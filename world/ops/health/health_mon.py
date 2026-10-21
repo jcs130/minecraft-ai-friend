@@ -82,8 +82,8 @@ FOM_SERVER_MANIFEST = {'probe': 'tools/fom_health.py', 'managedBy': 'existing-ow
     'agentGatewayOptional': True, 'agentGatewayPort': 28977, 'agentGatewayPolicy': 'ag_ / LAN only / partial projection'}
 FOM_BEDROCK_MANIFEST = {'probe':'tools/fom_bedrock_health.py','managedBy':'owned-child-supervisor-and-registered-startup',
     'udpPort':28988,'healthBind':'127.0.0.1','healthPort':28996,'modpack':'FOM 2.42',
-    'accountNamespace':'b_ / bh','requiresXboxValidation':True,'optionalNativeMaidModels':True,
-    'scope':'selected native item icons, contract-verified TLM model presentation and standard gameplay; other complex mod renderers remain separate'}
+    'accountNamespace':'b_ / bh','requiresXboxValidation':True,'optionalNativeMaidModels':True,'optionalNativeBlockPalette':True,
+    'scope':'contract-verified native icons, block palettes, source flipbook animations and TLM model presentation; custom renderers retain explicit coverage gaps'}
 AGENT_WORK_MANIFEST = {'probe':'tools/agent_work_health.mjs',
     'managedBy':'existing-agent-mc-world-method-runner', 'newDaemon':False,
     'scope':'built-in Mineflayer work/movement catalog, schemas, source identity and action-free syntax checks'}

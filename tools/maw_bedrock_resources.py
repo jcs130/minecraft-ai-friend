@@ -283,7 +283,7 @@ def validate(directory: Path, *, deployed=False):
     return contract
 
 
-def registered_items(log: Path, contract: dict, started_after: float):
+def registered_items(log: Path, contract: dict, started_after: float, *, additional_definitions=0):
     """Check this owned child's actual Geyser startup, not an old successful run."""
     with log.open('rb') as stream:
         stream.seek(max(0, log.stat().st_size-131072))
@@ -294,7 +294,7 @@ def registered_items(log: Path, contract: dict, started_after: float):
     stamp, count = matches[-1]
     at = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S,%f').timestamp()
     # One built-in item is registered by this pinned Geyser distribution.
-    if at < started_after or int(count) != contract.get('definitionCount', contract['itemCount'])+1:
+    if at < started_after or int(count) != contract.get('definitionCount', contract['itemCount'])+1+additional_definitions:
         raise ValueError('Stale or incomplete Geyser item registration')
     return {'registeredCustomItems': int(count), 'nativeItems': contract['itemCount'], 'atEpoch': at}
 

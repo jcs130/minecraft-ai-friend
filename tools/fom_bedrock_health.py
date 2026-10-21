@@ -18,6 +18,10 @@ def probe(file=DEFAULT):
         if config.get('modelContract'):
             checks['native_maid_model_registration']=bedrock['metrics']['customModels']['registeredModels']==config['modelContract']['modelCount']
             checks['native_maid_download_stack']=bedrock['metrics']['customModels']['packsLoaded']==len(config['modelContract']['packs'])
+        if config.get('blockContract'):
+            checks['native_block_registration']=bedrock['metrics']['customBlocks']['registeredStates']==config['blockContract']['stateCount']
+            checks['native_block_download_stack']=bedrock['metrics']['customBlocks']['packLoaded'] is True
+            if config['blockContract'].get('blockItemCount',0):checks['native_3d_block_item_registration']=bedrock['metrics']['customBlocks']['registeredBlockItems']==config['blockContract']['blockItemCount']
         gate=config['services'][0]
         checks['private_upstream']=gate['listenHost']=='127.0.0.1' and gate['env']['GATE_BEDROCK_ACCOUNT_NAMESPACE']=='1'
         checks['xbox_required_on_lan']=config['mode']=='lan'

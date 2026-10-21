@@ -33,6 +33,13 @@ final class NativeRegistryDump {
     private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maw_registry")
             .requires(s -> s.hasPermission(4))
+            .then(Commands.literal("visuals").executes(ctx -> {
+                try {
+                    Path file=Path.of("dump","maw-visual-shapes.jsonl").toAbsolutePath();Files.createDirectories(file.getParent());
+                    int count=dumpVisualShapes(file);
+                    ctx.getSource().sendSuccess(()->net.minecraft.network.chat.Component.literal("MC_VISUAL_EXPORT states="+count+" source=native_empty_block_getter"),false);return count;
+                } catch(Exception error){ctx.getSource().sendFailure(net.minecraft.network.chat.Component.literal("Visual shape export failed: "+error.getClass().getSimpleName()));return 0;}
+            }))
             .then(Commands.literal("dumpids").executes(ctx -> {
                 try {
                     Path dir = Path.of("dump", "maw-registry-ids").toAbsolutePath();
@@ -122,6 +129,30 @@ final class NativeRegistryDump {
     private static <T extends Comparable<T>> String propertyValue(BlockState state,
             net.minecraft.world.level.block.state.properties.Property<T> property) {
         return property.getName(state.getValue(property));
+    }
+
+    private static int dumpVisualShapes(Path file) throws Exception {
+        int count=0;
+        try(BufferedWriter writer=Files.newBufferedWriter(file)){
+            for(Block block:BuiltInRegistries.BLOCK)for(BlockState state:block.getStateDefinition().getPossibleStates()){
+                var row=new com.google.gson.JsonObject();row.addProperty("stateId",Block.BLOCK_STATE_REGISTRY.getId(state));
+                row.addProperty("name",BuiltInRegistries.BLOCK.getKey(block).toString());row.addProperty("dynamicShape",block.hasDynamicShape());
+                row.addProperty("context","native_empty_block_getter");row.addProperty("hasBlockEntity",state.hasBlockEntity());
+                var properties=new com.google.gson.JsonObject();for(var property:state.getProperties())properties.addProperty(property.getName(),propertyValue(state,property));row.add("properties",properties);
+                try{
+                    row.addProperty("hardness",state.getDestroySpeed(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,net.minecraft.core.BlockPos.ZERO));
+                    row.addProperty("lightEmission",state.getLightEmission());row.addProperty("friction",block.getFriction());
+                    row.addProperty("canBreakWithHand",!state.requiresCorrectToolForDrops());
+                    for(String kind:new String[]{"collision","selection"}){
+                        var shape=kind.equals("collision")?state.getCollisionShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,net.minecraft.core.BlockPos.ZERO):state.getShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,net.minecraft.core.BlockPos.ZERO);
+                        var boxes=new com.google.gson.JsonArray();for(var box:shape.toAabbs()){
+                            var coordinates=new com.google.gson.JsonArray();for(double value:new double[]{box.minX,box.minY,box.minZ,box.maxX,box.maxY,box.maxZ})coordinates.add(value);boxes.add(coordinates);
+                        }row.add(kind+"Boxes",boxes);
+                    }
+                }catch(RuntimeException unavailable){row.addProperty("shapeUnavailable",unavailable.getClass().getSimpleName());}
+                writer.write(row.toString());writer.newLine();count++;
+            }
+        }return count;
     }
 
     private static void dumpStates(Path file) throws Exception {

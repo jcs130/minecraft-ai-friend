@@ -25,6 +25,20 @@ def projection_catalog(output):
     (directory/'fom-projection-contract.json').write_bytes(resources.encoded({'schemaVersion':1,'nativeCatalogSha256':sha(native),'iconCatalogSha256':sha(icons),'projectionSha256':sha(target),'itemCount':len(rows)}))
     return len(rows)
 
+def install_blocks(workspace,source):
+    """Attach a separately verified block build to a new private candidate."""
+    import fom_bedrock_block_contract as blocks
+    workspace,source=Path(workspace).resolve(),Path(source).resolve()
+    if not workspace.is_relative_to(Path('E:/MC/research').resolve()) or (workspace/'prototype/ops').exists():raise ValueError('Blocks are installed only in an unstarted private candidate')
+    contract=blocks.validate(source);record=json.loads((workspace/'gateway/release.json').read_bytes());target=workspace/'prototype/plugins/Geyser'
+    if contract['inputs']['statesSha256']!=record['nativeExport']['block-states.jsonl']:raise ValueError('Block model registry differs from prepared gateway')
+    if contract.get('blockItemCount',0) and contract['blockItemInputs']['projectionSha256']!=sha(target/'fom-item-projection.json'):raise ValueError('Block item labels differ from prepared projection')
+    if sha(target.parent/'Geyser-ViaProxy.jar')!=contract['geyserJarSha256']:raise ValueError('Block extension Geyser build differs')
+    for name,meta in contract['files'].items():
+        destination=target/meta['directory']/name;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source/name,destination)
+    shutil.copy2(source/blocks.CONTRACT,target/blocks.CONTRACT);blocks.validate(target,deployed=True)
+    return {'blockCount':contract['blockCount'],'stateCount':contract['stateCount'],'blockItemCount':contract.get('blockItemCount',0),'productionModified':False}
+
 def prepare(output,assets_root=None,main_config=MAIN):
     output=Path(output).resolve()
     if output.exists():raise ValueError('Prepare in a new private workspace')
@@ -61,7 +75,7 @@ def prepare(output,assets_root=None,main_config=MAIN):
         else:shutil.copy2(src,dst)
     # Keep registry/dependency inputs frozen, but prepare the reviewed Bedrock
     # fixes from this checkout rather than reviving an older Agent-only gate.
-    for name in ['gate.cjs','idmap-remap.cjs','bedrock-models.cjs','bedrock-account.cjs']:
+    for name in ['gate.cjs','idmap-remap.cjs','bedrock-models.cjs','bedrock-account.cjs','bedrock-blocks.cjs','native-chunk-remap.cjs']:
         target=release/'gate'/name;shutil.copy2(REPO/'world/src/neoforge-handshake'/name,target)
         source_record['files']['gate/'+name]=sha(target)
     gateway=release/'gate/gate.cjs';old=gateway.read_text(encoding='utf-8')
@@ -95,4 +109,5 @@ def prepare(output,assets_root=None,main_config=MAIN):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--projection-only',action='store_true');parser.add_argument('--assets',type=Path)
     parser.add_argument('--main-config',type=Path,default=MAIN)
-    args=parser.parse_args();print(json.dumps({'namedNativeItems':projection_catalog(args.output)} if args.projection_only else prepare(args.output,args.assets,args.main_config),ensure_ascii=False))
+    parser.add_argument('--install-blocks',type=Path)
+    args=parser.parse_args();print(json.dumps(install_blocks(args.output,args.install_blocks) if args.install_blocks else {'namedNativeItems':projection_catalog(args.output)} if args.projection_only else prepare(args.output,args.assets,args.main_config),ensure_ascii=False))

@@ -12,6 +12,7 @@ import maw_service as service
 import maw_bedrock_service as original
 import maw_bedrock_resources as resources
 import maw_bedrock_modpacks as models
+import fom_bedrock_block_contract as blocks
 
 DEFAULT=Path('E:/MC/servers/fom-2.42/ops/fom-bedrock.json')
 PORTS={'lan':(28988,28994,28995,28996),'offline_qa':(28993,28991,28992,28997)}
@@ -76,6 +77,19 @@ def load_config(path,*,verify_hashes=True):
             expected[catalog/meta['directory']/name]=meta['sha256']
             if meta['directory']=='extensions':extensions.add(name)
         if extensions!={models.EXTENSION}:raise ValueError('Unreviewed model extensions')
+    block_contract=None
+    if (catalog/blocks.CONTRACT).is_file():
+        block_contract=blocks.validate(catalog,deployed=True)
+        if block_contract['geyserJarSha256']!=expected[directory/'plugins/Geyser-ViaProxy.jar']:raise ValueError('Block extension uses another Geyser build')
+        if block_contract['inputs']['statesSha256']!=record['nativeExport']['block-states.jsonl']:raise ValueError('Block models belong to another native state registry')
+        if 'gate/bedrock-blocks.cjs' not in record['files']:raise ValueError('Missing native block transport')
+        if block_contract.get('blockItemCount',0):
+            inputs=block_contract['blockItemInputs']
+            if inputs['itemsSha256']!=contract['inputs']['registrySha256'] or inputs['idmapSha256']!=contract['inputs']['idmapSha256'] or inputs['projectionSha256']!=projection['projectionSha256']:raise ValueError('Block item icons belong to another native item registry')
+        expected[catalog/blocks.CONTRACT]=sha(catalog/blocks.CONTRACT)
+        for name,meta in block_contract['files'].items():
+            expected[catalog/meta['directory']/name]=meta['sha256']
+            if meta['directory']=='extensions':extensions.add(name)
     stamps={}
     for file,digest in expected.items():
         if not file.is_file() or file.is_symlink() or verify_hashes and sha(file)!=digest:raise ValueError('Bedrock release hash mismatch: '+file.name)
@@ -96,10 +110,14 @@ def load_config(path,*,verify_hashes=True):
     env.pop('GATE_LAN_SUBNET',None)
     env.pop('GATE_BEDROCK_MODELS_FILE',None)
     if model_contract:env['GATE_BEDROCK_MODELS_FILE']=str(catalog/models.CATALOG)
+    env.pop('GATE_BEDROCK_BLOCKS_FILE',None)
+    if block_contract:env['GATE_BEDROCK_BLOCKS_FILE']=str(catalog/blocks.CATALOG)
     for key,name in {'GATE_CHANNELS_FILE':'network-channels.json','GATE_COMPONENTS_FILE':'components.tsv','GATE_PARTICLES_FILE':'particles.tsv','GATE_ENTITY_SERIALIZERS_FILE':'entity-data-serializers.tsv','GATE_IDMAP_FILE':'idmap.json'}.items():env[key]=str(release/'registry'/name)
-    command=[str(service.DEFAULT_JAVA),'-Djava.net.preferIPv4Stack=true','-Xms128M','-Xmx512M','-jar',str(directory/'ViaProxy-3.4.14.jar'),'cli','--target-address','127.0.0.1:'+str(gate),'--target-version','1.21.1','--auth-method','NONE','--bind-address','127.0.0.1:'+str(tcp),'--wildcard-domain-handling','NONE']
+    heap='-Xmx2048M' if block_contract else '-Xmx512M'
+    command=[str(service.DEFAULT_JAVA),'-Djava.net.preferIPv4Stack=true','-Xms128M',heap,'-jar',str(directory/'ViaProxy-3.4.14.jar'),'cli','--target-address','127.0.0.1:'+str(gate),'--target-version','1.21.1','--auth-method','NONE','--bind-address','127.0.0.1:'+str(tcp),'--wildcard-domain-handling','NONE']
+    if block_contract and mode=='offline_qa':command.insert(1,'-Dmaw.nativeBlocks.trace=true')
     return {'serverDir':str(directory),'runtimeDir':str(directory/'ops'),'gamePort':tcp,'healthPort':health,'validator':validate,
-        'fomRunConfig':str(main_path),'mode':mode,'udpPort':udp,'udpAddress':address,'resourceContract':contract,'modelContract':model_contract,
+        'fomRunConfig':str(main_path),'mode':mode,'udpPort':udp,'udpAddress':address,'resourceContract':contract,'modelContract':model_contract,'blockContract':block_contract,
         'networkExposure':{'mode':mode,'address':address,'udpPort':udp,'javaListenHost':'127.0.0.1'},
         'services':[{'id':'compat_gate','command':[str(release/'node.exe'),str(release/'gate/gate.cjs'),str(gate),'127.0.0.1',str(main['gamePort'])],'cwd':str(release),'env':env,'host':'127.0.0.1','listenHost':'127.0.0.1','port':gate,'dependsOn':[],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'{"kind":"shutdown"}','fomHealthPort':main['healthPort'],'fomServerDir':str(upstream)},
             {'id':'bedrock','command':command,'cwd':str(directory),'env':{},'host':'127.0.0.1','listenHost':'127.0.0.1','port':tcp,'dependsOn':['compat_gate'],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'stop'}]}
@@ -125,8 +143,9 @@ class BedrockChild(service.Child):
                 pong=original.decode_pong(data,stamp)
                 if pong['motd']!='My Agent World FOM 2.42' or pong['port']!=config['udpPort'] or pong['maxPlayers']!=8:raise ValueError('Wrong FOM Bedrock endpoint')
                 self.metrics['bedrock']=pong
-                if 'customItems' not in self.metrics:self.metrics['customItems']=resources.registered_items(Path(self.handler.baseFilename),config['resourceContract'],time.time()-(time.monotonic()-self.started)-5)
+                if 'customItems' not in self.metrics:self.metrics['customItems']=resources.registered_items(Path(self.handler.baseFilename),config['resourceContract'],time.time()-(time.monotonic()-self.started)-5,additional_definitions=(config.get('blockContract') or {}).get('blockItemCount',0))
                 if config.get('modelContract') and 'customModels' not in self.metrics:self.metrics['customModels']=models.registered_models(Path(self.handler.baseFilename),config['modelContract'],time.time()-(time.monotonic()-self.started)-5)
+                if config.get('blockContract') and 'customBlocks' not in self.metrics:self.metrics['customBlocks']=blocks.registered_blocks(Path(self.handler.baseFilename),config['blockContract'],time.time()-(time.monotonic()-self.started)-5)
             except Exception as error:
                 self.ready=False;self.problem='fom_bedrock_readiness_failed: '+str(error)
                 if time.monotonic()-self.started>self.spec['startupTimeoutSeconds']:self.stop()
@@ -141,7 +160,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('action',choices=('plan','run','status','pause','resume','shutdown'));parser.add_argument('--config',type=Path,default=DEFAULT)
     args=parser.parse_args();config=load_config(args.config)
     for row in config['services']:
-        if row['id']=='bedrock':row['bridgeConfig']={k:config[k] for k in ('udpPort','udpAddress','resourceContract','modelContract')}
+        if row['id']=='bedrock':row['bridgeConfig']={k:config[k] for k in ('udpPort','udpAddress','resourceContract','modelContract','blockContract')}
     if args.action=='run':BedrockSupervisor(config,validator=config['validator'],child_factory=BedrockChild).run()
     elif args.action=='plan':print(json.dumps({**{k:config[k] for k in ('serverDir','runtimeDir','healthPort','mode','udpPort','udpAddress')},'services':[{'id':'bedrock','port':config['gamePort']}]},ensure_ascii=False))
     elif args.action=='status':

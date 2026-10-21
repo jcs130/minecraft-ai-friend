@@ -89,6 +89,13 @@ function remapChunkBuf (buf) {
 const BLOCK_KEYS = { blockId: 1, newState: 1, blockStateId: 1, block: 1 }
 function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
   if (!MAP) return params
+  // Block actions use the block registry, unlike block updates and particles
+  // which use state IDs. Confusing the two breaks chest/piston animations.
+  if (name === 'block_action' && Number.isInteger(params.blockId)) {
+    const id=MAP.bm.get(params.blockId)
+    if (Number.isInteger(id) && id>=0) return {...params,blockId:id}
+    return params
+  }
   if (name === 'world_event' && params.effectId === 2001) return { ...params, data: stateToVanilla(params.data) }
   if (name === 'world_particles' && ['block','block_marker','falling_dust','dust_pillar'].includes(params.particle?.type)) {
     return { ...params, particle: { ...params.particle, data: stateToVanilla(params.particle.data) } }

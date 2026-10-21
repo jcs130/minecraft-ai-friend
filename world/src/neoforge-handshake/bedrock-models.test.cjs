@@ -152,7 +152,7 @@ test('strict FOM Bedrock sessions keep model support and restore inventory token
   const env = { GATE_BEDROCK_PROJECTION: '1', GATE_BEDROCK_MODELS_FILE: 'verified-models' }
   const begin = vm.runInNewContext(start+'\nstartSession', {
     sessions, process: { env }, vanillaAgentProjection: true, BedrockProjection, BedrockItems,
-    require: () => ({ BedrockModels: { load: file => { assert.equal(file,'verified-models'); return new BedrockModels(catalog()) } } }),
+    require: id => id==='./bedrock-blocks.cjs' ? require(id) : ({ BedrockModels: { load: file => { assert.equal(file,'verified-models'); return new BedrockModels(catalog()) } } }),
     connectBackend: () => {}
   })
   begin({ on: () => {} }, 'b_Test')

@@ -253,6 +253,7 @@ function startSession (front, username) {
     // not disable the explicitly installed native entity presentation bridge.
     sess.bedrockProjection = new BedrockProjection(process.env.GATE_BEDROCK_PROJECTION === '1' ? require('./bedrock-models.cjs').BedrockModels.load(process.env.GATE_BEDROCK_MODELS_FILE) : null, { strict: vanillaAgentProjection, omitUnsupportedEntities: vanillaAgentProjection })
     sess.bedrockItems = BedrockItems.load(process.env.GATE_BEDROCK_ITEMS_FILE)
+    if (process.env.GATE_BEDROCK_PROJECTION === '1') sess.bedrockBlocks = require('./bedrock-blocks.cjs').BedrockBlocks.load(process.env.GATE_BEDROCK_BLOCKS_FILE)
   }
   sessions.add(sess)
 
@@ -557,6 +558,11 @@ function onFrontPacket (sess, name, params) {
     drainPlay(sess)
     return
   }
+  if (name === 'custom_payload' && params.channel === 'mawbedrock:blocks_ready' && sess.bedrockBlocks) {
+    if (sess.phase !== 'play') return
+    if (!Buffer.isBuffer(params.data) || params.data.length !== 1 || params.data[0] !== 1) { kickFront(sess,'基岩方块握手格式错误'); return }
+    sess.playQueue.push(...sess.bedrockBlocks.activate());drainPlay(sess);return
+  }
 
   if (sess.phase === 'config') {
     switch (name) {
@@ -656,6 +662,10 @@ function relayTo (sess, target, name, params, dir) {
     }
     // Retained model snapshots must stay native. Replaying a display-projected
     // ItemStack would apply its connection token twice and lose native fields.
+    if (sess.bedrockBlocks) {
+      try { for (const packet of sess.bedrockBlocks.project(name,params)) target.write(packet.name,packet.params) }
+      catch(error) { kickFront(sess,'原生方块同步失败：'+error.message);return }
+    }
     if (sess.bedrockProjection && !menuProjected) {
       try {
         const projected = sess.bedrockProjection.project(name, params)

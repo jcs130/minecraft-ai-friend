@@ -8,7 +8,7 @@ test('item stacks map once and item cooldowns use the same vanilla identity', ()
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-idmap-'))
   try {
     const map = path.join(root, 'map.json')
-    fs.writeFileSync(map, JSON.stringify({ states: {79334:100}, items: { 3272: 340, 340: 2 } }))
+    fs.writeFileSync(map, JSON.stringify({ blocks:{9:{v:3}}, states: {9:99,79334:100}, items: { 3272: 340, 340: 2 } }))
     const script = `
       const assert=require('node:assert/strict'),r=require(${JSON.stringify(path.join(__dirname, 'idmap-remap.cjs'))});r.load();
       const stack=()=>({itemCount:1,itemId:3272,components:[]});
@@ -22,6 +22,7 @@ test('item stacks map once and item cooldowns use the same vanilla identity', ()
       assert.equal(r.remapOut('world_event',{effectId:2001,data:79334}).data,100);
       assert.equal(r.remapOut('world_event',{effectId:2002,data:79334}).data,79334);
       assert.equal(r.remapOut('world_particles',{particle:{type:'block',data:79334}}).particle.data,100);
+      assert.equal(r.remapOut('block_action',{blockId:9,byte1:1}).blockId,3);
     `
     execFileSync(process.execPath, ['-e', script], { env: { ...process.env, GATE_IDMAP_FILE: map, GATE_REMAP: '1' } })
   } finally { fs.rmSync(root, { recursive: true, force: true }) }

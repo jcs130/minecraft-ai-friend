@@ -1,0 +1,6 @@
+id: mawnativeblocks
+name: MawNativeBlocks
+main: dev.qiandeng.bedrock.blocks.NativeBlocksExtension
+api: 2.9.3
+version: 0.1.0
+authors: [MyAgentWorld]

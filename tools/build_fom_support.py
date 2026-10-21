@@ -1,17 +1,18 @@
 """Build a server-only FOM login adapter using the existing PlayerAuthBridge source."""
 from pathlib import Path
-import argparse,hashlib,json,os,subprocess,tempfile,zipfile
+import argparse,hashlib,json,os,re,subprocess,tempfile,zipfile
 REPO=Path(__file__).resolve().parents[1]
 SOURCE=REPO/'world/fom-support-src'
 AUTH=REPO/'world/society-bridge-src/src/main/java/dev/qiandeng/maw/PlayerAuthBridge.java'
 REGISTRY=AUTH.with_name('NativeRegistryDump.java')
 
-def build(server,java,output):
+def build(server,java,output,neoforge='21.1.248'):
     server,output=Path(server).resolve(),Path(output).resolve()
     libs=server/'libraries'
     mapped=libs/'net/minecraft/server/1.21.1-20240808.144430/server-1.21.1-20240808.144430-srg.jar'
-    neo=libs/'net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar'
-    patched=libs/'net/neoforged/neoforge/21.1.248/neoforge-21.1.248-server.jar'
+    if not re.fullmatch(r'21\.1\.\d+',neoforge):raise ValueError('Explicit NeoForge 1.21.1 version required')
+    neo=libs/f'net/neoforged/neoforge/{neoforge}/neoforge-{neoforge}-universal.jar'
+    patched=libs/f'net/neoforged/neoforge/{neoforge}/neoforge-{neoforge}-server.jar'
     assert mapped.is_file() and neo.is_file() and patched.is_file(),'Exact Minecraft/NeoForge cache required'
     cp=list(dict.fromkeys([patched,mapped,neo,*sorted(libs.rglob('*.jar'))]))
     sources=[AUTH,REGISTRY,*sorted((SOURCE/'src').rglob('*.java'))]
@@ -32,7 +33,7 @@ def build(server,java,output):
                         info=zipfile.ZipInfo(path.relative_to(root).as_posix(),(1980,1,1,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED
                         archive.writestr(info,path.read_bytes())
     sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-    record={'schemaVersion':1,'jar':str(jar),'sha256':sha(jar),'minecraft':'1.21.1','neoforge':'21.1.248','serverOnly':True,'clientRequired':False,
+    record={'schemaVersion':1,'jar':str(jar),'sha256':sha(jar),'minecraft':'1.21.1','neoforge':neoforge,'serverOnly':True,'clientRequired':False,
         'reusedAuthSource':str(AUTH.relative_to(REPO)),'reusedAuthSourceSha256':sha(AUTH),
         'sources':{str(p.relative_to(REPO)):sha(p) for p in [Path(__file__),*sources,*sorted((SOURCE/'resources').rglob('*'))] if p.is_file()}}
     (output/'build-record.json').write_text(json.dumps(record,indent=2),encoding='utf-8');return record
@@ -40,4 +41,5 @@ def build(server,java,output):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     for key in ('server','java','output'):parser.add_argument('--'+key,type=Path,required=True)
-    a=parser.parse_args();r=build(a.server,a.java,a.output);print(json.dumps({k:r[k] for k in ('jar','sha256','serverOnly','clientRequired')}))
+    parser.add_argument('--neoforge',default='21.1.248')
+    a=parser.parse_args();r=build(a.server,a.java,a.output,a.neoforge);print(json.dumps({k:r[k] for k in ('jar','sha256','serverOnly','clientRequired')}))

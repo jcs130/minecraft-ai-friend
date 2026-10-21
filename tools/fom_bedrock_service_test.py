@@ -80,6 +80,21 @@ class FomBedrockTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Invalid FOM'):bridge.load_config(config)
         self.scenario(run)
 
+    def test_native_blocks_are_optional_hash_guarded_and_have_separate_heap_budget(self):
+        def run(config,raw,contract):
+            release=Path(raw['gatewayRelease']);record=json.loads((release/'release.json').read_bytes());record['nativeExport']={'block-states.jsonl':'native-states'}
+            file=release/'gate/bedrock-blocks.cjs';file.write_bytes(b'block transport');record['files']['gate/bedrock-blocks.cjs']=bridge.sha(file);(release/'release.json').write_text(json.dumps(record))
+            catalog=Path(raw['bridgeDir'])/'plugins/Geyser';(catalog/'extensions').mkdir()
+            block={'schemaVersion':1,'geyserJarSha256':bridge.sha(Path(raw['bridgeDir'])/'plugins/Geyser-ViaProxy.jar'),'inputs':{'statesSha256':'native-states'},'files':{}}
+            for name,directory in [(bridge.blocks.PACK,'packs'),(bridge.blocks.EXTENSION,'extensions'),(bridge.blocks.CATALOG,''),(bridge.blocks.REPORT,'')]:
+                target=catalog/directory/name;target.write_bytes(b'block artifact');block['files'][name]={'directory':directory,'sha256':bridge.sha(target)}
+            (catalog/bridge.blocks.CONTRACT).write_text(json.dumps(block))
+            with patch.object(bridge.blocks,'validate',return_value=block):
+                result=bridge.load_config(config);result['validator']();self.assertIn('-Xmx2048M',result['services'][1]['command']);self.assertNotIn('-Dmaw.nativeBlocks.trace=true',result['services'][1]['command']);self.assertEqual(result['services'][0]['env']['GATE_BEDROCK_BLOCKS_FILE'],str(catalog/bridge.blocks.CATALOG))
+                (catalog/bridge.blocks.CATALOG).write_bytes(b'changed native palette')
+                with self.assertRaisesRegex(ValueError,'release changed'):result['validator']()
+        self.scenario(run)
+
     def test_isolated_candidate_uses_its_own_upstream_and_health(self):
         with tempfile.TemporaryDirectory() as tmp:
             config,raw,server,native,contract,hashes=self.fixture(Path(tmp))

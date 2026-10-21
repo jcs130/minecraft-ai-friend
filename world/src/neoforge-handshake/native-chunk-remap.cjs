@@ -11,7 +11,7 @@ function vi (value) {
   do { let byte = value & 127; value >>>= 7; if (value) byte |= 128; bytes.push(byte) } while (value)
   return Buffer.from(bytes)
 }
-function remapChunk (buffer, mapState, globalBits) {
+function remapChunk (buffer, mapState, globalBits, { visitor = null, readOnly = false } = {}) {
   if (!Buffer.isBuffer(buffer) || buffer.length > MAX_BYTES || !buffer.length) throw Error('INVALID_NATIVE_CHUNK_SIZE')
   if (!Number.isInteger(globalBits) || globalBits < 9 || globalBits > 32) throw Error('INVALID_VANILLA_GLOBAL_BITS')
   let offset = 0
@@ -109,11 +109,18 @@ function remapChunk (buffer, mapState, globalBits) {
     // legitimately exceed 4096 (observed 4980); preserve the native count.
     if (count < 0 || count > 8192) throw Error('INVALID_NATIVE_CHUNK_BLOCK_COUNT')
     parts.push(buffer.subarray(offset, offset + 2)); offset += 2
-    parts.push(projectBlocks(readContainer(4096, 8)))
+    const blocks = readContainer(4096, 8)
+    if (visitor) {
+      const raw = blocks.bits === 0 ? new Uint32Array(4096).fill(blocks.palette[0]) : values(blocks, 4096)
+      if (blocks.bits && blocks.palette) for (let i = 0; i < raw.length; i++) raw[i] = blocks.palette[raw[i]]
+      visitor(sections - 1, raw)
+    }
+    if (!readOnly) parts.push(projectBlocks(blocks))
     const biome = readContainer(64, 3)
     if (biome.bits && biome.palette) values(biome, 64)
     parts.push(buffer.subarray(biome.start, biome.end))
   }
-  return Buffer.concat(parts)
+  return readOnly ? sections : Buffer.concat(parts)
 }
-module.exports = { remapChunk }
+function visitChunk (buffer, visitor) { return remapChunk(buffer, id => id, 32, { visitor, readOnly: true }) }
+module.exports = { remapChunk, visitChunk }
