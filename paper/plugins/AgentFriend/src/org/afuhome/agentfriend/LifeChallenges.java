@@ -79,9 +79,8 @@ final class LifeChallenges implements Listener {
     private boolean machine(Player p){var request=commands.get(p.getUniqueId());return plugin.communication().compact(p)||explicitJson.contains(p.getUniqueId())||request!=null&&request.json();}
     private void human(Player p,String message){
         if(!machine(p))p.sendMessage(message);
-        // Machine clients receive one structured reply. Only their actually attached Eyes
-        // receive the readable counterpart; never broadcast it or repeat it to the Agent.
-        else for(Player eye:plugin.attachedEyes(p))eye.sendMessage(message);
+        // Machine clients receive one structured reply; command feedback stays
+        // with the actor rather than creating a second spectator chat feed.
     }
     private void emit(Player p,JsonObject out){
         var request=commands.get(p.getUniqueId());out.addProperty("trigger",request==null?"server_observation":request.verb());

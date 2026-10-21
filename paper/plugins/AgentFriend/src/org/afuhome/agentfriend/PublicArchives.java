@@ -223,7 +223,6 @@ final class PublicArchives implements Listener {
         out.addProperty("scope","self");out.addProperty("playerUuid",p.getUniqueId().toString());
         plugin.communication().stamp(p,out);
         if(q.json||plugin.communication().compact(p))p.sendMessage("MC_ARCHIVE "+out);else p.sendMessage("§6[公共档案馆] §f"+human);
-        for(Player eye:plugin.attachedEyes(p))eye.sendMessage("§6[公共档案馆] §f"+human);
     }
     private void error(Player p,String code,String message,boolean retry){error(p,false,code,message,retry);}
     private void error(Player p,boolean json,String code,String message,boolean retry){JsonObject out=base("error",true);out.addProperty("errorCode",code);out.addProperty("message",message);out.addProperty("retryable",retry);out.addProperty("nextCommand","/mycli archive status");reply(p,new Query("error",List.of(),json,1,"",0),out,message);}

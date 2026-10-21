@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "status": "validated_candidate_not_deployed",
+  "production": {
+    "paper": "1.21.1 build133",
+    "agentFriend": "0.4.47.9",
+    "eye": "0.1.16",
+    "paperPid": 19632
+  },
+  "candidate": {
+    "agentFriend": "0.4.47.10",
+    "eye": "0.1.17"
+  },
+  "files": [
+    {
+      "target": "AgentFriend-0.4.47.10.jar",
+      "source": "E:\\MC\\ops\\repairs\\message-audience-audit-20261021\\candidate-final\\AgentFriend-0.4.47.10.jar",
+      "sha256": "fa48a39410854eadb054eb3d8cbaaa65aad3e179c43ce22cad4d8a7f0efa013d"
+    },
+    {
+      "target": "CortiEyeMirror-0.1.17.jar",
+      "source": "E:\\MC\\ops\\repairs\\message-audience-audit-20261021\\candidate-final\\CortiEyeMirror-0.1.17.jar",
+      "sha256": "628242d9b46b2be68037a656986c1ac1274b6a876190451a37d7e85bb8d92f51"
+    }
+  ],
+  "removeJars": [
+    {
+      "name": "AgentFriend-0.4.47.9.jar",
+      "sha256": "6b14294c7759873ab775e2cbd43f70ecbf9737fdf761a1ae43d03d7782b54b89"
+    },
+    {
+      "name": "CortiEyeMirror-0.1.16.jar",
+      "sha256": "53ed34888734289d39f2ef5c69fbb2e213f7b03f30304b0d90496bec2d2b7921"
+    }
+  ],
+  "fixes": [
+    "Actor-only protection queries and permission denials",
+    "No explicit Eye/live tool feedback for task routes, verification and life challenges",
+    "Reserved MC system text, fixed protection feedback and versioned bare JSON excluded from spectator copies",
+    "Legacy bare market JSON kept on actor chat fallback; opt-in private payload avoids duplicate chat"
+  ],
+  "binaryReview": {
+    "productionChanged": false,
+    "jars": [
+      {
+        "version": "0.4.47.10",
+        "file": "AgentFriend-0.4.47.10.jar",
+        "sha256": "fa48a39410854eadb054eb3d8cbaaa65aad3e179c43ce22cad4d8a7f0efa013d",
+        "baselineSha256": "6b14294c7759873ab775e2cbd43f70ecbf9737fdf761a1ae43d03d7782b54b89",
+        "changedEntries": [
+          "org/afuhome/agentfriend/LifeChallenges.class",
+          "org/afuhome/agentfriend/ProtectionAdvisor.class",
+          "org/afuhome/agentfriend/TaskMarketManager.class",
+          "org/afuhome/agentfriend/TaskRoutes.class",
+          "plugin.yml",
+          "org/afuhome/agentfriend/AgentMessagePolicy.class"
+        ],
+        "unrelatedEntriesByteIdentical": 393
+      },
+      {
+        "version": "0.1.17",
+        "file": "CortiEyeMirror-0.1.17.jar",
+        "sha256": "628242d9b46b2be68037a656986c1ac1274b6a876190451a37d7e85bb8d92f51",
+        "baselineSha256": "53ed34888734289d39f2ef5c69fbb2e213f7b03f30304b0d90496bec2d2b7921",
+        "changedEntries": [
+          "org/afuhome/cortieye/MachineChatReceipts.class",
+          "plugin.yml"
+        ],
+        "unrelatedEntriesByteIdentical": 20
+      }
+    ],
+    "publishedTaskMarketSource": "838b0c8a4cb726f802c3880ea8a3682a709a68e4",
+    "taskMarketBaselineBytecodeIdentical": true,
+    "taskMarketGeneratedSha256": "c056b12386885ac8c0c928a86ba0dc35fe974d60e30f873e9fcf5946662c8faa",
+    "sources": {
+      "AgentFriend/src/org/afuhome/agentfriend/ProtectionAdvisor.java": "fe43ebd50eb1fa5e4ae2f1048817f1d79e8a6fffd3c10fcc9f27efe77e7b9f90",
+      "AgentFriend/src/org/afuhome/agentfriend/TaskRoutes.java": "9a0a1017246e5dcef0d3bd559229e2477387166e273d163012f3a1516acb8b6b",
+      "AgentFriend/src/org/afuhome/agentfriend/LifeChallenges.java": "04c62b8d194572a17c817f1eeeede400a0f1f2553abd3a69093ac00c5d734641",
+      "AgentFriend/src/org/afuhome/agentfriend/AgentMessagePolicy.java": "35f4c584245f5570354f8e8d9133c16617fa627c44e48e1593405c58b13a8bbf",
+      "CortiEyeMirror/src/org/afuhome/cortieye/MachineChatReceipts.java": "35ff18f4dd104f972b34046309e886d5161595a954da2f854744826481ba6337",
+      "CortiEyeMirror/test/org/afuhome/cortieye/MachineChatReceiptsTest.java": "b97100669dba50f037f3264ffe48e02d111d88228f205d9e041b1a9164ae790b",
+      "AgentFriend/tests/org/afuhome/agentfriend/AgentMessagePolicyTest.java": "854e1844f48be5b0d2074894b8f0106c9b04901dcff623a5750f9852a98646f5"
+    }
+  },
+  "tests": {
+    "machineReceipts": 61,
+    "messagePolicy": 66,
+    "realPaper": {
+      "1.21.1": {
+        "passed": true,
+        "checks": 55,
+        "realConnections": 5
+      },
+      "1.20.6": {
+        "passed": true,
+        "checks": 55,
+        "realConnections": 5
+      }
+    },
+    "baselineOldPrivacyLeaksReproduced": true,
+    "productionWorldOrPlayerItemsChanged": false,
+    "mobileXboxPixelsVerified": false,
+    "remoteWebDeployed": false,
+    "fullInventoryProtocolClaimed": false
+  },
+  "sourceOnlyNotDeployed": [
+    "PublicArchives: remove explicit spectator reply; feature remains unreleased"
+  ],
+  "retainedEvidence": [
+    "Initial batch syntax and old non-protected target assertions failed and were corrected",
+    "Initial generic message-count assertion replaced with correlated receipt markers",
+    "Source build rejected unpublished parry API; deployed published source reproduced before narrow edit",
+    "Verification test initially expected a prefix; discovered real bare-JSON producer and fixed its classification/transport",
+    "Existing Mineflayer painting/slot component parse warnings appear with baseline and candidate; not repaired here"
+  ],
+  "deployment": {
+    "queued": false,
+    "restartApproved": false,
+    "fullCandidateDeployed": false,
+    "reason": "沿用服主“先保留候选，暂不重启”的决定。",
+    "dualDiskCandidateRollback": true,
+    "newFullColdBackupCreated": false,
+    "kiritoAutonomyStillPaused": true,
+    "numenKernelCandidateIncluded": false,
+    "procedure": "另获当次确认；预告、真人及副本门禁、原流程E/F完整冷备份，正常停服安装并复核。不得热载JAR或覆盖玩家数据。"
+  }
+}

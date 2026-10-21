@@ -194,7 +194,6 @@ final class TaskRoutes implements Listener {
             plugin.communication().list(p, "tasks", refresh, List.of(out), 1);
         } else if (machine) p.sendMessage("MC_TASKS " + out);
         else human(p, out);
-        if (machine) for (Player eye : plugin.attachedEyes(p)) human(eye, out);
     }
     private void human(Player p, JsonObject out) {
         if (out.has("task")) p.sendMessage("§6【委托】" + out.getAsJsonObject("task").get("title").getAsString() + "：" + out.get("description").getAsString());

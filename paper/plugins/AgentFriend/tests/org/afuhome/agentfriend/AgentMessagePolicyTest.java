@@ -30,6 +30,14 @@ public final class AgentMessagePolicyTest {
             check(AgentMessagePolicy.compact(ordinary).equals(ordinary),"ordinary text unchanged");
         }
         check(AgentMessagePolicy.compact("MC_REWARD {\"sessionId\":\"receipt-id\"}").contains("receipt-id"),"do not remove action idempotency IDs");
+        String bare="{\"type\":\"MC_MARKET_CHECK\",\"schemaVersion\":1,\"ready\":false,\"nextAction\":\"需要弓\"}";
+        JsonObject bareFrame=AgentMessagePolicy.receipt(bare);
+        check(bareFrame.get("type").getAsString().equals("MC_MARKET_CHECK"),"bare market envelope type");
+        check(bareFrame.getAsJsonObject("data").get("nextAction").getAsString().equals("需要弓"),"bare market guidance retained");
+        check(AgentMessagePolicy.compact(bare).equals(bare),"legacy bare chat format preserved");
+        for(String json:new String[]{"{\"type\":\"MC_MARKET_CHECK\"}","{\"type\":\"npc_speech\",\"schemaVersion\":1}",
+                "{\"type\":\"MC_MARKET_CHECK\",\"schemaVersion\":1} trailing","{\"type\":{},\"schemaVersion\":1}"})
+            check(AgentMessagePolicy.receipt(json)==null,"not a reserved bare receipt: "+json);
         check(AgentMessagePolicy.launcherWarning("/skin notification ignore-cracked-client https://skinsrestorer.net/docs/troubleshooting/launcher-issues"),"exact launcher notification");
         check(!AgentMessagePolicy.launcherWarning("SkinsRestorer API error"),"keep skin failures");
         check(AgentMessagePolicy.joinTip("[系统·技能目录] 说明"),"known unsolicited hint");

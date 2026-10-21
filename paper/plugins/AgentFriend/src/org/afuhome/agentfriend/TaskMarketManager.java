@@ -734,7 +734,7 @@ final class TaskMarketManager implements Listener {
             JsonArray commands = new JsonArray(); commands.add(guide.get("nextCommand").getAsString()); data.add("nextCommands", commands);
         }
         send(player, "MC_MARKET_CHECK", data);
-        if (guide != null) {if(!plugin.communication().compact(player))showGuidance(player,guide);else for(Player eye:plugin.attachedEyes(player))showGuidance(eye,guide);}
+        if (guide != null) {if(!plugin.communication().compact(player))showGuidance(player,guide);}
         else player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
                 + "（" + result.progress() + "/" + task.steps.get(step).target + "）。");
         if (advice != null && guide == null) player.sendMessage("§a【正确做法】" + advice.next());
@@ -876,7 +876,6 @@ final class TaskMarketManager implements Listener {
                 + " " + current + "/" + step.target() + "；" + guide.get("nextAction").getAsString();
         if (!plugin.communication().compact(player)) player.sendMessage(human);
         send(player, "MC_MARKET_ACTION", data);
-        for (Player eye : plugin.attachedEyes(player)) eye.sendMessage(human);
     }
     /** Only native event adapters call this. No command or NPC/model text can submit proof. */
     void worldAction(Player player, GuildManager.Goal goal, String subject, String evidence, long occurredAt) {

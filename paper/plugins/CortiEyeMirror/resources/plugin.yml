@@ -1,5 +1,5 @@
 name: CortiEyeMirror
-version: '0.1.16'
+version: '0.1.17'
 main: org.afuhome.cortieye.CortiEyeMirrorPlugin
 api-version: '1.21.1'
 description: Mirrors registered Agents' HUD and chat packets to their attached Eye clients.

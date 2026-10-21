@@ -23,7 +23,21 @@ final class AgentMessagePolicy {
         } catch (RuntimeException invalid) { return false; }
     }
     static JsonObject receipt(String text) {
-        if (text == null || !text.matches("(?s)^MC_[A-Z0-9_]+ \\{.*")) return null;
+        if (text == null) return null;
+        // Task-market clients already consume this bare JSON shape. Preserve
+        // their chat fallback; opt-in clients receive the same private envelope.
+        if (text.startsWith("{")) {
+            try {
+                JsonObject data = JsonParser.parseString(text).getAsJsonObject();
+                JsonElement type = data.get("type");
+                if (!data.has("schemaVersion") || data.get("schemaVersion").getAsInt() != 1
+                        || type == null || !type.isJsonPrimitive() || !type.getAsJsonPrimitive().isString()
+                        || !type.getAsString().matches("MC_[A-Z0-9_]+")) return null;
+                JsonObject out = new JsonObject(); out.addProperty("protocol", 1);
+                out.addProperty("type", type.getAsString()); out.add("data", data); return out;
+            } catch (RuntimeException invalid) { return null; }
+        }
+        if (!text.matches("(?s)^MC_[A-Z0-9_]+ \\{.*")) return null;
         int space = text.indexOf(' ');
         try {
             JsonObject out = new JsonObject(); out.addProperty("protocol", 1);

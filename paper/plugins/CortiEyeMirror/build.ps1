@@ -16,7 +16,7 @@ $libraries = Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'libraries') -Rec
     ForEach-Object { $_.FullName }
 $classpath = (@($paper, $protocol, (Join-Path $ServerRoot 'plugins\AuraSkills-2.4.0.jar'),
     $spectator[0].FullName) + $libraries) -join ';'
-$build = Join-Path $root "build-0.1.16-mc-$MinecraftVersion"
+$build = Join-Path $root "build-0.1.17-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 $compileArguments = @('-proc:none', '-encoding', 'UTF-8', '-source', '21', '-target', '21', '-cp', $classpath, '-d', $build,
     (Get-Item -LiteralPath (Join-Path $root '..\shared\src\org\afuhome\eye\EyePairs.java')).FullName) +
@@ -32,7 +32,7 @@ if ($compileExitCode -ne 0) { throw 'javac failed' }
 $pluginYaml = (Get-Content -LiteralPath (Join-Path $root 'resources\plugin.yml') -Raw).Replace("api-version: '1.21.1'", "api-version: '$MinecraftVersion'")
 [System.IO.File]::WriteAllText((Join-Path $build 'plugin.yml'), $pluginYaml, [System.Text.UTF8Encoding]::new($false))
 Copy-Item -LiteralPath (Join-Path $root 'resources\config.yml') -Destination $build -Force
-$out = Join-Path $root 'CortiEyeMirror-0.1.16.jar'
+$out = Join-Path $root 'CortiEyeMirror-0.1.17.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

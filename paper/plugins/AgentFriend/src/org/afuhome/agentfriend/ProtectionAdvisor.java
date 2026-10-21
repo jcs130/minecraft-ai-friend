@@ -102,7 +102,6 @@ final class ProtectionAdvisor implements Listener {
         if (limited) result.addProperty("retryAfterMs", next - now);
         plugin.communication().stamp(player, result);
         if (!machine(player, query.json())) queryText(player, result, query.verbose());
-        else for (Player eye : plugin.attachedEyes(player)) queryText(eye, result, false);
         send(player, result); chatReceipt(player, "MC_PROTECTION", result, query.json(), query.verbose());
     }
 
@@ -149,7 +148,6 @@ final class ProtectionAdvisor implements Listener {
         send(player, data);
         if (machine(player, explicit)) {
             player.sendMessage("MC_PROTECTION_BATCH " + data);
-            for (Player eye : plugin.attachedEyes(player)) batchText(eye, data, false);
         } else batchText(player, data, verbose);
     }
 
@@ -345,8 +343,7 @@ final class ProtectionAdvisor implements Listener {
         if (!groupedNotices.allow(player.getUniqueId(), data, now)) return false;
         if (!machine(player, false)) {
             for (String line : ProtectionChat.summary(data)) player.sendMessage(line);
-        } else for (Player eye : plugin.attachedEyes(player))
-            for (String line : ProtectionChat.summary(data)) eye.sendMessage(line);
+        }
         return true;
     }
 
