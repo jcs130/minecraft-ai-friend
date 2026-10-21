@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed_verified",
+  "createdAt": "2026-10-21T01:09:02.197472+00:00",
+  "productionUnchanged": false,
+  "production": [
+    {
+      "file": "AgentVision-0.1.0.jar",
+      "sha256": "4a092854cf5769d39342b3db07c02e921684acaa4a8b664dcece4b188891d345"
+    },
+    {
+      "file": "AgentFriend-0.4.47.9.jar",
+      "sha256": "6b14294c7759873ab775e2cbd43f70ecbf9737fdf761a1ae43d03d7782b54b89"
+    },
+    {
+      "file": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "c6cfe448bc69cebe27c0c0e807c1cb7a1b674a534cf2e21f824d8c8e56a7ce58"
+    }
+  ],
+  "candidate": [
+    {
+      "file": "AgentVision-0.1.1.jar",
+      "sha256": "bf00bb818e824f1b672c441be3fd2838fb072d9d6a066fcffcb704af4654feab"
+    },
+    {
+      "file": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1"
+    }
+  ],
+  "paper": "1.21.1 build 133 / Java21",
+  "scope": [
+    "Verified, bounded terrain hints shared by native Numen and network Agent vision",
+    "Current shapes and eye/body geometry revalidated before every cached rejection",
+    "At most8 cells per hint and1024 slots per world; no entity references in terrain hints",
+    "One queue pass per tick, native position reads, immediate viewer release on disconnect",
+    "No async world access, extra plugin dependency or client change"
+  ],
+  "tests": {
+    "unit": {
+      "tests": 211,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "paperGameTests": 32,
+    "protocol": {
+      "1.21.1": 29,
+      "1.20.6": 29
+    },
+    "sixteenConnections": 14,
+    "deploymentBoundary": 16,
+    "numenSourceRebuildSameSha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1"
+  },
+  "performance": {
+    "hidden": {
+      "baselineNs": 1496.64,
+      "candidateNs": 247.74,
+      "timeChangePercent": -83.45,
+      "baselineBytes": 8042.56,
+      "candidateBytes": 169.06,
+      "allocationChangePercent": -97.9,
+      "pairs": 512,
+      "visiblePairs": 0,
+      "baselineWorldRays": 442368,
+      "candidateWorldRays": 0
+    },
+    "open": {
+      "baselineNs": 118.24,
+      "candidateNs": 113.54,
+      "timeChangePercent": -3.97,
+      "baselineBytes": 249.06,
+      "candidateBytes": 249.06,
+      "allocationChangePercent": 0.0,
+      "pairs": 512,
+      "visiblePairs": 512,
+      "baselineWorldRays": 147456,
+      "candidateWorldRays": 147456
+    }
+  },
+  "limitations": [
+    "Controlled same-scene component timings; not a full-server83% speedup",
+    "16 real protocol clients, not16 autonomous LLM workloads",
+    "No new phone/Xbox visual or long-running model workload validation",
+    "Original2ms budget remains cooperative, not a hard real-time bound"
+  ],
+  "evidenceRoot": "E:\\MC\\ops\\repairs\\agent-vision-cache-20261021\\evidence",
+  "mirrorRoot": "F:\\MC-backups\\repairs\\agent-vision-cache-20261021",
+  "opsHelper": {
+    "beforeSha256": "a60781e531d18512e2bbbf6eb4f028ad6e4409c81f211fb957407f8783558db4",
+    "sha256": "b53eef650f6d3c9fc9a67ffbdd1004afc2cb58d6781c0c90df16dbeb0e074c2d"
+  },
+  "deployment": {
+    "queued": false,
+    "consumed": true,
+    "originalLifecycle": "Afu-MC-DailyBackup",
+    "taskResult": 0,
+    "noticesSeconds": [
+      180,
+      60,
+      10
+    ],
+    "rollback": "Repeat the original maintenance and backup lifecycle; restore AgentVision0.1.0 and Numen content c6cfe448 with pinned hashes, retaining current player/world data."
+  },
+  "patch": {
+    "upstream": "https://github.com/Dwinovo/minecraft-numen",
+    "base": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+    "sha256": "7b1ed4f614f38b42b75926196905b40fc5071c687e944ce5d9cc1c867466b6ed"
+  },
+  "retainedFailures": [
+    "Initial RCON-only benchmark sender guard",
+    "Corner fixture still inside the solid wall",
+    "Initial candidate measured only9.65% less hidden-query time",
+    "Per-ray-only savings assertion superseded by complete-query proof counting"
+  ],
+  "files": [
+    {
+      "source": "E:\\MC\\ops\\repairs\\agent-vision-cache-20261021\\candidate-final\\AgentVision-0.1.1.jar",
+      "target": "AgentVision-0.1.1.jar",
+      "sha256": "bf00bb818e824f1b672c441be3fd2838fb072d9d6a066fcffcb704af4654feab"
+    },
+    {
+      "source": "E:\\MC\\ops\\repairs\\agent-vision-cache-20261021\\candidate-final\\numen-paper-1.21.1-0.1.4.jar",
+      "target": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1",
+      "beforeSha256": "c6cfe448bc69cebe27c0c0e807c1cb7a1b674a534cf2e21f824d8c8e56a7ce58"
+    }
+  ],
+  "helperCandidateSha256": "b53eef650f6d3c9fc9a67ffbdd1004afc2cb58d6781c0c90df16dbeb0e074c2d",
+  "deployedAt": "2026-10-21T02:00:18.089669+00:00",
+  "productionRestarted": true,
+  "authorization": "重启吧",
+  "backupStamp": "20261021-094826",
+  "dualDiskComplete": true,
+  "productionChecks": 31,
+  "gatewayChecks": 6,
+  "unchangedPluginJars": 38,
+  "pluginJars": 40,
+  "coreAndNumenApiRetained": true,
+  "inventoryEnderBackpackProfessionVerifiedBeforeAutonomy": true,
+  "dailyEnabled": true,
+  "nativeBodyExclusive": true,
+  "qwenpawPlugin": "0.3.0",
+  "nativeHeartbeat": "2m",
+  "otherRolesPreserved": true,
+  "nativeToolReceiptObserved": true,
+  "questCompletionNotAsserted": true,
+  "clientModificationRequired": false,
+  "newPublicPortOpened": false,
+  "live": {
+    "at": 1792548017.4242656,
+    "vision": {
+      "enabled": true,
+      "viewers": 2,
+      "queuedViewers": 2,
+      "targets": 266,
+      "checks": 86144,
+      "hides": 277,
+      "shows": 13,
+      "deferred": 33,
+      "maxTickMicros": 9170,
+      "maxChecks": 128,
+      "peakChecks": 128,
+      "tick": 2367,
+      "visits": 343917,
+      "lastVisits": 266,
+      "peakVisits": 266,
+      "workNanos": 208555700,
+      "budgetMicros": 2000,
+      "nativeQueries": 67971,
+      "worldRays": 17875,
+      "shapeSkips": 222878,
+      "hintHits": 58679,
+      "hintReads": 76666,
+      "hintEntries": 647
+    },
+    "nativeState": "[常驻] ag_Kirito，enabled=true，body=true，bodyState=PRESENT，hold=EXTERNAL，UUID=8e7b99e0-595d-3402-935c-7139ac6814e3。命令：/numen resident disable 8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "tick": "The game is running normallyTarget tick rate: 20.0 per second.\nAverage time per tick: 19.8ms (Target: 50.0ms)Percentiles: P50: 18.8ms P95: 29.8ms P99: 36.8ms, sample: 100",
+    "mspt": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a19.8§7/§a13.3§7/§a36.8§e, §a20.9§7/§a13.3§7/§c54.2§e, §a22.7§7/§a11.5§7/§c96.8\n",
+    "roster": "There are 4 of a max of 40 players online: Goddess (b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd), ag_Kirito (8e7b99e0-595d-3402-935c-7139ac6814e3), ag_CorMy (822d173a-7181-3b9b-be60-804f29b24ecc), ag_NEKO (6e8b395e-4349-3d44-99f5-b7488825e426)",
+    "maintenance": {
+      "result": 0,
+      "state": "Ready",
+      "last": "2026-10-21T09:48:12.0000000+08:00"
+    }
+  },
+  "previousIncompleteBackup": {
+    "stamp": "20261021-040021",
+    "stillIncomplete": true,
+    "newFullBackupVerifiesControllerLockExclusion": true
+  }
+}
