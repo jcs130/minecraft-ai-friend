@@ -469,6 +469,19 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
     if (options.land) {
       if (!hasSupport(bot, bot.entity.position)) throw new SkillBlocked('落脚支撑已变化，保持悬停；请换一个落脚点');
       stopFlight(bot);
+      // Restoring gravity is not evidence of landing; allow real collision ticks to settle.
+      const until = Date.now() + 750;
+      let stable = 0;
+      while (Date.now() < until && stable < 2) {
+        if (aborted()) throw new SkillBlocked('落地确认已取消；重新核对当前位置');
+        if (control.interrupted && control.interrupted !== '飞行已停止') throw new SkillBlocked(control.interrupted, [], 'server');
+        if (bot.entity.position.distanceTo(target) > 0.7 || !hasSupport(bot, bot.entity.position)) {
+          throw new SkillBlocked('落地时位置或支撑发生变化，尚未确认站稳');
+        }
+        stable = bot.entity.onGround ? stable + 1 : 0;
+        await sleep(FLIGHT_TICK_MS);
+      }
+      if (stable < 2) throw new SkillBlocked('已恢复重力，但尚未确认在平台站稳；重新观察后再行动');
     }
     const actual = bot.entity.position;
     return `${options.land ? '飞到平台并落地' : '飞到目标并悬停'}，实际在 (${actual.x.toFixed(1)},${actual.y.toFixed(1)},${actual.z.toFixed(1)})`;

@@ -161,7 +161,9 @@ export async function skillCollect(
   buried = false,
   mature = false,
   tool?: string,
+  exact?: Cell,
 ): Promise<string> {
+  if (exact && count !== 1) throw new SkillBlocked('精确采集一次只处理一个指定格');
   if (/^stripped_.*_log$/.test(block)) {
     throw new SkillBlocked('去皮原木是加工过的建筑材料，不能作为自动采木目标；请找天然未去皮原木。若是明确拆除建筑，改用精确坐标的挖掘操作');
   }
@@ -223,7 +225,13 @@ export async function skillCollect(
       checkAbort(ctx);
       // 只挖看得见的。扫到多少与看得见多少分开记:前者不进回执(那是穿墙情报),
       // 后者才是她的感知面。
-      const scanned = visibleBlocks(bot, ids, 48);
+      // Internal exact-cell path used by harvest; public collect remains an unlocated search.
+      // Never fall back to a nearby block if this cell was removed or changed.
+      const exactBlock = exact ? blockAtCell(bot, exact) : null;
+      if (exact && (!exactBlock || exactBlock.name !== block)) throw new SkillBlocked(
+        `${cellText(exact)} ${exactBlock ? `实际是 ${exactBlock.name}，需要 ${block}` : '尚未加载'}；没有改采别处`,
+        [], 'local', 'target-not-ready');
+      const scanned = exact ? [new Vec3(exact.x, exact.y, exact.z)] : visibleBlocks(bot, ids, 48);
       const found: typeof scanned = [];
       let protectedVisible = 0;
       let structureVisible = 0;
@@ -372,7 +380,7 @@ export async function skillCollect(
       }
       ctx.progress?.(dug, count);
       await collectDrops(bot, pos, countedDrops, countGains, mark, ctx);
-      await keep.light(undefined, 'travel');
+      if (!exact) await keep.light(undefined, 'travel');
       if (dug < count) {
         await ctx.checkpoint?.(() => settleOnGround(bot, ctx, 1_500));
       }

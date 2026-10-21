@@ -34,8 +34,19 @@ const SDK_API = Object.freeze({
     + 'await bot.read("entity"), await bot.read("entities") and await bot.read("players") read the corresponding fresh projection. '
     + 'Online does not mean nearby; a tracked entity is not proof of line of sight. Compare positions yourself and preserve sampledAt. availability:false means the corresponding source is unavailable, not an empty world. '
     + 'Synchronous bot.entity/bot.entities/bot.players are unavailable in the isolated worker; never infer an empty world from that TypeError.',
-  'mc.state': 'await mc.state(): {sampledAt,connectionGeneration,snapshot,flight,queue,temporaryScaffolds,combatActive,combat,method}. '
+  work: 'mc_script 的内置工作脚本（非 mc 对象方法）：routine:{op:"list"} 查看目录；'
+    + 'routine:{op:"read",id:"farm_harvest"} 读取参数 schema、源码、版本与适用条件。'
+    + 'routine:{op:"run",id},params:{...} 显式执行，返回 runId 后继续等 minecraft.method 终态或按 runId 查询。'
+    + 'farm_harvest 收割补种；gather_logs 定点采木；deposit_surplus 保留指定数量并存余料；restock 补至目标随身数量。'
+    + 'navigate_route 依次走多路点；swim_to 短程三维游泳（非水下A*）；flight_route 使用已有服务端权限分段飞行。'
+    + 'swim_route 在已加载水体内按氧气预算三维绕障；ride_route 串联点名实体ID的驾乘路点；portal_route 串联并核验跨维度穿门。'
+    + '所有坐标为绝对坐标并要求 dimension；最多8格/物种，120秒；现有单写者队列、保护、取消/死亡/断线收尾保持。'
+    + '运行结果含 outcome/goalCompleted/reason/remaining/records/inventoryDelta；completed 脚本不等于工作成功。'
+    + '停止或部分完成后先核验 remaining 的现场，不自动重放；这不是后台 NPC 自主循环。',
+  'mc.state': 'await mc.state(): {sampledAt,connectionGeneration,snapshot,flight,movement,lastSwim,queue,temporaryScaffolds,combatActive,combat,method}. '
+    + 'movement contains self-local feetWet/headWet/bodyWet (boolean|null), raw oxygen (0..20|null), yaw/pitch (native radians|null), onGround and vehicleAttached. Unknown oxygen is not replaced with 20; dry-land oxygen may be a stale reading. '
     + 'snapshot can be null; position/dimension/health/food/inventory/equipment are under snapshot. '
+    + 'lastSwim is the last swim action report for this connection (historical, with its own taskId/time), not a live assertion that the body remains at that position. '
     + 'No block scan is performed. Missing readings are unknown. Preserve sampledAt and connectionGeneration when comparing observations.',
   'mc.do': 'await mc.do(steps): {accepted,taskId?,kind,done,receipt,steps?,state}. '
     + 'Waits for this group\'s executor terminal, unlike the mc_do tool which returns on admission. '
@@ -60,6 +71,9 @@ const SDK_API = Object.freeze({
     + '先观察上方/返程通路和呼吸点，低顶不能按垂直距离当上浮时间。仅凭跳跃输入、程序结束或头出水不证明登岸/目标完成。'
     + '既有 surface/防溺水是应急兜底，不是完整潜水规划器。原生身体程序取得队列后不要嵌套 mc.do 等待自己的身体；用原生按键并在终态后核验。'
     + 'api:"diving-budget" 按需读可改写的预算参考；维护者资料不是已学会的方法。由 Agent 自己构造、校验、保存版本，记录实际效果/失败边界，下次检索后再评估复用。',
+  'mc.swimPlan':'await mc.swimPlan({at:[absoluteX,feetY,absoluteZ],reserveOxygen?:6..16}): read-only loaded-water A* with collision and oxygen budgeting. '
+    +'Returns {schema,sampledAt,from,at,complete,reason,waypoints:[{at,breathe}],expanded,planningMs,estimatedMs,reserveOxygen,terrainSource,unknownCells}. '
+    +'Does not move, reveal hidden material identities, guarantee arrival or certify future air refills. Execute swim skill through mc.do; read lastSwim for actual controls, replans and elapsedMs.',
   methods: '通过 mc_script 工具操作自己的方法库（不是 mc 对象的方法）：'
     + 'api:"authoring" 给完整编写、组合、执行、复盘和采用路径。'
     + '先 library:{op:"list",query:"关键词",limit:8} 找适用条件，再 library:{op:"read",id:"method-id"} 读取源码/版本。'

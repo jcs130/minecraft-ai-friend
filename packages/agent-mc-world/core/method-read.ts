@@ -1,7 +1,7 @@
 /** Project only named fields from an already public JSON snapshot, never the live bot. */
 export function publicReadProjection(path: unknown): { root: string; fields: string[] } | null {
   if (typeof path !== 'string') return null;
-  if (/^entity\.(id|yaw|pitch|onGround|position(?:\.[xyz])?|velocity(?:\.[xyz])?)$/.test(path))
+  if (/^entity\.(id|yaw|pitch|onGround|elytraFlying|position(?:\.[xyz])?|velocity(?:\.[xyz])?)$/.test(path))
     return { root: 'entity', fields: path.split('.').slice(1) };
   if (/^heldItem\.(name|displayName|type|count|slot|instanceHash)$/.test(path))
     return { root: 'heldItem', fields: path.split('.').slice(1) };

@@ -7,6 +7,20 @@ import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-cont
 import type { ControlKey, SkillCall } from './skills.ts';
 import { bodyInWater } from './terrain.ts';
 import { breathingReadout } from './breathing.ts';
+import { waterAtPoint } from './water-observation.ts';
+/** Self-local readings only. Unknown water/oxygen is never replaced with a healthy default. */
+export function movementReadout(bot: Bot) {
+  const breath = breathingReadout(bot, { attach: false });
+  const feetWet = bot.entity?.position ? waterAtPoint(bot, bot.entity.position) : null;
+  const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return { feetWet, headWet: breath.headWet, bodyWet: breath.bodyWet,
+    oxygen: breath.oxygen,
+    yaw: finite(bot.entity?.yaw), pitch: finite(bot.entity?.pitch),
+    onGround: typeof bot.entity?.onGround === 'boolean' ? bot.entity.onGround : null,
+    elytraFlying:typeof (bot.entity as typeof bot.entity & {elytraFlying?:boolean})?.elytraFlying==='boolean'
+      ?(bot.entity as typeof bot.entity & {elytraFlying?:boolean}).elytraFlying:null,
+    vehicleAttached: (bot as Bot & { vehicle?: unknown }).vehicle != null };
+}
 
 interface InputLease {
   keys: ControlKey[];

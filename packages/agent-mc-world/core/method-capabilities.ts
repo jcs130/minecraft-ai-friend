@@ -5,6 +5,7 @@ export const BOT_METHODS = [
   'setControlState', 'clearControlStates', 'waitForTicks', 'pathfinder.goto',
   'dig', 'stopDigging', 'placeBlock', 'equip', 'unequip',
   'activateBlock', 'activateItem', 'deactivateItem',
+  'elytraFly', 'mount', 'dismount', 'moveVehicle',
 ] as const;
 export type BotMethod = typeof BOT_METHODS[number];
 
@@ -16,7 +17,7 @@ export function methodCapabilities(backend: 'mineflayer' | 'java-client', advert
     contract: 'minecraft-method/v1' as const,
     backend,
     botMethods: BOT_METHODS.filter(name => supported.has(name)),
-    mcMethods: ['capabilities', 'state', 'do', ...(backend === 'mineflayer' ? ['flightPlan'] : [])],
+    mcMethods: ['capabilities', 'state', 'do', ...(backend === 'mineflayer' ? ['flightPlan', 'swimPlan'] : [])],
     stepGroups: backend === 'mineflayer' ? 'core' : 'single-legacy',
     pluginLoading: false,
   };

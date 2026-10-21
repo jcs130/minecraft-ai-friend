@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "shared agent-mc-world main integration; no host-specific implementation",
+  "mainBase": "1d7b254fea68891f20ac4d3405a9bc43526653de",
+  "importedFeatureCommits": [
+    "ab168c6f",
+    "243b7fb9",
+    "393c6fc9",
+    "4b1ce4d5"
+  ],
+  "integrationMethod": "Three-way additive port of package and read-only health probe only; experimental server branch was not merged wholesale.",
+  "packageVersion": "0.5.7-rc.59",
+  "npmPublished": false,
+  "routineCatalog": [
+    "farm_harvest",
+    "gather_logs",
+    "deposit_surplus",
+    "restock",
+    "navigate_route",
+    "swim_to",
+    "flight_route",
+    "swim_route",
+    "ride_route",
+    "portal_route"
+  ],
+  "publicContracts": {
+    "entry": "agent-mc-world/client",
+    "mcp": "agent-mc-world/mcp",
+    "extension": "agent-mc-world/extension",
+    "discovery": "mc_script routine list/read/run",
+    "sdkPlanning": "mc.swimPlan",
+    "bodyDiscovery": "mc.capabilities",
+    "nativeMethods": [
+      "elytraFly",
+      "mount",
+      "dismount",
+      "moveVehicle"
+    ],
+    "customAgentNameRequired": false,
+    "implementationBackend": "Mineflayer; Java-client advertises only implemented methods, not implied parity"
+  },
+  "mainCompatibilityPreserved": [
+    "Current authoring, method library review/adoption and receipt persistence",
+    "Shared body capability metadata and detached entity/players/breathing/sign projections",
+    "Canonical breathingReadout eye-height/fluid observations and native key ownership",
+    "No restoration of removed goal.y-based deep-fall exemption",
+    "No fixed low-oxygen restriction reintroduced into general native water control; bounded swim routine validates its selected reserve",
+    "Existing version, dependency lock, visual release inputs, autonomous planner and host code kept unchanged"
+  ],
+  "verification": {
+    "total": 1848,
+    "passed": 1845,
+    "failed": 0,
+    "skipped": 3,
+    "skippedTests": [],
+    "coreTypecheck": true,
+    "buildVerified": true,
+    "runtimeFiles": 363,
+    "publicDeclarationFiles": 327,
+    "viewerIncluded": false,
+    "viewerLimit": "engine-only integration artifact; optional locked render assets not staged or replaced",
+    "nodeNextPackedConsumer": true,
+    "bundlerPackedConsumer": true,
+    "sourceHealthAssertions": 35,
+    "packedHealthAssertions": 35,
+    "sdkMcpContractSmoke": {
+      "checks": [
+        "standalone public extension exports all ten shared work and movement routines",
+        "shared MCP tool schema declares routine discovery and execution",
+        "SDK and MCP discover identical schemas and conditions through actual core handlers",
+        "every MCP routine read preserves the public source hash and parameter schema",
+        "published SDK validates four movement programs in the real worker without world calls or body control"
+      ],
+      "gameConnected": false,
+      "modelRequests": 0,
+      "backendLifecycle": "explicit inert test port; real core tool handlers",
+      "ok": true
+    }
+  },
+  "artifact": {
+    "filename": "agent-mc-world-0.5.7-rc.59.tgz",
+    "sha256": "49cbed1d6891c397ef533e3bb423a29d092b18a64ecb23d82cd1d0ea0c2aea77",
+    "bytes": 3531007,
+    "entryCount": 1417,
+    "independentlyInstalled": true
+  },
+  "retainedValidationFailures": [
+    "First whole-suite attempt ran before build artifacts existed: six CLI/declaration/compiled-import checks failed. Built runtime and declarations, then reran the entire suite successfully.",
+    "New read-only capability test initially queried a nonexistent current status field; corrected to public currentTask and retained final whole-suite result.",
+    "First offline consumer dependency resolution lacked three transitive archives; populated only the isolated consumer, then the final independent install succeeded offline.",
+    "Private consumer harness initially omitted required dataDir, then a syntactically required configured account; both were test setup errors before any game connection. Corrected explicit inert lifecycle port and validated real SDK/MCP handlers."
+  ],
+  "historicalGameplayEvidence": {
+    "commit": "4b1ce4d5ca57b3d350c0b6e7c489c1e0a3d31d3b",
+    "url": "https://github.com/jcs130/minecraft-ai-friend/blob/4b1ce4d5ca57b3d350c0b6e7c489c1e0a3d31d3b/docs/evidence/advanced-mobility-20261021.json",
+    "newMainArtifactLiveGameplayTested": false,
+    "limit": "Previous isolated-server proofs apply to their exact experimental artifacts; not recast as this main artifact live verification."
+  },
+  "productionChanged": false,
+  "gameOrAgentConnectionsStarted": false,
+  "modelRequests": 0,
+  "newDaemon": false,
+  "serverOrRouterChanged": false,
+  "hostPinsUpdated": false,
+  "adoption": "All hosts can consume this shared package commit and discover capabilities. Existing running Agents need an explicit core dependency update.",
+  "privateEvidenceDirectory": "research/core-shared-mobility-20261021; raw reports, ledgers and tarballs excluded from Git"
+}

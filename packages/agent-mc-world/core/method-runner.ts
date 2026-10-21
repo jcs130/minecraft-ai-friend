@@ -7,7 +7,7 @@ export const METHOD_ADAPTER = 'minecraft-method/v1';
 export const METHOD_LIMITS = Object.freeze({ sourceChars: 12_000, paramsChars: 4_096,
   calls: 32, actions: 16, messageChars: 24_000, durationMs: 60_000, maxDurationMs: 120_000 });
 
-export type MethodOperation = 'capabilities' | 'state' | 'do' | 'flightPlan' | 'mineflayer';
+export type MethodOperation = 'capabilities' | 'state' | 'do' | 'flightPlan' | 'swimPlan' | 'mineflayer';
 export interface MethodTrace {
   call: number; method: MethodOperation; args: unknown; startedAt: string;
   endedAt?: string; result?: unknown; error?: string;
@@ -17,12 +17,14 @@ export interface MethodRun {
   id: number; name: string; sourceHash: string; startedAt: string; endedAt?: string;
   status: 'running' | 'validated' | 'completed' | 'failed' | 'cancelled';
   trace: MethodTrace[]; result?: unknown; error?: string;
+  routine?: { id: string; version: number };
   procedure?: { executionId: string; reference: ProcedureReference; adapter: string; mode: 'validation' | 'execution';
     invocations: ProcedureInvocation[]; versions: Array<{ id: string; revision: string; sourceHash: string; parent: string | null; author: unknown }> };
 }
 export interface MethodRequest {
   name?: string; code: string; params?: Record<string, unknown>; durationMs?: number; validate?: boolean;
   procedure?: { reference: ProcedureReference; graph: ProcedureGraph };
+  routine?: { id: string; version: number };
 }
 export interface MethodHost {
   nativeMethods?: string[];
@@ -39,9 +41,10 @@ export class MethodRunner {
 
   constructor(private readonly host: MethodHost) {}
 
-  get current(): Pick<MethodRun, 'id' | 'name' | 'sourceHash' | 'startedAt'> | null {
+  get current(): Pick<MethodRun, 'id' | 'name' | 'sourceHash' | 'startedAt' | 'routine'> | null {
     const run = this.active?.run;
-    return run ? { id: run.id, name: run.name, sourceHash: run.sourceHash, startedAt: run.startedAt } : null;
+    return run ? { id: run.id, name: run.name, sourceHash: run.sourceHash, startedAt: run.startedAt,
+      ...(run.routine ? { routine: { ...run.routine } } : {}) } : null;
   }
 
   /** Wait for an original run; a cancelled/expired wait never cancels the program. */
@@ -69,7 +72,7 @@ export class MethodRunner {
   inspect(id?: number, call?: number): unknown {
     const summary = (run: MethodRun) => ({ id: run.id, name: run.name, sourceHash: run.sourceHash,
       startedAt: run.startedAt, endedAt: run.endedAt, status: run.status, calls: run.trace.length, error: run.error,
-      ...(run.procedure ? { procedure: run.procedure } : {}) });
+      ...(run.procedure ? { procedure: run.procedure } : {}), ...(run.routine ? { routine: run.routine } : {}) });
     if (id === undefined) return [...this.runs.values()].map(summary);
     const run = this.runs.get(id);
     if (!run) throw new Error(`方法#${id}不在本次进程的最近八次记录中`);
@@ -79,7 +82,7 @@ export class MethodRunner {
       return structuredClone({ ...summary(run), trace });
     }
     const result = JSON.stringify(run.result ?? null);
-    return { ...summary(run), ...(result.length > 2000
+    return { ...summary(run), ...(result.length > 2000 && !run.routine
       ? { resultExcerpt: result.slice(0, 2000), resultTruncated: true }
       : { result: run.result }),
     trace: run.trace.map(trace => {
@@ -114,6 +117,7 @@ export class MethodRunner {
     const run: MethodRun = { id: ++this.serial, name,
       sourceHash: createHash('sha256').update(request.code).digest('hex'),
       startedAt: new Date().toISOString(), status: 'running', trace: [] };
+    if (request.routine) run.routine = structuredClone(request.routine);
     if (request.procedure) {
       const { reference, graph } = request.procedure;
       if (graph.root !== reference.revision || graph.versions[graph.root]?.code !== request.code) throw new Error('procedure request identity mismatch');
@@ -181,7 +185,7 @@ export class MethodRunner {
         catch (error) { finish('failed', String(error)); }
         return;
       }
-      if (message.kind !== 'call' || !['capabilities', 'state', 'do', 'flightPlan', 'mineflayer'].includes(message.method)) {
+      if (message.kind !== 'call' || !['capabilities', 'state', 'do', 'flightPlan', 'swimPlan', 'mineflayer'].includes(message.method)) {
         finish('failed', '脚本协议包含未知操作'); return;
       }
       if (request.validate) { finish('failed', '语法校验不可调用World'); return; }

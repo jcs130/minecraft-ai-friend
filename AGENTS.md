@@ -5,6 +5,7 @@
 - 宿主负责模型连接、人格、个人记忆和推理/采用决策；核心提供可复用的游戏学习及技能演化机制。适配器只映射宿主接口与生命周期，千灯纪规则、协议和资料作为显式可选包。可视化源码归 `mc-visual-console`，由核心消费锁定产物；演出/TTS/音乐独立。
 - 按核心公开契约、独立打包、SDK/MCP/宿主消费验证，再更新消费端锁定依赖的顺序交付。代码提交、发布、加载和实服效果分别留证；架构调整不授权重载或启动任何历史角色。
 - 下列日期记录保留各自历史范围，不能覆盖本节的核心优先原则。详细边界见 `packages/agent-mc-world/AGENTS.md` 与 `packages/agent-mc-world/docs/component-boundaries.md`。
+- 2026-10-21：实验分支已验证的通用生产/移动能力增量移植到 main@1d7b254f 基线：10项内置routine、单格harvest、水下有界绕障/氧气预算、点名载具/连续穿门、原生鞘翅与载具输入及滑翔误触坠落修复。保留主干眼高/流体读数、原生输入租约、方法学习回执和严格坠落检查；不复活旧goal.y豁免，不把Mineflayer实现冒称Java-client等后端已支持。共享SDK/MCP与extension公开能力，宿主无专用副本。1845测试通过/0失败，3项可选Harness2与渲染资源测试跳过；327声明、engine-only构建、隔离包NodeNext/Bundler、源/包各35健康及5项SDK/MCP实际传输/Worker校验通过。包版本保持0.5.7-rc.59，未发npm或更新现役宿主；主干新包未联机，不挪用实验包的实测结论。证据docs/evidence/core-shared-mobility-20261021.json；私有research/core-shared-mobility-20261021不上传。正式服/网络/角色与历史未知动作未动。
 
 ## 历史部署与审计记录
 

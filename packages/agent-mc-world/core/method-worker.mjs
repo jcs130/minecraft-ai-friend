@@ -53,7 +53,7 @@ function capabilities(scope) {
     enumerable: false,
   });
   return { mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
-    flightPlan: args => rpc('flightPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3),goals:harden({GoalBlock,GoalNear}) } : {}) };
+    flightPlan: args => rpc('flightPlan', args, scope), swimPlan: args => rpc('swimPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3),goals:harden({GoalBlock,GoalNear}) } : {}) };
 }
 
 try {

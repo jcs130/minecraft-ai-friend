@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "independent agent-mc-world Mineflayer movement routines",
+  "routines": [
+    "navigate_route",
+    "swim_to",
+    "flight_route"
+  ],
+  "routineSourceHashes": {
+    "navigate_route": "73b5c482a6e0f76fa81b2ac930189eb5f8f265eda6207fe1c517e157f5f1d50c",
+    "swim_to": "2811337cfddde30d174cdc258a24fc65e907eb5c66542ba9161eeaffc03bfb49",
+    "flight_route": "f8c67fba3b6c681321532533278a4ef4254c0297c314bb8e1c4eed36b3e9d8d4"
+  },
+  "changes": [
+    "Bounded absolute waypoints with actual per-leg arrival verification",
+    "Closed-loop short water inputs with raw nullable oxygen, measured stall detection and cancellation",
+    "Existing flight planning, permissions and collision control reused for multi-leg routes",
+    "Gravity restoration alone no longer reports landing; actual stable onGround samples required"
+  ],
+  "sourceVerification": {
+    "passed": 699,
+    "failed": 0,
+    "skipped": 0,
+    "coreTypecheck": true,
+    "build": true,
+    "publicDeclarations": 272,
+    "runtimeFiles": 11134,
+    "nodeNextConsumer": true,
+    "bundlerConsumer": true,
+    "healthSmoke": [
+      {
+        "package": "source",
+        "assertions": 25,
+        "ok": true
+      },
+      {
+        "package": "isolated-packed-consumer",
+        "assertions": 25,
+        "ok": true
+      }
+    ]
+  },
+  "artifact": {
+    "filename": "agent-mc-world-0.4.0.tgz",
+    "sha256": "01a5e8584ad8c158fdad1537dd71c0ba8146c7fbef1362bd1dd088b9d789ee56",
+    "bytes": 46991638,
+    "packedConsumerInstalledInIsolation": true,
+    "npmPublished": false,
+    "functionalPayloadIdenticalToGameplayArchive": true,
+    "documentationOnlyRepack": [
+      "package/docs/movement-routines.md"
+    ]
+  },
+  "isolatedGameplay": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "mods": 103,
+    "transport": "ordinary Mineflayer through frozen gateway",
+    "world": "previous isolated QA world; distinct new fixture and actor; no production world copied",
+    "checks": [
+      "packed standalone client joins the isolated 103-mod server as an ordinary Mineflayer account",
+      "one route request walks two exact waypoints and reports each actual position",
+      "survival body cannot start permission-based flight",
+      "server-granted flight executes both checked legs and confirms real landing",
+      "survival body swims using real server physics and verifies its three-dimensional destination",
+      "body remains alive and exposes current water and oxygen readings"
+    ],
+    "allSixGameplayAssertionsPassed": true,
+    "sourceHashesMatchPackedRoutines": true,
+    "flightFixture": "console-granted creative mode only for permission-based flight, then survival restored; no OP granted",
+    "waterFixture": "known three-block-deep water region; console placement into water is fixture, not counted as swimming",
+    "harnessCleanupFailure": "After all six assertions, harness called nonexistent client.close; retained original report. Identified only its owned parent Node process, ended it; child cleaned up on IPC disconnect. No gameplay action replayed.",
+    "followup": [
+      "new process restores the same body at its saved destination without replaying any action",
+      "correct disconnect API normally shuts down the packed engine and body connection"
+    ],
+    "followupReadOnly": true,
+    "correctDisconnectConfirmed": true,
+    "shutdown": {
+      "javaExit": 0,
+      "gatewayExit": 0,
+      "portsClosed": [
+        39320,
+        39321,
+        39322
+      ],
+      "at": "2026-10-21T07:05:44.348855+00:00"
+    }
+  },
+  "limits": {
+    "underwaterAStar": false,
+    "elytraFlight": false,
+    "allModVehiclesVerified": false,
+    "allGameplayVerified": false,
+    "productionRestarted": false,
+    "existingHostsAutomaticallyUpdated": false,
+    "newDaemon": false,
+    "modelRequests": 0
+  },
+  "upstreamResearch": [
+    {
+      "repo": "PrismarineJS/mineflayer-pathfinder",
+      "sha": "d773d15ff1bb271090122b3c7106a519a68bbbd9",
+      "adoptedNewBackend": false
+    },
+    {
+      "repo": "miner-org/mineflayer-baritone",
+      "sha": "5bbb91eeb2ace18b4c83a56d00fcd494f0f976f2",
+      "adoptedNewBackend": false,
+      "inspected": [
+        "src/movement/swin.js",
+        "src/flight.js"
+      ]
+    },
+    {
+      "repo": "trqxyz/SpectraPhysics",
+      "sha": "1ea12c8de3edbf9b3091c75569c80608ee886777",
+      "adoptedNewBackend": false
+    },
+    {
+      "repo": "cabaletta/baritone",
+      "sha": "62c784d8b3ac471d70fabb203ac11391b4a0a68b",
+      "adoptedNewBackend": false
+    }
+  ],
+  "privateEvidence": "research/agent-work-20261021/movement-* and release-movement-*; raw world, logs and archives remain private"
+}
