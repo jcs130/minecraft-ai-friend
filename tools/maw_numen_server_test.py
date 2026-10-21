@@ -10,6 +10,14 @@ from unittest.mock import patch
 import maw_numen_server as service
 
 class PrivateConfigurationTests(unittest.TestCase):
+    def test_provision_uses_the_selected_fom_endpoint_without_reviving_old_lan_proxy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);service.initialize(root)
+            path=root/'server/config/maw-numen-server.json';config=json.loads(path.read_text())
+            config['publicEndpoint']='http://127.0.0.1:28989/mcp';path.write_text(json.dumps(config))
+            result=service.provision(str(uuid.uuid4()),'fom-owner',root)
+            self.assertEqual(json.loads(Path(result['credentialsFile']).read_text())['endpoint'],config['publicEndpoint'])
+
     def test_configuration_keeps_http_loopback_and_reuses_existing_lan_gateway(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);result=service.initialize(root)

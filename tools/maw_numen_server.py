@@ -46,7 +46,8 @@ def provision(owner,label,root=DEFAULT_ROOT):
     accounts=json.loads(path.read_text('utf-8'));token=secrets.token_hex(32)
     if any(a['ownerUuid']==owner for a in accounts['accounts']):raise ValueError('Owner already provisioned; rotate explicitly from the private in-game menu')
     accounts['accounts'].append({'ownerUuid':owner,'label':label,'tokenHash':hashlib.sha256(token.encode()).hexdigest()});atomic_json(path,accounts)
-    credentials=private/'credentials'/f'{owner}.json';atomic_json(credentials,{'ownerUuid':owner,'endpoint':PUBLIC,'token':token})
+    config=json.loads((root/'server/config/maw-numen-server.json').read_text('utf-8'))
+    credentials=private/'credentials'/f'{owner}.json';atomic_json(credentials,{'ownerUuid':owner,'endpoint':config['publicEndpoint'],'token':token})
     return {'ok':True,'ownerUuid':owner,'credentialsFile':str(credentials),'tokenPrinted':False}
 
 def revoke(owner,root=DEFAULT_ROOT):

@@ -108,13 +108,15 @@ class Client:
         init = self.rpc('initialize', {'protocolVersion': '2025-06-18', 'clientInfo': {'name': 'maw-invite-client', 'version': '1'}})
         tools = self.rpc('tools/list')['tools']
         mods = self.call('mod_operations'); lua = self.call('operations'); owned = self.call('list_companions')
-        if any(not result.get('ok', True) for result in (mods, lua, owned)): raise ClientError('discovery_failed')
+        native_available=mods.get('ok') is True
+        if not native_available and mods.get('code')!='native_mod_bridge_unavailable':raise ClientError('discovery_failed')
+        if any(not result.get('ok', True) for result in (lua, owned)): raise ClientError('discovery_failed')
         states = [self.call('get_state', {'companion': row['bodyId']}) for row in owned['companions']]
         for row, state in zip(owned['companions'], states):
             if state.get('bodyId') != row['bodyId'] or not state.get('ok') and not (state.get('online') is False and state.get('status') in ('offline', 'dead') and state.get('code') == 'body_offline_or_dead'):
                 raise ClientError('own_body_read_failed')
             if self.owner_uuid and state.get('ownerUuid') != self.owner_uuid: raise ClientError('owner_identity_mismatch')
-        return {'ok': True, 'protocolVersion': init['protocolVersion'], 'tools': len(tools), 'nativeModOperations': mods['operationCount'],
+        return {'ok': True, 'protocolVersion': init['protocolVersion'], 'tools': len(tools), 'nativeModAccess':native_available,'nativeModOperations': mods['operationCount'] if native_available else 0,
                 'luaFunctions': lua['totalFunctions'], 'ownBodies': len(states), 'onlineBodies': sum(state.get('online') is True for state in states),
                 'bodyStates': [{key: state[key] for key in ('bodyId', 'status', 'online', 'blocked') if key in state} for state in states], 'worldMutations': 0, 'modelRequests': 0}
 

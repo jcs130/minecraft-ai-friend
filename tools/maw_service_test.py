@@ -467,6 +467,10 @@ class LocalRequestTests(unittest.TestCase):
         self.assertEqual(service.guard_console("locate structure minecraft:village_plains"), "locate structure minecraft:village_plains")
         self.assertEqual(service.guard_console("setworldspawn 10 64 10"), "setworldspawn 10 64 10")
         self.assertEqual(service.guard_console("spawnpoint MawLife 10 64 10"), "spawnpoint MawLife 10 64 10")
+        self.assertEqual(service.guard_console("/maw_registry dumpids"), "maw_registry dumpids")
+        self.assertEqual(service.guard_console("maw_registry visuals"), "maw_registry visuals")
+        for command in ('maw_registry','maw_registry dumpids extra','maw_registry arbitrary'):
+            with self.assertRaises(ValueError):service.guard_console(command)
         supervisor = service.Supervisor.__new__(service.Supervisor)
         child = Mock()
         supervisor.children = {"java": child}

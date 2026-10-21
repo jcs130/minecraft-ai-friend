@@ -64,6 +64,31 @@ test('Numen discovery reads real per-operation schemas without creating/restorin
   assert.equal(calls.some(row => ['create_companion', 'restore_companion', 'claim_control'].includes(row.name)), false)
   assert.equal((await adapter.read('body.observe')).code, 'read_requires_available_read_only_operation')
 })
+
+test('standalone Numen host exposes Lua and exact 41 inventory slots without guessing a mod menu type', async t => {
+  const s = server(), call = s.client.call.bind(s.client)
+  s.state.inventory = Array.from({ length: 41 }, (_, slot) => ({ slot, empty: slot !== 0, ...(slot === 0 ? {
+    id: 'farmersdelight:rice', count: 2, componentsSnbt: '{id:"farmersdelight:rice",count:2,components:{}}' } : {}) }))
+  s.state.menu = { containerId: 7, slotCount: 45, slots: Array.from({ length: 45 }, (_, slot) => ({ slot, empty: true })), cursor: { slot: -1, empty: true } }
+  s.client.call = async (name, args) => name === 'mod_operations' ? { ok: false, code: 'native_mod_bridge_unavailable' } : call(name, args)
+  const adapter = await withNumen(s.client, options(temp(t))); t.after(() => adapter.close())
+  const catalog = adapter.operations(), state = await adapter.snapshot()
+  assert.equal(catalog.nativeModAccess, false); assert(catalog.operations.some(r => r.id === 'numen.lua' && r.available))
+  assert(!catalog.operations.some(r => r.id === 'curios.open')); assert.equal(state.inventory.slotNamespace, 'player_inventory_0_40')
+  assert.equal(state.inventory.items[0].slot, 0); assert.equal(state.inventory.items[0].count, 2); assert.match(state.inventory.items[0].snbt, /components/)
+  assert.equal(state.menu.windowId, 7); assert.equal(state.menu.menuType, null); assert.equal(state.menu.slots.length, 45)
+  assert(!s.calls.some(r => r.name === 'mod_query'))
+  await adapter.claimControl(); const submitted = await adapter.submit({ action_id: 'standalone-lua', operation: 'numen.lua', args: { code: 'print(numen.status.self().hp)' } })
+  assert(submitted.ok); const terminal = await adapter.wait('standalone-lua'); assert.equal(terminal.status, 'succeeded')
+  assert.equal(terminal.result.inventoryDelta.source, 'native_numen_player_inventory'); assert.equal(terminal.result.inventoryDelta.available, true)
+  s.state.inventory[0].componentsSnbt = ''; assert.equal((await adapter.snapshot()).inventory.available, false)
+})
+
+test('an unrelated mod-discovery failure never becomes the standalone Lua mode', async t => {
+  const s = server(), call = s.client.call.bind(s.client)
+  s.client.call = async (name, args) => name === 'mod_operations' ? { ok: false, code: 'authentication_required' } : call(name, args)
+  await assert.rejects(withNumen(s.client, options(temp(t))), /numen_native_operations_unavailable/)
+})
 test('canonical state retains real mana/full components and labels 46 player-menu slots', async t => {
   const { adapter } = await fixture(t), s = await adapter.snapshot()
   assert.equal(s.provider, 'numen'); assert.equal(s.bodyKind, 'numen_fake_player'); assert.equal(s.ownerUuid, OWNER)

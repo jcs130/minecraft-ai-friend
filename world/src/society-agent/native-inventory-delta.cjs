@@ -32,9 +32,10 @@ function nativeInventorySnapshot (menu, expectedUuid) {
     items, totals: [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([id, count]) => ({ id, count })) }
 }
 function nativeInventoryDelta (before, after) {
-  const base = { available: false, source: 'native_player_inventory_menu', excludedSlots: [0], added: [], removed: [] }
+  const base = { available: false, source: after?.source || 'native_player_inventory_menu', excludedSlots: after?.excludedSlots || [0], added: [], removed: [] }
   if (!before?.available || !after?.available) return { ...base, reason: before?.reason || after?.reason || 'NATIVE_PLAYER_INVENTORY_UNAVAILABLE' }
   if (before.playerUuid !== after.playerUuid) return { ...base, reason: 'NATIVE_INVENTORY_PLAYER_BINDING_MISMATCH' }
+  if (before.source !== after.source || before.slotNamespace !== after.slotNamespace) return { ...base, reason: 'NATIVE_INVENTORY_SLOT_SPACE_MISMATCH' }
   const a = new Map(before.totals.map(item => [item.id, item.count])), b = new Map(after.totals.map(item => [item.id, item.count]))
   const added = [], removed = []
   for (const id of [...new Set([...a.keys(), ...b.keys()])].sort()) {

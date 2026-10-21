@@ -5,6 +5,13 @@ const uuid = 'e371227c-09fa-3722-84f4-f3228a552c3c'
 const item = (id = 'minecraft:cobblestone', count = 1, extra = '') => ({ id, count, snbt: `{id:"${id}",count:${count}${extra}}` })
 const state = (values = {}, windowId = 0) => ({ playerUuid: uuid, windowId, slots: Array.from({ length: 46 }, (_, slot) => values[slot] || null) })
 const snapshot = menu => nativeInventorySnapshot(menu, uuid)
+
+test('headless inventory deltas keep their source and reject a different slot namespace', () => {
+  const a = { available: true, playerUuid: uuid, source: 'native_numen_player_inventory', slotNamespace: 'player_inventory_0_40', excludedSlots: [], items: [], totals: [] }
+  const b = { ...a, items: [{ slot: 0, id: 'farmersdelight:rice', count: 2, snbt: '{id:"farmersdelight:rice",count:2}' }], totals: [{ id: 'farmersdelight:rice', count: 2 }] }
+  const d = nativeInventoryDelta(a, b); assert(d.available); assert.equal(d.source, a.source); assert.deepEqual(d.excludedSlots, []); assert.equal(d.added[0].count, 2)
+  assert.equal(nativeInventoryDelta(a, { ...b, slotNamespace: 'player_menu_46' }).reason, 'NATIVE_INVENTORY_SLOT_SPACE_MISMATCH')
+})
 const result = (before, after, type = 'gather', afterBlock = 'minecraft:air') => nativeDigResult({ type,
   position: { x: -393, y: 69, z: 352 }, beforeBlock: { id: 'minecraft:cobblestone' }, afterBlock,
   beforeInventory: snapshot(before), afterInventory: snapshot(after) })

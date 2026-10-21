@@ -46,6 +46,28 @@ function normalizedState (base, value, menu = value.menu) {
     menu: copy(ownMenu), equipment: copy(ownMenu?.self?.equipment || value.equipment || value.self?.equipment),
     mana: copy(ownMenu?.self?.mana || value.self?.mana), currentAction: copy(value.currentAction) }
 }
+function headlessState (base, value) {
+  const result = normalizedState(base, value), slots = value.inventory, totals = new Map(), items = []
+  const valid = Array.isArray(slots) && slots.length === 41 && slots.every((item, slot) => {
+    if (item?.slot !== slot || typeof item.empty !== 'boolean') return false
+    if (item.empty) return true
+    if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(item.id || '') || !Number.isInteger(item.count) || item.count < 1 || item.count > 2147483647 ||
+        typeof item.componentsSnbt !== 'string' || !item.componentsSnbt || Buffer.byteLength(item.componentsSnbt) > 65536) return false
+    items.push({ slot, id: item.id, count: item.count, snbt: item.componentsSnbt }); totals.set(item.id, (totals.get(item.id) || 0) + item.count)
+    return true
+  })
+  result.inventory = { available: valid, source: 'native_numen_player_inventory', playerUuid: base.bodyId,
+    slotNamespace: 'player_inventory_0_40', excludedSlots: [], items: valid ? items : [],
+    totals: valid ? [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([id, count]) => ({ id, count })) : [],
+    reason: valid ? null : 'native_numen_inventory_unavailable' }
+  // The host supplies exact current-menu slots and components, but does not
+  // advertise a menu type. Preserve that limitation instead of guessing by size.
+  const menu = value.menu
+  result.menu = menu && Number.isInteger(menu.containerId) && Array.isArray(menu.slots) && menu.slots.length === menu.slotCount
+    ? { ...copy(menu), playerUuid: base.bodyId, windowId: menu.containerId, menuType: null, capturedAt: result.capturedAt } : null
+  result.sampling = 'single_owned_headless_body_snapshot'; result.nativeModAccess = false
+  return result
+}
 function withMineflayer (sdk, { controllerId, viewerUrl = null } = {}) {
   const base = () => metadata('mineflayer', sdk.identity().bodyId, controllerId || sdk.identity().controllerId)
   const decorate = value => ({ ...copy(value), ...base() })
@@ -95,7 +117,7 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
   if (!body || !/^[A-Za-z0-9_]{1,16}$/.test(body.name || '')) throw Error('numen_body_not_owned')
   const ledger = new NativeLedger(path.join(ledgerDir, 'numen'), body.name)
   if (ledger.playerUuid && ledger.playerUuid !== bodyId) { ledger.close(); throw Error('numen_ledger_body_mismatch') }
-  let closed = false, lease = null, active = null, submitting = false, rows = [], closing = null
+  let closed = false, lease = null, active = null, submitting = false, rows = [], closing = null, nativeBridgeAvailable = true
   const statusReads = new Map()
   const decorate = value => ({ ...copy(value), ...base })
   const bound = (name, args = {}) => client.call(name, { ...args, companion: bodyId })
@@ -119,6 +141,7 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
     }
     const canonical = canonicalState(value)
     if (canonical) return canonical
+    if (!nativeBridgeAvailable) return { ...headlessState(base, value), account: body.name }
     let menu = null, menuError = null
     if (value.ok) {
       const result = await bound('mod_query', { operation: 'menu.snapshot' })
@@ -176,7 +199,8 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
         try {
           // Current hosts persist the actual terminal-tick menu/inventory in
           // the action receipt. Do not make three more HTTP reads per action.
-          const after = canonicalState(raw.after || {}) || await snapshot()
+          const after = canonicalState(raw.after || {}) || (!nativeBridgeAvailable && raw.after?.bodyId === bodyId && raw.after?.ownerUuid === ownerUuid
+            ? headlessState(base, raw.after) : await snapshot())
           if (after.ok) {
             value.actualPosition = copy(value.actualPosition || after.position)
             value.result = { ...value.result, actualPosition: copy(value.actualPosition), dimension: value.result?.dimension || after.dimension,
@@ -194,10 +218,11 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
   }
   async function discover () {
     const native = await client.call('mod_operations')
-    if (!native.ok || !Array.isArray(native.operations)) throw Error('numen_native_operations_unavailable')
+    nativeBridgeAvailable = native.ok === true
+    if (nativeBridgeAvailable ? !Array.isArray(native.operations) : native.code !== 'native_mod_bridge_unavailable') throw Error('numen_native_operations_unavailable')
     // List is cheap. Explain fetches one actual signature on demand; reconnect
     // must not spend 48 requests or guess the Mineflayer parameter contract.
-    rows = native.operations.map(row => ({ ...copy(row), parameters: null, provider: 'numen', common: controls.has(row.id), available: true,
+    rows = (nativeBridgeAvailable ? native.operations : []).map(row => ({ ...copy(row), parameters: null, provider: 'numen', common: controls.has(row.id), available: true,
       permission: 'owned_body_lease_and_native_rules', execution: row.readOnly ? 'awaitable_read' : 'asynchronous_action' }))
     rows.push(...core.map(row => ({ ...copy(row), provider: 'numen', available: true, common: true, execution: row.readOnly ? 'awaitable_read' : 'asynchronous_action' })),
       { id: 'numen.lua', readOnly: false, available: true, provider: 'numen', execution: 'asynchronous_action',
@@ -218,7 +243,7 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
     returns: row.readOnly ? 'own_body_data_or_explicit_unavailable' : 'accepted_then_original_action_id_terminal_or_unknown',
     invocation: row.readOnly ? 'adapter.read(id,args)' : 'adapter.submit({action_id,operation:id,args})' } : null
   const operations = id => id === undefined ? { schemaVersion: 1, provider: 'numen', bodyKind: base.bodyKind,
-    operationCount: rows.length, availableCount: rows.filter(row => row.available).length, allGameplayVerified: false,
+    operationCount: rows.length, availableCount: rows.filter(row => row.available).length, nativeModAccess: nativeBridgeAvailable, allGameplayVerified: false,
     explain: 'await adapter.operations(id)', operations: rows.map(operationRow) } : explain(rows.find(row => row.id === id)).then(operationRow)
   async function submit ({ action_id: id, operation, args = {} } = {}) {
     if (!ACTION.test(id || '')) return decorate(fail('action_id_invalid_common_contract'))

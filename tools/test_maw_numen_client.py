@@ -12,6 +12,13 @@ import maw_numen_client as sdk
 
 
 class ClientContract(unittest.TestCase):
+    def test_minimal_numen_lua_host_is_available_without_the_old_gameplay_bridge(self):
+        responses={'mod_operations':{'ok':False,'code':'native_mod_bridge_unavailable'},'operations':{'ok':True,'totalFunctions':72},'list_companions':{'ok':True,'companions':[]}}
+        with patch.object(self.client,'rpc',side_effect=lambda method,args=None:{'protocolVersion':'2025-06-18'} if method=='initialize' else {'tools':[]}),patch.object(self.client,'call',side_effect=lambda name,args=None:responses[name]):
+            value=self.client.smoke();self.assertTrue(value['ok']);self.assertFalse(value['nativeModAccess']);self.assertEqual(value['nativeModOperations'],0);self.assertEqual(value['luaFunctions'],72)
+            responses['mod_operations']={'ok':False,'code':'authentication_required'}
+            with self.assertRaises(sdk.ClientError):self.client.smoke()
+
     def setUp(self):
         self.requests = []; self.destination_auth = []; self.mode = 'ok'; outer = self
         class Handler(BaseHTTPRequestHandler):

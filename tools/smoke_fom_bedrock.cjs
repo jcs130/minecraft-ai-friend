@@ -40,7 +40,18 @@ async function inventoryUntil(predicate){
  do{snapshot=await nativeInventory();if(predicate(snapshot))return snapshot;await new Promise(r=>setTimeout(r,200))}while(Date.now()<end)
  assert.fail('native inventory did not reach the expected fixture state')
 }
-const say=message=>send('text',{type:'chat',category:'authored',needs_translation:false,source_name:'FomBedrockQA',message,xuid:'',platform_chat_id:'',has_filtered_message:false})
+// Read-only diagnostics are still chat commands to vanilla's spam limiter.
+// Serialize every query, including the keepalive query, below that limit.
+let chatTail=Promise.resolve(),nextChatAt=0
+const say=message=>{
+ const pending=chatTail.then(async()=>{
+  await new Promise(r=>setTimeout(r,Math.max(0,nextChatAt-Date.now())))
+  if(error)throw Error(error)
+  nextChatAt=Date.now()+1250
+  send('text',{type:'chat',category:'authored',needs_translation:false,source_name:'FomBedrockQA',message,xuid:'',platform_chat_id:'',has_filtered_message:false})
+ })
+ chatTail=pending.catch(e=>{error??=e.message});return chatTail
+}
 async function main(){
  client=bedrock.createClient({host:'127.0.0.1',port:28993,version:'1.26.51',username:'FomBedrockQA',offline:true,followPort:false,skipPing:true,raknetBackend:'raknet-native',conLog:()=>{}})
  send=client.write.bind(client);client.write=(n,p)=>n==='resource_pack_client_response'?undefined:send(n,p)
@@ -295,7 +306,11 @@ main().catch(e=>{report.error=e.stack;process.exitCode=1;console.error(e.stack)}
   const snapshot=await nativeInventory(),item=snapshot.items.find(i=>i.slot===f.slot)
   assert(item&&/^touhou_little_maid:smart_slab_(init|empty|has_maid)$/.test(item.nativeId)&&item.count===1)
   await ownConsole('execute run item replace entity b_FomBedrockQA hotbar.'+f.slot+' with minecraft:air')
-  await inventoryUntil(s=>JSON.stringify(s.items)===JSON.stringify(f.before.items))
+  // Other explicitly supplied fixtures may still be present in a combined
+  // run. Remove this slot only; their later cleanup verifies the full baseline.
+  const expected=snapshot.items.filter(i=>i.slot!==f.slot)
+  for(const original of f.before.items)assert.deepEqual(expected.find(i=>i.slot===original.slot),original)
+  await inventoryUntil(s=>JSON.stringify(s.items)===JSON.stringify(expected))
   check('soul-slab fixture removed and the original QA inventory retained',true)
  }catch(e){report.soulSlabCleanupError=e.message;process.exitCode=1}
  if(potionMetadataTest)try{await ownConsole('execute run kill @e[tag='+potionTag+']')}catch(e){report.cleanupError=e.message;process.exitCode=1}
@@ -304,7 +319,7 @@ main().catch(e=>{report.error=e.stack;process.exitCode=1;console.error(e.stack)}
  if(modelTest)try{await ownConsole('execute run kill @e[tag='+temporaryMaidTag+']')}catch(e){report.cleanupError=e.message;process.exitCode=1}
  if(fixture)try{
   if(process.argv.includes('--retain-fixture')&&!report.error){assert(report.fixtureAfter);report.fixtureRetainedForReconnect=true}
-  else {for(const [id,count] of report.suppliedTypes)await ownConsole('execute run clear b_FomBedrockQA '+id+' '+count);report.fixtureCleanupDelivered=true;report.fixtureCleanup=await inventoryUntil(s=>JSON.stringify(s.items)===JSON.stringify(report.fixtureBefore.items));assert.deepEqual(report.fixtureCleanup.items,report.fixtureBefore.items);check('only temporary QA items removed; original inventory fully retained',true)}
+  else {for(const [id,count] of report.suppliedTypes)await ownConsole('execute run clear b_FomBedrockQA '+id+' '+count);report.fixtureCleanupDelivered=true;const expected=report.soulSlabFixture&&!report.soulSlabCleanupError?report.soulSlabFixture.before.items:report.fixtureBefore.items;report.fixtureCleanup=await inventoryUntil(s=>JSON.stringify(s.items)===JSON.stringify(expected));assert.deepEqual(report.fixtureCleanup.items,expected);check('only temporary QA items removed; original inventory fully retained',true)}
  }catch(e){report.cleanupError=e.message;process.exitCode=1}
  clearInterval(heartbeat);client?.close();const file=path.join(root,'udp-smoke-'+Date.now()+'.json');fs.writeFileSync(file,JSON.stringify(report,(_,v)=>typeof v==='bigint'?v.toString():v,2));console.log(JSON.stringify({checks:report.checks,packs:report.packDownloads,chunks:report.chunks,error:report.error,report:file}))
 })

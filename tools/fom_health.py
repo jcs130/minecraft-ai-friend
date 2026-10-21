@@ -15,6 +15,11 @@ def probe(file=DEFAULT):
         checks['correct_server_owner']=state['serverDir']==cfg['serverDir'] and [r['id'] for r in state['services']]==[r['id'] for r in cfg['services']]
         checks['owner_heartbeat']=0<=time.time()-state['heartbeatEpoch']<15
         child=state['services'][0]
+        if cfg['services'][0].get('numenServer'):
+            import fom_numen
+            numen=fom_numen.health(cfg['services'][0]['numenServer']['port'],child['pid'])
+            checks['numen_official_version_and_optional_client']=numen['ready'] and numen['version']==fom_numen.VERSION and not numen['clientRequired']
+            checks['numen_host_in_owned_game_jvm']=child['metrics'].get('numen',{}).get('ready') is True
         checks['actual_minecraft_status']=state['healthy'] and child['ready'] and child['metrics']['version']['protocol']==767
         checks['explicit_game_bind']=child['port']==cfg['gamePort'] and child['listenHost']==cfg['services'][0]['listenHost']
         checks['private_admin_http']=child['host']=='127.0.0.1'

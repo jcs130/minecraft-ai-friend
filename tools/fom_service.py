@@ -1,7 +1,7 @@
 """FOM entry point using the existing owned-child supervisor, watchdog and mailbox."""
 from pathlib import Path
 import argparse,hashlib,json,sys,time,tomllib
-from maw_service import Supervisor,properties,read_json,submit,guard_console
+from maw_service import Supervisor,Child,properties,read_json,submit,guard_console
 from mixed_auth_support import verify,NAME as AUTH_NAME
 
 PRODUCTION=Path('E:/MC/servers/fom-2.42/server').resolve()
@@ -87,8 +87,11 @@ def load_config(file,*,verify_hashes=True):
     if support not in ('maw-fom-support-0.1.0.jar','maw-fom-support-0.2.0.jar') or support not in actual:raise ValueError('Explicit first-join login policy adapter required')
     if [name for name in actual if name.startswith('maw-fom-support-')]!=[support]:raise ValueError('Duplicate or unselected FOM support adapter')
     check_policies(server)
+    import fom_numen
+    numen=fom_numen.policy(server,raw.get('numen'),lock['files'],production=public)
     command=[str(java),'-Djava.net.preferIPv4Stack=true',JIT,'-Xms512M','-Xmx'+str(raw['maxMemoryMiB'])+'M','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8','@java.args','nogui']
     spec={'id':'java','port':port,'host':'127.0.0.1','listenHost':host,'command':command,'cwd':str(server),'env':{},'dependsOn':[],'readiness':'minecraft','healthUrl':None,'stopMode':'stdin','stopText':'stop','startupTimeoutSeconds':300}
+    if numen:spec['numenServer']=numen
     if raw.get('agentGateway') is not None and support!='maw-fom-support-0.2.0.jar':raise ValueError('Agent gateway requires explicitly selected FOM support 0.2.0')
     gate,gate_stats=gateway_spec(raw,server,port,health,public,verify_hashes)
     return {'schemaVersion':1,'serverDir':str(server),'gamePort':port,'healthPort':health,'runtimeDir':str(runtime),'services':[spec]+([gate] if gate else []),
@@ -101,12 +104,29 @@ def validator(config):
     if read_json(Path(config['_file']))!=config['_raw']:raise ValueError('FOM configuration changed; review and restart owner')
     server=Path(config['serverDir']);check_server(server,config['gamePort'],config['services'][0]['listenHost'])
     check_policies(server)
+    import fom_numen
+    fom_numen.check_unchanged(config['services'][0].get('numenServer'))
     if read_json(Path(config['_raw']['modsManifest']),65536)!=config['_lock']:raise ValueError('FOM release manifest changed while running')
     current=sorted((str(p),p.stat().st_size,p.stat().st_mtime_ns) for p in (server/'mods').glob('*.jar'))
     if current!=sorted(config['_modStats']):raise ValueError('FOM mods changed while running')
     for path,size,stamp in config.get('_gateStats',[]):
         stat=Path(path).stat()
         if (stat.st_size,stat.st_mtime_ns)!=(size,stamp):raise ValueError('FOM Agent gateway release changed while running')
+
+class FomChild(Child):
+    def tick(self):
+        super().tick()
+        selected=self.spec.get('numenServer')
+        if self.ready and selected:
+            try:
+                import fom_numen
+                self.metrics['numen']=fom_numen.health(selected['port'],self.process.pid)
+                self.numen_failures=0
+            except Exception as error:
+                self.numen_failures=getattr(self,'numen_failures',0)+1
+                self.ready=False;self.problem='numen_readiness_failed: '+str(error)
+                self.metrics['numen']={'ready':False,'consecutiveFailures':self.numen_failures}
+                if self.numen_failures>=3 and time.monotonic()-self.started>self.spec['startupTimeoutSeconds']:self.stop()
 
 def main():
     if sys.stdout is not None:sys.stdout.reconfigure(encoding='utf-8')
@@ -117,7 +137,7 @@ def main():
     a=parser.parse_args();config=load_config(a.config)
     if a.action=='plan':
         print(json.dumps({k:config[k] for k in ('schemaVersion','serverDir','gamePort','healthPort','runtimeDir','services','networkExposure')}))
-    elif a.action=='run':Supervisor(config,validator=lambda:validator(config)).run()
+    elif a.action=='run':Supervisor(config,validator=lambda:validator(config),child_factory=FomChild).run()
     elif a.action=='status':
         state=read_json(Path(config['runtimeDir'])/'health.json');state['heartbeatFresh']=0<=time.time()-state.get('heartbeatEpoch',0)<15
         if not state['heartbeatFresh']:state['healthy']=False
