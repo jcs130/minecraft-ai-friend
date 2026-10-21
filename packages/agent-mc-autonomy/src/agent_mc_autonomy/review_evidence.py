@@ -17,6 +17,10 @@ def completion_contract(review_id, reference, *, pending_death, legacy=None):
     contract = {
         "required": {"heartbeat_id": review_id, "decision": ["continue", "insert", "revise"],
                      "reason": "One short factual clause from inspected evidence (about 12 words)."},
+        "reasoning_guidance": "This is a brief strategic checkpoint. Keep reasoning brief and focused, "
+            "then submit one complete final decision from inspected evidence. "
+            "Do not exhaustively retell the history or persona. State uncertainty briefly when evidence is missing; "
+            "do not fill the output budget with deliberation. Preserve the original deadline and safety constraints.",
         "output_guidance": "Keep text fields short. Finish this final tool call before elaborating. "
             "Additional persona material and narration are not completion requirements; a natural reply can follow acknowledgement.",
         "goal": "Required only for insert/revise; a concise stage within user intent and standing goal. "

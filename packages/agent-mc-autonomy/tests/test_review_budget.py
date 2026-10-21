@@ -25,6 +25,23 @@ def test_minimal_completion_contract_is_neutral_and_ordinary_final_needs_no_extr
     assert not port.mailbox.ready()
 
 
+def test_short_checkpoint_guidance_survives_real_full_and_compact_inspection(runtime):
+    port, _, publish = runtime
+    publish()
+    rid = port.offer()['review']['id']
+    full = port.decide(rid, 'inspect')['completion_contract']
+    compact = port.decide(rid, 'inspect', compact=True)['completion_contract']
+    assert full == compact
+    guidance = full['reasoning_guidance']
+    assert 'brief strategic checkpoint' in guidance
+    assert 'Keep reasoning brief and focused' in guidance
+    assert 'uncertainty' in guidance
+    assert len(guidance.encode()) < 500
+    assert all(value not in guidance for value in ['512', 'xhigh', 'Neko', 'qwen', 'farm'])
+    assert full['required']['decision'] == ['continue', 'insert', 'revise']
+    assert not port.state()['review'].get('result') and not port.mailbox.ready()
+
+
 @pytest.mark.parametrize("outcome", ["lesson", "deferred"])
 def test_completion_contract_death_paths_are_minimal_and_evidence_bound(tmp_path, outcome):
     port, _, _, _, review = death_review(tmp_path)
