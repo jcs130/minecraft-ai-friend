@@ -56,11 +56,21 @@ numen.gui.close()
 
 不是模型长期自主发展测试，也不是所有模组、全部机器和复杂载具的全覆盖。
 
-当前提供 **17 个 MCP 工具、68 项真实服务端 Lua 函数**。`mod_operations` 明确返回 `native_mod_bridge_unavailable`，`nativeModAccess=false`、专用 mod operations 为 0；不能伪称拥有旧服 99 项模组桥。农夫乐事和机械动力上述流程通过原生 Lua 的交互、物品栏、GUI、建造和挖掘能力完成。统一适配器和 Python smoke 已支持这一模式，其他发现错误仍会拒绝。
+当前提供 **17 个 MCP 工具、68 项已注册 Lua 函数，其中 61 项可纯服务端执行**。另外 7 项需要客户端，宿主明确返回不可用：`numen.api.help`、`numen.module.delete/list/reset/save/show`、`tlm.skin.list`。不要将注册数量当成无头可执行数量。
+
+其中已经包含官方车万女仆联动的 14 个函数，13 个可在服务端调用，包括 `tlm.maid.list/info/config/task/open`、祭坛配方、模型及皮肤操作；客户端皮肤目录读取除外。原生目录不是只懂原版物品。`mod_operations` 返回的 `native_mod_bridge_unavailable` / `nativeModAccess=false` 只表示**本项目旧服专用桥没有安装**，其专用 operations 为 0，不代表 Numen 不能操作模组。农夫乐事和机械动力上述流程通过通用原生 Lua 完成。统一适配器和 Python smoke 已支持这一模式，其他发现错误仍会拒绝。
 
 Numen 原生背包是 **0–40 共 41 槽**，统一接口标为 `source=native_numen_player_inventory`、`slotNamespace=player_inventory_0_40`，保留非空物品完整组件 SNBT。当前菜单保留实际 containerId 和原生槽位；宿主未提供类型时 `menuType=null`，不能凭 45 槽猜测工作台类型。终态库存增量必须比较同身体、同来源和同槽空间。
 
 原模组 ID、组件、实体和全部 186,696 个状态语义未变化；只增加 26 个可选 Numen 频道。12 行原始几何导出出现最大 `5.55e-17` 的 JVM 浮点末位差异，单独记录后保留原规范资源。既有网页与基岩资源包字节保持；这不等于所有 GUI 或像素一致验收。
+
+## 模组适配与分发方式
+
+已核对[该发布版官方说明](https://github.com/Dwinovo/minecraft-numen/blob/v0.1.4.1-1.21.1-beta/README.md#插件)：原子动作由 Lua API 提供，其他模组通过插件注册新的 Lua API，官方以车万女仆和 YSM 为例。当前 JAR 已内嵌部分官方联动，按实际已安装目标模组注册。基础开箱、点机器、取放、挖放优先复用通用操作；模组特殊逻辑通过版本对应的公共 API 扩展，并提供玩法脚本/说明。能点击不等于已经理解整条生产链。
+
+本项目的常驻宿主与可选客户端兼容层均是独立 NeoForge **扩展模组 JAR**，可随匹配的整合包放进服务端 `mods`。分发组成是官方 Numen 核心、两个附加 JAR、配置模板与接入 SDK；不应分发本服私有 accounts、bridge secret、访问令牌、模型 Key、世界和玩家数据。各模组专用适配可继续独立成扩展，不能把本服固定端口与 FOM 运维策略当成适用于任意服务器的默认值。
+
+官方原版明确是双端模组；**本项目纯服务端、玩家可不安装 Numen 是附加组件实现的能力**，不能说成官方默认支持。没有客户端的服务器也不能调用声明为 client 的函数。
 
 ## 维护
 

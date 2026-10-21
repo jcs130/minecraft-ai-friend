@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "scope": "current_fom_optional_numen_server_host_and_native_mod_play",
+  "sourceCommit": "bad245ce4e99a74bbc256184ea87faa4c54ca745",
+  "branch": "experiment/agent-society-1.21.1",
+  "published": true,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.250",
+  "previousNumenInCurrentFom": false,
+  "official": {
+    "version": "0.1.4.1",
+    "preRelease": true,
+    "publishedAt": "2026-10-09",
+    "latestPublishedForMinecraft1211Checked": true,
+    "release": "https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta",
+    "pluginDocumentation": "https://github.com/Dwinovo/minecraft-numen/blob/v0.1.4.1-1.21.1-beta/README.md#插件",
+    "jarBytes": 4581865,
+    "sha256": "ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226",
+    "officialApiDigestMatches": true
+  },
+  "installation": {
+    "originalJarsPreserved": 103,
+    "totalJars": 106,
+    "officialCoreUnmodified": true,
+    "apiAlreadyEmbedded": true,
+    "addons": {
+      "maw_numen_compat-0.1.0.jar": "1f1ad2a47f7bbdbfab456735bc131f8650e87a9f3ca6fee6c9a5fdee08e0f6f0",
+      "maw_numen_server-0.1.0.jar": "6f5deffb896563880124fb2e732b9165c97878c4f27d44c684dd38ab55acd969"
+    },
+    "addonSourcesMatchRecordedBuild": true,
+    "officialRequiresClientAndServer": true,
+    "ourOptionalClientAddonInstalled": true,
+    "oldControllersOrBodiesRestored": false,
+    "worldRegenerated": false,
+    "existingPlayerItemsModified": false
+  },
+  "host": {
+    "kind": "server_side_fake_player",
+    "residentInGameJvm": true,
+    "mcpBind": "127.0.0.1:28989",
+    "perOwnerBearerRequired": true,
+    "newPublicPorts": 0,
+    "gamePortsUnchanged": {
+      "javaTcp": 28976,
+      "mineflayerTcp": 28977,
+      "bedrockUdp": 28988
+    },
+    "mcpTools": 17,
+    "registeredLua": 68,
+    "serverExecutableLua": 61,
+    "clientOnlyLua": [
+      "numen.api.help",
+      "numen.module.delete",
+      "numen.module.list",
+      "numen.module.reset",
+      "numen.module.save",
+      "numen.module.show",
+      "tlm.skin.list"
+    ],
+    "bundledOfficialTlmLua": 14,
+    "serverExecutableTlmLua": 13,
+    "nativeModAccess": false,
+    "oldProjectSpecificModOperations": 0,
+    "unattendedModelLoopStarted": false,
+    "modelKeysProvisioned": false,
+    "productionBodiesCreated": 0,
+    "securityChecks": {
+      "officialVersion": true,
+      "residentOptionalClient": true,
+      "noLegacyModBridge": true,
+      "unauthenticatedRejected": true,
+      "noOldAccountsRestored": true,
+      "noModelProfilesProvisioned": true,
+      "temporaryTcpPortsClosed": true
+    }
+  },
+  "actualTests": {
+    "numen": {
+      "passed": 7,
+      "ordinarySurvivalNonOp": true,
+      "operatorProvidedFixtures": true,
+      "llmDriven": false,
+      "verified": [
+        "same UUID after normal restart",
+        "native Farmer cooking-pot 45-slot menu",
+        "two actual rice and bowls naturally cooked into two meals and retrieved",
+        "native Create casing placed and mined with an iron pickaxe",
+        "Create hand crank actually driven"
+      ],
+      "nativeCrankRpm": -32
+    },
+    "officialPlugin": {
+      "actualLuaCompleted": true,
+      "readOwnMaidRegistry": true,
+      "readActualAltarRecipes": true,
+      "emptyRegistryNotCountedAsTamingOrTaskAutomation": true
+    },
+    "unifiedBodyAdapter": {
+      "passed": 5,
+      "inventorySlots": 41,
+      "slotNamespace": "player_inventory_0_40",
+      "menuTypeWhenUnadvertised": null,
+      "sameActionIdReconciledWithoutRedispatch": true
+    },
+    "mineflayer": {
+      "isolatedPassed": 3,
+      "productionPassed": 3,
+      "finalFrozenSdkUsed": true,
+      "originalComponentsRetained": true
+    },
+    "bedrock": {
+      "realUdpChecksPassed": 33,
+      "readOnlyHeartbeatSeconds": 10,
+      "soakSeconds": 75,
+      "originalPackDownloadsVerified": [
+        {
+          "id": "2254393d-8430-45b0-838a-bd397828c765_1.1.3",
+          "bytes": 146609,
+          "sha256": "7a7ad898228eee3a00adc0bf061c309f832ab98953c047c20fef928c5cef56a6"
+        },
+        {
+          "id": "b6a63468-6f80-5fff-b05e-4d9cb26da319_1.3.0",
+          "bytes": 12514196,
+          "sha256": "0c8bb45ef45ee89d3fb9526c497bdd04bec5d1df5476d44d5422efc94b43f6d4"
+        },
+        {
+          "id": "17c49227-9ee9-56ff-a16b-00593e5328b8_1.0.4",
+          "bytes": 964210,
+          "sha256": "5081173e187c0b52ee8c8084e3364de8f9db907680f944bc06d20d658bacad95"
+        },
+        {
+          "id": "affa4056-e3c8-5c86-b803-c39a64d026ab_1.0.0",
+          "bytes": 6632229,
+          "sha256": "4468f594beb3cf290575c250ba36626618291862e79f14d89534c24257740c48"
+        }
+      ],
+      "temporaryItemsCleanedWithReadback": true,
+      "actualPhoneTestedThisTurn": false,
+      "xboxValidationDisabledOnlyInLoopbackQa": true
+    },
+    "regression": {
+      "pythonPassed": 102,
+      "nodePassed": 36,
+      "nodeSkipped": 0,
+      "failed": 0,
+      "stdlibPythonMissingPillowAttemptRetained": true
+    },
+    "health": {
+      "mainPassed": 17,
+      "bedrockPassed": 14,
+      "panelMain": true,
+      "panelBedrock": true,
+      "productionXboxRequired": true,
+      "offlineQaProductionXboxOnlyAssertionFalseByDesign": true
+    }
+  },
+  "resourceRevalidation": {
+    "states": 186696,
+    "networkIdsAndPropertiesExact": true,
+    "originalShapeRoundoffRows": 12,
+    "maxOriginalShapeRoundoff": 5.551115123125783e-17,
+    "shapeComparisonTolerance": 1e-12,
+    "additionalOptionalNumenChannels": 26,
+    "oldChannelsUnchanged": true,
+    "rawExportSha256": "4db91ffecc4314795dec1d4730349a341d631f5c48757e1b6eee541f32aa501f",
+    "retainedCanonicalSha256": "05b7b2d1391e7d2227e282524b7f33b5aba62ba679393dbd365f21586aa453bb",
+    "rawCompletedExportSha256": "47a56e123fdff1d5fccfb438ef6c67aa93f623d8df58abcd2643208e9f39ca59"
+  },
+  "delivery": {
+    "pythonSdk": "E:/MC/integrations/fom-numen-20261022",
+    "existingViewerSdk": "E:/MC/integrations/fom-native-view-20261022-v2",
+    "sharedVisualizationCommitUnchanged": "327de5298ba061a0acc555cb32b890e7fe05b837",
+    "fullGuiOrPixelParityClaimed": false
+  },
+  "maintenance": {
+    "normalOriginalOwnerStopAndStart": true,
+    "originalRunAndDaclRegistered": true,
+    "ownedNumenHealthInWatchdog": true,
+    "mainRunId": "43632047875642829e7cbeba625a57b6",
+    "bedrockRunId": "63d77a8f895a4ea6a9d8dd7baa08a028",
+    "coldBackupFiles": 1912,
+    "coldBackupBytes": 140886174,
+    "coldBackupSha256": "0d28e671ce12ec350abc0fe570c48426381a7c250e5472cb85d2e21cfd11a57c",
+    "coldBackupCopies": [
+      "E:\\MC\\backups\\fom-numen-20261022\\before.zip",
+      "F:\\MC-backups\\fom-numen-20261022\\before.zip"
+    ],
+    "crcAndEveryMemberSha256Verified": true,
+    "qaMainExit": 0,
+    "qaBridgeExit": 0,
+    "qaTcpPortsClosed": true,
+    "qaUdp28993Released": true,
+    "numenFixtureOriginalFullComponentsRetained": true,
+    "qaBodyDormantAndLeaseReleased": true
+  },
+  "preservedFailures": [
+    "old console guard rejected registry export before stdin; exact read-only diagnostics allowed with tests",
+    "Create crank test assumed 16 RPM; original NBT showed -32 RPM; assertion reconciled without replay",
+    "combined Bedrock cleanup compared against pre-other-fixture baseline, overpolled and was kicked for spamming; exact fixture reconciliation plus serialized 1250ms chat queries and final 33-check combined test passed",
+    "first private Bedrock full-registry rebind and CRLF config preflights rejected before candidate startup"
+  ],
+  "limits": [
+    "not all mod machines or full automated production chains validated",
+    "not autonomous survival or long-term model operation",
+    "not a new full Java-client or phone GPU acceptance",
+    "client-only Lua functions explicitly unavailable in server-only mode",
+    "Numen custom API availability is distinct from old project nativeModAccess flag"
+  ]
+}

@@ -1,4 +1,6 @@
-2026-10-14 更新：未完成的 NeoForge 服已按用户要求退役，由命运齿轮 FOM 2.42 替换。当前 Java 地址 micro.kangqiang.site:28976（LAN 192.168.3.163:28976），MC1.21.1 / NeoForge21.1.248，需完整客户端整合包。最新连接、Agent 客户端接入及维护见 MY-AGENT-WORLD-FOM.txt 和 MY-AGENT-WORLD-FOM-OPERATIONS.md。下文属于旧栈留档；旧基岩、AgentGate、Numen 与 RPG 功能未迁入新包，不要照旧文档复活退役服务或解除旧 Agent 的自主暂停。
+2026-10-22 现役 FOM 更新：MC1.21.1 / NeoForge21.1.250，官方 Numen 0.1.4.1 beta 与纯服务端附加组件已接入。当前接入请读 FOM-NUMEN.md；MCP 只在服务器本机 http://127.0.0.1:28989/mcp，需要独立 owner bearer。不是下文旧服的 28984 代理地址。现有 Java28976、Mineflayer28977、基岩UDP28988 保持。当前是 17 工具、68 已注册 Lua（61 项无客户端），原生 Lua 已实际完成烹饪锅与机械动力操作。
+
+以下为旧栈历史记录：2026-10-14 未完成的 NeoForge 服由命运齿轮 FOM 2.42 替换，当时尚未迁入 Numen。不要照下文复活退役服务、配置旧代理或解除旧 Agent 的自主暂停。当前模组边界与维护见 MY-AGENT-WORLD-FOM.txt、MY-AGENT-WORLD-FOM-OPERATIONS.md。
 
 My Agent World：服务端常驻 Agent 接入
 

@@ -102,4 +102,6 @@ FOM 当前用完整 Java 客户端原生渲染交互。远程 Agent 在自己的
 
 Mineflayer 基础 registry 翻译已在 FOM 发布，见 [基础接入](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。烹饪、女仆和 Iron 法术内容已通过独立候选及正式服检查，2026-10-15 发布，见 [内容扩展](MY-AGENT-WORLD-FOM-CONTENT.md)。
 
-旧网页资源、Numen、千灯纪技能/公会/试炼、殖民地和距离语音未迁入当前 FOM。基岩现有独立的部分兼容入口，旧模型/表单/语音扩展未迁入。新内容必须按实际整包注册表与协议适配，并验证真实画面和操作。
+2026-10-22：FOM 增加官方 Numen 0.1.4.1 beta 和两个纯服务端附加模组，保留原 103 个 JAR，现 106 个。常驻宿主与游戏同 JVM，MCP 只在 127.0.0.1:28989、按 owner 的 bearer 鉴权；现有 Java/Mineflayer/基岩入口保持。实际烹饪锅、机械动力方块/曲柄与官方女仆 Lua 查询已验证。提供 68 项已注册 Lua，其中 61 项无需客户端；不是旧服 99 项专用桥迁移。管理、分发与接入见 [FOM Numen](FOM-NUMEN.md)。
+
+网页原生侧流与当前资源交付见 [Mineflayer 原生画面](FOM-MINEFLAYER-NATIVE-VIEW.md)及[双端适配](FOM-DUAL-CLIENT-ADAPTERS.md)。千灯纪旧技能/公会/试炼、殖民地和距离语音仍未迁入当前 FOM。新内容必须按实际整包注册表与协议适配，并验证真实画面和操作。
