@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "FOM Bedrock soul charm icons and TLM entity presentation",
+  "sourceCommit": "f9cd45da6d007b714b280099d7ecab0b83751a63",
+  "publication": {
+    "bridgeRunId": "dd3d6bb1acf849b2a5da1fb9f046db4e",
+    "worldRunIdPreserved": "34b2c08221fc404e942318d8df7af67c",
+    "worldJavaPidPreserved": 30356,
+    "worldServerRestarted": false,
+    "staticInputsUnchanged": 106,
+    "mods": 103,
+    "portsUnchanged": true,
+    "xboxValidationRequired": true,
+    "registeredOwner": true
+  },
+  "resources": {
+    "icons": 1082,
+    "namedNativeItems": 4575,
+    "iconPackVersion": [
+      1,
+      0,
+      4
+    ],
+    "modelBindings": 241,
+    "unsupportedSourceModelRows": 13,
+    "ysmInstalled": false,
+    "nativeRecordings": 435,
+    "animatedSoulCharmIcon": "exact native first frame; static preview only",
+    "packs": [
+      {
+        "id": "2254393d-8430-45b0-838a-bd397828c765_1.1.3",
+        "bytes": 146609,
+        "sha256": "7a7ad898228eee3a00adc0bf061c309f832ab98953c047c20fef928c5cef56a6"
+      },
+      {
+        "id": "b6a63468-6f80-5fff-b05e-4d9cb26da319_1.3.0",
+        "bytes": 12514196,
+        "sha256": "0c8bb45ef45ee89d3fb9526c497bdd04bec5d1df5476d44d5422efc94b43f6d4"
+      },
+      {
+        "id": "17c49227-9ee9-56ff-a16b-00593e5328b8_1.0.4",
+        "bytes": 964210,
+        "sha256": "5081173e187c0b52ee8c8084e3364de8f9db907680f944bc06d20d658bacad95"
+      }
+    ]
+  },
+  "tests": {
+    "node": {
+      "passed": 30,
+      "failed": 0
+    },
+    "python": {
+      "passed": 44,
+      "failed": 0
+    },
+    "bedrockUdp": {
+      "checks": [
+        {
+          "name": "real Bedrock UDP login reaches native FOM terrain",
+          "pass": true
+        },
+        {
+          "name": "native FOM icon pack must be accepted and downloads with its announced SHA256",
+          "pass": true
+        },
+        {
+          "name": "download is the exact FOM pack rather than retired-world resources",
+          "pass": true
+        },
+        {
+          "name": "Bedrock account is isolated from Java and Agent names",
+          "pass": true
+        },
+        {
+          "name": "native mixed-login policy authorizes first guest without a fabricated password",
+          "pass": true
+        },
+        {
+          "name": "own native inventory and nearby-entity queries return through Bedrock",
+          "pass": true
+        },
+        {
+          "name": "Bedrock position comes from the native body rather than origin placeholder",
+          "pass": true
+        },
+        {
+          "name": "three actual mod item types reach the Bedrock connection",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: farmersdelight:rice",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: touhou_little_maid:smart_slab_init",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: touhou_little_maid:smart_slab_empty",
+          "pass": true
+        },
+        {
+          "name": "native mod stack carries a real Bedrock item and server network stack identity",
+          "pass": true
+        },
+        {
+          "name": "ordinary Bedrock inventory swap gets an authoritative success",
+          "pass": true
+        },
+        {
+          "name": "native mod identity and count survive the real Bedrock inventory operation",
+          "pass": true
+        },
+        {
+          "name": "original QA guide/items remain in their original slots",
+          "pass": true
+        },
+        {
+          "name": "real native maid arrives as her own original custom model",
+          "pass": true
+        },
+        {
+          "name": "original maid entity movement reaches the same Bedrock actor",
+          "pass": true
+        },
+        {
+          "name": "real Bedrock session survives 75 seconds with native state and inventory retained",
+          "pass": true
+        },
+        {
+          "name": "only temporary QA items removed; original inventory fully retained",
+          "pass": true
+        }
+      ],
+      "reconnectChecks": [
+        {
+          "name": "real Bedrock UDP login reaches native FOM terrain",
+          "pass": true
+        },
+        {
+          "name": "native FOM icon pack must be accepted and downloads with its announced SHA256",
+          "pass": true
+        },
+        {
+          "name": "download is the exact FOM pack rather than retired-world resources",
+          "pass": true
+        },
+        {
+          "name": "Bedrock account is isolated from Java and Agent names",
+          "pass": true
+        },
+        {
+          "name": "native mixed-login policy authorizes first guest without a fabricated password",
+          "pass": true
+        },
+        {
+          "name": "own native inventory and nearby-entity queries return through Bedrock",
+          "pass": true
+        },
+        {
+          "name": "Bedrock position comes from the native body rather than origin placeholder",
+          "pass": true
+        },
+        {
+          "name": "real native maid arrives as her own original custom model",
+          "pass": true
+        },
+        {
+          "name": "original maid entity movement reaches the same Bedrock actor",
+          "pass": true
+        }
+      ],
+      "sameQaBodyAfterReconnect": true,
+      "readOnlyHeartbeatSeconds": 10,
+      "soakSeconds": 75
+    },
+    "productionBedrockHealth": {
+      "schemaVersion": 1,
+      "scope": "fom_bedrock",
+      "checks": {
+        "release_and_actual_fom_registry": true,
+        "correct_owner": true,
+        "fresh_heartbeat": true,
+        "supervised_children_ready": true,
+        "actual_udp_pong": true,
+        "native_icon_registration": true,
+        "native_maid_model_registration": true,
+        "native_maid_download_stack": true,
+        "private_upstream": true,
+        "xbox_required_on_lan": true
+      },
+      "modelRequests": 0,
+      "worldActions": 0,
+      "actualPhoneTested": false,
+      "allModGameplayVerified": false,
+      "udpPort": 28988,
+      "udpAddress": "192.168.3.163",
+      "runId": "dd3d6bb1acf849b2a5da1fb9f046db4e",
+      "customItems": 1082,
+      "ok": true
+    },
+    "productionWorldHealth": {
+      "schemaVersion": 1,
+      "scope": "fom_public_server",
+      "checks": {
+        "release_files_and_login_policy_verified": true,
+        "smart_npc_loader_and_budget": true,
+        "smart_npc_chinese_chat": true,
+        "smart_npc_cooperative_roster": true,
+        "correct_server_owner": true,
+        "owner_heartbeat": true,
+        "actual_minecraft_status": true,
+        "explicit_game_bind": true,
+        "private_admin_http": true,
+        "mixed_login_database_created": true,
+        "agent_gateway_ready": true,
+        "agent_gateway_peer_policy_matches_config": true
+      },
+      "modelRequests": 0,
+      "worldActions": 0,
+      "allModGameplayVerified": false,
+      "gamePort": 28976,
+      "healthPort": 28985,
+      "runId": "34b2c08221fc404e942318d8df7af67c",
+      "physicsTransport": "TCP",
+      "publicGameAccess": true,
+      "supervisedBy": "existing owned-child supervisor",
+      "ok": true
+    },
+    "qaShutdowns": [
+      {
+        "kind": "bedrock",
+        "runId": "977b5d2252b548f8a1f075568c212658",
+        "normalExits": [
+          0,
+          0
+        ]
+      },
+      {
+        "kind": "world",
+        "runId": "fe0e5b04ddae4d76abf81ba41a679622",
+        "normalExits": [
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  "limitations": {
+    "userConfirmedPhoneLoginBeforeFix": true,
+    "phoneVisualAfterFixVerified": false,
+    "pixelParityVerified": false,
+    "allModGameplayVerified": false,
+    "maidAutonomousAiAnimationTested": false,
+    "voicePlaybackOnPhoneTested": false
+  },
+  "preservedFailures": [
+    "Old post-swap QA inventory cache did not apply stack response; fixed probe order.",
+    "Early maid fixture used ModelId instead of native model_id; corrected and repeated.",
+    "Protocol-only no-input probes timed out; active acceptance uses explicit read-only queries.",
+    "Candidate standard-library deployment initially lacked voice validator dependency; preflight rejected, copied and revalidated.",
+    "New bridge runtime lacked startup record; Start rejected, same owned HKCU Run entry re-registered and ready verified."
+  ],
+  "backup": {
+    "drives": [
+      "E",
+      "F"
+    ],
+    "file": "fom-bedrock-fix-20261021/previous-controls.zip",
+    "sha256": "df94923541ff8bbd69d5ee1275e48b317d9e8493fae073889d8b25ffd8cbf194"
+  },
+  "modelRequests": 0
+}
