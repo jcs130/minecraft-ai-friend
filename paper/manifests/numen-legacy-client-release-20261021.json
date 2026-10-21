@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "at": 1792573394.5608022,
+  "authorization": "可以重启；可以重启 我和他说了",
+  "apiSha256": "6684d9e36d40bcf9a3b651a278fe978c9108f141fbecab8add03701a1496ef2c",
+  "previousApiSha256": "fb4e7a8656cb4f1226c13b1b1f04bf45816fedc781c0ccc9f5df6ffc1d5daa78",
+  "upstreamPr": "https://github.com/Dwinovo/minecraft-numen/pull/142",
+  "upstreamCommit": "493e0564a3e175fef2c71d16280f5b04b691452b",
+  "changedClasses": [
+    "com/dwinovo/numen/api/platform/PaperNetworkChannel.class"
+  ],
+  "unchangedJarEntries": 1219,
+  "backupStamp": "20261021-164816",
+  "coldBackups": [
+    "E:/MC/backups/scheduled/20261021-164816",
+    "F:/MC-backups/scheduled/20261021-164816"
+  ],
+  "maintenanceTask": "Afu-MC-DailyBackup",
+  "taskResult": 0,
+  "tests": {
+    "jvm": 1727,
+    "isolatedUpstreamPaper": 8,
+    "isolatedExactCandidate": 4,
+    "productionChecks": 21,
+    "productionProtocolChecks": 8,
+    "retentionChecks": 19
+  },
+  "residentDailyResumed": true,
+  "newTaskSubmitted": false,
+  "playerDataReset": false,
+  "graphicalClientTested": false,
+  "initialFailure": "First maintenance attempt stopped at the existing strict roster gate because a restarted Goddess bridge made the text roster exceed its length limit. No JAR was installed. Maintenance pause coordinated the watcher; full roster and existing gates then passed.",
+  "rollback": "Use a newly approved normal maintenance and new E/F cold backups; restore only the original API JAR from deployment-rollback. Preserve current world, account and companion files."
+}

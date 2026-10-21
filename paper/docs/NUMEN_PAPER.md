@@ -2,9 +2,12 @@
 
 ## 当前状态更新（2026-10-21）
 
-现役 **Paper 1.21.1 build133 / AgentFriend 0.4.47.10 / Numen 0.1.4 / NumenBedrock 0.1.0**。原版Java客户端不必安装Numen即可入服；只有完整Java设置面板需要下文固定的1.21.1模组包。基岩沿用`/numenmenu`，原协议3与端口保持。 完整双盘冷备份为`20261021-151552`。正式核验和回退见[本次发布说明](MESSAGE_AUTONOMY_RELEASE_20261021.md)。下方候选与暂停描述按历史时点阅读。
+现役 **Paper 1.21.1 build133 / AgentFriend 0.4.47.10 / Numen 0.1.4 / NumenBedrock 0.1.0**。原版 Java 客户端不必安装 Numen 即可入服；完整 Java 设置面板需要下文固定的 1.21.1 模组包。基岩沿用 `/numenmenu`，原协议 3 与端口保持。最新完整双盘冷备份为 `20261021-164816`；Numen API 已更新为 `6684d9e3`，修复官方旧客户端收到不兼容名册后断线。正式核验和回退见[本次发布记录](../manifests/numen-legacy-client-release-20261021.json)；此前消息降噪与自主运行修复见[前次发布说明](MESSAGE_AUTONOMY_RELEASE_20261021.md)。下方历史候选与暂停描述按当时时点阅读。
 
-### 官方旧客户端入服断线修复候选（2026-10-21，尚未部署）
+### 官方旧客户端入服断线修复已上线（2026-10-21）
+
+服主批准后，经 180/60/10 秒通知、真人退出和副本/PvP 检查，原维护任务完成 E/F 冷备份 `20261021-164816` 并只替换 API JAR，任务结果 0。正式 21 项状态/备份检查、8 项认证协议检查与 19 项同伴身份/物品核验通过，桐人原生心跳已恢复；更新说明已发。初次维护被长名单截断拦截，之后通过维护暂停协调女神守护程序，完整名单验证成功；未绕过真人门禁。见[发布记录](../manifests/numen-legacy-client-release-20261021.json)。
+
 
 官方发布的 `0.1.4`、`0.1.4.1` 客户端与这里固定源码构建的客户端虽然版本号接近，协议并不相同。旧版登记 `numen_api:companion_list`，但同伴名册每行没有新版 `removedFor` 字段，也没有 `hello_ack` 握手频道。Paper 原先只检查同名频道，向旧版发了新格式；用官方 0.1.4 NeoForge 解码器验证，空名册剩余 0 字节，有一个同伴时剩余 1 字节，与玩家的断线报错一致。重装客户端不会清除服务端名册，所以仍然会断线。
 
@@ -12,7 +15,7 @@
 
 上游 [PR #142](https://github.com/Dwinovo/minecraft-numen/pull/142)，提交 `493e0564a3e175fef2c71d16280f5b04b691452b`。1727 项 JVM、8 项真实 Paper E2E 全通过且无跳过；未修复版本的旧频道测试已复现失败。正式候选在现役 API 上仅替换 `PaperNetworkChannel.class`，其他 1219 个条目逐字节保持，并通过 4 项隔离联机（原版、旧频道重连保持同伴 UUID、新版握手及模型检查、私聊模型回复）。没有启动图形客户端验证画面。
 
-候选 SHA256 `6684d9e36d40bcf9a3b651a278fe978c9108f141fbecab8add03701a1496ef2c`；现役/回退仍为 `fb4e7a8656cb4f1226c13b1b1f04bf45816fedc781c0ccc9f5df6ffc1d5daa78`。候选、回退与回执位于 E/F `MC/ops/repairs/numen-client-owner-20261021/`，见[候选清单](../manifests/numen-legacy-client-candidate-20261021.json)。尚未写入维护队列，也未重启正式服务；上线需本次维护确认、预告、真人退出及原流程双盘完整冷备份。回退只在正常停服后恢复旧 API JAR，保留玩家和同伴目录，不覆盖旧世界。
+候选 SHA256 `6684d9e36d40bcf9a3b651a278fe978c9108f141fbecab8add03701a1496ef2c`；上一版回退为 `fb4e7a8656cb4f1226c13b1b1f04bf45816fedc781c0ccc9f5df6ffc1d5daa78`。候选、回退与回执位于 E/F `MC/ops/repairs/numen-client-owner-20261021/`，见[候选清单](../manifests/numen-legacy-client-candidate-20261021.json)。本次已正常重启上线；冻结候选清单保留构建时状态，以本节发布记录为准。回退只在正常停服后恢复旧 API JAR，保留玩家和同伴目录，不覆盖旧世界。
 
 小鱼的模型连接另行核实：已保存的新同伴绑定有真实模型回复和工具回执，保存的模型配置也通过原生 Java 流式调用。后续“another program is already running”是程序占用提示，不能当作 Key 无效；本兼容补丁不修改模型配置或执行槽。
 
