@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+0.2.83 pins core rc.65, which rechecks an exact-cell placement denial before a
+further retry. The body/review model coordination and existing queue/unknown
+barriers are unchanged. This dependency update neither enables optional practice
+workers nor establishes successful protected navigation or sustained learning.
+
 0.2.72 refreshes the public pending set immediately after durable native
 receipt processing, including while an unrelated model request is still slow.
 It does not read a second queue, retire unknown outcomes or replay work.
