@@ -39,7 +39,7 @@ export interface Harness2Result {
   train: { baseline: PracticeAssessment; candidate: PracticeAssessment | null };
   holdout: Array<{ caseId: string; baseline: PracticeAssessment; candidate: PracticeAssessment }>;
   gate: { eligible: boolean; reason: string; adopted: false };
-  experience: Harness2ModelReply['experience'] | null;
+  experience: NonNullable<Harness2ModelReply['experience']> | null;
   /** Every exact trial remains in the metadata journal and scoped MethodLibrary. */
   evidenceRefs: string[]; adopted: false;
 }
