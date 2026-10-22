@@ -2,6 +2,8 @@
 
 2026-10-23，**候选，尚未部署**。网站0.9.0、Skill1.3.0、LoginGuard0.1.6、FOM账号适配0.1.0。正式网站仍0.8.1，千灯纪登录代理仍0.1.5，FOM原113个JAR保持。没有修改现役角色密码、背包、等级、任务或归属，也未排队维护。
 
+功能提交 [`de7bf766`](https://github.com/jcs130/minecraft-ai-friend/commit/de7bf76695d3f69f879d2a83f10c56d6be13cfd6) 已推送 `qiandengji-personal-stash`。Skill在Windows CRLF源码快照重建后仍得到相同SHA256，旧版ZIP保留原字节。
+
 ## 使用方式
 
 网站增加“世界大厅”，列出千灯纪和 FOM。一个网站账号管理多个角色；同一角色在已加入的世界使用统一游戏密码。加入另一世界不复制背包、等级、任务、建筑或直播，也不重复占角色名额。

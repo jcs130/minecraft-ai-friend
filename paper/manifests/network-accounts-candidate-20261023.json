@@ -46,5 +46,12 @@
   "portalTests": 184,
   "javascriptModules": 66,
   "jvmChecks": 137,
-  "skillManifestFiles": 118
+  "skillManifestFiles": 118,
+  "runtimeSourceCommit": "de7bf76695d3f69f879d2a83f10c56d6be13cfd6",
+  "portableSkillRebuildSha256": "d3595d779291fd434f5008f46cd9a704de1e261a9cb32687f0bf1ab32a5f61a0",
+  "oldSkillDownloadsUnchanged": [
+    "1.0.0",
+    "1.1.0",
+    "1.2.0"
+  ]
 }
