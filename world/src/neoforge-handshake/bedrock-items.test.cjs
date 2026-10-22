@@ -9,6 +9,16 @@ const catalog = { schemaVersion: 1, items: [{ nativeId: 4500, nativeItem: 'examp
 const item = (components = []) => ({ itemCount: 3, itemId: 4500, components,
   addedComponentCount: components.length, removeComponents: [], removedComponentCount: 0 })
 
+test('advancement icons pass through original item identity projection without leaking native component IDs',()=>{
+  const adapter=new BedrockItems(catalog),original=item([{type:'example:spell',data:{level:12}}])
+  const input={reset:true,advancementMapping:[{key:'example:root',value:{displayData:{icon:original}}}],progressMapping:[]}
+  const out=adapter.outgoing('advancements',input),icon=out.advancementMapping[0].value.displayData.icon
+  assert(icon.components.some(c=>c.type==='custom_model_data'&&c.data===8004500))
+  assert.equal(icon.components.some(c=>c.type.includes(':')),false)
+  assert.deepEqual(adapter.incoming('window_click',{cursorItem:icon}).cursorItem,original)
+  assert.equal(input.advancementMapping[0].value.displayData.icon.components[0].type,'example:spell')
+})
+
 test('native dye-color varints select every book variant and survive the inventory round trip', () => {
   const colors = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
   const row = { ...catalog.items[0], variantComponent: 'base_color', variantDefault: 'purple',

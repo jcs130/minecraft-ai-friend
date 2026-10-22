@@ -112,7 +112,7 @@ const PARTICLE_ALIASES = {
   trial_spawner_detected_player: 'trial_spawner_detection',
   trial_spawner_detected_player_ominous: 'trial_spawner_detection_ominous'
 }
-const ITEM_PACKET_NAMES = new Set(['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'])
+const ITEM_PACKET_NAMES = new Set(['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata', 'advancements'])
 const packetMappings = mcData.protocol.play.toClient.types.packet[1][0].type[1].mappings
 const itemPacketIds = new Set(Object.entries(packetMappings).filter(([, name]) => ITEM_PACKET_NAMES.has(name)).map(([id]) => Number(id)))
 function isItemPacket (buffer) { return itemPacketIds.has(buffer[0]) }

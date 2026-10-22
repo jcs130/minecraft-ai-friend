@@ -727,7 +727,7 @@ function relayTo (sess, target, name, params, dir) {
     if (sess.bedrockItems) {
       try { params = sess.bedrockItems.outgoing(name, params) }
       catch (error) { kickFront(sess, '基岩物品显示转换失败：' + error.message); return }
-    } else if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
+    } else if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata', 'advancements'].includes(name)) params = vanillaProjection(params)
     if (REMAP.hasMap()) {
       try { params = REMAP.remapOut(name, params) }
       catch (error) { kickFront(sess, '模组区块转换失败，请联系管理员更新当前整包的注册表：' + error.message.slice(0, 120)); return }
@@ -745,7 +745,7 @@ function relayTo (sess, target, name, params, dir) {
     params = REMAP.remapIn(name, params) // 前端→后端: 原版号→NeoForge号 ✓
   }
   try {
-    if (target === sess.front && bedrockFrontendProtocol && ['window_items','set_slot','entity_equipment','trade_list','world_particles','entity_metadata'].includes(name)) {
+    if (target === sess.front && bedrockFrontendProtocol && ['window_items','set_slot','entity_equipment','trade_list','world_particles','entity_metadata','advancements'].includes(name)) {
       target.writeRaw(bedrockFrontendProtocol.createPacketBuffer('packet', { name, params }))
     } else if (target === sess.back && sess.bedrockItems && name === 'window_click' && bedrockItemWriter) {
       target.writeRaw(bedrockItemWriter.createPacketBuffer('packet', { name, params }))

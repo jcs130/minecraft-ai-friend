@@ -6,7 +6,7 @@ const v8 = require('node:v8')
 const { vanillaProjection } = require('./component-protocol.cjs')
 const KEY = 'maw_bedrock_view'
 const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
-const PACKETS = new Set(['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'])
+const PACKETS = new Set(['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata', 'advancements'])
 const clone = value => Buffer.isBuffer(value) ? Buffer.from(value)
   : Array.isArray(value) ? value.map(clone)
     : value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clone(v)])) : value

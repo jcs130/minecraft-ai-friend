@@ -164,7 +164,10 @@ async function main(){
   const after=await inventoryUntil(s=>JSON.stringify(s.items)===JSON.stringify(previous.fixtureBefore.items));assert.deepEqual(after.items,previous.fixtureBefore.items)
   report.recoveredFixture=file;check('previous interrupted QA fixture reconciled by exact native inventory',true)
  }
- if(process.argv.includes('--items')||cookingTest){
+ // Twilight's dimension assertion checks the supplied native items too.
+ // Include its fixture automatically rather than reporting a false game
+ // failure when a maintainer invokes --twilight without a redundant --items.
+ if(process.argv.includes('--items')||cookingTest||twilightTest){
   const before=await nativeInventory();report.fixtureBefore=before
   // The native first-login gift is a soul charm. Retain it and only supply
   // missing fixture types; never clear somebody's pre-existing item stack.

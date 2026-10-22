@@ -20,6 +20,23 @@ const particleRegistry = () => new Map(Object.entries(mcData.protocol.types.Part
   'minecraft:' + ({ trial_spawner_detected_player: 'trial_spawner_detection', trial_spawner_detected_player_ominous: 'trial_spawner_detection_ominous' }[name] || name), Number(id)
 ]))
 
+test('actual advancement wire codec decodes native icon components before producing a valid vanilla packet',()=>{
+  const text=value=>({type:'string',value})
+  const packet={name:'advancements',params:{reset:true,advancementMapping:[{key:'test:root',value:{
+    parentId:undefined,displayData:{title:text('Original title'),description:text('Original description'),icon:book,
+      frameType:0,flags:{unused:0,hidden:0,show_toast:1,has_background_texture:0},xCord:0,yCord:0},
+    requirements:[],sendsTelemtryData:false}}],identifiers:[],progressMapping:[]}}
+  const buffer=protocol.createPacketBuffer('packet',packet)
+  assert.equal(isItemPacket(buffer),true)
+  const decoded=protocol.parsePacketBuffer('packet',buffer);assert.equal(decoded.metadata.size,buffer.length)
+  const original=decoded.data.params.advancementMapping[0].value.displayData.icon
+  assert.equal(original.components[0].type,'patchouli:book')
+  const projected=vanillaProjection(decoded.data),front=createBackendComponentProtocol(new Map(Object.entries(vanilla).map(([id,name])=>['minecraft:'+name,Number(id)])))
+  const encoded=front.createPacketBuffer('packet',projected),parsed=front.parsePacketBuffer('packet',encoded)
+  assert.equal(parsed.metadata.size,encoded.length);assert.equal(parsed.data.params.advancementMapping[0].value.displayData.icon.components.length,0)
+  assert.equal(original.components[0].data,'touhou_little_maid:memorizable_gensokyo')
+})
+
 test('decodes native UUID and guidebook components without changing the vanilla protocol', async () => {
   const packet = { name: 'window_items', params: { windowId: 0, stateId: 7, items: [maid, book, empty], carriedItem: empty } }
   const buffer = protocol.createPacketBuffer('packet', packet)
