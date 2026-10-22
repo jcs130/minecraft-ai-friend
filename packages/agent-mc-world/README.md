@@ -1,5 +1,12 @@
 # Agent MC World
 
+`0.5.7-rc.68` renews an explicitly configured login on the same connection after
+trusted server authorization revocation. It makes one credential attempt per
+revocation and still requires a fresh server confirmation before any game operation.
+Repeated failures and immediate revoke/confirm loops do not resubmit credentials;
+registration and password changes are never automatic. See
+[server authorization lifecycle](docs/server-auth-lifecycle.md).
+
 `0.5.7-rc.67` includes all vanilla shulker-box colours in container discovery
 and historical container selection. Slot reads, transfers and material counts
 use the existing container paths. Saved contents remain last observations,

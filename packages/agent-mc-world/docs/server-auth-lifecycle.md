@@ -6,10 +6,21 @@ system-source `MC_AUTH_DENIED` or structured `MC_AUTH_STATE` with
 and an explicitly different account cannot revoke or grant authorization.
 
 This transition reports `required`, preserves the network connection and emits a
-World alarm. The Agent receives an explicit description of the missing current
-authorization. It does not resubmit a credential, register an account, change a
-password, disconnect the game or pause the host loop. A later authoritative
-confirmation can restore readiness on the same connection.
+World alarm. An explicitly configured `login` account can submit its existing scoped
+credential once after a direct `MC_AUTH_DENIED` or a structured `login_required`
+revocation of a previously confirmed session. Submission never opens the play gate;
+only a fresh authoritative confirmation does. Repeated denial messages do not submit
+again. After a successful recovery has remained authorized for 30 seconds, another
+later revocation may renew the session. Immediate success/denial loops stop at
+`required` for operator review. An account can opt out with
+`reauthenticateOnRevoked:false`; registration commands are never repeated.
+
+An expired recovery attempt remains `required` on the same connection. Delayed
+credential reads cannot send after the timeout or a stop. Explicit password rejection,
+two-factor requirements and unavailable credentials remain blocked. This recovery
+does not register an account, change a password, disconnect the game, pause the host
+loop or replay a body action. A later authoritative confirmation can restore readiness
+on the same connection.
 
 An initial confirmation timeout reports `retrying`, not a rejected credential.
 The connection owner closes only that attempt, disposes its observers and uses

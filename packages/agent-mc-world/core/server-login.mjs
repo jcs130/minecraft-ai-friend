@@ -45,12 +45,24 @@ async function readAccountCredential(account, configFile) {
 
 export function installServerLogin(bot, options) {
   let stage = 'disabled', attempted = false, active = true, account, timer;
-  let reason = null, authState = null;
+  let reason = null, authState = null, recoveryAttempted = false, recovering = false;
+  let credentialGeneration = 0, timeoutMs = 30000, recoveredAt = null;
   const report = (status, detail = null) => {
     if (stage === status && reason === detail) return;
+    if (status === 'confirmed' && recovering) { recoveredAt = Date.now(); recovering = false; }
     stage = status; reason = detail;
-    if (['confirmed', 'retrying', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
+    if (['confirmed', 'required', 'retrying', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
     options.report?.({ status, reason, username: options.username, server: options.server });
+  };
+  const armTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (active && ['armed', 'submitted'].includes(stage)) {
+        credentialGeneration++;
+        report(recovering ? 'required' : 'retrying', recovering ? 'reauthentication-timeout' : 'confirmation-timeout');
+      }
+    }, timeoutMs);
+    timer.unref?.();
   };
   try {
     if (options.configFile) {
@@ -69,15 +81,15 @@ export function installServerLogin(bot, options) {
           if (Number(file) + Number(env) !== 1
             || (account.credentialFormat !== undefined && !['dpapi', 'file'].includes(account.credentialFormat))
             || !/^[a-z][a-z0-9_]*$/.test(account.command)
+            || (account.reauthenticateOnRevoked !== undefined && typeof account.reauthenticateOnRevoked !== 'boolean')
             || ['requestMarkers', 'successMarkers', 'failureMarkers'].some(key => !Array.isArray(account[key])
               || account[key].length > 16 || account[key].some(m => typeof m !== 'string' || !m.trim() || m.length > 160))) throw new Error('incomplete account');
           report('armed');
-          const timeoutMs = account.timeoutMs ?? 30000;
+          timeoutMs = account.timeoutMs ?? 30000;
           if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) throw new Error('invalid timeout');
           // Missing final authorization is unknown, not a rejected credential.
           // End this attempt and let the connection owner use its normal backoff.
-          timer = setTimeout(() => { if (active && ['armed', 'submitted'].includes(stage)) report('retrying', 'confirmation-timeout'); }, timeoutMs);
-          timer.unref?.();
+          armTimer();
         } else report('blocked', 'account-not-matched');
       } else if (config.enabled === true) {
         throw new Error('missing accounts');
@@ -85,6 +97,35 @@ export function installServerLogin(bot, options) {
     }
   } catch { account = undefined; report('blocked', 'invalid-configuration'); }
   const stop = () => { active = false; clearTimeout(timer); bot.off('message', onMessage); bot.off('end', stop); bot.off('kicked', stop); stage = 'closed'; };
+  const submitCredential = (recovery = false) => {
+    attempted = true; recovering = recovery;
+    if (recovery) { recoveryAttempted = true; report('armed', 'reauthentication'); armTimer(); }
+    const selected = account, generation = ++credentialGeneration;
+    let credential;
+    try { credential = options.readCredential ? options.readCredential(selected.credentialFile)
+      : readAccountCredential(selected, options.configFile); }
+    catch { if (active && generation === credentialGeneration && stage === 'armed') report('blocked', 'credential-unavailable'); return; }
+    void credential.then(bytes => {
+      try {
+        if (!active || generation !== credentialGeneration || stage !== 'armed') return;
+        const password = bytes.toString('utf8');
+        if (!password || password.length > 128 || /\s/.test(password)) throw new Error('invalid private credential');
+        bot.chat('/' + selected.command + ' ' + password + (selected.repeatPassword === true ? ' ' + password : ''));
+        report('submitted', recovery ? 'reauthentication' : null);
+      } finally { bytes.fill(0); }
+    }).catch(() => { if (active && generation === credentialGeneration && stage === 'armed') report('blocked', 'credential-unavailable'); });
+  };
+  const revoke = (loginRequired) => {
+    const wasConfirmed = stage === 'confirmed';
+    credentialGeneration++;
+    report('required', 'authorization-revoked');
+    // One attempt per revocation; a stable authorized interval permits a later renewal.
+    if (wasConfirmed && loginRequired && account.command === 'login'
+      && account.reauthenticateOnRevoked !== false
+      && (!recoveryAttempted || (recoveredAt !== null && Date.now() - recoveredAt >= 30000))) queueMicrotask(() => {
+      if (active && stage === 'required' && reason === 'authorization-revoked') submitCredential(true);
+    });
+  };
   const onMessage = (message, position) => {
     if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage) || position !== 'system') return;
     const value = message.toString().replace(/§[0-9A-FK-OR]/gi, '').trimStart();
@@ -105,7 +146,7 @@ export function installServerLogin(bot, options) {
             && !/[\r\n\x00]/.test(data.nextCommand) ? data.nextCommand : null };
         if (authState.authorized && authState.status === 'authenticated') report('confirmed');
         else if (data.authorized === false && ['confirmed', 'required'].includes(stage)) {
-          report('required', 'authorization-revoked');
+          revoke(authState.status === 'login_required');
         }
       } catch { /* No authority in invalid JSON. */ }
       return;
@@ -115,7 +156,7 @@ export function installServerLogin(bot, options) {
       && ['confirmed', 'required'].includes(stage)) {
       authState = { ...authState, authorized: false, status: 'login_required',
         passwordSet: authState?.passwordSet ?? null, nextCommand: null };
-      report('required', 'authorization-revoked');
+      revoke(true);
       return;
     }
     if (matches(value, account.failureMarkers)) {
@@ -126,17 +167,7 @@ export function installServerLogin(bot, options) {
       report('confirmed'); return;
     }
     if (attempted || ['confirmed', 'required'].includes(stage) || !matches(value, account.requestMarkers)) return;
-    attempted = true;
-    const selected = account;
-    void (options.readCredential ? options.readCredential(selected.credentialFile) : readAccountCredential(selected, options.configFile)).then(bytes => {
-      try {
-        if (!active || stage !== 'armed') return;
-        const password = bytes.toString('utf8');
-        if (!password || password.length > 128 || /\s/.test(password)) throw new Error('invalid private credential');
-        bot.chat('/' + selected.command + ' ' + password + (selected.repeatPassword === true ? ' ' + password : ''));
-        report('submitted');
-      } finally { bytes.fill(0); }
-    }).catch(() => { if (active && stage === 'armed') report('blocked', 'credential-unavailable'); });
+    submitCredential();
   };
   bot.on('message', onMessage);
   bot.once('end', stop);

@@ -30,7 +30,7 @@ async function settle(check: () => boolean) {
 describe('scoped automatic server authentication', () => {
   it.each(['MC_AUTH_DENIED login required',
     'MC_AUTH_STATE {"username":"Agent","authorized":false,"status":"login_required"}'])
-  ('observes revoked authorization after login without disconnecting or resending credentials: %s', async marker => {
+  ('reauthenticates once on the same connection after trusted revocation: %s', async marker => {
     const r = fixture(), login = installServerLogin(r.bot, r.options);
     r.messages('AUTH_LOGIN'); await settle(() => r.sent.length === 1);
     r.messages('MC_AUTH_STATE {"username":"Agent","authorized":true,"status":"authenticated"}');
@@ -42,13 +42,60 @@ describe('scoped automatic server authentication', () => {
     expect(login.detail()).toMatchObject({stage:'required',reason:'authorization-revoked'});
     expect(login.ready()).toBe(false);
     expect(r.reports.filter((s: any) => s.status === 'required')).toHaveLength(1);
+    await settle(() => r.sent.length === 2);
+    expect(login.ready()).toBe(false);
+    expect(login.detail()).toMatchObject({stage:'submitted',reason:'reauthentication'});
     r.messages('AUTH_LOGIN'); await new Promise(resolve => setTimeout(resolve, 20));
-    expect(r.sent).toHaveLength(1);
+    expect(r.sent).toHaveLength(2);
     expect(r.bot.listenerCount('message')).toBe(1);
     r.messages('MC_AUTH_STATE {"username":"Agent","authorized":true,"status":"authenticated"}');
     expect(login.ready()).toBe(true);
+    r.messages(marker); r.messages('AUTH_LOGIN');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(login.ready()).toBe(false); expect(r.sent).toHaveLength(2);
     expect(JSON.stringify(r.reports)).not.toContain('fixture-pass');
     login.stop();
+  });
+
+  it.each([{ reauthenticateOnRevoked:false }, { command:'register' }])('preserves explicit recovery opt-out and never repeats registration: %j', async patch => {
+    const r=fixture();writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,...patch}]}));
+    const login=installServerLogin(r.bot,r.options);r.messages('AUTH_LOGIN');await settle(()=>r.sent.length===1);
+    r.messages('AUTH_SUCCESS');r.messages('MC_AUTH_DENIED login required');r.messages('AUTH_LOGIN');
+    await new Promise(resolve=>setTimeout(resolve,20));expect(login.detail()).toMatchObject({stage:'required',reason:'authorization-revoked'});
+    expect(r.sent).toHaveLength(1);login.stop();
+  });
+
+  it('renews again after stable authorization, while refusing an immediate repeat loop', async () => {
+    vi.useFakeTimers();
+    try {
+      const r=fixture(),login=installServerLogin(r.bot,{...r.options,readCredential:async()=>Buffer.from('fixture-pass')});
+      r.messages('AUTH_SUCCESS');r.messages('MC_AUTH_DENIED login required');await vi.advanceTimersByTimeAsync(0);
+      expect(r.sent).toHaveLength(1);r.messages('AUTH_SUCCESS');await vi.advanceTimersByTimeAsync(30000);
+      r.messages('MC_AUTH_DENIED login required');await vi.advanceTimersByTimeAsync(0);expect(r.sent).toHaveLength(2);
+      r.messages('AUTH_SUCCESS');r.messages('MC_AUTH_DENIED login required');await vi.advanceTimersByTimeAsync(0);
+      expect(r.sent).toHaveLength(2);expect(login.ready()).toBe(false);login.stop();
+    } finally {vi.useRealTimers();}
+  });
+
+  it('keeps a recovery timeout on the same connection and discards its delayed credential', async () => {
+    vi.useFakeTimers();
+    try {
+      const r=fixture();writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,timeoutMs:1000}]}));
+      let finish!: (bytes:Buffer)=>void;
+      const login=installServerLogin(r.bot,{...r.options,readCredential:()=>new Promise(resolve=>{finish=resolve;})});
+      r.messages('AUTH_SUCCESS');r.messages('MC_AUTH_DENIED login required');await vi.advanceTimersByTimeAsync(0);
+      expect(login.detail()).toMatchObject({stage:'armed',reason:'reauthentication'});
+      await vi.advanceTimersByTimeAsync(1000);expect(login.detail()).toMatchObject({stage:'required',reason:'reauthentication-timeout'});
+      const bytes=Buffer.from('late-fixture');finish(bytes);await Promise.resolve();await Promise.resolve();
+      expect(bytes.every(b=>b===0)).toBe(true);expect(r.sent).toEqual([]);expect(login.ready()).toBe(false);
+      r.messages('AUTH_LOGIN');await vi.advanceTimersByTimeAsync(1000);expect(r.sent).toEqual([]);login.stop();
+    } finally {vi.useRealTimers();}
+  });
+
+  it.each(['AUTH_FAILED','AUTH_2FA'])('stops a rejected recovery without another credential submission: %s', async marker => {
+    const r=fixture(),login=installServerLogin(r.bot,r.options);r.messages('AUTH_SUCCESS');
+    r.messages('MC_AUTH_DENIED login required');await settle(()=>r.sent.length===1);r.messages(marker);r.messages('AUTH_LOGIN');
+    await new Promise(resolve=>setTimeout(resolve,20));expect(login.ready()).toBe(false);expect(login.status().stage).toBe('blocked');expect(r.sent).toHaveLength(1);login.stop();
   });
 
   it.each([true, false])('accepts structured authorization with passwordSet=%s, without executing nextCommand', passwordSet => {
