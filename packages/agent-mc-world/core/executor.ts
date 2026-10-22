@@ -965,7 +965,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       const destination = call.dimension ? normalizeDimension(call.dimension) : null;
       const arrived = (): boolean => (!destination || normalizeDimension(dimensionOf(bot)) === destination)
         && distance() <= call.within;
-      if (arrived()) return `已在服务端传送落点 ${cellText(target)} 附近，无需重复传送`;
+      if (arrived()) return `命令未发送：已在服务端传送落点 ${cellText(target)} 附近，无需重复传送；本步只确认位置，不证明命令已执行。需要发送非传送命令时用 chat.text，结果以服务端回执为准`;
       // Own the transition only for the actual dispatched command, not for an
       // accepted or waiting step. Synchronous game events from chat are covered.
       const endTransition = ctx.beginDimensionTransition?.(destination ?? undefined);

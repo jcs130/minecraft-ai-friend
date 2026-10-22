@@ -1873,8 +1873,9 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'server_travel',
+    inputHint: '核验已知传送落点；已在范围内时命令未发送。查询、加入、启动等非传送命令用 chat.text，不用当前位置充当落点。',
     doc: `{"skill":"server_travel","command":"/spawn","at":[103,64,-31],"within":3}
-                                                 发服务端传送命令并等待位置确认；成功后下一步才开始。dimension 可声明落点维度，避免另一维度同坐标误算抵达；省略时仅核对坐标。仅使用服务端已验证可用的单行命令，最多 256 字符。`,
+                                                 只在尚未抵达时发服务端传送命令并等待位置确认；成功后下一步才开始。已在目标范围内时命令未发送，只证明位置满足条件。at:["~","~","~"] 是本步开始时的当前位置，不能用来要求命令必发。查询、加入、启动等非传送命令用 chat.text，发送后仍需读服务端回执。dimension 可声明落点维度，避免另一维度同坐标误算抵达；省略时仅核对坐标。仅使用服务端已验证可用的单行命令，最多 256 字符。`,
     fields: [
       { key: 'command', kind: 'string', required: true, schema: { type: 'string', maxLength: CHAT_LENGTH_LIMIT } },
       { key: 'at', kind: 'anchor', required: true, error: `server_travel 的 at 要 [x,y,z](${RELATIVE_HINT})` },

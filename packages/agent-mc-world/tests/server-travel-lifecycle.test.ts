@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Vec3 } from 'vec3';
 import type { TaskReport } from '../core/executor.ts';
-import { parseSteps, readSkillHelp } from '../core/skills.ts';
+import { parseSteps, readSkillHelp, SKILL_STEP_SCHEMA } from '../core/skills.ts';
 import { methodHarness } from './method-harness.ts';
 
 const rigs: ReturnType<typeof methodHarness>[] = [];
@@ -17,6 +17,29 @@ const travel = { skill: 'server_travel' as const, command: '/home', at: [10, 64,
 const idleBody = { skill: 'control' as const, keys: ['sneak' as const], durationMs: 2000, mode: 'ground' as const };
 
 describe('server travel task lifecycle', () => {
+  it.each([
+    ['relative current cell', ['~', '~', '~']],
+    ['absolute current cell', [0, 64, 0]],
+  ])('reports an unsent command when arrival already holds: %s', async (_name, at) => {
+    const r = rig();
+    const parsed = parseSteps([{ skill: 'server_travel', command: '/example join', at, within: 5 }]);
+    if (!('steps' in parsed)) throw new Error(JSON.stringify(parsed));
+    const task = r.exec.submitDetailed(parsed.steps, 'append');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(r.said).toEqual([]);
+    const report = r.reports.find(report => report.taskId === task.taskId)!;
+    expect(report.kind).toBe('done');
+    expect(report.text).toContain('命令未发送');
+    expect(report.text).toContain('chat');
+  });
+
+  it('exposes command dispatch versus arrival in default schema and on-demand help', () => {
+    for (const text of [SKILL_STEP_SCHEMA.description, (readSkillHelp({ skill: 'server_travel' }) as { text: string }).text]) {
+      expect(text).toContain('命令未发送');
+      expect(text).toContain('chat');
+    }
+  });
+
   it.each([undefined, 'minecraft:the_nether'])('owns only its dispatched transition (%s) and continues its following steps', async dimension => {
     const r = rig();
     r.bot.chat = vi.fn(text => {

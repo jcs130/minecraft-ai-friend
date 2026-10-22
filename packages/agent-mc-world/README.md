@@ -1,9 +1,15 @@
 # Agent MC World
 
-`0.5.7-rc.66` includes all vanilla shulker-box colours in container discovery
+`0.5.7-rc.67` includes all vanilla shulker-box colours in container discovery
 and historical container selection. Slot reads, transfers and material counts
 use the existing container paths. Saved contents remain last observations,
 not a claim that a portable box is still at its recorded coordinates.
+
+`0.5.7-rc.66` distinguishes a satisfied travel destination from a dispatched
+server command in the default schema, help and execution receipt. Already being
+at a destination still avoids sending a duplicate command. Queries and activity
+commands use `chat.text`; their original server replies establish acceptance.
+Travel completion alone does not establish command execution or activity membership.
 
 `0.5.7-rc.59` lets `mc_goal.revise.progress` explicitly correct a recorded
 numeric report while preserving the goal identity and checking its revision.

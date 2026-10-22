@@ -23,3 +23,10 @@ This contract alone does not retrofit a host's legacy pending-work manager or pr
 is an arrival condition. One dispatched travel command owns one observed transition until
 the landing is verified or the step ends. Other queued old-world work is cancelled with its
 original task identity. A dimension event alone is never arrival; coordinates are checked too.
+
+Travel is idempotent: if the destination already matches, the command is **not sent**.
+The receipt states that explicitly; a completed travel step proves position, not command
+execution or server activity membership. Relative `["~", "~", "~"]` denotes the current
+cell and therefore usually takes this path. Use `chat.text` for a command that must be
+sent, such as a query or activity join, then inspect the server's original reply. Neither
+chat acceptance nor a completed send proves the server accepted the requested activity.
