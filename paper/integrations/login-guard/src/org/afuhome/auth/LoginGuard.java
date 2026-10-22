@@ -69,6 +69,7 @@ public final class LoginGuard {
     private final Set<Player> authenticationNotified=ConcurrentHashMap.newKeySet();
     private static final MinecraftChannelIdentifier AGENT_CHANNEL=MinecraftChannelIdentifier.create("qiandengji","agent");
     private final Set<Player> payloadPeers=ConcurrentHashMap.newKeySet();
+    private final Map<String,Long> diagnosticTimes=new ConcurrentHashMap<>();
 
     @Inject public LoginGuard(ProxyServer server, Logger logger) { this.server=server; this.logger=logger; }
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }
@@ -80,7 +81,14 @@ public final class LoginGuard {
             return ready && authenticated.contains(p) && libre.getAuthorizationProvider().isAuthorized(p)
                 && !libre.getAuthorizationProvider().isAwaiting2FA(p);
         }
-        catch (Exception e) { ready=false; return false; }
+        catch (Exception e) { ready=false; diagnostic("authorization_provider",e); return false; }
+    }
+    // Log categories, never submitted arguments, credentials or database rows.
+    private void diagnostic(String phase,Throwable failure) {
+        long now=System.currentTimeMillis();
+        Long previous=diagnosticTimes.putIfAbsent(phase,now);
+        if(previous!=null && (now-previous<10_000 || !diagnosticTimes.replace(phase,previous,now)))return;
+        if(logger!=null)logger.warn("MC_AUTH_SERVICE_ERROR phase={} exception={}",phase,failure.getClass().getSimpleName());
     }
     @Subscribe(order=PostOrder.LAST) public void start(ProxyInitializeEvent event) throws Exception {
         server.getChannelRegistrar().register(AGENT_CHANNEL);
@@ -261,22 +269,32 @@ public final class LoginGuard {
                 // This observes authorization; it never grants or retries login.
                 server.getAllPlayers().forEach(this::notifyAuthenticated);
             }
-        } catch(Throwable e) { ready=false; }
+        } catch(Throwable e) { ready=false; diagnostic("refresh",e); }
+        publishHeartbeat();
+    }
+    void publishHeartbeat() {
         if(heartbeat!=null) try {
             var names=server.getAllPlayers().stream().filter(this::authorized).map(Player::getUsername).toList();
             var tmp=Path.of(heartbeat+".tmp"); Files.createDirectories(heartbeat.getParent());
             var observations=server.getAllPlayers().stream().map(this::authenticationState).toList();
             Files.writeString(tmp,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names,"sessionStates",observations)));
             Files.move(tmp,heartbeat,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
-        } catch(Exception e) { ready=false; }
+        } catch(Exception e) {
+            // A read-side observation failing to reach disk cannot revoke a
+            // live LibreLogin session. Existing commands still check the real
+            // provider. The gateway independently rejects NEW connections once
+            // the last successful heartbeat expires; no stale grant is added.
+            diagnostic("heartbeat_publish",e);
+        }
     }
     JsonObject authenticationState(Player p) {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("source","login_guard");
         out.addProperty("playerUuid",p.getUniqueId().toString());
         out.addProperty("authSessionId",observationSessions.computeIfAbsent(p,ignored->UUID.randomUUID().toString()));
         out.addProperty("observedAt",System.currentTimeMillis());out.addProperty("readOnly",true);
-        boolean granted=authorized(p);out.addProperty("status",!ready?"unavailable":granted?"authenticated":"pending");
-        out.add("authorized",ready?new com.google.gson.JsonPrimitive(granted):com.google.gson.JsonNull.INSTANCE);out.addProperty("method",authenticationMethods.getOrDefault(p,"unknown"));
+        boolean availableBefore=ready,granted=authorized(p),available=availableBefore&&ready;
+        out.addProperty("status",!available?"unavailable":granted?"authenticated":"pending");
+        out.add("authorized",available?new com.google.gson.JsonPrimitive(granted):com.google.gson.JsonNull.INSTANCE);out.addProperty("method",authenticationMethods.getOrDefault(p,"unknown"));
         try{var user=libre.getDatabaseProvider().getByName(p.getUsername());
             out.add("passwordSet",user==null?com.google.gson.JsonNull.INSTANCE:new com.google.gson.JsonPrimitive(user.isRegistered()));}
         catch(Exception unavailable){out.add("passwordSet",com.google.gson.JsonNull.INSTANCE);}
@@ -307,6 +325,7 @@ public final class LoginGuard {
                 || !state.get("authorized").getAsBoolean() || !authenticationNotified.add(p))return;
         p.sendMessage(text("[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。"));
         sendAuthentication(p,state,false);
+        if(logger!=null)logger.info("MC_AUTH_CONFIRMED account={} backend=paper",p.getUsername());
     }
     private static boolean inPaper(Player p) {
         return p.getCurrentServer().filter(c->c.getServerInfo().getName().equals("paper")).isPresent();
@@ -349,7 +368,7 @@ public final class LoginGuard {
     private void setOwnPassword(Player p,String[] parts) {
         var user=libre.getDatabaseProvider().getByName(p.getUsername());
         if(user==null || !maySetPassword(authorized(p),firstPasswordSessions.contains(p),user.isRegistered(),premiumVerified(p,user.getPremiumUUID()))) {
-            p.sendMessage(text("[MC_AUTH_DENIED] 已有密码请用 /changepassword 旧密码 新密码；忘记旧密码可用本人正版启动器登录后 /register 新密码 新密码。"));return;
+            p.sendMessage(text("[MC_AUTH_PASSWORD_DENIED] 已有密码请用 /changepassword 旧密码 新密码；忘记旧密码可用本人正版启动器登录后 /register 新密码 新密码。"));return;
         }
         if(parts.length!=3 || !parts[1].equals(parts[2])) {
             p.sendMessage(text("[MC_AUTH_PASSWORD_SETUP] 用法：/register 新密码 新密码，两次相同，至少六位。"));return;
@@ -470,6 +489,17 @@ public final class LoginGuard {
         if(!(e.getCommandSource() instanceof Player p)) return;
         String[] parts=e.getCommand().trim().split("\\s+"); String cmd=key(parts[0]);
         if(cmd.equals("authstatus")) {e.setResult(CommandExecuteEvent.CommandResult.denied());publishAuthentication(p);return;}
+        if(Set.of("login","l","log").contains(cmd)) {
+            if(logger!=null)logger.info("MC_AUTH_REQUEST account={} command={} available={}",p.getUsername(),cmd,ready);
+            if(ready && authorized(p) && inPaper(p)) {
+                // An explicit recovery request gets fresh authoritative state,
+                // without rechecking a password, granting a session, or replaying
+                // the once-per-connection MC_AUTH_SUCCESS event.
+                e.setResult(CommandExecuteEvent.CommandResult.denied());
+                publishAuthentication(p);
+                return;
+            }
+        }
         boolean admin=reserved.contains(key(p.getUsername()));
         boolean eye=eyes!=null && eyes.body(p.getUsername(),reserved)!=null;
         if(!eye && ready && authorized(p) && Set.of("register","reg","setpassword").contains(cmd)) {
@@ -496,7 +526,18 @@ public final class LoginGuard {
         }
         if(deny) {
             e.setResult(CommandExecuteEvent.CommandResult.denied());
-            p.sendMessage(text("[MC_AUTH_DENIED] 正版验证成功免密；已有密码的离线账号先 /login 密码。首次进入后用 /register 新密码 新密码 设置；Eye请先登录对应本体。"));
+            String reason;
+            if(!ready) {
+                reason="service_unavailable";
+                p.sendMessage(text("[MC_AUTH_UNAVAILABLE] 登录服务暂不可用；当前授权尚无法确认。稍后用 /authstatus 查询，不要反复提交密码。"));
+            } else if(!authorized(p)) {
+                reason=ready?"login_required":"service_unavailable";
+                p.sendMessage(text(ready?"[MC_AUTH_DENIED] 请先完成登录。命令：/login 密码；状态：/authstatus。":"[MC_AUTH_UNAVAILABLE] 登录服务暂不可用。稍后查询：/authstatus。"));
+            } else {
+                reason="command_restricted";
+                p.sendMessage(text("[MC_AUTH_COMMAND_DENIED] 当前账号不能执行此项账号管理操作；登录状态未改变。查询：/authstatus。"));
+            }
+            if(logger!=null)logger.info("MC_AUTH_COMMAND_REJECTED account={} command={} reason={}",p.getUsername(),cmd,reason);
         }
     }
     @Subscribe public void disconnected(DisconnectEvent e) {

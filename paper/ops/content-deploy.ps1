@@ -12,7 +12,7 @@ function Content-NumenPaperJar([string]$name) {
 }
 
 function Content-AgentVisionJar([string]$name) {
-    return $name -ceq 'AgentVision-0.1.0.jar' -or $name -ceq 'AgentVision-0.1.1.jar'
+    return $name -ceq 'AgentVision-0.1.0.jar' -or $name -ceq 'AgentVision-0.1.1.jar' -or $name -ceq 'AgentVision-0.1.2.jar'
 }
 
 function Content-YsmProxyTarget([string]$name) {

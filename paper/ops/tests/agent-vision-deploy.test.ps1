@@ -4,7 +4,8 @@ $ErrorActionPreference='Stop'
 foreach($taskCase in @(
     @('AgentVision-0.1.0.jar',$true),
     @('AgentVision-0.1.1.jar',$true),
-    @('AgentVision-0.1.2.jar',$false),
+    @('AgentVision-0.1.2.jar',$true),
+    @('AgentVision-0.1.3.jar',$false),
     @('agentvision-0.1.0.jar',$false),
     @('../AgentVision-0.1.0.jar',$false),
     @('AgentVision-0.1.0.jar.disabled',$false),
@@ -19,7 +20,7 @@ New-Item -ItemType Directory -Path (Join-Path $serverDir 'plugins'),$opsDir -For
 $script:taskListening=$false
 function Listener{return $script:taskListening}
 function Log([string]$text){}
-$taskName='AgentVision-0.1.1.jar'
+$taskName='AgentVision-0.1.2.jar'
 $taskFile=@{source=(Join-Path $taskSource $taskName);target=$taskName;sha256=(Get-FileHash -LiteralPath (Join-Path $taskSource $taskName) -Algorithm SHA256).Hash}
 function TaskPlan($id,$file,$remove=@()){@{schema=1;id=$id;files=@($file);removeJars=@($remove)}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $opsDir 'content-plugins.pending.json') -Encoding UTF8}
 function Refuse($id,$file,$reason){
@@ -34,9 +35,9 @@ Refuse 'vision-fixture-running' $taskFile 'requires stopped Paper'
 $script:taskListening=$false
 $bad=$taskFile.Clone();$bad.sha256='0'*64
 Refuse 'vision-fixture-hash' $bad 'source hash mismatch'
-$bad=$taskFile.Clone();$bad.target='AgentVision-0.1.2.jar'
+$bad=$taskFile.Clone();$bad.target='AgentVision-0.1.3.jar'
 Refuse 'vision-fixture-version' $bad 'Unexpected plugin JAR'
-foreach($taskBadRemoval in @('AgentVision-0.1.2.jar','../AgentVision-0.1.0.jar')) {
+foreach($taskBadRemoval in @('AgentVision-0.1.3.jar','../AgentVision-0.1.0.jar')) {
     TaskPlan ('vision-fixture-remove-'+[guid]::NewGuid().ToString('N')) $taskFile @(@{name=$taskBadRemoval;sha256=$taskFile.sha256})
     $failed=$false
     try{Deploy-PendingContent}catch{if($_ -notmatch 'Only previous first-party plugin JAR may be removed'){throw};$failed=$true}

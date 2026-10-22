@@ -59,12 +59,15 @@ final class SiteDungeonManager implements Listener {
         int attempt,resets;String pauseReason="",lastResetReason="";long lastResetAt;
         final Map<UUID,DungeonWaveCatalog.Enemy> mobs=new LinkedHashMap<>();final Set<Chunk> held=new HashSet<>();
         final Map<UUID,Long> hits=new HashMap<>();
-        int stage;String phase="muster",fault="";long started=System.currentTimeMillis(),readyAt=started+10_000,pausedAt;boolean invalid;
+        int stage;String phase="muster",fault="";long started=System.currentTimeMillis(),readyAt=started+10_000,pausedAt,faultPausedMillis,storageRetryAt;int storageRetryAttempts;boolean invalid;
         Run(Site site,Mode mode){this.site=site;this.mode=mode;}
         Room room(){return site.rooms.get(Math.min(stage,site.rooms.size()-1));}
     }
     private record Menu(String site,boolean pendingReward){}
     private record Shot(Run run,long expires){}
+    private static final class StorageUnavailable extends IllegalArgumentException {
+        StorageUnavailable(Exception cause){super("data_unavailable",cause);}
+    }
     private final AgentFriendPlugin plugin;
     private Map<String,Site> sites=Map.of();
     private final Map<String,Run> runs=new LinkedHashMap<>();
@@ -156,7 +159,7 @@ final class SiteDungeonManager implements Listener {
     private static String pauseLabel(String reason){return switch(reason){
         case "all_offline"->"全队离线";case "all_outside_site"->"全队离开挑战区";
         case "waiting_for_teammate"->"等待离线队友回场救援";case "server_restart"->"服务器重启，未清房间重新开始";
-        case "runtime_error"->"发生故障，等待处理后 resume";default->"暂无活跃队员";
+        case "runtime_error"->"发生故障，等待处理后 resume";case "recovery_return"->"故障已恢复，等待队员回场";default->"暂无活跃队员";
     };}
     private static String endLabel(String reason){return switch(reason){
         case "completed"->"全部房间已清理并完成返程结算";case "party_defeated"->"全队倒地，挑战失败";
@@ -265,7 +268,7 @@ final class SiteDungeonManager implements Listener {
                 case "start"->start(p,site(id),Mode.parse(args.length>3?args[3]:"normal"));
                 case "join"->join(p,site(id));
                 case "status"->status(p,id);
-                case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");String fault=r.fault;r.fault="";try{persist();}catch(RuntimeException e){r.fault=fault;throw e;}result(p,"resume",r.site.id,"success");}
+                case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");resume(r);result(p,"resume",r.site.id,"success");p.sendMessage("§a原地下城场次已恢复，已清进度保留；5分钟内返回目标房间。查询：/mycli dungeon status "+r.site.id);}
                 case "leave"->leave(p);
                 case "claim"->claim(p,id);
                 default->throw new IllegalArgumentException("use_list_info_travel_start_join_status_resume_leave_claim_menu");
@@ -333,6 +336,8 @@ final class SiteDungeonManager implements Listener {
         Room target=r.stage>=r.site.rooms.size()?r.site.rooms.getFirst():r.room();
         Map<String,Object> fields=new LinkedHashMap<>();fields.put("id",r.site.id);fields.put("run",r.id);fields.put("active",true);fields.put("participant",r.party.contains(p.getUniqueId()));fields.put("phase",r.phase);fields.put("stage",Math.min(r.stage+1,r.site.rooms.size()));fields.put("stages",r.site.rooms.size());fields.put("remainingMobs",r.mobs.size());fields.put("target",List.of(target.x,target.y,target.z));fields.put("difficulty",r.mode.id);fields.put("paused",r.pausedAt>0||!r.fault.isEmpty());fields.put("fault",r.fault);
         fields.putAll(attendanceState(r,p.getUniqueId()));fields.put("attempt",r.attempt);fields.put("resets",r.resets);fields.put("pauseReason",r.pauseReason);fields.put("lastResetReason",r.lastResetReason);fields.put("lastResetAt",r.lastResetAt);
+        fields.put("faultPausedMillis",r.faultPausedMillis);fields.put("resumable",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty());
+        fields.put("nextCommand",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty()?"/mycli dungeon resume":"/mycli dungeon status "+r.site.id);
         List<String> pending=pendingSites(p.getUniqueId());fields.put("pendingRewards",pending);
         fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
         fields.put("combatBounds",Map.of("world",r.site.world,"min",List.of(target.x+.5-target.radius-2,target.y-3,target.z+.5-target.radius-2),"max",List.of(target.x+.5+target.radius+2,target.y+3,target.z+.5+target.radius+2)));
@@ -341,7 +346,7 @@ final class SiteDungeonManager implements Listener {
         send(p,"MC_SITE_DUNGEON_STATE",fields);
         explainPending(p,pending);
         if(r.party.contains(p.getUniqueId())){
-            p.sendMessage("§b【"+label(r.site)+"】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"请返回首处集结点结算":"本段"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清段落重刷。":""));
+            p.sendMessage("§b【"+label(r.site)+"】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"请返回首处集结点结算":"本段"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(!r.fault.isEmpty()?"故障暂停，等待不计挑战时限；准备好后本人用 /mycli dungeon resume，恢复后5分钟内回场。":r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清段落重刷。":""));
             if(!missingRooms(r,p.getUniqueId()).isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missingRooms(r,p.getUniqueId()))+"；本轮不能领取完整奖励，可继续练习或正常退出后重新挑战。");
             if(!unverifiedRooms(r).isEmpty())p.sendMessage("§7旧版房间明细未保存，保留原登记数量，不推断缺席房间。本人当前总数以回执 attendance 为准。");
         }else if(!previousOutcome.isEmpty()){p.sendMessage("§7该地点有其他队伍正在挑战；以下是你本人最近一次结果。");explainOutcome(p,previousOutcome);}
@@ -396,11 +401,23 @@ final class SiteDungeonManager implements Listener {
         long timestamp=System.currentTimeMillis();
         for(var entry:new ArrayList<>(shots.entrySet())){Entity e=Bukkit.getEntity(entry.getKey());if(e==null||!e.isValid()||timestamp>=entry.getValue().expires){if(e!=null)e.remove();shots.remove(entry.getKey());}}
         for(Run r:new ArrayList<>(runs.values())){
-        if(!r.fault.isEmpty())continue;
+        if(!r.fault.isEmpty()){
+            // Only the initial, uncredited muster transition may retry itself.
+            // No award, item consumption or fighting transition is replayed.
+            if(r.storageRetryAt>0&&timestamp>=r.storageRetryAt){
+                r.storageRetryAt=0;r.storageRetryAttempts++;
+                try{resume(r);notice(r,"§a【"+label(r.site)+"】存档已恢复，继续原场次；未新增奖励或重开场次。");}
+                catch(RuntimeException failure){
+                    if(failure instanceof StorageUnavailable&&r.storageRetryAttempts<2)r.storageRetryAt=timestamp+1000;
+                    else notice(r,"§c【"+label(r.site)+"】存档仍不可用，原场次保留。请联系服主；恢复后本人用 /mycli dungeon resume。");
+                }
+            }
+            continue;
+        }
         int previousStage=r.stage;String previousPhase=r.phase;Map<UUID,Integer> previousAttendance=new HashMap<>(r.attendance);
         Map<Integer,Set<UUID>> previousRoomAttendance=new LinkedHashMap<>(r.roomAttendance);
         try{
-            long now=System.currentTimeMillis();if(now-r.started>TIMEOUT_MS){end(r,"time_limit");continue;}
+            long now=System.currentTimeMillis();if(activeMillis(r.started,r.faultPausedMillis,now)>TIMEOUT_MS){end(r,"time_limit");continue;}
             List<Player> present=present(r);
             if(present.isEmpty() || present.stream().allMatch(plugin::isDowned)
                     && r.party.stream().anyMatch(id->Bukkit.getPlayer(id)==null&&plugin.trialRescue()!=null&&!plugin.trialRescue().downed(id))){
@@ -441,8 +458,26 @@ final class SiteDungeonManager implements Listener {
                 for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【"+label(r.site)+"·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本段参战":"本段缺席，未登记")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。"+(credited.contains(id)?"":"继续可练习，完整奖励需重新组队挑战。"));}
                 notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"返回首室完成本次探索并登记奖励。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
             }
-        }catch(RuntimeException e){plugin.getLogger().warning("Site dungeon paused for explicit retry: "+r.site.id+" "+e.getMessage());clean(r);r.stage=previousStage;r.attendance.clear();r.attendance.putAll(previousAttendance);r.roomAttendance.clear();r.roomAttendance.putAll(previousRoomAttendance);r.phase=previousPhase.equals("fighting")?"moving":previousPhase;r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";if(previousPhase.equals("fighting")){r.resets++;r.lastResetReason="runtime_error";r.lastResetAt=r.pausedAt;}r.fault=Objects.toString(e.getMessage(),"runtime_error");try{persist();}catch(RuntimeException save){plugin.getLogger().warning("Site dungeon fault checkpoint not saved: "+r.site.id);}notice(r,"§c"+label(r.site)+"已暂停："+faultHint(r)+"。本段未结算；解决后 /mycli dungeon resume 重试，或 /mycli dungeon leave 退出。");}
+        }catch(RuntimeException e){
+            plugin.getLogger().log(java.util.logging.Level.WARNING,"Site dungeon paused for explicit retry: "+r.site.id+" run="+r.id+" phase="+previousPhase,e);
+            clean(r);r.stage=previousStage;r.attendance.clear();r.attendance.putAll(previousAttendance);r.roomAttendance.clear();r.roomAttendance.putAll(previousRoomAttendance);
+            r.phase=previousPhase.equals("fighting")?"moving":previousPhase;r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";
+            if(previousPhase.equals("fighting")){r.resets++;r.lastResetReason="runtime_error";r.lastResetAt=r.pausedAt;}
+            r.fault=Objects.toString(e.getMessage(),"runtime_error");
+            if(e instanceof StorageUnavailable&&previousPhase.equals("muster")&&r.stage==0&&r.storageRetryAttempts<2)r.storageRetryAt=r.pausedAt+1000;
+            try{persist();}catch(RuntimeException save){plugin.getLogger().log(java.util.logging.Level.WARNING,"Site dungeon fault checkpoint not saved: "+r.site.id,save);}
+            notice(r,"§c"+label(r.site)+"已暂停："+faultHint(r)+"。本段未结算，故障等待不计挑战时限；解决后 /mycli dungeon resume 重试，或 /mycli dungeon leave 退出。");
         }
+        }
+    }
+    static long activeMillis(long started,long faultPausedMillis,long now){return Math.max(0,now-started-faultPausedMillis);}
+    private void resume(Run r){
+        String fault=r.fault,reason=r.pauseReason;long paused=r.pausedAt,excluded=r.faultPausedMillis;
+        long now=System.currentTimeMillis();
+        r.faultPausedMillis+=Math.max(0,now-Math.max(r.started,paused));
+        r.fault="";r.pausedAt=now;r.pauseReason="recovery_return";
+        try{persist();}catch(RuntimeException failure){r.fault=fault;r.pausedAt=paused;r.pauseReason=reason;r.faultPausedMillis=excluded;throw failure;}
+        r.storageRetryAt=0;
     }
     private String faultHint(Run r){
         if(r.fault.equals("camp_spawn_points_obstructed"))return "已勘察的出怪点被占用或现场发生变化。队员先让出周围空地，不拆原建筑；仍不成功请服主核查标记位置";
@@ -509,11 +544,19 @@ final class SiteDungeonManager implements Listener {
     }
     private void atomic(Runnable change){
         String before=plugin.getConfig().saveToString();Path file=plugin.getDataFolder().toPath().resolve("config.yml"),temp=file.resolveSibling("config.yml.site-dungeon.tmp");
+        String step="change";
         try{
-            change.run();byte[] bytes=plugin.getConfig().saveToString().getBytes(StandardCharsets.UTF_8);require(bytes.length<=16*1024*1024,"state_capacity");
+            change.run();step="serialize";byte[] bytes=plugin.getConfig().saveToString().getBytes(StandardCharsets.UTF_8);require(bytes.length<=16*1024*1024,"state_capacity");step="write_and_force";
             try(FileChannel out=FileChannel.open(temp,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING,StandardOpenOption.WRITE)){ByteBuffer b=ByteBuffer.wrap(bytes);while(b.hasRemaining())out.write(b);out.force(true);}
+            step="atomic_replace";
             Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
-        }catch(Exception e){try{plugin.getConfig().loadFromString(before);}catch(Exception restore){throw new IllegalStateException("state_restore_failed",restore);}if(e instanceof IllegalArgumentException argument)throw argument;throw new IllegalArgumentException("data_unavailable");}
+        }catch(Exception e){
+            try{plugin.getConfig().loadFromString(before);}catch(Exception restore){restore.addSuppressed(e);throw new IllegalStateException("state_restore_failed",restore);}
+            if(e instanceof IllegalArgumentException argument)throw argument;
+            plugin.getLogger().log(java.util.logging.Level.WARNING,"MC_SITE_DUNGEON_SAVE_FAILURE step="+step,e);
+            if(e instanceof java.io.IOException)throw new StorageUnavailable(e);
+            throw new IllegalArgumentException("data_unavailable",e);
+        }
     }
     private void persist(){persist(()->{});}
     private void persist(Runnable extra){
@@ -523,7 +566,7 @@ final class SiteDungeonManager implements Listener {
             plugin.getConfig().set(ROOT+".runs",null);
             for(Run r:runs.values()){
                 String path=ROOT+".runs."+r.site.id;Map<String,Object> saved=new LinkedHashMap<>();
-                saved.put("id",r.id);saved.put("mode",r.mode.id);saved.put("definition",definition(r.site));saved.put("stage",r.stage);saved.put("phase",r.phase);saved.put("fault",r.fault);saved.put("started",r.started);saved.put("pausedAt",r.pausedAt);saved.put("party",r.party.stream().map(UUID::toString).toList());
+                saved.put("id",r.id);saved.put("mode",r.mode.id);saved.put("definition",definition(r.site));saved.put("stage",r.stage);saved.put("phase",r.phase);saved.put("fault",r.fault);saved.put("started",r.started);saved.put("pausedAt",r.pausedAt);saved.put("faultPausedMillis",r.faultPausedMillis);saved.put("party",r.party.stream().map(UUID::toString).toList());
                 Map<String,Integer> attendance=new LinkedHashMap<>();r.attendance.forEach((id,count)->attendance.put(id.toString(),count));saved.put("attendance",attendance);plugin.getConfig().createSection(path,saved);
                 Map<String,List<String>> roomAttendance=new LinkedHashMap<>();r.roomAttendance.forEach((stage,ids)->roomAttendance.put(stage.toString(),ids.stream().map(UUID::toString).toList()));
                 plugin.getConfig().set(path+".roomAttendance",roomAttendance);plugin.getConfig().set(path+".attempt",r.attempt);plugin.getConfig().set(path+".resets",r.resets);
@@ -547,6 +590,8 @@ final class SiteDungeonManager implements Listener {
             require(definition(site).equals(c.getString("definition")),"definition_changed_checkpoint_preserved");
             r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=site.rooms.size(),"invalid_checkpoint");r.started=c.getLong("started");
             r.phase=r.stage==site.rooms.size()?"returning":"moving";r.fault=c.getString("fault","");r.pausedAt=c.getLong("pausedAt",System.currentTimeMillis());if(r.pausedAt==0)r.pausedAt=System.currentTimeMillis();
+            r.faultPausedMillis=c.getLong("faultPausedMillis",0);require(r.faultPausedMillis>=0&&r.faultPausedMillis<=Math.max(0,System.currentTimeMillis()-r.started),"invalid_fault_pause");
+            if(!r.fault.isEmpty()&&c.getString("phase","").equals("muster"))r.phase="muster";
             for(String raw:c.getStringList("party")){UUID uuid=UUID.fromString(raw);require(r.party.size()<PARTY_LIMIT,"party_limit");require(runs.values().stream().noneMatch(old->old.party.contains(uuid)),"duplicate_participant");r.party.add(uuid);r.attendance.put(uuid,c.getInt("attendance."+raw));}
             r.attempt=c.getInt("attempt");r.resets=c.getInt("resets");r.pauseReason=c.getString("pauseReason","server_restart");r.lastResetReason=c.getString("lastResetReason","");r.lastResetAt=c.getLong("lastResetAt");
             var roomAttendance=c.getConfigurationSection("roomAttendance");
@@ -558,7 +603,7 @@ final class SiteDungeonManager implements Listener {
             if(c.getString("phase","").equals("fighting")){r.resets++;r.pauseReason="server_restart";r.lastResetReason="server_restart";r.lastResetAt=System.currentTimeMillis();}
             for(UUID uuid:r.party)require(r.attendance.getOrDefault(uuid,0)>=0&&r.attendance.getOrDefault(uuid,0)<=r.stage,"invalid_attendance_count");
             require(!r.party.isEmpty(),"empty_party");runs.put(id,r);
-            if(System.currentTimeMillis()-r.started>TIMEOUT_MS)expired.add(r);
+            if(r.fault.isEmpty()&&activeMillis(r.started,r.faultPausedMillis,System.currentTimeMillis())>TIMEOUT_MS)expired.add(r);
         }catch(RuntimeException e){blockedCheckpoints.add(id);ready=false;plugin.getLogger().warning("Site dungeon checkpoint preserved for operator: "+id+" "+e.getMessage());}
         if(blockedCheckpoints.isEmpty())for(Run r:expired)try{end(r,"time_limit");}catch(RuntimeException e){r.fault="data_unavailable";plugin.getLogger().warning("Expired dungeon outcome not saved: "+r.site.id);}
     }

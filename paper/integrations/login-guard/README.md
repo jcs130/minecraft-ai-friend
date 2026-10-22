@@ -1,4 +1,6 @@
-# LoginGuard 0.1.0
+# LoginGuard 0.1.5
+
+2026-10-22：0.1.5 已通过最终隔离验证，服主批准重新部署。修复心跳写盘失败影响在线授权、显式恢复登录缺少结构化回执和服务不可用被误报未登录。每连接初始成功标志仍只发一次，恢复请求返回原生认证提供者的新鲜 `MC_AUTH_STATE`；账号、密码、正版、Eye 与错密锁定保持。验证与回退见 [登录、墓穴与视线修复](../../docs/AUTH_DUNGEON_RECOVERY_20261022.md)。下方版本描述为历史记录。
 
 2026-10-15：现役为0.1.1；**0.1.2随核心升级隔离验证，尚未部署**。冷启动时首次免密码注册的授权可能晚于 ServerPostConnect，或短暂处于 unavailable；现在从每秒巡检补交一次已核实的成功标志和匹配的 `MC_AUTH_STATE`，必须同时满足已授权和实际进入 Paper。每个连接只交付一次，断线清理；不授权、不改密码、不重新执行登录。回归见 `AuthNotificationTest`。原0.1.1认证观察说明见 [Agent CLI观察](../../docs/AGENT_CLI_OBSERVATIONS.md)。`/authstatus` 与原子心跳继续提供本人状态，未知仍为 `authorized:null`，无新端口。
 

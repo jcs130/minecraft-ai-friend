@@ -205,6 +205,16 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
                 continue;
             }
             roundRobin.addLast(viewer);
+            // Paper temporarily detaches the chunk loader during death/respawn
+            // and world transfer while Bukkit still reports the player online.
+            // Keep the queue and visibility decisions until the stream resumes;
+            // CraftPlayer.isChunkSent dereferences this nullable loader.
+            if (((CraftPlayer) viewer.player).getHandle().moonrise$getChunkLoader() == null) {
+                remaining -= viewer.remainingVisits;
+                viewer.remainingVisits = 0;
+                deferrals++;
+                continue;
+            }
             if (viewer.remainingVisits == 0 || viewer.pending.isEmpty()) {
                 if (++idle >= roundRobin.size()) break;
                 continue;
