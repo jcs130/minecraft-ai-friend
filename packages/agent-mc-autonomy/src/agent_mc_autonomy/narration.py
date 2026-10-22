@@ -18,8 +18,7 @@ from .host_context import HostContextPort
 from .host_recent import binding
 from .mailbox import Mailbox, observation
 
-GUIDANCE = """
-A host voice output is available. In this SAME decision, include a short natural
+_LINE_GUIDANCE = """In this SAME decision, include a short natural
 utterance in mc_do._spoken_text when choosing meaningful work. This optional
 host-only field is removed before dispatch to Minecraft. Alternatively put exactly
 {"spoken_text":"one short natural utterance"} in assistant content alongside
@@ -30,6 +29,13 @@ tool workflow, tone instructions or silence placeholders aloud. An intention
 is not success; reflect outcomes only from observed receipts. Omit content when
 there is nothing worth saying. Speech neither replaces nor delays useful work.
 """
+
+GUIDANCE = "\nA host voice output is available. " + _LINE_GUIDANCE
+FULL_GUIDANCE = """
+Host voice is optional. The final scene's current_tool_policy.host_voice_available
+must be true before including host speech metadata. Tool declarations alone do
+not authorize speech, and older scenes do not grant current permission.
+""" + _LINE_GUIDANCE
 
 
 def tool_contract(tools):

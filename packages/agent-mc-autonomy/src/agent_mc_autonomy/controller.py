@@ -1816,6 +1816,7 @@ class Controller:
                 self.publish(host_context=host_context_metadata(host_context))
                 recent_context = await self.recent_for_round(host_context)
                 from .narration import (
+                    FULL_GUIDANCE,
                     GUIDANCE,
                     NarrationPort,
                     response_line,
@@ -1829,7 +1830,8 @@ class Controller:
                     narration_enabled = bool(narration_binding and narration.consumer(narration_binding))
                 except (OSError, sqlite3.Error):
                     narration_enabled = False
-                round_prefix = prefix + (GUIDANCE if narration_enabled else "")
+                voice_guidance = FULL_GUIDANCE if self.settings.context_mode == "full" else GUIDANCE if narration_enabled else ""
+                round_prefix = prefix + voice_guidance
                 if narration_enabled:
                     round_tools = tool_contract(round_tools)
                 # A temporary admission restriction must not rewrite a provider's
@@ -1838,10 +1840,13 @@ class Controller:
                 wire_tools = round_tools
                 current_tool_policy = None
                 if self.settings.context_mode == "full":
-                    wire_tools = tool_contract(tools) if narration_enabled else tools
+                    # The optional subscriber's short lease is current policy,
+                    # not a change to the reusable capability/system prefix.
+                    wire_tools = tool_contract(tools)
                     current_tool_policy = {
                         "allowed_tools": [tool["function"]["name"] for tool in round_tools],
                         "native_queue": "append_only" if self.lookahead_anchor else "normal",
+                        "host_voice_available": narration_enabled,
                     }
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
