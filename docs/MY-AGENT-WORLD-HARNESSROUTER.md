@@ -1,9 +1,11 @@
 # HarnessRouter 接入、角色持久化与维护
 
-日期：2026-10-22。第一阶段已实现并实测：自研 `agent-mc-autonomy 0.1.26`
-可显式选用 HarnessRouter/DSH 或原有直连规划器，在同一控制器中切换。
+日期：2026-10-22。第二阶段已完成：自研 `agent-mc-autonomy 0.1.27`
+可显式选用 HarnessRouter 的 23 种已测运行时或原有直连规划器，在同一控制器中切换。
 角色人设、私有经历与原任务/动作账本按各自职责保存。FOM 未重启、未换世界，
-现役人物未迁移、未恢复旧的自动循环；新测试账号的两次短距离步行已结束并离线。
+现役人物未迁移、未恢复旧的自动循环；普通测试账号已退出。
+完整运行时列表、线上模型、六种运行时的游戏验收及记忆检索修复见
+[运行时矩阵](HARNESS-RUNTIME-MATRIX-20261022.md)。下文末段保留第一阶段历史验收。
 
 ## 已部署的可选服务
 
@@ -14,16 +16,17 @@
 | 运行位置 | 已有 WSL `Ubuntu-24.04` 内的独立 Docker 容器 `maw-harnessrouter` |
 | 版本 | CE `0.35.13`、UHP `2026-09-28`、DSH `0.1.2rc1` |
 | 持久数据 | 命名卷 `maw-harnessrouter-data` → `/data` |
-| 资源 | 2 CPU、2 GiB 内存、512 PID；`unless-stopped` |
+| 资源 | 2 CPU、3 GiB 内存、1024 PID；`unless-stopped` |
 | 控制台登录资料 | 本机私有 `E:\MC\private\harnessrouter\console-login.json` |
 | 宿主 API key | 本机私有 `E:\MC\private\harnessrouter\api-key.json` 的 `key` 字段 |
 | 容器环境文件 | `E:\MC\private\harnessrouter\service.env`，含持久加密/内部认证密钥 |
-| 线上联调模型 | 账户实际可用的 `qwen3.5-plus`，没有自动跨模型回退 |
+| 线上联调模型 | Qwen Token Plan 的 `qwen3.7-plus`，没有自动跨模型回退 |
 
 完整镜像 digest、来源 commit 与启动参数见
 [版本锁](../manifests/harnessrouter-20261022.lock.json)。不把凭据值写进文档或 Git。
-CodingPlan 供应商配置通过 HarnessRouter 原生 integration 保存；原宿主配置未改。
-只启用 DSH，未安装它的其余二十多种运行时。本轮没有新增路由器/防火墙放行。
+供应商配置通过 HarnessRouter 原生加密 integration 保存；原宿主配置未改。
+26 个内置运行时均已安装并运行版本检查，23 个线上决策通过且已启用。
+Gemini、System One、Qoder 缺专属服务凭据，未启用。没有新增路由器/防火墙放行。
 
 `unless-stopped` 在 Docker daemon 启动后恢复容器；本轮没有新增 Windows 开机任务，
 不能据此承诺 WSL 在所有主机重启场景下自行启动。
@@ -36,9 +39,9 @@ CodingPlan 供应商配置通过 HarnessRouter 原生 integration 保存；原�
 沿用已验证的游戏后端和 Web 适配；服务不会自行猜测世界或登录账号。
 
 可用 wheel、独立 Python 环境、示例配置和依赖清单已放在
-`E:\MC\integrations\agent-mc-autonomy-0.1.26-harnessrouter`。
+`E:\MC\integrations\agent-mc-autonomy-0.1.27-harnessrouter`。
 使用其中 `.venv\Scripts\python.exe -m agent_mc_autonomy.cli` 执行指南命令。
-wheel SHA-256 为 `12f805ba281268350433ceddd088dbcaf321388558ae195442eaa72f8a19642e`。
+wheel SHA-256 为 `14313f41cfc49e25a71696a8faf65ad6c310e14512d4f784ca61a5cfd862c15f`。
 此安装不会自动启动游戏角色。
 
 角色的 `owner_id + agent.id` 与模型/harness 无关。`[planner]` 可在安全决策边界热读；
@@ -88,7 +91,7 @@ wsl -d Ubuntu-24.04 -- docker stop maw-harnessrouter
 178,121,333 字节，23,502 个成员逐项读过；原加密环境和登录资料在同一私有备份目录。
 仅此 HarnessRouter 容器停启后恢复原卷，FOM 与基岩桥未重启。
 
-## 本轮真实验收
+## 第一阶段真实验收（保留历史）
 
 独立普通账号 `ag_HarnQA22` 使用冻结的 `agent-mc-world 0.4.0` 与模组适配资产连接
 FOM 的 `28977`。没有 OP、赠物、传送、挖掘或放置。初轮从 `(-9,82,0)` 走到
@@ -122,7 +125,7 @@ integration 已移除，所有已知 UHP 任务均终结，测试账号已退出
 宿主 SDK/源码副本，同时验证原队列、角色导出及 UHP 封包。可复跑：
 
 ```powershell
-E:/MC/integrations/agent-mc-autonomy-0.1.26-harnessrouter/.venv/Scripts/python.exe -I packages/agent-mc-autonomy/tests/standalone_probe.py --installed --config packages/agent-mc-autonomy/standalone.example.toml
+E:/MC/integrations/agent-mc-autonomy-0.1.27-harnessrouter/.venv/Scripts/python.exe -I packages/agent-mc-autonomy/tests/standalone_probe.py --installed --config packages/agent-mc-autonomy/standalone.example.toml
 ```
 
 正式服只读 20 项、基岩桥只读 14 项均通过，仍是本轮开始前的两个原 run ID。

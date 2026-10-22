@@ -24,9 +24,11 @@ Neko / Cortico / other Agent                 Explicit model endpoint
 
 ## Run independently
 
-Version **0.1.26** adds optional HarnessRouter UHP planning and a host-owned,
-stable character profile/journal. The standalone CLI can switch the configured
-planner at a decision boundary while retaining the same game body and ledgers.
+Version **0.1.27** retains optional HarnessRouter UHP planning and a host-owned,
+stable character profile/journal introduced in 0.1.26. Matching personal notes
+now precede newer tool exchanges in searches, with previews around the actual
+match. The standalone CLI can switch the configured planner at a decision
+boundary while retaining the same game body and ledgers.
 See [configuration, persistence and switching](docs/harness-router.md) and
 [the private-configuration template](harnessrouter.example.toml).
 

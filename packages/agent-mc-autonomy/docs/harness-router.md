@@ -1,4 +1,4 @@
-# Optional HarnessRouter planning and persistent characters (0.1.26)
+# Optional HarnessRouter planning and persistent characters (0.1.27)
 
 The standalone coordinator can use a HarnessRouter UHP backend or its existing
 direct provider. Both return decisions to the same controller. The existing
@@ -96,6 +96,13 @@ or record pages. It labels history as historical and unverified as current world
 state. Models cannot choose another owner/character/scope or edit the persona.
 The profile is supplied by the trusted operator, not inferred from a nickname.
 
+A nonempty search prioritizes matching personal notes, then recent exchanges.
+An empty query still returns recent history. Previews contain up to 500 characters
+around the match; `preview_offset` is the character offset to pass with the record
+`id` for full paging. This prevents repeated recall/tool exchanges from burying
+the original note or hiding a late match behind the beginning of a long record.
+Stored history is retained in place; there is no destructive data migration.
+
 The current scope preserves the existing account identity hash (including an
 explicit alternative body configuration path). It does not automatically detect
 world resets or migrate records when server addresses/body providers change.
@@ -131,3 +138,11 @@ Cortico/Numen can still use the existing injected host/ReviewPort/body adapters.
 This release does not register their own Agent loops as HarnessRouter built-ins,
 add a user-facing runtime selector or implement cross-machine/cloud restoration.
 See the repository's [deployment and acceptance record](../../../docs/MY-AGENT-WORLD-HARNESSROUTER.md).
+
+The subsequent [runtime matrix](../../../docs/HARNESS-RUNTIME-MATRIX-20261022.md)
+records all 26 built-in installations, 23 real online decision checks with Token
+Plan/qwen3.7-plus, and six representative same-body game checks. Harness names
+select runtime software; choosing `claude-code` or `codex` does not automatically
+choose an Anthropic or OpenAI model. Their actual provider protocol must match
+the configured integration. Native-provider runtimes without suitable credentials
+remain unverified, and no long-running survival result is implied.

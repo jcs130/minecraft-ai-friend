@@ -140,6 +140,13 @@ def probe_character(data):
     ident = store.invoke("agent_remember", {"text": "persistent packed note"}, "one")["id"]
     restored = AgentStore(data, profile, "same-world")
     assert restored.invoke("agent_recall", {"query": "packed"}, "two")["records"][0]["id"] == ident
+    for index in range(8):
+        restored.record_exchange("packed-history-" + str(index), [{"role": "tool", "content": "Later search for packed note."}])
+    found = restored.invoke("agent_recall", {"query": "packed", "limit": 1}, "after-many-exchanges")["records"][0]
+    assert found["id"] == ident and "persistent packed note" in found["preview"]
+    late = restored.append("episode", "packed-probe", {"text": "前文" * 2000 + "后段独特承诺"}, "late-preview")
+    preview = restored.invoke("agent_recall", {"query": "后段独特承诺"}, "late-query")["records"][0]
+    assert preview["id"] == late and preview["preview_offset"] > 2000 and "后段独特承诺" in preview["preview"]
     config = data / "character.toml"
     config.write_text('[runtime]\ndata_directory="' + data.as_posix() + '"\n[agent]\nowner_id="owner"\nid="character"\nname="Packed Traveller"\npersona="Honest."\n', encoding="utf-8")
     assert standalone.main(["agent-export", "--config", str(config), "--output", str(data / "character.json")]) == 0

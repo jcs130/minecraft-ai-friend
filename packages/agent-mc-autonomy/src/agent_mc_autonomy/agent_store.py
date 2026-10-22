@@ -47,7 +47,7 @@ class AgentSettings:
 
 def tools():
     return [
-        {"name": "agent_recall", "description": "Recall this character's private historical notes and prior tool exchanges in the current world/account. History is not current world state. Query summaries, then use id and offset to page full records.",
+        {"name": "agent_recall", "description": "Recall this character's private historical notes and prior tool exchanges in the current world/account. History is not current world state. A nonempty query prioritizes matching personal notes, then recent exchanges, with previews around the match. Empty queries return recent records. Page full records using id and offset; pass the returned preview_offset as offset to start near a match.",
          "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "maxLength": 200},
              "id": {"type": "integer", "minimum": 1}, "offset": {"type": "integer", "minimum": 0},
              "limit": {"type": "integer", "minimum": 1, "maximum": 5}}, "additionalProperties": False},
@@ -151,10 +151,13 @@ class AgentStore:
                         "recorded_at": row["recorded_at"], "text": row["content"][offset:end], "next_offset": end,
                         "has_more": end < len(row["content"])}
             query = arguments.get("query", "")
-            rows = db.execute("SELECT id,kind,source,content,recorded_at FROM journal WHERE scope=? AND instr(lower(content),lower(?))>0 ORDER BY id DESC LIMIT ?",
-                              (self.scope, query, arguments.get("limit", 3))).fetchall()
+            rows = db.execute("SELECT id,kind,source,content,recorded_at,instr(lower(content),lower(?))-1 AS match_offset "
+                              "FROM journal WHERE scope=? AND instr(lower(content),lower(?))>0 "
+                              "ORDER BY CASE WHEN ?<>'' AND kind='note' THEN 0 ELSE 1 END,id DESC LIMIT ?",
+                              (query, self.scope, query, query, arguments.get("limit", 3))).fetchall()
             return {**base, "records": [{"id": row["id"], "kind": row["kind"], "source": row["source"],
-                "recorded_at": row["recorded_at"], "preview": row["content"][:500]} for row in rows]}
+                "recorded_at": row["recorded_at"], "preview_offset": max(0, row["match_offset"] - 120),
+                "preview": row["content"][max(0, row["match_offset"] - 120):max(0, row["match_offset"] - 120) + 500]} for row in rows]}
 
     def export(self, destination: Path):
         """Consistent, explicitly requested portable file. Never overwrites a file."""

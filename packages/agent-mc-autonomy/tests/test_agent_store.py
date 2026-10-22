@@ -68,6 +68,32 @@ def test_memory_page_is_bounded_not_a_full_history_dump(tmp_path):
     assert next_page["text"] and next_page["next_offset"] > page["next_offset"]
 
 
+def test_matching_note_survives_more_recent_matching_tool_exchanges(tmp_path):
+    store = AgentStore(tmp_path, PROFILE, "world")
+    store.configure()
+    note = store.invoke("agent_remember", {"text": "continuity-token original-private-note"}, "original")["id"]
+    latest = None
+    for index in range(12):
+        latest = store.record_exchange(f"turn-{index}", [
+            {"role": "tool", "tool_call_id": str(index), "content": "Searched continuity-token; this is a later exchange."}])
+    queried = store.invoke("agent_recall", {"query": "CONTINUITY-TOKEN", "limit": 3}, "query")["records"]
+    assert queried[0]["id"] == note and "original-private-note" in queried[0]["preview"]
+    assert queried[1]["id"] == latest and len(queried) == 3
+    # A recent-history request must still describe recent activity, without pinning old notes.
+    assert store.invoke("agent_recall", {"limit": 1}, "recent")["records"][0]["id"] == latest
+
+
+def test_match_preview_exposes_late_text_and_pages_from_its_real_character_offset(tmp_path):
+    store = AgentStore(tmp_path, PROFILE, "world")
+    store.configure()
+    ident = store.append("episode", "test", {"text": "前文" * 1600 + "原承诺：帮小鱼修桥" + "后文" * 1000}, "long")
+    result = store.invoke("agent_recall", {"query": "小鱼修桥", "limit": 1}, "find")["records"][0]
+    assert result["id"] == ident and "小鱼修桥" in result["preview"]
+    assert len(result["preview"]) <= 500 and result["preview_offset"] > 2000
+    page = store.invoke("agent_recall", {"id": ident, "offset": result["preview_offset"]}, "page")
+    assert page["text"].startswith(result["preview"]) and page["historical"]
+
+
 @pytest.mark.parametrize("value", [{"id": "../other", "owner_id": "a", "name": "a", "persona": "a"},
     {"id": "only-id"}, {"owner_id": "a", "id": "b", "name": "a", "persona": "x" * 2001}, {"api_key": "private"}])
 def test_invalid_profile_cannot_choose_paths_or_credentials(value):

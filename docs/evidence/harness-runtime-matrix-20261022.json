@@ -1,0 +1,830 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "scope": "Installed runtime, real online planning, bounded same-body game and memory acceptance",
+  "fixtureUsedForMatrix": false,
+  "localModelUsed": false,
+  "runtimeCount": 26,
+  "installedCount": 26,
+  "onlineAttempted": 23,
+  "onlineDecisionPass": 23,
+  "nativeProviderUnverified": [
+    "gemini",
+    "systemone",
+    "qoder"
+  ],
+  "model": {
+    "provider": "Qwen Token Plan",
+    "model": "qwen3.7-plus",
+    "automaticFallback": false,
+    "protocolProbe": {
+      "catalogStatus": 200,
+      "modelCount": 19,
+      "model": "qwen3.7-plus",
+      "protocols": [
+        {
+          "protocol": "chat",
+          "httpStatus": 200,
+          "latencyMs": 1015,
+          "model": "qwen3.7-plus",
+          "errorCode": null,
+          "usage": {
+            "prompt_tokens": 16,
+            "total_tokens": 18,
+            "completion_tokens": 2,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 16
+            }
+          }
+        },
+        {
+          "protocol": "anthropic",
+          "httpStatus": 200,
+          "latencyMs": 3500,
+          "model": "qwen3.7-plus",
+          "errorCode": null,
+          "usage": {
+            "input_tokens": 14,
+            "output_tokens": 160,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          }
+        },
+        {
+          "protocol": "responses",
+          "httpStatus": 200,
+          "latencyMs": 3985,
+          "model": "qwen3.7-plus",
+          "errorCode": null,
+          "usage": {
+            "input_tokens": 50,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 171,
+            "output_tokens_details": {
+              "reasoning_tokens": 167
+            },
+            "total_tokens": 221,
+            "x_details": [
+              {
+                "input_tokens": 50,
+                "output_tokens": 171,
+                "total_tokens": 221,
+                "output_tokens_details": {
+                  "reasoning_tokens": 167
+                },
+                "prompt_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "x_billing_type": "response_api"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "credentialsPrintedOrCommitted": false,
+    "qwenpawProviderStoreChanged": false
+  },
+  "runtimes": [
+    {
+      "id": "dsh",
+      "label": "DeepSeek Harness",
+      "backend": "dsh",
+      "version": "0.1.2rc1",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 7766,
+      "reportedUsage": {
+        "prompt_tokens": 8594,
+        "completion_tokens": 323,
+        "total_tokens": 8917
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_b617405529a04c53ac92ad11a17a11e5",
+      "gameMovementTested": true
+    },
+    {
+      "id": "qwen",
+      "label": "Qwen Code",
+      "backend": "qwen",
+      "version": "0.26.0",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 15875,
+      "reportedUsage": {
+        "prompt_tokens": 24638,
+        "completion_tokens": 675,
+        "total_tokens": 25313,
+        "reasoning_tokens": 497
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_ab24dff389d34f58a2c5a4c84fc415a3",
+      "gameMovementTested": true
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "backend": "claude",
+      "version": "2.1.280 (Claude Code)",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 7734,
+      "reportedUsage": {
+        "prompt_tokens": 6,
+        "completion_tokens": 319,
+        "total_tokens": 325
+      },
+      "protocol": "anthropic",
+      "onlineResponseId": "resp_210ba1bcea854acd964bff4cb7bb74dc",
+      "gameMovementTested": true
+    },
+    {
+      "id": "pi",
+      "label": "Pi",
+      "backend": "pi",
+      "version": "1.4.0",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 5312,
+      "reportedUsage": {
+        "prompt_tokens": 3373,
+        "completion_tokens": 224,
+        "total_tokens": 3597
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_32dd0fa874df4f5eace3017ce7cc4cda",
+      "gameMovementTested": true
+    },
+    {
+      "id": "opencode",
+      "label": "OpenCode",
+      "backend": "opencode",
+      "version": "1.19.3",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 8812,
+      "reportedUsage": {
+        "prompt_tokens": 9166,
+        "completion_tokens": 289,
+        "total_tokens": 9455,
+        "reasoning_tokens": 239
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_ce0a04b5cf164b7abf751fc8aa204c2a",
+      "gameMovementTested": true
+    },
+    {
+      "id": "hermes",
+      "label": "Hermes",
+      "backend": "hermes",
+      "version": "0.19.0",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 10594,
+      "reportedUsage": {
+        "prompt_tokens": 15090,
+        "completion_tokens": 331,
+        "total_tokens": 15421,
+        "reasoning_tokens": 285
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_71208228234d420aafd9c4aa13ab8ed3",
+      "gameMovementTested": false
+    },
+    {
+      "id": "omp",
+      "label": "Oh My Pi",
+      "backend": "omp",
+      "version": "omp/18.1.13",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 9531,
+      "reportedUsage": {
+        "prompt_tokens": 19516,
+        "completion_tokens": 301,
+        "total_tokens": 19817
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_7c2249e185ad485cb3cc5bc752a7d69b",
+      "gameMovementTested": false
+    },
+    {
+      "id": "cline",
+      "label": "Cline",
+      "backend": "cline",
+      "version": "3.0.60",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 8000,
+      "reportedUsage": {
+        "prompt_tokens": 6588,
+        "completion_tokens": 279,
+        "total_tokens": 6867,
+        "reasoning_tokens": 230
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_8bb2ad7281224360b1bf76f9c08d4ab0",
+      "gameMovementTested": false
+    },
+    {
+      "id": "goose",
+      "label": "goose",
+      "backend": "goose",
+      "version": "1.50.0",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 7062,
+      "reportedUsage": {
+        "prompt_tokens": 6294,
+        "completion_tokens": 313,
+        "total_tokens": 6607,
+        "reasoning_tokens": 258
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_6dce2ab7ab7149658593c024a18ffd6e",
+      "gameMovementTested": false
+    },
+    {
+      "id": "kilo",
+      "label": "Kilo Code",
+      "backend": "kilo",
+      "version": "7.8.1",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 13437,
+      "reportedUsage": {
+        "prompt_tokens": 14484,
+        "completion_tokens": 399,
+        "total_tokens": 14883,
+        "reasoning_tokens": 347
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_e1d56d0ad93f4f97be0adcc849472495",
+      "gameMovementTested": false
+    },
+    {
+      "id": "kimi",
+      "label": "Kimi Code CLI",
+      "backend": "kimi",
+      "version": "2.0.0",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 8844,
+      "reportedUsage": {
+        "prompt_tokens": 22777,
+        "completion_tokens": 344,
+        "total_tokens": 23121,
+        "reasoning_tokens": 290
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_454bd3f401a847f79280b6401ae0dbb2",
+      "gameMovementTested": false
+    },
+    {
+      "id": "minimax",
+      "label": "MiniMax Code",
+      "backend": "minimax",
+      "version": "0.5.4",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 16328,
+      "reportedUsage": {
+        "prompt_tokens": 10928,
+        "completion_tokens": 763,
+        "total_tokens": 11691,
+        "reasoning_tokens": 679
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_54856d4a420b4fd89dc87bf7b461266e",
+      "gameMovementTested": false
+    },
+    {
+      "id": "grok",
+      "label": "Grok Build",
+      "backend": "grok",
+      "version": "grok 1.0.41 (4220f3b224a6)",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 9313,
+      "reportedUsage": {
+        "prompt_tokens": 11792,
+        "completion_tokens": 457,
+        "total_tokens": 12249,
+        "reasoning_tokens": 406
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_aee9182a5ce24e52b666db000a3a60a2",
+      "gameMovementTested": false
+    },
+    {
+      "id": "aider",
+      "label": "Aider",
+      "backend": "aider",
+      "version": "0.86.2",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 15875,
+      "reportedUsage": {
+        "prompt_tokens": 3919,
+        "completion_tokens": 642,
+        "total_tokens": 4561,
+        "reasoning_tokens": 585
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_0158ae5de9244b8d98353a88e84ab58f",
+      "gameMovementTested": false
+    },
+    {
+      "id": "openhands",
+      "label": "OpenHands",
+      "backend": "openhands",
+      "version": "1.49.2",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 12765,
+      "reportedUsage": {
+        "prompt_tokens": 8648,
+        "completion_tokens": 277,
+        "total_tokens": 8925,
+        "reasoning_tokens": 226
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_325e021f76f04ad09a740556c9121656",
+      "gameMovementTested": false
+    },
+    {
+      "id": "cheetahclaws",
+      "label": "CheetahClaws",
+      "backend": "cheetahclaws",
+      "version": "3.5.88",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 8609,
+      "reportedUsage": {
+        "prompt_tokens": 9444,
+        "completion_tokens": 371,
+        "total_tokens": 9815,
+        "reasoning_tokens": 319
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_8d9b7a2de1ca4272a02b049fc4f33baa",
+      "gameMovementTested": false
+    },
+    {
+      "id": "agentzero",
+      "label": "Agent Zero",
+      "backend": "agentzero",
+      "version": "2.13",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 21375,
+      "reportedUsage": {
+        "prompt_tokens": 7123,
+        "completion_tokens": 1020,
+        "total_tokens": 8143,
+        "reasoning_tokens": 815
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_60f0c476dfa547b6b84532290b1c2166",
+      "gameMovementTested": false
+    },
+    {
+      "id": "mimo",
+      "label": "MiMo Code",
+      "backend": "mimo",
+      "version": "0.1.15",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 10000,
+      "reportedUsage": {
+        "prompt_tokens": 21589,
+        "completion_tokens": 340,
+        "total_tokens": 21929,
+        "reasoning_tokens": 562
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_f5ac0f0eef624648b917612fbaff15b4",
+      "gameMovementTested": false
+    },
+    {
+      "id": "jcode",
+      "label": "jcode",
+      "backend": "jcode",
+      "version": "jcode v0.90.0 (a7f005e8c)",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 8437,
+      "reportedUsage": {
+        "prompt_tokens": 12731,
+        "completion_tokens": 405,
+        "total_tokens": 13136,
+        "reasoning_tokens": 354
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_c563e147ca7b4a6c92a9d9fb53e203f4",
+      "gameMovementTested": false
+    },
+    {
+      "id": "opensquilla",
+      "label": "OpenSquilla",
+      "backend": "opensquilla",
+      "version": "0.5.6",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 20125,
+      "reportedUsage": {
+        "prompt_tokens": 11240,
+        "completion_tokens": 631,
+        "total_tokens": 11871,
+        "reasoning_tokens": 583
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_b3081c6386df453aa47cb3f439011788",
+      "gameMovementTested": false
+    },
+    {
+      "id": "nanobot",
+      "label": "nanobot",
+      "backend": "nanobot",
+      "version": "0.3.5",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 40687,
+      "reportedUsage": {
+        "prompt_tokens": 8987,
+        "completion_tokens": 239,
+        "total_tokens": 9226,
+        "reasoning_tokens": 189
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_dd599e464a794f48b6b70836fda395e9",
+      "gameMovementTested": false
+    },
+    {
+      "id": "zeroclaw",
+      "label": "ZeroClaw",
+      "backend": "zeroclaw",
+      "version": "zeroclaw 0.8.5",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 4234,
+      "reportedUsage": {
+        "prompt_tokens": 20749,
+        "completion_tokens": 142,
+        "total_tokens": 20891,
+        "reasoning_tokens": 90
+      },
+      "protocol": "openai_chat",
+      "onlineResponseId": "resp_4124705ffe4f4998b5055f7d67bfc325",
+      "gameMovementTested": false
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "backend": "codex",
+      "version": "codex-cli 0.154.0",
+      "installed": true,
+      "enabledInPersistentService": true,
+      "onlineAttempted": true,
+      "onlineDecisionPassed": true,
+      "latencyMs": 4969,
+      "reportedUsage": {
+        "prompt_tokens": 8823,
+        "completion_tokens": 192,
+        "total_tokens": 9015,
+        "reasoning_tokens": 142
+      },
+      "protocol": "responses",
+      "onlineResponseId": "resp_58cc01f95f5d48fcb6395db0dda16fac",
+      "gameMovementTested": true
+    },
+    {
+      "id": "gemini",
+      "label": "Gemini CLI",
+      "backend": "gemini",
+      "version": "0.58.0",
+      "installed": true,
+      "enabledInPersistentService": false,
+      "onlineAttempted": false,
+      "onlineDecisionPassed": false,
+      "reason": "Google native API credential not configured",
+      "gameMovementTested": false
+    },
+    {
+      "id": "systemone",
+      "label": "System One",
+      "backend": "systemone",
+      "version": "0.4.0",
+      "installed": true,
+      "enabledInPersistentService": false,
+      "onlineAttempted": false,
+      "onlineDecisionPassed": false,
+      "reason": "TypeSafe/OpenRouter SystemOne decision model credential not configured",
+      "gameMovementTested": false
+    },
+    {
+      "id": "qoder",
+      "label": "Qoder Cloud Agent",
+      "backend": "qoder",
+      "version": "0.6.0",
+      "installed": true,
+      "enabledInPersistentService": false,
+      "onlineAttempted": false,
+      "onlineDecisionPassed": false,
+      "reason": "Qoder Cloud Agent credential not configured",
+      "gameMovementTested": false
+    }
+  ],
+  "game": {
+    "username": "ag_HarnQA22",
+    "frameworkVersion": "0.1.26",
+    "bodyPackageVersion": "0.4.0",
+    "movementStages": [
+      {
+        "id": "dsh",
+        "readCallSelectionPassed": true,
+        "targetBlock": [
+          -8,
+          82,
+          0
+        ],
+        "originalExecutionId": "66c33bf8-9d71-46b5-b4bf-cdd66a2f596b:1",
+        "terminal": "completed",
+        "positionVerified": true,
+        "immediateSnapshotMatched": true,
+        "verifiedByNextReadBeforeAnyFurtherAction": false,
+        "planningDecisions": 2,
+        "sameBodyOnline": true,
+        "pendingCount": 0
+      },
+      {
+        "id": "pi",
+        "readCallSelectionPassed": true,
+        "targetBlock": [
+          -7,
+          82,
+          0
+        ],
+        "originalExecutionId": "66c33bf8-9d71-46b5-b4bf-cdd66a2f596b:2",
+        "terminal": "completed",
+        "positionVerified": true,
+        "immediateSnapshotMatched": true,
+        "verifiedByNextReadBeforeAnyFurtherAction": false,
+        "planningDecisions": 2,
+        "sameBodyOnline": true,
+        "pendingCount": 0
+      },
+      {
+        "id": "qwen",
+        "readCallSelectionPassed": true,
+        "targetBlock": [
+          -8,
+          82,
+          0
+        ],
+        "originalExecutionId": "66c33bf8-9d71-46b5-b4bf-cdd66a2f596b:3",
+        "terminal": "completed",
+        "positionVerified": true,
+        "immediateSnapshotMatched": false,
+        "verifiedByNextReadBeforeAnyFurtherAction": true,
+        "planningDecisions": 2,
+        "sameBodyOnline": true,
+        "pendingCount": 0
+      },
+      {
+        "id": "claude-code",
+        "readCallSelectionPassed": true,
+        "targetBlock": [
+          -7,
+          82,
+          0
+        ],
+        "originalExecutionId": "66c33bf8-9d71-46b5-b4bf-cdd66a2f596b:4",
+        "terminal": "completed",
+        "positionVerified": true,
+        "immediateSnapshotMatched": true,
+        "verifiedByNextReadBeforeAnyFurtherAction": false,
+        "planningDecisions": 2,
+        "sameBodyOnline": true,
+        "pendingCount": 0
+      },
+      {
+        "id": "opencode",
+        "readCallSelectionPassed": true,
+        "targetBlock": [
+          -8,
+          82,
+          0
+        ],
+        "originalExecutionId": "66c33bf8-9d71-46b5-b4bf-cdd66a2f596b:5",
+        "terminal": "completed",
+        "positionVerified": true,
+        "immediateSnapshotMatched": true,
+        "verifiedByNextReadBeforeAnyFurtherAction": false,
+        "planningDecisions": 2,
+        "sameBodyOnline": true,
+        "pendingCount": 0
+      },
+      {
+        "id": "codex",
+        "readCallSelectionPassed": true,
+        "targetBlock": [
+          -7,
+          82,
+          0
+        ],
+        "originalExecutionId": "66c33bf8-9d71-46b5-b4bf-cdd66a2f596b:6",
+        "terminal": "completed",
+        "positionVerified": true,
+        "immediateSnapshotMatched": true,
+        "verifiedByNextReadBeforeAnyFurtherAction": false,
+        "planningDecisions": 2,
+        "sameBodyOnline": true,
+        "pendingCount": 0
+      }
+    ],
+    "oneEventRun": true,
+    "startBlock": [
+      -7,
+      82,
+      0
+    ],
+    "finalBlock": [
+      -7,
+      82,
+      0
+    ],
+    "reconnectBlock": [
+      -7,
+      82,
+      0
+    ],
+    "leaseReleased": true,
+    "nativeMoves": 6,
+    "digPlaceTeleportOrOperatorActions": 0,
+    "immediateSnapshotPass": 5,
+    "positionsVerifiedAfterReadOnlyFollowup": 6,
+    "snapshotLagFixedInSdk": false
+  },
+  "memoryFix": {
+    "frameworkVersion": "0.1.27",
+    "matchingNotesRankBeforeMatchingEpisodes": true,
+    "previewsShowMatch": true,
+    "previewOffsetInCharacters": true,
+    "destructiveMigration": false,
+    "firstPublishedReadPass": 5,
+    "firstPublishedReadAttempts": 6,
+    "dshMalformedJsonBlockedBeforeToolDispatch": true,
+    "dshReadOnlyRecoveryAttempts": 1,
+    "afterRecoveryReadPass": 6,
+    "exactPriorNoteRecoveredBy": [
+      "claude-code",
+      "codex",
+      "dsh",
+      "opencode",
+      "pi",
+      "qwen"
+    ],
+    "sameProfileRevision": 1,
+    "finalExportHashVerified": true,
+    "leaseReleased": true,
+    "nativeWorldActions": 0
+  },
+  "frameworkRelease": {
+    "version": "0.1.27",
+    "wheelSha256": "14313f41cfc49e25a71696a8faf65ad6c310e14512d4f784ca61a5cfd862c15f",
+    "testsPassed": 334,
+    "installedConsumerPassed": true,
+    "consumerNetworkAndProcessesDenied": true,
+    "externalHostSdksImported": false,
+    "sourceImportsInInstalledConsumer": false
+  },
+  "deployment": {
+    "container": "maw-harnessrouter",
+    "apiBase": "http://127.0.0.1:29150/api/harness",
+    "enabledCount": 23,
+    "sameOriginalVolume": true,
+    "originalApiKeyRetained": true,
+    "knownOldResponseIdsRetained": 6,
+    "knownNewPublishedResponsesTerminal": {
+      "resp_7d2f66fc275c4a4285ae8f463e600ee3": "completed",
+      "resp_9bfe21cc8d654502badfccc7959c7c35": "completed",
+      "resp_3a34fda70b074d53b5e1ac6ffa531785": "completed",
+      "resp_4dbe11360e5349ab813fbaf1145220f9": "completed",
+      "resp_9e23b36377c34740bf9f6c7c297c2f2a": "completed",
+      "resp_499acf90b94d43d99b35ee335282079d": "completed",
+      "resp_917895bb4ec04c5db782a0c32fdcce02": "completed"
+    },
+    "anonymousProtectedPaths": {
+      "/v1/sessions": 401,
+      "/v1/admin/integrations": 401
+    },
+    "temporaryPortsClosed": {
+      "29152": true,
+      "29153": true
+    },
+    "temporaryFixtureRemoved": true,
+    "temporaryNetworkRemoved": true,
+    "coldBackup": {
+      "verified": true,
+      "members": 23502,
+      "uncompressedFileBytes": 521383596,
+      "archiveBytes": 178131986,
+      "sha256": "59713f30f54378edddf97dff289fd81957cbcbbde8df5854589c56fc3ef0b10f"
+    },
+    "firstCopyAttemptOom": {
+      "memoryBytes": 268435456,
+      "exitCode": 137,
+      "rolledBack": true
+    },
+    "successfulCopyMemoryBytes": 1073741824,
+    "memoryBytes": 3221225472,
+    "nanoCpus": 2000000000,
+    "pidsLimit": 1024,
+    "restartPolicy": "unless-stopped",
+    "newPublicPorts": 0,
+    "newWindowsStartupTask": false,
+    "credentialDirectoriesAndBackupAcl": {
+      "allowedPrincipals": [
+        "current_user",
+        "SYSTEM",
+        "Administrators"
+      ],
+      "tokenplanDpapiReadableAfterChange": true,
+      "nativeAuthenticatedApiReadableAfterChange": true,
+      "backupBytesAndHashesPreserved": true
+    }
+  },
+  "serverPreservation": {
+    "fomRunId": "296a9ace06624300bb9c8e2c379db166",
+    "bedrockRunId": "fa520f00c7d84001a32e6c193fac4ca3",
+    "fomChecks": 20,
+    "bedrockChecks": 14,
+    "runIdsUnchanged": true,
+    "minecraftRestarted": false,
+    "bedrockRestarted": false,
+    "oldAutonomousAgentsResumed": false,
+    "cormyPersonalDataImported": false
+  },
+  "limits": [
+    "Not a long-running autonomous survival benchmark",
+    "Only six representative runtimes exercised a real body; 23 returned a valid single read decision",
+    "Each online wire case was measured once; reported usage differs between drivers and is not a uniform billing benchmark",
+    "Cortico and Numen own-loop HarnessRouter drivers, cloud synchronization and user runtime-selection UI remain future work"
+  ],
+  "sources": [
+    "https://github.com/HarnessRouter/harnessrouter",
+    "https://help.aliyun.com/zh/model-studio/token-plan-personal-quick-start",
+    "https://help.aliyun.com/en/model-studio/more-tools"
+  ]
+}
