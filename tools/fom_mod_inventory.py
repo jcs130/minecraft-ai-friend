@@ -4,6 +4,8 @@ import argparse,collections,hashlib,json,re,tomllib,zipfile
 
 # Classification describes file roles; installation on both ends is reported separately.
 GROUPS=[
+ ('Numen 服务端 Agent',r'^(numen-|maw_numen_)', '服务端假玩家、可选客户端兼容与本人原生模组接口；模型与规划由调用端负责。'),
+ ('殖民地与建筑生产',r'^(minecolonies|structurize|domum-ornamentum|blockui|multipiston)', '原生居民、建造工单、材料需求、建筑蓝图与装饰切割台；含必要依赖。'),
  ('Agent 客户端组件',r'^(maw-client-bridge|minescript|baritone)', '可选的真实客户端控制、脚本执行与导航；普通玩家不必安装。'),
  ('登录与多人运维',r'^(mixauth|maw-fom-support|open-parties-and-claims|SimpleBackups|e4mc|mcwifipnp)', '登录、领地、备份或多人连接工具。'),
  ('航空与移动物理',r'^(create-aeronautics|sable-neoforge|aeroengine|aeroworks|azimuth|struts|cosmonautics|createpropulsion|create_radar)', '航空学、移动结构物理、推进器及航空扩展。'),
@@ -18,6 +20,11 @@ GROUPS=[
  ('配方、地图与操作界面',r'^(appleskin|extra-mod-integrations|reeses-sodium-options|emi|jei|jecharacters|Jade|InventoryProfilesNext|MouseTweaks|Controlling|xaero|fancymenu|Resourcify|tia-)', '配方、物品信息、地图、菜单或操作便利功能。'),
 ]
 NOTES={
+ 'minecolonies-':'殖民地：真实居民职业、建造工单、研究及物流。',
+ 'domum-ornamentum-':'建筑装饰切割台；产物保留两种原生材料的纹理组件。',
+ 'structurize-':'殖民地蓝图、建筑规划和摆放基础。',
+ 'maw_numen_mods-':'可选服务端 Numen 原生玩法扩展；按实际已装目标模组发现接口。',
+ 'maw_numen_server-':'Numen 常驻身体、owner 鉴权、单写者租约和持久动作回执。',
  'create-1.21.1-':'机械动力本体：旋转动力、加工机器、传送带和自动化。',
  'create-aeronautics-':'机械动力航空学；移动结构物理由 Sable 提供。',
  'sable-neoforge':'移动方块结构的物理与同步基础；本次公网发布使用官方 TCP 回退。',
@@ -69,6 +76,9 @@ def metadata(file):
 
 def inventory(client,server,index,output):
     client,server,output=Path(client),Path(server),Path(output)
+    args=(server/'java.args').read_text('utf-8') if (server/'java.args').is_file() else ''
+    match=re.search(r'(?m)^--fml\.neoForgeVersion\s+([0-9.]+)(?:\s|$)',args)
+    neoforge=match.group(1) if match else 'unknown'
     authored=json.loads(Path(index).read_bytes());sources={Path(row['path']).name:row for row in authored['files'] if row['path'].startswith('mods/')}
     names=sorted({p.name for p in (client/'mods').iterdir() if p.name.endswith(('.jar','.jar.disabled'))}|{p.name for p in (server/'mods').glob('*.jar')},key=str.casefold)
     rows=[]
@@ -86,12 +96,12 @@ def inventory(client,server,index,output):
         rows.append(row)
     counts={'clientEnabled':sum(r['clientInstalled'] and r['enabled'] for r in rows),'serverEnabled':sum(r['serverInstalled'] and r['enabled'] for r in rows),
             'authorDisabled':sum(not r['enabled'] for r in rows),'agentOptional':sum(r['category']=='Agent 客户端组件' and r['enabled'] for r in rows)}
-    report={'schemaVersion':1,'pack':'FOM 2.42','minecraft':'1.21.1','neoforge':'21.1.248','counts':counts,
+    report={'schemaVersion':1,'pack':'FOM 2.42','minecraft':'1.21.1','neoforge':neoforge,'counts':counts,
         'jarCountIsNotLoadedModCount':True,'disabledReasonKnown':False,'allModGameplayVerified':False,'rows':rows}
     output.mkdir(parents=True,exist_ok=True)
     (output/'mods-index.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     parts=['命运齿轮 FOM 2.42 · 模组分类清单（实际文件核对）',
-        'Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21。',
+        f'Minecraft 1.21.1 / NeoForge {neoforge} / Java 21。',
         f"客户端启用 {counts['clientEnabled']} 个 JAR，服务端启用 {counts['serverEnabled']} 个 JAR，作者禁用 {counts['authorDisabled']} 个文件。",
         f"Agent 客户端组件 {counts['agentOptional']} 个为可选；普通玩家使用作者客户端整包即可。",
         'JAR 数不等于加载器显示的模组数，部分 JAR 内嵌多个模组或依赖。',

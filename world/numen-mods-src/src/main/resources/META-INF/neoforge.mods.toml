@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="maw_numen_mods"
+version="0.1.0"
+displayName="My Agent World Numen Gameplay Extensions"
+description='''Optional server-side native gameplay APIs for owned Numen bodies. Modules activate only when their target mod is installed.'''
+
+[[dependencies.maw_numen_mods]]
+modId="numen"
+type="required"
+versionRange="[0.1.4.1,0.1.5)"
+ordering="AFTER"
+side="SERVER"
+
+[[dependencies.maw_numen_mods]]
+modId="numen_api"
+type="required"
+versionRange="[0.1.4.1,0.1.5)"
+ordering="AFTER"
+side="SERVER"
+
+[[dependencies.maw_numen_mods]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+side="SERVER"
+
+[[dependencies.maw_numen_mods]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.248,)"
+side="SERVER"

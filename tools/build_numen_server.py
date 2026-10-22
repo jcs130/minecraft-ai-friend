@@ -12,7 +12,7 @@ import zipfile
 from build_society_bridge import API_SHA, NUMEN_NAME, NUMEN_SHA, add_bytes, ensure_server_stopped, install_candidate
 from society_lab import DEFAULT_JAVA, DEFAULT_ROOT, REPO, safe_root, sha256
 
-NAME = 'maw_numen_server-0.1.0.jar'
+NAME = 'maw_numen_server-0.2.0.jar'
 SOURCE = REPO / 'world/numen-server-src/src/main'
 MAID_NAME = 'touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar'
 MAID_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'

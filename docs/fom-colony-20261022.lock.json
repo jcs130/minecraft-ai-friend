@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "minecraft": "1.21.1",
+  "neoforgeValidated": "21.1.250",
+  "scope": "FOM MineColonies compatible pinned addition; both Java client and server",
+  "artifacts": [
+    {
+      "name": "minecolonies-1.1.1319-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/minecolonies/files/8138370",
+      "url": "https://mediafilez.forgecdn.net/files/8138/370/minecolonies-1.1.1319-1.21.1.jar",
+      "sha256": "ab97c0eec45c3f2539ec31428e3c836bb30ba1c537af0c86f5ab4e38754f6a4d"
+    },
+    {
+      "name": "structurize-1.0.832-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/structurize/files/8610535",
+      "url": "https://mediafilez.forgecdn.net/files/8610/535/structurize-1.0.832-1.21.1.jar",
+      "sha256": "b6ede7635c63a80bd3d034c1ad3e74c648b8478f341f883d7d29c3dcf90b79ce"
+    },
+    {
+      "name": "multipiston-1.2.58-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/multi-piston/files/7097877",
+      "url": "https://mediafilez.forgecdn.net/files/7097/877/multipiston-1.2.58-1.21.1.jar",
+      "sha256": "7ca26db4648589b7f76694c249d5096c0c0afb7615fe6adf9f638c6c825c15e7"
+    },
+    {
+      "name": "blockui-1.0.209-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/blockui/files/7541336",
+      "url": "https://mediafilez.forgecdn.net/files/7541/336/blockui-1.0.209-1.21.1.jar",
+      "sha256": "eec023231b21a606306cac6c588b5b07f51741f5e5bc831dba709d52332b82ab"
+    },
+    {
+      "name": "domum-ornamentum-1.0.231-main.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/domum-ornamentum/files/7789217",
+      "url": "https://mediafilez.forgecdn.net/files/7789/217/domum-ornamentum-1.0.231-main.jar",
+      "sha256": "04c0c902bdbcbd48e38bee5a323907ae0b7b7db4ff4a3e4da7c45334b65610a1"
+    }
+  ]
+}

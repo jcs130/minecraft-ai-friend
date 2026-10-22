@@ -60,7 +60,9 @@ public final class HeadlessRuntime {
         this.directory=server.getWorldPath(LevelResource.ROOT).resolve("maw-numen-server");
         this.secrets=server.getServerDirectory().resolve("config/maw-numen-private");
         this.maids=net.neoforged.fml.ModList.get().isLoaded("touhou_little_maid")?new MaidConfigBridge(this):null;
-        this.mods=net.neoforged.fml.ModList.get().isLoaded("maw_agent_bridge")?new NativeModBridge():null;
+        this.mods=net.neoforged.fml.ModList.get().isLoaded("maw_numen_mods")
+            ?new NativeModBridge("dev.qiandeng.maw.numenmods.ModAccess")
+            :net.neoforged.fml.ModList.get().isLoaded("maw_agent_bridge")?new NativeModBridge():null;
         Files.createDirectories(directory.resolve("bodies"));Files.createDirectories(secrets);
         try(var paths=Files.list(directory.resolve("bodies"))) {
             for(Path path:paths.filter(p->p.getFileName().toString().matches("[a-f0-9-]{36}\\.json")).toList()) {

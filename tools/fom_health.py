@@ -20,6 +20,7 @@ def probe(file=DEFAULT):
             numen=fom_numen.health(cfg['services'][0]['numenServer']['port'],child['pid'])
             checks['numen_official_version_and_optional_client']=numen['ready'] and numen['version']==fom_numen.VERSION and not numen['clientRequired']
             checks['numen_host_in_owned_game_jvm']=child['metrics'].get('numen',{}).get('ready') is True
+            checks.update(fom_numen.gameplay_checks(cfg.get('_lock',{}).get('files',{}),numen))
         checks['actual_minecraft_status']=state['healthy'] and child['ready'] and child['metrics']['version']['protocol']==767
         checks['explicit_game_bind']=child['port']==cfg['gamePort'] and child['listenHost']==cfg['services'][0]['listenHost']
         checks['private_admin_http']=child['host']=='127.0.0.1'

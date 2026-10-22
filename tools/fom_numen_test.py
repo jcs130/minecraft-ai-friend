@@ -42,6 +42,18 @@ class PolicyTests(unittest.TestCase):
     def test_production_cannot_expose_arbitrary_admin_port(self):
         with self.assertRaisesRegex(ValueError,'private port'):numen.policy(self.server,self.selected,self.mods,production=True)
 
+class GameplayReadinessTests(unittest.TestCase):
+    def test_unselected_extension_does_not_impose_gameplay_catalog(self):
+        self.assertEqual(numen.gameplay_checks(numen.FILES,{}),{})
+    def test_installed_extension_must_be_detected_and_expose_its_base_actions(self):
+        files={**numen.FILES,'maw_numen_mods-0.1.0.jar':'locked'}
+        self.assertFalse(all(numen.gameplay_checks(files,{}).values()))
+        self.assertTrue(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':17}).values()))
+    def test_colony_installation_cannot_pass_with_only_the_base_catalog(self):
+        files={'maw_numen_mods-0.1.0.jar':'locked','minecolonies-1.1.1319-1.21.1.jar':'locked'}
+        self.assertFalse(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':17}).values()))
+        self.assertTrue(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':35}).values()))
+
 class OwnedReadinessTests(unittest.TestCase):
     def child(self,age=400):
         c=object.__new__(fom_service.FomChild);c.spec={'numenServer':{'port':39464},'startupTimeoutSeconds':300};c.started=time.monotonic()-age;c.process=SimpleNamespace(pid=123);c.metrics={};c.ready=True;c.stop=Mock();return c

@@ -738,6 +738,7 @@ final class PlayerColonyBridge {
                 result.addProperty("action", action);
                 result.addProperty("ok", false);
                 result.addProperty("code", "stock_outcome_unknown_check_inventory");
+                result.addProperty("outcomeKnown", false);
                 result.add("accepted", null);
                 actionReply(player, result);
             }
@@ -947,6 +948,18 @@ final class PlayerColonyBridge {
                 // BlockPos.ZERO means automatic builder selection in the original API.
                 if (builderPos.equals(BlockPos.ZERO)) {
                     constructionReject(player, requestId, kind, "builder_origin_not_selectable"); return;
+                }
+                // Native MineColonies refuses other huts until this builder's
+                // own level-one hut is complete. Explain the actionable next
+                // step before invoking a void native request.
+                if (!builderPos.equals(pos) && builder.getBuildingLevel() == 0) {
+                    JsonObject result = base(requestId);
+                    result.addProperty("action", kind); result.addProperty("ok", false);
+                    result.addProperty("code", "build_builder_hut_first"); result.addProperty("outcomeKnown", true);
+                    result.addProperty("builderLevel", 0); result.addProperty("requiredBuilderLevel", 1);
+                    JsonObject next = new JsonObject(); next.addProperty("operation", "colony.requestBuild");
+                    next.add("buildingPosition", pos(builderPos)); next.add("builderPosition", pos(builderPos));
+                    result.add("nextAction", next); actionReply(player, result); return;
                 }
                 Set<Integer> before = new HashSet<>(colony.getWorkManager().getWorkOrders().keySet());
                 for (IServerWorkOrder existing : colony.getWorkManager().getWorkOrders().values()) {

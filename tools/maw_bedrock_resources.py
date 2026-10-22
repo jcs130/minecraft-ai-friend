@@ -49,7 +49,8 @@ class Assets:
         if not meta:
             raise ValueError('asset_missing')
         if meta.get('variants') or meta.get('overriddenSources'):
-            raise ValueError('ambiguous_resource_priority')
+            from native_resource_priority import verified
+            if not verified(self.manifest,key,meta):raise ValueError('ambiguous_resource_priority')
         path = self.root.joinpath(*parts.parts)
         if path.is_symlink() or not path.resolve().is_relative_to(self.root):
             raise ValueError('unsafe_asset_path')

@@ -54,7 +54,7 @@ final class HeadlessHttp {
             if(path.equals("/healthz")){
                 if(!x.getRemoteAddress().getAddress().isLoopbackAddress()){send(x,403,object("code","loopback_only"));return;}
                 if(!x.getRequestMethod().equals("GET")){send(x,405,object("code","get_required"));return;}
-                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"bedrockVisualMenus",true,"nativeModAccess",runtime.mods!=null,"nativeViewerAvailable",runtime.mods!=null,"nativeModOperationCount",runtime.mods==null?0:runtime.mods.catalog("").get("operationCount"),"session",runtime.session));return;
+                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"bedrockVisualMenus",true,"nativeModAccess",runtime.mods!=null,"nativeViewerAvailable",runtime.mods!=null&&runtime.mods.viewerAvailable(),"nativeModOperationCount",runtime.mods==null?0:runtime.mods.catalog("").get("operationCount"),"session",runtime.session));return;
             }
             if(!Set.of("/mcp","/ui","/viewer").contains(path)){send(x,404,object("code","not_found"));return;}
             if(!x.getRequestMethod().equals("POST")){send(x,405,object("code","post_required"));return;}
@@ -80,7 +80,7 @@ final class HeadlessHttp {
                 JsonObject result=runtime.onMain(()->{
                     if(!Set.of("companion","initialize","columns").containsAll(in.keySet()))throw new IllegalArgumentException("unsupported_viewer_argument");
                     UUID body=runtime.own(authorized,in);
-                    if(runtime.mods==null)throw new IllegalArgumentException("native_viewer_bridge_unavailable");
+                    if(runtime.mods==null||!runtime.mods.viewerAvailable())throw new IllegalArgumentException("native_viewer_bridge_unavailable");
                     JsonObject args=in.deepCopy();args.remove("companion");
                     JsonObject frame=runtime.mods.viewer(runtime.live(body),args);
                     var stored=runtime.bodies.get(body);
@@ -103,7 +103,7 @@ final class HeadlessHttp {
             switch(method) {
                 case "initialize" -> {
                     String requested=params.has("protocolVersion")?text(params,"protocolVersion",30):"2025-06-18";
-                    result=object("protocolVersion",VERSIONS.contains(requested)?requested:"2025-06-18","capabilities",object("tools",object("listChanged",false)),"serverInfo",object("name","my-agent-world-numen","version","0.1.0"),"instructions","Server-resident bodies. Call operations before Lua. Mutations need claim_control and unique action_id. Reconnect: query action_status; never replay unknown. Tokens are owner-scoped.");
+                    result=object("protocolVersion",VERSIONS.contains(requested)?requested:"2025-06-18","capabilities",object("tools",object("listChanged",false)),"serverInfo",object("name","my-agent-world-numen","version","0.2.0"),"instructions","Server-resident bodies. Call operations before Lua and mod_operations for installed native gameplay interfaces. Mutations need claim_control and unique action_id. Reconnect: query action_status; never replay unknown. Tokens are owner-scoped.");
                 }
                 case "ping" -> result=new JsonObject();
                 case "tools/list" -> result=object("tools",catalog());

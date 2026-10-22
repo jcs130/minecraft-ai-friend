@@ -7,7 +7,7 @@ OFFICIAL_RELEASE='https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4
 FILES={
     'numen-neoforge-1.21.1-0.1.4.1.jar':'ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226',
     'maw_numen_compat-0.1.0.jar':'1f1ad2a47f7bbdbfab456735bc131f8650e87a9f3ca6fee6c9a5fdee08e0f6f0',
-    'maw_numen_server-0.1.0.jar':'6f5deffb896563880124fb2e732b9165c97878c4f27d44c684dd38ab55acd969'
+    'maw_numen_server-0.2.0.jar':'b31bc8ad4e0c3b35682dcf917c172b8f916b1238374dea19cd1a0b44b6dc75cc'
 }
 
 def policy(server,selected,mod_files,*,production):
@@ -50,3 +50,13 @@ def health(port,pid):
         return {'ready':True,'version':VERSION,'serverResident':True,'clientRequired':False,
             'nativeModAccess':value.get('nativeModAccess') is True,'nativeModOperationCount':value.get('nativeModOperationCount',0)}
     finally:connection.close()
+
+
+def gameplay_checks(mod_files,value):
+    """FOM feature readiness is required only when its optional extension is selected."""
+    if not any(name.startswith('maw_numen_mods-') for name in mod_files):return {}
+    checks={'numen_native_gameplay_extension_loaded':value.get('nativeModAccess') is True,
+            'numen_native_gameplay_catalog_available':value.get('nativeModOperationCount',0)>=17}
+    if any(name.startswith('minecolonies-') for name in mod_files):
+        checks['numen_colony_gameplay_catalog_available']=value.get('nativeModOperationCount',0)>=35
+    return checks
