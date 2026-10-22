@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+`0.2.87` keeps the full-context system instructions and provider tool declarations
+stable when an optional voice subscriber appears or expires. Current voice
+availability is explicit in the final scene's `current_tool_policy`; an absent
+subscriber still cannot authorize speech metadata or stale outbox delivery.
+Compact-context behavior, native queue ownership and speech freshness are
+unchanged. This removes a source of prefix churn, not proof that all live model
+deadlines or long-term autonomous play have improved.
+
 `0.2.86` makes identical scoped death-lesson reports explicit no-ops, preserves
 changed evidence and main-brain reflection precedence, and stops the current
 read chain with bounded idle backoff on a duplicate. The planning context marks
