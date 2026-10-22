@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .fast import FastSettings
+from .agent_store import AgentSettings
 
 
 def _text(section: dict, key: str, default: str = "") -> str:
@@ -129,6 +130,7 @@ class Settings:
     vision_enabled: bool = True
     fast: FastSettings = field(default_factory=FastSettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
+    agent: AgentSettings = field(default_factory=AgentSettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -180,6 +182,7 @@ class Settings:
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
             memory=MemorySettings.parse(raw.get("memory", {})),
+            agent=AgentSettings.parse(raw.get("agent", {})),
         )
 
     def require_server(self) -> None:

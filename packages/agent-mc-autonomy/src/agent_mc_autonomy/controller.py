@@ -16,6 +16,7 @@ from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .model_protocols import assistant_history
 from .planner import PlannerResponseError
 from .tool_schema import argument_error
+from .agent_store import tools as character_tools
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
@@ -217,9 +218,10 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, character=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
         self.data, self.publish = data, publish
+        self.character = character
         self.operator_stop = False
         self.stop_requested = lambda: self.operator_stop or stop_requested()
         self.commands = commands
@@ -257,6 +259,8 @@ class Controller:
         return isinstance(schema.get("properties", {}).get("steps"), dict)
 
     def immediate_read(self, name):
+        if name == "agent_recall" and self.character:
+            return True
         if name in IMMEDIATE_READ_TOOLS:
             return True
         if name in {"mc_scout", "mc_wait", "mc_events"}:
@@ -437,9 +441,16 @@ class Controller:
             await asyncio.gather(task, return_exceptions=True)
 
     async def dispatch(self, name, arguments, request_id):
-        if error := argument_error(self.bridge.tools, name, arguments):
+        catalogue = self.bridge.tools + (character_tools() if self.character else [])
+        if error := argument_error(catalogue, name, arguments):
             result = {"protocol": PROTOCOL, "failed": True, "execution": None,
                       "dispatched": False, "origin": "controller_validation", "text": error}
+            return result, await self.archive_receipt(request_id, name, result)
+        if self.character and name in {"agent_recall", "agent_remember"}:
+            try:
+                result = {"protocol": PROTOCOL, "text": encode(self.character.invoke(name, arguments, request_id))}
+            except ValueError as error:
+                result = {"protocol": PROTOCOL, "failed": True, "dispatched": False, "text": str(error).split(":", 1)[0]}
             return result, await self.archive_receipt(request_id, name, result)
         if name == "goal_report" and not self.active_goal:
             # A report about the standing goal is a local planning error, not a
@@ -598,7 +609,7 @@ class Controller:
             name, arguments = target, arguments["arguments"]
         if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
             raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
-        if error := argument_error(self.bridge.tools, name, arguments):
+        if error := argument_error(self.bridge.tools + (character_tools() if self.character else []), name, arguments):
             self.record_tool_failure(name, arguments, {"text": error})
             raise ModelCallRejected(error)
         if self.feedback_pending:
@@ -787,6 +798,8 @@ class Controller:
                 calls = response.get("tool_calls") or []
                 self.publish(last_message=(response.get("content") or "")[:1200])
                 if not calls:
+                    if self.character:
+                        self.character.record_exchange(self.turn, [assistant_history(response)])
                     self.invalid_tool_calls = 0
                     # A plain plan is still model history. Dropping it gives an
                     # unchanged world the same request on every idle wakeup.
@@ -827,6 +840,8 @@ class Controller:
                     # suffix. Never silently drop calls or cross native barriers.
                     exchange.append({"role": "tool", "tool_call_id": call["id"], "content": compact})
                 self.groups.append(exchange)
+                if self.character:
+                    self.character.record_exchange(self.turn, exchange)
                 self.groups = self.groups[-8:]
                 if boundary:
                     return
@@ -891,6 +906,10 @@ class Controller:
             self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=self.active_goal)
             prefix = text_content(await self.bridge.resource("mc://environment"))
             tools = model_tools(self.bridge.tools)
+            if self.character:
+                prefix += self.character.prompt()
+                tools += [{"type": "function", "function": {"name": t["name"], "description": t["description"],
+                          "parameters": t["inputSchema"]}} for t in character_tools()]
             wake, urgent = True, False
             last_status_check = time.monotonic()
             if self.commands:

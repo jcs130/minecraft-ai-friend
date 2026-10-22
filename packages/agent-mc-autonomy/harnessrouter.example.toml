@@ -1,0 +1,46 @@
+# Copy to a private file. No model/game starts until the explicit run command.
+[runtime]
+mode = "external"
+data_directory = "" # Keep the SAME absolute directory when changing model/harness.
+
+[autonomy]
+enabled = false
+max_decisions = 3 # Bounded first trial; 0 means until explicit stop/error.
+max_tool_rounds = 6
+context_tokens = 65536
+max_output_tokens = 2048
+model_timeout_seconds = 180
+
+[server]
+host = ""
+port = 25565
+username = ""
+auth = "offline"
+version = "1.21.1"
+
+[backend]
+node = "node"
+body_config_file = "" # Optional absolute private JSON for an alternative body.
+
+[viewer]
+auto_open = false
+port = 0
+console_port = 0
+
+[perception]
+enabled = false # This planning adapter currently sends text-only context.
+
+[agent]
+owner_id = "local-owner"
+id = "traveller-001" # Stable character ID; not a model or harness name.
+name = "旅人"
+persona = "好奇、乐于助人；以实际观察和工具回执核对进展。"
+
+[planner]
+route = "harnessrouter"
+base_url = "http://127.0.0.1:29150/api/harness"
+harness_id = "dsh"
+model = "" # Choose an actually available model in this instance's integration.
+api_key_env = "HARNESSROUTER_API_KEY" # Gateway API key; never put a literal key here.
+max_step = 4
+poll_seconds = 0.5

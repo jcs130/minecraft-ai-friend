@@ -24,6 +24,12 @@ Neko / Cortico / other Agent                 Explicit model endpoint
 
 ## Run independently
 
+Version **0.1.26** adds optional HarnessRouter UHP planning and a host-owned,
+stable character profile/journal. The standalone CLI can switch the configured
+planner at a decision boundary while retaining the same game body and ledgers.
+See [configuration, persistence and switching](docs/harness-router.md) and
+[the private-configuration template](harnessrouter.example.toml).
+
 Install with Python 3.11+ (`pip install ./packages/agent-mc-autonomy`). Install and
 build `packages/agent-mc-world` separately following its documentation; pass the
 actual built MCP entry explicitly. No private deployment or model is discovered.

@@ -199,9 +199,12 @@ def planner_settings(raw):
     if not isinstance(raw, dict):
         raise ValueError("brain_config_invalid")
     route = raw.get("route", "host")
-    if route not in {"host", "direct"}:
+    if route not in {"host", "direct", "harnessrouter"}:
         raise ValueError("brain_route_invalid")
     config = {k: v for k, v in raw.items() if k != "route"}
+    if route == "harnessrouter":
+        from .harness_router import HarnessRouterConfig
+        return HarnessRouterConfig.parse(config)
     if route == "host":
         # Disabled draft must not accept credential literals or unknown fields.
         if set(config) - HttpPlannerConfig.__dataclass_fields__.keys():

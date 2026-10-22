@@ -33,6 +33,7 @@ port = 0
 console_port = 0
 
 # Omit this table when using --queue-only. No model is discovered automatically.
+# HarnessRouter has a separate complete template: harnessrouter.example.toml.
 [planner]
 base_url = "" # Explicit OpenAI-compatible API base, including /v1 where required.
 model = ""
@@ -68,3 +69,10 @@ project_id = "agent-mc"
 scope_id = "" # Existing PowerContext Scope. No discovery or automatic creation.
 search_mode = "text" # PowerContext: text | vector | hybrid.
 learning_enabled = false # Optional PowerContext / HTTP game evidence and reviewed experience workflows.
+
+# Optional stable persona/history; omit to keep legacy behavior. IDs are not model names.
+# [agent]
+# owner_id = "local-owner"
+# id = "traveller-001"
+# name = "旅人"
+# persona = "好奇、乐于助人；用真实回执核对进展。"

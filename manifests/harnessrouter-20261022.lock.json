@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Optional explicit planning backend; no Minecraft body or legacy Agent migration",
+  "source": {
+    "repository": "https://github.com/HarnessRouter/harnessrouter",
+    "commit": "3668370c10255be7085bae207ace12a94422614f",
+    "license": "Apache-2.0"
+  },
+  "image": "harnessrouter/harnessrouter@sha256:1e9fe5373b1aaaa8946d62b7ca241a3e8d4c1312b5beb603af5656f760036e10",
+  "observedImplementation": "HarnessRouter Community Edition 0.35.13",
+  "observedUhpVersion": "2026-09-28",
+  "enabledBackends": ["dsh"],
+  "observedDshVersion": "0.1.2rc1",
+  "deployment": {
+    "wslDistribution": "Ubuntu-24.04",
+    "container": "maw-harnessrouter",
+    "label": "myagentworld.component=harnessrouter",
+    "publish": "127.0.0.1:29150:3000",
+    "apiBase": "http://127.0.0.1:29150/api/harness",
+    "volume": "maw-harnessrouter-data:/data",
+    "restart": "unless-stopped",
+    "memoryBytes": 2147483648,
+    "nanoCpus": 2000000000,
+    "pidsLimit": 512,
+    "environmentFile": "E:/MC/private/harnessrouter/service.env",
+    "consoleCredentialsFile": "E:/MC/private/harnessrouter/console-login.json",
+    "apiKeyFile": "E:/MC/private/harnessrouter/api-key.json"
+  },
+  "modelSelection": {
+    "integration": "codingplan",
+    "testedModel": "qwen3.5-plus",
+    "automaticFallback": false
+  },
+  "notEnabled": ["public_console", "public_mcp", "cloud_sync", "legacy_persona_import", "automatic_agent_start"]
+}

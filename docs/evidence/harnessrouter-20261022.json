@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-22T04:20:46.660994+00:00",
+  "packageVersion": "0.1.26",
+  "scope": "Optional HarnessRouter planning, single body coordinator and local character continuity; not full autonomous survival or cloud portability",
+  "onlineModel": "qwen3.5-plus",
+  "onlineFixture": false,
+  "stages": [
+    {
+      "stage": "A",
+      "route": "harnessrouter",
+      "plannerCalls": 2,
+      "latencyMs": [
+        15109,
+        18813
+      ],
+      "promptTokens": 37181,
+      "completionTokens": 1185,
+      "actualBlock": [
+        -8,
+        82,
+        0
+      ],
+      "pendingActions": 0
+    },
+    {
+      "stage": "B",
+      "route": "direct",
+      "plannerCalls": 4,
+      "latencyMs": [
+        1437,
+        1485,
+        860,
+        1344
+      ],
+      "promptTokens": 33079,
+      "completionTokens": 185,
+      "actualBlock": [
+        -7,
+        82,
+        0
+      ],
+      "pendingActions": 0
+    },
+    {
+      "stage": "C",
+      "route": "harnessrouter",
+      "plannerCalls": 2,
+      "latencyMs": [
+        8844,
+        19297
+      ],
+      "promptTokens": 35752,
+      "completionTokens": 695,
+      "actualBlock": [
+        -7,
+        82,
+        0
+      ],
+      "pendingActions": 0
+    }
+  ],
+  "sameGameEventRun": true,
+  "gameEventRun": "04c13a9c-ac1e-4b3f-aa21-5349828e8246",
+  "movement": {
+    "realActionsInFinalRun": 1,
+    "originalActionId": "cbf9bccb-effc-4d6f-b970-5012676147ae:1",
+    "phase": "completed",
+    "noDigOrPlace": true,
+    "startBlock": [
+      -8,
+      82,
+      0
+    ],
+    "endBlock": [
+      -7,
+      82,
+      0
+    ],
+    "reconnectBlock": [
+      -7,
+      82,
+      0
+    ],
+    "reconnectReplayedActions": 0
+  },
+  "character": {
+    "sameStableIdentity": true,
+    "privateRandomNoteRecovered": true,
+    "personaRevisions": 1,
+    "journalRecords": 12,
+    "canonicalExportHashVerified": true,
+    "accountLeaseReleased": true
+  },
+  "tests": {
+    "packagePytestPassed": 332,
+    "installedWheelConsumerPassed": true,
+    "installedProbeForbidsNetworkProcessesHostsAndSource": true,
+    "installedDiscoveryPassed": true,
+    "installedDiscoveryModelCalls": 0,
+    "wheelSha256": "12f805ba281268350433ceddd088dbcaf321388558ae195442eaa72f8a19642e"
+  },
+  "providerAvailability": {
+    "qwen3.7-plus": {
+      "directStatus": 429,
+      "harnessTask": "failed"
+    },
+    "qwen3.6-plus": {
+      "directStatus": 429
+    },
+    "glm-5": {
+      "directStatus": 429
+    },
+    "qwen3.5-plus": {
+      "directStatus": 200,
+      "harnessCompleted": true
+    },
+    "accountExhaustionInferred": false
+  },
+  "retainedFailures": [
+    "Initial DSH object-form arguments rejected before dispatch; now canonicalized with original schema validation",
+    "Final direct goto used x/y/z once; native parser rejected with no movement, model consulted mc_help and corrected to at",
+    "Temporary wire fixture excluded from live model/game success",
+    "First private packed-probe runner created a Windows wake pipe after network denial; reproducible installed probe now initializes the loop before denial"
+  ],
+  "harness": {
+    "implementation": {
+      "name": "HarnessRouter Community Edition",
+      "version": "0.35.13"
+    },
+    "uhpVersion": "2026-09-28",
+    "dshVersion": "0.1.2rc1",
+    "loopbackOnlyPublish": true,
+    "unauthenticatedSessionStatus": 401,
+    "discoveryPublicByUpstreamDesign": true,
+    "resourceLimitsVerified": true,
+    "coldBackupBytes": 178121333,
+    "coldBackupArchiveSha256": "043cc517c08925bd7282da8911969a2ebc83c8ffecbaf1b9ee90b721bce54d6b",
+    "coldBackupMembersRead": 23502,
+    "originalEncryptionEnvironmentSavedPrivately": true,
+    "restartedWithSameVolume": true
+  },
+  "production": {
+    "fomChecks": 20,
+    "fomRunId": "296a9ace06624300bb9c8e2c379db166",
+    "bedrockChecks": 14,
+    "bedrockRunId": "fa520f00c7d84001a32e6c193fac4ca3",
+    "sameGameOwners": true,
+    "worldRestarted": false,
+    "legacyAgentMigrated": false,
+    "localModelUsed": false,
+    "newPublicPorts": []
+  },
+  "cleanup": {
+    "fixtureRemoved": true,
+    "fixturePortClosed": true,
+    "temporaryNetworkRemoved": true,
+    "knownHarnessResponses": 9,
+    "allKnownResponsesTerminal": true,
+    "qaPlayerDisconnected": true
+  },
+  "notImplemented": [
+    "Cortico and Numen own-loop HarnessRouter drivers",
+    "multi-user profile API/runtime selection UI",
+    "legacy host memory import",
+    "cloud sync/import/cross-machine restore",
+    "long-running autonomous survival benchmark"
+  ]
+}

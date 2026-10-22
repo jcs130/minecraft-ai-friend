@@ -19,6 +19,7 @@ from .ownership import session_lease
 from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
+from .agent_store import AgentStore
 
 
 def validate_start(settings: Settings, goal: str):
@@ -75,6 +76,9 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
         if stopped():
             return
         with session_lease(directory):
+            character = AgentStore(data_root, settings.agent, settings.identity) if settings.agent.id else None
+            if character:
+                update(character=character.configure())
             commands = Mailbox(directory)
             commands.check_uncertain()
             config = directory / "client.json"
@@ -95,7 +99,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                     system_one = SystemOne(settings.fast)
                 selector = system_one.select if system_one else getattr(planner, "select_fast", None) if settings.fast.mode == "host" else None
                 policy = FastPolicy(settings.fast, selector)
-                await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped, commands, policy).run(goal.strip())
+                await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped, commands, policy,
+                                 character=character).run(goal.strip())
             except asyncio.CancelledError:
                 commands.stop_queued()
                 update(phase="stopped")
