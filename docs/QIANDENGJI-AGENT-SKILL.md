@@ -37,7 +37,7 @@ node scripts/setup.mjs portal --profile /私有profile目录 --token-file /私�
 
 本轮官网公开 capabilities 实测 `CLOUD_AUTH_BRIDGE_PENDING`，网站账号已可用，但云端建游戏角色、绑定与改密通道未就绪；状态按实际返回展示。**只读 PAT 不授权游戏控制或登录**，游戏连接仍用本账号的登录凭据。未来 game.connect 需真实服务端校验短期、角色绑定的凭证；不在客户端伪造通过。MCP 和 HarnessRouter 不新开公网端口。
 
-已向正在维护网站的会话发送用户授权的协作消息、ZIP 路径/校验和与上述接口边界。下载页的实际发布由网站会话管理；本记录不宣称下载路由或认证桥已经上线。
+网站会话已回写 `paper/docs/AGENT_SKILL_HANDOFF.md`，确认网站 0.5.0 候选的上述授权边界，以及同源下载路径 `/downloads/qiandengji-agent-1.0.0.zip` 和相同校验值。本轮收尾时对公网实际请求该路径返回 404；下载页发布由网站会话管理，不把候选路由视为已经上线。真人的正版与网站联合准入也仍在设计阶段，见 `PLAYER-PORTAL-ONBOARDING.md`。
 
 ## 验收与维护
 

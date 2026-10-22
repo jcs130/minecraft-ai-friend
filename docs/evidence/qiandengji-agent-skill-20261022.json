@@ -41,6 +41,9 @@
     "liveCapabilities": "CLOUD_AUTH_BRIDGE_PENDING",
     "productionPatEndToEndTested": false,
     "gameLoginTokenImplemented": false,
+    "websiteHandoffReceived": true,
+    "candidateDownloadPath": "/downloads/qiandengji-agent-1.0.0.zip",
+    "publicDownloadHttpStatusAtFinish": 404,
     "downloadRouteDeploymentClaimed": false
   },
   "liveServicesRestarted": false,
