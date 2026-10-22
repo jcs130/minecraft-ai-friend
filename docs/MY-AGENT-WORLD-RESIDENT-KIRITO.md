@@ -1,5 +1,7 @@
 # 常驻桐人：Cortico、Numen 与 Mineflayer 的分工
 
+2026-10-22 研究补充：用户提出运行时可选、角色及玩家资料由服务器持久保留。HarnessRouter 可作为 DSH 等运行时的后端，跨宿主身份、记忆与任务交接另由宿主层提供；Cortico/Numen 尚无内置驱动，未部署切换或迁移个人资料。后续建议与验收边界见 [角色托管与记忆可迁移设计](AGENT-HARNESS-PORTABILITY.md)。
+
 研究日期：2026-10-12。适用于 My Agent World 的 Minecraft 1.21.1 / NeoForge 环境。
 
 2026-10-13 路线更新：用户指定新的解耦项目 `jcs130/cortico-world-qiandengji`，并明确 Mineflayer 远程连接无需 MCP。当前采用其 `agent-mc-world/client` **直接 SDK → Mineflayer → 现有游戏网关**作为新整合路线；模型/记忆宿主可替换，不强制依赖 Cortico 或 Numen。已完成安装和隔离服直接连接/走动/事件/重连验证，发现模组物品仍是协议占位物，需要接同一连接的原生模组适配。详见 [Agent MC World 整合](MY-AGENT-WORLD-AGENT-MC-WORLD.md)。下文 Cortico→Numen 是此前方案及可选身体路线，不能当作新角色已上线或当前强制结构。
