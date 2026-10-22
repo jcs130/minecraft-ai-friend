@@ -10,6 +10,7 @@ function setSession(session) {
     state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null; state.appearance = null; state.agentInvites = [];
     // Do not leave a previous owner's private channel title on a shared phone.
     state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false }));
+    window.QdMemories?.clearPrivate();
   }
   state.session = session;
 }
@@ -49,7 +50,7 @@ const icons = {
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>'),
   link: svg('<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-6-6l6-6a4 4 0 0 1 6 0m4 4 2-2a4 4 0 0 1 6 6l-6 6a4 4 0 0 1-6 0"/>')
 };
-const titles = { home: '世界首页', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
+const titles = { home: '世界首页', memories: '共同回忆', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
 const kindNames = { agent: 'Agent', observer: '观战账号', player: '玩家', admin: '管理身份' };
 const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const number = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: digits });
@@ -97,7 +98,7 @@ function toast(message, error = false) {
 }
 function setView(view) { location.hash = titles[view] ? view : 'home'; }
 function navigation() {
-  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
+  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['memories', 'heart'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
     `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
 }
 function render() {
@@ -118,6 +119,7 @@ function render() {
     <div class="content"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" data-action="menu" aria-label="展开导航">${icons.menu}</button><a href="#home">千灯纪</a><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="top-divider"></span><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '服务器运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></header>
     <main id="main" tabindex="-1">${page()}</main></div>
   </div>`;
+  window.QdMemories?.route();
 }
 function heading(title, description, actions = '', eyebrow = 'QIANDENGJI / AGENT WORLD') {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${actions}</div></div>`;
@@ -127,7 +129,7 @@ function footer() {
 }
 function page() {
   const pages = { overview, agentsPage, inventoryPage, connectionsPage, accountPage, helpPage };
-  const fn = { gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
+  const fn = { memories: () => window.QdMemories?.page() || '', gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
   return (fn || overview)() + footer();
 }
 function landscape() {
@@ -146,7 +148,7 @@ function homePage() {
   const cast = state.roster.filter(row => row.kind === 'agent').slice(0, 6);
   const publicEvents = state.events.filter(row => row.kind === 'quest' || row.kind === 'advancement' || row.kind === 'notice').slice(0, 3);
   const init = state.session?.canSetup ? `<div class="notice onboarding-notice">${icons.key}<p>首次使用：请在本机设置网站管理员。</p>${button('setup', '设置管理员', 'arrow', 'small primary')}</div>` : '';
-  return `<div class="layout home-layout"><header class="home-topbar"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>一个持续生长的世界</small></div></a><nav class="home-links" aria-label="网站导航"><a href="#home" aria-current="page">世界首页</a><button data-action="home-section" data-section="world-life">在这里生活</button><a href="#gallery">相机展廊</a><a href="#live">冒险直播</a><a href="#help">如何加入 ${icons.arrow}</a></nav><div class="home-top-actions">${currentOwner ? button('route', `<strong>${e(currentOwner.username)}</strong>`, 'users', 'profile-button', 'data-view="account"') : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login') }<button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
+  return `<div class="layout home-layout"><header class="home-topbar"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>一个持续生长的世界</small></div></a><nav class="home-links" aria-label="网站导航"><a href="#home" aria-current="page">世界首页</a><button data-action="home-section" data-section="world-life">在这里生活</button><a href="#gallery">相机展廊</a><a href="#memories">共同回忆</a><a href="#live">冒险直播</a><a href="#help">如何加入 ${icons.arrow}</a></nav><div class="home-top-actions">${currentOwner ? button('route', `<strong>${e(currentOwner.username)}</strong>`, 'users', 'profile-button', 'data-view="account"') : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login') }<button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
     <main id="main" class="home-main" tabindex="-1">${init}
       <section class="world-hero world-hero-scene" aria-labelledby="world-title"><div class="world-hero-copy"><div class="home-kicker"><span class="home-lantern-spark"></span>MINECRAFT · AGENT · LIFE</div><h1 id="world-title">让 Agent 在这里，<br><em>过自己的生活。</em></h1><p class="home-intro">欢迎来到千灯纪。<br>一个对 Agent 友好的 RPG 生活世界，<br class="wide-only">跟可米和伙伴们一起，把这里变成家。</p><div class="home-hero-actions">${routeButton('help', '开始这段旅程', 'arrow', 'primary')}${routeButton('agents', '认识这里的伙伴', 'users', 'home-secondary')}</div><div class="home-live-status"><span class="status ${s?.online === true ? '' : 'unknown'}"><i class="dot"></i>${s?.online === true ? '世界正在运行' : '等待世界的消息'}</span><span>${number(s?.playersOnline)} 人在线</span><a href="#overview">查看世界状态 ${icons.arrow}</a></div></div><div class="world-hero-art"><img src="/assets/scenes/lantern-village.webp" srcset="/assets/scenes/lantern-village-960.webp 960w, /assets/scenes/lantern-village.webp 1672w" sizes="(max-width:760px) 100vw, 1200px" alt="可米走在灯火村庄的小路上，远处有宫殿、河流与浮空岛的世界概念场景" width="1672" height="941" fetchpriority="high"><div class="world-art-label"><span>可米与千灯纪 / 世界概念</span><small>日子从一条回家的路开始。AI 场景演绎。</small></div></div></section>
       <div class="home-world-strip"><span>一个世界，无数种生活。</span><p>NEKO <i>·</i> Cortico <i>·</i> QwenPaw <i>·</i> 也欢迎你的 Agent</p><a href="#connections">了解 Agent 接入 ${icons.arrow}</a></div>
@@ -162,6 +164,7 @@ function homePage() {
         ['04', 'book', '把今天，留给明天的自己。', '照片与故事', '用女神相机记录游戏里的相遇，给照片起题目、写故事，让生活有迹可循。', 'gallery']
       ].map(([n, icon, title, tag, text, view]) => `<a class="life-path" href="#${view}"><div class="life-path-top"><span>${n}</span>${icons[icon]}</div><small>${tag}</small><h3>${title}</h3><p>${text}</p><span class="life-path-link">继续了解 ${icons.arrow}</span></a>`).join('')}</div><div class="home-rescue-note">${icons.heart}<div><strong>倒地了，也不用独自离开。</strong><p>组队试炼与地下城中，队友在倒地者4格内连续停留10秒即可救起；清完本层或本室也会自动复活。全队倒下才撤离。</p></div></div></section>
       <section class="home-section home-residents"><div class="home-section-heading"><div><span class="home-kicker">MEET THE RESIDENTS</span><h2>不同的大脑，<br>在同一片星空下相遇。</h2></div><div><p>NEKO、Cortico，或你自己的 Agent。<br>带着各自的性格和能力，成为世界里的一位居民。</p><a class="text-link" href="#agents">认识全部角色 ${icons.arrow}</a></div></div><div class="resident-grid" data-world-roster>${cast.map(agent => `<button class="resident-card" data-action="detail" data-id="${e(agent.id)}">${avatar(agent)}<div><strong>${e(characterName(agent.name))}</strong><small>${e(agent.name)}</small></div>${statusTag(agent)}</button>`).join('') || '<p class="tiny">正在读取世界居民…</p>'}</div></section>
+      ${window.QdMemories?.home() || ''}
       <section class="home-section home-gallery"><div class="home-section-heading"><div><span class="home-kicker">LIFE, THROUGH THEIR EYES</span><h2>这是他们，<br>亲自拍下的生活。</h2></div><div><p>游戏内女神相机 · 真实作品 · 原作者署名<br>把一处风景，变成一个可以分享的故事。</p><a href="#gallery" class="text-link">走进相机展廊 ${icons.arrow}</a></div></div>${state.photos.length ? `<div class="photo-grid">${photoCards(state.photos.slice(0, 3))}</div>` : '<div class="gallery-wait"><span>相机展廊</span><p>公开展出的游戏照片同步后，会出现在这里。</p></div>'}</section>
       <section class="home-section home-journal"><div><span class="home-kicker">THE WORLD KEEPS GOING</span><h2>故事，还在发生。</h2><p>成长记录、委托与世界公告，<br>组成千灯纪每天的新一页。</p><div class="home-hero-actions">${routeButton('events', '翻开世界动态', 'arrow')}${routeButton('live', '去直播间看看', 'monitor', 'ghost')}</div></div><div class="home-journal-list">${publicEvents.length ? publicEvents.map(event => `<a href="#events"><span>${e(eventNames[event.kind] || '动态')} / ${date(event.occurredAt)}</span><h3>${e(event.title)}</h3>${icons.arrow}</a>`).join('') : '<p>游戏里的新成就与委托记录，会在这里留下足迹。</p>'}</div></section>
       <section class="home-join"><img src="/assets/lantern.svg" alt="" width="44" height="44"><span class="home-kicker">YOUR STORY STARTS HERE</span><h2>给你的 Agent，<br>一个可以回去的世界。</h2><p>真人玩家与 Agent 都可以加入。<br>先了解接入方式，进服后从 <code>/mycli help</code> 开始认识千灯纪。</p><div class="home-hero-actions">${routeButton('help', '查看接入指引', 'arrow', 'primary')}${currentOwner ? routeButton('account', '我的账号', 'users') : button('register', '注册网站账号', 'users')}</div><small>网站账号用于门户资料与权限；游戏账号接入以指引中的当前状态为准。</small></section>
@@ -304,7 +307,7 @@ function accountPage() {
     <section class="panel"><div class="panel-header"><h2>${icons.clock}最近操作</h2><span class="tiny">${isAdmin() ? '网站审计记录' : '你的安全记录'}</span></div><div class="content-pad audit-list">${account?.events?.length ? account.events.slice(0, 8).map(event => `<div class="audit-row"><i class="dot"></i><span>${auditNames[event.action] || e(event.action)}</span><time>${date(event.observedAt)}</time></div>`).join('') : '<p class="tiny">暂无操作记录</p>'}</div></section></div>`;
 }
 function helpPage() {
-  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>新账号先验证邮箱，再创建账号。可以使用用户名或已验证邮箱登录；已有账号可在账号与权限中补绑邮箱。找回密码会退出其他网站会话并撤销网站客户端凭据。发信服务未配置时页面会明确提示，不会跳过邮箱验证。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>默认选择本人绑定角色，可以切换其他公开频道。私人频道只允许角色主人与网站管理员观看。断流或画面过期显示未开播，画面不包含网页私聊、库存面板和工具反馈。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
+  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>默认选择本人绑定角色，可以切换其他公开频道。私人频道只允许角色主人与网站管理员观看。断流或画面过期显示未开播，画面不包含网页私聊、库存面板和工具反馈。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
 }
 
 async function loadPrivate() {
@@ -317,6 +320,7 @@ async function loadPrivate() {
     const owners = isAdmin() ? (await api('/admin/owners')).owners : [];
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
     state.authorized = agents.agents; state.account = account; state.credentials = credentials.credentials; state.owners = owners; state.accountJobs = accountJobs.jobs; state.agentInvites = invites.invites;
+    await window.QdMemories?.load({ privateOnly: true });
   } catch (error) {
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
     state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.agentInvites = [];
@@ -329,8 +333,11 @@ async function refresh(manual = false) {
   const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api('/gallery')]);
   if (revision !== authRevision) return;
   state.error = null;
-  if (results[0].status === 'fulfilled') state.session = results[0].value;
-  else { state.session = null; state.error = '门户连接暂时中断'; }
+  if (results[0].status === 'fulfilled') {
+    if (state.session?.owner?.id !== results[0].value?.owner?.id) window.QdMemories?.clearPrivate();
+    state.session = results[0].value;
+  }
+  else { window.QdMemories?.clearPrivate(); state.session = null; state.error = '门户连接暂时中断'; }
   if (results[1].status === 'fulfilled') state.summary = results[1].value;
   else { state.summary = null; state.error = '服务器状态暂未确认'; }
   if (results[2].status === 'fulfilled') state.roster = results[2].value.agents;
@@ -342,13 +349,14 @@ async function refresh(manual = false) {
   state.gameCapabilities = results[7].status === 'fulfilled' ? results[7].value : null;
   state.photos = results[8].status === 'fulfilled' ? results[8].value.photos : [];
   await loadPrivate();
+  await window.QdMemories?.load();
   if (revision !== authRevision && owner()) return;
-  if (!modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+  if (!modal.open && !detail.open && !window.QdMemories?.isOpen() && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
     if (state.view === 'home' && app.querySelector('.home-film video')) {
       // Poll live data without replacing the media element. Rebuilding the whole
       // homepage every 15 seconds stops playback and discards paused/seek state.
       const updated = document.createElement('template'); updated.innerHTML = homePage();
-      for (const selector of ['.home-top-actions', '.home-live-status', '[data-world-roster]', '.home-gallery', '.home-journal-list']) {
+      for (const selector of ['.home-top-actions', '.home-live-status', '[data-world-roster]', '.home-gallery', '.home-memories', '.home-journal-list']) {
         const previous = app.querySelector(selector), next = updated.content.querySelector(selector);
         if (previous && next) previous.replaceWith(next);
       }
@@ -668,8 +676,9 @@ modal.addEventListener('close', () => { modal.innerHTML = ''; if (!detail.open) 
 detail.addEventListener('close', () => { state.detail = null; detail.innerHTML = ''; });
 for (const dialog of [modal, detail]) dialog.addEventListener('click', event => { if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); });
 document.addEventListener('keydown', event => { if (event.key === '/' && !modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) { event.preventDefault(); setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 50); } });
-window.addEventListener('hashchange', () => { state.view = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home'; render(); window.scrollTo(0, 0); });
-state.view = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
+window.addEventListener('hashchange', () => { state.view = /^#memories(?:\/|$)/.test(location.hash) ? 'memories' : titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home'; render(); window.scrollTo(0, 0); });
+state.view = /^#memories(?:\/|$)/.test(location.hash) ? 'memories' : titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
+window.QdMemories?.init({ api, owner, toast, render, requestId: newRequestId, login: () => document.querySelector('[data-action=\"login\"]')?.click() });
 render(); refresh();
 setInterval(() => { if (document.visibilityState === 'visible' && !modal.open) refresh(); }, 15000);
 setInterval(pollLiveFrame, 1000);

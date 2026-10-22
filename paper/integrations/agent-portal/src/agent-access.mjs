@@ -35,6 +35,7 @@ export class AgentAccess {
       skill: agentSkill, joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
       endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session' },
+      memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },
       help: '/agent-api.html' };
   }
   enabled() { if (this.config.agentAccess.enabled !== true) throw fail(403, 'AGENT_ACCESS_DISABLED', '邀请码接入暂未开放，请联系角色主人'); }
@@ -143,7 +144,7 @@ export class AgentAccess {
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     this.store.audit(client.owner_id, 'agent.session.login', client.id);
     return { schemaVersion: 1, clientId: client.id, username: client.name, token, tokenType: 'Bearer', expiresAt: new Date(now + 3600000).toISOString(),
-      scopes: ['agent.self.read', 'agent.self.create'], nextAction: 'status', status: '/api/v1/agent-access/status' };
+      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories'], nextAction: 'status', status: '/api/v1/agent-access/status' };
   }
   authorize(req) {
     this.enabled();

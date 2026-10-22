@@ -77,6 +77,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     assert.ok(path.resolve(root).startsWith(fixtureBase + path.sep)); await fs.rm(root, { recursive: true, force: true });
     assert.deepEqual(errors, [], 'No unexpected DOM runtime errors');
   });
+  window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
   window.eval(code + '\nwindow.__portalRefreshForTest = refresh;');
   await waitFor(() => document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
@@ -421,4 +422,60 @@ test('game appearance is offered to the actual role owner and separates file upl
   assert.match(ui.document.querySelector('#modal').textContent, /不支持加密/);
   assert.ok(ui.document.querySelector('#appearance-upload-form [name="publicConsent"]').required);
   assert.equal(ui.document.querySelector('[data-action="apply-appearance"]'), null);
+});
+
+
+test('shared memories keep uploads private until preview and explicit publication, with working comparison and withdrawal', async t => {
+  const ui = await screen(t); await ui.setup();
+  ui.window.location.hash = 'memories';
+  await waitFor(() => ui.document.querySelector('[data-memory-action="new"]'));
+  ui.click('[data-memory-action="new"]');
+  ui.fill('title', '工坊旁的日常', '#memory-form');
+  ui.fill('story', '可米整理箱子，记录自己的生活。', '#memory-form');
+  ui.fill('participants', 'ag_CorMy', '#memory-form');
+  const bytes = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082', 'hex');
+  for (const name of ['original', 'redraw']) Object.defineProperty(ui.document.querySelector(`#memory-form [name="${name}"]`), 'files', { configurable: true, value: [new File([bytes], name + '.png', { type: 'image/png' })] });
+  ui.submit('#memory-form');
+  await waitFor(() => ui.document.querySelector('#memory-publish-form'));
+  assert.match(ui.document.querySelector('#memory-dialog').textContent, /私人草稿/);
+  assert.equal(ui.portal.memories.list().total, 0);
+  const slider = ui.document.querySelector('.memory-comparison input[type="range"]'); slider.value = '77';
+  slider.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+  assert.equal(ui.document.querySelector('.memory-compare-redraw').style.clipPath, 'inset(0 0 0 77%)');
+  assert.equal(ui.document.querySelector('.memory-compare-divider').style.left, '77%');
+  ui.document.querySelector('#memory-publish-form [name="confirmPublic"]').checked = true;
+  ui.submit('#memory-publish-form');
+  await waitFor(() => ui.portal.memories.list().total === 1 && ui.document.querySelector('[data-memory-action="withdraw"]'));
+  assert.equal(ui.portal.memories.list().items[0].title, '工坊旁的日常');
+  ui.click('[data-memory-action="withdraw"]');
+  await waitFor(() => ui.portal.memories.list().total === 0 && ui.document.querySelector('#toast').textContent.includes('已撤回为私人草稿'));
+  ui.click('#memory-dialog [data-memory-action="close"]');
+  ui.click('[data-memory-action="mine"]');
+  await waitFor(() => ui.document.querySelector('.memory-draft-label'));
+  assert.match(ui.document.querySelector('.memory-card').textContent, /私人草稿/);
+});
+
+test('public deep links render escaped stories, participant filtering and sharing without exposing private drafts', async t => {
+  const ui = await screen(t); await ui.setup();
+  const owner = ui.portal.store.ownerByName('ui-admin'), context = { owner };
+  const post = ui.portal.memories.create(context, { requestId: randomUUID(), title: '<img src=x onerror=bad()>', story: '<script>bad()</script>\n同行的一刻', participants: ['ag_CorMy', 'LittleFish0510'], credit: '玩家分享' });
+  const bytes = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082', 'hex');
+  for (const kind of ['original', 'redraw']) ui.portal.memories.upload(post.id, kind, context, bytes, 'image/png');
+  ui.portal.memories.publish(post.id, context, { confirmPublic: true, revision: ui.portal.memories.detail(post.id, context).revision });
+  const copies = []; Object.defineProperty(ui.window.navigator, 'clipboard', { value: { writeText: async value => copies.push(value) } });
+  ui.window.location.hash = 'memories/' + post.id;
+  await waitFor(() => ui.document.querySelector('.memory-story-text'));
+  assert.ok(ui.document.querySelector('.memory-story-text').textContent.includes('<script>bad()</script>'));
+  assert.equal(ui.document.querySelectorAll('#memory-dialog script, #memory-title img').length, 0);
+  assert.match(ui.document.querySelector('.memory-people').textContent, /可米/);
+  ui.click('[data-memory-action="share"]'); await waitFor(() => copies.length === 1);
+  assert.equal(copies[0], ui.origin + '/#memories/' + post.id);
+  ui.click('#memory-dialog [data-memory-action="participant"][data-name="LittleFish0510"]');
+  await waitFor(() => ui.window.location.hash === '#memories' && ui.document.querySelector('.memory-filter'));
+  assert.match(ui.document.querySelector('.memory-filter').textContent, /小鱼/);
+  ui.window.location.hash = 'account';
+  await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]');
+  await waitFor(() => ui.document.querySelector('#toast').textContent.includes('已退出网站'));
+  assert.equal(ui.document.querySelectorAll('.memory-draft-label').length, 0);
 });

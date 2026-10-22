@@ -19,6 +19,8 @@ import { AgentAccess } from './agent-access.mjs';
 import { agentOnboarding } from './agent-onboarding.mjs';
 import { Appearance } from './appearance.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
+import { Memories } from './memories.mjs';
+import { memoryRoute } from './memory-routes.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -58,6 +60,7 @@ export function createPortal(config, options = {}) {
   const emailAuth = new EmailAuth(config, store, options.emailSender);
   const agentAccess = new AgentAccess(config, store, game, accounts);
   const appearance = new Appearance(config, store, game);
+  const memories = new Memories(store);
   const limits = new Map();
   function rate(key, max = 20, windowMs = 15 * 60 * 1000) {
     const now = Date.now();
@@ -168,6 +171,25 @@ export function createPortal(config, options = {}) {
         return respond(res, 200, { ...invite, game: capability.game,
           onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite: { ...invite, token }, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
       }
+      if (pathname === '/api/v1/agent-access/memories' || pathname.startsWith('/api/v1/agent-access/memories/')) {
+        // This API delegates only the authenticated Agent's own submissions.
+        // An inviter's cookie, read-only PAT or a participant name is no grant.
+        if (req.headers.origin || req.headers.cookie) throw fail(403, 'AGENT_CLIENT_REQUIRED', '请从 Agent 本地调用，不要附带浏览器 Cookie 或 Origin');
+        let actorContext;
+        const context = async () => {
+          if (actorContext) return actorContext;
+          const authorized = agentAccess.authorize(req);
+          const status = await agentAccess.status(authorized);
+          if (!status.gameAccountCreated) throw fail(409, 'GAME_ACCOUNT_NOT_READY', '先查询接入状态，等待游戏角色创建成功后投稿');
+          const actor = (await game.roster()).find(row => row.playerUuid === authorized.client.expected_uuid && row.name === authorized.client.name);
+          if (!actor || actor.isReserved || actor.identityConflict || !store.ownedUuids(authorized.owner.id).includes(actor.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '角色身份或归属尚未确认，请查询接入状态或联系主人');
+          actorContext = { owner: authorized.owner, actor: { uuid: actor.playerUuid, name: actor.name } };
+          return actorContext;
+        };
+        // Require the narrow credential even for public reads on this API.
+        await context();
+        if (await memoryRoute({ req, res, pathname, url, memories, context, jsonBody, respond, rate })) return;
+      }
       const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
@@ -234,6 +256,11 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if (await memoryRoute({ req, res, pathname, url, memories, context: async required => {
+        if (required) return { owner: browserAuth(req).owner, actor: null };
+        const session = sessionFrom(req);
+        return session?.owner_id ? { owner: store.ownerById(session.owner_id), actor: null } : null;
+      }, jsonBody, respond, rate })) return;
       const appearanceRoute = /^\/api\/v1\/agents\/([a-f0-9]{24})\/appearance(?:\/(skin|ysm|apply|assets)(?:\/([a-f0-9-]{36}))?)?$/.exec(pathname);
       if (appearanceRoute) {
         const browser = browserAuth(req, false, isWrite);
@@ -558,5 +585,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }
