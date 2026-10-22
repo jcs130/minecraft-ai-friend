@@ -489,3 +489,18 @@ test('public deep links render escaped stories, participant filtering and sharin
   await waitFor(() => ui.document.querySelector('#toast').textContent.includes('已退出网站'));
   assert.equal(ui.document.querySelectorAll('.memory-draft-label').length, 0);
 });
+
+
+test('home and connection center expose three real client choices with parent projects and current SDK', async t => {
+ const ui = await screen(t, { initialView:'home' });
+ const source = 'https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world';
+ assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+ assert.ok(ui.document.querySelector(`.client-choices a[href="${source}"]`));
+ for (const url of ['https://github.com/Project-N-E-K-O/N.E.K.O','https://github.com/Pal-AI-Lab/Cortico']) assert.ok(ui.document.querySelector(`.client-choices a[href="${url}"]`));
+ ui.window.location.hash='connections'; await waitFor(()=>ui.document.querySelector('a[download]'));
+ assert.ok(ui.document.querySelector('a[download]').href.endsWith('/downloads/qiandengji-agent-1.2.0.zip'));
+ assert.match(ui.document.querySelector('#main').textContent,/0\.5\.7-rc\.67/);
+ assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+ await ui.refresh(false);
+ assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+});

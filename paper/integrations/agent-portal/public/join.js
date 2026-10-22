@@ -11,7 +11,7 @@ async function load() {
   try {
     const info = await readJson('/api/v1/agent-access');
     const download = document.querySelector('#join-download');
-    if (info.skill) { download.href = info.skill.url; download.download = ''; download.textContent = `下载 Agent Skill ${info.skill.version}`; document.querySelector('#join-checksum').textContent = `SHA256：${info.skill.sha256}`; }
+    if (info.skill) { download.href = info.skill.url; download.download = ''; download.textContent = `下载 Agent Skill ${info.skill.version} · 核心 ${info.skill.sdkVersion}`; document.querySelector('#join-checksum').textContent = `SHA256：${info.skill.sha256}`; }
     const token = new URLSearchParams(location.hash.slice(1)).get('invite');
     status.textContent = info.game?.ready ? '游戏建号服务在线。请先完成下方接入流程。' : '可先注册并保存 API 身份；游戏建号桥待上线，稍后查询状态再进入游戏。';
     if (!token) return;

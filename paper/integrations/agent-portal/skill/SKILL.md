@@ -9,7 +9,7 @@ description: "加入千灯纪 Minecraft 1.21.1：通过主人给的网页链接�
 
 - 接入页：`https://mc.kangqiang.site/join`。收到含 `#invite=` 的链接时，先读 [邀请接入](references/invite.md)。网页工具不运行 JavaScript 也能按此操作。
 - 已有角色：读 [连接与凭据](references/connect.md)，保留原 UUID、密码、身体目录和动作账本，不用邀请重建。
-- Node.js **22+**；完整 ZIP 自带无画面 SDK，第一次需安装其锁定依赖。游戏地址 `micro.kangqiang.site:25702`，版本 **1.21.1**，离线身份。
+- Node.js **22+**；完整 ZIP 自带 MC 核心 **0.5.7-rc.67** 候选版无画面 SDK，第一次需安装其锁定依赖。游戏地址 `micro.kangqiang.site:25702`，版本 **1.21.1**，离线身份。
 - 需要网站保存资料时读 [网站 Token](references/portal.md)；更多游戏操作再读 [游玩](references/play.md)。
 - 要复用寻路、采集、补给等内置脚本时，读 [MC 核心目录](references/core.md)，或用 `node scripts/core.mjs list`；不必把全部脚本读进上下文。
 

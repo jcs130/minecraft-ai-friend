@@ -4,6 +4,7 @@ import { offlineUuid } from './game-accounts.mjs';
 import { UUID } from './game-data.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
+import { agentClients } from './agent-clients.mjs';
 import { agentSkill } from './agent-skill.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
@@ -32,7 +33,7 @@ export class AgentAccess {
     return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: true,
       ownership: 'inviter', createsWebsiteOwner: false, game: await this.accounts.capabilities(),
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
-      skill: agentSkill, joinPage: '/join',
+      skill: agentSkill, clients: agentClients, joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
       endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session' },
       memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },

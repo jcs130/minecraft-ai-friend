@@ -13,7 +13,7 @@ export async function core(args) {
   if (!['list', 'read', 'check'].includes(action)) throw Error('USE_LIST_READ_OR_CHECK_EXECUTE_WITH_EXISTING_MCP');
   const id = action === 'list' ? null : rest.shift();
   const { values } = parseArgs({ args: rest, options: { source: { type: 'boolean' }, 'params-file': { type: 'string' } } });
-  const module = await import(pathToFileURL(path.join(root, 'assets/runtime/node_modules/agent-mc-world/dist/runtime/core/work-routines.js')));
+  const module = await import(pathToFileURL(path.join(root, 'assets/runtime/node_modules/agent-mc-world/dist/runtime/src/extension.js')));
   if (action === 'list') return { routines: module.listWorkRoutines(), gameConnected: false, modelCalled: false };
   if (action === 'check') {
     if (!values['params-file']) throw Error('PARAMS_FILE_REQUIRED');

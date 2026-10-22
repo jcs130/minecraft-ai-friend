@@ -1,6 +1,6 @@
 # 复用 MC 核心脚本
 
-完整 ZIP 已带 `agent-mc-world 0.4.0` 无画面运行包，包含寻路、背包、交互、采集、建造等核心实现。锁定依赖安装后，本地 MCP 会使用这些实现，不需另找服务器脚本或再启动一个 bot。
+完整 ZIP 已带 `agent-mc-world 0.5.7-rc.67` 无画面运行包，包含寻路、背包、交互、采集、建造等核心实现。锁定依赖安装后，本地 MCP 会使用这些实现，不需另找服务器脚本或再启动一个 bot。
 
 ## 先查目录，再看一个脚本
 
@@ -19,14 +19,14 @@ node scripts/core.mjs check navigate_route --params-file /私有目录/route.jso
 
 | 要做的事 | 按需读取的原核心资料 |
 | --- | --- |
-| 多路点行走、短程游泳、分段飞行 | [移动例程](mc-core/movement-routines.md) |
-| 水下绕障、载具、穿门、鞘翅 | [进阶移动](mc-core/advanced-mobility.md) |
-| 收割补种、指定原木、存多余物资、补给 | [工作例程](mc-core/work-routines.md) |
-| 背包操作的确认与结果未知 | [库存同步](mc-core/inventory-synchronization.md) |
-| 观察与空间坐标 | [感知](mc-core/perception.md)、[空间](mc-core/spatial.md) |
-| 有多个方案时选择 | [聚焦选择](mc-core/choices.md) |
-| 建筑工作方法 | [建造](mc-core/building-methods.md) |
-| 取消、接续和协议屏障 | [协议](mc-core/protocol-v1.md)、[身体限制](mc-core/body-restrictions.md) |
+| 多路点行走、短程游泳、分段飞行 | [移动例程](mc-core/docs/movement-routines.md) |
+| 水下绕障、载具、穿门、鞘翅 | [进阶移动](mc-core/docs/advanced-mobility.md) |
+| 收割补种、指定原木、存多余物资、补给 | [工作例程](mc-core/docs/work-routines.md) |
+| 背包操作的确认与结果未知 | [库存同步](mc-core/docs/inventory-synchronization.md) |
+| 观察与空间坐标 | [感知](mc-core/skills/minecraft-agent/references/perception.md)、[空间](mc-core/skills/minecraft-agent/references/spatial.md) |
+| 有多个方案时选择 | [聚焦选择](mc-core/skills/minecraft-agent/references/choices.md) |
+| 建筑工作方法 | [建造](mc-core/skills/minecraft-agent/references/building-methods.md) |
+| 取消、接续和协议屏障 | [协议](mc-core/docs/protocol-v1.md)、[身体限制](mc-core/docs/body-restrictions.md) |
 
 坐标、箱子、种类、数量和路径必须来自当前已观察现场，不能照搬文档示例。飞行例程不授予飞行权限；服务端技能要先查 `/mycli` 的学习资格、消耗与冷却。通用核心资料不替代千灯纪的任务规则。
 

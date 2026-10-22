@@ -1,0 +1,11 @@
+{
+  "version": "1.2.0",
+  "sdkVersion": "0.5.7-rc.67",
+  "sdkArchive": "agent-mc-world-0.5.7-rc.67-headless.tgz",
+  "sdkSha256": "38c2bcd32d8c38b7532c635aea4267882634bc3535e2b7bb878606e22def42d5",
+  "sdkBytes": 3542361,
+  "sdkSourceCommit": "aff5bb8ef25ce24c76efb7d608c1eea8da9fc129",
+  "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world",
+  "channel": "github-main-candidate",
+  "viewerIncluded": false
+}

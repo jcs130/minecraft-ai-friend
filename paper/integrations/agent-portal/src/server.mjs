@@ -14,6 +14,7 @@ import { publicMedia, servePublicMedia } from './public-media.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
+import { agentClients } from './agent-clients.mjs';
 import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
 import { agentOnboarding } from './agent-onboarding.mjs';
@@ -316,7 +317,7 @@ export function createPortal(config, options = {}) {
         const image = gallery.image(photoImage[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
       }
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
