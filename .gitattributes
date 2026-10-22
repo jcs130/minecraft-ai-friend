@@ -12,3 +12,9 @@ assets/town-renewal/operator-pack/** -text
 assets/town-renewal/bridge-operator-pack/** -text whitespace=cr-at-eol
 patches/guardvillagers/*.patch text eol=lf whitespace=-blank-at-eol
 patches/decider/*.patch text eol=lf whitespace=-blank-at-eol
+
+# Preserve the independently deployed Qiandengji harness source and npm lock hashes.
+integrations/qiandengji-harness/*.mjs text eol=lf
+integrations/qiandengji-harness/body-package*.json -text whitespace=cr-at-eol
+tools/qiandengji_harness.py text eol=lf
+tools/test_qiandengji_harness.py text eol=lf

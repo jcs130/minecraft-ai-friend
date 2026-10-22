@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "repository": "https://github.com/jcs130/minecraft-ai-friend",
+  "branch": "experiment/agent-society-1.21.1",
+  "baseCommit": "09f8184a5382c1f846c890a206da597352c1fbd2",
+  "minecraft": {
+    "implementation": "Paper",
+    "version": "1.21.1",
+    "build": 133,
+    "protocol": "1.21.1"
+  },
+  "installation": "E:\\MC\\integrations\\qiandengji-harness-20261022",
+  "framework": {
+    "version": "0.1.27",
+    "wheelSha256": "14313f41cfc49e25a71696a8faf65ad6c310e14512d4f784ca61a5cfd862c15f"
+  },
+  "body": {
+    "sdk": "agent-mc-world",
+    "version": "0.4.0",
+    "archive": "agent-mc-world-0.4.0.tgz",
+    "sha256": "bebf5ad804e008d03da2c1e1a45a9b6cf32d5ec4454cbde31179f4636ac92112",
+    "sizeBytes": 47023028,
+    "node": "22.23.2",
+    "mineflayer": "4.37.1",
+    "minecraftProtocol": "1.68.0",
+    "minecraftData": "3.112.0",
+    "packageJsonSha256": "4551b2bb77133685934148bedc8e6ba404fce32c7833ed2ca286dbd6820e2067",
+    "packageLockSha256": "5c6cf35825729bd746d9b2772411f005fb697dc9ac58f092b1ad000363a9e2ea",
+    "install": "npm ci --ignore-scripts --no-audit --no-fund",
+    "viewerEnabledInAcceptance": false
+  },
+  "sourceSha256": {
+    "integrations/qiandengji-harness/entry.mjs": "83ba2a8782a05d9d8b9ac5c5bc5c53ecfb9b6d7dc2511723d836253aade7d452",
+    "integrations/qiandengji-harness/engine.mjs": "e3964dfdb2d9e6d9023f591cc4ff2900b23abc00e307556c230a77c6f49e58e2",
+    "integrations/qiandengji-harness/contract.mjs": "ad2a95a9e1f494f420249cf1ce355c9d7bfa17da606f36aeb827414d4f24b317",
+    "integrations/qiandengji-harness/protocol.mjs": "062d0e7a1061dcb12e032e413279d48974a1a154dd765abb6f1924191a0aadec",
+    "integrations/qiandengji-harness/configuration.mjs": "93bc9698cc8190a46740b5e20f10d6db542d78edf79319debc89e1f990696cb7"
+  },
+  "operatorSha256": "d9d15f8b18d4b86435a1de32c0c8977d9ab3fa51810e16bdae1e5a7d73efd218",
+  "sharedPlanningService": {
+    "name": "maw-harnessrouter",
+    "version": "CE 0.35.13",
+    "uhpVersion": "2026-09-28",
+    "listen": "127.0.0.1:29150",
+    "upstreamLock": "harnessrouter-20261022.lock.json",
+    "newServiceCreated": false
+  },
+  "credentialsIncluded": false,
+  "worldSaveIncluded": false,
+  "thirdPartyArchivesIncluded": false
+}

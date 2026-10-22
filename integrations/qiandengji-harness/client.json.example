@@ -1,0 +1,20 @@
+{
+  "dataDir": "E:/MC/agents/qiandengji-harness/ag_NewAgent/body-data",
+  "timezone": "Asia/Shanghai",
+  "acceptsImages": false,
+  "metricsPort": 0,
+  "consolePort": 0,
+  "world": {
+    "host": "192.168.3.163",
+    "port": 25565,
+    "username": "ag_NewAgent",
+    "auth": "offline",
+    "version": "1.21.1",
+    "keepAliveTimeoutMs": 180000,
+    "loginConfigFile": "E:/MC/private/ag_NewAgent/login.json",
+    "viewerPort": 0,
+    "local": {"startWithWorld": false, "serverDir": "", "cheats": false},
+    "client": {"enabled": false},
+    "player": {"enabled": false}
+  }
+}

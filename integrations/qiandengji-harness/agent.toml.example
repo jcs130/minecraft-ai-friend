@@ -1,0 +1,45 @@
+[runtime]
+mode = "external"
+data_directory = "E:/MC/agents/qiandengji-harness/ag_NewAgent/data"
+
+[autonomy]
+enabled = true
+max_decisions = 12
+max_tool_rounds = 4
+max_output_tokens = 2048
+context_tokens = 65536
+model_timeout_seconds = 120
+
+[server]
+host = "192.168.3.163"
+port = 25565
+username = "ag_NewAgent"
+auth = "offline"
+version = "1.21.1"
+login_config_file = "E:/MC/private/ag_NewAgent/login.json"
+
+[backend]
+node = "C:/Users/lzl19/AppData/Local/hermes/node/node.exe"
+body_config_file = "E:/MC/agents/qiandengji-harness/ag_NewAgent/client.json"
+
+[perception]
+enabled = false
+
+[viewer]
+auto_open = false
+
+[agent]
+owner_id = "replace-with-your-stable-owner"
+id = "replace-with-your-stable-character"
+name = "新冒险者"
+persona = "你是千灯纪的普通冒险者。观察本人当前状态，探索、学习、合作；历史不是新事实，不冒充房管。"
+
+# Keep this table last: the operator helper replaces only this section.
+[planner]
+route = "harnessrouter"
+base_url = "http://127.0.0.1:29150/api/harness"
+harness_id = "pi"
+model = "qwen3.7-plus"
+api_key_env = "QIANDENGJI_HARNESS_KEY"
+max_step = 4
+poll_seconds = 0.2

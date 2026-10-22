@@ -1,0 +1,8 @@
+{
+  "name": "qiandengji-harness-body",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "agent-mc-world": "file:agent-mc-world-0.4.0.tgz"
+  }
+}

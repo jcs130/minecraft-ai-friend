@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "deployment": "qiandengji-paper-harness",
+  "server": {
+    "implementation": "Paper",
+    "minecraftVersion": "1.21.1",
+    "build": 133,
+    "plugin": "AgentFriend 0.4.47.10",
+    "clientProtocol": "1.21.1",
+    "restarted": false
+  },
+  "framework": {
+    "name": "agent-mc-autonomy",
+    "version": "0.1.27",
+    "bodySdk": "agent-mc-world 0.4.0",
+    "mineflayer": "4.37.1"
+  },
+  "tests": {
+    "node": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "python": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "templatesValid": true,
+    "operatorCheckValid": true
+  },
+  "protocolRegression": {
+    "unmodified1211": "proxy reconfiguration decode failure",
+    "control1206": "login succeeded; diagnostic only",
+    "fixed1211Authenticated": true,
+    "fixed1211SpawnCount": 1,
+    "staleMovementPacketsDiscarded": 0,
+    "installedFinalSdkPassed": true,
+    "installedFinalToolCount": 33,
+    "rejectedFinalStatePackets": 0
+  },
+  "privateState": {
+    "channels": [
+      "mcagent:state",
+      "mcviewer:state"
+    ],
+    "bodyUuidPresent": true,
+    "viewerMode": "self",
+    "mana": {
+      "current": 20,
+      "max": 20
+    },
+    "skillsCount": 11,
+    "cooldownsKeptRaw": true,
+    "professionAndAcademyPresent": true,
+    "protectionPluginReplyObserved": true,
+    "adapterChatCopiesSent": 0
+  },
+  "liveRuntimeRows": [
+    {
+      "harnessId": "pi",
+      "modelAlias": "qwen3.7-plus",
+      "memoryAndOwnStatePassed": true,
+      "walkPassed": true,
+      "modelDecisions": 2,
+      "readToolCalls": [
+        "agent_recall",
+        "mc_invoke"
+      ],
+      "readLatencyMs": 5578,
+      "walkDecisionLatencyMs": 8438,
+      "targetBlock": [
+        -1127,
+        64,
+        -599
+      ],
+      "actualBlock": [
+        -1127,
+        64,
+        -599
+      ],
+      "originalTaskId": "bee344dd-9b87-4065-a472-7a9f66eeff08:5",
+      "nativePhase": "completed",
+      "sameConnectionOnline": true,
+      "imageUsed": false
+    },
+    {
+      "harnessId": "dsh",
+      "modelAlias": "qwen3.7-plus",
+      "memoryAndOwnStatePassed": true,
+      "walkPassed": true,
+      "modelDecisions": 2,
+      "readToolCalls": [
+        "agent_recall",
+        "mc_invoke"
+      ],
+      "readLatencyMs": 11234,
+      "walkDecisionLatencyMs": 11094,
+      "targetBlock": [
+        -1128,
+        64,
+        -599
+      ],
+      "actualBlock": [
+        -1128,
+        64,
+        -599
+      ],
+      "originalTaskId": "bee344dd-9b87-4065-a472-7a9f66eeff08:6",
+      "nativePhase": "completed",
+      "sameConnectionOnline": true,
+      "imageUsed": false
+    },
+    {
+      "harnessId": "qwen",
+      "modelAlias": "qwen3.7-plus",
+      "memoryAndOwnStatePassed": true,
+      "walkPassed": true,
+      "modelDecisions": 2,
+      "readToolCalls": [
+        "agent_recall",
+        "mc_invoke"
+      ],
+      "readLatencyMs": 28765,
+      "walkDecisionLatencyMs": 27172,
+      "targetBlock": [
+        -1127,
+        64,
+        -599
+      ],
+      "actualBlock": [
+        -1127,
+        64,
+        -599
+      ],
+      "originalTaskId": "bee344dd-9b87-4065-a472-7a9f66eeff08:7",
+      "nativePhase": "completed",
+      "sameConnectionOnline": true,
+      "imageUsed": false
+    },
+    {
+      "harnessId": "claude-code",
+      "modelAlias": "qwen3.7-plus-messages",
+      "memoryAndOwnStatePassed": true,
+      "walkPassed": true,
+      "modelDecisions": 2,
+      "readToolCalls": [
+        "agent_recall",
+        "mc_invoke"
+      ],
+      "readLatencyMs": 6812,
+      "walkDecisionLatencyMs": 13235,
+      "targetBlock": [
+        -1128,
+        64,
+        -599
+      ],
+      "actualBlock": [
+        -1128,
+        64,
+        -599
+      ],
+      "originalTaskId": "bee344dd-9b87-4065-a472-7a9f66eeff08:8",
+      "nativePhase": "completed",
+      "sameConnectionOnline": true,
+      "imageUsed": false
+    },
+    {
+      "harnessId": "codex",
+      "modelAlias": "qwen3.7-plus-responses",
+      "memoryAndOwnStatePassed": true,
+      "walkPassed": true,
+      "modelDecisions": 2,
+      "readToolCalls": [
+        "agent_recall",
+        "mc_invoke"
+      ],
+      "readLatencyMs": 5735,
+      "walkDecisionLatencyMs": 5813,
+      "targetBlock": [
+        -1127,
+        64,
+        -599
+      ],
+      "actualBlock": [
+        -1127,
+        64,
+        -599
+      ],
+      "originalTaskId": "bee344dd-9b87-4065-a472-7a9f66eeff08:9",
+      "nativePhase": "completed",
+      "sameConnectionOnline": true,
+      "imageUsed": false
+    },
+    {
+      "harnessId": "opencode",
+      "modelAlias": "qwen3.7-plus",
+      "memoryAndOwnStatePassed": true,
+      "walkPassed": true,
+      "modelDecisions": 2,
+      "readToolCalls": [
+        "agent_recall",
+        "mc_invoke"
+      ],
+      "readLatencyMs": 15516,
+      "walkDecisionLatencyMs": 12265,
+      "targetBlock": [
+        -1128,
+        64,
+        -599
+      ],
+      "actualBlock": [
+        -1128,
+        64,
+        -599
+      ],
+      "originalTaskId": "bee344dd-9b87-4065-a472-7a9f66eeff08:10",
+      "nativePhase": "completed",
+      "sameConnectionOnline": true,
+      "imageUsed": false
+    }
+  ],
+  "successfulMatrixModelDecisions": 12,
+  "totalNewOnlineModelDecisions": 14,
+  "knownHarnessResponses": 14,
+  "knownHarnessResponsesCompleted": 14,
+  "sameBodyAndEventRunAcrossSixRuntimes": true,
+  "realWalks": 6,
+  "gameMutationsOtherThanWalking": 0,
+  "noDigPlaceTeleportOrOp": true,
+  "finalPosition": [
+    -1128,
+    64,
+    -599
+  ],
+  "reconnectPosition": [
+    -1128,
+    64,
+    -599
+  ],
+  "memoryRecalledAfterReconnect": true,
+  "characterRevision": 1,
+  "characterExportHashValid": true,
+  "qaAccountOffline": true,
+  "hostLeaseReleased": true,
+  "originalPaperPid": 10496,
+  "originalGatewayPid": 25912,
+  "staticConfigurationHashesUnchanged": true,
+  "existingPlayerCountAfterQa": 4,
+  "newPublicPorts": [],
+  "existingAgentsReplaced": false,
+  "qwenpawChanged": false,
+  "fomRestarted": false,
+  "retainedFailures": [
+    "Unmodified 1.21.1 client continued moving during proxy CONFIGURATION.",
+    "Initial acceptance fixtures parsed async acknowledgement as a measurement, then assumed an optional mc_result tool; no model/move in these fixtures.",
+    "First model read projection omitted mc_invoke; model correctly recalled memory and declined unavailable direct mc_qiandengji. Prior note retained and actual progressive interface used."
+  ],
+  "limitations": [
+    "Six representative runtimes tested on Paper, not all 23 enabled runtimes.",
+    "Bounded memory/state/walking acceptance, not long-term survival or all gameplay.",
+    "No new Web renderer launched; use explicit matching 1.21.1 assets when enabling.",
+    "Cortico/Numen native loop drivers, multi-user selection UI and cloud synchronization are not implemented.",
+    "Server also emitted a personal MC_PROTECTION text reply; this adapter itself forwards no chat copies."
+  ],
+  "privateEvidenceIncluded": false
+}

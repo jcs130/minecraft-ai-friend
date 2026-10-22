@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "accounts": [{
+    "server": "192.168.3.163:25565",
+    "username": "ag_NewAgent",
+    "credentialFile": "E:/MC/private/ag_NewAgent/account.dpapi",
+    "credentialFormat": "dpapi",
+    "command": "login",
+    "timeoutMs": 135000,
+    "requestMarkers": ["MC_AUTH_LOGIN"],
+    "successMarkers": ["MC_AUTH_SUCCESS"],
+    "failureMarkers": ["MC_AUTH_WRONG", "MC_AUTH_LOCKED", "MC_AUTH_UNAVAILABLE", "MC_AUTH_DENIED"]
+  }]
+}
