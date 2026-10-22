@@ -32,6 +32,8 @@ def main() -> None:
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--with-dependencies', action='store_true')
     args = parser.parse_args()
+    if not args.with_dependencies:
+        raise RuntimeError('A runnable frozen viewer requires --with-dependencies; bundle against the exact copied dependency tree')
     output = args.output.resolve()
     if output.exists() or not output.parent.is_dir():
         raise RuntimeError('Output must be a new directory with an existing parent')
@@ -83,7 +85,10 @@ def main() -> None:
     write_json(output / 'spectator.config.json.example', {'rendererDirectory': str(output / 'renderer'),
         'sourceUrl': 'http://127.0.0.1:3007/', 'portalUrl': 'https://mc.kangqiang.site',
         'channelId': 'REPLACE_WITH_OWN_WEBSITE_CHANNEL', 'tokenFile': 'ABSOLUTE_PRIVATE_PUBLISHER_TOKEN_FILE', 'tokenFormat': 'dpapi'})
-    subprocess.run([str(args.node), str(renderer / 'tools/build-native-spectator-site.mjs'), str(output / 'portal-site')], check=True, capture_output=True)
+    # esbuild includes dependency resolution paths in its output. Compile from
+    # the exact deployed tree, not the pnpm-linked development checkout, so the
+    # trusted site and the live host produce byte-identical browser bundles.
+    subprocess.run([str(args.node), str(output / 'renderer/tools/build-native-spectator-site.mjs'), str(output / 'portal-site')], check=True, capture_output=True)
     site = json.loads((output / 'portal-site/spectator-site.json').read_text(encoding='utf-8'))
     record = {'schemaVersion': 1, 'version': '0.1.0', 'serverSourceCommit': git_head(ROOT), 'visualSourceCommit': git_head(visual),
         'sdkArchiveSha256': digest(archive), 'minecraftVersion': '1.21.1', 'guiCatalogSha256': GUI_SHA,
