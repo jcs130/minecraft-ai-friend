@@ -29,17 +29,24 @@ async function readAccountCredential(account, configFile) {
     return Buffer.from(value, 'utf8');
   }
   const file = resolvePath(dirname(configFile), account.credentialFile);
-  if (account.credentialFormat !== 'file') return readProtectedCredential(file);
+  if (!['file', 'json'].includes(account.credentialFormat)) return readProtectedCredential(file);
   const handle = await open(file, 'r');
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size < 1 || stat.size > 1024
+    if (!stat.isFile() || stat.size < 1 || stat.size > (account.credentialFormat === 'json' ? 16384 : 1024)
       || (process.platform !== 'win32' && (stat.mode & 0o077))) throw new Error('private credential permissions');
     const bytes = await handle.readFile();
-    // A trailing line break is allowed in a mounted secret file, never in the command.
-    const result = Buffer.from(bytes.toString('utf8').replace(/\r?\n$/, ''), 'utf8');
-    bytes.fill(0);
-    return result;
+    try {
+      if (account.credentialFormat === 'json') {
+        const identity = JSON.parse(bytes.toString('utf8'));
+        if (!identity || typeof identity !== 'object' || Array.isArray(identity)
+          || !Object.hasOwn(identity, account.credentialField)
+          || typeof identity[account.credentialField] !== 'string') throw new Error('private credential unavailable');
+        return Buffer.from(identity[account.credentialField], 'utf8');
+      }
+      // A trailing line break is allowed in a mounted secret file, never in the command.
+      return Buffer.from(bytes.toString('utf8').replace(/\r?\n$/, ''), 'utf8');
+    } finally { bytes.fill(0); }
   } finally { await handle.close(); }
 }
 
@@ -79,7 +86,10 @@ export function installServerLogin(bot, options) {
           const file = typeof account.credentialFile === 'string' && !!account.credentialFile;
           const env = typeof account.credentialEnv === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(account.credentialEnv);
           if (Number(file) + Number(env) !== 1
-            || (account.credentialFormat !== undefined && !['dpapi', 'file'].includes(account.credentialFormat))
+            || (account.credentialFormat !== undefined && !['dpapi', 'file', 'json'].includes(account.credentialFormat))
+            || (account.credentialFormat === 'json' && (!file || typeof account.credentialField !== 'string'
+              || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(account.credentialField)))
+            || (account.credentialFormat !== 'json' && account.credentialField !== undefined)
             || !/^[a-z][a-z0-9_]*$/.test(account.command)
             || (account.reauthenticateOnRevoked !== undefined && typeof account.reauthenticateOnRevoked !== 'boolean')
             || ['requestMarkers', 'successMarkers', 'failureMarkers'].some(key => !Array.isArray(account[key])

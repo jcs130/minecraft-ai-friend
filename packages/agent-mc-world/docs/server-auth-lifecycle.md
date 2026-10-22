@@ -1,5 +1,14 @@
 # Server authorization after connection
 
+An existing private JSON identity can supply a game password without copying it
+into another credential file. Configure `credentialFile`, `credentialFormat:"json"`
+and one explicit top-level string `credentialField` (for example `gamePassword`).
+The server/account match and authoritative login gate remain unchanged. JSON files
+must be private, at most 16 KiB; missing/non-string fields, invalid JSON and whitespace
+in passwords fail without logging file contents. An API token is never chosen as a
+fallback. Account registration and external API readiness remain the server pack's
+responsibility, not a core default.
+
 The scoped login observer remains active after initial confirmation. A fresh,
 system-source `MC_AUTH_DENIED` or structured `MC_AUTH_STATE` with
 `authorized:false` revokes the previous ready state. Public chat, malformed state

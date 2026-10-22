@@ -12,7 +12,7 @@ afterEach(() => dirs.splice(0).forEach(d => rmSync(d, { recursive: true, force: 
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'server-login-')); dirs.push(dir);
   const credential = join(dir, 'credential'), configFile = join(dir, 'accounts.json');
-  writeFileSync(credential, 'fixture-pass');
+  writeFileSync(credential, 'fixture-pass', { mode: 0o600 });
   const account = { server: 'example.test:25565', username: 'Agent', credentialFile: credential, command: 'login',
     requestMarkers: ['AUTH_LOGIN'], successMarkers: ['AUTH_SUCCESS'], failureMarkers: ['AUTH_FAILED', 'AUTH_2FA'] };
   writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [account] }));
@@ -173,6 +173,30 @@ describe('scoped automatic server authentication', () => {
     await settle(() => r.sent.length === 1);
     expect(r.sent).toEqual(['/login file-fixture']);
     login.stop();
+  });
+  it('reads only the configured string field from an existing private JSON identity, including on renewal', async () => {
+    const r=fixture();
+    writeFileSync(r.credential,JSON.stringify({gamePassword:'json-fixture',token:'not-a-game-password'}),{mode:0o600});
+    writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,credentialFormat:'json',credentialField:'gamePassword'}]}));
+    const login=installServerLogin(r.bot,{...r.options,readCredential:undefined});
+    r.messages('AUTH_LOGIN');await settle(()=>r.sent.length===1);expect(r.sent).toEqual(['/login json-fixture']);expect(login.ready()).toBe(false);
+    r.messages('AUTH_SUCCESS');r.messages('MC_AUTH_DENIED required');await settle(()=>r.sent.length===2);
+    expect(r.sent[1]).toBe('/login json-fixture');expect(login.ready()).toBe(false);
+    expect(JSON.stringify(r.reports)).not.toMatch(/json-fixture|not-a-game-password/);login.stop();
+  });
+  it.each(['broken-json','{}','[]','{"gamePassword":123}','{"gamePassword":"bad\\npassword"}'])
+  ('rejects invalid private JSON without exposing or submitting its content: %s',async contents=>{
+    const r=fixture();writeFileSync(r.credential,contents,{mode:0o600});
+    writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,credentialFormat:'json',credentialField:'gamePassword'}]}));
+    const login=installServerLogin(r.bot,{...r.options,readCredential:undefined});r.messages('AUTH_LOGIN');
+    await settle(()=>login.status().stage==='blocked');expect(r.sent).toEqual([]);expect(JSON.stringify(r.reports)).not.toContain(contents);login.stop();
+  });
+  it.each([{credentialFormat:'json'},{credentialFormat:'json',credentialField:'nested.password'},
+    {credentialFormat:'file',credentialField:'gamePassword'},
+    {credentialFile:undefined,credentialEnv:'UNUSED_FIXTURE',credentialFormat:'json',credentialField:'gamePassword'}])
+  ('requires an explicit file and simple JSON field: %j',patch=>{
+    const r=fixture();writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,...patch}]}));
+    const login=installServerLogin(r.bot,{...r.options,readCredential:undefined});expect(login.status().stage).toBe('blocked');expect(r.sent).toEqual([]);login.stop();
   });
   it('times out without confirmation and discards delayed success or credential results', async () => {
     vi.useFakeTimers();
