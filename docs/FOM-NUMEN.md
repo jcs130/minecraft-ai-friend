@@ -1,5 +1,7 @@
 # FOM 服务端 Numen
 
+当前后续版本已加入殖民地和 35 项专用原生操作，宿主 0.2.0、现 112 个 JAR；请优先看 [最新接入与维护说明](FOM-NUMEN-MODS.md) 和 [发布记录](evidence/fom-numen-colony-20261022.json)。下文保留首次 106-JAR 发布时的范围与验收，`nativeModAccess=false` 属于那个时点。
+
 2026-10-22：为现役 Minecraft 1.21.1 / NeoForge 21.1.250 / FOM 2.42 增加独立的 Numen 服务端身体入口。正式发布结果见 `evidence/fom-numen-20261022.json`。旧服、旧身体与旧控制器不随之恢复。
 
 ## 版本与安装

@@ -1,5 +1,7 @@
 # FOM 双端物品、烹饪锅与女仆动作适配
 
+当前后续发布已加入殖民地：112 JAR、190,969 原生状态；最新冻结交付 `E:\MC\integrations\fom-native-view-20261022-colony-v1`，共享可视化 `18c8953d`。主/桥 20/14 健康通过，最新 UDP 37 项通过；全 GUI/殖民地专用模型仍有明确缺口。见 [最新说明](FOM-NUMEN-MODS.md) 与 [发布证据](evidence/fom-numen-colony-20261022.json)。以下为本页首次双端发布记录。
+
 目标：FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250。2026-10-22
 增量已发布到现役服务器，原世界、账号和 103 JAR 保持。服务端实现
 `8e97b2bf`，共享可视化 `main` 为 `327de529`，SDK 沿用 `c61e4fca`。

@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "scope": "FOM native Numen mod gameplay and MineColonies addition",
+  "productionInstalled": true,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.250",
+  "implementationCommit": "04679f6a046eb92a668b248bbda1c45d4125884d",
+  "qaHarnessCommit": "02c97d9ba727592fb9bef90b77d4ef3e72ab30c6",
+  "sharedRendererCommit": "18c8953db12f719e31629a2f0fd6e9ec1b14bc2b",
+  "numen": {
+    "officialVersion": "0.1.4.1 beta",
+    "officialJarUnmodified": true,
+    "officialJarSha256": "ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226",
+    "embeddedApiSha256": "bbc481ea8324b56989627c1f9f9c867e5e82cfd7f35ae5ec2107fb7e34430da5",
+    "hostVersion": "0.2.0",
+    "hostJarSha256": "b31bc8ad4e0c3b35682dcf917c172b8f916b1238374dea19cd1a0b44b6dc75cc",
+    "gameplayVersion": "0.1.0",
+    "gameplayJarSha256": "cf298614bee554f1051e37cbd7007c47bcaacf26cbe9544a745494bc461d4cc4",
+    "compiledSourceInputsMatch": true,
+    "nativeModOperations": 35,
+    "registeredLuaFunctions": 70,
+    "serverLuaFunctions": 63,
+    "mcpTools": 17,
+    "bodyKind": "owned_numen_fake_player",
+    "nativeViewerApiAvailable": false,
+    "newModelLoopsStarted": false
+  },
+  "colony": {
+    "contentArtifacts": [
+      {
+        "name": "minecolonies-1.1.1319-1.21.1.jar",
+        "kind": "mod",
+        "project": "https://www.curseforge.com/minecraft/mc-mods/minecolonies/files/8138370",
+        "url": "https://mediafilez.forgecdn.net/files/8138/370/minecolonies-1.1.1319-1.21.1.jar",
+        "sha256": "ab97c0eec45c3f2539ec31428e3c836bb30ba1c537af0c86f5ab4e38754f6a4d"
+      },
+      {
+        "name": "structurize-1.0.832-1.21.1.jar",
+        "kind": "mod",
+        "project": "https://www.curseforge.com/minecraft/mc-mods/structurize/files/8610535",
+        "url": "https://mediafilez.forgecdn.net/files/8610/535/structurize-1.0.832-1.21.1.jar",
+        "sha256": "b6ede7635c63a80bd3d034c1ad3e74c648b8478f341f883d7d29c3dcf90b79ce"
+      },
+      {
+        "name": "multipiston-1.2.58-1.21.1.jar",
+        "kind": "mod",
+        "project": "https://www.curseforge.com/minecraft/mc-mods/multi-piston/files/7097877",
+        "url": "https://mediafilez.forgecdn.net/files/7097/877/multipiston-1.2.58-1.21.1.jar",
+        "sha256": "7ca26db4648589b7f76694c249d5096c0c0afb7615fe6adf9f638c6c825c15e7"
+      },
+      {
+        "name": "blockui-1.0.209-1.21.1.jar",
+        "kind": "mod",
+        "project": "https://www.curseforge.com/minecraft/mc-mods/blockui/files/7541336",
+        "url": "https://mediafilez.forgecdn.net/files/7541/336/blockui-1.0.209-1.21.1.jar",
+        "sha256": "eec023231b21a606306cac6c588b5b07f51741f5e5bc831dba709d52332b82ab"
+      },
+      {
+        "name": "domum-ornamentum-1.0.231-main.jar",
+        "kind": "mod",
+        "project": "https://www.curseforge.com/minecraft/mc-mods/domum-ornamentum/files/7789217",
+        "url": "https://mediafilez.forgecdn.net/files/7789/217/domum-ornamentum-1.0.231-main.jar",
+        "sha256": "04c0c902bdbcbd48e38bee5a323907ae0b7b7db4ff4a3e4da7c45334b65610a1"
+      }
+    ],
+    "realColonyFounded": true,
+    "realCitizenAssignmentAndSelfBuildOrder": true,
+    "realMaterialRequirementsAndSupply": true,
+    "sameActionIdDoesNotConsumeTwice": true,
+    "builderFirstPrerequisiteExplained": true,
+    "fullBuildingCompletionVerified": false,
+    "crossDayLogisticsVerified": false
+  },
+  "representativeNativePlay": {
+    "curiosAndBackpackStorage": true,
+    "createSpeedController16To32": true,
+    "domumMaterialBearingOutput": true,
+    "ironScrollConsumed": true,
+    "ironSpellbookNativeQuickCast": true,
+    "curiosComponentsRestoredOnSameBody": true,
+    "frameworkSameBodyChecks": 5,
+    "normalRestartChecks": 8,
+    "optionalModuleWithoutColonyChecks": 4,
+    "optionalActiveOperationCount": 17,
+    "priorFarmerCookingAndNativeDigPlaceRetained": true
+  },
+  "clients": {
+    "isolatedMineflayerBasicChecks": 3,
+    "isolatedFrozenSdkAndWebglChecks": 4,
+    "productionFrozenSdkReadOnlyChecks": 3,
+    "finalUdpChecks": 37,
+    "finalUdpAllPassed": true,
+    "finalUdpSoakSeconds": 75,
+    "readOnlyQaHeartbeatSeconds": 10,
+    "actualPhoneTested": false,
+    "actualXboxLoginTested": false,
+    "productionXboxRequired": true,
+    "sdkPackageSource": "c61e4fcabbf99820f6b9278d73b3e2beec4101b6",
+    "viewerDelivery": "E:\\MC\\integrations\\fom-native-view-20261022-colony-v1",
+    "numenSdkDelivery": "E:/MC/integrations/fom-numen-mods-20261022",
+    "javaOverlay": {
+      "clientOverlay": "E:\\MC\\发布\\FOM-2.42-殖民地-20261022\\FOM-2.42-殖民地增量-20261022.zip",
+      "sha256": "81359bbc7ac550acb4e7837c6737bd356b71bc0688642b6f845435360c8bed9a",
+      "bytes": 80210268,
+      "copies": [
+        "E:\\MC\\发布\\FOM-2.42-殖民地-20261022",
+        "F:\\MC-发布\\FOM-2.42-殖民地-20261022"
+      ],
+      "mods": 5,
+      "accountsOrWorldIncluded": false
+    }
+  },
+  "resources": {
+    "nativeStates": 190969,
+    "byteExactAssetIntegrityVerified": true,
+    "resolvedOriginalDomumWoodPriorities": 2,
+    "remainingResourceConflicts": 46,
+    "bedrockStaticIcons": 1238,
+    "bedrockMappedBlocks": 3000,
+    "bedrockMappedStates": 59465,
+    "bedrockFullyStaticStates": 24186,
+    "bedrock3dBlockItems": 1343,
+    "bedrockSourceTextureAnimations": 11,
+    "nativeRegistrySemanticAudit": {
+      "ok": true,
+      "nativeIdsPropertiesAndAllOtherStateFieldsExact": true,
+      "occlusionSourceDoubleLastBitRows": 12,
+      "maxAbsoluteDoubleDifference": 5.551115123125783e-17,
+      "occlusionFloat32BitsExact": true,
+      "channelIdsVersionsAndFlowExact": true,
+      "channelArrayOrderOnly": true,
+      "productionSupportJarNotReplaced": true,
+      "frozenCanonicalRegistryRetained": true
+    },
+    "completeGuiAndSceneParityVerified": false,
+    "colonyCitizenAndHutSpecialRenderersFullySupported": false
+  },
+  "verification": {
+    "corePythonTestsPassed": 61,
+    "coreNodeAdapterTestsPassed": 25,
+    "sharedPythonTestsPassed": 11,
+    "sharedNodePriorityTestsPassed": 6,
+    "mainHealthChecks": 20,
+    "bedrockHealthChecks": 14,
+    "mainPanelSmoke": true,
+    "bedrockPanelSmoke": true,
+    "unauthenticatedMcpHttpStatus": 401
+  },
+  "publication": {
+    "ok": true,
+    "mainRunId": "296a9ace06624300bb9c8e2c379db166",
+    "mainJavaPid": 27228,
+    "bedrockRunId": "fa520f00c7d84001a32e6c193fac4ca3",
+    "sourceCommit": "04679f6a046eb92a668b248bbda1c45d4125884d",
+    "gateway": "E:\\MC\\servers\\fom-2.42\\ops\\agent-gateway\\colony-20261022-v1",
+    "bridge": "E:\\MC\\servers\\fom-2.42\\ops\\bedrock-colony-20261022-v1",
+    "delivery": "E:\\MC\\integrations\\fom-native-view-20261022-colony-v1",
+    "preservedJars": 105,
+    "totalJars": 112,
+    "worldRegenerated": false,
+    "existingPlayerItemsModified": false,
+    "modelRequests": 0,
+    "newPublicPorts": 0,
+    "bedrockInitialStartExit": 0,
+    "original103JarsUnchanged": true,
+    "existingOfficialNumenAndCompatUnchanged": true,
+    "oldHostReplaced": true,
+    "backupFiles": 1920,
+    "backupUncompressedBytes": 140964608,
+    "backupSha256": "9f7dd315f5baa7c36ec8d2a596fe5140ff1e7189258dfdb70fd8820608ad7395",
+    "backupCopies": [
+      "E:\\MC\\backups\\fom-colony-20261022\\before.zip",
+      "F:\\MC-backups\\fom-colony-20261022\\before.zip"
+    ],
+    "backupCrcAndEveryMemberSha256Verified": true,
+    "originalRunStartupAndOwnedWatchdogsReused": true,
+    "privilegeAndPrivateAuthFilesUnchanged": true,
+    "qaOwnersExitedZero": true,
+    "qaBodyDormant": true,
+    "qaTcpPortsClosed": true,
+    "routerAndFirewallChanged": false
+  },
+  "retainedFailures": [
+    "Initial residence build request was natively refused because the builder hut was level zero; preflight now gives its real prerequisite and next action.",
+    "QA scripts initially assumed incorrect result field names and supplied an unsupported optional argument; known receipts were inspected rather than replayed.",
+    "The shared Java method extractor matched an inline call; a regression test exposed it and extraction was corrected before final build.",
+    "The first visual export used the normal support JAR without the diagnostic command; final exports used a QA-only exporter and the original support JAR was restored.",
+    "An unstarted QA gateway was initially placed outside the required deployment ops directory; validation refused it before Java launch.",
+    "The first SDK registry test retained the old enchantment count 51; actual new native table has 52.",
+    "The first final registry probe observed the native exporter temporarily removing its completion marker; read-only reconciliation found only the documented Float32-equivalent occlusion and channel-order differences.",
+    "A final repeated soul-slab capture got no success receipt; native 20-tick cooldown and held-item readiness were verified in the harness, then the entire final 37-check suite passed."
+  ],
+  "limitations": [
+    "No autonomous LLM colony-development or multi-Agent load acceptance.",
+    "Whole colony houses, research/logistics progression and all target-mod gameplay are not fully verified.",
+    "Waystones dedicated travel, complex vehicles, colony special renderers and all GUIs remain explicit unsupported or unverified cases.",
+    "Original assets, world, raw packets, full inventories, credentials, JARs and private logs remain outside Git."
+  ]
+}

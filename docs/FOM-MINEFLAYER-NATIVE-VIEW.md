@@ -1,5 +1,7 @@
 # FOM 的原生 Mineflayer 观察与网页画面
 
+最新已发布的殖民地扩展使用 `E:\MC\integrations\fom-native-view-20261022-colony-v1`，含原 c61e4fca SDK、新共享 renderer `18c8953d` 与 190,969 状态的匹配资源。正式只读 3 项、隔离网页 WebGL 通过；专用模型/GUI 与完整场景仍不全。见 [当前说明](FOM-NUMEN-MODS.md)；下文保留首次原生网页交付记录。
+
 2026-10-22 更新。目标版本为 FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250。
 
 已发布到现有 TCP 28977。当前交付目录为 `E:\MC\integrations\fom-native-view-20261022-v2`，包含沿用的 c61e4fca SDK tgz、共享可视化 327de529 的冻结 renderer、原素材与 `client.example.json`。示例默认 `enabled:false`；为自己的账号配置后再启用，不会恢复既有暂停 Agent。网关实现 8e97b2bf 补齐实际注册表、附魔/药水、烹饪锅及收纳女仆数据；交付目录已实际构建网页并通过 WebGL，正式 SDK 只读接入与主/基岩 15/14 项健康检查通过。见 [当前适配说明](FOM-DUAL-CLIENT-ADAPTERS.md) 与 [本批发布证据](evidence/fom-dual-client-adapters-20261022.json)；[前版记录](evidence/fom-native-mineflayer-20261021.json) 保留历史验收与缺口。
