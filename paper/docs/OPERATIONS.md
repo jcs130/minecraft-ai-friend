@@ -1,3 +1,7 @@
+## 2026-10-22 登录恢复、墓穴与视线修复已上线
+
+服主批准后已完成180/60/10秒预告、原流程正常停启和E/F完整冷备份20261022-223855。正式Paper1.21.1 build133 / AgentFriend0.4.47.11 / LoginGuard0.1.5 / AgentVision0.1.2；Numen API4b36f166及内容82133ebd保持。51个认证账号、194份玩家物品存档和可米原故障墓穴场次核对保留，真实多版本登录与恢复检查通过，可米已重新获得授权。网站0.7.0的64b9a305与家庭同步也已上线，Numen按原生身体/创建者UUID自动归属；TianYi尚无原生创建证据，不能按旧同名存档猜绑。下方旧候选段落保留历史；后续维护仍按当次授权、活动门禁、预告及双盘完整备份执行。详见[发布记录](AUTH_DUNGEON_RECOVERY_20261022.md)。
+
 ## 2026-10-21 Numen个人模型与无模组CLI已上线
 
 服主批准后，等待可米安全离开墓穴，180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-202316完成后只换API4b36f166，任务结果0。其他39插件、Paper、1238原API条目保持；原身份/库存/私有模型及Key核验，桐人原QwenPaw日常恢复。原版help/status/model list/set、旧版客户端本机资料提示和专用服默认关闭共享Key已生效。1772核心JVM、25精确Paper、8MCP和Fabric/NeoForge构建通过；正式28/16/19核验。源代码0b3e1bab9已推送，GitHub预发布https://github.com/jcs130/minecraft-numen/releases/tag/qiandengji-paper-1.21.1-20261021已匿名下载核对SHA。无新公网接口；DSH Numen驱动、手机Xbox真机和16模型负载未验。详见paper/docs/NUMEN_PAPER.md及paper/manifests/numen-owner-cli-release-20261021.json；下方候选段为此前时点。

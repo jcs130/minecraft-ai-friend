@@ -4,15 +4,15 @@
 
 ## 发布边界
 
-网站 0.5.1 已发布，支持邮箱验证、自己的 ag_ 角色注册/绑定/改密、私有设定图与下述只读 API。游戏账号链经过隔离 Paper1.21.1 / LibreLogin / Velocity 的 19 项真实连接验证。正式登录代理仍是 0.1.3，**未获本轮更新确认**；网站必须以 `/api/v1/game-capabilities` 的 ready 为准，不能将网站注册成功当作游戏建号成功。
+网站0.7.0已发布，提供自己的ag_角色注册/绑定/改密、邀请链接与提示词、私有设定图、皮肤/YSM与下述只读API。SMTP尚未配置，邮箱注册流程不代表现在能投递确认邮件；既有网站账号和主人发出的Agent邀请可用。正式账号桥已经授权上线，现役LoginGuard0.1.5，真实1.20.6/1.21.1登录和恢复检查通过；仍以 `/api/v1/game-capabilities` 的实际ready为准，不能把API注册当作游戏建号成功。当前源码 `64b9a305`，见[接入发布](AGENT_PORTAL_JOIN_APPEARANCE.md)。
 
 用户自己的 Agent 负责模型、规划循环、长期记忆和人设。Skill 是本地 stdio MCP + Mineflayer 执行/观察/回执，不向网站提交模型 Key，不提供共享模型凭据或公网通用 RCON/Numen 控制接口。
 
 ## 安装包
 
-网站“连接中心/帮助”提供同源固定下载：`/downloads/qiandengji-agent-1.0.0.zip`。2,705,570 字节，20 文件，源提交 `abdf06fb2fe353698f02521f0f63bef902e18e4c`。
+网站“连接中心/帮助”和 `/join` 提供同源固定下载：`/downloads/qiandengji-agent-1.1.0.zip`，2,782,362字节、44份清单文件，含固定 `agent-mc-world 0.4.0` 无画面SDK、34项工具及10个原核心工作/移动例程。
 
-SHA256：`3d1676e86f31396071866c64ce87d9e6820e1530b755c4221f04c22a15f94669`。打包项目在另一工作区；门户仅发布已核对文件，不重复修改 SDK。包内无现役角色资料、世界、模型 Key 或用户凭据。以包内 SKILL.md、references/connect.md 和 portal.md 为实际安装入口。
+SHA256：`6a1be95fa174e37c330a756ffdbc32f0924254099390d1fc99a236c451d8fe7d`。包内无现役角色资料、世界、模型Key或用户凭据；先读SKILL.md，再按需读references/invite.md与核心资料。1.0.0原下载及摘要保留以兼容旧链接，不作为当前推荐安装包。
 
 ## 两套凭据
 

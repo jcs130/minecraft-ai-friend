@@ -1,6 +1,6 @@
-# 千灯纪网站：云端门户与认证桥候选
+# 千灯纪网站：云端门户与账号桥
 
-日期：2026-10-22。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。当前云端网址为 **https://mc.kangqiang.site**；部署与新首页结果见 [CLOUD_PORTAL.md](CLOUD_PORTAL.md)。原“先内网”是此前阶段，游戏认证桥仍沿用服主“暂不更新代理”的决定。
+日期：2026-10-22。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。网站0.7.0与游戏账号桥均已授权上线，当前源码 `64b9a305`、LoginGuard0.1.5；“先内网、暂不更新代理”是已经完成的早期阶段。最新接入、Skill1.1.0、外观与创建者归属见[当前发布](AGENT_PORTAL_JOIN_APPEARANCE.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
 
 ## 已运行的网站
 
@@ -12,19 +12,19 @@
 - 手机布局有可收起导航、44px 触控、16px 表单、滚动表格、安全区域及可长按复制的凭据；LAN HTTP 的安全随机请求 ID 不依赖 `crypto.randomUUID`。
 - 直播按角色切换，默认本人已绑定角色；私有频道按原 UUID 授权。发布器抓取现有现代 Viewer 的游戏画布，页面聊天与工具面板不入图，不另开游戏身体。
 
-云端 0.3.0 已通过真实 HTTPS 访问和账号迁移验证，原内网 0.2.0 保留为诊断副本。后续网站账号操作统一使用云端地址，两个账号库不是双向同步。手机真机和真实直播源仍需分别验收。
+云端当前为0.7.0，已通过真实HTTPS、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。手机真机和真实直播源仍需分别验收。
 
 ## 游戏账号桥现状
 
-正式 **LoginGuard 0.1.3 保持不动**。新增 0.1.4 为候选，通过原 Velocity / 已审计 LibreLogin / NanoLimbo / Paper 认证链隔离验证；没有修改现役玩家密码、UUID、物品或 OP。
+正式账号桥先以LoginGuard0.1.4上线，随后与登录恢复修复更新到 **0.1.5**。邀请实际建号、原UUID登录及重连已通过正式验收；51个原认证账号和194份玩家物品存档核对保持，未重置密码或授予OP。原内网0.2.0仅保留诊断用途，账号操作统一用云端。
 
 网站建号、已有角色确认、游戏改密经 AES-256-GCM 本机 IPC 请求桥，由原 LibreLogin 提供器完成。请求前持久化状态，崩溃后的未知结果不重放。创建只允许新 `ag_` 账号；原角色必须保持原 UUID，空密码或默认弱密码不能证明归属；管理名、OP、Eye、live 不允许网站自助认领。原正版免密、TOTP 与其他现役规则继续使用。
 
-适配器默认关闭；网站 `/api/v1/game-capabilities` 正式当前返回 `ready:false`。网站本身注册成功不表示游戏账号已经创建。
+正式账号通道已启用，网站 `/api/v1/game-capabilities` 已实际返回 `ready:true`。维护时仍可能暂不可用，所有调用以当次回执为准；网站API注册成功不表示游戏账号已经创建或真实入服。
 
-候选产物与回退前像放在 E/F 的 `ops/repairs/agent-portal-20261022`，摘要见 [候选清单](../manifests/agent-portal-candidate-20261022.json)。服主选择“先保留网站内网版，暂不更新代理”。**未写入 pending 部署标记，也未触发正式维护。**
+初版候选历史保留在E/F `ops/repairs/agent-portal-20261022`。最新账号桥证据位于 `repairs/portal-bridge-live-20261022`，登录/副本完整冷备份为E/F `scheduled/20261022-223855`；发布与回退见[当前修复](AUTH_DUNGEON_RECOVERY_20261022.md)。原生Numen身体的创建者关系见[归属机制](NUMEN_CREATOR_OWNERSHIP.md)。
 
-## 待批准的上线流程
+## 后续维护流程（首次部署已完成）
 
 按照服主“涉及重启或玩家数据先确认”的要求，以下步骤必须取得本轮确认后执行，沿 [OPERATIONS.md](OPERATIONS.md) 原维护流程，不使用 `/reload`：
 
@@ -42,17 +42,19 @@
 
 发布器仅接受已就绪的现代 Renderer、真实网格区块、新鲜 Socket 数据。当前 1280×720、约 1fps JPEG 预览，无声音；8 秒过期清空旧帧。WebGL 世界内姓名和文字气泡仍可能出现在画面。原客户端的真实渲染和远端设备尚未验收，不能把测试 JPEG 或 DOM 夹具算作真实直播。
 
-网页接管、托管 Mineflayer、外接 Agent 大脑、YSM/皮肤管理是后续独立能力。公网网站入口现已上线。本网站不提供通用 RCON、Shell、任意 URL 转发或共享模型 Key。
+网页接管、托管Mineflayer和外接Agent大脑仍为后续独立能力；皮肤与YSM上传、转换和确认已上线，详见[外观接入](AGENT_PORTAL_JOIN_APPEARANCE.md)。本网站不提供通用RCON、Shell、任意URL转发或共享模型Key。
 
-## 阿里云网站已部署，游戏账号桥仍待后续
+## 阿里云网站与家庭服务
 
 云端网站和账号库已运行于 `mc.kangqiang.site`，家庭端每 15 秒出站上传经过筛选的资料。家庭网络没有增加网站端口映射，访客访问云端；家庭端离线时网站仍可登录并查看标有时间的保存资料。
 
-游戏建号/认领/改密还需要云端账号作业与家庭端最终回执通道，并重新取得正式代理维护授权；不能把只读网站同步当成认证桥已生效。真实角色 Viewer 可以使用原标准发布器向同一个 HTTPS 网站推图，当前尚未连接正式画面源。
+游戏建号、认领与改密现已通过加密账号作业及家庭端最终回执通道启用，代理维护授权与部署已经完成；只读世界快照不能处理账号作业。真实角色Viewer可以使用原标准发布器向同一个HTTPS网站推图，当前尚未连接正式画面源。
 
 当前部署、备份、首页及照片展廊的验收边界以 [云端网站记录](CLOUD_PORTAL.md) 为准。
 
-## 验证与证据
+## 初版验证与证据
+
+以下保留0.2.0初版验证记录；当前0.7.0完整138项门户回归及正式发布见[接入发布](AGENT_PORTAL_JOIN_APPEARANCE.md)与[Numen归属清单](../manifests/portal-numen-owner-release-20261022.json)。
 
 - 21 个 JS 模块语法检查、**47 项** Node API/DOM 集成测试通过；覆盖旧频道 schema 迁移、用户隔离、撤权、原 UUID、真实物品名、CSRF/Host/代理、手机 HTTP 兼容、表单真实提交、发布 epoch/序号/过期与 Canvas 来源策略。
 - **7 个 JVM 测试程序，84 项检查**通过；含原认证/正版/Eye/并发回归和 21 项加密桥检查。

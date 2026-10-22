@@ -1,0 +1,58 @@
+{
+  "status": "deployed",
+  "releasedOn": "2026-10-22",
+  "sourceCommit": "64b9a305a818717a1fc945b660e21adb29e131b4",
+  "portal": {
+    "version": "0.7.0",
+    "url": "https://mc.kangqiang.site",
+    "image": "qiandengji-portal:0.7.0-64b9a305a818717a1fc945b660e21adb29e131b4",
+    "imageId": "sha256:a66b565067fe9fcc342ad3779f752e4ea15088b5a77d2d9308ad8810a8b1fb28",
+    "previousContainer": "qiandengji-portal-prev-before-numen-owner"
+  },
+  "homePublisher": {
+    "installedAt": "2026-10-22T23:04:00+08:00",
+    "changedModules": 5,
+    "nativeIdentitySources": [
+      "Numen.CompanionRegistry",
+      "Numen.live-owner-tag"
+    ],
+    "observationIntervalSeconds": 30,
+    "evidenceMaxAgeSeconds": 45,
+    "transport": "existing encrypted account bridge",
+    "newPublicPorts": 0
+  },
+  "preserved": {
+    "websiteOwners": 1,
+    "explicitRoleBindings": 6,
+    "archivedTestRoles": 141,
+    "existingCredentialsAndSessions": true,
+    "eyeAccountsAndPairings": true,
+    "existingExplicitOwnership": true,
+    "paperRestartedForThisIncrement": false,
+    "proxyRestartedForThisIncrement": false
+  },
+  "verification": {
+    "portalRegressionTests": 138,
+    "newOwnershipTestGroups": 9,
+    "productionHttpsChecks": 6,
+    "publicCheckedAt": "2026-10-22T15:10:46.979Z",
+    "gameAccountBridgeReady": true,
+    "nativeObservationFresh": true,
+    "appearanceBridgeFresh": true,
+    "observedNativeRole": "ag_Kirito",
+    "nativeRelationState": "pending_creator",
+    "tianYiObserved": false
+  },
+  "boundaries": [
+    "An existing explicit role owner is never overwritten by a native creator observation.",
+    "A creator without a verified website binding remains pending_creator.",
+    "TianYi needs actual native registry or online NumenOwner evidence; an old same-name player file is not proof.",
+    "Invalid optional Numen evidence cannot block account jobs, password receipts or authentication heartbeats.",
+    "No new live viewer source, mobile/Xbox pixel verification or sixteen-model long-duration load test."
+  ],
+  "rollback": {
+    "programs": "Restore the retained previous website container and the exact five home-publisher preimages through the original wrappers.",
+    "data": "Keep the latest portal database, credentials, bindings and audit history. Older programs ignore the two additional Numen tables; do not overwrite newer user data with the backup.",
+    "privateEvidence": "E/F ops/repairs/portal-numen-owner-20261022"
+  }
+}
