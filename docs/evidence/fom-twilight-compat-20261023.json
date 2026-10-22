@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-10-22T18:43:12.635599+00:00",
+  "productionPublished": true,
+  "ports": {
+    "java": 28976,
+    "mineflayer": 28977,
+    "bedrockUdp": 28988
+  },
+  "source": {
+    "renderer": {
+      "sourceCommit": "5f230d2cfb6c771fe8b0b0b7bf3b7cafadfb649f",
+      "sourceFiles": 645,
+      "dependencies": 16,
+      "files": 14955,
+      "manifestSha256": "a2cf45b2675c73190a999d5b1b185bbcbac4771162b45664f5ef5f8a85ad1349"
+    },
+    "gateways": {
+      "main": {
+        "directory": "E:\\MC\\servers\\fom-2.42\\ops\\agent-gateway\\twilight-compat-20261023-v4",
+        "manifestSha256": "0ac77a85d373014796a2208fbee0b958ae58ee84d2dbbdf43b08e0e2d9604265",
+        "files": 6567,
+        "sourceCommit": "8fbb9c9ab0c57870f12d9557ead196d5e6c98697"
+      },
+      "bedrock": {
+        "directory": "E:\\MC\\servers\\fom-2.42\\ops\\bedrock-gateway-twilight-compat-20261023-v4",
+        "manifestSha256": "5803e20f64a41cbfb4a07404e74fd352f75c16043b03074f679e3d97ad3be4de",
+        "files": 6567,
+        "sourceCommit": "8fbb9c9ab0c57870f12d9557ead196d5e6c98697"
+      }
+    }
+  },
+  "assets": {
+    "twilightLayers": {
+      "path": "assets/twilightforest/native/model-layers.json",
+      "sha256": "56dcd09468a6440b15d5258394d90da4a4d18dd9773a772dffc8149978eaf2a2",
+      "originalLayers": 100,
+      "integratedActors": [
+        "twilightforest:naga"
+      ],
+      "completeSceneParityVerified": false
+    },
+    "verification": {
+      "assetIntegrityVerified": true,
+      "filesVerified": 67188,
+      "renderParityVerified": false,
+      "complete": false,
+      "resourcePriorityVerified": false
+    },
+    "manifestSha256": "8d90a9975e4cb5c1a150ea2195b0a5f9327f2acfbcca71588fe10585920e71b3",
+    "directory": "E:\\MC\\integrations\\fom-twilight-compat-20261023\\assets"
+  },
+  "tests": {
+    "rendererPassed": 1223,
+    "rendererConditionalSkipped": 32,
+    "gatewayPassed": 339,
+    "pythonDeploymentPassed": 33,
+    "bedrockUdpTwilightPassed": 17,
+    "bedrockUdpReconnectPassed": 7,
+    "phoneGpuTested": false,
+    "wanRetested": false
+  },
+  "liveHealth": {
+    "28985": {
+      "runId": "65bd28af2f04432c87edfc30ed2ba26b",
+      "healthy": true,
+      "paused": false
+    },
+    "28996": {
+      "runId": "d3f579c47d9041608dc9946a67bd6e4d",
+      "healthy": true,
+      "paused": false
+    }
+  },
+  "healthCheckCounts": {
+    "main": 20,
+    "bedrock": 14
+  },
+  "productionMineflayer": {
+    "ok": true,
+    "checks": [
+      "LAN default-timeout native inventory and 65-second heartbeat",
+      "same UUID and complete inventory after reconnect"
+    ],
+    "sameUuidAndFullInventoryRetained": true,
+    "frontendHeartbeats": [
+      7,
+      2
+    ],
+    "modelCalls": 0,
+    "gameplayActions": 0
+  },
+  "webgl": {
+    "productionActionConnectionRendered": true,
+    "pageErrors": 0,
+    "qaNagaParts": 12,
+    "uncraftingVisibleSlots": 47,
+    "occupiedRecipePreviews": 5,
+    "javaPixelParityVerified": false
+  },
+  "backup": {
+    "files": 1975,
+    "bytes": 199868628,
+    "archiveSha256": "5ddf0d90835119ed6faae3853073a64bb3ea1740f60e81efe3e614a0a556e4ba",
+    "archive": "E:\\MC\\backups\\fom-twilight-compat-20261023\\before.zip",
+    "mirror": "F:\\MC\\backups\\fom-twilight-compat-20261023\\before.zip",
+    "crcAndPerMemberShaVerified": true,
+    "normalStopsVerified": true,
+    "modSetUnchanged": 113
+  },
+  "changes": {
+    "changedFields": [
+      "agentGateway.releaseDir",
+      "bedrock.gatewayRelease"
+    ],
+    "gameJarsUnchanged": true,
+    "bridgeResourcesUnchanged": true,
+    "before": {
+      "main": "df98f3c4846ce6d700391ca81d7ce77ee819f6455d86121cfe48febb63e35dea",
+      "bedrock": "8788ced09f7c61ce7e8fd1753015aa61c13fab2cdd4d6a5b7a883b348d698b78"
+    },
+    "after": {
+      "main": "3259c6b690d6bfd66bbf6efbdfef0fafb93454744f80ed364c6e6a27b234083c",
+      "bedrock": "bf6958beb2bf0abd48bd97ccbc117b71673141874f4e4cbcb5d9c073583b4224"
+    }
+  },
+  "isolatedShutdown": {
+    "normalExitCodes": true,
+    "temporaryPortsClosed": true,
+    "worldReset": false
+  },
+  "scope": {
+    "completeSceneParityVerified": false,
+    "allModGameplayVerified": false,
+    "integratedTwilightActors": [
+      "twilightforest:naga"
+    ],
+    "exportedOriginalModelGroups": 100,
+    "ordinaryConstructorProviders": 95,
+    "completeComponentConverters": 47
+  },
+  "remaining": [
+    "other Twilight boss and creature renderers",
+    "ore meter GUI and loading animation",
+    "jar dynamic item display",
+    "traveller gear overlays",
+    "Bedrock Twilight boss actors and Uncrafting interaction UI",
+    "Java reference-frame parity and actual phone GPU coverage"
+  ],
+  "failuresPreserved": [
+    "original metadata diagnostic client-only LinkageError on isolated server, fixed with bounded per-class handling",
+    "initial Naga camera anchored at origin, fixed",
+    "first heartbeat Number silently encoded zero, fixed to BigInt using actual wire codec",
+    "old-version test fixtures incorrectly pointed at FOM assets, rerun with matched assets",
+    "native advancement icon components leaked to ViaVersion, fixed and reconnect accepted",
+    "interrupted Bedrock QA left creative mode/items, explicitly reconciled to recorded state before final acceptance",
+    "final isolated client/gateway teardown raced with a maintenance disconnect after all live checks; all exited normally"
+  ]
+}

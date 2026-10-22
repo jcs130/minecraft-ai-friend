@@ -151,7 +151,18 @@ async function main(){
  if(process.argv.includes('--recover-fixture')){
   const file=process.argv[process.argv.indexOf('--recover-fixture')+1],previous=JSON.parse(fs.readFileSync(file))
   assert.equal(previous.nativeAuth.playerUuid,auth.playerUuid)
-  const before=await nativeInventory();assert.deepEqual(before.items,previous.fixtureAfter.items)
+  const before=await nativeInventory()
+  if(previous.fixtureAfter)assert.deepEqual(before.items,previous.fixtureAfter.items)
+  else {
+   // A disconnect may precede the post-swap snapshot. Reconcile the exact
+   // original slots plus the positively supplied item totals, never repeat give.
+   assert(previous.fixtureBefore&&Array.isArray(previous.suppliedTypes))
+   const totals=items=>{const counts={};for(const item of items)counts[item.nativeId]=(counts[item.nativeId]||0)+item.count;return counts}
+   const expected=totals(previous.fixtureBefore.items)
+   for(const [id,count]of previous.suppliedTypes){assert(/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(id)&&Number.isInteger(count)&&count>0);expected[id]=(expected[id]||0)+count}
+   assert.deepEqual(totals(before.items),expected)
+   for(const original of previous.fixtureBefore.items)assert.deepEqual(before.items.find(item=>item.slot===original.slot),original)
+  }
   if(blockItemTest){
    const catalog=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/native-block-catalog.json')))
    for(const id of ['create:andesite_casing','farmersdelight:tomato_crate']){
@@ -162,6 +173,14 @@ async function main(){
   }
   for(const [id,count] of previous.suppliedTypes)await ownConsole('execute run clear b_FomBedrockQA '+id+' '+count)
   const after=await inventoryUntil(s=>JSON.stringify(s.items)===JSON.stringify(previous.fixtureBefore.items));assert.deepEqual(after.items,previous.fixtureBefore.items)
+  if(previous.twilightRestore){
+   const restore=previous.twilightRestore,p=restore.position
+   assert(/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(restore.world)&&['x','y','z'].every(k=>Number.isFinite(p[k])&&Math.abs(p[k])<30000000))
+   await ownConsole(`execute in ${restore.world} run tp b_FomBedrockQA ${p.x} ${p.y} ${p.z}`)
+   await ownConsole('execute run gamemode survival b_FomBedrockQA')
+   await inventoryUntil(s=>s.world===restore.world)
+   check('interrupted Twilight fixture restores the recorded world and survival mode',true)
+  }
   report.recoveredFixture=file;check('previous interrupted QA fixture reconciled by exact native inventory',true)
  }
  // Twilight's dimension assertion checks the supplied native items too.
