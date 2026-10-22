@@ -91,7 +91,7 @@ export class GameData {
         if (playerNameValid(row.name) && UUID.test(row.uuid || '')) registered.push(row);
       }
     }
-    for (const row of registered) users.push({ name: row.name, uuid: row.uuid });
+    for (const row of registered) users.push({ name: row.name, uuid: row.uuid, identitySource: row.source });
     const userMap = new Map();
     const conflicts = new Set();
     for (const user of users) {
@@ -104,7 +104,8 @@ export class GameData {
     const names = new Map((this.config.publicRoster || []).map(name => [norm(name), name]));
     for (const user of users) if (this.config.includeKnownPlayers && playerNameValid(user.name)) names.set(norm(user.name), user.name);
     for (const row of registered) names.set(norm(row.name), row.name);
-    const agents = new Set(); const eyeNames = new Set(); const eyesByAgent = new Map();
+    const agents = new Set(registered.filter(row => row.kind === 'agent' && ['Numen.CompanionRegistry', 'Numen.live-owner-tag'].includes(row.source)).map(row => norm(row.name)));
+    const eyeNames = new Set(); const eyesByAgent = new Map();
     for (const pair of registry.data?.pairs || []) {
       if (typeof pair.agent !== 'string') continue;
       names.set(norm(pair.agent), pair.agent); agents.add(norm(pair.agent));

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { digest } from './store.mjs';
 import { seal, unseal } from './game-accounts.mjs';
+import { NumenOwnerships, validateNumenObservation } from './numen-ownership.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const uuid = /^[a-f0-9-]{36}$/;
@@ -12,6 +13,7 @@ const uuid = /^[a-f0-9-]{36}$/;
 export class CloudAccounts {
   constructor(config, store) {
     this.config = config; this.store = store;
+    this.numen = new NumenOwnerships(store);
     store.db.exec(`CREATE TABLE IF NOT EXISTS account_outbox(id TEXT PRIMARY KEY REFERENCES account_jobs(id),request TEXT NOT NULL,reply TEXT,dispatched_at INTEGER);
       CREATE TABLE IF NOT EXISTS account_bridge_heartbeat(id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL,received_at INTEGER NOT NULL);`);
     if (!store.db.prepare('PRAGMA table_info(account_outbox)').all().some(column => column.name === 'delivered_at')) store.db.exec('ALTER TABLE account_outbox ADD COLUMN delivered_at INTEGER');
@@ -66,8 +68,25 @@ export class CloudAccounts {
       replies.push(item); accepted.push(item.id);
     }
     const now = Date.now();
+    let numen, numenRejected = false;
+    if (body.numen !== undefined) {
+      try { numen = validateNumenObservation(unseal(key, 'numen-identities', body.numen), now); }
+      catch { numenRejected = true; }
+    }
     this.store.db.exec('BEGIN IMMEDIATE');
     try {
+      // Optional native ownership evidence cannot block registration/password
+      // receipts or heartbeat delivery. Invalid/replayed evidence grants nothing
+      // and rolls back only its own changes, preserving the account transaction.
+      this.store.db.exec('SAVEPOINT numen_owner');
+      try {
+        if (numen) this.numen.ingest(numen); else this.numen.reconcile();
+        this.store.db.exec('RELEASE numen_owner');
+      } catch {
+        this.store.db.exec('ROLLBACK TO numen_owner');
+        this.store.db.exec('RELEASE numen_owner');
+        numenRejected = true;
+      }
       for (const item of replies) this.store.db.prepare('UPDATE account_outbox SET reply=? WHERE id=?').run(item.envelope, item.id);
       for (const id of delivered) this.store.db.prepare('UPDATE account_outbox SET delivered_at=COALESCE(delivered_at,?) WHERE id=?').run(now, id);
       this.store.db.prepare('INSERT INTO account_bridge_heartbeat VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET ready=excluded.ready,received_at=excluded.received_at').run(body.heartbeat.ready ? 1 : 0, now);
@@ -79,7 +98,7 @@ export class CloudAccounts {
       for (const row of requests) this.store.db.prepare('UPDATE account_outbox SET dispatched_at=COALESCE(dispatched_at,?) WHERE id=?').run(now, row.id);
       this.store.db.exec('COMMIT');
       const watch = this.store.db.prepare("SELECT j.id FROM account_jobs j JOIN account_outbox o ON o.id=j.id WHERE j.state IN ('pending','unknown') AND o.dispatched_at IS NOT NULL ORDER BY j.created_at LIMIT 64").all().map(row => row.id);
-      return { requests, watch, acknowledged: accepted };
+      return { requests, watch, acknowledged: accepted, ...(body.numen !== undefined ? { numenAccepted: !numenRejected } : {}) };
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
   }
 }

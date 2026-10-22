@@ -3,6 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { seal, unseal } from '../src/game-accounts.mjs';
+import { readNumenIdentities } from './numen-identities.mjs';
 
 const uuid = /^[a-f0-9-]{36}$/;
 async function keyFile(file) {
@@ -62,19 +63,32 @@ export async function accountSyncOnce(settings, state = { watch: [] }, fetcher =
       if (results.length >= 8) break;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
-  const response = await fetcher(endpoint, { method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ heartbeat: { ready, at: Date.now() }, results, delivered }), signal: AbortSignal.timeout(10000) });
+  let numen;
+  if (settings.numen?.enabled === true && Date.now() - (state.numenAttemptAt || 0) >= 30000) {
+    state.numenAttemptAt = Date.now();
+    try { state.numenObservation = await readNumenIdentities(settings.numen); }
+    catch { state.numenObservation = null; } // Unknown evidence cannot grant ownership; account login keeps working.
+  }
+  if (state.numenObservation && Date.now() - state.numenObservation.observedAt < 40000) numen = seal(remoteKey, 'numen-identities', state.numenObservation);
+  const response = await fetcher(endpoint, { method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ heartbeat: { ready, at: Date.now() }, results, delivered, ...(numen ? { numen } : {}) }), signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw Object.assign(Error('ACCOUNT_SYNC_REJECTED'), { status: response.status });
   const text = await response.text(); if (Buffer.byteLength(text) > 256 * 1024) throw Error('ACCOUNT_RESPONSE_TOO_LARGE');
   const value = JSON.parse(text);
   if (!Array.isArray(value.requests) || value.requests.length > 4 || !Array.isArray(value.watch) || value.watch.length > 64 || value.watch.some(id => !uuid.test(id))) throw Error('ACCOUNT_RESPONSE_INVALID');
-  if (settings.portalIdentitiesFile && completed.length) {
+  if (settings.portalIdentitiesFile && (completed.length || state.numenObservation)) {
     const identities = new Map();
     try { for (const row of JSON.parse(await fs.readFile(settings.portalIdentitiesFile, 'utf8')).identities || []) identities.set(row.name.toLowerCase(), row); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     for (const row of completed.filter(row => value.acknowledged?.includes(row.requestId))) {
       if (!/^\.?[A-Za-z0-9_]{1,16}$/.test(row.username || '') || !uuid.test(row.playerUuid || '')) throw Error('ACCOUNT_REGISTRY_IDENTITY_INVALID');
       const previous = identities.get(row.username.toLowerCase());
       if (previous && previous.uuid !== row.playerUuid) throw Error('ACCOUNT_REGISTRY_IDENTITY_CONFLICT');
-      identities.set(row.username.toLowerCase(), { name: row.username, uuid: row.playerUuid });
+      identities.set(row.username.toLowerCase(), { ...previous, name: row.username, uuid: row.playerUuid });
+    }
+    for (const row of state.numenObservation?.companions || []) {
+      const previous = identities.get(row.name.toLowerCase());
+      // A reused name is never allowed to silently replace another UUID.
+      if (previous && previous.uuid !== row.playerUuid) continue;
+      identities.set(row.name.toLowerCase(), { name: row.name, uuid: row.playerUuid, kind: 'agent', source: row.source });
     }
     if (identities.size > 256) throw Error('ACCOUNT_REGISTRY_FULL');
     const temporary = settings.portalIdentitiesFile + '.tmp';
