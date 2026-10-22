@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import { siteFixture } from './helpers.mjs';
 
 async function fixture(t, options = {}) {
@@ -10,6 +11,13 @@ async function fixture(t, options = {}) {
   const signup = values => guest.request('/accounts', 'POST', { username: 'SimpleUser', password: 'abc123', ...values });
   return { ...f, guest, messages, signup };
 }
+
+test('health reports the version of the deployed package instead of a separately hardcoded label', async t => {
+  const f = await fixture(t);
+  const packageInfo = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const health = await f.guest.request('/health');
+  assert.equal(health.status, 200); assert.equal(health.data.version, packageInfo.version);
+});
 
 test('optional-email creates a normal password owner without mail and never requires a mail service', async t => {
   const f = await fixture(t, { mailReady: false });

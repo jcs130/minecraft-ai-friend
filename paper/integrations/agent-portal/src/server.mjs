@@ -20,6 +20,7 @@ import { agentOnboarding } from './agent-onboarding.mjs';
 import { Appearance } from './appearance.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 
+const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
 MIME['.mjs'] = 'text/javascript; charset=utf-8';
@@ -281,7 +282,7 @@ export function createPortal(config, options = {}) {
         throw fail(405, 'METHOD_NOT_ALLOWED', '此角色设定操作不支持这个方法');
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.7.0' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
