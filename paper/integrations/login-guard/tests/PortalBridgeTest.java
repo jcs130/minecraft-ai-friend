@@ -11,7 +11,7 @@ public final class PortalBridgeTest {
     static int checks;
     static void check(boolean value,String label){checks++;if(!value)throw new AssertionError(label);}
     static final class Accounts implements PortalBridge.Accounts {
-        int creates,changes; boolean ready=true; boolean failAfterWrite;
+        int creates,changes,verifies; boolean ready=true; boolean failAfterWrite;
         final Map<String,PortalBridge.Identity> users=new HashMap<>();
         public boolean ready(){return ready;}
         public boolean reserved(String name){return Set.of("goddess","corti","player","corticam","live").contains(name.toLowerCase(Locale.ROOT));}
@@ -21,6 +21,7 @@ public final class PortalBridgeTest {
             creates++;var result=new PortalBridge.Identity(name,UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8)));users.put(name.toLowerCase(Locale.ROOT),result);
             if(failAfterWrite)throw new IllegalStateException("simulated unknown");return result;
         }
+        public PortalBridge.Identity verify(String name,UUID uuid,String password) throws Exception {verifies++;if(!password.equals("isolated-test-password"))throw new PortalBridge.Problem("PASSWORD_INCORRECT","wrong");return find(name);}
         public PortalBridge.Identity password(String name,UUID uuid,String oldPassword,String newPassword){changes++;return find(name);}
     }
     static JsonObject request(String id,String operation,String name){
@@ -57,6 +58,19 @@ public final class PortalBridgeTest {
             check(result(bridge,root,claim).get("state").getAsString().equals("succeeded"),"claim succeeded");
             check(!Files.readString(root.resolve("results").resolve(claim+".json")).contains(identity.uuid().toString()),"private result encrypted");
             check(!Files.exists(root.resolve("requests").resolve(claim+".json")),"consumed encrypted request removed");
+            String verify=UUID.randomUUID().toString();var verifyRequest=request(verify,"verify",identity.name());
+            verifyRequest.remove("password");verifyRequest.addProperty("playerUuid",identity.uuid().toString());verifyRequest.addProperty("currentPassword","isolated-test-password");verifyRequest.addProperty("sharedCredential",true);
+            int mutations=accounts.creates+accounts.changes;submit(bridge,root,verify,verifyRequest);
+            check(result(bridge,root,verify).get("state").getAsString().equals("succeeded"),"read-only native password verification");
+            check(accounts.creates+accounts.changes==mutations&&accounts.verifies==1,"verification never creates or changes password");
+            check(bridge.isManaged(identity.uuid()),"shared role marked only after valid native proof");
+            String bad=UUID.randomUUID().toString();var badRequest=verifyRequest.deepCopy();badRequest.addProperty("requestId",bad);badRequest.addProperty("currentPassword","incorrect-isolated-password");submit(bridge,root,bad,badRequest);
+            check(result(bridge,root,bad).get("reason").getAsString().equals("PASSWORD_INCORRECT"),"wrong verify has failed receipt");
+            check(accounts.creates+accounts.changes==mutations,"wrong verification has no mutation");
+            check(bridge.unseal("heartbeat",Files.readString(root.resolve("heartbeat.json"))).get("verify").getAsBoolean(),"native verify capability advertised");
+            String split=UUID.randomUUID().toString();var splitRequest=request(split,"password",identity.name());splitRequest.addProperty("playerUuid",identity.uuid().toString());splitRequest.addProperty("currentPassword","isolated-test-password");submit(bridge,root,split,splitRequest);
+            check(result(bridge,root,split).get("reason").getAsString().equals("SHARED_PASSWORD_REQUIRED"),"old bridge caller cannot split managed shared password");
+            check(accounts.creates+accounts.changes==mutations,"blocked old caller does not mutate native credentials");
             accounts.ready=false;bridge.scan();check(!bridge.unseal("heartbeat",Files.readString(root.resolve("heartbeat.json"))).get("ready").getAsBoolean(),"readiness fails closed");
         } finally {try(var walk=Files.walk(root)){for(Path file:walk.sorted(Comparator.reverseOrder()).toList())Files.delete(file);}}
         System.out.println("PASS "+checks+" portal IPC and ownership checks (isolated account adapter)");

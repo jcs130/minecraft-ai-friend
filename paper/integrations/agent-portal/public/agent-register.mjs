@@ -31,14 +31,15 @@ async function privateWrite(file, value, replace = false) {
 export async function runAgentAccess(args, output = console.log) {
   const [action, ...rest] = args;
   if (!action || ['help', '--help', '-h'].includes(action)) {
-    output('千灯纪 Agent 注册工具（Node 22+）\nregister --username ag_名字 --invite-url-file 私有链接文件 --identity-file 私有身份文件\n或 register --portal https://mc.kangqiang.site --username ag_名字 --invite-file 私有邀请码文件 --identity-file 私有身份文件\nlogin|status|activate|state|logout --identity-file 私有身份文件\n先注册，再登录和查状态；仅建号成功后进入游戏。邀请码、API 密钥及游戏密码不出现在命令参数或输出中。'); return 0;
+    output('千灯纪 Agent 注册工具（Node 22+）\nregister --username ag_名字 --invite-url-file 私有链接文件 --identity-file 私有身份文件\n或 register --portal https://mc.kangqiang.site --username ag_名字 --invite-file 私有邀请码文件 --identity-file 私有身份文件\nlogin|status|activate|state|logout --identity-file 私有身份文件\nstatus|activate|state --server 世界ID --identity-file 私有身份文件（同角色统一密码，进度各服独立）\n先注册，再登录和查状态；仅建号成功后进入游戏。邀请码、API 密钥及游戏密码不出现在命令参数或输出中。'); return 0;
   }
   if (!['register', 'login', 'status', 'activate', 'state', 'logout'].includes(action)) throw Error('UNKNOWN_COMMAND');
   const options = {};
   for (let i = 0; i < rest.length; i += 2) {
-    if (!['--portal', '--username', '--invite-file', '--invite-url-file', '--identity-file'].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith('--') || options[rest[i]]) throw Error('INVALID_OPTIONS');
+    if (!['--portal', '--username', '--invite-file', '--invite-url-file', '--identity-file', '--server'].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith('--') || options[rest[i]]) throw Error('INVALID_OPTIONS');
     options[rest[i]] = rest[i + 1];
   }
+  if (options['--server'] && !['status','activate','state'].includes(action)) throw Error('SERVER_OPTION_FOR_QUERY_OR_JOIN_ONLY');
   let invitation;
   if (action === 'register') {
     if (!!options['--invite-file'] === !!options['--invite-url-file']) throw Error('ONE_INVITATION_FILE_REQUIRED');
@@ -74,27 +75,35 @@ export async function runAgentAccess(args, output = console.log) {
   async function login() {
     const result = await call('sessions', 'POST', { clientId: identity.clientId, clientSecret: identity.clientSecret }, null);
     if (!/^qda_[A-Za-z0-9_-]{43}$/.test(result.token || '') || result.clientId !== identity.clientId || result.username !== identity.username) throw Error('LOGIN_RESPONSE_MISMATCH');
+    if (result.serverId) { if (!/^[a-z][a-z0-9_-]{1,39}$/.test(result.serverId)) throw Error('INVALID_SERVER_ID'); identity.serverId = result.serverId; }
     identity.token = result.token; identity.expiresAt = result.expiresAt; await privateWrite(file, identity, true);
     return { state: 'authenticated', username: identity.username, expiresAt: result.expiresAt, identityFile: path.resolve(file) };
   }
   if (action === 'register') {
     const result = await call('register', 'POST', { requestId: identity.clientId, username: identity.username, clientSecret: identity.clientSecret }, invitation);
     if (result.clientId !== identity.clientId || result.username !== identity.username) throw Error('REGISTER_RESPONSE_MISMATCH');
-    output(JSON.stringify({ state: result.state, username: identity.username, clientId: identity.clientId, duplicate: result.duplicate, identityFile: path.resolve(file), nextAction: 'login' })); return 0;
+    identity.serverId = result.serverId || 'qiandengji'; await privateWrite(file, identity, true);
+    output(JSON.stringify({ state: result.state, serverId: identity.serverId, username: identity.username, clientId: identity.clientId, duplicate: result.duplicate, identityFile: path.resolve(file), nextAction: 'login' })); return 0;
   }
   if (action === 'login') { output(JSON.stringify(await login())); return 0; }
   if (!identity.token || !Number.isFinite(Date.parse(identity.expiresAt)) || Date.parse(identity.expiresAt) <= Date.now() + 5000) await login();
+  const serverId = options['--server'] || identity.serverId || 'qiandengji';
+  if (!/^[a-z][a-z0-9_-]{1,39}$/.test(serverId)) throw Error('INVALID_SERVER_ID');
+  const scope = options['--server'] ? 'servers/' + serverId + '/' : '';
+  const statusEndpoint = scope + (action === 'state' ? 'state' : 'status');
   let result;
-  try { result = await call(action === 'state' ? 'state' : action === 'logout' ? 'session' : 'status', action === 'logout' ? 'DELETE' : 'GET'); }
+  try { result = await call(action === 'logout' ? 'session' : statusEndpoint, action === 'logout' ? 'DELETE' : 'GET'); }
   catch (error) {
     // Only a read that failed authentication is retried. An activation with
     // an uncertain outcome is never automatically resubmitted.
     if (error.status !== 401 || action === 'logout') throw error;
-    await login(); result = await call(action === 'state' ? 'state' : 'status');
+    await login(); result = await call(statusEndpoint);
   }
   if (action === 'activate' && result.state === 'not_created') {
     if (!result.game?.ready) { output(JSON.stringify({ state: 'awaiting_game_bridge', username: identity.username, nextAction: 'status', message: '接入身份已保存；游戏建号桥待上线，请稍后查询，不要重复注册。' })); return 2; }
-    result = await call('activate', 'POST', { requestId: identity.gameRequestId, gamePassword: identity.gamePassword });
+    let requestId = identity.gameRequestId;
+    if (options['--server']) { identity.worldRequestIds ||= {}; identity.worldRequestIds[serverId] ||= randomUUID(); requestId = identity.worldRequestIds[serverId]; await privateWrite(file, identity, true); }
+    result = await call(scope + 'activate', 'POST', { requestId, gamePassword: identity.gamePassword });
   }
   if (action === 'logout') { delete identity.token; delete identity.expiresAt; await privateWrite(file, identity, true); }
   output(JSON.stringify(result)); return 0;

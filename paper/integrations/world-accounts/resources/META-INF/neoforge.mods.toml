@@ -1,0 +1,20 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+[[mods]]
+modId="qiandeng_world_accounts"
+version="0.1.0"
+displayName="Qiandeng World Accounts"
+description="Server-only website accounts mailbox; native MixAuth remains authoritative."
+[[dependencies.qiandeng_world_accounts]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.250,21.2)"
+ordering="AFTER"
+side="SERVER"
+[[dependencies.qiandeng_world_accounts]]
+modId="mixauth"
+type="required"
+versionRange="[1.3.3,1.4)"
+ordering="AFTER"
+side="SERVER"

@@ -22,3 +22,7 @@ Velocity 上的 LibreLogin 补充保护：认证失败关闭入口、已认证�
 `HashAccounts.java` 只供离线建立**全新**数据库使用，从标准输入接收临时凭据并输出 BCrypt 哈希给父进程。`bootstrap-login-accounts.py` 拒绝非空认证库，校验原离线 UUID；不能用于重置现有玩家密码。凭据、数据库、构建物和日志均不得进入 Git。
 
 2026-10-11深夜服主策略变更、21项profile/配对回归与正式验证见 `../../docs/PREMIUM_EYE_LOGIN.md`。Java测试为 `PremiumEyePolicyTest`、`RefreshConcurrencyTest`；Node门禁七项。只有官方会话且原始profile与绑定UUID一致才能免密码，不使用名字或IP会话证明正版。
+
+## 0.1.6 多世界账号候选
+
+新增只读原密码 verify、可发现的心跳标志和统一角色自助改密指引。统一操作须有 sharedCredential 标记；原密码、UUID和权限不由网站直接修改数据库。参见 paper/docs/NETWORK_ACCOUNTS.md。当前为候选，部署登录代理须取得本次维护批准。

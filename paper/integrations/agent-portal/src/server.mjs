@@ -1,3 +1,5 @@
+import { NetworkAccounts } from './network-accounts.mjs';
+import { networkRoute } from './network-routes.mjs';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -59,7 +61,8 @@ export function createPortal(config, options = {}) {
   const accounts = new GameAccounts(config, store, game, accountCloud);
   const profiles = new AgentProfiles(store);
   const emailAuth = new EmailAuth(config, store, options.emailSender);
-  const agentAccess = new AgentAccess(config, store, game, accounts);
+  const network = new NetworkAccounts(config,store,accounts,game);
+  const agentAccess = new AgentAccess(config, store, game, accounts,network);
   const appearance = new Appearance(config, store, game);
   const memories = new Memories(store);
   const limits = new Map();
@@ -163,14 +166,15 @@ export function createPortal(config, options = {}) {
         const bytes = appearance.signingImage(signingSkin[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length }); return res.end(bytes);
       }
+      if (await networkRoute({req,res,pathname,url,network,agentAccess,browserAuth,jsonBody,respond,rate}))return;
       if (req.method === 'GET' && pathname === '/api/v1/agent-access') return respond(res, 200, await agentAccess.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/agent-access/invitation') {
         if (req.headers.origin && req.headers.origin !== req.portalOrigin.origin) throw fail(403, 'INVALID_ORIGIN', '请从接入页或 Agent 本机读取邀请');
         rate('invite-inspect:' + digest(rateAddress(req, config)), 60, 60000);
         const token = /^Bearer (qdi_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1];
-        const invite = agentAccess.invitation(token), capability = await agentAccess.capabilities();
+        const invite = agentAccess.invitation(token), server = network.catalog.public(invite.serverId), capability = { game: await network.capabilities(invite.serverId) };
         return respond(res, 200, { ...invite, game: capability.game,
-          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite: { ...invite, token }, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
+          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite: { ...invite, token }, skill: agentSkill, gameAddress: server.addresses.mineflayer, gameReady: capability.game.ready, server }) });
       }
       if (pathname === '/api/v1/agent-access/memories' || pathname.startsWith('/api/v1/agent-access/memories/')) {
         // This API delegates only the authenticated Agent's own submissions.
@@ -219,6 +223,7 @@ export function createPortal(config, options = {}) {
         if (req.headers.origin) throw fail(403, 'ACCOUNT_WORKER_REQUIRED', '请从家庭端账号同步器提交');
         accountCloud.authorize(req); rate('account-bridge', 30, 60000);
         const result = await accountCloud.poll(await jsonBody(req, 512 * 1024));
+        await network.observeLegacy();
         for (const id of result.acknowledged) {
           const job = store.db.prepare('SELECT owner_id FROM account_jobs WHERE id=?').get(id);
           if (job) await accounts.job(store.ownerById(job.owner_id), id);
@@ -317,7 +322,7 @@ export function createPortal(config, options = {}) {
         const image = gallery.image(photoImage[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
       }
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, gameServers: network.catalog.list(), publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
@@ -439,8 +444,8 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/agent-invites') return respond(res, 200, agentAccess.list(browserAuth(req).owner));
       if (req.method === 'POST' && pathname === '/api/v1/agent-invites') {
         const { owner } = browserAuth(req, false, true); rate('agent-invite:' + owner.id, 20);
-        const invite = agentAccess.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();
-        return respond(res, 201, { ...invite, onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
+        const invite = agentAccess.issue(owner, await jsonBody(req)), server = network.catalog.public(invite.serverId), capability = { game: await network.capabilities(invite.serverId) };
+        return respond(res, 201, { ...invite, onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: server.addresses.mineflayer, gameReady: capability.game.ready, server }) });
       }
       const agentInvite = /^\/api\/v1\/agent-invites\/([a-f0-9-]{36})$/.exec(pathname);
       if (agentInvite && req.method === 'DELETE') return respond(res, 200, agentAccess.revoke(browserAuth(req, false, true).owner, agentInvite[1]));
@@ -586,5 +591,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, network, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

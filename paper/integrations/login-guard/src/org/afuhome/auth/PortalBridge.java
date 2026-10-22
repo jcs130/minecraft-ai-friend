@@ -26,6 +26,7 @@ final class PortalBridge implements AutoCloseable {
         Identity find(String name) throws Exception;
         Identity create(String name,String password,long createdAt) throws Exception;
         Identity password(String name,UUID uuid,String oldPassword,String newPassword) throws Exception;
+        default Identity verify(String name,UUID uuid,String password) throws Exception {throw new Problem("VERIFY_UNSUPPORTED","请先更新原生账号桥");}
     }
     static final class Problem extends Exception {
         final String reason;
@@ -33,16 +34,22 @@ final class PortalBridge implements AutoCloseable {
     }
     private static final Gson JSON=new Gson();
     private final Path root;
+    private final Set<UUID> managed=ConcurrentHashMap.newKeySet();
     private final byte[] key;
     private final Accounts accounts;
     private final SecureRandom random=new SecureRandom();
     private final AtomicBoolean scanning=new AtomicBoolean();
     private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"portal-account-bridge");t.setDaemon(true);return t;});
     private volatile boolean closed;
+    private volatile String lastFailure="";
     PortalBridge(Path root,byte[] key,Accounts accounts) throws Exception {
         if(key.length!=32||!root.isAbsolute())throw new IllegalArgumentException("portal config");
         this.root=root;this.key=key.clone();this.accounts=accounts;
-        Files.createDirectories(root.resolve("requests"));Files.createDirectories(root.resolve("results"));
+        Files.createDirectories(root.resolve("requests"));Files.createDirectories(root.resolve("results"));Files.createDirectories(root.resolve("managed"));
+        try(var files=Files.list(root.resolve("managed"))){for(Path file:files.filter(p->p.getFileName().toString().matches("[a-f0-9-]{36}\\.json")).limit(20000).toList()){
+            String id=file.getFileName().toString().substring(0,36);var value=unseal("managed:"+id,Files.readString(file));
+            if(id.equals(string(value,"playerUuid")))managed.add(UUID.fromString(id));else throw new IllegalArgumentException("managed identity");
+        }}
         try(var files=Files.list(root.resolve("results"))) {
             for(Path file:files.filter(p->p.getFileName().toString().matches("[a-f0-9-]{36}\\.json")).limit(20000).toList()) {
                 String id=file.getFileName().toString().substring(0,36);
@@ -73,8 +80,18 @@ final class PortalBridge implements AutoCloseable {
     }
     private void write(Path target,String label,JsonObject value) throws Exception {
         Path temp=target.resolveSibling(target.getFileName()+".tmp");
-        Files.writeString(temp,seal(label,value),StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING);
-        Files.move(temp,target,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
+        String encoded=seal(label,value);
+        // Windows scanners/readers can briefly hold a file without share-delete.
+        // Retry only this atomic receipt write, never the account mutation.
+        for(int attempt=0;;attempt++){
+            try{
+                Files.writeString(temp,encoded,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING);
+                Files.move(temp,target,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);return;
+            }catch(FileSystemException transientLock){
+                if(attempt>=9)throw transientLock;
+                Thread.sleep(50);
+            }
+        }
     }
     private JsonObject readResult(String id) throws Exception {
         Path file=root.resolve("results").resolve(id+".json");
@@ -84,11 +101,11 @@ final class PortalBridge implements AutoCloseable {
     private void result(String id,JsonObject value) throws Exception {write(root.resolve("results").resolve(id+".json"),"result:"+id,value);}
     void tick() {
         if(closed||!scanning.compareAndSet(false,true))return;
-        try {worker.execute(()->{try{scan();}catch(Exception ignored){/* heartbeat expires; game login is unchanged */}finally{scanning.set(false);}});}
+        try {worker.execute(()->{try{scan();}catch(Exception failure){lastFailure=failure.getClass().getSimpleName();/* heartbeat expires; login unchanged */}finally{scanning.set(false);}});}
         catch(RejectedExecutionException ignored){scanning.set(false);}
     }
     void scan() throws Exception {
-        JsonObject heartbeat=new JsonObject();heartbeat.addProperty("ready",!closed&&accounts.ready());heartbeat.addProperty("at",System.currentTimeMillis());
+        JsonObject heartbeat=new JsonObject();heartbeat.addProperty("ready",!closed&&accounts.ready());heartbeat.addProperty("at",System.currentTimeMillis());heartbeat.addProperty("verify",true);if(!lastFailure.isEmpty())heartbeat.addProperty("diagnostic",lastFailure);
         write(root.resolve("heartbeat.json"),"heartbeat",heartbeat);
         if(closed||!accounts.ready())return;
         try(var files=Files.list(root.resolve("requests"))) {
@@ -119,7 +136,15 @@ final class PortalBridge implements AutoCloseable {
                 out=receipt(id,identity.name(),"waiting");out.addProperty("playerUuid",identity.uuid().toString());out.addProperty("codeHash",sha(code));out.addProperty("expiresAt",expires);
                 result(id,out);return;
             }
+            if(operation.equals("verify")) {
+                identity=accounts.verify(name,UUID.fromString(string(request,"playerUuid")),string(request,"currentPassword"));
+                markManaged(request,identity);
+                out=receipt(id,identity.name(),"succeeded");out.addProperty("playerUuid",identity.uuid().toString());result(id,out);return;
+            }
             if(!Set.of("create","password").contains(operation))throw new Problem("OPERATION_UNSUPPORTED","操作不受支持");
+            if(operation.equals("password")&&isManaged(UUID.fromString(string(request,"playerUuid")))
+                &&(!request.has("sharedCredential")||!request.get("sharedCredential").getAsBoolean()))
+                throw new Problem("SHARED_PASSWORD_REQUIRED","此角色使用统一密码，请使用网站世界大厅的统一改密流程");
             String password=string(request,"password");
             if(password.length()<6||password.length()>64||password.matches(".*\\s.*")||Set.of("123456","12345678","password","qwerty").contains(password.toLowerCase(Locale.ROOT)))throw new Problem("PASSWORD_WEAK","请使用至少六位的独立游戏密码");
             // Persist before the first potentially irreversible database call.
@@ -129,13 +154,21 @@ final class PortalBridge implements AutoCloseable {
                 if(!agentName(name))throw new Problem("INVALID_AGENT_NAME","新 Agent 名必须为 ag_ 开头，最多16位");
                 identity=accounts.create(name,password,created);
             } else identity=accounts.password(name,UUID.fromString(string(request,"playerUuid")),string(request,"currentPassword"),password);
+            markManaged(request,identity);
             out=receipt(id,identity.name(),"succeeded");out.addProperty("playerUuid",identity.uuid().toString());result(id,out);
         } catch(Problem expected) {
             out=receipt(id,name,"failed");out.addProperty("reason",expected.reason);out.addProperty("message",expected.getMessage());result(id,out);
         } catch(Exception unknown) {
+            lastFailure=unknown.getClass().getSimpleName();
             // No exception message, password, hash or request contents in logs.
             out=receipt(id,name,"unknown");out.addProperty("message","操作结果尚未确认，请查询原请求或联系服主");result(id,out);
         } finally {Files.deleteIfExists(file);}
+    }
+    boolean isManaged(UUID uuid){return managed.contains(uuid);}
+    private void markManaged(JsonObject request,Identity identity) throws Exception {
+        if(!request.has("sharedCredential")||!request.get("sharedCredential").getAsBoolean())return;
+        JsonObject marker=new JsonObject();marker.addProperty("playerUuid",identity.uuid().toString());
+        write(root.resolve("managed").resolve(identity.uuid()+".json"),"managed:"+identity.uuid(),marker);managed.add(identity.uuid());
     }
     void confirm(String id,String code,String name,UUID uuid,BooleanSupplier currentProof,Consumer<String> reply) {
         if(!id.matches("[a-f0-9-]{36}")||!code.matches("[a-f0-9]{48}")){reply.accept("绑定命令无效，请复制网站上的完整命令。");return;}

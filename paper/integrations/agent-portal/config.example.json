@@ -61,8 +61,43 @@
     "keyFile": "E:/MC/private/portal-bridge.key"
   },
   "publicMedia": {},
-  "appearance": { "enabled": true, "bridgeEnabled": false, "tokenHash": "" },
+  "appearance": {
+    "enabled": true,
+    "bridgeEnabled": false,
+    "tokenHash": ""
+  },
   "agentAccess": {
     "enabled": true
-  }
+  },
+  "networkAccounts": {
+    "enabled": true,
+    "keyFile": ""
+  },
+  "gameServers": [
+    {
+      "id": "fom",
+      "name": "FOM · 机械动力与暮色",
+      "description": "NeoForge 模组世界，先接通统一账号，玩法资料与直播逐步接入。",
+      "core": "NeoForge",
+      "version": "1.21.1",
+      "state": "testing",
+      "addresses": {
+        "java": "micro.kangqiang.site:28976",
+        "mineflayer": "micro.kangqiang.site:28977",
+        "bedrock": "micro.kangqiang.site:28988"
+      },
+      "loginAuthority": "MixAuth",
+      "minPasswordLength": 8,
+      "guide": {
+        "help": "/fom help",
+        "status": "/fom status"
+      },
+      "adapter": "native-mineflayer",
+      "accountBridge": {
+        "enabled": false,
+        "keyFile": "",
+        "tokenHash": ""
+      }
+    }
+  ]
 }

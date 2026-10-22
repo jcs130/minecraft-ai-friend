@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "state": "validated-candidate-not-deployed",
+  "baseCommit": "fd5dfe2461226d0bcd0f848f318ddcf1145970db",
+  "versions": {
+    "portal": "0.9.0",
+    "skill": "1.3.0",
+    "loginGuard": "0.1.6",
+    "worldAccounts": "0.1.0",
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "mixauth": "1.3.3"
+  },
+  "artifacts": {
+    "fom-mods.candidate.json": "3d347555023c862be132a045266be122abea9810334ce23bb9762e0b056288dd",
+    "fom-service.candidate.json": "2274db87f6062b772e7b618c915f67804f2689641ac22fd1f42201549f571fcd",
+    "LoginGuard-0.1.6.jar": "fb8e873f12e438f030013a8d9b5714bb261022b2b47ba97036e4f3206cd4ceed",
+    "qiandeng-world-accounts-0.1.0.jar": "2fc91ece1bb83f6a77abdbc6c4790354f2f2d2ac2f66812fc8d75bd4101df596",
+    "qiandengji-agent-1.3.0.zip": "d3595d779291fd434f5008f46cd9a704de1e261a9cb32687f0bf1ab32a5f61a0"
+  },
+  "nativePrevious": {
+    "currentLoginGuardSha256": "5f7311d2b1ae22b10311302c12c31d9e1123314debaf975033d8384e61eb5852",
+    "currentFomServiceSha256": "3259c6b690d6bfd66bbf6efbdfef0fafb93454744f80ed364c6e6a27b234083c",
+    "currentFomManifestSha256": "66a64a1c2cf281098b6ca7573eea40db13ecd883e0088202d03d99473b50a751"
+  },
+  "gameDataChanged": false,
+  "productionRestarted": false,
+  "paperCoreRestartRequired": false,
+  "newPublicPorts": false,
+  "publishedToAliyun": false,
+  "validated": [
+    "Per-world membership and one shared password, original request IDs",
+    "Real website/native LibreLogin/MixAuth uniform-password integration",
+    "Final 11 native LibreLogin and 6 native NeoForge cold/claim/OP checks",
+    "137 JVM assertions including encrypted mailbox and auth policies",
+    "118 Skill file hashes, actual 38/36 MCP tool discovery",
+    "Desktop and 390px browser layout"
+  ],
+  "limits": [
+    "FOM website gameplay data and live streams not ingested",
+    "No whole 113-mod gameplay acceptance, mobile device or 16-model load claim",
+    "Current maintenance authorization and complete E/F cold backup still required"
+  ],
+  "evidenceDirectory": "ops/repairs/network-accounts-20261023",
+  "portalTests": 184,
+  "javascriptModules": 66,
+  "jvmChecks": 137,
+  "skillManifestFiles": 118
+}

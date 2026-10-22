@@ -10,3 +10,5 @@ config.local.json
 !public/downloads/qiandengji-agent-1.2.0.zip
 test-results/
 !public/assets/
+
+!public/downloads/qiandengji-agent-1.3.0.zip

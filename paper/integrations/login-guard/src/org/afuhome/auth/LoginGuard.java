@@ -132,6 +132,7 @@ public final class LoginGuard {
                     public PortalBridge.Identity find(String name){var user=libre.getDatabaseProvider().getByName(name);return user==null?null:new PortalBridge.Identity(user.getLastNickname(),user.getUuid());}
                     public PortalBridge.Identity create(String name,String password,long createdAt) throws Exception {return portalCreate(name,password,createdAt);}
                     public PortalBridge.Identity password(String name,UUID uuid,String previous,String next) throws Exception {return portalPassword(name,uuid,previous,next);}
+                    public PortalBridge.Identity verify(String name,UUID uuid,String password) throws Exception {return portalVerify(name,uuid,password);}
                 });
                 server.getScheduler().buildTask(this,portal::tick).repeat(Duration.ofSeconds(1)).schedule();
             } catch(Exception unavailable){logger.warn("Optional portal account bridge unavailable; existing game authentication remains unchanged.");}
@@ -173,8 +174,26 @@ public final class LoginGuard {
         if(saved==null||!saved.getUuid().equals(uuid)||!saved.isRegistered())throw new IllegalStateException("portal account persistence unavailable");
         return new PortalBridge.Identity(saved.getLastNickname(),saved.getUuid());
     }
+    private final Map<UUID,long[]> portalFailures=new ConcurrentHashMap<>();
+    private PortalBridge.Identity portalVerify(String name,UUID expected,String password) throws Exception {
+        if(!ready||portalReserved(name))throw new PortalBridge.Problem("RESERVED_ACCOUNT","此身份保留原游戏认证");
+        var user=libre.getDatabaseProvider().getByName(name);
+        if(user==null||!user.getLastNickname().equals(name)||!user.getUuid().equals(expected)||!user.isRegistered())throw new PortalBridge.Problem("IDENTITY_MISMATCH","原账号身份或密码状态未核实");
+        if(user.getSecret()!=null)throw new PortalBridge.Problem("TOTP_IN_GAME","两步验证账号请保留原游戏认证");
+        long now=System.currentTimeMillis();var counter=portalFailures.computeIfAbsent(expected,u->new long[]{now,0});
+        synchronized(counter){
+            if(now-counter[0]>300000){counter[0]=now;counter[1]=0;}
+            if(counter[1]>=3)throw new PortalBridge.Problem("PASSWORD_BLOCKED","网页密码核对次数过多，请五分钟后再试");
+            if(password==null||password.isEmpty()||password.length()>128||!libre.getCryptoProvider(user.getHashedPassword().algo()).matches(password,user.getHashedPassword())){
+                counter[1]++;throw new PortalBridge.Problem("PASSWORD_INCORRECT","当前游戏密码不正确");
+            }
+            counter[1]=0;
+        }
+        return new PortalBridge.Identity(user.getLastNickname(),user.getUuid());
+    }
     private PortalBridge.Identity portalPassword(String name,UUID expected,String previous,String next) throws Exception {
         if(!ready||portalReserved(name))throw new PortalBridge.Problem("RESERVED_ACCOUNT","此账号请在游戏内改密");
+        portalVerify(name,expected,previous);
         var user=libre.getDatabaseProvider().getByName(name);
         if(user==null||!user.getUuid().equals(expected)||!user.isRegistered())throw new PortalBridge.Problem("IDENTITY_MISMATCH","原账号身份或密码状态未核实");
         if(user.getSecret()!=null)throw new PortalBridge.Problem("TOTP_IN_GAME","两步验证账号请在游戏内 /changepassword 改密");
@@ -488,6 +507,9 @@ public final class LoginGuard {
     @Subscribe(order=PostOrder.LAST) public void command(CommandExecuteEvent e) {
         if(!(e.getCommandSource() instanceof Player p)) return;
         String[] parts=e.getCommand().trim().split("\\s+"); String cmd=key(parts[0]);
+        if(portal!=null&&portal.isManaged(p.getUniqueId())&&Set.of("register","reg","setpassword","changepassword","changepass","passwd","passch").contains(cmd.substring(cmd.lastIndexOf(':')+1))) {
+            e.setResult(CommandExecuteEvent.CommandResult.denied());p.sendMessage(text("此角色使用跨世界统一密码，请到网站世界大厅改密；各服会逐项确认。"));return;
+        }
         if(cmd.equals("authstatus")) {e.setResult(CommandExecuteEvent.CommandResult.denied());publishAuthentication(p);return;}
         if(Set.of("login","l","log").contains(cmd)) {
             if(logger!=null)logger.info("MC_AUTH_REQUEST account={} command={} available={}",p.getUsername(),cmd,ready);

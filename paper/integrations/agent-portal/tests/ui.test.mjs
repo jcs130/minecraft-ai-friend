@@ -78,6 +78,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     assert.deepEqual(errors, [], 'No unexpected DOM runtime errors');
   });
   window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
+  window.eval(await fs.readFile(path.join(projectRoot, 'public/worlds.js'), 'utf8'));
   window.eval(code + '\nwindow.__portalRefreshForTest = refresh;');
   await waitFor(() => document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
@@ -498,9 +499,19 @@ test('home and connection center expose three real client choices with parent pr
  assert.ok(ui.document.querySelector(`.client-choices a[href="${source}"]`));
  for (const url of ['https://github.com/Project-N-E-K-O/N.E.K.O','https://github.com/Pal-AI-Lab/Cortico']) assert.ok(ui.document.querySelector(`.client-choices a[href="${url}"]`));
  ui.window.location.hash='connections'; await waitFor(()=>ui.document.querySelector('a[download]'));
- assert.ok(ui.document.querySelector('a[download]').href.endsWith('/downloads/qiandengji-agent-1.2.0.zip'));
+ assert.ok(ui.document.querySelector('a[download]').href.endsWith('/downloads/qiandengji-agent-1.3.0.zip'));
  assert.match(ui.document.querySelector('#main').textContent,/0\.5\.7-rc\.67/);
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
  await ui.refresh(false);
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+});
+
+
+test('world hall shows separate readiness and world-scoped invitations without fabricating FOM inventory',async t=>{
+ const ui=await screen(t);await ui.setup();ui.window.location.hash='worlds';await waitFor(()=>ui.document.querySelectorAll('.world-card').length===2);
+ assert.match(ui.document.body.textContent,/统一登录密码/);assert.match(ui.document.body.textContent,/FOM/);assert.match(ui.document.body.textContent,/背包、任务、直播尚未同步/);
+ ui.click('[data-world-action="invite"][data-server="fom"]');ui.fill('label','模组世界伙伴','#world-account-form');ui.fill('username','ag_FomUI','#world-account-form');ui.submit('#world-account-form');
+ await waitFor(()=>ui.document.querySelector('#modal-title')?.textContent.includes('接入邀请'));
+ const text=[...ui.document.querySelectorAll('#modal textarea')].map(n=>n.value).join('\n');assert.match(text,/世界 ID：fom/);assert.match(text,/\/fom status/);assert.ok(!text.includes('从 /mycli help'));
+ ui.click('#modal [data-action="close-modal"]');assert.ok(!ui.document.body.textContent.includes('qdi_'),'secret invitation is removed when closed');
 });
