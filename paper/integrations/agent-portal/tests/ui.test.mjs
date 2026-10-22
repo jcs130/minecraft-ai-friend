@@ -270,14 +270,16 @@ test('the default homepage introduces a shared Agent living world and exhibits o
 });
 
 
-test('configured promotion and character art appear in the shared world homepage without autoplay', async t => {
+test('resident scene art and promotion preserve playback while background state updates', async t => {
   const ui = await screen(t, { initialView: 'home', media: { video: 'intro.mp4', poster: 'poster.jpg', character: 'cormy.webp', portrait: 'cormy-standing.png', credit: '千灯纪 / 可米' } });
   const video = ui.document.querySelector('.home-film video');
   assert.ok(video); assert.ok(video.hasAttribute('controls')); assert.ok(video.hasAttribute('playsinline')); assert.equal(video.hasAttribute('autoplay'), false);
   assert.equal(video.getAttribute('preload'), 'none'); assert.equal(video.querySelector('source').getAttribute('src'), '/media/intro.mp4');
-  assert.equal(ui.document.querySelector('.character-feature img').getAttribute('src'), '/media/cormy.webp');
-  assert.equal(ui.document.querySelector('.world-hero-resident img').getAttribute('src'), '/media/cormy-standing.png');
-  assert.match(ui.document.querySelector('.world-art-label').textContent, /常驻玩家.*可米/);
+  assert.equal(ui.document.querySelector('.character-feature'), null);
+  assert.equal(ui.document.querySelector('.world-hero-resident'), null);
+  assert.equal(ui.document.querySelector('.world-hero-art img').getAttribute('src'), '/assets/scenes/lantern-village.webp');
+  assert.equal(ui.document.querySelectorAll('.world-scenes img[loading="lazy"]').length, 3);
+  assert.match(ui.document.querySelector('.world-art-label').textContent, /可米与千灯纪.*世界概念/);
   assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico/);
   video.currentTime = 42;
   ui.outage(); await ui.refresh(false);

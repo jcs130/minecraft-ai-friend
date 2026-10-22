@@ -12,7 +12,7 @@ import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
 import { publicMedia, servePublicMedia } from './public-media.mjs';
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
 const sameSecret = (a, b) => typeof a === 'string' && typeof b === 'string' && /^[A-Za-z0-9_-]{43}$/.test(a) && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
@@ -153,7 +153,7 @@ export function createPortal(config, options = {}) {
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.4.1' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.4.2' });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {

@@ -28,4 +28,6 @@ test('selected video streams support phone range playback and HEAD, while privat
   const invalid = await fetch(origin + '/media/intro.mp4', { headers: { Range: 'bytes=999-1000' } }); assert.equal(invalid.status, 416);
   assert.equal((await fetch(origin + '/media/unselected.png')).status, 404);
   assert.equal((await fetch(origin + '/media/portal.sqlite')).status, 404);
+  const scene = await fetch(origin + '/assets/scenes/lantern-village.webp');
+  assert.equal(scene.status, 200); assert.equal(scene.headers.get('content-type'), 'image/webp');
 });
