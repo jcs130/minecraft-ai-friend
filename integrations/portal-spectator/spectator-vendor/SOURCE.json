@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "sourceDirectory": "packages/modern-viewer/renderer-src/host",
+  "files": {
+    "spectator-protocol.mjs": "e8d501c0bf7387f48932fdcf34a52ff5c5349e8ffd94e24d2eab1b1bf7a24f35",
+    "spectator-relay.mjs": "93e0175f3dd0e71541de67a94545770a39529a597da9b89adb853affa90b9a6b",
+    "spectator-site.mjs": "5504aaf7bfefd6d62997c497d7ade4c9cf47a776b6b03022760f93b92c8d50da"
+  },
+  "sourceCommit": "c23fd08931e13cea7a54ae8fcef234ffccc9753f"
+}

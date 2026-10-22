@@ -1,0 +1,8 @@
+{
+  "rendererDirectory": "E:/MC/integrations/qiandengji-web-view/renderer",
+  "sourceUrl": "http://127.0.0.1:3007/",
+  "portalUrl": "https://mc.kangqiang.site",
+  "channelId": "replace-with-own-website-channel-id",
+  "tokenFile": "E:/MC/private/spectator/publisher.dpapi",
+  "tokenFormat": "dpapi"
+}

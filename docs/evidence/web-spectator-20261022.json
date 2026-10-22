@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "minecraftVersion": "1.21.1",
+  "sdkVersion": "0.4.0",
+  "singleActionBody": true,
+  "modelCalls": 0,
+  "publisherAdditionalMinecraftLogins": 0,
+  "realPortalChecks": {
+    "websiteLoginTo3D": true,
+    "refreshKeepsSameIframe": true,
+    "allFiveCurrentIconsDecoded": true,
+    "logoutRevokesPrivateView": true
+  },
+  "unexpectedJavaScriptErrors": [],
+  "occupiedHotbarSlots": [
+    {
+      "slot": "36",
+      "nativeId": "minecraft:player_head",
+      "state": "verified",
+      "decodedWidth": 64
+    },
+    {
+      "slot": "37",
+      "nativeId": "minecraft:compass",
+      "state": "verified",
+      "decodedWidth": 16
+    },
+    {
+      "slot": "38",
+      "nativeId": "minecraft:written_book",
+      "state": "verified",
+      "decodedWidth": 16
+    },
+    {
+      "slot": "39",
+      "nativeId": "minecraft:blaze_rod",
+      "state": "verified",
+      "decodedWidth": 128
+    },
+    {
+      "slot": "40",
+      "nativeId": "minecraft:rotten_flesh",
+      "state": "verified",
+      "decodedWidth": 16
+    }
+  ],
+  "catalogImagesDecoded": 6,
+  "catalogSha256": "30b6712dd2209700e18ba7f6f1f625396cb35f41e5778b8474baa983dda1ad8a",
+  "portalAutomated": {
+    "passed": 111,
+    "failed": 0,
+    "skipped": 0
+  },
+  "sharedRendererAutomated": {
+    "passed": 1206,
+    "failed": 0,
+    "skipped": 32
+  },
+  "isolatedPortalWasFixture": true,
+  "gameBodyWasReal": true,
+  "productionGameOrProxyRestarted": false,
+  "productionAccountsChanged": false,
+  "productionWebsiteDeployedByThisTask": false,
+  "privateFailuresPreserved": true,
+  "sdkTacticalReflexWasEnabled": true,
+  "notClaimed": [
+    "complete_scene_or_Java_pixel_parity",
+    "all_mod_GUIs",
+    "new_long_term_autonomy_success_rate",
+    "live_sources_for_existing_agents"
+  ],
+  "rawCapturesCredentialsWorldsAndScreenshotsCommitted": false
+}
