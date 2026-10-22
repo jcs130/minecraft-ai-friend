@@ -1217,6 +1217,8 @@ class Controller:
             try:
                 detail = self.death_memory.execute(self.game_scope, arguments)
                 raw = {"structuredContent": {"protocol": PROTOCOL, "text": encode(detail)}}
+                if detail.get("reason") == "unchanged_lesson":
+                    raw["structuredContent"]["code"] = "death_lesson_unchanged"
             except ValueError as error:
                 raw = {"structuredContent": {"protocol": PROTOCOL, "failed": True, "text": str(error)}}
         else:
@@ -1566,6 +1568,20 @@ class Controller:
             result, compact = await self.dispatch(name, arguments, request_id,
                 attribution={"controller": "system2", **({"decisionId": self.turn} if self.turn else {})})
         self.publish(viewer_action=tool_receipt(name, arguments, result))
+        if name == "death_review" and result.get("code") == "death_lesson_unchanged":
+            # A successful no-op is neither new memory nor a game action. End
+            # this read chain with the real receipt; keep corrections and all
+            # native stop/unknown/death boundaries available on the next turn.
+            self.unactioned_replies += 1
+            delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                        * 2 ** min(6, self.unactioned_replies - 1))
+            self.planner_retry_at = time.monotonic() + delay
+            self.continuation_needed = True
+            self.planner_notice = ("The unchanged death lesson was already saved. No new memory or game action occurred. "
+                                   "Do not repeat that report; use fresh facts to choose useful work, revise with new evidence, "
+                                   "or explain a real waiting condition. Behavioral improvement remains unverified.")
+            self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+            return result, compact, True
         read_only = observation_call(name, arguments)
         if not result.get("failed"):
             if name in REUSABLE_IMMEDIATE_READS and not result.get("execution"):

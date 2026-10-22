@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+`0.2.86` makes identical scoped death-lesson reports explicit no-ops, preserves
+changed evidence and main-brain reflection precedence, and stops the current
+read chain with bounded idle backoff on a duplicate. The planning context marks
+saved/deferred reflection separately from an outstanding report; a recorded
+hypothesis does not establish behavioral improvement or gate native action.
+
 `0.2.85` pins the core travel-dispatch feedback repair. The original native
 queue, arrival idempotence and command confirmation rules are unchanged. A
 completed travel step does not establish server command execution or activity

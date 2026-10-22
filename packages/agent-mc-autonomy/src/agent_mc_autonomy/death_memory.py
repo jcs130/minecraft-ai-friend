@@ -276,14 +276,27 @@ class DeathMemory:
         rows = self.entries(scope)
         if not rows:
             return None
+        lesson_saved = bool(rows[0].get("lesson"))
+        reflection = rows[0].get("reflection") or {}
+        report_pending = not (lesson_saved or reflection)
+        if lesson_saved:
+            next_step = ("A lesson is already recorded for this episode; do not repeat the unchanged report. "
+                         "It is an unverified hypothesis, not behavioral improvement or a prerequisite for action. "
+                         "Evaluate applicability against fresh facts and choose useful work; revise only with new evidence.")
+        elif reflection:
+            next_step = ("The main-brain reflection is deferred; this is not a demand for another report. "
+                         "Inspect the episode if needed and choose useful work from fresh facts. No improvement is verified.")
+        else:
+            next_step = ("Use death_review with inspect arguments to read facts and receipts when needed. "
+                         "An optional report requires the full report_episode_id plus lesson, applicability and evidence. "
+                         "A report is not a prerequisite for action. Evaluate applicability against fresh facts before reuse.")
         return {"latest_episode": {k: rows[0][k] for k in ("id", "source_event", "observed_at", "position", "health", "food", "cause")},
                 "inspect": {"action": "get", "id": rows[0]["id"]}, "report_episode_id": rows[0]["id"],
+                "report_pending": report_pending, "lesson_saved": lesson_saved,
                 **({"recovery": recovery_context(rows[0], facts, objective)} if facts is not None else {}),
                 "lessons": [{"episode_id": r["id"], **r["lesson"]} for r in rows if r.get("lesson")][:3],
                 "historical": True, "behavioral_improvement_verified": False,
-                "next": "Use death_review with inspect arguments to read facts and receipts. Review the death in this existing planning turn; "
-                        "report requires the full report_episode_id plus lesson, applicability and evidence. "
-                        "Evaluate applicability against fresh facts before reuse."}
+                "next": next_step}
 
     def execute(self, scope, args):
         if not scope_key(scope):
@@ -322,7 +335,11 @@ class DeathMemory:
             if (row.get("reflection") or {}).get("outcome") == "lesson":
                 return {"saved": False, "episode_id": row["id"], "lesson": row["lesson"],
                         "reason": "main_brain_reflection_completed", "behavioral_improvement_verified": False}
-            row["lesson"] = {k: args[k].strip() for k in ("lesson", "applicability", "evidence")}
+            proposed = {k: args[k].strip() for k in ("lesson", "applicability", "evidence")}
+            if all((row.get("lesson") or {}).get(k) == value for k, value in proposed.items()):
+                return {"saved": False, "episode_id": row["id"], "lesson": row["lesson"],
+                        "reason": "unchanged_lesson", "behavioral_improvement_verified": False}
+            row["lesson"] = proposed
             row["lesson"].update(source="planner_inference", hypothesis=True, behavioral_improvement_verified=False)
             db.execute("UPDATE death_episodes SET body=? WHERE scope=? AND id=?", (json.dumps(row, ensure_ascii=False), scope_key(scope), row["id"]))
         return {"saved": True, "episode_id": row["id"], "lesson": row["lesson"], "behavioral_improvement_verified": False}
