@@ -1,0 +1,55 @@
+{
+  "version": "0.6.0",
+  "commit": "1cdb0bd121ed621a165eaf10fb879f4df026898e",
+  "image": "qiandengji-portal:0.6.0-1cdb0bd121ed621a165eaf10fb879f4df026898e",
+  "imageId": "sha256:f47a42e46864e4e5c2b1a0b05de561ade8b4a04c532827306e5e0c67abea1cd0",
+  "previous": "qiandengji-portal:0.5.1-b4f35a3dbabb1ab73a3ab3a0b4b6adbafae16021",
+  "releasedAt": "2026-10-22T11:04:03.753340+00:00",
+  "accountsAndPasswordsPreserved": true,
+  "bindingCount": 4,
+  "archivedTestBindings": 140,
+  "eyePairsChanged": false,
+  "agentInviteApiDeployed": true,
+  "gameAccountBridgeDeployed": false,
+  "paperOrProxyRestarted": false,
+  "skillDownloadVerified": true,
+  "helperSha256": "bafc80bd7d0cb2eeaa38710bc58ac7689f13e5d991fc62b6e520d6b7abcd24a5",
+  "verification": {
+    "version": "0.6.0",
+    "verifiedAt": "2026-10-22T11:05:01.247931+00:00",
+    "agentAccessDiscovery": true,
+    "helperHashVerified": true,
+    "helperSha256": "bafc80bd7d0cb2eeaa38710bc58ac7689f13e5d991fc62b6e520d6b7abcd24a5",
+    "docsHttps": true,
+    "noInviteDenied": true,
+    "newProductionTestAccountsCreated": 0,
+    "testRolesAbsent": true,
+    "listedEyes": [
+      "ag_cormy_eye",
+      "CortiEye"
+    ],
+    "ownBindingsPreserved": true,
+    "gameAccountBridgeReady": false,
+    "humanEmailRegistrationUnchanged": true
+  },
+  "validation": {
+    "syntaxModules": 40,
+    "automaticTests": 108,
+    "nativeIsolatedChecks": 16,
+    "allNativeProcessesStoppedNormally": true,
+    "phoneViewport": 390,
+    "phoneDocumentWidth": 375
+  },
+  "ownershipCleanup": {
+    "boundNamedRoles": 4,
+    "archivedHistoricalTestBindings": 140,
+    "productionTestAccountsCreatedThisRun": 0,
+    "eyePairsPreserved": true,
+    "sourceSyncExcludesRetiredTestNames": true
+  },
+  "approvalState": {
+    "gameAuthenticationBridge": "awaiting existing user confirmation",
+    "paperRestarted": false,
+    "loginProxyRestarted": false
+  }
+}

@@ -2,7 +2,7 @@
 
 ## 当前文件分工（2026-10-22，邀请码 0.6.0 发布准备）
 
-本对话正在提交邀请码 API 与测试绑定清理：暂时占用 `src/server.mjs`、`public/app.js`、`package.json`/lock、`config.example.json`、`src/config.mjs`、`src/store.mjs`、`src/cloud-source.mjs`、`src/game-accounts.mjs` 和对应测试。请等这一提交完成后再接 3D 的闭包 hook/UI/依赖，不整体覆盖这些文件。新 `vendor/`、`src/spectator.mjs` 和独立 3D 测试可另行准备；本次邀请码候选不包含未验收的 3D 接线。待发布时按来源提交逐项核对；不要仅因文件出现在同一工作区就一起打包。
+邀请码 API 与测试绑定清理已提交并推送 `1cdb0bd121ed621a165eaf10fb879f4df026898e`，网站 0.6.0 已按此固定提交上线，108 项自动测试、40 模块语法与 16 项隔离原生联机通过。此前占用的 server/app/package/config/store/cloud-source/game-accounts 已释放，可基于该提交接 3D，不整体覆盖邀请码改动。本次通过独立 Git 索引和完整干净源码快照发布，未覆盖工作区另一对话的 3D 代码，也未将它们打进镜像；新模块和接线仍是后续范围。后续需逐项验证与单独发布，不因文件出现在同一工作区就打包。正式游戏认证桥仍关闭，未重启 Paper/登录代理。
 
 2026-10-22。此文是后续接口约定建议，**当前生产网站只有原 canvas-only 预览**，下述 watch/WS 路由尚未启用。Paper、游戏代理和现役 Agent 身体保持。
 

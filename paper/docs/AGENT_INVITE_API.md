@@ -4,7 +4,7 @@
 
 主人在连接中心创建一次性邀请。受邀程序获得独立的 Agent API 身份，新游戏角色绑定到邀请人的网站账号；不另建网站管理员，也不需要主人的网站密码。普通用户仍通过邮箱注册网站账号，邀请码不冒充邮箱验证。
 
-网站为 `https://mc.kangqiang.site`，游戏为 `micro.kangqiang.site:25702`（1.21.1）。`GET /api/v1/agent-access` 返回真实桥能力及工具 SHA256。正式认证桥仍待服主确认更新；本次网站发布不重启 Paper 或登录代理。`ready=false` 时可先登记 API 身份，游戏激活返回 503，不伪造建号或入服成功。
+网站 0.6.0 已按源码 `1cdb0bd1` 发布至 `https://mc.kangqiang.site`，游戏为 `micro.kangqiang.site:25702`（1.21.1）。`GET /api/v1/agent-access` 返回真实桥能力及工具 SHA256。正式认证桥仍待服主确认更新；本次网站发布未重启 Paper 或登录代理。`ready=false` 时可先登记 API 身份，游戏激活返回 503，不伪造建号或入服成功。
 
 网页指引 `/agent-api.html`，独立 Node 22 工具 `/agent-register.mjs`。接入方使用自己的框架、模型、设定和记忆；原 Agent Skill 1.0.0 的文件及摘要保持。
 
@@ -40,11 +40,11 @@
 
 服主明确清理测试账号并保留 Eye。已逐条核对 140 个 UUID，均匹配 Paper usercache 历史、非 OP、非当时在线，且不在 Agent/Eye 配对登记中。清理的是先前导入的 140 条网站测试绑定，保留原审计与可恢复归档，不是删除游戏存档或 140 个常驻 Agent。
 
-`jcs130` 保留 ag_CorMy、.MicroKQ、ag_Kirito、ag_NarutoPi 四个原 UUID 绑定。网站账号、密码、游戏文件、Eye 与配对均未改。云端 SQLite backup 后，事务移入 archived_test_roles；后续快照不会复活公开测试角色，邀请码也不能重新占用它们。备份 `before-test-archive-20261022T103357.sqlite.gz`；恢复应按选定 UUID 单独恢复，不能覆盖之后的新用户。
+`jcs130` 保留 ag_CorMy、.MicroKQ、ag_Kirito、ag_NarutoPi 四个原 UUID 绑定。网站账号、密码、游戏文件、Eye 与配对均未改。云端 SQLite backup 后，事务移入 archived_test_roles；只读同步器的 hiddenPlayers 按确切名单排除这些历史测试名，后续快照不会复活公开测试角色，邀请码也不能重新占用它们。仅重连了只读网站同步器，不影响游戏连接。备份 `before-test-archive-20261022T103357.sqlite.gz`；恢复应按选定 UUID 单独恢复，不能覆盖之后的新用户。
 
 ## 验证与回退
 
-自动测试覆盖兑换、撤销、过期、同身份重试、并发、配额、主人隔离、CSRF 边界、Eye/管理名拒绝、归档不复活、会话轮换、丢包与未知结果；网页 DOM 覆盖创建、关闭密钥、撤销及退出清除列表。
+完整干净源码的 108 项自动测试、40 模块语法检查通过，覆盖兑换、撤销、过期、同身份重试、并发、配额、主人隔离、CSRF 边界、Eye/管理名拒绝、归档不复活、会话轮换、丢包与未知结果；网页 DOM 覆盖创建、关闭密钥、撤销及退出清除列表。正式 HTTPS 的接口发现、工具 SHA256、无邀请码拒绝及 390 像素手机无横向溢出已复核。
 
 隔离真实 Paper 1.21.1 / Velocity / LibreLogin / 两把 AES 密钥出站桥 16 项通过：普通主人邀请、工具注册/API 登录、原生建号、Mineflayer 密码入服到 PLAY、原 UUID、四块铁锭协议实收和 API 同数、归属、重试不多建、撤销不删身体。首次隔离暴露云目录漏保存 Store 引用，已修复并保留失败记录；第二轮 Paper/代理退出均为 0。新测试角色仅在隔离服。
 
