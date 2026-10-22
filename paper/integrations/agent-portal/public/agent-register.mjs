@@ -11,6 +11,13 @@ export function portalOrigin(value) {
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw Error('PORTAL_HTTPS_REQUIRED');
   return url.origin;
 }
+export function parseInviteLink(value) {
+  if (typeof value !== 'string' || value.length > 8192) throw Error('INVALID_INVITE_LINK');
+  const url = new URL(value.trim());
+  const origin = portalOrigin(url.origin), params = new URLSearchParams(url.hash.slice(1));
+  if (url.username || url.password || url.pathname !== '/join' || url.search || [...params.keys()].length !== 1 || !/^qdi_[A-Za-z0-9_-]{43}$/.test(params.get('invite') || '')) throw Error('INVALID_INVITE_LINK');
+  return { origin, token: params.get('invite') };
+}
 async function privateWrite(file, value, replace = false) {
   const absolute = path.resolve(file), directory = path.dirname(absolute);
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
@@ -24,19 +31,29 @@ async function privateWrite(file, value, replace = false) {
 export async function runAgentAccess(args, output = console.log) {
   const [action, ...rest] = args;
   if (!action || ['help', '--help', '-h'].includes(action)) {
-    output('千灯纪 Agent 注册工具（Node 22+）\nregister --portal https://mc.kangqiang.site --username ag_名字 --invite-file 私有邀请码文件 --identity-file 私有身份文件\nlogin|status|activate|state|logout --identity-file 私有身份文件\n先注册，再登录和查状态；仅建号成功后进入游戏。邀请码、API 密钥及游戏密码不出现在命令参数或输出中。'); return 0;
+    output('千灯纪 Agent 注册工具（Node 22+）\nregister --username ag_名字 --invite-url-file 私有链接文件 --identity-file 私有身份文件\n或 register --portal https://mc.kangqiang.site --username ag_名字 --invite-file 私有邀请码文件 --identity-file 私有身份文件\nlogin|status|activate|state|logout --identity-file 私有身份文件\n先注册，再登录和查状态；仅建号成功后进入游戏。邀请码、API 密钥及游戏密码不出现在命令参数或输出中。'); return 0;
   }
   if (!['register', 'login', 'status', 'activate', 'state', 'logout'].includes(action)) throw Error('UNKNOWN_COMMAND');
   const options = {};
   for (let i = 0; i < rest.length; i += 2) {
-    if (!['--portal', '--username', '--invite-file', '--identity-file'].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith('--') || options[rest[i]]) throw Error('INVALID_OPTIONS');
+    if (!['--portal', '--username', '--invite-file', '--invite-url-file', '--identity-file'].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith('--') || options[rest[i]]) throw Error('INVALID_OPTIONS');
     options[rest[i]] = rest[i + 1];
+  }
+  let invitation;
+  if (action === 'register') {
+    if (!!options['--invite-file'] === !!options['--invite-url-file']) throw Error('ONE_INVITATION_FILE_REQUIRED');
+    if (options['--invite-url-file']) {
+      const link = parseInviteLink(await fs.readFile(options['--invite-url-file'], 'utf8'));
+      if (options['--portal'] && portalOrigin(options['--portal']) !== link.origin) throw Error('INVITE_PORTAL_MISMATCH');
+      options['--portal'] = link.origin; invitation = link.token;
+    } else invitation = (await fs.readFile(options['--invite-file'], 'utf8')).trim();
+    if (!/^qdi_[A-Za-z0-9_-]{43}$/.test(invitation)) throw Error('INVALID_INVITE_FILE');
   }
   const file = options['--identity-file']; if (!file) throw Error('IDENTITY_FILE_REQUIRED');
   let identity;
   try { identity = JSON.parse(await fs.readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (!identity) {
-    if (action !== 'register' || !options['--portal'] || !options['--username'] || !options['--invite-file']) throw Error('REGISTER_OPTIONS_REQUIRED');
+    if (action !== 'register' || !options['--portal'] || !options['--username'] || !invitation) throw Error('REGISTER_OPTIONS_REQUIRED');
     if (!/^ag_[A-Za-z0-9_]{1,13}$/.test(options['--username'])) throw Error('INVALID_AGENT_NAME');
     identity = { schemaVersion: 1, portal: portalOrigin(options['--portal']), username: options['--username'], clientId: randomUUID(),
       clientSecret: randomBytes(32).toString('base64url'), gameRequestId: randomUUID(), gamePassword: randomBytes(24).toString('base64url') };
@@ -61,9 +78,7 @@ export async function runAgentAccess(args, output = console.log) {
     return { state: 'authenticated', username: identity.username, expiresAt: result.expiresAt, identityFile: path.resolve(file) };
   }
   if (action === 'register') {
-    if (!options['--invite-file']) throw Error('INVITE_FILE_REQUIRED');
-    const invite = (await fs.readFile(options['--invite-file'], 'utf8')).trim(); if (!/^qdi_[A-Za-z0-9_-]{43}$/.test(invite)) throw Error('INVALID_INVITE_FILE');
-    const result = await call('register', 'POST', { requestId: identity.clientId, username: identity.username, clientSecret: identity.clientSecret }, invite);
+    const result = await call('register', 'POST', { requestId: identity.clientId, username: identity.username, clientSecret: identity.clientSecret }, invitation);
     if (result.clientId !== identity.clientId || result.username !== identity.username) throw Error('REGISTER_RESPONSE_MISMATCH');
     output(JSON.stringify({ state: result.state, username: identity.username, clientId: identity.clientId, duplicate: result.duplicate, identityFile: path.resolve(file), nextAction: 'login' })); return 0;
   }

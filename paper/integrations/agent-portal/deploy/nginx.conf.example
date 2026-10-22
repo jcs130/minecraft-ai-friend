@@ -16,7 +16,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:qd_portal_tls:1m;
     ssl_session_timeout 1d;
-    client_max_body_size 5m;
+    client_max_body_size 9m;
     access_log /var/log/nginx/qiandengji-portal.access.log;
     error_log /var/log/nginx/qiandengji-portal.error.log;
     location / {

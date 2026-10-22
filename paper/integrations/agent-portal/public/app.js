@@ -7,7 +7,7 @@ let privateRevision = 0;
 function setSession(session) {
   authRevision++;
   if (state.session?.owner?.id !== session?.owner?.id) {
-    state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null; state.agentInvites = [];
+    state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null; state.appearance = null; state.agentInvites = [];
     // Do not leave a previous owner's private channel title on a shared phone.
     state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false }));
   }
@@ -254,7 +254,7 @@ function rosterCards(agents = state.roster) {
   const filtered = agents.filter(agent => (state.filter === 'all' || state.filter === 'authorized' && state.authorized.some(row => row.id === agent.id && row.isOwn) || state.filter === 'online' && agent.online === true || agent.kind === state.filter) && (agent.name.toLowerCase().includes(query) || (agent.playerUuid || '').toLowerCase().includes(query)));
   return filtered.length ? filtered.map(agent => {
     const full = state.authorized.find(row => row.id === agent.id);
-    return `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}</p></div>${statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
+    return `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}</p></div>${statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
   }).join('') : empty('没有找到匹配的角色', '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users');
 }
 function agentsPage() {
@@ -274,7 +274,7 @@ function inventoryPage() {
 }
 function skillDownload() {
   const release = state.site?.agentSkill;
-  return release ? `<div class="content-pad"><a class="btn primary" href="${e(release.url)}" download>${icons.download}下载 Agent Skill ${e(release.version)}</a><p class="tiny gap-top">Mineflayer · 本地 stdio MCP · 34 项游戏工具。模型、规划、长期记忆和人设由你自己的 Agent 管理，无需向网站提供模型 Key。</p><details class="gap-top"><summary>安装与接入</summary><ol><li>下载并解压，按包内 SKILL.md 和 references/connect.md 安装。</li><li>游戏地址：<code>${e(state.site?.gameAddress)}</code>；网站绑定自己的 ag_ 角色。</li><li>独立游戏密码放入 MC_GAME_PASSWORD。等待登录授权与世界就绪后开始任务。</li><li>可选：在连接中心为自己的角色创建只读凭据，放入 QD_PORTAL_CLIENT_TOKEN；它不能替代游戏密码。</li></ol><p class="tiny key-wrap">SHA256：<code>${e(release.sha256)}</code></p></details></div>` : '';
+  return release ? `<div class="content-pad"><a class="btn primary" href="${e(release.url)}" download>${icons.download}下载 Agent Skill ${e(release.version)}</a><p class="tiny gap-top">Mineflayer · 本地 stdio MCP · 34 项游戏工具与 10 个内置工作／移动脚本。模型、规划、长期记忆和人设由你自己的 Agent 管理，无需向网站提供模型 Key。</p><details class="gap-top"><summary>安装与接入</summary><ol><li>下载并解压；有接入链接读 references/invite.md，已有角色读 references/connect.md。</li><li>游戏地址：<code>${e(state.site?.gameAddress)}</code>；网站绑定自己的 ag_ 角色。</li><li>包内导入脚本生成本地 MCP 私有配置，并保留原密码；等待登录授权与世界就绪后开始任务。</li><li>可选：在连接中心为自己的角色创建只读凭据，放入 QD_PORTAL_CLIENT_TOKEN；它不能替代游戏密码。</li></ol><p class="tiny key-wrap">SHA256：<code>${e(release.sha256)}</code></p></details></div>` : '';
 }
 function connectionsPage() {
   if (!owner()) return lockedPage('连接中心', '一个角色，一个身体，安全连接你的 Agent。') + '<section class="panel"><div class="panel-header"><h2>Mineflayer Agent 接入</h2></div>' + skillDownload() + '</section>';
@@ -290,7 +290,7 @@ function feature(title, text, badge, icon, pending = false) {
 }
 function agentInvitesPanel() {
   const labels = { available: '未使用', used: '已使用', expired: '已过期', revoked: '已撤销' };
-  return `<section class="panel"><div class="panel-header"><div><h2>${icons.key}邀请自己的 Agent</h2><p>一次邀请，一个新角色，自动归属你的账号</p></div>${button('new-agent-invite', '生成邀请码', 'plus', 'primary')}</div><div class="content-pad"><p class="section-subtitle">把一次性邀请码交给 Agent，它可以通过 API 注册和登录，无需知道你的网站密码。已有角色与 Eye 观战账号保留原接入方式。</p><p class="tiny gap-top">游戏建号：${state.gameCapabilities?.ready ? '已连接，可注册新角色' : '等待认证桥上线；可先注册 API 身份，保留后稍后激活'}。<a href="/agent-api.html" target="_blank" rel="noopener">查看接入 API 与操作指引</a></p>${state.agentInvites.length ? state.agentInvites.map(invite => `<div class="token-row"><div class="avatar">${icons.users}</div><div><strong>${e(invite.label)}</strong><small>${e(invite.agent || invite.username || '由 Agent 选择新名字')} · ${labels[invite.state] || '未知'} · 有效至 ${date(invite.expiresAt)}</small></div>${['available', 'used'].includes(invite.state) ? button('revoke-agent-invite', '撤销', '', 'small danger', `data-id="${e(invite.id)}"`) : '<span class="tag">已结束</span>'}</div>`).join('') : '<p class="tiny gap-top">还没有邀请。邀请码仅显示一次，可随时撤销对应 API 接入。</p>'}</div></section>`;
+  return `<section class="panel"><div class="panel-header"><div><h2>${icons.key}邀请自己的 Agent</h2><p>一次邀请，一个新角色，自动归属你的账号</p></div>${button('new-agent-invite', '生成接入链接', 'plus', 'primary')}</div><div class="content-pad"><p class="section-subtitle">复制接入链接或完整提示词交给 Agent，它可以下载 Skill，通过 API 注册和登录，无需知道你的网站密码。已有角色与 Eye 观战账号保留原接入方式。</p><p class="tiny gap-top">游戏建号：${state.gameCapabilities?.ready ? '已连接，可注册新角色' : '等待认证桥上线；可先注册 API 身份，保留后稍后激活'}。<a href="/join" target="_blank" rel="noopener">查看 Agent 接入页与 Skill</a></p>${state.agentInvites.length ? state.agentInvites.map(invite => `<div class="token-row"><div class="avatar">${icons.users}</div><div><strong>${e(invite.label)}</strong><small>${e(invite.agent || invite.username || '由 Agent 选择新名字')} · ${labels[invite.state] || '未知'} · 有效至 ${date(invite.expiresAt)}</small></div>${['available', 'used'].includes(invite.state) ? button('revoke-agent-invite', '撤销', '', 'small danger', `data-id="${e(invite.id)}"`) : '<span class="tag">已结束</span>'}</div>`).join('') : '<p class="tiny gap-top">还没有邀请。邀请码仅显示一次，可随时撤销对应 API 接入。</p>'}</div></section>`;
 }
 const auditNames = { 'account.setup': '完成网站管理员初始化', 'account.register': '注册网站账号', 'session.login': '登录网站', 'session.logout': '退出网站', 'session.revoke': '撤销其他登录会话', 'account.password': '修改网站密码', 'credential.create': '创建客户端只读授权', 'credential.revoke': '撤销客户端授权', 'ownership.bind': '绑定已核验游戏角色', 'account.email-register': '邮箱验证注册', 'account.email-bind': '绑定验证邮箱', 'account.password-reset': '通过邮箱重设网站密码' };
 function accountPage() {
@@ -310,7 +310,7 @@ function helpPage() {
 async function loadPrivate() {
   const revision = ++privateRevision;
   const ownerId = owner()?.id;
-  if (!owner()) { state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.accountJobs = []; state.profile = null; state.agentInvites = []; return; }
+  if (!owner()) { state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.accountJobs = []; state.profile = null; state.appearance = null; state.agentInvites = []; return; }
   try {
     const [agents, account, credentials, accountJobs, invites] = await Promise.all([api('/agents'), api('/account'), api('/client-credentials'), api('/account-jobs'), api('/agent-invites')]);
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
@@ -457,6 +457,16 @@ async function profileModal(id) {
   state.profile = { id, ...profile };
   openModal('给你的 Agent，一份自己的设定。', '文字与设定图仅本人和网站管理员可看', `<form id="agent-profile-form" class="form-grid" data-agent="${e(id)}"><label class="field">角色称呼<input name="displayName" required maxlength="40" value="${e(profile.displayName)}" placeholder="角色的昵称"></label><label class="field">背景与性格<textarea name="bio" maxlength="1600" rows="5" placeholder="写下外貌、性格与角色的故事…">${e(profile.bio)}</textarea></label><div class="reference-grid">${profile.references.map(image => `<figure><img src="${e(image.url)}" alt="此角色的私有设定图" loading="lazy"><figcaption>${image.width} × ${image.height} · ${(image.bytes / 1024).toFixed(0)}KB ${button('remove-reference', '移除', '', 'small danger', `data-agent="${e(id)}" data-id="${e(image.id)}"`)}</figcaption></figure>`).join('')}</div><label class="field">添加一张设定图（可选）<input name="reference" type="file" accept="image/png,image/jpeg,image/webp" ${profile.references.length >= 3 ? 'disabled' : ''}><small>PNG / JPG / WebP，每张最多 4MB，最多 3 张。手机可直接从相册选择。</small></label><label class="checkbox"><input name="useReferences" type="checkbox" ${profile.useReferences ? 'checked' : ''}><span>允许在我之后发起的图片创作中参考这些设定图</span></label><p class="tiny">保存后供后续创作读取，不会自动调用模型。游戏相机继续记录游戏里的真实画面。</p><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">保存角色设定</button></div></form>`);
 }
+
+async function appearanceModal(id) {
+  const revision = authRevision, accountId = owner()?.id;
+  const data = await api(`/agents/${id}/appearance`);
+  if (authRevision !== revision || owner()?.id !== accountId) return;
+  state.appearance = data;
+  const labels = { queued: '等待同步', waiting_player: '等待本人在线', applying: '正在应用与核对', applied: '已确认生效', failed: '未执行或失败', unknown: '结果待确认' };
+  openModal('皮肤与 YSM 模型', '设定图用于创作；这里管理游戏里实际显示的外观', `<div class="notice muted">${e(data.capabilities.message)}</div><p class="tiny gap-top">普通皮肤兼容原版客户端。YSM 需公开源模型 ZIP；Java 需安装 YSM，Web 自动转换，基岩按模型支持范围投影。不会承诺所有端的动作完全一致。</p><h3 class="section-title">上传一份外观</h3><form id="appearance-upload-form" data-agent="${e(id)}" class="form-grid"><label class="field">类型<select name="kind"><option value="skin">普通皮肤 PNG</option><option value="ysm">YSM 原始模型 ZIP</option></select></label><label class="field">名称<input name="label" required maxlength="60" placeholder="例如：日常服"></label><label class="field">普通皮肤手臂<select name="variant"><option value="slim">纤细 Slim</option><option value="classic">标准 Classic</option></select></label><label class="field">外观文件<input name="file" type="file" accept=".png,.zip,image/png,application/zip" required><small>皮肤为 64×64 / 64×32 PNG；YSM ZIP 最多 8MB，需 ysm.json、模型和贴图，不支持加密 .ysm。</small></label><label class="checkbox"><input name="publicConsent" type="checkbox" required><span>我有权使用并公开展示这份外观，普通皮肤可提交签名服务生成原版材质</span></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">上传并保存</button></form><h3 class="section-title gap-top">已保存的外观</h3><div class="appearance-assets">${data.assets.map(asset => `<article class="appearance-asset">${asset.image ? `<img src="${e(asset.image)}" alt="${e(asset.label)}的皮肤展开图" width="96" height="96">` : '<span class="tag">YSM</span>'}<div><strong>${e(asset.label)}</strong><p class="tiny">${asset.kind === 'skin' ? `普通皮肤 · ${e(asset.variant)}` : `YSM · ${asset.textures.length} 张贴图`} · ${(asset.bytes / 1024).toFixed(0)}KB</p><div class="form-actions">${data.jobs.some(job => job.kind === asset.kind && ['queued','waiting_player','applying','unknown'].includes(job.state)) ? '<span class="tag">已有待确认请求</span>' : button('apply-appearance', '应用', 'check', 'small', `data-agent="${e(id)}" data-id="${e(asset.id)}"`)}${button('remove-appearance', '移除文件', '', 'small danger', `data-agent="${e(id)}" data-id="${e(asset.id)}"`)}</div></div></article>`).join('') || '<p class="tiny">还没有上传游戏外观。</p>'}</div><h3 class="section-title gap-top">应用记录</h3>${data.jobs.map(job => `<div class="token-row"><div><strong>${e(job.kind === 'skin' ? '普通皮肤' : 'YSM 模型')} · ${labels[job.state] || '待核对'}</strong><p class="tiny">${e(job.result?.message || '已保存请求，等待外观同步器处理；尚未确认换装。')}</p></div></div>`).join('') || '<p class="tiny">上传后仍需点“应用”，不会自动改动角色。</p>'}<div class="form-actions gap-top">${button('appearance-query', '刷新实际结果', 'refresh', '', `data-id="${e(id)}"`)}</div>`);
+}
+
 async function checkReferenceFile(file) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 4 * 1024 * 1024 || file.size < 24) throw Error('请选择 4MB 以内的 PNG、JPG 或 WebP 设定图');
   const url = URL.createObjectURL(file);
@@ -519,6 +529,14 @@ document.addEventListener('click', async event => {
     else if (action === 'binding') { if (detail.open) detail.close(); bindingModal(); }
     else if (action === 'new-game-agent') gameAccountModal('create');
     else if (action === 'agent-profile') await profileModal(target.dataset.id);
+    else if (action === 'agent-appearance' || action === 'appearance-query') await appearanceModal(target.dataset.id);
+    else if (action === 'apply-appearance') {
+      const id = target.dataset.agent, asset = state.appearance?.assets.find(row => row.id === target.dataset.id);
+      if (!asset) return;
+      openModal('应用这份游戏外观？', '角色需要在线；以实际同步回执为准，未确认时不会重复操作', `<form id="appearance-apply-form" data-agent="${e(id)}" data-asset="${e(asset.id)}" data-request="${crypto.randomUUID()}" class="form-grid"><p>${e(asset.label)} · ${asset.kind === 'skin' ? '普通皮肤' : 'YSM 模型'}</p>${asset.kind === 'ysm' ? `<label class="field">模型贴图<select name="texture">${asset.textures.map(row => `<option value="${e(row.name)}">${e(row.name)}</option>`).join('')}</select></label>` : ''}<div class="form-error" role="alert"></div><button class="btn primary" type="submit">确认应用到本人角色</button></form>`);
+    } else if (action === 'remove-appearance') {
+      openModal('移除未使用的外观文件？', '已有应用或待确认的文件会保留，避免破坏同步', `<form id="appearance-remove-form" data-agent="${e(target.dataset.agent)}" data-asset="${e(target.dataset.id)}"><div class="form-error" role="alert"></div><button class="btn danger" type="submit">确认移除</button></form>`);
+    }
     else if (action === 'open-account-job') accountJobModal(await api(`/jobs/${target.dataset.id}`));
     else if (action === 'remove-reference') { openModal('移除这张设定图？', '之后的新创作不再使用它，已有作品保留。', `<form id="remove-reference-form" data-agent="${e(target.dataset.agent)}" data-id="${e(target.dataset.id)}"><div class="form-error" role="alert"></div><button class="btn danger" type="submit">确认移除</button></form>`); }
     else if (action === 'claim-game-agent') gameAccountModal('claim');
@@ -539,7 +557,11 @@ document.addEventListener('click', async event => {
     else if (action === 'revoke-token') {
       openModal('撤销这个客户端凭据？', '已使用该凭据的客户端会立即失去读取权限', `<form id="revoke-token-form" data-id="${e(target.dataset.id)}" class="form-grid"><div class="form-error" role="alert"></div><div class="form-actions">${button('close-modal', '取消')}<button class="btn danger" type="submit">确认撤销</button></div></form>`);
     } else if (action === 'revoke-session') { await api(`/sessions/${target.dataset.id}`, { method: 'DELETE' }); await loadPrivate(); render(); toast('已退出该设备的网站会话'); }
-    else if (action === 'copy-token') {
+    else if (action === 'copy-invite-prompt' || action === 'copy-invite-link') {
+      const source = document.querySelector(action === 'copy-invite-link' ? '#created-invite-link' : '#created-invite-prompt');
+      try { await navigator.clipboard.writeText(source.textContent); toast(action === 'copy-invite-link' ? '接入链接已复制，可交给你的 Agent' : '完整接入提示词已复制'); }
+      catch { source.closest('details').open = true; const range = document.createRange(); range.selectNodeContents(source); const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); toast('请复制已选中的内容'); }
+    } else if (action === 'copy-token') {
       const value = document.querySelector('#created-token')?.textContent;
       if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); toast('已复制，请仅用于可信本地客户端'); }
       else toast('内网 HTTP 不支持自动复制，请长按凭据文字手动复制');
@@ -605,10 +627,21 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'remove-reference-form') {
       await api(`/agents/${form.dataset.agent}/references/${form.dataset.id}`, { method: 'DELETE' });
       await profileModal(form.dataset.agent); toast('设定图已移除');
+    } else if (form.id === 'appearance-upload-form') {
+      const id = form.dataset.agent, file = form.elements.file.files[0], kind = values.kind;
+      if (!file || file.size > (kind === 'skin' ? 128 * 1024 : 8 * 1024 * 1024)) throw Error(kind === 'skin' ? '普通皮肤请选择 128KB 以内的 PNG' : 'YSM 请选择 8MB 以内的 ZIP');
+      if (!form.elements.publicConsent.checked) throw Error('请确认这份外观可用于公开游戏展示');
+      await api(`/agents/${id}/appearance/${kind}`, { method: 'POST', headers: { 'Content-Type': kind === 'skin' ? 'image/png' : 'application/zip', 'X-Appearance-Label': encodeURIComponent(values.label), 'X-Skin-Variant': values.variant, 'X-Appearance-Consent': 'public-game-appearance' }, body: file });
+      await appearanceModal(id); toast('外观文件已保存，选择“应用”后等待实际换装结果');
+    } else if (form.id === 'appearance-apply-form') {
+      await api(`/agents/${form.dataset.agent}/appearance/apply`, { method: 'POST', body: JSON.stringify({ assetId: form.dataset.asset, requestId: form.dataset.request, ...(values.texture ? { texture: values.texture } : {}) }) });
+      await appearanceModal(form.dataset.agent); toast('换装请求已保存，请查询实际同步结果');
+    } else if (form.id === 'appearance-remove-form') {
+      await api(`/agents/${form.dataset.agent}/appearance/assets/${form.dataset.asset}`, { method: 'DELETE' }); await appearanceModal(form.dataset.agent); toast('未使用的外观文件已移除');
     } else if (form.id === 'agent-invite-form') {
       const result = await api('/agent-invites', { method: 'POST', body: JSON.stringify({ ...values, expiresInHours: Number(values.expiresInHours) }) });
       await loadPrivate();
-      openModal('邀请码已生成', '仅显示一次，请保存到可信程序的私有文件', `<div id="created-token" class="key-secret">${e(result.token)}</div><p class="tiny gap-top">${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。角色归属你；不能认领已有角色，也不能创建 Eye 或管理员账号。</p><p><a href="/agent-api.html" target="_blank" rel="noopener">Agent 接入步骤与 API</a></p><div class="form-actions">${button('copy-token', '复制邀请码', 'key', 'primary')}${button('close-modal', '已保存')}</div>`);
+      openModal('把接入链接交给你的 Agent', '链接含单次邀请，关闭后不能重新查看；只发给你信任的 Agent', `<p>${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。新角色属于你；不能认领已有角色，保留原有 Eye。</p><div class="form-actions gap-top">${button('copy-invite-link', '复制接入链接', 'link', 'primary')}${button('copy-invite-prompt', '复制完整提示词', 'book')}</div><details class="gap-top"><summary>查看接入链接与提示词</summary><div id="created-invite-link" class="key-secret">${e(result.onboarding.link)}</div><pre id="created-invite-prompt" class="code">${e(result.onboarding.prompt)}</pre></details><details class="gap-top"><summary>只复制邀请码</summary><div id="created-token" class="key-secret">${e(result.token)}</div>${button('copy-token', '复制邀请码', 'key', 'small')}</details><p class="tiny gap-top">网页含 Skill 下载和实际接入状态；没有运行 JavaScript 的 Agent 也能按说明接入。API 注册和游戏入服分别确认。</p><div class="form-actions">${button('close-modal', '已保存')}</div>`);
     } else if (form.id === 'revoke-agent-invite-form') {
       await api(`/agent-invites/${form.dataset.id}`, { method: 'DELETE' }); modal.close(); await loadPrivate(); render(); toast('邀请与 API 接入已撤销，游戏角色保留');
     } else if (form.id === 'game-account-form') {

@@ -91,6 +91,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
 
 test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {
   const ui = await screen(t); await ui.setup();
+  const copied = []; Object.defineProperty(ui.window.navigator, 'clipboard', { value: { writeText: async value => copied.push(value) } });
   ui.window.location.hash = 'connections';
   await waitFor(() => ui.document.querySelector('[data-action="new-agent-invite"]'));
   ui.click('[data-action="new-agent-invite"]');
@@ -99,6 +100,10 @@ test('an owner creates a one-time invite, closes its secret, and revokes it thro
   await waitFor(() => /^qdi_/.test(ui.document.querySelector('#created-token')?.textContent || ''));
   const secret = ui.document.querySelector('#created-token').textContent;
   assert.match(ui.document.querySelector('#modal').textContent, /不能认领已有角色/);
+  ui.click('[data-action="copy-invite-link"]'); await waitFor(() => copied.length === 1);
+  assert.ok(copied[0].endsWith('#invite=' + secret));
+  ui.click('[data-action="copy-invite-prompt"]'); await waitFor(() => copied.length === 2);
+  assert.match(copied[1], /\/mycli status/); assert.ok(copied[1].includes(copied[0]));
   ui.click('#modal [data-action="close-modal"]');
   assert.ok(!ui.document.body.textContent.includes(secret));
   assert.match(ui.document.body.textContent, /我的探索伙伴/);
@@ -373,4 +378,18 @@ test('my roles filters by ownership instead of administrator access and unbound 
   ui.click('[data-filter="all"]'); ui.click('[data-action="claim-role"]');
   assert.match(ui.document.querySelector('#modal').textContent, /账号桥尚未上线|认证桥|代理/);
   assert.equal(ui.document.querySelector('#game-account-form'), null);
+});
+
+test('game appearance is offered to the actual role owner and separates file upload from verified application', async t => {
+  const ui = await screen(t); await ui.setup(); ui.window.location.hash = 'agents';
+  await waitFor(() => ui.document.querySelector('[data-filter="all"]'));
+  assert.equal(ui.document.querySelector('[data-action="agent-appearance"]'), null);
+  const owner = ui.portal.store.ownerByName('ui-admin');
+  ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, playerUuid, 'Isolated owner proof', Date.now());
+  await ui.refresh(); ui.click('[data-action="agent-appearance"]');
+  await waitFor(() => ui.document.querySelector('#appearance-upload-form'));
+  assert.match(ui.document.querySelector('#modal').textContent, /上传不代表已换装/);
+  assert.match(ui.document.querySelector('#modal').textContent, /不支持加密/);
+  assert.ok(ui.document.querySelector('#appearance-upload-form [name="publicConsent"]').required);
+  assert.equal(ui.document.querySelector('[data-action="apply-appearance"]'), null);
 });

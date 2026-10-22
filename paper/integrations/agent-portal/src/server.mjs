@@ -14,8 +14,11 @@ import { publicMedia, servePublicMedia } from './public-media.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
-import { agentSkill, serveAgentSkill } from './agent-skill.mjs';
+import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
+import { agentOnboarding } from './agent-onboarding.mjs';
+import { Appearance } from './appearance.mjs';
+import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
@@ -53,6 +56,7 @@ export function createPortal(config, options = {}) {
   const profiles = new AgentProfiles(store);
   const emailAuth = new EmailAuth(config, store, options.emailSender);
   const agentAccess = new AgentAccess(config, store, game, accounts);
+  const appearance = new Appearance(config, store, game);
   const limits = new Map();
   function rate(key, max = 20, windowMs = 15 * 60 * 1000) {
     const now = Date.now();
@@ -131,12 +135,38 @@ export function createPortal(config, options = {}) {
       if (req.portalOrigin.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
-      if (pathname === agentSkill.url && ['GET', 'HEAD'].includes(req.method)) {
+      if (pathname === '/join') {
+        if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
+        const bytes = await fs.readFile(path.join(config.publicDir, 'join.html'));
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': bytes.length });
+        return res.end(req.method === 'HEAD' ? undefined : bytes);
+      }
+      if (skillAt(pathname) && ['GET', 'HEAD'].includes(req.method)) {
         rate('skill-download:' + digest(rateAddress(req, config)), 12, 60000);
-        await serveAgentSkill(req, res, config); return;
+        await serveAgentSkill(req, res, config, skillAt(pathname)); return;
       }
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll') {
+        if (req.headers.origin || req.headers.cookie) throw fail(403, 'APPEARANCE_WORKER_REQUIRED', '请从家庭端外观同步器调用');
+        appearance.authorize(req); rate('appearance-worker', 24, 60000);
+        return respond(res, 200, await appearance.poll(await jsonBody(req, 32768)));
+      }
+      const signingSkin = /^\/appearance\/skins\/([a-f0-9]{64})\.png$/.exec(pathname);
+      if (signingSkin && req.method === 'GET') {
+        rate('skin-signing:' + digest(rateAddress(req, config)), 30, 60000);
+        const bytes = appearance.signingImage(signingSkin[1]);
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length }); return res.end(bytes);
+      }
       if (req.method === 'GET' && pathname === '/api/v1/agent-access') return respond(res, 200, await agentAccess.capabilities());
+      if (req.method === 'GET' && pathname === '/api/v1/agent-access/invitation') {
+        if (req.headers.origin && req.headers.origin !== req.portalOrigin.origin) throw fail(403, 'INVALID_ORIGIN', '请从接入页或 Agent 本机读取邀请');
+        rate('invite-inspect:' + digest(rateAddress(req, config)), 60, 60000);
+        const token = /^Bearer (qdi_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1];
+        const invite = agentAccess.invitation(token), capability = await agentAccess.capabilities();
+        return respond(res, 200, { ...invite, game: capability.game,
+          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite: { ...invite, token }, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
+      }
       const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
@@ -203,6 +233,28 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      const appearanceRoute = /^\/api\/v1\/agents\/([a-f0-9]{24})\/appearance(?:\/(skin|ysm|apply|assets)(?:\/([a-f0-9-]{36}))?)?$/.exec(pathname);
+      if (appearanceRoute) {
+        const browser = browserAuth(req, false, isWrite);
+        const { agent } = await authorizedAgent(req, appearanceRoute[1]);
+        if (!store.ownedUuids(browser.owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '请由已绑定的角色主人管理游戏外观');
+        appearance.assertAgent(agent);
+        const action = appearanceRoute[2], id = appearanceRoute[3];
+        if (!action && req.method === 'GET') return respond(res, 200, appearance.list(agent));
+        if (['skin', 'ysm'].includes(action) && req.method === 'POST' && !id) {
+          rate('appearance-upload:' + browser.owner.id, 8);
+          const expectedType = action === 'skin' ? 'image/png' : 'application/zip';
+          if (req.headers['content-type'] !== expectedType) throw fail(415, 'APPEARANCE_TYPE', '普通皮肤请上传 PNG，YSM 请上传 ZIP');
+          let size = 0; const chunks = [];
+          for await (const chunk of req) { if ((size += chunk.length) > MAX_APPEARANCE_BYTES) throw fail(413, 'APPEARANCE_SIZE', '外观文件不能超过 8MB'); chunks.push(chunk); }
+          let label; try { label = decodeURIComponent(req.headers['x-appearance-label'] || ''); } catch { throw fail(400, 'APPEARANCE_LABEL', '外观名称格式不正确'); }
+          return respond(res, 201, appearance.upload(agent, browser.owner, action, Buffer.concat(chunks), { label, variant: req.headers['x-skin-variant'], consent: req.headers['x-appearance-consent'] }));
+        }
+        if (action === 'apply' && req.method === 'POST') { rate('appearance-apply:' + browser.owner.id, 8); return respond(res, 202, appearance.apply(agent, browser.owner, await jsonBody(req))); }
+        if (action === 'assets' && id && req.method === 'GET') { const bytes = appearance.image(agent, id); res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length }); return res.end(bytes); }
+        if (action === 'assets' && id && req.method === 'DELETE') return respond(res, 200, appearance.remove(agent, browser.owner, id));
+        throw fail(405, 'METHOD_NOT_ALLOWED', '请使用角色的外观管理入口');
+      }
       const profileRoute = /^\/api\/v1\/agents\/([a-f0-9]{24})\/(profile|references)(?:\/([a-f0-9-]{36}))?$/.exec(pathname);
       if (profileRoute) {
         if (isWrite) browserAuth(req);
@@ -229,7 +281,7 @@ export function createPortal(config, options = {}) {
         throw fail(405, 'METHOD_NOT_ALLOWED', '此角色设定操作不支持这个方法');
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.6.0' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.7.0' });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
@@ -353,7 +405,8 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/agent-invites') return respond(res, 200, agentAccess.list(browserAuth(req).owner));
       if (req.method === 'POST' && pathname === '/api/v1/agent-invites') {
         const { owner } = browserAuth(req, false, true); rate('agent-invite:' + owner.id, 20);
-        return respond(res, 201, agentAccess.issue(owner, await jsonBody(req)));
+        const invite = agentAccess.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();
+        return respond(res, 201, { ...invite, onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
       }
       const agentInvite = /^\/api\/v1\/agent-invites\/([a-f0-9-]{36})$/.exec(pathname);
       if (agentInvite && req.method === 'DELETE') return respond(res, 200, agentAccess.revoke(browserAuth(req, false, true).owner, agentInvite[1]));
@@ -499,5 +552,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

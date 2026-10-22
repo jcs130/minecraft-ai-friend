@@ -4,6 +4,7 @@ import { offlineUuid } from './game-accounts.mjs';
 import { UUID } from './game-data.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
+import { agentSkill } from './agent-skill.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -31,11 +32,21 @@ export class AgentAccess {
     return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: true,
       ownership: 'inviter', createsWebsiteOwner: false, game: await this.accounts.capabilities(),
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
+      skill: agentSkill, joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
       endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session' },
       help: '/agent-api.html' };
   }
   enabled() { if (this.config.agentAccess.enabled !== true) throw fail(403, 'AGENT_ACCESS_DISABLED', '邀请码接入暂未开放，请联系角色主人'); }
+  invitation(token) {
+    this.enabled();
+    const row = typeof token === 'string' && /^qdi_[A-Za-z0-9_-]{43}$/.test(token)
+      ? this.store.db.prepare('SELECT * FROM agent_invites WHERE token_hash=?').get(digest(token)) : null;
+    if (!row) throw fail(401, 'INVITE_INVALID', '邀请链接无效，请向角色主人申请新邀请');
+    const { username, state, expiresAt } = publicInvite(row);
+    // Reading a link never consumes it, logs in, or exposes the owner's name.
+    return { schemaVersion: 1, username, state, expiresAt };
+  }
   list(owner) {
     return { invites: this.store.db.prepare('SELECT * FROM agent_invites WHERE owner_id=? ORDER BY created_at DESC LIMIT 50').all(owner.id).map(row => ({ ...publicInvite(row),
       agent: this.store.db.prepare('SELECT name FROM agent_clients WHERE invite_id=?').get(row.id)?.name || null })) };

@@ -30,6 +30,7 @@ catch (error) {
 await lock.writeFile(String(process.pid));
 const store = new Store(config.dataDir), game = new GameData(config, store.salt), world = new WorldCatalog(config, game, store);
 const photoReader = new PhotoReader(config), uploaded = new Set();
+let appearanceTimer, appearanceBusy, lastAppearanceReport;
 let sequence = 0, stopping = false, lastReport;
 try { sequence = JSON.parse(await fs.readFile(stateFile, 'utf8')).sequence; } catch { }
 const report = text => { if (lastReport !== text) { console.log(text); lastReport = text; } };
@@ -40,6 +41,18 @@ async function persistSequence() {
 }
 try {
   if (!Number.isSafeInteger(sequence) || sequence < 0) throw Error('Inspect the synchronization sequence file');
+  if (settings.appearanceWorkerConfig && !process.argv.includes('--dry-run')) {
+    if (!path.isAbsolute(settings.appearanceWorkerConfig)) throw Error('Use an absolute private appearance configuration');
+    const appearanceConfig = JSON.parse(await fs.readFile(settings.appearanceWorkerConfig, 'utf8'));
+    if (new URL(appearanceConfig.endpoint).origin !== endpoint.origin) throw Error('Appearance and snapshot destinations must match');
+    const { AppearanceWorker } = await import('./appearance-worker.mjs');
+    const worker = await new AppearanceWorker(appearanceConfig).initialize();
+    const tick = () => {
+      if (appearanceBusy || stopping) return;
+      appearanceBusy = worker.poll().then(() => '外观同步已连接。', () => '外观同步暂不可用，保留原请求，稍后查询。').then(text => { if (text !== lastAppearanceReport) { console.log(text); lastAppearanceReport = text; } }).finally(() => { appearanceBusy = null; });
+    };
+    tick(); appearanceTimer = setInterval(tick, 5000);
+  }
   do {
     try {
       sequence++; await persistSequence();
@@ -74,4 +87,4 @@ try {
     const until = Date.now() + Math.max(10000, Number(settings.intervalMs) || 15000);
     while (!stopping && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 500));
   } while (!stopping);
-} finally { store.close(); await lock.close(); await fs.unlink(lockFile); }
+} finally { clearInterval(appearanceTimer); if (appearanceBusy) await appearanceBusy; store.close(); await lock.close(); await fs.unlink(lockFile); }
