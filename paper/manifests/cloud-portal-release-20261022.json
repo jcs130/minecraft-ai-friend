@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-22",
+  "component": "cloud-agent-portal",
+  "version": "0.4.2",
+  "status": "deployed",
+  "url": "https://mc.kangqiang.site",
+  "commit": "fe7a0370ceed54c4f411acc1682d92bb3dcae0e6",
+  "image": "sha256:ebd48048a8f4c410fd7f50718312469fa844635f1f0e96d6e9498e25f0a9019a",
+  "primaryCharacter": "CorMy",
+  "visuals": "world scenes, not isolated reference sheets",
+  "javascriptModules": 28,
+  "tests": 63,
+  "publishedPhotos": 3,
+  "originalPhotoBytesVerified": true,
+  "videoSeconds": 128.583333,
+  "actualBrowserPlaybackSeconds": 104,
+  "mobileBreakpoint": 390,
+  "phoneHardwareTested": false,
+  "accountsPreserved": true,
+  "gameRestarted": false,
+  "authBridgeEnabled": false,
+  "liveSources": 0,
+  "temporaryUploadRemoved": true,
+  "rollback": "Restart the retained previous website image against the current persistent database; preserve newer accounts and photos. No game rollback.",
+  "publicVerification": {
+    "checkedAt": "2026-10-22T08:12:22.233127+00:00",
+    "website": "https://mc.kangqiang.site",
+    "version": "0.4.2",
+    "https": true,
+    "originalRootSiteAvailable": true,
+    "playersOnline": 4,
+    "publishedPhotos": [
+      {
+        "title": "cormy_home",
+        "bytes": 628182,
+        "originalPngPreserved": true,
+        "sha256": "5075ce8a6fbb96d1e1ff49f38777fe43b1832df2b942cb0fe8f9ebcf1ef8ca15"
+      },
+      {
+        "title": "生活_1020_113147",
+        "bytes": 867366,
+        "originalPngPreserved": true,
+        "sha256": "0b773462724ec5b81ef26a9fa7f73682ab76a809d35bbc42c0113e6a85dc0851"
+      },
+      {
+        "title": "绯红林海西向实拍",
+        "bytes": 1469048,
+        "originalPngPreserved": true,
+        "sha256": "ffbf6d42a766567e88cb1544509ab0766f32f6f47dd487e1f95460034d80b9c6"
+      }
+    ],
+    "selectedMedia": [
+      {
+        "file": "intro-720-native-voice-no-added-bgm.mp4",
+        "publicVerified": true
+      },
+      {
+        "file": "poster-cormy-adventure.png",
+        "publicVerified": true
+      },
+      {
+        "file": "afternoon-by-the-river.webp",
+        "publicVerified": true
+      },
+      {
+        "file": "lantern-village-960.webp",
+        "publicVerified": true
+      },
+      {
+        "file": "lantern-village.webp",
+        "publicVerified": true
+      },
+      {
+        "file": "morning-in-the-fields.webp",
+        "publicVerified": true
+      },
+      {
+        "file": "together-into-ruins.webp",
+        "publicVerified": true
+      }
+    ],
+    "privateDataRejected": true,
+    "gameAccountBridgeEnabled": false,
+    "liveChannelCount": 0
+  }
+}
