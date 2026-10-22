@@ -84,11 +84,22 @@ public final class HeadlessRuntime {
     }
     static void tick(MinecraftServer server) {
         HeadlessRuntime r=INSTANCE;if(r==null||r.server!=server)return;
+        // The official dispatcher renews pads only while the Minecraft owner is
+        // online. External owners need not have a Minecraft connection. Reuse
+        // the same bounded, self-expiring native tickets for our exact bodies.
+        r.refreshManagedPads();
         long until=System.nanoTime()+2_000_000;
         for(int n=0;n<8&&System.nanoTime()<until;n++) {Runnable job=r.requests.poll();if(job==null)break;job.run();}
         for(Runnable job:List.copyOf(r.nativeControls.values()))job.run();
         for(HeadlessBrain brain:List.copyOf(r.brains.values()))brain.tick();
         if(++r.ticks%20==0){r.bedrockMenus.prune(System.currentTimeMillis());r.lifecycle();}
+    }
+    void refreshManagedPads() {
+        for(var entry:bodies.entrySet()) {
+            if(!entry.getValue().get("wantOnline").getAsBoolean())continue;
+            NumenPlayer body=NumenPlayer.findByUuid(server,entry.getKey());
+            if(body!=null&&body.isAlive()&&!body.isRemoved())CompanionChunkLoader.refresh(body);
+        }
     }
     static void stop() {
         HeadlessRuntime r=INSTANCE;if(r==null)return;

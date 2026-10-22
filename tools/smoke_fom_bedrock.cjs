@@ -272,9 +272,12 @@ async function main(){
   const modelId=motionTest?'touhou_little_maid:hakurei_reimu':'touhou_little_maid:hourai_doll'
   const definition=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/modpack-catalog.json'))).models.find(m=>m.modelId===modelId)
   assert(definition)
+  // Soul-slab fixtures may already have spawned this same model. Historic
+  // packets belong to a different actor and cannot prove this fixture moved.
+  const modelStart=report.models?.length||0
   await ownConsole('execute at b_FomBedrockQA run summon touhou_little_maid:maid ~2 ~ ~2 {model_id:"'+modelId+'",Tags:["'+temporaryMaidTag+'"],NoAI:'+(motionTest?'1b':'0b')+',PersistenceRequired:1b}')
-  await wait(()=>report.models?.some(m=>m.identifier===definition.bedrockIdentifier))
-  const model=report.models.find(m=>m.identifier===definition.bedrockIdentifier)
+  await wait(()=>report.models?.slice(modelStart).some(m=>m.identifier===definition.bedrockIdentifier))
+  const model=report.models.slice(modelStart).find(m=>m.identifier===definition.bedrockIdentifier)
   check('real native maid arrives as her own original custom model',!!model)
   await ownConsole('execute at b_FomBedrockQA run tp @e[tag='+temporaryMaidTag+',limit=1] ~5 ~ ~2')
   await wait(()=>report.moves?.some(m=>m.id===model.runtimeId&&Math.abs(m.position.x-model.position.x)>1))

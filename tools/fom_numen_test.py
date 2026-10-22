@@ -41,6 +41,14 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'private port'):self.policy()
     def test_production_cannot_expose_arbitrary_admin_port(self):
         with self.assertRaisesRegex(ValueError,'private port'):numen.policy(self.server,self.selected,self.mods,production=True)
+    def test_exactly_one_pinned_host_supports_reviewed_upgrade_and_rollback(self):
+        core={n:h for n,h in numen.FILES.items() if not n.startswith('maw_numen_server-')}
+        for name,digest in numen.HOSTS.items():
+            self.mods={**core,name:digest};self.policy()
+        self.mods={**core,**numen.HOSTS}
+        with self.assertRaises(ValueError):self.policy()
+        self.mods={**core,'maw_numen_server-0.2.1.jar':'modified'}
+        with self.assertRaises(ValueError):self.policy()
 
 class GameplayReadinessTests(unittest.TestCase):
     def test_unselected_extension_does_not_impose_gameplay_catalog(self):
@@ -48,7 +56,8 @@ class GameplayReadinessTests(unittest.TestCase):
     def test_installed_extension_must_be_detected_and_expose_its_base_actions(self):
         files={**numen.FILES,'maw_numen_mods-0.1.0.jar':'locked'}
         self.assertFalse(all(numen.gameplay_checks(files,{}).values()))
-        self.assertTrue(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':17}).values()))
+        self.assertFalse(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':17}).values()))
+        self.assertTrue(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':17,'managedBodyChunkLoading':True}).values()))
     def test_colony_installation_cannot_pass_with_only_the_base_catalog(self):
         files={'maw_numen_mods-0.1.0.jar':'locked','minecolonies-1.1.1319-1.21.1.jar':'locked'}
         self.assertFalse(all(numen.gameplay_checks(files,{'nativeModAccess':True,'nativeModOperationCount':17}).values()))

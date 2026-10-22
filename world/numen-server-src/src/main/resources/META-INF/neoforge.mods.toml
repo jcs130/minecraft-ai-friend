@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="maw_numen_server"
-version="0.2.0"
+version="0.2.1"
 displayName="My Agent World Numen Server"
 description='''Authenticated server-resident Numen bodies, MCP, event acknowledgement and hosted model profiles. No client mod required.'''
 [[mixins]]

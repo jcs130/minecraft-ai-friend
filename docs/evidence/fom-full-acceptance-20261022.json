@@ -1,0 +1,2031 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "scope": "current FOM full capability inventory and selected end-to-end acceptance; not all workflows passed",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.250",
+  "productionJarCount": 112,
+  "runtimeModuleCount": 135,
+  "nativeDedicatedOperations": 35,
+  "officialNumenVersion": "0.1.4.1",
+  "productionHost": "0.2.0",
+  "candidateHost": "0.2.1",
+  "candidateHostSha256": "11a6dbabd2117b1bb94e4b5ff24ced2de57495b7c580614e7786df89134fc5a7",
+  "productionUnchanged": {
+    "sameMainOwnerRunId": true,
+    "same112JarHashes": true,
+    "noConfigOrWorldMaintenance": true,
+    "noPublicPortChange": true,
+    "noModelLoopStarted": true
+  },
+  "overallFullAcceptancePassed": false,
+  "allModGameplayVerified": false,
+  "completeSceneParityVerified": false,
+  "readyForUnrestrictedAgentModGameplay": false,
+  "productionFixDeployed": false,
+  "modelRequests": 0,
+  "autonomousModelTaskSuccessMeasured": false,
+  "tests": {
+    "python": 42,
+    "nodeWorldAdapter": 25,
+    "unifiedLiveAdapterChecks": 5,
+    "frozenSdkAndWebGlChecks": 4,
+    "bedrockUdpChecks": 37,
+    "actualPhoneTested": false,
+    "actualXboxValidatedInQa": false,
+    "moddedJavaGuiTestedThisRun": false
+  },
+  "nativeProofs": {
+    "builderCompletedLevel": 1,
+    "builderWorkOrderCountAfter": 0,
+    "maidCropMatureToReplanted": true,
+    "huskHealthBefore": 20,
+    "huskHealthAfter": 12.095999717712,
+    "spellManaConsumed": true,
+    "realMillingOutput": "create:wheat_flour",
+    "realCuttingOutput": "farmersdelight:minced_beef",
+    "bodyIdentityAndFullComponentsRestored": true
+  },
+  "coverageCounts": {
+    "gameplay_unverified": 46,
+    "dependency_or_service_loaded": 78,
+    "partial": 7,
+    "not_retested_prior_evidence_exists": 1,
+    "failed_workflow_root_cause_open": 2,
+    "core_partial": 1
+  },
+  "modules": [
+    {
+      "id": "aeroengineering",
+      "name": "AeroEngine",
+      "productionVersion": "1.0.2",
+      "candidateVersion": "1.0.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "aeronautics",
+      "name": "Create Aeronautics",
+      "productionVersion": "1.3.2",
+      "candidateVersion": "1.3.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "aeronautics_bundled",
+      "name": "Create Aeronautics",
+      "productionVersion": "1.3.2",
+      "candidateVersion": "1.3.2",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "aeroworks",
+      "name": "Create: Aeroworks",
+      "productionVersion": "1.5.0",
+      "candidateVersion": "1.5.0",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "apollib",
+      "name": "Apollib",
+      "productionVersion": "1.2.0",
+      "candidateVersion": "1.2.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "appleskin",
+      "name": "AppleSkin",
+      "productionVersion": "3.0.9+mc1.21",
+      "candidateVersion": "3.0.9+mc1.21",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "architectury",
+      "name": "Architectury",
+      "productionVersion": "13.0.6",
+      "candidateVersion": "13.0.6",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "azimuth",
+      "name": "Azimuth",
+      "productionVersion": "1.4.9",
+      "candidateVersion": "1.4.9",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "baguettelib",
+      "name": "BaguetteLib",
+      "productionVersion": "2.0.6",
+      "candidateVersion": "2.0.6",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "balm",
+      "name": "Balm",
+      "productionVersion": "21.0.65",
+      "candidateVersion": "21.0.65",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "bellsandwhistles",
+      "name": "Create: Bells & Whistles",
+      "productionVersion": "0.4.7-1.21.1",
+      "candidateVersion": "0.4.7-1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "bits_n_bobs",
+      "name": "Create Bits 'n' Bobs",
+      "productionVersion": "2.3.5",
+      "candidateVersion": "2.3.5",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "blockui",
+      "name": "UI Library Mod",
+      "productionVersion": "1.0.209-1.21.1",
+      "candidateVersion": "1.0.209-1.21.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "cmpackagecouriers",
+      "name": "Create More: Package Couriers",
+      "productionVersion": "2.3.0",
+      "candidateVersion": "2.3.0",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "collective",
+      "name": "Collective",
+      "productionVersion": "8.39",
+      "candidateVersion": "8.39",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "conditional_mixin",
+      "name": "conditional mixin",
+      "productionVersion": "0.6.4",
+      "candidateVersion": "0.6.4",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "copycats",
+      "name": "Create: Copycats+",
+      "productionVersion": "3.0.9+mc.1.21.1-neoforge",
+      "candidateVersion": "3.0.9+mc.1.21.1-neoforge",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "coroutil",
+      "name": "CoroUtil",
+      "productionVersion": "1.21.0-1.3.8",
+      "candidateVersion": "1.21.0-1.3.8",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "cosmonauticsdeepair",
+      "name": "Cosmonautics Deep Air",
+      "productionVersion": "1.0.2",
+      "candidateVersion": "1.0.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create",
+      "name": "Create",
+      "productionVersion": "6.0.10",
+      "candidateVersion": "6.0.10",
+      "advertisedSupport": "native_extension",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "real hopper-fed powered milling to wheat_flour"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_abyss",
+      "name": "Create Abyss",
+      "productionVersion": "1.0.0",
+      "candidateVersion": "1.0.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_connected",
+      "name": "Create: Connected",
+      "productionVersion": "1.3.3-mc1.21.1",
+      "candidateVersion": "1.3.3-mc1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_copper_and_zinc",
+      "name": "Create: Copper and Zinc",
+      "productionVersion": "2.0.0",
+      "candidateVersion": "2.0.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_dragons_plus",
+      "name": "Create: Dragons Plus",
+      "productionVersion": "1.11.7b",
+      "candidateVersion": "1.11.7b",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_easy_structures",
+      "name": "Create: Easy Structures",
+      "productionVersion": "0.2",
+      "candidateVersion": "0.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_enchantment_industry",
+      "name": "Create: Enchantment Industry",
+      "productionVersion": "2.5.3b",
+      "candidateVersion": "2.5.3b",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_factory_abstractions",
+      "name": "Create Factory Abstractions",
+      "productionVersion": "1.4.9",
+      "candidateVersion": "1.4.9",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_high_seas",
+      "name": "Create High Seas",
+      "productionVersion": "0.1.1",
+      "candidateVersion": "0.1.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_power_loader",
+      "name": "Create: Power Loader",
+      "productionVersion": "2.0.5-mc1.21.1",
+      "candidateVersion": "2.0.5-mc1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_radar",
+      "name": "Create: Radars",
+      "productionVersion": "0.4.9.4-1.21.1",
+      "candidateVersion": "0.4.9.4-1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_sophback_compat",
+      "name": "Create Oh The Biomes We ve Gone Compat",
+      "productionVersion": "0.0NONE",
+      "candidateVersion": "0.0NONE",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_submarine",
+      "name": "Create Deep Seas",
+      "productionVersion": "3.3.0",
+      "candidateVersion": "3.3.0",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_synthetic_pressure",
+      "name": "Create: Synthetic Pressure",
+      "productionVersion": "1.0.1",
+      "candidateVersion": "1.0.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "create_tweaked_controllers",
+      "name": "Create Tweaked Controllers",
+      "productionVersion": "1.21.1-1.2.7",
+      "candidateVersion": "1.21.1-1.2.7",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createbigcannons",
+      "name": "Create Big Cannons",
+      "productionVersion": "5.11.7",
+      "candidateVersion": "5.11.7",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createcasing",
+      "name": "Create Encased",
+      "productionVersion": "1.9.0-ht3",
+      "candidateVersion": "1.9.0-ht3",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createcontraptionterminals",
+      "name": "Create Contraption Terminals",
+      "productionVersion": "1.4.0",
+      "candidateVersion": "1.4.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createdieselgenerators",
+      "name": "Create Diesel Generators",
+      "productionVersion": "1.21.1-1.3.15",
+      "candidateVersion": "1.21.1-1.3.15",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createendertransmission",
+      "name": "Create Ender Transmission",
+      "productionVersion": "2.1.1-1.21.1",
+      "candidateVersion": "2.1.1-1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createfactorycontroller",
+      "name": "Create: Factory Controller",
+      "productionVersion": "1.2.1-neoforge-1.21.1",
+      "candidateVersion": "1.2.1-neoforge-1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createfastschematiccannon",
+      "name": "Create: Fast Schematic Cannon",
+      "productionVersion": "2.6.1-neoforge",
+      "candidateVersion": "2.6.1-neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createhigherlogisticspatch",
+      "name": "Create: Higher Logistics Patch",
+      "productionVersion": "1.0.0",
+      "candidateVersion": "1.0.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createlogisticscontrol",
+      "name": "Create: Logistics Control",
+      "productionVersion": "1.0.1",
+      "candidateVersion": "1.0.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createoreexcavation",
+      "name": "Create Ore Excavation",
+      "productionVersion": "1.6.8",
+      "candidateVersion": "1.6.8",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createpropulsion",
+      "name": "Create Propulsion: Simulated",
+      "productionVersion": "1.1.5",
+      "candidateVersion": "1.1.5",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createrailwaysnavigator",
+      "name": "Create Railways Navigator",
+      "productionVersion": "1.21.1-beta-0.9.1-C6",
+      "candidateVersion": "1.21.1-beta-0.9.1-C6",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "createtrackmap",
+      "name": "Create Track Map",
+      "productionVersion": "2.1",
+      "candidateVersion": "2.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "creativecore",
+      "name": "CreativeCore",
+      "productionVersion": "2.13.44",
+      "candidateVersion": "2.13.44",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "curios",
+      "name": "Curios API",
+      "productionVersion": "9.5.1+1.21.1",
+      "candidateVersion": "9.5.1+1.21.1",
+      "advertisedSupport": "native_extension",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "real spellbook slot",
+        "full-component CAS rejection",
+        "same-body equipment restore"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "domum_ornamentum",
+      "name": "Domum Ornamentum",
+      "productionVersion": "1.0.231",
+      "candidateVersion": "1.0.231",
+      "advertisedSupport": "native_extension",
+      "acceptance": "not_retested_prior_evidence_exists",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "dragonlib",
+      "name": "DragonLib",
+      "productionVersion": "1.21.1-beta-3.0.28",
+      "candidateVersion": "1.21.1-beta-3.0.28",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "effortless",
+      "name": "Effortless Structure",
+      "productionVersion": "3.4.0",
+      "candidateVersion": "3.4.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "emi",
+      "name": "EMI",
+      "productionVersion": "1.1.24+1.21.1+neoforge",
+      "candidateVersion": "1.1.24+1.21.1+neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "emi_loot",
+      "name": "EMI Loot",
+      "productionVersion": "0.7.9+1.21+neoforge",
+      "candidateVersion": "0.7.9+1.21+neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "emi_ores",
+      "name": "EMI Ores",
+      "productionVersion": "1.3+1.21.1+neoforge",
+      "candidateVersion": "1.3+1.21.1+neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "explorerscompass",
+      "name": "Explorer's Compass",
+      "productionVersion": "1.21.1-3.4.0-neoforge",
+      "candidateVersion": "1.21.1-3.4.0-neoforge",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "fancymenu",
+      "name": "FancyMenu",
+      "productionVersion": "3.4.6",
+      "candidateVersion": "3.4.6",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "farmersdelight",
+      "name": "Farmer's Delight",
+      "productionVersion": "1.3.4",
+      "candidateVersion": "1.3.4",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "real knife cutting to minced_beef",
+        "Bedrock native cooking-pot insert/retrieve"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "ferritecore",
+      "name": "Ferrite Core",
+      "productionVersion": "7.0.3",
+      "candidateVersion": "7.0.3",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "flywheel",
+      "name": "Flywheel",
+      "productionVersion": "1.0.6",
+      "candidateVersion": "1.0.6",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "forgeconfigapiport",
+      "name": "Forge Config API Port",
+      "productionVersion": "21.1.1",
+      "candidateVersion": "21.1.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "functionalstorage",
+      "name": "Functional Storage",
+      "productionVersion": "1.21.1-1.5.7",
+      "candidateVersion": "1.21.1-1.5.7",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "failed_workflow_root_cause_open",
+      "verifiedWorkflows": [
+        "direct Numen right-click did not deposit fixture stack"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "fusion",
+      "name": "Fusion",
+      "productionVersion": "1.2.12",
+      "candidateVersion": "1.2.12",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "fzzy_config",
+      "name": "Fzzy Config",
+      "productionVersion": "0.7.6+1.21+neoforge",
+      "candidateVersion": "0.7.6+1.21+neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "geckolib",
+      "name": "GeckoLib 4",
+      "productionVersion": "4.9.3",
+      "candidateVersion": "4.9.3",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "gravestone",
+      "name": "Gravestone Mod",
+      "productionVersion": "1.21.1-1.0.40",
+      "candidateVersion": "1.21.1-1.0.40",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "gravestonecurioscompat",
+      "name": "Gravestone Curios Compatibility",
+      "productionVersion": "4.0.2",
+      "candidateVersion": "4.0.2",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "interiors",
+      "name": "Create: Interiors",
+      "productionVersion": "0.6.1",
+      "candidateVersion": "0.6.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "irons_lib",
+      "name": "Iron's Lib",
+      "productionVersion": "1.21.1-2.2.0",
+      "candidateVersion": "1.21.1-2.2.0",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "irons_spellbooks",
+      "name": "Iron's Spells 'n Spellbooks",
+      "productionVersion": "1.21.1-3.16.3",
+      "candidateVersion": "1.21.1-3.16.3",
+      "advertisedSupport": "native_extension",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "real spellbook equipment",
+        "firebolt target health 20 -> 12.095999717712",
+        "native mana consumed"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "jade",
+      "name": "Jade",
+      "productionVersion": "15.10.6+neoforge",
+      "candidateVersion": "15.10.6+neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "jadeaddons",
+      "name": "Jade Addons",
+      "productionVersion": "6.1.1+neoforge",
+      "candidateVersion": "6.1.1+neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "jei",
+      "name": "Just Enough Items",
+      "productionVersion": "19.43.0.392",
+      "candidateVersion": "19.43.0.392",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "konkrete",
+      "name": "Konkrete",
+      "productionVersion": "1.9.9",
+      "candidateVersion": "1.9.9",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "kotlinforforge",
+      "name": "Kotlin For Forge",
+      "productionVersion": "5.12.0",
+      "candidateVersion": "5.12.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "kuma_api",
+      "name": "KumaAPI",
+      "productionVersion": "21.0.8",
+      "candidateVersion": "21.0.8",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "lithium",
+      "name": "Lithium",
+      "productionVersion": "0.15.4+mc1.21.1",
+      "candidateVersion": "0.15.4+mc1.21.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "lithostitched",
+      "name": "Lithostitched",
+      "productionVersion": "1.8.0+beta4",
+      "candidateVersion": "1.8.0+beta4",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "maw_fom_support",
+      "name": "My Agent World · FOM Server Support",
+      "productionVersion": "0.2.0",
+      "candidateVersion": "0.2.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "maw_numen_compat",
+      "name": "My Agent World Numen Optional Client",
+      "productionVersion": "0.1.0",
+      "candidateVersion": "0.1.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "maw_numen_mods",
+      "name": "My Agent World Numen Gameplay Extensions",
+      "productionVersion": "0.1.0",
+      "candidateVersion": "0.1.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "maw_numen_server",
+      "name": "My Agent World Numen Server",
+      "productionVersion": "0.2.0",
+      "candidateVersion": "0.2.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mcwifipnp",
+      "name": "LAN World Plug-n-Play",
+      "productionVersion": "1.9.0",
+      "candidateVersion": "1.9.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "melody",
+      "name": "Melody",
+      "productionVersion": "1.0.10",
+      "candidateVersion": "1.0.10",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "minecolonies",
+      "name": "MineColonies",
+      "productionVersion": "1.1.1319-1.21.1",
+      "candidateVersion": "1.1.1319-1.21.1",
+      "advertisedSupport": "native_extension",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "owned town and spaced huts",
+        "real builder level-one completion",
+        "native material and shovel delivery"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "minecraft",
+      "name": "Minecraft",
+      "productionVersion": "1.21.1",
+      "candidateVersion": "1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "core_partial",
+      "verifiedWorkflows": [
+        "survival craft/dig/place/eat",
+        "exact action ID reconciliation",
+        "same-body restore"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mixauth",
+      "name": "MixAuth",
+      "productionVersion": "1.3.3",
+      "candidateVersion": "1.3.3",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mixauth_tests",
+      "name": "MixAuth GameTest Framework",
+      "productionVersion": "1.0.0",
+      "candidateVersion": "1.0.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "modernfix",
+      "name": "ModernFix",
+      "productionVersion": "5.27.24+mc1.21.1",
+      "candidateVersion": "5.27.24+mc1.21.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mr_create_crimsiterecipe",
+      "name": "Create: Crimsite Recipe",
+      "productionVersion": "1",
+      "candidateVersion": "1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mr_create_glowstonedustrecipe",
+      "name": "Create: Glowstone Dust Recipe",
+      "productionVersion": "1",
+      "candidateVersion": "1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mr_create_ochrumrecipe",
+      "name": "Create: Ochrum Recipe",
+      "productionVersion": "1",
+      "candidateVersion": "1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mr_create_redstonerecipe",
+      "name": "Create: Redstone Recipe",
+      "productionVersion": "1",
+      "candidateVersion": "1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "mru",
+      "name": "MRU",
+      "productionVersion": "1.0.33+1.21.1",
+      "candidateVersion": "1.0.33+1.21.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "multipiston",
+      "name": "Multi-Piston",
+      "productionVersion": "1.2.58-1.21.1",
+      "candidateVersion": "1.2.58-1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "naturescompass",
+      "name": "Nature's Compass",
+      "productionVersion": "1.21.1-3.4.0-neoforge",
+      "candidateVersion": "1.21.1-3.4.0-neoforge",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "neoforge",
+      "name": "NeoForge",
+      "productionVersion": "21.1.250",
+      "candidateVersion": "21.1.250",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "numen",
+      "name": "Numen",
+      "productionVersion": "0.1.4.1",
+      "candidateVersion": "0.1.4.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "numen_api",
+      "name": "Numen",
+      "productionVersion": "0.1.4.1",
+      "candidateVersion": "0.1.4.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "offroad",
+      "name": "Create Offroad",
+      "productionVersion": "1.3.2",
+      "candidateVersion": "1.3.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "openpartiesandclaims",
+      "name": "Open Parties and Claims",
+      "productionVersion": "0.30.3",
+      "candidateVersion": "0.30.3",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "packetfixer",
+      "name": "PacketFixer",
+      "productionVersion": "3.3.1",
+      "candidateVersion": "3.3.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "petrolpark",
+      "name": "Petrolpark's Library",
+      "productionVersion": "1.5.1",
+      "candidateVersion": "1.5.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "petrolsparts",
+      "name": "Petrol's Parts",
+      "productionVersion": "1.3.0-snapshot-2",
+      "candidateVersion": "1.3.0-snapshot-2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "platform",
+      "name": "Platform",
+      "productionVersion": "1.3.3",
+      "candidateVersion": "1.3.3",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "playeranimator",
+      "name": "Player Animator",
+      "productionVersion": "2.0.4+1.21.1",
+      "candidateVersion": "2.0.4+1.21.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "ponder",
+      "name": "Ponder",
+      "productionVersion": "1.0.82+mc1.21.1",
+      "candidateVersion": "1.0.82+mc1.21.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "railways",
+      "name": "Create: Steam 'n' Rails 1.21.1",
+      "productionVersion": "0.3.0-beta.2+neoforge-mc1.21.1",
+      "candidateVersion": "0.3.0-beta.2+neoforge-mc1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "rhino",
+      "name": "Rhino",
+      "productionVersion": "2101.2.8-build.91",
+      "candidateVersion": "2101.2.8-build.91",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "ritchiesprojectilelib",
+      "name": "Ritchie's Projectile Library",
+      "productionVersion": "2.1.2",
+      "candidateVersion": "2.1.2",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "sable",
+      "name": "Sable",
+      "productionVersion": "2.0.5",
+      "candidateVersion": "2.0.5",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "sablecompanion",
+      "name": "Sable Companion",
+      "productionVersion": "1.6.0",
+      "candidateVersion": "1.6.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "sablereplay",
+      "name": "Sable Replay Compat",
+      "productionVersion": "1.0.0",
+      "candidateVersion": "1.0.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "simplebackups",
+      "name": "Simple Backups",
+      "productionVersion": "1.21-4.0.30",
+      "candidateVersion": "1.21-4.0.30",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "simulated",
+      "name": "Create Simulated",
+      "productionVersion": "1.3.2",
+      "candidateVersion": "1.3.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "smart_npc",
+      "name": "Smart NPC",
+      "productionVersion": "2.0.1",
+      "candidateVersion": "2.0.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "sophisticatedbackpacks",
+      "name": "Sophisticated Backpacks",
+      "productionVersion": "3.25.77",
+      "candidateVersion": "3.25.77",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "real backpack insert/retrieve with exact counts"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "sophisticatedcore",
+      "name": "Sophisticated Core",
+      "productionVersion": "1.4.87",
+      "candidateVersion": "1.4.87",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "spark",
+      "name": "spark",
+      "productionVersion": "1.10.124",
+      "candidateVersion": "1.10.124",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "structurize",
+      "name": "Structurize",
+      "productionVersion": "1.0.832-1.21.1",
+      "candidateVersion": "1.0.832-1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "struts",
+      "name": "Strut Your Stuff",
+      "productionVersion": "1.3.1",
+      "candidateVersion": "1.3.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "submarinefix",
+      "name": "Create: Deep Seas - Lava Fix",
+      "productionVersion": "1.0.1",
+      "candidateVersion": "1.0.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "titanium",
+      "name": "Titanium",
+      "productionVersion": "4.0.45",
+      "candidateVersion": "4.0.45",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "toms_storage",
+      "name": "Tom's Simple Storage Mod",
+      "productionVersion": "2.4.2",
+      "candidateVersion": "2.4.2",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "failed_workflow_root_cause_open",
+      "verifiedWorkflows": [
+        "terminal menu opened; Numen partial-stack put refused"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "touhou_little_maid",
+      "name": "Touhou Little Maid",
+      "productionVersion": "1.5.3-neoforge+mc1.21.1",
+      "candidateVersion": "1.5.3-neoforge+mc1.21.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "partial",
+      "verifiedWorkflows": [
+        "owned soul-slab spawn",
+        "name-tag consumption",
+        "genuine maid menu",
+        "real hoe equipment and harvesting/replanting",
+        "Bedrock capture/release/pose"
+      ],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "tracks",
+      "name": "Create Tracks",
+      "productionVersion": "1.0.1",
+      "candidateVersion": "1.0.1",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "vanillabackport",
+      "name": "VanillaBackport",
+      "productionVersion": "1.1.7.10",
+      "candidateVersion": "1.1.7.10",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "veil",
+      "name": "Veil",
+      "productionVersion": "4.3.2",
+      "candidateVersion": "4.3.2",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "vein_vantage",
+      "name": "Vein Vantage",
+      "productionVersion": "3.0.0",
+      "candidateVersion": "3.0.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "watut",
+      "name": "What Are They Up To",
+      "productionVersion": "1.21.0-1.2.7",
+      "candidateVersion": "1.21.0-1.2.7",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "waystones",
+      "name": "Waystones",
+      "productionVersion": "21.1.44",
+      "candidateVersion": "21.1.44",
+      "advertisedSupport": "native_lua_interaction",
+      "acceptance": "gameplay_unverified",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "xaerolib",
+      "name": "XaeroLib",
+      "productionVersion": "1.7.1",
+      "candidateVersion": "1.7.1",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "xaerominimap",
+      "name": "Xaero's Minimap",
+      "productionVersion": "26.4.2",
+      "candidateVersion": "26.4.2",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "xaeroworldmap",
+      "name": "Xaero's World Map",
+      "productionVersion": "1.45.0",
+      "candidateVersion": "1.45.0",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    },
+    {
+      "id": "yet_another_config_lib_v3",
+      "name": "YetAnotherConfigLib",
+      "productionVersion": "3.8.2+1.21.1-neoforge",
+      "candidateVersion": "3.8.2+1.21.1-neoforge",
+      "advertisedSupport": "library_or_service",
+      "acceptance": "dependency_or_service_loaded",
+      "verifiedWorkflows": [],
+      "fullGameplayVerified": false
+    }
+  ],
+  "knownGaps": [
+    "Numen direct functional drawer deposit unresolved",
+    "Tom terminal partial-stack put unresolved in tested layout",
+    "MineColonies warehouse/delivery/research/cross-day production not verified",
+    "advanced Create addons and vehicles not verified",
+    "complete Java GUI and actual phone/Xbox user session not tested this run",
+    "Numen dedicated 35-operation facade is not a normal Mineflayer connection facade",
+    "web/Bedrock full special models and all mod GUIs not supported",
+    "legacy Paper mycli/guild/trial parity not accepted by this test",
+    "long-running autonomous LLM gameplay and multi-Agent load not tested"
+  ],
+  "productionStartupAudit": {
+    "scope": "production_read_only",
+    "errorHeaderLines": 315,
+    "categories": {
+      "other": 2,
+      "net.minecraft.world.level.storage.loot.LootDataType": 303,
+      "net.minecraft.Util": 1,
+      "net.minecraft.tags.TagLoader": 3,
+      "net.minecraft.world.item.crafting.RecipeManager": 2,
+      "dev.ryanhcode.sable.Sable": 4
+    },
+    "failedRecipes": [
+      "cmpackagecouriers:deploying/jar_plane",
+      "cosmonauticsdeepair:gravity_generator"
+    ],
+    "failedTags": [
+      "create:safe_nbt",
+      "minecraft:mineable/axe",
+      "minecraft:mineable/pickaxe"
+    ],
+    "invalidTracksNamespace": true,
+    "unknownCopycatPhysicsTag": true,
+    "lastErrorHeaderTime": "[2210月2026 09:31:14.281",
+    "runtimeCrashesObserved": false,
+    "playerCount": 0,
+    "stressTest": false
+  },
+  "viewerObserved": {
+    "nearbyNativeEntities": 6,
+    "nearbyRenderedEntities": 0,
+    "missingColonyCitizenRenderer": true,
+    "missingColonyHutSpecialRenderer": true,
+    "completeSceneParityVerified": false
+  },
+  "recordedNumenActionIds": 67,
+  "artifacts": [
+    {
+      "file": "catalog.json",
+      "sha256": "2bda83542e35af5eedfa2b93687a0e291a9b453681c416fb11f4cfd72d4e4356",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "Numen exposes 35 native operations for the actual 112-JAR mod set",
+          "pass": true
+        },
+        {
+          "name": "both new survival bodies created without production control",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "colony-fixed.json",
+      "sha256": "2ad7ced2e009fc0348ec223dbd2a0b74d30b16e9b0e1fb8b14df414881661e42",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "reconnect reports prior occupied-site rejection without executing it again",
+          "pass": true
+        },
+        {
+          "name": "native town founded at a free site from consumed hut",
+          "pass": true
+        },
+        {
+          "name": "spaced builder hut registered in native colony",
+          "pass": true
+        },
+        {
+          "name": "spaced residence registered without blueprint collision",
+          "pass": true
+        },
+        {
+          "name": "real worker self-build order created",
+          "pass": true
+        },
+        {
+          "name": "native builder AI produces material demand on real work order",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "colony-monitor.json",
+      "sha256": "27ea47c25e9086f8e0d7611dd0cd96200b4b4713986fa6407297e9308e6ad5b6",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "native builder actually completes its level-one original structure",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "colony-requests.json",
+      "sha256": "e1e7b6604c1100f3efeaa4674ffd4d387a6d530867230d66441de97e88846234",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "native request Shovel delivery changes real player inventory",
+          "pass": true
+        },
+        {
+          "name": "native builder completes original level-one hut after real tool delivery",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "colony-supply.json",
+      "sha256": "6971cd2abd216683c1d7ba5fee23eaaee07407f1ab7d7c7d9fefb89853086bc3",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "native material requirements supplied from real component-checked player inventory",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "core-contracts.json",
+      "sha256": "6e28144f668525a020c0bf770b9865cf95492ad67a343120a9ee70e95eca0f92",
+      "phaseCompleted": false,
+      "checks": [
+        {
+          "name": "real survival crafting consumes one log and produces four planks",
+          "pass": true
+        },
+        {
+          "name": "repeat exact crafting action ID returns terminal without a second craft",
+          "pass": true
+        },
+        {
+          "name": "native place consumes exactly one real plank",
+          "pass": true
+        },
+        {
+          "name": "native digging actually removes placed block",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "followups.json",
+      "sha256": "d045b58dde62f8a065d0222413ad43005d3479a0753645540ca4086dfa6721bb",
+      "phaseCompleted": false,
+      "checks": [
+        {
+          "name": "owner-offline Numen walks remotely outside spawn chunks",
+          "pass": true
+        },
+        {
+          "name": "agent supplies actual wheat through real hopper inventory",
+          "pass": true
+        },
+        {
+          "name": "real rotating millstone produces flour from hopper-fed wheat",
+          "pass": true
+        },
+        {
+          "name": "cutting produces native minced beef drops",
+          "pass": true
+        }
+      ],
+      "caseResults": [
+        {
+          "name": "owner_offline_remote_walk",
+          "ok": true
+        },
+        {
+          "name": "toms_correct_orientation",
+          "ok": false
+        },
+        {
+          "name": "create_hopper_mill",
+          "ok": true
+        },
+        {
+          "name": "cutting_held_food",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "file": "identity-restore.json",
+      "sha256": "d8895ad6f85dab4660c7be20779106cc9a1d7c35da960291cc472e51085313d0",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "explicit dormancy leaves the original body offline",
+          "pass": true
+        },
+        {
+          "name": "restore retains exact body UUID and all native inventory components",
+          "pass": true
+        },
+        {
+          "name": "restore retains exact native equipped spellbook components",
+          "pass": true
+        },
+        {
+          "name": "reconnect can reconcile the earlier known terminal action without replay",
+          "pass": true
+        },
+        {
+          "name": "all acceptance bodies end dormant with no active action",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "inventory-final.json",
+      "sha256": "43e09b39d5c155b1f6d91a12b44f29fee68d8a67356404d3cf5dba63da9c6d94",
+      "phaseCompleted": false,
+      "checks": [
+        {
+          "name": "eating one apple consumes one item rather than the entire stack",
+          "pass": true
+        },
+        {
+          "name": "eating increases actual body hunger",
+          "pass": false
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "inventory-verified.json",
+      "sha256": "9ac570c20406559f5db3b4866547614305c64750ae1facbbe868f0777ba297d7",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "native eating increases hunger after fixture debuff ends",
+          "pass": true
+        },
+        {
+          "name": "wrong full component hash is rejected without menu mutation",
+          "pass": true
+        },
+        {
+          "name": "native mod backpack opens its true storage menu",
+          "pass": true
+        },
+        {
+          "name": "two blocks actually enter the native backpack",
+          "pass": true
+        },
+        {
+          "name": "same blocks are retrieved without duplication",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "maid-actual.json",
+      "sha256": "c6b7fda1995e7f108ef25ca513a8074474ddced345e3dffccf09ff40e8209692",
+      "phaseCompleted": false,
+      "checks": [
+        {
+          "name": "real maid spawned earlier is discoverable in Household.here",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "maid-farm-fixed.json",
+      "sha256": "c9564384f4b29a390a860f17ce441c6bc0f77661af5a07fcd0b694ebec9c2a93",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "real maid main hand is equipped with actual iron hoe",
+          "pass": true
+        },
+        {
+          "name": "native maid enters farming task with its real prerequisites",
+          "pass": true
+        },
+        {
+          "name": "native maid harvests or replants a real originally mature crop",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "maid-farm-prepare.json",
+      "sha256": "81635a1316efe0446550aeacc64aa515d0a83db6bf9c320ef361a0fd40e55dd9",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "native naming consumes actual held name tag",
+          "pass": true
+        },
+        {
+          "name": "native maid storage menu opens",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "maid-magic-follow.json",
+      "sha256": "f73c6845546b75bbc3c850cef6a6d503949aeba1e0f585ce12156f0b56cbca2c",
+      "phaseCompleted": false,
+      "checks": [
+        {
+          "name": "equipped native spell reduces same-world hostile target health",
+          "pass": true
+        },
+        {
+          "name": "native spell consumes actual caster mana",
+          "pass": true
+        }
+      ],
+      "caseResults": [
+        {
+          "name": "maid_air_use",
+          "ok": false
+        },
+        {
+          "name": "spell_damage_and_mana",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "file": "security.json",
+      "sha256": "81af04fe0a2c802982938ab6d81c65df0e8ce0b42d860dd79e3eba0e3ea05240",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "anonymous MCP request cannot discover private body/control data",
+          "pass": true
+        },
+        {
+          "name": "invalid MCP request cannot discover private body/control data",
+          "pass": true
+        },
+        {
+          "name": "non-owned body query is explicitly rejected",
+          "pass": true
+        },
+        {
+          "name": "a second controller cannot take over a live owned lease",
+          "pass": true
+        }
+      ],
+      "caseResults": []
+    },
+    {
+      "file": "common-adapter/report.json",
+      "sha256": "5c0b55a9fe4a6ca507ec1565ac121e749bcd136e31e3d0ab7fa101f5d85f6c67",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "unified framework discovers real 35-operation native mod catalog",
+          "pass": true
+        },
+        {
+          "name": "same body canonical 46-slot inventory and native mana sampled together",
+          "pass": true
+        },
+        {
+          "name": "unified adapter queries the actual owned native colony",
+          "pass": true
+        },
+        {
+          "name": "unified framework controls and reads actual Curios menu through same body",
+          "pass": true
+        },
+        {
+          "name": "unified ledger returns same ID cached result without reopening menu",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "file": "sdk-isolated-final/report.json",
+      "sha256": "bbca6453e54b9ebbb6aa94ab7486cf82e8fb019f73e288b8dccbeeae9627b52a",
+      "phaseCompleted": true,
+      "checks": [
+        "completed original registries through frozen SDK",
+        "same connection original inventory",
+        "native bag identity retained",
+        "actual frozen browser bundle and WebGL"
+      ]
+    },
+    {
+      "file": "udp-smoke-1792637388568.json",
+      "sha256": "f01e37e5c3d0e8812cc8ad83f3fde17502fd9aeb5c190212f62ae2bd9a8b3326",
+      "phaseCompleted": true,
+      "checks": [
+        {
+          "name": "real Bedrock UDP login reaches native FOM terrain",
+          "pass": true
+        },
+        {
+          "name": "native FOM icon pack must be accepted and downloads with its announced SHA256",
+          "pass": true
+        },
+        {
+          "name": "download is the exact FOM pack rather than retired-world resources",
+          "pass": true
+        },
+        {
+          "name": "Bedrock account is isolated from Java and Agent names",
+          "pass": true
+        },
+        {
+          "name": "native mixed-login policy authorizes first guest without a fabricated password",
+          "pass": true
+        },
+        {
+          "name": "own native inventory and nearby-entity queries return through Bedrock",
+          "pass": true
+        },
+        {
+          "name": "Bedrock position comes from the native body rather than origin placeholder",
+          "pass": true
+        },
+        {
+          "name": "using the native soul slab spawns a real maid and returns the empty charm rather than placing a block",
+          "pass": true
+        },
+        {
+          "name": "ordinary Bedrock interaction captures the same maid into maid_info without disconnecting",
+          "pass": true
+        },
+        {
+          "name": "captured soul slab receives its occupied original icon",
+          "pass": true
+        },
+        {
+          "name": "captured maid releases again with the original UUID and the ground is unchanged",
+          "pass": true
+        },
+        {
+          "name": "real potion ItemStack metadata crosses ViaVersion and reaches Bedrock without stream misalignment",
+          "pass": true
+        },
+        {
+          "name": "three actual mod item types reach the Bedrock connection",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: farmersdelight:rice",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: touhou_little_maid:smart_slab_init",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: touhou_little_maid:smart_slab_empty",
+          "pass": true
+        },
+        {
+          "name": "actual Bedrock runtime identity selects original icon: minecolonies:clipboard",
+          "pass": true
+        },
+        {
+          "name": "native three-dimensional block item identity: create:andesite_casing",
+          "pass": true
+        },
+        {
+          "name": "native three-dimensional block item identity: farmersdelight:tomato_crate",
+          "pass": true
+        },
+        {
+          "name": "native mod stack carries a real Bedrock item and server network stack identity",
+          "pass": true
+        },
+        {
+          "name": "ordinary Bedrock inventory swap gets an authoritative success",
+          "pass": true
+        },
+        {
+          "name": "native mod identity and count survive the real Bedrock inventory operation",
+          "pass": true
+        },
+        {
+          "name": "original QA guide/items remain in their original slots",
+          "pass": true
+        },
+        {
+          "name": "native 3D block item survives real Bedrock inventory swap",
+          "pass": true
+        },
+        {
+          "name": "ordinary Bedrock use opens the nine native cooking-pot slots in its standard container UI",
+          "pass": true
+        },
+        {
+          "name": "Bedrock puts the original mod rice into the native ingredient slot",
+          "pass": true
+        },
+        {
+          "name": "Bedrock retrieves the exact native stack without losing components or count",
+          "pass": true
+        },
+        {
+          "name": "real native maid arrives as her own original custom model",
+          "pass": true
+        },
+        {
+          "name": "original maid entity movement reaches the same Bedrock actor",
+          "pass": true
+        },
+        {
+          "name": "native relative movement selects the downloaded walking controller",
+          "pass": true
+        },
+        {
+          "name": "walking expires to idle after native motion stops",
+          "pass": true
+        },
+        {
+          "name": "native sitting metadata selects the sitting controller",
+          "pass": true
+        },
+        {
+          "name": "native standing metadata restores idle on the same actor",
+          "pass": true
+        },
+        {
+          "name": "real Bedrock session survives 75 seconds with native state and inventory retained",
+          "pass": true
+        },
+        {
+          "name": "soul-slab fixture removed and the original QA inventory retained",
+          "pass": true
+        },
+        {
+          "name": "temporary Bedrock cooking pot removed with native confirmation",
+          "pass": true
+        },
+        {
+          "name": "only temporary QA items removed; original inventory fully retained",
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "cleanup": {
+    "originalQaOwnerExit": 0,
+    "candidateQaOwnerExit": 0,
+    "bedrockQaOwnerExit": 0,
+    "allBodiesDormant": true,
+    "temporaryPortsClosed": {
+      "39500": true,
+      "39501": true,
+      "39502": true,
+      "39503": true,
+      "39504": true,
+      "28991": true,
+      "28992": true,
+      "28997": true,
+      "28993/udp": true
+    },
+    "originalQaSpawnRestored": true
+  },
+  "privateArtifactsExcluded": [
+    "credentials",
+    "worlds",
+    "full inventories and components",
+    "raw packets and logs",
+    "jar and texture assets",
+    "screenshots"
+  ]
+}
