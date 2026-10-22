@@ -1,0 +1,9 @@
+node_modules/
+.local/
+config.local.json
+.env
+*.log
+*.sqlite*
+*.zip
+test-results/
+!public/assets/

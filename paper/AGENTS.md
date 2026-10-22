@@ -1,3 +1,7 @@
+## 2026-10-22 网站内网版已运行，游戏账号桥仍为候选
+
+独立门户0.2.0已在D:/codex/2026-09-14/new-chat/mc-agent-portal运行，LAN 192.168.3.163:8790；源码纳入paper/integrations/agent-portal。只读接Paper1.21.1的目录、真实成长/公开事件及原UUID授权保存资料，网站注册/改网站密码和手机HTTP兼容可用；首次管理员仅直接本机初始化。直播频道默认本人原角色，私有ACL/画布发布器已做，实际源尚未接入；无公网域名、手机像素或网页接管验收。47 Node/21模块、7 JVM程序84检查、隔离原认证链14真实联机通过，原UUID与3铁锭保持，旧弱密码不能认领；隔离服已正常end/stop。正式LoginGuard仍0.1.3、authBridge关闭，Paper/现役密码和角色未改；0.1.4候选5bd047f8及回退E/F已核对，无pending部署。服主明确选择“先保留网站内网版，暂不更新代理”，不能沿用历史授权上线。后询问阿里云网站方案，当前仍直接读本机文件，云端数据源/出站同步器尚未实现或部署。见docs/AGENT_PORTAL.md及manifests/agent-portal-candidate-20261022.json。
+
 ## 2026-10-21 Numen个人模型与无模组CLI已上线
 
 服主批准后，等待可米安全离开墓穴，180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-202316完成后只换API4b36f166，任务结果0。其他39插件、Paper、1238原API条目保持；原身份/库存/私有模型及Key核验，桐人原QwenPaw日常恢复。原版help/status/model list/set、旧版客户端本机资料提示和专用服默认关闭共享Key已生效。1772核心JVM、25精确Paper、8MCP和Fabric/NeoForge构建通过；正式28/16/19核验。源代码0b3e1bab9已推送，GitHub预发布https://github.com/jcs130/minecraft-numen/releases/tag/qiandengji-paper-1.21.1-20261021已匿名下载核对SHA。无新公网接口；DSH Numen驱动、手机Xbox真机和16模型负载未验。详见paper/docs/NUMEN_PAPER.md及paper/manifests/numen-owner-cli-release-20261021.json；下方候选段为此前时点。

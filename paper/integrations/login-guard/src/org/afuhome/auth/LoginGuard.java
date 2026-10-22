@@ -28,6 +28,7 @@ import com.github.retrooper.packetevents.event.*;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
@@ -51,6 +52,7 @@ public final class LoginGuard {
     private LibreLoginPlugin<Player, RegisteredServer> libre;
     private Path heartbeat, attemptsFile, opsFile, eyesFile;
     private volatile EyePolicy eyes;
+    private PortalBridge portal;
     private final Properties attempts = new Properties();
     private volatile boolean ready;
     private volatile Set<String> reserved = Set.of("corti", "corticam", "player", "goddess");
@@ -105,6 +107,92 @@ public final class LoginGuard {
         });
         server.getScheduler().buildTask(this, this::refresh).repeat(Duration.ofSeconds(1)).schedule();
         refresh();
+        server.getCommandManager().register(server.getCommandManager().metaBuilder("portal").plugin(this).build(),new SimpleCommand(){
+            @Override public void execute(Invocation invocation) {
+                if(!(invocation.source() instanceof Player player))return;
+                portalCommand(player,invocation.arguments());
+            }
+        });
+        if(Boolean.parseBoolean(cfg.getProperty("portal.enabled","false"))) {
+            try {
+                Path directory=Path.of(cfg.getProperty("portal.directory"));
+                String encoded=Files.readString(Path.of(cfg.getProperty("portal.key-file"))).trim();
+                if(!encoded.matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("portal key");
+                portal=new PortalBridge(directory,HexFormat.of().parseHex(encoded),new PortalBridge.Accounts(){
+                    public boolean ready(){return LoginGuard.this.ready;}
+                    public boolean reserved(String name){return portalReserved(name);}
+                    public PortalBridge.Identity find(String name){var user=libre.getDatabaseProvider().getByName(name);return user==null?null:new PortalBridge.Identity(user.getLastNickname(),user.getUuid());}
+                    public PortalBridge.Identity create(String name,String password,long createdAt) throws Exception {return portalCreate(name,password,createdAt);}
+                    public PortalBridge.Identity password(String name,UUID uuid,String previous,String next) throws Exception {return portalPassword(name,uuid,previous,next);}
+                });
+                server.getScheduler().buildTask(this,portal::tick).repeat(Duration.ofSeconds(1)).schedule();
+            } catch(Exception unavailable){logger.warn("Optional portal account bridge unavailable; existing game authentication remains unchanged.");}
+        }
+    }
+    private boolean portalReserved(String name) {
+        return reserved.contains(key(name))||key(name).equals("live")||key(name).endsWith("eye")
+            ||(eyes!=null&&eyes.body(name,reserved)!=null);
+    }
+    private void portalCommand(Player player,String[] parts) {
+        if(portal==null){player.sendMessage(text("网站绑定服务尚未启用，请联系服主。"));return;}
+        if(parts.length!=3||!parts[0].equals("bind")){player.sendMessage(text("请登录网站，复制本人角色的 /portal bind 完整命令。"));return;}
+        if(!authorized(player)){player.sendMessage(text("先 /login 完成登录，再绑定网站账号。"));return;}
+        portal.confirm(parts[1],parts[2],player.getUsername(),player.getUniqueId(),()->portalProof(player),message->player.sendMessage(text(message)));
+    }
+    private boolean portalWorldNameExists(String name) throws Exception {
+        Path cache=opsFile.getParent().resolve("usercache.json");
+        if(!Files.isRegularFile(cache)||Files.size(cache)>2*1024*1024)throw new IllegalStateException("world identity cache unavailable");
+        var rows=gson.fromJson(Files.readString(cache),com.google.gson.JsonArray.class);
+        if(rows==null)throw new IllegalStateException("world identity cache invalid");
+        for(var element:rows){var row=element.getAsJsonObject();if(row.has("name")&&row.get("name").getAsString().equalsIgnoreCase(name))return true;}
+        return false;
+    }
+    private PortalBridge.Identity portalCreate(String name,String password,long createdAt) throws Exception {
+        if(!ready||portalReserved(name)||!PortalBridge.agentName(name))throw new PortalBridge.Problem("RESERVED_ACCOUNT","此名称不可从网站注册");
+        if(!libre.validPassword(password))throw new PortalBridge.Problem("PASSWORD_INVALID","游戏密码未通过服务器校验");
+        UUID uuid=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        // Never claim a pre-existing world character, even if its login record
+        // is absent. Current production has whitelist=false; no OP is granted.
+        Path world=opsFile.getParent().resolve("world/playerdata").resolve(uuid+".dat");
+        if(libre.getDatabaseProvider().getByName(name)!=null||libre.getDatabaseProvider().getByUUID(uuid)!=null||Files.exists(world)||portalWorldNameExists(name))throw new PortalBridge.Problem("ACCOUNT_EXISTS","原角色已经存在，请在游戏内绑定，不能覆盖");
+        var hash=libre.getDefaultCryptoProvider().createHash(password);
+        if(hash==null)throw new PortalBridge.Problem("PASSWORD_INVALID","游戏密码暂不支持此长度");
+        if(libre.getDatabaseProvider().getByName(name)!=null||server.getPlayer(name).isPresent()||portalWorldNameExists(name))throw new PortalBridge.Problem("ACCOUNT_EXISTS","该名称已开始登录，请先核对原角色");
+        var date=new java.sql.Timestamp(createdAt);
+        var user=libre.createUser(uuid,null,hash,name,date,date,null,null,null,null,null);
+        libre.getDatabaseProvider().insertUser(user);
+        var saved=libre.getDatabaseProvider().getByName(name);
+        if(saved==null||!saved.getUuid().equals(uuid)||!saved.isRegistered())throw new IllegalStateException("portal account persistence unavailable");
+        return new PortalBridge.Identity(saved.getLastNickname(),saved.getUuid());
+    }
+    private PortalBridge.Identity portalPassword(String name,UUID expected,String previous,String next) throws Exception {
+        if(!ready||portalReserved(name))throw new PortalBridge.Problem("RESERVED_ACCOUNT","此账号请在游戏内改密");
+        var user=libre.getDatabaseProvider().getByName(name);
+        if(user==null||!user.getUuid().equals(expected)||!user.isRegistered())throw new PortalBridge.Problem("IDENTITY_MISMATCH","原账号身份或密码状态未核实");
+        if(user.getSecret()!=null)throw new PortalBridge.Problem("TOTP_IN_GAME","两步验证账号请在游戏内 /changepassword 改密");
+        if(!libre.validPassword(next)||!libre.getCryptoProvider(user.getHashedPassword().algo()).matches(previous,user.getHashedPassword()))throw new PortalBridge.Problem("PASSWORD_INCORRECT","当前游戏密码不正确，或新密码不符合要求");
+        if(!passwordWrites.add(expected))throw new PortalBridge.Problem("PASSWORD_BUSY","另一项密码操作尚未结束，请先查询结果");
+        try {
+            var hash=libre.getDefaultCryptoProvider().createHash(next);
+            if(hash==null)throw new PortalBridge.Problem("PASSWORD_INVALID","新密码暂不支持此长度");
+            synchronized(user) {
+                if(!libre.getCryptoProvider(user.getHashedPassword().algo()).matches(previous,user.getHashedPassword()))throw new PortalBridge.Problem("PASSWORD_CHANGED","密码状态已变化，请先重新核对");
+                var old=user.getHashedPassword();
+                try {user.setHashedPassword(hash);libre.getDatabaseProvider().updateUser(user);}
+                catch(Exception failure){user.setHashedPassword(old);throw failure;}
+            }
+            return new PortalBridge.Identity(user.getLastNickname(),user.getUuid());
+        } finally {passwordWrites.remove(expected);}
+    }
+    private boolean portalProof(Player p) {
+        if(!ready||!authorized(p)||!inPaper(p)||portalReserved(p.getUsername())||!server.getPlayer(p.getUniqueId()).filter(current->current==p).isPresent())return false;
+        var user=libre.getDatabaseProvider().getByName(p.getUsername());
+        if(user==null||!user.getUuid().equals(p.getUniqueId()))return false;
+        if(premiumVerified(p,user.getPremiumUUID()))return true;
+        if(!user.isRegistered()||firstPasswordSessions.contains(p))return false;
+        var crypto=libre.getCryptoProvider(user.getHashedPassword().algo());
+        for(String weak:List.of("123456","12345678","password","qwerty"))if(crypto.matches(weak,user.getHashedPassword()))return false;
+        return authorized(p)&&inPaper(p)&&server.getPlayer(p.getUniqueId()).filter(current->current==p).isPresent();
     }
     // Velocity can run the first scheduled refresh alongside initialization.
     // Serialize it so the authentication listener and atomic heartbeat writer
@@ -419,6 +507,7 @@ public final class LoginGuard {
         payloadPeers.remove(e.getPlayer());
     }
     @Subscribe public void stop(ProxyShutdownEvent event) {
+        if(portal!=null)portal.close();
         ready=false; try { if(heartbeat!=null) Files.deleteIfExists(heartbeat); } catch(Exception ignored) { }
     }
 }

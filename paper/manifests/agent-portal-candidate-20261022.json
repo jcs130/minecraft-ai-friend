@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-22",
+  "component": "agent-portal",
+  "portalVersion": "0.2.0",
+  "sourceFiles": 32,
+  "sourceTreeSha256": "6caae4ce45f3f7b38638250271e5902d7213b501785102d2e3fc55d93959e703",
+  "candidate": {
+    "loginGuardVersion": "0.1.4",
+    "sha256": "5bd047f85484798d9a8f779dcf2cb72011b1556e05a1e043f5723eb38f2552a1"
+  },
+  "production": {
+    "loginGuardVersion": "0.1.3",
+    "sha256": "1c881cecb47218a58f96c5c2c074d81a945cadaaf882dac7c4e0749e3a6183c1",
+    "authBridgeEnabled": false,
+    "gameChanged": false,
+    "pendingDeployment": false
+  },
+  "website": {
+    "lanRunning": true,
+    "publicDomainConfigured": false,
+    "actualLiveSourceConnected": false,
+    "phoneVisualAccepted": false
+  },
+  "verification": {
+    "javascriptModules": 21,
+    "nodeTests": 47,
+    "jvmPrograms": 7,
+    "jvmChecks": 84,
+    "nativeGameChecks": 14,
+    "isolatedServicesNormallyStopped": true
+  },
+  "rollback": "Website snapshots and old proxy JAR/config only; no full production cold backup claimed. Preserve newer game passwords, UUIDs and items.",
+  "deployment": "User chose to retain LAN website and defer proxy update; no queued production mutation. Cloud deployment is proposed, not implemented."
+}
