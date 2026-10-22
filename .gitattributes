@@ -18,3 +18,6 @@ integrations/qiandengji-harness/*.mjs text eol=lf
 integrations/qiandengji-harness/body-package*.json -text whitespace=cr-at-eol
 tools/qiandengji_harness.py text eol=lf
 tools/test_qiandengji_harness.py text eol=lf
+skills/qiandengji-agent/** text eol=lf
+tools/build_qiandengji_skill.py text eol=lf
+tools/test_qiandengji_skill* text eol=lf
