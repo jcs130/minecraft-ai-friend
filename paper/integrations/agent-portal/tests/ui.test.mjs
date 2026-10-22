@@ -451,7 +451,7 @@ test('shared memories keep uploads private until preview and explicit publicatio
   await waitFor(() => ui.portal.memories.list().total === 0 && ui.document.querySelector('#toast').textContent.includes('已撤回为私人草稿'));
   ui.click('#memory-dialog [data-memory-action="close"]');
   ui.click('[data-memory-action="mine"]');
-  await waitFor(() => ui.document.querySelector('.memory-draft-label'));
+  await waitFor(() => ui.document.querySelector('.memory-draft-label') && ui.document.querySelector('.memory-toolbar').getAttribute('aria-busy') === 'false');
   assert.match(ui.document.querySelector('.memory-card').textContent, /私人草稿/);
 });
 
@@ -470,6 +470,16 @@ test('public deep links render escaped stories, participant filtering and sharin
   assert.match(ui.document.querySelector('.memory-people').textContent, /可米/);
   ui.click('[data-memory-action="share"]'); await waitFor(() => copies.length === 1);
   assert.equal(copies[0], ui.origin + '/#memories/' + post.id);
+  ui.click('#memory-dialog [data-memory-action="close"]');
+  await waitFor(() => ui.window.location.hash === '#memories');
+  await ui.refresh(false);
+  assert.equal(ui.document.querySelector('#memory-dialog').open, false, 'Background refresh must not reopen a dismissed shared link');
+  ui.click('.memory-card-image');
+  await waitFor(() => ui.document.querySelector('.memory-story-text'));
+  ui.window.location.hash = 'home';
+  await waitFor(() => ui.document.querySelector('.world-hero') && !ui.document.querySelector('#memory-dialog').open);
+  ui.window.location.hash = 'memories/' + post.id;
+  await waitFor(() => ui.document.querySelector('.memory-story-text'));
   ui.click('#memory-dialog [data-memory-action="participant"][data-name="LittleFish0510"]');
   await waitFor(() => ui.window.location.hash === '#memories' && ui.document.querySelector('.memory-filter'));
   assert.match(ui.document.querySelector('.memory-filter').textContent, /小鱼/);

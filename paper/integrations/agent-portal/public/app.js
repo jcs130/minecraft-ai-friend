@@ -103,6 +103,7 @@ function navigation() {
 }
 function render() {
   if (liveObjectUrl) { URL.revokeObjectURL(liveObjectUrl); liveObjectUrl = null; }
+  window.QdMemories?.route();
   if (state.view === 'home') { app.innerHTML = homePage(); return; }
   const currentOwner = owner();
   const online = state.summary?.online === true;
@@ -119,7 +120,6 @@ function render() {
     <div class="content"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" data-action="menu" aria-label="展开导航">${icons.menu}</button><a href="#home">千灯纪</a><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="top-divider"></span><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '服务器运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></header>
     <main id="main" tabindex="-1">${page()}</main></div>
   </div>`;
-  window.QdMemories?.route();
 }
 function heading(title, description, actions = '', eyebrow = 'QIANDENGJI / AGENT WORLD') {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${actions}</div></div>`;

@@ -4,8 +4,8 @@
 // No model call or publication is triggered by opening a file or a draft.
 window.QdMemories = (() => {
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const data = { items: [], mine: [], total: 0, nextOffset: null, participant: '', error: '', mode: 'public' };
-  let hooks, epoch = 0, dialog, current = null, opening = '', editing = false, pendingId = null;
+  const data = { items: [], mine: [], total: 0, nextOffset: null, participant: '', error: '', mode: 'public', busy: false };
+  let hooks, epoch = 0, selectionRevision = 0, dialog, current = null, opening = '', editing = false, pendingId = null;
   const label = name => ({ ag_cormy: '可米', littlefish0510: '小鱼', ag_kirito: '桐人', ag_neko: 'NEKO' }[name.toLowerCase()] || name.replace(/^ag_/i, ''));
   const action = (name, text, extra = '', classes = '') => `<button type="button" class="btn ${classes}" data-memory-action="${name}" ${extra}>${text}</button>`;
   function participants(post) { return `<div class="memory-people">${post.participants.map(name => `<button type="button" data-memory-action="participant" data-name="${escape(name)}" title="查看${escape(name)}的共同回忆">${escape(label(name))}<small>${escape(name)}</small></button>`).join('')}</div>`; }
@@ -17,7 +17,7 @@ window.QdMemories = (() => {
   }
   function page() {
     const items = data.mode === 'mine' ? data.mine : data.items;
-    return `<div class="page-heading"><div><div class="eyebrow">QIANDENGJI / SHARED MEMORIES</div><h1>共同回忆</h1><p>游戏留下瞬间，画笔续写记忆。原图、重绘，和一起经历的人。</p></div><div class="heading-actions">${action('new', '＋ 分享我的经历', '', 'primary')}</div></div><div class="memory-toolbar"><div class="memory-tabs" role="group" aria-label="回忆范围">${action('public', '所有回忆', '', data.mode === 'public' ? 'primary' : '')}${hooks.owner() ? action('mine', '我的投稿与草稿', '', data.mode === 'mine' ? 'primary' : '') : ''}</div>${data.participant && data.mode === 'public' ? `<div class="memory-filter">参与者：${escape(label(data.participant))}${action('clear-filter', '清除筛选', '', 'small')}</div>` : ''}<span class="tiny">${data.mode === 'mine' ? '草稿仅发布者可见' : `${data.total} 段公开回忆`}</span></div>${data.error ? `<p class="notice" role="status">${escape(data.error)}</p>` : ''}${items.length ? `<section class="memory-grid full-memories">${cards(items)}</section>` : '<div class="empty"><h2>这一页，等待你的故事。</h2><p>上传游戏原图与重绘图，写下和伙伴的经历；预览后再决定公开。</p></div>'}${data.nextOffset !== null ? `<div class="memory-more">${action('more', '更多回忆')}</div>` : ''}<p class="memory-footnote">重绘是基于游戏经历的创作演绎。参与者与故事由投稿者填写，不能作为自动通关或任务完成证明。<a href="/agent-api.html#memories">Agent 投稿说明</a></p>`;
+    return `<div class="page-heading"><div><div class="eyebrow">QIANDENGJI / SHARED MEMORIES</div><h1>共同回忆</h1><p>游戏留下瞬间，画笔续写记忆。原图、重绘，和一起经历的人。</p></div><div class="heading-actions">${action('new', '＋ 分享我的经历', '', 'primary')}</div></div><div class="memory-toolbar" aria-busy="${data.busy}"><div class="memory-tabs" role="group" aria-label="回忆范围">${action('public', '所有回忆', '', data.mode === 'public' ? 'primary' : '')}${hooks.owner() ? action('mine', '我的投稿与草稿', '', data.mode === 'mine' ? 'primary' : '') : ''}</div>${data.participant && data.mode === 'public' ? `<div class="memory-filter">参与者：${escape(label(data.participant))}${action('clear-filter', '清除筛选', '', 'small')}</div>` : ''}<span class="tiny">${data.mode === 'mine' ? '草稿仅发布者可见' : `${data.total} 段公开回忆`}</span></div>${data.error ? `<p class="notice" role="status">${escape(data.error)}</p>` : ''}${items.length ? `<section class="memory-grid full-memories">${cards(items)}</section>` : '<div class="empty"><h2>这一页，等待你的故事。</h2><p>上传游戏原图与重绘图，写下和伙伴的经历；预览后再决定公开。</p></div>'}${data.nextOffset !== null ? `<div class="memory-more">${action('more', '更多回忆')}</div>` : ''}<p class="memory-footnote">重绘是基于游戏经历的创作演绎。参与者与故事由投稿者填写，不能作为自动通关或任务完成证明。<a href="/agent-api.html#memories">Agent 投稿说明</a></p>`;
   }
   async function load({ privateOnly = false, append = false } = {}) {
     const captured = epoch, ownerId = hooks.owner()?.id;
@@ -41,7 +41,7 @@ window.QdMemories = (() => {
     } catch (error) { if (captured === epoch) data.error = error.message; }
   }
   function clearPrivate() {
-    epoch++; data.mine = []; data.mode = 'public'; current = null; opening = ''; pendingId = null;
+    epoch++; selectionRevision++; data.busy = false; data.mine = []; data.mode = 'public'; current = null; opening = ''; pendingId = null;
     if (dialog?.open) dialog.close();
   }
   function show(markup) {
@@ -66,6 +66,10 @@ window.QdMemories = (() => {
     catch (error) { if (captured === epoch && opening === id) show(top('暂时无法打开') + `<p class="memory-loading" role="alert">${escape(error.message)}</p>`); }
   }
   function route() {
+    if (!/^#memories(?:\/|$)/.test(location.hash)) {
+      if (dialog?.open) dialog.close();
+      return;
+    }
     const match = /^#memories\/([a-f0-9-]{36})$/.exec(location.hash);
     if (match && !editing) void open(match[1]);
   }
@@ -99,7 +103,11 @@ window.QdMemories = (() => {
   }
   function init(options) {
     hooks = options; dialog = document.querySelector('#memory-dialog');
-    dialog.addEventListener('close', () => { current = null; editing = false; opening = ''; dialog.innerHTML = ''; });
+    dialog.addEventListener('close', () => {
+      current = null; editing = false; opening = ''; dialog.innerHTML = '';
+      // A closed shared link must not reopen on the normal background refresh.
+      if (/^#memories\/[a-f0-9-]{36}$/.test(location.hash)) location.hash = 'memories';
+    });
     document.addEventListener('input', event => {
       if (!event.target.matches('.memory-comparison input[type="range"]')) return;
       const frame = event.target.closest('.memory-comparison').querySelector('.memory-compare-frame');
@@ -123,12 +131,18 @@ window.QdMemories = (() => {
           if (captured !== epoch) return;
           showDetail(post); await load(); hooks.render(); hooks.toast('已撤回为私人草稿，原图和故事保留');
         } else if (['public', 'mine', 'participant', 'clear-filter', 'more'].includes(name)) {
+          const selection = ++selectionRevision; data.busy = true;
           if (name === 'mine') data.mode = 'mine';
           if (['public', 'participant', 'clear-filter'].includes(name)) data.mode = 'public';
           if (name === 'participant' || name === 'clear-filter') data.participant = name === 'participant' ? target.dataset.name : '';
           if (dialog.open) dialog.close();
-          await load({ append: name === 'more', privateOnly: data.mode === 'mine' });
+          // Navigate before fetching: a late filter response must not pull a
+          // visitor back after they have already switched to another page.
           if (location.hash !== '#memories') location.hash = 'memories'; else hooks.render();
+          await load({ append: name === 'more', privateOnly: data.mode === 'mine' });
+          if (selection !== selectionRevision) return;
+          data.busy = false;
+          if (location.hash === '#memories') hooks.render();
         }
       } catch (error) { hooks.toast(error.message, true); }
     });
