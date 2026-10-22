@@ -153,7 +153,7 @@ export function createPortal(config, options = {}) {
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.4.0' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.4.1' });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {

@@ -86,7 +86,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: () => window.__portalRefreshForTest(true), outage: () => { networkFailure = true; } };
+  return { portal, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
 }
 
 test('public growth, event filters and an offline live page work without exposing private profiles or executing announcement HTML', async t => {
@@ -279,4 +279,9 @@ test('configured promotion and character art appear in the shared world homepage
   assert.equal(ui.document.querySelector('.world-hero-resident img').getAttribute('src'), '/media/cormy-standing.png');
   assert.match(ui.document.querySelector('.world-art-label').textContent, /常驻玩家.*可米/);
   assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico/);
+  video.currentTime = 42;
+  ui.outage(); await ui.refresh(false);
+  assert.equal(ui.document.querySelector('.home-film video'), video, 'Background polling must preserve the actual video node');
+  assert.equal(video.currentTime, 42, 'Playback and paused seek positions must survive background polling');
+  assert.match(ui.document.querySelector('.home-live-status').textContent, /等待世界的消息/);
 });

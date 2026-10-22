@@ -328,7 +328,17 @@ async function refresh(manual = false) {
   state.photos = results[8].status === 'fulfilled' ? results[8].value.photos : [];
   await loadPrivate();
   if (revision !== authRevision && owner()) return;
-  if (!modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) render();
+  if (!modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+    if (state.view === 'home' && app.querySelector('.home-film video')) {
+      // Poll live data without replacing the media element. Rebuilding the whole
+      // homepage every 15 seconds stops playback and discards paused/seek state.
+      const updated = document.createElement('template'); updated.innerHTML = homePage();
+      for (const selector of ['.home-top-actions', '.home-live-status', '[data-world-roster]', '.home-gallery', '.home-journal-list']) {
+        const previous = app.querySelector(selector), next = updated.content.querySelector(selector);
+        if (previous && next) previous.replaceWith(next);
+      }
+    } else render();
+  }
   if (!owner() && detail.open) { detail.close(); state.detail = null; }
   if (manual) { render(); toast(state.error || '已更新服务器与角色状态', !!state.error); }
 }
