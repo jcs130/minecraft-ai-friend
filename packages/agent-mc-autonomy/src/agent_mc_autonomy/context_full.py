@@ -6,11 +6,11 @@ import time
 
 from . import host_recent
 from .context import (
-    rules_for,
     encode,
     event_priority,
     outcome_eviction_index,
     read_progress,
+    rules_for,
 )
 from .context_counter import (
     BYTE_COUNTER_NAME,
@@ -18,7 +18,12 @@ from .context_counter import (
     count_input,
     counter_name,
 )
-from .context_evidence import GUIDANCE, history_sources, project_values
+from .context_evidence import (
+    GUIDANCE,
+    history_sources,
+    project_values,
+    retire_native_sources,
+)
 from .scene_history import GUIDANCE as SCENE_GUIDANCE
 from .scene_history import make_scene, project_messages
 
@@ -81,6 +86,13 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         size = count_input(context_counter, projected, tools) if context_counter is not None else len(encode({"messages": projected, "tools": tools}).encode("utf-8"))
         total = size + reserved_output + FRAMING_RESERVE
 
+    def retire_source(group):
+        rows, retired = retire_native_sources(tail.get("recent_native_outcomes", []), sources[id(group)])
+        if retired:
+            tail["recent_native_outcomes"] = rows
+            tail.setdefault("retired_native_outcomes", []).extend(retired)
+            tail["context_omissions"]["native_outcomes_retired_with_history"] = len(tail["retired_native_outcomes"])
+
     measure()
 
     # Only a real overflow activates the opt-in cache margin. Retire a whole
@@ -98,8 +110,11 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         retirement_growth = 0
         for index in range(max(0, len(history) - 4), len(history)):
             group = history.pop(index)
+            original_tail = copy.deepcopy(tail)
+            retire_source(group)
             measure()
             retirement_growth = max(retirement_growth, original_projection[2] - total)
+            tail = original_tail
             history.insert(index, group)
         projected, scene_reuse, total = original_projection
         headroom = min(context_tokens // 4, max(headroom, 3 * retirement_growth))
@@ -109,7 +124,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         # a large fresh scene prevents reaching the optional cache target.
         if len(history) == 1 and total <= context_tokens:
             break
-        history.pop(0)
+        retire_source(history.pop(0))
         tail["context_omissions"]["history_groups"] += 1
         measure()
     # An oversized read batch must not delete all native feedback or selected
@@ -166,7 +181,8 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         "history": {"available": len(groups), "included": len(history),
                     "evicted": len(groups) - len(history), "cache_headroom_tokens": headroom,
                     "configured_cache_headroom_tokens": configured_headroom,
-                    "retirement_growth_units": retirement_growth},
+                    "retirement_growth_units": retirement_growth,
+                    "retired_native_outcome_ids": [row["outcome_id"] for row in tail.get("retired_native_outcomes", [])]},
         "evidence_reuse": {"history_sources": len(available), "native_outcomes": len(terminal),
                            "referenced": referenced, "inline": len(terminal) - referenced},
         "layout": {"stable_head_sha256": hashlib.sha256(encode(head).encode()).hexdigest(),
