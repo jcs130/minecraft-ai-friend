@@ -12,11 +12,12 @@ const wait=async(predicate,ms=25000)=>{const end=Date.now()+ms;while(!predicate(
 const check=(name,pass)=>{report.checks.push({name,pass:!!pass});assert(pass,name);console.log('PASS '+name)}
 const digest=data=>crypto.createHash('sha256').update(data).digest('hex')
 const uuid=value=>{const b=Buffer.from(value.replaceAll('-',''),'hex');b.subarray(0,8).reverse();b.subarray(8,16).reverse();const s=b.toString('hex');return `${s.slice(0,8)}-${s.slice(8,12)}-${s.slice(12,16)}-${s.slice(16,20)}-${s.slice(20)}`}
-let client,send,error,heartbeat,spawned=false,fixture=false;const packs=[],received=new Map(),complete=new Set(),inventory=[],chunkPackets=[]
+let client,send,error,heartbeat,spawned=false,fixture=false,serverTimePackets=0;const packs=[],received=new Map(),complete=new Set(),inventory=[],chunkPackets=[]
 const cookingTest=process.argv.includes('--cooking-pot'),motionTest=process.argv.includes('--motion'),modelTest=process.argv.includes('--models')||motionTest,blockItemTest=process.argv.includes('--block-items'),temporaryMaidTag='fom_bedrock_qa_'+crypto.randomBytes(8).toString('hex')
 const potionMetadataTest=process.argv.includes('--potion-metadata'),potionTag=temporaryMaidTag+'_potion'
 const soulSlabTest=process.argv.includes('--soul-slab')
-const fixtureItems=[['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1],...(modelTest?[['touhou_little_maid:smart_slab_empty',1]]:[]),...(blockItemTest?[['create:andesite_casing',3],['farmersdelight:tomato_crate',2]]:[])]
+const colonyTest=process.argv.includes('--colony')
+const fixtureItems=[['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1],...(modelTest?[['touhou_little_maid:smart_slab_empty',1]]:[]),...(blockItemTest?[['create:andesite_casing',3],['farmersdelight:tomato_crate',2]]:[]),...(colonyTest?[['minecolonies:clipboard',1]]:[])]
 const execFile=require('node:util').promisify(require('node:child_process').execFile)
 const ownConsole=async command=>{const {stdout}=await execFile('E:/MC/runtime/python-3.12.14/python.exe',['-X','utf8',path.join(__dirname,'fom_service.py'),'console','--config',config.mainConfig,'--command',command,'--wait','10'],{encoding:'utf8',timeout:120000,windowsHide:true});const receipt=JSON.parse(stdout);assert(receipt.ok&&receipt.deliveryKnown);return receipt}
 const nativeJson=(message,prefix)=>{const at=message.indexOf(prefix+' ');assert(at>=0);return JSON.parse(message.slice(at+prefix.length+1,message.lastIndexOf('}')+1))}
@@ -61,6 +62,7 @@ async function main(){
  client.on('resource_pack_data_info',p=>{received.set(p.pack_id,{...p,chunks:new Map()});for(let i=0;i<p.chunk_count;i++)send('resource_pack_chunk_request',{pack_id:p.pack_id,chunk_index:i})})
  client.on('resource_pack_chunk_data',p=>{try{const item=received.get(p.pack_id);item.chunks.set(p.chunk_index,Buffer.from(p.payload));if(item.chunks.size!==item.chunk_count||complete.has(p.pack_id))return;const raw=Buffer.concat(Array.from({length:item.chunk_count},(_,i)=>item.chunks.get(i)));assert.equal(BigInt(raw.length),BigInt(item.size));assert.equal(digest(raw),Buffer.from(item.hash).toString('hex'));complete.add(p.pack_id);report.packDownloads.push({id:p.pack_id,bytes:raw.length,sha256:digest(raw)});if(complete.size===packs.length)response('have_all_packs')}catch(e){error=e.message}})
  client.on('resource_pack_stack',()=>response('completed'));client.on('spawn',()=>{spawned=true});client.on('start_game',p=>{report.startGame={position:p.player_position,dimension:p.dimension,levelId:p.level_id}})
+ client.on('set_time',p=>{serverTimePackets++;report.nativeTimePackets??=[];if(report.nativeTimePackets.length<24)report.nativeTimePackets.push({time:p.time,at:Date.now()})})
  client.on('level_chunk',p=>{report.chunks++;if(process.argv.includes('--place')||soulSlabTest)chunkPackets.push(p)});client.on('text',p=>{if(/MC_AUTH_|MC_FOM_|MC_FOM_COMPAT/.test(p.message||''))report.messages.push({message:p.message,type:p.type,at:Date.now()})})
  client.on('inventory_content',p=>{if(report.inventoryPackets.length<25)report.inventoryPackets.push(p);if(p.window_id==='inventory')p.input.forEach((item,i)=>{inventory[i]=item})})
  client.on('inventory_slot',p=>{if(p.window_id==='inventory')inventory[p.slot]=p.item})
@@ -105,8 +107,14 @@ async function main(){
   const equip=async()=>{
    await wait(()=>inventory[slot]?.network_id>0)
    sendDescriptor('mob_equipment',{runtime_entity_id:client.entityId,item:inventory[slot],slot:slot+9,selected_slot:slot,window_id:'inventory'},inventory[slot])
-   await inventoryUntil(s=>s.selectedHotbar===slot)
+   const native=await inventoryUntil(s=>s.selectedHotbar===slot),held=native.items.find(i=>i.slot===slot)
+   const expected=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/maw-native-items.json'))).items.find(i=>i.nativeItem===held.nativeId)
+   assert(expected);await wait(()=>inventory[slot]?.count===held.count&&report.itemRegistry?.find(i=>i.runtime_id===inventory[slot]?.network_id)?.name===expected.bedrockIdentifier)
   }
+  // TLM imposes a 20-server-tick cooldown after capture/spawn. Fixed wall
+  // sleeps are insufficient while a native export/save temporarily stalls ticks.
+  // Java broadcasts time every 20 ticks; observe three subsequent packets.
+  const waitNativeCooldown=async()=>{const before=serverTimePackets;await wait(()=>serverTimePackets>=before+3,60000)}
   const useFloor=()=>sendDescriptor('inventory_transaction',{transaction:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use',actions:[],transaction_data:{action_type:'click_block',trigger_type:'player_input',block_position:floor,face:1,hotbar_slot:slot,hand:'main_hand',held_item:inventory[slot],player_pos:{...auth.position,y:auth.position.y+1.62},click_pos:{x:.5,y:1,z:.5},block_runtime_id:runtime,client_prediction:'success',client_cooldown_state:'off'}}},inventory[slot])
   const nearby=async()=>{const start=report.messages.length;say('/fom nearby');await wait(()=>report.messages.slice(start).some(m=>m.message.includes('MC_FOM_NEARBY ')));return nativeJson(report.messages.slice(start).find(m=>m.message.includes('MC_FOM_NEARBY ')).message,'MC_FOM_NEARBY')}
   const oldEntities=new Set((await nearby()).entities.map(e=>e.uuid)),modelsBefore=report.models?.length||0
@@ -118,7 +126,7 @@ async function main(){
   await wait(()=>report.models?.length>modelsBefore);const actor=report.models.at(-1)
   check('using the native soul slab spawns a real maid and returns the empty charm rather than placing a block',true)
   assert.equal((await nativeBlock(floor)).nativeId,ground.nativeId)
-  await new Promise(r=>setTimeout(r,1200));await equip()
+  await waitNativeCooldown();await equip()
   sendDescriptor('inventory_transaction',{transaction:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use_on_entity',actions:[],transaction_data:{entity_runtime_id:BigInt(actor.runtimeId),action_type:'interact',hotbar_slot:slot,held_item:inventory[slot],player_pos:{...auth.position,y:auth.position.y+1.62},click_pos:{x:0,y:.6,z:0}}}},inventory[slot])
   await inventoryUntil(s=>s.items.some(i=>i.slot===slot&&i.nativeId==='touhou_little_maid:smart_slab_has_maid'))
   assert(!(await nearby()).entities.some(e=>e.uuid===maid.uuid))
@@ -127,7 +135,7 @@ async function main(){
   const expected=icons.find(i=>i.nativeItem==='touhou_little_maid:smart_slab_has_maid')
   await wait(()=>report.itemRegistry?.find(i=>i.runtime_id===inventory[slot]?.network_id)?.name===expected.bedrockIdentifier)
   check('captured soul slab receives its occupied original icon',true)
-  await new Promise(r=>setTimeout(r,1200));await equip();useFloor()
+  await waitNativeCooldown();await equip();useFloor()
   await inventoryUntil(s=>s.items.some(i=>i.slot===slot&&i.nativeId==='touhou_little_maid:smart_slab_empty'))
   assert((await nearby()).entities.some(e=>e.uuid===maid.uuid))
   assert.equal((await nativeBlock(floor)).nativeId,ground.nativeId)
@@ -167,7 +175,7 @@ async function main(){
   const item=inventory[rice.slot];report.riceBedrock=item
   if(modelTest){
    const icons=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/maw-native-items.json'))).items
-   for(const id of ['farmersdelight:rice','touhou_little_maid:smart_slab_init','touhou_little_maid:smart_slab_empty']){
+   for(const id of ['farmersdelight:rice','touhou_little_maid:smart_slab_init','touhou_little_maid:smart_slab_empty',...(colonyTest?['minecolonies:clipboard']:[])]){
     const row=icons.find(i=>i.nativeItem===id),slot=supplied.items.find(i=>i.nativeId===id)
     assert(row&&slot);await wait(()=>inventory[slot.slot]?.count===slot.count)
     const runtime=inventory[slot.slot].network_id,actual=report.itemRegistry?.find(i=>i.runtime_id===runtime)
