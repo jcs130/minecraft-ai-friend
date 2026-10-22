@@ -13,6 +13,19 @@ const windows = factory.windows
 const OWN = '11111111-2222-3333-4444-555555555555'
 const OTHER = '99999999-2222-3333-4444-555555555555'
 const hash = 'a'.repeat(64)
+
+test('verified Twilight adapter forwards only its exact 56-slot contents without inventing a vanilla open',()=>{
+  const policy=createNativeMenuProxyGuard({windows,getPlayerUuid:()=>OWN})
+  const open=policy.filter('open_window',{windowId:7,inventoryType:30},{forceNativeMenu:true,nativeAdapter:'twilightforest:uncrafting'})
+  assert.equal(open.forward,false)
+  assert.equal(policy.filter('window_items',{windowId:7,items:Array(56).fill({itemCount:0})}).forward,true)
+  assert.equal(policy.filter('window_items',{windowId:7,items:Array(55).fill({itemCount:0})}).forward,false)
+  for(const slot of [0,10,19,20,55])assert.equal(policy.filter('set_slot',{windowId:7,slot}).forward,true)
+  for(const slot of [-1,56,1.5])assert.equal(policy.filter('set_slot',{windowId:7,slot}).forward,false)
+  assert.equal(policy.filter('set_slot',{windowId:-1,slot:-1}).forward,true)
+  assert.equal(policy.filter('close_window',{windowId:7}).forward,true)
+  assert.equal(policy.filter('window_items',{windowId:7,items:Array(56).fill({})}).forward,false)
+})
 test('explicit original-only menu cannot enter a colliding vanilla parser', () => {
   const guard = createNativeMenuProxyGuard({ windows, getPlayerUuid: () => OWN })
   const packet = { windowId: 17, inventoryType: windows['minecraft:crafting'].type }

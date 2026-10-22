@@ -33,6 +33,12 @@ final class NativeRegistryDump {
     private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maw_registry")
             .requires(s -> s.hasPermission(4))
+            .then(Commands.literal("metadata").executes(ctx -> {
+                try {
+                    int count=dumpEntityMetadata(Path.of("dump","maw-entity-class-input.json"),Path.of("dump","maw-entity-metadata.json"));
+                    ctx.getSource().sendSuccess(()->net.minecraft.network.chat.Component.literal("MC_ENTITY_METADATA_EXPORT classes="+count),false);return count;
+                } catch(Exception error){ctx.getSource().sendFailure(net.minecraft.network.chat.Component.literal("Entity metadata schema export failed: "+error.getClass().getSimpleName()));return 0;}
+            }))
             .then(Commands.literal("visuals").executes(ctx -> {
                 try {
                     Path file=Path.of("dump","maw-visual-shapes.jsonl").toAbsolutePath();Files.createDirectories(file.getParent());
@@ -268,5 +274,39 @@ final class NativeRegistryDump {
             }
         }
         return n;
+    }
+
+    /** Static field schemas only. No entity/world/player is created or read.
+     * Invoke after the actual mod loader/mixins initialize; a plain classpath
+     * cannot establish the IDs used by this complete running modpack. */
+    private static int dumpEntityMetadata(Path input,Path output) throws Exception {
+        if(Files.size(input)>65536)throw new IllegalArgumentException("Class input limit");
+        var names=com.google.gson.JsonParser.parseString(Files.readString(input)).getAsJsonArray();
+        if(names.size()>256)throw new IllegalArgumentException("Class count limit");
+        var schemas=new com.google.gson.JsonObject();var errors=new com.google.gson.JsonObject();
+        for(var name:names) {
+            String text=name.getAsString();
+            if(!text.matches("twilightforest\\.entity\\.[A-Za-z0-9_.$]+"))throw new IllegalArgumentException("Only known Twilight entity class schemas");
+            try {
+                var type=Class.forName(text,false,NativeRegistryDump.class.getClassLoader());
+                if(!net.minecraft.world.entity.Entity.class.isAssignableFrom(type))continue;
+                var rows=new com.google.gson.JsonArray();
+                for(var owner=type;owner!=null&&net.minecraft.world.entity.Entity.class.isAssignableFrom(owner);owner=owner.getSuperclass())
+                    for(var field:owner.getDeclaredFields())if(java.lang.reflect.Modifier.isStatic(field.getModifiers())&&field.getType()==net.minecraft.network.syncher.EntityDataAccessor.class) {
+                        field.setAccessible(true);var accessor=(net.minecraft.network.syncher.EntityDataAccessor<?>)field.get(null);
+                        var row=new com.google.gson.JsonObject();row.addProperty("owner",owner.getName());row.addProperty("field",field.getName());
+                        row.addProperty("key",accessor.id());row.addProperty("serializer",net.minecraft.network.syncher.EntityDataSerializers.getSerializedId(accessor.serializer()));rows.add(row);
+                    }
+                schemas.add(text,rows);
+            }catch(Exception|LinkageError error){
+                // Some mod entity-package helpers extend client-only classes.
+                // A missing optional side class is a per-entry diagnostic,
+                // never a reason to bring down the dedicated server thread.
+                errors.addProperty(text,error.getClass().getName());
+            }
+        }
+        var data=new com.google.gson.JsonObject();data.addProperty("schemaVersion",1);data.addProperty("source","actual_runtime_entity_data_accessor_fields");
+        data.addProperty("processId",ProcessHandle.current().pid());data.addProperty("complete",errors.size()==0);data.add("classes",schemas);data.add("errors",errors);
+        Files.writeString(output,data.toString());return schemas.size();
     }
 }

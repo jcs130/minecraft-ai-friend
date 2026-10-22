@@ -250,6 +250,7 @@ const sessionCount = () => sessions.size
 
 function startSession (front, username) {
   const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
+  sess.heartbeat=new (require('./gateway-heartbeat.cjs').GatewayHeartbeat)({send:params=>{if(!sess.closed&&sess.phase==='play')front.write('keep_alive',params)},expire:reason=>kickFront(sess,reason)})
   if (process.env.GATE_BEDROCK_PROJECTION === '1' || vanillaAgentProjection) {
     // FOM's strict registry/menu projection is also used by Bedrock. It must
     // not disable the explicitly installed native entity presentation bridge.
@@ -275,6 +276,7 @@ function startSession (front, username) {
 function closeSession (sess, reason) {
   if (sess.closed) return
   sess.closed = true
+  sess.heartbeat?.stop()
   sessions.delete(sess)
   // 【时间包普查】会话收摊:打出 back/front/err 三本账里时间相关与总量
   try {
@@ -289,6 +291,7 @@ function closeSession (sess, reason) {
     log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
     if (sess.bedrockProjection) log(`bedrock-projection[${sess.username}] ${JSON.stringify(sess.bedrockProjection.stats)}`)
     if (sess.bedrockItems) log(`bedrock-items[${sess.username}] ${JSON.stringify(sess.bedrockItems.stats)}`)
+    if (sess.heartbeat) log(`heartbeat[${sess.username}] ${JSON.stringify(sess.heartbeat.stats)}`)
   } catch (err) {}
   try { sess.back?.end() } catch (e) {}
   try { if (!sess.front.ended) sess.front.end(reason) } catch (e) {}
@@ -313,8 +316,11 @@ function kickFront (sess, reason) {
 // 后端连接（A 路协商，知识缓存失配时当场神谕学习）
 // keepAlive:false 是命门——mcp 的自动应答会与真客户端经门透传的应答叠加，
 // 服务端收到两条同 id 应答即断线（表现为 join+15s「Timed out」循环）。
-// 应答权必须完全让给真客户端，门只做搬运。
+// Backend automatic replies remain disabled. Gate now owns the sole backend
+// acknowledgement and an independent frontend heartbeat (gateway-heartbeat).
+// Never forward frontend keepalive IDs to the backend as a second reply.
 function connectBackend (sess) {
+  sess.heartbeat?.stop()
   const back = mc.createClient({
     host: BACKEND.host,
     port: BACKEND.port,
@@ -446,6 +452,9 @@ function onBackPacket (sess, name, params) {
 
   // 后端自己 LOGIN 阶段的包（compress/success 等）是发给门自己的，不透传
   if (back.state === states.LOGIN || back.state === states.HANDSHAKING) return
+  if(name==='keep_alive'&&['play_pending','play'].includes(sess.phase)){
+    back.write('keep_alive',{keepAliveId:params.keepAliveId??params.id});sess.heartbeat?.backendAck();return
+  }
 
   if (sess.phase === 'play_pending') {
     // 收尾令已发、真客户端的 ack 还在路上：此间后端 PLAY 包（通道注册、
@@ -545,6 +554,9 @@ function drainPlay (sess) {
 // 前端 -> 后端（CONFIG：只透传 vanilla 配置应答；PLAY：全透传）
 function onFrontPacket (sess, name, params) {
   if (sess.closed) return
+  if(name==='keep_alive'&&sess.phase==='play'&&sess.heartbeat){
+    try{sess.heartbeat.acknowledge(params.keepAliveId??params.id)}catch(error){kickFront(sess,error.message)}return
+  }
   const back = sess.back
   if (!back || back.ended) return
   // 【自 ack 传送】前端上行的 teleport_confirm 吞掉：改由门自己回，避免重序列化字节与 MC 期望不符
@@ -637,7 +649,7 @@ function relayTo (sess, target, name, params, dir) {
         // mirror belongs only to this frontend connection, never a new bot or
         // a broadcast. Failure ends the native view instead of substituting it.
         const data = NativeViewer.encodeNativePacket(vanillaTime ? 'update_time' : name, vanillaTime || params,
-          nativeViewerHash, (sess.nativeViewerSequence || 0) + 1)
+          nativeViewerHash, (sess.nativeViewerSequence || 0) + 1, componentProtocol)
         if (data) {
           target.write('custom_payload', { channel: NativeViewer.CHANNEL, data })
           sess.nativeViewerSequence = (sess.nativeViewerSequence || 0) + 1
@@ -668,7 +680,8 @@ function relayTo (sess, target, name, params, dir) {
           sess.menuProxyGuard = createNativeMenuProxyGuard({ windows: vanillaMenuParserWindows, getPlayerUuid: () => sess.back?.uuid })
           sess.menuProxyGuardBackend = sess.back
         }
-        sess.menuProxyGuard.filter(name, params, { forceNativeMenu: true })
+        const nativeAdapter=sess.bedrockProjection?.registries.get('minecraft:menu')?.get(params.inventoryType)==='twilightforest:uncrafting'?'twilightforest:uncrafting':null
+        sess.menuProxyGuard.filter(name, params, { forceNativeMenu: true,nativeAdapter })
         log(`menu[${sess.username}] native-only window=${params.windowId} type=${params.inventoryType}; original stream retained`)
         return
       }
@@ -737,6 +750,7 @@ function relayTo (sess, target, name, params, dir) {
     } else if (target === sess.back && sess.bedrockItems && name === 'window_click' && bedrockItemWriter) {
       target.writeRaw(bedrockItemWriter.createPacketBuffer('packet', { name, params }))
     } else target.write(name, params)
+    if(target===sess.front&&name==='login')sess.heartbeat?.start()
     if (cookingPotMenu) {
       target.write('open_window', cookingPotMenu)
       log(`DEBUG：[${sess.username}] 农夫乐事烹饪锅菜单转成原版 9x1（window=${cookingPotMenu.windowId}）`)

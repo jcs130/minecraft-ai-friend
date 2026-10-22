@@ -69,7 +69,7 @@ class BedrockProjection {
   learnDynamic (packet) {
     // Datapack enchantments are not part of NeoForge's built-in registry sync.
     // Their IDs are exactly the order of this connection's configuration list.
-    if (packet.id !== 'minecraft:enchantment') return
+    if (!['minecraft:enchantment', 'twilight:magic_paintings'].includes(packet.id)) return
     if (!Array.isArray(packet.entries) || packet.entries.length > 8192) throw Error('INVALID_DYNAMIC_REGISTRY')
     const values = new Map(); const names = new Set()
     for (const [id, row] of packet.entries.entries()) {
@@ -119,7 +119,7 @@ class BedrockProjection {
         if (this.omitUnsupportedEntities && !this.omissionNotices.has(nativeType)) {
           this.omissionNotices.add(nativeType)
           const text = 'MC_FOM_COMPAT ' + JSON.stringify({ schemaVersion: 1, kind: 'entity_not_rendered', nativeType,
-            scope: 'tracked_entity', nextCommand: '/fom nearby', nextAction: '服务器跟踪到当前兼容画面不能显示的模组生物，可能在16格之外。用 /fom nearby 查询16格内真实生物和坐标；完整显示与交互请使用模组Java客户端桥。' })
+            scope: 'tracked_entity', registryScope:'vanilla_bot_entities', nativeStatePreserved:true, nextCommand: '/fom nearby', nextAction: '原版 bot.entities 未收录此生物；原生通道保留真实数据。用 mc_native(action:entities) 或 /fom nearby 查询，网页按原生渲染器的支持情况显示。' })
           return { omit: true, before: [{ name: 'system_chat', params: {
             content: { type: 'compound', value: { text: { type: 'string', value: text } } }, isActionBar: false } }] }
         }

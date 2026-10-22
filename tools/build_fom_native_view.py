@@ -4,6 +4,22 @@ import argparse,hashlib,json,sys
 
 def sha(file):return hashlib.sha256(file.read_bytes()).hexdigest()
 
+def add_twilight_layers(output,source):
+    expected='56dcd09468a6440b15d5258394d90da4a4d18dd9773a772dffc8149978eaf2a2'
+    jar='493da16d10210f9f53a3c33b3d8fcb4ae9b14016ee420d753c894562bd9aba35'
+    if source.stat().st_size>8*1024*1024 or sha(source)!=expected:raise ValueError('Unverified original Twilight model bake')
+    data=json.loads(source.read_bytes());file=output/'native-assets.json';manifest=json.loads(file.read_bytes())
+    if not any(row.get('sha256')==jar and not row.get('explicitOverride') for row in manifest.get('sources',[])):raise ValueError('Twilight model bake belongs to another modpack')
+    if data.get('sourceJarSha256')!=jar or data.get('source')!='original_registered_LayerDefinition_bakeRoot' or len(data.get('layers',{}))!=100:raise ValueError('Invalid original Twilight model bake')
+    key='assets/twilightforest/native/model-layers.json';target=output/key
+    if target.exists() and sha(target)!=expected:raise ValueError('Conflicting Twilight model bake')
+    target.parent.mkdir(parents=True,exist_ok=True)
+    if not target.exists():target.write_bytes(source.read_bytes())
+    manifest['assets'][key]={'sha256':expected,'bytes':source.stat().st_size,'source':'twilightforest-1.21.1-4.8.3345-universal.jar',
+        'originalModelExport':{'source':data['source'],'sourceJarSha256':jar,'modelBytecodeModified':False}}
+    manifest['counts']['files']=len(manifest['assets']);file.write_bytes(json.dumps(manifest,ensure_ascii=False,separators=(',',':')).encode())
+    return {'path':key,'sha256':expected,'originalLayers':100,'integratedActors':['twilightforest:naga'],'completeSceneParityVerified':False}
+
 def add_client_item_colors(output,shared_source):
     """Copy the versioned original-client audit artifact, never guessed RGB."""
     key='assets/minecraft/native/client-item-colors.json'
@@ -43,7 +59,7 @@ def add_physics(output,source):
     manifest_file.write_text(json.dumps(manifest,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
     return manifest['nativePhysics']
 
-def build(shared_source,client_jar,platform_jar,mods_dir,mods_manifest,registry_dir,output,physics=None):
+def build(shared_source,client_jar,platform_jar,mods_dir,mods_manifest,registry_dir,output,physics=None,twilight_layers=None):
     if output.exists():raise ValueError('Choose a new native resource directory')
     expected=json.loads(mods_manifest.read_bytes())['files']
     actual={p.name:p for p in mods_dir.glob('*.jar')}
@@ -56,6 +72,7 @@ def build(shared_source,client_jar,platform_jar,mods_dir,mods_manifest,registry_
     report=export(client_jar,lock,mods_dir,registry_dir,output,platform_jars=[platform_jar])
     report['itemColors']=add_client_item_colors(output,shared_source)
     if physics:report['physics']=add_physics(output,physics)
+    if twilight_layers:report['twilightLayers']=add_twilight_layers(output,twilight_layers)
     report['verification']=verify_export(output)
     return report
 
@@ -63,4 +80,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('shared-source','client-jar','platform-jar','mods-dir','mods-manifest','registry-dir','output'):p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--physics',type=Path)
+    p.add_argument('--twilight-layers',type=Path,help='Pinned original Twilight CPU model export, never a substituted mesh')
     print(json.dumps(build(**vars(p.parse_args())),ensure_ascii=False))

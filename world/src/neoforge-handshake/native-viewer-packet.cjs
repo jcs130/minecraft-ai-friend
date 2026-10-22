@@ -18,7 +18,7 @@ const NAMES = new Set([
   'native_registries', 'login', 'respawn', 'map_chunk', 'unload_chunk', 'block_change', 'multi_block_change',
   'tile_entity_data', 'update_light', 'spawn_entity', 'entity_metadata', 'entity_equipment',
   'entity_destroy', 'rel_entity_move', 'entity_move_look', 'entity_look', 'entity_teleport',
-  'entity_head_rotation', 'entity_velocity', 'entity_status', 'animation', 'hurt_animation', 'maid_animation', 'world_particles',
+  'entity_head_rotation', 'entity_velocity', 'entity_status', 'animation', 'hurt_animation', 'maid_animation', 'twilight_multipart', 'world_particles',
   'window_items', 'set_slot', 'trade_list', 'open_window', 'close_window', 'craft_progress_bar',
   'update_time', 'game_state_change', 'held_item_slot', 'abilities', 'update_health',
   'entity_update_attributes', 'entity_effect', 'remove_entity_effect', 'collect',
@@ -32,7 +32,7 @@ function registryHash (file) {
 
 function nativeRegistries (source) {
   const registries = {}
-  for (const name of ['minecraft:menu', 'minecraft:mob_effect', 'minecraft:potion', 'minecraft:enchantment', 'minecraft:attribute']) {
+  for (const name of ['minecraft:menu', 'minecraft:mob_effect', 'minecraft:potion', 'minecraft:enchantment', 'minecraft:attribute', 'twilight:magic_paintings']) {
     const rows = source?.get(name)
     if (!rows) continue
     if (!(rows instanceof Map) || rows.size > 8192) throw Error('NATIVE_VIEWER_REGISTRY_BUDGET')
@@ -44,7 +44,10 @@ function nativeRegistries (source) {
   return { source: 'same_connection_neoforge_frozen_registry', registryVersion: 2, snapshotPhase: 'play_after_configuration', registries }
 }
 
-function encodeNativePacket (name, params, hash, sequence) {
+function encodeNativePacket (name, params, hash, sequence, componentProtocol = null) {
+  if (name === 'custom_payload' && params?.channel === require('./twilight-multipart.cjs').CHANNEL) {
+    name = 'twilight_multipart'; params = require('./twilight-multipart.cjs').decodeTwilightMultipart(params.data, componentProtocol)
+  }
   if (name === 'custom_payload' && params?.channel === 'neoforge:advanced_container_set_data') {
     name = 'craft_progress_bar'; params = { ...require('./advanced-container-data.cjs').decodeAdvancedContainerData(params.data), sourceChannel: params.channel }
   }

@@ -229,7 +229,7 @@ def guard_console(command: object) -> str:
     if not isinstance(command, str) or not command.strip() or len(command) > 2048 or any(c in command for c in "\r\n\0"):
         raise ValueError("Console requires one bounded command line")
     command = command.strip().lstrip("/")
-    if command in ('maw_registry dumpids','maw_registry visuals'):
+    if command in ('maw_registry dumpids','maw_registry visuals','maw_registry metadata'):
         return command
     if command.split()[0] not in CONSOLE_COMMANDS:
         raise ValueError("Console command not allowed; use dedicated stop/shutdown controls")

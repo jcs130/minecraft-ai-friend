@@ -51,7 +51,7 @@ function createNativeMenuProxyGuard ({ windows, getPlayerUuid = () => null }) {
         active.nativeIdentitySource = 'server_menu_state_registry'
         // If a mod ever occupies a parser-recognized number, do not continue
         // treating its unverified layout as a vanilla menu. No fake replacement.
-        if (!state.menuType.startsWith('minecraft:') && active.mode !== 'verified_cooking_pot_adapter') {
+        if (!state.menuType.startsWith('minecraft:') && !['verified_cooking_pot_adapter','verified_twilight_uncrafting_adapter'].includes(active.mode)) {
           active.mode = 'native_only'
           proxyWindowId = null
         }
@@ -68,7 +68,7 @@ function createNativeMenuProxyGuard ({ windows, getPlayerUuid = () => null }) {
     proxyWindowId = mode === 'native_only' ? null : windowId
   }
 
-  function filter (name, params, { cookingPotMenu = null, forceNativeMenu = false } = {}) {
+  function filter (name, params, { cookingPotMenu = null, forceNativeMenu = false, nativeAdapter = null } = {}) {
     if (name === 'login' || name === 'respawn') { active = null; proxyWindowId = null; return { forward: true } }
     if (name === 'custom_payload') {
       learnState(params)
@@ -93,7 +93,8 @@ function createNativeMenuProxyGuard ({ windows, getPlayerUuid = () => null }) {
       if (!positiveId(params.windowId)) return { forward: false, reason: 'invalid_proxy_window_id' }
       const nativeType = nativeTypes.get(params.inventoryType)
       const supported = !forceNativeMenu && parserTypes.has(params.inventoryType) && (!nativeType || nativeType.startsWith('minecraft:'))
-      open(params.windowId, params.inventoryType, supported ? 'installed_vanilla_parser' : 'native_only')
+      const twilight=forceNativeMenu&&nativeAdapter==='twilightforest:uncrafting'
+      open(params.windowId, params.inventoryType, supported ? 'installed_vanilla_parser' : twilight?'verified_twilight_uncrafting_adapter':'native_only')
       return { forward: supported, reason: supported ? null : 'native_menu_parser_unavailable',
         parserSource: 'installed_prismarine_windows', nativeMenuType: active.nativeMenuType,
         nativeMenuTypeId: active.nativeMenuTypeId }
@@ -106,6 +107,10 @@ function createNativeMenuProxyGuard ({ windows, getPlayerUuid = () => null }) {
     }
     if (WINDOW_DATA.has(name)) {
       const id = params.windowId
+      if(active?.mode==='verified_twilight_uncrafting_adapter'&&id===active.windowId){
+        if(name==='window_items'&&(!Array.isArray(params.items)||params.items.length!==56))return {forward:false,reason:'twilight_slot_count_mismatch'}
+        if(name==='set_slot'&&(!Number.isInteger(params.slot)||params.slot<0||params.slot>=56))return {forward:false,reason:'twilight_slot_out_of_range'}
+      }
       if (id === 0 || id === -2) return { forward: true }
       if (id === -1) return { forward: active?.mode !== 'native_only', reason: 'native_only_cursor_proxy' }
       if (!positiveId(id)) return { forward: true }
