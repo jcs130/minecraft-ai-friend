@@ -43,6 +43,8 @@ export class GameAccounts {
     return Buffer.from(encoded, 'hex');
   }
   async capabilities() {
+    if (this.config.sourceMode === 'cloud') return { ready: false, create: false, claim: false, gamePassword: false, source: null,
+      reason: 'CLOUD_AUTH_BRIDGE_PENDING', message: '网站账号可以注册登录；游戏角色建号、绑定和改密尚待接通家庭端认证作业通道。' };
     try {
       const key = await this.key();
       const raw = await fs.readFile(path.join(this.config.authBridge.directory, 'heartbeat.json'), 'utf8');
@@ -52,7 +54,8 @@ export class GameAccounts {
     } catch { return { ready: false, create: false, claim: false, gamePassword: false, source: null }; }
   }
   async start(owner, operation, body) {
-    if (!(await this.capabilities()).ready) throw fail(503, 'AUTH_BRIDGE_NOT_CONNECTED', '游戏账号桥尚未上线。网站注册登录已可用；游戏角色功能需要先更新登录代理。');
+    const capability = await this.capabilities();
+    if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥尚未上线。网站注册登录已可用；游戏角色功能需要先更新登录代理。');
     const name = body.username;
     if (typeof name !== 'string' || !(operation === 'create' ? /^ag_[A-Za-z0-9_]{1,13}$/i : /^\.?[A-Za-z0-9_]{1,16}$/).test(name)) throw fail(400, 'INVALID_AGENT_NAME', '新 Agent 角色名应为 ag_ 开头，总长不超过 16 个字母、数字或下划线；已有角色请填写原游戏名。');
     if (/eye$/i.test(name) || ['ag_goddess', 'ag_player', 'ag_corti', 'ag_corticam'].includes(name.toLowerCase())) throw fail(403, 'RESERVED_ACCOUNT', '观战与管理身份不能从网站注册或认领');

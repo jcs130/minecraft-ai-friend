@@ -16,6 +16,9 @@ export function loadConfig(overrides = {}) {
   config.publicDir = path.join(projectRoot, 'public');
   config.authBridge = { ...defaults.authBridge, ...local.authBridge, ...overrides.authBridge };
   config.live = { ...defaults.live, ...local.live, ...overrides.live };
+  config.cloudSync = { ...defaults.cloudSync, ...local.cloudSync, ...overrides.cloudSync };
+  if (!['local', 'cloud'].includes(config.sourceMode)) throw new Error('Invalid portal source mode');
+  if (config.sourceMode === 'cloud' && config.authBridge.enabled) throw new Error('The cloud website must not open a local game authentication bridge');
   config.publicOrigin = process.env.PORTAL_PUBLIC_ORIGIN || config.publicOrigin;
   if (config.publicOrigin) {
     const origin = new URL(config.publicOrigin);

@@ -18,7 +18,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t) {
+async function screen(t, { capabilitiesReady = false } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -53,6 +53,9 @@ async function screen(t) {
   window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); };
   window.fetch = async (resource, options = {}) => {
     const url = new URL(resource, origin);
+    // Simulate the bridge going offline between displaying a ready form and
+    // submitting it; the actual backend still returns its unavailable receipt.
+    if (capabilitiesReady && url.pathname === '/api/v1/game-capabilities') return new Response(JSON.stringify({ ready: true }));
     if (networkFailure && ['/api/v1/server', '/api/v1/roster'].includes(url.pathname)) throw new Error('Isolated network outage');
     const headers = { ...options.headers, ...(cookie ? { Cookie: cookie } : {}), ...(options.method && options.method !== 'GET' ? { Origin: origin } : {}) };
     const response = await fetch(url, { ...options, headers });
@@ -100,7 +103,7 @@ test('public growth, event filters and an offline live page work without exposin
 });
 
 test('phone navigation closes from its scrim and LAN HTTP forms work without secure-context randomUUID', async t => {
-  const ui = await screen(t); await ui.setup();
+  const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
   ui.click('.mobile-menu'); assert.ok(ui.document.querySelector('.layout').classList.contains('menu-open'));
   assert.equal(ui.document.querySelector('.mobile-menu').getAttribute('aria-expanded'), 'true');
   ui.click('.nav-scrim'); assert.ok(!ui.document.querySelector('.layout').classList.contains('menu-open'));

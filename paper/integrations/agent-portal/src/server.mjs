@@ -8,21 +8,22 @@ import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { Live } from './live.mjs';
 import { requestOrigin, rateAddress } from './request-origin.mjs';
 import { GameAccounts } from './game-accounts.mjs';
+import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
 const sameSecret = (a, b) => typeof a === 'string' && typeof b === 'string' && /^[A-Za-z0-9_-]{43}$/.test(a) && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const usernameValid = name => typeof name === 'string' && /^[\p{L}\p{N}_-]{3,24}$/u.test(name);
-const passwordValid = value => typeof value === 'string' && value.length >= 12 && value.length <= 128;
+const passwordValid = value => typeof value === 'string' && value.length >= 6 && value.length <= 128;
 
-async function jsonBody(req) {
+async function jsonBody(req, maximum = 16 * 1024) {
   if (!(req.headers['content-type'] || '').startsWith('application/json')) throw fail(415, 'JSON_REQUIRED', '请使用 JSON 请求');
-  if (Number(req.headers['content-length']) > 16 * 1024) throw fail(413, 'BODY_TOO_LARGE', '请求内容过大');
+  if (Number(req.headers['content-length']) > maximum) throw fail(413, 'BODY_TOO_LARGE', '请求内容过大');
   let bytes = 0; const chunks = [];
   for await (const chunk of req) {
     bytes += chunk.length;
-    if (bytes > 16 * 1024) throw fail(413, 'BODY_TOO_LARGE', '请求内容过大');
+    if (bytes > maximum) throw fail(413, 'BODY_TOO_LARGE', '请求内容过大');
     chunks.push(chunk);
   }
   try {
@@ -34,8 +35,9 @@ async function jsonBody(req) {
 
 export function createPortal(config, options = {}) {
   const store = options.store || new Store(config.dataDir);
-  const game = options.game || new GameData(config, store.salt);
-  const world = options.world || new WorldCatalog(config, game, store);
+  const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
+  const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
+  const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const live = new Live(config, store);
   const accounts = new GameAccounts(config, store, game);
   const limits = new Map();
@@ -115,6 +117,12 @@ export function createPortal(config, options = {}) {
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (req.method === 'PUT' && pathname === '/api/v1/internal/snapshot') {
+        if (!cloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
+        if (req.headers.origin) throw fail(403, 'SYNC_CLIENT_REQUIRED', '请从家庭端同步器上传资料');
+        cloud.authorize(req); rate('snapshot-sync', 12, 60000);
+        return respond(res, 200, cloud.accept(await jsonBody(req, config.cloudSync.maxBytes)));
+      }
       const ingest = /^\/api\/v1\/live\/([a-f0-9-]{36})\/(open|frame)$/.exec(pathname);
       if (ingest && (req.method === 'POST' && ingest[2] === 'open' || req.method === 'PUT' && ingest[2] === 'frame')) {
         // Only this narrow binary ingress accepts publisher credentials instead
@@ -131,7 +139,7 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.2.0' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.3.0' });
       if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: config.allowRegistration, publicOrigin: config.publicOrigin || null });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
@@ -167,7 +175,7 @@ export function createPortal(config, options = {}) {
         if (!setup && !config.allowRegistration) throw fail(403, 'REGISTRATION_CLOSED', '网站注册暂未开放');
         const body = await jsonBody(req);
         if (!usernameValid(body.username)) throw fail(400, 'INVALID_USERNAME', '用户名需为 3–24 个文字、数字、下划线或短横线');
-        if (!passwordValid(body.password)) throw fail(400, 'INVALID_PASSWORD', '网站密码需为 12–128 个字符');
+        if (!passwordValid(body.password)) throw fail(400, 'INVALID_PASSWORD', '网站密码需为 6–128 个字符');
         if (store.ownerByName(body.username)) throw fail(409, 'USERNAME_TAKEN', '此网站用户名已被使用');
         let owner;
         try { owner = store.createOwner(body.username, await hashPassword(body.password), setup ? 'admin' : 'owner', setup); }
@@ -230,7 +238,7 @@ export function createPortal(config, options = {}) {
       if (req.method === 'POST' && pathname === '/api/v1/account/password') {
         const { owner, session } = browserAuth(req); rate('password:' + owner.id, 6);
         const body = await jsonBody(req);
-        if (!passwordValid(body.newPassword)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 12–128 个字符');
+        if (!passwordValid(body.newPassword)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 6–128 个字符');
         if (typeof body.currentPassword !== 'string' || body.currentPassword.length > 128 || !await verifyPassword(body.currentPassword, owner.password_hash)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
         store.db.prepare('UPDATE owners SET password_hash=? WHERE id=?').run(await hashPassword(body.newPassword), owner.id);
         store.revokeOtherSessions(owner.id, session.id_hash);
@@ -348,11 +356,12 @@ export function createPortal(config, options = {}) {
       if (res.headersSent) return res.destroy();
       const status = error.status || 500;
       if (status === 500) console.error('Portal request failed:', error.code || error.name);
-      return respond(res, status, { error: { reason: error.reason || 'INTERNAL_ERROR', message: status === 500 ? '服务暂时无法完成请求，请稍后重试' : error.message } });
+      return respond(res, status, { error: { reason: error.reason || 'INTERNAL_ERROR', message: status === 500 ? '服务暂时无法完成请求，请稍后重试' : error.message,
+        ...(Number.isSafeInteger(error.currentSequence) ? { currentSequence: error.currentSequence } : {}) } });
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, close: async () => { clearInterval(cleanup); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, live, accounts, cloud, close: async () => { clearInterval(cleanup); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

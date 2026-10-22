@@ -18,7 +18,7 @@ const uuidAdmin = '33333333-3333-3333-8333-333333333333';
 const password = 'isolated-test-password-2026';
 const fixtureBase = path.resolve(projectRoot, '.local', 'tests');
 
-async function fixture(t) {
+async function fixture(t, initialPassword = password) {
   const root = path.join(fixtureBase, randomUUID());
   const gameDir = path.join(root, 'game'); const opsDir = path.join(root, 'ops');
   for (const child of ['world/playerdata', 'world/stats', 'plugins/Essentials/userdata', 'plugins/AgentFriend']) await fs.mkdir(path.join(gameDir, child), { recursive: true });
@@ -52,7 +52,7 @@ async function fixture(t) {
     return { request, init: () => request('/session'), signup: username => request('/accounts', 'POST', { username, password }), login: username => request('/sessions', 'POST', { username, password }), cookie: () => cookie };
   };
   const admin = client(); await admin.init();
-  const setup = await admin.request('/setup', 'POST', { username: 'site-admin', password }); assert.equal(setup.status, 201);
+  const setup = await admin.request('/setup', 'POST', { username: 'site-admin', password: initialPassword }); assert.equal(setup.status, 201);
   const roster = await game.roster(); const alpha = roster.find(row => row.name === 'ag_Alpha'); const beta = roster.find(row => row.name === 'ag_Beta');
   t.after(async () => {
     await portal.close();
@@ -62,6 +62,17 @@ async function fixture(t) {
   });
   return { portal, game, origin, admin, client, alpha, beta, root, gameDir };
 }
+
+test('six-character website passwords work for administrator setup, registration, change and login', async t => {
+  const f = await fixture(t, 'abc123');
+  const user = f.client(); await user.init();
+  assert.equal((await user.request('/accounts', 'POST', { username: 'short-user', password: 'def456' })).status, 201);
+  assert.equal((await user.request('/account/password', 'POST', { currentPassword: 'def456', newPassword: 'ghi789' })).status, 200);
+  await user.request('/session', 'DELETE');
+  assert.equal((await user.request('/sessions', 'POST', { username: 'short-user', password: 'ghi789' })).status, 200);
+  const rejected = f.client(); await rejected.init();
+  assert.equal((await rejected.request('/accounts', 'POST', { username: 'too-short', password: '12345' })).status, 400);
+});
 
 test('stale or future authentication heartbeats never assert an online authenticated role', () => {
   const now = Date.now();
