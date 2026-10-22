@@ -55,3 +55,10 @@ Nodemailer 固定 10.2.0，参考[官方 SMTP 配置](https://nodemailer.com/smt
 `npm test` 覆盖注册前后权限、浏览器绑定、过期/五次错误、限频、失败无副作用、旧账号绑定、重设后会话/PAT 撤销、角色 UUID 不变、未配置不绕过、SMTP 强制 TLS、UI 验证码与返回登录流程。手机页面使用 email/one-time-code 自动填充和数字键盘。
 
 回退旧网站程序时保留同一持久卷，不能恢复旧 SQLite 覆盖新用户。新增两张邮箱表不修改原 owners、ownerships 或游戏认证库。旧版本无法提供邮箱登录/找回，应提前说明并保留原用户名登录。
+
+
+## 可选的阿里云发信服务
+
+[DirectMail 邮件推送](https://help.aliyun.com/zh/direct-mail/getting-started/simplified-procedure-of-sending-by-api-and-smtp)提供 SMTP/API，可直接接上当前邮箱验证流程；需开通服务、验证发信域名并创建发信地址。建议用独立子域 `mail.kangqiang.site`，按控制台要求配置 DNS，再将 SMTP 凭据放入私有配置。官网已经支持标准 SMTP，不代表这个阿里云账号已经开通发信或通过域名验证。
+
+完整托管注册/登录可评估 [IDaaS CIAM](https://help.aliyun.com/zh/idaas/product-overview/product-function-node-idaas)，支持邮箱/手机号及社交登录；迁移时需额外保留本网站 owner 与游戏角色归属。微信仍需自己的微信应用配置。此处为方案研究，没有购买资源、开通计费产品或启用新的身份提供方。
