@@ -1,0 +1,46 @@
+{
+  "status": "deployed",
+  "releasedAt": "2026-10-22T22:47:58+08:00",
+  "codeCommit": "d5c70bd5",
+  "paper": {
+    "version": "1.21.1 build 133",
+    "previousPid": 10496,
+    "pid": 23228
+  },
+  "plugins": [
+    {
+      "name": "LoginGuard-0.1.5.jar",
+      "sha256": "5f7311d2b1ae22b10311302c12c31d9e1123314debaf975033d8384e61eb5852"
+    },
+    {
+      "name": "AgentFriend-0.4.47.11.jar",
+      "sha256": "9572d48ee16965dd25448a5634ad5e1b5607826dc4951c6133cc18d09de99be2"
+    },
+    {
+      "name": "AgentVision-0.1.2.jar",
+      "sha256": "05054e5d69da5bda49bc63d015421d94ac02fbe2f3ace52d25d9821d932fdd73"
+    }
+  ],
+  "coldBackup": "20261022-223855",
+  "dualDiskComplete": true,
+  "productionChecks": {
+    "components": 10,
+    "savedState": 18,
+    "playersCompared": 194,
+    "accountsPreserved": 51,
+    "nativeLogin": 16
+  },
+  "isolatedChecks": {
+    "jvmSuites": 8,
+    "nativeLogin": 17,
+    "dungeon": 14,
+    "visionLifecycle": 12,
+    "visionLegacyProtocol": 29,
+    "deploymentBoundary": 16
+  },
+  "limits": [
+    "Original 21:34:02 trigger was not logged; reproduced file-write failure and recovery branches are fixed.",
+    "No mobile/Xbox or sixteen autonomous model long-duration test."
+  ],
+  "rollback": "Restore exact program preimages after normal maintenance; preserve latest worlds, auth records, inventories and dungeon ledgers."
+}
