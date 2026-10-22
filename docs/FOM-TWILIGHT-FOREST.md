@@ -73,11 +73,26 @@ Java 需要同版本暮色森林。完整干净安装包和六 JAR 增量包在 
 
 正常停服后的双盘冷备在 `E:/MC/backups/fom-twilight-compat-20261023/before.zip` 和 F 盘同路径：1975 文件 / 199868628 字节，CRC、逐成员 SHA、冷备源复核及双盘整体 SHA 通过。该次只回退兼容补丁时，正常停两服务后恢复冷备中的两个配置、沿用保留的旧网关即可；无需删暮色或覆盖新存档。若要撤销暮色模组本身，仍遵循下文完整模组/存档回滚规则。
 
+## 2026-10-23 动态物品与语言补齐
+
+共享渲染提交 `mc-visual-console@e8e1dcfa`，主干已推送。新消费目录为 `E:/MC/integrations/fom-twilight-items-20261023`：`renderer` 是已提交代码及锁定依赖的冻结副本，`assets` 沿用完全相同的原生注册表/物理/贴图，仅增加已校验的 Mojang 中文语言对象。`client.example.json` 默认禁用；新客户端和网站需要同时切换 `nativeView.module`、`nativeView.assetsDir`，旧进程不会因 Git 更新自动换代码。
+
+- 探矿器按真实加载组件切换原始图标，显示扫描过程、区块原点、总数及分类统计；一次普通账号扫描得到 72000 方块中的 452 泥土，显示 0.628%。返回的是区块统计，不假造每块矿石位置；绝对区块坐标的有符号 64 位解析保留。原模组只接受准确的 `ServerPlayer` 类，Numen FakePlayer 使用探矿器仍会被原模组拒绝，没有用管理权限绕过。
+- 旅行装备从本人配置阶段收到的 `twilight:travellers_modifiers` 读取实际 24 项定义和顺序，按真实组件选取原始破损/改造叠图；内建能力不误作可插入纹理，缺失纹理不占叠图层数。真实破损改造旅行靴已在 WebGL 出图；穿戴护甲模型及所有组合尚未逐个验收。
+- 储物罐使用原始罐体、盖子模型及实际槽 0 物品。修复 `minecraft:container` 原生递归转码，保留空槽索引、完整组件及长整数；`copyOne()` 并不是取第一个非空槽。真实橡木盖/钻石储物罐出图。未知内部物品专用渲染仍明确不可用；这不包含摆放在世界里的罐子摇摆/旋转效果。
+- 按 Minecraft 的词条合并语义加载语言资源。此前 VanillaBackport 的 71 字节英文补充文件让整份原版英文词典不可读；现在验证各原始变体 SHA 后逐词条合并，只解决有证据的原版低于模组的优先级，不猜两个模组之间的覆盖顺序。中文对象 SHA1、SHA256、长度和所属索引均校验；素材共 67189 文件通过验证。模型/PNG 的冲突拒绝规则保持。
+
+普通木棍图标并未缺失。隔离角色原槽 13 是早前组件编解码测试的探针，附有 `twilightforest:skull_candles`，因此被明确拒绝渲染。已保留原完整测试物品记录，并将这一个隔离夹具对账为普通木棍，不通过删掉未知组件检查来掩盖问题。
+
+本轮为有物料夹具的同账号联机及真实无头 WebGL 验收，0 模型调用，不等于自主生存或地下城通关。共享渲染全量 1235 通过、32 个既有条件跳过；新语言导出 5 项验证通过。原始失败包括容器递归缺失、展示字段过滤、语言词典丢失，保留在私有研究目录。详细发布/收尾记录见 [动态物品证据](evidence/fom-twilight-items-20261023.json)。
+
+这轮是客户端渲染消费包更新，正式 Java/基岩服务无需停启；没有修改正式世界、JAR、网关配置、认证或其他 Agent 的模型循环。基岩原有静态适配继续运行，不能把以上 Web 动态界面验收当作基岩动态模型、手机 GPU 或所有暮色内容已完成。
+
 ## 维护与回滚
 
-使用原 `fom_control.ps1` / `fom_bedrock_control.ps1` 管理；先正常关闭基岩桥，再关闭游戏，更新固定发布目录及配置指针，原入口恢复。新素材在 `E:/MC/integrations/fom-twilight-20261022`，不是源码目录热运行。
+正式进程使用原 `fom_control.ps1` / `fom_bedrock_control.ps1` 管理。游戏/网关变更时先正常关闭基岩桥，再关闭游戏，备份后切换固定发布指针；单独更换外部渲染客户端时无需停游戏服。当前推荐消费包是 `E:/MC/integrations/fom-twilight-items-20261023`，不是源码目录热运行。渲染回退只需让消费端恢复 `fom-twilight-compat-20261023` 中的模块和素材两条路径，不覆盖世界。
 
-Mineflayer 新画面配置示例为该目录的 `client.example.json`，使用 `renderer-v3` 和本次原素材；旧 colony viewer 的注册表不能混用。主网关为 `ops/agent-gateway/twilight-20261023-v1`，基岩为 `ops/bedrock-twilight-20261023-v1` / `ops/bedrock-gateway-twilight-20261023-v1`。基岩运行目录迁移后，以相同 HKCU Run 入口/配置路径/任务名重新登记新邮箱并核对私有 DACL，没有增加一个重复启动项。仍是当前用户登录后启动，不能宣传登录前开服。
+Mineflayer 画面配置示例为该目录的 `client.example.json`；旧 colony viewer 的注册表不能混用。现役主网关是 `ops/agent-gateway/twilight-compat-20261023-v4`，基岩桥保持 `ops/bedrock-twilight-20261023-v1`，其网关为 `ops/bedrock-gateway-twilight-compat-20261023-v4`。原 HKCU Run 入口、配置路径及任务名保持，没有增加重复启动项。仍是当前用户登录后启动，不能宣传登录前开服。
 
 安装前发现 FOM 原实例已离线，不能把这次冷备说成刚刚正常停服。离线双盘备份 `backups/fom-twilight-20261022/before.zip`：1951 文件/140988559 字节，CRC、逐成员 SHA 和双盘归档 SHA 均通过。保留旧网关/桥目录、原 mod 锁、唯一替换的 Support JAR、所有世界与认证配置；安装前再次核对冷备源文件没有变化。
 

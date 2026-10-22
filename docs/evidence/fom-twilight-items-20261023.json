@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-10-22T19:33:13.449029+00:00",
+  "source": {
+    "renderer": {
+      "sourceCommit": "e8e1dcfaf9181a346ea5c6571ca8799bb1a1f9e0",
+      "sourceFiles": 651,
+      "dependencies": 16,
+      "files": 14862,
+      "manifestSha256": "0655b9868b71364b3df0ff5f318240fd4da174473623daebe64660f2ad492be2"
+    },
+    "serverBranch": "experiment/agent-society-1.21.1",
+    "builderSha256": "ee3682d534c3b3ab8e149712fe7711e82d661193b8ad69bc41b2bef1388ae019"
+  },
+  "consumer": {
+    "sourceCommit": "e8e1dcfaf9181a346ea5c6571ca8799bb1a1f9e0",
+    "rendererManifestSha256": "0655b9868b71364b3df0ff5f318240fd4da174473623daebe64660f2ad492be2",
+    "assetsManifestSha256": "1d47a9168475896c4d5d7c1a32e86c2c9d55d86c19eace2e8dc6cdeef5afbb4b",
+    "clientExample": "E:\\MC\\integrations\\fom-twilight-items-20261023\\client.example.json",
+    "enabled": false
+  },
+  "assets": {
+    "locales": [
+      "zh_cn"
+    ],
+    "clientJarSha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
+    "sourceExport": "E:\\mc-visual-console\\packages\\modern-viewer\\asset-packs\\native-1.21.1",
+    "byteExactMojangObjects": true,
+    "sourceManifestUnchanged": true,
+    "immutableUnchangedFilesHardlinked": true,
+    "assetsDir": "E:\\MC\\integrations\\fom-twilight-items-20261023\\assets",
+    "manifestSha256": "1d47a9168475896c4d5d7c1a32e86c2c9d55d86c19eace2e8dc6cdeef5afbb4b",
+    "verification": {
+      "assetIntegrityVerified": true,
+      "filesVerified": 67189,
+      "renderParityVerified": false,
+      "complete": false,
+      "resourcePriorityVerified": false
+    }
+  },
+  "production": {
+    "serverConfigChanged": false,
+    "gameOrGatewayRestarted": false,
+    "gameplayActions": 0,
+    "modelCalls": 0,
+    "health": {
+      "28985": {
+        "healthy": true,
+        "paused": false,
+        "runId": "65bd28af2f04432c87edfc30ed2ba26b",
+        "unchangedOwnerRun": true
+      },
+      "28996": {
+        "healthy": true,
+        "paused": false,
+        "runId": "d3f579c47d9041608dc9946a67bd6e4d",
+        "unchangedOwnerRun": true
+      }
+    },
+    "readOnlyLanAcceptance": {
+      "ok": true,
+      "checks": [
+        "LAN default-timeout native inventory and 65-second heartbeat",
+        "same UUID and complete inventory after reconnect"
+      ],
+      "heartbeats": [
+        7,
+        2
+      ],
+      "sameUuidAndCompleteInventoryAfterReconnect": true,
+      "phoneGpuOrWanRetested": false
+    }
+  },
+  "tests": {
+    "rendererPassed": 1235,
+    "rendererConditionalSkipped": 32,
+    "rendererFailed": 0,
+    "languageExportPassed": 5,
+    "scriptedQA": true,
+    "modelCalls": 0
+  },
+  "webgl": {
+    "actualFrozenConsumer": true,
+    "sameActionConnection": true,
+    "allNineTwilightHotbarImagesDecoded": true,
+    "oreLoadingAndActualResults": true,
+    "scanFixture": {
+      "blockDescriptionKey": "block.minecraft.dirt",
+      "count": 452,
+      "totalScannedBlocks": 72000,
+      "ratioText": "0.628%"
+    },
+    "modifiedBrokenTravellerBootsDecoded": true,
+    "oakLidDiamondJarDecoded": true,
+    "ordinaryStick": {
+      "name": "minecraft:stick",
+      "state": "verified",
+      "title": "木棍\nminecraft:stick × 1",
+      "decoded": true
+    },
+    "overlayPlacement": {
+      "top": "64px",
+      "left": "248px"
+    },
+    "pageErrors": 0,
+    "javaReferencePixelParityVerified": false
+  },
+  "originalClassAudit": {
+    "twilightforest.item.travellers_gear.modifiers.TravellersEntryModifier": "6f2380230f194e2b073006fc9402f2e7e13535082ec00f016bf6d7939d18bd76",
+    "twilightforest.item.travellers_gear.TravellersArmorBeltItem": "e3bbfef28c6dd44312ca29a638a8cdf01b192a70b0a0ebfdf5335ed18f1ddc0d",
+    "twilightforest.item.travellers_gear.TravellersGogglesItem": "170b031db670b88cfe703058595145e72dc59e6d406687aafd216561d9aa2107",
+    "twilightforest.TFEnumExtensions": "edc8fba1a312372da7b00761036edde131b3f24302a34ada7c88f495e834462f",
+    "twilightforest.block.JarBlock": "00a9e4fd8ff7a3b460d51e9fe9edff8c66185f3e7579e2f67ac88e250a93339f",
+    "twilightforest.client.event.ClientRegistrationEvents": "a6aae18061d77d7d12f872f288d960b72c7d2eed5f5cdcf582863a0e5782c402",
+    "twilightforest.init.TFItems": "0ea17aae2ca0609567e0f97893d53cad0181322f0bf6294db61ec76a32071271",
+    "net.minecraft.client.resources.language.ClientLanguage": "8937956cad957291b963ab2b86b79a4300f0e527e66c68f18f9e1001fc833d1b"
+  },
+  "isolatedCleanup": {
+    "ownerExitCode": 0,
+    "gatewayExitCode": 0,
+    "sameUuidFullTypedInventoryAfterReconnect": true,
+    "originalHotbarFixtureSlotsRestored": [
+      39,
+      41,
+      42
+    ],
+    "diagnosticStickExplicitlyReconciled": true,
+    "originalDiagnosticFullStackRetainedPrivately": true,
+    "temporaryTcpPortsClosed": [
+      39650,
+      39651,
+      39653,
+      39654,
+      39655,
+      39656,
+      39657,
+      39658,
+      39659
+    ],
+    "worldReset": false
+  },
+  "remaining": [
+    "other Twilight boss/creature actor renderers",
+    "placed jar wobble and content rotation",
+    "all traveller worn-armour and overlay-combination validation",
+    "unsupported nested special item renderers and glint",
+    "Bedrock dynamic Twilight actors and dedicated menu forms",
+    "matched Java client reference-frame parity and real phone GPU coverage"
+  ],
+  "failuresPreserved": [
+    "initial test assumed a one-element lid; original model actually has five elements",
+    "initial real connection exposed missing recursive minecraft:container converter",
+    "initial live viewer filtered the observed traveller registry from its private field allowlist",
+    "mod partial en_us file prevented reading the complete original vanilla dictionary; fixed with SHA-verified language resource stacks and matched Mojang zh_cn",
+    "previous component-codec diagnostic stick carried unrelated skull_candles; preserved full record and reconciled only the isolated QA fixture"
+  ]
+}
