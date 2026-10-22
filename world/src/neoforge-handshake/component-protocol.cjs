@@ -12,6 +12,7 @@ const { arsNativeTypes } = require('./native-ars-codec.cjs')
 const { arsEntityNativeTypes } = require('./native-ars-entity-codec.cjs')
 const { domumNativeTypes } = require('./native-domum-codec.cjs')
 const { contentNativeTypes } = require('./native-content-types.cjs')
+const { twilightComponentCodecs, twilightEntityCodecs, twilightNativeTypes } = require('./native-twilight-types.cjs')
 
 // Verified in TLM 1.5.3 InitDataComponent and Patchouli 93: UUIDUtil.STREAM_CODEC
 // is fixed 16-byte UUID; ResourceLocation.STREAM_CODEC is a protocol string.
@@ -167,11 +168,12 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
     { name: 'customColor', type: ['option', 'i32'] },
     { name: 'customEffects', type: ['array', { countType: 'varint', type: 'ItemPotionEffect' }] }
   ]]
+  const twilightCodecs = twilightComponentCodecs(fields)
   const unsupportedNamedTypes = { Read: {}, Write: {}, SizeOf: {} }
   for (const [name, id] of registry) {
     if (name.startsWith('minecraft:')) continue
     mappings[id] = name
-    if (MOD_CODECS[name]) fields[name] = MOD_CODECS[name]
+    if (MOD_CODECS[name] || twilightCodecs[name]) fields[name] = MOD_CODECS[name] || twilightCodecs[name]
     else {
       // Only report the registered type, never its private payload. Stop before
       // an unknown codec can consume bytes belonging to the following stack.
@@ -189,6 +191,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   protocol.types.MawDomumTextureData = 'mawDomumTextureDataCodec'
   protocol.types.MawIronCount = 'mawIronCount'
   protocol.types.MawFarmerVarLong = 'mawFarmerVarLong'
+  protocol.types.MawTwilightCount = 'mawTwilightCount'
   // NeoForge 21.1.248 CommonHooks keeps vanilla IDs and adds 256 to the
   // custom serializer registry ID. The TSV contains those actual network IDs.
   // TLM maids and Ars spell projectiles use custom serializers; every unknown
@@ -204,7 +207,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
           !Number.isSafeInteger(id) || id < 256 || ids.has(id)) throw Error('INVALID_ENTITY_SERIALIZER_REGISTRY')
       ids.add(id)
       metadataMappings[id] = name
-      metadataFields[name] = ENTITY_METADATA_CODECS[name] || 'mawUnsupportedEntityMetadata'
+      metadataFields[name] = ENTITY_METADATA_CODECS[name] || twilightEntityCodecs[name] || 'mawUnsupportedEntityMetadata'
     }
     metadata[1].type = ['mapper', { type: 'varint', mappings: metadataMappings }]
   }
@@ -272,6 +275,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   const unsupportedChatBubble = () => { throw Error('UNSUPPORTED_NATIVE_CHAT_BUBBLE_CODEC') }
   const compiler = new ProtoDefCompiler()
   compiler.addTypes(contentNativeTypes)
+  compiler.addTypes(twilightNativeTypes)
   compiler.addTypes(nativeTypes)
   compiler.addTypes(arsNativeTypes)
   compiler.addTypes(arsEntityNativeTypes)

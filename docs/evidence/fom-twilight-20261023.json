@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "scope": "current FOM 2.42 plus Twilight Forest; separate from Paper",
+  "status": "deployed_and_running",
+  "jarCount": 113,
+  "originalUnmodifiedJars": 111,
+  "replacedSupportClassOnly": "dev/qiandeng/maw/NativeRegistryDump.class",
+  "numenHostVersionUnchanged": "0.2.0",
+  "officialNumenUnchanged": "0.1.4.1-beta",
+  "twilightVersion": "4.8.3345",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.250",
+  "production": {
+    "mainHealthChecks": 20,
+    "mainRunId": "a43afb5b852a49c18483bf2cb173927f",
+    "bedrockHealthChecks": 14,
+    "bedrockRunId": "b4cc855e01be4c5ea85e9e75370f57b2",
+    "javaPid": 22140,
+    "gamePort": 28976,
+    "mineflayerPort": 28977,
+    "bedrockUdpPort": 28988,
+    "ordinaryLanAgentChecks": 3,
+    "ordinaryAgentClosed": true,
+    "worldRegenerated": false,
+    "originalColdWorldAndAuthUnchangedBeforeStart": true,
+    "staticPolicyAndOpFilesUnchangedAfterStart": 5,
+    "serverPropertiesSemanticallyUnchanged": true,
+    "serverPropertiesCommentTimestampRewrittenByVanilla": true,
+    "registration": "Existing HKCU Run task and config path retained; new bridge mailbox registered with the same method/identity and verified private DACL.",
+    "xboxValidationRequired": true,
+    "newPublicPorts": [],
+    "phoneOrNewWanVerified": false,
+    "newQaGuestAccountCreated": true
+  },
+  "backup": {
+    "files": 1951,
+    "bytes": 140988559,
+    "archiveSha256": "10b74631c55100759ae9d791466476758f181d1274c8b297780521acb1405209",
+    "copies": 2,
+    "crcAndEveryMemberHashVerified": true,
+    "productionWasAlreadyOffline": true
+  },
+  "registryComparison": {
+    "stateIdentityAndAllOtherFieldsExact": true,
+    "states": 210048,
+    "ignoredChannelArrayOrderOnly": true,
+    "float32EquivalentOcclusionRows": 8,
+    "unsupportedBlockEntityRandomOutlineStateIds": [
+      82906
+    ],
+    "reactorDebrisCollisionSource": "ReactorDebrisBlock.getCollisionShape returns Shapes.block; getShape requires ReactorDebrisBlockEntity and has a random fallback. No claim of entity outline/model parity."
+  },
+  "validation": {
+    "modelRequests": 0,
+    "gatewayNodeTests": 330,
+    "targetedPythonTests": 58,
+    "sharedFullPass": 1210,
+    "sharedExistingConditionalSkip": 32,
+    "additionalStaticProviderTestPass": 1,
+    "actualBedrockBaselineChecks": 36,
+    "actualBedrockTwilightChecks": 23,
+    "bedrockTwilightChunks": 434,
+    "actualWebglErrors": 0,
+    "webglIconWitnesses": [
+      "twilightforest:steeleaf_sword",
+      "twilightforest:magic_map"
+    ],
+    "numenNativeWitnesses": [
+      "actual UncraftingMenu",
+      "twilight_oak_log placement consumes one item",
+      "original UUID and inventory after restart"
+    ],
+    "numenPortalCreationVerified": false,
+    "allTemporaryEndpointsClosed": true,
+    "actualPersistentComponentWitnesses": [
+      "flask_contents",
+      "infinite_glass_sword",
+      "sidestep_cooldown",
+      "water_walk",
+      "high_jump_amplifier",
+      "slimy_soles_coefficient",
+      "ore_data",
+      "ore_range",
+      "skull_candles"
+    ]
+  },
+  "renderer": {
+    "repository": "https://github.com/jcs130/mc-visual-console",
+    "commit": "b187d922553dd72484ca33e9653c5b2e214b7111",
+    "manifestSha256": "40f17f338d210bb5a50cb7b0ff6665be208054b08d26ead632288c9b74524fa7",
+    "twilightWireComponents": 47,
+    "twilightEntitySerializers": 4,
+    "twilightPersistentComponentAdapters": 43,
+    "bedrockTwilightItemIcons": 192,
+    "bedrockTwilightBlockStates": 2948,
+    "assetIntegrityVerified": true,
+    "completeSceneParityVerified": false,
+    "fullResourcePriorityVerified": false,
+    "allSpecialRenderersSupported": false,
+    "knownWebGaps": [
+      "glass sword layers",
+      "ore meter",
+      "potion flask",
+      "jar",
+      "traveller armor",
+      "uncrafting table GUI",
+      "Twilight entity/Boss renderers",
+      "reactor debris block entity outline/renderer"
+    ]
+  },
+  "clientPackages": {
+    "folder": "E:\\MC\\发布\\FOM-2.42-暮色森林-20261023",
+    "incrementalJars": 6,
+    "profiles": [
+      {
+        "profile": "player",
+        "versionId": "2.42-qiandengji-20261023.1-player",
+        "enabledJars": 134,
+        "authorDisabled": 10,
+        "sha256": "769f6936dccffe35fbc794b16e5247031fa7c7d028be6abc50020625bc54630a",
+        "size": 205613789
+      },
+      {
+        "profile": "agent",
+        "versionId": "2.42-qiandengji-20261023.1-agent",
+        "enabledJars": 137,
+        "authorDisabled": 10,
+        "sha256": "a378855cb998f2a97fbd1f0095da4c966aed4779f58b6eb5e2c16f443d651c7f",
+        "size": 205702557
+      }
+    ],
+    "secondDiskHashVerified": true,
+    "containsPrivateState": false
+  },
+  "failuresRetained": [
+    "initial missing Pillow environment",
+    "old native asset registry hash rejected",
+    "incorrect initial skull color/scanned_chunk persistent forms rejected by real Java",
+    "unobserved diamond portal activation",
+    "QA helper used unsupported shutdown --wait; corrected CLI later confirmed both owned children exit 0",
+    "Windows newline encoding config hash rejected before startup; corrected bytes then fully revalidated",
+    "production QA assertion used wrong nested inventory field; original raw receipt already correct, same-account reconnect passed"
+  ],
+  "boundaries": {
+    "allModGameplayVerified": false,
+    "allWebAndBedrockRenderersSupported": false,
+    "llmAutonomousProgressionVerified": false,
+    "otherAgentLoopsResumed": false,
+    "otherPaperInstanceChanged": false
+  }
+}

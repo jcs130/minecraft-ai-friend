@@ -17,7 +17,9 @@ const cookingTest=process.argv.includes('--cooking-pot'),motionTest=process.argv
 const potionMetadataTest=process.argv.includes('--potion-metadata'),potionTag=temporaryMaidTag+'_potion'
 const soulSlabTest=process.argv.includes('--soul-slab')
 const colonyTest=process.argv.includes('--colony')
-const fixtureItems=[['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1],...(modelTest?[['touhou_little_maid:smart_slab_empty',1]]:[]),...(blockItemTest?[['create:andesite_casing',3],['farmersdelight:tomato_crate',2]]:[]),...(colonyTest?[['minecolonies:clipboard',1]]:[])]
+const twilightTest=process.argv.includes('--twilight')
+const twilightItems=['twilightforest:steeleaf_sword','twilightforest:ironwood_ingot']
+const fixtureItems=[['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1],...(modelTest?[['touhou_little_maid:smart_slab_empty',1]]:[]),...(blockItemTest?[['create:andesite_casing',3],['farmersdelight:tomato_crate',2]]:[]),...(colonyTest?[['minecolonies:clipboard',1]]:[]),...(twilightTest?twilightItems.map(id=>[id,1]):[])]
 const execFile=require('node:util').promisify(require('node:child_process').execFile)
 const ownConsole=async command=>{const {stdout}=await execFile('E:/MC/runtime/python-3.12.14/python.exe',['-X','utf8',path.join(__dirname,'fom_service.py'),'console','--config',config.mainConfig,'--command',command,'--wait','10'],{encoding:'utf8',timeout:120000,windowsHide:true});const receipt=JSON.parse(stdout);assert(receipt.ok&&receipt.deliveryKnown);return receipt}
 const nativeJson=(message,prefix)=>{const at=message.indexOf(prefix+' ');assert(at>=0);return JSON.parse(message.slice(at+prefix.length+1,message.lastIndexOf('}')+1))}
@@ -175,7 +177,7 @@ async function main(){
   const item=inventory[rice.slot];report.riceBedrock=item
   if(modelTest){
    const icons=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/maw-native-items.json'))).items
-   for(const id of ['farmersdelight:rice','touhou_little_maid:smart_slab_init','touhou_little_maid:smart_slab_empty',...(colonyTest?['minecolonies:clipboard']:[])]){
+   for(const id of ['farmersdelight:rice','touhou_little_maid:smart_slab_init','touhou_little_maid:smart_slab_empty',...(colonyTest?['minecolonies:clipboard']:[]),...(twilightTest?twilightItems:[])]){
     const row=icons.find(i=>i.nativeItem===id),slot=supplied.items.find(i=>i.nativeId===id)
     assert(row&&slot);await wait(()=>inventory[slot.slot]?.count===slot.count)
     const runtime=inventory[slot.slot].network_id,actual=report.itemRegistry?.find(i=>i.runtime_id===runtime)
@@ -301,6 +303,19 @@ async function main(){
    report.motionSource='actual_server_physics_and_synched_metadata';report.autonomousMaidAiTested=false
   }
  }
+ if(twilightTest){
+  const before=await nativeInventory(),p=report.startGame.position
+  assert(/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(before.world)&&['x','y','z'].every(k=>Number.isFinite(p[k])&&Math.abs(p[k])<30000000))
+  report.twilightRestore={world:before.world,position:p}
+  const chunks=report.chunks
+  await ownConsole('execute run gamemode creative b_FomBedrockQA')
+  await ownConsole('execute in twilightforest:twilight_forest run tp b_FomBedrockQA 0 80 0')
+  const end=Date.now()+60000;let state
+  do{state=await nativeInventory();if(state.world==='twilightforest:twilight_forest'&&report.chunks>chunks)break;await new Promise(r=>setTimeout(r,500))}while(Date.now()<end)
+  report.twilightInventory=state
+  check('actual Bedrock connection reaches native Twilight dimension and receives its terrain',state.world==='twilightforest:twilight_forest'&&report.chunks>chunks)
+  check('Twilight items retain exact native identity across the dimension switch',twilightItems.every(id=>state.items.some(i=>i.nativeId===id&&i.count===1)))
+ }
  if(process.argv.includes('--soak')){
   const before=await nativeInventory()
   for(let i=0;i<5;i++){
@@ -311,6 +326,12 @@ async function main(){
  }
 }
 main().catch(e=>{report.error=e.stack;process.exitCode=1;console.error(e.stack)}).finally(async()=>{
+ if(report.twilightRestore)try{
+  const restore=report.twilightRestore,p=restore.position
+  await ownConsole(`execute in ${restore.world} run tp b_FomBedrockQA ${p.x} ${p.y} ${p.z}`)
+  await ownConsole('execute run gamemode survival b_FomBedrockQA')
+  check('Twilight dimension fixture restores the original QA world', (await nativeInventory()).world===restore.world)
+ }catch(e){report.twilightCleanupError=e.message;process.exitCode=1}
  if(report.soulSlabFixture)try{
   const f=report.soulSlabFixture
   if(f.uuid)await ownConsole('execute run kill @e[tag='+f.tag+']')

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "minecraft": "1.21.1",
+  "neoforgeValidated": "21.1.250",
+  "scope": "Add Twilight Forest to the current FOM 2.42 deployment; both Java client and server; preserve the existing world",
+  "artifact": {
+    "file": "twilightforest-1.21.1-4.8.3345-universal.jar",
+    "version": "4.8.3345",
+    "releaseType": "release",
+    "loader": "neoforge",
+    "size": 27154121,
+    "sha256": "493da16d10210f9f53a3c33b3d8fcb4ae9b14016ee420d753c894562bd9aba35",
+    "sha512": "371dd7079b174091363327df70ed64c84e8e36fcab49b4c33bbcbe39650f6bccc12d3e14818cdfbbaa519a999f64a0a92c03ec981f55a315b044dc7cb5c27ef4",
+    "sha1": "9cfd4154928433e2f1f6cfc3deb48c284debb580",
+    "project": "https://www.curseforge.com/minecraft/mc-mods/the-twilight-forest/files/7797302",
+    "source": "https://github.com/TeamTwilight/twilightforest",
+    "url": "https://edge.forgecdn.net/files/7797/302/twilightforest-1.21.1-4.8.3345-universal.jar",
+    "requiredNeoForge": "[21.1.209,)",
+    "requiredMinecraft": "[1.21.1]",
+    "requiredAdditionalMods": [],
+    "dimension": "twilightforest:twilight_forest",
+    "license": "Code LGPL-2.1; non-code assets have the upstream custom license. Original JAR and exported assets remain outside Git.",
+    "hashProvenance": "Locally computed from the unchanged original official ForgeCDN download; size and filename independently checked against the official file listing. Not an upstream SHA256 declaration."
+  },
+  "existingClientAdditions": "fom-colony-20261022.lock.json",
+  "registries": {
+    "blocks": 5680,
+    "items": 6956,
+    "states": 210048,
+    "twilightItemComponentTypes": 47,
+    "twilightEntitySerializerTypes": 4,
+    "blockStatesSha256": "899b2250f1fcd3d979d146c4685172842111551b6e81c16070c7e8825f3bdda4",
+    "itemsSha256": "be250067e8f646860b26b5d14aa2d19ccf784c2aadeb8a28f305a4fdd070744e",
+    "shapesSha256": "5056ac1183d8c03b18e527a89b6e15987bdc242f3ffb19c733a5ee60ec31c0e9"
+  },
+  "supportExport": {
+    "file": "maw-fom-support-0.2.0.jar",
+    "sha256": "4b29cec671c451933528d8e011909fea46ac7c136075a3d7071d4d9ac6e46295",
+    "change": "Only NativeRegistryDump.class differs from the previous deployed support JAR; exposes the existing OP-only visual shape export. Authentication and other classes remain unchanged."
+  },
+  "limitations": {
+    "allModGameplayVerified": false,
+    "allWebAndBedrockRenderersSupported": false,
+    "autonomousProgressionVerified": false,
+    "numenPortalCreationVerified": false,
+    "phoneOrNewWanTest": false
+  }
+}

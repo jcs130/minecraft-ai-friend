@@ -12,6 +12,21 @@ VANILLA=Path('E:/MC/clients/fom-2.42/minecraft/versions/1.21.1/1.21.1.jar')
 
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
+def reused_asset_manifest(assets,archives):
+    """Accept a hash-bound native exporter output, including platform/JarJar inputs.
+
+    Do not require another bridge's sibling prepare.json: the standard exporter
+    already records the exact original archives. Each direct client/mod source
+    must occur once and match the JAR used by this server before reuse.
+    """
+    value=json.loads((Path(assets)/'native-assets.json').read_bytes())
+    if value.get('assetIntegrityVerified') is not True:raise ValueError('Unverified reused assets')
+    sources=value.get('sources',[])
+    for jar in archives:
+        rows=[row for row in sources if row.get('name')==jar.name]
+        if len(rows)!=1 or rows[0].get('sha256')!=sha(jar):raise ValueError('Reused asset export belongs to a different exact mod set')
+    return value['assets']
+
 def projection_catalog(output):
     output=Path(output).resolve();native=output/'gateway/registry/items.json';icons=output/'resources'/resources.CATALOG
     texture_rows=json.loads(icons.read_text(encoding='utf-8'))['items'];by_id={row['nativeId']:row for row in texture_rows}
@@ -40,6 +55,8 @@ def install_blocks(workspace,source):
     return {'blockCount':contract['blockCount'],'stateCount':contract['stateCount'],'blockItemCount':contract.get('blockItemCount',0),'productionModified':False}
 
 def prepare(output,assets_root=None,main_config=MAIN):
+    # Fail before copying a gateway if the image build dependency is absent.
+    from PIL import Image
     output=Path(output).resolve()
     if output.exists():raise ValueError('Prepare in a new private workspace')
     if not output.is_relative_to(Path('E:/MC/research').resolve()):raise ValueError('Preparation stays in the private research directory')
@@ -47,11 +64,7 @@ def prepare(output,assets_root=None,main_config=MAIN):
     output.mkdir(parents=True);assets=Path(assets_root).resolve() if assets_root else output/'assets';manifest={}
     archives=[VANILLA,*sorted((server/'mods').glob('*.jar'))]
     if assets_root:
-        previous=json.loads((assets.parent/'prepare.json').read_text(encoding='utf-8'))
-        if previous['jarInputs']!={jar.name:sha(jar) for jar in archives}:raise ValueError('Reused asset export belongs to a different exact mod set')
-        value=json.loads((assets/'native-assets.json').read_text(encoding='utf-8'))
-        if value.get('assetIntegrityVerified') is not True:raise ValueError('Unverified reused assets')
-        manifest=value['assets']
+        manifest=reused_asset_manifest(assets,archives)
     else:assets.mkdir()
     for jar in ([] if assets_root else archives):
         with zipfile.ZipFile(jar) as archive:
