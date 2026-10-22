@@ -1,0 +1,63 @@
+{
+  "status": "deployed",
+  "releasedAt": "2026-10-22T16:36:36.518277+00:00",
+  "websiteVersion": "0.7.1",
+  "sourceCommit": "77632a91c1f2a51fa5e1c123adc4acdb39cb16ee",
+  "url": "https://mc.kangqiang.site",
+  "image": "qiandengji-portal:0.7.1-77632a91c1f2a51fa5e1c123adc4acdb39cb16ee",
+  "imageId": "sha256:b5d2e4233265120b12ec9149ae54ba3402d2e167a543ee0e005195b0ce701080",
+  "registration": {
+    "mode": "optional-email",
+    "usernamePassword": true,
+    "minimumPasswordLength": 6,
+    "maximumPasswordLength": 128,
+    "emailOptional": true,
+    "suppliedEmailMustBeVerified": true,
+    "emailBindingAndRecovery": true
+  },
+  "mail": {
+    "provider": "Aliyun DirectMail",
+    "region": "cn-hangzhou",
+    "sender": "noreply@mail.kangqiang.site",
+    "smtpHost": "smtpdm.aliyun.com",
+    "smtpPort": 465,
+    "tlsVerified": true,
+    "smtpAuthenticationVerified": true,
+    "realInboxReceiptVerified": false,
+    "dnsRecordsAdded": 6,
+    "originalDnsRecordsPreserved": 8,
+    "allProviderDnsChecksPassed": true,
+    "credentials": "private files only, not in source, public responses or logs"
+  },
+  "verification": {
+    "fullNodeTests": 148,
+    "newRegressionTests": 10,
+    "publicHttpsChecks": 10,
+    "phoneViewportWidth": 390,
+    "phoneEmailRequired": false,
+    "horizontalOverflow": false,
+    "productionTestAccountsCreated": 0
+  },
+  "preserved": {
+    "owners": 1,
+    "ownerships": 6,
+    "owner_emails": 0,
+    "archived_test_roles": 141,
+    "passwordsAndRoleOwnership": true,
+    "eyeAccountsAndPairings": true,
+    "paperRestarted": false,
+    "loginProxyRestarted": false
+  },
+  "rollback": {
+    "container": "qiandengji-portal-prev-before-registration-20261023",
+    "configPreimage": "/opt/qiandengji-portal/email-registration-20261023/config.before-optional-email.json",
+    "keepLatestDatabase": true,
+    "restoreCompatibleRegistrationModeWithOldProgram": true
+  },
+  "earlierAttempt": "A stale hardcoded health version triggered the deployment gate and automatic restoration. The final build reads package.json and passes an explicit version regression.",
+  "limits": [
+    "Actual inbox receipt is awaiting the user; SMTP authentication alone is not a delivered email.",
+    "Phone-width browser QA is not a physical phone test.",
+    "Unpublished 3D work and FOM client packages are not included."
+  ]
+}

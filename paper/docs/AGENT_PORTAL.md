@@ -1,18 +1,18 @@
 # 千灯纪网站：云端门户与账号桥
 
-日期：2026-10-22。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。网站0.7.0与游戏账号桥均已授权上线，当前源码 `64b9a305`、LoginGuard0.1.5；“先内网、暂不更新代理”是已经完成的早期阶段。最新接入、Skill1.1.0、外观与创建者归属见[当前发布](AGENT_PORTAL_JOIN_APPEARANCE.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
+日期：2026-10-22。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。网站0.7.1与游戏账号桥均已授权上线，当前网站源码 `77632a91`、LoginGuard0.1.5；“先内网、暂不更新代理”是已经完成的早期阶段。最新接入、Skill1.1.0、外观与创建者归属见[当前发布](AGENT_PORTAL_JOIN_APPEARANCE.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
 
 ## 已运行的网站
 
 - 本机：`http://127.0.0.1:8790`；同网段：`http://192.168.3.163:8790`。
 - 本机独立运行目录：`D:/codex/2026-09-14/new-chat/mc-agent-portal`，版本 0.2.0。源码进入本仓库，数据库、配置、依赖与日志不入 Git。
 - 公开目录、等级/认证/声望榜、世界事件来自真实 Paper **1.21.1** 保存资料及精确的公开日志投影；不向网页发送整份配置或原日志。
-- 网站注册、登录、网站改密、设备撤销、原角色资料权限与只读程序 token 可用。首次管理员仅能在服务器本机初始化；初始化前普通注册关闭。
+- 网站用户名加密码可直接注册，邮箱可选；填写邮箱后需验证码验证，也可稍后补绑用于找回密码。登录、网站改密、设备撤销、原角色资料权限与只读程序token可用。首次管理员仅能在服务器本机初始化；初始化前普通注册关闭。
 - 认证、成长存档与实时状态分别标记。私有背包不因为名字相同或自报 UUID 放行。保存时属性不能用来断言当前游戏状态。
 - 手机布局有可收起导航、44px 触控、16px 表单、滚动表格、安全区域及可长按复制的凭据；LAN HTTP 的安全随机请求 ID 不依赖 `crypto.randomUUID`。
 - 直播按角色切换，默认本人已绑定角色；私有频道按原 UUID 授权。发布器抓取现有现代 Viewer 的游戏画布，页面聊天与工具面板不入图，不另开游戏身体。
 
-云端当前为0.7.0，已通过真实HTTPS、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。手机真机和真实直播源仍需分别验收。
+云端当前为0.7.1，已通过真实HTTPS、轻量注册回归、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。手机真机和真实直播源仍需分别验收。
 
 ## 游戏账号桥现状
 
@@ -54,7 +54,7 @@
 
 ## 初版验证与证据
 
-以下保留0.2.0初版验证记录；当前0.7.0完整138项门户回归及正式发布见[接入发布](AGENT_PORTAL_JOIN_APPEARANCE.md)与[Numen归属清单](../manifests/portal-numen-owner-release-20261022.json)。
+以下保留0.2.0初版验证记录；当前0.7.1完整148项门户回归及正式发布见[接入发布](AGENT_PORTAL_JOIN_APPEARANCE.md)与[Numen归属清单](../manifests/portal-numen-owner-release-20261022.json)。
 
 - 21 个 JS 模块语法检查、**47 项** Node API/DOM 集成测试通过；覆盖旧频道 schema 迁移、用户隔离、撤权、原 UUID、真实物品名、CSRF/Host/代理、手机 HTTP 兼容、表单真实提交、发布 epoch/序号/过期与 Canvas 来源策略。
 - **7 个 JVM 测试程序，84 项检查**通过；含原认证/正版/Eye/并发回归和 21 项加密桥检查。

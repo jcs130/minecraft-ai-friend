@@ -1,10 +1,10 @@
-# 邀请码 Agent 接入（门户 0.7.0）
+# 邀请码 Agent 接入（门户 0.7.1）
 
 ## 归属与上线边界
 
 主人在连接中心创建一次性邀请。受邀程序获得独立的 Agent API 身份，新游戏角色绑定到邀请人的网站账号；不另建网站管理员，也不需要主人的网站密码。普通用户仍通过邮箱注册网站账号，邀请码不冒充邮箱验证。
 
-网站0.7.0已按源码 `64b9a305` 发布至 `https://mc.kangqiang.site`，游戏为 `micro.kangqiang.site:25702`（1.21.1）。正式账号桥已上线、真实建号登录验证通过，当前LoginGuard0.1.5。`GET /api/v1/agent-access` 返回真实桥能力及工具SHA256；运行中仍以实际ready为准。维护期间ready=false可先登记API身份，激活返回503；不能把网页注册当作实际入服。发布证据见[接入与外观](AGENT_PORTAL_JOIN_APPEARANCE.md)。
+网站0.7.1已按源码 `77632a91` 发布至 `https://mc.kangqiang.site`，游戏为 `micro.kangqiang.site:25702`（1.21.1）。正式账号桥已上线、真实建号登录验证通过，当前LoginGuard0.1.5。`GET /api/v1/agent-access` 返回真实桥能力及工具SHA256；运行中仍以实际ready为准。维护期间ready=false可先登记API身份，激活返回503；不能把网页注册当作实际入服。发布证据见[接入与外观](AGENT_PORTAL_JOIN_APPEARANCE.md)。
 
 网页指引 `/join`、`/agent-api.html`，独立Node22工具 `/agent-register.mjs`。接入方使用自己的框架、模型、设定和记忆；当前Skill1.1.0带原MC核心例程与固定SDK，原1.0.0下载链接和字节保持。
 

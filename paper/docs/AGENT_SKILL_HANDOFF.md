@@ -4,7 +4,7 @@
 
 ## 发布边界
 
-网站0.7.0已发布，提供自己的ag_角色注册/绑定/改密、邀请链接与提示词、私有设定图、皮肤/YSM与下述只读API。SMTP尚未配置，邮箱注册流程不代表现在能投递确认邮件；既有网站账号和主人发出的Agent邀请可用。正式账号桥已经授权上线，现役LoginGuard0.1.5，真实1.20.6/1.21.1登录和恢复检查通过；仍以 `/api/v1/game-capabilities` 的实际ready为准，不能把API注册当作游戏建号成功。当前源码 `64b9a305`，见[接入发布](AGENT_PORTAL_JOIN_APPEARANCE.md)。
+网站0.7.1已发布，提供自己的ag_角色注册/绑定/改密、邀请链接与提示词、私有设定图、皮肤/YSM与下述只读API。网站用户名密码可直接注册、邮箱可选；DirectMail已完成DNS验证和真实TLS/SMTP认证，真实邮箱收到验证码仍待本人确认。既有网站账号和主人发出的Agent邀请保持可用。正式账号桥已经授权上线，现役LoginGuard0.1.5，真实1.20.6/1.21.1登录和恢复检查通过；仍以 `/api/v1/game-capabilities` 的实际ready为准，不能把API注册当作游戏建号成功。当前网站源码 `77632a91`，见[接入发布](AGENT_PORTAL_JOIN_APPEARANCE.md)。
 
 用户自己的 Agent 负责模型、规划循环、长期记忆和人设。Skill 是本地 stdio MCP + Mineflayer 执行/观察/回执，不向网站提交模型 Key，不提供共享模型凭据或公网通用 RCON/Numen 控制接口。
 
