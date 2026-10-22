@@ -63,3 +63,15 @@ test('stale heartbeat, forged receipts and unknown outcomes fail closed and neve
   assert.equal((await f.admin.request('/game-capabilities')).data.ready, false);
   assert.equal((await f.admin.request('/agents', 'POST', { username: 'ag_Later', requestId: randomUUID(), gamePassword: 'game-test-password' })).status, 503);
 });
+
+
+test('administrator-managed historical test bindings do not consume the normal self-service creation quota', async t => {
+  const f = await connected(t), owner = f.portal.store.ownerByName('fixture-admin');
+  for (let i = 0; i < 8; i++) f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, randomUUID(), 'Isolated archived QA binding', Date.now());
+  const created = await f.admin.request('/agents', 'POST', { username: 'ag_AdminNew', requestId: randomUUID(), gamePassword: 'admin-new-game-password' });
+  assert.equal(created.status, 202);
+  const ordinary = f.client(); await ordinary.init(); await ordinary.request('/accounts', 'POST', { username: 'QuotaUser', password: testPassword });
+  const other = f.portal.store.ownerByName('QuotaUser');
+  for (let i = 0; i < 5; i++) f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(other.id, randomUUID(), 'Isolated quota binding', Date.now());
+  assert.equal((await ordinary.request('/agents', 'POST', { username: 'ag_TooMany', requestId: randomUUID(), gamePassword: 'ordinary-game-password' })).data.error.reason, 'AGENT_LIMIT');
+});

@@ -226,6 +226,21 @@ test('connection exports contain environment names and original identity, withou
   assert.equal(config.data.gamePasswordEnv, 'MC_GAME_PASSWORD'); assert.equal(config.data.credentialEnv, 'QD_PORTAL_CLIENT_TOKEN');
   assert.ok(!JSON.stringify(config.data).includes(password));
 });
+
+test('ownership labels distinguish an administrator viewing a role from its verified owner and block duplicate claims', async t => {
+  const f = await fixture(t), guest = f.client(); await guest.init();
+  let roles = (await f.admin.request('/agents')).data.agents;
+  assert.equal(roles.find(row => row.id === f.alpha.id).isOwn, false);
+  assert.equal((await guest.request('/roster')).data.agents.find(row => row.id === f.alpha.id).claimable, true);
+  const currentOwner = (await f.admin.request('/session')).data.owner;
+  f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(currentOwner.id, uuidA, 'Isolated explicit owner verification', Date.now());
+  roles = (await f.admin.request('/agents')).data.agents;
+  assert.equal(roles.find(row => row.id === f.alpha.id).isOwn, true); assert.equal(roles.find(row => row.id === f.beta.id).isOwn, false);
+  const publicRoles = (await guest.request('/roster')).data.agents;
+  assert.equal(publicRoles.find(row => row.id === f.alpha.id).claimable, false);
+  assert.equal(publicRoles.find(row => row.name === 'Goddess').claimable, false);
+  assert.ok(!JSON.stringify(publicRoles).includes(currentOwner.id));
+});
 test('private files, shell, RCON and arbitrary proxy routes are not exposed', async t => {
   const f = await fixture(t);
   for (const route of ['/.local/portal.sqlite', '/config.local.json', '/src/server.mjs', '/%2e%2e%5c.local/portal.sqlite', '/api/v1/rcon', '/api/v1/proxy?url=http://127.0.0.1:8088']) {

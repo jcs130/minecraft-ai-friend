@@ -202,7 +202,7 @@ export function createPortal(config, options = {}) {
         throw fail(405, 'METHOD_NOT_ALLOWED', '此角色设定操作不支持这个方法');
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.5.0' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.5.1' });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
@@ -212,7 +212,11 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
-      if (req.method === 'GET' && pathname === '/api/v1/roster') return respond(res, 200, { agents: (await game.roster()).map(row => game.publicAgent(row)) });
+      if (req.method === 'GET' && pathname === '/api/v1/roster') {
+        const owned = new Set(store.db.prepare('SELECT agent_uuid FROM ownerships').all().map(row => row.agent_uuid));
+        return respond(res, 200, { agents: (await game.roster()).map(row => ({ ...game.publicAgent(row),
+          claimable: !!row.playerUuid && !row.isReserved && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
+      }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
       if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20) }));
       if (req.method === 'GET' && pathname === '/api/v1/live') {
@@ -298,7 +302,7 @@ export function createPortal(config, options = {}) {
         const roster = await game.roster();
         const owned = store.ownedUuids(context.owner.id);
         const agents = roster.filter(row => context.credential ? row.playerUuid === context.credential.agent_uuid : context.owner.role === 'admin' || owned.includes(row.playerUuid));
-        return respond(res, 200, { agents, access: context.owner.role === 'admin' && !context.credential ? 'admin' : 'owner' });
+        return respond(res, 200, { agents: agents.map(row => ({ ...row, isOwn: owned.includes(row.playerUuid) })), access: context.owner.role === 'admin' && !context.credential ? 'admin' : 'owner' });
       }
       const stateMatch = /^\/api\/v1\/agents\/([a-f0-9]{24})\/state$/.exec(pathname);
       if (req.method === 'GET' && stateMatch) {

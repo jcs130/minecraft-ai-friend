@@ -338,3 +338,17 @@ test('unconfigured email registration UI states the actual limitation and preser
   assert.equal(ui.document.querySelector('#auth-form'), null);
   ui.click('#modal [data-action="login"]'); assert.ok(ui.document.querySelector('#auth-form[data-mode="login"]'));
 });
+
+
+test('my roles filters by ownership instead of administrator access and unbound roles show a claim entry', async t => {
+  const ui = await screen(t); await ui.setup();
+  ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('[data-filter="authorized"]'));
+  ui.click('[data-filter="authorized"]'); assert.equal(ui.document.querySelectorAll('.agent-card').length, 0);
+  const admin = ui.portal.store.ownerByName('ui-admin');
+  ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(admin.id, playerUuid, 'Isolated explicit owner approval', Date.now());
+  await ui.refresh(); assert.equal(ui.document.querySelectorAll('.agent-card').length, 1); assert.match(ui.document.querySelector('.agent-card').textContent, /本人角色/);
+  ui.portal.store.db.prepare('DELETE FROM ownerships WHERE agent_uuid=?').run(playerUuid); await ui.refresh();
+  ui.click('[data-filter="all"]'); ui.click('[data-action="claim-role"]');
+  assert.match(ui.document.querySelector('#modal').textContent, /账号桥尚未上线|认证桥|代理/);
+  assert.equal(ui.document.querySelector('#game-account-form'), null);
+});

@@ -45,7 +45,7 @@ export class GameAccounts {
   async capabilities() {
     if (this.remote) return this.remote.capabilities();
     if (this.config.sourceMode === 'cloud') return { ready: false, create: false, claim: false, gamePassword: false, source: null,
-      reason: 'CLOUD_AUTH_BRIDGE_PENDING', message: '网站账号可以注册登录；游戏角色建号、绑定和改密尚待接通家庭端认证作业通道。' };
+      reason: 'CLOUD_AUTH_BRIDGE_PENDING', message: '游戏角色建号、本人认领和改密等待认证桥上线；现有游戏登录保持。' };
     try {
       const key = await this.key();
       const raw = await fs.readFile(path.join(this.config.authBridge.directory, 'heartbeat.json'), 'utf8');
@@ -71,7 +71,7 @@ export class GameAccounts {
       const maximum = this.config.cloudAccounts?.maxAgentsPerOwner || 5;
       const owned = this.store.ownedUuids(owner.id).length;
       const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
-      if (owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
+      if (owner.role !== 'admin' && owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
     }
     const roster = await this.game.roster();
     const existing = roster.find(row => row.name.toLowerCase() === name.toLowerCase());
