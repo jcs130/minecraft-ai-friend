@@ -9,7 +9,7 @@ import { publicMedia } from '../src/public-media.mjs';
 
 test('promotional media configuration is an allowlist, never a remote fetch or private file path', () => {
   assert.deepEqual(publicMedia({ publicMedia: { video: 'https://private/intro.mp4', poster: '../portal.sqlite', character: '/etc/key.png' } }), {});
-  assert.deepEqual(publicMedia({ publicMedia: { video: 'intro-v5.mp4', poster: 'intro.jpg', credit: '可米' } }), { video: '/media/intro-v5.mp4', poster: '/media/intro.jpg', credit: '可米' });
+  assert.deepEqual(publicMedia({ publicMedia: { video: 'intro-v5.mp4', poster: 'intro.jpg', portrait: 'cormy-standing.png', credit: '可米' } }), { video: '/media/intro-v5.mp4', poster: '/media/intro.jpg', portrait: '/media/cormy-standing.png', credit: '可米' });
 });
 
 test('selected video streams support phone range playback and HEAD, while private and unselected files stay inaccessible', async t => {

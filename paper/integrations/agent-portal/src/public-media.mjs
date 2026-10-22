@@ -4,7 +4,7 @@ import path from 'node:path';
 const types = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 export function publicMedia(config) {
   const result = {};
-  for (const key of ['video', 'poster', 'character']) {
+  for (const key of ['video', 'poster', 'character', 'portrait']) {
     const name = config.publicMedia?.[key], extension = typeof name === 'string' ? path.extname(name).toLowerCase() : '';
     if (typeof name === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,110}$/.test(name) && (key === 'video' ? ['.mp4', '.webm'].includes(extension) : ['.png', '.jpg', '.jpeg', '.webp'].includes(extension))) result[key] = '/media/' + name;
   }
@@ -17,7 +17,7 @@ export function publicMedia(config) {
 export async function servePublicMedia(req, res, pathname, config) {
   const name = pathname.slice('/media/'.length);
   const configured = publicMedia(config);
-  if (!['GET', 'HEAD'].includes(req.method) || !['video', 'poster', 'character'].some(key => configured[key] === pathname) || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,110}$/.test(name)) return false;
+  if (!['GET', 'HEAD'].includes(req.method) || !['video', 'poster', 'character', 'portrait'].some(key => configured[key] === pathname) || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,110}$/.test(name)) return false;
   const root = await fs.realpath(path.join(config.dataDir, 'media')).catch(() => null);
   const filename = root && await fs.realpath(path.join(root, name)).catch(() => null);
   if (!filename || path.dirname(filename) !== root) return false;
