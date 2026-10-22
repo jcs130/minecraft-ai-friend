@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "version": "0.8.0",
+  "sourceCommit": "e7bc27a22783ab320271ca5ae164ab8cff05cd41",
+  "initialSourceCommit": "4ef4c2694d7eb38bccb1cd2fdd172bfea5abad51",
+  "url": "https://mc.kangqiang.site/#memories",
+  "releasedAt": "2026-10-22T17:46:00.740832+00:00",
+  "imageId": "sha256:c2bb931df6e9cba696290d0f620cb7bf6b4c20f6200cfe80704a82e850e9b718",
+  "publicMemoryPosts": 4,
+  "memoryImages": 8,
+  "memoryIds": [
+    "1d4b953f-ec8a-4d8d-87cd-d6769adb7021",
+    "e8319df2-6d78-4655-90e7-cf6558ba3110",
+    "b8d31190-09cb-4a3f-a81c-26265a9dbb05",
+    "81bc7981-f4f6-428c-9fd6-4e0cd94af173"
+  ],
+  "sourceImageBytesPreserved": true,
+  "noImageGenerationPerformed": true,
+  "video": {
+    "version": "V8",
+    "seconds": 163,
+    "browserDecodedSeconds": 163.008,
+    "browserObservedPlaybackSeconds": 69.027267,
+    "width": 1280,
+    "height": 720,
+    "sha256": "f8e1080a7c1d4027b1a58e85009e08a17bc3491a39b66ee5c808daed50b2fcdb",
+    "posterSha256": "3c38684f1f1e1befde44afc157cfe8eb6036cb7398336e99de96ac1019179ec4",
+    "aigcLabeled": true
+  },
+  "verification": {
+    "apiAndDomPassed": 164,
+    "syntaxModules": 56,
+    "publicHttpsPassed": 28,
+    "desktopBrowser": true,
+    "mobileViewport": { "width": 390, "height": 844, "horizontalOverflow": false },
+    "physicalPhoneTested": false,
+    "createdProductionTestAccounts": 0
+  },
+  "preserved": { "owners": 1, "ownerships": 6, "archivedTestRoles": 141, "galleryImages": 3, "earlierMemoryPosts": 2 },
+  "registrationMode": "optional-email",
+  "gameAccountBridgeReady": true,
+  "uploadAuthorizationsRemoved": true,
+  "newPublicPorts": 0,
+  "paperRestarted": false,
+  "loginProxyRestarted": false,
+  "peerSpectatorChangesDeployed": false,
+  "previousContainer": "qiandengji-portal-prev-before-memories-followup-20261023",
+  "beforeFeatureContainer": "qiandengji-portal-prev-before-memories-20261023",
+  "rollbackPreservesLatestDatabase": true
+}
