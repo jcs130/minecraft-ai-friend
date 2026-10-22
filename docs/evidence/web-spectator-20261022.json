@@ -70,5 +70,29 @@
     "new_long_term_autonomy_success_rate",
     "live_sources_for_existing_agents"
   ],
-  "rawCapturesCredentialsWorldsAndScreenshotsCommitted": false
+  "rawCapturesCredentialsWorldsAndScreenshotsCommitted": false,
+  "frozenDeployment": {
+    "schemaVersion": 1,
+    "version": "0.1.0",
+    "serverSourceCommit": "4b3175d119b5d398657e8519f94c22e548b253d7",
+    "visualSourceCommit": "c23fd08931e13cea7a54ae8fcef234ffccc9753f",
+    "sdkArchiveSha256": "bebf5ad804e008d03da2c1e1a45a9b6cf32d5ec4454cbde31179f4636ac92112",
+    "minecraftVersion": "1.21.1",
+    "guiCatalogSha256": "30b6712dd2209700e18ba7f6f1f625396cb35f41e5778b8474baa983dda1ad8a",
+    "registrySha256": "55893d269459e1e05387903c77b2db877d7cece875ed31a5a6a2f965822ea546",
+    "originalAssetsVerified": 8451,
+    "consoleBundleSha256": "da609cdefefaaa477f799acaac90a9553a773235d5a3f9f6e1b44a861834e32f",
+    "worldBundleSha256": "4f77947f8a9e5d37455891c50bbc9d6d71f9031822d24d518d88739ced3bdfb3",
+    "readOnlyPublisher": true,
+    "additionalMinecraftLoginByPublisher": false,
+    "modelLoopIncluded": false,
+    "dependenciesInstalled": true,
+    "completeSceneParityVerified": false,
+    "copiedAssetsReverified": 8451,
+    "copiedGuiIconsReverified": 6,
+    "runtimeBundlesMatchTrustedSite": true,
+    "bundleHashesMatchRealWebglTest": true,
+    "qaAccountOrCredentialsIncluded": false,
+    "firstBuildPathMismatchPreserved": true
+  }
 }
