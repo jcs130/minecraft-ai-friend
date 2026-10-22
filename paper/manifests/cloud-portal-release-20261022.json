@@ -1,7 +1,7 @@
 {
   "checkedAt": "2026-10-22T09:34:33.319044+00:00",
   "website": "https://mc.kangqiang.site",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "https": true,
   "originalRootSiteAvailable": true,
   "playersOnline": 4,
@@ -62,10 +62,34 @@
   "oldUsernameLoginPreserved": true,
   "agentSkillDownloadSha256": "3d1676e86f31396071866c64ce87d9e6820e1530b755c4221f04c22a15f94669",
   "publicGameAddress": "micro.kangqiang.site:25702",
-  "sourceCommit": "0677a30b909b4c01e77cec42ea909bbed25e4f5a",
-  "imageId": "sha256:6ee70c97599afdcc3f023547af0db6e01ae53e3e02d0e57d52b0f2c4acb70542",
-  "automatedTests": 86,
+  "sourceCommit": "b4f35a3dbabb1ab73a3ab3a0b4b6adbafae16021",
+  "imageId": "sha256:ab4989708369e7548f5041f16a564a33ac44e5f88323a41474b48506fae22929",
+  "automatedTests": 89,
   "nativeIsolatedChecks": 19,
   "gameServicesRestarted": false,
-  "originalOwnerRowsPreserved": true
+  "originalOwnerRowsPreserved": true,
+  "verifiedAt": "2026-10-22T10:20:40.326205+00:00",
+  "ownerUsername": "jcs130",
+  "namedRoles": [
+    "ag_CorMy",
+    ".MicroKQ",
+    "ag_Kirito",
+    "ag_NarutoPi"
+  ],
+  "namedRolesNotClaimable": true,
+  "unboundExamples": [
+    "ag_NEKO",
+    "CortiLan",
+    "feiyu_bot",
+    "fulumu",
+    "TianYi"
+  ],
+  "testAccountsBound": 140,
+  "totalBindings": 144,
+  "reservedRolesNotClaimable": true,
+  "publicUuidNotExposed": true,
+  "gameBridgeReady": false,
+  "emailReady": false,
+  "gameDataChanged": false,
+  "ownerBindingsPreserved": true
 }
