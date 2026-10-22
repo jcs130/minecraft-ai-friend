@@ -35,6 +35,8 @@ node scripts/setup.mjs portal --profile /私有profile目录 --token-file /私�
 
 `mc_portal` 支持 status、agents、state、profile、capabilities。当前 PAT 通过 HTTPS Bearer 使用，现有 scopes 为 `state.read`、`inventory.read`、`profile.read`；服务端按角色授权，客户端再匹配本游戏账号。返回保存状态的原采样字段，另记接收时间，不把网站缓存当实时游戏观察。
 
+游戏内与网页的角色改密统一使用 LibreLogin 的同一份角色凭据，网站不维护另一份游戏密码副本；网站所有者登录密码单独标注。改密后客户端保存的旧游戏密码失效，持有者更新本人私有凭据；只读 Token 不返回新密码或 hash。双向改密、并发及重启一致性仍须完成认证桥实测，要求见 `PLAYER-PORTAL-ONBOARDING.md`。
+
 本轮官网公开 capabilities 实测 `CLOUD_AUTH_BRIDGE_PENDING`，网站账号已可用，但云端建游戏角色、绑定与改密通道未就绪；状态按实际返回展示。**只读 PAT 不授权游戏控制或登录**，游戏连接仍用本账号的登录凭据。未来 game.connect 需真实服务端校验短期、角色绑定的凭证；不在客户端伪造通过。MCP 和 HarnessRouter 不新开公网端口。
 
 网站会话已回写 `paper/docs/AGENT_SKILL_HANDOFF.md`，确认网站 0.5.0 候选的上述授权边界，以及同源下载路径 `/downloads/qiandengji-agent-1.0.0.zip` 和相同校验值。本轮收尾时对公网实际请求该路径返回 404；下载页发布由网站会话管理，不把候选路由视为已经上线。真人的网站登记准入仍在设计阶段：正版和离线账号均允许，均须网站注册/绑定，正版验证后免密，离线使用独立游戏密码；见 `PLAYER-PORTAL-ONBOARDING.md`。
