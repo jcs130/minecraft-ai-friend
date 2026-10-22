@@ -11,6 +11,10 @@ import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
 import { publicMedia, servePublicMedia } from './public-media.mjs';
+import { CloudAccounts } from './cloud-accounts.mjs';
+import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
+import { EmailAuth, normalizeEmail } from './email-auth.mjs';
+import { agentSkill, serveAgentSkill } from './agent-skill.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
@@ -42,7 +46,10 @@ export function createPortal(config, options = {}) {
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const live = new Live(config, store);
   const gallery = new Gallery(store, cloud);
-  const accounts = new GameAccounts(config, store, game);
+  const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
+  const accounts = new GameAccounts(config, store, game, accountCloud);
+  const profiles = new AgentProfiles(store);
+  const emailAuth = new EmailAuth(config, store, options.emailSender);
   const limits = new Map();
   function rate(key, max = 20, windowMs = 15 * 60 * 1000) {
     const now = Date.now();
@@ -67,7 +74,8 @@ export function createPortal(config, options = {}) {
     return created.session;
   }
   function sessionData(session) {
-    return { owner: store.ownerPublic(session?.owner_id ? store.ownerById(session.owner_id) : null), csrfToken: session?.csrf || null, allowRegistration: config.allowRegistration };
+    return { owner: store.ownerPublic(session?.owner_id ? store.ownerById(session.owner_id) : null), csrfToken: session?.csrf || null,
+      allowRegistration: config.allowRegistration && (config.emailAuth.registrationMode !== 'email' || emailAuth.capabilities().available), emailAuth: emailAuth.capabilities() };
   }
   function auth(req, scopes = []) {
     const bearer = req.headers.authorization;
@@ -98,6 +106,7 @@ export function createPortal(config, options = {}) {
     const allowed = context.credential ? context.credential.agent_uuid === agent.playerUuid
       : context.owner.role === 'admin' || store.ownedUuids(context.owner.id).includes(agent.playerUuid);
     if (!allowed) throw fail(404, 'AGENT_NOT_FOUND', '未找到可访问的角色');
+    if (agent.identityConflict) throw fail(409, 'IDENTITY_CONFLICT', '角色身份出现冲突，请联系服主核对原 UUID 后继续');
     return { ...context, agent };
   }
   function csrf(req) {
@@ -119,7 +128,22 @@ export function createPortal(config, options = {}) {
       if (req.portalOrigin.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
+      if (pathname === agentSkill.url && ['GET', 'HEAD'].includes(req.method)) {
+        rate('skill-download:' + digest(rateAddress(req, config)), 12, 60000);
+        await serveAgentSkill(req, res, config); return;
+      }
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (req.method === 'POST' && pathname === '/api/v1/internal/accounts/poll') {
+        if (!accountCloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
+        if (req.headers.origin) throw fail(403, 'ACCOUNT_WORKER_REQUIRED', '请从家庭端账号同步器提交');
+        accountCloud.authorize(req); rate('account-bridge', 30, 60000);
+        const result = await accountCloud.poll(await jsonBody(req, 512 * 1024));
+        for (const id of result.acknowledged) {
+          const job = store.db.prepare('SELECT owner_id FROM account_jobs WHERE id=?').get(id);
+          if (job) await accounts.job(store.ownerById(job.owner_id), id);
+        }
+        return respond(res, 200, result);
+      }
       if (req.method === 'PUT' && pathname === '/api/v1/internal/snapshot') {
         if (!cloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
         if (req.headers.origin) throw fail(403, 'SYNC_CLIENT_REQUIRED', '请从家庭端同步器上传资料');
@@ -152,15 +176,40 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      const profileRoute = /^\/api\/v1\/agents\/([a-f0-9]{24})\/(profile|references)(?:\/([a-f0-9-]{36}))?$/.exec(pathname);
+      if (profileRoute) {
+        if (isWrite) browserAuth(req);
+        const { agent, owner } = await authorizedAgent(req, profileRoute[1], ['profile.read']);
+        if (agent.kind !== 'agent' || agent.isReserved) throw fail(403, 'AGENT_PROFILE_REQUIRED', '设定图仅适用于普通 Agent 角色');
+        if (profileRoute[2] === 'profile' && !profileRoute[3]) {
+          if (req.method === 'GET') return respond(res, 200, profiles.get(agent));
+          if (req.method === 'PUT') return respond(res, 200, profiles.save(agent, owner, await jsonBody(req)));
+        }
+        if (profileRoute[2] === 'references') {
+          if (!profileRoute[3] && req.method === 'POST') {
+            rate('reference-upload:' + owner.id, 12);
+            if (Number(req.headers['content-length']) > MAX_REFERENCE_BYTES) throw fail(413, 'REFERENCE_SIZE', '设定图不能超过 4MB');
+            let length = 0; const chunks = [];
+            for await (const chunk of req) { length += chunk.length; if (length > MAX_REFERENCE_BYTES) throw fail(413, 'REFERENCE_SIZE', '设定图不能超过 4MB'); chunks.push(chunk); }
+            return respond(res, 201, profiles.upload(agent, owner, Buffer.concat(chunks), req.headers['content-type']));
+          }
+          if (profileRoute[3] && req.method === 'GET') {
+            const image = profiles.image(agent, profileRoute[3]);
+            res.writeHead(200, { 'Content-Type': image.mime, 'Content-Length': image.bytes.length, 'Cache-Control': 'private, no-store' }); return res.end(image.bytes);
+          }
+          if (profileRoute[3] && req.method === 'DELETE') return respond(res, 200, profiles.remove(agent, owner, profileRoute[3]));
+        }
+        throw fail(405, 'METHOD_NOT_ALLOWED', '此角色设定操作不支持这个方法');
+      }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.4.2' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.5.0' });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
         const image = gallery.image(photoImage[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
       }
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: config.allowRegistration, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') return respond(res, 200, { agents: (await game.roster()).map(row => game.publicAgent(row)) });
@@ -197,6 +246,9 @@ export function createPortal(config, options = {}) {
         if (!usernameValid(body.username)) throw fail(400, 'INVALID_USERNAME', '用户名需为 3–24 个文字、数字、下划线或短横线');
         if (!passwordValid(body.password)) throw fail(400, 'INVALID_PASSWORD', '网站密码需为 6–128 个字符');
         if (store.ownerByName(body.username)) throw fail(409, 'USERNAME_TAKEN', '此网站用户名已被使用');
+        if (!setup && config.emailAuth.registrationMode === 'email') {
+          return respond(res, 202, await emailAuth.begin('register', body, sessionFrom(req)));
+        }
         let owner;
         try { owner = store.createOwner(body.username, await hashPassword(body.password), setup ? 'admin' : 'owner', setup); }
         catch (error) { if (error.message === 'SETUP_COMPLETE' || (error.errcode & 255) === 19) throw fail(409, 'ACCOUNT_CONFLICT', '账号已存在或初始化已经完成'); throw error; }
@@ -208,12 +260,33 @@ export function createPortal(config, options = {}) {
         const body = await jsonBody(req);
         rate('login:' + digest(rateAddress(req, config) + ':' + String(body.username).toLowerCase()), 12);
         rate('login-global:' + digest(rateAddress(req, config)), 40);
-        if (!usernameValid(body.username) || typeof body.password !== 'string' || body.password.length > 128) throw fail(401, 'LOGIN_FAILED', '网站用户名或密码不正确');
-        const owner = store.ownerByName(body.username);
+        let email = null;
+        if (typeof body.username === 'string' && body.username.includes('@')) { try { email = normalizeEmail(body.username); } catch {} }
+        if ((!usernameValid(body.username) && !email) || typeof body.password !== 'string' || body.password.length > 128) throw fail(401, 'LOGIN_FAILED', '网站用户名、邮箱或密码不正确');
+        const owner = email ? emailAuth.ownerByEmail(email) : store.ownerByName(body.username);
         const valid = await verifyPassword(body.password, owner?.password_hash);
         if (!owner || !valid) throw fail(401, 'LOGIN_FAILED', '网站用户名或密码不正确');
         const session = newSession(req, res, owner.id); store.audit(owner.id, 'session.login', owner.id);
         return respond(res, 200, sessionData(session));
+      }
+      if (req.method === 'POST' && pathname === '/api/v1/auth/password-reset') {
+        rate('reset:' + digest(rateAddress(req, config)), 6);
+        return respond(res, 202, await emailAuth.begin('reset', await jsonBody(req), sessionFrom(req)));
+      }
+      if (req.method === 'POST' && pathname === '/api/v1/auth/email/verify') {
+        rate('verify-email:' + digest(rateAddress(req, config)), 30);
+        const body = await jsonBody(req);
+        const pending = emailAuth.checked(body.challengeId, body.code, sessionFrom(req));
+        if (pending.purpose === 'reset' && !passwordValid(body.newPassword)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 6–128 个字符');
+        const result = await emailAuth.finish(body.challengeId, body.code, sessionFrom(req), body.newPassword);
+        if (result.purpose === 'reset') return respond(res, 200, { ...sessionData(newSession(req, res, null)), passwordReset: true, message: '网站密码已重设，请重新登录；游戏密码保持原样。' });
+        return respond(res, 200, { ...sessionData(result.purpose === 'register' ? newSession(req, res, result.owner.id) : sessionFrom(req)), emailVerified: true });
+      }
+      if (req.method === 'POST' && pathname === '/api/v1/account/email') {
+        const { owner, session } = browserAuth(req, false, true); rate('bind-email:' + owner.id, 6);
+        const body = await jsonBody(req);
+        if (typeof body.currentPassword !== 'string' || body.currentPassword.length > 128 || !await verifyPassword(body.currentPassword, owner.password_hash)) throw fail(401, 'PASSWORD_INCORRECT', '请用当前网站密码确认邮箱绑定');
+        return respond(res, 202, await emailAuth.begin('bind', body, session));
       }
       if (req.method === 'DELETE' && pathname === '/api/v1/session') {
         const current = sessionFrom(req);
@@ -236,16 +309,15 @@ export function createPortal(config, options = {}) {
       }
       const configMatch = /^\/api\/v1\/agents\/([a-f0-9]{24})\/connection-config$/.exec(pathname);
       if (req.method === 'GET' && configMatch) {
-        browserAuth(req);
         const { agent } = await authorizedAgent(req, configMatch[1]);
         return respond(res, 200, { schemaVersion: 1, portal: req.portalOrigin.origin, agentId: agent.id, playerUuid: agent.playerUuid,
-          username: agent.name, credentialEnv: 'QD_PORTAL_CLIENT_TOKEN', gamePasswordEnv: 'MC_GAME_PASSWORD', readOnly: true });
+          username: agent.name, gameAddress: config.publicGameAddress, credentialEnv: 'QD_PORTAL_CLIENT_TOKEN', gamePasswordEnv: 'MC_GAME_PASSWORD', readOnly: true });
       }
       if (req.method === 'GET' && pathname === '/api/v1/account') {
         const { owner, session } = browserAuth(req);
         const sessions = store.db.prepare('SELECT id_hash,created_at,expires_at,device FROM sessions WHERE owner_id=? ORDER BY created_at DESC').all(owner.id)
           .map(row => ({ id: row.id_hash, current: row.id_hash === session.id_hash, device: row.device, createdAt: new Date(row.created_at).toISOString(), expiresAt: new Date(row.expires_at).toISOString() }));
-        return respond(res, 200, { owner: store.ownerPublic(owner), sessions, events: store.events(owner) });
+        return respond(res, 200, { owner: store.ownerPublic(owner), email: emailAuth.identity(owner.id), sessions, events: store.events(owner) });
       }
       if (req.method === 'POST' && pathname === '/api/v1/account/reauth') {
         const { owner, session } = browserAuth(req);
@@ -261,6 +333,7 @@ export function createPortal(config, options = {}) {
         if (!passwordValid(body.newPassword)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 6–128 个字符');
         if (typeof body.currentPassword !== 'string' || body.currentPassword.length > 128 || !await verifyPassword(body.currentPassword, owner.password_hash)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
         store.db.prepare('UPDATE owners SET password_hash=? WHERE id=?').run(await hashPassword(body.newPassword), owner.id);
+        emailAuth.invalidate(owner.id);
         store.revokeOtherSessions(owner.id, session.id_hash);
         store.db.prepare('UPDATE credentials SET revoked_at=? WHERE owner_id=? AND revoked_at IS NULL').run(Date.now(), owner.id);
         store.audit(owner.id, 'account.password', owner.id);
@@ -283,7 +356,7 @@ export function createPortal(config, options = {}) {
         const { agent } = await authorizedAgent(req, body.agentId);
         if (typeof body.label !== 'string' || body.label.trim().length < 1 || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请输入 1–60 字的客户端名称');
         const scopes = body.scopes || ['state.read'];
-        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read'].includes(value))) throw fail(400, 'INVALID_SCOPES', '首期客户端仅开放状态和背包读取权限');
+        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包和角色设定读取');
         const days = Number(body.expiresInDays || 30);
         if (!Number.isInteger(days) || days < 1 || days > 90) throw fail(400, 'INVALID_EXPIRY', '有效期需为 1–90 天');
         const token = 'pat_' + newSecret(); const id = randomUUID(); const now = Date.now();
@@ -347,6 +420,11 @@ export function createPortal(config, options = {}) {
         const body = await jsonBody(req);
         return respond(res, 202, await accounts.start(owner, pathname.endsWith('agent-claims') ? 'claim' : 'create', body));
       }
+      if (req.method === 'GET' && pathname === '/api/v1/account-jobs') {
+        const { owner } = browserAuth(req);
+        const rows = store.db.prepare('SELECT id FROM account_jobs WHERE owner_id=? ORDER BY created_at DESC LIMIT 20').all(owner.id);
+        return respond(res, 200, { jobs: await Promise.all(rows.map(row => accounts.job(owner, row.id))) });
+      }
       if (req.method === 'POST' && pathname === '/api/v1/game-password') {
         const { owner } = browserAuth(req, false, true); rate('game-password:' + owner.id, 4);
         return respond(res, 202, await accounts.start(owner, 'password', await jsonBody(req)));
@@ -369,7 +447,7 @@ export function createPortal(config, options = {}) {
         if (!real.startsWith(path.resolve(config.publicDir) + path.sep)) throw new Error();
         file = await fs.readFile(real);
       } catch { throw fail(404, 'NOT_FOUND', '未找到此页面'); }
-      res.setHeader('Cache-Control', /\.(png|jpg|svg|ico)$/.test(filePath) ? 'public, max-age=3600' : 'no-cache');
+      res.setHeader('Cache-Control', /\.(png|jpg|webp|svg|ico)$/.test(filePath) ? 'public, max-age=3600' : 'no-cache');
       res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Content-Length': file.length });
       return res.end(req.method === 'HEAD' ? undefined : file);
     } catch (error) {
@@ -383,5 +461,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, gallery, close: async () => { clearInterval(cleanup); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

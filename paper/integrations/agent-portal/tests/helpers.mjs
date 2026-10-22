@@ -19,8 +19,8 @@ export async function siteFixture(t, overrides = {}) {
     playerNbt: async () => ({ data: { XpLevel: 21, Inventory: ['private-inventory-value'], Pos: [99, 64, 888] }, savedAt: '2026-10-20T04:00:00Z' }),
     serverSummary: async () => ({ online: true, playersOnline: 1 }),
   };
-  const config = loadConfig({ port: 0, host: '127.0.0.1', dataDir: path.join(root, 'data'), serverDir: path.join(root, 'game'), ...overrides });
-  const portal = createPortal(config, { game });
+  const config = loadConfig({ skipLocalConfig: true, port: 0, host: '127.0.0.1', dataDir: path.join(root, 'data'), serverDir: path.join(root, 'game'), emailAuth: { registrationMode: 'username' }, ...overrides });
+  const portal = createPortal(config, { game, emailSender: overrides.emailSender });
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   function client() {
@@ -31,7 +31,8 @@ export async function siteFixture(t, overrides = {}) {
       const data = await response.json(); if (data.csrfToken) csrf = data.csrfToken;
       return { response, status: response.status, data };
     };
-    return { request, init: () => request('/session') };
+    const binary = async (endpoint, method, bytes, type = 'image/png', extra = {}) => fetch(origin + '/api/v1' + endpoint, { method, headers: { Cookie: cookie, Origin: origin, 'Content-Type': type, 'X-CSRF-Token': csrf, ...extra }, body: bytes });
+    return { request, binary, init: () => request('/session') };
   }
   const admin = client(); await admin.init();
   const setup = await admin.request('/setup', 'POST', { username: 'fixture-admin', password: testPassword });

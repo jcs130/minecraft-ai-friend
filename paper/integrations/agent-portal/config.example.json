@@ -3,6 +3,12 @@
   "port": 8790,
   "siteName": "千灯纪",
   "sourceMode": "local",
+  "cloudAccounts": {
+    "enabled": false,
+    "tokenHash": "",
+    "keyFile": "",
+    "maxAgentsPerOwner": 5
+  },
   "cloudSync": {
     "enabled": false,
     "tokenHash": "",
@@ -17,15 +23,21 @@
   ],
   "localOrigins": [],
   "allowRegistration": true,
+  "emailAuth": {
+    "enabled": true,
+    "registrationMode": "email",
+    "smtpConfigFile": null
+  },
   "includeKnownPlayers": false,
   "hiddenPlayers": [],
+  "portalIdentitiesFile": null,
   "serverDir": "E:/MC/server",
   "opsDir": "E:/MC/ops",
   "gameHost": "127.0.0.1",
   "gamePort": 25565,
   "authHeartbeat": "E:/MC/ops/auth-heartbeat.json",
   "agentRegistry": "E:/MC/ops/agent-eye-pairs.json",
-  "publicGameAddress": "micro.kangqiang.site",
+  "publicGameAddress": "micro.kangqiang.site:25702",
   "live": {
     "maxFrameBytes": 524288,
     "staleAfterMs": 8000,

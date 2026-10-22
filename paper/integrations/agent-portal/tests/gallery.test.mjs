@@ -12,7 +12,7 @@ const token = 'srv_' + 'h'.repeat(43), id = '11111111-1111-4111-8111-11111111111
 const photo = () => ({ id, author: 'ag_CorMy', title: '麦田边的家', story: '收完麦子，和伙伴一起回家。', capturedAt: '2026-10-20T12:00:00Z', sha256: createHash('sha256').update(png).digest('hex'), bytes: png.length, width: 1, height: 1 });
 async function fixture(t) {
   const base = path.resolve(projectRoot, '.local/tests'), root = path.join(base, 'gallery-' + randomUUID());
-  const config = loadConfig({ host: '127.0.0.1', port: 0, dataDir: root, sourceMode: 'cloud', cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') } });
+  const config = loadConfig({ skipLocalConfig: true, host: '127.0.0.1', port: 0, dataDir: root, sourceMode: 'cloud', cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') } });
   let portal;
   async function start() { portal = createPortal(config); await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve)); }
   await start();

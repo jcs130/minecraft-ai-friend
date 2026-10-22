@@ -75,8 +75,22 @@ export class GameData {
       this.document(path.join(this.config.serverDir, 'ops.json')),
       this.document(this.config.authHeartbeat), this.status()
     ]);
+    const auth = freshAuthentication(heartbeat.data);
     const users = Array.isArray(cached.data) ? [...cached.data] : [];
-    const registered = this.portalIdentities?.() || [];
+    const sampleAt = Date.parse(status.observedAt || '');
+    if (auth.fresh && Number.isFinite(sampleAt) && Math.abs(Date.now() - sampleAt) < 5000) for (const row of status.sample || []) {
+      // A newly joined player can precede Paper's usercache disk flush. Match
+      // the trusted backend's current name/UUID to fresh authorization; never
+      // invent an offline UUID or let an old cache silently override a conflict.
+      if (playerNameValid(row.name) && UUID.test(row.uuid || '') && auth.names.some(name => norm(name) === norm(row.name))) users.push({ name: row.name, uuid: row.uuid.toLowerCase(), identitySource: 'minecraft.server-list-ping.authorized-uuid' });
+    }
+    const registered = [...(this.portalIdentities?.() || [])];
+    if (this.config.portalIdentitiesFile) {
+      const record = await this.document(this.config.portalIdentitiesFile);
+      if (Array.isArray(record.data?.identities) && record.data.identities.length <= 256) for (const row of record.data.identities) {
+        if (playerNameValid(row.name) && UUID.test(row.uuid || '')) registered.push(row);
+      }
+    }
     for (const row of registered) users.push({ name: row.name, uuid: row.uuid });
     const userMap = new Map();
     const conflicts = new Set();
@@ -96,7 +110,6 @@ export class GameData {
       names.set(norm(pair.agent), pair.agent); agents.add(norm(pair.agent));
       if (typeof pair.eye === 'string') { names.set(norm(pair.eye), pair.eye); eyeNames.add(norm(pair.eye)); eyesByAgent.set(norm(pair.agent), pair.eye); }
     }
-    const auth = freshAuthentication(heartbeat.data);
     for (const row of status.sample || []) if (playerNameValid(row.name)) names.set(norm(row.name), row.name);
     for (const name of auth.names) names.set(norm(name), name);
     const authenticated = new Set(auth.names.map(norm));
@@ -115,7 +128,7 @@ export class GameData {
         statusSource: sampledByUuid ? 'minecraft.server-list-ping.uuid' : auth.fresh ? 'LoginGuard.authorizedNames' : 'minecraft.server-list-ping.sample',
         statusObservedAt: sampledByUuid ? status.observedAt : auth.fresh ? auth.observedAt : status.observedAt,
         eye: eyesByAgent.get(norm(name)) || null, isReserved: adminNames.has(norm(name)) || RESERVED.has(norm(name)) || kind === 'observer',
-        identityConflict: conflict, identitySource: uuid ? 'Paper.usercache' : null,
+        identityConflict: conflict, identitySource: uuid ? user.identitySource || 'Paper.usercache' : null,
         available: !!uuid, observedAt: new Date().toISOString() };
     }).sort((a, b) => Number(b.online === true) - Number(a.online === true) || a.name.localeCompare(b.name));
   }

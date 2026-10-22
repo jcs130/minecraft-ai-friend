@@ -17,7 +17,7 @@ test('selected video streams support phone range playback and HEAD, while privat
   await fs.mkdir(path.join(root, 'media'), { recursive: true });
   const bytes = Buffer.from('a-small-isolated-video-fixture');
   await fs.writeFile(path.join(root, 'media/intro.mp4'), bytes); await fs.writeFile(path.join(root, 'media/unselected.png'), bytes);
-  const portal = createPortal(loadConfig({ sourceMode: 'cloud', host: '127.0.0.1', port: 0, dataDir: root, publicMedia: { video: 'intro.mp4' } }));
+  const portal = createPortal(loadConfig({ skipLocalConfig: true, sourceMode: 'cloud', host: '127.0.0.1', port: 0, dataDir: root, publicMedia: { video: 'intro.mp4' } }));
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   t.after(async () => { await portal.close(); assert.ok(root.startsWith(base + path.sep)); await fs.rm(root, { recursive: true, force: true }); });

@@ -35,7 +35,7 @@ async function fixture(t, initialPassword = password) {
     Inventory: { type: 'list', value: { type: 'compound', value: [{ Slot: { type: 'byte', value: 5 }, id: { type: 'string', value: 'minecraft:player_head' }, count: { type: 'int', value: 1 }, components: { type: 'compound', value: { 'minecraft:custom_name': { type: 'string', value: '{"text":"大背包"}' } } } }] } }
   } };
   await fs.writeFile(path.join(gameDir, 'world/playerdata', uuidA + '.dat'), gzipSync(nbt.writeUncompressed(player)));
-  const config = loadConfig({ host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), serverDir: gameDir, opsDir, agentRegistry: path.join(opsDir, 'agent-eye-pairs.json'), authHeartbeat: path.join(opsDir, 'auth-heartbeat.json'), publicRoster: ['ag_Alpha', 'ag_Beta', 'Goddess'] });
+  const config = loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: 'username' }, host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), serverDir: gameDir, opsDir, agentRegistry: path.join(opsDir, 'agent-eye-pairs.json'), authHeartbeat: path.join(opsDir, 'auth-heartbeat.json'), publicRoster: ['ag_Alpha', 'ag_Beta', 'Goddess'] });
   const game = new GameData(config, 'fixture-salt', async () => ({ online: true, playersOnline: 1, playersMax: 40, sample: [{ name: 'ag_Alpha', uuid: uuidA }], version: 'Paper fixture', observedAt: new Date().toISOString(), source: 'isolated-test-fixture', latencyMs: 1 }));
   const portal = createPortal(config, { game });
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
@@ -80,6 +80,18 @@ test('stale or future authentication heartbeats never assert an online authentic
   assert.equal(freshAuthentication({ ready: true, at: now + 5000, authorizedNames: ['Alpha'] }, now).fresh, false);
   assert.equal(freshAuthentication({ ready: false, at: now, authorizedNames: ['Alpha'] }, now).fresh, false);
   assert.equal(freshAuthentication({ ready: true, at: now, authorizedNames: ['Alpha'] }, now).fresh, true);
+});
+test('a fresh authorized server sample identifies a new join before usercache flush, while conflicts remain blocked', async t => {
+  const f = await fixture(t), name = 'ag_NewJoin', uuid = '44444444-4444-3444-8444-444444444444';
+  f.game.config.publicRoster = [name];
+  f.game.ping = async () => ({ online: true, playersOnline: 1, sample: [{ name, uuid }], observedAt: new Date().toISOString() });
+  await fs.writeFile(f.game.config.authHeartbeat, JSON.stringify({ ready: true, at: Date.now(), authorizedNames: [name] })); f.game.cache.clear();
+  let row = (await f.game.roster())[0]; assert.equal(row.playerUuid, uuid); assert.equal(row.available, true); assert.equal(row.identitySource, 'minecraft.server-list-ping.authorized-uuid');
+  await fs.writeFile(f.game.config.authHeartbeat, JSON.stringify({ ready: true, at: Date.now() - 6000, authorizedNames: [name] })); f.game.cache.clear();
+  row = (await f.game.roster())[0]; assert.equal(row.playerUuid, null);
+  await fs.writeFile(f.game.config.authHeartbeat, JSON.stringify({ ready: true, at: Date.now(), authorizedNames: [name] }));
+  await fs.writeFile(path.join(f.gameDir, 'usercache.json'), JSON.stringify([{ name, uuid: uuidB }])); f.game.cache.clear();
+  row = (await f.game.roster())[0]; assert.equal(row.identityConflict, true); assert.equal(row.available, false);
 });
 test('native custom-name components preserve the real large-backpack name and raw item ID', () => {
   assert.equal(componentText('{"text":"大","extra":[{"text":"背包"}]}'), '大背包');
@@ -168,7 +180,8 @@ test('client credentials are scoped to one role; inventory needs a separate gran
   assert.equal(read.status, 200); assert.equal(read.data.inventory, undefined);
   assert.equal((await reader.request(`/agents/${f.beta.id}/state`, 'GET', undefined, headers)).status, 404);
   assert.equal((await reader.request('/account', 'GET', undefined, headers)).status, 403);
-  assert.equal((await reader.request(`/agents/${f.alpha.id}/connection-config`, 'GET', undefined, headers)).status, 403);
+  assert.equal((await reader.request(`/agents/${f.alpha.id}/connection-config`, 'GET', undefined, headers)).status, 200);
+  assert.equal((await reader.request(`/agents/${f.beta.id}/connection-config`, 'GET', undefined, headers)).status, 404);
   const stored = f.portal.store.db.prepare('SELECT * FROM credentials WHERE id=?').get(created.data.id);
   assert.notEqual(stored.token_hash, token); assert.equal(stored.token_hash.length, 64);
   assert.ok(!JSON.stringify((await f.admin.request('/client-credentials')).data).includes(token));

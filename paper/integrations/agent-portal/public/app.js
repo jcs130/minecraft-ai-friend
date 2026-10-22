@@ -1,13 +1,13 @@
 'use strict';
 
 const state = { session: null, summary: null, roster: [], authorized: [], account: null, credentials: [], owners: [], view: 'home', filter: 'all', query: '', detail: null, detailTab: 'summary', error: null,
-  growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, photos: [] };
+  growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, accountJobs: [], profile: null, photos: [] };
 let authRevision = 0;
 let privateRevision = 0;
 function setSession(session) {
   authRevision++;
   if (state.session?.owner?.id !== session?.owner?.id) {
-    state.selectedChannel = null; state.accountJob = null;
+    state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null;
     // Do not leave a previous owner's private channel title on a shared phone.
     state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false }));
   }
@@ -82,7 +82,7 @@ function newRequestId() {
 
 async function api(url, options = {}) {
   const headers = { ...options.headers };
-  if (options.method && options.method !== 'GET') { headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = state.session?.csrfToken || ''; }
+  if (options.method && options.method !== 'GET') { headers['Content-Type'] ||= 'application/json'; headers['X-CSRF-Token'] = state.session?.csrfToken || ''; }
   const response = await fetch('/api/v1' + url, { credentials: 'same-origin', ...options, headers });
   let data;
   try { data = await response.json(); } catch { throw new Error('服务响应不完整，请稍后重试'); }
@@ -251,17 +251,17 @@ async function pollLiveFrame() {
 }
 function rosterCards(agents = state.roster) {
   const query = state.query.toLowerCase();
-  const filtered = agents.filter(agent => (state.filter === 'all' || state.filter === 'online' && agent.online === true || agent.kind === state.filter) && (agent.name.toLowerCase().includes(query) || (agent.playerUuid || '').toLowerCase().includes(query)));
+  const filtered = agents.filter(agent => (state.filter === 'all' || state.filter === 'authorized' && state.authorized.some(row => row.id === agent.id) || state.filter === 'online' && agent.online === true || agent.kind === state.filter) && (agent.name.toLowerCase().includes(query) || (agent.playerUuid || '').toLowerCase().includes(query)));
   return filtered.length ? filtered.map(agent => {
     const full = state.authorized.find(row => row.id === agent.id);
-    return `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}</p></div>${statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full ? '已获得查看权限' : owner() ? '尚未绑定' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button></article>`;
+    return `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}</p></div>${statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full ? '已获得查看权限' : owner() ? '尚未绑定' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}</article>`;
   }).join('') : empty('没有找到匹配的角色', '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users');
 }
 function agentsPage() {
   return heading('每个角色，都有自己的身份。', '注册 Agent，或绑定你的已有角色。', button('new-game-agent', '注册新 Agent', 'plus', 'primary') + button('binding', isAdmin() ? '绑定已核验角色' : '绑定已有角色', 'link'))
     + (owner() ? notice(state.gameCapabilities?.ready ? '游戏账号桥在线。新建角色使用独立游戏密码，绑定已有角色保留原 UUID。' : e(state.gameCapabilities?.message || '网站账号已可注册和登录；游戏账号功能等待接通认证桥。'), 'muted') : '')
-    + `<div class="toolbar"><div class="filters" aria-label="筛选角色">${[['all', '全部'], ['online', '在线'], ['agent', 'Agent'], ['player', '玩家'], ['observer', '观战']].map(([value, text]) => `<button class="filter ${state.filter === value ? 'active' : ''}" data-action="filter" data-filter="${value}">${text}</button>`).join('')}</div><label class="search-input">${icons.search}<input id="roster-search" type="search" autocomplete="off" placeholder="搜索角色名称${isAdmin() ? '或 UUID' : ''}" value="${e(state.query)}" aria-label="搜索角色"></label></div>
-    <div id="roster-grid" class="roster-grid">${rosterCards()}</div><div class="gap-top">${notice('网站账号与游戏角色分别管理。角色的原 UUID、背包和成长记录保持原样。', 'muted')}</div>`;
+    + `<div class="toolbar"><div class="filters" aria-label="筛选角色">${[['all', '全部'], ...(owner() ? [['authorized', isAdmin() ? '已授权' : '我的角色']] : []), ['online', '在线'], ['agent', 'Agent'], ['player', '玩家'], ['observer', '观战']].map(([value, text]) => `<button class="filter ${state.filter === value ? 'active' : ''}" data-action="filter" data-filter="${value}">${text}</button>`).join('')}</div><label class="search-input">${icons.search}<input id="roster-search" type="search" autocomplete="off" placeholder="搜索角色名称${isAdmin() ? '或 UUID' : ''}" value="${e(state.query)}" aria-label="搜索角色"></label></div>
+    <div id="roster-grid" class="roster-grid">${rosterCards()}</div>${owner() && state.accountJobs.length ? `<section class="panel gap-top"><div class="panel-header"><h2>我的游戏账号请求</h2></div><div class="account-job-list">${state.accountJobs.map(job => `<button class="account-job-row" data-action="open-account-job" data-id="${e(job.id)}"><strong>${e(job.username)}</strong><span>${({create:'注册',claim:'绑定',password:'改密'})[job.operation] || '请求'} · ${({succeeded:'已完成',failed:'未完成',pending:'等待处理',unknown:'待确认',waiting:'等待游戏内确认'})[job.state] || '处理中'}</span>${icons.chevron}</button>`).join('')}</div></section>` : ''}<div class="gap-top">${notice('网站账号与游戏角色分别管理。角色的原 UUID、背包和成长记录保持原样。', 'muted')}</div>`;
 }
 function lockedPage(title, description) {
   return heading(title, description) + `<section class="panel">${empty('登录，查看你的冒险档案。', '登录网站账号后，可以访问已授权角色的资料、保存的背包和游戏统计。', button(state.session?.canSetup ? 'setup' : 'login', state.session?.canSetup ? '设置网站管理员' : '登录网站账号', 'lock', 'primary'))}</section>`;
@@ -272,40 +272,46 @@ function inventoryPage() {
     + notice('这里展示最近一次由游戏保存的数据。在线时的背包变化以游戏内实际状态为准，页面标注各份记录的保存时间。', 'muted')
     + `<div class="roster-grid gap-top">${state.authorized.length ? state.authorized.map(agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]} · 已授权</p></div>${statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`).join('') : empty('还没有已绑定的角色', '已有游戏角色需要独立核验归属后绑定网站账号。', button('binding', '查看绑定方式', 'link'), 'box')}</div>`;
 }
+function skillDownload() {
+  const release = state.site?.agentSkill;
+  return release ? `<div class="content-pad"><a class="btn primary" href="${e(release.url)}" download>${icons.download}下载 Agent Skill ${e(release.version)}</a><p class="tiny gap-top">Mineflayer · 本地 stdio MCP · 34 项游戏工具。模型、规划、长期记忆和人设由你自己的 Agent 管理，无需向网站提供模型 Key。</p><details class="gap-top"><summary>安装与接入</summary><ol><li>下载并解压，按包内 SKILL.md 和 references/connect.md 安装。</li><li>游戏地址：<code>${e(state.site?.gameAddress)}</code>；网站绑定自己的 ag_ 角色。</li><li>独立游戏密码放入 MC_GAME_PASSWORD。等待登录授权与世界就绪后开始任务。</li><li>可选：在连接中心为自己的角色创建只读凭据，放入 QD_PORTAL_CLIENT_TOKEN；它不能替代游戏密码。</li></ol><p class="tiny key-wrap">SHA256：<code>${e(release.sha256)}</code></p></details></div>` : '';
+}
 function connectionsPage() {
-  if (!owner()) return lockedPage('连接中心', '一个角色，一个身体，安全连接你的 Agent。');
+  if (!owner()) return lockedPage('连接中心', '一个角色，一个身体，安全连接你的 Agent。') + '<section class="panel"><div class="panel-header"><h2>Mineflayer Agent 接入</h2></div>' + skillDownload() + '</section>';
   const tokens = state.credentials;
-  return heading('连接你的 Agent。', '先用本地只读客户端查看角色记录，凭据由你自行配置。', button('new-token', '创建客户端凭据', 'plus', 'primary'))
-    + `<div class="grid-two"><section class="panel"><div class="panel-header"><h2>${icons.plug}连接配置</h2><span class="tag">本地只读接入</span></div><div class="content-pad"><p class="section-subtitle">选择角色，下载不含秘密的门户连接信息。配置本身不授予访问权限。</p><div class="form-grid"><label class="field">已授权角色<select id="connection-agent">${state.authorized.map(agent => `<option value="${agent.id}">${e(agent.name)}</option>`).join('') || '<option value="">暂无可访问角色</option>'}</select></label>${button('download-config', '下载连接配置', 'download')}</div><h3 class="section-title">由本人完成客户端配置</h3><p class="section-subtitle">客户端凭据仅供你配置可信本地程序，不需要交给 Agent 或粘贴到对话。密码与 token 不进入 LLM 上下文。</p><p class="tiny">当前为本地只读接入；OAuth 与自动凭据托管留待后续接入。只读门户 API 不需要游戏密码。</p></div></section><section class="panel"><div class="panel-header"><h2>${icons.shield}可用连接能力</h2></div><div class="content-pad feature-list">${feature('角色状态与存档背包', '读取已授权角色的真实保存记录。', '已可用', 'check')}${feature('客户端授权与撤销', '由本人管理，限定角色、权限和有效期。', '已可用', 'check')}${feature('实时画面与网页接管', '等待原客户端的状态桥及暂停、释放回执。', '待接入', 'eye', true)}${feature('创建角色与游戏改密', '等待现役游戏认证桥验证后开放。', '待接入', 'key', true)}</div></section></div>
+  return heading('连接你的 Agent。', '注册并绑定角色，再为可信的 Agent 程序授予访问权限。', button('new-token', '创建客户端凭据', 'plus', 'primary'))
+    + '<section class="panel"><div class="panel-header"><h2>Mineflayer Agent 接入</h2></div>' + skillDownload() + '</section>'
+    + `<div class="grid-two"><section class="panel"><div class="panel-header"><h2>${icons.plug}连接配置</h2><span class="tag">角色只读接口</span></div><div class="content-pad"><p class="section-subtitle">选择角色，下载不含秘密的门户连接信息。配置本身不授予访问权限。</p><div class="form-grid"><label class="field">已授权角色<select id="connection-agent">${state.authorized.map(agent => `<option value="${agent.id}">${e(agent.name)}</option>`).join('') || '<option value="">暂无可访问角色</option>'}</select></label>${button('download-config', '下载连接配置', 'download')}</div><h3 class="section-title">由本人完成客户端配置</h3><p class="section-subtitle">将凭据配置到可信 Agent 程序的私有环境变量，不要粘贴进聊天、提示词或公开链接。密码与 token 不进入 LLM 上下文。</p><p class="tiny">当前为角色只读接口；OAuth 与自动凭据托管留待后续接入。只读门户 API 不需要游戏密码。</p></div></section><section class="panel"><div class="panel-header"><h2>${icons.shield}可用连接能力</h2></div><div class="content-pad feature-list">${feature('角色状态与存档背包', '读取已授权角色的真实保存记录。', '已可用', 'check')}${feature('客户端授权与撤销', '由本人管理，限定角色、权限和有效期。', '已可用', 'check')}${feature('实时画面与网页接管', '等待原客户端的状态桥及暂停、释放回执。', '待接入', 'eye', true)}${feature('创建角色与游戏改密', state.gameCapabilities?.ready ? '注册 ag_ 角色、验证游戏内归属，或修改本人的游戏密码。' : '等待现役游戏认证桥上线；已验证请求不会自动重复提交。', state.gameCapabilities?.ready ? '已连接' : '待上线', 'key', !state.gameCapabilities?.ready)}</div></section></div>
     <section class="panel"><div class="panel-header"><div><h2>${icons.key}客户端凭据</h2><p>撤销后，该凭据立即失去读取权限</p></div><span class="tiny">仅显示名称与有效期</span></div><div class="content-pad">${tokens.length ? tokens.map(token => `<div class="token-row"><div class="avatar">${icons.plug}</div><div><strong>${e(token.label)}</strong><small>${token.scopes.includes('inventory.read') ? '状态与背包读取' : '状态读取'} · 有效至 ${date(token.expiresAt)}${token.revoked ? ' · 已撤销' : new Date(token.expiresAt) < new Date() ? ' · 已过期' : ''}</small></div>${token.revoked ? '<span class="tag">已撤销</span>' : button('revoke-token', '撤销', '', 'small danger', `data-id="${e(token.id)}"`)}</div>`).join('') : empty('还没有客户端凭据', '需要从可信本地程序读取角色状态时，由你在这里创建授权。', '', 'key')}</div></section>`;
 }
 function feature(title, text, badge, icon, pending = false) {
   return `<div class="feature-row ${pending ? 'pending' : ''}">${icons[icon]}<div><strong>${title}</strong><p>${text}</p></div><span class="tag">${badge}</span></div>`;
 }
-const auditNames = { 'account.setup': '完成网站管理员初始化', 'account.register': '注册网站账号', 'session.login': '登录网站', 'session.logout': '退出网站', 'session.revoke': '撤销其他登录会话', 'account.password': '修改网站密码', 'credential.create': '创建客户端只读授权', 'credential.revoke': '撤销客户端授权', 'ownership.bind': '绑定已核验游戏角色' };
+const auditNames = { 'account.setup': '完成网站管理员初始化', 'account.register': '注册网站账号', 'session.login': '登录网站', 'session.logout': '退出网站', 'session.revoke': '撤销其他登录会话', 'account.password': '修改网站密码', 'credential.create': '创建客户端只读授权', 'credential.revoke': '撤销客户端授权', 'ownership.bind': '绑定已核验游戏角色', 'account.email-register': '邮箱验证注册', 'account.email-bind': '绑定验证邮箱', 'account.password-reset': '通过邮箱重设网站密码' };
 function accountPage() {
   if (!owner()) return lockedPage('账号与权限', '把角色归属、网站密码和访问授权放在一起。');
   const account = state.account;
   return heading('账号与权限。', '你的游戏角色和网站身份，分别受到保护。', button('logout', '退出网站', 'logout'))
     + `<div class="settings-grid"><section class="panel"><div class="panel-header"><h2>${icons.users}网站资料</h2><span class="tag">${isAdmin() ? '网站管理员' : '网站用户'}</span></div><div class="content-pad"><div class="kv"><span>网站用户名</span><strong>${e(owner().username)}</strong></div><div class="kv"><span>创建时间</span><strong>${date(owner().createdAt, true)}</strong></div><div class="kv"><span>可访问角色</span><strong>${number(state.authorized.length)} 个</strong></div><div class="kv"><span>游戏管理权限</span><strong>沿用游戏内原有规则</strong></div><div class="gap-top">${notice('网站管理员权限只作用于门户，不会给角色授予游戏 OP。', 'muted')}</div>${isAdmin() ? button('binding', '绑定已核验角色', 'link', 'gap-top') : button('binding', '角色认领与绑定', 'link', 'gap-top')}</div></section>
     <section class="panel"><div class="panel-header"><h2>${icons.lock}修改网站密码</h2><button class="text-link" data-action="reauth">重新验证</button></div><div class="content-pad"><form id="password-form" class="form-grid"><label class="field">当前网站密码<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="128"></label><label class="field">新网站密码<input name="newPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"><small>至少 6 个字符。修改后会退出其他会话并撤销客户端凭据。</small></label><label class="field">再次输入新密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">保存网站密码</button></div></form><p class="tiny gap-top">这不会修改游戏密码。已绑定的角色可以单独修改游戏密码。</p></div></section>
+    <section class="panel"><div class="panel-header"><h2>${icons.shield}验证邮箱</h2><span class="tag">${account?.email?.verified ? "已验证" : "尚未绑定"}</span></div><div class="content-pad"><p>${account?.email?.verified ? e(account.email.address) : "绑定邮箱后可使用邮箱登录、找回网站密码。旧账号和角色归属继续保留。"}</p><div class="gap-top">${button("bind-email", account?.email?.verified ? "更换绑定邮箱" : "绑定邮箱", "link")}</div>${state.session?.emailAuth?.available ? "" : '<p class="tiny gap-top">发信服务尚未配置，邮箱验证暂未开放。</p>'}</div></section>
     <section class="panel"><div class="panel-header"><h2>${icons.key}游戏角色</h2></div><div class="content-pad"><p>注册 Agent 或绑定已有角色后，可以查看自己的档案与直播。</p><div class="form-actions">${button('new-game-agent', '注册新 Agent', 'plus')}${button('claim-game-agent', '游戏内绑定', 'link')}${button('change-game-password', '修改游戏密码', 'key')}</div></div></section><section class="panel"><div class="panel-header"><h2>${icons.monitor}登录设备</h2><span class="tiny">当前网站会话</span></div><div class="content-pad sessions-list">${account?.sessions?.map(session => `<div class="session-row">${icons.monitor}<div><strong>${e(session.device)}</strong><small>登录于 ${date(session.createdAt)}</small></div>${session.current ? '<span class="tag">当前设备</span>' : button('revoke-session', '退出设备', '', 'small', `data-id="${e(session.id)}"`)}</div>`).join('') || '<p class="tiny">正在读取登录会话…</p>'}</div></section>
     <section class="panel"><div class="panel-header"><h2>${icons.clock}最近操作</h2><span class="tiny">${isAdmin() ? '网站审计记录' : '你的安全记录'}</span></div><div class="content-pad audit-list">${account?.events?.length ? account.events.slice(0, 8).map(event => `<div class="audit-row"><i class="dot"></i><span>${auditNames[event.action] || e(event.action)}</span><time>${date(event.observedAt)}</time></div>`).join('') : '<p class="tiny">暂无操作记录</p>'}</div></section></div>`;
 }
 function helpPage() {
-  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，网站注册和公开资料仍可使用"}。</p><h2>直播间</h2><p>默认选择本人绑定角色，可以切换其他公开频道。私人频道只允许角色主人与网站管理员观看。断流或画面过期显示未开播，画面不包含网页私聊、库存面板和工具反馈。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
+  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>新账号先验证邮箱，再创建账号。可以使用用户名或已验证邮箱登录；已有账号可在账号与权限中补绑邮箱。找回密码会退出其他网站会话并撤销网站客户端凭据。发信服务未配置时页面会明确提示，不会跳过邮箱验证。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>默认选择本人绑定角色，可以切换其他公开频道。私人频道只允许角色主人与网站管理员观看。断流或画面过期显示未开播，画面不包含网页私聊、库存面板和工具反馈。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
 }
 
 async function loadPrivate() {
   const revision = ++privateRevision;
   const ownerId = owner()?.id;
-  if (!owner()) { state.authorized = []; state.account = null; state.credentials = []; state.owners = []; return; }
+  if (!owner()) { state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.accountJobs = []; state.profile = null; return; }
   try {
-    const [agents, account, credentials] = await Promise.all([api('/agents'), api('/account'), api('/client-credentials')]);
+    const [agents, account, credentials, accountJobs] = await Promise.all([api('/agents'), api('/account'), api('/client-credentials'), api('/account-jobs')]);
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
     const owners = isAdmin() ? (await api('/admin/owners')).owners : [];
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
-    state.authorized = agents.agents; state.account = account; state.credentials = credentials.credentials; state.owners = owners;
+    state.authorized = agents.agents; state.account = account; state.credentials = credentials.credentials; state.owners = owners; state.accountJobs = accountJobs.jobs;
   } catch (error) {
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
     state.authorized = []; state.account = null; state.credentials = []; state.owners = [];
@@ -353,9 +359,22 @@ function openModal(title, subtitle, body, bottom = '') {
 }
 function authModal(mode = 'login') {
   const setup = mode === 'setup'; const register = mode === 'register' || setup;
+  const emailMode = !setup && mode === 'register' && state.session?.emailAuth?.mode === 'email';
+  if (emailMode && !state.session?.emailAuth?.available) return openModal('邮箱注册准备中。', '已有网站账号可以继续登录', notice(e(state.session?.emailAuth?.unavailableReason || '发信服务配置完成后开放邮箱验证注册。'), 'muted'), '<button data-action="login">返回登录</button>');
   openModal(setup ? '点亮你的账号门户。' : register ? '创建网站账号。' : '欢迎回到千灯纪。', setup ? '首次初始化 · 仅在服务器本机开放' : '网站账号和游戏账号分开管理',
-    `<form id="auth-form" data-mode="${mode}" class="form-grid"><label class="field">网站用户名<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="24" placeholder="3–24 个文字或字母数字"></label><label class="field">网站密码<input name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" required minlength="${register ? 6 : 1}" maxlength="128" placeholder="${register ? '至少 6 个字符' : '输入网站密码'}"></label>${register ? '<label class="field">再次输入网站密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}${setup ? notice('这个账号将管理门户内的访问权限，游戏 OP、角色数据和游戏密码仍沿用原设置。', 'muted') : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">${setup ? '创建网站管理员' : register ? '注册并登录' : '登录网站'}</button></div></form>`,
+    `<form id="auth-form" data-mode="${mode}" class="form-grid"><label class="field">${register ? '网站用户名' : '网站用户名或已验证邮箱'}<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="${register ? 24 : 254}" placeholder="${register ? '3–24 个文字或字母数字' : '用户名 / 已验证的邮箱'}"></label>${emailMode ? '<label class="field">邮箱<input name="email" type="email" autocomplete="email" autocapitalize="none" required maxlength="254" placeholder="用于验证身份与找回密码"><small>先验证邮箱，再创建网站账号。</small></label>' : ''}<label class="field">网站密码<input name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" required minlength="${register ? 6 : 1}" maxlength="128" placeholder="${register ? '至少 6 个字符' : '输入网站密码'}"></label>${register ? '<label class="field">再次输入网站密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}${setup ? notice('这个账号将管理门户内的访问权限，游戏 OP、角色数据和游戏密码仍沿用原设置。', 'muted') : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">${setup ? '创建网站管理员' : emailMode ? '发送邮箱验证码' : register ? '注册并登录' : '登录网站'}</button>${!register ? button('forgot-password', '忘记密码', '', 'ghost') : ''}</div></form>`,
     setup ? '用户名和密码只保存到独立门户数据库。' : register ? '已有网站账号？ <button data-action="login">去登录</button>' : `还没有网站账号？ <button data-action="${state.session?.canSetup ? 'setup' : 'register'}">${state.session?.canSetup ? '设置管理员' : '注册账号'}</button>`);
+}
+
+function emailCodeModal(data, purpose) {
+  openModal(purpose === 'reset' ? '重设网站密码。' : '验证你的邮箱。', data.message,
+    `<form id="email-code-form" data-challenge="${e(data.challengeId)}" data-purpose="${purpose}" class="form-grid"><label class="field">八位验证码<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{8}" minlength="8" maxlength="8" placeholder="邮件中的八位数字"><small>十分钟内有效，只能使用一次。请在当前浏览器完成验证。</small></label>${purpose === 'reset' ? '<label class="field">新网站密码<input name="newPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label><label class="field">再次输入新密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">${purpose === 'reset' ? '验证并重设密码' : '完成邮箱验证'}</button></div></form>`,
+    '没有收到？请检查垃圾箱。一分钟后可返回重新填写发送。网站密码与游戏密码分别管理。');
+}
+function emailRequestModal(purpose) {
+  if (!state.session?.emailAuth?.available) return openModal('邮箱服务准备中。', '配置发信服务后开放', notice('当前还不能发送验证邮件。已有账号继续使用原用户名和网站密码登录。', 'muted'));
+  openModal(purpose === 'bind' ? '绑定或更换邮箱。' : '找回网站密码。', purpose === 'bind' ? '验证后可用邮箱登录和找回网站密码' : '只向已验证绑定的邮箱发送验证码',
+    `<form id="email-request-form" data-purpose="${purpose}" class="form-grid"><label class="field">邮箱<input name="email" type="email" autocomplete="email" autocapitalize="none" required maxlength="254"></label>${purpose === 'bind' ? '<label class="field">当前网站密码<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="128"></label>' : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">发送验证码</button></div></form>`);
 }
 
 async function openDetail(id, tab = 'summary') {
@@ -428,10 +447,24 @@ function accountJobModal(job) {
   state.accountJob = job;
   openModal(job.state === 'succeeded' ? '游戏账号操作已完成' : '查看服务器处理结果', '查询原请求，不会重复执行创建或改密', `<div class="notice"><p>${e(job.message || job.instruction || '服务器正在处理，请稍后查询结果。')}</p></div>${job.nextCommand ? `<pre class="code">${e(job.nextCommand)}</pre><p class="tiny">用对应角色在游戏内执行，再点下方查询。</p>` : ''}<p class="tiny">请求编号：${e(job.id)}</p><div class="form-actions">${button('check-account-job', '查询处理结果', 'refresh', 'primary')}${button('close-modal', '关闭')}</div>`);
 }
+async function profileModal(id) {
+  const profile = await api(`/agents/${id}/profile`);
+  state.profile = { id, ...profile };
+  openModal('给你的 Agent，一份自己的设定。', '文字与设定图仅本人和网站管理员可看', `<form id="agent-profile-form" class="form-grid" data-agent="${e(id)}"><label class="field">角色称呼<input name="displayName" required maxlength="40" value="${e(profile.displayName)}" placeholder="角色的昵称"></label><label class="field">背景与性格<textarea name="bio" maxlength="1600" rows="5" placeholder="写下外貌、性格与角色的故事…">${e(profile.bio)}</textarea></label><div class="reference-grid">${profile.references.map(image => `<figure><img src="${e(image.url)}" alt="此角色的私有设定图" loading="lazy"><figcaption>${image.width} × ${image.height} · ${(image.bytes / 1024).toFixed(0)}KB ${button('remove-reference', '移除', '', 'small danger', `data-agent="${e(id)}" data-id="${e(image.id)}"`)}</figcaption></figure>`).join('')}</div><label class="field">添加一张设定图（可选）<input name="reference" type="file" accept="image/png,image/jpeg,image/webp" ${profile.references.length >= 3 ? 'disabled' : ''}><small>PNG / JPG / WebP，每张最多 4MB，最多 3 张。手机可直接从相册选择。</small></label><label class="checkbox"><input name="useReferences" type="checkbox" ${profile.useReferences ? 'checked' : ''}><span>允许在我之后发起的图片创作中参考这些设定图</span></label><p class="tiny">保存后供后续创作读取，不会自动调用模型。游戏相机继续记录游戏里的真实画面。</p><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">保存角色设定</button></div></form>`);
+}
+async function checkReferenceFile(file) {
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 4 * 1024 * 1024 || file.size < 24) throw Error('请选择 4MB 以内的 PNG、JPG 或 WebP 设定图');
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(Error('图片无法读取，请重新导出为 PNG 或 JPG')); image.src = url; });
+    if (image.naturalWidth > 4096 || image.naturalHeight > 4096) throw Error('设定图宽高不能超过 4096，请先缩小图片');
+  } finally { URL.revokeObjectURL(url); }
+}
 function tokenModal() {
   if (!owner()) return authModal('login');
   if (!state.authorized.length) return toast('请先绑定一个可访问角色', true);
-  openModal('创建客户端只读凭据。', '由本人配置可信本地客户端，不交给 Agent', `<form id="token-form" class="form-grid"><label class="field">客户端名称<input name="label" required maxlength="60" placeholder="例如：本地角色查看器"></label><label class="field">授权角色<select name="agentId">${state.authorized.filter(a => a.playerUuid).map(row => `<option value="${row.id}">${e(row.name)}</option>`).join('')}</select></label><label class="field">有效期<select name="expiresInDays"><option value="7">7 天</option><option value="30" selected>30 天</option><option value="90">90 天</option></select></label><label class="checkbox"><input name="inventory" type="checkbox"><span>同时允许读取保存的背包。状态读取默认包含等级、统计与保存时坐标。</span></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">创建只读凭据</button></div></form>`);
+  openModal('创建客户端只读凭据。', '保存到可信程序的私有配置，不进入模型对话', `<form id="token-form" class="form-grid"><label class="field">客户端名称<input name="label" required maxlength="60" placeholder="例如：本地角色查看器"></label><label class="field">授权角色<select name="agentId">${state.authorized.filter(a => a.playerUuid).map(row => `<option value="${row.id}">${e(row.name)}</option>`).join('')}</select></label><label class="field">有效期<select name="expiresInDays"><option value="7">7 天</option><option value="30" selected>30 天</option><option value="90">90 天</option></select></label><label class="checkbox"><input name="inventory" type="checkbox"><span>同时允许读取保存的背包。状态读取默认包含等级、统计与保存时坐标。</span></label><label class="checkbox"><input name="profile" type="checkbox"><span>允许读取此角色的文字设定与参考图片，用于后续本人发起的创作。</span></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">创建只读凭据</button></div></form>`);
 }
 function reauthModal() {
   openModal('重新验证网站身份。', '敏感操作需要最近 10 分钟内的网站密码验证', '<form id="reauth-form" class="form-grid"><label class="field">当前网站密码<input name="password" type="password" required maxlength="128" autocomplete="current-password"></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">验证身份</button></div></form>');
@@ -480,6 +513,9 @@ document.addEventListener('click', async event => {
     else if (action === 'logout') { authRevision++; setSession(await api('/session', { method: 'DELETE' })); await loadPrivate(); if (detail.open) detail.close(); render(); toast('已退出网站'); }
     else if (action === 'binding') { if (detail.open) detail.close(); bindingModal(); }
     else if (action === 'new-game-agent') gameAccountModal('create');
+    else if (action === 'agent-profile') await profileModal(target.dataset.id);
+    else if (action === 'open-account-job') accountJobModal(await api(`/jobs/${target.dataset.id}`));
+    else if (action === 'remove-reference') { openModal('移除这张设定图？', '之后的新创作不再使用它，已有作品保留。', `<form id="remove-reference-form" data-agent="${e(target.dataset.agent)}" data-id="${e(target.dataset.id)}"><div class="form-error" role="alert"></div><button class="btn danger" type="submit">确认移除</button></form>`); }
     else if (action === 'claim-game-agent') gameAccountModal('claim');
     else if (action === 'change-game-password') gameAccountModal('password');
     else if (action === 'check-account-job') {
@@ -488,6 +524,8 @@ document.addEventListener('click', async event => {
     }
     else if (action === 'new-token') tokenModal();
     else if (action === 'reauth') reauthModal();
+    else if (action === 'forgot-password') emailRequestModal('reset');
+    else if (action === 'bind-email') emailRequestModal('bind');
     else if (action === 'download-config') await downloadConfig(document.querySelector('#connection-agent')?.value);
     else if (action === 'detail-config') await downloadConfig(state.detail?.agent.id);
     else if (action === 'revoke-token') {
@@ -505,7 +543,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form'].includes(form.id)) return;
+  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form'].includes(form.id)) return;
   event.preventDefault(); const values = Object.fromEntries(new FormData(form));
   const errorElement = form.querySelector('.form-error'); errorElement.textContent = '';
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
@@ -514,8 +552,20 @@ document.addEventListener('submit', async event => {
       const mode = form.dataset.mode;
       if (mode !== 'login' && values.password !== values.confirmPassword) throw new Error('两次输入的网站密码不一致');
       authRevision++;
-      setSession(await api(mode === 'setup' ? '/setup' : mode === 'register' ? '/accounts' : '/sessions', { method: 'POST', body: JSON.stringify({ username: values.username, password: values.password }) }));
+      const result = await api(mode === 'setup' ? '/setup' : mode === 'register' ? '/accounts' : '/sessions', { method: 'POST', body: JSON.stringify({ username: values.username, password: values.password, ...(values.email ? { email: values.email } : {}) }) });
+      if (result.verificationRequired) return emailCodeModal(result, 'register');
+      setSession(result);
       await loadPrivate(); modal.close(); render(); toast(mode === 'setup' ? '网站管理员已创建，可以查看角色资料了' : '已登录网站账号');
+    } else if (form.id === 'email-request-form') {
+      const purpose = form.dataset.purpose;
+      const result = await api(purpose === 'bind' ? '/account/email' : '/auth/password-reset', { method: 'POST', body: JSON.stringify(values) });
+      emailCodeModal(result, purpose);
+    } else if (form.id === 'email-code-form') {
+      if (form.dataset.purpose === 'reset' && values.newPassword !== values.confirmPassword) throw new Error('两次输入的新密码不一致');
+      const result = await api('/auth/email/verify', { method: 'POST', body: JSON.stringify({ challengeId: form.dataset.challenge, code: values.code, ...(values.newPassword ? { newPassword: values.newPassword } : {}) }) });
+      setSession(result); await loadPrivate(); modal.close(); render();
+      if (result.passwordReset) { authModal('login'); toast('网站密码已重设，请重新登录；其他会话与客户端凭据已撤销'); }
+      else toast('邮箱已验证，可以使用邮箱登录和找回密码');
     } else if (form.id === 'password-form') {
       if (values.newPassword !== values.confirmPassword) throw new Error('两次输入的新密码不一致');
       authRevision++;
@@ -525,7 +575,7 @@ document.addEventListener('submit', async event => {
       await api('/admin/bindings', { method: 'POST', body: JSON.stringify({ ...values, confirmedOwnership: values.confirmedOwnership === 'on' }) });
       modal.close(); await loadPrivate(); render(); toast('已绑定原角色，游戏 UUID 和存档保持原样');
     } else if (form.id === 'token-form') {
-      const data = await api('/client-credentials', { method: 'POST', body: JSON.stringify({ label: values.label, agentId: values.agentId, expiresInDays: Number(values.expiresInDays), scopes: values.inventory ? ['state.read', 'inventory.read'] : ['state.read'] }) });
+      const data = await api('/client-credentials', { method: 'POST', body: JSON.stringify({ label: values.label, agentId: values.agentId, expiresInDays: Number(values.expiresInDays), scopes: ['state.read', ...(values.inventory ? ['inventory.read'] : []), ...(values.profile ? ['profile.read'] : [])] }) });
       await loadPrivate();
       openModal('客户端凭据已创建。', '仅显示这一次，由你保存到可信本地客户端', `<div id="created-token" class="key-secret">${e(data.token)}</div><p class="tiny gap-top">有效至 ${date(data.expiresAt, true)}。关闭后无法再查看原凭据。不要粘贴到对话或放入模型上下文。</p><div class="form-actions gap-top">${button('copy-token', '复制凭据', 'key', 'primary')}${button('close-modal', '我已保存')}</div>`);
     } else if (form.id === 'reauth-form') {
@@ -535,6 +585,18 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'notice-form') {
       await api('/admin/notices', { method: 'POST', body: JSON.stringify(values) });
       modal.close(); await loadEvents(1, 'all'); render(); toast('世界公告已发布');
+    } else if (form.id === 'agent-profile-form') {
+      const file = form.elements.reference.files[0], id = form.dataset.agent;
+      if (file) await checkReferenceFile(file);
+      await api(`/agents/${id}/profile`, { method: 'PUT', body: JSON.stringify({ displayName: values.displayName, bio: values.bio, useReferences: values.useReferences === 'on' }) });
+      if (file) {
+        try { await api(`/agents/${id}/references`, { method: 'POST', headers: { 'Content-Type': file.type }, body: file }); }
+        catch (error) { throw Error('文字设定已保存；图片尚未上传：' + error.message); }
+      }
+      await profileModal(id); toast(file ? '角色设定与图片已保存' : '角色设定已保存');
+    } else if (form.id === 'remove-reference-form') {
+      await api(`/agents/${form.dataset.agent}/references/${form.dataset.id}`, { method: 'DELETE' });
+      await profileModal(form.dataset.agent); toast('设定图已移除');
     } else if (form.id === 'game-account-form') {
       const operation = form.dataset.operation;
       if (operation !== 'claim' && values.gamePassword !== values.confirmGamePassword) throw new Error('两次游戏密码不一致');

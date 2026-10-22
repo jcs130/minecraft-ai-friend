@@ -29,8 +29,8 @@ export function unseal(key, label, encoded) {
 }
 
 export class GameAccounts {
-  constructor(config, store, game) {
-    this.config = config; this.store = store; this.game = game;
+  constructor(config, store, game, remote = null) {
+    this.config = config; this.store = store; this.game = game; this.remote = remote;
     store.db.exec(`CREATE TABLE IF NOT EXISTS portal_agents(player_uuid TEXT PRIMARY KEY, name TEXT NOT NULL, normalized TEXT NOT NULL UNIQUE, source TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS account_jobs(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES owners(id), operation TEXT NOT NULL, name TEXT NOT NULL, state TEXT NOT NULL, result TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, expected_uuid TEXT);`);
     if (!store.db.prepare('PRAGMA table_info(account_jobs)').all().some(column => column.name === 'expected_uuid')) store.db.exec('ALTER TABLE account_jobs ADD COLUMN expected_uuid TEXT');
@@ -43,6 +43,7 @@ export class GameAccounts {
     return Buffer.from(encoded, 'hex');
   }
   async capabilities() {
+    if (this.remote) return this.remote.capabilities();
     if (this.config.sourceMode === 'cloud') return { ready: false, create: false, claim: false, gamePassword: false, source: null,
       reason: 'CLOUD_AUTH_BRIDGE_PENDING', message: '网站账号可以注册登录；游戏角色建号、绑定和改密尚待接通家庭端认证作业通道。' };
     try {
@@ -66,6 +67,12 @@ export class GameAccounts {
       if (previous.owner_id !== owner.id || previous.operation !== operation || previous.name.toLowerCase() !== name.toLowerCase()) throw fail(409, 'REQUEST_ID_CONFLICT', '此请求标识已用于另一项操作');
       return this.job(owner, id);
     }
+    if (operation === 'create') {
+      const maximum = this.config.cloudAccounts?.maxAgentsPerOwner || 5;
+      const owned = this.store.ownedUuids(owner.id).length;
+      const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
+      if (owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
+    }
     const roster = await this.game.roster();
     const existing = roster.find(row => row.name.toLowerCase() === name.toLowerCase());
     if (existing?.isReserved || existing?.identityConflict) throw fail(403, 'RESERVED_ACCOUNT', '这个角色不可自助绑定，请联系服主核验');
@@ -84,20 +91,23 @@ export class GameAccounts {
     const request = { schemaVersion: 1, requestId: id, operation, username: name, playerUuid: existing?.playerUuid || null,
       expiresAt: expires, createdAt: now, ...(operation === 'claim' ? { code } : { password: body.gamePassword }),
       ...(operation === 'password' ? { currentPassword: body.currentGamePassword } : {}) };
-    const key = await this.key(), directory = path.join(this.config.authBridge.directory, 'requests');
-    await fs.mkdir(directory, { recursive: true });
     const result = { state: 'pending', ...(code ? { nextCommand: `/portal bind ${id} ${code}`, instruction: '用已登录的原角色执行此命令，再查询本请求。无密码或弱默认密码不能证明归属，请先设置自己的密码。' } : {}) };
     this.store.db.prepare('INSERT INTO account_jobs VALUES(?,?,?,?,?,?,?,?,?)').run(id, owner.id, operation, name, 'pending', JSON.stringify(result), now, expires, expectedUuid);
     try {
+      if (this.remote) await this.remote.writeRequest(id, request);
+      else {
+      const key = await this.key(), directory = path.join(this.config.authBridge.directory, 'requests');
+      await fs.mkdir(directory, { recursive: true });
       const temporary = path.join(directory, id + '.tmp');
       await fs.writeFile(temporary, seal(key, 'request:' + id, request), { flag: 'wx', mode: 0o600 });
       await fs.rename(temporary, path.join(directory, id + '.json'));
+      }
     } catch {
       this.store.db.prepare('UPDATE account_jobs SET state=? WHERE id=?').run('unknown', id);
       throw fail(503, 'ACCOUNT_RESULT_UNKNOWN', `请求 ${id} 的结果尚未确认，请查询原请求，不要重复操作`);
     }
     this.store.audit(owner.id, 'game.' + operation + '.requested', id);
-    return { id, operation, username: name, ...result, expiresAt: new Date(expires).toISOString(), query: `/api/v1/jobs/${id}` };
+    return { id, operation, username: name, ...(this.remote && operation === 'claim' ? this.remote.claimStatus(id, result) : result), expiresAt: new Date(expires).toISOString(), query: `/api/v1/jobs/${id}` };
   }
   async job(owner, id) {
     const job = this.store.db.prepare('SELECT * FROM account_jobs WHERE id=? AND owner_id=?').get(id, owner.id);
@@ -105,8 +115,7 @@ export class GameAccounts {
     let result = JSON.parse(job.result || '{}');
     if (['pending', 'unknown'].includes(job.state)) {
       try {
-        const raw = await fs.readFile(path.join(this.config.authBridge.directory, 'results', id + '.json'), 'utf8');
-        const value = unseal(await this.key(), 'result:' + id, raw);
+        const value = this.remote ? await this.remote.readResult(id) : unseal(await this.key(), 'result:' + id, await fs.readFile(path.join(this.config.authBridge.directory, 'results', id + '.json'), 'utf8'));
         if (value.requestId !== id || value.username?.toLowerCase() !== job.name.toLowerCase() || !['succeeded', 'failed', 'waiting', 'running', 'unknown'].includes(value.state)) throw Error('BRIDGE_RESULT_MISMATCH');
         if (value.state === 'succeeded') {
           if (!UUID.test(value.playerUuid || '') || value.playerUuid !== job.expected_uuid) throw Error('BRIDGE_IDENTITY_INVALID');
@@ -136,6 +145,6 @@ export class GameAccounts {
       }
       if (result.state === 'pending' && Date.now() > job.expires_at) result = { state: 'unknown', message: '请求已超过等待时间，请查询原请求或联系服主核验。没有自动重放操作。' };
     }
-    return { id, operation: job.operation, username: job.name, ...result, query: `/api/v1/jobs/${id}`, expiresAt: new Date(job.expires_at).toISOString() };
+    return { id, operation: job.operation, username: job.name, ...(this.remote && job.operation === 'claim' && result.nextCommand ? this.remote.claimStatus(id, result) : result), query: `/api/v1/jobs/${id}`, expiresAt: new Date(job.expires_at).toISOString() };
   }
 }

@@ -17,7 +17,7 @@ function snapshot(sequence = 1) {
 }
 async function fixture(t) {
   const base = path.resolve(projectRoot, '.local/tests'), root = path.join(base, 'cloud-' + randomUUID());
-  const config = loadConfig({ host: '127.0.0.1', port: 0, sourceMode: 'cloud', dataDir: root, serverDir: path.join(root, 'MUST_NOT_READ_GAME_FILES'), cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') }, authBridge: { enabled: false } });
+  const config = loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: 'username' }, host: '127.0.0.1', port: 0, sourceMode: 'cloud', dataDir: root, serverDir: path.join(root, 'MUST_NOT_READ_GAME_FILES'), cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') }, authBridge: { enabled: false } });
   let portal;
   async function start() { portal = createPortal(config); await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve)); }
   await start();
@@ -99,4 +99,13 @@ test('home producer strips raw source fields and never synchronizes privileged i
   const world = { players: async () => ({ players: snapshot().players }), events: async () => ({ events: snapshot().events, pages: 1 }) };
   const value = await buildSnapshot(game, world, 2);
   assert.equal(Object.keys(value.states).length, 1); assert.ok(!JSON.stringify(value).includes('rawPluginConfig')); assert.ok(!JSON.stringify(value).includes('rawEssentialsConfig'));
+});
+
+test('historical events for removed or hidden players cannot block the current world snapshot', async t => {
+  const f = await fixture(t), current = snapshot(), old = { ...current.events[0], id: 'b'.repeat(64), playerName: 'ag_Removed' };
+  const game = { roster: async () => current.roster, serverSummary: async () => current.summary, playerState: async () => current.states[uuid] };
+  const world = { players: async () => ({ players: current.players }), events: async () => ({ events: [...current.events, old], pages: 1 }) };
+  const produced = await buildSnapshot(game, world, 1);
+  assert.deepEqual(produced.events.map(row => row.playerName), ['ag_Alpha']);
+  assert.equal((await f.put(produced)).status, 200); assert.equal((await f.get('roster')).agents[0].available, true);
 });

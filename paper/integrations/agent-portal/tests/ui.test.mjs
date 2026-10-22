@@ -18,7 +18,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {} } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -38,7 +38,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     players: async () => ({ players: [{ ...game.publicAgent(agent), savedAt, growth: { level: 7, fame: 14, completed: 2, rank: '黑铁 III', gradeIndex: 3, profession: 'mage' } }], freshness: 'saved' }),
     events: async ({ kind = 'all', page = 1 } = {}) => ({ events: kind === 'all' || kind === 'notice' ? [{ id: 'event-fixture', kind: 'notice', title: '<script>unsafe()</script>', body: '隔离测试公告', occurredAt: savedAt, timePrecision: 'second' }] : [], page, pages: 1, total: 1 })
   };
-  const portal = createPortal(loadConfig({ host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), publicMedia: media }), { game, world });
+  const portal = createPortal(loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: emailMode }, host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), publicMedia: media }), { game, world, emailSender });
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   const html = await fs.readFile(path.join(projectRoot, 'public/index.html'), 'utf8');
@@ -286,4 +286,55 @@ test('resident scene art and promotion preserve playback while background state 
   assert.equal(ui.document.querySelector('.home-film video'), video, 'Background polling must preserve the actual video node');
   assert.equal(video.currentTime, 42, 'Playback and paused seek positions must survive background polling');
   assert.match(ui.document.querySelector('.home-live-status').textContent, /等待世界的消息/);
+});
+
+test('an authorized owner edits private role settings and explicitly grants reference-reading scope', async t => {
+  const ui = await screen(t); await ui.setup();
+  ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('[data-action="agent-profile"]'));
+  ui.click('[data-action="agent-profile"]'); await waitFor(() => ui.document.querySelector('#agent-profile-form'));
+  ui.fill('displayName', '小旅人', '#agent-profile-form');
+  ui.fill('bio', '<script>unsafe()</script> 爱探索的旅人', '#agent-profile-form');
+  ui.click('#agent-profile-form [name="useReferences"]'); ui.submit('#agent-profile-form');
+  await waitFor(() => ui.document.querySelector('#toast').textContent.includes('角色设定已保存'));
+  assert.equal(ui.document.querySelector('#agent-profile-form [name="displayName"]').value, '小旅人');
+  assert.equal(ui.document.querySelectorAll('#agent-profile-form script').length, 0);
+  assert.equal(ui.portal.store.db.prepare('SELECT use_references FROM agent_profiles').get().use_references, 0);
+  assert.equal(ui.document.querySelector('#agent-profile-form [name="reference"]').getAttribute('accept'), 'image/png,image/jpeg,image/webp');
+  ui.click('[data-action="close-modal"]'); ui.window.location.hash = 'connections';
+  await waitFor(() => ui.document.querySelector('[data-action="new-token"]')); ui.click('[data-action="new-token"]');
+  assert.ok(ui.document.querySelector('#token-form [name="profile"]'));
+});
+
+
+test('email signup UI waits for code confirmation and recovery returns to login instead of assuming authentication', async t => {
+  const messages = [], ui = await screen(t, { emailMode: 'email', emailSender: { ready: true, send: async message => messages.push(message) } });
+  await ui.setup(); ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
+  ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
+  ui.fill('username', 'MailPlayer'); ui.fill('email', 'player@example.test'); ui.fill('password', password); ui.fill('confirmPassword', password); ui.submit('#auth-form');
+  await waitFor(() => ui.document.querySelector('#email-code-form'));
+  assert.equal(ui.portal.store.ownerByName('MailPlayer'), undefined);
+  assert.equal(ui.document.querySelector('#email-code-form [name="code"]').getAttribute('inputmode'), 'numeric');
+  ui.fill('code', messages.at(-1).code, '#email-code-form'); ui.submit('#email-code-form');
+  await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'MailPlayer');
+  assert.equal(ui.document.querySelector('#modal').open, false);
+  ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  assert.match(ui.document.querySelector('#main').textContent, /player@example.test/);
+  ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
+  ui.click('[data-action="login"]'); ui.click('[data-action="forgot-password"]');
+  ui.portal.store.db.prepare('UPDATE email_challenges SET created_at=created_at-61000').run();
+  ui.fill('email', 'player@example.test', '#email-request-form'); ui.submit('#email-request-form'); await waitFor(() => ui.document.querySelector('#email-code-form'));
+  ui.fill('code', messages.at(-1).code, '#email-code-form'); ui.fill('newPassword', 'new123', '#email-code-form'); ui.fill('confirmPassword', 'new123', '#email-code-form'); ui.submit('#email-code-form');
+  await waitFor(() => ui.document.querySelector('#auth-form[data-mode="login"]'));
+  assert.equal(ui.document.querySelector('.profile-button strong').textContent, '访客');
+});
+
+test('unconfigured email registration UI states the actual limitation and preserves returning login', async t => {
+  const ui = await screen(t, { emailMode: 'email' }); await ui.setup();
+  ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
+  ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
+  assert.match(ui.document.querySelector('#modal').textContent, /发信服务尚未配置/);
+  assert.equal(ui.document.querySelector('#auth-form'), null);
+  ui.click('#modal [data-action="login"]'); assert.ok(ui.document.querySelector('#auth-form[data-mode="login"]'));
 });

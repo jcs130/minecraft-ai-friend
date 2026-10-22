@@ -7,7 +7,8 @@ export const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.u
 export function loadConfig(overrides = {}) {
   let local = {};
   const localPath = path.join(projectRoot, 'config.local.json');
-  if (fs.existsSync(localPath)) local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+  // Isolated fixtures must never inherit a developer's live bridge or SMTP.
+  if (!overrides.skipLocalConfig && fs.existsSync(localPath)) local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
   const defaults = JSON.parse(fs.readFileSync(path.join(projectRoot, 'config.example.json'), 'utf8'));
   const config = { ...defaults, ...local, ...overrides };
   config.host = process.env.PORTAL_HOST || config.host;
@@ -17,6 +18,9 @@ export function loadConfig(overrides = {}) {
   config.authBridge = { ...defaults.authBridge, ...local.authBridge, ...overrides.authBridge };
   config.live = { ...defaults.live, ...local.live, ...overrides.live };
   config.cloudSync = { ...defaults.cloudSync, ...local.cloudSync, ...overrides.cloudSync };
+  config.cloudAccounts = { ...defaults.cloudAccounts, ...local.cloudAccounts, ...overrides.cloudAccounts };
+  config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
+  if (!['email', 'username'].includes(config.emailAuth.registrationMode)) throw new Error('Invalid registration mode');
   if (!['local', 'cloud'].includes(config.sourceMode)) throw new Error('Invalid portal source mode');
   if (config.sourceMode === 'cloud' && config.authBridge.enabled) throw new Error('The cloud website must not open a local game authentication bridge');
   config.publicOrigin = process.env.PORTAL_PUBLIC_ORIGIN || config.publicOrigin;

@@ -26,6 +26,7 @@ function noCredentials(value, depth = 0) {
 export async function buildSnapshot(game, world, sequence, photos = []) {
   const [all, summary, growth] = await Promise.all([game.roster(), game.serverSummary(), world.players()]);
   const roster = all.slice(0, 256).map(row => pick(row, rosterFields));
+  const publishedNames = new Set(roster.map(row => row.name.toLowerCase()));
   const states = {};
   const eligible = all.slice(0, 256).filter(row => row.available && !row.isReserved && row.kind !== 'observer');
   for (let offset = 0; offset < eligible.length; offset += 8) {
@@ -34,7 +35,9 @@ export async function buildSnapshot(game, world, sequence, photos = []) {
   const events = [];
   for (let page = 1; page <= 10; page++) {
     const result = await world.events({ page, limit: 50 });
-    events.push(...result.events.filter(event => event.kind !== 'notice').map(row => pick(row, eventFields)));
+    // Historical events can outlive a removed/hidden player. They must not
+    // reject the entire current snapshot or make that player public again.
+    events.push(...result.events.filter(event => event.kind !== 'notice' && publishedNames.has(String(event.playerName).toLowerCase())).map(row => pick(row, eventFields)));
     if (page >= result.pages) break;
   }
   const result = { schemaVersion: 1, sequence, observedAt: new Date().toISOString(), summary: pick(summary, summaryFields), roster,
@@ -110,8 +113,14 @@ export class CloudGame {
   publicAgent(row) { return GameData.prototype.publicAgent.call(this, row); }
   async roster() {
     const snapshot = this.source.read();
-    return (snapshot?.value.roster || []).map(row => ({ ...row, id: this.idFor(row.playerUuid, row.name),
+    const roster = (snapshot?.value.roster || []).map(row => ({ ...row, id: this.idFor(row.playerUuid, row.name),
       online: snapshot.stale ? null : row.online, authenticated: snapshot.stale ? null : row.authenticated }));
+    for (const registered of this.portalIdentities?.() || []) {
+      const existing = roster.find(row => row.name.toLowerCase() === registered.name.toLowerCase());
+      if (existing) { if (existing.playerUuid !== registered.uuid) existing.identityConflict = true; continue; }
+      if (!roster.some(row => row.playerUuid === registered.uuid)) roster.push({ id: this.idFor(registered.uuid, registered.name), name: registered.name, playerUuid: registered.uuid, kind: 'agent', online: snapshot?.stale || !snapshot ? null : false, authenticated: false, available: true, isReserved: false, source: 'LoginGuard.verified-portal-registration' });
+    }
+    return roster;
   }
   async serverSummary() {
     const snapshot = this.source.read();

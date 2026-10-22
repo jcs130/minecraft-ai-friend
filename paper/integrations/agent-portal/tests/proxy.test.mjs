@@ -6,7 +6,7 @@ import { loadConfig } from '../src/config.mjs';
 import { siteFixture, testPassword } from './helpers.mjs';
 
 test('public HTTPS requires the configured Host and a trusted proxy; public proxies never grant local setup', () => {
-  const config = loadConfig({ publicOrigin: 'https://world.example.test' });
+  const config = loadConfig({ skipLocalConfig: true, publicOrigin: 'https://world.example.test' });
   const req = (host, peer, forwarded = 'https') => ({ headers: { host, 'x-forwarded-proto': forwarded }, socket: { remoteAddress: peer } });
   assert.equal(requestOrigin(req('world.example.test', '127.0.0.1'), config, 8790).secure, true);
   assert.equal(requestOrigin(req('world.example.test', '127.0.0.1'), config, 8790).canSetup, false);
@@ -14,8 +14,8 @@ test('public HTTPS requires the configured Host and a trusted proxy; public prox
   assert.throws(() => requestOrigin(req('evil.test', '127.0.0.1'), config, 8790));
   assert.throws(() => requestOrigin(req('world.example.test', '127.0.0.1', 'http'), config, 8790));
   assert.equal(requestOrigin(req('127.0.0.1:8790', '127.0.0.1'), config, 8790).canSetup, false);
-  assert.throws(() => loadConfig({ publicOrigin: 'http://world.example.test' }));
-  assert.throws(() => loadConfig({ publicOrigin: 'https://user:password@world.example.test/' }));
+  assert.throws(() => loadConfig({ skipLocalConfig: true, publicOrigin: 'http://world.example.test' }));
+  assert.throws(() => loadConfig({ skipLocalConfig: true, publicOrigin: 'https://user:password@world.example.test/' }));
 });
 
 test('HTTPS proxy login issues Secure cookies, validates HTTPS Origin and hides administrator initialization', async t => {
@@ -46,7 +46,7 @@ test('HTTPS proxy login issues Secure cookies, validates HTTPS Origin and hides 
 });
 
 test('rate limits distinguish real proxy visitors and do not trust an attacker-supplied XFF prefix or untrusted peer', () => {
-  const config = loadConfig({ publicOrigin: 'https://world.example.test' });
+  const config = loadConfig({ skipLocalConfig: true, publicOrigin: 'https://world.example.test' });
   const request = { socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' }, portalOrigin: { origin: config.publicOrigin } };
   assert.equal(rateAddress(request, config), '5.6.7.8');
   request.socket.remoteAddress = '8.8.8.8'; assert.equal(rateAddress(request, config), '8.8.8.8');
