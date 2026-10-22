@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.66` distinguishes a satisfied travel destination from a dispatched
+server command in the default schema, help and execution receipt. Already being
+at a destination still avoids sending a duplicate command. Queries and activity
+commands use `chat.text`; their original server replies establish acceptance.
+Travel completion alone does not establish command execution or activity membership.
+
 `0.5.7-rc.59` lets `mc_goal.revise.progress` explicitly correct a recorded
 numeric report while preserving the goal identity and checking its revision.
 Omitting the report keeps it, `null` clears it, and omitted total/unit fields
