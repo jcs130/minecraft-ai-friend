@@ -68,6 +68,26 @@ def history_sources(group):
     return result
 
 
+def retire_native_sources(rows, source_ids):
+    """Retire recent copies only with their window-evicted immutable source.
+
+    The newest terminal stays available even if its history group cannot fit.
+    This changes model replay only; original journals and execution state are
+    untouched. A reference below locates omitted evidence, not an in-request
+    context_ref claiming that the complete value is still present.
+    """
+    latest = outcome_id(rows[-1]) if rows else None
+    retained, retired = [], []
+    for index, row in enumerate(rows):
+        key = outcome_id(row)
+        if key and key in source_ids and key != latest and index < len(rows) - 1:
+            retired.append({"outcome_id": key, **{field: copy.deepcopy(row[field])
+                for field in ("execution_kind", "execution_id", "phase", "original_event") if field in row}})
+        else:
+            retained.append(row)
+    return retained, retired
+
+
 def project_values(value):
     """Reuse only the native wrapper's exact copy of its primary receipt text.
 

@@ -22,7 +22,13 @@ from .context import (
     retain_events,
 )
 from .context_counter import CounterUnavailable, count_input
-from .context_evidence import outcome_id, outcome_message, project_values
+from .context_evidence import (
+    history_sources,
+    outcome_id,
+    outcome_message,
+    project_values,
+    retire_native_sources,
+)
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
@@ -41,10 +47,10 @@ from .observations import (
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import (
+    PlannerDeadlineError,
     PlannerRequestRejectedError,
     PlannerResponseError,
     PlannerUnavailableError,
-    PlannerDeadlineError,
 )
 from .reply_quality import repeated_plain_reply
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
@@ -1709,7 +1715,13 @@ class Controller:
                     size = len(encode(retained).encode("utf-8"))
                 if size <= self.settings.context_tokens:
                     break
-                self.groups.pop(0)
+                self.retire_native_history(history_sources(self.groups.pop(0)))
+
+    def retire_native_history(self, source_ids):
+        # A retired immutable source must not be frozen again or re-inlined in
+        # the next fresh scene. This is a replay projection, never a native ACK.
+        self.native_outcomes, retired = retire_native_sources(self.native_outcomes, source_ids)
+        self.outcome_history_ids.difference_update(row["outcome_id"] for row in retired)
 
     def synchronize_host_history(self, context):
         if self.settings.context_mode != 'full':
@@ -1874,10 +1886,11 @@ class Controller:
                 if self.settings.context_mode == "full":
                     # Do not resurrect the old prefix evicted by this request.
                     # Original journals/handles remain intact, as do all current
-                    # body facts, terminal outcomes and pending-event fences.
+                    # body facts, original terminal journals and pending fences.
                     history = budget["history"]
                     if history["available"] == len(self.groups) and history["evicted"]:
                         self.groups = self.groups[history["evicted"]:]
+                        self.retire_native_history(set(history.get("retired_native_outcome_ids", [])))
                 self.publish(context=budget)
                 # Non-content request evidence survives completion/cancellation/
                 # timeout, instead of being overwritten by the next live status.

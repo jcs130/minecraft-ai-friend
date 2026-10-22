@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.88
+
+- When a real full-context overflow retires an immutable native terminal's
+  history group, retire its identical recent replay copy too. Otherwise the
+  next scene re-inlines the retired receipt and can keep requests saturated
+  even after all history has gone. Keep the newest terminal, report omitted
+  execution identities and original event locations, and preserve journals,
+  pending work, barriers and fitting history. Cache-margin probes use the same
+  retirement operation as the actual request; no deadline or capacity changes.
+
 ## 0.2.80
 
 - Preserve the complete bounded standing instruction in strategic review, rather
