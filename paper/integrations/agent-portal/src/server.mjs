@@ -329,7 +329,12 @@ export function createPortal(config, options = {}) {
         if (!usernameValid(body.username)) throw fail(400, 'INVALID_USERNAME', '用户名需为 3–24 个文字、数字、下划线或短横线');
         if (!passwordValid(body.password)) throw fail(400, 'INVALID_PASSWORD', '网站密码需为 6–128 个字符');
         if (store.ownerByName(body.username)) throw fail(409, 'USERNAME_TAKEN', '此网站用户名已被使用');
-        if (!setup && config.emailAuth.registrationMode === 'email') {
+        // optional-email is an explicit operator choice: a blank email uses the
+        // ordinary password account; a supplied email must still be verified.
+        const emailMode = config.emailAuth.registrationMode;
+        const verifyEmail = emailMode === 'email' || emailMode === 'optional-email' && Object.hasOwn(body, 'email') && body.email !== '';
+        if (!setup && verifyEmail) {
+          if (emailMode === 'optional-email' && !emailAuth.capabilities().available) throw fail(503, 'EMAIL_NOT_CONFIGURED', '邮箱验证暂不可用；可以清空邮箱，先用用户名和密码注册，之后再绑定邮箱');
           return respond(res, 202, await emailAuth.begin('register', body, sessionFrom(req)));
         }
         let owner;

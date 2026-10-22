@@ -356,6 +356,35 @@ test('email signup UI waits for code confirmation and recovery returns to login 
   assert.equal(ui.document.querySelector('.profile-button strong').textContent, '访客');
 });
 
+test('optional-email registration UI accepts a blank email and logs in the new password account', async t => {
+  const ui = await screen(t, { emailMode: 'optional-email' }); await ui.setup();
+  ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
+  ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
+  assert.ok(ui.document.querySelector('#auth-form[data-mode="register"]'));
+  assert.equal(ui.document.querySelector('#auth-form [name="email"]').required, false);
+  assert.equal(ui.document.querySelector('#auth-form [name="email"]').disabled, true);
+  ui.fill('username', 'LightPlayer'); ui.fill('password', 'abc123'); ui.fill('confirmPassword', 'abc123'); ui.submit('#auth-form');
+  await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'LightPlayer');
+  assert.equal(ui.document.querySelector('#email-code-form'), null);
+  assert.equal(ui.portal.store.ownerByName('LightPlayer').role, 'owner');
+});
+
+test('optional-email UI verifies a supplied address instead of registering before the code', async t => {
+  const messages = [], ui = await screen(t, { emailMode: 'optional-email', emailSender: { ready: true, send: async value => messages.push(value) } }); await ui.setup();
+  ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
+  ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
+  assert.equal(ui.document.querySelector('#auth-form [name="email"]').required, false);
+  assert.equal(ui.document.querySelector('#auth-form [name="email"]').disabled, false);
+  ui.fill('username', 'VerifiedPlayer'); ui.fill('email', 'verified@example.test'); ui.fill('password', 'abc123'); ui.fill('confirmPassword', 'abc123'); ui.submit('#auth-form');
+  await waitFor(() => ui.document.querySelector('#email-code-form'));
+  assert.equal(ui.portal.store.ownerByName('VerifiedPlayer'), undefined);
+  ui.fill('code', messages[0].code, '#email-code-form'); ui.submit('#email-code-form');
+  await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'VerifiedPlayer');
+  assert.equal(ui.portal.emailAuth.ownerByEmail('verified@example.test').username, 'VerifiedPlayer');
+});
+
 test('unconfigured email registration UI states the actual limitation and preserves returning login', async t => {
   const ui = await screen(t, { emailMode: 'email' }); await ui.setup();
   ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));

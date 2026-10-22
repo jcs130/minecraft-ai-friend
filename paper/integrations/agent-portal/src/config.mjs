@@ -22,7 +22,7 @@ export function loadConfig(overrides = {}) {
   config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
   config.agentAccess = { ...defaults.agentAccess, ...local.agentAccess, ...overrides.agentAccess };
   config.appearance = { enabled: true, bridgeEnabled: false, tokenHash: '', ...defaults.appearance, ...local.appearance, ...overrides.appearance };
-  if (!['email', 'username'].includes(config.emailAuth.registrationMode)) throw new Error('Invalid registration mode');
+  if (!['email', 'username', 'optional-email'].includes(config.emailAuth.registrationMode)) throw new Error('Invalid registration mode');
   if (!['local', 'cloud'].includes(config.sourceMode)) throw new Error('Invalid portal source mode');
   if (config.sourceMode === 'cloud' && config.authBridge.enabled) throw new Error('The cloud website must not open a local game authentication bridge');
   config.publicOrigin = process.env.PORTAL_PUBLIC_ORIGIN || config.publicOrigin;

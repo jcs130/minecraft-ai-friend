@@ -53,7 +53,9 @@ export class EmailAuth {
   capabilities() {
     return { mode: this.config.emailAuth.registrationMode, available: this.config.emailAuth.enabled && this.sender.ready,
       verification: 'email-code', expiresInSeconds: 600,
-      unavailableReason: this.config.emailAuth.enabled && this.sender.ready ? null : '邮箱发信服务尚未配置，请稍后注册；已有账号可以继续登录。',
+      unavailableReason: this.config.emailAuth.enabled && this.sender.ready ? null : this.config.emailAuth.registrationMode === 'optional-email'
+        ? '邮箱验证暂不可用；可先用用户名和密码注册，之后再绑定邮箱。' : '邮箱发信服务尚未配置，请稍后注册；已有账号可以继续登录。',
+      registrationOptions: { usernamePassword: this.config.emailAuth.registrationMode !== 'email', emailVerification: this.config.emailAuth.enabled && this.sender.ready },
       phone: { available: false }, wechat: { available: false } };
   }
   identity(ownerId) {
