@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+`0.2.85` pins the core travel-dispatch feedback repair. The original native
+queue, arrival idempotence and command confirmation rules are unchanged. A
+completed travel step does not establish server command execution or activity
+membership; the core schema and receipt now expose the unsent-command case.
+
 0.2.84 preserves native execution kind together with the execution ID in pending,
 original evidence, viewer playback and offline recovery assessment. Task and method
 counters can share the same ID; a terminal from one cannot finish the other.
