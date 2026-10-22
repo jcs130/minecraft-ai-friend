@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.69` can read an explicitly named top-level password field from a private
+JSON identity (`credentialFormat: "json"`, `credentialField: "gamePassword"`).
+Credentials remain scoped to the configured server and account. Invalid fields
+fail without using an API token or another field as a fallback. See the
+[server authorization lifecycle](docs/server-auth-lifecycle.md).
+
 `0.5.7-rc.68` renews an explicitly configured login on the same connection after
 trusted server authorization revocation. It makes one credential attempt per
 revocation and still requires a fresh server confirmation before any game operation.
