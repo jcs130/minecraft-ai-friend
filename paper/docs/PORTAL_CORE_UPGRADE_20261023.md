@@ -1,6 +1,6 @@
 # MC 核心与官网接入更新 · 2026-10-23
 
-本轮候选：门户 **0.8.1**、接入 Skill **1.2.0**，核心由 **0.4.0** 更新到 GitHub 主干 **0.5.7-rc.67**，固定源提交 `aff5bb8ef25ce24c76efb7d608c1eea8da9fc129`。这是主干候选版本，不冒称 npm 稳定版；核对时 npm latest 为 rc.47、next 为 rc.64。
+本轮已上线：门户 **0.8.1**、接入 Skill **1.2.0**，核心由 **0.4.0** 更新到 GitHub 主干 **0.5.7-rc.67**，固定源提交 `aff5bb8ef25ce24c76efb7d608c1eea8da9fc129`。这是主干候选版本，不冒称 npm 稳定版；核对时 npm latest 为 rc.47、next 为 rc.64。
 
 ## 发布内容
 
@@ -23,6 +23,6 @@
 
 本机原Skill目录在 `~/.codex/skill-backups/qiandengji-agent-before-1.2.0-20261023`，E/F repairs/portal-core-upgrade-20261023 保存原Skill ZIP、新包及核验记录。回退本地Skill时停止其MCP后恢复原目录，保留外部私有profile和动作账本。
 
-云端发布前沿用SQLite一致性备份，保留旧容器、配置和镜像；回退只切回原网站容器及原配置，不把旧数据库覆盖回去。生产发布结果与精确源码提交另记清单。
+云端发布前沿用SQLite一致性备份，保留旧容器、配置和镜像；回退只切回原网站容器及原配置，不把旧数据库覆盖回去。云端实际运行源码 `485b1788244b83d61248e873ff318e09dedb152e`，镜像 `sha256:dff77a81ea75f8f9ec3699dda5dac1ae673f3b841564b42c42aa411f0ee5457b`。原容器 `qiandengji-portal-prev-before-core-upgrade-20261023` 保留；云端一致性备份与账号/归属/原图/回忆/邀请行核对通过，10项公网检查通过。详见 `paper/manifests/portal-core-release-20261023.json`。
 
 下载SHA256：`a0618f8c2d75a71d42ca532973a43f7d837e91ee47707a7ce9de2d9167cf858b`，`3867516` 字节。
