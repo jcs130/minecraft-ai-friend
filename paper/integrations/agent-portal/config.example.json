@@ -60,5 +60,8 @@
     "directory": "E:/MC/private/portal-bridge",
     "keyFile": "E:/MC/private/portal-bridge.key"
   },
-  "publicMedia": {}
+  "publicMedia": {},
+  "agentAccess": {
+    "enabled": true
+  }
 }

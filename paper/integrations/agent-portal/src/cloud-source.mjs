@@ -108,11 +108,12 @@ export class CloudSource {
 }
 
 export class CloudGame {
-  constructor(config, store, source) { this.config = config; this.salt = store.salt; this.source = source; }
+  constructor(config, store, source) { this.config = config; this.store = store; this.salt = store.salt; this.source = source; }
   idFor(uuid, name) { return GameData.prototype.idFor.call(this, uuid, name); }
   publicAgent(row) { return GameData.prototype.publicAgent.call(this, row); }
   async roster() {
     const snapshot = this.source.read();
+    const retired = new Set(this.store.db.prepare('SELECT lower(name) AS name FROM archived_test_roles').all().map(row => row.name));
     const roster = (snapshot?.value.roster || []).map(row => ({ ...row, id: this.idFor(row.playerUuid, row.name),
       online: snapshot.stale ? null : row.online, authenticated: snapshot.stale ? null : row.authenticated }));
     for (const registered of this.portalIdentities?.() || []) {
@@ -120,7 +121,7 @@ export class CloudGame {
       if (existing) { if (existing.playerUuid !== registered.uuid) existing.identityConflict = true; continue; }
       if (!roster.some(row => row.playerUuid === registered.uuid)) roster.push({ id: this.idFor(registered.uuid, registered.name), name: registered.name, playerUuid: registered.uuid, kind: 'agent', online: snapshot?.stale || !snapshot ? null : false, authenticated: false, available: true, isReserved: false, source: 'LoginGuard.verified-portal-registration' });
     }
-    return roster;
+    return roster.filter(row => !retired.has(row.name.toLowerCase()));
   }
   async serverSummary() {
     const snapshot = this.source.read();
@@ -141,7 +142,8 @@ export class CloudWorld {
   constructor(config, game, store, source) { this.config = config; this.game = game; this.store = store; this.source = source; }
   async players() {
     const snapshot = this.source.read(), roster = await this.game.roster();
-    return { players: (snapshot?.value.players || []).map(row => ({ ...this.game.publicAgent(roster.find(agent => agent.name.toLowerCase() === row.name.toLowerCase())), growth: row.growth, savedAt: row.savedAt, progressionSavedAt: row.progressionSavedAt })),
+    const visible = new Map(roster.map(row => [row.name.toLowerCase(), row]));
+    return { players: (snapshot?.value.players || []).filter(row => visible.has(row.name.toLowerCase())).map(row => ({ ...this.game.publicAgent(visible.get(row.name.toLowerCase())), growth: row.growth, savedAt: row.savedAt, progressionSavedAt: row.progressionSavedAt })),
       freshness: 'saved', source: 'home.outbound-snapshot', observedAt: snapshot?.value.observedAt || null };
   }
   async collect() { }

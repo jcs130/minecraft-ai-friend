@@ -1,13 +1,13 @@
 'use strict';
 
 const state = { session: null, summary: null, roster: [], authorized: [], account: null, credentials: [], owners: [], view: 'home', filter: 'all', query: '', detail: null, detailTab: 'summary', error: null,
-  growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, accountJobs: [], profile: null, photos: [] };
+  growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, accountJobs: [], profile: null, photos: [], agentInvites: [] };
 let authRevision = 0;
 let privateRevision = 0;
 function setSession(session) {
   authRevision++;
   if (state.session?.owner?.id !== session?.owner?.id) {
-    state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null;
+    state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null; state.agentInvites = [];
     // Do not leave a previous owner's private channel title on a shared phone.
     state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false }));
   }
@@ -281,11 +281,16 @@ function connectionsPage() {
   const tokens = state.credentials;
   return heading('连接你的 Agent。', '注册并绑定角色，再为可信的 Agent 程序授予访问权限。', button('new-token', '创建客户端凭据', 'plus', 'primary'))
     + '<section class="panel"><div class="panel-header"><h2>Mineflayer Agent 接入</h2></div>' + skillDownload() + '</section>'
+    + agentInvitesPanel()
     + `<div class="grid-two"><section class="panel"><div class="panel-header"><h2>${icons.plug}连接配置</h2><span class="tag">角色只读接口</span></div><div class="content-pad"><p class="section-subtitle">选择角色，下载不含秘密的门户连接信息。配置本身不授予访问权限。</p><div class="form-grid"><label class="field">已授权角色<select id="connection-agent">${state.authorized.map(agent => `<option value="${agent.id}">${e(agent.name)}</option>`).join('') || '<option value="">暂无可访问角色</option>'}</select></label>${button('download-config', '下载连接配置', 'download')}</div><h3 class="section-title">由本人完成客户端配置</h3><p class="section-subtitle">将凭据配置到可信 Agent 程序的私有环境变量，不要粘贴进聊天、提示词或公开链接。密码与 token 不进入 LLM 上下文。</p><p class="tiny">当前为角色只读接口；OAuth 与自动凭据托管留待后续接入。只读门户 API 不需要游戏密码。</p></div></section><section class="panel"><div class="panel-header"><h2>${icons.shield}可用连接能力</h2></div><div class="content-pad feature-list">${feature('角色状态与存档背包', '读取已授权角色的真实保存记录。', '已可用', 'check')}${feature('客户端授权与撤销', '由本人管理，限定角色、权限和有效期。', '已可用', 'check')}${feature('实时画面与网页接管', '等待原客户端的状态桥及暂停、释放回执。', '待接入', 'eye', true)}${feature('创建角色与游戏改密', state.gameCapabilities?.ready ? '注册 ag_ 角色、验证游戏内归属，或修改本人的游戏密码。' : '等待现役游戏认证桥上线；已验证请求不会自动重复提交。', state.gameCapabilities?.ready ? '已连接' : '待上线', 'key', !state.gameCapabilities?.ready)}</div></section></div>
     <section class="panel"><div class="panel-header"><div><h2>${icons.key}客户端凭据</h2><p>撤销后，该凭据立即失去读取权限</p></div><span class="tiny">仅显示名称与有效期</span></div><div class="content-pad">${tokens.length ? tokens.map(token => `<div class="token-row"><div class="avatar">${icons.plug}</div><div><strong>${e(token.label)}</strong><small>${token.scopes.includes('inventory.read') ? '状态与背包读取' : '状态读取'} · 有效至 ${date(token.expiresAt)}${token.revoked ? ' · 已撤销' : new Date(token.expiresAt) < new Date() ? ' · 已过期' : ''}</small></div>${token.revoked ? '<span class="tag">已撤销</span>' : button('revoke-token', '撤销', '', 'small danger', `data-id="${e(token.id)}"`)}</div>`).join('') : empty('还没有客户端凭据', '需要从可信本地程序读取角色状态时，由你在这里创建授权。', '', 'key')}</div></section>`;
 }
 function feature(title, text, badge, icon, pending = false) {
   return `<div class="feature-row ${pending ? 'pending' : ''}">${icons[icon]}<div><strong>${title}</strong><p>${text}</p></div><span class="tag">${badge}</span></div>`;
+}
+function agentInvitesPanel() {
+  const labels = { available: '未使用', used: '已使用', expired: '已过期', revoked: '已撤销' };
+  return `<section class="panel"><div class="panel-header"><div><h2>${icons.key}邀请自己的 Agent</h2><p>一次邀请，一个新角色，自动归属你的账号</p></div>${button('new-agent-invite', '生成邀请码', 'plus', 'primary')}</div><div class="content-pad"><p class="section-subtitle">把一次性邀请码交给 Agent，它可以通过 API 注册和登录，无需知道你的网站密码。已有角色与 Eye 观战账号保留原接入方式。</p><p class="tiny gap-top">游戏建号：${state.gameCapabilities?.ready ? '已连接，可注册新角色' : '等待认证桥上线；可先注册 API 身份，保留后稍后激活'}。<a href="/agent-api.html" target="_blank" rel="noopener">查看接入 API 与操作指引</a></p>${state.agentInvites.length ? state.agentInvites.map(invite => `<div class="token-row"><div class="avatar">${icons.users}</div><div><strong>${e(invite.label)}</strong><small>${e(invite.agent || invite.username || '由 Agent 选择新名字')} · ${labels[invite.state] || '未知'} · 有效至 ${date(invite.expiresAt)}</small></div>${['available', 'used'].includes(invite.state) ? button('revoke-agent-invite', '撤销', '', 'small danger', `data-id="${e(invite.id)}"`) : '<span class="tag">已结束</span>'}</div>`).join('') : '<p class="tiny gap-top">还没有邀请。邀请码仅显示一次，可随时撤销对应 API 接入。</p>'}</div></section>`;
 }
 const auditNames = { 'account.setup': '完成网站管理员初始化', 'account.register': '注册网站账号', 'session.login': '登录网站', 'session.logout': '退出网站', 'session.revoke': '撤销其他登录会话', 'account.password': '修改网站密码', 'credential.create': '创建客户端只读授权', 'credential.revoke': '撤销客户端授权', 'ownership.bind': '绑定已核验游戏角色', 'account.email-register': '邮箱验证注册', 'account.email-bind': '绑定验证邮箱', 'account.password-reset': '通过邮箱重设网站密码' };
 function accountPage() {
@@ -305,16 +310,16 @@ function helpPage() {
 async function loadPrivate() {
   const revision = ++privateRevision;
   const ownerId = owner()?.id;
-  if (!owner()) { state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.accountJobs = []; state.profile = null; return; }
+  if (!owner()) { state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.accountJobs = []; state.profile = null; state.agentInvites = []; return; }
   try {
-    const [agents, account, credentials, accountJobs] = await Promise.all([api('/agents'), api('/account'), api('/client-credentials'), api('/account-jobs')]);
+    const [agents, account, credentials, accountJobs, invites] = await Promise.all([api('/agents'), api('/account'), api('/client-credentials'), api('/account-jobs'), api('/agent-invites')]);
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
     const owners = isAdmin() ? (await api('/admin/owners')).owners : [];
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
-    state.authorized = agents.agents; state.account = account; state.credentials = credentials.credentials; state.owners = owners; state.accountJobs = accountJobs.jobs;
+    state.authorized = agents.agents; state.account = account; state.credentials = credentials.credentials; state.owners = owners; state.accountJobs = accountJobs.jobs; state.agentInvites = invites.invites;
   } catch (error) {
     if (revision !== privateRevision || owner()?.id !== ownerId) return;
-    state.authorized = []; state.account = null; state.credentials = []; state.owners = [];
+    state.authorized = []; state.account = null; state.credentials = []; state.owners = []; state.agentInvites = [];
     if (error.status === 401) { const session = await api('/session'); if (revision === privateRevision && owner()?.id === ownerId) setSession(session); }
     else toast(error.message, true);
   }
@@ -523,6 +528,8 @@ document.addEventListener('click', async event => {
       if (result.state === 'succeeded') { await loadPrivate(); await refresh(); }
     }
     else if (action === 'new-token') tokenModal();
+    else if (action === 'new-agent-invite') openModal('邀请自己的 Agent', '新角色将绑定到你的网站账号；邀请码一次性使用', '<form id="agent-invite-form" class="form-grid"><label class="field">用途名称<input name="label" required maxlength="60" placeholder="例如：我的探索伙伴"></label><label class="field">限定新角色名（可选）<input name="username" maxlength="16" pattern="ag_[A-Za-z0-9_]{1,13}" placeholder="ag_ 开头；留空由 Agent 选择" autocomplete="off" autocapitalize="none"></label><label class="field">有效小时数<input name="expiresInHours" type="number" min="1" max="168" value="24" required></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">生成一次性邀请码</button></form>');
+    else if (action === 'revoke-agent-invite') openModal('撤销这份 Agent 接入？', '对应的 API 身份立即失效；已有游戏角色、物品和游戏密码保留', `<form id="revoke-agent-invite-form" data-id="${e(target.dataset.id)}" class="form-grid"><div class="form-error" role="alert"></div><button class="btn danger" type="submit">确认撤销 API 接入</button></form>`);
     else if (action === 'reauth') reauthModal();
     else if (action === 'claim-role') gameAccountModal('claim', target.dataset.name);
     else if (action === 'forgot-password') emailRequestModal('reset');
@@ -544,7 +551,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form'].includes(form.id)) return;
+  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form'].includes(form.id)) return;
   event.preventDefault(); const values = Object.fromEntries(new FormData(form));
   const errorElement = form.querySelector('.form-error'); errorElement.textContent = '';
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
@@ -598,6 +605,12 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'remove-reference-form') {
       await api(`/agents/${form.dataset.agent}/references/${form.dataset.id}`, { method: 'DELETE' });
       await profileModal(form.dataset.agent); toast('设定图已移除');
+    } else if (form.id === 'agent-invite-form') {
+      const result = await api('/agent-invites', { method: 'POST', body: JSON.stringify({ ...values, expiresInHours: Number(values.expiresInHours) }) });
+      await loadPrivate();
+      openModal('邀请码已生成', '仅显示一次，请保存到可信程序的私有文件', `<div id="created-token" class="key-secret">${e(result.token)}</div><p class="tiny gap-top">${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。角色归属你；不能认领已有角色，也不能创建 Eye 或管理员账号。</p><p><a href="/agent-api.html" target="_blank" rel="noopener">Agent 接入步骤与 API</a></p><div class="form-actions">${button('copy-token', '复制邀请码', 'key', 'primary')}${button('close-modal', '已保存')}</div>`);
+    } else if (form.id === 'revoke-agent-invite-form') {
+      await api(`/agent-invites/${form.dataset.id}`, { method: 'DELETE' }); modal.close(); await loadPrivate(); render(); toast('邀请与 API 接入已撤销，游戏角色保留');
     } else if (form.id === 'game-account-form') {
       const operation = form.dataset.operation;
       if (operation !== 'claim' && values.gamePassword !== values.confirmGamePassword) throw new Error('两次游戏密码不一致');
@@ -606,7 +619,7 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'channel-form' || form.id === 'rotate-publisher-form') {
       const result = await api(form.id === 'channel-form' ? '/live-channels' : `/live-channels/${form.dataset.id}/publisher`, { method: 'POST', body: JSON.stringify(values) });
       state.channels = (await api('/live')).channels; state.selectedChannel = result.id;
-      openModal('直播发布凭据已准备好', '只显示一次，请由本人配置到可信的画面发布器', `<p>频道：<code>${e(result.id)}</code></p><div id="created-token" class="key-secret">${e(result.publisherToken)}</div><p class="tiny">环境变量：<code>QD_LIVE_PUBLISH_TOKEN</code>。该凭据只能发布这个频道的图片，不能登录游戏、调用模型或控制角色。</p><div class="form-actions gap-top">${button('copy-token', '复制发布凭据', 'key', 'primary')}${button('close-modal', '已保存')}</div>`);
+      openModal('直播发布凭据已准备好', '只显示一次，请由本人配置到可信的画面发布器', `<p>频道：<code>${e(result.id)}</code></p><div id="created-token" class="key-secret">${e(result.publisherToken)}</div><p class="tiny">环境变量：<code>QD_LIVE_PUBLISH_TOKEN</code>。该凭据只能发布这个频道的画布或本人3D观测数据，不能登录游戏、调用模型或控制角色。</p><div class="form-actions gap-top">${button('copy-token', '复制发布凭据', 'key', 'primary')}${button('close-modal', '已保存')}</div>`);
     } else if (form.id === 'delete-channel-form') {
       await api(`/live-channels/${form.dataset.id}`, { method: 'DELETE' });
       state.channels = (await api('/live')).channels; state.selectedChannel = null;

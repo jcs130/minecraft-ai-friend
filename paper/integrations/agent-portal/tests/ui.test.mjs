@@ -89,6 +89,28 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   return { portal, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
 }
 
+test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {
+  const ui = await screen(t); await ui.setup();
+  ui.window.location.hash = 'connections';
+  await waitFor(() => ui.document.querySelector('[data-action="new-agent-invite"]'));
+  ui.click('[data-action="new-agent-invite"]');
+  ui.fill('label', '我的探索伙伴', '#agent-invite-form'); ui.fill('username', 'ag_NewGuide', '#agent-invite-form');
+  ui.submit('#agent-invite-form');
+  await waitFor(() => /^qdi_/.test(ui.document.querySelector('#created-token')?.textContent || ''));
+  const secret = ui.document.querySelector('#created-token').textContent;
+  assert.match(ui.document.querySelector('#modal').textContent, /不能认领已有角色/);
+  ui.click('#modal [data-action="close-modal"]');
+  assert.ok(!ui.document.body.textContent.includes(secret));
+  assert.match(ui.document.body.textContent, /我的探索伙伴/);
+  assert.match(ui.document.body.textContent, /等待认证桥上线/);
+  ui.click('[data-action="revoke-agent-invite"]'); ui.submit('#revoke-agent-invite-form');
+  await waitFor(() => !ui.document.querySelector('[data-action="revoke-agent-invite"]'));
+  assert.match(ui.document.body.textContent, /已结束/);
+  ui.click('[data-action="route"][data-view="account"]'); await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]'); await waitFor(() => !ui.document.querySelector('[data-action="logout"]'));
+  assert.ok(!ui.document.body.textContent.includes('我的探索伙伴'));
+});
+
 test('public growth, event filters and an offline live page work without exposing private profiles or executing announcement HTML', async t => {
   const ui = await screen(t);
   ui.window.location.hash = 'growth'; await waitFor(() => ui.document.querySelector('.growth-table'));

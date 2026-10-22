@@ -54,12 +54,19 @@ export class GameAccounts {
       return { ready, create: ready, claim: ready, gamePassword: ready, source: ready ? 'LoginGuard.private-portal-bridge' : null };
     } catch { return { ready: false, create: false, claim: false, gamePassword: false, source: null }; }
   }
+  assertCreateQuota(owner) {
+    const maximum = this.config.cloudAccounts?.maxAgentsPerOwner || 5;
+    const owned = this.store.ownedUuids(owner.id).length;
+    const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
+    if (owner.role !== 'admin' && owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
+  }
   async start(owner, operation, body) {
     const capability = await this.capabilities();
     if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥尚未上线。网站注册登录已可用；游戏角色功能需要先更新登录代理。');
     const name = body.username;
     if (typeof name !== 'string' || !(operation === 'create' ? /^ag_[A-Za-z0-9_]{1,13}$/i : /^\.?[A-Za-z0-9_]{1,16}$/).test(name)) throw fail(400, 'INVALID_AGENT_NAME', '新 Agent 角色名应为 ag_ 开头，总长不超过 16 个字母、数字或下划线；已有角色请填写原游戏名。');
     if (/eye$/i.test(name) || ['ag_goddess', 'ag_player', 'ag_corti', 'ag_corticam'].includes(name.toLowerCase())) throw fail(403, 'RESERVED_ACCOUNT', '观战与管理身份不能从网站注册或认领');
+    if (this.store.db.prepare('SELECT 1 FROM archived_test_roles WHERE lower(name)=?').get(name.toLowerCase())) throw fail(403, 'RETIRED_TEST_ACCOUNT', '历史测试角色已归档，请选择新的角色名');
     const id = body.requestId;
     if (!UUID.test(id || '')) throw fail(400, 'REQUEST_ID_REQUIRED', '请提供一次操作对应的 requestId，超时后查询同一请求，不要重复提交');
     const previous = this.store.db.prepare('SELECT * FROM account_jobs WHERE id=?').get(id);
@@ -67,12 +74,7 @@ export class GameAccounts {
       if (previous.owner_id !== owner.id || previous.operation !== operation || previous.name.toLowerCase() !== name.toLowerCase()) throw fail(409, 'REQUEST_ID_CONFLICT', '此请求标识已用于另一项操作');
       return this.job(owner, id);
     }
-    if (operation === 'create') {
-      const maximum = this.config.cloudAccounts?.maxAgentsPerOwner || 5;
-      const owned = this.store.ownedUuids(owner.id).length;
-      const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
-      if (owner.role !== 'admin' && owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
-    }
+    if (operation === 'create') this.assertCreateQuota(owner);
     const roster = await this.game.roster();
     const existing = roster.find(row => row.name.toLowerCase() === name.toLowerCase());
     if (existing?.isReserved || existing?.identityConflict) throw fail(403, 'RESERVED_ACCOUNT', '这个角色不可自助绑定，请联系服主核验');
@@ -92,6 +94,15 @@ export class GameAccounts {
       expiresAt: expires, createdAt: now, ...(operation === 'claim' ? { code } : { password: body.gamePassword }),
       ...(operation === 'password' ? { currentPassword: body.currentGamePassword } : {}) };
     const result = { state: 'pending', ...(code ? { nextCommand: `/portal bind ${id} ${code}`, instruction: '用已登录的原角色执行此命令，再查询本请求。无密码或弱默认密码不能证明归属，请先设置自己的密码。' } : {}) };
+    // roster() yielded above. Recheck directly before persistence so parallel
+    // API/browser requests cannot pass the same final quota slot or insert the
+    // same id twice. No bridge operation is sent before this job exists.
+    const raced = this.store.db.prepare('SELECT * FROM account_jobs WHERE id=?').get(id);
+    if (raced) {
+      if (raced.owner_id !== owner.id || raced.operation !== operation || raced.name.toLowerCase() !== name.toLowerCase()) throw fail(409, 'REQUEST_ID_CONFLICT', '此请求标识已用于另一项操作');
+      return this.job(owner, id);
+    }
+    if (operation === 'create') this.assertCreateQuota(owner);
     this.store.db.prepare('INSERT INTO account_jobs VALUES(?,?,?,?,?,?,?,?,?)').run(id, owner.id, operation, name, 'pending', JSON.stringify(result), now, expires, expectedUuid);
     try {
       if (this.remote) await this.remote.writeRequest(id, request);

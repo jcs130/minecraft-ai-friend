@@ -15,9 +15,11 @@ import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
 import { agentSkill, serveAgentSkill } from './agent-skill.mjs';
+import { AgentAccess } from './agent-access.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
+MIME['.mjs'] = 'text/javascript; charset=utf-8';
 const sameSecret = (a, b) => typeof a === 'string' && typeof b === 'string' && /^[A-Za-z0-9_-]{43}$/.test(a) && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const usernameValid = name => typeof name === 'string' && /^[\p{L}\p{N}_-]{3,24}$/u.test(name);
@@ -50,6 +52,7 @@ export function createPortal(config, options = {}) {
   const accounts = new GameAccounts(config, store, game, accountCloud);
   const profiles = new AgentProfiles(store);
   const emailAuth = new EmailAuth(config, store, options.emailSender);
+  const agentAccess = new AgentAccess(config, store, game, accounts);
   const limits = new Map();
   function rate(key, max = 20, windowMs = 15 * 60 * 1000) {
     const now = Date.now();
@@ -133,6 +136,30 @@ export function createPortal(config, options = {}) {
         await serveAgentSkill(req, res, config); return;
       }
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (req.method === 'GET' && pathname === '/api/v1/agent-access') return respond(res, 200, await agentAccess.capabilities());
+      const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
+      if (agentApi) {
+        // A narrow non-browser API, isolated from cookie/CSRF authority. Its
+        // tokens never authorize the normal account, admin or game-claim API.
+        if (req.headers.origin || req.headers.cookie) throw fail(403, 'AGENT_CLIENT_REQUIRED', '请从 Agent 本地接入程序调用 API，不要附带浏览器 Cookie 或 Origin');
+        const action = agentApi[1], address = digest(rateAddress(req, config));
+        if (action === 'register' && req.method === 'POST') {
+          rate('agent-register:' + address, 12);
+          const token = /^Bearer (qdi_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1];
+          const result = await agentAccess.register(token, await jsonBody(req));
+          return respond(res, result.duplicate ? 200 : 201, result);
+        }
+        if (action === 'sessions' && req.method === 'POST') {
+          const body = await jsonBody(req); rate('agent-login:' + address, 30); rate('agent-login-client:' + digest(String(body.clientId)), 12);
+          return respond(res, 200, agentAccess.login(body));
+        }
+        const context = agentAccess.authorize(req);
+        if (action === 'status' && req.method === 'GET') return respond(res, 200, await agentAccess.status(context));
+        if (action === 'state' && req.method === 'GET') return respond(res, 200, await agentAccess.state(context));
+        if (action === 'activate' && req.method === 'POST') { rate('agent-activate:' + context.client.id, 6); return respond(res, 202, await agentAccess.activate(context, await jsonBody(req))); }
+        if (action === 'session' && req.method === 'DELETE') return respond(res, 200, agentAccess.logout(context));
+        throw fail(405, 'METHOD_NOT_ALLOWED', '请按 Agent 接入文档使用此接口');
+      }
       if (req.method === 'POST' && pathname === '/api/v1/internal/accounts/poll') {
         if (!accountCloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
         if (req.headers.origin) throw fail(403, 'ACCOUNT_WORKER_REQUIRED', '请从家庭端账号同步器提交');
@@ -202,7 +229,7 @@ export function createPortal(config, options = {}) {
         throw fail(405, 'METHOD_NOT_ALLOWED', '此角色设定操作不支持这个方法');
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.5.1' });
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.6.0' });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
@@ -323,6 +350,13 @@ export function createPortal(config, options = {}) {
           .map(row => ({ id: row.id_hash, current: row.id_hash === session.id_hash, device: row.device, createdAt: new Date(row.created_at).toISOString(), expiresAt: new Date(row.expires_at).toISOString() }));
         return respond(res, 200, { owner: store.ownerPublic(owner), email: emailAuth.identity(owner.id), sessions, events: store.events(owner) });
       }
+      if (req.method === 'GET' && pathname === '/api/v1/agent-invites') return respond(res, 200, agentAccess.list(browserAuth(req).owner));
+      if (req.method === 'POST' && pathname === '/api/v1/agent-invites') {
+        const { owner } = browserAuth(req, false, true); rate('agent-invite:' + owner.id, 20);
+        return respond(res, 201, agentAccess.issue(owner, await jsonBody(req)));
+      }
+      const agentInvite = /^\/api\/v1\/agent-invites\/([a-f0-9-]{36})$/.exec(pathname);
+      if (agentInvite && req.method === 'DELETE') return respond(res, 200, agentAccess.revoke(browserAuth(req, false, true).owner, agentInvite[1]));
       if (req.method === 'POST' && pathname === '/api/v1/account/reauth') {
         const { owner, session } = browserAuth(req);
         rate('reauth:' + owner.id, 8);
@@ -465,5 +499,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

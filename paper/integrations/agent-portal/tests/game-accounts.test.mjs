@@ -75,3 +75,13 @@ test('administrator-managed historical test bindings do not consume the normal s
   for (let i = 0; i < 5; i++) f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(other.id, randomUUID(), 'Isolated quota binding', Date.now());
   assert.equal((await ordinary.request('/agents', 'POST', { username: 'ag_TooMany', requestId: randomUUID(), gamePassword: 'ordinary-game-password' })).data.error.reason, 'AGENT_LIMIT');
 });
+
+test('parallel creation cannot consume the same final ordinary-owner quota slot twice', async t => {
+  const f = await connected(t), user = f.client(); await user.init();
+  await user.request('/accounts', 'POST', { username: 'ConcurrentOwner', password: testPassword });
+  const owner = f.portal.store.ownerByName('ConcurrentOwner');
+  for (let i = 0; i < 4; i++) f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, randomUUID(), 'Isolated existing role', Date.now());
+  const results = await Promise.all(['ag_LastOne', 'ag_LastTwo'].map(username => user.request('/agents', 'POST', { username, requestId: randomUUID(), gamePassword: 'isolated-quota-password' })));
+  assert.deepEqual(results.map(row => row.status).sort(), [202, 409]);
+  assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs WHERE owner_id=?').get(owner.id).n, 1);
+});
