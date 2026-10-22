@@ -17,6 +17,7 @@ import type { MinecraftLog } from './log.ts';
 import { DEFAULT_BLUEPRINT_MC_VERSION, setBlueprintMcVersion } from './blueprint-registry.ts';
 import { DIG_UNCONFIRMED_EVENT, installMineflayerFixes, installOffsetShapes, installPathfinderToolSelection } from './mineflayer-fixes.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
+import { CHEST_BLOCKS } from './chests.ts';
 import { installNavigationBareHand } from './hand-interaction.ts';
 import { installDoorWaypointRepair, groundPathIssueOf } from './path-waypoints.ts';
 import {
@@ -888,7 +889,7 @@ export class Bridge {
     // 上游默认保护名单只有 chest，需在此补齐。
     const blocksByName = bot.registry.blocksByName as Record<string, { id: number } | undefined>;
     for (const name of [
-      'chest', 'trapped_chest', 'barrel', 'ender_chest',
+      ...CHEST_BLOCKS,
       'furnace', 'blast_furnace', 'smoker', 'crafting_table',
       'bookshelf', 'enchanting_table', 'cake',
       'brewing_stand', 'lectern', 'smithing_table',

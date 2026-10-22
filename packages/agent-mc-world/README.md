@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.66` includes all vanilla shulker-box colours in container discovery
+and historical container selection. Slot reads, transfers and material counts
+use the existing container paths. Saved contents remain last observations,
+not a claim that a portable box is still at its recorded coordinates.
+
 `0.5.7-rc.59` lets `mc_goal.revise.progress` explicitly correct a recorded
 numeric report while preserving the goal identity and checking its revision.
 Omitting the report keeps it, `null` clears it, and omitted total/unit fields

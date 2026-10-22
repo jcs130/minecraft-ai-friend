@@ -3,11 +3,12 @@ import type { Bot } from 'mineflayer';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { SkillBlocked } from './skill-context.ts';
 import { itemCustomName } from './item-display.ts';
+import { CHEST_BLOCKS } from './chests.ts';
 
 const MECHANISM = /(^|_)(?:door|trapdoor|fence_gate|button)$/;
 const BED = /(^|_)bed$/;
 const UTILITY = new Set([
-  'lever', 'chest', 'trapped_chest', 'barrel', 'ender_chest',
+  'lever', ...CHEST_BLOCKS,
   'furnace', 'blast_furnace', 'smoker', 'crafting_table',
   'anvil', 'chipped_anvil', 'damaged_anvil', 'grindstone',
   'loom', 'stonecutter', 'cartography_table', 'smithing_table',

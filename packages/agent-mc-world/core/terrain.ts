@@ -29,6 +29,7 @@ import { flightState, type FlightState } from './flight.ts';
 import { inventoryReadState, narrateInventorySync, type InventoryReadState } from './inventory-window-sync.ts';
 import { footingFromBot, narrateFooting, type FootingReading } from './footing.ts';
 import { WATER_BLOCKS } from './fluid-blocks.ts';
+import { CHEST_BLOCKS, FURNACE_BLOCKS } from './chests.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 import { entityMaxHealth } from './entity-max-health.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
@@ -958,10 +959,7 @@ const FARMLAND_MAX_MOISTURE = 7;
  * 炉子族也在列:账本里有槽位读数就随行显示(「熔炉(粗铁×8、煤×2)」),
  * 没开过照容器的口径写「没开过」——15:57 她连撞两次右键问炉子里有什么都拿不到答案。
  */
-const CONTAINER_BLOCKS = new Set([
-  'chest', 'trapped_chest', 'barrel', 'ender_chest',
-  'furnace', 'smoker', 'blast_furnace',
-]);
+const CONTAINER_BLOCKS = new Set<string>([...CHEST_BLOCKS, ...FURNACE_BLOCKS]);
 const CONTAINER_NEARBY_CAP = 4;
 
 /** 自动摘要的近景预算；听觉独立消费真实声音包。 */

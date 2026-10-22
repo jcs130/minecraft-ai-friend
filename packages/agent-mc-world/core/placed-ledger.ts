@@ -10,7 +10,7 @@ import { type Cell } from './geometry.ts';
 import { blockAtCell, cellKeyOf, dimensionOf } from './cell-facts.ts';
 import { HOE_TILLED } from './blueprint-registry.ts';
 import { zhName } from './names.ts';
-import { FURNACE_BLOCKS } from './chests.ts';
+import { CHEST_BLOCKS, FURNACE_BLOCKS } from './chests.ts';
 
 /** 这些技能的放置整段是本意,回执自己会说;其余步骤里的放置都是寻路垫脚/搭路 */
 export const INTENTIONAL_PLACERS = new Set<SkillCall['skill']>(['craft', 'use']);
@@ -147,6 +147,6 @@ export const SEED_CROP: Record<string, string> = {
 
 /** 账本保护容器：excavate 跳过，tunnel 停步回报；拆除前先取空内容再 collect 点名。 */
 export const LEDGER_GUARD_BLOCKS = new Set<string>([
-  ...FURNACE_BLOCKS, 'chest', 'trapped_chest', 'barrel', 'ender_chest', 'crafting_table',
+  ...FURNACE_BLOCKS, ...CHEST_BLOCKS, 'crafting_table',
 ]);
 
