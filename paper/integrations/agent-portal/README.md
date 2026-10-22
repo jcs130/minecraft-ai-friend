@@ -1,12 +1,12 @@
-# 千灯纪 · 冒险世界门户 0.3.0
+# 千灯纪 · 冒险世界门户 0.4.0
 
 独立 Node.js 网站：玩家与 Agent 目录、冒险成长榜、世界动态、网站账号、原角色绑定、保存的背包和可选择的游戏直播。支持手机竖屏、收起导航、触控表单和横向滚动的成长表。
 
 ## 当前发布范围（2026-10-22）
 
-0.3.0 增加云端快照数据源和家庭端出站同步器，源代码与本机测试完成，云端部署验收另行记录。原内网 0.2.0 继续可用，网站密码已按服主要求放宽至至少 6 位。
+云端 0.3.0 已在 **https://mc.kangqiang.site** 运行，网站管理员沿用服主在本机设置的账号和密码。0.4.0 增加独立世界首页、公开相机展廊和受限宣传素材服务。网站密码至少 6 位；原内网 0.2.0 仅保留为诊断副本，账号操作统一使用云端。
 
-- 网站接入现役 **Paper 1.21.1** 的真实只读数据。本次先完成本机、局域网接入，没有配置公网域名或路由器端口。
+- 网站接入现役 **Paper 1.21.1** 的真实只读数据。云端读取家庭端主动上传的资料，不新增家庭网络入站端口。
 - 网站注册、登录、改网站密码、设备撤销、独立角色资料权限和只读客户端凭据可用。
 - 游戏账号桥已实现并通过独立 Paper / Velocity / LibreLogin 联机验证；**正式代理尚未更新**。页面以 `/api/v1/game-capabilities` 的实际结果决定是否可建号、绑定和改游戏密码，不把网站注册当作游戏建号成功。
 - 直播频道、所属角色默认选择、公开/仅本人权限及游戏画布发布器可用。原客户端的实际直播地址尚未接通；无画面时明确显示未开播。当前为约 1 帧/秒的只读预览，无声音。
@@ -102,7 +102,7 @@ portal.key-file=E:/MC/private/portal-bridge.key
 先由本人把页面一次性发布凭据放入 `QD_LIVE_PUBLISH_TOKEN` 环境变量，再运行：
 
 ```powershell
-npm run live:publish -- --portal http://192.168.3.163:8790 --channel <频道ID> --source http://127.0.0.1:7793 --browser "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+npm run live:publish -- --portal https://mc.kangqiang.site --channel <频道ID> --source http://127.0.0.1:7793 --browser "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
 ```
 
 不要把发布 token 放进命令参数、URL、Git 或 LLM 对话。发布器通过管道启动独立无头浏览器，不复用桌面 Cookie，不开放调试端口。需要原 Renderer 标识、实际网格区块与新鲜 socket 数据；未就绪不发布天空首帧或旧画面。1280×720、约 1fps JPEG；一次只保存各频道最新帧到内存，最多 16 频道。轮换凭据会即时停止旧发布器。
@@ -132,7 +132,7 @@ body: JPEG，最多 512 KiB，160×90 至 2560×1440
 
 浏览器写请求使用 `/api/v1/session` 的 `X-CSRF-Token`。游戏桥：`POST /api/v1/agents`、`/agent-claims`、`/game-password`；查结果 `GET /api/v1/jobs/{requestId}`。所有任务仅归属本人。
 
-以后公网部署通过同一个 HTTPS 反向代理站点转发门户，配置固定 `publicOrigin=https://你的域名` 和精确 `trustedProxies`。只信任已配置代理的 HTTPS/来源头，不允许外部伪造本机初始化或任意 Host。游戏目录、IPC 和私钥不作为静态文件提供。本次没有配置域名、证书或公网转发。
+以后公网部署通过同一个 HTTPS 反向代理站点转发门户，配置固定 `publicOrigin=https://你的域名` 和精确 `trustedProxies`。只信任已配置代理的 HTTPS/来源头，不允许外部伪造本机初始化或任意 Host。游戏目录、IPC 和私钥不作为静态文件提供。正式云端已按此方式配置 `mc.kangqiang.site`；游戏代理仍未更新。
 
 ## 配置、验证与回退
 
@@ -143,7 +143,7 @@ npm run check
 npm test
 ```
 
-0.3.0：24 个 JS 模块语法检查、54 项 Node API/DOM 测试通过，新增云端入站凭据隔离、HTTP 真实同步、序号/时间拒绝、字段筛选、重启持久化、离线状态和 6 位网站密码回归。原 0.2.0 对应登录代理的 7 个 JVM 程序（84 项检查）及隔离认证链 14 项真实联机保持为认证桥候选证据，没有因此更新正式代理。
+0.4.0：28 个 JS 模块语法检查、63 项 Node API/DOM 测试通过，新增云端入站凭据隔离、HTTP 真实同步、序号/时间拒绝、字段筛选、重启持久化、离线状态和 6 位网站密码回归。原 0.2.0 对应登录代理的 7 个 JVM 程序（84 项检查）及隔离认证链 14 项真实联机保持为认证桥候选证据，没有因此更新正式代理。
 
 ## 云端模式与家庭端同步
 
@@ -173,6 +173,22 @@ node scripts/sync-home.mjs --config E:/MC/private/portal-sync/config.json --dry-
 
 容器使用固定 Node 22.23.2 Linux amd64 镜像摘要，数据目录必须挂到持久卷，配置文件独立只读挂载。示例限额为 512MiB/1CPU；实际负载以云端验收为准。源码中不包含证书私钥或云端账号库。
 
-隔离场景只使用新建测试账号。早期客户端 codec、命令分发及测试夹具失败记录保留；没有把它们标为通过。DOM 检查不是像素渲染验收：当前没有可用的交互浏览器，**手机/桌面视觉和真实远端直播源尚未验收**。完整客户端托管、网页接管和公网访问不在本次验收内。
+隔离场景只使用新建测试账号。早期客户端 codec、命令分发及测试夹具失败记录保留；没有把它们标为通过。DOM 检查不是像素渲染验收：已在实际浏览器核对桌面和 390px 手机断点；**手机设备及真实远端直播源尚未验收**。完整客户端托管和网页接管不在本次验收内。
 
 源码在服务器仓库 `paper/integrations/agent-portal`；本机运行副本单独保留配置、依赖和数据库。回退网站先停止本网站，备份当前 SQLite（backup API 或 `VACUUM INTO`，不能只复制活跃主文件），恢复旧源码；只在确认 schema 不兼容时恢复配套网站库，须保留更新后的用户/归属记录。回退游戏桥仅恢复 LoginGuard JAR 与配置前像，关闭桥配置；**不恢复整个旧认证库、旧世界或旧玩家存档**，以免覆盖维护后密码和物品。
+
+## 世界首页、相机展廊与宣传素材
+
+无 hash 或 `#home` 为游戏介绍首页，`#overview` 保留旧工作台；`#gallery` 为公开照片展廊。首页不使用 NEKO 专属宣传素材，NEKO、Cortico、QwenPaw 和真实角色平等展示。
+
+家庭端只读取 `AgentFriend/photo-journal.json` 中已公开的作品，从合法 ImageFrame 数字目录读取 PNG。题目、作者、故事与采集时间进入快照；图片只在变化后上传，原图字节和元数据存到云端 SQLite。未公开照片不入站，撤展作品不再提供图片接口。单件最多 2MiB，目录最多 50 件。来源相机、游戏里展览及考试记录不被修改。
+
+公开 `GET /api/v1/gallery` 与 `/api/v1/gallery/{id}/image`；家庭端 `PUT /api/v1/internal/photos/{id}` 复用严格限定的同步凭据，须先有当前已发布目录、匹配 SHA256/尺寸及 PNG；浏览器与普通客户端 token 均不能上传。
+
+宣传文件放在云端数据卷 `media/`，只有私有配置 `publicMedia` 选中的 ASCII 文件名才可读取，支持视频 Range/HEAD；禁止外部 URL、路径和任意目录浏览。示例：
+
+```json
+{ "publicMedia": { "video": "qiandeng-intro-v5.mp4", "poster": "qiandeng-intro-v5.jpg", "character": "cormy-reference.webp", "credit": "千灯纪 · 可米" } }
+```
+
+`GET /api/v1/site` 仅公开选中媒体的 `/media/` 路径。没有素材时不显示假视频或空播放框。媒体需要服主确认可用于官网，原图、视频和游戏作品不随源码加入 Git。

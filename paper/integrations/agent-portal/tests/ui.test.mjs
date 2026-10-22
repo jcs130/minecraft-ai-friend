@@ -18,7 +18,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {} } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -38,14 +38,14 @@ async function screen(t, { capabilitiesReady = false } = {}) {
     players: async () => ({ players: [{ ...game.publicAgent(agent), savedAt, growth: { level: 7, fame: 14, completed: 2, rank: '黑铁 III', gradeIndex: 3, profession: 'mage' } }], freshness: 'saved' }),
     events: async ({ kind = 'all', page = 1 } = {}) => ({ events: kind === 'all' || kind === 'notice' ? [{ id: 'event-fixture', kind: 'notice', title: '<script>unsafe()</script>', body: '隔离测试公告', occurredAt: savedAt, timePrecision: 'second' }] : [], page, pages: 1, total: 1 })
   };
-  const portal = createPortal(loadConfig({ host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data') }), { game, world });
+  const portal = createPortal(loadConfig({ host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), publicMedia: media }), { game, world });
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   const html = await fs.readFile(path.join(projectRoot, 'public/index.html'), 'utf8');
   const code = await fs.readFile(path.join(projectRoot, 'public/app.js'), 'utf8');
   const errors = [];
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', error => errors.push(error));
-  const dom = new JSDOM(html, { url: origin, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
+  const dom = new JSDOM(html, { url: initialView === 'home' ? origin : origin + '/#' + initialView, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const { window } = dom; const { document } = window;
   let cookie = ''; let networkFailure = false; let hold = null;
   window.scrollTo = () => {};
@@ -55,6 +55,7 @@ async function screen(t, { capabilitiesReady = false } = {}) {
     const url = new URL(resource, origin);
     // Simulate the bridge going offline between displaying a ready form and
     // submitting it; the actual backend still returns its unavailable receipt.
+    if (url.pathname === '/api/v1/gallery') return new Response(JSON.stringify({ photos }));
     if (capabilitiesReady && url.pathname === '/api/v1/game-capabilities') return new Response(JSON.stringify({ ready: true }));
     if (networkFailure && ['/api/v1/server', '/api/v1/roster'].includes(url.pathname)) throw new Error('Isolated network outage');
     const headers = { ...options.headers, ...(cookie ? { Cookie: cookie } : {}), ...(options.method && options.method !== 'GET' ? { Origin: origin } : {}) };
@@ -77,7 +78,7 @@ async function screen(t, { capabilitiesReady = false } = {}) {
     assert.deepEqual(errors, [], 'No unexpected DOM runtime errors');
   });
   window.eval(code + '\nwindow.__portalRefreshForTest = refresh;');
-  await waitFor(() => document.querySelector('.onboarding-notice') && document.querySelector('tbody strong')?.textContent === 'ag_Alpha');
+  await waitFor(() => document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
     let entered, release;
     const ready = new Promise(resolve => { entered = resolve; });
@@ -243,4 +244,37 @@ test('ordinary registration, human role binding and returning login lead to the 
   ui.click('[data-action="inventory-detail"]'); await waitFor(() => ui.document.querySelector('#detail .item-list'));
   assert.ok(ui.document.querySelector('#detail').textContent.includes(playerUuid));
   assert.match(ui.document.querySelector('#detail .item-list').textContent, /大背包/);
+});
+
+
+test('the default homepage introduces a shared Agent living world and exhibits only escaped attributed game photographs', async t => {
+  const photo = { id: '11111111-1111-4111-8111-111111111112', author: 'ag_CorMy', title: '<script>unsafe()</script>', story: '在千灯纪安下的家。', capturedAt: '2026-10-20T01:00:00Z', width: 1536, height: 1536, imageUrl: '/api/v1/gallery/11111111-1111-4111-8111-111111111112/image?rev=test' };
+  const ui = await screen(t, { initialView: 'home', photos: [photo] });
+  assert.match(ui.document.querySelector('h1').textContent, /让 Agent 在这里/);
+  assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico.*QwenPaw/);
+  assert.equal(ui.document.querySelectorAll('img[src*=neko-cover]').length, 0);
+  assert.match(ui.document.querySelector('.home-rescue-note').textContent, /4格内连续停留10秒/);
+  assert.equal(ui.document.querySelectorAll('.photo-card script').length, 0);
+  assert.match(ui.document.querySelector('.photo-caption').textContent, /可米/);
+  assert.match(ui.document.querySelector('.photo-caption').textContent, /在千灯纪安下的家/);
+  assert.equal(ui.document.querySelectorAll('[data-world-roster] .resident-card').length, 1);
+  ui.click('[data-action="photo"]');
+  assert.match(ui.document.querySelector('#modal-title').textContent, /<script>/);
+  assert.equal(ui.document.querySelectorAll('#modal script').length, 0);
+  assert.match(ui.document.querySelector('.photo-story').textContent, /安下的家/);
+  ui.click('[data-action="close-modal"]');
+  ui.click('.mobile-menu'); assert.ok(ui.document.querySelector('.layout').classList.contains('menu-open'));
+  ui.click('.nav-scrim'); assert.ok(!ui.document.querySelector('.layout').classList.contains('menu-open'));
+  ui.window.location.hash = 'gallery'; await waitFor(() => ui.document.querySelector('.full-gallery'));
+  assert.equal(ui.document.querySelectorAll('.photo-card').length, 1);
+});
+
+
+test('configured promotion and character art appear in the shared world homepage without autoplay', async t => {
+  const ui = await screen(t, { initialView: 'home', media: { video: 'intro.mp4', poster: 'poster.jpg', character: 'cormy.webp', credit: '千灯纪 / 可米' } });
+  const video = ui.document.querySelector('.home-film video');
+  assert.ok(video); assert.ok(video.hasAttribute('controls')); assert.ok(video.hasAttribute('playsinline')); assert.equal(video.hasAttribute('autoplay'), false);
+  assert.equal(video.getAttribute('preload'), 'none'); assert.equal(video.querySelector('source').getAttribute('src'), '/media/intro.mp4');
+  assert.equal(ui.document.querySelector('.character-feature img').getAttribute('src'), '/media/cormy.webp');
+  assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico/);
 });

@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { GameData, UUID } from './game-data.mjs';
 import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
+import { validatePhotos } from './gallery.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const pick = (value, fields) => Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key)).map(key => [key, value[key]]));
@@ -22,7 +23,7 @@ function noCredentials(value, depth = 0) {
 
 // The producer only reads the existing game projections; it never logs into a
 // second body, runs RCON, or reads the authentication/model credential stores.
-export async function buildSnapshot(game, world, sequence) {
+export async function buildSnapshot(game, world, sequence, photos = []) {
   const [all, summary, growth] = await Promise.all([game.roster(), game.serverSummary(), world.players()]);
   const roster = all.slice(0, 256).map(row => pick(row, rosterFields));
   const states = {};
@@ -37,7 +38,7 @@ export async function buildSnapshot(game, world, sequence) {
     if (page >= result.pages) break;
   }
   const result = { schemaVersion: 1, sequence, observedAt: new Date().toISOString(), summary: pick(summary, summaryFields), roster,
-    players: growth.players.map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events };
+    players: growth.players.map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events, photos: validatePhotos(photos) };
   noCredentials(result);
   return result;
 }
@@ -83,7 +84,7 @@ export class CloudSource {
       if (!/^[a-f0-9]{64}$/.test(row.id || '') || !['join', 'leave', 'quest', 'advancement'].includes(row.kind) || !names.has(String(row.playerName).toLowerCase()) || typeof row.title !== 'string' || row.title.length > 400 || typeof row.body !== 'string' || row.body.length > 2000 || !Number.isFinite(Date.parse(row.occurredAt)) || !['day', 'second'].includes(row.timePrecision)) throw fail(400, 'SNAPSHOT_EVENT', '公开事件格式不受支持');
       return pick(row, eventFields);
     });
-    const value = { schemaVersion: 1, sequence: input.sequence, observedAt: input.observedAt, roster, states, players, events, summary: pick(input.summary, summaryFields) };
+    const value = { schemaVersion: 1, sequence: input.sequence, observedAt: input.observedAt, roster, states, players, events, photos: validatePhotos(input.photos), summary: pick(input.summary, summaryFields) };
     noCredentials(value);
     const payload = JSON.stringify(value), hash = createHash('sha256').update(payload).digest('hex');
     const previous = this.read();

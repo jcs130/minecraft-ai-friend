@@ -3,9 +3,18 @@
   "port": 8790,
   "siteName": "千灯纪",
   "sourceMode": "local",
-  "cloudSync": { "enabled": false, "tokenHash": "", "staleAfterMs": 45000, "maxBytes": 2097152 },
+  "cloudSync": {
+    "enabled": false,
+    "tokenHash": "",
+    "staleAfterMs": 45000,
+    "maxBytes": 2097152
+  },
   "publicOrigin": null,
-  "trustedProxies": ["127.0.0.1", "::1", "::ffff:127.0.0.1"],
+  "trustedProxies": [
+    "127.0.0.1",
+    "::1",
+    "::ffff:127.0.0.1"
+  ],
   "localOrigins": [],
   "allowRegistration": true,
   "includeKnownPlayers": false,
@@ -17,7 +26,27 @@
   "authHeartbeat": "E:/MC/ops/auth-heartbeat.json",
   "agentRegistry": "E:/MC/ops/agent-eye-pairs.json",
   "publicGameAddress": "micro.kangqiang.site",
-  "live": { "maxFrameBytes": 524288, "staleAfterMs": 8000, "maxChannels": 16 },
-  "publicRoster": ["CortiLan", "ag_Kirito", "ag_NEKO", "ag_CorMy", "ag_NarutoPi", "feiyu_bot", "Goddess", ".MicroKQ", "LittleFish0510", "TianYi"],
-  "authBridge": { "enabled": false, "directory": "E:/MC/private/portal-bridge", "keyFile": "E:/MC/private/portal-bridge.key" }
+  "live": {
+    "maxFrameBytes": 524288,
+    "staleAfterMs": 8000,
+    "maxChannels": 16
+  },
+  "publicRoster": [
+    "CortiLan",
+    "ag_Kirito",
+    "ag_NEKO",
+    "ag_CorMy",
+    "ag_NarutoPi",
+    "feiyu_bot",
+    "Goddess",
+    ".MicroKQ",
+    "LittleFish0510",
+    "TianYi"
+  ],
+  "authBridge": {
+    "enabled": false,
+    "directory": "E:/MC/private/portal-bridge",
+    "keyFile": "E:/MC/private/portal-bridge.key"
+  },
+  "publicMedia": {}
 }

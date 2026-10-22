@@ -5,6 +5,7 @@ import { Store } from '../src/store.mjs';
 import { GameData } from '../src/game-data.mjs';
 import { WorldCatalog } from '../src/world-catalog.mjs';
 import { buildSnapshot } from '../src/cloud-source.mjs';
+import { PhotoReader } from '../src/gallery.mjs';
 
 const configPath = process.argv[process.argv.indexOf('--config') + 1];
 if (!process.argv.includes('--config') || !path.isAbsolute(configPath)) throw Error('Use --config with an absolute private configuration file');
@@ -28,6 +29,7 @@ catch (error) {
 }
 await lock.writeFile(String(process.pid));
 const store = new Store(config.dataDir), game = new GameData(config, store.salt), world = new WorldCatalog(config, game, store);
+const photoReader = new PhotoReader(config), uploaded = new Set();
 let sequence = 0, stopping = false, lastReport;
 try { sequence = JSON.parse(await fs.readFile(stateFile, 'utf8')).sequence; } catch { }
 const report = text => { if (lastReport !== text) { console.log(text); lastReport = text; } };
@@ -41,14 +43,27 @@ try {
   do {
     try {
       sequence++; await persistSequence();
-      const snapshot = await buildSnapshot(game, world, sequence), body = JSON.stringify(snapshot);
+      const photos = await photoReader.read();
+      const activePhotos = new Set(photos.map(row => row.metadata.id + ':' + row.metadata.sha256));
+      for (const key of uploaded) if (!activePhotos.has(key)) uploaded.delete(key);
+      const snapshot = await buildSnapshot(game, world, sequence, photos.map(row => row.metadata)), body = JSON.stringify(snapshot);
       if (Buffer.byteLength(body) > 2097152) throw Error('Snapshot exceeds the configured size');
       if (process.argv.includes('--dry-run')) { console.log(JSON.stringify({ sequence, roster: snapshot.roster.length, privateProfiles: Object.keys(snapshot.states).length, events: snapshot.events.length, bytes: Buffer.byteLength(body) })); break; }
       const response = await fetch(endpoint, { method: 'PUT', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
       const result = await response.json();
       if (response.status === 409 && Number.isSafeInteger(result.error?.currentSequence)) { sequence = Math.max(sequence, result.error.currentSequence); await persistSequence(); }
       else if (!response.ok) throw Object.assign(Error('Synchronization rejected'), { status: response.status });
-      else report('云端资料同步已连接。');
+      else {
+        for (const photo of photos) {
+          const key = photo.metadata.id + ':' + photo.metadata.sha256;
+          if (uploaded.has(key)) continue;
+          const png = await fs.readFile(photo.file);
+          const upload = await fetch(new URL('/api/v1/internal/photos/' + photo.metadata.id, endpoint), { method: 'PUT', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
+          if (!upload.ok) throw Object.assign(Error('Photo synchronization rejected'), { status: upload.status });
+          uploaded.add(key);
+        }
+        report('云端资料同步已连接。');
+      }
       if (process.argv.includes('--once') && !response.ok) process.exitCode = 1;
     } catch (error) {
       report('云端资料同步暂不可用' + (error.status ? `（HTTP ${error.status}）` : error.reason ? `（${error.reason}）` : '') + '；保留保存资料，等待恢复。');

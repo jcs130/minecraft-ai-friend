@@ -9,6 +9,8 @@ import { Live } from './live.mjs';
 import { requestOrigin, rateAddress } from './request-origin.mjs';
 import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
+import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
+import { publicMedia, servePublicMedia } from './public-media.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 const sessionName = 'qd_portal_session';
@@ -39,6 +41,7 @@ export function createPortal(config, options = {}) {
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const live = new Live(config, store);
+  const gallery = new Gallery(store, cloud);
   const accounts = new GameAccounts(config, store, game);
   const limits = new Map();
   function rate(key, max = 20, windowMs = 15 * 60 * 1000) {
@@ -123,6 +126,16 @@ export function createPortal(config, options = {}) {
         cloud.authorize(req); rate('snapshot-sync', 12, 60000);
         return respond(res, 200, cloud.accept(await jsonBody(req, config.cloudSync.maxBytes)));
       }
+      const photoUpload = /^\/api\/v1\/internal\/photos\/([a-f0-9-]{36})$/.exec(pathname);
+      if (photoUpload && req.method === 'PUT') {
+        if (!cloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
+        if (req.headers.origin) throw fail(403, 'SYNC_CLIENT_REQUIRED', '请从家庭端同步器上传照片');
+        cloud.authorize(req); rate('photo-sync', 60, 60000);
+        if (req.headers['content-type'] !== 'image/png') throw fail(415, 'PHOTO_FORMAT', '请上传 PNG 照片');
+        let length = 0; const chunks = [];
+        for await (const chunk of req) { length += chunk.length; if (length > MAX_PHOTO_BYTES) throw fail(413, 'PHOTO_SIZE', '照片文件过大'); chunks.push(chunk); }
+        return respond(res, 200, gallery.accept(photoUpload[1], Buffer.concat(chunks)));
+      }
       const ingest = /^\/api\/v1\/live\/([a-f0-9-]{36})\/(open|frame)$/.exec(pathname);
       if (ingest && (req.method === 'POST' && ingest[2] === 'open' || req.method === 'PUT' && ingest[2] === 'frame')) {
         // Only this narrow binary ingress accepts publisher credentials instead
@@ -139,8 +152,15 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
-      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.3.0' });
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: config.allowRegistration, publicOrigin: config.publicOrigin || null });
+      if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
+      if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: '0.4.0' });
+      if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
+      const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
+      if (photoImage && req.method === 'GET') {
+        const image = gallery.image(photoImage[1]);
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
+      }
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: config.allowRegistration, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') return respond(res, 200, { agents: (await game.roster()).map(row => game.publicAgent(row)) });
@@ -363,5 +383,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, close: async () => { clearInterval(cleanup); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, live, accounts, cloud, gallery, close: async () => { clearInterval(cleanup); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

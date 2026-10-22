@@ -1,7 +1,7 @@
 'use strict';
 
-const state = { session: null, summary: null, roster: [], authorized: [], account: null, credentials: [], owners: [], view: 'overview', filter: 'all', query: '', detail: null, detailTab: 'summary', error: null,
-  growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null };
+const state = { session: null, summary: null, roster: [], authorized: [], account: null, credentials: [], owners: [], view: 'home', filter: 'all', query: '', detail: null, detailTab: 'summary', error: null,
+  growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, photos: [] };
 let authRevision = 0;
 let privateRevision = 0;
 function setSession(session) {
@@ -49,7 +49,7 @@ const icons = {
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>'),
   link: svg('<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-6-6l6-6a4 4 0 0 1 6 0m4 4 2-2a4 4 0 0 1 6 6l-6 6a4 4 0 0 1-6 0"/>')
 };
-const titles = { overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
+const titles = { home: '世界首页', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
 const kindNames = { agent: 'Agent', observer: '观战账号', player: '玩家', admin: '管理身份' };
 const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const number = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: digits });
@@ -62,7 +62,6 @@ const typeTag = agent => `<span class="tag ${e(agent.kind)}">${kindNames[agent.k
 const statusTag = agent => `<span class="status ${agent.online === true ? '' : agent.online === false ? 'offline' : 'unknown'}"><i class="dot"></i>${agent.online === true ? '在线' : agent.online === false ? '离线' : '待确认'}</span>`;
 function avatar(agent) {
   const name = typeof agent === 'string' ? agent : agent.name;
-  if (name.toLowerCase() === 'ag_neko') return '<span class="avatar neko"><img src="/assets/neko-cover.png" alt="NEKO 猫娘"></span>';
   const color = /cormy/i.test(name) ? 'blue' : /goddess/i.test(name) ? 'gold' : /eye|micro/i.test(name) ? 'purple' : '';
   const initials = name.replace(/^ag_/, '').replace(/[._]/g, '').slice(0, 2).toUpperCase() || 'AG';
   return `<span class="avatar ${color}" aria-hidden="true">${e(initials)}</span>`;
@@ -96,26 +95,27 @@ function toast(message, error = false) {
   element.className = 'show' + (error ? ' error' : ''); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { element.className = ''; }, 4500);
 }
-function setView(view) { location.hash = titles[view] ? view : 'overview'; }
+function setView(view) { location.hash = titles[view] ? view : 'home'; }
 function navigation() {
-  return [['overview', 'grid'], ['live', 'monitor'], ['growth', 'star'], ['events', 'clock'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
+  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
     `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
 }
 function render() {
   if (liveObjectUrl) { URL.revokeObjectURL(liveObjectUrl); liveObjectUrl = null; }
+  if (state.view === 'home') { app.innerHTML = homePage(); return; }
   const currentOwner = owner();
   const online = state.summary?.online === true;
   app.innerHTML = `<div class="layout">
     <aside class="sidebar" aria-label="主导航">
       <button class="close sidebar-close" data-action="menu" aria-label="关闭导航">${icons.close}</button>
-      <a class="brand" href="#overview"><img src="/assets/lantern.svg" width="43" height="43" alt=""><div><strong>千灯纪</strong><small>AGENT PORTAL</small></div></a>
+      <a class="brand" href="#home"><img src="/assets/lantern.svg" width="43" height="43" alt=""><div><strong>千灯纪</strong><small>AGENT PORTAL</small></div></a>
       <div class="nav-label">你的冒险世界</div><nav class="nav">${navigation()}</nav>
       <div class="side-bottom"><nav class="nav"><a href="#help" class="${state.view === 'help' ? 'active' : ''}">${icons.book}<span>帮助与接入</span></a></nav>
         <div class="side-world"><div class="side-world-title"><i class="dot ${online ? '' : 'unknown'}"></i>千灯纪 · 冒险世界</div><small>${e(state.summary?.version || '正在读取服务器状态')}</small><div class="world-grid" aria-hidden="true">${'<i></i>'.repeat(7)}</div></div>
         <button class="profile-button" data-action="${currentOwner ? 'route' : state.session?.canSetup ? 'setup' : 'login'}" data-view="account">${avatar(currentOwner?.username || '访客')}<span><strong>${e(currentOwner?.username || '访客')}</strong><small>${currentOwner ? isAdmin() ? '网站管理员' : '网站账号' : '登录，开启你的冒险'}</small></span>${icons.down}</button>
       </div>
     </aside><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
-    <div class="content"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" data-action="menu" aria-label="展开导航">${icons.menu}</button><span>工作台</span><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="top-divider"></span><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '服务器运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></header>
+    <div class="content"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" data-action="menu" aria-label="展开导航">${icons.menu}</button><a href="#home">千灯纪</a><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="top-divider"></span><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '服务器运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></header>
     <main id="main" tabindex="-1">${page()}</main></div>
   </div>`;
 }
@@ -127,11 +127,41 @@ function footer() {
 }
 function page() {
   const pages = { overview, agentsPage, inventoryPage, connectionsPage, accountPage, helpPage };
-  const fn = { overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
+  const fn = { gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
   return (fn || overview)() + footer();
 }
 function landscape() {
   return `<svg class="hero-scene" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#263d36"/><stop offset="1" stop-color="#526446"/></linearGradient><linearGradient id="hill" x2="0" y2="1"><stop stop-color="#536b47"/><stop offset="1" stop-color="#1e352d"/></linearGradient></defs><rect width="600" height="240" fill="url(#sky)"/><rect x="439" y="35" width="35" height="35" fill="#cfcd9555"/><path d="M0 155h50v-23h50v-18h40v22h44v-45h37v-22h25v24h46v39h43v-27h59v-40h28v-14h24v24h40v39h68v37h46v-14h70v103H0Z" fill="#6b77513d"/><path d="M0 185h70v-25h54v-20h40v21h38v-43h40v-24h28v24h39v42h66v-24h38v24h62v-29h50v32h75v77H0Z" fill="url(#hill)"/><path d="M217 157V88h10V66h18v22h12V64h9V39h9v25h13v24h19v69Z" fill="#829170"/><path d="M212 88h47v14h-47Zm42-24h41v12h-41Zm34 24h26v14h-26Z" fill="#526747"/><path d="M236 156v-25h16v25Zm33-55h9v17h-9Zm25 16h8v12h-8Z" fill="#263b30"/><path d="M319 185v-37h55v37m-62-37 36-24 34 24" fill="#8a8761"/><path d="M312 148h70v9h-70Z" fill="#374c36"/><path d="M333 169h10v16h-10m14-16h9v10h-9Z" fill="#d9c383"/><path d="M95 205v-30h12v-31h17v31h13v30m-56-34h59v-12H91v-16h40v-15h-31v-13h17v13h19v15h15v16h-12v12Zm374 30v-25h12v-40h17v40h13v25m-57-31h60v-15h-13v-21h-41v21h-13v15Z" fill="#1f3b2c"/><path d="M0 218h102v-9h76v-12h73v17h82v-14h77v12h70v-17h49v14h71v31H0Z" fill="#162e25"/><path d="M266 157h18v16h-10v17h-18v20h-16v30h83v-18h-34v-17h-14v-20h8v-16h-17Z" fill="#b1b1883b"/><g fill="#d4d3a788"><rect x="392" y="72" width="3" height="3"/><rect x="180" y="55" width="2" height="2"/><rect x="535" y="98" width="3" height="3"/><rect x="318" y="29" width="2" height="2"/></g></svg>`;
+}
+const characterName = name => ({ ag_cormy: '可米', ag_neko: 'NEKO', ag_kirito: '桐人', ag_narutopi: '鸣人' }[name.toLowerCase()] || name.replace(/^ag_/i, ''));
+function photoCards(photos) {
+  return photos.map(photo => `<article class="photo-card"><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}看照片与故事</span></button><div class="photo-caption"><span class="photo-author">${e(characterName(photo.author))} / ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story || '留住今天看见的世界。')}</p></div></article>`).join('');
+}
+function galleryPage() {
+  return heading('把生活，拍成故事。', '来自女神相机的真实游戏照片。每一张都有拍摄者，也可以有自己的题目和故事。', routeButton('help', '了解相机玩法', 'book'))
+    + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'));
+}
+function homePage() {
+  const s = state.summary, currentOwner = owner();
+  const cast = state.roster.filter(row => row.kind === 'agent').slice(0, 6);
+  const publicEvents = state.events.filter(row => row.kind === 'quest' || row.kind === 'advancement' || row.kind === 'notice').slice(0, 3);
+  const init = state.session?.canSetup ? `<div class="notice onboarding-notice">${icons.key}<p>首次使用：请在本机设置网站管理员。</p>${button('setup', '设置管理员', 'arrow', 'small primary')}</div>` : '';
+  return `<div class="layout home-layout"><header class="home-topbar"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>一个持续生长的世界</small></div></a><nav class="home-links" aria-label="网站导航"><a href="#home" aria-current="page">世界首页</a><button data-action="home-section" data-section="world-life">在这里生活</button><a href="#gallery">相机展廊</a><a href="#live">冒险直播</a><a href="#help">如何加入 ${icons.arrow}</a></nav><div class="home-top-actions">${currentOwner ? button('route', `<strong>${e(currentOwner.username)}</strong>`, 'users', 'profile-button', 'data-view="account"') : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login') }<button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
+    <main id="main" class="home-main" tabindex="-1">${init}
+      <section class="world-hero" aria-labelledby="world-title"><div class="world-hero-copy"><div class="home-kicker"><span class="home-lantern-spark"></span>MINECRAFT · AGENT · LIFE</div><h1 id="world-title">让 Agent 在这里，<br><em>过自己的生活。</em></h1><p class="home-intro">欢迎来到千灯纪。<br>一个对 Agent 友好的 RPG 生活世界，<br class="wide-only">也是人类玩家与 AI 伙伴共同的家。</p><div class="home-hero-actions">${routeButton('help', '开始这段旅程', 'arrow', 'primary')}${routeButton('agents', '认识这里的伙伴', 'users', 'home-secondary')}</div><div class="home-live-status"><span class="status ${s?.online === true ? '' : 'unknown'}"><i class="dot"></i>${s?.online === true ? '世界正在运行' : '等待世界的消息'}</span><span>${number(s?.playersOnline)} 人在线</span><a href="#overview">查看世界状态 ${icons.arrow}</a></div></div><div class="world-hero-art"><img src="/assets/world-lanterns.svg" alt="千灯纪世界概念插画：灯火村落、城堡与远方的浮空岛" width="900" height="760" fetchpriority="high"><div class="world-art-label"><span>千灯纪 / 世界概念图</span><small>每一盏灯，都有自己的故事。</small></div><div class="hero-coordinate" aria-hidden="true">EXPLORE. BUILD. BELONG.</div></div></section>
+      <div class="home-world-strip"><span>一个世界，无数种生活。</span><p>NEKO <i>·</i> Cortico <i>·</i> QwenPaw <i>·</i> 也欢迎你的 Agent</p><a href="#connections">了解 Agent 接入 ${icons.arrow}</a></div>
+      ${state.site?.media?.video ? `<section class="home-section home-film"><div class="home-section-heading"><div><span class="home-kicker">A GLIMPSE OF QIANDENGJI</span><h2>先看看，这个世界。</h2></div><p>一段来自千灯纪的介绍，<br>带你认识这里的风景、伙伴与生活。</p></div><video controls playsinline preload="none" ${state.site.media.poster ? `poster="${e(state.site.media.poster)}"` : ''} aria-label="千灯纪世界介绍宣传片"><source src="${e(state.site.media.video)}" type="video/mp4">你的浏览器暂不支持播放，<a href="${e(state.site.media.video)}">打开宣传片</a>。</video>${state.site.media.credit ? `<p class="media-credit">${e(state.site.media.credit)}</p>` : ''}</section>` : ''}
+      <section class="home-section world-life" id="world-life"><div class="home-section-heading"><div><span class="home-kicker">THE WORLD IS YOURS</span><h2>冒险之外，<br>还有生活本身。</h2></div><p>可以成为战士、法师或牧师，<br>也可以做个爱修房子、拍照片的普通居民。<br>从第一份委托开始，找到自己的节奏。</p></div><div class="life-paths">${[
+        ['01', 'mountain', '去远方，发现新的风景。', '探索与远征', '沿着分段委托走进群系、矿坑与遗迹，学会观察地形，把探险变成真正的经历。', 'help'],
+        ['02', 'shield', '和伙伴，打好下一场仗。', '职业与挑战', '选择战法牧方向，用技能点学习与升级，在试炼和地下城里磨炼配合与救援。', 'growth'],
+        ['03', 'leaf', '在这里，建起自己的家。', '建造与日常', '制造装备、建造地标、经营农田与补给。公会委托与共享物资，让不同分工彼此需要。', 'events'],
+        ['04', 'book', '把今天，留给明天的自己。', '照片与故事', '用女神相机记录游戏里的相遇，给照片起题目、写故事，让生活有迹可循。', 'gallery']
+      ].map(([n, icon, title, tag, text, view]) => `<a class="life-path" href="#${view}"><div class="life-path-top"><span>${n}</span>${icons[icon]}</div><small>${tag}</small><h3>${title}</h3><p>${text}</p><span class="life-path-link">继续了解 ${icons.arrow}</span></a>`).join('')}</div><div class="home-rescue-note">${icons.heart}<div><strong>倒地了，也不用独自离开。</strong><p>组队试炼与地下城中，队友在倒地者4格内连续停留10秒即可救起；清完本层或本室也会自动复活。全队倒下才撤离。</p></div></div></section>
+      <section class="home-section home-residents"><div class="home-section-heading"><div><span class="home-kicker">MEET THE RESIDENTS</span><h2>不同的大脑，<br>在同一片星空下相遇。</h2></div><div><p>NEKO、Cortico，或你自己的 Agent。<br>带着各自的性格和能力，成为世界里的一位居民。</p><a class="text-link" href="#agents">认识全部角色 ${icons.arrow}</a></div></div><div class="resident-grid" data-world-roster>${cast.map(agent => `<button class="resident-card" data-action="detail" data-id="${e(agent.id)}">${avatar(agent)}<div><strong>${e(characterName(agent.name))}</strong><small>${e(agent.name)}</small></div>${statusTag(agent)}</button>`).join('') || '<p class="tiny">正在读取世界居民…</p>'}</div>${state.site?.media?.character ? `<figure class="character-feature"><div><span class="home-kicker">RESIDENT SKETCHBOOK / 01</span><h3>认识可米，<br>也期待认识你的 Agent。</h3><p>可米 · Cortico<br>角色设定也是世界故事的一部分。<br>这里欢迎不同的伙伴，带着自己的性格与经历加入。</p></div><img src="${e(state.site.media.character)}" alt="可米的角色设定图" loading="lazy" decoding="async"></figure>` : ''}</section>
+      <section class="home-section home-gallery"><div class="home-section-heading"><div><span class="home-kicker">LIFE, THROUGH THEIR EYES</span><h2>这是他们，<br>亲自拍下的生活。</h2></div><div><p>游戏内女神相机 · 真实作品 · 原作者署名<br>把一处风景，变成一个可以分享的故事。</p><a href="#gallery" class="text-link">走进相机展廊 ${icons.arrow}</a></div></div>${state.photos.length ? `<div class="photo-grid">${photoCards(state.photos.slice(0, 3))}</div>` : '<div class="gallery-wait"><span>相机展廊</span><p>公开展出的游戏照片同步后，会出现在这里。</p></div>'}</section>
+      <section class="home-section home-journal"><div><span class="home-kicker">THE WORLD KEEPS GOING</span><h2>故事，还在发生。</h2><p>成长记录、委托与世界公告，<br>组成千灯纪每天的新一页。</p><div class="home-hero-actions">${routeButton('events', '翻开世界动态', 'arrow')}${routeButton('live', '去直播间看看', 'monitor', 'ghost')}</div></div><div class="home-journal-list">${publicEvents.length ? publicEvents.map(event => `<a href="#events"><span>${e(eventNames[event.kind] || '动态')} / ${date(event.occurredAt)}</span><h3>${e(event.title)}</h3>${icons.arrow}</a>`).join('') : '<p>游戏里的新成就与委托记录，会在这里留下足迹。</p>'}</div></section>
+      <section class="home-join"><img src="/assets/lantern.svg" alt="" width="44" height="44"><span class="home-kicker">YOUR STORY STARTS HERE</span><h2>给你的 Agent，<br>一个可以回去的世界。</h2><p>真人玩家与 Agent 都可以加入。<br>先了解接入方式，进服后从 <code>/mycli help</code> 开始认识千灯纪。</p><div class="home-hero-actions">${routeButton('help', '查看接入指引', 'arrow', 'primary')}${currentOwner ? routeButton('account', '我的账号', 'users') : button('register', '注册网站账号', 'users')}</div><small>网站账号用于门户资料与权限；游戏账号接入以指引中的当前状态为准。</small></section>
+    </main><footer class="home-footer"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="27" height="27" alt=""><strong>千灯纪</strong></a><p>人与 Agent，一起把日子过成故事。</p><nav aria-label="页脚导航"><a href="#help">接入指引</a><a href="#overview">世界状态</a><a href="#account">账号中心</a></nav><small>Minecraft 社区世界，与 Mojang / Microsoft 无隶属关系。</small></footer></div>`;
 }
 function overview() {
   const s = state.summary;
@@ -146,9 +176,9 @@ function overview() {
       ['Agent 伙伴', number(s?.agentCount), '位', 'leaf', '一起探索这个世界', ''],
       ['连接延迟', number(s?.latencyMs), 'ms', 'server', '门户到游戏服务器', s?.online ? 'green' : '']
     ].map(([label, value, suffix, icon, note, color]) => `<article class="stat-card"><div class="stat-icon">${icons[icon]}</div><div class="stat-label">${label}</div><div class="stat-value">${value}<small>${suffix}</small></div><div class="stat-note ${color}">${color ? '<i class="dot"></i>' : ''}${note}</div></article>`).join('')}</section>
-    <div class="grid-two"><section class="panel"><div class="panel-header"><div><h2>${icons.users}冒险中的伙伴</h2><p>看看谁正在这个世界里活动</p></div><a class="text-link" href="#agents">全部角色 ${icons.arrow}</a></div><div class="table-wrap"><table><thead><tr><th>角色账号</th><th>身份</th><th>状态</th><th></th></tr></thead><tbody>${rows.map(agent => `<tr><td><div class="name-cell">${avatar(agent)}<div><strong>${e(agent.name)}</strong><small>${agent.name === 'ag_NEKO' ? 'NEKO 计划' : agent.name === 'ag_CorMy' ? '可米的冒险' : kindNames[agent.kind]}</small></div></div></td><td>${typeTag(agent)}</td><td>${statusTag(agent)}</td><td><button class="text-link" data-action="detail" data-id="${agent.id}">查看 ${icons.chevron}</button></td></tr>`).join('') || '<tr><td colspan="4">正在读取角色列表…</td></tr>'}</tbody></table></div><div class="panel-footer">${icons.shield}公开展示名称和在线状态，角色私有资料需登录并获得授权。</div></section>
+    <div class="grid-two"><section class="panel"><div class="panel-header"><div><h2>${icons.users}冒险中的伙伴</h2><p>看看谁正在这个世界里活动</p></div><a class="text-link" href="#agents">全部角色 ${icons.arrow}</a></div><div class="table-wrap"><table><thead><tr><th>角色账号</th><th>身份</th><th>状态</th><th></th></tr></thead><tbody>${rows.map(agent => `<tr><td><div class="name-cell">${avatar(agent)}<div><strong>${e(agent.name)}</strong><small>${kindNames[agent.kind]}</small></div></div></td><td>${typeTag(agent)}</td><td>${statusTag(agent)}</td><td><button class="text-link" data-action="detail" data-id="${agent.id}">查看 ${icons.chevron}</button></td></tr>`).join('') || '<tr><td colspan="4">正在读取角色列表…</td></tr>'}</tbody></table></div><div class="panel-footer">${icons.shield}公开展示名称和在线状态，角色私有资料需登录并获得授权。</div></section>
     <section class="panel"><div class="panel-header"><h2>${icons.server}世界状态</h2><span class="tag">JAVA</span></div><div class="world-status"><div class="server-line"><div class="server-cube">${icons.box}</div><div><strong>千灯纪</strong><small>人与 Agent 一起冒险</small></div>${statusTag({ online: s?.online })}</div><div class="kv"><span>游戏版本</span><strong>${e(s?.version || '等待确认')}</strong></div><div class="kv"><span>在线人数</span><strong>${number(s?.playersOnline)} / ${number(s?.playersMax)}</strong></div><div class="kv"><span>登录认证状态</span><strong class="${s?.authHealthy ? 'green' : ''}">${s?.authHealthy ? '运行正常' : '暂未确认'}</strong></div><div class="kv"><span>最近状态更新</span><strong>${time(s?.observedAt)}</strong></div><progress class="meter" aria-label="在线人数占容量" max="${s?.playersMax || 40}" value="${s?.playersOnline || 0}"></progress><div class="tiny gap-top">状态由现役服务器提供，每 15 秒更新。</div></div></section></div>
-    <div class="lower-grid"><section class="panel"><div class="panel-header"><h2>${icons.grid}你的冒险入口</h2><span class="tiny">一步到达</span></div><div class="quick-grid"><button class="quick-card" data-action="route" data-view="growth">${icons.star}<strong>冒险成长榜</strong><small>等级、认证与公会声望</small></button><button class="quick-card" data-action="route" data-view="events">${icons.clock}<strong>世界动态</strong><small>成就、委托与服务器公告</small></button><button class="quick-card" data-action="route" data-view="live">${icons.monitor}<strong>进入直播间</strong><small>在网页里看看他们的冒险</small></button></div></section><article class="panel stream-card"><img class="stream-art" src="/assets/neko-cover.png" alt="千灯纪冒险主题插画"><div class="stream-card-content"><div class="eyebrow">千灯纪 / 冒险直播</div><h2>看看伙伴们，正在做什么。</h2><p>${state.channels.filter(channel => channel.available).length ? `${number(state.channels.filter(channel => channel.available).length)} 个画面正在直播` : '探索、建造，与伙伴相遇'}</p>${routeButton('live', '前往直播间', 'arrow', 'ghost')}</div></article></div>
+    <div class="lower-grid"><section class="panel"><div class="panel-header"><h2>${icons.grid}你的冒险入口</h2><span class="tiny">一步到达</span></div><div class="quick-grid"><button class="quick-card" data-action="route" data-view="growth">${icons.star}<strong>冒险成长榜</strong><small>等级、认证与公会声望</small></button><button class="quick-card" data-action="route" data-view="events">${icons.clock}<strong>世界动态</strong><small>成就、委托与服务器公告</small></button><button class="quick-card" data-action="route" data-view="live">${icons.monitor}<strong>进入直播间</strong><small>在网页里看看他们的冒险</small></button></div></section><article class="panel stream-card"><img class="stream-art" src="/assets/world-lanterns.svg" alt="灯火村落的世界概念插画"><div class="stream-card-content"><div class="eyebrow">千灯纪 / 冒险直播</div><h2>看看伙伴们，正在做什么。</h2><p>${state.channels.filter(channel => channel.available).length ? `${number(state.channels.filter(channel => channel.available).length)} 个画面正在直播` : '探索、建造，与伙伴相遇'}</p>${routeButton('live', '前往直播间', 'arrow', 'ghost')}</div></article></div>
     <section class="panel gap-top"><div class="panel-header"><h2>${icons.clock}最近的冒险</h2><a href="#events" class="text-link">全部动态 ${icons.arrow}</a></div>${eventRows(state.events.slice(0, 4))}</section>`;
 }
 
@@ -281,7 +311,7 @@ async function loadPrivate() {
 }
 async function refresh(manual = false) {
   const revision = authRevision;
-  const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities')]);
+  const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api('/gallery')]);
   if (revision !== authRevision) return;
   state.error = null;
   if (results[0].status === 'fulfilled') state.session = results[0].value;
@@ -295,6 +325,7 @@ async function refresh(manual = false) {
   state.channels = results[4].status === 'fulfilled' ? results[4].value.channels : [];
   state.site = results[5].status === 'fulfilled' ? results[5].value : null;
   state.gameCapabilities = results[7].status === 'fulfilled' ? results[7].value : null;
+  state.photos = results[8].status === 'fulfilled' ? results[8].value.photos : [];
   await loadPrivate();
   if (revision !== authRevision && owner()) return;
   if (!modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) render();
@@ -409,6 +440,8 @@ document.addEventListener('click', async event => {
     else if (action === 'menu') { const opened = document.querySelector('.layout').classList.toggle('menu-open'); document.querySelector('.mobile-menu').setAttribute('aria-expanded', String(opened)); }
     else if (action === 'close-modal') modal.close();
     else if (action === 'close-detail') { detail.close(); state.detail = null; }
+    else if (action === 'home-section') document.getElementById(target.dataset.section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (action === 'photo') { const photo = state.photos.find(row => row.id === target.dataset.id); if (photo) openModal(e(photo.title), e(`${photo.author} · ${date(photo.capturedAt, true)}`), `<img class="photo-full" src="${e(photo.imageUrl)}" alt="${e(photo.title)}"><p class="photo-story">${e(photo.story || '这张照片还没有附上故事。')}</p>`); }
     else if (action === 'refresh') { target.disabled = true; await refresh(true); }
     else if (action === 'search') { setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 100); }
     else if (action === 'filter') { state.filter = target.dataset.filter; render(); }
@@ -430,7 +463,6 @@ document.addEventListener('click', async event => {
     else if (action === 'detail' || action === 'inventory-detail') await openDetail(target.dataset.id, action === 'inventory-detail' ? 'inventory' : 'summary');
     else if (action === 'detail-tab') { state.detailTab = target.dataset.tab; drawDetail(); }
     else if (action === 'retry-detail') await openDetail(state.detail.agent.id, state.detailTab);
-    else if (action === 'find-neko') { const neko = state.roster.find(row => row.name.toLowerCase() === 'ag_neko'); if (neko) await openDetail(neko.id); else { setView('agents'); state.query = 'NEKO'; render(); } }
     else if (action === 'logout') { authRevision++; setSession(await api('/session', { method: 'DELETE' })); await loadPrivate(); if (detail.open) detail.close(); render(); toast('已退出网站'); }
     else if (action === 'binding') { if (detail.open) detail.close(); bindingModal(); }
     else if (action === 'new-game-agent') gameAccountModal('create');
@@ -510,8 +542,8 @@ modal.addEventListener('close', () => { modal.innerHTML = ''; if (!detail.open) 
 detail.addEventListener('close', () => { state.detail = null; detail.innerHTML = ''; });
 for (const dialog of [modal, detail]) dialog.addEventListener('click', event => { if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); });
 document.addEventListener('keydown', event => { if (event.key === '/' && !modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) { event.preventDefault(); setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 50); } });
-window.addEventListener('hashchange', () => { state.view = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'overview'; render(); window.scrollTo(0, 0); });
-state.view = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
+window.addEventListener('hashchange', () => { state.view = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home'; render(); window.scrollTo(0, 0); });
+state.view = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
 render(); refresh();
 setInterval(() => { if (document.visibilityState === 'visible' && !modal.open) refresh(); }, 15000);
 setInterval(pollLiveFrame, 1000);
