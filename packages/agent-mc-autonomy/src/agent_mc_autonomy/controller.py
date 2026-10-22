@@ -529,7 +529,7 @@ class Controller:
             self.persist(uncertain=True)
             raise RuntimeError("outcome_unknown: inspect the original action receipt; automatic replay is blocked")
         execution = value.get("execution")
-        foreign_execution_id = None
+        foreign_execution_key = None
         if execution:
             key = (execution["kind"], execution["id"])
             if execution.get("terminal") is True:
@@ -541,11 +541,11 @@ class Controller:
                 submitted_scope = self.action_scopes.pop(key, None)
                 sampled = self.observation_requests.pop(key, None)
                 if submitted and submitted_scope != self.game_scope:
-                    foreign_execution_id = execution["id"]
+                    foreign_execution_key = key
                 if submitted and submitted_scope == self.game_scope:
                     name, arguments, request_id, read_only = submitted
                     phase = execution.get("phase")
-                    event = next((e for e in value.get("events", []) if (e.get("execution") or {}).get("id") == execution["id"]), {})
+                    event = next((e for e in value.get("events", []) if ((e.get("execution") or {}).get("kind"), (e.get("execution") or {}).get("id")) == key), {})
                     reference = {k: event[k] for k in ("run", "cursor", "ts") if k in event}
                     receipt = str((execution.get("evidence") or {}).get("receipt", ""))
                     observations = spatial_observations(receipt)
@@ -563,7 +563,7 @@ class Controller:
                         self.spatial_handoffs += 1
                         if self.spatial_handoffs <= 2 and not (set(self.pending) - {key}):
                             self.continuation_ready = True
-                    native_outcome = {"tool": name, "execution_id": execution["id"], "phase": phase,
+                    native_outcome = {"tool": name, "execution_kind": execution["kind"], "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
                         "terminal": True, "goalCompleted": execution.get("goalCompleted"),
                         "step_outcomes": terminal_step_outcomes(execution, arguments),
@@ -612,11 +612,14 @@ class Controller:
                         self.publish(tool_failure=None)
                 self.pending.pop(key, None)
                 self.action_owners.pop(key, None)
-                self.publish(viewer_terminal={key: execution[key] for key in ("id", "terminal", "phase") if key in execution})
+                self.publish(viewer_terminal={key: execution[key] for key in ("kind", "id", "terminal", "phase") if key in execution})
             else:
                 # Late acceptance cannot resurrect an execution whose terminal
-                # outcome is already retained for this game scope.
-                if not any(row["execution_id"] == execution["id"] and row.get("terminal") is True
+                # outcome is already retained for this game scope. Native task
+                # and method counters can share an ID. Kindless legacy history
+                # keeps its conservative barrier rather than guessing a kind.
+                if not any(row["execution_id"] == execution["id"] and row.get("execution_kind") in {None, execution["kind"]}
+                           and row.get("terminal") is True
                            for row in self.native_outcomes):
                     self.pending[key] = execution
             self.persist(pending=list(self.pending.values()))
@@ -650,7 +653,7 @@ class Controller:
                 if current and isinstance(life, dict) and life.get("episodeId") == current["id"]:
                     self.publish(death_episode=current)
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
-                           and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
+                           and (foreign_execution_key is None or ((e.get("execution") or {}).get("kind"), (e.get("execution") or {}).get("id")) != foreign_execution_key))
         self.recent = retain_events(self.recent, byte_limit=self.settings.context_tokens if self.settings.context_mode == "full" else None)
 
     def clear_read_activity(self):

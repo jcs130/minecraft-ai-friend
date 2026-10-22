@@ -150,16 +150,18 @@ def _evidence(host, status, run, native_request_ids):
             raise RuntimeError("recovery_archive_binding_invalid")
         previous = cursor
         execution = event.get("execution")
-        if isinstance(execution, dict) and execution.get("terminal") is True:
-            terminals[execution.get("id")] = execution.get("phase")
+        if (isinstance(execution, dict) and execution.get("terminal") is True
+                and isinstance(execution.get("kind"), str) and execution["kind"]):
+            terminals[(execution["kind"], execution.get("id"))] = execution.get("phase")
     sources = [{"role": "native_archive", "sha256": _hash(raw)}]
     work = []
     pending = status.get("pending", [])
     if not isinstance(pending, list) or len(pending) > 32:
         raise RuntimeError("recovery_status_pending_invalid")
-    if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) for item in pending):
+    if any(not isinstance(item, dict) or not isinstance(item.get("id"), str)
+           or (item.get("kind") is not None and not isinstance(item["kind"], str)) for item in pending):
         raise RuntimeError("recovery_status_pending_invalid")
-    pending_ids = {item["id"] for item in pending}
+    pending_keys = {(item.get("kind"), item["id"]) for item in pending}
     for request in ids:
         _uuid(request)
         path = client / "requests" / (_hash(request.encode()) + ".json")
@@ -169,20 +171,27 @@ def _evidence(host, status, run, native_request_ids):
             raise RuntimeError("recovery_request_binding_invalid")
         execution = (record.get("outcome") or {}).get("execution") or {}
         execution_id = execution.get("id")
+        execution_kind = execution.get("kind")
         if (record.get("requestId") != request or record.get("phase") != "returned"
                 or execution.get("phase") != "accepted" or execution.get("terminal") is not False
                 or not isinstance(execution_id, str) or not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,160}", execution_id)
-                or execution_id not in pending_ids):
+                or (execution_kind is not None and not isinstance(execution_kind, str))
+                or (execution_kind is not None and (execution_kind, execution_id) not in pending_keys)
+                or not any(item[1] == execution_id for item in pending_keys)):
             raise RuntimeError("recovery_request_binding_invalid")
         sources.append({"role": "native_request", "request_id": request, "sha256": _hash(raw_request)})
-        terminal = terminals.get(execution_id)
-        work.append({"request_id": request, "execution_id": execution_id,
+        # Missing or different kinds cannot establish a matching terminal. This
+        # readonly assessment never retires uncertainty or acknowledges work.
+        terminal = terminals.get((execution_kind, execution_id)) if execution_kind else None
+        work.append({"request_id": request, "execution_kind": execution_kind, "execution_id": execution_id,
                      "classification": "archived_terminal" if terminal is not None else "accepted_only_unknown",
                      "terminal_phase": terminal, "verified": False})
-    for execution_id in pending_ids - {item["execution_id"] for item in work}:
+    linked = {(item["execution_kind"], item["execution_id"]) for item in work}
+    for execution_kind, execution_id in sorted(pending_keys - linked, key=lambda item: (item[0] or "", item[1])):
         if not isinstance(execution_id, str) or not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,160}", execution_id):
             raise RuntimeError("recovery_execution_identity_invalid")
-        work.append({"execution_id": execution_id, "classification": "unlinked_unknown", "verified": False})
+        work.append({"execution_kind": execution_kind, "execution_id": execution_id,
+                     "classification": "unlinked_unknown", "verified": False})
     return {"old_work": work, "sources": sources, "archive_last_cursor": previous,
             "archive_file_scanned": True, "old_run_completion_verified": False}
 

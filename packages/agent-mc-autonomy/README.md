@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.84 preserves native execution kind together with the execution ID in pending,
+original evidence, viewer playback and offline recovery assessment. Task and method
+counters can share the same ID; a terminal from one cannot finish the other.
+Legacy evidence without a kind stays conservative and never proves completion.
+See [execution identity](docs/execution-identity.md) for the regression boundaries.
+
 0.2.83 pins core rc.65, which rechecks an exact-cell placement denial before a
 further retry. The body/review model coordination and existing queue/unknown
 barriers are unchanged. This dependency update neither enables optional practice

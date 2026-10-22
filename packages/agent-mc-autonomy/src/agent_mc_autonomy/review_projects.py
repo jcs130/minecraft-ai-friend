@@ -38,7 +38,7 @@ def sample(current, now):
                      if row.get("terminal") is True and row.get("observation_only") is False), None)
     if terminal:
         row["latest_sampled_terminal"] = preview({key: terminal[key] for key in
-            ("execution_id", "phase", "original_event") if key in terminal}, 500)
+            ("execution_kind", "execution_id", "phase", "original_event") if key in terminal}, 500)
     return row
 
 

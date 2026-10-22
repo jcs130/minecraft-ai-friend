@@ -30,9 +30,9 @@ def fixture(tmp_path, framework_module):
     client = host.parent/'client'
     (client/'requests').mkdir(parents=True)
     (client/f'events-{run}.jsonl').write_text(json.dumps({'run': run, 'cursor': 1, 'type': 'minecraft.task',
-        'execution': {'id': 'old:8', 'terminal': True, 'phase': 'completed'}})+'\n', encoding='utf-8')
+        'execution': {'kind': 'task', 'id': 'old:8', 'terminal': True, 'phase': 'completed'}})+'\n', encoding='utf-8')
     (client/'requests'/(hashlib.sha256(request.encode()).hexdigest()+'.json')).write_text(json.dumps({
-        'requestId': request, 'phase': 'returned', 'outcome': {'execution': {'id': task, 'phase': 'accepted', 'terminal': False}}}), encoding='utf-8')
+        'requestId': request, 'phase': 'returned', 'outcome': {'execution': {'kind': 'task', 'id': task, 'phase': 'accepted', 'terminal': False}}}), encoding='utf-8')
     options = dict(expected_identity=settings.identity, expected_session=session, expected_run=run,
                    expected_state_sha256=hashlib.sha256((host/'host-state.json').read_bytes()).hexdigest(),
                    expected_status_sha256=hashlib.sha256((host/'status.json').read_bytes()).hexdigest(),
@@ -130,7 +130,7 @@ def test_terminal_evidence_is_truthful_but_not_automatic_ack(tmp_path, framework
     path = host.parent/'client'/f"events-{options['expected_run']}.jsonl"
     with path.open('a', encoding='utf-8') as stream:
         stream.write(json.dumps({'run': options['expected_run'], 'cursor': 2,
-            'execution': {'id': 'd48caefd-1030-428d-9c4f-8df1e54efd35:9', 'terminal': True, 'phase': 'blocked'}})+'\n')
+            'execution': {'kind': 'task', 'id': 'd48caefd-1030-428d-9c4f-8df1e54efd35:9', 'terminal': True, 'phase': 'blocked'}})+'\n')
     result = assess(settings, tmp_path, native_request_ids=options['native_request_ids'])
     assert result['old_work'][0]['classification'] == 'archived_terminal'
     assert result['old_work'][0]['terminal_phase'] == 'blocked'

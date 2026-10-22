@@ -5,6 +5,12 @@ import json
 import re
 
 
+def _matches(execution, receipt):
+    kind = execution.get("kind")
+    return (isinstance(kind, str) and bool(kind) and kind == receipt.get("execution_kind")
+            and execution.get("id") == receipt.get("execution_id"))
+
+
 def tool_receipt(name, arguments, result):
     steps = arguments.get("steps")
     skills = [step.get("skill", "") for step in steps if isinstance(step, dict)] if isinstance(steps, list) else []
@@ -13,7 +19,9 @@ def tool_receipt(name, arguments, result):
     failed = result.get("failed") is True or execution.get("phase") in {"blocked", "failed", "cancelled"}
     code = "rejected" if failed and not execution else execution.get("phase") if execution.get("terminal") else "queued" if execution else "returned"
     return {"at": datetime.now(timezone.utc).isoformat(), "action": {"type": name[:80], "operation": operation},
-            "execution_id": execution.get("id"), "result": {"ok": not failed, "code": code or "terminal", "effectVerified": False}}
+            "execution_id": execution.get("id"),
+            "execution_kind": execution.get("kind") if isinstance(execution.get("kind"), str) and re.fullmatch(r"[a-z_]{1,40}", execution["kind"]) else None,
+            "result": {"ok": not failed, "code": code or "terminal", "effectVerified": False}}
 
 
 def record_playback(state, values):
@@ -24,7 +32,7 @@ def record_playback(state, values):
         history.append(receipt)
     terminal = values.get("viewer_terminal") or {}
     if terminal.get("terminal") is True and terminal.get("id"):
-        previous = next((row for row in reversed(history) if row.get("execution_id") == terminal["id"]), None)
+        previous = next((row for row in reversed(history) if _matches(terminal, row)), None)
         phase = terminal.get("phase")
         if previous and previous["result"].get("code") != phase:
             history.append({**previous, "at": datetime.now(timezone.utc).isoformat(), "result": {
@@ -50,7 +58,7 @@ def viewer_projection(state, username, session):
     if receipt:
         receipt = {**receipt, "result": dict(receipt["result"])}
         terminal = state.get("viewer_terminal") or {}
-        if terminal.get("terminal") is True and terminal.get("id") == receipt.get("execution_id"):
+        if terminal.get("terminal") is True and _matches(terminal, receipt):
             phase = terminal.get("phase", "terminal")
             receipt["result"].update(ok=phase not in {"blocked", "failed", "cancelled"}, code=phase)
     mode = "offline" if not state.get("game_connected") else "acting" if state.get("pending") else "observing"
@@ -61,7 +69,7 @@ def viewer_projection(state, username, session):
     for execution in (state.get("pending") or [])[:12]:
         if isinstance(execution, dict):
             row = {key: str(execution[key])[:120] for key in ("id", "kind", "phase", "operation") if execution.get(key) is not None}
-            known = next((item for item in reversed(playback["timeline"]) if execution.get("id") and item.get("execution_id") == execution["id"]), None)
+            known = next((item for item in reversed(playback["timeline"]) if execution.get("id") and _matches(execution, item)), None)
             if "operation" not in row and known:
                 row["operation"] = str(known["action"].get("operation", ""))[:120]
             playback["queue"].append(row)

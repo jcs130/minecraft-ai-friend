@@ -49,6 +49,7 @@ def native_outcome_view(value):
         return None
     observations = spatial_observations(value.get("receipt", "")) if "observations" not in value else value["observations"]
     return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
+            **({"execution_kind": _bounded(value["execution_kind"], 40)} if isinstance(value.get("execution_kind"), str) else {}),
             "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
             "terminal": value.get("terminal") if type(value.get("terminal")) is bool else None,
             "goalCompleted": value.get("goalCompleted") if type(value.get("goalCompleted")) is bool else None,

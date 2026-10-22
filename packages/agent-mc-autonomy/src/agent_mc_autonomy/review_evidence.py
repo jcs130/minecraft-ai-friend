@@ -266,7 +266,7 @@ def compact(evidence, reference, last_decision=None):
         steps = row.get("step_outcomes") or {}
         samples = sample_preview(steps.get("samples", []))
         result["native_outcomes"].append({
-            **{key: preview(row[key], 180) for key in ("execution_id", "phase", "terminal", "observation_only", "goalCompleted", "goal_verified", "tool") if key in row},
+            **{key: preview(row[key], 180) for key in ("execution_kind", "execution_id", "phase", "terminal", "observation_only", "goalCompleted", "goal_verified", "tool") if key in row},
             "original_event": row.get("original_event", {}),
             "receipt": preview(row.get("receipt", ""), 420),
             "step_outcomes": {key: steps[key] for key in ("status", "counts", "mixed", "valid", "invalid", "omitted") if key in steps},

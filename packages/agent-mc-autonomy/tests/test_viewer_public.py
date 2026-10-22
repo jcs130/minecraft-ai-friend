@@ -20,8 +20,8 @@ def test_terminal_blocked_and_rejected_are_never_completed_success(framework_mod
     public = importlib.import_module('agent_mc_autonomy.viewer_public')
     receipt = public.tool_receipt('mc_do', {}, {'failed': True})
     assert receipt['result']['ok'] is False and receipt['result']['code'] == 'rejected'
-    state = {'viewer_action': public.tool_receipt('mc_do', {}, {'execution': {'id': 'one', 'terminal': False}}),
-             'viewer_terminal': {'id': 'one', 'terminal': True, 'phase': 'blocked'}}
+    state = {'viewer_action': public.tool_receipt('mc_do', {}, {'execution': {'kind': 'task', 'id': 'one', 'terminal': False}}),
+             'viewer_terminal': {'kind': 'task', 'id': 'one', 'terminal': True, 'phase': 'blocked'}}
     value = public.viewer_projection(state, 'Player', 'session')
     assert value['receipts'][-1]['result']['ok'] is False
     assert value['receipts'][-1]['result']['code'] == 'blocked'
@@ -31,12 +31,12 @@ def test_terminal_blocked_and_rejected_are_never_completed_success(framework_mod
 
 def test_public_timeline_keeps_matching_terminal_and_queue_without_private_payloads(framework_module):
     public = importlib.import_module('agent_mc_autonomy.viewer_public')
-    state = {'game_connected': True, 'pending': [{'id': 'task:1', 'kind': 'act', 'phase': 'running', 'arguments': 'api_key=private'}]}
-    receipt = public.tool_receipt('mc_do', {'steps': [{'skill': 'craft'}]}, {'execution': {'id': 'task:1', 'terminal': False}})
+    state = {'game_connected': True, 'pending': [{'id': 'task:1', 'kind': 'task', 'phase': 'running', 'arguments': 'api_key=private'}]}
+    receipt = public.tool_receipt('mc_do', {'steps': [{'skill': 'craft'}]}, {'execution': {'kind': 'task', 'id': 'task:1', 'terminal': False}})
     public.record_playback(state, {'viewer_action': receipt})
     public.record_playback(state, {'viewer_terminal': {'id': 'other', 'terminal': True, 'phase': 'blocked'}})
     assert len(state['viewer_history']) == 1
-    public.record_playback(state, {'viewer_terminal': {'id': 'task:1', 'terminal': True, 'phase': 'blocked'}})
+    public.record_playback(state, {'viewer_terminal': {'kind': 'task', 'id': 'task:1', 'terminal': True, 'phase': 'blocked'}})
     value = public.viewer_projection(state, 'Player', 'session')
     assert value['playback']['timeline'][-1]['result']['code'] == 'blocked'
     assert value['playback']['queue'][0]['phase'] == 'running'
