@@ -517,6 +517,9 @@ async function stowIntoOne(
           if (!it) break;
           const n = Math.min(it.count, want - e.deposited);
           const before = invCountIn(view, (name) => name === it.name);
+          const storedBefore = containerStacks(chest, bot.registry as never).items
+            .filter(stack => stack.name === it.name).reduce((sum, stack) => sum + stack.count, 0);
+          const heldBefore = chest.selectedItem?.name === it.name ? chest.selectedItem.count : 0;
           // undefined = 按类型搬(没点名,或这一摞不止一件);数字 = 点名搬进这一格;
           // null = 该点名搬,可箱里没有空格了
           const into = e.pick !== undefined && typeof bot.clickWindow !== 'function' && it.count === 1 ? chest.firstEmptyContainerSlot() : undefined;
@@ -532,6 +535,18 @@ async function stowIntoOne(
           } catch (err) {
             if (err instanceof Aborted || (isInventoryClickError(err) && !ctx.aborted())) throw err;
             e.failure = zhErrorText((err as Error).message);
+            // Native deposit may move a prefix then throw when the destination
+            // fills. Count only confirmed changes in both books, excluding the
+            // cursor remainder; otherwise the next chest repeats that quota.
+            if (bot.currentWindow === chest && inventoryReadConfirmed(bot)) {
+              const held = chest.selectedItem?.name === it.name ? chest.selectedItem.count : 0;
+              const lost = before - invCountIn(view, name => name === it.name) - held + heldBefore;
+              const gained = containerStacks(chest, bot.registry as never).items
+                .filter(stack => stack.name === it.name).reduce((sum, stack) => sum + stack.count, 0) - storedBefore;
+              const moved = Math.max(0, Math.min(n, lost, gained));
+              e.deposited += moved;
+              if (moved > 0 && e.pick !== undefined) e.picked.push(pickTargetOf(it, bot.registry as never));
+            }
             break;
           }
           const moved = before - invCountIn(view, (name) => name === it.name);

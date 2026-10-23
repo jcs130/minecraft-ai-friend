@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.70` preserves an explicit `stow.count` or `organize.rules[].keep` when
+a container fills after accepting part of a transfer. Confirmed inventory,
+cursor and container changes account for that partial transfer before another
+container is tried; unknown receipts and cancellation still stop the operation.
+
 `0.5.7-rc.69` can read an explicitly named top-level password field from a private
 JSON identity (`credentialFormat: "json"`, `credentialField: "gamePassword"`).
 Credentials remain scoped to the configured server and account. Invalid fields
