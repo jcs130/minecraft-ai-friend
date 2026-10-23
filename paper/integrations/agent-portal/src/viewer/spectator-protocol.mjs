@@ -14,6 +14,7 @@ export function observationPath(path) {
       || path.split('/').some(s => !s || s === '.' || s === '..')) return null;
   if (path === 'events') return 'text/event-stream';
   if (JSON_PATHS.has(path)) return 'application/json';
+  if (/^api\/server-appearance\/assets\/[a-f0-9]{64}\.json$/.test(path)) return 'application/json';
   const file = /^(?:assets\/[a-z0-9_.-]+\/|textures\/gui\/|api\/(?:server-items|bundled-appearances)\/assets\/)[A-Za-z0-9_./-]+\.(png|json|mcmeta)$/.exec(path);
   if (file) return file[1] === 'png' ? 'image/png' : 'application/json';
   // Original Minecraft GLSL is data compiled by the trusted renderer. Never
@@ -46,7 +47,8 @@ export function encodeChunk(id, sequence, bytes) {
   return Buffer.concat([head, bytes]);
 }
 
-export function decodeChunk(bytes) {
-  if (bytes.length <= 8 || bytes.length > CHUNK_BYTES + 8) throw Error('SPECTATOR_CHUNK_INVALID');
+export function decodeChunk(bytes, encoding = 'identity') {
+  if (!['identity', 'gzip-chunks-v1'].includes(encoding) || bytes.length <= 8 ||
+      bytes.length > CHUNK_BYTES + 8 + (encoding === 'identity' ? 0 : 1024)) throw Error('SPECTATOR_CHUNK_INVALID');
   return { id: bytes.readUInt32BE(0), sequence: bytes.readUInt32BE(4), bytes: bytes.subarray(8) };
 }

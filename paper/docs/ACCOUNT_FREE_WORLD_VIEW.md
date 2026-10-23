@@ -2,6 +2,30 @@
 
 状态：**2026-10-24 已上线：官网 0.8.11 / `49306775`，现代前端 `fe8d8313`，WorldObserver 0.1.0。**
 
+## 加载与外观更新候选 0.8.12
+
+共享源码 `f69e3471`：材质8链并行加载、原素材SHA缓存、原模型内部面裁剪，
+修复缺少边缘群系数据时整组草地消失；额外启用surfaceCulling保留地面、洞口和本人洞穴，
+封闭地下空间及裁切体外壳不再生成网格。遮住的完整固体仍保留原state runs用于碰撞，
+透明/不完整/未知方块保守处理；不是精准逐像素遮挡算法，原FOM默认策略保持。
+
+观察worker可配置 `appearance`：`stateFile`、`publicModelRoot`、`skinsRestorerRoot`、
+`ysmJarSha256`、Java21可执行文件及只读导出器classpath。导出器复用原ModelCatalog.java，
+用 `appearance/build.py --jdk <JDK21> --gson <Gson.jar> --output <独立classes目录>` 构建，
+classpath包含输出目录和该Gson。完整原包须与服务端本次实际绑定的压缩包SHA一致，
+逐文件原几何、动画、PNG均校验。原UUID/entityId、15秒新鲜状态和原版本/JAR匹配才生效。
+未收到YSM绑定时，可读取该UUID实际SkinsRestorer自定义皮肤，不猜模型文件夹，不换成Steve。
+本批已验证桐人、NEKO原YSM和可米实际皮肤资源；完整客户端动画、其他未支持人物和像素一致性未验。
+
+传输继续复用443，新增可协商独立gzip压缩块（每块解压最多64KiB），旧发布器/中继保留
+identity兼容；网页反代还需开启JS/JSON/CSS压缩，SSE压缩须验证即时刷新。原鉴权和撤权保持。
+角色模型异步准备，不阻塞地形/背包/动作帧；无新的Minecraft连接。
+
+验证：147项相关可视化测试（实际1.21.1元数据codec及原NEKO/桐人资源），10项worker/
+外观来源测试，真实既有NEKO连接的本地WebGL模型/持物/完整草地。发布须冻结当前源码、
+重建一致前端和中继，正常重连官网及观察后台并保留数据库/配置前像；不更换Paper插件。
+本段仍为候选，生产以文首及发布清单为准。
+
 官网选择角色后直接打开现代化 mc-visual-console 页面，无需手动填写 LAN 直播地址或发布凭据。
 第一人称、第三人称跟随、3D 观战、小地图和现有镜头设置沿用共享前端；
 网页不是图片轮播，也不会登录一个新的 Eye 账号。

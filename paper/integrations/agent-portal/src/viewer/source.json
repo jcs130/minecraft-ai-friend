@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "fe8d8313a3b9c288784fbb2a0ca1e59d126a5501",
-  "status": "deployed-portal-0.8.11-camera-switch-fix",
+  "commit": "f69e34715a802490c5d79a4b62645b0d3a7fea87",
+  "status": "candidate-portal-0.8.12-loading-and-original-appearance",
   "files": {
-    "spectator-protocol.mjs": "2e860761ea4d6eef708774a8bfc28418b2f3c1dca84b687bd6a8357245781ac1",
-    "spectator-relay.mjs": "93e0175f3dd0e71541de67a94545770a39529a597da9b89adb853affa90b9a6b",
+    "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
+    "spectator-relay.mjs": "a61920fe324b19337f0ad3d4c936549a7100d96b2e8d2312b78dd3ae7236d0d1",
     "spectator-site.mjs": "5504aaf7bfefd6d62997c497d7ade4c9cf47a776b6b03022760f93b92c8d50da"
   }
 }

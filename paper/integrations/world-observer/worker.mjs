@@ -3,6 +3,7 @@ import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import {ObservationAppearanceSource} from './appearance-source.mjs';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function validateWorkerConfig(c) {
@@ -22,11 +23,17 @@ export async function readBoundedJSON(response,maxBytes) {
 /** Controls only observation hosts and their outbound publishers. No createBot,
  * login, command, RCON or gameplay action exists in this service. */
 export class ObservationWorker {
-  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,fetcher=fetch,now=Date.now,log=()=>{}}) {
-    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,fetcher,now,log});
+  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
+    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,fetcher,now,log});
     this.sources=new Map();this.lastPortalAt=0;this.lastPoll=0;this.lastLog=null;this.closed=false;
   }
   report(reason){if(reason!==this.lastLog){this.log(reason);this.lastLog=reason;}}
+  status(){return {schemaVersion:1,readOnly:true,closed:this.closed,sources:[...this.sources.values()].map(source=>{
+    const host=source.view.host.status(),coverage=host.viewer?.terrain?.coverage;
+    const appearance=this.appearanceSource?.binding({uuid:source.job.playerUuid,entityId:host.identity?.entityId});
+    return {playerUuid:source.job.playerUuid,...source.publisher?.state?.(),terrain:coverage?{renderBlocks:coverage.renderBlocks,occludedBlocks:coverage.occludedBlocks,surfaceHiddenBlocks:coverage.surfaceHiddenBlocks,snapshotBuildMs:host.viewer.terrain.snapshotBuildMs,maxSliceMs:host.viewer.terrain.scan?.maxSliceMs}:null,
+      appearance:appearance?{available:appearance.available,kind:appearance.kind,modelId:appearance.modelId,reason:appearance.reason}:null};
+  })};}
   async request(origin,route,token,body,maxBytes){
     return readBoundedJSON(await this.fetcher(new URL(route,origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)}),maxBytes);
@@ -72,6 +79,8 @@ export class ObservationWorker {
         const row=reply.targets.find(r=>r.uuid===source.job.playerUuid);
         if(!row?.available||row.lease!==source.localLease){await this.retire(source.job.id);continue;}
         try{
+          // Model conversion/download must never delay world, inventory or pose.
+          if(this.appearanceSource)void this.appearanceSource.forPlayer(row.player).catch(()=>{});
           ({after:source.after,generation:source.generation}=source.view.ingest(row));
           const status=source.view.host.status();
           if(status.viewer.reason)throw Error('OBSERVER_SCENE_UNAVAILABLE');
@@ -96,9 +105,10 @@ export async function createObservationWorker(input,options={}) {
   const [{preparePaperObservation},{startSpectatorPublisher}]=await Promise.all([moduleAt('host/paper-observation.mjs'),moduleAt('host/spectator-publisher.mjs')]);
   const require=createRequire(import.meta.url),protocol=require('minecraft-protocol'),registry=require('minecraft-data')('1.21.1'),nbt=require('prismarine-nbt');
   const parsers=Object.fromEntries(['play','configuration'].map(state=>[state,protocol.createDeserializer({version:'1.21.1',state,isServer:false,noErrorLogging:true})]));
-  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,
+  const appearanceSource=config.appearance?new ObservationAppearanceSource({config:config.appearance,decodeBundle:(await moduleAt('host/viewer-ysm-assets.mjs')).decodeYsmBundle}):null;
+  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,appearanceSource,
     serverItemCatalogFile:config.serverItemCatalogFile,serverItemCatalogSha256:config.serverItemCatalogSha256,bundledAppearanceCatalogFile:config.bundledAppearanceCatalogFile||''});
-  return new ObservationWorker({config,prepared,registry,simplifyNBT:nbt.simplify,
+  return new ObservationWorker({config,prepared,registry,appearanceSource,simplifyNBT:nbt.simplify,
     decodePacket:(bytes,state)=>parsers[state].parsePacketBuffer(bytes).data,startPublisher:startSpectatorPublisher,...options});
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { SPECTATOR_PROTOCOL, CHUNK_BYTES, MAX_BODY_BYTES, CHANNEL_PATTERN, UUID_PATTERN,
   observationPath, validatedSource, decodeChunk } from './spectator-protocol.mjs';
 
@@ -10,6 +11,12 @@ const error = (res, status, reason) => {
   res.end(JSON.stringify({ available: false, reason }));
 };
 const send = (ws, value) => { if (ws.readyState === 1) ws.send(JSON.stringify(value)); };
+export function decodedSpectatorChunk(data,encoding='identity') {
+  const chunk=decodeChunk(data,encoding);
+  if(encoding==='gzip-chunks-v1')chunk.bytes=gunzipSync(chunk.bytes,{maxOutputLength:CHUNK_BYTES});
+  if(!chunk.bytes.length||chunk.bytes.length>CHUNK_BYTES)throw Error('SPECTATOR_CHUNK_INVALID');
+  return chunk;
+}
 
 /** Authorization is mandatory and belongs to the portal's existing session and
  * role database. Tokens never occur in a URL, browser bundle or viewer response.
@@ -77,8 +84,9 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       try {
         if (binary) {
           if (!source.info) throw Error('SPECTATOR_SOURCE_NOT_READY');
-          const chunk = decodeChunk(data), pending = source.requests.get(chunk.id);
+          const id = data.length >= 8 ? data.readUInt32BE(0) : 0, pending = source.requests.get(id);
           if (!pending) return; // A cancelled request's last in-flight chunk.
+          const chunk = decodedSpectatorChunk(data, pending.encoding);
           if (!pending.started || chunk.sequence !== pending.sequence || pending.awaitingDrain) throw Error('SPECTATOR_CHUNK_ORDER');
           pending.sequence++; pending.size += chunk.bytes.length;
           if (pending.path !== 'events' && pending.size > MAX_BODY_BYTES) throw Error('SPECTATOR_BODY_LIMIT');
@@ -103,7 +111,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
           sources.set(channelId, source);
           // Keep the initial deadline until identity and the exact renderer
           // hashes have also passed; an authenticated idle socket is not live.
-          send(ws, { type: 'ready', protocol: SPECTATOR_PROTOCOL, playerUuid: source.playerUuid, build: site.build, maxChunkBytes: CHUNK_BYTES });
+          send(ws, { type: 'ready', protocol: SPECTATOR_PROTOCOL, playerUuid: source.playerUuid, build: site.build, maxChunkBytes: CHUNK_BYTES, compression: 'gzip-chunks-v1' });
           return;
         }
         if (value.type === 'source') {
@@ -138,10 +146,10 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
         if (!pending) return;
         if (value.type === 'response') {
           if (pending.started || !Number.isInteger(value.status) || value.status !== 200
-              || value.contentType !== observationPath(pending.path)) {
+              || value.contentType !== observationPath(pending.path) || !['identity','gzip-chunks-v1'].includes(value.encoding ?? 'identity')) {
             pending.fail(value.status === 404 ? 404 : 502, 'SPECTATOR_SOURCE_RESOURCE_UNAVAILABLE'); return;
           }
-          pending.started = true; clearTimeout(pending.headerTimer);
+          pending.encoding = value.encoding ?? 'identity'; pending.started = true; clearTimeout(pending.headerTimer);
           pending.res.writeHead(200, { 'Content-Type': value.contentType + (value.contentType.startsWith('text/') || value.contentType === 'application/json' ? '; charset=utf-8' : ''),
             'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP,
             ...(pending.path === 'events' ? { 'X-Accel-Buffering': 'no' } : {}) });
