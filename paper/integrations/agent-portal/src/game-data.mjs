@@ -8,6 +8,14 @@ import { playerNameValid } from './world-catalog.mjs';
 
 export const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export const RESERVED = new Set(['corti', 'corticam', 'player', 'goddess', 'live']);
+export const reservedIdentityName = name => typeof name !== 'string' || /eye$/i.test(name) || RESERVED.has(name.toLowerCase()) || RESERVED.has(name.toLowerCase().replace(/^ag_/, ''));
+// Game OP is a capability, not a separate website owner. Reserved housekeeper
+// names and observers remain protected; ordinary OP players still prove their
+// original game UUID through LoginGuard before any self-service ownership.
+export function websiteIdentity(row) {
+  if (row.kind === 'admin' && !reservedIdentityName(row.name)) return { ...row, kind: /^ag_/i.test(row.name) ? 'agent' : 'player', isOperator: true, isReserved: false };
+  return row;
+}
 const norm = value => String(value).toLowerCase();
 const finite = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const iso = value => Number.isFinite(Number(value)) && Number(value) > 0 ? new Date(Number(value)).toISOString() : null;
@@ -121,14 +129,14 @@ export class GameData {
       const conflict = conflicts.has(norm(name));
       const uuid = !conflict && user && UUID.test(user.uuid) ? user.uuid.toLowerCase() : null;
       let kind = eyeNames.has(norm(name)) || /eye$/i.test(name) || norm(name) === 'live' ? 'observer' : agents.has(norm(name)) || name.startsWith('ag_') || name === 'feiyu_bot' ? 'agent' : 'player';
-      if (adminNames.has(norm(name)) || RESERVED.has(norm(name))) kind = 'admin';
+      if (reservedIdentityName(name) && kind !== 'observer') kind = 'admin';
       const sampledByUuid = uuid && sampledUuids.has(uuid);
       const online = sampledByUuid ? true : auth.fresh ? authenticated.has(norm(name)) : sampled.has(norm(name)) ? true : null;
       return { id: this.idFor(uuid, name), name: user?.name || name, playerUuid: uuid, kind, online,
         authenticated: sampledByUuid && !authenticated.has(norm(name)) ? null : auth.fresh ? authenticated.has(norm(name)) : null,
         statusSource: sampledByUuid ? 'minecraft.server-list-ping.uuid' : auth.fresh ? 'LoginGuard.authorizedNames' : 'minecraft.server-list-ping.sample',
         statusObservedAt: sampledByUuid ? status.observedAt : auth.fresh ? auth.observedAt : status.observedAt,
-        eye: eyesByAgent.get(norm(name)) || null, isReserved: adminNames.has(norm(name)) || RESERVED.has(norm(name)) || kind === 'observer',
+        eye: eyesByAgent.get(norm(name)) || null, isOperator: adminNames.has(norm(name)), isReserved: reservedIdentityName(name) || kind === 'observer',
         identityConflict: conflict, identitySource: uuid ? user.identitySource || 'Paper.usercache' : null,
         available: !!uuid, observedAt: new Date().toISOString() };
     }).sort((a, b) => Number(b.online === true) - Number(a.online === true) || a.name.localeCompare(b.name));

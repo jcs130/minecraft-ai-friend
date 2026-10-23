@@ -1,0 +1,29 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "496a83a46678a1b55884a9a94e9bc800b0e87bdb",
+  "inputs": [
+    {
+      "file": "host/java-data-viewer.mjs",
+      "sha256": "835fb745c49be125baf4d94e48ca3cf04656ec327452d51d17422f96de076822"
+    },
+    {
+      "file": "host/java-visual-data.mjs",
+      "sha256": "c1e569a56120504ab48f8c69c478dab0658394eab08f9b686bc8265721ccd143"
+    },
+    {
+      "file": "host/viewer-asset-server.mjs",
+      "sha256": "5d42164d5c567ba29ce5bb27ecb57dbe32b53b301bc9a8feb0c67e6144ca9a43"
+    },
+    {
+      "file": "host/viewer-version.mjs",
+      "sha256": "2a391fa5a59bc7d1d9289b11f795b712a2911d1e84bf3e3824dc69dc1ef709a0"
+    }
+  ],
+  "outputSha256": "0a8563378273dc58f4641d7791c9df23d2357263fb7afc46dc54de9862eb96c1",
+  "externalDependencies": [
+    "minecraft-data",
+    "prismarine-block",
+    "prismarine-chunk",
+    "socket.io"
+  ]
+}

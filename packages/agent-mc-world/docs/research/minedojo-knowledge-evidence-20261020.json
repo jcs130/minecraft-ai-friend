@@ -1,0 +1,786 @@
+{
+  "schema": "agent-mc-minedojo-research-evidence/v1",
+  "researchDate": "2026-10-20",
+  "coreBaseline": {
+    "commit": "233ad1b6952224928b1ab9309fa31fa32cbb9282",
+    "version": "0.5.7-rc.52"
+  },
+  "upstream": {
+    "MineDojo": "2731bc27394269643b43828d9db8ab3a364601f0",
+    "MineCLIP": "e6c06a0245fac63dceb38bc9bd4fecd033dae735"
+  },
+  "records": [
+    {
+      "id": 6693745,
+      "doi": "10.5281/zenodo.6693745",
+      "license": "cc-by-nc-sa-3.0",
+      "publicationDate": "2022-06-14",
+      "files": [
+        {
+          "key": "wiki_full.zip",
+          "size": 32749712512,
+          "checksum": "md5:5e5a590891072fbd0686fdc2a7883cd2"
+        },
+        {
+          "key": "wiki_samples.zip",
+          "size": 128063191,
+          "checksum": "md5:0dcbb67b86360ef777b05516b530ba5c"
+        }
+      ]
+    },
+    {
+      "id": 6693792,
+      "doi": "10.5281/zenodo.6693792",
+      "license": "cc-by-4.0",
+      "publicationDate": "2022-06-14",
+      "files": [
+        {
+          "key": "youtube_tutorial.json",
+          "size": 8147320,
+          "checksum": "md5:60ae52d65828b8b43fa0f3a63cf9258e"
+        },
+        {
+          "key": "youtube_full.json",
+          "size": 174033019,
+          "checksum": "md5:19a9ce144bfeb824623147f6a1d914e0"
+        }
+      ]
+    },
+    {
+      "id": 6693238,
+      "doi": "10.5281/zenodo.6693238",
+      "license": "cc-by-4.0",
+      "publicationDate": "2022-06-14",
+      "files": [
+        {
+          "key": "reddit.json",
+          "size": 11963859,
+          "checksum": "md5:401222528a245ffd7c920986fd78b3a6"
+        }
+      ]
+    }
+  ],
+  "wikiArchives": [
+    {
+      "archive": "wiki_samples.zip",
+      "archiveBytes": 128063191,
+      "archiveExpectedChecksum": "md5:0dcbb67b86360ef777b05516b530ba5c",
+      "wholeArchiveChecksumVerified": false,
+      "entries": 1269,
+      "annotationPages": 10,
+      "annotationCompressedBytes": 219970,
+      "annotationUncompressedBytes": 1069829,
+      "transferredBytes": 808278,
+      "rangeRequests": 13,
+      "retrievedPages": [
+        {
+          "path": "wiki_samples/Tutorials/Construction/data.json",
+          "bytes": 48442,
+          "sha256": "153a96530b4ee5de853dcf453ea7cabe77a94b2709aa1c5c20d1a453f6add337",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Tutorials/Construction",
+            "title": "Tutorials/Construction",
+            "time": "16/04/2022 23:52:19"
+          },
+          "counts": {
+            "texts": 66,
+            "tables": 8,
+            "images": 2,
+            "sprites": 238
+          }
+        },
+        {
+          "path": "wiki_samples/Tutorials/Nether_portals/data.json",
+          "bytes": 47176,
+          "sha256": "f81f375ab7cf4297f9d69eb30c582f10e45e32efa8d58910354ed4bfd194605b",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Tutorials/Nether_portals",
+            "title": "Tutorials/Nether_portals",
+            "time": "17/04/2022 00:06:51"
+          },
+          "counts": {
+            "texts": 51,
+            "tables": 8,
+            "images": 3,
+            "sprites": 193
+          }
+        },
+        {
+          "path": "wiki_samples/Tutorials/Beginner%27s_guide/data.json",
+          "bytes": 165597,
+          "sha256": "1d7d03f63fa99b5481f500e50ec3049aa7464a608d0d6a161a4ef65928f0c153",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Tutorials/Beginner%27s_guide",
+            "title": "Tutorials/Beginner%27s_guide",
+            "time": "16/04/2022 23:26:23"
+          },
+          "counts": {
+            "texts": 211,
+            "tables": 12,
+            "images": 23,
+            "sprites": 549
+          }
+        },
+        {
+          "path": "wiki_samples/Tutorials/Defeating_the_ender_dragon/data.json",
+          "bytes": 83908,
+          "sha256": "5f766ff85a9b53a730b253133b122095f9287b590c1b945a72fb90f5f9533d59",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Tutorials/Defeating_the_ender_dragon",
+            "title": "Tutorials/Defeating_the_ender_dragon",
+            "time": "17/04/2022 03:50:53"
+          },
+          "counts": {
+            "texts": 133,
+            "tables": 7,
+            "images": 36,
+            "sprites": 192
+          }
+        },
+        {
+          "path": "wiki_samples/Pickaxe/data.json",
+          "bytes": 77619,
+          "sha256": "4041001799f39387c555242ccd58aea2989658b32fc2abd62bedb2bff33e68d2",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Pickaxe",
+            "title": "Pickaxe",
+            "time": "17/04/2022 03:31:14"
+          },
+          "counts": {
+            "texts": 72,
+            "tables": 16,
+            "images": 93,
+            "sprites": 153
+          }
+        },
+        {
+          "path": "wiki_samples/Wood/data.json",
+          "bytes": 134669,
+          "sha256": "38f97d5476d3bf5a83c4cb30edaed6ade1552bcfafd732d46dd8e465653c2063",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Wood",
+            "title": "Wood",
+            "time": "16/04/2022 23:39:37"
+          },
+          "counts": {
+            "texts": 71,
+            "tables": 28,
+            "images": 251,
+            "sprites": 205
+          }
+        },
+        {
+          "path": "wiki_samples/Diamond/data.json",
+          "bytes": 44817,
+          "sha256": "b9363bcdd9d380cdf0f0145f226a6075411d9c25ee9ae00b69c09a866810acb0",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Diamond",
+            "title": "Diamond",
+            "time": "17/04/2022 01:29:32"
+          },
+          "counts": {
+            "texts": 45,
+            "tables": 10,
+            "images": 17,
+            "sprites": 139
+          }
+        },
+        {
+          "path": "wiki_samples/Sword/data.json",
+          "bytes": 112868,
+          "sha256": "8ada982434113565b6b573fe92d0f6fb89bf4589646a6a128da54a0e18cb84d0",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Sword",
+            "title": "Sword",
+            "time": "17/04/2022 05:18:39"
+          },
+          "counts": {
+            "texts": 84,
+            "tables": 16,
+            "images": 177,
+            "sprites": 166
+          }
+        },
+        {
+          "path": "wiki_samples/Villager/data.json",
+          "bytes": 271622,
+          "sha256": "a0cb715d0e37e23514e8d98a19547e0c4d3b1c99f5e01eba3542f23afcb35b44",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Villager",
+            "title": "Villager",
+            "time": "18/04/2022 16:11:51"
+          },
+          "counts": {
+            "texts": 294,
+            "tables": 14,
+            "images": 580,
+            "sprites": 167
+          }
+        },
+        {
+          "path": "wiki_samples/Minecraft/data.json",
+          "bytes": 83111,
+          "sha256": "fb74bc3a9868c57c247991bab8e2590227c5c94468851985c28e20a223957db0",
+          "entryCrcVerified": true,
+          "metadata": {
+            "url": "https://minecraft.fandom.com/wiki/Minecraft",
+            "title": "Minecraft",
+            "time": "17/04/2022 03:16:33"
+          },
+          "counts": {
+            "texts": 179,
+            "tables": 16,
+            "images": 67,
+            "sprites": 45
+          }
+        }
+      ]
+    },
+    {
+      "archive": "wiki_full.zip",
+      "archiveBytes": 32749712512,
+      "archiveExpectedChecksum": "md5:5e5a590891072fbd0686fdc2a7883cd2",
+      "wholeArchiveChecksumVerified": false,
+      "entries": 120291,
+      "annotationPages": 6738,
+      "annotationCompressedBytes": 32624764,
+      "annotationUncompressedBytes": 197602408,
+      "transferredBytes": 16740515,
+      "rangeRequests": 4,
+      "retrievedPages": []
+    }
+  ],
+  "selectedWikiPages": {
+    "pages": [
+      {
+        "title": "Bread",
+        "path": "wiki_full/Bread/data.json",
+        "sha256": "4992bdaad9d72972aa6de288af3b9cf9d9eea7682695b7c78f40030c2e6db084",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Bread",
+          "title": "Bread",
+          "time": "17/04/2022 03:54:59"
+        },
+        "bytes": 32948,
+        "texts": 34,
+        "tables": 9
+      },
+      {
+        "title": "Fishing",
+        "path": "wiki_full/Fishing/data.json",
+        "sha256": "8ea434282a9d17350d0db7b1ee8b266d6a1a4fdb48bda3b38b1f40710ce8b210",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Fishing",
+          "title": "Fishing",
+          "time": "16/04/2022 23:22:33"
+        },
+        "bytes": 37422,
+        "texts": 40,
+        "tables": 3
+      },
+      {
+        "title": "Fishing_Rod",
+        "path": "wiki_full/Fishing_Rod/data.json",
+        "sha256": "99a0ce5b82c48f8aeefd9b100a8f9ae97eec352903fa0809054e31d870ef8f68",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Fishing_Rod",
+          "title": "Fishing_Rod",
+          "time": "18/04/2022 15:29:36"
+        },
+        "bytes": 44706,
+        "texts": 82,
+        "tables": 14
+      },
+      {
+        "title": "Elytra",
+        "path": "wiki_full/Elytra/data.json",
+        "sha256": "995f8c605f027673b0d35f282430071cc561dc3d15e0c002a7a1f9cfb29bf007",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Elytra",
+          "title": "Elytra",
+          "time": "17/04/2022 06:31:24"
+        },
+        "bytes": 53677,
+        "texts": 109,
+        "tables": 11
+      },
+      {
+        "title": "Ender_Pearl",
+        "path": "wiki_full/Ender_Pearl/data.json",
+        "sha256": "5eaab90b6bab948d53db99500880a3af2a783bbd568c1e0c8f869683c3c496d8",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Ender_Pearl",
+          "title": "Ender_Pearl",
+          "time": "18/04/2022 15:55:27"
+        },
+        "bytes": 30081,
+        "texts": 62,
+        "tables": 11
+      },
+      {
+        "title": "Smelting",
+        "path": "wiki_full/Smelting/data.json",
+        "sha256": "5eb00904385f54ebd0079f6ba3395910f9483f29714ec278f69acb158d6f29a1",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Smelting",
+          "title": "Smelting",
+          "time": "17/04/2022 04:07:44"
+        },
+        "bytes": 82644,
+        "texts": 58,
+        "tables": 10
+      },
+      {
+        "title": "Shield",
+        "path": "wiki_full/Shield/data.json",
+        "sha256": "f2274dfde0b560ff4fd8c997ea5296268c19949568b130d60c537f2d80dc1140",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Shield",
+          "title": "Shield",
+          "time": "17/04/2022 01:39:24"
+        },
+        "bytes": 36430,
+        "texts": 54,
+        "tables": 12
+      },
+      {
+        "title": "Furnace",
+        "path": "wiki_full/Furnace/data.json",
+        "sha256": "d77f46baa3332e854d4df1315e792c70e502b5e4472f8aa0aab73e21246151b2",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Furnace",
+          "title": "Furnace",
+          "time": "16/04/2022 23:54:11"
+        },
+        "bytes": 97147,
+        "texts": 87,
+        "tables": 31
+      },
+      {
+        "title": "Campfire",
+        "path": "wiki_full/Campfire/data.json",
+        "sha256": "dbdb7dcbaffb02085fdf1ede0ee4a65a1b217b4f15c679a8b820cff02a928973",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Campfire",
+          "title": "Campfire",
+          "time": "16/04/2022 23:49:23"
+        },
+        "bytes": 63567,
+        "texts": 93,
+        "tables": 27
+      },
+      {
+        "title": "Tutorials/Combat",
+        "path": "wiki_full/Tutorials/Combat/data.json",
+        "sha256": "308cbc0886478ef035b5ba7a9acbca387098cba416efb3515a40a20d281c253d",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Tutorials/Combat",
+          "title": "Tutorials/Combat",
+          "time": "17/04/2022 00:54:59"
+        },
+        "bytes": 197268,
+        "texts": 446,
+        "tables": 8
+      },
+      {
+        "title": "Tutorials/Shelters",
+        "path": "wiki_full/Tutorials/Shelters/data.json",
+        "sha256": "2732f28e48368006e78fd250b910c57d08a8244b23b2064ddc8938084f33ef39",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Tutorials/Shelters",
+          "title": "Tutorials/Shelters",
+          "time": "17/04/2022 00:32:18"
+        },
+        "bytes": 197644,
+        "texts": 421,
+        "tables": 23
+      },
+      {
+        "title": "Tutorials/Transportation_methods",
+        "path": "wiki_full/Tutorials/Transportation_methods/data.json",
+        "sha256": "164553b9bca543687a904ab17f7bbe034b7e5669a2977fef33e943a0ee6e1297",
+        "entryCrcVerified": true,
+        "metadata": {
+          "url": "https://minecraft.fandom.com/wiki/Tutorials/Transportation_methods",
+          "title": "Tutorials/Transportation_methods",
+          "time": "17/04/2022 00:09:34"
+        },
+        "bytes": 12787,
+        "texts": 37,
+        "tables": 0
+      }
+    ],
+    "missing": [
+      "Tutorials/Fishing"
+    ],
+    "wholeArchiveChecksumVerified": false,
+    "transferredBytes": 995567
+  },
+  "metadataFiles": [
+    {
+      "file": "youtube_tutorial.json",
+      "bytes": 8147320,
+      "rows": 34472,
+      "officialMd5Verified": true,
+      "sha256": "346206b9ccd027fa7ab943711e73089bae4f0bd2ed20a0a182b5ad2640d35f28",
+      "keys": [
+        "duration",
+        "fps",
+        "id",
+        "like_count",
+        "link",
+        "title",
+        "view_count"
+      ]
+    },
+    {
+      "file": "reddit.json",
+      "bytes": 11963859,
+      "rows": 345876,
+      "officialMd5Verified": true,
+      "sha256": "f7406a602a38dd06e20d3b08fcce0c36857697474dae47c01161a116a59f0f19",
+      "keys": [
+        "id",
+        "type"
+      ]
+    }
+  ],
+  "pilot": {
+    "at": "2026-10-20T04:04:38Z",
+    "buildMs": 368.7389998231083,
+    "indexBytes": 1482752,
+    "queries": [
+      {
+        "query": "how to make bread",
+        "expectedPage": "Bread",
+        "titles": [
+          "Tutorials/Beginner's guide",
+          "Tutorials/Defeating the ender dragon",
+          "Tutorials/Shelters"
+        ],
+        "top5Hit": false,
+        "elapsedMs": 4.5380000956356525,
+        "terms": [
+          "make",
+          "bread"
+        ]
+      },
+      {
+        "query": "fishing rod casting",
+        "expectedPage": "Fishing Rod",
+        "titles": [
+          "Fishing Rod",
+          "Fishing"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 1.5412999782711267,
+        "terms": [
+          "fishing",
+          "rod",
+          "casting"
+        ]
+      },
+      {
+        "query": "elytra durability",
+        "expectedPage": "Elytra",
+        "titles": [
+          "Elytra",
+          "Tutorials/Transportation methods",
+          "Tutorials/Combat",
+          "Tutorials/Beginner's guide"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 3.0877001117914915,
+        "terms": [
+          "elytra",
+          "durability"
+        ]
+      },
+      {
+        "query": "ender pearl teleport",
+        "expectedPage": "Ender Pearl",
+        "titles": [
+          "Ender Pearl",
+          "Tutorials/Defeating the ender dragon",
+          "Tutorials/Shelters"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 2.369999885559082,
+        "terms": [
+          "ender",
+          "pearl",
+          "teleport"
+        ]
+      },
+      {
+        "query": "smelting fuel",
+        "expectedPage": "Smelting",
+        "titles": [
+          "Smelting",
+          "Furnace",
+          "Wood",
+          "Pickaxe",
+          "Sword"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 3.053799970075488,
+        "terms": [
+          "smelting",
+          "fuel"
+        ]
+      },
+      {
+        "query": "shield blocking",
+        "expectedPage": "Shield",
+        "titles": [
+          "Shield",
+          "Tutorials/Combat",
+          "Elytra",
+          "Tutorials/Beginner's guide"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 3.0393002089112997,
+        "terms": [
+          "shield",
+          "blocking"
+        ]
+      },
+      {
+        "query": "combat tactics",
+        "expectedPage": "Tutorials/Combat",
+        "titles": [
+          "Tutorials/Combat"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 2.0179999992251396,
+        "terms": [
+          "combat",
+          "tactics"
+        ]
+      },
+      {
+        "query": "campfire cooking",
+        "expectedPage": "Campfire",
+        "titles": [
+          "Campfire",
+          "Smelting",
+          "Tutorials/Beginner's guide"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 2.059800084680319,
+        "terms": [
+          "campfire",
+          "cooking"
+        ]
+      },
+      {
+        "query": "面包怎么制作",
+        "expectedPage": "Bread",
+        "titles": [
+          "Bread",
+          "Villager",
+          "Tutorials/Beginner's guide",
+          "Tutorials/Defeating the ender dragon",
+          "Tutorials/Shelters"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 3.275899915024638,
+        "terms": [
+          "bread"
+        ]
+      },
+      {
+        "query": "鱼竿怎么甩杆",
+        "expectedPage": "Fishing Rod",
+        "titles": [
+          "Fishing Rod",
+          "Fishing",
+          "Tutorials/Combat",
+          "Tutorials/Beginner's guide",
+          "Tutorials/Shelters"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 4.352000076323748,
+        "terms": [
+          "fishing",
+          "rod"
+        ]
+      },
+      {
+        "query": "鞘翅耐久",
+        "expectedPage": "Elytra",
+        "titles": [
+          "Elytra",
+          "Tutorials/Transportation methods",
+          "Tutorials/Combat",
+          "Tutorials/Defeating the ender dragon",
+          "Minecraft"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 6.208700127899647,
+        "terms": [
+          "elytra"
+        ]
+      },
+      {
+        "query": "末影珍珠传送",
+        "expectedPage": "Ender Pearl",
+        "titles": [
+          "Ender Pearl",
+          "Tutorials/Defeating the ender dragon",
+          "Minecraft",
+          "Tutorials/Shelters"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 2.706199884414673,
+        "terms": [
+          "ender",
+          "pearl"
+        ]
+      },
+      {
+        "query": "烧炼需要燃料",
+        "expectedPage": "Smelting",
+        "titles": [
+          "Smelting",
+          "Furnace",
+          "Wood",
+          "Pickaxe",
+          "Sword"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 3.644699929282069,
+        "terms": [
+          "smelting"
+        ]
+      },
+      {
+        "query": "盾牌防御",
+        "expectedPage": "Shield",
+        "titles": [
+          "Shield",
+          "Tutorials/Combat",
+          "Tutorials/Beginner's guide",
+          "Elytra",
+          "Tutorials/Defeating the ender dragon"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 5.045199999585748,
+        "terms": [
+          "shield"
+        ]
+      },
+      {
+        "query": "战斗打法",
+        "expectedPage": "Tutorials/Combat",
+        "titles": [
+          "Tutorials/Combat",
+          "Tutorials/Beginner's guide",
+          "Pickaxe",
+          "Sword",
+          "Tutorials/Shelters"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 4.317800048738718,
+        "terms": [
+          "combat"
+        ]
+      },
+      {
+        "query": "营火烹饪",
+        "expectedPage": "Campfire",
+        "titles": [
+          "Campfire",
+          "Smelting",
+          "Tutorials/Beginner's guide",
+          "Tutorials/Shelters",
+          "Tutorials/Combat"
+        ],
+        "top5Hit": true,
+        "elapsedMs": 4.462499869987369,
+        "terms": [
+          "campfire"
+        ]
+      }
+    ],
+    "negative": [
+      {
+        "query": "千灯纪闪现法术耗蓝多少",
+        "results": 0
+      },
+      {
+        "query": "NarutoPi的背包现在有几根鱼竿",
+        "results": 0
+      },
+      {
+        "query": "xqzv_nonexistent_reference_991",
+        "results": 0
+      }
+    ],
+    "boundedReads": [
+      {
+        "id": "minedojo/wiki/bab1314c5a741f6b03046edb",
+        "textChars": 400,
+        "tables": 9,
+        "tableCells": 4
+      }
+    ],
+    "queryCount": 16,
+    "top5Hits": 15,
+    "p50Ms": 3.181800013408065,
+    "p95Ms": 6.208700127899647,
+    "evaluation": "Hand-authored smoke cases on a deliberately selected 22-page research corpus. Not independent accuracy, a model benchmark, or game success evidence.",
+    "modelsCalled": 0,
+    "gameConnections": 0,
+    "liveAgentLoaded": false,
+    "build": {
+      "schema": "agent-mc-reference-research/v1",
+      "pages": 22,
+      "skippedNonWikiJson": 0,
+      "textBlocks": 2661,
+      "tablesPreserved": 294,
+      "sourceLicense": "CC-BY-NC-SA-3.0",
+      "minecraftVersionVerified": false,
+      "liveAgentLoaded": false
+    }
+  },
+  "earlierPilot": {
+    "at": "2026-10-20T03:59:16Z",
+    "queryCount": 16,
+    "top5Hits": 15,
+    "p50Ms": 3.1081499764695764,
+    "p95Ms": 5.207199836149812
+  },
+  "localSourceEvidenceSha256": {
+    "audit.json": "d4104ffa71f47adf35647585b6cc4e979804f932afff1e95221b566874b3e2ca",
+    "target-pages-1792468521/audit.json": "f914aacf00373a19ee7499c041a88127fb07724e9fc918518d72382a315b2dad",
+    "retrieval-1792469077/report.json": "b7ac5e94590b490f68d9edc5fb87f9eb11d89bff5795ababc97bc291714dcd73"
+  },
+  "pilotScriptSha256": "4a96057cb3fa64908fbbda76fe05a446473d458b2ecc98e0470d731609ec0478",
+  "limits": [
+    "Wiki whole-archive MD5 not verified; individual retrieved ZIP entry CRC checked and JSON SHA256 recorded.",
+    "22 deliberately selected pages and 16 authored smoke questions; not independent retrieval accuracy or game outcomes.",
+    "No raw Wiki text/media distributed in this evidence document.",
+    "No simulator, model inference, training, game connection or live Agent load."
+  ]
+}

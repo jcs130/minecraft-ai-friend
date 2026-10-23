@@ -21,7 +21,7 @@ export class Appearance {
       skin: '64×64 或 64×32 PNG，原版、兼容 Web 和基岩回退外观', ysm: '公开原始 ZIP；Java 需 YSM，Web 自动转换，基岩按模型投影能力处理',
       message: ready ? '外观同步在线；角色需在游戏内，提交后可查询实际结果。' : '可保存外观文件；应用将等待家庭端外观同步器上线，上传不代表已换装。' };
   }
-  assertAgent(agent) { if (agent.kind !== 'agent' || agent.isReserved || !uuid.test(agent.playerUuid) || /eye$/i.test(agent.name)) throw fail(403, 'APPEARANCE_ROLE', '外观仅供已绑定的普通 Agent 使用，Eye 与管理身份保留原外观'); }
+  assertAgent(agent) { if (agent.kind !== 'agent' || agent.isReserved || agent.historical || !uuid.test(agent.playerUuid) || /eye$/i.test(agent.name)) throw fail(403, 'APPEARANCE_ROLE', '外观仅供已绑定的当前 Agent 使用；历史身体、Eye 与管理身份不能换装'); }
   list(agent) {
     this.assertAgent(agent);
     const assets = this.store.db.prepare('SELECT id,kind,label,variant,sha256,metadata,length(bytes) AS size,created_at FROM appearance_assets WHERE player_uuid=? AND removed_at IS NULL ORDER BY created_at DESC').all(agent.playerUuid)

@@ -1,0 +1,180 @@
+"""Exercise the real Python-to-Node MCP bridge with networking denied."""
+
+import argparse
+import asyncio
+import json
+import tempfile
+from pathlib import Path
+
+
+def check_context(environment: str, tools: list) -> dict:
+    """Check the real catalogue with defaults and explicit limits, without a model."""
+    from agent_mc_autonomy import controller
+    from agent_mc_autonomy.configuration import Settings
+    from agent_mc_autonomy.context import encode
+    from agent_mc_autonomy.context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE
+
+    settings = Settings.parse({})
+    projected = controller.model_tools(tools)
+    # Synthetic evidence exercises retention; it makes no live-world claim.
+    facts = {"parts": [
+        {"key": "body", "text": "health 14/20, hunger 9/20, onGround true", "original": "fixture:body"},
+        {"key": "place", "text": "overworld (0,64,0), water east", "original": "fixture:place"},
+        {"key": "queue", "text": "idle; previous task ended; no pending actions", "original": "fixture:queue"},
+    ]}
+    failure = {"tool": "mc_scout", "error": "ray yaw exceeds maximum 180", "receipt": "fixture:rejected",
+               "next_step": "Read mc_tool_help before correcting the ray; original request was not dispatched."}
+    messages, budget = controller.assemble(environment, projected, "survive", facts, [], [],
+        context_tokens=settings.context_tokens, reserved_output=settings.max_output_tokens, tool_failure=failure)
+    tail = json.loads(messages[-1]["content"])
+    assert tail["current_facts"] == facts["parts"] and not budget["omitted"]
+    assert tail["tool_failure"] == failure
+    assert "mc_original" in tail["originals"] and "mc_protocol" in tail["originals"]
+    assert "mc_help" in messages[0]["content"] and "mc_tool_help" in messages[0]["content"]
+    assert budget["counter"] == BYTE_COUNTER_NAME and budget["units"] == "token_upper_bound"
+    assert budget["input"] == len(encode({"messages": messages, "tools": projected}).encode("utf-8"))
+    assert budget["output_reserve"] == settings.max_output_tokens
+    assert budget["framing_reserve"] == FRAMING_RESERVE
+    assert budget["total"] == budget["input"] + settings.max_output_tokens + FRAMING_RESERVE
+    assert budget["total"] <= settings.context_tokens
+    smaller = Settings.parse({"autonomy": {"context_tokens": 32768}})
+    assert smaller.context_tokens == 32768
+    try:
+        controller.assemble(environment, projected, "survive", facts, [], [],
+            context_tokens=smaller.context_tokens, reserved_output=smaller.max_output_tokens, tool_failure=failure)
+    except ValueError as error:
+        if not str(error).startswith("context_budget_exceeded:"):
+            raise
+        refusal = str(error)
+    else:
+        raise AssertionError("Expected explicit 32K conservative-budget rejection for this packed catalogue")
+    optional = Settings.parse({"autonomy": {"context_tokens": 131072}})
+    larger_messages, _ = controller.assemble(environment, projected, "survive", facts, [], [],
+        context_tokens=optional.context_tokens, reserved_output=optional.max_output_tokens, tool_failure=failure)
+    assert larger_messages == messages
+    return {"budget": budget, "projected_tools": [tool["function"]["name"] for tool in projected],
+            "explicit_32k_refusal": refusal, "optional_128k_preserved": optional.context_tokens == 131072,
+            "essential_facts_and_failure_retained": True, "counter_is_measured_model_tokens": False}
+
+
+async def check(directory: Path, node: str) -> dict:
+    root = Path(__file__).resolve().parent
+    from agent_mc_autonomy import bridge as module
+    from agent_mc_autonomy import controller
+    from agent_mc_autonomy.configuration import Settings
+
+    from . import install as installer
+    installer.verify_runtime(directory.resolve())
+    with tempfile.TemporaryDirectory(prefix="neko-minecraft-offline-") as temporary:
+        data = Path(temporary)
+        config = data / "client.json"
+        config.write_text(json.dumps({"dataDir": str(data / "data"), "consolePort": 0, "metricsPort": 0,
+                                      "world": {"host": "example.test", "username": "OfflineCheck", "viewerPort": 0, "version": "1.21.1"}}), encoding="utf-8")
+        bridge = module.MinecraftBridge(node, directory.resolve() / "node_modules/agent-mc-world/bin/minecraft-agent-mcp.mjs",
+                                        config, data / "backend.log", node_args=("--import", (root / "deny-network.mjs").as_uri()))
+        try:
+            await bridge.open()
+            names = {tool["name"] for tool in bridge.tools}
+            assert {"mc_connection", "mc_do", "mc_events", "mc_script", "mc_queue", "mc_visual", "mc_memory", "mc_combat_tactic", "mc_knowledge"} <= names
+            assert {"mc_tool_help", "mc_messages"} <= names
+            assert not any(name.startswith("mymc_") for name in names)
+            status = module.json_content(await bridge.call("mc_connection", {"action": "status"}))
+            assert status["phase"] == "disconnected" and status["facts"] is None
+            shared_controller = controller.Controller(bridge, None, Settings.parse({}), data / "autonomy",
+                                                       lambda **_: None, lambda: False)
+            result, _ = await shared_controller.dispatch("mc_tool_help", {"name": "mc_messages", "full": True}, "offline-shared-help")
+            help_result = json.loads(result["text"])
+            assert help_result["protocol"] == "agent-mc-tool-help/v1" and help_result["complete"] is True
+            assert help_result["schema"] == next(tool["inputSchema"] for tool in bridge.tools if tool["name"] == "mc_messages")
+            index = module.outcome(await bridge.call("mc_messages", {"action": "list"}))
+            # The MCP connection gate still fences game-scoped message reads.
+            # Discovering their schema is not proof of a live inbox or permission.
+            assert index["failed"] and "disconnected" in index["text"] and not index.get("execution"), index
+            reference = module.json_content(await bridge.call("mc_knowledge", {"action": "get", "id": "food/beef"}))
+            assert reference["version"] == "1.21.1" and reference["currentWorldVerified"] is False
+            assert reference["entry"]["nutrition"] == {"foodPoints": 3, "saturation": 1.8}
+            assert reference["entry"]["cooking"]["nutrition"] == {"foodPoints": 8, "saturation": 12.8}
+            assert reference["retrieval"] == "local-reference"
+            recipes = module.json_content(await bridge.call("mc_knowledge", {"query": "charcoal", "kind": "recipe", "limit": 1}))
+            assert recipes["entries"][0]["id"] == "recipe/charcoal"
+            charcoal = module.json_content(await bridge.call("mc_knowledge", {"id": "recipe/charcoal"}))
+            assert charcoal["entry"]["variants"][0]["type"] == "smelting"
+            saved = module.json_content(await bridge.call("mc_memory", {"action": "remember", "kind": "method",
+                "summary": "Offline method fixture", "content": "Historical hypothesis, no gameplay claim.",
+                "source": {"kind": "hypothesis", "reference": "offline:test"}}))
+            memory_id = saved["entry"]["id"]
+            learning_help = module.json_content(await bridge.call("mc_memory", {"action": "service", "operation": "help",
+                "input": {"operation": "record_outcome"}}))
+            assert learning_help["enabled"] is False and learning_help["inputSchema"]["type"] == "object"
+            assert "dream" in learning_help["operations"] and "approve" not in learning_help["operations"]
+            recalled = module.json_content(await bridge.call("mc_memory", {"action": "get", "id": memory_id}))
+            assert recalled["entry"]["content"] == "Historical hypothesis, no gameplay claim."
+            assert recalled["entry"]["currentWorldVerified"] is False
+            assert (await bridge.call("mc_memory", {"action": "capture"})).get("isError") is True
+            await bridge.close()
+            bridge = module.MinecraftBridge(node, directory.resolve() / "node_modules/agent-mc-world/bin/minecraft-agent-mcp.mjs",
+                                            config, data / "reopened-backend.log", node_args=("--import", (root / "deny-network.mjs").as_uri()))
+            await bridge.open()
+            restored = module.json_content(await bridge.call("mc_memory", {"action": "get", "id": memory_id}))
+            for key in ("id", "revision", "content", "source", "currentWorldVerified"):
+                assert restored["entry"][key] == recalled["entry"][key]
+            assert module.json_content(await bridge.call("mc_connection", {"action": "status"}))["phase"] == "disconnected"
+            environment = module.text_content(await bridge.resource("mc://environment"))
+            assert "mc_help" in environment
+            context_check = check_context(environment, bridge.tools)
+            budget = context_check["budget"]
+            settings = Settings.parse({})
+            # Check reserved image capacity; this is not a rendered-image or model test.
+            try:
+                _, image_budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": [
+                    {"key": "body", "text": "health 20/20, hunger 20/20"}, {"key": "place", "text": "overworld (0,64,0)"}]}, [], [],
+                    context_tokens=settings.context_tokens - controller.IMAGE_RESERVE, reserved_output=2048)
+                image_fits = not image_budget["omitted"]
+            except ValueError as error:
+                if not str(error).startswith("context_budget_exceeded:"):
+                    raise
+                # Match the runner's explicit text fallback; do not claim image support
+                # merely because the transport passed for the current tool catalog.
+                image_fits = False
+            facts = module.json_content(await bridge.call("mc_protocol", {"protocol": "agent-mc/v1", "action": "facts"}))
+            assert "1.21.1" in facts["parts"][0]["text"]
+            refused = await bridge.call("mc_bag", {})
+            assert refused.get("isError") is True
+            assert "disconnected" in module.text_content(refused)
+            invalid = await bridge.call("mc_connection", {"action": "not-an-action"})
+            assert invalid.get("isError") is True
+            pending = asyncio.create_task(bridge.call("mc_events", {"after": 0, "waitMs": 30000}))
+            try:
+                await asyncio.sleep(0.05)
+                assert not pending.done()
+                concurrent = module.json_content(await bridge.call("mc_connection", {"action": "status"}, timeout=2))
+                assert concurrent["phase"] == "disconnected"
+            finally:
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            return {"ok": True, "protocol": "MCP stdio", "profile": status["profile"], "tools": len(names),
+                    "phase": status["phase"], "game_connected": False, "network_denied": True,
+                    "minecraft_version": "1.21.1", "stable_context_byte_budget": budget["total"],
+                    "context_check": context_check,
+                    "image_and_body_facts_fit_default_budget": image_fits,
+                    "concurrent_status_and_cancel": True,
+                    "service_learning_contract": True, "service_learning_opt_in": True,
+                    "game_memory_write_recall": True, "game_memory_restart_recall": True,
+                    "disconnected_capture_refused": True, "shared_tactics_discovered": True,
+                    "shared_message_schema_and_help": True,
+                    "disconnected_message_query_refused": True,
+                    "cortico_installed": (directory / "node_modules/cortico").exists()}
+        finally:
+            await bridge.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--node", default="node")
+    arguments = parser.parse_args()
+    print(json.dumps(asyncio.run(check(arguments.directory, arguments.node)), indent=2))
+
+
+if __name__ == "__main__":
+    main()

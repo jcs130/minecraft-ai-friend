@@ -1,0 +1,49 @@
+{
+  "cortico": {
+    "repository": "https://github.com/jcs130/Cortico",
+    "commit": "8c00fbb022ea82fc9725301fde0437ccc00fdcc9",
+    "patches": [
+      "patches/minecraft-item-names.patch",
+      "patches/minecraft-viewer-content.patch",
+      "patches/minecraft-viewer-appearance.patch",
+      "patches/minecraft-spatial-budget.patch",
+      "patches/minecraft-recipe-protocol.patch",
+      "patches/minecraft-route-diagnostics.patch",
+      "patches/minecraft-flight-timing.patch",
+      "patches/minecraft-tool-trace.patch",
+      "patches/minecraft-probe-coverage.patch",
+      "patches/minecraft-hand-equipment.patch",
+      "patches/minecraft-idle-context.patch",
+      "patches/minecraft-storage-correction.patch",
+      "patches/minecraft-inventory-recovery.patch",
+      "patches/minecraft-combat-decision.patch",
+      "patches/minecraft-combat-program.patch",
+      "patches/minecraft-own-identity.patch",
+      "patches/minecraft-combat-eligibility.patch",
+      "patches/minecraft-combat-program-budget.patch",
+      "patches/minecraft-native-methods.patch",
+      "patches/minecraft-server-login.patch",
+      "patches/minecraft-procedures.patch",
+      "patches/minecraft-chat-provenance.patch",
+      "patches/minecraft-mounted-look.patch",
+      "patches/minecraft-railway-observation.patch",
+      "patches/minecraft-vehicle-state.patch",
+      "patches/minecraft-collect-target-contract.patch",
+      "patches/minecraft-collect-step-state.patch",
+      "patches/minecraft-placement-state-evidence.patch",
+      "patches/minecraft-crop-placement.patch",
+      "patches/minecraft-goal-metrics.patch",
+      "patches/minecraft-goal-closure.patch",
+      "patches/minecraft-method-await.patch",
+      "patches/minecraft-viewer-observer.patch",
+      "patches/minecraft-online-client.patch",
+      "patches/minecraft-blueprint-rail-review.patch"
+    ]
+  },
+  "viewer": {
+    "repository": "https://github.com/jcs130/mc-visual-console",
+    "commit": "8536b28516e99ae78a0d11d74f9cef329242c10b",
+    "assetPack": "java-1.20.6",
+    "preset": null
+  }
+}

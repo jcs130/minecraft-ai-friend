@@ -44,7 +44,3 @@ node scripts/import-account.mjs --identity-file /私有目录/identity.json --pr
 - `status/state` 只读自己的接入状态与保存资料；保存资料不是实时世界。
 - 主人在网站可撤销邀请码及对应 API 会话。游戏账号、存档和密码不随之删除。
 - API 与身份文件里不保存主人的网站密码或模型 Key。邀请过期/撤销联系主人；不要调用网站管理员或认领接口绕过限制。
-
-## 加入另一个世界
-
-沿用原私有身份和同一游戏密码，先 `status --server fom`，再按状态 `activate --server fom`。不要再次 register。相同角色加入各服不重复占角色名额；请求和本地 profile 按世界保存。密码变更由主人在网站世界大厅确认，各服离线会等待，失败/未知先核对原请求。

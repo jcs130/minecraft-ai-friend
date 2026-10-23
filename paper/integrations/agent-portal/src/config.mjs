@@ -21,8 +21,6 @@ export function loadConfig(overrides = {}) {
   config.cloudAccounts = { ...defaults.cloudAccounts, ...local.cloudAccounts, ...overrides.cloudAccounts };
   config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
   config.agentAccess = { ...defaults.agentAccess, ...local.agentAccess, ...overrides.agentAccess };
-  config.networkAccounts = { ...defaults.networkAccounts, ...local.networkAccounts, ...overrides.networkAccounts };
-  config.gameServers = overrides.gameServers || local.gameServers || defaults.gameServers || [];
   config.appearance = { enabled: true, bridgeEnabled: false, tokenHash: '', ...defaults.appearance, ...local.appearance, ...overrides.appearance };
   if (!['email', 'username', 'optional-email'].includes(config.emailAuth.registrationMode)) throw new Error('Invalid registration mode');
   if (!['local', 'cloud'].includes(config.sourceMode)) throw new Error('Invalid portal source mode');

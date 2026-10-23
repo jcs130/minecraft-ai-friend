@@ -1,0 +1,199 @@
+package org.cortico.minecraft;
+
+import com.google.gson.Gson;
+import com.sun.jna.Platform;
+import com.sun.jna.platform.win32.Crypt32Util;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.function.Supplier;
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.minecraft.class_310;
+import net.minecraft.class_642;
+import net.minecraft.class_412;
+import net.minecraft.class_419;
+import net.minecraft.class_639;
+import net.minecraft.class_5498;
+
+/** Submits a scoped private credential only after the server requests login. */
+public final class CorticoClientLogin implements ClientModInitializer, Supplier<Map<String,Object>> {
+    private static volatile CorticoClientLogin active;
+    private record Account(String server, String username, String credentialFile, String command,
+                           List<String> requestMarkers, List<String> successMarkers, List<String> failureMarkers,
+                           boolean reconnect, List<String> reauthMarkers, List<String> stateMarkers,
+                           String initialPerspective) {}
+    private record Config(boolean enabled, List<Account> accounts) {}
+    private LoginSession session;
+    private Account account;
+    private class_310 client;
+    private final LoginSession.ConnectionScope connection = new LoginSession.ConnectionScope();
+    private final ReconnectSession reconnect = new ReconnectSession();
+    private class_642 reconnectServer;
+    private String confirmedAt;
+
+    @Override
+    public void onInitializeClient() {
+        active = this;
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, current) -> {
+            if (!connection.join(handler.method_48296())) return;
+            client = current;
+            account = null;
+            session = null;
+            confirmedAt = null;
+            reconnectServer = null;
+            reconnect.block();
+            class_642 server = current.method_1558();
+            if (server == null) return;
+            try {
+                Path configFile = FabricLoader.getInstance().getConfigDir().resolve("cortico-client-login.json");
+                if (!Files.isRegularFile(configFile)) return;
+                Config config = new Gson().fromJson(Files.readString(configFile), Config.class);
+                if (config == null || !config.enabled || config.accounts == null) return;
+                for (Account entry : config.accounts) {
+                    if (entry == null || entry.server == null || entry.username == null
+                            || !LoginSession.matchesAccount(entry.server, entry.username,
+                                server.field_3761, current.method_1548().method_1676())) continue;
+                    if (account != null) throw new IllegalArgumentException("Duplicate matching accounts");
+                    if (entry.credentialFile == null || entry.command == null || entry.requestMarkers == null
+                            || entry.successMarkers == null || entry.failureMarkers == null)
+                        throw new IllegalArgumentException("Incomplete account configuration");
+                    account = entry;
+                }
+                if (account != null) {
+                    session = new LoginSession(account.requestMarkers, account.successMarkers, account.failureMarkers,
+                        account.reauthMarkers == null ? List.of() : account.reauthMarkers);
+                    reconnectServer = account.reconnect ? server : null;
+                    if (account.reconnect) reconnect.arm(); else reconnect.block();
+                    int perspective = InitialPerspective.select(account.initialPerspective);
+                    if (perspective >= 0) {
+                        current.field_1690.method_31043(switch (perspective) {
+                            case 1 -> class_5498.field_26665;
+                            case 2 -> class_5498.field_26666;
+                            default -> class_5498.field_26664;
+                        });
+                        System.out.println("[CorticoClientLogin] Initial perspective " + account.initialPerspective
+                            + "; current=" + current.field_1690.method_31044().name() + "; applied once, manual view changes remain available");
+                    }
+                    System.out.println("[CorticoClientLogin] Armed for " + account.username + " at " + account.server);
+                }
+            } catch (Exception error) {
+                account = null;
+                session = null;
+                reconnectServer = null;
+                reconnect.block();
+                System.out.println("[CorticoClientLogin] Configuration unavailable; no credential submitted ("
+                    + error.getClass().getSimpleName() + ")");
+            }
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, current) -> {
+            if (!connection.disconnect(handler.method_48296())) return;
+            session = null;
+            account = null;
+            client = null;
+        });
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
+            if (overlay || session == null || account == null || client == null) return true;
+            String text=message.getString().replaceAll("§[0-9A-FK-ORa-fk-or]", "").stripLeading();
+            LoginSession.Result result = session.observe(text);
+            if(account.stateMarkers!=null)for(String marker:account.stateMarkers)if(marker!=null&&!marker.isBlank()&&(text.startsWith(marker+" ")||text.startsWith("["+marker+"] "))){
+                try {
+                    int start=text.indexOf('{'); if(start<0)break;
+                    var data=com.google.gson.JsonParser.parseString(text.substring(start)).getAsJsonObject();
+                    if(!data.has("authorized")||!data.get("authorized").isJsonPrimitive()||!data.get("authorized").getAsJsonPrimitive().isBoolean()
+                      ||data.has("username")&&!account.username.equals(data.get("username").getAsString()))break;
+                    if(data.has("playerUuid")&&(client.field_1724==null||!client.field_1724.method_5667().toString().equalsIgnoreCase(data.get("playerUuid").getAsString())))break;
+                    result=session.authoritative(data.get("authorized").getAsBoolean());
+                } catch(Exception ignored) {} break;
+            }
+            if (result == LoginSession.Result.CONFIRMED) {
+                confirmedAt=java.time.Instant.now().toString();
+                System.out.println("[CorticoClientLogin] Server confirmed login for " + account.username);
+            }
+            else if (result == LoginSession.Result.BLOCKED) {
+                reconnect.block();
+                System.out.println("[CorticoClientLogin] Authentication requires intervention; no retry");
+            }
+            else if (result == LoginSession.Result.SUBMIT) {
+                Account selected = account;
+                class_310 current = client;
+                long generation = connection.generation();
+                current.execute(() -> submit(selected, current, generation));
+            }
+            return true;
+        });
+        ClientTickEvents.END_CLIENT_TICK.register(current -> {
+            if (current.method_1562() != null) {
+                if(session==null||session.authorized())reconnect.online(); else reconnect.cancel();
+                if(session!=null&&account!=null&&account.reconnect&&session.confirmationTimedOut(System.nanoTime()/1_000_000)){
+                    current.method_1562().method_48296().method_10747(net.minecraft.class_2561.method_43470("Configured server login confirmation timed out; waiting for scoped reconnect."));
+                    System.out.println("[CorticoClientLogin] Login confirmation timed out; bounded reconnect, no action replay");
+                }
+                return;
+            }
+            if (!reconnect.tick(current.field_1755 instanceof class_419 ? current.field_1755 : null,
+                    System.nanoTime() / 1_000_000)) return;
+            class_642 target = reconnectServer;
+            if (target == null) { reconnect.block(); return; }
+            try {
+                Path configFile = FabricLoader.getInstance().getConfigDir().resolve("cortico-client-login.json");
+                Config config = new Gson().fromJson(Files.readString(configFile), Config.class);
+                boolean allowed = config != null && config.enabled && config.accounts != null
+                    && config.accounts.stream().anyMatch(entry -> entry != null && entry.reconnect
+                        && entry.server != null && entry.username != null
+                        && LoginSession.matchesAccount(entry.server, entry.username, target.field_3761,
+                            current.method_1548().method_1676()));
+                if (!allowed) { reconnect.block(); return; }
+                System.out.println("[CorticoClientLogin] Reconnecting configured account, attempt " + reconnect.attempts());
+                // A non-null cookie storage marks the 1.20.6 handshake as TRANSFER.
+                // This is a fresh reconnect to the configured server, not a server-directed transfer.
+                class_412.method_36877(current.field_1755, current, class_639.method_2950(target.field_3761),
+                    target, false, null);
+            } catch (Exception error) {
+                reconnect.block();
+                System.out.println("[CorticoClientLogin] Reconnect configuration unavailable; no retry");
+            }
+        });
+        System.out.println("[CorticoClientLogin] Active; login commands and credentials are never logged");
+    }
+    /** Optional generic Fabric authorization evidence port. Explicitly excludes all credentials. */
+    @Override public Map<String,Object> get() {
+        CorticoClientLogin owner=active;
+        Map<String,Object> out=new LinkedHashMap<>();
+        out.put("protocol","agent-mc-server-authorization/v1");out.put("observedAt",java.time.Instant.now().toString());
+        boolean matched=owner!=null&&owner.client!=null&&owner.client.method_1562()!=null&&owner.connection.owns(owner.client.method_1562().method_48296());
+        out.put("required",owner!=null&&owner.account!=null);out.put("connectionMatched",matched);
+        out.put("phase",matched&&owner.session!=null?owner.session.phase():"unknown");
+        out.put("authorized",matched&&owner.session!=null?owner.session.authorized():null);
+        if(owner!=null&&owner.account!=null){out.put("username",owner.account.username);out.put("server",owner.account.server);}
+        if(owner!=null&&owner.confirmedAt!=null)out.put("confirmedAt",owner.confirmedAt);
+        return out;
+    }
+
+    private void submit(Account selected, class_310 current, long generation) {
+        if (generation != connection.generation() || client != current || account != selected || current.method_1562() == null) return;
+        byte[] plain = null;
+        try {
+            if (!Platform.isWindows()) throw new IllegalStateException("Windows user credential required");
+            byte[] cipher = Files.readAllBytes(Path.of(selected.credentialFile));
+            if (cipher.length < 1 || cipher.length > 16384) throw new IllegalArgumentException("Credential size");
+            plain = Crypt32Util.cryptUnprotectData(cipher);
+            String command = LoginSession.command(selected.command, new String(plain, StandardCharsets.UTF_8));
+            current.method_1562().method_45730(command);
+            System.out.println("[CorticoClientLogin] Submitted one login command for " + selected.username
+                + "; waiting for server confirmation");
+        } catch (Exception error) {
+            reconnect.block();
+            System.out.println("[CorticoClientLogin] Login not submitted; no retry (" + error.getClass().getSimpleName() + ")");
+        } finally {
+            if (plain != null) Arrays.fill(plain, (byte) 0);
+        }
+    }
+}

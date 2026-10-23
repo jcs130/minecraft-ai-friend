@@ -11,7 +11,7 @@ const fail = (status, reason, message) => Object.assign(new Error(message), { st
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
 const validName = name => typeof name === 'string' && /^ag_[A-Za-z0-9_]{1,13}$/.test(name);
 const equalHash = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === 64 && b.length === 64 && timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
-const publicInvite = row => ({ id: row.id, serverId: row.server_id || 'qiandengji', label: row.label, username: row.name || null,
+const publicInvite = row => ({ id: row.id, label: row.label, username: row.name || null,
   state: row.revoked_at ? 'revoked' : row.used_at ? 'used' : row.expires_at <= Date.now() ? 'expired' : 'available',
   createdAt: new Date(row.created_at).toISOString(), expiresAt: new Date(row.expires_at).toISOString() });
 
@@ -20,24 +20,20 @@ const publicInvite = row => ({ id: row.id, serverId: row.server_id || 'qiandengj
 // owner's browser session. The Agent generates its own high-entropy login
 // secret before exchange so a lost HTTP response is safely recoverable.
 export class AgentAccess {
-  constructor(config, store, game, accounts, network = null) {
-    Object.assign(this, { config, store, game, accounts, network });
+  constructor(config, store, game, accounts) {
+    Object.assign(this, { config, store, game, accounts });
     this.preparing = new Set();
     this.helperSha256 = digest(fs.readFileSync(path.join(config.publicDir, 'agent-register.mjs')));
     store.db.exec(`CREATE TABLE IF NOT EXISTS agent_invites(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES owners(id),label TEXT NOT NULL,name TEXT,token_hash TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,used_at INTEGER,revoked_at INTEGER);
       CREATE TABLE IF NOT EXISTS agent_clients(id TEXT PRIMARY KEY,invite_id TEXT NOT NULL UNIQUE REFERENCES agent_invites(id),owner_id TEXT NOT NULL REFERENCES owners(id),name TEXT NOT NULL,normalized TEXT NOT NULL UNIQUE,expected_uuid TEXT NOT NULL,secret_hash TEXT NOT NULL,created_at INTEGER NOT NULL,revoked_at INTEGER,game_request_id TEXT);
       CREATE TABLE IF NOT EXISTS agent_access_sessions(id_hash TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES agent_clients(id),created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,revoked_at INTEGER);
       CREATE INDEX IF NOT EXISTS agent_access_client_sessions ON agent_access_sessions(client_id);`);
-    this.migrateServerScope();
-  }
-  migrateServerScope() {
-    for (const table of ['agent_clients','agent_invites']) if (!this.store.db.prepare('PRAGMA table_info(' + table + ')').all().some(row => row.name === 'server_id')) this.store.db.exec("ALTER TABLE " + table + " ADD COLUMN server_id TEXT NOT NULL DEFAULT 'qiandengji'");
   }
   async capabilities() {
     return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: true,
       ownership: 'inviter', createsWebsiteOwner: false, game: await this.accounts.capabilities(),
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
-      servers: '/api/v1/servers', serverAccountPattern: '/api/v1/agent-access/servers/{serverId}/{status|activate|state}', skill: agentSkill, clients: agentClients, joinPage: '/join',
+      skill: agentSkill, clients: agentClients, joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
       endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session' },
       memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },
@@ -49,9 +45,9 @@ export class AgentAccess {
     const row = typeof token === 'string' && /^qdi_[A-Za-z0-9_-]{43}$/.test(token)
       ? this.store.db.prepare('SELECT * FROM agent_invites WHERE token_hash=?').get(digest(token)) : null;
     if (!row) throw fail(401, 'INVITE_INVALID', '邀请链接无效，请向角色主人申请新邀请');
-    const { username, state, expiresAt, serverId } = publicInvite(row);
+    const { username, state, expiresAt } = publicInvite(row);
     // Reading a link never consumes it, logs in, or exposes the owner's name.
-    return { schemaVersion: 1, username, state, expiresAt, serverId };
+    return { schemaVersion: 1, username, state, expiresAt };
   }
   list(owner) {
     return { invites: this.store.db.prepare('SELECT * FROM agent_invites WHERE owner_id=? ORDER BY created_at DESC LIMIT 50').all(owner.id).map(row => ({ ...publicInvite(row),
@@ -64,13 +60,14 @@ export class AgentAccess {
   }
   quota(owner) {
     if (owner.role === 'admin') return;
-    const ids = this.store.characterUuids(owner.id);
+    const owned = this.store.db.prepare('SELECT count(*) AS n FROM ownerships o WHERE owner_id=? AND NOT EXISTS (SELECT 1 FROM reviewed_role_identities r WHERE r.player_uuid=o.agent_uuid)').get(owner.id).n;
+    const clients = this.store.db.prepare('SELECT count(*) AS n FROM agent_clients c WHERE c.owner_id=? AND c.revoked_at IS NULL AND NOT EXISTS (SELECT 1 FROM ownerships o WHERE o.agent_uuid=c.expected_uuid)').get(owner.id).n;
+    const otherPending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs j WHERE j.owner_id=? AND j.operation='create' AND j.state IN ('pending','unknown') AND NOT EXISTS (SELECT 1 FROM agent_clients c WHERE c.game_request_id=j.id AND c.revoked_at IS NULL)").get(owner.id).n;
     const maximum = this.config.cloudAccounts.maxAgentsPerOwner || 5;
-    if(ids.size >= maximum)throw fail(409,'AGENT_LIMIT',`角色主人最多管理 ${maximum} 个 Agent；同一角色可加入多个世界。`);
+    if (owned + clients + otherPending >= maximum) throw fail(409, 'AGENT_LIMIT', `角色主人最多管理 ${maximum} 个 Agent；请先处理已有注册或联系服主`);
   }
   issue(owner, body) {
     this.enabled(); this.quota(owner);
-    const serverId=body.serverId || 'qiandengji'; if(this.network)this.network.catalog.requireOpen(serverId);else if(serverId!=='qiandengji')throw fail(404,'SERVER_NOT_FOUND','服务器尚未接入。');
     if (typeof body.label !== 'string' || !body.label.trim() || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请填写 1–60 字的邀请码用途');
     const name = body.username === undefined || body.username === '' ? null : body.username;
     if (name !== null) this.checkName(name);
@@ -78,7 +75,7 @@ export class AgentAccess {
     if (!Number.isInteger(hours) || hours < 1 || hours > 168) throw fail(400, 'INVALID_EXPIRY', '邀请码有效期为 1–168 小时');
     if (this.store.db.prepare('SELECT count(*) AS n FROM agent_invites WHERE owner_id=? AND used_at IS NULL AND revoked_at IS NULL AND expires_at>?').get(owner.id, Date.now()).n >= 20) throw fail(409, 'INVITE_LIMIT', '最多保留 20 个有效邀请码，请先撤销不再使用的邀请');
     const token = 'qdi_' + newSecret(), now = Date.now(), id = randomUUID();
-    this.store.db.prepare('INSERT INTO agent_invites(id,owner_id,label,name,token_hash,created_at,expires_at,used_at,revoked_at,server_id) VALUES(?,?,?,?,?,?,?,NULL,NULL,?)').run(id, owner.id, body.label.trim(), name, digest(token), now, now + hours * 3600000, serverId);
+    this.store.db.prepare('INSERT INTO agent_invites VALUES(?,?,?,?,?,?,?,NULL,NULL)').run(id, owner.id, body.label.trim(), name, digest(token), now, now + hours * 3600000);
     this.store.audit(owner.id, 'agent.invite.create', id);
     return { ...publicInvite(this.store.db.prepare('SELECT * FROM agent_invites WHERE id=?').get(id)), token,
       usage: '一次性邀请，仅用于新 Agent；角色属于你的账号。请私下交给可信程序，别放进公开对话。' };
@@ -104,7 +101,6 @@ export class AgentAccess {
     this.checkName(body.username);
     const invite = this.store.db.prepare('SELECT * FROM agent_invites WHERE token_hash=?').get(digest(token));
     if (!invite || invite.revoked_at || invite.expires_at <= Date.now()) throw fail(401, 'INVITE_INVALID', '邀请码无效、已过期或已撤销，请向角色主人申请新邀请');
-    this.network?.catalog.requireOpen(invite.server_id);
     if (invite.name && invite.name !== body.username) throw fail(403, 'INVITE_NAME_MISMATCH', '请使用邀请码限定的原始角色名');
     const owner = this.store.ownerById(invite.owner_id);
     if (!owner) throw fail(401, 'INVITE_INVALID', '邀请码已失效');
@@ -122,19 +118,18 @@ export class AgentAccess {
         duplicate = true;
       } else {
         if (current.used_at) throw fail(409, 'INVITE_USED', '邀请码已使用；原客户端请用已保存的 clientId 和 clientSecret 登录');
-    if(this.network&&this.store.db.prepare('SELECT 1 FROM network_memberships WHERE normalized=? LIMIT 1').get(body.username.toLowerCase()))throw fail(409,'ACCOUNT_EXISTS','这个角色已经加入其他世界，请沿用原身份或由主人认领，不用邀请码重建。');
         this.quota(owner);
         if (roster.some(row => row.name.toLowerCase() === body.username.toLowerCase()) || this.store.db.prepare('SELECT 1 FROM portal_agents WHERE normalized=?').get(body.username.toLowerCase()) || this.store.db.prepare('SELECT 1 FROM ownerships WHERE agent_uuid=?').get(offlineUuid(body.username))) throw fail(409, 'ACCOUNT_EXISTS', '该游戏角色已存在；邀请码不能认领或改密，请另选新名字');
         if (this.store.db.prepare('SELECT 1 FROM agent_clients WHERE normalized=?').get(body.username.toLowerCase())) throw fail(409, 'AGENT_NAME_RESERVED', '这个名字已被注册，请另选名字或联系角色主人');
         const now = Date.now();
-        this.store.db.prepare('INSERT INTO agent_clients(id,invite_id,owner_id,name,normalized,expected_uuid,secret_hash,created_at,revoked_at,game_request_id,server_id) VALUES(?,?,?,?,?,?,?,?,NULL,NULL,?)').run(body.requestId, invite.id, owner.id, body.username, body.username.toLowerCase(), offlineUuid(body.username), digest(body.clientSecret), now, invite.server_id);
+        this.store.db.prepare('INSERT INTO agent_clients VALUES(?,?,?,?,?,?,?,?,NULL,NULL)').run(body.requestId, invite.id, owner.id, body.username, body.username.toLowerCase(), offlineUuid(body.username), digest(body.clientSecret), now);
         this.store.db.prepare('UPDATE agent_invites SET used_at=? WHERE id=? AND used_at IS NULL').run(now, invite.id);
         this.store.audit(owner.id, 'agent.invite.redeem', body.requestId);
       }
       this.store.db.exec('COMMIT');
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     return { schemaVersion: 1, clientId: body.requestId, username: body.username, state: 'registered', duplicate,
-      serverId: invite.server_id || 'qiandengji', registrationOnly: true, nextAction: 'login', login: '/api/v1/agent-access/sessions', ownership: 'inviter' };
+      registrationOnly: true, nextAction: 'login', login: '/api/v1/agent-access/sessions', ownership: 'inviter' };
   }
   login(body) {
     this.enabled();
@@ -149,7 +144,7 @@ export class AgentAccess {
       this.store.db.exec('COMMIT');
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     this.store.audit(client.owner_id, 'agent.session.login', client.id);
-    return { schemaVersion: 1, clientId: client.id, username: client.name, serverId: client.server_id || 'qiandengji', token, tokenType: 'Bearer', expiresAt: new Date(now + 3600000).toISOString(),
+    return { schemaVersion: 1, clientId: client.id, username: client.name, token, tokenType: 'Bearer', expiresAt: new Date(now + 3600000).toISOString(),
       scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories'], nextAction: 'status', status: '/api/v1/agent-access/status' };
   }
   authorize(req) {
@@ -162,7 +157,6 @@ export class AgentAccess {
     return { client: row, owner };
   }
   async status({ client, owner }) {
-    if(this.network&&(client.server_id&&client.server_id!=='qiandengji'||this.network.credential(owner,client.expected_uuid)))return this.network.agentStatus({client,owner},client.server_id);
     let job = null;
     if (client.game_request_id) {
       if (this.store.db.prepare('SELECT 1 FROM account_jobs WHERE id=? AND owner_id=?').get(client.game_request_id, owner.id)) job = await this.accounts.job(owner, client.game_request_id);
@@ -180,7 +174,6 @@ export class AgentAccess {
       gamePasswordEnv: 'MC_GAME_PASSWORD', apiCredentialIsGamePassword: false };
   }
   async activate({ client, owner }, body) {
-    if(this.network&&(client.server_id&&client.server_id!=='qiandengji'||this.network.credential(owner,client.expected_uuid)))return this.network.begin(owner,client.server_id,{...body,username:client.name},{client});
     if (typeof body.requestId !== 'string' || !UUID.test(body.requestId)) throw fail(400, 'REQUEST_ID_REQUIRED', '先保存本次建号的 requestId，超时后查询状态，不要换标识重复提交');
     if (this.preparing.has(client.id)) throw fail(409, 'ACCOUNT_REQUEST_PENDING', '正在建立原请求，请查询 status');
     await this.status({ client, owner });
@@ -205,7 +198,6 @@ export class AgentAccess {
     } finally { this.preparing.delete(client.id); }
   }
   async state(context) {
-    if(context.client.server_id && context.client.server_id!=='qiandengji')return this.network.agentState(context,context.client.server_id);
     const status = await this.status(context);
     if (!status.gameAccountCreated) throw fail(409, 'GAME_ACCOUNT_NOT_READY', '先查询 status，等待游戏建号成功后读取角色资料');
     const agent = (await this.game.roster()).find(row => row.playerUuid === context.client.expected_uuid && row.name === context.client.name);

@@ -1,58 +1,38 @@
 # 千灯纪：Paper 跨端服务器
 
-## 当前源码与自部署入口（2026-10-23）
+## 当前状态（2026-10-23）
 
-现役核心为 **Paper 1.21.1 build 133 / JDK 21**，AgentFriend **0.4.47.11**，CortiEyeMirror **0.1.17**。当前完整源码会构建 **AgentFriend 0.4.48 候选**，不是现役 JAR 的逐字重建；不要直接用源码构建产物覆盖家服。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.12 / CortiEyeMirror 0.1.17**。源码完整 AgentFriend 为 **0.4.48 开发候选**，并非正式 JAR 的逐字重建。网站源码已对齐正式 **0.8.4**。
 
-- **自行搭建：**[完整指引](../docs/SELF_HOSTING.md)，从新目录下载固定公开依赖、校验并编译，不依赖维护者 `E:\MC`、私有配置或已安装插件。
-- **构建工具：**`python paper/self-host/selfhost.py doctor|prepare|build`，使用 `JAVA_HOME` 或 `--jdk`，Windows/Linux 均使用同一份源码；[依赖锁](self-host/dependencies.lock.json)。
-- **正式网站：**0.8.4 / `9f03e4f1`，可用 `export-portal` 导出，自己安装 Node 依赖并初始化账号；本分支 0.9.0 仍是独立候选。
-- **当前缺口：**家服布局绑定、23 栋村屋和部分固定 NPC/地标尚未拆成通用场景包；新世界会明确报缺布局，不能冒称全套 RPG 已复刻。
-- **凭据和存档：**仅发布无密模板和源码，运行数据库、玩家物品、私钥和服务 Key 由各部署者独立管理，见 [安全说明](../SECURITY.md)。
+官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 
-以下为 2026-10-05 等时点的运行与玩法历史，包含旧版本、旧维护路径和阶段性状态；新部署以以上入口及自部署文档为准。
+## 入口
 
-当前0.4.3补全[操作报错指引](docs/ERROR_GUIDANCE.md)：建筑拒绝显示真实世界和含边界范围，给出区外重查与公共箱入口；技能、委托、传送、经济等失败说明正确下一步。原原因码、权限、耗费与Agent/Eye客户端保持。发布与验证见[维护记录](docs/OPERATIONS.md)。
-
-这是当前家服的源码基线，目标是让真人、基岩玩家和 Mineflayer Agent 在同一个世界游玩，并用真实 Java 客户端采集 Agent 第一人称直播画面。此前 1.21.1 / NeoForge 实现保留在仓库历史和 `world/`，本目录是之后 Paper 版本迭代的入口。
-
-## 当前运行基线（2026-10-05）
-
-- Minecraft **1.20.6**，Paper **build 151**，Temurin **Java 21**。生产服运行在 `E:\MC\server`，由 `ops/manage-server.ps1` 启停、监控与备份；Cortico 连接现有服务器，不托管其 JVM。
-- Java 后端只监听 `127.0.0.1:25565`；局域网 Agent 网关在转发前拒绝 OP 名称。Geyser + Floodgate 向基岩开放 UDP 19132；ViaVersion / ViaBackwards 转译其 Java 协议。当前配置**不允许把离线模式 Java 后端直接暴露公网**。
-- 女神 `Goddess` 是被服务端强制为旁观者的 OP，`goddess-bridge.mjs` 把游戏内私聊送到宿主 QwenPaw `mc_godness`。`CortiLan` 是 Agent 玩家，`CortiEye` 是直播观察者。SpectatorPlus + 自研 CortiEyeMirror 把原版 HUD、聊天/私聊、成就及技能信息同步到真实 Java 观战客户端。
-- 20 个启用的服务端插件、9 套原版结构/群系数据包；版本与 SHA256 见 [installed-content.lock.json](manifests/installed-content.lock.json)。第三方 JAR/ZIP 由上游取得并校验，本仓库只保存清单。插件和数据包使用原版方块、实体与菜单，Java 普通客户端、基岩和 Mineflayer 无需安装内容模组。观战客户端另需匹配的 Fabric/SpectatorPlus。
-- 自研当前版本为 **AgentFriend 0.3.83**、**CortiEyeMirror 0.1.9**，已经备份并正常重启发布。修复 AuraSkills 消息缓存增长，减少 HUD、探矿、敌情巡检和铭牌重复工作，将 Eye 首次克隆初始化移到启动。连接上限 **40**；隔离服通过 **16 Agent + 16 Eye** 受控移动测试，自然冷探索仍有失败与短顿，详见 [多 Agent 性能验收](docs/MULTI_AGENT_PERFORMANCE.md)。CortiEye 原机客户端本次重启后尚未回连，插件加载不等于实际镜头已恢复。
-- 自研 **AgentFriend 0.3.83** 当前运行：`/mycli` 文字接口、技能罗盘与命格书、共享 AuraSkills 魔力、公共/私人传送、十五层试炼、第七层驿站、首领战和个人奖励箱。每层清怪后 10 秒全队自动下楼并补满生命；每位玩家获得独立随机战利品，含附魔装备与稀有保底。冒险者公会看板提供多类委托，涵盖组队、战斗、领箱和六处自然遗迹调查；新开放掠夺者营地、失落古镇、地下堡垒。手柄玩家由技能罗盘进入传送罗盘，再点“遗迹远征”；Agent 可用 `/mycli guild travel <遗迹ID>` 从外围步行探索。调查任务的完成条件是抵达遗迹中心附近，原生怪物与宝箱仍由世界数据包提供。`/mycli spells list` 分页列出 18 项主动法术，`/mycli spells explain <ID>` 给 Agent 逐项说明效果、目标、魔力、冷却、失败条件与成长；技能罗盘左上角「法术图鉴」供手柄玩家先阅读再施放，`/mycli focus list` 直接列出可绑定法杖技能，无需打开图形菜单。Paper 反透视隐藏密封矿石，探矿术提供 Java 施法者独享矿块轮廓及基岩墙面光框；灵纹法杖可绑定常用技能一按即放，并新增跃空、限时飞行、守护傀儡、探敌。成功施法会显示原版咏唱大字、技能名、粒子和音效；归乡术显示“空间之力，护你归途”，冷却失败不会误报。村庄可正常放置和清理树叶、草木及玩家新建方块，原有房屋方块由一次性结构快照保护，村民不会被误伤。造物术缺项可申请女神审核。公会声望从青铜升到钻石；奖励进入个人箱子。村庄东北侧有原版冒险者公会大厅，右键任务牌可打开看板，罗盘或 `/mycli guild hall` 可传送；门口的接待员提供任务、购买、装备回收和原版绿宝石交易，大厅东南侧四组 54 格公共双箱供所有玩家自由存取。Agent 用 `/mycli guild trader|shared` 获取入口和共享箱坐标，再用普通箱子操作。详见 [公会接待与共享箱](docs/GUILD_SERVICES.md)。从村庄北侧小路还可沿云杉栈道、桥墩与石砖阶梯步行到试炼场入口，无需传送。已加载的成年村民都有职业与原版交易菜单，价格上限为 16 绿宝石或 24 件交付物；控制台 `/mycli admin villagers` 可核查。历史 0.3.2 源码保存在 `plugins/AgentFriend/released/0.3.2/`。自研 **CortiEyeMirror 0.1.9** 同时运行，附身观战画面同步技能标题、粒子和音效。
-
-生活公会提供田园、美食家、钓客、建筑家、故事、机关工匠、商旅七种日常委托，村庄建有[四座不同主题的公会建筑与七位专属职业导师](docs/LIFE_GUILD_BUILDINGS.md)。玩家可从技能罗盘地图前往，右键导师用原版菜单接单、交付和交易；Agent 用 `/mycli life locations|visit` 取得绝对坐标或前往入口。钓鱼、种地、烹饪、建筑、写书和红石机关都按真实原版动作计进度，七条声望分别成长；奖励进入本人试炼箱。具体命令与跨端边界见 [生活公会](docs/LIFE_GUILDS.md)。`/mycli list life` 可发现 Agent 命令。`/mycli life write` 为无法操作原版书写 GUI 的 Agent 提供消耗书与笔生成真实成书的接口。商旅任务要求向两种不同职业的村民真正出售物资；`/mycli village villagers` 给出附近村民的收购报价与绝对坐标。村庄外围掠夺者出现时，在线 Agent 收到紧急私聊与私有 `mcagent:village` 状态，玩家可用 `/mycli village threat` 查敌情；实战支援有每日首次击败奖励。详见 [村民收购与村庄守望](docs/VILLAGE_SUPPORT.md)。
-
-试炼塔前三层保底材料、恢复品、酿药材料和弓箭，第四、五、八、九层保底集齐附魔铁甲，第六、十层推进个人钻石套装。`/mycli status` 与 `/mycli arena status` 分别说明本人是否参赛及全服活动层；Agent 只在 `MC_DUNGEON status participant=true` 时把楼层当作本人进度。成品药水暂不放进奖励箱，原因和完整掉落表见 [试炼塔奖励](docs/ARENA_LOOT.md)。
-- 难度普通、死亡保留背包、一人睡觉跳夜。出生村庄安全，室外可采集与攻击友善动物，房屋主体和试炼设施受保护。世界地形、已建建筑、玩家背包、权限数据库及女神会话都是运行数据，**不在 Git 中**。
-
-地下城掉线后为原队伍保留当前进度 10 分钟；重连自动返回当前层，自动下楼倒计时暂停后继续。正常停服重启也能从同一检查点恢复，已有奖励不会重复发放。试炼中死亡时本人会收到聊天与复活标题引导：已通关奖励去地面入口箱领取，或用 `/mycli arena rewards` 直接打开个人箱；未通关楼层不结算，死亡地点没有试炼奖励。
+- 玩家与 Agent：完成认证、进入世界后，用 `/mycli help`、`/mycli status` 和 `/mycli tasks list`。
+- 公共装备与补给：`/mycli guild shared`；原有农事可自愿继续，附近探索、试炼与遗迹亦可选择。
+- 默认任务反馈为精炼中文，需要程序数据时显式使用支持的 `--json`。
+- 自己搭建：[独立部署](../docs/SELF_HOSTING.md)，使用 `self-host/selfhost.py`，从新目录下载校验公开依赖并编译。
+- 网站：`integrations/agent-portal/` 为已上线版本；配置自己的账号库、桥与 Key，不使用维护者私有配置。
+- 通用 Agent 核心：[agent-mc-world](../packages/agent-mc-world/README.md)；可视化是[独立仓库](https://github.com/jcs130/mc-visual-console)。
 
 ## 目录
 
 | 路径 | 内容 |
 | --- | --- |
-| `plugins/AgentFriend/` | 自研玩法插件源码、构建脚本、默认配置、公共传送点与皮肤目录 |
-| `plugins/CortiEyeMirror/` | 自研第一人称观战同步插件源码和构建脚本 |
-| `ops/` | 服务器管理、Watchdog、双盘备份、女神桥、Agent 网关及健康测试 |
-| `probe/` | RCON、Java 状态、基岩 Pong 与局域网 Agent 入口探针 |
-| `config/` | 无口令的 Paper 配置示例、MagicSpells、WorldGuard 和公共 warp 配置 |
-| `manifests/` | 当前安装版本、文件哈希与部分上游下载记录 |
+| `plugins/AgentFriend/` | 技能、职业、任务、试炼、地下城、摄影与保护规则源码 |
+| `plugins/CortiEyeMirror/`、`plugins/shared/` | 观战和私有状态同步 |
+| `self-host/` | 无家服依赖的编译入口与依赖锁 |
+| `integrations/` | 网站、认证、基岩、模型和 Numen 等可选集成 |
+| `config/`、`manifests/` | 无密配置模板、来源和各批次版本清单 |
+| `ops/`、`probe/` | 运维代码、发布门禁与探针；原主机脚本移植前需改为自己的路径和权限 |
+| `docs/` | 玩法与带日期的维护记录 |
 
-具体启停、发布和恢复步骤见 [维护与发布](docs/OPERATIONS.md)，Agent 团队持续开发技能、公会任务和地下城的工作流程见 [世界运营手册](docs/AI_WORLD_OPERATIONS.md)，跨端服务的关键配置见 [配置说明](config/INTEGRATION.md)。
+## 部署和数据边界
 
-## 开发与部署
+最小沙盒不会生成原服务器的城镇和公会建筑。部分区域／村屋掩码仍依赖原布局，需要自己的场景配置；缺布局会明确报错，不能声称完整 RPG 已复刻。第三方插件、模型和数据包需要分别遵循许可。
 
-两套自研插件的 `build.ps1` 以本机 `E:\MC\jdk`、现服 Paper/依赖 JAR 为编译输入，使用 Java 21。构建输出 JAR 被 `.gitignore` 排除；请对照 [版本锁](manifests/installed-content.lock.json) 确认生产正在运行的版本，不要把源码候选版本当成已部署版本。`ops/` 脚本也保留当前主机的绝对路径与局域网地址，迁移主机时须逐项改配置、检查权限和入口，不能直接执行在另一台机器上。
+默认自部署后端只监听本机、离线身份且关闭 RCON；对外开放前须先设置自己的认证代理并封闭后端。Java 原版无需 Numen，基岩由 Geyser 接入；YSM 和图形能力按实际客户端另配。
 
-更新现服前，先确认没有真人在线，运行 `powershell -NoProfile -ExecutionPolicy Bypass -File E:\MC\ops\manage-server.ps1 Backup`，核对 `.complete`；在隔离副本完成 Java、基岩、Agent 和观战验证后才停服替换 JAR/配置并正常 `Start`。不要用 `/reload` 替代重启。管理脚本每天 04:00 仅在无真人玩家时做完整备份，恢复服务后镜像到独立 F 盘。现服状态用 `Status` 检查；世界数据恢复必须从 E/F 快照进行，Git 分支不是存档备份。
+正式维护需当次授权、提前提醒、在线身份与活动副本检查、完整恢复备份、正常停启和部署后核验。不能用全服 `/reload` 替代 JAR 更换，也不能整库回写旧玩家数据来回退代码。
 
-`config/server.properties.example` 刻意使用占位 RCON 密码。Floodgate 私钥、QwenPaw 凭据、玩家名单和数据库应只存于服务器本机。未来改动在本分支提交并推送，保持 `main` 的旧版本历史完整。
-
-## 验证边界
-
-2026-09-29，三个服务账号在线时最近一分钟平均约 3.7 ms/tick；Java 状态、基岩 Pong、局域网 Agent 白名单探针和观战插件加载均通过。0.3.4 更新后，临时局域网 Agent 实际发送缺项申请，女神审核并批准 2 棵樱花树苗，背包读到 2 棵；测试账号随后退出并移除白名单。隔离服另验证重复发放与管理方块被拒。Pong 只验证基岩入口响应，不能代替手机完整玩法测试；真实直播画面也须在客户端确认。跨端纯游戏内语音尚无可靠实现，本版本以游戏文字/私聊为主。
+运行世界、玩家背包、数据库、邮件／模型／云凭据和诊断转储不在 Git 中。历史状态以记录日期为准，当前版本入口见 [项目状态](../docs/PROJECT_STATUS.md)；旧工程保存在 [归档分支](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)。

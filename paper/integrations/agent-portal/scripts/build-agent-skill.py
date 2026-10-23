@@ -29,7 +29,7 @@ assert len(sdk) == lock['sdkBytes'] and hashlib.sha256(sdk).hexdigest() == lock[
 for file in (ROOT / 'skill').rglob('*'):
     if file.is_file() and not file.name.endswith('.tgz') and 'node_modules' not in file.parts:
         files[file.relative_to(ROOT / 'skill').as_posix()] = file.read_bytes().replace(b'\r\n',b'\n')
-files['scripts/agent-register.mjs'] = (ROOT / 'public/agent-register.mjs').read_bytes().replace(b'\r\n',b'\n')
+files['scripts/agent-register.mjs'] = (ROOT / 'public/agent-register.mjs').read_bytes()
 files['assets/runtime/' + lock['sdkArchive']] = sdk
 with tarfile.open(fileobj=io.BytesIO(sdk), mode='r:gz') as archive:
     package = json.load(archive.extractfile('package/package.json'))

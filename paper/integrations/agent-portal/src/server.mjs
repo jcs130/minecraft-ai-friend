@@ -1,5 +1,3 @@
-import { NetworkAccounts } from './network-accounts.mjs';
-import { networkRoute } from './network-routes.mjs';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -13,6 +11,7 @@ import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
 import { publicMedia, servePublicMedia } from './public-media.mjs';
+import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
@@ -55,14 +54,14 @@ export function createPortal(config, options = {}) {
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
+  const challenges = cloud ? new CloudChallenges(store,game) : new SavedChallenges(config,game,store);
   const live = new Live(config, store);
   const gallery = new Gallery(store, cloud);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
   const profiles = new AgentProfiles(store);
   const emailAuth = new EmailAuth(config, store, options.emailSender);
-  const network = new NetworkAccounts(config,store,accounts,game);
-  const agentAccess = new AgentAccess(config, store, game, accounts,network);
+  const agentAccess = new AgentAccess(config, store, game, accounts);
   const appearance = new Appearance(config, store, game);
   const memories = new Memories(store);
   const limits = new Map();
@@ -166,15 +165,14 @@ export function createPortal(config, options = {}) {
         const bytes = appearance.signingImage(signingSkin[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length }); return res.end(bytes);
       }
-      if (await networkRoute({req,res,pathname,url,network,agentAccess,browserAuth,jsonBody,respond,rate}))return;
       if (req.method === 'GET' && pathname === '/api/v1/agent-access') return respond(res, 200, await agentAccess.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/agent-access/invitation') {
         if (req.headers.origin && req.headers.origin !== req.portalOrigin.origin) throw fail(403, 'INVALID_ORIGIN', '请从接入页或 Agent 本机读取邀请');
         rate('invite-inspect:' + digest(rateAddress(req, config)), 60, 60000);
         const token = /^Bearer (qdi_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1];
-        const invite = agentAccess.invitation(token), server = network.catalog.public(invite.serverId), capability = { game: await network.capabilities(invite.serverId) };
+        const invite = agentAccess.invitation(token), capability = await agentAccess.capabilities();
         return respond(res, 200, { ...invite, game: capability.game,
-          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite: { ...invite, token }, skill: agentSkill, gameAddress: server.addresses.mineflayer, gameReady: capability.game.ready, server }) });
+          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite: { ...invite, token }, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
       }
       if (pathname === '/api/v1/agent-access/memories' || pathname.startsWith('/api/v1/agent-access/memories/')) {
         // This API delegates only the authenticated Agent's own submissions.
@@ -187,7 +185,7 @@ export function createPortal(config, options = {}) {
           const status = await agentAccess.status(authorized);
           if (!status.gameAccountCreated) throw fail(409, 'GAME_ACCOUNT_NOT_READY', '先查询接入状态，等待游戏角色创建成功后投稿');
           const actor = (await game.roster()).find(row => row.playerUuid === authorized.client.expected_uuid && row.name === authorized.client.name);
-          if (!actor || actor.isReserved || actor.identityConflict || !store.ownedUuids(authorized.owner.id).includes(actor.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '角色身份或归属尚未确认，请查询接入状态或联系主人');
+          if (!actor || actor.isReserved || actor.historical || actor.identityConflict || !store.ownedUuids(authorized.owner.id).includes(actor.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '角色身份或归属尚未确认，请查询接入状态或联系主人');
           actorContext = { owner: authorized.owner, actor: { uuid: actor.playerUuid, name: actor.name } };
           return actorContext;
         };
@@ -223,7 +221,6 @@ export function createPortal(config, options = {}) {
         if (req.headers.origin) throw fail(403, 'ACCOUNT_WORKER_REQUIRED', '请从家庭端账号同步器提交');
         accountCloud.authorize(req); rate('account-bridge', 30, 60000);
         const result = await accountCloud.poll(await jsonBody(req, 512 * 1024));
-        await network.observeLegacy();
         for (const id of result.acknowledged) {
           const job = store.db.prepare('SELECT owner_id FROM account_jobs WHERE id=?').get(id);
           if (job) await accounts.job(store.ownerById(job.owner_id), id);
@@ -235,6 +232,12 @@ export function createPortal(config, options = {}) {
         if (req.headers.origin) throw fail(403, 'SYNC_CLIENT_REQUIRED', '请从家庭端同步器上传资料');
         cloud.authorize(req); rate('snapshot-sync', 12, 60000);
         return respond(res, 200, cloud.accept(await jsonBody(req, config.cloudSync.maxBytes)));
+      }
+      if (req.method === 'PUT' && pathname === '/api/v1/internal/challenges') {
+        if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');
+        if (req.headers.origin || req.headers.cookie) throw fail(403,'SYNC_CLIENT_REQUIRED','挑战资料仅由家庭端只读采集器上传');
+        cloud.authorize(req); rate('challenge-sync',12,60000);
+        return respond(res,200,await challenges.accept(await jsonBody(req,config.cloudSync.maxBytes)));
       }
       const photoUpload = /^\/api\/v1\/internal\/photos\/([a-f0-9-]{36})$/.exec(pathname);
       if (photoUpload && req.method === 'PUT') {
@@ -322,15 +325,16 @@ export function createPortal(config, options = {}) {
         const image = gallery.image(photoImage[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
       }
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, gameServers: network.catalog.list(), publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
         const owned = new Set(store.db.prepare('SELECT agent_uuid FROM ownerships').all().map(row => row.agent_uuid));
-        return respond(res, 200, { agents: (await game.roster()).map(row => ({ ...game.publicAgent(row),
-          claimable: !!row.playerUuid && !row.isReserved && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
+        return respond(res, 200, { agents: (await game.roster()).filter(row=>!row.historical).map(row => ({ ...game.publicAgent(row),
+          claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
+      if (req.method === 'GET' && pathname === '/api/v1/challenges') return respond(res,200,await challenges.query({activity:url.searchParams.get('activity')||'trial_tower',difficulty:url.searchParams.get('difficulty')||'all',page:Number(url.searchParams.get('page')||1)}));
       if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20) }));
       if (req.method === 'GET' && pathname === '/api/v1/live') {
         const session = sessionFrom(req), owner = session?.owner_id ? store.ownerById(session.owner_id) : null;
@@ -432,6 +436,7 @@ export function createPortal(config, options = {}) {
       const configMatch = /^\/api\/v1\/agents\/([a-f0-9]{24})\/connection-config$/.exec(pathname);
       if (req.method === 'GET' && configMatch) {
         const { agent } = await authorizedAgent(req, configMatch[1]);
+        if (agent.historical) throw fail(409,'HISTORICAL_ROLE_READ_ONLY','这是历史身体的只读档案，请选择当前游戏角色生成登录配置。');
         return respond(res, 200, { schemaVersion: 1, portal: req.portalOrigin.origin, agentId: agent.id, playerUuid: agent.playerUuid,
           username: agent.name, gameAddress: config.publicGameAddress, credentialEnv: 'QD_PORTAL_CLIENT_TOKEN', gamePasswordEnv: 'MC_GAME_PASSWORD', readOnly: true });
       }
@@ -444,8 +449,8 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/agent-invites') return respond(res, 200, agentAccess.list(browserAuth(req).owner));
       if (req.method === 'POST' && pathname === '/api/v1/agent-invites') {
         const { owner } = browserAuth(req, false, true); rate('agent-invite:' + owner.id, 20);
-        const invite = agentAccess.issue(owner, await jsonBody(req)), server = network.catalog.public(invite.serverId), capability = { game: await network.capabilities(invite.serverId) };
-        return respond(res, 201, { ...invite, onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: server.addresses.mineflayer, gameReady: capability.game.ready, server }) });
+        const invite = agentAccess.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();
+        return respond(res, 201, { ...invite, onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) });
       }
       const agentInvite = /^\/api\/v1\/agent-invites\/([a-f0-9-]{36})$/.exec(pathname);
       if (agentInvite && req.method === 'DELETE') return respond(res, 200, agentAccess.revoke(browserAuth(req, false, true).owner, agentInvite[1]));
@@ -591,5 +596,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, network, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

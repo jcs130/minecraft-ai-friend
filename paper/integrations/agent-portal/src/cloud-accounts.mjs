@@ -16,7 +16,6 @@ export class CloudAccounts {
     this.numen = new NumenOwnerships(store);
     store.db.exec(`CREATE TABLE IF NOT EXISTS account_outbox(id TEXT PRIMARY KEY REFERENCES account_jobs(id),request TEXT NOT NULL,reply TEXT,dispatched_at INTEGER);
       CREATE TABLE IF NOT EXISTS account_bridge_heartbeat(id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL,received_at INTEGER NOT NULL);`);
-    if (!store.db.prepare('PRAGMA table_info(account_bridge_heartbeat)').all().some(c => c.name === 'verify')) store.db.exec('ALTER TABLE account_bridge_heartbeat ADD COLUMN verify INTEGER NOT NULL DEFAULT 0');
     if (!store.db.prepare('PRAGMA table_info(account_outbox)').all().some(column => column.name === 'delivered_at')) store.db.exec('ALTER TABLE account_outbox ADD COLUMN delivered_at INTEGER');
   }
   async key() {
@@ -32,7 +31,7 @@ export class CloudAccounts {
   capabilities() {
     const heartbeat = this.store.db.prepare('SELECT * FROM account_bridge_heartbeat WHERE id=1').get();
     const ready = !!heartbeat?.ready && Date.now() - heartbeat.received_at < 20000;
-    return { ready, create: ready, claim: ready, gamePassword: ready, verify: ready && heartbeat.verify === 1, source: ready ? 'LoginGuard.encrypted-outbound-bridge' : null,
+    return { ready, create: ready, claim: ready, gamePassword: ready, source: ready ? 'LoginGuard.encrypted-outbound-bridge' : null,
       ...(!ready ? { reason: 'AUTH_BRIDGE_NOT_CONNECTED', message: '网站账号已可使用；游戏建号服务正在等待登录代理上线，请稍后刷新。' } : {}) };
   }
   async writeRequest(id, request) {
@@ -90,7 +89,7 @@ export class CloudAccounts {
       }
       for (const item of replies) this.store.db.prepare('UPDATE account_outbox SET reply=? WHERE id=?').run(item.envelope, item.id);
       for (const id of delivered) this.store.db.prepare('UPDATE account_outbox SET delivered_at=COALESCE(delivered_at,?) WHERE id=?').run(now, id);
-      this.store.db.prepare('INSERT INTO account_bridge_heartbeat(id,ready,received_at,verify) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET ready=excluded.ready,received_at=excluded.received_at,verify=excluded.verify').run(body.heartbeat.ready ? 1 : 0, now, body.heartbeat.verify === true ? 1 : 0);
+      this.store.db.prepare('INSERT INTO account_bridge_heartbeat VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET ready=excluded.ready,received_at=excluded.received_at').run(body.heartbeat.ready ? 1 : 0, now);
       // An undelivered expired request provably did not reach the game. A
       // dispatched request stays queryable, including after its deadline.
       const expired = this.store.db.prepare("SELECT j.id FROM account_jobs j JOIN account_outbox o ON o.id=j.id WHERE j.state='pending' AND j.expires_at<? AND o.dispatched_at IS NULL").all(now);

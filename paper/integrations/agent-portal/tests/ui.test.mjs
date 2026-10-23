@@ -18,7 +18,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -39,6 +39,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     events: async ({ kind = 'all', page = 1 } = {}) => ({ events: kind === 'all' || kind === 'notice' ? [{ id: 'event-fixture', kind: 'notice', title: '<script>unsafe()</script>', body: '隔离测试公告', occurredAt: savedAt, timePrecision: 'second' }] : [], page, pages: 1, total: 1 })
   };
   const portal = createPortal(loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: emailMode }, host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), publicMedia: media }), { game, world, emailSender });
+  if (challengeSnapshot) { portal.challenges.capture=async()=>{};portal.challenges.saveMetadata(challengeSnapshot);for(const row of challengeSnapshot.runs)portal.challenges.put(row); }
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   const html = await fs.readFile(path.join(projectRoot, 'public/index.html'), 'utf8');
@@ -78,9 +79,9 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     assert.deepEqual(errors, [], 'No unexpected DOM runtime errors');
   });
   window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
-  window.eval(await fs.readFile(path.join(projectRoot, 'public/worlds.js'), 'utf8'));
+  window.eval(await fs.readFile(path.join(projectRoot, 'public/challenges.js'), 'utf8'));
   window.eval(code + '\nwindow.__portalRefreshForTest = refresh;');
-  await waitFor(() => document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
+  await waitFor(() => initialView==='challenges' ? document.querySelector('.challenge-points') : document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
     let entered, release;
     const ready = new Promise(resolve => { entered = resolve; });
@@ -88,8 +89,23 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
+  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
 }
+
+test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
+ const ui=await screen(t,{capabilitiesReady:true});await ui.setup();const id='b'.repeat(24),uuid='22222222-2222-3222-8222-222222222222';
+ const historical={...ui.agent,id,playerUuid:uuid,name:'Fishy',historical:true,online:false};
+ ui.game.roster=async()=>[ui.agent,historical];
+ const owner=ui.portal.store.ownerByName('ui-admin');ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,uuid,'Isolated verified original UUID',Date.now());
+ ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,ui.agent.playerUuid,'Isolated current game role',Date.now());
+ await ui.refresh();ui.window.location.hash='agents';
+ await waitFor(()=>ui.document.querySelector('#roster-grid')?.textContent.includes('历史身体（只读）'));
+ const card=[...ui.document.querySelectorAll('.agent-card')].find(r=>r.textContent.includes('Fishy'));
+ assert.ok(card.textContent.includes('22222222'));assert.equal(card.querySelector('[data-action="agent-appearance"]'),null);
+ ui.window.location.hash='account';await waitFor(()=>ui.document.querySelector('[data-action="change-game-password"]'));
+ ui.click('[data-action="change-game-password"]');await waitFor(()=>ui.document.querySelector('#game-account-form'));
+ assert.equal(ui.document.querySelector('#game-account-form select[name="username"] option[value="Fishy"]'),null);
+});
 
 test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {
   const ui = await screen(t); await ui.setup();
@@ -499,19 +515,11 @@ test('home and connection center expose three real client choices with parent pr
  assert.ok(ui.document.querySelector(`.client-choices a[href="${source}"]`));
  for (const url of ['https://github.com/Project-N-E-K-O/N.E.K.O','https://github.com/Pal-AI-Lab/Cortico']) assert.ok(ui.document.querySelector(`.client-choices a[href="${url}"]`));
  ui.window.location.hash='connections'; await waitFor(()=>ui.document.querySelector('a[download]'));
- assert.ok(ui.document.querySelector('a[download]').href.endsWith('/downloads/qiandengji-agent-1.3.0.zip'));
+ assert.ok(ui.document.querySelector('a[download]').href.endsWith('/downloads/qiandengji-agent-1.2.0.zip'));
  assert.match(ui.document.querySelector('#main').textContent,/0\.5\.7-rc\.67/);
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
  await ui.refresh(false);
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
-});
-
-
-test('world hall keeps unreleased FOM informational without addresses or account actions',async t=>{
- const ui=await screen(t);await ui.setup();ui.window.location.hash='worlds';await waitFor(()=>ui.document.querySelectorAll('.world-card').length===2);
- const card=ui.document.querySelector('[data-world-id="fom"]');assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
- assert.equal(card.querySelectorAll('button,a,code,.world-address').length,0);assert.ok(!card.textContent.includes('28976'));assert.ok(!card.textContent.includes('28977'));
- assert.ok(ui.document.querySelector('[data-world-action="invite"][data-server="qiandengji"]'),'Paper retains its entry');
 });
 
 
@@ -520,4 +528,29 @@ test('homepage presents FOM as coming soon without any connection action',async 
  assert.ok(card);assert.match(card.textContent,/FOM 模组世界/);assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
  assert.equal(card.querySelectorAll('a,button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
  await ui.refresh(false);assert.equal(ui.document.querySelectorAll('.home-upcoming-world').length,1);
+});
+
+function uiChallenges(stale=false){
+ const now=new Date().toISOString(),base={party:['ag_Alpha'],hiddenMembers:0,difficulty:'normal',reachedUnits:15,clearedUnits:15,totalUnits:15,startedAt:now,endedAt:now,observedAt:now,reason:'cleared',evidence:'saved-outcome'};
+ return {schemaVersion:1,available:true,observedAt:stale?new Date(Date.now()-120000).toISOString():now,activities:[{id:'trial_tower',type:'tower',name:'试炼塔',unit:'层',totalUnits:15},{id:'crypt',type:'dungeon',name:'测试墓穴',unit:'室',totalUnits:3}],runs:[{...base,id:'a'.repeat(24),activityId:'trial_tower',state:'completed'},{...base,id:'b'.repeat(24),activityId:'crypt',state:'paused',totalUnits:3,reachedUnits:2,clearedUnits:1,endedAt:null,reason:'data_unavailable'}]};
+}
+test('public challenge page shows verified team difficulty progress and website points without login',async t=>{
+ const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges()});
+ await waitFor(()=>ui.document.querySelector('.challenge-points'));
+ assert.match(ui.document.body.textContent,/普通难度榜/);assert.match(ui.document.querySelector('.challenge-party').textContent,/ag_Alpha/);
+ assert.equal(ui.document.querySelector('.challenge-points').textContent,'2000');assert.match(ui.document.querySelector('.challenge-run-progress').textContent,/已通关 15 \/ 15 层/);
+ assert.match(ui.document.querySelector('.challenge-notes').textContent,/网站挑战积分/);assert.equal(ui.document.querySelectorAll('.challenge-meter .complete').length,15);
+});
+test('challenge and difficulty controls preserve paused dungeon progress and select independent rankings',async t=>{
+ const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges()});await waitFor(()=>ui.document.querySelector('.challenge-points'));
+ const select=ui.document.querySelector('#challenge-activity');select.value='crypt';select.dispatchEvent(new ui.window.Event('change',{bubbles:true}));
+ await waitFor(()=>ui.document.querySelector('.challenge-hero h2').textContent==='测试墓穴');
+ assert.match(ui.document.querySelector('.challenge-run').textContent,/挑战暂停/);assert.match(ui.document.querySelector('.challenge-run-progress').textContent,/已通关 1 \/ 3 室/);assert.match(ui.document.querySelector('.challenge-run').textContent,/运行数据异常/);
+ assert.equal(ui.document.querySelectorAll('.challenge-ranking tbody tr').length,0);
+ ui.click('[data-challenge-level="adventure"]');await waitFor(()=>ui.document.querySelectorAll('.challenge-ranking').length===1);
+ assert.equal(ui.document.querySelectorAll('.challenge-run').length,0);await ui.refresh(false);assert.equal(ui.document.querySelector('#challenge-activity').value,'crypt');
+});
+test('stale challenge snapshots keep saved achievements visible and say current progress may have changed',async t=>{
+ const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges(true)});await waitFor(()=>ui.document.querySelector('.challenge-points'));
+ assert.match(ui.document.querySelector('.challenge-warning').textContent,/已保存记录/);assert.match(ui.document.querySelector('.challenge-warning').textContent,/可能已变化/);assert.equal(ui.document.querySelector('.challenge-points').textContent,'2000');
 });

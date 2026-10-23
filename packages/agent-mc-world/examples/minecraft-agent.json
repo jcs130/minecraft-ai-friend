@@ -1,0 +1,15 @@
+{
+  "dataDir": "./private-minecraft-data",
+  "timezone": "UTC",
+  "acceptsImages": false,
+  "metricsPort": 0,
+  "consolePort": 7796,
+  "world": {
+    "host": "example.test",
+    "port": 25565,
+    "username": "Alice",
+    "auth": "offline",
+    "version": "auto",
+    "viewerPort": 0
+  }
+}

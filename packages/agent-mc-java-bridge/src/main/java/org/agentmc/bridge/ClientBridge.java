@@ -1,0 +1,415 @@
+package org.agentmc.bridge;
+
+import com.google.gson.*;
+import com.mojang.serialization.JsonOps;
+import com.sun.net.httpserver.HttpServer;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.nio.file.attribute.*;
+import java.security.*;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.*;
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.minecraft.*;
+
+/** Actual game-thread operations. This client has no model, launcher or reconnect policy. */
+public final class ClientBridge implements ClientModInitializer {
+    public static final String MINECRAFT_VERSION = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow().getMetadata().getVersion().getFriendlyString();
+    public static volatile boolean running;
+    private static ClientBridge instance;
+    private static final String PROTOCOL = "agent-mc-java/v1";
+    private final Gson gson = new Gson();
+    private final ArrayDeque<ControlLedger.Action> queue = new ArrayDeque<>();
+    private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
+    private ControlLedger ledger;
+    private ControlLedger.Action current;
+    private class_310 client;
+    private VisualExport visual;
+    private Object lastScreen, lastHandler;
+    private String screenToken = UUID.randomUUID().toString();
+    private int generation;
+    private long messageSeq;
+    private boolean minescriptEnabled;
+    private boolean requireServerAuthorization;
+    private MinescriptRunner scriptRunner;
+    private boolean scriptStopUnconfirmed;
+    private MethodSession methodSession;
+    private final ReflexFrames reflexFrames=new ReflexFrames();
+    private ReflexInputs reflexInputs;
+    private ControlLedger.Action reflexItem;
+    private MethodSession reflexItemSession;
+    public static void reflexDamage(class_634 handler,class_8143 packet){if(currentNetwork(handler))instance.reflexFrames.damage(packet);}
+    private NativeNavigation navigation;
+    private final InventoryPick inventoryPick = new InventoryPick();
+    private static boolean currentNetwork(class_634 handler) { return instance != null && instance.client.method_1562() == handler; }
+    public static void inventorySlot(class_634 handler,int syncId,int slot) { if(currentNetwork(handler)){instance.inventoryPick.slot(syncId,slot);instance.reflexFrames.invalidateInventory();} }
+    public static void inventoryFull(class_634 handler,int syncId) { if(currentNetwork(handler)){instance.inventoryPick.full(syncId);instance.reflexFrames.invalidateInventory();} }
+    public static void inventorySelection(class_634 handler,int slot) { if(currentNetwork(handler)){instance.inventoryPick.selected(slot);instance.reflexFrames.invalidateInventory();} }
+    public static boolean hasController() { return instance != null && instance.ledger != null && instance.ledger.active(System.currentTimeMillis()); }
+    @Override public void onInitializeClient() {
+        instance = this; client = class_310.method_1551(); visual = new VisualExport(client); navigation=new NativeNavigation(client);reflexInputs=new ReflexInputs(client);
+        try {
+            Path directory = FabricLoader.getInstance().getGameDir().resolve("agent-mc-bridge");
+            Path config = directory.resolve("config.json");
+            if (Files.isRegularFile(config)) {var settings=JsonParser.parseString(Files.readString(config)).getAsJsonObject();minescriptEnabled=flag(settings,"minescriptEnabled");requireServerAuthorization=flag(settings,"requireServerAuthorization");}
+            ledger = new ControlLedger(directory.resolve("actions"));
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            byte[] secret = new byte[32]; new SecureRandom().nextBytes(secret);
+            String token = HexFormat.of().formatHex(secret);
+            server.createContext("/v1/rpc", exchange -> {
+                try {
+                    String provided = exchange.getRequestHeaders().getFirst("Authorization");
+                    if (!"POST".equals(exchange.getRequestMethod()) || provided == null || !MessageDigest.isEqual(provided.getBytes(StandardCharsets.UTF_8), ("Bearer " + token).getBytes(StandardCharsets.UTF_8))) {
+                        exchange.sendResponseHeaders(403, -1); return;
+                    }
+                    byte[] body = exchange.getRequestBody().readNBytes(262145);
+                    if (body.length > 262144) throw new IllegalArgumentException("Request too large");
+                    JsonObject request = JsonParser.parseString(new String(body, StandardCharsets.UTF_8)).getAsJsonObject();
+                    if (!PROTOCOL.equals(text(request, "protocol", ""))) throw new IllegalArgumentException("Unsupported bridge protocol");
+                    CompletableFuture<JsonObject> result = new CompletableFuture<>();
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                    client.execute(() -> {
+                        if (System.nanoTime() >= deadline) { result.completeExceptionally(new TimeoutException("Request expired before game-thread dispatch")); return; }
+                        try { result.complete(rpc(text(request, "method", ""), object(request, "params"))); } catch (Exception error) { result.completeExceptionally(error); }
+                    });
+                    JsonObject response = result.get(5, TimeUnit.SECONDS);
+                    byte[] bytes = gson.toJson(response).getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "application/json"); exchange.sendResponseHeaders(200, bytes.length); exchange.getResponseBody().write(bytes);
+                } catch (Exception error) {
+                    JsonObject failure = new JsonObject();
+                    Throwable cause = error instanceof ExecutionException ? error.getCause() : error;
+                    failure.addProperty("error", cause instanceof IllegalArgumentException || cause instanceof IllegalStateException ? cause.getMessage() : "Client operation unavailable; inspect local client log");
+                    byte[] bytes = gson.toJson(failure).getBytes(StandardCharsets.UTF_8);
+                    try { exchange.sendResponseHeaders(409, bytes.length); exchange.getResponseBody().write(bytes); } catch (Exception ignored) {}
+                } finally { exchange.close(); }
+            });
+            server.setExecutor(Executors.newFixedThreadPool(4, task -> { Thread thread = new Thread(task, "agent-mc-rpc"); thread.setDaemon(true); return thread; }));
+            server.start(); running = true;
+            JsonObject connection = new JsonObject(); connection.addProperty("protocol", PROTOCOL); connection.addProperty("endpoint", "http://127.0.0.1:" + server.getAddress().getPort());
+            connection.addProperty("token", token); connection.addProperty("instanceId", UUID.randomUUID().toString());
+            connection.addProperty("minecraftVersion", MINECRAFT_VERSION); connection.addProperty("createdAt", Instant.now().toString());
+            Path file = directory.resolve("connection.json"); Files.writeString(file, gson.toJson(connection)); restrict(file);
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> { running = false; server.stop(0); }));
+            ClientTickEvents.START_CLIENT_TICK.register(this::tick);
+            ClientTickEvents.END_CLIENT_TICK.register(c->reflexInputs.tick(reflexFrames.scope(c),c.field_1724!=null&&c.field_1687!=null&&ledger.active(System.currentTimeMillis())&&ServerAuthorization.ready(authorization())));
+            ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> { generation++; ledger.release(); cancelAll("connection changed"); inventoryPick.newConnection();reflexFrames.reset(); });
+            ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> { generation++; ledger.release(); cancelAll("connection closed"); });
+            ClientReceiveMessageEvents.GAME.register((message, overlay) -> receiveMessage(message.getString(), overlay, "system", null));
+            ClientReceiveMessageEvents.CHAT.register((message, signed, sender, parameters, timestamp) ->
+                receiveMessage(message.getString(), false, "player", sender == null ? null : sender.getName()));
+            System.out.println("[AgentMC] Local bridge ready; token stored privately, no server connection initiated");
+        } catch (Exception error) { throw new IllegalStateException("Agent MC bridge initialization failed", error); }
+    }
+    private void receiveMessage(String text, boolean overlay, String kind, String sender) {
+        JsonObject entry = new JsonObject(); entry.addProperty("seq", ++messageSeq); entry.addProperty("text", text); entry.addProperty("overlay", overlay);
+        entry.addProperty("kind", kind); if (sender != null) entry.addProperty("sender", sender); entry.addProperty("at", Instant.now().toString());
+        entry.addProperty("generation",generation);
+        messages.add(entry); while (messages.size() > 50) messages.removeFirst();
+    }
+    private static void restrict(Path file) throws Exception {
+        PosixFileAttributeView posix = Files.getFileAttributeView(file, PosixFileAttributeView.class);
+        if (posix != null) posix.setPermissions(Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+        AclFileAttributeView acl = Files.getFileAttributeView(file, AclFileAttributeView.class);
+        if (acl != null) acl.setAcl(List.of(AclEntry.newBuilder().setType(AclEntryType.ALLOW).setPrincipal(acl.getOwner()).setPermissions(EnumSet.allOf(AclEntryPermission.class)).build()));
+    }
+    private JsonObject rpc(String method, JsonObject args) throws Exception {
+        long now = System.currentTimeMillis();
+        if (method.equals("capabilities")) {
+            JsonObject capabilities=gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", MINECRAFT_VERSION, "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", navigation.available(), "methodAdapter", MethodSession.PROTOCOL, "methodCalls", MethodSession.methods(navigation.available()), "inventoryPick", InventoryPick.PROTOCOL)).getAsJsonObject();
+            if(navigation.available()){capabilities.addProperty("navigation",NativeNavigation.PROTOCOL);capabilities.addProperty("reflexAdapter",ReflexFrames.PROTOCOL);}return capabilities;
+        }
+        if (method.equals("operations")) return operations();
+        if (method.equals("state")) return state();
+        if (method.equals("result")) { ControlLedger.Action action = ledger.get(text(args, "action_id", "")); if (action == null) throw new IllegalArgumentException("Unknown action_id; do not assume it was not dispatched"); return gson.toJsonTree(action).getAsJsonObject(); }
+        connected();
+        String actualServer=client.method_1558()==null?"":client.method_1558().field_3761;
+        if(!client.field_1724.method_5667().toString().replace("-", "").equalsIgnoreCase(text(args,"expectedUuid","").replace("-", "")) || !actualServer.toLowerCase().replaceAll(":25565$","").equals(text(args,"expectedServer","").toLowerCase().replaceAll(":25565$",""))) throw new IllegalStateException("Client UUID/server mismatch");
+        if(args.has("expectedGeneration")&&args.get("expectedGeneration").getAsDouble()!=generation)throw new IllegalStateException("Method connection generation changed before dispatch");
+        if(args.has("expectedBodyScope")&&args.get("expectedBodyScope").getAsDouble()!=reflexFrames.scope(client))throw new IllegalStateException("Body lifecycle changed before dispatch; obtain fresh facts");
+        if(Set.of("do","method_claim","method_call","reflex_control","reflex_item").contains(method)&&!ServerAuthorization.ready(authorization()))
+            throw new IllegalStateException("Server authorization is not confirmed for this connection; no body operation dispatched. Wait for the private login channel.");
+        if(Set.of("do","method_call","reflex_control","reflex_item").contains(method)&&reflexInputs.unresolved())throw new IllegalStateException("Original reflex policy cleanup unknown; reconcile before body work");
+        if (method.equals("visual_registry")) return visual.registry();
+        if (method.equals("visual_frame")) return visual.frame(integer(args,"radius",2));
+        if (method.equals("visual_skin")) return visual.skin(text(args,"resource",""));
+        if (method.equals("visual_chunk")) return visual.chunk(integer(args,"x",0),integer(args,"z",0),text(args,"epoch",""));
+        if (method.equals("method_read")) {JsonObject result=new JsonObject();result.add("value",MethodSession.read(client,text(args,"name",""),args.getAsJsonArray("args")));result.addProperty("sampledAt",Instant.now().toString());result.addProperty("generation",generation);return result;}
+        if(method.equals("reflex_frame"))return reflexFrames.sample(client,generation,reflexState(),current==null?null:current.id,current!=null||!queue.isEmpty());
+        if (method.equals("screenshot")) {
+            try (class_1011 image = class_318.method_1663(client.method_1522())) {
+                JsonObject shot = new JsonObject(); shot.addProperty("mime", "image/png"); shot.addProperty("base64", Base64.getEncoder().encodeToString(image.method_24036()));
+                shot.addProperty("capturedAt", Instant.now().toString()); shot.add("state", state()); return shot;
+            }
+        }
+        if (method.equals("claim")) { connected(); if(scriptStopUnconfirmed||navigation.unresolved()) throw new IllegalStateException("Prior body cancellation unknown; explicit reconciliation required"); return ledger.claim(text(args, "controllerId", ""), integer(args, "ttlMs", 15000), now); }
+        if (method.equals("renew")) return ledger.renew(text(args, "controllerId", ""), text(args, "nonce", ""), integer(args, "ttlMs", 15000), now);
+        ledger.require(text(args, "controllerId", ""), text(args, "nonce", ""), now);
+        if(method.equals("reflex_control")){JsonObject control=object(args,"control");String owner=text(object(control,"input"),"owner","");
+            if(!owner.equals("idle")&&!reflexInputs.active(reflexFrames.scope(client))&&!navigation.mayPauseForReflex())throw new IllegalStateException("Foreign navigation owns the body; reflex did not replace or cancel it");
+            return reflexInputs.accept(control,reflexFrames.scope(client));}
+        if(method.equals("reflex_item")){
+            if(!reflexInputs.active(reflexFrames.scope(client)))throw new IllegalStateException("Reflex input lease is not active");
+            String id=text(args,"action_id","");var existing=ledger.get(id);if(existing!=null)return gson.toJsonTree(ledger.admit(id,"reflex.equip",object(args,"input"),now)).getAsJsonObject();
+            if(reflexItem!=null)throw new IllegalStateException("Reconcile original reflex item operation first");
+            JsonObject input=object(args,"input");validate("equip",input);inventoryPick.requireResolved();
+            JsonArray itemArgs=new JsonArray(),query=new JsonArray();query.add("inventory.slots");var slots=MethodSession.read(client,"read",query).getAsJsonArray();int slot=integer(input,"slot",-1);int standard=slot<9?slot+36:slot;
+            if(slots.get(standard).isJsonNull()||!text(slots.get(standard).getAsJsonObject(),"instanceHash","").equals(text(input,"instanceHash","")))throw new IllegalStateException("Reflex equipment identity changed");
+            reflexItem=ledger.admit(id,"reflex.equip",input,now);reflexItem.bodyScope=reflexFrames.scope(client);reflexItem.phase="running";ledger.save(reflexItem);
+            reflexItemSession=new MethodSession(client,10000,inventoryPick,id,navigation);
+            itemArgs.add(slots.get(standard));itemArgs.add("hand");reflexItemSession.call(1,"equip",itemArgs);return gson.toJsonTree(reflexItem).getAsJsonObject();
+        }
+        if (Set.of("method_call","method_result","method_finish").contains(method)) {
+            if(current==null||!current.id.equals(text(args,"action_id",""))||methodSession==null)throw new IllegalStateException("Original method session is not running; reconcile original action_id");
+            if(method.equals("method_call"))return methodSession.call(integer(args,"call",0),text(args,"name",""),args.getAsJsonArray("args"));
+            if(method.equals("method_result")){JsonObject result=methodSession.result(integer(args,"call",0)).deepCopy();JsonObject transfer=inventoryPick.inspect();if(transfer.has("id")&&transfer.get("id").getAsString().equals(current.id+":"+integer(args,"call",0)))result.add("inventoryTransfer",transfer);return result;}
+            if(methodSession.pending())throw new IllegalStateException("Await pending method call before finishing");
+            releaseKeys();ledger.finish(current,"partial","JavaScript program ended; verify actual world effect",state(),now);JsonObject result=gson.toJsonTree(current).getAsJsonObject();current=null;methodSession=null;return result;
+        }
+        if (method.equals("release") || method.equals("stop")) { boolean stopped=cancelAll("controller stopped"); if (method.equals("release")) ledger.release(); return gson.toJsonTree(Map.of("stopped", stopped)).getAsJsonObject(); }
+        if (method.equals("cancel")) {
+            String id = text(args, "action_id", ""); ControlLedger.Action action = ledger.get(id);
+            if (action == null) throw new IllegalArgumentException("Unknown action_id");
+            if(reflexItem==action){inventoryPick.unknown("Original reflex item operation cancelled");reflexItem=null;reflexItemSession=null;}
+            queue.remove(action); if (current == action || id.equals(navigation.owner())) {
+                reflexInputs.stop();
+                cancelScript();try{releaseKeys();}catch(IllegalStateException error){ledger.finish(action,"unknown",error.getMessage(),state(),now);current=null;return gson.toJsonTree(action).getAsJsonObject();}current=null;
+            }
+            ledger.finish(action, inventoryPendingFor(action)?"unknown":"cancelled", "explicit cancellation; dispatched inventory requests are reconciled separately", state(), now); return gson.toJsonTree(action).getAsJsonObject();
+        }
+        if (!method.equals("do")) throw new IllegalArgumentException("Unknown bridge method");
+        if(scriptStopUnconfirmed||navigation.unresolved()) throw new IllegalStateException("Prior body cancellation unknown; body blocked");
+        // Reads/reconciliation remain available. Never dispatch over an unknown inventory exchange.
+        if(inventoryPick.unresolved()) { String phase=inventoryPick.inspect().get("phase").getAsString(); if(phase.equals("unknown")) inventoryPick.requireResolved(); }
+        connected();
+        String operation = text(args, "operation", ""); JsonObject input = object(args, "input"); validate(operation, input);
+        String id = text(args, "action_id", ""); ControlLedger.Action existing = ledger.get(id);
+        ControlLedger.Action action = ledger.admit(id, operation, input, now);
+        if (existing == null) {action.bodyScope=reflexFrames.scope(client);ledger.save(action);if(text(args,"queue","append").equals("now")) cancelAll("explicit queue replacement"); if (queue.size() >= 16) { ledger.finish(action, "blocked", "client action queue full", state(), now); } else queue.add(action); }
+        return gson.toJsonTree(action).getAsJsonObject();
+    }
+    private JsonObject operations() {
+        JsonObject result = new JsonObject();
+        result.add("operations", gson.toJsonTree(Map.of(
+            "move", "{forward,back,left,right,jump,sneak,sprint:boolean,ticks:1..200}; actual position is verified",
+            "look", "{yaw:-180..180,pitch:-90..90}; degrees in the actual Java client",
+            "chat", "{text:string}; leading / sends a command; delivery is not server acceptance",
+            "use", "{ticks:1..100}; use held item at the current look target",
+            "menu_click", "{screenToken,slot,button:0..8,type:PICKUP|QUICK_MOVE|SWAP}; reject stale GUI; return full cursor/slots",
+            "close_screen", "{screenToken}; closes the actual current GUI without capturing the OS cursor",
+            "hotbar", "{slot:0..8}; selects actual inventory hotbar",
+            "inventory_open", "{}; opens the actual player inventory GUI without OS input",
+            "gui_click", "{screenToken,index}; actual displayed ButtonWidget, no system mouse")));
+        if (minescriptAvailable()) result.getAsJsonObject("operations").addProperty("minescript.run", "{code:string,input:JSON,timeoutMs:100..30000}; Python Minescript 4.0; variables minescript/input_data/result; trusted local code, not a sandbox. Original action ID, exclusive native queue and cancellation apply. Script report is not goal evidence.");
+        result.getAsJsonObject("operations").addProperty("equip", "{slot:0..35,instanceHash:string}; fresh player-inventory stack to main hand, preserving displaced item. Storage uses vanilla server pick and waits for source/hotbar/selection responses, at most5s. Unknown is not replayed. No armor/offhand or open GUI/cursor support.");
+        result.getAsJsonObject("operations").addProperty("method.run", "{durationMs:1000..120000}; reserved JavaScript body session, method_call/result/finish. mc_script owns its lifecycle; no source code executes inside Java.");
+        if(navigation.available())result.getAsJsonObject("operations").addProperty("navigate","{goal:{x,y,z,rangeSq?},timeoutMs?:1000..120000}; optional Baritone walking route; GoalBlock or integer-range GoalNear0..16, measured arrival and confirmed owned cancellation. No digging, placing or parkour. Original action ID and exclusive body lease apply.");
+        return result;
+    }
+    private boolean minescriptAvailable() { return minescriptEnabled && Path.of("").toAbsolutePath().normalize().equals(FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize()) && FabricLoader.getInstance().getModContainer("minescript").map(mod -> mod.getMetadata().getVersion().getFriendlyString().equals("4.0")).orElse(false); }
+    private MinescriptRunner scripts() throws Exception { if (!minescriptAvailable()) throw new IllegalStateException("Minescript 4.0 is not explicitly enabled and installed"); if(scriptRunner==null)scriptRunner=new MinescriptRunner(FabricLoader.getInstance().getGameDir()); return scriptRunner; }
+    private void cancelScript() {
+        if(scriptRunner==null)return;
+        try { scriptRunner.cancel(); } catch(Exception error) { scriptStopUnconfirmed=true;releaseKeys();try{if(current!=null)ledger.finish(current,"unknown","Script cancellation unconfirmed",new JsonObject(),System.currentTimeMillis());}catch(Exception ignored){} throw new IllegalStateException("Minescript cancellation unknown; no new body work permitted"); }
+    }
+    private void validate(String operation, JsonObject input) {
+        if(operation.equals("navigate")){
+            if(!navigation.available())throw new IllegalArgumentException("Navigation unavailable; matching Baritone API required");
+            if(!Set.of("goal","timeoutMs").containsAll(input.keySet())||!input.has("goal")||!input.get("goal").isJsonObject())throw new IllegalArgumentException("navigate requires goal and optional timeoutMs");
+            NativeNavigation.validate(input.getAsJsonObject("goal"));
+            if(input.has("timeoutMs")&&(!input.get("timeoutMs").isJsonPrimitive()||!input.get("timeoutMs").getAsJsonPrimitive().isNumber()||input.get("timeoutMs").getAsDouble()!=integer(input,"timeoutMs",0)||integer(input,"timeoutMs",0)<1000||integer(input,"timeoutMs",0)>120000))throw new IllegalArgumentException("timeoutMs must be integer1000..120000");return;
+        }
+        if(operation.equals("equip")){if(input.size()!=2||!input.has("slot")||!input.get("slot").isJsonPrimitive()||!input.get("slot").getAsJsonPrimitive().isNumber()||input.get("slot").getAsDouble()!=integer(input,"slot",-1)||integer(input,"slot",-1)<0||integer(input,"slot",-1)>35||!text(input,"instanceHash","").matches("[a-f0-9]{64}"))throw new IllegalArgumentException("equip requires native inventory slot0..35 and fresh instanceHash from mc_bag");return;}
+        if(operation.equals("method.run")){if(input.size()!=1||!input.has("durationMs")||!input.get("durationMs").isJsonPrimitive()||!input.get("durationMs").getAsJsonPrimitive().isNumber()||input.get("durationMs").getAsDouble()!=integer(input,"durationMs",0)||integer(input,"durationMs",0)<1000||integer(input,"durationMs",0)>120000)throw new IllegalArgumentException("method.run requires integer durationMs 1000..120000");return;}
+        Map<String,Set<String>> fields=Map.of("move",Set.of("forward","back","left","right","jump","sneak","sprint","ticks"),"look",Set.of("yaw","pitch"),"chat",Set.of("text"),"use",Set.of("ticks"),"menu_click",Set.of("screenToken","slot","button","type"),"close_screen",Set.of("screenToken"),"hotbar",Set.of("slot"),"gui_click",Set.of("screenToken","index"),"inventory_open",Set.of(),"minescript.run",Set.of("code","input","timeoutMs"));
+        if(fields.containsKey(operation))for(String key:input.keySet())if(!fields.get(operation).contains(key))throw new IllegalArgumentException("Unknown "+operation+" input field: "+key+"; query operations for exact names (back, not backward)");
+        if(operation.equals("minescript.run")) {if(!minescriptAvailable())throw new IllegalArgumentException("Minescript unavailable; explicit installation/configuration required");MinescriptRunner.validate(input);return;}
+        if (!Set.of("move", "look", "chat", "use", "menu_click", "close_screen", "hotbar", "gui_click", "inventory_open").contains(operation)) throw new IllegalArgumentException("Operation unavailable; query operations");
+        int ticks = integer(input, "ticks", 1); if (ticks < 1 || ticks > (operation.equals("use") ? 100 : 200)) throw new IllegalArgumentException("Invalid tick duration");
+        for (String key : List.of("forward", "back", "left", "right", "jump", "sneak", "sprint")) if (input.has(key) && !(input.get(key).isJsonPrimitive() && input.get(key).getAsJsonPrimitive().isBoolean())) throw new IllegalArgumentException("Movement keys must be boolean");
+        if (operation.equals("look") && (!finite(input, "yaw", -180, 180) || !finite(input, "pitch", -90, 90))) throw new IllegalArgumentException("Invalid yaw/pitch");
+        if (operation.equals("chat") && (text(input, "text", "").isBlank() || text(input, "text", "").length() > 256 || text(input, "text", "").contains("\n"))) throw new IllegalArgumentException("Invalid chat text");
+        if (Set.of("menu_click", "close_screen", "gui_click").contains(operation) && !screenToken.equals(text(input, "screenToken", ""))) throw new IllegalStateException("Stale screenToken");
+        if (operation.equals("hotbar") && (integer(input, "slot", -1) < 0 || integer(input, "slot", -1) > 8)) throw new IllegalArgumentException("Invalid hotbar slot");
+        if (operation.equals("menu_click") && (integer(input, "slot", -1) < 0 || integer(input, "slot", -1) >= client.field_1724.field_7512.field_7761.size() || integer(input, "button", 0) < 0 || integer(input, "button", 0) > 8)) throw new IllegalArgumentException("Invalid menu slot/button");
+    }
+    private void tick(class_310 c) {
+        try {
+            updateScreen();
+            if(navigation.unresolved()){cancelAll("Original navigation cleanup unresolved; no new body dispatch");return;}
+            if(inventoryPick.unresolved()&&c.field_1724!=null&&c.field_1687!=null){
+                inventoryPick.update(MethodSession.inventoryIdentities(c),c.field_1724.method_31548().field_7545,System.currentTimeMillis());
+                if(!inventoryPick.unresolved()){
+                    JsonObject transfer=inventoryPick.inspect();ControlLedger.Action original=ledger.get(transfer.get("actionId").getAsString());
+                    if(original!=null&&original.phase.equals("unknown"))ledger.finish(original,original.operation.equals("equip")?transfer.get("phase").getAsString():"cancelled","Original inventory response reconciled after local execution ended; no program replay",state(),System.currentTimeMillis());
+                }
+            }
+            if (!ledger.active(System.currentTimeMillis()) || c.field_1724 == null || c.field_1687 == null) { if (current != null || !queue.isEmpty() || navigation.owner()!=null) cancelAll("lease expired or body disconnected"); return; }
+            if (!ServerAuthorization.ready(authorization())) { if(current!=null||!queue.isEmpty()||navigation.owner()!=null)cancelAll("Server authorization changed; original action stopped, no replay"); return; }
+            if(reflexInputs.active(reflexFrames.scope(c))){
+                navigation.paused(true);if(methodSession!=null){methodSession.paused(true);methodSession.tick();}
+                if(reflexItem!=null){try{reflexItemSession.tick();JsonObject reply=reflexItemSession.result(1);if(!reply.get("status").getAsString().equals("running")){ledger.finish(reflexItem,reply.get("status").getAsString().equals("completed")?"completed":inventoryPendingFor(reflexItem)?"unknown":"blocked","Reflex item readback; no goal completion",state(),System.currentTimeMillis());reflexItem=null;reflexItemSession=null;}}catch(Exception error){ledger.finish(reflexItem,inventoryPendingFor(reflexItem)?"unknown":"blocked",error.getMessage(),state(),System.currentTimeMillis());reflexItem=null;reflexItemSession=null;}}
+                return;
+            }
+            if(reflexItem!=null){inventoryPick.unknown("Reflex lease ended before confirmation; reconcile original item action");ledger.finish(reflexItem,inventoryPendingFor(reflexItem)?"unknown":"cancelled","Reflex input lease ended",state(),System.currentTimeMillis());reflexItem=null;reflexItemSession=null;}
+            navigation.paused(false);if(methodSession!=null)methodSession.paused(false);
+            c.field_1690.field_1837 = false;
+            if (current == null && !queue.isEmpty()) {
+                current = queue.remove(); inventoryPick.requireResolved(); validate(current.operation, current.input);
+                if(current.bodyScope!=null&&current.bodyScope!=reflexFrames.scope(c))throw new IllegalStateException("Body lifecycle changed before queued dispatch; original action was not replayed");
+                current.before = position(); current.phase = "running"; ledger.save(current); dispatch(current);
+            }
+            if (current == null) return;
+            ControlLedger.Action action = current;
+            if(action.operation.equals("navigate")){
+                String phase=navigation.tick();if(phase.equals("running"))return;
+                JsonObject evidence=state();evidence.add("navigation",navigation.report());String reason=navigation.reason();
+                releaseKeys();ledger.finish(action,phase,reason,evidence,System.currentTimeMillis());current=null;return;
+            }
+            if(action.operation.equals("method.run")){methodSession.tick();return;}
+            if(action.operation.equals("equip")) {
+                methodSession.tick(); JsonObject reply=methodSession.result(1);
+                if(reply.get("status").getAsString().equals("running"))return;
+                JsonObject evidence=state(); evidence.add("method",reply.deepCopy());
+                String phase=reply.get("status").getAsString().equals("completed")?"completed":inventoryPick.unresolved()?"unknown":"blocked";
+                String reason=reply.has("error")?reply.get("error").getAsString():integer(action.input,"slot",-1)<9?"Selected hotbar item observed after game tick; no storage exchange or use implied.":"Main hand observed; storage exchange confirmed by server packets. No use/planting implied.";
+                releaseKeys();ledger.finish(action,phase,reason,evidence,System.currentTimeMillis());current=null;return;
+            }
+            if (action.operation.equals("minescript.run")) {
+                JsonObject reply = scripts().poll(); if(reply==null)return;
+                releaseKeys(); JsonObject evidence=state();evidence.add("script",reply);
+                ledger.finish(action,flag(reply,"ok")?"partial":"blocked", "Script ended; its result is a program report. Verify actual state/server effect before claiming goal completion",evidence,System.currentTimeMillis());current=null;return;
+            }
+            if (action.operation.equals("move") || action.operation.equals("use")) pressKeys(action);
+            int duration = action.operation.equals("move") || action.operation.equals("use") ? integer(action.input, "ticks", 1) : 5;
+            // START_CLIENT_TICK precedes vanilla input processing; allow all requested game ticks before releasing.
+            if (action.ticks++ < duration) return;
+            releaseKeys();
+            double[] after = position(); double moved = Math.sqrt(Math.pow(after[0]-action.before[0],2)+Math.pow(after[1]-action.before[1],2)+Math.pow(after[2]-action.before[2],2));
+            JsonObject evidence = state(); evidence.addProperty("moved", moved);
+            String phase = Set.of("chat", "use", "menu_click", "gui_click").contains(action.operation) ? "partial" : action.operation.equals("move") && moved < .02 ? "blocked" : "completed";
+            ledger.finish(action, phase, phase.equals("partial") ? "Input dispatched; verify actual server/inventory/GUI effect before claiming success" : phase.equals("blocked") ? "No actual movement. Inspect collision, GUI and actual movement key names before changing the plan" : null, evidence, System.currentTimeMillis()); current = null;
+        } catch (Exception error) {
+            try { cancelScript(); } catch(Exception ignored) {}
+            try { releaseKeys(); } catch(Exception ignored) {}
+            try { if (current != null) ledger.finish(current, scriptStopUnconfirmed||navigation.unresolved()||inventoryPendingFor(current)?"unknown":"blocked", error.getMessage(), state(), System.currentTimeMillis()); } catch (Exception ignored) {}
+            current = null;
+        }
+    }
+    private void dispatch(ControlLedger.Action action) throws Exception {
+        JsonObject input = action.input;
+        switch (action.operation) {
+            case "method.run" -> methodSession=new MethodSession(client,integer(input,"durationMs",60000),inventoryPick,action.id,navigation);
+            case "navigate" -> navigation.start(input.getAsJsonObject("goal"),integer(input,"timeoutMs",60000),action.id);
+            case "equip" -> {
+                int slot=integer(input,"slot",-1);var stack=client.field_1724.method_31548().method_5438(slot);
+                if(!Objects.equals(MethodSession.identity(stack),text(input,"instanceHash","")))throw new IllegalStateException("Inventory item changed before equip dispatch; read fresh mc_bag");
+                JsonArray args=new JsonArray();args.add(MethodSession.item(client,stack,slot<9?slot+36:slot));args.add("hand");
+                methodSession=new MethodSession(client,10000,inventoryPick,action.id,navigation);methodSession.call(1,"equip",args);
+            }
+            case "minescript.run" -> scripts().start(action.id,input);
+            case "look" -> { client.field_1724.method_36456(input.get("yaw").getAsFloat()); client.field_1724.method_36457(input.get("pitch").getAsFloat()); }
+            case "chat" -> { String value = text(input, "text", ""); if (value.startsWith("/")) client.method_1562().method_45730(value.substring(1)); else client.method_1562().method_45729(value); }
+            case "hotbar" -> client.field_1724.method_31548().field_7545 = integer(input, "slot", 0);
+            case "close_screen" -> client.field_1724.method_7346();
+            case "inventory_open" -> client.method_1507(new class_490(client.field_1724));
+            case "menu_click" -> {
+                class_1713 type = switch (text(input, "type", "PICKUP")) { case "PICKUP" -> class_1713.field_7790; case "QUICK_MOVE" -> class_1713.field_7794; case "SWAP" -> class_1713.field_7791; default -> throw new IllegalArgumentException("Unsupported slot click type"); };
+                client.field_1761.method_2906(client.field_1724.field_7512.field_7763, integer(input, "slot", -1), integer(input, "button", 0), type, client.field_1724);
+            }
+            case "gui_click" -> {
+                List<class_4185> buttons = buttons(); int index = integer(input, "index", -1);
+                if (index < 0 || index >= buttons.size() || !buttons.get(index).field_22763 || !buttons.get(index).field_22764) throw new IllegalArgumentException("GUI button unavailable");
+                buttons.get(index).method_25306();
+            }
+        }
+    }
+    private void pressKeys(ControlLedger.Action action) {
+        JsonObject input = action.input; class_315 options = client.field_1690;
+        options.field_1894.method_23481(flag(input,"forward")); options.field_1881.method_23481(flag(input,"back")); options.field_1913.method_23481(flag(input,"left")); options.field_1849.method_23481(flag(input,"right"));
+        options.field_1903.method_23481(flag(input,"jump")); options.field_1832.method_23481(flag(input,"sneak")); options.field_1867.method_23481(flag(input,"sprint")); options.field_1904.method_23481(action.operation.equals("use"));
+    }
+    private void releaseKeys() {
+        inventoryPick.unknown("Local execution ended before inventory confirmation; await original server response, no replay");methodSession=null;
+        if(client!=null){class_315 o=client.field_1690;for(class_304 key:List.of(o.field_1894,o.field_1881,o.field_1913,o.field_1849,o.field_1903,o.field_1832,o.field_1867,o.field_1904,o.field_1886))key.method_23481(false);}
+        try{if(!navigation.cancel())throw new IllegalStateException("Owned navigation cancellation unknown; reconcile original action before new body work");}
+        catch(Exception error){throw new IllegalStateException("Owned navigation cancellation unknown; reconcile original action before new body work",error);}
+    }
+    private boolean inventoryPendingFor(ControlLedger.Action action) { JsonObject receipt=inventoryPick.inspect();return inventoryPick.unresolved()&&receipt.has("actionId")&&receipt.get("actionId").getAsString().equals(action.id); }
+    private boolean cancelAll(String reason) {
+        reflexInputs.stop();
+        if(reflexItem!=null){inventoryPick.unknown(reason);try{ledger.finish(reflexItem,inventoryPendingFor(reflexItem)?"unknown":"cancelled",reason,state(),System.currentTimeMillis());}catch(Exception ignored){}reflexItem=null;reflexItemSession=null;}
+        ControlLedger.Action original=current!=null?current:navigation.owner()==null?null:ledger.get(navigation.owner());
+        try{cancelScript();}catch(Exception ignored){}try{releaseKeys();}catch(Exception ignored){}
+        boolean stopped=!scriptStopUnconfirmed&&!navigation.unresolved();
+        try{if(original!=null)ledger.finish(original,!stopped||inventoryPendingFor(original)?"unknown":"cancelled",reason,state(),System.currentTimeMillis());for(var action:queue)ledger.finish(action,"cancelled",reason,new JsonObject(),System.currentTimeMillis());}catch(Exception ignored){}
+        current=null;queue.clear();return stopped;
+    }
+    private void connected() { if (client.field_1724 == null || client.field_1687 == null || client.method_1562() == null) throw new IllegalStateException("Client is not connected to a world"); }
+    private double[] position() { return new double[]{client.field_1724.method_23317(),client.field_1724.method_23318(),client.field_1724.method_23321()}; }
+    private void updateScreen() { Object handler=client.field_1724 == null ? null : client.field_1724.field_7512; if(lastScreen!=client.field_1755 || lastHandler!=handler) {screenToken=UUID.randomUUID().toString();lastScreen=client.field_1755;lastHandler=handler;} }
+    private List<class_4185> buttons() { return client.field_1755 == null ? List.of() : client.field_1755.method_25396().stream().filter(child -> child instanceof class_4185).map(child -> (class_4185)child).toList(); }
+    private JsonObject item(class_1799 stack, int slot) {
+        JsonObject item=new JsonObject(); item.addProperty("slot",slot);item.addProperty("empty",stack.method_7960());item.addProperty("count",stack.method_7947());
+        if(!stack.method_7960()) {
+            item.addProperty("name",class_7923.field_41178.method_10221(stack.method_7909()).toString());item.addProperty("displayName",stack.method_7964().getString());
+            item.addProperty("instanceHash",MethodSession.identity(stack));
+            item.add("encoded",class_1799.field_24671.encodeStart(class_6903.method_46632(JsonOps.INSTANCE,client.field_1724.method_56673()),stack).result().orElse(JsonNull.INSTANCE));
+            item.addProperty("components",stack.method_57353().toString());
+        }
+        return item;
+    }
+    private JsonObject state() {
+        updateScreen(); JsonObject state=new JsonObject();state.addProperty("protocol",PROTOCOL);state.addProperty("sampledAt",Instant.now().toString());state.addProperty("generation",generation);
+        state.addProperty("inventoryPick",InventoryPick.PROTOCOL);state.add("inventoryTransfer",inventoryPick.inspect());
+        if(navigation.available())state.addProperty("navigationCapability",NativeNavigation.PROTOCOL);if(navigation.owner()!=null)state.add("navigation",navigation.report());
+        state.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);state.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);state.addProperty("controllerId",ledger.owner(System.currentTimeMillis()));
+        state.add("serverAuthorization",gson.toJsonTree(authorization()));
+        state.addProperty("reflexScope",reflexFrames.scope(client));state.add("reflex",reflexInputs.status(reflexFrames.scope(client)));if(reflexInputs.active(reflexFrames.scope(client))&&current!=null)state.addProperty("pausedActionId",current.id);
+        state.addProperty("screenToken",screenToken);state.addProperty("screen",client.field_1755==null?"":client.field_1755.getClass().getName());state.addProperty("screenTitle",client.field_1755==null?"":client.field_1755.method_25440().getString());
+        if(client.field_1755 instanceof class_419 disconnected){String reason=disconnected.method_25435().getString();state.addProperty("disconnectReason",reason.substring(0,Math.min(reason.length(),2048)));}
+        JsonArray buttons=new JsonArray();int index=0;for(var button:buttons()){JsonObject b=new JsonObject();b.addProperty("index",index++);b.addProperty("label",button.method_25369().getString());b.addProperty("active",button.field_22763);buttons.add(b);}state.add("buttons",buttons);
+        state.add("messages",gson.toJsonTree(messages));
+        JsonArray actionStates=new JsonArray();for(var action:ledger.recent()){JsonObject summary=new JsonObject();summary.addProperty("id",action.id);summary.addProperty("phase",action.phase);summary.addProperty("updatedAt",action.updatedAt);actionStates.add(summary);}state.add("actions",actionStates);
+        if(client.field_1724!=null&&client.field_1687!=null){
+            var player=client.field_1724;state.addProperty("uuid",player.method_5667().toString());state.addProperty("username",player.method_5477().getString());state.add("position",gson.toJsonTree(position()));
+            state.addProperty("yaw",player.method_36454());state.addProperty("pitch",player.method_36455());state.addProperty("health",player.method_6032());state.addProperty("food",player.method_7344().method_7586());state.addProperty("dimension",client.field_1687.method_27983().method_29177().toString());
+            state.addProperty("onGround",player.method_24828());
+            state.addProperty("worldTime",client.field_1687.method_8532());state.addProperty("raining",client.field_1687.method_8419());
+            JsonArray inventory=new JsonArray();var inv=player.method_31548();for(int slot=0;slot<inv.method_5439();slot++) inventory.add(item(inv.method_5438(slot),slot));state.add("inventory",inventory);state.addProperty("selectedSlot",inv.field_7545);
+            var menu=player.field_7512;JsonArray slots=new JsonArray();for(int slot=0;slot<menu.field_7761.size();slot++) slots.add(item(menu.field_7761.get(slot).method_7677(),slot));state.add("menuSlots",slots);state.add("cursor",item(menu.method_34255(),-1));state.addProperty("syncId",menu.field_7763);state.addProperty("menuRevision",menu.method_37421());
+        }
+        return state;
+    }
+    /** Fast kernel samples exclude encoded stacks, GUI books, notices and historical actions. */
+    private JsonObject reflexState(){
+        JsonObject out=new JsonObject();out.addProperty("protocol",PROTOCOL);out.addProperty("sampledAt",Instant.now().toString());out.addProperty("generation",generation);
+        out.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);out.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);
+        var p=client.field_1724;out.addProperty("uuid",p.method_5667().toString());out.addProperty("username",p.method_5477().getString());out.add("position",gson.toJsonTree(position()));
+        out.addProperty("yaw",p.method_36454());out.addProperty("pitch",p.method_36455());out.addProperty("health",p.method_6032());out.addProperty("food",p.method_7344().method_7586());out.addProperty("selectedSlot",p.method_31548().field_7545);
+        out.addProperty("onGround",p.method_24828());
+        out.addProperty("dimension",client.field_1687.method_27983().method_29177().toString());out.addProperty("screen",client.field_1755==null?"":client.field_1755.getClass().getName());out.addProperty("syncId",p.field_7512.field_7763);
+        out.addProperty("reflexScope",reflexFrames.scope(client));out.add("serverAuthorization",gson.toJsonTree(authorization()));out.add("reflex",reflexInputs.status(reflexFrames.scope(client)));out.add("actions",new JsonArray());out.add("messages",new JsonArray());out.addProperty("excluded","actions/messages/menu/encoded stacks; read full state explicitly");return out;
+    }
+    @SuppressWarnings({"rawtypes","unchecked"}) private Map<String,Object> authorization(){
+        List<Map<String,Object>> providers=new ArrayList<>();
+        try {
+            var entries=FabricLoader.getInstance().getEntrypoints("agent-mc-server-authorization",java.util.function.Supplier.class);
+            if(entries.size()>4)return ServerAuthorization.evaluate(List.of(),true,"","",generation);
+            for(var entry:entries){Object value=entry.get();if(value instanceof Map map)providers.add(map);}
+        }catch(Exception ignored){return ServerAuthorization.evaluate(List.of(),true,"","",generation);}
+        String user=client.field_1724==null?"":client.field_1724.method_5477().getString();
+        String server=client.method_1558()==null?"":client.method_1558().field_3761;
+        return ServerAuthorization.evaluate(providers,requireServerAuthorization,user,server,generation);
+    }
+    private static JsonObject object(JsonObject value,String key){return value.has(key)&&value.get(key).isJsonObject()?value.getAsJsonObject(key):new JsonObject();}
+    private static String text(JsonObject value,String key,String fallback){return value.has(key)&&value.get(key).isJsonPrimitive()?value.get(key).getAsString():fallback;}
+    private static int integer(JsonObject value,String key,int fallback){return value.has(key)?value.get(key).getAsInt():fallback;}
+    private static boolean flag(JsonObject value,String key){return value.has(key)&&value.get(key).getAsBoolean();}
+    private static boolean finite(JsonObject value,String key,double min,double max){if(!value.has(key))return false;double number=value.get(key).getAsDouble();return Double.isFinite(number)&&number>=min&&number<=max;}
+}

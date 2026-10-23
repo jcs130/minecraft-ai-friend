@@ -1,0 +1,15 @@
+LIBRARY agGDI
+EXPORTS
+    GetDeviceCaps=GDI32.GetDeviceCaps
+    CreateDCW=GDI32.CreateDCW
+    GetDeviceGammaRamp=GDI32.GetDeviceGammaRamp
+    SetDeviceGammaRamp=GDI32.SetDeviceGammaRamp
+    CreateBitmap=GDI32.CreateBitmap
+    CreateRectRgn=GDI32.CreateRectRgn
+    DeleteObject=GDI32.DeleteObject
+    CreateDIBSection=GDI32.CreateDIBSection
+    ChoosePixelFormat=GDI32.ChoosePixelFormat
+    DescribePixelFormat=GDI32.DescribePixelFormat
+    SetPixelFormat=GDI32.SetPixelFormat
+    SwapBuffers=AgentMcSwapBuffers
+    DeleteDC=GDI32.DeleteDC

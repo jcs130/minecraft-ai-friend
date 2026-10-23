@@ -1,0 +1,345 @@
+"""Bounded game-only death history in the existing strategic review database."""
+
+import json
+import math
+import sqlite3
+from datetime import datetime
+from contextlib import contextmanager
+
+
+def scope_key(scope):
+    if not isinstance(scope, dict) or set(scope) != {"realm", "account", "agent"} or not all(
+            isinstance(v, str) and 0 < len(v) <= 500 for v in scope.values()):
+        return None
+    return json.dumps([scope[k] for k in ("realm", "account", "agent")], ensure_ascii=False)
+
+
+def identity(facts):
+    try:
+        value = json.loads(next(p["text"] for p in facts.get("parts", []) if p["key"] == "identity"))
+        return value if scope_key(value) else None
+    except (StopIteration, KeyError, TypeError, ValueError):
+        return None
+
+
+def lifecycle(facts):
+    try:
+        return json.loads(next(p["text"] for p in facts.get("parts", []) if p["key"] == "deathLifecycle"))
+    except (StopIteration, KeyError, TypeError, ValueError):
+        return None
+
+
+def recovery_state(facts):
+    try:
+        value = json.loads(next(p["text"] for p in facts.get("parts", []) if p["key"] == "recoveryState"))
+        return value if isinstance(value, dict) else {}
+    except (StopIteration, KeyError, TypeError, ValueError):
+        return {}
+
+
+def recovery_context(episode, facts, objective=None):
+    """Measured displacement is evidence for a choice, never an instruction to return."""
+    current = recovery_state(facts)
+    old, new = episode.get("position") or {}, current.get("position") or {}
+    distance = None
+    dimension = old.get("dimension")
+    if dimension and dimension == current.get("dimension") and all(
+            type(p.get(axis)) in {int, float} and math.isfinite(p[axis]) for p in (old, new) for axis in ("x", "y", "z")):
+        distance = round(math.dist([old[a] for a in ("x", "y", "z")], [new[a] for a in ("x", "y", "z")]), 1)
+    return {"episode_id": episode["id"], "historical_position": episode.get("position"),
+            "current": current, "straight_line_death_distance": distance, "route_distance": None,
+            "objective_proposal": objective, "applicability": "requires_fresh_review",
+            "next": "Reevaluate the original objective and stage against current spawn position, inventory and native cancellation receipts. "
+                    "Earlier coordinates and routes are historical proposals. Explain whether to continue locally, revise or defer the stage, "
+                    "or return only if current evidence supports it. Distance is straight-line evidence, not route safety or a command to return."}
+
+
+TOOL = {"type": "function", "function": {"name": "death_review",
+    "description": "Local scoped death history: search/get factual episodes; report an inferred lesson with applicability and evidence. "
+                   "get and report require the full exact id from search or death_memory.latest_episode.id; never omit or abbreviate it. "
+                   "No model, body or network call. Improvement remains unverified.",
+    "parameters": {"type": "object", "additionalProperties": False, "required": ["action"], "properties": {
+        "action": {"enum": ["search", "get", "report"]}, "id": {"type": "string", "minLength": 1, "maxLength": 80},
+        "query": {"type": "string", "maxLength": 200}, "lesson": {"type": "string", "maxLength": 1200},
+        "applicability": {"type": "string", "maxLength": 600}, "evidence": {"type": "string", "maxLength": 600}},
+        "oneOf": [
+            {"properties": {"action": {"enum": ["search"]}}},
+            {"properties": {"action": {"enum": ["get"]}}, "required": ["id"]},
+            {"properties": {"action": {"enum": ["report"]}},
+             "required": ["id", "lesson", "applicability", "evidence"]}]}}}
+
+
+def combat_summary(value):
+    """Whitelist bounded controller facts; malformed optional data remains in the raw archive."""
+    if (not isinstance(value, dict) or not {'schemaVersion', 'finalMode', 'enteredDesperate', 'retreat'} <= value.keys()
+            or len(json.dumps(value, ensure_ascii=False).encode()) > 2048):
+        return None
+    if (type(value.get('schemaVersion')) is not int or value['schemaVersion'] != 1 or not isinstance(value.get('finalMode'), str) or value['finalMode'] not in {'fighting', 'retreating', 'tracking'}
+            or type(value.get('enteredDesperate')) is not bool):
+        return None
+    result = {k: value[k] for k in ('schemaVersion', 'finalMode', 'enteredDesperate')}
+    retreat = value.get('retreat')
+    if retreat is None:
+        return {**result, 'retreat': None}
+    if (not isinstance(retreat, dict) or not {'startedAt', 'waterAtStart', 'bankCandidate', 'routeStatus', 'movement'} <= retreat.keys()
+            or retreat.get('routeStatus') != 'unverified'):
+        return None
+    bank, movement = retreat.get('bankCandidate'), retreat.get('movement')
+    if (timestamp(retreat.get('startedAt')) is None or (retreat.get('waterAtStart') is not None and type(retreat.get('waterAtStart')) is not bool)
+            or (bank is not None and (not isinstance(bank, dict) or set(bank) != {'x', 'y', 'z'}
+                or not all(number(v) for v in bank.values()))) or not isinstance(movement, dict)):
+        return None
+    counts = ('samples', 'horizontalActiveSamples', 'horizontalIntentSamples', 'jumpOnlySamples')
+    if (not {*counts, 'observedHorizontalDistance', 'progressBasis', 'lastRejection'} <= movement.keys()
+            or not all(count(movement.get(k)) for k in counts)
+            or any(movement[k] > movement['samples'] for k in counts[1:])
+            or not number(movement.get('observedHorizontalDistance'), nonnegative=True)
+            or movement.get('progressBasis') != 'sampled_position_delta'
+            or (movement.get('lastRejection') is not None and not isinstance(movement.get('lastRejection'), str))
+            or movement.get('lastRejection') not in {None, 'unknown_cell', 'collision', 'no_support', 'hazard', 'unsafe_footing', 'blocked_heading', 'no_direction'}):
+        return None
+    result['retreat'] = {k: retreat[k] for k in ('startedAt', 'waterAtStart', 'bankCandidate', 'routeStatus')}
+    result['retreat']['movement'] = {k: movement[k] for k in (*counts, 'observedHorizontalDistance', 'progressBasis', 'lastRejection')}
+    return result
+
+
+def number(value, *, nonnegative=False):
+    try:
+        return type(value) in {int, float} and math.isfinite(value) and (not nonnegative or value >= 0)
+    except OverflowError:
+        return False
+
+
+def count(value):
+    return type(value) is int and 0 <= value <= 9007199254740991
+
+
+def timestamp(value):
+    if not isinstance(value, str) or not 1 <= len(value) <= 40:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return parsed.timestamp() if parsed.tzinfo else None
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def hydrate_combat(supplied, authoritative):
+    """Preserve lossless supplied receipts, refreshing only exact-episode additive evidence."""
+    if not isinstance(supplied, dict) or not isinstance(authoritative, dict) or any(
+            supplied.get(k) != authoritative.get(k) for k in ('id', 'scope', 'source_event')):
+        return authoritative
+    result = {**supplied}
+    result.pop('combat_observations', None)
+    if 'combat_observations' in authoritative:
+        result['combat_observations'] = authoritative['combat_observations']
+    return result
+
+
+class DeathMemory:
+    def __init__(self, directory):
+        self.path = directory / "reviews.sqlite3"
+
+    @contextmanager
+    def connection(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        db = sqlite3.connect(self.path, timeout=5)
+        try:
+            with db:
+                db.execute("CREATE TABLE IF NOT EXISTS death_episodes (scope TEXT, id TEXT, body TEXT NOT NULL, notified INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(scope,id))")
+                db.execute("CREATE TABLE IF NOT EXISTS death_cursors (scope TEXT, run TEXT, cursor INTEGER, PRIMARY KEY(scope,run))")
+                yield db
+        finally:
+            db.close()
+
+    def record(self, event, facts, recent, receipts, actions):
+        meta = event.get("meta") or {}
+        death = meta.get("death")
+        if (not isinstance(death, dict) or not scope_key(death.get("scope"))
+                or not isinstance(death.get("id"), str) or not 0 < len(death["id"]) <= 80
+                or not isinstance(event.get("run"), str) or type(event.get("cursor")) is not int
+                or not isinstance(event.get("ts"), str)):
+            return None
+        # Explicit field projection prevents host persona, chat and arbitrary metadata retention.
+        episode = {k: death.get(k) for k in ("id", "scope", "observed_at", "position", "health", "food", "cause")}
+        episode.update(source_event={k: event[k] for k in ("run", "cursor", "ts")}, historical=True,
+                       behavioral_improvement_verified=False, lesson=None)
+        same_scope = identity(facts) == death["scope"]
+        episode["facts"] = [{k: p[k] for k in ("key", "text", "original") if k in p}
+                            for p in facts.get("parts", []) if same_scope and p.get("key") in {"sample", "body", "gear", "life", "queue", "foodReserve", "lastTask", "terrain"}][:8]
+        for part in episode["facts"]:
+            part["text"] = str(part.get("text", ""))[:500]
+        recent, receipts, actions = (recent, receipts, actions) if same_scope else ([], [], [])
+        episode["recent_events"] = [{**{k: e[k] for k in ("run", "cursor", "ts", "type") if k in e},
+                                     "text": str(e.get("text", ""))[:400]}
+                                    for e in recent[-12:] if e.get("type") in {"minecraft.event", "minecraft.task", "minecraft.combat"}]
+        episode["receipts"] = [{k: r[k] for k in ("tool", "execution_id", "phase", "receipt", "original_event") if k in r} for r in receipts[-6:]]
+        episode["actions"] = actions[-6:]
+        key = scope_key(death["scope"])
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            previous = db.execute("SELECT cursor FROM death_cursors WHERE scope=? AND run=?", (key, event["run"])).fetchone()
+            if previous and previous[0] >= event["cursor"]:
+                return None
+            inserted = db.execute("INSERT OR IGNORE INTO death_episodes(scope,id,body) VALUES(?,?,?)",
+                                  (key, episode["id"], json.dumps(episode, ensure_ascii=False))).rowcount
+            db.execute("INSERT OR REPLACE INTO death_cursors VALUES(?,?,?)", (key, event["run"], event["cursor"]))
+            db.execute("DELETE FROM death_cursors WHERE scope=? AND rowid NOT IN (SELECT rowid FROM death_cursors WHERE scope=? ORDER BY rowid DESC LIMIT 64)", (key, key))
+            db.execute("DELETE FROM death_episodes WHERE scope=? AND rowid NOT IN (SELECT rowid FROM death_episodes WHERE scope=? ORDER BY rowid DESC LIMIT 32)", (key, key))
+        return episode if inserted else None
+
+    def append_combat(self, event):
+        """Attach explicit native death IDs only, under a fresh transactional row lock."""
+        receipt = (event.get('meta') or {}).get('receipt')
+        if event.get('type') != 'minecraft.combat' or not isinstance(receipt, dict):
+            return False
+        key, episode_id = scope_key(receipt.get('scope')), receipt.get('deathEpisodeId')
+        start, end, emitted = (timestamp(receipt.get('startedAt')), timestamp(receipt.get('endedAt')), timestamp(event.get('ts')))
+        if (not key or not isinstance(episode_id, str) or not 1 <= len(episode_id) <= 80
+                or not {'healthBefore', 'healthAfter'} <= receipt.keys()
+                or receipt.get('reason') != 'death' or not count(receipt.get('id')) or receipt['id'] == 0
+                or not isinstance(event.get('run'), str) or not 1 <= len(event['run']) <= 200
+                or not count(event.get('cursor')) or not event['cursor'] or None in (start, end, emitted)
+                or not start <= end <= emitted
+                or any(not count(receipt.get(k)) for k in ('swings', 'meleeLanded', 'arrows', 'rangedLanded'))
+                or any(receipt.get(k) is not None and not number(receipt[k], nonnegative=True) for k in ('healthBefore', 'healthAfter'))):
+            return False
+        entry = {k: receipt.get(k) for k in ('id', 'startedAt', 'endedAt', 'reason', 'healthBefore', 'healthAfter',
+                                            'swings', 'meleeLanded', 'arrows', 'rangedLanded')}
+        entry.update(original_event={k: event[k] for k in ('run', 'cursor', 'ts')}, historical=True, goal_verified=False)
+        if summary := combat_summary(receipt.get('controlSummary')):
+            entry['controlSummary'] = summary
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT body FROM death_episodes WHERE scope=? AND id=?', (key, episode_id)).fetchone()
+            if not row:
+                return False
+            episode = json.loads(row[0])
+            source, observed = episode['source_event'], timestamp(episode.get('observed_at'))
+            existing = episode.get('combat_observations', [])
+            if (source.get('run') != event['run'] or not count(source.get('cursor')) or event['cursor'] <= source['cursor']
+                    or observed is None or not start <= observed <= end or len(existing) >= 2
+                    or any(e['id'] == entry['id'] or e['original_event']['cursor'] >= event['cursor'] for e in existing)):
+                return False  # Duplicate/conflicting/out-of-order data remains available in the original journal.
+            additions = [*existing, entry]
+            if len(json.dumps(additions, ensure_ascii=False).encode()) > 4096:
+                return False
+            episode['combat_observations'] = additions
+            db.execute('UPDATE death_episodes SET body=? WHERE scope=? AND id=?', (json.dumps(episode, ensure_ascii=False), key, episode_id))
+        return True
+
+    def entries(self, scope, *, pending=False):
+        key = scope_key(scope)
+        if not key:
+            return []
+        with self.connection() as db:
+            rows = [json.loads(r[0]) for r in db.execute(
+                "SELECT body FROM death_episodes WHERE scope=? ORDER BY rowid DESC LIMIT 32", (key,))]
+            # Legacy notified means transport accepted, not reflection completed.
+            return [r for r in rows if not pending or not (r.get("reflection") or r.get("lesson"))]
+
+    def current_episode(self, scope, facts=None, *, pending=False):
+        """Newest real scoped episode only; unfinished history is not current authority."""
+        latest = next(iter(self.entries(scope)), None)
+        if not latest or (pending and (latest.get("reflection") or latest.get("lesson"))):
+            return None
+        life = lifecycle(facts) if facts is not None else None
+        if isinstance(life, dict) and life.get("phase") == "alive" and not life.get("episodeId"):
+            return None  # A new native connection has no death episode to review.
+        if isinstance(life, dict) and life.get("episodeId") not in {None, latest["id"]}:
+            return None
+        return latest
+
+    def notified(self, episode):
+        with self.connection() as db:
+            db.execute("UPDATE death_episodes SET notified=1 WHERE scope=? AND id=?", (scope_key(episode["scope"]), episode["id"]))
+
+    @staticmethod
+    def validate_reflection(value, episode):
+        if not isinstance(value, dict) or set(value) - {"episode_id", "outcome", "lesson", "applicability", "evidence", "reason"}:
+            raise ValueError("invalid_death_reflection")
+        if not episode or value.get("episode_id") != episode["id"]:
+            raise ValueError("death_episode_mismatch")
+        outcome = value.get("outcome")
+        required = (("lesson", 1200), ("applicability", 600), ("evidence", 600)) if outcome == "lesson" else (("reason", 600),)
+        if outcome not in {"lesson", "deferred"} or any(
+                not isinstance(value.get(k), str) or not 1 <= len(value[k].strip()) <= size for k, size in required):
+            raise ValueError("death_reflection_evidence_or_deferral_required")
+        if outcome == "lesson" and not any(ref and ref in value["evidence"] for ref in
+                                           (episode["id"], episode["source_event"].get("run"))):
+            raise ValueError("death_evidence_must_reference_episode_or_source_run")
+        return {"episode_id": episode["id"], "outcome": outcome,
+                **{k: value[k].strip() for k, _ in required}, "source_event": episode["source_event"],
+                "source": "main_brain_review", "hypothesis": True, "behavioral_improvement_verified": False}
+
+    def context(self, scope, facts=None, objective=None):
+        rows = self.entries(scope)
+        if not rows:
+            return None
+        lesson_saved = bool(rows[0].get("lesson"))
+        reflection = rows[0].get("reflection") or {}
+        report_pending = not (lesson_saved or reflection)
+        if lesson_saved:
+            next_step = ("A lesson is already recorded for this episode; do not repeat the unchanged report. "
+                         "It is an unverified hypothesis, not behavioral improvement or a prerequisite for action. "
+                         "Evaluate applicability against fresh facts and choose useful work; revise only with new evidence.")
+        elif reflection:
+            next_step = ("The main-brain reflection is deferred; this is not a demand for another report. "
+                         "Inspect the episode if needed and choose useful work from fresh facts. No improvement is verified.")
+        else:
+            next_step = ("Use death_review with inspect arguments to read facts and receipts when needed. "
+                         "An optional report requires the full report_episode_id plus lesson, applicability and evidence. "
+                         "A report is not a prerequisite for action. Evaluate applicability against fresh facts before reuse.")
+        return {"latest_episode": {k: rows[0][k] for k in ("id", "source_event", "observed_at", "position", "health", "food", "cause")},
+                "inspect": {"action": "get", "id": rows[0]["id"]}, "report_episode_id": rows[0]["id"],
+                "report_pending": report_pending, "lesson_saved": lesson_saved,
+                **({"recovery": recovery_context(rows[0], facts, objective)} if facts is not None else {}),
+                "lessons": [{"episode_id": r["id"], **r["lesson"]} for r in rows if r.get("lesson")][:3],
+                "historical": True, "behavioral_improvement_verified": False,
+                "next": next_step}
+
+    def execute(self, scope, args):
+        if not scope_key(scope):
+            raise ValueError("No fresh game identity; death history is unavailable")
+        action = args.get("action")
+        allowed = {"search": {"action", "query"}, "get": {"action", "id"}, "report": {"action", "id", "lesson", "applicability", "evidence"}}
+        if action not in allowed or set(args) - allowed[action]:
+            raise ValueError("Invalid death_review arguments")
+        if action != "search" and (not isinstance(args.get("id"), str) or not 1 <= len(args["id"]) <= 80 or not args["id"].strip()):
+            raise ValueError('id is required for death_review get/report; use death_review {"action":"search"} '
+                             'or death_memory.latest_episode.id and copy the full exact id. No lesson was saved.')
+        rows = self.entries(scope)
+        if action == "search":
+            query = args.get("query", "")
+            if not isinstance(query, str) or len(query) > 200:
+                raise ValueError("query exceeds 200 characters")
+            return {"episodes": [{k: r[k] for k in ("id", "source_event", "observed_at", "position", "cause", "lesson")} for r in rows
+                                  if query.casefold() in json.dumps(r, ensure_ascii=False).casefold()][:8], "historical": True}
+        row = next((r for r in rows if r["id"] == args.get("id")), None)
+        if row is None:
+            raise ValueError("Death episode not found in current realm/account/agent")
+        if action == "get":
+            return row
+        for field, size in (("lesson", 1200), ("applicability", 600), ("evidence", 600)):
+            if not isinstance(args.get(field), str) or not 1 <= len(args[field].strip()) <= size:
+                raise ValueError(field + " is required and bounded")
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            # A host reflection may have committed after the search above.
+            # Reread under the write lock rather than replace its whole row
+            # with that older snapshot. Completed main-brain lessons win.
+            current = db.execute("SELECT body FROM death_episodes WHERE scope=? AND id=?", (scope_key(scope), row["id"])).fetchone()
+            if not current:
+                raise ValueError("Death episode not found in current realm/account/agent")
+            row = json.loads(current[0])
+            if (row.get("reflection") or {}).get("outcome") == "lesson":
+                return {"saved": False, "episode_id": row["id"], "lesson": row["lesson"],
+                        "reason": "main_brain_reflection_completed", "behavioral_improvement_verified": False}
+            proposed = {k: args[k].strip() for k in ("lesson", "applicability", "evidence")}
+            if all((row.get("lesson") or {}).get(k) == value for k, value in proposed.items()):
+                return {"saved": False, "episode_id": row["id"], "lesson": row["lesson"],
+                        "reason": "unchanged_lesson", "behavioral_improvement_verified": False}
+            row["lesson"] = proposed
+            row["lesson"].update(source="planner_inference", hypothesis=True, behavioral_improvement_verified=False)
+            db.execute("UPDATE death_episodes SET body=? WHERE scope=? AND id=?", (json.dumps(row, ensure_ascii=False), scope_key(scope), row["id"]))
+        return {"saved": True, "episode_id": row["id"], "lesson": row["lesson"], "behavioral_improvement_verified": False}

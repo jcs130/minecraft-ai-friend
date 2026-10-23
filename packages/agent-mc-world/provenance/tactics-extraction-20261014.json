@@ -1,0 +1,88 @@
+{
+  "schema": "agent-mc-source-extraction/v1",
+  "date": "2026-10-14",
+  "author": "Maintainer (Codex), requested by human operator",
+  "sourceRepository": "https://github.com/jcs130/cortico-world-qiandengji",
+  "sourceRevision": "48fcc322ed81524cccfa93e245d2bf2bb8189fde",
+  "license": "MIT",
+  "coreBase": "826a29ac",
+  "changes": "Shared execution/state moved into core; explicit server message parsers, spell defaults and commands retained in server integration. Default SDK/IPC factory exposes tactics without the integration. Optional host selectors remain explicitly started.",
+  "ledgerFormat": "minecraft-combat-tactics.json version 1 unchanged",
+  "files": [
+    {
+      "source": "integrations/qiandengji/engine/battlefield.ts",
+      "sha256": "9d844473cbd5d55defd592dc2f7ed8e874e18726c050a26694a5ab1ddcc3cd7f",
+      "destination": "core/battlefield.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-decision-types.ts",
+      "sha256": "0448df8f753aec7541b5e7d2320f6ffaa3a5483de0c6daea8025e5ff221d4375",
+      "destination": "core/combat-decision-types.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-options.ts",
+      "sha256": "9526c5b3d80f6179d5cbc92289d2adcfdf508412b2867f09e50534bc804b42fa",
+      "destination": "core/combat-options.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-program.ts",
+      "sha256": "5984a60cfc55b8141cfdeafca34037553a4759804365d8908aec9b8897ec501a",
+      "destination": "core/combat-program.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-program-worker.mjs",
+      "sha256": "1b7907461ee0f52cba7885287e7c71027a63d8bdb7b7cdd3e3561208efc3bd52",
+      "destination": "core/combat-program-worker.mjs"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-reactions.ts",
+      "sha256": "7b658f5950368a33fb16916134e4b988f5681027269c352046f56b5a1c5053f0",
+      "destination": "core/combat-reactions.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-rules.ts",
+      "sha256": "3e28edcf2f71507057c4606ee67b6e7b11ea041f8eae5b490333757b6031f91e",
+      "destination": "core/combat-rules.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-tactics.ts",
+      "sha256": "1ccb9876d255247b6c008c1060ff1c50de2376d47aba905240b2f0e7c8bae903",
+      "destination": "core/combat-tactics.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/combat-spells.ts",
+      "sha256": "327197b64ec81515f9211181882def02e2dd1d3fe5400ef721147126f015c04b",
+      "destination": "core/combat-abilities.ts"
+    },
+    {
+      "source": "integrations/qiandengji/engine/world.ts",
+      "sha256": "41b434085f176c9d3005b8f5fd9d07bb9d5cd44ec19f66c3fd27943fc778f2a2",
+      "destination": "core/tactical-world.ts"
+    },
+    {
+      "source": "integrations/qiandengji/host/combat-decision.ts",
+      "sha256": "8cbb84c0088d9432acd188f0a225bae6d4a8716e1baf3774da6524a299aef8d4",
+      "destination": "src/decisions/combat-decision.ts"
+    },
+    {
+      "source": "integrations/qiandengji/host/combat-driver.ts",
+      "sha256": "ca451279f0008e5863b26b4540f1b07aff2691e293a80422394ea683b878efe0",
+      "destination": "src/decisions/combat-driver.ts"
+    },
+    {
+      "source": "integrations/qiandengji/host/defaults.ts",
+      "sha256": "36e47fdbd33b591861c055730fe06ce52e6663e5ac066156af404713cadb2d80",
+      "destination": "src/decisions/defaults.ts"
+    },
+    {
+      "source": "integrations/qiandengji/host/decision-adviser.ts",
+      "sha256": "28eed118f4fa3790be2e7ec36d14e36b6ea861e008b9e4af7204e8b7a3dc7f5c",
+      "destination": "src/decisions/decision-adviser.ts"
+    },
+    {
+      "source": "integrations/qiandengji/host/idle-behavior.ts",
+      "sha256": "b47d36e59725da300aff45abd1da3b7360c7ddc5324f4cc331f32ded6c32089e",
+      "destination": "src/decisions/idle-behavior.ts"
+    }
+  ]
+}

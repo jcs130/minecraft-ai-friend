@@ -15,7 +15,7 @@ test('copyable onboarding link, prompt, Skill and readiness share the exact invi
   const f = await siteFixture(t), value = await invite(f), parsed = new URL(value.onboarding.link);
   assert.equal(parsed.origin, f.origin); assert.equal(parsed.pathname, '/join'); assert.equal(parsed.search, ''); assert.equal(new URLSearchParams(parsed.hash.slice(1)).get('invite'), value.token);
   assert.match(value.onboarding.prompt, /自己的 Agent 框架/); assert.match(value.onboarding.prompt, /游戏建号桥当前尚未上线/); assert.match(value.onboarding.prompt, /scripts\/import-account.mjs/); assert.match(value.onboarding.prompt, /\/mycli status/);
-  assert.ok(!value.onboarding.prompt.includes('clientSecret=')); assert.equal(value.onboarding.skill.version, '1.3.0');
+  assert.ok(!value.onboarding.prompt.includes('clientSecret=')); assert.equal(value.onboarding.skill.version, '1.2.0');
   const data = (await inspect(f, value.token)).data; assert.equal(data.state, 'available'); assert.equal(data.username, 'ag_JoinLink'); assert.equal(data.onboarding.prompt, value.onboarding.prompt);
   for (const forbidden of ['Private owner label', 'owner_id', 'playerUuid', 'clientId', 'clientSecret', 'passwordHash']) assert.ok(!JSON.stringify(data).includes(forbidden), forbidden);
   assert.equal((await f.admin.request('/agent-invites')).data.invites[0].state, 'available'); assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM agent_clients').get().n, 0);
@@ -32,7 +32,7 @@ test('public join page and Skill remain useful to a fetch-only Agent and never c
   const f = await siteFixture(t), value = await invite(f), page = await fetch(value.onboarding.link);
   const html = await page.text(); assert.equal(page.status, 200); assert.equal(page.headers.get('referrer-policy'), 'no-referrer'); assert.ok(!html.includes(value.token)); assert.match(html, /不执行 JavaScript/); assert.match(html, /references\/invite.md/);
   assert.equal((await fetch(f.origin + '/join', { method: 'HEAD' })).status, 200);
-  const discovery = (await f.admin.request('/agent-access')).data; assert.equal(discovery.joinPage, '/join'); assert.equal(discovery.skill.version, '1.3.0');
+  const discovery = (await f.admin.request('/agent-access')).data; assert.equal(discovery.joinPage, '/join'); assert.equal(discovery.skill.version, '1.2.0');
   const old = await fetch(f.origin + '/downloads/qiandengji-agent-1.0.0.zip'); assert.equal(old.status, 200); assert.equal(old.headers.get('content-length'), '2705570');
 });
 test('full link helper validates origin and private files, exchanges once and preserves its identity on retry', async t => {
@@ -56,5 +56,5 @@ test('join page reads the fragment only in memory and copies a complete, current
   assert.equal(dom.window.document.querySelector('#join-name').textContent, 'ag_JoinLink'); assert.equal(dom.window.document.querySelector('#join-invite').hidden, false);
   dom.window.document.querySelector('#join-copy').click(); await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(copied[0], value.onboarding.prompt); assert.ok(urls.every(url => !url.includes(value.token))); assert.equal(dom.window.localStorage.length, 0);
-  assert.match(dom.window.document.querySelector('#join-download').href, /1\.3\.0\.zip$/);
+  assert.match(dom.window.document.querySelector('#join-download').href, /1\.2\.0\.zip$/);
 });

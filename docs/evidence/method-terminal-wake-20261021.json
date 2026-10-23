@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-21",
+  "scope": "Shared method terminal wake classification, discovered while following the core update in DSH",
+  "sourceBase": "7fdd91747eff0fd6f2cbd42485bc08c5fece4634",
+  "coreVersion": "0.5.7-rc.61",
+  "behavior": {
+    "activeGoalRealMethodTerminal": "task category; wakes when task is allowed",
+    "idleDefault": "quiet",
+    "piggybackAndArchiveOnly": "quiet",
+    "missingOrNonterminalExecution": "quiet",
+    "goalCompletion": "Not inferred from a program terminal"
+  },
+  "verification": {
+    "fullTests": { "total": 1849, "passed": 1848, "failed": 0, "skipped": 1 },
+    "publicDeclarations": 327,
+    "coreTypecheck": true,
+    "fullViewerBuildVerified": true,
+    "packedNodeNextConsumer": true,
+    "packedBundlerConsumer": true,
+    "packedDshContractsAndBudgetTestsPassed": 25,
+    "publicRoutinesReadThroughSdkMcp": 10,
+    "negativeControl": "The prior compiled helper ignored the same real terminal; the corrected packed helper wakes, retaining idle and piggyback exclusions."
+  },
+  "artifact": {
+    "filename": "agent-mc-world-0.5.7-rc.61.tgz",
+    "sha256": "7957ac9abfefff61efdc7e044fea47b612b1e78b4df3d7bf3df1947d851f8a73",
+    "integrity": "sha512-T3pCvPhblfevJZC1UCMbxB/RNE+soxiOXn4NHNVbzxFkUdzohH6nEnKVcMUB+Mn3dNMv6HP4k0i57fdgaMGpvA==",
+    "bytes": 59141148,
+    "includesLockedViewer": true,
+    "registryPublished": false
+  },
+  "retainedFailures": [
+    "An unrestricted parallel whole-suite run had two timing failures: game-memory IPC timeout and navigation meal checkpoint. Both passed in a focused serial rerun, followed by a full four-worker rerun with zero failures.",
+    "The first new DSH test fixture used an overlong offline account name; validation rejected it before any game transport. The corrected inert fixture passed."
+  ],
+  "privateEvidence": "runtime/dsh-core59-followup-20261021 (workspace, not distributed)",
+  "modelRequests": 0,
+  "gameConnections": 0,
+  "liveServicesChanged": false,
+  "distribution": "Source and validation only, per the user's instruction. No npm publication or live deployment."
+}

@@ -1,0 +1,46 @@
+/** Explicit installed-game compilation, with no framework checkout or automatic game launch. */
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { delimiter, join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=dirname(fileURLToPath(import.meta.url)), game=resolve(process.argv[2]??'');
+const home=process.argv[3], version=process.argv[4]??'1.20.6';
+if(!['1.20.6','1.21.1'].includes(version))throw new Error('Unsupported Minecraft build target');
+if(!home||!existsSync(join(game,'.fabric','remappedJars')))throw new Error('Usage: node build.mjs <installed Fabric game directory> <JDK 21 directory> [1.20.6|1.21.1]');
+const walk=directory=>existsSync(directory)?readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?walk(join(directory,entry.name)):[join(directory,entry.name)]):[];
+const run=(name,args,cwd=root)=>{const result=spawnSync(join(home,'bin',name+(process.platform==='win32'?'.exe':'')),args,{cwd,windowsHide:true,encoding:'utf8'});if(result.error)throw result.error;if(result.status)throw new Error(result.stdout+'\n'+result.stderr);if(result.stdout.trim())console.log(result.stdout.trim());};
+const build=join(root,'build',version),deps=join(build,'deps'),classes=join(build,'classes');
+// Clean only our exact generated class directory so moved Mixin classes cannot survive a build.
+if(resolve(classes)!==resolve(root,'build',version,'classes'))throw new Error('Unsafe generated class directory');
+rmSync(classes,{recursive:true,force:true});
+if(resolve(deps)!==resolve(root,'build',version,'deps'))throw new Error('Unsafe generated dependency directory');
+rmSync(deps,{recursive:true,force:true});
+mkdirSync(deps,{recursive:true});mkdirSync(classes,{recursive:true});
+const resources=join(root,'src','main','resources');
+const mod=JSON.parse(readFileSync(join(resources,'fabric.mod.json'),'utf8'));
+const mixin=JSON.parse(readFileSync(join(resources,'agent-mc-bridge.mixins.json'),'utf8'));
+if(mod.entrypoints.client.some(entry=>String(entry).startsWith(mixin.package+'.')))throw new Error('Entrypoint must not live in a Mixin-only package');
+const api=walk(join(game,'mods')).find(path=>path.includes('fabric-api-')&&path.endsWith('+'+version+'.jar'));
+const minecraft=walk(join(game,'.fabric','remappedJars')).find(path=>path.includes('minecraft-'+version+'-')&&path.endsWith('client-intermediary.jar'));
+if(!api||!minecraft)throw new Error('Matching installed Minecraft/Fabric API inputs are required');
+run('jar',['--extract','--file',api],deps);
+const classpath=[minecraft,...walk(join(game,'libraries')).filter(path=>path.endsWith('.jar')),...walk(deps).filter(path=>path.endsWith('.jar'))].join(delimiter);
+const sources=walk(join(root,'src','main','java')).filter(path=>path.endsWith('.java'));
+const quote=value=>'"'+value.replaceAll('\\','/').replaceAll('"','\\"')+'"';
+const args=join(build,'compile.args');writeFileSync(args,['--release','21','-encoding','UTF-8','-proc:none','-classpath',classpath,'-d',classes,...sources].map(quote).join('\n'));
+run('javac',['@'+args]);
+const testClasses=join(build,'test-classes');
+if(resolve(testClasses)!==resolve(root,'build',version,'test-classes'))throw new Error('Unsafe test class directory');
+rmSync(testClasses,{recursive:true,force:true});mkdirSync(testClasses,{recursive:true});
+const testArgs=join(build,'test-compile.args'),testClasspath=classes+delimiter+classpath;
+writeFileSync(testArgs,['--release','21','-encoding','UTF-8','-proc:none','-classpath',testClasspath,'-d',testClasses,...walk(join(root,'src','test','java')).filter(path=>path.endsWith('.java'))].map(quote).join('\n'));
+run('javac',['@'+testArgs]);
+for(const check of ['ControlLedgerCheck','MethodCallsCheck','BlockSearchCheck','InventoryPickCheck','org.agentmc.bridge.NavigationSessionCheck','org.agentmc.bridge.ServerAuthorizationCheck','org.agentmc.bridge.ReflexLeaseCheck'])run('java',['-cp',testClasses+delimiter+testClasspath,check]);
+run('java',['-cp',testClasses+delimiter+testClasspath,'org.agentmc.bridge.BaritoneApiCheck']);
+// An explicit API jar exercises optional discovery offline; it is never installed into the game.
+if(process.argv[5])run('java',['-cp',testClasses+delimiter+testClasspath+delimiter+resolve(process.argv[5]),'org.agentmc.bridge.BaritoneApiCheck','present']);
+mod.depends.minecraft=version;
+writeFileSync(join(build,'fabric.mod.json'),JSON.stringify(mod,null,2)+'\n');
+const output=join(root,'build','agent-mc-bridge-0.1.0-fabric-'+version+'.jar');
+run('jar',['--create','--file',output,'-C',classes,'org','-C',build,'fabric.mod.json','-C',resources,'agent-mc-bridge.mixins.json','-C',root,'LICENSE']);
+console.log(output);

@@ -38,9 +38,8 @@ export function loadProfile(directory) {
   if (config.world.version !== '1.21.1' || !config.dataDir || !config.world.loginConfigFile) throw Error('invalid_skill_profile');
   return {file,config,directory:dirname(file)};
 }
-export function makeProfile({directory,username,host='micro.kangqiang.site',port=25702,passwordFile,passwordFormat='file',root=SKILL_ROOT,serverId='qiandengji'}) {
+export function makeProfile({directory,username,host='micro.kangqiang.site',port=25702,passwordFile,passwordFormat='file',root=SKILL_ROOT}) {
   validAccount(username,host,port);
-  if(!/^[a-z][a-z0-9_-]{1,39}$/.test(serverId))throw Error('invalid_server_id');
   if (!['file','dpapi'].includes(passwordFormat) || (passwordFormat === 'dpapi' && (!passwordFile || process.platform !== 'win32'))) throw Error('invalid_password_format');
   directory = resolve(directory);
   if (existsSync(directory)) throw Error('profile_already_exists_use_check_or_config');
@@ -57,7 +56,7 @@ export function makeProfile({directory,username,host='micro.kangqiang.site',port
   const loginFile=join(privateDir,'login.json');
   writeJson(loginFile,{enabled:true,accounts:[{server:`${host}:${port}`,username,credentialFile,credentialFormat,command:'login',timeoutMs:135000,
     requestMarkers:['MC_AUTH_LOGIN'],successMarkers:['MC_AUTH_SUCCESS'],failureMarkers:['MC_AUTH_WRONG','MC_AUTH_LOCKED','MC_AUTH_UNAVAILABLE','MC_AUTH_DENIED']}]});
-  const config={serverId,dataDir:join(directory,'body-data'),timezone:'Asia/Shanghai',acceptsImages:false,metricsPort:0,consolePort:0,portalConfigFile:join(privateDir,'portal.json'),
+  const config={dataDir:join(directory,'body-data'),timezone:'Asia/Shanghai',acceptsImages:false,metricsPort:0,consolePort:0,portalConfigFile:join(privateDir,'portal.json'),
     world:{host,port,username,auth:'offline',version:'1.21.1',keepAliveTimeoutMs:180000,loginConfigFile:loginFile,viewerPort:0,
       local:{startWithWorld:false,serverDir:'',cheats:false},client:{enabled:false},player:{enabled:false}}};
   writeJson(join(directory,'client.json'),config);mkdirSync(config.dataDir,{mode:0o700});
@@ -81,7 +80,7 @@ function npmCli(explicit) {
 export async function main(argv=process.argv.slice(2)) {
   const command=argv.shift();
   const {values}=parseArgs({args:argv,options:{username:{type:'string'},profile:{type:'string'},host:{type:'string'},port:{type:'string'},
-    'password-file':{type:'string'},'password-format':{type:'string'},'token-file':{type:'string'},'portal-url':{type:'string'},'npm-cli':{type:'string'},'server-id':{type:'string'},'skip-install':{type:'boolean'}}});
+    'password-file':{type:'string'},'password-format':{type:'string'},'token-file':{type:'string'},'portal-url':{type:'string'},'npm-cli':{type:'string'},'skip-install':{type:'boolean'}}});
   if(!['init','check','config','portal'].includes(command))throw Error('usage_setup_init_check_config_or_portal');
   verifyBundle();
   const directory=values.profile || (values.username ? join(homedir(),'.qiandengji','players',values.username) : null);
@@ -91,12 +90,11 @@ export async function main(argv=process.argv.slice(2)) {
     if(existsSync(resolve(directory)))throw Error('profile_already_exists_use_check_or_config');
     if(!values['skip-install']) execFileSync(process.execPath,[npmCli(values['npm-cli']),'ci','--ignore-scripts','--no-audit','--no-fund'],
       {cwd:join(SKILL_ROOT,'assets','runtime'),windowsHide:true,stdio:['ignore','pipe','pipe'],maxBuffer:2*1024*1024});
-    return makeProfile({directory,username:values.username,host:values.host,port:Number(values.port??25702),passwordFile:values['password-file'],passwordFormat:values['password-format']??'file',serverId:values['server-id']??'qiandengji'});
+    return makeProfile({directory,username:values.username,host:values.host,port:Number(values.port??25702),passwordFile:values['password-file'],passwordFormat:values['password-format']??'file'});
   }
   if(command==='config')return mcpConfig(directory);
   const {file,config}=loadProfile(directory);
   if(command==='portal') {
-    if(config.serverId&&config.serverId!=='qiandengji')throw Error('world_portal_data_not_connected_use_game_status');
     if(!values['token-file'])throw Error('private_portal_token_file_required');
     const {validPortal}=await import('../assets/runtime/portal-client.mjs');
     validPortal(values['portal-url']??'https://mc.kangqiang.site');

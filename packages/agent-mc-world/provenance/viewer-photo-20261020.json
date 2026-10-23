@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "dc83a5f3d3e8c93cbbe5fef8bca90a01d1041ebd",
+  "branch": "codex/lean-photo-20261020",
+  "source": "packages/modern-viewer/renderer-src/host/viewer-photo-page.mjs",
+  "consumer": "core/viewer-photo-page.mjs",
+  "change": "Optional mode argument for the shared lean still page; ordinary HUD requests keep their normal page. No compiled renderer, original assets, source identity or server camera behavior changed."
+}

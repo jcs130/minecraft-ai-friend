@@ -61,43 +61,8 @@
     "keyFile": "E:/MC/private/portal-bridge.key"
   },
   "publicMedia": {},
-  "appearance": {
-    "enabled": true,
-    "bridgeEnabled": false,
-    "tokenHash": ""
-  },
+  "appearance": { "enabled": true, "bridgeEnabled": false, "tokenHash": "" },
   "agentAccess": {
     "enabled": true
-  },
-  "networkAccounts": {
-    "enabled": true,
-    "keyFile": ""
-  },
-  "gameServers": [
-    {
-      "id": "fom",
-      "name": "FOM · 机械动力与暮色",
-      "description": "机械工坊、田园生活与新的冒险正在筹备中。尚未正式开放，敬请期待。",
-      "core": "NeoForge",
-      "version": "1.21.1",
-      "state": "preparing",
-      "addresses": {
-        "java": "micro.kangqiang.site:28976",
-        "mineflayer": "micro.kangqiang.site:28977",
-        "bedrock": "micro.kangqiang.site:28988"
-      },
-      "loginAuthority": "MixAuth",
-      "minPasswordLength": 8,
-      "guide": {
-        "help": "/fom help",
-        "status": "/fom status"
-      },
-      "adapter": "native-mineflayer",
-      "accountBridge": {
-        "enabled": false,
-        "keyFile": "",
-        "tokenHash": ""
-      }
-    }
-  ]
+  }
 }

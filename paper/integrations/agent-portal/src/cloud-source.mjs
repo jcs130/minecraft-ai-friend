@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { GameData, UUID } from './game-data.mjs';
 import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { validatePhotos } from './gallery.mjs';
+import { mergeReviewedRoles, prepareReviewedRoles } from './ownership-review.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const pick = (value, fields) => Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key)).map(key => [key, value[key]]));
@@ -108,7 +109,7 @@ export class CloudSource {
 }
 
 export class CloudGame {
-  constructor(config, store, source) { this.config = config; this.store = store; this.salt = store.salt; this.source = source; }
+  constructor(config, store, source) { this.config = config; this.store = store; this.salt = store.salt; this.source = source; prepareReviewedRoles(store); }
   idFor(uuid, name) { return GameData.prototype.idFor.call(this, uuid, name); }
   publicAgent(row) { return GameData.prototype.publicAgent.call(this, row); }
   async roster() {
@@ -121,7 +122,7 @@ export class CloudGame {
       if (existing) { if (existing.playerUuid !== registered.uuid) existing.identityConflict = true; continue; }
       if (!roster.some(row => row.playerUuid === registered.uuid)) roster.push({ id: this.idFor(registered.uuid, registered.name), name: registered.name, playerUuid: registered.uuid, kind: 'agent', online: snapshot?.stale || !snapshot ? null : false, authenticated: false, available: true, isReserved: false, source: 'LoginGuard.verified-portal-registration' });
     }
-    return roster.filter(row => !retired.has(row.name.toLowerCase()));
+    return mergeReviewedRoles(this.store, roster.filter(row => !retired.has(row.name.toLowerCase())), (uuid,name)=>this.idFor(uuid,name));
   }
   async serverSummary() {
     const snapshot = this.source.read();
@@ -142,7 +143,7 @@ export class CloudWorld {
   constructor(config, game, store, source) { this.config = config; this.game = game; this.store = store; this.source = source; }
   async players() {
     const snapshot = this.source.read(), roster = await this.game.roster();
-    const visible = new Map(roster.map(row => [row.name.toLowerCase(), row]));
+    const visible = new Map(roster.filter(row=>!row.historical).map(row => [row.name.toLowerCase(), row]));
     return { players: (snapshot?.value.players || []).filter(row => visible.has(row.name.toLowerCase())).map(row => ({ ...this.game.publicAgent(visible.get(row.name.toLowerCase())), growth: row.growth, savedAt: row.savedAt, progressionSavedAt: row.progressionSavedAt })),
       freshness: 'saved', source: 'home.outbound-snapshot', observedAt: snapshot?.value.observedAt || null };
   }

@@ -2,16 +2,16 @@
 
 ## 结论与分支
 
-自研源码采用根目录 MIT；Numen 子项目和第三方组件保留自己的许可证。GitHub 仓库公开，可以克隆、fork 和自行构建。当前维护的 Paper 开发分支是 `qiandengji-personal-stash`；默认 `main` 仍为历史 NeoForge 工程，普通不带分支的 clone 不能代表现役 Paper。
+自研源码采用根目录 MIT；Numen 子项目和第三方组件保留自己的许可证。GitHub 仓库公开，可以克隆、fork 和自行构建。默认 `main` 现已包含当前 Paper 工程、正式 0.8.4 网站与通用 MC 核心；旧工程保存在 `legacy/pre-paper-main-20261023`。分支与候选边界见 [BRANCHES.md](BRANCHES.md)。
 
 ```sh
-git clone --branch qiandengji-personal-stash https://github.com/jcs130/minecraft-ai-friend.git
+git clone https://github.com/jcs130/minecraft-ai-friend.git
 cd minecraft-ai-friend
 ```
 
-fork 时保留该分支；若 GitHub 只复制默认分支，需要取消“只复制 main”或从上游获取所需分支。所有以下步骤操作自己新建的目录，不读取维护者家服。
+普通 clone 或只复制默认分支的 fork 即可获取当前入口。以下步骤均操作自己新建的目录，不读取维护者家服。
 
-这里提供可独立构建和启动的最小 Paper 沙盒。不是整台家服的磁盘镜像：原城镇、存档、玩家背包、账号、模型凭据、NAS 和云主机部署数据属于运行数据。现役 AgentFriend 是 0.4.47.11；当前完整源码生成 0.4.48 候选，不能把构建成功当成与现役包逐字相同或已完成所有玩法验证。
+这里提供可独立构建和启动的最小 Paper 沙盒。不是整台家服的磁盘镜像：原城镇、存档、玩家背包、账号、模型凭据、NAS 和云主机部署数据属于运行数据。现役 AgentFriend 是 0.4.47.12；当前完整源码生成 0.4.48 候选，不能把构建成功当成与现役包逐字相同或已完成所有玩法验证。
 
 ## 一、游戏核心与自研插件
 
@@ -39,7 +39,7 @@ java -Xms512M -Xmx2G -jar server.jar --nogui
 
 ## 二、网站
 
-网站当前正式源码为 0.8.4，固定提交 `9f03e4f1101d12f75c83add996165958565c964c`，位于 `portal-account-fix-20261023` 发布分支。当前游戏开发分支中的 0.9.0 是多世界候选，不能直接拿它覆盖正式网站。
+网站当前正式源码为 0.8.4，固定提交 `9f03e4f1101d12f75c83add996165958565c964c`，位于 `portal-account-fix-20261023` 发布分支。main 的 `paper/integrations/agent-portal/` 已纳入同一正式源码；原开发分支的 0.9.0 多世界候选未合入本次发布。
 
 需要 Node.js 22.13+。下列命令仅从公开 Git 提交导出正式网站，自动写入指向你自己的本机沙盒的无密配置。浅克隆若没有该对象，会从公开上游获取固定提交；不用 GitHub 私人 token。
 

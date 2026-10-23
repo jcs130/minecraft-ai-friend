@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "branch": "experiment/agent-society-1.21.1",
+  "sourceBaseCommit": "27e420eb996b7b3afcb2a840ef2e9af5420dc156",
+  "scope": "bounded Mineflayer work scripts in the independent agent-mc-world core",
+  "routines": [
+    {
+      "id": "farm_harvest",
+      "version": 1,
+      "sourceHash": "7dba2439f82bd3c193eaa1560ffc7d3279fbc5ac1b276dfa41684cc5446edc10",
+      "sourceChars": 4803
+    },
+    {
+      "id": "gather_logs",
+      "version": 1,
+      "sourceHash": "c85eab862605cbbe9d3b17a575353d0ce2cc95e6da520881d7dc882eb9791074",
+      "sourceChars": 4802
+    },
+    {
+      "id": "deposit_surplus",
+      "version": 1,
+      "sourceHash": "8c1e4d1ede8d3e12d75692561e60d3c542bdeb4033faf1ec979b3d589d4caf0a",
+      "sourceChars": 3848
+    },
+    {
+      "id": "restock",
+      "version": 1,
+      "sourceHash": "7958332943abfb3afd67af02321a9a968f5c71028ecf8a0034f54d4a43648b40",
+      "sourceChars": 3840
+    }
+  ],
+  "capabilities": [
+    "mature vanilla crop harvest and replant",
+    "exact-cell log gathering",
+    "surplus deposit",
+    "target-quantity restock"
+  ],
+  "package": {
+    "name": "agent-mc-world",
+    "version": "0.4.0",
+    "artifactSha256": "e4f8bbf01886b8ba464baa9ec54fc309dbf268fa845fc7134dfcec9bdecf9382",
+    "artifactBytes": 46981625,
+    "npmRegistryPublished": false
+  },
+  "verification": {
+    "fullPackageTests": {
+      "passed": 683,
+      "failed": 0,
+      "skipped": 0
+    },
+    "buildVerification": "Source, runtime, public declarations and default entry verified.",
+    "coreTypecheck": true,
+    "packedTypes:nodeNext": true,
+    "packedTypes:bundler": true,
+    "sourceSmokeAssertions": 19,
+    "packedSmokeAssertions": 19,
+    "liveGameAssertions": 10,
+    "newProcessReconciliationAssertions": 2,
+    "packedEventAssertions": 3,
+    "liveScriptHashesEqualFinalPackage": true,
+    "documentationOnlyRepack": {
+      "onlyChangedFile": "docs/work-routines.md",
+      "allOtherMemberBytesIdentical": true,
+      "previousVerifiedArtifactSha256": "6c897980c1d386bdc1ad92d40b0dc593e7ea7a36c6a906786999c48624ded317"
+    }
+  },
+  "liveFixture": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "mods": 103,
+    "accountRole": "non-OP survival QA body",
+    "materials": "console-built isolated test plots and supplied inventory; no natural survival claim",
+    "checks": [
+      "actual packed extension exports work catalog without repository imports",
+      "non-OP survival body receives real position and server inventory",
+      "one routine harvests a mature crop, gains wheat, replants age zero and leaves age-three seedling untouched",
+      "surplus stores exactly eight dirt; same request ID returns the original receipt without another transfer",
+      "real chest reopens, returns all eight stored dirt and supplies exactly five bread",
+      "already sufficient stock executes no extra chest operation",
+      "two explicit log cells become air and two logs enter inventory using the actual equipped axe",
+      "wrong exact block returns target_changed without searching or harvesting another log",
+      "cancel revokes an actual in-flight walk and does not break the distant work target",
+      "reconnect preserves actual inventory; a previously accepted request is reconciled, never replayed",
+      "persistent request ledger returns the original execution identity and receipt across a new Node process",
+      "no second deposit; actual server inventory remains twelve dirt"
+    ],
+    "normalShutdown": {
+      "javaExit": 0,
+      "gatewayExit": 0,
+      "ownerExit": 0,
+      "portsClosed": [
+        39320,
+        39321,
+        39322
+      ]
+    }
+  },
+  "eventDelivery": {
+    "scriptOwnedSubtasks": "piggyback",
+    "workTerminal": "flush",
+    "danger": "original immediate policy",
+    "verification": "final packed runtime + real executor with local fake bot; no server actions"
+  },
+  "retainedFailedTrials": [
+    "first elevated admin teleport fixture caused a fall before any routine executed",
+    "plain coordinate object passed to native blockAt; fixed with Vec3 and stricter native fixture",
+    "transport-only item metadata was mistaken for special equipment; semantic selection corrected without a server-specific core dependency",
+    "lower log removed with real inventory gain but subsequent air observation occluded; added explicit executor postcondition and kept current sight unknown",
+    "new-process receipt normalization adds an empty blobs array; reconciliation compares original execution, text, control and unchanged real inventory"
+  ],
+  "production": {
+    "restartedByThisTask": false,
+    "writtenByThisTask": false,
+    "fomPortsListening": {
+      "28976": false,
+      "28977": false,
+      "28985": false
+    },
+    "lastRecordedOwnerAt": "2026-10-20T15:19:23.460120+00:00"
+  },
+  "modelRequests": 0,
+  "newDaemon": false,
+  "naturalAutonomousSurvivalVerified": false,
+  "allNpcSystemsPorted": false,
+  "privateEvidence": "research/agent-work-20261021 (raw logs, inventory, worlds and archives kept outside Git)",
+  "ok": true
+}

@@ -1,0 +1,509 @@
+{
+  "purpose": "Declaration-only compatibility copies; no third-party runtime is modified.",
+  "files": [
+    {
+      "package": "typed-emitter",
+      "version": "1.4.0",
+      "path": "index.d.ts",
+      "file": "typed-emitter@1.4.0/typed-emitter/index.d.ts",
+      "upstreamSha256": "05a88db495057a6c3b1a0897fb40d7462f54d41a7d034b6bf8535f05e2aa534d",
+      "license": "MIT",
+      "sha256": "05a88db495057a6c3b1a0897fb40d7462f54d41a7d034b6bf8535f05e2aa534d"
+    },
+    {
+      "package": "buffer",
+      "version": "6.0.3",
+      "path": "index.d.ts",
+      "file": "buffer@6.0.3/buffer/index.d.ts",
+      "upstreamSha256": "4967529644e391115ca5592184d4b63980569adf60ee685f968fd59ab1557188",
+      "license": "MIT",
+      "sha256": "4967529644e391115ca5592184d4b63980569adf60ee685f968fd59ab1557188"
+    },
+    {
+      "package": "@types/readable-stream",
+      "version": "4.0.25",
+      "path": "index.d.ts",
+      "file": "@types+readable-stream@4.0.25/@types/readable-stream/index.d.ts",
+      "upstreamSha256": "3b1e2cba868b9f86ec48120513981337ddae7fb5e9c8313e6c4e8abfefdbb7cc",
+      "license": "MIT",
+      "sha256": "c342e68cde0c3b415467b0070b681cb67fca0ccbd4f0a7254a30a041f861e3a5"
+    },
+    {
+      "package": "prismarine-auth",
+      "version": "3.1.1",
+      "path": "index.d.ts",
+      "file": "prismarine-auth@3.1.1/prismarine-auth/index.d.ts",
+      "upstreamSha256": "ec628ba7fbb97ca8465bbade2fb56c528e9ecedc57a21ab2a0e000c42d97c437",
+      "license": "MIT",
+      "sha256": "8b1c4070ceb2dfb39e61b8fe5de5008da79125ee5ce39879c93a589d3d629481"
+    },
+    {
+      "package": "prismarine-realms",
+      "version": "1.6.0",
+      "path": "index.d.ts",
+      "file": "prismarine-realms@1.6.0/prismarine-realms/index.d.ts",
+      "upstreamSha256": "0cd2bb2f4a76e94b5a6116ac8b879e1acb825b4aa64653064963c41c314b46d3",
+      "license": "MIT",
+      "sha256": "3a077ca7ee370c58ecfea3bfbb3118d0afddba2907b33d0c1eaac4dcde385a38"
+    },
+    {
+      "package": "@types/node-rsa",
+      "version": "1.1.4",
+      "path": "index.d.ts",
+      "file": "@types+node-rsa@1.1.4/@types/node-rsa/index.d.ts",
+      "upstreamSha256": "9d9b96122bc72b6ed6ba9e989a955efb8cb49d6d7833998b47536dced0ad0c8f",
+      "license": "MIT",
+      "sha256": "bd49120d99b780ef9cc89a1fcd9039cfe4416a4160c38a28b7732da82d3d612e"
+    },
+    {
+      "package": "minecraft-protocol",
+      "version": "1.68.0",
+      "path": "src/index.d.ts",
+      "file": "minecraft-protocol@1.68.0/minecraft-protocol/src/index.d.ts",
+      "upstreamSha256": "e8b4be8df975b5fdc97748f9d5fcbd3ee0009e51d23159c23e2b51554199e456",
+      "license": "BSD-3-Clause",
+      "sha256": "ae93611d296f53cf8db5935bcfb90f639696906398f76656d760be7d9808bfa7"
+    },
+    {
+      "package": "vec3",
+      "version": "0.2.0",
+      "path": "index.d.ts",
+      "file": "vec3@0.2.0/vec3/index.d.ts",
+      "upstreamSha256": "f124a1cdb16829dc445c99a9d0bbd32d9fc2187e7e1cf9d548632abac6a58574",
+      "license": "BSD",
+      "sha256": "f124a1cdb16829dc445c99a9d0bbd32d9fc2187e7e1cf9d548632abac6a58574"
+    },
+    {
+      "package": "protodef",
+      "version": "1.19.0",
+      "path": "index.d.ts",
+      "file": "protodef@1.19.0/protodef/index.d.ts",
+      "upstreamSha256": "3954595b92077cb66d5e701c3f3e125828eb76054e78cf076f9e86bd12a50f17",
+      "license": "MIT",
+      "sha256": "e25c7da33fd241027e5d76cff02c7a9ecf12fb5f61497b03fb575254b1772da5"
+    },
+    {
+      "package": "prismarine-nbt",
+      "version": "2.8.0",
+      "path": "typings/index.d.ts",
+      "file": "prismarine-nbt@2.8.0/prismarine-nbt/typings/index.d.ts",
+      "upstreamSha256": "726b7d2b72d40763164da13b6c26822c2f2b1bf28f43577e9f905c3c3f55d237",
+      "license": "MIT",
+      "sha256": "5ddc74148af22b38bce9f1015c6e0d667361ee76135c30104f42ddceb7c5ed98"
+    },
+    {
+      "package": "prismarine-item",
+      "version": "1.18.0",
+      "path": "index.d.ts",
+      "file": "prismarine-item@1.18.0/prismarine-item/index.d.ts",
+      "upstreamSha256": "e3953c05f1b24a62e4e58338f84d034e9e1bc7497b227340bf39352686b2aa96",
+      "license": "MIT",
+      "sha256": "9c8adaef800020738870991428400c7ffd08ed1faaa690c1731dad256857e143"
+    },
+    {
+      "package": "typed-emitter",
+      "version": "2.1.0",
+      "path": "index.d.ts",
+      "file": "typed-emitter@2.1.0/typed-emitter/index.d.ts",
+      "upstreamSha256": "6c27d4b5ba01295ef334456d9af4366aca789f228eee70fcb874b903a59b0e5b",
+      "license": "MIT",
+      "sha256": "6c27d4b5ba01295ef334456d9af4366aca789f228eee70fcb874b903a59b0e5b"
+    },
+    {
+      "package": "prismarine-windows",
+      "version": "2.10.0",
+      "path": "index.d.ts",
+      "file": "prismarine-windows@2.10.0/prismarine-windows/index.d.ts",
+      "upstreamSha256": "259be5c2417335bb0322e02cd74a116744efa1170ea90436b795372714720aff",
+      "license": "MIT",
+      "sha256": "e581771dba4118cd8c5af551cd37e993f74f851f8ef6bea6156be3baf716a8c2"
+    },
+    {
+      "package": "prismarine-recipe",
+      "version": "1.5.0",
+      "path": "index.d.ts",
+      "file": "prismarine-recipe@1.5.0_prismarine-registry@1.12.0/prismarine-recipe/index.d.ts",
+      "upstreamSha256": "fd64fe16b2bfb588c2a2e5d0d912463d780728b014014abfca562362e65783ef",
+      "license": "MIT",
+      "sha256": "fd64fe16b2bfb588c2a2e5d0d912463d780728b014014abfca562362e65783ef"
+    },
+    {
+      "package": "minecraft-data",
+      "version": "3.117.0",
+      "path": "index.d.ts",
+      "file": "minecraft-data@3.117.0/minecraft-data/index.d.ts",
+      "upstreamSha256": "7245b6c0bc965602cf0d2b53639094c2bd1de074499cac13778b0ee164fb80ca",
+      "license": "MIT",
+      "sha256": "7245b6c0bc965602cf0d2b53639094c2bd1de074499cac13778b0ee164fb80ca"
+    },
+    {
+      "package": "prismarine-registry",
+      "version": "1.12.0",
+      "path": "lib/index.d.ts",
+      "file": "prismarine-registry@1.12.0/prismarine-registry/lib/index.d.ts",
+      "upstreamSha256": "cd71faa2c7818b27f7b10f8e32e0ff410e7d45748165c1f205fd9a4b1840f79a",
+      "license": "MIT",
+      "sha256": "8b1e802072f1217ba9f3872eb7b3750523df8f1bb8148a6ea1d19977678e4227"
+    },
+    {
+      "package": "prismarine-biome",
+      "version": "1.4.0",
+      "path": "index.d.ts",
+      "file": "prismarine-biome@1.4.0_prismarine-registry@1.12.0/prismarine-biome/index.d.ts",
+      "upstreamSha256": "27ffde2b250fd087506dbaafc9bd47bc52c2a7883d72e8a3c51986de1e76ed16",
+      "license": "MIT",
+      "sha256": "a57a30dde760d35b5ec91e1ef5c6d428cae8eafd4e11d3d9a82e4211b2f7e606"
+    },
+    {
+      "package": "prismarine-chat",
+      "version": "1.13.0",
+      "path": "index.d.ts",
+      "file": "prismarine-chat@1.13.0/prismarine-chat/index.d.ts",
+      "upstreamSha256": "0f695d684426a4e3eedd2858a5a1a9cfce7a4db71c3a2d208a05554055a9f790",
+      "license": "MIT",
+      "sha256": "9331ba92a25a73a8f98479960d593654819938eab2308d9fcff5c872badab1f5"
+    },
+    {
+      "package": "prismarine-block",
+      "version": "1.23.0",
+      "path": "index.d.ts",
+      "file": "prismarine-block@1.23.0_prismarine-registry@1.12.0/prismarine-block/index.d.ts",
+      "upstreamSha256": "e9d5e7907a4f03eec0ee321f16cd7de76202b9b69c7a98458ae428643aa7b5a1",
+      "license": "MIT",
+      "sha256": "040584bbabcaa97b7674ddc991610d00bcbc843228e890c579645bd85abdbe57"
+    },
+    {
+      "package": "prismarine-entity",
+      "version": "2.6.0",
+      "path": "index.d.ts",
+      "file": "prismarine-entity@2.6.0/prismarine-entity/index.d.ts",
+      "upstreamSha256": "08b41a0c645c0a90e233bc188178e3891896a128a39051368420d9b6de5cc86c",
+      "license": "MIT",
+      "sha256": "37351fe12a2235320f4db0b3e41da30dd2fa58c91902bae08d34dec1110b68ad"
+    },
+    {
+      "package": "prismarine-chunk",
+      "version": "1.41.0",
+      "path": "types/section.d.ts",
+      "file": "prismarine-chunk@1.41.0/prismarine-chunk/types/section.d.ts",
+      "upstreamSha256": "3c661d16edd5206e1e5d09dae33b0826554b4ffb858ecab841f47a29937b109c",
+      "license": "MIT",
+      "sha256": "2ed374260d55b56616ed38deb72fd6199efec748f8979f0c7254f3b71b78cbd6"
+    },
+    {
+      "package": "prismarine-chunk",
+      "version": "1.41.0",
+      "path": "types/index.d.ts",
+      "file": "prismarine-chunk@1.41.0/prismarine-chunk/types/index.d.ts",
+      "upstreamSha256": "06136db98ae58baf11a82246551493177e104ef76a3f8cba3d5f49ae1d23e314",
+      "license": "MIT",
+      "sha256": "9d14be5086ea5850ab1560c8e787c0eef09c4c495fc19e8ec2e0581c4b1dd543"
+    },
+    {
+      "package": "prismarine-world",
+      "version": "3.7.0",
+      "path": "types/iterators.d.ts",
+      "file": "prismarine-world@3.7.0/prismarine-world/types/iterators.d.ts",
+      "upstreamSha256": "69a9e0be841f0bf8ccab3a00e250f5156a52cbc333cc5546bec821cd207546cf",
+      "license": "MIT",
+      "sha256": "94ab149caa0f312c2eb0be17b343a0a741a844e62df676fbf66fba5d0db872e1"
+    },
+    {
+      "package": "prismarine-world",
+      "version": "3.7.0",
+      "path": "types/world.d.ts",
+      "file": "prismarine-world@3.7.0/prismarine-world/types/world.d.ts",
+      "upstreamSha256": "a51da3bdc71a5dacb0232fa8aa7359bb35c9ddb06936a374ea1eab823569cb63",
+      "license": "MIT",
+      "sha256": "61fda8ae91b0fca63d809623d1627137063a98184937c3067fc9ff7e058de566"
+    },
+    {
+      "package": "prismarine-world",
+      "version": "3.7.0",
+      "path": "types/index.d.ts",
+      "file": "prismarine-world@3.7.0/prismarine-world/types/index.d.ts",
+      "upstreamSha256": "09de83bcce5bf5e93a82a5eeadf1ef88317c1defe86b567fc0301c5889a8253d",
+      "license": "MIT",
+      "sha256": "33bcccdb3a68dbe9b2d3b1cae82f78ae4ca588fcbeea4f821fcc2a25ed250c79"
+    },
+    {
+      "package": "mineflayer",
+      "version": "4.37.1",
+      "path": "index.d.ts",
+      "file": "mineflayer@4.37.1/mineflayer/index.d.ts",
+      "upstreamSha256": "e8d8a40aa08f91ea0f5528eddc5b53d118b55508ce746b2394fe808ae7a5901c",
+      "license": "MIT",
+      "sha256": "567ebbb7006ff08f233251fae8da91a2113307be1c6f9741244330c9b4ffa313"
+    },
+    {
+      "package": "mineflayer-pathfinder",
+      "version": "2.4.5",
+      "path": "index.d.ts",
+      "file": "mineflayer-pathfinder@2.4.5_prismarine-registry@1.12.0/mineflayer-pathfinder/index.d.ts",
+      "upstreamSha256": "3cb726aadb9d7c834e47e8306fc1a1aeb5d7e3dd8b200e8bfd36721133911602",
+      "license": "MIT",
+      "sha256": "0b7e372088090908dee83cc153cc38a03d0b880cf0dd01d0168a2c57497550dc"
+    },
+    {
+      "package": "engine.io-parser",
+      "path": "build/cjs/commons.d.ts",
+      "file": "engine.io-parser@5.2.3/engine.io-parser/build/cjs/commons.d.ts",
+      "upstreamSha256": "569e762cf47aafdad508360a443c6c757e56c61db3b652b65458a7d168d139c4",
+      "sha256": "569e762cf47aafdad508360a443c6c757e56c61db3b652b65458a7d168d139c4",
+      "version": "5.2.3",
+      "license": "MIT"
+    },
+    {
+      "package": "engine.io-parser",
+      "path": "build/cjs/encodePacket.d.ts",
+      "file": "engine.io-parser@5.2.3/engine.io-parser/build/cjs/encodePacket.d.ts",
+      "upstreamSha256": "02ed2766d79a00719ac3cc77851d54bd7197c1b12085ea12126bc2a65068223e",
+      "sha256": "02ed2766d79a00719ac3cc77851d54bd7197c1b12085ea12126bc2a65068223e",
+      "version": "5.2.3",
+      "license": "MIT"
+    },
+    {
+      "package": "engine.io-parser",
+      "path": "build/cjs/decodePacket.d.ts",
+      "file": "engine.io-parser@5.2.3/engine.io-parser/build/cjs/decodePacket.d.ts",
+      "upstreamSha256": "4b84373e192b7e0f8569b65eb16857098a6ee279b75d49223db2a751fdd7efde",
+      "sha256": "4b84373e192b7e0f8569b65eb16857098a6ee279b75d49223db2a751fdd7efde",
+      "version": "5.2.3",
+      "license": "MIT"
+    },
+    {
+      "package": "engine.io-parser",
+      "path": "build/cjs/index.d.ts",
+      "file": "engine.io-parser@5.2.3/engine.io-parser/build/cjs/index.d.ts",
+      "upstreamSha256": "5aeea312cd1d3cc5d72fc8a9c964439d771bdf41d9cce46667471b896b997473",
+      "sha256": "5aeea312cd1d3cc5d72fc8a9c964439d771bdf41d9cce46667471b896b997473",
+      "version": "5.2.3",
+      "license": "MIT"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/parser-v3/index.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/parser-v3/index.d.ts",
+      "upstreamSha256": "a9de04c9ecc184497995853cfcf529de92b58adc5bccfae0350157269aba9391",
+      "license": "MIT",
+      "sha256": "49be2608713680ffd9d7d01586a735ceb8f852560b6bcfd70ab6a78b87b72366"
+    },
+    {
+      "package": "@types/ws",
+      "version": "8.18.2",
+      "path": "index.d.ts",
+      "file": "@types+ws@8.18.2/@types/ws/index.d.ts",
+      "upstreamSha256": "0143cefdb56a076f7f6cc2520a60469e0b349452f7882c5c2688f69032a8424c",
+      "license": "MIT",
+      "sha256": "0143cefdb56a076f7f6cc2520a60469e0b349452f7882c5c2688f69032a8424c"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/transport.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/transport.d.ts",
+      "upstreamSha256": "f2c4a36eb216aadb0d9c79862a31b922ccfa1eaaa38d2124cc9192d40eda4779",
+      "license": "MIT",
+      "sha256": "d37e062d3350b49ea8a8a03d93430f7fd3125e53f941ae22ce88b6324c2a3000"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/socket.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/socket.d.ts",
+      "upstreamSha256": "4a2566017e7735fa38f2cef8a4b4ac5e812aaa4614ba8b8fc7e9a8ef65ddd39a",
+      "license": "MIT",
+      "sha256": "a3b10cee3f00ee1654c725ceab02a8250968280a1c4c0734b048f943ab0cbb18"
+    },
+    {
+      "package": "@types/cors",
+      "version": "2.8.19",
+      "path": "index.d.ts",
+      "file": "@types+cors@2.8.19/@types/cors/index.d.ts",
+      "upstreamSha256": "25be1eb939c9c63242c7a45446edb20c40541da967f43f1aa6a00ed53c0552db",
+      "license": "MIT",
+      "sha256": "25be1eb939c9c63242c7a45446edb20c40541da967f43f1aa6a00ed53c0552db"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/contrib/types.cookie.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/contrib/types.cookie.d.ts",
+      "upstreamSha256": "08c2bb524b8ed271f194e1c7cc6ad0bcc773f596c41f68a207d0ec02c9727060",
+      "license": "MIT",
+      "sha256": "08c2bb524b8ed271f194e1c7cc6ad0bcc773f596c41f68a207d0ec02c9727060"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/server.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/server.d.ts",
+      "upstreamSha256": "8ac41e0836522cc725d4541502cc2d433fa5b66d66d074ef6716b201bdf8ecc0",
+      "license": "MIT",
+      "sha256": "ed7a6f5c9d09fa2b97358b02ed744296800f1071f0fd3867a8e168cdda8e6b7a"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/transports/polling.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/transports/polling.d.ts",
+      "upstreamSha256": "c0a4398261ab9b569fb4016576636c601c171ee983d124f68a2faa7ff82ce14b",
+      "license": "MIT",
+      "sha256": "2bccc73253366a50e28010ec4a08a9d0f698de0a1ea1961bcb001acde7f16362"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/transports/websocket.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/transports/websocket.d.ts",
+      "upstreamSha256": "d99e9f5aa43397599fe824e38c33d13d3a9e19198806a4363114bd7ac58b29cc",
+      "license": "MIT",
+      "sha256": "598819100bbfe44ced44662b21e0b81eb40cc8d81cca4d129e3ad6aded491727"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/transports/webtransport.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/transports/webtransport.d.ts",
+      "upstreamSha256": "440099416057789b14f85af057d4924915f27043399c10d4ca67409d94b963cf",
+      "license": "MIT",
+      "sha256": "54cecf455317cce43a1838b67c9587727bd30d14f89cf2c6a10b8032663158b1"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/transports/index.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/transports/index.d.ts",
+      "upstreamSha256": "ac44995fc7d0781d77927bae7dd41a31f0309e695fd2694b175c0ce3bc4b3b50",
+      "license": "MIT",
+      "sha256": "2cab968f65ff5bb879ba07ed693b2292e92ac2708bd40bb45b0afabce4c4d6da"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/userver.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/userver.d.ts",
+      "upstreamSha256": "0c1f802f7a60ca8084e5188ac7952accdfc00f39ded3ebbbd3cdcc9da51b9a7b",
+      "license": "MIT",
+      "sha256": "a179f581cf544d11fda1c0776dde6f4ebb93aaf8f172df852bc1733e4a10e1fc"
+    },
+    {
+      "package": "engine.io",
+      "version": "6.6.11",
+      "path": "build/engine.io.d.ts",
+      "file": "engine.io@6.6.11/engine.io/build/engine.io.d.ts",
+      "upstreamSha256": "a32e3fc530d8d1a18bf54678d8d55714827a50c9fabdd4ede7155a56be7d1dcb",
+      "license": "MIT",
+      "sha256": "a6b40d7f440a3f31320fc026201586e129bd4f19ffedaaee9a616ab2b69b3873"
+    },
+    {
+      "package": "@socket.io/component-emitter",
+      "path": "lib/cjs/index.d.ts",
+      "file": "@socket.io+component-emitter@3.1.2/@socket.io/component-emitter/lib/cjs/index.d.ts",
+      "upstreamSha256": "14ecfc29e0c44ad4c5e50f9b597492cd8f45a2a635db8b5fe911a5da83e26cf8",
+      "sha256": "14ecfc29e0c44ad4c5e50f9b597492cd8f45a2a635db8b5fe911a5da83e26cf8",
+      "version": "3.1.2",
+      "license": "MIT"
+    },
+    {
+      "path": "build/cjs/index.d.ts",
+      "file": "socket.io-parser@4.2.7/socket.io-parser/build/cjs/index.d.ts",
+      "upstreamSha256": "ba0badf6398010ef0ba77947d4b52078fc84cb4f209f6b70194b3b2cfb1823d8",
+      "sha256": "1a3cca60f395ea644d0a07379ef8ef0a978466a9ee716450d08811acb28473e6",
+      "package": "socket.io-parser",
+      "version": "4.2.7",
+      "license": "MIT"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/typed-events.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/typed-events.d.ts",
+      "upstreamSha256": "c2f041fe0e7ae2d5a19c477d19e8ec13de3d65ef45e442fa081cf6098cdcbe2d",
+      "license": "MIT",
+      "sha256": "c2f041fe0e7ae2d5a19c477d19e8ec13de3d65ef45e442fa081cf6098cdcbe2d"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/client.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/client.d.ts",
+      "upstreamSha256": "0cef678147928ef223ff7f2aae3442cc9f4e9996956e9ac92434e626d0e147f8",
+      "license": "MIT",
+      "sha256": "7b3fff263a489c147e984835d6c39ff9969d38cf5d147dcd36bffa1f919d5314"
+    },
+    {
+      "package": "socket.io-adapter",
+      "version": "2.5.8",
+      "path": "dist/in-memory-adapter.d.ts",
+      "file": "socket.io-adapter@2.5.8/socket.io-adapter/dist/in-memory-adapter.d.ts",
+      "upstreamSha256": "198ae766bb698feb66d3188cfce59fb33696c951b10f901aa3fc3db4847ce76a",
+      "license": "MIT",
+      "sha256": "198ae766bb698feb66d3188cfce59fb33696c951b10f901aa3fc3db4847ce76a"
+    },
+    {
+      "package": "socket.io-adapter",
+      "version": "2.5.8",
+      "path": "dist/cluster-adapter.d.ts",
+      "file": "socket.io-adapter@2.5.8/socket.io-adapter/dist/cluster-adapter.d.ts",
+      "upstreamSha256": "6dc488fd3d01e4269f0492b3e0ee7961eec79f4fc3ae997c7d28cde0572dbd91",
+      "license": "MIT",
+      "sha256": "059df47f018dcbcee92d4581ec2a6dbecffc145815888827b4fffaede9f88d3d"
+    },
+    {
+      "package": "socket.io-adapter",
+      "version": "2.5.8",
+      "path": "dist/index.d.ts",
+      "file": "socket.io-adapter@2.5.8/socket.io-adapter/dist/index.d.ts",
+      "upstreamSha256": "a09b706f16bda9372761bd70cf59814b6f0a0c2970d62a5b2976e2fd157b920f",
+      "license": "MIT",
+      "sha256": "bcdd6398ffb07f1a48be5e5a3e2ba47da6814354aa35e6d97b450a51312378f8"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/socket-types.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/socket-types.d.ts",
+      "upstreamSha256": "70da4bfde55d1ec74e3aa7635eae741f81ced44d3c344e2d299e677404570ca9",
+      "license": "MIT",
+      "sha256": "70da4bfde55d1ec74e3aa7635eae741f81ced44d3c344e2d299e677404570ca9"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/broadcast-operator.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/broadcast-operator.d.ts",
+      "upstreamSha256": "bf4f6b0d2ae8d11dc940c20891f9a4a558be906a530b9d9a8ff1032afa1962cd",
+      "license": "MIT",
+      "sha256": "456fc8f9a2f0132649c511bf762707a87d614d037ad60e26b6861d3e1e46198a"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/socket.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/socket.d.ts",
+      "upstreamSha256": "9975431639f84750a914333bd3bfa9af47f86f54edbaa975617f196482cfee31",
+      "license": "MIT",
+      "sha256": "801e72b1e3431943b8625d016c8afb5928da012350c5a4f7d9ba68c33e10b5c0"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/namespace.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/namespace.d.ts",
+      "upstreamSha256": "70a5cb56f988602271e772c65cb6735039148d5e90a4c270e5806f59fc51d3a0",
+      "license": "MIT",
+      "sha256": "cbdecf9130418816584f5daf0bd8a84388a150dddb6607ac0ed410530e6b1e52"
+    },
+    {
+      "package": "socket.io",
+      "version": "4.8.3",
+      "path": "dist/index.d.ts",
+      "file": "socket.io@4.8.3/socket.io/dist/index.d.ts",
+      "upstreamSha256": "e083384623f90cfa7e8d2aa7efe78c51095a04ad51d1f82c3e4052689666895d",
+      "license": "MIT",
+      "sha256": "b0014236a0b771c3af786924737eb4288fda328649620398d3f8b8c6e4e35088"
+    }
+  ]
+}

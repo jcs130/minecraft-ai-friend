@@ -82,19 +82,6 @@ export class Store {
   deleteSession(hash) { this.db.prepare('DELETE FROM sessions WHERE id_hash=?').run(hash); }
   revokeOtherSessions(ownerId, hash) { this.db.prepare('DELETE FROM sessions WHERE owner_id=? AND id_hash<>?').run(ownerId, hash); }
   ownedUuids(ownerId) { return this.db.prepare('SELECT agent_uuid FROM ownerships WHERE owner_id=?').all(ownerId).map(row => row.agent_uuid); }
-  // Count identities once across worlds, including reserved registrations and
-  // durable in-flight creations. Older standalone schemas remain readable.
-  characterUuids(ownerId) {
-    const ids=new Set(this.ownedUuids(ownerId)), tables=new Set(this.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>r.name));
-    for(const [table,column,condition] of [
-      ['agent_clients','expected_uuid','revoked_at IS NULL'],
-      ['account_jobs','expected_uuid',"operation='create' AND state IN ('pending','unknown')"],
-      ['network_memberships','player_uuid','1=1'],
-      ['network_flows','player_uuid',"state IN ('pending','unknown')"]
-    ])if(tables.has(table))for(const row of this.db.prepare(`SELECT ${column} AS uuid FROM ${table} WHERE owner_id=? AND ${condition}`).all(ownerId))ids.add(row.uuid);
-    return ids;
-  }
-
   audit(ownerId, action, target = null, result = 'succeeded') {
     this.db.prepare('INSERT INTO audit_events VALUES(?,?,?,?,?,?)').run(randomUUID(), ownerId || null, action, target, result, Date.now());
   }

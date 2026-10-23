@@ -1,0 +1,1 @@
+{"required": true, "package": "org.agentmc.bridge.mixin", "compatibilityLevel": "JAVA_21", "client": ["BackgroundMouseMixin", "BackgroundFocusMixin", "BackgroundWindowMixin", "VisualBlockMixin", "VisualLightMixin", "InventoryPacketsMixin", "ReflexPacketsMixin"], "injectors": {"defaultRequire": 1}}

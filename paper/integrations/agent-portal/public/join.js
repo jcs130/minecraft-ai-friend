@@ -21,7 +21,6 @@ async function load() {
     document.querySelector('#join-name').textContent = result.username || '由 Agent 选择新的 ag_ 角色名';
     document.querySelector('#join-expiry').textContent = new Date(result.expiresAt).toLocaleString('zh-CN');
     document.querySelector('#join-state').textContent = labels[result.state] || '状态待核实';
-    status.textContent = result.game?.ready ? `世界 ${result.serverId || 'qiandengji'} 的账号服务已连接；先完成接入再进服。` : `世界 ${result.serverId || 'qiandengji'} 的账号桥正在准备；保存身份，等待此世界的 status 就绪。`;
     prompt = result.onboarding.prompt;
     document.querySelector('#join-prompt').textContent = prompt;
     document.querySelector('#join-copy').disabled = result.state !== 'available';

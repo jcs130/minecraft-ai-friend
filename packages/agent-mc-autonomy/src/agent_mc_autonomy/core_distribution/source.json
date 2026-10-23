@@ -1,0 +1,74 @@
+{
+  "repository": "https://github.com/jcs130/minecraft-ai-friend",
+  "source_revision": "ddff4c293ae920995cf17957710ee45eaaff0748",
+  "source_path": "packages/agent-mc-world",
+  "name": "agent-mc-world",
+  "version": "0.5.7-rc.70",
+  "archive": "agent-mc-world-0.5.7-rc.70.tgz",
+  "sha256": "f125d94e95b90bae11b8220f42c36f2cccd47795039e1f7a431cf8e860ce1e52",
+  "build_profile": "canonical-engine-only",
+  "upstream_release": false,
+  "minecraft_version": "1.21.1",
+  "viewer_assets": null,
+  "verification": {
+    "package.json": "3b57209dc953790802b2d7242382cc5759cd1d92d6b066e41abb7ebf6c8ee9a6",
+    "dist/build.json": "707dce59141b8120e70156410a2902a269cde5bbea5109bf0a222e35c7f3cd79",
+    "dist/types/manifest.json": "2b2e11ade13ac8dd96469e19986c8bfd19ad0f8f46af3d6483ce732bc2941703",
+    "bin/minecraft-agent-mcp.mjs": "1508f8ccd65f176b5d14999d57d4e61103beda106070e152e693380c75a701f7",
+    "bin/minecraft-agent-client.mjs": "49384a0a96b3509a6a9afc42d00953752deb41a946efd5e2db46e1de43d5c8d8"
+  },
+  "external_viewer": {
+    "repository": "https://github.com/jcs130/mc-visual-console",
+    "source_revision": "dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f",
+    "archive": "modern-viewer-dd7c4011-runtime-source.tar.gz",
+    "sha256": "e68879b13766fe0df354eff14a02915c702f62f63f753010d3a66e05b41fc772",
+    "archive_paths": [
+      "modern-viewer/renderer-src",
+      "modern-viewer/src"
+    ],
+    "source_receipt": {
+      "sourceSha256": "2036296ab75fa9813fa1ad3ee67911877990551d4c3b963dd7991b16b531b422",
+      "sourceFiles": 340,
+      "scope": "renderer_source_host_adapters_and_asset_preparation"
+    },
+    "original_catalog_sha256": "e014078c1e0498fd70616cb951fb87b8091cea934cc3d26959b8b94394c5f353",
+    "bundle_sha256": {
+      "world-preview.js": "d14c28a9744347792638a7c354daf4d179e87d2929266327a990343d8be44fb5",
+      "native-console.js": "43af08e73a4185744f6ab4c1d8290eccf6b6f4b06c1d953fb968b8d01baa3129"
+    },
+    "bundled_in_core": false,
+    "source_inventory": {
+      "file": "viewer-source.json",
+      "sha256": "c3b1962f9c11e26e8502af89ef498e78d79ca07038f8a503790899380625533f",
+      "files": 347
+    }
+  },
+  "offline_node": {
+    "url": "https://nodejs.org/dist/v22.22.1/node-v22.22.1-win-x64.zip",
+    "sha256": "877cb93829e14fffbbc7903e7d8037336c9a79f3ea43c5d0b8c2379b79da56de",
+    "shasumsUrl": "https://nodejs.org/dist/v22.22.1/SHASUMS256.txt",
+    "shasumsSha256": "b4e0a68b3fd205e27a000f5722d7932cf31c1e0b6b3d9101bcb153abfd5d8023",
+    "versionProbe": "v22.22.1",
+    "executable_sha256": "923a41f268ab49ede2e3363fbdd9e790609e385c6f3ca880b4ee9a56a8133e5a"
+  },
+  "offline_resources": {
+    "resources/vanilla-1.21.1/native-assets.json": "4430d725d7f663bc48fece65cde8ee9cbadc4f4df5b9aa4cfef01e7e3f122cf1",
+    "resources/vanilla-1.21.1/public/sounds/manifest.json": "bb6ba5d8c664cf975b245ba1593bb9c25624a975e72d147876d22527e4e4773e",
+    "resources/vanilla-1.21.1/public/sounds/source-index.json": "dc6b5b45a405a3c2bc81df6c62745027be2df4c9e1f982cf714bebed25e20cdd",
+    "resources/vanilla-1.21.1/public/sounds/source-sounds.json": "51b23584d267ba37d3a1bafd4f24d3dda07672ab91672ea6f7a1bc86067a1a6b",
+    "resources/vanilla-1.21.1/public/sounds/registry.json": "2eb389ccb5a94f604ab423e8f42c3db711ed62317a67a55b7e3f3829e3828724",
+    "resources/vanilla-1.21.1/public/sounds/block-sounds.json": "d43dc9e7862aac8acdf4d0723379dbb387b1e457a9ce4ca954a9100d7e0a2b80",
+    "resources/appearances/catalog.json": "87878dc22f1596e326a7268e167841e2bf594619161ede5e7c9ca0b573fad45f"
+  },
+  "offline_browser": {
+    "playwrightCore": "1.63.0",
+    "revision": "1243",
+    "browserVersion": "153.0.8010.12",
+    "url": "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+    "sha256": "7aec872f3090e639c4237467624ea863c20fe2878914c93a6556bdbb52aa6c4c",
+    "bytes": 120200717,
+    "checksumAuthority": "locally computed SHA-256 over official HTTPS artifact; no separate upstream signed checksum claimed",
+    "seconds": 6.077999999979511,
+    "executable_sha256": "addfa79abb060e1e514e155ed745d4bf96140bca402735958bb4e223aea0b98c"
+  }
+}

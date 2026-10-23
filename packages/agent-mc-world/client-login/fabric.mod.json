@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "cortico-client-login",
+  "version": "1.2.1",
+  "name": "Cortico Client Login",
+  "description": "Scoped server login and reconnect with a Windows user encrypted credential.",
+  "environment": "client",
+  "entrypoints": { "client": ["org.cortico.minecraft.CorticoClientLogin"], "agent-mc-server-authorization": ["org.cortico.minecraft.CorticoClientLogin"] },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-message-api-v1": "*",
+    "fabric-lifecycle-events-v1": "*",
+    "fabric-networking-api-v1": "*",
+    "minecraft": "1.20.6",
+    "java": ">=21"
+  }
+}

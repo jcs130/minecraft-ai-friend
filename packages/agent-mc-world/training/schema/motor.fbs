@@ -1,0 +1,46 @@
+namespace AgentMcMotor;
+enum RecordKind:ubyte { ObservationAction, EnvironmentTruth }
+table MotorFrame {
+  protocol:string;
+  episodeId:string;
+  task:string;
+  seed:uint;
+  split:string;
+  tick:uint;
+  simTimeNs:ulong;
+  kind:RecordKind;
+  position:[double];
+  velocity:[double];
+  yaw:double;
+  onGround:bool;
+  goal:[double];
+  gridShape:[uint];
+  voxels:[ubyte];
+  features:[float];
+  actionIndex:int = -1;
+  teacherIndex:int = -1;
+  reward:double;
+  terminal:bool;
+  success:bool = null;
+  failure:string;
+  // Full generated fixture cells, x/y/z/stateId tuples. Never supplied to the learned policy.
+  truthCells:[int];
+  nextFeatures:[float];
+  nextPosition:[double];
+  nextVelocity:[double];
+  nextYaw:double;
+  nextOnGround:bool;
+  nextVoxels:[ubyte];
+  expertIntervention:bool = null;
+  goalMode:string;
+  nextGoal:[double];
+  // Server position evidence belongs exclusively to EnvironmentTruth, never the policy input.
+  serverPosition:[double];
+  serverClientDistance:double = null;
+  proposedActionIndex:int = -1;
+  terminated:bool = null;
+  truncated:bool = null;
+  serverGoalConfirmed:bool = null;
+}
+root_type MotorFrame;
+file_identifier "MCM1";

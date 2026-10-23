@@ -1,0 +1,189 @@
+{
+  "name": "agent-mc-world",
+  "version": "0.5.7-rc.70",
+  "type": "module",
+  "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jcs130/minecraft-ai-friend.git",
+    "directory": "packages/agent-mc-world"
+  },
+  "homepage": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world#readme",
+  "bugs": {
+    "url": "https://github.com/jcs130/minecraft-ai-friend/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "minecraft",
+    "mineflayer",
+    "agent",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "main": "./dist/runtime/src/index.js",
+  "bin": {
+    "minecraft-agent-client": "./bin/minecraft-agent-client.mjs",
+    "minecraft-agent-mcp": "./bin/minecraft-agent-mcp.mjs",
+    "minecraft-agent-record": "./bin/minecraft-agent-record.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/src/index.d.ts",
+      "default": "./dist/runtime/src/index.js"
+    },
+    "./client": {
+      "types": "./dist/types/src/client/index.d.ts",
+      "default": "./dist/runtime/src/client/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/types/src/contracts/index.d.ts",
+      "default": "./dist/runtime/src/contracts/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/types/src/mcp/server.d.ts",
+      "default": "./dist/runtime/src/mcp/server.js"
+    },
+    "./package.json": "./package.json",
+    "./mcp/stdio": {
+      "types": "./dist/types/src/mcp/stdio.d.ts",
+      "default": "./dist/runtime/src/mcp/stdio.js"
+    },
+    "./bridges/performance": {
+      "types": "./dist/types/bridges/performance/relay.d.mts",
+      "default": "./dist/runtime/bridges/performance/relay.mjs"
+    },
+    "./extension": {
+      "types": "./dist/types/src/extension.d.ts",
+      "default": "./dist/runtime/src/extension.js"
+    },
+    "./tactics": {
+      "types": "./dist/types/src/tactics.d.ts",
+      "default": "./dist/runtime/src/tactics.js"
+    },
+    "./motor": {
+      "types": "./dist/types/src/motor/index.d.ts",
+      "default": "./dist/runtime/src/motor/index.js"
+    },
+    "./motor/simulator": {
+      "types": "./dist/types/src/motor/simulator.d.ts",
+      "default": "./dist/runtime/src/motor/simulator.js"
+    },
+    "./motor/minecraft": {
+      "types": "./dist/types/src/motor/minecraft-simulation.d.ts",
+      "default": "./dist/runtime/src/motor/minecraft-simulation.js"
+    },
+    "./decisions": {
+      "types": "./dist/types/src/decisions/index.d.ts",
+      "default": "./dist/runtime/src/decisions/index.js"
+    },
+    "./learning": {
+      "types": "./dist/types/src/learning/index.d.ts",
+      "default": "./dist/runtime/src/learning/index.js"
+    }
+  },
+  "files": [
+    "core",
+    "src/client",
+    "src/contracts",
+    "src/runtime",
+    "src/mcp/server.ts",
+    "src/mcp/stdio.ts",
+    "src/index.ts",
+    "src/chat-provenance.ts",
+    "src/collect-contract.ts",
+    "src/mounted-look.ts",
+    "src/vehicle-state.ts",
+    "src/railway.ts",
+    "src/blueprint-railway.ts",
+    "bin/minecraft-agent-client.mjs",
+    "bin/minecraft-agent-mcp.mjs",
+    "bin/minecraft-agent-record.mjs",
+    "dist/runtime",
+    "dist/types",
+    "dist/build.json",
+    "dist/monitor",
+    "docs",
+    "skills",
+    "provenance",
+    "LICENSE",
+    "README.md",
+    "release-sources.json",
+    "bridges",
+    "scripts/build.mjs",
+    "scripts/copy-viewer-assets.mjs",
+    "scripts/defer-viewer-audio.mjs",
+    "scripts/viewer-input.mjs",
+    "scripts/build-types.mjs",
+    "scripts/verify-build.mjs",
+    "scripts/package-skills.mjs",
+    "vendor/native-types",
+    "tsconfig.core.json",
+    "examples",
+    "tsconfig.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "scripts/build-client-login.mjs",
+    "client-login",
+    "scripts/build-client-appearances.mjs",
+    "scripts/client-appearance-targets.mjs",
+    "scripts/build-client-graphics.mjs",
+    "scripts/build-mesa-presentation.mjs",
+    "scripts/client-graphics-loader.mjs",
+    "client-graphics",
+    "client-appearance",
+    "src/extension.ts",
+    "scripts/prepare-viewer.mjs",
+    "src/tactics.ts",
+    "src/decisions",
+    "src/motor",
+    "training",
+    "src/learning"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs && node scripts/build-types.mjs && node scripts/verify-build.mjs",
+    "build:engine": "node scripts/build.mjs --without-viewer && node scripts/build-types.mjs && node scripts/verify-build.mjs",
+    "build:viewer": "node scripts/build.mjs --require-viewer && node scripts/build-types.mjs && node scripts/verify-build.mjs",
+    "build:release": "node scripts/build.mjs --require-viewer --deferred-audio && node scripts/build-types.mjs && node scripts/verify-build.mjs",
+    "build:client-login": "node scripts/build-client-login.mjs",
+    "build:client-appearances": "node scripts/build-client-appearances.mjs",
+    "build:client-graphics": "node scripts/build-client-graphics.mjs",
+    "start:mcp": "node bin/minecraft-agent-mcp.mjs",
+    "start:minecraft": "node bin/minecraft-agent-client.mjs",
+    "verify:release": "node scripts/verify-build.mjs --packed",
+    "prepack": "node scripts/verify-build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.core.json",
+    "build:types": "node scripts/build-types.mjs"
+  },
+  "dependencies": {
+    "@mcap/core": "2.3.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "ajv": "8.20.0",
+    "flatbuffers": "25.9.23",
+    "minecraft-data": "3.112.0",
+    "mineflayer": "4.37.1",
+    "mineflayer-pathfinder": "2.4.5",
+    "playwright-core": "1.63.0",
+    "prismarine-auth": "3.1.1",
+    "prismarine-block": "1.23.0",
+    "prismarine-chunk": "1.41.0",
+    "prismarine-physics": "1.11.1",
+    "prismarine-viewer": "1.33.0",
+    "ses": "2.3.0",
+    "socket.io": "4.8.3",
+    "socket.io-client": "4.8.3",
+    "vec3": "0.2.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "types": "./dist/types/src/index.d.ts"
+}

@@ -46,10 +46,10 @@ export async function accountSyncOnce(settings, state = { watch: [] }, fetcher =
   const token = (await fs.readFile(settings.tokenFile, 'utf8')).trim();
   if (!/^acc_[A-Za-z0-9_-]{43}$/.test(token)) throw Error('ACCOUNT_TOKEN_INVALID');
   const localKey = await keyFile(settings.localKeyFile), remoteKey = await keyFile(settings.remoteKeyFile);
-  let ready = false, verify = false;
+  let ready = false;
   try {
     const value = unseal(localKey, 'heartbeat', await fs.readFile(path.join(settings.bridgeDirectory, 'heartbeat.json'), 'utf8'));
-    verify = value.verify === true; ready = value.ready === true && Number.isFinite(value.at) && Math.abs(Date.now() - value.at) < 5000;
+    ready = value.ready === true && Number.isFinite(value.at) && Math.abs(Date.now() - value.at) < 5000;
   } catch { }
   const results = [], completed = [], delivered = [];
   for (const id of state.watch.filter(id => uuid.test(id)).slice(0, 64)) {
@@ -70,7 +70,7 @@ export async function accountSyncOnce(settings, state = { watch: [] }, fetcher =
     catch { state.numenObservation = null; } // Unknown evidence cannot grant ownership; account login keeps working.
   }
   if (state.numenObservation && Date.now() - state.numenObservation.observedAt < 40000) numen = seal(remoteKey, 'numen-identities', state.numenObservation);
-  const response = await fetcher(endpoint, { method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ heartbeat: { ready, verify: ready && verify, at: Date.now() }, results, delivered, ...(numen ? { numen } : {}) }), signal: AbortSignal.timeout(10000) });
+  const response = await fetcher(endpoint, { method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ heartbeat: { ready, at: Date.now() }, results, delivered, ...(numen ? { numen } : {}) }), signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw Object.assign(Error('ACCOUNT_SYNC_REJECTED'), { status: response.status });
   const text = await response.text(); if (Buffer.byteLength(text) > 256 * 1024) throw Error('ACCOUNT_RESPONSE_TOO_LARGE');
   const value = JSON.parse(text);

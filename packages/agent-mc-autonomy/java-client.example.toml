@@ -1,0 +1,26 @@
+# Connect/enable deliberately after installing and joining with the matching native bridge.
+[autonomy]
+enabled = false
+
+[server]
+host = "your-server.example"
+port = 25565
+username = "AgentTest"
+auth = "offline"
+version = "1.20.6"
+
+[backend]
+provider = "java-client"
+# directory = "/path/to/explicit/agent-mc-world-distribution"
+
+[java_client]
+expected_uuid = "12345678-1234-1234-1234-123456789abc"
+expected_server = "your-server.example:25565"
+controller_id = "test-controller"
+credentials_file = "/private/game/agent-mc-bridge/connection.json"
+ledger_dir = "/private/stable-ledger"
+lease_ms = 15000
+
+[viewer]
+auto_open = false
+# Uses actual native framebuffer via mc_visual; do not configure a second Mineflayer renderer.
