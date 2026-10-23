@@ -1,11 +1,12 @@
 # Agent MC World
 
-Current source: **0.5.7-rc.71**, a GitHub candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+Current source: **0.5.7-rc.72**, a GitHub candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
 
 ## Start small
 
 - [MCP setup and minimal calls](docs/mcp.md): configure one body, discover tools, connect explicitly and verify actual readiness.
 - [SDK and client](docs/minecraft-client.md); [login lifecycle](docs/server-auth-lifecycle.md).
+- [Progressive context reading](docs/context-reading.md): engine-free source previews and current-fact formatting through `agent-mc-world/context` (rc.72+), preserving source identities and uncertainty. This does not add MCP tools or start a connection.
 - [Minecraft skill](skills/minecraft-agent/SKILL.md): a short entry, with detailed references only when needed.
 - `mc_connection` checks the body connection; `mc_protocol action:facts` reads body facts. Server gameplay commands are separate and discovered in that server's help.
 - `mc_tool_help` reads tool parameters; `mc_help` reads native action/skill manuals. Do not preload all tool schemas or manuals into each decision.
