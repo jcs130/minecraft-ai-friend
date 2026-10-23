@@ -99,6 +99,29 @@ class AgentSkillReleaseTest(unittest.TestCase):
             self.assertEqual((Path(directory) / self.file.name).read_bytes(), self.file.read_bytes())
             self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
 
+    def test_checkout_line_endings_do_not_change_the_download(self):
+        with tempfile.TemporaryDirectory(prefix="qd-skill-checkout-") as directory:
+            portal = Path(directory) / "portal"
+            shutil.copytree(PORTAL / "skill", portal / "skill", ignore=shutil.ignore_patterns("node_modules"))
+            (portal / "scripts").mkdir()
+            shutil.copyfile(PORTAL / "scripts/build-agent-skill.py", portal / "scripts/build-agent-skill.py")
+            (portal / "public/downloads").mkdir(parents=True)
+            for name in ("qiandengji-agent-1.0.0.zip", self.file.name):
+                shutil.copyfile(PORTAL / "public/downloads" / name, portal / "public/downloads" / name)
+            helper = portal / "public/agent-register.mjs"
+            original = (PORTAL / "public/agent-register.mjs").read_bytes().replace(b"\r\n", b"\n")
+            for label, newline in (("lf", b"\n"), ("crlf", b"\r\n")):
+                helper.write_bytes(original.replace(b"\n", newline))
+                for source in (portal / "skill").rglob("*"):
+                    if source.is_file():
+                        content = source.read_bytes().replace(b"\r\n", b"\n")
+                        source.write_bytes(content.replace(b"\n", newline))
+                output = Path(directory) / label
+                subprocess.run([sys.executable, str(portal / "scripts/build-agent-skill.py"),
+                                "--output-directory", str(output)], check=True, capture_output=True)
+                with self.subTest(checkout=label):
+                    self.assertEqual((output / self.file.name).read_bytes(), self.file.read_bytes())
+
     def test_runtime_gate_rejects_missing_and_stale_installs_without_connecting(self):
         with tempfile.TemporaryDirectory(prefix="qd-skill-runtime-") as directory:
             root = Path(directory)
