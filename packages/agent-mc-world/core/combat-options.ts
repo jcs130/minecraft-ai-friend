@@ -1,10 +1,12 @@
 import type { QueueStatus } from './executor.ts';
 import type { CombatCandidate } from './combat-decision-types.ts';
 
-/** Only a continuous, explicitly requested follow can yield to proactive combat. */
+/** Native combat suspends resumable work and restores its exact checkpoint. */
 export function combatMayTakeTask(queue: QueueStatus | undefined): boolean {
-  return !queue?.hold && !queue?.waiting.length && (!queue?.running
-    || (queue.running.skill === 'follow' && !!queue.running.followTarget));
+  if (queue?.hold) return false;
+  if (!queue?.running) return !queue?.waiting.length;
+  return queue.running.resumable === true
+    || (queue.running.skill === 'follow' && !!queue.running.followTarget);
 }
 
 /** Reserve choice space for different capabilities before same-kind variants. */

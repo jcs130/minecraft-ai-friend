@@ -8,6 +8,7 @@ import { corridorSafe } from './idle-actions.ts';
 export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecutionPolicy,
   control: { bodyFree: boolean; canStep: boolean; targetId: number | null; sinceHitMs: number | null;
     fight: string; fleeHealth: number; chaseMax: number; trackingTargets?: ReadonlySet<number>;
+    engagementTargets?: ReadonlySet<number>;
     retreatAvailable?: boolean }, programmable = false): CombatCandidate[] {
   if (field.action.emergency) return [];
   const hostiles = field.actors.filter(e => e.relation === 'hostile' && e.health.current !== 0
@@ -24,19 +25,26 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
       candidates.push({ id: 'retreat', kind: 'retreat', intent: 'Withdraw without attacking; continue through the body controller.' });
     const trackable = hostiles.filter(e => !control.trackingTargets || control.trackingTargets.has(e.entityId!));
     const tracked = trackable.find(e => e.entityId === control.targetId) ?? trackable[0];
-    if (tracked?.position && tracked.distance! <= control.chaseMax + 4)
+    // Watching is an explicit authored primitive, not a default combat choice.
+    if (programmable && tracked?.position && tracked.distance! <= control.chaseMax + 4)
       candidates.push({ id: `track_${tracked.entityId}`, kind: 'track', targetId: tracked.entityId!, uuid: tracked.uuid,
         minDistance: 5, maxDistance: 8, leaseMs: 4000,
-        intent: 'Follow without attacking; stop on lost sight or unsafe ground.' });
+        intent: `${field.action.fighting ? 'Stop current attacks and watch' : field.action.tracking ? 'Continue watching' : 'Watch'} visible hostile ${tracked.type ?? 'entity'} at 5-8 blocks for up to 4 seconds without attacking; stop on lost sight or unsafe ground.` });
   }
   if (cfg.allowEngage && (control.bodyFree || field.action.fighting) && control.fight !== 'off'
     && (field.self.health.current ?? 0) >= control.fleeHealth + 3) {
-    const enemies = hostiles.filter(e => e.distance! <= control.chaseMax
+    // The native controller owns admission. Its existing pursuit pool includes
+    // a four-block retention band; do not hide those targets behind a second,
+    // narrower acquisition test (or a different 3D-vs-horizontal distance).
+    const enemies = hostiles.filter(e => (control.engagementTargets
+      ? control.engagementTargets.has(e.entityId!)
+      : e.position !== null && Math.hypot(e.position[0] - field.self.position[0],
+        e.position[2] - field.self.position[2]) <= control.chaseMax + 4)
       && (cfg.engageScope === 'hostile' || (e.relationSource === 'server'
         && e.targetEntityId !== null && partyIds.has(e.targetEntityId))));
     for (const enemy of enemies.filter(e => e.entityId !== control.targetId || !field.action.fighting))
       candidates.push({ id: `engage_${enemy.entityId}`, kind: 'engage', targetId: enemy.entityId!, uuid: enemy.uuid,
-        intent: `Engage visible ${enemy.type ?? 'hostile'} at ${enemy.distance} blocks; continue attacking and approaching through the body controller.` });
+        intent: `Attack visible hostile ${enemy.type ?? 'entity'} at ${enemy.distance} blocks now, before it hits us; approach and continue attacking through the body controller, resuming paused work afterwards.` });
   }
   if (!cfg.allowMovement || !field.action.fighting || !control.canStep || target.position === null
     || (!programmable && (control.sinceHitMs ?? 0) < cfg.movementStallMs)) return candidates;

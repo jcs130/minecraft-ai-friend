@@ -356,16 +356,22 @@ describe('physically available combat candidates', () => {
     const cfg = { ...config(), allowEngage: false, allowMovement: true };
     const control = { bodyFree: true, canStep: false, targetId: null, sinceHitMs: null, fight: 'auto', fleeHealth: 6,
       chaseMax: 12, trackingTargets: new Set([8]), retreatAvailable: true };
-    const choices = combatReactions(bot, f, cfg, control);
+    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat']);
+    const choices = combatReactions(bot, f, cfg, control, true);
     expect(choices.map(c => c.kind)).toEqual(['retreat', 'track']);
     expect(choices[1]).toMatchObject({ kind: 'track', targetId: 8 });
     expect(combatReactions(bot, f, cfg, { ...control, trackingTargets: new Set(), retreatAvailable: false })).toEqual([]);
   });
-  it('offers attack, withdraw and distance tracking before the first hit, but does not steal another task', () => {
+  it('offers attack and withdrawal before the first hit, without a default watch option or stealing unavailable work', () => {
     const bot = flatBot(), f = frame().battlefield, cfg = { ...config(), allowEngage: true, allowMovement: true, engageScope: 'hostile' as const };
     f.action.fighting = false;
     const control = { bodyFree: true, canStep: false, targetId: null, sinceHitMs: null, fight: 'armed', fleeHealth: 6, chaseMax: 12 };
-    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat', 'track', 'engage']);
+    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat', 'engage']);
+    f.actors[0].position = [7.7,64,0]; f.actors[0].distance = 7.7;
+    expect(combatReactions(bot, f, cfg, { ...control, chaseMax: 6, engagementTargets: new Set([3]) })
+      .find(c => c.kind === 'engage')).toMatchObject({ targetId: 3 });
+    expect(combatReactions(bot, f, cfg, { ...control, engagementTargets: new Set() })
+      .some(c => c.kind === 'engage')).toBe(false);
     expect(combatReactions(bot, f, cfg, { ...control, bodyFree: false })).toEqual([]);
     f.actors[0].relation = 'unknown';
     expect(combatReactions(bot, f, cfg, control)).toEqual([]);
@@ -407,11 +413,11 @@ describe('physically available combat candidates', () => {
     const choices = combatReactions(bot, f, cfg, control);
     expect(choices.filter(c => c.kind === 'step')).toHaveLength(2);
     expect(choices.some(c => c.kind === 'retreat')).toBe(true);
-    expect(choices.map(c => c.kind)).toEqual(['retreat', 'track', 'step', 'step']);
-    expect(combatReactions(bot, f, cfg, { ...control, sinceHitMs: 20 }).map(c => c.kind)).toEqual(['retreat', 'track']);
-    expect(combatReactions(bot, f, cfg, { ...control, canStep: false }).map(c => c.kind)).toEqual(['retreat', 'track']);
+    expect(choices.map(c => c.kind)).toEqual(['retreat', 'step', 'step']);
+    expect(combatReactions(bot, f, cfg, { ...control, sinceHitMs: 20 }).map(c => c.kind)).toEqual(['retreat']);
+    expect(combatReactions(bot, f, cfg, { ...control, canStep: false }).map(c => c.kind)).toEqual(['retreat']);
     bot.blockAt = () => null;
-    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat', 'track']);
+    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat']);
   });
 
   it('removes casts for unknown cost, missing abilities, occlusion and changed mana', () => {

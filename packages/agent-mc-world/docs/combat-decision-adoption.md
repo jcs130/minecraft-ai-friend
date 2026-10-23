@@ -18,6 +18,20 @@ The visibility of an existing, unselected unknown bystander may change without g
 
 The host always applies the freshly recomputed candidate, not the old model projection. A comparison alone never proves that the candidate is executable.
 
+## Observation, following and attack continuity
+
+Default fast combat choices offer proactive engagement and withdrawal, rather than non-attacking enemy observation. They do not require a previous hit. Acquisition uses the native controller's actual bounded pursuit pool (the configured chase distance plus its existing four-block retention band), with fresh visibility, health, weapon policy, provocation and task checks. It no longer hides 6–10 block targets that the default controller can already pursue. This does not enlarge the native pursuit/exit radius or the automatic close-range self-defense trigger.
+
+The executor now reports whether the exact current step is safely resumable, using the same check as suspend/resume. Native combat may pause that work, retain its progress and pending queue, then resume it. Unproven or non-repeatable steps, open containers, eating, environmental escape and scripts retain their ownership checks. Authored method options still require a free executor because they do not use the native combat suspension lifecycle. Once an engagement enters fighting, existing spell rules and fast spell choices become eligible without waiting for injury.
+
+`track` remains an explicit authored action-pool primitive: it watches an observed hostile with a bounded distance lease and does not attack. Selecting it while fighting cancels the current attack controller. Its candidate intent states that transition, target type, distance and lease; `keep` states when it continues an attack, an observation lease or an explicit body follow task. The viewer calls the action “停火盯防”. An observed hostile remains hostile throughout this choice. Normal follow tasks retain their existing contract.
+
+Rule `enemyTypes` compare entity registry IDs: a bare native `zombie` and `minecraft:zombie` refer to the same vanilla type. Explicit other namespaces remain distinct and unknown types do not match. Candidate construction and automatic rule evaluation use the same comparison. Authored rule text, identity, revisions, relation evidence, mana and cooldown checks remain intact.
+
+When evaluating logs, count request candidates, model selections, validation results, accepted dispatches and world effects separately. A rejected tracking selection does not mean that the body followed that enemy. A short isolated replay checks the input contract; it does not establish improved combat outcomes.
+
+`describeCombatDecision` is a pure public presentation helper from `agent-mc-world/decisions`. It uses the original request frame for attributed target relations and reads explicit application flags for dispatch. Missing application flags remain unknown; even `sent` alone is not promoted to an accepted dispatch. Display stages and acknowledgements are not effect or goal verification.
+
 ## Receipts and evaluation
 
 A restored authored program that times out during cold worker startup now gets the same existing single delayed retry as a worker response timeout. The next evaluation reads a new sample at least one second later; the old output is never reused and execution budgets do not change. Syntax/contract failures do not retry, and a second timeout requires an authored revision. Source, parameters and author identity remain unchanged. This is lifecycle recovery, not a newly learned tactic or evidence of combat improvement.

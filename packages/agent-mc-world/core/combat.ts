@@ -450,7 +450,9 @@ export class CombatSession {
       || (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot))
       || Date.now() < this.capCooldownUntil
       || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)) return [];
-    return this.scan(bot, t, t.chaseMax).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
+    // Use the same bounded pursuit pool as fighting ticks. The old narrower
+    // acquisition radius offered only non-attacking observation at 6–10 blocks.
+    return this.scan(bot, t).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
   }
 
   /** Tracking must use the same provocation, visibility and admission rules as react(). */

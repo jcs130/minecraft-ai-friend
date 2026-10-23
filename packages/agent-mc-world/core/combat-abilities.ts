@@ -1,7 +1,7 @@
 import type { Bot } from 'mineflayer';
 import { HOSTILE } from './melee.ts';
 import { CombatTacticBook, type CombatCastAttempt, type CombatResult, type CombatReceipt } from './combat-tactics.ts';
-import { combatRuleBlock, type CombatRule, type CombatRuleFacts } from './combat-rules.ts';
+import { combatRuleBlock, combatEntityTypeMatches, type CombatRule, type CombatRuleFacts } from './combat-rules.ts';
 import type { Battlefield } from './battlefield.ts';
 import type { CombatDecisionFrame } from './combat-decision-types.ts';
 import type { CombatProgram } from './combat-program.ts';
@@ -80,7 +80,7 @@ export class CombatAbilities {
       const skill = skills.find(s => s.spell === rule.spell)!;
       const target = battlefield.actors.some(e => e.relation === 'hostile' && e.health.current !== 0
         && e.lineOfSight === true && e.distance !== null && e.distance <= (rule.when.within ?? 12)
-        && (!rule.when.enemyTypes || rule.when.enemyTypes.includes(e.type ?? '')));
+        && (!rule.when.enemyTypes || rule.when.enemyTypes.some(type => combatEntityTypeMatches(e.type, type))));
       if (!rule.intent || skill.block || skill.manaCost === null || !target
         || combatRuleBlock(rule, { ...facts, cost: skill.manaCost })) return [];
       return [{ id: rule.id, kind: 'cast' as const, ruleId: rule.id, spell: rule.spell, intent: rule.intent, manaCost: skill.manaCost }];

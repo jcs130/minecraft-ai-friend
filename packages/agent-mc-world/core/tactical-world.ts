@@ -62,7 +62,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       const candidate = choice.candidate;
       const target = ('targetId' in candidate && typeof candidate.targetId === 'number')
         ? this.bridge?.bot?.entities[candidate.targetId]?.position ?? null : null;
-      const label = { engage: '接敌', retreat: '撤离', track: '跟踪', step: '短步移动', cast: '施法', method: '运行方法' }[candidate.kind];
+      const label = { engage: '接敌', retreat: '撤离', track: '停火盯防', step: '短步移动', cast: '施法', method: '运行方法' }[candidate.kind];
       this.reportViewerDecision(role, `choice:${this.connectionGeneration}:${receipt.id}`, label, accepted, target);
       this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:receipt});
       return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt },
@@ -217,13 +217,16 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       targetId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
       fight: this.policy.get().fight, fleeHealth: this.cfg.reflex.fleeHealth, chaseMax: this.cfg.combat.chaseMax,
       trackingTargets: new Set(this.combat?.trackingTargets() ?? []),
+      engagementTargets: new Set(this.combat?.engagementTargets() ?? []),
       retreatAvailable: this.combat?.canRetreat() ?? false,
     };
-    const engagementTargets = new Set(this.combat?.engagementTargets() ?? []);
+    const engagementTargets = control.engagementTargets;
     const executableReaction = (candidate: CombatCandidate) => candidate.kind !== 'engage'
       || engagementTargets.has(candidate.targetId);
     const reactions = combatReactions(bot, battlefield, cfg, control).filter(executableReaction);
-    const routines: CombatCandidate[] = !emergency && control.bodyFree && !this.combat?.active
+    // Authored methods do not use CombatSession's suspend/resume lifecycle.
+    // They must still wait for a genuinely free executor, unlike typed combat.
+    const routines: CombatCandidate[] = !emergency && control.bodyFree && !this.combat?.active && !queue?.running
       ? (this.tactics.getTactic()?.routines ?? []).flatMap(routine => {
         try { this.routineGraph(routine); return [{ ...routine, kind: 'method' as const }]; }
         catch { return []; }
