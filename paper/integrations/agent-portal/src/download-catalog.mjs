@@ -1,8 +1,9 @@
 import { skillMirrorUrl } from './download-mirror.mjs';
+import offlineDownloads from './offline-downloads.json' with { type: 'json' };
 
 // Mirror original published bytes, not the current developer checkout. Large
 // binaries stay in OSS; this repository contains only their reviewed manifest.
-export const packageReleases = Object.freeze([
+const originalReleases = [
   Object.freeze({ id: 'cortico-world', framework: 'cortico', name: 'Cortico World', version: '0.4.1-rc.14', channel: 'npm-next',
     filename: 'cortico-world-qiandengji-0.4.1-rc.14.tgz', bytes: 120904,
     sha256: 'c242e6c879c809ee15b010c3bba4783fbad4d2c5404c8f1ce0bc3cf5b55b275e',
@@ -21,7 +22,7 @@ export const packageReleases = Object.freeze([
     filename: 'minecraft-autonomous-0.6.70.neko-plugin', bytes: 12655307,
     sha256: '0c3142bea90714db01c7f3dfae8f1ada85798aff86fd066816a5b22678c9b57a',
     sourceUrl: 'https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.70/minecraft_autonomous.neko-plugin',
-    platform: 'N.E.K.O 插件 SDK 0.1–0.2；首次 Windows 安装建议选完整离线包', license: 'Apache-2.0',
+    platform: 'Linux x64 / CPython 3.11；Windows 请使用基础包内的配套插件', license: 'Apache-2.0',
     install: 'N.E.K.O 插件中心选择导入此 .neko-plugin；复用自己的模型槽，已有运行环境可直接配置。',
     includes: '插件本身，不包含全部 Node、观战和游戏资源。首次安装选下面的完整包。' }),
   Object.freeze({ id: 'neko-offline', framework: 'neko', name: 'NEKO 完整离线包', version: '0.6.70', channel: 'github-release',
@@ -31,6 +32,10 @@ export const packageReleases = Object.freeze([
     platform: 'Windows x64；N.E.K.O CPython 3.11', license: 'Apache-2.0；保留包内各组件声明',
     install: '完整解压，运行“一键安装.cmd”，再到 N.E.K.O 插件中心导入包内 .neko-plugin。',
     includes: '约 1.11 GB，含 Node、固定后端、依赖和观战资源；仍需自己的 N.E.K.O 与可用模型。' }),
+];
+export const packageReleases = Object.freeze([
+  ...offlineDownloads.map(row => Object.freeze(row)),
+  ...originalReleases.map(row => Object.freeze({ ...row, category: 'advanced' })),
 ]);
 
 export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename);
