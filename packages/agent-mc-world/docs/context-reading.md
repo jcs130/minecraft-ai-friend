@@ -39,6 +39,14 @@ a labelled excerpt of the original event. At most four unsuccessful steps are
 shown, with omitted steps counted. A completion for another task does not resolve
 this task or its goal. The host owns persistence, expiry and selection for requests.
 
+`omitContextSchemaAnnotations(schema)` leaves validation keywords, fields and
+alternatives intact while moving `x-agent-mc-skill-contracts` behind complete
+help. The annotation contains on-demand generation material, not input-schema
+validation. Property names, constants, enums, defaults and other literal values
+are preserved. Full declarations, generation APIs and handlers retain the
+original annotation. The compact MCP catalogue and on-demand parameter view use
+this same helper; hosts can also use it through the engine-free context entry.
+
 This is request presentation, not automatic event deletion or a new background
 Agent. Native tool call/result pairing, recent/protected records, pending user
 intent, memory, exact expansion and model scheduling remain with the host.
