@@ -53,7 +53,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | `paper/plugins/` | AgentFriend RPG 玩法、CortiEyeMirror 观战及共享协议源码 |
 | `paper/self-host/` | 固定依赖锁、跨主机构建与网站导出工具 |
-| `paper/integrations/agent-portal/` | 已上线的 0.8.6 网站源码、测试、Dockerfile 与无密模板 |
+| `paper/integrations/agent-portal/` | 0.8.7 网站展示候选、测试、Dockerfile 与无密模板（正式 0.8.6） |
 | `paper/integrations/` | 登录保护、Numen、YSM、基岩与其他可选集成 |
 | `packages/agent-mc-world/` | 保留原 main 的最新通用 Agent MC 核心、MCP 与 SDK |
 | `packages/agent-mc-autonomy/` | 独立自主调度组件，按自身 README 使用 |
