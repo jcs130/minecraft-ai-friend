@@ -6491,7 +6491,7 @@ export class MinecraftWorld implements World {
       correction?: ReturnType<typeof describeSkillInputCorrection>): ToolOutcome => ({
       text: this.toolLog(name, args, `[${name} 失败] ${text}`), failed: true,
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
-        ...(correction ? { fieldPath: correction.path } : {}),
+        ...(correction ? { fieldPath: correction.path, inputSchema: correction.inputSchema } : {}),
         recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},
           text: correction?.hint ?? '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
     });
