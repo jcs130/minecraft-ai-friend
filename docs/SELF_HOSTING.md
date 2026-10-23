@@ -2,7 +2,7 @@
 
 ## 结论与分支
 
-自研源码采用根目录 MIT；Numen 子项目和第三方组件保留自己的许可证。GitHub 仓库公开，可以克隆、fork 和自行构建。默认 `main` 现已包含当前 Paper 工程、正式 0.8.4 网站与通用 MC 核心；旧工程保存在 `legacy/pre-paper-main-20261023`。分支与候选边界见 [BRANCHES.md](BRANCHES.md)。
+自研源码采用根目录 MIT；Numen 子项目和第三方组件保留自己的许可证。GitHub 仓库公开，可以克隆、fork 和自行构建。默认 `main` 现已包含当前 Paper 工程、正式 0.8.6 网站与通用 MC 核心；旧工程保存在 `legacy/pre-paper-main-20261023`。分支与候选边界见 [BRANCHES.md](BRANCHES.md)。
 
 ```sh
 git clone https://github.com/jcs130/minecraft-ai-friend.git
@@ -39,7 +39,7 @@ java -Xms512M -Xmx2G -jar server.jar --nogui
 
 ## 二、网站
 
-网站当前正式源码为 0.8.4，固定提交 `9f03e4f1101d12f75c83add996165958565c964c`，位于 `portal-account-fix-20261023` 发布分支。main 的 `paper/integrations/agent-portal/` 已纳入同一正式源码；原开发分支的 0.9.0 多世界候选未合入本次发布。
+网站当前正式源码为 0.8.6，固定提交 `800cf4fbf29163a5fbc8f7ed6aa0967cf2a9f1b5`，位于 main。`export-portal` 固定导出此正式版本；原开发分支的 0.9.0 多世界候选未合入本次发布。
 
 需要 Node.js 22.13+。下列命令仅从公开 Git 提交导出正式网站，自动写入指向你自己的本机沙盒的无密配置。浅克隆若没有该对象，会从公开上游获取固定提交；不用 GitHub 私人 token。
 
@@ -53,7 +53,7 @@ npm start
 
 本人在本机打开 `http://127.0.0.1:8790` 设置网站管理员。所有网站账号和密码都由新部署者自行创建。游戏建号、认领、改密桥默认关闭；需按照网站的 README 用你自己的认证代理、独立密钥和出站同步设置。云端部署可使用网站的 Dockerfile，但仍需独立的持久目录、私有配置和 HTTPS 反向代理。
 
-源码导出不复制当前网站的账号、归属、照片数据库、云配置或模型 Key。对网站做二次开发可 fork 对应发布分支；导出的固定版本不会自动收集本地未发布的开发修改。
+源码导出不复制当前网站的账号、归属、照片数据库、云配置或模型 Key。对网站做二次开发可 fork main；导出的固定版本不会自动收集本地未发布的开发修改。下载镜像默认关闭，需要时配置自己的对象存储及已审核发行物，不包含维护者的上传密钥，见[登录与下载](../paper/docs/WEBSITE_SECURITY_DOWNLOADS.md)。
 
 ## 三、可选组件与来源
 

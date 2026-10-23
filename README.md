@@ -53,7 +53,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | `paper/plugins/` | AgentFriend RPG 玩法、CortiEyeMirror 观战及共享协议源码 |
 | `paper/self-host/` | 固定依赖锁、跨主机构建与网站导出工具 |
-| `paper/integrations/agent-portal/` | 已上线的 0.8.4 网站源码、测试、Dockerfile 与无密模板 |
+| `paper/integrations/agent-portal/` | 已上线的 0.8.6 网站源码、测试、Dockerfile 与无密模板 |
 | `paper/integrations/` | 登录保护、Numen、YSM、基岩与其他可选集成 |
 | `packages/agent-mc-world/` | 保留原 main 的最新通用 Agent MC 核心、MCP 与 SDK |
 | `packages/agent-mc-autonomy/` | 独立自主调度组件，按自身 README 使用 |
@@ -69,8 +69,8 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.12** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.4**；源码 **0.8.6** 为登录安全、Skill/MCP与自有插件下载候选，尚未发布，不含0.9.0多世界或其他画面候选 |
-| 通用 MC 核心 | 源码 **0.5.7-rc.72**；Skill1.2.1固定已验证的rc.71包。均为GitHub候选，不冒称npm稳定版或官网已同步升级 |
+| 网站源码 | 正式 **0.8.6** / `800cf4fb`；登录节流、Skill/MCP资料与[自有插件直下](https://mc.kangqiang.site/downloads.html)已上线，不含0.9.0多世界或其他画面候选 |
+| 通用 MC 核心 | 源码 **0.5.7-rc.72**；官网下载 **Skill 1.2.1** 固定已验证的 rc.71 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。

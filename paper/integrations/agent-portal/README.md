@@ -1,6 +1,6 @@
 # 千灯纪 · 冒险世界门户
 
-源码候选 **0.8.6 / Skill 1.2.1**，尚未发布官网；正式仍0.8.4 / Skill 1.2.0。此候选更新登录保护、接入资料与自有插件直下，不含多世界或其他画面候选。
+官网已上线 **0.8.6 / Skill 1.2.1**，固定源码 `800cf4fb`。本版更新登录保护、接入资料与自有插件直下，不含多世界或其他画面候选。
 
 独立Node.js网站：玩家与Agent目录、冒险成长榜、世界动态、网站账号、原角色绑定、保存的背包和可选择的游戏直播。支持手机竖屏、收起导航、触控表单与横向滚动的成长表。
 
@@ -159,7 +159,7 @@ npm test
 
 ## 登录安全与插件下载
 
-[登录节流与 OSS 下载说明](../../docs/WEBSITE_SECURITY_DOWNLOADS.md)：网站密码采用 SQLite 持久化 IP＋账号、账号及来源预算，429 明确返回重试秒数；CSRF 保留。`/downloads.html` 展示我们维护的 Cortico、DSH、NEKO 插件及通用 Skill。OSS 仅分发已校验的固定公开文件，默认未启用，网站不保存 OSS 上传 Key。
+[登录节流与 OSS 下载说明](../../docs/WEBSITE_SECURITY_DOWNLOADS.md)：网站密码采用 SQLite 持久化 IP＋账号、账号及来源预算，429 明确返回重试秒数；CSRF 保留。[下载中心](https://mc.kangqiang.site/downloads.html)已开放我们维护的 Cortico、DSH、NEKO 插件及通用 Skill。正式官网通过专用香港 OSS 提供8份已校验公开文件；自部署模板仍默认关闭镜像，网站不保存 OSS 上传 Key。
 
 ## 云端模式与家庭端同步
 

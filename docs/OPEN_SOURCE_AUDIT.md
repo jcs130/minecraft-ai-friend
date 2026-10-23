@@ -2,7 +2,7 @@
 
 ## 结果
 
-仓库公开、根目录 MIT，自研 Paper 玩法、Eye、登录桥、网站和构建源码可获取。main 现已纳入当前 Paper 工程、通用 MC 核心及网站现役 0.8.4 固定提交 `9f03e4f1` 的源码，旧 main 保存在 `legacy/pre-paper-main-20261023`。**目前不能称为全套现役世界的一键、逐字可复现发行版。**
+仓库公开、根目录 MIT，自研 Paper 玩法、Eye、登录桥、网站和构建源码可获取。main 现已纳入当前 Paper 工程、通用 MC 核心及网站现役 0.8.6 固定提交 `800cf4fb` 的源码，旧 main 保存在 `legacy/pre-paper-main-20261023`。**目前不能称为全套现役世界的一键、逐字可复现发行版。**
 
 部署入口与准确限制见 [SELF_HOSTING.md](SELF_HOSTING.md)。本次完成：
 
