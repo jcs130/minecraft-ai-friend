@@ -3,7 +3,6 @@ import dataclasses
 import json
 
 import pytest
-
 from test_controller import setup
 from test_json_correction_handoff import BAD, tool
 

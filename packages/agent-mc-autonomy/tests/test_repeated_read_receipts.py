@@ -4,10 +4,9 @@ import copy
 import json
 
 import pytest
-
-from agent_mc_autonomy.context import assemble, encode
 from test_controller import setup
 
+from agent_mc_autonomy.context import assemble, encode
 
 REPEATED = "这轮已经答过了,答案不会变,先看上一条。"
 READ_TOOLS = ("mc_bag", "mc_queue", "mc_blocked")

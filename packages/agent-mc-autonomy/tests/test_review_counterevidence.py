@@ -1,13 +1,13 @@
 """Anonymous retained task140/143/144/145 ordering through real inspect."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import pytest
+from test_review import runtime as review_runtime
+from test_review_budget import read_original
 
 from agent_mc_autonomy.observations import terminal_step_outcomes
 from agent_mc_autonomy.review_evidence import compact, encoded
-from test_review import runtime as review_runtime
-from test_review_budget import read_original
 
 
 @pytest.fixture

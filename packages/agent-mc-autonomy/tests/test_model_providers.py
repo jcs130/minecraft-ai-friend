@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from agent_mc_autonomy.model_auth import Authorization, OAuthAttempt
-from agent_mc_autonomy.model_config import HttpPlannerConfig, PRESETS, planner_settings
+from agent_mc_autonomy.model_config import PRESETS, HttpPlannerConfig, planner_settings
 from agent_mc_autonomy.model_protocols import assistant_history, request, usage_metrics
 from agent_mc_autonomy.planner import HttpPlanner, PlannerResponseError
 
@@ -223,6 +223,7 @@ def test_vllm_reasoning_is_private_native_history_and_replayed_without_renaming(
 @pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
 def test_chat_first_output_includes_private_reasoning_before_spoken_content(field, monkeypatch):
     from types import SimpleNamespace
+
     from agent_mc_autonomy import model_stream
     clock = [11]
     monkeypatch.setattr(model_stream, "time", SimpleNamespace(monotonic=lambda: clock[0]))
@@ -368,8 +369,9 @@ def test_auth_error_does_not_leak_token_or_retry(tmp_path):
 
 
 def test_controller_keeps_native_history_on_both_text_and_tool_turns(framework_module, tmp_path, run_async):
-    from test_controller import setup, choose
     from dataclasses import replace
+
+    from test_controller import choose, setup
     state = {"scope": "test-scope", "data": {"reasoning_content": "signed-content"}}
     responses = [dict(choose(), _provider_state=state), {"content": "waiting", "tool_calls": [], "_provider_state": state}]
     async def decide(*_):
@@ -388,6 +390,7 @@ def test_oidc_signature_nonce_audience_and_expiry_verified():
     jwt = pytest.importorskip("jwt")
     pytest.importorskip("cryptography")
     from cryptography.hazmat.primitives.asymmetric import rsa
+
     from agent_mc_autonomy.model_auth import identity
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))

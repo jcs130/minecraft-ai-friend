@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
-
-from agent_mc_autonomy.commentary import commentary_observation
 from test_controller import setup
 from test_review import runtime as review_runtime
+
+from agent_mc_autonomy.commentary import commentary_observation
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures/mixed_outcomes.json").read_text(encoding="utf-8"))
 

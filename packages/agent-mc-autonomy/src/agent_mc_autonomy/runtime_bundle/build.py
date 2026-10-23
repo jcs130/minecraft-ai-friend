@@ -10,7 +10,17 @@ import stat
 import zipfile
 from pathlib import Path
 
-from .manifest import INVENTORY, MANIFEST, NODE_VERSION, REGISTRY_SHA256, SCHEMA, digest, relative_path, source_pin, verify_bundle
+from .manifest import (
+    INVENTORY,
+    MANIFEST,
+    NODE_VERSION,
+    REGISTRY_SHA256,
+    SCHEMA,
+    digest,
+    relative_path,
+    source_pin,
+    verify_bundle,
+)
 from .viewer_source import verify_viewer_input
 
 HERE = Path(__file__).parent

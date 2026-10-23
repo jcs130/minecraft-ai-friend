@@ -2,12 +2,12 @@ import json
 from copy import deepcopy
 
 import pytest
+import test_review
+from test_death_reflection_contract import death_review
 
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.observations import terminal_step_outcomes
 from agent_mc_autonomy.review import ReviewPort
-from test_death_reflection_contract import death_review
-import test_review
 
 
 def test_minimal_completion_contract_is_neutral_and_ordinary_final_needs_no_extras(runtime):
@@ -59,9 +59,10 @@ def test_completion_contract_death_paths_are_minimal_and_evidence_bound(tmp_path
 
 @pytest.mark.parametrize("saved", [False, True])
 def test_legacy_completion_contract_preserves_original_choice_without_replay(tmp_path, saved):
-    from test_death_reflection_contract import legacy
-    from agent_mc_autonomy.death_memory import DeathMemory
     from test_death_memory import SCOPE
+    from test_death_reflection_contract import legacy
+
+    from agent_mc_autonomy.death_memory import DeathMemory
     port, _, episode, _, review = death_review(tmp_path)
     choice, _ = legacy(port, review)
     if saved:

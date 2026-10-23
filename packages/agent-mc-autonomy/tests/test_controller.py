@@ -687,8 +687,10 @@ def test_goal_prompt_distinguishes_user_and_model_stage(framework_module, tmp_pa
 
 def test_host_stage_prompt_keeps_explicit_user_parent_goal(framework_module, tmp_path):
     import uuid
-    from agent_mc_autonomy.mailbox import Mailbox
+
     from test_death_memory import facts
+
+    from agent_mc_autonomy.mailbox import Mailbox
     _, _, controller = setup(framework_module, tmp_path, None)
     controller.observe_game_facts(facts())
     box = Mailbox(tmp_path)

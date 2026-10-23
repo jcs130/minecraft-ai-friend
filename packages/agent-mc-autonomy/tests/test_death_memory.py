@@ -1,9 +1,10 @@
 import json
-import pytest
 
-from agent_mc_autonomy.death_memory import DeathMemory
+import pytest
+from test_controller import choose, packed, setup
+
 from agent_mc_autonomy.context import RULES
-from test_controller import setup, choose, packed
+from agent_mc_autonomy.death_memory import DeathMemory
 
 SCOPE = {"realm": "realm-a", "account": "offline:actual-uuid", "agent": "player"}
 
@@ -96,9 +97,9 @@ def test_guide_is_optional_and_persona_and_user_intent_drive_interests():
 
 
 def test_host_receives_real_episode_once_even_after_restart_and_instant_respawn(tmp_path):
-    from datetime import datetime, timezone
-    from agent_mc_autonomy.review import ReviewPort, ReviewPolicy
     from test_review import snapshot
+
+    from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
     clock = [10000]
     port = ReviewPort(tmp_path, now=lambda: clock[0])
     port.configure(ReviewPolicy(enabled=True, idle_presence_seconds=900))
@@ -185,8 +186,9 @@ def test_foreign_scope_terminal_settles_native_ledger_without_contaminating_new_
 
 @pytest.mark.parametrize("change", ["death", "scope", "runtime_failure"])
 def test_quiet_review_defer_rechecks_new_urgent_event_and_identity_before_observe(tmp_path, change):
-    from agent_mc_autonomy.review import ReviewPort, ReviewPolicy
     from test_review import snapshot
+
+    from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
     clock = [10000]
     port = ReviewPort(tmp_path, now=lambda: clock[0])
     port.configure(ReviewPolicy(enabled=True, idle_presence_seconds=900))
@@ -218,6 +220,7 @@ def test_fresh_respawn_handoff_waits_for_native_terminal_and_retains_backoff(
     import asyncio
     import dataclasses
     from types import SimpleNamespace
+
     from test_controller import action
     clock, decisions = [1000], []
     async def decide(messages, _):
@@ -267,9 +270,10 @@ def test_respawn_requires_matching_identity_episode_and_synced_inventory(framewo
 
 
 def test_recovery_context_preserves_proposal_and_measured_distance_without_inventing_route(tmp_path):
+    from test_review import snapshot
+
     from agent_mc_autonomy.death_memory import recovery_context
     from agent_mc_autonomy.review import review_observation
-    from test_review import snapshot
     original = event()
     original["meta"]["death"]["position"]["dimension"] = "overworld"
     episode = DeathMemory(tmp_path).record(original, facts(), [], [], [])
@@ -316,6 +320,7 @@ def test_death_invalidates_delayed_planner_even_after_respawn_and_closes_old_tur
     import asyncio
     import dataclasses
     from types import SimpleNamespace
+
     from test_controller import action
     clock, requests, cancelled, delivered = [1000], [], [], [False]
     release = asyncio.Event()

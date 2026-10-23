@@ -1,11 +1,10 @@
 import json
 
 import pytest
+from test_controller import setup
 
 from agent_mc_autonomy.controller import model_tools, observation_call
 from agent_mc_autonomy.tool_schema import provider_schema
-from test_controller import setup
-
 
 HELP = {'name': 'mc_tool_help', 'description': 'Shared core progressive schema discovery',
         'inputSchema': {'type': 'object', 'additionalProperties': False, 'properties': {
@@ -80,8 +79,9 @@ def test_failure_recovery_uses_the_advertised_help_pointer_root(shared, expected
 
 
 def test_review_counts_shared_message_queries_as_reads():
-    from agent_mc_autonomy.review import review_observation, summary
     from test_review import snapshot
+
+    from agent_mc_autonomy.review import review_observation, summary
     evidence = review_observation(snapshot(10000, read_activity={'mc_messages': 4}), 10000)['evidence']
     assert evidence['read_activity']['mc_messages'] == 4
     assert '连续查询4次' in summary(evidence)
@@ -118,9 +118,10 @@ def test_consideration_acknowledges_native_barrier_without_claiming_body_progres
 
 
 def test_shared_message_index_is_at_dynamic_tail_and_visible_to_review():
+    from test_review import snapshot
+
     from agent_mc_autonomy.context import assemble
     from agent_mc_autonomy.review import review_observation
-    from test_review import snapshot
     index = {'key': 'messages', 'text': '[received] historical server message-7; mc_messages read by id',
              'original': 'log:messages'}
     facts = {'parts': [{'key': 'body', 'text': 'health=20 food=18'}, index,

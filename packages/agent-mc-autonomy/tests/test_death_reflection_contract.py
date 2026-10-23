@@ -4,12 +4,12 @@ from copy import deepcopy
 from unittest.mock import Mock
 
 import pytest
-
-from agent_mc_autonomy.death_memory import DeathMemory
-from agent_mc_autonomy.review import ReviewPort, review_observation
 from test_death_memory import SCOPE, event, facts
 from test_review import snapshot
 from test_review_speech import setup
+
+from agent_mc_autonomy.death_memory import DeathMemory
+from agent_mc_autonomy.review import ReviewPort, review_observation
 
 
 def death_review(tmp_path):

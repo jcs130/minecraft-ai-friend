@@ -3,9 +3,7 @@ import dataclasses
 import json
 
 import pytest
-
 from test_controller import setup
-
 
 BAD = '{"steps":[{"skill":"goto","at":[1,65,1]}],"queue"::"Original proposed narration"}'
 

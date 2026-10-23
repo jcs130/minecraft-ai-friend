@@ -8,11 +8,11 @@ import time
 import uuid
 
 import pytest
+from test_controller import action, choose, packed, setup
+from test_host_recent import controller_fixture, message, projection
 
 from agent_mc_autonomy.mailbox import Mailbox
 from agent_mc_autonomy.viewer_public import viewer_projection
-from test_controller import action, choose, packed, setup
-from test_host_recent import controller_fixture, message, projection
 
 
 @pytest.mark.parametrize("evidence", [{"outcomeKnown": False}, {"outcomeUnknown": True}, {"nativeStatus": "unknown"}])

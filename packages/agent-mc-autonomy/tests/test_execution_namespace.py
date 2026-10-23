@@ -3,7 +3,6 @@ import hashlib
 import json
 
 import pytest
-
 from test_controller import action, setup
 from test_recovery import fixture
 
@@ -33,7 +32,11 @@ def test_terminal_original_reference_matches_kind_as_well_as_id(framework_module
 
 
 def test_viewer_does_not_apply_method_terminal_to_task(framework_module):
-    from agent_mc_autonomy.viewer_public import record_playback, tool_receipt, viewer_projection
+    from agent_mc_autonomy.viewer_public import (
+        record_playback,
+        tool_receipt,
+        viewer_projection,
+    )
     receipt = tool_receipt('mc_do', {'steps': [{'skill': 'craft'}]}, {'execution': action()})
     state = {'viewer_action': receipt, 'pending': [{**action(), 'kind': 'method'}]}
     record_playback(state, {'viewer_action': receipt})

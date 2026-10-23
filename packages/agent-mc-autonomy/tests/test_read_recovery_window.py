@@ -3,9 +3,9 @@ import dataclasses
 import json
 
 import pytest
+from test_controller import packed, setup
 
 from agent_mc_autonomy.context import assemble
-from test_controller import packed, setup
 
 
 @pytest.mark.parametrize('context_mode', ['compact', 'full'])

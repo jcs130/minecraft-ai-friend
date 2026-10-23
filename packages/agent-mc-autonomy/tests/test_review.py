@@ -39,8 +39,9 @@ def body_snapshot(now, phase="alive", episode_id=None, gear="木镐×1"):
 
 
 def test_delivered_death_review_requires_fresh_respawn_inspection_before_mailbox_insert(runtime):
+    from test_death_memory import SCOPE, event, facts
+
     from agent_mc_autonomy.death_memory import DeathMemory
-    from test_death_memory import event, facts, SCOPE
     port, clock, publish = runtime
     publish(facts=body_snapshot(clock[0]), game_identity=SCOPE)
     before = port.offer()["review"]
@@ -200,8 +201,9 @@ def test_ordinary_review_cannot_suppress_a_fresh_runtime_failure(runtime, delive
 
 @pytest.mark.parametrize("acknowledged", [False, True])
 def test_delivered_death_metadata_dedup_cannot_hide_a_later_runtime_failure(runtime, acknowledged):
+    from test_death_memory import SCOPE, event, facts
+
     from agent_mc_autonomy.death_memory import DeathMemory
-    from test_death_memory import event, facts, SCOPE
     port, clock, publish = runtime
     episode = DeathMemory(port.directory).record(event(), facts(), [], [], [])
     publish(death_episode=episode, game_identity=SCOPE)
@@ -440,7 +442,8 @@ def test_successful_look_chatter_is_not_progress_but_task_result_and_death_are_e
     previous = port.offer()["review"]["id"]
     clock[0] += 10
     facts["parts"][0]["text"] = "生命 0/20"
-    from test_death_memory import event, SCOPE
+    from test_death_memory import SCOPE, event
+
     from agent_mc_autonomy.death_memory import DeathMemory
     episode = DeathMemory(port.directory).record(event(), facts, [], [], [])
     publish(facts=facts, death_episode=episode, game_identity=SCOPE)

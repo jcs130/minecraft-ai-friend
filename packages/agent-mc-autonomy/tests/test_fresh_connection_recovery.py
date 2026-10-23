@@ -5,11 +5,15 @@ import json
 from copy import deepcopy
 
 import pytest
-
-from agent_mc_autonomy.death_memory import DeathMemory
 from test_controller import action, choose, packed, setup
 from test_death_memory import SCOPE, event, facts
-from test_stage_applicability import offer, propose, seam  # shared real-port fixture
+from test_stage_applicability import offer, propose  # shared real-port fixture
+from test_stage_applicability import seam as _seam_fixture
+
+from agent_mc_autonomy.death_memory import DeathMemory
+
+# Keep pytest's shared fixture registration while leaving argument names free.
+seam = _seam_fixture
 
 
 def fresh_body(with_recovery=True):

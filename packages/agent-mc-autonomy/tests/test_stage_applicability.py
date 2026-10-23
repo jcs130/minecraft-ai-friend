@@ -6,11 +6,11 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from test_controller import action, choose, packed, setup
+from test_death_memory import SCOPE, event, facts
 
 from agent_mc_autonomy.mailbox import Mailbox
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
-from test_controller import action, choose, packed, setup
-from test_death_memory import SCOPE, event, facts
 
 
 @pytest.fixture

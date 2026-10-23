@@ -72,6 +72,8 @@ jobs:
         working-directory: ${{ runner.temp }}/portal
   agent-mc-core:
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
     defaults:
       run:
         working-directory: packages/agent-mc-world
@@ -88,4 +90,4 @@ jobs:
           java-version: '21'
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm build:engine
-      - run: corepack pnpm exec vitest run --maxWorkers=2 --minWorkers=1
+      - run: corepack pnpm exec vitest run --maxWorkers=1 --minWorkers=1

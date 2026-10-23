@@ -1,8 +1,8 @@
 import jsonschema
 import pytest
+from test_death_memory import SCOPE, event, facts
 
 from agent_mc_autonomy.death_memory import TOOL, DeathMemory
-from test_death_memory import SCOPE, event, facts
 
 
 @pytest.mark.parametrize("action", ["get", "report"])

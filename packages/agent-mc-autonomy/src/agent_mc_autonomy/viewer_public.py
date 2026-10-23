@@ -1,8 +1,8 @@
 """Bounded public playback state; never expose prompts, arguments or host config."""
 
-from datetime import datetime, timezone
 import json
 import re
+from datetime import datetime, timezone
 
 
 def _matches(execution, receipt):

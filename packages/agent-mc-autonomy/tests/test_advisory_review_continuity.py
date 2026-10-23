@@ -3,9 +3,9 @@ import dataclasses
 import uuid
 
 import pytest
+from test_controller import choose, setup
 
 from agent_mc_autonomy.mailbox import Mailbox
-from test_controller import choose, setup
 
 
 @pytest.mark.parametrize('origin,mode,choice', [('host_review', 'insert', 'revise'),

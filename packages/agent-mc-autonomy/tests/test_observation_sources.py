@@ -6,7 +6,6 @@ import pytest
 from agent_mc_autonomy.context import assemble
 from agent_mc_autonomy.observations import spatial_text
 
-
 SOURCES = ("client-loaded-world", "client-visible-world")
 
 

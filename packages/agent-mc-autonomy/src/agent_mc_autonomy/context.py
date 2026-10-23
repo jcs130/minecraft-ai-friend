@@ -5,8 +5,14 @@ import json
 import time
 
 from . import host_recent
-
-from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, ContextCounter, CounterUnavailable, count_input, counter_name
+from .context_counter import (
+    BYTE_COUNTER_NAME,
+    FRAMING_RESERVE,
+    ContextCounter,
+    CounterUnavailable,
+    count_input,
+    counter_name,
+)
 from .observations import fact_preview, spatial_text, terminal_step_outcomes
 
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.

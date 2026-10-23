@@ -3,10 +3,10 @@ import copy
 import json
 
 import pytest
-from agent_mc_autonomy.context import assemble
-from agent_mc_autonomy.controller import observation_call, spatial_read_key
 from test_controller import action, setup
 
+from agent_mc_autonomy.context import assemble
+from agent_mc_autonomy.controller import observation_call, spatial_read_key
 
 SCANS = [
     [{"skill": "look", "at": ["~0", "~2", "~0"]}],

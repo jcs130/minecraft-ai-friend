@@ -2,11 +2,11 @@ import json
 import uuid
 
 import pytest
+from test_death_memory import SCOPE, event, facts
+from test_review import snapshot
 
 from agent_mc_autonomy.death_memory import DeathMemory
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
-from test_death_memory import SCOPE, event, facts
-from test_review import snapshot
 
 
 def setup(tmp_path):

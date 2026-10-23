@@ -2,13 +2,13 @@ import json
 from copy import deepcopy
 
 import pytest
-
-from agent_mc_autonomy.death_memory import DeathMemory, scope_key
-from agent_mc_autonomy.host_context import HostContextPort
 from test_controller import action, setup
 from test_death_memory import SCOPE, event, facts
 from test_death_reflection_contract import reflection
 from test_review_speech import setup as review_setup
+
+from agent_mc_autonomy.death_memory import DeathMemory, scope_key
+from agent_mc_autonomy.host_context import HostContextPort
 
 
 def completed_latest(tmp_path):

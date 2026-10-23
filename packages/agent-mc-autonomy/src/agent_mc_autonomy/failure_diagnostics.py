@@ -7,7 +7,6 @@ from collections import deque
 from contextvars import ContextVar
 from datetime import datetime, timezone
 
-
 current = ContextVar("runtime_failure_diagnostics", default=None)
 
 

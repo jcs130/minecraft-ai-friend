@@ -2,11 +2,11 @@ import dataclasses
 import json
 
 import pytest
+from test_controller import setup
+from test_model_policy import image_raw
 
 from agent_mc_autonomy.context import RULES
 from agent_mc_autonomy.perception import has_images
-from test_controller import setup
-from test_model_policy import image_raw
 
 
 @pytest.mark.parametrize("vision_enabled, capture_failed", [(True, False), (False, False), (True, True)])

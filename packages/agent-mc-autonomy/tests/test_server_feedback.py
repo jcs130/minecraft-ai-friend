@@ -1,6 +1,5 @@
-from test_review import runtime as review_runtime
-
 import pytest
+from test_review import runtime as review_runtime
 
 
 @pytest.fixture
@@ -61,6 +60,7 @@ def test_compact_external_facts_are_bounded_and_keep_query_paths():
 
 def test_server_feedback_survives_large_scout_results_at_the_dynamic_request_tail():
     import json
+
     from agent_mc_autonomy.context import assemble
     feedback = {'key': 'serverFeedback', 'text': 'server denied place (-486,67,-506): land_permission_denied',
                 'original': 'log:server-feedback'}

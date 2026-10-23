@@ -2,8 +2,9 @@
 import copy
 import json
 
-from agent_mc_autonomy.context import assemble
 from test_controller import choose, setup
+
+from agent_mc_autonomy.context import assemble
 
 
 def private(cursor=1):

@@ -1,7 +1,10 @@
 import dataclasses
+
 import pytest
+from test_controller import packed, setup
+
 from agent_mc_autonomy.configuration import Settings
-from test_controller import setup, packed
+
 
 def config(tmp_path):
     return {"backend":{"provider":"java-client"},"server":{"host":"fixture.test","username":"Test","version":"1.20.6","auth":"offline"},
@@ -82,7 +85,7 @@ def test_native_tool_projection_keeps_operations_instead_of_mineflayer_steps():
 
 @pytest.mark.parametrize("body",['{"health":5,"food":20}','{"health":20,"food":3}'])
 def test_fast_rules_read_native_vitals_without_inference(body):
-    from agent_mc_autonomy.fast import rule_focus
     from agent_mc_autonomy.context import RULES
+    from agent_mc_autonomy.fast import rule_focus
     assert rule_focus({"facts":{"body":body}})=="survival"
     assert "Java protocol: 1.21.1" not in RULES

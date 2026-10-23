@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from test_controller import Bridge, choose
 
 

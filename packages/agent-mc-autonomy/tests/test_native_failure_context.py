@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from test_controller import action, setup
 
 

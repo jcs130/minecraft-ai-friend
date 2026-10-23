@@ -2,9 +2,10 @@ import dataclasses
 import json
 import time
 
-from agent_mc_autonomy.death_memory import DeathMemory
 from test_controller import packed, setup
 from test_death_memory import SCOPE, event, facts
+
+from agent_mc_autonomy.death_memory import DeathMemory
 
 
 def report(**changes):

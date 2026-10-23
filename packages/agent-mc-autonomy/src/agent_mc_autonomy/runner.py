@@ -14,8 +14,8 @@ from pathlib import Path
 from .bridge import MinecraftBridge
 from .configuration import Settings
 from .controller import Controller
-from .fast import FastPolicy, SystemOne
 from .failure_diagnostics import FailureDiagnostics, current
+from .fast import FastPolicy, SystemOne
 from .mailbox import Mailbox
 from .observations import runtime_error_code
 from .ownership import session_lease

@@ -3,7 +3,6 @@ import hashlib
 
 from .review_evidence import encoded, fact_preview, preview
 
-
 WINDOW_SECONDS = 3600
 SAMPLE_SECONDS = 300
 MAX_SAMPLES = 8

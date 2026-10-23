@@ -5,12 +5,12 @@ import json
 from dataclasses import replace
 
 import pytest
-
-from agent_mc_autonomy import context
-from agent_mc_autonomy.perception import IMAGE_RESERVE, latest_png
 from test_context_retention import exchange
 from test_controller import Bridge
 from test_model_policy import image_raw
+
+from agent_mc_autonomy import context
+from agent_mc_autonomy.perception import IMAGE_RESERVE, latest_png
 
 
 class SymbolCounter:

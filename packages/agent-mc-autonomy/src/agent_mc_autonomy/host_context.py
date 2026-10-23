@@ -1,11 +1,11 @@
 """Private, host-neutral identity/intent/selected-memory projection for the body."""
 
+import copy
 import hashlib
 import json
-import time
-import copy
-import uuid
 import re
+import time
+import uuid
 from datetime import datetime
 
 from . import host_recent as recent

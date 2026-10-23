@@ -4,7 +4,6 @@ import dataclasses
 import json
 
 import pytest
-
 from test_controller import setup
 
 

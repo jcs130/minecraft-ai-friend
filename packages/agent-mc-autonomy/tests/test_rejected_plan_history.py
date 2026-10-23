@@ -4,9 +4,9 @@ import copy
 import json
 
 import pytest
+from test_controller import setup
 
 from agent_mc_autonomy.context import assemble, encode
-from test_controller import setup
 
 
 def rejected(index, *, name="mc_do", result=None, steps=None):

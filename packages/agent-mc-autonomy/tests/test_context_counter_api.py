@@ -82,8 +82,11 @@ def test_runner_forwards_both_host_ports_and_exposes_the_same_runtime_session(
     import json
     module = importlib.import_module("agent_mc_autonomy.runner")
     seen, states = [], []
-    base = lambda revision: None
-    recent = lambda request: {"available": False}
+    def base(revision):
+        return None
+
+    def recent(request):
+        return {"available": False}
 
     class Controller:
         def __init__(self, *args, **kwargs):

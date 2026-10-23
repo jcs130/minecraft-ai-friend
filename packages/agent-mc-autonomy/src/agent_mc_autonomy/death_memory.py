@@ -3,8 +3,8 @@
 import json
 import math
 import sqlite3
-from datetime import datetime
 from contextlib import contextmanager
+from datetime import datetime
 
 
 def scope_key(scope):

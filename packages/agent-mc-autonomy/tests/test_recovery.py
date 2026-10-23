@@ -5,7 +5,6 @@ import sqlite3
 import uuid
 
 import pytest
-
 from test_controller import Bridge, choose
 
 
@@ -43,8 +42,8 @@ def fixture(tmp_path, framework_module):
 
 
 def test_assess_unknown_ack_audit_retry_and_fresh_planning(tmp_path, framework_module, run_async):
-    from agent_mc_autonomy.recovery import acknowledge_unknown, assess
     from agent_mc_autonomy.controller import Controller
+    from agent_mc_autonomy.recovery import acknowledge_unknown, assess
     settings, host, box, feedback, options = fixture(tmp_path, framework_module)
     command_before = box.get(feedback)
     with sqlite3.connect(box.path) as db:
@@ -184,8 +183,8 @@ def test_pending_gate_prevents_bridge_construction_and_changed_sources(tmp_path,
 
 
 def test_admin_cli_is_local_and_does_not_start_runtime(tmp_path, framework_module, monkeypatch, capsys):
-    from agent_mc_autonomy.cli import main
     import agent_mc_autonomy.cli as cli
+    from agent_mc_autonomy.cli import main
     settings, host, _, _, options = fixture(tmp_path, framework_module)
     config = tmp_path/'fixture.toml'
     config.write_text('[runtime]\nenabled=false\n[server]\nhost="example.test"\nusername="Alice"\n', encoding='utf-8')

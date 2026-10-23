@@ -3,8 +3,9 @@ import json
 from copy import deepcopy
 from unittest.mock import Mock
 
-from agent_mc_autonomy.review_evidence import compact, encoded
 from test_death_reflection_contract import death_review
+
+from agent_mc_autonomy.review_evidence import compact, encoded
 
 
 def test_long_inventory_never_hides_current_place_body_or_queue():

@@ -2,9 +2,9 @@
 import json
 
 import pytest
+from test_review import snapshot
 
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
-from test_review import snapshot
 
 
 def setup(tmp_path):

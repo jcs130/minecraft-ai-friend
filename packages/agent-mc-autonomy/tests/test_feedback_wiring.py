@@ -2,11 +2,11 @@ import dataclasses
 import json
 
 import pytest
-
-from agent_mc_autonomy.commentary import commentary_changes, commentary_observation
 from test_commentary import sample
 from test_controller import setup
 from test_review import runtime as review_runtime
+
+from agent_mc_autonomy.commentary import commentary_changes, commentary_observation
 
 
 @pytest.fixture

@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from agent_mc_autonomy import Settings
-from agent_mc_autonomy.runtime_bundle import apply_runtime_defaults, resolve_prepared_bundle, verify_settings_runtime
+from agent_mc_autonomy.runtime_bundle import (
+    apply_runtime_defaults,
+    resolve_prepared_bundle,
+    verify_settings_runtime,
+)
 from agent_mc_autonomy.runtime_bundle import manifest as m
 
 

@@ -6,7 +6,6 @@ import copy
 import re
 from typing import Protocol
 
-
 FRAMING_RESERVE = 1024
 BYTE_COUNTER_NAME = "utf8-byte-upper-bound+1024-framing"
 

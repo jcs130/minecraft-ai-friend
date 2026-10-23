@@ -5,7 +5,6 @@ import hashlib
 import json
 
 import pytest
-
 from test_controller import action, setup
 
 
@@ -96,7 +95,8 @@ def test_request_journal_records_non_content_prefix_and_policy_diagnostics(
     (messages, tools), _, _ = capture(framework_module, tmp_path / 'record', run_async)
     row = json.loads((tmp_path / 'record/decisions.jsonl').read_text(encoding='utf-8').splitlines()[-1])
     data = row['request_context']
-    encoded = lambda value: json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()
+    def encoded(value):
+        return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()
     policy = json.loads(messages[-1]['content'])['current_tool_policy']
     assert data['input'] > 0 and data['limit'] == 131072
     assert data['layout']['tools_sha256'] == hashlib.sha256(encoded(tools)).hexdigest()

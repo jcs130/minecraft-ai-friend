@@ -3,8 +3,9 @@ import copy
 import json
 
 import pytest
-from agent_mc_autonomy.context import assemble
 from test_controller import action, setup
+
+from agent_mc_autonomy.context import assemble
 
 REJECTED = "这一单我没接:这片区域已连续 3 次没找到生鸡肉；暂缓在周围 32 格内重复找它"
 PLAN = {"steps": [{"skill": "collect", "block": "oak_log", "count": 3},

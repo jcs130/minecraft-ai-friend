@@ -7,14 +7,13 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from test_controller import choose, packed, setup
+from test_death_memory import event as death_event
 
 from agent_mc_autonomy import host_recent
 from agent_mc_autonomy.context import assemble
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.mailbox import Mailbox
-from test_controller import choose, packed, setup
-from test_death_memory import event as death_event
-
 
 SCOPE = {"realm": "test-realm", "account": "test-account", "agent": "test-agent"}
 BASE = {"agent_name": "TestRole", "persona": "Observant", "persona_source": "host_projection",

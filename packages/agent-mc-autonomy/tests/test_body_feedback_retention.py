@@ -3,10 +3,10 @@ import dataclasses
 import json
 
 import pytest
-
-from agent_mc_autonomy.context import assemble
 from test_controller import action
 from test_observation_reuse import PLAN, observed, prepare
+
+from agent_mc_autonomy.context import assemble
 
 
 @pytest.mark.parametrize('mode', ['compact', 'full'])

@@ -5,7 +5,6 @@ import dataclasses
 from types import SimpleNamespace
 
 import pytest
-
 from test_controller import action, choose, setup
 
 

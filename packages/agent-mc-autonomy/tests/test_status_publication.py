@@ -5,9 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from test_controller import Bridge, choose
 
 from agent_mc_autonomy import runner
-from test_controller import Bridge, choose
 
 
 def denied(code=5):

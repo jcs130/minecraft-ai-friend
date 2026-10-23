@@ -10,13 +10,25 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
+from . import review_evidence, review_projects
 from .configuration import _boolean, _integer
+from .death_memory import (
+    DeathMemory,
+    hydrate_combat,
+    lifecycle,
+    recovery_context,
+    scope_key,
+)
 from .host_context import HostContextPort, validate_host_context
-from . import review_evidence
-from . import review_projects
 from .mailbox import Mailbox, observation
-from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view, native_outcome_summary
-from .death_memory import hydrate_combat, DeathMemory, lifecycle, scope_key, recovery_context
+from .observations import (
+    body_feedback,
+    fact_preview,
+    feedback_signal,
+    native_outcome_summary,
+    spatial_text,
+    tool_failure_view,
+)
 from .stage_applicability import body_baseline
 
 
