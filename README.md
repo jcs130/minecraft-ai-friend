@@ -77,6 +77,6 @@ python paper/self-host/selfhost.py doctor
 
 ## 开源与安全
 
-自研源码按 [MIT](LICENSE) 开放，欢迎 clone、fork 和提交改进。Minecraft、第三方插件、Numen、YSM、模型、数据包和其他依赖保留各自的许可，不因放在同一个世界就全部变成 MIT。
+仓库默认采用 [MIT](LICENSE)，子项目有独立许可证时以各自 LICENSE 为准，例如自主组件使用 Apache-2.0。欢迎 clone、fork 和提交改进。Minecraft、第三方插件、Numen、YSM、模型、数据包和其他依赖也保留各自的许可。
 
 只提交无密模板。不要提交 API Key、邮箱／云凭据、私钥、登录数据库、玩家物品、世界或蓝屏转储。部署自己的认证入口，封闭离线后端；详见 [安全说明](SECURITY.md) 与 [开源检查](docs/OPEN_SOURCE_AUDIT.md)。

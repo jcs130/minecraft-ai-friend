@@ -78,7 +78,7 @@ describe('selected procedure IPC',()=>{
       const attachment=(event as unknown as Parameters<WorldHost['pushEvent']>[0]).blobs![0];
       expect('bytes' in attachment&&attachment.mime).toBe(PROCEDURE_RECEIPT_MIME);
       const receipt=JSON.parse(Buffer.from((attachment as {bytes:Uint8Array}).bytes).toString('utf8'));
-      expect(receipt).toMatchObject({status:'validated',trace:[],root:procedureRef(root),result:{valid:true,versions:2}});
+      expect(receipt,JSON.stringify(receipt)).toMatchObject({status:'validated',trace:[],root:procedureRef(root),result:{valid:true,versions:2}});
       expect(reads.sort()).toEqual([procedureRef(root).handle,procedureRef(child).handle].sort());
       expect(JSON.stringify(receipt)).not.toContain('private source');
       expect(await tool.handler({procedure:{...procedureRef(root),revision:'a'.repeat(64)},validate:true},{role:'main',log:host.log}))

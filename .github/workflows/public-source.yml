@@ -90,4 +90,5 @@ jobs:
           java-version: '21'
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm build:engine
+      - run: corepack pnpm exec vitest run tests/procedure-ipc.test.ts --maxWorkers=1 --minWorkers=1
       - run: corepack pnpm exec vitest run --maxWorkers=1 --minWorkers=1
