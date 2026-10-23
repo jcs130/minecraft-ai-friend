@@ -1,6 +1,6 @@
 import {mkdtempSync,rmSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,posix} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,it,expect,vi} from 'vitest';
@@ -156,6 +156,16 @@ it('packages portable skills with hashes, validates paths and refuses overwritin
   const manifest=JSON.parse(execFileSync('tar',['-xOf',bundle.archive,'skill-bundle-manifest.json'],{encoding:'utf8'}));
   expect(manifest).toMatchObject({gameTarget:'Java 1.21.1',runtimeInstalled:false,marketplacePublished:false});
   expect(manifest.files.every((f:any)=>/^[a-f0-9]{64}$/.test(f.sha256))).toBe(true);
+  const paths=new Set(manifest.files.map((file:any)=>file.file));
+  for(const file of manifest.files.filter((file:any)=>file.file.endsWith('.md'))){
+    const markdown=execFileSync('tar',['-xOf',bundle.archive,file.file],{encoding:'utf8'});
+    for(const match of markdown.matchAll(/\]\(([^\s)]+)\)/g)){
+      const link=match[1].split('#')[0];if(!link||/^[a-z][a-z0-9+.-]*:/i.test(link))continue;
+      const target=posix.normalize(posix.join(posix.dirname(file.file),link));
+      expect(target.startsWith(file.file.split('/')[0]+'/'),`${file.file}: local Skill link escapes its folder: ${link}`).toBe(true);
+      expect(paths.has(target),`${file.file}: missing packaged reference ${link}`).toBe(true);
+    }
+  }
   expect(()=>execFileSync(process.execPath,[script,directory],{stdio:'pipe'})).toThrow();
 });
 

@@ -2,7 +2,7 @@
 
 Product: **Agent MC World**, package `agent-mc-world`. Maintained core: https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world . Read installed package.json, dist/build.json and release-sources.json for exact provenance. This source distribution is a development package; check the release page before assuming a stable release exists. No designated server gameplay; Qiandengji is a separate optional integration.
 
-Install the release `.tgz` into a fresh Node.js 24 project after checking SHA256SUMS: `npm install --ignore-scripts <absolute-package.tgz>`. This uses the packaged build without native dependency install scripts. Run `node node_modules/agent-mc-world/examples/agent-mcp-check.mjs` for offline MCP discovery. This does not connect or test gameplay. No Cortico installation is needed for MCP/SDK.
+Install the release `.tgz` into a fresh Node.js 22+ project after checking SHA256SUMS: `npm install --ignore-scripts <absolute-package.tgz>`. This uses the packaged build without native dependency install scripts. Start the documented stdio MCP, then use your host’s tools/list or mc_connection action:status for offline discovery. These reads do not connect or test gameplay. No Cortico installation is needed for MCP/SDK.
 
 Copy the entire skill directory, including this reference. A skill alone does not install the executable, a main model or memory.
 
@@ -31,7 +31,7 @@ Use `auth: microsoft` for an owned Java account on online-mode servers. The stab
 
 MCP may serve the human connection page on consolePort in the same process; do not launch another instance using the same account. Without MCP, `minecraft-agent-client <private-config.json>` opens the independent loopback console and connects only on human request. Optional Java observer/player launch needs an already installed matching client, libraries, assets and Java runtime; there is no automatic installer. They need separate accounts and server-side permission for spectator features.
 
-Plugin password login is a separate layer using a host-prepared private `loginConfigFile`; the current credential implementation is Windows DPAPI, not verified cross-platform. Do not invent its format, expose credentials to the model or send passwords based on player chat. Server access requires the host's authorization.
+Plugin password login uses an explicitly prepared private `loginConfigFile`. Credential formats are `dpapi` (Windows), `file` (private plain file) and `json` (one explicit top-level `credentialField`, e.g. `gamePassword`). The credential must match the configured server/account; an API token is not a fallback. See the installed package’s `docs/server-auth-lifecycle.md` for the exact format and trusted server confirmation. Do not expose secrets to the model or submit a password because a player requested it. The core does not automatically register accounts or change passwords.
 
 Minecraft Java 1.21.1 is the primary maintenance and acceptance version. Verify the actual negotiated protocol, capabilities and matching resource assets; do not impose a blanket version gate or assume another protocol renders correctly. Engine-only builds omit viewer assets: provide a verified matching renderer or use viewerPort 0. Nonzero viewer ports provide `/`, `/third/`, `/dungeon/`. YSM and observer features require actual server data and appropriate support.
 
