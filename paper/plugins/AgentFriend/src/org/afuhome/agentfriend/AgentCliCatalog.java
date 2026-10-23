@@ -150,7 +150,7 @@ final class AgentCliCatalog {
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
         add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z> [--verbose] [--json]","预判能否挖掘；多个目标用protect batch","整数坐标；同维度、16 格内、区块已加载","一份MC_PROTECTION摘要；deny停止，unknown暂缓；原频道完整数据，--verbose展开规则");
-        add(specs,"protect.container","safety","read","/mycli protect container <x> <y> <z> [--verbose] [--json]","开箱前查询领地与实体储物权限；公会门内归领地主人","整数坐标；同维度、16格内、已加载；门口公共箱可存取","一份MC_PROTECTION摘要；拒绝按publicCommand找公共箱；--verbose展开规则");
+        add(specs,"protect.container","safety","read","/mycli protect container <x> <y> <z> [--verbose] [--json]","开箱前查询领地与实体储物权限；公共设施补给可取放","整数坐标；同维度、16格内、已加载；门口公共箱可存取","一份MC_PROTECTION摘要；拒绝按publicCommand找公共箱；--verbose展开规则");
         add(specs,"protect.use","safety","read","/mycli protect use <x> <y> <z> [--verbose] [--json]","使用门、按钮、工作台前查询领地权限","整数坐标；同维度、16格内、已加载","一份MC_PROTECTION摘要；deny停止，unknown暂缓；--verbose展开规则");
         add(specs,"land","safety","query_or_manage","/mycli land here|list|info <ID>|menu；members <ID> [页码]；trust|untrust <ID> <玩家名或UUID>；board <ID>","查看归属、协作者与实体公告牌；主人管理协作者","仅当前主人能授权/撤权；成员不能转授权；其他公共建筑保护仍适用","MC_LAND_INFO/LIST/MEMBERS/GUIDE/MEMBER_RESULT/BOARD");
         add(specs,"land.here","safety","read","/mycli land here","查看当前位置的领地归属和本人可做的操作","在线玩家","MC_LAND_INFO；unclaimed 仍须遵守公共建筑和活动保护");

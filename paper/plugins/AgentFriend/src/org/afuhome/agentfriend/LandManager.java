@@ -64,7 +64,8 @@ final class LandManager implements Listener {
     private record Denial(Location at, Land land) { }
     record Land(String id, String title, World world, BlockVector3 min, BlockVector3 max,
                         UUID owner, Set<UUID> members, boolean visitorUse, boolean guild,
-                        String projectTask, String projectRun, boolean landmark, Set<BlockVector3> publicContainers) { }
+                        String projectTask, String projectRun, boolean landmark, Set<BlockVector3> publicContainers,
+                        boolean publicFacility) { }
 
     LandManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -158,8 +159,11 @@ final class LandManager implements Listener {
                     throw new IllegalArgumentException(id + " 的工程来源无效");
                 if (!run.isEmpty()) uuid(run);
                 boolean landmark = bool(s, "landmark-enabled", false);
+                boolean publicFacility = bool(s, "public-facility", false);
+                if (publicFacility && !bool(s, "visitor-use", false))
+                    throw new IllegalArgumentException(id + " 的 public-facility 需要 visitor-use: true");
                 if (landmark && (guild || !bool(s, "visitor-use", false)))
-                    throw new IllegalArgumentException(id + " 的地标须允许访客使用，且不能是公会私产");
+                    throw new IllegalArgumentException(id + " 的地标须允许访客使用，且不能使用公会大厅专属边界");
                 Set<BlockVector3> publicContainers = new LinkedHashSet<>();
                 if (s.contains("public-containers") && !s.isList("public-containers")) throw new IllegalArgumentException("public-containers 需要坐标列表");
                 for (Object value : s.getList("public-containers", List.of())) {
@@ -171,13 +175,13 @@ final class LandManager implements Listener {
                 }
                 if (publicContainers.size() > 16) throw new IllegalArgumentException(id + " 最多登记 16 格公共储物方块");
                 Land land = new Land(id, title, world, min, max, owner, Set.copyOf(members), bool(s, "visitor-use", false), guild,
-                        task, run, landmark, Set.copyOf(publicContainers));
+                        task, run, landmark, Set.copyOf(publicContainers), publicFacility);
                 for (Land other : proposed.values()) if (intersects(land, other))
                     throw new IllegalArgumentException(id + " 与 " + other.id() + " 重叠，需先划清边界");
                 proposed.put(id, land);
             }
             if (!proposed.containsKey(GUILD) || !proposed.get(GUILD).guild())
-                throw new IllegalArgumentException("必须保留 adventurers_guild / guild-hall，不能误删公会私产保护");
+                throw new IllegalArgumentException("必须保留 adventurers_guild / guild-hall，不能误删公会建筑保护");
             for (World world : Bukkit.getWorlds()) {
                 RegionManager manager = manager(world);
                 if (manager == null) throw new IllegalStateException(world.getName() + " 的 WorldGuard 不可用");
@@ -201,10 +205,11 @@ final class LandManager implements Listener {
                 region.setPriority(50);
                 DefaultDomain owners = new DefaultDomain(); owners.addPlayer(land.owner()); region.setOwners(owners);
                 DefaultDomain members = new DefaultDomain(); land.members().forEach(members::addPlayer); region.setMembers(members);
-                for (StateFlag flag : List.of(Flags.BLOCK_BREAK, Flags.BLOCK_PLACE, Flags.CHEST_ACCESS, Flags.ITEM_DROP, Flags.ITEM_PICKUP)) {
+                for (StateFlag flag : List.of(Flags.BLOCK_BREAK, Flags.BLOCK_PLACE)) {
                     region.setFlag(flag, StateFlag.State.DENY);
                     region.setFlag(flag.getRegionGroupFlag(), RegionGroup.NON_MEMBERS);
                 }
+                configureSupplies(region, land.publicFacility());
                 for (StateFlag flag : List.of(Flags.USE, Flags.INTERACT)) {
                     region.setFlag(flag, land.visitorUse() ? StateFlag.State.ALLOW : StateFlag.State.DENY);
                     region.setFlag(flag.getRegionGroupFlag(), land.visitorUse() ? RegionGroup.ALL : RegionGroup.NON_MEMBERS);
@@ -214,7 +219,7 @@ final class LandManager implements Listener {
                     region.setFlag(flag, StateFlag.State.DENY);
                 region.setFlag(Flags.DENY_MESSAGE, "「" + land.title() + "」保护区 " + land.world().getKey() + " "
                         + protectionArea(land).range() + "（含边界）；请停止未授权操作。需施工请另选区外目标，靠近后 /mycli protect break|place <x> <y> <z> 查询；"
-                        + (land.guild() ? "领物资请用 /mycli guild shared。" : "/mycli land info " + land.id() + " 核对主人并申请授权。"));
+                        + (land.publicFacility() ? "公共补给箱可自由取放；施工需管理者授权。" : "/mycli land info " + land.id() + " 核对主人并申请授权。"));
                 replacements.get(manager(land.world())).put(region.getId(), region);
                 int index = 0;
                 for (BlockVector3 point : land.publicContainers().stream().sorted(Comparator.comparing(BlockVector3::toString)).toList()) {
@@ -265,7 +270,7 @@ final class LandManager implements Listener {
             if (land != null) return land;
             UUID owner = region.getOwners().getUniqueIds().stream().findFirst().orElse(null);
             return new Land(id, id, at.getWorld(), region.getMinimumPoint(), region.getMaximumPoint(), owner,
-                    Set.copyOf(region.getMembers().getUniqueIds()), false, id.equals(GUILD), "", "", false, Set.of());
+                    Set.copyOf(region.getMembers().getUniqueIds()), false, id.equals(GUILD), "", "", false, Set.of(), false);
         }
         return null;
     }
@@ -273,8 +278,8 @@ final class LandManager implements Listener {
     boolean contains(Location at) { return find(at) != null; }
     boolean publicContainer(Location at) {
         Land land = find(at);
-        return ready && land != null && land.publicContainers().contains(
-                BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ()));
+        return ready && land != null && (land.publicFacility() || land.publicContainers().contains(
+                BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ())));
     }
     List<String> ids() { return lands.keySet().stream().sorted().toList(); }
     Land definition(String id) { return ready ? lands.get(id) : null; }
@@ -349,7 +354,7 @@ final class LandManager implements Listener {
         if (world == null) return "world_unavailable";
         var a = site.box().min(); var b = site.box().max();
         Land proposed = new Land(id, id, world, BlockVector3.at(a.x(), a.y(), a.z()), BlockVector3.at(b.x(), b.y(), b.z()),
-                new UUID(0, 1), Set.of(), true, false, task, run, true, Set.of());
+                new UUID(0, 1), Set.of(), true, false, task, run, true, Set.of(), false);
         for (Land land : lands.values()) if (intersects(proposed, land)) return "land_overlap:" + land.id();
         if (reservedIds.contains(id)) return "land_id_reserved";
         return "available";
@@ -392,6 +397,14 @@ final class LandManager implements Listener {
     }
     UUID guildOwner() { Land land = lands.get(GUILD); return ready && land != null ? land.owner() : null; }
     boolean guildMember(Player player) { Land land = lands.get(GUILD); return ready && land != null && member(player, land); }
+    boolean publicFacility(String id) { Land land = lands.get(id); return ready && land != null && land.publicFacility(); }
+    /** Supply access is independent of building membership; no BUILD flag is changed. */
+    static void configureSupplies(ProtectedRegion region, boolean publicFacility) {
+        for (StateFlag flag : List.of(Flags.CHEST_ACCESS, Flags.ITEM_DROP, Flags.ITEM_PICKUP)) {
+            region.setFlag(flag, publicFacility ? StateFlag.State.ALLOW : StateFlag.State.DENY);
+            region.setFlag(flag.getRegionGroupFlag(), publicFacility ? RegionGroup.ALL : RegionGroup.NON_MEMBERS);
+        }
+    }
     private boolean member(Player player, Land land) {
         ProtectedRegion region = manager(land.world()).getRegion(PREFIX + land.id());
         return region != null && (region.getOwners().contains(player.getUniqueId()) || region.getMembers().contains(player.getUniqueId()));
@@ -509,7 +522,7 @@ final class LandManager implements Listener {
 
     private Denial deniedInventory(Player player, Inventory inventory) {
         for (Location at : inventoryLocations(inventory.getHolder())) if (!allows(player, "container", at)) return new Denial(at,find(at));
-        if (inventory.getHolder() instanceof Entity entity && taggedLand(entity) != null && !tagMember(player, entity))
+        if (inventory.getHolder() instanceof Entity entity && taggedLand(entity) != null && !tagSupplyAccess(player, entity, "container"))
             return new Denial(entity.getLocation(),taggedLand(entity));
         return null;
     }
@@ -519,12 +532,22 @@ final class LandManager implements Listener {
         return id == null ? null : lands.get(id);
     }
     private boolean tagMember(Player player, Entity entity) { Land land = taggedLand(entity); return ready && land != null && member(player, land); }
+    private boolean tagSupplyAccess(Player player, Entity entity, String action) {
+        Land land = taggedLand(entity);
+        return ready && land != null && (member(player, land)
+                || land.publicFacility() && allows(player, action, entity.getLocation()));
+    }
     private boolean display(Entity entity) { return entity instanceof ItemFrame || entity instanceof ArmorStand
             || entity instanceof StorageMinecart || entity instanceof HopperMinecart; }
     private void mark(Entity entity) {
         Land land = find(entity.getLocation());
-        if (land != null && (display(entity) || entity instanceof Item))
-            entity.getPersistentDataContainer().set(property, PersistentDataType.STRING, land.id());
+        if (land != null && (display(entity) || entity instanceof Item)) {
+            if (entity instanceof Item && land.publicFacility()) {
+                // Remove only this public facility's legacy tag, never another private claim's tag.
+                if (land.id().equals(entity.getPersistentDataContainer().get(property, PersistentDataType.STRING)))
+                    entity.getPersistentDataContainer().remove(property);
+            } else entity.getPersistentDataContainer().set(property, PersistentDataType.STRING, land.id());
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent e) {
@@ -618,7 +641,7 @@ final class LandManager implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST) public void onDrop(PlayerDropItemEvent e){if(denyIfNeeded(e.getPlayer(),"drop",e.getPlayer().getLocation()))e.setCancelled(true);else mark(e.getItemDrop());}
     @EventHandler(priority=EventPriority.HIGHEST) public void onPickup(EntityPickupItemEvent e){
         Land tag=taggedLand(e.getItem());
-        if(tag!=null){if(e.getEntity() instanceof Player p && tagMember(p,e.getItem()))return;e.setCancelled(true);if(e.getEntity() instanceof Player p)denyTag(p,"pickup",e.getItem());}
+        if(tag!=null){if(e.getEntity() instanceof Player p && tagSupplyAccess(p,e.getItem(),"pickup"))return;e.setCancelled(true);if(e.getEntity() instanceof Player p)denyTag(p,"pickup",e.getItem());}
         else if(e.getEntity() instanceof Player p && denyIfNeeded(p,"pickup",e.getItem().getLocation()))e.setCancelled(true);
     }
     @EventHandler public void onMerge(ItemMergeEvent e){if(!Objects.equals(e.getEntity().getPersistentDataContainer().get(property,PersistentDataType.STRING),e.getTarget().getPersistentDataContainer().get(property,PersistentDataType.STRING)))e.setCancelled(true);}
@@ -647,6 +670,8 @@ final class LandManager implements Listener {
         JsonArray min=new JsonArray();min.add(land.min().x());min.add(land.min().y());min.add(land.min().z());data.add("min",min);
         JsonArray max=new JsonArray();max.add(land.max().x());max.add(land.max().y());max.add(land.max().z());data.add("max",max);
         data.addProperty("visitorUse",land.visitorUse());data.addProperty("opBypass",false);
+        data.addProperty("publicFacility",land.publicFacility());
+        data.addProperty("accessProfile",land.publicFacility()?"public_facility":"private");
         data.addProperty("landmarkEnabled",land.landmark());
         data.addProperty("publicContainers",land.publicContainers().size());
         data.addProperty("memberCount",land.members().size());
@@ -668,10 +693,10 @@ final class LandManager implements Listener {
         Land land=action.equals("here")?find(player.getLocation()):action.equals("info") && args.length==3?lands.get(args[2]):null;
         if(!action.equals("here") && !action.equals("info")){player.sendMessage("/mycli land here|list [页码]|info <ID>|menu；members <ID> 查协作者，主人用 trust|untrust <ID> <玩家名或UUID>");return;}
         data.addProperty("status",land==null?(action.equals("info")?"not_found":"unclaimed"):"claimed");
-        if(land!=null){data.add("land",info(land,player));player.sendMessage("§6「"+land.title()+"」主人："+ownerName(land.owner())+"；你的身份："+(player.getUniqueId().equals(land.owner())?"主人":member(player,land)?"受信任玩家":"访客")+"。"+(land.guild()?"公共物资：/mycli guild shared":""));}else player.sendMessage("§7这里未登记私人领地；原有公共建筑和活动保护仍适用。");
+        if(land!=null){data.add("land",info(land,player));player.sendMessage("§6「"+land.title()+"」"+(land.publicFacility()?"公共设施，管理者：":"主人：")+ownerName(land.owner())+"；你的身份："+(player.getUniqueId().equals(land.owner())?"主人":member(player,land)?"受信任玩家":"访客")+"。"+(land.publicFacility()?"补给箱可自由取放，普通物品可丢拾；建筑和设备受保护。":land.guild()?"公共物资：/mycli guild shared":""));}else player.sendMessage("§7这里未登记领地；原有公共建筑和活动保护仍适用。");
         if(land==null){machine(player,"MC_LAND_INFO",data);return;}
-        JsonObject details=data.getAsJsonObject("land");JsonObject header=new JsonObject();header.addProperty("schemaVersion",1);header.addProperty("ready",ready);header.addProperty("status","claimed");for(String key:List.of("id","title","owner","ownerUuid","role"))header.add(key,details.get(key));machine(player,"MC_LAND_INFO",header);
-        JsonObject permissions=details.getAsJsonObject("permissions").deepCopy();for(String key:List.of("id","world","min","max"))permissions.add(key,details.get(key));machine(player,"MC_LAND_PERMISSIONS",permissions);
+        JsonObject details=data.getAsJsonObject("land");JsonObject header=new JsonObject();header.addProperty("schemaVersion",1);header.addProperty("ready",ready);header.addProperty("status","claimed");for(String key:List.of("id","title","owner","ownerUuid","role","publicFacility","accessProfile"))header.add(key,details.get(key));machine(player,"MC_LAND_INFO",header);
+        JsonObject permissions=details.getAsJsonObject("permissions").deepCopy();for(String key:List.of("id","world","min","max","publicFacility","accessProfile"))permissions.add(key,details.get(key));machine(player,"MC_LAND_PERMISSIONS",permissions);
         access.hint(player,land);
     }
     private ItemStack icon(Material material,String title,String... lore){ItemStack item=new ItemStack(material);ItemMeta meta=item.getItemMeta();meta.setDisplayName(title);meta.setLore(Arrays.asList(lore));item.setItemMeta(meta);return item;}

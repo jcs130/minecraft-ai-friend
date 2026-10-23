@@ -56,7 +56,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataType;
 
-/** Physical hall property belongs to an exact player UUID; public services stay outside its bounds. */
+/** Building membership and public supply access are separate policies. Personal menus stay separate. */
 final class GuildStorageOwnership implements Listener {
     private final AgentFriendPlugin plugin;
     private final UUID fallbackOwner;
@@ -91,6 +91,7 @@ final class GuildStorageOwnership implements Listener {
     boolean owns(Player player) { return plugin.lands().guildOwner() != null ? plugin.lands().guildMember(player)
             : owner() != null && owner().equals(player.getUniqueId()); }
     private boolean inside(Location at) { return plugin.guildHall().containsProperty(at); }
+    private boolean publicSupplies() { return plugin.lands().publicFacility(LandManager.GUILD); }
     boolean deniesEdit(Player player, Block block) {
         if (plugin.bypassBlockProtection(player, block.getLocation())) return false; return inside(block.getLocation()) && !owns(player); }
 
@@ -111,7 +112,7 @@ final class GuildStorageOwnership implements Listener {
         return null;
     }
 
-    private Location protectedInventory(Inventory inventory) { return protectedHolder(inventory.getHolder()); }
+    private Location protectedInventory(Inventory inventory) { return publicSupplies() ? null : protectedHolder(inventory.getHolder()); }
     boolean physicalContainer(Block block) { return block.getState() instanceof BlockInventoryHolder; }
     private Location protectedContainer(Block block) {
         return block.getState() instanceof BlockInventoryHolder holder ? protectedInventory(holder.getInventory()) : null;
@@ -122,6 +123,7 @@ final class GuildStorageOwnership implements Listener {
         data.addProperty("owner", ownerLabel());
         data.addProperty("ownerUuid", owner() == null ? null : owner().toString());
         data.addProperty("publicCommand", "/mycli guild shared");
+        data.addProperty("publicSupplies", publicSupplies());
     }
 
     void denied(Player player, String action, Location at) {
@@ -197,7 +199,10 @@ final class GuildStorageOwnership implements Listener {
     private void markProperty(Entity entity) {
         if (owner() == null || !inside(entity.getLocation())) return;
         if (display(entity)) entity.getPersistentDataContainer().set(displayOwner, PersistentDataType.STRING, owner().toString());
-        if (entity instanceof Item item) item.getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner().toString());
+        if (entity instanceof Item item) {
+            if (publicSupplies()) item.getPersistentDataContainer().remove(droppedOwner);
+            else item.getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner().toString());
+        }
     }
     @EventHandler public void onEntitySpawn(EntitySpawnEvent event) { markProperty(event.getEntity()); }
     @EventHandler public void onEntitiesLoad(EntitiesLoadEvent event) {
@@ -241,14 +246,16 @@ final class GuildStorageOwnership implements Listener {
     }
 
     private boolean privateDrop(Item item) {
-        return inside(item.getLocation()) || item.getPersistentDataContainer().has(droppedOwner, PersistentDataType.STRING);
+        return !publicSupplies() && (inside(item.getLocation()) || item.getPersistentDataContainer().has(droppedOwner, PersistentDataType.STRING));
     }
     @EventHandler public void onSpawn(ItemSpawnEvent event) {
-        if (inside(event.getLocation()) && owner() != null)
-            event.getEntity().getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner().toString());
+        if (inside(event.getLocation()) && owner() != null) {
+            if (publicSupplies()) event.getEntity().getPersistentDataContainer().remove(droppedOwner);
+            else event.getEntity().getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner().toString());
+        }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onDrop(PlayerDropItemEvent event) {
-        if (inside(event.getPlayer().getLocation()) && !owns(event.getPlayer())) {
+        if (!publicSupplies() && inside(event.getPlayer().getLocation()) && !owns(event.getPlayer())) {
             event.setCancelled(true); denied(event.getPlayer(), "drop", event.getPlayer().getLocation());
         }
     }
@@ -260,6 +267,7 @@ final class GuildStorageOwnership implements Listener {
         if (event.getEntity() instanceof Player player) denied(player, "pickup", event.getItem().getLocation());
     }
     @EventHandler public void onMerge(ItemMergeEvent event) {
+        if (publicSupplies()) return;
         if (privateDrop(event.getEntity()) != privateDrop(event.getTarget()) || !java.util.Objects.equals(
                 event.getEntity().getPersistentDataContainer().get(droppedOwner, PersistentDataType.STRING),
                 event.getTarget().getPersistentDataContainer().get(droppedOwner, PersistentDataType.STRING))) event.setCancelled(true);
@@ -294,6 +302,7 @@ final class GuildStorageOwnership implements Listener {
         ownershipFields(data);
         data.addProperty("opBypass", false);
         data.addProperty("loadedOnly", true);
+        data.addProperty("publicSupplies", publicSupplies());
         JsonArray containers = new JsonArray();
         org.bukkit.World world = plugin.getServer().getWorld("world");
         int x = plugin.getConfig().getInt("guild-hall.x"), z = plugin.getConfig().getInt("guild-hall.z");
@@ -305,7 +314,7 @@ final class GuildStorageOwnership implements Listener {
                     JsonObject box = new JsonObject();
                     box.addProperty("x", state.getX()); box.addProperty("y", state.getY()); box.addProperty("z", state.getZ());
                     box.addProperty("type", state.getType().getKey().toString());
-                    box.addProperty("scope", inside(state.getLocation()) ? "private" : "public");
+                    box.addProperty("scope", inside(state.getLocation()) && !publicSupplies() ? "private" : "public");
                     containers.add(box);
                 }
             }

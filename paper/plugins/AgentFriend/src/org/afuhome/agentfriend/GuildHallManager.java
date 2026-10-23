@@ -467,7 +467,9 @@ final class GuildHallManager implements Listener {
 
     void storageInfo(Player player) {
         if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放；/mycli guild shared 查询现有箱体，持续未开放请联系服主；不要取大厅私产。"); return; }
-        player.sendMessage("§c公会门内实体储物和展示物归" + plugin.guildStorage().ownerLabel() + "所有，未授权的人无权取放；需要物资装备请使用门口东南侧公共箱。");
+        if (plugin.lands().publicFacility(LandManager.GUILD))
+            player.sendMessage("§6公会是公共设施，门内补给箱与门口共享箱均可自由取放；建筑、设备和展示物受保护。个人奖励箱仍只属于本人。");
+        else player.sendMessage("§c公会门内实体储物和展示物归" + plugin.guildStorage().ownerLabel() + "所有，未授权的人无权取放；需要物资装备请使用门口东南侧公共箱。");
         player.sendMessage("§6公会东南侧有四类公共双箱；上层扩容箱同样可存取。所有玩家可像普通箱子一样使用；不是个人奖励箱。");
         for (int i = 0; i < SHARED_LABELS.length; i++) {
             int dz = 7 + i * 2;

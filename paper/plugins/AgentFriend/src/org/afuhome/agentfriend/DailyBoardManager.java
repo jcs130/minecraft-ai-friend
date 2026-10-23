@@ -356,7 +356,7 @@ final class DailyBoardManager implements Listener {
                     || action.equals("replace") && index == cards.size()
                     || action.equals("add") && cards.size() >= 5) { usage(sender); return; }
             Card card = resolve(template, boardDate());
-            if (card == null) { sender.sendMessage("目标公共箱不可用，未发布供货卡；先 /mycli guild shared 核对箱体和公共权限，修复后重新发布，不改用大厅私有箱。"); return; }
+            if (card == null) { sender.sendMessage("目标公共箱不可用，未发布供货卡；先 /mycli guild shared 核对箱体和公共权限，修复后重新发布，其他公共箱先核对权限。"); return; }
             List<Card> next = new ArrayList<>(cards);
             if (next.stream().anyMatch(c -> c.id().equals(card.id()) && (action.equals("add") || !c.equals(next.get(index))))) {
                 sender.sendMessage("这张模板已在今日看板中。"); return;

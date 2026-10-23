@@ -11,8 +11,10 @@ lands:
     owner-uuid: '00000000-0000-0000-0009-00000d9f9c7b'
     members: []
     # Visitors may use doors, public workstations and quest/trade services.
-    # Physical containers, building and private stock remain restricted.
+    # Public facilities share physical supplies and ordinary loose items.
+    # Building edits and display entities remain protected; personal reward menus remain personal.
     visitor-use: true
+    public-facility: true
 
 # A second player's claim can be added online (use a real player UUID):
 #  forest_cottage:
@@ -24,4 +26,5 @@ lands:
 #    owner-uuid: '<full player UUID>'
 #    members: []
 #    visitor-use: false
+#    public-facility: false
 # To release a non-guild claim, keep its ID with enabled: false, then reload.

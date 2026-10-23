@@ -1,3 +1,9 @@
+## 2026-10-24 公共设施权限候选（尚未部署）
+
+服主已明确：女神建设的公共设施保护建筑和设备，补给箱为公共物资，普通物品可以正常丢弃、拾取。新建公共设施时应在已核实的 `lands.yml` 条目同时设置 `visitor-use: true` 与 `public-facility: true`；不能把公共用途误当作女神私人财产，也不能仅因 owner 是 Goddess 就自动公开任何旧条目。私人玩家工程与个人奖励菜单维持私有，绑定道具仍不能丢弃或捐入公共箱。操作前按需查本人 `/mycli land info <ID>` 及附近 `/mycli protect`，未知不当作允许。
+
+0.4.47.13 候选及 15 处明确公共设施的配置迁移已通过隔离联机与正常重启验收；正式服在正常维护发布前仍是 0.4.47.12，不能先向玩家声称已经放开。发布后 `mcagent:land` 查询新增 `publicFacility / accessProfile`，补给权限与建筑权限分开读取。详见 [领地](LANDS.md)。
+
 ## 2026-10-20 消息降噪与 Numen 已正式上线
 
 当前正式AgentFriend0.4.47.8、LoginGuard0.1.3；登录/活动提示已降噪，原任务/技能/物品保持。原版私聊用/minecraft:msg，勿群发长JSON；数据按需/mycli status、--help查询。Numen0.1.4及基岩菜单已开放：Java安装同源MC1.21.1客户端包后/numen settings，基岩/numenmenu。须配置本人的模型和Key，没有共享Key或免费额度保证；不要让玩家在聊天里发送Key。Numen不会自动接管现有可米/NEKO，实体存在不等于模型就绪。详细接入按需读resource/NUMEN_PAPER.md，开发者协议读resource/AGENT_MESSAGE_TRANSPORT.md。未发布档案馆0.4.48、格挡0.4.47.7、YSM af4仍未上线，勿指导未发布入口。

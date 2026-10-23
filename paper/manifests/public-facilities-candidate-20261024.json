@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate_not_deployed",
+  "version": "0.4.47.13",
+  "productionVersion": "0.4.47.12",
+  "productionChanged": false,
+  "restartApproved": false,
+  "artifact": {
+    "name": "AgentFriend-0.4.47.13.jar",
+    "sha256": "32016cd6568b09ea585e716358f079357a609262268b01c62b72d8b10f31be39",
+    "baselineSha256": "d024b51f2f623c16d2b71b02e2e7aa979928bd16d10f9879b35442a7e0ab1f72",
+    "unchangedJarEntries": 375,
+    "heldCliParryArchivesIncluded": false,
+    "textOnlyHelpBaselineBytecodeVerified": true
+  },
+  "config": {
+    "file": "plugins/AgentFriend/lands.yml",
+    "sourceSha256": "ed61aa03404def09900f0c5779d20f3f2d24320d21721fdd070a9d9cbc57e60e",
+    "candidateSha256": "73a3668d1067c897f593aeac43854c2ed895f8243f934be128636f771cc079f3",
+    "addedField": "public-facility: true",
+    "publicIds": ["adventurers_guild", "adventurers_guild_storage", "art_hall", "wayfarer_tower", "wayfarer_tent", "wayfarer_well", "wayfarer_guide", "wayfarer_supply", "wayfarer_inn", "wayfarer_home", "wayfarer_hall", "wayfarer_lodge", "wayfarer_forge", "village_public_mine", "undead_crypt_entrance"],
+    "unchangedPrivateIds": ["sky_view_tower", "village_watch_post", "cormy_cloudrail"],
+    "ownerMembersBoundsAndInventoryChanged": false
+  },
+  "validation": {
+    "worldGuardAssertions": 24,
+    "nativePaperChecks": 28,
+    "coldRestartNativeChecks": 28,
+    "retainedBuildingCoverageTests": 14,
+    "isolatedOriginalDeployerChecks": 11,
+    "publicContainerRoundTrip": ["mine barrel", "guild hall barrel"],
+    "privateOwnerAndVisitorSeparation": true,
+    "privatePickupAndDropRulesRetained": true,
+    "serverRetainsContainerAfterRejectedDig": true,
+    "boundGearDropRejected": true,
+    "candidateAndRollbackMirroredAndHashVerified": true,
+    "mobileXboxAndRemoteEyeVisualsTested": false,
+    "allProductionPluginsInIsolatedTest": false
+  },
+  "deployment": {
+    "plan": "public-facilities-release-20261024/release-plan.candidate.json",
+    "productionPendingPlanCreated": false,
+    "requires": ["this maintenance approval", "180/60/10 second notice", "fresh human and active challenge gates", "original stopped E/F complete backups", "original content installer and exact before-hash checks"],
+    "install": ["AgentFriend-0.4.47.13.jar", "plugins/AgentFriend/lands.yml"],
+    "remove": ["AgentFriend-0.4.47.12.jar"],
+    "rollback": "Normal maintenance only: restore the previous JAR and remove only the reviewed public-facility fields, retaining any later ownership, membership, inventory and world progress. Never overwrite a whole current world or player database with the preparation snapshots."
+  }
+}

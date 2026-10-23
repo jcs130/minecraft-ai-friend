@@ -966,7 +966,7 @@ final class GuildManager implements Listener {
             if (deliveryChest >= 0) {
                 delivery = plugin.guildShared().deposit(deliveryChest, new ItemStack(offer, quest.target()));
                 if (delivery == null) {
-                    player.sendMessage(ChatColor.YELLOW + "同类公共仓库已满或不可用；未扣物，任务保留。/mycli guild shared 查同类全部箱；将可用公共物资领取到本人库存腾位后再 claim，箱体或权限异常请联系服主，不放进大厅私有箱。");
+                    player.sendMessage(ChatColor.YELLOW + "同类公共仓库已满或不可用；未扣物，任务保留。/mycli guild shared 查同类全部箱；将可用公共物资领取到本人库存腾位后再 claim，箱体或权限异常请联系服主，其他公共箱先核对权限。");
                     player.sendMessage("MC_GUILD_DELIVERY {\"schemaVersion\":1,\"status\":\"denied\",\"reason\":\"public_storage_full_or_unavailable\",\"itemsDebited\":false}");
                     return;
                 }

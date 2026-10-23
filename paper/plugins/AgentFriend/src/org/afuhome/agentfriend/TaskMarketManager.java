@@ -1149,7 +1149,7 @@ final class TaskMarketManager implements Listener {
         data.add("steps", steps); data.addProperty("beneficiary", task.beneficiary);
         if (task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))) data.addProperty("currentStep", index(player) + 1);
         send(player, "MC_MARKET_DETAIL", data);
-        player.sendMessage("§7备料可用公会门口公共箱 /mycli guild shared；门内物品归萌萌。每阶段 guild claim 交付，末阶段统一领奖。");
+        player.sendMessage("§7备料可用公会门口公共箱 /mycli guild shared；公共设施内补给箱可取放，个人箱仍归本人。每阶段 guild claim 交付，末阶段统一领奖。");
     }
     void assessment(Player player) {
         JsonObject data = new JsonObject(); JsonObject goals = new JsonObject();
