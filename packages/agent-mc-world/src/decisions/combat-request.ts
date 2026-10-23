@@ -1,7 +1,22 @@
 /** Compact inference input; the decision loop retains the complete frame for execution checks. */
 import type { CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 
-export function combatRequest(frame: CombatDecisionFrame) {
+/** A categorical option may refer to a compatible pair. No top-N probability heuristic. */
+export function combatChoiceBindings(frame:CombatDecisionFrame,compatible=false):Record<string,number[]> {
+  const bindings:Record<string,number[]>={keep:[]};
+  frame.candidates.forEach((_c,i)=>{bindings[`option_${i}`]=[i];});
+  if(compatible&&frame.battlefield.action.fighting){
+    const cast=frame.candidates.findIndex(c=>c.kind==='cast');
+    if(cast>=0)for(const [i,candidate]of frame.candidates.entries()){
+      if(candidate.kind!=='step')continue;
+      const count=Object.values(bindings).filter(indices=>indices.length>1).length;
+      if(count>=2)break;
+      bindings[`option_${frame.candidates.length+count}`]=[i,cast];
+    }
+  }
+  return bindings;
+}
+export function combatRequest(frame: CombatDecisionFrame, config: { compatible?: boolean } = {}) {
   const b = frame.battlefield;
   // Four significant digits keep tiny positive health positive; execution retains the original precision.
   const approximate = (value: number | null) => value === null ? null : Number(value.toPrecision(4));
@@ -27,6 +42,16 @@ export function combatRequest(frame: CombatDecisionFrame) {
     criteria[`option_${index}`] = intent + binding;
     options[`option_${index}`] = action;
   });
+  const questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string,string> }> = {
+    tactic: { type:'choice', instructions:'Choose for survival or confirmed allies; keep an effective action. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
+      + (frame.policy ? '\nAgent tactic: '+frame.policy.instructions : ''), criteria },
+  };
+  for(const [key,indices]of Object.entries(combatChoiceBindings(frame,config.compatible))){
+    if(indices.length<2)continue;
+    const refs=indices.map(i=>`option_${i}`);
+    criteria[key]=`Combine ${refs.join(' and ')} while continuing the current attack.`;
+    options[key]={kind:'combination',actions:refs};
+  }
   return { state: {
     battlefield: { dimension: b.dimension,
       self: { entityId: b.self.entityId, health: health(b.self.health), food: b.self.food,
@@ -41,8 +66,5 @@ export function combatRequest(frame: CombatDecisionFrame) {
     },
     mana: approximate(frame.mana), skills: frame.skills.map(({ block, ...skill }) => ({ ...skill, blocked: block !== null })),
     options, omittedCandidates: frame.omittedCandidates,
-  }, questions: { tactic: { type: 'choice' as const,
-    instructions: 'Choose for survival or confirmed allies; keep an effective action. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
-      + (frame.policy ? '\nAgent tactic: ' + frame.policy.instructions : ''), criteria,
-  } } };
+  }, questions };
 }

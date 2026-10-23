@@ -4,6 +4,7 @@ export interface CombatDecisionDisplay {
   phase: 'requested' | 'kept' | 'not-applied' | 'dispatched' | 'observed' | 'error' | 'unknown';
   label: string;
   action: string | null;
+  actions: string[];
   reason: string | null;
   target: { entityId: number; type: string | null; relation: string | null; sampledAtMs: number | null } | null;
   text: string;
@@ -18,6 +19,9 @@ const reasons: Record<string,string> = { 'scene-changed':'场景变化',moved:'�
 export function describeCombatDecision(event: string, data: Record<string,unknown>, frame?: CombatDecisionFrame | null): CombatDecisionDisplay {
   const application=object(data.application),candidate=object(data.candidate),outcome=typeof data.outcome==='string'?data.outcome:null;
   const action=event==='requested'?null:data.choice==='keep'?'keep':typeof candidate.kind==='string'?candidate.kind:null;
+  const components=Array.isArray(data.selections)?data.selections.slice(0,2).map(object):[];
+  const applied=components.filter(s=>object(s.application).dispatched===true).map(s=>object(s.candidate).kind).filter((kind):kind is string=>typeof kind==='string');
+  const actions=applied.length?applied:action?[action]:[];
   let phase:CombatDecisionDisplay['phase']='unknown',label='下发状态未提供';
   if(event==='requested'){phase='requested';label='候选待决策';}
   else if(event==='observation'||event==='observed'){phase='observed';label='后续采样，效果待核对';}
@@ -31,8 +35,9 @@ export function describeCombatDecision(event: string, data: Record<string,unknow
   const actor=targetId==null?null:frame?.battlefield.actors.find(a=>a.entityId===targetId);
   const target=targetId==null?null:{entityId:targetId,type:actor?.type??null,relation:actor?.relation??null,sampledAtMs:frame?.battlefield.sampledAtMs??null};
   const relation:Record<string,string>={hostile:'敌对',ally:'已确认队友',neutral:'中立',unknown:'关系未知'};
-  const text=[label+(phase==='not-applied'&&reason?`：${reasons[reason]??reason}`:''),action?labels[action]??action:'',
+  const text=[label+(phase==='not-applied'&&reason?`：${reasons[reason]??reason}`:''),actions.map(action=>labels[action]??action).join(' + '),
+    ...components.map(s=>`${s.component==='ability'?'能力':'身体'}：${labels[String(object(s.candidate).kind)]??(s.choice==='keep'?'保持':'未知')} / ${String(s.outcome??'未知')}`),
     target?`目标 ${target.type??'类型未知'} #${target.entityId} · ${relation[target.relation??'unknown']??'关系未知'}（请求采样）`:'',
     '选择与下发均不证明完成'].filter(Boolean).join('；');
-  return {phase,label,action,reason,target,text,effectVerified:false,goalCompleted:false};
+  return {phase,label,action,actions,reason,target,text,effectVerified:false,goalCompleted:false};
 }

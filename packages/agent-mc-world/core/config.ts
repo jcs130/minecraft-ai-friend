@@ -96,6 +96,7 @@ export const MINECRAFT_DEFAULTS = {
     afterArrival: false,
     allowMovement: false,
   },
+  journey: {enabled:true},
   reflex: {
     /** 受击反击 */
     fightBack: true,
@@ -206,6 +207,8 @@ export const MINECRAFT_DEFAULTS = {
 } as const;
 
 export interface MinecraftConfigSection {
+  /** Observed journey opportunities wake the host; never force a stop or start inference in the core. */
+  journey?: {enabled:boolean};
   provider?: 'mineflayer' | 'java-client';
   javaClient?: import('../src/contracts/java-client.ts').JavaClientConfiguration;
   /** Generic fast-tactic execution permissions; no model endpoint or credentials. */
@@ -504,6 +507,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean', title: '战斗模式(夜间自保)', 'x-hot': true,
         description: '被打或敌对贴到触发半径内就接管移动与出手打完这一场,期间任务挂起、'
           + '事件照常推(夺手不夺嘴)。不主动招惹。关掉退回"受击反击"那套 10 秒挥两下。',
+      },
+      'worlds.minecraft.journey.enabled': {
+        type:'boolean',title:'旅途新发现提醒','x-hot':true,
+        description:'长途经过新的可见村民、告示牌或地标时，提供保留原目的地的短探索选择；是否停留由Agent判断，不自动改路或打断任务。',
       },
       'worlds.minecraft.combat.engageRadius': {
         type: 'integer', title: '战斗触发半径', minimum: 2, maximum: 8, 'x-suffix': '格', 'x-hot': true,

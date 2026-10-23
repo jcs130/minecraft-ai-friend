@@ -26,7 +26,7 @@ function frame(): CombatDecisionFrame {
     omittedCandidates: 0 };
 }
 const config = (): CombatDecisionConfig => ({ ...COMBAT_DECISION_DEFAULTS,
-  enabled: true, mode: 'act', endpoint: 'http://decision.invalid/systemone' });
+  enabled: true, mode: 'act', selectionMode:'single', endpoint: 'http://decision.invalid/systemone' });
 function response(choice = 'option_0', p = 0.9) {
   return new Response(JSON.stringify({ answers: { tactic: { type: 'choice', choice,
     confidence: p, probabilities: { keep: choice === 'keep' ? p : 1 - p, option_0: choice === 'keep' ? 1 - p : p } } },

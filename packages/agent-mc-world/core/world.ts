@@ -1,5 +1,6 @@
 import { operationInventory } from './operation-experience.ts';
 import { observationView, observedEntity } from './perception-sight.ts';
+import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
 import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex } from './options.ts';
@@ -48,7 +49,7 @@ import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './
 import { visualFovError } from './visual-fov.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
 import { precheckEmptyUseTarget } from './precheck.ts';
-import { blockAtCell, resolveAt } from './cell-facts.ts';
+import { blockAtCell, resolveAt, dimensionOf } from './cell-facts.ts';
 import { FLIGHT_PLAN_MAX_POINTS, parseFlightPlan, previewFlightPlan } from './flight-preview.ts';
 import { MethodRunner, METHOD_LIMITS, METHOD_ADAPTER, type MethodOperation, type MethodRun } from './method-runner.ts';
 import { MethodLibrary, METHOD_LIBRARY_SCHEMA } from './method-library.ts';
@@ -136,7 +137,7 @@ import {
   type BodyOwnerKind,
 } from './body-lease.ts';
 import {
-  bearing, biomeAt, canSeeEntity, classifyEntity, dayNightTransition, hazardTouch, isRaining,
+  bearing, biomeAt, bodyInWater, canSeeEntity, classifyEntity, dayNightTransition, hazardTouch, isRaining,
   droppedStackOf, narrateWorld, narrateWorldSegments, scanMatureCrops, snapshotFingerprint, snapshotFromBot,
   standCellsAround, worldDelta, DIRECTION_ZH, WATER_BLOCKS,
   type BlockReader, type ItemStack, type WorldSnapshot,
@@ -8120,6 +8121,21 @@ export class MinecraftWorld implements World {
    * 友好的点名类常规攒批;牲畜按种类合并捎带;离开只有敌对值得说,消失静默清态
    * (死亡另由 entityDead 报)。
    */
+  protected readonly journeyObserver=new JourneyObserver();
+  protected journeyBlocks:{generation:number;dimension:string;cues:JourneyCue[]}|null=null;
+  protected journeyScope():string{return `${this.realmKey()}:${this.cfg.auth}:${this.cfg.username}`;}
+  protected journeyTick(bot:Bot,cues:JourneyCue[]):void {
+    const queue=this.executor?.status(),running=queue?.running,p=bot.entity.position,now=Date.now();
+    const cached=this.journeyBlocks?.generation===this.connectionGeneration&&this.journeyBlocks.dimension===normalizeDimension(dimensionOf(bot))?this.journeyBlocks.cues:[];
+    const report=this.journeyObserver.observe({scope:this.journeyScope(),generation:String(this.connectionGeneration),atMs:now,
+      dimension:normalizeDimension(dimensionOf(bot)),position:[p.x,p.y,p.z],
+      intent:(this.cfg.journey??MINECRAFT_DEFAULTS.journey).enabled&&running?.travel
+        ?{taskId:running.id,stepIndex:running.stepIndex,...running.travel}:null,
+      safeToConsider:!queue?.hold&&!this.bodyInhibitReason&&!this.reflexes?.envActive&&!this.combat?.active
+        &&!this.executor?.eating&&!this.executor?.escaping&&!bot.currentWindow&&bot.entity.onGround===true&&!bodyInWater(bot),
+      cues:[...cues,...cached]});
+    if(report)this.emit('minecraft.event',`[Minecraft] ${journeyOpportunityText(report)}`,false,{trigger:'debounce',meta:{journey:report}});
+  }
   protected proximityTick(bot: any): void {
     if (bot !== this.proximityBot) {
       this.proximity.clear();
@@ -8136,6 +8152,7 @@ export class MinecraftWorld implements World {
     const present = new Set<number>();
     const flockSeen = new Map<string, number>();
     const flockNear = new Set<string>();
+    const journeyCues:JourneyCue[]=[];
     const rangedReady = typeof bot.inventory?.items === 'function' &&
       Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot);
     for (const key of Object.keys(bot.entities)) {
@@ -8160,6 +8177,8 @@ export class MinecraftWorld implements World {
       const dir = bearing(e.position.x - me.x, e.position.z - me.z);
       const at = dir ? `${DIRECTION_ZH[dir]}边` : '附近';
       const visible = canSeeEntity(bot, e);
+      if(visible&&(name==='villager'||name==='wandering_trader')&&d<=24)journeyCues.push({kind:'npc',key:`entity:${eid}`,label:zhEntity(name),
+        position:[e.position.x,e.position.y,e.position.z],source:'visible-entity',observedAtMs:Date.now()});
       const stateKind = kind === 'hostile' ? 'hostile' : 'notable';
       const extendedVisible = stateKind === 'hostile' && rangedReady && visible;
       const extendedState = state?.extended === true && rangedReady;
@@ -8227,6 +8246,7 @@ export class MinecraftWorld implements World {
     for (const [name, on] of this.flocks) {
       if (on && !flockNear.has(name)) this.flocks.set(name, false);
     }
+    this.journeyTick(bot,journeyCues);
   }
 
   /** Two nearby animations form one factual observation; intent remains the agent's judgment. */
@@ -8741,6 +8761,10 @@ export class MinecraftWorld implements World {
       // 在线名单排除 bot 自身与观察摄像机;两者都不是 goto_player 的有效目标。
       const self = this.chatName();
       snap.players = snap.players.filter((n) => n !== self && !this.isCamera(n));
+      if(snap.blocksScanned)this.journeyBlocks={generation:this.connectionGeneration,dimension:normalizeDimension(snap.dimension),cues:snap.nearbyBlocks
+        .filter(b=>/(?:^|_)sign$/.test(b.name)||['bell','spawner','trial_spawner','vault','lectern','enchanting_table','nether_portal','end_portal'].includes(b.name))
+        .slice(0,8).map(b=>({kind:/(?:^|_)sign$/.test(b.name)?'sign' as const:'landmark' as const,key:`${b.name}:${b.x},${b.y},${b.z}`,label:b.name,
+          position:[b.x,b.y,b.z] as [number,number,number],source:'visible-block' as const,observedAtMs:Date.now()}))};
       return snap;
     } catch {
       return null; // 区块未加载完成时跳过该快照;下一 tick 重试。
@@ -8800,6 +8824,8 @@ export class MinecraftWorld implements World {
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...fullSegments.map(({ key, text }) => ({ key, text })),
       { key: 'explored', text: this.explored.summary(normalizeDimension(snap.dimension)) }];
+    const journey=this.journeyObserver.reading(this.journeyScope(),String(this.connectionGeneration),now);
+    if(journey)parts.push({key:'journey',text:journeyOpportunityText(journey,{guidance:false})});
     this.requestFactsCache = {
       text: parts.map(part => part.text).filter(Boolean).join('\n'),
       parts,

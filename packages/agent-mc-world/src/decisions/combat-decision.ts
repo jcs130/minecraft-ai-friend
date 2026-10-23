@@ -1,7 +1,7 @@
 /** Optional HOST-side selector. The game engine never imports or starts this loop. */
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
 import { randomUUID } from 'node:crypto';
-import { combatRequest } from './combat-request.ts';
+import { combatChoiceBindings,combatRequest } from './combat-request.ts';
 import type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 import type { TypedChoice } from '../../core/support/typed-decision.ts';
 export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
@@ -10,6 +10,8 @@ export interface CombatDecisionConfig extends CombatExecutionPolicy {
   enabled:boolean;mode:'shadow'|'act';endpoint:string;timeoutMs:number;minIntervalMs:number;minConfidence:number;maxAgeMs:number;
   /** Optional lead over the strongest alternative; model scores are not calibrated win probabilities. */
   minMargin?: number;
+  /** One categorical option may combine one short body move with one ready ability. */
+  selectionMode?: 'single' | 'compatible';
   model?: string; apiKeyEnv?: string;
 }
 export interface CombatDecisionOptions {
@@ -24,7 +26,7 @@ export interface CombatDecisionOptions {
   fetchImpl?: typeof fetch;
   /** Supplied by the host adapter; the game core never resolves providers or credentials. */
   request?: (input: { state: unknown; questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string, string> }> },
-    options: { provider?: string; signal: AbortSignal; timeoutMs: number }) => Promise<{ answers?: { tactic?: unknown }; latency_ms?: unknown; usage?: unknown }>;
+    options: { provider?: string; signal: AbortSignal; timeoutMs: number }) => Promise<{ answers?: Record<string,unknown>; latency_ms?: unknown; usage?: unknown }>;
   now?: () => number;
 }
 
@@ -178,7 +180,8 @@ export class CombatDecisionLoop {
     }
     if (this.stopped) return;
     if (!frame.candidates.length) { entry.outcome = 'program-idle'; return; }
-    const compact = combatRequest(frame);
+    const bindings=combatChoiceBindings(frame,cfg.selectionMode==='compatible');
+    const compact = combatRequest(frame, {compatible:cfg.selectionMode==='compatible'});
     const criteria = compact.questions.tactic.criteria;
     const { program: _program, actionPool: _pool, ...publicFrame } = frame;
     const body = JSON.stringify({ ...(cfg.model ? { model: cfg.model } : {}), ...compact });
@@ -187,7 +190,7 @@ export class CombatDecisionLoop {
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null };
     Object.assign(entry, scope, { frame: publicFrame });
     this.options.report('requested', { ...scope, mode: cfg.mode, frame: publicFrame,
-      inputFormat: 'combat-compact-v2', requestBytes: Buffer.byteLength(body) });
+      inputFormat: 'combat-compact-v3',choiceBindings:bindings,request:compact,requestBytes: Buffer.byteLength(body) });
     let dispatchAttempted = false;
     try {
       const timeout = new Promise<never>((_, reject) => {
@@ -207,19 +210,19 @@ export class CombatDecisionLoop {
           body, signal: AbortSignal.any([controller.signal,this.lifetime.signal]),
         });
         if (!response.ok) throw new Error(`http-${response.status}`);
-        return await response.json() as { answers?: { tactic?: unknown }; latency_ms?: unknown; usage?: unknown };
+        return await response.json() as { answers?: Record<string,unknown>; latency_ms?: unknown; usage?: unknown };
       })(), timeout]);
       if (this.stopped) return;
       const answer = parseTypedChoice(payload.answers?.tactic, Object.keys(criteria));
       if (!answer) throw new Error('invalid-response');
-      const liveCfg = this.options.config();
-      const ranking = assessCombatChoice(answer, cfg, liveCfg);
-      const margin = ranking.margin;
       let current = this.options.refresh ? await this.options.refresh() : this.options.sample();
       if (current?.program && this.options.prepare) current = await this.options.prepare(current);
       if (this.stopped) return;
+      const liveCfg = this.options.config();
+      const ranking = assessCombatChoice(answer, cfg, liveCfg);
       const elapsedMs = now() - startedAtMs;
-      const selected = answer.choice === 'keep' ? null : frame.candidates[Number(answer.choice.slice(7))];
+      const indices=bindings[answer.choice]??[];
+      const selected = indices.length?frame.candidates[indices[0]!]:null;
       const executable = selected && current?.candidates.find(c => c.id === selected.id && c.kind === selected.kind
         && (selected.kind !== 'cast' || (c.kind === 'cast' && c.spell === selected.spell && c.ruleId === selected.ruleId))
         && (selected.kind !== 'engage' || (c.kind === 'engage' && c.targetId === selected.targetId && c.uuid === selected.uuid))
@@ -232,7 +235,7 @@ export class CombatDecisionLoop {
       let outcome: string;
       if (!liveCfg.enabled || liveCfg.mode !== cfg.mode || liveCfg.endpoint !== cfg.endpoint
         || liveCfg.connection !== cfg.connection || liveCfg.decisionProvider !== cfg.decisionProvider
-        || liveCfg.model !== cfg.model || liveCfg.apiKeyEnv !== cfg.apiKeyEnv) outcome = 'configuration-changed';
+        || liveCfg.model !== cfg.model || liveCfg.apiKeyEnv !== cfg.apiKeyEnv || liveCfg.selectionMode !== cfg.selectionMode) outcome = 'configuration-changed';
       else if (elapsedMs > Math.min(cfg.maxAgeMs, liveCfg.maxAgeMs)) outcome = 'expired';
       else if (!current || changed.length) outcome = 'scene-changed';
       else if ((!selected || selected.kind === 'step' || selected.kind === 'cast')
@@ -245,19 +248,58 @@ export class CombatDecisionLoop {
       else { dispatchAttempted = true; outcome = await this.options.apply(executable, current, scope) ? 'sent' : 'rejected'; }
       if (this.stopped) return;
       if (outcome === 'uncertain' && cfg.mode === 'act') this.options.fallback?.();
-      const result = { ...scope, elapsedMs, choice: answer.choice,
-        probability: answer.choiceProbability, confidence: answer.confidence, probabilities: answer.probabilities, margin, outcome,
+      const selections: Array<Record<string,unknown>> = [{question:'tactic',component:selected?.kind==='cast'?'ability':'body',choice:answer.choice,candidate:selected??null,
+        confidence:answer.confidence,probabilities:answer.probabilities,ranking,outcome,application:{attempted:dispatchAttempted,dispatched:outcome==='sent',keptCurrent:outcome==='keep'}}];
+      let abilityCandidate:CombatCandidate|null=null;
+      if(indices.length>1){
+        const candidate=frame.candidates[indices[1]!];
+        let extraOutcome='incompatible-body-choice',attempted=false,extraRanking=ranking;
+        try {
+            if(!['sent','shadow'].includes(outcome)||executable?.kind!=='step')extraOutcome='incompatible-body-choice';
+            else if(candidate?.kind!=='cast')extraOutcome='invalid-ability';
+            else {
+              const fresh=this.options.refresh?await this.options.refresh():this.options.sample(),live=this.options.config();
+              const eligible=fresh?.candidates.find(c=>c.kind==='cast'&&c.id===candidate.id&&c.spell===candidate.spell&&c.ruleId===candidate.ruleId);
+              if(this.stopped)return;
+              extraRanking=assessCombatChoice(answer,cfg,live);
+              if(!live.enabled||live.mode!==cfg.mode||live.endpoint!==cfg.endpoint||live.connection!==cfg.connection
+                ||live.decisionProvider!==cfg.decisionProvider||live.model!==cfg.model||live.apiKeyEnv!==cfg.apiKeyEnv||live.selectionMode!==cfg.selectionMode)extraOutcome='configuration-changed';
+              else if(now()-startedAtMs>Math.min(cfg.maxAgeMs,live.maxAgeMs))extraOutcome='expired';
+              else if(!extraRanking.accepted)extraOutcome='uncertain';
+              else if(!fresh||!fresh.battlefield.action.fighting||assessCombatDecisionScene(frame,fresh,candidate).changed.length)extraOutcome='scene-changed';
+              else if(Math.hypot(...fresh.battlefield.self.position.map((v,i)=>v-frame.battlefield.self.position[i]))>1.5)extraOutcome='moved';
+              else if(!eligible)extraOutcome='no-longer-executable';
+              else if(cfg.mode==='shadow')extraOutcome='shadow';
+              else {attempted=true;extraOutcome=await this.options.apply(eligible,fresh,{id,decisionId:scope.decisionId+':ability'})?'sent':'rejected';if(extraOutcome==='sent')abilityCandidate=eligible;}
+            }
+        }catch{extraOutcome=attempted?'dispatch-unknown':'error';}
+        selections.push({question:'tactic',component:'ability',choice:answer.choice,confidence:answer.confidence,ranking:extraRanking,
+          candidate:frame.candidates[indices[1]!]??null,outcome:extraOutcome,
+          application:{attempted,dispatched:extraOutcome==='dispatch-unknown'?null:extraOutcome==='sent',keptCurrent:extraOutcome==='keep'}});
+      }
+      if(this.stopped)return;
+      const primaryOutcome=outcome;
+      if(abilityCandidate)outcome='sent';
+      const uncertainDispatch=selections.some(s=>(s.application as {dispatched:boolean|null}).dispatched===null);
+      if(uncertainDispatch&&outcome!=='sent')outcome='dispatch-unknown';
+      const dispatched=[...(primaryOutcome==='sent'&&executable?[executable]:[]),...(abilityCandidate?[abilityCandidate]:[])];
+      const effective=primaryOutcome==='sent'?executable:abilityCandidate;
+      const lead=selections.find(s=>(s.application as {dispatched:boolean|null}).dispatched===true)??selections[0]!;
+      const leadRanking=lead.ranking as typeof ranking;
+      const result = { ...scope, elapsedMs:now()-startedAtMs, choice:lead.choice,
+        probability:leadRanking.probability,confidence:lead.confidence,probabilities:lead.probabilities,margin:leadRanking.margin,outcome,
         sceneChanges: changed,
         modelMs: payload.latency_ms ?? null, usage: payload.usage ?? null,
-        validation: { ranking, toleratedSceneChanges: scene.tolerated, selectedExecutable: !!executable },
-        application: { attempted: dispatchAttempted,
-          dispatched: outcome === 'sent', keptCurrent: outcome === 'keep', reason: outcome === 'moved' ? 'origin-moved' : outcome },
-        candidate: (outcome === 'sent' ? executable : selected) ?? null };
+        validation: { ranking:leadRanking, toleratedSceneChanges: scene.tolerated, selectedExecutable: !!executable||!!abilityCandidate },
+        ...(cfg.selectionMode==='compatible'?{selectionMode:'compatible',selections}:{}),
+        application: { attempted: dispatchAttempted||selections.some(s=>(s.application as {attempted:boolean}).attempted),
+          dispatched: outcome==='sent'?true:uncertainDispatch?null:false, keptCurrent: outcome === 'keep', reason: outcome === 'moved' ? 'origin-moved' : outcome },
+        candidate: (outcome === 'sent' ? effective : selected) ?? null, candidates:dispatched };
       Object.assign(entry, result);
       this.options.report('result', result);
       if (outcome === 'sent') {
         const before = current!.battlefield;
-        const targetId = executable?.kind === 'engage' || executable?.kind === 'track' ? executable.targetId : before.action.targetEntityId;
+        const targetId = effective?.kind === 'engage' || effective?.kind === 'track' ? effective.targetId : before.action.targetEntityId;
         const timer = setTimeout(() => { void (async () => {
           this.observations.delete(timer);
           if(this.stopped)return;
@@ -272,7 +314,7 @@ export class CombatDecisionLoop {
               targetBefore: before.actors.find(a => a.entityId === targetId) ?? null,
               targetAfter: after.actors.find(a => a.entityId === targetId) ?? null };
           entry.observation = observation;
-          this.options.report('observation', { ...scope, candidate: executable, observation });
+          this.options.report('observation', { ...scope, candidate: effective, candidates:dispatched, observation });
         })().catch(() => {}); }, 1000);
         this.observations.add(timer);
         timer.unref?.();

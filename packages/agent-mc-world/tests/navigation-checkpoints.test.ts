@@ -69,6 +69,29 @@ it('waits for the old path cleanup before consuming or resuming another path',as
   expect(h.bot.entity.position.x).toBeGreaterThan(resumedAt+1);
 });
 
+it('a journey encounter wakes the host without stopping travel; an explicitly chosen detour resumes the same destination',async()=>{
+  const h=rig();rigs.push(h);h.bot.food=20;
+  h.exec.submit([{skill:'goto',at:[128,64,0],walkOnly:true}],'append');
+  await vi.advanceTimersByTimeAsync(800);
+  const original=h.exec.status().running!.id;
+  expect(h.exec.status().running!.travel).toEqual({destination:[128,64,0],dimension:'minecraft:overworld'});
+  const here=h.bot.entity.position;
+  (h.world as any).journeyTick(h.bot,[{kind:'npc',key:'entity:7',label:'villager',position:[here.x+4,64,here.z],source:'visible-entity',observedAtMs:Date.now()}]);
+  const event=h.host.events.find(e=>e.meta?.journey);
+  expect(event?.text).toContain('128,64,0');
+  expect(h.host.pushOpts[h.host.events.indexOf(event!)]?.trigger).toBe('debounce');
+  expect(h.bot.pathfinder.isMoving()).toBe(true);
+  expect(h.exec.status().running?.id).toBe(original);
+  // This is the host/agent's explicit choice; the observer itself never creates this task.
+  h.exec.submit([{skill:'goto',at:[8,64,4],walkOnly:true},{skill:'chat',text:'detour inspected'}],'afterCheckpoint');
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(h.said).toEqual(['detour inspected']);
+  expect(h.exec.status().running).toMatchObject({id:original,travel:{destination:[128,64,0]}});
+  await vi.advanceTimersByTimeAsync(40_000);
+  expect(h.reports.filter(r=>r.kind==='done'&&r.taskId===original)).toHaveLength(1);
+  expect(h.bot.entity.position.x).toBeGreaterThan(126);
+});
+
 it.each(['combat','environment','airborne','window','foreign-goal'] as const)('does not stop navigation through an unsafe %s handoff',async state=>{
   const h=rig();rigs.push(h);
   h.exec.submit([{skill:'goto',at:[64,64,0],walkOnly:true}],'append');

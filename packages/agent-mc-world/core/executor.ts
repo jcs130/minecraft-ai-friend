@@ -1744,6 +1744,8 @@ export interface QueueStatus {
     skill?: SkillCall['skill'];
     /** This exact step can be suspended and resumed without replaying a side effect. */
     resumable?: boolean;
+    /** Original current goto intent; no inference from a label or a partial local path. */
+    travel?: {destination:number[];dimension:string};
     followTarget?: string;
     /** 受理到现在。只看步骤耗时读不出「这一单已经磨了二十分钟」 */
     taskElapsedMs: number;
@@ -2076,7 +2078,9 @@ export class Executor {
 
   status(): QueueStatus {
     const t = this.task;
-    const p = this.opts.getBot()?.entity?.position;
+    const bot=this.opts.getBot(),p=bot?.entity?.position,call=t?.steps[t.stepIndex];
+    const travel=bot&&!t?.program&&call?.skill==='goto'&&call.at.every(c=>typeof c==='number'&&Number.isFinite(c))
+      ?{destination:[...call.at] as number[],dimension:normalizeDimension(call.dimension??dimensionOf(bot))}:null;
     return {
       running: t
         ? {
@@ -2084,6 +2088,7 @@ export class Executor {
             label: labelOf(t),
             step: t.program?.name ?? describeSkill(t.steps[Math.min(t.stepIndex, t.steps.length - 1)]),
             ...(!t.program ? { skill: t.steps[t.stepIndex]?.skill, resumable: reRunnable(t.steps[t.stepIndex]),
+              ...(travel?{travel}:{}),
               ...(t.steps[t.stepIndex]?.skill === 'follow'
                 ? { followTarget: (t.steps[t.stepIndex] as Extract<SkillCall, {skill:'follow'}>).name } : {}) } : {}),
             stepIndex: t.stepIndex,
