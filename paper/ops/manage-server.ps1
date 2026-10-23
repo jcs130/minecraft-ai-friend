@@ -596,6 +596,17 @@ function Assert-MirrorHashes([string]$sourcePath, [string]$mirrorPath) {
     }
 }
 
+function Backup-TreeBytes([string]$path) {
+    # Offline client fixtures can contain paths longer than Win32 MAX_PATH.
+    # Robocopy preserves them; use the same extended local path for the
+    # space preflight. Missing files/access errors still stop the operation.
+    $full = [IO.Path]::GetFullPath($path)
+    if ($full -notmatch '^[A-Za-z]:\\') { throw 'Backup size requires a local absolute path.' }
+    $measure = Get-ChildItem -LiteralPath ('\\?\' + $full) -Recurse -File -ErrorAction Stop |
+        Measure-Object -Property Length -Sum
+    return [int64]$measure.Sum
+}
+
 function Mirror-LatestBackup {
     $source = CompleteSnapshots $backupRoot | Select-Object -First 1
     if (-not $source) { throw 'No verified local backup to mirror.' }
@@ -612,7 +623,7 @@ function Mirror-LatestBackup {
     if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $stage)) {
         throw "Incomplete mirror requires inspection: $destination or $stage"
     }
-    $sourceBytes = (Get-ChildItem -LiteralPath $source.FullName -Recurse -File | Measure-Object -Property Length -Sum).Sum
+    $sourceBytes = Backup-TreeBytes $source.FullName
     if ((Get-PSDrive -Name F).Free -lt ($sourceBytes + 1GB)) {
         throw 'Mirror skipped: F: needs at least snapshot size plus 1 GB free.'
     }
@@ -808,7 +819,7 @@ function Deploy-PendingEyeMirror {
 }
 
 function Backup-Server {
-    $sourceBytes = (Get-ChildItem -LiteralPath $serverDir -Recurse -File | Measure-Object -Property Length -Sum).Sum
+    $sourceBytes = Backup-TreeBytes $serverDir
     $freeBytes = (Get-PSDrive -Name E).Free
     if ($null -eq $freeBytes -or $freeBytes -lt ($sourceBytes + 1GB)) {
         throw "Backup skipped before stopping Paper: E: needs at least source size plus 1 GB free"

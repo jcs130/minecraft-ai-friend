@@ -2,7 +2,7 @@
 
 ## 结论与分支
 
-自研源码采用根目录 MIT；Numen 子项目和第三方组件保留自己的许可证。GitHub 仓库公开，可以克隆、fork 和自行构建。默认 `main` 现已包含当前 Paper 工程、正式 0.8.6 网站与通用 MC 核心；旧工程保存在 `legacy/pre-paper-main-20261023`。分支与候选边界见 [BRANCHES.md](BRANCHES.md)。
+自研源码采用根目录 MIT；Numen 子项目和第三方组件保留自己的许可证。GitHub 仓库公开，可以克隆、fork 和自行构建。默认 `main` 现已包含当前 Paper 工程、正式 0.8.8 网站与通用 MC 核心；旧工程保存在 `legacy/pre-paper-main-20261023`。分支与候选边界见 [BRANCHES.md](BRANCHES.md)。
 
 ```sh
 git clone https://github.com/jcs130/minecraft-ai-friend.git
@@ -39,7 +39,7 @@ java -Xms512M -Xmx2G -jar server.jar --nogui
 
 ## 二、网站
 
-网站当前正式源码为 0.8.6，固定提交 `800cf4fbf29163a5fbc8f7ed6aa0967cf2a9f1b5`，位于 main。`export-portal` 固定导出此正式版本；原开发分支的 0.9.0 多世界候选未合入本次发布。
+网站当前正式源码为 0.8.8，固定提交 `cb51ba79bbfb6377dee10eb3e8c45020dce00b59`，位于 main。`export-portal` 固定导出此正式版本；原开发分支的 0.9.0 多世界候选未合入本次发布。
 
 需要 Node.js 22.13+。下列命令仅从公开 Git 提交导出正式网站，自动写入指向你自己的本机沙盒的无密配置。浅克隆若没有该对象，会从公开上游获取固定提交；不用 GitHub 私人 token。
 

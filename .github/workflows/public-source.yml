@@ -59,6 +59,15 @@ jobs:
       - run: python paper/self-host/selfhost.py build --directory "$RUNNER_TEMP/paper-inputs" --output "$RUNNER_TEMP/plugin-build"
       - name: Check bounded CLI help and query contracts
         run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
+  backup-path-compatibility:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check Windows PowerShell backup paths without running maintenance
+        shell: powershell
+        run: ./paper/scripts/test-backup-long-path.ps1
   portal-release:
     runs-on: ubuntu-latest
     steps:
