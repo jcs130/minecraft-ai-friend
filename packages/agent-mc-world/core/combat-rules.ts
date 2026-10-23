@@ -41,7 +41,7 @@ export const COMBAT_RULES_SCHEMA = {
         description: 'Optional concise effect and tactical purpose from the skill documentation. Required to offer this rule to the asynchronous fast selector; does not prove the spell is learned.' },
       when: { type: 'object', additionalProperties: false, properties: {
         within: { type: 'number', minimum: 1, maximum: 16, description: 'Count matching enemies within this 3D distance; default 12. Not a claim about spell range or line of sight.' },
-        enemyTypes: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: { type: 'string', pattern: ID.source }, description: 'Optional exact entity types to count; omitted counts all observed hostiles.' },
+        enemyTypes: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: { type: 'string', pattern: ID.source }, description: 'Optional exact entity type IDs to count; bare IDs use the minecraft namespace (zombie = minecraft:zombie). Other namespaces remain distinct. Omitted counts all observed hostiles.' },
         hostilesAtLeast: { type: 'integer', minimum: 1, maximum: 64, description: 'Minimum matching enemy count; default 1.' },
         hostilesAtMost: { type: 'integer', minimum: 1, maximum: 64 },
         healthAtOrBelow: { type: 'number', minimum: 1, maximum: 20 },
@@ -90,11 +90,18 @@ export function validCombatRules(value: unknown): value is CombatRule[] {
   return true;
 }
 
+/** Compare registry IDs without treating another namespace as a vanilla type. Empty observations remain unknown. */
+export function combatEntityTypeMatches(observed: string | null | undefined, expected: string): boolean {
+  if (!observed || !expected) return false;
+  const qualified = (type: string) => type.includes(':') ? type : `minecraft:${type}`;
+  return qualified(observed) === qualified(expected);
+}
+
 /** Unknown required facts block the branch rather than silently satisfying it. */
 export function combatRuleBlock(rule: CombatRule, facts: CombatRuleFacts): string | null {
   const w = rule.when;
   const count = facts.enemies.filter(e => e.distance <= (w.within ?? 12)
-    && (!w.enemyTypes || w.enemyTypes.includes(e.type))).length;
+    && (!w.enemyTypes || w.enemyTypes.some(type => combatEntityTypeMatches(e.type, type)))).length;
   if (count < (w.hostilesAtLeast ?? 1)) return '范围内目标数量不足';
   if (w.hostilesAtMost !== undefined && count > w.hostilesAtMost) return '范围内目标数量超过此分支';
   if (w.healthAtOrBelow !== undefined && facts.health > w.healthAtOrBelow) return '未到此分支血线';

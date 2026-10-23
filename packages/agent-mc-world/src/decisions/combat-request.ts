@@ -8,8 +8,10 @@ export function combatRequest(frame: CombatDecisionFrame) {
   const health = (value: typeof b.self.health) => [approximate(value.current), approximate(value.max), value.source,
     value.updatedAtMs === null ? null : b.sampledAtMs - value.updatedAtMs];
   const criteria: Record<string, string> = { keep: b.action.fighting
-    ? 'Preserve the current attack and movement.' : b.action.tracking
-      ? 'Preserve tracking until its lease expires; track renews it.' : 'Remain idle; no body controller is running.' };
+    ? `Continue attacking${b.action.targetEntityId == null ? '' : ` entityId:${b.action.targetEntityId}`} and preserve combat movement.` : b.action.tracking
+      ? 'Continue observing without attacking until the current lease expires; track renews it.'
+      : b.action.followTarget ? `Continue the explicit follow task for ${b.action.followTarget}.`
+        : b.action.taskId != null ? 'Continue the current body task.' : 'Remain idle; no body controller is running.' };
   const options: Record<string, unknown> = {};
   frame.candidates.forEach((candidate, index) => {
     const { id: _id, intent, ...parameters } = candidate;

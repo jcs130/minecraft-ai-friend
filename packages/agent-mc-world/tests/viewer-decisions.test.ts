@@ -42,6 +42,10 @@ it.each([true, false])('shows actual host combat choice admission %s without cha
     tacticRevision: 2, connectionGeneration: 9 } }, true, 'host-decision');
   expect(outcome.meta.receipt.accepted).toBe(accepted);
   expect(events).toMatchObject([{ source: 'system1', status: accepted ? 'accepted' : 'rejected', target: { x: 4, y: 64, z: 5 } }]);
+  const tracked = await world.setCombatTactic({ choice: { candidate: { id: 'track_7', kind: 'track', targetId: 7 },
+    tacticRevision: 2, connectionGeneration: 9 } }, true, 'host-decision');
+  expect(tracked.meta.receipt.accepted).toBe(accepted);
+  expect(events[1]).toMatchObject({ source:'system1',label:'停火盯防',status:accepted?'accepted':'rejected' });
 });
 
 it.each(['system1','system2','human','unknown'] as const)('uses explicit %s attribution independently of the host role/name', async source => {

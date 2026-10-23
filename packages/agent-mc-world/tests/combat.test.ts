@@ -2119,6 +2119,30 @@ describe('末地:龙只报不撤,撤退不朝悬崖跑', () => {
 });
 
 describe('异步战术动作共用战斗控制器', () => {
+  it('can approach a visible 7.7-block enemy and attack before any hurt event, within the existing pursuit pool', async () => {
+    const enemy = foe(7, 'zombie', 8.2), { bot, controls, attacks } = combatRigBot([enemy]);
+    const r = rig(bot); // Production defaults: chaseMax 6, existing pursuit pool 10.
+    try {
+      expect(r.session.fighting).toBe(false);
+      expect(r.session.engagementTargets()).toEqual([7]);
+      expect(r.session.react({kind:'engage',targetId:7})).toBe(true);
+      await drive(bot, 200);
+      expect(r.session.fighting).toBe(true);
+      expect(['forward','back','left','right'].some(k=>controls[k])).toBe(true);
+      enemy.position = new Vec3(.5,64,3);
+      bot.entity.velocity.y = -.1;
+      await drive(bot, 900);
+      expect(attacks).toContain(7);
+      expect(bot.health).toBe(20);
+      expect(r.calls.suspended).toBe(1);
+      expect(r.events.some(e=>e.text.includes('打过来了'))).toBe(false);
+      enemy.isValid = false;
+      await drive(bot, 3600);
+      expect(r.calls.resumed).toBe(1);
+    } finally { r.session.stop(); }
+    const far = rig(combatRigBot([foe(8,'zombie',10.6)]).bot);
+    try { expect(far.session.engagementTargets()).toEqual([]); } finally { far.session.stop(); }
+  });
   it('跟随与撤离候选沿用真实挑衅判据，不因末影人的类型标签产生无法执行的选择', () => {
     const { bot, attacks } = combatRigBot([foe(7, 'enderman', 5)]);
     const r = rig(bot);

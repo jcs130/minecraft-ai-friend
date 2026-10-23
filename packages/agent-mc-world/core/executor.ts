@@ -1742,6 +1742,8 @@ export interface QueueStatus {
     id: number; label: string; step: string; stepIndex: number; stepCount: number; elapsedMs: number;
     /** Structured current intent; never infer control ownership by parsing the label. */
     skill?: SkillCall['skill'];
+    /** This exact step can be suspended and resumed without replaying a side effect. */
+    resumable?: boolean;
     followTarget?: string;
     /** 受理到现在。只看步骤耗时读不出「这一单已经磨了二十分钟」 */
     taskElapsedMs: number;
@@ -2081,7 +2083,7 @@ export class Executor {
             id: t.id,
             label: labelOf(t),
             step: t.program?.name ?? describeSkill(t.steps[Math.min(t.stepIndex, t.steps.length - 1)]),
-            ...(!t.program ? { skill: t.steps[t.stepIndex]?.skill,
+            ...(!t.program ? { skill: t.steps[t.stepIndex]?.skill, resumable: reRunnable(t.steps[t.stepIndex]),
               ...(t.steps[t.stepIndex]?.skill === 'follow'
                 ? { followTarget: (t.steps[t.stepIndex] as Extract<SkillCall, {skill:'follow'}>).name } : {}) } : {}),
             stepIndex: t.stepIndex,
