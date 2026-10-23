@@ -7,7 +7,7 @@ import type { Harness2Job, Harness2Phase } from './harness2.ts';
 export const EXPERIMENTS_SCHEMA = 'agent-mc.experiments/v1';
 export interface ExperimentAssessment {
   achieved: boolean | null;
-  measurements: { distance: number | null; gained: number | null; healthLoss: number | null; elapsedMs: number | null };
+  measurements: { distance: number | null; gained: number | null; healthLoss: number | null; elapsedMs: number | null; sdkCalls?:number|null };
 }
 export interface ExperimentView {
   id: string; methodId: string; status: 'not-started' | 'running' | 'completed' | 'blocked' | 'failed' | 'unknown';
@@ -31,7 +31,7 @@ const time=(v:unknown)=>typeof v==='number'&&v>0&&Number.isSafeInteger(v)?v:null
 function assessment(v:any):ExperimentAssessment|null {
   if(!v||typeof v!=='object')return null;
   return {achieved:typeof v.achieved==='boolean'?v.achieved:null,measurements:{distance:number(v.measurements?.distance),
-    gained:number(v.measurements?.gained),healthLoss:number(v.measurements?.healthLoss),elapsedMs:number(v.measurements?.elapsedMs)}};
+    gained:number(v.measurements?.gained),healthLoss:number(v.measurements?.healthLoss),elapsedMs:number(v.measurements?.elapsedMs),sdkCalls:count(v.measurements?.sdkCalls)}};
 }
 /** One cached reader per host. Multiple browser pages share the same two-second file sample. */
 export function createHarness2Monitor(options:{directory:string;jobs:readonly Harness2Job[];enabled?:boolean;now?:()=>number}) {

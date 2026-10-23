@@ -16,13 +16,15 @@ export type PracticeGoal =
 export interface PracticeCase { id: string; snapshotId: string; environmentVersion: string; goal: PracticeGoal }
 export interface PracticeAssessment {
   achieved: boolean | null; reason: 'measured' | 'missing-observation' | 'stale-observation' | 'binding-mismatch' | 'execution-incomplete';
-  measurements: { distance: number | null; gained: number | null; healthLoss: number | null; elapsedMs: number | null };
+  measurements: { distance: number | null; gained: number | null; healthLoss: number | null; elapsedMs: number | null; sdkCalls?:number|null };
 }
 export interface PracticeTrial {
   trialId: string; caseId: string; candidateHash: string; binding: PracticeBinding;
   reference: ProcedureReference | null; executionId: string | null; reviewId: string | null;
   startedAt: number; endedAt: number; completed: boolean; cleanup: 'settled';
   before: PracticeSnapshot | null; after: PracticeSnapshot | null;
+  /** Counted by the trusted method executor from its original trace, not script output. */
+  sdkCalls?:number|null;
 }
 export interface PracticeExecutionPort {
   readonly binding: PracticeBinding;
@@ -62,6 +64,7 @@ export function assessPracticeTrial(trial: PracticeTrial, fixture: PracticeCase,
   if (![a.at,b.at,trial.startedAt,trial.endedAt].every(finite) || trial.endedAt < trial.startedAt
     || Math.abs(a.at-trial.startedAt) > 5000 || b.at < trial.endedAt-5000 || b.at > trial.endedAt+1000 || b.at < a.at) return result('stale-observation');
   measurements.elapsedMs = trial.endedAt-trial.startedAt;
+  measurements.sdkCalls=Number.isSafeInteger(trial.sdkCalls)&&Number(trial.sdkCalls)>=0?Number(trial.sdkCalls):null;
   measurements.healthLoss = Math.max(0,a.health-b.health);
   const g = fixture.goal;
   if (g.kind === 'reach') {
@@ -138,6 +141,7 @@ export class MethodPracticeExecutor implements PracticeExecutionPort {
       const run = await this.terminal({code:candidate.code,params:candidate.params,durationMs,procedure:{reference,graph}},signal);
       if (await this.options.settle(run) !== 'settled') throw new PracticeUnknownEffect();
       trial.endedAt = Date.now();
+      trial.sdkCalls=run.trace.length;
       // Observe after cleanup, not the method's self-reported return value.
       if (!signal.aborted) trial.after = await this.options.observe(fixture,signal);
       if (!run.procedure || !run.endedAt || run.status === 'running') throw new PracticeUnknownEffect();
@@ -162,14 +166,28 @@ export class MethodPracticeExecutor implements PracticeExecutionPort {
 
 /** Independent baseline and held-out checks. No implicit skill adoption. */
 export function gatePracticeCandidate(baseline: PracticeAssessment[], candidate: PracticeAssessment[],
-  holdoutBaseline: PracticeAssessment[], holdoutCandidate: PracticeAssessment[]): { eligible: boolean; reason: string; adopted: false } {
+  holdoutBaseline: PracticeAssessment[], holdoutCandidate: PracticeAssessment[],objective:'success'|'balanced'='success'): { eligible: boolean; reason: string; adopted: false } {
   const all = [...baseline,...candidate,...holdoutBaseline,...holdoutCandidate];
   if (!baseline.length || candidate.length !== baseline.length || !holdoutBaseline.length || holdoutCandidate.length !== holdoutBaseline.length
     || all.some(a=>a.achieved===null)) return {eligible:false,reason:'incomplete-evidence',adopted:false};
   if (candidate.some((a,i)=>baseline[i].achieved===true && a.achieved!==true)
     || holdoutCandidate.some(a=>a.achieved!==true)) return {eligible:false,reason:'regression-or-holdout-failure',adopted:false};
-  if (!candidate.some((a,i)=>a.achieved===true && baseline[i].achieved===false)
-    && !holdoutCandidate.some((a,i)=>a.achieved===true && holdoutBaseline[i].achieved===false))
+  const improved=candidate.some((a,i)=>a.achieved===true && baseline[i].achieved===false)
+    ||holdoutCandidate.some((a,i)=>a.achieved===true && holdoutBaseline[i].achieved===false);
+  if(!improved){
+    if(objective==='balanced'){
+      const first=[...baseline,...holdoutBaseline],next=[...candidate,...holdoutCandidate];
+      const count=(v:unknown):v is number=>Number.isSafeInteger(v)&&Number(v)>=0;
+      // Elapsed time alone varies with worker cold start and load. Compare actual SDK work,
+      // preserve every paired success and measured health bound, and require held-out savings.
+      const comparable=first.every((a,i)=>a.reason==='measured'&&next[i]!.reason==='measured'
+        &&a.achieved===true&&next[i]!.achieved===true&&count(a.measurements.sdkCalls)&&count(next[i]!.measurements.sdkCalls)
+        &&typeof a.measurements.healthLoss==='number'&&typeof next[i]!.measurements.healthLoss==='number'
+        &&next[i]!.measurements.healthLoss!<=a.measurements.healthLoss&&next[i]!.measurements.sdkCalls!<=a.measurements.sdkCalls!);
+      if(comparable&&holdoutCandidate.some((a,i)=>a.measurements.sdkCalls!<holdoutBaseline[i]!.measurements.sdkCalls!))
+        return {eligible:true,reason:'isolated-equal-success-less-sdk-work',adopted:false};
+    }
     return {eligible:false,reason:'no-measured-success-improvement',adopted:false};
+  }
   return {eligible:true,reason:'isolated-comparison-passed',adopted:false};
 }

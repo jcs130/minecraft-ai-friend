@@ -30,6 +30,8 @@ export interface Harness2Job {
   /** Retrieved from canonical game memory by the host, not a second authoritative notebook. */
   lessons?: Array<{ cue: string; lesson: string; evidenceRefs: string[] }>;
   mode: 'parallel' | 'sequential'; k: number;
+  /** success preserves the original gate; balanced also evaluates equal-success SDK work savings. */
+  objective?:'success'|'balanced';
   budget: { modelCalls: number; trials: number; wallMs: number; trialMs: number; contextBytes: number };
 }
 export interface Harness2Result {
@@ -42,6 +44,8 @@ export interface Harness2Result {
   experience: NonNullable<Harness2ModelReply['experience']> | null;
   /** Every exact trial remains in the metadata journal and scoped MethodLibrary. */
   evidenceRefs: string[]; adopted: false;
+  comparison?:import('../learning/harness-evaluation.ts').PracticeFrontier;
+  optimizationUsage?:{modelCalls:number;trials:number;inputTokens:number|null;cachedTokens:number|null;outputTokens:number|null};
 }
 export interface Harness2Options {
   directory: string;
@@ -86,6 +90,7 @@ function validateJob(job: Harness2Job): void {
   if (!job.sourceInstanceId || !job.scope || !Object.values(job.scope).every(s=>typeof s==='string' && s.length>0 && s.length<=200)
     || typeof job.task !== 'string' || !job.task.trim() || job.task.length>6000
     || !['parallel','sequential'].includes(job.mode) || !Number.isInteger(job.k) || job.k<1 || job.k>4) throw Error('Invalid bounded Harness2 job');
+  if(job.objective!==undefined&&!['success','balanced'].includes(job.objective))throw Error('Invalid practice objective');
   if (!Array.isArray(job.holdout) || job.holdout.length<1 || job.holdout.length>8) throw Error('At least one independent held-out fixture is required');
   const cases = [job.train,...job.holdout]; cases.forEach(validatePracticeCase);
   if (new Set(cases.map(c=>c.id)).size!==cases.length || new Set(cases.map(c=>c.snapshotId)).size!==cases.length
@@ -267,7 +272,7 @@ export class Harness2Runner {
         holdout.push({caseId:fixture.id,baseline:base.assessment,candidate:candidate.assessment});
       }
       const base=baselineTrials[0].assessment;
-      const gate=gatePracticeCandidate([base],[chosen.assessment],holdout.map(v=>v.baseline),holdout.map(v=>v.candidate));
+      const gate=gatePracticeCandidate([base],[chosen.assessment],holdout.map(v=>v.baseline),holdout.map(v=>v.candidate),job.objective);
       // All reference probes must be known; differing baseline outcomes are an unstable fixture.
       if (baselineTrials.some(v=>v.assessment.achieved===null || v.assessment.achieved!==base.achieved)) {
         gate.eligible=false; gate.reason='unstable-baseline';
@@ -277,6 +282,14 @@ export class Harness2Runner {
         modelCalls:journal.modelCalls,trials:journal.trials,selected,selectedTrialId:chosen.trial.trialId,selectedReference:chosen.trial.reference,
         train:{baseline:base,candidate:chosen.assessment},holdout,gate,experience,
         evidenceRefs:Object.entries(journal.rpc).filter(([,r])=>r.kind==='trial'&&r.phase==='returned').map(([id])=>id),adopted:false};
+      const {evaluatePracticeVariants}=await import('../learning/harness-evaluation.ts');
+      const cohort=procedureHash({scope:job.scope,train:job.train,holdout:job.holdout});
+      result.comparison=evaluatePracticeVariants({id:'baseline',revision:procedureHash(job.baseline),cohort,train:[base],holdout:holdout.map(v=>v.baseline)},
+        [{id:job.id,revision:procedureHash(selected),cohort,train:[chosen.assessment],holdout:holdout.map(v=>v.candidate)}]);
+      const models=Object.values(journal.rpc).filter(r=>r.kind==='model'&&r.phase==='returned');
+      const total=(key:string)=>{const values=models.map(r=>(r.value as {usage?:Record<string,unknown>})?.usage?.[key]);
+        return values.length&&values.every(v=>Number.isSafeInteger(v)&&Number(v)>=0)?values.reduce<number>((sum,v)=>sum+Number(v),0):null;};
+      result.optimizationUsage={modelCalls:journal.modelCalls,trials:journal.trials,inputTokens:total('inputTokens'),cachedTokens:total('cachedTokens'),outputTokens:total('outputTokens')};
       // A host memory failure cannot cause a repeated game trial on restart.
       journal.result=result; journal.status='completed';
       if(journal.progress){journal.progress.phase=this.options.remember?'remember':'settled';journal.progress.endedAt=Date.now();}save();

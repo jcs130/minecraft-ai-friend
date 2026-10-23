@@ -102,6 +102,24 @@ const result = await runner.run({
 
 默认面板禁止嵌入。宿主可显式允许精确的 loopback HTTP 或 `dsh-app://app` 桌面来源；CSP 仅放行该父页面，跨来源 API、控制 nonce、Host 与实例隔离检查保持启用。Java1.21.1 主维护，1.20.6 显式兼容构建。
 
+## 目标与开销的共同评估
+
+`mc_practice start` 默认 `objective: balanced`；显式 `success` 保留原来的严格成功率改进条件。两者都使用原始执行终态、重置后的场景与独立留出目标。balanced 也允许原本已成功的版本在保持各对目标与生命损失的前提下减少 SDK 调用，且必须在留出场景观察到减少。SDK 次数来自执行器原始 trace；脚本返回的数字不是测量。单次墙钟更快、未知开销、只在训练场景减少调用均不够。
+
+`evaluatePracticeVariants` 通过 `/learning` 公开，比较同一 cohort 的质量和 SDK 工作量，提供非支配候选及 lite/balanced/quality 的建议。当前成本指标明确是 SDK 调用数，不冒充 token、金钱或真实 GPU 用量。时间作为辅助读数，缺失 token 保留 null。`Harness2Result.optimizationUsage` 分别记录本次优化本身的模型调用、试跑和已知 token；优化支出与未来实际复用节约分开。
+
+`mc_practice {op:"compare",ids:["original-job","next-job"]}` 只读取指定已完成任务。对照绑定原方法父版本、参数、训练/留出场景、作用域和单次预算，跨 cohort 不推荐。比较不新增模型、试跑或采用；同一输入下多档建议也可能是同一版本。
+
+## 候选回写与后续复用
+
+`mc_practice {op:"stage",id:"completed-job"}` 经宿主提供的 `createPracticeCandidateStager` 端口，将已通过隔离评估的源码重新语法校验，再按原父版本保存到原 `mc_script` 方法库。每次读取/保存都核对当前作用域；方法已被修订则先读新版本。原源码和已采用版本保持可检索，stage 不执行身体动作、不采用、不更新权重。已确认的保存会幂等返回原引用；保存回执未知时保留待核对状态，不能盲重试。校验或前置读失败不被标成已经写入。
+
+随后仍由 Agent 读取候选适用条件，在自然任务执行精确引用，按原执行 UUID 和世界净变化 review/adopt；回退沿同一库选择旧引用。原始负面结果、隔离练习和真实任务证据分别保留。可选宿主 request-facts 只投递最近三项任务的短索引和按需入口，正文/源码/完整历史不常驻，不启动隐式模型循环。
+
+本轮是方法层改进闭环和通用评估接口，尚未授权候选直接覆写运行中的引擎、上下文管理源码或工具契约。其他场景可经现有 `PracticeExecutionPort` 接入自己的真实重置/观察/清理与目标验证器；当前内置平地 fixture 仍不能验证潜水、战斗或背包。
+
+设计参考：[HarnessPro 论文](https://arxiv.org/html/2610.26770v2)及其[公开产物仓库](https://github.com/pzs19/HarnessPro)。本实现复用已有方法库和执行证据，未移植其 Codex hook、固定工具次数或付费模型配置；论文基准收益不是 Minecraft 收益。
+
 ## 验证与回退
 
 默认单元测试不需要模型、Python或网络：`vitest run tests/harness2.test.ts`。设置 `HARNESS2_TEST_WORKER` 为 worker JSON 后，`tests/harness2-upstream.test.ts` 执行原版算法、实际物理、两个递归模式、反思及恢复检查，使用明确标记的确定性模型替身；它不证明真实 LLM 提升。

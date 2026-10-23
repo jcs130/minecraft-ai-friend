@@ -11,3 +11,5 @@ export * from './practice.ts';
 export * from './practice-memory.ts';
 export * from './physics-practice.ts';
 export * from './harness2-service.ts';
+export * from './harness-evaluation.ts';
+export * from './practice-staging.ts';
