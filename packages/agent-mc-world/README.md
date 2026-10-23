@@ -1,5 +1,12 @@
 # Agent MC World
 
+`0.5.7-rc.72` adds engine-free [progressive context reading](docs/context-reading.md)
+through `agent-mc-world/context`: attributed literal source previews, cursor
+pagination and current-fact formatting with independently reusable append parts.
+Original bodies, observation times and evidence references stay with the caller.
+Importing this entry starts no model, transport or game connection; smaller
+individual readouts alone do not establish lower total request cost or latency.
+
 `0.5.7-rc.70` preserves an explicit `stow.count` or `organize.rules[].keep` when
 a container fills after accepting part of a transfer. Confirmed inventory,
 cursor and container changes account for that partial transfer before another

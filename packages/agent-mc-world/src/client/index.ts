@@ -8,6 +8,7 @@ export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAd
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
+export * from './context-reading.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,
