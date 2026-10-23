@@ -64,6 +64,22 @@ class SelfHostTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaisesRegex(ValueError,'new portal output'):module.export_portal(Path(temp)/'server',temp)
 
+    def test_exported_release_includes_current_login_guard_without_live_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target=Path(temp)/'my-server';output=Path(temp)/'portal'
+            module.export_portal(target,output,25599)
+            package=json.loads((output/'package.json').read_text(encoding='utf-8'))
+            self.assertEqual(package['version'],module.PORTAL_VERSION)
+            self.assertTrue((output/'src/login-throttle.mjs').is_file())
+            self.assertTrue((output/'public/downloads.html').is_file())
+            config=json.loads((output/'config.local.json').read_text(encoding='utf-8'))
+            self.assertEqual(Path(config['serverDir']),target)
+            self.assertFalse(config['authBridge']['enabled'])
+            self.assertFalse(config['cloudAccounts']['enabled'])
+            defaults=json.loads((output/'config.example.json').read_text(encoding='utf-8'))
+            self.assertEqual(defaults['downloads'],{'baseUrl':'','enabledPackages':[]})
+            self.assertFalse(list(output.rglob('*.sqlite*')))
+
     def test_legacy_launcher_requires_an_external_token_and_does_not_kill_by_port(self):
         text=(ROOT/'world/live/start-live.bat').read_text().lower()
         self.assertIn('if not defined live_write_token',text)

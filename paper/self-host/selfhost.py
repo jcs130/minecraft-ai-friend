@@ -20,7 +20,8 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = Path(__file__).with_name('dependencies.lock.json')
 USER_AGENT = 'qiandengji-selfhost/1.0 (https://github.com/jcs130/minecraft-ai-friend)'
-PORTAL_REF = '9f03e4f1101d12f75c83add996165958565c964c'
+PORTAL_REF = '800cf4fbf29163a5fbc8f7ed6aa0967cf2a9f1b5'
+PORTAL_VERSION = '0.8.6'
 MARKER = '.qiandengji-self-host.json'
 
 
@@ -134,7 +135,7 @@ def export_portal(target, output, port=25565):
         'authBridge':{'enabled':False},'cloudAccounts':{'enabled':False},'sourceMode':'local',
         'publicGameAddress':'127.0.0.1:'+str(port),'publicMedia':{}}
     (output/'config.local.json').write_text(json.dumps(config,indent=2)+'\n',encoding='utf-8')
-    print('Exported public portal 0.8.4 from '+PORTAL_REF+'. Configure your own account bridge separately.')
+    print('Exported public portal '+PORTAL_VERSION+' from '+PORTAL_REF+'. Configure your own account bridge separately.')
 
 
 def build(target, output, tools, component='all'):
