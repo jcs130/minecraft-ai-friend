@@ -70,7 +70,7 @@ export class AgentAccess {
   }
   issue(owner, body) {
     this.enabled(); this.quota(owner);
-    const serverId=body.serverId || 'qiandengji'; if(this.network)this.network.catalog.get(serverId);else if(serverId!=='qiandengji')throw fail(404,'SERVER_NOT_FOUND','服务器尚未接入。');
+    const serverId=body.serverId || 'qiandengji'; if(this.network)this.network.catalog.requireOpen(serverId);else if(serverId!=='qiandengji')throw fail(404,'SERVER_NOT_FOUND','服务器尚未接入。');
     if (typeof body.label !== 'string' || !body.label.trim() || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请填写 1–60 字的邀请码用途');
     const name = body.username === undefined || body.username === '' ? null : body.username;
     if (name !== null) this.checkName(name);
@@ -104,6 +104,7 @@ export class AgentAccess {
     this.checkName(body.username);
     const invite = this.store.db.prepare('SELECT * FROM agent_invites WHERE token_hash=?').get(digest(token));
     if (!invite || invite.revoked_at || invite.expires_at <= Date.now()) throw fail(401, 'INVITE_INVALID', '邀请码无效、已过期或已撤销，请向角色主人申请新邀请');
+    this.network?.catalog.requireOpen(invite.server_id);
     if (invite.name && invite.name !== body.username) throw fail(403, 'INVITE_NAME_MISMATCH', '请使用邀请码限定的原始角色名');
     const owner = this.store.ownerById(invite.owner_id);
     if (!owner) throw fail(401, 'INVITE_INVALID', '邀请码已失效');

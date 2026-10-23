@@ -77,10 +77,10 @@
     {
       "id": "fom",
       "name": "FOM · 机械动力与暮色",
-      "description": "NeoForge 模组世界，先接通统一账号，玩法资料与直播逐步接入。",
+      "description": "机械工坊、田园生活与新的冒险正在筹备中。尚未正式开放，敬请期待。",
       "core": "NeoForge",
       "version": "1.21.1",
-      "state": "testing",
+      "state": "preparing",
       "addresses": {
         "java": "micro.kangqiang.site:28976",
         "mineflayer": "micro.kangqiang.site:28977",

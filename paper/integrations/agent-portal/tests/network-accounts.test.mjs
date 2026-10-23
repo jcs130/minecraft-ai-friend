@@ -20,6 +20,32 @@ async function fixture(t){
 }
 const join=(f,id='fom',name='ag_Multi',extra={})=>f.network.begin(f.owner,id,{requestId:randomUUID(),username:name,gamePassword:'isolated-shared-password',...extra});
 
+test('coming-soon metadata hides routes even after a ready native heartbeat',async t=>{
+ const f=await fixture(t);f.network.catalog.entries.set('fom',Object.freeze({...f.network.catalog.get('fom'),state:'preparing'}));
+ const result=await f.admin.request('/servers');const world=result.data.servers.find(row=>row.id==='fom');
+ assert.equal(world.state,'preparing');assert.equal(world.joinable,false);assert.deepEqual(world.addresses,{});assert.deepEqual(world.guide,{});
+ assert.equal(world.accounts.ready,false);assert.equal(world.accounts.create,false);assert.equal(world.accounts.claim,false);assert.equal(world.accounts.reason,'WORLD_COMING_SOON');
+ assert.match(world.accounts.message,/敬请期待/);assert.ok(f.network.catalog.get('fom').addresses.mineflayer,'Internal future connection remains configured');
+});
+
+test('coming-soon worlds reject invites, joins and claim writes without consuming names or jobs',async t=>{
+ const f=await fixture(t);f.network.catalog.entries.set('fom',Object.freeze({...f.network.catalog.get('fom'),state:'preparing'}));
+ for(const endpoint of ['/servers/fom/agent-invites','/agent-invites','/servers/fom/join','/servers/fom/claim']){
+  const r=await f.admin.request(endpoint,'POST',{serverId:'fom',label:'Not open',username:'ag_Future',requestId:randomUUID(),gamePassword:'isolated-password'});
+  assert.equal(r.status,409,endpoint);assert.equal(r.data.error.reason,'WORLD_COMING_SOON');
+ }
+ for(const table of ['agent_invites','agent_clients','network_jobs','network_flows','network_memberships'])assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM '+table).get().n,0,table);
+ assert.equal((await f.admin.request('/agent-invites','POST',{label:'Paper remains open',username:'ag_StillOpen'})).status,201);
+});
+
+test('old pending invitations cannot register or activate a world that has not launched',async t=>{
+ const f=await fixture(t),invite=f.portal.agentAccess.issue(f.owner,{serverId:'fom',label:'Before closure'});
+ f.network.catalog.entries.set('fom',Object.freeze({...f.network.catalog.get('fom'),state:'preparing'}));
+ await assert.rejects(f.portal.agentAccess.register(invite.token,{requestId:randomUUID(),username:'ag_Future',clientSecret:randomBytes(32).toString('base64url')}),e=>e.reason==='WORLD_COMING_SOON');
+ await assert.rejects(join(f),e=>e.reason==='WORLD_COMING_SOON');assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM agent_clients').get().n,0);
+ assert.equal(f.portal.store.db.prepare('SELECT used_at FROM agent_invites WHERE id=?').get(invite.id).used_at,null);
+});
+
 test('native account receipt establishes one shared role only after verified server UUID; reads dispatch nothing',async t=>{
  const f=await fixture(t),flow=await join(f);assert.equal(flow.state,'pending');assert.equal(f.network.members(f.owner).length,0);
  const before=f.portal.store.db.prepare('SELECT count(*) AS n FROM network_jobs').get().n;

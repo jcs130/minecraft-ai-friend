@@ -507,11 +507,17 @@ test('home and connection center expose three real client choices with parent pr
 });
 
 
-test('world hall shows separate readiness and world-scoped invitations without fabricating FOM inventory',async t=>{
+test('world hall keeps unreleased FOM informational without addresses or account actions',async t=>{
  const ui=await screen(t);await ui.setup();ui.window.location.hash='worlds';await waitFor(()=>ui.document.querySelectorAll('.world-card').length===2);
- assert.match(ui.document.body.textContent,/统一登录密码/);assert.match(ui.document.body.textContent,/FOM/);assert.match(ui.document.body.textContent,/背包、任务、直播尚未同步/);
- ui.click('[data-world-action="invite"][data-server="fom"]');ui.fill('label','模组世界伙伴','#world-account-form');ui.fill('username','ag_FomUI','#world-account-form');ui.submit('#world-account-form');
- await waitFor(()=>ui.document.querySelector('#modal-title')?.textContent.includes('接入邀请'));
- const text=[...ui.document.querySelectorAll('#modal textarea')].map(n=>n.value).join('\n');assert.match(text,/世界 ID：fom/);assert.match(text,/\/fom status/);assert.ok(!text.includes('从 /mycli help'));
- ui.click('#modal [data-action="close-modal"]');assert.ok(!ui.document.body.textContent.includes('qdi_'),'secret invitation is removed when closed');
+ const card=ui.document.querySelector('[data-world-id="fom"]');assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
+ assert.equal(card.querySelectorAll('button,a,code,.world-address').length,0);assert.ok(!card.textContent.includes('28976'));assert.ok(!card.textContent.includes('28977'));
+ assert.ok(ui.document.querySelector('[data-world-action="invite"][data-server="qiandengji"]'),'Paper retains its entry');
+});
+
+
+test('homepage presents FOM as coming soon without any connection action',async t=>{
+ const ui=await screen(t,{initialView:'home'}),card=ui.document.querySelector('.home-upcoming-world');
+ assert.ok(card);assert.match(card.textContent,/FOM 模组世界/);assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
+ assert.equal(card.querySelectorAll('a,button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
+ await ui.refresh(false);assert.equal(ui.document.querySelectorAll('.home-upcoming-world').length,1);
 });

@@ -10,6 +10,7 @@ window.QdWorlds = (() => {
     const cards = servers.map(world => {
       const members = roles.filter(row => row.serverId === world.id);
       const ready = world.accounts?.ready === true;
+      if (world.joinable === false || ['preparing','closed'].includes(world.state)) return `<article class="panel world-card world-coming-soon" data-world-id="${esc(world.id)}"><div class="panel-header"><h2>${esc(world.name)}</h2><span class="coming-soon-badge">${world.state === 'preparing' ? '敬请期待' : '暂未开放'}</span></div><div class="content-pad"><p>${esc(world.description)}</p><p class="muted">尚未正式开放，开放时间与接入方式将另行公布。</p></div></article>`;
       return `<article class="panel world-card"><div class="panel-header"><h2>${esc(world.name)}</h2><span class="tag">${esc(world.core)} ${esc(world.version)}</span></div>
         <div class="content-pad"><p>${esc(world.description)}</p><p class="world-address"><code>${esc(world.addresses.mineflayer)}</code><small>Agent 入口</small></p>
         <p class="world-state">${ready ? '账号服务已连接' : '账号接入准备中 · 可先保存邀请身份'}</p>

@@ -26,8 +26,9 @@ export class ServerCatalog{
   }
  }
  get(id=DEFAULT_SERVER){const row=this.entries.get(id);if(!row)throw fail(404,'SERVER_NOT_FOUND','这个游戏世界尚未接入，请从世界目录选择。');return row;}
- public(id){const r=this.get(id);return {id:r.id,name:r.name,description:r.description||'',core:r.core,version:r.version,state:r.state,addresses:r.addresses,
-  loginAuthority:r.loginAuthority||'server-native',minPasswordLength:r.minPasswordLength,guide:r.guide,adapter:r.adapter||'native-mineflayer',
+ requireOpen(id){const r=this.get(id);if(r.state==='preparing')throw fail(409,'WORLD_COMING_SOON','这个世界尚未正式开放，敬请期待。请先加入千灯纪。');if(r.state==='closed')throw fail(409,'WORLD_CLOSED','这个世界暂未开放，请选择其他世界。');return r;}
+ public(id){const r=this.get(id),joinable=['open','testing'].includes(r.state);return {id:r.id,name:r.name,description:r.description||'',core:r.core,version:r.version,state:r.state,joinable,addresses:joinable?r.addresses:{},
+  loginAuthority:r.loginAuthority||'server-native',minPasswordLength:r.minPasswordLength,guide:joinable?r.guide:{},adapter:r.adapter||'native-mineflayer',
   progressScope:'server',identityScope:'website-owner',passwordPolicy:'shared-per-character'};}
  list(){return [...this.entries.keys()].map(id=>this.public(id));}
  roleId(serverId,uuid){this.get(serverId);return createHash('sha256').update(serverId+':'+uuid).digest('hex').slice(0,24);}

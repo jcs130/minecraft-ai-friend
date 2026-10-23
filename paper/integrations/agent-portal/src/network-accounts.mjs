@@ -30,6 +30,7 @@ export class NetworkAccounts{
  }
  async capabilities(id){
   const server=this.catalog.get(id);
+  if(['preparing','closed'].includes(server.state))return {serverId:id,ready:false,create:false,claim:false,gamePassword:false,unifiedPassword:false,reason:server.state==='preparing'?'WORLD_COMING_SOON':'WORLD_CLOSED',message:server.state==='preparing'?'这个世界尚未正式开放，敬请期待。':'这个世界暂未开放。'};
   if(id===DEFAULT_SERVER){const base=await this.legacy.capabilities(),ready=base.ready&&base.verify===true;return {...base,ready,create:ready,claim:ready,gamePassword:ready,serverId:id,unifiedPassword:ready,...(!ready?{reason:'NETWORK_BRIDGE_UPGRADE_PENDING',message:'统一账号等待原生登录桥更新；原千灯纪登录和单服账号功能保持可用。'}:{})};}
   const heartbeat=this.store.db.prepare('SELECT * FROM network_heartbeats WHERE server_id=?').get(id);
   const ready=server.accountBridge?.enabled===true&&heartbeat?.ready===1&&Date.now()-heartbeat.received_at<20000;
@@ -82,8 +83,7 @@ export class NetworkAccounts{
   return out;
  }
  async begin(owner,serverId,body,{kind='join',client=null}={}){
-  const server=this.catalog.get(serverId),name=body.username,uuid=offlineUuid(name||'');this.assertOwnedIdentity(owner,name,uuid);if(client&&(client.name!==name||client.expected_uuid!==uuid))throw fail(403,'AGENT_SCOPE_REQUIRED','只能操作本 API 身份绑定的角色。');
-  if(server.state==='closed')throw fail(409,'WORLD_CLOSED','这个世界暂未开放。请从世界目录选择其他世界。');
+  const server=this.catalog.requireOpen(serverId),name=body.username,uuid=offlineUuid(name||'');this.assertOwnedIdentity(owner,name,uuid);if(client&&(client.name!==name||client.expected_uuid!==uuid))throw fail(403,'AGENT_SCOPE_REQUIRED','只能操作本 API 身份绑定的角色。');
   if(!UUID.test(body.requestId||''))throw fail(400,'REQUEST_ID_REQUIRED','先保存 requestId；超时后查询原请求，不换标识重建。');
   const prior=this.store.db.prepare('SELECT * FROM network_flows WHERE id=?').get(body.requestId);
   if(prior){if(prior.owner_id!==owner.id||prior.name!==name||prior.target_server!==serverId||prior.kind!==kind)throw fail(409,'REQUEST_ID_CONFLICT','此请求标识属于其他操作。');return this.flow(owner,prior.id);}
@@ -140,6 +140,7 @@ export class NetworkAccounts{
   this.store.audit(owner.id,'network.recovery.requested',id);await this.advance(id);return this.flow(owner,id);
  }
  async agentStatus({client,owner},serverId){
+  this.catalog.requireOpen(serverId);
   const server=this.catalog.public(serverId),member=this.membership(owner,serverId,client.expected_uuid),credential=this.credential(owner,client.expected_uuid);
   const latest=this.store.db.prepare("SELECT id,state FROM network_flows WHERE owner_id=? AND player_uuid=? ORDER BY created_at DESC LIMIT 1").get(owner.id,client.expected_uuid);
   const job=latest?this.flow(owner,latest.id):null,ready=!!member&&!!credential&&(!latest||latest.state==='succeeded');

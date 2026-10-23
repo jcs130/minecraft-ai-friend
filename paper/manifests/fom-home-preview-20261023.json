@@ -1,0 +1,26 @@
+{
+  "status": "website-preview-deployed-world-unreleased",
+  "releasedAt": "2026-10-23T00:53:01.575883+00:00",
+  "website": "https://mc.kangqiang.site",
+  "version": "0.8.2",
+  "sourceCommit": "5fe97e6127fa477111748b1df8fdaadf56d3ec5d",
+  "baseCommit": "485b1788244b83d61248e873ff318e09dedb152e",
+  "imageId": "sha256:a0498f97615856ca8df0b00c2fa6f54ed53e06a474ca70408277838fd0c9403f",
+  "fomPublicState": "coming-soon",
+  "nativeAccountsCandidateDeployed": false,
+  "gameRestarted": false,
+  "loginProxyRestarted": false,
+  "fomRestarted": false,
+  "homePublishersRestarted": false,
+  "productionConfigChanged": false,
+  "tests": {
+    "productionBranchUiPassed": 22,
+    "candidateRelatedPassed": 58,
+    "browserDesktop": true,
+    "browser390px": true,
+    "phoneDeviceTested": false,
+    "unchangedSkillDownloads": 3
+  },
+  "rollbackContainer": "qiandengji-portal-prev-before-fom-preview-20261023",
+  "rollbackKeepsLatestDatabase": true
+}
