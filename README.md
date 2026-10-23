@@ -70,7 +70,7 @@ python paper/self-host/selfhost.py doctor
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.12** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.6** / `800cf4fb`；登录节流、Skill/MCP资料与[自有插件直下](https://mc.kangqiang.site/downloads.html)已上线，不含0.9.0多世界或其他画面候选 |
-| 通用 MC 核心 | 源码 **0.5.7-rc.72**；官网下载 **Skill 1.2.1** 固定已验证的 rc.71 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
+| 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网下载 **Skill 1.2.1** 固定已验证的 rc.71 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。
