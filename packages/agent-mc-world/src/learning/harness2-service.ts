@@ -112,7 +112,7 @@ export class Harness2PracticeService {
   context() {
     const view=this.snapshot();
     return {available:!this.closed,scope:view.scope,jobs:view.jobs.slice(-3).map(j=>({id:j.id,methodId:j.methodId,status:j.status,eligible:j.result?.eligible??null,
-      staged:this.records.get(j.id)?.staging==='saved'})),
+      staged:this.records.get(j.id)?.staging==='saved',...(j.failure?{failure:j.failure}:{})})),
       next:'For a measured difficulty, first retrieve an applicable mc_script library method. mc_practice help describes the actual fixture; start returns immediately. result/compare read evidence; stage saves a candidate. Natural execution and review/adopt remain separate.'};
   }
   private completed(row:RequestRecord):Harness2Result {
@@ -162,7 +162,7 @@ export class Harness2PracticeService {
     }
     if(args.op==='result'){
       const row=this.record(args.id),view=this.snapshot().jobs.find(j=>j.id===args.id);
-      if(view?.status!=='completed')return {status:view?.status??'unknown',error:row.error??null,result:null};
+      if(view?.status!=='completed')return {status:view?.status??'unknown',error:row.error??null,failure:view?.failure??null,result:null};
       const journal=JSON.parse(readFileSync(join(this.options.directory,row.job.id,'journal.json'),'utf8'));
       const result=journal.result as Harness2Result;
       return {status:'completed',result,source:{id:row.source.id,revision:row.source.revision,sourceHash:row.source.sourceHash},

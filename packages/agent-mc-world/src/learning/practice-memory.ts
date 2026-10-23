@@ -25,7 +25,7 @@ export function createPracticeGameMemory(port: PracticeMemoryPort): {
       if(entries.some(e=>e.source?.reference===reference))return;
       const content={schema:'agent-mc.practice-lesson/v1',jobId:report.jobId,jobHash:report.jobHash,upstreamRevision:report.upstreamRevision,
         cue:short(report.experience?.cue,400)||'A comparable isolated Minecraft practice task',
-        lesson:short(report.experience?.lesson,1600)||`Practice did not establish an improved applicable method: ${report.gate.reason}.`,
+        lesson:short(report.experience?.lesson,1600)||`Measured isolated comparison: ${report.gate.reason}. No reusable model-authored lesson was produced.`,
         modelInterpretation:short(report.experience?.evidence,1600),confidence:short(report.experience?.confidence,400),
         evidenceRefs:report.evidenceRefs.slice(0,8),totalEvidenceRefs:report.evidenceRefs.length,
         selectedReference:report.selectedReference,gate:report.gate,

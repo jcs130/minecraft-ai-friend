@@ -70,6 +70,7 @@ interface Journal {
   modelCalls: number; trials: number; rpc: Record<string,RpcRecord>; result?: Harness2Result;
   reason?: string; memory: 'pending' | 'stored' | 'disabled';
   progress?: Harness2Progress;
+  failure?:{kind:'model'|'trial'|'protocol';stage:string;category:string};
 }
 
 function abortable<T>(work: Promise<T>,signal: AbortSignal): Promise<T> {
@@ -249,7 +250,23 @@ export class Harness2Runner {
           // One dedicated body, serial probes. Concurrent upstream candidates do not become concurrent physical actions.
           queue=queue.then(async()=>{
             try { const value=await rpc(message); if (!child!.stdin!.destroyed) child!.stdin!.write(JSON.stringify({id:message.id,value})+'\n'); }
-            catch { fatal=true; if (!controller.signal.aborted) controller.abort(); }
+            catch(error) {
+              const reason=error instanceof Error?error.message:'';
+              journal.failure={kind:message.op==='trial'?'trial':message.op==='model'?'model':'protocol',
+                stage:String(message.label??message.runId??'rpc').slice(0,100),
+                category:error instanceof SyntaxError?'invalid-model-json':/HTTP \d{3}/.test(reason)?reason.match(/HTTP \d{3}/)![0]
+                  :/budget/.test(reason)?'budget-exhausted':/Expected Harness2|Invalid bounded model|artifact/.test(reason)?'invalid-model-artifact':'port-failure'};
+              // Optional prose reflection is not a candidate or a physical trial. Preserve its
+              // failure and continue to independent evaluation with NO_ENTRY, never fake a lesson.
+              const requestId=procedureHash({jobHash,label:message.label}),pending=journal.rpc[requestId];
+              if(message.op==='model'&&String(message.label).startsWith('experience.')&&!controller.signal.aborted&&pending?.kind==='model'
+                &&!Object.values(journal.rpc).some(r=>r.kind==='trial'&&r.phase==='pending')){
+                journal.rpc[requestId]={...pending,phase:'returned',endedAt:Date.now(),value:{usage:null,reflectionUnavailable:true}};save();
+                if(!child!.stdin!.destroyed)child!.stdin!.write(JSON.stringify({id:message.id,value:{notes:'Reflection unavailable; no reusable experience entry.'}})+'\n');
+                return;
+              }
+              save();fatal=true;if(!controller.signal.aborted)controller.abort();
+            }
           });
         } catch { protocolError=true; controller.abort(); }
       });

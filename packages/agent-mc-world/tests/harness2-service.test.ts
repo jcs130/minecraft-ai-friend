@@ -11,7 +11,7 @@ import {createPracticeGameMemory} from '../src/learning/practice-memory.ts';
 import {PracticeStagingError} from '../src/learning/practice-staging.ts';
 const directories:string[]=[];
 afterEach(()=>{for(const d of directories.splice(0))rmSync(d,{recursive:true,force:true});});
-function rig() {
+function rig(reflect=false) {
   const directory=mkdtempSync(join(tmpdir(),'mc-practice-service-'));directories.push(directory);
   const p=physicsPractice(join(directory,'methods'));
   const body={schema:PROCEDURE_SCHEMA,id:'walk-method',adapter:'minecraft-method/v1',description:'Walk on supported flat ground',
@@ -24,6 +24,7 @@ const send=v=>process.stdout.write(JSON.stringify(v)+'\\n');const rpc=(op,v)=>ne
 rl.on('line',async line=>{const v=JSON.parse(line);if(init){pending.get(v.id)?.(v.value);pending.delete(v.id);return;}init=v;
 await rpc('trial',{runId:'lab/base1',candidate:v.job.baseline});const patch=await rpc('model',{label:'inv1.a1',mission:'game task',files:{'task.md':v.job.task}});
 const candidate={...v.job.baseline,code:patch.files['skills/minecraft-method/scripts/run.js']};await rpc('trial',{runId:'lab/agg1',candidate});
+if(${reflect})await rpc('model',{label:'experience.agg1',mission:'Reflect measured trials',files:{}});
 send({type:'done',result:{upstreamRevision:v.revision,candidate,selectedRunId:'lab/agg1'}});rl.close();});`);
   let scope={realm:'live-fixture',account:'test-player',agent:'test-agent'},calls=0;
   let done!:()=>void;const settled=new Promise<void>(resolve=>{done=resolve;});
@@ -35,6 +36,16 @@ send({type:'done',result:{upstreamRevision:v.revision,candidate,selectedRunId:'l
   return {directory,p,options,args,source,settled,changeScope:()=>scope={...scope,account:'another-player'},calls:()=>calls};
 }
 describe('explicit host method practice service',()=>{
+  it('continues independent evaluation after an invalid optional reflection without retrying the model or inventing a lesson',async()=>{
+    const r=rig(true);let requests=0;
+    const service=new Harness2PracticeService({...r.options,model:{id:'reflection-format',generate:async(request:any)=>{
+      requests++;if(request.stage.startsWith('experience.'))throw new SyntaxError('bad prose');return r.options.model.generate();}}});
+    await service.call(r.args);await r.settled;
+    const expanded=await service.call({op:'result',id:r.args.id}) as any;
+    expect(expanded.status).toBe('completed');expect(expanded.result.gate.eligible).toBe(true);expect(expanded.result.experience).toBeNull();
+    expect(requests).toBe(2);expect(expanded.result.trials).toBe(4);expect(expanded.result.optimizationUsage.inputTokens).toBeNull();
+    expect((await service.call({op:'status'}) as any).jobs[0].failure).toMatchObject({stage:'experience.agg1',category:'invalid-model-json'});await service.close();
+  },20000);
   it('compares a completed cohort and stages its exact source once across restart without another trial or model call',async()=>{
     const r=rig();let staged=0;
     const options={...r.options,stageCandidate:async(request:any)=>{staged++;expect(request.source.revision).toBe(r.source.revision);expect(request.candidate.code).toBe(STEP_CODE);
@@ -108,4 +119,13 @@ describe('explicit host method practice service',()=>{
     expect(parseHarness2ModelReply('```json\n{"choice":"A"}\n```')).toEqual({choice:'A'});
     for(const text of ['{"files":','candidate A','[]','{"shell":"rm"}'])expect(()=>parseHarness2ModelReply(text)).toThrow();
   });
+  it('retains the failed model stage and safe error category without storing the provider response',async()=>{
+    const r=rig(),service=new Harness2PracticeService({...r.options,model:{id:'invalid-json',generate:async()=>{throw new SyntaxError('private response body');}}});
+    await service.call(r.args);await r.settled;await service.close();
+    const raw=readFileSync(join(r.options.directory,r.args.id,'journal.json'),'utf8'),journal=JSON.parse(raw);
+    expect(journal.failure).toEqual({kind:'model',stage:'inv1.a1',category:'invalid-model-json'});
+    const restored=new Harness2PracticeService(r.options);
+    expect(await restored.call({op:'result',id:r.args.id})).toMatchObject({failure:journal.failure});await restored.close();
+    expect(raw).not.toContain('private response body');expect(journal.modelCalls).toBe(1);
+  },15000);
 });

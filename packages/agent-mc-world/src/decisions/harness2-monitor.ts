@@ -14,6 +14,7 @@ export interface ExperimentView {
   phase: Harness2Phase | null; stale: boolean; startedAt: number | null; updatedAt: number | null; endedAt: number | null;
   mode: 'parallel' | 'sequential'; k: number; budget: Harness2Job['budget'];
   modelCalls: number | null; trials: number | null; memory: 'pending' | 'stored' | 'disabled' | 'unknown';
+  failure:{kind:'model'|'trial'|'protocol';stage:string;category:string}|null;
   usage: { inputTokens: number | null; outputTokens: number | null; cachedTokens: number | null; returnedCalls: number; usageSamples: number };
   timeline: Array<{ id: string; kind: 'model' | 'trial'; phase: 'pending' | 'returned'; startedAt: number | null; endedAt: number | null;
     caseId: string | null; group: 'train' | 'holdout' | null; role: 'baseline' | 'candidate' | null; assessment: ExperimentAssessment | null }>;
@@ -44,7 +45,7 @@ export function createHarness2Monitor(options:{directory:string;jobs:readonly Ha
     const at=now();if(cached&&at>=cached.sampledAt&&at-cached.sampledAt<2000)return structuredClone(cached);
     const views=jobs.map((job):ExperimentView=>{
       const view:ExperimentView={id:job.id,methodId:job.methodId,status:'not-started',phase:null,stale:false,startedAt:null,updatedAt:null,endedAt:null,
-        mode:job.mode,k:job.k,budget:structuredClone(job.budget),modelCalls:null,trials:null,memory:'unknown',
+        mode:job.mode,k:job.k,budget:structuredClone(job.budget),modelCalls:null,trials:null,memory:'unknown',failure:null,
         usage:{inputTokens:null,outputTokens:null,cachedTokens:null,returnedCalls:0,usageSamples:0},timeline:[],result:null};
       const file=join(root,job.id,'journal.json');let j:any;
       try{if(statSync(file).size>2_000_000)throw Error('Oversized journal');j=JSON.parse(readFileSync(file,'utf8'));}
@@ -62,6 +63,9 @@ export function createHarness2Monitor(options:{directory:string;jobs:readonly Ha
       if(['parallel','sequential'].includes(p.mode))view.mode=p.mode;if(Number.isInteger(p.k)&&p.k>=1&&p.k<=4)view.k=p.k;
       view.modelCalls=count(j.modelCalls);view.trials=count(j.trials);
       view.memory=['pending','stored','disabled'].includes(j.memory)?j.memory:'unknown';
+      if(j.failure&&['model','trial','protocol'].includes(j.failure.kind)&&typeof j.failure.stage==='string'
+        &&typeof j.failure.category==='string'&&/^[\w -]{1,80}$/.test(j.failure.category))
+        view.failure={kind:j.failure.kind,stage:j.failure.stage.slice(0,100),category:j.failure.category};
       const cases=new Set([job.train.id,...job.holdout.map(f=>f.id)]);
       const entries=Object.entries(j.rpc??{}).slice(0,88).filter(([id,r]:any)=>/^[a-f0-9]{64}$/.test(id)&&['model','trial'].includes(r?.kind)&&['pending','returned'].includes(r.phase));
       view.timeline=entries.map(([id,r]:any)=>({id,kind:r.kind,phase:r.phase,startedAt:time(r.startedAt),endedAt:time(r.endedAt),
