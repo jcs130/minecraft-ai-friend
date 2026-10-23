@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+The 0.2.91 distribution pins core rc.73 and uses its registry-derived skill
+alternatives only with the explicit `llamacpp` wire profile. Required fields
+such as `harvest.at` are constrained during generation; other providers retain
+the flat declaration. Native validation remains authoritative. Proven
+no-dispatch argument failures retain their typed correction across world drift
+and clock expiry, and repeated failures yield with bounded backoff. No arguments
+or replacement activities are selected automatically; stop, unknown inventory,
+the sole native queue and inference deadlines are unchanged.
+
 The 0.2.90 distribution adds the explicit Chat-only `planner.tool_schema_profile = "llamacpp"` option. It represents string limits above 256 characters as contract text instead of finite provider grammar repetitions, avoiding llama.cpp's grammar-complexity rejection. Native schemas still enforce every original limit before dispatch; the CPU counter uses the actual projected wire declarations. The default profile remains unchanged, and selecting this option does not discover a service or start gameplay. Core remains rc.70.
 
 The 0.2.89 distribution pins core rc.70, which preserves explicit storage counts and retained inventory when a full container accepts only part of a transfer. Planner, review and native queue policy are unchanged.

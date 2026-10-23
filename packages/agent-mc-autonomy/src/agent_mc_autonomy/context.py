@@ -354,11 +354,23 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         allowance = min(1200, max(0, (context_tokens - stable_cost) // 4))
         tail["tool_failure"] = tool_failure
         if cost() - stable_cost > allowance:
-            tail["tool_failure"] = {key: tool_failure[key] for key in ("tool", "error", "next_step", "admission", "recovery", "receipt") if key in tool_failure}
+            tail["tool_failure"] = {key: tool_failure[key] for key in ("tool", "error", "next_step", "admission", "recovery", "receipt", "correction_schema", "argument_correction") if key in tool_failure}
             tail["tool_failure"]["abridged"] = True
             if cost() - stable_cost > allowance and isinstance(tail["tool_failure"].get("recovery"), list):
                 tail["tool_failure"]["recovery"] = [{**row, "text": fact_preview(row["text"], 600)}
                                                    for row in tail["tool_failure"]["recovery"] if isinstance(row, dict) and isinstance(row.get("text"), str)]
+        if cost() - stable_cost > allowance and (tool_failure.get("correction_schema") or tool_failure.get("argument_correction")):
+            # Preserve typed correction and its count before flattening a large
+            # diagnostic into text. Full originals remain in the receipt journal.
+            compact = {key: tool_failure[key] for key in ("tool", "admission", "receipt", "correction_schema") if key in tool_failure}
+            compact["error"] = fact_preview(tool_failure.get("error", ""), 180)
+            compact["recovery"] = [{key: row[key] for key in ("tool", "arguments") if key in row}
+                                   for row in tool_failure.get("recovery", []) if isinstance(row, dict)][:1]
+            if tool_failure.get("argument_correction"):
+                compact["argument_correction"] = {key: tool_failure["argument_correction"][key]
+                    for key in ("attempts", "action_dispatched") if key in tool_failure["argument_correction"]}
+            compact["abridged"] = True
+            tail["tool_failure"] = compact
         while cost() - stable_cost > allowance and allowance >= 300:
             text = encode(tail["tool_failure"])
             tail["tool_failure"] = fact_preview(text, max(100, len(text.encode("utf-8")) // 2))

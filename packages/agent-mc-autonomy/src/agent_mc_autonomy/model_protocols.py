@@ -50,16 +50,15 @@ def request(config, messages, tools, budget):
     config.validate_reasoning_history()
     config.validate_cache_strategy()
     p = config.protocol
+    from .tool_schema import provider_schema
+    tools = [{**tool, "function": {**tool["function"], "parameters": provider_schema(
+        tool["function"].get("parameters", {}), profile=getattr(config, "tool_schema_profile", "default"),
+        wire=True)}} for tool in tools]
     options = copy.deepcopy(config.parameters)
     if not tools:
         options.pop("tool_choice", None)
     base = config.base_url.rstrip("/")
     if p == "chat":
-        profile = getattr(config, "tool_schema_profile", "default")
-        if profile != "default":
-            from .tool_schema import provider_schema
-            tools = [{**tool, "function": {**tool["function"], "parameters": provider_schema(
-                tool["function"].get("parameters", {}), profile=profile)}} for tool in tools]
         rows = []
         last_user = max((index for index, message in enumerate(messages) if message.get("role") == "user"), default=-1)
         for index, message in enumerate(messages):

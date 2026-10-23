@@ -183,6 +183,9 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 counter = context_counter if context_counter is not None else getattr(planner, "context_counter", None)
                 counter_options = {"context_counter": counter} if counter is not None else {}
                 counter_options["runtime_session"] = runtime_session
+                schema_profile = getattr(getattr(planner, "config", None), "tool_schema_profile", "default")
+                if schema_profile != "default":
+                    counter_options["tool_schema_profile"] = schema_profile
                 if host_context_provider is not None:
                     counter_options["host_context_provider"] = host_context_provider
                 if recent_context_provider is not None:

@@ -7,7 +7,7 @@ from jsonschema import validators
 from referencing import Registry
 
 
-def provider_schema(schema, *, profile="default"):
+def provider_schema(schema, *, profile="default", wire=False):
     """Project tuple contracts for homogeneous-items provider APIs only.
 
     Original native schemas remain authoritative at dispatch. Keep references
@@ -23,6 +23,23 @@ def provider_schema(schema, *, profile="default"):
     def project(value):
         if not isinstance(value, dict):
             return copy.deepcopy(value)
+        contracts = value.get("x-agent-mc-skill-contracts")
+        if wire and contracts is not None:
+            if profile == "llamacpp":
+                if (not isinstance(contracts, dict) or not contracts
+                        or set(contracts) != set(value.get("properties", {}).get("skill", {}).get("enum", []))
+                        or any(not isinstance(rows, list) or not rows or any(
+                            not isinstance(row, dict) or row.get("properties", {}).get("skill", {}).get("const") != skill
+                            or "skill" not in row.get("required", []) for row in rows)
+                            for skill, rows in contracts.items())):
+                    raise ValueError("brain_skill_generation_contract_invalid")
+                # These alternatives come from the native skill registry, never
+                # guessed from a previous action or current private world state.
+                value = {"anyOf": [row for rows in contracts.values() for row in rows]}
+            else:
+                # Providers that only understand a flat field pool keep their
+                # prior contract; native-only annotations never reach their API.
+                value = {key: child for key, child in value.items() if key != "x-agent-mc-skill-contracts"}
         result = {}
         for key, child in value.items():
             if key == "$schema":
