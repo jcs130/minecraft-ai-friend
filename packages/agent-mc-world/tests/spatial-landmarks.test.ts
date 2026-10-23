@@ -9,7 +9,7 @@ function bot(){return {entity:{id:1,position:new Vec3(-20.5,64,-10.5),yaw:0,pitc
 }};}
 describe('bounded decoded voxel landmarks',()=>{
   it('preserves negative-coordinate stairs and open gates while reporting coverage before dense cells',()=>{
-    const r=observeSpatial(bot() as never,{mode:'voxels',bounds:[-1,-3,-1,1,0,1]});if(r.kind!=='voxels')throw Error('voxels');
+    const r=observeSpatial(bot() as never,{mode: 'voxels', format: 'dense',bounds:[-1,-3,-1,1,0,1]});if(r.kind!=='voxels')throw Error('voxels');
     expect(r.summary).toMatchObject({totalCells:36,observedCells:18,unknownCells:18,headLayerIncluded:false});
     expect(r.summary.landmarks).toContainEqual({at:[-20,64,-11],name:'spruce_fence_gate',properties:{open:true,facing:'east'}});
     expect(r.summary.landmarks).toContainEqual({at:[-21,63,-10],name:'stone_brick_stairs',properties:{}});
@@ -18,7 +18,7 @@ describe('bounded decoded voxel landmarks',()=>{
   });
   it('caps landmarks, keeps omission counts and never promotes clues to route feasibility',()=>{
     const b=bot();b.blockAt=()=>({name:'stone_brick_stairs',stateId:1,shapes:full,getProperties:()=>({})});
-    const r=observeSpatial(b as never,{mode:'voxels',bounds:[-2,0,-2,2,1,2]});if(r.kind!=='voxels')throw Error('voxels');
+    const r=observeSpatial(b as never,{mode: 'voxels', format: 'dense',bounds:[-2,0,-2,2,1,2]});if(r.kind!=='voxels')throw Error('voxels');
     expect(r.summary.headLayerIncluded).toBe(true);expect(r.summary.landmarks).toHaveLength(12);expect(r.summary.omittedLandmarks).toBe(38);
     expect(r.summary).not.toHaveProperty('reachable');expect(JSON.stringify(r.summary).length).toBeLessThan(2400);
   });

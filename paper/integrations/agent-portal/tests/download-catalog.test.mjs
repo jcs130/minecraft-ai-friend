@@ -42,7 +42,8 @@ test('approved mirrors serve GET and HEAD redirects for exact plugin paths witho
   const site = (await f.client().request('/site')).data, api = await (await fetch(f.origin + '/api/v1/agent-access')).json();
   assert.deepEqual(site.agentClients, api.clients);
   assert.deepEqual(site.agentClients.map(row => row.id), ['core', 'neko', 'cortico', 'dsh']);
-  assert.equal(site.agentClients.find(row => row.id === 'neko').downloads.length, 2);
+  assert.equal(site.agentClients.find(row => row.id === 'neko').downloads.length, 1);
+  assert.equal(site.agentClients.find(row => row.id === 'neko').downloads[0].id, 'neko-base');
 });
 
 test('mirror activation requires an explicit reviewed package id, not just a base URL', async t => {
@@ -52,7 +53,7 @@ test('mirror activation requires an explicit reviewed package id, not just a bas
   assert.deepEqual(data.packages.filter(row => row.available).map(row => row.id), ['dsh-adapter']);
 });
 
-test('download page shows our four packages and versioned download buttons without a website login', async t => {
+test('download page separates three host bundles, two shared components and original files without a website login', async t => {
   const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
   const html = await (await fetch(f.origin + '/downloads.html')).text();
   const dom = new JSDOM(html, { url: f.origin + '/downloads.html', runScripts: 'outside-only' });
@@ -60,11 +61,29 @@ test('download page shows our four packages and versioned download buttons witho
   dom.window.fetch = url => fetch(new URL(url, f.origin));
   dom.window.eval(await fs.readFile(new URL('../public/downloads.js', import.meta.url), 'utf8'));
   const deadline = Date.now() + 4000;
-  while (dom.window.document.querySelectorAll('.download-card').length !== 4 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(dom.window.document.querySelectorAll('.download-card').length, 4);
-  assert.equal(dom.window.document.querySelectorAll('.download-card a[download]').length, 4);
+  while (dom.window.document.querySelectorAll('.download-card').length !== 9 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(dom.window.document.querySelectorAll('.download-card').length, 9);
+  assert.equal(dom.window.document.querySelectorAll('.download-card a[download]').length, 9);
+  assert.equal(dom.window.document.querySelectorAll('#package-downloads .download-card').length, 3);
+  assert.equal(dom.window.document.querySelectorAll('#component-downloads .download-card').length, 2);
+  assert.equal(dom.window.document.querySelectorAll('#advanced-downloads .download-card').length, 4);
+  assert.equal(dom.window.document.querySelector('.legacy-downloads').open, false);
+  assert.equal(dom.window.document.querySelectorAll('#package-downloads .download-contents').length, 3);
   assert.match(dom.window.document.body.textContent, /DSH.*0\.3\.0-rc\.12/s);
   assert.match(dom.window.document.body.textContent, /1\.11 GB/);
   assert.ok([...dom.window.document.querySelectorAll('a[download]')].every(link => link.href.startsWith(f.origin + '/downloads/')));
   assert.equal((await f.client().request('/session')).data.owner, null);
+});
+
+test('each recommended host bundle includes visualization and server data and names the same complete resource components', () => {
+  const hosts = packageReleases.filter(row => row.category === 'host');
+  assert.deepEqual(hosts.map(row => row.framework), ['cortico', 'dsh', 'neko']);
+  for (const row of hosts) {
+    assert.equal(row.viewerIncluded, true); assert.equal(row.serverPackIncluded, true); assert.equal(row.gameDependenciesBundled, true);
+    assert.ok(row.bytes > 100_000_000);
+    assert.deepEqual(row.requires, ['shared-audio', 'shared-browser']);
+    for (const id of row.requires) assert.equal(packageReleases.find(part => part.id === id)?.category, 'component');
+  }
+  assert.match(packageReleases.find(row => row.id === 'neko-plugin').platform, /Linux/);
+  assert.equal(packageReleases.find(row => row.id === 'neko-offline').bytes, 1111598162);
 });

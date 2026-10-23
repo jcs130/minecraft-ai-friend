@@ -60,7 +60,7 @@ it.each(['vine','short_grass','tall_grass','fern','wheat','carrots','torch','rai
     const block = state(name);
     expect(block.shapes).toEqual([]);
     expect(ray(block)).toBe(true);
-    const result = observeSpatial(botFor(block) as never,{mode:'voxels',bounds:[0,0,-1,0,0,-1]});
+    const result = observeSpatial(botFor(block) as never,{mode: 'voxels', format: 'dense',bounds:[0,0,-1,0,0,-1]});
     expect(result.unknownCells).toBe(0);
     expect(result.palette[0]).toMatchObject({name,collision:[]});
   });

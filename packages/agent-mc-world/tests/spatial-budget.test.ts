@@ -8,19 +8,19 @@ import { partitionSpatialBox, spatialBoxBudgetNote } from '../core/spatial-slice
 const cap = SPATIAL_OBSERVATION_LIMITS.cells;
 
 describe('bounded spatial request recovery', () => {
-  it('accepts an oversize read without rewriting the requested region', () => {
+  it('admits the observed 2205-cell request without inventing a smaller replacement', () => {
     const input = { mode: 'voxels', bounds: [-10, -2, -10, 10, 2, 10] };
-    const before = structuredClone(input);
+    const original = structuredClone(input);
     expect(parseSpatialObservation(input)).toEqual(input);
-    expect(input).toEqual(before);
+    expect(input).toEqual(original);
   });
   it.each([
     [-8, -2, -8, 0, 4, 8],
     [-6, 0, -6, 6, 3, 6],
     [-16, -16, -16, 16, 16, 16],
-  ])('partitions an accepted voxel region without dropping or repeating cells: %j', (...bounds) => {
+  ])('keeps the existing geometry partition helper complete without rejecting voxel input: %j', (...bounds) => {
     const issue = parseSpatialObservation({ mode: 'voxels', bounds });
-    expect(issue).not.toHaveProperty('error');
+    expect(issue).toEqual({mode:'voxels',bounds});
     const plan = partitionSpatialBox(bounds, cap);
     const seen = new Set<string>();
     const intervals = plan.chunkSizes.map((size, axis) => {
@@ -41,7 +41,6 @@ describe('bounded spatial request recovery', () => {
     }
     expect(seen.size).toBe(plan.cells);
     expect(plan.cells).toBe((bounds[3] - bounds[0] + 1) * (bounds[4] - bounds[1] + 1) * (bounds[5] - bounds[2] + 1));
-
   });
 
   it('keeps an exact-limit request intact', () => {

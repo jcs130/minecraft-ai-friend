@@ -1496,8 +1496,15 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"observe","mode":"voxels","bounds":[-2,-1,-2,2,3,2]}
                                                  按 MineDojo 的局部体素观测方式，直接读当前连接已加载方块，不需图像估深。
                                                  bounds 是相对执行时脚下格的 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；省略为 [-1,-1,-1,1,2,1]。
-                                                 ${VOXEL_QUERY_DOC}
-                                                 palette 保留方块状态、属性与真实格内碰撞箱；cells 按 y,z,x 展开(x 最快)，-1 是未知；无碰撞不证明安全可走或有支撑。
+                                                 默认 format:visible，只返回实际视线可见的非空气表面，不展开遮挡内部格或空气格。blocks 每项 [绝对x,y,z,palette索引]，palette 保存实际材质/状态/碰撞形状。
+                                                 遮挡/超距说明为“不可见”，invisibleCount 汇总；未加载 unloadedCount、细节未返回 omittedDetailCount 单列。不因未返回而推断目标不存在或路线安全。
+                                                 按固定原点由近到远检查，每页最多${SPATIAL_OBSERVATION_LIMITS.visibleScans}格可见性、最多${SPATIAL_OBSERVATION_LIMITS.cells}个表面；coverage 的 scanned/remaining/returnedCount 与 next 明示覆盖，不自动续读。
+                                                 需要逐格碰撞数组时显式 format:dense：以下连续长方体/ dense cells 说明仅适用于该格式。默认表面格式不返回 cells/-1网格。
+                                                 每项 ±${SPATIAL_OBSERVATION_LIMITS.offset}；一次返回最多${SPATIAL_OBSERVATION_LIMITS.cells}格的连续区域。体积超限直接返回真实部分数据 status:partial，不需先失败重试；文本预算不足时区域更小。
+                                                 coverage 报原请求/本页绝对边界、固定 origin、请求/已返回/本页/剩余格数与 partialReasons；bounds 对应本页 dense cells，未返回部分不作地形判断。complete 只说明本页后是否还有剩余且本页无不可见/未加载/省略，不证明整个世界已知或游戏目标完成。
+                                                 next 为可直接调用的 mc_scout 参数；续读仅给 mode:voxels,cursor，不带 bounds。按问题决定是否续读，不自动读全。cursor 绑定原点和本连接/维度/重生，移动不会改原点；作用域变化会明确拒绝，不自动重定位。
+                                                 每页 observedAt 是该页实际读取时间，不是同一时刻快照；回执另附当前眼位、朝向。读取顺序为原区域 y,z,x 递增（x最快），先返回剩余扫描序列的连续长方体，不保证恰好${SPATIAL_OBSERVATION_LIMITS.cells}格。
+                                                 palette 保留方块状态、属性与真实格内碰撞箱；cells 按 y,z,x 展开(x 最快)，-1 是不可见、未加载或细节未返回；无碰撞不证明安全可走或有支撑。
 {"skill":"observe","mode":"rays","rays":[[0,0,24],[15,30,16],[-15,-30,16]]}
                                                  从执行时眼位发射碰撞射线，每组 [相对pitch角,相对yaw角,最大距离]；角度用度，相对执行时身体朝向叠加，pitch 正值向上，yaw 正值向左，yaw=0 沿当前朝向。
                                                  pitch ±90、yaw ±180；最多 ${SPATIAL_OBSERVATION_LIMITS.rays} 条，每条距离 >0 且 ≤${SPATIAL_OBSERVATION_LIMITS.range} 格；省略 rays 为三行五列、24 格的扇面。
@@ -1510,8 +1517,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     },
     fields: [
       { key: 'mode', kind: 'enum', values: ['sites', 'voxels', 'rays'], required: true, error: 'mode 要 sites/voxels/rays' },
-      ...(['sites', 'bounds', 'cursor', 'rays'] as const).map(key => ({ key, kind: 'opaque' as const,
-        schema: SPATIAL_QUERY_SCHEMA.properties[key], doc: SPATIAL_QUERY_SCHEMA.properties[key].description })),
+      ...(['sites', 'bounds', 'cursor', 'format', 'rays'] as const).map(key => ({ key, kind: 'opaque' as const,
+        schema: key === 'format' ? {...SPATIAL_QUERY_SCHEMA.properties[key], default:'visible'} : SPATIAL_QUERY_SCHEMA.properties[key], doc: SPATIAL_QUERY_SCHEMA.properties[key].description })),
     ],
   },
   {
@@ -2058,8 +2065,8 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
     if (spec.name === 'craft') {
       variants = [variant(['item', 'count'], ['item']), variant(['grid', 'count'], ['grid'])];
     } else if (spec.name === 'observe') {
-      variants = [variant(['mode','bounds'], ['mode'], { mode: { const: 'voxels' } }),
-        variant(['mode','cursor'], ['mode','cursor'], { mode: { const: 'voxels' } }),
+      variants = [variant(['mode','format','bounds'], ['mode'], { mode: { const: 'voxels' } }),
+        variant(['mode','format','cursor'], ['mode','cursor'], { mode: { const: 'voxels' } }),
         variant(['mode','sites'], ['mode','sites'], { mode: { const: 'sites' } }),
         variant(['mode','rays'], ['mode'], { mode: { const: 'rays' } })];
     } else if (spec.name === 'build') {

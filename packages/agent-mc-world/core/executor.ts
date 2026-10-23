@@ -5255,7 +5255,7 @@ export class Executor {
       outcomes.push(outcome);
       const observation = observations.get(i);
       const readDecision: Partial<StepDecision> = observation?.kind === 'voxels' ? {
-        status: observation.complete === true ? 'completed' : 'partial',
+        status: observation.unobserved_count === 0 ? 'completed' : 'partial',
         reason: typeof observation.partial_reason === 'string' ? observation.partial_reason : null,
         completed: typeof observation.observed_count === 'number' ? observation.observed_count : null,
         remaining: typeof observation.unobserved_count === 'number' ? observation.unobserved_count : null,

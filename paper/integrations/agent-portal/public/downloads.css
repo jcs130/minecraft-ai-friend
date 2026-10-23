@@ -6,4 +6,8 @@
 .download-card details{margin-top:14px}.download-card code{overflow-wrap:anywhere;word-break:break-all}
 .download-card .btn{align-self:flex-start;white-space:normal;text-align:left}.download-card .download-install{line-height:1.7}
 .download-card .download-pending{font-weight:600}.download-footer{margin-top:32px}
+.download-card .download-contents{color:var(--gold);font-weight:600}.download-card .download-requires{font-size:13px;line-height:1.7}.download-install{overflow-wrap:anywhere}.legacy-downloads{margin-top:32px}.legacy-downloads>summary{cursor:pointer;font-weight:600}.legacy-downloads>.client-grid{margin-top:20px}
+.downloads-page #package-downloads{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.downloads-page #package-downloads{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.downloads-page #package-downloads{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.downloads-page .client-grid{grid-template-columns:minmax(0,1fr)}.downloads-page nav{flex-wrap:wrap}.download-card .btn{width:100%}}

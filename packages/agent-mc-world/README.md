@@ -1,10 +1,10 @@
 # Agent MC World
 
-Current source: **0.5.7-rc.76**, a GitHub candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+Current source: **0.5.7-rc.77**, a GitHub candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
 
 The rc.73 candidate adds opt-in [per-skill generation contracts](docs/skill-generation-contracts.md). Compatible harnesses can constrain required coordinates and mutually exclusive input forms before generation; the native parser, queue and permissions remain authoritative.
 
-The rc.76 candidate adds [bounded observations and trustworthy tool receipts](docs/bounded-tool-results.md): immediate `mc_observe`, fixed absolute cursors, explicit unknowns, structured diagnostics and original-request reconciliation.
+The rc.77 candidate adds [bounded observations and trustworthy tool receipts](docs/bounded-tool-results.md): immediate `mc_observe`, fixed absolute cursors, explicit unknowns, structured diagnostics and original-request reconciliation.
 
 ## Start small
 

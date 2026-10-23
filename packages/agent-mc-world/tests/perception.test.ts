@@ -36,7 +36,7 @@ describe('perception evidence boundaries',()=>{
     const eye={x:.5,y:65.62,z:.5};
     expect(clearObservationRay(bot,eye,{x:.5,y:65,z:-2.5})).toBe(true);
     expect(observedEntity(bot,bot.entities[9])).toBe(true);
-    const voxels=observeSpatial(bot as never,{mode:'voxels',bounds:[0,0,-3,0,1,-1]});
+    const voxels=observeSpatial(bot as never,{mode: 'voxels', format: 'dense',bounds:[0,0,-3,0,1,-1]});
     expect(voxels.unknownCells).toBe(0);
     expect(voxels.cells.every((cell:number)=>cell>=0)).toBe(true);
     expect(JSON.stringify(voxels.palette)).toContain('tall_grass');
@@ -55,7 +55,7 @@ describe('perception evidence boundaries',()=>{
     }};
     expect(clearObservationRay(bot,{x:.5,y:65.62,z:.5},{x:.5,y:65,z:-4.5})).toBe(false);
     expect(observedEntity(bot,bot.entities[9])).toBe(false);
-    const voxels=observeSpatial(bot as never,{mode:'voxels',bounds:[0,0,-4,0,0,-4]});
+    const voxels=observeSpatial(bot as never,{mode: 'voxels', format: 'dense',bounds:[0,0,-4,0,0,-4]});
     expect(voxels).toMatchObject({unknownCells:1,palette:[],cells:[-1]});
   });
   it('masks hidden block identities consistently in direct reads, index searches and voxel palettes',()=>{
@@ -65,7 +65,7 @@ describe('perception evidence boundaries',()=>{
     expect(view.blockAt(new Vec3(0,64,-2))?.name).toBe('stone');
     expect(view.blockAt(new Vec3(0,64,-5))).toBeNull();
     expect(view.findBlocks({matching:1,count:4})).toEqual([new Vec3(0,64,-2)]);
-    const voxels=observeSpatial(bot as never,{mode:'voxels',bounds:[0,0,-5,0,0,-5]});
+    const voxels=observeSpatial(bot as never,{mode: 'voxels', format: 'dense',bounds:[0,0,-5,0,0,-5]});
     expect(voxels).toMatchObject({unknownCells:1,palette:[],cells:[-1],entities:[]});
     expect(JSON.stringify(voxels)).not.toContain('diamond');
   });

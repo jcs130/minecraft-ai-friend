@@ -26,7 +26,7 @@ it('reads actual bounded data in one MCP call, reports precise errors and reconc
   const [a,b]=InMemoryTransport.createLinkedPair();
   try {
     await runtime.connect(); await server.connect(a); await client.connect(b);
-    const result=await client.callTool({name:'mc_observe',arguments:{mode:'voxels',bounds:[-10,-2,-10,10,2,10]}});
+    const result=await client.callTool({name:'mc_observe',arguments:{mode:'voxels',bounds:[-10,0,-10,10,4,10]}});
     expect(result.isError).not.toBe(true);
     const payload=result.structuredContent as any;
     expect(payload.data.status).toBe('partial'); expect(payload.data.cells.length).toBe(payload.data.returned_count);

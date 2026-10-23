@@ -2342,7 +2342,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   },
   {
     name: 'mc_observe', tags: ['read'],
-    description: 'Immediate read only: voxels max 512 cells, oversize returns partial; cursor pins absolute coordinates. Never replaces the action queue. mode is required: voxels/sites/rays. '
+    description: 'Immediate read only: dense voxels max 512 cells, oversize returns partial; optional visible format max 512 surfaces/2048 checks; cursor pins absolute coordinates. Never replaces the action queue. mode is required: voxels/sites/rays. '
       + VOXEL_QUERY_DOC + ' Structured result is in data (also JSON text); read failure is blocked, invalid parameters are invalid_arguments. No movement or world mutation.',
     parameters: SPATIAL_QUERY_SCHEMA,
   },
@@ -4617,7 +4617,7 @@ export class MinecraftWorld implements World {
       mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
       mc_observe: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
-        const parsed = parseSpatialObservation(args);
+        const parsed = parseSpatialObservation(args.mode === 'voxels' && args.format === undefined && args.cursor === undefined ? {...args,format:'dense'} : args);
         if ('error' in parsed) {
           const data = spatialArgumentDiagnostic(args, parsed.error);
           return { text: JSON.stringify(data), data, failed: true };

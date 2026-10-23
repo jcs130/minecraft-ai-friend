@@ -90,3 +90,32 @@ node scripts/download-manifest.mjs --base-url https://your-bucket.oss-cn-hongkon
 - 浏览器已核验正式下载按钮、桌面及390px布局；布局检查不等同于手机真机或所有地区的下载速度测试。
 
 自部署导出也已固定到上述正式提交，默认保留自己的账号初始化和关闭的下载镜像，避免继续导出旧版登录实现。
+
+## 完整安装与公共资源候选 0.8.8（尚未发布）
+
+原下载采用了不同分发层级：Cortico 的 121 KB、DSH 的 78 KB 只有适配器，依赖另行联网安装；NEKO 的 1.11 GB 则包含 Node、引擎、画面、完整原版音频和截图浏览器。其中约717 MB是音频，约120 MB是浏览器。服主确认保留完整离线内容，同时允许拆成多个包。
+
+| 主安装包 | 大小（十进制约数） | 包含 |
+| --- | --- | --- |
+| Cortico 0.4.1-rc.14 整合包 | 147 MB | 适配器、核心rc.69及全部游戏依赖、现代可视化/贴图、千灯纪中立包rc.13、Skill1.2.1 |
+| DSH 0.3.0-rc.12 整合包 | 148 MB | 适配器、核心rc.64及全部游戏依赖、现代可视化/贴图、千灯纪中立包rc.10、Skill1.2.1 |
+| NEKO 0.6.70 基础运行包 | 321 MB | 原Node/后端/依赖、现代画面和贴图、原Windows CPython3.11插件、千灯纪物品展示扩展及Skill1.2.1 |
+| 公共原版音频 | 720 MB | 三者所需的原版音效/音乐、内容哈希与来源，含两版SDK所需补充原版资源 |
+| Windows截图浏览器 | 120 MB | 配套playwright-core1.63.0的Chromium headless shell及许可 |
+
+这些是基于已公开版本的官网整合发行物，不把上游尚未发布的main开发版本当成已发行版本。宿主和模型由使用者自备；不附作者账号、模型Key、人设、记忆或世界存档。两份npm整合包使用标准bundledDependencies保留完整依赖，不改变核心或宿主的运行逻辑；千灯纪扩展仍需显式选择。随包Skill按需学习，不要同时启动第二个客户端接管同一角色。
+
+### 安装顺序
+
+1. 下载自己的宿主包及两份公共资源。音频和浏览器可在同一台电脑复用。
+2. Cortico/DSH将本地tgz安装到已有宿主的扩展部署目录。已有宿主提供自己的Node和模型环境；游戏依赖在tgz内。Cortico API6/官方0.2.5、DSH官方0.2.1-rc.2为对应兼容基线，DSH需Node24+。
+3. 将音频与浏览器组件解压到同一公共资源目录。Cortico在extensions目录运行 `pnpm exec cortico-minecraft-offline --resources <目录>`；DSH运行 `npx --no-install dsh-minecraft-offline --resources <目录>`。准备器只从本机已校验文件供给SDK，输出 `viewerAssetsDir` 及浏览器路径；按提示填写资源设置，并在启动宿主的进程设置 `AGENT_MC_BROWSER_EXECUTABLE`。它不修改宿主配置，不启动游戏或模型。
+4. NEKO将基础包也解压到这个目录，运行“准备千灯纪离线包.cmd”，再导入包内Windows插件。原生运行清单和所有字节校验保持，缺少部分时拒绝准备。验证在独立LOCALAPPDATA中执行，不更换本机正在使用的运行环境指针。
+
+高级区仍提供原四份不可变下载；原NEKO完整包已经包含两份公共资源，不必再下。原直接`.neko-plugin`是Linux x64/CPython3.11构建，Windows必须使用基础包/原完整包内部的Windows插件，避免把不同平台当作通用包。
+
+### 构建与回退
+
+`scripts/build-client-bundles.py`只接受固定摘要的公开原始发行物，在新目录装配并记录npm integrity、版本和原始来源；核心必须确实含viewer。NEKO按文件无损分组，公共音频补充仅来自Mojang内容寻址地址并校验SHA1、SHA256和大小。源码不包含大文件；制品经凭据检查后进入既有专用OSS。`scripts/test-client-bundles.py`覆盖路径、固定来源、拆分完整性与公共资源复用。
+
+下载清单新增固定ID与SHA；原链接和对象保持。关闭新增下载ID即可撤下新整合包。网站代码回退仍保留最新SQLite、账号与内容；不回退玩家物品。此次不需要重启Paper、登录代理、FOM或正在运行的Agent，官网容器更新继续等服主当次确认。

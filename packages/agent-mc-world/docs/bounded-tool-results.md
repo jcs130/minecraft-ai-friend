@@ -1,4 +1,4 @@
-# Bounded observations and trustworthy receipts (rc.76)
+# Bounded observations and trustworthy receipts (rc.77)
 
 This is a **Mineflayer client / SDK / MCP execution change**. It does not install a
 server mod, change permissions, remove collisions, restart a game, or start a model.
@@ -10,7 +10,7 @@ or the Java-client provider has gained an unimplemented observation API.
 
 | Call | Previous behavior | Current behavior |
 | --- | --- | --- |
-| `mc_scout` observe voxels, `[-10,-2,-10,10,2,10]` (2205 cells) | Reject the whole batch, give an example, read nothing | Admit normally; one bounded, real observation in the existing task result |
+| `mc_scout` observe voxels, `[-10,0,-10,10,4,10]` (2205 cells) | Reject the whole batch, give an example, read nothing | Admit normally; one bounded, real observation in the existing task result |
 | `mc_observe` with those bounds | Unavailable | Immediate read: normal `data.status=partial`, at most 512 cells; no queue mutation |
 | Damaged/missing/conflicting parameters | Often a string plus help | `invalid_arguments`, field path, expected contract, actual problem, minimal legal example; no dispatch |
 | Known crop/container/path/protection outcome | Primarily prose | Preserve original task verdict/effects; add a structured step decision and safe read/continue condition |
@@ -19,7 +19,7 @@ or the Java-client provider has gained an unimplemented observation API.
 Immediate call (MCP arguments; SDK uses `client.call('mc_observe', arguments)`):
 
 ```json
-{"mode":"voxels","bounds":[-10,-2,-10,10,2,10]}
+{"mode":"voxels","bounds":[-10,0,-10,10,4,10]}
 ```
 
 `mode` is required. Initial voxel bounds are six integer **block offsets**, inclusive,
@@ -30,55 +30,78 @@ are in the same `SPATIAL_QUERY_SCHEMA` used for tool discovery and skill fields.
 `mc_tool_help` exposes the complete effective schema. `mc_help skill:observe`
 includes the same voxel budget, algorithm and return contract.
 
-The live isolated 1.21.1 test read at anchor `[0,-60,0]` returned this envelope
+The live isolated 1.21.1 test merged rc.77 read at anchor `[0,-60,0]` returned this envelope
 (large `palette` and `cells` arrays omitted **only from this document**):
 
 ```json
 {
-  "status":"partial",
-  "requested_bounds":[-10,-62,-10,10,-58,10],
-  "requested_count":2205,
-  "returned_regions":[[-10,-62,-10,-5,-58,0]],
-  "returned_count":330,
-  "observed_count":264,
-  "unknownCells":66,
-  "remaining_count":1875,
-  "remaining_after_page":1875,
-  "complete":false,
-  "partial_reason":"cell_budget+unknown_cells",
-  "coordinate_system":"absolute_block",
-  "units":"blocks",
-  "query_anchor":[0,-60,0],
-  "observed_at":"2026-10-23T11:27:22.642Z",
-  "retryable":false,
-  "retry_after":null
+  "status": "partial",
+  "requested_bounds": [
+    -10,
+    -60,
+    -10,
+    10,
+    -56,
+    10
+  ],
+  "requested_count": 2205,
+  "returned_regions": [
+    [
+      -10,
+      -60,
+      -10,
+      10,
+      -60,
+      10
+    ]
+  ],
+  "returned_count": 441,
+  "observed_count": 438,
+  "unknownCells": 3,
+  "remaining_count": 1764,
+  "remaining_after_page": 1764,
+  "complete": false,
+  "partial_reason": "cell_budget+unknown_cells",
+  "coordinate_system": "absolute_block",
+  "units": "blocks",
+  "query_anchor": [
+    0,
+    -60,
+    0
+  ],
+  "observed_at": "2026-10-23T12:08:35.914Z",
+  "retryable": false,
+  "retry_after": null
 }
 ```
 
 ## Coverage and continuation
 
-- Selection is deterministic: recursively bisect the longest axis, ties x/y/z,
-  lower half of length `ceil(length/2)` first, until one continuous cuboid fits.
-  Do not reshape a region just to fill 512 cells. Traversal is depth first.
+- Dense selection follows the upstream contiguous rectangular prefix in y,z,x
+  order, x fastest. Do not reshape a region just to fill 512 cells. `mc_observe`
+  defaults to dense; queued observe follows upstream's visible-surface default.
+  Visible mode checks at most 2048 anchor-near cells and reports at most 512
+  non-air surfaces, retaining invisible/unloaded/air counts. Explicitly request
+  `format:dense` when existing code needs `cells` and a contiguous grid.
 - The returned `bounds` and each `returned_regions` entry use **absolute** integer
   cells, inclusive. `cells` is y,z,x order, x fastest; its length equals
   `returned_count` and the cuboid volume. Unknown cells are included in that count.
 - `remaining_count` means outside **this page**, including earlier pages if any.
   `remaining_after_page` is the disjoint volume left in `next_cursor`.
   `observed_count` excludes unknowns; `unobserved_count` includes both omitted and
-  unknown cells. The last page does not assert that the whole original query is
-  currently known. `complete` is true only if this response covers and observes all
-  originally requested cells.
-- `next_cursor` contains version, original anchor, dimension, original absolute
-  requested bounds and disjoint pending regions. Send it unchanged with
+  unknown cells. `complete_scope` explicitly retains the upstream meaning: scan exhausted and
+  this page readable; earlier pages are not refreshed. Step decision counters use
+  this response's actual observations, and do not infer host goal completion.
+- `next_cursor` is the upstream opaque signed string, binding the original
+  anchor, dimension, connection and respawn scope, format and scan offset. Send it unchanged with
   `{"mode":"voxels","cursor":...}`, or use the returned `next_safe_read` arguments.
   Do not send bounds together with a cursor. Only the Agent decides whether to
   continue; nothing automatically drains the rest.
 - Movement cannot move a cursor's coordinates. Each page rechecks **current**
   visibility/loading and has its own `observed_at`; pages are not a snapshot.
-  Dimension changes block the read rather than applying coordinates in a new world.
+  Dimension, respawn or connection changes block the read rather than reanchoring it.
 - A response is bounded to 24000 UTF-16 characters. Unusually verbose mod geometry
-  further bisects the page; a material too large even for one cell stays unknown.
+  further reduces the page; a material too large even for one cell stays unknown.
   Reads already performed are cached within this call; the fallback never reads
   outside its original at-most-512-cell candidate. No partial JSON is emitted.
 
@@ -168,15 +191,17 @@ Do not issue a new request ID to replay an uncertain side effect.
 
 `bounded-observation*.test.ts` uses the real native block registry/physics and actual
 MCP transport: overbudget data, counters, exact disjoint coverage, fixed cursor
-after movement, timestamps, malformed/conflicting input, visibility/unknowns,
+after movement, signed cursor scope/tampering, timestamps, malformed/conflicting input, visibility/unknowns,
 glass vs collision, response-budget fallback, legacy task evidence, queue retention,
 API vs business results and request deduplication. The inventory test independently
 checks source/destination/cursor changes against the claimed partial amount.
 Existing permissions, write caps, cancel, timeout, turn, IPC and queue suites run too.
 
-Live isolated NeoForge 1.21.1 + native Mineflayer gateway: 2205 requested → 330
-returned, 264 observed + 66 unknown; all 264 names/state IDs independently matched
+Live isolated NeoForge 1.21.1 + native Mineflayer gateway: 2205 requested → 441
+returned, 438 observed + 3 unknown; all 438 names/state IDs independently matched
 the connected world's cell reads. A second explicit page retained absolute bounds
-and anchor, with timestamp `2026-10-23T11:27:23.821Z`. Two reads total; zero model
+and anchor, with timestamp `2026-10-23T12:08:37.065Z`. Two reads total; zero model
 calls, no construction/digging/inventory mutations. Test services shut down normally
 with exit code 0. Private raw receipts/logs remain outside the repository.
+
+Compatibility: the upstream visible-surface API and signed cursors are retained. Dense-grid consumers must select `format:"dense"` on queued observe; immediate `mc_observe` does this by default. The added root envelope aliases coexist with upstream `coverage` and `next`.

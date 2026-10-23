@@ -4,63 +4,30 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { AIR_NAMES, LIQUIDS } from './cell-facts.ts';
 import { SkillBlocked } from './skill-context.ts';
-import { DEFAULT_VOXEL_BOUNDS, VOXEL_BOUNDS_SCHEMA, VOXEL_CURSOR_SCHEMA, VOXEL_QUERY_DOC, VOXEL_BUDGET, VOXEL_OFFSET, VOXEL_RESPONSE_TEXT_CAP, takeVoxelRegion, voxelVolume, voxelCursorError, type VoxelCursor } from './voxel-query-contract.ts';
-export { DEFAULT_VOXEL_BOUNDS } from './voxel-query-contract.ts';
 import { spatialSites } from './spatial-site.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
+import {SPATIAL_QUERY_LIMITS,DEFAULT_VOXEL_BOUNDS,VOXEL_CURSOR_MAX_LENGTH,VOXEL_CURSOR_PATTERN} from './voxel-query-contract.ts';
+export {DEFAULT_VOXEL_BOUNDS} from './voxel-query-contract.ts';
+export {SPATIAL_QUERY_SCHEMA,SPATIAL_QUERY_EXAMPLE,spatialArgumentDiagnostic} from './spatial-query-schema.ts';
+import { openVoxelQuery, voxelPage, visibleVoxelCells, voxelContinuation, type VoxelInput, type VoxelQuery } from './voxel-paging.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
 export type SpatialRay = [pitchDeg: number, yawDeg: number, range: number];
 export type SpatialObserveInput =
-  | { mode: 'voxels'; bounds: Box }
-  | { mode: 'voxels'; cursor: VoxelCursor }
+  | VoxelInput
   | { mode: 'rays'; rays: SpatialRay[] }
   | { mode: 'sites'; sites: Point[] };
 
-export const SPATIAL_OBSERVATION_LIMITS = {
-  cells: VOXEL_BUDGET, offset: VOXEL_OFFSET, rays: 64, range: 64, reads: 16_384, entities: 512, text: VOXEL_RESPONSE_TEXT_CAP, sites: 4,
-} as const;
+export const SPATIAL_OBSERVATION_LIMITS = SPATIAL_QUERY_LIMITS;
 export const DEFAULT_SPATIAL_RAYS: SpatialRay[] = [-15, 0, 15].flatMap(pitch =>
   [-30, -15, 0, 15, 30].map(yaw => [pitch, yaw, 24] as SpatialRay));
-export const SPATIAL_QUERY_EXAMPLE = { mode: 'voxels', bounds: [0,0,0,0,0,0] };
-export const SPATIAL_QUERY_SCHEMA = { type: 'object', required: ['mode'], additionalProperties: false,
-  examples: [SPATIAL_QUERY_EXAMPLE],
-  allOf: [
-    { if: { required:['mode'], properties: {mode:{const:'sites'}} }, then: { required:['sites'], properties:{bounds:false,rays:false,cursor:false} } },
-    { if: { required:['mode'], properties: {mode:{const:'rays'}} }, then: { properties:{bounds:false,sites:false,cursor:false} } },
-    { if: { required:['mode'], properties: {mode:{const:'voxels'}} }, then: { properties:{rays:false,sites:false} } },
-    { if: { required:['cursor'] }, then: { properties:{bounds:false} } },
-  ], properties: {
-  mode: { type: 'string', enum: ['voxels','sites','rays'] },
-  bounds: { ...VOXEL_BOUNDS_SCHEMA, description: VOXEL_QUERY_DOC },
-  cursor: { ...VOXEL_CURSOR_SCHEMA, description: 'Exact next_cursor from the prior page; mutually exclusive with bounds; absolute, dimension pinned. No automatic continuation.' },
-  sites: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.sites, uniqueItems: true,
-    items: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'integer', minimum: -30_000_000, maximum: 30_000_000 } },
-    description: 'sites only: 1..4 absolute integer block cells [x,y,z], no default. body.clear tests 0.6×1.8 clearance, not permission or reachability.' },
-  rays: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.rays,
-    items: { $schema: 'http://json-schema.org/draft-07/schema#', type: 'array', minItems: 3, maxItems: 3,
-      items: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'number', minimum: -180, maximum: 180 },
-        { type: 'number', exclusiveMinimum: 0, maximum: SPATIAL_OBSERVATION_LIMITS.range }] },
-    description: 'rays only: [relative pitch degrees,relative yaw degrees,range blocks]; default 3×5 fan at 24 blocks. Collision rays stop at glass even though vision can pass through it.' },
-} };
-
-export function spatialArgumentDiagnostic(args: Record<string,unknown>, problem: string) {
-  const fields = ['cursor','bounds','rays','sites','mode'];
-  const field = Object.keys(args).find(k => !(k in SPATIAL_QUERY_SCHEMA.properties))
-    ?? fields.find(f => problem.includes(f)) ?? 'mode';
-  return { status: 'invalid_arguments', reason: 'invalid_spatial_query', completed: 0, remaining: null,
-    retryable: false, retry_after: null, next_safe_read: null,
-    errors: [{ path: `/${field}`, expected: SPATIAL_QUERY_SCHEMA.properties[field as keyof typeof SPATIAL_QUERY_SCHEMA.properties]
-      ?? { allowed_fields: Object.keys(SPATIAL_QUERY_SCHEMA.properties), additionalProperties: false },
-      problem, actual: args[field] ?? null }],
-    minimal_legal_example: SPATIAL_QUERY_EXAMPLE, executed: false };
-}
 
 export function parseSpatialObservation(c: Record<string, unknown>): SpatialObserveInput | { error: string } {
-  const unexpected = Object.keys(c).find(k => !['mode','bounds','cursor','sites','rays','skill','needs','expect'].includes(k));
-  if (unexpected) return { error: `observe 不收 ${unexpected}；没有改读为其他参数或选择目标` };
-  if (c.cursor !== undefined && c.mode !== 'voxels') return { error: 'cursor 只用于 mode:voxels' };
+  const unexpected=Object.keys(c).find(k=>!['mode','bounds','cursor','format','sites','rays','skill','needs','expect'].includes(k));
+  if(unexpected)return {error:`observe 不收 ${unexpected}；没有改读为其他参数或选择目标`};
+  if (c.format !== undefined && c.mode !== 'voxels') return { error: 'observe.format 只用于 mode:voxels' };
+  if (c.cursor !== undefined && c.mode !== 'voxels') return { error: 'observe.cursor 只用于 mode:voxels；原样使用返回的 next.arguments，不与 sites/rays 混用' };
   if (c.mode === 'sites') {
     if (c.bounds != null || c.rays != null) return { error: 'sites 不收 bounds/rays；sites 是绝对方块坐标' };
     if (!Array.isArray(c.sites) || !c.sites.length || c.sites.length > SPATIAL_OBSERVATION_LIMITS.sites
@@ -73,10 +40,13 @@ export function parseSpatialObservation(c: Record<string, unknown>): SpatialObse
   if (c.sites != null) return { error: 'sites 只用于 mode:sites' };
   if (c.mode === 'voxels') {
     if (c.rays !== undefined) return { error: 'voxels 不收 rays' };
+    if (c.format !== undefined && c.format !== 'visible' && c.format !== 'dense') return { error: 'observe.format 只认 visible（默认可见表面）或 dense（显式逐格碰撞读数）' };
+    const format = c.format === undefined ? {} : { format: c.format as 'visible' | 'dense' };
     if (c.cursor !== undefined) {
-      if (c.bounds !== undefined) return { error: 'cursor 与 bounds 互斥；续读只发送原样 cursor' };
-      const error = voxelCursorError(c.cursor);
-      return error ? { error } : { mode: 'voxels', cursor: structuredClone(c.cursor) as VoxelCursor };
+      if (c.bounds !== undefined || typeof c.cursor !== 'string' || c.cursor.length > VOXEL_CURSOR_MAX_LENGTH || !VOXEL_CURSOR_PATTERN.test(c.cursor)) {
+        return { error: 'observe.cursor 要返回的完整续读字符串（≤1024字符），与 bounds 互斥；例：原样提交 next.arguments' };
+      }
+      return { mode: 'voxels', cursor: c.cursor, ...format };
     }
     const b = c.bounds ?? DEFAULT_VOXEL_BOUNDS;
     if (!Array.isArray(b) || b.length !== 6 || b.some(n => !Number.isInteger(n) || Math.abs(n) > SPATIAL_OBSERVATION_LIMITS.offset)) {
@@ -87,7 +57,7 @@ export function parseSpatialObservation(c: Record<string, unknown>): SpatialObse
         .concat([0, 1, 2].map(i => Math.max(b[i], b[i + 3])));
       return { error: `bounds 的最小值不能大于最大值；同一区域的升序边界为 ${JSON.stringify(ordered)}，请核对相对坐标后重新提交；尚未读取` };
     }
-    return { mode: 'voxels', bounds: [...b] as Box };
+    return { mode: 'voxels', bounds: [...b] as Box, ...format };
   }
   if (c.mode === 'rays') {
     if (c.bounds !== undefined) return { error: 'rays 不收 bounds' };
@@ -110,8 +80,7 @@ interface Material {
   liquid: boolean;
   /** Local boxes; null means the collision geometry was not supplied. */
   collision: Box[] | null;
-  /** Vision is independent of body collision and never establishes safe passage. */
-  vision: 'transparent' | 'shape-dependent' | 'unknown';
+  vision: 'transparent'|'shape-dependent'|'unknown';
   sign?: SignTextSnapshot;
 }
 type Sample = { material: Material } | { unknown: 'unloaded' | 'read-budget' | 'occluded' };
@@ -190,11 +159,89 @@ function collisionRay(origin: Point, direction: Point, range: number, read: (cel
   return { kind: 'clear', distance: range };
 }
 
+interface VoxelCoverage {
+  requestedBounds:number[]; requestedCount:number; origin:number[]; returnedCount:number; remainingCount:number;
+  observedCount?:number; unknownCount?:number; invisibleCount?:number; unloadedCount?:number;
+  omittedDetailCount?:number; airCount?:number; partialReasons:string[];
+}
+function surfaceRegions(blocks:number[][]):number[][] {
+  const rows=new Map<string,{y:number;z:number;xs:number[]}>();
+  for(const [x,y,z] of blocks){const key=`${y},${z}`;if(!rows.has(key))rows.set(key,{y,z,xs:[]});rows.get(key)!.xs.push(x);}
+  const regions:number[][]=[];
+  for(const {y,z,xs} of rows.values()){
+    xs.sort((a,b)=>a-b);let lo=xs[0],hi=lo;
+    for(const x of xs.slice(1)){if(x===hi+1)hi=x;else{regions.push([lo,y,z,hi,y,z]);lo=hi=x;}}
+    regions.push([lo,y,z,hi,y,z]);
+  }
+  return regions;
+}
+/** Add one machine envelope to both upstream formats before their response-size check. */
+function voxelReceipt<T extends {coverage:VoxelCoverage;observedAt:string;next:ReturnType<typeof voxelContinuation>;
+  complete:boolean;bounds?:number[];blocks?:number[][]}>(result:T) {
+  const c=result.coverage, observed=c.observedCount ?? c.returnedCount+(c.airCount??0);
+  const unknown=c.unknownCount ?? (c.invisibleCount??0)+(c.unloadedCount??0)+(c.omittedDetailCount??0);
+  const step=result.next?.arguments.steps[0];
+  const next_safe_read=step ? {mode:step.mode,format:step.format,cursor:step.cursor} : null;
+  return {...result, requested_bounds:c.requestedBounds,requested_count:c.requestedCount,
+    returned_regions:result.bounds?[result.bounds]:surfaceRegions(result.blocks??[]),
+    returned_count:c.returnedCount,observed_count:observed,partial_reason:c.partialReasons.join('+')||null,
+    reason:c.partialReasons.join('+')||null,remaining_count:c.requestedCount-c.returnedCount,
+    remaining_after_page:c.remainingCount,unobserved_count:c.requestedCount-observed,
+    coordinate_system:'absolute_block',units:'blocks',query_anchor:c.origin,observed_at:result.observedAt,
+    complete_scope:'scan_exhausted_and_current_page_readable',
+    requested_offsets:c.requestedBounds.map((n,i)=>n-c.origin[i%3]),
+    completed:{returned_count:c.returnedCount,observed_count:observed},
+    remaining:{outside_page:c.requestedCount-c.returnedCount,unknown_in_page:unknown},
+    retryable:false,retry_after:null,next_cursor:step?.cursor??null,next_safe_read};
+}
+
+/** Default Agent view: sparse visible non-air surfaces, no hidden/interior grid. */
+function visibleVoxelObservation(q: VoxelQuery, common: { source: string; observedAt: string; dimension: string | null; frame: unknown }, read: (p: Point)=>Sample) {
+  const all=visibleVoxelCells(q), samples: Array<{at:Point;sample:Sample}>=[];
+  let visible=0;
+  // Bounded local visibility checks; no chunk requests or automatic next call.
+  const scanCap=SPATIAL_OBSERVATION_LIMITS.visibleScans;
+  for(let i=q.offset;i<all.length && samples.length<scanCap && visible<SPATIAL_OBSERVATION_LIMITS.cells;i++) {
+    const sample=read(all[i]);samples.push({at:all[i],sample});
+    if('material' in sample && !sample.material.air)visible++;
+  }
+  let take=samples.length, textLimited=false, omitDetail=false;
+  for(;;) {
+    const palette:Material[]=[], ids=new Map<string,number>(), blocks:Array<[number,number,number,number]>=[];
+    let invisibleCount=0,unloadedCount=0,airCount=0,omittedDetailCount=0;
+    for(const {at,sample} of samples.slice(0,take)) {
+      if('unknown' in sample){if(sample.unknown==='unloaded')unloadedCount++;else invisibleCount++;continue;}
+      if(sample.material.air){airCount++;continue;}
+      if(omitDetail){omittedDetailCount++;continue;}
+      const key=JSON.stringify(sample.material);let id=ids.get(key);
+      if(id===undefined){id=palette.length;ids.set(key,id);palette.push(sample.material);}
+      blocks.push([...at,id]);
+    }
+    const end=q.offset+take,remaining=all.length-end;
+    const partialReasons=[...(remaining?[textLimited?'text_budget':'scan_or_surface_budget']:[]),
+      ...(invisibleCount?['不可见']:[]),...(unloadedCount?['未加载']:[]),...(omittedDetailCount?['细节未返回']:[])];
+    const result=voxelReceipt({...common,kind:'voxels' as const,format:'visible' as const,
+      status:partialReasons.length?'partial' as const:'complete' as const,complete:partialReasons.length===0,
+      coverage:{coordinateFrame:'absolute block coordinates; inclusive bounds',origin:q.origin,
+        requestedBounds:q.bounds.map((n,i)=>n+q.origin[i%3]),requestedCount:all.length,
+        previouslyScannedCount:q.offset,scannedCount:take,remainingCount:remaining,
+        returnedCount:blocks.length,invisibleCount,unloadedCount,airCount,omittedDetailCount,
+        readAttemptedCount:samples.length,unreturnedAttemptedCount:samples.length-take,partialReasons},
+      palette,order:'blocks:[absolute x,y,z,palette index]',blocks,next:voxelContinuation(q,end),
+      note:'仅返回当前视线可见的非空气表面方块；遮挡/超距部分为不可见，不展开格子，不能据此断言不存在。未加载、细节未返回分别计数。空气数量不证明净空或安全通行。按原点由近到远检查，预算内最多512个表面；按需续读，每页新现场，非同刻快照。'});
+    if(JSON.stringify(result).length<=SPATIAL_OBSERVATION_LIMITS.text)return result;
+    textLimited=true;
+    if(take>1){take=Math.max(1,Math.floor(take/2));continue;}
+    omitDetail=true;
+  }
+}
+
 export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
-  // Also guard SDK/direct callers: limits do not depend on the MCP transport.
-  const checked = parseSpatialObservation(input as unknown as Record<string, unknown>);
-  if ('error' in checked) throw new SkillBlocked(checked.error);
-  input = checked;
+  const parsed=parseSpatialObservation(input as unknown as Record<string,unknown>);
+  if('error' in parsed)throw new SkillBlocked(parsed.error);
+  input=parsed;
+  // Validate cursor scope before any block/entity read. No reanchoring on failure.
+  const query = input.mode === 'voxels' ? openVoxelQuery(bot, input) : null;
   const position = pointOf(bot.entity.position), feet = position.map(Math.floor) as Point;
   // Mineflayer supplies eyeHeight at runtime; prismarine-entity's declarations omit it.
   const { eyeHeight } = bot.entity as Bot['entity'] & { eyeHeight?: number };
@@ -203,12 +250,14 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     yawDeg: round(bot.entity.yaw * 180 / Math.PI), pitchDeg: round(bot.entity.pitch * 180 / Math.PI) };
   const common = { source: 'client-visible-world' as const, observedAt: new Date().toISOString(), dimension: bot.game?.dimension ?? null, frame };
   const cache = new Map<string, Sample>();
+  const attemptedCells = new Set<string>();
   const read = (cell: Point): Sample => {
     const key = cell.join(','), prior = cache.get(key);
+    attemptedCells.add(key);
     if (prior) return prior;
     if (cache.size >= SPATIAL_OBSERVATION_LIMITS.reads) return { unknown: 'read-budget' };
-    if (input.mode !== 'rays' && !observedBlock(bot,{x:cell[0],y:cell[1],z:cell[2]})) return {unknown:'occluded'};
     const block = bot.blockAt(new Vec3(...cell));
+    if (block && input.mode !== 'rays' && !observedBlock(bot,{x:cell[0],y:cell[1],z:cell[2]})) return {unknown:'occluded'};
     const sign = input.mode === 'sites' ? signTextSnapshot(block) : null;
     const sample: Sample = block ? { material: {
       name: block.name, stateId: block.stateId,
@@ -229,6 +278,7 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     }), blockReads: cache.size,
     geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
   };
+  if (query?.format === 'visible') return visibleVoxelObservation(query,common,read);
   const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id && observedEntity(bot,e)).map(e => {
     const p = pointOf(e.position);
     const bounds: Box | null = Number.isFinite(e.width) && e.width > 0 && Number.isFinite(e.height) && e.height > 0
@@ -237,86 +287,65 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
   }).sort((a, b) => a.id - b.id);
   if (input.mode === 'rays' && entities.length > SPATIAL_OBSERVATION_LIMITS.entities) throw new SkillBlocked(`当前实体超过 ${SPATIAL_OBSERVATION_LIMITS.entities} 个，未返回不完整射线观测`);
   if (input.mode === 'voxels') {
-    const query: VoxelCursor = 'cursor' in input ? input.cursor : { version: 1, anchor: feet,
-      requested_bounds: input.bounds.map((n, i) => n + feet[i % 3]) as Box,
-      dimension: common.dimension, pending_regions: [input.bounds.map((n, i) => n + feet[i % 3]) as Box] };
-    if (query.dimension !== common.dimension) throw new SkillBlocked('cursor 维度已改变；未读取，不能把原坐标当成新维度的区域');
-    const page = takeVoxelRegion(query.pending_regions);
-    const makePage = (bounds: Box, rest: Box[]) => {
-    const palette: Material[] = [], paletteIds = new Map<string, number>(), cells: number[] = [];
-    const counts: number[] = [], landmarks: Array<{ at: Point; palette: number; distance: number }> = [];
-    let unknownCells = 0;
-    for (let y = bounds[1]; y <= bounds[4]; y++) for (let z = bounds[2]; z <= bounds[5]; z++) for (let x = bounds[0]; x <= bounds[3]; x++) {
-      const sample = read([x, y, z]);
-      if ('unknown' in sample) { cells.push(-1); unknownCells++; continue; }
-      const key = JSON.stringify(sample.material);
-      let id = paletteIds.get(key);
-      if (id === undefined) { id = palette.length; paletteIds.set(key, id); palette.push(sample.material); }
-      cells.push(id);
-      counts[id] = (counts[id] ?? 0) + 1;
-      if (/(?:^|_)(?:stairs|slab|ladder|door|trapdoor|fence_gate|sign)$/.test(sample.material.name)) {
-        landmarks.push({ at: [x,y,z], palette: id, distance: round(Math.hypot(x-feet[0],y-feet[1],z-feet[2])) });
+    let cap: number = SPATIAL_OBSERVATION_LIMITS.cells, entityCap: number = SPATIAL_OBSERVATION_LIMITS.entities;
+    let textLimited = false, omitDetail = false;
+    for (;;) {
+      const page = voxelPage(query!, cap), { bounds } = page;
+      const palette: Material[] = [], paletteIds = new Map<string, number>(), cells: number[] = [];
+      const counts: number[] = [], landmarks: Array<{ at: Point; palette: number; distance: number }> = [];
+      let unknownCells = 0;
+      for (let y = bounds[1]; y <= bounds[4]; y++) for (let z = bounds[2]; z <= bounds[5]; z++) for (let x = bounds[0]; x <= bounds[3]; x++) {
+        const sample: Sample = omitDetail ? { unknown: 'read-budget' } : read([x, y, z]);
+        if ('unknown' in sample) { cells.push(-1); unknownCells++; continue; }
+        const key = JSON.stringify(sample.material);
+        let id = paletteIds.get(key);
+        if (id === undefined) { id = palette.length; paletteIds.set(key, id); palette.push(sample.material); }
+        cells.push(id);
+        counts[id] = (counts[id] ?? 0) + 1;
+        if (/(?:^|_)(?:stairs|slab|ladder|door|trapdoor|fence_gate|sign)$/.test(sample.material.name)) {
+          landmarks.push({ at: [x,y,z], palette: id, distance: round(Math.hypot(x-feet[0],y-feet[1],z-feet[2])) });
+        }
       }
+      const region = [...bounds] as Box;
+      for (let i = 3; i < 6; i++) region[i]++;
+      const nearby = entities.filter(e => e.bounds
+        ? [0, 1, 2].every(i => e.bounds![i] < region[i + 3] && e.bounds![i + 3] > region[i])
+        : [0, 1, 2].every(i => e.position[i] >= region[i] && e.position[i] < region[i + 3]));
+      landmarks.sort((a,b) => a.distance-b.distance || a.at[1]-b.at[1] || a.at[2]-b.at[2] || a.at[0]-b.at[0]);
+      const materialCounts = palette.map((p,id) => ({ palette:id, name:p.name, cells:counts[id] })).sort((a,b) => b.cells-a.cells);
+      let signPreviews = 0;
+      const summary = { observedCells: cells.length-unknownCells, totalCells: cells.length, unknownCells,
+        unknownMeaning: '-1=不可见、未加载或细节未返回，不是空气或实心，也不能排除目标或通道；未返回区域不作地形判断',
+        headLayerIncluded: bounds[1] <= feet[1]+1 && bounds[4] >= feet[1]+1,
+        materials: materialCounts.slice(0,16), omittedMaterials: Math.max(0,materialCounts.length-16),
+        landmarks: landmarks.slice(0,12).map(({ at,palette:id }) => {
+          const sign = /(?:^|_)sign$/.test(palette[id].name) && signPreviews++ < 3
+            ? signTextSnapshot(bot.blockAt(new Vec3(...at))) : null;
+          return { at, name:palette[id].name, properties:palette[id].properties,
+            ...(sign ? { sign:{...sign,front:sign.front?.slice(0,160)??null,back:sign.back?.slice(0,160)??null,
+              truncated:sign.truncated||(sign.front?.length??0)>160||(sign.back?.length??0)>160} } : {}) };
+        }),
+        omittedLandmarks: Math.max(0,landmarks.length-12),
+        note: '仅列实际观察到的地标；门、楼梯、牌子是核验线索，不证明入口、整条路线可达或施工权限。' };
+      const partialReasons = [
+        ...(page.coverage.remainingCount && !textLimited ? ['cell_budget'] : []),
+        ...(textLimited ? ['text_budget'] : []), ...(unknownCells ? ['unknown_cells'] : []),
+        ...(nearby.length > entityCap ? ['entity_budget'] : []),
+      ];
+      const result = voxelReceipt({ ...common, format:'dense' as const, kind: 'voxels' as const, status: partialReasons.length ? 'partial' as const : 'complete' as const,
+        complete: partialReasons.length === 0, coverage: { ...page.coverage, observedCount: cells.length-unknownCells,
+          unknownCount: unknownCells, readAttemptedCount: attemptedCells.size,
+          unreturnedAttemptedCount: Math.max(0,attemptedCells.size-cells.length),
+          partialReasons, omittedEntityCount: Math.max(0,nearby.length-entityCap) }, next: page.next,
+        bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells, entities: nearby.slice(0,entityCap),
+        geometry: 'collision boxes in local block coordinates; null=unread, []=no collision; liquids remain materials; no support/passability judgement' });
+      if (JSON.stringify(result).length <= SPATIAL_OBSERVATION_LIMITS.text) return result;
+      textLimited = true;
+      if (entityCap && nearby.length) { entityCap = Math.floor(Math.min(entityCap,nearby.length)/2); continue; }
+      if (cap > 1) { cap = Math.max(1,Math.floor(cap/2)); continue; }
+      // A pathological single material cannot fit: retain its coordinate as unknown.
+      omitDetail = true;
     }
-    const region = [...bounds] as Box;
-    for (let i = 3; i < 6; i++) region[i]++;
-    const nearby = entities.filter(e => e.bounds
-      ? [0, 1, 2].every(i => e.bounds![i] < region[i + 3] && e.bounds![i + 3] > region[i])
-      : [0, 1, 2].every(i => e.position[i] >= region[i] && e.position[i] < region[i + 3]));
-    landmarks.sort((a,b) => a.distance-b.distance || a.at[1]-b.at[1] || a.at[2]-b.at[2] || a.at[0]-b.at[0]);
-    const materialCounts = palette.map((p,id) => ({ palette:id, name:p.name, cells:counts[id] })).sort((a,b) => b.cells-a.cells);
-    let signPreviews = 0;
-    const summary = { observedCells: cells.length-unknownCells, totalCells: cells.length, unknownCells,
-      unknownMeaning: '-1=未观察（遮挡或未加载），不是空气或实心，也不能排除目标或通道',
-      headLayerIncluded: bounds[1] <= feet[1]+1 && bounds[4] >= feet[1]+1,
-      materials: materialCounts.slice(0,16), omittedMaterials: Math.max(0,materialCounts.length-16),
-      landmarks: landmarks.slice(0,12).map(({ at,palette:id }) => {
-        const sign = /(?:^|_)sign$/.test(palette[id].name) && signPreviews++ < 3
-          ? signTextSnapshot(bot.blockAt(new Vec3(...at))) : null;
-        return { at, name:palette[id].name, properties:palette[id].properties,
-          ...(sign ? { sign:{...sign,front:sign.front?.slice(0,160)??null,back:sign.back?.slice(0,160)??null,
-            truncated:sign.truncated||(sign.front?.length??0)>160||(sign.back?.length??0)>160} } : {}) };
-      }),
-      omittedLandmarks: Math.max(0,landmarks.length-12),
-      note: '仅列实际观察到的地标；门、楼梯、牌子是核验线索，不证明入口、整条路线可达或施工权限。' };
-    const requested_count = voxelVolume(query.requested_bounds), returned_count = cells.length;
-    const next_cursor = rest.length ? { ...query, pending_regions: rest } : null;
-    const complete = requested_count === returned_count && unknownCells === 0;
-    const reasons = [...(requested_count > SPATIAL_OBSERVATION_LIMITS.cells ? ['cell_budget']
-      : requested_count > returned_count ? ['paged_query'] : []), ...(unknownCells ? ['unknown_cells'] : [])];
-    return { ...common, kind: 'voxels' as const, bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells,
-      entities: nearby.slice(0, SPATIAL_OBSERVATION_LIMITS.entities), omitted_entities: Math.max(0,nearby.length-SPATIAL_OBSERVATION_LIMITS.entities),
-      status: complete ? 'complete' : 'partial', reason: reasons.join('+') || null,
-      requested_bounds: query.requested_bounds, requested_count, returned_regions: [bounds], returned_count,
-      complete, partial_reason: reasons.join('+') || null, remaining_count: requested_count-returned_count,
-      remaining_after_page: rest.reduce((n,b) => n+voxelVolume(b),0), observed_count: returned_count-unknownCells,
-      unobserved_count: requested_count-returned_count+unknownCells,
-      coordinate_system: 'absolute_block', units: 'blocks', query_anchor: query.anchor, observed_at: common.observedAt,
-      requested_offsets: query.requested_bounds.map((n,i)=>n-query.anchor[i%3]),
-      completed: { returned_count, observed_count: returned_count-unknownCells },
-      remaining: { outside_page: requested_count-returned_count, unknown_in_page: unknownCells },
-      retryable: false, retry_after: null, next_cursor,
-      next_safe_read: next_cursor ? { mode: 'voxels', cursor: next_cursor } : null,
-      geometry: 'vision=transparent is optical only; collision boxes in local block coordinates, null=unread, []=no collision; body clearance requires sites; no support/permission/safety judgement' };
-    };
-    // Keep a whole cuboid and a valid continuation even for unusually verbose mod geometry.
-    // Shrinking reuses this call's cache; it never reads outside the original <=512-cell page.
-    let selected = page, result = makePage(selected.bounds, selected.rest);
-    while (JSON.stringify(result).length > SPATIAL_OBSERVATION_LIMITS.text && voxelVolume(selected.bounds) > 1) {
-      selected = takeVoxelRegion([selected.bounds, ...selected.rest], Math.ceil(voxelVolume(selected.bounds)/2));
-      result = makePage(selected.bounds, selected.rest);
-      result.partial_reason = result.reason = [result.partial_reason, 'response_budget'].filter(Boolean).join('+');
-    }
-    // A single pathological material may exceed the text budget: preserve the cell as unknown.
-    if (JSON.stringify(result).length > SPATIAL_OBSERVATION_LIMITS.text) {
-      result.palette = []; result.cells = [-1]; result.unknownCells = 1; result.observed_count = 0;
-      result.summary = { ...result.summary, observedCells: 0, unknownCells: 1, materials: [], landmarks: [] };
-      result.completed.observed_count = 0; result.remaining.unknown_in_page = 1;
-      result.unobserved_count = result.requested_count; result.omitted_entities += result.entities.length;
-      result.entities = []; result.complete = false;
-      result.status = 'partial'; result.partial_reason = result.reason = 'response_budget+unknown_cells';
-    }
-    return result;
   }
   const unreadEntityIds = entities.filter(e => !e.bounds).map(e => e.id);
   const rays = input.rays.map(([pitchDeg, yawDeg, range]) => {
