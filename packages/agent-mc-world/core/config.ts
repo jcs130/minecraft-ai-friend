@@ -219,6 +219,8 @@ export interface MinecraftConfigSection {
   loginConfigFile: string;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
+  /** Requested server chunk radius, 2..32; omitted preserves Mineflayer's default. Not a visibility/security boundary. */
+  viewDistance?: number;
   /** Exact player-facing reply deduplication; 0 disables it, new inbound messages release it. */
   chatDuplicateWindowMs?: number;
   /** Connection-owned death display delay, 0..15000 milliseconds. */
@@ -412,6 +414,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.deathRespawnDelayMs': {
         type: 'integer', title: '死亡后重生等待', minimum: 0, maximum: 15000, 'x-suffix': 'ms', 'x-hot': false,
         description: '连接内实际重生前的等待时间；服务端主动重生优先。停止 World 或断开连接会取消尚未派发的重生；mc_stop 仅清理任务。',
+      },
+      'worlds.minecraft.viewDistance': {
+        type: 'integer', title: '请求区块视距', minimum: 2, maximum: 32, 'x-suffix': 'chunks', 'x-hot': false,
+        description: 'Mineflayer 请求服务端发送的区块半径；省略沿用上游默认。服务端可能限制或忽略；不代替视线过滤或防透视。',
       },
       'worlds.minecraft.world.moveThreshold': {
         type: 'integer', title: '位移播报阈值', minimum: 4, maximum: 200, 'x-suffix': '格', 'x-hot': true,

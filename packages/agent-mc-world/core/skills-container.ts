@@ -1102,7 +1102,9 @@ export async function takeFromChestAt(
   const inside = `箱里现在:${contentsText(snap.items)}`;
   if (took === 0) {
     if (noRoom) {
-      throw new SkillBlocked(`背包 ${INVENTORY_SLOTS} 格全满了,${where}的东西取不出来。${inside}`);
+      throw new SkillBlocked(`背包 ${INVENTORY_SLOTS} 格全满了,${where}的东西取不出来。${inside}`,
+        [], 'local', 'container-full', { completed: 0, remaining: Number.isFinite(want) ? want : null, unit: 'items',
+          next_safe_read: { tool: 'mc_bag', arguments: {} } });
     }
     throw new SkillBlocked(
       call.item
@@ -1122,8 +1124,11 @@ export async function takeFromChestAt(
     throw new SkillBlocked(`${head};但被服务端收回了,包里没多。${inside}`, [], 'server');
   }
   if (status === 'timeout') {
-    return `${head};关窗后包里的账还没跟着变(服务端没回灌确认),以包里为准。${inside}`;
+    throw new SkillBlocked(`${head};关窗后库存未确认；结果未知，不自动重放。${inside}`, [], 'server', 'inventory-click-sync',
+      { status: 'unknown', completed: null, remaining: null, unit: 'items', next_safe_read: { tool: 'mc_bag', arguments: {} } });
   }
+  ctx.progress?.(took, Number.isFinite(want) ? want : took);
+  if (Number.isFinite(want) && took < want) ctx.partial?.(`实际取出 ${took}/${want}；${noRoom ? '背包已满' : '来源不足'}，其余未取`);
   return `${head}。${inside}`;
 }
 

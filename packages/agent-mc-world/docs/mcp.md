@@ -64,6 +64,11 @@
 
 ## 三种帮助与状态
 
+Mineflayer 的即时地形读取使用 `mc_observe`：超限体素请求直接返回最多 512 格真实部分数据，
+`data.status=partial`，包含覆盖范围、未知计数、绝对坐标续读游标和观测时间。
+`mc_scout` 保留原队列语义，完整观察数据在任务步骤的 `observation` 字段。
+详见[有界查询、回执与调用前后对照](bounded-tool-results.md)。
+
 | 问题 | 入口 |
 | --- | --- |
 | 这个 MCP/SDK 身体连上了吗 | `mc_connection action:status`；SDK `status()` |

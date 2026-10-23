@@ -41,7 +41,8 @@ export async function transferInventoryStackConfirmed(bot: Bot, win: Window, fro
           into = i; capacity = limit - (target?.count ?? 0); break;
         }
       }
-      if (into < 0) throw new SkillBlocked(`目标范围没有兼容空位；已确认移入 ${moved}，剩余未移`);
+      if (into < 0) throw new SkillBlocked(`目标范围没有兼容空位；已确认移入 ${moved}，剩余未移`, [], 'local',
+        'container-full', { status: moved ? 'partial' : 'blocked', completed: moved, remaining: count-moved, unit: 'items' });
       const held = clone(cursor), old = win.slots[into], max = Math.min(capacity, cursor.count);
       const amount = max <= count - moved ? max : 1;
       const placed = { ...held, count: (old?.count ?? 0) + amount };

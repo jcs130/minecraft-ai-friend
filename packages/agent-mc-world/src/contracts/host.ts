@@ -46,6 +46,8 @@ export interface ToolCallContext {
 export interface ToolOutcome {
   text: string; blobs?: BlobInput[]; failed?: true; endsTurn?: boolean; retryAfterMs?: number; meta?: Record<string, unknown>;
   execution?: ExecutionReceipt; events?: EventEnvelope[]; control?: CallControl;
+  /** Structured query data or diagnostics; task lifecycle remains separate. */
+  data?: Record<string, unknown>;
 }
 export interface ToolDef extends ToolSchema {
   tags: readonly ToolTag[]; barrierAfter?: boolean; endsTurn?: boolean; interruptible?: boolean;

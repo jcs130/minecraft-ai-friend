@@ -1,10 +1,11 @@
-import { observedBlock, observedEntity } from './perception-sight.ts';
+import { observedBlock, observedEntity, observationTransparent } from './perception-sight.ts';
 /** Native, bounded voxel and collision-ray observations of the current connection. */
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { AIR_NAMES, LIQUIDS } from './cell-facts.ts';
 import { SkillBlocked } from './skill-context.ts';
-import { spatialBoxBudgetNote, partitionSpatialBox } from './spatial-slices.ts';
+import { DEFAULT_VOXEL_BOUNDS, VOXEL_BOUNDS_SCHEMA, VOXEL_CURSOR_SCHEMA, VOXEL_QUERY_DOC, VOXEL_BUDGET, VOXEL_OFFSET, VOXEL_RESPONSE_TEXT_CAP, takeVoxelRegion, voxelVolume, voxelCursorError, type VoxelCursor } from './voxel-query-contract.ts';
+export { DEFAULT_VOXEL_BOUNDS } from './voxel-query-contract.ts';
 import { spatialSites } from './spatial-site.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 
@@ -13,17 +14,53 @@ type Box = [number, number, number, number, number, number];
 export type SpatialRay = [pitchDeg: number, yawDeg: number, range: number];
 export type SpatialObserveInput =
   | { mode: 'voxels'; bounds: Box }
+  | { mode: 'voxels'; cursor: VoxelCursor }
   | { mode: 'rays'; rays: SpatialRay[] }
   | { mode: 'sites'; sites: Point[] };
 
 export const SPATIAL_OBSERVATION_LIMITS = {
-  cells: 512, offset: 16, rays: 64, range: 64, reads: 16_384, entities: 512, text: 24_000, sites: 4,
+  cells: VOXEL_BUDGET, offset: VOXEL_OFFSET, rays: 64, range: 64, reads: 16_384, entities: 512, text: VOXEL_RESPONSE_TEXT_CAP, sites: 4,
 } as const;
-export const DEFAULT_VOXEL_BOUNDS: Box = [-1, -1, -1, 1, 2, 1];
 export const DEFAULT_SPATIAL_RAYS: SpatialRay[] = [-15, 0, 15].flatMap(pitch =>
   [-30, -15, 0, 15, 30].map(yaw => [pitch, yaw, 24] as SpatialRay));
+export const SPATIAL_QUERY_EXAMPLE = { mode: 'voxels', bounds: [0,0,0,0,0,0] };
+export const SPATIAL_QUERY_SCHEMA = { type: 'object', required: ['mode'], additionalProperties: false,
+  examples: [SPATIAL_QUERY_EXAMPLE],
+  allOf: [
+    { if: { required:['mode'], properties: {mode:{const:'sites'}} }, then: { required:['sites'], properties:{bounds:false,rays:false,cursor:false} } },
+    { if: { required:['mode'], properties: {mode:{const:'rays'}} }, then: { properties:{bounds:false,sites:false,cursor:false} } },
+    { if: { required:['mode'], properties: {mode:{const:'voxels'}} }, then: { properties:{rays:false,sites:false} } },
+    { if: { required:['cursor'] }, then: { properties:{bounds:false} } },
+  ], properties: {
+  mode: { type: 'string', enum: ['voxels','sites','rays'] },
+  bounds: { ...VOXEL_BOUNDS_SCHEMA, description: VOXEL_QUERY_DOC },
+  cursor: { ...VOXEL_CURSOR_SCHEMA, description: 'Exact next_cursor from the prior page; mutually exclusive with bounds; absolute, dimension pinned. No automatic continuation.' },
+  sites: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.sites, uniqueItems: true,
+    items: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'integer', minimum: -30_000_000, maximum: 30_000_000 } },
+    description: 'sites only: 1..4 absolute integer block cells [x,y,z], no default. body.clear tests 0.6×1.8 clearance, not permission or reachability.' },
+  rays: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.rays,
+    items: { $schema: 'http://json-schema.org/draft-07/schema#', type: 'array', minItems: 3, maxItems: 3,
+      items: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'number', minimum: -180, maximum: 180 },
+        { type: 'number', exclusiveMinimum: 0, maximum: SPATIAL_OBSERVATION_LIMITS.range }] },
+    description: 'rays only: [relative pitch degrees,relative yaw degrees,range blocks]; default 3×5 fan at 24 blocks. Collision rays stop at glass even though vision can pass through it.' },
+} };
+
+export function spatialArgumentDiagnostic(args: Record<string,unknown>, problem: string) {
+  const fields = ['cursor','bounds','rays','sites','mode'];
+  const field = Object.keys(args).find(k => !(k in SPATIAL_QUERY_SCHEMA.properties))
+    ?? fields.find(f => problem.includes(f)) ?? 'mode';
+  return { status: 'invalid_arguments', reason: 'invalid_spatial_query', completed: 0, remaining: null,
+    retryable: false, retry_after: null, next_safe_read: null,
+    errors: [{ path: `/${field}`, expected: SPATIAL_QUERY_SCHEMA.properties[field as keyof typeof SPATIAL_QUERY_SCHEMA.properties]
+      ?? { allowed_fields: Object.keys(SPATIAL_QUERY_SCHEMA.properties), additionalProperties: false },
+      problem, actual: args[field] ?? null }],
+    minimal_legal_example: SPATIAL_QUERY_EXAMPLE, executed: false };
+}
 
 export function parseSpatialObservation(c: Record<string, unknown>): SpatialObserveInput | { error: string } {
+  const unexpected = Object.keys(c).find(k => !['mode','bounds','cursor','sites','rays','skill','needs','expect'].includes(k));
+  if (unexpected) return { error: `observe 不收 ${unexpected}；没有改读为其他参数或选择目标` };
+  if (c.cursor !== undefined && c.mode !== 'voxels') return { error: 'cursor 只用于 mode:voxels' };
   if (c.mode === 'sites') {
     if (c.bounds != null || c.rays != null) return { error: 'sites 不收 bounds/rays；sites 是绝对方块坐标' };
     if (!Array.isArray(c.sites) || !c.sites.length || c.sites.length > SPATIAL_OBSERVATION_LIMITS.sites
@@ -36,6 +73,11 @@ export function parseSpatialObservation(c: Record<string, unknown>): SpatialObse
   if (c.sites != null) return { error: 'sites 只用于 mode:sites' };
   if (c.mode === 'voxels') {
     if (c.rays !== undefined) return { error: 'voxels 不收 rays' };
+    if (c.cursor !== undefined) {
+      if (c.bounds !== undefined) return { error: 'cursor 与 bounds 互斥；续读只发送原样 cursor' };
+      const error = voxelCursorError(c.cursor);
+      return error ? { error } : { mode: 'voxels', cursor: structuredClone(c.cursor) as VoxelCursor };
+    }
     const b = c.bounds ?? DEFAULT_VOXEL_BOUNDS;
     if (!Array.isArray(b) || b.length !== 6 || b.some(n => !Number.isInteger(n) || Math.abs(n) > SPATIAL_OBSERVATION_LIMITS.offset)) {
       return { error: `bounds 要六个 -${SPATIAL_OBSERVATION_LIMITS.offset}..${SPATIAL_OBSERVATION_LIMITS.offset} 的整数，顺序 xmin,ymin,zmin,xmax,ymax,zmax；相对脚下格` };
@@ -44,13 +86,6 @@ export function parseSpatialObservation(c: Record<string, unknown>): SpatialObse
       const ordered = [0, 1, 2].map(i => Math.min(b[i], b[i + 3]))
         .concat([0, 1, 2].map(i => Math.max(b[i], b[i + 3])));
       return { error: `bounds 的最小值不能大于最大值；同一区域的升序边界为 ${JSON.stringify(ordered)}，请核对相对坐标后重新提交；尚未读取` };
-    }
-    const budget = spatialBoxBudgetNote(b, SPATIAL_OBSERVATION_LIMITS.cells);
-    if (budget) {
-      const plan = partitionSpatialBox(b, SPATIAL_OBSERVATION_LIMITS.cells);
-      const first = [...b.slice(0, 3), ...plan.chunkSizes.map((size, axis) => Math.min(b[axis + 3], b[axis] + size - 1))];
-      const retry = { steps: [{ skill: 'observe', mode: 'voxels', bounds: first }] };
-      return { error: `voxels ${budget}\n可复用首批(mc_scout)：${JSON.stringify(retry)}\n这只是 ${plan.chunks} 批中的首批，尚未读取任何一批；后续按实际未解决的问题查询，不必把整个区域重复拼回请求。` };
     }
     return { mode: 'voxels', bounds: [...b] as Box };
   }
@@ -75,6 +110,8 @@ interface Material {
   liquid: boolean;
   /** Local boxes; null means the collision geometry was not supplied. */
   collision: Box[] | null;
+  /** Vision is independent of body collision and never establishes safe passage. */
+  vision: 'transparent' | 'shape-dependent' | 'unknown';
   sign?: SignTextSnapshot;
 }
 type Sample = { material: Material } | { unknown: 'unloaded' | 'read-budget' | 'occluded' };
@@ -154,6 +191,10 @@ function collisionRay(origin: Point, direction: Point, range: number, read: (cel
 }
 
 export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
+  // Also guard SDK/direct callers: limits do not depend on the MCP transport.
+  const checked = parseSpatialObservation(input as unknown as Record<string, unknown>);
+  if ('error' in checked) throw new SkillBlocked(checked.error);
+  input = checked;
   const position = pointOf(bot.entity.position), feet = position.map(Math.floor) as Point;
   // Mineflayer supplies eyeHeight at runtime; prismarine-entity's declarations omit it.
   const { eyeHeight } = bot.entity as Bot['entity'] & { eyeHeight?: number };
@@ -174,6 +215,7 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
       properties: typeof block.getProperties === 'function' ? block.getProperties() : null,
       air: AIR_NAMES.has(block.name), liquid: LIQUIDS.has(block.name),
       collision: block.shapes === undefined ? null : block.shapes.map(s => [...s] as Box),
+      vision: observationTransparent(block.name) ? 'transparent' : block.shapes === undefined ? 'unknown' : 'shape-dependent',
       ...(sign ? { sign } : {}),
     } } : { unknown: 'unloaded' };
     cache.set(key, sample);
@@ -193,9 +235,14 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
       ? [p[0] - e.width / 2, p[1], p[2] - e.width / 2, p[0] + e.width / 2, p[1] + e.height, p[2] + e.width / 2] : null;
     return { id: e.id, name: e.username ?? e.name ?? e.type, position: p, bounds };
   }).sort((a, b) => a.id - b.id);
-  if (entities.length > SPATIAL_OBSERVATION_LIMITS.entities) throw new SkillBlocked(`当前实体超过 ${SPATIAL_OBSERVATION_LIMITS.entities} 个，未返回不完整射线观测`);
+  if (input.mode === 'rays' && entities.length > SPATIAL_OBSERVATION_LIMITS.entities) throw new SkillBlocked(`当前实体超过 ${SPATIAL_OBSERVATION_LIMITS.entities} 个，未返回不完整射线观测`);
   if (input.mode === 'voxels') {
-    const bounds = input.bounds.map((n, i) => n + feet[i % 3]) as Box;
+    const query: VoxelCursor = 'cursor' in input ? input.cursor : { version: 1, anchor: feet,
+      requested_bounds: input.bounds.map((n, i) => n + feet[i % 3]) as Box,
+      dimension: common.dimension, pending_regions: [input.bounds.map((n, i) => n + feet[i % 3]) as Box] };
+    if (query.dimension !== common.dimension) throw new SkillBlocked('cursor 维度已改变；未读取，不能把原坐标当成新维度的区域');
+    const page = takeVoxelRegion(query.pending_regions);
+    const makePage = (bounds: Box, rest: Box[]) => {
     const palette: Material[] = [], paletteIds = new Map<string, number>(), cells: number[] = [];
     const counts: number[] = [], landmarks: Array<{ at: Point; palette: number; distance: number }> = [];
     let unknownCells = 0;
@@ -232,8 +279,44 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
       }),
       omittedLandmarks: Math.max(0,landmarks.length-12),
       note: '仅列实际观察到的地标；门、楼梯、牌子是核验线索，不证明入口、整条路线可达或施工权限。' };
-    return { ...common, kind: 'voxels' as const, bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells, entities: nearby,
-      geometry: 'collision boxes in local block coordinates; null=unread, []=no collision; liquids remain materials; no support/passability judgement' };
+    const requested_count = voxelVolume(query.requested_bounds), returned_count = cells.length;
+    const next_cursor = rest.length ? { ...query, pending_regions: rest } : null;
+    const complete = requested_count === returned_count && unknownCells === 0;
+    const reasons = [...(requested_count > SPATIAL_OBSERVATION_LIMITS.cells ? ['cell_budget']
+      : requested_count > returned_count ? ['paged_query'] : []), ...(unknownCells ? ['unknown_cells'] : [])];
+    return { ...common, kind: 'voxels' as const, bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells,
+      entities: nearby.slice(0, SPATIAL_OBSERVATION_LIMITS.entities), omitted_entities: Math.max(0,nearby.length-SPATIAL_OBSERVATION_LIMITS.entities),
+      status: complete ? 'complete' : 'partial', reason: reasons.join('+') || null,
+      requested_bounds: query.requested_bounds, requested_count, returned_regions: [bounds], returned_count,
+      complete, partial_reason: reasons.join('+') || null, remaining_count: requested_count-returned_count,
+      remaining_after_page: rest.reduce((n,b) => n+voxelVolume(b),0), observed_count: returned_count-unknownCells,
+      unobserved_count: requested_count-returned_count+unknownCells,
+      coordinate_system: 'absolute_block', units: 'blocks', query_anchor: query.anchor, observed_at: common.observedAt,
+      requested_offsets: query.requested_bounds.map((n,i)=>n-query.anchor[i%3]),
+      completed: { returned_count, observed_count: returned_count-unknownCells },
+      remaining: { outside_page: requested_count-returned_count, unknown_in_page: unknownCells },
+      retryable: false, retry_after: null, next_cursor,
+      next_safe_read: next_cursor ? { mode: 'voxels', cursor: next_cursor } : null,
+      geometry: 'vision=transparent is optical only; collision boxes in local block coordinates, null=unread, []=no collision; body clearance requires sites; no support/permission/safety judgement' };
+    };
+    // Keep a whole cuboid and a valid continuation even for unusually verbose mod geometry.
+    // Shrinking reuses this call's cache; it never reads outside the original <=512-cell page.
+    let selected = page, result = makePage(selected.bounds, selected.rest);
+    while (JSON.stringify(result).length > SPATIAL_OBSERVATION_LIMITS.text && voxelVolume(selected.bounds) > 1) {
+      selected = takeVoxelRegion([selected.bounds, ...selected.rest], Math.ceil(voxelVolume(selected.bounds)/2));
+      result = makePage(selected.bounds, selected.rest);
+      result.partial_reason = result.reason = [result.partial_reason, 'response_budget'].filter(Boolean).join('+');
+    }
+    // A single pathological material may exceed the text budget: preserve the cell as unknown.
+    if (JSON.stringify(result).length > SPATIAL_OBSERVATION_LIMITS.text) {
+      result.palette = []; result.cells = [-1]; result.unknownCells = 1; result.observed_count = 0;
+      result.summary = { ...result.summary, observedCells: 0, unknownCells: 1, materials: [], landmarks: [] };
+      result.completed.observed_count = 0; result.remaining.unknown_in_page = 1;
+      result.unobserved_count = result.requested_count; result.omitted_entities += result.entities.length;
+      result.entities = []; result.complete = false;
+      result.status = 'partial'; result.partial_reason = result.reason = 'response_budget+unknown_cells';
+    }
+    return result;
   }
   const unreadEntityIds = entities.filter(e => !e.bounds).map(e => e.id);
   const rays = input.rays.map(([pitchDeg, yawDeg, range]) => {

@@ -328,7 +328,7 @@ export function withRouteScene(
     scene.push(renderRouteMenu(probes, target, { startDist, diag }));
   }
   const lead = diagText(diag);
-  return new SkillBlocked(lead ? `${lead};${err.message}` : err.message, [...err.scene, ...scene]);
+  return new SkillBlocked(lead ? `${lead};${err.message}` : err.message, [...err.scene, ...scene], err.source, err.code, err.decision);
 }
 
 /**
@@ -1048,7 +1048,7 @@ export function breakPermissionNote(bot: Bot, block: NonNullable<ReturnType<Bot[
 
 export async function digBlock(bot: Bot, target: NonNullable<ReturnType<Bot['blockAt']>>, ctx: SkillContext): Promise<void> {
   const permission = breakPermissionNote(bot, target);
-  if (permission) throw new SkillBlocked(permission);
+  if (permission) throw new SkillBlocked(permission, [], 'server', 'protection-denied', { completed: 0, remaining: 1, unit: 'cells' });
   // canDigBlock 与服务端使用相同的可挖掘性和 5.1 格距离约束。
   if (!bot.canDigBlock(target)) {
     throw new SkillBlocked(`够不到${zhName(target.name)}(离得太远或者隔着方块),没挖成`);

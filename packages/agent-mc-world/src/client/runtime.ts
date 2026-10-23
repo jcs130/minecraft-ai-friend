@@ -43,6 +43,8 @@ export type ClientEnvironment = World & {
 
 /** The caller owns reasoning, personal memory and wakeups. The client owns game receipts and an optional game notebook. */
 export class MinecraftAgentClient {
+  /** Inspect a durable original request, including across reconnects; never resubmit it. */
+  request(requestId: string) { return this.requests.inspect(requestId); }
   readonly journal: AgentJournal;
   readonly metrics: AgentMetrics;
   readonly learning: ClientOperationLearning;
@@ -372,7 +374,7 @@ export class MinecraftAgentClient {
       return outcome;
     } catch (error) {
       this.learning.finish(experience,null);
-      this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) });
+      this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error), ...(combined.aborted ? {cancelled:true} : {}) });
       this.metrics.toolEnded(callId, true);
       appendFileSync(join(this.options.dataDir, 'tools.jsonl'), JSON.stringify({ at: new Date().toISOString(),
         run: this.journal.run, callId, name, failed: true, error: String(error) }) + '\n');

@@ -10,17 +10,22 @@ import { randomUUID } from 'node:crypto';
 import { PROTOCOL, requireProtocol, type ArchiveQuery } from '../contracts/protocol.ts';
 import { readToolHelp } from '../client/tool-help.ts';
 import { EventCursorError } from '../client/journal.ts';
+import { invalidToolArguments } from '../contracts/tool-diagnostics.ts';
+import { RequestOutcomeUnknownError } from '../client/request-ledger.ts';
 
 const protocolSpec: Tool = {
   name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
-  inputSchema: { type: 'object', properties: {
+   inputSchema: { type: 'object', properties: {
     protocol: { type: 'string', const: PROTOCOL },
-    action: { enum: ['begin_turn', 'end_turn', 'ack_barrier', 'cancel', 'task', 'facts', 'archive', 'archive_runs', 'prepare_context'] },
+    action: { enum: ['begin_turn', 'end_turn', 'ack_barrier', 'cancel', 'task', 'request', 'facts', 'archive', 'archive_runs', 'prepare_context'] },
     id: { type: 'string', minLength: 1, maxLength: 256 }, kind: { enum: ['task', 'method', 'observation'] },
     run: { type: 'string' }, after: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 256 },
     type: { type: 'string' }, keyword: { type: 'string' }, history: { type: 'string' },
     contextTokens: { type: 'integer', minimum: 1 }, reservedOutputTokens: { type: 'integer', minimum: 0 },
-  }, required: ['protocol', 'action'], additionalProperties: false },
+   }, required: ['protocol', 'action'], additionalProperties: false,
+     allOf: [{ if: { required:['action'], properties: { action: { enum: ['begin_turn','end_turn','ack_barrier','cancel','task','request'] } } }, then: { required: ['id'] } },
+       { if: { required:['action'], properties: { action: { const: 'task' } } }, then: { required: ['kind'] } }],
+     examples: [{ protocol: PROTOCOL, action: 'facts' }] },
 };
 
 const connectionSpec: Tool = {
@@ -102,16 +107,21 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     structuredContent: { ...result, protocol: PROTOCOL, text: result.text, failed: result.failed === true,
       endsTurn: result.endsTurn === true, control: result.control ?? null, execution: result.execution ?? null,
       events: result.events ?? [], blobs: runtime.journal.saveBlobs(result.blobs) },
-    ...(result.failed ? { isError: true } : {}),
+    ...(result.failed && !['blocked','partial','unknown','noop'].includes(String(result.data?.status)) ? { isError: true } : {}),
   });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: advertised }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
     const { name, arguments: args = {} } = request.params;
+    let submittedRequestId: string | undefined;
     try {
       const validate = validators.get(name);
       if (!validate) throw new Error(`Unknown tool: ${name}`);
-      if (!validate(args)) throw new Error(`Invalid arguments: ${ajv.errorsText(validate.errors)}`);
+       if (!validate(args)) {
+         const schema = tools.find(t => t.name === name)!.inputSchema;
+         const data = invalidToolArguments(name, validate.errors, schema, ajv.errorsText(validate.errors));
+         return outcome({ text: JSON.stringify(data), data, failed: true });
+       }
       if (extra.signal.aborted) throw new Error('Request cancelled before submission.');
       if (name === `${prefix}_tool_help`) return outcome(readToolHelp(tools.map(tool => ({
         name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema,
@@ -125,6 +135,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
           case 'end_turn': result = await runtime.endTurn(id()); break;
           case 'ack_barrier': runtime.acknowledgeBarrier(id()); result = { acknowledged: true }; break;
           case 'cancel': result = runtime.cancel(id()); break;
+          case 'request': result = runtime.request(id()); break;
           case 'task': {
             if (!['task', 'method', 'observation'].includes(String(args.kind))) throw new Error('kind is required');
             result = runtime.task(args.kind as 'task' | 'method' | 'observation', id()); break;
@@ -180,9 +191,19 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       const metadata = request.params._meta?.[PROTOCOL] as import('../contracts/protocol.ts').CallOptions | undefined;
       if (metadata && (typeof metadata !== 'object' || (metadata.requestId !== undefined && typeof metadata.requestId !== 'string')
         || (metadata.turnId !== undefined && typeof metadata.turnId !== 'string'))) throw new Error('Invalid protocol call metadata');
-      return outcome(await runtime.call(name, args, { requestId: metadata?.requestId ?? `${session}:${extra.requestId}`,
+       submittedRequestId = metadata?.requestId ?? `${session}:${extra.requestId}`;
+       return outcome(await runtime.call(name, args, { requestId: submittedRequestId,
         turnId: metadata?.turnId, attribution:metadata?.attribution, signal: extra.signal }));
     } catch (error) {
+      const originalId = error instanceof RequestOutcomeUnknownError ? error.requestId : submittedRequestId;
+      const original = originalId && originalId.length <= 256 ? runtime.request(originalId) : null;
+      if (error instanceof RequestOutcomeUnknownError || original?.reason === 'execution_error' || original?.reason === 'request_cancelled') {
+        const data = { status: 'unknown', reason: 'request_outcome_unknown', request_id: originalId,
+          completed: null, remaining: null, retryable: false, retry_after: null,
+          next_safe_read: { tool: protocol.name, arguments: { protocol: PROTOCOL, action: 'request', id: originalId } } };
+        const result = outcome({ text: JSON.stringify(data), data });
+        return original?.reason === 'request_cancelled' ? { ...result, isError: true } : result;
+      }
       if (error instanceof EventCursorError) return outcome({ text: error.message, failed: true,
         meta: { eventCursor: { code: error.code, after: error.after, suppliedRun: error.suppliedRun ?? null,
           currentRun: error.currentRun, latestCursor: error.latestCursor },

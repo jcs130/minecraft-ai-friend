@@ -54,6 +54,7 @@ export interface BridgeOptions {
   username: string;
   version: string;
   keepAliveTimeoutMs?: number;
+  viewDistance?: number;
   deathRespawnDelayMs?: number;
   authentication?: MinecraftAuthentication;
   /** Private account configuration, reread for every network connection. Empty disables automatic login. */
@@ -512,6 +513,7 @@ export class Bridge {
       bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
         ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
         checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
+        ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
         logErrors: false, respawn: false });
     } catch (err) {
       this.failure = errorFailure(err instanceof Error ? err : new Error(String(err)));

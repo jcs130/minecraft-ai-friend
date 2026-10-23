@@ -193,6 +193,7 @@ import {
   collectVisible, skillCollect, skillFind, skillFish, skillProbe, skillTrade,
 } from './skills-gather.ts';
 import { spatialObservationText } from './spatial-observation.ts';
+import { stepDecision, type StepDecision } from './step-decision.ts';
 import { CONTAINER_FIND, FURNACE_KINDS } from './chests.ts';
 import { skillExcavate, skillTunnel } from './skills-dig.ts';
 import { skillHarvest, REPLANT_SEEDS } from './skills-harvest.ts';
@@ -1029,7 +1030,8 @@ export interface TaskReport {
   /** Last completed step of a successful task. */
   lastSkill?: SkillCall['skill'];
   steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null;
-    detail?: { text: string; chars: number; truncated: boolean }; observedEffect?: ObservedEffect }>;
+    detail?: { text: string; chars: number; truncated: boolean }; observedEffect?: ObservedEffect;
+    decision?: StepDecision; observation?: Record<string,unknown> }>;
   /** 同形状任务在短时间内再次未达整体目标时，附上上一回的受阻事实。 */
   repeatFailure?: { attempts: number; previousReceipt: string; scope: 'target' | 'shape'; observation: 'changed' | 'unchanged' | 'unavailable' };
   /** 这条汇报已经讲明了掉血的来由;World 据此不再复述一遍掉血播报 */
@@ -1047,6 +1049,8 @@ interface AbortFlag {
 
 /** 已落地步骤的终态；供未运行 finish 的取消路径通过 reportCancelled 回报各步结果。 */
 interface StepLanding {
+  decision?: StepDecision;
+  observation?: Record<string,unknown>;
   observedEffect?: ObservedEffect;
   /** 1 起的步号 */
   step: number;
@@ -4972,6 +4976,9 @@ export class Executor {
     });
     this.opts.report({ kind: 'cancelled', text, taskId: task.id,
       steps: landings.map(landing => ({ step: landing.step, outcome: landing.outcome, why: landing.why,
+        decision: 'decision' in landing && landing.decision ? landing.decision
+          : stepDecision(landing.outcome, undefined, landing.outcome === 'cut' ? progress?.count ?? undefined : undefined),
+        ...('observation' in landing && landing.observation ? { observation: landing.observation } : {}),
         ...('detail' in landing && landing.detail ? { detail: landing.detail } : {}),
         ...('observedEffect' in landing && landing.observedEffect ? { observedEffect: landing.observedEffect } : {}) })) });
   }
@@ -5237,18 +5244,31 @@ export class Executor {
     /** 各步在验收后的结局。显式依赖要求 ok/partial；自动因果边还可凭现有入料放行。 */
     const outcomes: StepOutcome[] = [];
     const effectReadbacks = new Map<number, ObservedEffect>();
+    const observations = new Map<number, Record<string,unknown>>();
+    const counts = new Map<number, { done: number; total: number }>();
     /**
      * 一步落地:记进 outcomes(闸门读它),同时记一笔终态账(见 StepLanding)。
      * 两处必须同一刻写,否则被叫停时那本账与实际跑到哪一步对不上号。
      * `line` 是这一步进结局回执的那一行,断点续做时原样摆回去。
      */
-    const land = (i: number, outcome: StepOutcome, why: string | null, line: string, code?: SkillBlocked['code']): void => {
+    const land = (i: number, outcome: StepOutcome, why: string | null, line: string, code?: SkillBlocked['code'], decision?: Partial<StepDecision>): void => {
       outcomes.push(outcome);
+      const observation = observations.get(i);
+      const readDecision: Partial<StepDecision> = observation?.kind === 'voxels' ? {
+        status: observation.complete === true ? 'completed' : 'partial',
+        reason: typeof observation.partial_reason === 'string' ? observation.partial_reason : null,
+        completed: typeof observation.observed_count === 'number' ? observation.observed_count : null,
+        remaining: typeof observation.unobserved_count === 'number' ? observation.unobserved_count : null,
+        unit: 'cells', next_safe_read: observation.next_safe_read
+          ? {tool:'mc_observe',arguments:observation.next_safe_read as Record<string,unknown>} : null,
+      } : {};
       task.stepLog.push({
         step: i + 1, what: describeSkill(steps[i]), outcome, why: shortWhy(why), line,
         ...(why ? { detail: { text: why.slice(0, 600), chars: why.length, truncated: why.length > 600 } } : {}),
         ...(effectReadbacks.has(i) ? { observedEffect: effectReadbacks.get(i)! } : {}),
         ...(code ? { code } : {}),
+        decision: stepDecision(outcome, code, counts.get(i), { ...readDecision, ...(why ? { reason: code ?? why } : {}), ...decision }),
+        ...(observations.has(i) ? { observation: observations.get(i)! } : {}),
       });
       if (outcome === 'ok') this.noteSuccessfulIntent(steps[i], Date.now());
     };
@@ -5545,6 +5565,7 @@ export class Executor {
         // 续做的 collect 按剩余数跑,进度读数加回打断前那一段:心跳与再次挂起看的都是整单的数
         const offset = carried?.done ?? 0;
         ctx.progress = (done, total) => {
+          counts.set(i, { done: done + offset, total: total + offset });
           const count = { done: done + offset, total: total + offset };
           task.count = count;
           if (!halfSent && count.total > 1 && count.done * 2 >= count.total && count.done < count.total) {
@@ -5595,7 +5616,10 @@ export class Executor {
           const effectBefore = ('dryRun' in call && call.dryRun)
             || ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
           let skillResult: string;
-          try { skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.()); }
+          try {
+            skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
+            if (run.skill === 'observe') observations.set(i, JSON.parse(skillResult));
+          }
           finally {
             if (effectBefore && !ctx.aborted() && normalizeDimension(dimensionOf(bot)) === effectDimension)
               effectReadbacks.set(i, observedEffect(call.skill, effectDimension, effectCell, effectBefore, sampleEffect(bot, effectCell)));
@@ -5782,7 +5806,7 @@ export class Executor {
             });
             const line = `${stepHead(i, startedAt)}: `
               + `${blockedText(call, reason, expect, verdict, bot.heldItem?.name ?? null, readAt)}${toolAndReserve()}${carriedNote}`;
-            land(i, 'fail', reason, line, blocked?.code);
+            land(i, 'fail', reason, line, blocked?.code, blocked?.decision);
             firstWhy ??= reason;
             this.noteBlockedReason(reason, Date.now(), {
               task: label(),
@@ -6099,7 +6123,8 @@ export class Executor {
     });
     const lastLanding = t?.stepLog.at(-1);
     this.opts.report({ ...report, text,
-      ...(t ? { steps: t.stepLog.map(({ step, outcome, why, detail, observedEffect }) => ({ step, outcome, why,
+      ...(t ? { steps: t.stepLog.map(({ step, outcome, why, detail, observedEffect, decision, observation }) => ({ step, outcome, why,
+        ...(decision ? { decision } : {}), ...(observation ? { observation } : {}),
         ...(detail ? { detail } : {}),
         ...(observedEffect ? { observedEffect } : {}) })) } : {}),
       ...(report.kind === 'done' && t && lastLanding

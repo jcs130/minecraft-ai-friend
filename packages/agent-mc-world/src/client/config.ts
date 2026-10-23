@@ -40,6 +40,8 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
   player: { ...MINECRAFT_DEFAULTS.player, teleportToBot: false },
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
+  if (cfg.viewDistance !== undefined && (!Number.isSafeInteger(cfg.viewDistance) || cfg.viewDistance < 2 || cfg.viewDistance > 32))
+    throw new Error('viewDistance must be an integer from 2 to 32 chunks (server may cap/ignore it; not anti-xray).');
   respawnDelay(cfg.deathRespawnDelayMs);
   if (cfg.viewerMaxSessions !== undefined && (!Number.isSafeInteger(cfg.viewerMaxSessions) || cfg.viewerMaxSessions < 0))
     throw new Error('viewerMaxSessions must be a non-negative safe integer (0 disables the audience cap).');

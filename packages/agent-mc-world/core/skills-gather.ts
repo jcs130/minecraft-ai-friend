@@ -303,7 +303,7 @@ export async function skillCollect(
       const chosen = bot.blockAt(pos);
       if (chosen) {
         const permission = breakPermissionNote(bot, chosen);
-        if (permission) throw new SkillBlocked(permission);
+        if (permission) throw new SkillBlocked(permission, [], 'server', 'protection-denied');
       }
       if (toolFact === undefined) {
         // 出发前选工具并读取挖掘等级，提前提供掉落条件。
@@ -1426,7 +1426,7 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
   if (outcome === 'caught') {
     try { return `钓上来${await confirmFishingLoot(bot, ctx)}；已核对本人拾取与背包稳定净增${notes}`; }
     catch (error) {
-      if (error instanceof SkillBlocked) throw new SkillBlocked(`${error.message}${notes}`, error.scene, error.source, error.code);
+      if (error instanceof SkillBlocked) throw new SkillBlocked(`${error.message}${notes}`, error.scene, error.source, error.code, error.decision);
       throw error;
     }
   }

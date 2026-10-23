@@ -4,8 +4,10 @@ import type { Bot } from 'mineflayer';
 type Point={x:number;y:number;z:number};
 const observationSources=new WeakMap<object,Bot>();
 const finite=(p:Point|undefined):p is Point=>!!p&&[p.x,p.y,p.z].every(Number.isFinite);
-const transparent=(name:string)=>['air','cave_air','void_air','water','glass','glass_pane'].includes(name)
+/** Vision only. Glass is transparent but retains its native collision boxes. Tinted glass is opaque. */
+export const observationTransparent=(name:string)=>['air','cave_air','void_air','water','glass','glass_pane'].includes(name)
   ||name.endsWith('_stained_glass')||name.endsWith('_stained_glass_pane');
+const transparent=observationTransparent;
 function intersects(a:number[],d:number[],shape:number[],cell:number[]):boolean {
   let near=0,far=1-1e-6;
   for(let i=0;i<3;i++){

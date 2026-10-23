@@ -119,6 +119,8 @@ import {
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
 import { chatInputError, describeSkillInputCorrection, readSkillHelp, SKILL_HELP_MAX_SKILLS, SKILL_SIGNATURE_DOC } from './skills.ts';
+import { observeSpatial, parseSpatialObservation, spatialArgumentDiagnostic, SPATIAL_QUERY_SCHEMA, SPATIAL_QUERY_EXAMPLE } from './spatial-observation.ts';
+import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import { TOOL_HELP_TOOL, readToolHelp } from '../src/client/tool-help.ts';
 import {
   parsePolicy, policyNoteText, renderFightRollback, renderPolicy, renderPolicyChange, renderPolicyEnv,
@@ -2314,6 +2316,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
         },
         queue: QUEUE_SCHEMA,
       },
+      examples: [{ steps: [{ skill: 'observe', ...SPATIAL_QUERY_EXAMPLE }] }],
       required: ['steps'],
     }
   },
@@ -2338,10 +2341,16 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     },
   },
   {
+    name: 'mc_observe', tags: ['read'],
+    description: 'Immediate read only: voxels max 512 cells, oversize returns partial; cursor pins absolute coordinates. Never replaces the action queue. mode is required: voxels/sites/rays. '
+      + VOXEL_QUERY_DOC + ' Structured result is in data (also JSON text); read failure is blocked, invalid parameters are invalid_arguments. No movement or world mutation.',
+    parameters: SPATIAL_QUERY_SCHEMA,
+  },
+  {
     name: 'mc_scout',
     tags: ['read'],
     description:
-      'Queue read-only observations in steps:[{skill,...}]. For probe, shape is required: line/rect/triangle/arc/box, together with that shape’s coordinates; use mc_help skill:probe for its exact signature. For a simple nearby scene use mc_visual or observe. Also supports observe (compact site geometry, voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.',
+      'Queue read-only observations in steps:[{skill,...}]. Use mc_observe for immediate data without queue admission. Queued observe preserves full step observation data. ' + VOXEL_QUERY_DOC + ' For probe, shape is required: line/rect/triangle/arc/box, together with that shape’s coordinates; use mc_help skill:probe for its exact signature. For a simple nearby scene use mc_visual or observe. Also supports observe (compact site geometry, voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.',
     parameters: {
       type: 'object',
       properties: {
@@ -2353,6 +2362,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
         // 同一条队列就是同一套三态:试算不该另有一份排队语义要记
         queue: QUEUE_SCHEMA,
       },
+      examples: [{ steps: [{ skill: 'observe', ...SPATIAL_QUERY_EXAMPLE }] }],
       required: ['steps'],
     },
   },
@@ -4285,6 +4295,7 @@ export class MinecraftWorld implements World {
       username: this.cfg.username || this.botName,
       version: this.cfg.version,
       keepAliveTimeoutMs: this.cfg.keepAliveTimeoutMs,
+      viewDistance: this.cfg.viewDistance,
       deathRespawnDelayMs: this.cfg.deathRespawnDelayMs,
       authentication: this.accountAuth.agent,
       loginConfigFile: () => this.cfg.loginConfigFile,
@@ -4604,6 +4615,29 @@ export class MinecraftWorld implements World {
       },
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
       mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
+      mc_observe: async (args, ctx) => {
+        ctx.signal?.throwIfAborted();
+        const parsed = parseSpatialObservation(args);
+        if ('error' in parsed) {
+          const data = spatialArgumentDiagnostic(args, parsed.error);
+          return { text: JSON.stringify(data), data, failed: true };
+        }
+        const bot = this.bridge?.bot;
+        if (!bot?.entity?.position) {
+          const data = { status: 'blocked', reason: 'body_unavailable', completed: 0, remaining: null,
+            retryable: false, retry_after: null, next_safe_read: { tool: 'mc_connection', arguments: { action: 'status' } } };
+          return { text: JSON.stringify(data), data };
+        }
+        try {
+          const data = observeSpatial(bot, parsed);
+          return { text: JSON.stringify(data), data };
+        } catch (error) {
+          if (!(error instanceof SkillBlocked)) throw error;
+          const data = { status: 'blocked', reason: error.message, completed: 0, remaining: null,
+            retryable: false, retry_after: null, next_safe_read: null };
+          return { text: JSON.stringify(data), data };
+        }
+      },
       mc_scout: async (args, ctx) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
       mc_attention: async (args) => this.perceptionReadout('mc_attention',args),
       mc_hear: async (args) => this.perceptionReadout('mc_hear',args),
@@ -6490,6 +6524,10 @@ export class MinecraftWorld implements World {
     const invalidArguments = (rule: string, text: string,
       correction?: ReturnType<typeof describeSkillInputCorrection>): ToolOutcome => ({
       text: this.toolLog(name, args, `[${name} 失败] ${text}`), failed: true,
+      data: { status: 'invalid_arguments', reason: rule, completed: 0, remaining: null,
+        retryable: false, retry_after: null, next_safe_read: null, executed: false,
+        errors: correction?.errors ?? [{ path: '/queue', expected: QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
+        minimal_legal_example: correction?.minimal_legal_example ?? { steps: [{ skill: 'observe', mode: 'voxels' }] } },
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
         ...(correction ? { fieldPath: correction.path, inputSchema: correction.inputSchema } : {}),
         recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},
@@ -6500,10 +6538,7 @@ export class MinecraftWorld implements World {
     const parsed = parse(args.steps);
     if ('error' in parsed) {
       const correction = describeSkillInputCorrection(args.steps, parsed.error);
-      return invalidArguments('arguments.steps', `${parsed.error}\n[参数纠正] ${correction.hint}`
-        + `\n按需帮助：mc_help ${JSON.stringify(correction.helpArguments)}`
-        + `\n整批未提交，前面的步骤也未执行；当前任务和待办保留。`
-        + `\n原参数摘要：${correction.suppliedExcerpt}`, correction);
+      return invalidArguments('arguments.steps', `${parsed.error}\nmc_help ${JSON.stringify(correction.helpArguments)}\n整批未提交，当前任务和待办保留。`, correction);
     }
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
     // A stopped login cannot execute a new body task. Reject before queue=replace
@@ -6525,7 +6560,9 @@ export class MinecraftWorld implements World {
           const rejection = this.executor.noteAdmissionRejection([only], invalid.rule, invalid.text);
           return { text: this.toolLog(name, args,
             `[${name} 未受理] ${invalid.text} 没有发送使用，也没有导航；当前任务和待办保留。`),
-            failed: true, meta: { admission: { accepted: false, dispatched: false, ...rejection } } };
+            failed: true, data: { status: 'blocked', reason: invalid.rule, completed: 0, remaining: 1,
+              retryable: false, retry_after: null, next_safe_read: { tool:'mc_bag', arguments:{} } },
+            meta: { admission: { accepted: false, dispatched: false, ...rejection } } };
         }
       }
     }
@@ -6620,7 +6657,11 @@ export class MinecraftWorld implements World {
     const help = recoverySkill ? readSkillHelp({ skill: recoverySkill }) : null;
     const admission = !admitted && rejection ? { accepted: false, ...rejection,
       recovery: help && 'text' in help ? [{ tool: 'mc_help', arguments: { skill: recoverySkill }, text: help.text }] : [] } : null;
-    return {text:receipt, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}), ...(!admitted ? { failed: true } : {})};
+    return {text:receipt, data: { status: admitted ? completedImmediately ? 'completed' : 'accepted' : 'blocked',
+      reason: rejection?.rule ?? null, completed: admitted ? completedImmediately ? parsed.steps.length : null : 0,
+      remaining: admitted ? completedImmediately ? 0 : null : parsed.steps.length, retryable:false, retry_after:null,
+      next_safe_read: { tool:'mc_queue', arguments:admittedTaskId === undefined ? {} : { taskId:admittedTaskId } },
+      goal_completed:false }, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}), ...(!admitted ? { failed: true } : {})};
   }
 
   protected perceptionReadout(name:string,args:Record<string,unknown>):ToolOutcome {

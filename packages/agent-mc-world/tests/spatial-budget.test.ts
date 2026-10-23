@@ -8,27 +8,19 @@ import { partitionSpatialBox, spatialBoxBudgetNote } from '../core/spatial-slice
 const cap = SPATIAL_OBSERVATION_LIMITS.cells;
 
 describe('bounded spatial request recovery', () => {
-  it('gives a directly reusable legal first query for the observed 2205-cell rejection', () => {
+  it('accepts an oversize read without rewriting the requested region', () => {
     const input = { mode: 'voxels', bounds: [-10, -2, -10, 10, 2, 10] };
-    const original = structuredClone(input);
-    const result = parseSpatialObservation(input) as { error: string };
-    const encoded = result.error.match(/可复用首批\(mc_scout\)：([^\n]+)/)?.[1];
-    expect(encoded).toBeDefined();
-    const retry = JSON.parse(encoded!);
-    expect(retry.steps).toHaveLength(1);
-    expect(retry.steps[0].skill).toBe('observe');
-    expect(parseSpatialObservation(retry.steps[0])).not.toHaveProperty('error');
-    expect(retry.steps[0].bounds.slice(0, 3)).toEqual(input.bounds.slice(0, 3));
-    expect(result.error).toContain('尚未读取');
-    expect(input).toEqual(original);
+    const before = structuredClone(input);
+    expect(parseSpatialObservation(input)).toEqual(input);
+    expect(input).toEqual(before);
   });
   it.each([
     [-8, -2, -8, 0, 4, 8],
     [-6, 0, -6, 6, 3, 6],
     [-16, -16, -16, 16, 16, 16],
-  ])('partitions a rejected voxel region without dropping or repeating cells: %j', (...bounds) => {
+  ])('partitions an accepted voxel region without dropping or repeating cells: %j', (...bounds) => {
     const issue = parseSpatialObservation({ mode: 'voxels', bounds });
-    expect(issue).toHaveProperty('error');
+    expect(issue).not.toHaveProperty('error');
     const plan = partitionSpatialBox(bounds, cap);
     const seen = new Set<string>();
     const intervals = plan.chunkSizes.map((size, axis) => {
@@ -49,8 +41,7 @@ describe('bounded spatial request recovery', () => {
     }
     expect(seen.size).toBe(plan.cells);
     expect(plan.cells).toBe((bounds[3] - bounds[0] + 1) * (bounds[4] - bounds[1] + 1) * (bounds[5] - bounds[2] + 1));
-    expect((issue as { error: string }).error).toContain(`${plan.cells}`);
-    expect((issue as { error: string }).error).toContain('区间组合');
+
   });
 
   it('keeps an exact-limit request intact', () => {

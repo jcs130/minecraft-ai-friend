@@ -156,7 +156,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     return `直接控制结束（${call.mode}，${call.keys.join('+') || (call.mode === 'water' ? '松键自然下沉' : '仅转头')}；客户端观测）；${observed()}；按键已释放，到达目标须按现场或 expect 另行核验`;
   } catch (error) {
     if (error instanceof SkillBlocked) {
-      throw new SkillBlocked(lease.reason ?? error.message, [...error.scene, observed()], lease.source ?? error.source, error.code);
+      throw new SkillBlocked(lease.reason ?? error.message, [...error.scene, observed()], lease.source ?? error.source, error.code, error.decision);
     }
     throw error;
   } finally {

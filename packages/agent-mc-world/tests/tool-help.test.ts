@@ -57,6 +57,14 @@ it('progressively expands the effective schema without inventing fields or dispa
   expect(handler).not.toHaveBeenCalled();
 });
 
+it('maps only the callable safe-read tool identity in structured business results', () => {
+  const original={text:'mc_Alex requested mc_queue',data:{status:'blocked',reason:'mc_queue',
+    next_safe_read:{tool:'mc_bag',arguments:{name:'mc_Alex'}}}};
+  const result=mapToolRecovery(original,name=>name.replace(/^mc_/,'mounted_'));
+  expect(result).toEqual({...original,data:{...original.data,next_safe_read:{tool:'mounted_bag',arguments:{name:'mc_Alex'}}}});
+  expect(original.data.next_safe_read.tool).toBe('mc_bag');
+});
+
 it.each([
   { path: '/properties' }, { full: true }, { name: 'not_installed' }, { name: 'mc_do', path: 'steps' },
   { name: 'mc_do', path: '/properties/steps/items/oneOf/99' }, { name: 'mc_do', path: '/__proto__' },

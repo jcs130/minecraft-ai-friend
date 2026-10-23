@@ -19,6 +19,7 @@ import type { BowShotResult, RangedTarget } from './ranged.ts';
 import type { ShowTempo } from './show.ts';
 import type { FindObservationCache, SearchScope } from './search-observation.ts';
 import type { NavigationCapabilities } from './navigation-capabilities.ts';
+import type { StepDecision } from './step-decision.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -59,18 +60,20 @@ export class SkillBlocked extends Error {
   readonly scene: string[];
   /** 机器可读原因；调用方不靠中文回执做重复失败判定。 */
   readonly code?: 'target-not-visible' | 'target-not-ready' | 'container-window-changed' | 'container-window-rollback' | 'inventory-click-sync' | 'use-hand-changed' | 'resource-unavailable'
-    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path';
+    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path' | 'container-full' | 'protection-denied';
+  readonly decision?: Partial<StepDecision>;
   /**
    * 受阻来源：server 表示操作后的回读或服务端结果，local 表示本地前置判断。
    * 仅写入 World 诊断日志。
    */
   readonly source: 'server' | 'local';
   constructor(message: string, scene: string[] = [], source: 'server' | 'local' = 'local',
-    code?: SkillBlocked['code']) {
+    code?: SkillBlocked['code'], decision?: Partial<StepDecision>) {
     super(message);
     this.scene = scene;
     this.source = source;
     this.code = code;
+    this.decision = decision;
   }
 }
 

@@ -38,6 +38,10 @@ export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-
 export type { JavaClientServices } from './client/java-memory.ts';
 export * from './contracts/java-client.ts';
 export { itemCustomName } from '../core/item-display.ts';
+export { observeSpatial, parseSpatialObservation, SPATIAL_QUERY_SCHEMA, SPATIAL_QUERY_EXAMPLE } from '../core/spatial-observation.ts';
+export type { SpatialObserveInput } from '../core/spatial-observation.ts';
+export type { VoxelCursor } from '../core/voxel-query-contract.ts';
+export type { StepDecision } from '../core/step-decision.ts';
 export { zhName } from '../core/names.ts';
 export { invCount, itemPredOf, invItemNamed } from '../core/inventory.ts';
 export { matchItemName, CONTAINER_FIND } from '../core/chests.ts';

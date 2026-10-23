@@ -18,7 +18,8 @@ import { collectTargetError } from '../src/collect-contract.ts';
 import { normalizeDimension } from './escape.ts';
 import type { PositionXYZ } from './blueprint.ts';
 import { PROBE_SLICE_CELL_CAP, SPATIAL_SLICE_AXES, type SpatialSliceAxis } from './spatial-slices.ts';
-import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, type SpatialObserveInput } from './spatial-observation.ts';
+import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, SPATIAL_QUERY_SCHEMA, type SpatialObserveInput } from './spatial-observation.ts';
+import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
@@ -209,8 +210,8 @@ export function chatInputError(text: string): string | null {
 /** 返回 [lo,hi] 内的整数;缺省时用 fallback,越界时返回 null。 */
 function intIn(v: unknown, lo: number, hi: number, fallback: number): number | null {
   if (v === undefined || v === null) return fallback;
-  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-  const n = Math.floor(v);
+  if (typeof v !== 'number' || !Number.isSafeInteger(v)) return null;
+  const n = v;
   return n >= lo && n <= hi ? n : null;
 }
 
@@ -1495,7 +1496,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"observe","mode":"voxels","bounds":[-2,-1,-2,2,3,2]}
                                                  按 MineDojo 的局部体素观测方式，直接读当前连接已加载方块，不需图像估深。
                                                  bounds 是相对执行时脚下格的 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；省略为 [-1,-1,-1,1,2,1]。
-                                                 每项 ±${SPATIAL_OBSERVATION_LIMITS.offset}；体积=(xmax-xmin+1)(ymax-ymin+1)(zmax-zmin+1)≤${SPATIAL_OBSERVATION_LIMITS.cells}，不是每个轴都可铺满。返回绝对坐标范围、读取时间、维度、眼位、朝向。
+                                                 ${VOXEL_QUERY_DOC}
                                                  palette 保留方块状态、属性与真实格内碰撞箱；cells 按 y,z,x 展开(x 最快)，-1 是未知；无碰撞不证明安全可走或有支撑。
 {"skill":"observe","mode":"rays","rays":[[0,0,24],[15,30,16],[-15,-30,16]]}
                                                  从执行时眼位发射碰撞射线，每组 [相对pitch角,相对yaw角,最大距离]；角度用度，相对执行时身体朝向叠加，pitch 正值向上，yaw 正值向左，yaw=0 沿当前朝向。
@@ -1509,18 +1510,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     },
     fields: [
       { key: 'mode', kind: 'enum', values: ['sites', 'voxels', 'rays'], required: true, error: 'mode 要 sites/voxels/rays' },
-      { key: 'sites', kind: 'opaque', schema: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.sites,
-        items: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'integer', minimum: -30_000_000, maximum: 30_000_000 } } },
-        doc: 'sites：绝对格 [x,y,z] 列表，短报占用/支撑高度/邻接面/0.6×1.8方块净空；非可达或放置许可' },
-      { key: 'bounds', kind: 'opaque', schema: { type: 'array', minItems: 6, maxItems: 6,
-        items: { type: 'integer', minimum: -SPATIAL_OBSERVATION_LIMITS.offset, maximum: SPATIAL_OBSERVATION_LIMITS.offset } }, doc: `voxels 相对脚下格 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；三轴长度相乘≤${SPATIAL_OBSERVATION_LIMITS.cells}` },
-      { key: 'rays', kind: 'opaque', schema: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.rays,
-        // The MCP validator uses draft-07 tuples; declare the nested dialect so
-        // newer host validators interpret these positional bounds identically.
-        items: { $schema: 'http://json-schema.org/draft-07/schema#', type: 'array', minItems: 3, maxItems: 3,
-          items: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'number', minimum: -180, maximum: 180 },
-            { type: 'number', exclusiveMinimum: 0, maximum: SPATIAL_OBSERVATION_LIMITS.range }] } },
-        doc: `rays 的 [相对pitch角±90,相对yaw角±180,距离>0且≤${SPATIAL_OBSERVATION_LIMITS.range}] 列表；相对执行时身体朝向，yaw=0 沿当前朝向` },
+      ...(['sites', 'bounds', 'cursor', 'rays'] as const).map(key => ({ key, kind: 'opaque' as const,
+        schema: SPATIAL_QUERY_SCHEMA.properties[key], doc: SPATIAL_QUERY_SCHEMA.properties[key].description })),
     ],
   },
   {
@@ -2066,6 +2057,11 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
     let variants: Record<string, unknown>[];
     if (spec.name === 'craft') {
       variants = [variant(['item', 'count'], ['item']), variant(['grid', 'count'], ['grid'])];
+    } else if (spec.name === 'observe') {
+      variants = [variant(['mode','bounds'], ['mode'], { mode: { const: 'voxels' } }),
+        variant(['mode','cursor'], ['mode','cursor'], { mode: { const: 'voxels' } }),
+        variant(['mode','sites'], ['mode','sites'], { mode: { const: 'sites' } }),
+        variant(['mode','rays'], ['mode'], { mode: { const: 'rays' } })];
     } else if (spec.name === 'build') {
       variants = [
         variant(['material', 'anchors', 'temporary', 'dryRun'], ['material', 'anchors']),
@@ -2256,6 +2252,15 @@ export function parseSteps(
     if (!spec) {
       return { error: `${at}的 skill「${String(c.skill)}」不是技能表里的动作` };
     }
+    // Typed control/target fields cannot disappear into defaults. In particular,
+    // dryRun:"true" must never become a real write, or count:1.9 become count:1.
+    for (const f of spec.fields) {
+      const v = c[f.key];
+      if (v === undefined || v === null) continue; // Existing nullable placeholder compatibility.
+      if (f.kind === 'flag' && typeof v !== 'boolean') return { error: `${at} ${f.key} 要布尔值 true/false；没有猜测或派发` };
+      if (f.kind === 'int' && (typeof v !== 'number' || !Number.isSafeInteger(v))) return { error: `${at} ${f.key} 要 ${f.lo}-${f.hi} 的整数；没有取整或派发` };
+      if (f.kind === 'string' && (typeof v !== 'string' || !v.trim())) return { error: `${at} ${f.key} 要非空字符串；没有忽略目标或派发` };
+    }
     if (spec.name === 'chat' || spec.name === 'server_travel') {
       const text = spec.name === 'chat' ? c.text : c.command;
       if (typeof text === 'string') {
@@ -2263,11 +2268,19 @@ export function parseSteps(
         if (error) return { error: `${at} ${error}` };
       }
     }
+    if (c.to !== undefined && !spec.fields.some(f => f.key === 'to')) return { error: `${at} /to 不受 ${spec.name} 支持；没有将 to 改成 at，也未选择目标` };
     const targetError = collectTargetError(c);
     if (targetError) return { error: `${at} ${targetError}` };
     const parsed = spec.parse ? spec.parse(c, at, marks) : parseByFields(spec, c, at, marks);
     if ('error' in parsed) return parsed;
     const step = parsed.step;
+    if (name !== c.skill) notes.push({step:i+1,field:'skill',given:c.skill,kind:'rewritten',as:JSON.stringify(name)});
+    for (const f of spec.fields) {
+      const v=c[f.key];
+      if ((f.kind === 'string' || f.kind === 'enum') && typeof v === 'string' && v !== v.trim()
+        && (step as unknown as Record<string,unknown>)[f.key] === v.trim())
+        notes.push({step:i+1,field:f.key,given:v,kind:'rewritten',as:JSON.stringify(v.trim())});
+    }
     for (const n of [...(parsed.notes ?? []), ...strayKeys(spec, c)]) notes.push({ ...n, step: i + 1 });
     // 边界声明骑在规范步骤上;结构非法同样整批退回
     if (c.needs !== undefined) {
@@ -2289,6 +2302,8 @@ export function parseSteps(
 export function describeSkillInputCorrection(raw: unknown, error: string): {
   path: string; hint: string; helpArguments: { skill?: SkillCall['skill'] }; suppliedExcerpt: string;
   inputSchema?: Record<string, unknown>;
+  errors: Array<{ path: string; expected: unknown; problem: string; actual: unknown }>;
+  minimal_legal_example: unknown;
 } {
   let value = raw;
   if (typeof value === 'string') { try { value = JSON.parse(value); } catch { /* Keep malformed input opaque. */ } }
@@ -2299,7 +2314,22 @@ export function describeSkillInputCorrection(raw: unknown, error: string): {
   const hint = spec ? spec.inputHint ?? skillSignature(spec)
     : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
   const supplied = JSON.stringify(raw) ?? String(raw);
-  return { path: index >= 0 ? `/steps/${index}` : '/steps', hint,
+  const base = index >= 0 ? `/steps/${index}` : '/steps';
+  const field = error.includes('/to') ? 'to' : spec?.fields.find(f => error.includes(f.key))?.key
+    ?? (item && !spec ? 'skill' : undefined);
+  const path = field ? `${base}/${field}` : base;
+  const declaration = spec?.fields.find(f => f.key === field);
+  let example: unknown = null;
+  try {
+    const encoded = spec?.doc.match(/^\{[^\n]+\}/m)?.[0];
+    const first = encoded ? JSON.parse(encoded) : null;
+    const chosen = spec?.name === 'observe' && item?.mode === 'voxels'
+      ? { skill: 'observe', mode: 'voxels', bounds: [0,0,0,0,0,0] } : first;
+    if (chosen && !('error' in parseSteps([chosen]))) example = { steps: [chosen] };
+  } catch { /* No invented example when the registry has none. */ }
+  return { path, hint,
+    errors: [{ path, expected: declaration ? fieldSchema(declaration) : hint, problem: error,
+      actual: field ? item?.[field] ?? null : item ?? raw ?? null }], minimal_legal_example: example,
     ...(spec ? { inputSchema: { anyOf: skillGenerationContracts([spec])[spec.name] } } : {}),
     helpArguments: spec ? { skill: spec.name } : {},
     suppliedExcerpt: supplied.length <= 180 ? supplied

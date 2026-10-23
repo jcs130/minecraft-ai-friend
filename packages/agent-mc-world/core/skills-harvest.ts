@@ -29,7 +29,9 @@ export async function skillHarvest(bot: Bot, call: Extract<SkillCall, { skill: '
   if (seed) {
     const age = cropAgeAt(bot, position);
     if (!age || age.value < age.max) throw new SkillBlocked(`${cellText(cell)} 的 ${call.block} 未成熟，保留植株`,
-      [], 'local', 'target-not-ready');
+      [], 'local', 'target-not-ready', { completed: 0, remaining: 1, unit: 'cells',
+        continue_when: 'The specified crop reaches its maximum age.',
+        next_safe_read: { tool: 'mc_observe', arguments: { mode: 'sites', sites: [[cell.x,cell.y,cell.z]] } } });
     if (blockAtCell(bot, soil)?.name !== 'farmland') throw new SkillBlocked(`${cellText(soil)} 不是耕地，未收割`);
     if (invCount(bot, name => name === seed) < 1) throw new SkillBlocked(`缺少预留补种材料 ${seed}×1，未收割`,
       [], 'local', 'resource-unavailable');
@@ -59,7 +61,7 @@ export async function skillHarvest(bot: Bot, call: Extract<SkillCall, { skill: '
     if (fresh?.name !== call.block || !age || age.value !== 0) throw new SkillBlocked(
       `收割后补种未确认，${cellText(cell)} 实际为 ${fresh?.name ?? 'unknown'}；${planted}`, [], 'server');
     const receipt = `${collected}；已补种 ${call.block} age=0 于 ${cellText(cell)}。${planted}`;
-    if (harvestError) throw new SkillBlocked(`${harvestError.message}；${receipt}`, harvestError.scene, 'server', harvestError.code);
+    if (harvestError) throw new SkillBlocked(`${harvestError.message}；${receipt}`, harvestError.scene, 'server', harvestError.code, harvestError.decision);
     return receipt;
   } finally { release(); }
 }

@@ -294,6 +294,16 @@ describe('native organization with server-confirmed slots and cursor', () => {
     expect(inventoryOrganizationKey(bag.slots[9])).toBe(inventoryOrganizationKey(bag.slots[10]));
     expect(bag.selectedItem).toBeNull();
   });
+  it('reports only the confirmed partial transfer when the remaining destination slots are full', async () => {
+    const r=rig(),bag=r.bot.inventory;
+    r.put(9,'paper',10);r.put(10,'paper',63);r.put(11,'dirt',64);r.full(bag);
+    const result=transferInventoryStackConfirmed(r.bot,bag,9,10,12,3,r.ctx).catch(e=>e);
+    await vi.runAllTimersAsync(); const error=await result;
+    expect(error.code).toBe('container-full');
+    expect(error.decision).toMatchObject({status:'partial',completed:1,remaining:2,unit:'items'});
+    expect(bag.slots[9].count).toBe(9);expect(bag.slots[10].count).toBe(64);
+    expect(bag.slots[11].name).toBe('dirt');expect(bag.selectedItem).toBeNull();
+  });
 });
 
 describe('shared action/scout contract', () => {

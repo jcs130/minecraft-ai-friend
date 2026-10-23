@@ -137,7 +137,7 @@ export async function skillOrganize(bot: Bot, call: Call, ctx: SkillContext): Pr
     } catch (error) {
       ctx.diag?.write({ lane: 'skill', event: 'inventory-organize-partial', taskId: ctx.taskId,
         msg: '取舍步骤未完成，保留已发生的结果，不自动重复', data: { rule, notes, error: String(error) } });
-      if (error instanceof SkillBlocked) throw new SkillBlocked(error.message, [...notes, ...error.scene], error.source, error.code);
+      if (error instanceof SkillBlocked) throw new SkillBlocked(error.message, [...notes, ...error.scene], error.source, error.code, error.decision);
       throw error;
     }
   }
@@ -163,7 +163,7 @@ export async function skillOrganize(bot: Bot, call: Call, ctx: SkillContext): Pr
       ctx.diag?.write({ lane: 'skill', event: 'inventory-organize-partial', taskId: ctx.taskId,
         msg: summary, data: { merges, swaps, notes, error: String(error) } });
       if (isInventoryClickError(error)) throw new SkillBlocked((error as Error).message, [...notes, summary], 'server', 'inventory-click-sync');
-      if (error instanceof SkillBlocked) throw new SkillBlocked(error.message, [...notes, summary, ...error.scene], error.source, error.code);
+      if (error instanceof SkillBlocked) throw new SkillBlocked(error.message, [...notes, summary, ...error.scene], error.source, error.code, error.decision);
       throw error;
     }
     if (move.kind === 'merge') merges++; else swaps++;

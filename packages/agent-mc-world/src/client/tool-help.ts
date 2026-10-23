@@ -113,8 +113,11 @@ export function mapToolRecovery(
 ): ToolOutcome {
   const record = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
+  const safe = outcome.data?.next_safe_read;
+  const mapped = record(safe) && typeof safe.tool === 'string'
+    ? { ...outcome, data: { ...outcome.data, next_safe_read: { ...safe, tool: mapName(safe.tool) } } } : outcome;
   const meta = outcome.meta, admission = record(meta) ? meta.admission : undefined;
-  if (!record(admission) || !Array.isArray(admission.recovery)) return outcome;
+  if (!record(admission) || !Array.isArray(admission.recovery)) return mapped;
   const recovery = admission.recovery.map(value => {
     if (!record(value) || typeof value.tool !== 'string') return value;
     const args = value.arguments;
@@ -126,5 +129,5 @@ export function mapToolRecovery(
       ...(mappedArgs === undefined ? {} : { arguments: mappedArgs }),
       ...(typeof value.text === 'string' ? { text: mapText(value.text) } : {}) };
   });
-  return { ...outcome, meta: { ...meta, admission: { ...admission, recovery } } };
+  return { ...mapped, meta: { ...meta, admission: { ...admission, recovery } } };
 }
