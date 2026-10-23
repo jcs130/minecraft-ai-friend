@@ -1,2 +1,2 @@
 /** Rank scores are not calibrated outcome probabilities. Require a lead; explicit probability floors remain supported. */
-export const COMBAT_DECISION_DEFAULTS = {enabled:false,mode:'shadow' as const,endpoint:'',timeoutMs:250,minIntervalMs:750,minConfidence:0,minMargin:.1,maxAgeMs:500,maxEntities:12,maxCandidates:6,allowMovement:false,allowEngage:false,engageScope:'party' as const,movementStallMs:1500};
+export const COMBAT_DECISION_DEFAULTS = {enabled:false,mode:'shadow' as const,selectionMode:'compatible' as const,endpoint:'',timeoutMs:250,minIntervalMs:750,minConfidence:0,minMargin:.1,maxAgeMs:500,maxEntities:12,maxCandidates:6,allowMovement:false,allowEngage:false,engageScope:'party' as const,movementStallMs:1500};

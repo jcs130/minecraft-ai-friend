@@ -7,14 +7,14 @@ const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(valu
 const text = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 type Candidate = { id: string; label: string; evidence: string; ready: boolean };
 const guidance = {
-  route: '比较现场已测路线的进展、支撑净空、距离、挖放成本与风险；未知路段须先观察。',
+  route: '比较现场已测路线的进展、支撑净空、距离、挖放成本与风险；未知路段须先观察。旅途新发现可比较继续赶路与短暂探索，保留原目的地；新奇本身不意味着必须停下。',
   survival: '比较进食、避险、恢复与继续工作；正在有效执行的任务无需重复接管。',
   skill: '只比较已核实资格、魔力、冷却和目标的技能；未知冷却不是零。',
   method: '按条件与反例选择已校验方法版本；程序结束不等于目标完成。',
   goal: '尊重用户最新意向与当前未完目标，挑一段有可验收里程碑的生活目标；勿反复准备或为多样性强行换目标。',
 };
 const focus = {
-  route: ['terrain', 'structure', 'flight', 'life', 'options'], survival: ['foodReserve', 'life', 'gear', 'equip', 'options'],
+  route: ['journey', 'terrain', 'structure', 'flight', 'life', 'options'], survival: ['foodReserve', 'life', 'gear', 'equip', 'options'],
   skill: ['combat', 'flight', 'life', 'equip', 'options'], method: ['lastTask', 'gear', 'structure', 'goals', 'options'],
   goal: ['goals', 'lastTask', 'foodReserve', 'gear', 'explored'],
 };
