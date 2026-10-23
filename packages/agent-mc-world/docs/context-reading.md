@@ -30,6 +30,15 @@ keeps parts independent, so a health update need not append unchanged inventory.
 Missing content is labelled as missing, not a known empty world state. The host
 may localize `label`, `observationsNote` and `emptyText` without altering facts.
 
+`contextExecutionReading(event)` extracts a bounded, attributed terminal from the
+structured `execution` contract. Acceptance, running events and prose alone return
+`null`. Failed, partial and cut step reasons retain the original `detail` text,
+its length/truncation and client-visible change flags; large inventories are not
+copied. The short `why` remains a preview. Older receipts without `detail` include
+a labelled excerpt of the original event. At most four unsuccessful steps are
+shown, with omitted steps counted. A completion for another task does not resolve
+this task or its goal. The host owns persistence, expiry and selection for requests.
+
 This is request presentation, not automatic event deletion or a new background
 Agent. Native tool call/result pairing, recent/protected records, pending user
 intent, memory, exact expansion and model scheduling remain with the host.
