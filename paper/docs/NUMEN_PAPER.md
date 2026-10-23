@@ -1,3 +1,16 @@
+## 身体重复与 LuckPerms 复查（2026-10-23，候选）
+
+不能只用官网折叠历史档案来解释全部身体重复。对正式 API `4b36f166` 和内容 `82133ebd` 的独立服实测：
+
+- 同一主人、完全相同拼写的重复召唤（普通命令、官方 Release 载荷）和重连保留原 UUID、背包；LP 能按名和 UUID识别同伴。
+- `Fishy`／`FISHY` 因 `CompanionRoster.findByName` 使用大小写敏感比较，会创建不同 UUID，甚至让两具身体同时在线。候选改为与原版玩家名一致的大小写无关比较；永久遣散按名查找同步修正。不自动清理已有重名或恢复旧身份。
+- `/numen player despawn <名字>` 和面板确认“删除／遣散”是永久除名，之后同名新建分配新 UUID。临时离开直接退出；再次召唤复用仍在名册的身体。`/kick` 保留名册，等主人再次召回。
+- 普通新同伴沿原有主人委托权限；接管旧账号沿已验证的原权限标记。排查 LP 时先核对身体 UUID，查询示例：`/lp user <身体UUID> info`。不要把同名真人的权限或存档迁给同伴。
+
+历史日志确认10月21日15:09、15:31、15:36、15:56先后使用四个随机UUID；后续三次前都有旧大脑 DISPOSE，旧同伴家目录也已移除，与永久遣散后新建的路径相符。但旧日志没有调用入口审计，不能断言每次都是面板删除，也没有证明这些历史身体同时在线。10月22日11:46的离场另有明确 `/kick fishy` 记录；当前名册只有最后一份、保持 removed 等待主人召回。
+
+候选新增 `[numen-lifecycle] create/reuse/dismiss body=… owner=… name=…` 到服务端日志，创建表示入册，实际加入仍须接纳；不发公屏。源码 [287ac6e5](https://github.com/jcs130/minecraft-numen/commit/287ac6e5d492ea73323fc4eb4ce668aacac89130)，可重放补丁与固定基线装配器在 `paper/integrations/numen-paper/`。候选API `7380a326` 仅替换两 class，其他1244条目逐字保持；1774 JVM、3真实Paper源码E2E、6精确候选联机与正常冷重启检查通过，首次测试夹具把UUID传给give失败已保留并改用真实在线名，不放宽断言。正式仍 `4b36f166`，未修改玩家数据、LP权限或重启服务。候选清单：[numen-body-identity-candidate-20261023.json](../manifests/numen-body-identity-candidate-20261023.json)。上线须当次维护批准、预告和完整双盘冷备份；回退换原API，保留最新世界及Numen资料。
+
 > 2026-10-20 最新：常驻角色已切换为原 `ag_Kirito`，由 QwenPaw 控制；原星灯离场保档。见 [桐人正式接管](KIRITO_QWENPAW.md) 和 [原生能力核验](KIRITO_NATIVE_QWENPAW.md)。下文此前常驻发布段落保留历史。
 
 ## 当前状态更新（2026-10-21）

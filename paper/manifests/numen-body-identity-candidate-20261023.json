@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-awaiting-restart-approval",
+  "observedAt": "2026-10-23T12:46:11.602050+00:00",
+  "sourceCommit": "287ac6e5d492ea73323fc4eb4ce668aacac89130",
+  "sourceUrl": "https://github.com/jcs130/minecraft-numen/commit/287ac6e5d492ea73323fc4eb4ce668aacac89130",
+  "sourceBaseline": "0b3e1bab925b1c5aa2a9d27d43cf90bdc58a1241",
+  "sourcePatch": "paper/integrations/numen-paper/patches/body-identity.patch",
+  "sourcePatchSha256": "2105b180d849d33cdb2db1dcfdb08348a02d8c834519e088e00b8764e1345ac4",
+  "changedClasses": [
+    "com/dwinovo/numen/api/entity/CompanionRoster.class",
+    "com/dwinovo/numen/api/entity/Companions.class"
+  ],
+  "unchangedEntries": 1244,
+  "tests": {
+    "jvm": 1774,
+    "paperSourceE2e": 3,
+    "productionJarIsolatedChecks": 6,
+    "coldIdentityAndInventory": true,
+    "officialReleaseProtocol": true,
+    "luckPermsIdentifiesBodyUuid": true,
+    "sourceSecrets": 0
+  },
+  "dataMigration": "none",
+  "productionRestarted": false,
+  "playersDeletedOrMerged": false,
+  "permissionsChanged": false,
+  "baselineSha256": "4b36f166b3f7c7f380a297c24a1f8bcd0fe9836ea0365c2da5993bc33792b313",
+  "candidateSha256": "7380a3260ab8b291536c748ae6c7094daf3cbb921643f8700d1193b50c0fd31a"
+}

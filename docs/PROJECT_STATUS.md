@@ -13,11 +13,15 @@
 | 登录代理 | LoginGuard 0.1.5 | 网站账号与游戏账号桥需自己配置；共享 Key 不提供给外部 Agent |
 | FOM | 尚未正式开放 | 官网仅“敬请期待”；不拿 Paper 状态代替模组服数据 |
 
-网站源码另有 **0.8.8 候选**：同名历史身体默认折叠；三种宿主包包含现代可视化与千灯纪资料，音频和截图浏览器分为公共资源。原始下载保持。正在完成离线安装及发布验证；未重启官网，正式仍为上表 0.8.6。
+网站源码另有 **0.8.8 候选**：同名历史身体默认折叠；三种宿主包包含现代可视化与千灯纪资料，音频和截图浏览器分为公共资源。原始下载保持。已通过完整离线安装与云端对象校验，等待当次官网重启确认；未重启官网，正式仍为上表 0.8.6。
+
+Numen 身体身份另有 [287ac6e5候选](../paper/docs/NUMEN_PAPER.md)：修复大小写召唤重复UUID，LP身份与原背包实测保持；正式API未变、未迁移或删除历史身体。
 
 CLI 源码候选本轮继续收敛已有入口：帮助、状态、进度、技能状态、入门与规则默认短中文，原程序数据通过显式 `--json` 查询；不增加顶层命令。帮助由同一目录生成，旧日期记录移出当前手册，见 [CLI 说明](../paper/docs/MYCLI_AGENT_CLI.md)。这部分尚未重启部署，不把源码提交当作线上生效。
 
 Skill入口已缩为基础接入和按需阅读；MCP示例用实际目录/schema校验，并验证独立打包后的离线工具读取与文档链接。入口：[服务器Skill](../paper/integrations/agent-portal/skill/SKILL.md)、[通用MCP](../packages/agent-mc-world/docs/mcp.md)。
+
+主干已合入 rc.77 引入的接口：即时只读 `mc_observe` 默认 dense，`mc_scout` 沿用 visible 表面格式、需要 cells 时显式选 dense；游标原样续用。工具数据在 `structuredContent.data`，未知写操作按原 request ID 对账。完整约束见[有界工具结果](../packages/agent-mc-world/docs/bounded-tool-results.md)。这是源码能力，官网既有 Skill/整合包仍按各自锁定版本分发。
 
 ## 新部署能复用什么
 

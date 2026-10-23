@@ -1,0 +1,157 @@
+diff --git a/docs/paper.md b/docs/paper.md
+index 59b2fcc17..76fb37a93 100644
+--- a/docs/paper.md
++++ b/docs/paper.md
+@@ -186,6 +186,8 @@ Paper、Leaves、spark、WorldEdit、PacketEvents、ProtocolLib 是 GPL,Citizens
+ - **摘出区块加载放在 `joined`**(`placeNewPlayer` 一开头就把旗标置真,所以不能在加入前置假):`removePlayer` 后 `setRealPlayer(false)`,实测区块包为 0(只有两个视距/中心包),换维度、死亡重生(重新加入时再摘一次)都不会被加回。
+ - **权限委托也在 `joined`**,晚于权限插件在 `PlayerLoginEvent` 里的注入,所以取代它的。主人在线问主人;离线经 Vault(装了的话)查离线玩家,没装按主人是不是 op 套默认值;没有任何权限插件的专属代码。
+   实测(LuckPerms,她经 `numen.mc.run` 以自己的身份跑指令):主人在线有授权/无授权、主人离线不装 Vault 时授权不算数(按 op)、装了 Vault 时授权经 LuckPerms 算数、主人是 op 时放行。Vault 的接口取 JitPack 的 VaultAPI 1.7(`transitive = false`:它依赖的老 Bukkit API 会盖掉 Paper 的)。
++- **名字与身体身份**:同一主人召唤同名玩家时不分大小写,复用名册中的 UUID 与原拼写;不按玩家名生成或合并 UUID。重复召唤、主人重连、换皮肤均保留原身体。`/numen player despawn <name>` 和面板确认删除是永久遣散,会清除名册,之后新建会分配新 UUID;临时退出不要用删除。历史重复身体不自动合并或丢弃物品。
++  创建、复用、永久遣散在服务端日志以 `[numen-lifecycle]` 记录 body/owner/name,不发到游戏公屏。`create` 表示新建名册条目,实际加入仍须经过平台接纳。LuckPerms 可用身体 UUID 查询身份;普通新同伴仍委托主人的权限,原账号接管沿用既有权限策略。
+ - **被踢与被收的区分不靠猜**:Numen 自己收她只有 `CompanionFactory.despawn` 一条路,收之前把她记进"正被 Numen 移出"的集合(`isLeaving`);`PlayerKickEvent`(MONITOR)与 `PlayerQuitEvent` 里不在这个集合里的,就是外面请出去的,交给 `Companions.removedFromOutside`
+   (踢人先到 Kick 再到 Quit,入口对第二次是空操作)。关服时 Paper 先停插件、后踢人,监听器已经不在,不会误报。
+ - **掉落物的几处挂点**:`BlockDropItemEvent` 里包住 `breakStarts/added/breakEnds`(Paper 在这一挖期间把进世界的物品实体都截下来交给它,事件之后才真进世界);`EntityPickupItemEvent`(件数减掉之前)→ `taken`;
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java
+index 1cbfaf994..3f6e57d9f 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java
+@@ -54,7 +54,7 @@ public final class CompanionRoster {
+     }
+ 
+     /**
+-     * 主人名下叫这个名字的同伴,没有则 null——<b>召唤的幂等就靠它</b>:同名就复用,
++     * 主人名下叫这个玩家名的同伴(同原版玩家名,不分大小写),没有则 null——<b>召唤的幂等就靠它</b>:同名就复用,
+      * 不铸新 UUID,否则每喊一次"召唤小焰"就多一只同名分身,登录时一起复活。
+      *
+      * <p>万一有重名(迁移过来的旧数据),取定序后的第一个:注册表是 HashMap,不定序的话
+@@ -66,7 +66,7 @@ public final class CompanionRoster {
+         }
+         UUID best = null;
+         for (Row r : rows) {
+-            if (!name.equals(r.name())) {
++            if (!name.equalsIgnoreCase(r.name())) {
+                 continue;
+             }
+             if (best == null || r.uuid().toString().compareTo(best.toString()) < 0) {
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
+index d82b429b3..af03aca27 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
+@@ -47,6 +47,8 @@ public final class Companions {
+         CompanionRegistry reg = CompanionRegistry.get(server);
+         UUID existing = findByOwnerName(server, ownerUuid, name);
+         if (existing != null) {
++            com.dwinovo.numen.api.Constants.LOG.info("[numen-lifecycle] reuse body={} owner={} name={}",
++                    existing, ownerUuid, reg.find(existing).name());
+             // 被外面请出去的她只有主人再召唤才回来:召唤就是主人的决定,清掉"被请出去"的状态,身体回来后解开停牌
+             boolean returning = reg.find(existing).removed();
+             reg.markReturned(existing);
+@@ -73,6 +75,8 @@ public final class Companions {
+         CompanionRegistry.Entry fresh = new CompanionRegistry.Entry(
+                 name, ownerUuid, level.dimension(), net.minecraft.core.BlockPos.containing(pos));
+         reg.put(companionUuid, fresh);
++        com.dwinovo.numen.api.Constants.LOG.info("[numen-lifecycle] create body={} owner={} name={}",
++                companionUuid, ownerUuid, name);
+         CompanionFactory.spawn(server, companionUuid, name, ownerUuid, level, pos,
+                 () -> reg.find(companionUuid) != null, arrival -> {
+             NumenPlayer body = arrival.body();
+@@ -626,6 +630,11 @@ public final class Companions {
+      */
+     public static void dismiss(MinecraftServer server, UUID ownerUuid, Collection<UUID> uuids) {
+         for (UUID uuid : uuids) {
++            CompanionRegistry.Entry entry = CompanionRegistry.get(server).find(uuid);
++            if (entry != null) {
++                com.dwinovo.numen.api.Constants.LOG.info("[numen-lifecycle] dismiss body={} owner={} name={}",
++                        uuid, entry.owner(), entry.name());
++            }
+             NumenPlayer live = NumenPlayer.findByUuid(server, uuid);
+             if (live == null) continue;
+             dropEverything(live);
+@@ -678,7 +687,7 @@ public final class Companions {
+     public static int dismissByName(MinecraftServer server, UUID ownerUuid, String name) {
+         List<UUID> ids = new ArrayList<>();
+         for (Map.Entry<UUID, CompanionRegistry.Entry> e : CompanionRegistry.get(server).ownedBy(ownerUuid)) {
+-            if (e.getValue().name().equals(name)) ids.add(e.getKey());
++            if (e.getValue().name().equalsIgnoreCase(name)) ids.add(e.getKey());
+         }
+         dismiss(server, ownerUuid, ids);
+         return ids.size();
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java
+index 21919577e..c8043bdcf 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java
+@@ -97,6 +97,25 @@ class CompanionRosterTest {
+         assertNull(CompanionRoster.findByName(List.of(), "小焰"));
+     }
+ 
++    @Test
++    void playerNameCaseDoesNotMintAnotherIdentity() {
++        List<CompanionRoster.Row> rows = List.of(new CompanionRoster.Row(A, "Fishy", 0L));
++        assertEquals(A, CompanionRoster.findByName(rows, "fishy"));
++        assertEquals(A, CompanionRoster.findByName(rows, "FISHY"));
++        assertEquals(A, CompanionRoster.findByName(rows, "FiShY"));
++        assertNull(CompanionRoster.findByName(rows, "fishy_2"));
++        assertNull(CompanionRoster.findByName(rows, "fishy "));
++    }
++
++    @Test
++    void historicalCaseDuplicatesStillResolveDeterministically() {
++        List<CompanionRoster.Row> rows = List.of(
++                new CompanionRoster.Row(B, "Fishy", 0L),
++                new CompanionRoster.Row(A, "fishy", 42L));
++        assertEquals(A, CompanionRoster.findByName(rows, "FISHY"));
++        assertEquals(A, CompanionRoster.findByName(rows.reversed(), "Fishy"));
++    }
++
+     // ---- 改:死亡倒计时 ----
+ 
+     @Test
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
+index a0ee31e3f..d79e38d4e 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
+@@ -14,6 +14,28 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
+ 
+ /** 官方发布协议的真实 Paper 连接;二进制布局另用原发布 JAR 的 codec 核对。 */
+ class ReleaseClientTest extends Scenario {
++    @Test void summonNameCaseKeepsTheSameBodyAndInventory() throws Exception {
++        Bot owner = legacy("rel_identity");
++        try {
++            UUID body = summonPacket(owner, "RelIdentity");
++            console("give RelIdentity minecraft:diamond 3");
++            String inventory = console("data get entity " + body + " Inventory");
++            assertTrue(inventory.contains("minecraft:diamond"));
++            for (String name : List.of("RelIdentity", "RELIDENTITY", "rElIdEnTiTy")) {
++                assertEquals(body, summonPacket(owner, name));
++                assertEquals(1, roster(owner).stream().filter(e -> e.name.equalsIgnoreCase(name)).count());
++                assertEquals(inventory, console("data get entity " + body + " Inventory"));
++            }
++            owner.command("numen player despawn rElIdEnTiTy");
++            until(() -> !online("RelIdentity"), "case-insensitive explicit dismissal");
++            UUID replacement = summonPacket(owner, "RelIdentity");
++            assertNotEquals(body, replacement, "only explicit permanent dismissal ends the identity");
++        } finally {
++            owner.command("numen player despawn RelIdentity");
++            until(() -> !online("RelIdentity"), "identity test cleanup");
++        }
++    }
++
+     @Test void oldClientModelCommandsExplainWhereItsSettingsActuallyLive() throws Exception {
+         Bot owner = legacy("rel_settings");
+         summonPacket(owner, "RelSettings");
+@@ -321,11 +343,13 @@ class ReleaseClientTest extends Scenario {
+         return owner;
+     }
+     private UUID summonPacket(Bot owner, String name) throws Exception {
++        int before = owner.payloads(ROSTER).size();
+         ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+         writeText(out, name); writeText(out, ""); writeText(out, ""); out.writeBoolean(false);
+         owner.payload("numen_api:summon_request", bytes.toByteArray());
+-        until(() -> roster(owner).stream().anyMatch(e -> e.name.equals(name)), "legacy summon " + name);
+-        return roster(owner).stream().filter(e -> e.name.equals(name)).findFirst().orElseThrow().id;
++        until(() -> owner.payloads(ROSTER).size() > before
++                && roster(owner).stream().anyMatch(e -> e.name.equalsIgnoreCase(name)), "legacy summon " + name);
++        return roster(owner).stream().filter(e -> e.name.equalsIgnoreCase(name)).findFirst().orElseThrow().id;
+     }
+     private static void run(Bot owner, UUID body, String id, String code) throws IOException {
+         ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
