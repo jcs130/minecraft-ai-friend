@@ -65,7 +65,7 @@ public final class BridgeContractTest {
         BridgeProtocol.requireOwner(identity.ownerUuid(), identity.ownerUuid()); check(true);
         failure("owner_changed", () -> BridgeProtocol.requireOwner(identity.ownerUuid(), identity.maidUuid()));
         failure("unowned_maid", () -> BridgeProtocol.requireOwner(identity.ownerUuid(), null));
-        byte[] key = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.US_ASCII);
+        byte[] key = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.US_ASCII); // gitleaks:allow -- deterministic repeated 0123456789 HMAC test vector only.
         byte[] raw = ("{\"qd_identity\":{\"maidUuid\":\"" + MAID + "\"}}").getBytes(StandardCharsets.UTF_8);
         var sig = BridgeProtocol.signature(key, "test-request-000001", "1788825600000", raw);
         check(sig.equals("89b02953054b0c27fe176ab88ffd03bded9dd8d0f190cbcb145a39e152db7f6d"));

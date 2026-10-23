@@ -1,0 +1,8 @@
+title = "Qiandengji source tree secret policy"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact JSON file fingerprints; not API credentials or arbitrary hex strings"
+regexTarget = "line"
+regexes = ['''^\s*"(?:apiSha256|previousApiSha256|numenApiPreserved(?:Sha256)?|[^"\r\n]+\.(?:jar|java|class|py))"\s*:\s*"[a-f0-9]{64}"[,]?\s*$''']

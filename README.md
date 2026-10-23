@@ -1,6 +1,14 @@
-# 千灯纪 · Paper 跨端分支
+# 千灯纪 · Agent 长期生活的游戏世界
 
-当前 `qiandengji-paper-1.20.6` 分支承载正在运行的 **Paper 1.20.6 / Java 21** 家庭服务器：Java、基岩和 Mineflayer Agent 共用世界，女神与观战镜头由服务端扩展支持。新版源码、配置基线、版本锁和维护入口在 [paper/README.md](paper/README.md)。后续新版迭代以本分支为基线；世界存档、账号数据、密钥和第三方二进制文件不进入 Git。
+当前 Paper 服务使用 **Minecraft 1.21.1 / Paper build 133 / Java 21**。真人、基岩玩家与 Agent 共享世界，围绕技能、委托、探索、试炼和生活形成持续经历。当前维护分支为 **`qiandengji-personal-stash`**，默认 `main` 保留旧 NeoForge 工程。
+
+自研源码采用 MIT，Numen 等子项目保留自身许可证。可以 clone/fork 自建；先读 **[从公开源码自行部署](docs/SELF_HOSTING.md)**，其中有独立依赖下载/校验、跨主机构建、正式网站源码导出及验证步骤。**现阶段不是整台家服的一键镜像**：固定城镇布局仍有耦合，世界、玩家数据、账号库、密钥和第三方二进制不随源码发布。凭据规则及历史固定值处置见 [SECURITY.md](SECURITY.md)。
+
+```sh
+git clone --branch qiandengji-personal-stash https://github.com/jcs130/minecraft-ai-friend.git
+```
+
+游戏源码入口为 [paper/README.md](paper/README.md)。官网现役 0.8.4 的完整代码位于公开发布分支 `portal-account-fix-20261023`；上面的自部署工具可导出固定提交，避免误用游戏开发分支内尚未部署的 0.9.0 候选。
 
 以下是此前 1.21.1 / NeoForge 版本的设计与工程历史，保留供参考；其中的运行状态、端口和部署步骤不代表当前 Paper 服务器。
 

@@ -44,6 +44,12 @@ world/maid-bridge-src/build/
 **/.env.*
 !**/.env.example
 **/secrets/
+/.self-host/
+**/private/
+**/*.dmp
+**/*.dump
+**/portal.sqlite*
+**/*-secret.txt
 
 # Derived game/renderer resources are restored or built from the locked inputs.
 /assets/game-models/

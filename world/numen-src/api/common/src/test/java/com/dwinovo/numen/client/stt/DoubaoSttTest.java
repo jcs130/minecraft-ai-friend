@@ -148,9 +148,9 @@ class DoubaoSttTest {
 
     @Test
     void aPlainApiKeyGoesOutAsTheNewConsoleHeader() {
-        // 新版控制台只发一串 UUID 样的 key,握手验过:这个头对、老的那两个头会 400
-        var headers = DoubaoStt.authHeaders("51e24a12-5224-41f5-838b-ce55ca639d27");
-        assertEquals(Map.of("X-Api-Key", "51e24a12-5224-41f5-838b-ce55ca639d27"), headers);
+        // Synthetic UUID fixture only; no provider credential belongs in a unit test.
+        var headers = DoubaoStt.authHeaders("00000000-0000-4000-8000-000000000001");
+        assertEquals(Map.of("X-Api-Key", "00000000-0000-4000-8000-000000000001"), headers);
     }
 
     @Test

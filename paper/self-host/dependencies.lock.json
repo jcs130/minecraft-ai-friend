@@ -1,0 +1,79 @@
+{
+  "minecraft": "1.21.1",
+  "paperBuild": 133,
+  "purpose": "Independent source sandbox; not the home server installation or production release selection",
+  "artifacts": [
+    {
+      "component": "Paper",
+      "path": "server.jar",
+      "url": "https://fill-data.papermc.io/v1/objects/39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9/paper-1.21.1-133.jar",
+      "algorithm": "sha256",
+      "digest": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9",
+      "licenseSource": "https://github.com/PaperMC/Paper"
+    },
+    {
+      "component": "AuraSkills",
+      "path": "plugins/AuraSkills-2.4.0.jar",
+      "url": "https://cdn.modrinth.com/data/uDdZAVls/versions/9rSJ3THD/AuraSkills-2.4.0.jar",
+      "algorithm": "sha512",
+      "digest": "47b9cd79efcb244f93e839abd8f5f27dce6945ca8ee23590d3fca194326defada28fe3b95d210b1f7ae5923d6c9dee53db3f62236a6a463c0d9c5f270bd18e77",
+      "licenseSource": "https://modrinth.com"
+    },
+    {
+      "component": "MagicSpells",
+      "path": "plugins/MagicSpells-4.0-Beta-15.jar",
+      "url": "https://cdn.modrinth.com/data/PhyGVafK/versions/tRBVdfAI/MagicSpells-4.0-Beta-15.jar",
+      "algorithm": "sha512",
+      "digest": "f60b9e7217ef8ae21753001f0ebf324e478e59ea0a1bf84b8e53e4685c296dcdab19444eb159a95b75ef974aaac09613a1bc2f65891823d15bf515be03a7416f",
+      "licenseSource": "https://modrinth.com"
+    },
+    {
+      "component": "worldedit",
+      "path": "plugins/worldedit-bukkit-7.3.9.jar",
+      "url": "https://cdn.modrinth.com/data/1u6JkXh5/versions/Bu1zaaoc/worldedit-bukkit-7.3.9.jar",
+      "algorithm": "sha512",
+      "digest": "ce19097ab93a3ff75a929a1efec58138adc5b700f876ec8ac7a96c97d98d77a06f22661f0418c3407d644ca2d9713fde417d5789c79864d9c2094f203f372c76",
+      "licenseSource": "https://modrinth.com"
+    },
+    {
+      "component": "WorldGuard",
+      "path": "plugins/worldguard-bukkit-7.0.12-dist.jar",
+      "url": "https://cdn.modrinth.com/data/DKY9btbd/versions/J66QOTLZ/worldguard-bukkit-7.0.12-dist.jar",
+      "algorithm": "sha512",
+      "digest": "5917a0bf2de577021a3881e440386acefa285dfb3625c4a69be12922e4bc03cfea16ea07335f0cc71d4ea516f19477679001f6968d853969a89bfee0c9ecd7b9",
+      "licenseSource": "https://github.com/EngineHub/WorldGuard"
+    },
+    {
+      "component": "EssentialsX",
+      "path": "plugins/EssentialsX-2.21.2.jar",
+      "url": "https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsX-2.21.2.jar",
+      "algorithm": "sha256",
+      "digest": "0b759026f02f3c547c32886f3666db3c1f94cff73e141ae5648313fd0d0bdfc6",
+      "licenseSource": "https://github.com/EssentialsX/Essentials"
+    },
+    {
+      "component": "ProtocolLib",
+      "path": "plugins/ProtocolLib-5.3.0.jar",
+      "url": "https://github.com/dmulloy2/ProtocolLib/releases/download/5.3.0/ProtocolLib.jar",
+      "algorithm": "sha256",
+      "digest": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d",
+      "licenseSource": "https://github.com/dmulloy2/ProtocolLib"
+    },
+    {
+      "component": "SpectatorPlus",
+      "path": "plugins/spectatorplus-paper-1.2.1.jar",
+      "url": "https://cdn.modrinth.com/data/qnFMs6Ja/versions/gglfSgWS/spectatorplus-paper-1.2.1.jar",
+      "algorithm": "sha512",
+      "digest": "240bce9c10e55d9246b1f465e604f69c9a3f941e3bbf09849d43a71c283404d2e3c4e7d50d0c52c38bdd2f1ed90b37f1ede30228a9dd2de8a0192d35ecdbed6e",
+      "licenseSource": "https://modrinth.com/plugin/spectatorplus"
+    },
+    {
+      "component": "SQLite JDBC",
+      "path": "libraries/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar",
+      "algorithm": "sha256",
+      "digest": "e697df15be3f95219d80773c5f1002030e33e932adda186c1c86fd51df6691a9",
+      "licenseSource": "https://github.com/xerial/sqlite-jdbc"
+    }
+  ]
+}
