@@ -1,0 +1,10 @@
+{
+  "observerOrigin": "http://127.0.0.1:28994/",
+  "observerKeyFile": "E:/MC/server/plugins/WorldObserver/worker.key",
+  "portalOrigin": "https://mc.example.test/",
+  "portalTokenFile": "E:/MC/private/world-observer-portal.key",
+  "rendererRoot": "E:/MC/integrations/world-observer/renderer",
+  "assetDirectory": "E:/MC/integrations/world-observer/assets/vanilla-1.21.1",
+  "serverItemCatalogFile": "",
+  "serverItemCatalogSha256": ""
+}

@@ -1,0 +1,66 @@
+# 官网女神之眼：无额外账号的现代观战
+
+状态：**0.8.9 / WorldObserver 0.1.0 候选，正式网站仍为 0.8.8，尚未重启部署。**
+
+官网选择角色后直接打开现代化 mc-visual-console 页面，无需手动填写 LAN 直播地址或发布凭据。
+第一人称、第三人称跟随、3D 观战、小地图和现有镜头设置沿用共享前端；
+网页不是图片轮播，也不会登录一个新的 Eye 账号。
+
+```text
+已存在的原玩家 / Numen 身体
+  → Paper WorldObserver（回环只读采集，真实 UUID）
+  → 本机观察 worker + 固定版现代渲染源
+  → 出站 HTTPS / WSS 443
+  → 官网 UUID / session 授权
+  → 浏览器里的现代化页面，独立切换镜头
+```
+
+## 权限和数据
+
+- 当前原 UUID 与可信在线/认证状态共同确认角色，不能凭 `ag_`、昵称或旧名册开流。
+  Numen 无普通网络登录会话时，要求当前服务端 UUID样本和真实原生身体登记共同匹配。
+- 默认只允许网站 owner/admin 观察所属角色。公开场景必须单独配置原 UUID，默认关闭；
+  公开流不包含完整背包、私聊、容器菜单、登录消息或工具 JSON。
+- 全部观看者复用一个 UUID 的同一观察源，不消耗玩家名额；各自镜头互不影响。
+  当前上限 4 个同时观察对象，容量满时显示等待说明，不抢断已有观众。
+- 每次请求与长流定时重验归属/会话；退出、撤权、离线、维度或身体变化会终止旧流。
+  网站自动刷新不重建正常 iframe，断流后保留该角色选择的镜头类型。
+- 可信 HTML/JS/CSS 固定在官网部署包里。发布端只能传白名单场景数据和已校验素材，
+  不能托管自己的网页脚本、访问任意 URL 或通过此接口操作游戏。
+
+## 已实现接口
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/v1/live` | 当前访问者可看的原 UUID角色映射，优先本人 |
+| `POST /api/v1/live/:id/watch` | 正常网站会话＋CSRF，续期当前页面的观看需求 |
+| `GET /watch/:id/`、`third/`、`3dview/` | 同源可信现代前端；仍需当前观战授权 |
+| `POST /api/v1/internal/world-view/poll` | 独立 worker 凭据，仅取授权租约，不向浏览器提供 |
+| WSS `/api/v1/live/:id/source` | 发布器首帧凭据，绑定真实 UUID与固定渲染构建 |
+
+旧 canvas/JPEG后台接口为兼容原发布器保留，普通直播页不再显示“接入/轮换发布凭据”。
+原 Eye 账号与原生游戏观战仍保留，它们不参与本网页数据源，也没有被删除或改密。
+
+## 运维配置
+
+官网新增字段位于 `live`：
+
+```json
+{
+  "worldObserverEnabled": false,
+  "worldObserverTokenHash": "",
+  "worldObserverMaxTargets": 4,
+  "worldObserverPublicUuids": [],
+  "native3dSiteDirectory": null
+}
+```
+
+具体 JAR构建、私有凭据文件、WSS反代、资源冻结、性能限额和回退见
+[WorldObserver](../integrations/world-observer/README.md)。发布需要新的维护确认与原双盘冷备份流程；
+不要把这个候选混同于完整 AgentFriend / CLI 新版本部署。
+
+## 验收边界
+
+必须用真实 Paper场景、原始资源和实际浏览器验证；HTTP200、空 canvas、纯天空首帧、
+自动测试里的假在线名册均不是画面验收。分别报告单元/协议测试、真实场景、
+手机尺寸、实际设备、生产发布状态。此候选不新增游戏控制、录播或完整 Java像素一致性承诺。

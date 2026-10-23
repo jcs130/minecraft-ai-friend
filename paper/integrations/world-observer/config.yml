@@ -1,0 +1,6 @@
+# Enable only with a configured local observation worker and website UUID ACL.
+enabled: false
+# Loopback only, never expose this port through a router or cloud proxy.
+port: 28994
+radius-chunks: 2
+max-targets: 4

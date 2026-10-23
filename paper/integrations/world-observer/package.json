@@ -1,0 +1,13 @@
+{
+  "name": "qiandengji-world-observer-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "dependencies": {
+    "minecraft-protocol": "1.66.2",
+    "minecraft-data": "3.113.2",
+    "prismarine-nbt": "2.8.0"
+  },
+  "scripts": { "start": "node worker.mjs", "test": "node --test tests/*.test.mjs" }
+}

@@ -6,6 +6,10 @@ import { Store, digest, newSecret, hashPassword, verifyPassword } from './store.
 import { GameData, UUID } from './game-data.mjs';
 import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { Live } from './live.mjs';
+import { WorldView } from './world-view.mjs';
+import { loadSpectatorSite } from './viewer/spectator-site.mjs';
+import { createSpectatorRelay } from './viewer/spectator-relay.mjs';
+import { WebSocketServer } from 'ws';
 import { requestOrigin, rateAddress } from './request-origin.mjs';
 import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
@@ -59,6 +63,17 @@ export function createPortal(config, options = {}) {
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const challenges = cloud ? new CloudChallenges(store,game) : new SavedChallenges(config,game,store);
   const live = new Live(config, store);
+  const worldView = new WorldView(config, store);
+  const nativeReady = worldView.enabled ? (async () => {
+    const site = options.spectatorSite || await loadSpectatorSite(config.live.native3dSiteDirectory);
+    return createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
+      authorizePublisher: async (req, id, token) => {
+        if (req.headers.origin || req.headers.cookie) throw fail(403, 'PUBLISHER_REQUIRED', '仅接受服务端观战源');
+        return worldView.publisher(id, token, await game.roster());
+      },
+      authorizeViewer: async (req, id) => worldView.viewer(id, await game.roster(), sessionFrom(req)) });
+  })() : Promise.resolve(null);
+  nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
@@ -159,6 +174,7 @@ export function createPortal(config, options = {}) {
       if (req.portalOrigin.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
+      if (pathname.startsWith('/watch/') && await (await nativeReady)?.http(req, res)) return;
       if (pathname === '/join') {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
         const bytes = await fs.readFile(path.join(config.publicDir, 'join.html'));
@@ -276,6 +292,11 @@ export function createPortal(config, options = {}) {
         for await (const chunk of req) { length += chunk.length; if (length > MAX_PHOTO_BYTES) throw fail(413, 'PHOTO_SIZE', '照片文件过大'); chunks.push(chunk); }
         return respond(res, 200, gallery.accept(photoUpload[1], Buffer.concat(chunks)));
       }
+      if (req.method === 'POST' && pathname === '/api/v1/internal/world-view/poll') {
+        worldView.authorizeWorker(req); rate('world-observer-worker', 90, 60000);
+        await jsonBody(req, 1024);
+        return respond(res, 200, worldView.poll(await game.roster()));
+      }
       const ingest = /^\/api\/v1\/live\/([a-f0-9-]{36})\/(open|frame)$/.exec(pathname);
       if (ingest && (req.method === 'POST' && ingest[2] === 'open' || req.method === 'PUT' && ingest[2] === 'frame')) {
         // Only this narrow binary ingress accepts publisher credentials instead
@@ -365,8 +386,19 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20) }));
       if (req.method === 'GET' && pathname === '/api/v1/live') {
         const session = sessionFrom(req), owner = session?.owner_id ? store.ownerById(session.owner_id) : null;
-        const channels = live.list(owner);
-        return respond(res, 200, { channels, defaultChannelId: channels.find(row => row.isOwn)?.id || channels.find(row => row.available)?.id || channels[0]?.id || null, mode: 'canvas-only', frameIntervalMs: 1000 });
+        const relay = await nativeReady;
+        const channels = worldView.enabled ? worldView.list(await game.roster(), owner, id => relay.state(id)) : live.list(owner);
+        return respond(res, 200, { channels, defaultChannelId: channels.find(row => row.isOwn)?.id || channels.find(row => row.available)?.id || channels[0]?.id || null, mode: worldView.enabled ? 'native-3d' : 'canvas-only', frameIntervalMs: 1000 });
+      }
+      const watch = /^\/api\/v1\/live\/([a-f0-9]{32})\/watch$/.exec(pathname);
+      if (watch && req.method === 'POST') {
+        if (!worldView.enabled) throw fail(404, 'NOT_FOUND', '观战服务尚未启用');
+        const body = await jsonBody(req, 1024), session = sessionFrom(req);
+        const accepted = worldView.watch(watch[1], await game.roster(), session, body.viewerId);
+        const relay = await nativeReady, available = relay.state(watch[1]).available;
+        const queued = !worldView.sources.has(watch[1]) && worldView.sources.size >= config.live.worldObserverMaxTargets;
+        return respond(res, 200, { ...accepted, available, watchUrl: `/watch/${watch[1]}/`,
+          message: available ? '观战画面已连接' : queued ? '当前观战场景已满，空闲后自动连接' : Date.now()-worldView.workerAt>8000 ? '观战服务暂未就绪，正在自动重试' : '女神之眼正在加载场景，请稍候' });
       }
       if (ingest && req.method === 'GET' && ingest[2] === 'frame') {
         const channel = live.channel(ingest[1]);
@@ -619,7 +651,14 @@ export function createPortal(config, options = {}) {
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;
+  server.on('upgrade', (req, socket, head) => {
+    void (async () => {
+      req.portalOrigin = requestOrigin(req, config, server.address()?.port || config.port);
+      const relay = await nativeReady;
+      if (!relay?.upgrade(req, socket, head)) socket.destroy();
+    })().catch(() => socket.destroy());
+  });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

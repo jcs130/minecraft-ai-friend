@@ -64,3 +64,6 @@ dialog{border:1px solid #405544;border-radius:12px;background:#172225;color:var(
 
 /* Retained UUID archives stay available without filling the current roster. */
 .role-history{grid-column:1/-1;min-width:0}.role-history>summary{padding:20px;cursor:pointer;color:var(--muted);font-size:14px}.role-history>summary:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}.role-history>.content-pad{padding-top:0}.role-history .roster-grid{margin-top:16px}
+
+/* Existing modern viewer remains one persistent browsing context across metadata refresh. */
+.native-screen{aspect-ratio:auto;height:72vh;min-height:440px;max-height:900px}.native-screen iframe{display:block;width:100%;height:100%;border:0;background:#111a20}.native-screen .live-placeholder{position:absolute;inset:0}.native-screen [hidden]{display:none!important}@media(max-width:600px){.native-screen{height:70vh;min-height:400px}}

@@ -19,7 +19,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -49,7 +49,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', error => errors.push(error));
   const dom = new JSDOM(html, { url: initialView === 'home' ? origin : origin + '/#' + initialView, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const { window } = dom; const { document } = window;
-  let cookie = ''; let networkFailure = false; let hold = null;
+  let cookie = ''; let networkFailure = false; let hold = null; let observationState = 'live';
   window.scrollTo = () => {};
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); };
@@ -58,6 +58,14 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     // Simulate the bridge going offline between displaying a ready form and
     // submitting it; the actual backend still returns its unavailable receipt.
     if (url.pathname === '/api/v1/gallery') return new Response(JSON.stringify({ photos }));
+    // Frontend-only fixture. Native streaming and actual ACLs have separate
+    // HTTP/WS tests and real Paper/WebGL acceptance.
+    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:'public'}]}));
+    if (managedLive && /^\/api\/v1\/live\/[a-f0-9]{32}\/watch$/.test(url.pathname)) {
+      if(observationState==='offline')throw new TypeError('Failed to fetch');
+      return new Response(JSON.stringify({accepted:true,available:observationState==='live',message:'当前观战场景已满，空闲后自动连接',watchUrl:'/watch/'+'a'.repeat(32)+'/'}));
+    }
+
     if (capabilitiesReady && url.pathname === '/api/v1/game-capabilities') return new Response(JSON.stringify({ ready: true }));
     if (networkFailure && ['/api/v1/server', '/api/v1/roster'].includes(url.pathname)) throw new Error('Isolated network outage');
     const headers = { ...options.headers, ...(cookie ? { Cookie: cookie } : {}), ...(options.method && options.method !== 'GET' ? { Origin: origin } : {}) };
@@ -81,8 +89,8 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   });
   window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
   window.eval(await fs.readFile(path.join(projectRoot, 'public/challenges.js'), 'utf8'));
-  window.eval(code + '\nwindow.__portalRefreshForTest = refresh;');
-  await waitFor(() => initialView==='challenges' ? document.querySelector('.challenge-points') : document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
+  window.eval(code + '\nwindow.__portalRefreshForTest = refresh; window.__portalPollWorldForTest = () => { worldLastRenew = 0; return pollLiveFrame(); };');
+  await waitFor(() => managedLive ? document.querySelector('[data-world-screen]') : initialView==='challenges' ? document.querySelector('.challenge-points') : document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
     let entered, release;
     const ready = new Promise(resolve => { entered = resolve; });
@@ -90,7 +98,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
+  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
 }
 
 test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
@@ -145,7 +153,7 @@ test('public growth, event filters and an offline live page work without exposin
   assert.ok(ui.document.querySelector('.event-body').textContent.includes('<script>unsafe()</script>'));
   assert.equal(ui.document.querySelectorAll('.event-body script').length, 0);
   ui.click('[data-action="event-filter"][data-kind="quest"]'); await waitFor(() => !ui.document.querySelector('.world-event'));
-  ui.window.location.hash = 'live'; await waitFor(() => ui.document.querySelector('#main').textContent.includes('直播间正在准备'));
+  ui.window.location.hash = 'live'; await waitFor(() => ui.document.querySelector('#main').textContent.includes('女神之眼'));
   assert.equal(ui.document.querySelectorAll('iframe').length, 0);
 });
 
@@ -165,31 +173,49 @@ test('phone navigation closes from its scrim and LAN HTTP forms work without sec
   assert.ok(!ui.document.querySelector('#game-account-form .form-error').textContent.includes('TypeError'));
 });
 
-test('announcement and live management forms submit, rotate and delete; logout clears private channel metadata', async t => {
+test('announcements still submit and private legacy metadata clears on logout; viewers never configure a publisher', async t => {
   const ui = await screen(t); await ui.setup();
   ui.window.location.hash = 'events'; await waitFor(() => ui.document.querySelector('[data-action="new-notice"]'));
   ui.click('[data-action="new-notice"]');
   ui.fill('title', '网页公告已提交', '#notice-form'); ui.fill('body', '表单必须得到服务端确认。', '#notice-form'); ui.submit('#notice-form');
   await waitFor(() => !ui.document.querySelector('#modal').open);
   assert.equal(ui.portal.store.db.prepare("SELECT count(*) AS n FROM public_events WHERE title=?").get('网页公告已提交').n, 1);
-  ui.window.location.hash = 'live'; await waitFor(() => ui.document.querySelector('[data-action="new-channel"]'));
-  ui.click('[data-action="new-channel"]'); ui.fill('title', '本人私有直播标题', '#channel-form'); ui.submit('#channel-form');
-  await waitFor(() => ui.document.querySelector('#created-token'));
-  const oldToken = ui.document.querySelector('#created-token').textContent;
-  assert.match(oldToken, /^pub_/); ui.click('[data-action="close-modal"]');
-  ui.click('[data-action="rotate-publisher"]'); ui.submit('#rotate-publisher-form');
-  await waitFor(() => ui.document.querySelector('#created-token'));
-  assert.notEqual(ui.document.querySelector('#created-token').textContent, oldToken);
-  ui.click('[data-action="close-modal"]');
-  ui.click('[data-action="delete-channel"]'); ui.submit('#delete-channel-form');
-  await waitFor(() => !ui.document.querySelector('#modal').open);
-  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM live_channels').get().n, 0);
-  ui.click('[data-action="new-channel"]'); ui.fill('title', '不得残留的私有标题', '#channel-form'); ui.submit('#channel-form');
-  await waitFor(() => ui.document.querySelector('#created-token')); ui.click('[data-action="close-modal"]');
+  ui.portal.live.create({title:'不得残留的私有标题',playerName:'ag_Alpha',playerUuid,visibility:'owner'});
+  await ui.refresh(false);
+  ui.window.location.hash = 'live'; await waitFor(() => ui.document.querySelector('#main').textContent.includes('ag_Alpha'));
+  assert.equal(ui.document.querySelector('[data-action="new-channel"]'),null);
+  assert.equal(ui.document.querySelector('[data-action="rotate-publisher"]'),null);
+  assert.equal(ui.document.querySelector('#created-token'),null);
   ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
   ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
-  ui.window.location.hash = 'live'; await waitFor(() => ui.document.querySelector('#main').textContent.includes('直播间正在准备'));
+  ui.window.location.hash = 'live'; await waitFor(() => ui.document.querySelector('#main').textContent.includes('女神之眼'));
   assert.ok(!ui.document.body.textContent.includes('不得残留的私有标题'));
+});
+
+test('managed viewing embeds the original modern page and metadata refresh keeps the same camera iframe', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const frame=ui.document.querySelector('[data-world-frame]');
+  assert.equal(frame.getAttribute('src'),'/watch/'+'a'.repeat(32)+'/');
+  assert.match(frame.getAttribute('sandbox'),/allow-pointer-lock/);
+  assert.ok(!ui.document.body.textContent.includes('接入直播'));
+  await ui.refresh(false);assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  await ui.refresh(true);assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  const previousFooter=ui.document.querySelector('.footer').textContent,summary=ui.game.serverSummary;
+  ui.game.serverSummary=async()=>({...await summary(),observedAt:'2026-10-10T03:10:00.000Z'});
+  ui.click('.topbar [data-action="refresh"]');
+  await waitFor(()=>!ui.document.querySelector('.topbar [data-action="refresh"]').disabled);
+  assert.equal(ui.document.querySelector('[data-world-frame]'),frame);assert.notEqual(ui.document.querySelector('.footer').textContent,previousFooter);
+});
+
+test('unavailable observation clears the old scene, explains capacity and recovers without English network errors', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const frame=ui.document.querySelector('[data-world-frame]');await ui.observation('pending');
+  assert.equal(frame.isConnected,false);assert.equal(ui.document.querySelector('[data-world-frame]'),null);
+  assert.match(ui.document.querySelector('[data-world-reason]').textContent,/场景已满/);
+  await ui.observation('live');assert.ok(ui.document.querySelector('[data-world-frame]'));
+  await ui.observation('offline');assert.equal(ui.document.querySelector('[data-world-frame]'),null);
+  assert.match(ui.document.querySelector('[data-world-reason]').textContent,/恢复后自动重试/);assert.ok(!ui.document.body.textContent.includes('Failed to fetch'));
 });
 
 test('page flow protects private data, validates setup, reads the saved backpack and revokes a one-time client token', async t => {

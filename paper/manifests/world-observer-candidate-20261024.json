@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate_not_deployed",
+  "date": "2026-10-24",
+  "websiteVersion": "0.8.9",
+  "observerVersion": "0.1.0",
+  "minecraftVersion": "1.21.1",
+  "basedOnServerCommit": "1b7f3ff151d3d13c27b87683c7c1ce35d01b5b41",
+  "viewerRepository": "https://github.com/jcs130/mc-visual-console",
+  "viewerCommit": "05b5538651aa63956175bd161554e6e1f0d9cca0",
+  "observerJarSha256": "c5dc4edcec95176c85518ede330a53b07f830540b702b33011a97c59d26a9d13",
+  "browserBundleSha256": "6b9ec50af9257108dafbd2cf49eade87a9285542ecd738f7e3a494cc5646d0f9",
+  "consoleBundleSha256": "a6ec113edb7aa9db1f766bcdb36cf9ada4ccd16163f722d1461ce6e791ff679e",
+  "viewerSourceSha256": "7ec4de0d7656e71b2bf4dd5cd628a05edfec58312b7edf5bcc69316cb2560627",
+  "scope": {
+    "extraMinecraftConnections": 0,
+    "newPublicHomePorts": 0,
+    "publicUuidsDefault": [],
+    "maxObservedTargets": 4,
+    "chunkRadius": 2,
+    "readOnly": true,
+    "originalEyeAccountsPreserved": true
+  },
+  "verification": {
+    "portalTestsPassed": 227,
+    "workerTestsPassed": 6,
+    "rendererTestsPassed": 77,
+    "rendererOptionalYsmAssetTestsSkipped": 6,
+    "paperChecksPassed": 11,
+    "nativeNumenScenes": 3,
+    "simultaneousObservedTargets": 4,
+    "originalAssetsVerified": 8451,
+    "numenTerrainMutationObservedMs": 1748,
+    "maximumObservationTickMeasuredMs": 10.7972,
+    "idleTargetsAfterRelease": 1,
+    "desktopAnd390pxBrowser": true,
+    "mobilePhysicalDeviceVerified": false,
+    "fullSceneParityVerified": false,
+    "allYsmModelsAndAnimationsVerified": false,
+    "productionLoadVerified": false
+  },
+  "production": {
+    "changed": false,
+    "websiteVersion": "0.8.8",
+    "paperRestarted": false
+  },
+  "deployment": {
+    "requiresNewMaintenanceConfirmation": true,
+    "paperRestartRequired": true,
+    "websiteRestartRequired": true,
+    "loginProxyRestartRequired": false,
+    "freshDualDiskColdBackupRequired": true
+  },
+  "rollback": "Stop observation worker; restore website image/config; normally stop Paper before removing this independent plugin. Keep latest website database, worlds, game passwords, UUIDs, inventory and Eye pairing."
+}

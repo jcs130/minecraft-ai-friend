@@ -1,0 +1,6 @@
+name: WorldObserver
+version: '0.1.0'
+main: org.qiandeng.observer.WorldObserverPlugin
+api-version: '1.21'
+depend: [ProtocolLib]
+description: Read-only account-free scenes for the modern web viewer.

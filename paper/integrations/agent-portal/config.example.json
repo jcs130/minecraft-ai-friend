@@ -39,6 +39,11 @@
   "agentRegistry": "E:/MC/ops/agent-eye-pairs.json",
   "publicGameAddress": "micro.kangqiang.site:25702",
   "live": {
+    "worldObserverEnabled": false,
+    "worldObserverTokenHash": "",
+    "worldObserverMaxTargets": 4,
+    "worldObserverPublicUuids": [],
+    "native3dSiteDirectory": null,
     "maxFrameBytes": 524288,
     "staleAfterMs": 8000,
     "maxChannels": 16

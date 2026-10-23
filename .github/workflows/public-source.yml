@@ -57,6 +57,8 @@ jobs:
       - name: Prepare public compile inputs only (no game process)
         run: python paper/self-host/selfhost.py prepare --directory "$RUNNER_TEMP/paper-inputs" --accept-eula
       - run: python paper/self-host/selfhost.py build --directory "$RUNNER_TEMP/paper-inputs" --output "$RUNNER_TEMP/plugin-build"
+      - name: Compile the independent read-only observation plugin
+        run: python paper/integrations/world-observer/build.py --server "$RUNNER_TEMP/paper-inputs" --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/observer-build"
       - name: Check bounded CLI help and query contracts
         run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
   backup-path-compatibility:
@@ -86,6 +88,12 @@ jobs:
       - name: Check current portal and Skill download contracts
         run: npm test
         working-directory: paper/integrations/agent-portal
+      - name: Install the locked observation worker
+        run: npm ci --ignore-scripts --no-audit
+        working-directory: paper/integrations/world-observer
+      - name: Check observation leases and lifecycle boundaries
+        run: npm test
+        working-directory: paper/integrations/world-observer
       - run: python paper/self-host/selfhost.py export-portal --directory "$RUNNER_TEMP/own-game" --output "$RUNNER_TEMP/portal"
       - run: npm ci --no-audit
         working-directory: ${{ runner.temp }}/portal

@@ -1,6 +1,6 @@
 # 千灯纪网站：云端门户与账号桥
 
-日期：2026-10-22。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。网站0.7.1与游戏账号桥均已授权上线，当前网站源码 `77632a91`、LoginGuard0.1.5；“先内网、暂不更新代理”是已经完成的早期阶段。最新接入、Skill1.1.0、外观与创建者归属见[当前发布](AGENT_PORTAL_JOIN_APPEARANCE.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
+更新：2026-10-24。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。正式网站0.8.8 / `cb51ba79`、Skill1.2.1、LoginGuard0.1.5；账号桥已上线，“先内网、暂不更新代理”是已完成的早期阶段。0.8.9无账号现代观战为本轮候选，尚未部署，见[女神之眼](ACCOUNT_FREE_WORLD_VIEW.md)。下载分包和登录保护见[官网发布](WEBSITE_SECURITY_DOWNLOADS.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
 
 ## 已运行的网站
 
@@ -12,7 +12,7 @@
 - 手机布局有可收起导航、44px 触控、16px 表单、滚动表格、安全区域及可长按复制的凭据；LAN HTTP 的安全随机请求 ID 不依赖 `crypto.randomUUID`。
 - 直播按角色切换，默认本人已绑定角色；私有频道按原 UUID 授权。发布器抓取现有现代 Viewer 的游戏画布，页面聊天与工具面板不入图，不另开游戏身体。
 
-云端当前为0.7.1，已通过真实HTTPS、轻量注册回归、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。手机真机和真实直播源仍需分别验收。
+云端当前为0.8.8，已通过真实HTTPS、轻量注册回归、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。候选的浏览器尺寸验证与手机真机验收需分别报告。
 
 ## 游戏账号桥现状
 
@@ -36,11 +36,11 @@
 6. 正式只读核验旧 UUID/背包/职业/认证正常；用明确授权的临时测试角色检查网站建号、原生登录、游戏内绑定、改密与同一 UUID/物品保持，再恢复原自动拉起。没有最终回执不能宣称完成。
 7. 记录发布版本与实际验收。出现问题时关闭桥、正常恢复旧 JAR/配置；保留维护后密码与玩家进度，不回滚整份旧认证库或世界。
 
-## 直播仍需接入实际来源
+## 直播：正式旧预览与新的现代场景候选
 
-还没有可用的原客户端 Viewer 地址，正式频道数为 0。网站已提供带本人权限的频道与标准发布 API。本人在有原画面的电脑运行源码目录的 `npm run live:publish`，设置仅该频道的一次性发布 token 即可向门户出站发布，无需把原 Viewer 的控制接口对外开放。
+正式0.8.8仍使用原JPEG预览和频道API，尚未连接正式画面源。旧发布器 `npm run live:publish` 为兼容保留。0.8.9候选改为网站自动选择本人角色，通过独立WorldObserver读取原身体，复用现代前端进行第一人称、第三人称与3D观战，不登录额外Eye；见[无账号观战](ACCOUNT_FREE_WORLD_VIEW.md)。
 
-发布器仅接受已就绪的现代 Renderer、真实网格区块、新鲜 Socket 数据。当前 1280×720、约 1fps JPEG 预览，无声音；8 秒过期清空旧帧。WebGL 世界内姓名和文字气泡仍可能出现在画面。原客户端的真实渲染和远端设备尚未验收，不能把测试 JPEG 或 DOM 夹具算作真实直播。
+旧发布器是1280×720、约1fps、无声音的JPEG预览。新的候选转发真实原生场景数据，由浏览器渲染；不是JPEG截图，具备单独的UUID/会话授权、撤权和断流清屏。原生资源、专用模型、声音与完整动画均应分别验收，不能把测试JPEG或DOM夹具当作实际画面。
 
 网页接管、托管Mineflayer和外接Agent大脑仍为后续独立能力；皮肤与YSM上传、转换和确认已上线，详见[外观接入](AGENT_PORTAL_JOIN_APPEARANCE.md)。本网站不提供通用RCON、Shell、任意URL转发或共享模型Key。
 

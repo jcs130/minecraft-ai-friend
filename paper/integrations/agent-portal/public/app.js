@@ -102,6 +102,7 @@ function navigation() {
     `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
 }
 function render() {
+  removeWorldFrame(); worldLastRenew = 0;
   if (liveObjectUrl) { URL.revokeObjectURL(liveObjectUrl); liveObjectUrl = null; }
   window.QdMemories?.route();
   if (state.view === 'home') { app.innerHTML = homePage(); return; }
@@ -212,8 +213,42 @@ function eventsPage() {
 function livePage() {
   const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
   state.selectedChannel = selected?.id || null;
-  return heading('在这里，遇见正在冒险的他们。', '只读观看游戏画面，不需要安装模组，也不会占用角色的游戏连接。', owner() ? button('new-channel', '接入直播', 'plus', 'primary') : '')
-    + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen"><img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏直播画面" hidden><div class="live-placeholder" data-live-placeholder>${icons.monitor}<h2>${selected.available ? '正在接入游戏画面…' : '这段冒险，稍后继续。'}</h2><p>${selected.available ? '画面正在加载' : '发布端尚未连接，或刚刚离线。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.title)}</h2><p>${e(selected.playerName)} · ${selected.visibility === 'public' ? '公开直播' : '仅本人可看'} · 游戏画面</p></div><span class="status unknown" data-live-state>等待画面</span></div><div class="panel-footer">${icons.eye}直播不包含网页面板、私聊和工具反馈。当前为低带宽预览，无声音。</div></section><aside class="live-channels">${state.channels.map(channel => `<button class="channel-card ${channel.id === selected.id ? 'selected' : ''}" data-action="watch-channel" data-id="${channel.id}">${avatar(channel.playerName)}<span><strong>${e(channel.title)}</strong><small>${e(channel.playerName)}</small></span><span class="tag ${channel.available ? 'live-tag' : ''}">${channel.available ? '直播中' : '未开播'}</span></button>`).join('')}${selected.canManage ? `<div class="live-admin-actions">${button('rotate-publisher', '更换发布凭据', 'key', 'small', `data-id="${selected.id}"`)}${button('delete-channel', '移除当前频道', '', 'small danger', `data-id="${selected.id}"`)}</div>` : ''}</aside></div>` : `<section class="panel">${empty('直播间正在准备。', '服务器可以接入多个角色的只读画面。频道接入后，会在这里显示开播状态。', owner() ? button('new-channel', '接入第一个直播', 'plus', 'primary') : '', 'monitor')}</section>`);
+  return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。')
+    + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。公开画面不含私聊与完整背包；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
+}
+function worldChannelButtons(selectedId) {
+  return state.channels.map(channel => `<button class="channel-card ${channel.id === selectedId ? 'selected' : ''}" data-action="watch-channel" data-id="${e(channel.id)}">${avatar(channel.playerName)}<span><strong>${e(channel.playerName)}</strong><small>${channel.isOwn ? '我的角色' : channel.visibility === 'public' ? '公开冒险' : '女神之眼'}</small></span><span class="tag ${channel.available ? 'live-tag' : ''}">${channel.available ? '观战中' : channel.online === false ? '离线' : '可观战'}</span></button>`).join('');
+}
+let worldViewerId = newRequestId(), worldLastRenew = 0;
+const worldViewModes = new Map();
+function removeWorldFrame() {
+  const frame = document.querySelector('[data-world-frame]');
+  if (!frame) return;
+  try { const path = frame.contentWindow.location.pathname; if (new RegExp('^/watch/' + frame.dataset.channel + '/(third/|3dview/)?$').test(path)) worldViewModes.set(frame.dataset.channel, path); } catch {}
+  frame.remove();
+}
+async function pollWorldView(selected) {
+  if (Date.now() - worldLastRenew < 4500) return;
+  worldLastRenew = Date.now();
+  const id = selected.id, revision = authRevision, screen = document.querySelector('[data-world-screen]');
+  if (!screen || screen.dataset.channel !== id) return;
+  const label = document.querySelector('[data-live-state]');
+  try {
+    const result = await api(`/live/${id}/watch`, { method: 'POST', body: JSON.stringify({ viewerId: worldViewerId }) });
+    if (revision !== authRevision || state.view !== 'live' || screen !== document.querySelector('[data-world-screen]')) return;
+    if (!result.available) { removeWorldFrame(); document.querySelector('[data-live-placeholder]').hidden = false; document.querySelector('[data-world-reason]').textContent = result.message || '正在加载真实场景，请稍候。'; label.className = 'status unknown'; label.textContent = '场景准备中'; return; }
+    if (!screen.querySelector('[data-world-frame]')) {
+      const frame = document.createElement('iframe'); frame.dataset.worldFrame = ''; frame.dataset.channel = id;
+      frame.title = selected.playerName + ' 的现代化观战画面'; frame.src = worldViewModes.get(id) || `/watch/${id}/`;
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-pointer-lock'); frame.setAttribute('allowfullscreen', '');
+      screen.append(frame);
+    }
+    document.querySelector('[data-live-placeholder]').hidden = true; label.className = 'status'; label.textContent = '● 观战中';
+  } catch (error) {
+    if (revision !== authRevision || screen !== document.querySelector('[data-world-screen]')) return;
+    removeWorldFrame(); document.querySelector('[data-live-placeholder]').hidden = false;
+    document.querySelector('[data-world-reason]').textContent = /Failed to fetch|fetch failed|NetworkError|Load failed/.test(error.message || '') ? '暂时连接不到观战服务，恢复后自动重试。' : error.message; label.className = 'status unknown'; label.textContent = '等待场景';
+  }
 }
 
 let eventRevision = 0;
@@ -229,6 +264,8 @@ async function loadEvents(page = state.eventPage, kind = state.eventKind) {
 let liveBusy = false, liveObjectUrl = null;
 async function pollLiveFrame() {
   if (liveBusy || state.view !== 'live' || document.visibilityState === 'hidden') return;
+  const selected = state.channels.find(row => row.id === state.selectedChannel);
+  if (selected?.managed) { liveBusy = true; try { await pollWorldView(selected); } finally { liveBusy = false; } return; }
   const image = document.querySelector('[data-live-image]'); if (!image) return;
   const revision = authRevision, id = image.dataset.channel;
   liveBusy = true;
@@ -325,7 +362,7 @@ function accountPage() {
     <section class="panel"><div class="panel-header"><h2>${icons.clock}最近操作</h2><span class="tiny">${isAdmin() ? '网站审计记录' : '你的安全记录'}</span></div><div class="content-pad audit-list">${account?.events?.length ? account.events.slice(0, 8).map(event => `<div class="audit-row"><i class="dot"></i><span>${auditNames[event.action] || e(event.action)}</span><time>${date(event.observedAt)}</time></div>`).join('') : '<p class="tiny">暂无操作记录</p>'}</div></section></div>`;
 }
 function helpPage() {
-  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>默认选择本人绑定角色，可以切换其他公开频道。私人频道只允许角色主人与网站管理员观看。断流或画面过期显示未开播，画面不包含网页私聊、库存面板和工具反馈。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
+  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>女神之眼直接观察现有角色，不占额外游戏名额，也不要求填写直播地址。默认选择本人角色，支持第一人称、第三人称和自由观察。公开场景不含私聊与完整背包，私人角色按原 UUID 和网站归属授权。断线或切换会清空旧场景。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
 }
 
 async function loadPrivate() {
@@ -379,10 +416,14 @@ async function refresh(manual = false) {
         const previous = app.querySelector(selector), next = updated.content.querySelector(selector);
         if (previous && next) previous.replaceWith(next);
       }
+    } else if (state.view === 'live' && document.querySelector('[data-world-frame]') && state.channels.some(row => row.id === state.selectedChannel)) {
+      const channels = document.querySelector('[data-world-channels]'); if (channels) channels.innerHTML = worldChannelButtons(state.selectedChannel);
+      const badge = document.querySelector('.online-badge'); if (badge) badge.innerHTML = `<i class="dot ${state.summary?.online ? '' : 'unknown'}"></i>${state.summary?.online ? '服务器运行中' : '状态暂未确认'}`;
+      const oldFooter = document.querySelector('.footer'); if (oldFooter) oldFooter.outerHTML = footer();
     } else render();
   }
   if (!owner() && detail.open) { detail.close(); state.detail = null; }
-  if (manual) { render(); toast(state.error || '已更新服务器与角色状态', !!state.error); }
+  if (manual) { if (!(state.view === 'live' && document.querySelector('[data-world-frame]'))) render(); toast(state.error || '已更新服务器与角色状态', !!state.error); }
 }
 
 function openModal(title, subtitle, body, bottom = '') {
@@ -534,7 +575,7 @@ document.addEventListener('click', async event => {
     else if (action === 'close-detail') { detail.close(); state.detail = null; }
     else if (action === 'home-section') document.getElementById(target.dataset.section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else if (action === 'photo') { const photo = state.photos.find(row => row.id === target.dataset.id); if (photo) openModal(e(photo.title), e(`${photo.author} · ${date(photo.capturedAt, true)}`), `<img class="photo-full" src="${e(photo.imageUrl)}" alt="${e(photo.title)}"><p class="photo-story">${e(photo.story || '这张照片还没有附上故事。')}</p>`); }
-    else if (action === 'refresh') { target.disabled = true; await refresh(true); }
+    else if (action === 'refresh') { target.disabled = true; try { await refresh(true); } finally { if (target.isConnected) target.disabled = false; } }
     else if (action === 'search') { setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 100); }
     else if (action === 'filter') { state.filter = target.dataset.filter; render(); }
     else if (action === 'growth-sort') { state.growthSort = target.dataset.sort; render(); }

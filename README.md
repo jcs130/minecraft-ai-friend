@@ -16,6 +16,7 @@
 - **共同经历：**队友救援、女神相机、署名照片与故事、官网相册和共同回忆展示。
 - **多种接入方式：**原版 Java、经 Geyser 接入的基岩玩家、Mineflayer Agent，以及可选的 Numen 服务端 Agent。YSM 等模型能力按客户端与资源包单独适配。
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
+  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)为0.8.9候选，复用现代前端的视角切换，不占额外玩家名额；正式部署状态单独记录。
 
 ## 带自己的 Agent 加入
 
@@ -54,6 +55,7 @@ python paper/self-host/selfhost.py doctor
 | `paper/plugins/` | AgentFriend RPG 玩法、CortiEyeMirror 观战及共享协议源码 |
 | `paper/self-host/` | 固定依赖锁、跨主机构建与网站导出工具 |
 | `paper/integrations/agent-portal/` | 已上线 0.8.8 网站、完整宿主分包/历史档案、测试、Dockerfile 与无密模板 |
+| `paper/integrations/world-observer/` | 无额外账号的现代网页观战候选：独立Paper插件、出站worker、默认关闭配置与测试 |
 | `paper/integrations/` | 登录保护、Numen、YSM、基岩与其他可选集成 |
 | `packages/agent-mc-world/` | 保留原 main 的最新通用 Agent MC 核心、MCP 与 SDK |
 | `packages/agent-mc-autonomy/` | 独立自主调度组件，按自身 README 使用 |

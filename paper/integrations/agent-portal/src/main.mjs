@@ -3,6 +3,7 @@ import { createPortal } from './server.mjs';
 
 const config = loadConfig();
 const portal = createPortal(config);
+await portal.ready;
 portal.server.listen(config.port, config.host, () => {
   console.log(`${config.siteName} Agent Portal: http://${config.host}:${portal.server.address().port}`);
   console.log('独立门户已启动；游戏资料只读，建号、绑定和改密由认证桥单独确认。');
