@@ -5,7 +5,7 @@ import { loadConfig, projectRoot } from '../src/config.mjs';
 import { createPortal } from '../src/server.mjs';
 
 export const testPassword = 'isolated-portal-password-2026';
-export async function siteFixture(t, overrides = {}) {
+export async function siteFixture(t, overrides = {}, options = {}) {
   const base = path.join(projectRoot, '.local', 'tests'), root = path.join(base, randomUUID());
   const uuid = '11111111-1111-3111-8111-111111111111';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid: uuid, kind: 'agent', available: true, online: true };
@@ -20,7 +20,7 @@ export async function siteFixture(t, overrides = {}) {
     serverSummary: async () => ({ online: true, playersOnline: 1 }),
   };
   const config = loadConfig({ skipLocalConfig: true, port: 0, host: '127.0.0.1', dataDir: path.join(root, 'data'), serverDir: path.join(root, 'game'), emailAuth: { registrationMode: 'username' }, ...overrides });
-  const portal = createPortal(config, { game, emailSender: overrides.emailSender });
+  const portal = createPortal(config, { game, emailSender: overrides.emailSender, ...options });
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   function client() {

@@ -15,7 +15,8 @@ import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
-import { agentClients } from './agent-clients.mjs';
+import { getAgentClients } from './agent-clients.mjs';
+import { packageAt, packageLocation, publicDownloads } from './download-catalog.mjs';
 import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
 import { agentOnboarding } from './agent-onboarding.mjs';
@@ -23,6 +24,7 @@ import { Appearance } from './appearance.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 import { Memories } from './memories.mjs';
 import { memoryRoute } from './memory-routes.mjs';
+import { LoginThrottle } from './login-throttle.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -50,6 +52,7 @@ async function jsonBody(req, maximum = 16 * 1024) {
 }
 
 export function createPortal(config, options = {}) {
+  const agentClients = getAgentClients(config);
   const store = options.store || new Store(config.dataDir);
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
@@ -64,13 +67,27 @@ export function createPortal(config, options = {}) {
   const agentAccess = new AgentAccess(config, store, game, accounts);
   const appearance = new Appearance(config, store, game);
   const memories = new Memories(store);
+  const loginThrottle = new LoginThrottle(store, options.now);
+  async function checkPassword(req, owner, password, suppliedName = '') {
+    const account = owner ? 'owner:' + owner.id : 'unknown:' + (typeof suppliedName === 'string' ? suppliedName.toLowerCase().slice(0, 254) : 'invalid');
+    const ticket = loginThrottle.reserve(rateAddress(req, config), account);
+    if (typeof password !== 'string' || password.length > 128) return false;
+    const valid = await verifyPassword(password, owner?.password_hash);
+    if (!owner || !valid) return false;
+    loginThrottle.succeeded(ticket);
+    return true;
+  }
   const limits = new Map();
   function rate(key, max = 20, windowMs = 15 * 60 * 1000) {
     const now = Date.now();
     for (const [candidate, entry] of limits) if (entry.until <= now) limits.delete(candidate);
-    const entry = limits.get(key) || { count: 0, until: now + windowMs };
+    const existing = limits.get(key);
+    if (!existing && limits.size >= 5000) throw Object.assign(fail(429, 'RATE_LIMIT', '操作较频繁，请稍后再试'), { retryAfterSeconds: 60 });
+    const entry = existing || { count: 0, until: now + windowMs };
     entry.count++; limits.set(key, entry);
-    if (entry.count > max || limits.size > 5000) throw fail(429, 'RATE_LIMIT', '操作较频繁，请稍后再试');
+    if (entry.count > max) throw Object.assign(fail(429, 'RATE_LIMIT', '操作较频繁，请稍后再试'), {
+      retryAfterSeconds: Math.max(1, Math.ceil((entry.until - now) / 1000)),
+    });
   }
   const respond = (res, status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
   function cookie(req, res, token, authenticated = false) {
@@ -153,7 +170,17 @@ export function createPortal(config, options = {}) {
         rate('skill-download:' + digest(rateAddress(req, config)), 12, 60000);
         await serveAgentSkill(req, res, config, skillAt(pathname)); return;
       }
+      const packageRelease = packageAt(pathname);
+      if (packageRelease && ['GET', 'HEAD'].includes(req.method)) {
+        rate('package-download:' + digest(rateAddress(req, config)), 20, 60000);
+        const location = packageLocation(config, packageRelease);
+        if (!location) throw fail(503, 'DOWNLOAD_UNAVAILABLE', '此直下载包尚未发布，请查看下载中心的状态与源码入口。');
+        res.writeHead(307, { Location: location, 'Content-Length': '0', 'Cache-Control': 'no-store',
+          'Referrer-Policy': 'no-referrer', 'X-Checksum-Sha256': packageRelease.sha256 });
+        return res.end();
+      }
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if (req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll') {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'APPEARANCE_WORKER_REQUIRED', '请从家庭端外观同步器调用');
         appearance.authorize(req); rate('appearance-worker', 24, 60000);
@@ -384,14 +411,10 @@ export function createPortal(config, options = {}) {
       }
       if (req.method === 'POST' && pathname === '/api/v1/sessions') {
         const body = await jsonBody(req);
-        rate('login:' + digest(rateAddress(req, config) + ':' + String(body.username).toLowerCase()), 12);
-        rate('login-global:' + digest(rateAddress(req, config)), 40);
         let email = null;
         if (typeof body.username === 'string' && body.username.includes('@')) { try { email = normalizeEmail(body.username); } catch {} }
-        if ((!usernameValid(body.username) && !email) || typeof body.password !== 'string' || body.password.length > 128) throw fail(401, 'LOGIN_FAILED', '网站用户名、邮箱或密码不正确');
-        const owner = email ? emailAuth.ownerByEmail(email) : store.ownerByName(body.username);
-        const valid = await verifyPassword(body.password, owner?.password_hash);
-        if (!owner || !valid) throw fail(401, 'LOGIN_FAILED', '网站用户名或密码不正确');
+        const owner = email ? emailAuth.ownerByEmail(email) : usernameValid(body.username) ? store.ownerByName(body.username) : null;
+        if (!await checkPassword(req, owner, body.password, body.username)) throw fail(401, 'LOGIN_FAILED', '网站用户名、邮箱或密码不正确');
         const session = newSession(req, res, owner.id); store.audit(owner.id, 'session.login', owner.id);
         return respond(res, 200, sessionData(session));
       }
@@ -411,7 +434,7 @@ export function createPortal(config, options = {}) {
       if (req.method === 'POST' && pathname === '/api/v1/account/email') {
         const { owner, session } = browserAuth(req, false, true); rate('bind-email:' + owner.id, 6);
         const body = await jsonBody(req);
-        if (typeof body.currentPassword !== 'string' || body.currentPassword.length > 128 || !await verifyPassword(body.currentPassword, owner.password_hash)) throw fail(401, 'PASSWORD_INCORRECT', '请用当前网站密码确认邮箱绑定');
+        if (!await checkPassword(req, owner, body.currentPassword)) throw fail(401, 'PASSWORD_INCORRECT', '请用当前网站密码确认邮箱绑定');
         return respond(res, 202, await emailAuth.begin('bind', body, session));
       }
       if (req.method === 'DELETE' && pathname === '/api/v1/session') {
@@ -458,7 +481,7 @@ export function createPortal(config, options = {}) {
         const { owner, session } = browserAuth(req);
         rate('reauth:' + owner.id, 8);
         const body = await jsonBody(req);
-        if (typeof body.password !== 'string' || body.password.length > 128 || !await verifyPassword(body.password, owner.password_hash)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
+        if (!await checkPassword(req, owner, body.password)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
         store.db.prepare('UPDATE sessions SET verified_at=? WHERE id_hash=?').run(Date.now(), session.id_hash);
         return respond(res, 200, { ok: true });
       }
@@ -466,7 +489,7 @@ export function createPortal(config, options = {}) {
         const { owner, session } = browserAuth(req); rate('password:' + owner.id, 6);
         const body = await jsonBody(req);
         if (!passwordValid(body.newPassword)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 6–128 个字符');
-        if (typeof body.currentPassword !== 'string' || body.currentPassword.length > 128 || !await verifyPassword(body.currentPassword, owner.password_hash)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
+        if (!await checkPassword(req, owner, body.currentPassword)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
         store.db.prepare('UPDATE owners SET password_hash=? WHERE id=?').run(await hashPassword(body.newPassword), owner.id);
         emailAuth.invalidate(owner.id);
         store.revokeOtherSessions(owner.id, session.id_hash);
@@ -588,9 +611,11 @@ export function createPortal(config, options = {}) {
     } catch (error) {
       if (res.headersSent) return res.destroy();
       const status = error.status || 500;
+      if (status === 429 && Number.isSafeInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0) res.setHeader('Retry-After', String(error.retryAfterSeconds));
       if (status === 500) console.error('Portal request failed:', error.code || error.name);
       return respond(res, status, { error: { reason: error.reason || 'INTERNAL_ERROR', message: status === 500 ? '服务暂时无法完成请求，请稍后重试' : error.message,
-        ...(Number.isSafeInteger(error.currentSequence) ? { currentSequence: error.currentSequence } : {}) } });
+        ...(Number.isSafeInteger(error.currentSequence) ? { currentSequence: error.currentSequence } : {}),
+        ...(status === 429 && Number.isSafeInteger(error.retryAfterSeconds) ? { retryAfterSeconds: error.retryAfterSeconds } : {}) } });
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;

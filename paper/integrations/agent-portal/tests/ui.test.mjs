@@ -512,15 +512,15 @@ test('public deep links render escaped stories, participant filtering and sharin
 test('home and connection center expose three real client choices with parent projects and current SDK', async t => {
  const ui = await screen(t, { initialView:'home' });
  const source = 'https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world';
- assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+ assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,4);
  assert.ok(ui.document.querySelector(`.client-choices a[href="${source}"]`));
  for (const url of ['https://github.com/Project-N-E-K-O/N.E.K.O','https://github.com/Pal-AI-Lab/Cortico']) assert.ok(ui.document.querySelector(`.client-choices a[href="${url}"]`));
  ui.window.location.hash='connections'; await waitFor(()=>ui.document.querySelector('a[download]'));
  assert.ok(ui.document.querySelector('a[download]').href.endsWith(agentSkill.url));
  assert.ok(ui.document.querySelector('#main').textContent.includes(agentSkill.sdkVersion));
- assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+ assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,4);
  await ui.refresh(false);
- assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
+ assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,4);
 });
 
 

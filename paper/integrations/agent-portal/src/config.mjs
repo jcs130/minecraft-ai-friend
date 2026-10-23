@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { downloadBaseUrl } from './download-mirror.mjs';
+import { packageReleases } from './download-catalog.mjs';
 
 export const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -21,6 +23,9 @@ export function loadConfig(overrides = {}) {
   config.cloudAccounts = { ...defaults.cloudAccounts, ...local.cloudAccounts, ...overrides.cloudAccounts };
   config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
   config.agentAccess = { ...defaults.agentAccess, ...local.agentAccess, ...overrides.agentAccess };
+  config.downloads = { baseUrl: '', enabledPackages: [], ...defaults.downloads, ...local.downloads, ...overrides.downloads };
+  config.downloads.baseUrl = downloadBaseUrl(config.downloads.baseUrl);
+  if (!Array.isArray(config.downloads.enabledPackages) || config.downloads.enabledPackages.some(id => !packageReleases.some(row => row.id === id))) throw new Error('Unknown reviewed download package');
   config.appearance = { enabled: true, bridgeEnabled: false, tokenHash: '', ...defaults.appearance, ...local.appearance, ...overrides.appearance };
   if (!['email', 'username', 'optional-email'].includes(config.emailAuth.registrationMode)) throw new Error('Invalid registration mode');
   if (!['local', 'cloud'].includes(config.sourceMode)) throw new Error('Invalid portal source mode');

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { siteFixture } from './helpers.mjs';
-import { agentClients } from '../src/agent-clients.mjs';
+import { agentClients, getAgentClients } from '../src/agent-clients.mjs';
 import { skillAt,agentSkill } from '../src/agent-skill.mjs';
 import {createHash} from 'node:crypto';
 
@@ -10,7 +10,7 @@ test('public discovery and fetch-only documentation share all adapter and parent
  const f=await siteFixture(t);
  const site=(await f.client().request('/site')).data;
  const access=(await (await fetch(f.origin+'/api/v1/agent-access')).json());
- assert.deepEqual(site.agentClients,agentClients);assert.deepEqual(access.clients,agentClients);
+ assert.deepEqual(site.agentClients,getAgentClients(f.config));assert.deepEqual(access.clients,getAgentClients(f.config));
  assert.equal(site.agentSkill.sdkVersion,agentSkill.sdkVersion);assert.equal(site.agentSkill.channel,'github-main-candidate');
  assert.equal(site.agentSkill.viewerIncluded,false);
  for(const page of ['/join','/agent-api.html']){

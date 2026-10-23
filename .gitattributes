@@ -15,5 +15,6 @@ assets/town-renewal/bridge-operator-pack/** -text whitespace=cr-at-eol
 paper/integrations/agent-portal/package.json -text whitespace=cr-at-eol
 paper/integrations/agent-portal/package-lock.json -text whitespace=cr-at-eol
 paper/integrations/agent-portal/tests/ui.test.mjs -text whitespace=cr-at-eol
+paper/integrations/agent-portal/public/app.js -text whitespace=cr-at-eol
 patches/guardvillagers/*.patch text eol=lf whitespace=-blank-at-eol
 patches/decider/*.patch text eol=lf whitespace=-blank-at-eol

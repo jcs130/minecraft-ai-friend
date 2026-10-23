@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { siteFixture } from './helpers.mjs';
 import { agentSkill, skillAt } from '../src/agent-skill.mjs';
+import { loadConfig } from '../src/config.mjs';
 
 test('public Agent skill download matches the pinned release and never embeds a private credential in the link', async t => {
   const f = await siteFixture(t);
@@ -28,5 +29,36 @@ test('earlier reviewed Skill links keep their bytes when the current bundle chan
     const response = await fetch(f.origin + url), bytes = Buffer.from(await response.arrayBuffer());
     assert.equal(response.status, 200);
     assert.equal(createHash('sha256').update(bytes).digest('hex'), digest);
+  }
+});
+
+test('reviewed Skill links redirect directly to the configured OSS prefix without forwarding cookies or query strings', async t => {
+  const baseUrl = 'https://downloads.example.test/qiandengji/skills/';
+  const f = await siteFixture(t, { downloads: { baseUrl } });
+  for (const version of ['1.0.0', '1.1.0', '1.2.0', '1.2.1']) {
+    const route = `/downloads/qiandengji-agent-${version}.zip`, release = skillAt(route);
+    for (const method of ['GET', 'HEAD']) {
+      const response = await fetch(f.origin + route + '?token=must-not-forward&url=https://evil.example', {
+        method, redirect: 'manual', headers: { Cookie: 'unrelated=must-not-forward' },
+      });
+      assert.equal(response.status, 307);
+      assert.equal(response.headers.get('location'), baseUrl + release.sha256 + '/' + release.filename);
+      assert.equal(response.headers.get('x-checksum-sha256'), release.sha256);
+      assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.equal((await response.arrayBuffer()).byteLength, 0);
+    }
+  }
+  assert.equal((await fetch(f.origin + '/downloads/config.local.json', { redirect: 'manual' })).status, 404);
+  assert.equal((await fetch(f.origin + '/downloads/qiandengji-agent-9.9.9.zip', { redirect: 'manual' })).status, 404);
+  assert.equal((await fetch(f.origin + '/downloads/.env', { redirect: 'manual' })).status, 404);
+});
+
+test('download mirror defaults to local delivery and rejects credentials, plaintext or arbitrary query parameters in configuration', () => {
+  assert.equal(loadConfig({ skipLocalConfig: true }).downloads.baseUrl, '');
+  for (const baseUrl of ['http://downloads.example.test/', 'https://user:secret@downloads.example.test/',
+    'https://downloads.example.test/?Signature=secret', 'https://downloads.example.test/#fragment',
+    'https://downloads.example.test/%2e%2e/private', 'file:///private/', null]) {
+    assert.throws(() => loadConfig({ skipLocalConfig: true, downloads: { baseUrl } }));
   }
 });

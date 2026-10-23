@@ -61,6 +61,7 @@
     "keyFile": "E:/MC/private/portal-bridge.key"
   },
   "publicMedia": {},
+  "downloads": { "baseUrl": "", "enabledPackages": [] },
   "appearance": { "enabled": true, "bridgeEnabled": false, "tokenHash": "" },
   "agentAccess": {
     "enabled": true

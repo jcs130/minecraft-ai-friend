@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { skillMirrorUrl } from './download-mirror.mjs';
 
 const originalSkill = Object.freeze({ version: '1.0.0', filename: 'qiandengji-agent-1.0.0.zip', bytes: 2705570,
   sha256: '3d1676e86f31396071866c64ce87d9e6820e1530b755c4221f04c22a15f94669',
@@ -10,7 +11,8 @@ const previousSkill = Object.freeze({ version: '1.1.0', filename: 'qiandengji-ag
   url: '/downloads/qiandengji-agent-1.1.0.zip', sdkSourceCommit: originalSkill.sourceCommit });
 const priorSkill120 = Object.freeze({"version": "1.2.0", "filename": "qiandengji-agent-1.2.0.zip", "bytes": 3867516, "sha256": "a0618f8c2d75a71d42ca532973a43f7d837e91ee47707a7ce9de2d9167cf858b", "url": "/downloads/qiandengji-agent-1.2.0.zip", "sdkVersion": "0.5.7-rc.67", "sdkSourceCommit": "aff5bb8ef25ce24c76efb7d608c1eea8da9fc129", "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world", "channel": "github-main-candidate", "viewerIncluded": false});
 export const agentSkill = Object.freeze({"version": "1.2.1", "filename": "qiandengji-agent-1.2.1.zip", "bytes": 3903081, "sha256": "1c3c57962babb47fd2ca2100b12e1d941949e85e6774b63b5cbd1a874e435c66", "url": "/downloads/qiandengji-agent-1.2.1.zip", "sdkVersion": "0.5.7-rc.71", "sdkSourceCommit": "e399b276fdd5bada4848d0ad2f047611f3bdae7d", "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world", "channel": "github-main-candidate", "viewerIncluded": false});
-export const skillAt = url => [agentSkill, priorSkill120, previousSkill, originalSkill].find(release => release.url === url);
+export const reviewedSkills = Object.freeze([agentSkill, priorSkill120, previousSkill, originalSkill]);
+export const skillAt = url => reviewedSkills.find(release => release.url === url);
 const releases = new Map();
 
 // Only known pinned releases, not an arbitrary filesystem download endpoint.
@@ -24,6 +26,14 @@ export async function serveAgentSkill(req, res, config, release = agentSkill) {
     return bytes;
   })());
   const bytes = await releases.get(file);
+  const mirror = skillMirrorUrl(config, release);
+  if (mirror) {
+    // Keep the original website link and reviewed digest stable. The browser
+    // downloads directly from OSS, without this server relaying the file.
+    res.writeHead(307, { Location: mirror, 'Content-Length': '0', 'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer', 'X-Checksum-Sha256': release.sha256 });
+    return res.end();
+  }
     res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': bytes.length,
       'Content-Disposition': `attachment; filename="${release.filename}"`, ETag: `"${release.sha256}"`, 'Cache-Control': 'public, max-age=86400' });
     res.end(req.method === 'HEAD' ? undefined : bytes);

@@ -22,5 +22,6 @@
 
 - [玩法运营手册](../paper/docs/AI_WORLD_OPERATIONS.md) · [维护与发布](../paper/docs/OPERATIONS.md)。
 - [源码边界检查](../tools/check_public_source.py) · [自部署入口](../paper/self-host/README.md)。
+- [网站登录保护与插件直下](../paper/docs/WEBSITE_SECURITY_DOWNLOADS.md)：持久化限流、官网下载中心与 OSS 公开文件边界。
 
 带日期的运行记录描述当时观测，不能当作实时状态。旧 NeoForge 架构与历史实验文档仍可在仓库历史和归档分支查阅；新部署优先使用本页入口。

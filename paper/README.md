@@ -2,7 +2,7 @@
 
 ## 当前状态（2026-10-23）
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.12 / CortiEyeMirror 0.1.17**。源码完整 AgentFriend 为 **0.4.48 开发候选**，并非正式 JAR 的逐字重建。网站正式 **0.8.4**；源码 **0.8.5** 为Skill/MCP与下载候选，尚未发布。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.12 / CortiEyeMirror 0.1.17**。源码完整 AgentFriend 为 **0.4.48 开发候选**，并非正式 JAR 的逐字重建。网站正式 **0.8.4**；源码 **0.8.6** 为登录安全、Skill/MCP与自有插件下载候选，尚未发布。
 
 官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 
