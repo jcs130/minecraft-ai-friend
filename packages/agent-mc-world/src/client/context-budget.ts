@@ -1,3 +1,5 @@
+import { CONTEXT_SCHEMA_ANNOTATIONS } from './schema-reading.ts';
+
 /**
  * Host-neutral context budget helpers: which game events deserve a model wake-up,
  * a bounded event tail for per-request snapshots, model-visible text caps and a
@@ -153,7 +155,7 @@ function slim(schema: unknown, depth: number, o: SlimOptions, level = 0): unknow
     && Object.keys(schema.properties).length > o.nestedCollapseProperties) return collapseNested(schema);
   const out: Schema = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === 'description' || key === 'title' || key === 'examples') continue;
+    if (key === 'description' || key === 'title' || key === 'examples' || CONTEXT_SCHEMA_ANNOTATIONS.includes(key)) continue;
     if (['const', 'enum', 'default'].includes(key)) { out[key] = value; continue; }
     if (key === 'properties' && isObject(value)) {
       out.properties = Object.fromEntries(Object.entries(value).map(([name, child]) => [name, slim(child, depth + 1, o, level + 1)]));

@@ -10,6 +10,7 @@ export { prepareMinecraftViewerAssets, type ViewerAssetProgress, type ViewerAsse
 export { AgentJournal, EventCursorError } from './journal.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';
+export * from './schema-reading.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,

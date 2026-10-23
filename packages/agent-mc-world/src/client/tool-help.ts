@@ -1,4 +1,5 @@
 import type { ToolDef, ToolOutcome, ToolSchema } from './contracts.ts';
+import { omitContextSchemaAnnotations } from './schema-reading.ts';
 
 export const TOOL_HELP_TOOL = {
   name: 'mc_tool_help', tags: ['read'],
@@ -97,7 +98,7 @@ export function withToolHelp(tools: readonly ToolDef[], name = TOOL_HELP_TOOL.na
   return options.parameterDescriptions !== 'on-demand' ? result : result.map(tool => {
     if (tool.name === name) return tool;
     const original = fullParameterSchemas.get(tool.parameters) ?? tool.parameters;
-    const parameters = withoutParameterDescriptions(original) as ToolDef['parameters'];
+    const parameters = omitContextSchemaAnnotations(withoutParameterDescriptions(original)) as ToolDef['parameters'];
     fullParameterSchemas.set(parameters, original);
     return { ...tool,
       description: `${tool.description}\nParameter notes: ${name} {"name":${JSON.stringify(tool.name)},"full":true}.`, parameters };
