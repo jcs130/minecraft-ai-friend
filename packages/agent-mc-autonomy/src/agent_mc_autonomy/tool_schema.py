@@ -7,12 +7,14 @@ from jsonschema import validators
 from referencing import Registry
 
 
-def provider_schema(schema):
+def provider_schema(schema, *, profile="default"):
     """Project tuple contracts for homogeneous-items provider APIs only.
 
     Original native schemas remain authoritative at dispatch. Keep references
     and definitions together: deleting either would silently remove constraints.
     """
+    if not isinstance(profile, str) or profile not in {"default", "llamacpp"}:
+        raise ValueError("brain_tool_schema_profile_invalid")
     maps = {"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"}
     singles = {"items", "additionalItems", "additionalProperties", "unevaluatedProperties", "unevaluatedItems",
                "contains", "propertyNames", "not", "if", "then", "else"}
@@ -53,6 +55,14 @@ def provider_schema(schema):
             guidance = json.dumps(dict(enumerate(positional)), ensure_ascii=False, separators=(",", ":"))[:1600]
             result["description"] = (result.get("description", "") + " Exact zero-based positions: " + guidance
                                      + ". Native validation enforces each position.").strip()
+        # llama.cpp expands nested string bounds into repeated grammar rules.
+        # Large finite bounds can fail its grammar-complexity guard before any
+        # generation. Keep the exact limit visible as text; the original native
+        # schema still enforces it before dispatch, including for this profile.
+        if profile == "llamacpp" and type(result.get("maxLength")) is int and result["maxLength"] > 256:
+            limit = result.pop("maxLength")
+            result["description"] = (result.get("description", "")
+                + f" Native maxLength={limit}; enforced by the executor.").strip()
         return result
 
     return project(schema)

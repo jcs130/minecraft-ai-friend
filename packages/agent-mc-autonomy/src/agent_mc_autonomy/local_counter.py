@@ -85,7 +85,7 @@ def render_input(config, messages, tools):
             function = call['function']
             function['arguments'] = json.loads(function['arguments']) if function['arguments'] else {}
     declared = []
-    for tool in tools:
+    for tool in body.get('tools', []):
         if tool.get('type') != 'function':
             raise ValueError('counter_tool_kind_not_supported')
         value = tool['function']

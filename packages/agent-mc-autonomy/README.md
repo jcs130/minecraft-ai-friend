@@ -1,5 +1,7 @@
 # Agent MC Autonomy
 
+The 0.2.90 distribution adds the explicit Chat-only `planner.tool_schema_profile = "llamacpp"` option. It represents string limits above 256 characters as contract text instead of finite provider grammar repetitions, avoiding llama.cpp's grammar-complexity rejection. Native schemas still enforce every original limit before dispatch; the CPU counter uses the actual projected wire declarations. The default profile remains unchanged, and selecting this option does not discover a service or start gameplay. Core remains rc.70.
+
 The 0.2.89 distribution pins core rc.70, which preserves explicit storage counts and retained inventory when a full container accepts only part of a transfer. Planner, review and native queue policy are unchanged.
 
 `0.2.87` keeps the full-context system instructions and provider tool declarations

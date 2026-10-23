@@ -149,6 +149,7 @@ class HttpPlannerConfig:
     reasoning_history: str = "all"
     cache_strategy: str = "none"
     context_counter: dict = field(default_factory=dict)
+    tool_schema_profile: str = "default"
 
     @classmethod
     def parse(cls, raw, *, require_model=True):
@@ -167,6 +168,9 @@ class HttpPlannerConfig:
         result = cls(**values)
         if not isinstance(result.protocol, str) or result.protocol not in PARAMETERS:
             raise ValueError("brain_protocol_invalid")
+        if (not isinstance(result.tool_schema_profile, str) or result.tool_schema_profile not in {"default", "llamacpp"}
+                or result.tool_schema_profile != "default" and result.protocol != "chat"):
+            raise ValueError("brain_tool_schema_profile_invalid")
         result.validate_reasoning_history()
         result.validate_cache_strategy()
         endpoint(result.base_url)
