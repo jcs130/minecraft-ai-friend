@@ -11,6 +11,7 @@ import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
 import { publicMedia, servePublicMedia } from './public-media.mjs';
+import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
@@ -53,6 +54,7 @@ export function createPortal(config, options = {}) {
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
+  const challenges = cloud ? new CloudChallenges(store,game) : new SavedChallenges(config,game,store);
   const live = new Live(config, store);
   const gallery = new Gallery(store, cloud);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
@@ -231,6 +233,12 @@ export function createPortal(config, options = {}) {
         cloud.authorize(req); rate('snapshot-sync', 12, 60000);
         return respond(res, 200, cloud.accept(await jsonBody(req, config.cloudSync.maxBytes)));
       }
+      if (req.method === 'PUT' && pathname === '/api/v1/internal/challenges') {
+        if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');
+        if (req.headers.origin || req.headers.cookie) throw fail(403,'SYNC_CLIENT_REQUIRED','挑战资料仅由家庭端只读采集器上传');
+        cloud.authorize(req); rate('challenge-sync',12,60000);
+        return respond(res,200,await challenges.accept(await jsonBody(req,config.cloudSync.maxBytes)));
+      }
       const photoUpload = /^\/api\/v1\/internal\/photos\/([a-f0-9-]{36})$/.exec(pathname);
       if (photoUpload && req.method === 'PUT') {
         if (!cloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
@@ -326,6 +334,7 @@ export function createPortal(config, options = {}) {
           claimable: !!row.playerUuid && !row.isReserved && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
+      if (req.method === 'GET' && pathname === '/api/v1/challenges') return respond(res,200,await challenges.query({activity:url.searchParams.get('activity')||'trial_tower',difficulty:url.searchParams.get('difficulty')||'all',page:Number(url.searchParams.get('page')||1)}));
       if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20) }));
       if (req.method === 'GET' && pathname === '/api/v1/live') {
         const session = sessionFrom(req), owner = session?.owner_id ? store.ownerById(session.owner_id) : null;
@@ -586,5 +595,5 @@ export function createPortal(config, options = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

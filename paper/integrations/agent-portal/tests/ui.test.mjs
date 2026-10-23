@@ -18,7 +18,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -39,6 +39,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     events: async ({ kind = 'all', page = 1 } = {}) => ({ events: kind === 'all' || kind === 'notice' ? [{ id: 'event-fixture', kind: 'notice', title: '<script>unsafe()</script>', body: '隔离测试公告', occurredAt: savedAt, timePrecision: 'second' }] : [], page, pages: 1, total: 1 })
   };
   const portal = createPortal(loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: emailMode }, host: '127.0.0.1', port: 0, dataDir: path.join(root, 'data'), publicMedia: media }), { game, world, emailSender });
+  if (challengeSnapshot) { portal.challenges.capture=async()=>{};portal.challenges.saveMetadata(challengeSnapshot);for(const row of challengeSnapshot.runs)portal.challenges.put(row); }
   await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + portal.server.address().port;
   const html = await fs.readFile(path.join(projectRoot, 'public/index.html'), 'utf8');
@@ -78,8 +79,9 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     assert.deepEqual(errors, [], 'No unexpected DOM runtime errors');
   });
   window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
+  window.eval(await fs.readFile(path.join(projectRoot, 'public/challenges.js'), 'utf8'));
   window.eval(code + '\nwindow.__portalRefreshForTest = refresh;');
-  await waitFor(() => document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
+  await waitFor(() => initialView==='challenges' ? document.querySelector('.challenge-points') : document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
     let entered, release;
     const ready = new Promise(resolve => { entered = resolve; });
@@ -511,4 +513,29 @@ test('homepage presents FOM as coming soon without any connection action',async 
  assert.ok(card);assert.match(card.textContent,/FOM 模组世界/);assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
  assert.equal(card.querySelectorAll('a,button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
  await ui.refresh(false);assert.equal(ui.document.querySelectorAll('.home-upcoming-world').length,1);
+});
+
+function uiChallenges(stale=false){
+ const now=new Date().toISOString(),base={party:['ag_Alpha'],hiddenMembers:0,difficulty:'normal',reachedUnits:15,clearedUnits:15,totalUnits:15,startedAt:now,endedAt:now,observedAt:now,reason:'cleared',evidence:'saved-outcome'};
+ return {schemaVersion:1,available:true,observedAt:stale?new Date(Date.now()-120000).toISOString():now,activities:[{id:'trial_tower',type:'tower',name:'试炼塔',unit:'层',totalUnits:15},{id:'crypt',type:'dungeon',name:'测试墓穴',unit:'室',totalUnits:3}],runs:[{...base,id:'a'.repeat(24),activityId:'trial_tower',state:'completed'},{...base,id:'b'.repeat(24),activityId:'crypt',state:'paused',totalUnits:3,reachedUnits:2,clearedUnits:1,endedAt:null,reason:'data_unavailable'}]};
+}
+test('public challenge page shows verified team difficulty progress and website points without login',async t=>{
+ const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges()});
+ await waitFor(()=>ui.document.querySelector('.challenge-points'));
+ assert.match(ui.document.body.textContent,/普通难度榜/);assert.match(ui.document.querySelector('.challenge-party').textContent,/ag_Alpha/);
+ assert.equal(ui.document.querySelector('.challenge-points').textContent,'2000');assert.match(ui.document.querySelector('.challenge-run-progress').textContent,/已通关 15 \/ 15 层/);
+ assert.match(ui.document.querySelector('.challenge-notes').textContent,/网站挑战积分/);assert.equal(ui.document.querySelectorAll('.challenge-meter .complete').length,15);
+});
+test('challenge and difficulty controls preserve paused dungeon progress and select independent rankings',async t=>{
+ const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges()});await waitFor(()=>ui.document.querySelector('.challenge-points'));
+ const select=ui.document.querySelector('#challenge-activity');select.value='crypt';select.dispatchEvent(new ui.window.Event('change',{bubbles:true}));
+ await waitFor(()=>ui.document.querySelector('.challenge-hero h2').textContent==='测试墓穴');
+ assert.match(ui.document.querySelector('.challenge-run').textContent,/挑战暂停/);assert.match(ui.document.querySelector('.challenge-run-progress').textContent,/已通关 1 \/ 3 室/);assert.match(ui.document.querySelector('.challenge-run').textContent,/运行数据异常/);
+ assert.equal(ui.document.querySelectorAll('.challenge-ranking tbody tr').length,0);
+ ui.click('[data-challenge-level="adventure"]');await waitFor(()=>ui.document.querySelectorAll('.challenge-ranking').length===1);
+ assert.equal(ui.document.querySelectorAll('.challenge-run').length,0);await ui.refresh(false);assert.equal(ui.document.querySelector('#challenge-activity').value,'crypt');
+});
+test('stale challenge snapshots keep saved achievements visible and say current progress may have changed',async t=>{
+ const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges(true)});await waitFor(()=>ui.document.querySelector('.challenge-points'));
+ assert.match(ui.document.querySelector('.challenge-warning').textContent,/已保存记录/);assert.match(ui.document.querySelector('.challenge-warning').textContent,/可能已变化/);assert.equal(ui.document.querySelector('.challenge-points').textContent,'2000');
 });
