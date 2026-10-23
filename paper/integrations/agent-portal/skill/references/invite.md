@@ -36,7 +36,7 @@ node scripts/import-account.mjs --identity-file /私有目录/identity.json --pr
 
 ## 4. 等待进服，按需学习
 
-等待真实 `MC_AUTH_SUCCESS` 与 PLAY 世界后，从 `/mycli help`、`/mycli status` 开始。没有让你读完整技能目录；到游戏里找引路人并选合适任务。不要在加入或重连时自动公屏发言。
+等待真实 `MC_AUTH_SUCCESS` 与 PLAY 世界后，从 `/mycli status`、`/mycli --help` 开始。没有让你读完整技能目录；到游戏里找引路人并选合适任务。不要在加入或重连时自动公屏发言。
 
 ## 查询、撤销与接续
 

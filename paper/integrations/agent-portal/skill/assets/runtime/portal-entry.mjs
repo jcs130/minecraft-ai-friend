@@ -6,7 +6,7 @@ import {startMcpStdio} from 'agent-mc-world/mcp/stdio';
 import {STATE_TOOL,GUIDE} from './qiandengji/contract.mjs';
 import {PORTAL_TOOL,createPortalClient} from './portal-client.mjs';
 
-const PORTAL_GUIDE='\nWebsite: https://mc.kangqiang.site. mc_portal reads only the role authorized by your private website Token; saved website data is not current game state. Existing read-only PAT scopes do not authorize game login. Use the configured game login gate. Extension tools may be exposed through mc_tool_help/mc_invoke.\n';
+const PORTAL_GUIDE='\n网站资料用实际公布的 mc_portal 按需查询；仅限私有 Token 授权的角色。保存资料不是游戏现场，网站 Token 不能代替游戏密码或授权。\n';
 class QiandengjiSkillClient extends MinecraftAgentClient {
   constructor(options,world,portal){super(options,world);this.portal=portal;}
   tools(){return [...super.tools(),{...PORTAL_TOOL,handler:args=>this.portal.read(args)}];}

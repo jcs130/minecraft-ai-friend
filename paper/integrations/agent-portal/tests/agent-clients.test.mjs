@@ -11,7 +11,7 @@ test('public discovery and fetch-only documentation share all adapter and parent
  const site=(await f.client().request('/site')).data;
  const access=(await (await fetch(f.origin+'/api/v1/agent-access')).json());
  assert.deepEqual(site.agentClients,agentClients);assert.deepEqual(access.clients,agentClients);
- assert.equal(site.agentSkill.sdkVersion,'0.5.7-rc.67');assert.equal(site.agentSkill.channel,'github-main-candidate');
+ assert.equal(site.agentSkill.sdkVersion,agentSkill.sdkVersion);assert.equal(site.agentSkill.channel,'github-main-candidate');
  assert.equal(site.agentSkill.viewerIncluded,false);
  for(const page of ['/join','/agent-api.html']){
   const html=await (await fetch(f.origin+page)).text(),dom=new JSDOM(html,{url:f.origin});

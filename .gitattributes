@@ -11,5 +11,9 @@ assets/town-renewal/**/*.nbt binary
 # Frozen one-time packs retain the exact bytes verified and deployed, including CRLF.
 assets/town-renewal/operator-pack/** -text
 assets/town-renewal/bridge-operator-pack/** -text whitespace=cr-at-eol
+# Keep existing portal CRLF files intact when editing release metadata/tests.
+paper/integrations/agent-portal/package.json -text whitespace=cr-at-eol
+paper/integrations/agent-portal/package-lock.json -text whitespace=cr-at-eol
+paper/integrations/agent-portal/tests/ui.test.mjs -text whitespace=cr-at-eol
 patches/guardvillagers/*.patch text eol=lf whitespace=-blank-at-eol
 patches/decider/*.patch text eol=lf whitespace=-blank-at-eol

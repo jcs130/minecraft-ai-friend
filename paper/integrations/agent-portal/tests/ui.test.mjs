@@ -7,6 +7,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { createPortal } from '../src/server.mjs';
 import { loadConfig, projectRoot } from '../src/config.mjs';
 import { WorldCatalog } from '../src/world-catalog.mjs';
+import { agentSkill } from '../src/agent-skill.mjs';
 
 // Programmatic DOM integration, not browser rendering or visual acceptance.
 const fixtureBase = path.resolve(projectRoot, '.local', 'tests');
@@ -515,8 +516,8 @@ test('home and connection center expose three real client choices with parent pr
  assert.ok(ui.document.querySelector(`.client-choices a[href="${source}"]`));
  for (const url of ['https://github.com/Project-N-E-K-O/N.E.K.O','https://github.com/Pal-AI-Lab/Cortico']) assert.ok(ui.document.querySelector(`.client-choices a[href="${url}"]`));
  ui.window.location.hash='connections'; await waitFor(()=>ui.document.querySelector('a[download]'));
- assert.ok(ui.document.querySelector('a[download]').href.endsWith('/downloads/qiandengji-agent-1.2.0.zip'));
- assert.match(ui.document.querySelector('#main').textContent,/0\.5\.7-rc\.67/);
+ assert.ok(ui.document.querySelector('a[download]').href.endsWith(agentSkill.url));
+ assert.ok(ui.document.querySelector('#main').textContent.includes(agentSkill.sdkVersion));
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
  await ui.refresh(false);
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);

@@ -43,4 +43,18 @@ node scripts/account.mjs enroll --profile /上一步输出的profile目录
 
 此发行包是无画面执行端，viewerPort/consolePort/metricsPort 默认 0，不抢鼠标、不需要 Java 图形客户端。它不代表已附带 1.21.1 的网页材质或完成所有玩法验收。
 
-当前 Skill 1.2.0 锁定 agent-mc-world 0.5.7-rc.67（GitHub 主干候选），不随 npm 标签静默漂移。上游安装与更新说明：https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world 。安装新 Skill 保留原私有 profile、密码与动作账本；更新依赖后重新启动本地 MCP 以加载新版。
+当前 Skill 1.2.1 锁定 agent-mc-world 0.5.7-rc.71（GitHub 主干候选），不随 npm 标签静默漂移。上游安装与更新说明：https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world 。安装新 Skill 保留原私有 profile、密码与动作账本；更新依赖后重新启动本地 MCP 以加载新版。
+
+## 升级已有角色
+
+先正常关闭本地 MCP，将完整新 ZIP 解压到新 Skill 目录。在其中执行以下现有步骤，保留原私有 profile，不重新 init、注册或建号：
+
+```sh
+cd assets/runtime
+npm ci --ignore-scripts --no-audit --no-fund
+cd ../..
+node scripts/setup.mjs config --profile /原私有profile目录
+node scripts/setup.mjs check --profile /原私有profile目录
+```
+
+将生成的 mcp.json 更新到宿主，再重新加载 MCP。check 返回实际 sdkVersion；缺依赖或版本不符会明确拒绝，按提示在 assets/runtime 重新 npm ci。只替换 SKILL.md 或保留旧 node_modules 不算升级完成。原身份、密码、数据和未决动作继续保留，重连后先查询再行动。

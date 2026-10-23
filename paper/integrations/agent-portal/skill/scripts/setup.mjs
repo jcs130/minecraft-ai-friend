@@ -25,6 +25,15 @@ export function verifyBundle(root = SKILL_ROOT) {
   }
   return manifest;
 }
+export function verifyRuntime(root=SKILL_ROOT,manifest=verifyBundle(root)) {
+  const file=join(root,'assets/runtime/node_modules/agent-mc-world/package.json');
+  let installed;
+  try{installed=JSON.parse(readFileSync(file,'utf8'));}
+  catch{throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');}
+  if(installed.name!=='agent-mc-world'||installed.version!==manifest.sdk?.version)
+    throw Error('installed_core_version_mismatch_run_npm_ci_in_assets_runtime');
+  return installed.version;
+}
 function writeJson(file, data) { writeFileSync(file, JSON.stringify(data,null,2)+'\n', {flag:'wx',mode:0o600}); }
 export function validAccount(username, host, port) {
   if (!/^[A-Za-z0-9_]{1,16}$/.test(username ?? '')) throw Error('username_requires_1_to_16_java_characters');
@@ -82,7 +91,7 @@ export async function main(argv=process.argv.slice(2)) {
   const {values}=parseArgs({args:argv,options:{username:{type:'string'},profile:{type:'string'},host:{type:'string'},port:{type:'string'},
     'password-file':{type:'string'},'password-format':{type:'string'},'token-file':{type:'string'},'portal-url':{type:'string'},'npm-cli':{type:'string'},'skip-install':{type:'boolean'}}});
   if(!['init','check','config','portal'].includes(command))throw Error('usage_setup_init_check_config_or_portal');
-  verifyBundle();
+  const bundle=verifyBundle();
   const directory=values.profile || (values.username ? join(homedir(),'.qiandengji','players',values.username) : null);
   if(!directory)throw Error('profile_or_username_required');
   if(command==='init') {
@@ -107,9 +116,10 @@ export async function main(argv=process.argv.slice(2)) {
     return {portalConfigured:true,username:config.world.username,rawTokenPrinted:false,gameConnected:false,modelCalled:false};
   }
   const runtime=join(SKILL_ROOT,'assets/runtime');
+  const sdkVersion=verifyRuntime(SKILL_ROOT,bundle);
   const {loadMinecraftClientConfig}=await import(pathToFileURL(join(runtime,'node_modules/agent-mc-world/dist/runtime/src/client/index.js')));
   const decoded=loadMinecraftClientConfig(file);
-  return {configurationValid:true,version:decoded.cfg.version,username:decoded.cfg.username,gameConnected:false,modelCalled:false};
+  return {configurationValid:true,sdkVersion,version:decoded.cfg.version,username:decoded.cfg.username,gameConnected:false,modelCalled:false};
 }
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   try{console.log(JSON.stringify(await main(),null,2));}

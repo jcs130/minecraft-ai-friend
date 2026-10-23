@@ -15,6 +15,7 @@
 - [技能](../paper/docs/SKILL_SYSTEM.md) · [动态委托板](../paper/docs/DYNAMIC_BOARD.md)。
 - [试炼塔与组队救援](../paper/docs/TRIAL_RESCUE_FEEDBACK.md) · [地下城领奖](../paper/docs/DUNGEON_PENDING_REWARDS.md)。
 - [通用 MC 核心](../packages/agent-mc-world/README.md) · [Numen](../paper/docs/NUMEN_PAPER.md) · [QwenPaw](../paper/docs/KIRITO_QWENPAW.md)。
+- [MCP最小操作](../packages/agent-mc-world/docs/mcp.md) · [服务器Skill](../paper/integrations/agent-portal/skill/SKILL.md)：工具参数与游戏玩法分别按需发现。
 - [网站](../paper/integrations/agent-portal/README.md) · [实时可视化项目](https://github.com/jcs130/mc-visual-console)。
 
 ## 维护

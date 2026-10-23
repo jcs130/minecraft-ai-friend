@@ -17,7 +17,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: python tools/check_public_source.py
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
       - run: python -m unittest discover -s tests -p test_self_host.py -v
+      - run: python -m unittest discover -s tests -p test_agent_skill.py -v
       - name: Scan current tree without printing credential values
         shell: bash
         run: |
@@ -67,6 +71,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+      - name: Install current portal source for candidate checks
+        run: npm ci --ignore-scripts --no-audit
+        working-directory: paper/integrations/agent-portal
+      - name: Check current portal and Skill download contracts
+        run: npm test
+        working-directory: paper/integrations/agent-portal
       - run: python paper/self-host/selfhost.py export-portal --directory "$RUNNER_TEMP/own-game" --output "$RUNNER_TEMP/portal"
       - run: npm ci --no-audit
         working-directory: ${{ runner.temp }}/portal
