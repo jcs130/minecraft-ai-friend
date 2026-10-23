@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "date": "2026-10-24",
+  "websiteVersion": "0.8.11",
+  "observerVersion": "0.1.0",
+  "minecraftVersion": "1.21.1",
+  "basedOnServerCommit": "1b7f3ff151d3d13c27b87683c7c1ce35d01b5b41",
+  "viewerRepository": "https://github.com/jcs130/mc-visual-console",
+  "viewerCommit": "05b5538651aa63956175bd161554e6e1f0d9cca0",
+  "observerJarSha256": "c5dc4edcec95176c85518ede330a53b07f830540b702b33011a97c59d26a9d13",
+  "browserBundleSha256": "6b9ec50af9257108dafbd2cf49eade87a9285542ecd738f7e3a494cc5646d0f9",
+  "consoleBundleSha256": "a6ec113edb7aa9db1f766bcdb36cf9ada4ccd16163f722d1461ce6e791ff679e",
+  "viewerSourceSha256": "7ec4de0d7656e71b2bf4dd5cd628a05edfec58312b7edf5bcc69316cb2560627",
+  "scope": {
+    "extraMinecraftConnections": 0,
+    "newPublicHomePorts": 0,
+    "publicUuidsDefault": [],
+    "maxObservedTargets": 4,
+    "chunkRadius": 2,
+    "readOnly": true,
+    "originalEyeAccountsPreserved": true
+  },
+  "verification": {
+    "portalTestsPassed": 232,
+    "workerTestsPassed": 6,
+    "rendererTestsPassed": 77,
+    "rendererOptionalYsmAssetTestsSkipped": 6,
+    "paperChecksPassed": 11,
+    "nativeNumenScenes": 3,
+    "simultaneousObservedTargets": 4,
+    "originalAssetsVerified": 8451,
+    "numenTerrainMutationObservedMs": 1748,
+    "maximumObservationTickMeasuredMs": 10.7972,
+    "idleTargetsAfterRelease": 1,
+    "desktopAnd390pxBrowser": true,
+    "mobilePhysicalDeviceVerified": false,
+    "fullSceneParityVerified": false,
+    "allYsmModelsAndAnimationsVerified": false,
+    "productionLoadVerified": false,
+    "nativeCadenceRegressionTestsPassed": 31,
+    "nativeRegressionTestsOnCloud": 5,
+    "productionBrowserRealScenesVerified": true,
+    "productionAnonymousPrivateViewStatus": 403,
+    "productionExistingRosterCount": 4,
+    "latestRuntimeCi": "all_five_jobs_succeeded"
+  },
+  "production": {
+    "changed": true,
+    "websiteVersion": "0.8.11",
+    "paperRestarted": true,
+    "loginProxyRestartedByOriginalLifecycle": true,
+    "loginProxyVersionAndRulesPreserved": true
+  },
+  "deployment": {
+    "authorized": true,
+    "normalPaperAndWebsiteRestartCompleted": true,
+    "freshDualDiskColdBackupCompleted": true,
+    "futureJarChangesRequireMaintenanceConfirmation": true,
+    "loginProxyCodeChanged": false
+  },
+  "rollback": "Stop observation worker; restore website image/config; normally stop Paper before removing this independent plugin. Keep latest website database, worlds, game passwords, UUIDs, inventory and Eye pairing.",
+  "serverSourceCommit": "49306775a511f2951516a1770959c7e6f776b471",
+  "backupStamp": "20261024-010454",
+  "preservedExistingPlugins": 40,
+  "playerRetentionChecks": 33,
+  "nativePresenceMaxAgeMs": 60000,
+  "websiteProtectedTables": 17,
+  "publication": {
+    "paperRestartedNormally": true,
+    "newMinecraftConnections": 0,
+    "newPublicHomePorts": 0,
+    "residentAutonomyRestored": true,
+    "latestDatabaseKept": true
+  },
+  "limitations": [
+    "Custom player skins and YSM are not fully projected by this scene source.",
+    "Some special blocks, biome tints, entities and item models remain explicitly unsupported.",
+    "Physical mobile devices and 16 autonomous model load were not part of this release verification."
+  ]
+}

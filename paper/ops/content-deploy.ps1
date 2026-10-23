@@ -1,4 +1,4 @@
-# Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
+﻿# Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
 function Content-FirstPartyPreviousJar([string]$name) {
     # Deployed hotfixes such as 0.4.47.3 use a fourth numeric component.
     # Keep the first-party filename boundary; deployment still pins its SHA256.
@@ -65,7 +65,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative)) { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
@@ -94,7 +94,7 @@ function Deploy-PendingContent {
             # This one root file uses the same stopped E/F snapshots, pinned hashes,
             # atomic replacement and rollback as plugin configuration below.
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('plugins/CortiEyeMirror/config.yml','plugins/WorldGuard/worlds/world/regions.yml','plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar','plugins/numen/server/server.json','plugins/numen/server/mcp_server.json','plugins/numen/server/appearance_bindings.json')) {
+        } elseif ($relative -in @('plugins/WorldObserver/config.yml','plugins/CortiEyeMirror/config.yml','plugins/WorldGuard/worlds/world/regions.yml','plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar','plugins/numen/server/server.json','plugins/numen/server/mcp_server.json','plugins/numen/server/appearance_bindings.json')) {
             # Only the two server-owned spell files are eligible; the same
             # pinned hashes, stopped snapshots and rollback apply below.
             $target = Join-Path $serverDir $relative

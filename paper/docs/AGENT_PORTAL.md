@@ -1,6 +1,6 @@
 # 千灯纪网站：云端门户与账号桥
 
-更新：2026-10-24。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。正式网站0.8.8 / `cb51ba79`、Skill1.2.1、LoginGuard0.1.5；账号桥已上线，“先内网、暂不更新代理”是已完成的早期阶段。0.8.9无账号现代观战为本轮候选，尚未部署，见[女神之眼](ACCOUNT_FREE_WORLD_VIEW.md)。下载分包和登录保护见[官网发布](WEBSITE_SECURITY_DOWNLOADS.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
+更新：2026-10-24。源码在 [integrations/agent-portal](../integrations/agent-portal/README.md)。云端网址 **https://mc.kangqiang.site**，接入页 **https://mc.kangqiang.site/join**。正式网站0.8.11 / `49306775`、Skill1.2.1、LoginGuard0.1.5；账号桥已上线，“先内网、暂不更新代理”是已完成的早期阶段。无账号现代观战已部署，见[女神之眼](ACCOUNT_FREE_WORLD_VIEW.md)。下载分包和登录保护见[官网发布](WEBSITE_SECURITY_DOWNLOADS.md)，早期云端建设过程见[CLOUD_PORTAL.md](CLOUD_PORTAL.md)。
 
 ## 已运行的网站
 
@@ -10,9 +10,9 @@
 - 网站用户名加密码可直接注册，邮箱可选；填写邮箱后需验证码验证，也可稍后补绑用于找回密码。登录、网站改密、设备撤销、原角色资料权限与只读程序token可用。首次管理员仅能在服务器本机初始化；初始化前普通注册关闭。
 - 认证、成长存档与实时状态分别标记。私有背包不因为名字相同或自报 UUID 放行。保存时属性不能用来断言当前游戏状态。
 - 手机布局有可收起导航、44px 触控、16px 表单、滚动表格、安全区域及可长按复制的凭据；LAN HTTP 的安全随机请求 ID 不依赖 `crypto.randomUUID`。
-- 直播按角色切换，默认本人已绑定角色；私有频道按原 UUID 授权。发布器抓取现有现代 Viewer 的游戏画布，页面聊天与工具面板不入图，不另开游戏身体。
+- 观战按角色切换，默认本人已绑定角色；私有场景按原 UUID 授权。WorldObserver读取原身体的真实场景数据，浏览器复用现代前端自行渲染，不另开游戏身体；旧画布/JPEG发布器仅保留兼容。
 
-云端当前为0.8.8，已通过真实HTTPS、轻量注册回归、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。候选的浏览器尺寸验证与手机真机验收需分别报告。
+云端当前为0.8.11，已通过真实HTTPS、轻量注册回归、账号桥和原生Numen归属验证；0.3.0为早期迁移版本，原内网0.2.0仅保留为诊断副本。网站账号操作统一使用云端地址，两个账号库不是双向同步。候选的浏览器尺寸验证与手机真机验收需分别报告。
 
 ## 游戏账号桥现状
 
@@ -38,7 +38,7 @@
 
 ## 直播：正式旧预览与新的现代场景候选
 
-正式0.8.8仍使用原JPEG预览和频道API，尚未连接正式画面源。旧发布器 `npm run live:publish` 为兼容保留。0.8.9候选改为网站自动选择本人角色，通过独立WorldObserver读取原身体，复用现代前端进行第一人称、第三人称与3D观战，不登录额外Eye；见[无账号观战](ACCOUNT_FREE_WORLD_VIEW.md)。
+正式0.8.11自动选择本人角色，通过独立WorldObserver读取原身体，复用现代前端进行第一人称、第三人称与3D观战、小地图，不登录额外Eye。旧JPEG发布接口保留兼容；见[无账号观战](ACCOUNT_FREE_WORLD_VIEW.md)。
 
 旧发布器是1280×720、约1fps、无声音的JPEG预览。新的候选转发真实原生场景数据，由浏览器渲染；不是JPEG截图，具备单独的UUID/会话授权、撤权和断流清屏。原生资源、专用模型、声音与完整动画均应分别验收，不能把测试JPEG或DOM夹具当作实际画面。
 
