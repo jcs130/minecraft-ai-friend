@@ -13,9 +13,6 @@ const stamp = value => Number.isSafeInteger(value)&&value>0&&value<=Date.now()+3
 const hash = value => createHash('sha256').update(value).digest('hex').slice(0,24);
 const mode = value => Object.hasOwn(difficulties,value) ? value : null;
 const unique = values => [...new Set(values)].sort((a,b)=>a.localeCompare(b));
-// A public challenge may include an OP player. Reserved login status protects
-// account control/private inventory; it does not hide a named public teammate.
-const published = roster => new Set(roster.filter(r=>r.available&&r.kind!=='observer').map(r=>r.name));
 const validActivity = value => typeof value==='string'&&/^[a-z][a-z0-9_-]{0,63}$/.test(value);
 
 /** Website progress score, not an imported game score. No speed/kill guesses. */
@@ -43,14 +40,22 @@ export class ChallengeLedger {
   all(limit=5000) { return this.store.db.prepare('SELECT payload FROM public_challenge_runs ORDER BY coalesce(ended_at,observed_at) DESC,id DESC LIMIT ?').all(limit).map(row=>JSON.parse(row.payload)); }
   metadata() {const row=this.store.db.prepare('SELECT * FROM challenge_feed WHERE id=1').get();return row?{...JSON.parse(row.payload),receivedAt:row.received_at}:null;}
   saveMetadata(value) {this.store.db.prepare('INSERT OR REPLACE INTO challenge_feed VALUES(1,?,?)').run(Date.now(),JSON.stringify(value));}
+  async visibility() {
+    // Offline players retain public history. This trusted feed proves a game
+    // participation, not account ownership or access to someone's inventory.
+    const excluded=new Set(this.store.db.prepare('SELECT name FROM archived_test_roles').all().map(r=>r.name.toLowerCase()));
+    for(const name of this.game.config?.hiddenPlayers||[])excluded.add(String(name).toLowerCase());
+    for(const r of await this.game.roster())if(r.kind==='observer')excluded.add(r.name.toLowerCase());
+    excluded.add('live');
+    return {excluded,has:name=>playerNameValid(name)&&!/eye$/i.test(name)&&!excluded.has(name.toLowerCase())};
+  }
   async query({activity='trial_tower',difficulty='all',page=1}={}) {
     if(!validActivity(activity)||difficulty!=='all'&&!mode(difficulty)||!Number.isInteger(page)||page<1||page>1000)throw fail('INVALID_CHALLENGE_FILTER','请选择有效的挑战、难度与页码。');
     const meta=this.metadata(),activities=meta?.activities||[],selected=activities.find(row=>row.id===activity);
     if(activities.length&&!selected)throw fail('CHALLENGE_NOT_FOUND','这个挑战尚未收录，请从挑战目录选择。',404);
-    const names=published(await this.game.roster());
-    const allowed=[...names].slice(0,512),slots=allowed.map(()=>'?').join(',')||'NULL';
-    const where=`activity_id=? AND (?='all' OR json_extract(payload,'$.difficulty')=?) AND EXISTS(SELECT 1 FROM json_each(payload,'$.party') WHERE value IN (${slots}))`;
-    const args=[activity,difficulty,difficulty,...allowed];
+    const names=await this.visibility(),excluded=[...names.excluded],slots=excluded.map(()=>'?').join(',');
+    const where=`activity_id=? AND (?='all' OR json_extract(payload,'$.difficulty')=?) AND EXISTS(SELECT 1 FROM json_each(payload,'$.party') WHERE lower(value) NOT LIKE '%eye' ${slots?'AND lower(value) NOT IN ('+slots+')':''})`;
+    const args=[activity,difficulty,difficulty,...excluded];
     const summary=this.store.db.prepare(`SELECT count(*) AS records,coalesce(sum(state='completed'),0) AS completed,coalesce(sum(state IN ('active','paused')),0) AS active FROM public_challenge_runs WHERE ${where}`).get(...args);
     const rows=this.store.db.prepare(`SELECT payload FROM public_challenge_runs WHERE ${where} ORDER BY coalesce(ended_at,observed_at) DESC,id DESC LIMIT 20 OFFSET ?`).all(...args,(page-1)*20).map(r=>visibleRun(JSON.parse(r.payload),names)).filter(Boolean);
     // Select each team's best across the complete ledger before limiting the
@@ -112,10 +117,13 @@ export class SavedChallenges extends ChallengeLedger {
     this.pending=this.collect().finally(()=>{this.pending=null;});return this.pending;
   }
   async collect() {
-    const [document,definition,roster]=await Promise.all([this.game.plugin('config.yml'),this.game.plugin('dungeons.yml'),this.game.roster()]);
+    const [document,definition,roster,cache]=await Promise.all([this.game.plugin('config.yml'),this.game.plugin('dungeons.yml'),this.game.roster(),this.game.document?this.game.document(path.join(this.config.serverDir,'usercache.json')):{data:null}]);
     const data=document.data,observedAt=new Date().toISOString();
     if(!data) {const previous=this.metadata();this.saveMetadata({schemaVersion:1,activities:previous?.activities||[],gameSavedAt:previous?.gameSavedAt||null,available:false,observedAt});return {available:false};}
-    const names=new Map(roster.filter(r=>r.available&&r.kind!=='observer'&&r.playerUuid).map(r=>[r.playerUuid,r.name]));
+    const observers=new Set(roster.filter(r=>r.kind==='observer').map(r=>r.name.toLowerCase()));
+    const hiddenNames=new Set((this.config.hiddenPlayers||[]).map(n=>n.toLowerCase()));
+    const names=new Map((Array.isArray(cache.data)?cache.data:[]).filter(r=>playerNameValid(r.name)&&typeof r.uuid==='string'&&/^[a-f0-9-]{36}$/.test(r.uuid)&&!/eye$/i.test(r.name)&&r.name.toLowerCase()!=='live'&&!observers.has(r.name.toLowerCase())&&!hiddenNames.has(r.name.toLowerCase())).map(r=>[r.uuid,r.name]));
+    for(const r of roster)if(r.available&&r.kind!=='observer'&&r.playerUuid)names.set(r.playerUuid,r.name);
     const party=ids=>unique((Array.isArray(ids)?ids:[]).map(id=>names.get(id)).filter(Boolean));
     const hidden=ids=>unique(Array.isArray(ids)?ids:[]).filter(id=>!names.has(id)).length;
     const towerMax=data['dungeon-challenge-built']===true?15:data['dungeon-expanded']===true?10:6;
@@ -197,7 +205,7 @@ export class CloudChallenges extends ChallengeLedger {
     const activities=input.activities.map(a=>{if(!validActivity(a.id)||!['tower','dungeon'].includes(a.type)||typeof a.name!=='string'||a.name.length>100||bounded(a.totalUnits)===null||a.totalUnits<1)throw fail('CHALLENGE_FEED_INVALID','挑战目录无效。');return {id:a.id,type:a.type,name:text(a.name),unit:a.type==='tower'?'层':'室',totalUnits:a.totalUnits};});
     if(!activities.length&&input.available===false)activities.push(...previous?.activities||[]);
     if(new Set(activities.map(a=>a.id)).size!==activities.length)throw fail('CHALLENGE_FEED_INVALID','挑战目录重复。');
-    const names=published(await this.game.roster()),ids=new Set();
+    const names=await this.visibility(),ids=new Set();
     const runs=input.runs.map(r=>{
       const activity=activities.find(a=>a.id===r.activityId);
       if(!activity||!/^[a-f0-9]{24}$/.test(r.id||'')||ids.has(r.id)||!['active','paused','completed','ended','interrupted'].includes(r.state)||r.difficulty!==null&&!mode(r.difficulty)||!Array.isArray(r.party)||r.party.length>24||r.party.some(n=>!playerNameValid(n))||new Set(r.party.map(n=>n.toLowerCase())).size!==r.party.length||bounded(r.hiddenMembers,24)===null||r.party.length+r.hiddenMembers>24||bounded(r.totalUnits)===null||r.totalUnits<1)throw fail('CHALLENGE_FEED_INVALID','挑战场次身份或类型无效。');

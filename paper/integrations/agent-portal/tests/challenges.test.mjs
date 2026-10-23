@@ -78,12 +78,20 @@ test('paused dungeon faults remain visible as paused, not completed or rewarded'
  const row=(await f.reader.snapshot()).runs[0];assert.equal(row.state,'paused');assert.equal(row.clearedUnits,1);assert.equal(row.reason,'data_unavailable');assert.equal((await f.reader.query({activity:'crypt'})).leaderboards[0].teams,0);
 });
 
-test('cloud ignores caller scores/private extras and rechecks only published names',async t=>{
+test('cloud ignores caller scores/private extras and filters hidden identities',async t=>{
  const f=await fixture(t),cloud=new CloudChallenges(f.store,f.game),r=record();
  await cloud.accept(feed([{...r,score:999999,password:'private-do-not-publish',playerUuid:uuids[0],inventory:['secret']}]))
  const result=await cloud.query();assert.equal(result.leaderboards[0].rows[0].score,2000);const encoded=JSON.stringify(result);
  for(const privateValue of ['999999','private-do-not-publish',uuids[0],'inventory'])assert.ok(!encoded.includes(privateValue));
+ f.game.config={hiddenPlayers:['ag_Hidden']};
  assert.equal((await cloud.accept(feed([record('b'.repeat(24),{party:['ag_Hidden']})]))).records,0);
+});
+
+test('offline teammates resolve only through saved UUIDs and retain their historical ranks',async t=>{
+ const f=await fixture(t);f.game.roster=async()=>[];f.game.document=async()=>({data:[{name:'ag_Alpha',uuid:uuids[0]},{name:'LittleFish0510',uuid:uuids[1]}]});
+ Object.assign(f.documents['config.yml'],{'dungeon-last-run':Date.now()-1000,'dungeon-last-outcome':'won','dungeon-last-finish-floor':15,'dungeon-last-finish-reason':'cleared','dungeon-last-participants':uuids});
+ const row=(await f.reader.snapshot()).runs[0];assert.deepEqual(row.party,names);assert.equal(row.hiddenMembers,0);
+ const cloud=new CloudChallenges(f.store,f.game);await cloud.accept(feed([record('d'.repeat(24),{party:names})]));assert.equal((await cloud.query()).leaderboards[0].teams,1);
 });
 
 test('older feed cannot roll back progress; omission never erases previously collected runs',async t=>{
