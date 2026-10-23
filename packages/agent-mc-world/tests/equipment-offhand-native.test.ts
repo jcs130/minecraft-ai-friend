@@ -83,8 +83,7 @@ it('does not fall back through a hotbar or cursor when a direct offhand exchange
   expect(r.clicks).toHaveLength(1);
   expect(r.clicks[0]).toMatchObject({ slot: 22, mouseButton: 40, mode: 2 });
   expect(r.raw()).toEqual(before); expect(r.bot.inventory.selectedItem).toBeNull();
-  expect(inventoryClickState(r.bot).phase).toBe('quarantined');
-  r.full(); expect(inventoryClickState(r.bot).phase).toBe('ready');
+  expect(inventoryClickState(r.bot).phase).toBe('ready'); // The denial already included its complete server frame.
   await vi.runAllTimersAsync(); expect(r.clicks).toHaveLength(1);
 });
 
@@ -94,7 +93,7 @@ it('records authoritative before/expected/actual stack differences without custo
   const operation = clickInventoryConfirmed(r.bot, 22, 0, 2, r.bot.inventory);
   const rejected = expect(operation).rejects.toMatchObject({ code: 'inventory-click-sync' });
   await vi.runAllTimersAsync(); await rejected;
-  const data = r.notes.findLast(n => n.event === 'click-quarantined').data;
+  const data = r.notes.findLast(n => n.event === 'click-reconciled').data;
   expect(data).toMatchObject({ mode: 2, button: 0, mismatchedSlots: [22, 36], omittedSlotDetails: 0 });
   expect(data.slotDetails.map((s: any) => s.slot)).toEqual([22, 36]);
   const [source, hotbar] = data.slotDetails;
@@ -177,11 +176,10 @@ it('stops a refused number-key swap without a cursor stack, retry, drop or false
   const before = structuredClone(r.raw());
   const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[40]!, 'off-hand');
   const rejected = expect(operation).rejects.toMatchObject({ source: 'server', code: 'inventory-click-sync',
-    message: expect.stringContaining('已收到完整快照') });
+    message: expect.stringContaining('服务端已返回完整库存状态') });
   await vi.runAllTimersAsync(); await rejected;
   expect(r.raw()).toEqual(before); expect(r.server.selectedItem).toBeNull();
   expect(r.clicks).toHaveLength(1); expect(r.clicks[0].mode).toBe(2);
-  expect(inventoryClickState(r.bot).phase).toBe('quarantined');
-  r.full(); expect(inventoryClickState(r.bot).phase).toBe('ready');
+  expect(inventoryClickState(r.bot).phase).toBe('ready'); // Failure is terminal; no second identical snapshot is required.
   await vi.runAllTimersAsync(); expect(r.clicks).toHaveLength(1);
 });

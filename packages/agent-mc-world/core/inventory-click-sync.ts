@@ -136,6 +136,12 @@ function record(state: SyncState, event: string, data: Record<string, unknown>):
 
 function activeWindow(bot: Bot): Window { return bot.currentWindow ?? bot.inventory; }
 
+function applyAuthoritativeFrame(state: SyncState, window: Window, frame: {items: unknown[]; cursor: unknown}): void {
+  const writable=window as unknown as {updateSlot(slot:number,item:Window['selectedItem']):void};
+  frame.items.forEach((item,slot)=>writable.updateSlot(slot,state.decode!(item)));
+  window.selectedItem=state.decode!(frame.cursor);
+}
+
 /** A complete authoritative frame may be finished by later slot/cursor packets. */
 function confirmPendingClick(bot: Bot, state: SyncState, source: 'window_items' | 'set_slot', stateId: unknown): void {
   const pending = state.pending, window = activeWindow(bot), frame = state.authority.get(window);
@@ -321,9 +327,7 @@ function restoreUnsentInventoryClick(bot: Bot, state: SyncState, pending: Pendin
   if (!frame || frame.fullSeq <= pending.createdSeq || !state.decode) return;
   // A blocked native closure may already have changed the local window optimistically.
   // Reapply the complete server view and every subsequent server slot/cursor update.
-  const writable = window as unknown as { updateSlot(slot: number, item: Window['selectedItem']): void };
-  frame.items.forEach((item, slot) => writable.updateSlot(slot, state.decode!(item)));
-  window.selectedItem = state.decode(frame.cursor);
+  applyAuthoritativeFrame(state,window,frame);
   state.phase = 'ready'; state.reason = undefined; state.pending = null;
   record(state, 'click-unsent-recovered', { packetSeq: state.packetSeq, snapshotSeq: frame.seq,
     windowId: window.id, windowSerial: windowSerial(state, window) });
@@ -354,6 +358,18 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
     const mismatchedSlots = fullAfterDispatch
       ? [...pending.expectedSlots].filter(([index, key]) => stackKey(frame!.items[index]) !== key).map(([index]) => index) : [];
     const cursorMatches = fullAfterDispatch ? stackKey(frame!.cursor) === pending.expectedCursor : null;
+    if (fullAfterDispatch && activeWindow(bot)===window && state.decode) {
+      // A denied/modified click can return its complete authoritative frame
+      // before this deadline. It need not push a second identical frame later.
+      // Finish this operation as failed, reconcile local prediction and permit
+      // a new explicit operation. Never replay the sent click or report success.
+      applyAuthoritativeFrame(state,window,frame!);
+      state.phase='ready';state.reason=undefined;state.pending=null;
+      record(state,'click-reconciled',{packetSeq:state.packetSeq,sentSeq:pending.sentSeq,slot,windowId:window.id,
+        fullSnapshotSeq:frame!.fullSeq,mismatchedSlots,cursorMatches,...mismatchDetails(pending,frame!,mismatchedSlots,cursorMatches!)});
+      complete(new InventoryClickSyncError('服务端已返回完整库存状态，但与本次点击预测不同；本次操作未确认成功，已同步服务端状态并恢复后续库存访问，未重试','rollback'));
+      return;
+    }
     state.phase = 'quarantined'; state.reason = `点击窗口${window.id}槽${slot}后服务端未在 ${INVENTORY_CLICK_CONFIRM_MS}ms 内确认预期结果`;
     if (fullAfterDispatch) state.reason += `；已收到完整快照，但${mismatchedSlots.length ? `槽位${mismatchedSlots.join('、')}不一致` : '槽位已匹配'}、${cursorMatches ? '光标已匹配' : '光标不一致'}`;
     else state.reason += '；尚缺本次派发后的完整槽位和光标快照';

@@ -152,6 +152,28 @@ describe('inventory read recovery', () => {
 });
 
 describe('failed inventory click recovery', () => {
+  it.each(['1.20.6', '1.21.1'])('reconciles a denied drop from an already received full %s frame without another snapshot or retry', async version => {
+    vi.useFakeTimers(); const r=rig(version);
+    r.full(0,46,{31:r.raw('rotten_flesh',12),9:r.raw('oak_log',8)});
+    const operation=clickInventoryConfirmed(r.bot,31,1,4);
+    const result=operation.then(()=>({ok:true,error:null}),error=>({ok:false,error}));
+    await Promise.resolve();
+    // Same packet shape as the live denial: the requested stack is unchanged,
+    // the cursor is empty and the complete authoritative response has arrived.
+    r.full(0,46,{31:r.raw('rotten_flesh',12),9:r.raw('oak_log',8)});
+    expect(inventoryClickState(r.bot).phase).toBe('pending');
+    await vi.advanceTimersByTimeAsync(INVENTORY_CLICK_CONFIRM_MS);
+    expect(await result).toMatchObject({ok:false,error:{code:'inventory-click-sync',reason:'rollback'}});
+    expect(inventoryClickState(r.bot).phase).toBe('ready');
+    expect(inventoryReadConfirmed(r.bot)).toBe(true);
+    expect(r.bot.inventory.slots[31]?.count).toBe(12);
+    expect(r.bot.inventory.selectedItem).toBeNull();
+    expect(r.write.mock.calls.filter(([name])=>name==='window_click')).toHaveLength(1);
+    const next=clickInventoryConfirmed(r.bot,9,0,0);
+    await Promise.resolve();r.full(0,46,{31:r.raw('rotten_flesh',12)},r.raw('oak_log',8));await next;
+    expect(r.write.mock.calls.filter(([name])=>name==='window_click').map(([,packet])=>packet.slot)).toEqual([31,9]);
+  });
+
   it.each(['cursor', 'slot'] as const)('confirms a fresh complete server frame when its delayed %s packet completes the expected click', async delayed => {
     const r = rig('1.21.1');
     const operation = clickInventoryConfirmed(r.bot, 9, 0, 0);
