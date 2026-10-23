@@ -4319,7 +4319,7 @@ export class MinecraftWorld implements World {
         this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
         this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
-        this.methods.stop('游戏连接已断开，原方法坐标和权限作废');
+        this.methods.cancelForDisconnect('游戏连接已断开，原方法坐标和权限作废');
         this.visualInFlight?.controller.abort(new Error('游戏连接已断开'));
         this.interruptIdle('disconnect');
         this.idleContext.clear();

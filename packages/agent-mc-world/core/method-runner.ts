@@ -35,7 +35,7 @@ export interface MethodHost {
 /** Each program has one revocable capability set and at most one outstanding World call. */
 export class MethodRunner {
   private serial = 0;
-  private active: { run: MethodRun; stop: (reason?: string) => void } | null = null;
+  private active: { run: MethodRun; validation: boolean; stop: (reason?: string) => void } | null = null;
   private readonly runs = new Map<number, MethodRun>();
   private readonly waiters = new Map<number, Set<() => void>>();
 
@@ -105,6 +105,13 @@ export class MethodRunner {
     return true;
   }
 
+  /** Static validation has no world coordinates or capabilities to revoke.
+   * Explicit stop still cancels it; a dropped game connection only stops execution. */
+  cancelForDisconnect(reason: string): boolean {
+    if (this.active?.validation) return false;
+    return this.stop(reason);
+  }
+
   start(request: MethodRequest): MethodRun {
     if (this.active) throw new Error(`方法#${this.active.run.id}仍在运行；先读取结果或明确取消`);
     if (typeof request.code !== 'string' || !request.code.trim() || request.code.length > METHOD_LIMITS.sourceChars) throw new Error(`code须为1至${METHOD_LIMITS.sourceChars}字符的JavaScript函数体`);
@@ -156,7 +163,7 @@ export class MethodRunner {
       for (const done of [...(this.waiters.get(run.id) ?? [])]) done();
     };
     const timer = setTimeout(() => finish('failed', `方法超过${durationMs}毫秒；已撤销它自己的未完成任务`), durationMs);
-    this.active = { run, stop: (reason) => finish('cancelled', reason) };
+    this.active = { run, validation: request.validate === true, stop: (reason) => finish('cancelled', reason) };
     this.runs.set(run.id, run);
     while (this.runs.size > 8) this.runs.delete(this.runs.keys().next().value!);
     worker.on('error', (error) => finish('failed', String(error)));
