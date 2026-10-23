@@ -41,7 +41,9 @@ export function freshAuthentication(heartbeat, now = Date.now()) {
 // normal Java connection or grants website ownership.
 export function freshNativePresence(row, now = Date.now()) {
   return row?.kind === 'agent' && row.source === 'Numen.live-owner-tag' && row.nativeOnline === true
-    && Number.isFinite(row.nativeObservedAt) && row.nativeObservedAt <= now + 1000 && now - row.nativeObservedAt <= 30000;
+    // Census runs every 30 seconds; publication can add another 15 seconds.
+    // The actual scene source still closes immediately when that UUID leaves.
+    && Number.isFinite(row.nativeObservedAt) && row.nativeObservedAt <= now + 1000 && now - row.nativeObservedAt <= 60000;
 }
 
 export function normalizeInventory(items) {

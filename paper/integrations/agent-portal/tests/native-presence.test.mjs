@@ -8,7 +8,8 @@ const record=now=>({name:'ag_Native',uuid,kind:'agent',source:'Numen.live-owner-
 test('only a current live Numen census establishes positive native presence',()=>{
  const now=Date.now(),row=record(now);
  assert.equal(freshNativePresence(row,now),true);
- for(const change of [{nativeObservedAt:now-30001},{nativeObservedAt:now+1001},{nativeObservedAt:undefined},{nativeOnline:false},{kind:'player'},{source:'Numen.CompanionRegistry'}])assert.equal(freshNativePresence({...row,...change},now),false);
+ assert.equal(freshNativePresence({...row,nativeObservedAt:now-45000},now),true);
+ for(const change of [{nativeObservedAt:now-60001},{nativeObservedAt:now+1001},{nativeObservedAt:undefined},{nativeOnline:false},{kind:'player'},{source:'Numen.CompanionRegistry'}])assert.equal(freshNativePresence({...row,...change},now),false);
 });
 async function roster(row,cacheUuid=uuid){
  const now=Date.now(),config={serverDir:path.resolve('no-real-server'),agentRegistry:path.resolve('pairs.json'),authHeartbeat:path.resolve('heartbeat.json'),portalIdentitiesFile:path.resolve('identities.json'),publicRoster:[],hiddenPlayers:[],includeKnownPlayers:true};
@@ -22,7 +23,7 @@ test('anonymous ping entry does not hide an independently verified live Numen UU
  assert.equal(new WorldView({},{}).online(row),true);
 });
 test('stale census and static registry never make a native body online',async()=>{
- for(const change of [{nativeObservedAt:Date.now()-31000},{source:'Numen.CompanionRegistry'},{nativeOnline:false}]){
+ for(const change of [{nativeObservedAt:Date.now()-61000},{source:'Numen.CompanionRegistry'},{nativeOnline:false}]){
   const row=await roster({...record(Date.now()),...change});assert.equal(row.online,false);assert.equal(new WorldView({},{}).online(row),false);
  }
 });
