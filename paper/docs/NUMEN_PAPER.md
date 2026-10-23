@@ -1,19 +1,19 @@
-## 身体重复与 LuckPerms 复查（2026-10-23，候选）
+## 身体重复与 LuckPerms 复查（2026-10-23，已上线）
 
 不能只用官网折叠历史档案来解释全部身体重复。对正式 API `4b36f166` 和内容 `82133ebd` 的独立服实测：
 
 - 同一主人、完全相同拼写的重复召唤（普通命令、官方 Release 载荷）和重连保留原 UUID、背包；LP 能按名和 UUID识别同伴。
-- `Fishy`／`FISHY` 因 `CompanionRoster.findByName` 使用大小写敏感比较，会创建不同 UUID，甚至让两具身体同时在线。候选改为与原版玩家名一致的大小写无关比较；永久遣散按名查找同步修正。不自动清理已有重名或恢复旧身份。
+- `Fishy`／`FISHY` 因 `CompanionRoster.findByName` 使用大小写敏感比较，会创建不同 UUID，甚至让两具身体同时在线。本次改为与原版玩家名一致的大小写无关比较；永久遣散按名查找同步修正。不自动清理已有重名或恢复旧身份。
 - `/numen player despawn <名字>` 和面板确认“删除／遣散”是永久除名，之后同名新建分配新 UUID。临时离开直接退出；再次召唤复用仍在名册的身体。`/kick` 保留名册，等主人再次召回。
 - 普通新同伴沿原有主人委托权限；接管旧账号沿已验证的原权限标记。排查 LP 时先核对身体 UUID，查询示例：`/lp user <身体UUID> info`。不要把同名真人的权限或存档迁给同伴。
 
 历史日志确认10月21日15:09、15:31、15:36、15:56先后使用四个随机UUID；后续三次前都有旧大脑 DISPOSE，旧同伴家目录也已移除，与永久遣散后新建的路径相符。但旧日志没有调用入口审计，不能断言每次都是面板删除，也没有证明这些历史身体同时在线。10月22日11:46的离场另有明确 `/kick fishy` 记录；当前名册只有最后一份、保持 removed 等待主人召回。
 
-候选新增 `[numen-lifecycle] create/reuse/dismiss body=… owner=… name=…` 到服务端日志，创建表示入册，实际加入仍须接纳；不发公屏。源码 [287ac6e5](https://github.com/jcs130/minecraft-numen/commit/287ac6e5d492ea73323fc4eb4ce668aacac89130)，可重放补丁与固定基线装配器在 `paper/integrations/numen-paper/`。候选API `7380a326` 仅替换两 class，其他1244条目逐字保持；1774 JVM、3真实Paper源码E2E、6精确候选联机与正常冷重启检查通过，首次测试夹具把UUID传给give失败已保留并改用真实在线名，不放宽断言。正式仍 `4b36f166`，未修改玩家数据、LP权限或重启服务。候选清单：[numen-body-identity-candidate-20261023.json](../manifests/numen-body-identity-candidate-20261023.json)。上线须当次维护批准、预告和完整双盘冷备份；回退换原API，保留最新世界及Numen资料。
+本次新增 `[numen-lifecycle] create/reuse/dismiss body=… owner=… name=…` 到服务端日志，创建表示入册，实际加入仍须接纳；不发公屏。源码 [287ac6e5](https://github.com/jcs130/minecraft-numen/commit/287ac6e5d492ea73323fc4eb4ce668aacac89130)，可重放补丁与固定基线装配器在 `paper/integrations/numen-paper/`。本次API `7380a326` 仅替换两 class，其他1244条目逐字保持；1774 JVM、3真实Paper源码E2E、6精确候选联机与正常冷重启检查通过，首次测试夹具把UUID传给give失败已保留并改用真实在线名，不放宽断言。正式API现为 `7380a326`，只在完整E/F冷备份 `20261023-215753` 后正常重启更换；未合并、删除玩家数据或修改LP权限。正式28项状态/备份、16项协议、43项保存和10项服务检查通过，桐人原日常恢复。首轮维护在镜像前遇到Windows长路径，原服正常恢复且未换JAR；长路径统计修复通过3项检查后重新走完整预告和双盘冷备份。[发布清单](../manifests/numen-body-identity-release-20261023.json)、[可下载发布包](https://github.com/jcs130/minecraft-numen/releases/tag/qiandengji-paper-1.21.1-20261023)。回退只换原API `4b36f166`，保留最新世界及Numen资料。
 
 > 2026-10-20 最新：常驻角色已切换为原 `ag_Kirito`，由 QwenPaw 控制；原星灯离场保档。见 [桐人正式接管](KIRITO_QWENPAW.md) 和 [原生能力核验](KIRITO_NATIVE_QWENPAW.md)。下文此前常驻发布段落保留历史。
 
-## 当前状态更新（2026-10-21）
+## 此前发布状态（2026-10-21）
 
 现役 **Paper 1.21.1 build133 / AgentFriend 0.4.47.10 / Numen 0.1.4 / NumenBedrock 0.1.0**，Numen API `4b36f166`；个人模型CLI与费用隔离已上线，兼容官方 Fabric 0.1.4/0.1.4.1。原版 Java 客户端不必安装 Numen 即可入服；完整 Java 设置面板可用官方 Fabric Release，也保留原配套的 1.21.1 模组包。基岩沿用 `/numenmenu`，原协议 3 与端口保持。最新完整双盘冷备份为 `20261021-202316`。正式核验和回退见[本次发布记录](../manifests/numen-owner-cli-release-20261021.json)；此前消息降噪与自主运行修复见[前次发布说明](MESSAGE_AUTONOMY_RELEASE_20261021.md)。下方历史候选与暂停描述按当时时点阅读。
 

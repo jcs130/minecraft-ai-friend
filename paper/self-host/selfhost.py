@@ -20,8 +20,8 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = Path(__file__).with_name('dependencies.lock.json')
 USER_AGENT = 'qiandengji-selfhost/1.0 (https://github.com/jcs130/minecraft-ai-friend)'
-PORTAL_REF = '800cf4fbf29163a5fbc8f7ed6aa0967cf2a9f1b5'
-PORTAL_VERSION = '0.8.6'
+PORTAL_REF = 'cb51ba79bbfb6377dee10eb3e8c45020dce00b59'
+PORTAL_VERSION = '0.8.8'
 MARKER = '.qiandengji-self-host.json'
 
 
