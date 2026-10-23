@@ -274,6 +274,9 @@ def tool_help(catalogue, arguments):
 
 
 def uncertain(receipt):
+    data = receipt.get("data")
+    if isinstance(data, dict) and data.get("status") == "unknown":
+        return True
     evidence = (receipt.get("execution") or {}).get("evidence") or {}
     return evidence.get("outcomeUnknown") is True or evidence.get("outcomeKnown") is False or evidence.get("nativeStatus") == "unknown"
 

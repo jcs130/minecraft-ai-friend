@@ -110,7 +110,16 @@ async def check(directory: Path, node: str) -> dict:
             recalled = module.json_content(await bridge.call("mc_memory", {"action": "get", "id": memory_id}))
             assert recalled["entry"]["content"] == "Historical hypothesis, no gameplay claim."
             assert recalled["entry"]["currentWorldVerified"] is False
-            assert (await bridge.call("mc_memory", {"action": "capture"})).get("isError") is True
+            capture = module.outcome(await bridge.call("mc_memory", {"action": "capture"}))
+            unknown = capture["data"]
+            assert unknown["status"] == "unknown" and unknown["retryable"] is False and not capture.get("execution")
+            safe_read = unknown["next_safe_read"]
+            assert safe_read == {"tool": "mc_protocol", "arguments": {
+                "protocol": "agent-mc/v1", "action": "request", "id": unknown["request_id"]}}
+            inspected = module.json_content(await bridge.call(safe_read["tool"], safe_read["arguments"]))
+            assert inspected["status"] == "unknown" and inspected["replayed"] is False
+            assert inspected["retryable"] is False and inspected["reason"] == "execution_error"
+            assert "No connected" in inspected["error"]
             await bridge.close()
             bridge = module.MinecraftBridge(node, directory.resolve() / "node_modules/agent-mc-world/bin/minecraft-agent-mcp.mjs",
                                             config, data / "reopened-backend.log", node_args=("--import", (root / "deny-network.mjs").as_uri()))
@@ -142,7 +151,7 @@ async def check(directory: Path, node: str) -> dict:
             assert refused.get("isError") is True
             assert "disconnected" in module.text_content(refused)
             invalid = await bridge.call("mc_connection", {"action": "not-an-action"})
-            assert invalid.get("isError") is True
+            assert module.outcome(invalid)["failed"] is True
             pending = asyncio.create_task(bridge.call("mc_events", {"after": 0, "waitMs": 30000}))
             try:
                 await asyncio.sleep(0.05)
@@ -160,7 +169,8 @@ async def check(directory: Path, node: str) -> dict:
                     "concurrent_status_and_cancel": True,
                     "service_learning_contract": True, "service_learning_opt_in": True,
                     "game_memory_write_recall": True, "game_memory_restart_recall": True,
-                    "disconnected_capture_refused": True, "shared_tactics_discovered": True,
+                    "disconnected_capture_refused": True, "unknown_request_read_without_replay": True,
+                    "shared_tactics_discovered": True,
                     "shared_message_schema_and_help": True,
                     "disconnected_message_query_refused": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}

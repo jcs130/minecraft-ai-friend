@@ -1,5 +1,16 @@
 # Agent MC Autonomy
 
+The 0.2.93 distribution pins upstream core rc.80. It retains default visible
+surface observations and bounded, caller-selected continuation while adding
+structured partial/blocked/unknown execution evidence and strict typed input
+validation. Native combat can act before injury and resume existing safe work;
+journey discoveries are factual choices, without an automatic detour. Method
+practice/evaluation remains explicitly configured and disabled unless selected.
+No new model loop, body queue, automatic retry, account change or relaxed
+inventory/stop/permission barrier is introduced by this distribution update.
+Structured MCP unknown outcomes preserve the same in-flight and restart fence
+as native unknown evidence, including when the reply has no execution object.
+
 The 0.2.91 distribution pins core rc.73 and uses its registry-derived skill
 alternatives only with the explicit `llamacpp` wire profile. Required fields
 such as `harvest.at` are constrained during generation; other providers retain

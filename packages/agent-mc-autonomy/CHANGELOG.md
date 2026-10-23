@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.93
+
+- Pin upstream core rc.80 with shared bounded observation contracts, structured
+  partial/blocked/unknown receipts, original-request reconciliation and strict
+  booleans/integers. Preserve sparse visible defaults, anchored optional paging
+  and unknown-effect barriers; unsupported targets are not guessed or rewritten.
+- Recognize the new MCP `data.status=unknown` receipt even without an execution
+  object or transport error. Preserve the original in-flight journal and restart
+  fence. The disconnected consumer reconciles the original request read-only
+  instead of interpreting the new transport envelope as successful capture.
+- Include native proactive combat/checkpoint restoration, bounded journey cues
+  and explicit method-cost evaluation support. Optional practice workers and
+  model-based decision services are not activated by installing this update.
+
 ## 0.2.88
 
 - When a real full-context overflow retires an immutable native terminal's
