@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .argument_correction import ArgumentCorrections, syntactic
 from .bridge import json_content, outcome, text_content
 from .container_recovery import ContainerRecovery
 from .context import (
@@ -313,7 +314,9 @@ def failure_context(catalogue, name, arguments, result):
         notice["next_step"] += " The batch was not accepted: earlier steps did not run either. Submit only the next feasible action; leave blocked optional searches and unverified dependent crafting out of that batch."
     admission = (result.get("meta") or {}).get("admission")
     if isinstance(admission, dict) and admission.get("accepted") is False:
-        notice["admission"] = {key: admission[key] for key in ("accepted", "rule", "kind") if key in admission}
+        notice["admission"] = {key: admission[key] for key in ("accepted", "dispatched", "rule", "kind", "fieldPath") if key in admission}
+        if isinstance(admission.get("inputSchema"), dict) and len(encode(admission["inputSchema"])) <= 3500:
+            notice["correction_schema"] = admission["inputSchema"]
         notice["recovery"] = [{"tool": row["tool"], "arguments": row["arguments"],
                                "text": fact_preview(row["text"], 1800)}
                               for row in admission.get("recovery", [])[:1]
@@ -395,6 +398,7 @@ class Controller:
         self.model_started_at = None
         self.planner_failures = 0
         self.planner_retry_at = 0.0
+        self.argument_corrections = ArgumentCorrections()
         self.planner_notice = None
         self.tool_failure = None
         self.rejected_calls = {}
@@ -517,6 +521,22 @@ class Controller:
                               "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
         self.retain_tool_failure(failure)
         return failure
+
+    def defer_argument_correction(self, name, failure):
+        correction = self.argument_corrections.record(name, failure, self.game_scope)
+        if correction is None:
+            return False
+        failure["argument_correction"] = correction
+        self.retain_tool_failure(failure)
+        if correction["attempts"] < 2:
+            return False  # One immediate, model-selected correction remains possible.
+        delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                    * 2 ** min(6, correction["attempts"] - 2))
+        self.planner_retry_at = time.monotonic() + delay
+        self.continuation_needed = True
+        self.publish(planner_error="repeated_argument_correction", rejected_tool=name,
+                     planner_retry_seconds=delay)
+        return True
 
     def retain_tool_failure(self, failure):
         # A failed read is not a new body plan. Keep both causes, with the body
@@ -1542,17 +1562,25 @@ class Controller:
             return result, await self.archive_receipt(request_id, name, result), True
         rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
         prior_admission = self.admission_failures.get(rejected_key)
-        if prior_admission and (prior_admission["facts"] != self.last_admission_facts
-                                or time.monotonic() - prior_admission["at"] >= 120):
+        syntax_rejected = bool(prior_admission and syntactic(prior_admission["failure"]))
+        if prior_admission and (prior_admission.get("scope", self.game_scope) != self.game_scope
+                or not syntax_rejected and (prior_admission["facts"] != self.last_admission_facts
+                                            or time.monotonic() - prior_admission["at"] >= 120)):
             self.admission_failures.pop(rejected_key)
             prior_admission = None
-        if prior_admission and self.last_admission_facts is not None:
+        if prior_admission and (syntax_rejected or self.last_admission_facts is not None):
             self.planner_notice = "The native executor already rejected this identical plan with unchanged world facts. It was NOT dispatched again. Use the retained native recovery reference to choose one feasible action, or query the specific missing prerequisite. Clocks and new tool-call IDs do not make a rejected plan feasible."
+            if syntax_rejected:
+                self.planner_notice = ("These exact arguments already failed native argument validation before dispatch. "
+                    "They were NOT dispatched again. Position, clocks and new call IDs cannot supply a missing field. "
+                    "Use the retained typed correction contract and correct the actual arguments, or inspect a missing prerequisite.")
             self.retain_tool_failure(prior_admission["failure"])
-            self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
+            syntax_deferred = self.defer_argument_correction(name, prior_admission["failure"])
+            if not syntax_deferred:
+                self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
             self.continuation_needed = True
             self.publish(planner_error="repeated_admission_rejection", rejected_tool=name,
-                         planner_retry_seconds=max(30, self.settings.min_decision_seconds))
+                         planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                       "text": self.planner_notice, "previous_failure": self.tool_failure}
             compact = await self.archive_receipt(request_id, name, result)
@@ -1589,6 +1617,7 @@ class Controller:
             self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
             return result, compact, True
         read_only = observation_call(name, arguments)
+        correction_boundary = False
         if not result.get("failed"):
             if name in REUSABLE_IMMEDIATE_READS and not result.get("execution"):
                 if len(self.read_answers) >= 32:
@@ -1607,12 +1636,13 @@ class Controller:
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
             failure_notice = self.record_tool_failure(name, arguments, result, request_id)
+            correction_boundary = self.defer_argument_correction(name, failure_notice)
             admission = failure_notice.get("admission") or {}
             if not result.get("execution") and admission.get("kind") in {"correction", "repeat"}:
                 if len(self.admission_failures) >= 16:
                     self.admission_failures.pop(next(iter(self.admission_failures)))
                 self.admission_failures[rejected_key] = {"failure": failure_notice,
-                    "facts": self.last_admission_facts, "at": time.monotonic()}
+                    "facts": self.last_admission_facts, "at": time.monotonic(), "scope": self.game_scope}
             failure = str(result.get("text", ""))
             parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
             if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
@@ -1638,7 +1668,7 @@ class Controller:
                 and execution.get("phase") in {"accepted", "running", "completed"}):
             self.conversation_continuation = False  # Model chose a real native plan; no automatic cancellation.
         queued = bool(execution and execution.get("terminal") is not True)
-        boundary = bool(queued or control.get("endTurnRequested") or result.get("endsTurn")
+        boundary = bool(correction_boundary or queued or control.get("endTurnRequested") or result.get("endsTurn")
                         or (self.current_work() and not self.feedback_pending
                             and not self.conversation_continuation and not self.lookahead_anchor))
         return result, compact, boundary
