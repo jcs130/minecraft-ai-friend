@@ -1,17 +1,23 @@
 # Presentation only. Rewards and evidence rules live in resident-contracts.yml.
 # Reload: mycli admin worldlife reload (console); no server restart.
 schema-version: 1
-season: 村庄生活季 · 一起把日子过好
+season: 千灯旅途季 · 出门发现新故事
 contracts:
+  - tm_local_village_notes
+  - tm_local_mine_journal
+  - tm_starter_trail
+  - tm_starter_blade
+  - tm_starter_tower
+  - tm_crypt_report
+  - tm_field_camp_report
+  - tm_photo_album
+  - tm_creeping_report
+  - tm_bunker_report
+  - tm_first_spell
+  - tm_trail_supply
   - tm_field_cycle
   - tm_vegetable_cycle
   - tm_village_breakfast
-  - tm_trail_supply
-  - tm_first_spell
-  - tm_photo_album
-  - tm_crypt_report
-  - tm_creeping_report
-  - tm_bunker_report
 shops:
   - id: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044
     name: 村庄补给商

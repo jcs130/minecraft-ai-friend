@@ -50,4 +50,4 @@ steps:
     message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
   complete:
     title: 入门已完成，选择自己的生活
-    message: 居民事务、种田交易、建造、实地探索、藏宝图、组队地下城和照片都可继续；职业技能按自己的方向学习，保留魔力与技能点选择。
+    message: 先选近郊探索，再尝试普通试炼塔和遗迹地下城：tasks list exploration、arena status、dungeon list。农事日常可选，毕业不需反复种田；出发用 guild shared 取公共补给。已有任务按 tasks status 收尾，试炼和地下城不占公会委托槽。

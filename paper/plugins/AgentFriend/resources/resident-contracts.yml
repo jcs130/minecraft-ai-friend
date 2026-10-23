@@ -7,7 +7,7 @@ tasks:
     scope: personal
     repeat: daily
     title: 青禾的麦田约定
-    description: 从自家或获准的田里收割八株成熟小麦，原地补种，再把余粮卖给禾仓。丰收时节更适合下田。
+    description: 从自家或获准的田里收割八株成熟小麦，原地补种，再把余粮卖给禾仓。这是自愿农事日常，不是毕业前置；做过后可选附近探索、试炼或遗迹。
     beneficiary: 田野学者·青禾
     icon: WHEAT
     reward: {fame: 4, emeralds: 2, bonus: BREAD, bonus-count: 2}

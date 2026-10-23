@@ -484,6 +484,15 @@ final class TaskMarketManager implements Listener {
         return out;
     }
     private JsonObject actionGuidance(Player player, Task task, JsonObject guide) {
+        if (task.steps().get(index(player)).goal() == GuildManager.Goal.REPLANT) {
+            Map<String, String> worlds = new HashMap<>();
+            for (org.bukkit.World world : Bukkit.getWorlds()) worlds.put(world.getUID().toString(), world.getName());
+            org.bukkit.Location at = player.getLocation();
+            return ReplantGuidance.attach(guide, task.steps().get(index(player)).site(),
+                    plugin.getConfig().getStringList(marketPath(player) + ".harvested"),
+                    plugin.getConfig().getStringList(marketPath(player) + ".action-evidence"), worlds,
+                    at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
+        }
         return task.steps().get(index(player)).goal() == GuildManager.Goal.PARRY
                 ? TaskProgressGuidance.parry(guide, plugin.professions().readGuardSkill(player, task.definition())) : guide;
     }
@@ -1184,6 +1193,13 @@ final class TaskMarketManager implements Listener {
         for (String key : List.of("status", "stage", "previousProgress", "progress", "target", "remaining", "observedAtMs"))
             if (data.has(key)) shortNotice.add(key, data.get(key));
         if (plugin.communication().compact(player)) {
+            if (type.equals("MC_MARKET_ACTION")) {
+                String result = data.has("status") && data.get("status").getAsString().equals("counted") ? "已记录" : "未计数";
+                String progress = data.has("progress") ? " " + data.get("progress").getAsInt() + "/" + data.get("target").getAsInt() : "";
+                String reason = result.equals("未计数") && data.has("guidance") ? "；" + data.getAsJsonObject("guidance").get("nextAction").getAsString() : "";
+                player.sendMessage("§e[委托] " + result + progress + reason + "。命令：" + command);
+                return;
+            }
             if (shortNotice.toString().length() > 1000) {
                 shortNotice.remove("summary"); shortNotice.remove("nextAction");
                 shortNotice.addProperty("nextAction", "详细条件按 nextCommand 查询；本回执不证明其他条件已满足。");

@@ -76,7 +76,9 @@ final class WorldLifeManager implements Listener {
     RpgCampaign story() { return story; }
     private void emit(Player p, String type, JsonObject data) {
         data.addProperty("type", type);
-        p.sendMessage("MC_WORLD " + data);
+        if (data.toString().length() > 3200)
+            plugin.communication().list(p, "world", "/mycli world " + type, List.of(data), 1);
+        else p.sendMessage("MC_WORLD " + data);
     }
     private void denied(Player p, String reason) {
         JsonObject data = new JsonObject(); data.addProperty("status", "denied"); data.addProperty("reason", reason);
@@ -93,7 +95,7 @@ final class WorldLifeManager implements Listener {
                     if (story == null) { denied(p, "story_unavailable"); return; }
                     story.command(p, args);
                 }
-                case "board" -> board(p, args.length > 2 && args[2].equals("menu"));
+                case "board" -> board(p, args.length > 2 && args[2].equals("menu"), java.util.Arrays.asList(args).contains("--json"));
                 case "shops" -> shops(p);
                 case "trades" -> plugin.tradeDirectory().command(p, new String[]{"trade", "menu"});
                 case "npcs" -> npcs(p);
@@ -154,22 +156,25 @@ final class WorldLifeManager implements Listener {
         p.sendMessage(ChatColor.GREEN + "世界生活：新手实习、村民聊天、世界事件、村民商店、照片地图。");
         p.sendMessage("/mycli world board | shops | guide start | practice start|status|stop | npcs | talk <NPC ID> <话> | end | events | photos | menu");
     }
-    private void board(Player p, boolean open) {
+    private void board(Player p, boolean open, boolean json) {
         JsonObject out = new JsonObject(); JsonArray cards = new JsonArray(); java.util.ArrayList<String> ids = new java.util.ArrayList<>();
         Inventory inv = open ? Bukkit.createInventory(new BoardHolder(p.getUniqueId(), ids), 45, "千灯纪 · 居民事务板") : null;
         p.sendMessage("§6【" + content.getString("season", "村庄生活") + "】居民事务；与冒险公会共用一个任务槽。");
         for (String id : content.getStringList("contracts")) {
             JsonObject card = plugin.taskMarket().residentCard(p, id); if (card == null) continue;
-            cards.add(card); ids.add(id);
-            p.sendMessage("§e" + id + " §f" + card.get("title").getAsString() + " §7[" + card.get("state").getAsString() + "]");
+            cards.add(TaskRouteCatalog.boardSummary(card)); ids.add(id);
+            if (!json) p.sendMessage("§e" + id + " §f" + card.get("title").getAsString() + " §7[" + TaskRouteCatalog.stateText(card.get("state").getAsString()) + "]");
             if (inv != null) inv.setItem(ids.size() - 1, item(Material.valueOf(card.get("icon").getAsString()),
                     "§e" + card.get("title").getAsString(), card.get("description").getAsString(),
                     "委托人：" + card.get("beneficiary").getAsString(), "点击查看实际步骤和接单命令"));
         }
         out.addProperty("season", content.getString("season")); out.add("contracts", cards);
+        out.addProperty("detailLevel", "summary");
         out.addProperty("claimCommand", "/mycli guild claim"); out.addProperty("assessmentCommand", "/mycli guild assessment");
         out.addProperty("instruction", "查看详情→guild accept <ID>→亲自操作→每阶段guild claim；全部完成统一入个人箱。真实动作验收，不能用聊天声明完成。");
-        emit(p, "board", out); if (inv != null) p.openInventory(inv);
+        if (json) emit(p, "board", out);
+        else p.sendMessage("§7详情：/mycli tasks info <ID>；接单：/mycli guild accept <ID>；每阶段交付：/mycli guild claim。农事可选，已有委托也可独立参加试炼或地下城。");
+        if (inv != null) p.openInventory(inv);
     }
     JsonArray observationPlaces() {
         JsonArray out=new JsonArray();for(java.util.Map<?,?> row:content.getMapList("shops")){JsonObject j=new JsonObject();for(String k:List.of("name","world","x","y","z")){Object value=row.get(k);if(value instanceof Number n)j.addProperty(k,n);else if(value!=null)j.addProperty(k,value.toString());}j.addProperty("kind","registered_shop");out.add(j);}

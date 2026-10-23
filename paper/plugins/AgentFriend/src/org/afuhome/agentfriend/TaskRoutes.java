@@ -61,7 +61,7 @@ final class TaskRoutes implements Listener {
         return new Request(action, value, page, json);
     }
     void command(Player p, String[] args) {
-        boolean machine = plugin.communication().compact(p) || Arrays.asList(args).contains("--json");
+        boolean machine = Arrays.asList(args).contains("--json");
         try {
             Request q = parse(args);
             switch (q.action) {
@@ -110,9 +110,12 @@ final class TaskRoutes implements Listener {
         out.addProperty("readOnly", !type.equals("menu")); out.addProperty("scope", "self");
         out.addProperty("suppliesCommand", "/mycli guild shared"); return out;
     }
-    private List<TaskMarketManager.Task> offers(String route) {
+    private List<TaskMarketManager.Task> offers(Player p, String route) {
+        Map<String, String> states = new HashMap<>();
+        for (var task : market.offers()) states.put(task.id(), market.offerState(task, p));
         return market.offers().stream().filter(t -> route.equals("all") || route.equals(t.route()))
-                .sorted(Comparator.comparing(TaskMarketManager.Task::beginner).reversed()
+                .sorted(Comparator.comparingInt((TaskMarketManager.Task t) -> TaskRouteCatalog.discoveryOrder(states.get(t.id()),
+                                plugin.getConfig().contains("guild-players." + p.getUniqueId() + ".everDone." + t.id()), t.beginner()))
                         .thenComparingInt(TaskMarketManager.Task::minRank).thenComparing(TaskMarketManager.Task::id)).toList();
     }
     private JsonObject card(Player p, TaskMarketManager.Task task) {
@@ -128,18 +131,18 @@ final class TaskRoutes implements Listener {
             if (q.page != 1) throw new IllegalArgumentException("路线目录只有一页；tasks list <路线> 查看该路线的任务");
             for (var route : TaskRouteCatalog.ROUTES) {
                 JsonObject row = new JsonObject(); row.addProperty("id", route.id()); row.addProperty("title", route.title());
-                row.addProperty("description", route.description()); row.addProperty("tasks", offers(route.id()).size());
+                row.addProperty("description", route.description()); row.addProperty("tasks", market.offers().stream().filter(t -> route.id().equals(t.route())).count());
                 row.addProperty("nextCommand", "/mycli tasks list " + route.id()); items.add(row);
             }
             out.addProperty("page", 1); out.addProperty("pages", 1); out.addProperty("total", items.size());
-            out.addProperty("advice", "战斗、制造、探索、后勤、工程、生活任选；不是职业锁定。先查看条件再 guild accept <ID>，每阶段 guild claim。出发前 guild shared 查门口公共箱，按需拿武器、护甲和补给；大厅内私产不能取。田园也可用 life board。");
+            out.addProperty("advice", "先探索附近村路与画廊，再试普通试炼塔或遗迹地下城；制造、补给、工程、田园也可自选。tasks info <ID> 查条件，每阶段 guild claim。已有农事不妨碍独立参加 arena/dungeon；副本结算和委托交付分开。guild shared 查门口公共装备，门内私产不可取。");
         } else {
-            var all = offers(q.value); int pages = Math.max(1, (all.size() + PAGE_SIZE - 1) / PAGE_SIZE);
+            var all = offers(p, q.value); int pages = Math.max(1, (all.size() + PAGE_SIZE - 1) / PAGE_SIZE);
             if (q.page > pages) throw new IllegalArgumentException("任务页码为 1–" + pages);
             for (var task : all.subList((q.page - 1) * PAGE_SIZE, Math.min(all.size(), q.page * PAGE_SIZE))) items.add(card(p, task));
             out.addProperty("route", q.value); out.addProperty("page", q.page); out.addProperty("pages", pages); out.addProperty("total", all.size());
             if (q.page < pages) out.addProperty("nextCommand", "/mycli tasks list " + q.value + " --page " + (q.page + 1));
-            out.addProperty("advice", all.isEmpty() ? "本路线暂未开放委托；可选其他路线，旧生活委托见 life board。" : "先 tasks info <ID> 读条件；beginner 是入门推荐，不限制选择其他可接任务。");
+            out.addProperty("advice", all.isEmpty() ? "本路线暂未开放委托；可选其他路线，旧生活委托见 life board。" : "在途、可接及未体验任务优先，已完成日常靠后；排序不改变资格。先 tasks info <ID> 读条件；beginner 是入门推荐，不自动接单。");
         }
         out.add("items", items); emit(p, out, machine);
     }
@@ -198,28 +201,30 @@ final class TaskRoutes implements Listener {
     private void human(Player p, JsonObject out) {
         if (out.has("task")) p.sendMessage("§6【委托】" + out.getAsJsonObject("task").get("title").getAsString() + "：" + out.get("description").getAsString());
         if (out.has("items")) for (var element : out.getAsJsonArray("items")) {
-            var row = element.getAsJsonObject(); p.sendMessage("§b" + row.get("title").getAsString() + " §7" + row.get("nextCommand").getAsString());
+            var row = element.getAsJsonObject();
+            p.sendMessage("§b" + row.get("title").getAsString() + (row.has("status") ? " [" + TaskRouteCatalog.stateText(row.get("status").getAsString()) + "] " + row.get("id").getAsString() : " §7" + row.get("nextCommand").getAsString()));
         }
         if (out.has("steps")) for (var element : out.getAsJsonArray("steps")) {
             var step = element.getAsJsonObject(); p.sendMessage("§f" + step.get("stage").getAsInt() + ". " + step.get("condition").getAsString() + "（" + step.get("target").getAsInt() + "）");
             if (step.has("walkthrough")) p.sendMessage("§7" + step.get("walkthrough").getAsString());
-            if (step.has("guidance")) TaskMarketManager.showGuidance(p, step.getAsJsonObject("guidance"));
+            if (step.has("guidance")) TaskRouteCatalog.guidanceText(step.getAsJsonObject("guidance")).forEach(p::sendMessage);
         }
         if (out.has("adventure")) {
             var adventure = out.getAsJsonObject("adventure");
             p.sendMessage("§b【当前公会委托】" + adventure.get("title").getAsString()
                     + (adventure.has("progress") ? " " + adventure.get("progress") + "/" + adventure.get("target")
                     : adventure.get("activeId").getAsString().isEmpty() ? "：尚未接单" : "：在途记录暂不可读，请联系服主核对"));
-            var life = out.getAsJsonObject("life"); p.sendMessage("§b【生活委托】" + (life.get("activeId").getAsString().isEmpty() ? "尚未接单" : life.get("title").getAsString() + " " + life.get("progress") + "/" + life.get("target")));
+            var life = out.getAsJsonObject("life");
+            if (!life.get("activeId").getAsString().isEmpty()) p.sendMessage("§b【生活委托】" + life.get("title").getAsString() + " " + life.get("progress") + "/" + life.get("target"));
             if (life.has("nextAction")) p.sendMessage("§a生活下一步：" + life.get("nextAction").getAsString());
         }
         JsonObject paused = out.has("pausedExploration") ? out.getAsJsonObject("pausedExploration") : out.has("paused") ? out.getAsJsonObject("paused") : null;
         if (paused != null && paused.has("title")) p.sendMessage("§e【暂存远征】" + paused.get("title").getAsString() + "，第" + paused.get("stage") + "阶段；完成当前委托后 /mycli tasks resume 继续。");
         if (out.has("adventure") && out.getAsJsonObject("adventure").has("market")
                 && out.getAsJsonObject("adventure").getAsJsonObject("market").has("guidance"))
-            TaskMarketManager.showGuidance(p, out.getAsJsonObject("adventure").getAsJsonObject("market").getAsJsonObject("guidance"));
+            TaskRouteCatalog.guidanceText(out.getAsJsonObject("adventure").getAsJsonObject("market").getAsJsonObject("guidance")).forEach(p::sendMessage);
         else if (out.has("adventure") && out.getAsJsonObject("adventure").has("guidance"))
-            TaskMarketManager.showGuidance(p, out.getAsJsonObject("adventure").getAsJsonObject("guidance"));
+            TaskRouteCatalog.guidanceText(out.getAsJsonObject("adventure").getAsJsonObject("guidance")).forEach(p::sendMessage);
         else if (out.has("advice")) p.sendMessage("§7" + out.get("advice").getAsString());
         if (out.has("acceptCommand")) p.sendMessage("§a接单：" + out.get("acceptCommand").getAsString() + "；进度 /mycli tasks status");
         if (out.has("nextCommand")) p.sendMessage("§7下一步：" + out.get("nextCommand").getAsString());
@@ -240,7 +245,7 @@ final class TaskRoutes implements Listener {
             inv.setItem(23, item("CHEST", "§a门口公共补给", "查询武器、护甲、补给和杂物箱坐标", "门内私产不可拿；公共物资按需使用"));
             inv.setItem(24, item("ARROW", "§7返回公会", "返回原公会菜单"));
         } else {
-            var all = offers(route); int pages = Math.max(1, (all.size() + 35) / 36);
+            var all = offers(p, route); int pages = Math.max(1, (all.size() + 35) / 36);
             if (page > pages) throw new IllegalArgumentException("任务菜单页码超出范围");
             inv = Bukkit.createInventory(null, 45, "委托 · " + (route.equals("all") ? "全部" : TaskRouteCatalog.find(route).title()) + " " + page + "/" + pages); kind = "tasks";
             for (var task : all.subList((page - 1) * 36, Math.min(all.size(), page * 36))) {

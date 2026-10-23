@@ -105,6 +105,9 @@ final class AgentCoach implements Listener {
     }
 
     void command(Player player, String[] args) {
+        if (args.length == 3 && args[2].equals("--json") && java.util.Set.of("next", "guide").contains(args[1])) {
+            onboarding.jsonGuide(player, args[1].equals("guide")); return;
+        }
         if(args.length==3 && args[1].equalsIgnoreCase("practice") && args[2].equalsIgnoreCase("status")) {
             if(!plugin.featureTutorials().enrolled(player)) {commandError(player,"NOT_ENROLLED");return;}
             plugin.communication().state(player);plugin.featureTutorials().note(player,"cli_status");return;

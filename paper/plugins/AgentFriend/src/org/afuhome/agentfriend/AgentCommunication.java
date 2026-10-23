@@ -107,9 +107,7 @@ final class AgentCommunication {
         if(jsonOnly)send(p, "MC_STATUS", out);
     }
     void reminder(Player p, JsonObject state, String type) {
-        JsonObject out = envelope(p, "next"); out.addProperty("trigger", type);
-        for (String key : List.of("step", "title", "message", "nextCommand", "completed")) if (state.has(key)) out.add(key, state.get(key));
-        out.addProperty("detailCommand", "/mycli progress all 1"); send(p, "MC_GUIDE_NEXT", out);
+        p.sendMessage("§b[提示] " + state.get("title").getAsString() + "。命令：" + state.get("nextCommand").getAsString());
     }
     String store(Player p, String kind, String query, List<JsonObject> rows) {
         Session session = session(p); long now = System.currentTimeMillis();
@@ -173,6 +171,8 @@ final class AgentCommunication {
         }
     }
     void jsonCommand(Player p,String[] raw) {
+        if (raw.length == 3 && raw[0].equalsIgnoreCase("world") && raw[1].equalsIgnoreCase("board")) { plugin.worldLife().command(p, raw); return; }
+        if (raw.length == 3 && raw[0].equalsIgnoreCase("coach") && Set.of("next", "guide").contains(raw[1])) { plugin.agentCoach().command(p, raw); return; }
         if(raw.length>=2&&raw[0].equalsIgnoreCase("world")&&raw[1].equalsIgnoreCase("story")){plugin.worldLife().command(p,raw);return;}
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);

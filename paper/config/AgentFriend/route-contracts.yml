@@ -4,6 +4,21 @@
 # only the real killer and lethal weapon; target is entity count, never damage or clicks.
 schema-version: 1
 tasks:
+  starter_tower:
+    route: combat
+    beginner: true
+    repeat: once
+    title: 初登试炼塔·第二层
+    description: 出发前 guild shared 查看门口公共武器、护甲和食物；到试炼塔选普通难度，实际通关第二层即可完成本阶段，不要求打完整座塔。已有农事不妨碍独立参战，但要空出公会任务槽才能接本单。
+    beneficiary: 村庄巡夜人
+    icon: STONE_SWORD
+    reward: {fame: 6, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    steps:
+      - title: 在普通试炼中熟悉战斗
+        description: 先 arena status 查看场次，到入口选择普通难度再开始；也可 arena difficulty normal 后 arena start。本人实际通关第二层才计数，走到第二层不算；达标后 guild claim 交委托。试炼奖励另用 arena rewards 核对领取。组队倒地可由同伴4格内连续停留10秒扶起，清层也会救起；无需先完成农事。
+        goal: floor
+        target: 1
+        floor: 2
   starter_blade:
     route: combat
     beginner: true

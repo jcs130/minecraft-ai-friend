@@ -186,7 +186,7 @@ final class OnboardingGuide implements Listener {
                         List.of("/mycli tasks list", "/mycli tasks menu", "/mycli guild shared"));
             } else if (flag(life, "ready")) step = new Step("life_claim", value(life, "title") + " " + life.get("progress") + "/" + life.get("target"), List.of("/mycli life claim"));
             else step = new Step("life_progress", value(life, "title") + " " + life.get("progress") + "/" + life.get("target") + "；" + value(life, "instruction"), List.of("/mycli life status", "/mycli life locations"));
-        } else step = new Step("complete", "已完成登记、技能目录、真实施法与一项自选委托。可继续战斗、制造、探索、后勤、工程或生活，不要求补做种田。", List.of("/mycli tasks list", "/mycli world npcs", "/mycli world events", "/mycli world photos", "/mycli skills list profession"));
+        } else step = new Step("complete", "入门已毕业；先 tasks list exploration 看近郊分段调查，arena status 看按层试炼，dungeon list 看逐室遗迹。农事日常可选，不必天天重复；已有委托用 tasks status 收尾，试炼/地下城可独立参加。出发前 guild shared 查公共装备。", List.of("/mycli tasks list exploration", "/mycli arena status", "/mycli dungeon list", "/mycli guild shared", "/mycli tasks list"));
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);
@@ -204,6 +204,9 @@ final class OnboardingGuide implements Listener {
         JsonObject item = new JsonObject(); item.addProperty("id", id); item.addProperty("title", title); item.addProperty("done", done); list.add(item);
     }
     private void show(Player p, JsonObject state, String type, boolean full) {
+        show(p, state, type, full, false);
+    }
+    private void show(Player p, JsonObject state, String type, boolean full, boolean json) {
         if (!flag(state, "eligible")) { p.sendMessage("§7观战账号不参加新手引导。 "); return; }
         if (full) for (String line : settings.getStringList("welcome")) p.sendMessage("§6[系统·迎新] §f" + line);
         p.sendMessage("§b[系统·旅途导师] " + state.get("title").getAsString() + "：§f" + state.get("message").getAsString());
@@ -224,9 +227,10 @@ final class OnboardingGuide implements Listener {
         tasks.addProperty("lifeStatus", "/mycli life status"); tasks.addProperty("tutorial", "/mycli world guide start");
         result.add("taskCommands", tasks);
         if (!full) { result.remove("checklist"); result.remove("guide"); result.remove("life"); result.remove("guild"); }
-        p.sendMessage("MC_COACH " + result);
+        if (json) p.sendMessage("MC_COACH " + result);
     }
     void guide(Player p, boolean full) { show(p, state(p), full ? "guide" : "next", full); }
+    void jsonGuide(Player p, boolean full) { show(p, state(p), full ? "guide" : "next", full, true); }
     void pause(Player p) {
         p.getPersistentDataContainer().set(mutedUntil, PersistentDataType.LONG, System.currentTimeMillis() + ms("pause-seconds"));
         p.sendMessage("§7个人提醒已暂停 " + ms("pause-seconds") / 60_000 + " 分钟；仍可主动 coach next/menu 查询。");
