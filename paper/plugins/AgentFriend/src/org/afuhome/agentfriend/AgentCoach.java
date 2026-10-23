@@ -110,7 +110,8 @@ final class AgentCoach implements Listener {
         }
         if(args.length==3 && args[1].equalsIgnoreCase("practice") && args[2].equalsIgnoreCase("status")) {
             if(!plugin.featureTutorials().enrolled(player)) {commandError(player,"NOT_ENROLLED");return;}
-            plugin.communication().state(player);plugin.featureTutorials().note(player,"cli_status");return;
+            // This explicit practice action retains its historical MC_STATUS receipt.
+            plugin.communication().state(player,true);plugin.featureTutorials().note(player,"cli_status");return;
         }
         if (args.length > 2) { commandError(player, "INVALID_ARGUMENT"); return; }
         String action = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "status";

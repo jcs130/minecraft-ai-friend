@@ -25,7 +25,7 @@ final class AgentEntry {
     private static String label(String status){return switch(status){case "none"->"未接单";case "active"->"进行中";case "ready_to_submit"->"待交付";case "needs_verification"->"待主动验收";default->"需核对数据";};}
     private static JsonArray commands(String... values){JsonArray a=new JsonArray();for(String value:values)a.add(value);return a;}
     void intro(Player p) {
-        intro(p,plugin.communication().compact(p));
+        intro(p,false);
     }
     void intro(Player p,boolean jsonOnly) {
         JsonObject onboarding=plugin.agentCoach().entryState(p),out=new JsonObject(),self=new JsonObject();
@@ -50,10 +50,10 @@ final class AgentEntry {
         p.sendMessage("§b【本人】"+p.getName()+" · "+self.get("adventurerRank").getAsString()+" · 生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()
                 +(flag(self,"manaLoaded")?" · 魔力 "+Math.round(mana.getMana())+"/"+Math.round(mana.getMaxMana()):" · 魔力尚未加载，等候后再查"));
         p.sendMessage("§e【建议下一步】"+out.get("nextAdvice").getAsString()+" "+out.get("nextCommand").getAsString());}
-        plugin.communication().stamp(p,out);p.sendMessage("MC_INTRO "+out);
+        if(jsonOnly){plugin.communication().stamp(p,out);p.sendMessage("MC_INTRO "+out);}
     }
     void rules(Player p,String[] args) {
-        rules(p,args,plugin.communication().compact(p));
+        rules(p,args,false);
     }
     void rules(Player p,String[] args,boolean jsonOnly) {
         int page=1,pages=(rules.size()+3)/4;
@@ -62,8 +62,9 @@ final class AgentEntry {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",rules.size());
         JsonArray rows=new JsonArray();
         for(int i=(page-1)*4;i<Math.min(page*4,rules.size());i++){rows.add(rules.get(i));if(!jsonOnly)p.sendMessage("§f"+(i+1)+". "+rules.get(i));}
-        out.add("rules",rows);if(page<pages)out.addProperty("nextCommand","/mycli rules "+(page+1));
-        plugin.communication().stamp(p,out);p.sendMessage("MC_RULES "+out);
+        out.add("rules",rows);if(page<pages)out.addProperty("nextCommand","/mycli rules "+(page+1)+(jsonOnly?" --json":""));
+        if(jsonOnly){plugin.communication().stamp(p,out);p.sendMessage("MC_RULES "+out);}
+        else if(page<pages)p.sendMessage("下一页："+out.get("nextCommand").getAsString());
     }
     void capabilities(Player p,String[] args) {
         if(args.length>1&&Set.of("info","explain").contains(args[1].toLowerCase(Locale.ROOT))) {
@@ -74,9 +75,17 @@ final class AgentEntry {
         System.arraycopy(args,from,listing,1,args.length-from);AgentCliCatalog.list(p,listing,false);
     }
     void progress(Player p,String[] args) {
+        progress(p,args,false);
+    }
+    void progress(Player p,String[] args,boolean jsonOnly) {
         String filter=args.length>1?args[1].toLowerCase(Locale.ROOT):"all";
         if(args.length>3||!Set.of("all","main","training","guild","challenge","story").contains(filter)){plugin.communication().error(p,"INVALID_ARGUMENT","/mycli progress [all|main|training|guild|challenge|story] [页码]：第三个参数启用按需分页；查询不接单、不领奖。",false,"/mycli progress all 1");return;}
         List<JsonObject> rows=progressRows(p,filter);
+        if(!jsonOnly){
+            try{AgentCliText.progress(rows,filter,args.length==3?Integer.parseInt(args[2]):1).forEach(p::sendMessage);}
+            catch(IllegalArgumentException invalid){plugin.communication().error(p,"INVALID_PAGE","页码必须在当前结果范围内。",false,"/mycli progress "+filter);}
+            return;
+        }
         if(args.length==3) {
             try{plugin.communication().list(p,"progress","/mycli progress "+filter+" 1",rows,Integer.parseInt(args[2]));}
             catch(NumberFormatException invalid){plugin.communication().error(p,"INVALID_PAGE","页码必须是整数。",false,"/mycli progress "+filter+" 1");}

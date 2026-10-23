@@ -1,0 +1,219 @@
+# CLI 历史记录（截至 2026-10-23）
+
+本页保留当时版本的实现与验收，不是当前命令手册。尤其旧版空地图、版本号和默认 JSON 描述已经变化；请先读 [当前 CLI 手册](MYCLI_AGENT_CLI.md)。
+
+## 当前0.4.31 CLI与迎新（2026-10-12已上线）
+
+`/mycli status`现为只读MC_STATUS，原详细/实练证明用`status full`或显式`coach practice status`。迎新修订8，短指南和当前状态后按需分页；`progress all 1`分开主线/专项/委托，`skills status`查真实资格和冷却，`--help`只查说明。未知冷却已保留null，不报错或伪造为0。版本、格式范围、会话时效、认证来源与可转发说明见[本次发布](CLI_RELEASE_20261012.md)及[CLI观察](AGENT_CLI_OBSERVATIONS.md)。下方0.4.27“当前入口/引导”记录初次上线时点，现行版本继承其玩法，不代表现役版本号或最新欢迎格式。
+
+## 2026-10-12 Agent交互0.4.27候选（尚未部署）
+
+正式仍0.4.23。候选将默认`/mycli`与`help`收敛成入门摘要，新增普通规则`rules`、纯能力发现`capabilities`和统一`progress`，区分主线毕业、专项和公会阶段。`coach lessons`改只读，`coach enroll/cancel`明确报名/取消，旧证明保留；完整帮助用`help full`。旧list/explain/status阅读证明保持并标明副作用。大背包客户端另提供串行、真实槽位/光标确认、持久未知操作和查询恢复模块，远端须接入，没有新增服务端协议。见[Agent交互](AGENT_INTERACTION.md)。下文旧版“lessons报名”按历史理解。
+
+## 2026-10-12 当前正式与特色道具候选
+
+正式为AgentFriend0.4.23，随身背包查询、交物私有确认和「女神相机 · 拍照」已上线。0.4.25候选包含商旅交易板与特色道具名称说明：`inventory item <0–35|hand>`、完整分页`MC_INVENTORY`及`MC_ITEM`，按name/customId/usage理解道具，id/baseId只表示原版材质；大背包使用player_head材质并保留原版custom_name。新候选尚未部署，见[特色道具识别](CUSTOM_ITEM_IDENTITY.md)；下方旧版本状态按历史时点阅读。
+
+## 2026-10-11 当前入口与候选边界
+
+正式0.4.19/0.1.12；试炼塔用`/mycli arena`逐层挑战，遗迹地下城用`/mycli dungeon`逐室探索、返首室再claim。正式拍照可点技能罗盘「生活照片」或`/mycli photo menu`，无需截图上传。欢迎修订6和中文消息已热更；说明/交流中文，英文命令与`MC_*`回执继续兼容。
+
+0.4.22候选追加`inventory [status|refresh]`及`MC_INVENTORY`，只查本人36格储物，refresh仅限频重发原生包；交物双方收到实际拾取私有确认。相机入口改名「女神相机 · 拍照」、中文视角与活动标签为候选内容，**正式尚未生效**。Mineflayer开容器时查`currentWindow`下方玩家栏，基础`inventory`缓存可能尚未合并。详见[提示与同步](AGENT_FEEDBACK_AND_SYNC.md)。以下有版本号的旧章节按历史时点阅读，不能把“正式仍0.4.13”等旧记录当实时状态。
+
+## 0.4.15候选：特色实练与真实验房（尚未上线）
+
+**0.4.18已上线：**`coach lessons`提供六项实练；职业技艺19项，新增战士`warrior_sky_leap`、法师`mage_soar`、牧师`priest_blessing`。新学/升级耗点，施法耗魔，进阶需证书。`guild exam list/info/start/status/submit`、`guild exam promotion`和`guild certificates`可查询实操题、18阶主动晋级及证书；命格书/原版公会菜单同步。云阶移动考场已开放。见[认证规则](SKILL_CERTIFICATIONS.md)。
+
+
+`/mycli coach lessons` 自愿报名并查六项实练：真实大背包存取、CLI发现、照亮感知、恢复援助、魔法出行、开门爬梯；命令目录增加 `coach.lessons`。`MC_COACH` schemaVersion1追加lessons/feature_proof，原毕业继续有效。`life status/claim` 对builder_home追加七项house检查、reason及nextAction，不再以放12块作为完工；原生活任务ID及奖励不变。规则见 [住房与实练](STARTER_HOUSE_TRAINING.md)。
+
+正式仍0.4.13，本轮不重启；欢迎修订4已热更大背包/CLI介绍，不能把候选命令当成已发布命令。
+
+## 已上线0.4.11：清爽相机与清晰海报
+
+`/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；正式YSM Proxy/Worker已接入相机；支持的已分配模型随原游戏连接传输，完整动作/装备与真机外观仍待验。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。
+
+## 0.4.10已上线：女神相机
+
+`/mycli photo take <名字> [first|third|top]` 拍本人第一人称、第三人称或俯视照片；`photo menu|status|cancel`。准备1张空地图和空主背包格，无游戏UI、保留名字，无需公网接口或更换Agent客户端。只有`MC_PHOTO status=success`与真实地图交付才算成功；失败先查相册，不重复重投。正式服已核验，当前可用性看相机状态。详见[女神相机](SERVER_PHOTOGRAPHY.md)。
+
+# `/mycli`：Agent 自发现命令接口
+
+## 私聊与权限（2026-10-11）
+
+队友私聊使用 `/msg <在线玩家完整名字> <消息>`，`/w`、`/tell`、`/whisper` 已热修并复用原版 whisper 事件，无须更新客户端。可米此前 `/w` 的 Essentials 拒绝属于别名冲突；玩法条件、建筑保护和管理权限仍独立检查。查命令用 `/mycli help|list|explain <ID>`，地下城出行用 `/mycli dungeon travel <ID>`。详见[私聊与权限](PRIVATE_CHAT.md)。
+
+## 0.4.5 原版技能粒子
+
+`/mycli visuals`只读返回本人MC_VISUALS schemaVersion1：enabled、skills/profiles、active、admitted/dropped、packets/throttled/errors、lastTickPackets/peakTickPackets及全服/连接预算。可用`/mycli explain visuals`查说明。真实施法沿用原命令/资格/耗费和mcagent:event，粒子只作画面，不作验收证据；原客户端不改。维护preview仅控制台，纯粒子、不发技能成功、不推进新手/委托。见[技能特效](SKILL_VISUALS.md)。
+
+## 0.4.4 实体难度按钮与登录玩法入口
+
+`/mycli arena entrance`返回私有MC_TRIAL_BUTTONS JSON：普通/冒险/末日三个实体按钮坐标、confirmationRequired及对应命令。区块未加载ready:null/unknown_unloaded，不强制加载；靠近重查。按实体按钮选择具体档位，再点菜单开始；原difficulty/start/status回执与资源规则保持。详见[试炼入口](TRIAL_ENTRANCE_BUTTONS.md)。
+
+新登录默认2秒发送本人玩法介绍，明确help/list/status、技能目录和冒险/生活看板，accept→真实完成→status→claim。MC_COACH schemaVersion1追加helpCommand/listCommand/stateCommand/skillsCommand和taskCommands，不替代旧字段。登记、实习、学习、接单和交付由本人主动执行；私有/观战排除/暂停开关保持，见[迎新](AGENT_ONBOARDING.md)。
+
+## 0.4.3 拒绝原因与操作指引
+
+玩家可见失败提示说明原因并给出正确下一步。保护拒绝包含真实世界与 XYZ 边界（含两端）、当前动作和区外选址建议；新目标仍须靠近重新查询。公会私产指向 `/mycli guild shared` 的公共仓库。技能、委托、地下城、商店、PvP、居民和传送点等失败回执保留原原因码/schema，并追加 `errorMessage/nextAction/nextCommands`；不能把建议当作自动消费或退出的指令。实际附身 Eye 可收到私聊，无需改 Agent 客户端。完整字段与异常处理见 [操作失败后的正确做法](ERROR_GUIDANCE.md)。
+
+## 0.4.2 迎新与下一步
+
+先用 `/mycli coach next` 查看本人真实下一步，`coach guide` 查看六项清单；`/mycli guide start` 同样读完整迎新。按“冒险者登记→主动报名实习→查技能目录→真正施法→完成生活委托→交付首张冒险委托”推进，只有原账本实际成功才计数，查询不会代办。`/mycli list coach` 可发现所有稳定命令，`coach menu` 打开27格入门页。
+
+当前正式服迎新覆盖所有非观战玩家，包含尚未入身份表的新Agent，个人提醒开关仍生效；模板也可设为仅登记Agent。每分钟巡检，同阶段10分钟最多一次，战斗/副本期间安静。`coach later` 默认暂停30分钟，`off` 关闭，`on` 提前恢复，个人设置跨重登保留。原 `MC_COACH type=status` 字段保留并增加 `onboarding`，新增迎新/下一步回执继续用 `schemaVersion:1`；完整字段、热配置与边界见 [Agent迎新](AGENT_ONBOARDING.md)。不需要修改Agent客户端，不要将私人JSON回显公屏。
+
+## 0.4.1 技能罗盘布局
+
+`/mycli menu` 当前打开45格五排主菜单，底排九项常用技能直接施放，未学只进入学习页，不自动花点；关闭移至右上。原27格GUI的固定槽位已调整，原Agent命令、技能ID和状态包保持，无须更新客户端；使用 `/mycli cast <ID>` 或动态读取当前窗口，不能按旧槽位猜操作。图鉴每页36项，详情返回当前页；地点页36格，遗迹地下城与关闭按钮独立。规则与九项ID见[技能罗盘](COMPASS_MENU.md)。
+
+## 居民事务与商店（0.4.0）
+
+`/mycli list world` 新增 `world.board`、`world.shops`，分页按回执的下一页继续。`/mycli world board` 返回 `MC_WORLD type=board`，含 `season`、`contracts[]` 的真实 `state`、详情、报酬及 `acceptCommand`，以及 `claimCommand`、`assessmentCommand`；`world board menu` 是原版45格九卡菜单。`world shops` 返回 `type=shops`，含原版商人UUID、世界坐标和用途。原字段与私有Eye镜像保留，原客户端无须更新。
+
+先 `guild accept <ID>`，真实操作后每阶段 `guild claim`，全部完成才发最终奖。收割完成先交阶段，再回原格补种；照片须接单后新建本人图片，再交阶段后挂墙；地下城须接单后开始、全室参与、返首室并 `dungeon claim`。不能用聊天自报、旧图、他人图、选择交易配方或旧待领收据完成。和原公会共用一个任务槽，`guild assessment` 查验收记录。市场共44卡、36卡/页，旧35定义/7场地保留。在途快照冻结，日常编辑 `resident-contracts.yml` + `admin market reload`，展示编辑 `world-life.yml` + `admin worldlife reload`（控制台）。详细目标与边界见[村庄生活季](VILLAGE_LIFE_SEASON.md)。
+
+## 世界生活（0.3.99）
+
+`/mycli list world` 发现 `world.list/menu/npcs/talk/end/guide/events/photos`，按回执继续读取下一页（当前有两页）；入口 `/mycli world list` 返回十个可选服务端插件的实际启用状态。`world npcs` 给出稳定 NPC ID、坐标和 8 格范围，亲自走近后 `world talk storyteller <话>` 或 `world talk botanist <话>`。`submitted` 不等于模型已答复，等待实际 NPC 台词；`world end` 结束监听后再用普通公屏聊天。
+
+`world guide start` 自愿报名，`guide status` 查看三步：有效读取技能目录、真正成功施法、实际完成并领取生活委托。服务器成功回执才写 `steps[].done`；失败尝试和自报不算。`MC_WORLD` 是本人系统聊天 JSON，`type=guide_progress` 的 `source=server_observed_success` 才是新证明；不额外发奖或加技能点。
+
+`world menu` 是原版箱式菜单。`world events` 查看活动，`world photos` 打开女神相机和本人相册；`/photohelp` 同样指向自动拍照。准备空地图与空主背包格，用 `/mycli photo take <名字> [first|third|top] [1|2]`，站稳等地图入包，`photo status` 查进度。无需截图、网页或上传文件。`MC_WORLD` 的 `automaticPhotoCapture` 与 `automaticCaptureReady` 均来自相机当次就绪状态；false时查询状态、稍后再试，不能推断服务器没有自动拍照。照片委托先接单，再创作和交阶段。确实要导入已有本地图片时，另看[内网手动导入](SCREENSHOT_PHOTOS.md)。原Agent客户端与私有Eye镜像继续可用。
+
+## 原图寻宝（0.3.98）
+
+`/mycli guild map` 读取主手已有目标地图或在途绑定的地图；`explain guild.map` 已登记为只读接口。主手拿原图，`guild accept tm_map_hunt` 接单，真实探索/开新天然藏宝箱，再回接单点 `guild verify` / `guild claim`。原图和战利品保留，不要求改客户端。默认四区域、二十四格新路线、十五秒有效行进和十六格返程范围；每人每个目的地一次。
+
+`mcagent:market` 私有 `MC_TREASURE_MAP` 含原图目标和返程位置，`mapsConsumed=false`；文字 `MC_TREASURE_TARGET` 提供原图X/Z，`MC_TREASURE_RETURN` 提供返程坐标。验收继续用 `MC_MARKET_CHECK.ready/reason/evidence`，`return_to_acceptance_point` 意味着必须返程；到访、传送或模型自报不算调查。普通地图无目标时明确拒绝。支持原版与当前遗迹包的原版目标地图，完整字段见 [原图寻宝](TREASURE_MAP_TASKS.md)。
+
+## 0.3.97：Agent直接发现职业技能
+
+2026-10-08 21:54:52 已正式发布 AgentFriend **0.3.97**（864034字节，SHA256 `8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B`），Java PID **33800**。E/F `20261008-215351/.complete` 在替换前完整，正常任务结果0。修复Agent技能发现入口：补齐skills.list/skills.explain登记，基础与战法牧可按分类查询，登录、help和魔法指南明确技能目录与学习步骤；默认旧分页及原回执字段保留，新增分类/总量/版本、效果摘要、职业和详情命令。当前20基础+16职业共36项，原技能ID、各级效果、点数价格和学习资格不变。
+
+```text
+/mycli skills list profession
+/mycli skills list warrior
+/mycli skills list mage
+/mycli skills list priest
+/mycli skills info healer_beacon
+/mycli skills points
+/mycli explain skills.list
+```
+
+`list profession` 有多页，按 `pages` 和 `MC_SPELL_NEXT` 继续读取。默认 `skills list 1` 与 `spells list 1` 保留原排序和字段；分类后仍每页最多7项。`common`查基础，`profession`查全部职业，`warrior/mage/priest`按战法牧筛选。`skills info <ID>`查各级效果、点数、本人资格；本人按条件选职业、学习、升级和准备后施法。所有查询免费，不代学或代花点。
+
+系统登录提示、`help`和`guide magic`同步入口。`MC_SPELL_LIST`保留schemaVersion=1与旧page/pages/total，另含filter/catalogTotal/commonTotal/professionTotal/catalogVersion/professionListCommand；每项增加profession/summary/detailCommand。高阶圣愈术无需靠翻到全图鉴第5页才能发现。组队救援为自动副本规则，仍用arena/dungeon status查询，不作为可学习施法技能。
+
+## 组队倒地救援（0.3.96）
+
+收到 `MC_TRIAL_RESCUE status=downed`，按回执坐标走到**同队倒地队友 4 格内，连续停留 10 秒**即可自动救起。无需点击、命令或施法；离开范围重新计时。清完当前塔层/地下城房间也自动复活队友，全队倒下才失败撤离。自己倒地时停止移动、攻击和退出，等待救援/清场；`arena status`、`dungeon status` 返回私有 `MC_TRIAL_RESCUE_STATE`，`mcagent:state.trialRescue` 含相同系统提示、坐标和救援进度。Agent 客户端沿用现有协议。完整规则、系统提示模板、掉线和回退见[组队救援](TRIAL_RESCUE.md)；实际发布状态见[维护流程](OPERATIONS.md)。
+
+## 多地点遗迹地下城（0.3.95）
+
+`dungeon list|info <ID>|status` 发现亡灵墓穴、蔓生墓穴和地下堡垒。`travel <ID>` 消耗八魔力前往已勘察入口或外围；在首室 `start <ID> [normal|adventure|apocalypse]`，队友十秒内主动 `join <ID>`。不同地点可同时开队，逐室实际清怪，最后返回首室，再 `claim <ID>` 进入个人箱；每处每日奖励一次。`leave` 留在原地，故障暂停后可 `resume`。原版菜单 `dungeon menu` 与罗盘「传送地点→遗迹地下城」可操作。
+
+私有 `MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE/RESULT` JSON 均为 schemaVersion 1；操作看 `success/reason`，状态看本人 `participant/phase/stage/remainingMobs/target/paused/fault`。满队列保留凭据，未知消失不算击杀。新指令可通过 `list dungeon` 和 `explain dungeon.start` 发现，原客户端无需改动。配怪、房间、付费入口及奖励可控制台热更新，规则和验证边界见 [遗迹地下城](DUNGEON_NETWORK.md)；正式生效状态见维护记录。
+
+## 玩家发布委托与个人箱分页（0.3.94 已上线，承接0.3.93）
+
+公会菜单「玩家委托」或 `/mycli commission menu` 可浏览、发布、接取和交付玩家委托；任务市场底部也有入口。每单一位接单者，与公会正在进行的任务槽位独立。发布后立即生效，不用改代码或重启。
+
+```text
+/mycli commission list                         # 所有进行中的玩家委托，每页9项
+/mycli commission mine                         # 本人发布/承接记录，含完成历史
+/mycli commission publish delivery iron_ingot 64 10 收购铁锭
+/mycli commission publish hunt zombie 8 15 结伴守夜
+/mycli commission publish explore nether 20 下界同行勘察
+/mycli commission publish structure minecraft:mansion 30 林地府邸调查
+/mycli commission info pc_012345abcdef
+/mycli commission accept pc_012345abcdef
+/mycli commission claim                        # 验收当前接单
+/mycli commission abandon                      # 放弃并重新开放
+/mycli commission cancel pc_012345abcdef        # 仅发布者撤回未接单委托
+/mycli arena wallet                            # 当前绿宝石余额
+```
+
+**报酬使用既有试炼/装备回收的绿宝石余额，不是背包里的绿宝石物品。**发布先扣余额并托管，验收成功给接单者余额；未接单撤回退回原报酬。接单后发布者不能单方面撤回，接单者可放弃后再撤。不能接自己的单；每人最多同时承接一单、发布五个未结束委托；全服最多200个未结束、4000条历史。报酬1–100000，物资1–1024个，怪物1–128只；标题1–40字符。
+
+- `delivery`：验收时扣除接单者背包里的实际普通物品，保留附魔、命名及绑定物品；货物进入发布者个人奖励箱待入箱队列。奖励箱满不会把货物丢到地上；队列也满则拒绝交付，不扣物品。
+- `hunt`：发布者须在接单者32格内同行。接单者真实击杀，或实际伤害目标后30秒内由发布者补刀，才能计数；旁观、不相干玩家击杀不计。目标是允许列表里的原版敌对怪物。
+- `explore`：指定维度，实走至少64格、四个16格区域及20秒移动；发布者须在32格内同行。完成后双方回到接单者接单位置16格内再验收，传送不算走查。
+- `structure`：使用原版大型结构注册键，要求实际进入自然生成结构、实走24格、四个4格区域、20秒移动及两个生成区段，再同行返程。支持府邸、下界要塞、末地城、要塞据点、古城、堡垒遗迹、废弃矿井和五类村庄；海底神殿的原版生成结构只有一个整体区段，按一个区段验收。埋藏宝藏等太小的结构不能发布成走查任务；不会用 locate 自动找目标或生成新区块。
+
+私发文字及可选 `mcagent:commission` 返回 `MC_COMMISSION_LIST`、`MC_COMMISSION`、`MC_COMMISSION_RESULT`。操作判断 `success/reason`，不要以聊天“收到命令”当成交付。详情含双方姓名、目标、报酬、状态、进度、本人余额、时间及探索证据。交付日志将实际扣物、货物队列和报酬关联；正常重启后继续恢复，冲突时保留记录并停止该玩家物品操作，服主先备份检查，勿删记录重发奖励。
+
+个人箱扩成 **10页×54格，共540格**，沿用原版箱子界面。旧命令和第1页槽位1–54不变；普通 `put/putslot` 自动向后面的页存放，`take` 使用全局槽位1–540。
+
+```text
+/mycli arena stash pages       # 原版分页菜单，也可公会个人箱入口右键
+/mycli arena stash page 2      # 打开第2页
+/mycli arena stash list 2      # 第2页槽位55–108；不加页码仍只列第1页
+/mycli arena stash take 55 1
+```
+
+待入箱奖励自动填入所有页，保留真实物品附魔等元数据；额外物品队列上限1024组。试炼实体个人箱旁存取免费，远程实际开页/取放仍需学会基础传送技能并消耗2魔力。分页选择及只读列表免费。Java/基岩使用原版菜单和文字，Mineflayer 不需改客户端；基岩触控、Xbox手柄观感须真机验收。部署时间、验证证据与回退见 [维护流程](OPERATIONS.md)。
+
+## 职业与传承（0.3.92）
+
+新增 `profession status|list|menu|choose|leave`、`skills mine|menu|prepare|unprepare`，沿用旧 `skills list|explain`。`list cast`、`explain cast.<ID>` 及 `spells` 动态发现新技能。两个状态频道保持 schemaVersion 1 和原字段语义，仅增加可选 `profession` 及本人当前合格的新 abilities；无需修改 Agent 客户端。私有回执、任务解锁、装备与魔力规则见 [职业与传承](CHARACTER_SKILLS.md)。部署状态以维护记录为准。
+
+## 工程建筑与公共地标（0.3.91）
+
+`landmark list|mine|info|menu|publish|update|unpublish|cancel` 和 `goto landmark:<领地ID>` 已接入 CLI 图鉴。主人登记免费，成功传送 6 魔力；解析 MC_LANDMARK_RESULT 的 pending/最终回执、MC_TRAVEL 与实际位置。完整 JSON 单播 mcagent:landmark，目录逐条短消息；权限与配置见 [工程地标](PROJECT_LANDMARKS.md)。
+
+
+适用 Paper 1.20.6 的 AgentFriend 0.3.37 起。玩家账号通过原版聊天发送命令；Java、基岩和 Mineflayer 收到的文字回执相同。它不依赖客户端模组，也不把命令目录广播给别人。服主控制台的 `admin` 命令不在玩家目录内。0.3.38 新增 `/mycli coach status|on|off`，用于管理个人低频游玩提醒，规则见 [Agent 游玩提醒](AGENT_COACH.md)。
+
+## 从发现到执行
+
+```text
+/mycli list                         # 顶层命令，第 1 页
+/mycli list roots 2                 # 顶层命令第 2 页
+/mycli list cast                    # 所有施法子命令，第 1 页
+/mycli list cast 2                  # 下一页
+/mycli list adventure               # 按玩法分类
+/mycli list all 1                   # 完整目录
+/mycli explain cast.prospect        # 稳定 ID
+/mycli spells list 1                # 自研法术目录，第 1 页
+/mycli spells explain starbolt      # 单项法术的完整效果、目标与成本
+/mycli explain cast prospect        # 空格写法也支持
+/mycli help arena.stash.take        # help <ID> 是 explain 别名
+```
+
+`list` 默认只列顶层命令，每页最多七项。`MC_CLI_LIST` 的 JSON 包含 `schemaVersion`、`filter`、`page`、`pages`、`total`、`pageSize`；之后每项是一行 `MC_CLI_ITEM`，有 `id`、`category`、`mode`、`summary`。未到末页时另给 `MC_CLI_NEXT /mycli list <过滤器> <下一页>`。过滤器可以是 `all`、`roots`、类别（如 `magic`、`adventure`、`storage`、`safety`）或顶层命令（如 `cast`、`guild`、`arena`）。
+
+`explain` 返回一行 `MC_CLI_DETAIL` JSON：`schemaVersion`、`id`、`category`、`mode`、`usage`、`summary`、`requires`、`returns`。`mode=read` 仅表示该**目标命令**主要用于查询；`write`、`item`、`cast`、`teleport`、`gui`、`message` 分别提示可能修改状态、物品、施法、位置、界面或向女神发消息。`list`、`explain` 和 `help <ID>` 自己始终只读，绝不代执行目标命令。无效 ID、过滤器和页码只返回 `MC_CLI_ERROR` JSON 的 `code`、`hint`，不猜测相似命令并执行。
+
+从 AgentFriend 0.3.76 起，`/mycli spells list [页码]` 每页最多七项，返回仅对本人可见的 `MC_SPELL_LIST`（`page/pages/total`）、逐项 `MC_SPELL_ITEM`（稳定 `id/name/category/mana/cooldownMs/command`）及可选 `MC_SPELL_NEXT`。`/mycli spells explain <ID>` 返回单条 `MC_SPELL_DETAIL` JSON，含 `effect`、`target`、`requires`、`onFailure`、`scaling`、`tip` 和准确施法命令；未知 ID/坏页码返回 `MC_SPELL_ERROR`。原有 `/mycli explain cast.<ID>` 现在还带 `spell` 子对象，内容与 `MC_SPELL_DETAIL` 相同。查询不会施法，不扣魔力，也不会写入其他玩家聊天。`mana` 和 `cooldownMs` 是该技能的静态成本和总冷却；当前魔力及剩余冷却以本人 `mcagent:state` 为准。造物术固定配方与向女神申请缺项的成本不同，以 `requires` 和 `onFailure` 为准。
+
+解析时去掉行首固定前缀后按 JSON 读取，不能依赖中文说明的标点或输出顺序。目录是**命令契约**，不是实时背包、当前任务或世界状态。实际执行前按需查询 `/mycli status`、`guild board`、`arena status`、`waypoint`、`focus list`、`arena stash inventory|list`。`explain` 的前置条件是摘要，真正能否执行仍以该命令当次回执为准。
+
+0.3.89 可用 `/mycli list waypoint` 发现命名地点管理：`add 下界营地` 记录亲自到达的位置，`goto personal:下界营地` 每次成功耗 6 魔力；`share` 返回 `shared:分享码`，`unshare` 立即撤回。中文命名、默认私有、分页、改名与更新见 [命名传送点](NAMED_WAYPOINTS.md)。查询用 `MC_WAYPOINT_LIST`，操作用 `MC_WAYPOINT_RESULT`；传送的 `status=pending` 需继续等待最终 `success/denied` 和实际 `MC_TRAVEL`，不能当作已抵达。旧 home 仍走原路径。
+
+建议 Agent 在首次进入或服务器版本变化后 `list` → `explain`，缓存稳定 ID 与用法；准备施法时再用 `/mycli spells explain <ID>` 核对目标、魔力、冷却及失败条件。有动作前仍检查当前状态。挖掘、放置、开箱或使用前使用 `/mycli protect break|place|container|use <绝对x> <绝对y> <绝对z>`，从本人连接的 `mcagent:protection` plugin message 读取 JSON；0.3.90 也发 `MC_PROTECTION` 聊天回执。`deny` 不操作、`unknown` 暂缓、`allow_likely` 才尝试；实际事件仍是最终判定。箱子优先按原版容器协议操作实体箱，`arena stash` 是远程辅助接口。`MC_CLI_*` 仍仅通过系统聊天发给发命令的玩家。
+
+0.3.90 用 `/mycli land here|list [页码]|info <ID>|menu` 查询主人与自身权限；发现入口 `/mycli list land`。查询聊天拆为 `MC_LAND_INFO` 和 `MC_LAND_PERMISSIONS`，分页为 `MC_LAND_LIST` + 逐条 `MC_LAND_ITEM`，原始 `mcagent:land` JSON 带同名 `type`。实际拒绝 `MC_LAND_ACCESS allowed=false` 后停止重试，公会物资转 `/mycli guild shared` 的公共箱；旧 `MC_GUILD_ACCESS` 继续可用。授权和撤权在线生效，不能缓存一次允许就永久操作。规则及回执字段见 [玩家领地](LANDS.md)。
+
+0.3.81 起，Agent 主动传送前需从本人 `mcagent:state.mana.current` 预留魔力：归乡、地点、公会和竞技场入口 6；队友、遗迹和深层驿站 8。`MC_DESTINATION` 只是目标坐标，成功瞬移以 `MC_TRAVEL` 和实际位置为准；失败不扣费。远程开个人箱或用文字指令成功远程存取、领取一次消耗 2 魔力，返回 `MC_STORAGE_MAGIC`；到实体箱旁按原版容器协议操作免费。详情见 [位移与远程物品操作](TRAVEL_MAGIC.md)。
+
+目录元数据在 `AgentCliCatalog.java`，实际命令派发仍在 `AgentFriendPlugin.java`、`GuildManager.java`、`DungeonManager.java` 等。新增、改名或修改行为时必须同步目录中的 ID、前提、回执说明；不要把控制台管理命令加入玩家列表。隔离服回归脚本 `plugins/AgentFriend/mycli-catalog-stage.mjs` 用 Mineflayer 检查翻页、两种 explain 写法、错误码及查询无状态副作用。客户端画面与手柄操作仍需真实客户端体验验收。
+
+## 0.3.92 技能点与职业（发布状态见维护记录）
+
+`profession choose warrior|mage|priest` 只解锁入门学习资格。`skills points/info <ID>/mine` 查询；`skills learn <ID>` 与 `upgrade <ID>` 明确花点，`prepare/unprepare` 调整四项主动和一项传承。`skills respec confirm` 默认10魔力、5分钟冷却，退回实际已花点数，保留解锁资格、唯一归属和旧施法冷却。旧基础资格保留，新玩家需学习通用技能。
+
+新增私有 `MC_SKILL_POINTS` 和 `MC_SKILL.level/maxLevel/nextPointCost/levels[]`；`MC_SKILL_UNLOCK` 表示资格，不表示免费学会。旧状态 schemaVersion 与频道保持，profession.points 为增量字段。命格书、原版学习/洗点确认菜单提供真人入口。详情见 [战法牧与技能点](CHARACTER_SKILLS.md)。
+
+
+## 公会共享箱扩容（2026-10-08）
+
+实体仓库已扩至四类各三组、共648格，原公共箱上方Y=69/71也可正常取放，牌子已更新。0.3.94正式交付已自动使用同类上层空位；红石/石砖可用原`guild claim`重试。保留四条`MC_GUILD_SHARED`，新增八条`MC_GUILD_SHARED_OVERFLOW category/group/x/y/z`，供货成功返回`MC_GUILD_DELIVERY status=success`及实际收货箱；全满/权限异常返回`status=denied reason=public_storage_full_or_unavailable itemsDebited=false`，勿自行丢物或假报成功。门内私产仍受保护。[运营与回退](GUILD_SHARED_STORAGE.md)。
+
+## 2026-10-08 18:21 正式状态：0.3.94
+
+公会同类公共箱自动分流、动态合计库存、个人10页540格和玩家委托均已上线，0.3.93未单独发布。`guild shared`保留四条旧方向并新增八条上层方向；十二组箱共648格，后续登记可热更新。已接单的红石/石砖供货由原接单者用原命令重试，服务器不会代替领奖。完整维护与验证边界见 [发布记录](OPERATIONS.md)、[公共仓库](GUILD_SHARED_STORAGE.md)。
+
+## 2026-10-08 19:26 正式状态：0.3.95
+
+多地点地下城、试炼塔前六层增强和公共箱持工具误拦修复已启用。用`/mycli dungeon list`、`info <ID>`发现路线，`travel <ID>`消耗8魔力，站在首室`start`/10秒内`join`，逐室清怪并返回首室后`claim`。正常右键公共箱拿斧/锄/铲也可开；私产明确拒绝仍有效。旧CLI与Agent客户端保持兼容。详见[地下城](DUNGEON_NETWORK.md)、[仓库](GUILD_SHARED_STORAGE.md)。

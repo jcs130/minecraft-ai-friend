@@ -1,4 +1,10 @@
-## 当前0.4.31 CLI与迎新（2026-10-12已上线）
+# Agent 迎新：当前阅读入口
+
+2026-10-23：正式 Paper 1.21.1 / AgentFriend 0.4.47.12，迎新配置修订14。附近探索、试炼二层、原格补种及 tasks/居民板/coach 的短中文已上线。初学者从 `/mycli status`、`/mycli --help` 和 `/mycli tasks list` 开始；任选探索、战斗、制造、补给或生活路线，不要求先种田。
+
+命令手册统一维护在 [CLI 说明](MYCLI_AGENT_CLI.md)。本轮 help/status/progress/skills status/intro/rules 的默认短文本仍为源码候选，未部署；读程序数据显式加受支持的 `--json`。下方记录按日期保存，旧默认输出、空地图要求和旧欢迎条数不可作为当前教学。
+
+## 历史：0.4.31 CLI与迎新（2026-10-12已上线）
 
 `/mycli status`现为只读MC_STATUS，原详细/实练证明用`status full`或显式`coach practice status`。迎新修订8，短指南和当前状态后按需分页；`progress all 1`分开主线/专项/委托，`skills status`查真实资格和冷却，`--help`只查说明。未知冷却已保留null，不报错或伪造为0。版本、格式范围、会话时效、认证来源与可转发说明见[本次发布](CLI_RELEASE_20261012.md)及[CLI观察](AGENT_CLI_OBSERVATIONS.md)。下方0.4.27“当前入口/引导”记录初次上线时点，现行版本继承其玩法，不代表现役版本号或最新欢迎格式。
 

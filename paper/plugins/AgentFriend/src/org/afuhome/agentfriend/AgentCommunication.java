@@ -11,7 +11,7 @@ import org.bukkit.entity.Player;
  * Authentication is informational, supplied only by the proxy's local heartbeat file;
  * missing/expired data is unknown and is never used to grant permissions. */
 final class AgentCommunication {
-    static final String GUIDE_VERSION = "2026-10-12.8";
+    static final String GUIDE_VERSION = "2026-10-23.9";
     static final long SNAPSHOT_TTL = 300_000L, AUTH_TTL = 15_000L;
     private static final class Session {
         final String id = UUID.randomUUID().toString(); final long joinedAt=System.currentTimeMillis();long sequence;
@@ -76,7 +76,7 @@ final class AgentCommunication {
         send(p, "MC_GUIDE", out); state(p,true);
     }
     void state(Player p) {
-        state(p,compact(p));
+        state(p,false);
     }
     void state(Player p,boolean jsonOnly) {
         JsonObject out = envelope(p, "state"); out.addProperty("name", p.getName()); out.addProperty("mode", p.getGameMode().name());
@@ -100,10 +100,7 @@ final class AgentCommunication {
         out.addProperty("downed", plugin.isDowned(p)); out.addProperty("inDungeon", plugin.dungeonParticipant(p));
         out.addProperty("inPvp", plugin.pvpParticipant(p));
         JsonObject challenge=plugin.lifeChallenges().activeSummary(p);if(challenge!=null)out.add("challenge",challenge);
-        if(!jsonOnly) {
-            p.sendMessage("§b【当前状态】生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()+" · 魔力 "+(manaKnown?Math.round(user.getMana())+"/"+Math.round(user.getMaxMana()):"尚未加载"));
-            p.sendMessage("§e【下一步】"+out.get("nextCommand").getAsString()+"；详情 /mycli progress all 1，技能 /mycli skills status。");
-        }
+        if(!jsonOnly) AgentCliText.state(out).forEach(p::sendMessage);
         if(jsonOnly)send(p, "MC_STATUS", out);
     }
     void reminder(Player p, JsonObject state, String type) {
@@ -150,6 +147,9 @@ final class AgentCommunication {
         }
     }
     void skills(Player p, String[] args) {
+        skills(p,args,false);
+    }
+    void skills(Player p, String[] args, boolean jsonOnly) {
         try {
             if (args.length > 4) throw new IllegalArgumentException();
             String filter = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "mine";
@@ -165,7 +165,9 @@ final class AgentCommunication {
                 if (entry == null) { error(p, "UNKNOWN_SKILL", "该技能ID不存在；从实际技能目录复制ID。", false, "/mycli skills list"); return; }
                 filter = entry.id(); rows.add(plugin.professions().readSkillState(p, filter));
             }
-            list(p, "skills", "/mycli skills status " + filter + " 1", rows, args.length > 3 ? Integer.parseInt(args[3]) : 1);
+            int page=args.length > 3 ? Integer.parseInt(args[3]) : 1;
+            if(jsonOnly)list(p, "skills", "/mycli skills status " + filter + " 1", rows, page);
+            else AgentCliText.skills(rows,filter,page).forEach(p::sendMessage);
         } catch (IllegalArgumentException invalid) {
             error(p, "INVALID_ARGUMENT", "格式：/mycli skills status [mine|all|技能ID] [页码]。只读，不学习、不刷新点数。", false, "/mycli skills status");
         }
@@ -186,9 +188,9 @@ final class AgentCommunication {
         }
         if(root.equals("status")&&args.length<=1) {state(p,true);return;}
         if(root.equals("progress")&&args.length<=3) {
-            plugin.agentEntry().progress(p,args.length==1?new String[]{"progress","all","1"}:args.length==2?new String[]{"progress",args[1],"1"}:args);return;
+            plugin.agentEntry().progress(p,args.length==1?new String[]{"progress","all","1"}:args.length==2?new String[]{"progress",args[1],"1"}:args,true);return;
         }
-        if(root.equals("skills")&&args.length>1&&args[1].equalsIgnoreCase("status")) {skills(p,args);return;}
+        if(root.equals("skills")&&args.length>1&&args[1].equalsIgnoreCase("status")) {skills(p,args,true);return;}
         if(root.equals("page")) {pageCommand(p,args);return;}
         if(root.equals("intro")) {plugin.agentEntry().intro(p,true);return;}
         if(root.equals("rules")) {plugin.agentEntry().rules(p,args,true);return;}

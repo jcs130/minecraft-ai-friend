@@ -141,6 +141,8 @@ final class AgentCliCatalog {
         add(specs,"waypoint","travel","read","/mycli waypoint","只读列出公共、本人命名地点和旧 home","在线玩家；不移动、不扣费","MC_WAYPOINT 绝对坐标和 MC_WAYPOINT_LIST JSON");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
         add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔按层挑战、商店与本人奖励箱；逐室探索的遗迹地下城另用 /mycli dungeon","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
+        add(specs,"dungeon","adventure","read","/mycli dungeon <动作>","遗迹地下城：逐室探索、组队挑战与奖励；试炼塔另用arena","查询免费；传送、参战和领取条件见子命令","私有MC_SITE_DUNGEON回执；status核对真实场次与凭据");
+        add(specs,"landmark","travel","read","/mycli landmark <动作>","公共地标：查询建筑安全落点，主人可登记和撤回","查询免费；管理需主人权限；实际传送另耗魔力","MC_LANDMARK回执；不会因查询自动登记或传送");
         add(specs,"pvp","adventure","read","/mycli pvp status|join|leave|lobby|board|menu","自愿参加同款装备一对一竞技场","非旁观者、未在试炼中；两人入队自动开赛","本人 MC_PVP JSON 与 MC_PVP_RESULT");
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
         add(specs,"life","life","read","/mycli life board|menu|status|locations|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书、红石机关和村民收购","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");
@@ -225,7 +227,9 @@ final class AgentCliCatalog {
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
-        add(specs,"dungeon.list","adventure","read","/mycli dungeon list|info <ID>|status [ID]","发现不同地点的建筑地下城、真实房间坐标、本人进度及旧场次待领奖凭据","只读免费；info 指明首室深度和逐室路线；status 的 pendingRewards/pendingRewardDetails 给出真实领取命令，有凭据无需重打旧场次","私有 MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE JSON，schemaVersion=1；查询不领取奖励或开场");
+        add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
+        add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查选中地下城的首室深度和逐室路线","只读免费；地点ID从dungeon list读取","私有MC_SITE_DUNGEON_INFO；抵达入口不等于进入首室");
+        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查本人场次、暂停原因与待领奖凭据","只读免费；有凭据无需重打旧场次；查询不领奖或开场","MC_SITE_DUNGEON_STATE；pendingRewards/pendingRewardDetails给出实际领取命令");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
         add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
@@ -249,6 +253,7 @@ final class AgentCliCatalog {
         add(specs,"arena.wallet","storage","read","/mycli arena wallet","查询本人的绿宝石余额","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.loot","adventure","read","/mycli arena loot","查看试炼装备、下一件法术刻印装备及本游戏日已领奖层数","在线玩家","私有 MC_DUNGEON_SET 进度回执");
         add(specs,"arena.layout","adventure","read","/mycli arena layout","读取本人当前战斗房间的绝对中心、范围、奖励箱和地形危险类型","本人正在当前层参赛","私有 MC_DUNGEON_LAYOUT 回执");
+        add(specs,"arena.recycle","storage","read","/mycli arena recycle <动作>","查询可回收装备、获取报价，再明确出售","list查询免费；quote生成报价；sell才转移实际物品","MC_ARENA_ECONOMY；按quoteId与实际余额核对");
         add(specs,"arena.recycle.list","storage","read","/mycli arena recycle list","列出本人箱子与背包中可回收装备","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取30秒报价","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
@@ -277,6 +282,8 @@ final class AgentCliCatalog {
         add(specs,"guild.map","adventure","read","/mycli guild map","读取主手目标地图或在途寻宝地图的真实标记与返程坐标","藏宝图/探险家/遗迹地图；普通地图无目标则明确拒绝；读取不消耗地图","MC_TREASURE_MAP / MC_TREASURE_TARGET / MC_TREASURE_RETURN；只提供原图X/Z，不揭示藏宝深度，不传送");
         add(specs,"guild.verify","adventure","read","/mycli guild verify","验收本人市场阶段的真实工程、动作、探索或地图寻宝证据","已接单；寻宝需真实探索/新开天然藏宝箱并返接单点；传送不增加路线","MC_MARKET_CHECK 的 ready/progress/reason/evidence；未通过不领奖");
         add(specs,"guild.assessment","adventure","read","/mycli guild assessment","读取本人各类任务的已验收步骤、失败检查和最近任务证据","只读本人记录；耗时含离线","MC_MARKET_ASSESSMENT；不把任务记录当作未测能力");
+        add(specs,"guild.exam","adventure","read","/mycli guild exam <动作>","能力认证与晋级考试；查询、报名和交付分开","先查题目与本人状态；start才报名，submit才交付","MC_GUILD_EXAM；专项证书与新手毕业独立");
+        add(specs,"guild.exam.supplies","adventure","read","/mycli guild exam supplies <动作>","考试材料：先查询，再明确领取或取回","只读查询免费；claim/take会转移本人的真实材料","MC_GUILD_EXAM；地图和奖励不重复发放");
         add(specs,"guild.exam.list","adventure","read","/mycli guild exam list","查看实操题库、场地开放情况与下一阶晋级缺项","生存角色；先guild join登记","MC_GUILD_EXAM；声望不自动跳段");
         add(specs,"guild.exam.info","adventure","read","/mycli guild exam info <ID>","查看题目、技能与资源准备、航点和验收要求","查询免费；自然前往已勘察起点","MC_GUILD_EXAM，含冻结版本与绝对目标");
         add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
@@ -352,16 +359,10 @@ final class AgentCliCatalog {
     static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
     /** Standard --help/-h discovery never runs the requested gameplay command. */
     static void commandHelp(Player player,String[] args) {
-        var communication=org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).communication();
-        boolean json=communication.compact(player)||java.util.Arrays.asList(args).contains("--json");
-        JsonObject out=helpData(args);stamp(player,out);
-        if(json){player.sendMessage("MC_CLI_HELP "+out);return;}
-        if(out.has("errorCode")){player.sendMessage("§e"+out.get("message").getAsString()+"；"+out.get("nextCommand").getAsString());return;}
-        player.sendMessage("§6用法："+out.get("usage").getAsString());
-        if(out.has("commands"))for(var item:out.getAsJsonArray("commands")){var command=item.getAsJsonObject();player.sendMessage("§b"+command.get("name").getAsString()+" §7"+command.get("summary").getAsString());}
-        else{player.sendMessage("§f"+out.get("summary").getAsString());player.sendMessage("§7"+out.get("requirements").getAsString());}
-        if(out.has("nextCommand"))player.sendMessage("§7下一页："+out.get("nextCommand").getAsString());
-        player.sendMessage("§7用 <命令> --help 查看参数；--json返回结构化结果。");
+        boolean json=java.util.Arrays.asList(args).contains("--json");
+        JsonObject out=helpData(args);
+        if(json){stamp(player,out);player.sendMessage("MC_CLI_HELP "+out);return;}
+        AgentCliText.help(out).forEach(player::sendMessage);
     }
 
     /** Pure help generation shares the actual catalog; never emits tutorial or gameplay evidence. */
@@ -401,11 +402,11 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=List.of("status","progress","rules","skills","challenge","inventory","world");
+                var order=List.of("status","tasks","skills","inventory","protect","progress","rules");
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
-                out.addProperty("usage",path+" <命令> [参数] [--json]");out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",list.size());
+                out.addProperty("usage",path+" <命令> [参数]");out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",list.size());
                 var rows=new com.google.gson.JsonArray();
                 list.stream().skip((long)(page-1)*PAGE_SIZE).limit(PAGE_SIZE).forEach(spec->{JsonObject row=new JsonObject();row.addProperty("name",spec.id().substring(prefix.length()));row.addProperty("summary",spec.summary());rows.add(row);});out.add("commands",rows);
                 if(page<pages)out.addProperty("nextCommand",path+" --help --page "+(page+1)+(json?" --json":""));
@@ -419,7 +420,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return (id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return (id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -501,7 +502,7 @@ final class AgentCliCatalog {
     }
 
     private static JsonObject semantics(Spec spec) {
-        String id=spec.id();boolean mixed=(spec.root()&&Set.of("archive","tasks","challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
+        String id=spec.id();boolean mixed=(spec.root()&&Set.of("archive","tasks","challenge","world","photo","profession","skills","spells","coach","arena","dungeon","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
                 ||Set.of("world.story","world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
         boolean evidence=Set.of("help","list","explain","status.full","skills.list","spells.list","skills.explain","spells.explain").contains(id);
         boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status","skills.mine","skills.info","skills.points","profession.status").contains(id);

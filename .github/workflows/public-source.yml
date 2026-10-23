@@ -53,6 +53,8 @@ jobs:
       - name: Prepare public compile inputs only (no game process)
         run: python paper/self-host/selfhost.py prepare --directory "$RUNNER_TEMP/paper-inputs" --accept-eula
       - run: python paper/self-host/selfhost.py build --directory "$RUNNER_TEMP/paper-inputs" --output "$RUNNER_TEMP/plugin-build"
+      - name: Check bounded CLI help and query contracts
+        run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
   portal-release:
     runs-on: ubuntu-latest
     steps:
