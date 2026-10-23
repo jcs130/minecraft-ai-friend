@@ -1,0 +1,23 @@
+{
+  "status": "deployed",
+  "website": "https://mc.kangqiang.site/#challenges",
+  "version": "0.8.3",
+  "releasedAt": "2026-10-23T01:40:27.134713+00:00",
+  "sourceBranch": "portal-challenges-20261023",
+  "sourceCommit": "f44f12ef763271eccab439d3f1ac601bca48919e",
+  "imageId": "sha256:02bcb59e3cc01e1b9fa34bcc011d0f5233408d98ea35cc645eadb2ee525d809f",
+  "collectorRuntime": "E:/MC/ops/portal-sync/runtime/0.8.3-f44f12ef",
+  "collectorTask": "Qiandengji-Challenge-Sync",
+  "collectorIntervalSeconds": 15,
+  "scoreVersion": "progress-v1",
+  "scoreIsWebsiteProjection": true,
+  "gameCommandsExecuted": false,
+  "gameServicesRestarted": false,
+  "existingHomeOrAccountPublisherChanged": false,
+  "fomStillComingSoon": true,
+  "multiWorldAccountsCandidateDeployed": false,
+  "requiresMergeBeforeOldMultiWorldCandidateDeployment": true,
+  "tests": {"apiAndDomPassed": 189, "finalRelatedPassed": 19, "javascriptModulesChecked": 62, "browserDesktop": true, "browser390px": true, "phoneHardwareTested": false},
+  "rollbackContainer": "qiandengji-portal-prev-before-challenges-20261023",
+  "rollbackKeepsLatestDatabase": true
+}
