@@ -555,3 +555,51 @@ test('stale challenge snapshots keep saved achievements visible and say current 
  const ui=await screen(t,{initialView:'challenges',challengeSnapshot:uiChallenges(true)});await waitFor(()=>ui.document.querySelector('.challenge-points'));
  assert.match(ui.document.querySelector('.challenge-warning').textContent,/已保存记录/);assert.match(ui.document.querySelector('.challenge-warning').textContent,/可能已变化/);assert.equal(ui.document.querySelector('.challenge-points').textContent,'2000');
 });
+
+
+test('historical archives are collapsed separately from a real player sharing the same name', async t => {
+  const ui = await screen(t); await ui.setup();
+  const player = { ...ui.agent, id: 'c'.repeat(24), playerUuid: '33333333-3333-3333-8333-333333333333', name: 'Fishy', kind: 'player', online: false };
+  const history = [4, 5].map(n => ({ ...ui.agent, id: String(n).repeat(24), playerUuid: `${n}`.repeat(8) + '-4444-4444-8444-' + `${n}`.repeat(12), name: 'fishy', historical: true, online: false }));
+  const rows = [ui.agent, player, ...history], owner = ui.portal.store.ownerByName('ui-admin');
+  for (const row of rows) ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, row.playerUuid, 'Isolated original UUID evidence', Date.now());
+  ui.game.roster = async () => rows;
+  await ui.refresh(); ui.window.location.hash = 'agents';
+  await waitFor(() => ui.document.querySelectorAll('#roster-grid > article.agent-card').length === 2);
+  const names = () => [...ui.document.querySelectorAll('#roster-grid > article.agent-card h2')].map(row => row.textContent);
+  assert.deepEqual(names(), ['ag_Alpha', 'Fishy']);
+  let archive = ui.document.querySelector('[data-role-history]');
+  assert.ok(archive); assert.equal(archive.open, false);
+  assert.match(archive.querySelector('summary').textContent, /2 份/);
+  assert.equal(archive.querySelectorAll('article.agent-card').length, 2);
+  assert.ok([...archive.querySelectorAll('.status')].every(row => row.textContent === '历史存档'));
+  ui.click('[data-role-history] > summary'); assert.equal(archive.open, true);
+  await ui.refresh(false); archive = ui.document.querySelector('[data-role-history]'); assert.equal(archive.open, true);
+  const search = ui.document.querySelector('#roster-search'); search.value = 'fishy';
+  search.dispatchEvent(new ui.window.Event('input', { bubbles: true }));
+  assert.deepEqual(names(), ['Fishy']);
+  assert.equal(ui.document.querySelector('[data-role-history]').open, true);
+  assert.equal(ui.document.querySelectorAll('[data-role-history] article').length, 2);
+  assert.equal(ui.portal.store.ownedUuids(owner.id).length, 4);
+});
+
+test('an archive-only account can open each saved inventory by UUID without showing current duplicates', async t => {
+  const ui = await screen(t); await ui.setup();
+  const history = [6, 7].map(n => ({ ...ui.agent, id: String(n).repeat(24), playerUuid: `${n}`.repeat(8) + '-4444-4444-8444-' + `${n}`.repeat(12), name: 'fishy', historical: true, online: false }));
+  const owner = ui.portal.store.ownerByName('ui-admin');
+  for (const row of history) ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, row.playerUuid, 'Isolated historical UUID', Date.now());
+  ui.game.roster = async () => history;
+  let inspectedUuid = null; const original = ui.game.playerState;
+  ui.game.playerState = async row => { inspectedUuid = row.playerUuid; return { ...await original(), agent: row }; };
+  await ui.refresh(); ui.window.location.hash = 'inventory';
+  await waitFor(() => ui.document.querySelector('[data-role-history]'));
+  assert.equal(ui.document.querySelectorAll('.roster-grid.gap-top > article.agent-card').length, 0);
+  assert.ok(ui.document.querySelector('main').textContent.includes('暂无已绑定的当前角色'));
+  const archive = ui.document.querySelector('[data-role-history]'); assert.equal(archive.open, false);
+  assert.equal(archive.querySelectorAll('[data-action="inventory-detail"]').length, 2);
+  ui.click('[data-role-history] > summary'); assert.equal(archive.open, true);
+  ui.click(`[data-action="inventory-detail"][data-id="${history[1].id}"]`);
+  await waitFor(() => inspectedUuid === history[1].playerUuid && ui.document.querySelector('dialog[open]'));
+  assert.equal(inspectedUuid, history[1].playerUuid);
+  assert.equal(ui.portal.store.ownedUuids(owner.id).length, 2);
+});

@@ -1,6 +1,6 @@
 {
   "name": "qiandengji-agent-portal",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "private": true,
   "type": "module",
   "description": "千灯纪独立账号门户：网站身份、真实只读角色资料与受限接入。",

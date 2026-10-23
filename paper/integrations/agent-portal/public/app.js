@@ -253,13 +253,22 @@ async function pollLiveFrame() {
     const label = document.querySelector('[data-live-state]'); label.className = 'status unknown'; label.textContent = '暂未开播';
   } finally { clearTimeout(timer); if (nextUrl) URL.revokeObjectURL(nextUrl); liveBusy = false; }
 }
+function historicalRoles(cards) {
+  if (!cards.length) return '';
+  const open = document.querySelector('[data-role-history]')?.open ? ' open' : '';
+  return `<details class="panel role-history" data-role-history${open}><summary>历史角色档案（${cards.length} 份）</summary><div class="content-pad"><p class="section-subtitle">旧身体按原 UUID 保留背包与经历，不计入当前角色。展开后可只读查看，不用于登录、改密或换装。</p><div class="roster-grid">${cards.join('')}</div></div></details>`;
+}
 function rosterCards(agents = [...state.roster, ...state.authorized.filter(row => !state.roster.some(publicRow => publicRow.id === row.id))]) {
   const query = state.query.toLowerCase();
   const filtered = agents.filter(agent => (state.filter === 'all' || state.filter === 'authorized' && state.authorized.some(row => row.id === agent.id && row.isOwn) || state.filter === 'online' && agent.online === true || agent.kind === state.filter) && (agent.name.toLowerCase().includes(query) || (agent.playerUuid || '').toLowerCase().includes(query)));
-  return filtered.length ? filtered.map(agent => {
+  const current = [], history = [];
+  for (const agent of filtered) {
     const full = state.authorized.find(row => row.id === agent.id);
-    return `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}${full?.historical ? " · 历史身体（只读）" : ""}</p></div>${statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
-  }).join('') : empty('没有找到匹配的角色', '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users');
+    const historical = !!(full?.historical || agent.historical);
+    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
+    (historical ? history : current).push(card);
+  }
+  return (current.length ? current.join('') : empty('没有找到匹配的当前角色', history.length ? '旧身体的保存资料在下方历史角色档案中。' : '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users')) + historicalRoles(history);
 }
 function agentsPage() {
   return heading('每个角色，都有自己的身份。', '注册 Agent，或绑定你的已有角色。', button('new-game-agent', '注册新 Agent', 'plus', 'primary') + button('binding', isAdmin() ? '绑定已核验角色' : '绑定已有角色', 'link'))
@@ -272,9 +281,12 @@ function lockedPage(title, description) {
 }
 function inventoryPage() {
   if (!owner()) return lockedPage('背包与进度', '冒险里的每一份收获，都有记录。');
+  const card = agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]} · ${agent.historical ? "历史身体（只读） · " + e(agent.playerUuid.slice(0,8)) : "已授权"}</p></div>${agent.historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`;
+  const current = state.authorized.filter(agent => !agent.historical);
+  const history = state.authorized.filter(agent => agent.historical).map(card);
   return heading('你的冒险档案。', '选择一个已授权角色，查看保存的背包、统计与成长记录。', routeButton('agents', '全部角色', 'users'))
     + notice('这里展示最近一次由游戏保存的数据。在线时的背包变化以游戏内实际状态为准，页面标注各份记录的保存时间。', 'muted')
-    + `<div class="roster-grid gap-top">${state.authorized.length ? state.authorized.map(agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]} · ${agent.historical ? "历史身体（只读） · " + e(agent.playerUuid.slice(0,8)) : "已授权"}</p></div>${statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`).join('') : empty('还没有已绑定的角色', '已有游戏角色需要独立核验归属后绑定网站账号。', button('binding', '查看绑定方式', 'link'), 'box')}</div>`;
+    + `<div class="roster-grid gap-top">${current.length ? current.map(card).join('') : empty('暂无已绑定的当前角色', history.length ? '旧身体的保存资料在下方历史角色档案中。' : '已有游戏角色需要独立核验归属后绑定网站账号。', button('binding', '查看绑定方式', 'link'), 'box')}${historicalRoles(history)}</div>`;
 }
 function clientChoices() {
   const clients = state.site?.agentClients || [];
