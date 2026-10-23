@@ -2043,6 +2043,53 @@ function fieldUse(skill: string, f: FieldSpec, merged: Record<string, unknown>):
   return bits.length ? `${skill}(${bits.join(';')})` : skill;
 }
 
+/** Generation-only alternatives for providers that explicitly support unions.
+ * Legacy schemas/parsing remain unchanged; facts, permissions and queue policy
+ * are never inferred here. Other providers must keep using the flat contract.
+ */
+function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, Record<string, unknown>[]> {
+  return Object.fromEntries(skills.map(spec => {
+    const fields = Object.fromEntries(spec.fields.map(f => [f.key, {
+      ...fieldSchema(f), ...(f.kind === 'string' ? { minLength: 1 } : {}),
+      ...(f.doc ? { description: f.doc } : {}),
+    }]));
+    const variant = (keys: string[], required: string[], overrides: Record<string, unknown> = {}) => ({
+      type: 'object',
+      properties: {
+        skill: { type: 'string', const: spec.name },
+        ...Object.fromEntries(keys.map(key => [key, fields[key]])),
+        needs: { type: 'array', items: { type: 'integer', minimum: 1 } },
+        ...overrides,
+      },
+      required: ['skill', ...required], additionalProperties: false,
+    });
+    let variants: Record<string, unknown>[];
+    if (spec.name === 'craft') {
+      variants = [variant(['item', 'count'], ['item']), variant(['grid', 'count'], ['grid'])];
+    } else if (spec.name === 'build') {
+      variants = [
+        variant(['material', 'anchors', 'temporary', 'dryRun'], ['material', 'anchors']),
+        variant(['material', 'on', 'temporary', 'dryRun'], ['material', 'on']),
+        variant(['material', 'at', 'temporary', 'dryRun'], ['material', 'at']),
+        // A bound blueprint may be resumed without a new origin.
+        variant(['blueprint', 'at', 'stopAfter', 'confirm', 'skipConflicts', 'rebindFrom', 'dryRun'], ['blueprint']),
+        ...SHAPE_NAMES.map(shape => variant(
+          ['material', 'shape', 'anchors', 'temporary', 'dryRun', ...(shape === 'box' ? ['fill'] : [])],
+          ['material', 'shape', 'anchors'],
+          { shape: { type: 'string', const: shape }, anchors: {
+            ...fields.anchors, minItems: ANCHOR_COUNT[shape], maxItems: ANCHOR_COUNT[shape],
+          } },
+        )),
+      ];
+    } else {
+      // Custom parsers may have alternatives (e.g. item versus entity target).
+      // Do not mistake their documentary required flags for unconditional rules.
+      variants = [variant(Object.keys(fields), spec.parse ? [] : spec.fields.filter(f => 'required' in f && f.required).map(f => f.key))];
+    }
+    return [spec.name, variants];
+  }));
+}
+
 /**
  * steps.items schema:一份扁平字段池,description 写明每个字段用于哪些技能。
  * 每技能自己的必填与横向规则不进 schema:判别式 oneOf 不能用,有的 provider 解工具参数
@@ -2080,6 +2127,9 @@ function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
       // 解析仍然收(见 `parseSteps`),写了照样覆写判据 —— 撤的是广告,不是能力。
     },
     required: ['skill'],
+    // Annotation, not a native validation rule. Opt-in model projections may
+    // replace the wide field pool with these registry-derived alternatives.
+    'x-agent-mc-skill-contracts': skillGenerationContracts(skills),
   };
 }
 
@@ -2238,6 +2288,7 @@ export function parseSteps(
 /** Read-only diagnosis from the same registry; never edits, submits or retries an action. */
 export function describeSkillInputCorrection(raw: unknown, error: string): {
   path: string; hint: string; helpArguments: { skill?: SkillCall['skill'] }; suppliedExcerpt: string;
+  inputSchema?: Record<string, unknown>;
 } {
   let value = raw;
   if (typeof value === 'string') { try { value = JSON.parse(value); } catch { /* Keep malformed input opaque. */ } }
@@ -2249,6 +2300,7 @@ export function describeSkillInputCorrection(raw: unknown, error: string): {
     : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
   const supplied = JSON.stringify(raw) ?? String(raw);
   return { path: index >= 0 ? `/steps/${index}` : '/steps', hint,
+    ...(spec ? { inputSchema: { anyOf: skillGenerationContracts([spec])[spec.name] } } : {}),
     helpArguments: spec ? { skill: spec.name } : {},
     suppliedExcerpt: supplied.length <= 180 ? supplied
       : `${supplied.slice(0, 180)}…（原参数 ${supplied.length} 字符，完整值保留在本次调用记录）` };
