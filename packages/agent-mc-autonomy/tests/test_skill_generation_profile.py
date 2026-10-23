@@ -30,7 +30,7 @@ def wire(profile):
     native = catalogue()
     original = copy.deepcopy(native)
     _, body = request(cfg, [{'role': 'user', 'content': 'Choose your own next action'}],
-                      model_tools(native, context_mode='full'), 512)
+                      model_tools(native, context_mode='full', tool_schema_profile=profile), 512)
     assert native == original
     return body['tools'][0]['function']['parameters']
 
@@ -52,6 +52,16 @@ def test_default_profile_keeps_flat_compatibility_and_strips_native_annotation()
 
 
 @pytest.mark.parametrize('profile', ['default', 'llamacpp'])
+def test_context_tools_contain_only_the_selected_wire_contract(profile):
+    tools = model_tools(catalogue(), context_mode='full', tool_schema_profile=profile)
+    assert 'x-agent-mc-skill-contracts' not in json.dumps(tools)
+    import dataclasses
+    cfg = dataclasses.replace(config('openai'), protocol='chat', tool_schema_profile=profile)
+    _, body = request(cfg, [{'role': 'user', 'content': 'Choose your activity'}], tools, 512)
+    assert body['tools'] == tools
+
+
+@pytest.mark.parametrize('profile', ['default', 'llamacpp'])
 def test_projection_is_stable_and_preserves_unannotated_native_tools(profile):
     assert wire(profile) == wire(profile)
 
@@ -66,3 +76,28 @@ def test_malformed_or_expanded_native_generation_annotation_fails_closed():
         schema['x-agent-mc-skill-contracts'] = mutation
         with pytest.raises(ValueError, match='brain_skill_generation_contract_invalid'):
             provider_schema(schema, profile='llamacpp', wire=True)
+
+
+def test_runner_forwards_explicit_schema_profile_without_inference(framework_module, tmp_path, run_async, monkeypatch):
+    import dataclasses
+    from types import SimpleNamespace
+
+    from agent_mc_autonomy import runner
+    seen = []
+    class Planner:
+        config = SimpleNamespace(tool_schema_profile='llamacpp')
+        async def decide(self, *_):
+            pytest.fail('no inference')
+        async def aclose(self):
+            pass
+    class Controller:
+        def __init__(self, *_, **kwargs):
+            seen.append(kwargs)
+        async def run(self, _):
+            pass
+    monkeypatch.setattr(runner, 'Controller', Controller)
+    settings = dataclasses.replace(framework_module.Settings(), enabled=True, host='example.test',
+                                   username='OfflineProfile', viewer_auto_open=False)
+    run_async(runner.run_session(settings, tmp_path / 'fake.mjs', tmp_path, Planner(), 'survive',
+        lambda **_: None, lambda: False, bridge_factory=lambda *_: object()))
+    assert seen[0]['tool_schema_profile'] == 'llamacpp'

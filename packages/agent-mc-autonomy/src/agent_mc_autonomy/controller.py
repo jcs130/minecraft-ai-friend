@@ -136,7 +136,7 @@ def admission_fingerprint(facts):
     return encode(parts) if parts else None
 
 
-def model_tools(catalogue, *, context_mode="compact"):
+def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="default"):
     # Native catalogues can repeat a tool. Dispatch/help use the first schema;
     # advertise that same contract exactly once to providers that reject names.
     unique = {}
@@ -214,7 +214,8 @@ def model_tools(catalogue, *, context_mode="compact"):
             description = "Read-only observations/dry runs; use mc_do for real actions. observe requires mode: sites|voxels|rays. voxels bounds are six inclusive foot-relative integers with volume <=512; [-3,-2,-3,3,3,3] reads 294 cells. Copy the legal first-query example from an oversized rejection instead of repeatedly guessing smaller bounds."
         if context_mode == "full" and tool["name"] in {"mc_do", "mc_scout"}:
             description += "\n" + tool.get("description", "")
-        tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": provider_schema(schema)}})
+        tools.append({"type": "function", "function": {"name": tool["name"], "description": description,
+                      "parameters": provider_schema(schema)}})
     if advanced:
         tools.append({"type": "function", "function": {"name": "mc_invoke",
                       "description": "Invoke an advanced Minecraft tool. First read its exact schema using mc_tool_help. The backend validates all arguments and returns the original execution receipt.",
@@ -239,7 +240,8 @@ def model_tools(catalogue, *, context_mode="compact"):
                     "evidence": {"type": "string", "minLength": 1, "maxLength": 1200}},
                     "required": ["outcome", "evidence"], "additionalProperties": False}}})
     tools.append(DEATH_REVIEW_TOOL)
-    return tools
+    return [{**tool, "function": {**tool["function"], "parameters": provider_schema(
+        tool["function"]["parameters"], profile=tool_schema_profile, wire=True)}} for tool in tools]
 
 
 def tool_help(catalogue, arguments):
@@ -352,9 +354,10 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, recent_context_provider=None, runtime_session=None, profile_decide=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, recent_context_provider=None, runtime_session=None, profile_decide=None, tool_schema_profile="default"):
         self.bridge, self.decide, self.settings = bridge, decide, settings
         self.profile_decide=profile_decide
+        self.tool_schema_profile = tool_schema_profile
         self.profile_death_id=None
         from .host_context import HostContextPort
         self.host_context_port = HostContextPort(data)
@@ -2158,7 +2161,8 @@ class Controller:
                 self.body_lease_due = time.monotonic() + lease_ms / 2000
             self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=None)
             prefix = text_content(await self.bridge.resource("mc://environment"))
-            tools = model_tools(self.bridge.tools, context_mode=self.settings.context_mode)
+            tools = model_tools(self.bridge.tools, context_mode=self.settings.context_mode,
+                                tool_schema_profile=self.tool_schema_profile)
             wake, urgent = True, False
             last_status_check = time.monotonic()
             if self.commands:
