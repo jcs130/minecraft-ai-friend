@@ -211,3 +211,5 @@ node scripts/sync-home.mjs --config E:/MC/private/portal-sync/config.json --dry-
 ```
 
 `GET /api/v1/site` 仅公开选中媒体的 `/media/` 路径。没有素材时不显示假视频或空播放框。媒体需要服主确认可用于官网，原图、视频和游戏作品不随源码加入 Git。
+
+2026-10-24 镜头切换修复：可信现代前端与worker渲染源同步至 `fe8d8313`，手动模式等待真实坐标定位，加载提示等待当前epoch地形提交。只正常重连官网与观战后台，游戏服不重启；详见[无账号观战](../../docs/ACCOUNT_FREE_WORLD_VIEW.md)。

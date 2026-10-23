@@ -7,11 +7,11 @@
   "minecraftVersion": "1.21.1",
   "basedOnServerCommit": "1b7f3ff151d3d13c27b87683c7c1ce35d01b5b41",
   "viewerRepository": "https://github.com/jcs130/mc-visual-console",
-  "viewerCommit": "05b5538651aa63956175bd161554e6e1f0d9cca0",
+  "viewerCommit": "fe8d8313a3b9c288784fbb2a0ca1e59d126a5501",
   "observerJarSha256": "c5dc4edcec95176c85518ede330a53b07f830540b702b33011a97c59d26a9d13",
-  "browserBundleSha256": "6b9ec50af9257108dafbd2cf49eade87a9285542ecd738f7e3a494cc5646d0f9",
-  "consoleBundleSha256": "a6ec113edb7aa9db1f766bcdb36cf9ada4ccd16163f722d1461ce6e791ff679e",
-  "viewerSourceSha256": "7ec4de0d7656e71b2bf4dd5cd628a05edfec58312b7edf5bcc69316cb2560627",
+  "browserBundleSha256": "dbd8f0c657f34ba1c22fc31040d53cf70d3dbe01c89b8dee1f2b79ee38aa615b",
+  "consoleBundleSha256": "3b09fb0d65614c4b3175659cb8ca8452ad41492f8ea785d2376a63745b35d8c1",
+  "viewerSourceSha256": "e596f3782b2b62169527565e649626776ede774a4633020bd6ea3ec811c88820",
   "scope": {
     "extraMinecraftConnections": 0,
     "newPublicHomePorts": 0,
@@ -43,7 +43,9 @@
     "productionBrowserRealScenesVerified": true,
     "productionAnonymousPrivateViewStatus": 403,
     "productionExistingRosterCount": 4,
-    "latestRuntimeCi": "all_five_jobs_succeeded"
+    "latestRuntimeCi": "all_five_jobs_succeeded",
+    "cameraSwitchRegressionTestsPassed": 26,
+    "productionManualCameraOnNewTargetVerified": true
   },
   "production": {
     "changed": true,
@@ -77,5 +79,15 @@
     "Custom player skins and YSM are not fully projected by this scene source.",
     "Some special blocks, biome tints, entities and item models remain explicitly unsupported.",
     "Physical mobile devices and 16 autonomous model load were not part of this release verification."
-  ]
+  ],
+  "cameraSwitchFix": {
+    "deployed": true,
+    "viewerCommit": "fe8d8313a3b9c288784fbb2a0ca1e59d126a5501",
+    "paperRestarted": false,
+    "loginProxyRestarted": false,
+    "websiteAndObserverReconnected": true,
+    "protectedWebsiteTables": 17,
+    "deferredManualCameraInitialization": true,
+    "currentEpochTerrainRequiredForReady": true
+  }
 }
