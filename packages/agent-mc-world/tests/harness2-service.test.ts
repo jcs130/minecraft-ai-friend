@@ -8,6 +8,7 @@ import {physicsPractice,STEP_CODE} from './harness2-fixture.ts';
 import {procedureHash,PROCEDURE_SCHEMA} from '../core/support/procedure.ts';
 import {GameMemoryBook} from '../core/game-memory.ts';
 import {createPracticeGameMemory} from '../src/learning/practice-memory.ts';
+import {PracticeStagingError} from '../src/learning/practice-staging.ts';
 const directories:string[]=[];
 afterEach(()=>{for(const d of directories.splice(0))rmSync(d,{recursive:true,force:true});});
 function rig() {
@@ -34,6 +35,27 @@ send({type:'done',result:{upstreamRevision:v.revision,candidate,selectedRunId:'l
   return {directory,p,options,args,source,settled,changeScope:()=>scope={...scope,account:'another-player'},calls:()=>calls};
 }
 describe('explicit host method practice service',()=>{
+  it('compares a completed cohort and stages its exact source once across restart without another trial or model call',async()=>{
+    const r=rig();let staged=0;
+    const options={...r.options,stageCandidate:async(request:any)=>{staged++;expect(request.source.revision).toBe(r.source.revision);expect(request.candidate.code).toBe(STEP_CODE);
+      return {staged:true,reference:{handle:'mem:fixture/candidate',revision:'f'.repeat(64)},adopted:false};}};
+    const service=new Harness2PracticeService(options);await service.call(r.args);await r.settled;
+    const comparison=await service.call({op:'compare',ids:[r.args.id]}) as any;
+    expect(comparison.adopted).toBe(false);expect(comparison.frontier).toContain(r.args.id);
+    const stats=r.p.stats(),first=await service.call({op:'stage',id:r.args.id});await service.close();
+    const restored=new Harness2PracticeService(options);expect(await restored.call({op:'stage',id:r.args.id})).toEqual(first);
+    expect(staged).toBe(1);expect(r.calls()).toBe(1);expect(r.p.stats()).toEqual(stats);expect(restored.context().jobs[0]?.staged).toBe(true);await restored.close();
+  },20000);
+  it('distinguishes a known pre-write staging rejection from an unknown acknowledgement',async()=>{
+    const r=rig();let attempts=0;
+    const service=new Harness2PracticeService({...r.options,stageCandidate:async()=>{attempts++;throw new PracticeStagingError('Parent changed',false);}});
+    await service.call(r.args);await r.settled;
+    await expect(service.call({op:'stage',id:r.args.id})).rejects.toThrow('Parent changed');
+    await expect(service.call({op:'stage',id:r.args.id})).rejects.toThrow('Parent changed');expect(attempts).toBe(2);await service.close();
+    const restored=new Harness2PracticeService({...r.options,stageCandidate:async()=>{throw Error('acknowledgement lost');}});
+    await expect(restored.call({op:'stage',id:r.args.id})).rejects.toThrow('acknowledgement lost');
+    await expect(restored.call({op:'stage',id:r.args.id})).rejects.toThrow('result is unknown');await restored.close();
+  },20000);
   it('recalls an attributed cue index for paraphrased tasks with the original confidence boundary and evidence',async()=>{
     const r=rig(),book=new GameMemoryBook(join(r.directory,'memory')),scope={realm:'lab',account:'fixture',agent:'fixture'};
     const memory=createPracticeGameMemory({call:async args=>book.execute(args,{scope,dimension:null})});
