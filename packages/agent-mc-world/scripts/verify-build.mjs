@@ -23,6 +23,14 @@ const pkg = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 if (pkg.dependencies?.cortico || pkg.devDependencies?.cortico || pkg.cortico) throw new Error('Default package must be host-independent');
 if (Object.keys(pkg.exports).some(key => /cortico/i.test(key)) || manifest.files.some(entry => /adapters\/(?:cortico|minecraft)/i.test(entry.file)))
   throw new Error('Host adapter leaked into the independent core distribution');
+// A declared public entry must ship both its runtime and declarations. Source
+// manifests alone cannot detect a newly declared entry omitted by build inputs.
+for (const [name,entry] of Object.entries(pkg.exports)) {
+  for (const target of typeof entry==='string'?[entry]:Object.values(entry)) {
+    if(typeof target!=='string'||!target.startsWith('./')||target.includes('..'))throw new Error('Invalid public entry '+name);
+    try{await readFile(new URL(target,root));}catch{throw new Error('Missing public entry '+name+': '+target);}
+  }
+}
 // A server/host package must consume the core; the inverse would make the
 // standalone client depend on an adapter checkout again. Check shipped modules.
 for (const entry of manifest.files.filter(e => /^dist\/runtime\/(?:core|src)\/.*\.(?:js|mjs)$/.test(e.file))) {

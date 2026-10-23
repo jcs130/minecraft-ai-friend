@@ -25,6 +25,18 @@ it.each([
 });
 
 describe('perception evidence boundaries',()=>{
+  it('does not report unknown candidate cells as air or contradict current physical support',()=>{
+    const bot={...rig(),entity:{...self,onGround:true,width:.6},game:{dimension:'overworld'},blockAt:(p:Vec3)=>({...stone,position:p})};
+    const result=observeSpatial(bot as never,{mode:'sites',sites:[[0,64,-3],[0,64,-4]]});
+    expect(result).toMatchObject({status:'partial',coverage:{observedTargets:0,unknownTargets:2,airTargets:0},
+      selfFooting:{kind:'support',block:'stone',grounded:true}});
+    expect(result.sites[0]).toMatchObject({target:null,observation:{target:'occluded',below:'occluded'},body:{clear:null}});
+    expect(result.interpretation).toContain('不等于空气');
+    expect(result.blockReads).toBeGreaterThan(0);
+    const unloaded=observeSpatial({...bot,blockAt:()=>null} as never,{mode:'sites',sites:[[0,64,-3]]});
+    expect(unloaded).toMatchObject({status:'partial',selfFooting:{kind:'unknown',grounded:true},coverage:{airTargets:0}});
+    expect(unloaded.sites[0].observation.target).toBe('unloaded');
+  });
   it('observes loaded voxels and entities through known empty grass, fern and near-eye vine shapes',()=>{
     const bot={...rig(),game:{dimension:'overworld'},blockAt:(p:Vec3)=>{
       const name=p.z===-1&&p.y===64?'tall_grass':p.z===-1&&p.y===65?'fern':null;

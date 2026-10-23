@@ -65,6 +65,7 @@ export function spatialSites(read: Read, sites: Point[]) {
     }
     return {
       at,
+      observation: { target: 'unknown' in target ? target.unknown : 'observed', below: 'unknown' in below ? below.unknown : 'observed' },
       target: 'material' in target ? { block: target.material.name,
         ...(target.material.properties && Object.keys(target.material.properties).length ? { properties: target.material.properties } : {}) } : null,
       below: { block: 'material' in below ? below.material.name : null,

@@ -18,3 +18,20 @@ References: [Mineflayer anvil API](https://github.com/PrismarineJS/mineflayer/bl
 Offline tests cover named component items, distinct inputs, unchanged original
 components, an explicit combined rename and an absent server output. They do not
 establish that a particular live server accepts any custom equipment recipe.
+
+## Observing another player's equipment
+
+Player gesture events retain the registry ID and received instance title as
+separate fields (`handItemName`, `handItemDisplayName`). A registry item such as
+`player_head` may carry a server item title; an absent title stays unknown and
+must not be replaced with a guessed semantic identity. Formatting is stripped
+and instance text is quoted. This does not decide whether a held swing is a
+greeting or an attack.
+
+`await bot.read("entitySnapshot")` includes detached equipment entries with
+native slot indices, `name`, `customName` and `count`. No components, profile
+textures or private client fields are copied. `equipment:null` means the client
+did not supply equipment, whereas a null entry in a received array is empty.
+Use `itemCustomName` from `agent-mc-world/observations` when consuming native
+items directly. The [upstream item API](https://github.com/PrismarineJS/prismarine-item#itemcustomname)
+distinguishes custom names from registry identity.

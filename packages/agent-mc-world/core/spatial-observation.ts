@@ -6,6 +6,7 @@ import { AIR_NAMES, LIQUIDS } from './cell-facts.ts';
 import { SkillBlocked } from './skill-context.ts';
 import { spatialSites } from './spatial-site.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
+import { footingFromBot } from './footing.ts';
 import {SPATIAL_QUERY_LIMITS,DEFAULT_VOXEL_BOUNDS,VOXEL_CURSOR_MAX_LENGTH,VOXEL_CURSOR_PATTERN} from './voxel-query-contract.ts';
 export {DEFAULT_VOXEL_BOUNDS} from './voxel-query-contract.ts';
 export {SPATIAL_QUERY_SCHEMA,SPATIAL_QUERY_EXAMPLE,spatialArgumentDiagnostic} from './spatial-query-schema.ts';
@@ -257,7 +258,10 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     if (prior) return prior;
     if (cache.size >= SPATIAL_OBSERVATION_LIMITS.reads) return { unknown: 'read-budget' };
     const block = bot.blockAt(new Vec3(...cell));
-    if (block && input.mode !== 'rays' && !observedBlock(bot,{x:cell[0],y:cell[1],z:cell[2]})) return {unknown:'occluded'};
+    if (block && input.mode !== 'rays' && !observedBlock(bot,{x:cell[0],y:cell[1],z:cell[2]})) {
+      const sample: Sample = {unknown:'occluded'};
+      cache.set(key,sample);return sample;
+    }
     const sign = input.mode === 'sites' ? signTextSnapshot(block) : null;
     const sample: Sample = block ? { material: {
       name: block.name, stateId: block.stateId,
@@ -270,14 +274,23 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     cache.set(key, sample);
     return sample;
   };
-  if (input.mode === 'sites') return {
-    source: common.source, observedAt: common.observedAt, dimension: common.dimension, position,
-    kind: 'sites' as const, sites: spatialSites(read, input.sites).map(site => {
+  if (input.mode === 'sites') {
+    const sites=spatialSites(read, input.sites).map(site => {
       const target = read(site.at), sign = 'material' in target ? target.material.sign : null;
       return sign ? { ...site, sign } : site;
-    }), blockReads: cache.size,
+    });
+    const unknownTargets=sites.filter(s=>s.target===null).length;
+    const partial=unknownTargets>0||sites.some(s=>s.body.unknown>0||s.below.topArea===null||s.faces.some(f=>f.area===null));
+    return {
+    ...common, position,kind:'sites' as const,status:partial?'partial' as const:'complete' as const,
+    selfFooting:{source:'client-contact' as const,...footingFromBot(bot)},
+    coverage:{requestedSites:sites.length,observedTargets:sites.length-unknownTargets,unknownTargets,
+      airTargets:sites.filter(s=>s.target&&AIR_NAMES.has(s.target.block)).length},
+    interpretation:'null=未知（遮挡、未加载或未核实），不等于空气、无支撑或不可达。仅 target.block 明示 air/cave_air/void_air 才是已观察空气；selfFooting 是本人当前接触，不代表候选落点。',
+    sites, blockReads: cache.size,
     geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
   };
+  }
   if (query?.format === 'visible') return visibleVoxelObservation(query,common,read);
   const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id && observedEntity(bot,e)).map(e => {
     const p = pointOf(e.position);

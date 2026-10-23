@@ -114,8 +114,8 @@ describe('compact site observations', () => {
     const input = { mode: 'sites' as const, sites: [[0, 64, 0], [1, 64, 0], [2, 64, 0], [3, 64, 0]] as [number, number, number][] };
     const text = spatialObservationText(s.bot, input), r = JSON.parse(text);
     expect(r.blockReads).toBe(72); // 6 x 4 x 3 unique owners, not 4 x 36 repeated reads.
-    expect(s.reads()).toBe(72);
-    expect(text.length).toBeLessThan(2600);
+    expect(s.reads()).toBeLessThanOrEqual(90); // Geometry cache plus bounded physical contact reading.
+    expect(text.length).toBeLessThan(3900);
     expect(r.position).toEqual([-20.5, 64, -10.5]);
     expect(r.observedAt).toEqual(expect.any(String));
     cells['0,63,0'] = block('air', []);

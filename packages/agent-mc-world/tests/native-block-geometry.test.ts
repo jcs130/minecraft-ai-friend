@@ -4,7 +4,7 @@ import { Vec3 } from 'vec3';
 import pathfinderPkg, { Movements } from 'mineflayer-pathfinder';
 import AStar from 'mineflayer-pathfinder/lib/astar.js';
 import Move from 'mineflayer-pathfinder/lib/move.js';
-import { clearObservationRay } from '../core/perception-sight.ts';
+import { clearObservationRay, observedBlock } from '../core/perception-sight.ts';
 import { observeSpatial } from '../core/spatial-observation.ts';
 import { movementTouchesHazard } from '../core/hazard-geometry.ts';
 import { doorPanelBlocksMove, doorStateOf, applyDoorState, installPathfinderPerf } from '../core/pathfinder-perf.ts';
@@ -162,4 +162,45 @@ it('does not assume an open trapdoor or closed iron door is an empty safe route'
   expect(routeThrough('oak_trapdoor',true).status).toBe('noPath');
   expect(routeThrough('oak_trapdoor',false).status).toBe('noPath'); // Top horizontal panel blocks this low corridor too.
   expect(routeThrough('iron_door',false).status).toBe('noPath');
+});
+
+it.each(['stone_stairs','stone_slab'])('sees consecutive descending native %s and finds a separate non-digging route',name=>{
+  const World=req('prismarine-world')(registry),Chunk=req('prismarine-chunk')(registry),world=new World(null).sync;
+  for(let x=-1;x<=0;x++)for(let z=-1;z<=0;z++)world.setColumn(x,z,new Chunk({minY:-64,worldHeight:384}));
+  const step=state(name,name.endsWith('stairs')?{facing:'south',half:'bottom',shape:'straight',waterlogged:false}:{type:'bottom',waterlogged:false});
+  world.setBlockStateId(new Vec3(0,64,1),state('stone').stateId);
+  for(let i=0;i<5;i++)world.setBlockStateId(new Vec3(0,64-i,-i),step.stateId);
+  const bot={registry,version:'1.21.1',world,game:{dimension:'overworld',minY:-64,height:384},
+    entity:{id:1,position:new Vec3(.5,65,1.5),height:1.8,width:.6,onGround:true,yaw:Math.PI/2,pitch:0,effects:{}},
+    entities:{},inventory:{items:()=>[]},pathfinder:{bestHarvestTool:()=>null},blockAt:(p:Vec3)=>world.getBlock(p)};
+  for(let i=0;i<5;i++){
+    bot.entity.position=i===0?new Vec3(.5,65,1.5):new Vec3(.5,65.5-i,1.2-i);
+    expect(observedBlock(bot,new Vec3(0,64-i,-i)),`step ${i}`).toBe(true);
+    const seen=observeSpatial(bot as never,{mode:'sites',sites:[[0,64-i,-i]]});
+    expect(seen.sites[0].target?.block).toBe(name);
+  }
+  bot.entity.position=new Vec3(.5,65,1.5);installPathfinderPerf();
+  const movement=new Movements(bot as never);movement.canDig=false;movement.allowParkour=false;
+  movement.allow1by1towers=false;movement.scafoldingBlocks=[];movement.maxDropDown=2;
+  movement.exclusionAreasStep.push((b:any)=>b.position.x!==0||b.position.z < -4||b.position.z > 1?1000:0);
+  (movement as any).clearCollisionIndex();(movement as any).updateCollisionIndex();
+  const search=new (AStar as any)(new (Move as any)(0,65,1,0,0),movement,new pathfinderPkg.goals.GoalXZ(0,-4),1000,40,10);
+  let route=search.compute();while(route.status==='partial')route=search.compute();
+  expect(route.status).toBe('success');expect(route.path.at(-1).y).toBeLessThan(65);
+  expect(route.path.flatMap((p:any)=>p.toBreak)).toEqual([]);expect(route.path.flatMap((p:any)=>p.toPlace)).toEqual([]);
+});
+
+it('retains descending stairs behind glass as visible while the glass remains a physical obstacle',()=>{
+  const stair=state('stone_stairs',{facing:'south',half:'bottom',shape:'straight',waterlogged:false});
+  const cells=new Map<string,any>([['0,63,-2',stair]]);
+  const bot={entity:{id:1,position:new Vec3(.5,64,2.5),yaw:0,pitch:0,onGround:true},entities:{},game:{dimension:'overworld'},
+    blockAt:(p:Vec3)=>cells.get(`${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`)??air};
+  const wall=(name:string)=>{for(let x=-1;x<=1;x++)for(let y=60;y<=68;y++)cells.set(`${x},${y},0`,state(name));};
+  wall('glass');expect(observedBlock(bot,new Vec3(0,63,-2))).toBe(true);
+  const glass=observeSpatial(bot as never,{mode:'sites',sites:[[0,64,0]]});
+  expect(glass.sites[0]).toMatchObject({target:{block:'glass'},body:{clear:false}});
+  wall('stone');expect(observedBlock(bot,new Vec3(0,63,-2))).toBe(false);
+  const hidden=observeSpatial(bot as never,{mode:'sites',sites:[[0,63,-2]]});
+  expect(hidden).toMatchObject({status:'partial',coverage:{observedTargets:0,unknownTargets:1,airTargets:0}});
+  expect(hidden.sites[0]).toMatchObject({target:null,observation:{target:'occluded'}});
 });

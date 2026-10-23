@@ -1,6 +1,7 @@
 /** PlayerObservations records visible player proximity, movement and pose edges without deciding how to respond. */
 import type { Bot } from 'mineflayer';
 import { bearing, canSeeEntity, DIRECTION_ZH, type Direction } from './terrain.ts';
+import { itemCustomName } from './item-display.ts';
 
 export const PLAYER_OBSERVATION_LIMITS = {
   enterRange: 16, exitRange: 24, closeRange: 4, closeExitRange: 6, gestureRange: 6, movementRange: 8,
@@ -19,6 +20,8 @@ export interface PlayerObservation {
   close: boolean;
   motion?: 'arm_swing' | 'crouch';
   handItemName?: string;
+  /** Instance text received with this equipment item; null means unavailable, not its registry name. */
+  handItemDisplayName?: string | null;
   angularErrorDegrees?: number;
 }
 
@@ -170,7 +173,7 @@ export class PlayerObservations {
       distance: Math.round(distance * 10) / 10, visible: true, close: distance <= limits.closeRange,
       direction: bearing(entity.position.x - bot.entity.position.x, entity.position.z - bot.entity.position.z),
       motion: motion === 'wave' ? 'arm_swing' : 'crouch',
-      ...(typeof hand?.name === 'string' ? { handItemName: hand.name } : {}) };
+      ...(typeof hand?.name === 'string' ? { handItemName: hand.name, handItemDisplayName: itemCustomName(hand) } : {}) };
   }
 }
 
@@ -190,7 +193,8 @@ export function renderPlayerObservation(fact: PlayerObservation): string {
   if (!fact.visible) return `玩家 ${fact.playerName} 在附近，${where}方向有遮挡`;
   if (fact.kind === 'gesture') {
     const action = fact.motion === 'crouch' ? '连续蹲起'
-      : fact.handItemName ? `手持 ${fact.handItemName} 连续挥动手臂` : '空手连续挥动手臂';
+      : fact.handItemName ? `手持物品${fact.handItemDisplayName ? `${JSON.stringify(fact.handItemDisplayName)}（原版ID：${fact.handItemName}）`
+        : `（原版ID：${fact.handItemName}；实例名称未知）`}连续挥动手臂` : '空手连续挥动手臂';
     return `玩家 ${fact.playerName} 在你身边${action}`;
   }
   if (fact.kind === 'facing') return `玩家 ${fact.playerName} 在${location}，头部朝向你所在的方向`;

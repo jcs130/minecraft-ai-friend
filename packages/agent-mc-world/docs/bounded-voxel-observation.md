@@ -3,6 +3,23 @@
 This is a native client/MCP capability. It needs no Minecraft server change,
 model loop, extra queue, network read or helper mod.
 
+## Candidate sites and current contact
+
+`mode:sites` retains explicit `status`, target coverage and each target/below
+observation reason. `null` is unknown (occluded, unloaded or unread); it is never
+air or proof of missing support. Air must have an observed `target.block` of
+`air`, `cave_air` or `void_air`. `selfFooting` is a separate current contact
+reading using collision faces and native grounded state. It does not establish
+support, clearance or reachability at any candidate site. Unknown visibility
+results are cached only within the call, keeping overlapping site queries
+bounded; subsequent calls read the world afresh.
+`blockReads` counts cached unique geometry samples, including unknowns, rather
+than all internal sight/contact checks; it is not a model-token cost counter.
+
+Native consumers can import `footingFromBot`, `entitySnapshot` and
+`itemCustomName` from `agent-mc-world/observations`. SDK/MCP clients retain
+the existing `mc_observe` / `mc_scout` and read-only script interfaces.
+
 ## Default: visible surfaces only
 
 `mode:voxels` defaults to `format:visible`. Only line-of-sight-visible non-air

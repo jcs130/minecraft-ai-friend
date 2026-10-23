@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.80",
+  "version": "0.5.7-rc.81",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -30,6 +30,10 @@
     "minecraft-agent-record": "./bin/minecraft-agent-record.mjs"
   },
   "exports": {
+    "./observations": {
+      "types": "./dist/types/src/observations.d.ts",
+      "default": "./dist/runtime/src/observations.js"
+    },
     ".": {
       "types": "./dist/types/src/index.d.ts",
       "default": "./dist/runtime/src/index.js"
@@ -97,6 +101,7 @@
     "src/mcp/stdio.ts",
     "src/index.ts",
     "src/context.ts",
+    "src/observations.ts",
     "src/chat-provenance.ts",
     "src/collect-contract.ts",
     "src/mounted-look.ts",

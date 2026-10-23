@@ -29,7 +29,7 @@ const SDK_API = Object.freeze({
     + 'reserveSeconds, minHealth, sampleMaxAgeMs（调用者选择的新鲜度容忍值）, nowMs?（默认当前时间，仅离线回放才覆盖）。'
     + '只用最后连续的同一 observationId/实体/维度/epoch 水下段；旧读数、换气和未知身份不能证明还能继续。'
     + '\n```js\n' + adaptiveDivingDecision + '\n```',
-  entities: 'Mineflayer: await bot.read("entitySnapshot") returns {sampledAt,source,dimension,coverage,availability,self,entities,players}. '
+  entities: 'Mineflayer: await bot.read("entitySnapshot") returns {sampledAt,source,dimension,coverage,availability,self,entities,players}. Entity equipment retains protocol slot indices with name (registry ID), customName (received instance text or null) and count; null equipment is unobserved, not empty. '
     + 'entities is keyed by entity id and players by online name. Entries are detached, read-only observations, not live bot objects. '
     + 'await bot.read("entity"), await bot.read("entities") and await bot.read("players") read the corresponding fresh projection. '
     + 'Online does not mean nearby; a tracked entity is not proof of line of sight. Compare positions yourself and preserve sampledAt. availability:false means the corresponding source is unavailable, not an empty world. '
