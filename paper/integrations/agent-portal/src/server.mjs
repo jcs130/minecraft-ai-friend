@@ -185,7 +185,7 @@ export function createPortal(config, options = {}) {
           const status = await agentAccess.status(authorized);
           if (!status.gameAccountCreated) throw fail(409, 'GAME_ACCOUNT_NOT_READY', '先查询接入状态，等待游戏角色创建成功后投稿');
           const actor = (await game.roster()).find(row => row.playerUuid === authorized.client.expected_uuid && row.name === authorized.client.name);
-          if (!actor || actor.isReserved || actor.identityConflict || !store.ownedUuids(authorized.owner.id).includes(actor.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '角色身份或归属尚未确认，请查询接入状态或联系主人');
+          if (!actor || actor.isReserved || actor.historical || actor.identityConflict || !store.ownedUuids(authorized.owner.id).includes(actor.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '角色身份或归属尚未确认，请查询接入状态或联系主人');
           actorContext = { owner: authorized.owner, actor: { uuid: actor.playerUuid, name: actor.name } };
           return actorContext;
         };
@@ -330,8 +330,8 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
         const owned = new Set(store.db.prepare('SELECT agent_uuid FROM ownerships').all().map(row => row.agent_uuid));
-        return respond(res, 200, { agents: (await game.roster()).map(row => ({ ...game.publicAgent(row),
-          claimable: !!row.playerUuid && !row.isReserved && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
+        return respond(res, 200, { agents: (await game.roster()).filter(row=>!row.historical).map(row => ({ ...game.publicAgent(row),
+          claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
       if (req.method === 'GET' && pathname === '/api/v1/challenges') return respond(res,200,await challenges.query({activity:url.searchParams.get('activity')||'trial_tower',difficulty:url.searchParams.get('difficulty')||'all',page:Number(url.searchParams.get('page')||1)}));
@@ -436,6 +436,7 @@ export function createPortal(config, options = {}) {
       const configMatch = /^\/api\/v1\/agents\/([a-f0-9]{24})\/connection-config$/.exec(pathname);
       if (req.method === 'GET' && configMatch) {
         const { agent } = await authorizedAgent(req, configMatch[1]);
+        if (agent.historical) throw fail(409,'HISTORICAL_ROLE_READ_ONLY','这是历史身体的只读档案，请选择当前游戏角色生成登录配置。');
         return respond(res, 200, { schemaVersion: 1, portal: req.portalOrigin.origin, agentId: agent.id, playerUuid: agent.playerUuid,
           username: agent.name, gameAddress: config.publicGameAddress, credentialEnv: 'QD_PORTAL_CLIENT_TOKEN', gamePasswordEnv: 'MC_GAME_PASSWORD', readOnly: true });
       }

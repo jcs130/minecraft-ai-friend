@@ -60,7 +60,7 @@ export class AgentAccess {
   }
   quota(owner) {
     if (owner.role === 'admin') return;
-    const owned = this.store.ownedUuids(owner.id).length;
+    const owned = this.store.db.prepare('SELECT count(*) AS n FROM ownerships o WHERE owner_id=? AND NOT EXISTS (SELECT 1 FROM reviewed_role_identities r WHERE r.player_uuid=o.agent_uuid)').get(owner.id).n;
     const clients = this.store.db.prepare('SELECT count(*) AS n FROM agent_clients c WHERE c.owner_id=? AND c.revoked_at IS NULL AND NOT EXISTS (SELECT 1 FROM ownerships o WHERE o.agent_uuid=c.expected_uuid)').get(owner.id).n;
     const otherPending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs j WHERE j.owner_id=? AND j.operation='create' AND j.state IN ('pending','unknown') AND NOT EXISTS (SELECT 1 FROM agent_clients c WHERE c.game_request_id=j.id AND c.revoked_at IS NULL)").get(owner.id).n;
     const maximum = this.config.cloudAccounts.maxAgentsPerOwner || 5;

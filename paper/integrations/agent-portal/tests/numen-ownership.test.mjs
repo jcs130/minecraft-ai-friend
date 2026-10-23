@@ -31,6 +31,20 @@ test('creator name similarity never grants ownership and an existing explicit ow
  const f=await local(t);const other=randomUUID();f.store.db.prepare('INSERT INTO owners VALUES(?,?,?,?,?,?)').run(other,'other','other','test-only-digest','owner',Date.now());bind(f.store,f.owner,creator);bind(f.store,other,body);
  f.service.ingest(observation());assert.deepEqual(f.store.ownedUuids(other),[body]);assert.equal(f.store.db.prepare('SELECT state FROM numen_creator_relations').get().state,'ownership_conflict');
 });
+
+test('different native bodies may share a name without replacing a login identity or losing UUID ownership',async t=>{
+ const f=await local(t);bind(f.store,f.owner,creator);const second=randomUUID();
+ f.service.ingest(observation([entry({name:'Fishy'}),entry({name:'Fishy',playerUuid:second})]));
+ assert.deepEqual(new Set(f.store.ownedUuids(f.owner)),new Set([creator,body,second]));
+ assert.equal(f.store.db.prepare('SELECT player_uuid FROM portal_agents WHERE normalized=?').get('fishy').player_uuid,body);
+ assert.equal(f.store.db.prepare("SELECT count(*) AS n FROM numen_creator_relations WHERE state='bound'").get().n,2);
+ assert.equal(f.store.db.prepare('SELECT count(*) AS n FROM reviewed_role_identities').get().n,2);
+ const other=randomUUID();f.store.db.prepare('INSERT INTO owners VALUES(?,?,?,?,?,?)').run(other,'other','other','test-only-digest','owner',Date.now());
+ const third=randomUUID();bind(f.store,other,third);
+ f.service.ingest(observation([entry({name:'Fishy',playerUuid:third})],Date.now()+2));
+ assert.equal(f.store.db.prepare('SELECT owner_id FROM ownerships WHERE agent_uuid=?').get(third).owner_id,other);
+ assert.equal(f.store.db.prepare('SELECT state FROM numen_creator_relations WHERE player_uuid=?').get(third).state,'ownership_conflict');
+});
 test('changed native creator UUID, reused name, stale snapshot and conflicting replay cannot steal a body',async t=>{
  const f=await local(t);bind(f.store,f.owner,creator);const value=observation();f.service.ingest(value);
  assert.throws(()=>f.service.ingest({...value,observedAt:value.observedAt-1}));assert.throws(()=>f.service.ingest({...value,companions:[entry({name:'Different'})]}));

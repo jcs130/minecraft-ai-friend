@@ -89,8 +89,23 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
+  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; } };
 }
+
+test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
+ const ui=await screen(t,{capabilitiesReady:true});await ui.setup();const id='b'.repeat(24),uuid='22222222-2222-3222-8222-222222222222';
+ const historical={...ui.agent,id,playerUuid:uuid,name:'Fishy',historical:true,online:false};
+ ui.game.roster=async()=>[ui.agent,historical];
+ const owner=ui.portal.store.ownerByName('ui-admin');ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,uuid,'Isolated verified original UUID',Date.now());
+ ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,ui.agent.playerUuid,'Isolated current game role',Date.now());
+ await ui.refresh();ui.window.location.hash='agents';
+ await waitFor(()=>ui.document.querySelector('#roster-grid')?.textContent.includes('历史身体（只读）'));
+ const card=[...ui.document.querySelectorAll('.agent-card')].find(r=>r.textContent.includes('Fishy'));
+ assert.ok(card.textContent.includes('22222222'));assert.equal(card.querySelector('[data-action="agent-appearance"]'),null);
+ ui.window.location.hash='account';await waitFor(()=>ui.document.querySelector('[data-action="change-game-password"]'));
+ ui.click('[data-action="change-game-password"]');await waitFor(()=>ui.document.querySelector('#game-account-form'));
+ assert.equal(ui.document.querySelector('#game-account-form select[name="username"] option[value="Fishy"]'),null);
+});
 
 test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {
   const ui = await screen(t); await ui.setup();

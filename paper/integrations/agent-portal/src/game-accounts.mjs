@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { prepareReviewedRoles } from './ownership-review.mjs';
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
@@ -30,6 +31,7 @@ export function unseal(key, label, encoded) {
 
 export class GameAccounts {
   constructor(config, store, game, remote = null) {
+    prepareReviewedRoles(store);
     this.config = config; this.store = store; this.game = game; this.remote = remote;
     store.db.exec(`CREATE TABLE IF NOT EXISTS portal_agents(player_uuid TEXT PRIMARY KEY, name TEXT NOT NULL, normalized TEXT NOT NULL UNIQUE, source TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS account_jobs(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES owners(id), operation TEXT NOT NULL, name TEXT NOT NULL, state TEXT NOT NULL, result TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, expected_uuid TEXT);`);
@@ -56,7 +58,7 @@ export class GameAccounts {
   }
   assertCreateQuota(owner) {
     const maximum = this.config.cloudAccounts?.maxAgentsPerOwner || 5;
-    const owned = this.store.ownedUuids(owner.id).length;
+    const owned = this.store.db.prepare('SELECT count(*) AS n FROM ownerships o WHERE owner_id=? AND NOT EXISTS (SELECT 1 FROM reviewed_role_identities r WHERE r.player_uuid=o.agent_uuid)').get(owner.id).n;
     const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
     if (owner.role !== 'admin' && owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
   }
@@ -77,6 +79,7 @@ export class GameAccounts {
     if (operation === 'create') this.assertCreateQuota(owner);
     const roster = await this.game.roster();
     const existing = roster.find(row => row.name.toLowerCase() === name.toLowerCase());
+    if (existing?.historical) throw fail(409, 'HISTORICAL_ROLE_READ_ONLY', '这是按原 UUID 保存的历史身体，不能按名字认领或改密；请使用当前游戏角色，或联系服主核验。');
     if (existing?.isReserved || existing?.identityConflict) throw fail(403, 'RESERVED_ACCOUNT', '这个角色不可自助绑定，请联系服主核验');
     if (operation === 'create' && existing) throw fail(409, 'ACCOUNT_EXISTS', '角色已经存在，请通过游戏内绑定原角色，保留 UUID 和原物品');
     if (operation !== 'create' && !existing?.playerUuid) throw fail(404, 'AGENT_NOT_FOUND', '请先选择已有角色');
