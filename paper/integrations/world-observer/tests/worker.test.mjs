@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { ObservationWorker, validateWorkerConfig, readBoundedJSON } from '../worker.mjs';
 const uuid='11111111-1111-3111-8111-111111111111';
 function fixture(){
@@ -39,7 +40,7 @@ test('HTTP failures and inflated response bodies are bounded',async()=>{
  await assert.rejects(readBoundedJSON(new Response('x'.repeat(200)),100),/RESPONSE_LIMIT/);
 });
 test('worker cannot follow remote source URLs or URLs containing credentials',()=>{
- const base={rendererRoot:'E:/test/renderer',assetDirectory:'E:/test/assets',observerKeyFile:'E:/test/local.key',portalTokenFile:'E:/test/portal.key',observerOrigin:'http://127.0.0.1:10001/',portalOrigin:'https://portal.example.test/'};
+ const base={rendererRoot:path.resolve('test/renderer'),assetDirectory:path.resolve('test/assets'),observerKeyFile:path.resolve('test/local.key'),portalTokenFile:path.resolve('test/portal.key'),observerOrigin:'http://127.0.0.1:10001/',portalOrigin:'https://portal.example.test/'};
  assert.equal(validateWorkerConfig(base).observerOrigin,'http://127.0.0.1:10001');
  for(const observerOrigin of ['http://192.168.1.1/','https://127.0.0.1/','http://localhost/','http://user:pass@127.0.0.1/','http://127.0.0.1/a'])assert.throws(()=>validateWorkerConfig({...base,observerOrigin}));
  assert.throws(()=>validateWorkerConfig({...base,portalOrigin:'http://public.example.test/'}));

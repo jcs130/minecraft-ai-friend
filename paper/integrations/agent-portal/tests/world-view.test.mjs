@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { siteFixture, testPassword } from './helpers.mjs';
 import { loadConfig } from '../src/config.mjs';
 const token='obs_'+'a'.repeat(43),hash=createHash('sha256').update(token).digest('hex');
 const site={build:{browserBundleSha256:'1'.repeat(64),consoleBundleSha256:'2'.repeat(64)},page:()=>Buffer.from('<html>trusted viewer</html>'),file:()=>null};
 async function fixture(t,live={}) {
-  const f=await siteFixture(t,{live:{worldObserverEnabled:true,worldObserverTokenHash:hash,native3dSiteDirectory:'E:/isolated/site',...live}},{spectatorSite:site});
+  const f=await siteFixture(t,{live:{worldObserverEnabled:true,worldObserverTokenHash:hash,native3dSiteDirectory:path.resolve('isolated-site'),...live}},{spectatorSite:site});
   f.agent.authenticated=true;await f.portal.ready;
   f.worker=(options={})=>fetch(f.origin+'/api/v1/internal/world-view/poll',{method:'POST',body:'{}',...options,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,...options.headers}});
   f.watch=(client,id,viewerId=randomUUID())=>client.request(`/live/${id}/watch`,'POST',{viewerId});
