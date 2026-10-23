@@ -88,7 +88,8 @@ export async function accountSyncOnce(settings, state = { watch: [] }, fetcher =
       const previous = identities.get(row.name.toLowerCase());
       // A reused name is never allowed to silently replace another UUID.
       if (previous && previous.uuid !== row.playerUuid) continue;
-      identities.set(row.name.toLowerCase(), { name: row.name, uuid: row.playerUuid, kind: 'agent', source: row.source });
+      identities.set(row.name.toLowerCase(), { name: row.name, uuid: row.playerUuid, kind: 'agent', source: row.source,
+        nativeOnline: row.source === 'Numen.live-owner-tag', nativeObservedAt: state.numenObservation.observedAt });
     }
     if (identities.size > 256) throw Error('ACCOUNT_REGISTRY_FULL');
     const temporary = settings.portalIdentitiesFile + '.tmp';

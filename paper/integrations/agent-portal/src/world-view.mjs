@@ -28,7 +28,7 @@ export class WorldView {
     // registered UUID to be present in the trusted backend's current sample;
     // an ag_ nickname, historical roster or explicit auth rejection is insufficient.
     return row?.online===true&&(row.authenticated===true || row.authenticated===null
-      &&row.statusSource==='minecraft.server-list-ping.uuid'
+      &&['minecraft.server-list-ping.uuid','Numen.live-owner-tag'].includes(row.statusSource)
       &&['Numen.CompanionRegistry','Numen.live-owner-tag'].includes(row.identitySource));
   }
   sessionOwner(hash) {
