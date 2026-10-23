@@ -1,5 +1,7 @@
 # Agent MC Autonomy
 
+The 0.2.89 distribution pins core rc.70, which preserves explicit storage counts and retained inventory when a full container accepts only part of a transfer. Planner, review and native queue policy are unchanged.
+
 `0.2.87` keeps the full-context system instructions and provider tool declarations
 stable when an optional voice subscriber appears or expires. Current voice
 availability is explicit in the final scene's `current_tool_policy`; an absent
