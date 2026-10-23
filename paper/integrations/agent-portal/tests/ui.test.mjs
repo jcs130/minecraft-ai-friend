@@ -504,3 +504,11 @@ test('home and connection center expose three real client choices with parent pr
  await ui.refresh(false);
  assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,3);
 });
+
+
+test('homepage presents FOM as coming soon without any connection action',async t=>{
+ const ui=await screen(t,{initialView:'home'}),card=ui.document.querySelector('.home-upcoming-world');
+ assert.ok(card);assert.match(card.textContent,/FOM 模组世界/);assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
+ assert.equal(card.querySelectorAll('a,button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
+ await ui.refresh(false);assert.equal(ui.document.querySelectorAll('.home-upcoming-world').length,1);
+});
