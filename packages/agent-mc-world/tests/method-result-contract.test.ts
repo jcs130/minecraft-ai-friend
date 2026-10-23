@@ -27,7 +27,9 @@ describe('program task result evidence', () => {
         [{ step: 1, outcome: 'fail', why: expect.any(String) }],
       ]);
       const expanded = r.runner.inspect(run.id, 2) as { trace: { result: { steps: unknown[]; receipt: string } } };
-      expect(expanded.trace.result.steps).toEqual(summary.trace[1].steps);
+      expect(expanded.trace.result.steps).toMatchObject(summary.trace[1].steps);
+      expect(expanded.trace.result.steps[0]).toMatchObject({ detail: { text: expect.stringContaining('石头'), truncated: false } });
+      expect(summary.trace[1].steps[0]).not.toHaveProperty('detail');
       expect(expanded.trace.result.receipt).toContain('石头');
     } finally { r.close(); }
   });

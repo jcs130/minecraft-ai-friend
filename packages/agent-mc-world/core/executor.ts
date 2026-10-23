@@ -1028,7 +1028,8 @@ export interface TaskReport {
   taskId?: number;
   /** Last completed step of a successful task. */
   lastSkill?: SkillCall['skill'];
-  steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null; observedEffect?: ObservedEffect }>;
+  steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null;
+    detail?: { text: string; chars: number; truncated: boolean }; observedEffect?: ObservedEffect }>;
   /** 同形状任务在短时间内再次未达整体目标时，附上上一回的受阻事实。 */
   repeatFailure?: { attempts: number; previousReceipt: string; scope: 'target' | 'shape'; observation: 'changed' | 'unchanged' | 'unavailable' };
   /** 这条汇报已经讲明了掉血的来由;World 据此不再复述一遍掉血播报 */
@@ -1055,6 +1056,8 @@ interface StepLanding {
   outcome: StepOutcome;
   /** 一句原因(截短);做成的那几步没有 */
   why: string | null;
+  /** Bounded original reason, including recovery conditions after the short preview. */
+  detail?: { text: string; chars: number; truncated: boolean };
   /** 技能给出的确定原因；资源许可拒绝不作为空间放置失败。 */
   code?: SkillBlocked['code'];
   /**
@@ -4969,6 +4972,7 @@ export class Executor {
     });
     this.opts.report({ kind: 'cancelled', text, taskId: task.id,
       steps: landings.map(landing => ({ step: landing.step, outcome: landing.outcome, why: landing.why,
+        ...('detail' in landing && landing.detail ? { detail: landing.detail } : {}),
         ...('observedEffect' in landing && landing.observedEffect ? { observedEffect: landing.observedEffect } : {}) })) });
   }
 
@@ -5242,6 +5246,7 @@ export class Executor {
       outcomes.push(outcome);
       task.stepLog.push({
         step: i + 1, what: describeSkill(steps[i]), outcome, why: shortWhy(why), line,
+        ...(why ? { detail: { text: why.slice(0, 600), chars: why.length, truncated: why.length > 600 } } : {}),
         ...(effectReadbacks.has(i) ? { observedEffect: effectReadbacks.get(i)! } : {}),
         ...(code ? { code } : {}),
       });
@@ -6094,7 +6099,8 @@ export class Executor {
     });
     const lastLanding = t?.stepLog.at(-1);
     this.opts.report({ ...report, text,
-      ...(t ? { steps: t.stepLog.map(({ step, outcome, why, observedEffect }) => ({ step, outcome, why,
+      ...(t ? { steps: t.stepLog.map(({ step, outcome, why, detail, observedEffect }) => ({ step, outcome, why,
+        ...(detail ? { detail } : {}),
         ...(observedEffect ? { observedEffect } : {}) })) } : {}),
       ...(report.kind === 'done' && t && lastLanding
         && (lastLanding.outcome === 'ok' || lastLanding.outcome === 'noop')
