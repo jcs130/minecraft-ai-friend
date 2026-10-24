@@ -1,5 +1,35 @@
 # Server authorization after connection
 
+## Password-server compatibility
+
+With an explicitly configured, server/account-bound `command:"login"` credential,
+a direct system message containing `/login` also counts as a request. This covers
+AuthMe's comma and plugin-prefix variants without changing existing request markers.
+Player chat and common forwarded player wrappers are excluded; `/loginx` and
+`/register` never trigger this fallback. A configured registration action still
+requires its own explicit markers. No password configuration means no automatic
+login command.
+
+The standard AuthMe success and session-reconnection receipts are recognized as
+exact messages, optionally with its `[AuthMe]` prefix. They do not match quoted,
+negated or player-chat text, and cannot override structured authorization state.
+A standard wrong-password receipt blocks further submission. These compatibility
+receipts come from the [official AuthMe message definitions](https://github.com/AuthMe/AuthMeReloaded/blob/master/authme-core/src/main/resources/messages/messages_en.yml).
+Other server-specific confirmations can still use explicit `successMarkers`.
+
+Initial timeout diagnostics preserve the actual phase through the disconnect,
+connection state and World operator text:
+
+| Reason | Meaning |
+| --- | --- |
+| `request-not-detected` | No login request was recognized; no password was submitted. |
+| `credential-read-timeout` | A request was recognized but private credential loading did not finish; no password was submitted. |
+| `confirmation-timeout` | The configured command was submitted but authorization was not confirmed; this is not proof of a bad password. |
+
+Existing DSH first-run password files use the same contract and require no
+credential rewrite. The adapter must consume the fixed core release. Passwords,
+submitted commands and private file contents never enter diagnostic metadata.
+
 An existing private JSON identity can supply a game password without copying it
 into another credential file. Configure `credentialFile`, `credentialFormat:"json"`
 and one explicit top-level string `credentialField` (for example `gamePassword`).

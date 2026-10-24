@@ -20,6 +20,24 @@ export function readProtectedCredential(file) {
 
 const address = value => value.trim().toLowerCase().includes(':') ? value.trim().toLowerCase() : value.trim().toLowerCase() + ':25565';
 const matches = (message, markers) => markers.some(marker => message.startsWith(marker) || message.startsWith('[' + marker + ']'));
+// Exact standard AuthMe receipts, not a broad "success" or "login" substring.
+// Custom markers remain available; authoritative structured state takes priority
+// over these compatibility receipts. Registration is never inferred here.
+const loginSuccessReceipts = new Set(['successful login!', 'logged-in due to session reconnection.', "you're already logged in!"]);
+const loginFailureReceipts = new Set(['wrong password!']);
+const failureMessages = {
+  'request-not-detected': '未识别到服务器登录提示，尚未提交密码',
+  'credential-read-timeout': '服务器登录凭据读取超时，尚未提交密码',
+  'confirmation-timeout': '服务器登录确认超时（密码已提交；不等于密码错误）',
+  'reauthentication-timeout': '服务器重新登录等待超时',
+  'server-rejected': '服务器拒绝了本次登录',
+  'credential-unavailable': '配置的登录凭据不可用',
+  'account-not-matched': '没有匹配当前服务器与账号的登录配置',
+  'invalid-configuration': '登录配置无效',
+};
+export function serverLoginFailureText(reason) {
+  return typeof reason === 'string' && Object.hasOwn(failureMessages, reason) ? failureMessages[reason] : null;
+}
 
 /** Explicit portable secret source; the legacy file format remains DPAPI by default. */
 async function readAccountCredential(account, configFile) {
@@ -66,7 +84,9 @@ export function installServerLogin(bot, options) {
     timer = setTimeout(() => {
       if (active && ['armed', 'submitted'].includes(stage)) {
         credentialGeneration++;
-        report(recovering ? 'required' : 'retrying', recovering ? 'reauthentication-timeout' : 'confirmation-timeout');
+        const detail = recovering ? 'reauthentication-timeout' : !attempted ? 'request-not-detected'
+          : stage === 'armed' ? 'credential-read-timeout' : 'confirmation-timeout';
+        report(recovering ? 'required' : 'retrying', detail);
       }
     }, timeoutMs);
     timer.unref?.();
@@ -169,14 +189,23 @@ export function installServerLogin(bot, options) {
       revoke(true);
       return;
     }
-    if (matches(value, account.failureMarkers)) {
+    const playerChat = /^(?:\[[^\]\r\n]+\]\s*)?<[^>\r\n]+>\s/.test(value);
+    const loginReceipt = account.command === 'login' && !playerChat && !authState
+      ? value.replace(/^\[AuthMe\]\s*/i, '').trim().toLowerCase() : null;
+    if (matches(value, account.failureMarkers) || loginFailureReceipts.has(loginReceipt)) {
       report(['confirmed', 'required'].includes(stage) ? 'required' : 'blocked', 'server-rejected'); return;
     }
-    if (matches(value, account.successMarkers)) {
+    if (matches(value, account.successMarkers) || loginSuccessReceipts.has(loginReceipt)) {
       if (authState) authState = { ...authState, authorized: true, status: 'authenticated' };
       report('confirmed'); return;
     }
-    if (attempted || ['confirmed', 'required'].includes(stage) || !matches(value, account.requestMarkers)) return;
+    // AuthMe wording and plugin prefixes vary. Only the configured login action
+    // may use this fallback; it never selects register or a command from text.
+    // Mineflayer labels player chat separately; also reject common forwarded
+    // player-chat wrappers if a server transports them as system messages.
+    const wantsLogin = matches(value, account.requestMarkers) || (account.command === 'login'
+      && !playerChat && /\/login\b/i.test(value));
+    if (attempted || ['confirmed', 'required'].includes(stage) || !wantsLogin) return;
     submitCredential();
   };
   bot.on('message', onMessage);

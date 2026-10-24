@@ -44,7 +44,7 @@ import { installBreathingReadings } from './breathing.ts';
 import { trackMaps } from './map-view.ts';
 import { trackDamageSources } from './damage-source.ts';
 import { MinecraftAuthentication, protocolVersion } from '../src/client/authentication.ts';
-import { installServerLogin } from './server-login.mjs';
+import { installServerLogin, serverLoginFailureText } from './server-login.mjs';
 import { installMountedLook } from '../src/mounted-look.ts';
 import { errorFailure, kickFailure } from './link.ts';
 
@@ -574,7 +574,7 @@ export class Bridge {
           } else {
             // No authoritative confirmation arrived. This is a transient
             // connection attempt, so onGone retains normal retry/backoff.
-            bot.quit('服务器登录确认超时，将自动重连');
+            bot.quit(`${serverLoginFailureText(status.reason) ?? '服务器登录未就绪'}，将自动重连`);
           }
         });
       } });

@@ -1,4 +1,5 @@
 import { operationInventory } from './operation-experience.ts';
+import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity } from './perception-sight.ts';
 import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
@@ -3564,15 +3565,8 @@ export class MinecraftWorld implements World {
       return '服务器当前要求重新登录；网络连接仍保留，但操作授权未就绪，旧在线状态已经失效。目标保留，等待新的授权确认；不要把消息发送成功当成施法或移动生效，也不要重复提交未生效的动作。';
     }
     if (connection.phase === 'stopped') {
-      const reasons: Record<string, string> = {
-        'confirmation-timeout': '服务器登录确认超时（不等于密码错误）',
-        'server-rejected': '服务器拒绝了本次登录',
-        'credential-unavailable': '配置的登录凭据不可用',
-        'account-not-matched': '没有匹配当前服务器与账号的登录配置',
-        'invalid-configuration': '登录配置无效',
-      };
       const reason = connection.serverLogin.reason;
-      return `${reason && reasons[reason] ? reasons[reason] : 'Minecraft 连接已停止'}；自动重连已停止，需要操作员核验后明确重连。当前坐标、维度和背包未验证；旧目标保留，恢复前不要重复提交身体动作。`;
+      return `${serverLoginFailureText(reason) ?? 'Minecraft 连接已停止'}；自动重连已停止，需要操作员核验后明确重连。当前坐标、维度和背包未验证；旧目标保留，恢复前不要重复提交身体动作。`;
     }
     if (connection.phase === 'retrying') return 'Minecraft 已断线，正在按现有机制自动重连；连接恢复会有事件，当前世界读数不可用。';
     return 'Minecraft 正在等待连接、登录或出生点就绪；当前世界读数不可用，等待连接恢复事件。';

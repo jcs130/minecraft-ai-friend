@@ -1,10 +1,13 @@
 # Agent MC World
 
-Current source: **0.5.7-rc.83**, a source candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+Current source: **0.5.7-rc.84**, a source candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
 
-The rc.83 candidate adds [isolated World mounts](docs/world-mounts.md), reviewed
+The rc.84 candidate adds [isolated World mounts](docs/world-mounts.md), reviewed
 copy-only legacy migration, envelope namespace mapping and an explicitly configured
 host-side decision transport. These helpers start no game or model by import.
+
+It also includes the upstream AuthMe login-receipt compatibility and distinct
+missing-prompt, credential-read and confirmation timeout diagnostics.
 
 The rc.73 candidate adds opt-in [per-skill generation contracts](docs/skill-generation-contracts.md). Compatible harnesses can constrain required coordinates and mutually exclusive input forms before generation; the native parser, queue and permissions remain authoritative.
 
