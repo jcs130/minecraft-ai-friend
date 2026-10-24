@@ -150,6 +150,7 @@ describe('explicit complete viewer resource preparation', () => {
   });
   it('preserves an explicitly silent version, but does not excuse an accidentally missing sound catalogue', async()=>{
     const f=await fixture();
+    await rm(join(f.templateDir,'audio-downloads.json')); // This case exercises original/silent input, not the fixture's unrelated deferred records.
     const primary=join(f.templateDir,'public/sounds'),silent=join(f.templateDir,'versions/1.21.11');
     await mkdir(primary,{recursive:true});await writeFile(join(primary,'manifest.json'),JSON.stringify({files:{}}));
     await mkdir(silent,{recursive:true});

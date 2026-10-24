@@ -80,7 +80,7 @@ export class MinecraftAgentClient {
     this.learning = new ClientOperationLearning(options.dataDir, this.journal.run,
       () => this.world.requestFacts?.() as WorldRequestFacts | null,
       () => ({realm:`weak:${options.cfg.host}:${options.cfg.port}|`,account:`${options.cfg.auth??'offline'}:${options.cfg.username}`,
-        agent:options.agentName??options.cfg.username}));
+        agent:options.cfg.memoryAgentId??options.agentName??options.cfg.username}));
     this.facts = new CurrentFacts(this.journal);
     this.requests = new RequestLedger(this.journal);
     this.metrics = new AgentMetrics(this.journal.run, options.dataDir, handle => this.journal.blob(handle) !== null);
@@ -125,6 +125,21 @@ export class MinecraftAgentClient {
     const tools = this.world.tools(), name = `${this.toolPrefix}_choose`;
     return this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
       ? [...tools, { ...this.hostChoice, name }] : tools;
+  }
+
+  /** Owner notebook port; no body action, model call or decision-turn mutation. Uses the Agent's same notebook. */
+  async notebook(args: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    signal?.throwIfAborted();
+    if (!['help','search','get','remember','revise','archive','capture'].includes(String(args.action ?? 'help')))
+      throw new Error('Notebook port supports local note operations only; service workflows use mc_memory explicitly.');
+    if (this.phase === 'starting' || this.phase === 'stopping') throw new Error('Notebook connection is transitioning; retry after it settles.');
+    const result = this.phase === 'disconnected'
+      ? await this.call(`${this.toolPrefix}_memory`, args, { signal })
+      : await this.tools().find(tool => tool.name === `${this.toolPrefix}_memory`)!.handler(args,
+        { role: 'operator', log: this.options.log, signal });
+    if (typeof result === 'string' || result.failed || !result.meta?.gameMemory)
+      throw new Error(typeof result === 'string' ? result : result.text || 'Notebook operation failed');
+    return result.meta.gameMemory as Record<string, unknown>;
   }
 
   async connect(): Promise<void> {
@@ -214,7 +229,10 @@ export class MinecraftAgentClient {
   async environment(): Promise<string> {
     if (this.options.cfg.provider === 'java-client') return JAVA_CLIENT_ENVIRONMENT;
     const { readFileSync } = await import('node:fs');
-    return readFileSync(new URL('./ENV_PROMPT.md', import.meta.url), 'utf8').replaceAll('mc_', this.toolPrefix + '_');
+    return readFileSync(new URL('./ENV_PROMPT.md', import.meta.url), 'utf8').replaceAll('mc_', this.toolPrefix + '_')
+      + (this.options.cfg.perception?.mineralVision === true
+        ? '\nMineral vision is explicitly enabled: bounded block queries may include occluded loaded mineral cells. This is chunk data, not firsthand sight; label it accordingly. Physical actions retain their safety checks.\n'
+        : '\nMineral vision is disabled. Occluded mineral cells remain unknown; do not infer a vein from received chunk data.\n');
   }
 
   beginTurn(id: string = randomUUID()): TurnReceipt {
@@ -450,7 +468,7 @@ export class MinecraftAgentClient {
     const memory = new GameMemoryService(new GameMemoryBook(directory), directory);
     const result = await memory.execute(args, { scope: {
       realm: marker ? `uuid:${marker.uuid}` : `weak:${address}|`,
-      account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: this.options.agentName ?? cfg.username,
+      account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: cfg.memoryAgentId ?? this.options.agentName ?? cfg.username,
     }, dimension: null }, cfg.memory, signal);
     return { text: JSON.stringify(result), meta: { gameMemory: result } };
   }

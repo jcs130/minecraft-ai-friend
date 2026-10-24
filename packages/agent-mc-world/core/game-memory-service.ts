@@ -6,11 +6,12 @@ import { GameMemoryLearning } from './game-memory-learning.ts';
 import { OperationExperienceBook } from './operation-experience.ts';
 import { artifactRef } from './game-memory-learning-contract.ts';
 import { memoryRequest, validateMemoryTransport } from './game-memory-http.ts';
+import { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from './memory-cpu-vector.ts';
 import { GameMemoryBook, type GameMemoryContext, type MemoryCandidate } from './game-memory.ts';
 import { MemoryReplicaLedger, memoryTarget, type ReplicaReceipt } from './game-memory-redundancy.ts';
 
 export interface GameMemoryConfig {
-  mode: 'local' | 'vector' | 'remote';
+  mode: 'local' | 'local-vector' | 'vector' | 'remote';
   endpoint: string; model: string; apiKeyEnv: string; timeoutMs: number;
   provider: 'http' | 'mem0-oss' | 'mem0-platform' | 'bailian' | 'powercontext';
   libraryId: string; projectId: string; scopeId: string;
@@ -23,7 +24,7 @@ export const GAME_MEMORY_DEFAULTS: GameMemoryConfig = {
   provider: 'http', libraryId: '', projectId: 'agent-mc', scopeId: '', searchMode: 'text', learningEnabled: false, readPreference: 'balanced',
 };
 export const GAME_MEMORY_CONFIG_SCHEMA = Object.fromEntries(Object.entries({
-  mode: { type: 'string', enum: ['local', 'vector', 'remote'], title: '游戏记忆检索', description: '本地关键词 / 本地向量混合 / 外挂记忆服务。外部服务故障时回退关键词，并报告降级。' },
+  mode: { type: 'string', enum: ['local', 'local-vector', 'vector', 'remote'], title: '游戏记忆检索', description: '本地关键词 / 离线 CPU 词元向量混合（不下载模型，不是神经语义模型）/ embeddings 向量 / 外挂记忆服务。外部服务故障时回退关键词，并报告降级。' },
   endpoint: { type: 'string', title: '记忆服务地址', description: '向量模式填完整 embeddings URL；远端模式填服务根地址。留空不连接。' },
   model: { type: 'string', title: '向量模型名称', description: '仅向量模式使用，调用兼容 embeddings 的接口。更换后需要按需重新索引旧笔记。' },
   apiKeyEnv: { type: 'string', title: '记忆服务密钥环境变量', description: '填写环境变量名称，不填写密钥本身。' },
@@ -152,7 +153,7 @@ export class GameMemoryService {
       return new OperationExperienceBook(this.directory).query(args, ctx, this.book);
     }
     if (args.action === 'search' && args.preference !== undefined) cfg.readPreference = args.preference as GameMemoryConfig['readPreference'];
-    if (!['local', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');
+    if (!['local', 'local-vector', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');
     if (!['local-first', 'balanced', 'remote-first'].includes(cfg.readPreference)) throw new Error('Unknown memory read preference');
     if (args.action === 'service') {
       const scope = this.book.execute({ action: 'search', limit: 1, query: '' }, ctx).scopeKey;
@@ -186,6 +187,20 @@ export class GameMemoryService {
         syncStatus: 'action:replication', serviceReadFallback: 'Exact previously read historical prepare/artifact/source results may fall back to a bounded local cache during service outages; stale results stay labelled.' },
       retrievalHelp: 'Local storage remains active in every mode. Only game notes are sent. replication lists current revision sync receipts across restart; sync(id,expectedRevision) indexes a pre-existing note or reconciles pending/unknown writes without replay. Remote matches must agree with local scope, revision and content hash. This is not a full-history backup: restore/migrate local notebooks for another machine.' };
     if (cfg.mode === 'local') return result;
+    if (cfg.mode === 'local-vector') {
+      if (args.action !== 'search' || !String(args.query ?? '').trim()) return result;
+      const query = cpuMemoryVector(String(args.query));
+      const similar = candidates.map(entry => ({ id: idOf(entry), score: cpuMemorySimilarity(query,
+        cpuMemoryVector(entry.summary + '\n' + entry.content + '\n' + entry.tags.join(' '))) }))
+        .filter(row => row.score > .08).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+      signal?.throwIfAborted();
+      const ranks = new Map<string, number>();
+      [lexical.map(idOf), similar.map(row => row.id)].forEach(list => list.forEach((id, index) =>
+        ranks.set(id, (ranks.get(id) ?? 0) + 1 / (61 + index))));
+      return { ...this.book.execute(args, ctx, { ranks }), retrieval: { mode: 'local-vector',
+        backend: CPU_MEMORY_VECTOR_VERSION, fusion: 'reciprocal-rank', neuralModel: false,
+        remoteConsulted: false, candidates: candidates.length, vectorMatches: similar.length } };
+    }
     if (result.saved) return { ...result, index: await this.tryIndex(cfg, String(result.scopeKey), this.canonical(result.entry as MemoryCandidate), signal) };
     if (args.action !== 'search' || !String(args.query ?? '').trim()) return result;
     if (cfg.readPreference === 'local-first' && lexical.length >= Number(args.limit ?? 8) + Number(args.offset ?? 0))

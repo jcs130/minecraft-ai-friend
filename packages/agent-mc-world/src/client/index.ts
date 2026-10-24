@@ -19,6 +19,10 @@ export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime,
 export { EventCondenser, DEFAULT_CONDENSE_RULES, type CondenseRule, type CondenseAction, type EventCondenserOptions, type CondenserStats } from './event-condenser.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
+export { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from '../../core/memory-cpu-vector.ts';
+export { configuredPlayerSkin, type LocalPlayerSkin } from '../../core/viewer-local-skin.ts';
+export { setStoredSkin, storedSkinInfo } from '../../core/client-skins.ts';
+export { configureObservationPolicy, type ObservationPolicy } from '../../core/perception-sight.ts';
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
 export { AgentMetrics, serveAgentMetrics, type HarnessTrace } from './metrics.ts';
 export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequestFacts, Logger, ModelFacts } from './contracts.ts';

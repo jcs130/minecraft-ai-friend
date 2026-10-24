@@ -1,15 +1,15 @@
 {
   "viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "commit": "60e611737a44edb43d195487f9300149402d4c66",
+    "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
     "assetPack": "java-1.21.1",
     "additionalPacks": [
       "java-1.20.6",
       "java-1.21.11"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-60e61173.tgz",
-    "sha256": "148e9ec42290258bfe99f78bb4f5e510e81454bc18e6cb26d88356e3ce29c41f",
+    "artifact": "vendor/mc-visual-console-java-1.21.1-4da993d1-audio.tgz",
+    "sha256": "a53a6cb443096ee113c964d44b4427e4a629acdf08584956004a147b0dc59b69",
     "soundPacks": [
       "java-1.21.1-sounds",
       "java-1.20.6-sounds",
@@ -21,6 +21,11 @@
       "1.21.1": "exact-version-separate-download",
       "1.20.6": "exact-version-separate-download",
       "1.21.11": "disabled-no-original-audio-pack"
+    },
+    "deferredAudioInput": {
+      "package": "agent-mc-world@0.5.7-rc.85",
+      "sha256": "8bb01430f2f8e9a8259df5f3105449bfdcc3b0c77a7fd8a46c33a72fa52b3936",
+      "filesCheckedAgainstCurrentSharedAssetPacks": 28
     }
   },
   "core": {
