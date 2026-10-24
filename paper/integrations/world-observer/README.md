@@ -77,7 +77,7 @@ npm test
   Paper原YSM/皮肤可配置只读`appearance`来源，复用真实绑定、原资源SHA和导出器；
   `bundledAppearanceCatalogFile`仍兼容。不能只根据玩家名字生成替代身体。
 
-`sampleIntervalMs`默认50，可配置50–1000；不要在宿主循环里另外固定休眠200ms。
+`sampleIntervalMs`默认50，可配置50–1000；宿主使用`nextSampleDelayMs()`计算剩余周期，不额外固定休眠200ms，也不在响应后再叠加完整50ms。
 `worker.status().sampling`记录实际采样次数、最近本机请求耗时和续期状态，不能用设定20Hz冒充实测20Hz。
 浏览器画布的`motionCadence`、`frameGaps`、`frameCost`和`cameraTracking`分别测量动作交付、绘制帧间隔、渲染耗时和镜头跟随。
 它们是有界只读诊断，无新公网端口、游戏命令或模型调用。撤权、离线、关闭和迟到握手仍清理原观察资源。

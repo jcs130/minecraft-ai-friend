@@ -31,6 +31,7 @@ export class ObservationWorker {
     this.lastSampleAt=null;this.sampleCount=0;this.sampleDurationMs=null;this.lifecycle=new AbortController();
   }
   report(reason){if(reason!==this.lastLog){this.log(reason);this.lastLog=reason;}}
+  nextSampleDelayMs(){return Math.max(0,this.sampleIntervalMs-(this.now()-(this.lastSampleAt??this.now())));}
   status(){return {schemaVersion:1,readOnly:true,closed:this.closed,sampling:{intervalMs:this.sampleIntervalMs,requests:this.sampleCount,
     lastSampleAt:this.lastSampleAt,lastDurationMs:this.sampleDurationMs,authorityPending:!!this.authorityInFlight},sources:[...this.sources.values()].map(source=>{
     const host=source.view.host.status(),coverage=host.viewer?.terrain?.coverage;
@@ -153,6 +154,6 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   const file=process.argv[2];if(!path.isAbsolute(file||''))throw Error('Use an absolute private observer configuration file');
   const worker=await createObservationWorker(JSON.parse(await fs.readFile(file,'utf8')),{log:text=>console.log(text)});
   let stopping=false;for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{stopping=true;void worker.close();});
-  try{while(!stopping){await worker.step();await new Promise(resolve=>setTimeout(resolve,worker.sampleIntervalMs));}}
+  try{while(!stopping){await worker.step();await new Promise(resolve=>setTimeout(resolve,worker.nextSampleDelayMs()));}}
   finally{await worker.close();}
 }

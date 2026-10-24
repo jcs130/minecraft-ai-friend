@@ -40,6 +40,13 @@ test('20Hz local sampling reuses one source; HUD/terrain and cloud grants do not
  assert.equal(f.worker.status().sampling.intervalMs,50);await f.worker.close();
 });
 
+test('sampling period includes request time instead of adding another full sleep after each response',async()=>{
+ const f=fixture();await f.worker.step();assert.equal(f.worker.nextSampleDelayMs(),50);
+ f.advance(30);assert.equal(f.worker.nextSampleDelayMs(),20);
+ f.advance(20);assert.equal(f.worker.nextSampleDelayMs(),0);
+ f.advance(250);assert.equal(f.worker.nextSampleDelayMs(),0,'a slow read cannot create a negative timer');await f.worker.close();
+});
+
 test('a slow cloud renewal never blocks an already authorized local pose sample',async()=>{
  const f=fixture();await f.worker.step();const fetcher=f.worker.fetcher;let release;
  f.worker.fetcher=async(url,options)=>{
