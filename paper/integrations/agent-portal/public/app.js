@@ -4,6 +4,7 @@ const state = { session: null, summary: null, roster: [], authorized: [], accoun
   growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, accountJobs: [], profile: null, photos: [], agentInvites: [] };
 let authRevision = 0;
 let privateRevision = 0;
+let liveFullscreen = null;
 function setSession(session) {
   authRevision++;
   if (state.session?.owner?.id !== session?.owner?.id) {
@@ -102,6 +103,7 @@ function navigation() {
     `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
 }
 function render() {
+  liveFullscreen?.dispose(); liveFullscreen = null;
   removeWorldFrame(); worldLastRenew = 0;
   if (liveObjectUrl) { URL.revokeObjectURL(liveObjectUrl); liveObjectUrl = null; }
   window.QdMemories?.route();
@@ -121,6 +123,11 @@ function render() {
     <div class="content"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" data-action="menu" aria-label="展开导航">${icons.menu}</button><a href="#home">千灯纪</a><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="top-divider"></span><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '服务器运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></header>
     <main id="main" tabindex="-1">${page()}</main></div>
   </div>`;
+  const screen=document.querySelector('[data-world-screen]');
+  if(screen&&window.QdViewerFullscreen){
+    const expand=document.createElement('button');expand.type='button';expand.className='live-expand-button';expand.dataset.worldFullscreen='';screen.append(expand);
+    liveFullscreen=window.QdViewerFullscreen.install({document,window,root:screen,button:expand});
+  }
 }
 function heading(title, description, actions = '', eyebrow = 'QIANDENGJI / AGENT WORLD') {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${actions}</div></div>`;

@@ -89,6 +89,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   });
   window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
   window.eval(await fs.readFile(path.join(projectRoot, 'public/challenges.js'), 'utf8'));
+  window.eval(await fs.readFile(path.join(projectRoot, 'public/viewer-fullscreen.js'), 'utf8'));
   window.eval(code + '\nwindow.__portalRefreshForTest = refresh; window.__portalPollWorldForTest = () => { worldLastRenew = 0; return pollLiveFrame(); };');
   await waitFor(() => managedLive ? document.querySelector('[data-world-screen]') : initialView==='challenges' ? document.querySelector('.challenge-points') : document.querySelector('.onboarding-notice') && (initialView === 'home' ? document.querySelector('[data-world-roster] strong')?.textContent === 'Alpha' : document.querySelector('tbody strong')?.textContent === 'ag_Alpha'));
   const holdPrivate = () => {
@@ -206,6 +207,21 @@ test('managed viewing embeds the original modern page and metadata refresh keeps
   ui.click('.topbar [data-action="refresh"]');
   await waitFor(()=>!ui.document.querySelector('.topbar [data-action="refresh"]').disabled);
   assert.equal(ui.document.querySelector('[data-world-frame]'),frame);assert.notEqual(ui.document.querySelector('.footer').textContent,previousFooter);
+});
+
+test('live fullscreen expands the existing scene, retains its iframe on refresh and exits cleanly',async t=>{
+  const ui=await screen(t,{initialView:'live',managedLive:true});
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const frame=ui.document.querySelector('[data-world-frame]'),scene=ui.document.querySelector('[data-world-screen]');
+  ui.click('[data-world-fullscreen]');
+  await waitFor(()=>scene.dataset.viewerFullscreen==='window');
+  assert.equal(ui.document.body.style.overflow,'hidden');assert.equal(ui.document.querySelector('[data-world-fullscreen]').textContent,'退出全屏');
+  await ui.refresh(false);assert.equal(ui.document.querySelector('[data-world-frame]'),frame);assert.equal(scene.dataset.viewerFullscreen,'window');
+  ui.window.dispatchEvent(new ui.window.KeyboardEvent('keydown',{key:'Escape'}));
+  assert.equal(scene.dataset.viewerFullscreen,undefined);assert.equal(ui.document.body.style.overflow,'');
+  ui.click('[data-world-fullscreen]');await waitFor(()=>scene.dataset.viewerFullscreen==='window');
+  ui.window.location.hash='#help';await waitFor(()=>!ui.document.querySelector('[data-world-screen]'));
+  assert.equal(ui.document.body.style.overflow,'','navigation must release fullscreen scroll lock');
 });
 
 test('unavailable observation clears the old scene, explains capacity and recovers without English network errors', async t => {

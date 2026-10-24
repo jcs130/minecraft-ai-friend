@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "77c98ea7e5bb96c3394982e4190d942d39ac43bc",
+  "sourcePath": "packages/modern-viewer/renderer-src/src/modern-viewer/viewer-fullscreen.js",
+  "sourceSha256": "1d45c7db7293aa3f00fb769910ba99d18056a75d95563c88c2193711263f27e7",
+  "outputSha256": "fde24dc60833c591234a27d298dde2c4545476c0b3399002ac0435ba846c5985",
+  "transform": "classic-script-global-v1"
+}
