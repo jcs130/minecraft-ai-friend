@@ -17,6 +17,8 @@ const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.st
 export interface ClientConsolePresentation {
   /** Explicit local host pages allowed to embed this UI. Control APIs keep their own Origin/nonce checks. */
   embedOrigins?: readonly string[];
+  /** Hosts without configured native launchers expose only their Agent connection. Defaults to true for existing SDK users. */
+  nativeClients?: boolean;
 }
 function embeddingPolicy(origins: readonly string[] = []) {
   for (const origin of origins) {
@@ -32,6 +34,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
   assets = fileURLToPath(new URL('../../dist/client-console/', import.meta.url)),
   binding?: { directory: string; identity: string }, presentation?: ClientConsolePresentation) {
   const ancestors = embeddingPolicy(presentation?.embedOrigins);
+  const nativeClients = presentation?.nativeClients !== false;
   const token = randomBytes(32).toString('hex');
   const instanceId = randomBytes(32).toString('hex');
   if (binding && !/^[a-f0-9]{24}$/.test(binding.identity)) throw new Error('Invalid operator identity');
@@ -74,7 +77,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
       if (request.method === 'GET') {
         if (request.url === '/api/client') {
           if (binding && request.headers['x-mc-instance'] !== instanceId) { json(409, { error: 'Operator instance changed.' }); return; }
-          json(200, { ...await runtime.operatorState() as object, instanceId, webConsoleAvailable: files.has('/'), controlToken: token, operations: Object.fromEntries(operations) }); return;
+          json(200, { ...await runtime.operatorState() as object, capabilities: { nativeClients }, instanceId, webConsoleAvailable: files.has('/'), controlToken: token, operations: Object.fromEntries(operations) }); return;
         }
         if (request.url === '/api/harness/metrics') { json(200, runtime.metrics.snapshot(runtime.status().phase)); return; }
         if (request.url === '/api/experiments') {
@@ -104,6 +107,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
       }
       const action = (JSON.parse(body) as { action?: unknown }).action;
       if (typeof action !== 'string' || !actions.has(action)) { json(400, { error: 'Unknown action.' }); return; }
+      if (!nativeClients && action !== 'connect' && action !== 'disconnect') { json(403, { error: 'Native client launchers are not enabled by this host.' }); return; }
       if (closing || operations.get(action)?.status === 'running') { json(409, { error: 'This action is already running or the console is closing.' }); return; }
       const record: { status: 'running' | 'completed' | 'failed'; at: string; error?: string } = { status: 'running', at: new Date().toISOString() };
       operations.set(action, record);

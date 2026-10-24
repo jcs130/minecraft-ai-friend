@@ -3729,7 +3729,7 @@ export class MinecraftWorld implements World {
         if (method !== 'state') throw new Error('Unknown connection method');
         return { server: { host: this.cfg.host, port: this.cfg.port, requestedVersion: this.cfg.version,
           actualVersion: this.bridge?.bot?.version ?? null, username: this.bridge?.bot?.username ?? null },
-          viewer: { mode: this.bridge?.viewerKind ?? null, url: this.bridge?.viewerUrl ?? null },
+          viewer: { ...this.bridge?.viewerState, mode: this.bridge?.viewerKind ?? null, url: this.bridge?.viewerUrl ?? null },
           accounts: Object.fromEntries(Object.entries(this.accountAuth).map(([lane, auth]) => [lane, auth.snapshot()])),
           connection: this.bridge?.connectionState ?? null,
           clients: { observer: (({command, ...state}) => state)(await this.client.state()),

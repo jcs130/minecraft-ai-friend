@@ -148,4 +148,14 @@ describe('explicit complete viewer resource preparation', () => {
     expect(await readFile(join(versions[1].directory, 'index.html'), 'utf8')).toBe('updated');
     expect(versions[1].downloaded).toBe(0);
   });
+  it('preserves an explicitly silent version, but does not excuse an accidentally missing sound catalogue', async()=>{
+    const f=await fixture();
+    const primary=join(f.templateDir,'public/sounds'),silent=join(f.templateDir,'versions/1.21.11');
+    await mkdir(primary,{recursive:true});await writeFile(join(primary,'manifest.json'),JSON.stringify({files:{}}));
+    await mkdir(silent,{recursive:true});
+    await expect(deferViewerAudio(f.templateDir,'c'.repeat(64))).rejects.toThrow();
+    await writeFile(join(silent,'viewer-assets.json'),JSON.stringify({minecraftVersion:'1.21.11',audio:{requested:false,status:'disabled'}}));
+    await expect(deferViewerAudio(f.templateDir,'c'.repeat(64))).resolves.toMatchObject({files:0});
+    expect((await readFile(join(f.templateDir,'audio-downloads.json'),'utf8'))).not.toContain('1.21.1/');
+  });
 });

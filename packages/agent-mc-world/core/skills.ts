@@ -1884,7 +1884,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'chat',
     doc: `{"skill":"chat","text":"大家好"}               发送游戏内公屏聊天，其他玩家能否收到以服务端与对方客户端为准
-{"skill":"chat","text":"/msg PlayerName 你好"} 私聊指定玩家；姓名用游戏里显示的完整登录名，含跨版玩家前缀
+默认用上面的普通文本在公屏交流；想对某人说话可在文本中点名。不假定服务器支持 /msg、/tell 或 /w。
+只有明确要求私聊且已确认该服务器支持时，才发送对应私聊命令；使用完整登录名。未知或失败的私聊不自动重发到公屏，不用私聊绕过公屏限额。
 {"skill":"chat","text":"/help"}               在游戏聊天栏输入服务端命令，结果看随后服务端消息
 单条最多 256 个字符（含 / 和命令参数），不收换行或控制字符；长内容分成多条单行 chat 步骤，私聊每条重复完整的 /msg 玩家名。`,
     fields: [{ key: 'text', kind: 'string', required: true, schema: { type: 'string', maxLength: CHAT_LENGTH_LIMIT } }],

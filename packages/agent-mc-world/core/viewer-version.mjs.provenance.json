@@ -1,16 +1,16 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "f832ee2a0838162b18daa546f975937f72913b76",
+  "commit": "20f22d9a3c60221ed0809286d51104c3a363d5e2",
   "inputs": [
     {
       "file": "host/viewer-version.mjs",
-      "sha256": "2a391fa5a59bc7d1d9289b11f795b712a2911d1e84bf3e3824dc69dc1ef709a0"
+      "sha256": "b9698b6eb1c9e9f0358eab13f479afae7c0e97fd5b77a8985872866d0626f000"
     },
     {
       "file": "host/viewer-version.d.mts",
-      "sha256": "345254f8f76f9db19c225367c0340e1a7f0e4f59c325032fd362c94af6dd9c61"
+      "sha256": "e77d8bcf3713bf9e2ce705e36d2318a6613503c4b8cce6e2838b80c5f70d28b2"
     }
   ],
-  "outputSha256": "2a391fa5a59bc7d1d9289b11f795b712a2911d1e84bf3e3824dc69dc1ef709a0",
+  "outputSha256": "b9698b6eb1c9e9f0358eab13f479afae7c0e97fd5b77a8985872866d0626f000",
   "externalDependencies": []
 }

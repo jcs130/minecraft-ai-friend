@@ -3,19 +3,30 @@ import path from 'node:path';
 
 export const PRIMARY_VIEWER_VERSION = '1.21.1';
 
+/** A resource directory identifier, never a protocol compatibility claim. */
+export function assertViewerVersion(version) {
+  if (typeof version !== 'string' || !/^\d{1,3}\.\d{1,3}(?:\.\d{1,3})?$/.test(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
+  return version;
+}
+
 /** Select the explicitly packaged version, without substituting an approximate registry or picture. */
 export async function viewerVersionAssets(root, version) {
-  if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
-  const readVersion = async directory => JSON.parse(await readFile(path.join(directory, 'viewer-assets.json'), 'utf8')).minecraftVersion;
+  assertViewerVersion(version);
+  const readVersion = async directory => {
+    try { return JSON.parse(await readFile(path.join(directory, 'viewer-assets.json'), 'utf8')).minecraftVersion; }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  };
   if (await readVersion(root) === version) return root;
   const matched = path.join(root, 'versions', version);
-  if (await readVersion(matched) !== version) throw Error('VIEWER_ASSET_VERSION_MISMATCH');
+  const selected = await readVersion(matched);
+  if (selected === null) throw Error('VIEWER_ASSETS_MISSING');
+  if (selected !== version) throw Error('VIEWER_ASSET_VERSION_MISMATCH');
   return matched;
 }
 
 /** Keep Mineflayer preview registries and legacy asset URLs on the action connection's exact version. */
 export function viewerVersionRegistry(version, loadData, loadItem) {
-  if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
+  assertViewerVersion(version);
   const data = loadData(version);
   if (data?.version?.minecraftVersion !== version || !Array.isArray(data.biomesArray))
     throw Error('VIEWER_REGISTRY_VERSION_MISMATCH');
@@ -25,21 +36,30 @@ export function viewerVersionRegistry(version, loadData, loadItem) {
 }
 
 export function viewerVersionCss(css, version) {
-  if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
+  assertViewerVersion(version);
   return css.replaceAll('/textures/1.20.6/', `/textures/${version}/`);
 }
 
 /** Resolve renderer legacy entity names to the exact selected Java texture layout. */
 export function viewerVersionTexture(relative, version) {
-  if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
+  assertViewerVersion(version);
   if (relative.startsWith('minecraft-assets/painting/'))
     return `textures/${version}/painting/${relative.slice('minecraft-assets/painting/'.length)}`;
   if (!relative.startsWith('textures/')) return null;
   let texture = relative.slice('textures/'.length);
   // Renderer entity tables still contain old version directories. Keep the
   // relative original resource name and resolve it only in the selected pack.
-  texture = texture.replace(/^1\.\d+(?:\.\d+)?\//, '');
-  if (version === '1.21.1' && ['entity/squid.png', 'entity/glow_squid.png'].includes(texture))
+  texture = texture.replace(/^\d+\.\d+(?:\.\d+)?\//, '');
+  const [major, minor] = version.split('.').map(Number);
+  if ((major > 1 || minor >= 21) && ['entity/squid.png', 'entity/glow_squid.png'].includes(texture))
     texture = `entity/squid/${texture.slice('entity/'.length)}`;
+  // Java 1.21.2 moved the same equipment UV layers into equipment/.
+  // Select only original files in this version; the builder checks they exist.
+  const patch = Number(version.split('.')[2] ?? 0);
+  if (major > 1 || minor > 21 || minor === 21 && patch >= 2) {
+    const armor = /^models\/armor\/([a-z_]+)_layer_([12])(_overlay)?\.png$/.exec(texture);
+    if (armor) texture = `entity/equipment/${armor[2] === '2' ? 'humanoid_leggings' : 'humanoid'}/${armor[1] === 'turtle' ? 'turtle_scute' : armor[1]}${armor[3] ?? ''}.png`;
+    if (texture === 'entity/elytra.png') texture = 'entity/equipment/wings/elytra.png';
+  }
   return `textures/${version}/${texture}`;
 }

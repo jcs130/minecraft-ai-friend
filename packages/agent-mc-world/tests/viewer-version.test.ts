@@ -58,3 +58,23 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
     } finally { socket.disconnect(); await viewer.close(); }
   }, 15000);
 });
+
+describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.11 viewer',()=>{
+  it('starts with actual 774 data and serves exact new-version textures and fonts',async()=>{
+    const {bot}=viewerBot('1.21.11');Object.assign(bot,{entities:{}});
+    expect(bot.registry.version.version).toBe(774);
+    const viewer=await startModernViewer(bot as never,{port:await freeViewerPort(),assetsDir:MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir});
+    const assets=await viewerVersionAssets(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir,'1.21.11');
+    const socket=io(viewer.url,{autoConnect:false,reconnection:false,transports:['websocket']});
+    try{
+      const version=new Promise(resolve=>socket.once('version',resolve));socket.connect();expect(await version).toBe('1.21.11');
+      expect(await(await fetch(viewer.url+'/healthz')).json()).toMatchObject({ok:true,version:'1.21.11'});
+      expect(await(await fetch(viewer.url+'/text-display-font.json')).json()).toMatchObject({minecraftVersion:'1.21.11',
+        clientJarSha256:'1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd'});
+      const iron=Buffer.from(await(await fetch(viewer.url+'/textures/models/armor/iron_layer_2.png')).arrayBuffer());
+      expect(iron).toEqual(readFileSync(join(assets,'public/textures/1.21.11/entity/equipment/humanoid_leggings/iron.png')));
+      expect((await fetch(viewer.url+'/fonts/1.21.1/unifont.zip')).status).toBe(404);
+      expect((await fetch(viewer.url+'/blocksStates/1.21.1.json')).status).toBe(404);
+    }finally{socket.disconnect();await viewer.close();}
+  },15000);
+});

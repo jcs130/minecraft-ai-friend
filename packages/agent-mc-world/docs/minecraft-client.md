@@ -16,6 +16,12 @@ Java 1.21.1 是主要维护、构建与验收版本，1.20.6 保留显式兼容�
 
 ## SDK
 
+连接配置推荐 `version:"auto"`，由 Mineflayer 识别服务器；显式版本仍原样保留。1.21.1 是主要维护基线，不是登录白名单。网页按实际版本匹配已打包的原素材和注册表，新增 1.21.11 原版资源；缺少资源不冒充游戏断线，也不使用相近版本代替。1.21.11 音频、地图/粒子扩展与新增实体模型尚未完成验收。
+
+`operatorState().connection.viewer` 提供 `phase`（waiting/starting/ready/failed/disabled）、`version`、安全的 `code/message` 及原有 `mode/url`。未连接或换代时不沿用旧画面状态。`serveClientConsole(..., {embedOrigins, nativeClients:false})` 可关闭宿主未配置的观察者/玩家原生启动入口；元数据和 POST 动作同时限制，Agent 的连接与微软授权不受影响。默认值保持既有 SDK 启动器可用。
+
+普通交流默认使用 `mc_do` 的 `chat` 步骤和不带命令的公屏文本，可直接在文字中点名。只有明确要求私聊且已确认服务器支持，才使用相应命令；私聊失败不能自动重发到公屏，公屏限额也不能转用私聊规避。
+
 ```ts
 import { MinecraftAgentClient, loadMinecraftClientConfig, nullLogger }
   from 'agent-mc-world/client';

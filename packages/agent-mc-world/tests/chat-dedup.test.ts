@@ -34,3 +34,12 @@ it('does not remember a message when native dispatch throws',()=>{
   expect(()=>sendDeduplicatedChat(bot,'hello',bad)).toThrow('socket closed');
   expect(sendDeduplicatedChat(bot,'hello',()=>{}).sent).toBe(true);
 });
+it('sends ordinary targeted speech as public text on 1.21.11 without inventing a private-message command',async()=>{
+  const r=methodHarness('1.21.11');
+  try{
+    const text='Alice，大家好，我先看看附近的环境。';
+    await r.world.tools().find(tool=>tool.name==='mc_do')!.handler({steps:[{skill:'chat',text}]},{role:'test',log:r.host.log});
+    expect(r.said).toEqual([text]);
+    expect(r.said.some(line=>/^\/(?:msg|tell|w)\b/.test(line))).toBe(false);
+  }finally{r.close();}
+});

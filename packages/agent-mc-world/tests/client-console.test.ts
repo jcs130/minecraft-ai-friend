@@ -12,19 +12,28 @@ import { startMcpStdio } from '../src/mcp/stdio.ts';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); });
-async function setup(action: (name: string) => Promise<void> = async () => {}, withAssets = true, embedOrigins?: string[]) {
+async function setup(action: (name: string) => Promise<void> = async () => {}, withAssets = true, embedOrigins?: string[], nativeClients = true) {
   const assets = mkdtempSync(join(tmpdir(), 'mc-console-test-'));
   cleanups.push(() => rmSync(assets, { recursive: true, force: true }));
   if (withAssets) for (const file of ['index.html', 'console.js', 'console.css', 'metrics.html', 'metrics.js', 'metrics.css']) writeFileSync(join(assets, file), 'fixture');
   const runtime = { operatorState: async () => ({ schema: 'minecraft-client-console/v1', runtime: { phase: 'disconnected' },
     connection: { accounts: { agent: { mode: 'microsoft', phase: 'awaiting-user', challenge: { userCode: 'FIXTURE-1234' } } } } }),
     operatorAction: vi.fn(action), metrics: { snapshot: () => ({ schema: 'metrics', phase: 'disconnected' }) }, status: () => ({ phase: 'disconnected' }) };
-  const server = await serveClientConsole(0, runtime, assets, undefined, {embedOrigins}); cleanups.push(() => server.close());
+  const server = await serveClientConsole(0, runtime, assets, undefined, {embedOrigins,nativeClients}); cleanups.push(() => server.close());
   const state = await (await fetch(server.url + 'api/client')).json() as { controlToken: string };
   const post = (body: string, headers = {}) => fetch(server.url + 'api/client/action', { method: 'POST', body,
     headers: { 'content-type': 'application/json', origin: server.url.slice(0, -1), 'x-mc-control': state.controlToken, ...headers } });
   return { ...server, runtime, state, post };
 }
+it('lets hosts disable native launchers in both operator metadata and authenticated actions',async()=>{
+  const app=await setup(undefined,true,undefined,false);
+  expect(app.state).toMatchObject({capabilities:{nativeClients:false}});
+  for(const action of ['observer.start','observer.stop','player.start','player.stop'])
+    expect((await app.post(JSON.stringify({action}))).status).toBe(403);
+  expect(app.runtime.operatorAction).not.toHaveBeenCalled();
+  expect((await app.post('{"action":"connect"}')).status).toBe(202);
+  expect(app.runtime.operatorAction).toHaveBeenCalledWith('connect');
+});
 it('serves the operator UI and private challenge separately from read-only model metrics', async () => {
   const app = await setup(), page = await fetch(app.url);
   expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
