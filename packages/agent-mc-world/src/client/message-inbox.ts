@@ -1,6 +1,7 @@
 /** Received chat observations; review state records consideration, not goal completion. */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import {extendWorldHost} from './world-namespace.ts';
 import { join } from 'node:path';
 import type { ToolDef, WorldHost, WorldRequestFacts } from './contracts.ts';
 
@@ -260,12 +261,12 @@ export class MessageInbox {
 
 /** Indexing never consumes an event, changes its trigger or starts a model. */
 export function messageInboxHost(host: WorldHost, inbox: MessageInbox): WorldHost {
-  return { ...host, get modelFacts() { return host.modelFacts; },
+  return extendWorldHost(host, {
     pushEvent: (event, options) => {
       try { inbox.observe(event, options?.deliver !== false); }
       catch (error) { host.log.warn('Message index unavailable; original event still delivered', { error: String(error) }); }
       return host.pushEvent(event, options);
-    } };
+    } });
 }
 
 /** Bounded historical index only; never create current facts from an old book. */

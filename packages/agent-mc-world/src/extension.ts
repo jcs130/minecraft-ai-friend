@@ -29,6 +29,8 @@ export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAd
 export { prepareMinecraftViewerAssets, type ViewerAssetProgress, type ViewerAssetOptions } from './client/viewer-assets.ts';
 export { MinecraftClientWorld } from './client/world.ts';
 export { WorldOperationLearning } from './client/world-learning.ts';
+export * from './client/world-storage.ts';
+export * from './client/world-namespace.ts';
 export { MethodLibrary, METHOD_LIBRARY_SCHEMA, type MethodReview } from '../core/method-library.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './client/tool-help.ts';
 export type { ToolHelpOptions } from './client/tool-help.ts';

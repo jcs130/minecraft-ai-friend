@@ -1,6 +1,10 @@
 # Agent MC World
 
-Current source: **0.5.7-rc.77**, a GitHub candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+Current source: **0.5.7-rc.83**, a source candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+
+The rc.83 candidate adds [isolated World mounts](docs/world-mounts.md), reviewed
+copy-only legacy migration, envelope namespace mapping and an explicitly configured
+host-side decision transport. These helpers start no game or model by import.
 
 The rc.73 candidate adds opt-in [per-skill generation contracts](docs/skill-generation-contracts.md). Compatible harnesses can constrain required coordinates and mutually exclusive input forms before generation; the native parser, queue and permissions remain authoritative.
 
@@ -88,7 +92,7 @@ shape handling, door/gate/trapdoor behavior, test coverage and remaining limits.
 
 Consumers depend on the package, never on another host's checkout:
 
-- `cortico-world-qiandengji`: Cortico API 5 adapter, public name 联机版我的世界.
+- `cortico-world-qiandengji`: Cortico API 6 adapter, public name 联机版我的世界; older private hosts use a separately validated compatibility package.
 - `agent-mc-qiandengji`: explicitly selected server protocols and reference guides.
 - `dsh-minecraft-agent`: native DeepSeek Harness adapter.
 - Other hosts: use `agent-mc-world`, `/client`, `/contracts` or `/mcp`.

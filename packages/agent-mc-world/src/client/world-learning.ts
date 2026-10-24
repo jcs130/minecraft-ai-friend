@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ClientOperationLearning } from './operation-learning.ts';
+import {extendWorldHost} from './world-namespace.ts';
 import type { ToolDef, WorldHost, WorldRequestFacts } from './contracts.ts';
 import type { OperationAttribution } from '../../core/operation-experience.ts';
 
@@ -24,13 +25,13 @@ export class WorldOperationLearning {
       throw new Error('No confirmed game identity available for operation evidence');
     });
     this.current = { run, collector };
-    return { ...host,
+    return extendWorldHost(host, {
       pushEvent: async (event, options) => {
         if (this.current?.collector === collector && event.execution) collector.execution(event.execution);
         return host.pushEvent(event, options);
       },
       recallGameLessons: query => collector.recall(query),
-    };
+    });
   }
 
   stop(): void { this.current = null; }
