@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.95
+
+- Pin core rc.82 so a denied or modified inventory click can reconcile the
+  complete authoritative slots and cursor frame already received before its
+  failure. Keep that operation failed and never retry it; subsequent explicit
+  inventory operations no longer wait indefinitely for a second snapshot.
+  Missing/incomplete frames, unsent clicks, permissions and unknown-effect
+  barriers remain unchanged. Preserve the existing model-chain completion fix.
+
 ## 0.2.94
 
 - End the current model chain after a typed successful action completion with

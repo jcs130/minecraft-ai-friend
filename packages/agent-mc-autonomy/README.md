@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+The 0.2.95 distribution pins core rc.82 for complete inventory-frame reconciliation.
+A denied or modified click still fails; an already received complete same-window
+server frame restores subsequent inventory access without another snapshot or
+replaying the click. Missing slots/cursor, unsent clicks and unknown dispatch stay
+blocked. Later unrelated core releases are not included.
+
 The 0.2.94 controller ends the current model chain when a typed native action
 completes immediately without creating a task, such as an already-satisfied
 arrival. It preserves the original receipt, counts the reply as no new task,
