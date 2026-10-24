@@ -1,6 +1,6 @@
 import { operationInventory } from './operation-experience.ts';
 import { serverLoginFailureText } from './server-login.mjs';
-import { observationView, observedEntity } from './perception-sight.ts';
+import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
 import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
@@ -3506,7 +3506,7 @@ export class MinecraftWorld implements World {
     catch { parts.push({ key: 'methods', text: '[动作方法索引] 读取失败，已有方法状态未验证；mc_script {api:"authoring"} 可读编写及恢复入口。' }); }
     if (bot) {
       parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(),
-        account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName }) });
+        account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName }) });
       const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
       parts.unshift({ key: 'deathLifecycle', text: JSON.stringify(lifecycle ?? { phase: 'alive' }) });
       if (lifecycle) parts.push({ key: 'recoveryState', text: JSON.stringify({
@@ -3549,7 +3549,7 @@ export class MinecraftWorld implements World {
         guards: { body: [snap.inWater, snap.inWater ? snap.oxygen : null],
           place: [snap.biome, snap.standingOn, snap.dimension, snap.gameMode],
           clock: [snap.timeOfDay >= 13000 && snap.timeOfDay < 23000, snap.raining, snap.light === null ? null : snap.light <= 7] } },
-      experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName },
+      experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'] };
@@ -4300,6 +4300,8 @@ export class MinecraftWorld implements World {
       viewerSpeakerName: this.cfg.viewerSpeakerName,
       viewerSpeechSourceId: this.botName,
       performanceBridge: this.cfg.performanceBridge, remoteTextures: this.cfg.remoteTextures,
+      localPlayerSkin: () => { const bytes=this.cfg.localSkinEnabled===false?null:readStoredSkin(this.skinStoreDir(),'bot');
+        return bytes?{bytes,model:this.cfg.skinModel??'classic'}:null; },
       log,
       diag: this.diag,
       shuttingDown: () => this.shuttingDown,
@@ -4315,7 +4317,7 @@ export class MinecraftWorld implements World {
       // 成果登记的垫脚过滤:维度在这里合上,寻路器只问「这一格算不算」
       workCell: (x, y, z) => this.works.has(this.bridge?.bot?.game?.dimension ?? 'overworld', x, y, z),
       showTempo: () => this.showTempo(),
-      onBotCreated: (bot) => this.hookMessageEvents(bot),
+      onBotCreated: (bot) => { configureObservationPolicy(bot,()=>this.cfg.perception);this.hookMessageEvents(bot); },
       onSpawn: () => this.onSpawn(),
       onRespawn: () => this.onRespawn(),
       onSpawnPosition: (landing) => this.onSpawnPosition(landing),
@@ -4660,7 +4662,7 @@ export class MinecraftWorld implements World {
           ctx.signal?.throwIfAborted();
           const bot = this.bridge?.bot;
           const result = await this.gameMemoryService.execute(args, {
-            scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName },
+            scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             dimension: bot?.entity && bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null,
             capture: () => {
               const snap = this.snapshot({ scanBlocks: false });
@@ -7717,7 +7719,7 @@ export class MinecraftWorld implements World {
         true,
         { meta: { deathLifecycle: lifecycle, death: { id: lifecycle?.episodeId ?? randomUUID(),
           observed_at: lifecycle?.observedAt ?? new Date(this.lastDeathAt).toISOString(),
-          scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName },
+          scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
           position: dropAt, health: bot.health, food: bot.food,
           cause: cause ? { text: cause.text, key: cause.key, observed_at: new Date(cause.at).toISOString() } : null } } },
       );
@@ -8901,7 +8903,7 @@ export class MinecraftWorld implements World {
       && (type === 'minecraft.chat' || type === 'minecraft.enter' || !!opts?.meta?.minecraftPlayerObservation)) {
       const uuid = typeof opts?.meta?.senderUuid === 'string' ? opts.meta.senderUuid : this.bridge?.bot?.players?.[player]?.uuid;
       const recall = this.playerMemory.recall({ name: player, uuid, direct: type === 'minecraft.chat' }, {
-        scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName }, dimension: null,
+        scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName }, dimension: null,
       });
       if (recall) {
         // Keep the player's original words unchanged for chat archives, classifiers and replies.

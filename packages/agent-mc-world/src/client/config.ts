@@ -40,6 +40,12 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
   player: { ...MINECRAFT_DEFAULTS.player, teleportToBot: false },
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
+  if (cfg.perception?.mineralVision !== undefined && typeof cfg.perception.mineralVision !== 'boolean')
+    throw new Error('perception.mineralVision must be a boolean. Default false.');
+  if (cfg.memoryAgentId !== undefined && (typeof cfg.memoryAgentId !== 'string' || !cfg.memoryAgentId.trim() || cfg.memoryAgentId.length > 160 || /[\x00-\x1f\x7f]/.test(cfg.memoryAgentId)))
+    throw new Error('memoryAgentId must be a stable non-empty identifier, at most 160 characters.');
+  if (cfg.skinModel !== undefined && !['classic', 'slim'].includes(cfg.skinModel)) throw new Error('Unknown skin arm model');
+  if (cfg.localSkinEnabled !== undefined && typeof cfg.localSkinEnabled !== 'boolean') throw new Error('localSkinEnabled must be a boolean');
   if (cfg.viewDistance !== undefined && (!Number.isSafeInteger(cfg.viewDistance) || cfg.viewDistance < 2 || cfg.viewDistance > 32))
     throw new Error('viewDistance must be an integer from 2 to 32 chunks (server may cap/ignore it; not anti-xray).');
   respawnDelay(cfg.deathRespawnDelayMs);

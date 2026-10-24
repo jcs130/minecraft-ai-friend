@@ -46,6 +46,7 @@ import type { EventEmitter } from 'node:events';
 import { isRaining } from './terrain.ts';
 import { observeStatusEffects, remainingEffectTicks } from './status-effects.ts';
 import { viewerPlayerSkin } from './viewer-player-skin.ts';
+import { configuredPlayerSkin, type LocalPlayerSkin } from './viewer-local-skin.ts';
 import type { ViewerRelay } from './relay-port.ts';
 export { viewerItem } from './viewer-state.ts';
 
@@ -105,6 +106,7 @@ export interface ModernViewerOptions {
   speechSourceId?: string;
   relay?: ViewerRelay;
   remoteTextures?: boolean;
+  localPlayerSkin?: LocalPlayerSkin | null;
     serverProtocol?: import('./viewer-extension.ts').ViewerServerProtocol;
   agentMana?: () => ViewerSkills['mana'] | undefined;
 }
@@ -227,7 +229,7 @@ async function requiredAssetsPresent(root: string, version: string): Promise<boo
   return true;
 }
 
-export function ownEntity(bot: mineflayer.Bot, remoteTextures = false): Record<string, unknown> {
+export function ownEntity(bot: mineflayer.Bot, remoteTextures = false, localSkin?: Pick<ReturnType<typeof configuredPlayerSkin>,'skinUrl'|'skinModel'|'skinSource'> | null): Record<string, unknown> {
   const entity = bot.entity;
   const uuid = bot._client?.uuid ?? bot.player?.uuid ?? entity.uuid;
   const inventory = bot.inventory as unknown as { slots?: unknown[]; hotbarStart?: number };
@@ -242,6 +244,7 @@ export function ownEntity(bot: mineflayer.Bot, remoteTextures = false): Record<s
     username: bot.username, uuid, isSelf: true, equipment, skinUrl: null, skinModel: null,
     bodyState: viewerBodyState(bot), sleepState: viewerSleepState(bot),
     ...viewerPlayerSkin(bot, bot.username, uuid, remoteTextures),
+    ...(localSkin ?? {}),
     burning: Boolean((entity as unknown as { isOnFire?: boolean }).isOnFire) ||
       (Number((entity as unknown as { metadata?: unknown[] }).metadata?.[0]) & 1) !== 0 };
 }
@@ -366,7 +369,7 @@ function equipmentArmor(equipment: unknown[]): number {
   }, 0);
 }
 
-function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false, remoteTextures = false): Record<string, unknown> {
+function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false, remoteTextures = false, localSkin?: Pick<ReturnType<typeof configuredPlayerSkin>,'skinUrl'|'skinModel'|'skinSource'> | null): Record<string, unknown> {
   const entity = bot.entity as unknown as Record<string, unknown>;
   const velocity = entity.velocity as { x?: number; y?: number; z?: number } | undefined;
   const speed = Math.hypot(Number(velocity?.x) || 0, Number(velocity?.z) || 0);
@@ -390,7 +393,7 @@ function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false
   const foodRegistry = (bot.registry as unknown as { foodsByName?: Record<string, unknown> }).foodsByName;
   const held = bot.heldItem as unknown as { name?: string; components?: Array<{ type?: string }> } | null;
   return {
-    seq: sequence, sequence, capturedAt: Date.now(), entity: ownEntity(bot, remoteTextures),
+    seq: sequence, sequence, capturedAt: Date.now(), entity: ownEntity(bot, remoteTextures, localSkin),
     movementState: viewerMovementState(speed, sprinting, sneaking),
     horizontalSpeed: speed,
     verticalSpeed: Number(velocity?.y) || 0,
@@ -448,6 +451,8 @@ export function observeViewerInventoryPreview(
 }
 
 export async function startModernViewer(bot: mineflayer.Bot, options: ModernViewerOptions): Promise<ModernViewerHandle> {
+  const localSkin = options.localPlayerSkin ? configuredPlayerSkin(options.localPlayerSkin) : null;
+  const ownSkin = localSkin ? { skinUrl: localSkin.skinUrl, skinModel: localSkin.skinModel, skinSource: localSkin.skinSource } : null;
   observeStatusEffects(bot);
   const root = await viewerVersionAssets(path.resolve(options.assetsDir), bot.version);
   if (!(await requiredAssetsPresent(root, bot.version))) throw new Error(`modern viewer: ${bot.version} 资源不完整 ${root}`);
@@ -723,6 +728,11 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       const pathname = new URL(req.url ?? '/', origin).pathname;
       if ((req.method !== 'GET' && !(req.method === 'DELETE' && pathname === '/capture-lease'))
           || req.headers.host !== `127.0.0.1:${options.port}`) { res.writeHead(403); res.end(); return; }
+      if (localSkin && pathname === localSkin.skinUrl) {
+        res.writeHead(200, { 'content-type':'image/png', 'content-length':localSkin.bytes.length,
+          'x-content-type-options':'nosniff', 'cache-control':'private, max-age=31536000, immutable' });
+        res.end(localSkin.bytes); return;
+      }
       if (pathname === '/dungeon' || pathname.startsWith('/dungeon/')) {
         res.writeHead(308, { location: '/3dview' + (pathname.slice(8) || '/') + new URL(req.url ?? '/', origin).search }); res.end(); return;
       }
@@ -1045,7 +1055,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     };
     const publishAvatar = () => {
       if (active && bot.entity && socket.connected) {
-        socket.emit('avatarState', avatarState(bot, ++sequence, shieldRaised, options.remoteTextures));
+        socket.emit('avatarState', avatarState(bot, ++sequence, shieldRaised, options.remoteTextures, ownSkin));
         publishDigging();
       }
     };
@@ -1100,7 +1110,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (!active || !bot.entity) return;
       socket.emit('position', { pos: bot.entity.position, yaw: bot.entity.yaw, pitch: bot.entity.pitch,
         addMesh: view === 'third', teleport: teleport === true });
-      socket.emit(view === 'third' ? 'entityMoved' : 'playerEntity', ownEntity(bot, options.remoteTextures));
+      socket.emit(view === 'third' ? 'entityMoved' : 'playerEntity', ownEntity(bot, options.remoteTextures, ownSkin));
       updateChunkPosition();
     };
     const forcedPosition = () => position(undefined, true);
@@ -1235,7 +1245,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         ...effectDetails(effect.id), amplifier: effect.amplifier, durationTicks: remainingEffectTicks(effect) });
     }
     socket.emit('biome', { name: 'unknown', dimension: String(bot.game.dimension || 'minecraft:overworld'), id: null });
-    socket.emit(view === 'third' ? 'entity' : 'playerEntity', ownEntity(bot, options.remoteTextures));
+    socket.emit(view === 'third' ? 'entity' : 'playerEntity', ownEntity(bot, options.remoteTextures, ownSkin));
     bot.on('move', position); bot.on('forcedMove', forcedPosition);
     bot.on('time', time);
     protocol.on('game_state_change', weather);

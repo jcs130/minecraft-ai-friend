@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.85",
+  "version": "0.5.7-rc.86",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -177,6 +177,7 @@
     "mineflayer": "4.37.1",
     "mineflayer-pathfinder": "2.4.5",
     "playwright-core": "1.63.0",
+    "pngjs": "7.0.0",
     "prismarine-auth": "3.1.1",
     "prismarine-block": "1.23.0",
     "prismarine-chunk": "1.41.0",
@@ -189,9 +190,10 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "tsx": "4.23.15",
     "@types/node": "^22.10.0",
+    "@types/pngjs": "6.0.5",
     "esbuild": "^0.28.2",
+    "tsx": "4.23.15",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },

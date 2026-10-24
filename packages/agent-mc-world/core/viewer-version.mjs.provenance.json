@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "60e611737a44edb43d195487f9300149402d4c66",
+  "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
   "inputs": [
     {
       "file": "host/viewer-version.mjs",

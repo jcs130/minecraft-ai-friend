@@ -3,6 +3,21 @@ import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
 type Point={x:number;y:number;z:number};
 const observationSources=new WeakMap<object,Bot>();
+export interface ObservationPolicy { mineralVision?: boolean }
+const policies=new WeakMap<object,()=>ObservationPolicy|undefined>();
+/** Host configuration only; an Agent cannot silently grant itself mineral vision. */
+export function configureObservationPolicy(bot:object,policy:()=>ObservationPolicy|undefined):void {
+  policies.set(observationSources.get(bot)??bot,policy);
+}
+/** Explicit opt-in exposes only already received mineral cells, never unloaded terrain or entities. */
+export function mineralObservationAllowed(bot:any,position:Point):boolean {
+  bot=observationSources.get(bot)??bot;
+  if(policies.get(bot)?.()?.mineralVision!==true||!finite(position)||!finite(bot?.entity?.position))return false;
+  const p=bot.entity.position;
+  if(Math.hypot(position.x-p.x,position.y-p.y,position.z-p.z)>32)return false;
+  const name=bot.blockAt?.(new Vec3(Math.floor(position.x),Math.floor(position.y),Math.floor(position.z)),false)?.name;
+  return typeof name==='string'&&(name.endsWith('_ore')||name==='ancient_debris');
+}
 const finite=(p:Point|undefined):p is Point=>!!p&&[p.x,p.y,p.z].every(Number.isFinite);
 /** Vision only. Glass is transparent but retains its native collision boxes. Tinted glass is opaque. */
 export const observationTransparent=(name:string)=>['air','cave_air','void_air','water','glass','glass_pane'].includes(name)
@@ -91,10 +106,13 @@ export function observedBlock(bot:any,position:Point):boolean {
 export function observationView<T extends Bot>(bot:T):T {
   if(observationSources.has(bot))return bot;
   const view=new Proxy(bot, {get(target,key){
-    if(key==='blockAt')return (p:Point,extra=true)=>observedBlock(target,p)?target.blockAt(new Vec3(p.x,p.y,p.z),extra):null;
+    if(key==='blockAt')return (p:Point,extra=true)=>observedBlock(target,p)||mineralObservationAllowed(target,p)?target.blockAt(new Vec3(p.x,p.y,p.z),extra):null;
     if(key==='entities')return Object.fromEntries(Object.entries(target.entities??{}).filter(([,e])=>e===target.entity||observedEntity(target,e)));
-    if(key==='findBlocks')return (options:Parameters<Bot['findBlocks']>[0])=>target.findBlocks({...options,count:Math.min(512,Math.max(options.count??1,128))})
-      .filter(p=>observedBlock(target,p)).slice(0,options.count??1);
+    if(key==='findBlocks'||key==='findBlock')return (options:Parameters<Bot['findBlocks']>[0])=>{
+      const found=target.findBlocks({...options,count:Math.min(512,Math.max(options.count??1,128))})
+        .filter(p=>observedBlock(target,p)||mineralObservationAllowed(target,p)).slice(0,options.count??1);
+      return key==='findBlock'?(found[0]?target.blockAt(found[0]):null):found;
+    };
     const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
   }});
   observationSources.set(view,bot);

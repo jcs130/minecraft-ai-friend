@@ -67,6 +67,7 @@ export interface BridgeOptions {
   viewerSpeechSourceId?: string;
   performanceBridge?: import('./relay-port.ts').RelayConfiguration;
   remoteTextures?: boolean;
+  localPlayerSkin?: () => import('./viewer-local-skin.ts').LocalPlayerSkin | null;
   log: Logger;
   /** World 日志;不给就不记(合成与放置的包流走它) */
   diag?: MinecraftLog;
@@ -1242,7 +1243,7 @@ export class Bridge {
           const relay = await loadViewerRelay(this.opts.performanceBridge, this.opts.viewerSpeechSourceId || bot.username);
           if (this.stopped || this._bot !== bot || this.generation !== gen) { relay?.close(); return; }
           const handle = await startModernViewer(bot, {
-            relay, remoteTextures: this.opts.remoteTextures,
+            relay, remoteTextures: this.opts.remoteTextures, localPlayerSkin: this.opts.localPlayerSkin?.(),
             port, maxSessions: this.opts.viewerMaxSessions, assetsDir: modernAssets, speakerName: this.opts.viewerSpeakerName,
             speechSourceId: this.opts.viewerSpeechSourceId,
             agentMana: () => this.agentMana, serverProtocol: this.viewerServerProtocol(),

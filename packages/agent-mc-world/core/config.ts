@@ -23,6 +23,8 @@ export const MINECRAFT_DEFAULTS = {
   keepAliveTimeoutMs: 60_000,
   chatDuplicateWindowMs: 120_000,
   deathRespawnDelayMs: 4000,
+  perception: { mineralVision: false },
+  skinModel: 'classic' as 'classic' | 'slim',
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
    * mineflayer 协议必须使用同一版本。主力优化和验收目标为原版 Java 1.21.1，
@@ -238,6 +240,13 @@ export interface MinecraftConfigSection {
   performanceBridge?: import('./relay-port.ts').RelayConfiguration;
   remoteTextures?: boolean;
   memory?: Partial<import('./game-memory-service.ts').GameMemoryConfig>;
+  /** Optional stable notebook owner, independent of the display name. Omit for legacy namespaces. */
+  memoryAgentId?: string;
+  /** Mineral queries only. Default uses actual sight; never grants movement or server permissions. */
+  perception?: import('./perception-sight.ts').ObservationPolicy;
+  /** Local viewer override; does not change the server's authenticated skin. */
+  skinModel?: 'classic' | 'slim';
+  localSkinEnabled?: boolean;
   visual: { background: boolean };
   photography?: Partial<import('../src/contracts/photography.ts').PhotographyConfig>;
   escapeCommand: string;
@@ -422,6 +431,13 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         type: 'integer', title: '请求区块视距', minimum: 2, maximum: 32, 'x-suffix': 'chunks', 'x-hot': false,
         description: 'Mineflayer 请求服务端发送的区块半径；省略沿用上游默认。服务端可能限制或忽略；不代替视线过滤或防透视。',
       },
+      'worlds.minecraft.perception.mineralVision': { type:'boolean',title:'矿物透视查询','x-hot':false,
+        description:'默认关闭，只返回真实视线内的方块。开启仅扩展方块查询至 32 格内已接收的矿物，不代表亲眼看见，也不放宽身体动作权限。' },
+      'worlds.minecraft.memoryAgentId': { type:'string',title:'游戏笔记稳定角色标识','x-hot':false,
+        description:'可选。与显示名称分离，用于同一服务器与账号的持久笔记；修改会切换命名空间，不迁移或合并旧笔记。' },
+      'worlds.minecraft.skinModel': { type:'string',enum:['classic','slim'],title:'本地预览皮肤手臂','x-hot':false },
+      'worlds.minecraft.localSkinEnabled': { type:'boolean',title:'使用本地预览皮肤','x-hot':false,
+        description:'只影响同连接网页画面的本人皮肤；不修改正版账号材质或假定服务端支持换肤命令。' },
       'worlds.minecraft.world.moveThreshold': {
         type: 'integer', title: '位移播报阈值', minimum: 4, maximum: 200, 'x-suffix': '格', 'x-hot': true,
       },
