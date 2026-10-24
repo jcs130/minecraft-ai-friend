@@ -1,0 +1,50 @@
+import {expect,it,vi} from 'vitest';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {Bridge} from '../core/bridge.ts';
+import {EventEmitter} from 'node:events';
+import {freeViewerPort} from './fixtures/viewer-bot.ts';
+
+const log={info(){},warn(){},error(){},debug(){},trace(){},emit(){},child(){return this;}};
+function readyBridge(port:number,assets?:string) {
+  const bridge=new Bridge({host:'example.test',port:25565,username:'fixture',version:'auto',viewerPort:port,
+    viewerAssetsDir:assets,log:log as never,onSpawn(){},onDisconnect(){}});
+  const bot=Object.assign(new EventEmitter(),{version:'1.21.11',username:'fixture',_client:{state:'play'},entity:{},quit(){}});
+  Object.assign(bridge,{_bot:bot,spawnedBot:bot,started:true,protocolSpawned:true});
+  return {bridge,bot};
+}
+it('reports exact-version resource failure independently of a ready 1.21.11 game',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'viewer-readiness-'));
+  const {bridge,bot}=readyBridge(await freeViewerPort(),directory);
+  try {
+    (bridge as any).startViewer(bot,0);
+    expect(bridge.viewerState.phase).toBe('starting');
+    await vi.waitFor(()=>expect(bridge.viewerState.phase).toBe('failed'));
+    expect(bridge.connected).toBe(true);
+    expect(bridge.viewerState).toMatchObject({version:'1.21.11',code:'VIEWER_ASSETS_MISSING'});
+    expect(bridge.viewerState.message).toContain('1.21.11');
+    expect(JSON.stringify(bridge.viewerState)).not.toContain(directory);
+    expect(bridge.viewerUrl).toBeNull();
+    Object.assign(bridge,{generation:1});
+    expect(bridge.viewerState.phase).toBe('waiting');
+  } finally {await bridge.stop();await rm(directory,{recursive:true,force:true});}
+});
+it('does not let an old asynchronous failure replace the new connection viewer state',async()=>{
+  const {bridge,bot}=readyBridge(await freeViewerPort());
+  let reject!:(error:Error)=>void;
+  Object.assign(bridge,{loadViewer:()=>new Promise((_,fail)=>{reject=fail;})});
+  try {
+    (bridge as any).startViewer(bot,0);
+    await vi.waitFor(()=>expect(reject).toBeTypeOf('function'));
+    Object.assign(bridge,{generation:1,viewerStartup:{gen:1,phase:'starting',version:'1.21.11',code:null,message:null}});
+    reject(new Error('old viewer failure'));
+    await new Promise(resolve=>setTimeout(resolve,15));
+    expect(bridge.viewerState.phase).toBe('starting');
+  }finally{await bridge.stop();}
+});
+it('disabled rendering remains explicit without changing game readiness',async()=>{
+  const {bridge}=readyBridge(0);
+  try {expect(bridge.connected).toBe(true);expect(bridge.viewerState.phase).toBe('disabled');}
+  finally{await bridge.stop();}
+});

@@ -10,7 +10,14 @@ export async function deferViewerAudio(viewer, viewerArchiveSha256) {
     if (entry.isDirectory() && /^[0-9.]+$/.test(entry.name)) roots.push(`versions/${entry.name}/`);
   const files = [];
   for (const prefix of roots) {
-    const manifest = JSON.parse(await readFile(join(viewer, prefix, 'public/sounds/manifest.json'), 'utf8'));
+    const raw = await readFile(join(viewer, prefix, 'public/sounds/manifest.json'), 'utf8').catch(async error => {
+      if (error.code !== 'ENOENT') throw error;
+      const receipt = JSON.parse(await readFile(join(viewer, prefix, 'viewer-assets.json'), 'utf8'));
+      if (receipt.audio?.requested !== false || receipt.audio?.status !== 'disabled') throw error;
+      return null; // An explicitly silent version never borrows another version's audio.
+    });
+    if (raw === null) continue;
+    const manifest = JSON.parse(raw);
     for (const [name, sha1] of Object.entries(manifest.files)) {
       if (!/^[A-Za-z0-9_./-]+\.ogg$/.test(name) || name.split('/').some(part => part === '.' || part === '..') || !/^[a-f0-9]{40}$/.test(sha1))
         throw new Error('Invalid source audio index');

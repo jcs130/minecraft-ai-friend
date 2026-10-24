@@ -273,6 +273,7 @@ export class Bridge {
   protected readonly bags = new Map<number, ResourceBag>();
   protected readonly disposing = new Set<Promise<void>>();
   protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
+  protected viewerStartup: { gen: number; phase: 'starting' | 'failed'; version: string; code: string | null; message: string | null } | null = null;
   protected _invSynced = false;
   protected _spawnPositionPending = true;
   protected scaffoldComplained = '';
@@ -397,6 +398,18 @@ export class Bridge {
 
   get viewerUrl(): string | null {
     return this.viewer !== null && this.viewer.gen === this.generation ? this.viewer.url : null;
+  }
+
+  /** Operator metadata only. A connected game is independent of viewer startup. */
+  get viewerState() {
+    const version = this._bot?.version ?? null;
+    if (this.opts.viewerPort <= 0) return { phase: 'disabled', version, code: null, message: '网页画面未启用。' };
+    if (!this.connected) return { phase: 'waiting', version, code: null, message: null };
+    if (this.viewerUrl) return { phase: 'ready', version, code: null, message: null };
+    if (this.viewerStartup?.gen === this.generation) {
+      const { gen, ...state } = this.viewerStartup; return state;
+    }
+    return { phase: 'waiting', version, code: null, message: null };
   }
 
   get agentViews(): import('./viewer-agent-views.ts').AgentViewGallery | undefined {
@@ -1208,6 +1221,8 @@ export class Bridge {
 
   protected startViewer(bot: mineflayer.Bot, gen: number): void {
     if (this.opts.viewerPort <= 0 || this.viewerUrl !== null) return;
+    if (this.viewerStartup?.gen === gen && this.viewerStartup.phase === 'starting') return;
+    this.viewerStartup = { gen, phase: 'starting', version: bot.version, code: null, message: null };
     const port = this.opts.viewerPort;
     /** 上游 viewer 不暴露 http server 的 error 处理接口，启动前先探测端口；探测与绑定之间仍有竞争窗口。 */
     void (async () => {
@@ -1215,10 +1230,7 @@ export class Bridge {
         await this.settleDisposals();
         const free = await probePort(port);
         if (!free) {
-          this.opts.log.warn(
-            `viewer 端口 ${port} 已被占用,本次不开画面(worlds.minecraft.viewerPort 可改)`,
-          );
-          return;
+          throw new Error('VIEWER_PORT_IN_USE');
         }
         let modernAssets = this.opts.viewerAssetsDir;
         let agentViews: import('./viewer-agent-views.ts').AgentViewGallery | undefined;
@@ -1249,6 +1261,15 @@ export class Bridge {
         this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic', agentViews };
         this.opts.log.info(`minecraft viewer 已启动 http://127.0.0.1:${port}`);
       } catch (err) {
+        if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;
+        const text = err instanceof Error ? err.message : '';
+        const code = text === 'VIEWER_PORT_IN_USE' ? text : /VIEWER_ASSETS_MISSING|ENOENT/.test(text) ? 'VIEWER_ASSETS_MISSING'
+          : /VERSION_MISMATCH|REGISTRY|资源不完整|VERSION_UNSUPPORTED/.test(text) ? 'VIEWER_ASSET_VERSION_MISMATCH' : 'VIEWER_START_FAILED';
+        const message = code === 'VIEWER_PORT_IN_USE' ? '画面端口已被占用，请调整配置后重连。'
+          : code === 'VIEWER_ASSETS_MISSING' ? `缺少 Java ${bot.version} 的网页画面资源，请安装匹配的资源包。`
+          : code === 'VIEWER_ASSET_VERSION_MISMATCH' ? `Java ${bot.version} 的画面资源或注册表未通过校验。`
+          : '网页画面启动失败，请检查本机日志。';
+        this.viewerStartup = {gen, phase:'failed', version:bot.version, code, message};
         this.opts.log.warn(`minecraft viewer 启动失败(不影响游玩): ${(err as Error).message}`);
       }
     })();
