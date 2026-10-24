@@ -10,7 +10,11 @@
   "rendererTestsPassed": 1274,
   "rendererConditionalTestsSkipped": 37,
   "typecheckPassed": true,
-  "workerTestsPassed": 15,
+  "workerTestsPassed": 16,
+  "matchingCloudBuildStaged": true,
+  "candidateAndRollbackDualDiskVerified": true,
+  "windowsConfirmationResult": "cancelled_before_service_stop",
+  "temporaryUploadKeyRevoked": true,
   "originalNekoAndKiritoResourceChecksPassed": true,
   "browserFixture": {
     "isLiveGameplay": false,
