@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.94
+
+- End the current model chain after a typed successful action completion with
+  no execution identity and no remaining steps. Preserve its exact receipt and
+  use the existing bounded no-action backoff instead of treating an already
+  satisfied arrival as new work. Queries, pending tasks, unknown-dispatch
+  fences, arrival conditions and submitted arguments remain unchanged.
+
 ## 0.2.93
 
 - Pin upstream core rc.80 with shared bounded observation contracts, structured

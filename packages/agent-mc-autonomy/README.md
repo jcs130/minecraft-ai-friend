@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+The 0.2.94 controller ends the current model chain when a typed native action
+completes immediately without creating a task, such as an already-satisfied
+arrival. It preserves the original receipt, counts the reply as no new task,
+and uses the existing bounded idle backoff. A successful no-op is not movement
+or project completion. Native arrival rules, arguments, pending work and unknown
+dispatch barriers remain unchanged; core stays pinned to rc.80.
+
 The 0.2.93 distribution pins upstream core rc.80. It retains default visible
 surface observations and bounded, caller-selected continuation while adding
 structured partial/blocked/unknown execution evidence and strict typed input

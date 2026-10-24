@@ -1623,6 +1623,27 @@ class Controller:
             self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
             return result, compact, True
         read_only = observation_call(name, arguments)
+        data = result.get("data")
+        if (name == "mc_do" and not read_only and not result.get("failed")
+                and result.get("execution") is None and not self.current_work()
+                and isinstance(data, dict) and data.get("status") == "completed"
+                and type(data.get("completed")) is int and data["completed"] > 0
+                and type(data.get("remaining")) is int and data["remaining"] == 0
+                and data.get("goal_completed") is False):
+            # The native arrival shortcut can complete without creating a task.
+            # Keep its exact receipt, but do not fill another read round or
+            # count it as new work. Unknown results were fenced by dispatch.
+            self.unactioned_replies += 1
+            delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                        * 2 ** min(6, self.unactioned_replies - 1))
+            self.planner_retry_at = time.monotonic() + delay
+            self.continuation_needed = True
+            self.planner_notice = ("The plan completed immediately with no new task. This is not evidence of new "
+                "movement or project progress. Read the original receipt; do not repeat an already-satisfied action. "
+                "Choose feasible next work from current facts, or explain a real waiting condition. "
+                "Arguments and native arrival rules have not been changed.")
+            self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+            return result, compact, True
         correction_boundary = False
         if not result.get("failed"):
             if name in REUSABLE_IMMEDIATE_READS and not result.get("execution"):
