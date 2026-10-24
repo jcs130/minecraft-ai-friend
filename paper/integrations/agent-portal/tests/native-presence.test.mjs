@@ -35,3 +35,14 @@ test('even a live native identity never overrides an explicit authentication rej
  const row={online:true,authenticated:false,statusSource:'Numen.live-owner-tag',identitySource:'Numen.live-owner-tag'};
  assert.equal(new WorldView({},{}).online(row),false);
 });
+
+test('verified live Geyser session is a player, without fabricating Java authorization',async()=>{
+ const bedrockUuid='00000000-0000-0000-0009-00000d9f9c7b';
+ const record={name:'.Example',uuid:bedrockUuid,kind:'player',source:'Geyser.live-session',nativeOnline:true,nativeObservedAt:Date.now()};
+ const row=await roster(record,bedrockUuid);
+ assert.equal(row.kind,'player');assert.equal(row.online,true);assert.equal(row.authenticated,null);assert.equal(row.statusSource,'Geyser.live-session');
+ assert.equal(new WorldView({},{}).online(row),true);
+ for(const change of [{nativeObservedAt:Date.now()-60001},{nativeOnline:false},{source:'Paper.usercache'},{name:'Example'},{uuid}])assert.equal(freshNativePresence({...record,...change}),false);
+ const gate=new WorldView({},{});
+ for(const change of [{authenticated:false},{identitySource:'Paper.usercache'},{statusSource:'minecraft.server-list-ping.uuid'},{kind:'agent'},{playerUuid:uuid}])assert.equal(gate.online({...row,...change}),false);
+});

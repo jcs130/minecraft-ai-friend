@@ -40,7 +40,10 @@ export function freshAuthentication(heartbeat, now = Date.now()) {
 // a persisted registry entry or nickname is not. It never authenticates a
 // normal Java connection or grants website ownership.
 export function freshNativePresence(row, now = Date.now()) {
-  return row?.kind === 'agent' && row.source === 'Numen.live-owner-tag' && row.nativeOnline === true
+  const identity=row?.kind==='agent'&&row.source==='Numen.live-owner-tag'
+    ||row?.kind==='player'&&row.source==='Geyser.live-session'&&/^\.[A-Za-z0-9_]{1,16}$/.test(row.name||'')
+      &&/^00000000-0000-0000-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.uuid||'');
+  return identity && row.nativeOnline === true
     // Census runs every 30 seconds; publication can add another 15 seconds.
     // The actual scene source still closes immediately when that UUID leaves.
     && Number.isFinite(row.nativeObservedAt) && row.nativeObservedAt <= now + 1000 && now - row.nativeObservedAt <= 60000;
@@ -111,7 +114,7 @@ export class GameData {
       }
     }
     for (const row of registered) users.push({ name: row.name, uuid: row.uuid, identitySource: row.source,
-      nativeOnline: freshNativePresence(row), nativeObservedAt: row.nativeObservedAt });
+      nativeOnline: freshNativePresence(row), nativeObservedAt: row.nativeObservedAt, nativeSource:row.source });
     const userMap = new Map();
     const conflicts = new Set();
     for (const user of users) {
@@ -147,7 +150,7 @@ export class GameData {
       const online = nativeOnline || sampledByUuid ? true : auth.fresh ? authenticated.has(norm(name)) : sampled.has(norm(name)) ? true : null;
       return { id: this.idFor(uuid, name), name: user?.name || name, playerUuid: uuid, kind, online,
         authenticated: nativeOnline || sampledByUuid && !authenticated.has(norm(name)) ? null : auth.fresh ? authenticated.has(norm(name)) : null,
-        statusSource: nativeOnline ? 'Numen.live-owner-tag' : sampledByUuid ? 'minecraft.server-list-ping.uuid' : auth.fresh ? 'LoginGuard.authorizedNames' : 'minecraft.server-list-ping.sample',
+        statusSource: nativeOnline ? user.nativeSource : sampledByUuid ? 'minecraft.server-list-ping.uuid' : auth.fresh ? 'LoginGuard.authorizedNames' : 'minecraft.server-list-ping.sample',
         statusObservedAt: nativeOnline ? iso(user.nativeObservedAt) : sampledByUuid ? status.observedAt : auth.fresh ? auth.observedAt : status.observedAt,
         eye: eyesByAgent.get(norm(name)) || null, isOperator: adminNames.has(norm(name)), isReserved: reservedIdentityName(name) || kind === 'observer',
         identityConflict: conflict, identitySource: uuid ? user.identitySource || 'Paper.usercache' : null,

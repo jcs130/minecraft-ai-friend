@@ -27,9 +27,11 @@ export class WorldView {
     // Native Numen bodies have no network login session. Require their exact
     // registered UUID to be present in the trusted backend's current sample;
     // an ag_ nickname, historical roster or explicit auth rejection is insufficient.
-    return row?.online===true&&(row.authenticated===true || row.authenticated===null
-      &&['minecraft.server-list-ping.uuid','Numen.live-owner-tag'].includes(row.statusSource)
-      &&['Numen.CompanionRegistry','Numen.live-owner-tag'].includes(row.identitySource));
+    const numen=['minecraft.server-list-ping.uuid','Numen.live-owner-tag'].includes(row?.statusSource)
+      &&['Numen.CompanionRegistry','Numen.live-owner-tag'].includes(row?.identitySource);
+    const bedrock=row?.kind==='player'&&row.statusSource==='Geyser.live-session'&&row.identitySource==='Geyser.live-session'
+      &&/^\.[A-Za-z0-9_]{1,16}$/.test(row.name||'')&&/^00000000-0000-0000-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.playerUuid||'');
+    return row?.online===true&&(row.authenticated===true || row.authenticated===null&&(numen||bedrock));
   }
   sessionOwner(hash) {
     const session=this.store.db.prepare('SELECT owner_id FROM sessions WHERE id_hash=? AND expires_at>?').get(hash,this.now());

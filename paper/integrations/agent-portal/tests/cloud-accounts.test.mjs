@@ -10,6 +10,17 @@ import { accountSyncOnce } from '../scripts/sync-accounts.mjs';
 import { CloudGame } from '../src/cloud-source.mjs';
 import { GameData } from '../src/game-data.mjs';
 
+test('verified Bedrock presence persists separately from ownership and never overwrites another UUID',async t=>{
+ const f=await bridge(t);await f.heartbeat();
+ const playerUuid='00000000-0000-0000-0009-00000d9f9c7b',state={watch:[],bedrockAttemptAt:Date.now(),bedrockObservation:{observedAt:Date.now(),players:[{name:'.Example',playerUuid,source:'Geyser.live-session'}]}};
+ f.settings.bedrock={enabled:true};await accountSyncOnce(f.settings,state);
+ const entries=JSON.parse(await fs.readFile(f.settings.portalIdentitiesFile,'utf8')).identities;
+ assert.equal(entries[0].uuid,playerUuid);assert.equal(entries[0].kind,'player');assert.equal(entries[0].source,'Geyser.live-session');
+ assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM ownerships').get().n,0);
+ state.bedrockObservation.players[0].playerUuid='00000000-0000-0000-0009-00000d9f9c7c';await accountSyncOnce(f.settings,state);
+ assert.equal(JSON.parse(await fs.readFile(f.settings.portalIdentitiesFile,'utf8')).identities[0].uuid,playerUuid);
+});
+
 async function bridge(t) {
   const token = 'acc_' + randomBytes(32).toString('base64url'), remoteKey = randomBytes(32), localKey = randomBytes(32);
   const f = await siteFixture(t, { sourceMode: 'cloud', cloudAccounts: { enabled: true, tokenHash: digest(token), keyFile: '' } });

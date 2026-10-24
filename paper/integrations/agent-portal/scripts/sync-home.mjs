@@ -6,6 +6,7 @@ import { GameData } from '../src/game-data.mjs';
 import { WorldCatalog } from '../src/world-catalog.mjs';
 import { buildSnapshot } from '../src/cloud-source.mjs';
 import { PhotoReader } from '../src/gallery.mjs';
+import { sendSnapshot } from './snapshot-transport.mjs';
 
 const configPath = process.argv[process.argv.indexOf('--config') + 1];
 if (!process.argv.includes('--config') || !path.isAbsolute(configPath)) throw Error('Use --config with an absolute private configuration file');
@@ -62,8 +63,7 @@ try {
       const snapshot = await buildSnapshot(game, world, sequence, photos.map(row => row.metadata)), body = JSON.stringify(snapshot);
       if (Buffer.byteLength(body) > 2097152) throw Error('Snapshot exceeds the configured size');
       if (process.argv.includes('--dry-run')) { console.log(JSON.stringify({ sequence, roster: snapshot.roster.length, privateProfiles: Object.keys(snapshot.states).length, events: snapshot.events.length, bytes: Buffer.byteLength(body) })); break; }
-      const response = await fetch(endpoint, { method: 'PUT', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
-      const result = await response.json();
+      const { response, result } = await sendSnapshot(endpoint, {token,body});
       if (response.status === 409 && Number.isSafeInteger(result.error?.currentSequence)) { sequence = Math.max(sequence, result.error.currentSequence); await persistSequence(); }
       else if (!response.ok) throw Object.assign(Error('Synchronization rejected'), { status: response.status });
       else {

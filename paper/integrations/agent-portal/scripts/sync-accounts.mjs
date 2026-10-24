@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { seal, unseal } from '../src/game-accounts.mjs';
 import { readNumenIdentities } from './numen-identities.mjs';
+import { readBedrockPresence } from './bedrock-presence.mjs';
 
 const uuid = /^[a-f0-9-]{36}$/;
 async function keyFile(file) {
@@ -70,12 +71,17 @@ export async function accountSyncOnce(settings, state = { watch: [] }, fetcher =
     catch { state.numenObservation = null; } // Unknown evidence cannot grant ownership; account login keeps working.
   }
   if (state.numenObservation && Date.now() - state.numenObservation.observedAt < 40000) numen = seal(remoteKey, 'numen-identities', state.numenObservation);
+  if(settings.bedrock?.enabled===true && Date.now()-(state.bedrockAttemptAt||0)>=30000){
+    state.bedrockAttemptAt=Date.now();
+    try{state.bedrockObservation=await readBedrockPresence(settings.bedrock);}
+    catch{state.bedrockObservation=null;}
+  }
   const response = await fetcher(endpoint, { method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ heartbeat: { ready, at: Date.now() }, results, delivered, ...(numen ? { numen } : {}) }), signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw Object.assign(Error('ACCOUNT_SYNC_REJECTED'), { status: response.status });
   const text = await response.text(); if (Buffer.byteLength(text) > 256 * 1024) throw Error('ACCOUNT_RESPONSE_TOO_LARGE');
   const value = JSON.parse(text);
   if (!Array.isArray(value.requests) || value.requests.length > 4 || !Array.isArray(value.watch) || value.watch.length > 64 || value.watch.some(id => !uuid.test(id))) throw Error('ACCOUNT_RESPONSE_INVALID');
-  if (settings.portalIdentitiesFile && (completed.length || state.numenObservation)) {
+  if (settings.portalIdentitiesFile && (completed.length || state.numenObservation || state.bedrockObservation)) {
     const identities = new Map();
     try { for (const row of JSON.parse(await fs.readFile(settings.portalIdentitiesFile, 'utf8')).identities || []) identities.set(row.name.toLowerCase(), row); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     for (const row of completed.filter(row => value.acknowledged?.includes(row.requestId))) {
@@ -90,6 +96,12 @@ export async function accountSyncOnce(settings, state = { watch: [] }, fetcher =
       if (previous && previous.uuid !== row.playerUuid) continue;
       identities.set(row.name.toLowerCase(), { name: row.name, uuid: row.playerUuid, kind: 'agent', source: row.source,
         nativeOnline: row.source === 'Numen.live-owner-tag', nativeObservedAt: state.numenObservation.observedAt });
+    }
+    for(const row of state.bedrockObservation?.players||[]){
+      const previous=identities.get(row.name.toLowerCase());
+      if(previous && previous.uuid!==row.playerUuid)continue;
+      identities.set(row.name.toLowerCase(),{name:row.name,uuid:row.playerUuid,kind:'player',source:row.source,
+        nativeOnline:true,nativeObservedAt:state.bedrockObservation.observedAt});
     }
     if (identities.size > 256) throw Error('ACCOUNT_REGISTRY_FULL');
     const temporary = settings.portalIdentitiesFile + '.tmp';

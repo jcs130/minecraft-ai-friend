@@ -274,7 +274,12 @@ export function createPortal(config, options = {}) {
         if (!cloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
         if (req.headers.origin) throw fail(403, 'SYNC_CLIENT_REQUIRED', '请从家庭端同步器上传资料');
         cloud.authorize(req); rate('snapshot-sync', 12, 60000);
-        return respond(res, 200, cloud.accept(await jsonBody(req, config.cloudSync.maxBytes)));
+        const diagnose=process.env.QIANDENGJI_SNAPSHOT_DIAGNOSTICS==='1',started=Date.now();
+        const trace=(phase,sequence)=>{if(diagnose)console.info(JSON.stringify({event:'snapshot-ingress',phase,sequence,elapsedMs:Date.now()-started}));};
+        trace('reading');
+        const input=await jsonBody(req, config.cloudSync.maxBytes);trace('validated-body',input.sequence);
+        const result=cloud.accept(input);trace('committed',input.sequence);
+        return respond(res, 200, result);
       }
       if (req.method === 'PUT' && pathname === '/api/v1/internal/challenges') {
         if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');

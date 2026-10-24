@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
   "commit": "f69e34715a802490c5d79a4b62645b0d3a7fea87",
-  "status": "candidate-portal-0.8.12-loading-and-original-appearance",
+  "status": "deployed-portal-0.8.12-loading-and-original-appearance",
   "files": {
     "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
     "spectator-relay.mjs": "a61920fe324b19337f0ad3d4c936549a7100d96b2e8d2312b78dd3ae7236d0d1",
