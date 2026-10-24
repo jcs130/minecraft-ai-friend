@@ -6,7 +6,7 @@ export * from '../contracts/java-client.ts';
 export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAddress, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
-export { prepareMinecraftViewerAssets, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
+export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';

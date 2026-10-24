@@ -26,7 +26,7 @@ export { MINECRAFT_PANEL_DECLS, MINECRAFT_TOOL_DECLS, MinecraftWorld, type Minec
 export { loadPrivateClientConfig } from './client/config-file.ts';
 export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } from './client/visual.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAddress } from './client/config.ts';
-export { prepareMinecraftViewerAssets, type ViewerAssetProgress, type ViewerAssetOptions } from './client/viewer-assets.ts';
+export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './client/viewer-assets.ts';
 export { MinecraftClientWorld } from './client/world.ts';
 export { WorldOperationLearning } from './client/world-learning.ts';
 export * from './client/world-storage.ts';

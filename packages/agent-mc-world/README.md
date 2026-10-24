@@ -1,6 +1,11 @@
 # Agent MC World
 
-Current source: **0.5.7-rc.84**, a source candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+Current source: **0.5.7-rc.85**, a source candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+
+The rc.85 candidate exposes a [base-viewer readiness handoff](docs/viewer-resources.md)
+so audio preparation need not hold the game connection. Reviewed World storage
+migration uses bounded parallel I/O with the same conflict, source-change and
+completion verification. Neither change starts a game or model implicitly.
 
 The rc.84 candidate adds [isolated World mounts](docs/world-mounts.md), reviewed
 copy-only legacy migration, envelope namespace mapping and an explicitly configured

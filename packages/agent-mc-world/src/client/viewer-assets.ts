@@ -5,10 +5,14 @@ import { dirname, join, resolve, sep } from 'node:path';
 export interface ViewerAssetProgress {
   phase: 'copying' | 'downloading' | 'ready'; completed: number; total: number; downloaded: number; bytes: number;
 }
+/** Base files can be served before all content-addressed audio entries are ready. */
+export interface ViewerAssetBase { directory: string; total: number }
 export interface ViewerAssetOptions {
   templateDir: string;
   cacheDir: string;
   signal?: AbortSignal;
+  /** Called once after template/catalog checks, before downloading audio. Not an audio-ready signal. */
+  onBaseReady?(base: ViewerAssetBase): void | Promise<void>;
   onProgress?(progress: ViewerAssetProgress): void;
   /** Explicit transport injection for hosts and isolated tests. URLs remain official, content addressed. */
   fetch?: typeof globalThis.fetch;
@@ -31,10 +35,17 @@ async function matches(file: string, entry: AudioEntry): Promise<boolean> {
 
 /** Explicit, resumable preparation. No game/model connection; private full bundles need no download. */
 export async function prepareMinecraftViewerAssets(options: ViewerAssetOptions): Promise<{ directory: string; downloaded: number; total: number }> {
+  options.signal?.throwIfAborted();
   const marker = join(options.templateDir, 'audio-downloads.json');
   let text: string;
   try { text = await readFile(marker, 'utf8'); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { directory: options.templateDir, downloaded: 0, total: 0 }; throw error; }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    options.signal?.throwIfAborted();
+    await options.onBaseReady?.({ directory: options.templateDir, total: 0 });
+    options.signal?.throwIfAborted();
+    return { directory: options.templateDir, downloaded: 0, total: 0 };
+  }
   const catalog = JSON.parse(text) as { schema: string; viewerArchiveSha256: string; files: AudioEntry[] };
   if (catalog.schema !== 'agent-mc-viewer-audio/v1' || !/^[a-f0-9]{64}$/.test(catalog.viewerArchiveSha256)
     || !Array.isArray(catalog.files) || catalog.files.length > 20000)
@@ -46,6 +57,12 @@ export async function prepareMinecraftViewerAssets(options: ViewerAssetOptions):
       || !Number.isSafeInteger(entry.bytes) || entry.bytes <= 0 || entry.bytes > 100 * 1024 * 1024)
       throw new Error('Invalid viewer audio catalog entry.');
   }
+  const groups = new Map<string, AudioEntry[]>();
+  for (const entry of catalog.files) {
+    const group = groups.get(entry.sha1) ?? [];
+    if (group.some(other => other.sha256 !== entry.sha256 || other.bytes !== entry.bytes)) throw new Error('Conflicting viewer audio hashes.');
+    group.push(entry); groups.set(entry.sha1, group);
+  }
   const id = hash(Buffer.from(text), 'sha256').slice(0, 24);
   const directory = inside(options.cacheDir, `viewer-${id}`), objects = inside(options.cacheDir, 'audio-objects');
   const progress: ViewerAssetProgress = { phase: 'copying', completed: 0, total: catalog.files.length, downloaded: 0, bytes: 0 };
@@ -56,19 +73,17 @@ export async function prepareMinecraftViewerAssets(options: ViewerAssetOptions):
   // Copy only package-owned viewer templates. Downloaded files live in the deployment cache, never node_modules.
   if (resolve(options.templateDir) !== directory)
     await cp(options.templateDir, directory, { recursive: true, force: false, errorOnExist: false, filter: async (source, target) => {
+      options.signal?.throwIfAborted();
       if ((await lstat(source)).isSymbolicLink()) throw new Error('Viewer templates must not contain symbolic links.');
       try { if ((await lstat(target)).isSymbolicLink()) throw new Error('Viewer cache must not contain symbolic links.'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       return true;
     } });
+  options.signal?.throwIfAborted();
+  await options.onBaseReady?.({ directory, total: catalog.files.length });
+  options.signal?.throwIfAborted();
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
-  const groups = new Map<string, AudioEntry[]>();
-  for (const entry of catalog.files) {
-    const group = groups.get(entry.sha1) ?? [];
-    if (group.some(other => other.sha256 !== entry.sha256 || other.bytes !== entry.bytes)) throw new Error('Conflicting viewer audio hashes.');
-    group.push(entry); groups.set(entry.sha1, group);
-  }
   const pending = [...groups.values()]; let cursor = 0;
   progress.phase = 'downloading'; report();
   const worker = async () => {
@@ -119,6 +134,7 @@ export async function prepareMinecraftViewerAssets(options: ViewerAssetOptions):
   }));
   const failed = results.find(result => result.status === 'rejected');
   if (failed?.status === 'rejected') throw failed.reason;
+  signal.throwIfAborted();
   progress.phase = 'ready'; report();
   return { directory, downloaded: progress.downloaded, total: progress.total };
 }

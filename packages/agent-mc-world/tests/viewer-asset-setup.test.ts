@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { prepareMinecraftViewerAssets, type ViewerAssetProgress } from '../src/client/viewer-assets.ts';
+import { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress } from '../src/client/viewer-assets.ts';
 // @ts-expect-error The build helper has no SDK declaration surface.
 import { deferViewerAudio } from '../scripts/defer-viewer-audio.mjs';
 
@@ -23,6 +23,59 @@ async function fixture() {
 }
 
 describe('explicit complete viewer resource preparation', () => {
+  it('exposes the copied base before a slow download, without claiming complete audio', async () => {
+    const f = await fixture(), progress: ViewerAssetProgress[] = [];
+    let base!: (value: ViewerAssetBase) => void, release!: () => void;
+    const baseReady = new Promise<ViewerAssetBase>(resolve => { base = resolve; });
+    const download = new Promise<void>(resolve => { release = resolve; });
+    let completed = false;
+    const pending = prepareMinecraftViewerAssets({ ...f, onBaseReady: base,
+      onProgress: row => progress.push(row), fetch: vi.fn(async () => { await download; return new Response(f.bytes); }) });
+    void pending.then(() => { completed = true; });
+    const ready = await baseReady;
+    try {
+      expect(ready.total).toBe(2);
+      expect(await readFile(join(ready.directory, 'index.html'), 'utf8')).toBe('viewer fixture');
+      expect(await readFile(join(ready.directory, f.files[0].file)).catch(() => null)).toBeNull();
+      expect(completed).toBe(false); expect(progress.some(row => row.phase === 'ready')).toBe(false);
+    } finally { release(); await pending; }
+    expect(progress.at(-1)).toMatchObject({ phase: 'ready', completed: 2 });
+  });
+  it('keeps base readiness distinct from a later download failure and permits retry', async () => {
+    const f = await fixture(), onBaseReady = vi.fn(), progress: ViewerAssetProgress[] = [];
+    await expect(prepareMinecraftViewerAssets({ ...f, onBaseReady, onProgress: row => progress.push(row),
+      fetch: vi.fn(async () => { throw new DOMException('simulated audio timeout', 'TimeoutError'); }) })).rejects.toThrow('simulated audio timeout');
+    expect(onBaseReady).toHaveBeenCalledOnce();
+    expect(progress.some(row => row.phase === 'ready')).toBe(false);
+    const retried = await prepareMinecraftViewerAssets({ ...f, fetch: vi.fn(async () => new Response(f.bytes)) });
+    expect(retried.directory).toBe(onBaseReady.mock.calls[0][0].directory);
+    expect(await readFile(join(retried.directory, f.files[0].file))).toEqual(f.bytes);
+  });
+  it('honors cancellation or host failure at the base handoff before starting downloads', async () => {
+    const f = await fixture(), controller = new AbortController(), fetch = vi.fn();
+    await expect(prepareMinecraftViewerAssets({ ...f, signal: controller.signal, fetch,
+      onBaseReady: () => { controller.abort(new Error('closed at handoff')); } })).rejects.toThrow('closed at handoff');
+    await expect(prepareMinecraftViewerAssets({ ...f, fetch,
+      onBaseReady: async () => { throw new Error('host could not adopt base'); } })).rejects.toThrow('host could not adopt base');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('signals a full offline bundle once and respects an already-cancelled offline preparation', async () => {
+    const f = await fixture(); await rm(join(f.templateDir, 'audio-downloads.json'));
+    const onBaseReady = vi.fn();
+    await prepareMinecraftViewerAssets({ ...f, onBaseReady });
+    expect(onBaseReady).toHaveBeenCalledOnce();
+    expect(onBaseReady).toHaveBeenCalledWith({ directory: f.templateDir, total: 0 });
+    const controller = new AbortController(); controller.abort(new Error('offline stop'));
+    await expect(prepareMinecraftViewerAssets({ ...f, onBaseReady, signal: controller.signal })).rejects.toThrow('offline stop');
+    expect(onBaseReady).toHaveBeenCalledOnce();
+  });
+  it('does not hand an invalid hash catalog to a host', async () => {
+    const f = await fixture(), onBaseReady = vi.fn(), fetch = vi.fn();
+    await writeFile(join(f.templateDir, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1',
+      viewerArchiveSha256: 'a'.repeat(64), files: [f.files[0], { ...f.files[1], sha256: 'b'.repeat(64) }] }));
+    await expect(prepareMinecraftViewerAssets({ ...f, onBaseReady, fetch })).rejects.toThrow('Conflicting');
+    expect(onBaseReady).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+  });
   it('uses a full private bundle without network or writes', async () => {
     const f = await fixture(); await rm(join(f.templateDir, 'audio-downloads.json'));
     const fetch = vi.fn();

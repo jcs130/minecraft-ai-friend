@@ -14,6 +14,11 @@ planId)` accepts only the current plan, creates independent copies, verifies the
 bytes and retains originals. Changed sources, differing destinations, symbolic
 links and junctions require reconciliation. A completed marker is written last;
 an interrupted copy can be reviewed again and reuse identical destination files.
+Scanning, hashing and copying use up to eight concurrent file jobs. File order
+and plan identities remain deterministic; all in-flight jobs settle before an
+error is returned. Source and copied hashes are still checked during copy and in
+the final rescan. Partial copies are not marked complete. This reduces serialized
+small-file work; it is not a guarantee of a migration duration on another disk.
 Host configuration, personal memory, connection leases and unknown files must
 not be added to the allowlist by discovery. Paths inside a copied identity or
 configuration file are not silently rewritten. The host must review references

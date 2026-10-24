@@ -6,6 +6,26 @@ import {dirname, isAbsolute, join, relative, resolve} from 'node:path';
 const MARKER = '.world-storage.json';
 const missing = (e: unknown) => (e as NodeJS.ErrnoException).code === 'ENOENT';
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+/** Bound actual file work, and settle in-flight work before returning a failure. */
+async function eachFile<T>(items: readonly T[], visit: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0, failed = false, failure: unknown;
+  await Promise.all(Array.from({length: Math.min(8, items.length)}, async () => {
+    while (!failed && cursor < items.length) {
+      const item = items[cursor++];
+      try { await visit(item); }
+      catch (error) { if (!failed) { failed = true; failure = error; } }
+    }
+  }));
+  if (failed) throw failure;
+}
+// Keep the previous sorted depth-first file order, independently of I/O completion order.
+const storageOrder = (a: string, b: string) => {
+  const left = a.split('/'), right = b.split('/');
+  for (let i = 0; i < Math.min(left.length, right.length); i++) {
+    if (left[i] !== right[i]) return left[i] < right[i] ? -1 : 1;
+  }
+  return left.length - right.length;
+};
 async function hashFile(file: string): Promise<string> {
   const hash = createHash('sha256');
   for await (const chunk of createReadStream(file)) hash.update(chunk);
@@ -48,23 +68,29 @@ export async function planWorldStorage(options: WorldStorageOptions): Promise<Wo
   await safePath(source, source); await safePath(source, target);
   const initialized = await marker(options);
   const files: WorldStoragePlan['files'] = [], conflicts: string[] = [];
-  if (!initialized) for (const entry of [...new Set(options.entries)].sort()) {
+  let pending = initialized ? [] : [...new Set(options.entries)].sort();
+  for (const entry of pending) {
     if (!entry || entry === '.' || entry === '..' || entry === options.id || /[\\/:]/.test(entry))
       throw Error('Legacy entries must be explicit top-level names outside the new namespace');
-    async function scan(name: string): Promise<void> {
+  }
+  while (pending.length) {
+    const next: string[] = [];
+    await eachFile(pending, async name => {
       const input = join(source, name), output = join(target, name);
       await safePath(source, input); await safePath(source, output);
       let info; try { info = await lstat(input); } catch (e) { if (missing(e)) return; throw e; }
-      if (info.isDirectory()) { for (const child of (await readdir(input)).sort()) await scan(join(name, child)); return; }
+      if (info.isDirectory()) { next.push(...(await readdir(input)).map(child => join(name, child))); return; }
       if (!info.isFile()) throw Error('Legacy storage contains a non-regular file');
       const sha256 = await hashFile(input); let existing = false;
       try { const dest = await lstat(output); existing = true;
         if (!dest.isFile() || await hashFile(output) !== sha256) conflicts.push(name.replaceAll('\\', '/'));
       } catch (e) { if (!missing(e)) throw e; }
       files.push({path: name.replaceAll('\\', '/'), bytes: info.size, sha256, existing});
-    }
-    await scan(entry);
+    });
+    pending = next;
   }
+  files.sort((a, b) => storageOrder(a.path, b.path));
+  conflicts.sort(storageOrder);
   return {schema: 'agent-mc-world-storage/v1', id: options.id, source, target, files, conflicts,
     planId: digest([options.id, source, target, files]), required: !initialized && files.length > 0, initialized};
 }
@@ -90,11 +116,11 @@ export async function copyWorldStorage(options: WorldStorageOptions, expectedPla
   if (plan.conflicts.length) throw Error('Storage destination conflicts; no original or destination was overwritten');
   // A staging directory contains only files from this operation and is never adopted as a World.
   await mkdir(plan.target, {recursive: true, mode: 0o700});
-  for (const file of plan.files) {
+  await eachFile(plan.files, async file => {
     const input = join(plan.source, file.path), output = join(plan.target, file.path);
     await safePath(plan.source, input); await safePath(plan.source, output);
     if (await hashFile(input) !== file.sha256) throw Error('Legacy storage changed during migration');
-    if (file.existing) continue;
+    if (file.existing) return;
     await mkdir(dirname(output), {recursive: true, mode: 0o700});
     const temp = output + '.' + randomUUID() + '.import';
     try {
@@ -102,7 +128,7 @@ export async function copyWorldStorage(options: WorldStorageOptions, expectedPla
       if (await hashFile(temp) !== file.sha256 || await hashFile(input) !== file.sha256) throw Error('Legacy copy changed');
       await link(temp, output); // Atomic exclusive adoption; an active destination is never replaced.
     } finally { await unlink(temp).catch(() => {}); }
-  }
+  });
   const verified = await planWorldStorage(options);
   if (verified.conflicts.length || verified.files.length !== plan.files.length
     || verified.files.some((f, i) => !f.existing || f.path !== plan.files[i].path || f.sha256 !== plan.files[i].sha256))
