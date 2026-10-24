@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-24",
+  "website": {
+    "version": "0.8.14",
+    "sourceCommit": "25363323d9440bec7865e953cde76fcc8e6221f6",
+    "viewerCommit": "77c98ea7e5bb96c3394982e4190d942d39ac43bc",
+    "deployed": true,
+    "testsPassed": 245,
+    "linuxChecksPassed": 16,
+    "protectedDataTablesPreserved": 17,
+    "userConfirmedNekoModelVisible": true,
+    "browserFullscreenPixelsVerified": false
+  },
+  "motionCandidate": {
+    "viewerCommit": "0773634bcae9e8bc3abcb7435ac9e2c2f78c6e9a",
+    "deployed": false,
+    "testsPassed": 108,
+    "conditionalTestsSkipped": 2,
+    "originalNekoAndKiritoAssetChecksPassed": true,
+    "matchingSiteAndWorkerBuildVerified": true,
+    "dualDiskCandidateVerified": true
+  },
+  "autonomyCandidate": {
+    "sourceCommit": "11eda1c4fac12817494b554cc296ba820c2e4dc0",
+    "version": "0.3.1",
+    "productionVersion": "0.3.0",
+    "deployed": false,
+    "pythonChecksPassed": 110,
+    "existingLiveChecksSkipped": 6,
+    "nativeWrapperContextCapTested": true,
+    "nativeHeartbeatTemporarilyPaused": true,
+    "originalBodyRemoved": false,
+    "originalLivePluginBackup": "pending_admin_access",
+    "realGameplayImprovementVerified": false
+  },
+  "blocker": "Windows elevation confirmation cancelled; no privileged update executed",
+  "paperRestarted": false,
+  "loginProxyRestarted": false,
+  "newMinecraftConnections": 0,
+  "credentialsPublished": false
+}
