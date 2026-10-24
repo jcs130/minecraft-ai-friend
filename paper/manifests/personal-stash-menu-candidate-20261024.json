@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "state": "candidate_not_deployed",
+  "version": "0.4.47.14",
+  "baselineVersion": "0.4.47.12",
+  "baselineSha256": "d024b51f2f623c16d2b71b02e2e7aa979928bd16d10f9879b35442a7e0ab1f72",
+  "sha256": "e34d5f45c318b8a675d20eb4a1c2e133e2bd5913e990aeebb6c8426208d5da78",
+  "changedEntries": ["plugin.yml", "org/afuhome/agentfriend/AgentFriendPlugin.class"],
+  "unchangedEntries": 400,
+  "baselineBytecodeVerified": true,
+  "menu": {"size": 45, "stashSlot": 8, "closeSlot": 35, "quickCastSlots": [36,37,38,39,40,41,42,43,44], "leftClick": "original personal stash page 1", "rightClick": "original ten-page selector"},
+  "rules": {"capacity": 540, "remoteMana": 2, "remoteQualification": "travel", "selectorMana": 0, "nearOriginalChestFree": true, "inventoryMigration": false, "newCommands": false},
+  "verification": {"nativeInitial": 20, "nativeAfterNormalRestart": 17, "itemConservation": "five quartz: inventory 3 + stash 2 + empty cursor", "ordinaryAndAgentAccounts": true, "physicalBedrockAndEyePixels": false},
+  "rollback": "Normal maintenance; restore only previous JAR. Preserve latest personal stash, queued rewards, photos, player inventories and all world/config data.",
+  "notIncluded": ["public facilities 0.4.47.13 candidate", "full 0.4.48 archive", "CLI convergence candidate", "Numen ownership policy"],
+  "runtimeWorldMaintenanceSeparate": {"rescuedUniqueVillagers": 16, "rescueMoves": 17, "groundBlocks": 80, "verifiedChecks": 14, "paperRestart": false},
+  "deployment": {"productionJarChanged": false, "pendingCreated": false, "waitingFor": "identity/maintenance coordination for online ag_xueyou"}
+}

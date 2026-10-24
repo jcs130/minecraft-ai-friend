@@ -177,6 +177,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(5, Material.EXPERIENCE_BOTTLE, "技能成长", "查看战斗、探索与采集熟练度", "menu:mastery"),
             new CompassButton(6, Material.BOOK, "法术图鉴", "分页阅读全部基础与职业技能；查看不施法", "menu:spell_guide"),
             new CompassButton(7, Material.BLAZE_ROD, "灵纹法杖", "绑定技能后手持使用；绑定本身不施法", "menu:focus"),
+            new CompassButton(8, Material.CHEST, "个人试炼箱 · 奖励与照片", "左键直接开箱；右键选10页540格；远程开箱2魔力；与大背包独立", "stash"),
             new CompassButton(9, Material.LODESTONE, "传送地点", "公共、命名与分享地点；成功传送消耗魔力", "menu:places"),
             new CompassButton(10, Material.PLAYER_HEAD, "找队友", "追踪队友方向，或消耗魔力安全传送", "menu:players"),
             new CompassButton(11, Material.GRASS_BLOCK, "领地与物品归属", "查看领地主人、授权与储物权限", "lands"),
@@ -2317,7 +2318,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void fillCompass(Player p, Inventory inv) {
         for (CompassButton button : COMPASS_BUTTONS)
             inv.setItem(button.slot(), item(button.icon(), (button.slot() < 9 ? "§d" : button.slot() < 18 ? "§a" : "§b")
-                    + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力" : "点击查看；打开页面不会施法"));
+                    + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力"
+                    : button.action().equals("stash") ? "只打开本人奖励箱；照片成片也存这里；选择页码不扣魔力" : "点击查看；打开页面不会施法"));
         for (int slot = 27; slot < 36; slot++)
             inv.setItem(slot, item(Material.GRAY_STAINED_GLASS_PANE, "§7↓ 底排常用技能 · 点击施法",
                     "未学技能先打开学习页，不会自动扣技能点", "技能的魔力、冷却、范围与安全规则保持"));
@@ -2329,7 +2331,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     entry.command()));
         }
     }
-    private void compassClick(Player p, int slot) {
+    private void compassClick(Player p, int slot, boolean rightClick) {
         if (slot >= 36 && slot < 45) {
             String id = COMPASS_QUICK.get(slot - 36);
             if (compassKnown(p, id)) cast(p, id);
@@ -2346,6 +2348,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else if (action.startsWith("profession:")) professions.open(p, action.substring(11));
         else if (action.startsWith("world:")) worldLife.command(p, new String[]{"world", action.substring(6), "menu"});
         else switch (action) {
+            case "stash" -> { if (rightClick) dungeon.openStashPages(p); else dungeon.openStash(p); }
             case "photo" -> photoCamera.menu(p);
             case "book" -> p.openBook(statusBook(p));
             case "lands" -> lands.open(p, 1);
@@ -2361,7 +2364,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         int requested = page.equals("spell_guide") ? 0 : Integer.parseInt(page.substring("spell_guide:".length()));
         return Math.max(0, Math.min(requested, Math.max(0, (SpellGuide.entries().size() - 1) / GUIDE_PAGE_SIZE)));
     }
-    private int menuCloseSlot(String page, int size) { return page.equals("skills") ? 8 : size - 1; }
+    private int menuCloseSlot(String page, int size) { return page.equals("skills") ? 35 : size - 1; }
     private void openMenu(Player p, String page) {
         if (isSpellGuidePage(page)) {
             int requested = page.equals("spell_guide") ? spellGuidePages.getOrDefault(p.getUniqueId(), 0) : spellGuidePage(page);
@@ -2659,7 +2662,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= top.getSize() || event.getClick().isShiftClick()) return;
-        if (page.equals("skills") && slot >= 27 && slot < 36) return;
+        if (page.equals("skills") && slot >= 27 && slot < 35) return;
         if (isSpellGuidePage(page) && slot < 9) return;
         menus.remove(top); // A second click packet cannot cast from this menu.
         p.closeInventory();
@@ -2667,7 +2670,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!p.isOnline()) return;
             if (slot == menuCloseSlot(page, top.getSize())) return;
             if (page.equals("skills")) {
-                compassClick(p, slot);
+                compassClick(p, slot, event.isRightClick());
             } else if (isSpellGuidePage(page)) {
                 int current = spellGuidePage(page), start = current * GUIDE_PAGE_SIZE;
                 if (slot == 49) openMenu(p, "skills");
