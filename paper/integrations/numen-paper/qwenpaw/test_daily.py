@@ -24,19 +24,23 @@ class Daily(unittest.IsolatedAsyncioTestCase):
 
     def healthy(self):
         channel = self.channel()
-        channel.invoke = AsyncMock(return_value={"content": [{"type": "text", "text":
-            'MC_STATUS {"food":20,"health":20,"maxHealth":20}'}]})
+        async def invoke(name, args):
+            raw = ('MC_STATUS {"food":20,"health":20,"maxHealth":20}' if args['line'] == '/mycli status'
+                   else '【当前公会委托】林缘巡守 0/4\n下一步：持剑近战清理蜘蛛')
+            return {"content": [{"type": "text", "text": raw}]}
+        channel.invoke = AsyncMock(side_effect=invoke)
         return channel
 
     async def test_healthy_opted_in_body_runs_one_native_daily_turn(self):
         self.configure()
         channel = self.healthy()
         self.assertTrue(await channel.heartbeat_once())
-        channel.invoke.assert_awaited_once_with("command", {"line": "/mycli status"})
+        self.assertEqual(channel.invoke.await_count, 2)
         payload = channel._enqueue.call_args.args[0]
         self.assertTrue(payload["meta"]["autonomous_daily"])
         self.assertIn("自行选择附近", payload["text"])
         self.assertIn("可以正常接单", payload["text"])
+        self.assertIn("本轮无需重复预检", payload["text"])
         self.assertFalse(await channel.heartbeat_once())
         channel._enqueue.assert_called_once()
 
@@ -88,6 +92,7 @@ class Daily(unittest.IsolatedAsyncioTestCase):
         self.configure()
         channel = self.healthy()
         channel.invoke.return_value = {"content": [{"type": "text", "text": "unknown"}]}
+        channel.invoke.side_effect = None
         self.assertFalse(await channel.heartbeat_once())
         channel._enqueue.assert_not_called()
 

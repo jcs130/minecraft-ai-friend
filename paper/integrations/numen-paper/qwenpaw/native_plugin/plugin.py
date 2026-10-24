@@ -10,6 +10,7 @@ import asyncio
 from contextlib import suppress
 from contextvars import ContextVar
 import html
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -39,6 +40,93 @@ def daily_enabled(cfg) -> bool:
     """Explicit host opt-in; game text and truthy strings grant no autonomy."""
     autonomy = cfg.get("autonomy") if isinstance(cfg, dict) else None
     return isinstance(autonomy, dict) and autonomy.get("enabled") is True
+
+
+class AutonomyGuard:
+    """Bound native heartbeat work by server progress, never by model claims.
+
+    This is scheduling/receipt state, not another planner. A changed objective
+    wakes immediately; repeated unchanged work gets one replan and then bounded
+    backoff. Persist through native role/plugin reloads. Unknown actions remain
+    in the existing controller ledger and are NEVER replayed here.
+    """
+    def __init__(self, workspace, body, now=time.time):
+        self.path = workspace / "game-autonomy-state.json"
+        self.body, self.now = body, now
+        self.state = dict(body=body, fingerprint="", unchanged=0, next_at=0,
+                          model_until=0, model_reason="")
+        if self.path.exists():
+            try:
+                if self.path.stat().st_size > 16384:
+                    raise ValueError("oversize guard state")
+                value = json.loads(self.path.read_text(encoding="utf-8"))
+                if value.get("body") != body:
+                    raise ValueError("wrong body")
+                for key in ("unchanged", "next_at", "model_until"):
+                    if type(value.get(key)) not in (int, float) or not math.isfinite(value[key]) or value[key] < 0:
+                        raise ValueError("invalid schedule")
+                if not isinstance(value.get("fingerprint"), str) or not re.fullmatch(r"(?:[a-f0-9]{64})?", value["fingerprint"]):
+                    raise ValueError("invalid progress fingerprint")
+                self.state.update({k: value[k] for k in self.state if k in value})
+                for key in ("next_at", "model_until"):
+                    self.state[key] = min(self.state[key], now() + 3600)
+            except (OSError, ValueError, TypeError):
+                self.state.update(model_until=now()+600, model_reason="guard_state_unavailable")
+
+    def save(self):
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.state, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(self.path)
+
+    def model_ready(self):
+        return self.now() >= self.state["model_until"]
+
+    def model_failed(self, message):
+        quota = bool(re.search(r"MODEL_QUOTA_EXCEEDED|quota.{0,80}exceeded|额度.{0,20}(?:耗尽|超限)", message, re.I))
+        self.state.update(model_until=self.now()+(1800 if quota else 300),
+                          model_reason="model_quota" if quota else "model_error")
+        self.save()
+
+    def model_succeeded(self):
+        if self.state["model_until"] or self.state["model_reason"]:
+            self.state.update(model_until=0, model_reason="")
+            self.save()
+
+    @staticmethod
+    def fingerprint(raw):
+        # The current server emits short task text; older JSON is normalized
+        # too. Session IDs/time/sequence are not evidence of task progress.
+        volatile = {"playerUuid", "sessionId", "authSessionId", "observedAt", "sequence", "timestamp"}
+        def clean(value, depth=0):
+            if depth > 12:
+                raise ValueError("task snapshot too deep")
+            if isinstance(value, dict):
+                return {k: clean(v, depth+1) for k,v in value.items() if k not in volatile}
+            if isinstance(value, list):
+                return [clean(v, depth+1) for v in value]
+            return value
+        text = re.sub(r"§.", "", raw).strip()
+        marker = re.search(r"(?:^|\n)MC_[A-Z_]+\s+(\{)", text)
+        if marker:
+            value, _ = json.JSONDecoder().raw_decode(text[marker.start(1):])
+            text = json.dumps(clean(value), sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(text.encode()).hexdigest()
+
+    def plan(self, task_receipt, critical=False):
+        if not self.model_ready():
+            return "wait_model"
+        signature = self.fingerprint(task_receipt)
+        if signature != self.state["fingerprint"]:
+            self.state.update(fingerprint=signature, unchanged=0, next_at=0)
+        if not critical and self.now() < self.state["next_at"]:
+            return "wait_progress"
+        self.state["unchanged"] += 1
+        mode = "continue" if self.state["unchanged"] <= 2 else "replan"
+        if mode == "replan":
+            delay = min(1800, 300 * 2 ** min(3, int(self.state["unchanged"])-3))
+            self.state["next_at"] = self.now()+delay
+        self.save()
+        return mode
 
 
 def normalize_memory_hits(payload: dict) -> list[dict]:
@@ -280,6 +368,9 @@ class BodyLane:
         self.read_lock = asyncio.Lock()
         self.read_cache = {}
         self.body_sequence = 0
+        self.autonomy_guard = AutonomyGuard(workspace, cfg["companion_uuid"])
+        self.autonomous_turn = False
+        self.spell_attempts = {}
 
     @property
     def revision(self):
@@ -382,6 +473,8 @@ class GameEnter(HookBase):
         await lane.lock.acquire()
         ctx.extras["qiandengji_lane"] = lane
         ctx.extras["qiandengji_context_token"] = _CURRENT_LANE.set(lane)
+        lane.autonomous_turn = meta.get("autonomous_daily") is True
+        lane.spell_attempts = {}
         lane.body_sequence += 1
         lane.project("working")
         return HookResult()
@@ -405,6 +498,8 @@ class GameLeave(HookBase):
         lane = ctx.extras.pop("qiandengji_lane", None)
         if lane is not None:
             try:
+                lane.autonomous_turn = False
+                lane.spell_attempts = {}
                 lane.body_sequence += 1
                 lane.project("unknown" if ctx.error else "idle")
             finally:
@@ -421,6 +516,30 @@ class ReviewBudget(HookBase):
         if ctx.extras.get("qiandengji_review") is not None and ctx.agent is not None:
             # Use AgentScope's own per-invocation ReAct limit; no extra loop.
             ctx.agent.react_config.max_iters = min(6, ctx.agent.react_config.max_iters)
+        elif ctx.extras.get("qiandengji_lane") is not None and ctx.agent is not None:
+            lane = ctx.extras["qiandengji_lane"]
+            if lane.autonomous_turn:
+                ctx.agent.react_config.max_iters = min(6, ctx.agent.react_config.max_iters)
+            # Native Scroll compaction reads model.context_size, not the old
+            # running.max_input_length field (which was silently ineffective).
+            # Cap this agent instance only; do not mutate provider/global config.
+            model = getattr(ctx.agent, "model", None)
+            size = getattr(model, "context_size", None)
+            if isinstance(size, (int, float)) and size > 64000:
+                # 2.2.2 wraps each per-agent model in Retry/TokenRecording.
+                # Native usage and compaction must see the same effective cap.
+                seen = set()
+                for _ in range(5):
+                    if model is None or id(model) in seen:
+                        break
+                    seen.add(id(model))
+                    size = getattr(model, "context_size", None)
+                    if isinstance(size, (int, float)) and size > 64000:
+                        model.context_size = 64000
+                    module = type(model).__module__
+                    if not module.startswith(("qwenpaw.providers.", "qwenpaw.token_usage.")):
+                        break
+                    model = getattr(model, "_inner", None) or getattr(model, "_model", None)
         return HookResult()
 
 
@@ -460,6 +579,19 @@ class PublicTools(MiddlewareBase):
             except (ValueError, TypeError, OverflowError):
                 yield tool_result({"status": "denied", "reason": "复盘参数无效；每批最多两个只读任务，最长180秒。"}, True)
                 return
+        if self.lane.autonomous_turn and name.rsplit("__", 1)[-1] == "command":
+            raw = call.get("input", "{}") if isinstance(call, dict) else getattr(call, "input", "{}")
+            try:
+                args = json.loads(raw) if isinstance(raw, str) else raw
+                line = " ".join(args.get("line", "").split())
+            except (TypeError, ValueError, AttributeError):
+                line = ""
+            if re.match(r"^/mycli cast\s+", line):
+                count = self.lane.spell_attempts.get(line, 0)
+                if count >= 2:
+                    yield tool_result({"status": "not_executed", "reason": "本轮同一法术已尝试两次；先核对真实目标、魔力和冷却，改可行步骤。"}, True)
+                    return
+                self.lane.spell_attempts[line] = count+1
         self.lane.project("tool_sent", name)
         body_tool = name not in REVIEW_TOOLS | {"spawn_subagent", "check_agent_task", "update_goal"}
         if body_tool:
@@ -548,7 +680,7 @@ class GameChannel(BaseChannel):
         request.request_context = {"source": "heartbeat" if meta.get("heartbeat") else "game_channel"}
         return request
 
-    def enqueue_heartbeat(self) -> bool:
+    def enqueue_heartbeat(self, preflight="", replan=False) -> bool:
         # One low-frequency native tick, no model while busy/offline, no backlog.
         if not self._enqueue or not self.lane or not self._connected or self.lane.lock.locked() or self._queued:
             return False
@@ -563,6 +695,12 @@ class GameChannel(BaseChannel):
                 "[游戏状态检查] 先查自己的连接与当前行动；只推进已有获准目标的一个短步骤。"
                                "没有目标就检查生存需要并安静待机。需要经验时先 memory_search；当前库存、任务以只读查询为准。"
                                "超时结果未知，不重放，不自动接单、领奖或开始远征。")
+        if preflight:
+            text += "\n[服务端刚完成的只读预检；不是动作完成证明]\n" + preflight[:2200]
+        if replan:
+            text += ("\n[无进展改计划] 同一委托已连续两轮没有服务器进度变化。保留原单和阻塞，"
+                     "本轮先补给、制造装备或推进附近可行步骤；没有新线索不重复探敌、闪现、归乡。"
+                     "无法推进就明确记录阻塞并安静等待条件变化，不把查询或计划重述算完成。")
         self._queued += 1
         self._enqueue({"text": text, "meta": {"heartbeat": True, "keys": [], "autonomous_daily": daily}})
         return True
@@ -578,6 +716,9 @@ class GameChannel(BaseChannel):
                               ("companion_uuid", "session_id", "player_name")):
                 return False
             self.lane.cfg = cfg  # A host pause takes effect without process restart.
+            if daily_enabled(cfg) and not self.lane.autonomy_guard.model_ready():
+                self.lane.project("waiting_model")
+                return False
             raw = texts(await self.invoke("command", {"line": "/mycli status"}))
             match = re.search(r"(?:^|\n)MC_STATUS\s+(\{)", raw)
             if not match:
@@ -591,9 +732,22 @@ class GameChannel(BaseChannel):
             if not needs_help and not getattr(goal, "active", False) and not daily_enabled(cfg):
                 self.lane.project("idle")
                 return False
+            preflight = ""; mode = "continue"
+            if daily_enabled(cfg):
+                task_raw = texts(await self.invoke("command", {"line": "/mycli tasks status"})).strip()
+                if not task_raw or len(task_raw) > 12000 or task_raw.startswith(("MC_STATUS", "MC_AUTH")):
+                    return False
+                critical = (status.get("downed") is True or float(status["food"]) <= 6
+                            or float(status["health"]) <= max(4, float(status["maxHealth"])*.3))
+                mode = self.lane.autonomy_guard.plan(task_raw, critical)
+                if mode.startswith("wait_"):
+                    self.lane.project(mode)
+                    return False
+                preflight = (f"生命 {status['health']}/{status['maxHealth']}；饥饿 {status['food']}；"
+                             f"魔力 {status.get('mana','未知')}。本轮无需重复预检，实际行动后再核对。\n" + task_raw)
         except Exception:
             return False  # A failed read is not a reason to start another brain.
-        return self.enqueue_heartbeat()
+        return self.enqueue_heartbeat(preflight, mode == "replan")
 
     def enqueue_operator(self, text: str) -> bool:
         # Only the already-authenticated host Console can take this path.
@@ -667,11 +821,13 @@ class GameChannel(BaseChannel):
         return None
 
     async def _on_process_completed(self, request, to_handle, send_meta):
+        self.lane.autonomy_guard.model_succeeded()
         content = self._reply_buffers.pop(tuple(send_meta.get("keys", [])), "")
         if content:
             await self.send(to_handle, content, send_meta)
 
     async def _on_consume_error(self, request, to_handle, error_message):
+        self.lane.autonomy_guard.model_failed(str(error_message))
         self.lane.project("unknown")
 
     async def send(self, to_handle, text, meta=None):
