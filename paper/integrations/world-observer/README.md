@@ -1,6 +1,6 @@
 # 无账号场景观战源 · WorldObserver 0.1.0
 
-**候选，未部署到正式服。** Paper 1.21.1 / Java 21 / ProtocolLib 5.3.0，复用
+**已上线WorldObserver 0.1.0，官网0.8.13/现代前端f69e3471。** Paper 1.21.1 / Java 21 / ProtocolLib 5.3.0，复用
 [mc-visual-console](https://github.com/jcs130/mc-visual-console) 现代化页面。
 已有玩家或 Numen 身体是观察对象；网页观众不会登录新的 Minecraft 玩家，不占 Eye 名额。
 
@@ -67,7 +67,8 @@ npm test
   它不是录像服务，恢复后拉当前状态，不回放旧操作。
 - 第一人称、第三人称跟随、3D 观战、原小地图与镜头设置复用现代前端。
   浏览器并非完整 Java 客户端；未验收的模型、声音、完整动画和像素一致性不可宣称等效。
-  YSM 需要已审核的 `bundledAppearanceCatalogFile`，不能只根据玩家名字生成替代身体。
+  Paper原YSM/皮肤可配置只读`appearance`来源，复用真实绑定、原资源SHA和导出器；
+  `bundledAppearanceCatalogFile`仍兼容。不能只根据玩家名字生成替代身体。
 
 ## 验证与回退
 

@@ -16,7 +16,7 @@
 - **共同经历：**队友救援、女神相机、署名照片与故事、官网相册和共同回忆展示。
 - **多种接入方式：**原版 Java、经 Geyser 接入的基岩玩家、Mineflayer Agent，以及可选的 Numen 服务端 Agent。YSM 等模型能力按客户端与资源包单独适配。
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
-  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已上线0.8.11，复用现代前端视角切换和小地图，不占额外玩家名额；`fe8d8313` 已修复手动镜头切换后只见状态栏。
+  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已上线0.8.13，复用现代前端视角切换和小地图，不占额外玩家名额；`f69e3471` 增加可见表面裁剪、压缩传输与原Paper角色模型，保留镜头切换修复。
 
 ## 带自己的 Agent 加入
 
@@ -54,7 +54,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | `paper/plugins/` | AgentFriend RPG 玩法、CortiEyeMirror 观战及共享协议源码 |
 | `paper/self-host/` | 固定依赖锁、跨主机构建与网站导出工具 |
-| `paper/integrations/agent-portal/` | 已上线 0.8.11 网站、完整宿主分包/历史档案、测试、Dockerfile 与无密模板 |
+| `paper/integrations/agent-portal/` | 已上线 0.8.13 网站、完整宿主分包/历史档案、测试、Dockerfile 与无密模板 |
 | `paper/integrations/world-observer/` | 已上线的无额外账号现代网页观战：独立Paper插件、出站worker、默认关闭配置与测试 |
 | `paper/integrations/` | 登录保护、Numen、YSM、基岩与其他可选集成 |
 | `packages/agent-mc-world/` | 保留原 main 的最新通用 Agent MC 核心、MCP 与 SDK |
@@ -71,7 +71,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.12** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.11** / `49306775`；登录节流、Skill/MCP资料、完整宿主分包与[自有插件直下](https://mc.kangqiang.site/downloads.html)已上线，无账号现代观战已上线；0.9.0多世界仍为独立候选 |
+| 网站源码 | 正式 **0.8.13** / `6051d6cb`；登录节流、Skill/MCP资料、完整宿主分包与[自有插件直下](https://mc.kangqiang.site/downloads.html)保持，现代观战加载、原角色模型和基岩在线识别更新；0.9.0多世界仍为独立候选 |
 | 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网下载 **Skill 1.2.1** 固定已验证的 rc.71 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 

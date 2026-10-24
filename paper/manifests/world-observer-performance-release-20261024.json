@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "date": "2026-10-24",
+  "websiteVersion": "0.8.13",
+  "serverSourceCommit": "6051d6cb90cda9cf3da833014d8ffdfb8c5428ce",
+  "viewerRepository": "https://github.com/jcs130/mc-visual-console",
+  "viewerCommit": "f69e34715a802490c5d79a4b62645b0d3a7fea87",
+  "observerPluginVersion": "0.1.0",
+  "minecraftVersion": "1.21.1",
+  "build": {
+    "buildSource": {
+      "sourceSha256": "f1f8a5c3e2d9149f29a1beb02dff29e07d21ac24cbb7313f30166f1e81f1d63c",
+      "sourceFiles": 362,
+      "scope": "native_renderer_and_its_included_host_adapters"
+    },
+    "browserBundleSha256": "14252ad6b220ccfc507d7e6dc5d72b39c96aeb9d8fe75239a3f0df3abf9b9811",
+    "consoleBundleSha256": "3ba7fa63d6de19803dc6746e8625907e0ec13f427540825f2660b2ccc1de270b",
+    "registrySha256": "55893d269459e1e05387903c77b2db877d7cece875ed31a5a6a2f965822ea546",
+    "assetManifestSha256": "1a0d8b0b402f3fd26b6173ea200c2a24275e34c5e126d88662228ee9b584c7b8",
+    "bundledAppearanceSha256": "ed07fb8022fabc545ebe87782a7abfdb195475808c90b53916994c85d0b8528a",
+    "serverItemPackSha256": "30b6712dd2209700e18ba7f6f1f625396cb35f41e5778b8474baa983dda1ad8a",
+    "viewerBuild": "f1f8a5c3e2d9149f29a1beb02dff29e07d21ac24cbb7313f30166f1e81f1d63c:883d378679d6d9163f4617240256164fd98ff78143c80936b2e2554dae3064da"
+  },
+  "scope": {
+    "paperRestarted": false,
+    "loginProxyRestarted": false,
+    "gameClientsChanged": false,
+    "gameDataChanged": false,
+    "gameAuthenticationChanged": false,
+    "extraMinecraftConnections": 0,
+    "newPublicHomePorts": 0,
+    "publicUuidsDefault": [],
+    "websiteAndObserverReconnected": true,
+    "existingWebsitePublishersReconnected": true
+  },
+  "verification": {
+    "rendererTestsPassed": 147,
+    "workerTestsPassed": 10,
+    "portalTestsPassed": 243,
+    "finalTargetedTestsPassed": 39,
+    "javascriptModulesChecked": 79,
+    "linuxTargetedTestsPassed": 15,
+    "websiteProtectedTablesPreserved": 17,
+    "databaseIntegrity": "ok",
+    "anonymousPageAndModelDenied": true,
+    "trustedBundlesMatched": true,
+    "nekoProductionPictureConfirmedByUser": true,
+    "kiritoProductionSource": {
+      "verified": true,
+      "originalUuidMatches": true,
+      "loadedColumns": 9,
+      "sseRenderBlocks": 16920,
+      "originalYsmBound": true,
+      "browserPixelConfirmationPending": false,
+      "productionPictureConfirmedByUser": true
+    },
+    "snapshotFreshnessSamples": 13,
+    "snapshotMaximumObservedAgeMs": 11470,
+    "onlineNumenViewingGateVerified": true,
+    "bedrockIdentityRegressionVerified": true,
+    "bedrockLiveSessionAndPaperUuidIntersectionObserved": true,
+    "bedrockFinalRealSessionOffline": true,
+    "allModelsAndAnimationsVerified": false,
+    "productionAutomatedBrowserVerified": false,
+    "physicalMobileVerified": false,
+    "sixteenAutonomousAgentsLoadVerified": false
+  },
+  "productionSample": {
+    "source": "NEKO real observation worker; one scene only",
+    "observedAt": "2026-10-24T05:00:21.522Z",
+    "transferredRawBytes": 19647091,
+    "transferredWireBytes": 4789723,
+    "savedPercent": 75.6,
+    "renderBlocks": 7128,
+    "occludedInteriorBlocks": 97387,
+    "surfaceHiddenBlocks": 2343,
+    "fpsImprovementMeasured": false
+  },
+  "transport": {
+    "sceneCompression": "gzip-chunks-v1",
+    "maximumDecodedChunkBytes": 65536,
+    "legacyIdentityCompatible": true,
+    "publicJsSavedPercent": 54.0,
+    "snapshotRetry": "One network retry with identical immutable sequence and body; no account or gameplay replay",
+    "hostTlsCompatibility": "TLSv1.2 ceiling only on affected outbound website workers; certificate validation retained",
+    "completeUploadTimeoutRootCauseProven": false,
+    "privateSnapshotPhaseDiagnostics": true
+  },
+  "retention": {
+    "owners": 8,
+    "ownerships": 15,
+    "galleryImages": 3,
+    "memoryPosts": 4,
+    "originalEyeAccountsPreserved": true,
+    "websiteBeforePerformanceAndBeforePresenceMirroredToTwoDisks": true,
+    "temporaryTransferKeysRevoked": true
+  },
+  "failureEvidenceRetained": [
+    "Initial account bridge preflight refused publication and old observer was restored",
+    "Linux home-script tests required an explicit read-only test mount; corrected run passed 15 tests",
+    "Stability probe incorrectly required a Bedrock player who had actually left to remain online; freshness subchecks and online Numen gates passed",
+    "Private Kirito SSE probe cleanup initially raised an intentional abort; corrected cleanup passed without changing game data"
+  ],
+  "rollback": "Normally reconnect observer with its preserved configuration/bootstrap and matching trusted website; use a retained website image/config while preserving the latest SQLite, game passwords, UUIDs, inventories, Eye pairs, worlds and content."
+}

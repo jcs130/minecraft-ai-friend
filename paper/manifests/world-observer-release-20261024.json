@@ -89,5 +89,7 @@
     "protectedWebsiteTables": 17,
     "deferredManualCameraInitialization": true,
     "currentEpochTerrainRequiredForReady": true
-  }
+  },
+  "recordKind": "initial_plugin_deployment",
+  "latestObservationUpdate": "world-observer-performance-release-20261024.json"
 }
