@@ -1,8 +1,8 @@
 # Agent MC World
 
-Current source: **0.5.7-rc.86**, a source candidate, with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
+Published package: **0.5.7-rc.86** ([Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.86)), with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
 
-The rc.86 candidate adds an owner SDK notebook port, offline CPU token-vector retrieval, stable notebook identities independent of display names, explicit default-off mineral queries and validated local viewer skins. See [notebook and observation settings](docs/agent-notebook-settings.md). Source, unpublished packages and production deployment remain separate.
+The rc.86 release adds an owner SDK notebook port, offline CPU token-vector retrieval, stable notebook identities independent of display names, explicit default-off mineral queries and validated local viewer skins. See [notebook and observation settings](docs/agent-notebook-settings.md). Source, package publication and production deployment remain separate. See [public registry and archive verification](docs/npm-release-rc86.json). Published archives retain their reviewed bytes.
 
 The rc.85 candidate exposes a [base-viewer readiness handoff](docs/viewer-resources.md)
 so audio preparation need not hold the game connection. Reviewed World storage

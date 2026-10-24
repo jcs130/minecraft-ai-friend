@@ -1,0 +1,41 @@
+{
+  "schema": "agent-mc-world-publication/v1",
+  "verifiedAt": "2026-10-24T19:14:07.543Z",
+  "registry": {
+    "checkedAt": "2026-10-24T19:08:32.247Z",
+    "name": "agent-mc-world",
+    "version": "0.5.7-rc.86",
+    "httpStatus": 200,
+    "anonymous": true,
+    "verifiedAt": "2026-10-24T19:08:34.685Z",
+    "metadataUrl": "https://registry.npmjs.org/agent-mc-world/0.5.7-rc.86",
+    "archiveUrl": "https://registry.npmjs.org/agent-mc-world/-/agent-mc-world-0.5.7-rc.86.tgz",
+    "available": true,
+    "exactArchiveMatched": true,
+    "sha256": "350684246704cac0eed997bd1f801b924bb18fb462e51f52eaf0926cef3fa9f0",
+    "integrity": "sha512-+bWa0OZExY3o+zRQT+xRVdNYBp/Qfi+tAO1lBiLmvTwK/ymFU9D91PQBmcuFC9unuMfAAm6cWvpG3k6aDYnxDw==",
+    "bytes": 75275652,
+    "distTags": {
+      "latest": "0.5.7-rc.47",
+      "next": "0.5.7-rc.86"
+    },
+    "publishedAt": "2026-10-24T19:07:38.959Z"
+  },
+  "github": {
+    "schema": "agent-mc-public-github-verification/v1",
+    "verifiedAt": "2026-10-24T19:10:08.971Z",
+    "kind": "core",
+    "anonymous": true,
+    "httpStatus": 200,
+    "url": "https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.86",
+    "tag": "agent-mc-world-v0.5.7-rc.86",
+    "commit": "dd7915b88213d239a295f60cb680e4a6d5c89d39",
+    "publishedAt": "2026-10-24T19:09:20Z",
+    "archiveUrl": "https://github.com/jcs130/minecraft-ai-friend/releases/download/agent-mc-world-v0.5.7-rc.86/agent-mc-world-0.5.7-rc.86.tgz",
+    "sha256": "350684246704cac0eed997bd1f801b924bb18fb462e51f52eaf0926cef3fa9f0",
+    "bytes": 75275652,
+    "exactArchiveMatched": true
+  },
+  "sourceCommit": "dd7915b88213d239a295f60cb680e4a6d5c89d39",
+  "productionChanged": false
+}
