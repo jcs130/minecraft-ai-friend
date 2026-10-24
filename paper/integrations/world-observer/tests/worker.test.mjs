@@ -108,6 +108,8 @@ test('HTTP failures and inflated response bodies are bounded',async()=>{
 test('worker cannot follow remote source URLs or URLs containing credentials',()=>{
  const base={rendererRoot:path.resolve('test/renderer'),assetDirectory:path.resolve('test/assets'),observerKeyFile:path.resolve('test/local.key'),portalTokenFile:path.resolve('test/portal.key'),observerOrigin:'http://127.0.0.1:10001/',portalOrigin:'https://portal.example.test/'};
  assert.equal(validateWorkerConfig(base).observerOrigin,'http://127.0.0.1:10001');
+ assert.equal(validateWorkerConfig({...base,terrainDeltas:true}).terrainDeltas,true);
+ for(const terrainDeltas of ['true',1,null])assert.throws(()=>validateWorkerConfig({...base,terrainDeltas}),/TERRAIN_DELTAS_INVALID/);
  for(const observerOrigin of ['http://192.168.1.1/','https://127.0.0.1/','http://localhost/','http://user:pass@127.0.0.1/','http://127.0.0.1/a'])assert.throws(()=>validateWorkerConfig({...base,observerOrigin}));
  assert.throws(()=>validateWorkerConfig({...base,portalOrigin:'http://public.example.test/'}));
 });

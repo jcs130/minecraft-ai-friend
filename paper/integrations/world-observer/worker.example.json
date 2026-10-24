@@ -1,6 +1,7 @@
 {
   "observerOrigin": "http://127.0.0.1:28994/",
   "sampleIntervalMs": 50,
+  "terrainDeltas": true,
   "observerKeyFile": "E:/MC/server/plugins/WorldObserver/worker.key",
   "portalOrigin": "https://mc.example.test/",
   "portalTokenFile": "E:/MC/private/world-observer-portal.key",

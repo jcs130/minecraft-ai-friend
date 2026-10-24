@@ -12,6 +12,7 @@ export function validateWorkerConfig(c) {
   if(local.protocol!=='http:'||local.hostname!=='127.0.0.1'||local.pathname!=='/'||local.username||local.password||local.search||local.hash)throw Error('OBSERVER_LOOPBACK_REQUIRED');
   if(portal.protocol!=='https:'&&!(portal.protocol==='http:'&&portal.hostname==='127.0.0.1')||portal.pathname!=='/'||portal.username||portal.password||portal.search||portal.hash)throw Error('OBSERVER_PORTAL_CONFIGURATION');
   if(c.sampleIntervalMs!==undefined&&(!Number.isInteger(c.sampleIntervalMs)||c.sampleIntervalMs<50||c.sampleIntervalMs>1000))throw Error('OBSERVER_SAMPLE_INTERVAL_INVALID');
+  if(c.terrainDeltas!==undefined&&typeof c.terrainDeltas!=='boolean')throw Error('OBSERVER_TERRAIN_DELTAS_INVALID');
   return {...c,sampleIntervalMs:c.sampleIntervalMs??50,observerOrigin:local.origin,portalOrigin:portal.origin};
 }
 export async function readBoundedJSON(response,maxBytes) {
@@ -145,7 +146,7 @@ export async function createObservationWorker(input,options={}) {
   const require=createRequire(import.meta.url),protocol=require('minecraft-protocol'),registry=require('minecraft-data')('1.21.1'),nbt=require('prismarine-nbt');
   const parsers=Object.fromEntries(['play','configuration'].map(state=>[state,protocol.createDeserializer({version:'1.21.1',state,isServer:false,noErrorLogging:true})]));
   const appearanceSource=config.appearance?new ObservationAppearanceSource({config:config.appearance,decodeBundle:(await moduleAt('host/viewer-ysm-assets.mjs')).decodeYsmBundle}):null;
-  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,appearanceSource,
+  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,terrainDeltas:config.terrainDeltas===true,appearanceSource,
     serverItemCatalogFile:config.serverItemCatalogFile,serverItemCatalogSha256:config.serverItemCatalogSha256,bundledAppearanceCatalogFile:config.bundledAppearanceCatalogFile||''});
   return new ObservationWorker({config,prepared,registry,appearanceSource,simplifyNBT:nbt.simplify,
     decodePacket:(bytes,state)=>parsers[state].parsePacketBuffer(bytes).data,startPublisher:startSpectatorPublisher,...options});

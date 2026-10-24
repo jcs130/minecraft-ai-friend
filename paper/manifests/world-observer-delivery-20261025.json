@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-25",
+  "state": "verified_source_candidate",
+  "deployed": false,
+  "viewerRepository": "https://github.com/jcs130/mc-visual-console",
+  "viewerCommit": "eceb4263425dac8b78562aaf80e930b91836c6cb",
+  "frozenBuildSourceSha256": "e74feebedfa29fa28f3c826eb2e1b37ede354ca524d1ebd7558e7a06bf74c4b7",
+  "frozenBrowserBundleSha256": "01adb6afc2e228b93f8de4b4ead3e75ff4b985dee6fc854fd6667afec0726019",
+  "frozenConsoleBundleSha256": "ea055a93db4cd2832004f18780f17f760bd7c5553697fe9c5d92aec8e50f442d",
+  "portalVersion": "0.8.15",
+  "workerVersion": "0.1.2",
+  "paperPluginVersionUnchanged": "0.1.0",
+  "rendererTestsPassed": 1291,
+  "rendererConditionalTestsSkipped": 37,
+  "typecheckPassed": true,
+  "portalTestsPassed": 247,
+  "workerTestsPassed": 16,
+  "originalNekoAndKiritoResourceChecksPassed": true,
+  "staticOnlyPublicApplicationCode": true,
+  "privateObservationAuthorizationKept": true,
+  "maxInFlightChunks": 4,
+  "maxRawChunkBytes": 65536,
+  "terrainDeltasDefault": false,
+  "originalNativeStateIdsAndCollisionRunsRetained": true,
+  "offlineFixture": {
+    "isLiveGameplay": false,
+    "originalTerrain": {
+      "rawBytes": 526845,
+      "gzipBytes": 106749
+    },
+    "indexedTerrain": {
+      "rawBytes": 333167,
+      "gzipBytes": 95377
+    },
+    "singleBlockEdit": {
+      "rawBytes": 1139,
+      "gzipBytes": 685
+    },
+    "mainScript": {
+      "rawBytes": 3699566,
+      "gzipBytes": 774789,
+      "brotliBytes": 679558
+    },
+    "browserRefreshApplicationRequests": 1,
+    "actualHttpBrotliBytesVerified": 679558,
+    "browserFps": 142.2,
+    "browserFrameGapP95Ms60Seconds": 8,
+    "browserFrameGapP99Ms60Seconds": 14,
+    "browserConsoleErrors": 0,
+    "minecraftConnectionsCreated": 0,
+    "modelCalls": 0
+  },
+  "productionCadenceVerified": false,
+  "productionVisualAcceptanceVerified": false,
+  "linuxImagePrepared": false,
+  "paperRestartRequired": false,
+  "loginProxyRestartRequired": false,
+  "agentClientModificationRequired": false,
+  "newPublicPorts": 0,
+  "newCdnOrOssResources": false,
+  "mustUpdatePortalRelayAndMatchingViewerAndWorker": true
+}

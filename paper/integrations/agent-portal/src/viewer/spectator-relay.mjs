@@ -11,6 +11,30 @@ const error = (res, status, reason) => {
   res.end(JSON.stringify({ available: false, reason }));
 };
 const send = (ws, value) => { if (ws.readyState === 1) ws.send(JSON.stringify(value)); };
+export function spectatorContentEncoding(header) {
+  if (!header) return 'identity';
+  const values = new Map();
+  for (const item of String(header).toLowerCase().split(',')) {
+    const [name, ...parameters] = item.trim().split(';');
+    const q = parameters.map(s => s.trim()).find(s => s.startsWith('q='));
+    const quality = q ? /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(q.slice(2)) ? Number(q.slice(2)) : 0 : 1;
+    if (name) values.set(name, quality);
+  }
+  const quality = name => values.get(name) ?? (name === 'identity' ? values.get('*') === 0 ? 0 : 1 : values.get('*') ?? 0);
+  const candidates = ['br', 'gzip', 'identity'].sort((a, b) => quality(b) - quality(a));
+  return quality(candidates[0]) > 0 ? candidates[0] : null;
+}
+function staticResponse(req, res, file, isPublic = false) {
+  const encoding = file.encodings ? spectatorContentEncoding(req.headers['accept-encoding']) : 'identity';
+  if (!encoding) { error(res, 406, 'SPECTATOR_ENCODING_UNAVAILABLE'); return; }
+  const bytes = encoding === 'identity' ? file.bytes : file.encodings[encoding];
+  const headers = { 'Content-Type': file.contentType, 'Cache-Control': isPublic ? 'public, max-age=31536000, immutable' : 'private, no-cache',
+    'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP, 'Referrer-Policy': 'no-referrer',
+    ...(file.encodings ? { Vary: 'Accept-Encoding' } : {}), ...(file.etag ? { ETag: file.etag } : {}) };
+  const match = file.etag && String(req.headers['if-none-match'] ?? '').split(',').some(tag => tag.trim() === '*' || tag.trim().replace(/^W\//, '') === file.etag.replace(/^W\//, ''));
+  if (match) { res.writeHead(304, headers); res.end(); return; }
+  res.writeHead(200, { ...headers, 'Content-Length': bytes.length, ...(encoding === 'identity' ? {} : { 'Content-Encoding': encoding }) }); res.end(bytes);
+}
 export function decodedSpectatorChunk(data,encoding='identity') {
   const chunk=decodeChunk(data,encoding);
   if(encoding==='gzip-chunks-v1')chunk.bytes=gunzipSync(chunk.bytes,{maxOutputLength:CHUNK_BYTES});
@@ -61,6 +85,20 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       send(source.ws, { type: 'request', id: pending.id, method: 'GET', path: pending.path });
     }
   }
+  function flushChunks(source, pending) {
+    while (!pending.awaitingDrain && pending.chunks.length && source.requests.has(pending.id)) {
+      const chunk = pending.chunks.shift();
+      const acknowledge = () => {
+        pending.unacknowledged--; pending.awaitingDrain = false; pending.onDrain = null;
+        if (source.requests.has(chunk.id)) send(source.ws, { type: 'ack', id: chunk.id, sequence: chunk.sequence });
+      };
+      pending.awaitingDrain = !pending.res.write(chunk.bytes);
+      if (pending.awaitingDrain) {
+        pending.onDrain = () => { acknowledge(); flushChunks(source, pending); };
+        pending.res.once('drain', pending.onDrain);
+      } else acknowledge();
+    }
+  }
   function upgrade(req, socket, head) {
     const raw = req.url?.split('?')[0] ?? '';
     if (!raw.startsWith(sourcePrefix + '/')) return false;
@@ -87,15 +125,10 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
           const id = data.length >= 8 ? data.readUInt32BE(0) : 0, pending = source.requests.get(id);
           if (!pending) return; // A cancelled request's last in-flight chunk.
           const chunk = decodedSpectatorChunk(data, pending.encoding);
-          if (!pending.started || chunk.sequence !== pending.sequence || pending.awaitingDrain) throw Error('SPECTATOR_CHUNK_ORDER');
+          if (!pending.started || chunk.sequence !== pending.sequence || pending.unacknowledged >= 4) throw Error('SPECTATOR_CHUNK_ORDER');
           pending.sequence++; pending.size += chunk.bytes.length;
           if (pending.path !== 'events' && pending.size > MAX_BODY_BYTES) throw Error('SPECTATOR_BODY_LIMIT');
-          pending.awaitingDrain = !pending.res.write(chunk.bytes);
-          const acknowledge = () => {
-            pending.awaitingDrain = false;
-            if (source.requests.has(chunk.id)) send(ws, { type: 'ack', id: chunk.id, sequence: chunk.sequence });
-          };
-          if (pending.awaitingDrain) pending.res.once('drain', acknowledge); else acknowledge();
+          pending.unacknowledged++; pending.chunks.push(chunk); flushChunks(source, pending);
           return;
         }
         const value = JSON.parse(data.toString('utf8'));
@@ -111,7 +144,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
           sources.set(channelId, source);
           // Keep the initial deadline until identity and the exact renderer
           // hashes have also passed; an authenticated idle socket is not live.
-          send(ws, { type: 'ready', protocol: SPECTATOR_PROTOCOL, playerUuid: source.playerUuid, build: site.build, maxChunkBytes: CHUNK_BYTES, compression: 'gzip-chunks-v1' });
+          send(ws, { type: 'ready', protocol: SPECTATOR_PROTOCOL, playerUuid: source.playerUuid, build: site.build, maxChunkBytes: CHUNK_BYTES, compression: 'gzip-chunks-v1', maxInFlightChunks: 4 });
           return;
         }
         if (value.type === 'source') {
@@ -155,7 +188,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
             ...(pending.path === 'events' ? { 'X-Accel-Buffering': 'no' } : {}) });
           if (pending.path === 'events') pending.res.flushHeaders();
         } else if (value.type === 'end') {
-          if (!pending.started || pending.awaitingDrain) throw Error('SPECTATOR_RESPONSE_ORDER');
+          if (!pending.started || pending.unacknowledged || pending.chunks.length) throw Error('SPECTATOR_RESPONSE_ORDER');
           pending.cleanup(); pending.res.end();
         } else if (value.type === 'error') pending.fail(502, 'SPECTATOR_SOURCE_RESOURCE_UNAVAILABLE');
         else throw Error('SPECTATOR_MESSAGE_INVALID');
@@ -168,6 +201,14 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
 
   async function http(req, res) {
     if (!req.url?.startsWith(pagePrefix + '/')) return false;
+    const staticPrefix = pagePrefix + '/_static/';
+    if (req.url.startsWith(staticPrefix)) {
+      // Public immutable scripts contain application code only. Their exact
+      // hash is part of the URL, independent of a private observation channel.
+      const local = req.method === 'GET' && site.staticFile?.(req.url.slice(staticPrefix.length));
+      if (!local) error(res, 404, 'SPECTATOR_ROUTE_NOT_FOUND'); else staticResponse(req, res, local, true);
+      return true;
+    }
     const raw = req.url.slice(pagePrefix.length + 1), parts = raw.split('/'), channelId = parts.shift();
     if (closed || req.method !== 'GET' || !CHANNEL_PATTERN.test(channelId ?? '') || /[%\\?#\x00-\x20]/.test(raw)
         || parts.some(p => p === '.' || p === '..')) { error(res, 400, 'SPECTATOR_REQUEST_INVALID'); return true; }
@@ -182,8 +223,9 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     }
     const page = relative === '' ? 'first' : ['third/', '3dview/'].includes(relative) ? relative.slice(0, -1) : null;
     const resource = relative.replace(/^(?:third|3dview)\//, '');
-    const local = page ? { bytes: site.page(`${pagePrefix}/${channelId}/`, source.info.viewerBuild, page), contentType: 'text/html; charset=utf-8' } : site.file(resource);
+    const local = page ? { bytes: site.page(`${pagePrefix}/${channelId}/`, source.info.viewerBuild, page, { staticPrefix: pagePrefix + '/_static' }), contentType: 'text/html; charset=utf-8' } : site.file(resource);
     if (local) {
+      if (!page) { staticResponse(req, res, local); return true; }
       res.writeHead(200, { 'Content-Type': local.contentType, 'Content-Length': local.bytes.length, 'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP, 'Referrer-Policy': 'no-referrer' });
       res.end(local.bytes); return true;
@@ -196,9 +238,11 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       error(res, 429, 'SPECTATOR_VIEWER_LIMIT'); return true;
     }
     const id = newId();
-    const pending = { id, req, res, path: resource, sequence: 0, size: 0, started: false, dispatched: false, awaitingDrain: false,
+    const pending = { id, req, res, path: resource, sequence: 0, size: 0, started: false, dispatched: false, awaitingDrain: false, unacknowledged: 0, chunks: [], onDrain: null,
       cleanup() {
         clearTimeout(pending.headerTimer); clearTimeout(pending.deadline); res.off('close', pending.cancel);
+        if (pending.onDrain) res.off('drain', pending.onDrain);
+        pending.chunks.length = 0; pending.onDrain = null;
         source.requests.delete(id);
         queueMicrotask(() => dispatch(source));
       },

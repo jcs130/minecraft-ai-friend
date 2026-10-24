@@ -1,6 +1,7 @@
 {
   "date": "2026-10-25",
-  "state": "verified_candidate",
+  "state": "superseded_verified_candidate",
+  "supersededBy": "world-observer-delivery-20261025.json",
   "deployed": false,
   "viewerRepository": "https://github.com/jcs130/mc-visual-console",
   "viewerCommit": "16843180378dc7bf757a57f9e9691bdc181f82ad",

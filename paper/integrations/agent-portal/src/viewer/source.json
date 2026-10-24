@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "77c98ea7e5bb96c3394982e4190d942d39ac43bc",
-  "status": "candidate-portal-0.8.14-model-retry-and-fullscreen",
+  "commit": "eceb4263425dac8b78562aaf80e930b91836c6cb",
+  "normalization": "CRLF-to-LF only",
   "files": {
     "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
-    "spectator-relay.mjs": "a61920fe324b19337f0ad3d4c936549a7100d96b2e8d2312b78dd3ae7236d0d1",
-    "spectator-site.mjs": "5504aaf7bfefd6d62997c497d7ade4c9cf47a776b6b03022760f93b92c8d50da"
+    "spectator-relay.mjs": "c710f2a9e966e2d7c0ac6311b169c912f978d555f9ebe071843677f299832e2a",
+    "spectator-site.mjs": "b5ef4d67aec49fdba525eac9874bc0663285728493e52b44669728e78cbddc39"
   }
 }

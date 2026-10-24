@@ -6,13 +6,22 @@ import { siteFixture, testPassword } from './helpers.mjs';
 import { loadConfig } from '../src/config.mjs';
 const token='obs_'+'a'.repeat(43),hash=createHash('sha256').update(token).digest('hex');
 const site={build:{browserBundleSha256:'1'.repeat(64),consoleBundleSha256:'2'.repeat(64)},page:()=>Buffer.from('<html>trusted viewer</html>'),file:()=>null};
-async function fixture(t,live={}) {
-  const f=await siteFixture(t,{live:{worldObserverEnabled:true,worldObserverTokenHash:hash,native3dSiteDirectory:path.resolve('isolated-site'),...live}},{spectatorSite:site});
+async function fixture(t,live={},spectatorSite=site) {
+  const f=await siteFixture(t,{live:{worldObserverEnabled:true,worldObserverTokenHash:hash,native3dSiteDirectory:path.resolve('isolated-site'),...live}},{spectatorSite});
   f.agent.authenticated=true;await f.portal.ready;
   f.worker=(options={})=>fetch(f.origin+'/api/v1/internal/world-view/poll',{method:'POST',body:'{}',...options,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,...options.headers}});
   f.watch=(client,id,viewerId=randomUUID())=>client.request(`/live/${id}/watch`,'POST',{viewerId});
   f.id=(await f.admin.request('/live')).data.channels[0].id;return f;
 }
+test('only fixed hash-addressed viewer application code is public; original game/account routes stay protected',async t=>{
+ const bytes=Buffer.from('/* trusted public application code */'),sha=createHash('sha256').update(bytes).digest('hex');
+ const f=await fixture(t,{}, {...site,staticFile:resource=>resource===sha+'/client.js'?{bytes,contentType:'text/javascript',etag:'W/"'+sha+'"'}:null});
+ const result=await fetch(f.origin+'/watch/_static/'+sha+'/client.js');assert.equal(result.status,200);assert.equal(await result.text(),bytes.toString());
+ assert.match(result.headers.get('cache-control'),/public.*immutable/);
+ assert.equal((await fetch(f.origin+'/watch/_static/'+sha+'/status.json')).status,404);
+ assert.equal((await fetch(f.origin+`/watch/${f.id}/status.json`)).status,403);
+ assert.equal((await fetch(f.origin+'/api/v1/internal/world-view/poll',{method:'POST',body:'{}'})).status,401);
+});
 test('live roles are automatic, private and UUID-bound without manual channels or game accounts',async t=>{
   const f=await fixture(t),result=(await f.admin.request('/live')).data;
   assert.equal(result.mode,'native-3d');assert.equal(result.channels[0].extraPlayerSlots,0);
