@@ -177,7 +177,6 @@
     "mineflayer": "4.37.1",
     "mineflayer-pathfinder": "2.4.5",
     "playwright-core": "1.63.0",
-    "pngjs": "7.0.0",
     "prismarine-auth": "3.1.1",
     "prismarine-block": "1.23.0",
     "prismarine-chunk": "1.41.0",
@@ -193,6 +192,7 @@
     "@types/node": "^22.10.0",
     "@types/pngjs": "6.0.5",
     "esbuild": "^0.28.2",
+    "pngjs": "7.0.0",
     "tsx": "4.23.15",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

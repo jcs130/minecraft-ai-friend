@@ -35,9 +35,6 @@ importers:
       playwright-core:
         specifier: 1.63.0
         version: 1.63.0
-      pngjs:
-        specifier: 7.0.0
-        version: 7.0.0
       prismarine-auth:
         specifier: 3.1.1
         version: 3.1.1
@@ -78,6 +75,9 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
+      pngjs:
+        specifier: 7.0.0
+        version: 7.0.0
       tsx:
         specifier: 4.23.15
         version: 4.23.15

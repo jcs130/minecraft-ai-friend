@@ -63,6 +63,10 @@ it('configured skins validate actual PNG bytes, dimensions and model without tru
   const skin=configuredPlayerSkin({bytes,model:'slim'});
   expect(skin.skinUrl).toMatch(/^\/agent-skin\/[a-f0-9]{64}\.png$/);
   expect(skin).toMatchObject({width:64,height:64,skinModel:'slim',skinSource:'local-viewer-override'});
+  expect(configuredPlayerSkin({bytes:PNG.sync.write(new PNG({width:64,height:32})),model:'classic'}).height).toBe(32);
+  expect(configuredPlayerSkin({bytes:PNG.sync.write(new PNG({width:64,height:64}),{colorType:2}),model:'classic'}).width).toBe(64);
+  const corrupted=Buffer.from(bytes);corrupted[corrupted.length-1]^=1;
+  expect(()=>configuredPlayerSkin({bytes:corrupted,model:'classic'})).toThrow(/decode/);
   expect(()=>configuredPlayerSkin({bytes:bytes.subarray(0,25),model:'classic'})).toThrow(/decode/);
   expect(()=>configuredPlayerSkin({bytes:PNG.sync.write(new PNG({width:128,height:128})),model:'classic'})).toThrow(/64/);
   expect(()=>configuredPlayerSkin({bytes,model:'unknown' as any})).toThrow(/model/);

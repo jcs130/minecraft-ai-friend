@@ -8,8 +8,8 @@
       "java-1.21.11"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-4da993d1.tgz",
-    "sha256": "e1ff1e981723e99476a945e6dcb6c75d67214cad8da4cba29f0892f2add6ccac",
+    "artifact": "vendor/mc-visual-console-java-1.21.1-4da993d1-audio.tgz",
+    "sha256": "a53a6cb443096ee113c964d44b4427e4a629acdf08584956004a147b0dc59b69",
     "soundPacks": [
       "java-1.21.1-sounds",
       "java-1.20.6-sounds",
@@ -21,6 +21,11 @@
       "1.21.1": "exact-version-separate-download",
       "1.20.6": "exact-version-separate-download",
       "1.21.11": "disabled-no-original-audio-pack"
+    },
+    "deferredAudioInput": {
+      "package": "agent-mc-world@0.5.7-rc.85",
+      "sha256": "8bb01430f2f8e9a8259df5f3105449bfdcc3b0c77a7fd8a46c33a72fa52b3936",
+      "filesCheckedAgainstCurrentSharedAssetPacks": 28
     }
   },
   "core": {
