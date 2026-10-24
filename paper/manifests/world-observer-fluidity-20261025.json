@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-25",
+  "state": "verified_candidate",
+  "deployed": false,
+  "viewerRepository": "https://github.com/jcs130/mc-visual-console",
+  "viewerCommit": "16843180378dc7bf757a57f9e9691bdc181f82ad",
+  "workerVersion": "0.1.1",
+  "paperPluginVersionUnchanged": "0.1.0",
+  "configuredSampleIntervalMs": 50,
+  "rendererTestsPassed": 1274,
+  "rendererConditionalTestsSkipped": 37,
+  "typecheckPassed": true,
+  "workerTestsPassed": 15,
+  "originalNekoAndKiritoResourceChecksPassed": true,
+  "browserFixture": {
+    "isLiveGameplay": false,
+    "manualOrbitTrackingVerified": true,
+    "fps": 144.5,
+    "arrivalP90Ms": 65.7,
+    "relativeCameraOffsetError": 1.1368683772161603e-13,
+    "consoleErrors": 0,
+    "minecraftConnectionsCreated": 0,
+    "modelCalls": 0
+  },
+  "productionCadenceVerified": false,
+  "productionVisualAcceptanceVerified": false,
+  "paperRestartRequired": false,
+  "loginProxyRestartRequired": false,
+  "agentClientModificationRequired": false,
+  "newPublicPorts": 0,
+  "authorizationExpiryRelaxed": false
+}

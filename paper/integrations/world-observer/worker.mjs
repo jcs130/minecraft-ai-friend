@@ -11,7 +11,8 @@ export function validateWorkerConfig(c) {
   const local=new URL(c.observerOrigin),portal=new URL(c.portalOrigin);
   if(local.protocol!=='http:'||local.hostname!=='127.0.0.1'||local.pathname!=='/'||local.username||local.password||local.search||local.hash)throw Error('OBSERVER_LOOPBACK_REQUIRED');
   if(portal.protocol!=='https:'&&!(portal.protocol==='http:'&&portal.hostname==='127.0.0.1')||portal.pathname!=='/'||portal.username||portal.password||portal.search||portal.hash)throw Error('OBSERVER_PORTAL_CONFIGURATION');
-  return {...c,observerOrigin:local.origin,portalOrigin:portal.origin};
+  if(c.sampleIntervalMs!==undefined&&(!Number.isInteger(c.sampleIntervalMs)||c.sampleIntervalMs<50||c.sampleIntervalMs>1000))throw Error('OBSERVER_SAMPLE_INTERVAL_INVALID');
+  return {...c,sampleIntervalMs:c.sampleIntervalMs??50,observerOrigin:local.origin,portalOrigin:portal.origin};
 }
 export async function readBoundedJSON(response,maxBytes) {
   if(!response.ok)throw Error('OBSERVATION_HTTP_'+response.status);
@@ -26,23 +27,23 @@ export class ObservationWorker {
   constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
     Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,fetcher,now,log});
     this.sources=new Map();this.lastPortalAt=0;this.lastPoll=0;this.lastLog=null;this.closed=false;
+    this.sampleIntervalMs=config.sampleIntervalMs??50;this.authorityInFlight=null;this.sampleInFlight=null;
+    this.lastSampleAt=null;this.sampleCount=0;this.sampleDurationMs=null;this.lifecycle=new AbortController();
   }
   report(reason){if(reason!==this.lastLog){this.log(reason);this.lastLog=reason;}}
-  status(){return {schemaVersion:1,readOnly:true,closed:this.closed,sources:[...this.sources.values()].map(source=>{
+  status(){return {schemaVersion:1,readOnly:true,closed:this.closed,sampling:{intervalMs:this.sampleIntervalMs,requests:this.sampleCount,
+    lastSampleAt:this.lastSampleAt,lastDurationMs:this.sampleDurationMs,authorityPending:!!this.authorityInFlight},sources:[...this.sources.values()].map(source=>{
     const host=source.view.host.status(),coverage=host.viewer?.terrain?.coverage;
     const appearance=this.appearanceSource?.binding({uuid:source.job.playerUuid,entityId:host.identity?.entityId});
     return {playerUuid:source.job.playerUuid,...source.publisher?.state?.(),terrain:coverage?{renderBlocks:coverage.renderBlocks,occludedBlocks:coverage.occludedBlocks,surfaceHiddenBlocks:coverage.surfaceHiddenBlocks,snapshotBuildMs:host.viewer.terrain.snapshotBuildMs,maxSliceMs:host.viewer.terrain.scan?.maxSliceMs}:null,
       appearance:appearance?{available:appearance.available,kind:appearance.kind,modelId:appearance.modelId,reason:appearance.reason}:null};
   })};}
   async request(origin,route,token,body,maxBytes){
-    return readBoundedJSON(await this.fetcher(new URL(route,origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(5000),
+    return readBoundedJSON(await this.fetcher(new URL(route,origin),{method:'POST',redirect:'error',signal:AbortSignal.any([this.lifecycle.signal,AbortSignal.timeout(5000)]),
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)}),maxBytes);
   }
-  async retire(id){const source=this.sources.get(id);if(!source)return;this.sources.delete(id);source.publisher?.close();await source.view.close();}
-  async step() {
-    if(this.closed)return;
-    if(this.now()-this.lastPoll>=2500){
-      this.lastPoll=this.now();
+  async retire(id){const source=this.sources.get(id);if(!source)return;this.sources.delete(id);source.publisherAbort?.abort();source.publisher?.close();await source.view.close();}
+  async refreshAuthority() {
       try{
         const reply=await this.request(this.config.portalOrigin,'/api/v1/internal/world-view/poll',this.config.portalToken,{},32768);
         if(this.closed)return;
@@ -63,19 +64,60 @@ export class ObservationWorker {
         }
         for(const id of [...this.sources.keys()])if(!seen.has(id))await this.retire(id);
         this.lastPortalAt=this.now();this.report('观战授权已连接。');
-      }catch(error){this.report('观战授权暂不可用，停止过期画面。');}
+      }catch(error){if(!this.closed)this.report('观战授权暂不可用，停止过期画面。');}
+  }
+  ensurePublisher(source) {
+    if(source.publisher||source.publisherPending)return;
+    source.publisherAbort=new AbortController();
+    source.publisherPending=Promise.resolve().then(()=>{
+      if(this.closed||this.sources.get(source.job.id)!==source)return null;
+      return this.startPublisher({sourceUrl:source.view.url,portalUrl:this.config.portalOrigin,channelId:source.job.id,
+        token:source.job.publisherToken,signal:source.publisherAbort.signal});
+    }).then(publisher=>{
+      if(!publisher)return;
+      if(this.closed||this.sources.get(source.job.id)!==source){publisher.close();return;}
+      source.publisher=publisher;
+      const ended=()=>{if(source.publisher===publisher)source.publisher=null;};
+      void publisher.done.then(ended,ended);
+    }).catch(async()=>{
+      if(this.sources.get(source.job.id)===source){await this.retire(source.job.id);this.report('观战发布暂不可用，等待重新接通。');}
+    }).finally(()=>{source.publisherPending=null;});
+  }
+  async step() {
+    if(this.closed)return;
+    if(!this.authorityInFlight&&this.now()-this.lastPoll>=2500){
+      this.lastPoll=this.now();
+      this.authorityInFlight=this.refreshAuthority().finally(()=>{this.authorityInFlight=null;});
+      // Startup may wait for its first grant; an existing scene never waits
+      // for a cloud round trip or another scene's publisher handshake.
+      if(!this.sources.size)await this.authorityInFlight;
     }
+    if(this.closed)return;
     if(this.now()-this.lastPortalAt>8000){for(const id of [...this.sources.keys()])await this.retire(id);return;}
-    const targets=[...this.sources.values()].map(s=>({uuid:s.job.playerUuid,lease:s.localLease,after:s.after,generation:s.generation}));
+    for(const [id,source] of this.sources)if(Date.parse(source.job.expiresAt)<=this.now())await this.retire(id);
+    if(this.sampleInFlight)return this.sampleInFlight;
+    if(this.lastSampleAt!==null&&this.now()-this.lastSampleAt<this.sampleIntervalMs)return;
+    this.lastSampleAt=this.now();
+    this.sampleInFlight=this.sampleSources().finally(()=>{this.sampleInFlight=null;});
+    return this.sampleInFlight;
+  }
+  async sampleSources() {
+    const active=[...this.sources.values()];
+    const targets=active.map(s=>({uuid:s.job.playerUuid,lease:s.localLease,after:s.after,generation:s.generation}));
     if(!targets.length)return;
     // This implementation has one channel per UUID. Duplicates indicate an
     // inconsistent job manifest rather than a reason to reset a live source.
     if(new Set(targets.map(t=>t.uuid)).size!==targets.length)throw Error('OBSERVER_DUPLICATE_TARGET');
+    const started=performance.now();
     try{
+      this.sampleCount++;
       const reply=await this.request(this.config.observerOrigin,'/v1/poll',this.config.observerKey,{schemaVersion:1,targets},12*1024*1024);
       if(this.closed)return;
       if(reply.schemaVersion!==1||reply.minecraftVersion!=='1.21.1'||!Array.isArray(reply.targets)||reply.targets.length>4)throw Error('OBSERVER_RECEIPT_INVALID');
-      for(const source of [...this.sources.values()]){
+      for(const source of active){
+        // A concurrent permission refresh may have replaced this exact source.
+        // Its delayed reply must neither update nor retire the replacement.
+        if(this.sources.get(source.job.id)!==source)continue;
         const row=reply.targets.find(r=>r.uuid===source.job.playerUuid);
         if(!row?.available||row.lease!==source.localLease){await this.retire(source.job.id);continue;}
         try{
@@ -84,17 +126,13 @@ export class ObservationWorker {
           ({after:source.after,generation:source.generation}=source.view.ingest(row));
           const status=source.view.host.status();
           if(status.viewer.reason)throw Error('OBSERVER_SCENE_UNAVAILABLE');
-          if(!source.publisher&&status.viewer.loadedColumns>=9&&status.identity.confirmed){
-            const publisher=await this.startPublisher({sourceUrl:source.view.url,portalUrl:this.config.portalOrigin,channelId:source.job.id,token:source.job.publisherToken});
-            if(this.closed||this.sources.get(source.job.id)!==source){publisher.close();return;}
-            source.publisher=publisher;
-            void publisher.done.then(()=>{if(source.publisher===publisher)source.publisher=null;});
-          }
+          if(status.viewer.loadedColumns>=9&&status.identity.confirmed)this.ensurePublisher(source);
         }catch(error){await this.retire(source.job.id);this.report('观战场景需要重新加载，旧画面已停止。');}
       }
-    }catch(error){for(const id of [...this.sources.keys()])await this.retire(id);this.report('游戏场景暂不可用，等待服务恢复。');}
+    }catch(error){for(const source of active)if(this.sources.get(source.job.id)===source)await this.retire(source.job.id);if(!this.closed)this.report('游戏场景暂不可用，等待服务恢复。');}
+    finally{this.sampleDurationMs=Math.round((performance.now()-started)*100)/100;}
   }
-  async close(){if(this.closed)return;this.closed=true;for(const id of [...this.sources.keys()])await this.retire(id);}
+  async close(){if(this.closed)return;this.closed=true;this.lifecycle.abort();for(const id of [...this.sources.keys()])await this.retire(id);}
 }
 
 export async function createObservationWorker(input,options={}) {
@@ -115,6 +153,6 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   const file=process.argv[2];if(!path.isAbsolute(file||''))throw Error('Use an absolute private observer configuration file');
   const worker=await createObservationWorker(JSON.parse(await fs.readFile(file,'utf8')),{log:text=>console.log(text)});
   let stopping=false;for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{stopping=true;void worker.close();});
-  try{while(!stopping){await worker.step();await new Promise(resolve=>setTimeout(resolve,200));}}
+  try{while(!stopping){await worker.step();await new Promise(resolve=>setTimeout(resolve,worker.sampleIntervalMs));}}
   finally{await worker.close();}
 }
