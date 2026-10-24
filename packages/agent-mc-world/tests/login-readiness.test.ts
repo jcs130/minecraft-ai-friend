@@ -37,6 +37,17 @@ function scopedLoginRig() {
 }
 
 describe('login readiness', () => {
+  it('preserves the missing-prompt diagnosis in the actual disconnect and connection state',async()=>{
+    vi.useFakeTimers();const r=scopedLoginRig();
+    try{
+      r.bridge.start();r.bots[0]!.emit('spawn');await vi.advanceTimersByTimeAsync(1000);
+      expect(r.bridge.connectionState).toMatchObject({phase:'retrying',ready:false,serverLogin:{reason:'request-not-detected'}});
+      expect(r.bots[0]!.chat).not.toHaveBeenCalled();
+      expect(r.bots[0]!.quit).toHaveBeenCalledWith(expect.stringContaining('未识别到服务器登录提示'));
+      expect(r.onDisconnect).toHaveBeenLastCalledWith(expect.stringContaining('尚未提交密码'),true,0);
+      expect(JSON.stringify(r.log.info.mock.calls)).not.toContain('private-reconnect-fixture');
+    }finally{await r.close();vi.useRealTimers();}
+  });
   it('owns respawn dispatch and cancels it when the connection stops', async () => {
     vi.useFakeTimers();
     const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit() {},

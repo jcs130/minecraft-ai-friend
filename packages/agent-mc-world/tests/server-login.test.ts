@@ -28,6 +28,77 @@ async function settle(check: () => boolean) {
   while (!check()) { if (Date.now() > end) throw new Error('authentication callback timeout'); await new Promise(r => setTimeout(r, 10)); }
 }
 describe('scoped automatic server authentication', () => {
+  it.each([
+    'Please, login with the command: /login <password>',
+    'Please log in using /login <password>',
+    '§e[AuthMe] 请使用指令：/login <密码>',
+    '[AuthMe] Sign in with /LOGIN <password>',
+  ])('recognizes a trusted login command independently of prompt wording: %s', async prompt => {
+    const r=fixture(),login=installServerLogin(r.bot,r.options);
+    r.messages(prompt,'chat');expect(r.sent).toEqual([]);
+    r.messages(prompt);r.messages(prompt);
+    await settle(()=>r.sent.length===1);
+    expect(r.sent).toEqual(['/login fixture-pass']);expect(login.ready()).toBe(false);
+    r.messages('AUTH_SUCCESS');expect(login.ready()).toBe(true);
+    r.messages(prompt);expect(r.sent).toHaveLength(1);
+    expect(JSON.stringify(r.reports)).not.toContain('fixture-pass');login.stop();
+  });
+  it.each(['/loginx <password>','/register <password> <password>',
+    '<Player> Please, login with /login <password>','[Global] <Player> /login <password>'])
+  ('does not treat registration, other commands or player chat as a login request: %s', async prompt=>{
+    const r=fixture(),readCredential=vi.fn(async()=>Buffer.from('fixture-pass'));
+    const login=installServerLogin(r.bot,{...r.options,readCredential});r.messages(prompt);
+    await Promise.resolve();expect(readCredential).not.toHaveBeenCalled();expect(r.sent).toEqual([]);
+    expect(login.status().stage).toBe('armed');login.stop();
+  });
+  it('never uses a login command to trigger an explicitly configured registration action',async()=>{
+    const r=fixture();writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,command:'register',repeatPassword:true}]}));
+    const readCredential=vi.fn(async()=>Buffer.from('fixture-pass')),login=installServerLogin(r.bot,{...r.options,readCredential});
+    r.messages('Please, login with the command: /login <password>');await Promise.resolve();
+    expect(readCredential).not.toHaveBeenCalled();expect(r.sent).toEqual([]);login.stop();
+  });
+  it('does not enable automatic login without explicitly configured credentials',()=>{
+    const r=fixture(),readCredential=vi.fn(async()=>Buffer.from('fixture-pass'));
+    const login=installServerLogin(r.bot,{...r.options,configFile:undefined,readCredential});
+    r.messages('Please, login with the command: /login <password>');
+    expect(login.status().stage).toBe('disabled');expect(readCredential).not.toHaveBeenCalled();expect(r.sent).toEqual([]);login.stop();
+  });
+  it.each(['§2Successful login!','[AuthMe] Successful login!',
+    'Logged-in due to Session Reconnection.',"You're already logged in!"])
+  ('accepts an exact standard server login/session receipt: %s',async receipt=>{
+    const r=fixture(),login=installServerLogin(r.bot,r.options);
+    r.messages(receipt,'chat');expect(login.ready()).toBe(false);
+    if(receipt.includes('Successful')){r.messages('Please, login with the command: /login <password>');await settle(()=>r.sent.length===1);expect(login.ready()).toBe(false);}
+    r.messages(receipt);expect(login.ready()).toBe(true);
+    expect(r.sent).toHaveLength(receipt.includes('Successful')?1:0);
+    expect(JSON.stringify(r.reports)).not.toContain('fixture-pass');login.stop();
+  });
+  it.each(['<Player> Successful login!','Not a successful login!',
+    'Successful login! is the text to expect','Successfully registered!'])
+  ('does not mistake chat, a negated/quoted success or registration for authorization: %s',receipt=>{
+    const r=fixture(),login=installServerLogin(r.bot,r.options);r.messages(receipt);expect(login.ready()).toBe(false);expect(r.sent).toEqual([]);login.stop();
+  });
+  it('does not override authoritative structured denial with a compatibility success receipt',()=>{
+    const r=fixture(),login=installServerLogin(r.bot,r.options);
+    r.messages('MC_AUTH_STATE {"authorized":false,"status":"login_required"}');
+    r.messages('Successful login!');expect(login.ready()).toBe(false);login.stop();
+  });
+  it('stops on the standard wrong-password receipt instead of resubmitting a rejected credential',async()=>{
+    const r=fixture(),login=installServerLogin(r.bot,r.options);r.messages('/login <password>');await settle(()=>r.sent.length===1);
+    r.messages('[AuthMe] Wrong password!');r.messages('/login <password>');
+    expect(login.detail()).toMatchObject({stage:'blocked',reason:'server-rejected'});expect(r.sent).toHaveLength(1);login.stop();
+  });
+  it.each([false,true])('distinguishes missing login prompts from missing confirmation (submitted=%s)',async submitted=>{
+    vi.useFakeTimers();
+    try{
+      const r=fixture();writeFileSync(r.configFile,JSON.stringify({enabled:true,accounts:[{...r.account,timeoutMs:1000}]}));
+      const login=installServerLogin(r.bot,{...r.options,readCredential:async()=>Buffer.from('fixture-pass')});
+      if(submitted){r.messages('AUTH_LOGIN');await vi.advanceTimersByTimeAsync(0);}
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(login.detail()).toMatchObject({stage:'retrying',reason:submitted?'confirmation-timeout':'request-not-detected'});
+      expect(r.sent).toHaveLength(submitted?1:0);expect(login.ready()).toBe(false);login.stop();
+    }finally{vi.useRealTimers();}
+  });
   it.each(['MC_AUTH_DENIED login required',
     'MC_AUTH_STATE {"username":"Agent","authorized":false,"status":"login_required"}'])
   ('reauthenticates once on the same connection after trusted revocation: %s', async marker => {
@@ -207,7 +278,7 @@ describe('scoped automatic server authentication', () => {
       const login = installServerLogin(r.bot, { ...r.options, readCredential: () => new Promise(resolve => { finish = resolve; }) });
       r.messages('AUTH_LOGIN');
       await vi.advanceTimersByTimeAsync(1000);
-      expect(login.detail()).toMatchObject({ stage: 'retrying', reason: 'confirmation-timeout' });
+      expect(login.detail()).toMatchObject({ stage: 'retrying', reason: 'credential-read-timeout' });
       const bytes = Buffer.from('must-not-send'); finish(bytes);
       await Promise.resolve();
       r.messages('AUTH_SUCCESS');
