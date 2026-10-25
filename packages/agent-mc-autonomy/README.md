@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+The 0.2.99 distribution pins core rc.89 and the shared viewer at 8b89927d.
+The core restores material-based viewer readiness and excludes idle sneak/jump
+signals from movement progress. The viewer includes upstream native appearance,
+HUD, portal and resource readiness changes, verified against its source inventory
+and browser bundle hashes. Original Minecraft 1.21.1 assets remain pinned.
+
 The 0.2.98 distribution consumes fixed core rc.88, including optional local
 MineDojo reference indexes and portable viewer resource diagnostics. Configure
 `knowledge.minedojo_index_file` as an explicit absolute SQLite path, with
