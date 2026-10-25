@@ -122,6 +122,28 @@ class MemorySettings:
 
 
 @dataclass(frozen=True)
+class KnowledgeSettings:
+    """Forward an explicitly prepared reference index to the shared core."""
+    minedojo_index_file: str = ""
+    retrieval: str = "hybrid"
+
+    @classmethod
+    def parse(cls, raw: dict) -> KnowledgeSettings:
+        if not isinstance(raw, dict) or set(raw) - cls.__dataclass_fields__.keys():
+            raise ValueError("knowledge must be a table of supported local reference settings")
+        index = _text(raw, "minedojo_index_file")
+        mode = _text(raw, "retrieval", "hybrid")
+        if index and not Path(index).is_absolute():
+            raise ValueError("knowledge.minedojo_index_file must be an absolute local path")
+        if mode not in {"hybrid", "lexical", "local-vector"}:
+            raise ValueError("knowledge.retrieval must be hybrid, lexical or local-vector")
+        return cls(index, mode)
+
+    def client_config(self) -> dict:
+        return {"minedojo": {"indexFile": self.minedojo_index_file, "retrieval": self.retrieval}} if self.minedojo_index_file else {}
+
+
+@dataclass(frozen=True)
 class Settings:
     enabled: bool = False
     host: str = ""
@@ -164,6 +186,7 @@ class Settings:
     mineral_vision: bool = False
     fast: FastSettings = field(default_factory=FastSettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
+    knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
     decision_policy: DecisionSettings = field(default_factory=DecisionSettings)
 
     @classmethod
@@ -272,6 +295,7 @@ class Settings:
             vision_enabled=_boolean(perception, "enabled", True),
             mineral_vision=_boolean(perception, "mineral_vision", False), fast=FastSettings.parse(raw.get("fast", {})),
             memory=MemorySettings.parse(raw.get("memory", {})),
+            knowledge=KnowledgeSettings.parse(raw.get("knowledge", {})),
             decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),
         )
 
@@ -311,6 +335,7 @@ class Settings:
                 "loginConfigFile": str(Path(self.login_config_file).expanduser().resolve()) if self.login_config_file else "",
                 "viewerPort": self.viewer_port,
                 "memory": self.memory.client_config(),
+                **({"knowledge": self.knowledge.client_config()} if self.knowledge.minedojo_index_file else {}),
                 **({"memoryAgentId": self.memory.agent_id} if self.memory.agent_id else {}),
                 "perception": {"mineralVision": self.mineral_vision},
                 "performanceBridge": {"module": "", "endpoint": ""},

@@ -53,6 +53,10 @@ image_input = false # Explicit capability; do not guess from the model name.
 enabled = true
 mineral_vision = false # Opt-in loaded-mineral queries only; physical permissions remain unchanged.
 
+[knowledge]
+minedojo_index_file = "" # Optional absolute path to a separately prepared reference SQLite index.
+retrieval = "hybrid" # CPU-only local retrieval; no corpus or embedding-model download.
+
 [fast]
 mode = "rules" # system_one enables an explicitly configured local/remote provider.
 endpoint = ""

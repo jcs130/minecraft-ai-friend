@@ -1,13 +1,15 @@
 # Agent MC Autonomy
 
-The 0.2.97 distribution keeps core rc.86 and schedules idle-presence reviews only
-after actual idle time; active inference and native work retain their own lifecycles.
-It forwards the shared offline notebook
-retrieval, optional stable note owner and explicit mineral-query policy.
-A denied or modified click still fails; an already received complete same-window
-server frame restores subsequent inventory access without another snapshot or
-replaying the click. Missing slots/cursor, unsent clicks and unknown dispatch stay
-blocked. Later unrelated core releases are not included.
+The 0.2.98 distribution consumes fixed core rc.88, including optional local
+MineDojo reference indexes and portable viewer resource diagnostics. Configure
+`knowledge.minedojo_index_file` as an explicit absolute SQLite path, with
+`knowledge.retrieval` set to `hybrid`, `lexical` or `local-vector`; an empty path
+leaves this source unconfigured. Preparation and provenance are documented in
+[the shared core guide](../agent-mc-world/docs/minedojo-knowledge.md). These are
+historical references, separate from personal game memory, with no automatic
+corpus download, embeddings service or gameplay action. The separately verified
+external viewer/resources remain pinned. The 0.2.97 idle review scheduling,
+inventory confirmation, unknown-result barriers and original native queue remain.
 
 The 0.2.94 controller ends the current model chain when a typed native action
 completes immediately without creating a task, such as an already-satisfied

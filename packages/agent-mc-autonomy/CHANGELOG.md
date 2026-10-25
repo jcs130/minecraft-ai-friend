@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.98
+
+- Consume the fixed rc.88 canonical engine with reference-index discovery, bounded local Wiki reads and viewer resource diagnostics.
+- Forward an explicitly configured local MineDojo index through neutral settings. Keep reference data separate from personal game memory; default to unconfigured, reject remote/relative paths and unsupported embeddings modes without filesystem or model calls.
+- Preserve the separately pinned external renderer/resources, idle review timing, inventory and unknown-result safeguards, and the single native queue.
+
 ## 0.2.97
 
 - Start optional idle-presence reviews after actual idle time. A bounded active
