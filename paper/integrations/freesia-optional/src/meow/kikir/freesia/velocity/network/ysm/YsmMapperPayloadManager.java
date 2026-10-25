@@ -338,11 +338,11 @@ public class YsmMapperPayloadManager {
             this.onBackendReady(player);
             attempted++;
         }
-        this.recoverMissingHeadlessStates();
+        this.recoverMissingWorkerStates();
     }
 
     /** Query the existing private Worker, never emulate a YSM client handshake. */
-    private void recoverMissingHeadlessStates() {
+    private void recoverMissingWorkerStates() {
         // This installation has one Worker. Refuse ambiguous multi-worker routing.
         if (Freesia.registedWorkers.size() != 1 || Freesia.PROXY_SERVER.getAllPlayers().size() > 40) return;
         final MasterServerMessageHandler worker = Freesia.registedWorkers.values().iterator().next();
@@ -351,8 +351,10 @@ public class YsmMapperPayloadManager {
             if (issued >= 4) break;
             final long epoch = this.backendEpoch(owner);
             final MapperSessionProcessor mapper = this.mapperSessions.get(owner);
-            if (mapper == null || !this.acceptsWorkerPayload(mapper) || this.isPlayerInstalledYsm(owner)
-                    || this.unavailableMappers.contains(owner.getUniqueId())) continue;
+            // A native client may complete the version handshake without sending
+            // a model selection (for example a saved nonmandatory model). Having
+            // YSM installed is not proof that the mapper holds its native state.
+            if (!this.workerRecoveryReady(owner, mapper)) continue;
             final YsmPacketProxy proxy = mapper.getPacketProxy();
             if (proxy.getCurrentEntityState() != null) continue;
             final var ticket = this.stateRestore.issue(owner.getUniqueId(), epoch, mapper, worker,
@@ -371,9 +373,19 @@ public class YsmMapperPayloadManager {
         return this.stateRestore.pending(player, worker, System.nanoTime());
     }
 
+    private boolean workerRecoveryReady(Player owner, MapperSessionProcessor mapper) {
+        if (mapper == null || !this.acceptsWorkerPayload(mapper)
+                || this.unavailableMappers.contains(owner.getUniqueId())) return false;
+        // Recovery notifies the native owner as well as trackers. A version reply
+        // alone is not enough: wait until its real Worker cache-init packet has
+        // been forwarded. Never make a recovered state overtake initialization.
+        return !this.isPlayerInstalledYsm(owner)
+                || this.observersResynced.get(owner.getUniqueId()) == mapper;
+    }
+
     private boolean currentReadback(WorkerStateRestoreGate.Ticket ticket, MasterServerMessageHandler worker, Player owner) {
         final MapperSessionProcessor mapper = this.mapperSessions.get(owner);
-        if (mapper == null || !this.acceptsWorkerPayload(mapper) || this.unavailableMappers.contains(owner.getUniqueId())
+        if (!this.workerRecoveryReady(owner, mapper)
                 || Freesia.registedWorkers.size() != 1 || !Freesia.registedWorkers.containsValue(worker)) return false;
         final YsmPacketProxy proxy = mapper.getPacketProxy();
         return this.stateRestore.current(ticket, this.backendEpoch(owner), mapper, worker,
@@ -408,7 +420,7 @@ public class YsmMapperPayloadManager {
                         this.stateRestore.finish(ticket);
                         if (restored) {
                             proxy.notifyFullTrackerUpdates();
-                            Freesia.LOGGER.info("Restored native Worker model state for {} without a client YSM handshake", owner.getUsername());
+                            Freesia.LOGGER.info("Restored missing native Worker model state for {}", owner.getUsername());
                         }
                     });
         } catch (Exception invalidReadback) {

@@ -98,9 +98,9 @@ python build.py --dependencies <private-dependencies> --output <new-private-buil
 
 Use a fresh output directory. The script verifies input JAR digests, records source and cache hashes, and produces:
 
-- `Freesia-Velocity-2.5.1+2.4.1-af3.jar`
+- `Freesia-Velocity-2.5.1+2.4.1-af5.jar` (candidate; production remains af3)
 - `Freesia-Worker-2.5.1+2.4.1-af1.jar`
-- `AgentAppearance-0.3.2.jar` (candidate; production remains 0.3.1)
+- `AgentAppearance-0.3.2.jar` (legacy build output; production is 0.3.3; **do not downgrade it**)
 - `AgentAppearance-WorkerCleanup-0.1.0.jar`
 - `build-manifest.json`
 
@@ -108,7 +108,7 @@ The script does not install, download, restart or modify a production server. Ke
 
 ## Deployment and rollback
 
-The deployed 0.3.0 module is wired into the production maintenance task. Update the candidate through that same single-instance supervisor and Watchdog, validate the original identity and Geyser routes, and perform the normal E/F backups and restart announcement. Preserve all original UUIDs, inventories, skills, ownership rules, ledgers and worlds. No `/reload` or server-core replacement. This round prohibits a gameplay/proxy restart; do not replace the live JAR or queue an automatic deployment.
+Update a confirmed candidate through the existing single-instance supervisor and Watchdog, validate the original identity and Geyser routes, and perform the normal E/F backups and restart announcement. Preserve all original UUIDs, inventories, skills, ownership rules, ledgers and worlds. No `/reload` or server-core replacement. The 2026-10-25 af5 candidate has not been deployed; its expanded proxy maintenance requires confirmation. Only the Freesia proxy JAR is included: the build's legacy appearance JAR is not an upgrade.
 
 Rollback restores the prior gateway backend route and removes only the newly added bridge services/plugin; preserve the existing Paper data and retain YSM assignments as separate appearance data. Rebuild and verify the matching Web consumer independently. Publishing source alone never updates a remote Agent's Web view.
 

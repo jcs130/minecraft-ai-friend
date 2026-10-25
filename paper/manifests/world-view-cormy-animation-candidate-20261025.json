@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-25",
+  "state": "verified_candidate_not_deployed",
+  "deployed": false,
+  "portalVersion": "0.8.17",
+  "workerVersion": "0.1.2",
+  "viewerRepository": "https://github.com/jcs130/mc-visual-console",
+  "viewerCommit": "19768897809a22befdf1ebcb56d5c11cbd39a2a4",
+  "frozenBuildSourceSha256": "6776d3107d08cc6c1a3e40e3756be1b12d29f9297738235e525f3ec8a56a3b5a",
+  "frozenBrowserBundleSha256": "fecf34df6b2ef9bc84323feda45a3fad5142c82b3b7aa834b379fae53c687ef8",
+  "frozenConsoleBundleSha256": "eef6453cb36c8796893aab9e65171f83d346933624212f12156ada1f7daf45cc",
+  "proxy": {
+    "previous": "Freesia-Velocity-2.5.1+2.4.1-af3",
+    "candidate": "Freesia-Velocity-2.5.1+2.4.1-af5",
+    "previousSha256": "593f06f6005d55772ef578c013db8cae733ec051d43f1ab9035b9e20338b6b38",
+    "candidateSha256": "47ec3fc898852919c11451f60976f5246e0e194be8318061921e16108a1a8d0a",
+    "appearancePluginPreserved": "0.3.3"
+  },
+  "tests": {
+    "javaPassed": 105,
+    "rendererPassed": 1307,
+    "rendererConditionalSkipped": 37,
+    "portalPassed": 248
+  },
+  "browserReplay": {
+    "fixture": true,
+    "originalCormyModel": true,
+    "originalHeldItems": true,
+    "thirdPersonFollow": true,
+    "consoleErrors": 0,
+    "gameConnections": 0,
+    "modelCalls": 0
+  },
+  "productionVisualAcceptanceVerified": false,
+  "paperRestartRequired": false,
+  "modelProxyRestartRequired": true,
+  "workerBinaryChanged": false,
+  "agentClientChangesRequired": false,
+  "previousStartupCandidateIncluded": true,
+  "defaultCamera": "third",
+  "privateModelsRemainAuthenticated": true,
+  "newPublicPorts": 0
+}
