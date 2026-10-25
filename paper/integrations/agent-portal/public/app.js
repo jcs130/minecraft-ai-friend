@@ -220,7 +220,7 @@ function eventsPage() {
 function livePage() {
   const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
   state.selectedChannel = selected?.id || null;
-  return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。')
+  return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。', selected?.canManagePublic ? button('world-visibility',selected.visibility==='public'?'关闭公开观战':'开启公开观战','eye','',`data-id="${e(selected.id)}" data-public="${selected.visibility!=='public'}"`) : '')
     + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。公开画面不含私聊与完整背包；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
 }
 function worldChannelButtons(selectedId) {
@@ -600,6 +600,10 @@ document.addEventListener('click', async event => {
     else if (action === 'event-filter') { await loadEvents(1, target.dataset.kind); render(); }
     else if (action === 'event-page') { await loadEvents(Number(target.dataset.page)); render(); }
     else if (action === 'watch-channel') { state.selectedChannel = target.dataset.id; render(); await pollLiveFrame(); }
+    else if (action === 'world-visibility') {
+      const enabled=target.dataset.public==='true';
+      openModal(enabled?'公开这个角色的冒险？':'关闭公开观战？',enabled?'开启后，游客无需登录即可观看地形、人物外观和动作。':'关闭后，游客画面立即停止，仅本人和网站管理员可看。',`<form id="world-visibility-form" data-id="${e(target.dataset.id)}" data-public="${enabled}" class="form-grid"><p>私聊、完整背包和私人 Agent 信息不会公开。你随时可以关闭，角色转交后由新主人重新选择。</p><div class="form-error" role="alert"></div><button class="btn primary" type="submit">${enabled?'开启公开观战':'关闭公开观战'}</button></form>`);
+    }
     else if (action === 'new-notice') {
       openModal('发布世界公告', '公告会出现在网站世界动态中', `<form id="notice-form" class="form-grid"><label class="field">标题<input name="title" required maxlength="100"></label><label class="field">正文<textarea name="body" required maxlength="2000" rows="6"></textarea></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">发布公告</button></form>`);
     } else if (action === 'new-channel') {
@@ -662,7 +666,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form'].includes(form.id)) return;
+  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form', 'world-visibility-form'].includes(form.id)) return;
   event.preventDefault(); const values = Object.fromEntries(new FormData(form));
   const errorElement = form.querySelector('.form-error'); errorElement.textContent = '';
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
@@ -738,6 +742,10 @@ document.addEventListener('submit', async event => {
       if (operation !== 'claim' && values.gamePassword !== values.confirmGamePassword) throw new Error('两次游戏密码不一致');
       const result = await api(operation === 'claim' ? '/agent-claims' : operation === 'password' ? '/game-password' : '/agents', { method: 'POST', body: JSON.stringify({ requestId: form.dataset.request, username: values.username, ...(operation !== 'claim' ? { gamePassword: values.gamePassword } : {}), ...(operation === 'password' ? { currentGamePassword: values.currentGamePassword } : {}) }) });
       form.reset(); accountJobModal(result);
+    } else if (form.id === 'world-visibility-form') {
+      await api(`/live/${form.dataset.id}/visibility`, {method:'PATCH',body:JSON.stringify({public:form.dataset.public==='true'})});
+      state.channels=(await api('/live')).channels;worldLastRenew=0;
+      removeWorldFrame();modal.close();render();toast(form.dataset.public==='true'?'已开启公开观战':'已关闭公开观战');
     } else if (form.id === 'channel-form' || form.id === 'rotate-publisher-form') {
       const result = await api(form.id === 'channel-form' ? '/live-channels' : `/live-channels/${form.dataset.id}/publisher`, { method: 'POST', body: JSON.stringify(values) });
       state.channels = (await api('/live')).channels; state.selectedChannel = result.id;

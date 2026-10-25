@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { siteFixture, testPassword } from './helpers.mjs';
 import { loadConfig } from '../src/config.mjs';
+import { WorldView } from '../src/world-view.mjs';
 const token='obs_'+'a'.repeat(43),hash=createHash('sha256').update(token).digest('hex');
 const site={build:{browserBundleSha256:'1'.repeat(64),consoleBundleSha256:'2'.repeat(64)},page:()=>Buffer.from('<html>trusted viewer</html>'),file:()=>null};
 async function fixture(t,live={},spectatorSite=site) {
@@ -129,4 +130,41 @@ test('native Numen bodies use exact live registry identity, never a nickname or 
   f.agent.identitySource='Paper.usercache';assert.equal((await f.watch(f.admin,f.id)).status,503);
   f.agent.identitySource='Numen.CompanionRegistry';f.agent.statusSource='minecraft.server-list-ping.sample';assert.equal((await f.watch(f.admin,f.id)).status,503);
   f.agent.statusSource='minecraft.server-list-ping.uuid';f.agent.authenticated=false;assert.equal((await f.watch(f.admin,f.id)).status,503);
+});
+test('only the bound role owner can opt in; guests and another administrator cannot publish it',async t=>{
+  const f=await fixture(t),alice=f.client();await alice.init();await alice.request('/accounts','POST',{username:'public-alice',password:testPassword});
+  const owner=f.portal.store.ownerByName('public-alice');
+  await f.admin.request('/admin/bindings','POST',{ownerId:owner.id,agentId:f.agent.id,proof:'Isolated original role owner',confirmedOwnership:true});
+  assert.equal((await f.admin.request(`/live/${f.id}/visibility`,'PATCH',{public:true})).status,404);
+  assert.equal((await alice.request('/live')).data.channels[0].canManagePublic,true);
+  assert.equal((await fetch(f.origin+`/api/v1/live/${f.id}/visibility`,{method:'PATCH',body:'{"public":true}',headers:{'Content-Type':'application/json'}})).status,403);
+  for(const body of [{public:'true'},{public:true,ownerId:owner.id},{}])assert.equal((await alice.request(`/live/${f.id}/visibility`,'PATCH',body)).status,400);
+  assert.equal((await alice.request(`/live/${f.id}/visibility`,'PATCH',{public:true})).status,200);
+  const guest=f.client();await guest.init();const channel=(await guest.request('/live')).data.channels[0];
+  assert.equal(channel.visibility,'public');assert.equal(channel.canManagePublic,false);
+  assert.equal((await guest.request(`/live/${f.id}/visibility`,'PATCH',{public:false})).status,401);
+});
+test('public toggle retires old private stream before scope change, then closing immediately revokes guests and old grants',async t=>{
+  const f=await fixture(t),owner=f.portal.store.ownerByName('fixture-admin');
+  f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,f.uuid,'Isolated owner',Date.now());
+  await f.watch(f.admin,f.id);const old=(await f.worker().then(r=>r.json())).jobs[0];assert.equal(old.scope,'owner');
+  const invalidated=[],original=f.portal.worldView.onInvalidate;f.portal.worldView.onInvalidate=id=>{invalidated.push({id,public:f.portal.worldView.isPublic(f.agent)});original(id);};
+  await f.admin.request(`/live/${f.id}/visibility`,'PATCH',{public:true});assert.deepEqual(invalidated[0],{id:f.id,public:false});
+  const guest=f.client();await guest.init();await f.watch(guest,f.id);
+  const current=(await f.worker().then(r=>r.json())).jobs;assert.equal(current.length,1);assert.equal(current[0].scope,'scene');assert.notEqual(current[0].lease,old.lease);
+  assert.throws(()=>f.portal.worldView.publisher(f.id,old.publisherToken,[f.agent]));
+  await f.admin.request(`/live/${f.id}/visibility`,'PATCH',{public:false});
+  assert.equal((await guest.request('/live')).data.channels.length,0);assert.equal((await f.watch(guest,f.id)).status,404);
+  assert.throws(()=>f.portal.worldView.publisher(f.id,current[0].publisherToken,[f.agent]));
+  assert.equal((await f.worker().then(r=>r.json())).jobs[0].scope,'owner');
+});
+test('opt in is persistent for its owner, but an ownership transfer or invalid stored setting returns to private',async t=>{
+  const f=await fixture(t),owner=f.portal.store.ownerByName('fixture-admin');
+  f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,f.uuid,'Isolated owner',Date.now());
+  await f.admin.request(`/live/${f.id}/visibility`,'PATCH',{public:true});
+  const restarted=new WorldView(f.config,f.portal.store);assert.equal(restarted.isPublic(f.agent),true);
+  const bob=f.client();await bob.init();await bob.request('/accounts','POST',{username:'new-owner',password:testPassword});
+  f.portal.store.db.prepare('UPDATE ownerships SET owner_id=? WHERE agent_uuid=?').run(f.portal.store.ownerByName('new-owner').id,f.uuid);
+  assert.equal(restarted.isPublic(f.agent),false);assert.equal((await fetch(f.origin+'/api/v1/live').then(r=>r.json())).channels.length,0);
+  f.portal.store.db.prepare('UPDATE settings SET value=? WHERE key=?').run('malformed','world-view-public:'+f.uuid);assert.equal(restarted.isPublic(f.agent),false);
 });

@@ -19,7 +19,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, initialObservation = 'live' } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, managedOwner = false, initialObservation = 'live' } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -51,6 +51,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   const { window } = dom; const { document } = window;
   let cookie = ''; let networkFailure = false; let hold = null; let observationState = initialObservation;
   const watchRequests = [];
+  let publicObservation=false;
   window.scrollTo = () => {};
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); };
@@ -61,7 +62,10 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     if (url.pathname === '/api/v1/gallery') return new Response(JSON.stringify({ photos }));
     // Frontend-only fixture. Native streaming and actual ACLs have separate
     // HTTP/WS tests and real Paper/WebGL acceptance.
-    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:'public'},{id:'b'.repeat(32),playerName:'ag_Beta',managed:true,online:true,available:true,visibility:'public'}]}));
+    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:managedOwner?(publicObservation?'public':'owner'):'public',canManagePublic:managedOwner,isOwn:managedOwner},{id:'b'.repeat(32),playerName:'ag_Beta',managed:true,online:true,available:true,visibility:'public'}]}));
+    if(managedLive&&url.pathname==='/api/v1/live/'+'a'.repeat(32)+'/visibility'&&options.method==='PATCH') {
+      publicObservation=JSON.parse(options.body).public;return new Response(JSON.stringify({visibility:publicObservation?'public':'owner'}));
+    }
     if (managedLive && /^\/api\/v1\/live\/[a-f0-9]{32}\/watch$/.test(url.pathname)) {
       if(observationState==='offline')throw new TypeError('Failed to fetch');
       watchRequests.push(url.pathname);
@@ -117,6 +121,19 @@ test('historical owned bodies are labelled with separate UUIDs and cannot offer 
  ui.window.location.hash='account';await waitFor(()=>ui.document.querySelector('[data-action="change-game-password"]'));
  ui.click('[data-action="change-game-password"]');await waitFor(()=>ui.document.querySelector('#game-account-form'));
  assert.equal(ui.document.querySelector('#game-account-form select[name="username"] option[value="Fishy"]'),null);
+});
+test('role owner can opt in and revoke guest observation from the live page, with a privacy explanation',async t=>{
+  const ui=await screen(t,{initialView:'live',managedLive:true,managedOwner:true});
+  const button=()=>ui.document.querySelector('[data-action="world-visibility"]');
+  assert.equal(button().textContent.includes('开启公开观战'),true);
+  ui.click('[data-action="world-visibility"]');await waitFor(()=>ui.document.querySelector('#world-visibility-form'));
+  assert.match(ui.document.querySelector('#world-visibility-form').textContent,/私聊、完整背包和私人 Agent 信息不会公开/);
+  ui.submit('#world-visibility-form');await waitFor(()=>button()?.textContent.includes('关闭公开观战'));
+  ui.click('[data-action="world-visibility"]');ui.submit('#world-visibility-form');
+  await waitFor(()=>button()?.textContent.includes('开启公开观战'));
+  ui.click('[data-action="watch-channel"][data-id="'+ 'b'.repeat(32)+'"]');
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]')?.dataset.channel==='b'.repeat(32));
+  assert.equal(button(),null);
 });
 
 test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {

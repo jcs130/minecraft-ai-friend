@@ -21,7 +21,30 @@ export class WorldView {
       &&!reservedIdentityName(row.name)&&['agent','player'].includes(row.kind))
       .map(row=>[idFor(row.playerUuid.toLowerCase()),{...row,playerUuid:row.playerUuid.toLowerCase()}]));
   }
-  isPublic(row) { return this.config.live.worldObserverPublicUuids.includes(row.playerUuid); }
+  roleOwner(row) { return this.store.db.prepare('SELECT owner_id FROM ownerships WHERE agent_uuid=?').get(row.playerUuid)?.owner_id ?? null; }
+  isPublic(row) {
+    const saved=this.store.db.prepare('SELECT value FROM settings WHERE key=?').get('world-view-public:'+row.playerUuid);
+    if(saved) {
+      try { const value=JSON.parse(saved.value);return value.enabled===true&&!!value.ownerId&&value.ownerId===this.roleOwner(row); }
+      catch { return false; }
+    }
+    return this.config.live.worldObserverPublicUuids.includes(row.playerUuid);
+  }
+  binding(row) { return (this.roleOwner(row)??'unbound')+':'+(this.isPublic(row)?'scene':'owner'); }
+  retire(id) { this.sources.delete(id);this.onInvalidate?.(id); }
+  setPublic(id,roster,owner,enabled) {
+    const row=this.roles(roster).get(id);
+    if(!row||!owner||!this.store.ownedUuids(owner.id).includes(row.playerUuid))throw fail(404,'CHANNEL_NOT_FOUND','请由已绑定的角色主人设置公开观战');
+    if(typeof enabled!=='boolean')throw fail(400,'INVALID_VISIBILITY','请选择是否公开观战');
+    // Synchronous revocation happens before the new scope becomes visible.
+    // An old private SSE/cache must never serve the first public visitor.
+    this.retire(id);
+    this.store.db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+      .run('world-view-public:'+row.playerUuid,JSON.stringify({ownerId:owner.id,enabled}));
+    this.store.audit(owner.id,'world-view.visibility',row.playerUuid,enabled?'public':'owner');
+    this.reconcile(roster);
+    return {id,visibility:enabled?'public':'owner',scope:enabled?'scene':'owner'};
+  }
   allowed(row, owner) { return this.isPublic(row)||!!owner&&(owner.role==='admin'||this.store.ownedUuids(owner.id).includes(row.playerUuid)); }
   online(row) {
     // Native Numen bodies have no network login session. Require their exact
@@ -44,7 +67,7 @@ export class WorldView {
       if(this.now()-demand.at>=20000||!actor||!row||!this.online(row)||!this.allowed(row,actor.owner))this.demands.delete(key);
     }
     const needed=new Set([...this.demands.values()].map(d=>d.id));
-    for(const [id,source]of this.sources)if(!needed.has(id)||!this.online(roles.get(id))||source.playerUuid!==roles.get(id)?.playerUuid)this.sources.delete(id);
+    for(const [id,source]of this.sources)if(!needed.has(id)||!this.online(roles.get(id))||source.playerUuid!==roles.get(id)?.playerUuid||source.binding!==this.binding(roles.get(id)))this.retire(id);
     return roles;
   }
   list(roster, owner, relayState=()=>({available:false})) {
@@ -52,7 +75,7 @@ export class WorldView {
     return [...roles].filter(([,row])=>this.allowed(row,owner)).map(([id,row])=>{
       const source=this.sources.get(id),state=source?relayState(id):null,online=this.online(row),available=online&&state?.available===true;
       return {id,playerName:row.name,title:row.name+' · 女神之眼',visibility:this.isPublic(row)?'public':'owner',
-        managed:true,readOnly:true,mode:'native-3d',canManage:false,isOwn:owned.includes(row.playerUuid),online,available,
+        managed:true,readOnly:true,mode:'native-3d',canManage:false,canManagePublic:owned.includes(row.playerUuid),isOwn:owned.includes(row.playerUuid),online,available,
         state:available?'live':!online?'offline':source?'preparing':'ready',watchUrl:`/watch/${id}/third/`,
         scope:this.isPublic(row)?'scene':'owner',extraPlayerSlots:0};
     });
@@ -75,9 +98,9 @@ export class WorldView {
       if(this.sources.size>=this.config.live.worldObserverMaxTargets)break;
       const row=roles.get(demand.id);
       this.sources.set(demand.id,{id:demand.id,lease:randomUUID(),playerUuid:row.playerUuid,playerName:row.name,
-        scope:this.isPublic(row)?'scene':'owner',publisherToken:'pub_'+newSecret()});
+        scope:this.isPublic(row)?'scene':'owner',binding:this.binding(row),publisherToken:'pub_'+newSecret()});
     }
-    return {jobs:[...this.sources.values()].map(row=>({...row,expiresAt:new Date(this.now()+8000).toISOString()})),extraPlayerSlots:0};
+    return {jobs:[...this.sources.values()].map(({binding,...row})=>({...row,expiresAt:new Date(this.now()+8000).toISOString()})),extraPlayerSlots:0};
   }
   publisher(id,token,roster) {
     this.reconcile(roster);const source=this.sources.get(id);

@@ -66,12 +66,15 @@ export function createPortal(config, options = {}) {
   const worldView = new WorldView(config, store);
   const nativeReady = worldView.enabled ? (async () => {
     const site = options.spectatorSite || await loadSpectatorSite(config.live.native3dSiteDirectory);
-    return createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
+    const relay=createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
+      sharedStreams:true,cacheAssets:true,maxViewers:32,
       authorizePublisher: async (req, id, token) => {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'PUBLISHER_REQUIRED', '仅接受服务端观战源');
         return worldView.publisher(id, token, await game.roster());
       },
       authorizeViewer: async (req, id) => worldView.viewer(id, await game.roster(), sessionFrom(req)) });
+    worldView.onInvalidate=id=>relay.invalidate(id);
+    return relay;
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
@@ -401,6 +404,14 @@ export function createPortal(config, options = {}) {
         return respond(res, 200, { channels, defaultChannelId: channels.find(row => row.isOwn)?.id || channels.find(row => row.available)?.id || channels[0]?.id || null, mode: worldView.enabled ? 'native-3d' : 'canvas-only', frameIntervalMs: 1000 });
       }
       const watch = /^\/api\/v1\/live\/([a-f0-9]{32})\/watch$/.exec(pathname);
+      const visibility = /^\/api\/v1\/live\/([a-f0-9]{32})\/visibility$/.exec(pathname);
+      if(visibility&&req.method==='PATCH') {
+        if(!worldView.enabled)throw fail(404,'NOT_FOUND','观战服务尚未启用');
+        const {owner}=browserAuth(req),body=await jsonBody(req,1024);
+        if(Object.keys(body).length!==1||typeof body.public!=='boolean')throw fail(400,'INVALID_VISIBILITY','请选择是否公开观战');
+        await nativeReady; // The synchronous invalidator must be installed first.
+        return respond(res,200,worldView.setPublic(visibility[1],await game.roster(),owner,body.public));
+      }
       if (watch && req.method === 'POST') {
         if (!worldView.enabled) throw fail(404, 'NOT_FOUND', '观战服务尚未启用');
         const body = await jsonBody(req, 1024), session = sessionFrom(req);
