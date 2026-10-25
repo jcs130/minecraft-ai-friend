@@ -105,7 +105,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
+  return { portal, game, world, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
 }
 
 test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
@@ -127,7 +127,7 @@ test('role owner can opt in and revoke guest observation from the live page, wit
   const button=()=>ui.document.querySelector('[data-action="world-visibility"]');
   assert.equal(button().textContent.includes('开启公开观战'),true);
   ui.click('[data-action="world-visibility"]');await waitFor(()=>ui.document.querySelector('#world-visibility-form'));
-  assert.match(ui.document.querySelector('#world-visibility-form').textContent,/私聊、完整背包和私人 Agent 信息不会公开/);
+  assert.match(ui.document.querySelector('#world-visibility-form').textContent,/背包、装备和对话对游客公开；登录凭据始终过滤/);
   ui.submit('#world-visibility-form');await waitFor(()=>button()?.textContent.includes('关闭公开观战'));
   ui.click('[data-action="world-visibility"]');ui.submit('#world-visibility-form');
   await waitFor(()=>button()?.textContent.includes('开启公开观战'));
@@ -695,4 +695,46 @@ test('an archive-only account can open each saved inventory by UUID without show
   await waitFor(() => inspectedUuid === history[1].playerUuid && ui.document.querySelector('dialog[open]'));
   assert.equal(inspectedUuid, history[1].playerUuid);
   assert.equal(ui.portal.store.ownedUuids(owner.id).length, 2);
+});
+
+
+test('public role trails deep-link chat, safe inventory and complete archive text without login', async t => {
+  const ui=await screen(t),calls=[];ui.portal.worldView.config.live.worldObserverPublicDefault=true;
+  ui.world.events=async options=>{calls.push(options);return {events:[{id:'chat-proof',kind:'chat',title:'ag_Alpha',playerName:'ag_Alpha',body:'<img src=x onerror=bad()>今天去探索',occurredAt:'2026-10-26T00:00:00Z'}],page:1,pages:1,total:1};};
+  ui.window.location.hash='events?player=ag_Alpha';
+  await waitFor(()=>ui.document.querySelector('.trail-person')&&calls.some(row=>row.player==='ag_Alpha'));
+  assert.equal(ui.portal.store.countOwners(),0);
+  assert.ok(calls.some(row=>row.player==='ag_Alpha'));
+  ui.click('[data-action="event-filter"][data-kind="chat"]');
+  await waitFor(()=>calls.some(row=>row.kind==='chat'));
+  assert.match(ui.document.querySelector('.event-body p').textContent,/<img/);
+  assert.equal(ui.document.querySelectorAll('.event-body img,.event-body script').length,0);
+  ui.click('[data-action="public-bag"]');
+  await waitFor(()=>ui.document.querySelector('dialog[open]'));
+  assert.match(ui.document.querySelector('dialog[open]').textContent,/大背包/);
+  assert.ok(!ui.document.querySelector('dialog[open]').textContent.includes(playerUuid));
+  ui.click('#modal [data-action="close-modal"]');
+  const id=randomUUID();
+  ui.portal.archives.accept({available:true,entries:[{id,version:1,kind:'book',author:'ag_Alpha',title:'今天的旅途',body:'第一段\n第二段 <script>bad()</script>',createdAt:new Date().toISOString(),published:true}]});
+  ui.window.location.hash='archives?author=ag_Alpha';
+  await waitFor(()=>ui.document.querySelector('[data-action="archive-read"]'));
+  ui.click('[data-action="archive-read"]');
+  await waitFor(()=>ui.document.querySelector('.archive-body'));
+  assert.equal(ui.document.querySelector('.archive-body').textContent,'第一段\n第二段 <script>bad()</script>');
+  assert.equal(ui.document.querySelectorAll('.archive-body script').length,0);
+});
+
+test('public dialogue polling updates its panel while keeping the live renderer and selected role', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const frame=ui.document.querySelector('[data-world-frame]'),id=frame.dataset.channel;
+  let revision=1;
+  ui.world.events=async ({kind='all'}={})=>({events:kind==='chat'?[{id:'chat-'+revision,kind:'chat',title:'ag_Alpha',playerName:'ag_Alpha',body:'一起去冒险 '+revision,occurredAt:new Date().toISOString()}]:[],page:1,pages:1,total:1});
+  await ui.refresh(false);
+  assert.match(ui.document.querySelector('[data-live-dialogue]').textContent,/一起去冒险 1/);
+  revision=2;await ui.refresh(false);
+  assert.match(ui.document.querySelector('[data-live-dialogue]').textContent,/一起去冒险 2/);
+  assert.ok(!ui.document.querySelector('[data-live-dialogue]').textContent.includes('一起去冒险 1'));
+  assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  assert.equal(frame.dataset.channel,id);
 });

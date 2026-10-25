@@ -5,7 +5,8 @@ assert(server&&root&&server.replaceAll('\\','/').startsWith('E:/MC/staging/'),'I
 const properties=fs.readFileSync(server+'/server.properties','utf8');assert(/^server-ip=127\.0\.0\.1$/m.test(properties)&&/^server-port=25914$/m.test(properties)&&/^rcon.port=25915$/m.test(properties)&&/^motd=QD_PUBLIC_ARCHIVES_TEST_ONLY$/m.test(properties),'Dedicated loopback fixture, never production');
 fs.mkdirSync(root,{recursive:true});const request=createRequire(process.env.MC_MINEFLAYER_PACKAGE??'E:/MC/research/mineflayer-client-fixes-20261011/package.json');
 const rc=q=>command(q,30000,{port:25915,properties:server+'/server.properties'}),report={at:new Date().toISOString(),checks:[],messages:[],scope:'Native Paper, ordinary vanilla-protocol books and SQLite; no production inventory changes or GPU rendering'};
-report.sha256=createHash('sha256').update(fs.readFileSync(server+'/plugins/AgentFriend-0.4.48.jar')).digest('hex');
+const version=process.env.MC_ARCHIVE_TEST_VERSION||'0.4.48';assert(['0.4.48','0.4.47.15'].includes(version));
+report.sha256=createHash('sha256').update(fs.readFileSync(server+'/plugins/AgentFriend-'+version+'.jar')).digest('hex');
 const bots=[];const db=server+'/plugins/AgentFriend/archives/archive.db';
 const python=process.env.MC_ARCHIVE_TEST_PYTHON??'C:/Users/lzl19/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe';
 function sql(query){const code='import sqlite3,json,sys\nc=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True)\nc.row_factory=sqlite3.Row\nprint(json.dumps([dict(r) for r in c.execute(sys.argv[2])],ensure_ascii=False))';return JSON.parse(execFileSync(python,['-X','utf8','-c',code,db,query],{encoding:'utf8'}));}
@@ -19,7 +20,7 @@ async function query(b,cmd){const n=b.results.length;b.chat('/mycli archive '+cm
 const amount=(b,name)=>b.inventory.items().filter(i=>i.name===name).reduce((n,i)=>n+i.count,0);
 const archivedBooks=(b,id)=>b.inventory.items().filter(i=>i.name==='written_book'&&JSON.stringify(i.components??i.nbt,(_k,v)=>typeof v==='bigint'?String(v):v).includes(id));
 try{
- check('archive candidate is actually loaded',(await rc('version AgentFriend')).includes('0.4.48'));
+ check('archive candidate is actually loaded',(await rc('version AgentFriend')).includes(version));
  const author=await connect('ag_ArchiveQA'),reader=await connect('ArchiveReader');
  await rc('minecraft:gamemode survival ag_ArchiveQA');await rc('minecraft:gamemode survival ArchiveReader');await rc('minecraft:time set day');
  await rc('minecraft:tp ag_ArchiveQA -1116.5 64 -600.5');await rc('minecraft:tp ArchiveReader -1115.5 64 -600.5');

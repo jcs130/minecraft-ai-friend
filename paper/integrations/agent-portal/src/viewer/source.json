@@ -1,11 +1,18 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "8b89927db49c9547a50029f039cbfe534d38e78b",
-  "normalization": "CRLF-to-LF only",
+  "commit": "ba56f73dba9501293c300be51104f6b713b5689a",
+  "normalization": "CRLF-to-LF and listed relative imports",
+  "transforms": {
+    "spectator-public.mjs": {
+      "../src/native-viewer/native-item-stack.js": "./native-item-stack.js"
+    }
+  },
   "files": {
     "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
-    "spectator-relay.mjs": "e1e41a811f0caff97c37d2fe3d38914ed0efabea3fed98be90f823257085d4bc",
+    "spectator-relay.mjs": "0985fa8c7c96f4ec1ee5811fd00103be18ebc5fd8186f0188c2ca0addb58cbe3",
     "spectator-site.mjs": "69ea76533bc70215aac0d81af407c2ad1c31fca9bf7856c7c371ab92b4e0b261",
-    "spectator-fanout.mjs": "b9e4fd4a2e8df357b9f1443f43baba8aedc83215e5c7ad65ad8785465ba09944"
+    "spectator-fanout.mjs": "b0290f5978d3c01e9a63a60935718551e7271b9350e003614be741a1f5589d23",
+    "spectator-public.mjs": "7c0a2a2876e4277ec3fd55ba3c31174df9919ce9c21d611f7c91adc79efd3033",
+    "native-item-stack.js": "3548831a7e87e6e38c85fcf3673c31edffe03691863479aa0815a7019b49d3b4"
   }
 }

@@ -3,6 +3,7 @@ import { GameData, UUID } from './game-data.mjs';
 import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { validatePhotos } from './gallery.mjs';
 import { mergeReviewedRoles, prepareReviewedRoles } from './ownership-review.mjs';
+import { publicDialogueText } from './public-dialogue.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const pick = (value, fields) => Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key)).map(key => [key, value[key]]));
@@ -24,7 +25,7 @@ function noCredentials(value, depth = 0) {
 
 // The producer only reads the existing game projections; it never logs into a
 // second body, runs RCON, or reads the authentication/model credential stores.
-export async function buildSnapshot(game, world, sequence, photos = []) {
+export async function buildSnapshot(game, world, sequence, photos = [], additions = {}) {
   const [all, summary, growth] = await Promise.all([game.roster(), game.serverSummary(), world.players()]);
   const roster = all.slice(0, 256).map(row => pick(row, rosterFields));
   const publishedNames = new Set(roster.map(row => row.name.toLowerCase()));
@@ -34,7 +35,8 @@ export async function buildSnapshot(game, world, sequence, photos = []) {
     await Promise.all(eligible.slice(offset, offset + 8).map(async row => { states[row.playerUuid] = pick(await game.playerState(row), privateStateFields); }));
   }
   const events = [];
-  for (let page = 1; page <= 10; page++) {
+  if (additions.events) events.push(...additions.events.filter(event=>publishedNames.has(String(event.playerName).toLowerCase())).map(row=>pick(row,eventFields)));
+  else for (let page = 1; page <= 10; page++) {
     const result = await world.events({ page, limit: 50 });
     // Historical events can outlive a removed/hidden player. They must not
     // reject the entire current snapshot or make that player public again.
@@ -42,7 +44,8 @@ export async function buildSnapshot(game, world, sequence, photos = []) {
     if (page >= result.pages) break;
   }
   const result = { schemaVersion: 1, sequence, observedAt: new Date().toISOString(), summary: pick(summary, summaryFields), roster,
-    players: growth.players.map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events, photos: validatePhotos(photos) };
+    players: growth.players.map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events, photos: validatePhotos(photos),
+    ...(additions.photoManifest?{photoManifest:additions.photoManifest}:{}) };
   noCredentials(result);
   return result;
 }
@@ -85,10 +88,17 @@ export class CloudSource {
       return { name: row.name, growth: pick(row.growth, ['level', 'fame', 'completed', 'gradeIndex', 'rank', 'profession', 'certificates']), savedAt: row.savedAt, progressionSavedAt: row.progressionSavedAt };
     });
     const events = input.events.map(row => {
-      if (!/^[a-f0-9]{64}$/.test(row.id || '') || !['join', 'leave', 'quest', 'advancement'].includes(row.kind) || !names.has(String(row.playerName).toLowerCase()) || typeof row.title !== 'string' || row.title.length > 400 || typeof row.body !== 'string' || row.body.length > 2000 || !Number.isFinite(Date.parse(row.occurredAt)) || !['day', 'second'].includes(row.timePrecision)) throw fail(400, 'SNAPSHOT_EVENT', '公开事件格式不受支持');
+      if (!/^[a-f0-9]{64}$/.test(row.id || '') || !['join', 'leave', 'quest', 'advancement', 'chat'].includes(row.kind) || !names.has(String(row.playerName).toLowerCase()) || typeof row.title !== 'string' || row.title.length > 400 || typeof row.body !== 'string' || row.body.length > 2000 || !Number.isFinite(Date.parse(row.occurredAt)) || !['day', 'second'].includes(row.timePrecision)) throw fail(400, 'SNAPSHOT_EVENT', '公开事件格式不受支持');
+      if(row.kind==='chat'&&(row.source!=='minecraft.public-chat'||!publicDialogueText(row.body)||!publicDialogueText(row.title)))throw fail(400,'SNAPSHOT_EVENT','对话来源或内容不符合公开规则');
       return pick(row, eventFields);
     });
     const value = { schemaVersion: 1, sequence: input.sequence, observedAt: input.observedAt, roster, states, players, events, photos: validatePhotos(input.photos), summary: pick(input.summary, summaryFields) };
+    if(input.photoManifest!==undefined){
+      const ids=input.photoManifest?.publishedIds;
+      const withdrawn=input.photoManifest?.withdrawnIds||[];
+      if(input.photoManifest?.complete!==true||!Array.isArray(ids)||ids.length>10000||ids.some(id=>!UUID.test(id))||new Set(ids).size!==ids.length||value.photos.some(row=>!ids.includes(row.id))||!Array.isArray(withdrawn)||withdrawn.length>10000||withdrawn.some(id=>!UUID.test(id)||ids.includes(id)))throw fail(400,'PHOTO_CATALOG','照片发布目录无效');
+      value.photoManifest={complete:true,publishedIds:ids,withdrawnIds:[...new Set(withdrawn)]};
+    }
     noCredentials(value);
     const payload = JSON.stringify(value), hash = createHash('sha256').update(payload).digest('hex');
     const previous = this.read();

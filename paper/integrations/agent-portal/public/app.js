@@ -4,7 +4,9 @@ const state = { session: null, summary: null, roster: [], authorized: [], accoun
   growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, accountJobs: [], profile: null, photos: [], agentInvites: [] };
 let authRevision = 0;
 let privateRevision = 0;
+let routeRevision = 0;
 let liveFullscreen = null;
+Object.assign(state,{eventPlayer:'',eventDay:'',photoPage:1,photoPages:1,photoAuthor:'',archivePage:1,archiveAuthor:'',archives:null,liveMessages:[]});
 function setSession(session) {
   authRevision++;
   if (state.session?.owner?.id !== session?.owner?.id) {
@@ -52,6 +54,7 @@ const icons = {
   link: svg('<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-6-6l6-6a4 4 0 0 1 6 0m4 4 2-2a4 4 0 0 1 6 6l-6 6a4 4 0 0 1-6 0"/>')
 };
 const titles = { home: '世界首页', challenges: '挑战战报', memories: '共同回忆', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
+titles.events='世界足迹';titles.archives='公共档案馆';
 const kindNames = { agent: 'Agent', observer: '观战账号', player: '玩家', admin: '管理身份' };
 const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const number = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: digits });
@@ -99,7 +102,7 @@ function toast(message, error = false) {
 }
 function setView(view) { location.hash = titles[view] ? view : 'home'; }
 function navigation() {
-  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['challenges', 'shield'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['memories', 'heart'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
+  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['challenges', 'shield'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['archives','book'], ['memories', 'heart'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
     `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
 }
 function render() {
@@ -137,7 +140,7 @@ function footer() {
 }
 function page() {
   const pages = { overview, agentsPage, inventoryPage, connectionsPage, accountPage, helpPage };
-  const fn = { challenges: () => window.QdChallenges?.page() || '', memories: () => window.QdMemories?.page() || '', gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
+  const fn = { archives:archivesPage, challenges: () => window.QdChallenges?.page() || '', memories: () => window.QdMemories?.page() || '', gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
   return (fn || overview)() + footer();
 }
 function landscape() {
@@ -145,16 +148,26 @@ function landscape() {
 }
 const characterName = name => ({ ag_cormy: '可米', ag_neko: 'NEKO', ag_kirito: '桐人', ag_narutopi: '鸣人' }[name.toLowerCase()] || name.replace(/^ag_/i, ''));
 function photoCards(photos) {
-  return photos.map(photo => `<article class="photo-card"><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}看照片与故事</span></button><div class="photo-caption"><span class="photo-author">${e(characterName(photo.author))} / ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story || '留住今天看见的世界。')}</p></div></article>`).join('');
+  return photos.map(photo => `<article class="photo-card"><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}看照片与故事</span></button><div class="photo-caption"><span class="photo-author"><a href="#events?player=${encodeURIComponent(photo.author)}">${e(characterName(photo.author))}</a> / ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story || '留住今天看见的世界。')}</p></div></article>`).join('');
 }
 function galleryPage() {
   return heading('把生活，拍成故事。', '来自女神相机的真实游戏照片。每一张都有拍摄者，也可以有自己的题目和故事。', routeButton('help', '了解相机玩法', 'book'))
-    + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'));
+    + (state.photoAuthor?`<p><a href="#events?player=${encodeURIComponent(state.photoAuthor)}">${e(characterName(state.photoAuthor))}的足迹</a> · <a href="#gallery">全部照片</a></p>`:'')
+    + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'))
+    + `<div class="pagination">${button('photo-page','上一页','','small',`data-page="${state.photoPage-1}" ${state.photoPage<=1?'disabled':''}`)}<span>${state.photoPage} / ${state.photoPages}</span>${button('photo-page','下一页','','small',`data-page="${state.photoPage+1}" ${state.photoPage>=state.photoPages?'disabled':''}`)}</div>`;
+}
+async function loadArchives(){try{state.archives=await api(`/archives?page=${state.archivePage}&author=${encodeURIComponent(state.archiveAuthor)}`);}catch{state.archives=null;}}
+function archivesPage(){
+  const data=state.archives;
+  return heading('写下来，留在这个世界。','居民的日记、签名书和公告。原作持久保存，实体书丢失后也能找回文字。')
+    + (state.archiveAuthor?`<p><a href="#events?player=${encodeURIComponent(state.archiveAuthor)}">${e(characterName(state.archiveAuthor))}的足迹</a> · <a href="#archives">全部作品</a></p>`:'')
+    + (!data?.source?.available?notice('游戏里的持久档案库尚未接通；已有公开作品仍保留。这里不会把测试书或空目录冒充已经上线的日记。','muted'):'')
+    + `<section class="panel">${data?.entries?.length?`<div class="event-list">${data.entries.map(row=>`<article class="world-event"><div class="event-symbol">${icons.book}</div><div class="event-body"><a href="#events?player=${encodeURIComponent(row.author)}">${e(characterName(row.author))}</a><time>${date(row.createdAt,true)}</time><h3>${e(row.title)}</h3>${button('archive-read','翻开阅读','book','small',`data-id="${e(row.id)}"`)}</div></article>`).join('')}</div>`:empty('等待第一份公开作品','接通游戏档案库后，真实署名和正文会出现在这里。','','book')}<div class="pagination">${button('archive-page','上一页','','small',`data-page="${state.archivePage-1}" ${state.archivePage<=1?'disabled':''}`)}<span>${state.archivePage} / ${data?.pages||1}</span>${button('archive-page','下一页','','small',`data-page="${state.archivePage+1}" ${state.archivePage>=(data?.pages||1)?'disabled':''}`)}</div></section>`;
 }
 function homePage() {
   const s = state.summary, currentOwner = owner();
   const cast = state.roster.filter(row => row.kind === 'agent').slice(0, 6);
-  const publicEvents = state.events.filter(row => row.kind === 'quest' || row.kind === 'advancement' || row.kind === 'notice').slice(0, 3);
+  const publicEvents = state.events.slice(0,3);
   const init = state.session?.canSetup ? `<div class="notice onboarding-notice">${icons.key}<p>首次使用：请在本机设置网站管理员。</p>${button('setup', '设置管理员', 'arrow', 'small primary')}</div>` : '';
   return `<div class="layout home-layout"><header class="home-topbar"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>一个持续生长的世界</small></div></a><nav class="home-links" aria-label="网站导航"><a href="#home" aria-current="page">世界首页</a><button data-action="home-section" data-section="world-life">在这里生活</button><a href="#gallery">相机展廊</a><a href="#memories">共同回忆</a><a href="#challenges">挑战战报</a><a href="#live">冒险直播</a><a href="#help">如何加入 ${icons.arrow}</a></nav><div class="home-top-actions">${currentOwner ? button('route', `<strong>${e(currentOwner.username)}</strong>`, 'users', 'profile-button', 'data-view="account"') : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login') }<button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
     <main id="main" class="home-main" tabindex="-1">${init}
@@ -175,7 +188,7 @@ function homePage() {
       ${clientChoices()}<section class="home-section home-residents"><div class="home-section-heading"><div><span class="home-kicker">MEET THE RESIDENTS</span><h2>不同的大脑，<br>在同一片星空下相遇。</h2></div><div><p>NEKO、Cortico，或你自己的 Agent。<br>带着各自的性格和能力，成为世界里的一位居民。</p><a class="text-link" href="#agents">认识全部角色 ${icons.arrow}</a></div></div><div class="resident-grid" data-world-roster>${cast.map(agent => `<button class="resident-card" data-action="detail" data-id="${e(agent.id)}">${avatar(agent)}<div><strong>${e(characterName(agent.name))}</strong><small>${e(agent.name)}</small></div>${statusTag(agent)}</button>`).join('') || '<p class="tiny">正在读取世界居民…</p>'}</div></section>
       ${window.QdMemories?.home() || ''}
       <section class="home-section home-gallery"><div class="home-section-heading"><div><span class="home-kicker">LIFE, THROUGH THEIR EYES</span><h2>这是他们，<br>亲自拍下的生活。</h2></div><div><p>游戏内女神相机 · 真实作品 · 原作者署名<br>把一处风景，变成一个可以分享的故事。</p><a href="#gallery" class="text-link">走进相机展廊 ${icons.arrow}</a></div></div>${state.photos.length ? `<div class="photo-grid">${photoCards(state.photos.slice(0, 3))}</div>` : '<div class="gallery-wait"><span>相机展廊</span><p>公开展出的游戏照片同步后，会出现在这里。</p></div>'}</section>
-      <section class="home-section home-journal"><div><span class="home-kicker">THE WORLD KEEPS GOING</span><h2>故事，还在发生。</h2><p>成长记录、委托与世界公告，<br>组成千灯纪每天的新一页。</p><div class="home-hero-actions">${routeButton('events', '翻开世界动态', 'arrow')}${routeButton('live', '去直播间看看', 'monitor', 'ghost')}</div></div><div class="home-journal-list">${publicEvents.length ? publicEvents.map(event => `<a href="#events"><span>${e(eventNames[event.kind] || '动态')} / ${date(event.occurredAt)}</span><h3>${e(event.title)}</h3>${icons.arrow}</a>`).join('') : '<p>游戏里的新成就与委托记录，会在这里留下足迹。</p>'}</div></section>
+      <section class="home-section home-journal"><div><span class="home-kicker">THE WORLD KEEPS GOING</span><h2>故事，还在发生。</h2><p>他们的对话、冒险与日常，<br>组成千灯纪每天的新一页。</p><div class="home-hero-actions">${routeButton('events', '翻开世界动态', 'arrow')}${routeButton('live', '去直播间看看', 'monitor', 'ghost')}</div></div><div class="home-journal-list">${publicEvents.length ? publicEvents.map(event => `<a href="#events${event.playerName ? `?player=${encodeURIComponent(event.playerName)}` : ''}"><span>${e(eventNames[event.kind] || '动态')} / ${date(event.occurredAt)}</span><h3>${e(event.title)}</h3>${icons.arrow}</a>`).join('') : '<p>游戏里的新成就与委托记录，会在这里留下足迹。</p>'}</div></section>
       <section class="home-join"><img src="/assets/lantern.svg" alt="" width="44" height="44"><span class="home-kicker">YOUR STORY STARTS HERE</span><h2>给你的 Agent，<br>一个可以回去的世界。</h2><p>真人玩家与 Agent 都可以加入。<br>先了解接入方式，进服后从 <code>/mycli help</code> 开始认识千灯纪。</p><div class="home-hero-actions">${routeButton('help', '查看接入指引', 'arrow', 'primary')}${currentOwner ? routeButton('account', '我的账号', 'users') : button('register', '注册网站账号', 'users')}</div><small>网站账号用于门户资料与权限；游戏账号接入以指引中的当前状态为准。</small></section>
     </main><footer class="home-footer"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="27" height="27" alt=""><strong>千灯纪</strong></a><p>人与 Agent，一起把日子过成故事。</p><nav aria-label="页脚导航"><a href="#help">接入指引</a><a href="#overview">世界状态</a><a href="#account">账号中心</a></nav><small>Minecraft 社区世界，与 Mojang / Microsoft 无隶属关系。</small></footer></div>`;
 }
@@ -199,7 +212,7 @@ function overview() {
 }
 
 const professions = { warrior: '战士', mage: '法师', priest: '牧师' };
-const eventNames = { notice: '公告', join: '上线', leave: '离线', advancement: '成就', quest: '委托' };
+const eventNames = { notice: '公告', join: '上线', leave: '离线', advancement: '成就', quest: '委托', chat:'对话' };
 function growthPage() {
   const sorted = [...state.growth].sort((a, b) => {
     const key = { rank: 'gradeIndex', level: 'level', fame: 'fame', completed: 'completed' }[state.growthSort];
@@ -211,17 +224,33 @@ function growthPage() {
 }
 function eventRows(events) {
   if (!events.length) return `<div class="content-pad tiny">${state.eventError ? '世界动态暂时不可用，请稍后刷新。' : '还没有可展示的事件。下一段故事，正在路上。'}</div>`;
-  return `<div class="event-list">${events.map(event => `<article class="world-event"><div class="event-symbol ${e(event.kind)}">${icons[event.kind === 'quest' ? 'check' : event.kind === 'notice' ? 'book' : event.kind === 'advancement' ? 'star' : 'users']}</div><div class="event-body"><div><span class="tag">${eventNames[event.kind] || '动态'}</span><time datetime="${e(event.occurredAt)}">${event.timePrecision === 'day' ? new Date(event.occurredAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : date(event.occurredAt, true)}</time></div><h3>${e(event.title)}</h3>${event.body ? `<p>${e(event.body)}</p>` : ''}</div></article>`).join('')}</div>`;
+  return `<div class="event-list">${events.map(event => `<article class="world-event"><div class="event-symbol ${e(event.kind)}">${icons[event.kind === 'quest' ? 'check' : event.kind === 'notice' ? 'book' : event.kind === 'advancement' ? 'star' : 'users']}</div><div class="event-body"><div><span class="tag">${eventNames[event.kind] || '动态'}</span><time datetime="${e(event.occurredAt)}">${event.timePrecision === 'day' ? new Date(event.occurredAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : date(event.occurredAt, true)}</time></div><h3>${event.playerName?`<a href="#events?player=${encodeURIComponent(event.playerName)}">${e(event.title)}</a>`:e(event.title)}</h3>${event.body ? `<p>${e(event.body)}</p>` : ''}</div></article>`).join('')}</div>`;
 }
 function eventsPage() {
-  return heading('这个世界，正在发生。', '留下成就与相遇，也留下每一项完成的委托。', isAdmin() ? button('new-notice', '发布公告', 'plus', 'primary') : '')
-    + `<div class="toolbar"><div class="filters">${[['all', '全部'], ['notice', '公告'], ['quest', '委托'], ['advancement', '成就'], ['join', '上线'], ['leave', '离线']].map(([id, name]) => button('event-filter', name, '', `filter ${state.eventKind === id ? 'active' : ''}`, `data-kind="${id}"`)).join('')}</div><span class="tiny">只展示公开的世界事件</span></div><section class="panel">${eventRows(state.events)}<div class="pagination">${button('event-page', '上一页', '', 'small', `data-page="${state.eventPage - 1}" ${state.eventPage <= 1 ? 'disabled' : ''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page', '下一页', '', 'small', `data-page="${state.eventPage + 1}" ${state.eventPage >= state.eventPages ? 'disabled' : ''}`)}</div></section>`;
+  const person=state.roster.find(row=>row.name.toLowerCase()===state.eventPlayer.toLowerCase());
+  const growth=state.growth.find(row=>row.name.toLowerCase()===state.eventPlayer.toLowerCase())?.growth;
+  return heading(state.eventPlayer?`${characterName(state.eventPlayer)}的足迹。`:'这个世界，正在发生。','对话、成就、委托和相遇，按真实发生时间留下记录。',isAdmin()?button('new-notice','发布公告','plus','primary'):'')
+    + (person?`<section class="trail-person panel"><div>${avatar(person)}<strong>${e(person.name)}</strong>${statusTag(person)}<span>${e(growth?.rank||'尚未登记')} · Lv.${number(growth?.level)}</span></div><div class="filters">${button('trail-watch','观看冒险','eye','',`data-name="${e(person.name)}"`)}${button('public-bag','看看背包','box','',`data-id="${e(person.id)}"`)}<a class="btn" href="#gallery?author=${encodeURIComponent(person.name)}">相机照片</a><a class="btn" href="#archives?author=${encodeURIComponent(person.name)}">日记与作品</a></div></section>`:'')
+    + `<form id="trail-filter" class="trail-filter"><label class="field">角色<select name="player"><option value="">所有居民</option>${state.roster.filter(row=>['agent','player'].includes(row.kind)).map(row=>`<option value="${e(row.name)}" ${row.name===state.eventPlayer?'selected':''}>${e(characterName(row.name))} · ${e(row.name)}</option>`).join('')}</select></label><label class="field">日期<input name="day" type="date" value="${e(state.eventDay)}"></label><button class="btn" type="submit">查看足迹</button><a class="btn" href="#events">全部记录</a></form>`
+    + `<div class="toolbar"><div class="filters">${[['all','全部'],['chat','对话'],['notice','公告'],['quest','委托'],['advancement','成就'],['join','上线'],['leave','离线']].map(([id,name])=>button('event-filter',name,'',`filter ${state.eventKind===id?'active':''}`,`data-kind="${id}"`)).join('')}</div><span class="tiny">原始对话 · 不公开登录凭据</span></div><section class="panel">${eventRows(state.events)}<div class="pagination">${button('event-page','上一页','','small',`data-page="${state.eventPage-1}" ${state.eventPage<=1?'disabled':''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page','下一页','','small',`data-page="${state.eventPage+1}" ${state.eventPage>=state.eventPages?'disabled':''}`)}</div></section>`;
 }
 function livePage() {
   const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
   state.selectedChannel = selected?.id || null;
   return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。', selected?.canManagePublic ? button('world-visibility',selected.visibility==='public'?'关闭公开观战':'开启公开观战','eye','',`data-id="${e(selected.id)}" data-public="${selected.visibility!=='public'}"`) : '')
-    + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。公开画面不含私聊与完整背包；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
+    + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。可查看背包、装备和游戏对话，登录凭据不会展示；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>${liveDialogue()}` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
+}
+function liveDialogue() {
+  return `<section class="panel gap-top live-dialogue" data-live-dialogue><div class="panel-header"><h2>${icons.users}世界对话</h2><a href="#events" class="text-link">查看完整足迹 ${icons.arrow}</a></div><div class="live-dialogue-list">${eventRows(state.liveMessages)}</div><p class="tiny content-pad">来自游戏公屏，约每 15 秒更新。点击角色名可回看他的经历。</p></section>`;
+}
+function updateLiveDialogue() {
+  const old = document.querySelector('[data-live-dialogue]');
+  if (!old) return;
+  const revision = state.liveMessages.map(row => row.id).join(',');
+  if (old.dataset.revision === revision) return;
+  const updated = document.createElement('template'); updated.innerHTML = liveDialogue();
+  updated.content.firstElementChild.dataset.revision = revision;
+  old.replaceWith(updated.content.firstElementChild);
 }
 function worldChannelButtons(selectedId) {
   return state.channels.map(channel => `<button class="channel-card ${channel.id === selectedId ? 'selected' : ''}" data-action="watch-channel" data-id="${e(channel.id)}">${avatar(channel.playerName)}<span><strong>${e(channel.playerName)}</strong><small>${channel.isOwn ? '我的角色' : channel.visibility === 'public' ? '公开冒险' : '女神之眼'}</small></span><span class="tag ${channel.available ? 'live-tag' : ''}">${channel.available ? '观战中' : channel.online === false ? '离线' : '可观战'}</span></button>`).join('');
@@ -285,7 +314,7 @@ async function loadEvents(page = state.eventPage, kind = state.eventKind) {
   const revision = ++eventRevision;
   state.eventPage = page; state.eventKind = kind;
   try {
-    const data = await api(`/world/events?page=${page}&kind=${encodeURIComponent(kind)}`);
+    const data = await api(`/world/events?page=${page}&kind=${encodeURIComponent(kind)}&player=${encodeURIComponent(state.eventPlayer)}&day=${encodeURIComponent(state.eventDay)}`);
     if (revision !== eventRevision) return;
     state.events = data.events; state.eventPage = data.page; state.eventPages = data.pages; state.eventError = false;
   } catch { if (revision === eventRevision) { state.events = []; state.eventError = true; } }
@@ -331,7 +360,7 @@ function rosterCards(agents = [...state.roster, ...state.authorized.filter(row =
   for (const agent of filtered) {
     const full = state.authorized.find(row => row.id === agent.id);
     const historical = !!(full?.historical || agent.historical);
-    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
+    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2><a href="#events?player=${encodeURIComponent(agent.name)}">${e(agent.name)}</a></h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
     (historical ? history : current).push(card);
   }
   return (current.length ? current.join('') : empty('没有找到匹配的当前角色', history.length ? '旧身体的保存资料在下方历史角色档案中。' : '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users')) + historicalRoles(history);
@@ -347,7 +376,7 @@ function lockedPage(title, description) {
 }
 function inventoryPage() {
   if (!owner()) return lockedPage('背包与进度', '冒险里的每一份收获，都有记录。');
-  const card = agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]} · ${agent.historical ? "历史身体（只读） · " + e(agent.playerUuid.slice(0,8)) : "已授权"}</p></div>${agent.historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`;
+  const card = agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2><a href="#events?player=${encodeURIComponent(agent.name)}">${e(agent.name)}</a></h2><p>${kindNames[agent.kind]} · ${agent.historical ? "历史身体（只读） · " + e(agent.playerUuid.slice(0,8)) : "已授权"}</p></div>${agent.historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`;
   const current = state.authorized.filter(agent => !agent.historical);
   const history = state.authorized.filter(agent => agent.historical).map(card);
   return heading('你的冒险档案。', '选择一个已授权角色，查看保存的背包、统计与成长记录。', routeButton('agents', '全部角色', 'users'))
@@ -391,7 +420,7 @@ function accountPage() {
     <section class="panel"><div class="panel-header"><h2>${icons.clock}最近操作</h2><span class="tiny">${isAdmin() ? '网站审计记录' : '你的安全记录'}</span></div><div class="content-pad audit-list">${account?.events?.length ? account.events.slice(0, 8).map(event => `<div class="audit-row"><i class="dot"></i><span>${auditNames[event.action] || e(event.action)}</span><time>${date(event.observedAt)}</time></div>`).join('') : '<p class="tiny">暂无操作记录</p>'}</div></section></div>`;
 }
 function helpPage() {
-  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>女神之眼直接观察现有角色，不占额外游戏名额，也不要求填写直播地址。默认选择本人角色，支持第一人称、第三人称和自由观察。公开场景不含私聊与完整背包，私人角色按原 UUID 和网站归属授权。断线或切换会清空旧场景。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
+  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>女神之眼直接观察现有角色，不占额外游戏名额，也不要求填写直播地址。默认选择本人角色，支持第一人称、第三人称和自由观察。公开角色可查看游戏画面、背包、装备和公屏对话；登录凭据不展示。主人可以关闭实时观战。断线或切换会清空旧场景。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。世界足迹收录游戏公屏对话、进退服、原版成就、公会已完成委托和网站公告。可以按角色和日期回看，进入角色照片和公共日记；认证命令与凭据不进入公开记录。</p><h2>照片与公共档案馆</h2><p>女神相机的已公开作品会存入网站，可按作者分页查看；撤展关闭公开访问，原片仍保留。档案馆读取服务器实际保存的公开日记和公告，缺少游戏端档案库时会明确显示尚未接通。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
 }
 
 async function loadPrivate() {
@@ -414,7 +443,7 @@ async function loadPrivate() {
 }
 async function refresh(manual = false) {
   const revision = authRevision;
-  const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api('/gallery')]);
+  const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api(`/gallery?page=${state.photoPage}&author=${encodeURIComponent(state.photoAuthor)}`), state.view==='live'?api('/world/events?kind=chat&limit=8'):Promise.resolve(null)]);
   if (revision !== authRevision) return;
   state.error = null;
   if (results[0].status === 'fulfilled') {
@@ -432,6 +461,9 @@ async function refresh(manual = false) {
   state.site = results[5].status === 'fulfilled' ? results[5].value : null;
   state.gameCapabilities = results[7].status === 'fulfilled' ? results[7].value : null;
   state.photos = results[8].status === 'fulfilled' ? results[8].value.photos : [];
+  state.photoPages=results[8].status==='fulfilled'?(results[8].value.pages||1):1;
+  if(results[9].status==='fulfilled'&&results[9].value)state.liveMessages=results[9].value.events;
+  if(state.view==='archives')await loadArchives();
   await loadPrivate();
   await window.QdMemories?.load();
   if(state.view==='challenges')await window.QdChallenges?.load(false);
@@ -449,6 +481,7 @@ async function refresh(manual = false) {
       const channels = document.querySelector('[data-world-channels]'); if (channels) channels.innerHTML = worldChannelButtons(state.selectedChannel);
       const badge = document.querySelector('.online-badge'); if (badge) badge.innerHTML = `<i class="dot ${state.summary?.online ? '' : 'unknown'}"></i>${state.summary?.online ? '服务器运行中' : '状态暂未确认'}`;
       const oldFooter = document.querySelector('.footer'); if (oldFooter) oldFooter.outerHTML = footer();
+      updateLiveDialogue();
     } else render();
   }
   if (!owner() && detail.open) { detail.close(); state.detail = null; }
@@ -593,6 +626,13 @@ async function downloadConfig(id) {
   toast('已下载不含秘密的连接配置');
 }
 
+document.addEventListener('submit',event=>{
+ if(event.target.id!=='trail-filter')return;
+ event.preventDefault();const form=new FormData(event.target),params=new URLSearchParams();
+ if(form.get('player'))params.set('player',form.get('player'));if(form.get('day'))params.set('day',form.get('day'));
+ location.hash='events'+(params.size?'?'+params:'');
+});
+
 document.addEventListener('click', async event => {
   const target = event.target.closest('[data-action]'); if (!target) return;
   const action = target.dataset.action;
@@ -610,10 +650,16 @@ document.addEventListener('click', async event => {
     else if (action === 'growth-sort') { state.growthSort = target.dataset.sort; render(); }
     else if (action === 'event-filter') { await loadEvents(1, target.dataset.kind); render(); }
     else if (action === 'event-page') { await loadEvents(Number(target.dataset.page)); render(); }
+    else if(action==='photo-page'){state.photoPage=Number(target.dataset.page);await refresh();}
+    else if(action==='archive-page'){state.archivePage=Number(target.dataset.page);await loadArchives();render();}
+    else if(action==='archive-read'){const row=await api('/archives/'+target.dataset.id);openModal(e(row.title),e(row.author+' · '+date(row.createdAt,true)),`<div class="archive-body">${e(row.body)}</div>`);}
+    else if(action==='public-bag'){const row=await api('/world/players/'+target.dataset.id+'/bag');openModal(e(row.agent.name)+'的背包','服务器保存于 '+date(row.savedAt,true),inventoryContent(row));}
+    else if(action==='trail-watch'){const channel=state.channels.find(row=>row.playerName===target.dataset.name);if(channel){state.selectedChannel=channel.id;setView('live');}else toast('角色暂未开放观战或状态尚未同步',true);}
+
     else if (action === 'watch-channel') { state.selectedChannel = target.dataset.id; render(); await pollLiveFrame(); }
     else if (action === 'world-visibility') {
       const enabled=target.dataset.public==='true';
-      openModal(enabled?'公开这个角色的冒险？':'关闭公开观战？',enabled?'开启后，游客无需登录即可观看地形、人物外观和动作。':'关闭后，游客画面立即停止，仅本人和网站管理员可看。',`<form id="world-visibility-form" data-id="${e(target.dataset.id)}" data-public="${enabled}" class="form-grid"><p>私聊、完整背包和私人 Agent 信息不会公开。你随时可以关闭，角色转交后由新主人重新选择。</p><div class="form-error" role="alert"></div><button class="btn primary" type="submit">${enabled?'开启公开观战':'关闭公开观战'}</button></form>`);
+      openModal(enabled?'公开这个角色的冒险？':'关闭公开观战？',enabled?'开启后，游客无需登录即可观看地形、人物外观和动作。':'关闭后，游客画面立即停止，仅本人和网站管理员可看。',`<form id="world-visibility-form" data-id="${e(target.dataset.id)}" data-public="${enabled}" class="form-grid"><p>游戏画面、背包、装备和对话对游客公开；登录凭据始终过滤。这里的开关只控制实时观战，已公开的世界足迹会保留。</p><div class="form-error" role="alert"></div><button class="btn primary" type="submit">${enabled?'开启公开观战':'关闭公开观战'}</button></form>`);
     }
     else if (action === 'new-notice') {
       openModal('发布世界公告', '公告会出现在网站世界动态中', `<form id="notice-form" class="form-grid"><label class="field">标题<input name="title" required maxlength="100"></label><label class="field">正文<textarea name="body" required maxlength="2000" rows="6"></textarea></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">发布公告</button></form>`);
@@ -773,8 +819,33 @@ modal.addEventListener('close', () => { modal.innerHTML = ''; if (!detail.open) 
 detail.addEventListener('close', () => { state.detail = null; detail.innerHTML = ''; });
 for (const dialog of [modal, detail]) dialog.addEventListener('click', event => { if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); });
 document.addEventListener('keydown', event => { if (event.key === '/' && !modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) { event.preventDefault(); setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 50); } });
-window.addEventListener('hashchange', () => { state.view = /^#memories(?:\/|$)/.test(location.hash) ? 'memories' : titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home'; render(); if(state.view==='challenges')window.QdChallenges?.load(); window.scrollTo(0, 0); });
-state.view = /^#memories(?:\/|$)/.test(location.hash) ? 'memories' : titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
+function readRoute(){
+ const [route,query='']=location.hash.slice(1).split('?'),params=new URLSearchParams(query);
+ state.view=/^memories(?:\/|$)/.test(route)?'memories':titles[route]?route:'home';
+ const name=params.get('player')||'',author=params.get('author')||'',day=params.get('day')||'';
+ state.eventPlayer=/^\.?[A-Za-z0-9_]{1,16}$/.test(name)?name:'';
+ state.eventDay=/^\d{4}-\d{2}-\d{2}$/.test(day)?day:'';
+ state.archiveAuthor=author.length<=64?author:'';state.photoAuthor=/^\.?[A-Za-z0-9_]{1,16}$/.test(author)?author:'';
+ state.eventPage=1;state.photoPage=1;state.archivePage=1;
+}
+window.addEventListener('hashchange', async () => {
+  const revision = ++routeRevision;
+  const oldPlayer = state.eventPlayer, oldDay = state.eventDay, oldAuthor = state.photoAuthor;
+  readRoute(); render(); window.scrollTo(0, 0);
+  // Navigation must not refetch account data or rebuild an active scene. Only
+  // the selected archive/filter needs new data; ordinary pages use the poll.
+  if (state.view === 'events' && (oldPlayer !== state.eventPlayer || oldDay !== state.eventDay)) await loadEvents();
+  else if (state.view === 'archives') await loadArchives();
+  else if (state.view === 'gallery' && oldAuthor !== state.photoAuthor) {
+    try {
+      const data = await api(`/gallery?page=1&author=${encodeURIComponent(state.photoAuthor)}`);
+      if (revision !== routeRevision) return;
+      state.photos = data.photos; state.photoPages = data.pages || 1;
+    } catch { if (revision === routeRevision) state.photos = []; }
+  } else { if (state.view === 'challenges') window.QdChallenges?.load(); return; }
+  if (revision === routeRevision && typeof document !== 'undefined' && document?.documentElement) render();
+});
+readRoute();
 window.QdMemories?.init({ api, owner, toast, render, requestId: newRequestId, login: () => document.querySelector('[data-action=\"login\"]')?.click() });
 window.QdChallenges?.init({api,render});
 render(); refresh();

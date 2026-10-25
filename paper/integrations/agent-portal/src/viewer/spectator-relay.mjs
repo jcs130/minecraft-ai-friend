@@ -1,8 +1,10 @@
 import { randomInt } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { gunzipSync } from 'node:zlib';
 import { SPECTATOR_PROTOCOL, CHUNK_BYTES, MAX_BODY_BYTES, CHANNEL_PATTERN, UUID_PATTERN,
   observationPath, validatedSource, decodeChunk } from './spectator-protocol.mjs';
 import { SpectatorFanout, SpectatorAssetCache, cacheableSpectatorAsset } from './spectator-fanout.mjs';
+import { publicSpectatorEvent, publicSpectatorStatus } from './spectator-public.mjs';
 
 const CSP = "default-src 'self'; script-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
 const error = (res, status, reason) => {
@@ -241,7 +243,8 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     const raw = req.url.slice(pagePrefix.length + 1), parts = raw.split('/'), channelId = parts.shift();
     if (closed || req.method !== 'GET' || !CHANNEL_PATTERN.test(channelId ?? '') || /[%\\?#\x00-\x20]/.test(raw)
         || parts.some(p => p === '.' || p === '..')) { error(res, 400, 'SPECTATOR_REQUEST_INVALID'); return true; }
-    try { await authorizeViewer(req, channelId); }
+    let viewerScope='owner';
+    try { const grant=await authorizeViewer(req, channelId);viewerScope=grant?.scope??'owner';if(!['owner','scene'].includes(viewerScope))throw Error('SPECTATOR_SCOPE_INVALID'); }
     catch (failure) {
       // A consumer may report source replacement only after verifying role
       // access. Keep that explicit temporary state retryable; all other
@@ -266,10 +269,31 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       res.end(local.bytes); return true;
     }
     if (!observationPath(resource)) { error(res, 404, 'SPECTATOR_ROUTE_NOT_FOUND'); return true; }
+    if(viewerScope==='scene'&&resource==='agent-views') {
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({schema:'mc-agent-views/v1',available:false,reason:'PUBLIC_SCENE_ONLY'}));return true;
+    }
+    if(viewerScope==='scene'&&resource==='status.json') {
+      // Buffer only this small JSON resource; never forward a private header or
+      // a partial raw status to a guest. Recheck permission after the read.
+      const value=await new Promise(resolve=>{
+        const sink=new EventEmitter();let chunks=[],size=0,status=0,done=false;
+        const finish=value=>{if(done)return;done=true;sink.destroyed=true;chunks=[];sink.emit('close');resolve(value);};
+        sink.writeHead=code=>{status=code;sink.headersSent=true;};sink.flushHeaders=()=>{};
+        sink.write=bytes=>{size+=bytes.length;if(size>1024*1024)finish(null);else if(!done)chunks.push(bytes);return true;};
+        sink.end=()=>{try{finish(status===200?publicSpectatorStatus(JSON.parse(Buffer.concat(chunks))):null);}catch{finish(null);}};
+        sink.destroy=()=>finish(null);request(source,null,sink,resource,true);
+      });
+      try{const grant=await authorizeViewer(req,channelId);if((grant?.scope??'owner')!=='scene'||source.closed||sources.get(channelId)!==source)throw Error('changed');}
+      catch{error(res,403,'SPECTATOR_VIEW_FORBIDDEN');return true;}
+      if(!value){error(res,502,'SPECTATOR_SOURCE_RESOURCE_UNAVAILABLE');return true;}
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'private, no-store'});res.end(JSON.stringify(value));return true;
+    }
+    if(viewerScope==='scene'&&resource==='events'&&!sharedStreams){error(res,403,'SPECTATOR_PUBLIC_STREAM_UNAVAILABLE');return true;}
     if (sharedStreams && resource === 'events') {
       if (!source.hub || source.hub.closed) source.hub = new SpectatorFanout({ ...fanoutOptions, playerUuid:source.playerUuid, maxViewers,
+        projectPublic:publicSpectatorEvent,
         open: sink => request(source,null,sink,'events',true) });
-      if (!source.hub.subscribe(req,res)) error(res,429,'SPECTATOR_VIEWER_LIMIT');
+      if (!source.hub.subscribe(req,res,{scope:viewerScope})) error(res,429,'SPECTATOR_VIEWER_LIMIT');
       return true;
     }
     if (cacheAssets && cacheableSpectatorAsset(resource)) {

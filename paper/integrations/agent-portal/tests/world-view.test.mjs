@@ -110,7 +110,7 @@ test('only explicit public UUIDs are anonymous scenes; no inventory permissions 
   const f=await fixture(t,{worldObserverPublicUuids:['11111111-1111-3111-8111-111111111111']}),guest=f.client();await guest.init();
   assert.equal((await guest.request('/live')).data.channels[0].scope,'scene');
   assert.equal((await f.watch(guest,f.id)).status,200);
-  assert.equal((await f.worker().then(r=>r.json())).jobs[0].scope,'scene');
+  assert.equal((await f.worker().then(r=>r.json())).jobs[0].scope,'owner');
   f.agent.name='Goddess';assert.equal((await f.admin.request('/live')).data.channels.length,0);
   f.agent.name='ag_Alpha_eye';assert.equal((await f.admin.request('/live')).data.channels.length,0);
 });
@@ -151,7 +151,7 @@ test('public toggle retires old private stream before scope change, then closing
   const invalidated=[],original=f.portal.worldView.onInvalidate;f.portal.worldView.onInvalidate=id=>{invalidated.push({id,public:f.portal.worldView.isPublic(f.agent)});original(id);};
   await f.admin.request(`/live/${f.id}/visibility`,'PATCH',{public:true});assert.deepEqual(invalidated[0],{id:f.id,public:false});
   const guest=f.client();await guest.init();await f.watch(guest,f.id);
-  const current=(await f.worker().then(r=>r.json())).jobs;assert.equal(current.length,1);assert.equal(current[0].scope,'scene');assert.notEqual(current[0].lease,old.lease);
+  const current=(await f.worker().then(r=>r.json())).jobs;assert.equal(current.length,1);assert.equal(current[0].scope,'owner');assert.notEqual(current[0].lease,old.lease);
   assert.throws(()=>f.portal.worldView.publisher(f.id,old.publisherToken,[f.agent]));
   await f.admin.request(`/live/${f.id}/visibility`,'PATCH',{public:false});
   assert.equal((await guest.request('/live')).data.channels.length,0);assert.equal((await f.watch(guest,f.id)).status,404);

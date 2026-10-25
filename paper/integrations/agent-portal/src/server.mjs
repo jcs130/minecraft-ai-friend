@@ -29,6 +29,8 @@ import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 import { Memories } from './memories.mjs';
 import { memoryRoute } from './memory-routes.mjs';
 import { LoginThrottle } from './login-throttle.mjs';
+import { PublicArchives } from './public-archives.mjs';
+import { publicDialogueText } from './public-dialogue.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -82,6 +84,7 @@ export function createPortal(config, options = {}) {
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
+  const archives = new PublicArchives(store);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
   const profiles = new AgentProfiles(store);
@@ -296,13 +299,21 @@ export function createPortal(config, options = {}) {
         trace('reading');
         const input=await jsonBody(req, config.cloudSync.maxBytes);trace('validated-body',input.sequence);
         const result=cloud.accept(input);trace('committed',input.sequence);
-        return respond(res, 200, result);
+        gallery.refreshCatalog();
+        const wantedPhotos=(input.photos||[]).filter(photo=>store.db.prepare('SELECT sha256 FROM gallery_images WHERE id=?').get(photo.id)?.sha256!==photo.sha256).map(photo=>photo.id);
+        return respond(res, 200, {...result,wantedPhotos});
       }
       if (req.method === 'PUT' && pathname === '/api/v1/internal/challenges') {
         if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');
         if (req.headers.origin || req.headers.cookie) throw fail(403,'SYNC_CLIENT_REQUIRED','挑战资料仅由家庭端只读采集器上传');
         cloud.authorize(req); rate('challenge-sync',12,60000);
         return respond(res,200,await challenges.accept(await jsonBody(req,config.cloudSync.maxBytes)));
+      }
+      if(req.method==='PUT'&&pathname==='/api/v1/internal/archives'){
+        if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
+        if(req.headers.origin||req.headers.cookie)throw fail(403,'SYNC_CLIENT_REQUIRED','档案仅由家庭端读取同步');
+        cloud.authorize(req);rate('archive-sync',12,60000);
+        return respond(res,200,archives.accept(await jsonBody(req,524288)));
       }
       const photoUpload = /^\/api\/v1\/internal\/photos\/([a-f0-9-]{36})$/.exec(pathname);
       if (photoUpload && req.method === 'PUT') {
@@ -384,11 +395,15 @@ export function createPortal(config, options = {}) {
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
-      if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
+      if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
+      if(req.method==='GET'&&pathname==='/api/v1/archives')return respond(res,200,archives.list({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||'',kind:url.searchParams.get('kind')||'all'}));
+      const archiveRead=/^\/api\/v1\/archives\/([a-f0-9-]{36})$/.exec(pathname);
+      if(req.method==='GET'&&archiveRead)return respond(res,200,archives.read(archiveRead[1]));
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
         const image = gallery.image(photoImage[1]);
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
+        if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'public, max-age=60'});return res.end();}
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=60' }); return res.end(image.bytes);
       }
       if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
@@ -399,8 +414,16 @@ export function createPortal(config, options = {}) {
           claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
+      const publicBag=/^\/api\/v1\/world\/players\/([a-f0-9]{24})\/bag$/.exec(pathname);
+      if(req.method==='GET'&&publicBag){
+        const row=[...worldView.roles(await game.roster()).values()].find(row=>row.id===publicBag[1]);
+        if(!row||!worldView.isPublic(row))throw fail(404,'NOT_FOUND','这个角色尚未公开背包');
+        const saved=await game.playerState(row),pick=(value,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(value||{},k)).map(k=>[k,value[k]]));
+        return respond(res,200,{agent:game.publicAgent(row),freshness:saved.freshness,savedAt:saved.savedAt,source:saved.source,
+          vitals:pick(saved.vitals,['health','food','level','experience']),inventory:(saved.inventory||[]).slice(0,64).map(item=>({...pick(item,['slot','id','count','enchanted']),name:publicDialogueText(item.name||'',160)}))});
+      }
       if (req.method === 'GET' && pathname === '/api/v1/challenges') return respond(res,200,await challenges.query({activity:url.searchParams.get('activity')||'trial_tower',difficulty:url.searchParams.get('difficulty')||'all',page:Number(url.searchParams.get('page')||1)}));
-      if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20) }));
+      if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20), player:url.searchParams.get('player')||'', day:url.searchParams.get('day')||'' }));
       if (req.method === 'GET' && pathname === '/api/v1/live') {
         const session = sessionFrom(req), owner = session?.owner_id ? store.ownerById(session.owner_id) : null;
         const relay = await nativeReady;
@@ -685,5 +708,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, archives, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

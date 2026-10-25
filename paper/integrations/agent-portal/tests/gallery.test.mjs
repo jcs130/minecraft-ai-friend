@@ -17,8 +17,8 @@ async function fixture(t) {
   async function start() { portal = createPortal(config); await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve)); }
   await start();
   const origin = () => 'http://127.0.0.1:' + portal.server.address().port;
-  const snapshot = (photos, sequence) => ({ schemaVersion: 1, observedAt: new Date().toISOString(), sequence, roster: [], players: [], states: {}, events: [], summary: {}, photos });
-  const catalog = (photos, sequence = 1) => portal.cloud.accept(snapshot(photos, sequence));
+  const snapshot = (photos, sequence, photoManifest) => ({ schemaVersion: 1, observedAt: new Date().toISOString(), sequence, roster: [], players: [], states: {}, events: [], summary: {}, photos, ...(photoManifest?{photoManifest}:{}) });
+  const catalog = (photos, sequence = 1, manifest) => portal.cloud.accept(snapshot(photos, sequence, manifest));
   const upload = (body = png, headers = {}, photoId = id) => fetch(origin() + '/api/v1/internal/photos/' + photoId, { method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'image/png', ...headers }, body });
   t.after(async () => { await portal.close(); assert.ok(root.startsWith(base + path.sep)); await fs.rm(root, { recursive: true, force: true }); });
   return { get portal() { return portal; }, config, root, origin, catalog, upload, restart: async () => { await portal.close(); await start(); } };
@@ -72,4 +72,27 @@ test('home photo reader includes only published game works and never follows ima
   assert.equal(rows.length, 1); assert.equal(rows[0].metadata.story, '我的故事'); assert.ok(!('owner' in rows[0].metadata)); assert.ok(!('x' in rows[0].metadata));
   await fs.writeFile(journal, '{partial'); assert.deepEqual(await reader.read(), rows);
   await fs.writeFile(journal, JSON.stringify({ players: {} })); assert.deepEqual(await reader.read(), []);
+});
+
+test('more than 50 works rotate through bounded batches; short ledgers retain originals and explicit withdrawal closes reads', async t => {
+  const f=await fixture(t),server=path.join(f.root,'game'),data=path.join(server,'plugins/ImageFrame/data/4'),journal=path.join(server,'plugins/AgentFriend/photo-journal.json');
+  await fs.mkdir(data,{recursive:true});await fs.mkdir(path.dirname(journal),{recursive:true});await fs.writeFile(path.join(data,'0.png'),png);
+  const works=Array.from({length:61},(_,i)=>({id:randomUUID(),author:i%2?'ag_CorMy':'ag_Alpha',title:'旅行 '+i,story:'真实原片',capturedAt:Date.now()+i,imageIndex:4,published:true}));
+  await fs.writeFile(journal,JSON.stringify({players:{a:{photos:Object.fromEntries(works.map(row=>[row.id,row]))}}}));
+  const reader=new PhotoReader({serverDir:server});let sequence=0;
+  for(const expected of [50,11]){
+    const rows=await reader.read();assert.equal(rows.length,expected);assert.equal(reader.manifest.publishedIds.length,61);
+    f.catalog(rows.map(row=>row.metadata),++sequence,reader.manifest);
+    for(const row of rows)f.portal.gallery.accept(row.metadata.id,png);
+  }
+  assert.equal(f.portal.gallery.page().total,61);assert.equal(f.portal.gallery.page().pages,3);
+  assert.equal(f.portal.gallery.page({page:3}).photos.length,13);
+  assert.equal(f.portal.gallery.page({author:'AG_CORMY'}).total,30);
+  const first=works[0].id;
+  f.catalog([],++sequence,{complete:true,publishedIds:[],withdrawnIds:[]});
+  assert.equal(f.portal.gallery.page().total,61,'a truncated game journal cannot erase older photographs');
+  f.catalog([],++sequence,{complete:true,publishedIds:[],withdrawnIds:[first]});
+  assert.equal(f.portal.gallery.page().total,60);assert.throws(()=>f.portal.gallery.image(first),/撤展/);
+  assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM gallery_originals').get().n,1,'same original bytes are stored once');
+  await f.restart();assert.equal(f.portal.gallery.page().total,60);assert.throws(()=>f.portal.gallery.image(first),/撤展/);
 });

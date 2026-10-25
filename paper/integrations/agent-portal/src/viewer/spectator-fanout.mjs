@@ -11,16 +11,18 @@ const latestTypes = new Set(['frame', 'motion', 'presentation']);
  * stop acknowledgements to the home publisher or buffer indefinitely. */
 export class SpectatorFanout extends EventEmitter {
   constructor({ playerUuid, open, maxViewers = 32, maxEventBytes = 16 * 1024 * 1024,
-    maxReplayBytes = 24 * 1024 * 1024, maxDeltas = 128, maxBufferedBytes = 28 * 1024 * 1024, idleTimeoutMs = 10000 }) {
+    maxReplayBytes = 24 * 1024 * 1024, maxDeltas = 128, maxBufferedBytes = 28 * 1024 * 1024, idleTimeoutMs = 10000, projectPublic = null }) {
     super(); Object.assign(this, { playerUuid, open, maxViewers, maxEventBytes, maxReplayBytes, maxDeltas, maxBufferedBytes, idleTimeoutMs });
     this.clients = new Set(); this.clear(); this.closed = false; this.upstream = null;
+    this.projectPublic=projectPublic;
   }
   clear() { this.decoder = new StringDecoder('utf8'); this.partial = ''; this.identity = null; this.checkpoint = null;
     this.deltas = []; this.latest = new Map(); this.epoch = null; this.sequence = null; this.replayBytes = 0; this.latestBytes = 0; this.order = 0; }
   state() { return { viewers: this.clients.size, upstreamStreams: this.upstream ? 1 : 0, replayBytes: this.replayBytes+this.latestBytes, deltas: this.deltas.length }; }
-  subscribe(req, res) {
+  subscribe(req, res, {scope='owner'}={}) {
     if (this.closed || this.clients.size >= this.maxViewers) return false;
-    const client = { req, res, queue: [], bytes: 0, blocked: false };
+    if(!['owner','scene'].includes(scope)||scope==='scene'&&!this.projectPublic)return false;
+    const client = { req, res, scope, queue: [], bytes: 0, blocked: false };
     client.close = () => { res.off('close', client.close); res.off('drain', client.drain); this.clients.delete(client);
       client.queue.length = 0; client.bytes = 0;
       if (!this.clients.size) { this.stop(); this.clear(); } };
@@ -37,6 +39,7 @@ export class SpectatorFanout extends EventEmitter {
   }
   enqueue(client, item) {
     if (client.res.destroyed || !this.clients.has(client)) return;
+    if(client.scope==='scene') { if(!item.publicBytes)return;item={type:item.type,bytes:item.publicBytes}; }
     // Replace only consecutive motion/HUD samples, never a terrain boundary.
     if (latestTypes.has(item.type)) {
       for (let i=client.queue.length-1;i>=0;i--) {
@@ -78,7 +81,8 @@ export class SpectatorFanout extends EventEmitter {
     this.refreshing = true;
     queueMicrotask(() => {
       this.refreshing = false; if (this.closed || !this.clients.size) return;
-      const item = { type: 'waiting', bytes: eventBytes({ type:'waiting', epoch:this.epoch, reason:'SPECTATOR_CHECKPOINT_REFRESH' }) };
+      const bytes=eventBytes({ type:'waiting', epoch:this.epoch, reason:'SPECTATOR_CHECKPOINT_REFRESH' });
+      const item = { type: 'waiting', bytes, publicBytes:bytes };
       for (const client of this.clients) this.enqueue(client,item);
       this.stop(); this.clear(); this.start();
     });
@@ -97,6 +101,8 @@ export class SpectatorFanout extends EventEmitter {
   receive(value) {
     if (!value || typeof value !== 'object' || typeof value.type !== 'string') throw Error('SPECTATOR_EVENT_INVALID');
     const item = { type:value.type, bytes:eventBytes(value), order:++this.order };
+    const publicValue=this.projectPublic?.(value);if(publicValue)item.publicBytes=eventBytes(publicValue);
+    item.size=item.bytes.length+(item.publicBytes?.length??0);
     if (value.type === 'identity') {
       if (value.playerUuid?.toLowerCase() !== this.playerUuid) throw Error('SPECTATOR_EVENT_IDENTITY');
       this.checkpoint=null; this.deltas=[]; this.latest.clear(); this.latestBytes=0; this.replayBytes=0; this.sequence=null; this.epoch=null; this.identity=item;
@@ -106,24 +112,24 @@ export class SpectatorFanout extends EventEmitter {
       if (!this.identity || !Number.isSafeInteger(value.epoch)) throw Error('SPECTATOR_CHECKPOINT_IDENTITY');
       if (this.epoch !== null && value.epoch < this.epoch) return;
       this.checkpoint=item; this.epoch=value.epoch; this.sequence=value.terrainSequence??null;
-      this.deltas=[]; this.latest.clear(); this.latestBytes=0; this.replayBytes=item.bytes.length;
+      this.deltas=[]; this.latest.clear(); this.latestBytes=0; this.replayBytes=item.size;
     } else if (value.type === 'snapshot_delta') {
       if (!this.checkpoint || value.epoch!==this.epoch || value.baseSequence!==this.sequence ||
           !Number.isSafeInteger(value.terrainSequence) || value.terrainSequence<=this.sequence) { this.refresh(); return; }
       // A terrain delta also contains the current pose/presentation. An older
       // cached frame must not roll a late visitor back after that newer state.
       this.latest.clear();this.latestBytes=0;
-      this.sequence=value.terrainSequence; this.deltas.push(item); this.replayBytes+=item.bytes.length;
+      this.sequence=value.terrainSequence; this.deltas.push(item); this.replayBytes+=item.size;
     } else if (latestTypes.has(value.type)) {
       if (!this.checkpoint || value.epoch!==this.epoch) return;
-      this.latestBytes+=item.bytes.length-(this.latest.get(value.type)?.bytes.length??0);this.latest.set(value.type,item);
+      this.latestBytes+=item.size-(this.latest.get(value.type)?.size??0);this.latest.set(value.type,item);
     } else if (!this.checkpoint || value.epoch!==this.epoch) return;
     for (const client of this.clients) this.enqueue(client,item);
     if (this.deltas.length>=this.maxDeltas || this.replayBytes+this.latestBytes>this.maxReplayBytes) this.refresh();
   }
   async check(authorize) {
     for (const client of [...this.clients]) {
-      try { await authorize(client.req); } catch { client.res.destroy(); client.close(); }
+      try { const grant=await authorize(client.req);if((grant?.scope??'owner')!==client.scope)throw Error('SPECTATOR_SCOPE_CHANGED'); } catch { client.res.destroy(); client.close(); }
     }
   }
   close() {

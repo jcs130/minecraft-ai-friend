@@ -28,8 +28,9 @@ export class WorldView {
       try { const value=JSON.parse(saved.value);return value.enabled===true&&!!value.ownerId&&value.ownerId===this.roleOwner(row); }
       catch { return false; }
     }
-    return this.config.live.worldObserverPublicUuids.includes(row.playerUuid);
+    return this.config.live.worldObserverPublicDefault===true||this.config.live.worldObserverPublicUuids.includes(row.playerUuid);
   }
+  scope(row,owner){return owner&&(owner.role==='admin'||this.store.ownedUuids(owner.id).includes(row.playerUuid))?'owner':'scene';}
   binding(row) { return (this.roleOwner(row)??'unbound')+':'+(this.isPublic(row)?'scene':'owner'); }
   retire(id) { this.sources.delete(id);this.onInvalidate?.(id); }
   setPublic(id,roster,owner,enabled) {
@@ -77,7 +78,7 @@ export class WorldView {
       return {id,playerName:row.name,title:row.name+' · 女神之眼',visibility:this.isPublic(row)?'public':'owner',
         managed:true,readOnly:true,mode:'native-3d',canManage:false,canManagePublic:owned.includes(row.playerUuid),isOwn:owned.includes(row.playerUuid),online,available,
         state:available?'live':!online?'offline':source?'preparing':'ready',watchUrl:`/watch/${id}/third/`,
-        scope:this.isPublic(row)?'scene':'owner',extraPlayerSlots:0};
+        scope:this.scope(row,owner),extraPlayerSlots:0};
     });
   }
   watch(id, roster, session, viewerId) {
@@ -98,7 +99,9 @@ export class WorldView {
       if(this.sources.size>=this.config.live.worldObserverMaxTargets)break;
       const row=roles.get(demand.id);
       this.sources.set(demand.id,{id:demand.id,lease:randomUUID(),playerUuid:row.playerUuid,playerName:row.name,
-        scope:this.isPublic(row)?'scene':'owner',binding:this.binding(row),publisherToken:'pub_'+newSecret()});
+        // One private trusted upstream. The cloud projects a separate public
+        // scene for guests, without a second Paper lease or terrain scan.
+        scope:'owner',binding:this.binding(row),publisherToken:'pub_'+newSecret()});
     }
     return {jobs:[...this.sources.values()].map(({binding,...row})=>({...row,expiresAt:new Date(this.now()+8000).toISOString()})),extraPlayerSlots:0};
   }
@@ -111,5 +114,6 @@ export class WorldView {
     const roles=this.reconcile(roster),row=roles.get(id),actor=session?this.sessionOwner(session.id_hash):null;
     if(!row||!this.allowed(row,actor?.owner))throw fail(404,'CHANNEL_NOT_FOUND','角色不存在或尚未授权');
     if(!this.online(row)||!this.sources.has(id))throw fail(503,'SPECTATOR_SOURCE_OFFLINE','角色场景正在恢复，请稍候');
+    return {scope:this.scope(row,actor?.owner)};
   }
 }

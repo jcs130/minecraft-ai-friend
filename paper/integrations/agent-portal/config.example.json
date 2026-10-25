@@ -43,6 +43,7 @@
     "worldObserverTokenHash": "",
     "worldObserverMaxTargets": 4,
     "worldObserverPublicUuids": [],
+    "worldObserverPublicDefault": false,
     "native3dSiteDirectory": null,
     "maxFrameBytes": 524288,
     "staleAfterMs": 8000,
