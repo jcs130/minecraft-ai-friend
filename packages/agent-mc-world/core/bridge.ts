@@ -273,7 +273,7 @@ export class Bridge {
   protected disposedThrough = -1;
   protected readonly bags = new Map<number, ResourceBag>();
   protected readonly disposing = new Set<Promise<void>>();
-  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
+  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; dispose?:()=>Promise<void>; resources?:import('./modern-viewer.ts').ModernViewerHandle['resources']; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
   protected viewerStartup: { gen: number; phase: 'starting' | 'failed'; version: string; code: string | null; message: string | null } | null = null;
   protected _invSynced = false;
   protected _spawnPositionPending = true;
@@ -406,7 +406,9 @@ export class Bridge {
     const version = this._bot?.version ?? null;
     if (this.opts.viewerPort <= 0) return { phase: 'disabled', version, code: null, message: '网页画面未启用。' };
     if (!this.connected) return { phase: 'waiting', version, code: null, message: null };
-    if (this.viewerUrl) return { phase: 'ready', version, code: null, message: null };
+    if (this.viewerUrl) return { phase: 'ready', version, code: null,
+      message:this.viewer?.resources?.mode==='compatible'?'已连接并使用兼容画面，部分新素材可稍后补全。':null,
+      resources:this.viewer?.resources??null };
     if (this.viewerStartup?.gen === this.generation) {
       const { gen, ...state } = this.viewerStartup; return state;
     }
@@ -420,7 +422,7 @@ export class Bridge {
   viewerResources() {
     return {...this.viewerState,directory:this.opts.viewerAssetsDir||null,
       repair:{guide:'https://github.com/jcs130/mc-visual-console/blob/main/docs/vanilla-viewer-resources.md',
-        meaning:'No protocol whitelist. Install resources for the actual version; missing optional icons do not block the world.',
+        meaning:'The game stays connected. Missing prebuilt materials use a compatible picture with the actual registry; exact resources are optional improvements. Missing icons do not block the world.',
         retry:'mc_connection action:viewer-retry (same body, no reconnect or replay)'}};
   }
 
@@ -428,6 +430,22 @@ export class Bridge {
   retryViewer() {
     const bot=this._bot;
     if(!this.connected||!bot?.entity)throw Error('Connect and authenticate the existing body before retrying its viewer.');
+    if(this.viewerStartup?.gen===this.generation&&this.viewerStartup.phase==='starting')return this.viewerResources();
+    const active=this.viewer;
+    if(active?.gen===this.generation&&active.resources?.mode==='compatible'&&active.dispose){
+      const gen=this.generation;
+      this.viewer=null;
+      const restarting={gen,phase:'starting' as const,version:bot.version,code:null,message:null};
+      this.viewerStartup=restarting;
+      void active.dispose().then(()=>{
+        if(this.stopped||this._bot!==bot||this.generation!==gen||this.viewerStartup!==restarting)return;
+        this.viewerStartup=null;this.startViewer(bot,gen);
+      }).catch(()=>{
+        if(this.viewerStartup!==restarting)return;
+        this.viewerStartup={gen,phase:'failed',version:bot.version,code:'VIEWER_START_FAILED',message:'游戏仍在线，画面重试暂未完成，可稍后再试。'};
+      });
+      return this.viewerResources();
+    }
     this.startViewer(bot,this.generation);
     return this.viewerResources();
   }
@@ -1250,8 +1268,9 @@ export class Bridge {
         }
         let modernAssets = this.opts.viewerAssetsDir;
         let agentViews: import('./viewer-agent-views.ts').AgentViewGallery | undefined;
-        // startModernViewer selects only an explicitly packaged matching version.
-        // Configured broken/mismatched assets remain a visible error instead of an approximate picture.
+        let resources:import('./modern-viewer.ts').ModernViewerHandle['resources']|undefined;
+        let dispose:(()=>Promise<void>)|undefined;
+        // Numeric registries always match the body; missing exact materials use a clearly marked compatible picture.
         if (modernAssets) {
           const { startModernViewer } = await import('./modern-viewer.ts');
           if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;
@@ -1263,8 +1282,10 @@ export class Bridge {
             speechSourceId: this.opts.viewerSpeechSourceId,
             agentMana: () => this.agentMana, serverProtocol: this.viewerServerProtocol(),
           }).catch(error => {relay?.close();throw error;});
-          this.bagFor(gen).register('modern-viewer', () => this.releaseViewer(gen, port, handle.close));
+          dispose=()=>this.releaseViewer(gen,port,handle.close);
+          this.bagFor(gen).register('modern-viewer', dispose);
           agentViews = handle.agentViews;
+          resources=handle.resources;
         } else {
           const mod = await this.loadViewer();
           if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;
@@ -1274,7 +1295,8 @@ export class Bridge {
           this.bagFor(gen).register('prismarine-viewer', () => this.releaseViewer(gen, port, close));
         }
         if (this.stopped || this.generation !== gen) return; // 旧代不得改新代状态
-        this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic', agentViews };
+        this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic', agentViews, resources, dispose };
+        this.viewerStartup = null;
         this.opts.log.info(`minecraft viewer 已启动 http://127.0.0.1:${port}`);
       } catch (err) {
         if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;
@@ -1282,7 +1304,7 @@ export class Bridge {
         const code = text === 'VIEWER_PORT_IN_USE' ? text : /VIEWER_ASSETS_MISSING|ENOENT/.test(text) ? 'VIEWER_ASSETS_MISSING'
           : /VERSION_MISMATCH|REGISTRY|资源不完整|VERSION_UNSUPPORTED/.test(text) ? 'VIEWER_ASSET_VERSION_MISMATCH' : 'VIEWER_START_FAILED';
         const message = code === 'VIEWER_PORT_IN_USE' ? '画面端口已被占用，请调整配置后重连。'
-          : code === 'VIEWER_ASSETS_MISSING' ? `本机尚未准备 Java ${bot.version} 的完整画面资源，游戏连接继续。Agent 可用 mc_connection 的 viewer-status 查看补全方法，完成后 viewer-retry 只重试画面。`
+          : code === 'VIEWER_ASSETS_MISSING' ? `Java ${bot.version} 游戏已连接，可以继续行动和聊天。网页画面的基础资源暂不可用，可重试画面；精确材质不是连接前提。`
           : code === 'VIEWER_ASSET_VERSION_MISMATCH' ? `Java ${bot.version} 的画面资源或注册表未通过校验。`
           : '网页画面启动失败，请检查本机日志。';
         this.viewerStartup = {gen, phase:'failed', version:bot.version, code, message};

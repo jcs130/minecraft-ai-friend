@@ -1,6 +1,7 @@
 import { onConnectionEnd } from './connection-end.ts';
 import { createViewerHeadTextures } from './viewer-head-textures.mjs';
-import { viewerVersionRegistry, viewerVersionCss, viewerVersionAssets, viewerVersionTexture } from './viewer-version.mjs';
+import { viewerVersionRegistry, viewerVersionCss, selectViewerAssets, viewerVersionTexture, type ViewerAssetSelection } from './viewer-version.mjs';
+import {viewerRuntimeRegistry,viewerRuntimeScript} from './viewer-runtime-registry.mjs';
 import { viewerBodyState } from './viewer-body-state.ts';
 import { viewerSleepState } from './viewer-sleep.ts';
 /** Read-only modern Minecraft picture served from the current Mineflayer bot. */
@@ -9,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import { Server as SocketServer, type Socket } from 'socket.io';
 import type mineflayer from 'mineflayer';
 import { Vec3 } from 'vec3';
@@ -94,6 +96,7 @@ interface WorldView {
 
 export interface ModernViewerHandle {
   url: string;
+  resources: Omit<ViewerAssetSelection,'directory'>;
   agentViews: AgentViewGallery;
   close(): Promise<void>;
 }
@@ -103,6 +106,8 @@ export interface ModernViewerOptions {
   /** 0 or omitted: no audience connection cap. Captures use their own lane. */
   maxSessions?: number;
   assetsDir: string;
+  /** Defaults to this package's bundled materials, so an old configured cache cannot disable a supported picture. */
+  fallbackAssetsDir?: string;
   speakerName?: string;
   speechSourceId?: string;
   relay?: ViewerRelay;
@@ -221,7 +226,7 @@ async function requiredAssetsPresent(root: string, version: string): Promise<boo
   for (const relative of ['dist/modern-viewer.js', 'public/mesher.js', 'public/mesherWasm.js',
     'public/threeWorker.js', `public/blocksStates/${version}.json`, `public/textures/${version}.png`,
     'render-assets/blockStatesModels.json', 'render-assets/blocksAtlases.json',
-    'render-assets/itemsAtlases.json', 'render-assets/painting-records.json']) {
+    'render-assets/itemsAtlases.json']) {
     if (!(await stat(path.join(root, relative)).catch(() => null))?.isFile()) return false;
   }
   const browserHash = createHash('sha256').update(await readFile(path.join(root, 'dist', 'modern-viewer.js'))).digest('hex');
@@ -456,9 +461,21 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   const localSkin = options.localPlayerSkin ? configuredPlayerSkin(options.localPlayerSkin) : null;
   const ownSkin = localSkin ? { skinUrl: localSkin.skinUrl, skinModel: localSkin.skinModel, skinSource: localSkin.skinSource } : null;
   observeStatusEffects(bot);
-  const root = await viewerVersionAssets(path.resolve(options.assetsDir), bot.version);
-  const sharedAssets=createSharedViewerAssets(options.assetsDir);
-  if (!(await requiredAssetsPresent(root, bot.version))) throw new Error(`modern viewer: ${bot.version} 资源不完整 ${root}`);
+  let assetsRoot=path.resolve(options.assetsDir);
+  let selected:ViewerAssetSelection;
+  try{selected=await selectViewerAssets(assetsRoot,bot.version);}
+  catch(error){
+    const bundled=path.resolve(options.fallbackAssetsDir??fileURLToPath(new URL('../dist/viewer/',import.meta.url)));
+    if(!(error instanceof Error)||error.message!=='VIEWER_ASSETS_MISSING'||bundled===assetsRoot)throw error;
+    selected=await selectViewerAssets(bundled,bot.version);assetsRoot=bundled;
+  }
+  const root=selected.directory,assetVersion=selected.assetVersion;
+  const resources={mode:selected.mode,requestedVersion:selected.requestedVersion,assetVersion};
+  const sharedAssets=createSharedViewerAssets(assetsRoot);
+  if (!(await requiredAssetsPresent(root, assetVersion))) throw new Error(`modern viewer: ${assetVersion} 资源不完整 ${root}`);
+  const registryScript=viewerRuntimeScript(await viewerRuntimeRegistry(bot.version,require),selected);
+  const compatibleMesher=selected.mode==='compatible'
+    ? 'importScripts("/viewer-runtime.js");\n'+await readFile(path.join(root,'public','mesher.js'),'utf8') : null;
   const { TradeItem, biomes: vanillaBiomes, plainsBiomeId } = viewerVersionRegistry(bot.version,
     require('minecraft-data'), createRequire(require.resolve('mineflayer'))('prismarine-item'));
   const soundRegistry = await loadViewerSoundRegistry(root, bot.version,
@@ -743,9 +760,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         const viewMode = pathname === '/third/' ? 'third' : pathname === '/3dview/' ? '3dview' : 'first';
         const query = new URL(req.url ?? '/', origin).searchParams;
         const photo = pathname === '/photo/' || query.get('photo') === '1' && query.get('clean') === '1';
-        const page = photo ? await viewerPhotoPage(root, viewMode) : await viewerPageHtml(root, viewMode, PAGE,
+        const document = photo ? await viewerPhotoPage(root, viewMode) : await viewerPageHtml(root, viewMode, PAGE,
           '<iframe class="corti-speech-bubble" id="corti-speech-bubble" title="主播语音气泡" aria-label="主播语音气泡" hidden></iframe>',
           '<script src="/speech-bubble.js" defer></script>');
+        const page=document.replace(/<head\b[^>]*>/i,'$&<script src="/viewer-runtime.js"></script>');
         const readyScript = photo ? page.match(/<script>([\s\S]*?)<\/script>/)?.[1] : undefined;
         const scriptPolicy = "'self' 'unsafe-eval'" + (readyScript
           ? ` 'sha256-${createHash('sha256').update(readyScript).digest('base64')}'` : '');
@@ -755,12 +773,16 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       }
       if (pathname === '/viewer.css') {
         const legacyCss = CSS + HUD_CSS + '.corti-offhand{position:absolute;left:-45px;top:4px;width:40px;height:36px;background:#505050bb;border:2px solid #a8a8a8;box-sizing:border-box;box-shadow:inset 2px 2px #272727,inset -2px -2px #ddd}' + DURABILITY_CSS + ENCHANT_CSS + ENCHANT_GLOW_CSS + PANELS_CSS + MANA_CSS + ABILITY_CSS + ABILITY_ICON_CSS + CAST_CSS + SKILL_TONE_CSS + NOTICE_CSS + COMBAT_CSS + TACTICS_CSS + EXTRA_FEEDBACK_CSS + VIEWER_LAYOUT_CSS + SPEECH_BUBBLE_CSS + PRESENTATION_CSS + STATUS_VIGNETTE_CSS + THEME_SURFACE_CSS + ABILITY_LAYOUT_CSS;
-        const style = viewerVersionCss(await viewerPageCss(root, legacyCss, SPEECH_BUBBLE_CSS), bot.version);
+        const style = viewerVersionCss(await viewerPageCss(root, legacyCss, SPEECH_BUBBLE_CSS), assetVersion);
         res.writeHead(200, { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'no-store' });
         res.end(style); return;
       }
       if (pathname === '/speech-bubble.js') {
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }); res.end(speakerScript); return;
+      }
+      if(pathname==='/viewer-runtime.js'){
+        res.writeHead(200,{'content-type':'application/javascript; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
+        res.end(registryScript);return;
       }
       if (await speechRelay?.handle(req, res, pathname)) return;
       if (pathname === '/speech-source') {
@@ -769,7 +791,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       }
       if (pathname === '/healthz') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(JSON.stringify({ ok: !closed, version: bot.version, ...sessionSlots.status(), content: content?.stats() ?? null,
+        res.end(JSON.stringify({ ok: !closed, version: bot.version, resources, ...sessionSlots.status(), content: content?.stats() ?? null,
           appearance: appearance ? { states: appearance.snapshot().length } : null })); return;
       }
       if (pathname === '/capture-lease') {
@@ -819,9 +841,18 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       }
       const relative = pathname.replace(/^\/(third|3dview)\//, '/').slice(1);
       const range = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+      if(relative==='mesher.js'&&compatibleMesher!==null){
+        res.writeHead(200,{'content-type':'application/javascript; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
+        res.end(compatibleMesher);return;
+      }
       if (relative === 'index.js' && await serveViewerAsset(res, root, 'dist/modern-viewer.js', 'no-store', range)) return;
       if (await serveViewerAsset(res, path.join(root, 'public'), relative, undefined, range,sharedAssets)) return;
-      const versionTexture = viewerVersionTexture(relative, bot.version);
+      if(selected.mode==='compatible'){
+        const material=relative===`blocksStates/${bot.version}.json`?`blocksStates/${assetVersion}.json`
+          :relative===`textures/${bot.version}.png`?`textures/${assetVersion}.png`:null;
+        if(material&&await serveViewerAsset(res,path.join(root,'public'),material,undefined,range,sharedAssets))return;
+      }
+      const versionTexture = viewerVersionTexture(relative, assetVersion);
       if (versionTexture && await serveViewerAsset(res, path.join(root, 'public'), versionTexture, undefined, range,sharedAssets)) return;
       res.writeHead(404); res.end();
     } catch {
@@ -1368,6 +1399,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   return {
     url: origin,
     agentViews,
+    resources,
     async close() {
       if (closed) return;
       closed = true;
