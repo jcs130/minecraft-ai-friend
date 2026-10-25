@@ -402,7 +402,7 @@ export function createPortal(config, options = {}) {
         const accepted = worldView.watch(watch[1], await game.roster(), session, body.viewerId);
         const relay = await nativeReady, available = relay.state(watch[1]).available;
         const queued = !worldView.sources.has(watch[1]) && worldView.sources.size >= config.live.worldObserverMaxTargets;
-        return respond(res, 200, { ...accepted, available, watchUrl: `/watch/${watch[1]}/`,
+        return respond(res, 200, { ...accepted, available, watchUrl: `/watch/${watch[1]}/third/`, preload: relay.preload(),
           message: available ? '观战画面已连接' : queued ? '当前观战场景已满，空闲后自动连接' : Date.now()-worldView.workerAt>8000 ? '观战服务暂未就绪，正在自动重试' : '女神之眼正在加载场景，请稍候' });
       }
       if (ingest && req.method === 'GET' && ingest[2] === 'frame') {

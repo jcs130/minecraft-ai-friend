@@ -19,7 +19,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, initialObservation = 'live' } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -49,7 +49,8 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', error => errors.push(error));
   const dom = new JSDOM(html, { url: initialView === 'home' ? origin : origin + '/#' + initialView, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const { window } = dom; const { document } = window;
-  let cookie = ''; let networkFailure = false; let hold = null; let observationState = 'live';
+  let cookie = ''; let networkFailure = false; let hold = null; let observationState = initialObservation;
+  const watchRequests = [];
   window.scrollTo = () => {};
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); };
@@ -60,10 +61,11 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     if (url.pathname === '/api/v1/gallery') return new Response(JSON.stringify({ photos }));
     // Frontend-only fixture. Native streaming and actual ACLs have separate
     // HTTP/WS tests and real Paper/WebGL acceptance.
-    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:'public'}]}));
+    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:'public'},{id:'b'.repeat(32),playerName:'ag_Beta',managed:true,online:true,available:true,visibility:'public'}]}));
     if (managedLive && /^\/api\/v1\/live\/[a-f0-9]{32}\/watch$/.test(url.pathname)) {
       if(observationState==='offline')throw new TypeError('Failed to fetch');
-      return new Response(JSON.stringify({accepted:true,available:observationState==='live',message:'当前观战场景已满，空闲后自动连接',watchUrl:'/watch/'+'a'.repeat(32)+'/'}));
+      watchRequests.push(url.pathname);
+      return new Response(JSON.stringify({accepted:true,available:observationState==='live',message:'当前观战场景已满，空闲后自动连接',watchUrl:'/watch/'+'a'.repeat(32)+'/third/',preload:['/watch/_static/'+'c'.repeat(64)+'/native-console.js','https://untrusted.example/script.js']}));
     }
 
     if (capabilitiesReady && url.pathname === '/api/v1/game-capabilities') return new Response(JSON.stringify({ ready: true }));
@@ -99,7 +101,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
+  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
 }
 
 test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
@@ -197,7 +199,7 @@ test('managed viewing embeds the original modern page and metadata refresh keeps
   const ui=await screen(t,{initialView:'live',managedLive:true});
   await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
   const frame=ui.document.querySelector('[data-world-frame]');
-  assert.equal(frame.getAttribute('src'),'/watch/'+'a'.repeat(32)+'/');
+  assert.equal(frame.getAttribute('src'),'/watch/'+'a'.repeat(32)+'/third/');
   assert.match(frame.getAttribute('sandbox'),/allow-pointer-lock/);
   assert.ok(!ui.document.body.textContent.includes('接入直播'));
   await ui.refresh(false);assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
@@ -207,6 +209,27 @@ test('managed viewing embeds the original modern page and metadata refresh keeps
   ui.click('.topbar [data-action="refresh"]');
   await waitFor(()=>!ui.document.querySelector('.topbar [data-action="refresh"]').disabled);
   assert.equal(ui.document.querySelector('[data-world-frame]'),frame);assert.notEqual(ui.document.querySelector('.footer').textContent,previousFooter);
+});
+
+test('pending scenes preload trusted code, retry promptly and default to third person without losing a selected camera',async t=>{
+  const ui=await screen(t,{initialView:'live',managedLive:true,initialObservation:'pending'});
+  await waitFor(()=>ui.document.querySelector('link[rel="modulepreload"]'));
+  assert.equal(ui.document.querySelector('[data-world-frame]'),null);
+  assert.equal(ui.document.querySelectorAll('link[rel="modulepreload"]').length,1);
+  assert.equal(ui.document.querySelector('link[rel="modulepreload"]').getAttribute('href'),'/watch/_static/'+'c'.repeat(64)+'/native-console.js');
+  const before=ui.watchRequests.length;
+  await waitFor(()=>ui.watchRequests.length>before);
+  await ui.observation('live');
+  const alpha=ui.document.querySelector('[data-world-frame]');
+  assert.equal(alpha.getAttribute('src'),'/watch/'+'a'.repeat(32)+'/third/');
+  alpha.contentWindow.history.replaceState(null,'','/watch/'+'a'.repeat(32)+'/3dview/');
+  ui.click('[data-action="watch-channel"][data-id="'+'b'.repeat(32)+'"]');
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]')?.dataset.channel==='b'.repeat(32));
+  assert.equal(ui.document.querySelector('[data-world-frame]').getAttribute('src'),'/watch/'+'b'.repeat(32)+'/third/');
+  ui.click('[data-action="watch-channel"][data-id="'+'a'.repeat(32)+'"]');
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]')?.dataset.channel==='a'.repeat(32));
+  assert.equal(ui.document.querySelector('[data-world-frame]').getAttribute('src'),'/watch/'+'a'.repeat(32)+'/3dview/');
+  assert.equal(ui.document.querySelectorAll('link[rel="modulepreload"]').length,1);
 });
 
 test('live fullscreen expands the existing scene, retains its iframe on refresh and exits cleanly',async t=>{

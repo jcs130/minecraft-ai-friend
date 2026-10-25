@@ -256,7 +256,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     dispatch(source);
     return true;
   }
-  return { http, upgrade, state,
+  return { http, upgrade, state, preload: () => site.preload?.(pagePrefix + '/_static') ?? [],
     async close() {
       if (closed) return;
       closed = true;

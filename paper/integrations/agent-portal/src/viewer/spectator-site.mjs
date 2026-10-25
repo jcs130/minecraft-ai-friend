@@ -22,6 +22,10 @@ export async function loadSpectatorSite(directory) {
   }
   const build = { browserBundleSha256: sha(files.get('client.js').bytes), consoleBundleSha256: sha(files.get('native-console.js').bytes) };
   return { build, manifest, file(name) { return files.get(name === 'index.js' ? 'native-console.js' : name) ?? null; },
+    preload(staticPrefix = '/watch/_static') {
+      if (!/^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+$/.test(staticPrefix)) throw Error('SPECTATOR_PAGE_INVALID');
+      return [`${staticPrefix}/${manifest.files['native-console.js'].sha256}/native-console.js`];
+    },
     // Only operator-built, hash-checked application code is public/cacheable.
     // No publisher files, models, inventories, or role-specific CSS enter here.
     staticFile(resource) {

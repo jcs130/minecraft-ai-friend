@@ -26,13 +26,15 @@ test('live roles are automatic, private and UUID-bound without manual channels o
   const f=await fixture(t),result=(await f.admin.request('/live')).data;
   assert.equal(result.mode,'native-3d');assert.equal(result.channels[0].extraPlayerSlots,0);
   assert.equal(result.channels[0].managed,true);assert.equal(result.channels[0].canManage,false);
+  assert.equal(result.channels[0].watchUrl,`/watch/${f.id}/third/`);
   assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM live_channels').get().n,0);
   assert.ok(!JSON.stringify(result).includes(token));assert.ok(!JSON.stringify(result).includes(f.uuid));
   assert.equal((await fetch(f.origin+'/api/v1/live').then(r=>r.json())).channels.length,0);
   assert.deepEqual((await f.worker().then(r=>r.json())).jobs,[]);
 });
 test('viewing creates only an observation lease; jobs are unavailable to browsers and public tokens',async t=>{
-  const f=await fixture(t);assert.equal((await f.watch(f.admin,f.id)).status,200);
+  const f=await fixture(t), watched=await f.watch(f.admin,f.id);assert.equal(watched.status,200);
+  assert.equal(watched.data.watchUrl,`/watch/${f.id}/third/`);assert.deepEqual(watched.data.preload,[]);
   const jobs=(await f.worker().then(r=>r.json())).jobs;assert.equal(jobs.length,1);
   assert.equal(jobs[0].playerUuid,f.uuid);assert.equal(jobs[0].playerName,'ag_Alpha');assert.match(jobs[0].publisherToken,/^pub_/);
   assert.equal(f.portal.worldView.publisher(f.id,jobs[0].publisherToken,[f.agent]).playerUuid,f.uuid);
@@ -52,7 +54,7 @@ test('one actual UUID shares its source across viewers and page mode is independ
   const f=await fixture(t);await f.watch(f.admin,f.id);await f.watch(f.admin,f.id);
   const first=(await f.worker().then(r=>r.json())).jobs;
   assert.equal(first.length,1);assert.equal((await f.worker().then(r=>r.json())).jobs[0].lease,first[0].lease);
-  const result=(await f.admin.request('/live')).data.channels[0];assert.equal(result.watchUrl,`/watch/${f.id}/`);
+  const result=(await f.admin.request('/live')).data.channels[0];assert.equal(result.watchUrl,`/watch/${f.id}/third/`);
 });
 test('switching the same browser view releases its old target and rotates source identity',async t=>{
   const f=await fixture(t),second={...f.agent,name:'ag_Beta',playerUuid:'22222222-2222-3222-8222-222222222222'};

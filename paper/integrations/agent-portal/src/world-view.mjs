@@ -53,7 +53,7 @@ export class WorldView {
       const source=this.sources.get(id),state=source?relayState(id):null,online=this.online(row),available=online&&state?.available===true;
       return {id,playerName:row.name,title:row.name+' · 女神之眼',visibility:this.isPublic(row)?'public':'owner',
         managed:true,readOnly:true,mode:'native-3d',canManage:false,isOwn:owned.includes(row.playerUuid),online,available,
-        state:available?'live':!online?'offline':source?'preparing':'ready',watchUrl:`/watch/${id}/`,
+        state:available?'live':!online?'offline':source?'preparing':'ready',watchUrl:`/watch/${id}/third/`,
         scope:this.isPublic(row)?'scene':'owner',extraPlayerSlots:0};
     });
   }

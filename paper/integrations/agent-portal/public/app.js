@@ -226,8 +226,17 @@ function livePage() {
 function worldChannelButtons(selectedId) {
   return state.channels.map(channel => `<button class="channel-card ${channel.id === selectedId ? 'selected' : ''}" data-action="watch-channel" data-id="${e(channel.id)}">${avatar(channel.playerName)}<span><strong>${e(channel.playerName)}</strong><small>${channel.isOwn ? '我的角色' : channel.visibility === 'public' ? '公开冒险' : '女神之眼'}</small></span><span class="tag ${channel.available ? 'live-tag' : ''}">${channel.available ? '观战中' : channel.online === false ? '离线' : '可观战'}</span></button>`).join('');
 }
-let worldViewerId = newRequestId(), worldLastRenew = 0;
+let worldViewerId = newRequestId(), worldLastRenew = 0, worldRenewChannel = null, worldPreparing = false;
 const worldViewModes = new Map();
+const worldPreloads = new Set();
+function preloadWorldAssets(paths) {
+  for (const path of (Array.isArray(paths) ? paths : []).slice(0, 2)) {
+    if (!/^\/watch\/_static\/[a-f0-9]{64}\/native-console\.js$/.test(path) || worldPreloads.has(path)) continue;
+    worldPreloads.add(path);
+    const link = document.createElement('link'); link.rel = 'modulepreload'; link.href = path;
+    document.head.append(link);
+  }
+}
 function removeWorldFrame() {
   const frame = document.querySelector('[data-world-frame]');
   if (!frame) return;
@@ -235,7 +244,8 @@ function removeWorldFrame() {
   frame.remove();
 }
 async function pollWorldView(selected) {
-  if (Date.now() - worldLastRenew < 4500) return;
+  if (worldRenewChannel === selected.id && Date.now() - worldLastRenew < (worldPreparing ? 1000 : 4500)) return;
+  worldRenewChannel = selected.id;
   worldLastRenew = Date.now();
   const id = selected.id, revision = authRevision, screen = document.querySelector('[data-world-screen]');
   if (!screen || screen.dataset.channel !== id) return;
@@ -243,10 +253,11 @@ async function pollWorldView(selected) {
   try {
     const result = await api(`/live/${id}/watch`, { method: 'POST', body: JSON.stringify({ viewerId: worldViewerId }) });
     if (revision !== authRevision || state.view !== 'live' || screen !== document.querySelector('[data-world-screen]')) return;
+    preloadWorldAssets(result.preload); worldPreparing = !result.available;
     if (!result.available) { removeWorldFrame(); document.querySelector('[data-live-placeholder]').hidden = false; document.querySelector('[data-world-reason]').textContent = result.message || '正在加载真实场景，请稍候。'; label.className = 'status unknown'; label.textContent = '场景准备中'; return; }
     if (!screen.querySelector('[data-world-frame]')) {
       const frame = document.createElement('iframe'); frame.dataset.worldFrame = ''; frame.dataset.channel = id;
-      frame.title = selected.playerName + ' 的现代化观战画面'; frame.src = worldViewModes.get(id) || `/watch/${id}/`;
+      frame.title = selected.playerName + ' 的现代化观战画面'; frame.src = worldViewModes.get(id) || `/watch/${id}/third/`;
       frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-pointer-lock'); frame.setAttribute('allowfullscreen', '');
       screen.append(frame);
     }
