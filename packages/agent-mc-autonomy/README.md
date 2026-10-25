@@ -1,6 +1,7 @@
 # Agent MC Autonomy
 
-The 0.2.95 distribution pins core rc.82 for complete inventory-frame reconciliation.
+The 0.2.96 distribution pins core rc.86 and forwards its shared offline notebook
+retrieval, optional stable note owner and explicit mineral-query policy.
 A denied or modified click still fails; an already received complete same-window
 server frame restores subsequent inventory access without another snapshot or
 replaying the click. Missing slots/cursor, unsent clicks and unknown dispatch stay
@@ -742,8 +743,22 @@ reference search/get. Its implementation and source data stay in the core. See
 Only discovery guidance belongs in the stable prefix; fetched references use
 ordinary bounded tool history. No embedding endpoint is implicitly selected.
 
-The `[memory]` table forwards local, vector or remote retrieval settings to the
+The `[memory]` table forwards local, local-vector, vector or remote retrieval settings to the
 shared core. See [game-memory configuration and provider contracts](../agent-mc-world/docs/game-memory.md).
+
+`mode = "local-vector"` uses the core's offline CPU token-vector and keyword rank
+fusion. It downloads no model, forwards no credential environment and makes no
+external retrieval request. This is lexical similarity, not neural semantic
+embedding. The existing local notebook stays authoritative. Optional
+`memory.agent_id` forwards the core's stable `memoryAgentId`; empty preserves
+legacy ownership. Changing it selects another notebook scope without moving or
+merging notes, changing the account ledger, or creating a game connection.
+
+`perception.mineral_vision` defaults to false and forwards only the shared core's
+observation policy. Explicit true permits bounded loaded-mineral block queries
+within 32 blocks, including occluded minerals. It does not reveal unloaded
+terrain, change entity sight, or relax movement/permission checks. Image input
+remains separately controlled by `perception.enabled`.
 `mc_memory` is available through progressive `mc_tool_help` / `mc_invoke`; neither
 the autonomous runtime nor a host adapter keeps a second notebook implementation.
 Only the configured key environment variable is forwarded to the body. Local

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.96
+
+- Consume fixed core rc.86, including shared AuthMe/readiness fixes and the
+  notebook/observation contracts used by DSH. Keep the existing independent
+  renderer, inventory reconciliation and unknown-effect fences.
+- Accept `memory.mode = "local-vector"` for the core's offline CPU token-vector
+  and keyword retrieval. Do not forward credential environment in local modes
+  or add another memory store, model, retrieval service or learning scheduler.
+- Forward optional `memory.agent_id` without changing the default note owner or
+  account ledger. Forward `perception.mineral_vision`, default false, separately
+  from image input. Installation does not migrate notes or grant action rights.
+
 ## 0.2.95
 
 - Pin core rc.82 so a denied or modified inventory click can reconcile the

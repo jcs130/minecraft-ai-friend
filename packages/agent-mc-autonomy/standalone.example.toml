@@ -51,6 +51,7 @@ image_input = false # Explicit capability; do not guess from the model name.
 
 [perception]
 enabled = true
+mineral_vision = false # Opt-in loaded-mineral queries only; physical permissions remain unchanged.
 
 [fast]
 mode = "rules" # system_one enables an explicitly configured local/remote provider.
@@ -66,7 +67,8 @@ min_interval_seconds = 60
 review_interval_seconds = 180
 
 [memory]
-mode = "local" # local | vector | remote; the canonical core implements retrieval.
+mode = "local" # local | local-vector (offline CPU token similarity) | vector | remote.
+agent_id = "" # Empty preserves existing note ownership; changing this does not migrate notes.
 endpoint = "" # Vector: full embeddings URL. Remote: memory API base URL.
 model = ""
 api_key_env = "" # Environment variable name, never a literal secret.

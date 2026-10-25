@@ -71,14 +71,19 @@ class MemorySettings:
     search_mode: str = "text"
     learning_enabled: bool = False
     read_preference: str = "balanced"
+    agent_id: str = ""
 
     @classmethod
     def parse(cls, raw: dict) -> MemorySettings:
         if not isinstance(raw, dict) or set(raw) - cls.__dataclass_fields__.keys():
             raise ValueError("memory must be a table of supported retrieval settings")
         fields = {key: _text(raw, key, value.default) for key, value in cls.__dataclass_fields__.items() if key not in {"timeout_ms", "learning_enabled"}}
-        if fields["mode"] not in {"local", "vector", "remote"}:
-            raise ValueError("memory.mode must be local, vector or remote")
+        if fields["mode"] not in {"local", "local-vector", "vector", "remote"}:
+            raise ValueError("memory.mode must be local, local-vector, vector or remote")
+        agent_id = fields["agent_id"]
+        if (sum(2 if ord(char) > 0xffff else 1 for char in agent_id) > 160
+                or any(ord(char) == 127 or 0xd800 <= ord(char) <= 0xdfff for char in agent_id)):
+            raise ValueError("memory.agent_id must be an optional stable identifier of at most 160 characters")
         if fields["provider"] not in {"http", "mem0-oss", "mem0-platform", "bailian", "powercontext"}:
             raise ValueError("Invalid memory provider")
         if fields["search_mode"] not in {"text", "vector", "hybrid"}:
@@ -90,7 +95,7 @@ class MemorySettings:
         key = fields["api_key_env"]
         if key and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
             raise ValueError("memory.api_key_env must be an environment variable name")
-        if fields["mode"] != "local" and not fields["endpoint"]:
+        if fields["mode"] in {"vector", "remote"} and not fields["endpoint"]:
             raise ValueError("Configure memory.endpoint for external retrieval")
         if fields["mode"] == "vector" and not fields["model"]:
             raise ValueError("Configure memory.model for vector retrieval")
@@ -108,12 +113,12 @@ class MemorySettings:
         # existing strict 0.4 configurations usable; explicit nondefault choices
         # still require a core that implements the preference contract.
         return {aliases.get(key, key): getattr(self, key) for key in self.__dataclass_fields__
-                if key != "read_preference" or self.read_preference != "balanced"}
+                if key != "agent_id" and (key != "read_preference" or self.read_preference != "balanced")}
 
     def environment(self) -> dict[str, str]:
         # MCP's child environment is allowlisted. Forward only this configured key, never all host credentials.
         key = self.api_key_env
-        return {key: os.environ[key]} if self.mode != "local" and key and key in os.environ else {}
+        return {key: os.environ[key]} if self.mode in {"vector", "remote"} and key and key in os.environ else {}
 
 
 @dataclass(frozen=True)
@@ -156,6 +161,7 @@ class Settings:
     bundle_root: str = ""
     bundle_manifest_sha256: str = ""
     vision_enabled: bool = True
+    mineral_vision: bool = False
     fast: FastSettings = field(default_factory=FastSettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
     decision_policy: DecisionSettings = field(default_factory=DecisionSettings)
@@ -263,7 +269,8 @@ class Settings:
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             bundle_root=_text(runtime, "bundle_root"), bundle_manifest_sha256=_text(runtime, "bundle_manifest_sha256"),
-            vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
+            vision_enabled=_boolean(perception, "enabled", True),
+            mineral_vision=_boolean(perception, "mineral_vision", False), fast=FastSettings.parse(raw.get("fast", {})),
             memory=MemorySettings.parse(raw.get("memory", {})),
             decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),
         )
@@ -304,6 +311,8 @@ class Settings:
                 "loginConfigFile": str(Path(self.login_config_file).expanduser().resolve()) if self.login_config_file else "",
                 "viewerPort": self.viewer_port,
                 "memory": self.memory.client_config(),
+                **({"memoryAgentId": self.memory.agent_id} if self.memory.agent_id else {}),
+                "perception": {"mineralVision": self.mineral_vision},
                 "performanceBridge": {"module": "", "endpoint": ""},
                 "local": {"startWithWorld": False, "serverDir": "", "cheats": False},
                 "client": {"enabled": False}, "player": {"enabled": False},
