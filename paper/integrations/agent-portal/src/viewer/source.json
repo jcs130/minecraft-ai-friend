@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "4d4252c19edd91cee59f4eb9aaa0626d90f7daf6",
+  "commit": "8b89927db49c9547a50029f039cbfe534d38e78b",
   "normalization": "CRLF-to-LF only",
   "files": {
     "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
