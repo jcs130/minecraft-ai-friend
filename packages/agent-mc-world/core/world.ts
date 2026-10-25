@@ -8911,6 +8911,10 @@ export class MinecraftWorld implements World {
   ): void {
     if (!this.host) return;
     const player = opts?.meta?.uname;
+    // Server status/action-bar payloads share the chat transport, but are not
+    // player conversation. Consumers must not interrupt a reply for every poll.
+    if (type === 'minecraft.chat' && typeof player !== 'string' && !opts?.meta?.channel)
+      opts = { ...opts, meta: { ...opts?.meta, channel: 'system' } };
     if (opts?.deliver !== false && typeof player === 'string' && player !== this.chatName() && !this.isCamera(player)
       && (type === 'minecraft.chat' || type === 'minecraft.enter' || !!opts?.meta?.minecraftPlayerObservation)) {
       const uuid = typeof opts?.meta?.senderUuid === 'string' ? opts.meta.senderUuid : this.bridge?.bot?.players?.[player]?.uuid;

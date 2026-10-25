@@ -8,7 +8,7 @@ import { BattlefieldObserver } from './battlefield.ts';
 import { CombatAbilities, type CombatSpell } from './combat-abilities.ts';
 import { CombatTacticBook } from './combat-tactics.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
-import { combatReactions } from './combat-reactions.ts';
+import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { CombatProgramRunner, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
 import { validCombatRules, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
@@ -164,7 +164,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       + (program ? `自主程序「${program.name}」SHA256 ${programHash}；`
         + (programError ? `已停止采用：${programError}。当前使用默认候选，需修订 program 后重新核验。`
           : '已编译，实战效果待核验。') : '')
-      + '已按当前世界保存；保存不代表程序已采用。只在交战时按目标、魔力和冷却尝试，效果以服务端回执为准。'
+      + '已按当前世界保存；保存不代表程序已采用。自动连招在交战时尝试；允许主动接敌时，带 intent 的已就绪分支也可供快决策选择先手施法，仍核对控制权、目标、生命、魔力与冷却。效果以服务端回执为准。'
       + '\n' + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined));
   }
 private routineGraph(routine: CombatRoutine): ProcedureGraph {
@@ -209,7 +209,6 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       tracking: this.combat?.tracking ?? false }, cfg.maxEntities, now);
     const program = this.tactics.getTactic()?.program;
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
-    if (!fighting) frame.candidates = [];
     const control = {
       bodyFree: (this.combat?.tracking ? !queue?.waiting.length : !this.combat?.active && combatMayTakeTask(queue))
         && !this.methods.current && !bot.currentWindow && !(this.executor?.eating ?? false),
@@ -220,6 +219,11 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       engagementTargets: new Set(this.combat?.engagementTargets() ?? []),
       retreatAvailable: this.combat?.canRetreat() ?? false,
     };
+    if (!fighting) {
+      const opening = openingSpellBattlefield(battlefield, cfg, { ...control, enabled: this.cfg.combat.enabled });
+      frame.candidates = opening ? this.tactics.decisionFrame(bot, opening,
+        program ? 16 : cfg.maxCandidates, now).candidates : [];
+    }
     const engagementTargets = control.engagementTargets;
     const executableReaction = (candidate: CombatCandidate) => candidate.kind !== 'engage'
       || engagementTargets.has(candidate.targetId);
@@ -285,7 +289,11 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
       candidate = checked;
     }
     if (candidate.kind === 'cast') {
-      if (!current.battlefield.action.fighting || this.tactics.manualCastBlock(candidate.spell)) return false;
+      // sampleCombatDecision revalidates opening admission as well as the exact rule.
+      // An authored program cannot manufacture an unoffered spell outside that pool.
+      const allowed = (current.actionPool ?? current.candidates).some(c => c.kind === 'cast'
+        && c.spell === candidate.spell && c.ruleId === candidate.ruleId);
+      if (!allowed || this.tactics.manualCastBlock(candidate.spell)) return false;
       return this.sendAutoCombatSpell(bot, candidate.spell, candidate.ruleId);
     }
     if (candidate.kind === 'method') {

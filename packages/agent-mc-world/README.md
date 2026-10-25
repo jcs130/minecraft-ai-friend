@@ -134,6 +134,19 @@ a short renewable lease; it stops on lost identity/sight or expiry and checks
 loaded safe ground before moving. Set `maxCandidates` to at least 3 to expose the
 different tactics. No host selector or inference starts by importing the package.
 
+With `allowEngage:true`, authored spell rules with an `intent` may be offered
+before the native melee controller starts, including when there is no sword or
+usable bow. Ability availability, mana/cost/cooldown, visible hostiles in the
+configured engagement scope, rule predicates, health and body admission must
+all pass again at dispatch. Sampling never casts a spell. `fight:off`, emergency
+ownership and a noninterruptible body task still prevent an opening. This does
+not grant spell range, aim, server success or melee capability.
+
+Server messages using the chat transport carry `meta.channel:"system"` when
+there is no named player source. Player speech and outgoing private echoes keep
+their original provenance, so host reply/speech lanes can distinguish telemetry
+from a new conversation without parsing server-specific text.
+
 ## Spatial observations
 
 The same SDK/MCP action interface offers compact site diagnostics, local 3D voxels,

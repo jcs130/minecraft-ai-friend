@@ -5,6 +5,20 @@ import type { Battlefield } from './battlefield.ts';
 import type { CombatCandidate, CombatExecutionPolicy } from './combat-decision-types.ts';
 import { corridorSafe } from './idle-actions.ts';
 
+/** An explicitly enabled opening spell need not wait for a melee controller or a first injury.
+ * The caller still checks observed ability, mana, cooldown and the authored rule. */
+export function openingSpellBattlefield(field: Battlefield, cfg: CombatExecutionPolicy,
+  control: { bodyFree: boolean; fight: string; enabled: boolean; fleeHealth: number }): Battlefield | null {
+  if (!cfg.allowEngage || !control.enabled || control.fight === 'off' || !control.bodyFree
+    || field.action.emergency || (field.self.health.current ?? 0) < control.fleeHealth + 3) return null;
+  const party = new Set([field.self.entityId, ...field.actors.filter(e => e.relation === 'ally'
+    && e.health.current !== 0 && e.entityId !== null).map(e => e.entityId!)]);
+  return { ...field, actors: field.actors.filter(e => e.relation !== 'hostile'
+    || e.health.current !== 0 && e.lineOfSight === true && e.distance !== null
+      && (cfg.engageScope === 'hostile' || e.relationSource === 'server'
+        && e.targetEntityId !== null && party.has(e.targetEntityId))) };
+}
+
 export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecutionPolicy,
   control: { bodyFree: boolean; canStep: boolean; targetId: number | null; sinceHitMs: number | null;
     fight: string; fleeHealth: number; chaseMax: number; trackingTargets?: ReadonlySet<number>;
