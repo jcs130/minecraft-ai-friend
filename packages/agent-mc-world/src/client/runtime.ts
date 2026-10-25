@@ -219,11 +219,20 @@ export class MinecraftAgentClient {
     if (action === 'disconnect') return this.disconnect();
     if (this.phase !== 'started') throw new Error('Connect the client environment first.');
     const method = ({ 'observer.start': 'observer.start', 'observer.stop': 'observer.stop',
-      'player.start': 'player.start', 'player.stop': 'player.stop' } as Record<string, string>)[action];
+      'player.start': 'player.start', 'player.stop': 'player.stop', 'viewer.retry':'viewer.retry' } as Record<string, string>)[action];
     if (!method) throw new Error('Unknown operator action.');
     const invoke = this.world.console?.().invoke;
     if (!invoke) throw new Error('This environment has no launcher interface.');
     await invoke('connection', method, []);
+  }
+
+  /** Model-safe resource metadata, without account authentication or device codes. */
+  async viewerResources(action:'status'|'retry'='status'):Promise<unknown> {
+    if(!['status','retry'].includes(action))throw Error('Unknown viewer resource action');
+    if(this.phase!=='started')throw Error('Connect the existing Minecraft environment first.');
+    const invoke=this.world.console?.().invoke;
+    if(!invoke)throw Error('This backend has no web-viewer resource interface.');
+    return invoke('connection',action==='retry'?'viewer.retry':'viewer.state',[]);
   }
 
   async environment(): Promise<string> {

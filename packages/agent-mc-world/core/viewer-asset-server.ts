@@ -27,15 +27,18 @@ export function viewerByteRange(range: string, size: number): { start: number; e
 }
 
 export async function serveViewerAsset(res: ServerResponse, root: string, relative: string,
-  cacheControl = 'public, max-age=3600', range?: string): Promise<boolean> {
-  const file = path.resolve(root, relative);
+  cacheControl = 'public, max-age=3600', range?: string,
+  shared?:ReturnType<typeof import('./viewer-shared-assets.mjs').createSharedViewerAssets>): Promise<boolean> {
+  let file = path.resolve(root, relative);
   const extension = path.extname(file).toLowerCase();
   if (!file.startsWith(path.resolve(root) + path.sep) || !MIME[extension]) return false;
-  const info = await stat(file).catch(() => null);
+  let info = await stat(file).catch(() => null);
+  const object=!info&&shared?await shared.resolve(file):null;
+  if(object){file=object.file;info=await stat(file);cacheControl='public, no-cache';}
   if (!info?.isFile() || info.size > MAX_ASSET_BYTES) return false;
   const ranged = extension === '.ogg';
   const headers = { 'content-type': MIME[extension], 'cache-control': cacheControl,
-    'x-content-type-options': 'nosniff', ...(ranged ? { 'accept-ranges': 'bytes' } : {}) };
+    'x-content-type-options': 'nosniff', ...(object?{etag:'"sha256-'+object.sha256+'"'}:{}), ...(ranged ? { 'accept-ranges': 'bytes' } : {}) };
   if (ranged && range !== undefined) {
     const selected = viewerByteRange(range, info.size);
     if (!selected) {

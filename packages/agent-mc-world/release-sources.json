@@ -1,15 +1,16 @@
 {
   "viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
+    "commit": "14aeb081fab1f2ed4d65cc8558a2b9d6eb066759",
     "assetPack": "java-1.21.1",
     "additionalPacks": [
       "java-1.20.6",
-      "java-1.21.11"
+      "java-1.21.11",
+      "java-1.21.5"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-4da993d1-audio.tgz",
-    "sha256": "a53a6cb443096ee113c964d44b4427e4a629acdf08584956004a147b0dc59b69",
+    "artifact": "vendor/mc-visual-console-java-1.21.1-14aeb081-audio.tgz",
+    "sha256": "a3558929cb9cb3401c71c2676d128721f7be47cb3c26a78d7e159b6aece4333d",
     "soundPacks": [
       "java-1.21.1-sounds",
       "java-1.20.6-sounds",
@@ -20,13 +21,77 @@
     "audioCoverage": {
       "1.21.1": "exact-version-separate-download",
       "1.20.6": "exact-version-separate-download",
-      "1.21.11": "disabled-no-original-audio-pack"
+      "1.21.11": "disabled-no-original-audio-pack",
+      "1.21.5": "disabled-no-original-audio-pack"
     },
     "deferredAudioInput": {
       "package": "agent-mc-world@0.5.7-rc.85",
       "sha256": "8bb01430f2f8e9a8259df5f3105449bfdcc3b0c77a7fd8a46c33a72fa52b3936",
       "filesCheckedAgainstCurrentSharedAssetPacks": 28
-    }
+    },
+    "previousFrozenInput": {
+      "commit": "94a12db5ae1f96ab8ea274395ece9eb38335c69a",
+      "sha256": "64e0d4ef79ae4c77af6044408990d519a28358e62ee84f9cc9bec43e7fc5626d"
+    },
+    "originalAssetInput": {
+      "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
+      "sha256": "a53a6cb443096ee113c964d44b4427e4a629acdf08584956004a147b0dc59b69",
+      "versions": [
+        "1.21.1",
+        "1.20.6",
+        "1.21.11"
+      ]
+    },
+    "generatedVanillaVersions": [
+      {
+        "version": "1.21.1",
+        "clientJarSha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
+        "browserBundleSha256": "77c396bc20e068a49b7dba45d3bea4e42df5d62ad8b0b8eb3669f401247179d2",
+        "mesherSha256": "537970d0ef79018017a4371290c42e70d73c4d267bbaf843e8146e1b62d7e336",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      },
+      {
+        "version": "1.20.6",
+        "clientJarSha256": "02dfd345ac1ad55692d5dbc8486ac7e4fea72cd54ac494a79cd48963048e56b2",
+        "browserBundleSha256": "d94e9dbb8f845c689c62d0a8d2a9039e34514d10a0b2609b6ce632f7234727d8",
+        "mesherSha256": "a1ff058d8ecab9019ca5a8b5b684d96d92b816fe48cd4ee396b9fd79a0fb654c",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      },
+      {
+        "version": "1.21.11",
+        "clientJarSha256": "1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd",
+        "browserBundleSha256": "87b4f0f4ccdd01ecd3dae209410d77492d22854b0bb85c00052eda6ea111aa89",
+        "mesherSha256": "7829de731fcff8d0911a677249efe742d57a21b7b90713fa23894debef82d63b",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      },
+      {
+        "version": "1.21.5",
+        "clientJarSha256": "522672ad20b460c02c2e39b6c5035ef6a849af28eb11ab2ac7eb293d395a8c11",
+        "browserBundleSha256": "84d14b6e6aa5519f7d0541ba0fe224b34cae008a78f866df46f6adfc20bab821",
+        "mesherSha256": "e0e383da60dd7c94795c16c65f2dfe5fcec7a4389bf15dd1f00d21e64fe66ca5",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      }
+    ]
   },
   "core": {
     "source": "core/",

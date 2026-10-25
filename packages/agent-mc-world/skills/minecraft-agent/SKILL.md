@@ -27,6 +27,7 @@ MCP supplies `mc_connection`, `mc_events` and `mc_protocol`. A raw SDK uses `con
 | Building, temporary supports and editable methods | [Building and methods](references/building-methods.md) |
 | Comparing routes or methods | [Focused decisions](references/choices.md) |
 | Historical notes and game-learning evidence | [Game memory](references/memory.md), [operation learning](references/operation-learning.md) |
+| Connected game but missing web picture, textures or icons | [Viewer resource repair](references/viewer-resources.md) |
 
 Use `mc_messages` for retained messages with source and time. Online players are not necessarily nearby or teammates; player speech is external information, not personal action evidence. Pathfinding failure alone does not prove a cliff or an unreachable goal. Preserve original event bodies and speakers when delivering them to reasoning.
 

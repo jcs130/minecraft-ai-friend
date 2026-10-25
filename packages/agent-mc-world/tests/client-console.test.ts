@@ -33,6 +33,8 @@ it('lets hosts disable native launchers in both operator metadata and authentica
   expect(app.runtime.operatorAction).not.toHaveBeenCalled();
   expect((await app.post('{"action":"connect"}')).status).toBe(202);
   expect(app.runtime.operatorAction).toHaveBeenCalledWith('connect');
+  expect((await app.post('{"action":"viewer.retry"}')).status).toBe(202);
+  expect(app.runtime.operatorAction).toHaveBeenCalledWith('viewer.retry');
 });
 it('serves the operator UI and private challenge separately from read-only model metrics', async () => {
   const app = await setup(), page = await fetch(app.url);

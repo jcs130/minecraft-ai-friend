@@ -26,6 +26,11 @@ it('reports exact-version resource failure independently of a ready 1.21.11 game
     expect(bridge.viewerState.message).toContain('1.21.11');
     expect(JSON.stringify(bridge.viewerState)).not.toContain(directory);
     expect(bridge.viewerUrl).toBeNull();
+    const quit=vi.spyOn(bot,'quit');
+    expect(bridge.viewerResources()).toMatchObject({directory,repair:{retry:expect.stringContaining('viewer-retry')}});
+    expect(bridge.retryViewer().phase).toBe('starting');
+    await vi.waitFor(()=>expect(bridge.viewerState.phase).toBe('failed'));
+    expect(bridge.bot).toBe(bot);expect(bridge.connected).toBe(true);expect(quit).not.toHaveBeenCalled();
     Object.assign(bridge,{generation:1});
     expect(bridge.viewerState.phase).toBe('waiting');
   } finally {await bridge.stop();await rm(directory,{recursive:true,force:true});}

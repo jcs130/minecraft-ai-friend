@@ -7,6 +7,7 @@ import { transform } from 'esbuild';
 import { readViewerInput } from './viewer-input.mjs';
 import { copyViewerAssets } from './copy-viewer-assets.mjs';
 import { deferViewerAudio } from './defer-viewer-audio.mjs';
+import {shareViewerAssets} from '../core/viewer-shared-assets.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'dist/runtime');
@@ -67,6 +68,7 @@ execFileSync('tar', ['-xzf', archive, '-C', join(root, 'dist'),
 if (process.argv.includes('--deferred-audio')) viewerInput.audio = await deferViewerAudio(join(root, 'dist/viewer'), lock.viewer.sha256);
 // Emitted config URLs remain valid when SDK and child processes run from dist/runtime.
 await copyViewerAssets(join(root, 'dist/viewer'), join(output, 'dist/viewer'));
+viewerInput.sharedAssets=await shareViewerAssets(join(output,'dist/viewer'),{generated:true});
 await cp(join(root, 'dist/client-console'), join(output, 'dist/client-console'), { recursive: true });
 for (const directory of ['dist/viewer','dist/client-console','dist/monitor','dist/runtime/dist/viewer','dist/runtime/dist/client-console'])
   for (const path of await walk(join(root,directory))) files.push({file:relative(root,path).replaceAll('\\','/'),sha256:digest(await readFile(path))});

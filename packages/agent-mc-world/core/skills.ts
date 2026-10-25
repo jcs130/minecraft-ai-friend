@@ -195,7 +195,7 @@ function str(v: unknown): string | null {
 }
 
 const CHAT_LENGTH_LIMIT = 256;
-const CHAT_SPLIT_HINT = '长消息请拆成多条单行 chat 步骤；/msg 私聊每条重复完整命令和收件人，其他命令须缩短参数并保持完整';
+const CHAT_SPLIT_HINT = '长消息请拆成多条单行 chat 步骤；/tell 私聊每条重复完整命令和收件人，其他命令须缩短参数并保持完整';
 
 export function chatInputError(text: string): string | null {
   if (/[\u0000-\u001f\u007f-\u009f\u00a7\u2028\u2029]/u.test(text)) {
@@ -1884,10 +1884,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'chat',
     doc: `{"skill":"chat","text":"大家好"}               发送游戏内公屏聊天，其他玩家能否收到以服务端与对方客户端为准
-默认用上面的普通文本在公屏交流；想对某人说话可在文本中点名。不假定服务器支持 /msg、/tell 或 /w。
-只有明确要求私聊且已确认该服务器支持时，才发送对应私聊命令；使用完整登录名。未知或失败的私聊不自动重发到公屏，不用私聊绕过公屏限额。
+默认用普通文本在公屏交流，可用「@玩家名 内容」点名回应；收到其他玩家公屏消息后，自行判断是否相关并决定是否回复，不必句句回应。
+明确选择私聊时优先使用原版 /tell 玩家名 内容（/minecraft:tell 是原版命名空间形式）；/msg 和 /w 只是别名，不依赖插件私聊。使用完整登录名，以真实回执确认可用性。未知或失败的私聊不自动重发到公屏；若改用公屏 @人，要明确选择公开内容，不泄露原私聊，不用私聊绕过公屏限额。
 {"skill":"chat","text":"/help"}               在游戏聊天栏输入服务端命令，结果看随后服务端消息
-单条最多 256 个字符（含 / 和命令参数），不收换行或控制字符；长内容分成多条单行 chat 步骤，私聊每条重复完整的 /msg 玩家名。`,
+单条最多 256 个字符（含 / 和命令参数），不收换行或控制字符；长内容分成多条单行 chat 步骤，私聊每条重复完整的 /tell 玩家名。`,
     fields: [{ key: 'text', kind: 'string', required: true, schema: { type: 'string', maxLength: CHAT_LENGTH_LIMIT } }],
   },
   {

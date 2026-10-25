@@ -17,7 +17,7 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
     Object.assign(bot,{players:{[bot.username]:{skinData:{url:'https://textures.minecraft.net/texture/'+'a'.repeat(64)}}}});
     expect(ownEntity(bot as never)).toMatchObject({skinUrl:null,skinAvailability:'disabled'});
     expect(ownEntity(bot as never,true).skinUrl).toBe('/head-texture/'+'a'.repeat(64)+'.png');
-    const viewer = await startModernViewer(bot as never, { port: await freeViewerPort(), assetsDir: MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir });
+    const viewer = await startModernViewer(bot as never, { port: await freeViewerPort(), assetsDir: MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir,remoteTextures:false });
     const assets = await viewerVersionAssets(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir,bot.version);
     const socket = io(viewer.url, { autoConnect: false, reconnection: false, transports: ['websocket'] });
     try {
@@ -75,6 +75,42 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.11 viewer',()=>{
       expect(iron).toEqual(readFileSync(join(assets,'public/textures/1.21.11/entity/equipment/humanoid_leggings/iron.png')));
       expect((await fetch(viewer.url+'/fonts/1.21.1/unifont.zip')).status).toBe(404);
       expect((await fetch(viewer.url+'/blocksStates/1.21.1.json')).status).toBe(404);
+    }finally{socket.disconnect();await viewer.close();}
+  },15000);
+});
+
+describe.skipIf(engineOnly)('exact vanilla versions beyond the primary maintenance release',()=>{
+  it('serves actual 1.21.5 blocks while absent optional font/icons stay local feature gaps',async()=>{
+    const {bot}=viewerBot('1.21.5');Object.assign(bot,{entities:{}});
+    expect(bot.registry.version.version).toBe(770);
+    const viewer=await startModernViewer(bot as never,{port:await freeViewerPort(),assetsDir:MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir});
+    try{
+      expect(await(await fetch(viewer.url+'/healthz')).json()).toMatchObject({ok:true,version:'1.21.5'});
+      const blocks=await(await fetch(viewer.url+'/blocksStates/1.21.5.json')).json();expect(blocks.stone).toBeDefined();
+      expect((await fetch(viewer.url+'/icons/not_a_real_item.png')).status).toBe(404);
+      expect((await fetch(viewer.url+'/text-display-font.json')).status).toBe(404);
+      expect((await fetch(viewer.url+'/healthz')).status).toBe(200);
+      expect((await fetch(viewer.url+'/blocksStates/1.21.1.json')).status).toBe(404);
+    }finally{await viewer.close();}
+  },15000);
+});
+
+describe.skipIf(engineOnly)('vanilla multiplayer skin synchronization',()=>{
+  it('updates a tracked player from late server properties without movement or reconnecting',async()=>{
+    const {bot}=viewerBot();const uuid='11111111-2222-3333-4444-555555555555';
+    const other={...bot.entity,id:2,uuid,username:'Alice',position:bot.entity.position.offset(2,0,-2)};
+    Object.assign(bot,{entities:{2:other},players:{}});
+    const viewer=await startModernViewer(bot as never,{port:await freeViewerPort(),assetsDir:MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir});
+    const socket=io(viewer.url,{autoConnect:false,reconnection:false,transports:['websocket']});
+    try{
+      const entity=(wanted:string|null)=>new Promise<any>(resolve=>{const listener=(data:any)=>{if(data.id===2&&data.skinUrl===wanted){socket.off('entity',listener);resolve(data);}};socket.on('entity',listener);});
+      const initial=entity(null);socket.connect();await initial;
+      const hash='a'.repeat(64),skinUrl=`/head-texture/${hash}.png`,changed=entity(skinUrl);
+      Object.assign(bot.players,{Alice:{uuid,properties:[{name:'textures',value:Buffer.from(JSON.stringify({textures:{SKIN:{url:'http://textures.minecraft.net/texture/'+hash,metadata:{model:'slim'}}}})).toString('base64')}]}});
+      bot.emit('playerUpdated',{uuid,username:'Alice'});
+      expect(await changed).toMatchObject({id:2,uuid,skinUrl,skinModel:'slim'});
+      const removed=entity(null);Object.assign(bot.players,{Alice:{uuid}});bot.emit('playerUpdated',{uuid,username:'Alice'});
+      expect(await removed).toMatchObject({id:2,skinUrl:null});
     }finally{socket.disconnect();await viewer.close();}
   },15000);
 });
