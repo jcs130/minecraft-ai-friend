@@ -118,6 +118,14 @@ describe('MovementProgress', () => {
     expect(progress.record([{ skill: 'chat', text: 'hi' }]).streak).toBe(8);
     expect(progress.record([{ skill: 'mine', at: [0, 60, 0] }]).streak).toBe(0);
   });
+  it('counts idle sneak/jump control bursts as no progress (does not reset like real work)', () => {
+    const progress = new MovementProgress({ window: 4 });
+    let verdict;
+    for (let i = 0; i < 4; i++) verdict = progress.record([{ skill: 'control', keys: ['sneak'], durationMs: 2000, mode: 'ground' }]);
+    expect(verdict).toMatchObject({ streak: 4, repetitive: true, kind: 'control' });
+    expect(progress.record([{ skill: 'control', keys: ['forward', 'jump'], durationMs: 500, mode: 'ground' }]).streak).toBe(5);
+    expect(progress.record([{ skill: 'mine', at: [0, 60, 0] }]).streak).toBe(0);
+  });
 });
 
 it('compact catalogue collapses deep wide unions such as goal verify conditions', () => {

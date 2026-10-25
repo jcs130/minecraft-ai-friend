@@ -208,6 +208,8 @@ export interface MovementVerdict {
   newCells: number;
   /** Many movement-only calls with no new ground or within one small area. */
   repetitive: boolean;
+  /** Set when the recent window is idle control (sneak/jump/sprint) spam. */
+  kind?: 'control';
 }
 
 /** Digest of an observation's text with timestamps, coordinates and counters stripped. */
@@ -218,13 +220,23 @@ export function observationDigest(text: string): string {
   return (h >>> 0).toString(16);
 }
 
-const MOVEMENT_SKILLS = ['goto', 'look', 'observe', 'walk', 'wander', 'face'];
+/** Skills that only move or look. `control` is included: sneak/jump/WASD bursts without gather/craft/place count as no progress (live autonomy loops). */
+const MOVEMENT_SKILLS = ['goto', 'look', 'observe', 'walk', 'wander', 'face', 'control'];
+/** control keys that never change position on their own; used for spam wording, not for membership. */
+const IDLE_CONTROL_KEYS = new Set(['sneak', 'jump', 'sprint']);
 const point = (value: unknown): [number, number, number] | undefined =>
   Array.isArray(value) && value.length === 3 && value.every(n => typeof n === 'number') ? value as [number, number, number] : undefined;
 
+export function isIdleControlStep(step: unknown): boolean {
+  if (!isObject(step) || step.skill !== 'control') return false;
+  const keys = Array.isArray(step.keys) ? step.keys.filter((k): k is string => typeof k === 'string') : [];
+  return keys.length === 0 || keys.every(k => IDLE_CONTROL_KEYS.has(k));
+}
+
 /**
- * Host-side detector for wandering without progress: e.g. dozens of goto/look calls inside one plaza.
- * Feed it each action's steps; hosts decide how to nudge or close the goal.
+ * Host-side detector for wandering without progress: e.g. dozens of goto/look calls inside one plaza,
+ * or repeated sneak/jump control bursts after a place. Feed it each action's steps; hosts decide how
+ * to nudge or close the goal.
  */
 export class MovementProgress {
   private readonly window: number;
@@ -233,7 +245,7 @@ export class MovementProgress {
   private readonly movement: Set<string>;
   private readonly cells = new Set<string>();
   // seen: observation digests
-  private recent: { points: [number, number, number][]; newCells: number }[] = [];
+  private recent: { points: [number, number, number][]; newCells: number; idleControl: boolean }[] = [];
   streak = 0;
 
   constructor(options: MovementProgressOptions = {}) {
@@ -255,7 +267,7 @@ export class MovementProgress {
   recordObservation(digest: string): MovementVerdict {
     if (this.seen.has(digest)) {
       this.streak++;
-      this.recent = [...this.recent, { points: [], newCells: 0 }].slice(-this.window);
+      this.recent = [...this.recent, { points: [], newCells: 0, idleControl: false }].slice(-this.window);
     } else this.seen.add(digest);
     return this.verdict();
   }
@@ -273,8 +285,10 @@ export class MovementProgress {
       const key = `${Math.floor(x / this.cellSize)},${Math.floor(z / this.cellSize)}`;
       if (!this.cells.has(key)) { this.cells.add(key); newCells++; }
     }
+    const idleControl = work.length > 0 && work.every(skill => skill === 'control')
+      && steps.filter(s => isObject(s) && s.skill === 'control').every(isIdleControlStep);
     this.streak++;
-    this.recent = [...this.recent, { points, newCells }].slice(-this.window);
+    this.recent = [...this.recent, { points, newCells, idleControl }].slice(-this.window);
     return this.verdict();
   }
 
@@ -287,7 +301,12 @@ export class MovementProgress {
       spread = Math.round(Math.max(...points.map(p => Math.hypot(p[0] - cx, p[2] - cz))));
     }
     const full = this.streak >= this.window;
-    return { streak: this.streak, spread, newCells, repetitive: full && (spread <= this.radius || newCells === 0) };
+    const idleControlStreak = this.recent.length > 0 && this.recent.every(e => e.idleControl);
+    return {
+      streak: this.streak, spread, newCells,
+      repetitive: full && (spread <= this.radius || newCells === 0 || idleControlStreak),
+      ...(idleControlStreak && full ? { kind: 'control' as const } : {}),
+    };
   }
 }
 

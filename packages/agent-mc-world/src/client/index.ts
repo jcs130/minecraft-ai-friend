@@ -15,7 +15,7 @@ export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapTool
 export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,
   type WakeCategory, type WakeOptions, type WakeDecision, type CompactEvent, type CompactCatalogOptions,
-  MovementProgress, type MovementProgressOptions, type MovementVerdict } from './context-budget.ts';
+  MovementProgress, isIdleControlStep, type MovementProgressOptions, type MovementVerdict } from './context-budget.ts';
 export { EventCondenser, DEFAULT_CONDENSE_RULES, type CondenseRule, type CondenseAction, type EventCondenserOptions, type CondenserStats } from './event-condenser.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
