@@ -1,4 +1,5 @@
 import { operationInventory } from './operation-experience.ts';
+import { TaskProgressReading } from './task-progress-reading.ts';
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
 import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
@@ -2770,6 +2771,7 @@ export class MinecraftWorld implements World {
   private readonly viewerActivity = new AgentActivityHistory();
   protected itemBreak: ItemBreakDecoder | null = null;
   protected executor: Executor | null = null;
+  private readonly taskProgressReading = new TaskProgressReading();
   protected readonly methodTasks = new Map<number, (report: TaskReport) => void>();
   protected readonly methodTerminals = new Map<number, TaskReport>();
   protected readonly methods = new MethodRunner({
@@ -3489,6 +3491,7 @@ export class MinecraftWorld implements World {
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) },
+      { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
       { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
@@ -3552,7 +3555,7 @@ export class MinecraftWorld implements World {
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
-      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'] };
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 
   private initialSceneStop: (() => void) | null = null;
@@ -4177,6 +4180,7 @@ export class MinecraftWorld implements World {
       }),
       // 周期份捎带、计数过半升常规;卡没卡住由 agent 看净位移自己判断
       onProgress: (p) => {
+        this.taskProgressReading.observe(p);
         const cnt = p.count ? `,进度 ${p.count.done}/${p.count.total}` : '';
         const detail = p.detail ? `;${p.detail}` : '';
         const where = p.pos ? `;我在 (${p.pos.x}, ${p.pos.y}, ${p.pos.z})` : '';
@@ -4405,6 +4409,7 @@ export class MinecraftWorld implements World {
     this.methodTerminals.clear();
     this.taskReadouts.clear();
     this.lastFinishedTask = null;
+    this.taskProgressReading.clear();
     this.visualInFlight?.controller.abort(new Error('Minecraft World 已停止'));
     this.requestFactsCache = null;
     this.idleBehavior?.stop();
@@ -6697,6 +6702,7 @@ export class MinecraftWorld implements World {
     // 新连接还没有现场读数，不能沿用上一代连接的事实。
     this.requestFactsCache = null;
     const connectionGeneration = ++this.connectionGeneration;
+    this.taskProgressReading.clear();
     this.idleContext.clear();
 
     this.resetBodyOwners();
@@ -8824,13 +8830,14 @@ export class MinecraftWorld implements World {
     ];
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...fullSegments.map(({ key, text }) => ({ key, text })),
+      { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'explored', text: this.explored.summary(normalizeDimension(snap.dimension)) }];
     const journey=this.journeyObserver.reading(this.journeyScope(),String(this.connectionGeneration),now);
     if(journey)parts.push({key:'journey',text:journeyOpportunityText(journey,{guidance:false})});
     this.requestFactsCache = {
       text: parts.map(part => part.text).filter(Boolean).join('\n'),
       parts,
-      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'],
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'],
     };
     // 按变化量发:与上一拍比没有实质变化、人也没挪窝,这一拍整条不发(基线不动,
     // 下一次真变了照样按段差分)。全量锚那一拍不受这道闸管,漂移由它兜住。
