@@ -2,7 +2,6 @@ import pytest
 
 from agent_mc_autonomy.configuration import Settings
 
-
 BASE = {"server": {"host": "fixture.test", "username": "Alice"}}
 
 
