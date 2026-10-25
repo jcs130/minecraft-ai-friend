@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+The 0.2.100 development distribution pins core rc.90, which preserves legitimate
+composter interactions with crop items and reports actual level/inventory effects.
+Scout tools retain the native paging description instead of an obsolete local
+total-volume limit. The existing viewer, model settings and native barriers remain.
+
 The 0.2.99 distribution pins core rc.89 and the shared viewer at 8b89927d.
 The core restores material-based viewer readiness and excludes idle sneak/jump
 signals from movement progress. The viewer includes upstream native appearance,

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.100
+
+- Consume core rc.90: seeds used on a composter no longer fail soil admission or execution; read compost level, consumed items and bone-meal gain separately.
+- Preserve native scout descriptions in full and compact contexts. Remove the outdated total 512-cell limit that contradicted bounded partial pages. Keep a generic read-only fallback for older catalogues without descriptions.
+- Keep the fixed viewer/resources, single native queue, inventory confirmation, stop/unknown barriers and explicit model selection.
+
 ## 0.2.99
 
 - Pin core rc.89 with material-based viewer readiness and idle-motion progress corrections.
