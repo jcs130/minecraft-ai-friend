@@ -1,5 +1,7 @@
 # Agent MC World
 
+**rc.88 candidate:** optional MineDojo historical reference indexes through the existing `mc_knowledge` SDK/MCP tool. Includes explicit local preparation, source/coverage manifest, bounded reads, BM25 + CPU token-vector retrieval and optional matching embeddings, with no corpus bundled or automatic game/model startup. See [index preparation and Agent queries](docs/minedojo-knowledge.md). CPU token vectors are lexical, not a neural model; the real 22-page retrieval smoke retains four corpus gaps.
+
 **rc.87 source candidate:** exact Java 1.21.5 resources, cross-version identical-image reuse, server-provided vanilla player skins, public-chat wake defaults, same-body resource diagnostics/retry and configurable viewer effects. See [viewer resources](docs/viewer-resources.md). npm publication is separate; rc.86 below remains the last verified public release until the rc.87 registry record is confirmed.
 
 Published package: **0.5.7-rc.86** ([Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.86)), with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.

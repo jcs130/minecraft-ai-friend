@@ -1,0 +1,1914 @@
+{
+  "schema": "agent-mc-minedojo-retrieval-evidence/v1",
+  "verifiedAt": "2026-10-25T06:29:55.827Z",
+  "scope": "real 22-page historical pilot; handwritten retrieval smoke cases, not a blinded accuracy or game-success benchmark",
+  "source": {
+    "id": "minedojo",
+    "title": "MineDojo historical Minecraft Wiki",
+    "dataset": "https://doi.org/10.5281/zenodo.6693745",
+    "documentation": "https://docs.minedojo.org/sections/getting_started/data.html",
+    "license": "CC-BY-NC-SA-3.0",
+    "corpusBundled": false,
+    "minecraftVersion": null,
+    "minecraftVersionVerified": false,
+    "usage": "External historical reference, not executable instructions or current-world evidence. Preserve source attribution and data license independently of code."
+  },
+  "inputsSha256": "48c52ed3789c390d3d976dce85e1c0174cb9d52360635cd1855d52d81e3c9598",
+  "pages": 22,
+  "chunks": 570,
+  "indexBytes": 5099520,
+  "buildMs": 213.91869999999994,
+  "results": [
+    {
+      "retrieval": "lexical",
+      "total": 32,
+      "covered": 28,
+      "coverageGaps": [
+        {
+          "id": 27,
+          "query": "create a bed from wool",
+          "expected": [
+            "Bed"
+          ]
+        },
+        {
+          "id": 28,
+          "query": "床的材料",
+          "expected": [
+            "Bed"
+          ]
+        },
+        {
+          "id": 29,
+          "query": "wheat farming",
+          "expected": [
+            "Tutorials/Crop farming",
+            "Wheat"
+          ]
+        },
+        {
+          "id": 30,
+          "query": "enchanting a sword",
+          "expected": [
+            "Enchanting",
+            "Enchantment"
+          ]
+        }
+      ],
+      "hits1": 23,
+      "hits5": 28,
+      "p50Ms": 4.299200000000155,
+      "p95Ms": 24.646600000000035,
+      "rows": [
+        {
+          "id": 1,
+          "query": "how to make bread",
+          "expected": [
+            "Bread"
+          ],
+          "covered": true,
+          "ranked": [
+            "Bread",
+            "Villager",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.611099999999851
+        },
+        {
+          "id": 2,
+          "query": "用小麦合成面包",
+          "expected": [
+            "Bread"
+          ],
+          "covered": true,
+          "ranked": [
+            "Bread",
+            "Villager",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 6.11889999999994
+        },
+        {
+          "id": 3,
+          "query": "is bread cooked in a furnace",
+          "expected": [
+            "Bread",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Campfire",
+            "Tutorials/Beginner's guide",
+            "Smelting",
+            "Furnace",
+            "Bread"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 3.8199999999999363
+        },
+        {
+          "id": 4,
+          "query": "cast a fishing rod into water",
+          "expected": [
+            "Fishing Rod",
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Tutorials/Beginner's guide"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.8687999999999647
+        },
+        {
+          "id": 5,
+          "query": "鱼竿怎么甩杆",
+          "expected": [
+            "Fishing Rod",
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 6.747700000000123
+        },
+        {
+          "id": 6,
+          "query": "when to reel in fishing",
+          "expected": [
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 5.788099999999986
+        },
+        {
+          "id": 7,
+          "query": "how to use elytra wings",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Elytra",
+            "Tutorials/Transportation methods",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.182000000000016
+        },
+        {
+          "id": 8,
+          "query": "鞘翅飞行",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Elytra",
+            "Tutorials/Transportation methods",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.6385999999999967
+        },
+        {
+          "id": 9,
+          "query": "flying with fireworks",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Elytra",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 2.5184999999999036
+        },
+        {
+          "id": 10,
+          "query": "ender pearl teleport damage",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Fishing Rod"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.299200000000155
+        },
+        {
+          "id": 11,
+          "query": "末影珍珠传送",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.2700999999999567
+        },
+        {
+          "id": 12,
+          "query": "teleport with a pearl",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Combat",
+            "Shield"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.360400000000027
+        },
+        {
+          "id": 13,
+          "query": "how to smelt iron",
+          "expected": [
+            "Smelting",
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Minecraft",
+            "Shield"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.1287999999999556
+        },
+        {
+          "id": 14,
+          "query": "烧炼需要燃料吗",
+          "expected": [
+            "Smelting",
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Furnace",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Sword"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.2772999999999683
+        },
+        {
+          "id": 15,
+          "query": "cook meat in a campfire",
+          "expected": [
+            "Campfire"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Campfire",
+            "Smelting",
+            "Villager",
+            "Tutorials/Combat"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 4.831400000000031
+        },
+        {
+          "id": 16,
+          "query": "营火可以做什么",
+          "expected": [
+            "Campfire"
+          ],
+          "covered": true,
+          "ranked": [
+            "Campfire",
+            "Tutorials/Beginner's guide",
+            "Villager",
+            "Tutorials/Shelters",
+            "Smelting"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.3392999999998665
+        },
+        {
+          "id": 17,
+          "query": "shield blocks arrows",
+          "expected": [
+            "Shield",
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Shield",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Sword",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.551200000000108
+        },
+        {
+          "id": 18,
+          "query": "用盾牌防御",
+          "expected": [
+            "Shield",
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Shield",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Elytra",
+            "Sword"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.038999999999987
+        },
+        {
+          "id": 19,
+          "query": "furnace cooking fuel",
+          "expected": [
+            "Furnace",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Campfire",
+            "Smelting",
+            "Furnace",
+            "Tutorials/Shelters"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 3.4021000000000186
+        },
+        {
+          "id": 20,
+          "query": "熔炉烧东西",
+          "expected": [
+            "Furnace",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Furnace",
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Campfire"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.515999999999849
+        },
+        {
+          "id": 21,
+          "query": "build a temporary shelter at night",
+          "expected": [
+            "Tutorials/Shelters"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction",
+            "Tutorials/Transportation methods"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 16.603399999999965
+        },
+        {
+          "id": 22,
+          "query": "晚上找个庇护所",
+          "expected": [
+            "Tutorials/Shelters"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Shelters",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction",
+            "Tutorials/Combat"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 24.646600000000035
+        },
+        {
+          "id": 23,
+          "query": "transportation by boat",
+          "expected": [
+            "Tutorials/Transportation methods"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Villager"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.993600000000015
+        },
+        {
+          "id": 24,
+          "query": "不同交通方式",
+          "expected": [
+            "Tutorials/Transportation methods"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Elytra",
+            "Minecraft",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 1.8781999999998789
+        },
+        {
+          "id": 25,
+          "query": "combat tactics against skeleton",
+          "expected": [
+            "Tutorials/Combat",
+            "Shield"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Combat",
+            "Minecraft",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Villager"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 16.493200000000115
+        },
+        {
+          "id": 26,
+          "query": "原版战斗攻略",
+          "expected": [
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Sword",
+            "Pickaxe",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 32.61159999999995
+        },
+        {
+          "id": 27,
+          "query": "create a bed from wool",
+          "expected": [
+            "Bed"
+          ],
+          "covered": false,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Villager",
+            "Tutorials/Transportation methods"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 4.2999999999999545
+        },
+        {
+          "id": 28,
+          "query": "床的材料",
+          "expected": [
+            "Bed"
+          ],
+          "covered": false,
+          "ranked": [],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 0.6289000000001579
+        },
+        {
+          "id": 29,
+          "query": "wheat farming",
+          "expected": [
+            "Tutorials/Crop farming",
+            "Wheat"
+          ],
+          "covered": false,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Villager",
+            "Tutorials/Shelters",
+            "Bread",
+            "Tutorials/Construction"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 5.7620999999999185
+        },
+        {
+          "id": 30,
+          "query": "enchanting a sword",
+          "expected": [
+            "Enchanting",
+            "Enchantment"
+          ],
+          "covered": false,
+          "ranked": [
+            "Sword",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Fishing"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 10.663800000000037
+        },
+        {
+          "id": 31,
+          "query": "diamond pickaxe",
+          "expected": [
+            "Diamond",
+            "Pickaxe"
+          ],
+          "covered": true,
+          "ranked": [
+            "Pickaxe",
+            "Diamond",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.0568000000000666
+        },
+        {
+          "id": 32,
+          "query": "light a furnace",
+          "expected": [
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Furnace",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Smelting",
+            "Campfire"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.936400000000049
+        }
+      ]
+    },
+    {
+      "retrieval": "hybrid",
+      "total": 32,
+      "covered": 28,
+      "coverageGaps": [
+        {
+          "id": 27,
+          "query": "create a bed from wool",
+          "expected": [
+            "Bed"
+          ]
+        },
+        {
+          "id": 28,
+          "query": "床的材料",
+          "expected": [
+            "Bed"
+          ]
+        },
+        {
+          "id": 29,
+          "query": "wheat farming",
+          "expected": [
+            "Tutorials/Crop farming",
+            "Wheat"
+          ]
+        },
+        {
+          "id": 30,
+          "query": "enchanting a sword",
+          "expected": [
+            "Enchanting",
+            "Enchantment"
+          ]
+        }
+      ],
+      "hits1": 24,
+      "hits5": 28,
+      "p50Ms": 4.744099999999889,
+      "p95Ms": 24.159599999999955,
+      "rows": [
+        {
+          "id": 1,
+          "query": "how to make bread",
+          "expected": [
+            "Bread"
+          ],
+          "covered": true,
+          "ranked": [
+            "Bread",
+            "Villager",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.909199999999828
+        },
+        {
+          "id": 2,
+          "query": "用小麦合成面包",
+          "expected": [
+            "Bread"
+          ],
+          "covered": true,
+          "ranked": [
+            "Bread",
+            "Villager",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 7.252700000000004
+        },
+        {
+          "id": 3,
+          "query": "is bread cooked in a furnace",
+          "expected": [
+            "Bread",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Smelting",
+            "Furnace",
+            "Campfire",
+            "Bread"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 4.528999999999996
+        },
+        {
+          "id": 4,
+          "query": "cast a fishing rod into water",
+          "expected": [
+            "Fishing Rod",
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Tutorials/Beginner's guide"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.424199999999928
+        },
+        {
+          "id": 5,
+          "query": "鱼竿怎么甩杆",
+          "expected": [
+            "Fishing Rod",
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 8.778499999999894
+        },
+        {
+          "id": 6,
+          "query": "when to reel in fishing",
+          "expected": [
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing",
+            "Fishing Rod",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.659599999999955
+        },
+        {
+          "id": 7,
+          "query": "how to use elytra wings",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Elytra",
+            "Tutorials/Transportation methods",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.349099999999908
+        },
+        {
+          "id": 8,
+          "query": "鞘翅飞行",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Elytra",
+            "Tutorials/Transportation methods",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.835600000000113
+        },
+        {
+          "id": 9,
+          "query": "flying with fireworks",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Elytra",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 2.751500000000078
+        },
+        {
+          "id": 10,
+          "query": "ender pearl teleport damage",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Fishing Rod"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.174299999999903
+        },
+        {
+          "id": 11,
+          "query": "末影珍珠传送",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Minecraft",
+            "Tutorials/Combat"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.507499999999936
+        },
+        {
+          "id": 12,
+          "query": "teleport with a pearl",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Combat",
+            "Shield"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.0289000000000215
+        },
+        {
+          "id": 13,
+          "query": "how to smelt iron",
+          "expected": [
+            "Smelting",
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Minecraft",
+            "Furnace"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.8514999999999873
+        },
+        {
+          "id": 14,
+          "query": "烧炼需要燃料吗",
+          "expected": [
+            "Smelting",
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Furnace",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Sword"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.918699999999944
+        },
+        {
+          "id": 15,
+          "query": "cook meat in a campfire",
+          "expected": [
+            "Campfire"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Campfire",
+            "Smelting",
+            "Tutorials/Combat",
+            "Villager"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 4.744099999999889
+        },
+        {
+          "id": 16,
+          "query": "营火可以做什么",
+          "expected": [
+            "Campfire"
+          ],
+          "covered": true,
+          "ranked": [
+            "Campfire",
+            "Tutorials/Beginner's guide",
+            "Villager",
+            "Tutorials/Shelters",
+            "Smelting"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.7443000000000666
+        },
+        {
+          "id": 17,
+          "query": "shield blocks arrows",
+          "expected": [
+            "Shield",
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Shield",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Sword",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 6.588600000000042
+        },
+        {
+          "id": 18,
+          "query": "用盾牌防御",
+          "expected": [
+            "Shield",
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Shield",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Elytra",
+            "Sword"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.307099999999991
+        },
+        {
+          "id": 19,
+          "query": "furnace cooking fuel",
+          "expected": [
+            "Furnace",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Smelting",
+            "Campfire",
+            "Furnace",
+            "Tutorials/Shelters"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 3.7450000000001182
+        },
+        {
+          "id": 20,
+          "query": "熔炉烧东西",
+          "expected": [
+            "Furnace",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Furnace",
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Campfire"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.409200000000055
+        },
+        {
+          "id": 21,
+          "query": "build a temporary shelter at night",
+          "expected": [
+            "Tutorials/Shelters"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction",
+            "Tutorials/Transportation methods"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 17.501899999999978
+        },
+        {
+          "id": 22,
+          "query": "晚上找个庇护所",
+          "expected": [
+            "Tutorials/Shelters"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Shelters",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction",
+            "Tutorials/Combat"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 24.159599999999955
+        },
+        {
+          "id": 23,
+          "query": "transportation by boat",
+          "expected": [
+            "Tutorials/Transportation methods"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Villager"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.966900000000123
+        },
+        {
+          "id": 24,
+          "query": "不同交通方式",
+          "expected": [
+            "Tutorials/Transportation methods"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Elytra",
+            "Minecraft",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.0328000000001794
+        },
+        {
+          "id": 25,
+          "query": "combat tactics against skeleton",
+          "expected": [
+            "Tutorials/Combat",
+            "Shield"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Combat",
+            "Minecraft",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Villager"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 15.819999999999936
+        },
+        {
+          "id": 26,
+          "query": "原版战斗攻略",
+          "expected": [
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Sword",
+            "Pickaxe",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 35.178100000000086
+        },
+        {
+          "id": 27,
+          "query": "create a bed from wool",
+          "expected": [
+            "Bed"
+          ],
+          "covered": false,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Villager"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 4.523299999999836
+        },
+        {
+          "id": 28,
+          "query": "床的材料",
+          "expected": [
+            "Bed"
+          ],
+          "covered": false,
+          "ranked": [],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 0.7285999999999149
+        },
+        {
+          "id": 29,
+          "query": "wheat farming",
+          "expected": [
+            "Tutorials/Crop farming",
+            "Wheat"
+          ],
+          "covered": false,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Villager",
+            "Tutorials/Shelters",
+            "Bread",
+            "Tutorials/Construction"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 5.3940000000000055
+        },
+        {
+          "id": 30,
+          "query": "enchanting a sword",
+          "expected": [
+            "Enchanting",
+            "Enchantment"
+          ],
+          "covered": false,
+          "ranked": [
+            "Sword",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters",
+            "Fishing"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 10.514400000000023
+        },
+        {
+          "id": 31,
+          "query": "diamond pickaxe",
+          "expected": [
+            "Diamond",
+            "Pickaxe"
+          ],
+          "covered": true,
+          "ranked": [
+            "Pickaxe",
+            "Diamond",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.3937999999998283
+        },
+        {
+          "id": 32,
+          "query": "light a furnace",
+          "expected": [
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Furnace",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Smelting",
+            "Campfire"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 8.90319999999997
+        }
+      ]
+    },
+    {
+      "retrieval": "local-vector",
+      "total": 32,
+      "covered": 28,
+      "coverageGaps": [
+        {
+          "id": 27,
+          "query": "create a bed from wool",
+          "expected": [
+            "Bed"
+          ]
+        },
+        {
+          "id": 28,
+          "query": "床的材料",
+          "expected": [
+            "Bed"
+          ]
+        },
+        {
+          "id": 29,
+          "query": "wheat farming",
+          "expected": [
+            "Tutorials/Crop farming",
+            "Wheat"
+          ]
+        },
+        {
+          "id": 30,
+          "query": "enchanting a sword",
+          "expected": [
+            "Enchanting",
+            "Enchantment"
+          ]
+        }
+      ],
+      "hits1": 24,
+      "hits5": 28,
+      "p50Ms": 3.841299999999819,
+      "p95Ms": 34.39200000000005,
+      "rows": [
+        {
+          "id": 1,
+          "query": "how to make bread",
+          "expected": [
+            "Bread"
+          ],
+          "covered": true,
+          "ranked": [
+            "Bread",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Villager",
+            "Tutorials/Combat"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.063200000000052
+        },
+        {
+          "id": 2,
+          "query": "用小麦合成面包",
+          "expected": [
+            "Bread"
+          ],
+          "covered": true,
+          "ranked": [
+            "Bread",
+            "Villager",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 6.273100000000113
+        },
+        {
+          "id": 3,
+          "query": "is bread cooked in a furnace",
+          "expected": [
+            "Bread",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Furnace",
+            "Tutorials/Shelters",
+            "Bread"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.1574000000000524
+        },
+        {
+          "id": 4,
+          "query": "cast a fishing rod into water",
+          "expected": [
+            "Fishing Rod",
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Transportation methods"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.9864000000000033
+        },
+        {
+          "id": 5,
+          "query": "鱼竿怎么甩杆",
+          "expected": [
+            "Fishing Rod",
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing Rod",
+            "Fishing",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.114699999999857
+        },
+        {
+          "id": 6,
+          "query": "when to reel in fishing",
+          "expected": [
+            "Fishing"
+          ],
+          "covered": true,
+          "ranked": [
+            "Fishing",
+            "Fishing Rod",
+            "Tutorials/Combat",
+            "Smelting",
+            "Villager"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.5306000000000495
+        },
+        {
+          "id": 7,
+          "query": "how to use elytra wings",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Elytra",
+            "Tutorials/Combat",
+            "Tutorials/Transportation methods",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.8070000000000164
+        },
+        {
+          "id": 8,
+          "query": "鞘翅飞行",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Elytra",
+            "Tutorials/Transportation methods",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.0014000000001033
+        },
+        {
+          "id": 9,
+          "query": "flying with fireworks",
+          "expected": [
+            "Elytra"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Defeating the ender dragon",
+            "Villager",
+            "Tutorials/Combat",
+            "Tutorials/Transportation methods",
+            "Elytra"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 2.9162999999998647
+        },
+        {
+          "id": 10,
+          "query": "ender pearl teleport damage",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Combat",
+            "Shield",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.898599999999988
+        },
+        {
+          "id": 11,
+          "query": "末影珍珠传送",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Defeating the ender dragon",
+            "Minecraft",
+            "Tutorials/Shelters",
+            "Tutorials/Transportation methods"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.3309999999999036
+        },
+        {
+          "id": 12,
+          "query": "teleport with a pearl",
+          "expected": [
+            "Ender Pearl"
+          ],
+          "covered": true,
+          "ranked": [
+            "Ender Pearl",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon",
+            "Campfire"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.0243000000000393
+        },
+        {
+          "id": 13,
+          "query": "how to smelt iron",
+          "expected": [
+            "Smelting",
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Smelting",
+            "Tutorials/Combat",
+            "Tutorials/Shelters",
+            "Villager"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 3.841299999999819
+        },
+        {
+          "id": 14,
+          "query": "烧炼需要燃料吗",
+          "expected": [
+            "Smelting",
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Furnace",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Sword"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.722400000000107
+        },
+        {
+          "id": 15,
+          "query": "cook meat in a campfire",
+          "expected": [
+            "Campfire"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Campfire",
+            "Fishing Rod",
+            "Tutorials/Shelters",
+            "Minecraft"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 2.9908000000000357
+        },
+        {
+          "id": 16,
+          "query": "营火可以做什么",
+          "expected": [
+            "Campfire"
+          ],
+          "covered": true,
+          "ranked": [
+            "Campfire",
+            "Tutorials/Beginner's guide",
+            "Smelting",
+            "Tutorials/Shelters",
+            "Tutorials/Combat"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.1652999999998883
+        },
+        {
+          "id": 17,
+          "query": "shield blocks arrows",
+          "expected": [
+            "Shield",
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Shield",
+            "Tutorials/Combat",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Wood"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 4.32329999999979
+        },
+        {
+          "id": 18,
+          "query": "用盾牌防御",
+          "expected": [
+            "Shield",
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Shield",
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Elytra",
+            "Tutorials/Defeating the ender dragon"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 7.2228000000000065
+        },
+        {
+          "id": 19,
+          "query": "furnace cooking fuel",
+          "expected": [
+            "Furnace",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Furnace",
+            "Campfire",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 6.530700000000024
+        },
+        {
+          "id": 20,
+          "query": "熔炉烧东西",
+          "expected": [
+            "Furnace",
+            "Smelting"
+          ],
+          "covered": true,
+          "ranked": [
+            "Furnace",
+            "Smelting",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 7.565499999999929
+        },
+        {
+          "id": 21,
+          "query": "build a temporary shelter at night",
+          "expected": [
+            "Tutorials/Shelters"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Tutorials/Transportation methods",
+            "Tutorials/Nether portals",
+            "Tutorials/Construction"
+          ],
+          "hit1": false,
+          "hit5": true,
+          "elapsedMs": 5.230199999999968
+        },
+        {
+          "id": 22,
+          "query": "晚上找个庇护所",
+          "expected": [
+            "Tutorials/Shelters"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Shelters",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Construction",
+            "Tutorials/Combat"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 23.48199999999997
+        },
+        {
+          "id": 23,
+          "query": "transportation by boat",
+          "expected": [
+            "Tutorials/Transportation methods"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods",
+            "Tutorials/Shelters",
+            "Tutorials/Combat",
+            "Villager",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 2.5996000000000095
+        },
+        {
+          "id": 24,
+          "query": "不同交通方式",
+          "expected": [
+            "Tutorials/Transportation methods"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Transportation methods"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 1.1666999999999916
+        },
+        {
+          "id": 25,
+          "query": "combat tactics against skeleton",
+          "expected": [
+            "Tutorials/Combat",
+            "Shield"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Defeating the ender dragon",
+            "Minecraft",
+            "Villager"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 34.39200000000005
+        },
+        {
+          "id": 26,
+          "query": "原版战斗攻略",
+          "expected": [
+            "Tutorials/Combat"
+          ],
+          "covered": true,
+          "ranked": [
+            "Tutorials/Combat",
+            "Tutorials/Beginner's guide",
+            "Pickaxe",
+            "Sword",
+            "Tutorials/Shelters"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 37.17529999999988
+        },
+        {
+          "id": 27,
+          "query": "create a bed from wool",
+          "expected": [
+            "Bed"
+          ],
+          "covered": false,
+          "ranked": [
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Tutorials/Defeating the ender dragon",
+            "Villager",
+            "Tutorials/Combat"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 3.855199999999968
+        },
+        {
+          "id": 28,
+          "query": "床的材料",
+          "expected": [
+            "Bed"
+          ],
+          "covered": false,
+          "ranked": [],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 0.8043999999999869
+        },
+        {
+          "id": 29,
+          "query": "wheat farming",
+          "expected": [
+            "Tutorials/Crop farming",
+            "Wheat"
+          ],
+          "covered": false,
+          "ranked": [
+            "Villager",
+            "Bread",
+            "Tutorials/Construction",
+            "Tutorials/Shelters",
+            "Tutorials/Beginner's guide"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 2.4895000000001346
+        },
+        {
+          "id": 30,
+          "query": "enchanting a sword",
+          "expected": [
+            "Enchanting",
+            "Enchantment"
+          ],
+          "covered": false,
+          "ranked": [
+            "Tutorials/Combat",
+            "Sword",
+            "Minecraft",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Shelters"
+          ],
+          "hit1": false,
+          "hit5": false,
+          "elapsedMs": 3.8601000000001022
+        },
+        {
+          "id": 31,
+          "query": "diamond pickaxe",
+          "expected": [
+            "Diamond",
+            "Pickaxe"
+          ],
+          "covered": true,
+          "ranked": [
+            "Pickaxe",
+            "Diamond",
+            "Tutorials/Defeating the ender dragon",
+            "Tutorials/Beginner's guide",
+            "Minecraft"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 3.1525000000001455
+        },
+        {
+          "id": 32,
+          "query": "light a furnace",
+          "expected": [
+            "Furnace"
+          ],
+          "covered": true,
+          "ranked": [
+            "Furnace",
+            "Tutorials/Beginner's guide",
+            "Tutorials/Shelters",
+            "Smelting",
+            "Campfire"
+          ],
+          "hit1": true,
+          "hit5": true,
+          "elapsedMs": 5.565599999999904
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "query": "qzxv987654321",
+      "returned": 0
+    },
+    {
+      "query": "aghjklpoiuytrewq",
+      "returned": 0
+    },
+    {
+      "query": "zx9v7q6p5b4k3",
+      "returned": 0
+    }
+  ],
+  "neuralModelUsed": false,
+  "neuralIntegrationVerification": "controlled embedding-port fixture only; no claim of neural retrieval quality",
+  "corpusBundled": false,
+  "gameConnections": 0,
+  "chatModelCalls": 0,
+  "productionReloads": 0
+}

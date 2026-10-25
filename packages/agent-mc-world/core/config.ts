@@ -240,6 +240,8 @@ export interface MinecraftConfigSection {
   performanceBridge?: import('./relay-port.ts').RelayConfiguration;
   remoteTextures?: boolean;
   memory?: Partial<import('./game-memory-service.ts').GameMemoryConfig>;
+  /** Explicit external reference indexes; separate from the personal game notebook. */
+  knowledge?: import('./reference-index.ts').MinecraftKnowledgeConfig;
   /** Optional stable notebook owner, independent of the display name. Omit for legacy namespaces. */
   memoryAgentId?: string;
   /** Mineral queries only. Default uses actual sight; never grants movement or server permissions. */
@@ -317,6 +319,10 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
     description: '连接项要重启 World 才生效；服务器路径在下次启动服务器时采用。',
     properties: {
       ...GAME_MEMORY_CONFIG_SCHEMA,
+      'worlds.minecraft.knowledge.minedojo.indexFile': { type: 'string', title: 'MineDojo 本地参考索引', 'x-hot': false,
+        description: '显式准备的绝对 SQLite 路径。空值不接入，不自动下载或写入个人记忆；准备说明见 docs/minedojo-knowledge.md。' },
+      'worlds.minecraft.knowledge.minedojo.retrieval': { type: 'string', title: '外部知识检索', enum: ['hybrid','lexical','local-vector','semantic'], 'x-hot': false,
+        description: '默认全文 + CPU 词元向量，词元相似度不是神经语义模型；semantic 需要明确配置且与索引一致的 embeddings 模型，失败报告本地回退。' },
       'worlds.minecraft.provider': { type: 'string', title: '客户端类型', enum: ['mineflayer', 'java-client'], 'x-hot': false,
         description: 'java-client 接管已进服的真实客户端；不会自动启动游戏或重连。' },
       'worlds.minecraft.javaClient.expectedUuid': { type: 'string', title: '真实玩家 UUID', 'x-hot': false,

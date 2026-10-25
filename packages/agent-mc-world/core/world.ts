@@ -3,7 +3,7 @@ import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
 import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
-import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
+import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from './knowledge.ts';
 import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex } from './options.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
 import { PlayerMemoryRecall } from './game-memory-player.ts';
@@ -4516,7 +4516,7 @@ export class MinecraftWorld implements World {
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         try {
-          const result = readMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version);
+          const result = await queryMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version, this.cfg.knowledge, ctx.signal);
           return { text: this.toolLog('mc_knowledge', args, JSON.stringify(result)), meta: { knowledge: result } };
         } catch (error) { return { text: String(error), failed: true }; }
       },
