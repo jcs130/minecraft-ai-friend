@@ -32,6 +32,30 @@ test('live roles are automatic, private and UUID-bound without manual channels o
   assert.equal((await fetch(f.origin+'/api/v1/live').then(r=>r.json())).channels.length,0);
   assert.deepEqual((await f.worker().then(r=>r.json())).jobs,[]);
 });
+test('ordinary browser IP exhaustion cannot stop a verified observer renewal; its own rate cap is preserved',async t=>{
+  const f=await fixture(t);let exhausted=false;
+  for(let i=0;i<305;i++){const response=await fetch(f.origin+'/api/v1/health');if(response.status===429){exhausted=true;break;}}
+  assert.equal(exhausted,true);
+  for(let i=0;i<90;i++)assert.equal((await f.worker()).status,200);
+  const limited=await f.worker();assert.equal(limited.status,429);assert.ok(Number(limited.headers.get('retry-after'))>0);
+  assert.equal((await fetch(f.origin+'/api/v1/health')).status,429);
+  assert.equal((await fetch(f.origin+'/api/v1/internal/world-view/poll',{method:'POST',headers:{Authorization:'Bearer bad'},body:'{}'})).status,429);
+  assert.equal((await fetch(f.origin+'/api/v1/internal/world-view/poll')).status,429,'other methods cannot use the service budget');
+});
+test('rejected observer credentials do not spend the authenticated observer budget',async t=>{
+  const f=await fixture(t);
+  for(let i=0;i<95;i++)assert.equal((await f.worker({headers:{Authorization:'Bearer bad'}})).status,401);
+  for(let i=0;i<90;i++)assert.equal((await f.worker()).status,200);
+  assert.equal((await f.worker()).status,429);
+});
+test('only a verified owner may distinguish temporary source loss from forbidden access',async t=>{
+  const f=await fixture(t),owner=f.portal.store.ownerByName('fixture-admin');
+  const session=f.portal.store.db.prepare('SELECT * FROM sessions WHERE owner_id=?').get(owner.id);
+  assert.throws(()=>f.portal.worldView.viewer(f.id,[f.agent],session),e=>e.status===503&&e.reason==='SPECTATOR_SOURCE_OFFLINE');
+  assert.throws(()=>f.portal.worldView.viewer(f.id,[f.agent],null),e=>e.status===404&&e.reason==='CHANNEL_NOT_FOUND');
+  await f.watch(f.admin,f.id);await f.worker();assert.doesNotThrow(()=>f.portal.worldView.viewer(f.id,[f.agent],session));
+  f.agent.authenticated=false;assert.throws(()=>f.portal.worldView.viewer(f.id,[f.agent],session),e=>e.status===503&&e.reason==='SPECTATOR_SOURCE_OFFLINE');
+});
 test('viewing creates only an observation lease; jobs are unavailable to browsers and public tokens',async t=>{
   const f=await fixture(t), watched=await f.watch(f.admin,f.id);assert.equal(watched.status,200);
   assert.equal(watched.data.watchUrl,`/watch/${f.id}/third/`);assert.deepEqual(watched.data.preload,[]);

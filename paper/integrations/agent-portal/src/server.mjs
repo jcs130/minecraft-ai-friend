@@ -195,6 +195,16 @@ export function createPortal(config, options = {}) {
           'Referrer-Policy': 'no-referrer', 'X-Checksum-Sha256': packageRelease.sha256 });
         return res.end();
       }
+      if (req.method === 'POST' && pathname === '/api/v1/internal/world-view/poll') {
+        // A verified observer has its own existing 90/minute budget. Browser
+        // traffic from the same household must not consume its eight-second
+        // authority renewal; unverified callers still spend the normal IP budget.
+        try { worldView.authorizeWorker(req); }
+        catch (error) { rate('api:' + digest(rateAddress(req, config)), 300, 60000); throw error; }
+        rate('world-observer-worker', 90, 60000);
+        await jsonBody(req, 1024);
+        return respond(res, 200, worldView.poll(await game.roster()));
+      }
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if (req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll') {
@@ -296,11 +306,6 @@ export function createPortal(config, options = {}) {
         let length = 0; const chunks = [];
         for await (const chunk of req) { length += chunk.length; if (length > MAX_PHOTO_BYTES) throw fail(413, 'PHOTO_SIZE', '照片文件过大'); chunks.push(chunk); }
         return respond(res, 200, gallery.accept(photoUpload[1], Buffer.concat(chunks)));
-      }
-      if (req.method === 'POST' && pathname === '/api/v1/internal/world-view/poll') {
-        worldView.authorizeWorker(req); rate('world-observer-worker', 90, 60000);
-        await jsonBody(req, 1024);
-        return respond(res, 200, worldView.poll(await game.roster()));
       }
       const ingest = /^\/api\/v1\/live\/([a-f0-9-]{36})\/(open|frame)$/.exec(pathname);
       if (ingest && (req.method === 'POST' && ingest[2] === 'open' || req.method === 'PUT' && ingest[2] === 'frame')) {

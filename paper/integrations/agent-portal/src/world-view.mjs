@@ -86,6 +86,7 @@ export class WorldView {
   }
   viewer(id,roster,session) {
     const roles=this.reconcile(roster),row=roles.get(id),actor=session?this.sessionOwner(session.id_hash):null;
-    if(!row||!this.allowed(row,actor?.owner)||!this.online(row)||!this.sources.has(id))throw fail(404,'CHANNEL_NOT_FOUND','观战角色离线或授权已失效');
+    if(!row||!this.allowed(row,actor?.owner))throw fail(404,'CHANNEL_NOT_FOUND','角色不存在或尚未授权');
+    if(!this.online(row)||!this.sources.has(id))throw fail(503,'SPECTATOR_SOURCE_OFFLINE','角色场景正在恢复，请稍候');
   }
 }

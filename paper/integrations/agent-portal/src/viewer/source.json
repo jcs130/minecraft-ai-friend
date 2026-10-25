@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "19768897809a22befdf1ebcb56d5c11cbd39a2a4",
+  "commit": "00411bf46875d77d33ad748eba64ece7e14b984f",
   "normalization": "CRLF-to-LF only",
   "files": {
     "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
-    "spectator-relay.mjs": "665c066881fcc7f1ebd70ac0a0d0b4f88366281a2c436c08682618c46c4faea6",
+    "spectator-relay.mjs": "6364502b3911155e0eb14a952569b4263bfd5b8bc740d64569fddc0366c9df6b",
     "spectator-site.mjs": "69ea76533bc70215aac0d81af407c2ad1c31fca9bf7856c7c371ab92b4e0b261"
   }
 }

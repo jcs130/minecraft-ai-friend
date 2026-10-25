@@ -213,7 +213,13 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     if (closed || req.method !== 'GET' || !CHANNEL_PATTERN.test(channelId ?? '') || /[%\\?#\x00-\x20]/.test(raw)
         || parts.some(p => p === '.' || p === '..')) { error(res, 400, 'SPECTATOR_REQUEST_INVALID'); return true; }
     try { await authorizeViewer(req, channelId); }
-    catch { error(res, 403, 'SPECTATOR_VIEW_FORBIDDEN'); return true; }
+    catch (failure) {
+      // A consumer may report source replacement only after verifying role
+      // access. Keep that explicit temporary state retryable; all other
+      // authorization errors stay forbidden and reveal no role information.
+      const waiting=failure?.status===503&&failure?.reason==='SPECTATOR_SOURCE_OFFLINE';
+      error(res,waiting?503:403,waiting?'SPECTATOR_SOURCE_OFFLINE':'SPECTATOR_VIEW_FORBIDDEN');return true;
+    }
     if (res.destroyed) return true;
     const source = sources.get(channelId);
     if (!source?.info || source.closed) { error(res, 503, 'SPECTATOR_SOURCE_OFFLINE'); return true; }
