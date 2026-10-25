@@ -20,7 +20,7 @@ import { CurrentFacts, prepareContext } from './context.ts';
 import { RequestLedger } from './request-ledger.ts';
 import { GameMemoryBook } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
-import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
+import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
 
@@ -369,7 +369,7 @@ export class MinecraftAgentClient {
       this.metrics.toolStarted(callId, name);
       combined.throwIfAborted();
       const result = await cancellable(offlineKnowledge
-        ? Promise.resolve({ text: JSON.stringify(readMinecraftKnowledge(args, this.options.cfg.version)) })
+        ? queryMinecraftKnowledge(args, this.options.cfg.version, this.options.cfg.knowledge, combined).then(value => ({ text: JSON.stringify(value) }))
         : offlineMemory && this.options.cfg.provider !== 'java-client' ? this.callOfflineMemory(args, combined) : tool.handler(args, {
         role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined, attribution,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);

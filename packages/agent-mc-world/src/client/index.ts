@@ -23,7 +23,9 @@ export { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from 
 export { configuredPlayerSkin, type LocalPlayerSkin } from '../../core/viewer-local-skin.ts';
 export { setStoredSkin, storedSkinInfo } from '../../core/client-skins.ts';
 export { configureObservationPolicy, type ObservationPolicy } from '../../core/perception-sight.ts';
-export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
+export { KNOWLEDGE_TOOL, readMinecraftKnowledge, queryMinecraftKnowledge } from '../../core/knowledge.ts';
+export { MINEDOJO_SOURCE, REFERENCE_INDEX_SCHEMA, buildReferenceIndex, readReferenceIndex, validateReferenceConfig,
+  type MinecraftKnowledgeConfig, type ReferenceIndexConfig, type ReferenceEmbeddingConfig } from '../../core/reference-index.ts';
 export { AgentMetrics, serveAgentMetrics, type HarnessTrace } from './metrics.ts';
 export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequestFacts, Logger, ModelFacts } from './contracts.ts';
 export type { FamiliarAction } from '../contracts/host.ts';

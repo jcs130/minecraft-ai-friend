@@ -4,7 +4,7 @@ import { JAVA_CLIENT_PROTOCOL, type JavaClientConfiguration, type JavaClientActi
 import type { ToolDef, ToolOutcome, ToolCallContext, WorldHost, WorldRequestFacts, World } from './contracts.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import { PhotographyService, PHOTO_TOOL } from '../../core/photography.ts';
-import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
+import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
@@ -367,8 +367,8 @@ export class JavaClientWorld implements World {
       { ...KNOWLEDGE_TOOL, handler: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         try {
-          return { text: JSON.stringify(readMinecraftKnowledge(args,
-            typeof this.state?.minecraftVersion === 'string' ? this.state.minecraftVersion : this.knowledgeVersion ?? this.cfg.version)) };
+          return { text: JSON.stringify(await queryMinecraftKnowledge(args,
+            typeof this.state?.minecraftVersion === 'string' ? this.state.minecraftVersion : this.knowledgeVersion ?? this.cfg.version, this.cfg.knowledge, ctx.signal)) };
         } catch (error) { return { text: String(error), failed: true }; }
       } },
       tool('mc_capabilities', 'Read actual client/backend capabilities, including the common Mineflayer-shaped JavaScript subset; no control claim or launcher.', parameters({}), async (_args, ctx) => {

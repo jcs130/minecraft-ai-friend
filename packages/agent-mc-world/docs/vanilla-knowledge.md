@@ -63,11 +63,11 @@ at the tail, replacing old keys; fetched references remain in bounded tool histo
 Do not append the whole catalogue or duplicate a retrieved manual every turn.
 No vector endpoint or model is required to use the bundled knowledge.
 
-MineDojo's historical Wiki is being evaluated separately as an optional external
-reference source. The [source/data audit and offline retrieval pilot](research/minedojo-knowledge-20261020.md)
-record the actual published formats, license, capture dates and unverified version
-coverage. This research does not add that corpus to `mc_knowledge`, personal game
-memory, the npm package or a running Agent.
+Since rc.88 an explicitly prepared [MineDojo external index](minedojo-knowledge.md)
+can be queried through the same tool with `source:minedojo`. It stays separate
+from vanilla references and personal memory; no corpus is bundled or downloaded
+on install. The earlier [source/data audit and offline retrieval pilot](research/minedojo-knowledge-20261020.md)
+retain the actual formats, license, capture dates and unverified version coverage.
 
 ## Optional survival cards (Java 1.21.1 only)
 

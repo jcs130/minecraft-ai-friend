@@ -4,6 +4,7 @@ import { protocolVersion } from './authentication.ts';
 import { respawnDelay } from '../../core/death-lifecycle.ts';
 import { validateJavaClientConfiguration } from './java-client.ts';
 import { isIP } from 'node:net';
+import { validateReferenceConfig } from '../../core/reference-index.ts';
 
 /** Java server notation, shared by SDKs and host setup forms. Does not connect or resolve DNS. */
 export function parseMinecraftServerAddress(value: string, defaultPort = 25565): { host: string; port: number } {
@@ -40,6 +41,7 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
   player: { ...MINECRAFT_DEFAULTS.player, teleportToBot: false },
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
+  validateReferenceConfig(cfg.knowledge);
   if (cfg.perception?.mineralVision !== undefined && typeof cfg.perception.mineralVision !== 'boolean')
     throw new Error('perception.mineralVision must be a boolean. Default false.');
   if (cfg.memoryAgentId !== undefined && (typeof cfg.memoryAgentId !== 'string' || !cfg.memoryAgentId.trim() || cfg.memoryAgentId.length > 160 || /[\x00-\x1f\x7f]/.test(cfg.memoryAgentId)))
