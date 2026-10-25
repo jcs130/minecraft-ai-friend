@@ -135,6 +135,17 @@ test('role owner can opt in and revoke guest observation from the live page, wit
   await waitFor(()=>ui.document.querySelector('[data-world-frame]')?.dataset.channel==='b'.repeat(32));
   assert.equal(button(),null);
 });
+test('an authorized watch retries an initial HTTP error document, without reloading a healthy renderer',async t=>{
+  const ui=await screen(t,{initialView:'live',managedLive:true});await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const old=ui.document.querySelector('[data-world-frame]');
+  old.contentDocument.open();old.contentDocument.write('<html><head></head><body>{"available":false,"reason":"SPECTATOR_SOURCE_OFFLINE"}</body></html>');old.contentDocument.close();
+  await ui.observation('live');const next=ui.document.querySelector('[data-world-frame]');assert.notEqual(next,old);
+  next.contentDocument.open();next.contentDocument.write('<html><head><meta name="native-viewer-build" content="trusted"></head><body></body></html>');next.contentDocument.close();
+  const meta=next.contentDocument.querySelector('meta');
+  await ui.observation('live');assert.equal(ui.document.querySelector('[data-world-frame]'),next);
+  meta.remove();next.contentDocument.body.textContent='{"available":false,"reason":"SPECTATOR_VIEW_FORBIDDEN"}';
+  await ui.observation('live');assert.equal(ui.document.querySelector('[data-world-frame]'),next);
+});
 
 test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {
   const ui = await screen(t); await ui.setup();

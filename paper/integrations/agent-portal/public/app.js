@@ -10,7 +10,7 @@ function setSession(session) {
   if (state.session?.owner?.id !== session?.owner?.id) {
     state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null; state.appearance = null; state.agentInvites = [];
     // Do not leave a previous owner's private channel title on a shared phone.
-    state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false }));
+    state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false, canManagePublic: false }));
     window.QdMemories?.clearPrivate();
   }
   state.session = session;
@@ -255,6 +255,17 @@ async function pollWorldView(selected) {
     if (revision !== authRevision || state.view !== 'live' || screen !== document.querySelector('[data-world-screen]')) return;
     preloadWorldAssets(result.preload); worldPreparing = !result.available;
     if (!result.available) { removeWorldFrame(); document.querySelector('[data-live-placeholder]').hidden = false; document.querySelector('[data-world-reason]').textContent = result.message || '正在加载真实场景，请稍候。'; label.className = 'status unknown'; label.textContent = '场景准备中'; return; }
+    const existing=screen.querySelector('[data-world-frame]');
+    if(existing)try {
+      // A first-page HTTP 503 contains no renderer/EventSource to reconnect.
+      // Retry only after this fresh authorized watch receipt, never blindly
+      // reload a running renderer or a forbidden page.
+      const doc=existing.contentDocument,text=doc?.body?.textContent?.trim()||'';
+      if(!doc?.querySelector('meta[name="native-viewer-build"]')&&text.startsWith('{')&&text.length<1024) {
+        const failure=JSON.parse(text);
+        if(failure.available===false&&['SPECTATOR_SOURCE_OFFLINE','SPECTATOR_SOURCE_TIMEOUT','SPECTATOR_SOURCE_RESOURCE_UNAVAILABLE'].includes(failure.reason))removeWorldFrame();
+      }
+    }catch{}
     if (!screen.querySelector('[data-world-frame]')) {
       const frame = document.createElement('iframe'); frame.dataset.worldFrame = ''; frame.dataset.channel = id;
       frame.title = selected.playerName + ' 的现代化观战画面'; frame.src = worldViewModes.get(id) || `/watch/${id}/third/`;
