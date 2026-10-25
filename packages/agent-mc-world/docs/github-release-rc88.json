@@ -1,0 +1,97 @@
+{
+  "schema": "minecraft-github-distribution/v1",
+  "verifiedAt": "2026-10-25T07:04:51.092125+00:00",
+  "role": "core",
+  "version": "0.5.7-rc.88",
+  "tag": "agent-mc-world-v0.5.7-rc.88",
+  "target": "fe7732611f9fcb7cdf6218bc63cdcc7e72362d2b",
+  "sourceCommit": "f2b6714bf633434aef7d67b5bf6b74a07423e5a7",
+  "file": "agent-mc-world-0.5.7-rc.88.tgz",
+  "bytes": 86352320,
+  "sha256": "56834b4a13ec6bd3f41790ae410843bc14febf5bbb227eac65882a51a13fd573",
+  "integrity": "sha512-IIU1R/xAcXVPpwyiM/q5V3kCl6O9P7DmWyr4P+6IfcYSV19hBEvNoGlWec6bDXkCYfz2YZJAS5NlJDEpolzIBA==",
+  "npm": {
+    "status": "not-public-404",
+    "defaultRegistryInstallVerified": false
+  },
+  "scope": "GitHub prerelease of reviewed archives; npm publication and public default installation remain separate",
+  "verification": {
+    "verifiedAt": "2026-10-25T06:54:47.564Z",
+    "core": "0.5.7-rc.88",
+    "adapter": "0.3.0-rc.21",
+    "distribution": "reviewed local core archive, normal npm dependency resolution; not a public default DSH install",
+    "index": {
+      "pages": 22,
+      "chunks": 570,
+      "sha256": "458aa11b72e247516ce1522b29a99ee974c06a6dcd70095672d2db4e0a59f501",
+      "unchangedAfterQueries": true
+    },
+    "cli": {
+      "status": "ready",
+      "queryResultTitles": [
+        "Fishing Rod",
+        "Fishing",
+        "Tutorials/Combat"
+      ]
+    },
+    "results": [
+      {
+        "dsh": "0.2.1-rc.2",
+        "modelRequests": 0,
+        "gameConnections": 0,
+        "mainExternalReferences": true,
+        "moduleLoaded": true,
+        "officialPluginLoader": true,
+        "mcpTools": 37,
+        "offlineEngineIpc": true,
+        "offlineGameMemory": true,
+        "serverPackLoaded": true,
+        "physicsFixtures": 2,
+        "workerLoaded": true,
+        "workerOfficialResolverActive": true,
+        "environmentRestored": true,
+        "resolverUnchanged": true,
+        "workerExternalReferences": true,
+        "frameworkSha256": [
+          "5135179ac810e4f626f32ec3bdc3293dc7d2028e8aa92e5e0c006f1a33b78e76",
+          "ccc8086845b5bba49e5fe3eed55cc1ddc3e96fc5eda1fee035e9d6a730137f19"
+        ],
+        "frameworkUnchanged": true
+      },
+      {
+        "dsh": "0.2.1-rc.3",
+        "modelRequests": 0,
+        "gameConnections": 0,
+        "mainExternalReferences": true,
+        "moduleLoaded": true,
+        "officialPluginLoader": true,
+        "mcpTools": 37,
+        "offlineEngineIpc": true,
+        "offlineGameMemory": true,
+        "serverPackLoaded": true,
+        "physicsFixtures": 2,
+        "workerLoaded": true,
+        "workerOfficialResolverActive": true,
+        "environmentRestored": true,
+        "resolverUnchanged": true,
+        "workerExternalReferences": true,
+        "frameworkSha256": [
+          "5135179ac810e4f626f32ec3bdc3293dc7d2028e8aa92e5e0c006f1a33b78e76",
+          "ccc8086845b5bba49e5fe3eed55cc1ddc3e96fc5eda1fee035e9d6a730137f19"
+        ],
+        "frameworkUnchanged": true
+      }
+    ],
+    "sharedPhysicalCore": true,
+    "overrides": false,
+    "chatModelCalls": 0,
+    "gameConnections": 0,
+    "productionReloads": 0
+  },
+  "modelCalls": 0,
+  "productionReloads": 0,
+  "realGameConnections": 0,
+  "url": "https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.88",
+  "githubPublished": true,
+  "anonymousDownloadVerified": true
+}
