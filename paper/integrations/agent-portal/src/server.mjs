@@ -68,6 +68,10 @@ export function createPortal(config, options = {}) {
     const site = options.spectatorSite || await loadSpectatorSite(config.live.native3dSiteDirectory);
     const relay=createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
       sharedStreams:true,cacheAssets:true,maxViewers:32,
+      // Four scenes share the existing 512 MiB portal container. Keep cached
+      // assets/checkpoints bounded per source instead of scaling with viewers.
+      assetCacheOptions:{maxBytes:16*1024*1024},
+      fanoutOptions:{maxEventBytes:8*1024*1024,maxReplayBytes:8*1024*1024,maxBufferedBytes:12*1024*1024},
       authorizePublisher: async (req, id, token) => {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'PUBLISHER_REQUIRED', '仅接受服务端观战源');
         return worldView.publisher(id, token, await game.roster());
