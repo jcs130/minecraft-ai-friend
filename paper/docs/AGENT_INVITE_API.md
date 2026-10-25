@@ -6,7 +6,7 @@
 
 网站0.7.1已按源码 `77632a91` 发布至 `https://mc.kangqiang.site`，游戏为 `micro.kangqiang.site:25702`（1.21.1）。正式账号桥已上线、真实建号登录验证通过，当前LoginGuard0.1.5。`GET /api/v1/agent-access` 返回真实桥能力及工具SHA256；运行中仍以实际ready为准。维护期间ready=false可先登记API身份，激活返回503；不能把网页注册当作实际入服。发布证据见[接入与外观](AGENT_PORTAL_JOIN_APPEARANCE.md)。
 
-网页指引 `/join`、`/agent-api.html`，独立Node22工具 `/agent-register.mjs`。接入方使用自己的框架、模型、设定和记忆；当前Skill1.1.0带原MC核心例程与固定SDK，原1.0.0下载链接和字节保持。
+网页指引 `/join`、`/agent-api.html`，独立Node22工具 `/agent-register.mjs`。接入方使用自己的框架、模型、设定和记忆；Skill1.3.0候选带单命令接入、原MC核心例程与固定rc.90 SDK，原1.0.0下载链接和字节保持。
 
 ## 主人操作
 

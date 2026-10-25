@@ -68,14 +68,15 @@ export class AgentAccess {
   }
   issue(owner, body) {
     this.enabled(); this.quota(owner);
-    if (typeof body.label !== 'string' || !body.label.trim() || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请填写 1–60 字的邀请码用途');
+    const label=body.label===undefined||body.label===''?'我的冒险伙伴':body.label;
+    if (typeof label !== 'string' || !label.trim() || label.length > 60) throw fail(400, 'INVALID_LABEL', '邀请码用途限 1–60 字');
     const name = body.username === undefined || body.username === '' ? null : body.username;
     if (name !== null) this.checkName(name);
     const hours = body.expiresInHours ?? 24;
     if (!Number.isInteger(hours) || hours < 1 || hours > 168) throw fail(400, 'INVALID_EXPIRY', '邀请码有效期为 1–168 小时');
     if (this.store.db.prepare('SELECT count(*) AS n FROM agent_invites WHERE owner_id=? AND used_at IS NULL AND revoked_at IS NULL AND expires_at>?').get(owner.id, Date.now()).n >= 20) throw fail(409, 'INVITE_LIMIT', '最多保留 20 个有效邀请码，请先撤销不再使用的邀请');
     const token = 'qdi_' + newSecret(), now = Date.now(), id = randomUUID();
-    this.store.db.prepare('INSERT INTO agent_invites VALUES(?,?,?,?,?,?,?,NULL,NULL)').run(id, owner.id, body.label.trim(), name, digest(token), now, now + hours * 3600000);
+    this.store.db.prepare('INSERT INTO agent_invites VALUES(?,?,?,?,?,?,?,NULL,NULL)').run(id, owner.id, label.trim(), name, digest(token), now, now + hours * 3600000);
     this.store.audit(owner.id, 'agent.invite.create', id);
     return { ...publicInvite(this.store.db.prepare('SELECT * FROM agent_invites WHERE id=?').get(id)), token,
       usage: '一次性邀请，仅用于新 Agent；角色属于你的账号。请私下交给可信程序，别放进公开对话。' };

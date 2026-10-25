@@ -492,6 +492,22 @@ function openModal(title, subtitle, body, bottom = '') {
   modal.innerHTML = `<div class="modal-header"><div><h2 id="modal-title">${title}</h2><p>${subtitle}</p></div><button class="close" data-action="close-modal" aria-label="关闭">${icons.close}</button></div><div class="modal-body">${body}</div>${bottom ? `<div class="modal-footer">${bottom}</div>` : ''}`;
   if (!modal.open) modal.showModal();
 }
+let inviteIssuing = false;
+function inviteResultModal(result) {
+openModal('把接入链接交给你的 Agent', '链接含单次邀请，关闭后不能重新查看；只发给你信任的 Agent', `<p>${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。新角色属于你；不能认领已有角色，保留原有 Eye。</p><div class="form-actions gap-top">${button('copy-invite-link', '复制接入链接', 'link', 'primary')}${button('copy-invite-prompt', '复制完整提示词', 'book')}</div><details class="gap-top"><summary>查看接入链接与提示词</summary><div id="created-invite-link" class="key-secret">${e(result.onboarding.link)}</div><pre id="created-invite-prompt" class="code">${e(result.onboarding.prompt)}</pre></details><details class="gap-top"><summary>只复制邀请码</summary><div id="created-token" class="key-secret">${e(result.token)}</div>${button('copy-token', '复制邀请码', 'key', 'small')}</details><p class="tiny gap-top">网页含 Skill 下载和实际接入状态；没有运行 JavaScript 的 Agent 也能按说明接入。API 注册和游戏入服分别确认。</p><div class="form-actions">${button('close-modal', '已保存')}</div>`);
+}
+async function quickInvite() {
+  if(inviteIssuing)return;
+  inviteIssuing=true;
+  try{const result=await api('/agent-invites',{method:'POST',body:'{}'});await loadPrivate();inviteResultModal(result);}
+  finally{inviteIssuing=false;}
+}
+function joinWelcomeModal() {
+  openModal('账号已准备好，开始你的冒险。','选择接入方式',`<p>把接入链接交给自己的 Agent，它会自动准备身份与游戏连接。你的网站密码不需要交给 Agent。</p><div class="form-actions">${button('quick-agent-invite','生成 Agent 接入链接','plus','primary')}<a class="btn" href="/join#players">真人玩家进服</a>${button('close-modal','稍后再说','','ghost')}</div>`);
+}
+function inviteSetupModal() {
+  openModal('邀请自己的 Agent','一次邀请建立一个新角色，自动属于你的网站账号',`<form id="agent-invite-form" class="form-grid"><label class="field">角色名（可选）<input name="username" maxlength="16" pattern="ag_[A-Za-z0-9_]{1,13}" placeholder="留空，让 Agent 自选名字" autocomplete="off" autocapitalize="none"></label><details><summary>有效期与备注</summary><label class="field">备注<input name="label" maxlength="60" value="我的冒险伙伴"></label><label class="field">有效小时数<input name="expiresInHours" type="number" min="1" max="168" value="24"></label></details><div class="form-error" role="alert"></div><button class="btn primary" type="submit">生成接入链接</button></form>`);
+}
 function authModal(mode = 'login') {
   const setup = mode === 'setup'; const register = mode === 'register' || setup;
   const registrationMode = state.session?.emailAuth?.mode;
@@ -500,7 +516,7 @@ function authModal(mode = 'login') {
   const emailAvailable = !!state.session?.emailAuth?.available;
   if (emailRequired && !emailAvailable) return openModal('邮箱注册准备中。', '已有网站账号可以继续登录', notice(e(state.session?.emailAuth?.unavailableReason || '发信服务配置完成后开放邮箱验证注册。'), 'muted'), '<button data-action="login">返回登录</button>');
   openModal(setup ? '点亮你的账号门户。' : register ? '创建网站账号。' : '欢迎回到千灯纪。', setup ? '首次初始化 · 仅在服务器本机开放' : '网站账号和游戏账号分开管理',
-    `<form id="auth-form" data-mode="${mode}" class="form-grid"><label class="field">${register ? '网站用户名' : '网站用户名或已验证邮箱'}<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="${register ? 24 : 254}" placeholder="${register ? '3–24 个文字或字母数字' : '用户名 / 已验证的邮箱'}"></label>${emailMode ? `<label class="field">${emailRequired ? '邮箱' : '邮箱（可选）'}<input name="email" type="email" autocomplete="email" autocapitalize="none" ${emailRequired ? 'required' : ''} ${emailAvailable ? '' : 'disabled'} maxlength="254" placeholder="${emailRequired ? '用于验证身份与找回密码' : '留空即可直接注册'}"><small>${emailRequired ? '先验证邮箱，再创建网站账号。' : emailAvailable ? '不填邮箱可直接注册；填写后需验证，可用来找回密码。' : '用户名和密码即可注册；邮箱验证暂不可用，之后可在账号页补绑。'}</small></label>` : ''}<label class="field">网站密码<input name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" required minlength="${register ? 6 : 1}" maxlength="128" placeholder="${register ? '至少 6 个字符' : '输入网站密码'}"></label>${register ? '<label class="field">再次输入网站密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}${setup ? notice('这个账号将管理门户内的访问权限，游戏 OP、角色数据和游戏密码仍沿用原设置。', 'muted') : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">${setup ? '创建网站管理员' : emailRequired ? '发送邮箱验证码' : emailMode ? '继续注册' : register ? '注册并登录' : '登录网站'}</button>${!register ? button('forgot-password', '忘记密码', '', 'ghost') : ''}</div></form>`,
+    `<form id="auth-form" data-mode="${mode}" class="form-grid"><label class="field">${register ? '网站用户名' : '网站用户名或已验证邮箱'}<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="${register ? 24 : 254}" placeholder="${register ? '3–24 个文字或字母数字' : '用户名 / 已验证的邮箱'}"></label>${emailMode ? `${emailRequired ? "" : "<details><summary>添加邮箱（可选，可稍后绑定）</summary>"}<label class="field">${emailRequired ? '邮箱' : '邮箱（可选）'}<input name="email" type="email" autocomplete="email" autocapitalize="none" ${emailRequired ? 'required' : ''} ${emailAvailable ? '' : 'disabled'} maxlength="254" placeholder="${emailRequired ? '用于验证身份与找回密码' : '留空即可直接注册'}"><small>${emailRequired ? '先验证邮箱，再创建网站账号。' : emailAvailable ? '不填邮箱可直接注册；填写后需验证，可用来找回密码。' : '用户名和密码即可注册；邮箱验证暂不可用，之后可在账号页补绑。'}</small></label>${emailRequired ? "" : "</details>"}` : ''}<label class="field">网站密码<input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" required minlength="${register ? 6 : 1}" maxlength="128" placeholder="${register ? '至少 6 个字符' : '输入网站密码'}"></label>${setup ? '<label class="field">再次输入网站密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}<button type="button" class="btn ghost" data-action="toggle-auth-password" aria-controls="auth-password">显示密码</button>${setup ? notice('这个账号将管理门户内的访问权限，游戏 OP、角色数据和游戏密码仍沿用原设置。', 'muted') : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">${setup ? '创建网站管理员' : emailRequired ? '发送邮箱验证码' : register ? '注册并登录' : '登录网站'}</button>${!register ? button('forgot-password', '忘记密码', '', 'ghost') : ''}</div></form>`,
     setup ? '用户名和密码只保存到独立门户数据库。' : register ? '已有网站账号？ <button data-action="login">去登录</button>' : `还没有网站账号？ <button data-action="${state.session?.canSetup ? 'setup' : 'register'}">${state.session?.canSetup ? '设置管理员' : '注册账号'}</button>`);
 }
 
@@ -696,7 +712,9 @@ document.addEventListener('click', async event => {
       if (result.state === 'succeeded') { await loadPrivate(); await refresh(); }
     }
     else if (action === 'new-token') tokenModal();
-    else if (action === 'new-agent-invite') openModal('邀请自己的 Agent', '新角色将绑定到你的网站账号；邀请码一次性使用', '<form id="agent-invite-form" class="form-grid"><label class="field">用途名称<input name="label" required maxlength="60" placeholder="例如：我的探索伙伴"></label><label class="field">限定新角色名（可选）<input name="username" maxlength="16" pattern="ag_[A-Za-z0-9_]{1,13}" placeholder="ag_ 开头；留空由 Agent 选择" autocomplete="off" autocapitalize="none"></label><label class="field">有效小时数<input name="expiresInHours" type="number" min="1" max="168" value="24" required></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">生成一次性邀请码</button></form>');
+    else if (action === 'new-agent-invite') inviteSetupModal();
+    else if (action === 'quick-agent-invite') await quickInvite();
+    else if (action === 'toggle-auth-password') { const input=modal.querySelector('[name=password]'); input.type=input.type==='password'?'text':'password'; target.textContent=input.type==='password'?'显示密码':'隐藏密码'; }
     else if (action === 'revoke-agent-invite') openModal('撤销这份 Agent 接入？', '对应的 API 身份立即失效；已有游戏角色、物品和游戏密码保留', `<form id="revoke-agent-invite-form" data-id="${e(target.dataset.id)}" class="form-grid"><div class="form-error" role="alert"></div><button class="btn danger" type="submit">确认撤销 API 接入</button></form>`);
     else if (action === 'reauth') reauthModal();
     else if (action === 'claim-role') gameAccountModal('claim', target.dataset.name);
@@ -730,12 +748,12 @@ document.addEventListener('submit', async event => {
   try {
     if (form.id === 'auth-form') {
       const mode = form.dataset.mode;
-      if (mode !== 'login' && values.password !== values.confirmPassword) throw new Error('两次输入的网站密码不一致');
+      if (mode === 'setup' && values.password !== values.confirmPassword) throw new Error('两次输入的网站密码不一致');
       authRevision++;
       const result = await api(mode === 'setup' ? '/setup' : mode === 'register' ? '/accounts' : '/sessions', { method: 'POST', body: JSON.stringify({ username: values.username, password: values.password, ...(values.email ? { email: values.email } : {}) }) });
       if (result.verificationRequired) return emailCodeModal(result, 'register');
       setSession(result);
-      await loadPrivate(); modal.close(); render(); toast(mode === 'setup' ? '网站管理员已创建，可以查看角色资料了' : '已登录网站账号');
+      await loadPrivate(); modal.close(); render(); if(mode==='register')joinWelcomeModal();else toast(mode === 'setup' ? '网站管理员已创建，可以查看角色资料了' : '已登录网站账号');
     } else if (form.id === 'email-request-form') {
       const purpose = form.dataset.purpose;
       const result = await api(purpose === 'bind' ? '/account/email' : '/auth/password-reset', { method: 'POST', body: JSON.stringify(values) });
@@ -745,7 +763,7 @@ document.addEventListener('submit', async event => {
       const result = await api('/auth/email/verify', { method: 'POST', body: JSON.stringify({ challengeId: form.dataset.challenge, code: values.code, ...(values.newPassword ? { newPassword: values.newPassword } : {}) }) });
       setSession(result); await loadPrivate(); modal.close(); render();
       if (result.passwordReset) { authModal('login'); toast('网站密码已重设，请重新登录；其他会话与客户端凭据已撤销'); }
-      else toast('邮箱已验证，可以使用邮箱登录和找回密码');
+      else if(form.dataset.purpose==='register')joinWelcomeModal();else toast('邮箱已验证，可以使用邮箱登录和找回密码');
     } else if (form.id === 'password-form') {
       if (values.newPassword !== values.confirmPassword) throw new Error('两次输入的新密码不一致');
       authRevision++;
@@ -791,7 +809,7 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'agent-invite-form') {
       const result = await api('/agent-invites', { method: 'POST', body: JSON.stringify({ ...values, expiresInHours: Number(values.expiresInHours) }) });
       await loadPrivate();
-      openModal('把接入链接交给你的 Agent', '链接含单次邀请，关闭后不能重新查看；只发给你信任的 Agent', `<p>${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。新角色属于你；不能认领已有角色，保留原有 Eye。</p><div class="form-actions gap-top">${button('copy-invite-link', '复制接入链接', 'link', 'primary')}${button('copy-invite-prompt', '复制完整提示词', 'book')}</div><details class="gap-top"><summary>查看接入链接与提示词</summary><div id="created-invite-link" class="key-secret">${e(result.onboarding.link)}</div><pre id="created-invite-prompt" class="code">${e(result.onboarding.prompt)}</pre></details><details class="gap-top"><summary>只复制邀请码</summary><div id="created-token" class="key-secret">${e(result.token)}</div>${button('copy-token', '复制邀请码', 'key', 'small')}</details><p class="tiny gap-top">网页含 Skill 下载和实际接入状态；没有运行 JavaScript 的 Agent 也能按说明接入。API 注册和游戏入服分别确认。</p><div class="form-actions">${button('close-modal', '已保存')}</div>`);
+      inviteResultModal(result);
     } else if (form.id === 'revoke-agent-invite-form') {
       await api(`/agent-invites/${form.dataset.id}`, { method: 'DELETE' }); modal.close(); await loadPrivate(); render(); toast('邀请与 API 接入已撤销，游戏角色保留');
     } else if (form.id === 'game-account-form') {

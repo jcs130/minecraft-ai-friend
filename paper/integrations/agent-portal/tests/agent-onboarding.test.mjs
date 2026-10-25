@@ -15,7 +15,7 @@ async function inspect(f, token) { const response = await fetch(f.origin + '/api
 test('copyable onboarding link, prompt, Skill and readiness share the exact invitation and canonical origin', async t => {
   const f = await siteFixture(t), value = await invite(f), parsed = new URL(value.onboarding.link);
   assert.equal(parsed.origin, f.origin); assert.equal(parsed.pathname, '/join'); assert.equal(parsed.search, ''); assert.equal(new URLSearchParams(parsed.hash.slice(1)).get('invite'), value.token);
-  assert.match(value.onboarding.prompt, /自己的 Agent 框架/); assert.match(value.onboarding.prompt, /游戏建号桥当前尚未上线/); assert.match(value.onboarding.prompt, /scripts\/import-account.mjs/); assert.match(value.onboarding.prompt, /\/mycli status/);
+  assert.match(value.onboarding.prompt, /自己的 Agent 框架/); assert.match(value.onboarding.prompt, /建号服务暂不可用/); assert.match(value.onboarding.prompt, /scripts\/setup.mjs join/); assert.match(value.onboarding.prompt, /\/mycli status/);
   assert.ok(!value.onboarding.prompt.includes('clientSecret=')); assert.equal(value.onboarding.skill.version, agentSkill.version);
   const data = (await inspect(f, value.token)).data; assert.equal(data.state, 'available'); assert.equal(data.username, 'ag_JoinLink'); assert.equal(data.onboarding.prompt, value.onboarding.prompt);
   for (const forbidden of ['Private owner label', 'owner_id', 'playerUuid', 'clientId', 'clientSecret', 'passwordHash']) assert.ok(!JSON.stringify(data).includes(forbidden), forbidden);

@@ -2,21 +2,17 @@
 
 把 ZIP 中整个 `qiandengji-agent` 文件夹放进宿主的技能目录。Codex 可用 `~/.codex/skills/qiandengji-agent`；其他支持 SKILL.md 的宿主使用自己的技能目录。保留 scripts、references 和 assets，不只复制 SKILL.md。
 
-安装 Node.js 22+，在该技能目录执行：
+新角色使用 [邀请接入](invite.md) 的一条 `setup.mjs join` 命令；它会保留建号密码并配置 MCP。下面仅用于已有角色的接入和升级，不能代替网站邀请。
 
-```sh
-node scripts/setup.mjs init --username ag_YourName
-```
-
-安装助手先核对包内 SHA，再用锁定依赖执行 `npm ci --ignore-scripts`；仅改本包的 assets/runtime/node_modules。创建属于该账号的私有 profile，输出 `client.json` 和可导入的 `mcp.json` 位置。默认公网地址为 `micro.kangqiang.site:25702`、1.21.1，不连接游戏、不调用模型、不修改宿主已有 MCP 配置。
-
-默认 profile 在 `~/.qiandengji/players/账号名`。已有目录不会被覆盖。可用 `--profile /绝对私有目录`；局域网调试可显式加 `--host 192.168.3.163 --port 25565`。不要用他人的账号或本包验收账号。
-
-已有游戏密码时，把密码存入仅本人可读的文件，再初始化：
+安装 Node.js 22+，已有角色将原游戏密码保存到私有文件后执行：
 
 ```sh
 node scripts/setup.mjs init --username ag_YourName --password-file /私有目录/game-password
 ```
+
+安装助手先核对包内 SHA，再用锁定依赖执行 `npm ci --ignore-scripts`；仅改本包的 assets/runtime/node_modules。创建属于该账号的私有 profile，输出 `client.json` 和可导入的 `mcp.json` 位置。默认公网地址为 `micro.kangqiang.site:25702`、1.21.1，不连接游戏、不调用模型、不修改宿主已有 MCP 配置。
+
+默认 profile 在 `~/.qiandengji/players/账号名`。已有目录不会被覆盖，可用 `--profile /绝对私有目录`。游戏入口以官网接入 API 的 `gameAddress` 为准，使用域名，不写死动态公网 IP，也不照搬服务器内网地址。不要用他人的账号或本包验收账号。
 
 未提供密码时助手为新角色生成随机密码，不输出其明文。Windows 默认用当前用户 DPAPI 保存；其他系统使用权限 0600 的私有文件。已有 Windows DPAPI 凭据可用 `--password-format dpapi --password-file /私有目录/原文件`。模型供应商 Key 不需要交给本包。
 
@@ -43,7 +39,7 @@ node scripts/account.mjs enroll --profile /上一步输出的profile目录
 
 此发行包是无画面执行端，viewerPort/consolePort/metricsPort 默认 0，不抢鼠标、不需要 Java 图形客户端。它不代表已附带 1.21.1 的网页材质或完成所有玩法验收。
 
-当前 Skill 1.2.1 锁定 agent-mc-world 0.5.7-rc.71（GitHub 主干候选），不随 npm 标签静默漂移。上游安装与更新说明：https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world 。安装新 Skill 保留原私有 profile、密码与动作账本；更新依赖后重新启动本地 MCP 以加载新版。
+当前 Skill 1.3.0 锁定 agent-mc-world 0.5.7-rc.90（GitHub 主干候选），不随 npm 标签静默漂移。上游安装与更新说明：https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world 。安装新 Skill 保留原私有 profile、密码与动作账本；更新依赖后重新启动本地 MCP 以加载新版。
 
 ## 升级已有角色
 

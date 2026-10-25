@@ -363,8 +363,10 @@ test('ordinary registration, human role binding and returning login lead to the 
   };
   await logout();
   ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
-  ui.fill('username', 'Alice'); ui.fill('password', password); ui.fill('confirmPassword', password); ui.submit('#auth-form');
+  ui.fill('username', 'Alice'); ui.fill('password', password); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'Alice');
+  await waitFor(() => ui.document.querySelector('#modal [data-action="quick-agent-invite"]'));
+  ui.click('#modal [data-action="close-modal"]');
   ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('[data-action="detail"]'));
   ui.click('[data-action="detail"]');
   assert.match(ui.document.querySelector('#detail').textContent, /这个角色尚未授权给你/);
@@ -450,13 +452,14 @@ test('email signup UI waits for code confirmation and recovery returns to login 
   await ui.setup(); ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
   ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
   ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
-  ui.fill('username', 'MailPlayer'); ui.fill('email', 'player@example.test'); ui.fill('password', password); ui.fill('confirmPassword', password); ui.submit('#auth-form');
+  ui.fill('username', 'MailPlayer'); ui.fill('email', 'player@example.test'); ui.fill('password', password); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('#email-code-form'));
   assert.equal(ui.portal.store.ownerByName('MailPlayer'), undefined);
   assert.equal(ui.document.querySelector('#email-code-form [name="code"]').getAttribute('inputmode'), 'numeric');
   ui.fill('code', messages.at(-1).code, '#email-code-form'); ui.submit('#email-code-form');
   await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'MailPlayer');
-  assert.equal(ui.document.querySelector('#modal').open, false);
+  await waitFor(() => ui.document.querySelector('[data-action="quick-agent-invite"]'));
+  ui.click('#modal [data-action="close-modal"]');
   ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
   assert.match(ui.document.querySelector('#main').textContent, /player@example.test/);
   ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
@@ -476,10 +479,27 @@ test('optional-email registration UI accepts a blank email and logs in the new p
   assert.ok(ui.document.querySelector('#auth-form[data-mode="register"]'));
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').required, false);
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').disabled, true);
-  ui.fill('username', 'LightPlayer'); ui.fill('password', 'abc123'); ui.fill('confirmPassword', 'abc123'); ui.submit('#auth-form');
+  assert.equal(ui.document.querySelector('#auth-form details').open,false);
+  assert.equal(ui.document.querySelector('#auth-form [name="confirmPassword"]'),null);
+  assert.equal(ui.document.querySelectorAll('#auth-form input[required]').length,2);
+  ui.click('[data-action="toggle-auth-password"]');
+  assert.equal(ui.document.querySelector('#auth-password').type,'text');
+  ui.click('[data-action="toggle-auth-password"]');
+  assert.equal(ui.document.querySelector('#auth-password').type,'password');
+  ui.fill('username', 'LightPlayer'); ui.fill('password', 'abc123'); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'LightPlayer');
   assert.equal(ui.document.querySelector('#email-code-form'), null);
   assert.equal(ui.portal.store.ownerByName('LightPlayer').role, 'owner');
+  await waitFor(()=>ui.document.querySelector('[data-action="quick-agent-invite"]'));
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM agent_invites').get().n,0);
+  ui.click('[data-action="quick-agent-invite"]');ui.click('[data-action="quick-agent-invite"]');
+  await waitFor(()=>ui.document.querySelector('#created-invite-link'));
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM agent_invites').get().n,1);
+  const row=ui.portal.store.db.prepare('SELECT owner_id,label FROM agent_invites').get();
+  assert.equal(row.owner_id,ui.portal.store.ownerByName('LightPlayer').id);
+  assert.equal(row.label,'我的冒险伙伴');
+  assert.match(ui.document.querySelector('#created-invite-prompt').textContent,/scripts\/setup.mjs join/);
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs').get().n,0);
 });
 
 test('optional-email UI verifies a supplied address instead of registering before the code', async t => {
@@ -489,7 +509,7 @@ test('optional-email UI verifies a supplied address instead of registering befor
   ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').required, false);
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').disabled, false);
-  ui.fill('username', 'VerifiedPlayer'); ui.fill('email', 'verified@example.test'); ui.fill('password', 'abc123'); ui.fill('confirmPassword', 'abc123'); ui.submit('#auth-form');
+  ui.fill('username', 'VerifiedPlayer'); ui.fill('email', 'verified@example.test'); ui.fill('password', 'abc123'); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('#email-code-form'));
   assert.equal(ui.portal.store.ownerByName('VerifiedPlayer'), undefined);
   ui.fill('code', messages[0].code, '#email-code-form'); ui.submit('#email-code-form');

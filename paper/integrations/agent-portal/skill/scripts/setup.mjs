@@ -88,9 +88,10 @@ function npmCli(explicit) {
 }
 export async function main(argv=process.argv.slice(2)) {
   const command=argv.shift();
+  if(command==='join'){const{joinSkill}=await import('./join.mjs');return joinSkill(argv);}
   const {values}=parseArgs({args:argv,options:{username:{type:'string'},profile:{type:'string'},host:{type:'string'},port:{type:'string'},
     'password-file':{type:'string'},'password-format':{type:'string'},'token-file':{type:'string'},'portal-url':{type:'string'},'npm-cli':{type:'string'},'skip-install':{type:'boolean'}}});
-  if(!['init','check','config','portal'].includes(command))throw Error('usage_setup_init_check_config_or_portal');
+  if(!['init','check','config','portal'].includes(command))throw Error('usage_setup_join_init_check_config_or_portal');
   const bundle=verifyBundle();
   const directory=values.profile || (values.username ? join(homedir(),'.qiandengji','players',values.username) : null);
   if(!directory)throw Error('profile_or_username_required');
@@ -122,6 +123,10 @@ export async function main(argv=process.argv.slice(2)) {
   return {configurationValid:true,sdkVersion,version:decoded.cfg.version,username:decoded.cfg.username,gameConnected:false,modelCalled:false};
 }
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
-  try{console.log(JSON.stringify(await main(),null,2));}
-  catch(error){console.error(JSON.stringify({error:error instanceof Error?error.message:'setup_failed'}));process.exitCode=1;}
+  // Finish module evaluation before join imports the existing account importer,
+  // which itself uses these exports. Avoid a top-level-await import cycle.
+  setImmediate(async()=>{
+    try{const result=await main();console.log(JSON.stringify(result,null,2));if(process.argv[2]==='join'&&result?.state!=='ready')process.exitCode=2;}
+    catch(error){console.error(JSON.stringify({error:error instanceof Error?error.message:'setup_failed'}));process.exitCode=1;}
+  });
 }

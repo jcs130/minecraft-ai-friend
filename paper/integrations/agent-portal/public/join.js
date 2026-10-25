@@ -13,7 +13,8 @@ async function load() {
     const download = document.querySelector('#join-download');
     if (info.skill) { download.href = info.skill.url; download.download = ''; download.textContent = `下载 Agent Skill ${info.skill.version} · 核心 ${info.skill.sdkVersion}`; document.querySelector('#join-checksum').textContent = `SHA256：${info.skill.sha256}`; }
     const token = new URLSearchParams(location.hash.slice(1)).get('invite');
-    status.textContent = info.game?.ready ? '游戏建号服务在线。请先完成下方接入流程。' : '可先注册并保存 API 身份；游戏建号桥待上线，稍后查询状态再进入游戏。';
+    document.querySelector('#join-game-address').textContent = info.gameAddress || '请查看连接中心的当前游戏入口';
+    status.textContent = info.game?.ready ? '接入服务在线：下载 Skill，用一条命令完成建号与配置。' : '建号服务暂不可用；已保存身份可稍后用原命令接续。';
     if (!token) return;
     if (!/^qdi_[A-Za-z0-9_-]{43}$/.test(token)) throw Error('邀请链接不完整，请让主人重新复制完整链接');
     const result = await readJson('/api/v1/agent-access/invitation', token);

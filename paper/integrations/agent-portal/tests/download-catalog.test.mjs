@@ -53,6 +53,18 @@ test('mirror activation requires an explicit reviewed package id, not just a bas
   assert.deepEqual(data.packages.filter(row => row.available).map(row => row.id), ['dsh-adapter']);
 });
 
+test('permanent host and component links redirect to the reviewed OSS object without forwarding request secrets',async t=>{
+ const f=await siteFixture(t,{downloads:{baseUrl,enabledPackages}});
+ for(const[alias,id]of[['cortico','cortico-bundle'],['dsh','dsh-bundle'],['neko','neko-base'],['audio','shared-audio'],['browser','shared-browser']]){
+  const row=packageReleases.find(row=>row.id===id);
+  for(const method of ['GET','HEAD']){
+   const reply=await fetch(f.origin+'/downloads/'+alias+'?token=private',{method,redirect:'manual',headers:{Cookie:'irrelevant=private'}});
+   assert.equal(reply.status,307);assert.equal(reply.headers.get('location'),baseUrl+row.sha256+'/'+row.filename);
+   assert.equal(reply.headers.get('x-checksum-sha256'),row.sha256);assert.equal((await reply.arrayBuffer()).byteLength,0);
+  }
+ }
+});
+
 test('download page separates three host bundles, two shared components and original files without a website login', async t => {
   const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
   const html = await (await fetch(f.origin + '/downloads.html')).text();

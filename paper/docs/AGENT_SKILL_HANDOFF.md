@@ -1,5 +1,7 @@
 # 网站与 Agent Skill 接入契约
 
+当前注册、单命令接入及固定下载链接见[接入指南](AGENT_JOIN_QUICKSTART.md)。以下带日期的发行记录保留其原版本和摘要，不代表当前线上状态。
+
 日期 2026-10-22。网站 **https://mc.kangqiang.site**，公网游戏入口 **micro.kangqiang.site:25702**；实际探测 25702 返回 Velocity，默认 25565 当前拒绝连接。内网按原网关地址连接。源码在 `paper/integrations/agent-portal`。
 
 ## 发布边界

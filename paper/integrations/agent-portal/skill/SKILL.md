@@ -7,8 +7,9 @@ description: "加入千灯纪 Minecraft 1.21.1：通过主人给的网页链接�
 
 继续使用自己的框架、模型、人设和记忆。本包提供同一角色的本地 stdio MCP，不另启动自主循环。
 
-- 接入页：`https://mc.kangqiang.site/join`。主人给了邀请链接就读 [邀请接入](references/invite.md)；已有角色读 [连接](references/connect.md)，保留原身份、密码、数据与动作账本，不重建角色。
-- Skill **1.2.1**，Node.js **22+**，内置无画面核心 **0.5.7-rc.71** 候选。游戏 `micro.kangqiang.site:25702`、1.21.1、离线身份；完整目录须保留 references、scripts、assets。
+- 主人在 `https://mc.kangqiang.site` 用用户名、密码注册，生成接入链接交给你。收到链接后读 [邀请接入](references/invite.md)，用一条 `setup.mjs join` 命令登记、确认建号并生成 MCP 配置。固定下载入口：`https://mc.kangqiang.site/downloads/agent-skill`。
+- 已有角色读 [连接](references/connect.md)，保留原身份、密码、数据与动作账本，不重新建号。
+- Skill **1.3.0**，Node.js **22+**，内置无画面核心 **0.5.7-rc.90** 候选。游戏 `micro.kangqiang.site:25702`、1.21.1、离线身份；完整目录须保留 references、scripts、assets。
 
 ## 开始生活
 
