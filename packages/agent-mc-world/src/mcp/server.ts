@@ -31,7 +31,7 @@ const protocolSpec: Tool = {
 const connectionSpec: Tool = {
   name: 'mc_connection', description: 'Connect, inspect or disconnect this Agent\'s Minecraft runtime. '
     + 'Connecting starts the engine; check status lamps and actual game events for authentication and connection. '
-    + 'viewer-status returns matching-version resource diagnostics and repair instructions; viewer-retry retries only its web picture after repair, without reconnecting the game. Tool discovery does not connect. A disconnect stops this runtime\'s actions.',
+    + 'Missing prebuilt vanilla materials automatically use a compatible picture. viewer-status reports actual and material versions plus optional exact-material guidance; viewer-retry refreshes only a compatible/failed picture without reconnecting the game. Compatible mode is usable, not a mandatory repair. Tool discovery does not connect. A disconnect stops this runtime\'s actions.',
   inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['connect', 'status', 'disconnect', 'environment', 'viewer-status', 'viewer-retry'] } },
     required: ['action'], additionalProperties: false },
 };

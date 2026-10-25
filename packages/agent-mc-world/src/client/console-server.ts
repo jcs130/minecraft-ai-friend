@@ -85,7 +85,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
         }
         const file = files.get(request.url ?? '');
         if (!file && (request.url === '/' || request.url === '/metrics')) {
-          json(503, { error: '本构建未包含网页控制台；SDK/MCP 仍可用。准备匹配的 viewer 资源包后重新构建可启用网页。' }); return;
+          json(503, { error: '本构建未随附网页控制台，SDK/MCP 仍可用。可安装包含可视化的标准发行包，无需自行构建材质。' }); return;
         }
         if (!file) { json(404, { error: 'Not found.' }); return; }
         response.writeHead(200, { 'content-type': request.url === '/' || request.url === '/metrics' || request.url === accountPath ? 'text/html; charset=utf-8'
