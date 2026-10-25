@@ -71,7 +71,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.12** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.13** / `6051d6cb`；登录节流、Skill/MCP资料、完整宿主分包与[自有插件直下](https://mc.kangqiang.site/downloads.html)保持，现代观战加载、原角色模型和基岩在线识别更新；0.9.0多世界仍为独立候选 |
+| 网站源码 | 正式 **0.8.17** / `0f137d4e`，现代前端 `19768897`；可米原 YSM 状态恢复、动作采样、加载缓存及默认第三人称已上线。登录节流、Skill/MCP资料、完整宿主分包与[自有插件直下](https://mc.kangqiang.site/downloads.html)保持；0.9.0多世界仍为独立候选。副本传送后的自动重连仍有待修复，见[本次记录](paper/docs/WORLD_VIEW_CORMY_ANIMATION.md) |
 | 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网下载 **Skill 1.2.1** 固定已验证的 rc.71 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 

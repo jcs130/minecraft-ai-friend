@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-25",
+  "completedAt": "2026-10-25T18:42:07+08:00",
+  "state": "deployed_with_scene_recovery_followup",
+  "deployed": true,
+  "portalVersion": "0.8.17",
+  "runtimeSourceCommit": "0f137d4ef695c1822cda11f8cd0a9296b13b724b",
+  "viewerCommit": "19768897809a22befdf1ebcb56d5c11cbd39a2a4",
+  "workerVersion": "0.1.2",
+  "sampleIntervalMs": 50,
+  "browserBundleSha256": "fecf34df6b2ef9bc84323feda45a3fad5142c82b3b7aa834b379fae53c687ef8",
+  "consoleBundleSha256": "eef6453cb36c8796893aab9e65171f83d346933624212f12156ada1f7daf45cc",
+  "proxy": {
+    "previous": "Freesia-Velocity-2.5.1+2.4.1-af3",
+    "current": "Freesia-Velocity-2.5.1+2.4.1-af5",
+    "sha256": "47ec3fc898852919c11451f60976f5246e0e194be8318061921e16108a1a8d0a",
+    "appearancePluginPreserved": "0.3.3",
+    "workerBinaryChanged": false
+  },
+  "maintenance": {
+    "announcementsSeconds": [180, 60, 10],
+    "noHumanPlayersAndNoActiveDungeonsAtMaintenance": true,
+    "coldBackupVerifiedOnTwoDisks": true,
+    "filesBackedUp": 642,
+    "paperRestarted": false,
+    "paperCreationTimeUnchanged": true,
+    "loginProxyRestarted": true,
+    "latestWebsiteDatabaseKept": true,
+    "protectedWebsiteTablesPreserved": 17,
+    "authenticationConfigurationChanged": false,
+    "modelAssignmentChanged": false,
+    "newPublicPorts": 0
+  },
+  "acceptance": {
+    "originalCormyYsmRestoredFromNativeWorker": true,
+    "originalSavedModelNbtUnchanged": true,
+    "originalCormyModelVisibleOnProductionWebsite": true,
+    "defaultCamera": "third",
+    "singleDesktopFirstTerrainMs": 3979,
+    "singleDesktopModelReadyMs": 3516,
+    "shortStaticFrameP50Ms": 7,
+    "shortStaticFrameP95Ms": 14,
+    "shortStaticFrameP99Ms": 15,
+    "productionWalkAttackUseVerified": false,
+    "mobileParityVerified": false,
+    "fullJavaAnimationParityVerified": false
+  },
+  "followup": {
+    "dungeonTeleportSceneRebuildObserved": true,
+    "manualRefreshRecoveredDungeonView": true,
+    "automaticSceneRecoveryFixed": false,
+    "specificExceptionStillUnconfirmed": true,
+    "extraDiagnosticDeploymentBlockedByCancelledSystemConfirmation": true
+  }
+}
