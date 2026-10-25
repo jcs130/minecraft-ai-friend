@@ -31,8 +31,8 @@ const protocolSpec: Tool = {
 const connectionSpec: Tool = {
   name: 'mc_connection', description: 'Connect, inspect or disconnect this Agent\'s Minecraft runtime. '
     + 'Connecting starts the engine; check status lamps and actual game events for authentication and connection. '
-    + 'Tool discovery does not connect. A disconnect stops this runtime\'s actions.',
-  inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['connect', 'status', 'disconnect', 'environment'] } },
+    + 'viewer-status returns matching-version resource diagnostics and repair instructions; viewer-retry retries only its web picture after repair, without reconnecting the game. Tool discovery does not connect. A disconnect stops this runtime\'s actions.',
+  inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['connect', 'status', 'disconnect', 'environment', 'viewer-status', 'viewer-retry'] } },
     required: ['action'], additionalProperties: false },
 };
 const eventsSpec: Tool = {
@@ -158,6 +158,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
         if (args.action === 'connect') await runtime.connect();
         else if (args.action === 'disconnect') await runtime.disconnect();
         else if (args.action === 'environment') return outcome({ text: await runtime.environment() });
+        else if(args.action==='viewer-status'||args.action==='viewer-retry')return outcome({text:JSON.stringify(await runtime.viewerResources(args.action==='viewer-retry'?'retry':'status'))});
         return outcome({ text: JSON.stringify(runtime.status()) });
       }
       if (name === events.name) {

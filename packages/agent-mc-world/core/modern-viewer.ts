@@ -36,6 +36,7 @@ import { loadViewerSoundRegistry } from './viewer-sound-registry.ts';
 import { observeViewerFishingCatch, viewerDroppedItem } from './viewer-fishing.ts';
 import { viewerPageCss, viewerPageHtml } from './viewer-page-assets.ts';
 import { serveViewerAsset } from './viewer-asset-server.ts';
+import {createSharedViewerAssets} from './viewer-shared-assets.mjs';
 import { createViewerAgentBridge } from './viewer-agent.mjs';
 import { flightState } from './flight.ts';
 import { createViewerContentBridge } from './viewer-content.mjs';
@@ -451,10 +452,12 @@ export function observeViewerInventoryPreview(
 }
 
 export async function startModernViewer(bot: mineflayer.Bot, options: ModernViewerOptions): Promise<ModernViewerHandle> {
+  options={...options,remoteTextures:options.remoteTextures!==false};
   const localSkin = options.localPlayerSkin ? configuredPlayerSkin(options.localPlayerSkin) : null;
   const ownSkin = localSkin ? { skinUrl: localSkin.skinUrl, skinModel: localSkin.skinModel, skinSource: localSkin.skinSource } : null;
   observeStatusEffects(bot);
   const root = await viewerVersionAssets(path.resolve(options.assetsDir), bot.version);
+  const sharedAssets=createSharedViewerAssets(options.assetsDir);
   if (!(await requiredAssetsPresent(root, bot.version))) throw new Error(`modern viewer: ${bot.version} 资源不完整 ${root}`);
   const { TradeItem, biomes: vanillaBiomes, plainsBiomeId } = viewerVersionRegistry(bot.version,
     require('minecraft-data'), createRequire(require.resolve('mineflayer'))('prismarine-item'));
@@ -817,9 +820,9 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       const relative = pathname.replace(/^\/(third|3dview)\//, '/').slice(1);
       const range = typeof req.headers.range === 'string' ? req.headers.range : undefined;
       if (relative === 'index.js' && await serveViewerAsset(res, root, 'dist/modern-viewer.js', 'no-store', range)) return;
-      if (await serveViewerAsset(res, path.join(root, 'public'), relative, undefined, range)) return;
+      if (await serveViewerAsset(res, path.join(root, 'public'), relative, undefined, range,sharedAssets)) return;
       const versionTexture = viewerVersionTexture(relative, bot.version);
-      if (versionTexture && await serveViewerAsset(res, path.join(root, 'public'), versionTexture, undefined, range)) return;
+      if (versionTexture && await serveViewerAsset(res, path.join(root, 'public'), versionTexture, undefined, range,sharedAssets)) return;
       res.writeHead(404); res.end();
     } catch {
       if (!res.headersSent) res.writeHead(500);
@@ -1010,7 +1013,8 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     const entityMoved = (entity: ViewerEntity) => queueEntity(entity);
     const entityUpdate = (entity: ViewerEntity) => queueEntity(entity, true);
     const playerUpdated = (player: mineflayer.Player) => {
-      if (player.entity) queueEntity(player.entity, true);
+      const entity=player.entity??(player.uuid?Object.values(bot.entities??{}).find(candidate=>candidate.name==='player'&&candidate.uuid===player.uuid):undefined);
+      if(entity)queueEntity(entity,true);
     };
     const flushEntities = () => {
       if (!active || !socket.connected || socket.conn?.transport?.writable === false) return;

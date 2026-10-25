@@ -13,7 +13,7 @@ export interface ClientConsolePort {
   status(): { phase: string };
   experiments?(): ExperimentsSnapshot;
 }
-const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop']);
+const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop','viewer.retry']);
 export interface ClientConsolePresentation {
   /** Explicit local host pages allowed to embed this UI. Control APIs keep their own Origin/nonce checks. */
   embedOrigins?: readonly string[];
@@ -107,7 +107,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
       }
       const action = (JSON.parse(body) as { action?: unknown }).action;
       if (typeof action !== 'string' || !actions.has(action)) { json(400, { error: 'Unknown action.' }); return; }
-      if (!nativeClients && action !== 'connect' && action !== 'disconnect') { json(403, { error: 'Native client launchers are not enabled by this host.' }); return; }
+      if (!nativeClients && /^(?:observer|player)\./.test(action)) { json(403, { error: 'Native client launchers are not enabled by this host.' }); return; }
       if (closing || operations.get(action)?.status === 'running') { json(409, { error: 'This action is already running or the console is closing.' }); return; }
       const record: { status: 'running' | 'completed' | 'failed'; at: string; error?: string } = { status: 'running', at: new Date().toISOString() };
       operations.set(action, record);

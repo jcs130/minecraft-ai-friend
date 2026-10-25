@@ -1,0 +1,40 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "5d63813f1712cf65a3d8cf2b29cd0c67226591c7",
+  "files": [
+    {
+      "file": "viewer-player-profile.mjs",
+      "sourceSha256": "c3560a4c028f44ad4e9a2a3706aa22858598258ae3f00dc307ee49005d3eb9d2",
+      "coreSha256": "e5f05938a2d25c0ba67becfa9b5b9f32a364b1bb5432524102871fb37415f168",
+      "adaptation": "relative item-profile import only"
+    },
+    {
+      "file": "viewer-player-profile.d.mts",
+      "sourceSha256": "95cdb87e6d27820d047efc5fd0f0c8122781592ac85e12af9a6d0874f50cc203",
+      "coreSha256": "95cdb87e6d27820d047efc5fd0f0c8122781592ac85e12af9a6d0874f50cc203",
+      "adaptation": "none"
+    },
+    {
+      "file": "viewer-head-textures.mjs",
+      "sourceSha256": "ae29781ae815c8087a73884e76549f1517bf4b78b6cc17ceef6aea64933aed5e",
+      "coreSha256": "7d02919174b01f2d63afa07306d8ec184b8f281df259e3e92cb9f4ef23adb4fb",
+      "adaptation": "relative item-profile import only"
+    },
+    {
+      "file": "viewer-shared-assets.mjs",
+      "sourceSha256": "cd44ae2a79b600418b5774ba19345259aee2fc6629be188d2342b14470f6758c",
+      "coreSha256": "cd44ae2a79b600418b5774ba19345259aee2fc6629be188d2342b14470f6758c",
+      "adaptation": "none"
+    },
+    {
+      "file": "viewer-shared-assets.d.mts",
+      "sourceSha256": "b05711a597ec83fa76a59cbab53ad7f840150787474b3c2248ebdf74ddca0638",
+      "coreSha256": "b05711a597ec83fa76a59cbab53ad7f840150787474b3c2248ebdf74ddca0638",
+      "adaptation": "none"
+    }
+  ],
+  "purpose": "Content-addressed exact image reuse and server-delivered vanilla player skin profiles; no username lookup.",
+  "gameConnections": 0,
+  "modelCalls": 0,
+  "productionChanged": false
+}

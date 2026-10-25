@@ -14,11 +14,12 @@ const chat = (text: string, uname?: string, trigger = 'debounce') =>
 const self = { selfNames: ['ag_jojo', 'Jojo'] };
 
 describe('classifyWake', () => {
-  it('wakes on whispers and mentions only, not chat between other players', () => {
+  it('offers public player conversation to the model, retaining self/system suppression and explicit opt-out', () => {
     expect(classifyWake(chat('[MC 私聊] ag_CorMy: 你好'), self)).toEqual({ wake: true, category: 'whisper' });
     expect(classifyWake(chat('[MC] ag_CorMy: 欢迎回来 Jojo~', 'ag_CorMy', 'flush'), self).category).toBe('mention');
     expect(classifyWake(chat('[MC] ag_CorMy: @ag_jojo 来一下', 'ag_CorMy'), self).wake).toBe(true);
-    expect(classifyWake(chat('[MC] ag_CorMy: 小鱼早呀~ 天亮了', 'ag_CorMy'), self)).toEqual({ wake: false, category: 'chat-other' });
+    expect(classifyWake(chat('[MC] ag_CorMy: 小鱼早呀~ 天亮了', 'ag_CorMy'), self)).toEqual({ wake: true, category: 'chat-other' });
+    expect(classifyWake(chat('[MC] ag_CorMy: 天亮了', 'ag_CorMy'), {...self,wakeOn:['mention','whisper']})).toEqual({wake:false,category:'chat-other'});
     expect(classifyWake(chat('[MC] ag_jojo: 大家好', 'ag_jojo'), self).wake).toBe(false);
     expect(classifyWake(chat('[MC 私聊发出] ag_jojo → ag_CorMy: 好'), self).wake).toBe(false);
     expect(classifyWake(chat('[MC 插件] 槽位1「技能罗盘」', undefined, 'flush'), self)).toEqual({ wake: false, category: 'system' });

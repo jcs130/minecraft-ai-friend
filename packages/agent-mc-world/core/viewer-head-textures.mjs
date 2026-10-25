@@ -1,4 +1,5 @@
-import { itemHeadProfile, minecraftTextureHash } from './viewer-item-profile.mjs';
+import { itemHeadProfile } from './viewer-item-profile.mjs';
+import {playerSkinTexture} from './viewer-player-profile.mjs';
 
 // Same-origin proxy for profiles actually received on the subject connection.
 // This is not an arbitrary URL loader; unknown hashes never trigger a request.
@@ -18,7 +19,7 @@ export function createViewerHeadTextures({ fetcher = fetch, now = Date.now, limi
       for (const item of entity.equipment ?? []) observeItem(item);
       try { observeItem(entity.getDroppedItem?.()); } catch { /* Not a dropped item. */ }
     }
-    for (const player of Object.values(bot.players ?? {})) remember(minecraftTextureHash(player.skinData?.url));
+    for (const player of Object.values(bot.players ?? {})) remember(playerSkinTexture(player)?.hash);
   };
   async function read(hash) {
     if (!allowed.has(hash)) return null;

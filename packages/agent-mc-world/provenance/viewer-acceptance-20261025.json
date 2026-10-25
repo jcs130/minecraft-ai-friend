@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-10-25T04:42:38.838Z",
+  "version": "0.5.7-rc.87",
+  "viewer": {
+    "sourceCommit": "14aeb081fab1f2ed4d65cc8558a2b9d6eb066759",
+    "archiveSha256": "a3558929cb9cb3401c71c2676d128721f7be47cb3c26a78d7e159b6aece4333d",
+    "versions": [
+      {
+        "version": "1.21.1",
+        "clientJarSha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
+        "browserBundleSha256": "77c396bc20e068a49b7dba45d3bea4e42df5d62ad8b0b8eb3669f401247179d2",
+        "mesherSha256": "537970d0ef79018017a4371290c42e70d73c4d267bbaf843e8146e1b62d7e336",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      },
+      {
+        "version": "1.20.6",
+        "clientJarSha256": "02dfd345ac1ad55692d5dbc8486ac7e4fea72cd54ac494a79cd48963048e56b2",
+        "browserBundleSha256": "d94e9dbb8f845c689c62d0a8d2a9039e34514d10a0b2609b6ce632f7234727d8",
+        "mesherSha256": "a1ff058d8ecab9019ca5a8b5b684d96d92b816fe48cd4ee396b9fd79a0fb654c",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      },
+      {
+        "version": "1.21.11",
+        "clientJarSha256": "1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd",
+        "browserBundleSha256": "87b4f0f4ccdd01ecd3dae209410d77492d22854b0bb85c00052eda6ea111aa89",
+        "mesherSha256": "7829de731fcff8d0911a677249efe742d57a21b7b90713fa23894debef82d63b",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      },
+      {
+        "version": "1.21.5",
+        "clientJarSha256": "522672ad20b460c02c2e39b6c5035ef6a849af28eb11ab2ac7eb293d395a8c11",
+        "browserBundleSha256": "84d14b6e6aa5519f7d0541ba0fe224b34cae008a78f866df46f6adfc20bab821",
+        "mesherSha256": "e0e383da60dd7c94795c16c65f2dfe5fcec7a4389bf15dd1f00d21e64fe66ca5",
+        "buildSource": {
+          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
+          "sourceFiles": 375,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null
+      }
+    ],
+    "sharedAssets": {
+      "aliases": 19649,
+      "objects": 5568,
+      "removedBytes": 11644687,
+      "objectBytes": 3320507,
+      "savedBytes": 8324180
+    }
+  },
+  "tests": {
+    "core": {
+      "passed": 2068,
+      "skipped": 1,
+      "failed": 0,
+      "filesPassed": 249,
+      "workers": 8
+    },
+    "rendererTools": {
+      "passed": 1298,
+      "skipped": 38,
+      "failed": 0
+    },
+    "effectChannelsTargeted": {
+      "passed": 16,
+      "failed": 0
+    },
+    "typesAndBuild": true,
+    "retainedDiagnostic": "One default high-concurrency run failed the existing navigation checkpoint timer assertion; its isolated 8-test file and final full 8-worker suite passed. Failure evidence kept outside Git."
+  },
+  "browser": {
+    "minecraftVersion": "1.21.5",
+    "protocol": 770,
+    "backend": "WebGL2",
+    "assets": "generated CAS runtime",
+    "scene": "explicit procedural fixture; real exact-version blocks and original vanilla Alex PNG in synthetic textures property",
+    "terrainVisible": true,
+    "lateOtherPlayerSkinVisible": true,
+    "settingsMenuVisible": true,
+    "fourPreferencesPersistAfterReload": true,
+    "disabledParticleAllocation": false,
+    "disabledParticleScheduledFrame": false,
+    "errors": 0,
+    "liveServerGameplayVerified": false,
+    "productionRestarted": false
+  },
+  "privacy": {
+    "modelCalls": 0,
+    "gameConnections": 0,
+    "privateCapturesCommitted": false
+  },
+  "publication": "source-candidate; registry and consuming hosts verified separately"
+}

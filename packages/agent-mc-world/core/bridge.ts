@@ -417,6 +417,21 @@ export class Bridge {
     return this.viewer?.gen === this.generation ? this.viewer.agentViews : undefined;
   }
 
+  viewerResources() {
+    return {...this.viewerState,directory:this.opts.viewerAssetsDir||null,
+      repair:{guide:'https://github.com/jcs130/mc-visual-console/blob/main/docs/vanilla-viewer-resources.md',
+        meaning:'No protocol whitelist. Install resources for the actual version; missing optional icons do not block the world.',
+        retry:'mc_connection action:viewer-retry (same body, no reconnect or replay)'}};
+  }
+
+  /** Only restart a failed presentation server, never the Minecraft connection or its actions. */
+  retryViewer() {
+    const bot=this._bot;
+    if(!this.connected||!bot?.entity)throw Error('Connect and authenticate the existing body before retrying its viewer.');
+    this.startViewer(bot,this.generation);
+    return this.viewerResources();
+  }
+
   /** 已作废代次使用关闭状态的 ResourceBag，迟到资源登记时立即关闭。 */
   protected bagFor(gen: number): ResourceBag {
     const existing = this.bags.get(gen);
@@ -1267,7 +1282,7 @@ export class Bridge {
         const code = text === 'VIEWER_PORT_IN_USE' ? text : /VIEWER_ASSETS_MISSING|ENOENT/.test(text) ? 'VIEWER_ASSETS_MISSING'
           : /VERSION_MISMATCH|REGISTRY|资源不完整|VERSION_UNSUPPORTED/.test(text) ? 'VIEWER_ASSET_VERSION_MISMATCH' : 'VIEWER_START_FAILED';
         const message = code === 'VIEWER_PORT_IN_USE' ? '画面端口已被占用，请调整配置后重连。'
-          : code === 'VIEWER_ASSETS_MISSING' ? `缺少 Java ${bot.version} 的网页画面资源，请安装匹配的资源包。`
+          : code === 'VIEWER_ASSETS_MISSING' ? `本机尚未准备 Java ${bot.version} 的完整画面资源，游戏连接继续。Agent 可用 mc_connection 的 viewer-status 查看补全方法，完成后 viewer-retry 只重试画面。`
           : code === 'VIEWER_ASSET_VERSION_MISMATCH' ? `Java ${bot.version} 的画面资源或注册表未通过校验。`
           : '网页画面启动失败，请检查本机日志。';
         this.viewerStartup = {gen, phase:'failed', version:bot.version, code, message};

@@ -1,5 +1,7 @@
 # Agent MC World
 
+**rc.87 source candidate:** exact Java 1.21.5 resources, cross-version identical-image reuse, server-provided vanilla player skins, public-chat wake defaults, same-body resource diagnostics/retry and configurable viewer effects. See [viewer resources](docs/viewer-resources.md). npm publication is separate; rc.86 below remains the last verified public release until the rc.87 registry record is confirmed.
+
 Published package: **0.5.7-rc.86** ([Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.86)), with Java **1.21.1** as the primary target. The core supplies a Minecraft body, observations and verified execution receipts; your host keeps its model, personality, decisions and personal memory.
 
 The rc.86 release adds an owner SDK notebook port, offline CPU token-vector retrieval, stable notebook identities independent of display names, explicit default-off mineral queries and validated local viewer skins. See [notebook and observation settings](docs/agent-notebook-settings.md). Source, package publication and production deployment remain separate. See [public registry and archive verification](docs/npm-release-rc86.json). Published archives retain their reviewed bytes.

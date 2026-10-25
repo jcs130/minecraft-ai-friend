@@ -19,8 +19,8 @@ export interface WakeOptions {
 
 export interface WakeDecision { wake: boolean; category: WakeCategory }
 
-/** Idle-safe default: only things a person would interrupt you for. */
-export const WAKE_DEFAULT: readonly WakeCategory[] = ['whisper', 'mention', 'danger', 'connection'];
+/** Player conversation is visible by default; the host/model decides whether to answer. */
+export const WAKE_DEFAULT: readonly WakeCategory[] = ['whisper', 'mention', 'chat-other', 'danger', 'connection'];
 /** While a goal is running, the body's own task receipts also matter. */
 export const WAKE_ACTIVE_GOAL: readonly WakeCategory[] = [...WAKE_DEFAULT, 'task', 'goal'];
 
@@ -44,7 +44,7 @@ export function classifyWake(event: Pick<EventEnvelope, 'type' | 'text'> & Parti
     if (names.includes(speaker.toLocaleLowerCase())) return { wake: false, category: 'self' };
     const body = text.replace(/^\[MC[^\]]*\]\s*[^:：]*[:：]\s*/u, '').toLocaleLowerCase();
     const mentioned = names.some(name => body.includes(name) || body.includes('@' + name));
-    return mentioned ? decide('mention') : { wake: false, category: 'chat-other' };
+    return decide(mentioned ? 'mention' : 'chat-other');
   }
   if (event.trigger === 'piggyback') return { wake: false, category: 'piggyback' };
   if (kind === 'task' || kind.startsWith('task.')) return kind === 'task' ? decide('task') : { wake: false, category: 'ambient' };

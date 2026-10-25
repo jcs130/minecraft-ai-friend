@@ -3717,6 +3717,11 @@ export class MinecraftWorld implements World {
     };
     switch (panel) {
       case 'connection': {
+        if(method==='viewer.state')return this.bridge?.viewerResources()??{phase:'waiting',version:null};
+        if(method==='viewer.retry'){
+          if(!this.bridge)throw Error('Minecraft body is not connected');
+          return this.bridge.retryViewer();
+        }
         const launched = method === 'observer.start' ? this.client : method === 'player.start' ? this.playerClient : null;
         if (launched) {
           // Human OAuth can take minutes. A console RPC accepts the launch and
@@ -3729,7 +3734,7 @@ export class MinecraftWorld implements World {
         if (method !== 'state') throw new Error('Unknown connection method');
         return { server: { host: this.cfg.host, port: this.cfg.port, requestedVersion: this.cfg.version,
           actualVersion: this.bridge?.bot?.version ?? null, username: this.bridge?.bot?.username ?? null },
-          viewer: { ...this.bridge?.viewerState, mode: this.bridge?.viewerKind ?? null, url: this.bridge?.viewerUrl ?? null },
+          viewer: { ...this.bridge?.viewerResources(), mode: this.bridge?.viewerKind ?? null, url: this.bridge?.viewerUrl ?? null },
           accounts: Object.fromEntries(Object.entries(this.accountAuth).map(([lane, auth]) => [lane, auth.snapshot()])),
           connection: this.bridge?.connectionState ?? null,
           clients: { observer: (({command, ...state}) => state)(await this.client.state()),

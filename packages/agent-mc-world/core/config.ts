@@ -41,7 +41,7 @@ export const MINECRAFT_DEFAULTS = {
   viewerSpeakerName: '',
   metricsDashboardUrl: '',
   performanceBridge: {module:'',endpoint:''},
-  remoteTextures: false,
+  remoteTextures: true,
   memory: { ...GAME_MEMORY_DEFAULTS },
   /** Omitted mc_visual.background follows this mode; explicit arguments take precedence. */
   visual: { background: false },
