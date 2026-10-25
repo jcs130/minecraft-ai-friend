@@ -1,5 +1,7 @@
 # 村庄生活插件包（AgentFriend 0.4.0）
 
+2026-10-26候选更新（已获上线授权，等待维护门禁）：农耕委托与丰收事件已撤下新接入口，旧单保留进度并支持tasks pause；青禾不再劝农事。请按[探索与冒险活动](ADVENTURE_ACTIVITIES.md)查看当前规则，下文旧农耕说明为历史兼容记录。
+
 0.4.6 增加 `/mycli world practice start|status|stop` 和原27格生活菜单第15格梯子按钮，记录实际开门穿过与连续爬梯三格；原三项实习、奖励和生活任务保持。建筑保护和实练规则见 [自然建筑保护](STRUCTURE_PROTECTION.md)；当前部署状态以维护记录为准。
 
 **本次收尾复核：**原机CortiEye已实际恢复 `camera=online attached=true cameraNightVision=true`，目标CortiLan；Goddess/CortiLan/CortiEye/ag_NEKO四个原服务账号均已回连。女神资料箱与玩家手册SHA256同为 `F3947044583989863935E2DA693A6809597FFC441B503D0FBE5E4F075433C69D`，另附村庄生活季指南；两项原生只读问答实际读取两份资料后答复111/70字符，准确解释原格补种、普通配怪和本人照片保留，没有主动游戏公告。下方维护期间尚未回连的记录为历史。

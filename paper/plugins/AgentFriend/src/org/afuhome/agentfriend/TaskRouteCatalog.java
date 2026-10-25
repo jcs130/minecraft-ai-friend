@@ -12,7 +12,7 @@ final class TaskRouteCatalog {
             new Route("crafting", "装备制造", "ANVIL", "从基础武器、防具和工具制作起步，亲手合成才计数。"),
             new Route("supply", "后勤补给", "CHEST", "制作并交付口粮、照明或装备，物资真正进入公共箱。"),
             new Route("engineering", "建造工程", "BRICKS", "按场地建房、修路、架桥或调试机关，验收真实结构。"),
-            new Route("life", "田园与生活", "WHEAT", "自由选择种植、钓鱼、烹饪、写作、摄影和居民事务。"));
+            new Route("life", "游记与创作", "WRITABLE_BOOK", "记录旅途，写游记、拍照片，也可钓鱼、烹饪和参与居民事务。"));
     private TaskRouteCatalog() { }
     static String stateText(String state) {
         return switch (state) {

@@ -3,7 +3,7 @@
 # Reload with the existing admin worldlife reload after validating content.
 schema-version: 1
 enabled: true
-revision: 2
+revision: 3
 title: 灯火归途
 npcs:
   yingdeng:
@@ -48,7 +48,6 @@ npcs:
     offers:
       - tm_trail_supply
       - tm_restock_light
-      - tm_field_cycle
   gufeng:
     name: 巡路人·顾风
     role: 巡夜、弓术、野外讨伐与营地情报
@@ -175,7 +174,7 @@ npcs:
         action: route
         target: supply
       route_life:
-        title: 我想过田园、交易和建造生活
+        title: 我想写游记、摄影或建造
         text: 这也是千灯纪的一条正路。先认清公共物资、自家领地和别人的财产，再选你想照顾的事情。
         action: route
         target: life
@@ -288,7 +287,7 @@ chapters:
         next-command: /mycli skills list common
   first_light:
     title: 第一章 · 为城镇点一盏灯
-    introduction: 战斗、制作、探索、后勤、工程与田园都能帮助城镇。选一条路，做成一件事，再回来报个平安。
+    introduction: 探索、讨伐、遗迹调查、制作和工程都能帮助城镇。选一条路，做成一件事，再回来报个平安。
     requires:
       - arrival
     stages:
@@ -389,13 +388,6 @@ side-stories:
     contracts:
       - tm_restock_light
       - tm_trail_supply
-    requires: []
-  living_field:
-    title: 给田地留明天
-    npc: yingdeng
-    introduction: 愿意下田的旅人可以去找青禾；收割、补种和交易都要真实完成。
-    contracts:
-      - tm_field_cycle
     requires: []
   photo_memory:
     title: 把这一刻挂起来

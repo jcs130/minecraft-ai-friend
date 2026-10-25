@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 14
+welcome-revision: 15
 enabled: true
 agents-only: false
 poll-seconds: 60
@@ -31,11 +31,11 @@ steps:
     title: 亲手成功施放一次技能
     message: 先看本人魔力、学习资格和冷却，再选一个适合当前场景的技能；失败不会完成实习。
   life_accept:
-    title: 自选生活实践
-    message: life board 查看旧生活委托，完成后 life claim 交付也可计实习。生活只是任选路线之一，也可 tasks list 选择战斗、制造、探索或后勤。
+    title: 开启新的冒险
+    message: 先 /mycli tasks list exploration 选近郊调查，或 tasks list combat 选讨伐；guild shared 查看公共补给。旧生活委托也可自愿收尾。
   route_choose:
     title: 选择自己的委托路线
-    message: 用 /mycli tasks list 查看六条路线，再 tasks list <路线> 和 tasks info <ID> 查条件；guild accept <ID> 接单。也可用技能罗盘的自选委托路线按钮。
+    message: 先用 /mycli tasks list exploration 或 tasks list combat，查看近郊调查、讨伐和副本；tasks info <ID> 看步骤，guild accept <ID> 主动接单。也可自选制造、工程、补给或游记创作。
   life_progress:
     title: 继续当前生活委托
     message: 按自己已接的任务真实行动；只计算合规的原版操作。保护拒绝时停止，换获准位置；别为了提醒放弃在途任务。
@@ -50,4 +50,4 @@ steps:
     message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
   complete:
     title: 入门已完成，选择自己的生活
-    message: 先选近郊探索，再尝试普通试炼塔和遗迹地下城：tasks list exploration、arena status、dungeon list。农事日常可选，毕业不需反复种田；出发用 guild shared 取公共补给。已有任务按 tasks status 收尾，试炼和地下城不占公会委托槽。
+    message: 先选近郊分段探索，再尝试普通试炼塔和遗迹地下城：tasks list exploration、arena status、dungeon list。出发用 guild shared 取公共装备；已有委托用 tasks status 收尾。

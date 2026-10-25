@@ -179,14 +179,15 @@ final class OnboardingGuide implements Listener {
         } else if (!lived) {
             String id = value(life, "activeId");
             if (!value(guild, "activeId").isEmpty()) {
-                step = new Step("guild_progress", "当前委托 " + value(guild, "activeId") + "；已接的任务可继续，不需换成农事。每阶段达标后交付，全部完成才计实习证明。",
-                        List.of("/mycli tasks status", "/mycli guild claim"));
-            } else if (id.isEmpty()) {
+                step = RetiredActivities.retired(value(guild,"activeId"))
+                        ? new Step("route_choose", "旧农耕委托已撤下；用 tasks pause 暂存原阶段和进度，再选择探索或讨伐。不会替你放弃或清零。", List.of("/mycli tasks pause", "/mycli tasks list exploration"))
+                        : new Step("guild_progress", "当前委托 " + value(guild, "activeId") + "；每阶段达标后交付，全部完成才计实习证明。", List.of("/mycli tasks status", "/mycli guild claim"));
+            } else if (id.isEmpty() || RetiredActivities.retired(id)) {
                 step = new Step("route_choose", "六条路线任选，也可接旧 life 委托；不会自动选职业。出发前 guild shared 查公会门口武器、护甲与补给箱，按需领取。",
                         List.of("/mycli tasks list", "/mycli tasks menu", "/mycli guild shared"));
             } else if (flag(life, "ready")) step = new Step("life_claim", value(life, "title") + " " + life.get("progress") + "/" + life.get("target"), List.of("/mycli life claim"));
             else step = new Step("life_progress", value(life, "title") + " " + life.get("progress") + "/" + life.get("target") + "；" + value(life, "instruction"), List.of("/mycli life status", "/mycli life locations"));
-        } else step = new Step("complete", "入门已毕业；先 tasks list exploration 看近郊分段调查，arena status 看按层试炼，dungeon list 看逐室遗迹。农事日常可选，不必天天重复；已有委托用 tasks status 收尾，试炼/地下城可独立参加。出发前 guild shared 查公共装备。", List.of("/mycli tasks list exploration", "/mycli arena status", "/mycli dungeon list", "/mycli guild shared", "/mycli tasks list"));
+        } else step = new Step("complete", "入门已毕业；先 tasks list exploration 看近郊分段调查，arena status 看按层试炼，dungeon list 看逐室遗迹。已有委托用 tasks status 收尾，试炼/地下城可独立参加。出发前 guild shared 查公共装备。", List.of("/mycli tasks list exploration", "/mycli arena status", "/mycli dungeon list", "/mycli guild shared", "/mycli tasks list"));
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);

@@ -9,10 +9,10 @@ tasks:
     beginner: true
     repeat: once
     title: 初登试炼塔·第二层
-    description: 出发前 guild shared 查看门口公共武器、护甲和食物；到试炼塔选普通难度，实际通关第二层即可完成本阶段，不要求打完整座塔。已有农事不妨碍独立参战，但要空出公会任务槽才能接本单。
+    description: 出发前 guild shared 查看公共武器、护甲和食物；到试炼塔选普通难度，实际通关第二层即可完成本阶段，不要求打完整座塔。试炼塔与公会委托分别结算。
     beneficiary: 村庄巡夜人
     icon: STONE_SWORD
-    reward: {fame: 6, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    reward: { fame: 6, emeralds: 2, bonus: TORCH, bonus-count: 8 }
     steps:
       - title: 在普通试炼中熟悉战斗
         description: 先 arena status 查看场次，到入口选择普通难度再开始；也可 arena difficulty normal 后 arena start。本人实际通关第二层才计数，走到第二层不算；达标后 guild claim 交委托。试炼奖励另用 arena rewards 核对领取。组队倒地可由同伴4格内连续停留10秒扶起，清层也会救起；无需先完成农事。
@@ -27,7 +27,7 @@ tasks:
     description: 从主村庄出发，只在附近约一百格巡访公共矿棚外的村路、河畔艺术厅，再回司灯人处报平安。不必下矿、打怪或寻找稀有遗迹；每段实际走查后主动交阶段。
     beneficiary: 司灯人·沐辰
     icon: COMPASS
-    reward: {fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 3}
+    reward: { fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 3 }
     steps:
       - title: 西边的公共矿路
         description: 从主村庄沿地面道路向西到矿棚(-652,68,-484)外，辨认入口与回村道路；在本阶段范围走过两个四格分区、八格新路线、五秒有效行进。只认地面，不需开挖。达标后 guild claim。
@@ -37,7 +37,7 @@ tasks:
         zone-size: 4
         min-distance: 8
         min-seconds: 5
-        area: {name: 矿棚外村路, min-x: -666, min-y: 65, min-z: -496, max-x: -642, max-y: 76, max-z: -472}
+        area: { name: 矿棚外村路, min-x: -666, min-y: 65, min-z: -496, max-x: -642, max-y: 76, max-z: -472 }
       - title: 河畔艺术厅的来路
         description: 沿地面村路去艺术厅入口(-616,67,-378)，辨认河畔外观与回村方向；在本阶段范围走过两个四格分区、八格新路线、五秒有效行进。门可用，别拆展框或作品；达标后 guild claim。
         goal: dimension
@@ -46,13 +46,13 @@ tasks:
         zone-size: 4
         min-distance: 8
         min-seconds: 5
-        area: {name: 河畔艺术厅及门外村路, min-x: -638, min-y: 64, min-z: -395, max-x: -600, max-y: 77, max-z: -365}
+        area: { name: 河畔艺术厅及门外村路, min-x: -638, min-y: 64, min-z: -395, max-x: -600, max-y: 77, max-z: -365 }
       - title: 把路线记回村里
         description: 沿地面道路回司灯人沐辰(-541,67,-435)附近，本人进入范围后 guild claim 完整交付。只在同维度不算返程；奖励进入本人个人奖励箱。
         goal: return
         dimension: overworld
         target: 1
-        area: {name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428}
+        area: { name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428 }
   local_mine_journal:
     route: exploration
     beginner: true
@@ -61,9 +61,9 @@ tasks:
     description: 主村庄西侧公共矿坑实练，最远约两百格。准备照明→辨认矿棚→沿现有台阶走查→看清地下平台→回村报告；不要求找到天然矿井、稀有矿石或古城，不必破坏公共设施。
     beneficiary: 采矿领班·石砚
     icon: STONE_PICKAXE
-    reward: {fame: 7, emeralds: 3, bonus: TORCH, bonus-count: 8}
+    reward: { fame: 7, emeralds: 3, bonus: TORCH, bonus-count: 8 }
     steps:
-      - {title: 带一盏自己的灯, description: 接单后用煤炭或木炭加木棍亲手合成一批火把；材料可按需从公会门口公共箱取，guild shared 查位置。火把留下自用，不扣物。大背包先整理，再 guild claim 交准备阶段。, goal: craft, item: TORCH, target: 1}
+      - { title: 带一盏自己的灯, description: 接单后用煤炭或木炭加木棍亲手合成一批火把；材料可按需从公会门口公共箱取，guild shared 查位置。火把留下自用，不扣物。大背包先整理，再 guild claim 交准备阶段。, goal: craft, item: TORCH, target: 1 }
       - title: 找对矿棚入口
         description: 走地面村路到(-652,68,-484)矿棚，辨认云杉栅栏门与门外退路；在范围内步行两个四格分区、八格新路线、五秒有效行进。不要在村庄脚下挖洞；达标后 guild claim。
         goal: dimension
@@ -72,7 +72,7 @@ tasks:
         zone-size: 4
         min-distance: 8
         min-seconds: 5
-        area: {name: 公共矿棚入口, min-x: -666, min-y: 65, min-z: -496, max-x: -642, max-y: 76, max-z: -472}
+        area: { name: 公共矿棚入口, min-x: -666, min-y: 65, min-z: -496, max-x: -642, max-y: 76, max-z: -472 }
       - title: 沿照明台阶下行
         description: 打开矿棚栅栏门，沿现有三格宽台阶向西下行，平台在(-701,36,-484)。走过至少三个八格分区、二十四格新路线、十秒有效行进和二十四格上下高差。别拆台阶、灯和顶棚；达标后 guild claim。
         goal: dimension
@@ -82,7 +82,7 @@ tasks:
         min-distance: 24
         min-seconds: 10
         min-height-span: 24
-        area: {name: 公共矿坑照明台阶, min-x: -704, min-y: 35, min-z: -489, max-x: -648, max-y: 71, max-z: -479}
+        area: { name: 公共矿坑照明台阶, min-x: -704, min-y: 35, min-z: -489, max-x: -648, max-y: 71, max-z: -479 }
       - title: 平台与开采面的区别
         description: 到地下平台(-701,36,-484)附近横向走查两个四格分区、八格新路线、五秒有效行进。平台与台阶受保护；真正开采从X≤-702向西，先protect查询。本单只需认路，不要求挖矿；达标后 guild claim。
         goal: dimension
@@ -91,13 +91,13 @@ tasks:
         zone-size: 4
         min-distance: 8
         min-seconds: 5
-        area: {name: 矿坑地下公共平台, min-x: -705, min-y: 35, min-z: -490, max-x: -691, max-y: 40, max-z: -478}
+        area: { name: 矿坑地下公共平台, min-x: -705, min-y: 35, min-z: -490, max-x: -691, max-y: 40, max-z: -478 }
       - title: 沿原路回村报平安
         description: 从平台沿东侧照明台阶上行，出矿棚关门，再走村路回司灯人(-541,67,-435)附近。本人进入交付范围后 guild claim 结算；奖励进个人奖励箱，arena stash pages查看，非大背包。
         goal: return
         dimension: overworld
         target: 1
-        area: {name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428}
+        area: { name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428 }
   starter_blade:
     route: combat
     beginner: true
@@ -106,13 +106,13 @@ tasks:
     description: 不必先种田。按需从公会门口公共箱取剑、护甲和食物，持剑亲自击败三只僵尸或尸壳；城外夜间或普通试炼塔可寻找敌人。
     beneficiary: 村庄巡夜人
     icon: STONE_SWORD
-    reward: {fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 3}
+    reward: { fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 3 }
     steps:
       - title: 持剑清剿
         description: 接单后用任意材质的剑近战击败三只僵尸或尸壳；本人最后一击才计数，队友击杀、斧头、法术和环境伤害不算。出发前 guild shared 查公共补给。
         goal: kills
         target: 3
-        combat: {mobs: [ZOMBIE, HUSK], weapons: [SWORD], attack: melee}
+        combat: { mobs: [ ZOMBIE, HUSK ], weapons: [ SWORD ], attack: melee }
   starter_archer:
     route: combat
     beginner: true
@@ -121,13 +121,13 @@ tasks:
     description: 从公共箱按需领取弓弩、箭和护甲，用实际发射的箭击败两只骷髅类敌人。可独立接取，不要求先完成剑士或农事任务。
     beneficiary: 村庄巡夜人
     icon: BOW
-    reward: {fame: 5, emeralds: 2, bonus: ARROW, bonus-count: 8}
+    reward: { fame: 5, emeralds: 2, bonus: ARROW, bonus-count: 8 }
     steps:
       - title: 骷髅弓术
         description: 本人用弓或弩射出的箭完成两次骷髅、流浪者或沼骸的最后一击；按发射时的武器验收，射后换成剑仍是弓箭，近战或队友击杀不算。
         goal: kills
         target: 2
-        combat: {mobs: [SKELETON, STRAY, BOGGED], weapons: [BOW, CROSSBOW], attack: projectile}
+        combat: { mobs: [ SKELETON, STRAY, BOGGED ], weapons: [ BOW, CROSSBOW ], attack: projectile }
   spider_patrol:
     route: combat
     repeat: daily
@@ -135,13 +135,13 @@ tasks:
     description: 城镇之外巡逻时用剑或斧清理四只蜘蛛类敌人，为旅人留出安全行路空间。按需取用门口公共武器与补给，别拆受保护建筑找怪。
     beneficiary: 林间旅人
     icon: IRON_AXE
-    reward: {fame: 4, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    reward: { fame: 4, emeralds: 2, bonus: TORCH, bonus-count: 8 }
     steps:
       - title: 近战清理蛛患
         description: 本人持剑或斧近战击败四只蜘蛛或洞穴蜘蛛；不同怪物各计一次，不要求拆毁刷怪笼，不计算动物和村民。
         goal: kills
         target: 4
-        combat: {mobs: [SPIDER, CAVE_SPIDER], weapons: [SWORD, AXE], attack: melee}
+        combat: { mobs: [ SPIDER, CAVE_SPIDER ], weapons: [ SWORD, AXE ], attack: melee }
   starter_equipment:
     route: crafting
     beginner: true
@@ -150,10 +150,10 @@ tasks:
     description: 亲手制作石剑与盾牌，学会准备战斗装备。材料可自备或按需从公共箱领取；成品留给自己，不必先参加农事。
     beneficiary: 工匠导师
     icon: SHIELD
-    reward: {fame: 5, emeralds: 2, bonus: IRON_INGOT, bonus-count: 2}
+    reward: { fame: 5, emeralds: 2, bonus: IRON_INGOT, bonus-count: 2 }
     steps:
-      - {title: 制作石剑, description: 接单后在工作台亲手合成一把石剑；从箱子取成品或捡起别人的剑不算。完成后 guild claim 进入下一阶段。, goal: craft, item: STONE_SWORD, target: 1}
-      - {title: 制作盾牌, description: 第一阶段交付后亲手合成一个盾牌；需要木板与铁锭。最后 guild claim 结算，成品不扣走。, goal: craft, item: SHIELD, target: 1}
+      - { title: 制作石剑, description: 接单后在工作台亲手合成一把石剑；从箱子取成品或捡起别人的剑不算。完成后 guild claim 进入下一阶段。, goal: craft, item: STONE_SWORD, target: 1 }
+      - { title: 制作盾牌, description: 第一阶段交付后亲手合成一个盾牌；需要木板与铁锭。最后 guild claim 结算，成品不扣走。, goal: craft, item: SHIELD, target: 1 }
   starter_tools:
     route: crafting
     beginner: true
@@ -162,10 +162,10 @@ tasks:
     description: 用木棍和圆石打造石镐、石斧，准备采矿与林业。成品留给自己，采集到营地石质边线和建筑保护之外。
     beneficiary: 工匠导师
     icon: STONE_PICKAXE
-    reward: {fame: 4, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    reward: { fame: 4, emeralds: 2, bonus: TORCH, bonus-count: 8 }
     steps:
-      - {title: 石镐, description: 接单后亲手合成一把石镐，guild claim 交阶段；保护区内不可挖深坑。, goal: craft, item: STONE_PICKAXE, target: 1}
-      - {title: 石斧, description: 前一阶段交付后亲手合成一把石斧，guild claim 结算；不要砍建筑用的木料。, goal: craft, item: STONE_AXE, target: 1}
+      - { title: 石镐, description: 接单后亲手合成一把石镐，guild claim 交阶段；保护区内不可挖深坑。, goal: craft, item: STONE_PICKAXE, target: 1 }
+      - { title: 石斧, description: 前一阶段交付后亲手合成一把石斧，guild claim 结算；不要砍建筑用的木料。, goal: craft, item: STONE_AXE, target: 1 }
   starter_trail:
     route: exploration
     beginner: true
@@ -174,9 +174,9 @@ tasks:
     description: 从附近起步，亲自调查主世界三个不同区域，记下一段至少四十八格的新路线。不必找稀有群系、天然高山或先学会跨维度传送。
     beneficiary: 旅人阿岚
     icon: COMPASS
-    reward: {fame: 5, emeralds: 2, bonus: MAP, bonus-count: 1}
+    reward: { fame: 5, emeralds: 2, bonus: MAP, bonus-count: 1 }
     steps:
-      - {title: 附近路线走查, description: 主世界内实际走过三个不同的十六格区域，至少四十八格新路线与十五秒有效行进；重复绕圈、原地等候和传送不增加探索证据。看 guild status 缺项再 guild claim。, goal: dimension, dimension: overworld, target: 3, zone-size: 16, min-distance: 48, min-seconds: 15}
+      - { title: 附近路线走查, description: 主世界内实际走过三个不同的十六格区域，至少四十八格新路线与十五秒有效行进；重复绕圈、原地等候和传送不增加探索证据。看 guild status 缺项再 guild claim。, goal: dimension, dimension: overworld, target: 3, zone-size: 16, min-distance: 48, min-seconds: 15 }
   restock_light:
     route: supply
     beginner: true
@@ -185,10 +185,10 @@ tasks:
     description: 亲手合成火把，再把十六支交入公会公共补给仓库。不是往私人箱里放物品，guild claim 会核对随身栏并真正入库。
     beneficiary: 公会补给员与后来者
     icon: TORCH
-    reward: {fame: 4, emeralds: 1, bonus: BREAD, bonus-count: 2}
+    reward: { fame: 4, emeralds: 1, bonus: BREAD, bonus-count: 2 }
     steps:
-      - {title: 亲手制作照明, description: 接单后亲手合成至少一批火把；备齐十六支，再 guild claim 确认制造阶段。每批合成出四支，煤炭或木炭配木棍。, goal: craft, item: TORCH, target: 1}
-      - {title: 公共照明入库, description: 主背包备齐十六支普通火把后 guild claim，真实扣物并放入公共补给库存；仓库满或不可用不扣物、不完成。guild shared 查箱体，不取大厅私产。, goal: donate, item: TORCH, target: 16, chest: supplies}
+      - { title: 亲手制作照明, description: 接单后亲手合成至少一批火把；备齐十六支，再 guild claim 确认制造阶段。每批合成出四支，煤炭或木炭配木棍。, goal: craft, item: TORCH, target: 1 }
+      - { title: 公共照明入库, description: 主背包备齐十六支普通火把后 guild claim，真实扣物并放入公共补给库存；仓库满或不可用不扣物、不完成。guild shared 查箱体，不取大厅私产。, goal: donate, item: TORCH, target: 16, chest: supplies }
   restock_shield:
     route: supply
     beginner: true
@@ -197,10 +197,10 @@ tasks:
     description: 亲手造一面普通盾牌交给公共护甲箱，让下一位挑战者有所依靠。成品入公共仓库，奖励进本人个人箱。
     beneficiary: 公会补给员与挑战者
     icon: SHIELD
-    reward: {fame: 4, emeralds: 1, bonus: BREAD, bonus-count: 2}
+    reward: { fame: 4, emeralds: 1, bonus: BREAD, bonus-count: 2 }
     steps:
-      - {title: 制作备用盾牌, description: 接单后亲手合成一个盾牌，然后 guild claim 确认制作阶段；直接拿公共成品来回交不能跳过制作。, goal: craft, item: SHIELD, target: 1}
-      - {title: 备用盾牌入库, description: 主背包保留一面无附魔无自定义名的普通盾牌，用 guild claim 实际放入公共护甲库存；满仓不扣物，原任务保留。, goal: donate, item: SHIELD, target: 1, chest: armor}
+      - { title: 制作备用盾牌, description: 接单后亲手合成一个盾牌，然后 guild claim 确认制作阶段；直接拿公共成品来回交不能跳过制作。, goal: craft, item: SHIELD, target: 1 }
+      - { title: 备用盾牌入库, description: 主背包保留一面无附魔无自定义名的普通盾牌，用 guild claim 实际放入公共护甲库存；满仓不扣物，原任务保留。, goal: donate, item: SHIELD, target: 1, chest: armor }
   field_camp_report:
     route: combat
     repeat: once
@@ -208,7 +208,7 @@ tasks:
     description: 巡路人顾风发现林道北边的掠夺者营地。先实地调查外哨与退路，再自愿结伴挑战两处阵地和执斧头目，最后回来报告；普通难度即可。先从公会公共箱准备护甲、盾牌、武器和食物。
     beneficiary: 巡路人·顾风
     icon: CROSSBOW
-    reward: {fame: 8, emeralds: 3, bonus: BREAD, bonus-count: 4}
+    reward: { fame: 8, emeralds: 3, bonus: BREAD, bonus-count: 4 }
     steps:
       - title: 先看清营地与退路
         description: 主世界营地在(-1072,67,-1120)；从西侧(-1080,68,-1117)靠近。进入天然营地，在外哨、营火附近走过两个四格分区、至少十六格新路线与五秒有效行进；随后 guild claim 交侦察阶段。仅到坐标不算，暂时不必开战。

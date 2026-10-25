@@ -17,9 +17,9 @@ public final class JourneyCatalogTest {
         var board = new YamlConfiguration(); board.load(new File(root, "world-life.yml"));
         var cards = board.getStringList("contracts");
         check("nearby discoveries first", cards.getFirst().equals("tm_local_village_notes"));
-        check("trial before farm", cards.indexOf("tm_starter_tower") < cards.indexOf("tm_field_cycle"));
-        check("dungeon before farm", cards.indexOf("tm_crypt_report") < cards.indexOf("tm_field_cycle"));
-        check("farm still optional", cards.contains("tm_vegetable_cycle"));
+        check("trial is discoverable", cards.contains("tm_starter_tower"));
+        check("dungeon is discoverable", cards.contains("tm_crypt_report"));
+        check("farming offers withdrawn", !cards.contains("tm_field_cycle") && !cards.contains("tm_vegetable_cycle"));
         check("board bounded and unique", cards.size() <= 36 && new HashSet<>(cards).size() == cards.size());
         for (String id : cards) check("real task " + id, ids.contains(id));
         var routes = new YamlConfiguration(); routes.load(new File(root, "route-contracts.yml"));
@@ -31,7 +31,7 @@ public final class JourneyCatalogTest {
         var onboarding = new YamlConfiguration(); onboarding.load(new File(root, "onboarding.yml"));
         String complete = onboarding.getString("steps.complete.message");
         check("graduate has dungeon and trial entrances", complete.contains("dungeon list") && complete.contains("arena status"));
-        check("one welcome not repeat spam", onboarding.getInt("welcome-revision") == 14);
+        check("one welcome not repeat spam", onboarding.getInt("welcome-revision") == 15);
         System.out.println("JourneyCatalogTest: " + checks + " passed");
     }
 }

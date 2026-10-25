@@ -76,8 +76,8 @@ final class TaskRoutes implements Listener {
                     JsonObject life = plugin.lifeGuild().onboardingState(p); life.remove("availableId");
                     if (!life.get("activeId").getAsString().isEmpty()) {
                         life.addProperty("remaining", Math.max(0, life.get("target").getAsInt() - life.get("progress").getAsInt()));
-                        life.addProperty("nextCommand", life.get("ready").getAsBoolean() ? "/mycli life claim" : "/mycli life status");
-                        life.addProperty("nextAction", life.get("ready").getAsBoolean() ? "本生活委托条件已满足，用 /mycli life claim 本人交付。"
+                        life.addProperty("nextCommand", life.has("retired") ? "/mycli tasks list exploration" : life.get("ready").getAsBoolean() ? "/mycli life claim" : "/mycli life status");
+                        life.addProperty("nextAction", life.has("retired") ? RetiredActivities.HINT : life.get("ready").getAsBoolean() ? "本生活委托条件已满足，用 /mycli life claim 本人交付。"
                                 : life.get("instruction").getAsString() + "；" + (life.has("missingAdvice") ? life.get("missingAdvice").getAsString() : "按真实行动累计，库存搬运不能代替；完成后 life claim。"));
                     }
                     out.add("life", life);

@@ -182,9 +182,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(10, Material.PLAYER_HEAD, "找队友", "追踪队友方向，或消耗魔力安全传送", "menu:players"),
             new CompassButton(11, Material.GRASS_BLOCK, "领地与物品归属", "查看领地主人、授权与储物权限", "lands"),
             new CompassButton(12, Material.LECTERN, "冒险者公会", "注册、接委托、交付与查看个人奖励", "menu:guild"),
-            new CompassButton(13, Material.SUNFLOWER, "生活公会", "农耕、烹饪、钓鱼、建筑、写书与红石", "menu:life"),
+            new CompassButton(13, Material.WRITABLE_BOOK, "游记与创作", "写书、摄影、建筑、钓鱼与红石", "menu:life"),
             new CompassButton(14, Material.WRITABLE_BOOK, "任务市场", "工程、探索、职业试炼与居民事务", "market"),
-            new CompassButton(15, Material.BELL, "居民事务板", "农耕补种、真实交易、照片与遗迹调查", "world:board"),
+            new CompassButton(15, Material.BELL, "居民事务板", "近郊探索、讨伐、照片与遗迹调查", "world:board"),
             new CompassButton(16, Material.OAK_SAPLING, "村庄新生活", "居民聊天、新手实习、商店与世界活动", "world:menu"),
             new CompassButton(17, Material.SPYGLASS, "女神相机 · 拍照", "点击选择第一人称、第三人称、俯视或清晰海报；成片自动进入个人奖励箱", "photo"),
             new CompassButton(18, Material.BLAZE_POWDER, "战斗法术", "星芒箭、霜环与焰浪；按原规则消耗魔力", "menu:combat"),
@@ -3193,7 +3193,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("trade"))
             return List.of("menu", "list", "find", "buy", "sell", "info", "locate", "stop", "hall");
         if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("accept"))
-            return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light", "trader_supply");
+            return List.of("gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light", "trader_supply");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
             return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
         if (args.length == 2 && args[0].equalsIgnoreCase("waypoint"))

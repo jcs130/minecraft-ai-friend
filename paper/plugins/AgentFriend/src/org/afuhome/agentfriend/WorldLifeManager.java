@@ -325,7 +325,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(14, item(Material.EMERALD, "§a商旅公会 · 交易信息板", "汇总已加载村民与集市商店的出售/收购", "查询报价、售罄状态，点击定位商人", "/mycli trade menu；成交需亲自到场"));
         inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));
-        inv.setItem(22, item(Material.BELL, "§6居民事务板", "农耕、集市、照片和遗迹调查", "/mycli world board"));
+        inv.setItem(22, item(Material.BELL, "§6居民事务板", "近郊探索、讨伐、照片和遗迹调查", "/mycli world board"));
         inv.setItem(20, item(Material.WRITTEN_BOOK, "§e灯火归途 · RPG旅途手记", "剧情章节、人物对话、六条路线与居民支线", "按真实进度给出下一步；自愿开始", "/mycli world story menu"));
         inv.setItem(24, item(Material.WRITABLE_BOOK, "§b生活能力挑战", "行囊存取、木匠互助、同队救援", "自愿报名；查看真实进度与证据", "/mycli challenge menu"));
         p.openInventory(inv);

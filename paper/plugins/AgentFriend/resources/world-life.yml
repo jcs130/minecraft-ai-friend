@@ -1,7 +1,7 @@
 # Presentation only. Rewards and evidence rules live in resident-contracts.yml.
 # Reload: mycli admin worldlife reload (console); no server restart.
 schema-version: 1
-season: 千灯旅途季 · 出门发现新故事
+season: 千灯探险季 · 走出村庄发现新故事
 contracts:
   - tm_local_village_notes
   - tm_local_mine_journal
@@ -15,8 +15,6 @@ contracts:
   - tm_bunker_report
   - tm_first_spell
   - tm_trail_supply
-  - tm_field_cycle
-  - tm_vegetable_cycle
   - tm_village_breakfast
 shops:
   - id: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044
@@ -32,7 +30,7 @@ shops:
     x: -547
     y: 67
     z: -445
-    description: 8小麦、16甘蔗、6南瓜、6西瓜块或32竹子换1绿宝石；先补种再卖自己的余粮。
+    description: 可出售自己已有的余粮换旅费；探索出发可到补给商或公会公共箱取口粮，无需种地。
   - id: 5a218622-d736-48e9-899c-58bd390ea185
     name: 远行货郎·灯穗
     world: world
