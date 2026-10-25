@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger, classifyWake, compactEvents, capModelText,
-  compactToolSchema, WAKE_ACTIVE_GOAL, MovementProgress, compactFacts } from '../src/client/index.ts';
+  compactToolSchema, WAKE_ACTIVE_GOAL, MovementProgress, isIdleControlStep, compactFacts } from '../src/client/index.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 import { SKILL_STEP_SCHEMA, SKILL_SIGNATURE_DOC } from '../core/skills.ts';
 
@@ -117,6 +117,37 @@ describe('MovementProgress', () => {
     expect(verdict!.repetitive).toBe(false);
     expect(progress.record([{ skill: 'chat', text: 'hi' }]).streak).toBe(8);
     expect(progress.record([{ skill: 'mine', at: [0, 60, 0] }]).streak).toBe(0);
+  });
+  it('counts idle sneak/jump control bursts as no progress (does not reset like real work)', () => {
+    const progress = new MovementProgress({ window: 4 });
+    let verdict;
+    for (let i = 0; i < 4; i++) verdict = progress.record([{ skill: 'control', keys: ['sneak'], durationMs: 2000, mode: 'ground' }]);
+    expect(verdict).toMatchObject({ streak: 4, repetitive: true, kind: 'control' });
+    expect(progress.record([{ skill: 'control', keys: ['forward', 'jump'], durationMs: 500, mode: 'ground' }]).streak).toBe(5);
+    expect(progress.record([{ skill: 'control', keys: ['forward'], durationMs: 500, mode: 'ground' }]).repetitive).toBe(false);
+    expect(progress.record([{ skill: 'mine', at: [0, 60, 0] }]).streak).toBe(0);
+  });
+  it.each([
+    {mode:'water',keys:[]},
+    {mode:'water',keys:['jump']},
+    {mode:'flight',keys:['jump']},
+    {mode:'flight',keys:['sneak']},
+    {mode:'ground',keys:['forward','jump']},
+    {mode:'ground',keys:[],yawDeg:30},
+    {mode:'ground',keys:['sneak'],pitchDeg:20},
+  ])('does not call unknown swimming, flying, walking or turning motion idle: %j',control=>{
+    const step={skill:'control',durationMs:500,...control},progress=new MovementProgress({window:4});
+    expect(isIdleControlStep(step)).toBe(false);
+    for(let i=0;i<4;i++)progress.record([step]);
+    expect(progress.record([step])).toMatchObject({streak:5,repetitive:false});
+    expect(progress.record([step])).not.toHaveProperty('kind');
+  });
+  it('keeps malformed or absent control keys unknown and preserves mixed productive work',()=>{
+    for(const keys of [undefined,null,{},[1],['sneak',1],['unexpected']])
+      expect(isIdleControlStep({skill:'control',keys})).toBe(false);
+    const progress=new MovementProgress({window:2});
+    progress.record([{skill:'control',keys:['sneak']}]);
+    expect(progress.record([{skill:'control',keys:['sneak']},{skill:'place',at:[1,64,2]}])).toMatchObject({streak:0,repetitive:false});
   });
 });
 

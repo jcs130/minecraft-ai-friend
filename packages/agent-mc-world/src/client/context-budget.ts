@@ -206,8 +206,10 @@ export interface MovementVerdict {
   spread: number;
   /** Grid cells first visited within the last `window` movement calls. */
   newCells: number;
-  /** Many movement-only calls with no new ground or within one small area. */
+  /** Repeated request pattern, not proof of execution failure or absent world progress. */
   repetitive: boolean;
+  /** Repeated ground modifier-key requests; verify actual movement before intervening. */
+  kind?: 'control';
 }
 
 /** Digest of an observation's text with timestamps, coordinates and counters stripped. */
@@ -218,13 +220,25 @@ export function observationDigest(text: string): string {
   return (h >>> 0).toString(16);
 }
 
-const MOVEMENT_SKILLS = ['goto', 'look', 'observe', 'walk', 'wander', 'face'];
+/** Control is movement-related, not automatically productive work or failed movement. */
+const MOVEMENT_SKILLS = ['goto', 'look', 'observe', 'walk', 'wander', 'face', 'control'];
+/** Ground modifier-key request patterns. Jump may change height; this is not outcome evidence. */
+const IDLE_CONTROL_KEYS = new Set(['sneak', 'jump', 'sprint']);
 const point = (value: unknown): [number, number, number] | undefined =>
   Array.isArray(value) && value.length === 3 && value.every(n => typeof n === 'number') ? value as [number, number, number] : undefined;
 
+export function isIdleControlStep(step: unknown): boolean {
+  if (!isObject(step) || step.skill !== 'control') return false;
+  if (step.mode !== undefined && step.mode !== 'ground') return false;
+  if (step.yawDeg || step.pitchDeg) return false;
+  return Array.isArray(step.keys) && step.keys.length > 0
+    && step.keys.every(k => typeof k === 'string' && IDLE_CONTROL_KEYS.has(k));
+}
+
 /**
- * Host-side detector for wandering without progress: e.g. dozens of goto/look calls inside one plaza.
- * Feed it each action's steps; hosts decide how to nudge or close the goal.
+ * Host-side detector for wandering without progress: e.g. dozens of goto/look calls inside one plaza,
+ * or repeated sneak/jump control bursts after a place. Feed it each action's steps; hosts decide how
+ * to inspect actual receipts. This statistic never proves a goal complete or authorizes cancellation.
  */
 export class MovementProgress {
   private readonly window: number;
@@ -233,7 +247,7 @@ export class MovementProgress {
   private readonly movement: Set<string>;
   private readonly cells = new Set<string>();
   // seen: observation digests
-  private recent: { points: [number, number, number][]; newCells: number }[] = [];
+  private recent: { points: [number, number, number][]; newCells: number; idleControl: boolean; unknownMotion: boolean }[] = [];
   streak = 0;
 
   constructor(options: MovementProgressOptions = {}) {
@@ -255,7 +269,7 @@ export class MovementProgress {
   recordObservation(digest: string): MovementVerdict {
     if (this.seen.has(digest)) {
       this.streak++;
-      this.recent = [...this.recent, { points: [], newCells: 0 }].slice(-this.window);
+      this.recent = [...this.recent, { points: [], newCells: 0, idleControl: false, unknownMotion: false }].slice(-this.window);
     } else this.seen.add(digest);
     return this.verdict();
   }
@@ -273,8 +287,13 @@ export class MovementProgress {
       const key = `${Math.floor(x / this.cellSize)},${Math.floor(z / this.cellSize)}`;
       if (!this.cells.has(key)) { this.cells.add(key); newCells++; }
     }
+    const idleControl = work.length > 0 && work.every(skill => skill === 'control')
+      && steps.filter(s => isObject(s) && s.skill === 'control').every(isIdleControlStep);
+    // Directional walking, swimming, diving and flying have no target coordinates
+    // in this request contract. Missing coordinates cannot prove absent movement.
+    const unknownMotion = steps.some(s => isObject(s) && s.skill === 'control' && !isIdleControlStep(s));
     this.streak++;
-    this.recent = [...this.recent, { points, newCells }].slice(-this.window);
+    this.recent = [...this.recent, { points, newCells, idleControl, unknownMotion }].slice(-this.window);
     return this.verdict();
   }
 
@@ -287,7 +306,13 @@ export class MovementProgress {
       spread = Math.round(Math.max(...points.map(p => Math.hypot(p[0] - cx, p[2] - cz))));
     }
     const full = this.streak >= this.window;
-    return { streak: this.streak, spread, newCells, repetitive: full && (spread <= this.radius || newCells === 0) };
+    const idleControlStreak = this.recent.length > 0 && this.recent.every(e => e.idleControl);
+    return {
+      streak: this.streak, spread, newCells,
+      repetitive: full && !this.recent.some(entry => entry.unknownMotion)
+        && (spread <= this.radius || newCells === 0 || idleControlStreak),
+      ...(idleControlStreak && full ? { kind: 'control' as const } : {}),
+    };
   }
 }
 
