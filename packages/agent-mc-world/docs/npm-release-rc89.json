@@ -1,0 +1,167 @@
+{
+  "schema": "minecraft-npm-distribution/v1",
+  "verifiedAt": "2026-10-25T15:47:27.990Z",
+  "core": {
+    "schema": "minecraft-npm-archive-verification/v1",
+    "verifiedAt": "2026-10-25T15:37:20.612Z",
+    "role": "core",
+    "name": "agent-mc-world",
+    "version": "0.5.7-rc.89",
+    "tag": "next",
+    "tagVersion": "0.5.7-rc.89",
+    "publishedAt": "2026-10-25T15:35:49.086Z",
+    "file": "agent-mc-world-0.5.7-rc.89.tgz",
+    "bytes": 86369370,
+    "sha256": "9fa8f2eb7fff6dcc50b0b7498757a7ab1372071f351bed755341575f3d41a99b",
+    "integrity": "sha512-bsA3+jpbm+tXcEJaQXn/coXqj2q1kxfdLnI0mxHlSWLzMty+hpduGiYPMZHySWNHlIrWyAJC/ZEIkciX1bCmJA==",
+    "tarball": "https://registry.npmjs.org/agent-mc-world/-/agent-mc-world-0.5.7-rc.89.tgz",
+    "canonicalArchiveStatus": 200,
+    "downloadedFrom": "https://registry.npmjs.org/agent-mc-world/-/agent-mc-world-0.5.7-rc.89.tgz",
+    "cacheBustUsed": false,
+    "registry": "https://registry.npmjs.org",
+    "anonymousDownloadVerified": true,
+    "reviewedArchiveBytesPreserved": true,
+    "modelCalls": 0,
+    "gameConnections": 0,
+    "productionChanged": false
+  },
+  "adapter": {
+    "schema": "minecraft-npm-archive-verification/v1",
+    "verifiedAt": "2026-10-25T15:43:59.554Z",
+    "role": "adapter",
+    "name": "@jcs130/dsh-minecraft-agent",
+    "version": "0.3.0-rc.22",
+    "tag": "latest",
+    "tagVersion": "0.3.0-rc.22",
+    "publishedAt": "2026-10-25T15:43:02.978Z",
+    "file": "jcs130-dsh-minecraft-agent-0.3.0-rc.22.tgz",
+    "bytes": 679333,
+    "sha256": "026a8c4eb86bb7d09ff91b6faac46eee67b447885ad0ebac1539dde450f7b68b",
+    "integrity": "sha512-7jhBf1SGR35DGb3rimplY5V+OcJffY9XcFd50gvb9HwbpBs3uiuLlKcB8iY1Kj8xNdif6TmGvoUsmim8Red0SQ==",
+    "tarball": "https://registry.npmjs.org/@jcs130/dsh-minecraft-agent/-/dsh-minecraft-agent-0.3.0-rc.22.tgz",
+    "canonicalArchiveStatus": 200,
+    "downloadedFrom": "https://registry.npmjs.org/@jcs130/dsh-minecraft-agent/-/dsh-minecraft-agent-0.3.0-rc.22.tgz",
+    "cacheBustUsed": false,
+    "registry": "https://registry.npmjs.org",
+    "anonymousDownloadVerified": true,
+    "reviewedArchiveBytesPreserved": true,
+    "modelCalls": 0,
+    "gameConnections": 0,
+    "productionChanged": false
+  },
+  "defaultRegistryInstallVerified": true,
+  "installations": [
+    {
+      "dsh": "0.2.1-rc.2",
+      "channel": "npm",
+      "source": "@jcs130/dsh-minecraft-agent@0.3.0-rc.22",
+      "stages": [
+        {
+          "stage": "profile-init",
+          "exitCode": 0
+        },
+        {
+          "stage": "default-plugin-add",
+          "exitCode": 0
+        }
+      ],
+      "sharedPhysicalCore": true,
+      "runtimeFilesCompared": 18,
+      "runtimeComparison": "exact-reviewed-archive-bytes",
+      "verifierCorrection": "npm-normalized-shebang-hashes-replaced-with-reviewed-original-archive-hashes",
+      "stock": {
+        "dsh": "0.2.1-rc.2",
+        "modelRequests": 0,
+        "gameConnections": 0,
+        "mainExternalReferences": true,
+        "moduleLoaded": true,
+        "officialPluginLoader": true,
+        "mcpTools": 37,
+        "offlineEngineIpc": true,
+        "offlineGameMemory": true,
+        "serverPackLoaded": true,
+        "physicsFixtures": 2,
+        "workerLoaded": true,
+        "workerOfficialResolverActive": true,
+        "environmentRestored": true,
+        "resolverUnchanged": true,
+        "workerExternalReferences": true,
+        "frameworkSha256": [
+          "5135179ac810e4f626f32ec3bdc3293dc7d2028e8aa92e5e0c006f1a33b78e76",
+          "ccc8086845b5bba49e5fe3eed55cc1ddc3e96fc5eda1fee035e9d6a730137f19"
+        ],
+        "frameworkUnchanged": true
+      },
+      "defaultWorkspace": "packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\nminimumReleaseAgeExclude:\n  - '@jcs130/dsh-minecraft-agent@0.3.0-rc.22'\n  - agent-mc-world@0.5.7-rc.89\n",
+      "manualSymlinks": false,
+      "dependencyOverrides": false,
+      "hostFilesPatched": false,
+      "securityFlagsOverridden": false,
+      "modelCalls": 0,
+      "gameConnections": 0,
+      "productionChanged": false
+    },
+    {
+      "dsh": "0.2.1-rc.3",
+      "channel": "npm",
+      "source": "@jcs130/dsh-minecraft-agent@0.3.0-rc.22",
+      "stages": [
+        {
+          "stage": "profile-init",
+          "exitCode": 0
+        },
+        {
+          "stage": "default-plugin-add",
+          "exitCode": 0
+        }
+      ],
+      "sharedPhysicalCore": true,
+      "runtimeFilesCompared": 18,
+      "runtimeComparison": "exact-reviewed-archive-bytes",
+      "verifierCorrection": "npm-normalized-shebang-hashes-replaced-with-reviewed-original-archive-hashes",
+      "stock": {
+        "dsh": "0.2.1-rc.3",
+        "modelRequests": 0,
+        "gameConnections": 0,
+        "mainExternalReferences": true,
+        "moduleLoaded": true,
+        "officialPluginLoader": true,
+        "mcpTools": 37,
+        "offlineEngineIpc": true,
+        "offlineGameMemory": true,
+        "serverPackLoaded": true,
+        "physicsFixtures": 2,
+        "workerLoaded": true,
+        "workerOfficialResolverActive": true,
+        "environmentRestored": true,
+        "resolverUnchanged": true,
+        "workerExternalReferences": true,
+        "frameworkSha256": [
+          "5135179ac810e4f626f32ec3bdc3293dc7d2028e8aa92e5e0c006f1a33b78e76",
+          "ccc8086845b5bba49e5fe3eed55cc1ddc3e96fc5eda1fee035e9d6a730137f19"
+        ],
+        "frameworkUnchanged": true
+      },
+      "defaultWorkspace": "packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\nminimumReleaseAgeExclude:\n  - '@jcs130/dsh-minecraft-agent@0.3.0-rc.22'\n  - agent-mc-world@0.5.7-rc.89\n",
+      "manualSymlinks": false,
+      "dependencyOverrides": false,
+      "hostFilesPatched": false,
+      "securityFlagsOverridden": false,
+      "modelCalls": 0,
+      "gameConnections": 0,
+      "productionChanged": false
+    }
+  ],
+  "knowledgeIndex": {
+    "source": "minedojo",
+    "pages": 22,
+    "chunks": 570,
+    "corpusBundled": false,
+    "neuralQualityBenchmarked": false
+  },
+  "reviewedArchiveBytesPreserved": true,
+  "githubAssetBytesPreserved": true,
+  "modelCalls": 0,
+  "gameConnections": 0,
+  "productionChanged": false
+}
