@@ -141,6 +141,10 @@ configured engagement scope, rule predicates, health and body admission must
 all pass again at dispatch. Sampling never casts a spell. `fight:off`, emergency
 ownership and a noninterruptible body task still prevent an opening. This does
 not grant spell range, aim, server success or melee capability.
+An active read-only/computational script is not a body lease and does not hide
+fast combat choices. A native script holding control, or a script awaiting its
+executor task, still owns the body. A second authored method cannot start while
+the first worker remains active.
 
 Server messages using the chat transport carry `meta.channel:"system"` when
 there is no named player source. Player speech and outgoing private echoes keep

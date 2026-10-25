@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { TacticalMinecraftWorld } from '../core/tactical-world.ts';
@@ -61,7 +61,10 @@ it.each(['disabled', 'off', 'low-health', 'busy', 'window', 'unknown-mana', 'coo
     if (condition === 'disabled') r.cfg.combatOptions!.allowEngage = false;
     if (condition === 'off') r.world.policyFight('off');
     if (condition === 'low-health') r.bot.health = 6;
-    if (condition === 'busy') Object.assign(r.world, { methods: { current: { id: 1 } } });
+    if (condition === 'busy') {
+      r.runner.start({ code: 'await mc.state(); return 1;' });
+      Object.assign(r.world, { nativeMethod: { runId: r.runner.current!.id, session: { ownsBody: true } } });
+    }
     if (condition === 'window') r.bot.currentWindow = {} as never;
     if (condition === 'unknown-mana') r.world.abilities().noteMana(null);
     if (condition === 'cooldown') r.world.abilities().noteAbilities([{ id: 'frostnova', manaCost: 7, cooldownMs: 15000, cooldownRemainingMs: 2000 }]);
@@ -72,7 +75,30 @@ it.each(['disabled', 'off', 'low-health', 'busy', 'window', 'unknown-mana', 'coo
     expect(r.world.choose(candidate, before.tacticRevision)).toBe(false);
     expect(r.world.sent).toEqual([]);
   } finally {
-    if (condition === 'busy') Object.assign(r.world, { methods: r.runner });
+    if (condition === 'busy') Object.assign(r.world, { nativeMethod: null });
     r.close();
   }
+});
+
+it('allows fast combat during a real read-only worker without cancelling that script', async () => {
+  const r = rig();
+  try {
+    const run = r.runner.start({ name: 'read-only-observation', code: 'const state = await mc.state(); return state.sampledAt;' });
+    expect(r.runner.current?.id).toBe(run.id);
+    const frame = r.world.frame()!, spell = frame.candidates.find(c => c.kind === 'cast')!;
+    expect(spell).toBeDefined();
+    expect(r.world.choose(spell, frame.tacticRevision)).toBe(true);
+    await r.runner.wait(run.id, 3000);
+    expect(r.runner.read(run.id)[0].status).toBe('completed');
+    expect(r.world.sent).toEqual(['frostnova']);
+  } finally { r.close(); }
+});
+
+it('still defers fast combat while a real scripted movement owns the executor', async () => {
+  const r = rig();
+  try {
+    r.runner.start({ name: 'scripted-body', code: 'return await mc.do([{skill:"control",keys:["forward"],durationMs:1000}]);' });
+    await vi.waitFor(() => expect(r.exec.status().running?.skill).toBe('control'));
+    expect(r.world.frame()!.candidates.filter(c => c.kind === 'cast' || c.kind === 'engage')).toEqual([]);
+  } finally { r.close(); }
 });

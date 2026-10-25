@@ -4740,6 +4740,13 @@ export class MinecraftWorld implements World {
       combat: this.extensionState() };
   }
 
+  /** A live worker is not itself a body lease: reads and pure computation may overlap combat. */
+  protected methodOwnsBody(): boolean {
+    const current = this.methods.current;
+    return !!current && (this.nativeMethod?.runId === current.id && this.nativeMethod.session.ownsBody
+      || this.methodTasks.size > 0);
+  }
+
   protected async methodCall(method: MethodOperation, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
     signal.throwIfAborted();
     const bot = this.bridge?.bot;
@@ -6626,9 +6633,7 @@ export class MinecraftWorld implements World {
       methodAdmission?.({ accepted: value, receipt: '', retryAfterMs, completedImmediately: completed,
         rejection: rejected, taskId });
     }, () => {
-      const currentMethod = this.methods.current;
-      const ownsNativeBody = currentMethod && this.nativeMethod?.runId === currentMethod.id && this.nativeMethod.session.ownsBody;
-      if (!methodAdmission && (ownsNativeBody || this.methodTasks.size > 0)) this.methods.stop('新的身体任务已受理，原身体方法取消');
+      if (!methodAdmission && this.methodOwnsBody()) this.methods.stop('新的身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
     });
     if (admitted && directChat) {

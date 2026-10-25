@@ -211,7 +211,7 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
     const control = {
       bodyFree: (this.combat?.tracking ? !queue?.waiting.length : !this.combat?.active && combatMayTakeTask(queue))
-        && !this.methods.current && !bot.currentWindow && !(this.executor?.eating ?? false),
+        && !this.methodOwnsBody() && !bot.currentWindow && !(this.executor?.eating ?? false),
       canStep: (reaction?.canStep ?? false) && !bot.currentWindow && !(this.executor?.eating ?? false),
       targetId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
       fight: this.policy.get().fight, fleeHealth: this.cfg.reflex.fleeHealth, chaseMax: this.cfg.combat.chaseMax,
@@ -230,7 +230,7 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const reactions = combatReactions(bot, battlefield, cfg, control).filter(executableReaction);
     // Authored methods do not use CombatSession's suspend/resume lifecycle.
     // They must still wait for a genuinely free executor, unlike typed combat.
-    const routines: CombatCandidate[] = !emergency && control.bodyFree && !this.combat?.active && !queue?.running
+    const routines: CombatCandidate[] = !emergency && control.bodyFree && !this.methods.current && !this.combat?.active && !queue?.running
       ? (this.tactics.getTactic()?.routines ?? []).flatMap(routine => {
         try { this.routineGraph(routine); return [{ ...routine, kind: 'method' as const }]; }
         catch { return []; }
