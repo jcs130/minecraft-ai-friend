@@ -2,6 +2,10 @@
 
 Published package: **0.5.7-rc.89** on npm's **next** tag and [GitHub Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.89). Install this preview with `npm install agent-mc-world@0.5.7-rc.89`. Java **1.21.1** remains the primary target; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
 
+Development candidate **0.5.7-rc.90** fixes crop items being incorrectly rejected
+as planting when used on a composter. Receipts distinguish compost level, item
+consumption and actual bone-meal gain. This candidate is not an npm release.
+
 When exact prebuilt vanilla materials are absent, the web viewer automatically selects compatible materials while preserving the actual connection's block IDs in the browser and mesher. Unknown materials use local placeholders; optional icons, fonts, paintings or audio do not block terrain. An incomplete old cache can fall back to bundled resources. Refreshing the viewer keeps the body and session. Users can connect without building resources; exact materials remain an optional enhancement. See [viewer resources](docs/viewer-resources.md).
 
 Optional MineDojo historical indexes use `mc_knowledge`: explicit local preparation, source/coverage manifests, bounded reads, BM25 + CPU token vectors and optional matching embeddings. See [preparation and queries](docs/minedojo-knowledge.md). CPU token vectors are lexical. No corpus, SQLite database or automatic model/game startup is bundled. Vanilla player skins, public-chat defaults, configurable effects and the [server notebook](docs/agent-notebook-settings.md) remain available; mineral queries are off by default.

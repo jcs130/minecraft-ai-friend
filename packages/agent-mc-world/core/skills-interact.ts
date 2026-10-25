@@ -429,6 +429,30 @@ export function useProbeAt(
     }
   }
 
+  if (target === 'composter') {
+    const level = blockProp(blockAtCell(bot, cell), 'level');
+    const stock = item ? invCount(bot, name => name === item) : 0;
+    const meal = invCount(bot, name => name === 'bone_meal');
+    return {
+      want: '堆肥桶层级变化、投入物实测消耗或骨粉实测增加',
+      read: () => {
+        const block = blockAtCell(bot, cell);
+        const nextLevel = blockProp(block, 'level');
+        const nextStock = item ? invCount(bot, name => name === item) : 0;
+        const nextMeal = invCount(bot, name => name === 'bone_meal');
+        // Composting may consume a seed without winning a level increase.
+        // Consumption alone never means that bone meal was produced.
+        return {
+          met: block?.name === 'composter' && (level !== null && nextLevel !== null && nextLevel !== level
+            || item !== null && nextStock < stock || nextMeal > meal),
+          actual: `堆肥桶 level ${level ?? '(读不到)'} → ${nextLevel ?? '(读不到)'}`
+            + (item ? `；包里${zhName(item)} ${stock} → ${nextStock} 个` : '')
+            + `；包里骨粉 ${meal} → ${nextMeal} 个`,
+        };
+      },
+    };
+  }
+
   if (item === null) return null;
   if (item.endsWith('_hoe')) {
     const tilled = HOE_TILLED[target];
@@ -779,6 +803,9 @@ function farmingUseBlockedFact(
   bot: Bot, held: string | null, cell: Cell, target: string,
   ctx: SkillContext, face?: BlockFace, writingSign = false,
 ): string | null {
+  // The observed composter is an interaction target, including when seeds or
+  // a hoe are held. Its own use probe checks the actual block/inventory effect.
+  if (target === 'composter') return null;
   if (held?.endsWith('_hoe')) {
     if (HOE_TILLED[target] === undefined) {
       return `${cellText(cell)} 是${zhName(target)}，不是锄头能翻的土格；没有发送使用。先探查目标土格及其上方空间`;

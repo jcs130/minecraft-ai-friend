@@ -14,3 +14,12 @@ Planner body facts read maximum health from native attributes and modifiers, usi
 the same reader as battlefield observations. An unobserved maximum stays unknown;
 legacy snapshot producers that omit the optional field retain their prior 20-point
 format. No server-specific channel, model, host or permission rule is added.
+
+## Composter interactions
+
+Using a crop item on an observed composter is a block interaction, rather than
+planting on soil. Both admission and execution retain the requested block. The
+receipt reads the composter's `level`, the offered item's inventory count, and
+the bone-meal count separately. A consumed seed can fail to increase the level;
+neither consumption nor a level increase proves bone-meal output. An unreadable
+target, or an unchanged target with no inventory effect, is not confirmed success.
