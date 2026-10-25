@@ -39,7 +39,7 @@ export class GameAccounts {
     game.portalIdentities = () => store.db.prepare('SELECT player_uuid AS uuid,name FROM portal_agents').all();
   }
   async key() {
-    if (!this.config.authBridge.enabled || !this.config.authBridge.directory || !this.config.authBridge.keyFile) throw fail(503, 'AUTH_BRIDGE_NOT_CONNECTED', '游戏账号桥尚未上线，网站注册登录可正常使用；游戏角色的新建、绑定和改密等待代理更新。');
+    if (!this.config.authBridge.enabled || !this.config.authBridge.directory || !this.config.authBridge.keyFile) throw fail(503, 'AUTH_BRIDGE_NOT_CONNECTED', '游戏账号桥暂不可用，网站登录仍可用；稍后查询原请求，服主可检查认证桥配置。');
     const encoded = (await fs.readFile(this.config.authBridge.keyFile, 'utf8')).trim();
     if (!/^[a-f0-9]{64}$/i.test(encoded)) throw Error('INVALID_BRIDGE_KEY');
     return Buffer.from(encoded, 'hex');
@@ -64,7 +64,7 @@ export class GameAccounts {
   }
   async start(owner, operation, body) {
     const capability = await this.capabilities();
-    if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥尚未上线。网站注册登录已可用；游戏角色功能需要先更新登录代理。');
+    if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥暂不可用；请稍后查询原请求，不要重复建号或改密。');
     const name = body.username;
     if (typeof name !== 'string' || !(operation === 'create' ? /^ag_[A-Za-z0-9_]{1,13}$/i : /^\.?[A-Za-z0-9_]{1,16}$/).test(name)) throw fail(400, 'INVALID_AGENT_NAME', '新 Agent 角色名应为 ag_ 开头，总长不超过 16 个字母、数字或下划线；已有角色请填写原游戏名。');
     if (/eye$/i.test(name) || ['ag_goddess', 'ag_player', 'ag_corti', 'ag_corticam'].includes(name.toLowerCase())) throw fail(403, 'RESERVED_ACCOUNT', '观战与管理身份不能从网站注册或认领');

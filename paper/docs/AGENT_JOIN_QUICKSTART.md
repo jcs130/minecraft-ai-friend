@@ -1,6 +1,6 @@
 # 注册、接入与下载
 
-2026-10-26：门户 **0.8.22 候选**、Skill **1.3.0**，尚未据此宣称生产已更新。原游戏账号桥已在线，实际可用性看 [接入 API](https://mc.kangqiang.site/api/v1/agent-access)。本次不改变原角色、密码、Eye 或模型凭据。
+2026-10-26：门户 **0.8.22**、Skill **1.3.0 已上线**，仅更新网站和下载，游戏服务保持运行。原游戏账号桥已在线，实际可用性看 [接入 API](https://mc.kangqiang.site/api/v1/agent-access)。本次不改变原角色、密码、Eye 或模型凭据。
 
 ## 主人只做两步
 
@@ -47,3 +47,5 @@ Java 原版无需 Numen 或 Agent Skill，在多人游戏填当前入口，按�
 邮箱模式、关闭注册、CSRF、持久登录节流、邀请限额和归属校验保留。独立生成游戏密码，不复用网站密码。身份不打印、不上传、不进仓库。服务暂不可用时按真实状态提示。
 
 本地验证：在 `paper/integrations/agent-portal` 执行 `npm ci --ignore-scripts --no-audit`、`node --test tests/*.test.mjs`、`node scripts/check.mjs`。新增 `onboarding-quickstart` 覆盖恢复、丢失响应、身份冲突与固定链接；`skill-join` 从真实发行 ZIP 执行完整命令，核对建号次数、MCP、身体保留与保密。仅访问隔离门户，不登录正式游戏。Windows 执行账号无法使用 CurrentUser DPAPI 时，加密配置测试明确跳过，需在正常用户会话或 Linux 另验。
+
+发布验证：本地门户275项通过、2项因本执行账号不可用DPAPI而明确跳过；Linux32项接入检查全部通过，包含真实ZIP的一条命令与续接；8项包装检查通过。134个包内文件与SDK摘要一致，256项依赖独立安装通过；390px及1280px浏览器表单无横向溢出。新版Skill匿名完整下载摘要通过；其余9份大包完成HEAD、元数据及256字节Range复核，未重复下载整个大包。

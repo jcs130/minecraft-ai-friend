@@ -204,6 +204,14 @@ test('phone navigation closes from its scrim and LAN HTTP forms work without sec
   assert.ok(!ui.document.querySelector('#game-account-form .form-error').textContent.includes('TypeError'));
 });
 
+test('connection-center installation help uses the same one-command invitation flow without announcing an undeployed bridge',async t=>{
+ const ui=await screen(t);await ui.setup();ui.window.location.hash='connections';
+ await waitFor(()=>ui.document.querySelector('#main')?.textContent.includes('scripts/setup.mjs join'));
+ const text=ui.document.querySelector('#main').textContent;
+ assert.match(text,/invite-url-file/);assert.match(text,/已有角色/);
+ assert.doesNotMatch(text,/候选待上线|尚未上线/);
+});
+
 test('announcements still submit and private legacy metadata clears on logout; viewers never configure a publisher', async t => {
   const ui = await screen(t); await ui.setup();
   ui.window.location.hash = 'events'; await waitFor(() => ui.document.querySelector('[data-action="new-notice"]'));
@@ -537,7 +545,7 @@ test('my roles filters by ownership instead of administrator access and unbound 
   await ui.refresh(); assert.equal(ui.document.querySelectorAll('.agent-card').length, 1); assert.match(ui.document.querySelector('.agent-card').textContent, /本人角色/);
   ui.portal.store.db.prepare('DELETE FROM ownerships WHERE agent_uuid=?').run(playerUuid); await ui.refresh();
   ui.click('[data-filter="all"]'); ui.click('[data-action="claim-role"]');
-  assert.match(ui.document.querySelector('#modal').textContent, /账号桥尚未上线|认证桥|代理/);
+  assert.match(ui.document.querySelector('#modal').textContent, /账号桥暂不可用|游戏账号服务暂不可用|认证桥|代理/);
   assert.equal(ui.document.querySelector('#game-account-form'), null);
 });
 

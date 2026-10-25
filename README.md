@@ -54,7 +54,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | `paper/plugins/` | AgentFriend RPG 玩法、CortiEyeMirror 观战及共享协议源码 |
 | `paper/self-host/` | 固定依赖锁、跨主机构建与网站导出工具 |
-| `paper/integrations/agent-portal/` | 已上线 0.8.19 网站／0.8.22 源码候选、完整宿主分包/历史档案、测试、Dockerfile 与无密模板 |
+| `paper/integrations/agent-portal/` | 已上线 0.8.22 网站、完整宿主分包/历史档案、测试、Dockerfile 与无密模板 |
 | `paper/integrations/world-observer/` | 已上线的无额外账号现代网页观战：独立Paper插件、出站worker、默认关闭配置与测试 |
 | `paper/integrations/` | 登录保护、Numen、YSM、基岩与其他可选集成 |
 | `packages/agent-mc-world/` | 保留原 main 的最新通用 Agent MC 核心、MCP 与 SDK |
@@ -71,8 +71,8 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.12** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.19** / `c617b7c8`；源码 **0.8.22候选**，含公开世界足迹、日记/相机作品、共享观战HUD与连续动作。原注册、下载、账号桥保持；[实现与部署边界](paper/docs/PUBLIC_WORLD_TRAIL.md) |
-| 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill 1.2.1**；**Skill 1.3.0** 候选固定已验证的 rc.90 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
+| 网站源码 | 正式 **0.8.22**：轻量注册、单命令Skill接入与OSS固定下载已上线。公开足迹和作品的消费接口已在网站；配套家庭端发布器、游戏档案和连续动作仍待另批部署；[实现与部署边界](paper/docs/PUBLIC_WORLD_TRAIL.md) |
+| 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill 1.3.0** 固定已验证的 rc.90 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。
