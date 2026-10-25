@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.97
+
+- Start optional idle-presence reviews after actual idle time. A bounded active
+  planner request or known running native task no longer triggers another
+  idle-presence model call just because the preceding host message is 45 seconds
+  old. Inference completion, failure and cancellation release the busy signal;
+  expired signals cannot suppress reviews indefinitely. State changes, user
+  intent, death and periodic review keep their existing scheduling and checks.
+- Keep complete tool declarations, fitting history, native barriers and model
+  deadlines unchanged. Live cache hits and game effects require separate evidence.
+
 ## 0.2.96
 
 - Consume fixed core rc.86, including shared AuthMe/readiness fixes and the

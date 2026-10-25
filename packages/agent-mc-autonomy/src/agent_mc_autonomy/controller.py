@@ -1133,9 +1133,14 @@ class Controller:
 
     async def decide_with_events(self, messages, tools, profile=None):
         death_epoch = self.death_epoch
-        call=self.profile_decide(messages,tools,profile) if profile and self.profile_decide else self.decide(messages,tools)
-        task = asyncio.create_task(asyncio.wait_for(call, self.settings.model_timeout_seconds))
+        started = datetime.now(timezone.utc).timestamp()
+        inference = {'active': True, 'started_at': started,
+                     'expires_at': started + self.settings.model_timeout_seconds}
+        self.publish(planner_inference=inference)
+        task = None
         try:
+            call=self.profile_decide(messages,tools,profile) if profile and self.profile_decide else self.decide(messages,tools)
+            task = asyncio.create_task(asyncio.wait_for(call, self.settings.model_timeout_seconds))
             while True:
                 done, _ = await asyncio.wait({task}, timeout=1)
                 if self.stop_requested():
@@ -1165,9 +1170,13 @@ class Controller:
                         result.setdefault('model_status',{})['decision_profile']=profile_view(profile,parameters_applied=False,fallback='planner_profile_port_unavailable',budget_applied=False)
                     return result
         finally:
-            if not task.done():
-                task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            try:
+                if task is not None:
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+            finally:
+                self.publish(planner_inference={**inference, 'active': False})
 
     def cancelled_decision(self, reason):
         record = {**self.model_timing(), 'turnId': self.turn, 'controller_cancelled': reason,

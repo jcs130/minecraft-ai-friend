@@ -1,6 +1,8 @@
 # Agent MC Autonomy
 
-The 0.2.96 distribution pins core rc.86 and forwards its shared offline notebook
+The 0.2.97 distribution keeps core rc.86 and schedules idle-presence reviews only
+after actual idle time; active inference and native work retain their own lifecycles.
+It forwards the shared offline notebook
 retrieval, optional stable note owner and explicit mineral-query policy.
 A denied or modified click still fails; an already received complete same-window
 server frame restores subsequent inventory access without another snapshot or

@@ -53,6 +53,20 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
+def body_busy(snapshot, now):
+    """Only idle-presence scheduling; this grants no action or review authority."""
+    if any(isinstance(row, dict) and row.get('terminal') is not True
+           and row.get('phase') in {'accepted', 'queued', 'running'}
+           for row in snapshot.get('pending', [])):
+        return True
+    request = snapshot.get('planner_inference')
+    if not isinstance(request, dict) or request.get('active') is not True:
+        return False
+    start, end = request.get('started_at'), request.get('expires_at')
+    return (type(start) in {int, float} and type(end) in {int, float}
+            and 0 < end - start <= 300 and start <= now < end)
+
+
 def review_observation(status, now):
     snapshot = status.get("observation", status)
     try:
@@ -341,6 +355,10 @@ class ReviewPort:
             revision = self.mailbox.intent_revision()
             same_session = previous.get("session") == observed["session"]
             same_intent = previous.get("revision") == revision and previous.get("intent") == observed["intent"]
+            busy = body_busy(snapshot.get('observation', snapshot), now)
+            if busy or state.get('body_busy') or not same_session or not same_intent:
+                state['idle_since'] = now
+            state['body_busy'] = busy
             urgent = superseded_death or bool(observed["urgent"] and observed["urgent"] != previous.get("urgent"))
             if state.get("material") != observed["material"] or not same_session:
                 state.update(material=observed["material"], material_since=now)
@@ -383,8 +401,9 @@ class ReviewPort:
                 return
             elapsed = now - state.get("created_at", 0)
             changed = not same_session or not same_intent or observed["signal"] != previous.get("signal")
-            idle_due = bool(previous and same_session and same_intent and not changed
-                            and now - state.get("submitted_at", state.get("created_at", now)) >= policy.idle_presence_seconds)
+            idle_since = max(state.get('idle_since', 0), state.get("submitted_at", state.get("created_at", now)))
+            idle_due = bool(previous and same_session and same_intent and not changed and not busy
+                            and now - idle_since >= policy.idle_presence_seconds)
             if not urgent and not idle_due and (elapsed < policy.min_interval_seconds or (not changed and elapsed < policy.review_interval_seconds)):
                 return
             state.update(created_at=now, review={**observed, "id": uuid.uuid4().hex[:12], "created_at": now,

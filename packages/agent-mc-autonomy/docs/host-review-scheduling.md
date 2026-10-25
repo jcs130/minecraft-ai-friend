@@ -1,5 +1,27 @@
 # Host review and inference boundaries
 
+## Actual idle time
+
+The 0.2.97 runtime starts the optional idle-presence clock after known native
+work or an active body-model request ends. Previously, 45 seconds since the last
+accepted review notification was enough to offer `idle_presence`, even during a
+100-second input prefill. On a shared single-slot model that can interleave short
+host reviews with long body prompts and defeat reuse of the body's KV prefix.
+
+The controller publishes a non-content `planner_inference` record only for the
+actual await, with the existing timeout as its expiry, and clears it in `finally`
+on success, exception and cancellation. Stale, future, malformed or expired
+records never indefinitely suppress idle opportunities. Known accepted, queued
+or running native tasks also count as work. The record grants no game authority,
+changes no native barrier and never claims an action succeeded.
+
+This only changes `idle_presence`. New material changes, explicit user intent,
+death, runtime failure and the periodic review schedule retain their existing
+paths. Freshness, ownership, review expiry, acknowledgement and speech checks
+remain independent. Original scenes, tool schemas, fitting history and provider
+deadlines are unchanged. Fake-port regressions prove scheduling; only subsequent
+natural engine timings can establish cache hits or latency improvement.
+
 An ordinary revision of the active host-authored stage used to pass the same
 `ready()` interruption check as new human feedback. If it arrived during a long
 request, the coordinator discarded that request and began another one, without
