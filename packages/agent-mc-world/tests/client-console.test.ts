@@ -79,7 +79,7 @@ it('keeps the local control API usable without optional viewer assets', async ()
   const app = await setup(undefined, false);
   const page = await fetch(app.url);
   expect(page.status).toBe(503);
-  expect(await page.text()).toContain('未包含网页控制台');
+  expect(await page.text()).toContain('未随附网页控制台');
   expect((await fetch(app.url + 'metrics')).status).toBe(503);
   expect(await (await fetch(app.url + 'api/client')).json()).toMatchObject({ webConsoleAvailable: false });
   expect((await app.post('{"action":"disconnect"}')).status).toBe(202);
