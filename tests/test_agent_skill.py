@@ -81,6 +81,7 @@ class AgentSkillReleaseTest(unittest.TestCase):
             ("1.0.0", "3d1676e86f31396071866c64ce87d9e6820e1530b755c4221f04c22a15f94669"),
             ("1.1.0", "6a1be95fa174e37c330a756ffdbc32f0924254099390d1fc99a236c451d8fe7d"),
             ("1.2.0", "a0618f8c2d75a71d42ca532973a43f7d837e91ee47707a7ce9de2d9167cf858b"),
+            ("1.2.1", "1c3c57962babb47fd2ca2100b12e1d941949e85e6774b63b5cbd1a874e435c66"),
         ):
             file = PORTAL / "public/downloads" / ("qiandengji-agent-" + version + ".zip")
             self.assertEqual(hashlib.sha256(file.read_bytes()).hexdigest(), digest)
@@ -89,8 +90,16 @@ class AgentSkillReleaseTest(unittest.TestCase):
         for name in ("join.html", "agent-api.html"):
             html = (PORTAL / "public" / name).read_text(encoding="utf-8")
             with self.subTest(page=name):
-                self.assertIn(self.release["url"], html)
-                self.assertIn(self.lock["sdkVersion"], html)
+                self.assertIn('href="/downloads/agent-skill"', html)
+                self.assertNotRegex(html, r'/downloads/qiandengji-agent-[0-9.]+\.zip')
+        # Fetch-only readers follow the stable HTTP route too. Verify its
+        # actual catalogue target instead of requiring a stale version in HTML.
+        script = "import {skillAt} from './src/agent-skill.mjs'; console.log(JSON.stringify(skillAt('/downloads/agent-skill')));"
+        result = subprocess.run([shutil.which("node") or "node", "--input-type=module", "--eval", script], cwd=PORTAL, check=True, capture_output=True, text=True)
+        current = json.loads(result.stdout)
+        self.assertEqual(current["version"], self.lock["version"])
+        self.assertEqual(current["sdkVersion"], self.lock["sdkVersion"])
+        self.assertEqual(current["sha256"], self.release["sha256"])
 
     def test_rebuild_is_identical_and_refuses_existing_release(self):
         with tempfile.TemporaryDirectory(prefix="qd-skill-release-") as directory:
