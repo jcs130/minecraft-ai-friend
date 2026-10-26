@@ -20,7 +20,10 @@ final class BlockAccessRules {
     final List<Area> villages;
     BlockAccessRules(boolean enabled, Set<UUID> editors, List<Area> villages) {
         if (enabled && villages.isEmpty()) throw new IllegalArgumentException("启用时必须明确至少一个保留保护的村庄");
-        if (villages.size() > 8 || editors.size() > 16) throw new IllegalArgumentException("最多8个村庄、16位建设者");
+        // Retained areas also include authored adventure worlds. The eight
+        // existing village/facility areas must not be removed to fit a map.
+        // Keep the independent 256-region complement bound below.
+        if (villages.size() > 16 || editors.size() > 16) throw new IllegalArgumentException("最多16个保留保护区域、16位建设者");
         this.enabled = enabled;
         this.editors = Set.copyOf(editors);
         this.villages = List.copyOf(villages);

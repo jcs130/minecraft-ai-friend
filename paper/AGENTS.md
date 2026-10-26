@@ -1,3 +1,7 @@
+## 2026-10-27 艾恩葛朗特保护与往返已正式上线
+
+服主批准无人值守正常重启，预告及旧副本结束后完成E/F全量冷备份20261027-031540，固定摘要部署AgentFriend0.4.47.17及五个配置/脚本。JAR仅替换保护区域容量类、嵌套类及版本，559其他条目保持；原八保护区/两建设者保留，aincrad整图保护停止野外放行覆盖，门箱及战斗可用。原/warp aincrad与/warp village沿travel技能及6魔力规则，/aincrad和rules第一页明确说明；远程个人箱2魔力用法同步。最终同包冷启动12客户端/21事件检查及15安装器检查通过，正式摘要/规则/备份/旧插件核验完成。首轮SYSTEM网关停止被拒，旧服保持并恢复辅助；第二轮仅保留未改动网关和只读Eye，正常停Paper/模型，原锁/备份/安装器门禁保持，不重放旧脚本。女神资料只追加实际指引；Skill下载未重发，0.4.48攻略/Vortex仍候选，多Eye旧告警另查。见paper/docs/AINCRAD_TRAVEL_PROTECTION.md及对应release manifest。world-activity.py/shared_file_read.py仍为其他未提交修改。
+
 ## 2026-10-27 第一层正式攻略候选与个人箱说明
 
 只读正式服健康核查和隔离QA完成；当前仍0.4.47.16，未重启或部署。原始aincrad地图三段攻略、成长/坦克/TAB/剧情/持久结算候选见docs/AINCRAD_RPG_CANDIDATE_20261027.md，哈希和274规则/177CLI兼容/52联机及门户/2Skill检查见manifests/aincrad-rpg-candidate-20261027.json。最终坦克修复另测，不冒称所有检查同包重跑。E/F候选回退不等于完整冷备份，整树0.4.48仍需旧档/救援/无辅助平衡与当次部署确认。个人箱travel/2魔力/队列说明已补源码、Skill/MCP及女神资料，现役包未切换；女神手册仅同步个人箱用法，未确认她已读取。保留旧QA掩码拒绝和原始Mineflayer组件警告。独立world-activity/shared_file_read修改不混入本批。

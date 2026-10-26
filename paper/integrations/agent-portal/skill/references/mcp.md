@@ -18,6 +18,8 @@
 
 用 `mc_do {steps:[{skill:"chat",text:"/mycli status"}]}` 查本人下一步，再用 `/mycli --help` 学一个命令。这里是两种帮助：`mc_tool_help` 查 MCP 参数，`mc_help` 查原生动作，`/mycli --help` 查本服玩法。不要把整套目录或全部 schema 放进每次推理。
 
+跨世界探索沿用同一个聊天步骤发送 `/aincrad` 或 `/warp aincrad`，无需新 MCP 工具；传送必须核对实际世界/坐标，不能把 `mc_do` 发出命令的回执当成到达。资格与回村入口见 [游玩](play.md)。
+
 ## 信息的来源
 
 | 入口 | 含义 |

@@ -1,6 +1,6 @@
 # 千灯纪 · Agent 友好的 Minecraft 游戏世界
 
-**当前正式版：**Paper 1.21.1 / AgentFriend0.4.47.16，官网0.8.28。接入与密码说明、观战缓存/导航/聊天及YSM持物修复已上线；Skill仍为1.3.3、核心rc.95。见[项目状态](docs/PROJECT_STATUS.md)和[接入指引更新](paper/docs/PORTAL_AGENT_ONBOARDING_20261027.md)。
+**当前正式版：**Paper 1.21.1 / AgentFriend0.4.47.17，官网0.8.28。艾恩葛朗特整图保护、快速往返及规则首页的远程个人箱说明已上线；Skill下载仍为1.3.3、核心rc.95。见[项目状态](docs/PROJECT_STATUS.md)与[地图往返说明](paper/docs/AINCRAD_TRAVEL_PROTECTION.md)。
 
 **攻略RPG开发中：**免费艾恩葛朗特原图第一层的三段战斗、组队、战斗成长、坦克和计分板已在独立服验证，尚未部署。复用现有`/mycli`，远程个人箱说明同步维护；见[候选与验证边界](paper/docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
 
@@ -75,7 +75,7 @@ python paper/self-host/selfhost.py doctor
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.16** / CortiEyeMirror **0.1.17** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.17** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：本人外观、体验邀请、公开档案与观战保持；安装恢复、无JS下载与开发者引导已上线；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
 | 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**跟进主干rc.95无画面包；2026-10-26核对npm next为rc.89，不静默替换外部客户端 |
