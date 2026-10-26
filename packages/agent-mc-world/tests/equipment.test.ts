@@ -9,7 +9,7 @@ import { installInventoryClickSync, INVENTORY_CLICK_CONFIRM_MS } from '../core/i
 const require = createRequire(import.meta.url);
 const dependency = (name: string) => require(require.resolve(name, { paths: [require.resolve('mineflayer')] }));
 
-function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; denyHandSwap?: boolean; silent?: boolean; version?: string } = {}) {
+function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; denyHandSwap?: boolean; denyAnyHandSwap?: boolean; silent?: boolean; version?: string } = {}) {
   const registry = require('minecraft-data')(options.version ?? '1.20.6');
   const Item = dependency('prismarine-item')(registry);
   const windows = dependency('prismarine-windows')(registry.version.minecraftVersion);
@@ -20,7 +20,9 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
     registry, inventory, currentWindow: null, _client: client,
     supportFeature: (feature: string) => registry.supportFeature(feature),
     quickBarSlot: 8,
-    getEquipmentDestSlot: (dest: string) => ({ head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45, hand: 44 })[dest],
+    getEquipmentDestSlot: (dest: string) => dest === 'hand' ? 36 + bot.quickBarSlot
+      : ({ head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45 })[dest],
+    setQuickBarSlot: (index: number) => { bot.quickBarSlot = index; },
     equip: async () => { throw new Error('Modern equipment must use confirmed clicks'); },
     unequip: async () => { throw new Error('Modern equipment must use confirmed clicks'); },
     clickWindow: async () => {},
@@ -28,7 +30,7 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
   let stateId = 40;
   const sent: number[] = [];
   const cursorHistory: (string | null)[] = [];
-  Object.defineProperty(bot, 'heldItem', { get: () => inventory.slots[44] });
+  Object.defineProperty(bot, 'heldItem', { get: () => inventory.slots[36 + bot.quickBarSlot] });
   const full = () => client.emit('window_items', { windowId: 0, stateId: ++stateId,
     items: server.slots.map((item: unknown) => Item.toNotch(item)), carriedItem: Item.toNotch(server.selectedItem) });
   client.on('window_items', packet => {
@@ -40,6 +42,7 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
     const denied = (packet.slot === 45 && options.denyPickup)
       || (options.denySwap && server.slots[45] && ((packet.slot === 45 && server.selectedItem)
         || (packet.mode === 2 && (packet.slot === 45 || packet.mouseButton === 40))))
+      || (options.denyAnyHandSwap && packet.mode === 2 && packet.mouseButton >= 0 && packet.mouseButton < 9)
       || (options.denyHandSwap && ((packet.mode === 2 && packet.mouseButton === 8)
         || (packet.mode === 0 && packet.slot === 44)));
     if (!denied) {
@@ -133,7 +136,7 @@ describe('equipment server confirmation', () => {
 
   it('keeps a refused main-hand swap unconfirmed without cursor or follow-up clicks', async () => {
     vi.useFakeTimers();
-    const rig = equipmentServer({ version: '1.21.1', denyHandSwap: true });
+    const rig = equipmentServer({ version: '1.21.1', denyAnyHandSwap: true });
     rig.seed(9, 'torch', 64); rig.seed(44, 'stone_pickaxe');
     const equip = equipHandConfirmed(rig.bot, rig.inventory.slots[9]);
     const failed = expect(equip).rejects.toMatchObject({ source: 'server', code: 'inventory-click-sync' });
@@ -142,6 +145,40 @@ describe('equipment server confirmation', () => {
     expect(rig.server.slots[9]).toMatchObject({ name: 'torch', count: 64 });
     expect(rig.cursorHistory.every(item => item === null)).toBe(true);
     expect(rig.sent).toHaveLength(1);
+  });
+
+  it.each(['1.21.1', '1.20.6'])('equips into an empty %s hotbar slot without moving a protected selected shortcut', async version => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version, denyHandSwap: true });
+    rig.seed(9, 'iron_sword'); rig.seed(44, 'player_head'); rig.seed(36, 'bread', 3);
+    const operation = equipHandConfirmed(rig.bot, rig.inventory.slots[9]);
+    await vi.advanceTimersByTimeAsync(165);
+    expect(rig.bot.quickBarSlot).toBe(8); // do not select the optimistic destination before its ACK
+    await vi.runAllTimersAsync(); await operation;
+    expect(rig.server.slots[44].name).toBe('player_head');
+    expect(rig.server.slots[36]).toMatchObject({ name: 'bread', count: 3 });
+    expect(rig.server.slots[37].name).toBe('iron_sword');
+    expect(rig.bot.quickBarSlot).toBe(1);
+    expect(rig.bot.heldItem?.name).toBe('iron_sword');
+    expect(rig.sent).toEqual([9]);
+    expect(rig.cursorHistory.every(item => item === null)).toBe(true);
+  });
+
+  it('does not select a confirmed spare hotbar slot when the original task was cancelled during its ACK', async () => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1', denyHandSwap: true });
+    rig.seed(9, 'iron_sword'); rig.seed(44, 'player_head');
+    let active = true;
+    const operation = equipHandConfirmed(rig.bot, rig.inventory.slots[9], () => {
+      if (!active) throw Error('Original task cancelled');
+    });
+    const stopped = expect(operation).rejects.toThrow('Original task cancelled');
+    await vi.advanceTimersByTimeAsync(50); active = false;
+    await vi.runAllTimersAsync(); await stopped;
+    expect(rig.bot.quickBarSlot).toBe(8);
+    expect(rig.server.slots[44].name).toBe('player_head');
+    expect(rig.server.slots[36].name).toBe('iron_sword');
+    expect(rig.sent).toEqual([9]);
   });
 
   it('returns armor to inventory only after server pickup and cursor recovery are confirmed', async () => {

@@ -33,7 +33,7 @@ function rig(denySwap = false, version = '1.20.6') {
   client.write = (name, p) => {
     if (name !== 'window_click') return;
     sent.push(p.slot);
-    const denied = denySwap && ((p.mode === 2 && p.mouseButton === 0)
+    const denied = denySwap && ((p.mode === 2 && p.mouseButton >= 0 && p.mouseButton < 9)
       || (p.slot === 36 && server.selectedItem && server.slots[36]));
     if (!denied) server.acceptClick({ slot: p.slot, mouseButton: p.mouseButton, mode: p.mode,
       item: server.slots[p.slot] });
@@ -76,8 +76,8 @@ describe('hand material server confirmation', () => {
     Object.assign(r.bot, {
       entity: { position: new Vec3(0, 64, 0), eyeHeight: 1.62 },
       lookAt: async () => {},
-      activateItem: () => { activated.push(r.server.slots[36]?.name); },
-      deactivateItem: () => { released.push(r.server.slots[36]?.name); },
+      activateItem: () => { activated.push(r.server.slots[36 + r.bot.quickBarSlot]?.name); },
+      deactivateItem: () => { released.push(r.server.slots[36 + r.bot.quickBarSlot]?.name); },
     });
     const bow = new BowController({ getBot: () => r.bot, hasLos: () => true });
     const result = bow.shoot({ id: 7, position: new Vec3(9.8, 64, 0), height: 1.95 });
@@ -117,8 +117,9 @@ describe('hand material server confirmation', () => {
     expect(finished).toBe(false);
     await vi.runAllTimersAsync();
     expect(await result).toBe(true);
-    expect(r.server.slots[36].name).toBe('green_bed');
-    expect(r.server.slots[9].name).toBe('player_head');
+    expect(r.server.slots[36 + r.bot.quickBarSlot].name).toBe('green_bed');
+    expect(r.server.slots[36].name).toBe('player_head');
+    expect(r.server.slots[9]).toBeNull();
     expect(r.server.selectedItem).toBeNull();
   });
 
@@ -145,7 +146,8 @@ describe('hand material server confirmation', () => {
     expect(finished).toBe(false);
     await vi.runAllTimersAsync();
     expect(await result).toContain('手里拿起了');
-    expect(r.server.slots[36].name).toBe('green_bed');
+    expect(r.server.slots[36 + r.bot.quickBarSlot].name).toBe('green_bed');
+    expect(r.server.slots[36].name).toBe('player_head');
     expect(r.server.selectedItem).toBeNull();
     expect(r.sent).not.toContain(-999);
   });

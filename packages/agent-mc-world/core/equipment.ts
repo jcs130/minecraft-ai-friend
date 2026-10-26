@@ -104,7 +104,30 @@ export async function equipHandConfirmed(bot: Bot, item: Item, checkActive?: () 
   if (item.slot >= start && item.slot < start + 9) {
     bot.setQuickBarSlot(item.slot - start);
   } else {
-    await equipSlotConfirmed(bot, item, 'hand', checkActive);
+    const window = bot.inventory, selected = bot.getEquipmentDestSlot('hand');
+    const empty = window.slots[selected] ? window.slots.findIndex((entry, slot) =>
+      slot >= start && slot < start + 9 && !entry) : -1;
+    if (empty < 0) {
+      await equipSlotConfirmed(bot, item, 'hand', checkActive);
+    } else {
+      // A hand selection need not relocate an unrelated selected stack. Some
+      // servers protect shortcut items there; prefer an empty hotbar slot before
+      // any click, not a retry after a denied swap. Keep the old selection until
+      // the destination is confirmed, including cancellation during the ACK.
+      const source = item.slot;
+      await equipmentMove(bot, empty, () => clickInventoryConfirmed(bot, source, empty - start, 2, window, () => {
+        checkActive?.();
+        if (window.slots[source] || !window.slots[empty] || !sameInventoryStack(window.slots[empty], item)
+          || window.selectedItem) {
+          throw new SkillBlocked('备用快捷栏或来源在派发前变化，换装未发送');
+        }
+      }));
+      checkActive?.();
+      if (!window.slots[empty] || !sameInventoryStack(window.slots[empty], item) || window.selectedItem) {
+        throw new SkillBlocked('备用快捷栏未确认收到点名物品，未切换主手', [], 'server');
+      }
+      bot.setQuickBarSlot(empty - start);
+    }
   }
   checkActive?.();
   if (!bot.heldItem || !sameInventoryStack(bot.heldItem, item) || bot.inventory.selectedItem) {
