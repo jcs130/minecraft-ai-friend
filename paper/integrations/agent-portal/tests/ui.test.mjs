@@ -256,6 +256,39 @@ test('phone navigation closes from its scrim and LAN HTTP forms work without sec
   assert.ok(!ui.document.querySelector('#game-account-form .form-error').textContent.includes('TypeError'));
 });
 
+test('Agent creation and game password changes explain every rule and reject invalid values before sending', async t => {
+  const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
+  const owner = ui.portal.store.ownerByName('ui-admin');
+  ui.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, playerUuid, 'Isolated password form fixture', Date.now());
+  await ui.refresh();
+  for (const operation of ['create', 'password']) {
+    ui.window.location.hash = operation === 'create' ? 'agents' : 'account';
+    const action = operation === 'create' ? 'new-game-agent' : 'change-game-password';
+    await waitFor(() => ui.document.querySelector(`[data-action="${action}"]`));
+    ui.click(`[data-action="${action}"]`);
+    const form = ui.document.querySelector('#game-account-form');
+    const rules = ui.document.getElementById(form.elements.gamePassword.getAttribute('aria-describedby')).textContent;
+    for (const phrase of ['6–64', '空格', '换行', '制表符', '123456', '12345678', 'password', 'qwerty', '不区分大小写', '不强制混用', '网站密码分别管理']) assert.ok(rules.includes(phrase), phrase);
+    ui.fill('username', operation === 'create' ? 'ag_Policy' : 'ag_Alpha', '#game-account-form');
+    if (operation === 'password') ui.fill('currentGamePassword', 'existing-isolated-password', '#game-account-form');
+    for (const [value, expected] of [['short', /至少.*6/], ['x'.repeat(65), /最多.*64/], ['abc def', /空白/], ['abc\tdef', /空白/], ['abc\u00a0def', /空白/], ...['123456', '12345678', 'PaSsWoRd', 'QwErTy'].map(value => [value, /不能使用/])]) {
+      ui.fill('gamePassword', value, '#game-account-form'); ui.fill('confirmGamePassword', value, '#game-account-form');
+      const before = ui.requests.length; ui.submit('#game-account-form');
+      assert.match(form.querySelector('.form-error').textContent, expected);
+      assert.equal(ui.requests.length, before, 'invalid input must not consume a creation or password request');
+      assert.equal(form.querySelector('[type="submit"]').disabled, false);
+    }
+    ui.fill('gamePassword', 'abcdef', '#game-account-form'); ui.fill('confirmGamePassword', 'abcdeg', '#game-account-form');
+    const before = ui.requests.length; ui.submit('#game-account-form');
+    assert.match(form.querySelector('.form-error').textContent, /两次游戏密码不一致/);
+    assert.equal(ui.requests.length, before);
+    ui.fill('confirmGamePassword', 'abcdef', '#game-account-form'); ui.submit('#game-account-form');
+    await waitFor(() => form.querySelector('.form-error').textContent.includes('账号桥'));
+    assert.equal(ui.requests.at(-1), operation === 'create' ? '/api/v1/agents' : '/api/v1/game-password', 'six lowercase letters pass the frontend policy and reach the real backend');
+    ui.document.querySelector('#modal').close();
+  }
+});
+
 test('connection-center installation help uses the same one-command invitation flow without announcing an undeployed bridge',async t=>{
  const ui=await screen(t);await ui.setup();ui.window.location.hash='connections';
  await waitFor(()=>ui.document.querySelector('#main')?.textContent.includes('scripts/setup.mjs join'));

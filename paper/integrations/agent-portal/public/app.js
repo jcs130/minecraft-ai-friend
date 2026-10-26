@@ -633,6 +633,15 @@ function bindingModal() {
   const candidates = state.authorized.filter(agent => !agent.isReserved && !agent.historical && agent.playerUuid && !agent.identityConflict);
   openModal('绑定已核验的角色。', '仅记录门户归属，不修改游戏身份和存档', `<form id="binding-form" class="form-grid"><label class="field">网站账号<select name="ownerId" required>${state.owners.map(row => `<option value="${e(row.id)}">${e(row.username)}${row.role === 'admin' ? '（网站管理员）' : ''}</option>`).join('')}</select></label><label class="field">原游戏角色<select name="agentId" required>${candidates.map(row => `<option value="${row.id}">${e(row.name)} · ${e(row.playerUuid.slice(0, 8))}…</option>`).join('')}</select></label><label class="field">归属核验依据<textarea name="proof" required minlength="10" maxlength="300" placeholder="记录独立核验原主人的依据，请勿填写密码或令牌。"></textarea></label><label class="checkbox"><input name="confirmedOwnership" type="checkbox" required><span>我已独立核验此网站用户就是原角色主人，不以在线名称、IP 或 ag_ 前缀作为归属证明。</span></label><div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">确认绑定原角色</button></div></form>`);
 }
+// Mirrors the existing GameAccounts / AgentAccess policy; do not add complexity
+// requirements here. The server still validates every request independently.
+function gamePasswordError(value) {
+  if (typeof value !== 'string' || value.length < 6) return '游戏密码至少需要 6 个字符。';
+  if (value.length > 64) return '游戏密码最多允许 64 个字符。';
+  if (/\s/.test(value)) return '游戏密码不能包含空格、换行、制表符等空白字符。';
+  if (/^(123456|12345678|password|qwerty)$/i.test(value)) return '不能使用 123456、12345678、password 或 qwerty（不区分大小写），请换一个游戏密码。';
+  return '';
+}
 function gameAccountModal(operation = 'create', selectedName = '') {
   if (!owner()) return authModal(state.session?.canSetup ? 'setup' : 'login');
   if (!state.gameCapabilities?.ready) return openModal('游戏账号功能准备中', '现有网站账号可继续登录', notice(e(state.gameCapabilities?.message || '游戏账号服务暂不可用，请稍后重试；保留原身份，不要重复建号。')));
@@ -642,7 +651,7 @@ function gameAccountModal(operation = 'create', selectedName = '') {
   const names = password ? owned : candidates;
   openModal(create ? '注册一个新的 Agent 角色' : password ? '修改游戏密码' : '绑定已有游戏角色', create ? '新角色默认普通权限，沿用服务器登录系统' : '网站账号与游戏角色分别管理',
     notice(state.gameCapabilities?.ready ? '游戏账号桥在线。操作结果请以服务器回执为准。' : '游戏账号服务暂不可用，当前不会提交；请稍后用原身份接续。', 'muted')
-    + `<form id="game-account-form" data-operation="${operation}" data-request="${newRequestId()}" class="form-grid gap-top"><label class="field">游戏角色名${create ? '<input name="username" value="ag_" required pattern="[Aa][Gg]_[A-Za-z0-9_]{1,13}" maxlength="16" autocapitalize="none" spellcheck="false" autocomplete="off">' : `<select name="username" required>${names.map(agent => `<option value="${e(agent.name)}" ${agent.name === selectedName ? 'selected' : ''}>${e(agent.name)}</option>`).join('')}</select>`}</label>${password ? '<label class="field">当前游戏密码<input name="currentGamePassword" type="password" autocomplete="current-password" required maxlength="128"></label>' : ''}${operation !== 'claim' ? '<label class="field">新游戏密码<input name="gamePassword" type="password" autocomplete="new-password" required minlength="6" maxlength="64"><small>6–64 位，不含空格；和网站密码分别管理。</small></label><label class="field">再输入一次游戏密码<input name="confirmGamePassword" type="password" autocomplete="new-password" required minlength="6" maxlength="64"></label>' : '<p class="tiny">会生成一条短期绑定命令，需要用已登录的原角色在游戏内执行。只知道名字不能认领角色。</p>'}<div class="form-error" role="alert"></div><button class="btn primary" type="submit">${create ? '注册游戏角色' : password ? '保存新游戏密码' : '生成游戏内绑定命令'}</button></form>`);
+    + `<form id="game-account-form" data-operation="${operation}" data-request="${newRequestId()}" class="form-grid gap-top"><label class="field">游戏角色名${create ? '<input name="username" value="ag_" required pattern="[Aa][Gg]_[A-Za-z0-9_]{1,13}" maxlength="16" autocapitalize="none" spellcheck="false" autocomplete="off">' : `<select name="username" required>${names.map(agent => `<option value="${e(agent.name)}" ${agent.name === selectedName ? 'selected' : ''}>${e(agent.name)}</option>`).join('')}</select>`}</label>${password ? '<label class="field">当前游戏密码<input name="currentGamePassword" type="password" autocomplete="current-password" required maxlength="128"></label>' : ''}${operation !== 'claim' ? '<label class="field">新游戏密码<input name="gamePassword" type="password" autocomplete="new-password" required minlength="6" maxlength="64" aria-describedby="game-password-rules"><small id="game-password-rules">6–64 个字符，不能含空格、换行或制表符等空白字符。<br>不能使用 123456、12345678、password、qwerty（不区分大小写）。<br>不强制混用大小写、数字或符号。游戏密码与网站密码分别管理。</small></label><label class="field">再输入一次游戏密码<input name="confirmGamePassword" type="password" autocomplete="new-password" required minlength="6" maxlength="64"></label>' : '<p class="tiny">会生成一条短期绑定命令，需要用已登录的原角色在游戏内执行。只知道名字不能认领角色。</p>'}<div class="form-error" role="alert"></div><button class="btn primary" type="submit">${create ? '注册游戏角色' : password ? '保存新游戏密码' : '生成游戏内绑定命令'}</button></form>`);
 }
 function accountJobModal(job) {
   state.accountJob = job;
@@ -862,7 +871,11 @@ document.addEventListener('submit', async event => {
       await api(`/agent-invites/${form.dataset.id}`, { method: 'DELETE' }); modal.close(); await loadPrivate(); render(); toast('邀请与 API 接入已撤销，游戏角色保留');
     } else if (form.id === 'game-account-form') {
       const operation = form.dataset.operation;
-      if (operation !== 'claim' && values.gamePassword !== values.confirmGamePassword) throw new Error('两次游戏密码不一致');
+      if (operation !== 'claim') {
+        const passwordError = gamePasswordError(values.gamePassword);
+        if (passwordError) throw new Error(passwordError);
+        if (values.gamePassword !== values.confirmGamePassword) throw new Error('两次游戏密码不一致');
+      }
       const result = await api(operation === 'claim' ? '/agent-claims' : operation === 'password' ? '/game-password' : '/agents', { method: 'POST', body: JSON.stringify({ requestId: form.dataset.request, username: values.username, ...(operation !== 'claim' ? { gamePassword: values.gamePassword } : {}), ...(operation === 'password' ? { currentGamePassword: values.currentGamePassword } : {}) }) });
       form.reset(); accountJobModal(result);
     } else if (form.id === 'world-visibility-form') {
