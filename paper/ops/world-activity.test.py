@@ -61,6 +61,15 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(a.task_info('db_20261026_supply',defs)['category'],'logistics')
         self.assertEqual(a.task_info('unknown',defs)['category'],'other')
         self.assertEqual(a.category(['build','fish'])[0],'mixed')
+    def test_market_yaml_short_keys_map_to_actual_prefixed_runtime_ids(self):
+        folder=self.root/'plugins/AgentFriend';folder.mkdir(parents=True)
+        for name in ('task-market.yml','resident-contracts.yml','route-contracts.yml'):
+            (folder/name).write_text('tasks:\n  crypt_report:\n    title: Crypt\n    steps:\n      - goal: explore\n',encoding='utf8')
+        defs,_=a.catalogue(self.root,{})
+        self.assertEqual(a.task_info('tm_crypt_report',defs)['category'],'exploration')
+        self.assertEqual(a.task_info('crypt_report',defs)['category'],'other')
+        rows,_=a.log_events([self.line(f'Guild accepted: player={P}, contract=tm_crypt_report')],'2026-10-26',defs,{})
+        self.assertEqual(rows[0]['category'],'exploration')
     def test_public_box_allowlist_does_not_expand_to_arbitrary_private_boxes(self):
         c={'guild-hall':{'services-built':True,'x':0,'y':64,'z':0}}
         points=a.public_boxes(c,{'extras':{'misc':[[16,67,13],[500,65,500]]}})

@@ -90,7 +90,9 @@ def catalogue(server, static):
                 if not ID.fullmatch(task) or not isinstance(definition, dict): continue
                 goals = [s.get('goal') for s in definition.get('steps', []) if isinstance(s, dict)]
                 primary, tags = category(goals)
-                result[task] = {'title': str(definition.get('title', task))[:160], 'category': primary, 'tags': tags}
+                # TaskMarketManager.Task.id() adds tm_ to YAML's short key.
+                # Logs, saved runs and active contracts all use that public ID.
+                result['tm_'+task] = {'title': str(definition.get('title', task))[:160], 'category': primary, 'tags': tags}
         except (OSError, ValueError, yaml.YAMLError): errors.append(name)
     try:
         doc,_=stable_yaml(folder/'dynamic-board.yml')

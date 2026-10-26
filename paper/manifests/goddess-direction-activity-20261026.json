@@ -27,7 +27,7 @@
     "output": "E:/MC/ops/state/world-activity/snapshot.json"
   },
   "tests": {
-    "activityCollector": 19,
+    "activityCollector": 20,
     "worldEvolution": 17,
     "nativeJobPlanner": 5,
     "portalProjection": 13
