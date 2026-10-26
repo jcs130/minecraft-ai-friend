@@ -14,6 +14,40 @@ const ctx: GameMemoryContext = { scope: { realm: 'weak:fixture.invalid:25565', a
 const note = { action: 'remember', kind: 'method', summary: '水下换气方法', content: '先读氧气；仅在实际水中使用。未验证长距离下潜。源码sha:test；失败task:1', source: { kind: 'hypothesis', reference: 'task:1' }, tags: ['下潜', '换气'] };
 const entry = (result: Record<string, unknown>) => result.entry as { id: string; revision: number; source: { kind: string }; content: string };
 
+it('reuses identical attributed notes across restarts without refreshing evidence or expiry', () => {
+  const dir = directory(); let now = Date.parse('2026-10-14T00:00:00Z');
+  const args = { ...note, expiresAt: '2026-10-14T00:00:01Z' };
+  const saved = new GameMemoryBook(dir, () => now).execute(args, ctx);
+  const file = join(dir, readdirSync(dir)[0]), before = readFileSync(file, 'utf8');
+  now += 5000;
+  const repeated = new GameMemoryBook(dir, () => now).execute({ ...args, tags: [...note.tags].reverse() }, ctx);
+  expect(repeated).toMatchObject({ saved: true, deduplicated: true, written: false, goalCompleted: false,
+    entry: { id: entry(saved).id, revision: 1, recordedAt: '2026-10-14T00:00:00.000Z', expired: true, currentWorldVerified: false } });
+  expect(readFileSync(file, 'utf8')).toBe(before);
+});
+
+it('keeps changed evidence, content, dimension and archived notes distinct', () => {
+  const book = new GameMemoryBook(directory()), first = entry(book.execute(note, ctx));
+  for (const change of [{ source: { ...note.source, speaker: 'another author' } },
+    { source: { ...note.source, reference: 'task:2' } }, { content: note.content + ' Revised.' },
+    { dimension: 'minecraft:the_nether' }, { expiresAt: '2026-10-14T00:00:00Z' }]) {
+    expect(entry(book.execute({ ...note, ...change }, ctx)).id).not.toBe(first.id);
+  }
+  book.execute({ action: 'archive', id: first.id, expectedRevision: 1 }, ctx);
+  expect(entry(book.execute(note, ctx)).id).not.toBe(first.id);
+});
+
+it('deduplicates a retry even at capacity without evicting older notes', () => {
+  const dir = directory(), book = new GameMemoryBook(dir), saved = entry(book.execute(note, ctx));
+  const file = join(dir, readdirSync(dir)[0]), raw = JSON.parse(readFileSync(file, 'utf8'));
+  const original = raw.entries[0];
+  raw.entries = Array.from({ length: 1000 }, (_, i) => i === 0 ? original : {
+    id: `fixture-${i}`, versions: [{ ...original.versions[0], summary: `Other note ${i}` }] });
+  writeFileSync(file, JSON.stringify(raw));
+  expect(book.execute(note, ctx)).toMatchObject({ deduplicated: true, entry: { id: saved.id } });
+  expect(() => book.execute({ ...note, summary: 'New note' }, ctx)).toThrow('capacity');
+});
+
 it('recovers the observed missing-source and misrouted-capture failures without forging runtime provenance', () => {
   const dir = directory(), book = new GameMemoryBook(dir);
   const { source: _source, ...missingSource } = note;
@@ -145,6 +179,8 @@ it('uses the same notebook through offline SDK calls, preserving deduplication, 
     try {
       const read = await restored.call('mc_memory', { action: 'get', id: saved.entry.id });
       expect(JSON.parse(read.text).entry.content).toBe(note.content);
+      const repeated = JSON.parse((await restored.call('mc_memory', note, { requestId: 'new-call-same-note' })).text);
+      expect(repeated).toMatchObject({ deduplicated: true, written: false, entry: { id: saved.entry.id, revision: 1 } });
       expect(restored.status().phase).toBe('disconnected');
     } finally { await restored.disconnect(); }
   } finally { await client.disconnect(); }
