@@ -24,6 +24,14 @@ class AgentSkillReleaseTest(unittest.TestCase):
     def setUpClass(cls):
         cls.lock = json.loads((PORTAL / "skill/runtime-lock.json").read_text(encoding="utf-8"))
         cls.file = PORTAL / "public/downloads" / ("qiandengji-agent-" + cls.lock["version"] + ".zip")
+        # Recent immutable ZIPs live in the public release mirror rather than
+        # Git. Use the existing size/hash-verified preparer for this fixture;
+        # never skip archive acceptance or rebuild a different release here.
+        if not cls.file.exists():
+            subprocess.run([
+                shutil.which("node") or "node", "scripts/prepare-downloads.mjs", "--base-url",
+                "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/",
+            ], cwd=PORTAL, check=True, capture_output=True)
         cls.release = json.loads(cls.file.with_suffix(".json").read_text(encoding="utf-8"))
         with zipfile.ZipFile(cls.file) as archive:
             cls.files = {name.removeprefix(PREFIX): archive.read(name) for name in archive.namelist() if not name.endswith("/")}
@@ -74,7 +82,11 @@ class AgentSkillReleaseTest(unittest.TestCase):
                     self.assertFalse(target.startswith("../"))
                 count += 1
         self.assertGreater(count, 50)
-        self.assertLess(len(self.files["SKILL.md"].decode("utf-8")), 1400)
+        entry = self.files["SKILL.md"].decode("utf-8")
+        self.assertEqual(entry, (PORTAL / "skill/SKILL.md").read_text(encoding="utf-8"))
+        # 1.3.3 includes private invitation files and dependency recovery. Keep
+        # its reviewed entry small while verifying the exact current source.
+        self.assertLess(len(entry), 1500)
 
     def test_old_downloads_remain_immutable(self):
         for version, digest in (
@@ -117,10 +129,13 @@ class AgentSkillReleaseTest(unittest.TestCase):
             (portal / "public/downloads").mkdir(parents=True)
             for name in ("qiandengji-agent-1.0.0.zip", self.file.name):
                 shutil.copyfile(PORTAL / "public/downloads" / name, portal / "public/downloads" / name)
-            helper = portal / "public/agent-register.mjs"
-            original = (PORTAL / "public/agent-register.mjs").read_bytes().replace(b"\r\n", b"\n")
+            helpers = {
+                name: (PORTAL / "public" / name).read_bytes().replace(b"\r\n", b"\n")
+                for name in ("agent-register.mjs", "agent-appearance.mjs")
+            }
             for label, newline in (("lf", b"\n"), ("crlf", b"\r\n")):
-                helper.write_bytes(original.replace(b"\n", newline))
+                for name, original in helpers.items():
+                    (portal / "public" / name).write_bytes(original.replace(b"\n", newline))
                 for source in (portal / "skill").rglob("*"):
                     if source.is_file():
                         content = source.read_bytes().replace(b"\r\n", b"\n")
@@ -154,6 +169,14 @@ assert.throws(()=>verifyRuntime(root),/installed_core_version_mismatch/);
 const rejected=spawnSync(process.execPath,[join(root,'scripts/mcp.mjs'),join(root,'absent/client.json')],{encoding:'utf8'});
 assert.equal(rejected.status,1);assert.match(rejected.stderr,/installed_core_version_mismatch/);
 writeFileSync(join(dir,'package.json'),JSON.stringify({name:'agent-mc-world',version:expected}));
+assert.throws(()=>verifyRuntime(root),/runtime_dependencies_missing/);
+const completed=join(root,'assets/runtime/node_modules/.package-lock.json');
+writeFileSync(completed,JSON.stringify({packages:{'node_modules/agent-mc-world':{version:expected}}}));
+assert.throws(()=>verifyRuntime(root),/runtime_dependencies_missing/);
+for(const entry of ['dist/runtime/src/client/index.js','dist/runtime/src/mcp/stdio.js']){
+ const file=join(dir,entry);mkdirSync(join(file,'..'),{recursive:true});writeFileSync(file,'');
+ if(entry.includes('/client/'))assert.throws(()=>verifyRuntime(root),/runtime_dependencies_missing/);
+}
 assert.equal(verifyRuntime(root),expected);
 """
             subprocess.run([shutil.which("node") or "node", "--input-type=module", "--eval", script,
