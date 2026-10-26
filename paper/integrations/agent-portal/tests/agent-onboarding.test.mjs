@@ -9,6 +9,7 @@ import { newSecret } from '../src/store.mjs';
 import { runAgentAccess, parseInviteLink } from '../public/agent-register.mjs';
 import { projectRoot } from '../src/config.mjs';
 import { agentSkill } from '../src/agent-skill.mjs';
+import { renderJoinPage } from '../src/agent-onboarding.mjs';
 
 async function invite(f) { const response = await f.admin.request('/agent-invites', 'POST', { label: 'Private owner label', username: 'ag_JoinLink' }); assert.equal(response.status, 201); return response.data; }
 async function inspect(f, token) { const response = await fetch(f.origin + '/api/v1/agent-access/invitation', { headers: { Authorization: 'Bearer ' + token } }); return { status: response.status, data: await response.json() }; }
@@ -35,6 +36,25 @@ test('public join page and Skill remain useful to a fetch-only Agent and never c
   assert.equal((await fetch(f.origin + '/join', { method: 'HEAD' })).status, 200);
   const discovery = (await f.admin.request('/agent-access')).data; assert.equal(discovery.joinPage, '/join'); assert.equal(discovery.skill.version, agentSkill.version);
   const old = await fetch(f.origin + '/downloads/qiandengji-agent-1.0.0.zip'); assert.equal(old.status, 200); assert.equal(old.headers.get('content-length'), '2705570');
+});
+
+test('fetch-only join routes expose the current reviewed release and direct OSS link without an invitation or JavaScript',async t=>{
+ const baseUrl='https://downloads.example.test/qiandengji/',f=await siteFixture(t,{downloads:{baseUrl}}),value=await invite(f);
+ for(const route of ['/join','/join.html','/downloads.html']){
+  const response=await fetch(f.origin+route),html=await response.text(),dom=new JSDOM(html);t.after(()=>dom.window.close());
+  const download=dom.window.document.querySelector(route==='/downloads.html'?'#skill-download':'#join-download');
+  assert.equal(download.getAttribute('href'),baseUrl+agentSkill.sha256+'/'+agentSkill.filename);
+  assert.ok(download.textContent.includes(agentSkill.version));assert.ok(download.textContent.includes(agentSkill.sdkVersion));
+  assert.ok(dom.window.document.querySelector(route==='/downloads.html'?'#skill-checksum':'#join-checksum').textContent.includes(agentSkill.sha256));
+  assert.ok(!html.includes('{{'));assert.ok(!html.includes(value.token));assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+  const head=await fetch(f.origin+route,{method:'HEAD'});assert.equal(head.headers.get('content-length'),String(Buffer.byteLength(html)));assert.equal((await head.arrayBuffer()).byteLength,0);
+ }
+ assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM agent_clients').get().n,0);
+});
+
+test('public guide interpolation escapes configured values rather than creating markup',()=>{
+ const html=renderJoinPage('<a href="{{SKILL_DOWNLOAD}}">{{SKILL_VERSION}}</a>{{GAME_ADDRESS}}',{skill:{...agentSkill,version:'<script>'},downloadUrl:'https://example.test/" onclick="x',gameAddress:'<b>host</b>'});
+ const dom=new JSDOM(html);try{assert.equal(dom.window.document.querySelector('script'),null);assert.equal(dom.window.document.querySelector('a').getAttribute('onclick'),null);assert.equal(dom.window.document.querySelector('b'),null);}finally{dom.window.close();}
 });
 test('full link helper validates origin and private files, exchanges once and preserves its identity on retry', async t => {
   const f = await siteFixture(t), value = await invite(f), linkFile = path.join(f.root, 'link.txt'), file = path.join(f.root, 'identity.json');

@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {inflateRawSync} from 'node:zlib';
 import {spawn} from 'node:child_process';
 import {execFileSync} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
 import {agentSkill} from '../src/agent-skill.mjs';
 import {projectRoot} from '../src/config.mjs';
 import {offlineUuid} from '../src/game-accounts.mjs';
@@ -56,10 +57,18 @@ async function fixture(t,name){
  const ready=()=>{f.portal.accounts.remote={capabilities:async()=>({ready:true}),writeRequest:async()=>{writes++;},readResult:async requestId=>({requestId,username:name,playerUuid:offlineUuid(name),state:'succeeded'})};};
  return{...f,root,identity,profile,args,ready,writes:()=>writes};
 }
+// These CLI tests exercise install-state handling, not Minecraft execution.
+// Actual SDK loading is verified separately against the installed release.
+async function declareRuntime(root,version=agentSkill.sdkVersion){
+ const directory=path.join(root,'assets/runtime/node_modules/agent-mc-world');await fs.mkdir(directory,{recursive:true});
+ await fs.writeFile(path.join(directory,'package.json'),JSON.stringify({name:'agent-mc-world',version}));
+ await fs.writeFile(path.join(root,'assets/runtime/node_modules/.package-lock.json'),JSON.stringify({packages:{'node_modules/agent-mc-world':{version}}}));
+ for(const name of ['client/index.js','mcp/stdio.js']){const file=path.join(directory,'dist/runtime/src',name);await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,'// fixture only');}
+}
 
 test('the distributed one-command CLI creates the MCP profile and resumes without replacing a body or exposing passwords',async t=>{
  if(!credentialStoreAvailable(t))return;
- const f=await fixture(t,'ag_ZipJoin');f.ready();
+ const f=await fixture(t,'ag_ZipJoin');f.ready();await declareRuntime(f.root);
  const first=await cli(f.root,f.args);assert.equal(first.code,0,first.err);
  const result=JSON.parse(first.out);assert.equal(result.state,'ready');assert.equal(result.gameConnected,false);assert.equal(result.modelCalled,false);
  const identity=JSON.parse(await fs.readFile(f.identity,'utf8')),config=JSON.parse(await fs.readFile(path.join(f.profile,'client.json'),'utf8'));
@@ -77,7 +86,43 @@ test('the distributed CLI reports a temporarily unavailable bridge with nonzero 
  const f=await fixture(t,'ag_ZipWait'),pending=await cli(f.root,f.args);
  assert.equal(pending.code,2,pending.err);assert.equal(JSON.parse(pending.out).state,'awaiting_game_bridge');
  await assert.rejects(fs.access(f.profile));const original=JSON.parse(await fs.readFile(f.identity,'utf8'));
- f.ready();const done=await cli(f.root,f.args);assert.equal(done.code,0,done.err);assert.equal(f.writes(),1);
+ f.ready();await declareRuntime(f.root);const done=await cli(f.root,f.args);assert.equal(done.code,0,done.err);assert.equal(f.writes(),1);
  assert.equal(JSON.parse(await fs.readFile(f.identity,'utf8')).clientId,original.clientId);
  assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM agent_clients').get().n,1);
+});
+
+test('a created account with missing local dependencies is resumable and is never reported as connected or registered twice',async t=>{
+ if(!credentialStoreAvailable(t))return;
+ const f=await fixture(t,'ag_ZipDeps');f.ready();
+ const first=await cli(f.root,f.args);assert.equal(first.code,2,first.err);
+ const waiting=JSON.parse(first.out);assert.equal(waiting.state,'awaiting_dependencies');assert.equal(waiting.accountState,'ready');
+ assert.equal(waiting.gameAccountCreated,true);assert.equal(waiting.dependenciesReady,false);assert.equal(waiting.gameConnected,false);
+ const identity=JSON.parse(await fs.readFile(f.identity,'utf8')),config=await fs.readFile(path.join(f.profile,'client.json'),'utf8');
+ await fs.writeFile(path.join(f.profile,'body-data','keep.txt'),'pending body');
+ const again=await cli(f.root,f.args);assert.equal(again.code,2,again.err);assert.equal(JSON.parse(again.out).reused,true);
+ await declareRuntime(f.root);
+ const done=await cli(f.root,f.args);assert.equal(done.code,0,done.err);assert.equal(JSON.parse(done.out).dependenciesReady,true);
+ assert.equal(await fs.readFile(path.join(f.profile,'client.json'),'utf8'),config);assert.equal(await fs.readFile(path.join(f.profile,'body-data','keep.txt'),'utf8'),'pending body');
+ assert.equal(JSON.parse(await fs.readFile(f.identity,'utf8')).clientId,identity.clientId);assert.equal(f.writes(),1);
+ for(const secret of [identity.clientSecret,identity.gamePassword,identity.token])assert.ok(!(first.out+first.err+again.out+again.err+done.out+done.err).includes(secret));
+});
+
+test('runtime preparation distinguishes unavailable npm, install failure, skipped install and verified dependencies without leaking subprocess output',async t=>{
+ const root=await unpack(t),{prepareRuntime}=await import(pathToFileURL(path.join(root,'scripts/setup.mjs')));
+ let calls=0;
+ const noNpm=prepareRuntime({root,resolveNpm:()=>{calls++;throw Error('private registry token');}});
+ assert.equal(noNpm.reason,'npm_unavailable');assert.equal(noNpm.dependenciesReady,false);assert.equal(calls,1);
+ const skipped=prepareRuntime({root,skipInstall:true,resolveNpm:()=>{throw Error('must not run');}});
+ assert.equal(skipped.reason,'runtime_dependencies_missing');assert.equal(skipped.dependenciesReady,false);
+ const failed=prepareRuntime({root,resolveNpm:()=>'/fixture/npm-cli.js',run:()=>{throw Object.assign(Error('secret registry credential'),{stdout:'secret',stderr:'secret'});}});
+ assert.equal(failed.reason,'dependency_install_failed');assert.ok(!JSON.stringify(failed).includes('secret'));
+ const installed=prepareRuntime({root,resolveNpm:()=>'/fixture/npm-cli.js',run:(command,args,options)=>{
+   assert.equal(command,process.execPath);assert.deepEqual(args,['/fixture/npm-cli.js','ci','--ignore-scripts','--no-audit','--no-fund']);
+   assert.equal(options.cwd,path.join(root,'assets/runtime'));
+   execFileSync(process.execPath,['--input-type=module','-e',"import fs from 'node:fs';fs.mkdirSync('node_modules/agent-mc-world',{recursive:true});fs.writeFileSync('node_modules/agent-mc-world/package.json',JSON.stringify({name:'agent-mc-world',version:process.argv[1]}));fs.writeFileSync('node_modules/.package-lock.json',JSON.stringify({packages:{'node_modules/agent-mc-world':{version:process.argv[1]}}}));for(const name of ['client/index.js','mcp/stdio.js']){const p='node_modules/agent-mc-world/dist/runtime/src/'+name;fs.mkdirSync(p.slice(0,p.lastIndexOf('/')),{recursive:true});fs.writeFileSync(p,'// fixture only');}",agentSkill.sdkVersion],{cwd:options.cwd,windowsHide:true});
+ }});
+ assert.equal(installed.dependenciesReady,true);assert.equal(installed.sdkVersion,agentSkill.sdkVersion);
+ const existing=prepareRuntime({root,skipInstall:true,resolveNpm:()=>{throw Error('must not run');}});assert.equal(existing.dependenciesReady,true);
+ await fs.unlink(path.join(root,'assets/runtime/node_modules/.package-lock.json'));assert.equal(prepareRuntime({root,skipInstall:true}).dependenciesReady,false);
+ await declareRuntime(root,'0.0.0');assert.equal(prepareRuntime({root,skipInstall:true}).dependenciesReady,false);
 });

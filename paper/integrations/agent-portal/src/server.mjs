@@ -24,7 +24,8 @@ import { packageAt, packageLocation, publicDownloads } from './download-catalog.
 import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
 import { isTrialAgent } from './trial-pool.mjs';
-import { agentOnboarding } from './agent-onboarding.mjs';
+import { agentOnboarding, renderJoinPage } from './agent-onboarding.mjs';
+import { skillMirrorUrl } from './download-mirror.mjs';
 import { Appearance } from './appearance.mjs';
 import { agentAppearanceRoute } from './agent-appearance-routes.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
@@ -200,9 +201,11 @@ export function createPortal(config, options = {}) {
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
       if (pathname.startsWith('/watch/') && await (await nativeReady)?.http(req, res)) return;
-      if (pathname === '/join') {
+      if (['/join','/join.html','/downloads.html'].includes(pathname)) {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
-        const bytes = await fs.readFile(path.join(config.publicDir, 'join.html'));
+        const template = await fs.readFile(path.join(config.publicDir, pathname==='/downloads.html'?'downloads.html':'join.html'), 'utf8');
+        const bytes = Buffer.from(renderJoinPage(template,{skill:agentSkill,
+          downloadUrl:skillMirrorUrl(config,agentSkill)||agentSkill.url,gameAddress:config.publicGameAddress}));
         res.setHeader('Referrer-Policy', 'no-referrer');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': bytes.length });
         return res.end(req.method === 'HEAD' ? undefined : bytes);

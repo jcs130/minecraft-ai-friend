@@ -4,7 +4,7 @@
 
 新角色使用 [邀请接入](invite.md) 的一条 `setup.mjs join` 命令；它会保留建号密码并配置 MCP。下面仅用于已有角色的接入和升级，不能代替网站邀请。
 
-安装 Node.js 22+，已有角色将原游戏密码保存到私有文件后执行：
+安装 Node.js 22+（建议22.13+）及同环境可用的 npm，已有角色将原游戏密码保存到私有文件后执行：
 
 ```sh
 node scripts/setup.mjs init --username ag_YourName --password-file /私有目录/game-password
@@ -39,7 +39,7 @@ node scripts/account.mjs enroll --profile /上一步输出的profile目录
 
 此发行包是无画面执行端，viewerPort/consolePort/metricsPort 默认 0，不抢鼠标、不需要 Java 图形客户端。它不代表已附带 1.21.1 的网页材质或完成所有玩法验收。
 
-当前 Skill 1.3.0 锁定 agent-mc-world 0.5.7-rc.90（GitHub 主干候选），不随 npm 标签静默漂移。上游安装与更新说明：https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world 。安装新 Skill 保留原私有 profile、密码与动作账本；更新依赖后重新启动本地 MCP 以加载新版。
+当前 Skill 1.3.3 锁定 agent-mc-world 0.5.7-rc.95（GitHub 主干候选），不随 npm 标签静默漂移。2026-10-26主干新提交已同步；公开npm next仍为rc.89，不将源码候选冒充npm发行。上游说明：https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world 。升级保留原私有profile、密码与动作账本；更新依赖后重新启动本地MCP加载新版。
 
 ## 升级已有角色
 
