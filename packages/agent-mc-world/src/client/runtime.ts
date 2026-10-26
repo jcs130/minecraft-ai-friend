@@ -475,11 +475,21 @@ export class MinecraftAgentClient {
       throw new Error('Local world identity is not initialized; connect explicitly before using its notebook');
     const directory = join(this.options.dataDir, 'minecraft-memory');
     const memory = new GameMemoryService(new GameMemoryBook(directory), directory);
-    const result = await memory.execute(args, { scope: {
-      realm: marker ? `uuid:${marker.uuid}` : `weak:${address}|`,
-      account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: cfg.memoryAgentId ?? this.options.agentName ?? cfg.username,
-    }, dimension: null }, cfg.memory, signal);
-    return { text: JSON.stringify(result), meta: { gameMemory: result } };
+    try {
+      const result = await memory.execute(args, { scope: {
+        realm: marker ? `uuid:${marker.uuid}` : `weak:${address}|`,
+        account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: cfg.memoryAgentId ?? this.options.agentName ?? cfg.username,
+      }, dimension: null }, cfg.memory, signal);
+      return { text: JSON.stringify(result), meta: { gameMemory: result } };
+    } catch (error) {
+      signal.throwIfAborted();
+      // A failed evidence read has no action outcome to reconcile. Preserve its
+      // contract error through the request ledger/MCP instead of hiding it as
+      // request_outcome_unknown. Mutating and remote-service uncertainty stays.
+      if (args.action === 'experience' && ['help', 'list', 'get', 'stats'].includes(String(args.operation ?? 'help')))
+        return { text: `[mc_memory] ${String(error)}`, failed: true };
+      throw error;
+    }
   }
 }
 

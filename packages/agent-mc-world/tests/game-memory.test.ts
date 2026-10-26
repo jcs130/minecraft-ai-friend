@@ -186,6 +186,20 @@ it('uses the same notebook through offline SDK calls, preserving deduplication, 
   } finally { await client.disconnect(); }
 });
 
+it('preserves offline evidence-read validation failures as known read failures across request replay', async () => {
+  const dataDir=directory(),cfg={...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'fixture.invalid',username:'Alice'};
+  const client=new MinecraftAgentClient({cfg,dataDir,log:nullLogger()});
+  try {
+    const args={action:'experience',operation:'list',limit:2,input:{limit:3}};
+    const first=await client.call('mc_memory',args,{requestId:'invalid-evidence-page'});
+    expect(first.failed).toBe(true);expect(first.text).toContain('Conflicting experience limit');
+    expect(first.text).not.toContain('request_outcome_unknown');
+    expect(await client.call('mc_memory',args,{requestId:'invalid-evidence-page'})).toEqual(first);
+    expect(client.request('invalid-evidence-page')).toMatchObject({status:'returned',outcome:{failed:true},goal_completed:false});
+    expect(client.status().phase).toBe('disconnected');
+  } finally {await client.disconnect();}
+});
+
 it('holds the offline writer lease until cancellation and releases it on journal failure', async () => {
   const dataDir = directory(), cfg = { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'fixture.invalid', username: 'Alice',
     memory: { mode: 'remote' as const, provider: 'http' as const, endpoint: 'https://memory.invalid', timeoutMs: 30000 } };
