@@ -1,7 +1,21 @@
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
 
+// Paper's spatial entity lookup scans the bounding-box sections, even when
+// almost all of them are empty. Never turn a loaded-entity census into a
+// world-sized spatial query (the 2026-10-26 diagnostic caused a watchdog stop).
+export function assertSafeSelectorRanges(text) {
+  for (const match of text.matchAll(/\b(distance|dx|dy|dz)\s*=\s*([^\s,\]]+)/g)) {
+    const [_, key, value] = match;
+    const upper = key === 'distance' ? value.split('..').at(-1) : value;
+    if (!upper) continue; // An open upper bound does not construct a huge AABB.
+    const size = Number(upper);
+    if (Number.isFinite(size) && Math.abs(size) > 256) throw new Error('Unsafe spatial selector: use a radius/extent of at most 256 blocks or inspect saved entity data');
+  }
+}
+
 export function command(text, timeoutMs = 60000, connection = {}) {
+  assertSafeSelectorRanges(text);
   const properties = readFileSync(connection.properties ?? 'E:/MC/server/server.properties', 'utf8');
   const password = properties.match(/^rcon\.password=(.*)$/m)?.[1].trim();
   if (!password) throw new Error('RCON password is not configured');
