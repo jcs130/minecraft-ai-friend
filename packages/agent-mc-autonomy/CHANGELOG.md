@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.109
+
+- Publish the confirmed stopped-connection state without stale pending actions after the native disconnect has stopped its queue. Keep failed-disconnect uncertainty and original native task outcomes intact.
+- Consume core rc.107's confirmed transfer to an empty hotbar slot before changing the held item; keep protected selected stacks, cursor checks and denial barriers intact.
+
 ## 0.2.108
 
 - Pin core rc.106, preserving equipment-confirmed ranged combat, original navigation hand failures, bounded paginated operation evidence and actual projectile/shield observations.
