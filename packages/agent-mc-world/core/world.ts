@@ -3483,11 +3483,11 @@ export class MinecraftWorld implements World {
   }
 
   requestFacts(): WorldRequestFacts | null {
-    if (!this.bridge?.connected) return null;
+    if (!this.bridge?.connected) return this.unavailableRequestFacts('disconnected');
     // SDK hosts need not drain deferred event renders. Sample cheap live
     // state here, independently of that delivery cache; no 16-block scan.
     const snap = this.snapshot({ scanBlocks: false });
-    if (!snap) return null;
+    if (!snap) return this.unavailableRequestFacts('snapshot-unavailable');
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) },
@@ -3555,6 +3555,26 @@ export class MinecraftWorld implements World {
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
+  }
+
+  /** A loss of observation replaces current-state streams with explicit unknowns.
+   * Returning null made hosts resurrect every historical delta as required context.
+   * Keep local intent and attributed terminal evidence, never cached body readings.
+   */
+  private unavailableRequestFacts(reason: 'disconnected' | 'snapshot-unavailable'): WorldRequestFacts {
+    const last = this.lastFinishedTask;
+    const parts = [
+      { key: 'availability', text: JSON.stringify({ observedAt: new Date().toISOString(), reason,
+        connection: this.connectionReadiness(), currentWorldVerified: false,
+        position: null, dimension: null, health: null, inventory: null, nearby: null,
+        bodyTask: null, taskProgress: null }) },
+      { key: 'observationBoundary', text: 'Minecraft 当前现场读数不可用；位置、维度、生命、背包、周围环境及身体任务进展均未验证，null 表示未知，不表示空或没有任务。历史快照和增量不能充当当前状态；原文仍在事件账本。恢复后重新读取现场，并核对原动作终态再决定下一步。' },
+      { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
+      { key: 'lastTask', text: renderLastTaskReadout(last
+        ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
+    ];
+    return { text: parts.map(part => part.text).join('\n'), parts,
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 

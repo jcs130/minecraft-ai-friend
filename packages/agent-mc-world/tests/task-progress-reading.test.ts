@@ -37,7 +37,7 @@ it('does not lend old progress to another task or step, and represents holds and
 
 const rigs:ReturnType<typeof methodHarness>[]=[];
 afterEach(()=>{for(const r of rigs.splice(0))r.close();});
-it('declares progress coverage only alongside self-contained body facts; disconnect removes that coverage',()=>{
+it('declares progress coverage alongside fresh facts or an explicit unavailable-state replacement',()=>{
  const r=methodHarness('1.21.1');rigs.push(r);
  const original=structuredClone(progress);
  (r.world as any).taskProgressReading.observe(original);
@@ -46,7 +46,9 @@ it('declares progress coverage only alongside self-contained body facts; disconn
  expect(facts.parts!.find(p=>p.key==='taskProgress')!.text).toContain('lastObservedProgress');
  expect(facts.parts!.find(p=>p.key==='queue')).toBeDefined();
  expect((r.world as any).lastFinishedTask).toBeNull();
- (r.world as any).bridge.connected=false;expect(r.world.requestFacts()).toBeNull();
+ (r.world as any).bridge.connected=false;
+ expect(r.world.requestFacts()?.text).toContain('身体任务进展均未验证');
+ expect(r.world.requestFacts()?.parts?.find(p=>p.key==='taskProgress')).toBeUndefined();
 });
 
 it('delivers the same task progress through independent SDK and actual MCP transport without replay',async()=>{
@@ -68,6 +70,16 @@ it('delivers the same task progress through independent SDK and actual MCP trans
   const text=response.content.find(p=>p.type==='text');
   if(text?.type!=='text')throw Error('Missing MCP facts');
   expect(JSON.parse(text.text).parts.find((p:{key:string})=>p.key==='taskProgress').text).toBe(sdk);
+  expect(runtime.journal.store.latestCursor()).toBe(before);
+  (r.world as any).bridge.connected=false;
+  const unavailable=await client.callTool({name:'mc_protocol',arguments:{protocol:'agent-mc/v1',action:'facts'}});
+  expect(unavailable.isError).not.toBe(true);
+  const offlineText=unavailable.content.find(p=>p.type==='text');
+  if(offlineText?.type!=='text')throw Error('Missing offline MCP facts');
+  const offline=JSON.parse(offlineText.text);
+  expect(offline.parts.some((p:{key:string})=>p.key==='taskProgress')).toBe(false);
+  expect(offline.parts.find((p:{key:string})=>p.key==='availability').text).toContain('"currentWorldVerified":false');
+  expect(runtime.status().facts!.snapshotTypes).toContain('minecraft.task.progress');
   expect(runtime.journal.store.latestCursor()).toBe(before);
  }finally{await client.close();await server.close();await runtime.disconnect();rmSync(dir,{recursive:true,force:true});}
 });
