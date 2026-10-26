@@ -824,7 +824,7 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
         progress.unit = unit;
       }
     }
-    const plan=parseGoalPlan(r.plan);if('error' in plan)return plan;
+    const plan=parseGoalPlan(r.plan,'revise.plan');if('error' in plan)return plan;
     return {kind:'revise',slot:Number(r.slot),expectedRevision:Number(r.expectedRevision),text:(r.text as string).trim(),plan,reason:(r.reason as string).trim(),...(progress !== undefined ? {progress} : {})};
   }
   if (which === 'milestone' || which === 'reopen') {

@@ -6,6 +6,16 @@ const GOAL_PLAN_MAX_STEPS = 12;
 const GOAL_PLAN_MAX_PROBES_PER_STEP = 8;
 const GOAL_PLAN_MAX_PROBES = 24;
 
+const GOAL_PROBE_FIELDS: Record<string, readonly string[]> = {
+  block: ['source', 'at', 'is'],
+  inventory: ['source', 'item', 'count'],
+  blueprint: ['source', 'key', 'loaded', 'matched'],
+  position: ['source', 'region', 'dimension'],
+  entity: ['source', 'type', 'region', 'dimension', 'count'],
+  item: ['source', 'item', 'region', 'dimension', 'count'],
+  status: ['source', 'field', 'equals'],
+};
+
 type GoalCompare = { op: '=' | '>=' | '<='; n: number };
 type Region = { min: PositionXYZ; max: PositionXYZ; dimension: string };
 
@@ -237,17 +247,8 @@ function parseProbe(value: unknown, path: string): GoalProbe | { error: string }
   if (!body) return { error: `${path} 要一个旁证对象` };
   const source = body.source;
   if (typeof source !== 'string') return { error: `${path}.source 要一个来源名` };
-  const allowedBySource: Record<string, readonly string[]> = {
-    block: ['source', 'at', 'is'],
-    inventory: ['source', 'item', 'count'],
-    blueprint: ['source', 'key', 'loaded', 'matched'],
-    position: ['source', 'region', 'dimension'],
-    entity: ['source', 'type', 'region', 'dimension', 'count'],
-    item: ['source', 'item', 'region', 'dimension', 'count'],
-    status: ['source', 'field', 'equals'],
-  };
-  const allowed = allowedBySource[source];
-  if (!allowed) return { error: `${path}.source 不认识「${source}」` };
+  if (!Object.hasOwn(GOAL_PROBE_FIELDS, source)) return { error: `${path}.source 不认识「${source}」` };
+  const allowed = GOAL_PROBE_FIELDS[source];
   const extras = unknownFields(body, allowed);
   if (extras.length > 0) return { error: `${path} 有不属于 ${source} 的字段: ${extras.join(', ')}` };
 
@@ -312,15 +313,33 @@ function parseProbe(value: unknown, path: string): GoalProbe | { error: string }
     : { source: 'status', field: field as 'health' | 'food' | 'oxygen', equals };
 }
 
-export function parseGoalPlan(value: unknown): GoalPlan | { error: string } {
-  if (!Array.isArray(value) || value.length === 0) return { error: 'add.plan 至少要一步' };
+function probeRepairHint(value: unknown): string {
+  const source = objectOf(value)?.source;
+  if (typeof source !== 'string' || !Object.hasOwn(GOAL_PROBE_FIELDS, source)) {
+    return `source 只收 ${Object.keys(GOAL_PROBE_FIELDS).join('/')}。`;
+  }
+  let hint = `${source} 只收 ${GOAL_PROBE_FIELDS[source].join(', ')}。`;
+  if (source === 'position') {
+    hint += '结构示例（坐标和维度是占位值，请按实际目标填写）：'
+      + '{"source":"position","region":[[0,63,0],[2,66,2]],"dimension":"minecraft:overworld"}。';
+  }
+  if (source === 'item') {
+    hint += 'item 统计区域内的掉落物；结构示例（请替换占位值）：'
+      + '{"source":"item","item":"arrow","region":[[0,63,0],[2,66,2]],"dimension":"minecraft:overworld","count":">=1"}。';
+  }
+  hint += '服务端命令结果、委托状态或历史动作成果应在本步改用 judgment，删除 verify；完成时再用 milestone 引用真实回执。';
+  return hint;
+}
+
+export function parseGoalPlan(value: unknown, planPath = 'add.plan'): GoalPlan | { error: string } {
+  if (!Array.isArray(value) || value.length === 0) return { error: `${planPath} 至少要一步` };
   if (value.length > GOAL_PLAN_MAX_STEPS) {
-    return { error: `add.plan 一次最多 ${GOAL_PLAN_MAX_STEPS} 步` };
+    return { error: `${planPath} 一次最多 ${GOAL_PLAN_MAX_STEPS} 步` };
   }
   const steps: GoalPlanStep[] = [];
   let probeCount = 0;
   for (const [index, raw] of value.entries()) {
-    const path = `add.plan[${index}]`;
+    const path = `${planPath}[${index}]`;
     const body = objectOf(raw);
     if (!body) return { error: `${path} 要一个对象` };
     const extras = unknownFields(body, ['do', 'verify', 'judgment']);
@@ -344,12 +363,12 @@ export function parseGoalPlan(value: unknown): GoalPlan | { error: string } {
     }
     probeCount += rawProbes.length;
     if (probeCount > GOAL_PLAN_MAX_PROBES) {
-      return { error: `add.plan 一共最多 ${GOAL_PLAN_MAX_PROBES} 个旁证` };
+      return { error: `${planPath} 一共最多 ${GOAL_PLAN_MAX_PROBES} 个旁证` };
     }
     const probes: GoalProbe[] = [];
     for (const [probeIndex, rawProbe] of rawProbes.entries()) {
       const parsed = parseProbe(rawProbe, `${path}.verify[${probeIndex}]`);
-      if ('error' in parsed) return parsed;
+      if ('error' in parsed) return { error: `${parsed.error}\n${probeRepairHint(rawProbe)}` };
       probes.push(parsed);
     }
     steps.push({ do: action, verify: probes, judgment: null, state: 'pending', evidence: null, completedAt: null });
