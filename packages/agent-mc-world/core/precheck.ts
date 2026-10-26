@@ -24,6 +24,7 @@ import { zhDimension, zhEntity, zhName } from './names.ts';
 import { invItemNamed, noSuchItem } from './inventory.ts';
 import { itemCustomName } from './item-display.ts';
 import { bestRangedWeapon, hasRangedLos, hasUsableArrows, type RangedTarget } from './ranged.ts';
+import { bestWeapon } from './melee.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { inventoryIdentityText } from './item-identities.ts';
@@ -603,8 +604,19 @@ function attackEntity(bot: Bot, target: string): RangedTarget | null {
   return best?.target ?? null;
 }
 
-/** 强制远程的确定性缺口；auto/melee 不在试算阶段替任务选择武器。 */
+/** Report the requested mode's current equipment without selecting a different mode. */
 function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
+  if (call.mode === 'melee' && inventoryReadConfirmed(bot) && !bestWeapon(bot)) {
+    const target = precheckTarget(bot, call.target, 32, 'attack.noTarget');
+    if (target) return target;
+    const bow = bestRangedWeapon(bot);
+    const arrows = hasUsableArrows(bot);
+    return { level: 'soft', rule: 'attack.meleeLoadout',
+      text: `当前随身没有执行器可自动选用的近战武器，主手为 ${bot.heldItem?.name ?? '空'}；`
+        + '本步明确指定 melee，只会近战挥击，不会射箭。'
+        + (bow ? `当前有 ${bow.name}${arrows ? '和普通箭' : '，但没有普通箭'}；远程命中与安全位置尚未验证。` : '')
+        + '这是受理时库存，执行前会重查；未改写模式或代为补给。' };
+  }
   if (call.mode !== 'ranged' && call.mode !== 'kite') return precheckTarget(bot, call.target, 32, 'attack.noTarget');
   if (!bestRangedWeapon(bot)) {
     return { level: 'hard', text: '包里没有可用的弓;强制远程不会改用近战', rule: 'attack.noBow' };
