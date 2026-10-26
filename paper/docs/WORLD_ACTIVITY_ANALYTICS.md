@@ -40,6 +40,6 @@
 
 - `validateActivitySnapshot(raw,{now})`核对版本、时间、窗口、数量与记录结构；不接受未来时间、负数量或净额矛盾。
 - `activityReplacement(previous,incoming,{now})`用于内部同步整份替换，拒绝旧时间和相同时间不同内容；幂等重发changed=false。
-- `projectWorldActivity(snapshot,roster,{days:7|30,excludedNames,now})`返回可公开汇总。roster必须来自门户已验证的当前居民来源，excludedNames合并hiddenPlayers与archived_test_roles；源里的名字不能自行取得可见性。排除观察者/管理员/测试/历史冲突身份后，才汇总分类、居民、公共物资与在途。输出没有原始UUID、私有source字段或日志路径。
+- `projectWorldActivity(snapshot,roster,{days:7|30,excludedNames,now})`返回可公开汇总，以及每位居民按来源/物品分组的存取明细；只捐物而未接单的居民也收录。roster必须来自门户已验证的当前居民来源，excludedNames合并hiddenPlayers与archived_test_roles；源里的名字不能自行取得可见性。排除观察者/管理员/测试/历史冲突身份后，才汇总分类、居民、公共物资与在途。输出没有原始UUID、私有source字段或日志路径。
 
-空源/不可用返回totals=null；180秒以上标stale。分类的accepted/completed/abandoned为各自观察数，不计算完成率。contributions始终按source及material分别计数，不生成混合货币值。12项门户投影回归已通过，包括隐藏者贡献不泄漏、源名字冒充拒绝、重复同步/旧包/冲突时间、窗口、来源和未知状态；**纯模块通过不等于网页入口已上线**。网站线负责原同步渠道、路由、页面与匹配发布，本工作区不重启其在途发布。
+空源/不可用返回totals=null；180秒以上标stale。分类的accepted/completed/abandoned为各自观察数，不计算完成率。contributions始终按source及material分别计数，不生成混合货币值。13项门户投影回归已通过，包括隐藏者贡献不泄漏、源名字冒充拒绝、重复同步/旧包/冲突时间、窗口、来源和未知状态；**纯模块通过不等于网页入口已上线**。网站线负责原同步渠道、路由、页面与匹配发布，本工作区不重启其在途发布。

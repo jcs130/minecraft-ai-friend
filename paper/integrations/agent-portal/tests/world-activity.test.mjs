@@ -63,3 +63,8 @@ test('malformed bounds, future timestamp and inconsistent item quantities reject
 test('conflicting trusted roster identity fails closed',()=>{
   const s=base();s.commissions=[row('a')];assert.equal(projectWorldActivity(s,[roster[0],{...roster[0],name:'Different'}],{now:NOW}).totals.completed,0);
 });
+test('donation-only residents have attributable per-source item totals, with no hidden donor leakage',()=>{
+  const s=base();s.donations=[donation('a'),donation('b',A,'public_chest',0,1),donation('c',A,'commission_delivery',10),donation('secret',B,'public_chest',999)];
+  const p=project(s);assert.equal(p.residents.length,1);assert.equal(p.residents[0].name,'Resident');assert.equal(p.totals.participants,1);
+  const own=p.residents[0].contributions;assert.equal(own.find(r=>r.source==='public_chest').net,1);assert.equal(own.find(r=>r.source==='commission_delivery').deposited,10);
+});

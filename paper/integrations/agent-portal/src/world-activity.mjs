@@ -87,7 +87,7 @@ export function projectWorldActivity(snapshot,roster,{days=7,excludedNames=[],no
   const ids=publicIdentities(roster,excludedNames);
   const groups=new Map(Object.entries(activityCategories).map(([id,label])=>[id,{id,label,completed:0,accepted:0,abandoned:0,active:0,participants:new Set()}]));
   const residents=new Map();
-  const resident=id=>{if(!residents.has(id))residents.set(id,{name:ids.get(id),completed:0,accepted:0,abandoned:0,active:0});return residents.get(id);};
+  const resident=id=>{if(!residents.has(id))residents.set(id,{name:ids.get(id),completed:0,accepted:0,abandoned:0,active:0,contributions:new Map()});return residents.get(id);};
   const seen=new Set();
   const totals={completed:0,accepted:0,abandoned:0,active:0,participants:0};
   for(const row of snapshot.commissions) {
@@ -100,7 +100,7 @@ export function projectWorldActivity(snapshot,roster,{days=7,excludedNames=[],no
     const identity=[row.playerUuid,row.system,row.taskId].join(':');
     if(!ids.has(row.playerUuid)||activeIds.has(identity))continue;
     activeIds.add(identity);totals.active++;resident(row.playerUuid).active++;
-    groups.get(category(row.category)).active++;
+    groups.get(category(row.category)).active++;groups.get(category(row.category)).participants.add(row.playerUuid);
     active.push({name:ids.get(row.playerUuid),system:row.system,taskId:row.taskId,title:text(row.title),category:category(row.category)});
   }
   const contributions=[],donationIds=new Set();
@@ -111,6 +111,9 @@ export function projectWorldActivity(snapshot,roster,{days=7,excludedNames=[],no
       donationIds.add(row.id);contributors.add(row.playerUuid);
       if(!materials.has(row.material))materials.set(row.material,{material:row.material,deposited:0,withdrawn:0,net:0,transactions:0});
       const material=materials.get(row.material);for(const key of ['deposited','withdrawn','net','transactions'])material[key]+=row[key];
+      const own=resident(row.playerUuid).contributions,ownKey=source+':'+row.material;
+      if(!own.has(ownKey))own.set(ownKey,{source,material:row.material,deposited:0,withdrawn:0,net:0,transactions:0});
+      for(const key of ['deposited','withdrawn','net','transactions'])own.get(ownKey)[key]+=row[key];
     }
     contributions.push({source,participants:contributors.size,materials:[...materials.values()].sort((a,b)=>a.material.localeCompare(b.material))});
   }
@@ -119,6 +122,6 @@ export function projectWorldActivity(snapshot,roster,{days=7,excludedNames=[],no
     stale:now-Date.parse(snapshot.observedAt)>180000,window:{from,through,requestedFrom,days,timezone:'Asia/Shanghai'},
     coverage:publicCoverage(snapshot.coverage,from,through),totals:snapshot.available?totals:null,
     categories:snapshot.available?[...groups.values()].map(r=>({...r,participants:r.participants.size})):[],
-    contributions,active,residents:[...residents.values()].sort((a,b)=>b.completed-a.completed||a.name.localeCompare(b.name)),
+    contributions,active,residents:[...residents.values()].map(r=>({...r,contributions:[...r.contributions.values()].sort((a,b)=>a.source.localeCompare(b.source)||a.material.localeCompare(b.material))})).sort((a,b)=>b.completed-a.completed||a.name.localeCompare(b.name)),
     notices:['显示已观察到的完整交付、接取与放弃次数；缺少一致分母，不计算完成率。','公共箱存入、取出与任务交付分别展示；不把物品件数合并成捐赠价值。','在途是服务器上次保存的状态，不代表居民此刻在线或正在执行。']};
 }
