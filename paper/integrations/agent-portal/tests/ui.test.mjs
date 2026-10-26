@@ -240,13 +240,71 @@ test('public growth, event filters and an offline live page work without exposin
   assert.equal(ui.document.querySelectorAll('iframe').length, 0);
 });
 
+test('role and account entry guide plugin setup without silently creating an account or invite', async t => {
+  const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
+  ui.document.querySelector('#modal').close();
+  for (const view of ['agents', 'account']) {
+    ui.window.location.hash = view;
+    await waitFor(() => ui.document.querySelector('#main [data-action="connect-agent"]'));
+    assert.equal(ui.document.querySelector('#main [data-action="new-game-agent"]'), null);
+    const before = ui.requests.length;
+    ui.click('#main [data-action="connect-agent"]');
+    assert.equal(ui.requests.length, before, 'reading guidance is read-only');
+    const guide = ui.document.querySelector('[data-agent-setup]');
+    for (const phrase of ['先装插件', 'NEKO', 'Cortico', 'DSH', 'Skill', '不要先在网页', '不要再次注册', '游戏密码', '真正入服']) assert.ok(guide.textContent.includes(phrase), phrase);
+    assert.equal(ui.document.querySelector('#game-account-form'), null);
+    assert.equal(guide.querySelector('[data-manual-create]').open, false);
+    assert.equal(guide.querySelector('a[href="/downloads.html"]').textContent, '下载插件与安装说明');
+    ui.click('[data-action="new-agent-invite"]');
+    assert.ok(ui.document.querySelector('#agent-invite-form'));
+    assert.equal(ui.requests.length, before, 'opening the invitation form does not redeem it');
+    ui.document.querySelector('#modal').close();
+  }
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs').get().n, 0);
+});
+
+test('an existing web-created account gets a reuse path and a creation receipt never claims gameplay', async t => {
+  const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
+  const owner = ui.portal.store.ownerByName('ui-admin'), jobId = randomUUID();
+  ui.portal.store.db.prepare('INSERT INTO account_jobs(id,owner_id,operation,name,state,result,created_at,expires_at,expected_uuid) VALUES(?,?,?,?,?,?,?,?,?)')
+    .run(jobId, owner.id, 'create', 'ag_Existing', 'succeeded', JSON.stringify({state:'succeeded',username:'ag_Existing',message:'游戏账号已创建'}), Date.now(), Date.now()+120000, playerUuid);
+  await ui.refresh(); ui.document.querySelector('#modal').close();
+  ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('[data-action="open-account-job"]'));
+  ui.click('#main [data-action="connect-agent"]');
+  assert.match(ui.document.querySelector('[data-existing-agent-names]').textContent, /ag_Existing/);
+  assert.match(ui.document.querySelector('[data-existing-agent-help]').textContent, /不要.*名字后加数字重建/);
+  ui.document.querySelector('#modal').close();
+  ui.click(`[data-action="open-account-job"][data-id="${jobId}"]`);
+  await waitFor(() => ui.document.querySelector('#modal-title')?.textContent === '游戏账号已创建');
+  assert.match(ui.document.querySelector('.modal-header').textContent, /不等于 Agent 已启动或已入服/);
+  assert.match(ui.document.querySelector('[data-existing-agent-help]').textContent, /ag_Existing/);
+  assert.equal(ui.document.querySelector('#game-account-form'), null);
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs').get().n, 1);
+});
+
+test('public no-JavaScript onboarding and downloads distinguish plugin registration from existing-account login', async t => {
+  const ui = await screen(t);
+  for (const url of ['/join', '/downloads.html', '/agent-api.html']) {
+    const response = await fetch(ui.origin + url), html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /不要先在网页手动建号|不要先在网页手动创建游戏账号/);
+    assert.match(html, /原角色名/);
+    assert.match(html, /游戏密码/);
+  }
+  const html = await (await fetch(ui.origin + '/join')).text();
+  assert.match(html, /id="existing-agent"/);
+  assert.ok(!html.includes('{{GAME_ADDRESS}}'), 'every repeated address placeholder is resolved');
+});
+
 test('phone navigation closes from its scrim and LAN HTTP forms work without secure-context randomUUID', async t => {
   const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
   ui.click('.mobile-menu'); assert.ok(ui.document.querySelector('.layout').classList.contains('menu-open'));
   assert.equal(ui.document.querySelector('.mobile-menu').getAttribute('aria-expanded'), 'true');
   ui.click('.nav-scrim'); assert.ok(!ui.document.querySelector('.layout').classList.contains('menu-open'));
   Object.defineProperty(ui.window.crypto, 'randomUUID', { value: undefined });
-  ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('[data-action="new-game-agent"]'));
+  ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('#main [data-action="connect-agent"]'));
+  ui.click('[data-action="connect-agent"]');
+  ui.document.querySelector('[data-manual-create]').open = true;
   ui.click('[data-action="new-game-agent"]');
   assert.ok(ui.document.querySelector('#game-account-form'));
   assert.match(ui.document.querySelector('#game-account-form').dataset.request, /^[a-f0-9-]{36}$/);
@@ -263,9 +321,13 @@ test('Agent creation and game password changes explain every rule and reject inv
   await ui.refresh();
   for (const operation of ['create', 'password']) {
     ui.window.location.hash = operation === 'create' ? 'agents' : 'account';
-    const action = operation === 'create' ? 'new-game-agent' : 'change-game-password';
+    const action = operation === 'create' ? 'connect-agent' : 'change-game-password';
     await waitFor(() => ui.document.querySelector(`[data-action="${action}"]`));
     ui.click(`[data-action="${action}"]`);
+    if (operation === 'create') {
+      ui.document.querySelector('[data-manual-create]').open = true;
+      ui.click('[data-action="new-game-agent"]');
+    }
     const form = ui.document.querySelector('#game-account-form');
     const rules = ui.document.getElementById(form.elements.gamePassword.getAttribute('aria-describedby')).textContent;
     for (const phrase of ['6–64', '空格', '换行', '制表符', '123456', '12345678', 'password', 'qwerty', '不区分大小写', '不强制混用', '网站密码分别管理']) assert.ok(rules.includes(phrase), phrase);
