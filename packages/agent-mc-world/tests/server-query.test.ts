@@ -20,6 +20,39 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-26T09:
 afterEach(() => { vi.useRealTimers(); });
 
 describe('read-only server query lane', () => {
+  it.each([{ query: 'missing' }, { query: 'status', requestId: 'invented' }, { command: '/status' }])(
+    'returns configured repair information with rejected %j without dispatching', args => {
+      const { lane, send, context } = setup();
+      const result = lane.call(args, definitions, context);
+      expect(result).toMatchObject({ failed: true, data: { goal_completed: false, recovery: {
+        supportedQueryIds: ['status', 'inventory'], moreQueries: 0, index: {},
+      } } });
+      expect(result.data?.next_safe_read).toEqual({ tool: 'mc_help', arguments: { skill: 'chat' } });
+      expect(result.text).toContain('"next_safe_read":{"tool":"mc_help","arguments":{"skill":"chat"}}');
+      expect(result.text).toContain('never invent it or combine it with query');
+      expect(result.text).toContain('"supportedQueryIds":["status","inventory"]');
+      expect(result.text).not.toContain('dungeon');
+      expect(send).not.toHaveBeenCalled();
+    });
+
+  it('bounds error recovery instead of expanding every configured protocol description', () => {
+    const { lane, send, context } = setup();
+    const many = Array.from({ length: 100 }, (_, i) => ({ ...definitions[0], id: `query${i}`, description: 'large'.repeat(2000) }));
+    const result = lane.call({ query: 'missing' }, many, context);
+    expect(result.data?.recovery).toMatchObject({ supportedQueryIds: expect.any(Array), moreQueries: 68 });
+    expect((result.data?.recovery as any).supportedQueryIds).toHaveLength(32);
+    expect(result.text.length).toBeLessThan(2000);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('does not reinterpret an invented requestId as a new query or auto-retry', () => {
+    const { lane, send, context } = setup();
+    const result = lane.call({ requestId: 'query-invented' }, definitions, context);
+    expect(result.data).toMatchObject({ found: false, outcomeUnknown: true, goal_completed: false });
+    expect(result.data?.recovery).toBeUndefined();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('lists configured protocols offline and does not become a body/barrier tool', () => {
     const { lane } = setup();
     expect(lane.call({}, definitions, null).data?.queries).toEqual(definitions.map(({ id, description }) => ({ id, description })));
