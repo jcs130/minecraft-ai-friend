@@ -52,13 +52,18 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   const dom = new JSDOM(html, { url: initialView === 'home' ? origin : origin + '/#' + initialView, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const { window } = dom; const { document } = window;
   let cookie = ''; let networkFailure = false; let hold = null; let observationState = initialObservation;
-  const watchRequests = [];
+  const watchRequests = [], requests = [], failures = new Map();
   let publicObservation=false;
   window.scrollTo = () => {};
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); };
   window.fetch = async (resource, options = {}) => {
     const url = new URL(resource, origin);
+    requests.push(url.pathname);
+    if (failures.has(url.pathname)) {
+      const status = failures.get(url.pathname);
+      return new Response(JSON.stringify({error:{reason:status===429?'RATE_LIMIT':'FORBIDDEN',message:'隔离拒绝',retryAfterSeconds:15}}), {status,headers:{'Retry-After':'15'}});
+    }
     // Simulate the bridge going offline between displaying a ready form and
     // submitting it; the actual backend still returns its unavailable receipt.
     if (url.pathname === '/api/v1/gallery') return new Response(JSON.stringify({ photos }));
@@ -107,8 +112,53 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, game, world, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
+  return { portal, game, world, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, requests, failures, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
 }
+
+test('rate limited catalogue polling retains the selected scene and backs off without resetting it', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});
+  ui.click('[data-action="watch-channel"][data-id="'+'b'.repeat(32)+'"]');
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]')?.dataset.channel==='b'.repeat(32));
+  const frame=ui.document.querySelector('[data-world-frame]');
+  ui.failures.set('/api/v1/live',429); await ui.refresh(false);
+  assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  const count=ui.requests.length;
+  await ui.refresh(false); await ui.observation('live');
+  assert.equal(ui.requests.length,count,'honour Retry-After instead of retrying every second');
+  ui.failures.clear(); const now=ui.window.Date.now();ui.window.Date.now=()=>now+16000;
+  await ui.refresh(false);await ui.observation('live');
+  assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  assert.equal(frame.dataset.channel,'b'.repeat(32));
+});
+
+test('watch rate limits keep the renderer but a fresh authorization denial removes it', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const frame=ui.document.querySelector('[data-world-frame]'),route='/api/v1/live/'+'a'.repeat(32)+'/watch';
+  ui.failures.set(route,429);await ui.observation('live');
+  assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  const count=ui.requests.length;await ui.observation('live');assert.equal(ui.requests.length,count);
+  const now=ui.window.Date.now();ui.window.Date.now=()=>now+16000;
+  ui.failures.set(route,403);await ui.observation('live');
+  assert.equal(ui.document.querySelector('[data-world-frame]'),null);
+});
+
+test('background live polling coalesces overlap and avoids unrelated account and story requests', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});await ui.setup();
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  ui.requests.length=0;await Promise.all([ui.refresh(false),ui.refresh(false)]);
+  assert.equal(ui.requests.filter(p=>p==='/api/v1/live').length,1);
+  assert.equal(ui.requests.some(p=>['/api/v1/account','/api/v1/agents','/api/v1/client-credentials','/api/v1/agent-invites','/api/v1/memories','/api/v1/memories/mine'].includes(p)),false);
+});
+
+test('a fresh logout receipt clears the scene even when the live catalogue is rate limited', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});await ui.setup();
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  ui.portal.store.db.prepare('DELETE FROM sessions WHERE owner_id IS NOT NULL').run();
+  ui.failures.set('/api/v1/live',429);await ui.refresh(false);
+  assert.equal(currentAccountName(ui.document),'访客');
+  assert.equal(ui.document.querySelector('[data-world-frame]'),null);
+});
 
 test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
  const ui=await screen(t,{capabilitiesReady:true});await ui.setup();const id='b'.repeat(24),uuid='22222222-2222-3222-8222-222222222222';

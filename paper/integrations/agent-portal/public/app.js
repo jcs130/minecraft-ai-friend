@@ -85,13 +85,21 @@ function newRequestId() {
   return [value.slice(0, 8), value.slice(8, 12), value.slice(12, 16), value.slice(16, 20), value.slice(20)].join('-');
 }
 
+let pollNotBefore = 0;
 async function api(url, options = {}) {
   const headers = { ...options.headers };
   if (options.method && options.method !== 'GET') { headers['Content-Type'] ||= 'application/json'; headers['X-CSRF-Token'] = state.session?.csrfToken || ''; }
   const response = await fetch('/api/v1' + url, { credentials: 'same-origin', ...options, headers });
   let data;
   try { data = await response.json(); } catch { throw new Error('服务响应不完整，请稍后重试'); }
-  if (!response.ok) { const error = new Error(data.error?.message || '请求未完成'); error.reason = data.error?.reason; error.status = response.status; throw error; }
+  if (!response.ok) {
+    const error = new Error(data.error?.message || '请求未完成'); error.reason = data.error?.reason; error.status = response.status;
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get('Retry-After') || data.error?.retryAfterSeconds);
+      pollNotBefore = Math.max(pollNotBefore, Date.now() + Math.min(300, Math.max(1, Number.isFinite(seconds) && seconds > 0 ? seconds : 15)) * 1000);
+    }
+    throw error;
+  }
   return data;
 }
 let toastTimer;
@@ -248,7 +256,9 @@ function eventsPage() {
 }
 function livePage() {
   const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
-  state.selectedChannel = selected?.id || null;
+  // A missing polling result is not a user selection. Keep the opaque ID so a
+  // later authorized catalogue can restore it; never retain private titles.
+  state.selectedChannel = selected?.id || state.selectedChannel || null;
   return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。', selected?.canManagePublic ? button('world-visibility',selected.visibility==='public'?'关闭公开观战':'开启公开观战','eye','',`data-id="${e(selected.id)}" data-public="${selected.visibility!=='public'}"`) : '')
     + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。可查看背包、装备和游戏对话，登录凭据不会展示；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>${liveDialogue()}` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
 }
@@ -320,6 +330,9 @@ async function pollWorldView(selected) {
     document.querySelector('[data-live-placeholder]').hidden = true; label.className = 'status'; label.textContent = '● 观战中';
   } catch (error) {
     if (revision !== authRevision || screen !== document.querySelector('[data-world-screen]')) return;
+    // Rate limiting is neither logout nor source loss. The existing stream
+    // still enforces its own authorization; do not reload all terrain/models.
+    if (error.status === 429) { label.textContent = '数据暂缓更新，自动重试'; return; }
     removeWorldFrame(); document.querySelector('[data-live-placeholder]').hidden = false;
     document.querySelector('[data-world-reason]').textContent = /Failed to fetch|fetch failed|NetworkError|Load failed/.test(error.message || '') ? '暂时连接不到观战服务，恢复后自动重试。' : error.message; label.className = 'status unknown'; label.textContent = '等待场景';
   }
@@ -337,7 +350,7 @@ async function loadEvents(page = state.eventPage, kind = state.eventKind) {
 }
 let liveBusy = false, liveObjectUrl = null;
 async function pollLiveFrame() {
-  if (liveBusy || state.view !== 'live' || document.visibilityState === 'hidden') return;
+  if (liveBusy || Date.now() < pollNotBefore || state.view !== 'live' || document.visibilityState === 'hidden') return;
   const selected = state.channels.find(row => row.id === state.selectedChannel);
   if (selected?.managed) { liveBusy = true; try { await pollWorldView(selected); } finally { liveBusy = false; } return; }
   const image = document.querySelector('[data-live-image]'); if (!image) return;
@@ -458,10 +471,25 @@ async function loadPrivate() {
     else toast(error.message, true);
   }
 }
-async function refresh(manual = false) {
+let refreshInFlight = null, refreshAuthRevision = -1;
+function refresh(manual = false) {
+  if (Date.now() < pollNotBefore) return Promise.resolve();
+  if (refreshInFlight && refreshAuthRevision === authRevision) return refreshInFlight;
+  refreshAuthRevision = authRevision;
+  const pending = refreshData(manual).finally(() => { if (refreshInFlight === pending) refreshInFlight = null; });
+  refreshInFlight = pending; return pending;
+}
+async function refreshData(manual = false) {
   const revision = authRevision;
   const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api(`/gallery?page=${state.photoPage}&author=${encodeURIComponent(state.photoAuthor)}`), state.view==='live'?api('/world/events?kind=chat&limit=8'):Promise.resolve(null)]);
   if (revision !== authRevision) return;
+  const sessionChanged = results[0].status === 'fulfilled' && state.session?.owner?.id !== results[0].value?.owner?.id;
+  // Keep the last rendered scene and selection during a bounded Retry-After.
+  // A fresh session change must still clear private content immediately.
+  if (!sessionChanged && results.some(result => result.status === 'rejected' && result.reason?.status === 429)) {
+    const label = document.querySelector('[data-live-state]'); if (label) label.textContent = '数据暂缓更新，自动重试';
+    return;
+  }
   state.error = null;
   if (results[0].status === 'fulfilled') {
     if (state.session?.owner?.id !== results[0].value?.owner?.id) window.QdMemories?.clearPrivate();
@@ -482,8 +510,8 @@ async function refresh(manual = false) {
   state.photoPages=results[8].status==='fulfilled'?(results[8].value.pages||1):1;
   if(results[9].status==='fulfilled'&&results[9].value)state.liveMessages=results[9].value.events;
   if(state.view==='archives')await loadArchives();
-  await loadPrivate();
-  await window.QdMemories?.load();
+  if (manual || sessionChanged || state.view !== 'live') await loadPrivate();
+  if (manual || state.view !== 'live') await window.QdMemories?.load();
   if(state.view==='challenges')await window.QdChallenges?.load(false);
   if (revision !== authRevision && owner()) return;
   const navigating=!manual&&(app.querySelector('.layout.menu-open')||app.querySelector('.site-header details[open]'));
