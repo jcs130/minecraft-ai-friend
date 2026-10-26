@@ -1,0 +1,24 @@
+# Minecraft combat balance, not claimed canonical SAO numerical stats.
+QD_Aincrad_Illfang:
+  Type: VINDICATOR
+  Display: '&c狗头人领主·Illfang'
+  Health: 120
+  Damage: 5
+  Options:
+    MovementSpeed: 0.24
+    PreventOtherDrops: true
+    PreventRandomEquipment: true
+    PreventSunburn: true
+    PreventRenaming: true
+    AlwaysShowName: true
+    Despawn: false
+    KnockbackResistance: 0.35
+  BossBar:
+    Enabled: true
+    Title: '&c第一层 · Illfang'
+    Range: 22
+    Color: RED
+    Style: SEGMENTED_10
+  Skills:
+  - skill{s=QD_Illfang_Desperation} @self ~onDamaged <30%
+  - skill{s=QD_Illfang_Cleave} @self ~onTimer:40

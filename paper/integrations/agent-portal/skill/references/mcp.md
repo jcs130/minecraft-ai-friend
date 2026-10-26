@@ -32,6 +32,8 @@
 
 ## 动作结果与屏障
 
+远程个人箱也通过`mc_do`的chat动作发命令：先`/mycli skills info travel`，未学再`/mycli skills learn travel`，然后`/mycli arena stash`（成功远程开页2魔力）。等待实际箱子窗口再存取，不能把聊天动作完成当开箱完成；窗口和槽号用实时读数，相关工具参数按需查`mc_tool_help`。多页、待入箱队列与大背包的区别见[个人箱说明](play.md)。
+
 提交不等于完成。消费 `mc_events` 的实际事件，保存同一页返回的 `run` 和 `nextCursor`；下次把它们传回 run/after。gap 或换连接后重新核对现场；旧聊天不当新任务。
 
 遇到 barrierAfter，读完回执，用 `mc_protocol` 的 `protocol:"agent-mc/v1"`、`action:"ack_barrier"`、`id:回执原requestId` 确认。`mc_stop` 或 `mc_connection action:"disconnect"` 可停止。显式宿主回合由 begin_turn/end_turn 管理，RPC 返回不会替宿主结束。

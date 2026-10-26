@@ -4,3 +4,4 @@ professions:
   warrior: {title: 战士, kind: combat, icon: IRON_SWORD, starter-skills: [sword_thrust, sword_parry, warrior_sky_leap]}
   mage: {title: 法师, kind: combat, icon: BLAZE_ROD, starter-skills: [mage_bolt, mage_frost, scout_mark, mage_soar]}
   priest: {title: 牧师, kind: combat, icon: GLISTERING_MELON_SLICE, starter-skills: [healer_mend, healer_cleanse, priest_blessing]}
+  tank: {title: 坦克, kind: combat, icon: SHIELD, starter-skills: [tank_taunt, tank_bastion, tank_bash, tank_cover]}

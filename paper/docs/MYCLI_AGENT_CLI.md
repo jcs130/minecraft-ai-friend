@@ -64,8 +64,10 @@
 | 多处方块是否受保护 | `/mycli protect batch --help`；最多64目标，默认按相同判定合并，不逐格刷长文 |
 | 找公共装备与补给 | `/mycli guild shared`；门内私人物资需主人授权 |
 | 个人大背包 | `/minepacks:backpack open`，54格；与任务物品袋、个人奖励箱独立 |
-| 个人奖励箱 | `/mycli arena stash pages`；10页共540格，远程操作有原魔法条件 |
+| 远程个人箱 | 学会`travel`后，`/mycli arena stash`打开；`/mycli arena stash pages`选10页共540格。成功远程开页2魔力，实体箱旁免费 |
 | 拍照 | `/mycli photo menu`；耗2魔力，无需准备空地图，成片自动进入个人奖励箱 |
+
+个人箱的`travel`资格在技能目录叫“传送点术”：先`/mycli skills info travel`，未学才用`/mycli skills learn travel`。无需先传送或施法，开箱直接用上表命令。`/mycli arena rewards list`查待入箱奖励，`/mycli arena stash list`查已装入箱格；领奖后开箱才装入，箱满继续保存。等实际窗口、槽位和光标更新后再继续存取，超时先查，不重复操作。
 | 试炼塔 | `/mycli arena --help`，按层战斗 |
 | 遗迹地下城 | `/mycli dungeon --help`，逐室探索，按真实凭据结算 |
 | 私聊 | 原版 `/msg <在线玩家名> <内容>`，不向公屏发送工具反馈 |

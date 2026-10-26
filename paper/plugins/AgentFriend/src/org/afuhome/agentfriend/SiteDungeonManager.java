@@ -36,7 +36,7 @@ final class SiteDungeonManager implements Listener {
         boolean contains(Location l){return Math.abs(l.getX()-(x+.5))<=radius+2&&Math.abs(l.getZ()-(z+.5))<=radius+2&&Math.abs(l.getY()-y)<=3;}
     }
     private record Site(String id,String name,String expedition,String hint,Material icon,String world,
-                        List<Room> rooms,int emeralds,Material bonus,int bonusCount,List<Integer> entry,boolean outdoor) {
+                        List<Room> rooms,int emeralds,Material bonus,int bonusCount,List<Integer> entry,boolean outdoor,int conquestFloor,int minimumLevel) {
         boolean contains(Location l){
             if(l.getWorld()==null||!l.getWorld().getName().equals(world))return false;
             int minX=rooms.stream().mapToInt(Room::x).min().orElseThrow()-24,maxX=rooms.stream().mapToInt(Room::x).max().orElseThrow()+24;
@@ -113,7 +113,7 @@ final class SiteDungeonManager implements Listener {
     }
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private List<Player> present(Run r){return r.party.stream().map(Bukkit::getPlayer).filter(this::playing).filter(p->r.site.contains(p.getLocation())).toList();}
-    private String label(Site site){return site.outdoor?"野外据点讨伐":"遗迹地下城";}
+    private String label(Site site){return site.conquestFloor>0?"正式楼层攻略":site.outdoor?"野外据点讨伐":"遗迹地下城";}
     private void send(Player p,String prefix,Map<String,?> fields){Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.put("activityType","site_dungeon");Site site=sites.get(Objects.toString(fields.get("id"),""));data.put("activityLabel",site==null?"遗迹远征":label(site));if(site!=null)data.put("setting",site.outdoor?"outdoor":"interior");data.put("commandRoot","/mycli dungeon");data.put("language","zh-CN");data.put("recipient",p.getName());data.putAll(fields);p.sendMessage(prefix+" "+JSON.toJson(data));}
     private void result(Player p,String action,String site,String reason){
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
@@ -237,7 +237,10 @@ final class SiteDungeonManager implements Listener {
                 for(Room r:rooms)require(Math.abs(r.x-first.x)<=128&&Math.abs(r.z-first.z)<=128&&Math.abs(r.y-first.y)<=128,"site_bounds");
                 int emeralds=c.getInt("reward.emeralds",8),count=c.getInt("reward.count",4);Material bonus=Material.matchMaterial(c.getString("reward.item","LAPIS_LAZULI"));
                 require(emeralds>=1&&emeralds<=64&&count>=1&&count<=21&&bonus!=null&&bonus.isItem(),"reward_bounds");
-                Site s=new Site(id,name,expedition,c.getString("hint",""),Material.matchMaterial(c.getString("icon","STONE_BRICKS")),world,List.copyOf(rooms),emeralds,bonus,count,List.copyOf(entry),c.getBoolean("outdoor",false));
+                int floor=c.getInt("conquest-floor",0),minimum=c.getInt("minimum-combat-level",1);
+                require(floor>=0&&floor<=100&&minimum>=1&&minimum<=100,"conquest_bounds");
+                require(floor==0||id.equals("aincrad_"+String.format(Locale.ROOT,"%02d",floor))&&ConquestWorld.WORLD.equals(world),"conquest_identity");
+                Site s=new Site(id,name,expedition,c.getString("hint",""),Material.matchMaterial(c.getString("icon","STONE_BRICKS")),world,List.copyOf(rooms),emeralds,bonus,count,List.copyOf(entry),c.getBoolean("outdoor",false),floor,minimum);
                 if(!entry.isEmpty())require(s.contains(new Location(Bukkit.getWorld(world),entry.get(0),entry.get(1),entry.get(2))),"entry_outside_site");
                 require(s.icon!=null&&s.icon.isItem(),"invalid_icon");
                 for(Site prior:next.values())require(!prior.contains(first.center(Bukkit.getWorld(world)))&&!s.contains(prior.rooms.getFirst().center(Bukkit.getWorld(prior.world))),"overlapping_sites");
@@ -276,11 +279,13 @@ final class SiteDungeonManager implements Listener {
         }catch(IllegalArgumentException e){result(p,action,id,e.getMessage());}
     }
     private void info(Player p,Site s){
+        if(s.conquestFloor>0)p.sendMessage("§6正式第"+s.conquestFloor+"层 · 最低战斗Lv."+s.minimumLevel+"；建议先学一项战斗技能，带武器、盾牌、护甲与食物。旧试炼塔成绩不能代替本层通关。");
         Room first=s.rooms.getFirst();send(p,"MC_SITE_DUNGEON_INFO",Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8));
-        p.sendMessage("§6【"+label(s)+"·"+s.name+"】"+s.hint+"。/mycli dungeon travel "+s.id+"（8魔力）"+(s.entry.isEmpty()?"到外围，步行深入首处集结点":s.outdoor?"到已勘察的营地外围":"到已勘察的墓穴入口")+"；/mycli dungeon start "+s.id+" 开场，队友10秒内用 /mycli dungeon join "+s.id+" 加入。清怪后步行到下一处，最后返回首处集结点，/mycli dungeon claim "+s.id+" 领奖。每处每日一次奖励。");
+        p.sendMessage("§6【"+label(s)+"·"+s.name+"】"+s.hint+" /mycli dungeon travel "+s.id+"（8魔力）"+(s.entry.isEmpty()?"到外围，步行深入首处集结点":s.outdoor?"到已勘察的营地外围":"到已勘察的挑战入口")+"；/mycli dungeon start "+s.id+" 开场，队友10秒内用 /mycli dungeon join "+s.id+" 加入。清怪后步行到下一处，最后返回首处集结点，/mycli dungeon claim "+s.id+" 领奖。每处每日一次奖励。");
     }
     private void travel(Player p,Site s){
-        require(playing(p)&&own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        require(own(p)==null,"already_in_site_dungeon");
+        require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
         if(s.entry.isEmpty()){new DungeonExpeditions(plugin).travel(p,s.expedition);return;}
         World w=Bukkit.getWorld(s.world);int x=s.entry.get(0),y=s.entry.get(1),z=s.entry.get(2);
         require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");Location origin=p.getLocation().clone();
@@ -300,7 +305,9 @@ final class SiteDungeonManager implements Listener {
         }));
     }
     private void start(Player p,Site s,Mode mode){
-        require(playing(p)&&own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        conquestAdmission(p,s);
+        require(own(p)==null,"already_in_site_dungeon");
+        require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
         require(s.contains(p.getLocation())&&s.rooms.getFirst().contains(p.getLocation()),"walk_to_first_room");
         require(!runs.containsKey(s.id),"site_busy");require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
@@ -310,13 +317,23 @@ final class SiteDungeonManager implements Listener {
         result(p,"start",s.id,"success");tell(r,"§6"+s.name+"〔"+mode.label+"〕集结10秒；队友需主动 dungeon join "+s.id+"。房间清怪后自行前进，掉线宽限5分钟。");
     }
     private void join(Player p,Site s){
+        conquestAdmission(p,s);
         Run r=runs.get(s.id);require(r!=null&&r.phase.equals("muster")&&System.currentTimeMillis()<r.readyAt,"muster_closed");
-        require(playing(p)&&own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        require(own(p)==null,"already_in_site_dungeon");
+        require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
         require(r.party.size()<PARTY_LIMIT&&s.contains(p.getLocation())&&s.rooms.getFirst().contains(p.getLocation()),"party_full_or_not_at_first_room");
         require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
         r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);
         try{persist();}catch(RuntimeException failure){r.party.remove(p.getUniqueId());r.attendance.remove(p.getUniqueId());throw failure;}
         result(p,"join",s.id,"success");
+    }
+    private void conquestAdmission(Player p,Site s){
+        if(s.conquestFloor==0)return;
+        require(plugin.conquestWorldReady(),"conquest_map_unavailable");
+        var combat=plugin.combatRpg();require(combat!=null,"combat_progress_unavailable");
+        require(!combat.profession(p).isEmpty(),"conquest_profession_required");
+        require(combat.level(p)>=s.minimumLevel,"conquest_level_required");
+        require(combat.floor(p)>=s.conquestFloor-1,"previous_floor_required");
     }
     private void status(Player p,String id){
         if(plugin.trialRescue()!=null)plugin.trialRescue().report(p);
@@ -395,7 +412,7 @@ final class SiteDungeonManager implements Listener {
                 plugin.getConfig().set(history+".nextCommands",List.of("/mycli arena rewards","/mycli arena stash"));
             }
         });
-        result(p,"claim",chosen,"success");p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已存入个人箱；用 /mycli arena rewards 查看，/mycli arena stash 打开。重复领取不会再次发奖。");
+        result(p,"claim",chosen,"success");p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。命令：/mycli arena stash；只查待入箱奖励：/mycli arena rewards list。重复领取不会再次发奖。");
     }
     private void tick(){
         long timestamp=System.currentTimeMillis();
@@ -504,7 +521,7 @@ final class SiteDungeonManager implements Listener {
         try{
             for(int i=0;i<room.enemies.size();i++){
                 var spec=room.enemies.get(i);Location at=spots.get(i);Chunk chunk=at.getChunk();if(r.held.add(chunk))chunk.addPluginChunkTicket(plugin);
-                Mob mob=spec.spawn(at,r.mode!=Mode.NORMAL);
+                Mob mob=spec.spawn(at,r.mode!=Mode.NORMAL||r.site.conquestFloor>0);
                 r.mobs.put(mob.getUniqueId(),spec);
                 mob.addScoreboardTag(TAG);mob.addScoreboardTag("afu_site_"+r.site.id);spec.equip(mob,r.mode.health*(1+Math.max(0,r.party.size()-1)*.2));
                 String enemyName=spec.name().isEmpty()?(mob.getCustomName()==null?mob.getType().name():ChatColor.stripColor(mob.getCustomName())):spec.name();
@@ -520,7 +537,10 @@ final class SiteDungeonManager implements Listener {
         for(Player p:eligible){
             UUID id=p.getUniqueId();String rewardDay=day();
             if(rewardDay.equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id))||receipt(id,r.site.id)!=null)continue;
-            atomic(()->{String path=ROOT+".receipts."+id+"."+r.site.id;plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward));});
+            atomic(()->{String path=ROOT+".receipts."+id+"."+r.site.id;plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward));
+                if(r.site.conquestFloor>0)plugin.getConfig().set(ROOT+".conquest-proofs."+id+"."+r.site.conquestFloor,r.id);
+            });
+            if(r.site.conquestFloor>0&&plugin.combatRpg()!=null)plugin.combatRpg().formalClear(r.id,p,r.site.conquestFloor);
             p.sendMessage("§6"+r.site.name+"已完成；dungeon claim "+r.site.id+"领取到个人箱，今日该处仅奖励一次。");
         }
         // Keep the return phase while any eligible online teammate is still walking back.
@@ -638,7 +658,7 @@ final class SiteDungeonManager implements Listener {
     private void open(Player p,String id){
         Inventory inv=Bukkit.createInventory(null,54,id.isEmpty()?"遗迹地下城":"地下城 · "+site(id).name);menus.put(inv,new Menu(id,receipt(p.getUniqueId(),id)!=null));
         if(id.isEmpty()){int slot=10;for(Site s:sites.values())inv.setItem(slot++,icon(s.icon,"§6"+s.name,s.hint,"点击查看入口、组队、挑战与奖励"));}
-        else{Site s=site(id);inv.setItem(10,icon(Material.ENDER_PEARL,s.entry.isEmpty()?"§b前往遗迹外围":"§b前往墓穴入口","8魔力；抵达后仍须主动开始、逐室清怪"));inv.setItem(12,icon(Material.IRON_SWORD,"§a开始普通挑战","须亲自站在首室；10秒组队集结"));inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6开始冒险挑战","更强怪物；每日奖励二倍"));inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5开始末日挑战","更强怪物；每日奖励三倍"));inv.setItem(16,icon(Material.SUNFLOWER,"§a加入正在集结的队伍","须站在首室；每队最多8人"));inv.setItem(22,icon(Material.BARRIER,"§c退出自己的挑战","留在原地；自行步行或使用传送技能"));inv.setItem(30,icon(Material.CHEST,"§6领取已完成奖励","存入个人箱；满队列时保留凭据"));inv.setItem(31,icon(Material.WRITTEN_BOOK,"§e路线与当前进度","清理每个标记房间并返回首室"));inv.setItem(49,icon(Material.ARROW,"§7返回地下城列表"));}
+        else{Site s=site(id);inv.setItem(10,icon(Material.ENDER_PEARL,s.entry.isEmpty()?"§b前往遗迹外围":"§b前往挑战入口","8魔力；抵达后仍须主动开始、逐室清怪"));inv.setItem(12,icon(Material.IRON_SWORD,"§a开始普通挑战","须亲自站在首室；10秒组队集结"));inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6开始冒险挑战","更强怪物；每日奖励二倍"));inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5开始末日挑战","更强怪物；每日奖励三倍"));inv.setItem(16,icon(Material.SUNFLOWER,"§a加入正在集结的队伍","须站在首室；每队最多8人"));inv.setItem(22,icon(Material.BARRIER,"§c退出自己的挑战","留在原地；自行步行或使用传送技能"));inv.setItem(30,icon(Material.CHEST,"§6领取已完成奖励","存入个人箱；满队列时保留凭据"));inv.setItem(31,icon(Material.WRITTEN_BOOK,"§e路线与当前进度","清理每个标记房间并返回首室"));inv.setItem(49,icon(Material.ARROW,"§7返回地下城列表"));}
         if(id.isEmpty()){
             int slot=10;for(Site s:sites.values()){
                 if(receipt(p.getUniqueId(),s.id)!=null)inv.setItem(slot,icon(s.icon,"§e"+s.name+" · 有奖励待领取",s.hint,"点击打开，再点奖励箱领取上次奖励","领取后才可开始或加入这处的新挑战"));

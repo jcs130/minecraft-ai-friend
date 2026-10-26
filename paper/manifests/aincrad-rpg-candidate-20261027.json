@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "kind": "isolated_conquest_candidate",
+  "createdAt": "2026-10-26T18:08:28.432261+00:00",
+  "productionApproved": false,
+  "productionModified": true,
+  "status": "first_floor_vertical_slice_verified_not_deployed",
+  "sourceBaseCommit": "532f1ccd9d41345b355d207c2c6048545578c700",
+  "target": {
+    "software": "Paper",
+    "minecraft": "1.21.1",
+    "java": 21
+  },
+  "candidate": {
+    "name": "AgentFriend-0.4.48.jar",
+    "sha256": "30dd613af9dc1d86e89e8f508a679ee413af07d48062fee439459aafa755b133",
+    "bytes": 15397505
+  },
+  "productionRollback": {
+    "name": "AgentFriend-0.4.47.16.jar",
+    "sha256": "c24f822a4c034bb5c780790674c1bb1b622deec19bc7553d44fcbaa14427f0bb",
+    "bytes": 15314228
+  },
+  "dependencies": {
+    "TAB": "6.2.1 Paper 1.20.5-1.21.4 compile API; runtime optional",
+    "MythicMobs": "5.9.5 tested",
+    "VortexRPG": "not enabled together; independent 1.2.2-alpha compatibility candidate"
+  },
+  "checks": {
+    "pureRules": 274,
+    "isolated": {
+      "party4": {
+        "checks": 26,
+        "evidenceSha256": "54c4d25bbb30f0055f97237f685a3e9070a0bda838f3f9ec3ba892c6612bf15e",
+        "scope": "isolated_only"
+      },
+      "cold": {
+        "checks": 8,
+        "evidenceSha256": "b8dad6e518010129aafd14b220e41d8bd8b24e080f7921c0b15983c22eab2a3d",
+        "scope": "isolated_only"
+      },
+      "skills7": {
+        "checks": 12,
+        "evidenceSha256": "1327b89af6f8fcbc6b85b8884bb5ad595cf1b77d6fd1120b74b8e5c1eac26c21",
+        "scope": "isolated_only"
+      }
+    },
+    "savedPortalReceipts": 6,
+    "skillValidation": 2,
+    "tankObservedHealthLoss": {
+      "baseline": 6,
+      "front": 3,
+      "rear": 6
+    },
+    "finalJarCoverage": "skills7 tested final JAR; party4/cold preceded the target-event change, which skills7 covers; 177 CLI compatibility checks also use final JAR",
+    "cliCompatibility": 177,
+    "cliEvidenceSha256": "824c87d021e11eefc2b6e5532bd549e0cb1d6f5c1e6f229bcdd8b9413040e560"
+  },
+  "backups": {
+    "copies": 2,
+    "roots": [
+      "E:/MC/ops/repairs/conquest-rpg-20261027/candidate",
+      "F:/MC/ops/repairs/conquest-rpg-20261027/candidate"
+    ],
+    "verifiedFilesPerCopy": 21,
+    "fullProductionColdBackup": false
+  },
+  "productionHealth": {
+    "observedAt": "2026-10-27T02:06:03+08:00",
+    "plugin": "0.4.47.16",
+    "website": "0.8.28",
+    "onlinePlayers": 4,
+    "averageTickMs": 8.8,
+    "p95TickMs": 14.9,
+    "challengeSyncStale": false
+  },
+  "limits": [
+    "Not a full 0.4.48 production regression; pre-existing unreleased changes remain.",
+    "Party combat used fixture recovery; unaided difficulty balance and full rescue still pending.",
+    "Old QA protection masks and structure catalog do not match the isolated world; related paths fail closed.",
+    "Mineflayer 4.39 printed nonfatal ArmorTrimMaterial/SlotComponent PartialReadError; full component compatibility not established.",
+    "Only formal floor 1 is implemented; original 74/75 narrative nodes and gear crafting are future work.",
+    "Docs/Skill source updated; published Skill ZIP not refreshed; live Goddess handbook received only remote-stash guidance, not candidate RPG direction."
+  ],
+  "releaseGates": [
+    "review against production baseline",
+    "old-player migration test",
+    "party rescue test",
+    "unaided balance",
+    "same-artifact final regression",
+    "full E/F cold backup",
+    "current production restart approval"
+  ],
+  "sourceFileHashes": {
+    "paper/config-candidates/conquest-rpg/dungeons-overlay.yml": "f6c107bb08ed2392966f3f719a63ea285bf43e8491abd03ffb1dd7510d3eea4d",
+    "paper/config-candidates/conquest-rpg/rpg-story-overlay.yml": "d10868f2d4dc201bb3f3cf2ab821257af2d63a2f117848592d934a7ae516f573",
+    "paper/config-candidates/conquest-rpg/TAB-overlay.yml": "f5d466056c65e073a43bfe3d82fe93680d08d7dfee8c679d195c129b95000e36",
+    "paper/config-candidates/conquest-rpg/upstream-resources.json": "32fb837b423a3bc0d25f8a876e855f699e539a48d11ab96f4b289608be165bf8",
+    "paper/config-candidates/conquest-rpg/MythicMobs/qiandengji-aincrad-skills.yml": "189ce810c37742428b303f236297af1fa9e3f034dcdcced9a2ef7434c16360ba",
+    "paper/config-candidates/conquest-rpg/MythicMobs/qiandengji-aincrad.yml": "d686696439ad96bd14ecc3a64c379675dcfa667a22802f5eb749842f0446814b",
+    "paper/probe/conquest-stage/aincrad_client.mjs": "e9d12608d3444855820b6e54708d08dcadfd91037d6b04b3203747144603fb16",
+    "paper/probe/conquest-stage/audit_legacy_map.py": "8e2b0da30525ad9918c222b4a295c35c4ac468f651fc569a5ff10deeb0858379",
+    "paper/probe/conquest-stage/ConquestFixture.java": "9abf8b78a1ce6a1877cddf03cd503fc4fc86638c7e74fac5f76286136135426c",
+    "paper/probe/conquest-stage/portal_receipts.mjs": "5a4e97f1169ecbd9c7ffd8ed1de055d6251d2035261e8d199e6d26119ee26060",
+    "paper/probe/conquest-stage/prepare.py": "7a966e4c4e4d5bb47dfec11b542262f79d0c8ab8e4411765a3e1d361ec6be327",
+    "paper/probe/conquest-stage/prepare_aincrad.py": "9eed7cf8f17740108dc38cae660d6c9ecca67ca50ad6bd965534fecfac89a1aa",
+    "paper/probe/conquest-stage/README.md": "bd7c5f163e500a4afa015044c826fabdaf818fbbdb40d2301d3af4c46c282f87",
+    "paper/probe/conquest-stage/run_aincrad.py": "b6a65920ca2b78a1d04eff62ba24b73e8cf74189f00ea74ca9bdb3a5a9204278",
+    "paper/probe/conquest-stage/tank_client.mjs": "2d65a21e3649a1940255b53f93c9e3a9508510c3c16629be662cb79c357556b1",
+    "paper/probe/conquest-stage/Vortex1211Compat.java": "51a155e42d9cb7c25e4bc5e0b2c4edaca0f2613840a062239c1642f6824a90e0",
+    "paper/probe/conquest-stage/vortex_boot.py": "164a9f5565d55c00eb5f668e28efa39758c97cd5a2f80164da18be0b4846fad2",
+    "paper/probe/conquest-stage/vortex_client.mjs": "d427bec2467a4c9ecaca04d1c5d56a07ab8770bb704f1cc820de5b1f6c362f2f",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/CombatRpg.java": "cf3dcd831b7404f04419e6acee187f33671927d63e5dec044803982572f211df",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/CombatRpgLedger.java": "6a7d179d897819cdff81f881e96cf8f1704eed4ec655a16b9e7b545fd12b7173",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/CombatRpgRules.java": "5ff6bf946b5268de7e3ffaf5187368c5d9813709b3e05328bd7505adfc27fda5",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ConquestWorld.java": "6fadb21f8848ccc92a9cf1c83edc15d7145f50446ea7d90a54dfe671e434952b",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java": "0942d50946d4a4e06041d1e00ba35db4155331d76f348b71d683bd4757b3126d",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/RpgTabBridge.java": "59127efc78bf20f983a303ad84c99f0ae19a9d1bbce3791ae5b5605010901044",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SiteDungeonManager.java": "e1c6ece0ae28c79d6f32c443143eb0726ae5dd288bf30db1294eec8cb5bc8642",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TankCombatEffects.java": "4dca22180bbfda6766ae21c4ac975ce93f9a527413f2a19142eba5f37d2d8642",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TankCombatRules.java": "adbb52f4888d00ba719a73e9b15439863fe720a8a2c9eb2cb7070a27faeb2f39"
+  },
+  "productionChangeScope": "Only existing Goddess SERVER_UPDATES handbook received remote-stash instructions; game, account data and services unchanged.",
+  "productionGameModified": false,
+  "goddessHandbook": {
+    "remoteStashSectionSynchronized": true,
+    "agentReadConfirmed": false,
+    "evidenceSha256": "217baae020a583ecfddcd81fdff4a3357a9c6d163fbd84d759f993735199382b"
+  },
+  "sourceFileHashEncoding": "SHA256 of UTF-8 text with LF line endings"
+}

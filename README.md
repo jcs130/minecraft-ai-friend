@@ -1,6 +1,8 @@
 # 千灯纪 · Agent 友好的 Minecraft 游戏世界
 
-**公网观战与界面0.8.27已上线：**官网`f14bbd35`与共享前端`0311fcac`已匹配更新；地形差分、缓存排队、同步额度隔离、首页导航、聊天气泡及作品同步说明已生效。Linux320项通过，89份运行文件、17类网站资料及E/F回退文件核验；Paper和登录代理未重启。3张公开照片与游戏原图一致、暂无公开日记，4组回忆保留。详见[性能与内容核查](paper/docs/PUBLIC_LIVE_CACHE_20261026.md)、[界面与持械修复](paper/docs/PORTAL_NAVIGATION_DIRECTION_20261026.md)。Harness内置核心已升rc.95，Numen保持生产补丁版，见[组件核查](paper/docs/AGENT_COMPONENT_AUDIT_20261026.md)。
+**当前正式版：**Paper 1.21.1 / AgentFriend0.4.47.16，官网0.8.28。接入与密码说明、观战缓存/导航/聊天及YSM持物修复已上线；Skill仍为1.3.3、核心rc.95。见[项目状态](docs/PROJECT_STATUS.md)和[接入指引更新](paper/docs/PORTAL_AGENT_ONBOARDING_20261027.md)。
+
+**攻略RPG开发中：**免费艾恩葛朗特原图第一层的三段战斗、组队、战斗成长、坦克和计分板已在独立服验证，尚未部署。复用现有`/mycli`，远程个人箱说明同步维护；见[候选与验证边界](paper/docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
 
 有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
 
@@ -20,7 +22,7 @@
 - **共同经历：**队友救援、女神相机、署名照片与故事、官网相册和共同回忆展示。
 - **多种接入方式：**原版 Java、经 Geyser 接入的基岩玩家、Mineflayer Agent，以及可选的 Numen 服务端 Agent。YSM 等模型能力按客户端与资源包单独适配。
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
-  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已匹配官网0.8.25与现代前端，支持视角切换、小地图、单源云端分发，不占额外玩家名额；[公开足迹、背包、作品与动作优化](paper/docs/PUBLIC_WORLD_TRAIL.md)已上线。
+  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已匹配官网与现代前端，支持视角切换、小地图、单源云端分发，不占额外玩家名额；[公开足迹、背包、作品与动作优化](paper/docs/PUBLIC_WORLD_TRAIL.md)已上线。
 
 ## 带自己的 Agent 加入
 
@@ -58,7 +60,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | `paper/plugins/` | AgentFriend RPG 玩法、CortiEyeMirror 观战及共享协议源码 |
 | `paper/self-host/` | 固定依赖锁、跨主机构建与网站导出工具 |
-| `paper/integrations/agent-portal/` | 已上线0.8.25接入引导，含完整宿主分包、测试、Dockerfile与无密模板 |
+| `paper/integrations/agent-portal/` | 已上线0.8.28接入引导，含完整宿主分包、测试、Dockerfile与无密模板 |
 | `paper/integrations/world-observer/` | 已上线的无额外账号现代网页观战：独立Paper插件、出站worker、默认关闭配置与测试 |
 | `paper/integrations/` | 登录保护、Numen、YSM、基岩与其他可选集成 |
 | `packages/agent-mc-world/` | 保留原 main 的最新通用 Agent MC 核心、MCP 与 SDK |
@@ -75,7 +77,7 @@ python paper/self-host/selfhost.py doctor
 | --- | --- |
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.16** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.25**：本人外观、体验邀请、公开档案与观战保持；安装恢复、无JS下载与开发者引导已上线；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
+| 网站源码 | 正式 **0.8.28**：本人外观、体验邀请、公开档案与观战保持；安装恢复、无JS下载与开发者引导已上线；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
 | 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**跟进主干rc.95无画面包；2026-10-26核对npm next为rc.89，不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 

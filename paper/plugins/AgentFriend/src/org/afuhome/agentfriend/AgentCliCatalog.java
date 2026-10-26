@@ -104,8 +104,8 @@ final class AgentCliCatalog {
         add(specs,"visuals","magic","read","/mycli visuals","查看原版技能粒子和播放预算；特效只在成功施法后出现","查询免费；不改变技能资格、耗魔、冷却和实际伤害范围","本人MC_VISUALS JSON；画面不作为命中或验收证据");
         add(specs,"say","life","chat","/mycli say <公开发言>","公开说话并在角色头顶显示短暂文字气泡；普通聊天同样有效","沿用普通聊天的接收者和取消规则；非观战/隐身角色才有气泡；附近24格且视线可达；私聊不显示","原版聊天及TextDisplay；连续发言更新同一个气泡；超长内容气泡省略，完整正文仍在聊天栏");
         add(specs,"bubbles","life","read","/mycli bubbles","查看玩家/NPC文字气泡状态和多人预算","查询免费；NPC私有对白仅本人及当前附身Eye可见；Java、基岩及Agent沿用原客户端","本人MC_BUBBLES JSON；基岩由Geyser转文字标签，外观可能不同；语音功能尚未启用");
-        add(specs,"skills","magic","read","/mycli skills list [分类] [页码]|info <ID>|mine|points|learn <ID>|upgrade <ID>","基础和战法牧技能图鉴；list profession 直接查看职业技艺，默认列表有多页","查询免费；学习与升级耗点，施法需要本人资格","MC_SPELL_*、MC_SKILL、MC_SKILL_POINTS、MC_SKILL_ASSESSMENT");
-        add(specs,"skills.list","magic","read","/mycli skills list [all|common|profession|warrior|mage|priest] [页码]","分页发现基础和职业技能；如 list priest 查看抚愈、净化、高阶圣愈","查询免费；旧 list <页码> 保留；按 pages 和 MC_SPELL_NEXT 读后续页","MC_SPELL_LIST 含分类/总量/版本，MC_SPELL_ITEM 含效果摘要/职业/详情命令");
+        add(specs,"skills","magic","read","/mycli skills list [分类] [页码]|info <ID>|mine|points|learn <ID>|upgrade <ID>","基础与四种战斗职业技能图鉴；list profession 直接查看职业技艺，默认列表有多页","查询免费；学习与升级耗点，施法需要本人资格","MC_SPELL_*、MC_SKILL、MC_SKILL_POINTS、MC_SKILL_ASSESSMENT");
+        add(specs,"skills.list","magic","read","/mycli skills list [all|common|profession|warrior|tank|mage|priest] [页码]","分页发现基础和职业技能；如 list priest 查看抚愈、净化、高阶圣愈","查询免费；旧 list <页码> 保留；按 pages 和 MC_SPELL_NEXT 读后续页","MC_SPELL_LIST 含分类/总量/版本，MC_SPELL_ITEM 含效果摘要/职业/详情命令");
         add(specs,"skills.explain","magic","read","/mycli skills explain <ID>","读取法术图鉴说明；逐级数值、技能点和本人条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");
         add(specs,"skills.mine","magic","read","/mycli skills mine","查看本人新技能、装备、资格、来源和实际能力统计","查询免费；未学技能也显示获取途径","MC_SKILL、MC_SKILL_POINTS 与 MC_SKILL_ASSESSMENT");
         add(specs,"skills.status","magic","read","/mycli skills status [mine|all|技能ID] [页码]","读取本人当前技能资格、实际魔力成本、剩余冷却和已知阻碍","只读，不刷新点数；supported/unlocked/learned/canUseNow分开；未知为null，目标/落点仍由实际施法检查","MC_PAGE；mine默认只列已学及资格未知项；详情用skills info <ID>");
@@ -125,7 +125,7 @@ final class AgentCliCatalog {
         add(specs,"status","info","read","/mycli status","本人即时状态：连接标识、观测时间、认证、生命魔力、活动和主线下一步","已登录普通玩家；只读，不刷新任务、不记实练；旧公告不覆盖当前状态，缺认证桥接为unknown","MC_STATUS；更多任务用progress all 1、技能用skills status、物品用inventory status");
         add(specs,"status.full","info","read","/mycli status full","兼容旧版详细状态，附带公会与试炼输出","旧入口可刷新任务和记录已报名实练证明；只读状态用status","旧版个人状态、MC_GUILD、MC_DUNGEON等");
         add(specs,"coach.practice","info","write","/mycli coach practice status","主动读取并记录状态实练证明，普通status查询不会完成实练","先coach enroll；不会报名、施法或花费资源；已有证明不会重复发放","MC_STATUS及MC_COACH type=feature_proof；失败查coach lessons");
-        add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
+        add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/tank/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
         add(specs,"mastery","magic","read","/mycli mastery","查看本人法术熟练度与升级门槛","在线玩家","熟练度报告");
         add(specs,"skillbook","magic","item","/mycli skillbook list|use [槽位]","列出或使用实体技艺研习书；也可手持右键","背包有研习书且对应技能未满级","MC_SKILLBOOK 私有回执");
         add(specs,"cast","magic","cast","/mycli cast <技能ID> [参数]","施放生活、战斗或探索法术","本人非旁观者；魔力/学习/冷却由技能检查","技能结果；部分返回 MC_* 坐标");
@@ -178,7 +178,7 @@ final class AgentCliCatalog {
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
         add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z> [--verbose] [--json]","预判能否放置；多个目标用protect batch","整数坐标；同维度、16 格内、区块已加载","一份MC_PROTECTION摘要；deny停止，unknown暂缓；--verbose展开规则");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
-        add(specs,"spells.list","magic","read","/mycli spells list [分类] [页码]","skills list 的兼容别名；profession/warrior/mage/priest 可直接查职业技能","查询免费；默认 all 多页，旧 list <页码> 保留","MC_SPELL_LIST/ITEM/NEXT");
+        add(specs,"spells.list","magic","read","/mycli spells list [分类] [页码]","skills list 的兼容别名；profession/warrior/tank/mage/priest 可直接查职业技能","查询免费；默认 all 多页，旧 list <页码> 保留","MC_SPELL_LIST/ITEM/NEXT");
         add(specs,"spells.explain","magic","read","/mycli spells explain <ID>","skills explain 的兼容别名；各级价格和条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");
         add(specs,"skillbook.list","magic","read","/mycli skillbook list","列出背包内真实研习书、槽位、技能与可得熟练度","本人在线","MC_SKILLBOOK action=list|summary");
         add(specs,"skillbook.use","magic","item","/mycli skillbook use [背包槽位0–35]","消耗一册研习书增加对应技能熟练度；满级不消耗","本人持有该书且未满 3 级","MC_SKILLBOOK action=use");
@@ -257,11 +257,11 @@ final class AgentCliCatalog {
         add(specs,"arena.recycle.list","storage","read","/mycli arena recycle list","列出本人箱子与背包中可回收装备","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取30秒报价","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
-        add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","远程开启 2 魔力；站在实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","列出箱满后尚未入箱的奖励","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
+        add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","需先学travel：skills info travel / skills learn travel；成功远程开页2魔力，实体箱旁免费，无需先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
         add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–7|9–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人第一页54格双箱；10页共540格；支持原版箱子操作","远程开启 2 魔力；站在实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；远程开页2魔力","原版分页选择菜单");
+        add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人第一页54格双箱；10页共540格；支持原版箱子操作","需先学travel：skills info travel / skills learn travel；成功远程开页2魔力，实体箱旁免费，无需先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；先学travel，成功远程开页2魔力","原版分页选择菜单");
         add(specs,"arena.stash.page","storage","gui","/mycli arena stash page <1–10>","打开个人箱指定页","原槽位1–54保留，全局最大540","原版54格箱子");
         add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用现有绿宝石余额；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
         add(specs,"commission.publish","adventure","write","/mycli commission publish delivery <物品ID> <数量> <报酬> <标题>；hunt <怪物ID> <数量> <报酬> <标题>；explore <维度> <报酬> <标题>；structure <结构ID> <报酬> <标题>","托管实际绿宝石余额并发布物资或同行委托","生存；余额足够；物资只收普通物品；结伴需发布者32格内同行","MC_COMMISSION_RESULT / MC_COMMISSION");
@@ -270,7 +270,7 @@ final class AgentCliCatalog {
         add(specs,"commission.abandon","adventure","write","/mycli commission abandon [ID]","放弃接单，委托重新开放","不领取报酬；交付处理中禁止放弃","MC_COMMISSION_RESULT");
         add(specs,"commission.cancel","adventure","write","/mycli commission cancel <ID>","撤回本人未接委托并退回托管余额","有人接单后不能单方面撤回","MC_COMMISSION_RESULT");
         add(specs,"arena.stash.inventory","storage","read","/mycli arena stash inventory","列出本人背包槽位 0–35","在线玩家","MC_INVENTORY、MC_INVENTORY_SUMMARY");
-        add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","分页列出全局1–540槽位，默认第一页","在线玩家","MC_STASH、MC_STASH_SUMMARY");
+        add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","只查已装入箱格，默认第一页；待入箱奖励另用arena rewards list，开箱后装入","在线玩家","MC_STASH、MC_STASH_SUMMARY");
         add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved 数量与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按精确背包槽存入；保留附魔与自定义物品","背包槽有物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved 数量与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–540> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位；远程成功取出 2 魔力","MC_STASH_TAKE moved 数量与远程 MC_STORAGE_MAGIC");

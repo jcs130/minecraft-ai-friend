@@ -82,6 +82,7 @@ final class AgentCommunication {
         JsonObject out = envelope(p, "state"); out.addProperty("name", p.getName()); out.addProperty("mode", p.getGameMode().name());
         out.addProperty("health", p.getHealth()); out.addProperty("maxHealth",p.getMaxHealth());out.addProperty("food", p.getFoodLevel());
         out.addProperty("adventurerRank",plugin.guild().adventurerRankName(p));out.add("profession",plugin.professions().readProfession(p));
+        if (plugin.combatRpg() != null) out.add("combatRpg",plugin.combatRpg().state(p));
         var user = AuraSkillsApi.get().getUser(p.getUniqueId()); boolean manaKnown = user != null && user.isLoaded();
         out.add("mana", manaKnown ? new JsonPrimitive(user.getMana()) : JsonNull.INSTANCE);
         out.add("maxMana", manaKnown ? new JsonPrimitive(user.getMaxMana()) : JsonNull.INSTANCE);

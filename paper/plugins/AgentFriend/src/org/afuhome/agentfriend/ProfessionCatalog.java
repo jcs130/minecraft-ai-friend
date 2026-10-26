@@ -22,7 +22,7 @@ final class ProfessionCatalog {
     record Unlock(String id, String source, String sourceId, List<String> skills) { }
     static final Set<String> EFFECTS = Set.of("sword_thrust", "sword_parry", "sword_cone", "sword_step",
             "sword_beam", "sword_combo", "arcane_bolt", "frost_cone", "flame_cone", "ward", "mark", "mend", "cleanse", "haste", "growth", "warmth",
-            "sky_leap", "soar", "blessing");
+            "sky_leap", "soar", "blessing", "tank_taunt", "tank_bastion");
     final Map<String, Role> roles;
     final Map<String, Skill> skills;
     final List<Unlock> unlocks;
@@ -44,8 +44,9 @@ final class ProfessionCatalog {
             List<String> starters = strings(row, "starter-skills", 4);
             roles.put(id, new Role(id, text(row, "title", 24), kind.equals("combat"), icon(row), starters));
         }
-        // The old guide keeps its original slots. At most 20 additions fit its vanilla 54-slot menu.
-        rows = section(definitions, "skills", 20);
+        // 20 basics plus at most 24 profession skills fit before the menu's
+        // fixed bottom row. Never overwrite navigation buttons with a new skill.
+        rows = section(definitions, "skills", 24);
         for (String id : rows.getKeys(false)) {
             id(id); if (SpellGuide.baseIds().contains(id)) throw new IllegalArgumentException("reserved skill " + id);
             ConfigurationSection row = section(rows, id, 20);
@@ -84,6 +85,9 @@ final class ProfessionCatalog {
     static void validateEffect(Skill skill) {
         String effect = skill.effect(); double range = skill.range(), power = skill.power();
         int targets = skill.targets(), duration = skill.ticks() / 20;
+    if (effect.equals("tank_taunt") && (range > 8 || targets > 4 || duration > 6 || !skill.equipment().equals("shield"))
+            || effect.equals("tank_bastion") && (targets != 1 || power > 6 || duration > 8 || !skill.equipment().equals("shield")))
+        throw new IllegalArgumentException(skill.id() + " exceeds tank limits");
     if (effect.equals("sword_cone") && (range > 3.5 || targets > 3 || power > 4)
             || effect.equals("sword_thrust") && (range > 3.5 || targets != 1 || power > 8)
             || effect.equals("sword_step") && (range > 3 || targets != 1 || power > 6)
