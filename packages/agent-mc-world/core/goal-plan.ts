@@ -5,6 +5,7 @@ import type { PositionXYZ } from './blueprint.ts';
 const GOAL_PLAN_MAX_STEPS = 12;
 const GOAL_PLAN_MAX_PROBES_PER_STEP = 8;
 const GOAL_PLAN_MAX_PROBES = 24;
+const GOAL_PLAN_MAX_REPORTED_ERRORS = 8;
 
 const GOAL_PROBE_FIELDS: Record<string, readonly string[]> = {
   block: ['source', 'at', 'is'],
@@ -134,7 +135,7 @@ const GOAL_PROBE_SCHEMA = {
     },
     at: VEC3_SCHEMA,
     is: { type: 'string', description: 'block 的精确方块 id。' },
-    item: { type: 'string', description: 'inventory/item 的精确物品 id。' },
+    item: { type: 'string', description: 'inventory 查当前背包；item 查区域内当前掉落物。精确物品 id；两者都不能证明曾经领取奖励。' },
     type: { type: 'string', description: 'entity 的精确实体 id。' },
     count: COMPARE_SCHEMA,
     key: { type: 'string', description: 'blueprint 的蓝图键。' },
@@ -142,7 +143,7 @@ const GOAL_PROBE_SCHEMA = {
     matched: COMPARE_SCHEMA,
     region: REGION_SCHEMA,
     dimension: { type: 'string', description: 'region 所在维度，如 minecraft:overworld。' },
-    field: { type: 'string', enum: ['health', 'food', 'oxygen', 'burning'] },
+    field: { type: 'string', enum: ['health', 'food', 'oxygen', 'burning'], description: 'status 只支持这四项；装备、任务或副本状态不在此字段中。' },
     equals: {
       type: ['number', 'string', 'boolean'],
       description: 'status 的目标值；数值状态也可写 ">=8" / "<=2"。',
@@ -155,7 +156,7 @@ export const GOAL_PLAN_SCHEMA = {
   type: 'array',
   minItems: 1,
   maxItems: GOAL_PLAN_MAX_STEPS,
-  description: '按执行顺序列里程碑。每步恰好给 verify 或 judgment；verify 数组按 AND 求值。只在读数能直接证明本步成果时用 verify；信息理解、对话和服务端命令回执用 judgment 登记实际依据。',
+  description: '按执行顺序列里程碑。每步恰好给 verify 或 judgment；verify 数组按 AND 求值。只在读数能直接证明本步成果时用 verify；信息理解、对话和服务端命令回执用 judgment 登记实际依据。登记只维护计划，不启动或暂停身体任务；参数错误时保持原成果语义，不换成无关条件凑通过。',
   items: {
     type: 'object',
     properties: {
@@ -326,6 +327,11 @@ function probeRepairHint(value: unknown): string {
   if (source === 'item') {
     hint += 'item 统计区域内的掉落物；结构示例（请替换占位值）：'
       + '{"source":"item","item":"arrow","region":[[0,63,0],[2,66,2]],"dimension":"minecraft:overworld","count":">=1"}。';
+    hint += '最多 4096 格且须完整加载；地上的物品或当前背包数量都不能证明领取奖励的历史动作。';
+  }
+  if (source === 'status') {
+    hint += 'field 只支持 health/food/oxygen/burning；前三项 equals 用非负数或比较式，burning 用布尔值。'
+      + '没有装备、任务或副本状态字段，不要杜撰字段名。';
   }
   hint += '服务端命令结果、委托状态或历史动作成果应在本步改用 judgment，删除 verify；完成时再用 milestone 引用真实回执。';
   return hint;
@@ -337,41 +343,60 @@ export function parseGoalPlan(value: unknown, planPath = 'add.plan'): GoalPlan |
     return { error: `${planPath} 一次最多 ${GOAL_PLAN_MAX_STEPS} 步` };
   }
   const steps: GoalPlanStep[] = [];
+  const issues: string[] = [];
+  const hints = new Set<string>();
+  const reject = (error: string, probe?: unknown) => {
+    issues.push(error);
+    // Report a compact contract once per source, not once per bad probe.
+    if (probe !== undefined && issues.length <= GOAL_PLAN_MAX_REPORTED_ERRORS) hints.add(probeRepairHint(probe));
+  };
   let probeCount = 0;
   for (const [index, raw] of value.entries()) {
     const path = `${planPath}[${index}]`;
     const body = objectOf(raw);
-    if (!body) return { error: `${path} 要一个对象` };
+    if (!body) { reject(`${path} 要一个对象`); continue; }
     const extras = unknownFields(body, ['do', 'verify', 'judgment']);
-    if (extras.length > 0) return { error: `${path} 有未知字段: ${extras.join(', ')}` };
+    if (extras.length > 0) reject(`${path} 有未知字段: ${extras.join(', ')}`);
     const action = text(body.do);
-    if (!action) return { error: `${path}.do 不能空` };
+    if (!action) reject(`${path}.do 不能空`);
     // Public snapshots represent the unused branch as null. Accept that exact
     // round-trip without accepting two real criteria or weakening verification.
     const hasVerify = body.verify != null;
     const hasJudgment = body.judgment != null;
-    if (hasVerify === hasJudgment) return { error: `${path} 要恰好给 verify 或 judgment` };
+    if (hasVerify === hasJudgment) { reject(`${path} 要恰好给 verify 或 judgment`); continue; }
     if (hasJudgment) {
       const judgment = text(body.judgment);
-      if (!judgment) return { error: `${path}.judgment 不能空` };
-      steps.push({ do: action, verify: null, judgment, state: 'pending', evidence: null, completedAt: null });
+      if (!judgment) reject(`${path}.judgment 不能空`);
+      if (action && judgment) steps.push({ do: action, verify: null, judgment, state: 'pending', evidence: null, completedAt: null });
       continue;
     }
     const rawProbes = Array.isArray(body.verify) ? body.verify : [body.verify];
     if (rawProbes.length === 0 || rawProbes.length > GOAL_PLAN_MAX_PROBES_PER_STEP) {
-      return { error: `${path}.verify 要 1..${GOAL_PLAN_MAX_PROBES_PER_STEP} 个旁证` };
+      reject(`${path}.verify 要 1..${GOAL_PLAN_MAX_PROBES_PER_STEP} 个旁证`);
+      continue;
     }
     probeCount += rawProbes.length;
     if (probeCount > GOAL_PLAN_MAX_PROBES) {
-      return { error: `${planPath} 一共最多 ${GOAL_PLAN_MAX_PROBES} 个旁证` };
+      reject(`${planPath} 一共最多 ${GOAL_PLAN_MAX_PROBES} 个旁证`);
+      break;
     }
     const probes: GoalProbe[] = [];
     for (const [probeIndex, rawProbe] of rawProbes.entries()) {
       const parsed = parseProbe(rawProbe, `${path}.verify[${probeIndex}]`);
-      if ('error' in parsed) return { error: `${parsed.error}\n${probeRepairHint(rawProbe)}` };
-      probes.push(parsed);
+      if ('error' in parsed) reject(parsed.error, rawProbe);
+      else probes.push(parsed);
     }
-    steps.push({ do: action, verify: probes, judgment: null, state: 'pending', evidence: null, completedAt: null });
+    if (action) steps.push({ do: action, verify: probes, judgment: null, state: 'pending', evidence: null, completedAt: null });
+  }
+  if (issues.length > 0) {
+    const visible = issues.slice(0, GOAL_PLAN_MAX_REPORTED_ERRORS);
+    const remaining = issues.length - visible.length;
+    return { error: [
+      ...visible,
+      ...(remaining > 0 ? [`另有 ${remaining} 处错误；先修正以上问题后重新校验。`] : []),
+      ...hints,
+      ...(issues.length > 1 ? ['本次计划未采用任何部分；请一次修正这些独立问题，保持原目标成果与证据要求。'] : []),
+    ].join('\n') };
   }
   return { steps, readyAnnounced: false };
 }

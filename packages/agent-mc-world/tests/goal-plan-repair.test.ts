@@ -3,6 +3,62 @@ import { parseGoalPlan } from '../core/goal-plan.ts';
 import { parseGoal } from '../core/world.ts';
 
 describe('recoverable goal probe contract errors', () => {
+  it('reports both independent failures from the live revision instead of spending a model turn per error', () => {
+    const plan = [
+      { do: 'start the dungeon', verify: [{ source: 'status', field: 'dungeon_active', equals: true }] },
+      { do: 'clear rooms and return', judgment: 'check observed room-clear receipts' },
+      { do: 'claim the reward', verify: [{ source: 'item', item: 'emerald', equals: true }] },
+    ];
+    const before = JSON.stringify(plan);
+    const result = parseGoalPlan(plan, 'revise.plan');
+    if (!('error' in result)) throw new Error('Invalid revision was accepted');
+    expect(result.error).toContain('revise.plan[0].verify[0].field 只收 health/food/oxygen/burning');
+    expect(result.error).toContain('revise.plan[2].verify[0] 有不属于 item 的字段: equals');
+    expect(result.error).toContain('没有装备、任务或副本状态字段');
+    expect(result.error).toContain('不能证明领取奖励的历史动作');
+    expect(result.error).toContain('本次计划未采用任何部分');
+    expect(result).not.toHaveProperty('steps');
+    expect(JSON.stringify(plan)).toBe(before);
+  });
+
+  it('reports structural and probe failures together, with one contract hint per source', () => {
+    const result = parseGoalPlan([
+      { do: '', judgment: 'check original evidence', unsupported: true },
+      { do: 'check status', verify: [
+        { source: 'status', field: 'armor', equals: '>=10' },
+        { source: 'status', field: 'dungeon_active', equals: true },
+      ] },
+    ]);
+    if (!('error' in result)) throw new Error('Invalid plan was accepted');
+    expect(result.error).toContain('add.plan[0] 有未知字段: unsupported');
+    expect(result.error).toContain('add.plan[0].do 不能空');
+    expect(result.error).toContain('add.plan[1].verify[0].field');
+    expect(result.error).toContain('add.plan[1].verify[1].field');
+    expect(result.error.match(/status 只收 source, field, equals/g)).toHaveLength(1);
+  });
+
+  it('bounds multi-error receipts without accepting a partial plan', () => {
+    const result = parseGoalPlan(Array.from({ length: 12 }, (_, index) => ({
+      do: `check ${index}`, verify: { source: 'status', field: 'unsupported', equals: true },
+    })));
+    if (!('error' in result)) throw new Error('Invalid plan was accepted');
+    expect(result.error.match(/\.verify\[0\]\.field/g)).toHaveLength(8);
+    expect(result.error).toContain('另有 4 处错误');
+    expect(result.error.match(/status 只收 source, field, equals/g)).toHaveLength(1);
+    expect(result).not.toHaveProperty('steps');
+  });
+
+  it('does not weaken observable dropped-item limits to make a reward plan pass', () => {
+    const result = parseGoalPlan([{ do: 'claim reward', verify: [{
+      source: 'item', item: 'emerald', count: '>=2', dimension: 'minecraft:overworld',
+      region: [[-440, 0, 660], [-410, 20, 690]],
+    }] }], 'revise.plan');
+    if (!('error' in result)) throw new Error('Unobservable item region accepted');
+    expect(result.error).toContain('共 20181 格');
+    expect(result.error).toContain('4096');
+    expect(result.error).toContain('不能证明领取奖励的历史动作');
+  });
+
   it('rejects the live position alias loop and returns an accepted complete shape', () => {
     const bad = parseGoalPlan([{ do: 'reach the entrance', verify: {
       source: 'position', at: [-1181, 66, -1554], equals: true,

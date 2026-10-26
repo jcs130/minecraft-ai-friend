@@ -73,3 +73,4 @@ export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizat
   type InventoryOrganizationPlan } from '../core/inventory-organization.ts';
 
 export { PHOTOGRAPHY_DEFAULTS } from '../core/photo-image.ts';
+export { ObservedCommandCatalog, type ObservedCommandUsage, type CommandRouteMismatch } from '../core/observed-command-catalog.ts';

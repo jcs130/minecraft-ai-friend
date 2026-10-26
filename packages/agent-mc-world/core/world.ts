@@ -4527,6 +4527,8 @@ export class MinecraftWorld implements World {
   protected extensionRespawn(): void {}
   protected extensionRealm(_key: string): void {}
   protected extensionMessage(_text: string): boolean { return false; }
+  /** Server-position feedback after player/private chat provenance exclusions. */
+  protected extensionServerFeedback(_text: string): void {}
   protected extensionImportantMessage(_text: string): boolean { return false; }
   protected attachExtension(_bot: Bot): void {}
   protected disposeExtension(): void {}
@@ -7295,7 +7297,7 @@ export class MinecraftWorld implements World {
       if (t) this.emit('minecraft.event', `[Minecraft] 屏幕大字:${t}`, false);
     });
     // 高层 chat/whisper 由 Mineflayer 的英文格式正则识别；没匹配上的聊天由 message 补送。
-    bot.on('message', (jsonMsg: { translate?: string; with?: Array<{ toString(): string }>; toString(): string }, position: string) => {
+    bot.on('message', (jsonMsg: { translate?: string; with?: Array<{ toString(): string }>; toString(): string }, position: string, sender?: string | null) => {
       const loginMessage = !this.hookedBots.has(bot);
       const key = String(jsonMsg?.translate ?? '');
       if (key === SET_SPAWN_TRANSLATE) {
@@ -7339,6 +7341,7 @@ export class MinecraftWorld implements World {
           if (this.bridge?.bot === bot && !matchedChatMessages.has(jsonMsg) && !this.chatClaimed.has(jsonMsg)
             && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.')) {
             this.serverFeedback.note(reply, 'system', taskId);
+            if (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender)) this.extensionServerFeedback(reply);
             const denial=parseServerActionDenial(reply);
             if (denial && this.bridge?.noteServerActionDenied?.(denial)
               && taskId!==null && this.executor?.currentTask?.id===taskId) {
