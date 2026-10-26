@@ -10,6 +10,7 @@ import type { RangedTarget } from '../core/ranged.ts';
 import { MinecraftLog } from '../core/log.ts';
 import { Executor, type TaskReport } from '../core/executor.ts';
 import { skillEat } from '../core/skills-craft.ts';
+import { skillAttack } from '../core/melee.ts';
 import type { CombatResult } from '../core/combat-observation.ts';
 import type { Logger } from '../src/client/contracts.ts';
 
@@ -492,6 +493,117 @@ describe('standable 认岩浆', () => {
 });
 
 describe('战斗会话:进入(夺手不夺嘴)', () => {
+  it.each(['cancel', 'low-health', 'timeout'] as const)('pending explicit attack equipment yields its body on %s before a late equip confirmation', async cause => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' }; b.heldItem = null;
+    let finish!: () => void, cancelled = false;
+    b.equip = () => new Promise<void>(resolve => { finish = () => { b.heldItem = { name: 'iron_sword', type: 1, count: 1 }; resolve(); }; });
+    const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
+      hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
+    const release = vi.fn();
+    const result = skillAttack(bot, 'zombie', 'melee', { aborted: () => cancelled, fleeHealth: () => 10,
+      escape: { active: false }, attack: { acquire: () => stats, release }, log } as never)
+      .then(value => ({ value, error: null }), error => ({ value: null, error }));
+    await drive(bot, 100);
+    if (cause === 'cancel') cancelled = true;
+    if (cause === 'low-health') b.health = 5;
+    await drive(bot, cause === 'timeout' ? 3000 : 100);
+    expect((await result).error).toBeInstanceOf(Error);
+    expect(release).toHaveBeenCalledTimes(1); expect(attacks).toHaveLength(0);
+    expect(Object.values(controls).every(value => !value)).toBe(true);
+    finish(); await drive(bot, 100);
+    expect(release).toHaveBeenCalledTimes(1); expect(attacks).toHaveLength(0);
+  });
+
+  it.each(['blocked', 'unavailable'] as const)('auto attack with only a bow makes space and reports %s rather than silently using fists', async failure => {
+    const enemy = foe(7, 'zombie', 2.5), { bot, attacks, controls } = combatRigBot([enemy]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };
+    b.heldItem = null; b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
+      hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
+    const ranged = rangedRig(), release = vi.fn();
+    const result = skillAttack(bot, 'zombie', 'auto', { aborted: () => false, fleeHealth: () => 0,
+      escape: { active: false }, attack: { acquire: () => stats, release, ranged: ranged.actions }, log } as never)
+      .then(value => ({ value, error: null }), error => ({ value: null, error }));
+    await drive(bot, 300);
+    expect(attacks).toHaveLength(0); expect(controls.back).toBe(true);
+    enemy.position.x = 8;
+    if (failure === 'unavailable') ranged.actions.ready = () => false;
+    await drive(bot, 100);
+    expect(String((await result).error)).toContain('未改为空手攻击');
+    expect(attacks).toHaveLength(0); expect(release).toHaveBeenCalledWith(stats);
+    expect(Object.values(controls).every(value => !value)).toBe(true);
+  });
+
+  it('a ranged-only loadout keeps distance instead of switching to an empty melee hand at close range', async () => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null; b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const ranged = rangedRig(), { session } = rig(bot, {}, undefined, ranged.actions);
+    try {
+      session.onHurtBy(7, 'zombie'); await drive(bot, 1200);
+      expect(attacks).toHaveLength(0); expect(Object.values(controls).some(Boolean)).toBe(true);
+      expect(session.reactionState().retreating).toBe(false); // the ranged body is actively making space
+    } finally { session.stop(); }
+  });
+
+  it.each(['reject', 'unconfirmed'] as const)('explicit attack surfaces %s equipment failure and releases its lease without a fist swing', async failure => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };
+    b.heldItem = null;
+    b.equip = async () => { if (failure === 'reject') throw Error('server denied equip'); };
+    const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
+      hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
+    const release = vi.fn();
+    await expect(skillAttack(bot, 'zombie', 'melee', { aborted: () => false, fleeHealth: () => 0,
+      escape: { active: false }, attack: { acquire: () => stats, release }, log } as never)).rejects.toThrow('未改为空手攻击');
+    expect(attacks).toHaveLength(0); expect(release).toHaveBeenCalledWith(stats);
+    expect(Object.values(controls).every(value => !value)).toBe(true);
+  });
+
+  it('does not swing while a bag weapon is still equipping, then attacks after the real hand reading', async () => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null;
+    let finish!: () => void;
+    b.equip = vi.fn((item: unknown) => new Promise<void>(resolve => { finish = () => { b.heldItem = item; resolve(); }; }));
+    const { session } = rig(bot);
+    try {
+      session.onHurtBy(7, 'zombie');
+      await drive(bot, 900);
+      expect(attacks).toHaveLength(0);
+      expect(b.equip).toHaveBeenCalledTimes(1);
+      expect(Object.values(controls).some(Boolean)).toBe(true); // maneuvering is not held by inventory wait
+      finish(); await drive(bot, 900);
+      expect(attacks.length).toBeGreaterThan(0);
+    } finally { session.stop(); finish?.(); }
+  });
+
+  it.each(['reject', 'unconfirmed', 'timeout'] as const)('failed equip %s cannot turn into normal barehand attacks', async failure => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null;
+    b.equip = vi.fn(() => failure === 'reject' ? Promise.reject(Error('denied'))
+      : failure === 'timeout' ? new Promise<void>(() => {}) : Promise.resolve());
+    const { session } = rig(bot);
+    try {
+      session.onHurtBy(7, 'zombie');
+      await drive(bot, failure === 'timeout' ? 3_100 : 200);
+      expect(attacks).toHaveLength(0);
+      expect(session.reactionState().retreating).toBe(true);
+      expect(b.equip).toHaveBeenCalledTimes(1);
+    } finally { session.stop(); }
+  });
+
+  it('a cancelled equip cannot report failure or revive the ended combat session', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null;
+    let reject!: (error: Error) => void;
+    b.equip = () => new Promise<void>((_, no) => { reject = no; });
+    const { session, events } = rig(bot);
+    session.onHurtBy(7, 'zombie'); session.stop();
+    const count = events.length;
+    reject(Error('late rejection')); await sleep(100);
+    expect(session.active).toBe(false); expect(attacks).toHaveLength(0); expect(events).toHaveLength(count);
+  });
+
   it('换武器没成:接敌播报不说手里是它,换手结果出来后照实补一条', async () => {
     const { bot } = combatRigBot([foe(7, 'zombie', 2.5)]);
     const b = bot as unknown as Record<string, unknown>;

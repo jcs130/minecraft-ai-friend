@@ -35,6 +35,8 @@ import {
   HARD, blend, blur, decide, dirSlot, newMap, slotDir, write, writeSlot, type Map16,
 } from './combat-context.ts';
 import { HOSTILE, bestWeapon, dropOwnedGoal, meleeCooldownMs, releaseBody, setOwnedGoal } from './executor.ts';
+import { weaponScore } from './melee.ts';
+import { equipHandConfirmed } from './equipment.ts';
 import { walkOnlyPath } from './travel.ts';
 import type { FightMode } from './policy.ts';
 import { zhEntity, zhName } from './names.ts';
@@ -340,6 +342,7 @@ export class CombatSession {
   /** 撤退失败转身还手中:E2 血线对本场静默(血线的前提是"跑得掉",这里已经证伪) */
   private desperate = false;
   private hadCombatWeapon = false;
+  private meleeEquip: { bot: Bot; weapon: string; startedAt: number; failed: boolean } | null = null;
 
   // —— v7 出手/移动状态
   private lastSwingAt = 0;
@@ -749,6 +752,7 @@ export class CombatSession {
     if (Date.now() < this.capCooldownUntil && !hurt) return false;
     this.bot = bot;
     this.state = initial;
+    this.meleeEquip = null;
     this.trackingLease = null;
     this.hadCombatWeapon = Boolean(bestWeapon(bot) || this.rangedReady(bot));
     const now = Date.now();
@@ -1145,7 +1149,11 @@ export class CombatSession {
       return;
     }
 
-    const weapon = chooseHybridWeapon(this.hybridWeapon, target.reach, rangedReady);
+    // Having a bow does not make the empty melee hand armed. With no melee
+    // weapon, keep the ranged controller's spacing instead of choosing fists
+    // merely because the hostile crossed the hybrid distance threshold.
+    const weapon = !this.desperate && rangedReady && !bestWeapon(bot)
+      ? 'ranged' : chooseHybridWeapon(this.hybridWeapon, target.reach, rangedReady);
     if (weapon !== this.hybridWeapon) this.switchWeapon(bot, weapon);
     if (this.hybridWeapon === 'ranged') {
       this.driveRanged(bot, target, visibleFoes, now);
@@ -1247,8 +1255,13 @@ export class CombatSession {
     const weapon = bestWeapon(bot);
     if (!weapon) return ',手边没趁手的家伙';
     if (bot.heldItem?.name === weapon.name) return `,手里是${zhName(weapon.name)}`;
+    if (this.meleeEquip?.bot === bot) return ',正在核对换手结果';
+    const attempt: NonNullable<CombatSession['meleeEquip']> = { bot, weapon: weapon.name, startedAt: Date.now(), failed: false };
+    this.meleeEquip = attempt;
     const was = heldText(bot);
     const miss = (why: string): void => {
+      if (this.meleeEquip !== attempt || this.bot !== bot || this.state !== 'fighting') return;
+      attempt.failed = true;
       const now = heldText(bot);
       this.opts.emit(`${zhName(weapon.name)}没换到手上(${why}),手里是${now}。`, true, false);
       this.opts.diag?.write({
@@ -1257,11 +1270,39 @@ export class CombatSession {
         data: { weapon: weapon.name, held: bot.heldItem?.name ?? null, why },
       });
     };
-    void bot.equip(weapon, 'hand').then(
-      () => { if (bot.heldItem?.name !== weapon.name) miss('换手做完了,主手读数却不是它'); },
+    void equipHandConfirmed(bot, weapon, () => {
+      if (this.meleeEquip !== attempt || this.bot !== bot || this.state !== 'fighting' || attempt.failed)
+        throw new Error('原战斗已让出身体，不继续换手');
+    }).then(
+      () => {
+        if (this.meleeEquip !== attempt) return;
+        if (bot.heldItem?.name !== weapon.name) miss('换手做完了,主手读数却不是它');
+        else this.meleeEquip = null;
+      },
       (err: Error) => miss(zhErrorText(err.message)),
     );
     return `,正把${zhName(weapon.name)}换到手上(原来手里是${was})`;
+  }
+
+  /** Inventory availability is not equip confirmation. Never swing while the
+   * selected weapon is still in the bag; keep movement/retreat independent. */
+  private meleeHandReady(bot: Bot, now: number): boolean {
+    if (weaponScore(bot.heldItem?.name ?? '') >= 0) return true;
+    if (!bestWeapon(bot)) return true; // Existing unarmed/escape policy owns this case.
+    if (!this.meleeEquip) this.armMelee(bot);
+    const attempt = this.meleeEquip;
+    if (!attempt) return false;
+    if (!attempt.failed && now - attempt.startedAt < 3_000) return false;
+    if (!attempt.failed) {
+      attempt.failed = true;
+      this.opts.emit(`换${zhName(attempt.weapon)}超过3秒仍未确认，手里是${heldText(bot)}。`, true, false);
+    }
+    // A cornered escape may explicitly fall back to bare hands. Ordinary
+    // combat must leave rather than silently treating a bag weapon as held.
+    if (this.desperate) return true;
+    this.opts.emit('武器没能拿到手，先拉开距离再处理装备。', true, false);
+    this.beginRetreat('flee');
+    return false;
   }
 
   private driveRanged(bot: Bot, target: Foe, foes: Foe[], now: number): void {
@@ -1770,6 +1811,11 @@ export class CombatSession {
    */
   private tryOffense(target: Foe, mode: 'crit' | 'kb' | 'sweep', now: number): void {
     const bot = this.bot!;
+    if (!this.meleeHandReady(bot, now)) {
+      this.swingPhase = 'idle';
+      bot.setControlState('jump', false);
+      return;
+    }
     const inReach = target.reach <= REACH_MAX;
     const cd = meleeCooldownMs(bot);
     const left = cd - (now - this.lastSwingAt);
@@ -2204,6 +2250,7 @@ export class CombatSession {
     const deathEpisodeId = reason === 'death' && lifecycle?.episodeId && lifecycle.episodeId !== this.lifeEpisodeAtStart
       && Date.parse(lifecycle.observedAt) >= this.startedAt ? lifecycle.episodeId : undefined;
     this.state = 'idle';
+    this.meleeEquip = null;
     this.trackingLease = null;
     this.desperate = false;
     this.retreatBank = null;

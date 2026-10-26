@@ -15,6 +15,7 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, type SkillContext } from './skill-context.ts';
+import { equipHandConfirmed } from './equipment.ts';
 import { isKnownTarget } from './entity-facts.ts';
 import { dropGoal, findEntity, gotoGoal, levelTravelGoal, walkOnlyPath } from './travel.ts';
 import { zhEntity } from './names.ts';
@@ -301,7 +302,7 @@ export async function skillAttack(
   let inMelee = false;
   let strafeLeft = false;
   let strafeAt = 0;
-  let weapon: HybridWeapon = forcedRanged ? 'ranged' : 'melee';
+  let weapon: HybridWeapon = forcedRanged || (mode === 'auto' && ranged?.ready(bot) && !bestWeapon(bot)) ? 'ranged' : 'melee';
   let desperate = false;
   let retreatFailed = false;
   let chaseWithoutProgress = 0;
@@ -310,7 +311,39 @@ export async function skillAttack(
   const equipMelee = async (): Promise<void> => {
     ranged?.abort();
     const best = bestWeapon(bot);
-    if (best) await bot.equip(best, 'hand').catch(() => undefined);
+    if (!best || bot.heldItem?.name === best.name) return;
+    checkAbort(ctx);
+    const equipDeadline = Date.now() + 3_000;
+    let active = true;
+    const checkEquipmentActive = (): void => {
+      checkAbort(ctx);
+      if (!active) throw new SkillBlocked('原攻击已结束，不继续换手');
+      if (stats.disconnected) throw new SkillBlocked('换手期间连接断开');
+      if (!desperate && dangerous && ctx.fleeHealth() > 0 && (bot.health ?? 20) < ctx.fleeHealth()) {
+        throw new SkillBlocked('换手等待期间生命低于撤退线，释放攻击任务的身体占用');
+      }
+      if (Date.now() >= equipDeadline) throw new SkillBlocked('换手超过3秒仍未确认，不重试库存操作');
+    };
+    let guard: ReturnType<typeof setInterval> | undefined;
+    try {
+      const interrupted = new Promise<never>((_resolve, reject) => {
+        guard = setInterval(() => {
+          try {
+            checkEquipmentActive();
+          } catch (error) { reject(error); }
+        }, 50);
+      });
+      await Promise.race([equipHandConfirmed(bot, best, checkEquipmentActive), interrupted]);
+    }
+    catch (error) {
+      checkAbort(ctx);
+      throw new SkillBlocked(`近战武器 ${best.name} 换手失败:${String(error)};未改为空手攻击;${attackStats(stats)}`);
+    }
+    finally { active = false; if (guard !== undefined) clearInterval(guard); }
+    checkAbort(ctx);
+    if (bot.heldItem?.name !== best.name) {
+      throw new SkillBlocked(`近战武器 ${best.name} 未在主手确认，实际为 ${bot.heldItem?.name ?? '空手'};未改为空手攻击;${attackStats(stats)}`);
+    }
   };
   const releaseWalkOnly = walkOnlyPath(bot);
   const crystal = entity.name === 'end_crystal';
@@ -386,9 +419,13 @@ export async function skillAttack(
       }
       const d = entity.position.distanceTo(bot.entity.position);
       const rangedReady = Date.now() >= rangedRetryAfter && Boolean(ranged?.ready(bot));
+      if (!desperate && mode === 'auto' && weapon === 'ranged' && !rangedReady && !bestWeapon(bot)) {
+        throw new SkillBlocked(`远程武器已不可用，且没有可切换的近战武器；未改为空手攻击;${attackStats(stats)}`);
+      }
       const nextWeapon = forcedRanged
         ? 'ranged'
-        : mode === 'melee' ? 'melee' : chooseHybridWeapon(weapon, d, rangedReady);
+        : mode === 'melee' ? 'melee' : !desperate && rangedReady && !bestWeapon(bot)
+          ? 'ranged' : chooseHybridWeapon(weapon, d, rangedReady);
       if (nextWeapon !== weapon) {
         weapon = nextWeapon;
         releaseMelee(bot);
@@ -440,6 +477,9 @@ export async function skillAttack(
         }
         // 选武器仍会选弓的距离上不改近战,射不出就受阻
         const away = entity.position.distanceTo(bot.entity.position);
+        if (!bestWeapon(bot)) {
+          throw new SkillBlocked(`${rangedBlockedText(result)};没有可切换的近战武器，未改为空手攻击;${attackStats(stats)}`);
+        }
         if (chooseHybridWeapon('melee', away, Boolean(ranged.ready(bot))) === 'ranged') {
           throw new SkillBlocked(
             `${rangedBlockedText(result)};相距 ${Math.round(away * 10) / 10} 格,auto 在 ${HYBRID_RANGED_AT} 格外不改近战;` +
@@ -489,6 +529,7 @@ export async function skillAttack(
       await aimAt(bot, entity);
       pressMelee(bot, entity, dangerous ? strafeLeft : null);
       if (d <= MELEE_REACH && Date.now() - lastSwing >= attackCooldownMs(bot)) {
+        if (weaponScore(bot.heldItem?.name ?? '') < 0) await equipMelee();
         await meleeSwing(bot, entity, () => {
           stats.lastSwingAt = Date.now();
           stats.lastSwingTargetId = entity.id;

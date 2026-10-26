@@ -398,10 +398,12 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
 }
 
 /** Restore a server-confirmed cursor before recipe admission counts the player inventory. */
-export async function resumeInventoryCursor(bot: Bot): Promise<void> {
+export async function resumeInventoryCursor(bot: Bot, beforeDispatch?: () => void): Promise<void> {
+  beforeDispatch?.();
   assertInventoryClicksReady(bot);
   const window = activeWindow(bot);
   for (let attempt = 0; window.selectedItem && attempt <= window.inventoryEnd - window.inventoryStart; attempt++) {
+    beforeDispatch?.();
     const cursor = window.selectedItem;
     let dest: number | null = null;
     for (let slot = window.inventoryStart; slot < window.inventoryEnd; slot++) {
@@ -410,7 +412,8 @@ export async function resumeInventoryCursor(bot: Bot): Promise<void> {
       if (!item && dest === null) dest = slot;
     }
     if (dest === null) throw new InventoryClickSyncError('背包没有位置归还服务端游标物品，材料保留在游标上', 'rollback');
-    await clickInventoryConfirmed(bot, dest, 0, 0, window);
+    await clickInventoryConfirmed(bot, dest, 0, 0, window, beforeDispatch);
+    beforeDispatch?.();
   }
   if (window.selectedItem) throw new InventoryClickSyncError('服务端游标仍未归位，暂停配方预检', 'rollback');
 }

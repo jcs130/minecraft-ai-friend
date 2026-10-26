@@ -1,5 +1,6 @@
 import { operationInventory } from './operation-experience.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
+import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
 import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneyCue} from './journey.ts';
@@ -488,10 +489,11 @@ export const MINECRAFT_STORAGE_DECLS: ReadonlyArray<Omit<StoragePart, 'stat' | '
   },
   {
     key: 'minecraft-pwsr',
-    label: '暂态表(目标/路标等)',
-    kind: 'memory',
-    note: 'PWSR 暂态:她从笔记投影进来的目标与路标,外加蓝图施工进度那张视图,按世界分命名空间。'
-      + '本来就不跨重启,清了等于提前进了下一场',
+    label: '目标恢复与暂态表',
+    kind: 'disk',
+    location: 'data/minecraft-goals/',
+    note: '目标意图在配置 dataDir 时按世界/账号/Agent 保存；重启只恢复计划与历史判断，现场条件重新核验。'
+      + '路标仍为内存暂态。清除会同时移除所有目标恢复记录与暂态表，不执行旧动作。',
   },
 ];
 
@@ -502,8 +504,8 @@ export const MINECRAFT_STORAGE_DECLS: ReadonlyArray<Omit<StoragePart, 'stat' | '
 /**
  * 一张 realm 域暂态表的登记项。
  *
- * PWSR 的暂态**不是 World 的持久状态**:真身写在她自己的笔记里,World 这一份只是她
- * 运行时投影进来的可计算副本(so World 与 memory 互相匿名,她本人是同步协议)。
+ * PWSR 管理运行时的可计算投影，不持有个人记忆。目标表另由 GoalCheckpointBook
+ * 保存有限的意图恢复记录；其余表的持久化由各自实现负责。
  * 于是每张表只需要交代三件事 —— **叫什么、清的时候怎么说、现状一行贡献什么**;
  * 命名空间归骨架管(换世界即换空间,旧数据留在旧空间**不删**),内容归表自己管。
  *
@@ -626,6 +628,8 @@ const GOAL_SLOTS = 5;
 
 /** 一条目标。`slot` 是她认的号(#1..#5);撤掉之后那个号空出来,下一次 add 补上 */
 export interface MinecraftGoal {
+  /** Saved intention checkpoint time; never the time of a current observation. */
+  recoveredAt?: number;
   revision?: number;
   slot: number;
   text: string;
@@ -872,6 +876,7 @@ function renderGoalQuery(list: readonly MinecraftGoal[], now: number, note?: Blu
       const head = `${goalLine(g, note)} —— ${goalAge(g, now)}`;
       return [
         head,
+        ...(g.recoveredAt === undefined ? [] : [`  意图恢复自 ${new Date(g.recoveredAt).toISOString()}；历史判断保留，机械条件重新现读，未重放动作。`]),
         ...g.plan.steps.map((step, index) => {
           const state = step.state === 'verified' ? '机械旁证符合'
             : step.state === 'judged' ? '已判断' : '待完成';
@@ -2431,8 +2436,9 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'evidence for understood information, conversation and server command results. '
       + 'For observable position, inventory or entity conditions, use verify probes. A failed observation or a scan without a hit does not establish absence or safety. '
       + 'Judgment registration records the host claim; it is not independent world verification. '
-      + 'Call with no fields to read them all back. Tied to the current world and empty after a restart '
-      + 'or a world change, so the lasting copy belongs in your own notes.' + GOAL_CLOSURE_CONTRACT,
+      + 'Call with no fields to read them all back. Scoped to world, account and Agent. When dataDir is configured, '
+      + 'intentions and historical judgments survive restarts; mechanical conditions are rechecked and no actions are replayed. '
+      + 'Without dataDir this table is temporary. Personal memories remain in your own notes.' + GOAL_CLOSURE_CONTRACT,
     parameters: {
       type: 'object',
       properties: {
@@ -2849,8 +2855,10 @@ export class MinecraftWorld implements World {
     }
     return library;
   }
-  /** 按 realmKey 隔离的内存暂态表，不落盘。 */
+  /** 按 realmKey 隔离的运行时投影；目标的意图恢复记录另行落盘。 */
   protected readonly pwsr = new PwsrTables();
+  protected readonly goalCheckpoints: GoalCheckpointBook;
+  private readonly goalCheckpointScopes = new WeakMap<GoalTable, string>();
   /**
    * 当前世界的目标表(句柄每次现取,换世界后自动指向新命名空间)。
    * `status` 换成带蓝图进度的那一版:目标行上「(蓝图 home-v2:已施工 34%)」的来源。
@@ -2943,6 +2951,7 @@ export class MinecraftWorld implements World {
       emit: (event) => this.logBodyLease(event),
     });
     this.dataDir = opts.dataDir ?? '';
+    this.goalCheckpoints = new GoalCheckpointBook(this.dataDir ? join(this.dataDir, 'minecraft-goals') : null);
     this.photography = new PhotographyService({
       directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
       capture: (args, signal) => this.capturePhoto(args, signal),
@@ -4162,7 +4171,7 @@ export class MinecraftWorld implements World {
       },
       'minecraft-pwsr': {
         stat: () => this.pwsr.stat(),
-        clear: () => this.pwsr.clear(),
+        clear: () => { this.goalCheckpoints.clear(); return this.pwsr.clear(); },
       },
     };
     return MINECRAFT_STORAGE_DECLS.map((d) => ({ ...d, ...impl[d.key]! }));
@@ -5421,6 +5430,7 @@ export class MinecraftWorld implements World {
     const table = this.goalTable();
     const writeState = (): string => JSON.stringify(table.list.map((goal) => ({
       slot: goal.slot,
+      revision: goal.revision,
       text: goal.text,
       kind: goal.kind,
       target: goal.target,
@@ -5428,6 +5438,7 @@ export class MinecraftWorld implements World {
       blueprint: goal.blueprint,
       plan: goal.plan.steps.map((step) => ({
         do: step.do,
+        verify: step.verify,
         state: step.state,
         judgment: step.judgment,
         note: step.evidence && 'note' in step.evidence ? step.evidence.note : null,
@@ -5461,7 +5472,16 @@ export class MinecraftWorld implements World {
     const after = op.kind === 'done' ? [] : this.coordinateGoalPlans();
     const notices = [...before, ...after];
     if (notices.length > 0) receipt += `\n[目标旁证] ${notices.join('；')}`;
-    if (writeState() !== writeBefore) this.markGoalWrite();
+    if (writeState() !== writeBefore) {
+      this.markGoalWrite();
+      try {
+        if (op.kind !== 'query') this.goalCheckpoints.save(this.goalCheckpointScope(), table.list);
+        if (this.dataDir) receipt = receipt.replaceAll(PWSR_OVERNIGHT_NOTE, '(目标意图已保存；重启后重新核验现场条件，不重放动作。)');
+      } catch (error) {
+        this.host?.log.warn('目标恢复记录未保存', { err: String(error) });
+        receipt += '\n[恢复记录未保存] 本次只改了内存目标；原文件保留。请先修复存储，不能假定重启可恢复。';
+      }
+    }
     return receipt;
   }
 
@@ -7033,6 +7053,13 @@ export class MinecraftWorld implements World {
     // 骨架的「下桌」那几句里有一句要问蓝图表旧世界那边还剩什么
     this.blueprints.useRealm(key, normalizeDimension(this.bridge?.bot?.game?.dimension));
     const cleared = this.pwsr.switchTo(key);
+    const table = this.goals(), scope = this.goalCheckpointScope(key), identity = JSON.stringify(scope);
+    if (this.goalCheckpointScopes.get(table) !== identity) {
+      this.goalCheckpointScopes.set(table, identity);
+      table.list = [];
+      try { table.list = this.goalCheckpoints.load(scope); }
+      catch (error) { this.host?.log.warn('目标恢复记录读取失败，保留原文件', { err: String(error) }); }
+    }
     // 碰一下新命名空间里的蓝图视图:记录先存在,下一次换世界才说得出这边有什么下桌
     this.blueprintView();
     this.syncBlueprintResources();
@@ -7043,6 +7070,10 @@ export class MinecraftWorld implements World {
   protected goalTable(): GoalTable {
     this.syncRealm();
     return this.goals();
+  }
+
+  protected goalCheckpointScope(realm = this.realmKey()): GoalCheckpointScope {
+    return { realm, account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName };
   }
 
   /**
