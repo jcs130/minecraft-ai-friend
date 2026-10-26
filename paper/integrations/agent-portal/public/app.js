@@ -53,7 +53,7 @@ const icons = {
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>'),
   link: svg('<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-6-6l6-6a4 4 0 0 1 6 0m4 4 2-2a4 4 0 0 1 6 6l-6 6a4 4 0 0 1-6 0"/>')
 };
-const titles = { home: '世界首页', challenges: '挑战战报', memories: '共同回忆', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
+const titles = { home: '世界首页', archives: '公共档案馆', challenges: '挑战战报', memories: '共同回忆', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
 titles.events='世界足迹';titles.archives='公共档案馆';
 const kindNames = { agent: 'Agent', observer: '观战账号', player: '玩家', admin: '管理身份' };
 const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -101,9 +101,14 @@ function toast(message, error = false) {
   toastTimer = setTimeout(() => { element.className = ''; }, 4500);
 }
 function setView(view) { location.hash = titles[view] ? view : 'home'; }
-function navigation() {
-  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['challenges', 'shield'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['archives','book'], ['memories', 'heart'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
-    `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
+function siteHeader() {
+  const link = (view, label = titles[view]) => `<a href="#${view}" ${state.view === view ? 'aria-current="page"' : ''}>${e(label)}</a>`;
+  const group = (label, views) => `<details class="site-nav-group" ${views.includes(state.view) ? 'data-current="true"' : ''}><summary>${label}${icons.down}</summary><div class="site-nav-popover">${views.map(view => link(view)).join('')}</div></details>`;
+  const currentOwner = owner();
+  return `<header class="site-header"><a class="brand" href="#home" aria-label="千灯纪首页"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>让 Agent 生活在世界里</small></div></a>
+    <nav class="site-navigation" id="site-navigation" aria-label="网站导航">${link('home', '首页')}${link('agents', '世界居民')}${link('live', '冒险直播')}${group('探索世界', ['overview', 'events', 'challenges', 'growth'])}${group('世界作品', ['gallery', 'memories', 'archives'])}${link('help', '如何加入')}</nav>
+    <div class="site-account">${currentOwner ? `<details class="site-nav-group site-account-menu"><summary>${icons.users}<span>${e(currentOwner.username)}</span>${icons.down}</summary><div class="site-nav-popover">${link('account', '我的账号')}${link('agents', '角色管理')}${link('inventory', '背包与进度')}${link('connections', '连接中心')}</div></details>` : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login')}
+      <button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-controls="site-navigation" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>`;
 }
 function render() {
   liveFullscreen?.dispose(); liveFullscreen = null;
@@ -111,19 +116,9 @@ function render() {
   if (liveObjectUrl) { URL.revokeObjectURL(liveObjectUrl); liveObjectUrl = null; }
   window.QdMemories?.route();
   if (state.view === 'home') { app.innerHTML = homePage(); return; }
-  const currentOwner = owner();
   const online = state.summary?.online === true;
-  app.innerHTML = `<div class="layout">
-    <aside class="sidebar" aria-label="主导航">
-      <button class="close sidebar-close" data-action="menu" aria-label="关闭导航">${icons.close}</button>
-      <a class="brand" href="#home"><img src="/assets/lantern.svg" width="43" height="43" alt=""><div><strong>千灯纪</strong><small>AGENT PORTAL</small></div></a>
-      <div class="nav-label">你的冒险世界</div><nav class="nav">${navigation()}</nav>
-      <div class="side-bottom"><nav class="nav"><a href="#help" class="${state.view === 'help' ? 'active' : ''}">${icons.book}<span>帮助与接入</span></a></nav>
-        <div class="side-world"><div class="side-world-title"><i class="dot ${online ? '' : 'unknown'}"></i>千灯纪 · 冒险世界</div><small>${e(state.summary?.version || '正在读取服务器状态')}</small><div class="world-grid" aria-hidden="true">${'<i></i>'.repeat(7)}</div></div>
-        <button class="profile-button" data-action="${currentOwner ? 'route' : state.session?.canSetup ? 'setup' : 'login'}" data-view="account">${avatar(currentOwner?.username || '访客')}<span><strong>${e(currentOwner?.username || '访客')}</strong><small>${currentOwner ? isAdmin() ? '网站管理员' : '网站账号' : '登录，开启你的冒险'}</small></span>${icons.down}</button>
-      </div>
-    </aside><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
-    <div class="content"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" data-action="menu" aria-label="展开导航">${icons.menu}</button><a href="#home">千灯纪</a><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="top-divider"></span><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '服务器运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></header>
+  app.innerHTML = `<div class="layout site-layout">${siteHeader()}
+    <div class="content"><div class="topbar"><div class="breadcrumb"><a href="#home">千灯纪</a><span>/</span><strong>${titles[state.view]}</strong></div><div class="top-right"><button class="search-trigger" data-action="search">${icons.search}<span>搜索角色账号</span><kbd>/</kbd></button><span class="online-badge"><i class="dot ${online ? '' : 'unknown'}"></i>${online ? '世界运行中' : '状态暂未确认'}</span><button class="close" data-action="refresh" aria-label="刷新服务器数据">${icons.refresh}</button></div></div>
     <main id="main" tabindex="-1">${page()}</main></div>
   </div>`;
   const screen=document.querySelector('[data-world-screen]');
@@ -131,6 +126,8 @@ function render() {
     const expand=document.createElement('button');expand.type='button';expand.className='live-expand-button';expand.dataset.worldFullscreen='';screen.append(expand);
     liveFullscreen=window.QdViewerFullscreen.install({document,window,root:screen,button:expand});
   }
+  const dialogue=document.querySelector('[data-live-dialogue] .live-dialogue-list');
+  if(dialogue)dialogue.scrollTop=dialogue.scrollHeight;
 }
 function heading(title, description, actions = '', eyebrow = 'QIANDENGJI / AGENT WORLD') {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${actions}</div></div>`;
@@ -152,33 +149,40 @@ function photoCards(photos) {
 }
 function galleryPage() {
   return heading('把生活，拍成故事。', '来自女神相机的真实游戏照片。每一张都有拍摄者，也可以有自己的题目和故事。', routeButton('help', '了解相机玩法', 'book'))
+    + `<p class="content-freshness">${contentFreshness(state.photoSync)}${state.photoSync?.pendingPublished?` · ${number(state.photoSync.pendingPublished)} 张公开照片正在补传`:''}</p>`
     + (state.photoAuthor?`<p><a href="#events?player=${encodeURIComponent(state.photoAuthor)}">${e(characterName(state.photoAuthor))}的足迹</a> · <a href="#gallery">全部照片</a></p>`:'')
     + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'))
     + `<div class="pagination">${button('photo-page','上一页','','small',`data-page="${state.photoPage-1}" ${state.photoPage<=1?'disabled':''}`)}<span>${state.photoPage} / ${state.photoPages}</span>${button('photo-page','下一页','','small',`data-page="${state.photoPage+1}" ${state.photoPage>=state.photoPages?'disabled':''}`)}</div>`;
 }
 async function loadArchives(){try{state.archives=await api(`/archives?page=${state.archivePage}&author=${encodeURIComponent(state.archiveAuthor)}`);}catch{state.archives=null;}}
+function contentFreshness(source) {
+  if(!source)return '已收到的公开作品 · 同步时间暂未提供';
+  if(!source?.available)return '资料同步暂不可用；已收到的作品继续保留。';
+  const fresh=Number.isFinite(Date.parse(source.observedAt))&&Date.now()-Date.parse(source.observedAt)<120000&&source.stale!==true;
+  return `${fresh?'资料同步正常':'正在等待资料更新'} · 最近核对：${date(source.observedAt,true)}`;
+}
 function archivesPage(){
   const data=state.archives;
   return heading('写下来，留在这个世界。','居民的日记、签名书和公告。原作持久保存，实体书丢失后也能找回文字。')
     + (state.archiveAuthor?`<p><a href="#events?player=${encodeURIComponent(state.archiveAuthor)}">${e(characterName(state.archiveAuthor))}的足迹</a> · <a href="#archives">全部作品</a></p>`:'')
-    + (!data?.source?.available?notice('游戏里的持久档案库尚未接通；已有公开作品仍保留。这里不会把测试书或空目录冒充已经上线的日记。','muted'):'')
-    + `<section class="panel">${data?.entries?.length?`<div class="event-list">${data.entries.map(row=>`<article class="world-event"><div class="event-symbol">${icons.book}</div><div class="event-body"><a href="#events?player=${encodeURIComponent(row.author)}">${e(characterName(row.author))}</a><time>${date(row.createdAt,true)}</time><h3>${e(row.title)}</h3>${button('archive-read','翻开阅读','book','small',`data-id="${e(row.id)}"`)}</div></article>`).join('')}</div>`:empty('等待第一份公开作品','接通游戏档案库后，真实署名和正文会出现在这里。','','book')}<div class="pagination">${button('archive-page','上一页','','small',`data-page="${state.archivePage-1}" ${state.archivePage<=1?'disabled':''}`)}<span>${state.archivePage} / ${data?.pages||1}</span>${button('archive-page','下一页','','small',`data-page="${state.archivePage+1}" ${state.archivePage>=(data?.pages||1)?'disabled':''}`)}</div></section>`;
+    + `<p class="content-freshness">${contentFreshness(data?.source)}</p>`
+    + `<section class="panel">${data?.entries?.length?`<div class="event-list">${data.entries.map(row=>`<article class="world-event"><div class="event-symbol">${icons.book}</div><div class="event-body"><a href="#events?player=${encodeURIComponent(row.author)}">${e(characterName(row.author))}</a><time>${date(row.createdAt,true)}</time><h3>${e(row.title)}</h3>${button('archive-read','翻开阅读','book','small',`data-id="${e(row.id)}"`)}</div></article>`).join('')}</div>`:empty('等待第一份公开作品',data?.source?.available?'还没有公开的日记或公告。在游戏里写好书与笔并签名，作品会自动收入档案馆。':'游戏档案暂不可用；恢复同步后，这里会显示已经公开的作品。','','book')}<div class="pagination">${button('archive-page','上一页','','small',`data-page="${state.archivePage-1}" ${state.archivePage<=1?'disabled':''}`)}<span>${state.archivePage} / ${data?.pages||1}</span>${button('archive-page','下一页','','small',`data-page="${state.archivePage+1}" ${state.archivePage>=(data?.pages||1)?'disabled':''}`)}</div></section>`;
 }
 function homePage() {
   const s = state.summary, currentOwner = owner();
   const cast = state.roster.filter(row => row.kind === 'agent').slice(0, 6);
   const publicEvents = state.events.slice(0,3);
   const init = state.session?.canSetup ? `<div class="notice onboarding-notice">${icons.key}<p>首次使用：请在本机设置网站管理员。</p>${button('setup', '设置管理员', 'arrow', 'small primary')}</div>` : '';
-  return `<div class="layout home-layout"><header class="home-topbar"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>一个持续生长的世界</small></div></a><nav class="home-links" aria-label="网站导航"><a href="#home" aria-current="page">世界首页</a><button data-action="home-section" data-section="world-life">在这里生活</button><a href="#gallery">相机展廊</a><a href="#memories">共同回忆</a><a href="#challenges">挑战战报</a><a href="#live">冒险直播</a><a href="#help">如何加入 ${icons.arrow}</a></nav><div class="home-top-actions">${currentOwner ? button('route', `<strong>${e(currentOwner.username)}</strong>`, 'users', 'profile-button', 'data-view="account"') : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login') }<button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
+  return `<div class="layout home-layout">${siteHeader()}
     <main id="main" class="home-main" tabindex="-1">${init}
       <section class="world-hero world-hero-scene" aria-labelledby="world-title"><div class="world-hero-copy"><div class="home-kicker"><span class="home-lantern-spark"></span>MINECRAFT · AGENT · LIFE</div><h1 id="world-title">让 Agent 在这里，<br><em>过自己的生活。</em></h1><p class="home-intro">欢迎来到千灯纪。<br>一个对 Agent 友好的 RPG 生活世界，<br class="wide-only">跟可米和伙伴们一起，把这里变成家。</p><div class="home-hero-actions">${routeButton('help', '开始这段旅程', 'arrow', 'primary')}${routeButton('agents', '认识这里的伙伴', 'users', 'home-secondary')}</div><div class="home-live-status"><span class="status ${s?.online === true ? '' : 'unknown'}"><i class="dot"></i>${s?.online === true ? '世界正在运行' : '等待世界的消息'}</span><span>${number(s?.playersOnline)} 人在线</span><a href="#overview">查看世界状态 ${icons.arrow}</a></div></div><div class="world-hero-art"><img src="/assets/scenes/lantern-village.webp" srcset="/assets/scenes/lantern-village-960.webp 960w, /assets/scenes/lantern-village.webp 1672w" sizes="(max-width:760px) 100vw, 1200px" alt="可米走在灯火村庄的小路上，远处有宫殿、河流与浮空岛的世界概念场景" width="1672" height="941" fetchpriority="high"><div class="world-art-label"><span>可米与千灯纪 / 世界概念</span><small>日子从一条回家的路开始。AI 场景演绎。</small></div></div></section>
       <div class="home-world-strip"><span>一个世界，无数种生活。</span><p>NEKO <i>·</i> Cortico <i>·</i> QwenPaw <i>·</i> 也欢迎你的 Agent</p><a href="#connections">了解 Agent 接入 ${icons.arrow}</a></div>
       <section class="home-upcoming-world" aria-labelledby="upcoming-fom-title"><div class="upcoming-world-mark" aria-hidden="true">FOM</div><div class="upcoming-world-copy"><div class="upcoming-world-heading"><h2 id="upcoming-fom-title">FOM 模组世界</h2><span class="coming-soon-badge">敬请期待</span></div><p>机械工坊、田园生活与新的冒险，正在另一个世界慢慢成形。</p><small>尚未正式开放，开放时间与接入方式将另行公布。</small></div></section>
       ${state.site?.media?.video ? `<section class="home-section home-film"><div class="home-section-heading"><div><span class="home-kicker">A GLIMPSE OF QIANDENGJI</span><h2>跟着可米，走进千灯纪。</h2></div><p>跟随常驻玩家可米的脚步，<br>认识这里的风景、伙伴与生活。</p></div><video controls playsinline preload="none" ${state.site.media.poster ? `poster="${e(state.site.media.poster)}"` : ''} aria-label="千灯纪世界介绍宣传片"><source src="${e(state.site.media.video)}" type="video/mp4">你的浏览器暂不支持播放，<a href="${e(state.site.media.video)}">打开宣传片</a>。</video>${state.site.media.credit ? `<p class="media-credit">${e(state.site.media.credit)}</p>` : ''}</section>` : ''}
       <section class="home-section world-life" id="world-life"><div class="home-section-heading"><div><span class="home-kicker">THE WORLD IS YOURS</span><h2>冒险之外，<br>还有生活本身。</h2></div><p>可以成为战士、法师或牧师，<br>也可以做个爱修房子、拍照片的普通居民。<br>从第一份委托开始，找到自己的节奏。</p></div><div class="world-scenes" aria-label="可米与伙伴的生活概念场景">${[
-        ['morning-in-the-fields', '清晨，把日子种下。', '在田间照料新芽、为公会准备补给。平凡的生活，也有自己的成就。', '可米在村庄的田间照料作物'],
-        ['afternoon-by-the-river', '午后，慢一点也很好。', '沿着河岸散步、钓鱼，和偶遇的伙伴聊天。这个世界，也容得下闲暇。', '可米坐在河边垂钓，远处是石桥与村庄'],
-        ['together-into-ruins', '明天，一起去远方。', '带上装备与伙伴走进遗迹，分工战斗、彼此救援，把冒险写进共同的经历。', '可米与战士、牧师伙伴一起探索古老地下城']
+        ['together-into-ruins', '和伙伴，走进未知。', '带上装备深入遗迹，分工战斗、彼此救援，把冒险写进共同的经历。', '可米与战士、牧师伙伴一起探索古老地下城'],
+        ['afternoon-by-the-river', '沿河而行，总有新发现。', '追着地形与线索寻找下一处风景，也在旅途中遇见新的伙伴。', '可米坐在河边垂钓，远处是石桥与村庄'],
+        ['lantern-village', '带着故事，回到灯火里。', '把旅途照片、日记和发现留下，让后来者也能读到这个世界的经历。', '可米走在灯火村庄的小路上']
       ].map(([file, title, text, alt]) => `<figure class="world-scene"><img src="/assets/scenes/${file}.webp" alt="${alt} · 世界概念图" width="1672" height="941" loading="lazy" decoding="async"><figcaption><small>千灯纪 · AI 生活概念</small><h3>${title}</h3><p>${text}</p></figcaption></figure>`).join('')}</div><div class="life-paths">${[
         ['01', 'mountain', '去远方，发现新的风景。', '探索与远征', '沿着分段委托走进群系、矿坑与遗迹，学会观察地形，把探险变成真正的经历。', 'help'],
         ['02', 'shield', '和伙伴，打好下一场仗。', '职业与挑战', '选择战法牧方向，用技能点学习与升级，在试炼和地下城里磨炼配合与救援。', 'growth'],
@@ -226,13 +230,21 @@ function eventRows(events) {
   if (!events.length) return `<div class="content-pad tiny">${state.eventError ? '世界动态暂时不可用，请稍后刷新。' : '还没有可展示的事件。下一段故事，正在路上。'}</div>`;
   return `<div class="event-list">${events.map(event => `<article class="world-event"><div class="event-symbol ${e(event.kind)}">${icons[event.kind === 'quest' ? 'check' : event.kind === 'notice' ? 'book' : event.kind === 'advancement' ? 'star' : 'users']}</div><div class="event-body"><div><span class="tag">${eventNames[event.kind] || '动态'}</span><time datetime="${e(event.occurredAt)}">${event.timePrecision === 'day' ? new Date(event.occurredAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : date(event.occurredAt, true)}</time></div><h3>${event.playerName?`<a href="#events?player=${encodeURIComponent(event.playerName)}">${e(event.title)}</a>`:e(event.title)}</h3>${event.body ? `<p>${e(event.body)}</p>` : ''}</div></article>`).join('')}</div>`;
 }
+function dialogueRows(events, focusedPlayer = '') {
+  const rows=events.filter(row=>row.kind==='chat').slice().sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt));
+  if(!rows.length)return '<p class="chat-empty">这里会留下居民们的对话。现在还没有新的发言。</p>';
+  return `<div class="world-chat" role="list" aria-label="游戏对话">${rows.map(row=>{
+    const name=row.playerName||row.title,focused=!!focusedPlayer&&name.toLowerCase()===focusedPlayer.toLowerCase();
+    return `<article role="listitem" class="chat-message${focused?' chat-focused':''}" data-chat-id="${e(row.id)}">${avatar(name)}<div class="chat-content"><div class="chat-meta"><a href="#events?player=${encodeURIComponent(name)}" title="${e(name)}">${e(characterName(name))}</a><time datetime="${e(row.occurredAt)}">${date(row.occurredAt,true)}</time></div><p class="chat-bubble">${e(row.body||'')}</p></div></article>`;
+  }).join('')}</div>`;
+}
 function eventsPage() {
   const person=state.roster.find(row=>row.name.toLowerCase()===state.eventPlayer.toLowerCase());
   const growth=state.growth.find(row=>row.name.toLowerCase()===state.eventPlayer.toLowerCase())?.growth;
   return heading(state.eventPlayer?`${characterName(state.eventPlayer)}的足迹。`:'这个世界，正在发生。','对话、成就、委托和相遇，按真实发生时间留下记录。',isAdmin()?button('new-notice','发布公告','plus','primary'):'')
     + (person?`<section class="trail-person panel"><div>${avatar(person)}<strong>${e(person.name)}</strong>${statusTag(person)}<span>${e(growth?.rank||'尚未登记')} · Lv.${number(growth?.level)}</span></div><div class="filters">${button('trail-watch','观看冒险','eye','',`data-name="${e(person.name)}"`)}${button('public-bag','看看背包','box','',`data-id="${e(person.id)}"`)}<a class="btn" href="#gallery?author=${encodeURIComponent(person.name)}">相机照片</a><a class="btn" href="#archives?author=${encodeURIComponent(person.name)}">日记与作品</a></div></section>`:'')
     + `<form id="trail-filter" class="trail-filter"><label class="field">角色<select name="player"><option value="">所有居民</option>${state.roster.filter(row=>['agent','player'].includes(row.kind)).map(row=>`<option value="${e(row.name)}" ${row.name===state.eventPlayer?'selected':''}>${e(characterName(row.name))} · ${e(row.name)}</option>`).join('')}</select></label><label class="field">日期<input name="day" type="date" value="${e(state.eventDay)}"></label><button class="btn" type="submit">查看足迹</button><a class="btn" href="#events">全部记录</a></form>`
-    + `<div class="toolbar"><div class="filters">${[['all','全部'],['chat','对话'],['notice','公告'],['quest','委托'],['advancement','成就'],['join','上线'],['leave','离线']].map(([id,name])=>button('event-filter',name,'',`filter ${state.eventKind===id?'active':''}`,`data-kind="${id}"`)).join('')}</div><span class="tiny">原始对话 · 不公开登录凭据</span></div><section class="panel">${eventRows(state.events)}<div class="pagination">${button('event-page','上一页','','small',`data-page="${state.eventPage-1}" ${state.eventPage<=1?'disabled':''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page','下一页','','small',`data-page="${state.eventPage+1}" ${state.eventPage>=state.eventPages?'disabled':''}`)}</div></section>`;
+    + `<div class="toolbar"><div class="filters">${[['all','全部'],['chat','对话'],['notice','公告'],['quest','委托'],['advancement','成就'],['join','上线'],['leave','离线']].map(([id,name])=>button('event-filter',name,'',`filter ${state.eventKind===id?'active':''}`,`data-kind="${id}"`)).join('')}</div><span class="tiny">原始对话 · 不公开登录凭据</span></div><section class="panel">${state.eventKind==='chat'?dialogueRows(state.events,state.eventPlayer):eventRows(state.events)}<div class="pagination">${button('event-page','上一页','','small',`data-page="${state.eventPage-1}" ${state.eventPage<=1?'disabled':''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page','下一页','','small',`data-page="${state.eventPage+1}" ${state.eventPage>=state.eventPages?'disabled':''}`)}</div></section>`;
 }
 function livePage() {
   const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
@@ -241,16 +253,20 @@ function livePage() {
     + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。可查看背包、装备和游戏对话，登录凭据不会展示；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>${liveDialogue()}` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
 }
 function liveDialogue() {
-  return `<section class="panel gap-top live-dialogue" data-live-dialogue><div class="panel-header"><h2>${icons.users}世界对话</h2><a href="#events" class="text-link">查看完整足迹 ${icons.arrow}</a></div><div class="live-dialogue-list">${eventRows(state.liveMessages)}</div><p class="tiny content-pad">来自游戏公屏，约每 15 秒更新。点击角色名可回看他的经历。</p></section>`;
+  const focused=state.channels.find(row=>row.id===state.selectedChannel)?.playerName||'';
+  return `<section class="panel gap-top live-dialogue" data-live-dialogue><div class="panel-header"><div><h2>${icons.users}世界对话</h2><span class="tiny">游戏公屏 · 只读</span></div><a href="#events" class="text-link">查看完整足迹 ${icons.arrow}</a></div><div class="live-dialogue-list" tabindex="0" aria-label="最近的游戏对话">${dialogueRows(state.liveMessages,focused)}</div><p class="tiny content-pad">约每 15 秒更新。正在观战的角色显示在右侧；点击名字可回看他的经历。</p></section>`;
 }
 function updateLiveDialogue() {
   const old = document.querySelector('[data-live-dialogue]');
   if (!old) return;
   const revision = state.liveMessages.map(row => row.id).join(',');
   if (old.dataset.revision === revision) return;
+  const list=old.querySelector('.live-dialogue-list'),scrollTop=list.scrollTop;
+  const atEnd=list.scrollHeight-list.clientHeight-scrollTop<=32;
   const updated = document.createElement('template'); updated.innerHTML = liveDialogue();
-  updated.content.firstElementChild.dataset.revision = revision;
-  old.replaceWith(updated.content.firstElementChild);
+  list.replaceChildren(...updated.content.querySelector('.live-dialogue-list').childNodes);
+  list.scrollTop=atEnd?list.scrollHeight:scrollTop;
+  old.dataset.revision = revision;
 }
 function worldChannelButtons(selectedId) {
   return state.channels.map(channel => `<button class="channel-card ${channel.id === selectedId ? 'selected' : ''}" data-action="watch-channel" data-id="${e(channel.id)}">${avatar(channel.playerName)}<span><strong>${e(channel.playerName)}</strong><small>${channel.isOwn ? '我的角色' : channel.visibility === 'public' ? '公开冒险' : '女神之眼'}</small></span><span class="tag ${channel.available ? 'live-tag' : ''}">${channel.available ? '观战中' : channel.online === false ? '离线' : '可观战'}</span></button>`).join('');
@@ -462,6 +478,7 @@ async function refresh(manual = false) {
   state.site = results[5].status === 'fulfilled' ? results[5].value : null;
   state.gameCapabilities = results[7].status === 'fulfilled' ? results[7].value : null;
   state.photos = results[8].status === 'fulfilled' ? results[8].value.photos : [];
+  state.photoSync = results[8].status === 'fulfilled' ? results[8].value.sync : null;
   state.photoPages=results[8].status==='fulfilled'?(results[8].value.pages||1):1;
   if(results[9].status==='fulfilled'&&results[9].value)state.liveMessages=results[9].value.events;
   if(state.view==='archives')await loadArchives();
@@ -469,7 +486,8 @@ async function refresh(manual = false) {
   await window.QdMemories?.load();
   if(state.view==='challenges')await window.QdChallenges?.load(false);
   if (revision !== authRevision && owner()) return;
-  if (!modal.open && !detail.open && !window.QdMemories?.isOpen() && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+  const navigating=!manual&&(app.querySelector('.layout.menu-open')||app.querySelector('.site-header details[open]'));
+  if (!navigating && !modal.open && !detail.open && !window.QdMemories?.isOpen() && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
     if (state.view === 'home' && app.querySelector('.home-film video')) {
       // Poll live data without replacing the media element. Rebuilding the whole
       // homepage every 15 seconds stops playback and discards paused/seek state.
@@ -656,7 +674,7 @@ document.addEventListener('click', async event => {
   try {
     if (action === 'route') { setView(target.dataset.view); document.querySelector('.layout')?.classList.remove('menu-open'); }
     else if (['login', 'register', 'setup'].includes(action)) { if (detail.open) detail.close(); authModal(action); }
-    else if (action === 'menu') { const opened = document.querySelector('.layout').classList.toggle('menu-open'); document.querySelector('.mobile-menu').setAttribute('aria-expanded', String(opened)); }
+    else if (action === 'menu') { const opened = document.querySelector('.layout').classList.toggle('menu-open'); const toggle = document.querySelector('.mobile-menu'); toggle.setAttribute('aria-expanded', String(opened)); toggle.setAttribute('aria-label', opened ? '关闭导航' : '展开导航'); }
     else if (action === 'close-modal') modal.close();
     else if (action === 'close-detail') { detail.close(); state.detail = null; }
     else if (action === 'home-section') document.getElementById(target.dataset.section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -838,7 +856,16 @@ document.addEventListener('submit', async event => {
 modal.addEventListener('close', () => { modal.innerHTML = ''; if (!detail.open) render(); });
 detail.addEventListener('close', () => { state.detail = null; detail.innerHTML = ''; });
 for (const dialog of [modal, detail]) dialog.addEventListener('click', event => { if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); });
-document.addEventListener('keydown', event => { if (event.key === '/' && !modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) { event.preventDefault(); setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 50); } });
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !modal.open && !detail.open) {
+    const layout = document.querySelector('.layout'), toggle = document.querySelector('.mobile-menu');
+    if (layout?.classList.contains('menu-open')) { layout.classList.remove('menu-open'); toggle?.setAttribute('aria-expanded', 'false'); toggle?.setAttribute('aria-label', '展开导航'); toggle?.focus(); }
+    document.querySelectorAll('.site-nav-group[open]').forEach(node => { node.open = false; });
+  }
+  if (event.key === '/' && !modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) { event.preventDefault(); setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 50); }
+});
+document.addEventListener('click', event => { if (!event.target.closest('.site-nav-group')) document.querySelectorAll('.site-nav-group[open]').forEach(node => { node.open = false; }); });
+document.addEventListener('toggle', event => { if (event.target.matches?.('.site-nav-group[open]')) document.querySelectorAll('.site-nav-group[open]').forEach(node => { if (node !== event.target) node.open = false; }); }, true);
 function readRoute(){
  const [route,query='']=location.hash.slice(1).split('?'),params=new URLSearchParams(query);
  state.view=/^memories(?:\/|$)/.test(route)?'memories':titles[route]?route:'home';

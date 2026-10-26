@@ -78,7 +78,9 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       playerUuid: source?.info?.playerUuid ?? null, viewerBuild: source?.info?.viewerBuild ?? null,
       viewers: source?.hub ? source.hub.state().viewers : source ? [...source.requests.values()].filter(p => p.path === 'events').length : 0,
       ...(sharedStreams ? { upstreamStreams: source?.hub?.state().upstreamStreams ?? 0, replayBytes: source?.hub?.state().replayBytes ?? 0,
-        assetCacheBytes: source?.assets?.bytes ?? 0 } : {}) };
+        assetCacheBytes: source?.assets?.bytes ?? 0, assetCacheHits: source?.assets?.hits ?? 0,
+        assetCacheMisses: source?.assets?.misses ?? 0, assetCacheCoalesced: source?.assets?.coalesced ?? 0,
+        assetCacheActive: source?.assets?.active.size ?? 0, assetCacheQueued: source?.assets?.pending.length ?? 0 } : {}) };
   }
   function dispatch(source) {
     if (source.closed) return;
@@ -298,7 +300,9 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     }
     if (cacheAssets && cacheableSpectatorAsset(resource)) {
       source.assets ||= new SpectatorAssetCache(assetCacheOptions);
-      const asset = await source.assets.read(resource, sink => request(source,null,sink,resource,true));
+      let asset;
+      try { asset = await source.assets.read(resource, sink => request(source,null,sink,resource,true)); }
+      catch { error(res,429,'SPECTATOR_ASSET_QUEUE_FULL'); return true; }
       // Authorization may have changed while the shared cache miss was pending.
       // Never send old private bytes after an ownership/visibility invalidation.
       try { await authorizeViewer(req,channelId); }

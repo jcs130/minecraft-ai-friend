@@ -104,7 +104,10 @@ export class Gallery {
   page(query={}) {
     const photos=this.list(query),author=query.author||'';
     const total=this.store.db.prepare("SELECT count(*) AS n FROM gallery_catalog c JOIN gallery_images i ON i.id=c.id AND i.sha256=json_extract(c.metadata,'$.sha256') WHERE c.visible=1 AND (?='' OR json_extract(c.metadata,'$.author')=? COLLATE NOCASE)").get(author,author).n;
-    return {photos,total,page:query.page||1,pages:Math.max(1,Math.ceil(total/(query.limit||24))),source:'published-game-photography'};
+    const snapshot=this.source?.read();
+    const pending=this.store.db.prepare("SELECT count(*) AS n FROM gallery_catalog c LEFT JOIN gallery_images i ON i.id=c.id AND i.sha256=json_extract(c.metadata,'$.sha256') WHERE c.visible=1 AND i.id IS NULL").get().n;
+    return {photos,total,page:query.page||1,pages:Math.max(1,Math.ceil(total/(query.limit||24))),source:'published-game-photography',
+      sync:{available:!!snapshot,stale:snapshot?.stale??true,observedAt:snapshot?.value?.observedAt??null,pendingPublished:pending}};
   }
   accept(id, bytes) {
     const photo = this.published(id);

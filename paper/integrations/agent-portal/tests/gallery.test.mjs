@@ -36,6 +36,25 @@ test('published photos retain original PNG bytes, author/story and remain after 
   assert.deepEqual(f.portal.gallery.image(id).bytes, png);
 });
 
+test('gallery distinguishes an empty source, pending published image and a completed sync', async t => {
+  const f = await fixture(t);
+  assert.equal(f.portal.gallery.page().sync.available, false);
+  f.catalog([photo()]);
+  let page = f.portal.gallery.page();
+  assert.equal(page.sync.available, true);
+  assert.equal(page.sync.stale, false);
+  assert.equal(page.sync.pendingPublished, 1);
+  assert.ok(Date.parse(page.sync.observedAt));
+  assert.equal(page.total, 0);
+  await f.upload();
+  page = f.portal.gallery.page();
+  assert.equal(page.total, 1);
+  assert.equal(page.sync.pendingPublished, 0);
+  f.catalog([], 2, {complete:true,publishedIds:[],withdrawnIds:[id]});
+  assert.equal(f.portal.gallery.page().sync.pendingPublished, 0);
+  assert.equal(f.portal.gallery.page().total, 0);
+});
+
 test('browser writes, bad credentials, unpublished IDs and mismatched image bodies cannot enter the gallery', async t => {
   const f = await fixture(t);
   assert.equal((await f.upload()).status, 404);

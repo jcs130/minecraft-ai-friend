@@ -144,18 +144,26 @@ export class SpectatorFanout extends EventEmitter {
 // No global hash URL can bypass role authorization, even on an LRU hit.
 export const cacheableSpectatorAsset = path => /^(?:assets\/|textures\/gui\/|sounds\/|api\/(?:server-appearance|server-items|bundled-appearances)\/assets\/)/.test(path);
 export class SpectatorAssetCache {
-  constructor({ maxBytes=64*1024*1024, maxEntryBytes=8*1024*1024, maxInflight=8 }={}) {
-    Object.assign(this,{maxBytes,maxEntryBytes,maxInflight});this.entries=new Map();this.loading=new Map();this.bytes=0;this.closed=false;
+  constructor({ maxBytes=64*1024*1024, maxEntryBytes=8*1024*1024, maxInflight=8, maxQueued=256 }={}) {
+    Object.assign(this,{maxBytes,maxEntryBytes,maxInflight,maxQueued});this.entries=new Map();this.loading=new Map();this.bytes=0;this.closed=false;
+    this.pending=[];this.active=new Set();this.hits=0;this.misses=0;this.coalesced=0;
   }
   async read(path, open) {
     if (this.closed) return null;
     const hit=this.entries.get(path);
-    if(hit){this.entries.delete(path);this.entries.set(path,hit);return hit;}
-    if(this.loading.has(path))return this.loading.get(path);
-    if(this.loading.size>=this.maxInflight)return null;
-    const promise=new Promise(resolve=>{
+    if(hit){this.hits++;this.entries.delete(path);this.entries.set(path,hit);return hit;}
+    if(this.loading.has(path)){this.coalesced++;return this.loading.get(path);}
+    // Bursts must not bypass the cache: every viewer would otherwise request
+    // the same ninth texture separately. Queue unique misses within a bound.
+    if(this.loading.size>=this.maxInflight+this.maxQueued)throw Error('SPECTATOR_ASSET_QUEUE_FULL');
+    this.misses++;
+    let resolve;
+    const promise=new Promise(done=>{resolve=done;});
+    this.loading.set(path,promise);
+    const start=()=>{
       const sink=new EventEmitter();let chunks=[],size=0,status=0,contentType=null,done=false;
-      const finish=value=>{if(done)return;done=true;chunks=[];sink.destroyed=true;sink.emit('close');resolve(value);};
+      const finish=value=>{if(done)return;done=true;chunks=[];sink.destroyed=true;sink.emit('close');this.active.delete(cancel);this.loading.delete(path);resolve(value);this.drain();};
+      const cancel=()=>finish(null);this.active.add(cancel);
       sink.headersSent=false;sink.destroyed=false;
       sink.writeHead=(code,headers)=>{status=code;contentType=headers?.['Content-Type'];sink.headersSent=true;};sink.flushHeaders=()=>{};
       sink.write=bytes=>{if(done)return true;size+=bytes.length;if(size>this.maxEntryBytes){finish(null);return true;}chunks.push(bytes);return true;};
@@ -167,10 +175,12 @@ export class SpectatorAssetCache {
         if(bytes.length<=this.maxBytes){this.entries.set(path,value);this.bytes+=bytes.length;}
         finish(value);
       };
-      sink.destroy=()=>finish(null);open(sink);
-    });
-    this.loading.set(path,promise);
-    try{return await promise;}finally{this.loading.delete(path);}
+      sink.destroy=cancel;
+      try{open(sink);}catch{finish(null);}
+    };
+    this.pending.push({start,resolve,path});this.drain();
+    return promise;
   }
-  clear(){this.closed=true;this.entries.clear();this.loading.clear();this.bytes=0;}
+  drain(){while(!this.closed&&this.active.size<this.maxInflight&&this.pending.length)this.pending.shift().start();}
+  clear(){this.closed=true;this.entries.clear();this.bytes=0;for(const job of this.pending.splice(0))job.resolve(null);for(const cancel of [...this.active])cancel();this.loading.clear();}
 }
