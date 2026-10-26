@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "releasedAt": "2026-10-26T10:00:40.370587+00:00",
+  "status": "deployed",
+  "websiteVersion": "0.8.26",
+  "serverCommit": "05507c707ce4fb0ff7ccd524932cdeab366f0af7",
+  "viewerCommit": "0311fcac046c1f7adcbf7fd22b137b6d89af64e0",
+  "runtimeFilesVerified": 89,
+  "protectedWebsiteTables": 17,
+  "linuxTestsPassed": 316,
+  "windowsTests": {
+    "passed": 313,
+    "conditionalSkipped": 3
+  },
+  "viewerTests": {
+    "passed": 1354,
+    "conditionalSkipped": 39,
+    "transportPassed": 51,
+    "original1211AssetsPassed": 8,
+    "legacy1206EquipmentPassed": 12
+  },
+  "sourceSha256": "d2176700d0ec4ac693e8be00a41633d2891723259f3b45b21a04027a50c612ad",
+  "packageSha256": "c472b070b320e0dc7ad5d59c9fe6127da216cf1df2485ee9ea3a15142a957ce4",
+  "paperRestarted": false,
+  "loginProxyRestarted": false,
+  "observerFreshHeartbeat": true,
+  "sampleIntervalMs": 50,
+  "websiteDataPreserved": true,
+  "dualDiskRollbackVerified": true,
+  "cdnEnabledThisRelease": false,
+  "contentAudit": {
+    "gamePhotos": 24,
+    "publishedPhotos": 3,
+    "originalPhotosMatch": true,
+    "unpublishedPhotosKept": 21,
+    "publicBooks": 0,
+    "memories": 4
+  },
+  "limits": [
+    "57.17% gzip saving is an identical-input offline terrain replay, not a measured production speedup.",
+    "Original Cormy YSM and HUD are visible after rollout; complete animation parity and long-running mobile performance are not claimed.",
+    "Native map, dynamic bow GUI and special trident providers retain explicit unsupported states.",
+    "A publisher transport closure was observed and recovered; no continuous stability guarantee is inferred from this short verification."
+  ]
+}

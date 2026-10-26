@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "websiteVersion": "0.8.27",
+  "skillVersion": "1.3.3",
+  "sdkVersion": "0.5.7-rc.95",
+  "sourceCommit": "f14bbd35816f79a692da25e3029ce7425958703c",
+  "image": "qiandengji-portal:0.8.27-poll-bbdc9a19de94",
+  "imageId": "sha256:3652e04970aa8c864776370864ffc0b1f84dffd2777e1b22f83e9efc84e7d160",
+  "runtimeFilesVerified": 89,
+  "protectedTables": 17,
+  "previousContainer": "qiandengji-portal-prev-before-public-poll-20261026",
+  "latestDatabaseKept": true,
+  "oldDownloadsKept": true,
+  "paperRestarted": false,
+  "proxyRestarted": false,
+  "observerRestarted": false,
+  "releasedAt": "2026-10-26T10:24:21.673631+00:00",
+  "status": "deployed",
+  "viewerCommit": "0311fcac046c1f7adcbf7fd22b137b6d89af64e0",
+  "linuxTestsPassed": 320,
+  "windowsTests": {
+    "passed": 317,
+    "conditionalSkipped": 3
+  },
+  "newRegressionTests": 4,
+  "dualDiskBackupVerified": true,
+  "credentialsAndAccessLimitsUnchanged": true,
+  "notes": [
+    "A transient HTTP 429 preserves the selected scene and honours Retry-After.",
+    "Actual logout and fresh watch authorization denial still clear the scene.",
+    "Concurrent page polls are coalesced. Background live views skip unrelated private account and story queries."
+  ]
+}
