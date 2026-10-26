@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 1,
+  "source": "GuildManager.CONTRACTS/LifeGuildManager.CONTRACTS; regenerate after definition changes",
+  "tasks": {
+    "undead_explorer": {
+      "title": "亡灵墓穴调查",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "creeping_explorer": {
+      "title": "蔓生墓穴调查",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "desert_explorer": {
+      "title": "沙漠遗迹调查",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "camp_scout": {
+      "title": "营地侦察",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "lost_town": {
+      "title": "失落古镇",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "bunker_explorer": {
+      "title": "地下堡垒",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "biome_border": {
+      "title": "边界巡礼",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "high_peak": {
+      "title": "制高点",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "first_step": {
+      "title": "初探苔穴",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "desert_scout": {
+      "title": "遗迹前哨",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "deep_explorer": {
+      "title": "深层远征",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "ocean_guard": {
+      "title": "海渊守望",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "treasure_vault": {
+      "title": "宝库守护者",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "trial_seven": {
+      "title": "星光深径",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "trial_ten": {
+      "title": "千灯之巅",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "pest_control": {
+      "title": "洞窟讨伐",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "ember_hunter": {
+      "title": "烈焰讨伐",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "witch_hunter": {
+      "title": "药婆克星",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "flower_tithe": {
+      "title": "千灯花礼",
+      "category": "logistics",
+      "tags": [
+        "logistics"
+      ]
+    },
+    "harvest_home": {
+      "title": "丰收归仓",
+      "category": "logistics",
+      "tags": [
+        "logistics"
+      ]
+    },
+    "honey_tribute": {
+      "title": "蜜糖进贡",
+      "category": "logistics",
+      "tags": [
+        "logistics"
+      ]
+    },
+    "berry_basket": {
+      "title": "浆果满篮",
+      "category": "logistics",
+      "tags": [
+        "logistics"
+      ]
+    },
+    "gem_offer": {
+      "title": "星辰之晶",
+      "category": "logistics",
+      "tags": [
+        "logistics"
+      ]
+    },
+    "lantern_light": {
+      "title": "点灯人",
+      "category": "construction",
+      "tags": [
+        "construction"
+      ]
+    },
+    "erudite": {
+      "title": "博识之证",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "treasure_keeper": {
+      "title": "宝箱整理师",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "light_pack": {
+      "title": "轻装远行",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "party_oath": {
+      "title": "结伴试炼",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "pair_deep": {
+      "title": "同行深远",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "pair_teach": {
+      "title": "薪火相传",
+      "category": "combat",
+      "tags": [
+        "combat"
+      ]
+    },
+    "oracle_road": {
+      "title": "神谕问路",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "stone_riddle": {
+      "title": "碑文解读",
+      "category": "exploration",
+      "tags": [
+        "exploration"
+      ]
+    },
+    "lantern_riddle": {
+      "title": "千灯灯谜",
+      "category": "logistics",
+      "tags": [
+        "logistics"
+      ]
+    },
+    "stone_only": {
+      "title": "朴素远征",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "pilgrimage": {
+      "title": "徒步朝圣",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "fasting": {
+      "title": "斋戒试炼",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "flawless": {
+      "title": "无瑕之径",
+      "category": "other",
+      "tags": [
+        "other"
+      ]
+    },
+    "farmer_harvest": {
+      "title": "丰收的一天",
+      "category": "farming",
+      "tags": [
+        "farming"
+      ]
+    },
+    "gourmet_bread": {
+      "title": "给大家烤面包",
+      "category": "crafting",
+      "tags": [
+        "crafting"
+      ]
+    },
+    "angler_catch": {
+      "title": "河畔小憩",
+      "category": "fishing",
+      "tags": [
+        "fishing"
+      ]
+    },
+    "builder_home": {
+      "title": "搭一间小屋",
+      "category": "construction",
+      "tags": [
+        "construction"
+      ]
+    },
+    "author_story": {
+      "title": "旅途的一页",
+      "category": "culture",
+      "tags": [
+        "culture"
+      ]
+    },
+    "tinkerer_light": {
+      "title": "点亮第一盏灯",
+      "category": "construction",
+      "tags": [
+        "construction"
+      ]
+    },
+    "trader_supply": {
+      "title": "村庄收购单",
+      "category": "trade",
+      "tags": [
+        "trade"
+      ]
+    }
+  }
+}
