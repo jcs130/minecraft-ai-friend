@@ -6,10 +6,10 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { runAgentAccess } from './agent-register.mjs';
-import { main as setup, SKILL_ROOT, loadProfile } from './setup.mjs';
+import { main as setup, SKILL_ROOT, loadProfile, prepareRuntime } from './setup.mjs';
 
 export async function importAccount(args) {
-  const { values } = parseArgs({ args, options: { 'identity-file': { type: 'string' }, profile: { type: 'string' }, 'skip-install': { type: 'boolean' } } });
+  const { values } = parseArgs({ args, options: { 'identity-file': { type: 'string' }, profile: { type: 'string' }, 'skip-install': { type: 'boolean' }, 'npm-cli': { type: 'string' } } });
   if (!values['identity-file']) throw Error('IDENTITY_FILE_REQUIRED');
   const file = path.resolve(values['identity-file']), stat = await fs.lstat(file);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16384 || process.platform !== 'win32' && (stat.mode & 0o077)) throw Error('PRIVATE_IDENTITY_REQUIRED');
@@ -22,23 +22,26 @@ export async function importAccount(args) {
   const directory = path.resolve(values.profile || path.join(homedir(), '.qiandengji', 'players', identity.username));
   const relative = path.relative(SKILL_ROOT, directory);
   if (!relative || !relative.startsWith('..') && !path.isAbsolute(relative)) throw Error('PRIVATE_PROFILE_OUTSIDE_SKILL_REQUIRED');
+  const complete=result=>({...result,...prepareRuntime({skipInstall:values['skip-install'],npmPath:values['npm-cli']})});
   // Keep the original body after a lost local response. Never replace it.
   try {
     const existing = loadProfile(directory);
     if (existing.config.world.username !== identity.username || existing.config.world.host !== address[1] || existing.config.world.port !== Number(address[2])) throw Error('EXISTING_PROFILE_CONFLICT');
     const original = JSON.parse(await fs.readFile(path.join(directory, 'private/invitation-origin.json'), 'utf8'));
     if (original.clientId !== identity.clientId || original.portal !== identity.portal) throw Error('EXISTING_PROFILE_CONFLICT');
-    return { profile: directory, mcpConfig: path.join(directory, 'mcp.json'), reused: true, gameConnected: false, modelCalled: false };
+    return complete({ profile: directory, mcpConfig: path.join(directory, 'mcp.json'), reused: true, gameConnected: false, modelCalled: false });
   } catch (error) { if (error.code !== 'ENOENT') throw error; try { await fs.access(directory); throw Error('EXISTING_PROFILE_REQUIRES_MANUAL_CHECK'); } catch (present) { if (present.code !== 'ENOENT') throw present; } }
   const privateDirectory = path.dirname(file), passwordFile = path.join(privateDirectory, '.' + randomUUID() + '.secret');
   await fs.writeFile(passwordFile, identity.gamePassword, { flag: 'wx', mode: 0o600 });
   try {
-    const result = await setup(['init', '--username', identity.username, '--profile', directory, '--host', address[1], '--port', address[2], '--password-file', passwordFile, ...(values['skip-install'] ? ['--skip-install'] : [])]);
+    // Persist the profile and its origin before attempting npm. An install
+    // failure must remain resumable with this exact identity and body.
+    const result = await setup(['init', '--username', identity.username, '--profile', directory, '--host', address[1], '--port', address[2], '--password-file', passwordFile, '--skip-install']);
     await fs.writeFile(path.join(directory, 'private/invitation-origin.json'), JSON.stringify({ clientId: identity.clientId, portal: identity.portal }), { flag: 'wx', mode: 0o600 });
-    return result;
+    return complete(result);
   } finally { await fs.unlink(passwordFile); identity.gamePassword = undefined; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { console.log(JSON.stringify(await importAccount(process.argv.slice(2)))); }
+  try { const result=await importAccount(process.argv.slice(2)); console.log(JSON.stringify(result)); if(!result.dependenciesReady)process.exitCode=2; }
   catch (error) { console.error(JSON.stringify({ error: /^[A-Za-z0-9_]{3,100}$/.test(error.message) ? error.message : 'PRIVATE_IMPORT_FAILED', message: '保留原身份和身体目录；先查询 status，不重新建号。' })); process.exitCode = 1; }
 }

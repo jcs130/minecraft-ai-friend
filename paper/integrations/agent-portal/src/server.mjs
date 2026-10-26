@@ -23,12 +23,17 @@ import { getAgentClients } from './agent-clients.mjs';
 import { packageAt, packageLocation, publicDownloads } from './download-catalog.mjs';
 import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
-import { agentOnboarding } from './agent-onboarding.mjs';
+import { isTrialAgent } from './trial-pool.mjs';
+import { agentOnboarding, renderJoinPage } from './agent-onboarding.mjs';
+import { skillMirrorUrl } from './download-mirror.mjs';
 import { Appearance } from './appearance.mjs';
+import { agentAppearanceRoute } from './agent-appearance-routes.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 import { Memories } from './memories.mjs';
 import { memoryRoute } from './memory-routes.mjs';
 import { LoginThrottle } from './login-throttle.mjs';
+import { PublicArchives } from './public-archives.mjs';
+import { publicDialogueText } from './public-dialogue.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -66,15 +71,23 @@ export function createPortal(config, options = {}) {
   const worldView = new WorldView(config, store);
   const nativeReady = worldView.enabled ? (async () => {
     const site = options.spectatorSite || await loadSpectatorSite(config.live.native3dSiteDirectory);
-    return createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
+    const relay=createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
+      sharedStreams:true,cacheAssets:true,maxViewers:32,
+      // Four scenes share the existing 512 MiB portal container. Keep cached
+      // assets/checkpoints bounded per source instead of scaling with viewers.
+      assetCacheOptions:{maxBytes:16*1024*1024},
+      fanoutOptions:{maxEventBytes:8*1024*1024,maxReplayBytes:8*1024*1024,maxBufferedBytes:12*1024*1024},
       authorizePublisher: async (req, id, token) => {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'PUBLISHER_REQUIRED', '仅接受服务端观战源');
         return worldView.publisher(id, token, await game.roster());
       },
       authorizeViewer: async (req, id) => worldView.viewer(id, await game.roster(), sessionFrom(req)) });
+    worldView.onInvalidate=id=>relay.invalidate(id);
+    return relay;
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
+  const archives = new PublicArchives(store);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
   const profiles = new AgentProfiles(store);
@@ -155,6 +168,19 @@ export function createPortal(config, options = {}) {
     if (agent.identityConflict) throw fail(409, 'IDENTITY_CONFLICT', '角色身份出现冲突，请联系服主核对原 UUID 后继续');
     return { ...context, agent };
   }
+  async function selfAppearance(req) {
+    if (req.headers.authorization?.startsWith('Bearer qda_')) {
+      const context = agentAccess.authorize(req);
+      return { ...context, agent: await agentAccess.selfAgent(context) };
+    }
+    let context;
+    try { context = auth(req, ['appearance.write']); }
+    catch (error) { if (error.reason === 'SCOPE_REQUIRED') throw fail(403, 'SCOPE_REQUIRED', '当前凭据未获外观管理权限，请让主人在连接中心新建凭据并勾选“本人外观管理”；原只读凭据保持只读'); throw error; }
+    if (!context.credential || !context.owner) throw fail(401, 'INVALID_CREDENTIAL', '请使用本人 Agent 接入身份，或由主人签发带外观管理权限的单角色凭据');
+    const agent = (await game.roster()).find(row => row.playerUuid === context.credential.agent_uuid);
+    if (!agent || agent.identityConflict || !store.ownedUuids(context.owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '角色归属已变化，请让当前主人在连接中心重新授权本人角色的外观管理');
+    return { ...context, agent };
+  }
   function csrf(req) {
     const current = sessionFrom(req);
     if (!current || !sameSecret(req.headers['x-csrf-token'], current.csrf)) throw fail(403, 'CSRF_REQUIRED', '会话已更新，请刷新页面后继续');
@@ -175,9 +201,11 @@ export function createPortal(config, options = {}) {
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
       if (pathname.startsWith('/watch/') && await (await nativeReady)?.http(req, res)) return;
-      if (pathname === '/join') {
+      if (['/join','/join.html','/downloads.html'].includes(pathname)) {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
-        const bytes = await fs.readFile(path.join(config.publicDir, 'join.html'));
+        const template = await fs.readFile(path.join(config.publicDir, pathname==='/downloads.html'?'downloads.html':'join.html'), 'utf8');
+        const bytes = Buffer.from(renderJoinPage(template,{skill:agentSkill,
+          downloadUrl:skillMirrorUrl(config,agentSkill)||agentSkill.url,gameAddress:config.publicGameAddress}));
         res.setHeader('Referrer-Policy', 'no-referrer');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': bytes.length });
         return res.end(req.method === 'HEAD' ? undefined : bytes);
@@ -194,6 +222,16 @@ export function createPortal(config, options = {}) {
         res.writeHead(307, { Location: location, 'Content-Length': '0', 'Cache-Control': 'no-store',
           'Referrer-Policy': 'no-referrer', 'X-Checksum-Sha256': packageRelease.sha256 });
         return res.end();
+      }
+      if (req.method === 'POST' && pathname === '/api/v1/internal/world-view/poll') {
+        // A verified observer has its own existing 90/minute budget. Browser
+        // traffic from the same household must not consume its eight-second
+        // authority renewal; unverified callers still spend the normal IP budget.
+        try { worldView.authorizeWorker(req); }
+        catch (error) { rate('api:' + digest(rateAddress(req, config)), 300, 60000); throw error; }
+        rate('world-observer-worker', 90, 60000);
+        await jsonBody(req, 1024);
+        return respond(res, 200, worldView.poll(await game.roster()));
       }
       if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
@@ -236,6 +274,7 @@ export function createPortal(config, options = {}) {
         await context();
         if (await memoryRoute({ req, res, pathname, url, memories, context, jsonBody, respond, rate })) return;
       }
+      if (await agentAppearanceRoute({ req, res, pathname, context: () => selfAppearance(req), appearance, jsonBody, respond, rate })) return;
       const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
@@ -279,13 +318,21 @@ export function createPortal(config, options = {}) {
         trace('reading');
         const input=await jsonBody(req, config.cloudSync.maxBytes);trace('validated-body',input.sequence);
         const result=cloud.accept(input);trace('committed',input.sequence);
-        return respond(res, 200, result);
+        gallery.refreshCatalog();
+        const wantedPhotos=(input.photos||[]).filter(photo=>store.db.prepare('SELECT sha256 FROM gallery_images WHERE id=?').get(photo.id)?.sha256!==photo.sha256).map(photo=>photo.id);
+        return respond(res, 200, {...result,wantedPhotos});
       }
       if (req.method === 'PUT' && pathname === '/api/v1/internal/challenges') {
         if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');
         if (req.headers.origin || req.headers.cookie) throw fail(403,'SYNC_CLIENT_REQUIRED','挑战资料仅由家庭端只读采集器上传');
         cloud.authorize(req); rate('challenge-sync',12,60000);
         return respond(res,200,await challenges.accept(await jsonBody(req,config.cloudSync.maxBytes)));
+      }
+      if(req.method==='PUT'&&pathname==='/api/v1/internal/archives'){
+        if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
+        if(req.headers.origin||req.headers.cookie)throw fail(403,'SYNC_CLIENT_REQUIRED','档案仅由家庭端读取同步');
+        cloud.authorize(req);rate('archive-sync',12,60000);
+        return respond(res,200,archives.accept(await jsonBody(req,524288)));
       }
       const photoUpload = /^\/api\/v1\/internal\/photos\/([a-f0-9-]{36})$/.exec(pathname);
       if (photoUpload && req.method === 'PUT') {
@@ -296,11 +343,6 @@ export function createPortal(config, options = {}) {
         let length = 0; const chunks = [];
         for await (const chunk of req) { length += chunk.length; if (length > MAX_PHOTO_BYTES) throw fail(413, 'PHOTO_SIZE', '照片文件过大'); chunks.push(chunk); }
         return respond(res, 200, gallery.accept(photoUpload[1], Buffer.concat(chunks)));
-      }
-      if (req.method === 'POST' && pathname === '/api/v1/internal/world-view/poll') {
-        worldView.authorizeWorker(req); rate('world-observer-worker', 90, 60000);
-        await jsonBody(req, 1024);
-        return respond(res, 200, worldView.poll(await game.roster()));
       }
       const ingest = /^\/api\/v1\/live\/([a-f0-9-]{36})\/(open|frame)$/.exec(pathname);
       if (ingest && (req.method === 'POST' && ingest[2] === 'open' || req.method === 'PUT' && ingest[2] === 'frame')) {
@@ -372,11 +414,15 @@ export function createPortal(config, options = {}) {
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
-      if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, { photos: gallery.list(), source: 'published-game-photography' });
+      if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
+      if(req.method==='GET'&&pathname==='/api/v1/archives')return respond(res,200,archives.list({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||'',kind:url.searchParams.get('kind')||'all'}));
+      const archiveRead=/^\/api\/v1\/archives\/([a-f0-9-]{36})$/.exec(pathname);
+      if(req.method==='GET'&&archiveRead)return respond(res,200,archives.read(archiveRead[1]));
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
         const image = gallery.image(photoImage[1]);
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=86400' }); return res.end(image.bytes);
+        if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'public, max-age=60'});return res.end();}
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=60' }); return res.end(image.bytes);
       }
       if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
@@ -384,11 +430,20 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
         const owned = new Set(store.db.prepare('SELECT agent_uuid FROM ownerships').all().map(row => row.agent_uuid));
         return respond(res, 200, { agents: (await game.roster()).filter(row=>!row.historical).map(row => ({ ...game.publicAgent(row),
-          claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
+          experiencePool: !!row.playerUuid && isTrialAgent(store, row.playerUuid),
+          claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && (!owned.has(row.playerUuid) || isTrialAgent(store, row.playerUuid)) })) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
+      const publicBag=/^\/api\/v1\/world\/players\/([a-f0-9]{24})\/bag$/.exec(pathname);
+      if(req.method==='GET'&&publicBag){
+        const row=[...worldView.roles(await game.roster()).values()].find(row=>row.id===publicBag[1]);
+        if(!row||!worldView.isPublic(row))throw fail(404,'NOT_FOUND','这个角色尚未公开背包');
+        const saved=await game.playerState(row),pick=(value,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(value||{},k)).map(k=>[k,value[k]]));
+        return respond(res,200,{agent:game.publicAgent(row),freshness:saved.freshness,savedAt:saved.savedAt,source:saved.source,
+          vitals:pick(saved.vitals,['health','food','level','experience']),inventory:(saved.inventory||[]).slice(0,64).map(item=>({...pick(item,['slot','id','count','enchanted']),name:publicDialogueText(item.name||'',160)}))});
+      }
       if (req.method === 'GET' && pathname === '/api/v1/challenges') return respond(res,200,await challenges.query({activity:url.searchParams.get('activity')||'trial_tower',difficulty:url.searchParams.get('difficulty')||'all',page:Number(url.searchParams.get('page')||1)}));
-      if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20) }));
+      if (req.method === 'GET' && pathname === '/api/v1/world/events') return respond(res, 200, await world.events({ kind: url.searchParams.get('kind') || 'all', page: Number(url.searchParams.get('page') || 1), limit: Number(url.searchParams.get('limit') || 20), player:url.searchParams.get('player')||'', day:url.searchParams.get('day')||'' }));
       if (req.method === 'GET' && pathname === '/api/v1/live') {
         const session = sessionFrom(req), owner = session?.owner_id ? store.ownerById(session.owner_id) : null;
         const relay = await nativeReady;
@@ -396,6 +451,14 @@ export function createPortal(config, options = {}) {
         return respond(res, 200, { channels, defaultChannelId: channels.find(row => row.isOwn)?.id || channels.find(row => row.available)?.id || channels[0]?.id || null, mode: worldView.enabled ? 'native-3d' : 'canvas-only', frameIntervalMs: 1000 });
       }
       const watch = /^\/api\/v1\/live\/([a-f0-9]{32})\/watch$/.exec(pathname);
+      const visibility = /^\/api\/v1\/live\/([a-f0-9]{32})\/visibility$/.exec(pathname);
+      if(visibility&&req.method==='PATCH') {
+        if(!worldView.enabled)throw fail(404,'NOT_FOUND','观战服务尚未启用');
+        const {owner}=browserAuth(req),body=await jsonBody(req,1024);
+        if(Object.keys(body).length!==1||typeof body.public!=='boolean')throw fail(400,'INVALID_VISIBILITY','请选择是否公开观战');
+        await nativeReady; // The synchronous invalidator must be installed first.
+        return respond(res,200,worldView.setPublic(visibility[1],await game.roster(),owner,body.public));
+      }
       if (watch && req.method === 'POST') {
         if (!worldView.enabled) throw fail(404, 'NOT_FOUND', '观战服务尚未启用');
         const body = await jsonBody(req, 1024), session = sessionFrom(req);
@@ -507,6 +570,13 @@ export function createPortal(config, options = {}) {
         return respond(res, 200, { owner: store.ownerPublic(owner), email: emailAuth.identity(owner.id), sessions, events: store.events(owner) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/agent-invites') return respond(res, 200, agentAccess.list(browserAuth(req).owner));
+      if (req.method === 'POST' && pathname === '/api/v1/admin/trial-invites') {
+        const { owner } = browserAuth(req, true, true); rate('trial-invite:' + owner.id, 10);
+        agentAccess.enabled();
+        const result = agentAccess.pool.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();
+        return respond(res, result.duplicate ? 200 : 201, { ...result, invites: result.invites.map(invite => ({ ...invite,
+          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) })) });
+      }
       if (req.method === 'POST' && pathname === '/api/v1/agent-invites') {
         const { owner } = browserAuth(req, false, true); rate('agent-invite:' + owner.id, 20);
         const invite = agentAccess.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();
@@ -551,7 +621,11 @@ export function createPortal(config, options = {}) {
         const { agent } = await authorizedAgent(req, body.agentId);
         if (typeof body.label !== 'string' || body.label.trim().length < 1 || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请输入 1–60 字的客户端名称');
         const scopes = body.scopes || ['state.read'];
-        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包和角色设定读取');
+        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取和本人外观管理');
+        if (scopes.includes('appearance.write')) {
+          if (!store.ownedUuids(owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '只有本人已绑定角色可以授权外观管理；请先通过游戏内证明认领');
+          appearance.assertAgent(agent);
+        }
         const days = Number(body.expiresInDays || 30);
         if (!Number.isInteger(days) || days < 1 || days > 90) throw fail(400, 'INVALID_EXPIRY', '有效期需为 1–90 天');
         const token = 'pat_' + newSecret(); const id = randomUUID(); const now = Date.now();
@@ -665,5 +739,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, archives, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

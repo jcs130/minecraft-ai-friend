@@ -39,7 +39,9 @@ export class ObservationAppearanceSource {
       if(state.source!=='freesia_worker'||!Number.isFinite(state.writtenAt)||this.now()-state.writtenAt>15000||state.writtenAt>this.now()+1000)throw Error('SERVER_APPEARANCE_STATE_STALE');
       if(row?.available===true){
         if(row.entityId!==entityId||row.webAvailable!==true||row.ysmVersion!=='2.4.1'||row.protocolVersion!=='2.4.0'||row.jarSha256!==this.config.ysmJarSha256||!SHA.test(row.assetSha256??'')||!Number.isInteger(row.assetBytes)||row.assetBytes<1||row.assetBytes>2*1024*1024||!/^[-a-zA-Z0-9_]{1,96}$/.test(row.modelId??''))throw Error('SERVER_APPEARANCE_BODY_OR_SOURCE_MISMATCH');
-        let asset=previous?.value;
+        // Reuse immutable resource references, never the previous body's
+        // UUID/entityId/authority. Reconnects and respawns get a new entityId.
+        let asset=previous?.value&&{bundleSha256:previous.value.bundleSha256,bytes:previous.value.bytes,assetSha256:previous.value.assetSha256};
         if(asset?.assetSha256!==row.assetSha256||!this.assets.has(asset?.bundleSha256)){
           if(this.now()-(this.failed.get(row.assetSha256)??-Infinity)<5000)throw Error('SERVER_APPEARANCE_RETRY_PENDING');
           try{
@@ -62,7 +64,7 @@ export class ObservationAppearanceSource {
         const match=/^https?:\/\/textures\.minecraft\.net\/texture\/([a-f0-9]{64})$/.exec(selected?.url??'');
         if(!match)throw Error('SERVER_SKIN_URL_INVALID');
         const model=selected.metadata?.model==='slim'?'slim':'wide',identity=match[1]+':'+model;
-        let asset=previous?.value;
+        let asset=previous?.value&&{bundleSha256:previous.value.bundleSha256,bytes:previous.value.bytes,skinIdentity:previous.value.skinIdentity};
         if(asset?.skinIdentity!==identity||!this.assets.has(asset?.bundleSha256)){
           const response=await this.fetcher('https://textures.minecraft.net/texture/'+match[1],{redirect:'error',signal:AbortSignal.timeout(8000)});
           if(!response.ok)throw Error('SERVER_SKIN_DOWNLOAD_FAILED');

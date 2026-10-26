@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { methodHarness } from './method-harness.ts';
 import { noteGoalOwner } from '../core/travel.ts';
 import type { TaskReport } from '../core/executor.ts';
+import { createMinecraftChoiceTool } from '../src/client/choice.ts';
 
 const rigs: ReturnType<typeof rig>[] = [];
 afterEach(() => { for (const r of rigs.splice(0)) r.close(); vi.useRealTimers(); });
@@ -46,6 +47,41 @@ it('a long running goto yields to one real meal before arrival, then resumes its
   expect(h.reports.filter(r=>r.kind==='done'&&r.taskId===original)).toHaveLength(1);
 });
 
+it.each(['villager','zombie'])('keeps bounded advice past a static visible %s through live requestFacts movement',async name=>{
+  const h=rig();rigs.push(h);h.bot.food=20;
+  Object.assign((h.world as any).bridge,{connectionState:{ready:true,phase:'online'}});
+  h.exec.submit([{skill:'goto',at:[128,64,0],walkOnly:true}],'append');
+  await vi.advanceTimersByTimeAsync(800);
+  const here=h.bot.entity.position.clone();
+  Object.assign(h.bot.entities,{55:{id:55,name,type:'mob',isValid:true,height:1.8,health:20,position:here.offset(12,0,0),metadata:[]}});
+  (h.world as any).journeyTick(h.bot,[{kind:'sign',key:'sign:1',label:'oak_sign',position:[here.x+4,64,here.z],source:'visible-block',observedAtMs:Date.now()}]);
+  const before=h.world.requestFacts()!;
+  expect(before.decisionStability!.route!.entities).toMatchObject([{id:55,name,visible:true}]);
+  const request=vi.fn(async()=>{
+    await vi.advanceTimersByTimeAsync(500);
+    return {answers:{action:{choice:'continue',confidence:.9,probabilities:{continue:.9,inspect:.08,_inspect:.02}}}};
+  });
+  Object.assign(h.host,{decisions:{request}});
+  const tool=createMinecraftChoiceTool(()=>h.host,()=>h.world.requestFacts());
+  const raw=await tool.handler({category:'route',goal:'继续原旅程，可考虑已见告示牌',candidates:[
+    {id:'continue',label:'继续',evidence:'当前goto在推进',ready:true},
+    {id:'inspect',label:'读牌',evidence:'刚看见告示牌',ready:true},
+  ]},{role:'test',log:h.host.log});
+  const result=JSON.parse(typeof raw==='string'?raw:raw.text);
+  expect(h.bot.entity.position.distanceTo(here)).toBeGreaterThan(1);
+  expect(h.world.requestFacts()!.parts!.find(part=>part.key==='queue')!.text).not.toBe(before.parts!.find(part=>part.key==='queue')!.text);
+  expect(h.world.requestFacts()!.parts!.find(part=>part.key==='life')!.text).not.toBe(before.parts!.find(part=>part.key==='life')!.text);
+  expect(result.status).toBe('advice');expect(result.execution).toContain('未执行');
+  if(name==='zombie')expect(result.routeTolerance.horizontalBlocks).toBe(5);
+  else expect(result.routeTolerance.horizontalBlocks).toBeGreaterThan(10);
+  expect(h.exec.status().waiting).toHaveLength(0);
+  expect(request.mock.calls[0][0].state.observed.facts.find((part:any)=>part.key==='journey')).toBeTruthy();
+  (h.world as any).hookBotEvents(h.bot);
+  const epoch=h.world.requestFacts()!.decisionStability!.route!.positionEpoch;
+  h.bot.emit('forcedMove');
+  expect(h.world.requestFacts()!.decisionStability!.route!.positionEpoch).toBe(epoch+1);
+});
+
 it('waits for the old path cleanup before consuming or resuming another path',async()=>{
   const h=rig();rigs.push(h);
   const native=h.bot.pathfinder.goto.bind(h.bot.pathfinder);let cleaned=0;
@@ -80,6 +116,9 @@ it('a journey encounter wakes the host without stopping travel; an explicitly ch
   const event=h.host.events.find(e=>e.meta?.journey);
   expect(event?.text).toContain('128,64,0');
   expect(h.host.pushOpts[h.host.events.indexOf(event!)]?.trigger).toBe('debounce');
+  const fresh=h.world.requestFacts()!;
+  expect(fresh.parts?.find(part=>part.key==='journey')?.text).toContain((event!.meta!.journey as any).id);
+  expect(fresh.decisionStability?.route).toMatchObject({task:{id:original,destination:[128,64,0]},journeyId:(event!.meta!.journey as any).id});
   expect(h.bot.pathfinder.isMoving()).toBe(true);
   expect(h.exec.status().running?.id).toBe(original);
   // This is the host/agent's explicit choice; the observer itself never creates this task.
@@ -90,6 +129,19 @@ it('a journey encounter wakes the host without stopping travel; an explicitly ch
   await vi.advanceTimersByTimeAsync(40_000);
   expect(h.reports.filter(r=>r.kind==='done'&&r.taskId===original)).toHaveLength(1);
   expect(h.bot.entity.position.x).toBeGreaterThan(126);
+});
+
+it('does not bind an earlier opportunity to a replacement task and marks aged cues as history',async()=>{
+  const h=rig();rigs.push(h);h.bot.food=20;
+  h.exec.submit([{skill:'goto',at:[128,64,0],walkOnly:true}],'append');await vi.advanceTimersByTimeAsync(800);
+  const here=h.bot.entity.position;
+  (h.world as any).journeyTick(h.bot,[{kind:'sign',key:'sign:old',label:'oak_sign',position:[here.x+4,64,here.z],source:'visible-block',observedAtMs:Date.now()}]);
+  expect(h.world.requestFacts()!.parts?.find(p=>p.key==='journey')).toBeTruthy();
+  await vi.advanceTimersByTimeAsync(11_000);
+  expect(h.world.requestFacts()!.parts?.find(p=>p.key==='journey')?.text).toContain('历史旅途线索');
+  h.exec.submit([{skill:'goto',at:[256,64,0],walkOnly:true}],'now');await vi.advanceTimersByTimeAsync(100);
+  expect(h.world.requestFacts()!.parts?.find(p=>p.key==='journey')).toBeUndefined();
+  expect(h.world.requestFacts()!.decisionStability?.route?.journeyId).toBeNull();
 });
 
 it.each(['combat','environment','airborne','window','foreign-goal'] as const)('does not stop navigation through an unsafe %s handoff',async state=>{

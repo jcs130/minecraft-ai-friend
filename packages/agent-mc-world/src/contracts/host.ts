@@ -96,7 +96,19 @@ export interface WorldRequestFacts {
   /** Fresh typed fields for optional host-side bounded decision stability checks. */
   decisionStability?: { sampledAtMs: number; identity: unknown; dimension: string | null;
     position: readonly [number, number, number] | null; health: number | null; food: number | null;
-    guards: Readonly<Record<string, unknown>> };
+    guards: Readonly<Record<string, unknown>>;
+    /** Producer-owned current navigation identity, not permission to interrupt or execute a route. */
+    route?: { generation: number; positionEpoch: number; speedBlocksPerSec: number;
+      policy: import('../../core/journey.ts').JourneyChoicePolicy; risks: readonly string[];
+      task: { id: number; stepIndex: number; stepCount: number; step: string; skill: string;
+        resumable: boolean; destination: readonly number[]; dimension: string } | null;
+      waiting: readonly { id: number; label: string }[]; hold: string | null; goalOwner: string | null;
+      fighting: boolean; environment: string | null; windowOpen: boolean; cursorOccupied: boolean;
+      footing: { kind: string; block: string | null; grounded: boolean | null } | null;
+      entities: readonly { id:number|null;name:string;kind:string;visible:boolean|null;position:readonly[number,number,number]|null;
+        health:number|null;note:string|null;item:unknown }[];
+      journeyId: string | null;
+      journeyCues: readonly { position: readonly [number,number,number]; observedAtMs:number }[] } };
 }
 export interface StoragePart {
   key: string; label: string; kind: 'disk' | 'memory'; location?: string; danger?: boolean; note?: string; order?: number;

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { prepareReviewedRoles } from './ownership-review.mjs';
+import { trialPoolOwnerId, isTrialAgent, transferTrialAgent } from './trial-pool.mjs';
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
@@ -39,7 +40,7 @@ export class GameAccounts {
     game.portalIdentities = () => store.db.prepare('SELECT player_uuid AS uuid,name FROM portal_agents').all();
   }
   async key() {
-    if (!this.config.authBridge.enabled || !this.config.authBridge.directory || !this.config.authBridge.keyFile) throw fail(503, 'AUTH_BRIDGE_NOT_CONNECTED', '游戏账号桥尚未上线，网站注册登录可正常使用；游戏角色的新建、绑定和改密等待代理更新。');
+    if (!this.config.authBridge.enabled || !this.config.authBridge.directory || !this.config.authBridge.keyFile) throw fail(503, 'AUTH_BRIDGE_NOT_CONNECTED', '游戏账号桥暂不可用，网站登录仍可用；稍后查询原请求，服主可检查认证桥配置。');
     const encoded = (await fs.readFile(this.config.authBridge.keyFile, 'utf8')).trim();
     if (!/^[a-f0-9]{64}$/i.test(encoded)) throw Error('INVALID_BRIDGE_KEY');
     return Buffer.from(encoded, 'hex');
@@ -57,6 +58,7 @@ export class GameAccounts {
     } catch { return { ready: false, create: false, claim: false, gamePassword: false, source: null }; }
   }
   assertCreateQuota(owner) {
+    if (owner.id === trialPoolOwnerId(this.store)) return;
     const maximum = this.config.cloudAccounts?.maxAgentsPerOwner || 5;
     const owned = this.store.db.prepare('SELECT count(*) AS n FROM ownerships o WHERE owner_id=? AND NOT EXISTS (SELECT 1 FROM reviewed_role_identities r WHERE r.player_uuid=o.agent_uuid)').get(owner.id).n;
     const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
@@ -64,7 +66,7 @@ export class GameAccounts {
   }
   async start(owner, operation, body) {
     const capability = await this.capabilities();
-    if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥尚未上线。网站注册登录已可用；游戏角色功能需要先更新登录代理。');
+    if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥暂不可用；请稍后查询原请求，不要重复建号或改密。');
     const name = body.username;
     if (typeof name !== 'string' || !(operation === 'create' ? /^ag_[A-Za-z0-9_]{1,13}$/i : /^\.?[A-Za-z0-9_]{1,16}$/).test(name)) throw fail(400, 'INVALID_AGENT_NAME', '新 Agent 角色名应为 ag_ 开头，总长不超过 16 个字母、数字或下划线；已有角色请填写原游戏名。');
     if (/eye$/i.test(name) || ['ag_goddess', 'ag_player', 'ag_corti', 'ag_corticam'].includes(name.toLowerCase())) throw fail(403, 'RESERVED_ACCOUNT', '观战与管理身份不能从网站注册或认领');
@@ -84,7 +86,7 @@ export class GameAccounts {
     if (operation === 'create' && existing) throw fail(409, 'ACCOUNT_EXISTS', '角色已经存在，请通过游戏内绑定原角色，保留 UUID 和原物品');
     if (operation !== 'create' && !existing?.playerUuid) throw fail(404, 'AGENT_NOT_FOUND', '请先选择已有角色');
     const ownership = existing?.playerUuid ? this.store.db.prepare('SELECT owner_id FROM ownerships WHERE agent_uuid=?').get(existing.playerUuid) : null;
-    if (ownership && ownership.owner_id !== owner.id) throw fail(409, 'ALREADY_OWNED', '角色已绑定其他网站账号，请联系服主核验');
+    if (ownership && ownership.owner_id !== owner.id && !(operation === 'claim' && isTrialAgent(this.store, existing.playerUuid))) throw fail(409, 'ALREADY_OWNED', '角色已绑定其他网站账号，请联系服主核验');
     if (operation === 'password' && ownership?.owner_id !== owner.id) throw fail(403, 'OWNERSHIP_REQUIRED', '先在游戏内绑定这个角色，再修改游戏密码');
     if (operation === 'create' || operation === 'password') {
       if (typeof body.gamePassword !== 'string' || body.gamePassword.length < 6 || body.gamePassword.length > 64 || /\s/.test(body.gamePassword) || /^(123456|password|qwerty|12345678)$/i.test(body.gamePassword)) throw fail(400, 'INVALID_GAME_PASSWORD', '游戏密码需为 6–64 位且不含空格，请避免常见弱密码');
@@ -137,7 +139,10 @@ export class GameAccounts {
           try {
             if (job.operation !== 'password') {
               const original = this.store.db.prepare('SELECT owner_id FROM ownerships WHERE agent_uuid=?').get(value.playerUuid);
-              if (original && original.owner_id !== owner.id) throw Error('OWNERSHIP_CONFLICT');
+              if (original && original.owner_id !== owner.id) {
+                if (job.operation !== 'claim' || !isTrialAgent(this.store, value.playerUuid)) throw Error('OWNERSHIP_CONFLICT');
+                transferTrialAgent(this.store, value.playerUuid, owner, 'Verified LoginGuard request ' + id);
+              }
               const known = this.store.db.prepare('SELECT player_uuid FROM portal_agents WHERE normalized=?').get(job.name.toLowerCase());
               if (known && known.player_uuid !== value.playerUuid) throw Error('IDENTITY_CONFLICT');
               this.store.db.prepare('INSERT OR IGNORE INTO portal_agents VALUES(?,?,?,?)').run(value.playerUuid, value.username, value.username.toLowerCase(), 'LoginGuard.verified-portal-bridge');

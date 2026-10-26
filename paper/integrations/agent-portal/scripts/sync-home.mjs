@@ -6,6 +6,7 @@ import { GameData } from '../src/game-data.mjs';
 import { WorldCatalog } from '../src/world-catalog.mjs';
 import { buildSnapshot } from '../src/cloud-source.mjs';
 import { PhotoReader } from '../src/gallery.mjs';
+import { ArchiveReader } from '../src/public-archives.mjs';
 import { sendSnapshot } from './snapshot-transport.mjs';
 
 const configPath = process.argv[process.argv.indexOf('--config') + 1];
@@ -31,6 +32,7 @@ catch (error) {
 await lock.writeFile(String(process.pid));
 const store = new Store(config.dataDir), game = new GameData(config, store.salt), world = new WorldCatalog(config, game, store);
 const photoReader = new PhotoReader(config), uploaded = new Set();
+const archiveReader=new ArchiveReader(config,store);
 let appearanceTimer, appearanceBusy, lastAppearanceReport;
 let sequence = 0, stopping = false, lastReport;
 try { sequence = JSON.parse(await fs.readFile(stateFile, 'utf8')).sequence; } catch { }
@@ -58,24 +60,40 @@ try {
     try {
       sequence++; await persistSequence();
       const photos = await photoReader.read();
-      const activePhotos = new Set(photos.map(row => row.metadata.id + ':' + row.metadata.sha256));
-      for (const key of uploaded) if (!activePhotos.has(key)) uploaded.delete(key);
-      const snapshot = await buildSnapshot(game, world, sequence, photos.map(row => row.metadata)), body = JSON.stringify(snapshot);
+      const activePhotos = new Set(photoReader.manifest?.publishedIds||photos.map(row=>row.metadata.id));
+      for (const key of uploaded) if (!activePhotos.has(key.split(':')[0])) uploaded.delete(key);
+      const eventBatch=await world.pendingEvents();
+      const snapshot = await buildSnapshot(game, world, sequence, photos.map(row => row.metadata), {events:eventBatch,photoManifest:photoReader.manifest}), body = JSON.stringify(snapshot);
       if (Buffer.byteLength(body) > 2097152) throw Error('Snapshot exceeds the configured size');
       if (process.argv.includes('--dry-run')) { console.log(JSON.stringify({ sequence, roster: snapshot.roster.length, privateProfiles: Object.keys(snapshot.states).length, events: snapshot.events.length, bytes: Buffer.byteLength(body) })); break; }
       const { response, result } = await sendSnapshot(endpoint, {token,body});
       if (response.status === 409 && Number.isSafeInteger(result.error?.currentSequence)) { sequence = Math.max(sequence, result.error.currentSequence); await persistSequence(); }
       else if (!response.ok) throw Object.assign(Error('Synchronization rejected'), { status: response.status });
       else {
+        // Acknowledgement follows committed cloud acceptance, never merely a
+        // sent HTTP request. A lost reply resends the same stable event IDs.
+        world.acknowledgeEvents(snapshot.events.map(row=>row.id));
+        let archivePending=false;
+        try {
+          const archiveBatch=await archiveReader.read();
+          const archiveResponse=await fetch(new URL('/api/v1/internal/archives',endpoint),{method:'PUT',redirect:'error',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(archiveBatch),signal:AbortSignal.timeout(15000)});
+          if(!archiveResponse.ok)throw Object.assign(Error('Archive synchronization rejected'),{status:archiveResponse.status});
+          archiveReader.acknowledge();
+        } catch(error) {
+          if([401,403].includes(error.status))throw error;
+          // Independent durable queues: a temporarily unavailable archive API
+          // must not block delivery of already committed photographs/events.
+          archivePending=true;
+        }
         for (const photo of photos) {
           const key = photo.metadata.id + ':' + photo.metadata.sha256;
-          if (uploaded.has(key)) continue;
+          if (Array.isArray(result.wantedPhotos) ? !result.wantedPhotos.includes(photo.metadata.id) : uploaded.has(key)) continue;
           const png = await fs.readFile(photo.file);
           const upload = await fetch(new URL('/api/v1/internal/photos/' + photo.metadata.id, endpoint), { method: 'PUT', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
           if (!upload.ok) throw Object.assign(Error('Photo synchronization rejected'), { status: upload.status });
           uploaded.add(key);
         }
-        report('云端资料同步已连接。');
+        report(archivePending?'角色与照片同步已连接；档案保留待补传。':'云端资料同步已连接。');
       }
       if (process.argv.includes('--once') && !response.ok) process.exitCode = 1;
     } catch (error) {

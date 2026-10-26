@@ -39,12 +39,12 @@ final class AgentCliCatalog {
         add(specs,"archive.notice","life","write","/mycli archive notice <标题>|<正文> [--request-id 标识]","在公共档案目录发布署名公告并写成书","耗1本空白书与笔；公开正文是作者内容；有奖励的委托仍用commission托管","MC_ARCHIVE与真实书；不会向公屏广播正文或机器回执");
         add(specs,"archive.restore","life","write","/mycli archive restore <作品UUID> [--version 版本] [--request-id 标识]","从数据库恢复遗失书籍的普通副本","耗1本本人空白书与笔；只支持book/notice；保留原作者/版本，不增加写作/照片/任务奖励","MC_ARCHIVE copyId/printed；结果未知先查背包与info，不能盲目重放");
         add(specs,"archive.menu","life","gui","/mycli archive menu [book|photo|notice|event] [--page 页码]","打开公共档案目录，点击作品阅读","免费；浏览不打印、不报名；照片实物仍在原个人奖励箱","原版箱式菜单与MC_ARCHIVE");
-        add(specs,"tasks","adventure","read","/mycli tasks <list|info|status|menu|pause|resume>","自选六条任务路线；远途纯探索委托可主动暂存和恢复","已登录玩家；查看不报名、不选职业、不换任务；查询免费","私有MC_TASKS；接单和交付沿用guild accept/claim，任务进度查tasks status");
+        add(specs,"tasks","adventure","read","/mycli tasks <list|info|status|menu|pause|resume>","先探索、再冒险；纯探索远征和已撤下的农耕旧单可暂存","已登录玩家；查看不报名、不选职业、不换任务；查询免费","私有MC_TASKS；接单和交付沿用guild accept/claim，任务进度查tasks status");
         add(specs,"tasks.list","adventure","read","/mycli tasks list [combat|crafting|exploration|supply|engineering|life|all] [--page 页码]","裸list列六条路线；指定路线分页查任务，入门任务优先","免费只读；每页最多7张；beginner只推荐，不限制选其他任务","MC_TASKS type=routes/list；items/page/pages/total/nextCommand");
         add(specs,"tasks.info","adventure","read","/mycli tasks info <任务ID>","查指定委托阶段、怪物/武器条件、奖励与本人可接状态","ID从tasks list取得；在途使用接单快照；超长详情按nextCommand无损续读","MC_TASKS type=info或MC_PAGE完整分片；acceptCommand接单、submitCommand交阶段、statusCommand复查");
         add(specs,"tasks.status","adventure","read","/mycli tasks status","读取本人冒险与生活委托的阶段和下一步","免费只读；不自动刷新验收、释放过期任务或报名","MC_TASKS type=status；全部阶段实际交付后才发最终奖");
         add(specs,"tasks.menu","adventure","gui","/mycli tasks menu [路线|all] [--page 页码]","罗盘同款路线菜单：先选路线、查看详情，再明确接单","原版Java/基岩/Mineflayer可用；浏览不接单，不选职业；公共补给另有按钮","原版菜单与MC_TASKS type=menu；只有接单按钮调用guild accept");
-        add(specs,"tasks.pause","adventure","write","/mycli tasks pause","暂存当前一次性纯探索远征，空出任务槽","免费；只保留一张；先结束本人考试或副本；不适用于日常、工程和原图；完整保留冻结规则、阶段、证据","私有MC_TASKS；durable=true才确认成功；tasks status查看暂存，不能覆盖旧记录");
+        add(specs,"tasks.pause","adventure","write","/mycli tasks pause","暂存一次性纯探索远征或已撤下的农耕旧单，空出任务槽","免费；只保留一张；先结束本人考试或副本；其他日常、工程和原图不可暂存；完整保留冻结规则、阶段、证据","私有MC_TASKS；durable=true才确认成功；tasks status查看暂存，不能覆盖旧记录");
         add(specs,"tasks.resume","adventure","write","/mycli tasks resume","恢复暂存远征的原阶段","免费；任务槽必须为空且没有进行中的考试；不重接、不发奖、不改变原规则","私有MC_TASKS；tasks status核对原阶段与走查证据；重复调用不重置进度");
         add(specs,"challenge","life","read","/mycli challenge <子命令> [--json]","自愿生活挑战；create报名、start开始、status查进度","查询免费且不报名；生活实测不代表标准化模型排名","私有MC_CHALLENGE；success且durable才算已保存通过");
         add(specs,"challenge.create","life","write","/mycli challenge create <项目ID> [--json]","创建等待场次，冻结规则；尚未开始计时","生存或冒险角色，无在办挑战；免费，使用自己物资","MC_CHALLENGE state=forming；准备后 challenge start；重复创建同项目返回原场次");

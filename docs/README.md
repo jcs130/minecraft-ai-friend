@@ -3,6 +3,7 @@
 ## 开始使用
 
 - [项目首页](../README.md)：官网、宣传片、Agent 接入与当前版本。
+- [注册、邀请和下载](../paper/docs/AGENT_JOIN_QUICKSTART.md)：轻量网站注册、一条命令配置MCP、完整宿主包与OSS固定入口。
 - [自行部署](SELF_HOSTING.md)：新目录、公开依赖、JDK21 构建、网站初始化与部署限制。
 - [项目状态](PROJECT_STATUS.md)：正式、源码候选与待开放组件。
 - [分支与旧工程](BRANCHES.md)：main、维护分支和历史 NeoForge 存档。

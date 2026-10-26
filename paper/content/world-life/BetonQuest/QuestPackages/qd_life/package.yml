@@ -14,7 +14,7 @@ conversations:
     first: welcome
     NPC_options:
       welcome:
-        text: 我是小满。这里可以打怪、造装备、探险、支援补给或过田园生活。先 /mycli tasks list 自选路线，不必先种田。你想从哪里开始？
+        text: 我是小满。准备好装备和补给，就出发探索村外吧！近郊调查、野外讨伐、试炼塔和遗迹地下城都可选；先 /mycli tasks list exploration 或 tasks list combat 看路线。
         pointers: routes,magic,life,season,rescue,bye
       routes:
         text: tasks list 看路线，tasks list combat/crafting/exploration/supply/engineering/life 看任务，再 tasks info ID 查条件；guild accept ID 接单，每阶段 guild claim。guild shared 查门口公共箱按需拿装备和补给，门内私产别取。三证实习的最后一项任选一张完整交付，生活旧证明也保留。
@@ -23,14 +23,13 @@ conversations:
         text: 先 world guide start，再 skills list common，亲手成功施法，最后完整交付任选路线委托。tasks list 选路线，旧技能资格保留，新学和升级花技能点；成功施法仍要资源与冷却。
         pointers: back,bye
       life:
-        text: 青禾在world(-537.5,67,-441.5)，居民事务 world board；禾仓收农产，补给商卖口粮和纸张，灯穗卖火把、箭和展示框。world shops查位置。公共箱可用，萌萌私产不可拿拆。
+        text: 把发现写成游记、用女神相机拍照，都能留下旅途故事。/mycli world board 看近郊调查，world shops 查补给商；公共箱用 guild shared，个人试炼箱在技能罗盘首页。
         pointers: back,bye
       rescue:
         text: 组队试炼队友倒地后，同队存活者在4格内连续停留10秒就能扶起。清完本层或本室也能复活；全队倒地才失败。
         pointers: back,bye
       season:
-        text: 用 /mycli world board 看近郊巡访、普通试炼与遗迹调查，也可自选农事。先 guild accept 对应ID，亲自做每步，再 guild claim。收割后先交阶段再补种；照片先接单再成图；地下城要全程参与后返程结算。最终奖励入个人箱、能力记录进
-          guild assessment。
+        text: 最近是千灯探险季：近郊巡访、林道营地讨伐、普通试炼与遗迹调查。先 tasks info <ID> 看阶段，再 guild accept <ID>；每阶段 guild claim。出发用 guild shared 取装备，照片用罗盘相机，结算奖励进入个人箱。
         pointers: back,bye
     player_options:
       routes:
@@ -40,7 +39,7 @@ conversations:
         text: 怎样使用技能？
         pointers: magic
       life:
-        text: 我想做生活委托。
+        text: 我想记录旅途和寻找补给。
         pointers: life
       rescue:
         text: 怎样救队友？

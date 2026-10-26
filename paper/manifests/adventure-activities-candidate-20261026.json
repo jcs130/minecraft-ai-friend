@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "status": "approved_waiting_unknown_account_identity",
+  "websiteVersion": "0.8.21",
+  "viewerCommit": "ba56f73dba9501293c300be51104f6b713b5689a",
+  "websiteCommit": "0745171143ef4f0193794765b0abf260cca47fe1",
+  "agentFriendVersion": "0.4.47.16",
+  "sha256": "c24f822a4c034bb5c780790674c1bb1b622deec19bc7553d44fcbaa14427f0bb",
+  "archiveBaseVersion": "0.4.47.15",
+  "baselineBytecodeVerified": true,
+  "newRulesPass": 129,
+  "nativeChecks": {
+    "before": 3,
+    "after": 17,
+    "help": 3
+  },
+  "nativeFinalJarHelpAndCompass": true,
+  "withdrawnTaskIds": [
+    "farmer_harvest",
+    "harvest_home",
+    "tm_field_cycle",
+    "tm_vegetable_cycle"
+  ],
+  "withdrawnWorldEvent": "qd-harvest",
+  "frozenProgressPreserved": true,
+  "retiredDailyPauseVerified": true,
+  "cliAddedCommands": 0,
+  "deploymentFiles": 9,
+  "originalInstallerVerifiedFiles": 10,
+  "authorizationReceived": true,
+  "identityQuestionPending": "ag_Naruto (maintenance list previously ag_NarutoPi)",
+  "productionChanged": false
+}

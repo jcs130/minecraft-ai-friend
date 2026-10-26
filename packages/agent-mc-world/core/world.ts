@@ -2,7 +2,7 @@ import { operationInventory } from './operation-experience.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
-import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
+import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from './knowledge.ts';
 import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex } from './options.ts';
@@ -37,6 +37,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
+import { ServerQueryLane, SERVER_QUERY_TOOL, type ServerQueryDefinition } from './server-query.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -114,7 +115,7 @@ import { MinecraftAuthentication } from '../src/client/authentication.ts';
 import { GameClient, type ClientState } from './client.ts';
 import {
   Executor, Reflexes, releaseBody, parseNoteText, parseQueueMode, parseScoutSteps, parseSteps, sendChat,
-  QUEUE_SCHEMA, renderQueue,
+  QUEUE_SCHEMA, renderQueue, goalOwnerKind,
   SCOUT_SKILL_DOC, SCOUT_STEP_SCHEMA, SKILL_STEP_SCHEMA,
   type BlueprintDesk, type BlueprintSurvey, type MarkDesk, type MarkLookup,
   type ParseNote, type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
@@ -2231,6 +2232,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   GAME_MEMORY_TOOL,
   KNOWLEDGE_TOOL,
   OPTIONS_TOOL,
+  SERVER_QUERY_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2306,7 +2308,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_do',
     tags: ['act'],
     description:
-      'Queue an ordered group of Minecraft skills and return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
+      'Queue Minecraft actions; queue:"afterCheckpoint" inserts a safe detour and resumes the original task. Return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
     parameters: {
       type: 'object',
       properties: {
@@ -3530,6 +3532,16 @@ export class MinecraftWorld implements World {
     parts.push({ key: 'lastTask', text: outcome });
     const queue = this.executor?.status();
     const threats = snap.entities.filter(entity => entity.kind === 'hostile');
+    const observedJourney = this.journeyObserver.reading(this.journeyScope(), String(this.connectionGeneration));
+    const journey = observedJourney && running?.travel && observedJourney.journey.taskId === running.id
+      && observedJourney.journey.stepIndex === running.stepIndex && observedJourney.journey.dimension === running.travel.dimension
+      && JSON.stringify(observedJourney.journey.destination) === JSON.stringify(running.travel.destination) ? observedJourney : null;
+    if (journey) {
+      const current = journey.observations.every(cue => Date.now() - cue.observedAtMs <= 10_000
+        && Math.hypot(cue.position[0] - snap.position.x, cue.position[1] - snap.position.y, cue.position[2] - snap.position.z) <= 32);
+      parts.push({ key: 'journey', text: journeyOpportunityText(journey, { guidance: false })
+        + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
+    }
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options,
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
@@ -3551,7 +3563,32 @@ export class MinecraftWorld implements World {
         position: [snap.position.x, snap.position.y, snap.position.z], health: snap.health, food: snap.food,
         guards: { body: [snap.inWater, snap.inWater ? snap.oxygen : null],
           place: [snap.biome, snap.standingOn, snap.dimension, snap.gameMode],
-          clock: [snap.timeOfDay >= 13000 && snap.timeOfDay < 23000, snap.raining, snap.light === null ? null : snap.light <= 7] } },
+          clock: [snap.timeOfDay >= 13000 && snap.timeOfDay < 23000, snap.raining, snap.light === null ? null : snap.light <= 7] },
+        route: { generation: this.connectionGeneration, positionEpoch: this.routePositionEpoch, speedBlocksPerSec: snap.speed,
+          policy: journeyChoicePolicy(this.cfg.journey),
+          risks: [
+            ...(threats.length ? ['visible-hostile-species-not-attack-intent'] : []),
+            ...(snap.health !== null && snap.health <= this.cfg.reflex.fleeHealth ? ['low-health'] : []),
+            ...snap.effects.filter(effect => ['poison','wither'].includes(effect.name)).map(effect => `effect:${effect.name}`),
+          ],
+          task: running?.travel ? { id: running.id, stepIndex: running.stepIndex, stepCount: running.stepCount,
+            step: running.step, skill: running.skill ?? '', resumable: running.resumable === true,
+            destination: [...running.travel.destination], dimension: running.travel.dimension } : null,
+          waiting: queue?.waiting.map(task => ({ id: task.id, label: task.label })) ?? [], hold: queue?.hold ?? null,
+          goalOwner: bot ? goalOwnerKind(bot) : null, fighting: this.combat?.active ?? false,
+          environment: this.reflexes?.environmentOwnerKind ?? null, windowOpen: !!bot?.currentWindow,
+          cursorOccupied: !!bot?.inventory?.selectedItem,
+          footing: snap.footing ? { kind: snap.footing.kind, block: snap.footing.block, grounded: snap.footing.grounded } : null,
+          entities: snap.entities.map(reading => {
+            const entity = reading.entityId === undefined ? undefined : bot?.entities[reading.entityId];
+            const position = entity?.position;
+            const health = (entity as {health?:unknown}|undefined)?.health;
+            return { id:reading.entityId??null,name:reading.name,kind:reading.kind,visible:reading.visible??null,
+              position:position?[position.x,position.y,position.z] as [number,number,number]:null,
+              health:typeof health==='number'&&Number.isFinite(health)?health:null,note:reading.note??null,item:reading.item??null };
+          }).sort((a,b)=>(a.id??-1)-(b.id??-1)),
+          journeyId: journey?.id ?? null,
+          journeyCues: journey?.observations.map(cue => ({ position: [...cue.position] as [number,number,number], observedAtMs: cue.observedAtMs })) ?? [] } },
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
@@ -4143,6 +4180,7 @@ export class MinecraftWorld implements World {
 
     this.executor = new Executor({
       getBot: () => this.bridge?.bot ?? null,
+      chatDispatch: (text, send) => this.dispatchServerChat(text, send),
       admissionCheck: steps => this.extensionAdmission(steps),
       report: (r) => this.onTaskReport(r),
       log,
@@ -4353,6 +4391,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.serverQueries.reset('游戏连接已断开，查询结果未知；重连后需重新读取');
         this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
         this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
@@ -4418,6 +4457,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.serverQueries.reset('Minecraft World 已停止，查询结果未知');
     this.pendingDeathCause = null;
     this.photography.stop();
     this.initialSceneStop?.(); this.initialSceneStop = null;
@@ -4487,6 +4527,44 @@ export class MinecraftWorld implements World {
   }
 
   protected extensionTools(): ToolDef[] { return []; }
+  /** Explicit server capabilities, never inferred from command keywords. */
+  protected serverQueryDefinitions(): readonly ServerQueryDefinition[] { return []; }
+  protected readonly serverQueries = new ServerQueryLane({ onTerminal: outcome => {
+    this.emit('minecraft.event', outcome.text, false,
+      { trigger: outcome.data?.phase === 'cancelled' ? 'piggyback' : 'debounce', meta: { serverQuery: outcome.data } });
+  } });
+  private serverQueryMessageSequence = 0;
+
+  private queryGeneration(): string {
+    return `${this.executionEpoch}:${this.connectionGeneration}:${this.cfg.host}:${this.cfg.port}:${this.bridge?.bot?.game.dimension ?? 'unknown'}`;
+  }
+
+  /** This hook wraps actual transport dispatch, not task admission. */
+  private dispatchServerChat(text: string, send: () => void): void {
+    const previous = new Map(this.recentSystemMessages);
+    const mutates = !this.serverActionWait.isReadOnlyQuery(text);
+    if (mutates) this.recentSystemMessages.clear();
+    try { this.serverActionWait.dispatchChat(text, send); }
+    catch (error) {
+      if (mutates) {
+        this.recentSystemMessages.clear();
+        for (const [key, value] of previous) this.recentSystemMessages.set(key, value);
+      }
+      throw error;
+    }
+  }
+
+  protected queryServer(args: Record<string, unknown>): ToolOutcome {
+    const bot = this.bridge?.bot;
+    const connected = bot && this.bridge?.connected && this.bridge.connectionState?.ready !== false;
+    return this.serverQueries.call(args, this.serverQueryDefinitions(), connected ? {
+      generation: this.queryGeneration(), username: bot.username || this.chatName(),
+      afterSequence: this.serverQueryMessageSequence,
+      // A read has its own correlation slot and must not replace an active
+      // body action's wait/cooldown evidence or clear its system-message cache.
+      send: command => sendChat(bot, command),
+    } : null);
+  }
   protected bodyInhibitReason: string | null = null;
   private bodyInhibitHold: QueueHoldToken | null = null;
 
@@ -4539,6 +4617,7 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
@@ -6614,7 +6693,7 @@ export class MinecraftWorld implements World {
       }
       try {
         this.interruptIdle('outgoing-chat');
-        sendChat(bot, only.text);
+        sendChat(bot, only.text, (text, send) => this.dispatchServerChat(text, send));
         const notes = parsed.notes?.map(parseNoteText) ?? [];
         return this.toolLog(name, args, `[游戏聊天] 已发送：${only.text}。当前任务和待办保留`
           + (notes.length > 0 ? `\n${notes.join(';')}。` : ''));
@@ -6658,10 +6737,6 @@ export class MinecraftWorld implements World {
       if (!methodAdmission && this.methodOwnsBody()) this.methods.stop('新的身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
     });
-    if (admitted && directChat) {
-      this.serverActionWait.noteChat(directChat);
-      if (!this.serverActionWait.isReadOnlyQuery(directChat)) this.recentSystemMessages.clear();
-    }
     // 受理回执附当前队列状态，与结局回执和世界快照共用渲染。
     const queue = renderQueue(this.executor.status());
     const receipt = this.toolLog(
@@ -6717,6 +6792,7 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.serverQueries.reset('游戏连接代次已改变，原查询结果未知');
     this.pendingDeathCause = null;
     this.deathRespawnConfirmation = null;
     this.bodyInhibitReason = null; this.bodyInhibitHold = null;
@@ -6799,6 +6875,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.serverQueries.reset('重生或维度已改变，原查询结果未知');
     this.pendingDeathCause = null;
     this.setBodyInhibited(null);
     this.attention.reset();
@@ -7332,26 +7409,38 @@ export class MinecraftWorld implements World {
         return;
       }
       let unchangedQueryFeedback = false;
+      let independentQueryReply = false;
       if (position === 'system') {
         const reply = jsonMsg.toString().trim();
         const taskId = this.executor?.currentTask?.id ?? null;
+        const queryGeneration = this.queryGeneration();
+        const querySequence = ++this.serverQueryMessageSequence;
+        let extensionConsumed = false;
         // Mineflayer may recognize a player/private chat only after `message`.
         // Keep consumed extension errors too, without relabeling player quotes.
         if (!loginMessage) queueMicrotask(() => {
           if (this.bridge?.bot === bot && !matchedChatMessages.has(jsonMsg) && !this.chatClaimed.has(jsonMsg)
             && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.')) {
-            this.serverFeedback.note(reply, 'system', taskId);
-            if (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender)) this.extensionServerFeedback(reply);
-            const denial=parseServerActionDenial(reply);
-            if (denial && this.bridge?.noteServerActionDenied?.(denial)
-              && taskId!==null && this.executor?.currentTask?.id===taskId) {
-              this.executor.blockCurrentFromServer(reply);
+            if (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender)) {
+              independentQueryReply = this.serverQueries.receive(reply, queryGeneration, bot.username || this.chatName(), querySequence);
+              if (!independentQueryReply && !extensionConsumed) unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
+              this.extensionServerFeedback(reply);
+            }
+            // A correlated read result belongs to its query receipt, not to the
+            // unrelated body task that happened to be running at arrival.
+            if (!independentQueryReply) {
+              this.serverFeedback.note(reply, 'system', taskId);
+              const denial=parseServerActionDenial(reply);
+              if (denial && this.bridge?.noteServerActionDenied?.(denial)
+                && taskId!==null && this.executor?.currentTask?.id===taskId) {
+                this.executor.blockCurrentFromServer(reply);
+              }
             }
           }
         });
         // 服务器扩展可消费自己的机器可读回执。
-        if (this.extensionMessage(reply)) return;
-        unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
+        extensionConsumed = this.extensionMessage(reply);
+        if (extensionConsumed) return;
 
       }
       if (position === 'system') {
@@ -7407,7 +7496,7 @@ export class MinecraftWorld implements World {
           return;
         }
         // 明确的方块保护拒绝会终止当前任务；其他插件回执按文本识别并即时投递。
-        if (/can't break that block here|你不能破坏这里的方块|不能在这里破坏方块|不许破坏|不允许破坏|禁止.{0,12}(?:深挖|破坏|挖掘)|这块属于村庄原有建筑|受保护.*(?:破坏|挖掘)/i.test(text)) {
+        if (!independentQueryReply && /can't break that block here|你不能破坏这里的方块|不能在这里破坏方块|不许破坏|不允许破坏|禁止.{0,12}(?:深挖|破坏|挖掘)|这块属于村庄原有建筑|受保护.*(?:破坏|挖掘)/i.test(text)) {
           const notice = `[MC 系统] ${text}`;
           this.bridge?.noteServerBreakDenied(text);
           if (this.executor?.currentTask) {
@@ -7573,6 +7662,7 @@ export class MinecraftWorld implements World {
       if (dim) this.lastDimension = dim;
     });
     bot.on('forcedMove', () => {
+      this.routePositionEpoch++;
       this.interruptIdle('forced-move');
       const p = bot.entity?.position;
       if (!p) return;
@@ -8082,6 +8172,8 @@ export class MinecraftWorld implements World {
   protected readonly flocks = new Map<string, boolean>();
   protected lastThunder = false;
   protected lastPosForTeleport: { x: number; y: number; z: number } | null = null;
+  /** Every server position correction expires outstanding route advice, including short teleports. */
+  protected routePositionEpoch = 0;
   protected lastDeathAt = 0;
   /** 挂起的官方死因(死亡广播通常先于 death 事件一拍到);随死亡专报投一次,过期作废 */
   protected pendingDeathCause: { text: string; key: string; at: number } | null = null;

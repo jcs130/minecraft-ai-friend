@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { Bridge } from '../core/bridge.ts';
 import { MinecraftWorld } from '../core/world.ts';
 import { Executor } from '../core/executor.ts';
+import { ServerQueryLane, type ServerQueryDefinition } from '../core/server-query.ts';
 import { biomeAt, type WorldSnapshot } from '../core/terrain.ts';
 import { nullLogger } from '../src/client/index.ts';
 
@@ -48,6 +49,7 @@ function rig(initialX = 0, positionFirst = false) {
     lastDeathEpisodeId: null, pendingDeathCause: null, personalSpawn: undefined,
     diag: { write: vi.fn() }, emit: vi.fn(), attachExtension() {}, hookMessageEvents() {},
     serverActionWait: { observeUses: () => () => {} }, scheduleBlueprintResourceObservation() {},
+    serverQueries: new ServerQueryLane(),
     interruptIdle() {}, bodyLease: { invalidate() {}, revive() {} }, resetBodyOwners() {},
     methods: { stop() {} }, deaths: { record: () => ({ today: 1, hereToday: 1 }) },
     worldIdentity: () => ({ key: 'test-realm' }), realmKey: () => 'test-realm', nearMarkNote: () => null,
@@ -90,6 +92,28 @@ function rig(initialX = 0, positionFirst = false) {
     walk: (x: number) => { bot.entity.position.x = x; world.reportWorldDelta(); },
   };
 }
+
+it('cancels a pending server query on native respawn without reusing it in the same connection', () => {
+  const r = rig();
+  const lane = r.world.serverQueries as ServerQueryLane;
+  const definitions: ServerQueryDefinition[] = [{ id: 'self', description: 'Fixture personal query',
+    command: args => args.length === 0 ? '/fixture state' : null,
+    matchReply: (text, _args, username) => text === `STATE ${username}` ? { data: { username }, ok: true } : null }];
+  const context = { generation: 'fixture-connection-1', username: 'tester', send: vi.fn() };
+  const sent = lane.call({ query: 'self' }, definitions, context);
+  const requestId = (sent.data as { requestId: string }).requestId;
+  expect(sent.data).toMatchObject({ phase: 'sent', outcomeUnknown: true });
+  r.die(); r.bot._client.emit('respawn', {}); r.position(121); r.full(); r.health(20);
+  expect(r.world.connectionGeneration).toBe(1);
+  expect(lane.call({ requestId }, definitions, null).data).toMatchObject({ phase: 'cancelled',
+    outcomeUnknown: true, reason: '重生或维度已改变，原查询结果未知' });
+  expect(lane.receive('STATE tester', context.generation, context.username)).toBe(false);
+  const fresh = lane.call({ query: 'self' }, definitions, context);
+  expect(fresh.data).toMatchObject({ phase: 'sent' });
+  expect((fresh.data as { requestId: string }).requestId).not.toBe(requestId);
+  expect(context.send).toHaveBeenCalledTimes(2);
+  lane.reset('fixture cleanup');
+});
 
 it.each([true, false])('rebases native landing before positive-health snapshot, inventory-before-health=%s', inventoryFirst => {
   const r = rig(); r.die();

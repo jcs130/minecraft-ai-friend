@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { parsePublicDialogue } from './public-dialogue.mjs';
 
 const RANKS = ['青铜', '黑铁', '白银', '黄金', '白金', '钻石'];
 const DIVISIONS = ['III', 'II', 'I'];
@@ -45,7 +46,13 @@ export function parsePublicLog(line, date) {
 }
 
 export class WorldCatalog {
-  constructor(config, game, store) { this.config = config; this.game = game; this.store = store; }
+  constructor(config, game, store) {
+    this.config = config; this.game = game; this.store = store;
+    store.db.exec(`CREATE TABLE IF NOT EXISTS public_event_outbox(seq INTEGER PRIMARY KEY AUTOINCREMENT,event_id TEXT UNIQUE NOT NULL,delivered INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS public_log_cursor(path TEXT PRIMARY KEY,identity TEXT NOT NULL,offset INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS public_events_player_time ON public_events(player_name COLLATE NOCASE,occurred_at DESC,id DESC);
+      INSERT OR IGNORE INTO public_event_outbox(event_id) SELECT id FROM public_events WHERE kind!='notice';`);
+  }
   async players() {
     return this.game.cached('public-growth', 15000, async () => {
       const [roster, gameplay, professions] = await Promise.all([this.game.roster(), this.game.plugin('config.yml'), this.game.plugin('profession-ledger.json')]);
@@ -69,11 +76,52 @@ export class WorldCatalog {
   insert(event, identity) {
     const id = createHash('sha256').update(identity).digest('hex');
     this.store.db.prepare('INSERT OR IGNORE INTO public_events VALUES(?,?,?,?,?,?,?,?)').run(id, event.kind, event.playerName || null, event.title, event.body || '', event.occurredAt, event.precision, event.source);
+    if (event.kind !== 'notice') this.store.db.prepare('INSERT OR IGNORE INTO public_event_outbox(event_id) VALUES(?)').run(id);
+  }
+  async pendingEvents() {
+    await this.collect();
+    const names=(await this.game.roster()).filter(row=>!row.historical&&!row.identityConflict&&row.kind!=='observer').slice(0,256).map(row=>row.name.toLowerCase());
+    if(!names.length)return [];
+    return this.store.db.prepare(`SELECT e.* FROM public_event_outbox o JOIN public_events e ON e.id=o.event_id WHERE o.delivered=0 AND lower(e.player_name) IN (${names.map(()=>'?').join(',')}) ORDER BY o.seq LIMIT 100`).all(...names).map(eventView);
+  }
+  acknowledgeEvents(ids) {
+    const update=this.store.db.prepare('UPDATE public_event_outbox SET delivered=1 WHERE event_id=?');
+    this.store.db.exec('BEGIN IMMEDIATE');
+    try { for (const id of ids) update.run(id); this.store.db.exec('COMMIT'); }
+    catch(error) { this.store.db.exec('ROLLBACK'); throw error; }
+  }
+  async ingestLog(allowed) {
+    const file=path.join(this.config.serverDir,'logs','latest.log'); let handle;
+    try {
+      handle=await fs.open(file,'r');const stat=await handle.stat();
+      const identity=`${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
+      const prior=this.store.db.prepare('SELECT * FROM public_log_cursor WHERE path=?').get(file);
+      const resume=prior?.identity===identity&&prior.offset<=stat.size;
+      let start=resume?prior.offset:Math.max(0,stat.size-262144);
+      const buffer=Buffer.alloc(Math.min(stat.size-start,262144));
+      const {bytesRead}=await handle.read(buffer,0,buffer.length,start);
+      const end=buffer.subarray(0,bytesRead).lastIndexOf(10);
+      if(end<0) { // Bound malformed oversized lines; normal partial lines wait.
+        if(bytesRead===262144)this.store.db.prepare('INSERT OR REPLACE INTO public_log_cursor VALUES(?,?,?)').run(file,identity,start+bytesRead);
+        return;
+      }
+      const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(stat.mtime);
+      let offset=!resume&&start>0?buffer.indexOf(10)+1:0;
+      while(offset<=end){
+        const next=buffer.indexOf(10,offset);if(next<0)break;
+        const line=buffer.subarray(offset,next).toString('utf8').replace(/\r$/,'');
+        const event=line.length<=8192?(parsePublicLog(line,date)||parsePublicDialogue(line,date)):null;
+        if(event&&allowed.has(event.playerName.toLowerCase()))this.insert(event,event.kind==='chat'?`chat:${identity}:${start+offset}`:`${date}:${line}`);
+        offset=next+1;
+      }
+      this.store.db.prepare('INSERT OR REPLACE INTO public_log_cursor VALUES(?,?,?)').run(file,identity,start+end+1);
+    } catch { /* A missing/locked log invents no speech; retry from committed offset. */ }
+    finally { await handle?.close(); }
   }
   async collect() {
     return this.game.cached('public-event-ingest', 15000, async () => {
       const roster = await this.game.roster();
-      const allowed = new Set(roster.map(row => row.name.toLowerCase()));
+      const allowed = new Set(roster.filter(row=>!row.historical&&!row.identityConflict&&row.kind!=='observer').map(row => row.name.toLowerCase()));
       const gameplay = await this.game.plugin('config.yml');
       const [tasks, daily] = await Promise.all([this.game.plugin('task-market.yml'), this.game.plugin('dynamic-board.yml')]);
       for (const player of roster.filter(row => row.available && !['admin', 'observer'].includes(row.kind))) {
@@ -88,33 +136,18 @@ export class WorldCatalog {
           this.insert({ kind: 'quest', playerName: player.name, title: `${player.name} ${title ? `完成委托「${title}」` : '完成了一项公会委托'}`, body: title ? '' : `委托编号：${text(id, 120)}`, occurredAt, precision: 'day', source: 'AgentFriend.guild.everDone' }, `quest:${player.id}:${id}:${date}`);
         }
       }
-      // Read at most the last 256 KiB. Raw logs are never returned or persisted.
-      // latest.log is rotated daily by Paper; its mtime supplies the date.
-      let handle;
-      try {
-        handle = await fs.open(path.join(this.config.serverDir, 'logs', 'latest.log'), 'r');
-        const stat = await handle.stat();
-        const start = Math.max(0, stat.size - 262144); const buffer = Buffer.alloc(Math.min(stat.size, 262144));
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
-        const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(stat.mtime);
-        const lines = buffer.subarray(0, bytesRead).toString('utf8').split(/\r?\n/);
-        if (start > 0) lines.shift();
-        // Ignore the unfinished final line, which may be in the middle of a write.
-        lines.pop();
-        for (const line of lines) {
-          const event = parsePublicLog(line, date);
-          if (event && allowed.has(event.playerName.toLowerCase())) this.insert(event, `${date}:${line}`);
-        }
-      } catch { /* A missing/locked log does not invent activity. */ }
-      finally { await handle?.close(); }
+      await this.ingestLog(allowed);
     });
   }
-  async events({ kind = 'all', page = 1, limit = 20 } = {}) {
-    if (!['all', 'notice', 'join', 'leave', 'advancement', 'quest'].includes(kind) || !Number.isInteger(page) || page < 1 || page > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw Object.assign(new Error('请选择有效的事件类型和页码'), { status: 400, reason: 'INVALID_PAGE' });
+  async events({ kind = 'all', page = 1, limit = 20, player = '', day = '' } = {}) {
+    if (!['all', 'notice', 'join', 'leave', 'advancement', 'quest', 'chat'].includes(kind) || !Number.isInteger(page) || page < 1 || page > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 50 || player && !playerNameValid(player) || day && (!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day)))) throw Object.assign(new Error('请选择有效的角色、日期、事件类型和页码'), { status: 400, reason: 'INVALID_PAGE' });
     await this.collect();
-    const total = this.store.db.prepare('SELECT count(*) AS n FROM public_events WHERE (?=\'all\' OR kind=?)').get(kind, kind).n;
-    const rows = this.store.db.prepare('SELECT * FROM public_events WHERE (?=\'all\' OR kind=?) ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?').all(kind, kind, limit, (page - 1) * limit);
-    return { events: rows.map(row => ({ id: row.id, kind: row.kind, playerName: row.player_name, title: row.title, body: row.body,
-      occurredAt: new Date(row.occurred_at).toISOString(), timePrecision: row.precision, source: row.source })), page, pages: Math.max(1, Math.ceil(total / limit)), total, observedAt: new Date().toISOString() };
+    const where="(?='all' OR kind=?) AND (?='' OR player_name=? COLLATE NOCASE) AND (?='' OR occurred_at>=? AND occurred_at<?)";
+    const start=day?Date.parse(day+'T00:00:00+08:00'):0,args=[kind,kind,player,player,day,start,start+86400000];
+    const total = this.store.db.prepare('SELECT count(*) AS n FROM public_events WHERE '+where).get(...args).n;
+    const rows = this.store.db.prepare('SELECT * FROM public_events WHERE '+where+' ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?').all(...args, limit, (page - 1) * limit);
+    return { events: rows.map(eventView), page, pages: Math.max(1, Math.ceil(total / limit)), total, observedAt: new Date().toISOString() };
   }
 }
+
+export function eventView(row) { return {id:row.id,kind:row.kind,playerName:row.player_name,title:row.title,body:row.body,occurredAt:new Date(row.occurred_at).toISOString(),timePrecision:row.precision,source:row.source}; }

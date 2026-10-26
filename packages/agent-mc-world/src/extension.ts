@@ -74,3 +74,5 @@ export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizat
 
 export { PHOTOGRAPHY_DEFAULTS } from '../core/photo-image.ts';
 export { ObservedCommandCatalog, type ObservedCommandUsage, type CommandRouteMismatch } from '../core/observed-command-catalog.ts';
+export { ServerQueryLane, SERVER_QUERY_TOOL, type ServerQueryDefinition, type ServerQueryContext,
+  type ServerQueryReceipt } from '../core/server-query.ts';

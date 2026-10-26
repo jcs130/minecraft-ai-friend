@@ -400,6 +400,9 @@ function precheckSoilCell(
   if (!cell) return null;
   const b = deps.blockAt(cell) as BlockLike;
   if (!b) return null;
+  // A composter consumes its block interaction before a held crop can plant.
+  // Keep this as use on the requested block; no soil target is implied.
+  if (b.name === 'composter') return null;
   if (hoe && !AIR_NAMES.has(b.name) && HOE_TILLED[b.name] === undefined) {
     const below = deps.blockAt({ x: cell.x, y: cell.y - 1, z: cell.z }) as BlockLike | null;
     const soilHint = below && HOE_TILLED[below.name] !== undefined

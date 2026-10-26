@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.101
+
+- Pin the integrated core rc.95 with authored opening-spell admission, accurate script body ownership, task progress snapshots and explicit unknown current facts when observation is unavailable.
+- Consume bounded batch message reads with scoped result revisions, server-message provenance and idempotent retries of identical attributed game notes.
+- Retain the composter repair, fixed renderer/resources, model selection, native queue, inventory confirmation and stop/unknown boundaries.
+
+## 0.2.100
+
+- Consume core rc.90: seeds used on a composter no longer fail soil admission or execution; read compost level, consumed items and bone-meal gain separately.
+- Preserve native scout descriptions in full and compact contexts. Remove the outdated total 512-cell limit that contradicted bounded partial pages. Keep a generic read-only fallback for older catalogues without descriptions.
+- Keep the fixed viewer/resources, single native queue, inventory confirmation, stop/unknown barriers and explicit model selection.
+
+## 0.2.99
+
+- Pin core rc.89 with material-based viewer readiness and idle-motion progress corrections.
+- Update the shared renderer to 8b89927d, including upstream appearance, HUD, portal and resource handling, with a new exact source inventory and bundle fingerprints. Preserve the original Minecraft 1.21.1 assets.
+- Keep model selection explicit, personal memory and account identity intact, and the single native queue, inventory confirmation and unknown-result barriers unchanged.
+
 ## 0.2.98
 
 - Consume the fixed rc.88 canonical engine with reference-index discovery, bounded local Wiki reads and viewer resource diagnostics.

@@ -638,10 +638,16 @@ function fleeTimeoutText(
     + `人在 ${cellText(feetOf(bot))};${chaser};${around}`;
 }
 
-export function sendChat(bot: Bot, text: string): void {
+/** Observe the synchronous transport boundary, after validation and deduplication. */
+export type ChatDispatch = (text: string, send: () => void) => void;
+
+export function sendChat(bot: Bot, text: string, dispatch?: ChatDispatch): void {
   const error = chatInputError(text);
   if (error) throw new SkillBlocked(error);
-  const result = sendDeduplicatedChat(bot, text, () => bot.chat(text));
+  const result = sendDeduplicatedChat(bot, text, () => {
+    if (dispatch) dispatch(text, () => bot.chat(text));
+    else bot.chat(text);
+  });
   if (!result.sent) throw new SkillNoop(`相同接收范围和内容已于 ${new Date(result.previousAt!).toISOString()} 发送；期间没有新的对方消息，本次未重复发送。去重窗口 ${result.windowMs} 毫秒，可由 chatDuplicateWindowMs 配置。`);
 }
 
@@ -659,7 +665,7 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
     ? `;本次满足目标 ${cellText(target)} 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true` : '';
 }
 
-async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<string> {
+async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
   // An unresolved click is a protocol transaction barrier, independent of item
   // dependencies. Observing, walking and speaking remain available; the lower
   // click guard also covers inventory changes initiated by background actions.
@@ -971,7 +977,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       // accepted or waiting step. Synchronous game events from chat are covered.
       const endTransition = ctx.beginDimensionTransition?.(destination ?? undefined);
       try {
-        sendChat(bot, call.command);
+        sendChat(bot, call.command, chatDispatch);
         const until = Date.now() + 6_000;
         while (Date.now() < until) {
           checkAbort(ctx);
@@ -988,7 +994,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
       const needsWindow = call.text.startsWith('/') && consumesOpenWindow(next);
       const beforeWindow = bot.currentWindow;
-      sendChat(bot, call.text);
+      sendChat(bot, call.text, chatDispatch);
       publishViewerCastCommand(bot, call.text);
       if (needsWindow && bot.currentWindow !== beforeWindow && storageWindow(bot.currentWindow)) {
         ctx.holdWindow?.(bot.currentWindow!);
@@ -1896,6 +1902,8 @@ interface ExecutorOptions {
   /** 白天点床时重生点已经悄悄搬走了没有(World 持有 set_spawn 的时刻) */
   spawnNote?: SkillContext['spawnNote'];
   serverFeedbackSince?: SkillContext['serverFeedbackSince'];
+  /** Called only at actual chat transport dispatch, never while merely queued. */
+  chatDispatch?: ChatDispatch;
   /** 个人重生点那一格(World 持有);受理刻的重生锚闸与技能回执共读一份 */
   spawnAnchor?: SkillContext['spawnAnchor'];
   /** 蓝图施工面(World 持有);build 的蓝图形态、两道受理刻的闸与采集搭车共读一份 */
@@ -5624,7 +5632,7 @@ export class Executor {
             || ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
           let skillResult: string;
           try {
-            skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
+            skillResult = await runSkill(bot, run, ctx, this.opts.chatDispatch).finally(() => releaseTread?.());
             if (run.skill === 'observe') observations.set(i, JSON.parse(skillResult));
           }
           finally {

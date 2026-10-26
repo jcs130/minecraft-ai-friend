@@ -86,6 +86,9 @@ jobs:
         run: npm ci --ignore-scripts --no-audit
         working-directory: paper/integrations/agent-portal
       - name: Check current portal and Skill download contracts
+        run: node scripts/prepare-downloads.mjs --base-url https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/
+        working-directory: paper/integrations/agent-portal
+      - name: Test current portal and Skill download contracts
         run: npm test
         working-directory: paper/integrations/agent-portal
       - name: Install the locked observation worker

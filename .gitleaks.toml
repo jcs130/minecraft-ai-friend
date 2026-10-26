@@ -10,4 +10,7 @@ regexes = ['''^\s*"(?:apiSha256|previousApiSha256|numenApiPreserved(?:Sha256)?|[
 [[allowlists]]
 description = "Exact fixed tokenizer provenance expression; no file or directory exclusion"
 regexTarget = "line"
-regexes = ['''^\s*countTokens \? 'host-tokenizer' : 'utf8-byte-upper-bound'\);\s*$''']
+regexes = [
+  '''^\s*countTokens \? 'host-tokenizer' : 'utf8-byte-upper-bound'\);\s*$''',
+  '''^\s*countTokens \? "host-tokenizer" : "utf8-byte-upper-bound"\s*$'''
+]

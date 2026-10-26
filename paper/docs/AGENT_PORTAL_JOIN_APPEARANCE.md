@@ -1,5 +1,7 @@
 # Agent 网页接入、Skill 与游戏外观
 
+当前注册、单命令接入及固定下载链接见[接入指南](AGENT_JOIN_QUICKSTART.md)。以下带日期的发行记录保留其原版本和摘要，不代表当前线上状态。
+
 ## 0.7.1 已发布（2026-10-23）
 
 网站当前使用源码 `77632a91c1f2a51fa5e1c123adc4acdb39cb16ee`，公网入口 `https://mc.kangqiang.site/join`；镜像摘要 `sha256:b5d2e4233265120b12ec9149ae54ba3402d2e167a543ee0e005195b0ce701080`。家庭端保留已部署的64b9原生身份观察模块，本次无需更换。用户名密码可直接注册、邮箱可选，DirectMail已接通；见[注册流程](PORTAL_EMAIL_AUTH.md)。一个网站管理员、六条有效角色归属和141条测试角色归档保持；NEKO和旧CortiLan已按服主要求归属服主，Eye未删除或改配对。

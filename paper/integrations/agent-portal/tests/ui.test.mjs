@@ -19,7 +19,7 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, initialObservation = 'live' } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, managedOwner = false, initialObservation = 'live' } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
@@ -51,6 +51,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
   const { window } = dom; const { document } = window;
   let cookie = ''; let networkFailure = false; let hold = null; let observationState = initialObservation;
   const watchRequests = [];
+  let publicObservation=false;
   window.scrollTo = () => {};
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); };
@@ -61,7 +62,10 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     if (url.pathname === '/api/v1/gallery') return new Response(JSON.stringify({ photos }));
     // Frontend-only fixture. Native streaming and actual ACLs have separate
     // HTTP/WS tests and real Paper/WebGL acceptance.
-    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:'public'},{id:'b'.repeat(32),playerName:'ag_Beta',managed:true,online:true,available:true,visibility:'public'}]}));
+    if (managedLive && url.pathname === '/api/v1/live') return new Response(JSON.stringify({mode:'native-3d',channels:[{id:'a'.repeat(32),playerName:'ag_Alpha',managed:true,online:true,available:true,visibility:managedOwner?(publicObservation?'public':'owner'):'public',canManagePublic:managedOwner,isOwn:managedOwner},{id:'b'.repeat(32),playerName:'ag_Beta',managed:true,online:true,available:true,visibility:'public'}]}));
+    if(managedLive&&url.pathname==='/api/v1/live/'+'a'.repeat(32)+'/visibility'&&options.method==='PATCH') {
+      publicObservation=JSON.parse(options.body).public;return new Response(JSON.stringify({visibility:publicObservation?'public':'owner'}));
+    }
     if (managedLive && /^\/api\/v1\/live\/[a-f0-9]{32}\/watch$/.test(url.pathname)) {
       if(observationState==='offline')throw new TypeError('Failed to fetch');
       watchRequests.push(url.pathname);
@@ -101,7 +105,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     hold = { entered, release, pending };
     return { ready, release };
   };
-  return { portal, game, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
+  return { portal, game, world, agent, document, window, origin, click, fill, submit, setup, holdPrivate, watchRequests, refresh: (manual = true) => window.__portalRefreshForTest(manual), outage: () => { networkFailure = true; }, observation: value => { observationState=value; return window.__portalPollWorldForTest(); } };
 }
 
 test('historical owned bodies are labelled with separate UUIDs and cannot offer live skin or password actions',async t=>{
@@ -117,6 +121,30 @@ test('historical owned bodies are labelled with separate UUIDs and cannot offer 
  ui.window.location.hash='account';await waitFor(()=>ui.document.querySelector('[data-action="change-game-password"]'));
  ui.click('[data-action="change-game-password"]');await waitFor(()=>ui.document.querySelector('#game-account-form'));
  assert.equal(ui.document.querySelector('#game-account-form select[name="username"] option[value="Fishy"]'),null);
+});
+test('role owner can opt in and revoke guest observation from the live page, with a privacy explanation',async t=>{
+  const ui=await screen(t,{initialView:'live',managedLive:true,managedOwner:true});
+  const button=()=>ui.document.querySelector('[data-action="world-visibility"]');
+  assert.equal(button().textContent.includes('开启公开观战'),true);
+  ui.click('[data-action="world-visibility"]');await waitFor(()=>ui.document.querySelector('#world-visibility-form'));
+  assert.match(ui.document.querySelector('#world-visibility-form').textContent,/背包、装备和对话对游客公开；登录凭据始终过滤/);
+  ui.submit('#world-visibility-form');await waitFor(()=>button()?.textContent.includes('关闭公开观战'));
+  ui.click('[data-action="world-visibility"]');ui.submit('#world-visibility-form');
+  await waitFor(()=>button()?.textContent.includes('开启公开观战'));
+  ui.click('[data-action="watch-channel"][data-id="'+ 'b'.repeat(32)+'"]');
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]')?.dataset.channel==='b'.repeat(32));
+  assert.equal(button(),null);
+});
+test('an authorized watch retries an initial HTTP error document, without reloading a healthy renderer',async t=>{
+  const ui=await screen(t,{initialView:'live',managedLive:true});await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const old=ui.document.querySelector('[data-world-frame]');
+  old.contentDocument.open();old.contentDocument.write('<html><head></head><body>{"available":false,"reason":"SPECTATOR_SOURCE_OFFLINE"}</body></html>');old.contentDocument.close();
+  await ui.observation('live');const next=ui.document.querySelector('[data-world-frame]');assert.notEqual(next,old);
+  next.contentDocument.open();next.contentDocument.write('<html><head><meta name="native-viewer-build" content="trusted"></head><body></body></html>');next.contentDocument.close();
+  const meta=next.contentDocument.querySelector('meta');
+  await ui.observation('live');assert.equal(ui.document.querySelector('[data-world-frame]'),next);
+  meta.remove();next.contentDocument.body.textContent='{"available":false,"reason":"SPECTATOR_VIEW_FORBIDDEN"}';
+  await ui.observation('live');assert.equal(ui.document.querySelector('[data-world-frame]'),next);
 });
 
 test('an owner creates a one-time invite, closes its secret, and revokes it through the connection page', async t => {
@@ -174,6 +202,14 @@ test('phone navigation closes from its scrim and LAN HTTP forms work without sec
   ui.fill('username', 'ag_Phone', '#game-account-form'); ui.fill('gamePassword', 'phone-game-password', '#game-account-form'); ui.fill('confirmGamePassword', 'phone-game-password', '#game-account-form'); ui.submit('#game-account-form');
   await waitFor(() => ui.document.querySelector('#game-account-form .form-error').textContent.includes('账号桥'));
   assert.ok(!ui.document.querySelector('#game-account-form .form-error').textContent.includes('TypeError'));
+});
+
+test('connection-center installation help uses the same one-command invitation flow without announcing an undeployed bridge',async t=>{
+ const ui=await screen(t);await ui.setup();ui.window.location.hash='connections';
+ await waitFor(()=>ui.document.querySelector('#main')?.textContent.includes('scripts/setup.mjs join'));
+ const text=ui.document.querySelector('#main').textContent;
+ assert.match(text,/invite-url-file/);assert.match(text,/已有角色/);
+ assert.doesNotMatch(text,/候选待上线|尚未上线/);
 });
 
 test('announcements still submit and private legacy metadata clears on logout; viewers never configure a publisher', async t => {
@@ -282,11 +318,15 @@ test('page flow protects private data, validates setup, reads the saved backpack
   assert.match(ui.document.querySelector('#detail').textContent, /home等级 2/);
   ui.click('[data-action="close-detail"]');
   ui.window.location.hash = 'connections'; await waitFor(() => ui.document.querySelector('[data-action="new-token"]'));
-  ui.click('[data-action="new-token"]'); ui.fill('label', 'UI reader', '#token-form'); ui.submit('#token-form');
+  ui.click('[data-action="new-token"]');
+  assert.equal(ui.document.querySelector('#token-form [name="appearance"]').checked, false);
+  assert.match(ui.document.querySelector('#token-form').textContent, /默认不授予，不能操作其他角色/);
+  ui.fill('label', 'UI reader', '#token-form'); ui.submit('#token-form');
   await waitFor(() => ui.document.querySelector('#created-token'));
   const token = ui.document.querySelector('#created-token').textContent;
   assert.match(token, /^pat_[A-Za-z0-9_-]{43}$/);
   assert.equal((await fetch(ui.origin + '/api/v1/agents', { headers: { Authorization: 'Bearer ' + token } })).status, 200);
+  assert.equal((await fetch(ui.origin + '/api/v1/agent-access/appearance', { headers: { Authorization: 'Bearer ' + token } })).status, 403);
   ui.click('[data-action="close-modal"]');
   assert.ok(!ui.document.body.textContent.includes(token));
   assert.equal(ui.window.localStorage.length, 0);
@@ -335,8 +375,10 @@ test('ordinary registration, human role binding and returning login lead to the 
   };
   await logout();
   ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
-  ui.fill('username', 'Alice'); ui.fill('password', password); ui.fill('confirmPassword', password); ui.submit('#auth-form');
+  ui.fill('username', 'Alice'); ui.fill('password', password); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'Alice');
+  await waitFor(() => ui.document.querySelector('#modal [data-action="quick-agent-invite"]'));
+  ui.click('#modal [data-action="close-modal"]');
   ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('[data-action="detail"]'));
   ui.click('[data-action="detail"]');
   assert.match(ui.document.querySelector('#detail').textContent, /这个角色尚未授权给你/);
@@ -422,13 +464,14 @@ test('email signup UI waits for code confirmation and recovery returns to login 
   await ui.setup(); ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
   ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
   ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
-  ui.fill('username', 'MailPlayer'); ui.fill('email', 'player@example.test'); ui.fill('password', password); ui.fill('confirmPassword', password); ui.submit('#auth-form');
+  ui.fill('username', 'MailPlayer'); ui.fill('email', 'player@example.test'); ui.fill('password', password); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('#email-code-form'));
   assert.equal(ui.portal.store.ownerByName('MailPlayer'), undefined);
   assert.equal(ui.document.querySelector('#email-code-form [name="code"]').getAttribute('inputmode'), 'numeric');
   ui.fill('code', messages.at(-1).code, '#email-code-form'); ui.submit('#email-code-form');
   await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'MailPlayer');
-  assert.equal(ui.document.querySelector('#modal').open, false);
+  await waitFor(() => ui.document.querySelector('[data-action="quick-agent-invite"]'));
+  ui.click('#modal [data-action="close-modal"]');
   ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
   assert.match(ui.document.querySelector('#main').textContent, /player@example.test/);
   ui.click('[data-action="logout"]'); await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === '访客');
@@ -448,10 +491,27 @@ test('optional-email registration UI accepts a blank email and logs in the new p
   assert.ok(ui.document.querySelector('#auth-form[data-mode="register"]'));
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').required, false);
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').disabled, true);
-  ui.fill('username', 'LightPlayer'); ui.fill('password', 'abc123'); ui.fill('confirmPassword', 'abc123'); ui.submit('#auth-form');
+  assert.equal(ui.document.querySelector('#auth-form details').open,false);
+  assert.equal(ui.document.querySelector('#auth-form [name="confirmPassword"]'),null);
+  assert.equal(ui.document.querySelectorAll('#auth-form input[required]').length,2);
+  ui.click('[data-action="toggle-auth-password"]');
+  assert.equal(ui.document.querySelector('#auth-password').type,'text');
+  ui.click('[data-action="toggle-auth-password"]');
+  assert.equal(ui.document.querySelector('#auth-password').type,'password');
+  ui.fill('username', 'LightPlayer'); ui.fill('password', 'abc123'); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('.profile-button strong')?.textContent === 'LightPlayer');
   assert.equal(ui.document.querySelector('#email-code-form'), null);
   assert.equal(ui.portal.store.ownerByName('LightPlayer').role, 'owner');
+  await waitFor(()=>ui.document.querySelector('[data-action="quick-agent-invite"]'));
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM agent_invites').get().n,0);
+  ui.click('[data-action="quick-agent-invite"]');ui.click('[data-action="quick-agent-invite"]');
+  await waitFor(()=>ui.document.querySelector('#created-invite-link'));
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM agent_invites').get().n,1);
+  const row=ui.portal.store.db.prepare('SELECT owner_id,label FROM agent_invites').get();
+  assert.equal(row.owner_id,ui.portal.store.ownerByName('LightPlayer').id);
+  assert.equal(row.label,'我的冒险伙伴');
+  assert.match(ui.document.querySelector('#created-invite-prompt').textContent,/scripts\/setup.mjs join/);
+  assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs').get().n,0);
 });
 
 test('optional-email UI verifies a supplied address instead of registering before the code', async t => {
@@ -461,7 +521,7 @@ test('optional-email UI verifies a supplied address instead of registering befor
   ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').required, false);
   assert.equal(ui.document.querySelector('#auth-form [name="email"]').disabled, false);
-  ui.fill('username', 'VerifiedPlayer'); ui.fill('email', 'verified@example.test'); ui.fill('password', 'abc123'); ui.fill('confirmPassword', 'abc123'); ui.submit('#auth-form');
+  ui.fill('username', 'VerifiedPlayer'); ui.fill('email', 'verified@example.test'); ui.fill('password', 'abc123'); ui.submit('#auth-form');
   await waitFor(() => ui.document.querySelector('#email-code-form'));
   assert.equal(ui.portal.store.ownerByName('VerifiedPlayer'), undefined);
   ui.fill('code', messages[0].code, '#email-code-form'); ui.submit('#email-code-form');
@@ -489,7 +549,7 @@ test('my roles filters by ownership instead of administrator access and unbound 
   await ui.refresh(); assert.equal(ui.document.querySelectorAll('.agent-card').length, 1); assert.match(ui.document.querySelector('.agent-card').textContent, /本人角色/);
   ui.portal.store.db.prepare('DELETE FROM ownerships WHERE agent_uuid=?').run(playerUuid); await ui.refresh();
   ui.click('[data-filter="all"]'); ui.click('[data-action="claim-role"]');
-  assert.match(ui.document.querySelector('#modal').textContent, /账号桥尚未上线|认证桥|代理/);
+  assert.match(ui.document.querySelector('#modal').textContent, /账号桥暂不可用|游戏账号服务暂不可用|认证桥|代理/);
   assert.equal(ui.document.querySelector('#game-account-form'), null);
 });
 
@@ -667,4 +727,46 @@ test('an archive-only account can open each saved inventory by UUID without show
   await waitFor(() => inspectedUuid === history[1].playerUuid && ui.document.querySelector('dialog[open]'));
   assert.equal(inspectedUuid, history[1].playerUuid);
   assert.equal(ui.portal.store.ownedUuids(owner.id).length, 2);
+});
+
+
+test('public role trails deep-link chat, safe inventory and complete archive text without login', async t => {
+  const ui=await screen(t),calls=[];ui.portal.worldView.config.live.worldObserverPublicDefault=true;
+  ui.world.events=async options=>{calls.push(options);return {events:[{id:'chat-proof',kind:'chat',title:'ag_Alpha',playerName:'ag_Alpha',body:'<img src=x onerror=bad()>今天去探索',occurredAt:'2026-10-26T00:00:00Z'}],page:1,pages:1,total:1};};
+  ui.window.location.hash='events?player=ag_Alpha';
+  await waitFor(()=>ui.document.querySelector('.trail-person')&&calls.some(row=>row.player==='ag_Alpha'));
+  assert.equal(ui.portal.store.countOwners(),0);
+  assert.ok(calls.some(row=>row.player==='ag_Alpha'));
+  ui.click('[data-action="event-filter"][data-kind="chat"]');
+  await waitFor(()=>calls.some(row=>row.kind==='chat'));
+  assert.match(ui.document.querySelector('.event-body p').textContent,/<img/);
+  assert.equal(ui.document.querySelectorAll('.event-body img,.event-body script').length,0);
+  ui.click('[data-action="public-bag"]');
+  await waitFor(()=>ui.document.querySelector('dialog[open]'));
+  assert.match(ui.document.querySelector('dialog[open]').textContent,/大背包/);
+  assert.ok(!ui.document.querySelector('dialog[open]').textContent.includes(playerUuid));
+  ui.click('#modal [data-action="close-modal"]');
+  const id=randomUUID();
+  ui.portal.archives.accept({available:true,entries:[{id,version:1,kind:'book',author:'ag_Alpha',title:'今天的旅途',body:'第一段\n第二段 <script>bad()</script>',createdAt:new Date().toISOString(),published:true}]});
+  ui.window.location.hash='archives?author=ag_Alpha';
+  await waitFor(()=>ui.document.querySelector('[data-action="archive-read"]'));
+  ui.click('[data-action="archive-read"]');
+  await waitFor(()=>ui.document.querySelector('.archive-body'));
+  assert.equal(ui.document.querySelector('.archive-body').textContent,'第一段\n第二段 <script>bad()</script>');
+  assert.equal(ui.document.querySelectorAll('.archive-body script').length,0);
+});
+
+test('public dialogue polling updates its panel while keeping the live renderer and selected role', async t => {
+  const ui=await screen(t,{initialView:'live',managedLive:true});
+  await waitFor(()=>ui.document.querySelector('[data-world-frame]'));
+  const frame=ui.document.querySelector('[data-world-frame]'),id=frame.dataset.channel;
+  let revision=1;
+  ui.world.events=async ({kind='all'}={})=>({events:kind==='chat'?[{id:'chat-'+revision,kind:'chat',title:'ag_Alpha',playerName:'ag_Alpha',body:'一起去冒险 '+revision,occurredAt:new Date().toISOString()}]:[],page:1,pages:1,total:1});
+  await ui.refresh(false);
+  assert.match(ui.document.querySelector('[data-live-dialogue]').textContent,/一起去冒险 1/);
+  revision=2;await ui.refresh(false);
+  assert.match(ui.document.querySelector('[data-live-dialogue]').textContent,/一起去冒险 2/);
+  assert.ok(!ui.document.querySelector('[data-live-dialogue]').textContent.includes('一起去冒险 1'));
+  assert.equal(ui.document.querySelector('[data-world-frame]'),frame);
+  assert.equal(frame.dataset.channel,id);
 });

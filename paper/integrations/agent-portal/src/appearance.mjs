@@ -1,11 +1,13 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { digest } from './store.mjs';
 import { pngInfo, ysmArchive } from './appearance-files.mjs';
+import { trialPoolOwnerId } from './trial-pool.mjs';
 
 const fail = (status, reason, message) => Object.assign(Error(message), { status, reason });
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const active = ['queued', 'waiting_player', 'applying', 'unknown'];
 const cleanMessage = value => typeof value === 'string' && value.length <= 300 && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value);
+const publicJob = row => ({ id: row.id, assetId: row.asset_id, kind: row.kind, texture: row.texture, state: row.state, result: row.result ? JSON.parse(row.result) : null, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString() });
 export class Appearance {
   constructor(config, store, game) {
     Object.assign(this, { config, store, game });
@@ -27,8 +29,15 @@ export class Appearance {
     const assets = this.store.db.prepare('SELECT id,kind,label,variant,sha256,metadata,length(bytes) AS size,created_at FROM appearance_assets WHERE player_uuid=? AND removed_at IS NULL ORDER BY created_at DESC').all(agent.playerUuid)
       .map(row => ({ id: row.id, kind: row.kind, label: row.label, variant: row.variant, sha256: row.sha256, ...JSON.parse(row.metadata), bytes: row.size, createdAt: new Date(row.created_at).toISOString(), ...(row.kind === 'skin' ? { image: `/api/v1/agents/${agent.id}/appearance/assets/${row.id}` } : {}) }));
     const jobs = this.store.db.prepare('SELECT id,asset_id,kind,texture,state,result,created_at,updated_at FROM appearance_jobs WHERE player_uuid=? ORDER BY created_at DESC LIMIT 12').all(agent.playerUuid)
-      .map(row => ({ id: row.id, assetId: row.asset_id, kind: row.kind, texture: row.texture, state: row.state, result: row.result ? JSON.parse(row.result) : null, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString() }));
-    return { capabilities: this.capabilities(), assets, jobs, limits: { maxUploadBytes: 8 * 1024 * 1024, maxAssetsPerKind: 4, ownerBytes: 32 * 1024 * 1024 } };
+      .map(publicJob);
+    const pool = trialPoolOwnerId(this.store), owner = this.store.db.prepare('SELECT owner_id FROM ownerships WHERE agent_uuid=?').get(agent.playerUuid);
+    return { capabilities: this.capabilities(), assets, jobs, limits: { maxUploadBytes: 8 * 1024 * 1024, maxAssetsPerKind: 4, ownerBytes: 32 * 1024 * 1024, quotaScope: pool && owner?.owner_id === pool ? 'trial_role' : 'website_owner' } };
+  }
+  job(agent, id) {
+    this.assertAgent(agent);
+    const row = this.store.db.prepare('SELECT * FROM appearance_jobs WHERE id=? AND player_uuid=?').get(id, agent.playerUuid);
+    if (!row) throw fail(404, 'APPEARANCE_JOB_NOT_FOUND', '未找到本人这条换装请求，请使用提交时返回的 query，不要更换请求标识重复应用');
+    return publicJob(row);
   }
   upload(agent, owner, kind, bytes, fields) {
     this.assertAgent(agent);
@@ -40,7 +49,9 @@ export class Appearance {
     const metadata = kind === 'skin' ? pngInfo(bytes, true) : ysmArchive(bytes), duplicate = this.store.db.prepare('SELECT id FROM appearance_assets WHERE player_uuid=? AND kind=? AND sha256=? AND COALESCE(variant,?)=? AND removed_at IS NULL').get(agent.playerUuid, kind, metadata.sha256, '', kind === 'skin' ? fields.variant : '');
     if (duplicate) return this.list(agent);
     if (this.store.db.prepare('SELECT count(*) AS n FROM appearance_assets WHERE player_uuid=? AND kind=? AND removed_at IS NULL').get(agent.playerUuid, kind).n >= 4) throw fail(409, 'APPEARANCE_LIMIT', '每个角色每类最多 4 份外观，请先移除不再使用的文件');
-    if (this.store.db.prepare('SELECT COALESCE(sum(length(bytes)),0) AS n FROM appearance_assets WHERE owner_id=?').get(owner.id).n + bytes.length > 32 * 1024 * 1024) throw fail(409, 'APPEARANCE_QUOTA', '你的外观文件已达到 32MB，请先移除旧文件');
+    const pool = owner.id === trialPoolOwnerId(this.store);
+    const stored = pool ? this.store.db.prepare('SELECT COALESCE(sum(length(bytes)),0) AS n FROM appearance_assets WHERE player_uuid=?').get(agent.playerUuid).n : this.store.db.prepare('SELECT COALESCE(sum(length(bytes)),0) AS n FROM appearance_assets WHERE owner_id=?').get(owner.id).n;
+    if (stored + bytes.length > 32 * 1024 * 1024) throw fail(409, 'APPEARANCE_QUOTA', '外观文件已达到 32MB，请先移除本人未使用的旧文件');
     this.store.db.prepare('INSERT INTO appearance_assets(id,owner_id,player_uuid,kind,label,variant,sha256,metadata,bytes,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), owner.id, agent.playerUuid, kind, fields.label, kind === 'skin' ? fields.variant : null, metadata.sha256, JSON.stringify(metadata), bytes, Date.now());
     this.store.audit(owner.id, 'appearance.upload', agent.id); return this.list(agent);
   }

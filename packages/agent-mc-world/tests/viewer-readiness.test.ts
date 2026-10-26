@@ -1,5 +1,5 @@
 import {expect,it,vi} from 'vitest';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Bridge} from '../core/bridge.ts';
@@ -14,8 +14,9 @@ function readyBridge(port:number,assets?:string) {
   Object.assign(bridge,{_bot:bot,spawnedBot:bot,started:true,protocolSpawned:true});
   return {bridge,bot};
 }
-it('reports exact-version resource failure independently of a ready 1.21.11 game',async()=>{
+it('reports a broken explicitly matching pack independently of a ready 1.21.11 game',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'viewer-readiness-'));
+  await writeFile(join(directory,'viewer-assets.json'),JSON.stringify({minecraftVersion:'1.21.11'}));
   const {bridge,bot}=readyBridge(await freeViewerPort(),directory);
   try {
     (bridge as any).startViewer(bot,0);
@@ -34,6 +35,32 @@ it('reports exact-version resource failure independently of a ready 1.21.11 game
     Object.assign(bridge,{generation:1});
     expect(bridge.viewerState.phase).toBe('waiting');
   } finally {await bridge.stop();await rm(directory,{recursive:true,force:true});}
+});
+it('retries a compatible picture once so exact resources can be adopted without reconnecting or replaying the body',async()=>{
+  const {bridge,bot}=readyBridge(await freeViewerPort());
+  let release!:()=>void;
+  const dispose=vi.fn(()=>new Promise<void>(resolve=>{release=resolve;}));
+  const start=vi.fn();
+  Object.assign(bridge,{viewer:{gen:0,url:'http://127.0.0.1:12345',kind:'modern',dispose,
+    resources:{mode:'compatible',requestedVersion:'1.21.11',assetVersion:'1.21.1'}},startViewer:start});
+  try{
+    expect(bridge.retryViewer().phase).toBe('starting');
+    expect(bridge.retryViewer().phase).toBe('starting');
+    expect(dispose).toHaveBeenCalledTimes(1);
+    release();await vi.waitFor(()=>expect(start).toHaveBeenCalledTimes(1));
+    expect(start).toHaveBeenCalledWith(bot,0);expect(bridge.connected).toBe(true);
+  }finally{await bridge.stop();}
+});
+it('finishes the startup marker on readiness so a later compatible-picture refresh is not suppressed',async()=>{
+  const {bridge,bot}=readyBridge(await freeViewerPort());
+  const close=vi.fn();
+  Object.assign(bridge,{loadViewer:async()=>({mineflayer:()=>Object.assign(bot,{viewer:{close}})})});
+  try{
+    (bridge as any).startViewer(bot,0);
+    await vi.waitFor(()=>expect(bridge.viewerState.phase).toBe('ready'));
+    expect((bridge as any).viewerStartup).toBeNull();
+    expect(bridge.connected).toBe(true);
+  }finally{await bridge.stop();expect(close).toHaveBeenCalledTimes(1);}
 });
 it('does not let an old asynchronous failure replace the new connection viewer state',async()=>{
   const {bridge,bot}=readyBridge(await freeViewerPort());

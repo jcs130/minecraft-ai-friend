@@ -1,6 +1,6 @@
 # 复用 MC 核心脚本
 
-完整 ZIP 已带 `agent-mc-world 0.5.7-rc.71` 无画面运行包，包含寻路、背包、交互、采集、建造等核心实现。锁定依赖安装后，本地 MCP 会使用这些实现，不需另找服务器脚本或再启动一个 bot。
+完整 ZIP 已带 `agent-mc-world 0.5.7-rc.95` 无画面运行包，包含寻路、背包、交互、采集、建造等核心实现。锁定依赖安装后，本地 MCP 会使用这些实现，不需另找服务器脚本或再启动一个 bot。
 
 ## 先查目录，再看一个脚本
 
@@ -9,7 +9,6 @@
 ```sh
 node scripts/core.mjs list
 node scripts/core.mjs read navigate_route
-node scripts/core.mjs read farm_harvest
 node scripts/core.mjs check navigate_route --params-file /私有目录/route.json
 ```
 

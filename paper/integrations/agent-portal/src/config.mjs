@@ -19,7 +19,7 @@ export function loadConfig(overrides = {}) {
   config.publicDir = path.join(projectRoot, 'public');
   config.authBridge = { ...defaults.authBridge, ...local.authBridge, ...overrides.authBridge };
   config.live = { ...defaults.live, ...local.live, ...overrides.live };
-  if (typeof config.live.worldObserverEnabled !== 'boolean' || !Number.isInteger(config.live.worldObserverMaxTargets)
+  if (typeof config.live.worldObserverEnabled !== 'boolean' || typeof config.live.worldObserverPublicDefault !== 'boolean' || !Number.isInteger(config.live.worldObserverMaxTargets)
     || config.live.worldObserverMaxTargets < 1 || config.live.worldObserverMaxTargets > 4
     || !Array.isArray(config.live.worldObserverPublicUuids) || config.live.worldObserverPublicUuids.some(id => !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id))
     || config.live.worldObserverEnabled && (!/^[a-f0-9]{64}$/.test(config.live.worldObserverTokenHash) || !path.isAbsolute(config.live.native3dSiteDirectory || '')))

@@ -981,8 +981,8 @@ final class TaskMarketManager implements Listener {
         else if (pause && paused.get("present").getAsBoolean()) {
             if (!occupied && !paused.has("errorCode")) { out.addProperty("status", "already_paused"); out.add("paused", paused); out.addProperty("nextCommand", "/mycli tasks list exploration"); return out; }
             denial="PAUSED_SLOT_OCCUPIED"; advice="只能暂存一张远征；先完成当前委托，再 tasks resume 处理原远征，不能覆盖暂存记录。";
-        } else if (pause && (task == null || task.project || !task.repeatOnce || task.steps.stream().anyMatch(s -> s.exploration == null))) {
-            denial="TASK_NOT_PAUSABLE"; advice="仅一次性、纯探索的个人远征可暂存；日常、工程、原图和动作混合任务保持原流程。用 tasks status 核对当前单。";
+        } else if (pause && (task == null || !RetiredActivities.pausable(task.id(), task.project, task.repeatOnce, task.steps.stream().allMatch(s -> s.exploration != null)))) {
+            denial="TASK_NOT_PAUSABLE"; advice="一次性纯探索远征或已撤下的农耕旧单可暂存，保留进度后换新冒险；其他任务保持原流程。用 tasks status 核对当前单。";
         } else if (!pause && !paused.get("present").getAsBoolean()) {
             if (occupied && task != null) { out.addProperty("status", "already_active"); out.addProperty("nextCommand", "/mycli tasks status"); return out; }
             denial="NO_PAUSED_TASK"; advice="没有暂存远征；tasks list exploration 查看可选任务。";

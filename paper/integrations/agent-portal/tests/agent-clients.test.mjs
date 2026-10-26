@@ -17,7 +17,7 @@ test('public discovery and fetch-only documentation share all adapter and parent
   const html=await (await fetch(f.origin+page)).text(),dom=new JSDOM(html,{url:f.origin});
   const links=new Set([...dom.window.document.querySelectorAll('a[href]')].map(a=>a.href));
   for(const client of agentClients){assert.ok(links.has(client.source));if(client.framework)assert.ok(links.has(client.framework.url));if(client.releases)assert.ok(links.has(client.releases));}
-  assert.ok(links.has(f.origin+agentSkill.url));assert.ok(!html.includes('agent-mc-world 0.4.0'));
+  assert.ok(links.has(f.origin+'/downloads/agent-skill'));assert.ok(!html.includes('agent-mc-world 0.4.0'));
   dom.window.close();
  }
  for(const release of [skillAt('/downloads/qiandengji-agent-1.0.0.zip'),skillAt('/downloads/qiandengji-agent-1.1.0.zip')]){

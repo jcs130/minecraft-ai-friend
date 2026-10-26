@@ -1,5 +1,23 @@
 # Agent MC Autonomy
 
+The 0.2.101 development distribution pins the integrated core rc.95. Authored
+opening spells recheck actual combat and body admission; read-only script workers
+do not claim the native body. Current task progress and unavailable observations
+have explicit snapshot coverage. Message batches retain source/result revisions,
+and identical attributed note retries reuse their original persistent entry.
+The composter repair, fixed viewer/resources, model choices and native barriers remain.
+
+The 0.2.100 distribution pins core rc.90, which preserves legitimate
+composter interactions with crop items and reports actual level/inventory effects.
+Scout tools retain the native paging description instead of an obsolete local
+total-volume limit. The existing viewer, model settings and native barriers remain.
+
+The 0.2.99 distribution pins core rc.89 and the shared viewer at 8b89927d.
+The core restores material-based viewer readiness and excludes idle sneak/jump
+signals from movement progress. The viewer includes upstream native appearance,
+HUD, portal and resource readiness changes, verified against its source inventory
+and browser bundle hashes. Original Minecraft 1.21.1 assets remain pinned.
+
 The 0.2.98 distribution consumes fixed core rc.88, including optional local
 MineDojo reference indexes and portable viewer resource diagnostics. Configure
 `knowledge.minedojo_index_file` as an explicit absolute SQLite path, with

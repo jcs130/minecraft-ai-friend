@@ -2,10 +2,11 @@
 export class ServerActionWait {
   private recent: { key: string; at: number } | null = null;
   private waiting: { key: string; until: number; reason: string } | null = null;
-  private readonly recentQueries = new Map<string, number>();
-  private readonly queryFeedback = new Map<string, {
+  private recentQueries = new Map<string, number>();
+  private queryFeedback = new Map<string, {
     count: number; lines: string[]; previousLines: string[]; stableCycles: number;
   }>();
+  private dispatchIdentity: object | null = null;
 
   private key(at: readonly number[]): string {
     return `use:${at.join(',')}`;
@@ -44,6 +45,33 @@ export class ServerActionWait {
   noteUse(at: readonly number[], now = Date.now(), observation?: string): void {
     const key = this.key(at);
     this.recent = { key, at: now };
+  }
+
+  /** Surround actual synchronous transport dispatch, not queue admission.
+   * Arm first so a synchronous reply is correlated; a thrown send rolls back
+   * only this attempt, never a newer nested dispatch. No timer/listener survives.
+   */
+  dispatchChat(command: string, send: () => void, now = Date.now()): void {
+    if (!command.trim().startsWith('/')) { send(); return; }
+    const identity = {};
+    const before = { recent: this.recent, waiting: this.waiting,
+      recentQueries: this.recentQueries, queryFeedback: this.queryFeedback,
+      dispatchIdentity: this.dispatchIdentity };
+    this.dispatchIdentity = identity;
+    // Copy-on-write keeps earlier feedback intact if the transport rejects.
+    // noteChat creates a new feedback record for the current command.
+    this.recentQueries = new Map(this.recentQueries);
+    this.queryFeedback = new Map(this.queryFeedback);
+    this.noteChat(command, now);
+    try { send(); }
+    catch (error) {
+      if (this.dispatchIdentity === identity) {
+        this.recent = before.recent; this.waiting = before.waiting;
+        this.recentQueries = before.recentQueries; this.queryFeedback = before.queryFeedback;
+        this.dispatchIdentity = before.dispatchIdentity;
+      }
+      throw error;
+    }
   }
 
   noteChat(command: string, now = Date.now()): void {

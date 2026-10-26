@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getAgentClients } from './agent-clients.mjs';
 import { agentSkill } from './agent-skill.mjs';
+import { TrialPool, trialPoolOwnerId } from './trial-pool.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -28,14 +29,16 @@ export class AgentAccess {
       CREATE TABLE IF NOT EXISTS agent_clients(id TEXT PRIMARY KEY,invite_id TEXT NOT NULL UNIQUE REFERENCES agent_invites(id),owner_id TEXT NOT NULL REFERENCES owners(id),name TEXT NOT NULL,normalized TEXT NOT NULL UNIQUE,expected_uuid TEXT NOT NULL,secret_hash TEXT NOT NULL,created_at INTEGER NOT NULL,revoked_at INTEGER,game_request_id TEXT);
       CREATE TABLE IF NOT EXISTS agent_access_sessions(id_hash TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES agent_clients(id),created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,revoked_at INTEGER);
       CREATE INDEX IF NOT EXISTS agent_access_client_sessions ON agent_access_sessions(client_id);`);
+    this.pool = new TrialPool(store);
   }
   async capabilities() {
     return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: true,
-      ownership: 'inviter', createsWebsiteOwner: false, game: await this.accounts.capabilities(),
+      ownership: 'inviter', trialPool: { available: true, ownership: 'experience_pool', claim: 'authenticated_game_proof', registrationRequiredToPlay: false }, createsWebsiteOwner: false, game: await this.accounts.capabilities(),
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
       skill: agentSkill, clients: getAgentClients(this.config), joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
-      endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session' },
+      endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session', appearance: '/api/v1/agent-access/appearance' },
+      appearance: { selfService: true, kinds: ['skin', 'ysm'], websiteLoginRequired: false, helper: 'scripts/appearance.mjs', help: '/agent-api.html#appearance' },
       memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },
       help: '/agent-api.html' };
   }
@@ -47,10 +50,13 @@ export class AgentAccess {
     if (!row) throw fail(401, 'INVITE_INVALID', '邀请链接无效，请向角色主人申请新邀请');
     const { username, state, expiresAt } = publicInvite(row);
     // Reading a link never consumes it, logs in, or exposes the owner's name.
-    return { schemaVersion: 1, username, state, expiresAt };
+    return { schemaVersion: 1, username, state, expiresAt, ownership: this.pool.invitation(row.id) ? 'experience_pool' : 'inviter' };
   }
   list(owner) {
-    return { invites: this.store.db.prepare('SELECT * FROM agent_invites WHERE owner_id=? ORDER BY created_at DESC LIMIT 50').all(owner.id).map(row => ({ ...publicInvite(row),
+    return { invites: this.store.db.prepare(`SELECT i.* FROM agent_invites i WHERE i.owner_id=?
+      OR EXISTS(SELECT 1 FROM agent_clients c WHERE c.invite_id=i.id AND c.owner_id=?)
+      OR EXISTS(SELECT 1 FROM agent_trial_invites t JOIN agent_trial_batches b ON b.id=t.batch_id WHERE t.invite_id=i.id AND b.issuer_id=?)
+      ORDER BY i.created_at DESC LIMIT 100`).all(owner.id, owner.id, owner.id).map(row => ({ ...publicInvite(row), ownership: this.pool.invitation(row.id) ? 'experience_pool' : 'inviter',
       agent: this.store.db.prepare('SELECT name FROM agent_clients WHERE invite_id=?').get(row.id)?.name || null })) };
   }
   checkName(name) {
@@ -59,6 +65,7 @@ export class AgentAccess {
     if (this.store.db.prepare('SELECT 1 FROM archived_test_roles WHERE lower(name)=?').get(name.toLowerCase())) throw fail(403, 'RETIRED_TEST_ACCOUNT', '这个历史测试角色已归档，请为新 Agent 选择新名字');
   }
   quota(owner) {
+    if (owner.id === trialPoolOwnerId(this.store)) return;
     if (owner.role === 'admin') return;
     const owned = this.store.db.prepare('SELECT count(*) AS n FROM ownerships o WHERE owner_id=? AND NOT EXISTS (SELECT 1 FROM reviewed_role_identities r WHERE r.player_uuid=o.agent_uuid)').get(owner.id).n;
     const clients = this.store.db.prepare('SELECT count(*) AS n FROM agent_clients c WHERE c.owner_id=? AND c.revoked_at IS NULL AND NOT EXISTS (SELECT 1 FROM ownerships o WHERE o.agent_uuid=c.expected_uuid)').get(owner.id).n;
@@ -68,20 +75,23 @@ export class AgentAccess {
   }
   issue(owner, body) {
     this.enabled(); this.quota(owner);
-    if (typeof body.label !== 'string' || !body.label.trim() || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请填写 1–60 字的邀请码用途');
+    const label=body.label===undefined||body.label===''?'我的冒险伙伴':body.label;
+    if (typeof label !== 'string' || !label.trim() || label.length > 60) throw fail(400, 'INVALID_LABEL', '邀请码用途限 1–60 字');
     const name = body.username === undefined || body.username === '' ? null : body.username;
     if (name !== null) this.checkName(name);
     const hours = body.expiresInHours ?? 24;
     if (!Number.isInteger(hours) || hours < 1 || hours > 168) throw fail(400, 'INVALID_EXPIRY', '邀请码有效期为 1–168 小时');
     if (this.store.db.prepare('SELECT count(*) AS n FROM agent_invites WHERE owner_id=? AND used_at IS NULL AND revoked_at IS NULL AND expires_at>?').get(owner.id, Date.now()).n >= 20) throw fail(409, 'INVITE_LIMIT', '最多保留 20 个有效邀请码，请先撤销不再使用的邀请');
     const token = 'qdi_' + newSecret(), now = Date.now(), id = randomUUID();
-    this.store.db.prepare('INSERT INTO agent_invites VALUES(?,?,?,?,?,?,?,NULL,NULL)').run(id, owner.id, body.label.trim(), name, digest(token), now, now + hours * 3600000);
+    this.store.db.prepare('INSERT INTO agent_invites VALUES(?,?,?,?,?,?,?,NULL,NULL)').run(id, owner.id, label.trim(), name, digest(token), now, now + hours * 3600000);
     this.store.audit(owner.id, 'agent.invite.create', id);
     return { ...publicInvite(this.store.db.prepare('SELECT * FROM agent_invites WHERE id=?').get(id)), token,
       usage: '一次性邀请，仅用于新 Agent；角色属于你的账号。请私下交给可信程序，别放进公开对话。' };
   }
   revoke(owner, id) {
-    const invite = this.store.db.prepare('SELECT * FROM agent_invites WHERE id=? AND owner_id=?').get(id, owner.id);
+    const invite = this.store.db.prepare(`SELECT i.* FROM agent_invites i WHERE i.id=? AND (i.owner_id=?
+      OR EXISTS(SELECT 1 FROM agent_clients c WHERE c.invite_id=i.id AND c.owner_id=?)
+      OR EXISTS(SELECT 1 FROM agent_trial_invites t JOIN agent_trial_batches b ON b.id=t.batch_id WHERE t.invite_id=i.id AND b.issuer_id=?))`).get(id, owner.id, owner.id, owner.id);
     if (!invite) throw fail(404, 'INVITE_NOT_FOUND', '未找到属于你的邀请');
     const now = Date.now();
     this.store.db.exec('BEGIN IMMEDIATE');
@@ -129,7 +139,7 @@ export class AgentAccess {
       this.store.db.exec('COMMIT');
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     return { schemaVersion: 1, clientId: body.requestId, username: body.username, state: 'registered', duplicate,
-      registrationOnly: true, nextAction: 'login', login: '/api/v1/agent-access/sessions', ownership: 'inviter' };
+      registrationOnly: true, nextAction: 'login', login: '/api/v1/agent-access/sessions', ownership: this.pool.invitation(invite.id) ? 'experience_pool' : 'inviter' };
   }
   login(body) {
     this.enabled();
@@ -145,7 +155,7 @@ export class AgentAccess {
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     this.store.audit(client.owner_id, 'agent.session.login', client.id);
     return { schemaVersion: 1, clientId: client.id, username: client.name, token, tokenType: 'Bearer', expiresAt: new Date(now + 3600000).toISOString(),
-      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories'], nextAction: 'status', status: '/api/v1/agent-access/status' };
+      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories', 'agent.self.appearance'], nextAction: 'status', status: '/api/v1/agent-access/status' };
   }
   authorize(req) {
     this.enabled();
@@ -171,6 +181,7 @@ export class AgentAccess {
     return { schemaVersion: 1, clientId: client.id, username: client.name, state: job?.state === 'succeeded' ? 'ready' : job ? job.state : 'not_created',
       gameAccountCreated: job?.state === 'succeeded', job, game: await this.accounts.capabilities(), gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
       nextAction: job?.state === 'succeeded' ? 'connect_game' : job && ['pending', 'unknown'].includes(job.state) ? 'query_status' : 'activate',
+      ownership: this.pool.invitation(client.invite_id) && client.owner_id === trialPoolOwnerId(this.store) ? 'experience_pool' : 'website_account',
       gamePasswordEnv: 'MC_GAME_PASSWORD', apiCredentialIsGamePassword: false };
   }
   async activate({ client, owner }, body) {
@@ -197,12 +208,13 @@ export class AgentAccess {
       throw error;
     } finally { this.preparing.delete(client.id); }
   }
-  async state(context) {
+  async selfAgent(context) {
     const status = await this.status(context);
     if (!status.gameAccountCreated) throw fail(409, 'GAME_ACCOUNT_NOT_READY', '先查询 status，等待游戏建号成功后读取角色资料');
     const agent = (await this.game.roster()).find(row => row.playerUuid === context.client.expected_uuid && row.name === context.client.name);
     if (!agent || agent.isReserved || agent.identityConflict || !this.store.ownedUuids(context.owner.id).includes(agent.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '原角色身份或归属尚未确认，请查询 status 或联系主人');
-    return this.game.playerState(agent);
+    return agent;
   }
+  async state(context) { return this.game.playerState(await this.selfAgent(context)); }
   logout(context) { this.store.db.prepare('UPDATE agent_access_sessions SET revoked_at=? WHERE id_hash=?').run(Date.now(), context.client.session_hash); return { ok: true }; }
 }

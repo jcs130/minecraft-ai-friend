@@ -1,7 +1,10 @@
 import { randomInt } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { gunzipSync } from 'node:zlib';
 import { SPECTATOR_PROTOCOL, CHUNK_BYTES, MAX_BODY_BYTES, CHANNEL_PATTERN, UUID_PATTERN,
   observationPath, validatedSource, decodeChunk } from './spectator-protocol.mjs';
+import { SpectatorFanout, SpectatorAssetCache, cacheableSpectatorAsset } from './spectator-fanout.mjs';
+import { publicSpectatorEvent, publicSpectatorStatus } from './spectator-public.mjs';
 
 const CSP = "default-src 'self'; script-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
 const error = (res, status, reason) => {
@@ -48,6 +51,7 @@ export function decodedSpectatorChunk(data,encoding='identity') {
  */
 export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher, authorizeViewer,
   pagePrefix = '/watch', sourcePrefix = '/api/v1/live', maxPublishers = 32, maxViewers = 4,
+  sharedStreams = false, cacheAssets = false, fanoutOptions = {}, assetCacheOptions = {},
   permissionIntervalMs = 5000, headerTimeoutMs = 10000, requestTimeoutMs = 60000, authTimeoutMs = 3000 }) {
   if (typeof WebSocketServer !== 'function' || !site?.page || !site?.file || !site.build
       || typeof authorizePublisher !== 'function' || typeof authorizeViewer !== 'function'
@@ -63,6 +67,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     source.closed = true;
     clearTimeout(source.authTimer); clearInterval(source.timer);
     if (sources.get(source.channelId) === source) sources.delete(source.channelId);
+    source.hub?.close(); source.assets?.clear();
     for (const pending of source.requests.values()) pending.fail(503, reason);
     source.requests.clear();
     if (source.ws.readyState === 1) source.ws.close(1008, reason);
@@ -71,7 +76,9 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     const source = sources.get(channelId);
     return { available: !!source?.info && !source.closed, readOnly: true, mode: 'native-3d',
       playerUuid: source?.info?.playerUuid ?? null, viewerBuild: source?.info?.viewerBuild ?? null,
-      viewers: source ? [...source.requests.values()].filter(p => p.path === 'events').length : 0 };
+      viewers: source?.hub ? source.hub.state().viewers : source ? [...source.requests.values()].filter(p => p.path === 'events').length : 0,
+      ...(sharedStreams ? { upstreamStreams: source?.hub?.state().upstreamStreams ?? 0, replayBytes: source?.hub?.state().replayBytes ?? 0,
+        assetCacheBytes: source?.assets?.bytes ?? 0 } : {}) };
   }
   function dispatch(source) {
     if (source.closed) return;
@@ -162,7 +169,9 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
                 if (Date.now() - source.lastPong > 45000 || Date.now() - source.lastSource > 15000) throw Error('SPECTATOR_SOURCE_STALE');
                 const current = await authorizePublisher(req, channelId, source.token);
                 if (current?.playerUuid?.toLowerCase() !== source.playerUuid) throw Error('SPECTATOR_AUTH_REVOKED');
+                await source.hub?.check(request => authorizeViewer(request, channelId));
                 for (const pending of source.requests.values()) {
+                  if (pending.internal) continue; // The hub checks every downstream separately.
                   try { await authorizeViewer(pending.req, channelId); }
                   catch { pending.fail(403, 'SPECTATOR_VIEW_REVOKED'); }
                 }
@@ -199,6 +208,28 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     });
   });
 
+  function request(source, req, res, resource, internal = false) {
+    if(source.closed||res.destroyed){error(res,503,'SPECTATOR_SOURCE_OFFLINE');return;}
+    if(source.requests.size>=256){error(res,429,'SPECTATOR_VIEWER_LIMIT');return;}
+    const id = newId();
+    const pending = { id, req, res, internal, path: resource, sequence: 0, size: 0, started: false, dispatched: false, awaitingDrain: false, unacknowledged: 0, chunks: [], onDrain: null,
+      cleanup() {
+        clearTimeout(pending.headerTimer); clearTimeout(pending.deadline); res.off('close', pending.cancel);
+        if (pending.onDrain) res.off('drain', pending.onDrain);
+        pending.chunks.length = 0; pending.onDrain = null;
+        source.requests.delete(id);
+        queueMicrotask(() => dispatch(source));
+      },
+      cancel() { pending.cleanup(); if (pending.dispatched) send(source.ws, { type: 'cancel', id }); },
+      fail(status, reason) { pending.cancel(); error(res, status, reason); } };
+    if (resource !== 'events') {
+      pending.deadline = setTimeout(() => pending.fail(504, 'SPECTATOR_SOURCE_TIMEOUT'), requestTimeoutMs);
+      pending.deadline.unref();
+    }
+    source.requests.set(id, pending); res.once('close', pending.cancel);
+    dispatch(source);
+  }
+
   async function http(req, res) {
     if (!req.url?.startsWith(pagePrefix + '/')) return false;
     const staticPrefix = pagePrefix + '/_static/';
@@ -212,8 +243,15 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     const raw = req.url.slice(pagePrefix.length + 1), parts = raw.split('/'), channelId = parts.shift();
     if (closed || req.method !== 'GET' || !CHANNEL_PATTERN.test(channelId ?? '') || /[%\\?#\x00-\x20]/.test(raw)
         || parts.some(p => p === '.' || p === '..')) { error(res, 400, 'SPECTATOR_REQUEST_INVALID'); return true; }
-    try { await authorizeViewer(req, channelId); }
-    catch { error(res, 403, 'SPECTATOR_VIEW_FORBIDDEN'); return true; }
+    let viewerScope='owner';
+    try { const grant=await authorizeViewer(req, channelId);viewerScope=grant?.scope??'owner';if(!['owner','scene'].includes(viewerScope))throw Error('SPECTATOR_SCOPE_INVALID'); }
+    catch (failure) {
+      // A consumer may report source replacement only after verifying role
+      // access. Keep that explicit temporary state retryable; all other
+      // authorization errors stay forbidden and reveal no role information.
+      const waiting=failure?.status===503&&failure?.reason==='SPECTATOR_SOURCE_OFFLINE';
+      error(res,waiting?503:403,waiting?'SPECTATOR_SOURCE_OFFLINE':'SPECTATOR_VIEW_FORBIDDEN');return true;
+    }
     if (res.destroyed) return true;
     const source = sources.get(channelId);
     if (!source?.info || source.closed) { error(res, 503, 'SPECTATOR_SOURCE_OFFLINE'); return true; }
@@ -231,32 +269,55 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       res.end(local.bytes); return true;
     }
     if (!observationPath(resource)) { error(res, 404, 'SPECTATOR_ROUTE_NOT_FOUND'); return true; }
+    if(viewerScope==='scene'&&resource==='agent-views') {
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({schema:'mc-agent-views/v1',available:false,reason:'PUBLIC_SCENE_ONLY'}));return true;
+    }
+    if(viewerScope==='scene'&&resource==='status.json') {
+      // Buffer only this small JSON resource; never forward a private header or
+      // a partial raw status to a guest. Recheck permission after the read.
+      const value=await new Promise(resolve=>{
+        const sink=new EventEmitter();let chunks=[],size=0,status=0,done=false;
+        const finish=value=>{if(done)return;done=true;sink.destroyed=true;chunks=[];sink.emit('close');resolve(value);};
+        sink.writeHead=code=>{status=code;sink.headersSent=true;};sink.flushHeaders=()=>{};
+        sink.write=bytes=>{size+=bytes.length;if(size>1024*1024)finish(null);else if(!done)chunks.push(bytes);return true;};
+        sink.end=()=>{try{finish(status===200?publicSpectatorStatus(JSON.parse(Buffer.concat(chunks))):null);}catch{finish(null);}};
+        sink.destroy=()=>finish(null);request(source,null,sink,resource,true);
+      });
+      try{const grant=await authorizeViewer(req,channelId);if((grant?.scope??'owner')!=='scene'||source.closed||sources.get(channelId)!==source)throw Error('changed');}
+      catch{error(res,403,'SPECTATOR_VIEW_FORBIDDEN');return true;}
+      if(!value){error(res,502,'SPECTATOR_SOURCE_RESOURCE_UNAVAILABLE');return true;}
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'private, no-store'});res.end(JSON.stringify(value));return true;
+    }
+    if(viewerScope==='scene'&&resource==='events'&&!sharedStreams){error(res,403,'SPECTATOR_PUBLIC_STREAM_UNAVAILABLE');return true;}
+    if (sharedStreams && resource === 'events') {
+      if (!source.hub || source.hub.closed) source.hub = new SpectatorFanout({ ...fanoutOptions, playerUuid:source.playerUuid, maxViewers,
+        projectPublic:publicSpectatorEvent,
+        open: sink => request(source,null,sink,'events',true) });
+      if (!source.hub.subscribe(req,res,{scope:viewerScope})) error(res,429,'SPECTATOR_VIEWER_LIMIT');
+      return true;
+    }
+    if (cacheAssets && cacheableSpectatorAsset(resource)) {
+      source.assets ||= new SpectatorAssetCache(assetCacheOptions);
+      const asset = await source.assets.read(resource, sink => request(source,null,sink,resource,true));
+      // Authorization may have changed while the shared cache miss was pending.
+      // Never send old private bytes after an ownership/visibility invalidation.
+      try { await authorizeViewer(req,channelId); }
+      catch { error(res,403,'SPECTATOR_VIEW_FORBIDDEN'); return true; }
+      if (source.closed || sources.get(channelId)!==source) { error(res,503,'SPECTATOR_SOURCE_OFFLINE'); return true; }
+      if (res.destroyed) return true;
+      if (asset) { staticResponse(req,res,asset); return true; }
+    }
     // HTTP/2 can request the original HUD/texture atlas in one burst. Queue a
     // bounded burst rather than turning legitimate texture loads into 429s;
     // only 24 reads (including SSE) reach the source at a time.
     if (source.requests.size >= 256 || resource === 'events' && [...source.requests.values()].filter(p => p.path === 'events').length >= maxViewers) {
       error(res, 429, 'SPECTATOR_VIEWER_LIMIT'); return true;
     }
-    const id = newId();
-    const pending = { id, req, res, path: resource, sequence: 0, size: 0, started: false, dispatched: false, awaitingDrain: false, unacknowledged: 0, chunks: [], onDrain: null,
-      cleanup() {
-        clearTimeout(pending.headerTimer); clearTimeout(pending.deadline); res.off('close', pending.cancel);
-        if (pending.onDrain) res.off('drain', pending.onDrain);
-        pending.chunks.length = 0; pending.onDrain = null;
-        source.requests.delete(id);
-        queueMicrotask(() => dispatch(source));
-      },
-      cancel() { pending.cleanup(); if (pending.dispatched) send(source.ws, { type: 'cancel', id }); },
-      fail(status, reason) { pending.cancel(); error(res, status, reason); } };
-    if (resource !== 'events') {
-      pending.deadline = setTimeout(() => pending.fail(504, 'SPECTATOR_SOURCE_TIMEOUT'), requestTimeoutMs);
-      pending.deadline.unref();
-    }
-    source.requests.set(id, pending); res.once('close', pending.cancel);
-    dispatch(source);
+    request(source,req,res,resource);
     return true;
   }
-  return { http, upgrade, state, preload: () => site.preload?.(pagePrefix + '/_static') ?? [],
+  return { http, upgrade, state, invalidate: (id,reason='SPECTATOR_VIEW_REVOKED') => { const source=sources.get(id);if(source)retire(source,reason); },
+    preload: () => site.preload?.(pagePrefix + '/_static') ?? [],
     async close() {
       if (closed) return;
       closed = true;

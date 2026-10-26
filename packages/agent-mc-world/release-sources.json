@@ -1,7 +1,7 @@
 {
   "viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "commit": "14aeb081fab1f2ed4d65cc8558a2b9d6eb066759",
+    "commit": "d60328fe7c6e54652779b81e447587b908399ba6",
     "assetPack": "java-1.21.1",
     "additionalPacks": [
       "java-1.20.6",
@@ -9,8 +9,8 @@
       "java-1.21.5"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-14aeb081-audio.tgz",
-    "sha256": "a3558929cb9cb3401c71c2676d128721f7be47cb3c26a78d7e159b6aece4333d",
+    "artifact": "vendor/mc-visual-console-java-1.21.1-d60328fe-compatible.tgz",
+    "sha256": "19d000c0a65568d330d2a6b5a3ac35a34adfbaef2842320c2e6a3c59aa07eb71",
     "soundPacks": [
       "java-1.21.1-sounds",
       "java-1.20.6-sounds",
@@ -30,8 +30,8 @@
       "filesCheckedAgainstCurrentSharedAssetPacks": 28
     },
     "previousFrozenInput": {
-      "commit": "94a12db5ae1f96ab8ea274395ece9eb38335c69a",
-      "sha256": "64e0d4ef79ae4c77af6044408990d519a28358e62ee84f9cc9bec43e7fc5626d"
+      "commit": "14aeb081fab1f2ed4d65cc8558a2b9d6eb066759",
+      "sha256": "a3558929cb9cb3401c71c2676d128721f7be47cb3c26a78d7e159b6aece4333d"
     },
     "originalAssetInput": {
       "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
@@ -46,11 +46,11 @@
       {
         "version": "1.21.1",
         "clientJarSha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
-        "browserBundleSha256": "77c396bc20e068a49b7dba45d3bea4e42df5d62ad8b0b8eb3669f401247179d2",
-        "mesherSha256": "537970d0ef79018017a4371290c42e70d73c4d267bbaf843e8146e1b62d7e336",
+        "browserBundleSha256": "07abd5301e92dfdaff96ddaa793c2593551c424fd2dc0473bd2be3f03c06b98a",
+        "mesherSha256": "0bdf8a324c499c1661ab9d234fe6f2e04499fc4fc1eb935dc7c89fa11bf23e53",
         "buildSource": {
-          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
-          "sourceFiles": 375,
+          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
+          "sourceFiles": 382,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
@@ -58,11 +58,11 @@
       {
         "version": "1.20.6",
         "clientJarSha256": "02dfd345ac1ad55692d5dbc8486ac7e4fea72cd54ac494a79cd48963048e56b2",
-        "browserBundleSha256": "d94e9dbb8f845c689c62d0a8d2a9039e34514d10a0b2609b6ce632f7234727d8",
-        "mesherSha256": "a1ff058d8ecab9019ca5a8b5b684d96d92b816fe48cd4ee396b9fd79a0fb654c",
+        "browserBundleSha256": "930a11be8d9d36983f19c0246e8117372f4205fbb8fa7d411503abf991a248b8",
+        "mesherSha256": "6ac9dde8fbcc19ad94aca473fdf7699fff6d5fe4405d4acb1b2f4d2fd008dafa",
         "buildSource": {
-          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
-          "sourceFiles": 375,
+          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
+          "sourceFiles": 382,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
@@ -70,11 +70,11 @@
       {
         "version": "1.21.11",
         "clientJarSha256": "1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd",
-        "browserBundleSha256": "87b4f0f4ccdd01ecd3dae209410d77492d22854b0bb85c00052eda6ea111aa89",
-        "mesherSha256": "7829de731fcff8d0911a677249efe742d57a21b7b90713fa23894debef82d63b",
+        "browserBundleSha256": "783e54080b610055bd46a755fb7a547c4ad6dde188a57770c5c7dcefa92659ff",
+        "mesherSha256": "1a3c31fd873054f54d1be2b31b56d100b8c2eff1079e1e4274e88c55d8f79898",
         "buildSource": {
-          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
-          "sourceFiles": 375,
+          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
+          "sourceFiles": 382,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
@@ -82,16 +82,18 @@
       {
         "version": "1.21.5",
         "clientJarSha256": "522672ad20b460c02c2e39b6c5035ef6a849af28eb11ab2ac7eb293d395a8c11",
-        "browserBundleSha256": "84d14b6e6aa5519f7d0541ba0fe224b34cae008a78f866df46f6adfc20bab821",
-        "mesherSha256": "e0e383da60dd7c94795c16c65f2dfe5fcec7a4389bf15dd1f00d21e64fe66ca5",
+        "browserBundleSha256": "bb48ca3c5a3b86b91b412eb12d0e843a92037c0f70fb099561cba970dc7944eb",
+        "mesherSha256": "bab52f2ea048641c69ae886220c3fcff2db61a166b814cacc3b795f24713f3ca",
         "buildSource": {
-          "sourceSha256": "4cbd4dcef4954fb10a4820725dc384ac2e1eb69ab1b4e9fcfa890199bdb745a6",
-          "sourceFiles": 375,
+          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
+          "sourceFiles": 382,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
       }
-    ]
+    ],
+    "runtimeRegistryVersion": 1,
+    "missingExactMaterials": "automatic-compatible-materials-with-actual-connection-registry"
   },
   "core": {
     "source": "core/",

@@ -198,6 +198,11 @@ final class GuildManager implements Listener {
             out.addProperty("nextCommand", guide.get("nextCommand").getAsString());
             out.addProperty("status", guide.get("ready").getAsBoolean() ? "ready_to_submit" : "active");
         }
+        if (RetiredActivities.retired(id)) {
+            out.addProperty("retired", true); out.addProperty("status", "withdrawn_offer");
+            out.addProperty("advice", "旧农耕委托已撤下；用 tasks pause 暂存原阶段和进度，再选探索或讨伐；也可自愿继续收尾。");
+            out.addProperty("nextCommand", "/mycli tasks pause");
+        }
         return out;
     }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
@@ -400,6 +405,7 @@ final class GuildManager implements Listener {
                 && !plugin.skillAssessments().canAttachContract(player,id);
     }
     private void accept(Player player, String id) {
+        if (RetiredActivities.retired(id)) { player.sendMessage(ChatColor.YELLOW + RetiredActivities.HINT); return; }
         if(examBlocks(player,id)){plugin.skillAssessments().contractRejected(player,id);return;}
         Contract quest = contract(id);
         if (quest == null) { player.sendMessage(ChatColor.RED + "没有这个任务 ID；/mycli guild board 查看精确名称。"); return; }
@@ -852,7 +858,7 @@ final class GuildManager implements Listener {
         int focusA = random.nextInt(DIMS.length), focusB = random.nextInt(DIMS.length);
         if (focusB == focusA) focusB = (focusB + 1 + random.nextInt(DIMS.length - 1)) % DIMS.length;
         List<Contract> focus = new java.util.ArrayList<>(), others = new java.util.ArrayList<>();
-        for (Contract quest : CONTRACTS) (quest.dim() == focusA || quest.dim() == focusB ? focus : others).add(quest);
+        for (Contract quest : CONTRACTS) if (!RetiredActivities.retired(quest.id())) (quest.dim() == focusA || quest.dim() == focusB ? focus : others).add(quest);
         java.util.Collections.shuffle(others, random);
         List<String> pool = new java.util.ArrayList<>();
         for (Contract quest : focus) pool.add(quest.id());
@@ -869,6 +875,7 @@ final class GuildManager implements Listener {
     }
 
     private boolean availableToday(Player player, Contract quest) {
+        if (RetiredActivities.retired(quest.id())) return false;
         if (plugin.taskMarket() != null && plugin.taskMarket().offered(quest.id()) != null) return true;
         if (plugin.dailyBoard() != null && plugin.dailyBoard().card(quest.id()) != null) return true;
         if (poolIds().contains(quest.id())) return true;
@@ -878,7 +885,7 @@ final class GuildManager implements Listener {
         if (extra > 0) {
             java.util.Random random = new java.util.Random((today() + player.getUniqueId()).hashCode());
             List<Contract> others = new java.util.ArrayList<>(CONTRACTS);
-            others.removeIf(q -> poolIds().contains(q.id()));
+            others.removeIf(q -> RetiredActivities.retired(q.id()) || poolIds().contains(q.id()));
             java.util.Collections.shuffle(others, random);
             for (int i = 0; i < Math.min(extra, others.size()); i++)
                 if (others.get(i).id().equals(quest.id())) return true;
@@ -1082,6 +1089,7 @@ final class GuildManager implements Listener {
         }
         for (int i = 0; i < CONTRACTS.size(); i++) {
             Contract quest = CONTRACTS.get(i);
+            if (RetiredActivities.retired(quest.id())) continue;
             String state = !availableToday(player, quest) ? "今日未开放（轮换）"
                     : doneToday(player, quest) ? "今天已完成"
                     : quest.minRank() > rank ? "需要" + RANKS[quest.minRank()] : "点击接单";

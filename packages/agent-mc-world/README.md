@@ -1,12 +1,27 @@
 # Agent MC World
 
-Published package: **0.5.7-rc.88** on npm's **next** tag and [GitHub Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.88). Install this preview with `npm install agent-mc-world@0.5.7-rc.88`. Java **1.21.1** remains the primary target; the host owns its model, personality, decisions and personal memory.
+Published package: **0.5.7-rc.89** on npm's **next** tag and [GitHub Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.89). Install this preview with `npm install agent-mc-world@0.5.7-rc.89`. Java **1.21.1** remains the primary target; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
 
-Optional MineDojo historical indexes use the existing `mc_knowledge` SDK/MCP interface: explicit local preparation, source/coverage manifests, bounded reads, BM25 + CPU token vectors and optional matching embeddings. See [preparation and queries](docs/minedojo-knowledge.md). CPU token vectors are lexical. No corpus, SQLite database or automatic model/game startup is bundled.
+Development candidate **0.5.7-rc.99** includes independent, explicitly declared
+[read-only server queries](docs/server-query-lifecycle.md) that do not wait behind
+navigation. Queued command reply tracking begins at the actual transport call,
+not task admission. It also includes self-contained task progress,
+explicit unknowns when world snapshots are unavailable, validated batch message
+reads, verified opening-spell candidates, script-worker versus body-lease checks,
+and idempotent attributed-note retries. It retains the rc.90 composter fix, whose
+receipts distinguish compost level, item consumption and actual bone-meal gain.
+This candidate is not an npm release; the published preview remains rc.89.
 
-The release includes the rc.87 viewer resources, vanilla player skins, public-chat defaults and configurable effects, plus the rc.86 notebook and default-off mineral queries. See [viewer resources](docs/viewer-resources.md) and [notebook settings](docs/agent-notebook-settings.md).
+[Journey decisions](docs/journey-decisions.md) retain current route observations
+and configurable movement tolerance while the host considers a short visit.
+Safe checkpoint insertion preserves the original task; no hidden model loop or
+automatic detour is introduced.
 
-Anonymous npm downloads match the original reviewed GitHub archive byte for byte. Two unmodified official DSH versions passed default pnpm registry installation, main/Worker loading and real local knowledge queries. See [npm verification](docs/npm-release-rc88.json); [earlier GitHub evidence](docs/github-release-rc88.json) remains a time-stamped snapshot. The 22-page retrieval smoke retains four coverage gaps and is not a gameplay or full-Wiki benchmark. Source, package publication and live deployment remain separate; published archives are not repacked.
+When exact prebuilt vanilla materials are absent, the web viewer automatically selects compatible materials while preserving the actual connection's block IDs in the browser and mesher. Unknown materials use local placeholders; optional icons, fonts, paintings or audio do not block terrain. An incomplete old cache can fall back to bundled resources. Refreshing the viewer keeps the body and session. Users can connect without building resources; exact materials remain an optional enhancement. See [viewer resources](docs/viewer-resources.md).
+
+Optional MineDojo historical indexes use `mc_knowledge`: explicit local preparation, source/coverage manifests, bounded reads, BM25 + CPU token vectors and optional matching embeddings. See [preparation and queries](docs/minedojo-knowledge.md). CPU token vectors are lexical. No corpus, SQLite database or automatic model/game startup is bundled. Vanilla player skins, public-chat defaults, configurable effects and the [server notebook](docs/agent-notebook-settings.md) remain available; mineral queries are off by default.
+
+Anonymous npm downloads match the original reviewed GitHub archives byte for byte. Unmodified official DSH 0.2.1-rc.2 / rc.3 passed default pnpm registry installation, main/Worker loading and real local knowledge queries; see [npm verification](docs/npm-release-rc89.json). The 22-page retrieval smoke retains four coverage gaps and is not a full-Wiki or gameplay benchmark. Source, publication and live deployment are recorded separately. Published archives and earlier evidence are preserved.
 
 The rc.85 candidate exposes a [base-viewer readiness handoff](docs/viewer-resources.md)
 so audio preparation need not hold the game connection. Reviewed World storage

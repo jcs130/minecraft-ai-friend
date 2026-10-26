@@ -61,11 +61,11 @@ def test_compact_step_projection_preserves_short_action_parameter_meanings():
         assert result[field] == props[field]
 
 
-def test_scout_description_exposes_a_valid_bounded_example_and_find_explains_movement():
+def test_scout_keeps_native_paging_semantics_and_find_explains_movement():
     native = catalogue()
+    native[0]["description"] = "Read-only voxel queries return bounded partial pages; use the returned cursor for caller-selected continuation."
     native.append({**copy.deepcopy(native[0]), "name": "mc_do"})
     tools = {row["function"]["name"]: row["function"] for row in model_tools(native)}
-    assert "512" in tools["mc_scout"]["description"]
-    assert "[-3,-2,-3,3,3,3]" in tools["mc_scout"]["description"]
+    assert tools["mc_scout"]["description"] == native[0]["description"]
     assert "direction" in tools["mc_do"]["description"]
     assert "target" in tools["mc_do"]["description"]

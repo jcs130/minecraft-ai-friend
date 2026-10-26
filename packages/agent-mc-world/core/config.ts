@@ -98,7 +98,7 @@ export const MINECRAFT_DEFAULTS = {
     afterArrival: false,
     allowMovement: false,
   },
-  journey: {enabled:true},
+  journey: {enabled:true,choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5},
   reflex: {
     /** 受击反击 */
     fightBack: true,
@@ -210,7 +210,7 @@ export const MINECRAFT_DEFAULTS = {
 
 export interface MinecraftConfigSection {
   /** Observed journey opportunities wake the host; never force a stop or start inference in the core. */
-  journey?: {enabled:boolean};
+  journey?: {enabled:boolean;choiceMinBlocks?:number;choiceMaxBlocks?:number;dangerChoiceMaxBlocks?:number};
   provider?: 'mineflayer' | 'java-client';
   javaClient?: import('../src/contracts/java-client.ts').JavaClientConfiguration;
   /** Generic fast-tactic execution permissions; no model endpoint or credentials. */
@@ -533,6 +533,18 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.journey.enabled': {
         type:'boolean',title:'旅途新发现提醒','x-hot':true,
         description:'长途经过新的可见村民、告示牌或地标时，提供保留原目的地的短探索选择；是否停留由Agent判断，不自动改路或打断任务。',
+      },
+      'worlds.minecraft.journey.choiceMinBlocks': {
+        type:'number',title:'路线建议常规位移容差起点',minimum:1,maximum:64,'x-suffix':'格','x-hot':true,
+        description:'默认10格。建议有效距离=min(上限,起点+实测速度×决策耗时)，只允许同一任务的短期位移；不改变寻路与安全让位判定。',
+      },
+      'worlds.minecraft.journey.choiceMaxBlocks': {
+        type:'number',title:'路线建议常规位移容差上限',minimum:1,maximum:64,'x-suffix':'格','x-hot':true,
+        description:'默认20格，不能小于起点。目标、身体控制权、受伤、战斗和服务端传送变化仍立即使旧建议失效。',
+      },
+      'worlds.minecraft.journey.dangerChoiceMaxBlocks': {
+        type:'number',title:'有风险时路线建议位移上限',minimum:1,maximum:64,'x-suffix':'格','x-hot':true,
+        description:'默认5格。已见敌对种类、低生命或伤害效果时缩小建议容差；附近玩家不自动算敌人。这不是自动接敌或通行安全证明。',
       },
       'worlds.minecraft.combat.engageRadius': {
         type: 'integer', title: '战斗触发半径', minimum: 2, maximum: 8, 'x-suffix': '格', 'x-hot': true,

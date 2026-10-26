@@ -1,8 +1,9 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {spawn,execFileSync} from 'node:child_process';import {createRequire} from 'node:module';import {createHash} from 'node:crypto';import {setTimeout as sleep} from 'node:timers/promises';import {command} from '../ops/rcon-client.mjs';import {installRecipePacketBypass} from '../ops/mineflayer-client-compat.mjs';
 const stage=process.env.MC_ARCHIVE_TEST_SERVER,root=process.env.MC_ARCHIVE_TEST_OUTPUT;assert(stage?.replaceAll('\\','/').startsWith('E:/MC/staging/')&&root);
 const props=fs.readFileSync(stage+'/server.properties','utf8');assert(/^motd=QD_PUBLIC_ARCHIVES_TEST_ONLY$/m.test(props)&&/^rcon.port=25915$/m.test(props));
-const req=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json'),python='C:/Users/lzl19/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe',db=stage+'/plugins/AgentFriend/archives/archive.db';
-const rc=q=>command(q,15000,{port:25915,properties:stage+'/server.properties'}),report={at:new Date().toISOString(),checks:[],sha256:createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-0.4.48.jar')).digest('hex')};let bot;const children=[];
+const req=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json'),python=process.env.MC_ARCHIVE_TEST_PYTHON??'C:/Users/lzl19/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe',db=stage+'/plugins/AgentFriend/archives/archive.db';
+const version=process.env.MC_ARCHIVE_TEST_VERSION||'0.4.48';assert(['0.4.48','0.4.47.15'].includes(version));
+const rc=q=>command(q,15000,{port:25915,properties:stage+'/server.properties'}),report={at:new Date().toISOString(),checks:[],sha256:createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-'+version+'.jar')).digest('hex')};let bot;const children=[];
 const check=(n,v)=>{assert(v,n);report.checks.push(n);console.log('PASS '+n);};
 async function until(f,n,ms=15000){const end=Date.now()+ms;while(Date.now()<end){if(await f())return;await sleep(80);}throw Error('Timeout '+n);}
 function sql(q){return JSON.parse(execFileSync(python,['-X','utf8','-c','import sqlite3,json,sys\nc=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True);c.row_factory=sqlite3.Row\nprint(json.dumps([dict(r) for r in c.execute(sys.argv[2])],ensure_ascii=False))',db,q],{encoding:'utf8'}));}

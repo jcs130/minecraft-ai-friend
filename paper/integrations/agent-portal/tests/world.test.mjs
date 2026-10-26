@@ -38,7 +38,7 @@ test('public event parser admits canonical lifecycle/advancement lines and rejec
 test('events persist de-duplicated public facts, retain day precision and ignore unfinished log lines', async t => {
   const f = await siteFixture(t); const log = path.join(f.root, 'game/logs/latest.log');
   const complete = '[12:01:00] [Server thread/INFO]: ag_Alpha joined the game\n';
-  await fs.writeFile(log, complete + '[12:02:00] [Server thread/INFO]: <ag_Alpha> private message\n' + '[12:03:00] [Server thread/INFO]: ag_Alpha left the game');
+  await fs.writeFile(log, complete + '[12:02:00] [Server thread/INFO]: <ag_Alpha> /login private-message-test\n' + '[12:03:00] [Server thread/INFO]: ag_Alpha left the game');
   const first = await f.admin.request('/world/events');
   assert.equal(first.data.total, 2); assert.ok(first.data.events.some(e => e.timePrecision === 'day' && e.title.includes('营地补给')));
   assert.equal((await f.admin.request('/world/events')).data.total, 2);

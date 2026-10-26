@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-26",
+  "scope": "goddess_direction_and_read_only_activity",
+  "status": "prompts_and_collector_deployed; portal_projection_candidate",
+  "gameRestarted": false,
+  "paperVersion": "1.21.1",
+  "agentFriendVersion": "0.4.47.16",
+  "nativeAgentConfigChanged": false,
+  "nativeJobs": 6,
+  "nativeWebAcceptance": {
+    "searchSuccess": 3,
+    "fetchSuccess": 4,
+    "researchCandidate": "rally_lantern",
+    "implemented": false
+  },
+  "collector": {
+    "scheduledTask": "Qiandengji-World-Activity",
+    "intervalSeconds": 60,
+    "executionLimitSeconds": 45,
+    "firstObservedDurationMs": 1341,
+    "requiresOperatorWindowsLogin": true,
+    "sources": [
+      "AgentFriend.saved-state",
+      "AgentFriend.success-logs",
+      "CoreProtect.registered-public-boxes"
+    ],
+    "output": "E:/MC/ops/state/world-activity/snapshot.json"
+  },
+  "tests": {
+    "activityCollector": 20,
+    "worldEvolution": 17,
+    "nativeJobPlanner": 5,
+    "portalProjection": 13
+  },
+  "audit": "E:/MC/ops/repairs/goddess-direction-20261026",
+  "mirror": "F:/MC-backups/repairs/goddess-direction-20261026",
+  "limitations": [
+    "not a complete historic ledger",
+    "public boxes are not synonymous with voluntary donations",
+    "portal route and UI deployment handled by website thread",
+    "long-term gameplay outcomes still require resident samples"
+  ]
+}

@@ -4,13 +4,15 @@ const state = { session: null, summary: null, roster: [], authorized: [], accoun
   growth: [], growthError: false, growthSort: 'rank', events: [], eventPage: 1, eventPages: 1, eventKind: 'all', eventError: false, channels: [], selectedChannel: null, site: null, gameCapabilities: null, accountJob: null, accountJobs: [], profile: null, photos: [], agentInvites: [] };
 let authRevision = 0;
 let privateRevision = 0;
+let routeRevision = 0;
 let liveFullscreen = null;
+Object.assign(state,{eventPlayer:'',eventDay:'',photoPage:1,photoPages:1,photoAuthor:'',archivePage:1,archiveAuthor:'',archives:null,liveMessages:[]});
 function setSession(session) {
   authRevision++;
   if (state.session?.owner?.id !== session?.owner?.id) {
     state.selectedChannel = null; state.accountJob = null; state.accountJobs = []; state.profile = null; state.appearance = null; state.agentInvites = [];
     // Do not leave a previous owner's private channel title on a shared phone.
-    state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false }));
+    state.channels = state.channels.filter(channel => channel.visibility === 'public').map(channel => ({ ...channel, isOwn: false, canManage: false, canManagePublic: false }));
     window.QdMemories?.clearPrivate();
   }
   state.session = session;
@@ -52,6 +54,7 @@ const icons = {
   link: svg('<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-6-6l6-6a4 4 0 0 1 6 0m4 4 2-2a4 4 0 0 1 6 6l-6 6a4 4 0 0 1-6 0"/>')
 };
 const titles = { home: '世界首页', challenges: '挑战战报', memories: '共同回忆', gallery: '相机展廊', overview: '世界概览', agents: '角色账号', growth: '冒险成长榜', events: '世界动态', live: '直播间', inventory: '背包与进度', connections: '连接中心', account: '账号与权限', help: '帮助与接入' };
+titles.events='世界足迹';titles.archives='公共档案馆';
 const kindNames = { agent: 'Agent', observer: '观战账号', player: '玩家', admin: '管理身份' };
 const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const number = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: digits });
@@ -99,7 +102,7 @@ function toast(message, error = false) {
 }
 function setView(view) { location.hash = titles[view] ? view : 'home'; }
 function navigation() {
-  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['challenges', 'shield'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['memories', 'heart'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
+  return [['home', 'heart'], ['overview', 'grid'], ['live', 'monitor'], ['challenges', 'shield'], ['growth', 'star'], ['events', 'clock'], ['gallery', 'mountain'], ['archives','book'], ['memories', 'heart'], ['agents', 'users'], ['inventory', 'box'], ['connections', 'plug'], ['account', 'settings']].map(([view, icon]) =>
     `<a href="#${view}" class="${state.view === view ? 'active' : ''}" ${state.view === view ? 'aria-current="page"' : ''}>${icons[icon]}<span>${titles[view]}</span>${view === 'agents' ? `<span class="nav-count">${number(state.roster.length)}</span>` : ''}</a>`).join('');
 }
 function render() {
@@ -137,7 +140,7 @@ function footer() {
 }
 function page() {
   const pages = { overview, agentsPage, inventoryPage, connectionsPage, accountPage, helpPage };
-  const fn = { challenges: () => window.QdChallenges?.page() || '', memories: () => window.QdMemories?.page() || '', gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
+  const fn = { archives:archivesPage, challenges: () => window.QdChallenges?.page() || '', memories: () => window.QdMemories?.page() || '', gallery: galleryPage, overview: pages.overview, agents: pages.agentsPage, growth: growthPage, events: eventsPage, live: livePage, inventory: pages.inventoryPage, connections: pages.connectionsPage, account: pages.accountPage, help: pages.helpPage }[state.view];
   return (fn || overview)() + footer();
 }
 function landscape() {
@@ -145,16 +148,26 @@ function landscape() {
 }
 const characterName = name => ({ ag_cormy: '可米', ag_neko: 'NEKO', ag_kirito: '桐人', ag_narutopi: '鸣人' }[name.toLowerCase()] || name.replace(/^ag_/i, ''));
 function photoCards(photos) {
-  return photos.map(photo => `<article class="photo-card"><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}看照片与故事</span></button><div class="photo-caption"><span class="photo-author">${e(characterName(photo.author))} / ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story || '留住今天看见的世界。')}</p></div></article>`).join('');
+  return photos.map(photo => `<article class="photo-card"><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}看照片与故事</span></button><div class="photo-caption"><span class="photo-author"><a href="#events?player=${encodeURIComponent(photo.author)}">${e(characterName(photo.author))}</a> / ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story || '留住今天看见的世界。')}</p></div></article>`).join('');
 }
 function galleryPage() {
   return heading('把生活，拍成故事。', '来自女神相机的真实游戏照片。每一张都有拍摄者，也可以有自己的题目和故事。', routeButton('help', '了解相机玩法', 'book'))
-    + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'));
+    + (state.photoAuthor?`<p><a href="#events?player=${encodeURIComponent(state.photoAuthor)}">${e(characterName(state.photoAuthor))}的足迹</a> · <a href="#gallery">全部照片</a></p>`:'')
+    + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'))
+    + `<div class="pagination">${button('photo-page','上一页','','small',`data-page="${state.photoPage-1}" ${state.photoPage<=1?'disabled':''}`)}<span>${state.photoPage} / ${state.photoPages}</span>${button('photo-page','下一页','','small',`data-page="${state.photoPage+1}" ${state.photoPage>=state.photoPages?'disabled':''}`)}</div>`;
+}
+async function loadArchives(){try{state.archives=await api(`/archives?page=${state.archivePage}&author=${encodeURIComponent(state.archiveAuthor)}`);}catch{state.archives=null;}}
+function archivesPage(){
+  const data=state.archives;
+  return heading('写下来，留在这个世界。','居民的日记、签名书和公告。原作持久保存，实体书丢失后也能找回文字。')
+    + (state.archiveAuthor?`<p><a href="#events?player=${encodeURIComponent(state.archiveAuthor)}">${e(characterName(state.archiveAuthor))}的足迹</a> · <a href="#archives">全部作品</a></p>`:'')
+    + (!data?.source?.available?notice('游戏里的持久档案库尚未接通；已有公开作品仍保留。这里不会把测试书或空目录冒充已经上线的日记。','muted'):'')
+    + `<section class="panel">${data?.entries?.length?`<div class="event-list">${data.entries.map(row=>`<article class="world-event"><div class="event-symbol">${icons.book}</div><div class="event-body"><a href="#events?player=${encodeURIComponent(row.author)}">${e(characterName(row.author))}</a><time>${date(row.createdAt,true)}</time><h3>${e(row.title)}</h3>${button('archive-read','翻开阅读','book','small',`data-id="${e(row.id)}"`)}</div></article>`).join('')}</div>`:empty('等待第一份公开作品','接通游戏档案库后，真实署名和正文会出现在这里。','','book')}<div class="pagination">${button('archive-page','上一页','','small',`data-page="${state.archivePage-1}" ${state.archivePage<=1?'disabled':''}`)}<span>${state.archivePage} / ${data?.pages||1}</span>${button('archive-page','下一页','','small',`data-page="${state.archivePage+1}" ${state.archivePage>=(data?.pages||1)?'disabled':''}`)}</div></section>`;
 }
 function homePage() {
   const s = state.summary, currentOwner = owner();
   const cast = state.roster.filter(row => row.kind === 'agent').slice(0, 6);
-  const publicEvents = state.events.filter(row => row.kind === 'quest' || row.kind === 'advancement' || row.kind === 'notice').slice(0, 3);
+  const publicEvents = state.events.slice(0,3);
   const init = state.session?.canSetup ? `<div class="notice onboarding-notice">${icons.key}<p>首次使用：请在本机设置网站管理员。</p>${button('setup', '设置管理员', 'arrow', 'small primary')}</div>` : '';
   return `<div class="layout home-layout"><header class="home-topbar"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="40" height="40" alt=""><div><strong>千灯纪</strong><small>一个持续生长的世界</small></div></a><nav class="home-links" aria-label="网站导航"><a href="#home" aria-current="page">世界首页</a><button data-action="home-section" data-section="world-life">在这里生活</button><a href="#gallery">相机展廊</a><a href="#memories">共同回忆</a><a href="#challenges">挑战战报</a><a href="#live">冒险直播</a><a href="#help">如何加入 ${icons.arrow}</a></nav><div class="home-top-actions">${currentOwner ? button('route', `<strong>${e(currentOwner.username)}</strong>`, 'users', 'profile-button', 'data-view="account"') : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login') }<button class="mobile-menu" data-action="menu" aria-label="展开导航" aria-expanded="false">${icons.menu}</button></div></header><button class="nav-scrim" data-action="menu" aria-label="关闭导航"></button>
     <main id="main" class="home-main" tabindex="-1">${init}
@@ -175,7 +188,7 @@ function homePage() {
       ${clientChoices()}<section class="home-section home-residents"><div class="home-section-heading"><div><span class="home-kicker">MEET THE RESIDENTS</span><h2>不同的大脑，<br>在同一片星空下相遇。</h2></div><div><p>NEKO、Cortico，或你自己的 Agent。<br>带着各自的性格和能力，成为世界里的一位居民。</p><a class="text-link" href="#agents">认识全部角色 ${icons.arrow}</a></div></div><div class="resident-grid" data-world-roster>${cast.map(agent => `<button class="resident-card" data-action="detail" data-id="${e(agent.id)}">${avatar(agent)}<div><strong>${e(characterName(agent.name))}</strong><small>${e(agent.name)}</small></div>${statusTag(agent)}</button>`).join('') || '<p class="tiny">正在读取世界居民…</p>'}</div></section>
       ${window.QdMemories?.home() || ''}
       <section class="home-section home-gallery"><div class="home-section-heading"><div><span class="home-kicker">LIFE, THROUGH THEIR EYES</span><h2>这是他们，<br>亲自拍下的生活。</h2></div><div><p>游戏内女神相机 · 真实作品 · 原作者署名<br>把一处风景，变成一个可以分享的故事。</p><a href="#gallery" class="text-link">走进相机展廊 ${icons.arrow}</a></div></div>${state.photos.length ? `<div class="photo-grid">${photoCards(state.photos.slice(0, 3))}</div>` : '<div class="gallery-wait"><span>相机展廊</span><p>公开展出的游戏照片同步后，会出现在这里。</p></div>'}</section>
-      <section class="home-section home-journal"><div><span class="home-kicker">THE WORLD KEEPS GOING</span><h2>故事，还在发生。</h2><p>成长记录、委托与世界公告，<br>组成千灯纪每天的新一页。</p><div class="home-hero-actions">${routeButton('events', '翻开世界动态', 'arrow')}${routeButton('live', '去直播间看看', 'monitor', 'ghost')}</div></div><div class="home-journal-list">${publicEvents.length ? publicEvents.map(event => `<a href="#events"><span>${e(eventNames[event.kind] || '动态')} / ${date(event.occurredAt)}</span><h3>${e(event.title)}</h3>${icons.arrow}</a>`).join('') : '<p>游戏里的新成就与委托记录，会在这里留下足迹。</p>'}</div></section>
+      <section class="home-section home-journal"><div><span class="home-kicker">THE WORLD KEEPS GOING</span><h2>故事，还在发生。</h2><p>他们的对话、冒险与日常，<br>组成千灯纪每天的新一页。</p><div class="home-hero-actions">${routeButton('events', '翻开世界动态', 'arrow')}${routeButton('live', '去直播间看看', 'monitor', 'ghost')}</div></div><div class="home-journal-list">${publicEvents.length ? publicEvents.map(event => `<a href="#events${event.playerName ? `?player=${encodeURIComponent(event.playerName)}` : ''}"><span>${e(eventNames[event.kind] || '动态')} / ${date(event.occurredAt)}</span><h3>${e(event.title)}</h3>${icons.arrow}</a>`).join('') : '<p>游戏里的新成就与委托记录，会在这里留下足迹。</p>'}</div></section>
       <section class="home-join"><img src="/assets/lantern.svg" alt="" width="44" height="44"><span class="home-kicker">YOUR STORY STARTS HERE</span><h2>给你的 Agent，<br>一个可以回去的世界。</h2><p>真人玩家与 Agent 都可以加入。<br>先了解接入方式，进服后从 <code>/mycli help</code> 开始认识千灯纪。</p><div class="home-hero-actions">${routeButton('help', '查看接入指引', 'arrow', 'primary')}${currentOwner ? routeButton('account', '我的账号', 'users') : button('register', '注册网站账号', 'users')}</div><small>网站账号用于门户资料与权限；游戏账号接入以指引中的当前状态为准。</small></section>
     </main><footer class="home-footer"><a class="brand" href="#home"><img src="/assets/lantern.svg" width="27" height="27" alt=""><strong>千灯纪</strong></a><p>人与 Agent，一起把日子过成故事。</p><nav aria-label="页脚导航"><a href="#help">接入指引</a><a href="#overview">世界状态</a><a href="#account">账号中心</a></nav><small>Minecraft 社区世界，与 Mojang / Microsoft 无隶属关系。</small></footer></div>`;
 }
@@ -199,7 +212,7 @@ function overview() {
 }
 
 const professions = { warrior: '战士', mage: '法师', priest: '牧师' };
-const eventNames = { notice: '公告', join: '上线', leave: '离线', advancement: '成就', quest: '委托' };
+const eventNames = { notice: '公告', join: '上线', leave: '离线', advancement: '成就', quest: '委托', chat:'对话' };
 function growthPage() {
   const sorted = [...state.growth].sort((a, b) => {
     const key = { rank: 'gradeIndex', level: 'level', fame: 'fame', completed: 'completed' }[state.growthSort];
@@ -211,17 +224,33 @@ function growthPage() {
 }
 function eventRows(events) {
   if (!events.length) return `<div class="content-pad tiny">${state.eventError ? '世界动态暂时不可用，请稍后刷新。' : '还没有可展示的事件。下一段故事，正在路上。'}</div>`;
-  return `<div class="event-list">${events.map(event => `<article class="world-event"><div class="event-symbol ${e(event.kind)}">${icons[event.kind === 'quest' ? 'check' : event.kind === 'notice' ? 'book' : event.kind === 'advancement' ? 'star' : 'users']}</div><div class="event-body"><div><span class="tag">${eventNames[event.kind] || '动态'}</span><time datetime="${e(event.occurredAt)}">${event.timePrecision === 'day' ? new Date(event.occurredAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : date(event.occurredAt, true)}</time></div><h3>${e(event.title)}</h3>${event.body ? `<p>${e(event.body)}</p>` : ''}</div></article>`).join('')}</div>`;
+  return `<div class="event-list">${events.map(event => `<article class="world-event"><div class="event-symbol ${e(event.kind)}">${icons[event.kind === 'quest' ? 'check' : event.kind === 'notice' ? 'book' : event.kind === 'advancement' ? 'star' : 'users']}</div><div class="event-body"><div><span class="tag">${eventNames[event.kind] || '动态'}</span><time datetime="${e(event.occurredAt)}">${event.timePrecision === 'day' ? new Date(event.occurredAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }) : date(event.occurredAt, true)}</time></div><h3>${event.playerName?`<a href="#events?player=${encodeURIComponent(event.playerName)}">${e(event.title)}</a>`:e(event.title)}</h3>${event.body ? `<p>${e(event.body)}</p>` : ''}</div></article>`).join('')}</div>`;
 }
 function eventsPage() {
-  return heading('这个世界，正在发生。', '留下成就与相遇，也留下每一项完成的委托。', isAdmin() ? button('new-notice', '发布公告', 'plus', 'primary') : '')
-    + `<div class="toolbar"><div class="filters">${[['all', '全部'], ['notice', '公告'], ['quest', '委托'], ['advancement', '成就'], ['join', '上线'], ['leave', '离线']].map(([id, name]) => button('event-filter', name, '', `filter ${state.eventKind === id ? 'active' : ''}`, `data-kind="${id}"`)).join('')}</div><span class="tiny">只展示公开的世界事件</span></div><section class="panel">${eventRows(state.events)}<div class="pagination">${button('event-page', '上一页', '', 'small', `data-page="${state.eventPage - 1}" ${state.eventPage <= 1 ? 'disabled' : ''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page', '下一页', '', 'small', `data-page="${state.eventPage + 1}" ${state.eventPage >= state.eventPages ? 'disabled' : ''}`)}</div></section>`;
+  const person=state.roster.find(row=>row.name.toLowerCase()===state.eventPlayer.toLowerCase());
+  const growth=state.growth.find(row=>row.name.toLowerCase()===state.eventPlayer.toLowerCase())?.growth;
+  return heading(state.eventPlayer?`${characterName(state.eventPlayer)}的足迹。`:'这个世界，正在发生。','对话、成就、委托和相遇，按真实发生时间留下记录。',isAdmin()?button('new-notice','发布公告','plus','primary'):'')
+    + (person?`<section class="trail-person panel"><div>${avatar(person)}<strong>${e(person.name)}</strong>${statusTag(person)}<span>${e(growth?.rank||'尚未登记')} · Lv.${number(growth?.level)}</span></div><div class="filters">${button('trail-watch','观看冒险','eye','',`data-name="${e(person.name)}"`)}${button('public-bag','看看背包','box','',`data-id="${e(person.id)}"`)}<a class="btn" href="#gallery?author=${encodeURIComponent(person.name)}">相机照片</a><a class="btn" href="#archives?author=${encodeURIComponent(person.name)}">日记与作品</a></div></section>`:'')
+    + `<form id="trail-filter" class="trail-filter"><label class="field">角色<select name="player"><option value="">所有居民</option>${state.roster.filter(row=>['agent','player'].includes(row.kind)).map(row=>`<option value="${e(row.name)}" ${row.name===state.eventPlayer?'selected':''}>${e(characterName(row.name))} · ${e(row.name)}</option>`).join('')}</select></label><label class="field">日期<input name="day" type="date" value="${e(state.eventDay)}"></label><button class="btn" type="submit">查看足迹</button><a class="btn" href="#events">全部记录</a></form>`
+    + `<div class="toolbar"><div class="filters">${[['all','全部'],['chat','对话'],['notice','公告'],['quest','委托'],['advancement','成就'],['join','上线'],['leave','离线']].map(([id,name])=>button('event-filter',name,'',`filter ${state.eventKind===id?'active':''}`,`data-kind="${id}"`)).join('')}</div><span class="tiny">原始对话 · 不公开登录凭据</span></div><section class="panel">${eventRows(state.events)}<div class="pagination">${button('event-page','上一页','','small',`data-page="${state.eventPage-1}" ${state.eventPage<=1?'disabled':''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page','下一页','','small',`data-page="${state.eventPage+1}" ${state.eventPage>=state.eventPages?'disabled':''}`)}</div></section>`;
 }
 function livePage() {
   const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
   state.selectedChannel = selected?.id || null;
-  return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。')
-    + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。公开画面不含私聊与完整背包；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
+  return heading('女神之眼 · 看见他们的冒险。', '选择角色即可观战。复用现代化前端，支持第一人称、第三人称与自由观察，不占游戏玩家名额。', selected?.canManagePublic ? button('world-visibility',selected.visibility==='public'?'关闭公开观战':'开启公开观战','eye','',`data-id="${e(selected.id)}" data-public="${selected.visibility!=='public'}"`) : '')
+    + (selected ? `<div class="live-layout"><section class="panel live-main"><div class="live-screen ${selected.managed ? 'native-screen' : ''}" data-world-screen data-channel="${e(selected.id)}">${selected.managed ? '' : `<img data-live-image data-channel="${selected.id}" alt="${e(selected.playerName)} 的游戏画面" hidden>`}<div class="live-placeholder" data-live-placeholder>${icons.eye}<h2>${selected.online === false ? '这段冒险，稍后继续。' : '女神之眼正在准备…'}</h2><p data-world-reason>${selected.online === false ? '角色离线，在线后即可继续观看。' : '正在加载真实场景，请稍候。'}</p></div></div><div class="live-caption"><div><h2>${e(selected.playerName)}</h2><p>${selected.visibility === 'public' ? '公开场景' : '本人观战'} · ${selected.managed ? '无账号观战 · 可切换视角' : '游戏画面'}</p></div><span class="status unknown" data-live-state>等待场景</span></div><div class="panel-footer">${icons.eye}${selected.managed ? '由服务端提供真实场景，不登录额外角色。可查看背包、装备和游戏对话，登录凭据不会展示；可在画面工具栏切换视角和调整镜头。' : '只读游戏画面，不显示网页私聊和工具反馈。'}</div></section><aside class="live-channels" data-world-channels>${worldChannelButtons(selected.id)}</aside></div>${liveDialogue()}` : `<section class="panel">${empty('女神之眼', owner() ? '绑定角色后可直接观看自己的冒险。公开观战角色也会出现在这里。' : '登录可观看本人角色；已开放的公开场景无需登录。', owner() ? button('route', '查看我的角色', 'users', 'primary', 'data-view="agents"') : button('login', '登录观看自己的角色', 'users', 'primary'), 'eye')}</section>`);
+}
+function liveDialogue() {
+  return `<section class="panel gap-top live-dialogue" data-live-dialogue><div class="panel-header"><h2>${icons.users}世界对话</h2><a href="#events" class="text-link">查看完整足迹 ${icons.arrow}</a></div><div class="live-dialogue-list">${eventRows(state.liveMessages)}</div><p class="tiny content-pad">来自游戏公屏，约每 15 秒更新。点击角色名可回看他的经历。</p></section>`;
+}
+function updateLiveDialogue() {
+  const old = document.querySelector('[data-live-dialogue]');
+  if (!old) return;
+  const revision = state.liveMessages.map(row => row.id).join(',');
+  if (old.dataset.revision === revision) return;
+  const updated = document.createElement('template'); updated.innerHTML = liveDialogue();
+  updated.content.firstElementChild.dataset.revision = revision;
+  old.replaceWith(updated.content.firstElementChild);
 }
 function worldChannelButtons(selectedId) {
   return state.channels.map(channel => `<button class="channel-card ${channel.id === selectedId ? 'selected' : ''}" data-action="watch-channel" data-id="${e(channel.id)}">${avatar(channel.playerName)}<span><strong>${e(channel.playerName)}</strong><small>${channel.isOwn ? '我的角色' : channel.visibility === 'public' ? '公开冒险' : '女神之眼'}</small></span><span class="tag ${channel.available ? 'live-tag' : ''}">${channel.available ? '观战中' : channel.online === false ? '离线' : '可观战'}</span></button>`).join('');
@@ -255,6 +284,17 @@ async function pollWorldView(selected) {
     if (revision !== authRevision || state.view !== 'live' || screen !== document.querySelector('[data-world-screen]')) return;
     preloadWorldAssets(result.preload); worldPreparing = !result.available;
     if (!result.available) { removeWorldFrame(); document.querySelector('[data-live-placeholder]').hidden = false; document.querySelector('[data-world-reason]').textContent = result.message || '正在加载真实场景，请稍候。'; label.className = 'status unknown'; label.textContent = '场景准备中'; return; }
+    const existing=screen.querySelector('[data-world-frame]');
+    if(existing)try {
+      // A first-page HTTP 503 contains no renderer/EventSource to reconnect.
+      // Retry only after this fresh authorized watch receipt, never blindly
+      // reload a running renderer or a forbidden page.
+      const doc=existing.contentDocument,text=doc?.body?.textContent?.trim()||'';
+      if(!doc?.querySelector('meta[name="native-viewer-build"]')&&text.startsWith('{')&&text.length<1024) {
+        const failure=JSON.parse(text);
+        if(failure.available===false&&['SPECTATOR_SOURCE_OFFLINE','SPECTATOR_SOURCE_TIMEOUT','SPECTATOR_SOURCE_RESOURCE_UNAVAILABLE'].includes(failure.reason))removeWorldFrame();
+      }
+    }catch{}
     if (!screen.querySelector('[data-world-frame]')) {
       const frame = document.createElement('iframe'); frame.dataset.worldFrame = ''; frame.dataset.channel = id;
       frame.title = selected.playerName + ' 的现代化观战画面'; frame.src = worldViewModes.get(id) || `/watch/${id}/third/`;
@@ -274,7 +314,7 @@ async function loadEvents(page = state.eventPage, kind = state.eventKind) {
   const revision = ++eventRevision;
   state.eventPage = page; state.eventKind = kind;
   try {
-    const data = await api(`/world/events?page=${page}&kind=${encodeURIComponent(kind)}`);
+    const data = await api(`/world/events?page=${page}&kind=${encodeURIComponent(kind)}&player=${encodeURIComponent(state.eventPlayer)}&day=${encodeURIComponent(state.eventDay)}`);
     if (revision !== eventRevision) return;
     state.events = data.events; state.eventPage = data.page; state.eventPages = data.pages; state.eventError = false;
   } catch { if (revision === eventRevision) { state.events = []; state.eventError = true; } }
@@ -320,13 +360,14 @@ function rosterCards(agents = [...state.roster, ...state.authorized.filter(row =
   for (const agent of filtered) {
     const full = state.authorized.find(row => row.id === agent.id);
     const historical = !!(full?.historical || agent.historical);
-    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
+    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2><a href="#events?player=${encodeURIComponent(agent.name)}">${e(agent.name)}</a></h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
     (historical ? history : current).push(card);
   }
   return (current.length ? current.join('') : empty('没有找到匹配的当前角色', history.length ? '旧身体的保存资料在下方历史角色档案中。' : '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users')) + historicalRoles(history);
 }
 function agentsPage() {
   return heading('每个角色，都有自己的身份。', '注册 Agent，或绑定你的已有角色。', button('new-game-agent', '注册新 Agent', 'plus', 'primary') + button('binding', isAdmin() ? '绑定已核验角色' : '绑定已有角色', 'link'))
+    + (state.roster.some(agent=>agent.experiencePool) ? notice('体验池中的 Agent 可先玩后认领。注册／登录网站后点击“认领体验角色”，按提示让本人已登录的游戏角色执行 /portal bind；仅知道名字不能认领。', 'muted') + button('claim-trial', '认领体验角色', 'link') : '')
     + (owner() ? notice(state.gameCapabilities?.ready ? '游戏账号桥在线。新建角色使用独立游戏密码，绑定已有角色保留原 UUID。' : e(state.gameCapabilities?.message || '网站账号已可注册和登录；游戏账号功能等待接通认证桥。'), 'muted') : '')
     + `<div class="toolbar"><div class="filters" aria-label="筛选角色">${[['all', '全部'], ...(owner() ? [['authorized', '我的角色']] : []), ['online', '在线'], ['agent', 'Agent'], ['player', '玩家'], ['observer', '观战']].map(([value, text]) => `<button class="filter ${state.filter === value ? 'active' : ''}" data-action="filter" data-filter="${value}">${text}</button>`).join('')}</div><label class="search-input">${icons.search}<input id="roster-search" type="search" autocomplete="off" placeholder="搜索角色名称${isAdmin() ? '或 UUID' : ''}" value="${e(state.query)}" aria-label="搜索角色"></label></div>
     <div id="roster-grid" class="roster-grid">${rosterCards()}</div>${owner() && state.accountJobs.length ? `<section class="panel gap-top"><div class="panel-header"><h2>我的游戏账号请求</h2></div><div class="account-job-list">${state.accountJobs.map(job => `<button class="account-job-row" data-action="open-account-job" data-id="${e(job.id)}"><strong>${e(job.username)}</strong><span>${({create:'注册',claim:'绑定',password:'改密'})[job.operation] || '请求'} · ${({succeeded:'已完成',failed:'未完成',pending:'等待处理',unknown:'待确认',waiting:'等待游戏内确认'})[job.state] || '处理中'}</span>${icons.chevron}</button>`).join('')}</div></section>` : ''}<div class="gap-top">${notice('网站账号与游戏角色分别管理。角色的原 UUID、背包和成长记录保持原样。', 'muted')}</div>`;
@@ -336,7 +377,7 @@ function lockedPage(title, description) {
 }
 function inventoryPage() {
   if (!owner()) return lockedPage('背包与进度', '冒险里的每一份收获，都有记录。');
-  const card = agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2>${e(agent.name)}</h2><p>${kindNames[agent.kind]} · ${agent.historical ? "历史身体（只读） · " + e(agent.playerUuid.slice(0,8)) : "已授权"}</p></div>${agent.historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`;
+  const card = agent => `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2><a href="#events?player=${encodeURIComponent(agent.name)}">${e(agent.name)}</a></h2><p>${kindNames[agent.kind]} · ${agent.historical ? "历史身体（只读） · " + e(agent.playerUuid.slice(0,8)) : "已授权"}</p></div>${agent.historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div>${button('inventory-detail', '打开背包与进度', 'box', '', `data-id="${agent.id}"`)}</article>`;
   const current = state.authorized.filter(agent => !agent.historical);
   const history = state.authorized.filter(agent => agent.historical).map(card);
   return heading('你的冒险档案。', '选择一个已授权角色，查看保存的背包、统计与成长记录。', routeButton('agents', '全部角色', 'users'))
@@ -350,16 +391,16 @@ function clientChoices() {
 }
 function skillDownload() {
   const release = state.site?.agentSkill;
-  return release ? `<div class="content-pad"><a class="btn primary" href="${e(release.url)}" download>${icons.download}下载 Agent Skill ${e(release.version)}</a><p class="tiny gap-top">MC 核心 ${e(release.sdkVersion)} · 本地 stdio MCP · 寻路、背包、交互与工作例程。模型、规划、长期记忆和人设由你自己的 Agent 管理，无需向网站提供模型 Key。</p><details class="gap-top"><summary>安装与接入</summary><ol><li>下载并解压；有接入链接读 references/invite.md，已有角色读 references/connect.md。</li><li>游戏地址：<code>${e(state.site?.gameAddress)}</code>；网站绑定自己的 ag_ 角色。</li><li>包内导入脚本生成本地 MCP 私有配置，并保留原密码；等待登录授权与世界就绪后开始任务。</li><li>可选：在连接中心为自己的角色创建只读凭据，放入 QD_PORTAL_CLIENT_TOKEN；它不能替代游戏密码。</li></ol><p class="tiny key-wrap">SHA256：<code>${e(release.sha256)}</code></p></details>${clientChoices()}</div>` : '';
+  return release ? `<div class="content-pad"><a class="btn primary" href="${e(release.url)}" download>${icons.download}下载 Agent Skill ${e(release.version)}</a><p class="tiny gap-top">MC 核心 ${e(release.sdkVersion)} · 本地 stdio MCP · 寻路、背包、交互与工作例程。模型、规划、长期记忆和人设由你自己的 Agent 管理，无需向网站提供模型 Key。</p><details class="gap-top"><summary>安装与接入</summary><ol><li>在网站注册／登录后生成接入链接，交给自己的 Agent。</li><li>下载完整 Skill，把链接保存到本机私有文件，运行 <code>node scripts/setup.mjs join --username ag_MyAgent --invite-url-file 私有文件路径</code>；将输出的 mcp.json 加入自己的宿主。</li><li>连接 <code>${e(state.site?.gameAddress)}</code>，等游戏认证和世界就绪，用 /mycli status 查看下一步。已有角色读 references/connect.md，保留原密码和身体。</li></ol><p class="tiny">查询网站保存资料是可选能力；只读 Token 不能替代游戏密码。详细说明：<a href="/join">接入页</a>。</p><p class="tiny key-wrap">SHA256：<code>${e(release.sha256)}</code></p></details>${clientChoices()}</div>` : '';
 }
 function connectionsPage() {
   if (!owner()) return lockedPage('连接中心', '一个角色，一个身体，安全连接你的 Agent。') + '<section class="panel"><div class="panel-header"><h2>Mineflayer Agent 接入</h2></div>' + skillDownload() + '</section>';
   const tokens = state.credentials;
-  return heading('连接你的 Agent。', '注册并绑定角色，再为可信的 Agent 程序授予访问权限。', button('new-token', '创建客户端凭据', 'plus', 'primary'))
+  return heading('带上你的 Agent。', '生成接入链接交给 Agent；已有角色可在角色页绑定。', button('new-agent-invite', '邀请自己的 Agent', 'plus', 'primary'))
     + '<section class="panel"><div class="panel-header"><h2>Mineflayer Agent 接入</h2></div>' + skillDownload() + '</section>'
     + agentInvitesPanel()
-    + `<div class="grid-two"><section class="panel"><div class="panel-header"><h2>${icons.plug}连接配置</h2><span class="tag">角色只读接口</span></div><div class="content-pad"><p class="section-subtitle">选择角色，下载不含秘密的门户连接信息。配置本身不授予访问权限。</p><div class="form-grid"><label class="field">已授权角色<select id="connection-agent">${state.authorized.filter(agent=>!agent.historical).map(agent => `<option value="${agent.id}">${e(agent.name)}</option>`).join('') || '<option value="">暂无可访问角色</option>'}</select></label>${button('download-config', '下载连接配置', 'download')}</div><h3 class="section-title">由本人完成客户端配置</h3><p class="section-subtitle">将凭据配置到可信 Agent 程序的私有环境变量，不要粘贴进聊天、提示词或公开链接。密码与 token 不进入 LLM 上下文。</p><p class="tiny">当前为角色只读接口；OAuth 与自动凭据托管留待后续接入。只读门户 API 不需要游戏密码。</p></div></section><section class="panel"><div class="panel-header"><h2>${icons.shield}可用连接能力</h2></div><div class="content-pad feature-list">${feature('角色状态与存档背包', '读取已授权角色的真实保存记录。', '已可用', 'check')}${feature('客户端授权与撤销', '由本人管理，限定角色、权限和有效期。', '已可用', 'check')}${feature('实时画面与网页接管', '等待原客户端的状态桥及暂停、释放回执。', '待接入', 'eye', true)}${feature('创建角色与游戏改密', state.gameCapabilities?.ready ? '注册 ag_ 角色、验证游戏内归属，或修改本人的游戏密码。' : '等待现役游戏认证桥上线；已验证请求不会自动重复提交。', state.gameCapabilities?.ready ? '已连接' : '待上线', 'key', !state.gameCapabilities?.ready)}</div></section></div>
-    <section class="panel"><div class="panel-header"><div><h2>${icons.key}客户端凭据</h2><p>撤销后，该凭据立即失去读取权限</p></div><span class="tiny">仅显示名称与有效期</span></div><div class="content-pad">${tokens.length ? tokens.map(token => `<div class="token-row"><div class="avatar">${icons.plug}</div><div><strong>${e(token.label)}</strong><small>${token.scopes.includes('inventory.read') ? '状态与背包读取' : '状态读取'} · 有效至 ${date(token.expiresAt)}${token.revoked ? ' · 已撤销' : new Date(token.expiresAt) < new Date() ? ' · 已过期' : ''}</small></div>${token.revoked ? '<span class="tag">已撤销</span>' : button('revoke-token', '撤销', '', 'small danger', `data-id="${e(token.id)}"`)}</div>`).join('') : empty('还没有客户端凭据', '需要从可信本地程序读取角色状态时，由你在这里创建授权。', '', 'key')}</div></section>`;
+    + `<div class="grid-two"><section class="panel"><div class="panel-header"><h2>${icons.plug}连接配置</h2><span class="tag">单角色授权接口</span></div><div class="content-pad"><p class="section-subtitle">选择角色，下载不含秘密的门户连接信息。配置本身不授予访问权限。</p><div class="form-grid"><label class="field">已授权角色<select id="connection-agent">${state.authorized.filter(agent=>!agent.historical).map(agent => `<option value="${agent.id}">${e(agent.name)}</option>`).join('') || '<option value="">暂无可访问角色</option>'}</select></label>${button('download-config', '下载连接配置', 'download')}</div><h3 class="section-title">由本人完成客户端配置</h3><p class="section-subtitle">将凭据配置到可信 Agent 程序的私有环境变量，不要粘贴进聊天、提示词或公开链接。密码与 token 不进入 LLM 上下文。</p><p class="tiny">当前为单角色授权接口；OAuth 与自动凭据托管留待后续接入。只读门户 API 不需要游戏密码。</p></div></section><section class="panel"><div class="panel-header"><h2>${icons.shield}可用连接能力</h2></div><div class="content-pad feature-list">${feature('角色状态与存档背包', '读取已授权角色的真实保存记录。', '已可用', 'check')}${feature('客户端授权与撤销', '由本人管理，限定角色、权限和有效期。', '已可用', 'check')}${feature('实时画面与网页接管', '等待原客户端的状态桥及暂停、释放回执。', '待接入', 'eye', true)}${feature('创建角色与游戏改密', state.gameCapabilities?.ready ? '注册 ag_ 角色、验证游戏内归属，或修改本人的游戏密码。' : '游戏建号服务暂不可用；稍后可用原身份接续。', state.gameCapabilities?.ready ? '已连接' : '暂不可用', 'key', !state.gameCapabilities?.ready)}</div></section></div>
+    <section class="panel"><div class="panel-header"><div><h2>${icons.key}客户端凭据</h2><p>撤销后，该凭据立即失去读取权限</p></div>${button('new-token', '创建客户端凭据', 'key', 'small')}</div><div class="content-pad">${tokens.length ? tokens.map(token => `<div class="token-row"><div class="avatar">${icons.plug}</div><div><strong>${e(token.label)}</strong><small>${token.scopes.includes('inventory.read') ? '状态与背包读取' : '状态读取'}${token.scopes.includes('appearance.write') ? ' · 本人外观管理' : ''} · 有效至 ${date(token.expiresAt)}${token.revoked ? ' · 已撤销' : new Date(token.expiresAt) < new Date() ? ' · 已过期' : ''}</small></div>${token.revoked ? '<span class="tag">已撤销</span>' : button('revoke-token', '撤销', '', 'small danger', `data-id="${e(token.id)}"`)}</div>`).join('') : empty('还没有客户端凭据', '需要从可信本地程序读取角色状态时，由你在这里创建授权。', '', 'key')}</div></section>`;
 }
 function feature(title, text, badge, icon, pending = false) {
   return `<div class="feature-row ${pending ? 'pending' : ''}">${icons[icon]}<div><strong>${title}</strong><p>${text}</p></div><span class="tag">${badge}</span></div>`;
@@ -380,7 +421,7 @@ function accountPage() {
     <section class="panel"><div class="panel-header"><h2>${icons.clock}最近操作</h2><span class="tiny">${isAdmin() ? '网站审计记录' : '你的安全记录'}</span></div><div class="content-pad audit-list">${account?.events?.length ? account.events.slice(0, 8).map(event => `<div class="audit-row"><i class="dot"></i><span>${auditNames[event.action] || e(event.action)}</span><time>${date(event.observedAt)}</time></div>`).join('') : '<p class="tiny">暂无操作记录</p>'}</div></section></div>`;
 }
 function helpPage() {
-  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "候选待上线，现有网站账号可继续使用"}。</p><h2>直播间</h2><p>女神之眼直接观察现有角色，不占额外游戏名额，也不要求填写直播地址。默认选择本人角色，支持第一人称、第三人称和自由观察。公开场景不含私聊与完整背包，私人角色按原 UUID 和网站归属授权。断线或切换会清空旧场景。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。动态收录进退服、原版成就、公会已完成委托和网站公告，不采集聊天内容。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
+  return heading("从这里，开始冒险。", "注册、绑定、观看；手机也能方便使用。") + '<section class="panel">' + skillDownload() + '</section>' + `<article class="panel help-doc"><div class="content-pad"><h2>第一次使用</h2><p>注册并登录网站账号，在角色账号中注册新的 ag_ 角色，或绑定已有角色。正版 Java 和基岩玩家仍可沿用原游戏入口。</p><h2>邮箱与网站账号</h2><p>用户名和6–128位密码即可注册，邮箱可选。填写邮箱时先完成验证码验证，也可以之后在账号与权限中补绑；已验证邮箱可用于登录和找回密码。找回密码会退出其他网站会话并撤销网站客户端凭据。</p><h2>网站与游戏密码</h2><p>两种密码分别管理。新角色设置独立游戏密码，离线客户端用 /login 登录；已有角色在游戏内执行网站给出的 /portal bind 命令证明归属。无密码与弱默认密码不作为归属证明。</p><p>游戏账号桥状态：${state.gameCapabilities?.ready ? "已连接" : "暂不可用，稍后可用原身份接续"}。</p><h2>直播间</h2><p>女神之眼直接观察现有角色，不占额外游戏名额，也不要求填写直播地址。默认选择本人角色，支持第一人称、第三人称和自由观察。公开角色可查看游戏画面、背包、装备和公屏对话；登录凭据不展示。主人可以关闭实时观战。断线或切换会清空旧场景。</p><h2>等级与世界动态</h2><p>经验等级、冒险认证与公会声望分别显示；认证以实际考试记录为准。世界足迹收录游戏公屏对话、进退服、原版成就、公会已完成委托和网站公告。可以按角色和日期回看，进入角色照片和公共日记；认证命令与凭据不进入公开记录。</p><h2>照片与公共档案馆</h2><p>女神相机的已公开作品会存入网站，可按作者分页查看；撤展关闭公开访问，原片仍保留。档案馆读取服务器实际保存的公开日记和公告，缺少游戏端档案库时会明确显示尚未接通。</p><h2>哪些信息是实时的？</h2><p>在线状态来自服务器列表与新鲜认证心跳；成长、背包和坐标是最近保存记录，显示各自保存时间。未知不是零，照片不是直播。</p><h2>游戏接入</h2><p>游戏地址：<code>${e(state.site?.gameAddress || "micro.kangqiang.site:25702")}</code>。游戏内用 <code>/mycli help</code> 查看入门、任务和技能。手机网页可以看直播与管理账号；基岩版游戏仍通过原 Geyser 入口连接。</p><h2>客户端只读授权</h2><p>在连接中心创建本人角色的只读凭据，只供可信程序读取。凭据不会授予游戏控制权，不要发进聊天、分享链接或模型上下文。</p></div></article>`;
 }
 
 async function loadPrivate() {
@@ -403,7 +444,7 @@ async function loadPrivate() {
 }
 async function refresh(manual = false) {
   const revision = authRevision;
-  const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api('/gallery')]);
+  const results = await Promise.allSettled([api('/session'), api('/server'), api('/roster'), api('/world/players'), api('/live'), api('/site'), loadEvents(), api('/game-capabilities'), api(`/gallery?page=${state.photoPage}&author=${encodeURIComponent(state.photoAuthor)}`), state.view==='live'?api('/world/events?kind=chat&limit=8'):Promise.resolve(null)]);
   if (revision !== authRevision) return;
   state.error = null;
   if (results[0].status === 'fulfilled') {
@@ -421,6 +462,9 @@ async function refresh(manual = false) {
   state.site = results[5].status === 'fulfilled' ? results[5].value : null;
   state.gameCapabilities = results[7].status === 'fulfilled' ? results[7].value : null;
   state.photos = results[8].status === 'fulfilled' ? results[8].value.photos : [];
+  state.photoPages=results[8].status==='fulfilled'?(results[8].value.pages||1):1;
+  if(results[9].status==='fulfilled'&&results[9].value)state.liveMessages=results[9].value.events;
+  if(state.view==='archives')await loadArchives();
   await loadPrivate();
   await window.QdMemories?.load();
   if(state.view==='challenges')await window.QdChallenges?.load(false);
@@ -438,6 +482,7 @@ async function refresh(manual = false) {
       const channels = document.querySelector('[data-world-channels]'); if (channels) channels.innerHTML = worldChannelButtons(state.selectedChannel);
       const badge = document.querySelector('.online-badge'); if (badge) badge.innerHTML = `<i class="dot ${state.summary?.online ? '' : 'unknown'}"></i>${state.summary?.online ? '服务器运行中' : '状态暂未确认'}`;
       const oldFooter = document.querySelector('.footer'); if (oldFooter) oldFooter.outerHTML = footer();
+      updateLiveDialogue();
     } else render();
   }
   if (!owner() && detail.open) { detail.close(); state.detail = null; }
@@ -448,6 +493,22 @@ function openModal(title, subtitle, body, bottom = '') {
   modal.innerHTML = `<div class="modal-header"><div><h2 id="modal-title">${title}</h2><p>${subtitle}</p></div><button class="close" data-action="close-modal" aria-label="关闭">${icons.close}</button></div><div class="modal-body">${body}</div>${bottom ? `<div class="modal-footer">${bottom}</div>` : ''}`;
   if (!modal.open) modal.showModal();
 }
+let inviteIssuing = false;
+function inviteResultModal(result) {
+openModal('把接入链接交给你的 Agent', '链接含单次邀请，关闭后不能重新查看；只发给你信任的 Agent', `<p>${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。新角色属于你；不能认领已有角色，保留原有 Eye。</p><div class="form-actions gap-top">${button('copy-invite-link', '复制接入链接', 'link', 'primary')}${button('copy-invite-prompt', '复制完整提示词', 'book')}</div><details class="gap-top"><summary>查看接入链接与提示词</summary><div id="created-invite-link" class="key-secret">${e(result.onboarding.link)}</div><pre id="created-invite-prompt" class="code">${e(result.onboarding.prompt)}</pre></details><details class="gap-top"><summary>只复制邀请码</summary><div id="created-token" class="key-secret">${e(result.token)}</div>${button('copy-token', '复制邀请码', 'key', 'small')}</details><p class="tiny gap-top">网页含 Skill 下载和实际接入状态；没有运行 JavaScript 的 Agent 也能按说明接入。API 注册和游戏入服分别确认。</p><div class="form-actions">${button('close-modal', '已保存')}</div>`);
+}
+async function quickInvite() {
+  if(inviteIssuing)return;
+  inviteIssuing=true;
+  try{const result=await api('/agent-invites',{method:'POST',body:'{}'});await loadPrivate();inviteResultModal(result);}
+  finally{inviteIssuing=false;}
+}
+function joinWelcomeModal() {
+  openModal('账号已准备好，开始你的冒险。','选择接入方式',`<p>把接入链接交给自己的 Agent，它会自动准备身份与游戏连接。你的网站密码不需要交给 Agent。</p><div class="form-actions">${button('quick-agent-invite','生成 Agent 接入链接','plus','primary')}<a class="btn" href="/join#players">真人玩家进服</a>${button('close-modal','稍后再说','','ghost')}</div>`);
+}
+function inviteSetupModal() {
+  openModal('邀请自己的 Agent','一次邀请建立一个新角色，自动属于你的网站账号',`<form id="agent-invite-form" class="form-grid"><label class="field">角色名（可选）<input name="username" maxlength="16" pattern="ag_[A-Za-z0-9_]{1,13}" placeholder="留空，让 Agent 自选名字" autocomplete="off" autocapitalize="none"></label><details><summary>有效期与备注</summary><label class="field">备注<input name="label" maxlength="60" value="我的冒险伙伴"></label><label class="field">有效小时数<input name="expiresInHours" type="number" min="1" max="168" value="24"></label></details><div class="form-error" role="alert"></div><button class="btn primary" type="submit">生成接入链接</button></form>`);
+}
 function authModal(mode = 'login') {
   const setup = mode === 'setup'; const register = mode === 'register' || setup;
   const registrationMode = state.session?.emailAuth?.mode;
@@ -456,7 +517,7 @@ function authModal(mode = 'login') {
   const emailAvailable = !!state.session?.emailAuth?.available;
   if (emailRequired && !emailAvailable) return openModal('邮箱注册准备中。', '已有网站账号可以继续登录', notice(e(state.session?.emailAuth?.unavailableReason || '发信服务配置完成后开放邮箱验证注册。'), 'muted'), '<button data-action="login">返回登录</button>');
   openModal(setup ? '点亮你的账号门户。' : register ? '创建网站账号。' : '欢迎回到千灯纪。', setup ? '首次初始化 · 仅在服务器本机开放' : '网站账号和游戏账号分开管理',
-    `<form id="auth-form" data-mode="${mode}" class="form-grid"><label class="field">${register ? '网站用户名' : '网站用户名或已验证邮箱'}<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="${register ? 24 : 254}" placeholder="${register ? '3–24 个文字或字母数字' : '用户名 / 已验证的邮箱'}"></label>${emailMode ? `<label class="field">${emailRequired ? '邮箱' : '邮箱（可选）'}<input name="email" type="email" autocomplete="email" autocapitalize="none" ${emailRequired ? 'required' : ''} ${emailAvailable ? '' : 'disabled'} maxlength="254" placeholder="${emailRequired ? '用于验证身份与找回密码' : '留空即可直接注册'}"><small>${emailRequired ? '先验证邮箱，再创建网站账号。' : emailAvailable ? '不填邮箱可直接注册；填写后需验证，可用来找回密码。' : '用户名和密码即可注册；邮箱验证暂不可用，之后可在账号页补绑。'}</small></label>` : ''}<label class="field">网站密码<input name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" required minlength="${register ? 6 : 1}" maxlength="128" placeholder="${register ? '至少 6 个字符' : '输入网站密码'}"></label>${register ? '<label class="field">再次输入网站密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}${setup ? notice('这个账号将管理门户内的访问权限，游戏 OP、角色数据和游戏密码仍沿用原设置。', 'muted') : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">${setup ? '创建网站管理员' : emailRequired ? '发送邮箱验证码' : emailMode ? '继续注册' : register ? '注册并登录' : '登录网站'}</button>${!register ? button('forgot-password', '忘记密码', '', 'ghost') : ''}</div></form>`,
+    `<form id="auth-form" data-mode="${mode}" class="form-grid"><label class="field">${register ? '网站用户名' : '网站用户名或已验证邮箱'}<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="${register ? 24 : 254}" placeholder="${register ? '3–24 个文字或字母数字' : '用户名 / 已验证的邮箱'}"></label>${emailMode ? `${emailRequired ? "" : "<details><summary>添加邮箱（可选，可稍后绑定）</summary>"}<label class="field">${emailRequired ? '邮箱' : '邮箱（可选）'}<input name="email" type="email" autocomplete="email" autocapitalize="none" ${emailRequired ? 'required' : ''} ${emailAvailable ? '' : 'disabled'} maxlength="254" placeholder="${emailRequired ? '用于验证身份与找回密码' : '留空即可直接注册'}"><small>${emailRequired ? '先验证邮箱，再创建网站账号。' : emailAvailable ? '不填邮箱可直接注册；填写后需验证，可用来找回密码。' : '用户名和密码即可注册；邮箱验证暂不可用，之后可在账号页补绑。'}</small></label>${emailRequired ? "" : "</details>"}` : ''}<label class="field">网站密码<input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" required minlength="${register ? 6 : 1}" maxlength="128" placeholder="${register ? '至少 6 个字符' : '输入网站密码'}"></label>${setup ? '<label class="field">再次输入网站密码<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="6" maxlength="128"></label>' : ''}<button type="button" class="btn ghost" data-action="toggle-auth-password" aria-controls="auth-password">显示密码</button>${setup ? notice('这个账号将管理门户内的访问权限，游戏 OP、角色数据和游戏密码仍沿用原设置。', 'muted') : ''}<div class="form-error" role="alert"></div><div class="form-actions"><button type="submit" class="btn primary">${setup ? '创建网站管理员' : emailRequired ? '发送邮箱验证码' : register ? '注册并登录' : '登录网站'}</button>${!register ? button('forgot-password', '忘记密码', '', 'ghost') : ''}</div></form>`,
     setup ? '用户名和密码只保存到独立门户数据库。' : register ? '已有网站账号？ <button data-action="login">去登录</button>' : `还没有网站账号？ <button data-action="${state.session?.canSetup ? 'setup' : 'register'}">${state.session?.canSetup ? '设置管理员' : '注册账号'}</button>`);
 }
 
@@ -528,13 +589,13 @@ function bindingModal() {
 }
 function gameAccountModal(operation = 'create', selectedName = '') {
   if (!owner()) return authModal(state.session?.canSetup ? 'setup' : 'login');
-  if (!state.gameCapabilities?.ready) return openModal('游戏账号功能准备中', '现有网站账号可继续登录', notice(e(state.gameCapabilities?.message || '游戏账号桥尚未上线；接通后可在这里注册角色、游戏内绑定和修改游戏密码。')));
+  if (!state.gameCapabilities?.ready) return openModal('游戏账号功能准备中', '现有网站账号可继续登录', notice(e(state.gameCapabilities?.message || '游戏账号服务暂不可用，请稍后重试；保留原身份，不要重复建号。')));
   const create = operation === 'create', password = operation === 'password';
   const candidates = state.roster.filter(agent => agent.available && agent.claimable && !['observer', 'admin'].includes(agent.kind));
   const owned = state.authorized.filter(agent => agent.isOwn && !agent.isReserved && !agent.historical);
   const names = password ? owned : candidates;
   openModal(create ? '注册一个新的 Agent 角色' : password ? '修改游戏密码' : '绑定已有游戏角色', create ? '新角色默认普通权限，沿用服务器登录系统' : '网站账号与游戏角色分别管理',
-    notice(state.gameCapabilities?.ready ? '游戏账号桥在线。操作结果请以服务器回执为准。' : '账号桥候选尚未上线，目前提交会被明确拒绝，不会悄悄修改游戏账号。', 'muted')
+    notice(state.gameCapabilities?.ready ? '游戏账号桥在线。操作结果请以服务器回执为准。' : '游戏账号服务暂不可用，当前不会提交；请稍后用原身份接续。', 'muted')
     + `<form id="game-account-form" data-operation="${operation}" data-request="${newRequestId()}" class="form-grid gap-top"><label class="field">游戏角色名${create ? '<input name="username" value="ag_" required pattern="[Aa][Gg]_[A-Za-z0-9_]{1,13}" maxlength="16" autocapitalize="none" spellcheck="false" autocomplete="off">' : `<select name="username" required>${names.map(agent => `<option value="${e(agent.name)}" ${agent.name === selectedName ? 'selected' : ''}>${e(agent.name)}</option>`).join('')}</select>`}</label>${password ? '<label class="field">当前游戏密码<input name="currentGamePassword" type="password" autocomplete="current-password" required maxlength="128"></label>' : ''}${operation !== 'claim' ? '<label class="field">新游戏密码<input name="gamePassword" type="password" autocomplete="new-password" required minlength="6" maxlength="64"><small>6–64 位，不含空格；和网站密码分别管理。</small></label><label class="field">再输入一次游戏密码<input name="confirmGamePassword" type="password" autocomplete="new-password" required minlength="6" maxlength="64"></label>' : '<p class="tiny">会生成一条短期绑定命令，需要用已登录的原角色在游戏内执行。只知道名字不能认领角色。</p>'}<div class="form-error" role="alert"></div><button class="btn primary" type="submit">${create ? '注册游戏角色' : password ? '保存新游戏密码' : '生成游戏内绑定命令'}</button></form>`);
 }
 function accountJobModal(job) {
@@ -568,7 +629,7 @@ async function checkReferenceFile(file) {
 function tokenModal() {
   if (!owner()) return authModal('login');
   if (!state.authorized.length) return toast('请先绑定一个可访问角色', true);
-  openModal('创建客户端只读凭据。', '保存到可信程序的私有配置，不进入模型对话', `<form id="token-form" class="form-grid"><label class="field">客户端名称<input name="label" required maxlength="60" placeholder="例如：本地角色查看器"></label><label class="field">授权角色<select name="agentId">${state.authorized.filter(a => a.playerUuid).map(row => `<option value="${row.id}">${e(row.name)}</option>`).join('')}</select></label><label class="field">有效期<select name="expiresInDays"><option value="7">7 天</option><option value="30" selected>30 天</option><option value="90">90 天</option></select></label><label class="checkbox"><input name="inventory" type="checkbox"><span>同时允许读取保存的背包。状态读取默认包含等级、统计与保存时坐标。</span></label><label class="checkbox"><input name="profile" type="checkbox"><span>允许读取此角色的文字设定与参考图片，用于后续本人发起的创作。</span></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">创建只读凭据</button></div></form>`);
+  openModal('创建客户端凭据。', '保存到可信程序的私有配置，不进入模型对话', `<form id="token-form" class="form-grid"><label class="field">客户端名称<input name="label" required maxlength="60" placeholder="例如：本地角色查看器"></label><label class="field">授权角色<select name="agentId">${state.authorized.filter(a => a.playerUuid).map(row => `<option value="${row.id}">${e(row.name)}</option>`).join('')}</select></label><label class="field">有效期<select name="expiresInDays"><option value="7">7 天</option><option value="30" selected>30 天</option><option value="90">90 天</option></select></label><label class="checkbox"><input name="inventory" type="checkbox"><span>同时允许读取保存的背包。状态读取默认包含等级、统计与保存时坐标。</span></label><label class="checkbox"><input name="profile" type="checkbox"><span>允许读取此角色的文字设定与参考图片，用于后续本人发起的创作。</span></label><label class="checkbox"><input name="appearance" type="checkbox"><span>允许客户端上传、应用本人 Agent 的皮肤和 YSM；默认不授予，不能操作其他角色。</span></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">创建客户端凭据</button></div></form>`);
 }
 function reauthModal() {
   openModal('重新验证网站身份。', '敏感操作需要最近 10 分钟内的网站密码验证', '<form id="reauth-form" class="form-grid"><label class="field">当前网站密码<input name="password" type="password" required maxlength="128" autocomplete="current-password"></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">验证身份</button></div></form>');
@@ -581,6 +642,13 @@ async function downloadConfig(id) {
   link.download = `${data.username.replace(/[^A-Za-z0-9_.-]/g, '_')}-portal.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast('已下载不含秘密的连接配置');
 }
+
+document.addEventListener('submit',event=>{
+ if(event.target.id!=='trail-filter')return;
+ event.preventDefault();const form=new FormData(event.target),params=new URLSearchParams();
+ if(form.get('player'))params.set('player',form.get('player'));if(form.get('day'))params.set('day',form.get('day'));
+ location.hash='events'+(params.size?'?'+params:'');
+});
 
 document.addEventListener('click', async event => {
   const target = event.target.closest('[data-action]'); if (!target) return;
@@ -599,7 +667,17 @@ document.addEventListener('click', async event => {
     else if (action === 'growth-sort') { state.growthSort = target.dataset.sort; render(); }
     else if (action === 'event-filter') { await loadEvents(1, target.dataset.kind); render(); }
     else if (action === 'event-page') { await loadEvents(Number(target.dataset.page)); render(); }
+    else if(action==='photo-page'){state.photoPage=Number(target.dataset.page);await refresh();}
+    else if(action==='archive-page'){state.archivePage=Number(target.dataset.page);await loadArchives();render();}
+    else if(action==='archive-read'){const row=await api('/archives/'+target.dataset.id);openModal(e(row.title),e(row.author+' · '+date(row.createdAt,true)),`<div class="archive-body">${e(row.body)}</div>`);}
+    else if(action==='public-bag'){const row=await api('/world/players/'+target.dataset.id+'/bag');openModal(e(row.agent.name)+'的背包','服务器保存于 '+date(row.savedAt,true),inventoryContent(row));}
+    else if(action==='trail-watch'){const channel=state.channels.find(row=>row.playerName===target.dataset.name);if(channel){state.selectedChannel=channel.id;setView('live');}else toast('角色暂未开放观战或状态尚未同步',true);}
+
     else if (action === 'watch-channel') { state.selectedChannel = target.dataset.id; render(); await pollLiveFrame(); }
+    else if (action === 'world-visibility') {
+      const enabled=target.dataset.public==='true';
+      openModal(enabled?'公开这个角色的冒险？':'关闭公开观战？',enabled?'开启后，游客无需登录即可观看地形、人物外观和动作。':'关闭后，游客画面立即停止，仅本人和网站管理员可看。',`<form id="world-visibility-form" data-id="${e(target.dataset.id)}" data-public="${enabled}" class="form-grid"><p>游戏画面、背包、装备和对话对游客公开；登录凭据始终过滤。这里的开关只控制实时观战，已公开的世界足迹会保留。</p><div class="form-error" role="alert"></div><button class="btn primary" type="submit">${enabled?'开启公开观战':'关闭公开观战'}</button></form>`);
+    }
     else if (action === 'new-notice') {
       openModal('发布世界公告', '公告会出现在网站世界动态中', `<form id="notice-form" class="form-grid"><label class="field">标题<input name="title" required maxlength="100"></label><label class="field">正文<textarea name="body" required maxlength="2000" rows="6"></textarea></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">发布公告</button></form>`);
     } else if (action === 'new-channel') {
@@ -615,6 +693,7 @@ document.addEventListener('click', async event => {
     else if (action === 'detail-tab') { state.detailTab = target.dataset.tab; drawDetail(); }
     else if (action === 'retry-detail') await openDetail(state.detail.agent.id, state.detailTab);
     else if (action === 'logout') { authRevision++; setSession(await api('/session', { method: 'DELETE' })); await loadPrivate(); if (detail.open) detail.close(); render(); toast('已退出网站'); }
+    else if (action === 'claim-trial') { if (detail.open) detail.close(); gameAccountModal('claim'); }
     else if (action === 'binding') { if (detail.open) detail.close(); bindingModal(); }
     else if (action === 'new-game-agent') gameAccountModal('create');
     else if (action === 'agent-profile') await profileModal(target.dataset.id);
@@ -635,7 +714,9 @@ document.addEventListener('click', async event => {
       if (result.state === 'succeeded') { await loadPrivate(); await refresh(); }
     }
     else if (action === 'new-token') tokenModal();
-    else if (action === 'new-agent-invite') openModal('邀请自己的 Agent', '新角色将绑定到你的网站账号；邀请码一次性使用', '<form id="agent-invite-form" class="form-grid"><label class="field">用途名称<input name="label" required maxlength="60" placeholder="例如：我的探索伙伴"></label><label class="field">限定新角色名（可选）<input name="username" maxlength="16" pattern="ag_[A-Za-z0-9_]{1,13}" placeholder="ag_ 开头；留空由 Agent 选择" autocomplete="off" autocapitalize="none"></label><label class="field">有效小时数<input name="expiresInHours" type="number" min="1" max="168" value="24" required></label><div class="form-error" role="alert"></div><button class="btn primary" type="submit">生成一次性邀请码</button></form>');
+    else if (action === 'new-agent-invite') inviteSetupModal();
+    else if (action === 'quick-agent-invite') await quickInvite();
+    else if (action === 'toggle-auth-password') { const input=modal.querySelector('[name=password]'); input.type=input.type==='password'?'text':'password'; target.textContent=input.type==='password'?'显示密码':'隐藏密码'; }
     else if (action === 'revoke-agent-invite') openModal('撤销这份 Agent 接入？', '对应的 API 身份立即失效；已有游戏角色、物品和游戏密码保留', `<form id="revoke-agent-invite-form" data-id="${e(target.dataset.id)}" class="form-grid"><div class="form-error" role="alert"></div><button class="btn danger" type="submit">确认撤销 API 接入</button></form>`);
     else if (action === 'reauth') reauthModal();
     else if (action === 'claim-role') gameAccountModal('claim', target.dataset.name);
@@ -662,19 +743,19 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form'].includes(form.id)) return;
+  if (!['auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form', 'world-visibility-form'].includes(form.id)) return;
   event.preventDefault(); const values = Object.fromEntries(new FormData(form));
   const errorElement = form.querySelector('.form-error'); errorElement.textContent = '';
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
   try {
     if (form.id === 'auth-form') {
       const mode = form.dataset.mode;
-      if (mode !== 'login' && values.password !== values.confirmPassword) throw new Error('两次输入的网站密码不一致');
+      if (mode === 'setup' && values.password !== values.confirmPassword) throw new Error('两次输入的网站密码不一致');
       authRevision++;
       const result = await api(mode === 'setup' ? '/setup' : mode === 'register' ? '/accounts' : '/sessions', { method: 'POST', body: JSON.stringify({ username: values.username, password: values.password, ...(values.email ? { email: values.email } : {}) }) });
       if (result.verificationRequired) return emailCodeModal(result, 'register');
       setSession(result);
-      await loadPrivate(); modal.close(); render(); toast(mode === 'setup' ? '网站管理员已创建，可以查看角色资料了' : '已登录网站账号');
+      await loadPrivate(); modal.close(); render(); if(mode==='register')joinWelcomeModal();else toast(mode === 'setup' ? '网站管理员已创建，可以查看角色资料了' : '已登录网站账号');
     } else if (form.id === 'email-request-form') {
       const purpose = form.dataset.purpose;
       const result = await api(purpose === 'bind' ? '/account/email' : '/auth/password-reset', { method: 'POST', body: JSON.stringify(values) });
@@ -684,7 +765,7 @@ document.addEventListener('submit', async event => {
       const result = await api('/auth/email/verify', { method: 'POST', body: JSON.stringify({ challengeId: form.dataset.challenge, code: values.code, ...(values.newPassword ? { newPassword: values.newPassword } : {}) }) });
       setSession(result); await loadPrivate(); modal.close(); render();
       if (result.passwordReset) { authModal('login'); toast('网站密码已重设，请重新登录；其他会话与客户端凭据已撤销'); }
-      else toast('邮箱已验证，可以使用邮箱登录和找回密码');
+      else if(form.dataset.purpose==='register')joinWelcomeModal();else toast('邮箱已验证，可以使用邮箱登录和找回密码');
     } else if (form.id === 'password-form') {
       if (values.newPassword !== values.confirmPassword) throw new Error('两次输入的新密码不一致');
       authRevision++;
@@ -694,7 +775,7 @@ document.addEventListener('submit', async event => {
       await api('/admin/bindings', { method: 'POST', body: JSON.stringify({ ...values, confirmedOwnership: values.confirmedOwnership === 'on' }) });
       modal.close(); await loadPrivate(); render(); toast('已绑定原角色，游戏 UUID 和存档保持原样');
     } else if (form.id === 'token-form') {
-      const data = await api('/client-credentials', { method: 'POST', body: JSON.stringify({ label: values.label, agentId: values.agentId, expiresInDays: Number(values.expiresInDays), scopes: ['state.read', ...(values.inventory ? ['inventory.read'] : []), ...(values.profile ? ['profile.read'] : [])] }) });
+      const data = await api('/client-credentials', { method: 'POST', body: JSON.stringify({ label: values.label, agentId: values.agentId, expiresInDays: Number(values.expiresInDays), scopes: ['state.read', ...(values.inventory ? ['inventory.read'] : []), ...(values.profile ? ['profile.read'] : []), ...(values.appearance ? ['appearance.write'] : [])] }) });
       await loadPrivate();
       openModal('客户端凭据已创建。', '仅显示这一次，由你保存到可信本地客户端', `<div id="created-token" class="key-secret">${e(data.token)}</div><p class="tiny gap-top">有效至 ${date(data.expiresAt, true)}。关闭后无法再查看原凭据。不要粘贴到对话或放入模型上下文。</p><div class="form-actions gap-top">${button('copy-token', '复制凭据', 'key', 'primary')}${button('close-modal', '我已保存')}</div>`);
     } else if (form.id === 'reauth-form') {
@@ -730,7 +811,7 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'agent-invite-form') {
       const result = await api('/agent-invites', { method: 'POST', body: JSON.stringify({ ...values, expiresInHours: Number(values.expiresInHours) }) });
       await loadPrivate();
-      openModal('把接入链接交给你的 Agent', '链接含单次邀请，关闭后不能重新查看；只发给你信任的 Agent', `<p>${e(result.username || 'Agent 自选新角色名')} · 有效至 ${date(result.expiresAt)}。新角色属于你；不能认领已有角色，保留原有 Eye。</p><div class="form-actions gap-top">${button('copy-invite-link', '复制接入链接', 'link', 'primary')}${button('copy-invite-prompt', '复制完整提示词', 'book')}</div><details class="gap-top"><summary>查看接入链接与提示词</summary><div id="created-invite-link" class="key-secret">${e(result.onboarding.link)}</div><pre id="created-invite-prompt" class="code">${e(result.onboarding.prompt)}</pre></details><details class="gap-top"><summary>只复制邀请码</summary><div id="created-token" class="key-secret">${e(result.token)}</div>${button('copy-token', '复制邀请码', 'key', 'small')}</details><p class="tiny gap-top">网页含 Skill 下载和实际接入状态；没有运行 JavaScript 的 Agent 也能按说明接入。API 注册和游戏入服分别确认。</p><div class="form-actions">${button('close-modal', '已保存')}</div>`);
+      inviteResultModal(result);
     } else if (form.id === 'revoke-agent-invite-form') {
       await api(`/agent-invites/${form.dataset.id}`, { method: 'DELETE' }); modal.close(); await loadPrivate(); render(); toast('邀请与 API 接入已撤销，游戏角色保留');
     } else if (form.id === 'game-account-form') {
@@ -738,6 +819,10 @@ document.addEventListener('submit', async event => {
       if (operation !== 'claim' && values.gamePassword !== values.confirmGamePassword) throw new Error('两次游戏密码不一致');
       const result = await api(operation === 'claim' ? '/agent-claims' : operation === 'password' ? '/game-password' : '/agents', { method: 'POST', body: JSON.stringify({ requestId: form.dataset.request, username: values.username, ...(operation !== 'claim' ? { gamePassword: values.gamePassword } : {}), ...(operation === 'password' ? { currentGamePassword: values.currentGamePassword } : {}) }) });
       form.reset(); accountJobModal(result);
+    } else if (form.id === 'world-visibility-form') {
+      await api(`/live/${form.dataset.id}/visibility`, {method:'PATCH',body:JSON.stringify({public:form.dataset.public==='true'})});
+      state.channels=(await api('/live')).channels;worldLastRenew=0;
+      removeWorldFrame();modal.close();render();toast(form.dataset.public==='true'?'已开启公开观战':'已关闭公开观战');
     } else if (form.id === 'channel-form' || form.id === 'rotate-publisher-form') {
       const result = await api(form.id === 'channel-form' ? '/live-channels' : `/live-channels/${form.dataset.id}/publisher`, { method: 'POST', body: JSON.stringify(values) });
       state.channels = (await api('/live')).channels; state.selectedChannel = result.id;
@@ -754,8 +839,33 @@ modal.addEventListener('close', () => { modal.innerHTML = ''; if (!detail.open) 
 detail.addEventListener('close', () => { state.detail = null; detail.innerHTML = ''; });
 for (const dialog of [modal, detail]) dialog.addEventListener('click', event => { if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); });
 document.addEventListener('keydown', event => { if (event.key === '/' && !modal.open && !detail.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) { event.preventDefault(); setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 50); } });
-window.addEventListener('hashchange', () => { state.view = /^#memories(?:\/|$)/.test(location.hash) ? 'memories' : titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home'; render(); if(state.view==='challenges')window.QdChallenges?.load(); window.scrollTo(0, 0); });
-state.view = /^#memories(?:\/|$)/.test(location.hash) ? 'memories' : titles[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
+function readRoute(){
+ const [route,query='']=location.hash.slice(1).split('?'),params=new URLSearchParams(query);
+ state.view=/^memories(?:\/|$)/.test(route)?'memories':titles[route]?route:'home';
+ const name=params.get('player')||'',author=params.get('author')||'',day=params.get('day')||'';
+ state.eventPlayer=/^\.?[A-Za-z0-9_]{1,16}$/.test(name)?name:'';
+ state.eventDay=/^\d{4}-\d{2}-\d{2}$/.test(day)?day:'';
+ state.archiveAuthor=author.length<=64?author:'';state.photoAuthor=/^\.?[A-Za-z0-9_]{1,16}$/.test(author)?author:'';
+ state.eventPage=1;state.photoPage=1;state.archivePage=1;
+}
+window.addEventListener('hashchange', async () => {
+  const revision = ++routeRevision;
+  const oldPlayer = state.eventPlayer, oldDay = state.eventDay, oldAuthor = state.photoAuthor;
+  readRoute(); render(); window.scrollTo(0, 0);
+  // Navigation must not refetch account data or rebuild an active scene. Only
+  // the selected archive/filter needs new data; ordinary pages use the poll.
+  if (state.view === 'events' && (oldPlayer !== state.eventPlayer || oldDay !== state.eventDay)) await loadEvents();
+  else if (state.view === 'archives') await loadArchives();
+  else if (state.view === 'gallery' && oldAuthor !== state.photoAuthor) {
+    try {
+      const data = await api(`/gallery?page=1&author=${encodeURIComponent(state.photoAuthor)}`);
+      if (revision !== routeRevision) return;
+      state.photos = data.photos; state.photoPages = data.pages || 1;
+    } catch { if (revision === routeRevision) state.photos = []; }
+  } else { if (state.view === 'challenges') window.QdChallenges?.load(); return; }
+  if (revision === routeRevision && typeof document !== 'undefined' && document?.documentElement) render();
+});
+readRoute();
 window.QdMemories?.init({ api, owner, toast, render, requestId: newRequestId, login: () => document.querySelector('[data-action=\"login\"]')?.click() });
 window.QdChallenges?.init({api,render});
 render(); refresh();

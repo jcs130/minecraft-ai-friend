@@ -210,9 +210,12 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
         description = tool.get("description", "") if context_mode == "full" else tool.get("description", "")[:450]
         if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
             description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
-        elif tool["name"] == "mc_scout":
-            description = "Read-only observations/dry runs; use mc_do for real actions. observe requires mode: sites|voxels|rays. voxels bounds are six inclusive foot-relative integers with volume <=512; [-3,-2,-3,3,3,3] reads 294 cells. Copy the legal first-query example from an oversized rejection instead of repeatedly guessing smaller bounds."
-        if context_mode == "full" and tool["name"] in {"mc_do", "mc_scout"}:
+        elif tool["name"] == "mc_scout" and not description:
+            description = "Read-only observations/dry runs; use mc_do for real actions. Read mc_help for the selected skill's native parameters, limits and returned coverage."
+        # Scout paging/defaults belong to the native contract. An older local
+        # summary incorrectly imposed a total 512-cell region limit after the
+        # core gained bounded partial pages and caller-selected continuation.
+        if context_mode == "full" and tool["name"] == "mc_do":
             description += "\n" + tool.get("description", "")
         tools.append({"type": "function", "function": {"name": tool["name"], "description": description,
                       "parameters": provider_schema(schema)}})

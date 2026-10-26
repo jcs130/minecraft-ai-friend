@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Path;
 
 /** Server-authoritative metadata; no client handshake emulation or gameplay action. */
-@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.3",
+@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.4",
     dependencies={@Dependency(id="freesia"), @Dependency(id="packetevents")})
 public final class AppearanceBridge {
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("mcagent:appearance");
@@ -35,6 +35,7 @@ public final class AppearanceBridge {
     private final NativeCompanions companions = new NativeCompanions(Path.of("plugins/agentappearance/models.json"));
     private final Map<UUID,Transfer> transfers = new ConcurrentHashMap<>();
     private final Map<UUID,Long> requested = new ConcurrentHashMap<>();
+    private final SelfAppearance selfAppearance = new SelfAppearance();
     private record Transfer(ModelCatalog.Asset asset, String request, int index) { }
     private static final Gson JSON = new Gson();
     private static final String YSM_SHA = "ec51cfae84d219a45fac5098a31bfe980bcb7c2d8b413e8fffbd05a411a85680";
@@ -70,6 +71,7 @@ public final class AppearanceBridge {
     @Subscribe public void left(DisconnectEvent event) {
         UUID uuid=event.getPlayer().getUniqueId();last.remove(uuid);states.remove(uuid);delivered.remove(uuid);refreshed.remove(uuid);
         transfers.remove(uuid);requested.remove(uuid);
+        selfAppearance.left(uuid);
     }
     @Subscribe public void stop(ProxyShutdownEvent event) { transfers.clear(); requested.clear(); server.getChannelRegistrar().unregister(ASSETS); }
     @Subscribe public void assetRequest(PluginMessageEvent event) {
@@ -142,6 +144,11 @@ public final class AppearanceBridge {
                 workerConnected?"awaiting_model_state":"worker_offline");
             row.put("message",stateMessage(row));
             states.put(owner.getUniqueId(),row);
+            long session = Freesia.mapperManager.backendEpoch(owner);
+            String selectionResult = selfAppearance.observe(owner.getUniqueId(), owner, session,
+                Freesia.mapperManager.isPlayReady(owner, session), (String)row.get("modelId"),
+                (String)row.get("texture"), System.currentTimeMillis());
+            if (selectionResult != null) tell(owner,"[外观] " + selectionResult);
             String serial=JSON.toJson(row);
             if(!serial.equals(last.put(owner.getUniqueId(),serial))) for(Set<UUID> set:delivered.values()) set.remove(owner.getUniqueId());
         }
@@ -198,6 +205,25 @@ public final class AppearanceBridge {
     private final class Commands implements SimpleCommand {
         @Override public void execute(Invocation invocation) {
             CommandSource source=invocation.source();String[] args=invocation.arguments();
+            if(args.length>0 && args[0].equals("set")) {
+                if(!(source instanceof Player player)) {tell(source,"本人换装须在游戏中执行；管理员仍用 appearance admin set。");return;}
+                long session=Freesia.mapperManager==null?-1:Freesia.mapperManager.backendEpoch(player);
+                var result=selfAppearance.begin(player.getUniqueId(),player,session,player.getUsername(),
+                    Freesia.mapperManager!=null && Freesia.mapperManager.isPlayReady(player,session),
+                    Freesia.registedWorkers.size(),models.catalog(),args,System.currentTimeMillis());
+                tell(player,"[外观] " + result.message());
+                if(result.selection()!=null) {
+                    var selection=result.selection();
+                    try {
+                        Freesia.registedWorkers.values().iterator().next().dispatchCommandToWorker(selection.command(),feedback->{
+                            // Command feedback is not proof of application. poll() confirms the actual native state.
+                            if(feedback==null && player.isActive() && Freesia.mapperManager.isPlayReady(player,session))
+                                tell(player,"[外观] 模型服务尚无回执；请 /appearance status 查询，未自动重试。");
+                        });
+                    } catch(Exception unavailable) {tell(player,"[外观] 请求结果未知；请 /appearance status 查询，勿连续重发。");}
+                }
+                return;
+            }
             if(args.length==1 && args[0].equals("list")) { tell(source,"MC_APPEARANCE_CATALOG "+JSON.toJson(models.catalog()));return; }
             if(args.length==0 || args.length==1 && args[0].equals("status")) {
                 if(!(source instanceof Player player)) { tell(source,"MC_APPEARANCE_STATUS players="+states.size()+" worker="+!Freesia.registedWorkers.isEmpty()+" confirmed="+states.values().stream().filter(s->Boolean.TRUE.equals(s.get("available"))).count());return; }
@@ -219,7 +245,7 @@ public final class AppearanceBridge {
                 });
                 return;
             }
-            tell(source,"/appearance status 查看实际模型；/appearance list 查看已核对模型。客户端未装 YSM 仍可正常游戏。控制台：appearance admin set <在线玩家> <模型> <材质>。");
+            tell(source,"YSM：/appearance list 查看，/appearance set <模型ID> [贴图ID] 换本人，/appearance status 确认。普通皮肤：/skin help。自己的文件：官网本人外观上传。无需OP；未装YSM仍可正常游戏。");
         }
     }
 }

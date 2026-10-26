@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "status": "validated_candidate_not_deployed",
+  "date": "2026-10-26",
+  "websiteVersion": "0.8.21",
+  "viewerCommit": "ba56f73dba9501293c300be51104f6b713b5689a",
+  "production": {
+    "websiteVersion": "0.8.19",
+    "agentFriendVersion": "0.4.47.12"
+  },
+  "agentFriend": {
+    "version": "0.4.47.15",
+    "sha256": "df99617efdbc0cbfbd9f0bb6665dd154da6a01726b8967d97404c3bcf8971193",
+    "baselineSha256": "d024b51f2f623c16d2b71b02e2e7aa979928bd16d10f9879b35442a7e0ab1f72",
+    "baselineBytecodeVerified": true,
+    "unchangedEntries": 391,
+    "replacedEntries": [
+      "org/afuhome/agentfriend/AgentCliCatalog$Spec.class",
+      "org/afuhome/agentfriend/AgentCliCatalog.class",
+      "org/afuhome/agentfriend/AgentFriendPlugin$1.class",
+      "org/afuhome/agentfriend/AgentFriendPlugin$CompassButton.class",
+      "org/afuhome/agentfriend/AgentFriendPlugin$FocusSpell.class",
+      "org/afuhome/agentfriend/AgentFriendPlugin$GiftIdea.class",
+      "org/afuhome/agentfriend/AgentFriendPlugin$PublicPlace.class",
+      "org/afuhome/agentfriend/AgentFriendPlugin.class",
+      "org/afuhome/agentfriend/ArchiveStore$Attachment.class",
+      "org/afuhome/agentfriend/ArchiveStore$Entry.class",
+      "org/afuhome/agentfriend/ArchiveStore.class",
+      "org/afuhome/agentfriend/LifeGuildManager$Contract.class",
+      "org/afuhome/agentfriend/LifeGuildManager.class",
+      "org/afuhome/agentfriend/PublicArchives$Menu.class",
+      "org/afuhome/agentfriend/PublicArchives$Print.class",
+      "org/afuhome/agentfriend/PublicArchives$Query.class",
+      "org/afuhome/agentfriend/PublicArchives$Source.class",
+      "org/afuhome/agentfriend/PublicArchives$Work.class",
+      "org/afuhome/agentfriend/PublicArchives.class",
+      "plugin.yml",
+      "public-archives.yml"
+    ],
+    "driverSha256": "e697df15be3f95219d80773c5f1002030e33e932adda186c1c86fd51df6691a9",
+    "productionChanged": false
+  },
+  "configPatch": {
+    "live.worldObserverPublicDefault": true
+  },
+  "checks": {
+    "rendererPass": 1342,
+    "rendererConditionalSkip": 39,
+    "originalModelsPass": 6,
+    "portalPass": 264,
+    "syntaxModules": 86,
+    "archiveStoragePass": 25,
+    "paperNativePass": 23,
+    "paperRacePass": 7,
+    "realPaperArchiveToGuestWebsite": true,
+    "coldRestartPreserved": {
+      "originals": 113,
+      "requests": 113,
+      "copies": 1
+    }
+  },
+  "requires": {
+    "matchingWebsiteAndSource": true,
+    "paperNormalRestart": true,
+    "latestCompleteBackup": true,
+    "specificMaintenanceConfirmation": true
+  },
+  "productionChanged": false,
+  "documentation": "paper/docs/PUBLIC_WORLD_TRAIL.md"
+}

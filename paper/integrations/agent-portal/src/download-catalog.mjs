@@ -38,7 +38,8 @@ export const packageReleases = Object.freeze([
   ...originalReleases.map(row => Object.freeze({ ...row, category: 'advanced' })),
 ]);
 
-export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename);
+const aliases=Object.freeze({'/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
+export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id);
 export function publicDownloads(config) {
   return packageReleases.map(release => {
     const available = !!config.downloads?.baseUrl && (config.downloads?.enabledPackages || []).includes(release.id);

@@ -103,8 +103,11 @@ final class LifeGuildManager implements Listener {
         out.addProperty("progress", contract == null ? 0 : observedProgress);
         out.addProperty("target", contract == null ? 0 : contract.target());
         out.addProperty("ready", contract != null && observedProgress >= contract.target());
+        if (contract != null && RetiredActivities.retired(contract.id())) {
+            out.addProperty("retired", true); out.addProperty("instruction", RetiredActivities.HINT);
+        }
         if(house!=null) out.addProperty("missingAdvice",StarterHouseInspection.hint(house));
-        out.addProperty("availableId", CONTRACTS.stream().filter(c -> !completedToday(player,c)).map(Contract::id).findFirst().orElse(""));
+        out.addProperty("availableId", CONTRACTS.stream().filter(c -> !RetiredActivities.retired(c.id()) && !completedToday(player,c)).map(Contract::id).findFirst().orElse(""));
         return out;
     }
 
@@ -134,6 +137,7 @@ final class LifeGuildManager implements Listener {
     private void board(Player player) {
         status(player);
         for (Contract contract : CONTRACTS) {
+            if (RetiredActivities.retired(contract.id())) continue;
             String state = completedToday(player, contract) ? "今日已完成" : "可接";
             player.sendMessage(ChatColor.GOLD + contract.guild() + ChatColor.WHITE + " "
                     + contract.id() + " · " + contract.title() + " · " + contract.description()
@@ -173,7 +177,7 @@ final class LifeGuildManager implements Listener {
         send(player, json);
         String[] dailyThoughts = {
                 "今日无委托也可：去钓一次鱼、看一场日落，都算过好了今天。",
-                "今天可以慢慢来：给田地浇水，或和朋友散散步。",
+                "今天可以出门发现一处新风景，再把故事写进游记。",
                 "做完想做的事，也别忘了在灯下歇一会儿。"
         };
         int thought = Math.floorMod((java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
@@ -189,6 +193,7 @@ final class LifeGuildManager implements Listener {
     }
 
     private void accept(Player player, String id) {
+        if (RetiredActivities.retired(id)) { player.sendMessage(ChatColor.YELLOW + RetiredActivities.HINT); return; }
         Contract contract = byId(id);
         if (contract == null) { player.sendMessage(ChatColor.RED + "未知生活委托；/mycli life board 查看任务 ID。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接委托；请使用生存角色，/mycli life board 查看生活委托。"); return; }
@@ -439,6 +444,7 @@ final class LifeGuildManager implements Listener {
                 : active.title() + " " + progress(player) + "/" + active.target()));
         for (int i = 0; i < CONTRACTS.size(); i++) {
             Contract contract = CONTRACTS.get(i);
+            if (RetiredActivities.retired(contract.id())) continue;
             int rep = plugin.getConfig().getInt(base(player) + ".reputation." + contract.guildId());
             inventory.setItem(10 + i, icon(contract.icon(), "§e" + contract.guild(), contract.title(),
                     contract.description(), "等级：" + rank(rep) + " · 声望 " + rep,

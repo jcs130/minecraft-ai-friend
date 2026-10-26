@@ -222,7 +222,9 @@ final class PublicArchives implements Listener {
     private void reply(Player p,Query q,JsonObject out,String human){
         out.addProperty("scope","self");out.addProperty("playerUuid",p.getUniqueId().toString());
         plugin.communication().stamp(p,out);
-        if(q.json||plugin.communication().compact(p))p.sendMessage("MC_ARCHIVE "+out);else p.sendMessage("§6[公共档案馆] §f"+human);
+        // Plain text is the default for humans and Agents alike. Structured
+        // receipts are opt-in; never broadcast authoring/tool output.
+        if(q.json)p.sendMessage("MC_ARCHIVE "+out);else p.sendMessage("§6[公共档案馆] §f"+human);
     }
     private void error(Player p,String code,String message,boolean retry){error(p,false,code,message,retry);}
     private void error(Player p,boolean json,String code,String message,boolean retry){JsonObject out=base("error",true);out.addProperty("errorCode",code);out.addProperty("message",message);out.addProperty("retryable",retry);out.addProperty("nextCommand","/mycli archive status");reply(p,new Query("error",List.of(),json,1,"",0),out,message);}

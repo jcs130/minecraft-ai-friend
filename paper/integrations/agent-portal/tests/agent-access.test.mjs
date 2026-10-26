@@ -221,7 +221,11 @@ test('helper validates transport and identity target; discovery pins its exact p
   const f = await siteFixture(t), caps = await (await fetch(f.origin + '/api/v1/agent-access')).json();
   const helper = await fetch(f.origin + caps.helper.url); assert.match(helper.headers.get('content-type'), /javascript/);
   assert.equal(digest(Buffer.from(await helper.arrayBuffer())), caps.helper.sha256);
-  assert.equal((await fetch(f.origin + caps.help)).status, 200);
+  const helpResponse = await fetch(f.origin + caps.help);
+  // Consume the larger guide body: on Node22, an unread fetch stream can keep
+  // the test process alive after all assertions and fixture teardown finish.
+  await helpResponse.arrayBuffer();
+  assert.equal(helpResponse.status, 200);
 });
 
 test('archived test identities cannot reappear from a later snapshot; an Eye and its real Agent remain visible', async t => {

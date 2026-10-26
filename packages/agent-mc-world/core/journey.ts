@@ -4,6 +4,17 @@ export interface JourneyCue {
   source:'visible-entity'|'visible-block'|'server-event'; observedAtMs:number;
 }
 export interface JourneyIntent {taskId:number;stepIndex:number;destination:number[];dimension:string}
+/** Short-lived route advice expiry; never overrides navigation or checkpoint safety. */
+export interface JourneyChoicePolicy { choiceMinBlocks:number;choiceMaxBlocks:number;dangerChoiceMaxBlocks:number }
+export const DEFAULT_JOURNEY_CHOICE_POLICY: Readonly<JourneyChoicePolicy> = {
+  choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5,
+};
+export function journeyChoicePolicy(value?:Partial<JourneyChoicePolicy>):JourneyChoicePolicy {
+  const finite=(value:unknown,fallback:number)=>typeof value==='number'&&Number.isFinite(value)?Math.max(1,Math.min(64,value)):fallback;
+  const choiceMinBlocks=finite(value?.choiceMinBlocks,10);
+  const choiceMaxBlocks=Math.max(choiceMinBlocks,finite(value?.choiceMaxBlocks,20));
+  return {choiceMinBlocks,choiceMaxBlocks,dangerChoiceMaxBlocks:Math.min(choiceMaxBlocks,finite(value?.dangerChoiceMaxBlocks,5))};
+}
 export interface JourneySample {
   scope:string;generation:string;atMs:number;dimension:string;position:[number,number,number];
   intent:JourneyIntent|null;safeToConsider:boolean;cues:readonly JourneyCue[];

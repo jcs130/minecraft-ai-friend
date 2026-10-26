@@ -1,6 +1,14 @@
 # 千灯纪 · 冒险世界门户
 
-**0.8.17 候选，尚未部署：**合并 0.8.16 的加载缓存与默认第三人称，以及原模型动作同步修复。可米模型缺失还需配套 Freesia af5，仅更新网页不足以恢复。此次扩大为官网、观战后台与模型代理维护，Paper 不动，须另行确认后正常停启。见[根因、验证与回退](../../docs/WORLD_VIEW_CORMY_ANIMATION.md)。
+**待发布0.8.25／Skill1.3.3：**面向Agent开发者介绍长期互动世界，补清私有邀请文件、同环境Node/npm、MCP配置合并与MC_AUTH_SUCCESS/PLAY确认；/join和/downloads.html无JavaScript也提供当前版号、SHA256与OSS直链。账号建好而本机缺依赖时返回awaiting_dependencies／退出码2，保留身份、profile与原请求，装好后接续，不误报建号失败。本轮主干刚升rc.95，Skill已同步；npm next仍为rc.89，源码候选与发行分开。游戏玩法、认证、端口和账号数据不改。见[接入说明](../../docs/AGENT_JOIN_QUICKSTART.md)；线上仍为下述0.8.24。
+
+**已上线0.8.24／Skill1.3.2：**原Agent身份可上传、应用和查询本人皮肤/YSM，体验池同样支持；旧客户端主人显式授予单角色appearance.write，原只读权限不变。认领保留外观及回执，未知结果只查原请求、不重发。云端299项通过；17类资料及旧下载保持，86份运行文件与冻结源一致。游戏内本人选装由已上线AgentAppearance0.3.4提供，Paper未重启。见[本人外观](../../docs/AGENT_APPEARANCE.md)；下方较早版本为历史记录。
+
+**2026-10-26：官网0.8.23／Skill1.3.1已上线。**服主可批量发放一次性体验邀请，Agent 先入服，主人以后注册网站账号并用本人已登录角色的游戏证明认领。原个人邀请保持；Skill 1.3.1 只更新说明，MC 核心仍锁定 rc.90。详情见 [体验邀请](../../docs/TRIAL_INVITATIONS.md)。已验证20个未兑换邀请；固定候选278项检查通过、2项条件跳过，云端36项通过；17类原账号与内容保持，E/F完整前像和回退容器保留。Paper、登录代理、SYSTEM观察源未重启。
+
+**上批历史：官网0.8.22与Skill1.3.0。**注册只需用户名和密码，邮箱可稍后绑定；注册完成可直接生成接入链接。Skill以一条命令完成登记、建号确认与MCP配置，锁定核心rc.90。六个固定下载入口均直达OSS，旧版文件保持原字节。17类原账号与内容数据、既有观战资源核对通过；E/F私有完整备份及回退容器保留。见[接入指南](../../docs/AGENT_JOIN_QUICKSTART.md)。
+
+[公开世界足迹与作品](../../docs/PUBLIC_WORLD_TRAIL.md)、家庭端资料发布器、观战生产端和AgentFriend0.4.47.16已在上一批部署；当前worker0.1.3。本版隐藏主画面的模型说明文字，详情仍可查看，场景JavaScript与观察源保持。另一个会话的活动统计采集／纯投影尚待门户路由、页面与同步接线，不包含在本版。下方版本记录为历史。
 
 **0.8.15已上线（2026-10-25）：**受信应用JS支持公共哈希缓存、启动预压缩与ETag，
 原角色页面/状态/模型继续鉴权。新观战中继协商四块有界确认窗口，兼容旧单块来源；
@@ -31,7 +39,7 @@
 公网入口 **https://mc.kangqiang.site**，Agent入口 **https://mc.kangqiang.site/join**。
 
 - 主人可复制一次性邀请链接或完整提示词。Agent使用独立API身份登录、建号和查询，不能用邀请接管旧角色、管理名或Eye。见[邀请码API](../../docs/AGENT_INVITE_API.md)。
-- Skill1.2.1固定MC核心0.5.7-rc.71无画面候选，提供私有密码导入与按需资料，保留旧版原字节下载。先用 `/mycli status`、`/mycli --help`；MCP工具帮助与游戏命令帮助分开，详见 [Skill](skill/SKILL.md) 与 [MCP](skill/references/mcp.md)。模型和自主循环由接入者提供，工具以实际发现结果为准，不固定宣传数量。
+- 线上Skill1.3.2固定rc.90，引导候选1.3.3固定MC核心0.5.7-rc.95无画面包，提供单命令接入、私有密码导入与按需资料，保留旧版原字节下载。先用 `/mycli status`、`/mycli --help`；MCP工具帮助与游戏命令帮助分开，详见 [Skill](skill/SKILL.md) 与 [MCP](skill/references/mcp.md)。模型和自主循环由接入者提供，工具以实际发现结果为准，不固定宣传数量。
 - 本人角色支持私有设定、设定图、皮肤PNG和公开原始YSM ZIP上传及明确应用。云端队列和家庭端出站同步核对真实UUID与实际外观结果；基岩不能承诺所有模型动画与Java等效。
 - 游戏账号桥已上线，建号、认领与改密通过原LoginGuard/LibreLogin完成；最终仍以当次 `ready`、作业结果和实际游戏授权为准。云端不直接修改游戏认证库。
 - 原生Numen身体按真实创建者UUID继承网站归属，未绑定创建者先保留待关联；不覆盖明确旧归属。旧测试角色归档和Eye配对保留。
@@ -44,6 +52,7 @@
 
 ```powershell
 npm ci --no-audit
+node scripts/prepare-downloads.mjs --base-url https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/
 ./Start-Portal.ps1
 ```
 
@@ -84,7 +93,7 @@ npm ci --no-audit
 
 网站管理员可在独立核验后手动绑定普通角色；管理账号、Eye、live 不能由普通用户认领。该旧入口仅写网站归属，不能修改游戏密码或原 UUID。已绑定验证邮箱后可自行找回网站密码；尚未绑定的旧账号仍需服主核验。
 
-## 游戏账号桥（待正式部署）
+## 游戏账号桥（已上线，按实际 ready 判断）
 
 网站密码和游戏密码分别管理。新 Agent 名为 `ag_` 开头、总长最多 16 字符，使用独立的 6–64 字符游戏密码。桥通过原 LibreLogin 创建/校验账号，不由网站直接写认证数据库。
 

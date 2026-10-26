@@ -32,6 +32,15 @@ export function verifyRuntime(root=SKILL_ROOT,manifest=verifyBundle(root)) {
   catch{throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');}
   if(installed.name!=='agent-mc-world'||installed.version!==manifest.sdk?.version)
     throw Error('installed_core_version_mismatch_run_npm_ci_in_assets_runtime');
+  // npm writes this completion lock only after installing the dependency tree.
+  // A lone SDK package.json left by an interrupted install is not readiness.
+  let completed;
+  try{completed=JSON.parse(readFileSync(join(root,'assets/runtime/node_modules/.package-lock.json'),'utf8'));}
+  catch{throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');}
+  if(completed.packages?.['node_modules/agent-mc-world']?.version!==installed.version
+    ||!existsSync(join(dirname(file),'dist/runtime/src/client/index.js'))
+    ||!existsSync(join(dirname(file),'dist/runtime/src/mcp/stdio.js')))
+    throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');
   return installed.version;
 }
 function writeJson(file, data) { writeFileSync(file, JSON.stringify(data,null,2)+'\n', {flag:'wx',mode:0o600}); }
@@ -86,11 +95,31 @@ function npmCli(explicit) {
     resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli.js'),'/usr/share/nodejs/npm/bin/npm-cli.js'].filter(Boolean);
   const found=candidates.find(file=>existsSync(file));if(!found)throw Error('npm_cli_not_found_pass_npm_cli_or_run_npm_ci_in_assets_runtime');return found;
 }
+// Account creation and local dependency installation are separate outcomes.
+// Never discard a registered identity or repeat registration because npm is
+// missing, offline, or interrupted. A subsequent join checks the same profile.
+export function prepareRuntime({root=SKILL_ROOT,skipInstall=false,npmPath,resolveNpm=npmCli,run=execFileSync}={}) {
+  const manifest=verifyBundle(root);
+  const current=()=>{try{return verifyRuntime(root,manifest);}catch{return null;}};
+  let version=current();
+  if(version)return{dependenciesReady:true,sdkVersion:version};
+  const waiting=reason=>({dependenciesReady:false,reason,
+    nextAction:'账号与身份保留。用同一 Node 环境的 npm 在 Skill 的 assets/runtime 执行 npm ci --ignore-scripts --no-audit --no-fund，再运行原 join 命令；不要重新建号。'});
+  if(skipInstall)return waiting('runtime_dependencies_missing');
+  let cli;
+  try{cli=resolveNpm(npmPath);}catch{return waiting('npm_unavailable');}
+  try{run(process.execPath,[cli,'ci','--ignore-scripts','--no-audit','--no-fund'],
+    {cwd:join(root,'assets','runtime'),windowsHide:true,stdio:['ignore','pipe','pipe'],maxBuffer:2*1024*1024});}
+  catch{return waiting('dependency_install_failed');} // npm output may contain private local paths or registry credentials.
+  version=current();
+  return version?{dependenciesReady:true,sdkVersion:version}:waiting('runtime_dependencies_missing');
+}
 export async function main(argv=process.argv.slice(2)) {
   const command=argv.shift();
+  if(command==='join'){const{joinSkill}=await import('./join.mjs');return joinSkill(argv);}
   const {values}=parseArgs({args:argv,options:{username:{type:'string'},profile:{type:'string'},host:{type:'string'},port:{type:'string'},
     'password-file':{type:'string'},'password-format':{type:'string'},'token-file':{type:'string'},'portal-url':{type:'string'},'npm-cli':{type:'string'},'skip-install':{type:'boolean'}}});
-  if(!['init','check','config','portal'].includes(command))throw Error('usage_setup_init_check_config_or_portal');
+  if(!['init','check','config','portal'].includes(command))throw Error('usage_setup_join_init_check_config_or_portal');
   const bundle=verifyBundle();
   const directory=values.profile || (values.username ? join(homedir(),'.qiandengji','players',values.username) : null);
   if(!directory)throw Error('profile_or_username_required');
@@ -122,6 +151,10 @@ export async function main(argv=process.argv.slice(2)) {
   return {configurationValid:true,sdkVersion,version:decoded.cfg.version,username:decoded.cfg.username,gameConnected:false,modelCalled:false};
 }
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
-  try{console.log(JSON.stringify(await main(),null,2));}
-  catch(error){console.error(JSON.stringify({error:error instanceof Error?error.message:'setup_failed'}));process.exitCode=1;}
+  // Finish module evaluation before join imports the existing account importer,
+  // which itself uses these exports. Avoid a top-level-await import cycle.
+  setImmediate(async()=>{
+    try{const result=await main();console.log(JSON.stringify(result,null,2));if(process.argv[2]==='join'&&result?.state!=='ready')process.exitCode=2;}
+    catch(error){console.error(JSON.stringify({error:error instanceof Error?error.message:'setup_failed'}));process.exitCode=1;}
+  });
 }

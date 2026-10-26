@@ -2,8 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { ObservationWorker, validateWorkerConfig, readBoundedJSON } from '../worker.mjs';
+import { ObservationWorker, validateWorkerConfig, readBoundedJSON, observationFailure } from '../worker.mjs';
 const uuid='11111111-1111-3111-8111-111111111111';
+test('failure diagnostics preserve stage and code without credentials, payloads or arbitrary stack text',()=>{
+ const e=Object.assign(Error('fetch failed with Bearer private-secret'),{cause:{code:'ECONNRESET',password:'private-secret'},stack:'private-secret'});
+ const failure=observationFailure('sample',e,100000);
+ assert.equal(failure.stage,'sample');assert.equal(failure.reason,'OBSERVER_EXCEPTION');assert.equal(failure.cause,'ECONNRESET');assert.ok(!JSON.stringify(failure).includes('private-secret'));
+ assert.equal(observationFailure('scene',Error('PAPER_OBSERVATION_SEQUENCE'),100000).reason,'PAPER_OBSERVATION_SEQUENCE');
+ assert.equal(observationFailure('sample',Object.assign(Error('a timeout'),{name:'TimeoutError'}),100000).reason,'OBSERVER_REQUEST_TIMEOUT');
+ assert.throws(()=>observationFailure('password',e),/OBSERVER_FAILURE_STAGE/);
+});
 function fixture(){
  let now=100000,allowed=true,localAvailable=true,closes=0,publisherCloses=0,creates=0,after=0,cloudReads=0,localReads=0;
  const job={id:'a'.repeat(32),lease:randomUUID(),playerUuid:uuid,playerName:'ObservedPlayer',scope:'scene',publisherToken:'pub_'+'a'.repeat(43)};
@@ -30,6 +38,34 @@ test('slow appearance preparation never holds up the actual world and publisher'
 });
 test('a game-side offline receipt closes the old source without any replay or game reconnection',async()=>{
  const f=fixture();await f.worker.step();f.offline();f.advance(50);await f.worker.step();assert.equal(f.worker.sources.size,0);assert.equal(f.counts().closes,1);await f.worker.close();
+});
+test('sample timeout is diagnosed distinctly and a later valid grant can recover without replay',async()=>{
+ const f=fixture();await f.worker.step();const fetcher=f.worker.fetcher;
+ f.worker.fetcher=async(url,options)=>{if(!url.pathname.includes('world-view'))throw Object.assign(Error('timed out'),{name:'TimeoutError'});return fetcher(url,options);};
+ f.advance(50);await f.worker.step();assert.equal(f.worker.status().lastFailure.stage,'sample');assert.equal(f.worker.status().lastFailure.reason,'OBSERVER_REQUEST_TIMEOUT');assert.equal(f.worker.sources.size,0);
+ f.worker.fetcher=fetcher;f.advance();await f.worker.step();assert.equal(f.worker.sources.size,1);assert.equal(f.counts().creates,2);await f.worker.close();
+});
+test('one transient readonly sample retry keeps the same lease and acknowledgement without rebuilding the world',async()=>{
+ const f=fixture();await f.worker.step();const fetcher=f.worker.fetcher,queries=[];let failOnce=true;
+ f.worker.fetcher=async(url,options)=>{
+  if(!url.pathname.includes('world-view')){queries.push(JSON.parse(options.body));if(failOnce){failOnce=false;throw Object.assign(Error('timeout'),{name:'TimeoutError'})}}
+  return fetcher(url,options);
+ };
+ f.advance(50);await f.worker.step();assert.equal(queries.length,2);assert.deepEqual(queries[0],queries[1]);assert.equal(f.counts().creates,1);assert.equal(f.counts().closes,0);assert.equal(f.worker.sources.size,1);await f.worker.close();
+});
+test('a sample completing after its grant expires cannot update or publish the old scene',async()=>{
+ const f=fixture();await f.worker.step();const source=[...f.worker.sources.values()][0],cursor=source.after,fetcher=f.worker.fetcher;
+ f.worker.fetcher=async(url,options)=>{const response=await fetcher(url,options);if(!url.pathname.includes('world-view'))f.advance(8100);return response};
+ f.advance(50);await f.worker.step();assert.equal(source.after,cursor);assert.equal(f.worker.sources.size,0);assert.equal(f.counts().closes,1);await f.worker.close();
+});
+test('packet and scene errors retain their actual category before the old scene is retired',async()=>{
+ const f=fixture();await f.worker.step();const source=[...f.worker.sources.values()][0];source.view.ingest=()=>{throw Error('PAPER_OBSERVATION_SEQUENCE')};
+ f.advance(50);await f.worker.step();assert.equal(f.worker.status().lastFailure.stage,'scene');assert.equal(f.worker.status().lastFailure.reason,'PAPER_OBSERVATION_SEQUENCE');assert.equal(f.worker.sources.size,0);await f.worker.close();
+});
+test('publisher failure is diagnosed independently of a healthy Paper sample',async()=>{
+ const f=fixture();f.worker.startPublisher=async()=>{throw Error('SPECTATOR_PUBLISHER_READY_TIMEOUT')};
+ await f.worker.step();const pending=[...f.worker.sources.values()][0]?.publisherPending;await pending;
+ assert.equal(f.worker.status().lastFailure.stage,'publisher');assert.equal(f.worker.status().lastFailure.reason,'SPECTATOR_PUBLISHER_READY_TIMEOUT');assert.equal(f.worker.sources.size,0);await f.worker.close();
 });
 
 test('20Hz local sampling reuses one source; HUD/terrain and cloud grants do not set pose cadence',async()=>{
