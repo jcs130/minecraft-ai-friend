@@ -233,7 +233,19 @@ export function createPortal(config, options = {}) {
         await jsonBody(req, 1024);
         return respond(res, 200, worldView.poll(await game.roster()));
       }
-      if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      // Browser traffic and authenticated home publishers may share one NAT.
+      // Verify the exact service/route before isolating its quota; the route's
+      // existing service cap, body checks and authorization still run below.
+      // Invalid tokens, browser context and wrong methods keep the public cap.
+      let trustedSync = false;
+      if (!req.headers.origin && !req.headers.cookie) {
+        const authority = req.method === 'POST' && pathname === '/api/v1/internal/accounts/poll' ? accountCloud
+          : req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll' ? appearance
+          : req.method === 'PUT' && (['/api/v1/internal/snapshot', '/api/v1/internal/challenges', '/api/v1/internal/archives'].includes(pathname)
+            || /^\/api\/v1\/internal\/photos\/[a-f0-9-]{36}$/.test(pathname)) ? cloud : null;
+        if (authority) try { authority.authorize(req); trustedSync = true; } catch { /* Spend the public budget before the normal denial. */ }
+      }
+      if (pathname.startsWith('/api/') && !trustedSync) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if (req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll') {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'APPEARANCE_WORKER_REQUIRED', '请从家庭端外观同步器调用');
