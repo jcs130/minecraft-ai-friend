@@ -318,11 +318,15 @@ test('page flow protects private data, validates setup, reads the saved backpack
   assert.match(ui.document.querySelector('#detail').textContent, /home等级 2/);
   ui.click('[data-action="close-detail"]');
   ui.window.location.hash = 'connections'; await waitFor(() => ui.document.querySelector('[data-action="new-token"]'));
-  ui.click('[data-action="new-token"]'); ui.fill('label', 'UI reader', '#token-form'); ui.submit('#token-form');
+  ui.click('[data-action="new-token"]');
+  assert.equal(ui.document.querySelector('#token-form [name="appearance"]').checked, false);
+  assert.match(ui.document.querySelector('#token-form').textContent, /默认不授予，不能操作其他角色/);
+  ui.fill('label', 'UI reader', '#token-form'); ui.submit('#token-form');
   await waitFor(() => ui.document.querySelector('#created-token'));
   const token = ui.document.querySelector('#created-token').textContent;
   assert.match(token, /^pat_[A-Za-z0-9_-]{43}$/);
   assert.equal((await fetch(ui.origin + '/api/v1/agents', { headers: { Authorization: 'Bearer ' + token } })).status, 200);
+  assert.equal((await fetch(ui.origin + '/api/v1/agent-access/appearance', { headers: { Authorization: 'Bearer ' + token } })).status, 403);
   ui.click('[data-action="close-modal"]');
   assert.ok(!ui.document.body.textContent.includes(token));
   assert.equal(ui.window.localStorage.length, 0);

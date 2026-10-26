@@ -40,6 +40,7 @@ for file in (ROOT / 'skill').rglob('*'):
             raise ValueError('Unexpected Skill input: ' + name)
         files[name] = file.read_bytes().replace(b'\r\n',b'\n')
 files['scripts/agent-register.mjs'] = (ROOT / 'public/agent-register.mjs').read_bytes().replace(b'\r\n',b'\n')
+files['scripts/agent-appearance.mjs'] = (ROOT / 'public/agent-appearance.mjs').read_bytes().replace(b'\r\n',b'\n')
 files['assets/runtime/' + lock['sdkArchive']] = sdk
 with tarfile.open(fileobj=io.BytesIO(sdk), mode='r:gz') as archive:
     package = json.load(archive.extractfile('package/package.json'))

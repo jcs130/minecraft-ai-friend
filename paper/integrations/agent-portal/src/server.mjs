@@ -26,6 +26,7 @@ import { AgentAccess } from './agent-access.mjs';
 import { isTrialAgent } from './trial-pool.mjs';
 import { agentOnboarding } from './agent-onboarding.mjs';
 import { Appearance } from './appearance.mjs';
+import { agentAppearanceRoute } from './agent-appearance-routes.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 import { Memories } from './memories.mjs';
 import { memoryRoute } from './memory-routes.mjs';
@@ -166,6 +167,19 @@ export function createPortal(config, options = {}) {
     if (agent.identityConflict) throw fail(409, 'IDENTITY_CONFLICT', '角色身份出现冲突，请联系服主核对原 UUID 后继续');
     return { ...context, agent };
   }
+  async function selfAppearance(req) {
+    if (req.headers.authorization?.startsWith('Bearer qda_')) {
+      const context = agentAccess.authorize(req);
+      return { ...context, agent: await agentAccess.selfAgent(context) };
+    }
+    let context;
+    try { context = auth(req, ['appearance.write']); }
+    catch (error) { if (error.reason === 'SCOPE_REQUIRED') throw fail(403, 'SCOPE_REQUIRED', '当前凭据未获外观管理权限，请让主人在连接中心新建凭据并勾选“本人外观管理”；原只读凭据保持只读'); throw error; }
+    if (!context.credential || !context.owner) throw fail(401, 'INVALID_CREDENTIAL', '请使用本人 Agent 接入身份，或由主人签发带外观管理权限的单角色凭据');
+    const agent = (await game.roster()).find(row => row.playerUuid === context.credential.agent_uuid);
+    if (!agent || agent.identityConflict || !store.ownedUuids(context.owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '角色归属已变化，请让当前主人在连接中心重新授权本人角色的外观管理');
+    return { ...context, agent };
+  }
   function csrf(req) {
     const current = sessionFrom(req);
     if (!current || !sameSecret(req.headers['x-csrf-token'], current.csrf)) throw fail(403, 'CSRF_REQUIRED', '会话已更新，请刷新页面后继续');
@@ -257,6 +271,7 @@ export function createPortal(config, options = {}) {
         await context();
         if (await memoryRoute({ req, res, pathname, url, memories, context, jsonBody, respond, rate })) return;
       }
+      if (await agentAppearanceRoute({ req, res, pathname, context: () => selfAppearance(req), appearance, jsonBody, respond, rate })) return;
       const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
@@ -603,7 +618,11 @@ export function createPortal(config, options = {}) {
         const { agent } = await authorizedAgent(req, body.agentId);
         if (typeof body.label !== 'string' || body.label.trim().length < 1 || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请输入 1–60 字的客户端名称');
         const scopes = body.scopes || ['state.read'];
-        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包和角色设定读取');
+        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取和本人外观管理');
+        if (scopes.includes('appearance.write')) {
+          if (!store.ownedUuids(owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '只有本人已绑定角色可以授权外观管理；请先通过游戏内证明认领');
+          appearance.assertAgent(agent);
+        }
         const days = Number(body.expiresInDays || 30);
         if (!Number.isInteger(days) || days < 1 || days > 90) throw fail(400, 'INVALID_EXPIRY', '有效期需为 1–90 天');
         const token = 'pat_' + newSecret(); const id = randomUUID(); const now = Date.now();

@@ -37,7 +37,8 @@ export class AgentAccess {
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
       skill: agentSkill, clients: getAgentClients(this.config), joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
-      endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session' },
+      endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session', appearance: '/api/v1/agent-access/appearance' },
+      appearance: { selfService: true, kinds: ['skin', 'ysm'], websiteLoginRequired: false, helper: 'scripts/appearance.mjs', help: '/agent-api.html#appearance' },
       memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },
       help: '/agent-api.html' };
   }
@@ -154,7 +155,7 @@ export class AgentAccess {
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     this.store.audit(client.owner_id, 'agent.session.login', client.id);
     return { schemaVersion: 1, clientId: client.id, username: client.name, token, tokenType: 'Bearer', expiresAt: new Date(now + 3600000).toISOString(),
-      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories'], nextAction: 'status', status: '/api/v1/agent-access/status' };
+      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories', 'agent.self.appearance'], nextAction: 'status', status: '/api/v1/agent-access/status' };
   }
   authorize(req) {
     this.enabled();
@@ -207,12 +208,13 @@ export class AgentAccess {
       throw error;
     } finally { this.preparing.delete(client.id); }
   }
-  async state(context) {
+  async selfAgent(context) {
     const status = await this.status(context);
     if (!status.gameAccountCreated) throw fail(409, 'GAME_ACCOUNT_NOT_READY', '先查询 status，等待游戏建号成功后读取角色资料');
     const agent = (await this.game.roster()).find(row => row.playerUuid === context.client.expected_uuid && row.name === context.client.name);
     if (!agent || agent.isReserved || agent.identityConflict || !this.store.ownedUuids(context.owner.id).includes(agent.playerUuid)) throw fail(409, 'AGENT_IDENTITY_UNCONFIRMED', '原角色身份或归属尚未确认，请查询 status 或联系主人');
-    return this.game.playerState(agent);
+    return agent;
   }
+  async state(context) { return this.game.playerState(await this.selfAgent(context)); }
   logout(context) { this.store.db.prepare('UPDATE agent_access_sessions SET revoked_at=? WHERE id_hash=?').run(Date.now(), context.client.session_hash); return { ok: true }; }
 }
