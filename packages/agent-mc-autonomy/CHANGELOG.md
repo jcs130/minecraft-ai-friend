@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.108
+
+- Pin core rc.106, preserving equipment-confirmed ranged combat, original navigation hand failures, bounded paginated operation evidence and actual projectile/shield observations.
+- Keep the existing viewer, all 256 non-core npm lock entries and the single native execution queue.
+
 ## 0.2.107
 
 - Accept the installer's logical resource-directory spelling when a packaged Windows host resolves the same verified runtime into its redirected application-data view. Keep the canonical spelling valid without rewriting user metadata.
