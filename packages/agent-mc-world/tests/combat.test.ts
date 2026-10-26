@@ -6,7 +6,7 @@ import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CombatSession, footingAhead, type CombatTuning } from '../core/combat.ts';
 import type { CombatRangedActions } from '../core/combat.ts';
-import type { RangedTarget } from '../core/ranged.ts';
+import { BowController, type RangedTarget } from '../core/ranged.ts';
 import { MinecraftLog } from '../core/log.ts';
 import { Executor, type TaskReport } from '../core/executor.ts';
 import { skillEat } from '../core/skills-craft.ts';
@@ -515,21 +515,22 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
     expect(release).toHaveBeenCalledTimes(1); expect(attacks).toHaveLength(0);
   });
 
-  it.each(['blocked', 'unavailable'] as const)('auto attack with only a bow makes space and reports %s rather than silently using fists', async failure => {
+  it.each(['blocked', 'unavailable'] as const)('auto attack with only a bow reports %s rather than silently using fists', async failure => {
     const enemy = foe(7, 'zombie', 2.5), { bot, attacks, controls } = combatRigBot([enemy]), b = bot as any;
     b.registry.entitiesByName.zombie = { name: 'zombie' };
     b.heldItem = null; b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
     const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
       hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
     const ranged = rangedRig(), release = vi.fn();
+    if (failure === 'unavailable') ranged.actions.shoot = async () => {
+      ranged.actions.ready = () => false;
+      return { kind: 'released', shotId: 1, targetId: 7, ownerToken: stats.token,
+        at: Date.now(), aim: enemy.position, hitWindow: { from: Date.now(), until: Date.now() + 1500 } };
+    };
     const result = skillAttack(bot, 'zombie', 'auto', { aborted: () => false, fleeHealth: () => 0,
       escape: { active: false }, attack: { acquire: () => stats, release, ranged: ranged.actions }, log } as never)
       .then(value => ({ value, error: null }), error => ({ value: null, error }));
     await drive(bot, 300);
-    expect(attacks).toHaveLength(0); expect(controls.back).toBe(true);
-    enemy.position.x = 8;
-    if (failure === 'unavailable') ranged.actions.ready = () => false;
-    await drive(bot, 100);
     expect(String((await result).error)).toContain('未改为空手攻击');
     expect(attacks).toHaveLength(0); expect(release).toHaveBeenCalledWith(stats);
     expect(Object.values(controls).every(value => !value)).toBe(true);
@@ -543,6 +544,34 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
       session.onHurtBy(7, 'zombie'); await drive(bot, 1200);
       expect(attacks).toHaveLength(0); expect(Object.values(controls).some(Boolean)).toBe(true);
       expect(session.reactionState().retreating).toBe(false); // the ranged body is actively making space
+    } finally { session.stop(); }
+  });
+
+  it('a bow-only body trapped in close terrain actually releases arrows instead of waiting for 5.5 blocks', async () => {
+    const enemy = foe(7, 'zombie', 2.5), { bot, attacks, controls } = combatRigBot([enemy]), b = bot as any;
+    const bow = { name: 'bow', type: 2, count: 1 }, arrows = { name: 'arrow', type: 3, count: 15 };
+    b.heldItem = bow; b.quickBarSlot = 0; b.inventory.hotbarStart = 36;
+    b.inventory.items = () => [bow, arrows]; b.inventory.slots[36] = bow;
+    b.equip = async () => { b.heldItem = bow; };
+    b.activateItem = vi.fn(() => { b.usingHeldItem = true; });
+    b.deactivateItem = vi.fn(() => { b.usingHeldItem = false; });
+    b.setQuickBarSlot = (slot: number) => { b.quickBarSlot = slot; b.usingHeldItem = false; };
+    // The real body has no safe lateral/backward cell; LOS towards the enemy
+    // is independently known clear. No artificial movement should be forced.
+    b.blockAt = () => ({ name: 'stone', boundingBox: 'block', shapes: [[0, 0, 0, 1, 1, 1]], getProperties: () => ({}) });
+    let session: CombatSession;
+    const bowBody = new BowController({ getBot: () => bot, resolveTarget: () => enemy,
+      leaseValid: token => session.ownsRanged(token), emit: event => session.onBowEvent(event) });
+    ({ session } = rig(bot, {}, undefined, {
+      ready: () => true, active: () => bowBody.active,
+      shoot: (target, owner) => bowBody.shoot(target, owner), abort: () => bowBody.abort(),
+    }));
+    try {
+      session.onHurtBy(7, 'zombie'); await drive(bot, 1300);
+      expect(b.deactivateItem).toHaveBeenCalledTimes(1);
+      expect(attacks).toHaveLength(0);
+      expect(Object.values(controls).every(value => !value)).toBe(true);
+      expect(session.reactionState().retreating).toBe(false);
     } finally { session.stop(); }
   });
 

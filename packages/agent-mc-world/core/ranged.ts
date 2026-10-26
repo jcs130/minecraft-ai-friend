@@ -418,7 +418,9 @@ export class BowController {
     const bow = bestRangedWeapon(bot);
     if (!bow) return this.blocked('aborted', 'bow_lost');
     if (!hasUsableArrows(bot)) return this.blocked('no_arrow');
-    if (!target.cell && rangedTargetDistance(bot, target) <= HYBRID_MELEE_AT) return this.blocked('too_close');
+    // HYBRID_MELEE_AT chooses a preferred weapon; it is not a bow or protocol
+    // minimum range. A bow-only body must still be able to defend itself when
+    // a hostile closes in. Actual shot validity remains LOS, aim and lease.
     if (!this.hasLos(bot, target)) return this.blocked('no_los');
     if (!this.validLease(leaseToken)) return this.blocked('aborted', 'lease');
 
@@ -543,9 +545,6 @@ export class BowController {
       return { kind: 'blocked', reason: 'aborted', cause: 'bow_lost' };
     }
     if (!hasUsableArrows(drawing.bot)) return { kind: 'blocked', reason: 'no_arrow' };
-    if (!target.cell && rangedTargetDistance(drawing.bot, target) <= HYBRID_MELEE_AT) {
-      return { kind: 'blocked', reason: 'too_close' };
-    }
     if (!this.hasLos(drawing.bot, target)) return { kind: 'blocked', reason: 'no_los' };
     return null;
   }
