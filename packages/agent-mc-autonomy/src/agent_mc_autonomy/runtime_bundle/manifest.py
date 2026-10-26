@@ -11,6 +11,8 @@ import stat
 import sys
 from pathlib import Path
 
+from ..filesystem import verification_path
+
 SCHEMA = "agent-mc-runtime-bundle/v1"
 MANIFEST = "runtime-manifest.json"
 INVENTORY = "runtime-files.json"
@@ -30,13 +32,13 @@ def fail(code: str) -> None:
 
 
 def digest(path: Path) -> str:
-    with path.open("rb") as stream:
+    with verification_path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def read_json(path: Path, limit: int = MAX_JSON) -> dict:
     try:
-        with path.open("rb") as stream:
+        with verification_path(path).open("rb") as stream:
             data = stream.read(limit + 1)
         if len(data) > limit:
             fail("metadata_too_large")
@@ -62,7 +64,7 @@ def relative_path(value: object) -> str:
 
 
 def checked_path(root: Path, name: str, checked: set[Path] | None = None) -> Path:
-    result = root
+    result = verification_path(root)
     for part in relative_path(name).split("/"):
         result = result / part
         if checked is not None and result in checked:
@@ -84,7 +86,7 @@ def source_pin() -> dict:
 
 def verify_bundle(root: Path, *, expected_manifest_sha256: str | None = None, full: bool = True) -> dict:
     """Check bounded metadata; full=True additionally verifies every payload byte."""
-    root = Path(root).absolute()
+    root = verification_path(Path(root).absolute())
     if sys.platform != "win32" or platform.machine().lower() not in {"amd64", "x86_64"}:
         fail("platform_unsupported_windows_x64_required")
     if not root.is_dir():

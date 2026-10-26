@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..filesystem import verification_path
 from .manifest import BundleError, fail, read_json, verify_bundle
 
 
@@ -36,7 +37,12 @@ def resolve_prepared_bundle(*, bundle_root: Path | None = None, registration_fil
     if bundle_root is not None and registration_file is None:
         metadata = verify_bundle(Path(bundle_root), full=False)
         selected_hash = metadata["manifestSha256"]
-        selected = selected.parent / "installations" / (metadata["id"] + "-" + metadata["manifestSha256"]) / "registration.json"
+        installations = selected.parent / "installations"
+        selected = installations / ("r-" + selected_hash[:32]) / "registration.json"
+        # Previously prepared downloads remain usable. A present but invalid
+        # short registration must fail instead of silently selecting another.
+        if not verification_path(selected).exists():
+            selected = installations / (metadata["id"] + "-" + selected_hash) / "registration.json"
     registration = read_json(selected, 65536)
     if registration.get("schema") != "agent-mc-runtime-registration/v1":
         fail("registration_invalid")

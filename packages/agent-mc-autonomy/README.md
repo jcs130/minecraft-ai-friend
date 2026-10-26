@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+The 0.2.103 installer automatically uses a short per-user runtime cache. Users do
+not need administrator privileges, registry changes or a long-path system toggle.
+The full manifest hash still authenticates every installation; shortened folder
+names never permit a conflicting payload to be replaced. Existing prepared
+registrations remain readable. Resource and backend verification both use exact
+extended Windows paths, including when the host executable lacks long-path support.
+
 The 0.2.102 distribution pins core rc.99, including rejected-plan repair contracts,
 terminal death boundaries, observed command recovery and independent declared
 server queries. `mc_query` retains its native schema in both context modes and

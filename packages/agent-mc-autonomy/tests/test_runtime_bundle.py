@@ -195,7 +195,7 @@ def test_reparse_point_rejected(bundle, monkeypatch):
     class Reparse:
         st_mode = 0
         st_file_attributes = 0x400
-    monkeypatch.setattr(Path, "lstat", lambda path: Reparse() if path == root / "node" else original(path))
+    monkeypatch.setattr(Path, "lstat", lambda path: Reparse() if path == m.verification_path(root / "node") else original(path))
     with pytest.raises(m.BundleError, match="link_forbidden"):
         m.verify_bundle(root, full=False)
 
@@ -255,6 +255,64 @@ def test_extracted_source_selects_cached_installation_by_identity(bundle, tmp_pa
     # Removing only this test's extracted source cannot break the installed selection.
     shutil.rmtree(source)
     assert resolve_prepared_bundle(registration_file=selected).node == root / "node/node.exe"
+
+
+def test_extracted_source_prefers_short_cache_with_full_hash_identity(bundle, tmp_path, monkeypatch):
+    import shutil
+    root, manifest, registration = bundle
+    local = tmp_path / "recipient-local"
+    identity = m.digest(root / m.MANIFEST)
+    installations = local / "AgentMCWorld/installations"
+    selected = installations / ("r-" + identity[:32]) / "registration.json"
+    selected.parent.mkdir(parents=True)
+    shutil.copyfile(registration, selected)
+    # A stale legacy registration cannot override the newly prepared copy.
+    legacy = installations / (manifest["id"] + "-" + identity) / "registration.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("{}")
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    assert resolve_prepared_bundle(bundle_root=root).root == root
+    record = json.loads(selected.read_text())
+    record["manifestSha256"] = identity[:32] + ("0" * 32 if identity[32:] != "0" * 32 else "1" * 32)
+    selected.write_text(json.dumps(record))
+    with pytest.raises(m.BundleError, match="registration_root_mismatch"):
+        resolve_prepared_bundle(bundle_root=root)
+
+
+def test_bundle_verification_does_not_require_hosts_long_path_manifest(bundle, monkeypatch):
+    import os
+    import sys
+    if sys.platform != "win32":
+        pytest.skip("Windows legacy MAX_PATH regression")
+    root, manifest, _ = bundle
+    relative = "assets/" + "nested-resource-segment/" * 10 + "actual.bin"
+    target = root / relative
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"complete recipient resource")
+    manifest["files"][relative] = {"bytes": target.stat().st_size, "sha256": m.digest(target)}
+    update(root, manifest)
+    assert len(str(target)) > 260
+    original_lstat, original_open = Path.lstat, Path.open
+
+    def check_legacy_path(path):
+        if len(str(path)) >= 260 and not str(path).startswith("\\\\?\\"):
+            raise FileNotFoundError(3, "legacy host path limit", os.fspath(path))
+
+    def legacy_lstat(path, *args, **kwargs):
+        check_legacy_path(path)
+        return original_lstat(path, *args, **kwargs)
+
+    def legacy_open(path, *args, **kwargs):
+        check_legacy_path(path)
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", legacy_lstat)
+    monkeypatch.setattr(Path, "open", legacy_open)
+    assert m.verify_bundle(root)["integrityVerified"] is True
+    with original_open(target, "wb") as stream:
+        stream.write(b"tampered")
+    with pytest.raises(m.BundleError, match="file_hash_mismatch"):
+        m.verify_bundle(root)
 
 
 def test_rehashed_wrong_viewer_source_cannot_claim_the_pin(bundle):

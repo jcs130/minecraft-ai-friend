@@ -10,24 +10,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from ..filesystem import verification_path as _verification_path
+
 SOURCE_DIR = Path(__file__).resolve().parent
 SOURCE = json.loads((SOURCE_DIR / "source.json").read_text(encoding="utf-8"))
 
 
 def runtime_entry(directory: Path) -> Path:
     return directory / "node_modules" / "agent-mc-world" / "bin" / "minecraft-agent-mcp.mjs"
-
-
-def _verification_path(path: Path) -> Path:
-    """Read exact Windows files without depending on the host EXE's MAX_PATH manifest."""
-    if os.name != "nt":
-        return path
-    value = os.path.abspath(path)
-    if value.startswith("\\\\?\\"):
-        return Path(value)
-    if value.startswith("\\\\"):
-        return Path("\\\\?\\UNC\\" + value[2:])
-    return Path("\\\\?\\" + value)
 
 
 def verify_runtime(directory: Path) -> Path:

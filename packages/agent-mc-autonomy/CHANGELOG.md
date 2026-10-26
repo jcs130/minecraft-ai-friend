@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.103
+
+- Prepare offline runtimes in a short per-user cache automatically, without administrator rights or registry changes; retain complete SHA-256 identity checks, atomic preparation and compatibility with existing registrations.
+- Verify complete Windows bundles and backend members with extended filesystem paths, preserving link, containment, inventory and hash checks when the host lacks long-path awareness.
+
+## 0.2.102
+
+- Pin core rc.99 and expose its declared read-only server query lane with native schemas and receipt semantics.
+- Verify long Windows backend paths and include the relative missing member in configuration diagnostics without revealing host paths.
+
 ## 0.2.101
 
 - Pin the integrated core rc.95 with authored opening-spell admission, accurate script body ownership, task progress snapshots and explicit unknown current facts when observation is unavailable.
