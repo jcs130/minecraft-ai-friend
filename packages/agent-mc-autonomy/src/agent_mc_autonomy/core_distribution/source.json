@@ -1,22 +1,22 @@
 {
   "repository": "https://github.com/jcs130/minecraft-ai-friend",
-  "source_revision": "c798963bcd2aa8437fd918b78892b2dbd2aed91d",
+  "source_revision": "9b93af4523ddb0556c89a2a5edc9a0e8e2c0f05e",
   "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.95",
-  "archive": "agent-mc-world-0.5.7-rc.95.tgz",
-  "sha256": "e1108da2ecd41c30ebd0e04b4096081186036b83fdec907bc0cb3c0d66f97bb9",
+  "version": "0.5.7-rc.99",
+  "archive": "agent-mc-world-0.5.7-rc.99.tgz",
+  "sha256": "9aedb3e1280a48ca68a3f4bdc9f6403b2f38b2ea42ee497c1624773de4c0695f",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "5669e1933f0dde4c619839704165250a2ebd691863f32ff7da9af99b6089b79a",
-    "dist/build.json": "6d4559e26cabaa3399612f2110337daad0e26ce67b8da7a261b407f7c0c91747",
-    "dist/types/manifest.json": "01843ee65b9559a96c3c1302a40c83e6baec52ded0b1b6548f507ab2ec24c408",
-    "bin/minecraft-agent-mcp.mjs": "1508f8ccd65f176b5d14999d57d4e61103beda106070e152e693380c75a701f7",
-    "bin/minecraft-agent-client.mjs": "49384a0a96b3509a6a9afc42d00953752deb41a946efd5e2db46e1de43d5c8d8",
-    "bin/minecraft-agent-knowledge.mjs": "ad4ff2e683d4a8f91ff823cb17e88060e61a0326e306421327d8f0653a289270"
+    "package.json": "0f359c5173cd74919613330e461747a3931586542b25eca96699a753bed03791",
+    "dist/build.json": "1a4923a5253e4cc5e7d4faf735b528c9cecea0bad1b4ff18fa7402bdc4b3a4fb",
+    "dist/types/manifest.json": "a6b6873be8279b0dabe16c2f6fe44c8f8a6171f994bbaaa6e8b117b0fcdc7a2a",
+    "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
+    "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc",
+    "bin/minecraft-agent-knowledge.mjs": "a67d8c4fa1221e9035e463e959cca36648c956e578b9a264e4618a00a4daa86b"
   },
   "external_viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",

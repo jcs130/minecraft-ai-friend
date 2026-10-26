@@ -1,5 +1,15 @@
 # Agent MC Autonomy
 
+The 0.2.102 distribution pins core rc.99, including rejected-plan repair contracts,
+terminal death boundaries, observed command recovery and independent declared
+server queries. `mc_query` retains its native schema in both context modes and
+can be used as an immediate read during navigation; its sent receipts are not
+body tasks or goal completion, and the framework does not cache or resend them.
+Core query permissions, reply provenance, native barriers and model deadlines remain.
+Windows backend verification uses extended filesystem paths so a host without
+long-path awareness can verify installed files beyond MAX_PATH. Missing members
+name their relative build path; absent, altered and escaping files remain rejected.
+
 The 0.2.101 development distribution pins the integrated core rc.95. Authored
 opening spells recheck actual combat and body admission; read-only script workers
 do not claim the native body. Current task progress and unavailable observations
