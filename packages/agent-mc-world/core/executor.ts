@@ -2781,6 +2781,11 @@ export class Executor {
   private impossibleCraftStartNote(steps: readonly SkillCall[]): string | null {
     const bot = this.opts.getBot();
     for (const [index, step] of steps.entries()) {
+      if (bot && step.skill === 'eat' && step.item && this.opts.precheck?.() !== false
+        && Object.keys(bot.registry?.foodsByName ?? {}).length > 0
+        && bot.registry?.itemsByName?.[step.item] && !bot.registry?.foodsByName?.[step.item]) {
+        return `第 ${index + 1} 步${notFoodText(bot, step.item)}；本单未入队，原队列保留`;
+      }
       if (step.skill === 'craft' && step.grid && step.item) {
         return `合成同时写了 item 和 grid；实际只会按 grid 摆，item 会被忽略。若要做${zhName(step.item)}，只写 item 走官方配方；若要试自摆配方，只写 grid。原队列保留`;
       }

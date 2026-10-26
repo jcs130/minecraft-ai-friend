@@ -37,6 +37,12 @@ private routineError: string | null = null;
   protected combatHealingUrgent(_bot: Bot): boolean { return false; }
   protected sendAutoCombatSpell(_bot: Bot, _spell: CombatSpell, _ruleId?: string): boolean { return false; }
   protected battlefieldChannel(): string | undefined { return undefined; }
+  override requestFacts(): ReturnType<MinecraftWorld['requestFacts']> {
+    const facts = super.requestFacts();
+    if (!facts || !this.bridge?.connected || !this.bridge.bot?.entity) return facts;
+    const text = this.tactics.capabilityIndex();
+    return {...facts, text:facts.text+'\n'+text, parts:[...(facts.parts ?? []),{key:'combatCapabilities',text}]};
+  }
   protected override extensionTools(): ToolDef[] { return [{...COMBAT_TACTIC_TOOL, handler: (args, ctx) => this.setCombatTactic(args, ctx.role === 'host-decision', ctx.role)}]; }
 protected async setCombatTactic(args: Record<string, unknown>, hostSampling = false, role?: string): Promise<string | ToolOutcome> {
     const tool = 'mc_combat_tactic';

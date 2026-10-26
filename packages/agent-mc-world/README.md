@@ -255,6 +255,12 @@ The public SDK exposes optional metadata-only `status().connection` (`ready`, `p
 
 `mc_messages read` accepts one `id` or an explicit `ids` batch of 1–16 retained message IDs, preserving each source and reception time. Missing/malformed selectors return `messages.selector` with a correction; only valid but absent IDs return `messages.retained-id`. Reading never marks messages reviewed. Successful `list`, `search` and `read` receipts expose `meta.readback` (`agent-mc-readback/v1`) with a realm/account-scoped resource and content revision. Equivalent keyword/query filters share a resource; changed observations, pagination and review state remain distinguishable. Consumers may use this to recognize repeated results; an unchanged history query proves neither current world state nor goal progress. The inbox does not cache away calls, trigger model work or choose an action.
 
+### Current combat capabilities and movement
+
+Tactical request facts expose a bounded `combatCapabilities` index of observed abilities and the current authored configuration. Fast decision frames likewise include observed, unconfigured skills with `configured: false`; this does not authorize a cast. Costs and cooldowns remain `null` until observed, and excess skills are counted explicitly. Hosts can read the existing tactic and skill-source contracts before proposing a revision; the core neither invents abilities nor silently adds rules.
+
+Known inedible items are rejected before an action batch replaces or extends the body queue. The diagnostic lists confirmed edible inventory instead of similarly named ingredients. Unresolved custom items retain their existing behavior. Vertical swim waypoints preserve heading inside the horizontal movement deadband; support, oxygen checks and cancellation ownership remain unchanged.
+
 ### Remember retries
 
 Identical normalized `mc_memory remember` notes in the same realm/account/agent scope reuse the latest unarchived entry ID and revision. The receipt adds `deduplicated: true, written: false`; `saved: true` still means local persistence, not successful remote indexing. Source, speaker, observed time, content, dimension, tag set and expiry must all match. Recorded time and expiry are never refreshed. Explicit revisions/captures and changed evidence remain separate; existing duplicates are not deleted.

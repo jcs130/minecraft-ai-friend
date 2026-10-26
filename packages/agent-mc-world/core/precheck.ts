@@ -189,15 +189,10 @@ export function notFoodText(bot: Bot, item: string): string {
   const head = Object.keys(known).length === 0 || known[item]
     ? `${zhName(item)}不是可进食物品`
     : `没有 ${item} 这样的物品`;
-  const roots = new Set(item.split('_').filter((t) => t !== 'raw' && t !== 'item' && t !== 'block'));
-  const like = [...new Set(bot.inventory.items()
-    .filter((i) => i.count > 0 && i.name !== item)
-    .filter((i) => i.name.split('_').some((t) => roots.has(t)))
-    .map((i) => i.name))];
-  const near = like.length > 0
-    ? `;包里名字最像的是 ${like.map((n) => `${n}(${zhName(n)})`).join('、')}`
-    : '';
-  return `${head}${near}`;
+  // Similar names are not edible substitutes (wheat -> wheat_seeds caused a
+  // repeated failed meal queue). Only offer registry-confirmed carried food.
+  const food = edibleInBag(bot);
+  return `${head}；${food ?? '未见已确认可直接进食的随身食物；原料须先按真实配方加工'}`;
 }
 
 /** 无食物时的事实读数，由 renderPrecheckNotes 渲染为独立的 [口粮] 行。 */

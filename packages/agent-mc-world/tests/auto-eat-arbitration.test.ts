@@ -32,6 +32,21 @@ function rig() {
   return { bot, stack, exec, world, reports, tick: () => world.autoEatTick(bot) };
 }
 
+it('rejects a known inedible meal immediately without losing earlier queued work or suggesting seeds', () => {
+  const r=rig();
+  const hold=r.exec.pauseForEnvironment('drowning recovery');
+  r.exec.submit([{skill:'chat',text:'/original'}],'append');
+  const before=r.exec.status().waiting.map(t=>t.id);
+  const rejected=r.exec.submitDetailed([{skill:'eat',item:'wheat'}],'append');
+  expect(rejected.accepted).toBe(false);
+  expect(rejected.receipt).toContain('不是可进食物品');
+  expect(rejected.receipt).not.toContain('wheat_seeds');
+  expect(rejected.receipt).toContain('生牛肉');
+  expect(r.exec.status().waiting.map(t=>t.id)).toEqual(before);
+  expect(r.bot.consume).not.toHaveBeenCalled();
+  r.exec.resumeAfterEnvironment(hold);r.exec.shutdown();
+});
+
 it.each(['raw_beef', 'beef'])('a queued future %s meal does not suppress a safe native meal', async item => {
   const r = rig();
   const hold = r.exec.pauseForEnvironment('drowning recovery');
