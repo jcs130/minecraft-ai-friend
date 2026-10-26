@@ -39,7 +39,12 @@ export const packageReleases = Object.freeze([
 ]);
 
 const aliases=Object.freeze({'/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
-export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id);
+// Existing bookmarks keep their immutable bytes; the recommended alias selects
+// the current reviewed complete package. Both use the same operator enablement.
+const legacyNekoBase = Object.freeze({id:'neko-base', filename:'qiandengji-neko-0.6.70-base-with-viewer-data.zip',
+  bytes:321124552, sha256:'701716c351f8cd3dd43b0837b34131b793648eab740e60d4145748fea59e2dc2'});
+export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id)
+  || (pathname === '/downloads/' + legacyNekoBase.filename ? legacyNekoBase : undefined);
 export function publicDownloads(config) {
   return packageReleases.map(release => {
     const available = !!config.downloads?.baseUrl && (config.downloads?.enabledPackages || []).includes(release.id);

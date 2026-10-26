@@ -51,26 +51,23 @@
   },
   {
     "channel": "website-bundle",
-    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/blob/main/paper/integrations/agent-portal/scripts/build-client-bundles.py",
+    "sourceUrl": "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/blob/main/docs/install-candidate-0.6.109.md",
     "id": "neko-base",
-    "filename": "qiandengji-neko-0.6.70-base-with-viewer-data.zip",
-    "bytes": 321124552,
-    "sha256": "701716c351f8cd3dd43b0837b34131b793648eab740e60d4145748fea59e2dc2",
+    "filename": "NEKO-MC-0.6.109-Windows.zip",
+    "bytes": 1107341175,
+    "sha256": "624ef18e011ef6681cfa1c2e963745e815582130a77b812e0fc525e2fcd4e5d4",
     "framework": "neko",
     "category": "host",
-    "name": "NEKO 基础运行包",
-    "version": "0.6.70",
+    "name": "NEKO 完整安装包",
+    "version": "0.6.109",
     "platform": "Windows x64；N.E.K.O CPython 3.11；自带 Node 22",
     "license": "Apache-2.0；保留随包组件声明",
-    "install": "基础包、公共音频包、截图浏览器包解压到同一目录，运行“准备千灯纪离线包.cmd”，再导入包内 Windows .neko-plugin。",
-    "includes": "原固定后端及依赖、Node、现代 Web 可视化与贴图、Windows 插件、千灯纪物品展示扩展和 Skill 1.2.1。原运行文件与插件字节保持。",
+    "install": "只需本包：完整解压 → 双击“一键安装.cmd” → 按中文指南导入包内插件。自动采用短缓存，无需管理员或修改注册表；升级保留原配置和数据；旧离线路径不匹配时点「使用已安装的新版运行环境」。",
+    "includes": "插件 0.6.109、框架 0.2.103、核心 rc.99、Node、3D 观战、贴图、完整原版音频和截图浏览器。无需另下两个公共组件；仍需自己的 Neko、模型和服务器。",
     "viewerIncluded": true,
-    "serverPackIncluded": true,
+    "serverPackIncluded": false,
     "gameDependenciesBundled": true,
-    "requires": [
-      "shared-audio",
-      "shared-browser"
-    ]
+    "requires": []
   },
   {
     "channel": "website-bundle",
