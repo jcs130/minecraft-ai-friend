@@ -188,6 +188,14 @@ final class OnboardingGuide implements Listener {
             } else if (flag(life, "ready")) step = new Step("life_claim", value(life, "title") + " " + life.get("progress") + "/" + life.get("target"), List.of("/mycli life claim"));
             else step = new Step("life_progress", value(life, "title") + " " + life.get("progress") + "/" + life.get("target") + "；" + value(life, "instruction"), List.of("/mycli life status", "/mycli life locations"));
         } else step = new Step("complete", "入门已毕业；先 tasks list exploration 看近郊分段调查，arena status 看按层试炼，dungeon list 看逐室遗迹。已有委托用 tasks status 收尾，试炼/地下城可独立参加。出发前 guild shared 查公共装备。", List.of("/mycli tasks list exploration", "/mycli arena status", "/mycli dungeon list", "/mycli guild shared", "/mycli tasks list"));
+        if(registered&&plugin.combatRpg()!=null){
+            boolean retired=RetiredActivities.retired(value(guild,"activeId"));
+            String next=plugin.combatRpg().next(p,retired);
+            if(retired||plugin.dungeonParticipant(p)||!plugin.combatRpg().profession(p).isEmpty()&&lived)
+                step=new Step("complete","攻略路线：整备装备 → 学习技能 → 战斗练级 → 探索迷宫 → 讨伐楼层首领。旧试炼塔只作练习，正式层数单独统计。"
+                    +(retired?"当前是已撤下的农耕委托；可主动暂存，保留历史进度。":""),List.of(next,"/mycli world story list ranking"));
+            else if(plugin.combatRpg().profession(p).isEmpty())step=new Step("route_choose","先选战斗职业：战士、坦克、法师或牧师；均可单人练级或组队。",List.of(next));
+        }
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);

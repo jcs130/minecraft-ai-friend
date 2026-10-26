@@ -1,6 +1,50 @@
 schema-version: 1
 # Effects are bounded native server primitives. Learning uses skill points; each cast additionally uses AuraSkills mana.
 skills:
+  tank_taunt:
+    title: 守卫·挑衅
+    profession: tank
+    icon: SHIELD
+    effect: tank_taunt
+    equipment: shield
+    mana: 4
+    cooldown-seconds: 12
+    limits: {range: 6, targets: 2, power: 1, duration-seconds: 3}
+    description: "持盾吸引6格内可见敌人；1/2/3级最多2/3/4名，持续3/4/5秒。离开12格、收盾或倒地即解除。仅对敌对生物生效，不抢别队副本怪。"
+    origin: "千灯纪坦克战术；借鉴攻略组前卫职责，数值为Minecraft适配，不冒称原作公式。"
+  tank_bastion:
+    title: 守卫·坚壁
+    profession: tank
+    icon: IRON_CHESTPLATE
+    effect: tank_bastion
+    equipment: shield
+    mana: 5
+    cooldown-seconds: 18
+    limits: {range: 1, targets: 1, power: 3, duration-seconds: 4}
+    description: "持盾迎敌，正面怪物攻击的最终伤害减少50%；1/2/3级每击最多减3/4/6点，持续4/5/6秒。背面攻击不减；不与护阵重复相乘。"
+    origin: "千灯纪坦克防御技；盾牌原版格挡仍有效，未受伤不会制造治疗贡献。"
+  tank_bash:
+    title: 守卫·盾击
+    profession: tank
+    icon: IRON_AXE
+    effect: sword_thrust
+    equipment: shield
+    mana: 3
+    cooldown-seconds: 6
+    limits: {range: 2.5, targets: 1, power: 3, duration-seconds: 1}
+    description: "持盾打击正前方2.5格内的一名可见敌人，1/2/3级造成3/4/5点基础伤害；提供坦克单人练级的攻击手段。"
+    origin: "千灯纪盾战适配；不击穿墙壁，不伤玩家、村民或动物。"
+  tank_cover:
+    title: 守卫·掩护
+    profession: tank
+    icon: IRON_HELMET
+    effect: ward
+    equipment: shield
+    mana: 6
+    cooldown-seconds: 20
+    limits: {range: 4, targets: 2, power: 3, duration-seconds: 4}
+    description: "持盾为4格内1/2/3级最多2/3/4名队友掩护4/5/6秒，每人抵挡一次怪物攻击，减伤50%，每击最多3/4/6点。"
+    origin: "千灯纪坦克支援技；多人副本用于保护正在施术或救援的队友。"
   warrior_sky_leap:
     title: 凌空跃击
     profession: warrior

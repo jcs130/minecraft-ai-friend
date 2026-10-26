@@ -97,6 +97,12 @@ final class ActionFeedback {
                 case "walk_to_first_room", "party_full_or_not_at_first_room" -> a("未到首室，或队伍已满8人。", "用 " + dungeon + " 核对入口和首室坐标；沿原通道进入首室。加入需在10秒集结期且有空位，否则等下一场。", dungeon);
                 case "muster_closed" -> a("本场10秒集结期已关闭。", "用 /mycli dungeon status 查看场次；等本场结束后到首室与队友重新开场，不要强行加入。", "/mycli dungeon status", dungeon);
                 case "site_busy" -> a("该地点已有挑战队伍。", "用 /mycli dungeon status 查看，等待结束或从 /mycli dungeon list 选另一处。", "/mycli dungeon status", "/mycli dungeon list");
+                case "already_in_site_dungeon" -> a("你已有地下城或正式攻略场次，不能重复开场。", "先查本人当前场次；故障暂停且已恢复条件时用resume继续，决定放弃时用leave退出后再开场。", "/mycli dungeon status", "/mycli dungeon resume", "/mycli dungeon leave");
+                case "conquest_profession_required" -> a("正式攻略需要先选择战斗职业。", "选择战士、坦克、法师或牧师，再学习合适的技能。", "/mycli profession menu");
+                case "conquest_level_required" -> a("战斗等级尚未达到本层要求。", "先查询本层最低等级；探索与击败敌对生物获得战斗经验，种地不会增加战斗等级。", dungeon,"/mycli status");
+                case "previous_floor_required" -> a("尚未完成上一正式楼层。", "练习塔与正式攻略分开计分；先核对攻略层数，再挑战已解锁楼层。", "/mycli status");
+                case "combat_progress_unavailable" -> a("战斗成长记录暂不可用。", "请联系女神检查存档；不要重复报名或领奖。", "/mycli status");
+                case "conquest_map_unavailable" -> a("正式攻略地图尚未就绪。", "请联系女神核对地图与场地配置；不要重复开场。原有地下城和练习塔可另查目录。", "/mycli dungeon list");
                 case "site_cooldown" -> a("场地处于开场冷却（最长120秒）。", "等待冷却结束，到首室再 start 一次；可先用 " + dungeon + " 查看规则。", dungeon);
                 case "claim_previous_reward_first" -> a("上次地下城奖励尚未领取，本次未开场或加入。", "先 /mycli dungeon claim " + id + " 领取到个人奖励箱，再重新 start 或 join；无需重打旧场次。", "/mycli dungeon claim " + id, "/mycli dungeon status " + id);
                 case "no_pending_reward" -> a("本人没有这份待领奖凭据，未发放奖励。", "用 /mycli dungeon status 查待领奖记录和最近结果；已领取的用 /mycli arena rewards 查看。新挑战需每室参战并返回首室，生成凭据后才能领。", "/mycli dungeon status", "/mycli arena rewards");

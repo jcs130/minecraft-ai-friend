@@ -1833,6 +1833,11 @@ final class DungeonManager implements Listener {
                 entries++;
             }
             player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/" + STASH_SIZE + " page="+page+" pages=10 capacity=540");
+            // Listing is read-only. Ledger rewards are materialized on opening,
+            // so an empty stored page must not imply that a new reward was lost.
+            int queued=bonusItems(id).size()+PhotoRewards.pending(plugin,id);
+            for(Material material:REWARD_TYPES)if(pending(id,material)>0)queued++;
+            if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程需travel，2魔力）。");
             return;
         }
         if (action.equals("putslot") && args.length == 5) {

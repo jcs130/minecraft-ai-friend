@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-27",
+  "productionApproved": false,
+  "target": {
+    "software": "Paper",
+    "minecraft": "1.21.1",
+    "java": 21
+  },
+  "preferredMap": {
+    "id": "lerfing-project-aincrad-v2",
+    "author": "Lerfing",
+    "page": "https://www.planetminecraft.com/project/sword-art-online-map-project-aincrad-100-floors/",
+    "authorDownloadPage": "https://www.patreon.com/Lerfing/posts/updated-aincrad-96437751",
+    "lastPublicMapUpdate": "2026-02-02",
+    "lastPublicMapUpdateMeaning": "Bedrock V2 support; not evidence of additional Java floors",
+    "authorClaimedTerrainFloors": 20,
+    "authorClaimedV2AddedDungeons": 24,
+    "access": "Patreon Gold or above",
+    "downloaded": false,
+    "sha256": null,
+    "dataVersion": null,
+    "serverUseTermsVerified": false,
+    "redistributeInRepository": false,
+    "state": "awaiting_owner_supplied_archive",
+    "worldMode": "separate_world",
+    "floorBindings": [],
+    "entry": null,
+    "return": null
+  },
+  "freeMapCandidates": [
+    {
+      "id": "justtcrafts-sao-floor1",
+      "author": "JusttCrafts",
+      "page": "https://www.planetminecraft.com/project/sword-art-online-floor1/",
+      "authorDownloadLink": "https://www.planetminecraft.com/project/sword-art-online-floor1/download/mirror/708022/",
+      "access": "explicit_free_download",
+      "lastPublicMapUpdate": "2024-06-02",
+      "maintenance": "author_says_unfinished_no_plans_to_continue",
+      "authorClaimedMinecraft": "1.16+",
+      "authorClaimedContents": [
+        "town_of_beginnings",
+        "other_villages",
+        "two_dungeons",
+        "boss_room",
+        "floating_islands"
+      ],
+      "knownLimitations": [
+        "many_houses_have_no_interior",
+        "some_corrupted_blocks_need_replacement"
+      ],
+      "downloaded": false,
+      "sha256": null,
+      "dataVersion": null,
+      "state": "download_page_requires_site_verification",
+      "redistributeInRepository": false
+    },
+    {
+      "id": "sven14smeets-aincrad-floor1",
+      "author": "sven14smeets",
+      "page": "https://www.planetminecraft.com/project/aincrad-floor-1/",
+      "authorDownloadLink": "https://www.planetminecraft.com/project/aincrad-floor-1/download/mirror/564500/",
+      "access": "public_java_download_link_not_yet_resolved",
+      "lastPublicMapUpdate": "2026-09-13",
+      "authorClaimedCompletionPercent": 30,
+      "lastUpdateMeaning": "guild hall square improved; author states development resumed",
+      "downloaded": false,
+      "sha256": null,
+      "dataVersion": null,
+      "state": "awaiting_download_verification",
+      "redistributeInRepository": false
+    }
+  ],
+  "rpgPlugin": {
+    "id": "vortexrpg",
+    "page": "https://modrinth.com/plugin/vortexrpg",
+    "source": "https://github.com/Sauron05/vortexrpg",
+    "testedVersion": "1.2.2-alpha",
+    "artifact": "https://cdn.modrinth.com/data/vuXiXUvx/versions/dOKT586F/VortexRPG-1.2.2-alpha-paper-folia.jar",
+    "artifactSha512": "736888d27b7d5e1de2a039c276984ef67be50f47c4fc78f7e3db2973fb60c5e171801a3a9fdf8d2b8ae27ee7327d5240abcaa71e79120e7abd0592e75592d501",
+    "modrinthLicense": "ARR",
+    "latestPublishedVersionObserved": "1.2.10-alpha",
+    "latestPublishedDateObserved": "2026-09-02",
+    "latestPublishedGameVersionsObserved": [
+      "26.1",
+      "26.1.1",
+      "26.1.2"
+    ],
+    "declaresTargetSupport": true,
+    "isolatedBootPassed": true,
+    "vanillaProtocolClientSpawnPassed": true,
+    "liveRuntimePassed": false,
+    "affectedPaths": [
+      "item-runtime-refresh-join",
+      "profile-join-load",
+      "choose-class",
+      "player-hud",
+      "scoreboard-refresh",
+      "class-synergy-refresh"
+    ],
+    "state": "basic_runtime_compatible_dungeon_integration_incomplete",
+    "redistributeInRepository": false,
+    "originalFailure": "NoSuchFieldError: org.bukkit.attribute.Attribute.MAX_HEALTH",
+    "compatibilityPatch": {
+      "target": "Paper 1.21.1",
+      "artifactSha512": "4cafc171905350e5a56e94239f4f247ad34141d965f93b71c6daf7f8b3af84f75d668fea7eff31eb783b57cd964aecb11a06a036a6c6d9ed64b9ed0a79741d7f",
+      "isolatedClassSkillPartyColdRestartPassed": true,
+      "completeDungeonPassed": false
+    },
+    "dungeonBlockers": [
+      "Missing shipped world templates",
+      "enterDungeon starts List.of(player), not the existing party",
+      "Configured default boss IDs are absent from bosses.yml",
+      "Dungeon boss spawn does not apply BossService phases",
+      "completionReward credits Vault; rewardItemIds are not issued",
+      "No durable per-run completion ledger in inspected DungeonService"
+    ],
+    "sourceRevisionReviewed": "3e5baba",
+    "numericAuthority": "disabled_in_qiandengji_until_single_authority_adapter_verified"
+  },
+  "selectedFreeMap": {
+    "id": "sao-map-floor-1",
+    "page": "https://www.curseforge.com/minecraft/worlds/sao-map-floor-1",
+    "download": "https://mediafilez.forgecdn.net/files/6729/184/SAOFloorOne.zip",
+    "sha256": "0ddf2c3f8c767d2acdfa3be793293a47fd7cb3d45a34bb997ff9d5861970518f",
+    "bytes": 179748622,
+    "archiveFormat": "legacy_numeric_block_ids",
+    "productionExplorationWorld": "aincrad",
+    "formalConquestProductionEnabled": false,
+    "candidateSite": "aincrad_01",
+    "candidateStages": [
+      [
+        856,
+        69,
+        -1144
+      ],
+      [
+        844,
+        69,
+        -1160
+      ],
+      [
+        832,
+        69,
+        -1176
+      ]
+    ],
+    "verifiedWalkableSpawnColumns": 15,
+    "redistributeInRepository": false,
+    "credits": "Preserve original map notices; see the author download page and in-map credits."
+  }
+}

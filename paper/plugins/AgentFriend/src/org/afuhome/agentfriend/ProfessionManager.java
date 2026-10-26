@@ -176,9 +176,12 @@ final class ProfessionManager implements Listener {
         if (user != null && user.isLoaded()) for (var skill : dev.aurelium.auraskills.api.skill.Skills.values())
             if (skill.isEnabled()) levels += Math.max(0, user.getSkillLevel(skill) - 1);
         JsonObject old = ledger.profile(p.getUniqueId()).getAsJsonObject("points");
-        int high = Math.max(levels, old.get("levelHighWater").getAsInt());
+        // Existing points remain owned. With combat RPG enabled, new points come
+        // from combat levels, not repeatable farming or a profession switch.
+        boolean combat = plugin.combatRpg() != null;
+        int high = combat ? old.get("levelHighWater").getAsInt() : Math.max(levels, old.get("levelHighWater").getAsInt());
         int earned = Math.max(old.get("earned").getAsInt(), Math.min(catalog.progression.cap,
-                catalog.progression.initial + high / catalog.progression.levelsPerPoint));
+                catalog.progression.initial + (combat ? plugin.combatRpg().level(p)-1 : high / catalog.progression.levelsPerPoint)));
         if (high == old.get("levelHighWater").getAsInt() && earned == old.get("earned").getAsInt()) return true;
         return ledger.write(data -> { var points = ProfessionLedger.profile(data,p.getUniqueId()).getAsJsonObject("points");
             points.addProperty("levelHighWater",high); points.addProperty("earned",earned); });
@@ -189,6 +192,7 @@ final class ProfessionManager implements Listener {
         result.addProperty("cap", catalog == null ? 0 : catalog.progression.cap);
         result.addProperty("initial", catalog == null ? 0 : catalog.progression.initial);
         result.addProperty("auraLevelsPerPoint", catalog == null ? 0 : catalog.progression.levelsPerPoint);
+        result.addProperty("earningSource",plugin.combatRpg()==null?"aura":"combat_level");
         result.addProperty("grandfathered", grandfathered(p));
         result.addProperty("respecMana",catalog==null?0:catalog.progression.respecMana);
         result.addProperty("respecCooldownMs",catalog==null?0:catalog.progression.respecSeconds*1000L);
@@ -309,7 +313,7 @@ final class ProfessionManager implements Listener {
         String title = catalog != null && catalog.roles.containsKey(role) ? catalog.roles.get(role).title() : "尚未选择";
         List<String> pages = new ArrayList<>();
         pages.add("§d命格 · 技能点§r\n\n职业：" + title + "\n" + pointSummary(p) + "\n\n初始" + points.get("initial").getAsInt()
-                + "点；AuraSkills累计成长每" + points.get("auraLevelsPerPoint").getAsInt() + "级增加1点。\n三方向共用余额，切换职业不退点。\n洗点退回已花点数，需"+points.get("respecMana").getAsInt()+"魔力；冷却"+points.get("respecCooldownMs").getAsLong()/1000+"秒，剩余"+(points.get("respecRemainingMs").getAsLong()+999)/1000+"秒。\n\n罗盘→职业与传承→技能学习与升级");
+                + "点；" + (plugin.combatRpg()==null?"AuraSkills累计成长每"+points.get("auraLevelsPerPoint").getAsInt()+"级增加1点。":"战斗等级每升1级增加1点，旧点数保留。") + "\n三方向共用余额，切换职业不退点。\n洗点退回已花点数，需"+points.get("respecMana").getAsInt()+"魔力；冷却"+points.get("respecCooldownMs").getAsLong()/1000+"秒，剩余"+(points.get("respecRemainingMs").getAsLong()+999)/1000+"秒。\n\n罗盘→职业与传承→技能学习与升级");
         if(plugin.skillAssessments()!=null)pages.add(plugin.skillAssessments().bookPage(p));
         List<String> lines = new ArrayList<>();
         for (String id : learningIds()) {

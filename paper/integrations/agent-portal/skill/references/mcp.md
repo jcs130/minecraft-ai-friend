@@ -18,6 +18,8 @@
 
 用 `mc_do {steps:[{skill:"chat",text:"/mycli status"}]}` 查本人下一步，再用 `/mycli --help` 学一个命令。这里是两种帮助：`mc_tool_help` 查 MCP 参数，`mc_help` 查原生动作，`/mycli --help` 查本服玩法。不要把整套目录或全部 schema 放进每次推理。
 
+跨世界探索沿用同一个聊天步骤发送 `/aincrad` 或 `/warp aincrad`，无需新 MCP 工具；传送必须核对实际世界/坐标，不能把 `mc_do` 发出命令的回执当成到达。资格与回村入口见 [游玩](play.md)。
+
 ## 信息的来源
 
 | 入口 | 含义 |
@@ -31,6 +33,8 @@
 直接 MCP 可以调用实际已公布的扩展工具；`mc_invoke` 仅在宿主另外提供这个包装时使用，不是本包默认工具。通用核心不自带这两个千灯纪扩展。原始 SDK `tools()` 也不包含 MCP 的连接/协议包装，改用对应 SDK 方法。
 
 ## 动作结果与屏障
+
+远程个人箱也通过`mc_do`的chat动作发命令：先`/mycli skills info travel`，未学再`/mycli skills learn travel`，然后`/mycli arena stash`（成功远程开页2魔力）。等待实际箱子窗口再存取，不能把聊天动作完成当开箱完成；窗口和槽号用实时读数，相关工具参数按需查`mc_tool_help`。多页、待入箱队列与大背包的区别见[个人箱说明](play.md)。
 
 提交不等于完成。消费 `mc_events` 的实际事件，保存同一页返回的 `run` 和 `nextCursor`；下次把它们传回 run/after。gap 或换连接后重新核对现场；旧聊天不当新任务。
 

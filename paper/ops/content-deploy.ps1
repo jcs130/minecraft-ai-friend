@@ -15,6 +15,13 @@ function Content-AgentVisionJar([string]$name) {
     return $name -ceq 'AgentVision-0.1.0.jar' -or $name -ceq 'AgentVision-0.1.1.jar' -or $name -ceq 'AgentVision-0.1.2.jar'
 }
 
+function Content-AincradProtectionTarget([string]$relative) {
+    # Only the reviewed authored world's two protection files. Do not broaden
+    # this to arbitrary WorldGuard configuration or player-owned regions.
+    return $relative -ceq 'plugins/WorldGuard/worlds/aincrad/regions.yml' -or
+        $relative -ceq 'plugins/WorldGuard/worlds/aincrad/config.yml'
+}
+
 function Content-YsmProxyTarget([string]$name) {
     if ($name -notmatch '^(AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected proxy plugin JAR' }
     $config = Ysm-Config
@@ -69,6 +76,8 @@ function Deploy-PendingContent {
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
+            $target = Join-Path $serverDir $relative
+        } elseif (Content-AincradProtectionTarget $relative) {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'plugins/OlEncounters/schematics/qd_forest_camp.schem') {
             $target = Join-Path $serverDir $relative

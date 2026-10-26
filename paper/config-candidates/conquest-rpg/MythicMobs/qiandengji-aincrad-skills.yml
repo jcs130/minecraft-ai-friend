@@ -1,0 +1,18 @@
+QD_Illfang_Desperation:
+  Cooldown: 90
+  Skills:
+    - equip{item=IRON_SWORD HAND} @self
+    - effect:particles{p=crit;amount=24;hS=1;vS=1} @self
+    - sound{s=entity.ravager.roar;v=0.8;p=1.2} @self
+    - potion{type=SPEED;duration=120;level=0} @self
+QD_Illfang_Cleave:
+  Cooldown: 8
+  Conditions:
+    - targetwithin{d=5} true
+  Skills:
+    - message{m="&6[首领] 近身蓄力：1.5秒后挥斩，请退出3格范围。"} @PlayersInRadius{r=12}
+    - effect:particlering{particle=crit;radius=3;points=24;amount=1} @self
+    - potion{type=SLOW;duration=30;level=9} @self
+    - delay 30
+    - damage{amount=5} @PlayersInRadius{r=3}
+    - sound{s=entity.player.attack.sweep;v=0.8;p=0.7} @self

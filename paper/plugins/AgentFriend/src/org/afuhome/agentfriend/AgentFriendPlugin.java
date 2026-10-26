@@ -253,6 +253,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private SpellMastery spellMastery;
     private ProfessionManager professions;
     private TrialRescueManager trialRescue;
+    private CombatRpg combatRpg;
+    private boolean conquestWorldReady;
     private PlayerContracts playerContracts;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
@@ -354,6 +356,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dailyBoard = new DailyBoardManager(this);
         taskMarket = new TaskMarketManager(this);
         playerContracts = new PlayerContracts(this);
+        try { conquestWorldReady=ConquestWorld.load(this); }
+        catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE,"Formal conquest unavailable; other activities retained",failure); }
         siteDungeons = new SiteDungeonManager(this);
         new WorldLifeActions(this);
         soulboundGear = new SoulboundGear(this);
@@ -364,6 +368,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         tradeDirectory = new TradeDirectory(this);
         trialRescue = new TrialRescueManager(this);
         lifeChallenges = new LifeChallenges(this);
+        try { if (CombatRpgRules.activate(getConfig().getBoolean("combat-rpg.enabled",false),
+                getServer().getPluginManager().isPluginEnabled("VortexRPG"))) combatRpg = new CombatRpg(this); }
+        catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE, "Combat RPG unavailable; original progression retained", failure); }
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         agentStatePublisher = new AgentStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
@@ -383,6 +390,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (combatRpg != null) combatRpg.close();
         if (lifeChallenges != null) lifeChallenges.shutdown();
         if (privateChatNames != null) privateChatNames.stop();
         if (itemAppearances != null) itemAppearances.stop();
@@ -469,6 +477,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     LifeGuildManager lifeGuild() { return lifeGuild; }
     TrialRescueManager trialRescue() { return trialRescue; }
+    CombatRpg combatRpg() { return combatRpg; }
+    boolean conquestWorldReady() { return conquestWorldReady; }
     boolean isDowned(Player p) { return trialRescue != null && trialRescue.downed(p); }
     PlayerContracts playerContracts() { return playerContracts; }
     PvpArenaManager pvp() { return pvpArena; }

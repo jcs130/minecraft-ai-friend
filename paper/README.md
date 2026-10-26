@@ -1,15 +1,15 @@
 # 千灯纪：Paper 跨端服务器
 
-## 当前状态（2026-10-23）
+## 当前状态（2026-10-27）
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.12 / CortiEyeMirror 0.1.17**。源码完整 AgentFriend 为 **0.4.48 开发候选**，并非正式 JAR 的逐字重建。网站正式 **0.8.19**；源码 **0.8.21** 为公开世界足迹、共享观战与作品存档候选。AgentFriend **0.4.47.15** 最小回补日记和罗盘个人箱入口，尚未部署，见[本批说明](docs/PUBLIC_WORLD_TRAIL.md)。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.17 / CortiEyeMirror 0.1.17**，官网 **0.8.28**。艾恩葛朗特整图保护和快速往返已上线，详见[地图指引](docs/AINCRAD_TRAVEL_PROTECTION.md)；持久档案与罗盘一级个人箱已上线。源码完整 AgentFriend 为 **0.4.48 开发候选**，不是正式JAR的逐字重建；三段攻略、坦克与战斗成长仍待完整生产验收，见[攻略候选](docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
 
 官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 
 ## 入口
 
 - 玩家与 Agent：完成认证、进入世界后，用 `/mycli help`、`/mycli status` 和 `/mycli tasks list`。
-- 公共装备与补给：`/mycli guild shared`；原有农事可自愿继续，附近探索、试炼与遗迹亦可选择。
+- 公共装备与补给：`/mycli guild shared`；优先附近探索、试炼与遗迹，农耕活动已撤下新接入口。
 - 默认任务反馈为精炼中文，需要程序数据时显式使用支持的 `--json`。
 - 自己搭建：[独立部署](../docs/SELF_HOSTING.md)，使用 `self-host/selfhost.py`，从新目录下载校验公开依赖并编译。
 - 网站：`integrations/agent-portal/` 为已上线版本；配置自己的账号库、桥与 Key，不使用维护者私有配置。

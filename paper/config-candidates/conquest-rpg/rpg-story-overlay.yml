@@ -1,0 +1,39 @@
+revision: 4
+title: 艾恩葛朗特攻略记
+chapters:
+  aincrad_departure:
+    title: 第一层·踏上攻略之路
+    introduction: 从起始之城出发，选择职业、准备战备，单人或与队友突破第一层。练习塔是练习；正式楼层必须实际清场并返回结算，不要求先完成种植委托。
+    requires: []
+    stages:
+      aincrad_choose_role:
+        title: 选择战斗职业
+        kind: COMBAT_ROLE
+        description: 战士负责近战剑技，坦克持盾吸引敌人，法师远程控制，牧师治疗支援。沿用已有职业，不必重新选择。
+        next-command: /mycli profession menu
+      aincrad_briefing:
+        title: 听取前线战备说明
+        kind: TALK
+        reference: gufeng
+        description: 到新村巡路人顾风处讨论攻略。准备武器、护甲、盾牌、食物和至少一项战斗技能；共享装备按需领取。
+        next-command: /mycli world story talk gufeng aincrad
+      aincrad_clear_one:
+        title: 完成第一层攻略
+        kind: CONQUEST_CLEAR
+        reference: '1'
+        description: 查看第一层入口，传送或步行到前哨后主动开场；队友在集结时加入。清理三段标记敌人，避开首领蓄力，清场后返回前哨结算。只查状态或打练习塔不算通关。
+        next-command: /mycli dungeon info aincrad_01
+npc-topics:
+  gufeng:
+    aincrad:
+      title: 开始艾恩葛朗特攻略
+      text: 第一层入口在aincrad世界(856,69,-1144)。先备武器、铁甲、盾、食物和战斗技能；单人可开场，组队须在10秒集结期主动加入。沿前哨→守卫区→领主区清场，首领蓄力时退出近身圈；胜利后回前哨，再claim到个人箱。旧试炼塔仅练习。
+      action: encounter
+      target: aincrad_01
+  yingdeng:
+    rewards:
+      title: 奖励和照片放在哪里？
+      text: 远程个人箱用 /mycli arena stash，stash pages选10页。先查skills info travel，未学用skills
+        learn travel；保持2魔力，开页才扣费，不用先传送。领奖后开箱装入，箱满保留；arena rewards list查待入箱，stash list查箱格。实体箱旁免费，大背包另用/minepacks:backpack
+        open。
+      action: rewards

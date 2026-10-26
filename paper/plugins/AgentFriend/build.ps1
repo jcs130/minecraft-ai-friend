@@ -1,6 +1,7 @@
 param(
     [string]$ServerRoot = 'E:\MC\server',
-    [ValidateSet('1.20.6', '1.21.1')][string]$MinecraftVersion = '1.21.1'
+    [ValidateSet('1.20.6', '1.21.1')][string]$MinecraftVersion = '1.21.1',
+    [string]$TabJar = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,7 +13,14 @@ $worldGuard = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -Fi
 if ($worldGuard.Count -ne 1) { throw 'Exactly one enabled WorldGuard JAR is required for a reproducible build.' }
 $worldEdit = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -File | Where-Object { $_.Name -match '^(worldedit-bukkit-|FastAsyncWorldEdit(?:-Paper)?-).*\.jar$' })
 if ($worldEdit.Count -ne 1) { throw 'Exactly one enabled WorldEdit or FastAsyncWorldEdit JAR is required.' }
+if (-not $TabJar) {
+    $tabCandidates = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -Filter 'TAB*.jar' -File)
+    if ($tabCandidates.Count -ne 1) { throw 'Supply -TabJar with the official TAB 6.2.1 Paper API JAR (runtime integration is optional).' }
+    $TabJar = $tabCandidates[0].FullName
+}
+if (-not (Test-Path -LiteralPath $TabJar -PathType Leaf)) { throw 'TAB compile dependency is missing.' }
 $classpath = @(
+    $TabJar
     $paper
     Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'libraries') -Recurse -Filter '*.jar' -File | ForEach-Object { $_.FullName }
     Join-Path $ServerRoot 'plugins\MagicSpells-4.0-Beta-15.jar'

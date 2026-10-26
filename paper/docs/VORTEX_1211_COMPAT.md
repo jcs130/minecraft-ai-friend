@@ -35,6 +35,17 @@
 
 ## 重现
 
+2026-10-27 追加核对：对照官方源码 `3e5baba` 的 `DungeonService.java`
+及已固定的1.2.2 JAR反编译结果，`enterDungeon` 使用 `List.of(player)`，没有把
+现有队伍带进场；该路径未检查配置最低等级。默认副本引用的首领ID不在自带
+bosses.yml中；`startBossPhase`只生成基础实体/生命值，并未调用BossService的阶段机制。
+完成时仅处理Vault金额，`rewardItemIds`未发放，也没有该服务的持久场次结算账。
+这些与缺失地图模板独立，不能以修好Attribute兼容宣称完整副本可用。
+
+千灯纪候选采用现有SiteDungeon的主动组队、整室参战、救援、返程、持久领奖账，
+MythicMobs负责首领动作；不同时开启Vortex与本服的战斗数值权威。Vortex仍留在独立
+兼容服，后续逐项接入上述缺口再决定替换。源码为审计依据，未将第三方JAR纳入仓库。
+
 使用 Java21 编译适配器，classpath 为 ASM9.7.1；运行参数为官方JAR、目标Paper API
 JAR和不存在的输出路径。本机API位于 `libraries/com/destroystokyo/paper/paper-mojangapi/1.21.1-R0.1-SNAPSHOT/`。
 

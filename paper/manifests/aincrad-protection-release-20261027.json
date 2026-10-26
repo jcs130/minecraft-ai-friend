@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "verifiedAt": "2026-10-26T19:42:11.252Z",
+  "startedAt": "2026-10-27T03:15:25.0549296+08:00",
+  "completedAt": "2026-10-27T03:37:07.9990637+08:00",
+  "sourceBaseCommit": "0bdd7a951d16b6644b9937f755d98542e2b02504",
+  "target": {
+    "minecraft": "1.21.1",
+    "server": "Paper build 133"
+  },
+  "artifact": {
+    "version": "0.4.47.17",
+    "sha256": "909b4d7b077ab601d36d4851f01a69fccbf0182bc2110e2352c2e24206761906",
+    "baselineSha256": "c24f822a4c034bb5c780790674c1bb1b622deec19bc7553d44fcbaa14427f0bb",
+    "unchangedArchiveEntries": 559
+  },
+  "files": [
+    {
+      "target": "AgentFriend-0.4.47.17.jar",
+      "sha256": "909b4d7b077ab601d36d4851f01a69fccbf0182bc2110e2352c2e24206761906"
+    },
+    {
+      "target": "plugins/AgentFriend/block-access.yml",
+      "sha256": "9bbfb2ef470d387b189d8e62323b16ae391861544b40e49950762a872d7fa629",
+      "beforeSha256": "3ea416c4a5a15b2ceffde2d7d16703efabfdcb2b2917501e42df3dcb6b49f257"
+    },
+    {
+      "target": "plugins/WorldGuard/worlds/aincrad/regions.yml",
+      "sha256": "5b1f4e406038baff8117e5af938b07fba7bc5d1c001098f3ca71a0ce1e96ab1c",
+      "beforeSha256": "8342e8923ced9b5c7f645c91893ceb3d2df2052bf25c78b6b0b1b0adc920d9c7"
+    },
+    {
+      "target": "plugins/WorldGuard/worlds/aincrad/config.yml",
+      "sha256": "ea37db3d2e24f7b0e3380915c1d1f7e7e51472d6716d6a010c87615ee08e6cb9",
+      "beforeSha256": "c1bb8947703e4994dbb529add0e885813113681cdd2bcd6c2aa28987dd8de42e"
+    },
+    {
+      "target": "plugins/Denizen/scripts/qd_aincrad.dsc",
+      "sha256": "c3bcb230391d505fb99ed028aad76aa28d9c473ce29c61ffaa150d4094c0e998",
+      "beforeSha256": "8ba7fc1cce351b8323d60a2797b52a493a541cf473ce070a8ab132880f39a6c4"
+    },
+    {
+      "target": "plugins/AgentFriend/agent-guide.yml",
+      "sha256": "c289b6768302e6d627c8761a7e048e77881e39350e6bff8605779a60760f0b38",
+      "beforeSha256": "4f3ae9538cca4714848c6600fe87b0233130fe89f441d6233f245e40f9072673"
+    }
+  ],
+  "backup": {
+    "id": "20261027-031540",
+    "copies": 2,
+    "fullColdBackup": true,
+    "stoppedBeforeBackupCall": true
+  },
+  "checks": {
+    "pureGeometryAssertions": 24529,
+    "realClientColdStart": 12,
+    "paperEventsAndState": 21,
+    "installer": 15,
+    "productionReadback": 82,
+    "clientEvidenceSha256": "87252d626409571a41220e222ce73fbd7ea50e72f551bd10e8d45e55a877bdb7",
+    "postflightEvidenceSha256": "f7aa221ceabcb8d2641b54458755adc3c63bbe82ca5280cf14ed99c108aa27eb",
+    "publicSourceSecretScan": "74 indexed files, no findings; final docs separately scanned"
+  },
+  "map": {
+    "world": "aincrad",
+    "entry": [
+      -582.5,
+      69,
+      934.5
+    ],
+    "enter": "/warp aincrad",
+    "leave": "/warp village",
+    "skill": "travel",
+    "skillPointsToLearn": 1,
+    "manaPerSuccessfulTeleport": 6,
+    "source": "https://www.curseforge.com/minecraft/worlds/sao-map-floor-1",
+    "mapArchiveIncluded": false
+  },
+  "limits": [
+    "Full 0.4.48 RPG remains a separate unshipped candidate.",
+    "Skill download 1.3.3 unchanged; source guidance and live first rules page updated.",
+    "Goddess handbook updated; actual Agent reading was not observed.",
+    "Existing multiple Eye watcher warning was not repaired by this map change."
+  ]
+}

@@ -1,0 +1,31 @@
+# Merge into the pinned TAB 6.2.1 generated config. Sidebar only. Existing
+# display names, teams, tab-list and chat continue to have their original owners.
+header-footer: {enabled: false}
+tablist-name-formatting: {enabled: false}
+scoreboard-teams: {enabled: false}
+playerlist-objective: {enabled: false}
+belowname-objective: {enabled: false}
+prevent-spectator-effect: {enabled: false}
+bossbar: {enabled: false}
+layout: {enabled: false}
+global-playerlist: {enabled: false}
+scoreboard:
+  enabled: true
+  toggle-command: /sb
+  remember-toggle-choice: true
+  hidden-by-default: false
+  delay-on-join-milliseconds: 3000
+  scoreboards:
+    conquest:
+      title: '&6千灯纪 · 攻略纪行'
+      display-condition: '%qd_visible%=yes'
+      lines:
+        - '&f职业 &e%qd_profession%'
+        - '&f战斗 &aLv.%qd_level%'
+        - '&f升级 &7%qd_xp%'
+        - '&f生命 &c%qd_health%'
+        - '&f正式攻略 &b%qd_floor% 层'
+        - '&f攻略排名 &e%qd_rank%'
+        - '&7%qd_goal%'
+        - '&7进度 /mycli status'
+        - '&8练习塔成绩单独统计'
