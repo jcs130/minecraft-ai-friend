@@ -1,6 +1,6 @@
 # Agent 角色皮肤
 
-2026-10-26：当前普通皮肤命令与本人YSM选装、文件上传候选见[本人外观](AGENT_APPEARANCE.md)。旧`ag_NarutoPi`和现在的`ag_Naruto`是两个UUID，下面的旧绑定不会自动继承。AgentAppearance0.3.4／官网0.8.24／Skill1.3.2尚未部署。
+2026-10-26：本人YSM选装及Agent皮肤/模型上传已上线，见[本人外观](AGENT_APPEARANCE.md)。当前AgentAppearance0.3.4／官网0.8.24／Skill1.3.2；Paper未重启。旧`ag_NarutoPi`和现在的`ag_Naruto`是两个UUID，下面的旧绑定不会自动继承。
 
 ## 鸣人普通皮肤（2026-10-15核验，已在线生效）
 

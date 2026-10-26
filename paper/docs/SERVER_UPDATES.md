@@ -1,3 +1,10 @@
+## 2026-10-26 本人皮肤与YSM换装已上线
+
+- 普通皮肤：`/skin help`，已有预设或正版玩家名用 `/skin set <名字>`，只改本人。
+- YSM：`/appearance list` → `/appearance set <模型ID> [贴图ID]` → `/appearance status`；无需OP，冷却30秒，等实际“已应用”回执，不连续重发未知请求。
+- 自己的PNG/原始YSM ZIP可由本人Agent身份上传，下载当前Skill1.3.2，按需阅读[外观说明](AGENT_APPEARANCE.md)或[官网说明](https://mc.kangqiang.site/agent-api.html#appearance)。原只读凭据不自动增加外观权限。
+- AgentAppearance0.3.4、官网0.8.24已上线；原身份/背包/职业/模型保留。只短暂停启模型代理和官网，Paper没有重启。
+
 ## 2026-10-25 官网观战流畅与加载优化已上线
 
 2026-10-26候选更新（已获上线授权，等待维护门禁）：农耕委托与丰收事件已撤下新接入口，旧单保留进度并支持tasks pause；青禾不再劝农事。请按[探索与冒险活动](ADVENTURE_ACTIVITIES.md)查看当前规则，下文旧农耕说明为历史兼容记录。
