@@ -24,11 +24,30 @@ it.each(['1.21.1','1.20.6'])('streams observed short-lived arrows on %s before r
     await writeFile(join(root,'public/asset-source.json'),JSON.stringify({minecraftVersion:version,clientJarSha256:jar}));
     await writeFile(join(root,'viewer-client.json'),JSON.stringify({minecraftVersion:version,clientJarSha256:jar,
       browserBundleSha256:hash(client),mesherSha256:hash(worker),runtimeRegistryVersion:1,preset:null}));
-    const {bot}=viewerBot(version);Object.assign(bot,{entities:{}});
+    const {bot,protocol}=viewerBot(version);Object.assign(bot,{entities:{}});
+    // Incoming observations plus explicitly simulated outgoing use packets.
+    // The viewer itself must never initiate one.
+    protocol.write=()=>{};
+    const simulated=Object.assign(bot,{heldItem:{name:'shield'},usingHeldItem:false});
+    bot.inventory.slots[36]={name:'shield',count:1};bot.inventory.slots[45]={name:'shield',count:1};
     viewer=await startModernViewer(bot as never,{assetsDir:root,port:await freeViewerPort(),remoteTextures:false});
     socket=io(viewer.url,{autoConnect:false,reconnection:false,transports:['websocket']});
     const ready=new Promise(resolve=>socket!.once('version',resolve));socket.connect();await ready;
     const seen:Array<{event:string;value:any}>=[];
+    const avatars:any[]=[];socket.on('avatarState',v=>avatars.push(v));
+    const write=protocol.write as (name:string,params:Record<string,unknown>)=>void;
+    simulated.usingHeldItem=true;write('use_item',{hand:0});
+    await expect.poll(()=>avatars.at(-1)?.shieldHand).toBe('mainhand');
+    expect(avatars.at(-1)?.usingOffhand).toBe(false);
+    write('use_item',{hand:1});
+    await expect.poll(()=>avatars.at(-1)?.shieldHand).toBe('offhand');
+    expect(avatars.at(-1)?.usingOffhand).toBe(true);
+    simulated.usingHeldItem=false;write('block_dig',{status:5});
+    await expect.poll(()=>avatars.at(-1)?.shieldRaised).toBe(false);
+    simulated.usingHeldItem=true;write('use_item',{hand:1});bot.health=0;
+    await expect.poll(()=>avatars.at(-1)?.health).toBe(0);
+    expect(avatars.at(-1)?.shieldRaised).toBe(false);expect(avatars.at(-1)?.shieldHand).toBe(null);
+    bot.health=20;simulated.usingHeldItem=false;write('block_dig',{status:5});
     for(const event of ['entity','entityMoved'])socket.on(event,value=>seen.push({event,value}));
     const arrow={...bot.entity,id:72,name:'arrow',type:'projectile',position:bot.entity.position.offset(1,0,0),velocity:bot.entity.position.offset(0,-64,0)};
     arrow.velocity.set(2,0,0);Object.assign(bot.entities,{72:arrow});
@@ -44,6 +63,12 @@ it.each(['1.21.1','1.20.6'])('streams observed short-lived arrows on %s before r
     bot.emit('entitySpawn',far);bot.emit('entityGone',far);
     await new Promise(resolve=>setTimeout(resolve,150));
     expect(seen.filter(x=>[72,73].includes(x.value.id))).toHaveLength(2);
+    for (const [index,name] of ['potion','snowball','egg','ender_pearl','experience_bottle','fireball','small_fireball','dragon_fireball','shulker_bullet','llama_spit','wind_charge','breeze_wind_charge','wither_skull','firework_rocket'].entries()) {
+      const projectile={...arrow,id:100+index,name};
+      bot.emit('entitySpawn',projectile);bot.emit('entityGone',projectile);
+      await expect.poll(()=>seen.filter(x=>x.value.id===projectile.id).length).toBe(2);
+      expect(seen.filter(x=>x.value.id===projectile.id).map(x=>x.value.delete??false)).toEqual([false,true]);
+    }
     const moving={...arrow,id:74};Object.assign(bot.entities,{74:moving});bot.emit('entitySpawn',moving);
     await expect.poll(()=>seen.filter(x=>x.value.id===74).length).toBe(1);
     moving.position=moving.position.offset(1,0,0);moving.velocity=moving.velocity.clone().set(2,-.5,0);
