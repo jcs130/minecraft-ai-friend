@@ -30,6 +30,7 @@ import type { MinecraftLog } from './log.ts';
 import type { SkillCall } from './skills.ts';
 import { spatialBody } from './spatial-site.ts';
 import type { CombatResult, CombatScene, CombatControlSummary, MovementRejection } from './combat-observation.ts';
+import type { DeathLifecycle } from './death-lifecycle.ts';
 import {
   HARD, blend, blur, decide, dirSlot, newMap, slotDir, write, writeSlot, type Map16,
 } from './combat-context.ts';
@@ -293,6 +294,8 @@ export class CombatSession {
   private lastMovementRejection: MovementRejection | null = null;
   private startedAt = 0;
   private healthBefore: number | null = null;
+  /** A combat observation belongs to this life, never to the next respawn. */
+  private lifeEpisodeAtStart: string | null = null;
   private sceneBefore: CombatScene | undefined;
   /** 会话级总_cap 起点:仅 idle→engage 时重置,内部 fight/retreat 振荡不重置 */
   private sessionStartedAt = 0;
@@ -398,7 +401,7 @@ export class CombatSession {
   private lastRangedHitAt = 0;
 
   private readonly onTick = (): void => {
-    this.sampleTrajectory();
+    if (this.bot && !this.bodyEnded(this.bot)) this.sampleTrajectory();
     this.tick();
   };
   private readonly onDead = (e: { id?: number; name?: string; position?: Vec3 }): void => this.noteDead(e);
@@ -435,6 +438,8 @@ export class CombatSession {
   get tracking(): boolean { return this.state === 'tracking'; }
 
   reactionState(): { targetId: number | null; canStep: boolean; sinceHitMs: number | null; retreating: boolean } {
+    if (!this.bot || !this.alive(this.bot) || this.bodyEnded(this.bot))
+      return { targetId: null, canStep: false, sinceHitMs: null, retreating: false };
     return { targetId: this.targetId >= 0 ? this.targetId : null,
       canStep: this.fighting && !this.eating && !this.pathing && this.swingPhase === 'idle' && this.hybridWeapon === 'melee',
       sinceHitMs: this.fighting ? Date.now() - Math.max(this.lastLandedAt, this.startedAt) : null,
@@ -444,7 +449,7 @@ export class CombatSession {
   /** Read-only target eligibility shared by candidate construction and execution. */
   engagementTargets(): number[] {
     const bot = this.opts.getBot(), t = this.opts.tuning();
-    if (!bot?.entity || (this.active && !this.tracking && !this.fighting) || !t.enabled || t.fight === 'off'
+    if (!this.alive(bot) || (this.active && (this.bodyEnded(bot) || (!this.tracking && !this.fighting))) || !t.enabled || t.fight === 'off'
       || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot))
@@ -458,7 +463,7 @@ export class CombatSession {
   /** Tracking must use the same provocation, visibility and admission rules as react(). */
   trackingTargets(): number[] {
     const bot = this.opts.getBot(), t = this.opts.tuning();
-    if (!bot?.entity || !t.enabled || this.state === 'retreating'
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || !t.enabled || this.state === 'retreating'
       || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (!this.active && (Date.now() < this.capCooldownUntil
@@ -469,7 +474,7 @@ export class CombatSession {
 
   canRetreat(): boolean {
     const bot = this.opts.getBot();
-    if (!bot?.entity || (bot.health ?? 0) <= 0 || this.opts.envBusy()
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || this.opts.envBusy()
       || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
     return this.active || this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible);
   }
@@ -479,7 +484,7 @@ export class CombatSession {
     | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
     | { kind: 'step'; destination: [number, number, number] }): boolean {
     const bot = this.opts.getBot();
-    if (!bot?.entity || (bot.health ?? 0) <= 0 || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
     if (action.kind === 'retreat') {
       if (!this.canRetreat()) return false;
       if (this.state === 'retreating') return true;
@@ -582,6 +587,11 @@ export class CombatSession {
   onHurtBy(attackerId: number, name: string): boolean {
     const t = this.opts.tuning();
     if (!t.enabled) return false;
+    const current = this.opts.getBot();
+    if (!this.alive(current) || (this.active && this.bodyEnded(current))) {
+      if (this.active && current && current === this.bot) this.end(this.bodyEnded(current) ? 'death' : 'gone');
+      return false;
+    }
     this.lastSelfHurtAt = Date.now();
     if (this.state === 'retreating') {
       this.retreatHits += 1;
@@ -674,7 +684,7 @@ export class CombatSession {
     if (t.fight === 'off') return;
     if (!t.arena && Date.now() < this.cooldownUntil) return;
     const bot = this.opts.getBot();
-    if (!bot?.entity) return;
+    if (!this.alive(bot)) return;
     // armed 模式仅在背包有可用近战武器或远程武器就绪时主动进场。
     if (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot)) return;
     this.bot = bot;
@@ -691,9 +701,25 @@ export class CombatSession {
     return Math.ceil(this.bot?.health ?? 0);
   }
 
+  private life(bot: Bot): DeathLifecycle | undefined {
+    return (bot as Bot & { deathLifecycle?: DeathLifecycle }).deathLifecycle;
+  }
+
+  private alive(bot: Bot | null | undefined): bot is Bot {
+    if (!bot?.entity || !Number.isFinite(bot.health) || bot.health <= 0) return false;
+    const phase = this.life(bot)?.phase;
+    return phase === undefined || phase === 'alive';
+  }
+
+  private bodyEnded(bot: Bot): boolean {
+    const life = this.life(bot);
+    return (Number.isFinite(bot.health) && bot.health <= 0)
+      || (!!life && (life.phase !== 'alive' || life.episodeId !== this.lifeEpisodeAtStart));
+  }
+
   private engage(firstName: string, hurt: boolean, initial: 'fighting' | 'tracking' = 'fighting'): boolean {
     const bot = this.opts.getBot();
-    if (!bot?.entity) return false;
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot))) return false;
     // 血线不足时转入撤退，避免 250ms 巡检反复尝试进场。
     const line = this.opts.tuning().fleeHealth + (hurt ? 0 : ENGAGE_MARGIN);
     if ((bot.health ?? 20) < line) {
@@ -728,6 +754,7 @@ export class CombatSession {
     const now = Date.now();
     this.controlSummary = { schemaVersion: 1, finalMode: 'fighting', enteredDesperate: false, retreat: null };
     this.startedAt = now;
+    this.lifeEpisodeAtStart = this.life(bot)?.episodeId ?? null;
     this.healthBefore = bot.health ?? null;
     this.sceneBefore = this.observeScene(bot);
     this.sessionStartedAt = now;
@@ -998,6 +1025,8 @@ export class CombatSession {
     if (this.state === 'idle') return;
     const bot = this.bot;
     if (!bot?.entity || bot !== this.opts.getBot()) { this.end('gone'); return; }
+    if (this.bodyEnded(bot)) { this.end('death'); return; }
+    if (!this.alive(bot)) { this.end('gone'); return; }
     const now = Date.now();
     // E6:环境自保找上门(岩浆/溺水),战斗静默让位,由环境反射自己汇报
     if (this.opts.envBusy()) { this.end('env'); return; }
@@ -1823,14 +1852,17 @@ export class CombatSession {
     this.cancelRanged();
     const bot = this.bot;
     if (!bot?.entity) { this.end('gone'); return; }
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot))) { this.end('death'); return; }
     this.cancelCombatFood(bot);
     this.releaseWalkOnly ??= walkOnlyPath(bot);
     if (why === 'flee') this.opts.onLowHealth?.(bot);
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot))) { this.end('death'); return; }
     // 没打起来就直接撤(E7 / 血线挡下):E4 滑窗记的是这一场,起点得是现在,
     // 否则 end() 会把上一场的开始时刻算成本场时长
     if (this.state === 'idle') {
       this.controlSummary = { schemaVersion: 1, finalMode: 'retreating', enteredDesperate: false, retreat: null };
       this.startedAt = Date.now();
+      this.lifeEpisodeAtStart = this.life(bot)?.episodeId ?? null;
       this.healthBefore = bot.health ?? null;
       this.sceneBefore = this.observeScene(bot);
       this.sessionStartedAt = this.startedAt;
@@ -2085,6 +2117,7 @@ export class CombatSession {
    */
   standDown(firstStep?: SkillCall): string | null {
     if (this.state === 'idle') return null;
+    if (this.bot && this.bodyEnded(this.bot)) { this.end('death'); return null; }
     // queue:"now" 只更新普通任务意图，不清除受击和无进展记录。
     // 低血、绝境战斗或刚受击的撤退只向进食和撤离交还身体。
     const now = Date.now();
@@ -2115,12 +2148,14 @@ export class CombatSession {
   /** mc_stop:收手 + 撤退(原地站住等于送死)。返回给工具回执的一句话 */
   requestStop(): string | null {
     if (this.state === 'idle') return null;
+    if (this.bot && this.bodyEnded(this.bot)) { this.end('death'); return null; }
     if (this.state === 'retreating') return '正在撤了';
     this.beginRetreat('mc_stop');
     return '收手了,正在撤离';
   }
 
   private endClear(): void {
+    if (this.bot && this.bodyEnded(this.bot)) { this.end('death'); return; }
     const totalKills = [...this.kills.values()].reduce((a, b) => a + b, 0);
     const what = totalKills > 0
       ? `打完了,干掉 ${[...this.kills].map(([n, c]) => `${zhEntity(n)}${c > 1 ? `×${c}` : ''}`).join('、')}。`
@@ -2160,12 +2195,13 @@ export class CombatSession {
 
   private end(reason: EndReason): void {
     if (this.state === 'idle') return;
+    if (this.bot && this.bodyEnded(this.bot)) reason = 'death';
     this.cancelRanged();
     const bot = this.bot;
     if (bot) this.cancelCombatFood(bot);
     const controlSummary = structuredClone({ ...this.controlSummary, finalMode: this.state });
-    const lifecycle = (bot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
-    const deathEpisodeId = reason === 'death' && lifecycle?.phase !== 'alive' && lifecycle?.episodeId
+    const lifecycle = bot ? this.life(bot) : undefined;
+    const deathEpisodeId = reason === 'death' && lifecycle?.episodeId && lifecycle.episodeId !== this.lifeEpisodeAtStart
       && Date.parse(lifecycle.observedAt) >= this.startedAt ? lifecycle.episodeId : undefined;
     this.state = 'idle';
     this.trackingLease = null;
@@ -2189,7 +2225,7 @@ export class CombatSession {
       msg: `收工(${reason}),${Math.round((Date.now() - this.startedAt) / 1000)}s,` +
         `击杀 ${[...this.kills.values()].reduce((a, b) => a + b, 0)},` +
         `挥刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,` +
-        `放箭 ${this.arrows} 支命中 ${this.rangedLanded} 次,生命 ${this.hp()}/20`,
+        `放箭 ${this.arrows} 支命中 ${this.rangedLanded} 次,生命 ${reason === 'death' ? 0 : this.hp()}/20`,
       data: {
         reason, ms: Date.now() - this.startedAt, kills: Object.fromEntries(this.kills),
         swings: this.swings, arrows: this.arrows, meleeLanded: this.meleeLanded(),
@@ -2198,7 +2234,7 @@ export class CombatSession {
     });
     this.opts.report?.({ startedAt: new Date(this.startedAt).toISOString(),
       endedAt: new Date(Date.now()).toISOString(), reason,
-      healthBefore: this.healthBefore, healthAfter: bot?.health ?? null,
+      healthBefore: this.healthBefore, healthAfter: reason === 'death' ? 0 : bot?.health ?? null,
       sceneBefore: this.sceneBefore, controlSummary, ...(deathEpisodeId ? { deathEpisodeId } : {}),
       kills: Object.fromEntries(this.kills), swings: this.swings,
       meleeLanded: this.meleeLanded(), arrows: this.arrows, rangedLanded: this.rangedLanded });

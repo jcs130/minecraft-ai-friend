@@ -144,6 +144,119 @@ async function drive(bot: EventEmitter, ms: number, stepMs = 50): Promise<void> 
   }
 }
 
+describe('combat death and respawn boundary', () => {
+  it('does not reopen combat on the dead body during the 250ms watch or count respawn as escape', async () => {
+    const enemy=foe(7,'zombie',2.5),{bot,controls}=combatRigBot([enemy]),b=bot as any;
+    b.respawn=()=>{};
+    const lifecycle=installDeathLifecycle(b,4000,()=>true);
+    const {session,combatReports,calls,events}=rig(bot,{arena:true});
+    try{
+      session.start();await drive(bot,300);
+      expect(session.active).toBe(true);
+      b.health=0;bot.emit('death');
+      expect(combatReports).toHaveLength(1);
+      const episode=b.deathLifecycle.episodeId;
+      expect(combatReports[0]).toMatchObject({reason:'death',healthAfter:0,deathEpisodeId:episode});
+      await drive(bot,1000);
+      expect(session.onHurtBy(7,'zombie')).toBe(false); // delayed lethal hit
+      expect(session.active).toBe(false);
+      expect(calls.suspended).toBe(1);
+      b.health=26;await drive(bot,300); // health can precede native spawn
+      expect(session.active).toBe(false);
+      b.entities={};b.entity.position=new Vec3(1463,64,0.5);
+      bot.emit('respawn');bot.emit('spawn');await drive(bot,2000);
+      expect(combatReports).toHaveLength(1);
+      expect(events.some(e=>/跑开了|撤出来了|血只剩 0/.test(e.text))).toBe(false);
+      expect(calls.resumed).toBe(0);
+      expect(Object.values(controls).some(Boolean)).toBe(false);
+      const fresh=foe(9,'zombie',1465);b.entities={9:fresh};
+      expect(session.onHurtBy(9,'zombie')).toBe(true);
+      session.stop();
+      expect(combatReports[1]).toMatchObject({healthBefore:26,reason:'gone'});
+      expect(combatReports[1].deathEpisodeId).toBeUndefined();
+    }finally{session.stop();lifecycle.dispose();}
+  });
+
+  it.each(['zero','pending-positive'] as const)('rejects all combat admissions for %s body state',async mode=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    b.health=mode==='zero'?0:26;
+    if(mode==='pending-positive')b.deathLifecycle={episodeId:'pending',phase:'respawn_pending',observedAt:new Date().toISOString(),respawnAt:null};
+    const {session,calls,events,combatReports}=rig(bot,{arena:true});
+    try{
+      session.start();await drive(bot,600);
+      expect(session.engagementTargets()).toEqual([]);
+      expect(session.trackingTargets()).toEqual([]);
+      expect(session.canRetreat()).toBe(false);
+      expect(session.react({kind:'retreat'})).toBe(false);
+      expect(session.react({kind:'engage',targetId:7})).toBe(false);
+      expect(session.onHurtBy(7,'zombie')).toBe(false);
+      expect(session.active).toBe(false);
+      expect(calls.suspended).toBe(0);expect(calls.resumed).toBe(0);
+      expect(combatReports).toEqual([]);expect(events).toEqual([]);
+    }finally{session.stop();}
+  });
+
+  it('settles a lethal health sample before the native death event once, without a success or task resume',async()=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    const {session,calls,combatReports,events}=rig(bot);
+    try{
+      b.health=9;session.onHurtBy(7,'zombie');await drive(bot,200);
+      b.health=0;await drive(bot,100);
+      expect(session.active).toBe(false);
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0]).toMatchObject({reason:'death',healthBefore:9,healthAfter:0});
+      bot.emit('death');await drive(bot,100);
+      expect(combatReports).toHaveLength(1);expect(calls.resumed).toBe(0);
+      expect(events.some(e=>/跑开了|撤出来了/.test(e.text))).toBe(false);
+    }finally{session.stop();}
+  });
+
+  it('does not lend a new alive death episode to an old retreat if native death delivery was missed',async()=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    b.health=9;
+    const {session,combatReports,calls,events}=rig(bot);
+    try{
+      session.onHurtBy(7,'zombie');await drive(bot,300);
+      b.deathLifecycle={episodeId:'next-life',phase:'alive',observedAt:new Date().toISOString(),respawnAt:null};
+      b.health=26;b.entities={};b.entity.position=new Vec3(1463,64,0.5);
+      await drive(bot,2000);
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0]).toMatchObject({reason:'death',deathEpisodeId:'next-life',healthBefore:9,healthAfter:0});
+      expect(combatReports[0].controlSummary?.retreat?.movement.observedHorizontalDistance).toBe(0);
+      expect(calls.resumed).toBe(0);
+      expect(events.some(e=>/跑开了|撤出来了/.test(e.text))).toBe(false);
+    }finally{session.stop();}
+  });
+
+  it.each(['missing-entity','unknown-health'] as const)('keeps %s and connection loss distinct from a witnessed death',async mode=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    const {session,combatReports,calls}=rig(bot);
+    try{
+      session.onHurtBy(7,'zombie');
+      if(mode==='missing-entity')b.entity=null;else b.health=undefined;
+      session.onConnectionLost();
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0].reason).toBe('gone');
+      expect(combatReports[0].deathEpisodeId).toBeUndefined();
+      expect(calls.resumed).toBe(0);
+    }finally{session.stop();}
+  });
+
+  it.each(['requestStop','standDown'] as const)('does not acknowledge %s as a retreat on a terminal body',method=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    const {session,combatReports,calls,events}=rig(bot);
+    try{
+      session.onHurtBy(7,'zombie');b.health=0;
+      expect(session.reactionState()).toMatchObject({canStep:false,targetId:null,retreating:false});
+      expect(session[method]()).toBeNull();
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0].reason).toBe('death');
+      expect(calls.resumed).toBe(0);
+      expect(events.some(e=>/跑开了|撤出来了|先不打了/.test(e.text))).toBe(false);
+    }finally{session.stop();}
+  });
+});
+
 describe('战斗补给', () => {
   it('tracks proactively, keeps the chosen range on physics ticks and never swings until told to engage', async () => {
     const enemy = foe(7, 'zombie', 10), { bot, controls, attacks } = combatRigBot([enemy]);
@@ -1436,7 +1549,7 @@ describe('战斗:水里与逃不掉', () => {
     expect(Buffer.byteLength(JSON.stringify(r.controlSummary))).toBeLessThanOrEqual(2048);
     expect(calls.resumed).toBe(0);
     expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(false);
-    b.health = 9; session.onHurtBy(7, 'drowned'); session.stop();
+    b.health = 9; bot.emit('respawn'); bot.emit('spawn'); session.onHurtBy(7, 'drowned'); session.stop();
     expect(combatReports[1].deathEpisodeId).toBeUndefined();
     lifecycle.dispose();
   });
