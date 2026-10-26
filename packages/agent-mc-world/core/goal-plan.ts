@@ -634,6 +634,10 @@ export function recordGoalJudgment(
   const trimmed = note.trim();
   if (!trimmed) return { ok: false, error: 'judgment 说明不能空' };
   const completed = completedGoalSteps(plan);
+  if (completed === plan.steps.length) {
+    return { ok: false, error: `本目标共 ${plan.steps.length} 步，均已有里程碑记录，没有下一步。`
+      + '请核对实际成果：判断记录有误用 reopen 重开对应步骤；计划改变用 revise 修订；只有目标实际达成才用 done 结案。原记录未改动。' };
+  }
   if (completed !== index) {
     const blocker = plan.steps[completed];
     return {

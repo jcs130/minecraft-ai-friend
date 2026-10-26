@@ -81,6 +81,53 @@ it('reflects evidence into searchable memory once, recovers interrupted receipts
   expect(()=>collector.validateMemoryRefs(['mc-memory:aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1'])).toThrow();
   expect(network).not.toHaveBeenCalled();
 });
+it('documents the real reflection wrapper and rejects observed array conditions without writing or rewriting memory',async()=>{
+  const directory=dir(),book=new OperationExperienceBook(directory),memory=new GameMemoryBook(directory);
+  const row=book.begin(scope,'run','inspect','mc_do',{skill:'inspect'},sample());
+  const help=await book.query({action:'experience',operation:'help'},ctx,memory);
+  const contract=help.reflection as {text:string;fields:Record<string,unknown>;example:Record<string,any>};
+  expect(contract.fields).toMatchObject({requestId:{location:'top-level',type:'string',maxLength:128},summary:{location:'input',type:'string',maxLength:180},
+    lesson:{maxLength:1800},conditions:{location:'input',type:'string',maxLength:600},counterexample:{maxLength:600},ids:{minItems:1,maxItems:8,uniqueItems:true}});
+  expect(contract.text).toContain('single-line');expect(contract.text).toContain('UTF-16');
+  expect(contract.example).toMatchObject({action:'experience',operation:'reflect',requestId:'review-1',input:{verdict:'unclear'}});
+  // The live error shape: the caller sent two conditions as an array after reading help.
+  const conditions=['主背包占用36/36且需要捡掉落物','organize的rules里keep等于该物品现有数量'];
+  const request={...contract.example,requestId:'array-conditions',input:{...contract.example.input,ids:[row.id],conditions}};
+  const original=JSON.stringify(request);
+  const snapshot=()=>readdirSync(directory,{recursive:true}).filter(file=>String(file).endsWith('.json')).sort().map(file=>[file,readFileSync(join(directory,String(file)),'utf8')]);
+  const before=snapshot();
+  for(let attempt=0;attempt<2;attempt++)await expect(book.query(request,ctx,memory)).rejects.toThrow(/Invalid conditions: expected a non-empty single-line string, at most 600.*received array/);
+  expect(JSON.stringify(request)).toBe(original);expect(snapshot()).toEqual(before);
+  expect(memory.execute({action:'search',kind:'lesson'},ctx).total).toBe(0);
+  // Only an explicit caller correction follows the original evidence-linked save path.
+  const corrected={...request,input:{...request.input,conditions:conditions.join('；')}};
+  const receipt=await book.query(corrected,ctx,memory);
+  expect(receipt).toMatchObject({saved:true,masteryVerified:false,goalVerified:false,verdict:'unclear'});
+  expect(await book.query(corrected,ctx,memory)).toMatchObject({duplicate:true,note:receipt.note});
+  expect(memory.execute({action:'search',kind:'lesson'},ctx).total).toBe(1);
+  expect((memory.execute({action:'get',id:(receipt.note as {id:string}).id},ctx).entry as {content:string}).content).toContain(conditions.join('；'));
+});
+it.each([
+  ['requestId',129,128],['summary',181,180],['lesson',1801,1800],['conditions',601,600],['counterexample',601,600],
+] as const)('reports the %s limit without echoing private text and saves nothing on failure',async(field,length,limit)=>{
+  const directory=dir(),book=new OperationExperienceBook(directory),memory=new GameMemoryBook(directory);
+  const row=book.begin(scope,'run','inspect','mc_do',{skill:'inspect'},sample());
+  const request:{requestId:string;operation:string;input:Record<string,unknown>}={requestId:'review',operation:'reflect',input:{ids:[row.id],summary:'summary',lesson:'lesson',conditions:'conditions',counterexample:'counterexample',verdict:'unclear'}};
+  const privateText='PRIVATE_TEXT'.padEnd(length,'x');
+  if(field==='requestId')request.requestId=privateText;else request.input[field]=privateText;
+  const before=readdirSync(directory,{recursive:true}).sort();
+  await expect(book.query(request,ctx,memory)).rejects.toThrow(new RegExp(`at most ${limit}.*received string \\(length ${length}\\)`));
+  await book.query(request,ctx,memory).catch(error=>expect(String(error)).not.toContain('PRIVATE_TEXT'));
+  expect(readdirSync(directory,{recursive:true}).sort()).toEqual(before);
+  expect(memory.execute({action:'search',kind:'lesson'},ctx).total).toBe(0);
+});
+it.each([['line\nbreak','string'],['line\tbreak','string'],['   ','string'],[null,'null'],[{},'object']] as const)('preserves the single-line reflection contract for %j',async(value,type)=>{
+  const directory=dir(),book=new OperationExperienceBook(directory),memory=new GameMemoryBook(directory);
+  const row=book.begin(scope,'run','inspect','mc_do',{skill:'inspect'},sample());
+  await expect(book.query({requestId:'review',operation:'reflect',input:{ids:[row.id],summary:'summary',lesson:'lesson',conditions:value,counterexample:'counterexample',verdict:'unclear'}},ctx,memory))
+    .rejects.toThrow(new RegExp(`Invalid conditions:.*received ${type}`));
+  expect(memory.execute({action:'search',kind:'lesson'},ctx).total).toBe(0);
+});
 it('records rejected decisions without treating their probability as execution accuracy',async()=>{
   const directory=dir(),book=new OperationExperienceBook(directory);
   const row=book.decision(scope,'run',{id:'d',category:'skill',selected:'blink',status:'stale',candidates:[{id:'blink',ready:true,probability:.95}],elapsedMs:2100},sample());

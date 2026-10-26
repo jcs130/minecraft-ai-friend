@@ -77,6 +77,11 @@ This package owns the Mineflayer connection, inventory synchronization, navigati
 validated actions, executable methods, evidence receipts, current facts/archive,
 deduplication, goal revisions, cancellation, SDK/MCP and the viewer integration.
 The host owns personality, goals, planning model calls, decisions and personal long-term memory.
+
+The core's five-slot goal projection can survive a reload through the configured
+`dataDir`, scoped to world/account/Agent. It restores intentions and historical
+judgments, rechecks mechanical conditions, and never replays actions. See
+[goal recovery and combat equipment](docs/goal-recovery.md).
 The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
 
 The SDK/MCP native backend uses that same notebook. A host mounting the body

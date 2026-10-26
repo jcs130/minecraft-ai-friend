@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { parseGoalPlan } from '../core/goal-plan.ts';
+import { parseGoalPlan, recordGoalJudgment, reopenGoalJudgment } from '../core/goal-plan.ts';
 import { parseGoal } from '../core/world.ts';
 
 describe('recoverable goal probe contract errors', () => {
+  it('does not send a completed four-step plan to a nonexistent fifth step or overwrite a mistaken judgment', () => {
+    const plan = parseGoalPlan(Array.from({ length: 4 }, (_, i) => ({ do: `Stage ${i + 1}`, judgment: 'Host receipt required' })));
+    if ('error' in plan) throw Error(plan.error);
+    for (let step = 1; step <= 4; step++) expect(recordGoalJudgment(plan, step, `Reported stage ${step}`, step).ok).toBe(true);
+    const before = structuredClone(plan);
+    expect(recordGoalJudgment(plan, 5, 'Equipment update', 10)).toEqual({ ok: false, error: '没有第 5 个里程碑' });
+    for (const step of [1, 4]) {
+      const outcome = recordGoalJudgment(plan, step, 'Correction with newer evidence', 11);
+      expect(outcome).toMatchObject({ ok: false, error: expect.stringContaining('没有下一步') });
+      if ('error' in outcome) {
+        expect(outcome.error).not.toContain('当前应处理第 5 步');
+        for (const op of ['reopen', 'revise', 'done']) expect(outcome.error).toContain(op);
+      }
+    }
+    expect(plan).toEqual(before);
+    expect(reopenGoalJudgment(plan, 4)).toMatchObject({ ok: true, completed: 3 });
+    expect(recordGoalJudgment(plan, 4, 'New verified source for the host judgment', 12).ok).toBe(true);
+  });
+
   it('reports both independent failures from the live revision instead of spending a model turn per error', () => {
     const plan = [
       { do: 'start the dungeon', verify: [{ source: 'status', field: 'dungeon_active', equals: true }] },

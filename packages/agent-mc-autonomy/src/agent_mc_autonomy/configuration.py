@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from .decision_profiles import DecisionSettings
 from .fast import FastSettings
+from .native_settings import NativeSettings
 
 DEFAULT_CONTEXT_TOKENS = 65536
 
@@ -188,6 +189,7 @@ class Settings:
     memory: MemorySettings = field(default_factory=MemorySettings)
     knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
     decision_policy: DecisionSettings = field(default_factory=DecisionSettings)
+    native: NativeSettings = field(default_factory=NativeSettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -297,6 +299,7 @@ class Settings:
             memory=MemorySettings.parse(raw.get("memory", {})),
             knowledge=KnowledgeSettings.parse(raw.get("knowledge", {})),
             decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),
+            native=NativeSettings.parse(raw.get("native", {})),
         )
 
     def require_server(self) -> None:
@@ -329,6 +332,7 @@ class Settings:
             "metricsPort": 0, "consolePort": self.console_port,
             **({"operatorIdentity": self.identity} if self.console_port else {}),
             "world": {
+                **self.native.client_config(),
                 **({"provider": "java-client", "javaClient": self.java_client} if self.body_provider == "java-client" else {}),
                 "host": self.host, "port": self.port, "username": self.username, "auth": self.auth,
                 "version": self.version, "profilesFolder": str(private / "auth"),

@@ -67,8 +67,12 @@ function stable(v: unknown): string {
   return '{' + Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => JSON.stringify(k) + ':' + stable(x)).join(',') + '}';
 }
 export const operationScopeKey = (s: GameMemoryScope) => experienceHash([s.realm, s.account, s.agent]);
+const reflectionTextLimits = {requestId:128,summary:180,lesson:1800,conditions:600,counterexample:600} as const;
 function bounded(v: unknown, name: string, max = 256): string {
-  if (typeof v !== 'string' || !v.trim() || v.length > max || /[\x00-\x1f]/.test(v)) throw new Error(`Invalid ${name}`);
+  if (typeof v !== 'string' || !v.trim() || v.length > max || /[\x00-\x1f]/.test(v)) {
+    const received=Array.isArray(v)?'array':v===null?'null':typeof v==='string'?`string (length ${v.length})`:typeof v;
+    throw new Error(`Invalid ${name}: expected a non-empty single-line string, at most ${max} UTF-16 code units, with no control characters (U+0000..U+001F); received ${received}. Supply one string within this limit, not an array or object.`);
+  }
   return v;
 }
 const number = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -213,7 +217,16 @@ export class OperationExperienceBook {
     if (args.operation==='help' || !args.operation) return {protocol:'agent-mc-experience/v1',operations:{
       list:'input:{operation?,controller?,kind?,run?,limit:1..20,offset?}; recent 1024 rows, exact get retains older rows',
       get:'input:{id}; exact scope-bound evidence',stats:'input:{operation?,controller?,run?}; bounded window, not model accuracy',
-      reflect:'requestId + input:{ids:[1..8 exact IDs],summary,lesson,conditions,counterexample,verdict:helpful|harmful|unclear}; attributed notebook lesson; no automatic activation'},
+      reflect:'Top-level requestId plus input:{ids,summary,lesson,conditions,counterexample,verdict}; see reflection for types, limits and a complete call. Attributed notebook lesson; no automatic activation'},
+      reflection:{
+        text:'All text fields are non-empty single-line strings, not arrays or objects; no control characters U+0000..U+001F. Length limits count UTF-16 code units.',
+        fields:{requestId:{location:'top-level',type:'string',maxLength:reflectionTextLimits.requestId},
+          ids:{location:'input',type:'array of strings',minItems:1,maxItems:8,uniqueItems:true,source:'Exact IDs returned by experience list/get in this realm/account/agent scope'},
+          ...Object.fromEntries(Object.entries(reflectionTextLimits).filter(([field])=>field!=='requestId').map(([field,maxLength])=>[field,{location:'input',type:'string',maxLength}])),
+          verdict:{location:'input',type:'string',enum:['helpful','harmful','unclear']}},
+        example:{action:'experience',operation:'reflect',requestId:'review-1',input:{ids:['<exact ID from experience list>'],summary:'Outcome needs verification',
+          lesson:'Check the observed result before repeating the method.',conditions:'The same method and relevant scene conditions apply.',counterexample:'A different scene or missing result evidence.',verdict:'unclear'}},
+        evidence:'Replace the example ID with real evidence. Helpful requires a completed operation with measured before/after. A saved interpretation is neither verified mastery nor a completed goal.'},
       privacy:'No prompts, model prose, code, chat or raw arguments. Hashes and allowlisted observations/choice metadata only.',
       meaning:'RPC return, choice probability, execution completion and goal success are different. Unknown effects are never replayed.',
       next:'Search mc_memory lessons before acting; pass decisionId, exact method revision and memoryRefs in agent-mc/v1 attribution. Use bounded methods and discover server abilities from real help.'};
@@ -226,14 +239,14 @@ export class OperationExperienceBook {
         measuredPairs:rows.filter(r=>r.kind==='operation'&&r.before&&r.after).length,goalSuccessRate:null,modelAccuracy:null,masteryVerified:false};
     }
     if (args.operation!=='reflect') throw new Error('Unknown experience operation');
-    const requestId=bounded(args.requestId,'reflection requestId',128);
+    const requestId=bounded(args.requestId,'reflection requestId',reflectionTextLimits.requestId);
     if (!Array.isArray(input.ids)||input.ids.length<1||input.ids.length>8||new Set(input.ids).size!==input.ids.length) throw new Error('Use 1..8 unique evidence IDs');
     const rows=input.ids.map(id=>this.get(ctx.scope,String(id)));
     if (!['helpful','harmful','unclear'].includes(String(input.verdict))) throw new Error('Invalid verdict');
     if (input.verdict==='helpful' && !rows.some(r=>r.kind==='operation'&&r.dispatch==='returned'&&r.execution?.terminal&&r.execution.phase==='completed'&&r.before&&r.after))
       throw new Error('Helpful review needs a completed operation and measured before/after; advice or RPC acceptance is insufficient');
-    const body={ids:input.ids,summary:bounded(input.summary,'summary',180),lesson:bounded(input.lesson,'lesson',1800),
-      conditions:bounded(input.conditions,'conditions',600),counterexample:bounded(input.counterexample,'counterexample',600),verdict:input.verdict};
+    const body={ids:input.ids,summary:bounded(input.summary,'summary',reflectionTextLimits.summary),lesson:bounded(input.lesson,'lesson',reflectionTextLimits.lesson),
+      conditions:bounded(input.conditions,'conditions',reflectionTextLimits.conditions),counterexample:bounded(input.counterexample,'counterexample',reflectionTextLimits.counterexample),verdict:input.verdict};
     const reviewId=experienceHash([operationScopeKey(ctx.scope),requestId]), digest=experienceHash(body), reference=`mc-experience:${reviewId}`;
     const dir=this.folder(ctx.scope);mkdirSync(dir,{recursive:true});const file=join(dir,`review-${reviewId}.json`);
     const old=existsSync(file)?JSON.parse(readFileSync(file,'utf8')):null;

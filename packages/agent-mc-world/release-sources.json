@@ -1,7 +1,7 @@
 {
   "viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "commit": "d60328fe7c6e54652779b81e447587b908399ba6",
+    "commit": "6363dabe5c8127ea5cbbed0e1c784119b9c21fe8",
     "assetPack": "java-1.21.1",
     "additionalPacks": [
       "java-1.20.6",
@@ -9,8 +9,8 @@
       "java-1.21.5"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-d60328fe-compatible.tgz",
-    "sha256": "19d000c0a65568d330d2a6b5a3ac35a34adfbaef2842320c2e6a3c59aa07eb71",
+    "artifact": "vendor/mc-visual-console-java-1.21.1-6363dabe-compatible.tgz",
+    "sha256": "0658ca0192b987a7c805b57fd9018938a63a510913c8ef70a9e0a83f901bba2b",
     "soundPacks": [
       "java-1.21.1-sounds",
       "java-1.20.6-sounds",
@@ -30,8 +30,8 @@
       "filesCheckedAgainstCurrentSharedAssetPacks": 28
     },
     "previousFrozenInput": {
-      "commit": "14aeb081fab1f2ed4d65cc8558a2b9d6eb066759",
-      "sha256": "a3558929cb9cb3401c71c2676d128721f7be47cb3c26a78d7e159b6aece4333d"
+      "commit": "d60328fe7c6e54652779b81e447587b908399ba6",
+      "sha256": "19d000c0a65568d330d2a6b5a3ac35a34adfbaef2842320c2e6a3c59aa07eb71"
     },
     "originalAssetInput": {
       "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
@@ -46,11 +46,11 @@
       {
         "version": "1.21.1",
         "clientJarSha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
-        "browserBundleSha256": "07abd5301e92dfdaff96ddaa793c2593551c424fd2dc0473bd2be3f03c06b98a",
-        "mesherSha256": "0bdf8a324c499c1661ab9d234fe6f2e04499fc4fc1eb935dc7c89fa11bf23e53",
+        "browserBundleSha256": "8b9bf95e4b5149323573a5e869a24a3e0282802d3a6743f4bfda0ee962353e47",
+        "mesherSha256": "2d3c925683f77dc18bad734e85d192c756b0431136216fcc02d475742bef2f21",
         "buildSource": {
-          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
-          "sourceFiles": 382,
+          "sourceSha256": "a56b3062ea4df59d16437ac34489f1c5b6c05ced7e1c1b46a94fe657454ff452",
+          "sourceFiles": 387,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
@@ -58,11 +58,11 @@
       {
         "version": "1.20.6",
         "clientJarSha256": "02dfd345ac1ad55692d5dbc8486ac7e4fea72cd54ac494a79cd48963048e56b2",
-        "browserBundleSha256": "930a11be8d9d36983f19c0246e8117372f4205fbb8fa7d411503abf991a248b8",
-        "mesherSha256": "6ac9dde8fbcc19ad94aca473fdf7699fff6d5fe4405d4acb1b2f4d2fd008dafa",
+        "browserBundleSha256": "65108d50c4cdc46731e7568e1b959dbb620d6fe0286cc7b98f0dcff630c79ecb",
+        "mesherSha256": "60348a1993e46c943aba13a127ecdbab1210ad60441f76ca60c0b2cb40d1f263",
         "buildSource": {
-          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
-          "sourceFiles": 382,
+          "sourceSha256": "a56b3062ea4df59d16437ac34489f1c5b6c05ced7e1c1b46a94fe657454ff452",
+          "sourceFiles": 387,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
@@ -70,11 +70,11 @@
       {
         "version": "1.21.11",
         "clientJarSha256": "1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd",
-        "browserBundleSha256": "783e54080b610055bd46a755fb7a547c4ad6dde188a57770c5c7dcefa92659ff",
-        "mesherSha256": "1a3c31fd873054f54d1be2b31b56d100b8c2eff1079e1e4274e88c55d8f79898",
+        "browserBundleSha256": "f1d1b247331cba9ef9c81ad90db3b2e06bbfbf8f7d52fe090ccf40e30b0b9c5c",
+        "mesherSha256": "4380630138ce835f228cc0bd2b52aecf4e62d2d7e8d32ff46c9079285ba5c926",
         "buildSource": {
-          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
-          "sourceFiles": 382,
+          "sourceSha256": "a56b3062ea4df59d16437ac34489f1c5b6c05ced7e1c1b46a94fe657454ff452",
+          "sourceFiles": 387,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
@@ -82,11 +82,11 @@
       {
         "version": "1.21.5",
         "clientJarSha256": "522672ad20b460c02c2e39b6c5035ef6a849af28eb11ab2ac7eb293d395a8c11",
-        "browserBundleSha256": "bb48ca3c5a3b86b91b412eb12d0e843a92037c0f70fb099561cba970dc7944eb",
-        "mesherSha256": "bab52f2ea048641c69ae886220c3fcff2db61a166b814cacc3b795f24713f3ca",
+        "browserBundleSha256": "3f8b5dc294284780ef7283ecfdff8fe65242f86a39399013933989a73fd03894",
+        "mesherSha256": "c4951379058f0b99d7851ef3f57c67070c683ad4dd678051e39a048783c47534",
         "buildSource": {
-          "sourceSha256": "b342df96069c86a1c9bd3f864d4932f115f8efdcd834da463fba3968a790cb5d",
-          "sourceFiles": 382,
+          "sourceSha256": "a56b3062ea4df59d16437ac34489f1c5b6c05ced7e1c1b46a94fe657454ff452",
+          "sourceFiles": 387,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null

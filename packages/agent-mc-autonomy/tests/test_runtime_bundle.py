@@ -281,8 +281,9 @@ def test_extracted_source_prefers_short_cache_with_full_hash_identity(bundle, tm
 
 def test_bundle_verification_does_not_require_hosts_long_path_manifest(bundle, monkeypatch):
     import os
-    import sys
-    if sys.platform != "win32":
+    # bundle mocks sys.platform to exercise portable manifest validation. The
+    # extended filesystem syntax itself still requires real Windows paths.
+    if os.name != "nt":
         pytest.skip("Windows legacy MAX_PATH regression")
     root, manifest, _ = bundle
     relative = "assets/" + "nested-resource-segment/" * 10 + "actual.bin"

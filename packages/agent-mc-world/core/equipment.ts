@@ -24,21 +24,23 @@ async function equipmentMove(bot: Bot, slot: number, move: () => Promise<void>):
 }
 
 /** Direct slot exchanges keep the cursor empty without moving unrelated hotbar items. */
-async function swapOffHandConfirmed(bot: Bot, source: number, destination: number): Promise<void> {
+async function swapOffHandConfirmed(bot: Bot, source: number, destination: number, checkActive?: () => void): Promise<void> {
   const window = bot.inventory, start = window.hotbarStart;
   const quickBar = Array.from({ length: 9 }, (_, i) => start + i);
+  checkActive?.();
   if (quickBar.includes(source)) {
-    await clickInventoryConfirmed(bot, destination, source - start, 2, window);
+    await clickInventoryConfirmed(bot, destination, source - start, 2, window, checkActive);
     return;
   }
   // F over the source swaps it directly with offhand. An unrelated hotbar
   // shortcut may be protected by the server even when both intended slots are
   // movable; it must not be borrowed as scratch storage. A denial stops here.
-  await clickInventoryConfirmed(bot, source, 40, 2, window);
+  await clickInventoryConfirmed(bot, source, 40, 2, window, checkActive);
 }
 
 /** Each inventory move has its own authoritative slot and cursor confirmation. */
-export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDestination): Promise<void> {
+export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDestination, checkActive?: () => void): Promise<void> {
+  checkActive?.();
   requirePlayerInventory(bot);
   const slot = bot.getEquipmentDestSlot(dest);
   if (item.slot === slot) return;
@@ -48,7 +50,8 @@ export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDe
       return;
     }
     const window = bot.inventory;
-    await resumeInventoryCursor(bot);
+    await resumeInventoryCursor(bot, checkActive);
+    checkActive?.();
     const source = item.slot;
     const found = window.slots[source];
     if (!found || !sameInventoryStack(found, item)) {
@@ -59,17 +62,20 @@ export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDe
         || source === bot.getEquipmentDestSlot('off-hand'))) {
       // A number-key swap preserves both complete stacks and an empty cursor,
       // even with a full bag or compatible stacks already in the selected hand.
-      await clickInventoryConfirmed(bot, source, slot - window.hotbarStart, 2, window);
+      await clickInventoryConfirmed(bot, source, slot - window.hotbarStart, 2, window, checkActive);
       return;
     }
     if (dest === 'off-hand' && source >= window.inventoryStart && source < window.inventoryEnd) {
-      await swapOffHandConfirmed(bot, source, slot);
+      await swapOffHandConfirmed(bot, source, slot, checkActive);
       return;
     }
-    await clickInventoryConfirmed(bot, source, 0, 0, window);
-    await clickInventoryConfirmed(bot, slot, 0, 0, window);
-    if (window.selectedItem) await clickInventoryConfirmed(bot, source, 0, 0, window);
+    await clickInventoryConfirmed(bot, source, 0, 0, window, checkActive);
+    checkActive?.();
+    await clickInventoryConfirmed(bot, slot, 0, 0, window, checkActive);
+    checkActive?.();
+    if (window.selectedItem) await clickInventoryConfirmed(bot, source, 0, 0, window, checkActive);
   });
+  checkActive?.();
   const worn = bot.inventory.slots[slot];
   if (!worn || !sameInventoryStack(worn, item) || bot.inventory.selectedItem) {
     throw new SkillBlocked(`换装后装备槽回读为${itemText(worn)}，未确认穿上点名装备`, [], 'server');
@@ -77,16 +83,19 @@ export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDe
 }
 
 /** Hotbar selection needs no inventory move; other hand swaps use the same server barrier as armor. */
-export async function equipHandConfirmed(bot: Bot, item: Item): Promise<void> {
+export async function equipHandConfirmed(bot: Bot, item: Item, checkActive?: () => void): Promise<void> {
+  checkActive?.();
   requirePlayerInventory(bot);
   if (bot.supportFeature?.('stateIdUsed') !== true) {
     await bot.equip(item, 'hand');
+    checkActive?.();
     if (!bot.heldItem || !sameInventoryStack(bot.heldItem, item)) {
       throw new SkillBlocked('主手回读未确认拿起点名物品', [], 'server');
     }
     return;
   }
-  await resumeInventoryCursor(bot);
+  await resumeInventoryCursor(bot, checkActive);
+  checkActive?.();
   const found = bot.inventory.slots[item.slot];
   if (!found || !sameInventoryStack(found, item)) {
     throw new SkillBlocked('待手持物品所在槽位已经变化，先重新核对背包');
@@ -95,8 +104,9 @@ export async function equipHandConfirmed(bot: Bot, item: Item): Promise<void> {
   if (item.slot >= start && item.slot < start + 9) {
     bot.setQuickBarSlot(item.slot - start);
   } else {
-    await equipSlotConfirmed(bot, item, 'hand');
+    await equipSlotConfirmed(bot, item, 'hand', checkActive);
   }
+  checkActive?.();
   if (!bot.heldItem || !sameInventoryStack(bot.heldItem, item) || bot.inventory.selectedItem) {
     throw new SkillBlocked('主手回读未确认拿起点名物品，先核对库存和游标', [], 'server');
   }

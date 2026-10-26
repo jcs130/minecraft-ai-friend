@@ -1032,6 +1032,27 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       pendingEntities.delete(id);
       if (knownEntities.delete(id) && socket.connected) socket.emit('entity', { id: entity.id, delete: true });
     };
+    // Keep the shared viewer's short-lived projectile policy: real samples are
+    // sent immediately, never extended or replayed after the server removes them.
+    const transientEntity = (entity: ViewerEntity) => ['arrow', 'spectral_arrow', 'trident']
+      .includes(String(entity.name ?? '').replace(/^minecraft:/, ''));
+    const entityTransportWritable = () => {
+      const connection = socket.conn as unknown as { transport?: { writable?: boolean }; writeBuffer?: unknown[] } | undefined;
+      return active && socket.connected && connection?.transport?.writable !== false && (connection?.writeBuffer?.length ?? 0) <= 4;
+    };
+    const sendEntity = (entity: ViewerEntity, full: boolean) => {
+      if (!nearby(entity)) { removeEntity(entity); return; }
+      const id = String(entity.id);
+      if (!knownEntities.has(id) && knownEntities.size >= 128) return;
+      const complete = full || !knownEntities.has(id);
+      const velocity = entity.velocity;
+      socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) :
+        { id: entity.id, pos: { x: entity.position.x, y: entity.position.y, z: entity.position.z }, yaw: entity.yaw, pitch: entity.pitch,
+          headYaw: (entity as unknown as { headYaw?: number }).headYaw,
+          ...(transientEntity(entity) && velocity && [velocity.x, velocity.y, velocity.z].every(Number.isFinite)
+            ? { velocity: { x: velocity.x, y: velocity.y, z: velocity.z } } : {}) });
+      knownEntities.add(id);
+    };
     const queueEntity = (entity: ViewerEntity, full = false) => {
       if (!active || !entity || entity.id === undefined) return;
       if (!nearby(entity)) { removeEntity(entity); return; }
@@ -1039,6 +1060,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (pendingEntities.size < 256 || pendingEntities.has(id)) pendingEntities.set(id, {
         entity, full: full || pendingEntities.get(id)?.full === true,
       });
+      if (transientEntity(entity) && entityTransportWritable()) {
+        const pending = pendingEntities.get(id);
+        if (pending) { pendingEntities.delete(id); sendEntity(pending.entity, pending.full); }
+      }
     };
     const entitySpawn = (entity: ViewerEntity) => queueEntity(entity, true);
     const entityMoved = (entity: ViewerEntity) => queueEntity(entity);
@@ -1048,23 +1073,14 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if(entity)queueEntity(entity,true);
     };
     const flushEntities = () => {
-      if (!active || !socket.connected || socket.conn?.transport?.writable === false) return;
+      if (!entityTransportWritable()) return;
       for (const id of knownEntities) {
         const entity = bot.entities[id];
         if (!entity || !nearby(entity)) removeEntity(entity ?? { id: Number(id) } as ViewerEntity);
       }
       const rows = [...pendingEntities.values()];
       pendingEntities.clear();
-      for (const { entity, full } of rows) {
-        if (!nearby(entity)) { removeEntity(entity); continue; }
-        const id = String(entity.id);
-        if (!knownEntities.has(id) && knownEntities.size >= 128) continue;
-        const complete = full || !knownEntities.has(id);
-        socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) :
-          { id: entity.id, pos: entity.position, yaw: entity.yaw, pitch: entity.pitch,
-            headYaw: (entity as unknown as { headYaw?: number }).headYaw });
-        knownEntities.add(id);
-      }
+      for (const { entity, full } of rows) sendEntity(entity, full);
     };
     const entityTimer = setInterval(flushEntities, 100);
     const publishDigging = () => {

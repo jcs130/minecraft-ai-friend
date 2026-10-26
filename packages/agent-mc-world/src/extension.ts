@@ -30,6 +30,8 @@ export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetPro
 export { MinecraftClientWorld } from './client/world.ts';
 export { WorldOperationLearning } from './client/world-learning.ts';
 export * from './client/world-storage.ts';
+export { GoalCheckpointBook, createGoalCheckpoint, restoreGoalCheckpoint,
+  type GoalCheckpoint, type GoalCheckpointScope } from '../core/goal-checkpoint.ts';
 export * from './client/world-namespace.ts';
 export { MethodLibrary, METHOD_LIBRARY_SCHEMA, type MethodReview } from '../core/method-library.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './client/tool-help.ts';

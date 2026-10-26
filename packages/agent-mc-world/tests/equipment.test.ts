@@ -72,6 +72,48 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
 afterEach(() => vi.useRealTimers());
 
 describe('equipment server confirmation', () => {
+  it.each(['1.21.1', '1.20.6'])('stops cancelled %s hand selection after the original cursor ACK without dispatching a new swap', async version => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version });
+    rig.seed(10, 'iron_sword'); rig.seed(12, 'cobblestone', 4);
+    rig.inventory.selectedItem = rig.inventory.slots[12]; rig.inventory.updateSlot(12, null);
+    rig.server.selectedItem = rig.server.slots[12]; rig.server.updateSlot(12, null);
+    let active = true;
+    const operation = equipHandConfirmed(rig.bot, rig.inventory.slots[10], () => {
+      if (!active) throw Error('Original task cancelled');
+    });
+    const stopped = expect(operation).rejects.toThrow('Original task cancelled');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(rig.sent).toEqual([9]); // the already-dispatched cursor return still awaits its ACK
+    active = false;
+    await vi.runAllTimersAsync(); await stopped;
+    expect(rig.sent).toEqual([9]); // late ACK must not authorize the cancelled task's next click
+    expect(rig.server.slots[10].name).toBe('iron_sword');
+    expect(rig.server.slots[44]).toBeNull();
+    expect(rig.server.selectedItem).toBeNull();
+    const next = equipHandConfirmed(rig.bot, rig.inventory.slots[10]);
+    await vi.runAllTimersAsync(); await next;
+    expect(rig.sent).toEqual([9, 10]); // a new explicit operation can use the confirmed inventory
+    expect(rig.server.slots[44].name).toBe('iron_sword');
+  });
+
+  it('does not select a hotbar weapon after cancellation during cursor recovery', async () => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1' });
+    rig.seed(36, 'iron_sword'); rig.seed(12, 'cobblestone', 4);
+    rig.inventory.selectedItem = rig.inventory.slots[12]; rig.inventory.updateSlot(12, null);
+    rig.server.selectedItem = rig.server.slots[12]; rig.server.updateSlot(12, null);
+    rig.bot.setQuickBarSlot = vi.fn();
+    let active = true;
+    const operation = equipHandConfirmed(rig.bot, rig.inventory.slots[36], () => {
+      if (!active) throw Error('Original task cancelled');
+    });
+    const stopped = expect(operation).rejects.toThrow('Original task cancelled');
+    await vi.advanceTimersByTimeAsync(50); active = false;
+    await vi.runAllTimersAsync(); await stopped;
+    expect(rig.sent).toEqual([9]); expect(rig.bot.setQuickBarSlot).not.toHaveBeenCalled();
+  });
+
   it('changes main-hand stacks in a full 1.21.1 inventory without borrowing the cursor', async () => {
     vi.useFakeTimers();
     const rig = equipmentServer({ version: '1.21.1' });

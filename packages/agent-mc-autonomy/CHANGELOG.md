@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.104
+
+- Pin core rc.100, retaining scoped goal recovery and the latest combat/equipment lifecycle guards.
+- Prepare server/account-scoped login references for the existing native login client. Windows credentials use current-user DPAPI; portable files retain private permissions. Passwords never enter ordinary settings or public status.
+- Forward explicit typed combat, reflex, journey, idle, container pacing and scaffold options. Unset values keep native defaults; process, permission, inventory and unknown-dispatch controls remain outside this surface.
+
 ## 0.2.103
 
 - Prepare offline runtimes in a short per-user cache automatically, without administrator rights or registry changes; retain complete SHA-256 identity checks, atomic preparation and compatibility with existing registrations.
