@@ -78,6 +78,7 @@ describe('explicit host choice', () => {
 });
 
 function walkingFacts(): WorldRequestFacts {
+  const sampledAtMs = Date.now();
   return { text: 'current route', snapshotTypes: [], parts: [
     { key: 'place', text: '主世界 (0,64,0)，石头支撑，步行' },
     { key: 'queue', text: '任务#44第1步，到[256,64,0]，已跑1s，我在(0,64,0)' },
@@ -86,15 +87,15 @@ function walkingFacts(): WorldRequestFacts {
     { key: 'journey', text: 'journey:1:44:0:1，同一已见告示牌，任务#44前往[256,64,0]' },
     { key: 'terrain', text: '当前未扫描更多地形' }, { key: 'life', text: '' },
     { key: 'recoveryState', text: JSON.stringify({sampledAt:'old',position:{x:0,y:64,z:0},episodeId:2,health:20,inventory:[]}) },
-  ], decision: { sampledAtMs: Date.now(), state: {
+  ], decision: { sampledAtMs, state: {
     connection: {ready:true,phase:'ready'}, danger:{water:false,environment:null,hostileCount:0},
     constraints:{body:null,support:'stone',grounded:true},
-  } }, decisionStability: { sampledAtMs: Date.now(), identity: ['realm','account'], dimension:'minecraft:overworld',
+  } }, decisionStability: { sampledAtMs, identity: ['realm','account'], dimension:'minecraft:overworld',
     position:[0,64,0],health:20,food:20,guards:{body:[false,null],place:['plains','stone','minecraft:overworld','survival'],clock:[false,false,false]},
     route:{generation:1,positionEpoch:0,speedBlocksPerSec:4,policy:{choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5},risks:[],
       task:{id:44,stepIndex:0,stepCount:1,step:'goto (256,64,0)',skill:'goto',resumable:true,destination:[256,64,0],dimension:'minecraft:overworld'},
       waiting:[{id:45,label:'later task'}],hold:null,goalOwner:'task',fighting:false,environment:null,windowOpen:false,cursorOccupied:false,
-      footing:{kind:'support',block:'stone',grounded:true},entities:[],journeyId:'journey:1:44:0:1',journeyCues:[{position:[4,64,0],observedAtMs:Date.now()}]} } };
+      footing:{kind:'support',block:'stone',grounded:true},entities:[],journeyId:'journey:1:44:0:1',journeyCues:[{position:[4,64,0],observedAtMs:sampledAtMs}]} } };
 }
 async function choiceDuring(update: (facts: WorldRequestFacts) => void, category = 'route', before = walkingFacts()) {
   let facts = before;
@@ -106,6 +107,19 @@ async function choiceDuring(update: (facts: WorldRequestFacts) => void, category
   return {result:JSON.parse(typeof result==='string'?result:result.text),request};
 }
 describe('bounded route advice while the original goto continues', () => {
+  it('keeps one observation time when the clock advances during fixture preparation', async () => {
+    let now = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now++);
+    try {
+      const { result } = await choiceDuring(facts => { facts.decisionStability!.position = [2,64,0]; });
+      expect(result.status).toBe('advice');
+    } finally { clock.mockRestore(); }
+  });
+  it('still expires a journey cue timestamp later than its producer snapshot', async () => {
+    const before = walkingFacts();
+    before.decisionStability!.route!.journeyCues[0]!.observedAtMs++;
+    expect((await choiceDuring(facts => { facts.decisionStability!.position = [2,64,0]; }, 'route', before)).result.status).toBe('stale');
+  });
   it('does not reuse cached advice across an unrendered forced move or replacement guard',async()=>{
     let facts=walkingFacts();const owner:any=new FakeHost();
     owner.decisions={request:vi.fn(async()=>answer)};
