@@ -1130,7 +1130,7 @@ const SKILLS: readonly SkillSpec[] = [
   {
     name: 'control',
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。
-{"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。自动踩水与防溺水共用 reflex.antiDrown 开关，关闭后结束也不自动上浮；启用时低氧/环境自救仍可接管。回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
+{"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。reflex.antiDrown 只控制普通踩水；独立 reflex.emergencyDrown 默认开启，低氧/环境自救仍可接管，脱险后不重放已中断控制段。回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
 {"skill":"control","keys":["forward","jump"],"durationMs":1000,"mode":"flight","yawDeg":30} 先相对当前视角左转 30 度，再向前上方斜飞。飞行必须已有服务端许可，可与授予许可的 chat 同单用 needs 连接；最多等待许可 2 秒。
 keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 WASD 水平移动，jump 上升、sneak 下降，可边平移边升降；forward+sprint 水平加速，升降速度不翻倍。方向按当前视角水平朝向，pitch 不改变升降。受控短时飞行使用服务端能力速度及保守步长，不复刻完整创造模式惯性。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
 ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight 检查身位碰撞和区块加载，遇遮挡停止；不会绕路。位置修正、死亡、断线或身体被其他任务接管时结束本步，不从旧坐标继续移动。

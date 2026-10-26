@@ -68,6 +68,14 @@ it('native air ticks are converted to the shared oxygen scale and reuse the drow
   await vi.waitFor(()=>expect(r.commands.some(c=>c.input.owner==='environment'&&c.input.keys.jump)).toBe(true),{timeout:4500});
   expect(r.commands.some(c=>c.input.attack)).toBe(false);expect(r.runtime.status().environment).toBe('drown');
 },6000);
+it('native emergency rescue remains enabled with ordinary surface swimming disabled',async()=>{
+  const r=rig({combat:false,water:true,oxygen:30});
+  r.cfg.reflex.antiDrown=false;
+  expect(r.cfg.reflex.emergencyDrown).toBe(true);
+  r.runtime.start();
+  await vi.waitFor(()=>expect(r.commands.some(c=>c.input.owner==='environment'&&c.input.keys.jump)).toBe(true),{timeout:4500});
+  expect(r.commands.some(c=>c.input.attack)).toBe(false);
+},6000);
 it('fresh tactical candidates use the existing track/engage selection and reject a stale generation',async()=>{
   const r=rig({enemyDistance:5});await r.runtime.poll();
   const sample=await r.runtime.tool({battlefield:true},{role:'host-decision'} as any),frame=(sample.meta as any).frame;

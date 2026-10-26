@@ -107,6 +107,8 @@ export const MINECRAFT_DEFAULTS = {
     /** 两次受击反应的最短间隔 */
     reactCooldownSec: 8,
     antiDrown: true,
+    /** Critical oxygen rescue is independent of ordinary passive surface swimming. */
+    emergencyDrown: true,
     /**
      * 挨烧就跑。这一条不能交给主脑:岩浆浇脸、蹭到流动岩浆柱都是环境自己找上门,
      * 20 血在岩浆里只够活两秒半,等她下一轮想明白再动人已经烧没了。挖掘绕开岩浆
@@ -278,7 +280,7 @@ export interface MinecraftConfigSection {
   };
   reflex: {
     fightBack: boolean; fleeHealth: number;
-    reactCooldownSec: number; antiDrown: boolean; antiLava: boolean;
+    reactCooldownSec: number; antiDrown: boolean; emergencyDrown?: boolean; antiLava: boolean;
   };
   combat: {
     enabled: boolean; engageRadius: number; chaseMax: number; maxSec: number;
@@ -518,8 +520,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.reflex.reactCooldownSec': {
         type: 'integer', title: '受击反应冷却', minimum: 1, maximum: 120, 'x-suffix': 's', 'x-hot': true,
       },
-      'worlds.minecraft.reflex.antiDrown': { type: 'boolean', title: '自动踩水与防溺水上浮', 'x-hot': true,
-        description: '关闭后不再自动按跳跃、找岸或冻结水中任务，并释放已发生的上浮接管。手动游泳、潜水程序与正常寻路继续可用；氧气和伤害观测仍保留。' },
+      'worlds.minecraft.reflex.antiDrown': { type: 'boolean', title: '普通自动踩水', 'x-hot': true,
+        description: '控制空闲时普通踩水。关闭后手动游泳、潜水程序与正常寻路继续可用；不关闭独立的低氧紧急自救。' },
+      'worlds.minecraft.reflex.emergencyDrown': { type: 'boolean', title: '低氧紧急自救', 'x-hot': true,
+        description: '默认开启。头在水下低氧、持续缺少可信氧气读数或受到水下环境伤害时，本地反射暂停身体任务并上浮找岸，不等模型。独立于普通自动踩水；关闭会释放正在进行的防溺水接管，氧气和伤害观测仍保留。' },
       'worlds.minecraft.reflex.antiLava': {
         type: 'boolean', title: '挨烧自动逃离', 'x-hot': true,
         description: '碰到岩浆/火就立刻手动冲出去,再交给寻路器。判定看碰撞箱压着什么,'

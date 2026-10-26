@@ -6,12 +6,14 @@ import { Reflexes } from '../core/executor.ts';
 import { headInWater } from '../core/terrain.ts';
 import { hasDryFooting } from '../core/skills-build.ts';
 import { methodHarness } from './method-harness.ts';
+import { installTreadWater } from '../core/travel.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-17T00:43:00Z')); });
 afterEach(() => vi.useRealTimers());
 
-function rescue() {
-  let waterAscent = true;
+function rescue(options: { passive?: boolean; emergency?: boolean } = {}) {
+  let waterAscent = options.passive ?? true;
+  let emergency = options.emergency;
   const h = methodHarness('1.21.1');
   for (let x = -8; x <= 8; x++) for (let z = -8; z <= 8; z++) {
     for (let y = 64; y <= 66; y++) h.set(x, y, z, 'water');
@@ -23,6 +25,9 @@ function rescue() {
   h.bot.entity.onGround = false;
   h.bot.oxygenLevel = 0;
   h.bot.physicsEnabled = false; // Replay the measured, blocked live coordinates, not invented navigation.
+  Object.assign(h.bot.pathfinder, { isMoving: () => false });
+  const detachTread = options.passive === false
+    ? installTreadWater(h.bot as unknown as Bot, () => waterAscent) : () => {};
   const reports: Array<{ text: string }> = [], diagnostics: Array<{ event: string; data?: unknown }> = [];
   const reflexes = new Reflexes({
     getBot: () => h.bot as unknown as Bot,
@@ -33,12 +38,83 @@ function rescue() {
     stopFallTask: why => h.exec.stopCurrent(why), resumeAfterFall: token => h.exec.resumeQueue(token),
     escapeActive: () => false, fightBack: () => false, fleeHealth: () => 6,
     reactCooldownSec: () => 10, antiDrown: () => waterAscent, antiLava: () => false,
+    ...(emergency === undefined ? {} : { emergencyDrown: () => emergency! }),
     diag: { write: row => diagnostics.push(row) } as never,
   });
   reflexes.start();
   return { ...h, reflexes, reports, diagnostics, disableAscent() { waterAscent = false; },
-    close() { reflexes.stop(); h.close(); } };
+    disableEmergency() { emergency = false; },
+    close() { reflexes.stop(); detachTread(); h.close(); } };
 }
+
+it('keeps ordinary diving input free but starts critical rescue with passive ascent disabled', async () => {
+  const r = rescue({ passive: false, emergency: true });
+  try {
+    r.bot.oxygenLevel = 20;
+    await vi.advanceTimersByTimeAsync(2300);
+    expect(r.keys.jump).toBe(false);
+    expect(r.reflexes.envActive).toBe(false);
+    r.bot.oxygenLevel = 3;
+    await vi.advanceTimersByTimeAsync(200);
+    expect(r.reflexes.environmentOwnerKind).toBe('drown');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(r.keys.jump).toBe(true);
+    expect(r.bot.pathfinder.goal).not.toBeNull();
+  } finally { r.close(); }
+});
+
+it('reacts to paired underwater damage before the timer while passive ascent is disabled', async () => {
+  const r = rescue({ passive: false, emergency: true });
+  try {
+    r.bot.oxygenLevel = 20;
+    await vi.advanceTimersByTimeAsync(200);
+    r.bot._client.emit('damage_event', { entityId: 1, nativeDecodedIds: true,
+      nativeSourceType: 'minecraft:drown', sourceTypeId: 0, sourceCauseId: -1, sourceDirectId: -1 });
+    r.bot.health = 18; r.bot.emit('health');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(r.reflexes.environmentOwnerKind).toBe('drown');
+    expect(r.diagnostics.some(row => row.event === 'drown-trigger')).toBe(true);
+    expect(r.keys.jump).toBe(true);
+  } finally { r.close(); }
+});
+
+it('honors explicit emergency disable and releases only its rescue ownership', async () => {
+  const r = rescue({ passive: false, emergency: true });
+  try {
+    await vi.advanceTimersByTimeAsync(2300);
+    expect(r.reflexes.environmentOwnerKind).toBe('drown');
+    r.disableEmergency();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(r.reflexes.envActive).toBe(false);
+    expect(r.keys.jump).toBe(false);
+    expect(r.bot.pathfinder.goal).toBeNull();
+    expect(r.diagnostics.some(row => row.event === 'drown-disabled')).toBe(true);
+  } finally { r.close(); }
+});
+
+it('interrupts a water control segment, clears its input, and does not replay it after measured safe footing', async () => {
+  const r = rescue({ passive: false, emergency: true });
+  try {
+    r.bot.physicsEnabled = true;
+    r.bot.entity.yaw = Math.PI; // Keep this segment beneath the roof, away from the breathing openings.
+    r.bot.oxygenLevel = 20;
+    r.exec.submit([{ skill: 'control', mode: 'water', keys: ['forward'], durationMs: 8000 },
+      { skill: 'chat', text: 'after rescue' }], 'append');
+    await vi.advanceTimersByTimeAsync(2300);
+    expect(r.keys.forward).toBe(true);
+    r.bot.oxygenLevel = 3;
+    await vi.advanceTimersByTimeAsync(400);
+    expect(r.reflexes.environmentOwnerKind).toBe('drown');
+    expect(r.keys.forward).toBe(false);
+    expect(r.said).not.toContain('after rescue');
+    r.bot.entity.position = new Vec3(.5, 68, .5);
+    r.bot.entity.onGround = true; r.bot.oxygenLevel = 20;
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(r.reflexes.envActive).toBe(false);
+    expect(r.keys.forward).toBe(false);
+    expect(r.said.filter(text => text === 'after rescue')).toHaveLength(1);
+  } finally { r.close(); }
+});
 
 it('releases a running drowning reflex and its queue hold on live disable while still underwater', async () => {
   const r = rescue();
@@ -108,8 +184,8 @@ it('bounds a looping rescue even when repeated movement is large enough to look 
   } finally { r.close(); }
 });
 
-it('uses the real 1.21.1 pathfinder and physics to leave water beneath a low roof', async () => {
-  const r = rescue();
+it.each([{}, { passive: false, emergency: true }])('uses real 1.21.1 pathfinder and physics to leave roofed water with switches %j', async options => {
+  const r = rescue(options);
   try {
     r.bot.physicsEnabled = true;
     Object.assign(r.bot, {

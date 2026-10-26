@@ -6178,8 +6178,10 @@ interface ReflexOptions {
   onWaterTrap?: () => void;
   /** 两次受击反应之间的最短间隔(秒) */
   reactCooldownSec: () => number;
-  /** 防溺水上浮 */
+  /** Legacy combined switch; retained for callers that do not provide emergencyDrown. */
   antiDrown: () => boolean;
+  /** Critical oxygen rescue, independent of passive surface swimming. */
+  emergencyDrown?: () => boolean;
   /** 挨烧就跑(岩浆、火);关掉则连手动冲刺一起松手 */
   antiLava: () => boolean;
   /** 执行器手上正在跑的任务;灭火找水不在它跑的时候抢身体 */
@@ -6373,7 +6375,7 @@ export class Reflexes {
     // not authorize a new rescue while Mineflayer still reports a dead body.
     if ((bot as Bot & { isAlive?: boolean }).isAlive === false || bot.health <= 0) return;
     // Turning a reflex off also releases its existing input, path and queue hold.
-    if (!this.opts.antiDrown()) this.endDrown(bot);
+    if (!this.drownRescueEnabled()) this.endDrown(bot);
     // 防溺水与防烧在各自开关启用时逐心跳检查；关闭防烧时调用 endLavaEscape 收尾。
     // 执行器清空冻结后，持续危机会重申环境租约，仍受 beginEnvironment 的超时放弃限制。
     if (this.environmentHoldStale) {
@@ -6382,7 +6384,7 @@ export class Reflexes {
         this.beginEnvironment(`${Reflexes.ownerText(this.environmentOwnerKind)}危机还在,重申队列冻结`);
       }
     }
-    if (this.opts.antiDrown()) void this.antiDrown(bot);
+    if (this.drownRescueEnabled()) void this.antiDrown(bot);
     if (this.opts.antiLava()) void this.antiLava(bot);
     else this.endLavaEscape(bot, false);
     if (this.buried !== null) void this.antiSuffocate(bot);
@@ -7233,7 +7235,7 @@ export class Reflexes {
     if (this.opts.antiLava()) void this.antiLava(bot);
     if (headInWater(bot)) {
       this.hurtUnderwaterAt = now;
-      if (this.opts.antiDrown()) void this.antiDrown(bot);
+      if (this.drownRescueEnabled()) void this.antiDrown(bot);
     }
     // hurting=true:实心方块闷头那一路(圆石/石头)只在掉血时起手,口径在这条挂钩上
     void this.antiSuffocate(bot, true);
@@ -7493,6 +7495,10 @@ export class Reflexes {
   /** 本轮溺水里零推进撤销过的目标格,登岸/换气点都不再选它;危机解除清空 */
   private readonly drownExcluded = new Set<string>();
 
+  private drownRescueEnabled(): boolean {
+    return this.opts.emergencyDrown?.() ?? this.opts.antiDrown();
+  }
+
   private endDrown(bot: Bot): void {
     const active = this.drowning;
     const escape = this.escapeGoal;
@@ -7505,16 +7511,16 @@ export class Reflexes {
     if (escape?.kind === 'drown') {
       this.escapeGoal = null;
       if (bot.pathfinder?.goal === escape.goal) {
-        dropGoal(bot, 'escape', '自动上浮已关闭', this.opts.diag);
+        dropGoal(bot, 'escape', '紧急防溺水已关闭', this.opts.diag);
       }
     }
     if (!active && escape?.kind !== 'drown') return;
     if (this.lavaEscape === null && this.buried === null && !waterControlActive(bot)) {
       bot.setControlState('jump', false);
     }
-    this.releaseEnvironmentHoldNow(bot, '自动上浮已关闭，交还控制权');
+    this.releaseEnvironmentHoldNow(bot, '紧急防溺水已关闭，交还控制权');
     this.opts.diag?.write({ lane: 'reflex', event: 'drown-disabled',
-      msg: '自动上浮已关闭，撤销本反射的按键、寻路与冻结租约',
+      msg: '紧急防溺水已关闭，撤销本反射的按键、寻路与冻结租约',
       data: { position: bot.entity.position, oxygen: bot.oxygenLevel ?? null } });
   }
 
