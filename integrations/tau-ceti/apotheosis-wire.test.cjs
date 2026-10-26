@@ -1,0 +1,25 @@
+const { test } = require('node:test'), assert = require('node:assert/strict'), path = require('node:path')
+const snapshot = process.env.TAU_GATE_TEST_SOURCE
+if (!snapshot) throw Error('Set TAU_GATE_TEST_SOURCE to the prepared gateway source snapshot')
+const data = require('minecraft-data')('1.21.1')
+const { createBackendComponentProtocol } = require(path.join(snapshot, 'component-protocol.cjs'))
+const registry = new Map(Object.entries(data.protocol.types.SlotComponentType[1].mappings).map(([id, name]) => ['minecraft:' + name, Number(id)]))
+registry.set('apotheosis:affixes', 150); registry.set('apotheosis:from_mob', 151)
+const protocol = createBackendComponentProtocol(registry)
+test('ItemAffixes uses resource names and fixed FLOAT, not registry ordinals or NBT', () => {
+  const raw = Buffer.concat([Buffer.from([0x96, 1, 1, 16]), Buffer.from('apotheosis:sharp'), Buffer.from('3f000000', 'hex')])
+  const parsed = protocol.parsePacketBuffer('SlotComponent', raw)
+  assert.equal(parsed.metadata.size, raw.length)
+  assert.deepEqual(parsed.data, { type: 'apotheosis:affixes', data: [{ affix: 'apotheosis:sharp', level: 0.5 }] })
+  assert.deepEqual(protocol.createPacketBuffer('SlotComponent', parsed.data), raw)
+})
+test('implicit persistent boolean uses anonymous NBT and preserves its wire representation', () => {
+  const raw = Buffer.from([0x97, 1, 1, 1])
+  const parsed = protocol.parsePacketBuffer('SlotComponent', raw)
+  assert.equal(require('prismarine-nbt').simplify(parsed.data.data), 1)
+  assert.deepEqual(protocol.createPacketBuffer('SlotComponent', parsed.data), raw)
+})
+test('affix collections stay bounded and truncated values remain failures', () => {
+  assert.throws(() => protocol.parsePacketBuffer('SlotComponent', Buffer.from([0x96, 1, 0x81, 2])), /AFFIX_BUDGET/)
+  assert.throws(() => protocol.parsePacketBuffer('SlotComponent', Buffer.from([0x96, 1, 1, 16, 0])))
+})

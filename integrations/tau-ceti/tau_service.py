@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse, hashlib, json, sys, time, tomllib, re, http.client
 import maw_service
 from maw_service import Supervisor, properties, read_json, submit, guard_console
+from live_registry import LiveRegistry
 maw_service.CONSOLE_COMMANDS=maw_service.CONSOLE_COMMANDS|{'maw_registry','tower'}
 
 PRODUCTION=Path('E:/MC/servers/tau-ceti-1.3.3/server').resolve()
@@ -90,6 +91,10 @@ def validate(config):
         stat=Path(path).stat()
         if (stat.st_size,stat.st_mtime_ns)!=(size,stamp):raise ValueError('Gateway release changed while running')
 class TauChild(maw_service.Child):
+    def start(self):
+        if self.spec['id']=='gate' and self.boot is not None:
+            self.spec['env'].update(self.boot.environment())
+        super().start()
     def tick(self):
         super().tick()
         port=self.spec.get('numenPort')
@@ -105,13 +110,24 @@ class TauChild(maw_service.Child):
                 if state.get('ok') is not True or state.get('nativeModAccess') is not True or state.get('nativeModOperationCount',0)<35:raise ValueError('Native mod SDK not ready')
                 self.metrics['numen']={k:state[k] for k in ('numenVersion','serverResident','clientRequired','nativeModAccess','nativeModOperationCount')}
             finally:connection.close()
+            if self.boot is not None:
+                self.boot.job=self.job
+                ready=self.boot.tick(self.process.pid,self.send)
+                self.metrics['registry']={'phase':self.boot.phase,'serverPid':self.boot.pid,
+                    'directory':str(self.boot.output) if self.boot.output else None,'problem':self.boot.problem}
+                if not ready:
+                    self.ready=False;self.problem='native_registry_'+self.boot.phase
         except Exception as error:
             self.ready=False;self.problem='private_numen_readiness_failed: '+str(error)
 def main():
     if sys.stdout:sys.stdout.reconfigure(encoding='utf8')
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['plan','run','status','pause','resume','stop','shutdown','console']);p.add_argument('--config',required=True);p.add_argument('--command');p.add_argument('--request-id');p.add_argument('--reason',default='Tau operator maintenance');p.add_argument('--wait',type=float,default=30)
     a=p.parse_args();config=load_config(a.config,verify=a.action in ('run','plan','resume'))
-    if a.action=='run':Supervisor(config,validator=lambda:validate(config),child_factory=TauChild).run()
+    if a.action=='run':
+        boot=LiveRegistry(config) if config['_raw'].get('agentGateway') else None
+        def child(spec,logs,job):
+            value=TauChild(spec,logs,job);value.boot=boot;return value
+        Supervisor(config,validator=lambda:validate(config),child_factory=child).run()
     elif a.action=='plan':print(json.dumps({k:v for k,v in config.items() if not k.startswith('_')}))
     elif a.action=='status':
         state=read_json(Path(config['runtimeDir'])/'health.json');state['heartbeatFresh']=0<=time.time()-state.get('heartbeatEpoch',0)<15

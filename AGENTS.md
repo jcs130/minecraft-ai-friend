@@ -1,3 +1,7 @@
+## 2026-10-27 Tau 隔离候选与 Aincrad 地图
+
+本分支 feat/tau-ceti-and-aincrad-20261026：Paper 已独立加载公开免费 Aincrad 第一层，入口 /warp aincrad、返回 /warp village，沿用 travel 学习/魔力规则；原世界保持。Tau Ceti ATM 仍是回环隔离候选，原 FOM 整服 E/F 冷备及旧自启动未切换。真人用官方客户端 1.3.2（MC1.21.1/NeoForge21.1.234）；不要换成旧 FOM 加载器。Numen 同 UUID 恢复、真实走动终态及 action_id 去重已验；Mineflayer v11 已实际登录并收到原始数据，NPC/词缀/墓碑组件按真实 StreamCodec 适配，网页/基岩和完整模组玩法未验。每次 JVM 启动导出当前注册表，不能复用跨启动数字 ID。网站注册/Token 门禁尚未与旧访客登录策略统一，禁止据此宣布已开放 Tau 公网。34 项本批检查通过。见 integrations/tau-ceti/README.md、paper/integrations/aincrad/README.md。
+
 ## 2026-10-26 开放世界定位与活动采集
 
 女神现役PROFILE/SOUL/AGENTS/MEMORY取消旧低龄定位，保留公序良俗、居民自主性和原完整工具权限；六项原生任务读新方向与活动证据。原生联网3次搜索/4次抓取已验，BetonQuest现役3.2.0已核，剧情集合灯仍为候选。只读活动采集每60秒运行，逐类委托完整交付/接取/放弃与三类公共物资流水分开；较早日志和缺失来源明确partial，不能把未知当0。19项采集+17项原工具+5项任务计划通过；12项门户纯投影检查通过，网站路由/UI发布交网站线，不能宣称页面已上线。无游戏JAR/重启/权限变化，不夹带.13。见paper/docs/WORLD_ACTIVITY_ANALYTICS.md、paper/docs/GODDESS_WORLD_EVOLUTION.md（paper目录内去掉paper前缀）。

@@ -2,9 +2,19 @@ import unittest
 import json
 from build_addons import lower_own_requirement
 from language_json import parse_language, NORMALIZATIONS
+from build_gateway import CODEC_MOD_HASHES, validate_codec_manifest
 
 
 class BuildPolicyTests(unittest.TestCase):
+    def test_native_codecs_require_the_reviewed_mod_bytes(self):
+        validate_codec_manifest({'files': dict(CODEC_MOD_HASHES)})
+        altered = dict(CODEC_MOD_HASHES)
+        altered[next(iter(altered))] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'reviewed mod bytes'):
+            validate_codec_manifest({'files': altered})
+        with self.assertRaisesRegex(ValueError, 'reviewed mod bytes'):
+            validate_codec_manifest({'files': {}})
+
     def test_official_mod_metadata_cannot_be_rewritten(self):
         source = b'[[mods]]\nmodId="numen"\nversion="0.1.4.1"\nx="[21.1.248,)"'
         with self.assertRaisesRegex(ValueError, 'Only our own'): lower_own_requirement(source)
