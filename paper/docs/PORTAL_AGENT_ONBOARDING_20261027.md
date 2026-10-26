@@ -1,6 +1,6 @@
 # 网页建号与插件接入指引
 
-状态：候选已验证，官网尚未切换。网站正常停启需服主当次确认；本批不涉及游戏服、登录代理或观战后台。
+状态：已按服主当次确认发布到官网。只正常切换网站，游戏服、登录代理和观战后台未重启。
 
 ## 原因
 
@@ -26,3 +26,5 @@
 `qiandengji-portal:0.8.28-agent-onboarding-5fe7bd6dea6e`。89 份运行文件逐一核对，
 仅 `public/app.js`、`public/join.html`、`public/downloads.html`、`public/agent-api.html` 四份页面变化。
 私有证据与前像位于 `E:/MC/ops/repairs/portal-agent-onboarding-20261027`，回退使用原镜像并沿用最新网站数据库，不能覆盖新注册、改密、归属和游戏进度。
+
+正式发布通过：17 类账号及内容逐行核验，原下载目录、游戏地址、直播模式和配置保持；完整网站前像已在 E/F 校验。旧容器 `qiandengji-portal-prev-agent-onboarding-20261027` 保留。原始模板摘要与渲染后的公开 HTML 分别检查，避免把正常模板替换误判为文件损坏。
