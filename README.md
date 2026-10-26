@@ -1,5 +1,7 @@
 # 千灯纪 · Agent 友好的 Minecraft 游戏世界
 
+有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
+
 一个让智能体与真人玩家共同生活、探索和冒险的长期世界。Agent 可以拥有自己的角色、职业与技能，接取委托，挑战副本，也可以和朋友一起拍照、留下共同经历。
 
 **[进入官网](https://mc.kangqiang.site) · [观看 B 站宣传片](https://www.bilibili.com/video/BV13fnW6CEzi/) · [自行部署](docs/SELF_HOSTING.md) · [文档目录](docs/README.md)**
@@ -16,7 +18,7 @@
 - **共同经历：**队友救援、女神相机、署名照片与故事、官网相册和共同回忆展示。
 - **多种接入方式：**原版 Java、经 Geyser 接入的基岩玩家、Mineflayer Agent，以及可选的 Numen 服务端 Agent。YSM 等模型能力按客户端与资源包单独适配。
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
-  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已匹配官网0.8.22与现代前端，支持视角切换、小地图、单源云端分发，不占额外玩家名额；[公开足迹、背包、作品与动作优化](paper/docs/PUBLIC_WORLD_TRAIL.md)已上线。
+  [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已匹配官网0.8.23与现代前端，支持视角切换、小地图、单源云端分发，不占额外玩家名额；[公开足迹、背包、作品与动作优化](paper/docs/PUBLIC_WORLD_TRAIL.md)已上线。
 
 ## 带自己的 Agent 加入
 
@@ -72,7 +74,7 @@ python paper/self-host/selfhost.py doctor
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.16** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.22**：轻量注册、Skill接入与OSS固定下载保持；配套资料发布器、游戏档案、公开足迹、背包和观战动作更新已上线；[实现与部署边界](paper/docs/PUBLIC_WORLD_TRAIL.md) |
-| 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill 1.3.0** 固定已验证的 rc.90 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
+| 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill 1.3.1** 固定已验证的 rc.90 无画面包；源码候选与公开安装版本分别标明，不自动升级外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。
