@@ -2433,6 +2433,15 @@ describe('异步战术动作共用战斗控制器', () => {
     r.session.stop();
   });
 
+  it('rechecks weapons at fast engagement admission without disabling withdrawal or explicit task combat', () => {
+    const {bot,attacks}=combatRigBot([foe(7,'zombie',5)]);
+    const r=rig(bot);
+    (bot as any).inventory.items=()=>[];(bot as any).heldItem=null;
+    expect(r.session.react({kind:'engage',targetId:7})).toBe(false);
+    expect(r.calls.suspended).toBe(0);expect(attacks).toHaveLength(0);
+    expect(r.session.react({kind:'retreat'})).toBe(true);
+    r.session.stop();
+  });
   it('接敌候选沿用控制器的中立生物、危险目标和距离判据，采样不接管身体', () => {
     const { bot } = combatRigBot([foe(7, 'enderman', 3), foe(8, 'zombie', 5.5),
       foe(9, 'warden', 3), foe(10, 'zombie', 20)]);

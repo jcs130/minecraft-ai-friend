@@ -37,6 +37,23 @@ function rig() {
   return { ...r, world, cfg, session, close: () => { session.stop(); r.close(); } };
 }
 
+it('exposes known unconfigured abilities without silently granting automatic casts', () => {
+  const r = rig();
+  try {
+    // Establish the observed realm before receiving its live capability packet.
+    r.world.requestFacts();
+    r.world.abilities().noteAbilities([
+      {id:'frostnova',manaCost:7,cooldownMs:15000,cooldownRemainingMs:0},
+      {id:'fireball',manaCost:12,cooldownMs:5000,cooldownRemainingMs:0},
+    ]);
+    const frame = r.world.frame()!;
+    expect(frame.skills).toContainEqual(expect.objectContaining({spell:'fireball',configured:false,available:true,manaCost:12}));
+    expect(frame.candidates.some(c=>c.kind==='cast' && c.spell==='fireball')).toBe(false);
+    expect(r.world.requestFacts()?.parts?.find(p=>p.key==='combatCapabilities')?.text).toContain('fireball');
+    expect(r.world.sent).toEqual([]);
+  } finally {r.close();}
+});
+
 it('offers and dispatches an observed authored spell before melee or injury, without a sword or arrows', () => {
   const r = rig();
   try {

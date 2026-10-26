@@ -10,10 +10,12 @@ export type CombatCandidate = { id: string; intent: string } & (
   | ({ kind: 'method' } & CombatRoutine)
 );
 export interface CombatDecisionFrame {
+  loadout?: import('./combat-loadout.ts').CombatLoadout;
   battlefield: Battlefield;
   tacticRevision: number;
   mana: number | null;
-  skills: Array<{ spell: string; available: boolean; manaCost: number | null;
+  skillsOmitted?: number;
+  skills: Array<{ spell: string; available: boolean; configured?: boolean; manaCost: number | null;
     cooldownRemainingMs: number | null; block: string | null }>;
   candidates: CombatCandidate[];
   omittedCandidates: number;

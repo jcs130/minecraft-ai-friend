@@ -93,6 +93,15 @@ function rig(initialX = 0, positionFirst = false) {
   };
 }
 
+it('publishes death as an observed outcome with the same native episode, never goal completion', () => {
+  const r = rig(); r.die();
+  const call = r.world.emit.mock.calls.find((c: any[]) => c[3]?.execution?.evidence?.outcome === 'death');
+  expect(call).toBeDefined();
+  expect(call[3].execution).toEqual({ kind: 'observation', id: r.bot.deathLifecycle.episodeId,
+    phase: 'completed', terminal: true, goalCompleted: false, evidence: { outcome: 'death', health: 0 } });
+  expect(call[3].meta.death.id).toBe(call[3].execution.id);
+});
+
 it('cancels a pending server query on native respawn without reusing it in the same connection', () => {
   const r = rig();
   const lane = r.world.serverQueries as ServerQueryLane;

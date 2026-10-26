@@ -1,12 +1,13 @@
 import type { ToolDef } from './support/host-contract.ts';
 import type { WorldSnapshot } from './terrain.ts';
 import { RISKY_FOODS, type FoodValue } from './nutrition.ts';
+import { weaponScore } from './melee.ts';
 import { MINECRAFT_OPTION_INTENTS, type MinecraftOption, type MinecraftOptionIntent,
   type MinecraftOptionsSnapshot } from '../src/contracts/options.ts';
 
 export const OPTIONS_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_options', tags: ['read'],
-  description: 'Discover a bounded shortlist by intended outcome: food, travel, water, inventory, explore or method. '
+  description: 'Discover a bounded shortlist by intended outcome: food, equipment, travel, water, inventory, explore or method. '
     + 'Empty arguments show an index and current clues. Returns purposes, observed evidence, missing prerequisites and focused read-tool arguments. '
     + 'Includes explicitly installed server observations where available. No model, scan, body task, cast or automatic choice; discovery does not certify readiness or success.',
   parameters: { type: 'object', additionalProperties: false, properties: {
@@ -17,7 +18,7 @@ const guide = (args: Record<string, unknown>) => ({ tool: 'mc_help', args });
 const method = (query: string) => ({ tool: 'mc_script', args: { library: { op: 'list', query, limit: 4 } } });
 const source = { kind: 'core' as const, reference: 'agent-mc-world:action-registry/knowledge/method-library' };
 const title: Record<MinecraftOptionIntent, string> = {
-  food: '补给与随身口粮', travel: '赶路与交通', water: '水路与潜水', inventory: '背包与取舍',
+  food: '补给与随身口粮', equipment: '武器与装备', travel: '赶路与交通', water: '水路与潜水', inventory: '背包与取舍',
   explore: '现场线索与交互', method: '已保存方法与经验',
 };
 const boatItem = (id: string) => /(?:^|_)(?:boat|chest_boat|raft|chest_raft)$/.test(id);
@@ -38,9 +39,18 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     oxygen: snapshot.inWater ? snapshot.oxygen : null, inWater: snapshot.inWater,
     carriedFood: edible?.reduce((n, s) => n + s.count, 0) ?? null,
     carriedBoats: boats?.reduce((n, s) => n + s.count, 0) ?? null,
+    meleeEquipment: inventory ? [...new Set(inventory.filter(s => s.count > 0 && weaponScore(s.name) >= 0).map(s => s.name))] : null,
+    arrows: inventory?.filter(s => s.name === 'arrow').reduce((n,s)=>n+s.count,0) ?? null,
     freeSlots: snapshot.invSynced ? state.freeSlots : null, travelling: state.travelling,
     bodyTask: state.task, bodyRestriction: state.restriction };
   const options: MinecraftOption[] = [
+    { id: 'core.equipment', intents: ['equipment'], title: '现有武器、已知存放处或实际配方',
+      purpose: `本次随身近战装备：${context.meleeEquipment?.join('、') || (context.meleeEquipment ? '未见' : '未同步')}；普通箭 ${context.arrows ?? '未知'}。`,
+      support: 'supported', evidence: ['仅随身采样；未打开的个人奖励箱、扩展背包及共享箱内容未知，不能据此说没有装备'],
+      checks: ['先比较随身、已记录容器和记忆入口；历史数量须现读，容器归属与取用权限单独核验',
+        '需要制作时读当前版本配方和工作台；取到或合成受理不等于拿到手，核对背包与装备终态'],
+      read: [{ tool: 'mc_bag', args: { item: 'sword' } }, { tool: 'mc_memory', args: { action: 'search', query: '武器 补给', limit: 3 } },
+        { tool: 'mc_knowledge', args: { kind: 'recipe', query: 'sword', limit: 3 } }, guide({ skills: ['take', 'craft', 'equip'] })], source },
     { id: 'core.carried-food', intents: ['food'], title: '吃已有食物', purpose: '恢复当前饥饿；随身储备和当前饱食分开判断。',
       support: 'supported', evidence: [edible ? `已同步随身常规食物 ${context.carriedFood} 个${foodNames ? `：${foodNames}` : ''}` : '随身食物未同步或未分类；自定义物品可食性未知'],
       checks: ['核对饥饿、食物效果及当前身体任务；未知可食性先读物品说明'],
@@ -95,6 +105,7 @@ export function extendMinecraftOptions(snapshot: MinecraftOptionsSnapshot, extra
 export function relevantMinecraftOptionIntents(s: MinecraftOptionsSnapshot): MinecraftOptionIntent[] {
   const c = s.context, intents: MinecraftOptionIntent[] = [];
   if ((c.food !== null && c.food < 18) || c.carriedFood === 0) intents.push('food');
+  if (c.meleeEquipment?.length === 0) intents.push('equipment');
   if (c.inWater === true) intents.push('water');
   if (c.travelling) intents.push('travel');
   if (c.freeSlots === 0) intents.push('inventory');
@@ -102,7 +113,7 @@ export function relevantMinecraftOptionIntents(s: MinecraftOptionsSnapshot): Min
 }
 export function renderMinecraftOptionIndex(s: MinecraftOptionsSnapshot): string {
   const intents = relevantMinecraftOptionIntents(s);
-  const lead = '[可选办法索引] mc_options {intent:food|travel|water|inventory|explore|method} 按意图读用途、前提与工具入口；不是强制流程，不执行动作。';
+  const lead = '[可选办法索引] mc_options {intent:food|equipment|travel|water|inventory|explore|method} 按意图读用途、前提与工具入口；不是强制流程，不执行动作。';
   const selected = intents.flatMap(intent => s.options.filter(o => o.intents.includes(intent) && o.id !== 'core.methods')
     .slice(0, 6).map(o => `${title[intent]}→${o.id} ${o.title}：${o.purpose.slice(0, 105)}`));
   // Prefer an explicit server effect over generic second-line preparation details when space is tight.
@@ -115,7 +126,7 @@ export function renderMinecraftOptionIndex(s: MinecraftOptionsSnapshot): string 
 export function readMinecraftOptions(s: MinecraftOptionsSnapshot | null | undefined, args: Record<string, unknown>): unknown {
   const intent = args.intent ?? 'index';
   if (Object.keys(args).some(k => k !== 'intent') || (intent !== 'index' && !MINECRAFT_OPTION_INTENTS.includes(intent as MinecraftOptionIntent)))
-    throw new Error('intent=index|food|travel|water|inventory|explore|method');
+    throw new Error('intent=index|food|equipment|travel|water|inventory|explore|method');
   const warning = 'Discovery only. Evidence is scoped to this sample; all action prerequisites, permissions, ownership and terminal effects require validation. Unknown is not ready. No body task or model was started.';
   if (!s) return { schema: 'minecraft-options/v1', status: 'unverified', warning,
     index: MINECRAFT_OPTION_INTENTS.map(id => ({ intent: id, title: title[id] })), options: [] };

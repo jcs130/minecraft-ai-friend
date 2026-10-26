@@ -9,6 +9,7 @@ import { CombatAbilities, type CombatSpell } from './combat-abilities.ts';
 import { CombatTacticBook } from './combat-tactics.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
+import { combatLoadout } from './combat-loadout.ts';
 import { CombatProgramRunner, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
 import { validCombatRules, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
@@ -36,6 +37,12 @@ private routineError: string | null = null;
   protected combatHealingUrgent(_bot: Bot): boolean { return false; }
   protected sendAutoCombatSpell(_bot: Bot, _spell: CombatSpell, _ruleId?: string): boolean { return false; }
   protected battlefieldChannel(): string | undefined { return undefined; }
+  override requestFacts(): ReturnType<MinecraftWorld['requestFacts']> {
+    const facts = super.requestFacts();
+    if (!facts || !this.bridge?.connected || !this.bridge.bot?.entity) return facts;
+    const text = this.tactics.capabilityIndex();
+    return {...facts, text:facts.text+'\n'+text, parts:[...(facts.parts ?? []),{key:'combatCapabilities',text}]};
+  }
   protected override extensionTools(): ToolDef[] { return [{...COMBAT_TACTIC_TOOL, handler: (args, ctx) => this.setCombatTactic(args, ctx.role === 'host-decision', ctx.role)}]; }
 protected async setCombatTactic(args: Record<string, unknown>, hostSampling = false, role?: string): Promise<string | ToolOutcome> {
     const tool = 'mc_combat_tactic';
@@ -209,6 +216,7 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       tracking: this.combat?.tracking ?? false }, cfg.maxEntities, now);
     const program = this.tactics.getTactic()?.program;
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
+    frame.loadout = combatLoadout(bot);
     const control = {
       bodyFree: (this.combat?.tracking ? !queue?.waiting.length : !this.combat?.active && combatMayTakeTask(queue))
         && !this.methodOwnsBody() && !bot.currentWindow && !(this.executor?.eating ?? false),

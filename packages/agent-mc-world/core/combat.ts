@@ -36,6 +36,7 @@ import {
 } from './combat-context.ts';
 import { HOSTILE, bestWeapon, dropOwnedGoal, meleeCooldownMs, releaseBody, setOwnedGoal } from './executor.ts';
 import { weaponScore } from './melee.ts';
+import { combatLoadout } from './combat-loadout.ts';
 import { equipHandConfirmed } from './equipment.ts';
 import { walkOnlyPath } from './travel.ts';
 import type { FightMode } from './policy.ts';
@@ -523,7 +524,7 @@ export class CombatSession {
       return true;
     }
     const foe = bot.entities[action.targetId];
-    if (!foe || !this.engagementTargets().includes(action.targetId)) return false;
+    if (!foe || !this.engagementTargets().includes(action.targetId) || combatLoadout(bot).canEngage !== true) return false;
     if (this.tracking) {
       this.trackingLease = null; this.state = 'fighting'; this.rangedOwner = {}; this.armMelee(bot);
       this.lastLandedAt = this.lastProgressAt = this.lastRealProgressAt = Date.now();
@@ -2232,7 +2233,7 @@ export class CombatSession {
         || Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z) > 16) continue;
       nearbyHostiles[e.name!] = (nearbyHostiles[e.name!] ?? 0) + 1;
     }
-    return { dimension: bot.game?.dimension ?? null, position: { x: p.x, y: p.y, z: p.z },
+    return { dimension: bot.game?.dimension ?? null, position: { x: p.x, y: p.y, z: p.z }, loadout: combatLoadout(bot),
       hostileRadius: 16, nearbyHostiles, equipment: { mainHand: bot.heldItem?.name ?? null,
         offHand: bot.inventory?.slots?.[45]?.name ?? null,
         helmet: bot.inventory?.slots?.[5]?.name ?? null, chestplate: bot.inventory?.slots?.[6]?.name ?? null,

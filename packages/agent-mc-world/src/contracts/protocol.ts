@@ -9,6 +9,9 @@ export interface ExecutionReceipt {
   terminal: boolean;
   /** Only the host can judge its goal; execution completion never makes this true. */
   goalCompleted: false;
+  /** An observation terminal may carry `outcome` (e.g. death). This records an
+   * observed event, not successful action or goal completion. Preserve its
+   * original event timestamp when retaining causal history beside newer state. */
   evidence?: Record<string, unknown>;
 }
 export interface CallOptions { requestId?: string; turnId?: string; signal?: AbortSignal; attribution?: import('../../core/operation-experience.ts').OperationAttribution }
