@@ -233,7 +233,8 @@ describe('live readouts and honest startup', () => {
       expect(current!.text).not.toContain('地形：；');
       expect(current!.text).not.toContain('服务器上只有我');
       Object.assign((r.world as any).bridge, { connected: false });
-      expect(r.world.requestFacts()).toBeNull();
+      expect(r.world.requestFacts()?.text).toContain('当前现场读数不可用');
+      expect(r.world.requestFacts()?.decision).toBeUndefined();
     } finally { r.close(); }
   });
   it('keeps the native food-reserve fact in direct SDK reads without draining host events', () => {

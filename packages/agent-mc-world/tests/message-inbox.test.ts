@@ -8,6 +8,43 @@ const event = (text: string, ts = '2026-01-01T00:00:00Z', senderKey = 'minecraft
   ({ ts, text, source: 'minecraft', type: 'minecraft.chat', senderKey });
 
 describe('received Minecraft messages', () => {
+  it('expands the observed batch selector without pretending retained messages were evicted', () => {
+    const inbox = new MessageInbox('example.test:25565:ag_Player');
+    inbox.observe(event('[MC 系统] Room result: one of three cleared.'));
+    inbox.observe(event('[MC 私聊] Alex: I will join after harvesting.', '2026-01-01T00:00:01Z', 'Alex'));
+    const result = inbox.readout({ action: 'read', ids: ['message_1', 'message_2', 'message_1'] });
+    expect(result.failed).toBeUndefined();
+    expect(result.text).toContain('one of three cleared'); expect(result.text).toContain('senderKey=Alex');
+    expect(result.text.match(/\[Minecraft收到的消息 message_1\]/g)).toHaveLength(1);
+    expect(inbox.readout({ ids: ['message_1', 'message_2'] })).toEqual(result);
+    expect(inbox.index()).toContain('2 条未标记已考虑');
+    for (const args of [{action:'read'}, {action:'read', id:''}, {action:'read', ids:[]},
+      {action:'read', ids:['message_1', 2]}, {action:'read', id:'message_1', ids:['message_2']},
+      {action:'read', ids:Array(17).fill('message_1')}, {action:'search', query:'Alex', ids:['message_2']}]) {
+      expect(inbox.readout(args)).toMatchObject({failed:true,meta:{admission:{rule:'messages.selector'}}});
+    }
+    const missing = inbox.readout({action:'read',ids:['message_1','message_36806']});
+    expect(missing).toMatchObject({failed:true,meta:{admission:{rule:'messages.retained-id',missingIds:['message_36806']}}});
+    expect(missing.text).not.toContain('one of three cleared');
+    expect(inbox.readout({action:'read'}).text).toContain('尚未查找消息');
+  });
+  it('versions query results by scope and normalized selector, preserving changes, review and page boundaries', () => {
+    const inbox = new MessageInbox('example.test:25565:ag_Player');
+    inbox.observe(event('[MC 系统] Room closed.'));
+    const query = {action:'search',query:'room',limit:1};
+    const first = inbox.readout(query);
+    expect(inbox.readout({action:'search',keyword:' ROOM ',limit:1}).meta).toEqual(first.meta);
+    inbox.observe(event('[MC 系统] Unrelated notice.'));
+    expect(inbox.readout(query).meta).toEqual(first.meta);
+    inbox.observe(event('[MC 系统] Room closed.', '2026-01-01T00:01:00Z'));
+    expect(inbox.readout(query).meta).not.toEqual(first.meta);
+    expect(inbox.readout({...query,offset:1}).meta).not.toEqual(inbox.readout(query).meta);
+    inbox.readout({action:'review',ids:['message_1']});
+    expect(inbox.readout(query).text).toContain('匹配 0 条');
+    expect(inbox.readout({...query,status:'all'}).text).toContain('匹配 1 条');
+    const other = new MessageInbox('other.test:25565:ag_Player'); other.observe(event('[MC 系统] Room closed.'));
+    expect(other.readout(query).meta).not.toEqual(first.meta);
+  });
   it('reads an exact id without action, never silently ignores a selector, and exposes stable scoped revisions', () => {
     const inbox=new MessageInbox('example.test:25565:ag_Player');
     inbox.observe(event('[MC 系统] Original message body.'));

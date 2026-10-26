@@ -31,7 +31,7 @@ export interface CombatRuleFacts {
 const ID = /^[a-z][a-z0-9_:-]{0,63}$/;
 export const COMBAT_RULES_SCHEMA = {
   type: 'array', maxItems: 16,
-  description: 'Ordered conditional rules re-evaluated against current facts while fighting. First matching, ready rule wins; no match means no automatic offensive cast. [] restores spells/default priority. This is not a timed sequence; use mc_do for a bounded movement/action group.',
+  description: 'Ordered conditional rules re-evaluated against current facts while fighting. With allowEngage enabled, a rule with intent may also be offered to the fast selector before melee begins, subject to the same engagement scope, free body, health, observed ability, mana and cooldown checks. First matching, ready rule wins during automatic combat; no match means no automatic offensive cast. [] restores spells/default priority. This is not a timed sequence; use mc_do for a bounded movement/action group.',
   items: {
     type: 'object', additionalProperties: false, required: ['id', 'spell', 'when'],
     properties: {

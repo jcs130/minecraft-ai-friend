@@ -138,6 +138,23 @@ a short renewable lease; it stops on lost identity/sight or expiry and checks
 loaded safe ground before moving. Set `maxCandidates` to at least 3 to expose the
 different tactics. No host selector or inference starts by importing the package.
 
+With `allowEngage:true`, authored spell rules with an `intent` may be offered
+before the native melee controller starts, including when there is no sword or
+usable bow. Ability availability, mana/cost/cooldown, visible hostiles in the
+configured engagement scope, rule predicates, health and body admission must
+all pass again at dispatch. Sampling never casts a spell. `fight:off`, emergency
+ownership and a noninterruptible body task still prevent an opening. This does
+not grant spell range, aim, server success or melee capability.
+An active read-only/computational script is not a body lease and does not hide
+fast combat choices. A native script holding control, or a script awaiting its
+executor task, still owns the body. A second authored method cannot start while
+the first worker remains active.
+
+Server messages using the chat transport carry `meta.channel:"system"` when
+there is no named player source. Player speech and outgoing private echoes keep
+their original provenance, so host reply/speech lanes can distinguish telemetry
+from a new conversation without parsing server-specific text.
+
 ## Spatial observations
 
 The same SDK/MCP action interface offers compact site diagnostics, local 3D voxels,
@@ -219,3 +236,9 @@ The public SDK exposes optional metadata-only `status().connection` (`ready`, `p
 `standingOn` identifies a collision face touching the player's footprint, including block edges and fractional-height blocks. The feet's center cell can be air while an adjacent block supports the body. Unloaded or unresolved support remains unknown; it is never narrated as air. Airborne motion does not claim a block below as current support. The viewer surface readout uses the same calculation.
 
 `serverFeedback` retains up to three recent server rejection/error observations for ten minutes, including system messages and raw action-bar packets. It is historical server text with channel, receipt time and task identity, not a permission grant or proof of an action's effect. Matching blocked/partial task receipts also preserve text received during that task, without claiming causation. Full messages remain in the event archive. Repeated HUD values, player chat and duplicate raw/high-level packets do not create new error observations. Server-specific decoding and protection policy belong to optional extensions.
+
+`mc_messages read` accepts one `id` or an explicit `ids` batch of 1–16 retained message IDs, preserving each source and reception time. Missing/malformed selectors return `messages.selector` with a correction; only valid but absent IDs return `messages.retained-id`. Reading never marks messages reviewed. Successful `list`, `search` and `read` receipts expose `meta.readback` (`agent-mc-readback/v1`) with a realm/account-scoped resource and content revision. Equivalent keyword/query filters share a resource; changed observations, pagination and review state remain distinguishable. Consumers may use this to recognize repeated results; an unchanged history query proves neither current world state nor goal progress. The inbox does not cache away calls, trigger model work or choose an action.
+
+### Remember retries
+
+Identical normalized `mc_memory remember` notes in the same realm/account/agent scope reuse the latest unarchived entry ID and revision. The receipt adds `deduplicated: true, written: false`; `saved: true` still means local persistence, not successful remote indexing. Source, speaker, observed time, content, dimension, tag set and expiry must all match. Recorded time and expiry are never refreshed. Explicit revisions/captures and changed evidence remain separate; existing duplicates are not deleted.
