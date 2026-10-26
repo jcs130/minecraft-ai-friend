@@ -493,6 +493,56 @@ describe('standable 认岩浆', () => {
 });
 
 describe('战斗会话:进入(夺手不夺嘴)', () => {
+  it('fast engagement cannot immediately reopen a stuck fight, but observed injury still permits self defence', async () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 6)]);
+    const { session } = rig(bot);
+    try {
+      expect(session.react({ type: 'engage', targetId: 7 })).toBe(true);
+      await drive(bot, 7_000);
+      expect(session.active).toBe(false);
+      expect(session.engagementTargets()).toEqual([]);
+      expect(session.react({ type: 'engage', targetId: 7 })).toBe(false);
+      expect(session.onHurtBy(7, 'zombie')).toBe(true);
+      expect(session.active).toBe(true);
+    } finally { session.stop(); }
+  });
+
+  it.each(['equip', 'busy'] as const)('a bow-only body retreats on %s failure and cannot corner itself into punching with bread', async cause => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = { name: 'bread', type: 3, count: 5 };
+    b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const ranged = rangedRig();
+    ranged.actions.shoot = vi.fn(async () => ({ kind: 'blocked' as const, reason: 'aborted' as const, cause }));
+    const diag = new MinecraftLog(), { session, events } = rig(bot, {}, diag, ranged.actions);
+    try {
+      session.onHurtBy(7, 'zombie'); await drive(bot, 2_000);
+      expect(session.reactionState().retreating).toBe(true);
+      for (let i = 0; i < 9; i++) { // sustained injury while escape has no net movement
+        session.onHurtBy(7, 'zombie'); await drive(bot, 1_000);
+      }
+      expect(session.reactionState().retreating).toBe(true);
+      expect(attacks).toHaveLength(0);
+      expect(events.filter(event => event.text.includes('弓箭未能出手'))).toHaveLength(1);
+      expect(diag.after(0).find(event => event.event === 'ranged-blocked')?.data)
+        .toMatchObject({ cause, held: 'bread', targetId: 7 });
+    } finally { session.stop(); }
+  });
+
+  it('a cornered bow-only body still uses its bow rather than food as a melee fallback', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = { name: 'bread', type: 3, count: 5 };
+    b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const ranged = rangedRig(), { session } = rig(bot, {}, undefined, ranged.actions);
+    try {
+      session.onHurtBy(7, 'zombie');
+      // Same state transition as retreat's cornered recovery, without making
+      // the mock no-damage body repeatedly fail before the assertion.
+      (session as any).desperate = true;
+      await drive(bot, 500);
+      expect(ranged.shots.length).toBeGreaterThan(0);
+      expect(attacks).toHaveLength(0);
+    } finally { session.stop(); }
+  });
   it.each(['cancel', 'low-health', 'timeout'] as const)('pending explicit attack equipment yields its body on %s before a late equip confirmation', async cause => {
     const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
     b.registry.entitiesByName.zombie = { name: 'zombie' }; b.heldItem = null;

@@ -5,14 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ensureHolding } from '../core/placement.ts';
 import { skillEquip } from '../core/skills-craft.ts';
 import { installInventoryClickSync } from '../core/inventory-click-sync.ts';
+import { BowController } from '../core/ranged.ts';
+import { Vec3 } from 'vec3';
 
 const require = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 
 // The server and client use real Prismarine windows, with delayed server snapshots.
-function rig(denySwap = false) {
-  const registry = require('minecraft-data')('1.20.6');
+function rig(denySwap = false, version = '1.20.6') {
+  const registry = require('minecraft-data')(version);
   const Item = require('prismarine-item')(registry);
-  const windows = require('prismarine-windows')('1.20.6');
+  const windows = require('prismarine-windows')(version);
   const inventory = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
   const server = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
   const client = new EventEmitter() as EventEmitter & { write(name: string, packet: any): void };
@@ -60,12 +62,52 @@ function rig(denySwap = false) {
   };
   seed(9, 'green_bed'); seed(36, 'player_head');
   installInventoryClickSync(bot);
-  return { bot, inventory, server, sent };
+  return { bot, inventory, server, sent, seed };
 }
 
 afterEach(() => vi.useRealTimers());
 
 describe('hand material server confirmation', () => {
+  it.each([false, true])('bow drawing waits for authoritative 1.21.1 equipment; refused=%s', async denied => {
+    vi.useFakeTimers();
+    const r = rig(denied, '1.21.1');
+    r.seed(9, 'bow'); r.seed(36, 'bread'); r.seed(10, 'arrow');
+    const activated: string[] = [], released: string[] = [];
+    Object.assign(r.bot, {
+      entity: { position: new Vec3(0, 64, 0), eyeHeight: 1.62 },
+      lookAt: async () => {},
+      activateItem: () => { activated.push(r.server.slots[36]?.name); },
+      deactivateItem: () => { released.push(r.server.slots[36]?.name); },
+    });
+    const bow = new BowController({ getBot: () => r.bot, hasLos: () => true });
+    const result = bow.shoot({ id: 7, position: new Vec3(9.8, 64, 0), height: 1.95 });
+    await vi.advanceTimersByTimeAsync(165);
+    expect(activated).toEqual([]);
+    await vi.runAllTimersAsync();
+    expect(await result).toMatchObject(denied ? { kind: 'blocked', cause: 'equip_timeout' } : { kind: 'released' });
+    expect(activated).toEqual(denied ? [] : ['bow']);
+    expect(released).toEqual(denied ? [] : ['bow']);
+    expect(r.server.selectedItem).toBeNull();
+    expect(r.sent).toEqual([9]);
+    expect(bow.active).toBe(false);
+  });
+
+  it('a cancelled bow swap cannot activate the hand after its late server acknowledgement', async () => {
+    vi.useFakeTimers();
+    const r = rig(false, '1.21.1');
+    r.seed(9, 'bow'); r.seed(36, 'bread'); r.seed(10, 'arrow');
+    const activate = vi.fn();
+    Object.assign(r.bot, { entity: { position: new Vec3(0, 64, 0) }, activateItem: activate });
+    let owned = true;
+    const bow = new BowController({ getBot: () => r.bot, hasLos: () => true, leaseValid: () => owned });
+    const result = bow.shoot({ id: 7, position: new Vec3(9.8, 64, 0), height: 1.95 }, {});
+    await vi.advanceTimersByTimeAsync(100); owned = false;
+    await vi.runAllTimersAsync();
+    expect(await result).toMatchObject({ kind: 'blocked', cause: 'lease' });
+    expect(activate).not.toHaveBeenCalled();
+    expect(r.server.selectedItem).toBeNull();
+    expect(bow.active).toBe(false);
+  });
   it('waits for the complete material swap before construction can use the hand', async () => {
     vi.useFakeTimers();
     const r = rig();

@@ -1,6 +1,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { readDurability, type ItemLike } from './item-facts.ts';
+import { equipHandConfirmed } from './equipment.ts';
 
 /** 未交战时允许进入远程候选池的最大距离。感知命中本身不触发开火。 */
 export const RANGED_ENTER_RANGE = 32;
@@ -326,6 +327,7 @@ export type BowAbortCause =
   | 'bot_lost'
   | 'target_lost'
   | 'equip'
+  | 'equip_timeout'
   | 'activate'
   | 'release'
   | 'cancel_slot'
@@ -436,10 +438,32 @@ export class BowController {
     };
     this.drawing = drawing;
     try {
+      let equipmentGuard: ReturnType<typeof setInterval> | undefined;
       try {
-        await bot.equip(bow, 'hand');
+        // Inventory prediction is not server confirmation. In particular, a
+        // delayed 1.21 slot snapshot can otherwise put food back into the hand
+        // after activateItem(), leaving the combat owner waiting for an arrow.
+        const deadline = this.now() + 3_000;
+        const checkEquipment = (): void => {
+          const stopped = this.validateOwner(drawing);
+          if (stopped) throw new Error(`Bow equipment cancelled: ${stopped.cause}`);
+          if (this.drawing !== drawing) throw new Error('Bow equipment owner ended');
+          if (this.now() >= deadline) {
+            drawing.abortCause = 'equip_timeout';
+            throw new Error('Bow equipment confirmation timed out');
+          }
+        };
+        const interrupted = new Promise<never>((_resolve, reject) => {
+          equipmentGuard = setInterval(() => {
+            try { checkEquipment(); } catch (error) { reject(error); }
+          }, AIM_STEP_MS);
+        });
+        await Promise.race([equipHandConfirmed(bot, bow, checkEquipment), interrupted]);
       } catch {
-        return await this.finishBlocked(drawing, 'aborted', 'equip');
+        const stopped = this.validateOwner(drawing);
+        return await this.finishBlocked(drawing, 'aborted', stopped?.cause ?? 'equip');
+      } finally {
+        if (equipmentGuard !== undefined) clearInterval(equipmentGuard);
       }
       drawing.cancelSlot = findSafeCancelSlot(bot, drawing.bowType);
       if (drawing.cancelSlot < 0) return await this.finishBlocked(drawing, 'aborted', 'cancel_slot');

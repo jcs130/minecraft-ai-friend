@@ -343,6 +343,8 @@ export class CombatSession {
   /** 撤退失败转身还手中:E2 血线对本场静默(血线的前提是"跑得掉",这里已经证伪) */
   private desperate = false;
   private hadCombatWeapon = false;
+  private rangedUnavailable = false;
+  private rangedBlocked: { firstAt: number; reason: string; cause?: string } | null = null;
   private meleeEquip: { bot: Bot; weapon: string; startedAt: number; failed: boolean } | null = null;
 
   // —— v7 出手/移动状态
@@ -458,6 +460,7 @@ export class CombatSession {
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot))
       || Date.now() < this.capCooldownUntil
+      || (!t.arena && Date.now() < this.cooldownUntil)
       || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)) return [];
     // Use the same bounded pursuit pool as fighting ticks. The old narrower
     // acquisition radius offered only non-attacking observation at 6–10 blocks.
@@ -562,6 +565,10 @@ export class CombatSession {
     if (event.kind === 'blocked' || !this.ownsRanged(event.ownerToken)) return;
     if (event.kind === 'released') {
       this.arrows += 1;
+      this.rangedBlocked = null;
+      // A released arrow proves the ranged body can act. Only a hit extends
+      // the hard no-damage window; repeated misses must still terminate.
+      this.lastProgressAt = event.at;
       this.nextRangedAt = Math.max(this.nextRangedAt, event.at + 200);
       return;
     }
@@ -754,6 +761,8 @@ export class CombatSession {
     this.bot = bot;
     this.state = initial;
     this.meleeEquip = null;
+    this.rangedUnavailable = false;
+    this.rangedBlocked = null;
     this.trackingLease = null;
     this.hadCombatWeapon = Boolean(bestWeapon(bot) || this.rangedReady(bot));
     const now = Date.now();
@@ -1153,7 +1162,7 @@ export class CombatSession {
     // Having a bow does not make the empty melee hand armed. With no melee
     // weapon, keep the ranged controller's spacing instead of choosing fists
     // merely because the hostile crossed the hybrid distance threshold.
-    const weapon = !this.desperate && rangedReady && !bestWeapon(bot)
+    const weapon = rangedReady && !bestWeapon(bot)
       ? 'ranged' : chooseHybridWeapon(this.hybridWeapon, target.reach, rangedReady);
     if (weapon !== this.hybridWeapon) this.switchWeapon(bot, weapon);
     if (this.hybridWeapon === 'ranged') {
@@ -1228,7 +1237,7 @@ export class CombatSession {
   }
 
   private rangedReady(bot: Bot): boolean {
-    return this.opts.ranged?.ready(bot) ?? false;
+    return (!this.active || !this.rangedUnavailable) && (this.opts.ranged?.ready(bot) ?? false);
   }
 
   private switchWeapon(bot: Bot, next: HybridWeapon): void {
@@ -1298,9 +1307,8 @@ export class CombatSession {
       attempt.failed = true;
       this.opts.emit(`换${zhName(attempt.weapon)}超过3秒仍未确认，手里是${heldText(bot)}。`, true, false);
     }
-    // A cornered escape may explicitly fall back to bare hands. Ordinary
-    // combat must leave rather than silently treating a bag weapon as held.
-    if (this.desperate) return true;
+    // Cornered status cannot turn a failed equipment transaction into a
+    // confirmed weapon. The truly unarmed policy was handled above.
     this.opts.emit('武器没能拿到手，先拉开距离再处理装备。', true, false);
     this.beginRetreat('flee');
     return false;
@@ -1372,11 +1380,35 @@ export class CombatSession {
       position: target.pos,
       height: target.ent.height,
       width: target.ent.width,
-    }, owner).catch((error: unknown) => {
+    }, owner).then(result => {
+      if (result.kind === 'blocked') this.onRangedBlocked(owner, target.id, result);
+    }).catch((error: unknown) => {
       this.opts.log.warn(`远程出手失败:${error instanceof Error ? error.message : String(error)}`);
+      this.onRangedBlocked(owner, target.id, { kind: 'blocked', reason: 'aborted', cause: 'activate' });
     }).finally(() => {
       if (this.rangedPendingOwner === owner) this.rangedPendingOwner = null;
     });
+  }
+
+  private onRangedBlocked(owner: unknown, targetId: number, result: Extract<BowShotResult, { kind: 'blocked' }>): void {
+    if (!this.ownsRanged(owner) || !this.bot || this.bodyEnded(this.bot)) return;
+    if (result.cause && ['abort', 'lease', 'death', 'bot_lost'].includes(result.cause)) return;
+    const now = Date.now(), previous = this.rangedBlocked;
+    this.rangedBlocked = { firstAt: previous?.firstAt ?? now, reason: result.reason, cause: result.cause };
+    if (!previous || previous.reason !== result.reason || previous.cause !== result.cause) {
+      this.opts.diag?.write({ lane: 'combat', event: 'ranged-blocked', msg: '弓箭执行未完成',
+        data: { targetId, reason: result.reason, cause: result.cause ?? null, held: this.bot.heldItem?.name ?? null } });
+    }
+    const equipmentFailure = result.reason === 'no_arrow'
+      || ['equip', 'equip_timeout', 'bow_lost', 'cancel_slot', 'activate', 'release'].includes(result.cause ?? '');
+    // LOS and a busy hand may recover while spacing. They cannot keep an idle
+    // controller labelled as attacking for the whole six-second stuck window.
+    if (!equipmentFailure && now - this.rangedBlocked.firstAt < 1_500) return;
+    this.rangedUnavailable = true;
+    this.opts.emit(`弓箭未能出手(${result.cause ?? result.reason})，主手是${heldText(this.bot)}。` +
+      (bestWeapon(this.bot) ? '核对近战武器后再打。' : '先撤离，不用手里物品继续攻击。'), true, false);
+    if (bestWeapon(this.bot)) this.switchWeapon(this.bot, 'melee');
+    else this.beginRetreat('flee');
   }
 
   private meleeLanded(): number {
@@ -2104,6 +2136,10 @@ export class CombatSession {
    * 时返回 false 并继续撤退。
    */
   private turnAndFight(bot: Bot, glued: Foe, now: number, cause: 'close' | 'stalled'): boolean {
+    // A failed bow/equip is not evidence that punching with the previous food
+    // item is a usable fallback. Keep the escape owner until it can disengage.
+    if (!bestWeapon(bot) && this.rangedUnavailable) return false;
+    if (this.meleeEquip?.failed && !this.rangedReady(bot)) return false;
     const line = this.opts.tuning().fleeHealth + ENGAGE_MARGIN;
     if (!bestWeapon(bot) && !this.rangedReady(bot) && (bot.health ?? 20) < line) {
       if (!this.retreatBarehandNoted) {

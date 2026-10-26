@@ -30,6 +30,20 @@ function fixture(distance: number, height = 1.95, y = 64) {
 }
 
 describe('short-range bow safety versus preferred weapon distance', () => {
+  it.each(['timeout', 'lease'] as const)('a stalled equipment promise releases the bow owner on %s; late completion cannot fire', async cause => {
+    const f = fixture(9.8);
+    let finish!: () => void;
+    f.bot.equip = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const pending = f.controller.shoot(f.target, {});
+    await vi.advanceTimersByTimeAsync(100);
+    if (cause === 'lease') f.cancelLease();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(await pending).toMatchObject({ kind: 'blocked', cause: cause === 'timeout' ? 'equip_timeout' : 'lease' });
+    expect(f.controller.active).toBe(false);
+    finish(); await vi.advanceTimersByTimeAsync(100);
+    expect(f.bot.activateItem).not.toHaveBeenCalled();
+    expect(f.bot.deactivateItem).not.toHaveBeenCalled();
+  });
   it.each([
     [0.6, 1.95, 64], [1, 1.95, 64], [2.7, 1.95, 64], [5.5, 1.95, 64],
     [2, 0.5, 64], [2, 1.95, 65],
