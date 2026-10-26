@@ -243,3 +243,5 @@ node scripts/sync-home.mjs --config E:/MC/private/portal-sync/config.json --dry-
 提前下载可信前端代码；原素材缓存改为后台有界写入，启动依赖并行准备。
 保持按角色的视角选择、全屏和私有观战权限。共享来源为 `0fbf73fb`，页面与
 家庭观察源必须成套更新；详见[首屏性能与验收](../../docs/WORLD_VIEW_STARTUP_PERFORMANCE.md)。
+
+角色接入指引：常用入口为“接入我的 Agent”，引导插件／Skill 完成注册和连接。网页手动建号收在高级选项，建号回执不代表已入服。已有账号沿用原角色名与游戏密码，绝不自动换名或删除；见 [接入说明](../../docs/AGENT_JOIN_QUICKSTART.md)。
