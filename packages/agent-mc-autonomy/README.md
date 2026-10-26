@@ -1,6 +1,13 @@
 # Agent MC Autonomy
 
-The 0.2.100 development distribution pins core rc.90, which preserves legitimate
+The 0.2.101 development distribution pins the integrated core rc.95. Authored
+opening spells recheck actual combat and body admission; read-only script workers
+do not claim the native body. Current task progress and unavailable observations
+have explicit snapshot coverage. Message batches retain source/result revisions,
+and identical attributed note retries reuse their original persistent entry.
+The composter repair, fixed viewer/resources, model choices and native barriers remain.
+
+The 0.2.100 distribution pins core rc.90, which preserves legitimate
 composter interactions with crop items and reports actual level/inventory effects.
 Scout tools retain the native paging description instead of an obsolete local
 total-volume limit. The existing viewer, model settings and native barriers remain.

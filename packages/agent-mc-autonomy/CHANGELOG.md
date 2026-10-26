@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.101
+
+- Pin the integrated core rc.95 with authored opening-spell admission, accurate script body ownership, task progress snapshots and explicit unknown current facts when observation is unavailable.
+- Consume bounded batch message reads with scoped result revisions, server-message provenance and idempotent retries of identical attributed game notes.
+- Retain the composter repair, fixed renderer/resources, model selection, native queue, inventory confirmation and stop/unknown boundaries.
+
 ## 0.2.100
 
 - Consume core rc.90: seeds used on a composter no longer fail soil admission or execution; read compost level, consumed items and bone-meal gain separately.
