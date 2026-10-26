@@ -1,0 +1,34 @@
+{
+  "qiandengji-daily-patrol": {
+    "text": "【千灯纪每日巡检与项目发现】先读 resource/GODDESS_WORLD_CURRENT.md 和 skills/world-evolution/SKILL.md。用现有只读快照、日志与本人状态核对健康、在线身份、实际副本、近期居民活动；原始私聊不公开。读取项目台账，调查反复卡点：村民按原UUID分清固定服务岗/卸载/睡觉/真实卡住，检查通路与地形根因；不凭静止就传送。新增问题和证据写入项目台账，已有问题更新下一步，不重复立项。若可安全完成已授权小修，按技能流程前像、施工协调、验证与复查；较大项目勘察/隔离推进。正常只写运营记录，真实异常沿原有渠道简短报告。不要把巡检任务执行成功算世界改进完成。",
+    "timeout": 900,
+    "shareSession": false
+  },
+  "qiandengji-morning-curation": {
+    "text": "【千灯纪活动与剧情策展】读 resource/GODDESS_WORLD_CURRENT.md、skills/world-evolution/SKILL.md 和项目台账。根据近期真实居民行为、在途任务、公开作品和卡点，推进一条可选的故事/探索/战斗/制造路线；不要只换供货看板。优先继续已勘察项目，明确NPC/现场/CLI入口、任务条件、返程或重连及适量奖励。复用当前 rpg-story/route-contracts/task-market/BetonQuest 等真实能力，先读对应schema；当前农耕新接单已撤下，不恢复旧土豆/麦收号召。修改前获取本轮施工租约和E/F前像；有进度的旧单/章节/奖励不重置。隔离验证再热加载，失败或未知只读对账。写台账与日记，默认不主动私聊催单；既有简报只报已核验变化。没有可发布内容时完成实质勘察/测试并留下一步，不编造上线。",
+    "timeout": 1200,
+    "shareSession": false
+  },
+  "qiandengji-world-weekly-build": {
+    "name": "qiandengji-world-daily-build",
+    "cron": "0 14 * * *",
+    "text": "【千灯纪每日世界建设】服主2026-10-26要求自主持续丰富世界。先读 resource/GODDESS_WORLD_CURRENT.md、skills/world-evolution/SKILL.md 和项目台账，从已有项目继续一个可验收增量；不要每次只贴新告示牌或写下周想法。优先修居民实际卡点，再推进村庄通路/公共设施、NPC互动剧情、已生成遗迹的入口与多室地下城。结合已安装 MythicMobs/BetonQuest/Denizen/结构包的真实能力，不能把FOM模组当Paper现役。可以自行开发和隔离测试，不再一律写交开发线。施工租约、当前场地/玩家状态、E/F前像、精确回退、普通玩家可用性和真实回执必须具备；正式换JAR/重启仍待本次维护批准。项目阶段分开记录，已应用即核验，未知先对账，下一轮复查参与和复发。沿原既有周建渠道简短报告实际建成/候选/阻塞与下一步，不额外发游戏公屏或私聊。",
+    "timeout": 2400,
+    "shareSession": false
+  },
+  "qiandengji-guild-weekly-iteration": {
+    "text": "【千灯纪每周玩法复盘】读 resource/GODDESS_WORLD_CURRENT.md、skills/world-evolution/SKILL.md 和项目台账。统计过去一周有原始证据的已发布增量、真实接取/完成/失败分母、无人体验内容、反复卡点、奖励产出与MSPT；任务调度success不当成内容完成。按真实兴趣与障碍改进剧情/任务/地下城，保持选择自由，不因无人接就断言不喜欢；不恢复已撤下农耕，不重置旧进度/一次性奖励。选一个影响最大的可验证改进，继续已有项目；缺判定能力可自行开发隔离测试，发布按原维护规则。填写 reviewed 的实际 outcome（无样本照实），沿既有周报渠道给简短结果和下一周重点。",
+    "timeout": 1800,
+    "shareSession": false
+  },
+  "滞留任务巡检-3h": {
+    "text": "【千灯纪持续问题发现与复查】读 resource/GODDESS_WORLD_CURRENT.md、skills/world-evolution/SKILL.md、state/world-evolution/projects.json。先查真实状态和上轮证据：任务是否在途、可获得性/天气/位置是否匹配，村民是否再次困在已修通路，副本是否有异常或已登记待复查的内容。以实际变化判断，不把缺失进度字段当0%，不把没动当卡死，不盲跑旧命令。把问题和复发次数写入原项目，挑一项需要继续的勘察/复查；与其他施工任务共享租约，繁忙则只读。不要自动放弃或接玩家任务，不催单、不主动广播；确需通知按原已有渠道与限频。正常留简短结构化记录；无新证据不要反复写同一正常结论。",
+    "timeout": 600,
+    "shareSession": false
+  },
+  "qiandengji-evening-briefing": {
+    "text": "【千灯纪傍晚就绪简报】读 resource/GODDESS_WORLD_CURRENT.md 和项目台账，查询当前性能/在线/活动场次。优先确认萌萌与Agent今晚能发现哪些已核验新内容、可走入口、旧任务兼容；按原授权仅在没有冲突活动时调整白天/晴天，先确认当前状态和语法。不要按旧十层/三地下城文案介绍。沿原既有简报渠道用三行说明：服务状态、实际新增/改进、尚在候选或待确认项。没有新内容就如实说，已执行任务数不算建设成果；不向游戏公屏群发。",
+    "timeout": 600,
+    "shareSession": false
+  }
+}
