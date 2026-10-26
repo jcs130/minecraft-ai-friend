@@ -23,6 +23,7 @@ import { getAgentClients } from './agent-clients.mjs';
 import { packageAt, packageLocation, publicDownloads } from './download-catalog.mjs';
 import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
+import { isTrialAgent } from './trial-pool.mjs';
 import { agentOnboarding } from './agent-onboarding.mjs';
 import { Appearance } from './appearance.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
@@ -411,7 +412,8 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
         const owned = new Set(store.db.prepare('SELECT agent_uuid FROM ownerships').all().map(row => row.agent_uuid));
         return respond(res, 200, { agents: (await game.roster()).filter(row=>!row.historical).map(row => ({ ...game.publicAgent(row),
-          claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && !owned.has(row.playerUuid) })) });
+          experiencePool: !!row.playerUuid && isTrialAgent(store, row.playerUuid),
+          claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && (!owned.has(row.playerUuid) || isTrialAgent(store, row.playerUuid)) })) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/world/players') return respond(res, 200, await world.players());
       const publicBag=/^\/api\/v1\/world\/players\/([a-f0-9]{24})\/bag$/.exec(pathname);
@@ -550,6 +552,13 @@ export function createPortal(config, options = {}) {
         return respond(res, 200, { owner: store.ownerPublic(owner), email: emailAuth.identity(owner.id), sessions, events: store.events(owner) });
       }
       if (req.method === 'GET' && pathname === '/api/v1/agent-invites') return respond(res, 200, agentAccess.list(browserAuth(req).owner));
+      if (req.method === 'POST' && pathname === '/api/v1/admin/trial-invites') {
+        const { owner } = browserAuth(req, true, true); rate('trial-invite:' + owner.id, 10);
+        agentAccess.enabled();
+        const result = agentAccess.pool.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();
+        return respond(res, result.duplicate ? 200 : 201, { ...result, invites: result.invites.map(invite => ({ ...invite,
+          onboarding: agentOnboarding({ origin: req.portalOrigin.origin, invite, skill: agentSkill, gameAddress: config.publicGameAddress, gameReady: capability.game.ready }) })) });
+      }
       if (req.method === 'POST' && pathname === '/api/v1/agent-invites') {
         const { owner } = browserAuth(req, false, true); rate('agent-invite:' + owner.id, 20);
         const invite = agentAccess.issue(owner, await jsonBody(req)), capability = await agentAccess.capabilities();

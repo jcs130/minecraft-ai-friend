@@ -367,6 +367,7 @@ function rosterCards(agents = [...state.roster, ...state.authorized.filter(row =
 }
 function agentsPage() {
   return heading('每个角色，都有自己的身份。', '注册 Agent，或绑定你的已有角色。', button('new-game-agent', '注册新 Agent', 'plus', 'primary') + button('binding', isAdmin() ? '绑定已核验角色' : '绑定已有角色', 'link'))
+    + (state.roster.some(agent=>agent.experiencePool) ? notice('体验池中的 Agent 可先玩后认领。注册／登录网站后点击“认领体验角色”，按提示让本人已登录的游戏角色执行 /portal bind；仅知道名字不能认领。', 'muted') + button('claim-trial', '认领体验角色', 'link') : '')
     + (owner() ? notice(state.gameCapabilities?.ready ? '游戏账号桥在线。新建角色使用独立游戏密码，绑定已有角色保留原 UUID。' : e(state.gameCapabilities?.message || '网站账号已可注册和登录；游戏账号功能等待接通认证桥。'), 'muted') : '')
     + `<div class="toolbar"><div class="filters" aria-label="筛选角色">${[['all', '全部'], ...(owner() ? [['authorized', '我的角色']] : []), ['online', '在线'], ['agent', 'Agent'], ['player', '玩家'], ['observer', '观战']].map(([value, text]) => `<button class="filter ${state.filter === value ? 'active' : ''}" data-action="filter" data-filter="${value}">${text}</button>`).join('')}</div><label class="search-input">${icons.search}<input id="roster-search" type="search" autocomplete="off" placeholder="搜索角色名称${isAdmin() ? '或 UUID' : ''}" value="${e(state.query)}" aria-label="搜索角色"></label></div>
     <div id="roster-grid" class="roster-grid">${rosterCards()}</div>${owner() && state.accountJobs.length ? `<section class="panel gap-top"><div class="panel-header"><h2>我的游戏账号请求</h2></div><div class="account-job-list">${state.accountJobs.map(job => `<button class="account-job-row" data-action="open-account-job" data-id="${e(job.id)}"><strong>${e(job.username)}</strong><span>${({create:'注册',claim:'绑定',password:'改密'})[job.operation] || '请求'} · ${({succeeded:'已完成',failed:'未完成',pending:'等待处理',unknown:'待确认',waiting:'等待游戏内确认'})[job.state] || '处理中'}</span>${icons.chevron}</button>`).join('')}</div></section>` : ''}<div class="gap-top">${notice('网站账号与游戏角色分别管理。角色的原 UUID、背包和成长记录保持原样。', 'muted')}</div>`;
@@ -692,6 +693,7 @@ document.addEventListener('click', async event => {
     else if (action === 'detail-tab') { state.detailTab = target.dataset.tab; drawDetail(); }
     else if (action === 'retry-detail') await openDetail(state.detail.agent.id, state.detailTab);
     else if (action === 'logout') { authRevision++; setSession(await api('/session', { method: 'DELETE' })); await loadPrivate(); if (detail.open) detail.close(); render(); toast('已退出网站'); }
+    else if (action === 'claim-trial') { if (detail.open) detail.close(); gameAccountModal('claim'); }
     else if (action === 'binding') { if (detail.open) detail.close(); bindingModal(); }
     else if (action === 'new-game-agent') gameAccountModal('create');
     else if (action === 'agent-profile') await profileModal(target.dataset.id);
