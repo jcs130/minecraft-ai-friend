@@ -37,6 +37,23 @@ test('website create waits for authenticated bridge receipt, persists stable ide
   assert.equal(repeated.data.state, 'succeeded'); assert.equal(await fs.readFile(path.join(f.directory, 'requests', id + '.json'), 'utf8'), request);
 });
 
+test('published game password rules match the existing server policy without imposing character-class requirements', async t => {
+  const f = await connected(t), owner = f.portal.store.ownerByName('fixture-admin');
+  const invalid = ['', 'short', 'a'.repeat(65), 'abc def', 'abc\tdef', 'abc\ndef', 'abc\u00a0def', '123456', '12345678', 'PASSWORD', 'QwErTy'];
+  for (const gamePassword of invalid) {
+    await assert.rejects(f.portal.accounts.start(owner, 'create', { username: 'ag_Policy', requestId: randomUUID(), gamePassword }), { status: 400, reason: 'INVALID_GAME_PASSWORD' });
+  }
+  assert.equal(f.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs').get().n, 0, 'invalid passwords must not create a bridge job');
+  const valid = ['abcdef', 'a'.repeat(64), '自主冒险角色', '654321', 'word-!'];
+  for (const [index, gamePassword] of valid.entries()) {
+    const requestId = randomUUID();
+    const result = await f.portal.accounts.start(owner, 'create', { username: 'ag_Policy' + index, requestId, gamePassword });
+    assert.equal(result.state, 'pending');
+    const encrypted = await fs.readFile(path.join(f.directory, 'requests', requestId + '.json'), 'utf8');
+    assert.equal(unseal(f.key, 'request:' + requestId, encrypted).password, gamePassword, 'do not trim or rewrite the chosen password');
+  }
+});
+
 test('game claim requires a game proof receipt; other website accounts cannot poll or overwrite it', async t => {
   const f = await connected(t), id = randomUUID();
   const claim = await f.admin.request('/agent-claims', 'POST', { username: 'ag_Alpha', requestId: id });

@@ -82,4 +82,5 @@ dialog{border:1px solid #405544;border-radius:12px;background:#172225;color:var(
 .event-body a, .photo-author a, .agent-card h2 a { color:inherit; text-decoration:none; }
 .event-body a:hover, .photo-author a:hover, .agent-card h2 a:hover { text-decoration:underline; }
 .archive-body { white-space:pre-wrap; overflow-wrap:anywhere; font-size:17px; line-height:2; padding:12px 0; }
+#game-password-rules { font-size:13px; line-height:1.7; }
 @media(max-width:600px) { .trail-person { padding:16px; } .trail-filter .field { flex-basis:100%; } .trail-person .btn { flex:1 1 40%; } }
