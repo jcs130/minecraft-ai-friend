@@ -159,9 +159,12 @@ export class OperationExperienceBook {
     if (row.schema !== 'agent-mc-experience/v1' || row.id !== id || row.scopeKey !== operationScopeKey(scope)) throw new Error('Experience identity mismatch');
     return row;
   }
-  private recent(scope:GameMemoryScope,input:Record<string,unknown>){
+  private recentIds(scope:GameMemoryScope):string[]{
     const file = join(this.folder(scope),'recent.json');
-    const ids: string[] = existsSync(file) ? JSON.parse(readFileSync(file,'utf8')) : [];
+    return existsSync(file) ? JSON.parse(readFileSync(file,'utf8')) : [];
+  }
+  private recent(scope:GameMemoryScope,input:Record<string,unknown>){
+    const ids=this.recentIds(scope);
     const rows = ids.slice().reverse().map(id=>this.get(scope,id)).filter(r =>
       (!input.run || r.run===input.run) && (!input.kind || r.kind===input.kind)
       && (!input.operation || r.operations.includes(String(input.operation)) || r.decision?.category===input.operation)
@@ -171,6 +174,12 @@ export class OperationExperienceBook {
   list(scope: GameMemoryScope, input: Record<string,unknown> = {}) {
     const limit = input.limit ?? 8, offset = input.offset ?? 0;
     if (!Number.isInteger(limit) || Number(limit)<1 || Number(limit)>20 || !Number.isInteger(offset) || Number(offset)<0 || Number(offset)>1024) throw new Error('limit 1..20, offset 0..1024');
+    if(!['run','kind','operation','controller'].some(key=>input[key])){
+      const ids=this.recentIds(scope);
+      return {window:'latest-1024-records',retained:ids.length,total:ids.length,
+        nextOffset:Number(offset)+Number(limit)<ids.length?Number(offset)+Number(limit):null,
+        entries:ids.slice().reverse().slice(Number(offset),Number(offset)+Number(limit)).map(id=>this.get(scope,id)),historical:true,goalVerified:false};
+    }
     const {ids,rows}=this.recent(scope,input);
     return {window:'latest-1024-records',retained:ids.length,total:rows.length, nextOffset:Number(offset)+Number(limit)<rows.length ? Number(offset)+Number(limit) : null,
       entries:rows.slice(Number(offset),Number(offset)+Number(limit)), historical:true, goalVerified:false};
@@ -212,10 +221,22 @@ export class OperationExperienceBook {
       after:operationObservation(after),updatedAt:new Date().toISOString()});
   }
   async query(args: Record<string,unknown>, ctx: GameMemoryContext, notebook: GameMemoryBook): Promise<Record<string,unknown>> {
-    const input=(args.input??{}) as Record<string,unknown>;
-    if (!input || typeof input!=='object' || Array.isArray(input)) throw new Error('Experience input must be an object');
+    const rawInput=args.input??{};
+    if (!rawInput || typeof rawInput!=='object' || Array.isArray(rawInput)) throw new Error('Experience input must be an object');
+    const input={...rawInput} as Record<string,unknown>;
+    const operation=String(args.operation??'help');
+    const fields:Record<string,string[]>={help:[],list:['operation','controller','kind','run','limit','offset','detail'],
+      get:['id'],stats:['operation','controller','kind','run'],reflect:['ids','summary','lesson','conditions','counterexample','verdict']};
+    // The public memory schema exposes pagination at the top level for local
+    // notes. Accept those same read-only aliases explicitly, never ignore them.
+    for(const key of Object.keys(args))if(!['action','operation','input','requestId'].includes(key)){
+      if(operation!=='list'||!['limit','offset'].includes(key))throw new Error(`Experience ${operation}: ${key} belongs inside input when supported; use operation:help for the exact contract`);
+      if(input[key]!==undefined&&input[key]!==args[key])throw new Error(`Conflicting experience ${key}: use one value in input or at top level`);
+      input[key]=args[key];
+    }
+    if(fields[operation])for(const key of Object.keys(input))if(!fields[operation].includes(key))throw new Error(`Unknown experience ${operation} input field: ${key}`);
     if (args.operation==='help' || !args.operation) return {protocol:'agent-mc-experience/v1',operations:{
-      list:'input:{operation?,controller?,kind?,run?,limit:1..20,offset?}; recent 1024 rows, exact get retains older rows',
+      list:'input:{operation?,controller?,kind?,run?,limit:1..20,offset?,detail?:summary|full}; bounded summaries by default. Top-level limit/offset are accepted when unambiguous. Follow nextOffset; get(input:{id}) expands one full record. Recent 1024 rows; exact get retains older rows.',
       get:'input:{id}; exact scope-bound evidence',stats:'input:{operation?,controller?,run?}; bounded window, not model accuracy',
       reflect:'Top-level requestId plus input:{ids,summary,lesson,conditions,counterexample,verdict}; see reflection for types, limits and a complete call. Attributed notebook lesson; no automatic activation'},
       reflection:{
@@ -231,7 +252,26 @@ export class OperationExperienceBook {
       meaning:'RPC return, choice probability, execution completion and goal success are different. Unknown effects are never replayed.',
       next:'Search mc_memory lessons before acting; pass decisionId, exact method revision and memoryRefs in agent-mc/v1 attribution. Use bounded methods and discover server abilities from real help.'};
     if (args.operation==='get') return {entry:this.get(ctx.scope,String(input.id)),historical:true};
-    if (args.operation==='list') return this.list(ctx.scope,input);
+    if (args.operation==='list') {
+      if(input.detail!==undefined&&!['summary','full'].includes(String(input.detail)))throw new Error('Experience list detail must be summary or full');
+      const page=this.list(ctx.scope,input);
+      if(input.detail==='full')return {...page,detail:'full'};
+      const entries:Record<string,unknown>[]=[];let chars=0;
+      for(const row of page.entries){
+        const summary={id:row.id,run:row.run,requestId:row.requestId,at:row.at,updatedAt:row.updatedAt,kind:row.kind,
+          tool:row.tool,operations:row.operations.slice(0,8),omittedOperations:Math.max(0,row.operations.length-8),
+          controller:row.attribution.controller??'unknown',method:row.attribution.method??null,
+          decision:row.decision?{id:row.decision.id,selected:row.decision.selected,status:row.decision.status}:null,
+          execution:row.execution,dispatch:row.dispatch,elapsedMs:row.elapsedMs,
+          observations:{before:row.before!==null,after:row.after!==null},goalVerified:false};
+        const size=JSON.stringify(summary).length;
+        if(entries.length&&chars+size>6000)break;
+        entries.push(summary);chars+=size;
+      }
+      const next=Number(input.offset??0)+entries.length;
+      return {...page,entries,nextOffset:next<page.total?next:null,detail:'summary',
+        omitted:'Parameters, observations, candidates and policy remain in the original record. Use get with input:{id}; absence in this summary is not absence of evidence.'};
+    }
     if (args.operation==='stats') {
       const {rows}=this.recent(ctx.scope,input);
       const counts:Record<string,number>={}; for(const r of rows){const key=r.kind==='decision'?`decision:${r.decision?.status}`:`operation:${r.execution?.phase??r.dispatch}`;counts[key]=(counts[key]??0)+1;}

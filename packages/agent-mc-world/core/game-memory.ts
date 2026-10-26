@@ -71,7 +71,7 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
     + 'remember needs top-level kind/summary/content/source (your conclusion: source.kind=agent_note). '
     + 'capture only samples current runtime facts. Use action:help,topic:remember for exact arguments. '
-    + 'Use action:experience,operation:help for shared decision/execution evidence and evidence-linked local reflection. Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
+    + 'experience/list returns paginated evidence summaries; experience/get with input:{id} expands one record. Use action:experience,operation:help for filters and evidence-linked reflection. Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service', 'experience'] },
     preference: { type: 'string', enum: ['local-first', 'balanced', 'remote-first'], description: 'Only search: choose retrieval emphasis for this task. Does not disable local persistence or enable an unconfigured service.' },

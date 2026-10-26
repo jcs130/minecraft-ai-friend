@@ -19,6 +19,49 @@ const sample=(x=0)=>({at:new Date().toISOString(),dimension:'overworld',position
 const accepted={kind:'task' as const,id:'epoch:1',phase:'accepted' as const,terminal:false,goalCompleted:false as const};
 const completed={...accepted,phase:'completed' as const,terminal:true};
 
+it('honors observed top-level experience pagination and rejects conflicting or silently ignored arguments',async()=>{
+  const directory=dir(),book=new OperationExperienceBook(directory),memory=new GameMemoryBook(directory);
+  for(let i=0;i<12;i++)book.begin(scope,'run',`req-${i}`,'mc_do',{skill:'inspect'},sample());
+  const reads=vi.spyOn(book,'get');
+  const page=await book.query({action:'experience',operation:'list',limit:2,offset:3},ctx,memory);
+  expect(page).toMatchObject({total:12,nextOffset:5,detail:'summary'});
+  expect(page.entries).toHaveLength(2);
+  expect((page.entries as {requestId:string}[]).map(x=>x.requestId)).toEqual(['req-8','req-7']);
+  expect(reads).toHaveBeenCalledTimes(2);
+  await expect(book.query({operation:'list',limit:2,input:{limit:3}},ctx,memory)).rejects.toThrow('Conflicting');
+  await expect(book.query({operation:'list',input:{limt:2}},ctx,memory)).rejects.toThrow('Unknown');
+  await expect(book.query({operation:'list',query:'ignored search'},ctx,memory)).rejects.toThrow('exact contract');
+});
+
+it('lists bounded evidence pages without erasing full observations, failed terminals or method provenance',async()=>{
+  const directory=dir(),book=new OperationExperienceBook(directory),memory=new GameMemoryBook(directory);
+  const inventory=Object.fromEntries(Array.from({length:128},(_,i)=>[`inventory_item_${i}`,i]));
+  for(let i=0;i<20;i++){
+    const row=book.begin(scope,'run',`req-${i}`,'mc_do',{skill:'attack',targetId:i},{...sample(),inventory},
+      {controller:'system1',method:{id:'fixture-method',revision:'v1'}});
+    book.finish(scope,row.id,{text:'accepted',execution:accepted},sample(),20);
+    book.terminal(scope,row.id,{...completed,phase:'failed'},null);
+  }
+  const ids:string[]=[];let offset:number|null=0,firstId='';
+  while(offset!==null){
+    const page=await book.query({operation:'list',input:{limit:20,offset}},ctx,memory);
+    expect(JSON.stringify(page).length).toBeLessThan(8000);
+    const entries=page.entries as Record<string,any>[];
+    expect(entries.length).toBeGreaterThan(0);
+    for(const entry of entries){
+      expect(entry).toMatchObject({execution:{phase:'failed',terminal:true},method:{id:'fixture-method',revision:'v1'},observations:{before:true,after:false},goalVerified:false});
+      expect(entry).not.toHaveProperty('before');ids.push(entry.id);firstId||=entry.id;
+    }
+    offset=page.nextOffset as number|null;
+  }
+  expect(ids).toHaveLength(20);expect(new Set(ids).size).toBe(20);
+  const expanded=await book.query({operation:'get',input:{id:firstId}},ctx,memory);
+  expect(expanded).toMatchObject({entry:{before:{inventory},execution:{phase:'failed'},goalVerified:false}});
+  const explicit=await book.query({operation:'list',input:{limit:1,detail:'full'}},ctx,memory);
+  expect((explicit.entries as any[])[0]).toEqual(expanded.entry);
+  expect(book.list(scope,{limit:1}).entries[0]).toEqual(expanded.entry);
+});
+
 it('retains step change evidence across restart without copying result prose or promoting a goal',()=>{
   const directory=dir(),book=new OperationExperienceBook(directory);
   const row=book.begin(scope,'run','effect-readback','mc_do',{steps:[{skill:'use',at:[1,63,1]}]},sample());

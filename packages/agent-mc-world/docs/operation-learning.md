@@ -70,6 +70,16 @@ when visibility or loaded data changes. Historical lessons must retain these lim
 turning an unobserved region or a failed route into proof that no target or route exists.
 
 `mc_memory action:experience` exposes help/list/get/stats/reflect through existing SDK and MCP tools.
+`list` returns compact historical summaries by default. Pass pagination and optional filters in
+`input` (for example `{action:"experience",operation:"list",input:{limit:4,offset:0}}`).
+Top-level `limit`/`offset` are also accepted when they do not conflict with `input`; other misplaced
+or unknown fields fail explicitly. Follow the returned `nextOffset`, because the character budget
+may make a summary page smaller than the requested limit. Expand one exact ID with
+`{action:"experience",operation:"get",input:{id:"<returned ID>"}}`; `input.detail:"full"` explicitly
+requests full list records. Original observations, decisions and policy evidence are never rewritten.
+Unfiltered pagination reads only the selected evidence files. The direct `OperationExperienceBook.list`
+API retains full records for existing SDK consumers. List summaries and successful reads do not establish
+current facts, completed goals or a learned improvement.
 Reflection checks scope-bound evidence IDs and preserves an attributed notebook lesson, with explicit
 conditions and counterexamples. Stable review IDs support local crash recovery without duplicate notes.
 Helpful interpretations need at least one completed operation with measured before/after, and still
