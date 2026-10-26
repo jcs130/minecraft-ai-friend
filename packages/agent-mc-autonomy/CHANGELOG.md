@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.107
+
+- Accept the installer's logical resource-directory spelling when a packaged Windows host resolves the same verified runtime into its redirected application-data view. Keep the canonical spelling valid without rewriting user metadata.
+- Continue rejecting relative, foreign or arbitrary alias paths and catalog changes; full payload, link, source and component verification remain required at start.
+
 ## 0.2.106
 
 - Pin core rc.103: preserve original death observations, expose observed abilities separately from automatic tactics, require known usable weapons for native fast engagement, and reject registry-confirmed inedible queued food before replacing work.

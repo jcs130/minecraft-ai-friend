@@ -91,6 +91,51 @@ def test_complete_bundle_and_prepared_defaults(bundle):
     verify_settings_runtime(settings)
 
 
+def test_prepared_catalog_accepts_logical_path_after_app_data_redirection(bundle, tmp_path, monkeypatch):
+    """Node keeps the logical LOCALAPPDATA path; packaged Python resolves its physical view."""
+    root, _, registration = bundle
+    record = json.loads(registration.read_text())
+    catalog_file = Path(record["catalog"])
+    catalog = json.loads(catalog_file.read_text())
+    catalog["packs"][0]["assetDirectory"] = str(root / "assets")
+    catalog_file.write_text(json.dumps(catalog))
+    original = Path.resolve
+    redirected = tmp_path / "packaged-app-view" / "assets"
+
+    def resolve(path, *args, **kwargs):
+        return redirected if path == root / "assets" else original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    effective = apply_runtime_defaults({}, registration_file=registration)
+    assert resolve_prepared_bundle(registration_file=registration).root == root
+    assert verify_settings_runtime(Settings.parse(effective))["AGENT_MC_BROWSER_EXECUTABLE"]
+    # The canonical spelling remains valid too; no catalog rewrite is required.
+    catalog["packs"][0]["assetDirectory"] = str(redirected)
+    catalog_file.write_text(json.dumps(catalog))
+    assert resolve_prepared_bundle(registration_file=registration).root == root
+    verify_settings_runtime(Settings.parse(effective))
+
+
+@pytest.mark.parametrize("asset", ["assets", "unrelated", "alias-to-assets"])
+def test_prepared_catalog_still_rejects_other_paths(bundle, tmp_path, monkeypatch, asset):
+    root, _, registration = bundle
+    record = json.loads(registration.read_text())
+    catalog_file = Path(record["catalog"])
+    catalog = json.loads(catalog_file.read_text())
+    value = asset if asset == "assets" else str(tmp_path / asset)
+    catalog["packs"][0]["assetDirectory"] = value
+    catalog_file.write_text(json.dumps(catalog))
+    original = Path.resolve
+
+    def resolve(path, *args, **kwargs):
+        # Resolving an arbitrary alias to the assets must not authorize it.
+        return root / "assets" if str(path) == str(tmp_path / "alias-to-assets") else original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    with pytest.raises(m.BundleError, match="prepared_catalog_mismatch"):
+        resolve_prepared_bundle(registration_file=registration)
+
+
 @pytest.mark.parametrize("raw", [
     {"backend": {"node": "custom-node"}}, {"backend": {"directory": "custom-core"}},
     {"viewer": {"renderer_directory": "custom-viewer"}}, {"viewer": {"catalog_file": "custom.json"}},
