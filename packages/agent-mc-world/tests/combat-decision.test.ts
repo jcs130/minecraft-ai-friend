@@ -342,6 +342,7 @@ describe('independent asynchronous combat choices', () => {
 
 function flatBot() {
   const bot = { entity: { id: 1, position: new Vec3(0, 64, 0), onGround: true }, health: 20,
+    inventory: { items: () => [{ name: 'iron_sword', count: 1 }], slots: [] },
     entities: { 3: { name: 'skeleton', position: new Vec3(3, 64, 0), isValid: true } },
     blockAt: (p: Vec3) => ({ name: p.y < 64 ? 'stone' : 'air', boundingBox: p.y < 64 ? 'block' : 'empty',
       shapes: p.y < 64 ? [[0, 0, 0, 1, 1, 1]] : [], getProperties: () => ({}) }),
@@ -349,6 +350,18 @@ function flatBot() {
   return bot as unknown as Bot;
 }
 describe('physically available combat candidates', () => {
+  it('does not offer native engagement without a usable weapon, but still offers withdrawal', () => {
+    const bot=flatBot(), f=frame().battlefield;
+    f.action.fighting=false;
+    const cfg={...config(),allowEngage:true,allowMovement:true,engageScope:'hostile' as const};
+    const control={bodyFree:true,canStep:false,targetId:null,sinceHitMs:null,fight:'auto',fleeHealth:6,chaseMax:12};
+    bot.inventory.items=()=>[];
+    expect(combatReactions(bot,f,cfg,control).map(c=>c.kind)).toEqual(['retreat']);
+    bot.inventory.items=()=>[{name:'iron_sword',count:1}] as any;
+    expect(combatReactions(bot,f,cfg,control).some(c=>c.kind==='engage')).toBe(true);
+    (bot as any).deathLifecycle={inventorySynced:false};
+    expect(combatReactions(bot,f,cfg,control).map(c=>c.kind)).toEqual(['retreat']);
+  });
   it('does not let a neutral first actor hide an eligible tracking target, or offer withdrawal without a native threat', () => {
     const bot = flatBot(), f = frame().battlefield;
     f.action.fighting = false;

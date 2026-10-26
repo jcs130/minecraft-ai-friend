@@ -39,6 +39,13 @@ a labelled excerpt of the original event. At most four unsuccessful steps are
 shown, with omitted steps counted. A completion for another task does not resolve
 this task or its goal. The host owns persistence, expiry and selection for requests.
 
+Native death observations carry `execution.kind: "observation"`, the same death
+episode ID, `terminal: true`, `goalCompleted: false`, and evidence with
+`outcome: "death"` and zero health. Terminal here means an observed outcome,
+not successful completion. Later server leave/cleanup receipts do not change that
+earlier outcome. Hosts can keep this small dated cause alongside recent state
+without retaining the entire snapshot history in each model request.
+
 `omitContextSchemaAnnotations(schema)` leaves validation keywords, fields and
 alternatives intact while moving `x-agent-mc-skill-contracts` behind complete
 help. The annotation contains on-demand generation material, not input-schema

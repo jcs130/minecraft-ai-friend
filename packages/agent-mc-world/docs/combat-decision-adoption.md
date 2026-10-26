@@ -2,6 +2,16 @@
 
 Fast inference is an explicit host service. The core supplies executable candidates and current facts; it does not select a model, infer allies from proximity, or start a hidden model loop.
 
+`CombatDecisionFrame.loadout` reports the observed native controller's melee weapon,
+ranged weapon and ordinary arrow count. Missing or unsynchronized inventory stays
+unknown. Idle `engage` candidates require a usable native loadout, and dispatch
+checks it again because ammunition may change while inference is running. This is
+not a verdict on server spells or a promise that the fight is winnable. Retreat,
+explicit agent actions and emergency self-defense retain their existing contracts.
+SDK consumers can read the same result with `combatLoadout(bot)` from the root entry.
+`mc_options {intent:"equipment"}` exposes bounded inventory, memory, recipe and
+take/craft/equip discovery routes; unopened or historical containers are not current stock.
+
 ## Ranking and abstention
 
 Candidate scores are a distribution over the supplied choices, not calibrated probabilities of winning a fight. Applying an implicit 0.75 floor to every multi-choice ranking prevented clear alternatives from being considered. The optional service now defaults to `minConfidence: 0` and `minMargin: 0.1`: the winner must lead the strongest alternative by at least 0.1. Ties abstain even when the configured margin is zero. An explicit `minConfidence` remains an additional probability floor, and stricter settings introduced during an in-flight request apply to its result.

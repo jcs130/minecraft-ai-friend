@@ -45,6 +45,7 @@ export function sanitizeCombatResult<T extends CombatResult>(result: T): T {
 }
 
 export interface CombatScene {
+  loadout?: import('./combat-loadout.ts').CombatLoadout;
   dimension: string | null;
   position: { x: number; y: number; z: number };
   hostileRadius: number;

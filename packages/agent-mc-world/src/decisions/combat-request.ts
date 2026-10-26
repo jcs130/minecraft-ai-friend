@@ -53,6 +53,7 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     options[key]={kind:'combination',actions:refs};
   }
   return { state: {
+    ...(frame.loadout ? { loadout: frame.loadout } : {}),
     battlefield: { dimension: b.dimension,
       self: { entityId: b.self.entityId, health: health(b.self.health), food: b.self.food,
         ...(frame.candidates.some(candidate => candidate.kind === 'step')

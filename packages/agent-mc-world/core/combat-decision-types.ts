@@ -10,6 +10,7 @@ export type CombatCandidate = { id: string; intent: string } & (
   | ({ kind: 'method' } & CombatRoutine)
 );
 export interface CombatDecisionFrame {
+  loadout?: import('./combat-loadout.ts').CombatLoadout;
   battlefield: Battlefield;
   tacticRevision: number;
   mana: number | null;

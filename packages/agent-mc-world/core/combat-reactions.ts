@@ -4,6 +4,7 @@ import { Vec3 } from 'vec3';
 import type { Battlefield } from './battlefield.ts';
 import type { CombatCandidate, CombatExecutionPolicy } from './combat-decision-types.ts';
 import { corridorSafe } from './idle-actions.ts';
+import { combatLoadout } from './combat-loadout.ts';
 
 /** An explicitly enabled opening spell need not wait for a melee controller or a first injury.
  * The caller still checks observed ability, mana, cooldown and the authored rule. */
@@ -46,6 +47,7 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
         intent: `${field.action.fighting ? 'Stop current attacks and watch' : field.action.tracking ? 'Continue watching' : 'Watch'} visible hostile ${tracked.type ?? 'entity'} at 5-8 blocks for up to 4 seconds without attacking; stop on lost sight or unsafe ground.` });
   }
   if (cfg.allowEngage && (control.bodyFree || field.action.fighting) && control.fight !== 'off'
+    && combatLoadout(bot).canEngage === true
     && (field.self.health.current ?? 0) >= control.fleeHealth + 3) {
     // The native controller owns admission. Its existing pursuit pool includes
     // a four-block retention band; do not hide those targets behind a second,

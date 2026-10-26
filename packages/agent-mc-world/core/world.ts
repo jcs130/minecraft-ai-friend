@@ -7874,11 +7874,14 @@ export class MinecraftWorld implements World {
       const gloss = cause ? deathCauseZh(cause.key) : null;
       const causeLine = cause ? `服务端记的死因:${cause.text}${gloss ? `(${gloss})` : ''}。` : '';
       const hereLine = toll.hereToday > 1 ? `你今天第 ${toll.hereToday} 次死在这一格。` : '';
+      const deathId = lifecycle?.episodeId ?? randomUUID();
       this.emit(
         'minecraft.event',
         `[Minecraft] 你死了(今天第 ${toll.today} 次)。${causeLine}${this.deathNote(bot, dropAt)}${hereLine}`,
         true,
-        { meta: { deathLifecycle: lifecycle, death: { id: lifecycle?.episodeId ?? randomUUID(),
+        { execution: { kind: 'observation', id: deathId, phase: 'completed', terminal: true,
+          goalCompleted: false, evidence: { outcome: 'death', health: 0 } },
+          meta: { deathLifecycle: lifecycle, death: { id: deathId,
           observed_at: lifecycle?.observedAt ?? new Date(this.lastDeathAt).toISOString(),
           scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
           position: dropAt, health: bot.health, food: bot.food,
