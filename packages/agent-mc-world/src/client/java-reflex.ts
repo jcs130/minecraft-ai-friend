@@ -84,7 +84,8 @@ export class JavaReflexRuntime {
       preempt:reason=>{this.combat.yieldToEnv();this.cancelOriginalTask(reason);},pauseEnvironment:hold,resumeEnvironment:(token:QueueHoldToken)=>({released:this.environmentHolds.delete(token.owner),note:null}),
       stopFallTask:reason=>{this.cancelOriginalTask(reason);return hold();},resumeAfterFall:token=>this.environmentHolds.delete(token.owner),
       fightBack:()=>cfg.reflex.fightBack,fleeHealth:()=>cfg.reflex.fleeHealth,reactCooldownSec:()=>cfg.reflex.reactCooldownSec,
-      antiDrown:()=>cfg.reflex.antiDrown,antiLava:()=>cfg.reflex.antiLava,combatHurt:(id,kind)=>this.combat.onHurtBy(id,kind),
+      antiDrown:()=>cfg.reflex.antiDrown,emergencyDrown:()=>cfg.reflex.emergencyDrown!==false,
+      antiLava:()=>cfg.reflex.antiLava,combatHurt:(id,kind)=>this.combat.onHurtBy(id,kind),
       escapeActive:()=>this.combat.reactionState().retreating,
     });
   }

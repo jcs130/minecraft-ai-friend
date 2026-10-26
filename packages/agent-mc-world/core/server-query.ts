@@ -72,6 +72,20 @@ type Record_ = {
 };
 
 const failure = (message: string): ToolOutcome => ({ text: message, failed: true, data: { goal_completed: false } });
+/** Return a bounded repair path in the failed receipt itself; never infer or send a command. */
+function queryInputFailure(message: string, definitions: readonly ServerQueryDefinition[]): ToolOutcome {
+  const ids = [...new Set(definitions.map(item => item.id))];
+  const recovery = {
+    supportedQueryIds: ids.slice(0, 32).map(id => id.slice(0, 128)),
+    moreQueries: Math.max(0, ids.length - 32),
+    index: {},
+    callForms: ['{}', '{"query":"listed query ID","arguments":["argument token"]}', '{"requestId":"returned requestId"}'],
+    rule: 'Choose one form. arguments is optional and query-specific. requestId is returned by a sent query; never invent it or combine it with query. Only registered queries are supported. For other server commands, read the chat action contract via next_safe_read.',
+  };
+  const next_safe_read = { tool: 'mc_help', arguments: { skill: 'chat' } };
+  return { text: message + '\n' + JSON.stringify({ recovery, next_safe_read }), failed: true,
+    data: { goal_completed: false, recovery, next_safe_read } };
+}
 const scopeKey = (context: Pick<ServerQueryContext, 'generation' | 'username'>) => JSON.stringify([context.generation, context.username]);
 
 /** A single-flight non-body lane. receive() must only be called for provenance-filtered server messages. */
@@ -96,7 +110,7 @@ export class ServerQueryLane {
     }
     this.expire();
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
-      return failure('Use {}, {query,arguments?:string[]}, or {requestId} separately. No query was sent.');
+      return queryInputFailure('Use {}, {query,arguments?:string[]}, or {requestId} separately. No query was sent.', definitions);
     }
     const keys = Object.keys(args);
     if (keys.length === 0) {
@@ -114,10 +128,10 @@ export class ServerQueryLane {
       || args.query.length === 0 || args.query.length > 128 || (args.arguments !== undefined
         && (!Array.isArray(args.arguments) || args.arguments.length > 16
           || args.arguments.some(value => typeof value !== 'string' || value.length > 256 || /[\r\n\0]/u.test(value))))) {
-      return failure('Use {}, {query,arguments?:string[]}, or {requestId} separately. No query was sent.');
+      return queryInputFailure('Use {}, {query,arguments?:string[]}, or {requestId} separately. No query was sent.', definitions);
     }
     const matches = definitions.filter(definition => definition.id === args.query);
-    if (matches.length !== 1) return failure('Unknown or ambiguous query. Read {} for the available protocol definitions. No query was sent.');
+    if (matches.length !== 1) return queryInputFailure('Unknown or ambiguous query. Read {} for the available protocol definitions. No query was sent.', definitions);
     if (!context) return failure('Server connection is unavailable. No query was sent; reconnect before submitting a query.');
     if (context.afterSequence !== undefined && (!Number.isSafeInteger(context.afterSequence) || context.afterSequence < 0)) {
       return failure('Server reply arrival sequence is invalid. No query was sent.');

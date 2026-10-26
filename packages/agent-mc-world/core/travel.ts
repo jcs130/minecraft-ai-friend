@@ -86,7 +86,7 @@ function targetSubmerged(bot: Bot): boolean {
   return false;
 }
 
-/** Passive ascent is opt-in and shares the host's live anti-drowning switch. */
+/** Passive ascent is opt-in; critical oxygen rescue uses a separate reflex switch. */
 export function installTreadWater(bot: Bot, enabled: () => boolean = () => false): () => void {
   const existing = treadControllers.get(bot);
   if (existing) { existing.enabled = enabled; return existing.dispose; }

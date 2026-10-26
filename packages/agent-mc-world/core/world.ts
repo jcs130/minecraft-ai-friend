@@ -4351,6 +4351,7 @@ export class MinecraftWorld implements World {
       },
       reactCooldownSec: () => this.cfg.reflex.reactCooldownSec,
       antiDrown: () => this.cfg.reflex.antiDrown,
+      emergencyDrown: () => this.cfg.reflex.emergencyDrown !== false,
       antiLava: () => this.cfg.reflex.antiLava,
       currentTask: () => this.executor?.currentTask ?? null,
       combatHurt: (id, name) => (

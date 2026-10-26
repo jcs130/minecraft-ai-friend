@@ -449,8 +449,9 @@ export async function skillAttack(
         }
         await aimAt(bot, entity);
         pressRanged(bot, d, mode, strafeLeft);
-        // kite 先把过近距离拉开；ranged/auto 只需高于弓控制器的安全下限。
-        if ((mode === 'kite' && d < KITE_MIN_RANGE) || d <= HYBRID_MELEE_AT) {
+        // Explicit kite asks for spacing first. Auto/ranged may shoot while
+        // making room; the hybrid weapon preference is not a bow range limit.
+        if (mode === 'kite' && d < KITE_MIN_RANGE) {
           await sleep(50);
           continue;
         }
