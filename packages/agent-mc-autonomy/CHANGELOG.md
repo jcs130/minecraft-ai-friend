@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.106
+
+- Pin core rc.103: preserve original death observations, expose observed abilities separately from automatic tactics, require known usable weapons for native fast engagement, and reject registry-confirmed inedible queued food before replacing work.
+- Retain the existing viewer, all 256 non-core npm lock entries and the one native execution queue.
+
+## 0.2.105
+
+- Pin verified core rc.102 with actionable reflection errors, weapon admission and critical drowning recovery. Runtime Python behavior is unchanged.
+
 ## 0.2.104
 
 - Pin core rc.100, retaining scoped goal recovery and the latest combat/equipment lifecycle guards.
