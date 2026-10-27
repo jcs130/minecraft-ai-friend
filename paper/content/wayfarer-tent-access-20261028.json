@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "world": "minecraft:overworld",
+  "purpose": "wayfarer_tent_three_lane_exit",
+  "bounds": {
+    "min": [
+      -1139,
+      63,
+      -573
+    ],
+    "max": [
+      -1137,
+      65,
+      -568
+    ]
+  },
+  "clearance": {
+    "x": [
+      -1139,
+      -1137
+    ],
+    "z": [
+      -573,
+      -568
+    ],
+    "floorY": 63,
+    "airY": [
+      64,
+      65
+    ]
+  },
+  "changes": [
+    {
+      "position": [
+        -1139,
+        63,
+        -573
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1139,
+        63,
+        -572
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1139,
+        65,
+        -572
+      ],
+      "before": "minecraft:red_wool",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1139,
+        63,
+        -571
+      ],
+      "before": "minecraft:dirt",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1139,
+        64,
+        -571
+      ],
+      "before": "minecraft:red_wool",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1139,
+        63,
+        -570
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1139,
+        63,
+        -569
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1138,
+        63,
+        -573
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1138,
+        65,
+        -573
+      ],
+      "before": "minecraft:spruce_fence[east=false,north=false,south=true,waterlogged=false,west=false]",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1138,
+        63,
+        -572
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1138,
+        64,
+        -572
+      ],
+      "before": "minecraft:spruce_fence[east=false,north=false,south=true,waterlogged=false,west=false]",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1138,
+        65,
+        -572
+      ],
+      "before": "minecraft:spruce_planks",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1138,
+        63,
+        -571
+      ],
+      "before": "minecraft:dirt",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1138,
+        64,
+        -571
+      ],
+      "before": "minecraft:spruce_planks",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1138,
+        65,
+        -571
+      ],
+      "before": "minecraft:spruce_fence[east=false,north=true,south=false,waterlogged=false,west=false]",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1138,
+        63,
+        -570
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1138,
+        64,
+        -570
+      ],
+      "before": "minecraft:spruce_fence[east=false,north=true,south=false,waterlogged=false,west=false]",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1138,
+        63,
+        -569
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1137,
+        63,
+        -573
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1137,
+        63,
+        -572
+      ],
+      "before": "minecraft:dirt_path",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1137,
+        65,
+        -572
+      ],
+      "before": "minecraft:red_wool",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1137,
+        63,
+        -571
+      ],
+      "before": "minecraft:dirt",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1137,
+        64,
+        -571
+      ],
+      "before": "minecraft:red_wool",
+      "after": "minecraft:air"
+    },
+    {
+      "position": [
+        -1137,
+        63,
+        -570
+      ],
+      "before": "minecraft:grass_block[snowy=false]",
+      "after": "minecraft:stone_bricks"
+    },
+    {
+      "position": [
+        -1137,
+        63,
+        -569
+      ],
+      "before": "minecraft:dirt_path",
+      "after": "minecraft:stone_bricks"
+    }
+  ],
+  "preserve": {
+    "roofAtOrAboveY": 66,
+    "chest": [
+      -1139,
+      64,
+      -574
+    ],
+    "bed": [
+      [
+        -1138,
+        64,
+        -574
+      ],
+      [
+        -1137,
+        64,
+        -574
+      ]
+    ],
+    "protectionConfiguration": "unchanged"
+  },
+  "application": "Reviewed sparse changes only. Require exact current preimages, no players in work area, verified backups. Fence directional connections are derived. On unknown effect inspect the original position, never replay blindly."
+}

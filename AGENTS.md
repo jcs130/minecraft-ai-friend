@@ -1,3 +1,7 @@
+## 2026-10-28 正式营地红帐篷通行已修复
+
+Paper/AgentFriend0.4.47.21在线稀疏调整25格，南口X[-1139,-1137]/Z[-573,-568]三格宽平路，Y63石砖、Y64/65空气；床箱/上方屋顶与建筑地坪保护保持。服务端5项结构/保护检查、非OP三条实际步行与库存核验4项通过；测试客户端旧物品解码警告保留，完整隔离套件未重跑。未移动Corti、未重启/换JAR，实时与CoreProtect已证实她离开帐篷正常采矿；不要凭旧聊天说她仍原地卡住。E/F前像/日志在repairs/corti-stuck-20261028，自动保存已恢复；不能在线覆盖region回退。未来重建模板要保留入口补丁并实走。见paper/docs/WAYFARER_CAMP.md及paper/content/wayfarer-tent-access-20261028.json。下方Tau是独立实例。
+
 ## 2026-10-27 Tau / Aincrad 公测已切换
 
 本分支 feat/tau-ceti-and-aincrad-20261026 已将原 FOM 入口切到 E:/MC/servers/tau-ceti-1.3.3：Java 28976、Mineflayer 28977 公网状态探测通过；旧 FOM 与前一 Tau 完整冷备 E/F 保留，Paper 未变。527 个 JAR 含 Create、MineColonies、Farmer's Delight、女仆及探索魔法；54 个保留内容/依赖需补入官方 Tau 客户端 1.3.2，另更新 Sodium，合计55文件。MC1.21.1/NeoForge21.1.234；不要换旧加载器或复用旧数字ID，每 JVM 导出并冻结本次注册表。免费 Aincrad 仅第一层，主图保护建筑；/mycli wild 去正常资源世界，/mycli spawn 返回，出生(-582.5,69,934.5)发光地面是原生波次塔入口。服主明确允许测试期游戏内/register、/login，旧原生密码库保持，未注册不能行动；Numen TCP28989和健康TCP28985仍仅回环，语音用独立UDP28989，基岩/完整Web/全模组玩法未验。38项源码回归、11项真实联机、首次注册及4项最终冷启动/入口检查通过；安全名字回调须先于MixAuth执行（实际@名字已拒绝），不能只按编译判断。自动启动已改指Tau，监护运行/维护暂停已清；SimpleBackups保留原120分钟配置。完整SAO剧情、职业工会与独立楼层继续迭代，旧Paper体系不冒称自动迁移。当前事实见 integrations/tau-ceti/PUBLIC_BETA.md、public-beta-release.json；下方隔离说明均为历史。

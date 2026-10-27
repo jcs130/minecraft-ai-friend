@@ -70,6 +70,19 @@ try{
  check('guide opens the existing vanilla travel-guide menu',JSON.stringify(first.currentWindow?.title??'').includes('旅途'));
  check('NPC introduction and machine receipts do not reach bystander',!out.otherMessages.some(s=>/欢迎来到千灯纪旅人营地|MC_INTRO |54格个人大背包/.test(s)));
  if(first.currentWindow)first.closeWindow(first.currentWindow);
+ // The bed/respawn check alone missed the old tent's low wool/fence facade.
+ // The isolated world must include the reviewed 2026-10-28 entrance patch.
+ // Walk all three lanes without mining/placing, then read native server feet.
+ for(const x of[-1139,-1138,-1137]){
+  await rc(`minecraft:execute in minecraft:overworld run minecraft:tp ag_Camp4A ${x+.5} 64 -572.5`);await sleep(700);
+  await first.lookAt(new Vec3(x+.5,65.62,-565.5),true);const deadline=Date.now()+6000;
+  try{first.setControlState('forward',true);while(first.entity.position.z < -567.8&&Date.now()<deadline)await sleep(50);}
+  finally{first.clearControlStates();}
+  await sleep(250);
+  const native=await rc('minecraft:data get entity ag_Camp4A Pos');
+  const values=native.slice(native.indexOf('[')+1,native.indexOf(']')).split(',').map(v=>Number(v.trim().replace(/[dDfF]$/,'')));
+  check('tent lane '+x+' exits on actual server feet without mining',values.length===3&&Math.floor(values[0])===x&&Math.floor(values[2])===-568&&Math.abs(values[1]-64)<.2);
+ }
  // Actual night-time bed use keeps native bed priority over the world spawn.
  await rc('minecraft:time set night');await rc('minecraft:tp ag_Camp4A -1136.5 64 -573.5');await sleep(800);
  const bed=block(first,-1138,64,-574);check('tent contains a real usable bed',bed?.name==='white_bed');
