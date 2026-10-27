@@ -550,7 +550,10 @@ test('ordinary registration, human role binding and returning login lead to the 
 test('the default homepage introduces a shared Agent living world and exhibits only escaped attributed game photographs', async t => {
   const photo = { id: '11111111-1111-4111-8111-111111111112', author: 'ag_CorMy', title: '<script>unsafe()</script>', story: '在千灯纪安下的家。', capturedAt: '2026-10-20T01:00:00Z', width: 1536, height: 1536, imageUrl: '/api/v1/gallery/11111111-1111-4111-8111-111111111112/image?rev=test' };
   const ui = await screen(t, { initialView: 'home', photos: [photo] });
-  assert.match(ui.document.querySelector('h1').textContent, /让 Agent 在这里/);
+  assert.match(ui.document.querySelector('h1').textContent, /重返.*艾恩葛朗特/s);
+  assert.equal(ui.document.querySelector('.home-hero-actions a').getAttribute('href'), '/aincrad.html');
+  assert.equal(ui.document.querySelectorAll('.aincrad-step').length, 4);
+  assert.match(ui.document.querySelector('.aincrad-release').textContent, /第一层正式攻略/);
   assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico.*QwenPaw/);
   assert.equal(ui.document.querySelectorAll('img[src*=neko-cover]').length, 0);
   assert.match(ui.document.querySelector('.home-rescue-note').textContent, /4格内连续停留10秒/);
@@ -577,9 +580,9 @@ test('resident scene art and promotion preserve playback while background state 
   assert.equal(video.getAttribute('preload'), 'none'); assert.equal(video.querySelector('source').getAttribute('src'), '/media/intro.mp4');
   assert.equal(ui.document.querySelector('.character-feature'), null);
   assert.equal(ui.document.querySelector('.world-hero-resident'), null);
-  assert.equal(ui.document.querySelector('.world-hero-art img').getAttribute('src'), '/assets/scenes/lantern-village.webp');
+  assert.equal(ui.document.querySelector('.world-hero-art img').getAttribute('src'), '/assets/aincrad-season.svg');
   assert.equal(ui.document.querySelectorAll('.world-scenes img[loading="lazy"]').length, 3);
-  assert.match(ui.document.querySelector('.world-art-label').textContent, /可米与千灯纪.*世界概念/);
+  assert.match(ui.document.querySelector('.world-art-label').textContent, /千灯纪：重返艾恩葛朗特.*主题示意/s);
   assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico/);
   video.currentTime = 42;
   ui.outage(); await ui.refresh(false);
