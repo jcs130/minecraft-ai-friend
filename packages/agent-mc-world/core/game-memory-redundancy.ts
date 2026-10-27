@@ -12,6 +12,9 @@ export function memoryTarget(cfg: GameMemoryConfig, scope: string): string {
   return memoryHash(canonicalMemoryJson([scope, cfg.mode, cfg.provider, cfg.endpoint.replace(/\/$/, ''), cfg.model,
     cfg.libraryId, cfg.projectId, cfg.scopeId]));
 }
+export function memoryKnowledgeBinding(cfg: GameMemoryConfig, scope: string): string {
+  return memoryHash(canonicalMemoryJson([cfg.provider, new URL(cfg.endpoint).href.replace(/\/$/, ''), cfg.provider === 'powercontext' ? cfg.scopeId : scope]));
+}
 function pathFor(directory: string | null, folder: string, binding: string) {
   if (!directory || !/^[a-f0-9]{64}$/.test(binding)) throw new Error('Persistent game memory storage required');
   return join(directory, folder, binding + '.json');
@@ -34,6 +37,8 @@ export interface ReplicaReceipt {
   revision: number; contentHash: string; at: string; status: 'unverified' | 'pending' | 'stored';
   searchVerified: boolean; eventId?: string | null;
   artifacts?: ArtifactRef[]; scopeId?: string;
+  pendingCorrection?: boolean;
+  nativeRevisions?: boolean;
 }
 export class MemoryReplicaLedger {
   constructor(private readonly directory: string | null) {}
@@ -44,6 +49,8 @@ export class MemoryReplicaLedger {
       || Object.keys(value.entries).length > 2000 || Object.entries(value.entries).some(([id, v]: [string, any]) =>
         !/^[\w-]{36}$/.test(id) || !v || !Number.isInteger(v.revision) || v.revision < 1 || !/^[a-f0-9]{64}$/.test(v.contentHash)
         || !Number.isFinite(Date.parse(v.at)) || !['unverified', 'pending', 'stored'].includes(v.status) || typeof v.searchVerified !== 'boolean'
+        || (v.pendingCorrection !== undefined && typeof v.pendingCorrection !== 'boolean')
+        || (v.nativeRevisions !== undefined && typeof v.nativeRevisions !== 'boolean')
         || (v.artifacts !== undefined && (!Array.isArray(v.artifacts) || v.artifacts.length > 100 || v.artifacts.some((ref: unknown) => !artifactRef.safeParse(ref).success)))))
       throw new Error('Invalid replication ledger; preserve it and reconcile remote state before retrying');
     return value;
@@ -52,8 +59,12 @@ export class MemoryReplicaLedger {
   put(binding: string, scope: string, id: string, receipt: ReplicaReceipt) {
     const ledger = this.open(binding, scope), old = ledger.entries[id];
     // A slow older request cannot overwrite a newer revision or a confirmed receipt.
-    if (old && (old.revision > receipt.revision || (old.revision === receipt.revision && old.contentHash === receipt.contentHash
-      && (old.searchVerified || old.status === 'stored') && !receipt.searchVerified))) return;
+    if (old?.revision === receipt.revision && old.contentHash === receipt.contentHash && (old.searchVerified || old.status === 'stored') && !receipt.searchVerified) {
+      // A verified native-Artifact reconciliation can improve a legacy stored receipt without claiming a search.
+      if (receipt.status !== 'stored' || receipt.nativeRevisions !== true || old.nativeRevisions === true) return;
+      receipt = { ...receipt, searchVerified: old.searchVerified };
+    }
+    if (old && old.revision > receipt.revision) return;
     if (!old && Object.keys(ledger.entries).length >= 2000) throw new Error('Replication ledger capacity reached; preserve/export before rotating');
     ledger.entries[id] = receipt;
     save(pathFor(this.directory, 'replicas', binding), ledger);
@@ -73,6 +84,14 @@ export class MemoryKnowledgeCache {
     return value;
   }
   private key(operation: string, input: unknown) { return memoryHash(canonicalMemoryJson({ operation, input })); }
+  invalidatePrepared(binding: string, scope: string) {
+    // A local correction can affect any cached prepared summary. This discards replaceable cache, never notebook/server history.
+    const path = pathFor(this.directory, 'knowledge-cache', binding);
+    if (!existsSync(path)) return;
+    const cache = this.open(binding, scope);
+    cache.entries = {};
+    save(path, cache);
+  }
   invalidate(binding: string, scope: string, operation: string, input: unknown) {
     if (!['prepare', 'artifact', 'source'].includes(operation)) return;
     const cache = this.open(binding, scope);

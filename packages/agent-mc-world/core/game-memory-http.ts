@@ -24,12 +24,16 @@ function transport(cfg: GameMemoryConfig, suffix: string, query: Record<string, 
 export function validateMemoryTransport(cfg: GameMemoryConfig) { transport(cfg, '', {}); }
 
 export async function memoryRequest(request: typeof fetch, cfg: GameMemoryConfig, suffix: string,
-  body: unknown, signal?: AbortSignal, method: 'POST' | 'GET' = 'POST', query: Record<string, string> = {}):
+  body: unknown, signal?: AbortSignal, method: 'POST' | 'GET' | 'PUT' = 'POST', query: Record<string, string> = {}, ifMatch?: string):
   Promise<{ data: Record<string, unknown>; etag: string | null; requestId: string | null }> {
   const { url, headers } = transport(cfg, suffix, query);
+  if (ifMatch !== undefined) {
+    if (!/^"revision:[1-9][0-9]*"$/.test(ifMatch)) throw new Error('Invalid memory revision precondition');
+    headers['If-Match'] = ifMatch;
+  }
   const abort = AbortSignal.any([AbortSignal.timeout(cfg.timeoutMs), ...(signal ? [signal] : [])]);
   try {
-    const response = await request(url, { method, headers, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}), signal: abort, redirect: 'error' });
+    const response = await request(url, { method, headers, ...(method !== 'GET' ? { body: JSON.stringify(body) } : {}), signal: abort, redirect: 'error' });
     const rawId = response.headers.get('X-PowerContext-Request-ID') ?? response.headers.get('X-Request-ID');
     const requestId = rawId && /^[\w.-]{1,128}$/.test(rawId) ? rawId : null;
     if (!response.ok) {

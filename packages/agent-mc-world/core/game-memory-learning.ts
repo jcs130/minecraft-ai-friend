@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { memoryRequest } from './game-memory-http.ts';
 import { artifactRef, sourceRef, LEARNING_INPUTS, LEARNING_WRITES, learningHelp, type LearningOperation } from './game-memory-learning-contract.ts';
 import type { GameMemoryConfig } from './game-memory-service.ts';
-import { MemoryKnowledgeCache } from './game-memory-redundancy.ts';
+import { MemoryKnowledgeCache, memoryKnowledgeBinding } from './game-memory-redundancy.ts';
 
 type Data = Record<string, any>;
 interface Submission { operation: LearningOperation; digest: string; state: 'unverified' | 'confirmed'; at: string; source?: unknown; runKey?: string; evidence?: Data; receipt?: Data }
@@ -67,7 +67,7 @@ export class GameMemoryLearning {
     try { endpoint = new URL(cfg.endpoint); } catch { throw new Error('Invalid learning endpoint'); }
     if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash)
       throw new Error('Invalid learning endpoint');
-    const binding = hash(canonical([cfg.provider, endpoint.href.replace(/\/$/, ''), cfg.provider === 'powercontext' ? cfg.scopeId : scopeKey]));
+    const binding = memoryKnowledgeBinding(cfg, scopeKey);
     const path = join(this.directory, 'learning', binding + '.json');
     return exclusive(path, async () => {
       signal?.throwIfAborted();
