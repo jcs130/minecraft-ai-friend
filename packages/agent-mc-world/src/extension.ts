@@ -1,5 +1,7 @@
 /** Versioned server-extension surface. Plugins depend on this port; the core never loads a server implicitly. */
 export { metaOf } from '../core/animal-state.ts';
+export { chatDeliveryMessage } from '../core/chat-delivery.ts';
+export type { ChatDeliveryReceipt, ChatDeliveryRejection } from './contracts/chat-delivery.ts';
 export { publishViewerCastCommand, observeViewerCastCommands } from '../core/command-events.ts';
 export { BREAK_ACL_CHANNEL } from '../core/break-permissions.ts';
 export { Bridge, type BridgeOptions } from '../core/bridge.ts';

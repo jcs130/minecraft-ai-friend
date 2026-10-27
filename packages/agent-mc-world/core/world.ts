@@ -4190,7 +4190,7 @@ export class MinecraftWorld implements World {
 
     this.executor = new Executor({
       getBot: () => this.bridge?.bot ?? null,
-      chatDispatch: (text, send) => this.dispatchServerChat(text, send),
+      chatDispatch: (text, send, context) => this.dispatchServerChat(text, send, context),
       admissionCheck: steps => this.extensionAdmission(steps),
       report: (r) => this.onTaskReport(r),
       log,
@@ -4551,11 +4551,25 @@ export class MinecraftWorld implements World {
   }
 
   /** This hook wraps actual transport dispatch, not task admission. */
-  private dispatchServerChat(text: string, send: () => void): void {
+  private chatDeliverySequence = 0;
+  private dispatchServerChat(text: string, send: () => void, context?: ChatDispatchContext): ChatDeliveryReceipt | undefined {
     const previous = new Map(this.recentSystemMessages);
     const mutates = !this.serverActionWait.isReadOnlyQuery(text);
+    let delivery: ChatDeliveryReceipt | undefined;
     if (mutates) this.recentSystemMessages.clear();
-    try { this.serverActionWait.dispatchChat(text, send); }
+    try { this.serverActionWait.dispatchChat(text, () => {
+      send();
+      const message = chatDeliveryMessage(text);
+      if (!message) return;
+      delivery = { protocol: 'agent-mc/chat-delivery/v1', id: `${this.executionEpoch}:chat:${++this.chatDeliverySequence}`,
+        status: 'sent', sentAt: new Date().toISOString(), ...message, boundary: 'client-transport', recipientRead: 'unknown',
+        ...(context?.callId ? { callId: context.callId } : {}),
+        ...(context?.taskId !== undefined ? { taskExecutionId: `${this.executionEpoch}:${context.taskId}` } : {}),
+        ...(context?.stepIndex !== undefined ? { stepIndex: context.stepIndex } : {}) };
+      this.emit('minecraft.chat.sent', `已向${message.to ? `玩家 ${message.to}` : '游戏公屏'}发送一条逻辑消息；仅确认客户端传输，不证明对方已读。`, false,
+        { trigger: 'piggyback', meta: { outgoing: true, direction: 'outgoing', channel: message.channel,
+          socialScope: 'minecraft-server', chatDelivery: delivery } }, this.chatName());
+    }); }
     catch (error) {
       if (mutates) {
         this.recentSystemMessages.clear();
@@ -4563,6 +4577,7 @@ export class MinecraftWorld implements World {
       }
       throw error;
     }
+    return delivery;
   }
 
   protected queryServer(args: Record<string, unknown>): ToolOutcome {
@@ -4733,7 +4748,7 @@ export class MinecraftWorld implements World {
         } catch (error) { return { text: this.toolLog('mc_script', args, String(error)), failed: true }; }
       },
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
-      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
+      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller, ctx),
       mc_observe: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         const parsed = parseSpatialObservation(args.mode === 'voxels' && args.format === undefined && args.cursor === undefined ? {...args,format:'dense'} : args);
@@ -6656,6 +6671,7 @@ export class MinecraftWorld implements World {
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
     role?: string,
     controller?: 'system1' | 'system2' | 'human' | 'unknown',
+    callContext?: Pick<ToolCallContext, 'callId'>,
   ): string | ToolOutcome {
     // Proven pre-dispatch rejection: no queue mutation, navigation or interaction took place.
     const invalidArguments = (rule: string, text: string,
@@ -6711,16 +6727,21 @@ export class MinecraftWorld implements World {
         const connection = this.bridge?.connectionState;
         const reason = connection && connection.protocolState !== 'closed' && !connection.ready
           ? '正在等待服务器登录或出生点就绪' : '当前没有连接服务器';
-        return { text: this.toolLog(name, args, `[${name} 失败] ${reason}，聊天未发送`), failed: true };
+        return { text: this.toolLog(name, args, `[${name} 失败] ${reason}，聊天未发送`), failed: true,
+          meta: { chatDelivery: { protocol: 'agent-mc/chat-delivery/v1', status: 'rejected', dispatchStarted: false } } };
       }
+      let dispatchStarted = false;
       try {
         this.interruptIdle('outgoing-chat');
-        sendChat(bot, only.text, (text, send) => this.dispatchServerChat(text, send));
+        let delivery: ChatDeliveryReceipt | undefined;
+        sendChat(bot, only.text, (text, send) => { delivery = this.dispatchServerChat(text,
+          () => { dispatchStarted = true; send(); }, { callId: callContext?.callId }); });
         const notes = parsed.notes?.map(parseNoteText) ?? [];
-        return this.toolLog(name, args, `[游戏聊天] 已发送：${only.text}。当前任务和待办保留`
-          + (notes.length > 0 ? `\n${notes.join(';')}。` : ''));
+        return { text: this.toolLog(name, args, `[游戏聊天] 已发送：${only.text}。当前任务和待办保留`
+          + (notes.length > 0 ? `\n${notes.join(';')}。` : '')), ...(delivery ? { meta: { chatDelivery: delivery } } : {}) };
       } catch (error) {
-        return { text: this.toolLog(name, args, `[${name} 失败] 聊天没有发出：${String(error)}`), failed: true };
+        return { text: this.toolLog(name, args, `[${name} 失败] ${dispatchStarted ? '客户端发送调用异常，实际发送结果未知，请核对原回执后再决定是否重发' : '聊天未发送'}：${String(error)}`), failed: true,
+          ...(!dispatchStarted ? { meta: { chatDelivery: { protocol: 'agent-mc/chat-delivery/v1', status: 'rejected', dispatchStarted: false } } } : {}) };
       }
     }
     const directUse = name === 'mc_do' && parsed.steps.length === 1 && parsed.steps[0].skill === 'use'
@@ -9116,3 +9137,6 @@ export class MinecraftWorld implements World {
     ).catch((e) => this.host?.log.warn('事件投递失败', { type, err: String(e) }));
   }
 }
+import { chatDeliveryMessage } from './chat-delivery.ts';
+import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
+import type { ChatDispatchContext } from './executor.ts';

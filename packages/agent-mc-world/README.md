@@ -1,5 +1,10 @@
 # Agent MC World
 
+Development candidate rc.113 adds [logical chat transport receipts](docs/chat-delivery.md)
+so SDK/MCP and host consumers can distinguish admitted chat from actual client
+dispatch and correlate queued messages to their task step. Sending does not imply
+recipient acknowledgment or completion of an action described in the message.
+
 Published package: **0.5.7-rc.89** on npm's **next** tag and [GitHub Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.89). Install this preview with `npm install agent-mc-world@0.5.7-rc.89`. Java **1.21.1** remains the primary target; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
 
 Development candidate **0.5.7-rc.99** includes independent, explicitly declared

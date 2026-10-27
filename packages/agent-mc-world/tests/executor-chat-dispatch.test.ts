@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
-import { Executor, sendChat, type TaskReport } from '../core/executor.ts';
+import { Executor, sendChat, type TaskReport, type ChatDispatchContext } from '../core/executor.ts';
 import { configureChatDedup } from '../core/chat-dedup.ts';
 import { ServerActionWait } from '../core/server-action-wait.ts';
 
@@ -27,7 +27,7 @@ function harness() {
     pathfinder: { stop: vi.fn(), setGoal: vi.fn() },
   }) as unknown as Bot;
   const log = { child() { return this; }, info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {} };
-  const dispatch = vi.fn((text: string, send: () => void) => wait.dispatchChat(text, send));
+  const dispatch = vi.fn((text: string, send: () => void, _context?: ChatDispatchContext) => wait.dispatchChat(text, send));
   let id = 0;
   const exec = new Executor({ getBot: () => bot, report: r => reports.push(r), log: log as never,
     nextId: () => ++id, fleeHealth: () => 0, chatDispatch: dispatch });
@@ -50,6 +50,7 @@ it('starts reply correlation only when a chat queued for over three seconds is s
   expect(r.chat).toHaveBeenCalledTimes(1);
   expect(r.chat).toHaveBeenCalledWith('/example enter');
   expect(r.dispatch).toHaveBeenCalledTimes(1);
+  expect(r.dispatch.mock.calls[0][2]).toEqual({ taskId: admitted.taskId, stepIndex: 0 });
   expect(r.wait.blockChat('/example enter')).toContain('10 秒');
   expect(r.reports.find(report => report.taskId === admitted.taskId && report.kind === 'done')).toBeDefined();
 });

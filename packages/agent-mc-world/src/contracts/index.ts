@@ -9,3 +9,4 @@ export * from './options.ts';
 export * from './work-state.ts';
 export type { InventoryOrganization, InventoryDisposition, OrganizationStack, OrganizationMove,
   InventoryOrganizationPlan } from '../../core/inventory-organization.ts';
+export * from './chat-delivery.ts';

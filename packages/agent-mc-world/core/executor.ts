@@ -639,13 +639,14 @@ function fleeTimeoutText(
 }
 
 /** Observe the synchronous transport boundary, after validation and deduplication. */
-export type ChatDispatch = (text: string, send: () => void) => void;
+export interface ChatDispatchContext { taskId?: number; stepIndex?: number; callId?: string }
+export type ChatDispatch = (text: string, send: () => void, context?: ChatDispatchContext) => void;
 
-export function sendChat(bot: Bot, text: string, dispatch?: ChatDispatch): void {
+export function sendChat(bot: Bot, text: string, dispatch?: ChatDispatch, context?: ChatDispatchContext): void {
   const error = chatInputError(text);
   if (error) throw new SkillBlocked(error);
   const result = sendDeduplicatedChat(bot, text, () => {
-    if (dispatch) dispatch(text, () => bot.chat(text));
+    if (dispatch) dispatch(text, () => bot.chat(text), context);
     else bot.chat(text);
   });
   if (!result.sent) throw new SkillNoop(`相同接收范围和内容已于 ${new Date(result.previousAt!).toISOString()} 发送；期间没有新的对方消息，本次未重复发送。去重窗口 ${result.windowMs} 毫秒，可由 chatDuplicateWindowMs 配置。`);
@@ -1014,7 +1015,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
       const needsWindow = call.text.startsWith('/') && consumesOpenWindow(next);
       const beforeWindow = bot.currentWindow;
-      sendChat(bot, call.text, chatDispatch);
+      sendChat(bot, call.text, chatDispatch, ctx.batch ? { taskId: ctx.batch.taskId, stepIndex: ctx.batch.index } : undefined);
       publishViewerCastCommand(bot, call.text);
       if (needsWindow && bot.currentWindow !== beforeWindow && storageWindow(bot.currentWindow)) {
         ctx.holdWindow?.(bot.currentWindow!);
@@ -5627,7 +5628,7 @@ export class Executor {
         const gainBase = collectGainBase(bot, call) ?? undefined;
         // 这一步能不能顺手把后面几步也做掉(目前只有 stow 用):它自己看剩下的步
         ctx.batch = {
-          steps, index: i,
+          steps, index: i, taskId: id,
           absorb: (n, receipt, ok = true) => { (task.absorbed ??= new Map()).set(n, { receipt, ok }); },
         };
         windowStep = i + 1;

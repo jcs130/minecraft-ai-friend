@@ -282,6 +282,7 @@ export interface SkillContext {
    * 容器连续存取共用窗口时，登记过的后续步由执行器按各自结果落账。
    */
   batch?: {
+    taskId?: number;
     steps: readonly SkillCall[];
     index: number;
     absorb(stepIndex: number, receipt: string, ok?: boolean): void;
