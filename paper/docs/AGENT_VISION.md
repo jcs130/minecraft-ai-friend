@@ -1,8 +1,10 @@
 # Agent 普通实体感知
 
-**2026-10-22 当前：** AgentVision **0.1.2**（`05054e5d`）已上线，修复死亡/重生期间区块加载器为空导致的任务异常。保留队列和显隐判断，流恢复后继续；三次真实重生后实际目标可重新显示和隐藏，12 项生命周期、29 项协议回归通过。正式同批为 AgentFriend0.4.47.11 / LoginGuard0.1.5，Numen 内容与 API 保持。E/F `20261022-223855` 完整冷备份、原存档与账号对账见 [本次发布](AUTH_DUNGEON_RECOVERY_20261022.md)。以下 0.1.1 段落是此前发布时点。
+**2026-10-27 当前：** 正式仍为 AgentVision **0.1.2**（`05054e5d`），AgentFriend 已为 **0.4.47.18**。本日只读确认过滤器正在工作，并以同摘要 AgentVision 验证原始实体包；没有为此更换正式 JAR、重启或改玩家资料。隔离 AgentFriend0.4.47.11 的 `AgentVisionBridge.class` 与正式0.4.47.18字节相同。完全遮挡的生物、掉落物没有初始出生包；隐藏后不再下发坐标、装备、属性和移动更新，64格范围限制实际生效。见[抓包验收清单](../manifests/entity-packet-visibility-20261027.json)。
 
-**当前已上线：** AgentVision0.1.1（`bf00bb81`）/ Numen内容`82133ebd`，AgentFriend仍0.4.47.9、Paper仍1.21.1 build133。180/60/10秒提醒、原维护任务正常停启、E/F完整冷备份`20261021-094826`和31项正式核验、6项网关查询通过；原角色物品/职业对账后恢复桐人自主日常。详见`paper/manifests/agent-vision-cache-release-20261021.json`。
+2026-10-22 的0.1.2修复了死亡/重生期间区块加载器为空导致的任务异常。保留队列和显隐判断，流恢复后继续；三次真实重生后实际目标可重新显示和隐藏，12项生命周期、29项协议回归通过。当次正式为AgentFriend0.4.47.11 / LoginGuard0.1.5，E/F完整冷备份和对账见[当次发布](AUTH_DUNGEON_RECOVERY_20261022.md)。以下0.1.1段落是历史发布时点。
+
+**此前已上线：** AgentVision0.1.1（`bf00bb81`）/ Numen内容`82133ebd`，当次AgentFriend0.4.47.9、Paper1.21.1 build133。180/60/10秒提醒、原维护任务正常停启、E/F完整冷备份`20261021-094826`和31项正式核验、6项网关查询通过；原角色物品/职业对账后恢复桐人自主日常。详见`paper/manifests/agent-vision-cache-release-20261021.json`。
 
 ## 0.1.1 共享缓存（已上线）
 
@@ -59,6 +61,7 @@ AgentFriend 0.4.47.9从固定现役0.4.47.8逐项回补：只有 `UtilitySpells.
 - Numen：`:numen:paper:runGameTestServer`，用 `gametestOnly` 选择感知与 `ordinary_threats_`；`:numen:paper:build :numen:common:test`。Gradle逐条执行且加 `--no-daemon`。
 - 原生联机：`paper/plugins/AgentVision/tests/protocol.mjs <隔离服目录> <回执文件> [1.21.1或1.20.6]`。只接受本机非正式端口；测试账号会改变隔离存档，禁止对正式服运行。
 - 16连接负载：同目录 `load.mjs <隔离服目录> <回执文件>`，需要独占测试场地。它验证协议与感知同步负载，不调用16个自主模型。
+- 原始数据包：同目录 `run-packets.py --stage <隔离目录> --evidence <新证据目录> --runtime-package <已装Mineflayer的package.json> --java <Java21路径> --node <Node路径>`。只接受回环25982/25983；正常启动、停止，临时扩展隔离视距并恢复原配置。直接检查出生、元数据、装备、移动及属性包，测试范围外目标的区块必须已加载，且真人对照实际收到同一目标，不能把原版区块卸载算过滤成功。首次四区块夹具不足的失败记录保留。
 - 部署边界：`paper/ops/tests/agent-vision-deploy.test.ps1 -CandidateRoot <候选目录>`，Windows PowerShell5.1执行，另保留原Numen和版本边界检查。
 
 本轮最终候选通过29项Numen GameTest、204项内容JVM、两个协议版本各25项联机检查、8项16连接检查及11项新部署检查。初期夹具区块未加载、隐身NBT写法、创造模式学技能、旧夹具身份表，以及脚本编码和字节码展示差异均保留原失败回执；没有放宽可见性断言。

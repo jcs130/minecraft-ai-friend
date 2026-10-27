@@ -1,0 +1,30 @@
+# Isolated integration candidate. Does not migrate existing AgentFriend profiles.
+preview-only: true
+allowed-worlds: [qa_world, aincrad]
+shops:
+  quartermaster:
+    name: 冒险者公会补给柜台
+    offers:
+      ration:
+        material: BREAD
+        amount: 8
+        emeralds: 1
+      shield:
+        material: SHIELD
+        amount: 1
+        emeralds: 3
+  blacksmith:
+    name: 武具工房
+    offers:
+      knight_blade:
+        vortex-item: knight_iron_resolve
+        amount: 1
+        emeralds: 5
+      staff:
+        vortex-item: mage_apprentice_staff
+        amount: 1
+        emeralds: 5
+      iron_helmet:
+        material: IRON_HELMET
+        amount: 1
+        emeralds: 4

@@ -1,0 +1,62 @@
+world:
+  auto-import-default-worlds: true
+  auto-import-3rd-party-worlds: false
+  enforce-access: false
+  enforce-gamemode: false
+  enforce-flight: false
+  gamemode-and-flight-enforce-delay: 1
+  apply-entity-spawn-rate: false
+  apply-entity-spawn-limit: false
+  auto-purge-entities: false
+  world-name-format:
+    nether: '%overworld%_nether'
+    end: '%overworld%_the_end'
+  warn-alias-conflicts: true
+teleport:
+  use-finer-teleport-permissions: true
+  passenger-mode: default
+  concurrent-teleport-limit: 50
+  teleport-intercept: true
+  safe-location-horizontal-search-radius: 3
+  safe-location-vertical-search-radius: 3
+spawn:
+  first-spawn-override: false
+  first-spawn-location: ''
+  enable-join-destination: false
+  join-destination: ''
+  default-respawn-in-overworld: false
+  default-respawn-within-same-world: false
+  enforce-respawn-at-world-spawn: false
+portal:
+  use-custom-portal-search: false
+  custom-portal-search-radius: 128
+messaging:
+  enable-chat-prefix: false
+  chat-prefix-format: '[%world%]%chat%'
+  register-papi-hook: true
+  warn-invalid-papi-format: true
+  invalid-papi-format-returns-blank: false
+  default-locale: zh
+  per-player-locale: false
+command:
+  resolve-alias-name: true
+  simplified-destination-tab-completion: false
+  confirm-mode: enable
+  use-confirm-otp: true
+  confirm-timeout: 30
+  show-legacy-aliases: false
+event-priority:
+  player-portal: high
+  player-respawn: low
+  player-spawn-location: normal
+  player-teleport: highest
+  player-changed-world: normal
+misc:
+  bukkit-yml-path: bukkit.yml
+  server-properties-path: server.properties
+  auto-detect-generator-plugins: true
+  global-debug: 0
+  debug-permissions: false
+  silent-start: false
+  show-donation-message: true
+version: 5.2

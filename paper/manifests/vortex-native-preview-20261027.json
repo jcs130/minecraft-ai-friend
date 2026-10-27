@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "state": "isolated_native_preview_validated_not_deployed",
+  "productionApproved": false,
+  "productionModified": false,
+  "ownerDecision": "先保留候选，继续完善",
+  "upstream": "1.2.2-alpha",
+  "upstreamSource": "3e5babaf13f390ef135782f5b1d5158e34ff22ff",
+  "nativeSha256": "b47f71f5cde9faef18e5734a0f974ce4293ffaa6fef457e9fbb1b2cc567a8f7c",
+  "bridgeSha256": "7c278a2aa53cb318d9c795e26feca2e81e4994d3e940c561c4f050c458067a8e",
+  "changedNativeClasses": 35,
+  "retainedNativeEntries": 2814,
+  "validation": {
+    "pureRules": 34,
+    "artifactPolicySuites": 3,
+    "realJavaChecks": 36,
+    "coldJavaChecks": 9,
+    "bedrockChecks": 9,
+    "clientModsRequired": false,
+    "normalStop": true
+  },
+  "canonicalCli": [
+    "status",
+    "profession",
+    "skills",
+    "cast",
+    "tasks",
+    "trade",
+    "waypoint"
+  ],
+  "repairs": [
+    "Paper1.21.1 Attribute API",
+    "objective completion required before claim",
+    "manual quest claim, no auto reward",
+    "real XYZ exploration checks",
+    "single native mana pool reservation and refund",
+    "native queued profile persistence",
+    "typed optional API accessors",
+    "plain merchant quote DTOs",
+    "fail closed on missing integration API"
+  ],
+  "notProductionReady": [
+    "native dungeon default templates and party/settlement integration",
+    "existing profession/learned skill/mana authority migration",
+    "real town NPC placement and operation"
+  ],
+  "cityFacilityProposals": 7,
+  "cityFacilitiesOperating": false,
+  "separateClientModsRequired": false
+}

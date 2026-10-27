@@ -75,6 +75,45 @@ final class SiteDungeonManager implements Listener {
     private final Map<UUID,Shot> shots=new HashMap<>();
     private final Set<String> blockedCheckpoints=new HashSet<>();
     private boolean ready;
+    private final ThreadLocal<Boolean> jsonOutput=ThreadLocal.withInitial(()->false);
+    private final ThreadLocal<Boolean> verboseOutput=ThreadLocal.withInitial(()->false);
+
+    /** Read only current runtime facts. Does not load chunks, enroll, resume,
+     * clear an expired task, save a checkpoint or grant completion evidence. */
+    Map<String,Object> advice(Player p,String id){
+        Site s=sites.get(id);if(s==null)return DungeonAdvice.evaluate(id,id,Map.of("configured",false));
+        Run run=runs.get(id),mine=own(p);Room first=s.rooms.getFirst();long now=System.currentTimeMillis();
+        Map<String,Object> facts=new LinkedHashMap<>();
+        facts.put("configured",ready&&!blockedCheckpoints.contains(id)&&Bukkit.getWorld(s.world)!=null);
+        facts.put("pendingReward",receipt(p.getUniqueId(),id)!=null);
+        facts.put("participant",run!=null&&run.party.contains(p.getUniqueId()));
+        facts.put("otherActivity",mine!=null&&mine!=run||plugin.dungeonParticipant(p)&&mine==null||plugin.pvpParticipant(p));
+        facts.put("occupied",run!=null);facts.put("joinable",run!=null&&run.phase.equals("muster")&&now<run.readyAt&&run.party.size()<PARTY_LIMIT);
+        facts.put("atFirstRoom",first.contains(p.getLocation())&&s.contains(p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
+        facts.put("firstRoom",s.world+" "+first.x+","+first.y+","+first.z);
+        facts.put("cooldownMs",Math.max(0,120_000-(now-plugin.getConfig().getLong(ROOT+".cooldowns."+id,0))));
+        if(run!=null){facts.put("phase",run.phase);facts.put("paused",run.pausedAt>0);facts.put("faulted",!run.fault.isEmpty());facts.put("remainingMobs",run.mobs.size());Room target=run.room();facts.put("target",s.world+" "+target.x+","+target.y+","+target.z);}
+        var combat=plugin.combatRpg();String role=combat==null?"":combat.profession(p);int level=combat==null?1:combat.level(p);
+        if(s.conquestFloor>0){
+            String reason="",hint="",command="";
+            if(!plugin.conquestWorldReady()){reason="CONQUEST_MAP_UNAVAILABLE";hint="攻略地图暂不可用，改选其他地点；不要反复传送或开场。";command="/mycli dungeon list";}
+            else if(role.isEmpty()){reason="PROFESSION_REQUIRED";hint="正式攻略需先选择职业；原委托保留。";command="/mycli profession status";}
+            else if(level<s.minimumLevel){reason="COMBAT_LEVEL_REQUIRED";hint="本层最低战斗Lv."+s.minimumLevel+"，你为Lv."+level+"；先练级整备。";command="/mycli rpg status";}
+            else if(combat.floor(p)<s.conquestFloor-1){reason="PREVIOUS_FLOOR_REQUIRED";hint="须先实际通关前一层，旧练习塔成绩不能代替正式攻略。";command="/mycli rpg status";}
+            facts.put("admissionReason",reason);facts.put("admissionHint",hint);facts.put("admissionCommand",command);
+        }
+        Map<String,Object> out=DungeonAdvice.evaluate(id,s.name,facts);var prep=DungeonAdvice.preparation(id,s.minimumLevel);
+        out.put("recommendedLevel",prep.recommendedLevel());out.put("minimumLevel",s.conquestFloor>0?s.minimumLevel:1);
+        out.put("playerCombatLevel",level);out.put("recommendedEquipment",prep.equipment());out.put("recommendedParty",prep.party());
+        long armor=Arrays.stream(p.getInventory().getArmorContents()).filter(i->i!=null&&!i.getType().isAir()).count();
+        out.put("currentEquipment","战斗Lv."+level+"、护甲"+armor+"/4、"+(p.getInventory().getItemInOffHand().getType()==Material.SHIELD?"已副手持盾":"副手未持盾")+"、饱食"+p.getFoodLevel()+"/20");
+        out.put("skillHint",DungeonAdvice.skill(role));out.put("firstRoom",facts.get("firstRoom"));
+        List<String> nativeEnemies=s.rooms.stream().flatMap(room->room.enemies.stream()).map(DungeonWaveCatalog.Enemy::mythic).filter(mob->mob!=null&&!mob.isEmpty()).distinct().toList();
+        if(!nativeEnemies.isEmpty()){out.put("nativeEnemies",nativeEnemies);out.put("nativeContent",s.conquestFloor>0?"普通难度也启用Mythic首领机制":"冒险与末日启用Mythic精英；普通保留原版战斗");}
+        if(out.get("state").equals("approach")&&!s.hint.isBlank())out.put("nextAction",out.get("nextAction")+" 路线："+(s.hint.length()>180?s.hint.substring(0,180)+"…":s.hint));
+        out.put("difficulty",List.of(Map.of("id","normal","label","普通","stars",prep.stars(),"healthMultiplier",1.0,"damageMultiplier",1.0),Map.of("id","adventure","label","冒险","stars",Math.min(5,prep.stars()+1),"healthMultiplier",1.5,"damageMultiplier",1.25),Map.of("id","apocalypse","label","末日","stars",5,"healthMultiplier",2.1,"damageMultiplier",1.6)));
+        return out;
+    }
 
     SiteDungeonManager(AgentFriendPlugin plugin){
         this.plugin=plugin;
@@ -114,14 +153,45 @@ final class SiteDungeonManager implements Listener {
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private List<Player> present(Run r){return r.party.stream().map(Bukkit::getPlayer).filter(this::playing).filter(p->r.site.contains(p.getLocation())).toList();}
     private String label(Site site){return site.conquestFloor>0?"正式楼层攻略":site.outdoor?"野外据点讨伐":"遗迹地下城";}
-    private void send(Player p,String prefix,Map<String,?> fields){Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.put("activityType","site_dungeon");Site site=sites.get(Objects.toString(fields.get("id"),""));data.put("activityLabel",site==null?"遗迹远征":label(site));if(site!=null)data.put("setting",site.outdoor?"outdoor":"interior");data.put("commandRoot","/mycli dungeon");data.put("language","zh-CN");data.put("recipient",p.getName());data.putAll(fields);p.sendMessage(prefix+" "+JSON.toJson(data));}
+    private void send(Player p,String prefix,Map<String,?> fields){
+        Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.put("activityType","site_dungeon");
+        Site site=sites.get(Objects.toString(fields.get("id"),""));data.put("activityLabel",site==null?"遗迹远征":label(site));
+        if(site!=null)data.put("setting",site.outdoor?"outdoor":"interior");data.put("commandRoot","/mycli dungeon");data.put("language","zh-CN");data.putAll(fields);
+        Map<String,Object> guide=site==null?Map.of():advice(p,site.id);
+        if(!guide.isEmpty())data.put("guidance",guide);
+        if(jsonOutput.get()){p.sendMessage(prefix+" "+JSON.toJson(data));return;}
+        if(prefix.equals("MC_SITE_DUNGEON_ITEM")){
+            var prep=DungeonAdvice.preparation(site.id,site.minimumLevel);
+            p.sendMessage("[地下城] "+site.name+" ("+site.id+") · "+DungeonAdvice.label(guide.get("state").toString())+" · 普通"+prep.stars()+"/5星，建议战斗Lv."+prep.recommendedLevel()+"；详情：/mycli dungeon info "+site.id);return;
+        }
+        if(prefix.equals("MC_SITE_DUNGEON_LIST")){p.sendMessage("[提示] 空闲需本人到首室 start；active=false不是未开放。详情用 info <ID>，状态用 status <ID>。" );return;}
+        if(prefix.equals("MC_SITE_DUNGEON_RESULT")){
+            boolean success=Boolean.TRUE.equals(fields.get("success"));String action=Objects.toString(fields.get("action"),"");
+            String done=switch(action){case "start"->"已开启本次集结";case "join"->"已加入本次队伍";case "claim"->"奖励结算已保存";case "travel"->"已到入口";case "resume"->"已处理恢复请求";case "leave"->"已退出本次场次";default->"操作已完成";};
+            p.sendMessage("[地下城] "+(success?done:Objects.toString(fields.get("errorMessage"),"操作未完成"))+"（"+fields.get("reason")+"）。");
+            if(!success&&!guide.isEmpty()&&Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(fields.get("reason"))){p.sendMessage("下一步："+guide.get("nextAction")+" 命令："+guide.get("nextCommand"));}
+            return;
+        }
+        if(!guide.isEmpty()){
+            p.sendMessage("[地下城] "+site.name+" · "+DungeonAdvice.label(guide.get("state").toString()));
+            if(prefix.equals("MC_SITE_DUNGEON_INFO")){
+                var prep=DungeonAdvice.preparation(site.id,site.minimumLevel);
+                p.sendMessage("普通"+prep.stars()+"/5星；"+(site.conquestFloor>0?"本层最低Lv."+site.minimumLevel+"；":"")+"建议战斗Lv."+prep.recommendedLevel()+"（装备和组队建议不设新门槛）。装备："+prep.equipment()+"。当前："+guide.get("currentEquipment"));
+                p.sendMessage("队伍："+prep.party()+"；"+guide.get("skillHint")+"。技能用 /mycli skills status 按需查。" );
+                if(guide.containsKey("nativeContent"))p.sendMessage("[机制] "+guide.get("nativeContent"));
+            }
+            p.sendMessage("下一步："+guide.get("nextAction")+" 命令："+guide.get("nextCommand"));
+            if(verboseOutput.get())p.sendMessage(prefix+" "+JSON.toJson(data));
+        }else p.sendMessage("[地下城] 当前没有已开启的本人场次；查询不会开场。选择地点：/mycli dungeon list");
+    }
     private void result(Player p,String action,String site,String reason){
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
         data.put("success",reason.equals("success"));data.put("reason",reason);
         ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
         if(advice!=null){data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());}
         if(reason.equals("claim_previous_reward_first"))data.put("pendingReward",pendingReward(p.getUniqueId(),site));
-        send(p,"MC_SITE_DUNGEON_RESULT",data);if(advice!=null)advice.send(p);
+        send(p,"MC_SITE_DUNGEON_RESULT",data);
+        if(advice!=null&&!jsonOutput.get()&&!Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(reason))advice.send(p);
         if(reason.equals("claim_previous_reward_first"))explainPending(p,List.of(site));
         else if(reason.equals("specify_dungeon_id"))explainPending(p,pendingSites(p.getUniqueId()));
     }
@@ -258,13 +328,25 @@ final class SiteDungeonManager implements Listener {
         for(Site s:sites.values()){Run r=runs.get(s.id);sender.sendMessage("MC_SITE_DUNGEON_SITE id="+s.id+" rooms="+s.rooms.size()+" active="+(r!=null)+" stage="+(r==null?0:r.stage+1)+" phase="+(r==null?"idle":r.phase)+" party="+(r==null?0:r.party.size()));}
         for(Run r:runs.values())for(UUID id:r.mobs.keySet()){Entity e=Bukkit.getEntity(id);if(e instanceof Mob m)sender.sendMessage("MC_SITE_DUNGEON_MOB site="+r.site.id+" id="+id+" type="+m.getType()+" health="+m.getHealth()+" target="+(m.getTarget()==null?"none":m.getTarget().getUniqueId())+" x="+m.getLocation().getBlockX()+" y="+m.getLocation().getBlockY()+" z="+m.getLocation().getBlockZ());}
     }
-    void command(Player p,String[] args){
+    void command(Player p,String[] raw){
+        DungeonAdvice.Request request;
+        try{request=DungeonAdvice.parse(raw);}catch(IllegalArgumentException e){
+            if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_SITE_DUNGEON_RESULT "+JSON.toJson(Map.of("schemaVersion",1,"success",false,"reason","INVALID_ARGUMENT","errorMessage",e.getMessage(),"retryable",false,"nextCommand","/mycli dungeon --help")));
+            else p.sendMessage("[地下城] 未执行（INVALID_ARGUMENT）："+e.getMessage()+"。命令：/mycli dungeon --help");return;
+        }
+        format(request.json(),request.verbose(),()->execute(p,request.args(),request.page()));
+    }
+    private void format(boolean json,boolean verbose,Runnable work){
+        boolean beforeJson=jsonOutput.get(),beforeVerbose=verboseOutput.get();jsonOutput.set(json);verboseOutput.set(verbose);
+        try{work.run();}finally{jsonOutput.set(beforeJson);verboseOutput.set(beforeVerbose);}
+    }
+    private void execute(Player p,String[] args,int page){
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"list",id=args.length>2?args[2]:"";
-        if(Set.of("list","info","status").contains(action))p.sendMessage("§6【遗迹远征】天然遗迹与野外据点都用 /mycli dungeon；试炼塔用 /mycli arena。分段挑战后回首处集结点，再 dungeon claim 结算；奖励进入个人奖励箱。");
+        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后回首室结算，奖励进入个人箱。");
         try{
             require(ready,"configuration_unavailable");
             switch(action){
-                case "list"->{for(Site s:sites.values())send(p,"MC_SITE_DUNGEON_ITEM",Map.of("id",s.id,"name",s.name,"rooms",s.rooms.size(),"active",runs.containsKey(s.id),"expedition",s.expedition));send(p,"MC_SITE_DUNGEON_LIST",Map.of("total",sites.size(),"partyLimit",PARTY_LIMIT,"parallelSites",true));}
+                case "list"->listing(p,page);
                 case "menu"->open(p,"");
                 case "info"->info(p,site(id));
                 case "travel"->travel(p,site(id));
@@ -278,18 +360,31 @@ final class SiteDungeonManager implements Listener {
             }
         }catch(IllegalArgumentException e){result(p,action,id,e.getMessage());}
     }
+    private void listing(Player p,int page){
+        int first=(page-1)*7;var rows=new ArrayList<>(sites.values());require(first<rows.size()||first==0,"page_out_of_range");
+        List<Map<String,Object>> items=new ArrayList<>();
+        for(Site s:rows.subList(Math.min(first,rows.size()),Math.min(first+7,rows.size()))){
+            var prep=DungeonAdvice.preparation(s.id,s.minimumLevel);
+            if(jsonOutput.get())items.add(Map.of("id",s.id,"name",s.name,"active",runs.containsKey(s.id),"state",advice(p,s.id).get("state"),"recommendedLevel",prep.recommendedLevel(),"normalStars",prep.stars(),"nextCommand","/mycli dungeon info "+s.id));
+            else send(p,"MC_SITE_DUNGEON_ITEM",Map.of("id",s.id,"name",s.name,"rooms",s.rooms.size(),"active",runs.containsKey(s.id),"expedition",s.expedition));
+        }
+        Map<String,Object> summary=new LinkedHashMap<>();summary.put("total",sites.size());summary.put("page",page);summary.put("pages",Math.max(1,(sites.size()+6)/7));summary.put("partyLimit",PARTY_LIMIT);summary.put("parallelSites",true);
+        if(jsonOutput.get())summary.put("items",items);
+        if(first+7<rows.size())summary.put("nextCommand","/mycli dungeon list --page "+(page+1));
+        send(p,"MC_SITE_DUNGEON_LIST",summary);
+    }
     private void info(Player p,Site s){
-        if(s.conquestFloor>0)p.sendMessage("§6正式第"+s.conquestFloor+"层 · 最低战斗Lv."+s.minimumLevel+"；建议先学一项战斗技能，带武器、盾牌、护甲与食物。旧试炼塔成绩不能代替本层通关。");
         Room first=s.rooms.getFirst();send(p,"MC_SITE_DUNGEON_INFO",Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8));
-        p.sendMessage("§6【"+label(s)+"·"+s.name+"】"+s.hint+" /mycli dungeon travel "+s.id+"（8魔力）"+(s.entry.isEmpty()?"到外围，步行深入首处集结点":s.outdoor?"到已勘察的营地外围":"到已勘察的挑战入口")+"；/mycli dungeon start "+s.id+" 开场，队友10秒内用 /mycli dungeon join "+s.id+" 加入。清怪后步行到下一处，最后返回首处集结点，/mycli dungeon claim "+s.id+" 领奖。每处每日一次奖励。");
+        if(verboseOutput.get()&&!jsonOutput.get())p.sendMessage("[路线] "+s.hint+"；逐室清怪，最后返回首室领取结算。普通/冒险/末日的生命倍率为1/1.5/2.1，伤害倍率为1/1.25/1.6；队友在10秒集结期主动加入。");
     }
     private void travel(Player p,Site s){
         require(own(p)==null,"already_in_site_dungeon");
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
-        if(s.entry.isEmpty()){new DungeonExpeditions(plugin).travel(p,s.expedition);return;}
+        if(s.entry.isEmpty()){require(!jsonOutput.get(),"legacy_travel_format_unavailable");new DungeonExpeditions(plugin).travel(p,s.expedition);return;}
         World w=Bukkit.getWorld(s.world);int x=s.entry.get(0),y=s.entry.get(1),z=s.entry.get(2);
         require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");Location origin=p.getLocation().clone();
-        w.getChunkAtAsync(x>>4,z>>4,false).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->{
+        boolean requestedJson=jsonOutput.get(),requestedVerbose=verboseOutput.get();
+        w.getChunkAtAsync(x>>4,z>>4,false).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(requestedJson,requestedVerbose,()->{
             if(!p.isOnline())return;
             if(error!=null||chunk==null){result(p,"travel",s.id,"entry_unavailable");return;}
             if(!playing(p)||own(p)!=null||plugin.dungeonParticipant(p)||plugin.pvpParticipant(p)||p.getWorld()!=origin.getWorld()||p.getLocation().distanceSquared(origin)>4){result(p,"travel",s.id,"player_state_changed");return;}
@@ -302,7 +397,7 @@ final class SiteDungeonManager implements Listener {
             if(landing==null){result(p,"travel",s.id,"entry_blocked");return;}
             if(plugin.travelMagic().teleport(p,landing,"dungeon:"+s.id,"遗迹入口传送术",TravelMagic.DISTANT_MANA)){result(p,"travel",s.id,"success");p.sendMessage("§6已到"+label(s)+"入口；仍须主动 start、分段清怪并返回首处集结点才能领取奖励。");}
             else result(p,"travel",s.id,"travel_denied");
-        }));
+        })));
     }
     private void start(Player p,Site s,Mode mode){
         conquestAdmission(p,s);
@@ -344,6 +439,7 @@ final class SiteDungeonManager implements Listener {
             fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
             Map<String,Object> outcome=lastOutcome(p.getUniqueId(),id);fields.put("lastOutcome",outcome);fields.put("outcomeKnown",!outcome.isEmpty());
             send(p,"MC_SITE_DUNGEON_STATE",fields);
+            if(!verboseOutput.get())return;
             explainPending(p,pending);
             if(!outcome.isEmpty())explainOutcome(p,outcome);
             else if(!pending.isEmpty())p.sendMessage("§e【遗迹远征】当前没有正在参与的挑战；以上是已保存的待领奖凭据，可直接领取，无需重打或返回首处集结点。");
@@ -361,6 +457,7 @@ final class SiteDungeonManager implements Listener {
         Map<String,Object> previousOutcome=r.party.contains(p.getUniqueId())?Map.of():lastOutcome(p.getUniqueId(),r.site.id);
         if(!r.party.contains(p.getUniqueId())){fields.put("lastOutcome",previousOutcome);fields.put("outcomeKnown",!previousOutcome.isEmpty());}
         send(p,"MC_SITE_DUNGEON_STATE",fields);
+        if(!verboseOutput.get())return;
         explainPending(p,pending);
         if(r.party.contains(p.getUniqueId())){
             p.sendMessage("§b【"+label(r.site)+"】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"请返回首处集结点结算":"本段"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(!r.fault.isEmpty()?"故障暂停，等待不计挑战时限；准备好后本人用 /mycli dungeon resume，恢复后5分钟内回场。":r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清段落重刷。":""));

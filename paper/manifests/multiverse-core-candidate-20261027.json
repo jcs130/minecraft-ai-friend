@@ -1,0 +1,31 @@
+{
+  "state": "candidate_not_installed",
+  "version": "5.8.1",
+  "url": "https://github.com/Multiverse/Multiverse-Core/releases/download/5.8.1/multiverse-core-5.8.1.jar",
+  "sha256": "bc3f34e2d747fdf024f44868747bb016b08fa11d98ccb4ffcac958f083151a83",
+  "configSha256": "03421d01e7ad01a99a48dfebae58fa9dc8959b93075c38728548b0476dab450f",
+  "bytes": 4627993,
+  "productionApproved": false,
+  "queued": false,
+  "productionModified": false,
+  "clientModsRequired": false,
+  "worldInventorySplit": false,
+  "restrictiveAincradBorder": false,
+  "schemaVersion": 1,
+  "id": "multiverse-core-candidate-20261027",
+  "ownerDecision": "先保留候选，继续完善；艾恩葛朗特城外可自由探索",
+  "validation": {
+    "nativeJavaMineflayer": 18,
+    "coldRestart": 9,
+    "bedrockTested": false,
+    "seededItems": [
+      "iron_sword x1",
+      "shield x1",
+      "cobblestone x17"
+    ],
+    "existingProtocolWarningsRetained": true
+  },
+  "staticCopiesOnTwoDisks": true,
+  "fullColdBackupCompleted": false,
+  "installerTargetsApproved": false
+}

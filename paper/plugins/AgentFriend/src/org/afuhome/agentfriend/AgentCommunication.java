@@ -197,6 +197,7 @@ final class AgentCommunication {
         if(root.equals("rules")) {plugin.agentEntry().rules(p,args,true);return;}
         if(root.equals("capabilities")) {plugin.agentEntry().capabilities(p,args);return;}
         if(root.equals("challenge")) {plugin.lifeChallenges().jsonCommand(p,args);return;}
+        if(root.equals("dungeon")) {plugin.siteDungeons().command(p,raw);return;}
         if(root.equals("tasks")) {
             String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
             plugin.taskMarket().routes().command(p,query);return;

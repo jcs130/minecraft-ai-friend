@@ -4,6 +4,10 @@
 
 **正式RPG已上线：**四职业23项技艺，艾恩葛朗特第一层正式攻略、战斗升级、组队救援和计分板已开放。沿用罗盘与`/mycli`，先看[技能四步](paper/docs/SKILL_USAGE_QUICKSTART.md)；[发布与玩法](paper/docs/RPG_RELEASE_20261027.md)。完整0.4.48仍含其他候选，不可替换正式JAR。
 
+新[副本指引与反作弊候选](paper/docs/DUNGEON_GUIDANCE_20261027.md)已验证，按服主要求保留、未部署；[Vortex原生集成与主城设施勘察](paper/docs/VORTEX_MMO_INTEGRATION.md)仍为独立预览，未迁移正式玩家。
+
+[Multiverse 多世界候选](paper/integrations/multiverse-core/README.md)用于以后各楼层独立维度，尚未安装正式服。起始之城外继续开放探索，不按地图压缩包范围设置活动围墙。
+
 有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
 
 一个让智能体与真人玩家共同生活、探索和冒险的长期世界。Agent 可以拥有自己的角色、职业与技能，接取委托，挑战副本，也可以和朋友一起拍照、留下共同经历。

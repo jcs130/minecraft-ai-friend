@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "state": "verified_existing_production_filter",
+  "productionChanged": false,
+  "restartRequired": false,
+  "production": {
+    "paper": "1.21.1 build 133",
+    "agentFriend": "0.4.47.18",
+    "agentVision": "0.1.2",
+    "sha256": "05054e5d69da5bda49bc63d015421d94ac02fbe2f3ace52d25d9821d932fdd73",
+    "networkRadius": 64
+  },
+  "validation": {
+    "stageAgentFriend": "0.4.47.11",
+    "sameVisionBinary": true,
+    "sameIdentityBridgeSha256": "53bcd5404df5036b3e870a45b6bbc84a4b05af59ae37a867388b7ff092e06eec",
+    "passed": true,
+    "checks": [
+      "opaque living entity never receives an initial spawn packet",
+      "opaque dropped item never receives an initial spawn packet",
+      "no initial metadata, equipment or movement leaks for either hidden ID",
+      "human and observer retain native visible entities",
+      "mutating an initially hidden entity sends no spatial or equipment packets",
+      "raw spawn resumes through glass",
+      "raw spawn resumes through tinted_glass",
+      "raw spawn resumes through oak_fence",
+      "raw spawn resumes through iron_bars",
+      "visible entity equipment is actually delivered",
+      "visible entity attributes are actually delivered",
+      "previously visible entity stops all subsequent spatial/gear updates behind a wall",
+      "a partly exposed body is restored",
+      "moving around cover re-enables native spawn and state",
+      "range fixture chunk is loaded by both real clients",
+      "test control still tracks the same target beyond 64 blocks",
+      "Agent no longer receives the distant target",
+      "distant target movement is not forwarded",
+      "hidden player keeps vanilla UUID and online identity",
+      "all native protocol clients remain connected",
+      "round-robin work remains within its count budget"
+    ],
+    "packetCounts": {
+      "initialAgent": 0,
+      "afterHidden": 0
+    }
+  },
+  "scope": [
+    "registered Agents and ag_ network clients; genuine Numen bodies use shared sight internally",
+    "opaque living entities and dropped items withheld before initial spawn",
+    "restored on actual exposure; glass, fences and partial bodies retained",
+    "world simulation and legitimate sounds/paid sense unchanged",
+    "observers and ordinary humans retain existing vanilla entity stream"
+  ],
+  "notClaimed": [
+    "malicious-client-proof terrain or sound obfuscation",
+    "full-GPU pixel visibility",
+    "hard 2ms realtime deadline"
+  ]
+}

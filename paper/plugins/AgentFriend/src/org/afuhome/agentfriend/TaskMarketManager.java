@@ -484,6 +484,8 @@ final class TaskMarketManager implements Listener {
         return out;
     }
     private JsonObject actionGuidance(Player player, Task task, JsonObject guide) {
+        if(task.steps().get(index(player)).goal()==GuildManager.Goal.SITE_CLEAR)
+            return DungeonAdvice.attach(guide,plugin.siteDungeons().advice(player,task.steps().get(index(player)).site()));
         if (task.steps().get(index(player)).goal() == GuildManager.Goal.REPLANT) {
             Map<String, String> worlds = new HashMap<>();
             for (org.bukkit.World world : Bukkit.getWorlds()) worlds.put(world.getUID().toString(), world.getName());

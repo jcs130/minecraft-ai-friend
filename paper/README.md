@@ -2,7 +2,7 @@
 
 ## 当前状态（2026-10-27）
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.17 / CortiEyeMirror 0.1.17**，官网 **0.8.28**。艾恩葛朗特整图保护和快速往返已上线，详见[地图指引](docs/AINCRAD_TRAVEL_PROTECTION.md)；持久档案与罗盘一级个人箱已上线。源码完整 AgentFriend 为 **0.4.48 开发候选**，不是正式JAR的逐字重建；三段攻略、坦克与战斗成长仍待完整生产验收，见[攻略候选](docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.18 / CortiEyeMirror 0.1.17**，官网 **0.8.28**。四职业、战斗成长、第一层正式攻略及艾恩葛朗特整图保护已上线；[正式发布](docs/RPG_RELEASE_20261027.md)。新的精炼副本指引0.4.47.19与保守反作弊已验证，服主决定先保留候选，未排队部署；[候选说明](docs/DUNGEON_GUIDANCE_20261027.md)。[Vortex原生集成](docs/VORTEX_MMO_INTEGRATION.md)仍在独立测试服，不能用完整0.4.48开发包替换现役JAR。
 
 官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 

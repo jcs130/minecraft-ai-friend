@@ -228,8 +228,8 @@ final class AgentCliCatalog {
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
-        add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查选中地下城的首室深度和逐室路线","只读免费；地点ID从dungeon list读取","私有MC_SITE_DUNGEON_INFO；抵达入口不等于进入首室");
-        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查本人场次、暂停原因与待领奖凭据","只读免费；有凭据无需重打旧场次；查询不领奖或开场","MC_SITE_DUNGEON_STATE；pendingRewards/pendingRewardDetails给出实际领取命令");
+        add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
+        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查空闲可开、占用、故障、当前房间或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认只给当前一步；--json含真实状态和凭据；完整旧结果用--verbose");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
         add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
@@ -402,7 +402,8 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=List.of("status","tasks","skills","inventory","protect","progress","rules");
+                var order=prefix.equals("dungeon.")?List.of("list","info","status","start","join","claim","leave"):
+                        List.of("status","tasks","skills","dungeon","profession","inventory","rules");
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
@@ -419,8 +420,11 @@ final class AgentCliCatalog {
         }catch(IllegalArgumentException invalid){out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("errorCode","INVALID_ARGUMENT");out.addProperty("message",invalid.getMessage());out.addProperty("nextCommand","/mycli --help");}
         return out;
     }
-    private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return (id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static int idEmptyPriority(String prefix,String id,List<String> order){
+        String key=prefix.isEmpty()?id:prefix.equals("dungeon.")?id.substring(prefix.length()):"";
+        return order.contains(key)?order.indexOf(key):order.size();
+    }
+    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
