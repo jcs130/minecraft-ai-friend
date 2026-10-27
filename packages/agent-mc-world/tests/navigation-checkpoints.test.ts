@@ -11,9 +11,14 @@ afterEach(() => { for (const r of rigs.splice(0)) r.close(); vi.useRealTimers();
 function rig() {
   vi.useFakeTimers();
   const h=methodHarness('1.21.1'), bot=h.bot as unknown as Bot, reports:TaskReport[]=[];
-  const stack={name:'beef',count:2,type:h.bot.registry.itemsByName.beef.id};
+  const stack={name:'beef',count:2,type:h.bot.registry.itemsByName.beef.id,slot:36};
+  const slots=Array(46).fill(null);slots[36]=stack;
   Object.assign(h.bot,{supportFeature:(name:string)=>h.bot.registry.supportFeature(name),isAlive:true,
-    inventory:{slots:Array(46).fill(null),selectedItem:null,items:()=>stack.count?[stack]:[]},
+    // This is a path/physics fixture. Food is already in an actual hotbar
+    // slot; inventory packet exchanges are covered by food-consumption-native.
+    inventory:{slots,hotbarStart:36,inventoryStart:9,inventoryEnd:45,selectedItem:null,items:()=>stack.count?[stack]:[]},quickBarSlot:0,
+    getEquipmentDestSlot:(dest:string)=>dest==='hand'?36:45,
+    setQuickBarSlot:vi.fn((slot:number)=>{h.bot.heldItem=slots[36+slot];}),
     equip:vi.fn(async()=>{h.bot.heldItem=stack as never;}),
     consume:vi.fn(async()=>{stack.count--;h.bot.food+=3;}),food:0});
   Object.assign(h.bot.game,{minY:-64,height:384});
@@ -43,7 +48,7 @@ it.each([2,32])('a persistent follow at distance %s yields for a meal and resume
   const original=h.exec.status().running!.id;
   h.exec.submit([{skill:'eat',item:'beef'}],'afterCheckpoint');
   await vi.advanceTimersByTimeAsync(2000);
-  expect((h.bot as any).consume).toHaveBeenCalledTimes(1);
+  expect((h.bot as any).consume,JSON.stringify(h.reports)).toHaveBeenCalledTimes(1);
   expect(h.reports.filter(r=>r.kind==='suspended'&&r.taskId===original)).toHaveLength(1);
   expect(h.exec.status().running).toMatchObject({id:original,skill:'follow',followTarget:'Ally'});
   expect(h.reports.filter(r=>r.kind==='done'&&r.taskId===original)).toHaveLength(0);

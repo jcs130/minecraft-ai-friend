@@ -46,6 +46,7 @@ import { BURNING_BLOCKS, SCORCHING_FLOOR, bodyInWater, canSeeEntity, findBankCel
 import { piglinIsHostile } from './piglin.ts';
 import { corridorSafe } from './idle-actions.ts';
 import { consumeHeldFood } from './skills-craft.ts';
+import { SkillBlocked } from './skill-context.ts';
 import { itemsInReach } from './inventory.ts';
 import { RISKY_FOODS } from './nutrition.ts';
 import {
@@ -1765,8 +1766,7 @@ export class CombatSession {
     if (this.eating) {
       if (foes.some((foe) => foe.reach < 4)) {
         this.cancelCombatFood(bot);
-        const weapon = bestWeapon(bot);
-        if (weapon) void bot.equip(weapon, 'hand').catch(() => undefined);
+        this.armMelee(bot);
         return false;
       }
       return true;
@@ -1779,6 +1779,11 @@ export class CombatSession {
     this.lastFoodAttemptAt = now;
     this.eating = true;
     const generation = ++this.supplyGeneration;
+    const checkActive = (): void => {
+      if (generation !== this.supplyGeneration || this.bot !== bot || this.state === 'idle') {
+        throw new SkillBlocked('战斗补食控制权已变化，停止旧换手与消费', [], 'local', 'execution-context-changed');
+      }
+    };
     this.lowerShield(bot);
     this.opts.ranged?.abort();
     if (this.pathing) {
@@ -1788,9 +1793,8 @@ export class CombatSession {
     this.stopMovement(bot);
     void (async () => {
       try {
-        await bot.equip(food, 'hand');
-        if (generation !== this.supplyGeneration) return;
-        const receipt = await consumeHeldFood(bot, food.name);
+        await equipHandConfirmed(bot, food, checkActive);
+        const receipt = await consumeHeldFood(bot, food.name, checkActive);
         if (generation !== this.supplyGeneration) return;
         this.opts.diag?.write({ lane: 'combat', event: 'combat-food', msg: receipt,
           data: { item: food.name, health: bot.health, food: bot.food } });
@@ -1804,7 +1808,7 @@ export class CombatSession {
         if (generation === this.supplyGeneration) {
           if (this.state !== 'idle') {
             const weapon = bestWeapon(bot);
-            if (weapon) await bot.equip(weapon, 'hand').catch(() => undefined);
+            if (weapon) await equipHandConfirmed(bot, weapon, checkActive).catch(() => undefined);
           }
           this.eating = false;
         }
