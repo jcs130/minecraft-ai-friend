@@ -4,6 +4,7 @@ import minecraftData from 'minecraft-data';
 import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BattlefieldObserver, BATTLEFIELD_CHANNEL } from '../core/battlefield.ts';
+import { configureObservationPolicy } from '../core/perception-sight.ts';
 
 const ownUuid = '00000000-0000-0000-0000-000000000001';
 const allyUuid = '00000000-0000-0000-0000-000000000002';
@@ -56,6 +57,8 @@ describe('programmatic battlefield observations', () => {
     r.bot.blockAt = (p: Vec3) => ({ name: 'air', position: p, shapes: [] });
     expect(r.sample(1100).actors.find(e => e.entityId === 3)?.position).toEqual([3,64,0]);
     r.bot.entity.yaw = Math.PI / 2;
+    expect(r.sample(1100).actors.find(e => e.entityId === 3)?.position).toEqual([3,64,0]);
+    configureObservationPolicy(r.bot, () => ({ entityView: 'camera' }));
     expect(r.sample(1100).actors.find(e => e.entityId === 3)).toBeUndefined();
   });
   it.each(['1.20.6', '1.21.4'])('reads health using the %s registry and keeps missing player health unknown', version => {

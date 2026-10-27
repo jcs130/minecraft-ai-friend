@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "id": "rpg-skills-release-20261027",
+  "state": "deployed",
+  "version": "0.4.47.18",
+  "jarSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+  "verifiedAt": "2026-10-27T01:15:36.750Z",
+  "sourceCommit": "39a2e9f9",
+  "candidate": "rpg-skills-candidate-20261027.json",
+  "backup": {
+    "stamp": "20261027-084146",
+    "EComplete": true,
+    "FComplete": true,
+    "latestPlayerConfigPreserved": true
+  },
+  "installedFiles": 14,
+  "coldBackupCopiesVerified": {
+    "playerFiles": 318,
+    "privateFiles": 57,
+    "otherJars": 40
+  },
+  "postStartDataAudit": {
+    "profiles": 96,
+    "roleAndSkillFieldsRetained": 96,
+    "playerInventoriesChecked": 203,
+    "unchangedPlayerInventories": 200,
+    "connectedInventoriesChangedAfterReconnection": 3,
+    "allEnderInventoriesRetained": true,
+    "personalTrialBoxesRetained": true,
+    "minepacks": {
+      "old": 34,
+      "current": 34,
+      "unchangedContents": 33,
+      "changedBackpackOldItemsRetained": 52,
+      "newItems": [
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        }
+      ]
+    }
+  },
+  "initialVerifierIssue": "Case-only SHA256 comparison incorrectly failed after installation. Original failed receipt retained; normal recovery startup and post-start reconciliation verified. No repeated restart.",
+  "candidateValidation": {
+    "rules": {
+      "combat": 234,
+      "story": 30,
+      "conquest": 16,
+      "protectionSamples": 24529,
+      "compactCli": 97,
+      "cliContract": 80,
+      "journeyCatalog": 80,
+      "hitTiming": 8
+    },
+    "installer": 18,
+    "probes": [
+      {
+        "label": "strike49",
+        "checks": 7,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 1,
+        "clientReportSha256": "adba1eaa6ee6f1a47c4a31d21accb066ceddce738e75a896231ef95b23fd4807"
+      },
+      {
+        "label": "skills51",
+        "checks": 12,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 2,
+        "clientReportSha256": "b6cf07668621d77772cab566219c23d56fb41456d120674a15921c931ab901b9"
+      },
+      {
+        "label": "soloeasy50",
+        "checks": 28,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 1,
+        "clientReportSha256": "28ee0475d1277fcf833fc3335dd08f1697533f1ef3a102e99146638c8a781475"
+      },
+      {
+        "label": "rescue52",
+        "checks": 9,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 2,
+        "clientReportSha256": "9e53cd86bad21f42f658489b18e168b74ac2987c6cf845ea81dbbdf25d56cde1"
+      },
+      {
+        "label": "coldsolo50",
+        "checks": 9,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 1,
+        "clientReportSha256": "79df89cfb90a9376549c24d02c1fbb8a20c30fd6fec4a2c4bef8bfc1d289a7ad"
+      }
+    ],
+    "portalSavedDataChecks": 8,
+    "qaUploadedToProduction": false,
+    "migration": {
+      "originalProfiles": 95,
+      "allOriginalProfilesDeepEqual": true,
+      "productionProfilesOverwritten": false,
+      "replicaSourceSha256": "45c8796be303832622a43c88544e3987aa37e513f61f78d4e0cc8c79310ba72c"
+    },
+    "solo": {
+      "difficulty": "Easy matching current map",
+      "startLevel": 1,
+      "endLevel": 3,
+      "xp": 292,
+      "kills": 7,
+      "basicAttackPackets": 47,
+      "successfulOffensiveSkills": 4,
+      "legitimateSelfHeals": 1,
+      "adminRecoveries": 0
+    },
+    "failedEvidencePreserved": [
+      "solo49: Normal difficulty level-one character died; not a clear",
+      "skills48/skills50 and rescue50: fixture enemy targeted a different player, so WorldGuard correctly denied indirect PvP",
+      "rescue51: client attack phase did not complete; retained as a failed attempt, not a clear",
+      "earlier interrupted navigation and pre-final artifact probes retained"
+    ],
+    "limitations": [
+      "not a long-term autonomous LLM or all-server regression",
+      "QA copy has existing unavailable protection masks, photo service and some structure definitions; those paths remain fail closed",
+      "Mineflayer ArmorTrimMaterial/SlotComponent partial-read warnings remain",
+      "current public website and downloadable Skill have not been republished"
+    ]
+  },
+  "productionChecks": 42,
+  "components": {
+    "minecraft": "1.21.1",
+    "paper": 133,
+    "TAB": "6.2.1",
+    "MythicMobs": "5.9.5",
+    "professions": 4,
+    "professionSkills": 23,
+    "formalFloors": 1,
+    "sites": 5
+  },
+  "website": "0.8.28, existing challenge collector; no website restart",
+  "downloadableSkillRepublished": false,
+  "goddessHandbookUpdated": true,
+  "goddessReadVerified": false,
+  "rollback": "Preserve new profiles, items and receipts. After tank learning/new progression, retain compatible JAR and disable new combat/conquest controllers; never overwrite later progress with the cold snapshot."
+}

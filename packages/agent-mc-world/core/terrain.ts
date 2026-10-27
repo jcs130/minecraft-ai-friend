@@ -8,7 +8,7 @@
  */
 import { Vec3 } from 'vec3';
 import { headWaterObservation } from './water-observation.ts';
-import { observedEntity, observationView } from './perception-sight.ts';
+import { observedEntity, observationView, entityObservationScope } from './perception-sight.ts';
 import { spatialSites } from './spatial-site.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
@@ -190,6 +190,7 @@ export interface WorldSnapshot {
   entities: EntityInfo[];
   /** 截断掉了几条:她无从分辨"没报"是没有还是没给,这个数把两者分开 */
   entitiesOmitted: number;
+  entityObservation?: ReturnType<typeof entityObservationScope>;
   /** 实际脚部接触的支撑/流体；null 为未知，air 为未接地。 */
   standingOn: string | null;
   footing?: FootingReading;
@@ -473,7 +474,9 @@ export function narrateWorldSegments(
   const seen = s.entities.filter((e) => e.visible);
   const seenMobs = seen.filter((e) => !isDroppedItem(e));
   const seenDrops = seen.filter((e) => isDroppedItem(e));
-  const lifeLines: string[] = [];
+  const lifeLines: string[] = s.entityObservation
+    ? [`${s.entityObservation.view === 'camera' ? '朝向视野' : '周边视线'}（${s.entityObservation.range} 格范围，遮挡与未加载区域未知）。`]
+    : [];
   if (seenMobs.length > 0) {
     lifeLines.push(
       '看得见的：' +
@@ -490,6 +493,7 @@ export function narrateWorldSegments(
   if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个更远的没列进来。`);
   lifeLines.push(...narrateDrops(seenDrops));
   const lifeCmp = [
+    ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}`] : []),
     ...seenMobs.map((e) => `见:${e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
       `落:${e.item?.name ?? 'item'}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? 1}`,
@@ -961,9 +965,6 @@ const FARMLAND_MAX_MOISTURE = 7;
  */
 const CONTAINER_BLOCKS = new Set<string>([...CHEST_BLOCKS, ...FURNACE_BLOCKS]);
 const CONTAINER_NEARBY_CAP = 4;
-
-/** 自动摘要的近景预算；听觉独立消费真实声音包。 */
-const SNAPSHOT_ENTITY_RANGE = 16;
 
 /**
  * 视线射线允许穿过各色普通玻璃、玻璃板与铁栏杆的碰撞箱。
@@ -1764,13 +1765,14 @@ export function snapshotFromBot(
   const maxEntities = opts?.maxEntities ?? 12;
   const me = bot.entity;
   const pos = me.position;
+  const entityObservation = entityObservationScope(bot);
 
   const entities: EntityInfo[] = [];
   for (const id of Object.keys(bot.entities)) {
     const e = bot.entities[id];
     if (!e || e === me || !e.position) continue;
     const d = e.position.distanceTo(pos);
-    if (d > SNAPSHOT_ENTITY_RANGE) continue;
+    if (d > entityObservation.range) continue;
     const name = e.type === 'player' ? (e.username ?? 'player') : (e.name ?? e.displayName ?? 'unknown');
     // 飞行中/插在地上的射弹:看得见也不报
     if (e.name && NOISE_ENTITIES.has(e.name)) continue;
@@ -1935,6 +1937,7 @@ export function snapshotFromBot(
     effects: readEffects(bot),
     entities: entities.slice(0, maxEntities),
     entitiesOmitted: Math.max(0, entities.length - maxEntities),
+    entityObservation,
     standingOn: footing.block,
     footing,
     nearbyBlocks,

@@ -1,5 +1,5 @@
 import type { ToolDef } from './support/host-contract.ts';
-import { observedEntity } from './perception-sight.ts';
+import { observedEntity, entityObservationScope } from './perception-sight.ts';
 import { classifyEntity } from './terrain.ts';
 import { zhEntity } from './names.ts';
 
@@ -68,7 +68,7 @@ export class AttentionReader {
       :this.mode==='combat'?6:['player','npc'].includes(row.kind)?3:4;
     const selected=rows.filter(row=>entityId!==undefined?row.entity.id===entityId:risk||this.mode==='combat'
       ?['warning','hostile'].includes(row.kind):true).sort((a,b)=>priority(a)-priority(b)||a.distance-b.distance).slice(0,limit);
-    return {sampledAt:now,mode:this.mode,source:'eye-line-of-sight',
+    return {sampledAt:now,mode:this.mode,source:'eye-line-of-sight',observation:entityObservationScope(bot),
       highlights:selected.map(({entity:e,kind,distance,prediction})=>({id:e.id,label:zhEntity(e.name??'unknown'),kind,distance:round(distance),
         at:[round(e.position.x),round(e.position.y),round(e.position.z)],relation:kind==='player'?'未确认':undefined,
         ...(risk?{attackRange:null,sightRange:null,prediction,priority:kind==='warning'?'高':distance<6?'近距注意':'观察'}:{})})),

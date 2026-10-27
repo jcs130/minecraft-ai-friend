@@ -44,6 +44,10 @@ export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
   validateReferenceConfig(cfg.knowledge);
   if (cfg.perception?.mineralVision !== undefined && typeof cfg.perception.mineralVision !== 'boolean')
     throw new Error('perception.mineralVision must be a boolean. Default false.');
+  if (cfg.perception?.entityView !== undefined && !['surroundings', 'camera'].includes(cfg.perception.entityView))
+    throw new Error('perception.entityView must be surroundings or camera.');
+  if (cfg.perception?.entityRange !== undefined && (!Number.isInteger(cfg.perception.entityRange) || cfg.perception.entityRange < 1 || cfg.perception.entityRange > 64))
+    throw new Error('perception.entityRange must be an integer from 1 to 64 blocks.');
   if (cfg.memoryAgentId !== undefined && (typeof cfg.memoryAgentId !== 'string' || !cfg.memoryAgentId.trim() || cfg.memoryAgentId.length > 160 || /[\x00-\x1f\x7f]/.test(cfg.memoryAgentId)))
     throw new Error('memoryAgentId must be a stable non-empty identifier, at most 160 characters.');
   if (cfg.skinModel !== undefined && !['classic', 'slim'].includes(cfg.skinModel)) throw new Error('Unknown skin arm model');
