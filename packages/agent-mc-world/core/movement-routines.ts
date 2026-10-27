@@ -92,7 +92,8 @@ for (let i=0;i<(params.maxPulses===undefined?12:params.maxPulses);i++) {
   const keys=[];
   if (Math.hypot(dx,dz)>0.3) keys.push('forward');
   if (target.y-from.y>0.2) keys.push('jump');
-  const group=await mc.do([{skill:'control',mode:'water',keys,yawDeg,durationMs:params.pulseMs===undefined?500:params.pulseMs}]);
+  const group=await mc.do([{skill:'control',mode:'water',keys,
+    ...(keys.includes('forward')?{yawDeg}:{}),durationMs:params.pulseMs===undefined?500:params.pulseMs}]);
   state=group.state;
   stop=unsafe();
   const met=!stop && arrived();

@@ -6900,6 +6900,7 @@ export class MinecraftWorld implements World {
         this.pwsr.statusLine() ?? '',
       ].filter(Boolean).join('\n'),
       true,
+      { meta: { connection: { phase: 'spawned', generation: connectionGeneration } } },
     );
     // 服务端起来时回读到的难度:挂到这一刻才送得到她眼前(见 onServerDifficulty)
     this.initialSceneStop = observeInitialScene(bot, () => this.bridge?.bot === bot, () => {

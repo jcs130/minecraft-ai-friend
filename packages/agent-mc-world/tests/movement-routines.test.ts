@@ -27,7 +27,7 @@ function rig(id: string, params: Record<string, unknown>, options: {
     const old={...p};
     if (!options.denied && !options.unchanged) {
       if (step.skill==='control') {
-        yaw+=step.yawDeg*Math.PI/180;
+        yaw+=(step.yawDeg ?? 0)*Math.PI/180;
         if (!options.noProgress) p={x:p.x-Math.sin(yaw),y:p.y,z:p.z-Math.cos(yaw)};
       } else p={x:step.at[0]+0.5,y:step.at[1],z:step.at[2]+0.5};
     }
@@ -78,6 +78,12 @@ describe('bounded movement routine receipts',()=>{
     const r=rig('swim_to',{dimension:'overworld',at:[2,64,0],within:0.5});
     expect(await r.terminal).toMatchObject({result:{goalCompleted:true,outcome:'completed',remaining:[]}});
     expect(r.actions).toHaveLength(2);expect(r.actions[0]).toMatchObject({skill:'control',mode:'water',yawDeg:-90,keys:['forward'],durationMs:500});
+  });
+  it('does not rotate on pure vertical swim pulses when horizontal drift is within tolerance',async()=>{
+    const r=rig('swim_to',{dimension:'overworld',at:[0,67,0]},{noProgress:true});
+    expect(await r.terminal).toMatchObject({result:{goalCompleted:false,reason:'no_progress'}});
+    expect(r.actions).toHaveLength(3);
+    for(const step of r.actions){expect(step.keys).toEqual(['jump']);expect(step).not.toHaveProperty('yawDeg');}
   });
   it.each([{oxygen:8},{oxygen:null}])('will not submerge with unusable oxygen %j',async options=>{
     const r=rig('swim_to',{dimension:'overworld',at:[1,63,0]},options);

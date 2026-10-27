@@ -1,11 +1,17 @@
 # Agent MC World
 
-Development candidate rc.113 adds [logical chat transport receipts](docs/chat-delivery.md)
+Development candidate **rc.115** freezes shared viewer `c0b9a7a6`: first-person
+cave section visibility, legacy server-skin preview normalization and exact
+original armor paths including modern copper equipment. All shipped asset
+versions were rebuilt. See [viewer scope](docs/viewer-rc115.md). Host model
+continuation remains a host policy, with no additional model loop in this SDK.
+
+The inherited rc.113 changes add [logical chat transport receipts](docs/chat-delivery.md)
 so SDK/MCP and host consumers can distinguish admitted chat from actual client
 dispatch and correlate queued messages to their task step. Sending does not imply
 recipient acknowledgment or completion of an action described in the message.
 
-Published package: **0.5.7-rc.89** on npm's **next** tag and [GitHub Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.89). Install this preview with `npm install agent-mc-world@0.5.7-rc.89`. Java **1.21.1** remains the primary target; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
+Published npm preview at preparation time: **0.5.7-rc.99** on **next**. The rc.115 candidate is not an npm publication; verify final release receipts before changing a production pin. Java **1.21.1** remains primary; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
 
 Development candidate **0.5.7-rc.99** includes independent, explicitly declared
 [read-only server queries](docs/server-query-lifecycle.md) that do not wait behind
@@ -15,7 +21,7 @@ explicit unknowns when world snapshots are unavailable, validated batch message
 reads, verified opening-spell candidates, script-worker versus body-lease checks,
 and idempotent attributed-note retries. It retains the rc.90 composter fix, whose
 receipts distinguish compost level, item consumption and actual bone-meal gain.
-This candidate is not an npm release; the published preview remains rc.89.
+The rc.99 preview is now published; the following notes preserve its feature scope.
 
 [Journey decisions](docs/journey-decisions.md) retain current route observations
 and configurable movement tolerance while the host considers a short visit.
