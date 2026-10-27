@@ -1,5 +1,7 @@
 ## 2026-10-28 mcbot Paper适配与玩家名单修复：候选
 
+服主在最终评审中明确选择“先保留候选”。本批mcbot及配套Numen/Guard/Vision均不安排维护，不得用旧授权发布；源已推main、E/F候选及回退核验，正式JAR不变。
+
 服主选择现有Paper、共用千灯纪世界。新增独立QiandengjiMcbot0.1.0，复用Numen原身体/背包/权限/执行器；MCBot上游ARR只读，不复制或重发。Numen窄补通用驾驶席、临时程序/精确取消、待处理挖掘释放、旧快照不误清归属及熔炉成品精确取出；LoginGuard0.1.7从现役0.1.5窄构建，保留原PortalBridge，不带一般0.1.6候选。AgentVision0.1.3修复Bukkit玩家隐藏造成假离开/加入，真实连接和遮挡保持。文档见paper/integrations/mcbot/README.md及paper/docs/PLAYER_ROSTER_OCCLUSION_20261028.md。
 
 所有变更仍为候选，生产仍AF0.4.47.21/Numen0.1.4/Guard0.1.5/Vision0.1.2；本轮未重启或写正式世界。独立协议驱动不等于原生Fabric界面、真实LLM或全32工具已验；原mcbot工具表也没有/mycli扩展，不能声称它已会自主RPG。发布须新维护授权、原预告/真人/副本门禁及E/F全冷备，不重放旧维护。world-activity.py/shared_file_read.py为其他修改，不提交。另会话已在线修通旅人营地红帐篷南口，旧门洞坐标记忆不可再当现状；不要重复施工。

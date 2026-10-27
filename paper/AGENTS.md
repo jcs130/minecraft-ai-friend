@@ -1,5 +1,7 @@
 ## 2026-10-28 mcbot与玩家名单候选：未部署
 
+最终评审服主明确选择“先保留候选”：mcbot及本批配套Numen/Guard/Vision全部暂不发布、不安排重启；旧维护授权不可复用。
+
 现有Paper1.21.1世界接入独立mcbot协议后端，复用Numen，不部署Fabric服务端或复制ARR上游。Numen驾驶席、远程任务不重放、精确取消/挖掘释放、归属缓存和熔炉取出为窄补；Guard0.1.7从现役0.1.5窄构建并保留PortalBridge，禁止夹带0.1.6全量账号候选。Vision0.1.3只改玩家场景跟踪、不移除TAB身份，修Corti/CorMy假上下线。候选与边界见integrations/mcbot/README.md和docs/PLAYER_ROSTER_OCCLUSION_20261028.md；原生mcbot界面/真实LLM/代理全链仍须另验，不能说全32工具/RPG客户端已支持。生产JAR和玩家数据没改，没有本次重启授权；保留原维护门禁与双盘全冷备。两个独立ops修改不提交，营地帐篷另一会话已在线修通，不重复施工。
 
 ## 2026-10-27 破晓攻略：Vortex六职业已正式上线

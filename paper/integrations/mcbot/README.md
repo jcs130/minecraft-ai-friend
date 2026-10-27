@@ -2,6 +2,8 @@
 
 2026-10-28：服主已选择接入现有 Paper、共用千灯纪世界。本目录独立实现协议适配；**尚未部署，不代表官方 mcbot 原包已能驱动正式服**。
 
+完成候选评审后，服主明确选择**先保留候选**。代码已推送main，E/F候选与原JAR回退均已核验；正式服及代理不替换、不重启，后续上线须另获维护授权。
+
 核对上游 [qaqms/mcbot](https://github.com/qaqms/mcbot) 主干 `12d3e05fb9a417d4b2d53e6c16a77b8f4247194f` 与官方测试版 [v0.1.0](https://github.com/qaqms/mcbot/releases/tag/v0.1.0) `80b556a1d54cba1aee29d1bd978cf6b9cf5f645d`：两者均要求 Minecraft 1.21.11、Fabric Loader 0.19.5、Fabric API 0.141.6、Java21。发布版有17个客户端工具，当前源码有32个；同为0.1.0不能当作相同能力版本。
 
 ## 接入边界

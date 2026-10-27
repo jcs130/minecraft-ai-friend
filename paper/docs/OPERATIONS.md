@@ -1,5 +1,7 @@
 ## 2026-10-28 mcbot/玩家名单修复仍为候选
 
+服主最终选择“先保留候选”。本批不写pending、不停启服务、不替换正式JAR；后续须重新取得这批的维护授权。
+
 本轮没有正式停启、改密码或写玩家世界。mcbot独立Paper后端、配套Numen API/内容、LoginGuard0.1.7窄补和AgentVision0.1.3须当次维护授权后部署；不可重放.21旧维护授权或使用/reload替换JAR。Guard窄构建保留现役0.1.5的PortalBridge，不可带入一般0.1.6全量账号候选。必须先预告、查真人/活动副本、正常停服、完成E/F最新完整冷备，再按固定摘要替换；不复制QA世界、测试原生检查插件或QA角色。回退只恢复旧JAR，保留最新Numen/账号库/世界/角色与mcbot绑定。文档见../integrations/mcbot/README.md、PLAYER_ROSTER_OCCLUSION_20261028.md。旅人营地红帐篷南口已由另会话在线修通，不重复施工；本轮未改Goddess/玩家权限。
 
 ## 2026-10-27 破晓攻略：Vortex六职业已正式上线

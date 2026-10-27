@@ -1,6 +1,7 @@
 {
   "schemaVersion": 0,
   "status": "candidate-not-deployed",
+  "ownerDecision": "hold-candidate",
   "requiresFreshMaintenanceApproval": true,
   "fullColdBackupCompleted": false,
   "adapter": "QiandengjiMcbot 0.1.0",
