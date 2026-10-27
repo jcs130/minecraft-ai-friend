@@ -1,11 +1,18 @@
 import unittest
 import json
-from build_addons import lower_own_requirement
+from build_addons import lower_own_requirement, registration_policy_source
 from language_json import parse_language, NORMALIZATIONS
 from build_gateway import CODEC_MOD_HASHES, validate_codec_manifest
 
 
 class BuildPolicyTests(unittest.TestCase):
+    def test_beta_registration_is_an_explicit_jvm_policy(self):
+        original='if(auth!=null&&auth.getClass().getMethod("stage").invoke(auth).toString().equals("REGISTER")&&!reserved(p)){release(p);}'
+        changed=registration_policy_source(original)
+        self.assertIn('System.getProperty("maw.guest-login","true")',changed)
+        self.assertIn('{release(p);}',changed)
+        with self.assertRaisesRegex(ValueError,'Review changed'):registration_policy_source('unknown source')
+
     def test_native_codecs_require_the_reviewed_mod_bytes(self):
         validate_codec_manifest({'files': dict(CODEC_MOD_HASHES)})
         altered = dict(CODEC_MOD_HASHES)

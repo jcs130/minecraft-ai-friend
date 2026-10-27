@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "baseClient": "TauCeti-ATM10-CF-1.3.2",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.234",
+  "server": "micro.kangqiang.site:28976",
+  "files": [
+    {
+      "name": "AeroEngine-1.3.0.jar",
+      "url": "https://cdn.modrinth.com/data/CRh10iJF/versions/eqi1VZul/AeroEngine-1.3.0.jar",
+      "sha256": "5d9f86d8345beb25189e21044ecd19c9140c77c6e9010fb1a7f2250fde775e05",
+      "bytes": 1589690
+    },
+    {
+      "name": "aeroworks-1.5.0.jar",
+      "url": "https://cdn.modrinth.com/data/P26k79kP/versions/6kk7ruR3/aeroworks-1.5.0.jar",
+      "sha256": "7e9745569a75eb613a9f75c9308aa2c806d3f0fab3a272d98647a13d3fa41641",
+      "bytes": 790152
+    },
+    {
+      "name": "azimuth-1.4.9.jar",
+      "url": "https://cdn.modrinth.com/data/RpH8tmT1/versions/j7UkVY7e/azimuth-1.4.9.jar",
+      "sha256": "15b42b6ff69d567c57760c7965a2f744ac127888934d55ce1cb89df4480f0284",
+      "bytes": 143078
+    },
+    {
+      "name": "baguettelib-1.21.1-NeoForge-2.0.6.jar",
+      "url": "https://cdn.modrinth.com/data/OfKzpbRU/versions/OpiO7Pem/baguettelib-1.21.1-NeoForge-2.0.6.jar",
+      "sha256": "b063969bb7dcd69ce758f0a7446b87702fff662f8be2e55913ac76fcdb57ef7f",
+      "bytes": 81947
+    },
+    {
+      "name": "bits_n_bobs-2.3.5.jar",
+      "url": "https://cdn.modrinth.com/data/T8bvmqVZ/versions/g9Lmjjc5/bits_n_bobs-2.3.5.jar",
+      "sha256": "3e1647383c6ed1d629b6f20210179d5870bcbf8ba2a2a0ec58af69b53513db68",
+      "bytes": 2433531
+    },
+    {
+      "name": "cmpackagecouriers-neoforge-2.3.0.jar",
+      "url": "https://cdn.modrinth.com/data/GRqrodjM/versions/rv1JwLWn/cmpackagecouriers-neoforge-2.3.0.jar",
+      "sha256": "76e728a765ee04a53e566eda6b302a05ff855965dcf0230cc33f3dd2c1836e8b",
+      "bytes": 284825
+    },
+    {
+      "name": "collective-1.21.1-8.39.jar",
+      "url": "https://cdn.modrinth.com/data/e0M1UDsY/versions/4XRlrKGN/collective-1.21.1-8.39.jar",
+      "sha256": "ae59b63790c3097fb01e7801c21f3e7feed13b151c2ad993895196c74381a8fe",
+      "bytes": 1061931
+    },
+    {
+      "name": "copycats-3.0.9+mc.1.21.1-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/UT2M39wf/versions/bPYeUWZx/copycats-3.0.9%2Bmc.1.21.1-neoforge.jar",
+      "sha256": "d1efdd8688af6603dff9425299ac4547ef56a7d5cfee757716ead7853276694e",
+      "bytes": 1799381
+    },
+    {
+      "name": "coroutil-neoforge-1.21.0-1.3.8.jar",
+      "url": "https://cdn.modrinth.com/data/rLLJ1OZM/versions/H2YXCYUY/coroutil-neoforge-1.21.0-1.3.8.jar",
+      "sha256": "9b32bcf2c793d33b93b5d4739c0dc4b64231025c7dc5fe40732b66d7cf4b2826",
+      "bytes": 63981
+    },
+    {
+      "name": "cosmonauticsdeepair-1.0.2.jar",
+      "url": "https://cdn.modrinth.com/data/rzqxJXfo/versions/IxjdMVIp/cosmonauticsdeepair-1.0.2.jar",
+      "sha256": "364ed0abe3124f65e52463727690a140aefc6519791d32072b4c6d70c3ee66fb",
+      "bytes": 31730
+    },
+    {
+      "name": "Create Encased-1.21.1-1.9.0-ht3.jar",
+      "url": "https://cdn.modrinth.com/data/hSSqdyU1/versions/t6MATlU9/Create%20Encased-1.21.1-1.9.0-ht3.jar",
+      "sha256": "e93bb110241ab8283c6238590eb04f1fb37199815623f53f3e981ee650f344a3",
+      "bytes": 3110804
+    },
+    {
+      "name": "create-aeronautics-bundled-1.21.1-1.3.2.jar",
+      "url": "https://cdn.modrinth.com/data/oWaK0Q19/versions/44pLdPGg/create-aeronautics-bundled-1.21.1-1.3.2.jar",
+      "sha256": "a3f330d4757640f8715d991a43eedb826e4d0e51558d859c843ae6693bd35f1e",
+      "bytes": 33123131
+    },
+    {
+      "name": "create-crimsite-recipe-1.jar",
+      "url": "https://cdn.modrinth.com/data/t1fcPMyu/versions/eATkXzQ2/create-crimsite-recipe-1.jar",
+      "sha256": "4c21b0bcd37db06c2e214a65ce4b43e044cd6bc4ae85e28dc45c57861239e711",
+      "bytes": 1963
+    },
+    {
+      "name": "create-glowstone-dust-recipe-1.jar",
+      "url": "https://cdn.modrinth.com/data/W8VGEPty/versions/iVr0T4j0/create-glowstone-dust-recipe-1.jar",
+      "sha256": "98466990030791de4bc109c86e74e7f3ad35b352defd6f72d11e624f98fafffd",
+      "bytes": 1879
+    },
+    {
+      "name": "create-ochrum-recipe-1.jar",
+      "url": "https://cdn.modrinth.com/data/r6SlWTQ5/versions/iwb4FMqV/create-ochrum-recipe-1.jar",
+      "sha256": "7baf58b7bd7ed43b1d8a06cfb58e2925e0c4c4ae0d361ae5b52bd6a0a32c481a",
+      "bytes": 1929
+    },
+    {
+      "name": "create-redstone-recipe-1.jar",
+      "url": "https://cdn.modrinth.com/data/CYSgjm6s/versions/fwgphbRy/create-redstone-recipe-1.jar",
+      "sha256": "2cef4db10bf518df0064fbcac20d9da28991cf9e4c4c3b2c318f3389dd521a7a",
+      "bytes": 1884
+    },
+    {
+      "name": "create-track-map-2.1+mc1.21.1-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/NHRXB9Bi/versions/EYyY9A0V/create-track-map-2.1%2Bmc1.21.1-neoforge.jar",
+      "sha256": "e708b13d9c7b3e551a65b40ba96b7b1974fab001437be276a140f215b1369978",
+      "bytes": 3274545
+    },
+    {
+      "name": "createbigcannons-5.11.7+mc.1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/GWp4jCJj/versions/bOiDu0LS/createbigcannons-5.11.7%2Bmc.1.21.1.jar",
+      "sha256": "ea017ab94637032d039899d88404838d173fa0e6286657cae6a6c3af459e87ca",
+      "bytes": 3771506
+    },
+    {
+      "name": "createcontraptionterminals-1.21-1.4.0.jar",
+      "url": "https://cdn.modrinth.com/data/gOPAFzp0/versions/gBvq8zOa/createcontraptionterminals-1.21-1.4.0.jar",
+      "sha256": "ce67a1d5543a1629460bcfd530f595e024fc89ebb7861bf1094aa398df19d9ee",
+      "bytes": 91226
+    },
+    {
+      "name": "createdieselgenerators-1.21.1-1.3.15.jar",
+      "url": "https://cdn.modrinth.com/data/ZM3tt6p1/versions/UoPH8lO1/createdieselgenerators-1.21.1-1.3.15.jar",
+      "sha256": "56ef1d574278fc311f1ffa223dbd613077b899354a18d01ae8dca2578a4e2990",
+      "bytes": 3154746
+    },
+    {
+      "name": "createendertransmission-2.1.1-1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/wtW8g4TG/versions/eI9pk5JC/createendertransmission-2.1.1-1.21.1.jar",
+      "sha256": "13f237796ba51312a385ebd55b252c55598d49bcf677ea68f0bfb9bd88c23b63",
+      "bytes": 84366
+    },
+    {
+      "name": "createfactorycontroller-1.2.1-neoforge-1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/VR3MrvE2/versions/CBUpgyAH/createfactorycontroller-1.2.1-neoforge-1.21.1.jar",
+      "sha256": "df2abbd1c225d310dd4b7c54f8100cfdc92d4800d14e8e64507d522efcdc73ad",
+      "bytes": 2123625
+    },
+    {
+      "name": "CreateFastSchematicCannon-2.6.1-neoforge-1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/DebMSCVn/versions/bG6IJw6J/CreateFastSchematicCannon-2.6.1-neoforge-1.21.1.jar",
+      "sha256": "6d5ea8f1a7db565baf8d5ab8823fdbb25ed6cd0e47f028ac6c820c1ad993fd07",
+      "bytes": 73994
+    },
+    {
+      "name": "createoreexcavation-1.21-1.6.8.jar",
+      "url": "https://cdn.modrinth.com/data/ResbpANg/versions/tivxiPTo/createoreexcavation-1.21-1.6.8.jar",
+      "sha256": "d3a2e1a6e65de7e50ae9e279de399b6535da407abc8e6b4688a56f2e461aab99",
+      "bytes": 476990
+    },
+    {
+      "name": "createpropulsion-1.1.5.jar",
+      "url": "https://cdn.modrinth.com/data/ApkoHNO9/versions/H13U56dc/createpropulsion-1.1.5.jar",
+      "sha256": "5525a3a0c8b1c476cbc467d021e9d1492b58c78de31ed269eb04f169d42db0a1",
+      "bytes": 1707765
+    },
+    {
+      "name": "createrailwaysnavigator-neoforge-1.21.1-beta-0.9.1-C6.jar",
+      "url": "https://cdn.modrinth.com/data/Dq3STxps/versions/hjpv7klQ/createrailwaysnavigator-neoforge-1.21.1-beta-0.9.1-C6.jar",
+      "sha256": "336536a181faf6db7f756393248e786382fdd0c1c2760ff2dfc4b265859321b7",
+      "bytes": 2071249
+    },
+    {
+      "name": "create_connected-1.3.3-mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/Vg5TIO6d/versions/Xe7EqzfQ/create_connected-1.3.3-mc1.21.1.jar",
+      "sha256": "0c5eb9ffb5c8d71e6e2a39023feb85c51adfb10d38949bc47c4abbd53b351a4f",
+      "bytes": 6786783
+    },
+    {
+      "name": "create_copper_and_zinc-2.0.0-neoforge-1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/aqYNR6rI/versions/1Z1LCW5Z/create_copper_and_zinc-2.0.0-neoforge-1.21.1.jar",
+      "sha256": "1882e3102771ed2db4ba7f62c0b500d7a40e4d2c1823700c2fa55a75b77359f9",
+      "bytes": 98709
+    },
+    {
+      "name": "create_easy_structures-0.2a-neoforge-1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/z69Pxatv/versions/ECkmsrG4/create_easy_structures-0.2a-neoforge-1.21.1.jar",
+      "sha256": "8d5949114e9dd506c4a8598f789e63678fdf6b2b90f40a8e6ef2babc6f56029f",
+      "bytes": 469490
+    },
+    {
+      "name": "create_power_loader-2.0.5-mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/wPQ6GgFE/versions/3Y4r0ItR/create_power_loader-2.0.5-mc1.21.1.jar",
+      "sha256": "69fb0433dcba1597e7fbc06b2731ebd441f8ed99e20d8ec798d852d6865d1bd7",
+      "bytes": 442369
+    },
+    {
+      "name": "create_radar-0.4.9.4-1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/BLu2Yqfq/versions/AntNFNAx/create_radar-0.4.9.4-1.21.1.jar",
+      "sha256": "4554359fee389b1c255b4cef23ac41e978b2a371cec9e952185f4ec0a90ee930",
+      "bytes": 2990812
+    },
+    {
+      "name": "create_sophback_compat-1.0.jar",
+      "url": "https://cdn.modrinth.com/data/BAEkFrvn/versions/MGpIgh9e/create_sophback_compat-1.0.jar",
+      "sha256": "5eee67aff06d3355cbd06b6190551e109884a43465da3671f9d2735a07eba3c3",
+      "bytes": 679850
+    },
+    {
+      "name": "create_submarine-3.3.0.jar",
+      "url": "https://cdn.modrinth.com/data/mva5q4qZ/versions/8CV1LRTl/create_submarine-3.3.0.jar",
+      "sha256": "99709e004c8a7a36cb3439c0200ffd0c8ff5d7ca4fb77d49f76395d803864ba1",
+      "bytes": 8109785
+    },
+    {
+      "name": "create_synthetic_pressure-1.0.1.jar",
+      "url": "https://cdn.modrinth.com/data/DFKpjlu6/versions/S3pAqL5x/create_synthetic_pressure-1.0.1.jar",
+      "sha256": "6e1762f5daf54c14ebe927714d917016a11bd8ea43b1d7a0abbf31d7179d3a64",
+      "bytes": 55864
+    },
+    {
+      "name": "create_tweaked_controllers-1.21.1-1.2.7.jar",
+      "url": "https://cdn.modrinth.com/data/H6bJ8Ju4/versions/csCe2v7f/create_tweaked_controllers-1.21.1-1.2.7.jar",
+      "sha256": "eda56263fabfcf4064dbaa8950a7f469775d4457dc807ee84ba29169690fda34",
+      "bytes": 303343
+    },
+    {
+      "name": "CreativeCore_NEOFORGE_v2.13.44_mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/OsZiaDHq/versions/JX9o5pJD/CreativeCore_NEOFORGE_v2.13.44_mc1.21.1.jar",
+      "sha256": "016eaec4445863874b51130a146346f1d862b92f1c4168333fbc219aa1e5d328",
+      "bytes": 1232783
+    },
+    {
+      "name": "dragonlib-neoforge-1.21.1-beta-3.0.28.jar",
+      "url": "https://cdn.modrinth.com/data/sbIsGaOV/versions/x376YU9w/dragonlib-neoforge-1.21.1-beta-3.0.28.jar",
+      "sha256": "ba127947220504d1410716e422ef6a9a387d818a922ad5fdb3be044f9f7556f7",
+      "bytes": 2107270
+    },
+    {
+      "name": "effortless-1.21.1-3.4.0.jar",
+      "url": "https://cdn.modrinth.com/data/EF68hjiy/versions/ngJJMR0I/effortless-1.21.1-3.4.0.jar",
+      "sha256": "43dcee63746a1a0126c333c3d36cce23884e13138ad17aeaa7abec19d1df1ad0",
+      "bytes": 2054108
+    },
+    {
+      "name": "interiors-1.21.1-neoforge-0.6.1.jar",
+      "url": "https://cdn.modrinth.com/data/r4Knci2k/versions/gBrfZy6S/interiors-1.21.1-neoforge-0.6.1.jar",
+      "sha256": "0d1326fb8b67623ae1c69a63b788dcdcecaf8df400c7d8e5e55ace79a5166fe5",
+      "bytes": 486912
+    },
+    {
+      "name": "JadeAddons-1.21.1-NeoForge-6.1.1.jar",
+      "url": "https://cdn.modrinth.com/data/xuDOzCLy/versions/ZHjXkd1n/JadeAddons-1.21.1-NeoForge-6.1.1.jar",
+      "sha256": "ebf500331c07a4c67147f61ad8a5e3b186afa49f70028904a639229fdf40f372",
+      "bytes": 75431
+    },
+    {
+      "name": "lithium-neoforge-0.15.4+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/gvQqBUqZ/versions/DDUrRVCA/lithium-neoforge-0.15.4%2Bmc1.21.1.jar",
+      "sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757",
+      "bytes": 774220
+    },
+    {
+      "name": "packetfixer-3.3.1-1.20.5-1.21.X-merged.jar",
+      "url": "https://cdn.modrinth.com/data/c7m1mi73/versions/2C41Q8WX/packetfixer-3.3.1-1.20.5-1.21.X-merged.jar",
+      "sha256": "2979a8a3f44e5d5df4f9f6315d18c220f3debf736bb8a2c2740acdfb13bd820f",
+      "bytes": 46623
+    },
+    {
+      "name": "Platform-neoforge-1.21.1-1.3.3.jar",
+      "url": "https://cdn.modrinth.com/data/i6fiqm5y/versions/v7P0nBi2/Platform-neoforge-1.21.1-1.3.3.jar",
+      "sha256": "2d7175e43943d22cbb4f8d4533f0ad620f87a3ac12c77a4f15c3a35d965c4f18",
+      "bytes": 489341
+    },
+    {
+      "name": "railways-0.3.0-beta.2+neoforge-mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/L3Jv0QZI/versions/czVeSmZo/railways-0.3.0-beta.2%2Bneoforge-mc1.21.1.jar",
+      "sha256": "64b74ddad661deae1cfe7e8334cfa3d39bb8ef7b761f83595ba0476c4a9bb1d5",
+      "bytes": 18728584
+    },
+    {
+      "name": "ritchiesprojectilelib-2.1.2+mc.1.21.1-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/B3pb093D/versions/hZ6B2Z0x/ritchiesprojectilelib-2.1.2%2Bmc.1.21.1-neoforge.jar",
+      "sha256": "cc509060833736fb650aa4c36b1ce33a7eeeb9ca6e9f8e80a7c951c9e7487b24",
+      "bytes": 76369
+    },
+    {
+      "name": "sable-neoforge-1.21.1-2.0.5.jar",
+      "url": "https://cdn.modrinth.com/data/T9PomCSv/versions/U678xqle/sable-neoforge-1.21.1-2.0.5.jar",
+      "sha256": "c8710f85bc780bbf523e6726ceaaf76dd0b8c61479db497b382c6bb34317e7ab",
+      "bytes": 12986136
+    },
+    {
+      "name": "SimpleBackups-1.21-4.0.30.jar",
+      "url": "https://cdn.modrinth.com/data/fzSKSXVK/versions/tHyCDNNH/SimpleBackups-1.21-4.0.30.jar",
+      "sha256": "0c322781b3c559f7d2c62ac87eb9d7ce459f3f3b5ab771a8794d009b42c729ec",
+      "bytes": 70269
+    },
+    {
+      "name": "struts-1.3.1.jar",
+      "url": "https://cdn.modrinth.com/data/sHO3MhQx/versions/BOTN7zzN/struts-1.3.1.jar",
+      "sha256": "21002a8b6881a3d08da74f03f29ab23551db50d755d7e75b8b94847511d9a863",
+      "bytes": 216678
+    },
+    {
+      "name": "submarinefix-1.0.1.jar",
+      "url": "https://cdn.modrinth.com/data/NgqP2RZb/versions/9LUKMhCi/submarinefix-1.0.1.jar",
+      "sha256": "518c8ef52828eb65b67a91ae93c08fd8a52cb9e75441ac4e1588e7f7a2f4c0dc",
+      "bytes": 15391
+    },
+    {
+      "name": "toms_storage-1.21-2.4.2.jar",
+      "url": "https://cdn.modrinth.com/data/XZNI4Cpy/versions/WQAMoIMC/toms_storage-1.21-2.4.2.jar",
+      "sha256": "a703e28391b914298223a515238c8729007606f2f967a83b65b8d5cb39e0789d",
+      "bytes": 856803
+    },
+    {
+      "name": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar",
+      "sha256": "f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27",
+      "bytes": 24408776
+    },
+    {
+      "name": "tracks-neoforge-1.21.1-1.0.1.jar",
+      "url": "https://cdn.modrinth.com/data/iPv9VoMI/versions/V4hhNZeU/tracks-neoforge-1.21.1-1.0.1.jar",
+      "sha256": "b126b2522a129c13ebec6491b8602726bad9a3df201cf906468ba583796125c8",
+      "bytes": 166455
+    },
+    {
+      "name": "VanillaBackport-neoforge-1.21.1-1.1.7.10.jar",
+      "url": "https://cdn.modrinth.com/data/6xwxDTgf/versions/rUSWdBok/VanillaBackport-neoforge-1.21.1-1.1.7.10.jar",
+      "sha256": "ecd807ac358e243ede17819455788c7b7a0ce5e0af4aecee82c1c62c586d818d",
+      "bytes": 54902084
+    },
+    {
+      "name": "watut-neoforge-1.21.0-1.2.7.jar",
+      "url": "https://cdn.modrinth.com/data/AtB5mHky/versions/uWr2aTW9/watut-neoforge-1.21.0-1.2.7.jar",
+      "sha256": "b1aac4b9832e16439ee86f27814f7b6a42f2f6bea0ea6949dfffffcd0599d88c",
+      "bytes": 432269
+    },
+    {
+      "name": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/uMOpc5uV/sodium-neoforge-0.8.13%2Bmc1.21.1.jar",
+      "sha256": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+      "bytes": 1292934
+    }
+  ],
+  "note": "Keep the official Tau client assets. Patch references official Modrinth downloads; no third-party JAR is included. Old shader/renderer addons are backed up; Sodium is pinned to the compatible release."
+}

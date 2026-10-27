@@ -49,6 +49,12 @@ def lower_own_requirement(data):
     return text.replace('[21.1.248,', '[21.1.234,').encode('utf-8')
 
 
+def registration_policy_source(text):
+    marker='&&auth.getClass().getMethod("stage").invoke(auth).toString().equals("REGISTER")&&!reserved(p))'
+    if text.count(marker)!=1:raise ValueError('Review changed first-join authentication source')
+    return text.replace(marker,marker[:-1]+'&&Boolean.parseBoolean(System.getProperty("maw.guest-login","true")))')
+
+
 def build(source, server, api_dir, java, output):
     source, server, api_dir = (Path(p).resolve() for p in (source, server, api_dir))
     output = Path(output).resolve()
@@ -98,6 +104,11 @@ def build(source, server, api_dir, java, output):
         key = 'maw-fom-support-0.2.0-tau234'
         src, resources, extra = modules[key]
         modules[key] = (src, resources, [p for p in extra if p != registry_source] + [registry_derived])
+        auth_source=shared/'PlayerAuthBridge.java'
+        auth_derived=work/'PlayerAuthBridge.java'
+        auth_derived.write_text(registration_policy_source(auth_source.read_text(encoding='utf-8')),encoding='utf-8')
+        src,resources,extra=modules[key]
+        modules[key]=(src,resources,[p for p in extra if p!=auth_source]+[auth_derived])
         native_resources = work / 'native-resources'; (native_resources / 'META-INF').mkdir(parents=True)
         metadata = source / 'world/numen-mods-src/src/main/resources/META-INF/neoforge.mods.toml'
         (native_resources / 'META-INF/neoforge.mods.toml').write_bytes(metadata.read_bytes())
@@ -130,7 +141,7 @@ def build(source, server, api_dir, java, output):
                     if relative == 'META-INF/neoforge.mods.toml': data = lower_own_requirement(data)
                     if name.startswith('maw_numen_compat') and relative == 'maw_numen_compat.mixins.json':
                         config = json.loads(data)
-                        config['server'].append('TauQuestTitleMixin')
+                        config['server'].extend(['TauQuestTitleMixin','TauLoginNameMixin'])
                         data = json.dumps(config).encode('utf-8')
                     info = zipfile.ZipInfo(relative, (1980, 1, 1, 0, 0, 0)); info.compress_type = zipfile.ZIP_DEFLATED
                     archive.writestr(info, data)

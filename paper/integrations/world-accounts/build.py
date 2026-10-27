@@ -8,14 +8,17 @@ for name in ('server', 'jdk', 'output'):
     p.add_argument('--' + name, type=Path, required=True)
 p.add_argument('--neoforge', default='21.1.250')
 a = p.parse_args()
-assert a.neoforge == '21.1.250', 'Revalidate a new native API before changing this pin'
+assert a.neoforge in ('21.1.234','21.1.250'), 'Use one of the explicitly compiled native API targets'
 mix = a.server / 'mods/mixauth-1.21.1-1.3.3.jar'
 assert mix.is_file() and hashlib.sha256(mix.read_bytes()).hexdigest() == 'c57bd2c5ce9f911f8935102aa5beb77b3df147071d669ff5e1f8696e4f98bc3d', 'Exact reviewed MixAuth 1.3.3 is required'
 libs = a.server / 'libraries'
 neo = libs / f'net/neoforged/neoforge/{a.neoforge}'
+active_args=(neo/'win_args.txt').read_text(encoding='utf-8')
+active_legacy=next(line.split('=',1)[1] for line in active_args.splitlines() if line.startswith('-DlegacyClassPath='))
 cp = [neo / f'neoforge-{a.neoforge}-server.jar',
       libs / 'net/minecraft/server/1.21.1-20240808.144430/server-1.21.1-20240808.144430-srg.jar',
-      neo / f'neoforge-{a.neoforge}-universal.jar', mix, *sorted(libs.rglob('*.jar'))]
+      neo / f'neoforge-{a.neoforge}-universal.jar', mix, *(a.server/part for part in active_legacy.split(';'))]
+cp=list(dict.fromkeys(cp))
 assert all(f.is_file() for f in cp[:4])
 a.output.mkdir(parents=True, exist_ok=False)
 sources = sorted((root / 'src').rglob('*.java'))
@@ -37,7 +40,11 @@ with tempfile.TemporaryDirectory(prefix='classes-', dir=a.output) as temp:
                 if file.is_file():
                     info = zipfile.ZipInfo(file.relative_to(folder).as_posix(), (1980, 1, 1, 0, 0, 0))
                     info.compress_type = zipfile.ZIP_DEFLATED
-                    archive.writestr(info, file.read_bytes())
+                    content=file.read_bytes()
+                    if file.relative_to(folder).as_posix()=='META-INF/neoforge.mods.toml' and a.neoforge=='21.1.234':
+                        assert b'modId="qiandeng_world_accounts"' in content and content.count(b'[21.1.250,21.2)')==1
+                        content=content.replace(b'[21.1.250,21.2)',b'[21.1.234,21.2)')
+                    archive.writestr(info, content)
 sha = lambda f: hashlib.sha256(f.read_bytes()).hexdigest()
 record = dict(schemaVersion=1, jar=str(jar), sha256=sha(jar), serverOnly=True, clientRequired=False,
               minecraft='1.21.1', neoforge=a.neoforge, mixauthSha256=sha(mix),

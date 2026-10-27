@@ -4,6 +4,7 @@ import argparse, hashlib, json, sys, time, tomllib, re, http.client
 import maw_service
 from maw_service import Supervisor, properties, read_json, submit, guard_console
 from live_registry import LiveRegistry
+from probe_grace import ProbeGrace
 maw_service.CONSOLE_COMMANDS=maw_service.CONSOLE_COMMANDS|{'maw_registry','tower'}
 
 PRODUCTION=Path('E:/MC/servers/tau-ceti-1.3.3/server').resolve()
@@ -57,7 +58,8 @@ def load_config(path,verify=True):
     path=Path(path).resolve();raw=read_json(path,262144)
     server=Path(raw['serverDir']).resolve();public=raw.get('publicGameAccess')
     if type(public) is not bool or raw.get('schemaVersion')!=1:raise ValueError('Explicit schema and public mode required')
-    if (server,raw.get('gamePort'),raw.get('healthPort')) != ((PRODUCTION,28976,28985) if public else (STAGING,39476,39485)):
+    allowed={(PRODUCTION,28976,28985)} if public else {(STAGING,39476,39485),(PRODUCTION,39476,39485)}
+    if (server,raw.get('gamePort'),raw.get('healthPort')) not in allowed:
         raise ValueError('Tau service only owns its exact authorized deployment/ports')
     host='0.0.0.0' if public else '127.0.0.1'
     p=auth_policy(server)
@@ -73,7 +75,9 @@ def load_config(path,verify=True):
             with p.open('rb') as stream:
                 if hashlib.file_digest(stream,'sha256').hexdigest()!=manifest['files'][name]:raise ValueError('Tau mod hash differs: '+name)
     if not {'mixauth-1.21.1-1.3.3.jar',SUPPORT}.issubset(files):raise ValueError('Mixed login and first-join adapter required')
-    command=[str(java),'-Djava.net.preferIPv4Stack=true','-Xms2G','-Xmx'+str(heap)+'M','-Dfile.encoding=UTF-8','@java.args','nogui']
+    guest=raw.get('allowGuestLogin',True)
+    if type(guest) is not bool or (public and guest):raise ValueError('Public beta requires registration/password before offline play')
+    command=[str(java),'-Djava.net.preferIPv4Stack=true','-Dmaw.guest-login='+str(guest).lower(),'-Xms2G','-Xmx'+str(heap)+'M','-Dfile.encoding=UTF-8','@java.args','nogui']
     spec={'id':'java','port':raw['gamePort'],'host':'127.0.0.1','listenHost':host,'command':command,'cwd':str(server),'env':{},'dependsOn':[],'readiness':'minecraft','healthUrl':None,'stopMode':'stdin','stopText':'stop','startupTimeoutSeconds':600,'numenPort':28989}
     gate,gate_stats=gateway(raw,server,manifest,public,verify)
     return {'schemaVersion':1,'serverDir':str(server),'gamePort':raw['gamePort'],'healthPort':raw['healthPort'],'runtimeDir':str(runtime),'services':[spec]+([gate] if gate else []),
@@ -91,12 +95,57 @@ def validate(config):
         stat=Path(path).stat()
         if (stat.st_size,stat.st_mtime_ns)!=(size,stamp):raise ValueError('Gateway release changed while running')
 class TauChild(maw_service.Child):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.probe_grace=ProbeGrace();self.grace_active=False
     def start(self):
+        self.probe_grace.reset();self.grace_active=False
         if self.spec['id']=='gate' and self.boot is not None:
             self.spec['env'].update(self.boot.environment())
         super().start()
     def tick(self):
-        super().tick()
+        # Base lifecycle and restart ownership, with readiness separated from a
+        # transient probe outage. A first login can synchronously prepare a large
+        # native protocol; one timeout must not itself disconnect that login.
+        now=time.monotonic()
+        if self.process is None:return
+        code=self.process.poll()
+        if code is not None:
+            self.last_exit={'code':code,'at':maw_service.utc(),'requested':self.stopping}
+            self.process.stdin.close();self.process=None
+            if not self.stopping:self.problem='process_exited: '+str(code);self.failed(now)
+            self.ready=False;self.stopping=False;self.grace_active=False;return
+        if self.stopping:
+            if now-self.stop_started>90:self.problem='stop_timeout: still running; no forced termination'
+            return
+        try:
+            maw_service.check_owned_listener(self.spec['port'],self.process.pid,expected_host=self.spec.get('listenHost','127.0.0.1'))
+            self.metrics=maw_service.probe_service(self.spec)
+            self.ready=True;self.problem=None
+            self._native_probe()
+            if not self.ready:self.grace_active=False;return
+            self.probe_grace.success(time.monotonic());self.grace_active=False
+            if now-self.started>600:self.failures=0
+        except Exception as error:
+            transient=isinstance(error,(TimeoutError,ConnectionError))
+            retain=transient and self.ready and self.probe_grace.transient(time.monotonic())
+            self.grace_active=bool(retain)
+            self.problem='readiness_failed: '+type(error).__name__+': '+str(error)
+            self.metrics['probe']={'healthy':False,'graceActive':bool(retain),'consecutiveFailures':self.probe_grace.failures,
+                'lastSuccessfulMonotonic':self.probe_grace.last_success,'graceSeconds':self.probe_grace.seconds}
+            self.log.warning('readiness_probe '+json.dumps({'problem':self.problem,**self.metrics['probe']}))
+            if not retain:
+                self.ready=False
+                if not transient:self.probe_grace.reset()
+                if now-self.started>self.spec['startupTimeoutSeconds']:self.stop()
+
+    def state(self):
+        result=super().state()
+        if self.grace_active:
+            result.update(ready=False,dependencyReady=self.ready,servingDuringProbeGrace=True)
+        return result
+
+    def _native_probe(self):
         port=self.spec.get('numenPort')
         if not self.ready or not port:return
         try:
@@ -117,8 +166,10 @@ class TauChild(maw_service.Child):
                     'directory':str(self.boot.output) if self.boot.output else None,'problem':self.boot.problem}
                 if not ready:
                     self.ready=False;self.problem='native_registry_'+self.boot.phase
+        except (TimeoutError,ConnectionError):
+            raise
         except Exception as error:
-            self.ready=False;self.problem='private_numen_readiness_failed: '+str(error)
+            raise RuntimeError('private_numen_readiness_failed: '+str(error)) from error
 def main():
     if sys.stdout:sys.stdout.reconfigure(encoding='utf8')
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['plan','run','status','pause','resume','stop','shutdown','console']);p.add_argument('--config',required=True);p.add_argument('--command');p.add_argument('--request-id');p.add_argument('--reason',default='Tau operator maintenance');p.add_argument('--wait',type=float,default=30)

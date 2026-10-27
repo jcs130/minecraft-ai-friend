@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "status": "public-beta-running",
+  "publishedAt": "2026-10-27T06:23:18.937945+00:00",
+  "name": "My Agent World - Aincrad Beta",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.234",
+  "pack": {
+    "server": "TauCeti-ServerPack-1.3.3",
+    "baseClient": "TauCeti-ATM10-CF-1.3.2",
+    "serverJarCount": 527,
+    "clientPatchFiles": 55
+  },
+  "entrypoints": {
+    "java": "micro.kangqiang.site:28976",
+    "mineflayer": "micro.kangqiang.site:28977",
+    "voiceUdp": 28989,
+    "numenTcp": "127.0.0.1:28989",
+    "healthTcp": "127.0.0.1:28985",
+    "bedrock": "not-yet-validated"
+  },
+  "authentication": {
+    "temporaryBetaPolicy": "native-game-registration-and-password",
+    "websiteRequiredForBeta": false,
+    "unregisteredOfflinePlay": false,
+    "priorFomNativeDatabasePreserved": true,
+    "premiumPath": "MixAuth Mojang validation; real premium-client login not tested in this batch"
+  },
+  "map": {
+    "name": "SAO Map Floor 1",
+    "sourceFileId": 6729184,
+    "sourceUrl": "https://www.curseforge.com/minecraft/worlds/sao-map-floor-1/files/6729184",
+    "separateFloorMaps": 1,
+    "spawn": {
+      "x": -582.5,
+      "y": 69,
+      "z": 934.5
+    },
+    "mainMapProtected": true,
+    "resourceDimension": "myagentworld:wilderness"
+  },
+  "gateway": {
+    "release": "aincrad-beta-20261027-v4",
+    "manifestSha256": "39f00a8b22269974c52d92db872d844c2c384820f0e7920a9e14bcf5e477be17",
+    "sourceCommit": "78ec7abb4745f0f5e4a840af03a2fbe3166265cc",
+    "perBootRegistryRequired": true,
+    "modsLockSha256": "7f86f3527edb4b383db6f1152e2bdd85fb7577e8a0cb6960d6b334132d3bc02e"
+  },
+  "addons": {
+    "maw-fom-support-0.2.0-tau234.jar": "7f419875c41fea3868eca7589c24778b2d6c01460b20f6bb34962e6f19e267c7",
+    "maw_numen_compat-0.1.0-tau234.jar": "334f9a6f28b732ad9316afa4f87b0be17202fe1a3285aa9fd88fb2b685fb04ed",
+    "maw_numen_mods-0.1.0-tau234.jar": "5302b8f47807566c26bd68d4b008e49adfc0d89592d5c31927c3065ab3455fc0",
+    "maw_numen_server-0.2.1-tau234.jar": "0328897dcb6553874ec08ffe61a6450b1c12c524b86ba415e4f82a7716f90cb2"
+  },
+  "verification": {
+    "pythonTests": 17,
+    "nodeTests": 21,
+    "worldConnection": {
+      "observedAt": "2026-10-27T05:57:00.101Z",
+      "checks": [
+        {
+          "name": "pending password cannot use world teleport",
+          "ok": true
+        },
+        {
+          "name": "existing password authenticates this connection",
+          "ok": true
+        },
+        {
+          "name": "own world status has absolute coordinates",
+          "ok": true
+        },
+        {
+          "name": "authored spawn floor is loaded",
+          "ok": true
+        },
+        {
+          "name": "ordinary player cannot break protected map",
+          "ok": true
+        },
+        {
+          "name": "resource travel reports actual completed movement",
+          "ok": true
+        },
+        {
+          "name": "resource destination has real solid ground",
+          "ok": true
+        },
+        {
+          "name": "resource world exposes a reachable harvest target",
+          "ok": true
+        },
+        {
+          "name": "ordinary player really harvests in resource world",
+          "ok": true
+        },
+        {
+          "name": "return to Aincrad is verified",
+          "ok": true
+        },
+        {
+          "name": "connection survives native initial load",
+          "ok": true
+        }
+      ]
+    },
+    "nativeFirstRegistration": true,
+    "finalColdRestart": {
+      "observedAt": "2026-10-27T06:20:12.540Z",
+      "checks": [
+        {
+          "name": "selector name rejected before MixAuth replacement",
+          "ok": true
+        },
+        {
+          "name": "registered account password survives final cold restart",
+          "ok": true
+        },
+        {
+          "name": "native and Mineflayer agree on real trial entry pad",
+          "ok": true
+        },
+        {
+          "name": "native tower progress is queryable",
+          "ok": true
+        }
+      ]
+    },
+    "externalMinecraftStatus": {
+      "28976": {
+        "online": true,
+        "minecraft": "1.21.1",
+        "source": "api.mcsrvstat.us/3",
+        "observedAt": "2026-10-27T06:23:16.710891+00:00",
+        "providerCacheHit": false,
+        "providerCacheTime": 1793082197
+      },
+      "28977": {
+        "online": true,
+        "minecraft": "1.21.1",
+        "source": "api.mcsrvstat.us/3",
+        "observedAt": "2026-10-27T06:23:18.933942+00:00",
+        "providerCacheHit": false,
+        "providerCacheTime": 1793082199
+      }
+    },
+    "clientPatchPlan": "passed against official client startup script; mods directory unchanged",
+    "fullJavaGuiClient": "not-tested",
+    "allModGameplay": "not-tested"
+  },
+  "maintenance": {
+    "autorun": "existing HKCU Run entry now targets Tau; original value backed up",
+    "oldFomDirectoryPreserved": true,
+    "paperInstanceUnchanged": true,
+    "unattendedRecovery": "owned-process supervisor active, maintenance pause cleared",
+    "baselineWorldBackupSha256": "1f5f5fef0c29eaefb4386b008510446654f1cb8340f8b0c04ede17f89609a859",
+    "priorCompleteTauBackupSha256": "a7c2ee73dad90f2d30f95a18b3d4b97e10038dc56d8e3caa136a1f045eb34503",
+    "mirrorsVerified": true
+  },
+  "knownGaps": [
+    "Bedrock protocol/resources and full Web visuals pending",
+    "Paper professions/guild/skills are not automatically migrated",
+    "Only one authored Aincrad floor; native tower uses shared wave rooms",
+    "Original pack still contains missing loot/recipe/tag references",
+    "Petrolpark/Petrols Parts and Smart NPC deferred due NeoForge requirements"
+  ]
+}

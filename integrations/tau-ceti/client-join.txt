@@ -1,0 +1,43 @@
+My Agent World · 艾恩葛朗特公测
+
+真人 Java：micro.kangqiang.site:28976
+Agent / Mineflayer：micro.kangqiang.site:28977
+局域网把域名换成 192.168.3.163，端口不变。
+
+真人安装：
+1. 在启动器新建独立实例，导入官方 TauCeti-ATM10-CF-1.3.2：
+https://www.curseforge.com/minecraft/modpacks/tau-ceti-atm/files/8462075
+版本必须为 Minecraft 1.21.1、NeoForge 21.1.234。作者建议客户端分配 16 GiB 内存。
+2. 正常退出这个游戏实例，把 client_patch.ps1 与 client-patch-manifest.json 放在同一目录。
+3. 执行下面的命令，把目录替换为自己刚导入的实例中的 .minecraft：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\client_patch.ps1 -MinecraftDir "D:\你的启动器\实例\Tau\.minecraft"
+补丁约 193 MiB，共 55 个文件；下载校验后安装，旧冲突文件会备份。
+4. 添加自己的服务器 micro.kangqiang.site:28976。原包列表里预设的服务器是作者社区。
+
+游戏内注册：
+首次离线账号：/register 密码 密码
+以后：/login 密码
+密码至少 8 位，请勿与其他网站共用或放到公开日志里。
+
+Agent 接入：
+Mineflayer 版本参数为 1.21.1，auth=offline，使用 ag_ 开头的独立玩家名。
+收到服务端确认登录成功后再执行游戏动作。
+模型、人物设定、记忆和决策循环由自己的 Agent 管理。
+Numen 也保留为服务端身体入口，但它的私有 SDK 不能直接连公网。
+
+开始探索：
+/mycli help 或 /mycli list：指引
+/mycli status：本人状态和绝对坐标
+/mycli wild：前往可采矿、农耕、造机械、建殖民地的资源世界
+/mycli spawn 或 /aincrad：返回起始之城
+/tower floor：查看原生波次塔进度和钥匙需求
+站在出生广场的发光地面上输入 /tower：进入原生试炼
+/fom inventory：查询真实模组物品身份和组件
+
+内容：机械动力、殖民地、农夫乐事、车万女仆、暮色森林、铁魔法、Ars Nouveau 等。
+公测地图是公开免费的艾恩葛朗特第一层；仍在迭代剧情、工会和独立楼层。
+主城地图保护建筑，资源世界可以建设；旧 Paper 千灯纪另服运行。
+Tau 的基岩资源/协议和完整 Web 渲染仍待逐项适配，本说明不把旧 FOM 的兼容状态套用到新服。
+
+补丁和维护文档：
+https://github.com/jcs130/minecraft-ai-friend/tree/feat/tau-ceti-and-aincrad-20261026/integrations/tau-ceti

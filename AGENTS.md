@@ -1,3 +1,7 @@
+## 2026-10-27 Tau / Aincrad 公测已切换
+
+本分支 feat/tau-ceti-and-aincrad-20261026 已将原 FOM 入口切到 E:/MC/servers/tau-ceti-1.3.3：Java 28976、Mineflayer 28977 公网状态探测通过；旧 FOM 与前一 Tau 完整冷备 E/F 保留，Paper 未变。527 个 JAR 含 Create、MineColonies、Farmer's Delight、女仆及探索魔法；54 个保留内容/依赖需补入官方 Tau 客户端 1.3.2，另更新 Sodium，合计55文件。MC1.21.1/NeoForge21.1.234；不要换旧加载器或复用旧数字ID，每 JVM 导出并冻结本次注册表。免费 Aincrad 仅第一层，主图保护建筑；/mycli wild 去正常资源世界，/mycli spawn 返回，出生(-582.5,69,934.5)发光地面是原生波次塔入口。服主明确允许测试期游戏内/register、/login，旧原生密码库保持，未注册不能行动；Numen TCP28989和健康TCP28985仍仅回环，语音用独立UDP28989，基岩/完整Web/全模组玩法未验。38项源码回归、11项真实联机、首次注册及4项最终冷启动/入口检查通过；安全名字回调须先于MixAuth执行（实际@名字已拒绝），不能只按编译判断。自动启动已改指Tau，监护运行/维护暂停已清；SimpleBackups保留原120分钟配置。完整SAO剧情、职业工会与独立楼层继续迭代，旧Paper体系不冒称自动迁移。当前事实见 integrations/tau-ceti/PUBLIC_BETA.md、public-beta-release.json；下方隔离说明均为历史。
+
 ## 2026-10-27 Tau 隔离候选与 Aincrad 地图
 
 本分支 feat/tau-ceti-and-aincrad-20261026：Paper 已独立加载公开免费 Aincrad 第一层，入口 /warp aincrad、返回 /warp village，沿用 travel 学习/魔力规则；原世界保持。Tau Ceti ATM 仍是回环隔离候选，原 FOM 整服 E/F 冷备及旧自启动未切换。真人用官方客户端 1.3.2（MC1.21.1/NeoForge21.1.234）；不要换成旧 FOM 加载器。Numen 同 UUID 恢复、真实走动终态及 action_id 去重已验；Mineflayer v11 已实际登录并收到原始数据，NPC/词缀/墓碑组件按真实 StreamCodec 适配，网页/基岩和完整模组玩法未验。每次 JVM 启动导出当前注册表，不能复用跨启动数字 ID。网站注册/Token 门禁尚未与旧访客登录策略统一，禁止据此宣布已开放 Tau 公网。34 项本批检查通过。见 integrations/tau-ceti/README.md、paper/integrations/aincrad/README.md。
