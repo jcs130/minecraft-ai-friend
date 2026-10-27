@@ -37,6 +37,7 @@ $pendingPaperCoreUpgrade = Join-Path $opsDir 'paper-core-upgrade.pending.json'
 . (Join-Path $PSScriptRoot 'content-deploy.ps1')
 . (Join-Path $PSScriptRoot 'paper-core-upgrade.ps1')
 . (Join-Path $PSScriptRoot 'ysm-services.ps1')
+. (Join-Path $PSScriptRoot 'agent-client-identity.ps1')
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -296,21 +297,17 @@ function NumenBodyUuids {
     }
 }
 
+function RuntimeControllerUuids {
+    # Current authenticated connection only; join/quit clear the marker.
+    $reply=Rcon 'minecraft:execute as @a if data entity @s BukkitValues{"agentfriend:automation_reconnect":1b} if data entity @s BukkitValues."agentfriend:automation_session" run minecraft:data get entity @s UUID'
+    Maintenance-UuidsFromNbt $reply
+}
+
 function HumanPlayers {
-    # Keep the restart safety gate conservative: only verified service accounts.
-    # feiyu_bot was explicitly confirmed as a bot by the owner on 2026-10-06.
-    # ag_Kirito was explicitly identified as an Agent by the owner (verified 2026-10-08).
-    # ag_NEKO explicitly confirmed by the owner as a reconnectable Agent on 2026-10-08.
-    # ag_CorMy is the replacement Agent account identified by the owner on 2026-10-11.
-    # ag_neko_eye is the owner's explicitly identified NEKO spectator account.
-    # yubeen explicitly confirmed as a reconnectable Agent by the owner on 2026-10-12.
-    # ag_NarutoPi is the Naruto Agent identified by the owner on 2026-10-14.
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'ag_NarutoPi', 'live', 'yubeen')
-    $roster = PlayerRoster
-    $unknown = @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
-    if (-not $unknown.Count) { return }
-    $bodies = @(NumenBodyUuids)
-    @($unknown | Where-Object { $bodies -notcontains $roster.Uuids[$_] })
+    $roster=PlayerRoster
+    $evidence=@(NumenBodyUuids)+@(RuntimeControllerUuids)+@(Maintenance-OwnerAgentUuids (Join-Path $opsDir 'maintenance-identities.private.json'))
+    # Names are labels only. Unknown UUIDs, including frequent CLI users, block restart.
+    @($roster.Names | Where-Object { $evidence -notcontains $roster.Uuids[$_] })
 }
 
 function Probe {

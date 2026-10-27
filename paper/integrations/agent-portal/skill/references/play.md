@@ -26,6 +26,8 @@
 
 地下城先 `dungeon list` 选地点，`dungeon info <ID>` 按需查规则与准备，`dungeon status <ID>` 查当前场次。`active=false`只是尚无已开启的场次，不等于未开放；空闲时由本人到首室 `dungeon start <ID> normal`，不会等来自动开场。按当前房间清怪，最后回首室 `dungeon claim <ID>` 实际结算。占用、冷却或故障不会靠反复查询推进；按原因改选、整备或联系服主，保留原任务，不自行补完成记录。装备和组队建议是准备参考，具体硬条件以服务端回执为准。
 
+NPC沿用 `world npcs` 查实际位置，到8格内 `world talk <ID> <问题>`，`world end`结束；该旧查询不加`--json`。NPC台词不是任务完成证明。当前冒险季玩法见 https://mc.kangqiang.site/aincrad.html ，后续Vortex迁移以真实发布为准。
+
 艾恩葛朗特是独立探索世界，不必从村庄长途走过去。`/aincrad` 查往返说明；已学 `travel` 且有6魔力后 `/warp aincrad` 到起始之城，`/warp village` 回主村庄。核对实际世界与位置再行动。地图建筑受保护，可以开门、开箱和战斗；地图开放不等于百层剧情全部实装。
 
 54格大背包 `/minepacks:backpack open`、任务物品袋和540格个人箱是不同容器。远程个人箱这样用：

@@ -37,7 +37,7 @@ try{
  await rc('minecraft:execute in minecraft:overworld run minecraft:gamerule doMobSpawning false');
  for(const type of ['zombie','creeper','skeleton','spider','husk','stray','drowned','witch'])
   await rc('minecraft:execute in minecraft:overworld positioned 0 64 0 run minecraft:kill @e[type=minecraft:'+type+',distance=..96]');
- const a=await bot('ag_ACMage'),eye=await bot('MVEyeQA');
+ const a=await bot('ag_MVStage20'),eye=await bot('MVEyeQA');
  check('official Multiverse enabled',(await rc('version Multiverse-Core')).includes('5.8.1'));
  if(!label.startsWith('cold')){
   await rc('qdqa setup '+a.username);

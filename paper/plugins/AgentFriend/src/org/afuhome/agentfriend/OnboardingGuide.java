@@ -52,7 +52,7 @@ final class OnboardingGuide implements Listener {
     private final AgentFriendPlugin plugin;
     private final File file;
     private final Map<UUID, Session> sessions = new HashMap<>();
-    private final NamespacedKey welcomeRevision, welcomeAt, reminderAt, lastStep, mutedUntil, deliveredAt;
+    private final NamespacedKey welcomeRevision, welcomeAt, reminderAt, lastStep, mutedUntil, deliveredAt, releaseRevision;
     private YamlConfiguration settings;
 
     OnboardingGuide(AgentFriendPlugin plugin) {
@@ -62,6 +62,7 @@ final class OnboardingGuide implements Listener {
         welcomeRevision = key("onboarding_welcome_revision"); welcomeAt = key("onboarding_welcome_at");
         reminderAt = key("onboarding_reminder_at"); lastStep = key("onboarding_last_step");
         mutedUntil = key("onboarding_muted_until"); deliveredAt = key("coach_delivered_at");
+        releaseRevision = key("onboarding_release_revision");
         if (!reload().equals("success")) {
             settings = YamlConfiguration.loadConfiguration(new InputStreamReader(
                     java.util.Objects.requireNonNull(plugin.getResource("onboarding.yml")), StandardCharsets.UTF_8));
@@ -84,6 +85,13 @@ final class OnboardingGuide implements Listener {
         List<String> intro = c.getStringList("welcome");
         if (intro.isEmpty() || intro.size() > 4) throw new IllegalArgumentException("welcome");
         for (String line : intro) validateText(line, 240);
+        int release = c.getInt("release-revision", 0);
+        if (release < 0) throw new IllegalArgumentException("release-revision");
+        if (release > 0) {
+            List<String> notes = c.getStringList("release-notice");
+            if (notes.isEmpty() || notes.size() > 2) throw new IllegalArgumentException("release-notice");
+            for (String line : notes) validateText(line, 240);
+        }
         for (String id : STEPS) {
             validateText(c.getString("steps." + id + ".title", ""), 50);
             validateText(c.getString("steps." + id + ".message", ""), 360);
@@ -133,6 +141,17 @@ final class OnboardingGuide implements Listener {
         // This only checks a player's safety/PDC; ledgers are read after the checks pass.
         session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
         if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
+        int release = settings.getInt("release-revision", 0);
+        if (release > p.getPersistentDataContainer().getOrDefault(releaseRevision, PersistentDataType.INTEGER, 0)) {
+            // Private and persistent per account: never broadcast a release payload,
+            // repeat it on reconnect, or disturb an active fight/menu. This is only
+            // discovery; selecting a class, learning and accepting a task stay explicit.
+            for (String line : settings.getStringList("release-notice")) p.sendMessage(line);
+            p.getPersistentDataContainer().set(releaseRevision, PersistentDataType.INTEGER, release);
+            delivered(p, now);
+            session.nextCheck = now + ms("poll-seconds");
+            return true;
+        }
         boolean compact=plugin.communication().compact(p), justEntered=!session.entrySent;
         // Join discovery is one persistent, short human hint. Agents query help
         // themselves. Never push GUIDE + STATUS + NEXT on each reconnect.

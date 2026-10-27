@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "patches": [
+    {"file":"plugins/Shopkeepers/config.yml","path":["language"],"value":"zh-CN"},
+    {"file":"plugins/SkinsRestorer/config.yml","path":["messages","locale"],"value":"zh_CN"},
+    {"file":"plugins/SkinsRestorer/config.yml","path":["messages","perIssuerLocale"],"value":false},
+    {"file":"plugins/MagicSpells/general.yml","path":["str-spell-change"],"value":"当前法术：%s。"},
+    {"file":"plugins/MagicSpells/general.yml","path":["str-spell-change-empty"],"value":"已取消当前法术。"},
+    {"file":"plugins/MagicSpells/general.yml","path":["str-xp-auto-learned"],"value":"已学会法术：%s。"}
+  ],
+  "translation": {
+    "file":"plugins/Shopkeepers/lang/language-zh-CN.yml",
+    "url":"https://raw.githubusercontent.com/Shopkeepers/Language-Files/v2.23.3/lang/language-zh-CN.yml",
+    "sha256":"0ea142f2d90d83d29cc9435dcd416c6eb8630aa4a44f5405224ec5b3654ac550",
+    "pluginVersion":"2.23.3"
+  }
+}

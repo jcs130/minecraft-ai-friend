@@ -26,11 +26,15 @@ final class AgentMessageTransport implements Listener, PluginMessageListener {
     private final AgentFriendPlugin plugin;
     private final Set<UUID> payload = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> joined = new ConcurrentHashMap<>(), manual = new ConcurrentHashMap<>();
-    private final NamespacedKey summarySeen;
+    private final NamespacedKey summarySeen, agentSession, reconnectReady, cliHint;
+    private final Map<UUID,long[]> cliWindows = new HashMap<>();
     private final ActivityBarLimiter activityBars=new ActivityBarLimiter();
     private final PacketAdapter packets;
     AgentMessageTransport(AgentFriendPlugin plugin) {
         this.plugin = plugin; summarySeen = new NamespacedKey(plugin, "entry_summary_seen_v1");
+        agentSession = new NamespacedKey(plugin, "automation_session");
+        reconnectReady = new NamespacedKey(plugin, "automation_reconnect");
+        cliHint = new NamespacedKey(plugin, "cli_activity_hint");
         var messenger = Bukkit.getMessenger();
         messenger.registerOutgoingPluginChannel(plugin, AgentMessagePolicy.CHANNEL);
         messenger.registerIncomingPluginChannel(plugin, AgentMessagePolicy.CHANNEL, this);
@@ -70,6 +74,7 @@ final class AgentMessageTransport implements Listener, PluginMessageListener {
         ProtocolLibrary.getProtocolManager().addPacketListener(packets);
     }
     void joined(Player p) {
+        clearIdentity(p); // Saved evidence from an old connection is never reused.
         joined.put(p.getUniqueId(), System.currentTimeMillis());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline() || plugin.isObserver(p) || plugin.communication().compact(p)
@@ -78,10 +83,21 @@ final class AgentMessageTransport implements Listener, PluginMessageListener {
             p.getPersistentDataContainer().set(summarySeen, PersistentDataType.BYTE, (byte) 1);
         }, 50L);
     }
-    void forget(Player p) { UUID id = p.getUniqueId(); payload.remove(id); joined.remove(id); manual.remove(id); activityBars.forget(id); }
+    private void clearIdentity(Player p) {
+        var data=p.getPersistentDataContainer();data.remove(agentSession);data.remove(reconnectReady);data.remove(cliHint);
+        cliWindows.remove(p.getUniqueId());
+    }
+    void forget(Player p) { UUID id = p.getUniqueId(); payload.remove(id); joined.remove(id); manual.remove(id); activityBars.forget(id);clearIdentity(p); }
     @Override public void onPluginMessageReceived(String channel, Player p, byte[] data) {
-        if (!channel.equals(AgentMessagePolicy.CHANNEL) || !AgentMessagePolicy.agent(p.getName())
-                || !p.getListeningPluginChannels().contains(channel) || !AgentMessagePolicy.hello(data)) return;
+        if (!channel.equals(AgentMessagePolicy.CHANNEL) || !p.getListeningPluginChannels().contains(channel)) return;
+        Boolean reconnect=AgentMessagePolicy.identity(data);
+        if(reconnect!=null){
+            p.getPersistentDataContainer().set(agentSession,PersistentDataType.INTEGER,p.getEntityId());
+            p.getPersistentDataContainer().set(reconnectReady,PersistentDataType.BYTE,(byte)(reconnect?1:0));
+            p.sendPluginMessage(plugin,channel,("{\"protocol\":1,\"type\":\"identity_ack\",\"reconnect\":"+reconnect+"}").getBytes(StandardCharsets.UTF_8));
+            return; // Identity does not silently switch chat receipts to custom payloads.
+        }
+        if(!AgentMessagePolicy.hello(data))return;
         payload.add(p.getUniqueId());
         p.sendPluginMessage(plugin, channel, "{\"protocol\":1,\"type\":\"hello_ack\",\"transport\":\"payload\"}".getBytes(StandardCharsets.UTF_8));
     }
@@ -89,6 +105,11 @@ final class AgentMessageTransport implements Listener, PluginMessageListener {
     public void command(PlayerCommandPreprocessEvent e) {
         String command = e.getMessage().toLowerCase(Locale.ROOT);
         if (command.matches("^/(?:agentfriend:)?mycli(?: .*)?$") || command.startsWith("/photohelp")) {
+            long now=System.currentTimeMillis();
+            long[] window=cliWindows.computeIfAbsent(e.getPlayer().getUniqueId(),id->new long[]{now,0});
+            if(now-window[0]>60000){window[0]=now;window[1]=0;}
+            if(++window[1]>=8)e.getPlayer().getPersistentDataContainer().set(cliHint,PersistentDataType.STRING,"frequent_cli");
+            // The hint is advisory only, never authentication or restart permission.
             // Preserve full metadata only when the user explicitly asks for JSON.
             if (command.matches(".*(?:^| )--json(?: |$).*")) manual.put(e.getPlayer().getUniqueId(), System.currentTimeMillis() + 3000);
         }
@@ -98,6 +119,7 @@ final class AgentMessageTransport implements Listener, PluginMessageListener {
         ProtocolLibrary.getProtocolManager().removePacketListener(packets);
         Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, AgentMessagePolicy.CHANNEL, this);
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, AgentMessagePolicy.CHANNEL);
+        Bukkit.getOnlinePlayers().forEach(this::clearIdentity);
         HandlerList.unregisterAll(this); payload.clear(); joined.clear(); manual.clear(); activityBars.clear();
     }
 }

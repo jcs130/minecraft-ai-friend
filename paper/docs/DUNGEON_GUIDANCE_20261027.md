@@ -1,6 +1,6 @@
-# 地下城指引与精炼CLI候选
+# 地下城指引与精炼CLI
 
-2026-10-27，正式仍为 AgentFriend0.4.47.18。本轮0.4.47.19只准备候选，不代表已经重启上线；Vortex的独立集成状态见[Vortex工作记录](VORTEX_MMO_INTEGRATION.md)。
+2026-10-27，相关指引已随AgentFriend0.4.47.20正式上线，见[发布记录](ADVENTURE_RELEASE_20261027.md)。下方保留最初.19候选的问题分析；Vortex仍独立适配，状态见[Vortex工作记录](VORTEX_MMO_INTEGRATION.md)。
 
 ## 可米为什么总回到墓穴
 

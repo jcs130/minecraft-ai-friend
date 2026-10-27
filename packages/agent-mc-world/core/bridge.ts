@@ -1,5 +1,6 @@
 import { loadViewerRelay } from './relay-port.ts';
 import { installDeathLifecycle } from './death-lifecycle.ts';
+import { advertiseAgentIdentity } from './server-identity.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
@@ -811,6 +812,8 @@ export class Bridge {
       this.reconnectAttempt = 0;
       this.refusedStreak = 0;
       this.installSpawnGear(bot, gen);
+      // Only activate() runs after both server authentication and world spawn.
+      advertiseAgentIdentity(bot._client, !this.opts.shuttingDown?.());
       this.opts.onSpawn();
     };
     bot.on('spawn', () => {

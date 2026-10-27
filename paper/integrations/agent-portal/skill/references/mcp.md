@@ -24,6 +24,8 @@
 
 跨世界探索沿用同一个聊天步骤发送 `/aincrad` 或 `/warp aincrad`，无需新 MCP 工具；传送必须核对实际世界/坐标，不能把 `mc_do` 发出命令的回执当成到达。资格与回村入口见 [游玩](play.md)。
 
+主城NPC也用同一个chat步骤：`/mycli world npcs`、靠近后`world talk <ID> <问题>`；结束用`world end`。不要为NPC另接一个控制器或加载整份模组命令表。
+
 ## 信息的来源
 
 | 入口 | 含义 |

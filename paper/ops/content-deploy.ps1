@@ -38,6 +38,15 @@ function Content-AgentAntiCheatTarget([string]$relative) {
     return (Content-AgentAntiCheatJar $relative) -or $relative -ceq 'plugins/LightAntiCheat/config.yml'
 }
 
+function Content-MultiverseJar([string]$relative) {
+    return $relative -ceq 'Multiverse-Core-5.8.1.jar'
+}
+
+function Content-MultiverseTarget([string]$relative) {
+    # Exact reviewed core and configuration only; never inventories or worlds.
+    return (Content-MultiverseJar $relative) -or $relative -ceq 'plugins/Multiverse-Core/config.yml'
+}
+
 function Content-YsmProxyTarget([string]$name) {
     if ($name -notmatch '^(AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected proxy plugin JAR' }
     $config = Ysm-Config
@@ -88,12 +97,12 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative)) { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
             $target = Join-Path $serverDir $relative
-        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative)) {
+        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative)) {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'plugins/OlEncounters/schematics/qd_forest_camp.schem') {
             $target = Join-Path $serverDir $relative
@@ -134,6 +143,8 @@ function Deploy-PendingContent {
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
+        } elseif ($relative -in @('ops/agent-client-identity.ps1','ops/maintenance-identities.private.json')) {
+            $target = Join-Path $opsDir $relative.Substring(4)
         } elseif ($relative -in @('ops/agent-auth.json','ops/auth-proxy.mjs','ops/mineflayer-login-gate.mjs','ops/mineflayer-client-compat.mjs','ops/manage-server.ps1','ops/content-deploy.ps1','ops/numen-qwenpaw-controller.py','ops/ysm-services.mjs','ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/goddess-perception.mjs','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-pairs.json','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
             $target = Join-Path $opsDir $relative.Substring(4)
         } else { throw "Unexpected content target: $relative" }
@@ -150,7 +161,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.removeJars)) {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
-        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name)) {
+        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name)) {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
             # This exact reviewed replacement is necessary: FAWE provides the

@@ -13,7 +13,21 @@ final class AgentMessagePolicy {
     private static final Set<String> COMPACT = Set.of("MC_AUTH_STATE", "MC_GUIDE", "MC_STATUS", "MC_GUIDE_NEXT");
     private static final Set<String> VOLATILE = Set.of("playerUuid", "sessionId", "authSessionId", "observedAt", "sequence");
     private AgentMessagePolicy() { }
+    // Legacy message presentation fallback only, never control identity or permissions.
     static boolean agent(String name) { return name != null && name.toLowerCase(Locale.ROOT).startsWith("ag_"); }
+    // Explicit control declaration on the already authenticated player connection.
+    // This selects client classification only; it grants no permissions or login bypass.
+    static Boolean identity(byte[] data) {
+        if (data == null || data.length > 256) return null;
+        try {
+            JsonObject o = JsonParser.parseString(new String(data, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            if (o.size()!=4 || !o.get("op").getAsString().equals("identity")
+                    || !o.get("protocol").getAsJsonPrimitive().isNumber() || !o.get("protocol").getAsString().equals("1")
+                    || !o.get("control").getAsString().equals("agent")
+                    || !o.get("reconnect").getAsJsonPrimitive().isBoolean()) return null;
+            return o.get("reconnect").getAsBoolean();
+        } catch (RuntimeException invalid) { return null; }
+    }
     static boolean hello(byte[] data) {
         if (data == null || data.length > 256) return false;
         try {

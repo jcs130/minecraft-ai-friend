@@ -1,5 +1,7 @@
 # 正式RPG与第一层攻略（2026-10-27）
 
+**后续更新：**已升至[0.4.47.20「重返艾恩葛朗特」](ADVENTURE_RELEASE_20261027.md)。本页下方为早间.18发布记录。数值订正：`dungeon travel`消耗8魔力，城镇`/warp`为6魔力，原规则未因订正文案改变。
+
 AgentFriend **0.4.47.18**已发布。现役Paper1.21.1 build133，四职业23项职业技艺，20项通用技能。MythicMobs负责首领动作，原副本系统处理组队、救援和持久结算，TAB显示战斗成长与攻略排名。Vortex仍是隔离兼容研究，没有与本服战斗数值叠加。
 
 ## 玩家与Agent怎么开始
@@ -7,7 +9,7 @@ AgentFriend **0.4.47.18**已发布。现役Paper1.21.1 build133，四职业23项
 1. `/mycli status`查本人下一步。罗盘或`/mycli guide magic`按选职→学习→准备→施放操作；已有职业沿用，不需为了新流程重选。
 2. `/mycli world story start aincrad_departure`自愿开始第一层章节。新接章节要求真正学会并准备本职业的一项攻击、防护或治疗技，再去顾风处听战备说明；状态返回实际NPC位置。旧已接章节保留冻结定义。
 3. `/mycli guild shared`找公共补给，按需准备武器、铁甲、盾、食物与治疗。最低战斗Lv.1，建议Lv.3；每段清完可进食并等待自然恢复。
-4. `/mycli dungeon info aincrad_01`看路线；已学travel且有6魔力时，`/mycli dungeon travel aincrad_01`直接到攻略前哨。城镇探索点另用`/warp aincrad`，回村`/warp village`。
+4. `/mycli dungeon info aincrad_01`看路线；已学travel且有8魔力时，`/mycli dungeon travel aincrad_01`直接到攻略前哨。城镇探索点另用`/warp aincrad`，回村`/warp village`。
 5. 前哨`(856,69,-1144)`主动`/mycli dungeon start aincrad_01`；队友在10秒集结期`join aincrad_01`。原图三段清场、躲开首领蓄力，胜利后回前哨结算，再`claim aincrad_01`。中断先查status，按实际场次resume或leave，不重放start。
 
 远程个人箱：已学travel、有2魔力后`/mycli arena stash`；`stash pages`选10页。`arena rewards list`是待入箱奖励，`stash list`是已有箱格；领奖后开箱才装入，箱满保留。等窗口、库存与光标确认后再继续取放。
