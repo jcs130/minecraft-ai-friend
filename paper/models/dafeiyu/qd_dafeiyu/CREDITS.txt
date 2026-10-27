@@ -1,0 +1,3 @@
+QianDengJi original fat fish 1.0.0
+Geometry, texture, animations: original, CC0 1.0.
+No third-party encrypted .ysm was read, decrypted, copied, or used as a source.
