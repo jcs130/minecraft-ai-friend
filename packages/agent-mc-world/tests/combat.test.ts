@@ -565,6 +565,26 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
     expect(release).toHaveBeenCalledTimes(1); expect(attacks).toHaveLength(0);
   });
 
+  it.each([[], ['bread'], ['bow'], ['bow', 'bread']].map(names => ({ names })))('auto attack refuses unusable starting equipment $names before acquiring an attack lease', async ({ names }) => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };
+    b.inventory.items = () => names.map((name: string, index: number) => ({ name, type: index + 1, count: 1 }));
+    b.heldItem = names.includes('bread') ? { name: 'bread' } : null;
+    const acquire = vi.fn();
+    await expect(skillAttack(bot, 'zombie', 'auto', { aborted: () => false,
+      attack: { acquire, ranged: { ready: () => false } } } as never)).rejects.toThrow('未开始攻击');
+    expect(acquire).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
+  });
+
+  it('auto attack does not treat death-respawn inventory as current equipment', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };b.deathLifecycle = { inventorySynced: false };
+    const acquire = vi.fn();
+    await expect(skillAttack(bot, 'zombie', 'auto', { aborted: () => false, attack: { acquire } } as never))
+      .rejects.toThrow('背包读数尚未确认');
+    expect(acquire).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
+  });
+
   it.each(['blocked', 'unavailable'] as const)('auto attack with only a bow reports %s rather than silently using fists', async failure => {
     const enemy = foe(7, 'zombie', 2.5), { bot, attacks, controls } = combatRigBot([enemy]), b = bot as any;
     b.registry.entitiesByName.zombie = { name: 'zombie' };

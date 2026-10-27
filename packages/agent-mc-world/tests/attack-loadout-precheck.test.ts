@@ -47,4 +47,11 @@ describe('explicit melee admission exposes current equipment', () => {
     const bot = rig(['bow', 'arrow']); bot.entities = {} as typeof bot.entities;
     expect(precheckSteps(bot as never, [{ skill: 'attack', target: 'zombie', mode: 'melee' }], deps)[0]?.note.rule).toBe('attack.noTarget');
   });
+  it('reports unusable auto equipment without rejecting a batch that may acquire a weapon first', () => {
+    const bot = rig(['bow', 'bread'], 'bread');
+    const steps: SkillCall[] = [{ skill: 'attack', target: 'zombie' }];
+    expect(precheckSteps(bot as never, steps, deps)[0]?.note).toMatchObject({ level: 'soft', rule: 'attack.autoLoadout' });
+    expect(renderPrecheckNotes(precheckSteps(bot as never, steps, deps))).toContain('不会降级为空手');
+    expect(steps).toEqual([{ skill: 'attack', target: 'zombie' }]);
+  });
 });

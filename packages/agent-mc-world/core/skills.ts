@@ -1749,7 +1749,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'attack',
-    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断近战或弓(8 格切弓、5.5 格切回近战);
+    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断可用近战武器或弓箭(8 格切弓、5.5 格切回近战)，两者都不可用时明确受阻，不降级为空手;
                                                  melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
                                                  ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
                                                  auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。

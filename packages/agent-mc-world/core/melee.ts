@@ -22,6 +22,7 @@ import { zhEntity } from './names.ts';
 import { chooseHybridWeapon, type HybridWeapon } from './ranged.ts';
 import { zhErrorText } from './receipt.ts';
 import { itemsInReach } from './inventory.ts';
+import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -277,6 +278,20 @@ export async function skillAttack(
 ): Promise<string> {
   if (!isKnownTarget(bot, target)) {
     throw new SkillBlocked(`不认识「${target}」这种东西,认不出要打谁`);
+  }
+  // Auto selects usable weapons, not an implicit unarmed fallback. Recheck at execution, after any earlier
+  // equip/craft/container steps. This does not disable spell programs or the cornered self-defence policy.
+  if (mode === 'auto') {
+    checkAbort(ctx);
+    const synced = (bot as Bot & { deathLifecycle?: { inventorySynced?: boolean } }).deathLifecycle?.inventorySynced;
+    if (!inventoryReadConfirmed(bot) || synced === false)
+      throw new SkillBlocked('当前背包读数尚未确认，不能判定武器可用；先等服务器完整槽位，不按旧库存或空包开战');
+    if (!bestWeapon(bot) && !ctx.attack.ranged?.ready(bot)) {
+      const bow = bestRangedWeapon(bot);
+      throw new SkillBlocked(`当前没有可选近战武器，主手为 ${bot.heldItem?.name ?? '空手'}；`
+        + (bow ? `有 ${bow.name}${hasUsableArrows(bot) ? '和普通箭，但远程控制器暂不可用' : '，但没有普通箭'}` : '没有可用的弓和普通箭组合')
+        + '；auto 未改为空手挥击，未开始攻击。补给后重新核对实际背包与主手；法术和避险可单独选择');
+    }
   }
   const radius = FAR_TARGETS[target] ?? 32;
   const entity = findEntity(bot, target, radius, (candidate) => canSeeEntity(bot, candidate));

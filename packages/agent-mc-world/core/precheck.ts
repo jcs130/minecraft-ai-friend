@@ -601,6 +601,13 @@ function attackEntity(bot: Bot, target: string): RangedTarget | null {
 
 /** Report the requested mode's current equipment without selecting a different mode. */
 function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
+  if ((!call.mode || call.mode === 'auto') && inventoryReadConfirmed(bot) && !bestWeapon(bot)
+    && (!bestRangedWeapon(bot) || !hasUsableArrows(bot))) {
+    const target = precheckTarget(bot, call.target, 32, 'attack.noTarget');
+    if (target) return target;
+    return { level: 'soft', rule: 'attack.autoLoadout', text: `当前没有可用近战武器或弓箭组合，主手为 ${bot.heldItem?.name ?? '空手'}；`
+      + 'auto 不会降级为空手挥击。若前序步骤取到武器，执行时重查；否则本步会明确受阻，法术与避险不受此检查限制。' };
+  }
   if (call.mode === 'melee' && inventoryReadConfirmed(bot) && !bestWeapon(bot)) {
     const target = precheckTarget(bot, call.target, 32, 'attack.noTarget');
     if (target) return target;
