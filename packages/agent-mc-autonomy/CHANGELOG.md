@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.110
+
+- Pin canonical core rc.108, including surrounding awareness independent of camera direction; keep the synchronized b99464bb viewer build.
+
+- Add explicit preparation from a fixed public runtime ZIP with bounded streaming, download and expanded-size limits, SHA256 validation, checked extraction, cancellation and the existing fully verified short-cache installer. Importing the framework never downloads or launches anything.
+- Pin shared viewer b99464bb: preserve observed startup position, original held-item transforms, short projectile observations and shield-use presentation. Keep the rc.107 execution core, Node/browser/resources, permissions and one native task queue unchanged.
+
 ## 0.2.109
 
 - Publish the confirmed stopped-connection state without stale pending actions after the native disconnect has stopped its queue. Keep failed-disconnect uncertainty and original native task outcomes intact.

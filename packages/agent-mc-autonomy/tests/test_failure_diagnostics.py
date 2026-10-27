@@ -1,14 +1,20 @@
 import dataclasses
 import json
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from test_controller import Bridge, choose
 
 
 @pytest.mark.parametrize('seam', ['status.publish', 'host_state.persist'])
-def test_first_failure_survives_cleanup(framework_module, tmp_path, monkeypatch, run_async, seam):
+@pytest.mark.parametrize('status_retry', [False, True], ids=['posix-immediate', 'windows-retry'])
+def test_first_failure_survives_cleanup(framework_module, tmp_path, monkeypatch, run_async, seam, status_retry):
+    from agent_mc_autonomy import runner
     from agent_mc_autonomy.runner import run_session
+
+    monkeypatch.setattr(runner, 'os', SimpleNamespace(name='nt' if status_retry else 'posix', getpid=os.getpid))
 
     first = PermissionError(13, 'PRIVATE provider/persona/credential', '/PRIVATE/credentials/config')
     first.winerror = 5
@@ -56,7 +62,10 @@ def test_first_failure_survives_cleanup(framework_module, tmp_path, monkeypatch,
     assert 'PRIVATE' not in records[0].read_text(encoding='utf-8')
     state = json.loads((host/'host-state.json').read_text(encoding='utf-8'))
     assert state['stopped'] is True
-    assert state['uncertain'] is (seam == 'host_state.persist')
+    # Windows consumes the second injected status fault inside its bounded
+    # retry. POSIX fails immediately, so that fault reaches the later cleanup
+    # publication instead; cleanup must then retain the uncertainty fence.
+    assert state['uncertain'] is (seam == 'host_state.persist' or not status_retry)
     assert (state['inflight_request'] is not None) is (seam == 'host_state.persist')
     assert len([c for c in body.calls if c[0] == 'mc_do']) == 1
     assert body.closed

@@ -1,5 +1,5 @@
 import type { ToolDef } from './support/host-contract.ts';
-import { observedEntity } from './perception-sight.ts';
+import { entityAwareness, entityObservationScope } from './perception-sight.ts';
 import { classifyEntity } from './terrain.ts';
 import { zhEntity } from './names.ts';
 
@@ -51,28 +51,33 @@ export class AttentionReader {
   reset():void{this.motion.clear();}
   read(bot:any,limit:number,now=Date.now(),risk=false,entityId?:number) {
     const p=bot.entity.position;
-    const visible=Object.values(bot.entities??{}).filter((e:any)=>e!==bot.entity&&e.id!==bot.entity.id&&observedEntity(bot,e)) as any[];
-    const rows=visible.map(e=>{
+    const observed=Object.values(bot.entities??{}).flatMap((e:any)=>{
+      if(e===bot.entity||e.id===bot.entity.id)return [];
+      const observation=entityAwareness(bot,e);return observation?[{entity:e,observation}]:[];
+    });
+    const rows=observed.map(({entity:e,observation})=>{
       const pos=e.position,previous=this.motion.get(e.id),dt=previous?(now-previous.at)/1000:0;
       let prediction:null|{source:string;horizonMs:number;at:number[];uncertaintyRadius:number;probability:null}=null;
-      if(previous&&dt>=.1&&dt<=2){
+      if(observation.visibility==='visible'&&previous&&dt>=.1&&dt<=2){
         const dx=(pos.x-previous.position.x)/dt,dz=(pos.z-previous.position.z)/dt,speed=Math.hypot(dx,dz);
         if(speed<=8)prediction={source:'两次可见位置匀速外推，未核验路线',horizonMs:1000,
           at:[round(pos.x+dx),round(pos.y),round(pos.z+dz)],uncertaintyRadius:round(.5+speed*.5),probability:null};
       }
-      this.motion.set(e.id,{position:{x:pos.x,y:pos.y,z:pos.z},at:now});
-      return {entity:e,kind:kindOf(bot,e),distance:Math.hypot(pos.x-p.x,pos.y-p.y,pos.z-p.z),prediction};
+      if(observation.visibility==='visible')this.motion.set(e.id,{position:{x:pos.x,y:pos.y,z:pos.z},at:now});
+      else this.motion.delete(e.id);
+      return {entity:e,observation,kind:kindOf(bot,e),distance:Math.hypot(pos.x-p.x,pos.y-p.y,pos.z-p.z),prediction};
     });
-    const ids=new Set(visible.map(e=>e.id));for(const id of this.motion.keys())if(!ids.has(id))this.motion.delete(id);
+    const ids=new Set(observed.map(row=>row.entity.id));for(const id of this.motion.keys())if(!ids.has(id))this.motion.delete(id);
     const priority=(row:typeof rows[number])=>row.kind==='warning'?0:row.kind==='hostile'?(row.distance<6?1:this.mode==='peaceful'?5:2)
       :this.mode==='combat'?6:['player','npc'].includes(row.kind)?3:4;
     const selected=rows.filter(row=>entityId!==undefined?row.entity.id===entityId:risk||this.mode==='combat'
       ?['warning','hostile'].includes(row.kind):true).sort((a,b)=>priority(a)-priority(b)||a.distance-b.distance).slice(0,limit);
-    return {sampledAt:now,mode:this.mode,source:'eye-line-of-sight',
-      highlights:selected.map(({entity:e,kind,distance,prediction})=>({id:e.id,label:zhEntity(e.name??'unknown'),kind,distance:round(distance),
+    return {sampledAt:now,mode:this.mode,source:'current-entity-observations',observation:entityObservationScope(bot),
+      highlights:selected.map(({entity:e,observation,kind,distance,prediction})=>({id:e.id,label:zhEntity(e.name??'unknown'),kind,distance:round(distance),
+        visible:observation.visibility==='visible',observation,
         at:[round(e.position.x),round(e.position.y),round(e.position.z)],relation:kind==='player'?'未确认':undefined,
         ...(risk?{attackRange:null,sightRange:null,prediction,priority:kind==='warning'?'高':distance<6?'近距注意':'观察'}:{})})),
-      note:risk?'范围未知不是零；风险为注意优先级，非命中概率或安全保证。':'仅当前可见；未列出不等于不存在。'};
+      note:(risk?'范围未知不是零；风险为注意优先级，非命中概率或安全保证。':'未列出不等于不存在。')+'近处未直视实体来自当前同步，遮挡/视线未知不等于可攻击或可抵达，不是声音证据。'};
   }
 }
 const round=(n:number)=>Math.round(n*10)/10;

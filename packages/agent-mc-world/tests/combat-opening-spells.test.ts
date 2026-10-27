@@ -111,6 +111,19 @@ it('allows fast combat during a real read-only worker without cancelling that sc
   } finally { r.close(); }
 });
 
+it('does not count a nearby occluded actor toward an authored visible-enemy spell threshold',()=>{
+  const r=rig();
+  try {
+    const field=r.world.frame()!.battlefield;
+    expect(r.world.abilities().decisionFrame(r.bot as unknown as Bot,field,12).candidates.some(c=>c.kind==='cast')).toBe(true);
+    const hidden=field.actors.find(actor=>actor.entityId===8)!;
+    hidden.lineOfSight=false;
+    hidden.observation={source:'nearby-entity-tracking',visibility:'occluded',lineOfSight:false};
+    expect(r.world.abilities().decisionFrame(r.bot as unknown as Bot,field,12).candidates.filter(c=>c.kind==='cast')).toEqual([]);
+    expect(r.world.sent).toEqual([]);
+  }finally{r.close();}
+});
+
 it('still defers fast combat while a real scripted movement owns the executor', async () => {
   const r = rig();
   try {
