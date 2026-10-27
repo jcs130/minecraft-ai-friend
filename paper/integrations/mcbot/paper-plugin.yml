@@ -1,0 +1,18 @@
+name: QiandengjiMcbot
+version: '0.1.0'
+main: org.qiandengji.mcbot.McbotPaper
+api-version: '1.21'
+description: Independent mcbot transport backed by Numen bodies and permissions.
+dependencies:
+  server:
+    numen_api:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    numen:
+      load: BEFORE
+      required: true
+      join-classpath: true
+permissions:
+  qiandengji.mcbot.use:
+    default: true

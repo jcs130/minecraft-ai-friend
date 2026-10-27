@@ -1,8 +1,10 @@
 # 千灯纪：Paper 跨端服务器
 
-## 当前状态（2026-10-27）
+## 当前状态（2026-10-28）
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.18 / CortiEyeMirror 0.1.17**，官网 **0.8.28**。四职业、战斗成长、第一层正式攻略及艾恩葛朗特整图保护已上线；[正式发布](docs/RPG_RELEASE_20261027.md)。新的精炼副本指引0.4.47.19与保守反作弊已验证，服主决定先保留候选，未排队部署；[候选说明](docs/DUNGEON_GUIDANCE_20261027.md)。[Vortex原生集成](docs/VORTEX_MMO_INTEGRATION.md)仍在独立测试服，不能用完整0.4.48开发包替换现役JAR。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.21 / VortexRPG1.2.2-alpha-qd27 / QiandengjiRpg0.2.0**，官网 **0.8.28**。六职业、唯一成长与魔力、八张冒险任务、天赋、考试和旧副本救援已正式接通；旧职业只读归档。副本准入识别四护甲及近战、弓弩或本职业法器，不强制带剑；[正式发布与回退](docs/NATIVE_RPG_RELEASE_20261027.md)。Multiverse5.8.1、起始之城保护和原村庄往返保持。完整0.4.48仍有其他候选，不可直接替换现役JAR。
+
+新增[mcbot独立适配候选](integrations/mcbot/README.md)，接入原Paper与原世界，不改为Fabric服务端；以及[玩家假上下线修复候选](docs/PLAYER_ROSTER_OCCLUSION_20261028.md)。两项尚未部署，不将隔离验证写成正式生效。
 
 官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 

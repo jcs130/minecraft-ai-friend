@@ -12,9 +12,10 @@ const [stage, output, runtimePackage] = process.argv.slice(2);
 assert(stage && output && runtimePackage, 'stage, evidence file and installed Mineflayer package.json required');
 const properties=stage+'/server.properties', config=fs.readFileSync(properties,'utf8');
 assert.match(config,/^server-ip=127\.0\.0\.1\r?$/m);
-assert.match(config,/^server-port=25982\r?$/m);
-assert.match(config,/^rcon.port=25983\r?$/m);
-const rc=q=>command(q,15000,{properties,port:25983});
+const port=Number(/^server-port=(\d+)\r?$/m.exec(config)?.[1]),rcon=Number(/^rcon.port=(\d+)\r?$/m.exec(config)?.[1]);
+assert(port===25982&&rcon===25983||port===25928&&rcon===25929,'dedicated loopback QA ports only');
+if(port===25928)assert.equal(fs.readFileSync(stage+'/.qa-only','utf8'),'VORTEX_TAKEOVER_QA_ONLY');
+const rc=q=>command(q,15000,{properties,port:rcon});
 const mf=createRequire(runtimePackage)('mineflayer');
 const bots=[], report={passed:false,checks:[],packetCounts:{},scope:'isolated Paper 1.21.1, raw entity packets; sounds and tab identity deliberately retained'};
 const check=(name,ok)=>{assert.ok(ok,name);report.checks.push(name);console.log('PASS '+name);};
@@ -22,7 +23,7 @@ async function until(fn,label,ms=12000){const end=Date.now()+ms;while(Date.now()
 const entity=(bot,uuid)=>Object.values(bot.entities).find(e=>e.uuid?.toLowerCase()===uuid.toLowerCase());
 const spatial=new Set(['spawn_entity','named_entity_spawn','spawn_entity_living','entity_metadata','entity_equipment','entity_teleport','rel_entity_move','entity_move_look','entity_look','entity_velocity','entity_head_rotation','entity_status','entity_effect','remove_entity_effect','entity_update_attributes']);
 async function connect(username){
-  const bot=mf.createBot({host:'127.0.0.1',port:25982,username,version:'1.21.1',auth:'offline',defaultChatPatterns:false,hideErrors:true,checkTimeoutInterval:60000});
+  const bot=mf.createBot({host:'127.0.0.1',port,username,version:'1.21.1',auth:'offline',defaultChatPatterns:false,hideErrors:true,checkTimeoutInterval:60000});
   bots.push(bot);bot.raw=[];bot.failures=[];bot.ids=new Map();
   bot._client.on('packet',(data,meta)=>{
     if(!spatial.has(meta.name))return;
@@ -80,6 +81,9 @@ try{
  await rc('minecraft:tp ag_RawVision 106.5 81 100.5');await until(()=>entity(agent,zombie),'observer rounds the wall');
  check('moving around cover re-enables native spawn and state',!!entity(agent,zombie));
  await rc('minecraft:tp ag_RawVision 100.5 81 100.5');await wall('air');
+ // The ordinary control must remain inside vanilla's own tracking range.
+ // This tests the Agent's 64-block filter, not Spigot's monster range.
+ await rc('minecraft:tp RawControl 138.5 81 100.5');await sleep(700);
  await rc(`minecraft:tp ${zombie} 166.5 81 100.5`);await sleep(1500);
  check('range fixture chunk is loaded by both real clients',!!agent.world.getColumnAt({x:166,y:81,z:100})&&!!human.world.getColumnAt({x:166,y:81,z:100}));
  check('test control still tracks the same target beyond 64 blocks',!!entity(human,zombie));

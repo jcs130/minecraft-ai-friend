@@ -46,6 +46,7 @@
 | DSH | [dsh-minecraft-agent](https://github.com/jcs130/dsh-minecraft-agent) |
 | Cortico | [千灯纪 World](https://github.com/jcs130/cortico-world-qiandengji) · [Cortico 主项目](https://github.com/Pal-AI-Lab/Cortico) |
 | Numen／QwenPaw | [Numen Paper 接入](paper/docs/NUMEN_PAPER.md) · [QwenPaw 桥](paper/docs/KIRITO_QWENPAW.md)；模型与 Key 由各自部署者提供 |
+| mcbot（Paper适配候选） | [独立服务端适配](paper/integrations/mcbot/README.md)，复用Numen身体与原世界；客户端要求1.21.11 Fabric，当前未部署 |
 | 实时可视化 | [mc-visual-console](https://github.com/jcs130/mc-visual-console) |
 
 这些是可选接入方式，不要求安装全部框架。普通 Java 玩家无需安装 Numen；基岩与不同 Java 版本的支持以实际入口和客户端说明为准。
