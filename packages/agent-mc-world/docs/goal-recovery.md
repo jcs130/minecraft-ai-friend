@@ -45,3 +45,13 @@ empty melee hand as armed.
 
 These are lifecycle and execution fixes. Offline tests cannot establish improved
 survival or goal completion in a live server.
+## Full hotbar and main-hand equipment
+
+When equipping a stored item, the core prefers an empty hotbar slot. If the
+hotbar is full and the selected item has a custom name, it prefers exchanging
+an ordinary hotbar stack, preserving the named item in place. A custom name is
+not proof of server protection; the exchange still requires authoritative
+confirmation of both stacks and an empty cursor. A rejected exchange does not
+try other slots, and cancellation prevents a late acknowledgement from changing
+the selected hand. This applies to the shared equipment path used by explicit
+equip, combat, ranged weapons and building.
