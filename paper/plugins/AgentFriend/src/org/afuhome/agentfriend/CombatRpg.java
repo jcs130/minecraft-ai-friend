@@ -37,6 +37,10 @@ final class CombatRpg implements Listener {
     CombatRpg(AgentFriendPlugin plugin)throws Exception {
         this.plugin=plugin;ledger=new CombatRpgLedger(plugin.getDataFolder().toPath().resolve("combat-rpg-ledger.json"));
         origin=new NamespacedKey(plugin,"combat_origin");healthKey=new NamespacedKey(plugin,"combat_health");attackKey=new NamespacedKey(plugin,"combat_attack");
+        if(plugin.nativeRpg().selected()){
+            Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
+            return;
+        }
         Bukkit.getPluginManager().registerEvents(this,plugin);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
         if(Bukkit.getPluginManager().isPluginEnabled("TAB"))tab=new RpgTabBridge(plugin,this);
@@ -96,7 +100,7 @@ final class CombatRpg implements Listener {
     void formalClear(String run,Player p,int floor){
         if(floor<1||floor>100)throw new IllegalArgumentException("formal_floor");
         UUID receipt=UUID.nameUUIDFromBytes(("conquest:"+run+":"+p.getUniqueId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        enqueue(new CombatRpgLedger.Award(receipt,List.of(new CombatRpgRules.Credit(p.getUniqueId(),p.getName(),100+floor*40,0,floor))));
+        enqueue(new CombatRpgLedger.Award(receipt,List.of(new CombatRpgRules.Credit(p.getUniqueId(),p.getName(),plugin.nativeRpg().selected()?0:100+floor*40,0,floor))));
     }
     private void enqueue(CombatRpgLedger.Award event){
         if(stopping||fault||ledger.snapshot().receipts().contains(event.event())||pending.containsKey(event.event()))return;
@@ -115,16 +119,17 @@ final class CombatRpg implements Listener {
                 batch.forEach(e->pending.remove(e.event()));
                 for(Player p:Bukkit.getOnlinePlayers()){
                     int old=before.player(p.getUniqueId(),p.getName()).progress().level(),level=level(p);
-                    if(level>old&&eligible(p)){p.sendMessage("§a[战斗成长] Lv."+old+" → Lv."+level+"。下一步：/mycli status");p.playSound(p.getLocation(),Sound.ENTITY_PLAYER_LEVELUP,.6f,1f);}
+                    if(!plugin.nativeRpg().selected()&&level>old&&eligible(p)){p.sendMessage("§a[战斗成长] Lv."+old+" → Lv."+level+"。下一步：/mycli status");p.playSound(p.getLocation(),Sound.ENTITY_PLAYER_LEVELUP,.6f,1f);}
                 }
             });
         });
     }
-    int level(Player p){return ledger.snapshot().player(p.getUniqueId(),p.getName()).progress().level();}
+    int level(Player p){if(plugin.nativeRpg().selected())return plugin.nativeRpg().level(p);return ledger.snapshot().player(p.getUniqueId(),p.getName()).progress().level();}
     int floor(Player p){return ledger.snapshot().player(p.getUniqueId(),p.getName()).highestFloor();}
     List<CombatRpgLedger.PlayerRecord> ranking(){return ledger.snapshot().ranking();}
-    String profession(Player p){return plugin.professions().ledger.profile(p.getUniqueId()).get("combat").getAsString();}
+    String profession(Player p){if(plugin.nativeRpg().selected())return plugin.nativeRpg().profession(p);return plugin.professions().ledger.profile(p.getUniqueId()).get("combat").getAsString();}
     String next(Player p,boolean retiredTask){
+        if(plugin.nativeRpg().selected())return profession(p).isEmpty()?"/mycli profession list":"/mycli tasks list";
         String role=profession(p);
         boolean armed=Arrays.stream(p.getInventory().getContents()).filter(Objects::nonNull).anyMatch(i->
                 i.getType().name().endsWith("_SWORD")||i.getType().name().endsWith("_AXE")||i.getType()==Material.BOW||i.getType()==Material.CROSSBOW);
@@ -138,12 +143,13 @@ final class CombatRpg implements Listener {
         out.addProperty("level",progress.level());out.addProperty("xp",row.xp());out.addProperty("xpToNext",progress.toNext());
         out.addProperty("kills",row.kills());out.addProperty("conquestFloor",row.highestFloor());out.addProperty("practiceSeparate",true);
         out.addProperty("saveState",fault?"unavailable":pending.values().stream().anyMatch(e->e.credits().stream().anyMatch(c->c.id().equals(p.getUniqueId())))?"pending":"saved");
+        if(plugin.nativeRpg().selected()){var nativeState=plugin.nativeRpg().state(p);out.add("level",nativeState.get("level"));out.add("xp",nativeState.get("xp"));out.add("xpToNext",com.google.gson.JsonNull.INSTANCE);out.addProperty("authority","VortexRPG");}
         out.addProperty("rankingCommand","/mycli world story list ranking");return out;
     }
     void rankings(Player p){
-        p.sendMessage("§6攻略榜 · 正式层数优先，再按战斗经验；练习塔另计");var rows=ranking();
+        p.sendMessage(plugin.nativeRpg().selected()?"§6攻略榜 · 正式层数；旧经验已归档，现等级用 /mycli status":"§6攻略榜 · 正式层数优先，再按战斗经验；练习塔另计");var rows=ranking();
         if(rows.isEmpty()){p.sendMessage("§7尚无已保存的战斗记录；未开始不等于通关。");return;}
-        for(int i=0;i<rows.size();i++){var row=rows.get(i);p.sendMessage("§f"+(i+1)+". "+row.name()+" · 攻略"+row.highestFloor()+"层 · Lv."+row.progress().level());}
+        for(int i=0;i<rows.size();i++){var row=rows.get(i);p.sendMessage("§f"+(i+1)+". "+row.name()+" · 攻略"+row.highestFloor()+"层"+(plugin.nativeRpg().selected()?"":" · Lv."+row.progress().level()));}
     }
     private void modifier(Player p,Attribute type,NamespacedKey key,double value){
         var attr=p.getAttribute(type);if(attr==null)return;
@@ -168,8 +174,8 @@ final class CombatRpg implements Listener {
         flush();
         for(Player p:Bukkit.getOnlinePlayers()){
             boolean eligible=eligible(p);int level=level(p);
-            modifier(p,Attribute.GENERIC_MAX_HEALTH,healthKey,eligible?CombatRpgRules.healthBonus(level):0);
-            modifier(p,Attribute.GENERIC_ATTACK_DAMAGE,attackKey,eligible?CombatRpgRules.attackBonus(level):0);
+            modifier(p,Attribute.GENERIC_MAX_HEALTH,healthKey,!plugin.nativeRpg().selected()&&eligible?CombatRpgRules.healthBonus(level):0);
+            modifier(p,Attribute.GENERIC_ATTACK_DAMAGE,attackKey,!plugin.nativeRpg().selected()&&eligible?CombatRpgRules.attackBonus(level):0);
         }
         if(tab!=null)tab.refresh();
     }

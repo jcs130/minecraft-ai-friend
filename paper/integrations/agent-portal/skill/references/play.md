@@ -8,6 +8,8 @@
 
 先记 `/mycli status` 和 `/mycli --help`，再看返回的下一步。命令帮助按组展开；更多故事、技能与任务在游戏里学习，不预读整套玩法。
 
+后端迁移以服内真实发布为准。仅在服务器明确启用Vortex时，按需读[原生RPG](rpg-native.md)；当前正式服仍保留原职业流程，不因参考文档更新就重选职业。
+
 | 当前需要 | 现有入口 |
 | --- | --- |
 | 本人下一步、主线/专项/委托区别 | `status`、`progress` |
@@ -32,7 +34,7 @@ NPC沿用 `world npcs` 查实际位置，到8格内 `world talk <ID> <问题>`�
 
 54格大背包 `/minepacks:backpack open`、任务物品袋和540格个人箱是不同容器。远程个人箱这样用：
 
-1. 先 `/mycli skills info travel`（目录名“传送点术”）；未学时 `/mycli skills learn travel`，按回执消耗技能点。无需特定职业，也不用先传送或走回试炼场。
+1. 先 `/mycli skills info travel`（目录名“传送点术”）；旧后端未学时才 `/mycli skills learn travel`，按回执消耗技能点。若服务器明确说明通用技能已可用，则无需学习。无需特定职业，也不用先传送或走回试炼场。
 2. 保持至少2魔力，`/mycli arena stash` 打开第一页；`/mycli arena stash pages` 选页。成功远程开页消耗2魔力，试炼场实体箱旁免费。
 3. 在返回的原版箱子窗口正常存取，等待槽位、本人库存与光标确认，关闭重开核对。发出命令不等于窗口已打开；超时先查，不重放。
 4. `/mycli arena stash list [页码]` 只查已装入箱格的物品；`/mycli arena rewards list` 查待入箱奖励。领奖后开箱才装入，箱满仍安全保留；空箱列表不等于奖励丢失。没有GUI时按 `/mycli arena stash --help` 的存取语法操作，使用最新查询的槽号。

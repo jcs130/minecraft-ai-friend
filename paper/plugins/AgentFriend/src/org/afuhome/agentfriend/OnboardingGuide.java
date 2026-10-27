@@ -215,6 +215,7 @@ final class OnboardingGuide implements Listener {
                     +(retired?"当前是已撤下的农耕委托；可主动暂存，保留历史进度。":""),List.of(next,"/mycli world story list ranking"));
             else if(plugin.combatRpg().profession(p).isEmpty())step=new Step("route_choose","先选战斗职业：战士、坦克、法师或牧师；均可单人练级或组队。",List.of(next));
         }
+        if(plugin.nativeRpg().selected()){boolean chosen=!plugin.nativeRpg().profession(p).isEmpty();step=new Step(chosen?"complete":"route_choose",chosen?"Vortex职业已选；查看技能学习点，接讨伐和探索，再组队攻略。":"先选原生职业：骑士、法师、游侠、牧师、驯兽师、工程师。少量通用技无需选职。",List.of(chosen?"/mycli skills list":"/mycli profession list","/mycli tasks list","/mycli guild shared"));}
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);

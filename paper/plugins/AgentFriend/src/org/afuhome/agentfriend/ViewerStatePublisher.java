@@ -184,6 +184,7 @@ final class ViewerStatePublisher implements Listener {
             root.add("mana", mana);
             root.add("skills", skills(user));
         }
+        if(plugin.nativeRpg().selected())root.add("mana",plugin.nativeRpg().mana(player));
         root.add("abilities", abilities(player, user != null && user.isLoaded() ? user : null));
         if (plugin.professions() != null) root.add("profession", plugin.professions().state(player));
         if (plugin.skillAssessments() != null) root.add("academy",plugin.skillAssessments().summary(player));
@@ -221,6 +222,7 @@ final class ViewerStatePublisher implements Listener {
     }
 
     private JsonArray abilities(Player player, SkillsUser user) {
+        if(plugin.nativeRpg().selected())return plugin.nativeRpg().abilities(player);
         JsonArray result = new JsonArray();
         addAbility(result, "mycli:starbolt", "星芒箭", plugin.mastery().rank(player, "starbolt"), combatSpells.remainingCooldownMs(player, "starbolt"));
         addAbility(result, "mycli:frostnova", "霜环", plugin.mastery().rank(player, "frostnova"), combatSpells.remainingCooldownMs(player, "frostnova"));

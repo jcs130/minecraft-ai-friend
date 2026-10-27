@@ -1,0 +1,579 @@
+{
+  "schemaVersion": 1,
+  "status": "5_installed_3_candidate",
+  "date": "2026-10-27",
+  "sourcePolicy": "Keep original authors, notices, textures, geometry and animation; no encrypted extraction or forced player assignment.",
+  "entryPoints": {
+    "skin": "/skin set <preset>",
+    "ysm": "/appearance list → /appearance set <model> <texture> → /appearance status"
+  },
+  "skinCatalog": "../../plugins/AgentFriend/skin-catalog.json",
+  "models": [
+    {
+      "id": "qd_frieren",
+      "label": "芙莉莲",
+      "style": "精灵法师",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_SousouNoFrieren/SnF_Frieren.zip",
+        "archiveSha256": "755db78d041fa65ca5d7b957fc8e4979e1789fe8d83e0cd10e887ba0fc202580"
+      },
+      "credits": [
+        {
+          "name": "原模型作者",
+          "role": "模型与动画",
+          "comment": "源包及署名保留；来源 Elaina69/Yes-Steve-Model-Repo，未声明为千灯纪原创。"
+        }
+      ],
+      "license": {
+        "type": "All Rights Reserved"
+      },
+      "files": {
+        "arm.animation.json": "729eef5fc94218b42b71d20d7c6d4b8b0ce59951e13de70d3547031318e1de6f",
+        "arm.json": "30872c8f49a5b185c3619eba8f4033b6d375f6eb74f0c1846dfc8b006ff7efbf",
+        "main.animation.json": "fda324ca3f61682ebad1ac5dc9fe291b4003560c72f6f799e0effbd8acd719ce",
+        "main.json": "ec1af9602f26bcb291fc46af5dcbf6e31aeeaaa95ec4c30e119ed1a643d02ba0",
+        "texture.png": "77ca12fd1d54e1b6c6e3b4b0de284622453f5dc683e4876f823a0e11d919d96f",
+        "ysm.json": "df03f6fc521ed0d0dc8174670b6fc378e2ded52c063794377bcafca376596a30"
+      },
+      "runtimeBytes": 379063,
+      "webBundleBytes": 80836,
+      "textures": [
+        "texture"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": true,
+            "reason": null
+          },
+          "eat": {
+            "available": true,
+            "reason": null
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": true,
+        "firstPersonArmReason": null
+      },
+      "status": "installed"
+    },
+    {
+      "id": "qd_kazuha",
+      "label": "枫原万叶",
+      "style": "旅行剑士",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_GenshinImpact/GI_Kazuha.zip",
+        "archiveSha256": "37538353f5be8611b1967df3618b0093b42e8e8345ec10c9794adf4c11aaccd5"
+      },
+      "credits": [
+        {
+          "name": "原模型作者",
+          "role": "模型与动画",
+          "comment": "源包及署名保留；来源 Elaina69/Yes-Steve-Model-Repo，未声明为千灯纪原创。"
+        }
+      ],
+      "license": {
+        "type": "All Rights Reserved"
+      },
+      "files": {
+        "arm.json": "8458102c36489be1074ffcd8a87978c50e2d77b4878dc3b5606ec9af62747f44",
+        "main.animation.json": "c755eb4c9bc45410ff161768b04e7b66a436dde4610f2465688ecb328d427d08",
+        "main.json": "66ab506e116943d84067655a2134233df09a36985b22bcd6dfd5db9b3da859d8",
+        "texture.png": "5387e345d7d9ac2e4bf0e5aa6efa84a18c882c8bcf2998ae1c2cde039ad7e854",
+        "ysm.json": "52341244ef52d52920bf5ff2e496fb868e32d3e09f992e55db506b22fbd21d58"
+      },
+      "runtimeBytes": 265383,
+      "webBundleBytes": 81803,
+      "textures": [
+        "texture"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:swing_hand"
+          },
+          "eat": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:use_mainhand"
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": true,
+        "firstPersonArmReason": null
+      },
+      "status": "installed"
+    },
+    {
+      "id": "qd_lappland",
+      "label": "拉普兰德",
+      "style": "双剑兽耳",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_Arknights/Ak_Lappland.zip",
+        "archiveSha256": "aff0bcdb57515a1e3ff79a5cd74abbcc007cf8e23682fae1a67acb944466f65e"
+      },
+      "credits": [
+        {
+          "name": "原模型作者",
+          "role": "模型与动画",
+          "comment": "源包及署名保留；来源 Elaina69/Yes-Steve-Model-Repo，未声明为千灯纪原创。"
+        }
+      ],
+      "license": {
+        "type": "All Rights Reserved"
+      },
+      "files": {
+        "main.animation.json": "e21a8d9271c66f4e627342fac3ffca24cde02bfdd17d84d8b3b155d5c0dc5b97",
+        "main.json": "f0cb7fb9ea0318121be23ec7ed2730f4cb1f0a96607c9a6824e9213897ba56d9",
+        "texture.png": "b8692f98804fc0d7f6aed216ba1c5fdedf7e0a983ee75d31529bca808de8d643",
+        "arm.json": "852b36cfc4d8c88d0fbe4ccdcbdcd0bae79591472843ddc0e893af5de7cbb31f",
+        "ysm.json": "808a0cdc39623d0b95f5dd86d33298e737aff2bdddb2d43583378910d998fecd"
+      },
+      "runtimeBytes": 419437,
+      "webBundleBytes": 59041,
+      "textures": [
+        "texture"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:swing_hand"
+          },
+          "eat": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:use_mainhand"
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": true,
+        "firstPersonArmReason": null
+      },
+      "status": "installed"
+    },
+    {
+      "id": "qd_mega_knight",
+      "label": "超级骑士",
+      "style": "重甲骑士",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_ClashRoyal-COC/CR_Mega-Knight.zip",
+        "archiveSha256": "580df79add43e1bc550604ed14b9515ad58d655fb01c1158fa686d6d15235d9a"
+      },
+      "credits": [
+        {
+          "name": "§c烈鸟比百",
+          "role": "§7人物模型",
+          "avatar": "avatar/lnbb.png",
+          "contact": {
+            "Afdian": "爱发电搜索“烈鸟比百”",
+            "Bilibili": "B站搜索“烈鸟比百”"
+          },
+          "comment": "§7啦啦啦~"
+        }
+      ],
+      "license": {
+        "type": "CC 0"
+      },
+      "files": {
+        "ysm.json": "0dc93e6eb7f2323d75965d088a0d1667489a5238db234c39c2b284da8cd26dae",
+        "animations/arm.animation.json": "173ffd65b4b5592277efa4e1f1e6abe32aca169d478374b41659b3055a66e88a",
+        "animations/arrow.animation.json": "a1742d97b6f3a435a92ed37c1f971b9367d8198a3c12116be4a9f433586b8e12",
+        "animations/carryon.animation.json": "32851380160c2bceea27535eeb1f27ed77e74f2fd565ac13c06c499952aff79e",
+        "animations/extra.animation.json": "213d3621c82fb031ff49c00280adaca8187cf66fad906433644de43f3b20e588",
+        "animations/main.animation.json": "38697232333486252706f1e6ee4b80fc321a2ecc72149e452b75889ae9d8f1cf",
+        "animations/parcool.animation.json": "85f8114dce69f142d5516cd237ca63ef02dc7e655a82076387a66d05e7610700",
+        "animations/swem.animation.json": "bf1f5c06a4238c24ee8e745801e6f5dacbcf7d489f4e47488b84e40b1372dd7b",
+        "animations/tac.animation.json": "a873d09b660dd231643cdce11c366f1e91e03692c3ec9ee675ad4e034aa2f404",
+        "avatar/lnbb.png": "4cc20ed747dac439077a2fbc20ec4d9787cdee95c7266d4c97e1fd9b6b1a922b",
+        "models/arm.json": "93d4fc7249d4a47f95c393345d87c36042ea30c3eb19155283141609681fb948",
+        "models/main.json": "4af8b85e786eb01273bc60af1eb540a2a1a3f8f7fc812c139ff393ec65ed6183",
+        "textures/default.png": "762606c1f81aba930f176fd044aaa64253b57cbf620f5b420bea852bce0db29c"
+      },
+      "runtimeBytes": 1022581,
+      "webBundleBytes": 107958,
+      "textures": [
+        "default"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:swing_hand"
+          },
+          "eat": {
+            "available": true,
+            "reason": null
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": true,
+        "firstPersonArmReason": null
+      },
+      "status": "installed"
+    },
+    {
+      "id": "qd_papyrus",
+      "label": "帕派瑞斯",
+      "style": "骷髅守卫",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_Undertale/Undertale_Papyrus.zip",
+        "archiveSha256": "8da922ae090283a97448d2ece957295268ebd253cd6f2e824902d6267545a9fd"
+      },
+      "credits": [
+        {
+          "name": "okarun",
+          "role": "",
+          "avatar": "avatar/okarun.png",
+          "contact": {
+            "Afdian": "https://afdian.com/a/6TGESILA",
+            "Bilibili": "https://space.bilibili.com/17798027"
+          },
+          "comment": "一个MC模型/YSM作者，想法很多，时间很少"
+        }
+      ],
+      "license": {
+        "type": "CC 0"
+      },
+      "files": {
+        "animations/main.animation.json": "5542bec68f8d35d14120cae85e96785708623e8b315dca550e95025c6084f0dc",
+        "animations/parcool.animation.json": "1bfd0c06c63282bc1f0bbb316983c0faa4e98b666989961479fa424f5f3e556a",
+        "animations/slashblade.animation.json": "af05ec10f7e23dd7148f6a72bdba8abd0e4899dd9e7bf6d65cc42e4feba118fb",
+        "avatar/okarun.png": "3e843ebcd7e1f14ce013996a5ca5f8e07e5b2ea59c720a997bf9849cd1cd4290",
+        "models/arm.json": "2b8e430c2bf3684eb1f1b906fc42f4e6b0d2529a03a5efb9c13e0f5223aff048",
+        "models/main.json": "ebff26da81b53441d0457269ab6291f95dc913abf171244102821a815d9f7164",
+        "textures/default.png": "a384bd2402a86d36b1c9b1e890f940e1ee7ea27d57140baa0be5419d8639b485",
+        "ysm.json": "4954218428f271389a98471b94f336be871bee7e9dfc66ff9b22b90e087254b2"
+      },
+      "runtimeBytes": 2018069,
+      "webBundleBytes": 40980,
+      "textures": [
+        "default"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:swing_hand"
+          },
+          "eat": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:use_mainhand"
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": false,
+        "firstPersonArmReason": "PAPER_FIRST_PERSON_ARM_RIG_UNSUPPORTED"
+      },
+      "status": "candidate_requires_viewer_update"
+    },
+    {
+      "id": "qd_ryza",
+      "label": "莱莎",
+      "style": "炼金冒险家",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_Atelier/Atelier_Reisalin-Stout.zip",
+        "archiveSha256": "2b710e60116838f143c6f74440e03f839e82ea1e8f0e235a0c121004a1497792"
+      },
+      "credits": [
+        {
+          "name": "原模型作者",
+          "role": "模型与动画",
+          "comment": "源包及署名保留；来源 Elaina69/Yes-Steve-Model-Repo，未声明为千灯纪原创。"
+        }
+      ],
+      "license": {
+        "type": "All Rights Reserved"
+      },
+      "files": {
+        "default.png": "3a93dca96383b9a35cffeb72abde52f29f9b48ddfd417714f02f2e0962d4d459",
+        "main.animation.json": "2719edcb1d88db3aa3f4d626c5602c74af2376db53056a9e7abf19fa9ed2d694",
+        "main.json": "0adf5f02f350aca54c5f0e1a46ef250c7fe0615e2ed4517f9be944ca03fe44f6",
+        "arm.json": "b170c5866f268d4a65c2b8a382cfa76fd57b0e2dad0ff9257487eb313bcca2f5",
+        "ysm.json": "4c7ea84c40ff6ffc09409ef9625992394e2b27de1209c29932b6170dcd0c1326"
+      },
+      "runtimeBytes": 319280,
+      "webBundleBytes": 78725,
+      "textures": [
+        "default"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": true,
+            "reason": null
+          },
+          "eat": {
+            "available": true,
+            "reason": null
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": true,
+        "firstPersonArmReason": null
+      },
+      "status": "installed"
+    },
+    {
+      "id": "qd_sans",
+      "label": "杉斯",
+      "style": "骷髅旅人",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_Undertale/Undertale_Sans_v2.zip",
+        "archiveSha256": "91ebdc682a9fcbf5d31f5e98c6e139eeaa8620c17b02522e298187f6a9a15f0c"
+      },
+      "credits": [
+        {
+          "name": "okarun",
+          "role": "",
+          "avatar": "avatar/okarun.png",
+          "contact": {
+            "Afdian": "https://afdian.com/a/6TGESILA",
+            "Bilibili": "https://space.bilibili.com/17798027"
+          },
+          "comment": "一个MC模型/YSM作者，想法很多，时间很少"
+        }
+      ],
+      "license": {
+        "type": "CC 0"
+      },
+      "files": {
+        "animations/main.animation.json": "1d8c6151e3b8bf6b0be4611373ae45c29a8d45cbe1ad6ee3f1d76a792d1a8d6d",
+        "animations/parcool.animation.json": "1bfd0c06c63282bc1f0bbb316983c0faa4e98b666989961479fa424f5f3e556a",
+        "animations/slashblade.animation.json": "af05ec10f7e23dd7148f6a72bdba8abd0e4899dd9e7bf6d65cc42e4feba118fb",
+        "avatar/okarun.png": "3e843ebcd7e1f14ce013996a5ca5f8e07e5b2ea59c720a997bf9849cd1cd4290",
+        "models/arm.json": "c3ae22ede6593ed9d8d20b951db5f1cac0acd4db28b466cdd2171422fb8fa453",
+        "models/main.json": "30855940b85d044402561c0ec6933bce073e6843235ffa7521847efd4719225c",
+        "textures/default.png": "17832d85df342b62fbfede149c2e934c2100101d57d5c5ea99377817a4f062a8",
+        "ysm.json": "4954218428f271389a98471b94f336be871bee7e9dfc66ff9b22b90e087254b2"
+      },
+      "runtimeBytes": 1989509,
+      "webBundleBytes": 34149,
+      "textures": [
+        "default"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:swing_hand"
+          },
+          "eat": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:use_mainhand"
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": false,
+        "firstPersonArmReason": "PAPER_FIRST_PERSON_ARM_RIG_UNSUPPORTED"
+      },
+      "status": "candidate_requires_viewer_update"
+    },
+    {
+      "id": "qd_tahu",
+      "label": "塔胡",
+      "style": "机械守卫",
+      "source": {
+        "repository": "https://github.com/Elaina69/Yes-Steve-Model-Repo",
+        "commit": "1749b46467acea11694891c01ede24914b22dc6c",
+        "path": "_Bionicle/Bionicle_Tahu.zip",
+        "archiveSha256": "39aa4a62b241e5d8d0e7ed8136c9f9e8f126d22ca3d075a040e58c13b5be57ff"
+      },
+      "credits": [
+        {
+          "name": "CrystalizedSun",
+          "comment": "The Contributor of TLM mod"
+        }
+      ],
+      "license": {
+        "type": "CC 0"
+      },
+      "files": {
+        "models/arm.json": "ec27de03fc80aadf5b73640f60ec524a4a95dc17323b5e5fcda071fa89c223fd",
+        "models/main.json": "f9b87a530edc63428d7932b9ed7275228d97011c9181665229cc7dbb2d5c1679",
+        "textures/tahu.png": "3d06aef0256db4b635aa1b01b64940244bdcc2c78a4e069da2e6583eff2c0c09",
+        "textures/tahu_goldmask.png": "5083314d8526bb21cc098b66d497f4550ca66abf0ac47316a798b6f14c6caf04",
+        "ysm.json": "b3d03427770d2165d4778dab807e9c6e4f65438397329fdb8cd2c7b71094ea23",
+        "animations/main.animation.json": "f59a6aa33c2448a3e6ec5f9e3cafe0d4079a404c240e80b39395a768a84c355e",
+        "animations/tac.animation.json": "4f40aec385f3c4117db41fdbe6c94184a17c75cd324d37fb0660a9c70e251ff1",
+        "animations/tlm.animation.json": "d4247a4d8064c8d548f95c8804f077c816feecbb9e24a70abc24e9a619472fcf",
+        "avatar/dm.png": "5d28f00fd947e31f361da9cab6c16693d80f25988515822e078cea1f5ef08a60",
+        "avatar/gsl.png": "0bf76a1ba896f709839f9c35bb62852350b4b0f110bc9a1c4c4c5acc99f25188"
+      },
+      "runtimeBytes": 604100,
+      "webBundleBytes": 103721,
+      "textures": [
+        "tahu",
+        "tahu_goldmask"
+      ],
+      "qa": {
+        "nativeSelection": true,
+        "webIdleWalkRun": true,
+        "syntheticActions": {
+          "idle": {
+            "available": true,
+            "reason": null
+          },
+          "walk": {
+            "available": true,
+            "reason": null
+          },
+          "run": {
+            "available": true,
+            "reason": null
+          },
+          "swing": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:swing_hand"
+          },
+          "eat": {
+            "available": false,
+            "reason": "YSM_CLIP_UNAVAILABLE:use_mainhand"
+          },
+          "sneak": {
+            "available": true,
+            "reason": null
+          }
+        },
+        "firstPersonArmsAvailable": false,
+        "firstPersonArmReason": "PAPER_FIRST_PERSON_ARM_RIG_UNSUPPORTED"
+      },
+      "status": "candidate_requires_viewer_update"
+    }
+  ],
+  "nativeAndWebPixelParityVerified": false,
+  "verificationDate": "2026-10-27",
+  "viewerFixCommit": "9958361a"
+}

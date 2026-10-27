@@ -2,7 +2,8 @@
 from pathlib import Path
 import argparse,os,subprocess,zipfile
 p=argparse.ArgumentParser();p.add_argument('--server',type=Path,required=True);p.add_argument('--vortex',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
-root=Path(__file__).resolve().parent;java=Path('E:/MC/jdk/jdk-21.0.12.1+1/bin');classes=a.output.parent/'bridge-classes';classes.mkdir(exist_ok=True,parents=True)
+assert not a.output.exists(),'new output required'
+root=Path(__file__).resolve().parent;java=Path('E:/MC/jdk/jdk-21.0.12.1+1/bin');classes=a.output.parent/(a.output.stem+'.build')/'classes';classes.mkdir(parents=True)
 cp=os.pathsep.join(map(str,[a.vortex,*a.server.rglob('libraries/**/*.jar')]))
 result=subprocess.run([str(java/'javac.exe'),'-J-Duser.language=en','-J-Dfile.encoding=UTF-8','-proc:none','-encoding','UTF-8','--release','21','-cp',cp,'-d',str(classes),*map(str,(root/'src').rglob('*.java'))],capture_output=True)
 if result.returncode:

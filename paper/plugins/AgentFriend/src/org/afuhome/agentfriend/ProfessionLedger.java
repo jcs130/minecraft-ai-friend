@@ -14,7 +14,10 @@ final class ProfessionLedger {
     private JsonObject data;
     private boolean ready;
     private String error = "";
-    ProfessionLedger(Path file) {
+    private final boolean readOnly;
+    ProfessionLedger(Path file) { this(file, false); }
+    ProfessionLedger(Path file, boolean readOnly) {
+        this.readOnly=readOnly;
         this.file = file;
         try {
             if (Files.exists(file)) {
@@ -110,7 +113,7 @@ final class ProfessionLedger {
         if (!players.has(id.toString())) players.add(id.toString(), empty()); return players.getAsJsonObject(id.toString());
     }
     boolean write(Consumer<JsonObject> edit) {
-        if (!ready) return false;
+        if (!ready || readOnly) return false;
         JsonObject next = data.deepCopy();
         try {
             edit.accept(next); byte[] bytes = next.toString().getBytes(StandardCharsets.UTF_8);

@@ -1,0 +1,54 @@
+# Vortex 原生接管候选
+
+2026-10-27 服主明确采用 Vortex 整套职业，允许废弃旧职业。本候选不再尝试把四职业硬映射到六职业；旧 `profession-ledger.json` 保留只读，旧职业技能、属性和击杀经验监听停止。玩家主动选择 Vortex 原生职业，背包、个人箱、既有副本场次和结算记录保留。
+
+唯一成长与魔力来源是 Vortex。通用技能 `home/travel/prospect/night/feather` 仍调用已经验证的 AgentFriend/MagicSpells 效果、安全落点、遮挡和冷却，通过窄接口扣同一 Vortex 魔力，不复制效果。旧战斗账本仅继续保存原副本的正式楼层证明，不再产生战斗经验或属性。
+
+## 当前验收状态
+
+隔离 `VORTEX_TAKEOVER_QA_ONLY` 场地首轮27项和冷启动14项通过；补真实Vault及短任务指引后34项联机、17项冷启动通过。经验和实际余额均保存，重复领奖不再增加；旧职业账本逐字节保持。
+
+六个普通非OP角色的原生选职、初始技能、粒子、冷却及旁观状态拦截共57项通过。法师、游侠、驯兽师和工程师真正降低目标生命，牧师真正恢复生命；不是只数“命令已发出”。该轮为API桥guides2；guides4只补通用技能旧learn兼容与目标文字，另12项个人箱检查通过：不选职也能开远程箱，存3、关闭重开、取3，光标为空，实际服务器数量4→7与活动窗口一致。inventory-0在箱子开着时暂为7→4，不能拿另一窗口快照误报服务端丢物。
+
+目标数量、前置、奖励和下一步由原生任务定义与进度投影，12项文字状态规则通过。原版剧情NPC初稿已由真实女神原生任务生成并核对为候选，未冒称皮肤或剧情已落地。
+
+这是原生接管候选的证据，不等于所有天赋、原生菜单、旧副本结算、NPC外观及实体城门都已验收。正式仍 `.20`，未替换生产JAR，也未改玩家职业。外观5套YSM/40款皮肤已独立无重启加入，不能把它当作职业切换。
+
+## 客户端入口
+
+普通 Java、Mineflayer、Numen 与 Geyser 使用同一个 `/mycli`：
+
+```text
+/mycli status
+/mycli profession list
+/mycli profession info knight
+/mycli profession choose knight
+/mycli skills list
+/mycli skills info iron_body
+/mycli skills learn iron_body
+/mycli skills prepare fortify
+/mycli cast fortify
+/mycli tasks list
+/mycli tasks info <任务ID>
+/mycli tasks accept <任务ID>
+/mycli tasks status
+/mycli tasks claim <任务ID>
+```
+
+技能树节点与施放技能ID由原生定义决定，不能把被动 `iron_body` 当成可施放技能。默认精炼中文；`--json` 仅改变输出格式。查询不报名、不选职、不花点；`menu` 打开原生菜单。`/mycli guild party ...` 复用 Vortex 原生命令；公共补给箱仍 `/mycli guild shared`，个人奖励箱仍 `/mycli arena stash`。
+
+## 构建
+
+先从官方取得固定输入，按父目录说明完成 1.21.1 属性兼容及窄补丁。`build-takeover.py --help` 构建自有 AgentFriend 适配，要求固定 `.20` 基包和未使用输出目录，保留未涉及原条目；`build.py` 构建 API 桥。不分发上游 JAR 或第三方资产。
+
+`patch-vortex.py`另外需要官方Vault API的 `--vault <Vault.jar>`。补丁修复原生CURRENCY只显示提示却未入账的问题；实际调用既有经济服务，并等待原生经验保存/实际入账后才发完成回执。未完成目标、失配的旧目标和缺少经济服务时不交付。原生写操作包含身体状态检查，重复冷却在实体线程扣魔力前复查。
+
+`localize-native.py`只替换已审阅可见常量和YAML值，37类/232处可见文字及两个原生资源已转换，ID、权限、参数和机制保持。尚有未覆盖的原生天赋、装备描述和任务资源，不能宣称完整汉化。
+
+接管需要同时配置 AgentFriend `rpg-backend: vortex` 与 QiandengjiRpg `backend: vortex`；默认仍旧模式/独立预览。仅安装一个JAR、缺少API或只改变配置，不得宣称切换完成；桥拒绝没有明确停用旧职业的双重权威。`city-gates` 默认未启用，须核实物理入口、目标、保护和往返消耗后配置。
+
+生产发布前还须完成完整天赋/中文菜单、普通/Agent/基岩交互、旧副本救援/结算、通用技能及NPC/门的回归；正常冷备、当前批准与原维护门禁。原生CAST_SPELL/TALK_TO_NPC/REACH_LEVEL枚举尚无完整事件链，不能先配置成玩家必须完成的目标。跨任务存档与Vault的进程崩溃窗口仍须补持久结算证据；当前不自动重领或宣称跨库恰好一次。
+
+测试服沿用的旧世界保护掩码有UUID失配，已拒绝编辑；相机没有真实外部桥。这些旧告警不算保护/拍照验收通过。早期探针过快触发原版反刷屏、传送未等区块、测试名超过16字符及读取inventory-0，均保留失败记录后修正测试，不放宽正式服反作弊、不靠重复消耗操作凑成功。
+
+数据切换后的回退必须保留最新 Vortex 数据，不能恢复旧世界或用旧职业档覆盖新进度。当前清单是schema0、不可部署；禁止把测试目录整体复制到正式服。

@@ -4,9 +4,11 @@
 
 **正式RPG已上线：**四职业23项技艺，艾恩葛朗特第一层正式攻略、战斗升级、组队救援和计分板已开放。沿用罗盘与`/mycli`，先看[技能四步](paper/docs/SKILL_USAGE_QUICKSTART.md)；[发布与玩法](paper/docs/RPG_RELEASE_20261027.md)。完整0.4.48仍含其他候选，不可替换正式JAR。
 
-[副本指引与反作弊](paper/docs/DUNGEON_GUIDANCE_20261027.md)已随.20部署。[Vortex原生集成](paper/docs/VORTEX_MMO_INTEGRATION.md)仍在独立验证；下一阶段统一迁移旧技能/职业、SAO外观和双城传送，不让两套RPG规则同时扣算。
+[副本指引与反作弊](paper/docs/DUNGEON_GUIDANCE_20261027.md)已随.20部署。[Vortex原生接管](paper/integrations/vortex-rpg/TAKEOVER.md)按服主决定采用原生六职业、归档旧职业，复用通用效果；仍在独立验证，不让两套RPG同时扣算。SAO NPC外观和双城实体门仍待验收。
 
 [Multiverse多世界](paper/integrations/multiverse-core/README.md)5.8.1已正式安装，用于以后楼层独立维度。起始之城外开放探索，不按压缩包范围设置活动围墙。
+
+[外观选择](paper/content/appearance-gallery/README.md)新增40款签名皮肤与5套YSM，保留现有角色外观，沿用 `/skin` 与 `/appearance`。另3套通过网页运动审阅的模型待匹配渲染器；Vortex六职业接管仍是[独立候选](paper/integrations/vortex-rpg/TAKEOVER.md)，没有替换当前正式职业。
 
 有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
 

@@ -4,6 +4,8 @@
 
 ## 已在服务器上的外观
 
+2026-10-27正式服新增5套YSM与40款普通皮肤，按需从 `/appearance list` 选择。例：`/appearance set qd_frieren texture`、`/skin set afu_link`。仍只改本人、用原身份；未知结果先查询。完整选择与逐项能力见[外观目录](https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/content/appearance-gallery)，不预加载整份清单。
+
 普通皮肤直接在游戏里执行 `/skin help`、`/skin set <预设或正版玩家名>`；已有鸣人预设为 `afu_naruto`。不要加其他玩家作为目标。自己的PNG可用下面的上传助手；MC核心的本地预览换肤不等于向全服提交皮肤。
 
 先读 `/appearance help` 查看服务器实际支持。AgentAppearance0.3.4起支持 `/appearance list` → `/appearance set <模型ID> [贴图ID]` → `/appearance status`，只改本人，不需要OP。旧0.3.3只有查询，不要反复试管理命令。冷却30秒，等待实际“已应用”回执；未知先查，不连续重发。Java三维YSM需匹配的客户端模组，当前原生链为1.21.1／YSM2.4.1。

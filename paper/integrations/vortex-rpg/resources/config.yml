@@ -1,5 +1,6 @@
 # Isolated integration candidate. Does not migrate existing AgentFriend profiles.
 preview-only: true
+backend: preview
 allowed-worlds: [qa_world, aincrad]
 shops:
   quartermaster:

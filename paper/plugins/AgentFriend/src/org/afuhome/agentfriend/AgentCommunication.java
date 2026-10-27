@@ -87,6 +87,12 @@ final class AgentCommunication {
         out.add("mana", manaKnown ? new JsonPrimitive(user.getMana()) : JsonNull.INSTANCE);
         out.add("maxMana", manaKnown ? new JsonPrimitive(user.getMaxMana()) : JsonNull.INSTANCE);
         out.addProperty("manaStatus", manaKnown ? "known" : "unknown_not_loaded");
+        if(plugin.nativeRpg().selected()){
+            var nativeMana=plugin.nativeRpg().mana(p);
+            out.add("mana",nativeMana.isJsonObject()?nativeMana.getAsJsonObject().get("current"):JsonNull.INSTANCE);
+            out.add("maxMana",nativeMana.isJsonObject()?nativeMana.getAsJsonObject().get("max"):JsonNull.INSTANCE);
+            out.addProperty("manaStatus",nativeMana.isJsonObject()?"known_vortex":"unknown_not_loaded");
+        }
         out.add("authentication", authentication(p));
         JsonObject next = plugin.agentCoach().entryState(p);
         if (next.has("step")) {

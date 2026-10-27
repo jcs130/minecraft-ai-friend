@@ -44,9 +44,14 @@ final class DungeonAdvice {
     static String skill(String role) {
         return switch(role) {
             case "warrior" -> "战士：sword_parry防护、sword_thrust近战";
-            case "mage" -> "法师：mage_frost减速、mage_bolt远程";
+            case "mage" -> "法师：远程输出与控制；当前可用技用 /mycli skills list 查询";
             case "priest" -> "牧师：healer_mend恢复、priest_blessing团队增益";
             case "tank" -> "坦克：tank_taunt吸引仇恨、tank_bastion防护";
+            case "knight" -> "骑士：fortify防护承伤；后续节点用 /mycli skills list 查询";
+            case "cleric" -> "牧师：mend恢复；范围治疗等后续节点用 /mycli skills list 查询";
+            case "ranger" -> "游侠：hunter_mark标记目标，配合弓箭输出";
+            case "beastmaster" -> "驯兽师：beast_call野性攻击；有效目标用技能详情查询";
+            case "engineer" -> "工程师：deploy_turret机巧攻击；保持目标在技能范围内";
             default -> "先选职业；学习→准备→装备合适武器→施放，技能名称从 skills status 查";
         };
     }

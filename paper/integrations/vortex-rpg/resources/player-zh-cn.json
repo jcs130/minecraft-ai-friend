@@ -1,0 +1,37 @@
+{
+  "exact": {
+    "Knight": "骑士", "Mage": "法师", "Ranger": "游侠", "Cleric": "牧师", "Beastmaster": "驯兽师", "Engineer": "工程师",
+    "Strength": "力量", "Vitality": "体质", "Wisdom": "感知", "Dexterity": "敏捷", "Intelligence": "智力", "Spirit": "精神",
+    "Class Hall": "职业大厅", "Skill Atlas": "技能图谱", "Ascension Hall": "进阶大厅", "Ascensions": "职业进阶", "Profile Summary": "角色摘要",
+    "Back to Class Hall": "返回职业大厅", "Return to your class overview.": "查看职业与成长概况。",
+    "Spellbook": "职业技能书", "Active Spell": "当前装备技能", "Cast Active Spell": "施放当前技能", "No active spell": "尚未装备技能", "Spellbook Help": "技能书说明",
+    "Click any spell to equip it.": "点击技能将其装备。", "Use /spell cast to fire the active spell.": "用 /mycli cast <ID> 施放技能。",
+    "Right-click active-spell items casts the equipped spell.": "持职业武器右键，施放已装备技能。", "Your current active spell.": "当前装备的技能。", "No active spell selected.": "尚未装备技能。",
+    "Currently equipped.": "当前已装备。", "Click to equip this spell.": "点击装备技能。", "Selected on this profile.": "当前角色已选择。", "Built-in class profile.": "Vortex原生职业。", "Custom class profile.": "服务器自定义职业。",
+    "Unlocked. Click to equip spell if available.": "已学会；若有主动技，点击即可装备。", "Click to unlock.": "点击主动花费学习点。", "You need more levels for this skill.": "战斗等级不足；先接讨伐委托练级。",
+    "Ascension is ready to choose.": "已满足进阶等级，可主动选择。", "Click to view class spec paths.": "查看职业进阶路线。", "Click to ascend.": "点击选择职业进阶。", "Reach the level requirement first.": "请先达到所需等级。",
+    "Swapping RESETS skills and ascension.": "更换职业会重置技能与进阶。", "Your XP and level are preserved.": "经验与等级保留。", "Click a class below to confirm the swap.": "点击下方职业确认更换。", "Close without swapping.": "关闭，不更换职业。",
+    "Class swapping is currently disabled on this server.": "当前不开放自行换职；不会重置你的技能。", "Choose a class first with /class choose <class>.": "请先 /mycli profession list，再主动 choose <ID>。", "Choose a class first with /class.": "请先 /mycli profession list 选择职业。",
+    "Choose a class before selecting an ascension.": "选择职业后才能进阶。", "That ascension does not belong to your class path.": "这条进阶不属于当前职业。", "That class action could not be completed.": "职业操作未完成；先查 /mycli status，不要重复操作。",
+    "You do not have an active spell.": "尚未装备技能；先 /mycli skills list。", "You do not have any unlocked spells.": "尚无职业主动技能；先 /mycli profession list。", "Spell failed": "技能未生效",
+    "Iron Body": "钢铁之躯", "Raises your maximum survivability.": "提高体质，增强生存能力。", "War Stomp": "战争践踏", "Unlock a crushing frontline shockwave.": "解锁前方震荡攻击。", "Bulwark Mastery": "壁垒精通", "Deepens your frontline durability.": "进一步提高体质与前排韧性。",
+    "Focus Channel": "专注引导", "Boosts your wisdom and intelligence growth.": "提高感知与智力。", "Nova Burst": "奥术新星", "Unlock a short-range arcane detonation.": "解锁近距离奥术爆发。", "Astral Depth": "星界深悟", "Extends your raw magical throughput.": "进一步提高魔法属性。",
+    "Keen Eye": "锐利目光", "Tightens your precision and pursuit speed.": "增强精准与追击能力。", "Volley": "箭雨", "Unlock a multi-target ranged barrage.": "解锁多目标远程齐射。", "Windrunner": "追风者", "Adds mobility and relentless pressure.": "提高机动性与持续压制能力。",
+    "Sacred Focus": "神圣专注", "Strengthens your healing and survival.": "增强治疗与生存属性。", "Radiant Pulse": "辉光脉冲", "Unlock a healing wave around the caster.": "解锁施术者周围的范围治疗。", "Sanctified Core": "圣佑核心", "Expands your spiritual presence and sustain.": "增强精神与续战能力。",
+    "Pack Instinct": "兽群本能", "Strengthens the bond between you and your beasts.": "提高驯兽师的战斗属性。", "Savage Charge": "野性冲锋", "Unlock a ferocious lunge alongside your beasts.": "解锁一次野性突击。", "Primal Roar": "原始咆哮", "Deepens your savage resilience and pack ferocity.": "提高体质与野性战斗属性。",
+    "Calibrate Optics": "校准瞄具", "Refines targeting precision for your deployed gadgets.": "提高机巧瞄准与伤害属性。", "Concussion Mine": "震荡地雷", "Unlock a proximity-detonated explosive device.": "解锁震荡范围攻击；不破坏地图方块。", "Overclock": "超频", "Pushes your gadgets beyond safe operating limits.": "提高机巧攻击属性。",
+    "Fortify": "坚守", "Arcane Bolt": "奥术飞弹", "Mage Staff Bolt": "法杖基础弹", "Hunter Mark": "猎手印记", "Hunter's Mark": "猎手印记", "Mend": "愈合", "Beast Call": "野性召唤", "Deploy Turret": "机巧锁击", "Ember Lance": "余烬长枪", "Warden's Bloom": "守望绽放", "Astral Convergence": "星界汇聚", "Lucky Step": "幸运步",
+    "First Blood": "公会初战", "Gathering Basics": "旅途补给", "The Deep Descent": "深入矿脉", "Realm Warden": "边境守望者", "Daily Hunt": "每日讨伐",
+    "Prove your worth by slaying hostile creatures near spawn.": "讨伐出生地附近的敌对怪物，磨练战斗技巧。", "Learn the fundamentals of resource gathering.": "可选补给委托：为旅途准备木材与石料。", "Venture into the depths and collect precious ores.": "深入地下，寻找珍贵矿石。", "Track and eliminate dangerous creatures in the wilds.": "追踪并讨伐野外的危险怪物。", "Defend the realm against the encroaching darkness.": "抵御侵袭，守护边境。", "A standing bounty for clearing hostile mobs.": "可重复领取的敌对怪物讨伐委托。",
+    "Your stance hardens with protective force.": "你稳住了防守架势。", "Restorative light flows through you.": "恢复之光流过身体。", "Your beasts lunge at the enemy.": "野性力量向敌人突击。", "Your turret locks on and fires.": "机巧装置锁定并攻击目标。", "Arcane Ward surrounds you.": "奥术护盾环绕着你。", "Iron will fortifies your defences.": "钢铁意志增强了防御。",
+    "Ready": "可用", "Locked": "未解锁", "None": "无", "N/A": "暂无", "Quest Complete!": "委托已完成！", "Quest Board": "公会委托板", "Quest Log": "我的委托", "Active Quests": "在办委托", "Completed Quests": "已完成委托", "Talent Tree": "天赋树", "Talents": "天赋", "Stats": "角色属性", "Professions": "生活技艺", "Party": "队伍",
+    "(Type in chat to speak — right-click again to leave)": "（在聊天中与此NPC交谈；再次右键结束对话）"
+  },
+  "fragments": {
+    "Selected class: ": "当前职业：", "Class: ": "职业：", " | Level: ": " · 等级：", " | Skill Points: ": " · 学习点：", " | Active Spell: ": " · 当前技能：", " | Ascension: ": " · 进阶：",
+    "Starter Spell: ": "起始技能：", "Archetype: ": "职业方向：", "Required Level: ": "所需等级：", "Skill Cost: ": "学习点：", "Grants Spell: ": "解锁主动技：", "Unlocked Skills: ": "已学节点：", "Spells: ": "技能：", "Signature Spell: ": "进阶技能：",
+    "Class already selected as ": "已经选择职业：", "Unknown class ": "未知职业：", "Unknown skill ": "未知技能：", "Requires level ": "需要等级：", "You need ": "还需要：", "Unlocked ": "已学会：", "Active spell set to ": "已装备技能：", "No valid target found for ": "没有有效目标：", "Spell conditions failed for ": "施放条件未满足：", "Spell is on cooldown for ": "技能尚在冷却，剩余：",
+    "You are already the ": "当前已是：", "That skill belongs to the ": "该技能属于职业：", "Unknown ascension ": "未知进阶：", "Ascended as ": "已进阶：", "Reach level ": "需达到等级：", "Locked until ": "解锁等级：", "Unlocks at level ": "解锁等级：", "Ascensions unlock at level ": "进阶解锁等级：", "Active Ascension: ": "当前进阶：",
+    "Id: ": "技能ID：", "Cooldown: ": "冷却：", "Active: ": "当前：", "Quest Complete!": "委托已完成！", "A new chapter awaits...": "下一段冒险已解锁。", "Front-line bruiser built around strength and vitality.": "前排骑士，擅长力量与体质，承担坦克职责。", "Arcane glass-cannon with explosive intelligence and wisdom scaling.": "法师，以智力和感知驱动魔法爆发。", "Mobile striker with dexterity pressure and reliable sustained damage.": "游侠，以敏捷、远程和持续攻击见长。", "Support archetype with powerful spirit scaling and strong sustain.": "牧师，以精神增强治疗和队伍续战。", "Wild fighter who bonds with beasts for savage frontline pressure.": "驯兽师，使用野性战技与自然力量。", "Gadget specialist who deploys devices and controls the battlefield.": "工程师，以机巧攻击控制战场。"
+  }
+}

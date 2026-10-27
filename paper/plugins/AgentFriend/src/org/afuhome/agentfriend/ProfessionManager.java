@@ -29,9 +29,14 @@ final class ProfessionManager implements Listener {
         this.plugin = plugin;
         for (String file : List.of("professions.yml", "skills.yml", "skill-unlocks.yml", "skill-points.yml"))
             if (!new java.io.File(plugin.getDataFolder(), file).exists()) plugin.saveResource(file, false);
-        ledger = new ProfessionLedger(plugin.getDataFolder().toPath().resolve("profession-ledger.json"));
+        ledger = new ProfessionLedger(plugin.getDataFolder().toPath().resolve("profession-ledger.json"), plugin.nativeRpg().selected());
         if (!reload()) plugin.getLogger().severe("New profession abilities disabled; existing skills remain available.");
         if (!ledger.ready()) plugin.getLogger().severe("Profession ledger retained, writes disabled: " + ledger.error());
+        if(plugin.nativeRpg().selected()){
+            effects=null;
+            plugin.getLogger().info("旧职业已归档只读；职业、技能、经验和魔力由Vortex管理。");
+            return;
+        }
         initializeLegacy();
         effects = new ProfessionEffects(plugin, this);
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -95,8 +100,9 @@ final class ProfessionManager implements Listener {
             plugin.getLogger().warning("Profession reload rejected; last valid catalog retained: " + error.getMessage()); return false;
         }
     }
-    private boolean available() { return catalog != null && ledger.ready(); }
+    private boolean available() { return !plugin.nativeRpg().selected() && catalog != null && ledger.ready(); }
     JsonObject readProfession(Player p) {
+        if(plugin.nativeRpg().selected())return plugin.nativeRpg().state(p);
         JsonObject out=new JsonObject();out.addProperty("available",available());
         if(!available()){out.add("combat",JsonNull.INSTANCE);out.add("life",JsonNull.INSTANCE);out.add("prepared",JsonNull.INSTANCE);return out;}
         JsonObject profile=ledger.profile(p.getUniqueId());
@@ -154,6 +160,7 @@ final class ProfessionManager implements Listener {
         return ledger.ready() && ledger.data().getAsJsonObject("legacyPlayers").has(p.getUniqueId().toString());
     }
     int level(Player p, String id) {
+        if(plugin.nativeRpg().selected())return NativeRpg.COMMON.contains(id)?1:0;
         if (SpellGuide.baseIds().contains(id)) {
             if (plugin.oldGoddessLearned(p, id)) return 1;
             if (!id.equals("feather") && !id.equals("night") && grandfathered(p)) return 1;
@@ -164,6 +171,10 @@ final class ProfessionManager implements Listener {
     }
     /** Every old native entry point uses this gate; legacy players retain their current qualification. */
     boolean basicAllowed(Player p, String id) {
+        if(plugin.nativeRpg().selected()){
+            if(!plugin.isDowned(p)&&NativeRpg.COMMON.contains(id))return true;
+            p.sendMessage("§e旧职业法术已停用。通用技能：home、travel、prospect、night、feather；职业技能：/mycli skills list");return false;
+        }
         if (plugin.isDowned(p)) { result(p, "cast", "downed", id); return false; }
         if (!SpellGuide.baseIds().contains(id) || !available()) return true;
         if (level(p, id) > 0) return true;
@@ -209,7 +220,7 @@ final class ProfessionManager implements Listener {
         result.addProperty("respecCooldownMs",catalog==null?0:catalog.progression.respecSeconds*1000L);
         result.addProperty("respecRemainingMs",remaining(p,"respec")); return result;
     }
-    String bookSummary(Player p) { JsonObject points=pointState(p); return "技能点 "+points.get("remaining").getAsInt()+" 可用 / 上限 "+points.get("cap").getAsInt(); }
+    String bookSummary(Player p) { if(plugin.nativeRpg().selected())return "Vortex职业与技能：/mycli status · /mycli skills list"; JsonObject points=pointState(p); return "技能点 "+points.get("remaining").getAsInt()+" 可用 / 上限 "+points.get("cap").getAsInt(); }
     String pointSummary(Player p) {
         JsonObject points = pointState(p);
         return "技能点 " + points.get("remaining").getAsInt() + " 可用 / " + points.get("earned").getAsInt()
@@ -574,7 +585,7 @@ final class ProfessionManager implements Listener {
         return "success";
     }
     private static String identity(ProfessionCatalog.Skill skill) { return skill.role() + ":" + skill.effect() + ":" + skill.legacy() + ":" + skill.worldLimit(); }
-    void observedHealing(Player caster, Player target, double amount) { effects.recordHealing(caster, target, amount); }
+    void observedHealing(Player caster, Player target, double amount) { if(effects!=null)effects.recordHealing(caster, target, amount); }
     void metric(Player player, String key, double amount) {
         if (amount > 0 && Double.isFinite(amount)) metrics.computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>()).merge(key, amount, Double::sum);
     }
@@ -586,6 +597,7 @@ final class ProfessionManager implements Listener {
         }); if (effects != null) effects.save(data); })) { metrics.clear(); if (effects != null) effects.saved(); }
     }
     JsonObject state(Player player) {
+        if(plugin.nativeRpg().selected())return plugin.nativeRpg().state(player);
         JsonObject p = ledger.profile(player.getUniqueId()), state = new JsonObject();
         state.addProperty("schemaVersion", 1); state.addProperty("available", available()); state.add("points", pointState(player));
         state.add("combat", p.get("combat")); state.add("life", p.getAsJsonArray("life").deepCopy()); state.add("prepared", p.getAsJsonArray("prepared").deepCopy());
@@ -613,6 +625,7 @@ final class ProfessionManager implements Listener {
         // CortiEyeMirror forwards this private system chat to the registered attached observer.
     }
     void command(Player p, String[] args) {
+        if(plugin.nativeRpg().selected()){plugin.nativeRpg().delegate(p,args);return;}
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         if (action.equals("menu")) { open(p, args[0].equalsIgnoreCase("skills") ? "skills" : "roles"); return; }
         if (action.equals("mine")) { reportSkills(p); return; }
@@ -707,6 +720,7 @@ final class ProfessionManager implements Listener {
         sender.sendMessage("mycli admin professions audit|reload|recover|assign <UUID> <职业ID>");
     }
     void open(Player p, String page) {
+        if(plugin.nativeRpg().selected()){plugin.nativeRpg().delegate(p,page.equals("roles")?"profession":"skills","menu");return;}
         if (!available()) { result(p, "menu", "data_unavailable", ""); return; }
         Inventory inv = Bukkit.createInventory(null, 54, page.equals("roles") ? "职业与传承" : page.equals("learn") ? "技能学习与升级" : "我的职业技能");
         List<String> ids = page.equals("roles") ? List.copyOf(catalog.roles.keySet()) : page.equals("learn") ? learningIds() : ids();
@@ -758,5 +772,5 @@ final class ProfessionManager implements Listener {
     }
     @EventHandler public void drag(InventoryDragEvent event) { if (menus.containsKey(event.getView().getTopInventory())) event.setCancelled(true); }
     @EventHandler public void close(InventoryCloseEvent event) { menus.remove(event.getInventory()); }
-    void shutdown() { flushMetrics(); effects.shutdown(); menus.clear(); }
+    void shutdown() { flushMetrics(); if(effects!=null)effects.shutdown(); menus.clear(); }
 }

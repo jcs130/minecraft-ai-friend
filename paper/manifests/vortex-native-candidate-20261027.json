@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 0,
+  "deployable": false,
+  "state": "isolated_candidate_only",
+  "date": "2026-10-27",
+  "currentProduction": {
+    "agentFriend": "0.4.47.20",
+    "rpgAuthority": "legacy",
+    "playerClassesChanged": false
+  },
+  "requestedDesign": {
+    "nativeClasses": 6,
+    "oldProfessionLedger": "read_only_archive",
+    "commonSkills": [
+      "home",
+      "travel",
+      "prospect",
+      "night",
+      "feather"
+    ],
+    "manaAuthority": "VortexRPG",
+    "newDefaultCommandGroups": false
+  },
+  "upstream": {
+    "repository": "https://github.com/Sauron05/vortexrpg",
+    "commit": "3e5babaf13f390ef135782f5b1d5158e34ff22ff",
+    "version": "1.2.2-alpha",
+    "redistributed": false
+  },
+  "components": {
+    "agentFriend": {
+      "file": "AgentFriend-0.4.47.21-vortex7.jar",
+      "sha256": "c7f6df83c30d619056babdec57d3b59c912a100350913b95747e0a1cfd12a47e"
+    },
+    "vortex": {
+      "file": "VortexRPG-1.2.2-alpha-qd12-zh.jar",
+      "sha256": "2dea5af91316a40378a60c5400b2657a6add77382c15567758393456deb5eca0"
+    },
+    "adapter": {
+      "file": "QiandengjiRpg-0.2.0-guides4.jar",
+      "sha256": "f4ddef61dc10a43f2b1afa500392a1e36c638e6156523556277721c5f89bae94"
+    },
+    "vault": {
+      "file": "Vault-1.7.3.jar",
+      "sha256": "a6b5ed97f43a5cf5bbaf00a7c8cd23c5afc9bd003f849875af8b36e6cf77d01d"
+    }
+  },
+  "validation": [
+    {
+      "name": "native_reward",
+      "checks": 34,
+      "adapter": "guides2",
+      "productionChanged": false
+    },
+    {
+      "name": "cold_restore",
+      "checks": 17,
+      "adapter": "guides2",
+      "productionChanged": false
+    },
+    {
+      "name": "six_classes",
+      "checks": 57,
+      "adapter": "guides2",
+      "productionChanged": false
+    },
+    {
+      "name": "common_chest",
+      "checks": 12,
+      "adapter": "guides4",
+      "productionChanged": false
+    },
+    {
+      "name": "quest_text_rules",
+      "checks": 12
+    },
+    {
+      "name": "gallery_archive_rules",
+      "checks": 7
+    }
+  ],
+  "remaining": [
+    "Native talent tree and complete visible resource localization",
+    "Vanilla/Mineflayer/Numen/Bedrock final same-build coverage",
+    "Existing formal dungeon rescue and settlement continuity",
+    "Native quest event types not yet wired: CAST_SPELL/TALK_TO_NPC/REACH_LEVEL",
+    "Durable cross-store payout evidence for process-crash windows",
+    "Physical city gates: protected placement, actual round trip and charged/refunded mana",
+    "Canonical NPC skins/models and final Goddess-managed dialogue activation"
+  ],
+  "resourceRelease": "appearance-gallery-release-20261027.json",
+  "warning": "Not an installation plan; do not copy QA configs, worlds, passwords, identities or inventories into production."
+}
