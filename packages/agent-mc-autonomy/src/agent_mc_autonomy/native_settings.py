@@ -17,6 +17,8 @@ GROUPS = {
     'show': {'clickMs': (0, 5000), 'dwellOpenMs': (0, 5000), 'dwellResultMs': (0, 5000), 'dwellCloseMs': (0, 5000),
              'reopenGapMs': (0, 5000), 'budgetMs': (0, 30000)},
     'visual': {'background': bool},
+    'perception': {'entityView': frozenset({'surroundings', 'camera'}), 'entityRange': (1, 64),
+                   'nearbyOccludedRange': (0, 16)},
 }
 
 
@@ -44,8 +46,12 @@ class NativeSettings:
                 rule = GROUPS[group][key]
                 if rule is bool:
                     valid = type(value) is bool
+                elif isinstance(rule, frozenset):
+                    valid = isinstance(value, str) and value in rule
                 else:
                     valid = type(value) in {float, int} and math.isfinite(value) and rule[0] <= value <= rule[1]
+                    if group == 'perception':
+                        valid = valid and type(value) is int
                 if not valid:
                     raise ValueError('native_settings_invalid')
             for lower, upper in (('choiceMinBlocks', 'choiceMaxBlocks'), ('minIntervalMs', 'maxIntervalMs')):
