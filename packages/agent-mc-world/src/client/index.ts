@@ -4,6 +4,10 @@ export { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_ENVIRONME
 export type { JavaClientServices } from './java-memory.ts';
 export * from '../contracts/java-client.ts';
 export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
+/** Transport/authentication hooks for hosts retaining an existing Mineflayer body. */
+export { installConfigurationPhaseGuard, installConfigurationRoundCleanup, configurationTransportReady } from '../../core/configuration-round.ts';
+export { installServerLogin, serverLoginFailureText } from '../../core/server-login.mjs';
+export type { ServerAuthState } from '../../core/server-login.mjs';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAddress, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';

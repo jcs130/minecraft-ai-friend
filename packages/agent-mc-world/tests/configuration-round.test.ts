@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { expect, it } from 'vitest';
-import { installConfigurationRoundCleanup, installConfigurationPhaseGuard, configurationTransportReady } from '../core/configuration-round.ts';
+import { installConfigurationRoundCleanup, installConfigurationPhaseGuard, configurationTransportReady } from '../src/client/index.ts';
 const require = createRequire(import.meta.url);
 const play = createRequire(require.resolve('mineflayer'))('minecraft-protocol/src/client/play.js');
 
