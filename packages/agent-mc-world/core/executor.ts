@@ -908,12 +908,15 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       // 跳键不许漏出这个技能:它会污染后续所有任务。松开推迟到登岸这一程走完为止,
       // 超时那条出口正靠它继续上浮。
       try {
-        const land = findNearbyAirColumn(bot, 32, landSearchUp(bot));
-        if (!land) {
+        const lands = [...nearbyAirColumns(bot, 32, landSearchUp(bot))];
+        if (!lands.length) {
           throw new SkillBlocked(`${head},但 32 格内没找到可站立的岸;只换到气,还没有脱离液体`);
         }
         try {
-          await gotoGoal(bot, new goals.GoalBlock(land.x, land.y, land.z), ctx);
+          // Geometry identifies candidates, not an attainable shore. One search
+          // chooses among them; never spend a whole surface task on the first
+          // dry cliff top while a reachable bank exists in another direction.
+          await gotoGoal(bot, new goals.GoalCompositeAny(lands.map(land => new goals.GoalBlock(land.x, land.y, land.z))), ctx);
         } catch (err) {
           if (err instanceof Aborted) throw err;
           throw new SkillBlocked(`${head},但游不到看见的那处岸(${(err as Error).message});还没有脱离液体`);
@@ -7939,13 +7942,22 @@ function findBreathingCell(
 
 /**
  * 寻找最近的可站立登岸点；脚下有支撑、脚头不在水中且路线无实心阻隔。
- * maxUp 由实测水柱确定，搜索从半径一格逐圈扩展；找不到返回 null。
+ * maxUp 由实测水柱确定，搜索从半径一格逐圈扩展；反射只取直线候选。
  */
 function findNearbyAirColumn(
   bot: Bot, maxR = 12, maxUp = 3, excluded: (c: Cell) => boolean = () => false,
 ): { x: number; y: number; z: number } | null {
+  const p = bot.entity.position.floored();
+  for (const cell of nearbyAirColumns(bot, maxR, maxUp, excluded)) {
+    if (reachableFromWater(bot, p, cell)) return cell;
+  }
+  return null;
+}
+
+function* nearbyAirColumns(
+  bot: Bot, maxR: number, maxUp: number, excluded: (c: Cell) => boolean = () => false,
+): Generator<Cell, void, unknown> {
   const base = bot.entity.position.floored();
-  const me: Cell = { x: base.x, y: base.y, z: base.z };
   for (let r = 1; r <= maxR; r += 1) {
     for (let dx = -r; dx <= r; dx += 1) {
       for (let dz = -r; dz <= r; dz += 1) {
@@ -7958,11 +7970,12 @@ function findNearbyAirColumn(
           if (!below || !at || !head) continue;
           if (below.boundingBox !== 'block' || at.name !== 'air' || head.name !== 'air') continue;
           const cell: Cell = { x: feet.x, y: feet.y, z: feet.z };
-          if (excluded(cell) || !reachableFromWater(bot, me, cell)) continue;
-          return cell;
+          // A dry cell is only a candidate. Explicit surface uses path search
+          // so a wall on the straight ray must not hide a bank around a bend.
+          if (excluded(cell)) continue;
+          yield cell;
         }
       }
     }
   }
-  return null;
 }
