@@ -1,7 +1,7 @@
 {
   "viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "commit": "127eb1874786cfb64f949d4ce1a2549aeffbab72",
+    "commit": "4bf251fadbb373823f98a1399d7a8c3eda338f14",
     "assetPack": "java-1.21.1",
     "additionalPacks": [
       "java-1.20.6",
@@ -9,8 +9,8 @@
       "java-1.21.5"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-127eb187-compatible.tgz",
-    "sha256": "a0f5d80aa062f87a882c98f1e52a25b0868ba393766440f298f85028623925f3",
+    "artifact": "vendor/mc-visual-console-java-1.21.1-4bf251fa-compatible.tgz",
+    "sha256": "c09ce39df4479c20fb05b0e85148c31a357c667e432e10040012a27547291b34",
     "soundPacks": [
       "java-1.21.1-sounds",
       "java-1.20.6-sounds",
@@ -30,8 +30,8 @@
       "filesCheckedAgainstCurrentSharedAssetPacks": 28
     },
     "previousFrozenInput": {
-      "commit": "d5382821530d5c260416ed30f04bf38b8cda13ba",
-      "sha256": "6d984dcd5d293b59e3a0564786e3a4e65808578b35c93ac96b63ec6d8f1d81e5"
+      "commit": "1086eb20dbae24825cb02d89b14a1cc68689c9be",
+      "sha256": "703c82f8e33e9a405e7faa70ab79ed9508d85edfae77934b49ee2c5e6bc0fbd3"
     },
     "originalAssetInput": {
       "commit": "4da993d1d96e79c7ba195ef38d49976250a621aa",
@@ -46,11 +46,11 @@
       {
         "version": "1.21.1",
         "clientJarSha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
-        "browserBundleSha256": "93414010e4402ef949417ceec48bb2c14b19d01d6673441e77e02e41053dcfb2",
+        "browserBundleSha256": "b6c6b6b4f428584bcae3c2b996dc031f1b5896ef8ea409b09eb430ab62103aec",
         "mesherSha256": "2d3c925683f77dc18bad734e85d192c756b0431136216fcc02d475742bef2f21",
         "buildSource": {
-          "sourceSha256": "b871ad2fde5ffe46f527722a08baecfedf7c86aa5c5fd8c40dcdf12d8a0e1872",
-          "sourceFiles": 394,
+          "sourceSha256": "932455bdfdc672395437943b213a0004336481f02abb6e0cdc966e8c3bfc4656",
+          "sourceFiles": 398,
           "scope": "renderer_source_host_adapters_and_asset_preparation"
         },
         "preset": null
