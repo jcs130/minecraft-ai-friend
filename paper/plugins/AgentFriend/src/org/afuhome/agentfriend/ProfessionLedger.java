@@ -86,6 +86,19 @@ final class ProfessionLedger {
         } catch (Exception invalid) { error = invalid.toString(); data = new JsonObject(); }
     }
     boolean ready() { return ready; }
+    static ProfessionLedger academy(Path target,ProfessionLedger legacy) {
+        boolean exists=Files.exists(target);var next=new ProfessionLedger(target);
+        if(exists)return next;
+        if(!legacy.ready()||!next.ready()){next.ready=false;next.error="academy source unavailable";return next;}
+        if(!next.write(data->{
+            for(var entry:legacy.data().getAsJsonObject("players").entrySet()){
+                var profile=entry.getValue().getAsJsonObject();
+                if(profile.has("academy"))ProfessionLedger.profile(data,UUID.fromString(entry.getKey())).add("academy",profile.get("academy").deepCopy());
+            }
+            data.addProperty("academyMigration",1);
+        })){next.ready=false;}
+        return next;
+    }
     private static boolean finitePositive(JsonElement value, double maximum) {
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) return false;
         double number = value.getAsDouble(); return Double.isFinite(number) && number >= 0 && number <= maximum;

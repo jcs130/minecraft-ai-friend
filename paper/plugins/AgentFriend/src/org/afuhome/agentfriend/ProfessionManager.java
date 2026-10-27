@@ -50,6 +50,11 @@ final class ProfessionManager implements Listener {
     /** Preparation is server-owned learning and slot state, not a catalog view.
      * Movement alone does not satisfy the first combat lesson. */
     boolean preparedCombatSkill(Player p) {
+        if(plugin.nativeRpg().selected()){
+            var state=plugin.nativeRpg().state(p);
+            return state.has("combat")&&!state.get("combat").getAsString().isEmpty()&&state.has("activeSkill")
+                &&!state.get("activeSkill").getAsString().isEmpty()&&!NativeRpg.COMMON.contains(state.get("activeSkill").getAsString());
+        }
         if (!available()) return false;
         var profile=ledger.profile(p.getUniqueId());
         String role=profile.get("combat").getAsString();

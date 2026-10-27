@@ -14,7 +14,7 @@ async function mobHealth(){const s=await rc('execute at '+bot.username+' run dat
 try{
  await rc('minecraft:gamerule doMobSpawning false');await rc('minecraft:gamerule naturalRegeneration false');await rc('minecraft:time set midnight');
  for(const[classId,spell]of [['knight','fortify'],['mage','arcane_bolt'],['ranger','hunter_mark'],['cleric','mend'],['beastmaster','beast_call'],['engineer','deploy_turret']]){
-  messages=[];last=0;const name='ag_V'+classId+suffix;assert(name.length<=16,'vanilla username bound');
+  messages=[];last=0;const name='ag_V'+classId.slice(0,9)+suffix.slice(-3);assert(name.length<=16,'vanilla username bound');
   bot=mf.createBot({host:'127.0.0.1',port:25928,username:name,auth:'offline',version:'1.21.1',hideErrors:true,checkTimeoutInterval:60000});
   bot.on('messagestr',s=>messages.push(s));bot.on('error',e=>report.errors.push(String(e)));bot.on('kicked',r=>report.errors.push(JSON.stringify(r)));installRecipePacketBypass(bot._client);
   await until(()=>bot.entity,'spawn '+name,30000);bot.physicsEnabled=false;await bot.waitForChunksToLoad();await wait(1200);

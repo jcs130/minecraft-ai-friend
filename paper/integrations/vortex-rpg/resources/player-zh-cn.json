@@ -1,5 +1,8 @@
 {
   "exact": {
+    "Grace": "神恩", "Windstep": "踏风",
+    "Welcome to VortexRPG. Use <yellow>/class</yellow> to choose your path.": "欢迎踏上攻略之路。用 <yellow>/mycli profession list</yellow> 选择职业，/mycli status 查看本人状态。",
+    "Choose a class with <yellow>/class</yellow> to activate your RPG profile.": "用 <yellow>/mycli profession list</yellow> 选择职业，开启战斗成长。",
     "Knight": "骑士", "Mage": "法师", "Ranger": "游侠", "Cleric": "牧师", "Beastmaster": "驯兽师", "Engineer": "工程师",
     "Strength": "力量", "Vitality": "体质", "Wisdom": "感知", "Dexterity": "敏捷", "Intelligence": "智力", "Spirit": "精神",
     "Class Hall": "职业大厅", "Skill Atlas": "技能图谱", "Ascension Hall": "进阶大厅", "Ascensions": "职业进阶", "Profile Summary": "角色摘要",
@@ -28,6 +31,7 @@
     "(Type in chat to speak — right-click again to leave)": "（在聊天中与此NPC交谈；再次右键结束对话）"
   },
   "fragments": {
+    "Class rewards: ": "职业初始物品：", "Codex updated: ": "冒险手记已更新：", "First steps on the server": "初到千灯纪",
     "Selected class: ": "当前职业：", "Class: ": "职业：", " | Level: ": " · 等级：", " | Skill Points: ": " · 学习点：", " | Active Spell: ": " · 当前技能：", " | Ascension: ": " · 进阶：",
     "Starter Spell: ": "起始技能：", "Archetype: ": "职业方向：", "Required Level: ": "所需等级：", "Skill Cost: ": "学习点：", "Grants Spell: ": "解锁主动技：", "Unlocked Skills: ": "已学节点：", "Spells: ": "技能：", "Signature Spell: ": "进阶技能：",
     "Class already selected as ": "已经选择职业：", "Unknown class ": "未知职业：", "Unknown skill ": "未知技能：", "Requires level ": "需要等级：", "You need ": "还需要：", "Unlocked ": "已学会：", "Active spell set to ": "已装备技能：", "No valid target found for ": "没有有效目标：", "Spell conditions failed for ": "施放条件未满足：", "Spell is on cooldown for ": "技能尚在冷却，剩余：",

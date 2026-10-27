@@ -2,7 +2,7 @@
 
 核验日期：2026-10-27。此页用于避免历史记录混淆；每次操作仍查真实状态。版本变更时更新此页，旧记录移入历史，不向 AGENTS/PROFILE 反复插入发布流水。
 
-- 现役世界：`E:/MC/server`，Paper 1.21.1 / AgentFriend **0.4.47.20**。2026-10-27 14:37 正常维护启动，180/60/10秒预告及 E/F 完整冷备 `20261027-141626` 已核；24项正式启动检查通过，原职业/玩家配置保留。证据 `E:/MC/ops/repairs/adventure-release-20261027/postflight.json`。FOM/NeoForge 是另一实例，不将其模组当成本服现役。
+- 现役世界：`E:/MC/server`，Paper1.21.1 / AgentFriend **0.4.47.21-vortex**；2026-10-27 22:30正常启动，E/F完整冷备 `20261027-220757`，30项正式检查通过。Vortex1.2.2-alpha为唯一职业/技能/经验/魔力，旧四职业只读归档，原背包、个人箱、成绩保留。FOM仍是另一实例。证据 `E:/MC/ops/repairs/vortex-release-20261027/postflight.json`。
 - 女神：QwenPaw `mc_godness`，现役工作区 `D:/qwenpaw/home/workspaces/mc_godness`。游戏 Goddess 是原 OP 旁观者；继续完整文件、Shell、开发、记忆能力。普通玩家的游戏消息仍只是问答/需求输入，不授权运维动作。
 - 原生定时任务已有六个，心跳关闭。使用原生任务继续建设，不另开一个模型循环。运营技能 `skills/world-evolution/SKILL.md`；项目与未知结果 `state/world-evolution/projects.json`；当天日记和 `memory/goddess-operations.md` 保留。
 - 当前实际在线账号在巡检时为 ag_Kirito、ag_CorMy、ag_NEKO、ag_Naruto、Goddess。仅为该时点样本，不代表永久在线或全部角色；旧 CortiLan 不等于当前可米。别按 ag_ 前缀推断维护许可。
@@ -26,3 +26,15 @@
 ## NPC 与世界线导演
 
 服主2026-10-27明确委托女神持续设计、维护NPC台词、人物关系、支线和世界线。按需读 `resource/AINCRAD_NPC_DIRECTOR.md`，继续项目 `aincrad-npc-director`。安丽卡/欧文/琉音三位已上线，旧青禾/阿卷保留；用原 `world npcs` / `world talk`，不新增一套命令。首版台词由女神生成，已通过实际插件与冷启动验证；后续剧情草案保存在 `resource/aincrad-npc-draft.json`，实际任务与奖励仍由规则验收。
+
+
+<!-- appearance-gallery-20261027-verified -->
+已上线外观选择见 `resource/APPEARANCE_GALLERY_20261027.md`。Vortex与SAO新版NPC仍为候选，保留当前真实后端说明；现有模型与玩家身份未改。
+
+## 破晓攻略：当前指引优先
+
+先引导玩家 `/mycli status`，本人选择六职业 `/mycli profession list`，再 `skills list` 和 `tasks list`。初始主动技选职后即可cast；learn花点学节点，prepare设置点击技，被动不能cast。home/travel/prospect/night/feather是通用能力，无需重复学习。细节按需读 resource/NATIVE_RPG_CURRENT.md。
+
+鼓励讨伐、探索、打造和组队攻略，先补给、看难度和退路，不安排先种田。缺护甲或战斗装备时引导guild shared；远途缺粮先考虑远程个人箱arena stash（2魔力）和通用返程能力，别饿着在野外死等。副本须四件护甲及近战、弓弩或本职业法器，不强制带剑。旧在途单用guild status继续，不代取消、选职、领奖或编造通关。
+
+艾基尔/克莱因/阿尔戈按原稳定NPC ID提供补给、选职和攻略情报，当前仍是村民身体。双城石英门已建并保护：主村(-555,67,-439)→起始之城；起始之城(-582,67,919)→主村。6魔力，走入门洞；warp aincrad/village仍可用。剧情和NPC台词继续由你维护，不把未来支线说成已经可接。

@@ -7,6 +7,7 @@ ManaGate classes change. Original upstream resources/other classes stay exact.
 from pathlib import Path
 import argparse,hashlib,json,os,re,subprocess,zipfile
 from quest_rewards_patch import patch_currency_rewards
+from profile_load_patch import patch_profiles
 PIN='4cafc171905350e5a56e94239f4f247ad34141d965f93b71c6daf7f8b3af84f75d668fea7eff31eb783b57cd964aecb11a06a036a6c6d9ed64b9ed0a79741d7f'
 def replace_once(text,before,after):
  assert text.count(before)==1,'Upstream code differs from reviewed patch point'
@@ -27,8 +28,8 @@ def main():
  def read(name):
   f=base/name;text=f.read_text(encoding='utf8');sources[name]=hashlib.sha256(f.read_bytes()).hexdigest();return text
  q=read('quest/QuestService.java')
- q,vault=patch_currency_rewards(q,read('integration/vault/VaultEconomyBridge.java'))
  q=replace_once(q,'QuestProgress completed = progress.complete();','if (definition.objectives().isEmpty() || !definition.objectives().stream().allMatch(o -> progress.objectives().stream().anyMatch(v -> v.objectiveId().equals(o.id()) && v.current()>=o.amount() && v.completed()))) { return CompletableFuture.completedFuture(false); }\n            QuestProgress completed = progress.complete();')
+ q,vault=patch_currency_rewards(q,read('integration/vault/VaultEconomyBridge.java'))
  q=replace_once(q,'completeQuest(player, questId.toLowerCase(Locale.ROOT));','scheduler.runEntity(player, "quest-ready-" + player.getUniqueId(), () -> messageService.send(player, "<green>目标已完成，请主动交付：</green> /mycli tasks claim " + questId));')
  # Capture the actual location before asynchronous repository work. Legacy
  # world-only targets remain supported; coordinate targets require all axes.
@@ -57,10 +58,24 @@ def main():
     }
 '''
  q=replace_once(q,'    public CompletableFuture<Boolean> completeQuest(Player player, String questId) {',method+'\n    public CompletableFuture<Boolean> completeQuest(Player player, String questId) {')
+ q=replace_once(q,'    private final int maxActiveQuests;','    private final int maxActiveQuests;\n    private final QuestWrites qiandengjiWrites=new QuestWrites();')
+ for name in ['startQuest','progressObjective','completeQuest','abandonQuest']:
+  match=re.search(r'    public CompletableFuture<[^>]+> '+name+r'\([^\n]+\) \{',q);assert match
+  start=match.end();depth=1;end=start
+  while depth:
+   if q[end]=='{':depth+=1
+   if q[end]=='}':depth-=1
+   end+=1
+  q=q[:start]+'\n        return qiandengjiWrites.run(player.getUniqueId(), () -> {'+q[start:end-1]+'        });\n    '+q[end-1:]
+ repository=read('quest/QuestRepository.java')
+ repository=repository.replace('com.fasterxml.jackson','io.vortexcore.libs.jackson').replace('com.github.benmanes.caffeine','io.vortexcore.libs.caffeine')
+ repository=replace_once(repository,'logger.warning("Unable to read existing quest file for revision check: " + exception.getMessage());','throw new IllegalStateException("任务存档不可验证，保留原文件；请联系服主。", exception);')
+ repository=replace_once(repository,'PlayerQuestData fresh = PlayerQuestData.create(playerId);\n            localCache.put(playerId, fresh);\n            return fresh;','throw new IllegalStateException("任务存档读取失败，未创建空进度；请联系服主。", exception);')
  listener=read('quest/listener/QuestEventListener.java')
  listener=replace_once(listener,'String worldName = to.getWorld().getName().toLowerCase();\n        questService.progressObjectiveByType(player, QuestObjectiveType.VISIT_LOCATION, worldName, 1);','questService.progressLocation(player, to.clone());')
  listener=replace_once(listener,'previous.getBlockZ() == to.getBlockZ()','previous.getBlockZ() == to.getBlockZ() && previous.getBlockY() == to.getBlockY()')
  spell=read('rpg/SpellbookService.java')
+ spell=replace_once(spell,'.filter(entity -> entity instanceof Monster && entity.isValid())','.filter(entity -> entity instanceof Monster && entity.isValid() && player.hasLineOfSight((org.bukkit.entity.LivingEntity)entity))')
  # Observation is read-only and shares the exact map used by every native cast.
  spell=replace_once(spell,'    public CompletableFuture<Void> cast(Player player, UnifiedPlayer profile, String requestedSpellId) {','''    public long qiandengjiCooldown(java.util.UUID id, String spellId) {
         return Math.max(0L, cooldowns.getOrDefault(id, java.util.Map.of()).getOrDefault(spellId, 0L)-System.currentTimeMillis());
@@ -96,6 +111,12 @@ def main():
   'public CompletableFuture<SkillUnlockResult> unlockSkill(Player player, UnifiedPlayer profile, String skillId)']:
   classes=replace_once(classes,signature+' {',signature+' {\n        if(!io.vortexcore.combat.PlayerStateGate.allowed(player))return CompletableFuture.failedFuture(new IllegalStateException("当前状态不能更改职业或技能；先等待救援，再查 /mycli status。"));')
  for field in ['MAX_HEALTH','ATTACK_DAMAGE','MOVEMENT_SPEED','ARMOR']:classes=classes.replace('Attribute.'+field,'Attribute.GENERIC_'+field)
+ talents=read('talent/TalentService.java')
+ for signature in ['public CompletableFuture<TalentAllocateResult> allocateNode(Player player, String nodeId)',
+                   'public CompletableFuture<Boolean> resetTree(Player player)']:
+  talents=replace_once(talents,signature+' {',signature+' {\n        if(!io.vortexcore.combat.PlayerStateGate.allowed(player))return CompletableFuture.failedFuture(new IllegalStateException("当前状态不能学习或重置天赋；先等待救援，再查 /mycli status。"));')
+ talents=replace_once(talents,'return uiFuture.thenApply(ignored -> TalentAllocateResult.success("Unlocked " + node.displayName() + "."));',
+  'return uiFuture.thenCompose(ignored -> playerProfileService.qiandengjiSave(player).thenApply(savedProfile -> TalentAllocateResult.success("已学习天赋：" + node.displayName())));')
  gate='''package io.vortexcore.combat;
 import org.bukkit.entity.Player;import org.bukkit.plugin.Plugin;
 public final class ManaGate {
@@ -116,13 +137,17 @@ public final class PlayerStateGate {
  }
 }
 '''
- texts={'quest/QuestService.java':q,'quest/listener/QuestEventListener.java':listener,'rpg/SpellbookService.java':spell,'rpg/ClassSkillService.java':classes,'combat/ManaGate.java':gate,'combat/PlayerStateGate.java':state_gate,'integration/vault/VaultEconomyBridge.java':vault}
+ profiles=patch_profiles(read('rpg/PlayerProfileService.java'),replace_once)
+ player_repository=read('persistence/PlayerDataRepository.java').replace('com.fasterxml.jackson','io.vortexcore.libs.jackson').replace('com.github.benmanes.caffeine','io.vortexcore.libs.caffeine')
+ player_repository=replace_once(player_repository,'logger.warning("Unable to read existing player file for revision check: " + exception.getMessage());','throw new IllegalStateException("角色存档不可验证，保留原文件；请联系服主。",exception);')
+ player_repository=replace_once(player_repository,'PlayerSnapshot fresh = PlayerSnapshot.create(playerId);\n            localCache.put(playerId, fresh);\n            return fresh;','throw new IllegalStateException("角色存档读取失败，未创建空角色；请联系服主。",exception);')
+ texts={'rpg/PlayerProfileService.java':profiles,'persistence/PlayerDataRepository.java':player_repository,'quest/QuestService.java':q,'quest/QuestRepository.java':repository,'quest/QuestWrites.java':Path(__file__).with_name('QuestWrites.java').read_text(encoding='utf8'),'quest/RewardJournal.java':Path(__file__).with_name('RewardJournal.java').read_text(encoding='utf8'),'quest/listener/QuestEventListener.java':listener,'rpg/SpellbookService.java':spell,'rpg/ClassSkillService.java':classes,'talent/TalentService.java':talents,'combat/ManaGate.java':gate,'combat/PlayerStateGate.java':state_gate,'integration/vault/VaultEconomyBridge.java':vault}
  for name,text in texts.items():f=generated/'io/vortexcore'/name;f.parent.mkdir(exist_ok=True,parents=True);f.write_text(text,encoding='utf8')
  cp=os.pathsep.join(map(str,[access,a.vault,*a.server.rglob('libraries/**/*.jar')]))
  result=subprocess.run(['E:/MC/jdk/jdk-21.0.12.1+1/bin/javac.exe','-J-Duser.language=en','-J-Dfile.encoding=UTF-8','-proc:none','-encoding','UTF-8','--release','21','-cp',cp,'-d',str(compiled),*map(str,generated.rglob('*.java'))],capture_output=True)
  if result.returncode:print(result.stderr.decode('utf8',errors='replace'));raise SystemExit(result.returncode)
  new={f.relative_to(compiled).as_posix():f.read_bytes()for f in (compiled/'io').rglob('*.class')}
- allowed=('io/vortexcore/quest/QuestService','io/vortexcore/quest/listener/QuestEventListener','io/vortexcore/rpg/SpellbookService','io/vortexcore/rpg/ClassSkillService','io/vortexcore/combat/ManaGate','io/vortexcore/combat/PlayerStateGate','io/vortexcore/integration/vault/VaultEconomyBridge')
+ allowed=('io/vortexcore/rpg/PlayerProfileService','io/vortexcore/persistence/PlayerDataRepository','io/vortexcore/quest/QuestService','io/vortexcore/quest/QuestRepository','io/vortexcore/quest/QuestWrites','io/vortexcore/quest/RewardJournal','io/vortexcore/quest/listener/QuestEventListener','io/vortexcore/rpg/SpellbookService','io/vortexcore/rpg/ClassSkillService','io/vortexcore/talent/TalentService','io/vortexcore/combat/ManaGate','io/vortexcore/combat/PlayerStateGate','io/vortexcore/integration/vault/VaultEconomyBridge')
  assert all(any(n==s+'.class'or n.startswith(s+'$') for s in allowed)for n in new)
  retained=0
  with zipfile.ZipFile(access)as z,zipfile.ZipFile(a.output,'w',zipfile.ZIP_DEFLATED)as out:

@@ -12,7 +12,7 @@ def main():
  subprocess.run([str(a.java/'javac.exe'),'-proc:none','-encoding','UTF-8','-cp',cp,'-d',str(classes),str(root/'VortexChineseConstants.java')],check=True,capture_output=True)
  binary=build/'constants.jar';lang=root/'resources/player-zh-cn.json'
  r=subprocess.run([str(a.java/'java.exe'),'-cp',str(classes)+os.pathsep+cp,'VortexChineseConstants',str(a.input),str(binary),str(lang)],capture_output=True,check=True)
- details=json.loads(r.stdout);rules=json.loads(lang.read_text(encoding='utf8'));fragments=sorted(rules['fragments'].items(),key=lambda t:-len(t[0]))
+ details=json.loads(r.stdout);rules=json.loads(lang.read_text(encoding='utf8'));rules['exact'].update(json.loads((root/'resources/defaults-zh-cn.json').read_text(encoding='utf8')));fragments=sorted(rules['fragments'].items(),key=lambda t:-len(t[0]))
  def text(s):
   if s in rules['exact']:return rules['exact'][s]
   for a,b in fragments:s=s.replace(a,b)

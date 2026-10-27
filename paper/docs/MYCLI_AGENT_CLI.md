@@ -2,7 +2,7 @@
 
 ## 版本与生效范围
 
-2026-10-23 源码修订，**本轮尚未部署到正式服**。正式仍为 Paper 1.21.1 / AgentFriend 0.4.47.12；其中 tasks、world board、coach next/guide 的短中文已上线。下面的 help/status/progress/skills status/intro/rules 统一短文本属于本轮源码候选，完整源码版本仍为 0.4.48。部署状态以[项目状态](../../docs/PROJECT_STATUS.md)为准。
+Vortex原生接管沿用下列少量主入口；职业、技能和任务以服务端实际后端为准。最新发布进度见[破晓攻略](NATIVE_RPG_RELEASE_20261027.md)，完整源码中的其他候选不代表已生效。
 
 ## Agent 只需先记这些
 
@@ -20,7 +20,7 @@
 - `tasks list`：可选路线，探索、战斗、制造、补给与生活均可自选。查询不接单。
 - `tasks status`：当前委托阶段、真实缺项、位置与下一步；完成当前阶段后再按回执交付。
 - `skills status`：实际已学技能、等级、耗魔与剩余冷却，未知读数不会写成 0 或可用。
-- 技能操作沿用 `guide magic`：选职→学习→准备→施放；通用技能学会即可用。只读详情不代学，选职业不代花点，具体罗盘操作见[技能四步](SKILL_USAGE_QUICKSTART.md)。
+- Vortex选职后初始主动技可用，learn按详情学习节点，prepare设置点击技能，cast施放主动技；通用技能无需重学。只读详情不代学，选职业不代花点，具体罗盘操作见[技能四步](SKILL_USAGE_QUICKSTART.md)。
 - `progress`：主线、专项实练、公会委托、挑战与剧情分别显示。专项完成不等于主线毕业；首页合并专项摘要，细看用 `progress training`。
 
 规则用 `/mycli rules`。不要一次读取全目录或背下所有参数；先看当前状态，再按需要读取一个命令的帮助。

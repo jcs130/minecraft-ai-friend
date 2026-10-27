@@ -94,6 +94,9 @@ final class DungeonAdvice {
         }else if(!text(f,"admissionReason").isEmpty()) {
             state="requirements";reason=text(f,"admissionReason");
             action=text(f,"admissionHint");command=text(f,"admissionCommand");
+        }else if(f.containsKey("loadoutReady")&&!yes(f,"loadoutReady")){
+            state="requirements";reason="EQUIPMENT_REQUIRED";
+            action="缺少："+text(f,"missingLoadout")+"。穿齐四件护甲，携带近战武器、弓弩或本职业法器；不强制带剑。";command="/mycli guild shared";
         }else if(yes(f,"occupied")) {
             if(yes(f,"joinable")&&yes(f,"atFirstRoom")) {
                 state="joinable";reason="PARTY_MUSTER_OPEN";

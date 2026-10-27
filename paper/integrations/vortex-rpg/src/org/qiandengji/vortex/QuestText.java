@@ -16,7 +16,7 @@ public final class QuestText {
             case PERMISSION->"权限 "+r.value();
             case COMMAND->"配置奖励（交付时执行）";
         }).toList());
-        return q.name()+" ["+q.id()+"]；需要 "+requirements+"；目标："+objectives+"；奖励："+rewards+"。接取：/mycli tasks accept "+q.id();
+        return q.name()+" ["+q.id()+"]；需要 "+requirements+"；"+q.description()+"；目标："+objectives+"；奖励："+rewards+"。接取：/mycli tasks accept "+q.id();
     }
     public static String progress(QuestDefinition q,QuestProgress p){
         if(p.state()==QuestState.COMPLETED)return q.name()+" ["+q.id()+"] 已交付";
@@ -36,7 +36,9 @@ public final class QuestText {
             case "CAST_SPELL"->"施放";case "REACH_LEVEL"->"达到等级";case "TALK_TO_NPC"->"交谈";case "KILL_BOSS"->"讨伐首领";
             default->o.type().name();
         };
-        return o.description()!=null&&!o.description().isBlank()?o.description():type+" "+o.target();
+        String text=o.description()!=null&&!o.description().isBlank()?o.description():type+" "+o.target();
+        if(o.type()==QuestObjectiveType.VISIT_LOCATION){String[] target=o.target().split(":");if(target.length==5)text+="（"+target[0]+" "+target[1]+","+target[2]+","+target[3]+"，半径"+target[4]+"）";}
+        return text;
     }
     private static String number(double n){return n==Math.rint(n)?Long.toString((long)n):Double.toString(n);}
 }

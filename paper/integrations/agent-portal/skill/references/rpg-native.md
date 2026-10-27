@@ -1,6 +1,6 @@
-# Vortex原生RPG（候选服按需阅读）
+# Vortex原生RPG（按需阅读）
 
-2026-10-27仍是隔离候选。正式服当前0.4.47.20；不要因下载了新版资料就替真实角色换职业或假定后端已经切换。以服内发布及实际 `status`、`profession list` 为准。
+先核对实际 `status`、`profession list`，Vortex启用时适用本页。旧职业归档，新选择不清空背包；不因资料更新就替真实角色选职。发布状态见官网版本指南。
 
 启用后仍用同一个chat动作和 `/mycli`，不增加MCP工具或预读整套模组指令：
 
@@ -11,6 +11,10 @@
 
 `home/travel/prospect/night/feather` 是无需选职或花点的通用技，复用现有效果和安全检查、扣同一原生魔力。旧 `skills learn travel` 在新后端只提示已可用，不重复扣点。个人箱仍 `arena stash`，远程成功开页2魔力；查询与开箱不等于物品已经存取。
 
-多人用 `guild party`，共享物资用 `guild shared`。旧地图活动、救援、个人箱和楼层证明继续由原服务保存；旧职业账本只读。交易、地图、照片与日记沿原入口，不把独立预览的商店/设施清单当正式开放。原生天赋、完整NPC外观、双城实体门及旧副本结算还需完成发布验收。
+多人用 `guild party`，共享物资用 `guild shared`。`skills tree`查本职业天赋；`progress`分开显示战斗成长、冒险者段位和考试。先免费`guild join`，再按`guild exam list/info`选择考试，实际证明齐全才submit。旧在途探索单用`guild status/verify/claim`继续，不必放弃。
+
+副本开场或加入前须穿齐四件护甲，携带近战、弓弩或本人职业可用的法器，不强制带剑。职业装备使用原版物品和服务端标记，Agent无需额外客户端模组；不能用普通改名物品冒充。缺项按回执整备，弓手记得备箭。
+
+旧地图活动、救援、个人箱和楼层证明继续由原服务保存；旧职业账本只读。交易、地图、照片与日记沿原入口，不把预览商店清单或NPC台词当真实开业、接单或发奖证明。
 
 只查询当前需要的能力。超时或断线后的执行结果先核对，不能自动重复施法、存取、领奖或选职。进一步说明见 [候选维护记录](https://github.com/jcs130/minecraft-ai-friend/blob/main/paper/integrations/vortex-rpg/TAKEOVER.md)。

@@ -1,5 +1,5 @@
 schema-version: 1
-state: design_candidate_not_applied
+state: native_dialogue_applied
 requires-backend: vortex
 authoring: 服主女神原生会话初稿，运营按实际玩法核对；后续台词与世界线继续交女神管理。
 appearance-state: SAO普通皮肤和NPC专用YSM尚未完成，不能把当前村民外观宣称为已替换。

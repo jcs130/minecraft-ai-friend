@@ -1,0 +1,260 @@
+resource-version: 8
+persistence:
+  shutdown-drain-seconds: 5
+cache:
+  ttl-seconds: 900
+smart-systems:
+  director:
+    enabled: false
+    pulse-ticks: 1200
+  relic-affixes:
+    enabled: true
+    roll-chance: 0.18
+  dungeon-mutators:
+    enabled: true
+    roll-chance: 1.0
+  class-synergies:
+    enabled: true
+    radius: 24.0
+    refresh-ticks: 100
+  codex:
+    enabled: true
+  reputation:
+    enabled: true
+items:
+  prevent-drop-locked: true
+quests:
+  max-active: 5
+  cache-ttl-seconds: 900
+talents:
+  talent-points-per-levels: 2
+  reset-cost: 500.0
+  cache-ttl-seconds: 900
+messages:
+  prefix: '<gold>千灯纪</gold> <dark_gray>»</dark_gray> '
+scoreboard:
+  enabled: true
+  title: <gold>千灯纪 · 重返艾恩葛朗特</gold>
+  update-ticks: 20
+  lines:
+  - ''
+  - <gray>职业：</gray> <gold>{class}</gold>
+  - <gray>等级：</gray> <yellow>{level}</yellow>
+  - <gray>经验：</gray> <aqua>{xp}/{xp_next}</aqua>
+  - ''
+  - <gray>金币：</gray> <green>{currency}</green>
+  - <gray>徽记：</gray> <light_purple>{breach_tokens}</light_purple>
+  - ''
+  - <gray>委托：</gray> <yellow>{quests_active}/{quests_max}</yellow>
+  - <gray>天赋点：</gray> <gold>{talent_points}</gold>
+  - ''
+  - <dark_gray>micro.kangqiang.site</dark_gray>
+resource-pack:
+  enabled: false
+  send-on-join: true
+  send-delay-ticks: 20
+  required: false
+  url: ''
+  sha1: ''
+  prompt: 启用服务器材质包可显示自定义外形；不安装也能使用装备与技能。
+  pack-id: ''
+fracture-gateway:
+  enabled: false
+  auto-create-primary: false
+  auto-create-return: false
+  build-structures: true
+  ambient-particles: true
+  monument-pulse-ticks: 40
+  primary-world: ''
+  primary-offset-x: 10
+  primary-offset-z: 0
+  primary-gateway-id: worldspawn
+  return-gateway-id: realm_return
+integrations:
+  protection:
+    enabled: true
+    worldguard:
+      enabled: true
+  citizens:
+    enabled: false
+    neural-greeting-template: 用中文简短说明你能提供的帮助。
+  placeholderapi:
+    enabled: true
+  vault:
+    enabled: true
+    expedition-base-reward: 120.0
+    expedition-score-multiplier: 0.06
+    breach-cache-base-reward: 220.0
+    breach-token-multiplier: 2.5
+    breach-experience-multiplier: 0.08
+economy:
+  baseline-stock: 128
+  price-floor-multiplier: 0.35
+  price-cap-multiplier: 3.75
+  demand-elasticity: 0.65
+  stock-elasticity: 0.45
+  stock-decay-rate: 0.08
+  decay-period-seconds: 300
+npc:
+  provider: OLLAMA
+  base-url: http://127.0.0.1:11434/api/chat
+  api-key: ''
+  model: vortexcore-npc
+  timeout-seconds: 15
+  max-memory-turns: 16
+instances:
+  template-root: templates
+fractures:
+  tick-period-seconds: 30
+  base-intensity: 35.0
+  ecology-intensity-multiplier: 1.0
+  passive-escalation: 6.0
+  corrupted-threshold: 75.0
+  overrun-threshold: 150.0
+  boss-threshold: 250.0
+  boss-template: fracture_breach
+  market-pressure-units: 8
+  suppression-per-kill: 12.0
+  visual-pulse-ticks: 20
+  loot-base-drop-chance: 0.38
+  loot-boss-drop-chance: 1.0
+  board-max-contracts: 21
+  party-invite-ttl-minutes: 2
+  breach-boss-type: wither_skeleton
+  breach-boss-health: 450.0
+  breach-boss-damage-multiplier: 2.4
+  breach-boss-score-bonus: 450.0
+  breach-phase-two-threshold: 0.75
+  breach-phase-three-threshold: 0.45
+  breach-phase-four-threshold: 0.2
+  breach-ability-cooldown-seconds: 14
+  breach-shared-revives: 3
+  breach-disconnect-grace-seconds: 30
+  breach-revive-respawn-delay-seconds: 3
+  breach-token-base-reward: 18
+  breach-token-severity-bonus: 6
+  scarcity-items:
+  - ration_kit
+  - arcane_shard
+  recovery-items:
+  - tainted_essence
+  - stabilized_relic
+fracture-realm:
+  enabled: false
+  world-name: vortex_fractured
+  template-name: fractured_realm
+  environment: NORMAL
+  seed: 847261105931
+  generate-structures: false
+  difficulty: HARD
+  fixed-time: 18000
+  storm: true
+  thundering: true
+  auto-save: true
+  spawn-monsters: true
+  spawn-animals: false
+  pvp: true
+  world-border-radius: 1536.0
+  auto-seed:
+    enabled: true
+    intensity: 120.0
+    anchor-count: 8
+    ring-radius-blocks: 384
+    profile-cycle:
+    - wild
+    - skeletal_assault
+    - necrotic_surge
+    - arcane_tempest
+menus:
+  click-cooldown-millis: 150
+effects:
+  tick-period-ticks: 1
+diagnostics:
+  sample-period-millis: 1000
+support:
+  dump-directory: support
+  redact-paths:
+  - mongodb.uri
+  - redis.uri
+  - npc.api-key
+physics:
+  tick-period-millis: 50
+ecology:
+  tree-cut-threshold: 128
+  mob-kill-threshold: 256
+  ore-mine-threshold: 96
+progression:
+  curve-a: 45.0
+  curve-c: 120.0
+  ascension-level-threshold: 20
+class-selection:
+  celebrate-on-admin-change: true
+  allow-player-swap: false
+  effects:
+    particles: true
+    firework: false
+  rewards:
+    grant-once-per-class: true
+    grant-on-admin-change: false
+    classes:
+      knight:
+        experience: 0
+        breach-tokens: 0
+        items:
+          knight_iron_resolve: 1
+      mage:
+        experience: 0
+        breach-tokens: 0
+        items:
+          mage_apprentice_staff: 1
+      ranger:
+        experience: 0
+        breach-tokens: 0
+        items:
+          ranger_hunting_bow: 1
+      cleric:
+        experience: 0
+        breach-tokens: 0
+        items:
+          cleric_devotion_tome: 1
+      beastmaster:
+        experience: 0
+        breach-tokens: 0
+        items:
+          beastmaster_fang_totem: 1
+      engineer:
+        experience: 0
+        breach-tokens: 0
+        items:
+          engineer_field_kit: 1
+professions:
+  curve-a: 18.0
+  curve-c: 40.0
+  mastery-level-threshold: 20
+  station-open-requires-sneak: true
+  gathering:
+    mining-ore-xp: 18
+    mining-stone-xp: 6
+    foraging-log-xp: 10
+    farming-harvest-xp: 8
+    fishing-catch-xp: 16
+season:
+  renown-per-level: 100
+  adventure-daily-renown: 25
+  adventure-weekly-renown: 40
+  expeditions:
+    s-renown: 42
+    a-renown: 34
+    b-renown: 28
+    c-renown: 22
+  breaches:
+    s-renown: 60
+    a-renown: 48
+    b-renown: 40
+    c-renown: 32
+bosses:
+  tick-period-ticks: 20
+  default-arena-radius: 30
+  participant-range: 50.0
+cosmetics:
+  trail-period-ticks: 10

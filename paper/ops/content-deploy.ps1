@@ -47,6 +47,23 @@ function Content-MultiverseTarget([string]$relative) {
     return (Content-MultiverseJar $relative) -or $relative -ceq 'plugins/Multiverse-Core/config.yml'
 }
 
+function Content-NativeRpgJar([string]$relative) {
+    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','QiandengjiRpg-0.2.0.jar','Vault-1.7.3.jar')
+}
+
+function Content-NativeRpgTarget([string]$relative) {
+    # Exact static configuration only. Never native player/quest/talent stores.
+    return (Content-NativeRpgJar $relative) -or $relative -cin @(
+        'plugins/VortexRPG/config.yml','plugins/VortexRPG/quests.yml',
+        'plugins/VortexRPG/spells.yml','plugins/VortexRPG/effects.yml',
+        'plugins/VortexRPG/items.yml','plugins/VortexRPG/talents.yml',
+        'plugins/VortexRPG/bosses.yml','plugins/VortexRPG/dungeons.yml',
+        'plugins/QiandengjiRpg/config.yml','plugins/QiandengjiRpg/city-facilities.yml',
+        'plugins/AuraSkills/config.yml','plugins/AuraSkills/abilities.yml',
+        'plugins/AuraSkills/mana_abilities.yml','plugins/AuraSkills/stats.yml',
+        'plugins/AuraSkills/skills.yml')
+}
+
 function Content-YsmProxyTarget([string]$name) {
     if ($name -notmatch '^(AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected proxy plugin JAR' }
     $config = Ysm-Config
@@ -97,12 +114,12 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative)) { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
             $target = Join-Path $serverDir $relative
-        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative)) {
+        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative) -or (Content-NativeRpgTarget $relative)) {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'plugins/OlEncounters/schematics/qd_forest_camp.schem') {
             $target = Join-Path $serverDir $relative

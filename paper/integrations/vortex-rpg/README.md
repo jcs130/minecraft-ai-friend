@@ -1,10 +1,12 @@
-# VortexRPG独立候选
+# VortexRPG原生接管
 
-本目录是API适配和窄补丁，**不代表正式服已安装Vortex**。现状、修复、原生联机证据、许可和迁移门槛见[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)。
+本目录是API适配和窄补丁。**2026-10-27已发布**AgentFriend0.4.47.21、VortexRPG1.2.2-alpha-qd27和QiandengjiRpg0.2.0；[发布与回滚](../../docs/NATIVE_RPG_RELEASE_20261027.md)、[固定摘要清单](../../manifests/native-rpg-release-20261027.json)为当前状态。较早[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留调查历史。
 
-2026-10-27服主明确改用原生六职业，旧职业可废弃。当前接管候选停止旧职业写入及旧战斗成长，保留地图活动/救援与只读归档，通用效果复用既有实现；[最新接管与实测](TAKEOVER.md)优先于下方较早独立预览记录。正式仍0.4.47.20。
+服主明确改用原生六职业，旧职业归档。接管停止旧职业写入及旧战斗成长，保留地图活动、救援、证书和只读归档，通用效果复用既有实现；[接管与实测](TAKEOVER.md)区分最终验证与较早独立预览记录。不能直接部署含其他候选的完整AgentFriend0.4.48。
 
 `patch-vortex.py`要求固定摘要的1.21.1兼容JAR、固定上游源码及 `--vault <官方Vault.jar>`；保留其他条目，输出到隔离目录。`build.py`只构建本仓库桥，要求新输出；不重建或复制正式服。所有输入使用参数传入；本机回环探针有固定隔离目录和端口门禁，不应对公网服运行。
+
+`build-takeover.py`是Windows/JDK21的窄构建入口，使用固定AgentFriend0.4.47.20基包，保留528个无关条目，只编译本轮所属类。基包摘要在脚本和发布清单中固定；它不是第三方Vortex包。上游Vortex、Vault及场景资源须按各自许可自行取得，本仓库不分发这些第三方JAR或地图。
 
 正式接管沿用 `/mycli status|profession|skills|cast|tasks`；原交易、地图、个人箱、照片等入口继续保留。早期 `rpg status` 是兼容别名；独立预览里的shop/town不是新的默认命令。原生职业选择与学习等待保存回执；未完成目标不能领奖。公开列表和资料不代表商店或设施已开业。
 

@@ -10,12 +10,16 @@ test('Aincrad release is readable without login or JavaScript and serves its own
   const dom = new JSDOM(await response.text()); t.after(() => dom.window.close());
   const document = dom.window.document;
   assert.equal(document.querySelectorAll('script,form').length, 0);
-  assert.match(document.querySelector('h1').textContent, /千灯纪：重返艾恩葛朗特/);
-  assert.match(document.body.textContent, /VortexRPG.*尚未接管正式角色数据/);
+  assert.match(document.querySelector('h1').textContent, /重返艾恩葛朗特.*破晓攻略/);
+  assert.match(document.body.textContent, /Vortex六职业/);
   assert.match(document.body.textContent, /后续楼层逐步建设/);
-  assert.match(document.body.textContent, /有8魔力时/);
-  assert.match(document.body.textContent, /有2魔力后/);
-  assert.match(document.body.textContent, /与NPC聊过天不等于自动接单或完成任务/);
+  assert.match(document.body.textContent, /耗8魔力/);
+  assert.match(document.body.textContent, /开页耗2魔力/);
+  assert.match(document.body.textContent, /聊天不能替代任务验收和发奖/);
+  for(const id of ['knight','mage','ranger','cleric','beastmaster','engineer'])assert.match(document.body.textContent,new RegExp(id));
+  assert.match(document.body.textContent,/奖励待核对/);
+  assert.match(document.body.textContent,/必须穿齐头盔、胸甲、护腿、靴子/);
+  assert.match(document.body.textContent,/不强制带剑/);
   assert.equal(document.querySelectorAll('a[href^="/#"]').length >= 4, true);
   for (const element of document.querySelectorAll('link[rel="stylesheet"],img')) {
     const url = element.getAttribute('href') || element.getAttribute('src');

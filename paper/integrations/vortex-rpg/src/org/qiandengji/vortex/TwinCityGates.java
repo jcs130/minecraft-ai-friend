@@ -16,6 +16,12 @@ final class TwinCityGates implements Listener {
     private final VortexBridge owner;
     private final List<Gate> gates;
     private final Map<UUID,Long> attempts=new HashMap<>();
+    private boolean built(Gate gate){
+        World w=Bukkit.getWorld(gate.world());if(w==null||!w.isChunkLoaded((gate.x()-1)>>4,gate.z()>>4)||!w.isChunkLoaded((gate.x()+3)>>4,gate.z()>>4))return false;
+        return w.getBlockAt(gate.x()-1,gate.y(),gate.z()).getType()==Material.SMOOTH_QUARTZ
+            &&w.getBlockAt(gate.x()+3,gate.y(),gate.z()).getType()==Material.SMOOTH_QUARTZ
+            &&w.getBlockAt(gate.x()+1,gate.y()+3,gate.z()).getType()==Material.CHISELED_QUARTZ_BLOCK;
+    }
     TwinCityGates(VortexBridge owner){
         this.owner=owner;var root=owner.getConfig().getConfigurationSection("city-gates");
         List<Gate> values=new ArrayList<>();
@@ -31,7 +37,7 @@ final class TwinCityGates implements Listener {
         if(e instanceof PlayerTeleportEvent||e.getTo()==null||e.getFrom().getBlockX()==e.getTo().getBlockX()
                 &&e.getFrom().getBlockY()==e.getTo().getBlockY()&&e.getFrom().getBlockZ()==e.getTo().getBlockZ())return;
         Player p=e.getPlayer();if(!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode()))return;
-        for(Gate gate:gates)if(gate.contains(e.getTo())&&!gate.contains(e.getFrom())){
+        for(Gate gate:gates)if(gate.contains(e.getTo())&&!gate.contains(e.getFrom())&&built(gate)){
             long now=System.currentTimeMillis();if(now-attempts.getOrDefault(p.getUniqueId(),0L)<5000)return;
             attempts.put(p.getUniqueId(),now);
             // Defer to the next tick, after the accepted move. Never cancel a

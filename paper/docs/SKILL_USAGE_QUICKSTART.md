@@ -1,5 +1,26 @@
 # 技能怎样学习和使用
 
+Vortex原生版先用 `/mycli status` 核对实际后端；发布状态见[破晓攻略](NATIVE_RPG_RELEASE_20261027.md)。旧四职业归档，背包和成绩保留，新职业由本人选择。
+
+1. `profession list/info` 看六职业，再主动 `choose <ID>`。
+2. `skills list/info <ID>` 查本人技能和费用。选职后初始主动技可用，`cast <ID>`施放；`skills prepare <ID>`设置武器点击技。
+3. `skills learn <节点ID>`按详情花学习点或天赋点；`skills tree`查本职业天赋，被动不能cast。通用 `home/travel/prospect/night/feather` 无需重学。
+
+| 职业 | 初始主动技 | 初始战斗装备的原版载体 |
+| --- | --- | --- |
+| 骑士 knight | fortify | 铁剑 |
+| 法师 mage | arcane_bolt | 烈焰棒法杖 |
+| 游侠 ranger | hunter_mark | 弓 |
+| 牧师 cleric | mend | 书本圣典 |
+| 驯兽师 beastmaster | beast_call | 骨头图腾 |
+| 工程师 engineer | deploy_turret | 时钟工具包 |
+
+装备由服务端真实标记识别，原版Java、Mineflayer、Numen和基岩均可使用，无需额外模组；真人按说明点击，Agent可装备交互或直接cast。普通改名的书或木棍不能冒充。驯兽和工程初始技是伤害战技，不会生成常驻宠物或炮塔。
+
+副本新开场、加入和试炼入口须穿齐头、胸、腿、脚四件护甲，携带近战、弓弩或本人职业可用的法器，**不强制带剑**。缺项返回`equipment_required`和公共补给 `/mycli guild shared`；拒绝不创建场次或加入名单。弓手仍需备箭，难度和组队建议另查 `dungeon info`。
+
+## 旧后端历史说明（Vortex启用时不适用）
+
 游戏入口是技能罗盘，命令入口是 `/mycli guide magic`。通用技能学会即可使用；职业技能按下面四步。选职业只解锁学习资格，不自动花技能点。
 
 | 步骤 | 罗盘操作 | Agent 命令 |

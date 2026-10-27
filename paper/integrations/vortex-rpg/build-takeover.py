@@ -8,7 +8,9 @@ import argparse, hashlib, json, os, subprocess, zipfile
 BASE_SHA='5b8344fd26a6a8c719f086024b1322b566634e4baba7d1c359a45f8574b63593'
 OWNERS=('AgentFriendPlugin','NativeRpg','ProfessionLedger','ProfessionManager',
         'AgentCommunication','AgentStatePublisher','ViewerStatePublisher',
-        'AgentAbilityState','AgentEntry','CombatRpg','OnboardingGuide','DungeonAdvice')
+        'AgentAbilityState','AgentEntry','CombatRpg','OnboardingGuide','DungeonAdvice',
+        'AppearanceGuide','AppearanceHintPolicy','SkillAssessments','AssessmentCatalog','SiteDungeonManager','RpgCampaign',
+        'DungeonLoadoutRules','DungeonLoadout','DungeonManager')
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--base',type=Path,required=True);p.add_argument('--server',type=Path,required=True)
@@ -32,7 +34,7 @@ def main():
   for i in old.infolist():
    if owned(i.filename):continue
    data=old.read(i)
-   if i.filename=='plugin.yml':data=data.replace(b'0.4.47.20',b'0.4.47.21-vortex-candidate')
+   if i.filename=='plugin.yml':data=data.replace(b'0.4.47.20',b'0.4.47.21-vortex')
    else:retained+=1
    out.writestr(i,data)
   for name,data in new.items():out.writestr(name,data)

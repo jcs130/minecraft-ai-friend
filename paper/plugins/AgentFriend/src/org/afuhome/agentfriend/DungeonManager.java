@@ -658,7 +658,8 @@ final class DungeonManager implements Listener {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 " + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。");
             return;
         }
-        List<Player> group = groupNearLobbyButton(lobbyButton());
+        if(!DungeonLoadout.ready(starter))return;
+        List<Player> group = groupNearLobbyButton(lobbyButton()).stream().filter(DungeonLoadout::ready).toList();
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
@@ -702,6 +703,8 @@ final class DungeonManager implements Listener {
         }
         List<Player> group = nearLobbyButton(starter, lobbyButton())
                 ? groupNearLobbyButton(lobbyButton()) : List.of(starter);
+        if(!DungeonLoadout.ready(starter))return;
+        group=group.stream().filter(DungeonLoadout::ready).toList();
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(REST_FLOOR, group) == 0) {

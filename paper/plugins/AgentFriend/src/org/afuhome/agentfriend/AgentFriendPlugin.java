@@ -285,6 +285,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private AgentCoach agentCoach;
     private AgentEntry agentEntry;
     private AgentCommunication communication;
+    private AppearanceGuide appearanceGuide;
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
@@ -362,6 +363,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentEntry = new AgentEntry(this);
         agentCoach = new AgentCoach(this);
         communication = new AgentCommunication(this);
+        appearanceGuide = new AppearanceGuide(this);
         archives = new PublicArchives(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
@@ -632,6 +634,21 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (taskMarket != null) taskMarket.worldAction(player, GuildManager.Goal.SKILL_CAST,
                 spell, "cast:" + java.util.UUID.randomUUID(), System.currentTimeMillis());
     }
+    public void nativeCastConfirmed(Player p,String id) {
+        if(!nativeRpg.selected()||!p.isOnline()||!id.matches("[a-z0-9_]{1,48}"))return;
+        recordWorldLesson(p,"cast");
+        if(skillAssessments!=null)skillAssessments.proof(p,"native_cast","vortex:"+id);
+        if(featureTutorials!=null)featureTutorials.cast(p,id);
+        if(taskMarket!=null)taskMarket.worldAction(p,GuildManager.Goal.SKILL_CAST,id,"vortex:"+java.util.UUID.randomUUID(),System.currentTimeMillis());
+    }
+    public void nativeKillConfirmed(Player p) {
+        if(nativeRpg.selected()&&skillAssessments!=null)skillAssessments.proof(p,"native_kill","vortex_hostile_kill");
+    }
+    void nativeSiteCompleted(Player p,String site,String run) {
+        if(!nativeRpg.selected())return;
+        if(skillAssessments!=null)skillAssessments.proof(p,"native_clear","site:"+site+":"+run);
+        nativeRpg.siteCompleted(p,site,run);
+    }
 
     private WorldLifeManager worldLife;
     private FeatureTutorials featureTutorials;
@@ -802,6 +819,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler public void onStarterJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         communication.joined(player);
+        appearanceGuide.joined(player);
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
             int backpackChanges = BackpackShortcutMigration.migrate(player);

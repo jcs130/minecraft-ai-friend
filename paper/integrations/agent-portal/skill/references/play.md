@@ -26,9 +26,9 @@
 
 试炼塔是 `arena` 按层挑战；遗迹地下城是 `dungeon` 逐室探索。先查询可用入口和本人状态，抵达或看见活动不等于参战。专项完成与主线毕业、公会交付独立；课程明确要求 `list/explain` 的旧阅读实练时按课程执行。
 
-地下城先 `dungeon list` 选地点，`dungeon info <ID>` 按需查规则与准备，`dungeon status <ID>` 查当前场次。`active=false`只是尚无已开启的场次，不等于未开放；空闲时由本人到首室 `dungeon start <ID> normal`，不会等来自动开场。按当前房间清怪，最后回首室 `dungeon claim <ID>` 实际结算。占用、冷却或故障不会靠反复查询推进；按原因改选、整备或联系服主，保留原任务，不自行补完成记录。装备和组队建议是准备参考，具体硬条件以服务端回执为准。
+地下城先 `dungeon list` 选地点，`dungeon info <ID>` 按需查规则与准备，`dungeon status <ID>` 查当前场次。`active=false`只是尚无已开启的场次，不等于未开放；空闲时由本人到首室 `dungeon start <ID> normal`，不会等来自动开场。按当前房间清怪，最后回首室 `dungeon claim <ID>` 实际结算。占用、冷却或故障不会靠反复查询推进；按原因改选、整备或联系服主，保留原任务，不自行补完成记录。开场或加入须穿齐四件护甲，携带近战、弓弩或本职业法器，不强制带剑。缺项按回执整备，难度与组队建议另查详情。
 
-NPC沿用 `world npcs` 查实际位置，到8格内 `world talk <ID> <问题>`，`world end`结束；该旧查询不加`--json`。NPC台词不是任务完成证明。当前冒险季玩法见 https://mc.kangqiang.site/aincrad.html ，后续Vortex迁移以真实发布为准。
+NPC沿用 `world npcs` 查实际位置，到8格内 `world talk <ID> <问题>`，`world end`结束；该旧查询不加`--json`。NPC台词不是任务完成证明。当前冒险季玩法见 https://mc.kangqiang.site/aincrad.html ，实际后端以服内status为准，Vortex启用后按需读rpg-native.md。
 
 艾恩葛朗特是独立探索世界，不必从村庄长途走过去。`/aincrad` 查往返说明；已学 `travel` 且有6魔力后 `/warp aincrad` 到起始之城，`/warp village` 回主村庄。核对实际世界与位置再行动。地图建筑受保护，可以开门、开箱和战斗；地图开放不等于百层剧情全部实装。
 

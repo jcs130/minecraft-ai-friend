@@ -84,6 +84,7 @@ final class SiteDungeonManager implements Listener {
         Site s=sites.get(id);if(s==null)return DungeonAdvice.evaluate(id,id,Map.of("configured",false));
         Run run=runs.get(id),mine=own(p);Room first=s.rooms.getFirst();long now=System.currentTimeMillis();
         Map<String,Object> facts=new LinkedHashMap<>();
+        var loadout=DungeonLoadout.missing(p);facts.put("loadoutReady",loadout.isEmpty());facts.put("missingLoadout",String.join("、",loadout));
         facts.put("configured",ready&&!blockedCheckpoints.contains(id)&&Bukkit.getWorld(s.world)!=null);
         facts.put("pendingReward",receipt(p.getUniqueId(),id)!=null);
         facts.put("participant",run!=null&&run.party.contains(p.getUniqueId()));
@@ -105,6 +106,7 @@ final class SiteDungeonManager implements Listener {
         Map<String,Object> out=DungeonAdvice.evaluate(id,s.name,facts);var prep=DungeonAdvice.preparation(id,s.minimumLevel);
         out.put("recommendedLevel",prep.recommendedLevel());out.put("minimumLevel",s.conquestFloor>0?s.minimumLevel:1);
         out.put("playerCombatLevel",level);out.put("recommendedEquipment",prep.equipment());out.put("recommendedParty",prep.party());
+        out.put("requiredEquipment","穿齐头、胸、腿、脚四件护甲，并携带近战武器、弓弩或本职业法器");out.put("missingEquipment",loadout);
         long armor=Arrays.stream(p.getInventory().getArmorContents()).filter(i->i!=null&&!i.getType().isAir()).count();
         out.put("currentEquipment","战斗Lv."+level+"、护甲"+armor+"/4、"+(p.getInventory().getItemInOffHand().getType()==Material.SHIELD?"已副手持盾":"副手未持盾")+"、饱食"+p.getFoodLevel()+"/20");
         out.put("skillHint",DungeonAdvice.skill(role));out.put("firstRoom",facts.get("firstRoom"));
@@ -194,6 +196,14 @@ final class SiteDungeonManager implements Listener {
         if(advice!=null&&!jsonOutput.get()&&!Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(reason))advice.send(p);
         if(reason.equals("claim_previous_reward_first"))explainPending(p,List.of(site));
         else if(reason.equals("specify_dungeon_id"))explainPending(p,pendingSites(p.getUniqueId()));
+    }
+    private boolean loadout(Player p,String action,Site site){
+        var missing=DungeonLoadout.missing(p);if(missing.isEmpty())return true;
+        send(p,"MC_SITE_DUNGEON_RESULT",Map.of("action",action,"id",site.id,"success",false,"reason","equipment_required",
+            "errorMessage","未满足入场战备，缺少："+String.join("、",missing),"missingEquipment",missing,
+            "nextAction","穿齐四件护甲，并携带可用战斗装备；近战、弓弩、法杖、圣典等均可，不强制带剑。", "nextCommand","/mycli guild shared"));
+        if(!jsonOutput.get())p.sendMessage("[战备] 穿齐四件护甲，带上可用战斗装备，再开场或加入；法器须为本人职业可用的真实装备。公共补给：/mycli guild shared");
+        return false;
     }
     private void tell(Run r,String message){for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage("§6【"+label(r.site)+"·"+r.site.name+"】§r "+message);}}
     private void notice(Run r,String message){
@@ -407,6 +417,7 @@ final class SiteDungeonManager implements Listener {
         require(!runs.containsKey(s.id),"site_busy");require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
+        if(!loadout(p,"start",s))return;
         Run r=new Run(s,mode);r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
         result(p,"start",s.id,"success");tell(r,"§6"+s.name+"〔"+mode.label+"〕集结10秒；队友需主动 dungeon join "+s.id+"。房间清怪后自行前进，掉线宽限5分钟。");
@@ -418,6 +429,7 @@ final class SiteDungeonManager implements Listener {
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
         require(r.party.size()<PARTY_LIMIT&&s.contains(p.getLocation())&&s.rooms.getFirst().contains(p.getLocation()),"party_full_or_not_at_first_room");
         require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
+        if(!loadout(p,"join",s))return;
         r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);
         try{persist();}catch(RuntimeException failure){r.party.remove(p.getUniqueId());r.attendance.remove(p.getUniqueId());throw failure;}
         result(p,"join",s.id,"success");
@@ -638,6 +650,7 @@ final class SiteDungeonManager implements Listener {
                 if(r.site.conquestFloor>0)plugin.getConfig().set(ROOT+".conquest-proofs."+id+"."+r.site.conquestFloor,r.id);
             });
             if(r.site.conquestFloor>0&&plugin.combatRpg()!=null)plugin.combatRpg().formalClear(r.id,p,r.site.conquestFloor);
+            plugin.nativeSiteCompleted(p,r.site.id,r.id);
             p.sendMessage("§6"+r.site.name+"已完成；dungeon claim "+r.site.id+"领取到个人箱，今日该处仅奖励一次。");
         }
         // Keep the return phase while any eligible online teammate is still walking back.

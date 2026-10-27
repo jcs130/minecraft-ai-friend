@@ -1,14 +1,14 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前正式版：**Paper1.21.1 / AgentFriend0.4.47.20，官网0.8.28冒险季首页。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布记录](paper/docs/ADVENTURE_RELEASE_20261027.md)。四职业、首层攻略、动态副本指引、保守反作弊、Multiverse和主城三位AI接待已上线；Skill下载仍为1.3.3、核心rc.95，源码更新不冒充客户端包已升级。
+**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.21、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.0已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.113，源码更新不冒充外部客户端已升级。
 
-**正式RPG已上线：**四职业23项技艺，艾恩葛朗特第一层正式攻略、战斗升级、组队救援和计分板已开放。沿用罗盘与`/mycli`，先看[技能四步](paper/docs/SKILL_USAGE_QUICKSTART.md)；[发布与玩法](paper/docs/RPG_RELEASE_20261027.md)。完整0.4.48仍含其他候选，不可替换正式JAR。
+**六职业共用一套成长：**骑士、法师、游侠、牧师、驯兽师和工程师，由本人主动选择。原生技能、天赋、经验与金币，八张冒险委托、五处活动、首层攻略及组队救援已接入原`/mycli`；旧职业停止写入并保留归档。先看[技能与装备](paper/docs/SKILL_USAGE_QUICKSTART.md)。完整0.4.48仍含其他候选，不可直接替换正式JAR。
 
-[副本指引与反作弊](paper/docs/DUNGEON_GUIDANCE_20261027.md)已随.20部署。[Vortex原生接管](paper/integrations/vortex-rpg/TAKEOVER.md)按服主决定采用原生六职业、归档旧职业，复用通用效果；仍在独立验证，不让两套RPG同时扣算。SAO NPC外观和双城实体门仍待验收。
+副本新开场和加入须穿齐四件护甲，携带近战、弓弩或本职业法器，不强制带剑；缺项会返回补给入口。装备使用原版物品承载，普通Java、基岩、Mineflayer和Numen无需为RPG额外安装模组。原村庄与起始之城实体传送门已开放，每次6魔力；三位原NPC接待已改为艾基尔、克莱因和阿尔戈的剧情指引，身体仍为原村民。详见[接管与实测](paper/integrations/vortex-rpg/TAKEOVER.md)。
 
 [Multiverse多世界](paper/integrations/multiverse-core/README.md)5.8.1已正式安装，用于以后楼层独立维度。起始之城外开放探索，不按压缩包范围设置活动围墙。
 
-[外观选择](paper/content/appearance-gallery/README.md)新增40款签名皮肤与5套YSM，保留现有角色外观，沿用 `/skin` 与 `/appearance`。另3套通过网页运动审阅的模型待匹配渲染器；Vortex六职业接管仍是[独立候选](paper/integrations/vortex-rpg/TAKEOVER.md)，没有替换当前正式职业。
+[外观选择](paper/content/appearance-gallery/README.md)新增40款签名皮肤与5套YSM，保留现有角色外观，沿用 `/skin` 与 `/appearance`；默认外观仅私发一次选择建议。另3套模型待匹配网页渲染器。特殊装备外形和YSM按各客户端资源支持单独适配，不影响技能功能。
 
 有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
 
@@ -24,7 +24,7 @@
 
 - **长期生活：**共享物资、村民交易、居民与 NPC 互动、生活与建造委托。
 - **自由选择旅途：**探索、讨伐、制造、补给、工程与游记创作；已撤下农耕活动和新接单推荐，旧任务进度保留。
-- **职业与冒险：**通用技能与战士／法师／牧师／坦克，技能学习、准备与升级；试炼塔和遗迹地下城保留各自的进度与奖励规则。
+- **职业与冒险：**五项通用技及Vortex六职业，原生技能、天赋、经验和金币；试炼塔与遗迹地下城保留各自的进度和奖励规则。
 - **共同经历：**队友救援、女神相机、署名照片与故事、官网相册和共同回忆展示。
 - **多种接入方式：**原版 Java、经 Geyser 接入的基岩玩家、Mineflayer Agent，以及可选的 Numen 服务端 Agent。YSM 等模型能力按客户端与资源包单独适配。
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
@@ -77,14 +77,14 @@ python paper/self-host/selfhost.py doctor
 
 ## 当前版本与开发边界
 
-截至 **2026-10-26**：
+截至 **2026-10-27**：
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.18** / CortiEyeMirror **0.1.17** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.21** / VortexRPG **1.2.2-alpha-qd27** / QiandengjiRpg **0.2.0** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.28**：本人外观、体验邀请、公开档案与观战保持；安装恢复、无JS下载与开发者引导已上线；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
-| 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**跟进主干rc.95无画面包；2026-10-26核对npm next为rc.89，不静默替换外部客户端 |
+| 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
+| 通用 MC 核心 | [主干 **0.5.7-rc.113**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。

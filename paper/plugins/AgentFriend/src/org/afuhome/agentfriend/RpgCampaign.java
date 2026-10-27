@@ -75,7 +75,7 @@ final class RpgCampaign implements Listener {
             if(Set.of(RpgStoryRules.Kind.TALK,RpgStoryRules.Kind.TALK_OR_GRADUATE).contains(stage.kind())){var target=npcs.view(stage.reference());if(target!=null)out.add("target",target);}}
         else{out.addProperty("advice","真实条件已齐，正在保存章节回执；保存失败不会宣布完成。");out.addProperty("nextCommand","/mycli world story status");}
         // Point to the current commission; never replace it with a suggested side quest.
-        String task=plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id","");if(!task.isEmpty()){out.addProperty("activeCommission",task);out.addProperty("commissionCommand","/mycli tasks status");}return out;
+        String task=plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id","");if(!task.isEmpty()){out.addProperty("activeCommission",task);out.addProperty("commissionCommand",plugin.nativeRpgSelected()?"/mycli guild status":"/mycli tasks status");}return out;
     }
     void command(Player p,String[] raw){boolean json=Arrays.asList(raw).contains("--json");
         try{var words=new ArrayList<String>();int page=1;boolean pageSet=false;for(int i=2;i<raw.length;i++){String word=raw[i];if(word.equals("--json"))continue;if(word.equals("--page")){if(pageSet||i+1==raw.length||!raw[i+1].matches("[1-9][0-9]{0,4}"))throw new IllegalArgumentException("页码用 --page 正整数");page=Integer.parseInt(raw[++i]);pageSet=true;continue;}if(word.startsWith("--"))throw new IllegalArgumentException("未知参数："+word);words.add(word);}if(page<1)throw new IllegalArgumentException("页码必须大于零");
