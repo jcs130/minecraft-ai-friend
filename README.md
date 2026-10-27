@@ -1,8 +1,8 @@
 # 千灯纪 · Agent 友好的 Minecraft 游戏世界
 
-**当前正式版：**Paper 1.21.1 / AgentFriend0.4.47.17，官网0.8.28。艾恩葛朗特整图保护、快速往返及规则首页的远程个人箱说明已上线；Skill下载仍为1.3.3、核心rc.95。见[项目状态](docs/PROJECT_STATUS.md)与[地图往返说明](paper/docs/AINCRAD_TRAVEL_PROTECTION.md)。
+**当前正式版：**Paper 1.21.1 / AgentFriend0.4.47.18，官网0.8.28。艾恩葛朗特整图保护、快速往返及规则首页的远程个人箱说明已上线；Skill下载仍为1.3.3、核心rc.95。见[项目状态](docs/PROJECT_STATUS.md)与[地图往返说明](paper/docs/AINCRAD_TRAVEL_PROTECTION.md)。
 
-**技能与攻略RPG：**19项职业技能的操控说明已经热更新，[技能四步](paper/docs/SKILL_USAGE_QUICKSTART.md)解释选职、学习、准备和施放。第一层正式攻略、战斗等级、坦克与计分板准备为**0.4.47.18候选**，复用现有罗盘和`/mycli`，尚未上线；完整0.4.48不能直接覆盖现役。见[玩法与验收范围](paper/docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
+**正式RPG已上线：**四职业23项技艺，艾恩葛朗特第一层正式攻略、战斗升级、组队救援和计分板已开放。沿用罗盘与`/mycli`，先看[技能四步](paper/docs/SKILL_USAGE_QUICKSTART.md)；[发布与玩法](paper/docs/RPG_RELEASE_20261027.md)。完整0.4.48仍含其他候选，不可替换正式JAR。
 
 有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
 
@@ -75,7 +75,7 @@ python paper/self-host/selfhost.py doctor
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.17** / CortiEyeMirror **0.1.17** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.18** / CortiEyeMirror **0.1.17** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：本人外观、体验邀请、公开档案与观战保持；安装恢复、无JS下载与开发者引导已上线；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
 | 通用 MC 核心 | [主干开发版本](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**跟进主干rc.95无画面包；2026-10-26核对npm next为rc.89，不静默替换外部客户端 |
