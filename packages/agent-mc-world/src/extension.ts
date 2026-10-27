@@ -48,6 +48,8 @@ export { observeSpatial, parseSpatialObservation, SPATIAL_QUERY_SCHEMA, SPATIAL_
 export type { SpatialObserveInput } from '../core/spatial-observation.ts';
 export type { VoxelCursor } from '../core/voxel-query-contract.ts';
 export type { StepDecision } from '../core/step-decision.ts';
+export { minecraftStepRequestKind, minecraftRequestKinds, omitRejectedMinecraftSpeech } from '../core/request-intent.ts';
+export type { MinecraftRequestKind } from '../core/request-intent.ts';
 export { zhName } from '../core/names.ts';
 export { invCount, itemPredOf, invItemNamed } from '../core/inventory.ts';
 export { matchItemName, CONTAINER_FIND } from '../core/chests.ts';
