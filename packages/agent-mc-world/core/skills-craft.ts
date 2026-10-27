@@ -373,54 +373,81 @@ function newEffectText(bot: Bot, before: Map<number, ActiveEffect>): string {
   return changed.length ? `;进食后观察到状态:${changed.join('、')}` : '';
 }
 
-export async function consumeHeldFood(bot: Bot, foodName: string): Promise<string> {
+export async function consumeHeldFood(bot: Bot, foodName: string, checkActive?: () => void): Promise<string> {
   // 牛奶这类东西不给饱食度,拿 food 读数当结果就是编:它的结果是状态效果没了、
   // 手里剩个空桶(见 DRINKABLES)。判成没成仍用同一条「包里少了一个」的因果事实。
   const drink = DRINKABLES[foodName] ?? null;
   const before = bot.food;
+  const saturationBefore = bot.foodSaturation;
   const effectsBefore = activeEffects(bot);
   const bagBefore = invCount(bot, (n) => n === foodName);
   const emptyBefore = drink ? invCount(bot, (n) => n === drink.empty) : 0;
+  const entityBefore = bot.entity;
+  let windowChanged = Boolean(bot.currentWindow), completed = false;
+  const unconfirmed = (detail: string): SkillBlocked => new SkillBlocked(
+    `进食未确认：${detail}；先核对当前背包、主手和饥饿读数，不重复使用结果未知的食物`,
+    [], 'server', 'food-consumption-unconfirmed');
+  const checkState = (): void => {
+    checkActive?.();
+    if (windowChanged || bot.currentWindow || !inventoryReadConfirmed(bot)) {
+      throw unconfirmed('期间打开了容器或背包读数尚未同步');
+    }
+    if (bot.health <= 0 || bot.entity !== entityBefore) throw unconfirmed('生命或身体实例已变化');
+  };
+  checkState();
+  if (bot.heldItem?.name !== foodName || bagBefore <= 0) {
+    throw new SkillBlocked(`进食前主手没有确认拿着${zhName(foodName)}，未使用物品`, [], 'server', 'use-hand-changed');
+  }
+  // Native consume also resolves on heldItemChanged. Only the matching own
+  // consume status, nutrition or returned drink container can corroborate loss.
+  const onStatus = (packet: { entityId: number; entityStatus: number }): void => {
+    if (packet.entityId === entityBefore?.id && packet.entityStatus === 9) completed = true;
+  };
+  const onWindow = (): void => { windowChanged = true; };
+  bot._client?.on('entity_status', onStatus);
+  bot.on('windowOpen', onWindow);
   try {
-    await bot.consume();
-  } catch (err) {
-    const message = (err as Error).message;
-    if (message === 'Food is full') return `饥饿已经是 ${bot.food}/20,吃不下,没吃`;
-    throw new SkillBlocked(`吃不下去: ${zhErrorText(message)}`);
+    try { await bot.consume(); } catch (err) {
+      checkState();
+      const message = (err as Error).message;
+      if (message === 'Food is full') return `饥饿已经是 ${bot.food}/20,吃不下,没吃`;
+      throw new SkillBlocked(`吃不下去: ${zhErrorText(message)}`);
+    }
+    const confirmed = (): boolean => completed || bot.food > before
+      || bot.foodSaturation > saturationBefore || Boolean(drink && invCount(bot, n => n === drink.empty) > emptyBefore);
+    const settle = Date.now() + EAT_SETTLE_MS;
+    while (Date.now() < settle) {
+      checkState();
+      const removed = bagBefore - invCount(bot, n => n === foodName);
+      if (removed !== 0 && (removed !== 1 || confirmed())) break;
+      await sleep(50);
+    }
+    // Inventory, health and effects arrive in separate server packets.
+    await sleep(200);
+    checkState();
+    const bagAfter = invCount(bot, n => n === foodName), removed = bagBefore - bagAfter;
+    if (removed !== 1) {
+      throw unconfirmed(`${zhName(foodName)}随身数量 ${bagBefore} → ${bagAfter}，一次应只消耗一个；饥饿 ${before} → ${bot.food}/20`);
+    }
+    if (!confirmed()) throw unconfirmed(`食物少了一个，但未收到本人进食完成或营养变化，饥饿 ${before} → ${bot.food}/20`);
+    if (drink) {
+      // 空桶回没回包里也照报；喝奶不记入「上次进食」。
+      const emptyAfter = invCount(bot, (n) => n === drink.empty);
+      const back = emptyAfter > emptyBefore
+        ? `,${zhName(drink.empty)}回到包里(现在 ${emptyAfter} 个)`
+        : `,但包里的${zhName(drink.empty)}还是 ${emptyAfter} 个`;
+      return `喝了${drink.label},${drink.effect}${back}`;
+    }
+    noteAte(bot);
+    return `吃了一个${zhName(foodName)},饥饿 ${before} → ${bot.food}/20${newEffectText(bot, effectsBefore)}`;
+  } finally {
+    bot._client?.removeListener('entity_status', onStatus);
+    bot.removeListener('windowOpen', onWindow);
   }
-  // consume() 可被 heldItemChanged 提前 resolve；food 也可能因跑步、死亡或重生变化。
-  // 进食以所选食物库存减少作为因果判据。
-  const settle = Date.now() + EAT_SETTLE_MS;
-  while (invCount(bot, (n) => n === foodName) === bagBefore && Date.now() < settle) await sleep(50);
-  // 回执同时报告进食前后读数，即使两次读数相同。
-  if (invCount(bot, (n) => n === foodName) >= bagBefore) {
-    throw new SkillBlocked(
-      drink
-        ? `举着${zhName(foodName)}喝了一下,但包里还是 ${bagBefore} 个,没喝进去`
-        : `啃了一口${zhName(foodName)},但包里还是 ${bagBefore} 个、饥饿 ${before} → ${bot.food}/20,没吃进去`,
-    );
-  }
-  if (drink) {
-    // 空桶回没回包里也照报:她下一步要拿它去装水/装奶,数得出来才算这一口有交代
-    const emptyAfter = invCount(bot, (n) => n === drink.empty);
-    const back = emptyAfter > emptyBefore
-      ? `,${zhName(drink.empty)}回到包里(现在 ${emptyAfter} 个)`
-      : `,但包里的${zhName(drink.empty)}还是 ${emptyAfter} 个`;
-    // 不记进食时刻:这一口不管饱,`[口粮]` 那行说「上次进食」就得是真吃过东西
-    return `喝了${drink.label},${drink.effect}${back}`;
-  }
-  // 库存扣除与状态效果是独立的服务端包，留一小段时间接收后者。
-  await sleep(200);
-  noteAte(bot);
-  const bagAfter = invCount(bot, (n) => n === foodName);
-  const removed = bagBefore - bagAfter;
-  if (removed > 1) {
-    return `使用了${zhName(foodName)}，但随身数量 ${bagBefore} → ${bagAfter}，一次少了 ${removed} 个；这不符合正常一次进食，不能当作只吃了一个。先核对背包和服务端库存同步${newEffectText(bot, effectsBefore)}`;
-  }
-  return `吃了一个${zhName(foodName)},饥饿 ${before} → ${bot.food}/20${newEffectText(bot, effectsBefore)}`;
 }
 
-export async function skillEat(bot: Bot, itemName: string): Promise<string> {
+export async function skillEat(bot: Bot, itemName: string, checkActive?: () => void): Promise<string> {
+  checkActive?.();
   const foods = (bot.registry.foodsByName ?? {}) as Record<string, unknown>;
   if (!foods[itemName] && !DRINKABLES[itemName]) {
     throw new SkillBlocked(notFoodText(bot, itemName));
@@ -429,7 +456,7 @@ export async function skillEat(bot: Bot, itemName: string): Promise<string> {
     if (!inventoryReadConfirmed(bot)) {
       throw new SkillBlocked('进食前容器与背包尚未同步，未关窗或使用食物', [], 'server', 'inventory-click-sync');
     }
-    try { await resumeInventoryCursor(bot); }
+    try { await resumeInventoryCursor(bot, checkActive); }
     catch (err) {
       if (!isInventoryClickError(err)) throw err;
       throw new SkillBlocked(`进食前归还游标物品未完成: ${(err as Error).message}`, [], 'server', 'inventory-click-sync');
@@ -445,15 +472,15 @@ export async function skillEat(bot: Bot, itemName: string): Promise<string> {
     // 手边还有什么能吃是她下一单要用的事实;一样都没有就是「包里没有任何食物」那一句
     throw new SkillBlocked(`包里没有点名的${zhName(itemName)};${edibleInBag(bot) ?? '包里没有任何食物'}`);
   }
-  await bot.equip(food, 'hand');
-  return consumeHeldFood(bot, itemName);
+  await equipHandConfirmed(bot, food, checkActive);
+  return consumeHeldFood(bot, itemName, checkActive);
 }
 
 /** 按名字拿到手上 */
-export async function equipNamed(bot: Bot, name: string): Promise<string> {
+export async function equipNamed(bot: Bot, name: string, checkActive?: () => void): Promise<string> {
   const item = invItemNamed(bot, name);
   if (!item) throw noSuchItem(bot, name);
-  await bot.equip(item, 'hand');
+  await equipHandConfirmed(bot, item, checkActive);
   return item.name;
 }
 

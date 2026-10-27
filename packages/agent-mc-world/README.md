@@ -1,9 +1,9 @@
 # Agent MC World
 
-Development candidate **rc.114** freezes shared viewer `c0b9a7a6`: first-person
+Development candidate **rc.115** freezes shared viewer `c0b9a7a6`: first-person
 cave section visibility, legacy server-skin preview normalization and exact
 original armor paths including modern copper equipment. All shipped asset
-versions were rebuilt. See [viewer scope](docs/viewer-rc114.md). Host model
+versions were rebuilt. See [viewer scope](docs/viewer-rc115.md). Host model
 continuation remains a host policy, with no additional model loop in this SDK.
 
 The inherited rc.113 changes add [logical chat transport receipts](docs/chat-delivery.md)
@@ -11,7 +11,7 @@ so SDK/MCP and host consumers can distinguish admitted chat from actual client
 dispatch and correlate queued messages to their task step. Sending does not imply
 recipient acknowledgment or completion of an action described in the message.
 
-Published npm preview at preparation time: **0.5.7-rc.99** on **next**. The rc.114 candidate is not an npm publication; verify final release receipts before changing a production pin. Java **1.21.1** remains primary; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
+Published npm preview at preparation time: **0.5.7-rc.99** on **next**. The rc.115 candidate is not an npm publication; verify final release receipts before changing a production pin. Java **1.21.1** remains primary; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
 
 Development candidate **0.5.7-rc.99** includes independent, explicitly declared
 [read-only server queries](docs/server-query-lifecycle.md) that do not wait behind

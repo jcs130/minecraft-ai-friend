@@ -1863,7 +1863,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     parse: parseTake,
     fields: [
       { key: 'item', kind: 'string', hint: '物品英文 id', doc: '定量取物时与 count 一起写' },
-      { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1, doc: '定量取物必须显式写;不再默认成 1' },
+      { key: 'count', kind: 'opaque', schema: { type: 'integer', minimum: 1, maximum: 64 }, doc: '定量取物必须显式写;不默认数量' },
       { key: 'at', kind: 'anchor', error: `take 的 at 要 [x,y,z](${RELATIVE_HINT})`, doc: '点名哪一格容器' },
       { key: 'from', kind: 'enum', values: ['open'], error: 'from 只认 open', doc: '从当前打开的容器窗口取;不写 = 找附近箱子' },
       { key: 'all', kind: 'flag', doc: 'at+all:true 取指定容器;炉子有原料时保留原料和燃料' },
@@ -2066,6 +2066,9 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
     let variants: Record<string, unknown>[];
     if (spec.name === 'craft') {
       variants = [variant(['item', 'count'], ['item']), variant(['grid', 'count'], ['grid'])];
+    } else if (spec.name === 'take') {
+      variants = [variant(['item', 'count', 'at', 'from', 'pick'], ['item', 'count']),
+        variant(['at', 'all'], ['at', 'all'], { all: { type: 'boolean', const: true } })];
     } else if (spec.name === 'observe') {
       variants = [variant(['mode','format','bounds'], ['mode'], { mode: { const: 'voxels' } }),
         variant(['mode','format','cursor'], ['mode','cursor'], { mode: { const: 'voxels' } }),

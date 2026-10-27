@@ -60,7 +60,7 @@ export class SkillBlocked extends Error {
   readonly scene: string[];
   /** 机器可读原因；调用方不靠中文回执做重复失败判定。 */
   readonly code?: 'target-not-visible' | 'target-not-ready' | 'container-window-changed' | 'container-window-rollback' | 'inventory-click-sync' | 'use-hand-changed' | 'resource-unavailable'
-    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path' | 'container-full' | 'protection-denied' | 'interaction-hand-unavailable';
+    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path' | 'container-full' | 'protection-denied' | 'interaction-hand-unavailable' | 'food-consumption-unconfirmed';
   readonly decision?: Partial<StepDecision>;
   /**
    * 受阻来源：server 表示操作后的回读或服务端结果，local 表示本地前置判断。

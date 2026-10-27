@@ -827,7 +827,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
   let held: string | null;
   if (call.item) {
     try {
-      held = await equipNamed(bot, call.item);
+      held = await equipNamed(bot, call.item, () => checkAbort(ctx));
     } catch (err) {
       // 点名物品缺货而 at 格本身就是该物品时，回执提示直接右键该格的写法。
       if (err instanceof SkillBlocked && call.at) {
@@ -956,7 +956,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     await reachCell(bot, cell, ctx);
     checkAbort(ctx);
     // 路上寻路器垫方块会把主手换成垫脚块;点名的东西不在手上就再拿一次,不然右键的是圆石
-    if (call.item && held && bot.heldItem?.name !== held) held = await equipNamed(bot, call.item);
+    if (call.item && held && bot.heldItem?.name !== held) held = await equipNamed(bot, call.item, () => checkAbort(ctx));
     const target = blockAtCell(bot, cell);
     if (!target) throw new SkillBlocked(`${cellText(cell)} 所在区块没加载`);
     if (bareBlockUse && (AIR_NAMES.has(target.name) || LIQUIDS.has(target.name))) {
@@ -1145,7 +1145,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
   // 手上是吃的/喝的就走真进食通道:通用兜底按一下 1.2 秒就松手,喝完一桶奶要 1.61 秒,
   // 从那条路走的奶永远喝不下去(只会回一句「这样东西没有登记的使用效果」)
   if ((bot.registry?.foodsByName as Record<string, unknown> | undefined)?.[held] || DRINKABLES[held]) {
-    return dispatchUse(bot, hand, ctx, { kind: 'item' }, () => consumeHeldFood(bot, held));
+    return dispatchUse(bot, hand, ctx, { kind: 'item' }, () => consumeHeldFood(bot, held, () => checkAbort(ctx)));
   }
   // 通用使用按整包前后差值回报；无变化时明确无法确认效果。
   const beforeInv = invSnapshot(bot);
