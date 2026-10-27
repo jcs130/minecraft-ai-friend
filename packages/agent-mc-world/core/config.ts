@@ -2,6 +2,7 @@ import type { ConfigGroup } from './support/host-contract.ts';
 import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-service.ts';
 import { COMBAT_EXECUTION_DEFAULTS } from './combat-decision-types.ts';
 import { PHOTOGRAPHY_DEFAULTS } from './photo-image.ts';
+import { OBSERVATION_DEFAULTS } from './perception-sight.ts';
 
 
 export const MINECRAFT_DEFAULTS = {
@@ -23,7 +24,7 @@ export const MINECRAFT_DEFAULTS = {
   keepAliveTimeoutMs: 60_000,
   chatDuplicateWindowMs: 120_000,
   deathRespawnDelayMs: 4000,
-  perception: { mineralVision: false },
+  perception: structuredClone(OBSERVATION_DEFAULTS),
   skinModel: 'classic' as 'classic' | 'slim',
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
@@ -441,6 +442,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.minecraft.perception.mineralVision': { type:'boolean',title:'矿物透视查询','x-hot':false,
         description:'默认关闭，只返回真实视线内的方块。开启仅扩展方块查询至 32 格内已接收的矿物，不代表亲眼看见，也不放宽身体动作权限。' },
+      'worlds.minecraft.perception.entityView': { type:'string',enum:['surroundings','camera'],title:'实体观察范围','x-hot':true,
+        description:'surroundings 默认观察周围无遮挡实体；camera 额外按当前朝向限制到水平 110°、垂直 80°。两者都保留遮挡、未加载和隐身检查。' },
+      'worlds.minecraft.perception.entityRange': { type:'integer',minimum:1,maximum:64,title:'实体感知距离','x-suffix':'格','x-hot':true,
+        description:'默认 32 格，世界快照与主动实体查询使用同一距离。服务端未发送或被遮挡的实体仍不会出现；交互与攻击距离单独核验。' },
       'worlds.minecraft.memoryAgentId': { type:'string',title:'游戏笔记稳定角色标识','x-hot':false,
         description:'可选。与显示名称分离，用于同一服务器与账号的持久笔记；修改会切换命名空间，不迁移或合并旧笔记。' },
       'worlds.minecraft.skinModel': { type:'string',enum:['classic','slim'],title:'本地预览皮肤手臂','x-hot':false },

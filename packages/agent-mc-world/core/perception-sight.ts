@@ -3,8 +3,19 @@ import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
 type Point={x:number;y:number;z:number};
 const observationSources=new WeakMap<object,Bot>();
-export interface ObservationPolicy { mineralVision?: boolean }
+export interface ObservationPolicy {
+  mineralVision?: boolean;
+  /** Surroundings uses loaded line of sight in every direction; camera also applies the yaw/pitch cone. */
+  entityView?: 'surroundings' | 'camera';
+  /** Maximum entity observation distance in blocks, 1..64. */
+  entityRange?: number;
+}
+export const OBSERVATION_DEFAULTS = { mineralVision: false, entityView: 'surroundings' as const, entityRange: 32 };
 const policies=new WeakMap<object,()=>ObservationPolicy|undefined>();
+export function entityObservationScope(bot: object): { view: 'surroundings' | 'camera'; range: number } {
+  const policy=policies.get(observationSources.get(bot)??bot)?.();
+  return {view:policy?.entityView??OBSERVATION_DEFAULTS.entityView,range:policy?.entityRange??OBSERVATION_DEFAULTS.entityRange};
+}
 /** Host configuration only; an Agent cannot silently grant itself mineral vision. */
 export function configureObservationPolicy(bot:object,policy:()=>ObservationPolicy|undefined):void {
   policies.set(observationSources.get(bot)??bot,policy);
@@ -64,8 +75,9 @@ export function clearObservationRay(bot:any,from:Point,to:Point):boolean {
   }
   return false;
 }
-export function observedEntity(bot:any,entity:any,cone=true):boolean {
+export function observedEntity(bot:any,entity:any,cone?:boolean):boolean {
   bot=observationSources.get(bot)??bot;
+  const scope=entityObservationScope(bot);
   const self=bot?.entity,p=entity?.position;
   if(!finite(self?.position)||!finite(p)||entity.isValid===false||entity.invisible||entity.dead||entity.health===0)return false;
   const keys=bot.registry?.entitiesByName?.[entity.name]?.metadataKeys??[];
@@ -74,8 +86,8 @@ export function observedEntity(bot:any,entity:any,cone=true):boolean {
   return [.25,.5,.85].some(part=>{
     const point={x:p.x,y:p.y+(entity.height??1)*part,z:p.z};
     const dx=point.x-eye.x,dy=point.y-eye.y,dz=point.z-eye.z,flat=Math.hypot(dx,dz);
-    if(Math.hypot(flat,dy)>32)return false;
-    if(cone){
+    if(Math.hypot(flat,dy)>scope.range)return false;
+    if(cone??scope.view==='camera'){
       const diff=Math.atan2(Math.sin(Math.atan2(-dx,-dz)-(self.yaw??0)),Math.cos(Math.atan2(-dx,-dz)-(self.yaw??0)));
       if(Math.abs(diff)>55*Math.PI/180||Math.abs(Math.atan2(dy,flat)-(self.pitch??0))>40*Math.PI/180)return false;
     }
@@ -109,7 +121,7 @@ export function observationView<T extends Bot>(bot:T):T {
     if(key==='blockAt')return (p:Point,extra=true)=>observedBlock(target,p)||mineralObservationAllowed(target,p)?target.blockAt(new Vec3(p.x,p.y,p.z),extra):null;
     if(key==='entities')return Object.fromEntries(Object.entries(target.entities??{}).filter(([,e])=>e===target.entity||observedEntity(target,e)));
     if(key==='findBlocks'||key==='findBlock')return (options:Parameters<Bot['findBlocks']>[0])=>{
-      const found=target.findBlocks({...options,count:Math.min(512,Math.max(options.count??1,128))})
+      const found=target.findBlocks({...options,count:Math.min(2048,Math.max(options.count??1,128))})
         .filter(p=>observedBlock(target,p)||mineralObservationAllowed(target,p)).slice(0,options.count??1);
       return key==='findBlock'?(found[0]?target.blockAt(found[0]):null):found;
     };
