@@ -820,7 +820,27 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       setOwnedGoal(bot, goal, 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
       try {
         // 战斗会挂起本步并原样续做。旧实例醒来时不能撤掉新持有者的目标。
-        while (!ctx.aborted() && e.isValid) await sleep(100);
+        while (!ctx.aborted() && e.isValid) {
+          await sleep(100);
+          checkAbort(ctx);
+          if (!e.isValid) break;
+          let stopped = false;
+          await ctx.checkpoint?.(async () => {
+            const owner = goalOwnerOf(bot);
+            if (owner?.kind !== 'task' || owner.goal !== goal || bot.pathfinder.goal !== goal) {
+              throw new Aborted('跟随目标已由其他动作接管');
+            }
+            dropGoal(bot, 'task', '安全检查点暂停跟随', ctx.diag);
+            stopped = true;
+            await settleOnGround(bot, ctx, 1_500);
+          });
+          if (stopped) {
+            checkAbort(ctx); // Successful yields unwind this instance before another task starts.
+            if (bot.pathfinder.goal || goalOwnerKind(bot)) throw new Aborted('检查点收尾期间跟随已被接管');
+            // A changed safety condition can defer the handoff after its path was stopped.
+            if (e.isValid) setOwnedGoal(bot, goal, 'task', `继续跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
+          }
+        }
       } finally {
         if (goalOwnerOf(bot)?.goal === goal) dropGoal(bot, 'task', '跟随结束', ctx.diag);
         releaseWalkOnly();
@@ -1282,12 +1302,13 @@ interface CheckpointDrain {
   continuation: QueuedTask | null;
 }
 
-/** 当前步骤重放时仍有固定空间目标，或按实际采集计数扣除已完成量。 */
+/** 按固定空间目标、可重新核验的跟随对象，或实际采集计数恢复当前步骤。 */
 function checkpointReplayable(call: SkillCall): boolean {
   const fixed = (at: readonly unknown[] | undefined): boolean =>
     at !== undefined && at.every((value) => typeof value === 'number' && Number.isFinite(value));
   switch (call.skill) {
     case 'collect': return true;
+    case 'follow': return true; // Re-resolve the explicitly named target when resuming.
     case 'goto': return fixed(call.at);
     case 'excavate': return call.anchors.every(fixed);
     case 'build':
@@ -4174,10 +4195,10 @@ export class Executor {
     // Native programs own an opaque continuation, not replayable skill steps.
     if (!boundary && (!call || !checkpointReplayable(call)
       || (call.skill === 'collect' && !task.count))) return;
-    // A fixed goto can stop its owned path at a grounded checkpoint. Other work
+    // A fixed goto or explicit follow can stop its owned path at a grounded checkpoint. Other work
     // retains its existing atomic boundaries; settling never interrupts a dig,
     // placement, container operation or another body owner.
-    const navigation = !boundary && !!settle && call?.skill === 'goto';
+    const navigation = !boundary && !!settle && (call?.skill === 'goto' || call?.skill === 'follow');
     if (this.checkpointDrain || !this.checkpointReady(task, bot, navigation || !settle, boundary, navigation)) return;
     const drain: CheckpointDrain = { task, bot, resumeFrom, boundary, phase: 'settling', continuation: null };
     this.checkpointDrain = drain;

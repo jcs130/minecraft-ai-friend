@@ -28,6 +28,64 @@ function rig() {
   return {...h,bot,stack,reports,internals};
 }
 
+function allyFor(h: ReturnType<typeof rig>, distance = 2) {
+  const ally = {id:2,type:'player',username:'Ally',name:'player',isValid:true,
+    position:h.bot.entity.position.offset(distance,0,0)};
+  Object.assign(h.bot.entities,{2:ally});
+  Object.assign(h.bot.players,{Ally:{entity:ally}});
+  return ally;
+}
+
+it.each([2,32])('a persistent follow at distance %s yields for a meal and resumes the same task',async distance=>{
+  const h=rig();rigs.push(h);const ally=allyFor(h,distance);
+  h.exec.submit([{skill:'follow',name:'Ally'}],'append');
+  await vi.advanceTimersByTimeAsync(800);
+  const original=h.exec.status().running!.id;
+  h.exec.submit([{skill:'eat',item:'beef'}],'afterCheckpoint');
+  await vi.advanceTimersByTimeAsync(2000);
+  expect((h.bot as any).consume).toHaveBeenCalledTimes(1);
+  expect(h.reports.filter(r=>r.kind==='suspended'&&r.taskId===original)).toHaveLength(1);
+  expect(h.exec.status().running).toMatchObject({id:original,skill:'follow',followTarget:'Ally'});
+  expect(h.reports.filter(r=>r.kind==='done'&&r.taskId===original)).toHaveLength(0);
+  const resumedAt=h.bot.entity.position.x;
+  ally.position=ally.position.offset(12,0,0);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(h.bot.entity.position.x).toBeGreaterThan(resumedAt+1);
+});
+
+it.each(['combat','environment','airborne','window','foreign-goal'] as const)('a follow does not yield through an unsafe %s checkpoint',async state=>{
+  const h=rig();rigs.push(h);allyFor(h);
+  h.exec.submit([{skill:'follow',name:'Ally'}],'append');await vi.advanceTimersByTimeAsync(800);
+  const original=h.exec.status().running!.id,goal=h.bot.pathfinder.goal;
+  if(state==='combat')h.internals.opts.bodyState=()=>({combatActive:true});
+  if(state==='environment')h.internals.opts.bodyState=()=>({environmentOwnerKind:'drown'});
+  if(state==='airborne'){h.bot.physicsEnabled=false;h.bot.entity.onGround=false;}
+  if(state==='window')h.bot.currentWindow={} as never;
+  if(state==='foreign-goal')noteGoalOwner(h.bot,goal!,'combat','other body owner');
+  h.exec.submit([{skill:'eat',item:'beef'}],'afterCheckpoint');await vi.advanceTimersByTimeAsync(1500);
+  expect((h.bot as any).consume).not.toHaveBeenCalled();
+  expect(h.exec.status().running?.id).toBe(original);expect(h.bot.pathfinder.goal).toBe(goal);
+  h.internals.opts.bodyState=undefined;h.bot.currentWindow=null;h.bot.physicsEnabled=true;h.bot.entity.onGround=true;
+  if(state==='foreign-goal')noteGoalOwner(h.bot,goal!,'task','follow owns movement again');
+  await vi.advanceTimersByTimeAsync(2000);
+  expect((h.bot as any).consume).toHaveBeenCalledTimes(1);
+  expect(h.exec.status().running?.id).toBe(original);
+});
+
+it('a checkpoint resumes follow from a newly resolved target, and does not resurrect a missing target',async()=>{
+  const h=rig();rigs.push(h);const ally=allyFor(h);
+  h.exec.submit([{skill:'follow',name:'Ally'}],'append');await vi.advanceTimersByTimeAsync(800);
+  const original=h.exec.status().running!.id;
+  (h.bot as any).consume.mockImplementation(async()=>{
+    ally.isValid=false;delete (h.bot.entities as any)[2];delete (h.bot.players as any).Ally;
+    h.stack.count--;h.bot.food+=3;
+  });
+  h.exec.submit([{skill:'eat',item:'beef'}],'afterCheckpoint');await vi.advanceTimersByTimeAsync(2000);
+  expect((h.bot as any).consume).toHaveBeenCalledTimes(1);
+  expect(h.reports.some(r=>r.kind==='blocked'&&r.taskId===original)).toBe(true);
+  expect(h.exec.status().running).toBeNull();expect(h.bot.pathfinder.goal).toBeNull();
+});
+
 it('a long running goto yields to one real meal before arrival, then resumes its original task id',async()=>{
   const h=rig();rigs.push(h);
   h.exec.submit([{skill:'goto',at:[64,64,0],walkOnly:true}],'append');
