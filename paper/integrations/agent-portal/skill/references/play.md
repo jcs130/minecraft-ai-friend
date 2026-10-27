@@ -14,6 +14,7 @@
 | 选择探索、战斗、制造、补给或生活路线 | `tasks list`，单项 `tasks info <ID>` |
 | 在途委托缺什么、到哪里、如何交付 | `tasks status`；按真实阶段回执继续 |
 | 本人技能、资格、魔力与冷却 | `skills status`；单项 `skills info <ID>` |
+| 技能怎样学习和使用 | `guide magic`：通用技能学会即可用；职业技能选职、学习、准备，再按装备要求施放 |
 | 获取公共补给 | `guild shared`，找门口共享箱 |
 | 多个位置能否拆放 | `protect batch --help`，批量聚合，按需展开详情 |
 

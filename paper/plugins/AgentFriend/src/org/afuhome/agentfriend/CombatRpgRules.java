@@ -65,11 +65,16 @@ final class CombatRpgRules {
     }
     static String next(String profession, int level, boolean armed, boolean combatSkill,
                        boolean retiredTask, String runningCommand, int highestFloor, boolean campaignReady) {
+        return next(profession,level,armed,combatSkill,combatSkill,retiredTask,runningCommand,highestFloor,campaignReady);
+    }
+    static String next(String profession, int level, boolean armed, boolean combatSkill,boolean prepared,
+                       boolean retiredTask, String runningCommand, int highestFloor, boolean campaignReady) {
         if(runningCommand!=null&&!runningCommand.isBlank()) return runningCommand;
         if(retiredTask) return "/mycli tasks pause";
         if(profession==null||profession.isBlank()) return "/mycli profession menu";
         if(!armed) return "/mycli guild shared";
         if(!combatSkill) return "/mycli skills list "+profession;
+        if(!prepared) return "/mycli skills menu";
         if(campaignReady) return "/mycli dungeon info aincrad_"+String.format(Locale.ROOT,"%02d",highestFloor+1);
         return "/mycli tasks list combat";
     }

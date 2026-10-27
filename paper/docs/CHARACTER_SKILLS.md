@@ -1,5 +1,7 @@
 # 战法牧、技能点与传承（AgentFriend 0.3.92）
 
+当前入门先看[技能怎样使用](SKILL_USAGE_QUICKSTART.md)。正式0.4.47.17保留战法牧19项职业技能；职业选择、学习、准备与施放分别执行，菜单已补左右键提示。坦克四项和新第一层剧情属于独立候选，具体发布以[项目状态](../../docs/PROJECT_STATUS.md)为准。以下旧版数量与状态按日期阅读。
+
 团队配合速查：战士守护阵／村庄誓约提供群体一次减伤，牧师抚愈升级后群疗、高阶圣愈附护佑、同行祝福提供抗性与迅捷（三级加力量）；法师负责范围伤害与减速。现有数值、学习和施放入口见[组队救援与团队技能](TRIAL_RESCUE_FEEDBACK.md#正式服已经具备的团队技能)。这些技能已在正式服；该文的0.4.35救援画面增强仍是待部署候选。选职业后仍须本人学习、准备技能，不自动花点。
 
 **0.4.18已上线：**`coach lessons`提供六项实练；职业技艺19项，新增战士`warrior_sky_leap`、法师`mage_soar`、牧师`priest_blessing`。新学/升级耗点，施法耗魔，进阶需证书。`guild exam list/info/start/status/submit`、`guild exam promotion`和`guild certificates`可查询实操题、18阶主动晋级及证书；命格书/原版公会菜单同步。云阶移动考场已开放。见[认证规则](SKILL_CERTIFICATIONS.md)。

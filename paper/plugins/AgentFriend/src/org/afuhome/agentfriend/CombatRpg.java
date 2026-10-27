@@ -130,7 +130,7 @@ final class CombatRpg implements Listener {
                 i.getType().name().endsWith("_SWORD")||i.getType().name().endsWith("_AXE")||i.getType()==Material.BOW||i.getType()==Material.CROSSBOW);
         boolean learned=plugin.professions().skills().stream().anyMatch(s->s.role().equals(role)&&plugin.professions().level(p,s.id())>0);
         String running=plugin.siteDungeons().isParticipant(p)?"/mycli dungeon status":plugin.dungeonParticipant(p)?"/mycli arena status":"";
-        return CombatRpgRules.next(role,level(p),armed,learned,retiredTask,running,floor(p),
+        return CombatRpgRules.next(role,level(p),armed,learned,plugin.professions().preparedCombatSkill(p),retiredTask,running,floor(p),
                 plugin.siteDungeons().ids().contains("aincrad_"+String.format(java.util.Locale.ROOT,"%02d",floor(p)+1)));
     }
     JsonObject state(Player p){

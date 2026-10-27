@@ -40,6 +40,9 @@ final class BlockAccessPolicy implements Listener {
         if (player == null || at == null || at.getWorld() == null || plugin.isObserver(player)) return false;
         return rules.open(player.getUniqueId(), at.getWorld().getName(), at.getBlockX(), at.getBlockZ());
     }
+    boolean trustedEditor(Player player) {
+        return player!=null&&!plugin.isObserver(player)&&rules.enabled&&rules.editors.contains(player.getUniqueId());
+    }
     private static int integer(Map<?, ?> row, String key) {
         if (!(row.get(key) instanceof Integer value)) throw new IllegalArgumentException(key + " 需要整数");
         return value;

@@ -1,4 +1,4 @@
-revision: 4
+revision: 5
 title: 艾恩葛朗特攻略记
 chapters:
   aincrad_departure:
@@ -11,6 +11,11 @@ chapters:
         kind: COMBAT_ROLE
         description: 战士负责近战剑技，坦克持盾吸引敌人，法师远程控制，牧师治疗支援。沿用已有职业，不必重新选择。
         next-command: /mycli profession menu
+      aincrad_prepare_skill:
+        title: 学会并准备一项战斗技能
+        kind: COMBAT_READY
+        description: 选职业只解锁资格。罗盘「技能学习与升级」右键看条件、左键花点；「我的职业技能」左键准备、右键施放。先学并准备本职业的一项攻击、防护或治疗技，高跳/御空不代替战斗准备。通用技能无需职业准备；已有战斗技能可直接通过。
+        next-command: /mycli guide magic
       aincrad_briefing:
         title: 听取前线战备说明
         kind: TALK

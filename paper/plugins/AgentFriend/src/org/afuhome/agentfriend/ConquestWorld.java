@@ -16,7 +16,8 @@ final class ConquestWorld implements Listener {
         boolean contains(Location l){return l.getX()>=minX&&l.getX()<=maxX&&l.getY()>=minY&&l.getY()<=maxY&&l.getZ()>=minZ&&l.getZ()<=maxZ;}
     }
     private final List<Area> areas;
-    private ConquestWorld(List<Area> areas){this.areas=List.copyOf(areas);}
+    private final AgentFriendPlugin plugin;
+    private ConquestWorld(AgentFriendPlugin plugin,List<Area> areas){this.plugin=plugin;this.areas=List.copyOf(areas);}
     static boolean load(AgentFriendPlugin plugin){
         if(!plugin.getConfig().getBoolean("conquest-world.enabled",false))return false;
         Path directory=Bukkit.getWorldContainer().toPath().resolve(WORLD);
@@ -42,12 +43,13 @@ final class ConquestWorld implements Listener {
             if(minX==Integer.MAX_VALUE||maxX-minX>128||maxY-minY>128||maxZ-minZ>128)throw new IllegalArgumentException("conquest_site_bounds");
             areas.add(new Area(minX-24,maxX+24,minY-8,maxY+12,minZ-24,maxZ+24));
         }
-        Bukkit.getPluginManager().registerEvents(new ConquestWorld(areas),plugin);
+        Bukkit.getPluginManager().registerEvents(new ConquestWorld(plugin,areas),plugin);
         return !areas.isEmpty();
     }
     private boolean protectedAt(Location l){return l.getWorld()!=null&&WORLD.equals(l.getWorld().getName())&&areas.stream().anyMatch(a->a.contains(l));}
-    @EventHandler(ignoreCancelled=true) public void breaking(BlockBreakEvent e){if(protectedAt(e.getBlock().getLocation())&&!e.getPlayer().isOp()){e.setCancelled(true);e.getPlayer().sendActionBar(net.kyori.adventure.text.Component.text("攻略建筑不可拆；地图其余位置按当地规则探索。"));}}
-    @EventHandler(ignoreCancelled=true) public void placing(BlockPlaceEvent e){if(protectedAt(e.getBlock().getLocation())&&!e.getPlayer().isOp())e.setCancelled(true);}
+    private boolean editor(org.bukkit.entity.Player p){return p.isOp()||plugin.trustedBlockEditor(p);}
+    @EventHandler(ignoreCancelled=true) public void breaking(BlockBreakEvent e){if(protectedAt(e.getBlock().getLocation())&&!editor(e.getPlayer())){e.setCancelled(true);e.getPlayer().sendActionBar(net.kyori.adventure.text.Component.text("艾恩葛朗特建筑受保护，可探索与战斗；/aincrad 查看往返。"));}}
+    @EventHandler(ignoreCancelled=true) public void placing(BlockPlaceEvent e){if(protectedAt(e.getBlock().getLocation())&&!editor(e.getPlayer()))e.setCancelled(true);}
     @EventHandler(ignoreCancelled=true) public void explosion(EntityExplodeEvent e){e.blockList().removeIf(b->protectedAt(b.getLocation()));}
     @EventHandler(ignoreCancelled=true) public void blocks(BlockExplodeEvent e){e.blockList().removeIf(b->protectedAt(b.getLocation()));}
     @EventHandler(ignoreCancelled=true) public void mobGrief(EntityChangeBlockEvent e){if(protectedAt(e.getBlock().getLocation()))e.setCancelled(true);}

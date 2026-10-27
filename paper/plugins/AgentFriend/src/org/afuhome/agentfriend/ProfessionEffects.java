@@ -110,8 +110,12 @@ final class ProfessionEffects implements Listener {
         double facing = switch (skill.effect()) { case "sword_cone", "frost_cone", "flame_cone" -> .5; case "arcane_bolt" -> .98; default -> .85; };
         List<Enemy> targets = targets(p, skill.range(), skill.targets(), facing);
         if (targets.isEmpty()) { manager.result(p, "cast", "no_target", skill.id()); return; }
+        double firstDamage = skill.effect().equals("sword_combo") ? skill.power() / 4 : skill.power();
+        targets = targets.stream().filter(t -> !ProfessionHitRules.recovering(
+                t.getNoDamageTicks(), t.getMaximumNoDamageTicks(), t.getLastDamage(), firstDamage)).toList();
+        if (targets.isEmpty()) { manager.result(p, "cast", "target_recovering", skill.id()); return; }
         if (!manager.begin(p, skill)) return;
-        double firstDamage = skill.effect().equals("sword_combo") ? skill.power() / 4 : skill.power(); int hit = 0;
+        int hit = 0;
         for (Enemy target : targets) if (damage(p, target, firstDamage)) {
             trail(p, target.getEyeLocation(), skill.effect()); hit++;
             if (skill.effect().equals("frost_cone") && !target.isDead())

@@ -32,6 +32,18 @@ $classpath = @(
 ) -join ';'
 $build = Join-Path $root "build-0.4.48-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
+# Removed inner classes must not leak from an earlier incremental build into
+# a release (e.g. the abandoned void-map generator). Only delete class files
+# in this exact build directory; resources are refreshed below.
+$resolvedBuild = [IO.Path]::GetFullPath($build).TrimEnd('\')
+$expectedBuild = [IO.Path]::GetFullPath((Join-Path $root "build-0.4.48-mc-$MinecraftVersion")).TrimEnd('\')
+if ($resolvedBuild -ne $expectedBuild -or (Get-Item -LiteralPath $resolvedBuild).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'Unsafe class output directory' }
+if (Get-ChildItem -LiteralPath $resolvedBuild -Recurse -Force | Where-Object { $_.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint) }) { throw 'Build directory contains a reparse point' }
+$oldClasses = @(Get-ChildItem -LiteralPath $resolvedBuild -Recurse -File -Filter '*.class')
+foreach ($classFile in $oldClasses) {
+    if (-not [IO.Path]::GetFullPath($classFile.FullName).StartsWith(($resolvedBuild + '\'), [StringComparison]::OrdinalIgnoreCase)) { throw 'Class file escaped build directory' }
+}
+foreach ($classFile in $oldClasses) { Remove-Item -LiteralPath $classFile.FullName -Force }
 # The isolated server path plus both library generations can exceed Windows'
 # command-line limit. A UTF-8 argument file also handles paths containing spaces.
 $compileArguments = @('-encoding', 'UTF-8', '-source', '21', '-target', '21', '-cp', $classpath, '-d', $build,

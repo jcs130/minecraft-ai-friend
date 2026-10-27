@@ -454,6 +454,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean bypassBlockProtection(Player player, Location at) {
         return blockAccess != null && blockAccess.allows(player, at);
     }
+    boolean trustedBlockEditor(Player player) { return blockAccess!=null&&blockAccess.trustedEditor(player); }
     GeneratedStructureProtection generatedStructures() { return generatedStructures; }
     NativeTraversalPractice traversalPractice() { return traversalPractice; }
     LandManager lands() { return lands; }
@@ -1369,8 +1370,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 p.sendMessage(ChatColor.GRAY + "挖掘/放置前：/mycli protect break|place <x> <y> <z>；deny 不动、unknown 暂缓、allow_likely 可尝试。");
             }
             case "magic", "魔法" -> {
-                p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】罗盘「法术图鉴」先看说明，再点施放；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli skills list profession；list warrior|mage|priest 按方向查询；/mycli skills info <ID> 查各级效果与学习条件；/mycli skills points 查点数。学习 learn、升级 upgrade、准备 prepare 后再 cast；/mycli focus list 看法杖，/mycli status 看魔力。");
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "【技能入门】罗盘→法术图鉴看用途。通用技能学会即可用；职业技能按下面四步，选职业只解锁学习资格。");
+                p.sendMessage(ChatColor.GRAY + "①选职业：罗盘→职业与传承，或 /mycli profession menu。已有职业可继续用。");
+                p.sendMessage(ChatColor.GRAY + "②学习：罗盘→技能学习与升级，右键看条件，左键花点学习/升级。Agent先 /mycli skills info <ID>，再 /mycli skills learn <ID>。");
+                p.sendMessage(ChatColor.GRAY + "③准备：罗盘→我的职业技能，左键准备/取消；已自动准备无需重复。Agent用 /mycli skills prepare <ID>；最多4项普通职业技和1项传承。");
+                p.sendMessage(ChatColor.GRAY + "④施放：持详情要求的剑/盾等装备，职业技能页右键，或 /mycli cast <ID>。先 /mycli skills status <ID> 查本人缺项、魔力和冷却；不要反复重发失败动作。");
             }
             case "gear", "装备", "刻印" -> {
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "【工具刻印】手持镐、剑等工具，在附魔台旁潜行使用附魔台，选择要刻印的法术；之后潜行对方块使用工具施法。");

@@ -1,18 +1,20 @@
 """Bounded loopback canary, with normal shutdown in all cases. Never runs production."""
 from pathlib import Path
-import argparse,json,subprocess,time,socket,hashlib
+import argparse,json,subprocess,time,socket,hashlib,re
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--client',type=Path);p.add_argument('--label',default='first');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path);p.add_argument('--label',default='first');p.add_argument('--jar',default='AgentFriend-0.4.48.jar');a=p.parse_args()
     stage=Path('E:/MC/staging/aincrad-conquest-20261027')
     assert 'motd=QD_AINCRAD_CONQUEST_QA_ONLY' in (stage/'server.properties').read_text()
     assert a.label.isalnum()
+    assert re.fullmatch(r'AgentFriend-[0-9]+(?:\.[0-9]+){2,3}\.jar',a.jar)
+    assert [f.name for f in (stage/'plugins').glob('AgentFriend-*.jar')]==[a.jar], 'exactly one reviewed AgentFriend artifact required'
     if (stage/f'qa-{a.label}.log').exists() or (stage/f'client-{a.label}.json').exists():
         raise ValueError('label already used; preserve previous evidence and choose another label')
     for port in (25924,25925):
         with socket.socket() as s:s.bind(('127.0.0.1',port))
     logpath=stage/f'qa-{a.label}.log';proc=None;result={'productionModified':False,'label':a.label,'ready':False,
-        'candidateSha256':hashlib.sha256((stage/'plugins/AgentFriend-0.4.48.jar').read_bytes()).hexdigest()}
+        'artifactName':a.jar,'candidateSha256':hashlib.sha256((stage/'plugins'/a.jar).read_bytes()).hexdigest()}
     try:
         with logpath.open('w',encoding='utf8') as log:
             proc=subprocess.Popen(['E:/MC/jdk/jdk-21.0.12.1+1/bin/java.exe','-Xms512M','-Xmx2048M','-XX:ActiveProcessorCount=2','-Dfile.encoding=UTF-8','-jar','server.jar','--nogui'],

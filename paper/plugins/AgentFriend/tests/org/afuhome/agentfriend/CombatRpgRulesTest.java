@@ -32,6 +32,8 @@ public final class CombatRpgRulesTest {
         rejects(()->CombatRpgRules.split(100,List.of(party.getFirst(),party.getFirst()),false),"no duplicate participants");
         check(CombatRpgRules.next("",1,false,false,true,"/mycli dungeon status",0,false).equals("/mycli dungeon status"),"active activity priority");
         check(CombatRpgRules.next("mage",12,true,true,true,"",0,false).equals("/mycli tasks pause"),"graduated retired task still has exit");
+        check(CombatRpgRules.next("warrior",1,true,true,false,false,"",0,true).equals("/mycli skills menu"),"learned but unprepared points to preparation instead of repeating the catalog");
+        check(CombatRpgRules.next("warrior",1,true,true,false,false,"/mycli dungeon status",0,true).equals("/mycli dungeon status"),"active combat takes priority over preparing another skill");
         check(TankCombatRules.remaining(10,3,.5)==7,"tank cap after armor");
         check(TankCombatRules.remaining(2,6,.5)==1,"tank cannot be immune");
         check(TankCombatRules.remaining(0,6,.5)==0,"zero damage stays zero");

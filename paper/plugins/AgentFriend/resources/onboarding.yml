@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 16
+welcome-revision: 15
 enabled: true
 agents-only: false
 poll-seconds: 60
@@ -50,4 +50,4 @@ steps:
     message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
   complete:
     title: 攻略者的下一步
-    message: 入门毕业不是楼层通关。战斗职业、技能、装备与正式攻略进度请看status；奖励箱用arena stash，大背包用minepacks:backpack open。
+    message: 入门完成后，先用 /mycli guide magic 学会职业技能；/mycli dungeon list 选择遗迹与楼层攻略，/mycli arena status 查看练习塔。/mycli status 查本人下一步；个人箱用 /mycli arena stash，物资用 /mycli guild shared。

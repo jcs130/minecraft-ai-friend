@@ -54,8 +54,8 @@ skills:
     mana: 6
     cooldown-seconds: 20
     limits: {range: 1, targets: 1, power: 8, duration-seconds: 20}
-    description: "从地面真实起跳，一/二/三级开阔地目标跃高约8/12/16格；魔力6/8/10；自行控制横移，缓降20秒，不附带伤害，不穿过屋顶。"
-    origin: "选择战士可花2点学习；二/三级分别需高跃基础/进阶证书，再花3/5点升级。"
+    description: "站稳地面、确认头顶开阔后施放；自动起跳，再自行按方向键或摇杆横移并安全落地。一/二/三级目标跃高约8/12/16格，魔力6/8/10，缓降20秒；不会自动攻击或穿过屋顶。"
+    origin: "选择战士可花2点学习；二/三级分别需高跃基础/进阶证书，再花3/5点升级。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   mage_soar:
     title: 御空术
     profession: mage
@@ -65,8 +65,8 @@ skills:
     mana: 8
     cooldown-seconds: 90
     limits: {range: 1, targets: 1, power: 1, duration-seconds: 20}
-    description: "一/二/三级御空20/30/40秒，魔力8/10/12；自行升降和前后移动，到期缓降；不能与基础飞行叠加，传送/洗点/离线清理临时权限。"
-    origin: "选择法师可花3点学习；二/三级分别需飞行基础/进阶证书，再花4/6点升级。"
+    description: "施放即进入飞行；用方向键/摇杆前后左右移动，跳跃上升、潜行下降，提前找落点。一/二/三级持续20/30/40秒，魔力8/10/12，到期缓降；不可叠加基础飞行，传送/洗点/离线清理权限。"
+    origin: "选择法师可花3点学习；二/三级分别需飞行基础/进阶证书，再花4/6点升级。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   priest_blessing:
     title: 同行祝福
     profession: priest
@@ -76,8 +76,8 @@ skills:
     mana: 8
     cooldown-seconds: 30
     limits: {range: 8, targets: 2, power: 1, duration-seconds: 8}
-    description: "8格内可见友军含自己，一/二/三级最多2/3/4人，迅捷I+抗性I持续8/12/16秒；三级加力量I；魔力8/10/12，不覆盖更强效果。"
-    origin: "选择牧师可花3点学习；二/三级分别需支援基础/进阶证书，再花4/6点升级。"
+    description: "队友靠近8格内再施放，无需点名；对可见生存友军含本人加迅捷I和抗性I。一/二/三级最多2/3/4人、持续8/12/16秒，魔力8/10/12；三级另加力量I，不覆盖更强效果。"
+    origin: "选择牧师可花3点学习；二/三级分别需支援基础/进阶证书，再花4/6点升级。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   sword_thrust:
     title: 突刺
     profession: warrior
@@ -88,7 +88,7 @@ skills:
     cooldown-seconds: 8
     limits: {range: 3, targets: 1, power: 8, duration-seconds: 1}
     description: "持剑突刺3格内一名可见敌人；一/二/三级基础伤害4.0/6.0/8点，魔力4/5/6；不破坏方块。"
-    origin: 选择战士解锁学习资格；随后完成剑路初试解锁弧光斩。
+    origin: "选择战士解锁学习资格；随后完成剑路初试解锁弧光斩。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   sword_parry:
     title: 架势格挡
     profession: warrior
@@ -99,7 +99,7 @@ skills:
     cooldown-seconds: 12
     limits: {range: 3, targets: 1, power: 6, duration-seconds: 2}
     description: "主手持剑，先正对怪物再施放；随后2秒内可化解一次正面怪物近战，最多减半伤害。冷却12秒；一/二/三级减免上限2/4/6点，魔力4/5/6，施放成功即收费。普通举盾、箭和药水不计格挡试炼。"
-    origin: 选择战士仅解锁资格；一级需2技能点学习，准备后施放，实际减伤才计入任务。
+    origin: "选择战士仅解锁资格；一级需2技能点学习，准备后施放，实际减伤才计入任务。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   sword_arc:
     title: 弧光斩
     profession: warrior
@@ -110,7 +110,7 @@ skills:
     cooldown-seconds: 12
     limits: {range: 3, targets: 3, power: 4, duration-seconds: 1}
     description: "挥斩正面3格扇形内可见敌人；一/二/三级最多1/2/3名，每名基础伤害2.0/3.0/4点，魔力7/8/9；不破坏方块。"
-    origin: 完成任务 tm_sword_arc_trial，验收持剑近战击杀和有效格挡。
+    origin: "完成任务 tm_sword_arc_trial，验收持剑近战击杀和有效格挡。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   sword_step:
     title: 步法斩
     profession: warrior
@@ -121,7 +121,7 @@ skills:
     cooldown-seconds: 15
     limits: {range: 3, targets: 1, power: 5, duration-seconds: 1}
     description: "沿安全路径前进3格后挥斩一名敌人；一/二/三级基础伤害3/4/6点，魔力6/7/8；墙、岩浆、悬空和禁止进入处拒绝。"
-    origin: 学会弧光斩后完成任务 tm_sword_road_trial。
+    origin: "学会弧光斩后完成任务 tm_sword_road_trial。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   sword_beam:
     title: 剑气
     profession: warrior
@@ -132,7 +132,7 @@ skills:
     cooldown-seconds: 16
     limits: {range: 10, targets: 1, power: 6, duration-seconds: 1}
     description: "向准星方向释放10格内单目标剑气；一/二/三级基础伤害3.0/4.5/6点，魔力8/9/10；目标须可见，墙体阻挡。"
-    origin: 完成任务 tm_sword_road_trial，与步法斩一并获得。
+    origin: "完成任务 tm_sword_road_trial，与步法斩一并获得。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   twin_legacy:
     title: 双剑觉醒·星流连斩
     profession: warrior
@@ -145,7 +145,7 @@ skills:
     cooldown-seconds: 90
     limits: {range: 3, targets: 1, power: 16, duration-seconds: 2}
     description: "主副手各持剑，对同一敌人进行四段连斩；一/二/三级总基础伤害上限8.0/12.0/16点，魔力14/15/16；每段重查装备、视线、距离和资格。"
-    origin: 完成传承任务 tm_twin_legacy_trial，需格挡、组队深层和两处首领层履历。
+    origin: "完成传承任务 tm_twin_legacy_trial，需格挡、组队深层和两处首领层履历。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   guardian_ward:
     title: 守护阵
     profession: warrior
@@ -156,7 +156,7 @@ skills:
     cooldown-seconds: 20
     limits: {range: 5, targets: 4, power: 4, duration-seconds: 6}
     description: "持盾为5格内生存玩家准备护阵；一/二/三级最多2/3/4人，持续4/6/8秒，各抵挡一次怪物攻击并减半伤害，上限2/4/6点，魔力7/8/9。"
-    origin: 实际参与原版袭击并获胜后，与村庄誓约一同获得。
+    origin: "实际参与原版袭击并获胜后，与村庄誓约一同获得。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   guardian_oath:
     title: 传承·村庄誓约
     profession: warrior
@@ -169,7 +169,7 @@ skills:
     cooldown-seconds: 90
     limits: {range: 8, targets: 4, power: 6, duration-seconds: 8}
     description: "持盾为8格内生存玩家准备誓约护阵；一/二/三级最多2/3/4人，持续4/6/8秒，各抵挡一次怪物攻击并减半伤害，上限2/4/6点，魔力12/13/14。"
-    origin: 参与原版袭击并获胜，实际造成十点伤害、为队友治疗八点怪物伤量或减免四点伤害之一。
+    origin: "参与原版袭击并获胜，实际造成十点伤害、为队友治疗八点怪物伤量或减免四点伤害之一。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   scout_mark:
     title: 秘法标记
     profession: mage
@@ -180,7 +180,7 @@ skills:
     cooldown-seconds: 10
     limits: {range: 12, targets: 1, power: 1, duration-seconds: 8}
     description: "标记前方12格内一名可见敌人；一/二/三级持续8/12/16秒，魔力3/4/5；给出绝对坐标和私有原版粒子。"
-    origin: 选择法师解锁学习资格；本人或近旁队友击败仍有效的标记者才计入法师试炼。
+    origin: "选择法师解锁学习资格；本人或近旁队友击败仍有效的标记者才计入法师试炼。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   scout_watch:
     title: 秘法巡望
     profession: mage
@@ -191,7 +191,7 @@ skills:
     cooldown-seconds: 20
     limits: {range: 12, targets: 3, power: 1, duration-seconds: 12}
     description: "标记前方12格内可见敌人；一/二/三级最多1/2/3名，持续8/12/16秒，魔力6/7/8；私有粒子供本人及实际附身的Eye查看。"
-    origin: 完成任务 tm_mage_trial，包含标记后的击杀、下界实地调查和返程。
+    origin: "完成任务 tm_mage_trial，包含标记后的击杀、下界实地调查和返程。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   healer_mend:
     title: 抚愈
     profession: priest
@@ -202,7 +202,7 @@ skills:
     cooldown-seconds: 8
     limits: {range: 8, targets: 1, power: 6, duration-seconds: 1}
     description: "治疗8格内受伤生存玩家；一/二/三级最多1/2/3人，每人最多恢复6/8/10HP，魔力4/6/8；指定玩家名时只治疗该人，旁观者无效。"
-    origin: 选择牧师解锁学习资格；只有为其他玩家恢复真实怪物伤量才计入治疗试炼。
+    origin: "选择牧师解锁学习资格；只有为其他玩家恢复真实怪物伤量才计入治疗试炼。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   healer_cleanse:
     title: 净化
     profession: priest
@@ -213,7 +213,7 @@ skills:
     cooldown-seconds: 16
     limits: {range: 1, targets: 1, power: 1, duration-seconds: 1}
     description: "一级技能：解除自身中毒与凋零；消耗4魔力，冷却16秒；没有这些状态时不扣费，不进入冷却。"
-    origin: 选择牧师解锁学习资格。
+    origin: "选择牧师解锁学习资格。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   healer_beacon:
     title: 高阶圣愈术
     profession: priest
@@ -224,7 +224,7 @@ skills:
     cooldown-seconds: 24
     limits: {range: 8, targets: 4, power: 8, duration-seconds: 1}
     description: "8格群疗：一/二/三级最多2/3/4人，各恢复至多8/10/12HP，魔力10/14/18。二/三级附4/6秒一次怪物攻击减伤50%，上限4/6HP；三级另有1.5秒怪物攻击护佑。保护仅给予本次实际回血者，不免环境、虚空或PvP伤害。"
-    origin: 完成任务 tm_healer_trial，需实际队友怪物伤量二十四点和组队试炼第三层。
+    origin: "完成任务 tm_healer_trial，需实际队友怪物伤量二十四点和组队试炼第三层。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   mage_bolt:
     title: 奥术飞矢
     profession: mage
@@ -235,7 +235,7 @@ skills:
     cooldown-seconds: 5
     limits: {range: 12, targets: 1, power: 6, duration-seconds: 1}
     description: "攻击准星前方12格内一名可见敌人；一/二/三级基础伤害3.0/4.5/6点，魔力6/7/8；墙体阻挡，不破坏方块。"
-    origin: 选择法师解锁学习资格；可直接施法、绑定原法杖或刻印原版工具。
+    origin: "选择法师解锁学习资格；可直接施法、绑定原法杖或刻印原版工具。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   mage_frost:
     title: 霜寒束缚
     profession: mage
@@ -246,7 +246,7 @@ skills:
     cooldown-seconds: 14
     limits: {range: 5, targets: 3, power: 3, duration-seconds: 3}
     description: "攻击正面5格扇形内可见敌人；一/二/三级最多1/2/3名，每名基础伤害1.5/2.5/3点并附1/2/3秒缓慢一，魔力8/9/10；不伤玩家或村民。"
-    origin: 选择法师解锁学习资格；为战士接敌或牧师救援争取时间。
+    origin: "选择法师解锁学习资格；为战士接敌或牧师救援争取时间。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"
   mage_flame:
     title: 炎流
     profession: mage
@@ -257,4 +257,4 @@ skills:
     cooldown-seconds: 18
     limits: {range: 4, targets: 3, power: 4, duration-seconds: 1}
     description: "攻击正面4格扇形内可见敌人；一/二/三级最多1/2/3名，每名基础伤害2.0/3.0/4点，魔力9/10/11；不点燃实体或建筑。"
-    origin: 完成任务 tm_mage_trial，实际协战、调查下界并返回。
+    origin: "完成任务 tm_mage_trial，实际协战、调查下界并返回。 罗盘学习页：左键学习/升级，右键说明；职业技能页：左键准备/取消，右键施放。"

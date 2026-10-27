@@ -63,7 +63,7 @@ final class RpgCampaign implements Listener {
         // entering the map and reading a guide cannot complete a conquest chapter.
         if(combat!=null)for(int n=1;n<=combat.floor(p);n++)floors.add(n);
         return new RpgStoryRules.Facts(plugin.guild().hasJoined(p),flag(guide,"started"),flag(guide,"catalog"),flag(guide,"cast"),flag(guide,"commission"),ledger.getString(base(p)+".route",""),conversations,settled(p),
-                combat!=null&&!combat.profession(p).isEmpty(),combat==null?1:combat.level(p),floors);}
+                combat!=null&&!combat.profession(p).isEmpty(),combat==null?1:combat.level(p),floors,plugin.professions().preparedCombatSkill(p));}
     private RpgStoryRules.Chapter next(Player p){return content.chapters.stream().filter(c->!completed(p,c.id())&&c.requires().stream().allMatch(id->completed(p,id))).findFirst().orElse(null);}
     private boolean sideDone(Player p,RpgStoryContent.Side side){return settled(p).containsAll(side.contracts());}
     private boolean sideAvailable(Player p,RpgStoryContent.Side side){return side.requires().stream().allMatch(id->{var prior=content.side(id);return prior!=null&&sideDone(p,prior);});}

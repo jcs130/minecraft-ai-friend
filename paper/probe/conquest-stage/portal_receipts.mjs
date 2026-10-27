@@ -9,7 +9,9 @@ const require=createRequire(new URL('../../integrations/agent-portal/package.jso
 const yaml=require('yaml');
 const stage='E:/MC/staging/aincrad-conquest-20261027';
 assert.match(await fs.readFile(path.join(stage,'server.properties'),'utf8'),/^motd=QD_AINCRAD_CONQUEST_QA_ONLY$/m);
-const out='E:/MC/ops/repairs/conquest-rpg-20261027/portal-receipts';
+const expectedSolo=process.argv[2]||'';
+if(expectedSolo)assert.match(expectedSolo,/^ag_UseSolo[0-9]+$/);
+const out=expectedSolo?'E:/MC/ops/repairs/rpg-usage-20261027/portal-receipts-final':'E:/MC/ops/repairs/conquest-rpg-20261027/portal-receipts';
 const cache=JSON.parse(await fs.readFile(path.join(stage,'usercache.json'),'utf8'));
 const game={config:{hiddenPlayers:[]},roster:async()=>cache.map(r=>({name:r.name,playerUuid:r.uuid,available:true,kind:'agent'})),
  plugin:async file=>{assert.ok(['config.yml','dungeons.yml'].includes(file));const p=path.join(stage,'plugins/AgentFriend',file);return{data:yaml.parse(await fs.readFile(p,'utf8')),savedAt:(await fs.stat(p)).mtime.toISOString()};}};
@@ -22,7 +24,8 @@ try{
  assert.ok(result.runs.some(r=>r.state==='completed'&&r.party.some(n=>n.startsWith('ag_TankQA'))&&r.party.some(n=>n.startsWith('ag_HealQA'))));
  assert.ok(result.runs.every(r=>r.activityId==='aincrad_01'));
  const second=await reader.query({activity:'aincrad_01'});assert.equal(second.summary.records,result.summary.records);
- const report={checks:6,source:result.source,summary:result.summary,activity:result.activity,
+ if(expectedSolo){const completed=result.runs.find(r=>r.state==='completed'&&r.party.includes(expectedSolo));assert.ok(completed);assert.equal(completed.clearedUnits,3);assert.equal(completed.score,800);}
+ const report={checks:expectedSolo?8:6,source:result.source,summary:result.summary,activity:result.activity,
    runs:result.runs.map(({state,party,clearedUnits,score})=>({state,party,clearedUnits,score})),productionUploaded:false};
  await fs.writeFile(path.join(out,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{store.close();}

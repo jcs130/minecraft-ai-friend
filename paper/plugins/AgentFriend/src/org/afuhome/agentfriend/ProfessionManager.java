@@ -42,6 +42,17 @@ final class ProfessionManager implements Listener {
     Collection<ProfessionCatalog.Skill> skills() { return catalog == null ? List.of() : catalog.skills.values(); }
     List<String> ids() { return skills().stream().map(ProfessionCatalog.Skill::id).toList(); }
     List<String> roleIds() { return catalog == null ? List.of() : List.copyOf(catalog.roles.keySet()); }
+    /** Preparation is server-owned learning and slot state, not a catalog view.
+     * Movement alone does not satisfy the first combat lesson. */
+    boolean preparedCombatSkill(Player p) {
+        if (!available()) return false;
+        var profile=ledger.profile(p.getUniqueId());
+        String role=profile.get("combat").getAsString();
+        var prepared=ProfessionLedger.strings(profile,"prepared");
+        return skills().stream().anyMatch(s -> s.role().equals(role)
+                && !Set.of("sky_leap","soar").contains(s.effect())
+                && learned(p.getUniqueId(),s.id()) && prepared.contains(s.id()));
+    }
     ProfessionCatalog.Skill skill(String id) { return catalog == null ? null : catalog.skills.get(normalize(id)); }
     String normalize(String id) {
         id = id == null ? "" : id.toLowerCase(Locale.ROOT).trim();

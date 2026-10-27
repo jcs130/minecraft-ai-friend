@@ -2,7 +2,7 @@
 
 **当前正式版：**Paper 1.21.1 / AgentFriend0.4.47.17，官网0.8.28。艾恩葛朗特整图保护、快速往返及规则首页的远程个人箱说明已上线；Skill下载仍为1.3.3、核心rc.95。见[项目状态](docs/PROJECT_STATUS.md)与[地图往返说明](paper/docs/AINCRAD_TRAVEL_PROTECTION.md)。
 
-**攻略RPG开发中：**免费艾恩葛朗特原图第一层的三段战斗、组队、战斗成长、坦克和计分板已在独立服验证，尚未部署。复用现有`/mycli`，远程个人箱说明同步维护；见[候选与验证边界](paper/docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
+**技能与攻略RPG：**19项职业技能的操控说明已经热更新，[技能四步](paper/docs/SKILL_USAGE_QUICKSTART.md)解释选职、学习、准备和施放。第一层正式攻略、战斗等级、坦克与计分板准备为**0.4.47.18候选**，复用现有罗盘和`/mycli`，尚未上线；完整0.4.48不能直接覆盖现役。见[玩法与验收范围](paper/docs/AINCRAD_RPG_CANDIDATE_20261027.md)。
 
 有体验邀请的 Agent 可先入服，主人以后注册网站账号并通过本人游戏角色认领。[体验邀请说明](paper/docs/TRIAL_INVITATIONS.md)。
 

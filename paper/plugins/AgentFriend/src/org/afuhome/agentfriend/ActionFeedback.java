@@ -13,7 +13,7 @@ final class ActionFeedback {
             JsonArray values = new JsonArray(); commands.forEach(values::add); data.add("nextCommands", values);
             String reason=data.has("reason")?data.get("reason").getAsString():"unknown";
             data.addProperty("errorCode",reason.toUpperCase(java.util.Locale.ROOT));
-            boolean transientReason=java.util.Set.of("cooldown","insufficient_mana","not_enough_mana","no_target","unsafe_path","already_effective").contains(reason);
+            boolean transientReason=java.util.Set.of("cooldown","insufficient_mana","not_enough_mana","no_target","target_recovering","unsafe_path","already_effective").contains(reason);
             boolean unknownResult=reason.contains("save")||reason.contains("journal")||reason.contains("conflict")||reason.equals("data_unavailable")||reason.equals("unknown");
             data.add("retryable",unknownResult?com.google.gson.JsonNull.INSTANCE:new com.google.gson.JsonPrimitive(transientReason));
             data.addProperty("retryPolicy",unknownResult?"结果未知，先查询核对；不要自动重复提交":"先按nextCommands解决条件；不自动重放动作");
@@ -62,6 +62,7 @@ final class ActionFeedback {
                 case "cooldown" -> a("技能仍在冷却。", "按回执 cooldownRemainingMs 等待剩余秒数，再施放一次；反复执行不会缩短冷却。", skill);
                 case "insufficient_mana" -> mana();
                 case "no_target" -> a("没有有效目标。", "按 " + skill + " 的范围靠近可见目标；治疗需有受伤友军，攻击需有效敌人，再施法。", skill);
+                case "target_recovering" -> a("目标正处于原版受击间隔，本次未施放。", "停止连击，等约半秒后重新瞄准再施放一次；不要把普通攻击和剑技同时发出。本次未扣魔力或冷却。", skill);
                 case "protected_target" -> a("目标受保护。", "停止攻击该目标；根据 " + skill + " 选择可攻击的敌对生物，不攻击村民、队友或私产。", skill);
                 case "unsafe_path" -> a("路径或落点不安全。", "移到无遮挡的平地，确认脚下有支撑、头顶两格净空后再试，不要拆开受保护建筑。", skill);
                 case "prepared_limit" -> a("技能准备槽已满。", "用 /mycli skills mine 查看当前准备项，选一项执行 /mycli skills unprepare <ID>，再准备所需技能。", "/mycli skills mine");

@@ -5,7 +5,7 @@ import java.util.*;
 /** Pure story conditions. Facts come from server ledgers or a nearby NPC action,
  * never from a player's chat, menu browsing or an NPC model's generated answer. */
 final class RpgStoryRules {
-    enum Kind { TALK, TALK_OR_GRADUATE, MEMBER, ENROLLED, CATALOG, CAST, COMMISSION, ROUTE, CONTRACT, COMBAT_ROLE, COMBAT_LEVEL, CONQUEST_CLEAR }
+    enum Kind { TALK, TALK_OR_GRADUATE, MEMBER, ENROLLED, CATALOG, CAST, COMMISSION, ROUTE, CONTRACT, COMBAT_ROLE, COMBAT_READY, COMBAT_LEVEL, CONQUEST_CLEAR }
     static final Set<String> ROUTES=Set.of("combat","crafting","exploration","supply","engineering","life");
     record Stage(String id,String title,Kind kind,String reference,String description,String nextCommand) {
         Stage {
@@ -28,10 +28,16 @@ final class RpgStoryRules {
     }
     record Facts(boolean member,boolean enrolled,boolean catalog,boolean cast,boolean commission,
                  String route,Set<String> conversations,Set<String> contracts,
-                 boolean combatRole,int combatLevel,Set<Integer> clearedFloors) {
+                 boolean combatRole,int combatLevel,Set<Integer> clearedFloors,boolean combatReady) {
         Facts(boolean member,boolean enrolled,boolean catalog,boolean cast,boolean commission,
               String route,Set<String> conversations,Set<String> contracts){
-            this(member,enrolled,catalog,cast,commission,route,conversations,contracts,false,1,Set.of());
+            this(member,enrolled,catalog,cast,commission,route,conversations,contracts,false,1,Set.of(),false);
+        }
+        // Retain callers and frozen chapters from before the preparation step.
+        Facts(boolean member,boolean enrolled,boolean catalog,boolean cast,boolean commission,
+              String route,Set<String> conversations,Set<String> contracts,
+              boolean combatRole,int combatLevel,Set<Integer> clearedFloors){
+            this(member,enrolled,catalog,cast,commission,route,conversations,contracts,combatRole,combatLevel,clearedFloors,false);
         }
         Facts {route=route==null?"":route;conversations=Set.copyOf(conversations);contracts=Set.copyOf(contracts);
             clearedFloors=Set.copyOf(clearedFloors);if(combatLevel<1||combatLevel>100||clearedFloors.stream().anyMatch(n->n<1||n>100))throw new IllegalArgumentException("invalid combat facts");}
@@ -53,6 +59,7 @@ final class RpgStoryRules {
             case ROUTE -> ROUTES.contains(f.route);
             case CONTRACT -> f.contracts.contains(stage.reference);
             case COMBAT_ROLE -> f.combatRole;
+            case COMBAT_READY -> f.combatRole&&f.combatReady;
             case COMBAT_LEVEL -> f.combatLevel>=Integer.parseInt(stage.reference);
             case CONQUEST_CLEAR -> f.clearedFloors.contains(Integer.parseInt(stage.reference));
         };

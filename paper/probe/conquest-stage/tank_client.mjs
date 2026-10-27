@@ -20,7 +20,7 @@ try{
  for(const skill of ['tank_taunt','tank_bastion']){await chat(tank,'/mycli skills learn '+skill);await chat(tank,'/mycli skills prepare '+skill);}
  // The copied flat-world region policy cancels hostile damage. Use the actual
  // conquest map, without changing any protection flag, and await teleport grace.
- await rcon('qdqa castle '+ally.username);await rcon('qdqa castle '+tank.username);await sleep(5000);
+ await rcon('qdqa castle '+ally.username);await rcon('qdqa castle '+tank.username);await rcon('qdqa difficulty');await sleep(5000);
  await rcon('qdqa spawn '+tank.username);await sleep(400);
  const mob=Object.values(tank.entities).find(e=>e.name==='zombie');check(!!mob,'real visible hostile target');
  await tank.lookAt(mob.position.offset(0,1,0));await sleep(250);

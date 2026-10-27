@@ -1,3 +1,7 @@
+## 2026-10-27 技能说明热更新与正式RPG最小候选
+
+正式仍AgentFriend0.4.47.17/官网0.8.28，本轮未停启生产。19项职业技能只改菜单/操控文字已热加载，女神手册追加四步且保留原文，未确认已读。0.4.47.18最小候选从固定.17回补，保留521原JAR条目，包含真实学习准备、首层、成长、坦克、TAB与原版受击间隔误报修复；完整.48不可直接发布。E/F评审模板schema0不可部署，未写pending；玩家config必须在获当次批准、正常停服和原完整双盘备份后按最新原字节追加两开关，不能用旧快照覆盖。验收、失败边界和回退见paper/docs/AINCRAD_RPG_CANDIDATE_20261027.md及rpg-skills-candidate-20261027.json。Skill/MCP参考源码已维护，官网下载包未重发；world-activity.py/shared_file_read.py仍是其他未提交修改，不混入。
+
 ## 2026-10-27 艾恩葛朗特保护与往返已正式上线
 
 服主批准无人值守正常重启，预告及旧副本结束后完成E/F全量冷备份20261027-031540，固定摘要部署AgentFriend0.4.47.17及五个配置/脚本。JAR仅替换保护区域容量类、嵌套类及版本，559其他条目保持；原八保护区/两建设者保留，aincrad整图保护停止野外放行覆盖，门箱及战斗可用。原/warp aincrad与/warp village沿travel技能及6魔力规则，/aincrad和rules第一页明确说明；远程个人箱2魔力用法同步。最终同包冷启动12客户端/21事件检查及15安装器检查通过，正式摘要/规则/备份/旧插件核验完成。首轮SYSTEM网关停止被拒，旧服保持并恢复辅助；第二轮仅保留未改动网关和只读Eye，正常停Paper/模型，原锁/备份/安装器门禁保持，不重放旧脚本。女神资料只追加实际指引；Skill下载未重发，0.4.48攻略/Vortex仍候选，多Eye旧告警另查。见paper/docs/AINCRAD_TRAVEL_PROTECTION.md及对应release manifest。world-activity.py/shared_file_read.py仍为其他未提交修改。
