@@ -596,7 +596,8 @@ def test_multiple_mutating_calls_are_rejected_as_a_whole_and_rate_limited(framew
     assert controller.inflight_request is None and not bridge.closed
 
 
-def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_module, tmp_path, run_async, monkeypatch):
+@pytest.mark.parametrize("confirmed_disconnect", [True, False])
+def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_module, tmp_path, run_async, monkeypatch, confirmed_disconnect):
     decisions, polls, stopped = [], [], False
 
     async def decide(*_):
@@ -604,6 +605,16 @@ def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_modu
         return choose()
 
     module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: stopped)
+    published = {}
+    controller.publish = lambda **patch: published.update(patch)
+    original_call = bridge.call
+
+    async def call(name, args, **kwargs):
+        if name == "mc_connection" and args.get("action") == "disconnect" and not confirmed_disconnect:
+            return packed({"phase": "unconfirmed"})
+        return await original_call(name, args, **kwargs)
+
+    bridge.call = call
     clock = [1000]
     monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
     original_sleep = asyncio.sleep
@@ -625,7 +636,15 @@ def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_modu
     assert len(decisions) == 1
     assert bridge.closed
     state = json.loads((tmp_path / "host-state.json").read_text())
-    assert state["stopped"] is True and state["pending"] == []
+    assert state["stopped"] is True
+    if confirmed_disconnect:
+        assert state["pending"] == [] and published["pending"] == []
+        assert published["disconnect_confirmed"] is True
+        # Disconnect is a lifecycle receipt, never invented native completion.
+        assert not published.get("native_outcomes")
+    else:
+        assert state["pending"] and published["pending"]
+        assert state["uncertain"] is True and published["disconnect_confirmed"] is False
 
 
 def test_stop_during_model_wait_blocks_late_action(framework_module, tmp_path, run_async):

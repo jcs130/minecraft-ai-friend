@@ -2299,6 +2299,7 @@ class Controller:
                     # Generic core disconnect explicitly stops its own action queue.
                     # This must not be reused for Numen, whose remote body stays alive.
                     self.persist(pending=[])
+                    self.publish(disconnect_confirmed=True, pending=[])
                 except Exception:
                     if self.pending or self.inflight_request:
                         self.persist(uncertain=True)
