@@ -164,6 +164,56 @@ describe('equipment server confirmation', () => {
     expect(rig.cursorHistory.every(item => item === null)).toBe(true);
   });
 
+  it.each(['1.21.1', '1.20.6'])('preserves a selected named shortcut when the %s hotbar is full', async version => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version, denyHandSwap: true });
+    for (let slot = 9; slot < 45; slot++) rig.seed(slot, 'cobblestone', 64);
+    rig.seed(29, 'iron_sword'); rig.seed(44, 'player_head'); rig.seed(37, 'stick', 9);
+    for (const window of [rig.inventory, rig.server]) {
+      for (let slot = 36; slot < 45; slot++) {
+        if (slot !== 37) window.slots[slot].customName = 'Inventory shortcut';
+      }
+    }
+    const operation = equipHandConfirmed(rig.bot, rig.inventory.slots[29]);
+    // Capture a rejection immediately so the old implementation is a clean failing regression.
+    const result = operation.then(() => null, error => error);
+    await vi.advanceTimersByTimeAsync(165);
+    expect(rig.bot.quickBarSlot).toBe(8);
+    await vi.runAllTimersAsync();
+    expect(await result).toBeNull();
+    expect(rig.bot.quickBarSlot).toBe(1);
+    expect(rig.server.slots[37].name).toBe('iron_sword');
+    expect(rig.server.slots[29]).toMatchObject({ name: 'stick', count: 9 });
+    expect(rig.server.slots[44].name).toBe('player_head');
+    expect(rig.server.items()).toHaveLength(36);
+    expect(rig.cursorHistory.every(item => item === null)).toBe(true);
+    expect(rig.sent).toEqual([29]);
+  });
+
+  it.each(['denied', 'cancelled'])('keeps one full-hotbar swap isolated when it is %s', async outcome => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1', denyAnyHandSwap: outcome === 'denied' });
+    for (let slot = 9; slot < 45; slot++) rig.seed(slot, 'cobblestone', 64);
+    rig.seed(29, 'iron_sword'); rig.seed(44, 'player_head');
+    rig.inventory.slots[44].customName = 'Inventory shortcut';
+    let active = true;
+    const operation = equipHandConfirmed(rig.bot, rig.inventory.slots[29], () => {
+      if (!active) throw Error('Original task cancelled');
+    });
+    const result = operation.then(() => null, error => error);
+    await vi.advanceTimersByTimeAsync(50);
+    if (outcome === 'cancelled') active = false;
+    await vi.runAllTimersAsync();
+    expect(await result).toBeInstanceOf(Error);
+    expect(rig.bot.quickBarSlot).toBe(8);
+    expect(rig.server.slots[44].name).toBe('player_head');
+    expect(rig.server.slots[29].name).toBe(outcome === 'denied' ? 'iron_sword' : 'cobblestone');
+    expect(rig.server.slots[36].name).toBe(outcome === 'denied' ? 'cobblestone' : 'iron_sword');
+    expect(rig.server.items()).toHaveLength(36);
+    expect(rig.cursorHistory.every(item => item === null)).toBe(true);
+    expect(rig.sent).toEqual([29]);
+  });
+
   it('does not select a confirmed spare hotbar slot when the original task was cancelled during its ACK', async () => {
     vi.useFakeTimers();
     const rig = equipmentServer({ version: '1.21.1', denyHandSwap: true });

@@ -107,26 +107,38 @@ export async function equipHandConfirmed(bot: Bot, item: Item, checkActive?: () 
     const window = bot.inventory, selected = bot.getEquipmentDestSlot('hand');
     const empty = window.slots[selected] ? window.slots.findIndex((entry, slot) =>
       slot >= start && slot < start + 9 && !entry) : -1;
-    if (empty < 0) {
+    // Named server shortcuts are often immovable. With a full hotbar, prefer
+    // exchanging an ordinary stack rather than moving that selected shortcut.
+    // This is only destination selection: the server still confirms one swap,
+    // and a rejection must never trigger attempts against the remaining slots.
+    const ordinary = empty < 0 && itemCustomName(window.slots[selected] ?? {})
+      ? window.slots.findIndex((entry, slot) => slot >= start && slot < start + 9
+        && entry && !itemCustomName(entry)) : -1;
+    const destination = empty >= 0 ? empty : ordinary;
+    if (destination < 0) {
       await equipSlotConfirmed(bot, item, 'hand', checkActive);
     } else {
-      // A hand selection need not relocate an unrelated selected stack. Some
-      // servers protect shortcut items there; prefer an empty hotbar slot before
-      // any click, not a retry after a denied swap. Keep the old selection until
-      // the destination is confirmed, including cancellation during the ACK.
-      const source = item.slot;
-      await equipmentMove(bot, empty, () => clickInventoryConfirmed(bot, source, empty - start, 2, window, () => {
+      // Keep the old selection until both stacks and the empty cursor are
+      // confirmed, including cancellation during the ACK. No item is dropped.
+      const source = item.slot, displaced = window.slots[destination];
+      const sourceMatches = (): boolean => displaced
+        ? Boolean(window.slots[source] && sameInventoryStack(window.slots[source], displaced)
+          && window.slots[source]!.count === displaced.count)
+        : !window.slots[source];
+      await equipmentMove(bot, destination, () => clickInventoryConfirmed(bot, source, destination - start, 2, window, () => {
         checkActive?.();
-        if (window.slots[source] || !window.slots[empty] || !sameInventoryStack(window.slots[empty], item)
+        if (!sourceMatches() || !window.slots[destination] || !sameInventoryStack(window.slots[destination], item)
+          || window.slots[destination]!.count !== item.count
           || window.selectedItem) {
           throw new SkillBlocked('备用快捷栏或来源在派发前变化，换装未发送');
         }
       }));
       checkActive?.();
-      if (!window.slots[empty] || !sameInventoryStack(window.slots[empty], item) || window.selectedItem) {
+      if (!sourceMatches() || !window.slots[destination] || !sameInventoryStack(window.slots[destination], item)
+        || window.slots[destination]!.count !== item.count || window.selectedItem) {
         throw new SkillBlocked('备用快捷栏未确认收到点名物品，未切换主手', [], 'server');
       }
-      bot.setQuickBarSlot(empty - start);
+      bot.setQuickBarSlot(destination - start);
     }
   }
   checkActive?.();
