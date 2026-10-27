@@ -76,7 +76,7 @@ export class CombatAbilities {
         : !this.serverReadyAt.has(spell) ? 'cooldown-unknown'
         : this.mana === null || this.manaLoading ? 'mana-unknown' : this.manualCastBlock(spell, now) }));
     const facts: Omit<CombatRuleFacts, 'cost'> = { ...this.ruleFacts(bot),
-      enemies: battlefield.actors.flatMap(e => e.relation === 'hostile' && e.distance !== null
+      enemies: battlefield.actors.flatMap(e => e.relation === 'hostile' && e.lineOfSight === true && e.distance !== null
         && e.distance <= 16 && e.health.current !== 0 ? [{ type: e.type ?? '', distance: e.distance }] : []) };
     const candidates = rules.flatMap(rule => {
       const skill = skills.find(s => s.spell === rule.spell)!;

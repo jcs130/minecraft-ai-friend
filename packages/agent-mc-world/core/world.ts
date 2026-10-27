@@ -2268,7 +2268,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Nearby blocks: {find:{names:["water"],maxDistance:8,count:4},waitMs:1000} runs a bounded read recipe without scan loops. name is optional for code; omitted names use its stable source hash. Explicit names are1–80 characters. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
-      + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible}; snapshot.entitiesOmitted reports truncation. '
+      + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible,observation?}; observation distinguishes visible from nearby tracked occluded/unknown entities, never inferred sound or attack permission. snapshot.entitiesOmitted reports truncation. '
       + 'snapshot.blocksScanned is false here; empty nearbyBlocks/terrain do not establish water depth or traversability. Missing fields are unknown observations. '
       + 'await mc.do(steps) submits one ordered group to the normal executor and waits for its actual terminal result: accepted, taskId, kind, done, receipt, steps and fresh state. '
       + 'A sent server command still needs observed effects; done is the executor result, not proof of an external quest. '
@@ -3576,7 +3576,8 @@ export class MinecraftWorld implements World {
         route: { generation: this.connectionGeneration, positionEpoch: this.routePositionEpoch, speedBlocksPerSec: snap.speed,
           policy: journeyChoicePolicy(this.cfg.journey),
           risks: [
-            ...(threats.length ? ['visible-hostile-species-not-attack-intent'] : []),
+            ...(threats.some(e => e.visible) ? ['visible-hostile-species-not-attack-intent'] : []),
+            ...(threats.some(e => !e.visible) ? ['nearby-occluded-hostile-species-not-attack-intent'] : []),
             ...(snap.health !== null && snap.health <= this.cfg.reflex.fleeHealth ? ['low-health'] : []),
             ...snap.effects.filter(effect => ['poison','wither'].includes(effect.name)).map(effect => `effect:${effect.name}`),
           ],

@@ -4,7 +4,7 @@ import { metaOf } from './animal-state.ts';
 import { HOSTILE } from './melee.ts';
 import { piglinIsHostile } from './piglin.ts';
 import { canSeeEntity } from './terrain.ts';
-import { observedEntity } from './perception-sight.ts';
+import { entityAwareness, type EntityAwareness } from './perception-sight.ts';
 import { loadedSight } from './idle-actions.ts';
 import { entityMaxHealth as maxHealth } from './entity-max-health.ts';
 
@@ -23,6 +23,7 @@ export interface BattlefieldActor {
   position: [number, number, number] | null;
   distance: number | null;
   lineOfSight: boolean | null;
+  observation?: EntityAwareness;
   targetEntityId: number | null;
 }
 export interface Battlefield {
@@ -141,10 +142,9 @@ export class BattlefieldObserver {
     const actors: BattlefieldActor[] = [];
     for (const e of Object.values(bot.entities ?? {})) {
       if (!e?.position || e === bot.entity || e.id === bot.entity.id || e.isValid === false) continue;
-      // Native tracking and party telemetry do not grant visual knowledge through walls.
-      if (!observedEntity(bot, e)) continue;
+      const observation = entityAwareness(bot, e);
+      if (!observation) continue;
       const distance = Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z);
-      if (distance > 24) continue;
       const rawRow = e.uuid ? rows.get(e.uuid.toLowerCase()) : undefined;
       const row = rawRow && (rawRow.entityId === null || rawRow.entityId === e.id) ? rawRow : undefined;
       const hostile = e.type !== 'player' && (HOSTILE.has(e.name ?? '')
@@ -152,8 +152,8 @@ export class BattlefieldObserver {
       if (!row && !hostile && e.type !== 'player') continue;
       if (row) rows.delete(row.uuid.toLowerCase());
       const native = metaOf(bot, e, 'health');
-      let visible: boolean | null = null;
-      if (typeof bot.world?.raycast === 'function' && typeof bot.blockAt === 'function') {
+      let visible: boolean | null = observation.lineOfSight;
+      if (observation.visibility === 'visible' && typeof bot.world?.raycast === 'function' && typeof bot.blockAt === 'function') {
         try {
           const to = { x: e.position.x, y: e.position.y + (e.height ?? 1) * 0.5, z: e.position.z };
           if (loadedSight(bot, to)) visible = canSeeEntity(bot, e);
@@ -167,7 +167,7 @@ export class BattlefieldObserver {
           : { current: number(native) ? native : null, max: maxHealth(e), source: number(native) ? 'native' : 'unknown',
             updatedAtMs: this.healthTimes.get(e.id) ?? null },
         position: [e.position.x, e.position.y, e.position.z], distance: Math.round(distance * 10) / 10,
-        lineOfSight: visible, targetEntityId: row?.targetEntityId ?? null });
+        lineOfSight: visible, observation, targetEntityId: row?.targetEntityId ?? null });
     }
     for (const row of rows.values()) {
       if (row.relation !== 'ally' || row.uuid.toLowerCase() === bot.entity.uuid?.toLowerCase()) continue;

@@ -46,8 +46,9 @@ it('requires explicit telemetry opt-in and releases its listeners on disposal', 
 });
 
 describe('programmatic battlefield observations', () => {
-  it('omits hidden enemies and keeps confirmed ally telemetry non-spatial', () => {
+  it('can disable near occlusion reporting and keep confirmed ally telemetry non-spatial', () => {
     const r = rig();
+    configureObservationPolicy(r.bot,()=>({nearbyOccludedRange:0}));
     r.observer.noteServerPayload(Buffer.from(JSON.stringify(payload())), 1000);
     r.bot.blockAt = (p: Vec3) => ({ name: p.x === 1 ? 'stone' : 'air', position: p,
       shapes: p.x === 1 ? [[0,0,0,1,1,1]] : [] });

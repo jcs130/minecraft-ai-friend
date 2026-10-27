@@ -9,12 +9,16 @@ export interface ObservationPolicy {
   entityView?: 'surroundings' | 'camera';
   /** Maximum entity observation distance in blocks, 1..64. */
   entityRange?: number;
+  /** Report tracked but non-visible entities this close, with explicit occlusion/unknown provenance. 0 disables. */
+  nearbyOccludedRange?: number;
 }
-export const OBSERVATION_DEFAULTS = { mineralVision: false, entityView: 'surroundings' as const, entityRange: 32 };
+export const OBSERVATION_DEFAULTS = { mineralVision: false, entityView: 'surroundings' as const, entityRange: 64, nearbyOccludedRange: 8 };
 const policies=new WeakMap<object,()=>ObservationPolicy|undefined>();
-export function entityObservationScope(bot: object): { view: 'surroundings' | 'camera'; range: number } {
+export function entityObservationScope(bot: object): { view: 'surroundings' | 'camera'; range: number; nearbyOccludedRange: number } {
   const policy=policies.get(observationSources.get(bot)??bot)?.();
-  return {view:policy?.entityView??OBSERVATION_DEFAULTS.entityView,range:policy?.entityRange??OBSERVATION_DEFAULTS.entityRange};
+  const range=policy?.entityRange??OBSERVATION_DEFAULTS.entityRange;
+  return {view:policy?.entityView??OBSERVATION_DEFAULTS.entityView,range,
+    nearbyOccludedRange:Math.min(range,policy?.nearbyOccludedRange??OBSERVATION_DEFAULTS.nearbyOccludedRange)};
 }
 /** Host configuration only; an Agent cannot silently grant itself mineral vision. */
 export function configureObservationPolicy(bot:object,policy:()=>ObservationPolicy|undefined):void {
@@ -43,18 +47,18 @@ function intersects(a:number[],d:number[],shape:number[],cell:number[]):boolean 
   }
   return far>=0&&near<1-1e-6;
 }
-export function clearObservationRay(bot:any,from:Point,to:Point):boolean {
+export function observationRay(bot:any,from:Point,to:Point):boolean|null {
   bot=observationSources.get(bot)??bot;
-  if(!finite(from)||!finite(to)||typeof bot?.blockAt!=='function')return false;
+  if(!finite(from)||!finite(to)||typeof bot?.blockAt!=='function')return null;
   const a=[from.x,from.y,from.z],d=[to.x-from.x,to.y-from.y,to.z-from.z];
-  if(Math.hypot(...d)>64)return false;
+  if(Math.hypot(...d)>65)return null;
   const cell=a.map(Math.floor),end=[to.x,to.y,to.z].map(Math.floor),step=d.map(Math.sign);
   const delta=d.map(n=>n?Math.abs(1/n):Infinity);
   const edge=d.map((n,i)=>n?((step[i]!>0?cell[i]!+1:cell[i]!)-a[i]!)/n:Infinity),tested=new Set<string>();
   const check=(at:number[])=>{
     for(let dy=-1;dy<=1;dy++){
       const p=[at[0]!,at[1]!+dy,at[2]!],key=p.join(',');if(tested.has(key))continue;tested.add(key);
-      const block=bot.blockAt(new Vec3(p[0]!,p[1]!,p[2]!),false);if(!block)return false;
+      const block=bot.blockAt(new Vec3(p[0]!,p[1]!,p[2]!),false);if(!block)return null;
       if(transparent(String(block.name)))continue;
       const shapes=Array.isArray(block.shapes)?block.shapes:[[0,0,0,1,1,1]];
       if(shapes.some((s:number[])=>intersects(a,d,s,p)))return false;
@@ -62,37 +66,55 @@ export function clearObservationRay(bot:any,from:Point,to:Point):boolean {
     return true;
   };
   for(let count=0;count<256;count++){
-    if(!check(cell))return false;
+    const checked=check(cell);if(checked!==true)return checked;
     if(cell.every((n,i)=>n===end[i]))return true;
     const next=Math.min(...edge);if(next>1)return true;
     const axes=edge.map((v,i)=>Math.abs(v-next)<1e-10?i:-1).filter(i=>i>=0);
     // A diagonal grazing a corner cannot skip the other adjacent cells.
     for(let mask=1;mask<(1<<axes.length);mask++){
       const neighbor=[...cell];axes.forEach((axis,j)=>{if(mask&(1<<j))neighbor[axis]!+=step[axis]!;});
-      if(!check(neighbor))return false;
+      const checked=check(neighbor);if(checked!==true)return checked;
     }
     for(const i of axes){cell[i]!+=step[i]!;edge[i]!+=delta[i]!;}
   }
-  return false;
+  return null;
 }
-export function observedEntity(bot:any,entity:any,cone?:boolean):boolean {
+export function clearObservationRay(bot:any,from:Point,to:Point):boolean { return observationRay(bot,from,to)===true; }
+export interface EntityAwareness {
+  source: 'line-of-sight' | 'nearby-entity-tracking';
+  visibility: 'visible' | 'occluded' | 'unknown';
+  lineOfSight: boolean|null;
+}
+/** Reporting an occluded actor never grants visual or interaction permission. No synthetic sound evidence. */
+export function entityAwareness(bot:any,entity:any,cone?:boolean):EntityAwareness|null {
   bot=observationSources.get(bot)??bot;
   const scope=entityObservationScope(bot);
   const self=bot?.entity,p=entity?.position;
-  if(!finite(self?.position)||!finite(p)||entity.isValid===false||entity.invisible||entity.dead||entity.health===0)return false;
+  if(!finite(self?.position)||!finite(p)||entity.isValid===false||entity.invisible||entity.dead||entity.health===0)return null;
+  const distance=Math.hypot(p.x-self.position.x,p.y-self.position.y,p.z-self.position.z);
+  if(distance>scope.range)return null;
   const keys=bot.registry?.entitiesByName?.[entity.name]?.metadataKeys??[];
-  const flags=entity.metadata?.[keys.indexOf('shared_flags')];if(typeof flags==='number'&&(flags&32))return false;
+  const flags=entity.metadata?.[keys.indexOf('shared_flags')];if(typeof flags==='number'&&(flags&32))return null;
   const eye={x:self.position.x,y:self.position.y+(Number.isFinite(self.eyeHeight)?self.eyeHeight:1.62),z:self.position.z};
-  return [.25,.5,.85].some(part=>{
+  let unknown=false, tested=false;
+  for(const part of [.25,.5,.85]) {
     const point={x:p.x,y:p.y+(entity.height??1)*part,z:p.z};
     const dx=point.x-eye.x,dy=point.y-eye.y,dz=point.z-eye.z,flat=Math.hypot(dx,dz);
-    if(Math.hypot(flat,dy)>scope.range)return false;
     if(cone??scope.view==='camera'){
       const diff=Math.atan2(Math.sin(Math.atan2(-dx,-dz)-(self.yaw??0)),Math.cos(Math.atan2(-dx,-dz)-(self.yaw??0)));
-      if(Math.abs(diff)>55*Math.PI/180||Math.abs(Math.atan2(dy,flat)-(self.pitch??0))>40*Math.PI/180)return false;
+      if(Math.abs(diff)>55*Math.PI/180||Math.abs(Math.atan2(dy,flat)-(self.pitch??0))>40*Math.PI/180)continue;
     }
-    return clearObservationRay(bot,eye,point);
-  });
+    tested=true;
+    const ray=observationRay(bot,eye,point);
+    if(ray===true)return {source:'line-of-sight',visibility:'visible',lineOfSight:true};
+    if(ray===null)unknown=true;
+  }
+  if(!tested||scope.nearbyOccludedRange===0||distance>scope.nearbyOccludedRange)return null;
+  return {source:'nearby-entity-tracking',visibility:unknown?'unknown':'occluded',lineOfSight:unknown?null:false};
+}
+/** Strict visual gate used by execution, spatial geometry and completion checks. */
+export function observedEntity(bot:any,entity:any,cone?:boolean):boolean {
+  return entityAwareness(bot,entity,cone)?.visibility==='visible';
 }
 
 /** A visible face establishes the block identity; hidden neighboring cells stay unknown. */
@@ -103,7 +125,7 @@ export function observedBlock(bot:any,position:Point):boolean {
   const cell={x:Math.floor(position.x),y:Math.floor(position.y),z:Math.floor(position.z)};
   const eye={x:self.position.x,y:self.position.y+(self.eyeHeight??1.62),z:self.position.z};
   const center={x:cell.x+.5,y:cell.y+.5,z:cell.z+.5};
-  if(Math.hypot(center.x-eye.x,center.y-eye.y,center.z-eye.z)>32)return false;
+  if(Math.hypot(center.x-eye.x,center.y-eye.y,center.z-eye.z)>entityObservationScope(bot).range)return false;
   const target=bot.blockAt(new Vec3(cell.x,cell.y,cell.z),false);
   if(!target)return false;
   const points=transparent(String(target.name))?[center]:[

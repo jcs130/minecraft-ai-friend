@@ -8,7 +8,7 @@
  */
 import { Vec3 } from 'vec3';
 import { headWaterObservation } from './water-observation.ts';
-import { observedEntity, observationView, entityObservationScope } from './perception-sight.ts';
+import { entityAwareness, observationView, entityObservationScope, type EntityAwareness } from './perception-sight.ts';
 import { spatialSites } from './spatial-site.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
@@ -100,8 +100,9 @@ interface EntityInfo {
   direction: Direction | null;
   /** 相对我的高度差,四舍五入到格 */
   dy: number;
-  /** 当前视线确认；false 仅为旧快照兼容，不是听觉证据。 */
+  /** 当前视线确认；false 不是听觉证据，也不赋予交互权限。 */
   visible: boolean;
+  observation?: EntityAwareness;
   /** 掉落物实体上读到的物品;没有元数据时缺省 */
   item?: ItemStack;
   /** 可见实体的身份与当前元数据读数。 */
@@ -475,7 +476,7 @@ export function narrateWorldSegments(
   const seenMobs = seen.filter((e) => !isDroppedItem(e));
   const seenDrops = seen.filter((e) => isDroppedItem(e));
   const lifeLines: string[] = s.entityObservation
-    ? [`${s.entityObservation.view === 'camera' ? '朝向视野' : '周边视线'}（${s.entityObservation.range} 格范围，遮挡与未加载区域未知）。`]
+    ? [`${s.entityObservation.view === 'camera' ? '朝向视野' : '周边视线'}（${s.entityObservation.range} 格；近处 ${s.entityObservation.nearbyOccludedRange ?? 0} 格内未直视实体另列，来自当前实体同步，不是声音）。`]
     : [];
   if (seenMobs.length > 0) {
     lifeLines.push(
@@ -490,10 +491,15 @@ export function narrateWorldSegments(
         '。',
     );
   }
-  if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个更远的没列进来。`);
+  const nearbyTracked = s.entities.filter(e => !e.visible && e.observation?.source === 'nearby-entity-tracking');
+  if (nearbyTracked.length) lifeLines.push('近处未直视：' + nearbyTracked.map(e =>
+    `${whereIs(e.direction,e.distance,e.dy)}有${zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
+  if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个感知实体未展开；可按需查询，未列出不等于没有。`);
   lifeLines.push(...narrateDrops(seenDrops));
   const lifeCmp = [
-    ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}`] : []),
+    ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}|${s.entityObservation.nearbyOccludedRange}`] : []),
+    ...nearbyTracked.map(e => `近:${e.entityId}|${e.name}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
+    `省略:${s.entitiesOmitted}`,
     ...seenMobs.map((e) => `见:${e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
       `落:${e.item?.name ?? 'item'}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? 1}`,
@@ -1779,25 +1785,28 @@ export function snapshotFromBot(
     const kind = e.name === 'piglin' && piglinIsHostile(bot, e)
       ? 'hostile'
       : classifyEntity(e.type, e.name);
-    const visible = observedEntity(bot, e);
-    // Entity tracking is not evidence of sound. Actual packets are available
-    // separately through mc_hear, without hidden identities/distances/counts.
-    if (!visible) continue;
-    const stack = droppedStackOf(e, bot.registry?.items);
+    const observation = entityAwareness(bot, e);
+    if (!observation) continue;
+    const visible = observation.visibility === 'visible';
+    const stack = visible ? droppedStackOf(e, bot.registry?.items) : null;
     const note = visible ? entityObservationNote(bot, e) : null;
     entities.push({
-      ...(visible && Number.isInteger(e.id) ? { entityId: e.id } : {}),
+      ...(Number.isInteger(e.id) ? { entityId: e.id } : {}),
       name,
       kind,
       distance: d,
       direction: bearing(e.position.x - pos.x, e.position.z - pos.z),
       dy: Math.round(e.position.y - pos.y),
       visible,
+      observation,
       ...(stack ? { item: stack } : {}),
       ...(note ? { note } : {}),
     });
   }
-  entities.sort((a, b) => a.distance - b.distance);
+  // Drops must not fill the compact budget and hide a player or a nearby threat.
+  const importance = (e: EntityInfo) => e.kind === 'hostile' && e.distance <= 8 ? 0
+    : e.kind === 'player' ? 1 : e.kind === 'hostile' ? 2 : isDroppedItem(e) ? 4 : 3;
+  entities.sort((a, b) => importance(a) - importance(b) || a.distance - b.distance);
 
   const nearbyBlocks: WorldSnapshot['nearbyBlocks'] = [];
   const registry = bot.registry;

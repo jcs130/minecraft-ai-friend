@@ -22,7 +22,7 @@ export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '
 export { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from '../../core/memory-cpu-vector.ts';
 export { configuredPlayerSkin, type LocalPlayerSkin } from '../../core/viewer-local-skin.ts';
 export { setStoredSkin, storedSkinInfo } from '../../core/client-skins.ts';
-export { configureObservationPolicy, entityObservationScope, OBSERVATION_DEFAULTS, type ObservationPolicy } from '../../core/perception-sight.ts';
+export { configureObservationPolicy, entityObservationScope, entityAwareness, OBSERVATION_DEFAULTS, type ObservationPolicy, type EntityAwareness } from '../../core/perception-sight.ts';
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 export { MINEDOJO_SOURCE, REFERENCE_INDEX_SCHEMA, buildReferenceIndex, readReferenceIndex, validateReferenceConfig,
   type MinecraftKnowledgeConfig, type ReferenceIndexConfig, type ReferenceEmbeddingConfig } from '../../core/reference-index.ts';
