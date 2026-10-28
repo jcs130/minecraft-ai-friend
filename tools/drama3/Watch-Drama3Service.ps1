@@ -27,8 +27,10 @@ try {
 if ($healthy -and $task.State -eq 'Running') { exit 0 }
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
 $age = (Get-Date) - $info.LastRunTime
-if ($task.State -eq 'Running' -and $age.TotalSeconds -lt 90) {
-    # Loading a 20.8 GB model can take tens of seconds after a cold boot.
+$usingRs = [bool]($task.Actions | Where-Object { $_.Arguments -match 'drama_rs_service[.]py' })
+$startupGraceSeconds = if ($usingRs) { 180 } else { 90 }
+if ($task.State -eq 'Running' -and $age.TotalSeconds -lt $startupGraceSeconds) {
+    # CUDA Q4 cold boot and voice preload can take over 90 seconds.
     exit 0
 }
 
@@ -48,6 +50,12 @@ $orphaned = Get-CimInstance Win32_Process -Filter "Name='speech.exe' OR Name='py
 foreach ($process in $orphaned) {
     Stop-Process -Id $process.ProcessId -Force
     Add-Content -LiteralPath $log -Encoding UTF8 -Value "$(Get-Date -Format o) stopped stale Drama 3 pid=$($process.ProcessId)"
+}
+# A stopped Windows gateway can leave its WSL child alive. Reap that exact
+# runtime before restarting, or the next model load can exhaust the 3090.
+if ($usingRs) {
+    & wsl.exe -d Ubuntu-24.04 -- pkill -TERM -x drama 2>$null
+    Add-Content -LiteralPath $log -Encoding UTF8 -Value "$(Get-Date -Format o) checked stale drama-rs process"
 }
 Start-ScheduledTask -TaskName $TaskName
 Add-Content -LiteralPath $log -Encoding UTF8 -Value "$(Get-Date -Format o) restart requested"
