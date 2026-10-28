@@ -1,5 +1,18 @@
 # Agent MC Autonomy
 
+Version 0.2.115 rejects invalid `mc_original` pagination before opening the
+dispatch uncertainty journal. The planner receives a normal failed-tool result
+with the actual 1..1000 page bound and can continue playing. Native action and
+unknown-dispatch safeguards are unchanged.
+
+The administrator-only `python -m agent_mc_autonomy.local_rejection_recovery`
+command can reconcile this historical pre-dispatch validation failure. It
+requires exact failed-state/status/last-decision hashes, the original validation
+trace, an idle ownership lease, an empty native queue, and explicit prior-process
+attestation. It preserves original evidence and records rejection rather than
+action success; it never replays work or starts a game. An interrupted prepared
+audit blocks ordinary startup until an explicit same-ID recovery completes.
+
 The 0.2.114 source candidate pins the independently built core rc.116 and adds
 an explicit optional server-engine composition port. A host supplies a local
 module and SHA-256; the same engine and bridge can be composed with the viewer

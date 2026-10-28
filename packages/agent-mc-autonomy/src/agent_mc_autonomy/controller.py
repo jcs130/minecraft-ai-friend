@@ -1242,6 +1242,13 @@ class Controller:
                           "text": "Invalid arguments: mc_tool_help requires an available tool and a documented JSON-pointer path. No native call was dispatched. Read mc_tool_help(name) first and copy an actual child path; for a skill manual use mc_help(skill), not a skill name as a schema property."}
                 return result, await self.archive_receipt(request_id, name, result)
         # Journal before sending: unknown delivery never gets a new request ID.
+        if name == "mc_original":
+            from .original_query import original_query_error
+            if error := original_query_error(arguments):
+                result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                          "dispatched": False, "origin": "controller_validation",
+                          "code": "invalid_original_page", "text": error}
+                return result, await self.archive_receipt(request_id, name, result)
         self.inflight_request = request_id
         self.persist(inflight_request=request_id, uncertain=True)
         if name == "goal_report":
