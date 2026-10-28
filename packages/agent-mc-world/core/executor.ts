@@ -774,6 +774,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           await runLeg(sceneTarget, levelTravelGoal(leg.x, leg.z));
           const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
           if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
+          // A leg can settle before navigateWithCheckpoints polls pending work.
+          // Offer that completed boundary without reviving the released path.
+          await ctx.checkpoint?.(() => settleOnGround(bot, ctx, 1_500));
+          checkAbort(ctx);
         }
         sceneTarget = target;
         await runLeg(target, finalGoal, !call.groundY && !call.exact);
