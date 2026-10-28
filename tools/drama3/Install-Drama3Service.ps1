@@ -5,7 +5,10 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $runtime = 'E:\ai-models\drama3-20261028\speechcpp'
 $exe = Join-Path $runtime 'runtime\speech.exe'
+$dll = Join-Path $runtime 'runtime\speech.dll'
 $model = Join-Path $runtime 'models\Drama-35B-A3B-v3-Q4_K.gguf'
+$python = 'C:\Python314\python.exe'
+$voiceService = Join-Path $PSScriptRoot 'voice_service.py'
 $watchScript = Join-Path $PSScriptRoot 'Watch-Drama3Service.ps1'
 $pwsh = 'C:\Program Files\PowerShell\7\pwsh.exe'
 $stateDir = Join-Path $repo 'server\drama3-service'
@@ -20,7 +23,7 @@ $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 if ($Mode -eq 'Auto') { $Mode = 'User' }
 if ($Mode -eq 'System' -and -not $admin) { throw 'System mode needs an elevated PowerShell session' }
 
-foreach ($path in @($exe, $model, $watchScript, $pwsh,
+foreach ($path in @($exe, $dll, $model, $python, $voiceService, $watchScript, $pwsh,
                   (Join-Path $runtime 'kirito.voice.gguf'),
                   (Join-Path $runtime 'yui.voice.gguf'),
                   (Join-Path $runtime 'cast.voice.gguf'))) {
@@ -100,23 +103,20 @@ try {
         -MultipleInstances IgnoreNew -StartWhenAvailable -Priority 4
     $watchSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) `
         -MultipleInstances IgnoreNew -StartWhenAvailable
-    # Task Scheduler must own speech.exe itself. A PowerShell wrapper leaves an
-    # orphan speech.exe when Stop-ScheduledTask terminates only the wrapper.
+    # Task Scheduler owns the Python model process itself. A PowerShell wrapper
+    # would leave it orphaned when Stop-ScheduledTask terminates only the wrapper.
     $serviceArguments = @(
-        'serve', $model,
+        '-u', ('"' + $voiceService + '"'),
         '--host', '0.0.0.0', '--port', '18120',
-        '--device', 'Vulkan0', '--threads', '12', '--top-k', '4097', '--max-seconds', '10',
-        '--add-voice', ('kirito=' + (Join-Path $runtime 'kirito.voice.gguf')),
-        '--add-voice', ('yui=' + (Join-Path $runtime 'yui.voice.gguf')),
-        '--add-voice', ('cast=' + (Join-Path $runtime 'cast.voice.gguf'))
+        '--state', ('"' + $stateDir + '"')
     ) -join ' '
-    $serviceAction = New-ScheduledTaskAction -Execute $exe -Argument $serviceArguments `
-        -WorkingDirectory (Join-Path $runtime 'runtime')
+    $serviceAction = New-ScheduledTaskAction -Execute $python -Argument $serviceArguments `
+        -WorkingDirectory $repo
     $watchAction = New-ScheduledTaskAction -Execute $pwsh `
         -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $watchScript + '"') `
         -WorkingDirectory $repo
     Register-ScheduledTask -TaskName $serviceTask -Action $serviceAction -Trigger $onStart `
-        -Principal $principal -Settings $settings -Description 'Dedicated Drama 3 speech.cpp server on port 18120' -Force | Out-Null
+        -Principal $principal -Settings $settings -Description 'Dedicated Drama 3 voice registry and speech server on port 18120' -Force | Out-Null
     Register-ScheduledTask -TaskName $watchTask -Action $watchAction -Trigger @($onStart, $repeat) `
         -Principal $principal -Settings $watchSettings -Description 'Restart Drama 3 when HTTP health is lost' -Force | Out-Null
 
