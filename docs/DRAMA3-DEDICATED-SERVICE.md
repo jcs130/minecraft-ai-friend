@@ -98,7 +98,7 @@ curl -sS 'http://192.168.3.133:18120/v1/audio/speech' \
 
 20:25 再次**仅重启 `Drama3-Speech`**；日志在 20:26:03 记录模型与 `cormy` 就绪，20:26:06 的首条合成即为相同 204 字长句。冷机首段 1.059 秒、总请求 51.969 秒、音频 46.997 秒、`stop=complete`，PCM 哈希与热机相同，未复现 Vulkan OOM。显式 `max_seconds=1` 的短句真实返回 `stop=max_seconds`、`samples=43008`，证明截断终态没有被改写为成功。排队取消实测：第一条正在合成的请求断线后记录 `stop=cancelled samples=24576`，其后排队且已断线的另一请求记录 `stop=cancelled samples=0`，没有进入模型生成。冷机后 `cormy`、`kirito`、`yui`、`cast` 四音色真合成冒烟再次通过。
 
-独立 CPU Qwen3-ASR-0.6B 对 47 秒长 WAV 转写出了从开头到结尾的所有句段，未发现整段台词缺失；短句逐字一致。它把长句中部分人物名写成近音字，名字/数字坐标句还把 `Z=-302` 识别成正数；这可能是 TTS 发音，也可能是 ASR 错词，**不能据此宣称专名和负号发音已准确**。用户于 20:22 试听下方的 204 字单请求原始 WAV，反馈“全程音色基本一致”；该人工听感只覆盖这段样本，不由 HTTP 200、哈希相同或单一 ASR 推广到任意台词。文件与逐事件日志：`server/drama3-service/longform-acceptance/{short,names,long}-max30-seed20261021.wav`、对应 `.request.json`/`.log.json`、`asr-qwen3-0.6b.jsonl`。服务日志按请求 ID 写 voice、seed、字符数、块预算、stop、样本数和耗时，不记录台词或参考音内容。
+独立 CPU Qwen3-ASR-0.6B 对 47 秒长 WAV 转写出了从开头到结尾的所有句段，未发现整段台词缺失；短句逐字一致。它把长句中部分人物名写成近音字，名字/数字坐标句还把 `Z=-302` 识别成正数。用户于 20:22 试听 204 字单请求原始 WAV，反馈“全程音色基本一致”；20:37 又试听名字/坐标原始 WAV，确认“可米、桐人、结衣”和负号都准确。人工听感覆盖这两段样本，说明该处 ASR 有误识别，但不由 HTTP 200、哈希相同或单一试听推广到任意台词。文件与逐事件日志：`server/drama3-service/longform-acceptance/{short,names,long}-max30-seed20261021.wav`、对应 `.request.json`/`.log.json`、`asr-qwen3-0.6b.jsonl`。服务日志按请求 ID 写 voice、seed、字符数、块预算、stop、样本数和耗时，不记录台词或参考音内容。
 
 20:31 的真实日志仍见另一个局域网客户端以 `max_seconds=10` 连续提交 6–27 字独立请求；服务只能保证**每个 HTTP 请求内部**连续生成，调用端必须停止那条逐句独立克隆拼接路径，才能让整条台词共享原生声学历史。
 
