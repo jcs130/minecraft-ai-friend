@@ -385,7 +385,8 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
 /** Put coverage interpretation before dense geometry; keep the full native data. */
 export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
   const data = readSpatialObservation(bot, input);
-  return { readout: spatialReadout(data), ...data };
+  // Keep observed materials beside coverage, ahead of a long geometry body.
+  return { readout: spatialReadout(data), ...('summary' in data ? { summary: data.summary } : {}), ...data };
 }
 
 export function spatialObservationText(bot: Bot, input: SpatialObserveInput): string {

@@ -42,12 +42,16 @@ describe('shared current spatial read feedback',()=>{
     const r=methodHarness('1.21.1');
     try{
       const submit=vi.spyOn(r.exec,'submit'),position=r.bot.entity.position.clone();
-      r.bot.blockAt=((p:Vec3)=>p.x>r.bot.entity.position.x+3?null:{name:'air',stateId:0,shapes:[],getProperties:()=>({})}) as never;
+      const feet=r.bot.entity.position.floored();
+      r.bot.blockAt=((p:Vec3)=>p.x>r.bot.entity.position.x+3?null:p.x===feet.x+2&&p.y===feet.y&&p.z===feet.z
+        ?{name:'chest',stateId:203,shapes:[[0,0,0,1,1,1]],getProperties:()=>({})}
+        :{name:'air',stateId:0,shapes:[],getProperties:()=>({})}) as never;
       const tool=r.world.tools().find(x=>x.name==='mc_observe')!;
       const result=await tool.handler({mode:'voxels',bounds:[0,0,0,16,2,0]},{role:'test',log:r.host.log});
       if(typeof result==='string')throw Error('Expected native structured read');
       expect(result.meta?.observation).toMatchObject({protocol:'agent-mc-spatial-read/v1',historical:false,scanComplete:true,unknownCount:39});
       expect(result.text.slice(0,1200)).toContain('扫描已读完');
+      expect(result.text.slice(0,1500)).toContain('"name":"chest"');
       expect(result.data?.readout).toEqual(result.meta?.observation);
       expect(submit).not.toHaveBeenCalled();expect(r.bot.entity.position.equals(position)).toBe(true);
     }finally{r.close();}
