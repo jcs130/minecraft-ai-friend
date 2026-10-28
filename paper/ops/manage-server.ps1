@@ -598,8 +598,18 @@ function PruneSnapshots([string]$path) {
             $old.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
             throw "Unsafe backup retention path: $resolved"
         }
-        Remove-Item -LiteralPath $resolved -Recurse -Force
-        Log "Expired backup removed: $resolved"
+        try {
+            # Never advertise a partly deleted snapshot as a recovery point.
+            # Preserve the validated absolute root before adding Win32's long-
+            # path prefix for bundled client dependencies.
+            Rename-Item -LiteralPath (Join-Path $resolved '.complete') -NewName '.pruning' -ErrorAction Stop
+            Remove-Item -LiteralPath ('\\?\' + $resolved) -Recurse -Force -ErrorAction Stop
+            Log "Expired backup removed: $resolved"
+        } catch {
+            # Retention is housekeeping after a successful cold backup and
+            # deployment. It must not suppress the already completed release.
+            Log "WARN expired backup cleanup incomplete: $resolved; $($_.Exception.GetType().Name)"
+        }
     }
 }
 

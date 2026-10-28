@@ -1,31 +1,46 @@
 {
   "state": "deployed-and-verified",
-  "latestRelease": "server-connection-fixes-20261028",
-  "verifiedAt": "2026-10-28T02:18:55.368Z",
-  "releaseDocument": "paper/docs/CONNECTION_FIXES_20261028.md",
+  "latestRelease": "basic-survival-release-20261028",
+  "verifiedAt": "2026-10-28T08:03:57.630Z",
+  "releaseDocument": "paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md",
   "runtime": {
     "paper": "1.21.1 build133",
     "plugins": 49,
-    "AgentFriend": "0.4.47.22-vortex",
-    "QiandengjiRpg": "0.2.1",
-    "VortexRPG": "1.2.2-alpha-qd27",
+    "AgentFriend": "0.4.47.25-vortex",
+    "QiandengjiRpg": "0.2.4",
+    "VortexRPG": "1.2.2-alpha-qd29",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.3",
     "LoginGuard": "0.1.8",
     "Numen": "0.1.4 + pinned mcbot/control fixes",
-    "QiandengjiMcbot": "0.1.0"
+    "QiandengjiMcbot": "0.1.0",
+    "QwenPawGameChannel": "0.3.2",
+    "LanTts": "1.6.0"
   },
   "liveArtifactDigests": {
     "QiandengjiMcbot-0.1.0.jar": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59",
     "numen_api-paper-1.21.1-0.1.4.jar": "6bfea19c81b3000586949dde6f128efad7534c8932fbe485a39933e4d55e9239",
     "numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "ysm-proxy/LoginGuard-0.1.5.jar": "a9ccb8fb93eb905851cb375679ea96f15c94416af04e7677e3ffd602380aea72",
-    "AgentVision-0.1.2.jar": "e7e0b46c9bc9df9ea8f8e7ba00dbe7df8e415ac8eea00aed32cf4c21c1a10a65"
+    "AgentVision-0.1.2.jar": "e7e0b46c9bc9df9ea8f8e7ba00dbe7df8e415ac8eea00aed32cf4c21c1a10a65",
+    "AgentFriend-0.4.47.25.jar": "46b590db9fd01d0129f9c8f090ca7c0d5e2c1ee0544d3c1a267aed2df1cd62d6",
+    "QiandengjiRpg-0.2.4.jar": "e93fb3210038b17b8a11730d3b5b0d9f4a0dc5485890e9ea168d041e79fafed9",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "e16481eabaee1e18cdaaa6d230bfef65bd7e1178247a703215c3bf9b91119d8d"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
     "original Fabric mcbot GUI",
-    "real LLM long tasks"
+    "real LLM long tasks",
+    "remote live native client after OP change",
+    "long autonomous combat balance",
+    "physical Bedrock rendering"
   ],
-  "scopeNotice": "This is actual server deployment, not a claim that external client packages, official UI or long autonomous tasks were tested."
+  "scopeNotice": "This is actual server deployment, not a claim that external client packages, official UI or long autonomous tasks were tested.",
+  "verification": {
+    "liveChecks": 37,
+    "backup": "20261028-152444",
+    "unrelatedPluginJarsPreserved": 46,
+    "oldRetentionErrorRecoveredWithoutAnotherPaperRestart": true,
+    "publicSkillDownloadRepublished": false
+  }
 }

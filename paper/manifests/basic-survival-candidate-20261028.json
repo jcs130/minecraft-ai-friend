@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "id": "basic-survival-20261028",
-  "status": "validated_candidate_pending_restart_approval",
-  "productionChanged": false,
+  "status": "deployed_and_verified",
+  "productionChanged": true,
   "requiresNormalPaperRestart": true,
   "requiresOnboardingReleaseOnlyMerge": true,
   "candidate": {
@@ -81,12 +81,16 @@
       "[开始攻略] 职业技能仍用skills list/info；任务tasks list；补给guild shared；个人箱arena stash。基础技能施放不加--json，未知结果先核对。入门：/mycli intro"
     ]
   },
-  "coldBackupCompleted": false,
-  "actualQwenRuntimeBackupCompleted": false,
+  "coldBackupCompleted": true,
+  "actualQwenRuntimeBackupCompleted": true,
   "stateMigration": false,
   "publicSkillDownloadRepublished": false,
   "preservedAgentFriendEntries": 574,
-  "notes": [
+  "releaseDocument": "paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md",
+  "verifiedAt": "2026-10-28T08:03:57.630Z",
+  "coldBackup": "20261028-152444",
+  "liveChecks": 37,
+  "historicalCandidateNotes": [
     "Not an executable deployment plan",
     "Only fixed home to village bypasses the Essentials command; no administrative warp permission granted",
     "Native mana, original effects and cooldowns reused",
@@ -94,5 +98,10 @@
     "Static review copies are not a complete cold backup",
     "No QA fixture, warp, player or world data may be deployed",
     "Production remains .22 / bridge .2.1 / qd27; no restart performed"
+  ],
+  "notes": [
+    "This candidate was deployed as basic-survival-release-20261028; do not replay the consumed plan.",
+    "QwenPaw and TTS were independently verified; original passwords, player identities and unknown action records retained.",
+    "The first maintenance wrapper reported a post-install old snapshot retention error. Original failure retained and continuation verified; no additional Paper restart."
   ]
 }

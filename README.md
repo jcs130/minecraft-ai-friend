@@ -1,17 +1,17 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.22、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.1已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
+**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.25、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.4已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
 
 
 连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
-后续 Agent 交互可用性修订仍为**未部署候选**：统一帮助、任务分页、组队与失败指引，补齐坦克防御和桐人状态兼容；[验证范围和发布边界](paper/docs/RPG_USABILITY_20261028.md)。源码更新不等于正式服已切换。
+Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、失败指引、坦克防御及桐人状态兼容；[发布与验收](paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md)。
 
-后续候选也恢复了寒霜、星芒箭、闪现、圣愈、饱食与造物，归乡保留并修正权限依赖；这些是无需选职的基础生存技能，见[基础技能和测试](paper/docs/BASIC_SURVIVAL_SKILLS_20261028.md)。
+正式版已恢复寒霜、星芒箭、闪现、圣愈、饱食与造物，归乡保留并修正权限依赖；这些是无需选职的基础生存技能，见[基础技能和测试](paper/docs/BASIC_SURVIVAL_SKILLS_20261028.md)。
 
 **六职业共用一套成长：**骑士、法师、游侠、牧师、驯兽师和工程师，由本人主动选择。原生技能、天赋、经验与金币，八张冒险委托、五处活动、首层攻略及组队救援已接入原`/mycli`；旧职业停止写入并保留归档。先看[技能与装备](paper/docs/SKILL_USAGE_QUICKSTART.md)。完整0.4.48仍含其他候选，不可直接替换正式JAR。
 
-最新修复：原版附魔保留；旧技能停用会给原因与下一步，`/mycli intro`查看选职、技能、任务和副本整备。更新提醒按账号私下一次，反作弊异步属性读取已修复。[0.4.47.22发布与回退](paper/docs/RPG_GUIDANCE_20261028.md)。
+最新修复：基础生存技能恢复；归乡权限、职业菜单、组队和无目标施法回执已修正。更新提醒按账号私发一次。[0.4.47.25发布与回退](paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md)。局域网另提供[完整TTS与自建音色](paper/integrations/lan-tts/README.md)。
 
 
 副本新开场和加入须穿齐四件护甲，携带近战、弓弩或本职业法器，不强制带剑；缺项会返回补给入口。装备使用原版物品承载，普通Java、基岩、Mineflayer和Numen无需为RPG额外安装模组。原村庄与起始之城实体传送门已开放，每次6魔力；三位原NPC接待已改为艾基尔、克莱因和阿尔戈的剧情指引，身体仍为原村民。详见[接管与实测](paper/integrations/vortex-rpg/TAKEOVER.md)。
@@ -34,7 +34,7 @@
 
 - **长期生活：**共享物资、村民交易、居民与 NPC 互动、生活与建造委托。
 - **自由选择旅途：**探索、讨伐、制造、补给、工程与游记创作；已撤下农耕活动和新接单推荐，旧任务进度保留。
-- **职业与冒险：**五项通用技及Vortex六职业，原生技能、天赋、经验和金币；试炼塔与遗迹地下城保留各自的进度和奖励规则。
+- **职业与冒险：**十一项基础技及Vortex六职业，原生技能、天赋、经验和金币；试炼塔与遗迹地下城保留各自的进度和奖励规则。
 - **共同经历：**队友救援、女神相机、署名照片与故事、官网相册和共同回忆展示。
 - **多种接入方式：**原版 Java、经 Geyser 接入的基岩玩家、Mineflayer Agent，以及可选的 Numen 服务端 Agent。YSM 等模型能力按客户端与资源包单独适配。
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
@@ -92,7 +92,7 @@ python paper/self-host/selfhost.py doctor
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.22** / VortexRPG **1.2.2-alpha-qd27** / QiandengjiRpg **0.2.1** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.25** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.4** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
 | 通用 MC 核心 | [主干 **0.5.7-rc.116**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |

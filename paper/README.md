@@ -5,12 +5,12 @@
 
 连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](manifests/current-deployment.json)。
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.22 / VortexRPG1.2.2-alpha-qd27 / QiandengjiRpg0.2.1**，官网 **0.8.28**。六职业、唯一成长与魔力、八张冒险任务、天赋、考试和旧副本救援已正式接通；旧职业只读归档。副本准入识别四护甲及近战、弓弩或本职业法器，不强制带剑；[正式发布与回退](docs/NATIVE_RPG_RELEASE_20261027.md)。Multiverse5.8.1、起始之城保护和原村庄往返保持。完整0.4.48仍有其他候选，不可直接替换现役JAR。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.25 / VortexRPG1.2.2-alpha-qd29 / QiandengjiRpg0.2.4**，官网 **0.8.28**。六职业、唯一成长与魔力、八张冒险任务、天赋、考试和旧副本救援已正式接通；旧职业只读归档。副本准入识别四护甲及近战、弓弩或本职业法器，不强制带剑；[正式发布与回退](docs/NATIVE_RPG_RELEASE_20261027.md)。Multiverse5.8.1、起始之城保护和原村庄往返保持。完整0.4.48仍有其他候选，不可直接替换现役JAR。
 
-最新修复：原版附魔保留；旧技能停用会给原因与下一步，`/mycli intro`查看选职、技能、任务和副本整备。更新提醒按账号私下一次，反作弊异步属性读取已修复。[0.4.47.22发布与回退](docs/RPG_GUIDANCE_20261028.md)。
+最新修复：基础生存技能、普通组队、职业菜单和失败指引，桐人原生频道0.3.2已生效；原物品、职业与未知回执保持。[0.4.47.25发布与回退](docs/BASIC_SURVIVAL_RELEASE_20261028.md) · [局域网TTS自建音色](integrations/lan-tts/README.md)。
 
 
-新增[mcbot独立适配候选](integrations/mcbot/README.md)，接入原Paper与原世界，不改为Fabric服务端；以及[玩家假上下线修复候选](docs/PLAYER_ROSTER_OCCLUSION_20261028.md)。两项尚未部署，不将隔离验证写成正式生效。
+[mcbot独立Paper适配](integrations/mcbot/README.md)与[玩家假上下线修复](docs/PLAYER_ROSTER_OCCLUSION_20261028.md)已部署，官方Fabric界面与长期模型任务仍未验证。
 
 官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 

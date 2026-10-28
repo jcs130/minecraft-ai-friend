@@ -1,6 +1,6 @@
 # RPG 可用性与 Agent 指引检查
 
-状态：隔离验收中的后续候选，未更新正式服。它接续 [CLI 精简候选](AGENT_CLI_REDESIGN_20261028.md)；以 [实际部署清单](../manifests/current-deployment.json) 判断是否生效。
+状态：修复已并入AF.25/桥0.2.4/Vortex qd29和Qwen频道0.3.2正式发布。见[发布记录](BASIC_SURVIVAL_RELEASE_20261028.md)及[实际部署清单](../manifests/current-deployment.json)；下方保留各轮候选的原验证证据。
 
 服主随后明确七项基础生存技不应停用；后续[基础技能修复](BASIC_SURVIVAL_SKILLS_20261028.md)接续本批，更新基础技能集合与用法。下方`.24 / 0.2.3`的摘要和测试保留对应历史候选，不代表已部署。
 

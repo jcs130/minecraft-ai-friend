@@ -1,6 +1,6 @@
 # 破晓攻略：职业、技能与冒险
 
-入口 `/mycli intro`，以本人实际后端和回执为准。0.4.47.22 修复旧技能提示和更新通知，状态见[版本记录](RPG_GUIDANCE_20261028.md)。查询不会代选职业、学习或接任务。
+入口 `/mycli intro`，以本人实际后端和回执为准。当前0.4.47.25已恢复基础生存技能并修复RPG目录、组队与施法回执，见[发布记录](BASIC_SURVIVAL_RELEASE_20261028.md)。寒霜、星芒箭、闪现、归乡、圣愈、饱食、造物无需选职或学习，先查 `/mycli skills list common`；查询不会代选职业、学习或接任务。
 
 1. `/mycli profession list` 看六职业，`profession info <ID>` 看条件，再主动 `profession choose <ID>`。
 2. `/mycli skills list` 看本职技能，`skills info <ID>` 看目标、效果、等级、耗魔和冷却。初始主动技选职后可直接 `/mycli cast <ID>`；`skills prepare <ID>` 设置职业装备的点击技能。`skills learn <节点ID>` 仅按详情花点；被动不能施放。
