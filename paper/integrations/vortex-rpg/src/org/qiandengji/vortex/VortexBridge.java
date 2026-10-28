@@ -118,6 +118,7 @@ public final class VortexBridge extends JavaPlugin {
             if(r.help()){help(p,r);return true;}
             if(!getConfig().getString("backend","preview").equals("vortex")&&!getConfig().getStringList("allowed-worlds").contains(p.getWorld().getName()))throw new IllegalArgumentException("当前世界未开放Vortex预览。");
             var state=profile(p);
+            if(skillFailure(p,state,r))return true;
             switch(r.group()){
                 case "status"->emit(p,r,Map.of("authority","VortexRPG","class",vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("none"),"level",state.level(),"xp",state.experience(),"nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state),"mana",Math.round(mana.getMana(p.getUniqueId())),"maxMana",Math.round(mana.getMaxMana(p)),"economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)),"preview",!getConfig().getString("backend","preview").equals("vortex")),"职业 "+vortex.classSkillService().selectedClassDefinition(state).map(c->BridgeRules.className(c.id())).orElse("未选择")+"；战斗Lv."+state.level()+"；距升级 "+vortex.playerProfileService().experienceToNextLevel(state)+"；魔力 "+Math.round(mana.getMana(p.getUniqueId()))+"/"+Math.round(mana.getMaxMana(p))+"。下一步：/mycli "+(vortex.classSkillService().hasClass(state)?"skills status":"profession list"));
                 case "class"->classes(p,state,r);
@@ -141,7 +142,25 @@ public final class VortexBridge extends JavaPlugin {
             default->throw new IllegalArgumentException("class 仅 list/info/choose；查询不自动选职。");
         }
     }
+    private boolean skillFailure(Player p,UnifiedPlayer state,BridgeRules.Request r){
+        if(!(r.group().equals("cast")||r.group().equals("skills")&&Set.of("info","explain","status","learn","prepare","equip").contains(r.action()))||r.arguments().size()!=1)return false;
+        String id=r.arguments().getFirst();
+        if(List.of("home","travel","prospect","night","feather").contains(id))return false;
+        boolean spell=vortex.spellbookService().editorSpellSnapshots().stream().anyMatch(s->s.id().equals(id));
+        boolean node=vortex.classSkillService().skillsFor(state).stream().anyMatch(s->s.id().equals(id))
+            ||vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(t->t.find(id)).isPresent();
+        boolean executing=r.group().equals("cast")||Set.of("prepare","equip").contains(r.action());
+        if(executing&&node&&!spell){emit(p,r,Map.of("success",false,"reason","skill_node_not_castable","skill",id,"nextCommand","/mycli skills info "+id,"changed",false),"[skill_node_not_castable] "+id+" 是学习/天赋节点，不能当作施法ID；不扣魔力。查看对应主动技能：/mycli skills info "+id);return true;}
+        if(executing&&spell&&!vortex.spellbookService().availableSpells(state).contains(id)){
+            boolean chosen=vortex.classSkillService().hasClass(state);String next=chosen?"/mycli skills info "+id:"/mycli profession list";
+            emit(p,r,Map.of("success",false,"reason",chosen?"skill_locked":"class_required","skill",id,"nextCommand",next,"changed",false),"["+(chosen?"skill_locked":"class_required")+"] "+id+(chosen?" 尚未满足本职/等级/学习条件；":" 需要先选择职业；")+"未施法、不扣魔力。下一步："+next);return true;
+        }
+        if(spell||node)return false;
+        boolean chosen=vortex.classSkillService().hasClass(state);String next=SkillTransition.next(chosen);
+        emit(p,r,Map.of("success",false,"reason",SkillTransition.reason(id),"skill",id,"nextCommand",next,"changed",false),SkillTransition.message(id,chosen));return true;
+    }
     private void skills(Player p,UnifiedPlayer state,BridgeRules.Request r){
+        if(Set.of("explain","status").contains(r.action())&&r.arguments().size()==1){skills(p,state,new BridgeRules.Request(r.group(),"info",r.arguments(),r.json(),r.help()));return;}
         if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",List.of("home","travel","prospect","night","feather"),"queryOnly",true),"通用技能：home回城、travel传送点、prospect探矿、night夜视、feather羽落；无需重复学习。详情：/mycli skills info <ID>");return;}
         switch(r.action()){
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
@@ -157,7 +176,7 @@ public final class VortexBridge extends JavaPlugin {
                 if(List.of("home","travel","prospect","night","feather").contains(id)){emit(p,r,Map.of("id",id,"common",true,"available",true,"learned",true),"通用技能已可用，无需选职、学习或花点；原效果与安全检查保留。施放：/mycli cast "+id);return;}
                 var talent=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(tree->tree.find(id));
                 if(talent.isPresent()){var n=talent.get();emit(p,r,Map.of("talent",n,"queryOnly",true),n.displayName()+"；"+n.description()+"；消耗 "+n.cost()+"天赋点；前置 "+(n.prerequisites().isEmpty()?"无":String.join("、",n.prerequisites()))+"；实际属性 "+n.statBonuses()+"。被动天赋无需施放；学习：/mycli skills learn "+id);return;}
-                var spell=vortex.spellbookService().editorSpellSnapshots().stream().filter(s->s.id().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("未知技能"));emit(p,r,Map.of("id",id,"available",vortex.spellbookService().availableSpells(state).contains(id),"definition",spell),vortex.spellbookService().spellLabel(id)+"；"+(vortex.spellbookService().availableSpells(state).contains(id)?"已可用":"尚未解锁")+"；需要Lv"+spell.minLevel()+"；消耗 "+io.vortexcore.combat.ManaGate.cost(vortex,id)+"魔力；冷却 "+spell.cooldownMillis()/1000.0+"秒。详情/目标以原生定义为准；施放：/mycli cast "+id);}
+                var spell=vortex.spellbookService().editorSpellSnapshots().stream().filter(s->s.id().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("未知技能"));emit(p,r,Map.of("id",id,"available",vortex.spellbookService().availableSpells(state).contains(id),"definition",spell),vortex.spellbookService().spellLabel(id)+"；"+(vortex.spellbookService().availableSpells(state).contains(id)?"已可用":"尚未解锁")+"；需要Lv"+spell.minLevel()+"；消耗 "+io.vortexcore.combat.ManaGate.cost(vortex,id)+"魔力；冷却 "+spell.cooldownMillis()/1000.0+"秒；目标："+SkillTransition.targets(spell.targeters())+"；效果："+SkillTransition.effects(spell.mechanics())+"。施放：/mycli cast "+id);}
             case "learn"->{String id=BridgeRules.id(r);
                 if(List.of("home","travel","prospect","night","feather").contains(id)){emit(p,r,Map.of("id",id,"common",true,"learned",true,"changed",false),"通用技能已可用，无需重复学习或花点。施放：/mycli cast "+id);return;}
                 if(vortex.classSkillService().skillsFor(state).stream().noneMatch(k->k.id().equals(id))&&vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(tree->tree.find(id)).isPresent()){

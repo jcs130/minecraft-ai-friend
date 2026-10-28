@@ -2,7 +2,7 @@
 
 ## 版本与生效范围
 
-Vortex原生接管沿用下列少量主入口；职业、技能和任务以服务端实际后端为准。最新发布进度见[破晓攻略](NATIVE_RPG_RELEASE_20261027.md)，完整源码中的其他候选不代表已生效。
+Vortex原生接管沿用下列少量主入口；职业、技能和任务以服务端实际后端为准。先 `/mycli intro` 读四步入门；[引导修复](RPG_GUIDANCE_20261028.md)说明旧技能停用与原版附魔保留。完整源码中的其他候选不代表已生效。
 
 ## Agent 只需先记这些
 
@@ -19,7 +19,7 @@ Vortex原生接管沿用下列少量主入口；职业、技能和任务以服�
 - `--help`：当前命令目录，首页只有七项常用入口；照返回的下一页逐步查。`help` 和不带参数的 `/mycli` 使用同一目录。
 - `tasks list`：可选路线，探索、战斗、制造、补给与生活均可自选。查询不接单。
 - `tasks status`：当前委托阶段、真实缺项、位置与下一步；完成当前阶段后再按回执交付。
-- `skills status`：实际已学技能、等级、耗魔与剩余冷却，未知读数不会写成 0 或可用。
+- `skills status`：本人当前后端的技能概览；单项用 `skills info <ID>`，`skills status <ID>` 保持兼容。以实际返回字段为准，未返回的冷却不能推成零。
 - Vortex选职后初始主动技可用，learn按详情学习节点，prepare设置点击技能，cast施放主动技；通用技能无需重学。只读详情不代学，选职业不代花点，具体罗盘操作见[技能四步](SKILL_USAGE_QUICKSTART.md)。
 - `progress`：主线、专项实练、公会委托、挑战与剧情分别显示。专项完成不等于主线毕业；首页合并专项摘要，细看用 `progress training`。
 
@@ -53,7 +53,7 @@ Vortex原生接管沿用下列少量主入口；职业、技能和任务以服�
 
 显式 JSON 保留 `MC_STATUS`、`MC_PAGE`、`MC_CLI_HELP` 等现有协议及关联字段。完整 UUID、会话和观测时间仍用于程序校对，默认短文本不重复展示。认证、安全、危险与死亡等必要回执保留。不是把所有历史命令或客户端工具输出都改成中文。
 
-兼容调用端如果依赖原状态/进度/技能的 JSON，请加 `--json`；`intro`、`rules` 同理。`world board`、`coach next` 和 `coach guide` 的帮助已补正为支持 `--json`，与实际实现一致。
+旧后端的兼容调用端可按帮助使用 `--json`；Vortex的状态/任务以当前回执为准，`intro` 固定返回精炼入门文本，不承诺旧 GUIDE JSON。`world board`、`coach next` 和 `coach guide` 的帮助支持 `--json`。
 
 旧 `list`、`explain`、`capabilities`、`spells` 和 `status full` 继续可用，不重复宣传为另一套主入口。`list`、`explain` 等旧阅读入口可能给已报名的专项记录证明；`status full` 还有原详细状态/刷新行为。做指定 CLI 实练时按课程执行；普通发现用 `--help`，查进度用 `progress`。
 

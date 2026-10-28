@@ -1,6 +1,6 @@
 # VortexRPG原生接管
 
-本目录是API适配和窄补丁。**2026-10-27已发布**AgentFriend0.4.47.21、VortexRPG1.2.2-alpha-qd27和QiandengjiRpg0.2.0；[发布与回滚](../../docs/NATIVE_RPG_RELEASE_20261027.md)、[固定摘要清单](../../manifests/native-rpg-release-20261027.json)为当前状态。较早[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留调查历史。
+本目录是API适配和窄补丁。**2026-10-28已发布**AgentFriend0.4.47.22、VortexRPG1.2.2-alpha-qd27和QiandengjiRpg0.2.1（[引导修复](../../docs/RPG_GUIDANCE_20261028.md)）；[发布与回滚](../../docs/NATIVE_RPG_RELEASE_20261027.md)、[固定摘要清单](../../manifests/native-rpg-release-20261027.json)为当前状态。较早[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留调查历史。
 
 服主明确改用原生六职业，旧职业归档。接管停止旧职业写入及旧战斗成长，保留地图活动、救援、证书和只读归档，通用效果复用既有实现；[接管与实测](TAKEOVER.md)区分最终验证与较早独立预览记录。不能直接部署含其他候选的完整AgentFriend0.4.48。
 

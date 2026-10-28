@@ -126,9 +126,23 @@ final class OnboardingGuide implements Listener {
                 && (!settings.getBoolean("agents-only") || plugin.isRegisteredAgent(p));
     }
     private boolean safe(Player p, long now, long quietUntil) {
-        return p.getGameMode() == GameMode.SURVIVAL && !p.isDead() && !plugin.isDowned(p)
+        return (p.getGameMode() == GameMode.SURVIVAL||p.getGameMode()==GameMode.ADVENTURE) && !p.isDead() && !plugin.isDowned(p)
                 && !plugin.dungeonParticipant(p) && !plugin.pvpParticipant(p) && now >= quietUntil
                 && p.getOpenInventory().getTopInventory().getType() == InventoryType.CRAFTING;
+    }
+    boolean pollRelease(Player p,long now,long quietUntil){
+        int release=settings.getInt("release-revision",0);
+        if(release<=p.getPersistentDataContainer().getOrDefault(releaseRevision,PersistentDataType.INTEGER,0)||!target(p)
+                ||paused(p,now)||!safe(p,now,quietUntil)||!gapReady(p,now))return false;
+        Session session=sessions.computeIfAbsent(p.getUniqueId(),id->new Session(now,ms("welcome-delay-seconds")));
+        if(now-session.joined<ms("welcome-delay-seconds"))return false;
+        if(plugin.nativeRpg().selected()){
+            JsonObject current=plugin.nativeRpg().state(p);
+            if(!current.has("available")||!current.get("available").getAsBoolean())return false;
+        }
+        for(String line:settings.getStringList("release-notice"))p.sendMessage(line);
+        p.getPersistentDataContainer().set(releaseRevision,PersistentDataType.INTEGER,release);delivered(p,now);
+        session.nextCheck=now+ms("poll-seconds");return true;
     }
     boolean poll(Player p, long now, long quietUntil) {
         Session session = sessions.computeIfAbsent(p.getUniqueId(), id -> new Session(now, ms("welcome-delay-seconds")));
@@ -141,17 +155,7 @@ final class OnboardingGuide implements Listener {
         // This only checks a player's safety/PDC; ledgers are read after the checks pass.
         session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
         if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
-        int release = settings.getInt("release-revision", 0);
-        if (release > p.getPersistentDataContainer().getOrDefault(releaseRevision, PersistentDataType.INTEGER, 0)) {
-            // Private and persistent per account: never broadcast a release payload,
-            // repeat it on reconnect, or disturb an active fight/menu. This is only
-            // discovery; selecting a class, learning and accepting a task stay explicit.
-            for (String line : settings.getStringList("release-notice")) p.sendMessage(line);
-            p.getPersistentDataContainer().set(releaseRevision, PersistentDataType.INTEGER, release);
-            delivered(p, now);
-            session.nextCheck = now + ms("poll-seconds");
-            return true;
-        }
+        if(pollRelease(p,now,quietUntil))return true;
         boolean compact=plugin.communication().compact(p), justEntered=!session.entrySent;
         // Join discovery is one persistent, short human hint. Agents query help
         // themselves. Never push GUIDE + STATUS + NEXT on each reconnect.
