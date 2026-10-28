@@ -7,7 +7,7 @@ import ctypes as c
 import json
 from pathlib import Path
 import threading
-from typing import Callable
+from typing import Callable, Protocol
 
 from gpu_headroom import reserve_nvidia_vram
 
@@ -17,6 +17,10 @@ class SpeechError(RuntimeError):
         super().__init__(message)
         self.status = status
         self.option = option
+
+
+class CancellationSignal(Protocol):
+    def is_set(self) -> bool: ...
 
 
 def _utf8(value: str | Path) -> bytes:
@@ -86,6 +90,7 @@ class SpeechEngine:
         self._fn("speech_voice_make_from", c.c_int, c.c_char_p, p, c.c_char_p, p)
         self._fn("speech_request_new", c.c_int, p, pp)
         self._fn("speech_request_free", None, p)
+        self._fn("speech_request_cancel", None, p)
         self._fn("speech_request_set_text", c.c_int, p, c.c_char_p)
         self._fn("speech_option_from_name", c.c_int, c.c_char_p, c.POINTER(c.c_int))
         self._fn("speech_request_set_string", c.c_int, p, c.c_int, c.c_char_p)
@@ -97,6 +102,7 @@ class SpeechEngine:
         self._fn("speech_result_stop", c.c_int, p)
         self._fn("speech_stop_name", c.c_char_p, c.c_int)
         self._fn("speech_result_seed", c.c_int64, p)
+        self._fn("speech_result_samples", c.c_uint64, p)
 
     def _check(self, status: int) -> None:
         if status == 0:
@@ -168,13 +174,18 @@ class SpeechEngine:
         finally:
             self.dll.speech_voice_params_free(voice)
 
-    def synthesize(self, text: str, options: dict, on_pcm: Callable[[bytes], None]) -> dict:
+    def synthesize(self, text: str, options: dict, on_pcm: Callable[[bytes], None],
+                   cancellation: CancellationSignal | None = None) -> dict:
         """Call the real decoder; `on_pcm` runs synchronously from the native audio callback."""
         with self._lock:
             if not self._model.value:
                 raise RuntimeError("model not loaded")
+            if cancellation is not None and cancellation.is_set():
+                return {"samples": 0, "stop": "cancelled", "seed": options["seed"]}
             request = c.c_void_p()
             self._check(self.dll.speech_request_new(self._model, c.byref(request)))
+            cancel_done = threading.Event()
+            cancel_thread: threading.Thread | None = None
             try:
                 self._check(self.dll.speech_request_set_text(request, _utf8(text)))
                 for name, value in options.items():
@@ -202,21 +213,40 @@ class SpeechEngine:
                             max(-32768, min(32767, int(float(samples[i]) * 32768)))
                             for i in range(size)
                         ))
-                        count += size
                         on_pcm(pcm.tobytes())
+                        count += size
                         return 0
                     except Exception as exc:
                         callback_error.append(exc)
                         return 1
 
+                if cancellation is not None:
+                    def cancel_when_disconnected() -> None:
+                        while not cancel_done.wait(0.05):
+                            if cancellation.is_set():
+                                self.dll.speech_request_cancel(request)
+                                return
+
+                    cancel_thread = threading.Thread(target=cancel_when_disconnected,
+                                                     name="drama3-native-cancel", daemon=True)
+                    cancel_thread.start()
+                    if cancellation.is_set():
+                        self.dll.speech_request_cancel(request)
                 status = self.dll.speech_synthesize(request, callback, None)
                 if callback_error:
                     raise callback_error[0]
-                self._check(status)
+                if status != 1:
+                    self._check(status)
                 result = self.dll.speech_request_result(request)
                 if not result:
                     raise RuntimeError("native synthesis returned no result")
                 stop = self.dll.speech_stop_name(self.dll.speech_result_stop(result))
+                native_count = self.dll.speech_result_samples(result)
+                if native_count != count:
+                    raise RuntimeError(f"native sample count {native_count} differs from delivered {count}")
                 return {"samples": count, "stop": stop.decode(), "seed": self.dll.speech_result_seed(result)}
             finally:
+                cancel_done.set()
+                if cancel_thread is not None:
+                    cancel_thread.join()
                 self.dll.speech_request_free(request)
