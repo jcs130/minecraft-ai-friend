@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+Version 0.2.119 retains current native RPG state and observed combat capabilities
+ahead of optional bulk world detail in compact decision requests. These remain
+dated observations, not permission to use a skill or verified progression; the
+existing archive handles and context budget still apply.
+
 Planner-facing protocol schemas, progressive help and validation corrections share the same runtime ownership projection. The planner can read `task`, `facts`, `archive` and `archive_runs`; turn boundaries and barrier acknowledgement remain with the coordinator. A backend's broader transport manual must not reintroduce hidden control operations. Other progressive tool help continues to use the native shared contract. This lookup needs no model or game action.
 
 Version 0.2.116 retains the core's typed repeat-attempt metadata in planner

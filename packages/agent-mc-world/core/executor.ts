@@ -774,6 +774,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           await runLeg(sceneTarget, levelTravelGoal(leg.x, leg.z));
           const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
           if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
+          // A leg can settle before navigateWithCheckpoints polls pending work.
+          // Offer that completed boundary without reviving the released path.
+          await ctx.checkpoint?.(() => settleOnGround(bot, ctx, 1_500));
+          checkAbort(ctx);
         }
         sceneTarget = target;
         await runLeg(target, finalGoal, !call.groundY && !call.exact);
@@ -2238,9 +2242,19 @@ export class Executor {
     const frozen = p ? freezeFirstStep(steps, { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) }) : null;
     const calls = frozen?.steps ?? steps;
     const satisfiedGoto = this.satisfiedGotoReceipt(calls);
-    if (satisfiedGoto) return {
-      receipt: `[${this.clock(at)}] ${satisfiedGoto}`, accepted: true, completedImmediately: true,
-    };
+    if (satisfiedGoto) {
+      // The first no-movement arrival is useful evidence. Repeating it must
+      // not bypass the same-position guard and manufacture successful work.
+      // This branch is only reached after fresh arrival verification while
+      // idle; it never changes or interrupts an owned task/queue.
+      const repeat = this.repeatStationaryGotoNote(calls, this.opts.getBot(), at);
+      if (repeat) return {
+        receipt: `[${this.clock(at)}] ${satisfiedGoto}\n[重复无效移动] ${repeat}。`
+          + '到达条件已满足，本单未派发。请根据原回执选择后续动作或真实等待条件；重发相同 goto 不会增加位移，也不证明长期目标完成。',
+        accepted: false, rejection: { kind: 'repeat', rule: 'navigation.already-satisfied' },
+      };
+      return { receipt: `[${this.clock(at)}] ${satisfiedGoto}`, accepted: true, completedImmediately: true };
+    }
     const id = this.opts.nextId();
     const task: QueuedTask = { id, steps: [...calls], enqueuedAt: at,
       priorContext: this.priorOutcomeContext(calls) ?? undefined };
