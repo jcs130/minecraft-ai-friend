@@ -128,7 +128,8 @@ try {
             if ($oldRule.Direction -ne 'Inbound' -or $oldRule.Action -ne 'Allow' -or
                 $oldRule.Enabled -ne 'True' -or $oldRule.Profile -ne 'Private' -or
                 $portFilter.Protocol -ne 'TCP' -or $portFilter.LocalPort -ne '18120' -or
-                ($addressFilter.RemoteAddress -join ',') -ne '192.168.3.0/24') {
+                @('192.168.3.0/24', '192.168.3.0/255.255.255.0') -notcontains
+                    ($addressFilter.RemoteAddress -join ',')) {
                 throw "Existing firewall rule $firewallName has an unexpected scope"
             }
         } else {
