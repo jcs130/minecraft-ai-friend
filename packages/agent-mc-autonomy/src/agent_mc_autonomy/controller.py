@@ -6,6 +6,7 @@ import asyncio
 import copy
 import json
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -61,6 +62,9 @@ from .viewer_public import tool_receipt
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
+PROTOCOL_PLANNER_DESCRIPTION = (
+    "Read native tasks, facts and original archives. Only task, facts, archive and archive_runs are exposed. "
+    "The host owns turn boundaries, barrier acknowledgement and cancellation; do not manage that lifecycle.")
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
 DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages", "mc_query"}
 READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices", "mc_messages", "mc_query"}
@@ -189,9 +193,7 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
     for tool in sorted(catalogue, key=lambda row: row["name"]):
         if tool["name"] not in direct:
             continue
-        schema = structural(tool["inputSchema"])
-        if tool["name"] == "mc_protocol":
-            schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+        schema = structural(planner_tool_schema(tool))
         if tool["name"] in {"mc_do", "mc_scout"}:
             schema.setdefault("properties", {})["queue"] = {"enum": ["append", "afterCheckpoint", "now"]}
             step = schema["properties"].get("steps", {}).get("items", {})
@@ -211,7 +213,9 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
                     # Retain it intact rather than inventing a find-only ID rule.
                     properties["target"]["description"] = target
         description = tool.get("description", "") if context_mode == "full" else tool.get("description", "")[:450]
-        if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
+        if tool["name"] == "mc_protocol":
+            description = PROTOCOL_PLANNER_DESCRIPTION
+        elif tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
             description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
         elif tool["name"] == "mc_scout" and not description:
             description = "Read-only observations/dry runs; use mc_do for real actions. Read mc_help for the selected skill's native parameters, limits and returned coverage."
@@ -250,12 +254,58 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
         tool["function"]["parameters"], profile=tool_schema_profile, wire=True)}} for tool in tools]
 
 
+def planner_tool_schema(tool):
+    """One ownership projection for advertisement, documentation and recovery."""
+    schema = copy.deepcopy(tool["inputSchema"])
+    if tool["name"] == "mc_protocol":
+        schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+    return schema
+
+
+def protocol_planner_help(catalogue, arguments):
+    """Progressive documentation for this runtime's protocol read capability."""
+    native = next((tool for tool in catalogue if tool["name"] == "mc_protocol"), None)
+    if native is None:
+        raise ValueError("Protocol tool is not available")
+    value = planner_tool_schema(native)
+    path = arguments.get("path", "")
+    if not isinstance(path, str) or path and not path.startswith("/") or re.search(r"~(?![01])", path):
+        raise ValueError("path must be a JSON pointer")
+    for encoded in path.split("/")[1:]:
+        token = encoded.replace("~1", "/").replace("~0", "~")
+        if isinstance(value, list) and (not token.isdecimal() or token != str(int(token))):
+            raise ValueError("Array path must use a returned nonnegative index")
+        value = value[int(token)] if isinstance(value, list) else value[token]
+    reply = {"protocol": "agent-mc-tool-help/v1", "name": "mc_protocol", "path": path,
+             "description": PROTOCOL_PLANNER_DESCRIPTION}
+    if arguments.get("full"):
+        reply.update(schema=value, complete=True)
+    else:
+        scalars, children = {}, []
+        if not isinstance(value, (dict, list)):
+            summary = {"value": value, "complete": True, "children": []}
+        else:
+            for key, child in (value.items() if isinstance(value, dict) else enumerate(value)):
+                if not isinstance(child, (dict, list)) or isinstance(child, list) and all(
+                        not isinstance(item, (dict, list)) for item in child):
+                    scalars[str(key)] = child
+                else:
+                    keys = list(child) if isinstance(child, dict) else list(map(str, range(len(child))))
+                    children.append({"path": path + "/" + str(key).replace("~", "~0").replace("/", "~1"),
+                                     "kind": "array" if isinstance(child, list) else "object", "keys": keys[:32],
+                                     "omittedKeys": max(0, len(keys) - 32)})
+            summary = {"scalarFields": scalars, "complete": not children, "children": children}
+        reply["schemaSummary"] = summary
+    return {"protocol": PROTOCOL, "text": encode(reply), "dispatched": False, "origin": "controller_contract"}
+
+
 def tool_help(catalogue, arguments):
     value = next(tool for tool in catalogue if tool["name"] == arguments["name"])
     # Expose the same host-owned control restriction in expanded documentation.
     value = json.loads(encode(value))
+    value["inputSchema"] = planner_tool_schema(value)
     if value["name"] == "mc_protocol":
-        value["inputSchema"]["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+        value["description"] = PROTOCOL_PLANNER_DESCRIPTION
     if value["name"] == "mc_visual":
         value["planner_guidance"] = (
             "Use supported synchronous raw PNG when useful; actual modes and limits come from this schema and body receipt. "
@@ -304,7 +354,8 @@ def failure_context(catalogue, name, arguments, result):
     Generic enum errors alone do not say which values belong to which tool.
     Keep only the submitted fields' original constraints, bounded at the tail.
     """
-    schema = next((t["inputSchema"] for t in catalogue if t["name"] == name), {})
+    selected = next((tool for tool in catalogue if tool["name"] == name), None)
+    schema = planner_tool_schema(selected) if selected else {}
     properties = schema.get("properties", {})
     fields = [(key, properties.get(key, {})) for key in arguments if key != "steps"]
     steps = arguments.get("steps")
@@ -1229,6 +1280,13 @@ class Controller:
         if name == "mc_tool_help" and shared_help and arguments.get("name") in HIDDEN_TOOLS:
             result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
                       "text": "That transport/control tool belongs to the runtime coordinator; it is not a planner capability."}
+            return result, await self.archive_receipt(request_id, name, result)
+        if name == "mc_tool_help" and shared_help and arguments.get("name") == "mc_protocol":
+            try:
+                result = protocol_planner_help(self.bridge.tools, arguments)
+            except (LookupError, TypeError, ValueError):
+                result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
+                          "origin": "controller_validation", "text": "Read mc_tool_help(name=mc_protocol) and use a returned schema path; this planner's host-owned control actions are unavailable."}
             return result, await self.archive_receipt(request_id, name, result)
         if name == "mc_tool_help" and not shared_help:
             # This is a local schema lookup. A guessed field/index has not sent
