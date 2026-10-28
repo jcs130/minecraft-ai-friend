@@ -1,6 +1,6 @@
-## 2026-10-28 Tau 原生 Mineflayer 接口候选已验收
+## 2026-10-28 Tau 原生 Mineflayer 接口已正式发布
 
-integrations/tau-ceti/native-bridge 提供普通登录身体的8项原生接口、可选服务端组件与独立无依赖SDK；同一玩家连接发送原始物品/菜单/配方，不新建Numen身体或公网端口。527原模组+本组件的隔离服26项真实操作、17客户端、15Java策略、17原管理回归和4打包消费者通过；含魂符真实ID、厨锅放入/关闭、1原木→4木板、requestId去重及跨连接对账。构建a1826bfa…0d2390eb，原始源码/配方补丁有哈希；不能把未知配方、魔力或专用模组按钮说成已接通。当前仅候选，正式服尚未安装/重启，正在等待本次维护窗口答复；Paper未改。私有证据和发布预案在E:/MC/ops/repairs/tau-native-player-20261028，说明见integrations/tau-ceti/NATIVE_PLAYER_VALIDATION.md。不要部署早期build-1至6，或把早期失败改成成功。
+integrations/tau-ceti/native-bridge 提供普通登录身体的8项原生接口、可选服务端组件与独立无依赖SDK；同一玩家连接发送原始物品/菜单/配方，不新建Numen身体或公网端口。服主明确授权后正常退出0、E/F完整冷备58,700文件（压缩包3.56GB、双盘SHA一致），安装前后3027原世界/配置/认证/模组等文件核验保持，已发布构建a1826bfa…0d2390eb及匹配冻结网关。现役11项局域网登录/本人数据/配方/原物品栏/未知回执检查通过，监护健康且维护暂停解除，原Numen35项能力保持；Paper未操作。此前隔离26实操+5只读、17客户端、15Java、17原管理和4打包消费者通过。SDK须由Agent运行时显式附加，不宣称全部模组、真人GUI、基岩和Web像素已验。完整证据在E:/MC/ops/repairs/tau-native-player-20261028，说明/发布清单见integrations/tau-ceti/NATIVE_PLAYER_VALIDATION.md及native-player-release-20261028.json。维护已结束，不重放旧停服/安装脚本，不部署早期build-1至6。
 
 ## 2026-10-28 正式营地红帐篷通行已修复
 

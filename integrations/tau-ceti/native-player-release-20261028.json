@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "status": "published",
+  "observedAt": "2026-10-28T09:24:05.104068+00:00",
+  "sourceCommit": "6fef2fe4",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.234",
+  "modCount": 528,
+  "nativePlayerBridge": {
+    "modId": "maw_tau_native",
+    "version": "0.1.0",
+    "sha256": "a1826bfa6ae15cd81138d2ce5e22790e6dbc2d1ba45d560edfbe3b9b0d2390eb",
+    "serverOnly": true,
+    "operationCount": 8
+  },
+  "gateway": {
+    "release": "aincrad-native-player-20261028-v1",
+    "codeChanged": false,
+    "currentJvmRegistryVerified": true
+  },
+  "runtime": {
+    "healthy": true,
+    "maintenancePaused": false,
+    "supervisorPid": 28096,
+    "javaPid": 13624,
+    "gatewayPid": 22240,
+    "ownedStarts": {
+      "java": 1,
+      "gate": 1
+    },
+    "numen": {
+      "numenVersion": "0.1.4.1",
+      "serverResident": true,
+      "clientRequired": false,
+      "nativeModAccess": true,
+      "nativeModOperationCount": 35
+    },
+    "existingAutorunPreserved": true
+  },
+  "network": {
+    "javaTcp": 28976,
+    "mineflayerTcp": 28977,
+    "numenTcp": {
+      "port": 28989,
+      "scope": "loopback"
+    },
+    "healthTcp": {
+      "port": 28985,
+      "scope": "loopback"
+    },
+    "voiceUdp": 28989,
+    "newPorts": []
+  },
+  "backup": {
+    "cold": true,
+    "fileCount": 58700,
+    "sourceBytes": 16295624121,
+    "archiveBytes": 3561421659,
+    "sha256": "e6f8df89406ea556fe8983e9b8222ca0a048ed4413dcbdcc232c32f4627f32ce",
+    "mirrors": [
+      "E",
+      "F"
+    ],
+    "crcVerified": true,
+    "mirrorsVerified": true
+  },
+  "preservedBeforeStart": {
+    "world": 499,
+    "config": 1995,
+    "auth": 2,
+    "originalMods": 527,
+    "playerPolicy": 4
+  },
+  "validation": {
+    "clientRegression": 17,
+    "javaPolicy": 15,
+    "existingTauLifecycle": 17,
+    "packedConsumer": 4,
+    "isolatedPlay": 26,
+    "isolatedReads": 5,
+    "productionReadOnly": [
+      {
+        "name": "no_native_data_before_auth",
+        "pass": true
+      },
+      {
+        "name": "eight_remote_operations",
+        "pass": true
+      },
+      {
+        "name": "ordinary_connected_body",
+        "pass": true
+      },
+      {
+        "name": "actual_own_uuid",
+        "pass": true
+      },
+      {
+        "name": "absolute_position_and_dimension",
+        "pass": true
+      },
+      {
+        "name": "real_health_and_food",
+        "pass": true
+      },
+      {
+        "name": "original_item_identity",
+        "pass": true
+      },
+      {
+        "name": "inventory_preserved_since_baseline",
+        "pass": true
+      },
+      {
+        "name": "native_create_recipes",
+        "pass": true
+      },
+      {
+        "name": "native_farmer_partial_page",
+        "pass": true
+      },
+      {
+        "name": "missing_receipt_is_unknown",
+        "pass": true
+      }
+    ],
+    "productionGameplayWritesPerformed": false,
+    "allModGameplayVerified": false,
+    "fullJavaGuiVerified": false,
+    "bedrockVerified": false,
+    "webPixelsVerified": false
+  },
+  "scope": {
+    "worldReset": false,
+    "accountMigration": false,
+    "thirdPartyJarsModified": false,
+    "paperTouched": false
+  },
+  "rollback": "Graceful stop; restore previous mods.lock/service configuration and original immutable gateway; remove only the new addon. Do not overwrite the active world."
+}
