@@ -602,19 +602,41 @@ function RetainedSnapshots([array]$completed, [datetime]$asOf = (Get-Date)) {
 
 function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
     $root = [IO.Path]::GetFullPath($path).TrimEnd('\')
+    # Millions of dependency files can stall world/auth database writes on the
+    # same host. Bulk retention belongs inside the existing cold maintenance.
+    if ($root -in @('E:\MC\backups\scheduled', 'F:\MC-backups\scheduled') -and (Listener)) {
+        Log "WARN backup cleanup deferred until Paper is stopped: $root"
+        return
+    }
     $completed = @(CompleteSnapshots $root)
     $keep = @(RetainedSnapshots $completed $asOf)
-    foreach ($old in @($completed | Where-Object { $keep -notcontains $_.FullName })) {
+    # Only a previous native prune's explicit marker permits resuming an
+    # interrupted deletion. Unmarked partial backups remain for inspection.
+    $resuming = @(Get-ChildItem -LiteralPath $root -Directory | Where-Object {
+        $_.Name -match '^\d{8}-\d{6}$' -and
+        (Test-Path -LiteralPath (Join-Path $_.FullName '.pruning')) -and
+        -not (Test-Path -LiteralPath (Join-Path $_.FullName '.complete')) -and
+        -not (Test-Path -LiteralPath (Join-Path $_.FullName '.keep')) -and
+        -not (Test-Path -LiteralPath (Join-Path $_.FullName '.pinned'))
+    })
+    $expired = @($completed | Where-Object { $keep -notcontains $_.FullName })
+    foreach ($old in @($expired + $resuming)) {
         $resolved = [IO.Path]::GetFullPath($old.FullName).TrimEnd('\')
         if (-not $resolved.StartsWith(($root + '\'), [StringComparison]::OrdinalIgnoreCase) -or
             $old.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
             throw "Unsafe backup retention path: $resolved"
         }
         try {
+            if ((Test-Path -LiteralPath (Join-Path $resolved '.keep')) -or
+                (Test-Path -LiteralPath (Join-Path $resolved '.pinned'))) { continue }
             # Never advertise a partly deleted snapshot as a recovery point.
             # Preserve the validated absolute root before adding Win32's long-
             # path prefix for bundled client dependencies.
-            Rename-Item -LiteralPath (Join-Path $resolved '.complete') -NewName '.pruning' -ErrorAction Stop
+            if (Test-Path -LiteralPath (Join-Path $resolved '.complete')) {
+                Rename-Item -LiteralPath (Join-Path $resolved '.complete') -NewName '.pruning' -ErrorAction Stop
+            } elseif (-not (Test-Path -LiteralPath (Join-Path $resolved '.pruning'))) {
+                throw 'Backup pruning marker changed; inspect before retrying.'
+            }
             Remove-Item -LiteralPath ('\\?\' + $resolved) -Recurse -Force -ErrorAction Stop
             Log "Expired backup removed: $resolved"
         } catch {
@@ -948,6 +970,9 @@ function Backup-Server {
         Log "Backup complete: $dest"
         # Pending deployments require both verified recovery copies before any JAR changes.
         Mirror-LatestBackup
+        # Finish E: retention while Paper and authentication are still stopped.
+        # A standalone Mirror also defers pruning if players are already back.
+        PruneSnapshots $backupRoot
         Deploy-PendingPaperCore $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingContent $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingServerSettings
@@ -968,7 +993,6 @@ function Backup-Server {
             Remove-Item -LiteralPath $pausedFile -Force -ErrorAction SilentlyContinue
         }
     }
-    PruneSnapshots $backupRoot
 }
 
 if ($Action -eq 'Status') {

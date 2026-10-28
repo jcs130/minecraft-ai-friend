@@ -67,5 +67,21 @@
     "additionalPaperRestart": false,
     "backupTaskTimeLimitNow": "PT2H",
     "nativeTaskDefinitionPreserved": true
+  },
+  "loginRecovery": {
+    "state": "recovered-and-actual-world-entry-verified",
+    "verifiedAt": "2026-10-29T01:01:41.770379+08:00",
+    "credentialsPreserved": 68,
+    "paperRestarted": false,
+    "confirmedActualWorldEntry": [
+      "ag_CorMy",
+      "DeepFish",
+      "Yui"
+    ],
+    "document": "paper/docs/LOGIN_IO_RECOVERY_20261029.md",
+    "lastCheckedAt": "2026-10-29T01:14:29.927381+08:00",
+    "freshSnapshotVerified": true,
+    "refreshErrorsSinceRecovery": 0,
+    "transientHeartbeatPublishWarnings": 1
   }
 }

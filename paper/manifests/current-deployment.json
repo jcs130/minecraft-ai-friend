@@ -85,6 +85,31 @@
     "nativeTaskDefinitionPreserved": true,
     "releaseRecoveryAnchor": "20261028-230739",
     "document": "paper/docs/BACKUP_RETENTION_20261029.md",
-    "historicalCleanup": "running"
+    "historicalCleanup": {
+      "state": "partially-completed-rest-deferred-offline",
+      "directoriesRemoved": 17,
+      "remainingDirectories": 12,
+      "spaceReclaimedBytes": 698215063552,
+      "retainedCompletePerDrive": 9,
+      "onlineBulkDeletion": false
+    },
+    "helperSha256": "3141475be29d67e978bae5896ae1e706695aaeed9cfc12d4a3c8dd0e8b32579c",
+    "safetyChecks": 27
+  },
+  "loginRecovery": {
+    "state": "recovered-and-actual-world-entry-verified",
+    "verifiedAt": "2026-10-29T01:01:41.770379+08:00",
+    "credentialsPreserved": 68,
+    "paperRestarted": false,
+    "confirmedActualWorldEntry": [
+      "ag_CorMy",
+      "DeepFish",
+      "Yui"
+    ],
+    "document": "paper/docs/LOGIN_IO_RECOVERY_20261029.md",
+    "lastCheckedAt": "2026-10-29T01:14:29.927381+08:00",
+    "freshSnapshotVerified": true,
+    "refreshErrorsSinceRecovery": 0,
+    "transientHeartbeatPublishWarnings": 1
   }
 }
