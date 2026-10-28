@@ -95,12 +95,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="http://127.0.0.1:18120")
     parser.add_argument("--smoke", action="store_true", help="render real Kirito, Yui and cast samples")
+    parser.add_argument("--custom-voice", help="render this registered voice first, before the built-in smoke")
+    parser.add_argument("--custom-text", default="你好，我正在测试新的音色注册。")
     parser.add_argument("--max-seconds", type=float, help="send an explicit request limit; omission tests the service default")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     base = args.base.rstrip("/")
     try:
         result = check_service(base)
+        if args.custom_voice:
+            result["custom_sample"] = synthesize(
+                base, args.output_dir, args.custom_voice, args.custom_text, 123, 10
+            )
         if args.smoke:
             result["samples"] = [
                 synthesize(base, args.output_dir, label, prompt, seed, args.max_seconds)
