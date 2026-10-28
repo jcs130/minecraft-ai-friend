@@ -25,7 +25,7 @@ class Daily(unittest.IsolatedAsyncioTestCase):
     def healthy(self):
         channel = self.channel()
         async def invoke(name, args):
-            raw = ('MC_STATUS {"food":20,"health":20,"maxHealth":20}' if args['line'] == '/mycli status'
+            raw = ('MC_STATUS {"food":20,"health":20,"maxHealth":20}' if args['line'] == '/mycli status --json'
                    else '【当前公会委托】林缘巡守 0/4\n下一步：持剑近战清理蜘蛛')
             return {"content": [{"type": "text", "text": raw}]}
         channel.invoke = AsyncMock(side_effect=invoke)

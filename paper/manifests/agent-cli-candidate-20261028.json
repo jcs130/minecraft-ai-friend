@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "agent-cli-redesign-20261028",
-  "status": "validated_candidate_pending_restart_approval",
+  "status": "superseded_candidate_not_deployed",
   "productionChanged": false,
   "requiresNormalPaperRestart": true,
   "candidate": {
@@ -44,5 +44,6 @@
     "366 pure assertions plus 92 native and 8 cold-start assertions",
     "Static E/F original JAR copies are not a complete cold backup",
     "Public Skill downloads not republished; references only"
-  ]
+  ],
+  "supersededBy": "rpg-usability-candidate-20261028.json"
 }

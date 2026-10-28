@@ -1,11 +1,11 @@
-"""Narrow CLI patch on the verified deployed .22; never builds the full candidate tree."""
+"""Narrow CLI/RPG usability patch on deployed .22; never builds the full candidate tree."""
 from pathlib import Path
 import argparse,hashlib,json,os,subprocess,zipfile
 p=argparse.ArgumentParser();p.add_argument('--base',type=Path,required=True);p.add_argument('--server',type=Path,required=True);p.add_argument('--jdk',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
 base_sha='015bdcd18c3ad07a03eed0e05f6e3c56b42cb7ec6c0f2a5b32d8d88096f06f13'
 assert not a.output.exists() and hashlib.sha256(a.base.read_bytes()).hexdigest()==base_sha
 root=Path(__file__).resolve().parents[1];build=a.output.parent/(a.output.stem+'.build');build.mkdir(parents=True);classes=build/'classes';classes.mkdir()
-names=['NativeRpg','AgentCliCatalog','AgentCliText'];prefix='org/afuhome/agentfriend/'
+names=['NativeRpg','AgentCliCatalog','AgentCliText','SiteDungeonManager'];prefix='org/afuhome/agentfriend/'
 sources=[root/'src'/prefix/(name+'.java') for name in names]
 cp=os.pathsep.join(map(str,[a.base,*sorted((a.server/'libraries').rglob('*.jar')),*sorted((a.server/'versions').rglob('*.jar')),*sorted((a.server/'plugins').glob('*.jar'))]))
 args=['-proc:none','-implicit:none','--release','21','-encoding','UTF-8','-cp',cp,'-d',str(classes),*map(str,sources)]
@@ -19,7 +19,7 @@ with zipfile.ZipFile(a.base)as src,zipfile.ZipFile(a.output,'w',zipfile.ZIP_DEFL
  for entry in src.infolist():
   if own(entry.filename):continue
   data=src.read(entry)
-  if entry.filename=='plugin.yml':assert b'0.4.47.22-vortex'in data;data=data.replace(b'0.4.47.22-vortex',b'0.4.47.23-vortex')
+  if entry.filename=='plugin.yml':assert b'0.4.47.22-vortex'in data;data=data.replace(b'0.4.47.22-vortex',b'0.4.47.24-vortex')
   else:retained+=1
   out.writestr(entry,data)
  for name,data in compiled.items():out.writestr(name,data)

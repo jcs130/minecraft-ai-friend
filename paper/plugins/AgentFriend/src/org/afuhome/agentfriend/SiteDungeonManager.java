@@ -161,6 +161,9 @@ final class SiteDungeonManager implements Listener {
         if(site!=null)data.put("setting",site.outdoor?"outdoor":"interior");data.put("commandRoot","/mycli dungeon");data.put("language","zh-CN");data.putAll(fields);
         Map<String,Object> guide=site==null?Map.of():advice(p,site.id);
         if(!guide.isEmpty())data.put("guidance",guide);
+        if(!guide.isEmpty()&&prefix.equals("MC_SITE_DUNGEON_RESULT")&&!Boolean.TRUE.equals(fields.get("success"))&&Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(fields.get("reason"))){
+            data.put("primaryBlocker",guide.get("reason"));data.put("nextAction",guide.get("nextAction"));data.put("nextCommand",guide.get("nextCommand"));data.put("nextCommands",List.of(guide.get("nextCommand")));
+        }
         if(jsonOutput.get()){p.sendMessage(prefix+" "+JSON.toJson(data));return;}
         if(prefix.equals("MC_SITE_DUNGEON_ITEM")){
             var prep=DungeonAdvice.preparation(site.id,site.minimumLevel);

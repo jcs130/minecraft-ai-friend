@@ -17,6 +17,9 @@ public final class NativeCliCatalogTest {
         check(!help("skills info fortify --help").get("resultQuery").getAsString().contains("skills points"),"no old point query fanout");
         check(help("arena stash --help").toString().contains("2魔力"),"personal stash cost discoverable");
         check(help("guild shared --help").toString().contains("共享"),"shared supplies discoverable");
+        for(String alias:List.of("list","info","join","gui"))check(!help("guild party "+alias+" --help").has("errorCode"),"party alias discoverable "+alias);
+        check(help("guild party status --help").get("actionReadOnly").getAsBoolean(),"party status read-only");
+        check(help("guild party accept --help").get("resultQuery").getAsString().equals("/mycli guild party status"),"party action checks native membership");
         for(String line:List.of("--help --page 999","skills bogus --help","--help --page 1 --page 2"))check(help(line).has("errorCode"),"invalid help "+line);
         for(String group:List.of("skills","profession","tasks")){var h=help(group+" --help");check(String.join("\n",AgentCliText.help(h)).length()<1100,"compact group "+group);}
         System.out.println("native catalog="+checks);

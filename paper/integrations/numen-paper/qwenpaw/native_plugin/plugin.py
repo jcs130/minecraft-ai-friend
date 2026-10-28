@@ -34,6 +34,27 @@ _LANES: dict[str, "BodyLane"] = {}
 _CURRENT_LANE = ContextVar("qiandengji_lane", default=None)
 REVIEW_TOOLS = frozenset({"recall_history", "memory_search", "memory_remember", "qiandengji_snapshot"})
 READ_COMMANDS = {"status": "/mycli status", "tasks": "/mycli tasks status", "skills": "/mycli skills status"}
+HEARTBEAT_STATUS_COMMAND = "/mycli status --json"
+
+
+def heartbeat_status(raw):
+    """Read explicit native/legacy state, never guess vitals from prose or action receipts."""
+    text = re.sub(r"§.", "", raw)
+    for marker in re.finditer(r"(?:^|\n)MC_(?:STATUS|RPG)\s+(\{)", text):
+        try:
+            data, _ = json.JSONDecoder().raw_decode(text[marker.start(1):])
+            if not isinstance(data, dict) or data.get("success") is False:
+                continue
+            values = [data[key] for key in ("health", "maxHealth", "food")]
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in values):
+                continue
+            health, maximum, food = values
+            if maximum <= 0 or health < 0 or health > maximum + 1e-6 or not 0 <= food <= 20:
+                continue
+            return data
+        except (KeyError, ValueError, TypeError):
+            continue
+    return None
 
 
 def daily_enabled(cfg) -> bool:
@@ -719,11 +740,11 @@ class GameChannel(BaseChannel):
             if daily_enabled(cfg) and not self.lane.autonomy_guard.model_ready():
                 self.lane.project("waiting_model")
                 return False
-            raw = texts(await self.invoke("command", {"line": "/mycli status"}))
-            match = re.search(r"(?:^|\n)MC_STATUS\s+(\{)", raw)
-            if not match:
+            raw = texts(await self.invoke("command", {"line": HEARTBEAT_STATUS_COMMAND}))
+            status = heartbeat_status(raw)
+            if status is None:
+                self.lane.project("waiting_status")
                 return False
-            status, _ = json.JSONDecoder().raw_decode(raw[match.start(1):])
             needs_help = (status.get("downed") is True or float(status["food"]) < 18
                           or float(status["health"]) < float(status["maxHealth"]) - 0.5)
             modes = getattr(getattr(self._workspace, "plugins", None), "modes", ())

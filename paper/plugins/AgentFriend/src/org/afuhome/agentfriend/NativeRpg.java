@@ -125,8 +125,8 @@ final class NativeRpg {
             boolean json=Arrays.asList(args).contains("--json");delegate(p,json?new String[]{"tasks","status","--json"}:new String[]{"tasks","status"});adventureProgress(p,json,true);return true;
         }
         if(group.equals("guild")&&args.length>=2&&args[1].equalsIgnoreCase("party")){
-            try{backend();}catch(RuntimeException e){p.sendMessage("§e"+e.getMessage());return true;}
-            Bukkit.dispatchCommand(p,"vortexrpg:party "+String.join(" ",Arrays.copyOfRange(args,2,args.length)));return true;
+            try{call("partyCommand",new Class<?>[]{Player.class,String[].class},p,Arrays.copyOfRange(args,2,args.length));}
+            catch(RuntimeException e){p.sendMessage("§e[service_unavailable] 组队服务暂不可用；先查 /mycli guild party status，不重复创建或接受邀请。");}return true;
         }
         if(Set.of("status","profession","职业","skills","spells","技能","tasks","任务路线").contains(group)) {
             if(group.equals("status")&&args.length>1&&args[1].equalsIgnoreCase("full"))return false;

@@ -1,0 +1,18 @@
+/** Healthy menus and legacy-API fault recovery, with a separate non-OP chat observer. */
+import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {setTimeout as sleep} from 'node:timers/promises';import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs';
+const stage='E:/MC/staging/vortex-takeover-20261027',label=process.argv[2],legacy=process.argv.includes('--legacy-fault');assert(/^[a-z0-9]{1,7}$/.test(label));assert.equal(await fs.readFile(stage+'/.qa-only','utf8'),'VORTEX_TAKEOVER_QA_ONLY');
+const mf=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('mineflayer'),report={checks:[],receipts:[],legacyApiFault:legacy,productionChanged:false};const bots=[];let bot,last=0;
+const check=(n,v)=>{assert(v,n);report.checks.push(n);console.log('PASS '+n);};const until=async(f,n)=>{for(let end=Date.now()+25000;Date.now()<end;){const v=await f();if(v)return v;await sleep(100);}throw Error(n);};
+async function connect(suffix){const b=mf.createBot({host:'127.0.0.1',port:25928,username:'ag_RU'+suffix+label,auth:'offline',version:'1.21.1',hideErrors:true,checkTimeoutInterval:60000});bots.push(b);b.messages=[];b.on('messagestr',s=>b.messages.push(s));b.on('error',()=>{});installRecipePacketBypass(b._client);await until(()=>b.entity&&b.world.getColumnAt(b.entity.position),'world');b.physicsEnabled=false;await sleep(1800);return b;}
+async function json(q){await sleep(Math.max(0,1100-(Date.now()-last)));last=Date.now();const at=bot.messages.length;bot.chat(q);const text=await until(()=>bot.messages.slice(at).find(s=>s.startsWith('MC_RPG ')),q);report.receipts.push({q,text});return JSON.parse(text.slice(7));}
+try{
+ bot=await connect('M');const observer=await connect('O');observer.messages=[];
+ const result=await json('/mycli profession menu --json');
+ if(legacy){check('legacy API fault produces explicit service error',result.success===false&&result.reason==='service_unavailable');check('fault gives a safe text recovery',result.nextCommand==='/mycli profession status');check('failed menu never claims it opened',!bot.currentWindow&&!result.requestedMenu);}
+ else{check('profession menu has a precise request acknowledgement',result.requestedMenu==='profession'&&result.selectionConfirmed===false);await until(()=>bot.currentWindow,'profession window');check('actual profession inventory window arrived',!!bot.currentWindow);bot.closeWindow(bot.currentWindow);}
+ check('menu did not choose a class',(await json('/mycli profession status --json')).class==='none');
+ if(!legacy){check('explicit class choice really saves',(await json('/mycli profession choose knight --json')).saved);check('skill menu has a precise request acknowledgement',(await json('/mycli skills menu --json')).requestedMenu==='skills');await until(()=>bot.currentWindow,'skills window');check('actual skills inventory window arrived',!!bot.currentWindow);bot.closeWindow(bot.currentWindow);}
+ const state=await json('/mycli status --json');check('text alternative remains usable after the menu',Number.isFinite(state.health)&&Number.isFinite(state.maxHealth)&&Number.isFinite(state.food));
+ const bad=await json('/mycli skills info no_such_skill --json');check('bad ID still returns recovery',bad.reason==='unknown_skill'&&!!bad.nextCommand);await sleep(300);
+ const own=new Set(report.receipts.map(r=>r.text));check('private tool results and errors never reach another player',!observer.messages.some(t=>own.has(t)));report.passed=true;
+}catch(e){report.error=e.stack;throw e;}finally{for(const b of bots)b.quit();await fs.writeFile(stage+'/rpg-menus-'+label+'.json',JSON.stringify(report,null,2));}

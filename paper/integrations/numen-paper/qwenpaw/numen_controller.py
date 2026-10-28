@@ -27,7 +27,7 @@ from mcp.server.stdio import stdio_server
 
 ALLOWED = {"list_companions", "lua", "skill", "todo", "memory", "say", "command"}
 ACTION_TIMEOUT_SECONDS = 150  # Numen's interactive permission window lasts 120 seconds.
-READ_ONLY_COMMANDS = {"/mycli status", "/mycli status full", "/mycli tasks status", "/mycli inventory status"}
+READ_ONLY_COMMANDS = {"/mycli status", "/mycli status --json", "/mycli status full", "/mycli tasks status", "/mycli inventory status"}
 DESCRIPTIONS = {
     "list_companions": "只读：查询当前身体是否在线。本接口仅控制你自己的角色。",
     "lua": "执行游戏动作或只读查询。先用原生技能目录学习 API；动作完成必须读取实际回执，超时结果未知，不要自动重放。",

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "id": "rpg-usability-20261028",
+  "status": "validated_candidate_pending_restart_approval",
+  "productionChanged": false,
+  "requiresNormalPaperRestart": true,
+  "requiresNativeQwenChannelLifecycleReload": true,
+  "candidate": {
+    "AgentFriend-0.4.47.24.jar": "5b22887d41be63c7ba4349bc9d3d30188eb433ba5080fedcabe029cdc78a2567",
+    "QiandengjiRpg-0.2.3.jar": "7f3cb09e12fda637577c8137794ae9eed2886095e46ae5720ff8433b139182d5",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "e16481eabaee1e18cdaaa6d230bfef65bd7e1178247a703215c3bf9b91119d8d"
+  },
+  "candidateBuilds": {
+    "AgentFriend": "0.4.47.24-r2",
+    "QiandengjiRpg": "0.2.3-r9",
+    "Vortex": "qd29",
+    "QwenPawChannel": "0.3.2"
+  },
+  "rollback": {
+    "AgentFriend-0.4.47.22.jar": {
+      "sha256": "015bdcd18c3ad07a03eed0e05f6e3c56b42cb7ec6c0f2a5b32d8d88096f06f13",
+      "metadataVersion": "0.4.47.22-vortex"
+    },
+    "QiandengjiRpg-0.2.0.jar": {
+      "sha256": "231a13974c7592b1427cd2c94ca021fc4af5f38bc66b08e9ad478ae21a424794",
+      "metadataVersion": "0.2.1"
+    },
+    "VortexRPG-1.2.2-alpha-qd27-zh.jar": {
+      "sha256": "3091f10513855b6116d53534de309fdee29f8689fdcff1b184f2dadc1f51bc38",
+      "metadataVersion": "1.2.2-alpha"
+    }
+  },
+  "qwenCandidateSources": {
+    "native_plugin/plugin.py": "5c2adf2fb4fa0907ebf3e3be49ef4354f7840b3d0d01aaccdb0f131ea9145c0d",
+    "native_plugin/plugin.json": "473aa0c3d6ce136965536485161c7a714f77fdae35a83113bffca73475547a89",
+    "numen_controller.py": "0021f0d10b96593c203746f8d2aadaa5f9b950ce818408c70f2b46578e24d605"
+  },
+  "actualQwenRuntimeBackupCompleted": false,
+  "coldBackupCompleted": false,
+  "stateMigration": false,
+  "publicSkillDownloadRepublished": false,
+  "websiteUpdated": false,
+  "tests": {
+    "pureChecks": 454,
+    "coreNativeChecks": 189,
+    "r8TargetedChecks": 38,
+    "r9NativeAndColdChecks": 17,
+    "legacyApiFaultChecks": 7,
+    "qwenPassed": 117,
+    "qwenExistingOptInSkipped": 6,
+    "qwenActualQaReceiptParsed": true,
+    "modelCalls": 0,
+    "realPhoneOrXbox": false
+  },
+  "evidence": {
+    "rpg-usability-ru5b.json": {
+      "checks": 49,
+      "sha256": "23710fc7d9671ccb74e5b92a662f454ede00adecc8a225d487358f243f988c63"
+    },
+    "six-native-classes-ru5b.json": {
+      "checks": 57,
+      "sha256": "720f6f8856ddaf183b060bfbb37d36e4fe34e84fe61819a833e5d6d554942f32"
+    },
+    "loadout-ru6d1.json": {
+      "checks": 16,
+      "sha256": "81518964a8a26b81948f35f0d0cf1b8a7d4bed8c801e309984e8c2868bb74db8"
+    },
+    "native-dungeon-ru6d1.json": {
+      "checks": 13,
+      "sha256": "f52cbd1e797ea15db0bbd3f737526b79ab365c620b3f3241ecab7cd7fdfac89a"
+    },
+    "rpg-unlocked-ru8s.json": {
+      "checks": 31,
+      "sha256": "52bdfe333aea8951e3cb88b42554981403141097e2a4fb221fc27ed97c80378b"
+    },
+    "rpg-cold-exam-ru8s.json": {
+      "checks": 15,
+      "sha256": "8623d9ac9a887da0ef399193fa1b6cdbe3d0500aa687c8764c8edd8dcb281e4e"
+    },
+    "rpg-certificate-cold-ru9c.json": {
+      "checks": 8,
+      "sha256": "fd40358c1a9ac4064c7af85ef913f0c4002203c6754a9b7a1d22375cabfaed61"
+    },
+    "rpg-recovery-ru15f.json": {
+      "checks": 15,
+      "sha256": "1276dcecf6d02c642d4049f3bf5328202906bf7eb8239cfdca18abde1fecb2ae"
+    },
+    "rpg-tank-ru15f.json": {
+      "checks": 15,
+      "sha256": "bf44b1fd49d21e3a919f463dbd9a7f15e3fb35f0da916a46d52d24bcb77e7252"
+    },
+    "rpg-certificate-cold-ru15f.json": {
+      "checks": 8,
+      "sha256": "da5a33fcd0b8edde75bebd4081ab37f2ebd86d7104ec1bdf92651a93deb0c86a"
+    },
+    "rpg-menus-ru16m.json": {
+      "checks": 7,
+      "sha256": "fa1cc24d413c5673ab2646f3048c6e3fc0bf53d42bed65dde84fadf9b7cbb4de"
+    },
+    "rpg-menus-ru17m.json": {
+      "checks": 9,
+      "sha256": "23275ed12a099ef3e7df03d6c86897609b2501ca450bfdf9298a5ad6223589b8"
+    },
+    "rpg-certificate-cold-ru17m.json": {
+      "checks": 8,
+      "sha256": "797e82acfcd2f877b422943a59c5244fd5a3eade4b8ce08d96a8673626d52698"
+    }
+  },
+  "preservedEntries": {
+    "AgentFriend": 577,
+    "VortexQd28ToQd29": 2852
+  },
+  "productionObservation": {
+    "time": "2026-10-28T12:57:06+08:00",
+    "fault": "profession menu CustomModelDataComponent NoSuchMethodError",
+    "runtimeVortex": "qd27",
+    "candidateFix": "qd28 included in qd29"
+  },
+  "notes": [
+    "Not an executable deployment plan",
+    "Counts include targeted repeated regressions; no claim of complete gameplay coverage",
+    "Static E/F JAR copies are not a complete cold backup",
+    "Qwen baseline source is not an actual protected runtime backup",
+    "No QA fixture, world or player data may be installed in production",
+    "Production must keep latest player/config/reward/certificate data",
+    "LLM long-term tactics, full floor balance and physical Bedrock client validation are not claimed",
+    "Skill/MCP reference source updated; public download not republished"
+  ]
+}

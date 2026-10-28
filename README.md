@@ -5,6 +5,8 @@
 
 连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
+后续 Agent 交互可用性修订仍为**未部署候选**：统一帮助、任务分页、组队与失败指引，补齐坦克防御和桐人状态兼容；[验证范围和发布边界](paper/docs/RPG_USABILITY_20261028.md)。源码更新不等于正式服已切换。
+
 **六职业共用一套成长：**骑士、法师、游侠、牧师、驯兽师和工程师，由本人主动选择。原生技能、天赋、经验与金币，八张冒险委托、五处活动、首层攻略及组队救援已接入原`/mycli`；旧职业停止写入并保留归档。先看[技能与装备](paper/docs/SKILL_USAGE_QUICKSTART.md)。完整0.4.48仍含其他候选，不可直接替换正式JAR。
 
 最新修复：原版附魔保留；旧技能停用会给原因与下一步，`/mycli intro`查看选职、技能、任务和副本整备。更新提醒按账号私下一次，反作弊异步属性读取已修复。[0.4.47.22发布与回退](paper/docs/RPG_GUIDANCE_20261028.md)。
@@ -52,7 +54,7 @@
 | DSH | [dsh-minecraft-agent](https://github.com/jcs130/dsh-minecraft-agent) |
 | Cortico | [千灯纪 World](https://github.com/jcs130/cortico-world-qiandengji) · [Cortico 主项目](https://github.com/Pal-AI-Lab/Cortico) |
 | Numen／QwenPaw | [Numen Paper 接入](paper/docs/NUMEN_PAPER.md) · [QwenPaw 桥](paper/docs/KIRITO_QWENPAW.md)；模型与 Key 由各自部署者提供 |
-| mcbot（Paper适配候选） | [独立服务端适配](paper/integrations/mcbot/README.md)，复用Numen身体与原世界；客户端要求1.21.11 Fabric，当前未部署 |
+| mcbot（Paper服务端适配已安装） | [独立服务端适配](paper/integrations/mcbot/README.md)，复用Numen身体与原世界；客户端要求1.21.11 Fabric，官方界面及真实模型任务仍需联测 |
 | 实时可视化 | [mc-visual-console](https://github.com/jcs130/mc-visual-console) |
 
 这些是可选接入方式，不要求安装全部框架。普通 Java 玩家无需安装 Numen；基岩与不同 Java 版本的支持以实际入口和客户端说明为准。

@@ -13,6 +13,12 @@
 
 多人用 `guild party`，共享物资用 `guild shared`。`skills tree`查本职业天赋；`progress`分开显示战斗成长、冒险者段位和考试。先免费`guild join`，再按`guild exam list/info`选择考试，实际证明齐全才submit。旧在途探索单用`guild status/verify/claim`继续，不必放弃。
 
+组队由队长 `guild party create`、`guild party invite <在线玩家名>`，受邀者本人 `guild party accept`。组队不代表已进入副本，每位队员仍按集结期执行 dungeon start/join。先按该服实际帮助使用格式旗标，未支持时不强加 `--json`。
+
+已学习节点先核对 info/status，不因详情中的学习入口就重复 learn。新版候选详情会区分已学生效、被动常驻和主动施放，`skills status` 可回查 activeSpell；旧回执没有该字段时不能猜已准备。报错先按 nextCommand 处理，冷却、缺魔力或无目标都不是连续重试的理由。
+
+候选中锁定技能的详情会按本人等级、职业与学习状态给出下一步；不把“尚未解锁”的技能推荐为立即施放。骑士 `fortify` 成功后保留原恢复，并补8秒抗性I（原版可减免伤害降低20%，更强抗性保留）；未部署前不能仅凭文档推定有该防御。无目标失败的退款按实际回执和魔力核对，不把粒子或台词当命中证明。
+
 副本开场或加入前须穿齐四件护甲，携带近战、弓弩或本人职业可用的法器，不强制带剑。职业装备使用原版物品和服务端标记，Agent无需额外客户端模组；不能用普通改名物品冒充。缺项按回执整备，弓手记得备箭。
 
 原版附魔继续有效；旧职业战斗法术和旧技能刻印可能返回 `skill_retired`，表示已停用，物品保留且不扣费。按回执转本人 `skills list`，不要反复尝试旧ID。`unknown_skill` 与旧技能停用是不同原因。`skills status <ID>` 保留为单项详情入口。

@@ -2,7 +2,7 @@
 
 ## 版本与生效范围
 
-Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精简入口；本轮 `.23 / RPG 0.2.2` 的帮助统一与任务分页仍为待发布候选，状态及验收见 [CLI 修订](AGENT_CLI_REDESIGN_20261028.md)。生产版本以 [部署清单](../manifests/current-deployment.json) 为准，源码更新不等于已上线。
+Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精简入口；`.24 / RPG 0.2.3` 候选接续帮助统一与任务分页，并补齐组队、技能详情和失败指引，仍未部署，见 [RPG 可用性](RPG_USABILITY_20261028.md)。生产版本以 [部署清单](../manifests/current-deployment.json) 为准，源码更新不等于已上线。
 
 ## Agent 只需先记这些
 

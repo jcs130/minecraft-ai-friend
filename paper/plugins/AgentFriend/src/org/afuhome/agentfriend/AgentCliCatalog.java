@@ -382,6 +382,8 @@ final class AgentCliCatalog {
             }
             Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；个人箱：/mycli arena stash；共享补给：/mycli guild shared",inventory.returns()));
             Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
+            nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","原生队伍：默认status；create/invite/accept组队，副本仍须分别join","复用原Vortex权限；不授OP；会话队伍不代表已加入副本");
+            for(String action:List.of("status","create","invite","accept","decline","leave","disband","kick","menu"))nativeSpec(specs,"guild.party."+action,action.equals("status")?"read":action.equals("menu")?"gui":"write","/mycli guild party "+action+(Set.of("invite","kick").contains(action)?" <在线玩家名>":""),switch(action){case "status"->"查本人队长和成员；无队伍是正常状态";case "create"->"创建原生队伍，不自动邀请或开副本";case "invite"->"邀请在线队友，需对方主动accept";case "accept"->"接受本人有效邀请，不会自动进入副本";case "decline"->"拒绝本人待接受邀请";case "leave"->"退出原生队伍；原副本场次另查status";case "disband"->"队长解散原生队伍";case "kick"->"依原生队伍职权移出在线成员";default->"打开原生组队菜单";},"仅本人；原生组队权限；操作免费，邀请和队伍为会话状态；成功后用guild party status核对");
             return specs;
         }
         for (SpellGuide.Entry spell : spells) {
@@ -431,6 +433,7 @@ final class AgentCliCatalog {
                 if(words.getFirst().equals("rpg"))words.removeFirst();
                 if(!words.isEmpty())words.set(0,switch(words.getFirst()){case "class","职业"->"profession";case "quests","任务路线"->"tasks";case "spells","技能"->"skills";default->words.getFirst();});
                 if(words.size()>1&&words.getFirst().equals("skills"))words.set(1,switch(words.get(1)){case "equip"->"prepare";case "explain"->"info";default->words.get(1);});
+                if(words.size()>2&&words.getFirst().equals("guild")&&words.get(1).equals("party"))words.set(2,switch(words.get(2)){case "list","info"->"status";case "join"->"accept";case "gui","open"->"menu";default->words.get(2);});
             }
             Map<String,Spec> specs=catalogSpecs(spells,nativeRpg);String id="";int matched=0;
             for(int count=words.size();count>0;count--){String candidate=String.join(".",words.subList(0,count));if(specs.containsKey(candidate)){id=candidate;matched=count;break;}}
@@ -449,7 +452,7 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=switch(prefix){case ""->List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
+                var order=switch(prefix){case ""->List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
@@ -468,12 +471,12 @@ final class AgentCliCatalog {
         }catch(IllegalArgumentException invalid){out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("errorCode","INVALID_ARGUMENT");out.addProperty("message",invalid.getMessage());out.addProperty("nextCommand","/mycli --help");}
         return out;
     }
-    private static boolean nativeEntry(String id){return Set.of("status","progress","profession","skills","cast","tasks","tasks.list","tasks.info","tasks.status","tasks.accept","tasks.claim").contains(id)||id.startsWith("profession.")||id.startsWith("skills.");}
+    private static boolean nativeEntry(String id){return Set.of("status","progress","profession","skills","cast","tasks","tasks.list","tasks.info","tasks.status","tasks.accept","tasks.claim","guild.party").contains(id)||id.startsWith("profession.")||id.startsWith("skills.")||id.startsWith("guild.party.");}
     private static void nativeSemantics(Spec spec,JsonObject out){
         boolean read=spec.mode().equals("read");out.addProperty("operation",read?"query":spec.mode().equals("group")?"group":"execute");out.addProperty("readOnly",read);
         var effects=new com.google.gson.JsonArray();effects.add(read?"只读取并发送本人信息，不选职、不接任务、不学习、不消耗资源":spec.mode().equals("group")?"由具体子动作决定，先查子命令帮助":spec.mode().equals("gui")?"只请求打开界面；不代表已选择或学习，点击动作另行结算":"明确执行所请求动作；以最终回执和真实状态核对，未知结果不重放");out.add("sideEffects",effects);
         out.addProperty("consumption",read?"无游戏内资源消耗":spec.requires());
-        out.addProperty("resultQuery",spec.id().startsWith("tasks")?"/mycli tasks status <ID>":spec.id().startsWith("profession")?"/mycli profession status":spec.id().startsWith("skills")||spec.id().equals("cast")?"/mycli skills status；/mycli skills info <ID>":"/mycli status");
+        out.addProperty("resultQuery",spec.id().startsWith("guild.party")?"/mycli guild party status":spec.id().startsWith("tasks")?"/mycli tasks status <ID>":spec.id().startsWith("profession")?"/mycli profession status":spec.id().startsWith("skills")||spec.id().equals("cast")?"/mycli skills status；/mycli skills info <ID>":"/mycli status");
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
