@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+The 0.2.113 source candidate pins the independently built core rc.116 and adds
+an explicit optional server-engine composition port. A host supplies a local
+module and SHA-256; the same engine and bridge can be composed with the viewer
+or used headlessly. This does not select a server, model or account, and does
+not enable autonomous gameplay by default. Server behavior remains in the
+separately installed server package.
+
 The 0.2.103 installer automatically uses a short per-user runtime cache. Users do
 not need administrator privileges, registry changes or a long-path system toggle.
 The full manifest hash still authenticates every installation; shortened folder

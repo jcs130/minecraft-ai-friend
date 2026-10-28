@@ -5,11 +5,16 @@ import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { publicAgentReader } from './viewer-public.mjs';
 import { presentationFactory, mergePresentation } from './server-presentation.mjs';
+import { serverEnginePort } from './server-engine-port.mjs';
 
 const require = createRequire(resolve(new URL(import.meta.url).searchParams.get('package'), 'package.json'));
 const { Bridge, bindNativeGuiPresentation } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
 const { TacticalMinecraftWorld } = await import(pathToFileURL(require.resolve('agent-mc-world/tactics')).href);
 const { simplify } = require('prismarine-nbt');
+const engineUrl = new URL(import.meta.url);
+const serverEngine = await serverEnginePort({module:engineUrl.searchParams.get('engine'),sha256:engineUrl.searchParams.get('engineSha256')}, {World:TacticalMinecraftWorld,Bridge});
+const ViewerWorldBase = serverEngine?.EngineWorld ?? TacticalMinecraftWorld;
+const ViewerBridgeBase = serverEngine?.EngineBridge ?? Bridge;
 
 export function createEngine(options) {
   const cfg = options.extension.config;
@@ -83,7 +88,7 @@ export function createEngine(options) {
   };
   // Presentation decorates the default tactical body; it must retain its tools,
   // battlefield sampling, combat receipts and extension lifecycle hooks.
-  return new class extends TacticalMinecraftWorld {
+  return new class extends ViewerWorldBase {
     async start(host) {
       stopped = false; logger = host.log;
       const currentGeneration = ++generation;
@@ -118,7 +123,7 @@ export function createEngine(options) {
     createBridge(bridgeOptions) {
       // The optional renderer replaces the built-in viewer, so the original
       // core camera port must point at this same body's live attachment too.
-      const bridge = new class extends Bridge {
+      const bridge = new class extends ViewerBridgeBase {
         get viewerUrl() { return captureView(this)?.url ?? null; }
         get viewerKind() { return captureView(this) ? 'modern' : null; }
       }({ ...bridgeOptions, onBotCreated: bot => {

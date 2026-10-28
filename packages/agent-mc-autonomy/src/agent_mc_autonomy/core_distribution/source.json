@@ -1,22 +1,22 @@
 {
   "repository": "https://github.com/jcs130/minecraft-ai-friend",
-  "source_revision": "4e2cf948df7fcca40dfa3483891c321dbb623058",
+  "source_revision": "8e2591e4f24109384622f5a6083cc3a8b71b39b9",
   "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.110",
-  "archive": "agent-mc-world-0.5.7-rc.110.tgz",
-  "sha256": "84237b4ec9936e8c8aad5e39ffa8a0ae177d2f1c50430c3158d59ffd5a5f12b5",
+  "version": "0.5.7-rc.116",
+  "archive": "agent-mc-world-0.5.7-rc.116.tgz",
+  "sha256": "23669d1234e126c38812c2142b5233e85a7c0372e8c4ef0591925950488ec89a",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "9137bb0a2fc9f467f4e5dc763890cd396af2cd752e9e1ae04239228201d5e385",
-    "dist/build.json": "95069f4fa697edc24f99e5cee2e13c76426d85190e8a872a988e5aa75d20f020",
-    "dist/types/manifest.json": "f6ffb7ef94c24e37dcc655c88131f7c8b55fd2978efbf241d2d6732b8ff815aa",
-    "bin/minecraft-agent-mcp.mjs": "1508f8ccd65f176b5d14999d57d4e61103beda106070e152e693380c75a701f7",
-    "bin/minecraft-agent-client.mjs": "49384a0a96b3509a6a9afc42d00953752deb41a946efd5e2db46e1de43d5c8d8",
-    "bin/minecraft-agent-knowledge.mjs": "ad4ff2e683d4a8f91ff823cb17e88060e61a0326e306421327d8f0653a289270"
+    "package.json": "dd9dd63e56dd87f5c3f0a502c4ff2d2ed602615fc3536f63ceade0f9def2ff89",
+    "dist/build.json": "743a5245e764c40f4ed486b916090ee3f6cbffb9a7eeb7f453c735226a3336fd",
+    "dist/types/manifest.json": "6200d8ec891e3db35c8f2558739c8a9fe388578079f70423d9caf72fc334a683",
+    "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
+    "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc",
+    "bin/minecraft-agent-knowledge.mjs": "a67d8c4fa1221e9035e463e959cca36648c956e578b9a264e4618a00a4daa86b"
   },
   "external_viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
