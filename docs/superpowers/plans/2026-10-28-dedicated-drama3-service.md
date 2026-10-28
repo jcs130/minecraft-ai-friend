@@ -45,8 +45,8 @@
 **Interfaces:** `http://192.168.3.133:18120/health`, `/v1/models`, and `/v1/audio/speech`.
 
 - [x] Record the current Qwen container restart policy and LAN proxy task state, then stop and disable only those exact local LLM components.
-- [ ] Install the scoped firewall and interactive user scheduled tasks, then require actual Kirito/Yui/cast synthesis. The SYSTEM trial failed generation. The user task passed initial smoke but a watchdog restart exposed Vulkan OOM; the `max_seconds=10` service limit passed two three-voice rounds and awaits deployment plus restart smoke.
-- [ ] Verify the task principal, active process, GPU allocation, firewall scope, and watchdog behavior after an intentional service-task stop. The earlier user-mode task, GPU, and stop/restart were verified; the final combined setup remains pending.
+- [x] Install the scoped firewall and interactive user scheduled tasks, then require actual Kirito/Yui/cast synthesis. The final task action includes `--max-seconds 10`; installation and independent smoke passed.
+- [x] Verify the task principal, active process, GPU allocation, firewall scope, and watchdog behavior after an intentional service-task stop. The watchdog restored the service, two three-voice rounds passed after restart, and its next timed check returned 0. A second physical LAN client has not been tested.
 
 ### Task 3: Real speech smoke and documentation
 
@@ -57,4 +57,4 @@
 - [x] Run the smoke tool on loopback and the machine's LAN IP; record actual request latency and audio lengths.
 - [x] Verify the old local LLM health endpoint no longer answers and the Drama 3 endpoint remains healthy.
 - [x] Document LAN client request, model/voice IDs, operational status, restart/rollback steps, licensing, and the unverified remote-machine boundary.
-- [ ] Run `git diff --check`, review changed files, commit only source/docs, and follow the repository's main-branch publication rules without force-push.
+- [x] Run `git diff --check`, review changed files, commit only source/docs, and follow the repository's main-branch publication rules without force-push.
