@@ -1,6 +1,6 @@
 # GitHub 开发与本机资源恢复
 
-> **2026-10-23 当前入口：**Paper 维护分支为 `qiandengji-personal-stash`，核心 1.21.1；官网正式源为 `portal-account-fix-20261023` 的 0.8.4。新部署请先读 [SELF_HOSTING.md](SELF_HOSTING.md)。下文主干/NeoForge镜像/本机资源恢复属于历史工程记录，不是当前 Paper 的通用安装步骤；不因以下旧命令覆盖现役服务或把私有资源提交 Git。
+> **2026-10-29 当前入口：**`main` 的 `paper/` 保存 Paper 1.21.1 维护源码，官网源码在 `paper/integrations/agent-portal/`，正式官网为 0.8.28。实际部署版本以 [当前组件清单](../paper/manifests/current-deployment.json) 为准，新部署先读 [SELF_HOSTING.md](SELF_HOSTING.md)。下文 NeoForge 镜像和本机资源恢复属于历史工程记录；不能用旧分支、旧命令覆盖现役服务，也不把私有资源提交 Git。
 
 主仓库是 https://github.com/jcs130/minecraft-ai-friend。2026-09-20 用户明确要求部署后提交主干，交付分支改为 `main`；`codex/*` 可继续用于隔离开发。原整合开发分支为 `codex/performance-foundation`，本次目录整合继承原 `main` 的 `7e2b4e19f07cacab903f88e5b785487b9deae225` 及之前 409 个提交；原世界服务源码现在位于 `world/`。配套 `dsh-minecraft-agent` 是另一个 Agent 接入仓库，不是本项目的远端。
 

@@ -1,13 +1,15 @@
 # 千灯纪：Paper 跨端服务器
 
-## 当前状态（2026-10-28）
+## 当前状态（2026-10-29）
 
 
 连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](manifests/current-deployment.json)。
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.25 / VortexRPG1.2.2-alpha-qd29 / QiandengjiRpg0.2.4**，官网 **0.8.28**。六职业、唯一成长与魔力、八张冒险任务、天赋、考试和旧副本救援已正式接通；旧职业只读归档。副本准入识别四护甲及近战、弓弩或本职业法器，不强制带剑；[正式发布与回退](docs/NATIVE_RPG_RELEASE_20261027.md)。Multiverse5.8.1、起始之城保护和原村庄往返保持。完整0.4.48仍有其他候选，不可直接替换现役JAR。
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.27 / VortexRPG1.2.2-alpha-qd29 / QiandengjiRpg0.2.6**，官网 **0.8.28**。职业、经验、魔力和金币已统一到 Vortex，原背包、个人箱、任务和成绩保留；[最新发布与回退](docs/RPG_UNIFIED_20261028.md)。副本准入识别四护甲及近战、弓弩或本职业法器，不强制带剑。Multiverse5.8.1、起始之城保护和原村庄往返保持。完整0.4.48仍有其他候选，不可直接替换现役JAR。
 
 最新修复：基础生存技能、普通组队、职业菜单和失败指引，桐人原生频道0.3.2已生效；原物品、职业与未知回执保持。[0.4.47.25发布与回退](docs/BASIC_SURVIVAL_RELEASE_20261028.md) · [局域网TTS自建音色](integrations/lan-tts/README.md)。
+
+存储维护：E/F 新冷备及本轮到期清理已完成，[NVMe 切换](docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，原 E 盘服已恢复开放；修正版通过 57 项隔离检查，等待 Windows 确认。[近场语音](docs/PROXIMITY_VOICE.md)为调研方案，尚未安装。
 
 
 [mcbot独立Paper适配](integrations/mcbot/README.md)与[玩家假上下线修复](docs/PLAYER_ROSTER_OCCLUSION_20261028.md)已部署，官方Fabric界面与长期模型任务仍未验证。

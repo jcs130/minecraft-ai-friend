@@ -34,10 +34,12 @@ $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
 $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
 $pendingContentDeploy = Join-Path $opsDir 'content-plugins.pending.json'
 $pendingPaperCoreUpgrade = Join-Path $opsDir 'paper-core-upgrade.pending.json'
+$pendingRuntimeRelocation = Join-Path $opsDir 'runtime-relocation.pending.json'
 . (Join-Path $PSScriptRoot 'content-deploy.ps1')
 . (Join-Path $PSScriptRoot 'paper-core-upgrade.ps1')
 . (Join-Path $PSScriptRoot 'ysm-services.ps1')
 . (Join-Path $PSScriptRoot 'agent-client-identity.ps1')
+. (Join-Path $PSScriptRoot 'runtime-relocation.ps1')
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -483,6 +485,9 @@ function Apply-AuraSkillsCachePatch {
 }
 
 function Start-Server {
+    if (Test-Path -LiteralPath (Join-Path $opsDir 'runtime-relocation.recovery.blocked')) {
+        throw 'Runtime relocation recovery requires inspection; refusing startup'
+    }
     if (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')) {
         throw 'Native economy recovery requires inspection; refusing startup'
     }
@@ -881,6 +886,12 @@ function Deploy-PendingEyeMirror {
 }
 
 function Backup-Server {
+    if(Test-Path -LiteralPath $pendingRuntimeRelocation) {
+        $null=Relocation-ValidatePlan (Get-Content -LiteralPath $pendingRuntimeRelocation -Raw -Encoding UTF8 | ConvertFrom-Json)
+        foreach($other in @($pendingAgentFriendDeploy,$pendingEyeMirrorDeploy,$pendingGeyserDeploy,$pendingContentDeploy,$pendingPaperCoreUpgrade,$pendingServerSettings)) {
+            if(Test-Path -LiteralPath $other) { throw 'Runtime relocation must not be mixed with another deployment.' }
+        }
+    }
     $sourceBytes = Backup-TreeBytes $serverDir
     $freeBytes = (Get-PSDrive -Name E).Free
     if ($null -eq $freeBytes -or $freeBytes -lt ($sourceBytes + 1GB)) {
@@ -904,6 +915,7 @@ function Backup-Server {
                  (Test-Path -LiteralPath $pendingEyeMirrorDeploy) -or
                  (Test-Path -LiteralPath $pendingContentDeploy) -or
                  (Test-Path -LiteralPath $pendingPaperCoreUpgrade) -or
+                 (Test-Path -LiteralPath $pendingRuntimeRelocation) -or
                  (Test-Path -LiteralPath $pendingServerSettings)) -and (DungeonActive)) {
                 Log 'Backup and pending deployment skipped: dungeon run active'
                 return
@@ -930,7 +942,7 @@ function Backup-Server {
         # Resident MCP drivers keep a Windows byte-range lock until they exit.
         # The PID lease is rebuilt at startup and is not restorable state.
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'runtime-relocation.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Details: $opsCopyLog. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -973,6 +985,7 @@ function Backup-Server {
         # Finish E: retention while Paper and authentication are still stopped.
         # A standalone Mirror also defers pruning if players are already back.
         PruneSnapshots $backupRoot
+        Deploy-PendingRuntimeRelocation $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingPaperCore $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingContent $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingServerSettings
@@ -982,6 +995,7 @@ function Backup-Server {
     }
     finally {
         if ($wasRunning -and ($script:coreUpgradeRecoveryBlocked -or $script:contentRecoveryBlocked -or
+            (Test-Path -LiteralPath (Join-Path $opsDir 'runtime-relocation.recovery.blocked')) -or
             (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')))) {
             Log 'CRITICAL: Core file rollback requires inspection; automatic startup remains paused'
             throw 'Core file recovery incomplete; refusing automatic restart'

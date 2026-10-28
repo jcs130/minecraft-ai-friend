@@ -2,6 +2,8 @@
 
 **当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.27、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.6已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/RPG_UNIFIED_20261028.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
 
+运维状态：原 E 盘服已恢复开放。[NVMe 迁移](paper/docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，修正版通过 57 项隔离检查，仍待 Windows 确认；C 盘候选副本尚未启用。
+
 
 统一版 `.27 / 桥0.2.6` 已正式部署并通过核验：任务/回收/试炼/商店/委托共用金币，旧技能成长归档，背包满会提示直接远程存箱。见[发布与验收](paper/docs/RPG_UNIFIED_20261028.md)。
 
