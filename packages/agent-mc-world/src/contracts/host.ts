@@ -85,7 +85,7 @@ export interface WorldRequestFacts {
   /** Event state streams fully represented by these current facts. This permits
    * request-only replacement of old state snapshots, not deletion of the event
    * ledger, terminal outcomes or evidence of historical progress. */
-  text: string; snapshotTypes: readonly string[]; parts?: readonly { key: string; text: string }[];
+  text: string; snapshotTypes: readonly string[]; parts?: readonly import('./protocol.ts').FactPart[];
   /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */
   workStates?: readonly import('./work-state.ts').WorkState[];
   /** Bounded current capability discovery; not execution eligibility or a model-selected plan. */

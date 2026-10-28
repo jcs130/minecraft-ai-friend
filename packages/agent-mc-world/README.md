@@ -1,5 +1,12 @@
 # Agent MC World
 
+Development candidate **rc.121** adds the optional producer-owned
+`FactPart.stateRevision` comparison contract and `withFactState` SDK helper.
+Recovery facts keep their raw sample time and original content hashes while
+comparing explicitly selected position, life and inventory state. Unknown
+producers retain text comparison; no timestamp fields are stripped by name.
+The digest is not freshness, action permission or a completed task.
+
 Development candidate **rc.117** adds the public `FactUpdateStream`,
 `applyFactUpdate` and `FACT_UPDATE_GUIDANCE` SDK exports and the
 `agent-mc/fact-update/v1` contract under `agent-mc-world/contracts`.
