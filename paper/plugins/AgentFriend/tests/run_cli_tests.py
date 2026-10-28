@@ -22,7 +22,7 @@ def main():
     classpath = os.pathsep.join(map(str, [classes, inputs / "versions/1.21.1/paper-1.21.1.jar",
         *sorted((inputs / "libraries").rglob("*.jar")), *sorted((inputs / "plugins").glob("*.jar"))]))
     root = Path(__file__).resolve().parent
-    tests = ["AgentCliContractTest", "AgentCliTextTest", "JourneyCatalogTest"]
+    tests = ["AgentCliContractTest", "AgentCliTextTest", "JourneyCatalogTest", "NativeCliCatalogTest"]
     suffix = ".exe" if os.name == "nt" else ""
     tool = lambda name: str(args.jdk / "bin" / (name + suffix)) if args.jdk else name
     version = subprocess.run([tool("javac"), "-version"], capture_output=True, text=True, check=True)

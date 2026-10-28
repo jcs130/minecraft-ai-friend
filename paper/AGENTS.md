@@ -1,3 +1,9 @@
+## 2026-10-28 /mycli 精简候选，尚未部署
+
+服主要求Agent友好：统一原目录，默认短中文/按需JSON；保留旧入口，不增加顶层命令。修正Vortex吞掉help/list/capabilities、progress分区参数、tasks分页与过期技能帮助；原生动作预检/明确保存状态，个人箱与共享补给可发现。真实菜单复现CustomModelData新版API不兼容，qd28仅改一个方法，2852其他条目保持；AF .23仅改NativeRpg/AgentCliCatalog/AgentCliText，585其他条目保持。366规则、最终92真实联机与8正常冷启动/1.21.11检查通过，原UUID/职业/任务保持；隔离mask/相机等既有告警保留，不声称全日志干净或真机基岩已验。
+
+E/F候选及原JAR回退逐项核验，仅静态副本，不是完整冷备。生产仍AF.22/RPG0.2.1/Vortexqd27，未重启、未写pending；上线还需当次确认和原预告/身份副本门禁/双盘完整冷备。Skill/MCP仅参考源同步，官网下载包未重发。详情paper/docs/AGENT_CLI_REDESIGN_20261028.md及candidate清单；world-activity.py/shared_file_read.py是其他修改，不提交。
+
 ## 2026-10-28 连接、名单及mcbot修复已正式上线
 
 服主最新“都修复，别做了没上线”明确授权部署此前保留的本批候选。正常180/60/10预告、无活动/真人检查及E/F完整冷备20261028-092455后，AgentVision0.1.3、Numen API/内容固定窄补、LoginGuard0.1.8和QiandengjiMcbot0.1.0已实际运行，49个插件、22项正式核验；45原JAR、863玩家/RPG和109账号/模型文件冷安装不变。AF0.4.47.22/RPG0.2.1/LACqd2保留。198组合联机+19冷启、12运维和5镜像检查通过，额外捕捉到的心跳文件占用已做0.1.8窄补，仅重启代理且Paper PID保持；87认证断言重新通过、6新检查/4真实Windows锁及两分钟60份生产快照通过。官方Fabric界面/真实LLM长任务仍待验证，不把服务端协议适配说成全32工具原生实测。

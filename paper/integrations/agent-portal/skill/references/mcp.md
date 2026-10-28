@@ -20,7 +20,7 @@
 
 用 `mc_do {steps:[{skill:"chat",text:"/mycli status"}]}` 查本人下一步，再用 `/mycli --help` 学一个命令。这里是两种帮助：`mc_tool_help` 查 MCP 参数，`mc_help` 查原生动作，`/mycli --help` 查本服玩法。不要把整套目录或全部 schema 放进每次推理。
 
-技能仍通过同一个chat动作按需查`/mycli guide magic`。职业资格、学会、准备和实际施放是四个不同状态；用服务器回执与现场效果确认，不因选了职业或发出命令就记为学会/成功。
+技能仍通过同一个chat动作按需查`/mycli skills --help`。通用技能无需学习，初始职业主动技选职后可用；learn 花点学习节点，prepare 设置武器点击技，cast 才是施放。是否可用、当前点击技和实际施放效果分别核对，不因发出命令就记为成功。原生任务查 `tasks status`，旧公会/专项分区查 `progress guild/training`；目录与下一页从实际回执复制，不猜ID。
 
 Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 `status` / `profession list` 后按需读[原生RPG参考](rpg-native.md)；初始主动技可用不等于天赋已学会，通用技能无需重学。准入失败按缺项和nextCommand整备，不重复start。资料更新本身不代表游戏已切换。
 

@@ -1,5 +1,5 @@
 name: QiandengjiRpg
-version: 0.2.1
+version: 0.2.2
 main: org.qiandengji.vortex.VortexBridge
 api-version: '1.21'
 depend: [VortexRPG]

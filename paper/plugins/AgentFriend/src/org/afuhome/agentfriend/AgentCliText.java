@@ -24,15 +24,16 @@ final class AgentCliText {
     }
 
     static List<String> help(JsonObject data) {
-        if (data.has("errorCode")) return List.of("[提示] " + shortText(value(data, "message", "参数错误"), 180) + "。命令：/mycli --help");
+        if (data.has("errorCode")) return List.of("[invalid_argument] " + shortText(value(data, "message", "参数错误"), 180) + "。下一步："+command(data,"nextCommand","/mycli --help"));
         List<String> lines = new ArrayList<>();
         lines.add("用法：" + value(data, "usage", "/mycli --help"));
+        if(data.has("defaultAction"))lines.add(value(data,"defaultAction",""));
         if (data.has("commands")) {
             for (JsonElement item : data.getAsJsonArray("commands")) {
                 JsonObject row = item.getAsJsonObject();
-                lines.add(value(row, "name", "") + "：" + shortText(value(row, "summary", ""), 60));
+                lines.add(value(data,"path","/mycli")+" "+value(row, "name", "") + "：" + shortText(value(row, "summary", ""), 60));
             }
-            lines.add("详情：<命令> --help；仅详情标明支持时使用 --json。");
+            lines.add("详情："+value(data,"path","/mycli")+" <命令> --help；仅详情标明支持时使用 --json。");
         } else {
             lines.add(shortText(value(data, "summary", ""), 160));
             String operation = switch (value(data, "operation", "")) {

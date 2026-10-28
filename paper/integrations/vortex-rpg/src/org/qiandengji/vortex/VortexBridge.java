@@ -113,14 +113,14 @@ public final class VortexBridge extends JavaPlugin {
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] raw){
         if(!(sender instanceof Player p)){sender.sendMessage("此入口只操作本人角色。");return true;}
         BridgeRules.Request r;
-        try{r=BridgeRules.parse(raw);}catch(IllegalArgumentException e){p.sendMessage("[RPG] "+e.getMessage());return true;}
+        try{r=BridgeRules.parse(raw);}catch(IllegalArgumentException e){if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_RPG "+gson.toJson(Map.of("success",false,"reason","invalid_argument","changed",false,"message",e.getMessage(),"nextCommand",e instanceof BridgeRules.InvalidArgument invalid?invalid.nextCommand():"/mycli --help")));else p.sendMessage("[RPG] "+e.getMessage());return true;}
         try{
             if(r.help()){help(p,r);return true;}
             if(!getConfig().getString("backend","preview").equals("vortex")&&!getConfig().getStringList("allowed-worlds").contains(p.getWorld().getName()))throw new IllegalArgumentException("当前世界未开放Vortex预览。");
             var state=profile(p);
             if(skillFailure(p,state,r))return true;
             switch(r.group()){
-                case "status"->emit(p,r,Map.of("authority","VortexRPG","class",vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("none"),"level",state.level(),"xp",state.experience(),"nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state),"mana",Math.round(mana.getMana(p.getUniqueId())),"maxMana",Math.round(mana.getMaxMana(p)),"economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)),"preview",!getConfig().getString("backend","preview").equals("vortex")),"职业 "+vortex.classSkillService().selectedClassDefinition(state).map(c->BridgeRules.className(c.id())).orElse("未选择")+"；战斗Lv."+state.level()+"；距升级 "+vortex.playerProfileService().experienceToNextLevel(state)+"；魔力 "+Math.round(mana.getMana(p.getUniqueId()))+"/"+Math.round(mana.getMaxMana(p))+"。下一步：/mycli "+(vortex.classSkillService().hasClass(state)?"skills status":"profession list"));
+                case "status"->status(p,state,r);
                 case "class"->classes(p,state,r);
                 case "skills"->skills(p,state,r);
                 case "cast"->{String id=BridgeRules.id(r);write(p,r,()->vortex.spellbookService().cast(p,state,id),false,"技能已执行；效果以现场和 status 为准。");}
@@ -132,13 +132,24 @@ public final class VortexBridge extends JavaPlugin {
         }catch(Exception e){emit(p,r,Map.of("success",false,"reason","unavailable","message",safeError(e)),safeError(e));}
         return true;
     }
+    private void status(Player p,UnifiedPlayer state,BridgeRules.Request r){
+        String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("none");
+        String next="/mycli "+(id.equals("none")?"profession list":"tasks status");
+        var data=new LinkedHashMap<String,Object>();
+        data.put("authority","VortexRPG");data.put("class",id);data.put("level",state.level());data.put("xp",state.experience());
+        data.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));data.put("mana",Math.round(mana.getMana(p.getUniqueId())));data.put("maxMana",Math.round(mana.getMaxMana(p)));
+        data.put("health",p.getHealth());data.put("maxHealth",p.getMaxHealth());data.put("food",p.getFoodLevel());data.put("mode",p.getGameMode().name());
+        data.put("pending",pending.contains(p.getUniqueId()));data.put("queryOnly",true);data.put("nextCommand",next);
+        data.put("economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)));data.put("preview",!getConfig().getString("backend","preview").equals("vortex"));
+        emit(p,r,data,"[状态] "+BridgeRules.className(id)+" Lv."+state.level()+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"；魔力 "+data.get("mana")+"/"+data.get("maxMana")+"；升级还需 "+data.get("nextLevelXp")+"经验"+(pending.contains(p.getUniqueId())?"；上一操作确认中，勿重复执行":"")+"。下一步："+next);
+    }
     private void classes(Player p,UnifiedPlayer state,BridgeRules.Request r){
         switch(r.action()){
             case "status"->{noArgs(r);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("none");emit(p,r,Map.of("class",id,"queryOnly",true),id.equals("none")?"尚未选职。下一步：/mycli profession list":BridgeRules.className(id)+"；技能：/mycli skills status");}
-            case "menu"->{noArgs(r);vortex.classSkillService().openClassMenu(p,state);}
+            case "menu"->{noArgs(r);vortex.classSkillService().openClassMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","profession","selectionConfirmed",false,"nextCommand","/mycli profession status"),"已请求打开职业菜单；尚未选择。");}
             case "list"->{noArgs(r);var ids=vortex.classSkillService().registeredClassIds();emit(p,r,Map.of("classes",ids),String.join("；",ids.stream().map(id->id+" "+BridgeRules.className(id)).toList())+"。详情：/mycli profession info <ID>");}
-            case "info"->{String id=BridgeRules.id(r);var d=vortex.classSkillService().classProfile(id).orElseThrow(()->new IllegalArgumentException("未知职业"));emit(p,r,Map.of("id",id,"starterSpell",d.starterSpellId(),"queryOnly",true),BridgeRules.className(id)+"；起始技能 "+d.starterSpellId()+"。主动选择：/mycli profession choose "+id);}
-            case "choose"->{String id=BridgeRules.id(r);if(vortex.classSkillService().classProfile(id).isEmpty())throw new IllegalArgumentException("未知职业");write(p,r,()->vortex.classSkillService().chooseClass(p,state,id),true,"职业已选择并保存。下一步：/mycli skills list");}
+            case "info"->{String id=BridgeRules.id(r);var d=vortex.classSkillService().classProfile(id).orElseThrow(()->new IllegalArgumentException("[unknown_class] 未知职业 "+id+"；未执行。下一步：/mycli profession list"));emit(p,r,Map.of("id",id,"starterSpell",d.starterSpellId(),"queryOnly",true),BridgeRules.className(id)+"；起始技能 "+d.starterSpellId()+"。主动选择：/mycli profession choose "+id);}
+            case "choose"->{String id=BridgeRules.id(r);if(vortex.classSkillService().classProfile(id).isEmpty())throw new IllegalArgumentException("[unknown_class] 未知职业 "+id+"；未执行。下一步：/mycli profession list");write(p,r,()->vortex.classSkillService().chooseClass(p,state,id),true,"职业已选择并保存。下一步：/mycli skills list");}
             default->throw new IllegalArgumentException("class 仅 list/info/choose；查询不自动选职。");
         }
     }
@@ -165,11 +176,11 @@ public final class VortexBridge extends JavaPlugin {
         switch(r.action()){
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
                 async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("talentPoints",data.talentPoints(),"allocated",data.allocatedNodes(),"nodes",tree.nodes(),"summary","天赋点 "+data.talentPoints()+"；"+String.join("、",tree.nodes().values().stream().map(n->n.id()+" "+n.displayName()+"("+n.cost()+"点)").toList())+"。查看条件：/mycli skills info <ID>")),"天赋资料暂不可用");}
-            case "menu"->{noArgs(r);vortex.classSkillService().openSkillMenu(p,state);}
+            case "menu"->{noArgs(r);vortex.classSkillService().openSkillMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","skills","learningConfirmed",false,"nextCommand","/mycli skills status"),"已请求打开技能菜单；尚未学习。");}
             case "list", "status", "mine", "points"->{noArgs(r);var ids=vortex.spellbookService().availableSpells(state);var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
                 emit(p,r,Map.of("available",ids,"common",List.of("home","travel","prospect","night","feather"),"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state)),
                     "通用：home/travel/prospect/night/feather；职业可用："+String.join("、",ids)+"；学习点 "+vortex.classSkillService().unspentSkillPoints(state)+"；可学："+String.join("、",learnable.stream().map(k->k.id()+"("+k.cost()+"点,Lv"+k.requiredLevel()+")").toList())+"。详情：/mycli skills info <ID>");}
-            case "prepare", "equip"->{String id=BridgeRules.id(r);write(p,r,()->{vortex.spellbookService().setActiveSpell(state,id);return CompletableFuture.completedFuture(null);},true,"已装备原生技能；施放：/mycli cast <ID>");}
+            case "prepare", "equip"->{String id=BridgeRules.id(r);write(p,r,()->{vortex.spellbookService().setActiveSpell(state,id);return CompletableFuture.completedFuture(null);},true,"已设置点击技能并保存；施放：/mycli cast "+id);}
             case "info"->{String id=BridgeRules.id(r);
                 var node=vortex.classSkillService().skillsFor(state).stream().filter(k->k.id().equals(id)).findFirst();
                 if(node.isPresent()){var k=node.get();emit(p,r,Map.of("skill",k,"learned",vortex.classSkillService().unlockedSkillIds(state).contains(id),"queryOnly",true),k.displayName()+"；需要Lv"+k.requiredLevel()+"、"+k.cost()+"点；"+k.description()+"。学习：/mycli skills learn "+id);return;}
@@ -187,24 +198,25 @@ public final class VortexBridge extends JavaPlugin {
     }
     private void quests(Player p,BridgeRules.Request r){
         switch(r.action()){
-            case "list"->{noArgs(r);var defs=quests.registry().all().values().stream().toList();emit(p,r,Map.of("quests",defs),String.join("；",defs.stream().map(q->q.id()+" "+q.name()).toList())+"。详情：/mycli tasks info <ID>");}
+            case "list"->{noArgs(r);var defs=quests.registry().all().values().stream().sorted(Comparator.comparing(QuestDefinition::id)).toList();var shown=BridgeRules.page(defs,r);var out=new LinkedHashMap<String,Object>(BridgeRules.pagination(defs.size(),r));out.put("quests",shown);out.put("queryOnly",true);emit(p,r,out,"[任务 "+r.page()+"/"+BridgeRules.pages(defs.size())+"] "+String.join("；",shown.stream().map(q->q.id()+" "+q.name()).toList())+"。详情：/mycli tasks info <ID>"+BridgeRules.nextPage(defs.size(),r));}
             case "info"->{String id=BridgeRules.id(r);var q=quest(id);emit(p,r,Map.of("quest",q,"queryOnly",true),QuestText.info(q));}
-            case "status"->{noArgs(r);async(p,r,quests.questData(p.getUniqueId()).thenApply(data->{
+            case "status"->{String focus=r.arguments().isEmpty()?null:BridgeRules.id(r);if(focus!=null)quest(focus);async(p,r,quests.questData(p.getUniqueId()).thenApply(data->{
+                if(focus!=null){var progress=data.quests().get(focus);int awaiting=quests.qiandengjiPendingRewards(p.getUniqueId());String summary=progress==null?focus+"："+(data.completedQuestLog().contains(focus)?"已交付；下一步：/mycli tasks list":"未接取；先读条件：/mycli tasks info "+focus):QuestText.progress(quest(focus),progress);if(awaiting>0)summary+="；有 "+awaiting+"笔奖励待核对，勿重复领取，请联系服主。";return Map.<String,Object>of("id",focus,"summary",summary,"pendingRewardCount",awaiting,"queryOnly",true);}
                 var active=data.quests().values().stream().filter(v->v.state()==QuestState.ACTIVE).sorted(Comparator.comparing(QuestProgress::questId)).toList();
-                var shown=active.stream().limit(8).toList();
+                var shown=BridgeRules.page(active,r);
                 var lines=shown.stream().map(v->quests.registry().find(v.questId()).map(q->QuestText.progress(q,v)).orElse(v.questId()+"：任务定义暂不可用，勿重复接取")).toList();
-                String summary=active.isEmpty()?"当前没有进行中的任务。选择冒险：/mycli tasks list":String.join("；",lines)+(active.size()>8?"；另有"+(active.size()-8)+"项进行中":"");
+                String summary=active.isEmpty()?"当前没有进行中的任务。选择冒险：/mycli tasks list":String.join("；",lines)+BridgeRules.nextPage(active.size(),r);
                 if(!data.completedQuestLog().isEmpty())summary+="；已交付 "+data.completedQuestLog().size()+"项";
                 int awaiting=quests.qiandengjiPendingRewards(p.getUniqueId());
                 if(awaiting>0)summary+="；有 "+awaiting+"笔奖励待核对，勿重复领取，请联系服主。";
-                return Map.<String,Object>of("quests",shown,"activeCount",active.size(),"completedCount",data.completedQuestLog().size(),"pendingRewardCount",awaiting,"summary",summary,"queryOnly",true);
+                var out=new LinkedHashMap<String,Object>(BridgeRules.pagination(active.size(),r));out.put("quests",shown);out.put("activeCount",active.size());out.put("completedCount",data.completedQuestLog().size());out.put("pendingRewardCount",awaiting);out.put("summary",summary);out.put("queryOnly",true);return out;
             }),"查询暂不可用；不要重复接取。");}
             case "accept"->{String id=BridgeRules.id(r);quest(id);write(p,r,()->quests.startQuest(p,id).thenAccept(result->{if(!result.success())throw new IllegalStateException(result.message());}),false,"任务已接取并保存；查询：/mycli tasks status");}
             case "claim"->{String id=BridgeRules.id(r);quest(id);write(p,r,()->quests.completeQuest(p,id).thenAccept(ok->{if(!ok)throw new IllegalStateException("目标未完成、已领取或当前不能交付；查询：/mycli tasks status");}),false,"任务已交付，奖励已确认；查询：/mycli tasks status");}
             default->throw new IllegalArgumentException("quests 仅 list/info/status/accept/claim。");
         }
     }
-    private QuestDefinition quest(String id){return quests.registry().find(id).orElseThrow(()->new IllegalArgumentException("未知任务"));}
+    private QuestDefinition quest(String id){return quests.registry().find(id).orElseThrow(()->new IllegalArgumentException("[unknown_task] 未知任务 "+id+"；未执行。下一步：/mycli tasks list"));}
     private ItemStack offerItem(ConfigurationSection c){String id=c.getString("vortex-item");return id!=null?items.create(id,c.getInt("amount",1)):new ItemStack(Objects.requireNonNull(Material.matchMaterial(c.getString("material",""))),c.getInt("amount",1));}
     private void validateShops(){var shops=getConfig().getConfigurationSection("shops");if(shops==null)return;for(String id:shops.getKeys(false)){var offers=shops.getConfigurationSection(id+".offers");if(offers==null)throw new IllegalStateException("商店无商品");for(String offer:offers.getKeys(false)){var c=offers.getConfigurationSection(offer);if(c.getInt("emeralds")<1||c.getInt("emeralds")>64||c.getInt("amount")<1||c.getInt("amount")>64)throw new IllegalStateException("商品数量无效");offerItem(c);}}}
     private void shop(Player p,BridgeRules.Request r){
@@ -226,7 +238,7 @@ public final class VortexBridge extends JavaPlugin {
         if(!io.vortexcore.combat.PlayerStateGate.allowed(p))throw new IllegalStateException("当前状态不能执行；请先等待救援或使用对应生存角色。查询：/mycli status");
         if(!pending.add(p.getUniqueId()))throw new IllegalStateException("上一操作仍在确认，请稍后查询；不要重复执行。");
         try{CompletableFuture<Void> f=operation.get();if(save)f=f.thenCompose(ignored->vortex.playerProfileService().qiandengjiSave(p).thenApply(snapshot->null));
-            f.whenComplete((ignored,error)->Bukkit.getScheduler().runTask(this,()->{pending.remove(p.getUniqueId());if(p.isOnline())emit(p,r,Map.of("success",error==null,"saved",error==null&&save,"reason",error==null?"completed":"failed","message",error==null?success:safeError(error)),error==null?success:safeError(error));}));
+            f.whenComplete((ignored,error)->Bukkit.getScheduler().runTask(this,()->{pending.remove(p.getUniqueId());boolean durable=save||r.group().equals("quests");if(p.isOnline())emit(p,r,Map.of("success",error==null,"saved",error==null&&durable,"saveState",error!=null?"unverified":durable?"saved":"not_applicable","reason",error==null?"completed":"failed","message",error==null?success:safeError(error)),error==null?success:safeError(error));}));
         }catch(Exception error){pending.remove(p.getUniqueId());throw error;}
     }
     private void async(Player p,BridgeRules.Request r,CompletableFuture<Map<String,Object>> f,String text){f.whenComplete((data,error)->Bukkit.getScheduler().runTask(this,()->{if(p.isOnline())emit(p,r,error==null?data:Map.of("success",false,"message",safeError(error)),error==null?String.valueOf(data.getOrDefault("summary",text)):safeError(error));}));}

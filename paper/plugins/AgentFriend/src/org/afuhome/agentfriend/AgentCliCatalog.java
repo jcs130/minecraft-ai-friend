@@ -344,10 +344,46 @@ final class AgentCliCatalog {
     }
 
     private static Map<String, Spec> catalogSpecs() {
-        return catalogSpecs(SpellGuide.entries());
+        return catalogSpecs(SpellGuide.entries(),nativeBackend());
     }
+    private static boolean nativeBackend(){return org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).nativeRpg().selected();}
     private static Map<String, Spec> catalogSpecs(List<SpellGuide.Entry> spells) {
+        return catalogSpecs(spells,false);
+    }
+    private static Map<String, Spec> catalogSpecs(List<SpellGuide.Entry> spells,boolean nativeRpg) {
         Map<String, Spec> specs = new LinkedHashMap<>(SPECS);
+        if(nativeRpg){
+            // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
+            specs.keySet().removeIf(id->Set.of("profession","skills","spells","cast").contains(id.split("\\.")[0]));
+            nativeSpec(specs,"profession","group","/mycli profession <动作>","职业：list/info 查询，choose 主动选择，status 核对","choose 只选一次，授予本职业初始装备；查询免费");
+            nativeSpec(specs,"profession.status","read","/mycli profession status","查本人当前职业","免费只读；不会重选或发装备");
+            nativeSpec(specs,"profession.list","read","/mycli profession list","列六职业 ID 与定位","免费只读；先 info 了解，再主动 choose");
+            nativeSpec(specs,"profession.info","read","/mycli profession info <ID>","查职业定位与初始技能","免费只读；ID 来自 profession list");
+            nativeSpec(specs,"profession.choose","write","/mycli profession choose <ID>","选择职业并保存，领取原生初始装备","需未选职且处于可行动状态；免费；只能选一次");
+            nativeSpec(specs,"profession.menu","gui","/mycli profession menu","打开职业菜单，点击选择才变更职业","打开免费；选择后以 profession status 核对");
+            nativeSpec(specs,"skills","group","/mycli skills <动作>","技能：list/info 查询，learn 学习，prepare 设置点击技","Vortex 为唯一成长权威；不再使用旧准备槽和 upgrade");
+            for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common]":action.equals("status")?" [ID]":""),"查本职可用技能、待学节点与点数","免费只读；list common 查无需选职的五项通用技");
+            nativeSpec(specs,"skills.info","read","/mycli skills info <ID>","查目标、效果、等级、费用与冷却","免费只读；主动技能、学习节点和被动天赋分别说明");
+            nativeSpec(specs,"skills.tree","read","/mycli skills tree","查本职天赋点、节点与前置条件","免费只读；需要已选职业");
+            nativeSpec(specs,"skills.learn","write","/mycli skills learn <节点ID>","学习职业节点或被动天赋并保存","按 skills info 明示的等级、前置与学习点/天赋点扣费；通用技无需学习");
+            nativeSpec(specs,"skills.prepare","write","/mycli skills prepare <技能ID>","设置已解锁的武器点击技能","仅已解锁的主动技能；不扣学习点、不施法；被动不能准备");
+            nativeSpec(specs,"skills.menu","gui","/mycli skills menu","打开原生技能菜单","打开免费，点击学习按对应节点费用结算");
+            nativeSpec(specs,"cast","cast","/mycli cast <技能ID> [参数]","施放技能；先 info 查目标、耗魔和冷却","职业技支持 --json；通用技沿用原回执，prospect 需要矿种等参数；不支持的格式会在执行前拒绝");
+            nativeSpec(specs,"tasks","group","/mycli tasks <动作>","冒险任务：list/info/status 查询，accept 接取，claim 交付","不自动接单；旧路线分类、menu/pause/resume 保持兼容");
+            nativeSpec(specs,"tasks.list","read","/mycli tasks list [--page 页码]","分页查原生讨伐、探索与制作任务","每页最多7项，免费只读；旧路线分类另沿原公会任务");
+            nativeSpec(specs,"tasks.info","read","/mycli tasks info <ID>","查条件、前置、奖励和接取命令","免费只读；ID 从 list 复制，不猜测任务名");
+            nativeSpec(specs,"tasks.status","read","/mycli tasks status [ID] [--page 页码]","查进行中任务的实际缺项及下一步；可聚焦一项","免费只读；指定 ID 时不使用 --page；旧委托查 progress guild");
+            nativeSpec(specs,"tasks.accept","write","/mycli tasks accept <ID>","主动接取指定原生任务并保存","按 info 核对等级与前置；不代做目标；超时先查 status，勿重接");
+            nativeSpec(specs,"tasks.claim","write","/mycli tasks claim <ID>","满足真实目标后交付并结算奖励","以最终保存与奖励回执为准；待核对时不重复领取");
+            nativeSpec(specs,"status","read","/mycli status","查生命、饱食、职业等级、魔力与下一步","免费只读；不代选职业、接任务或领奖");
+            nativeSpec(specs,"progress","read","/mycli progress [all|main|training|guild|challenge|story] [页码]","总览RPG任务与冒险；指定分区查原有独立进度","裸 progress 汇总，显式分区保留原分页；专项完成不等于主线毕业");
+            for(String id:List.of("arena.stash","arena.stash.pages","arena.stash.page")){
+                Spec old=specs.get(id);specs.put(id,new Spec(id,old.category(),old.mode(),old.usage(),old.summary(),"成功远程开页2魔力，实体箱旁免费；通用travel已可用，无需学习；未开箱时不扣费",old.returns()));
+            }
+            Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；个人箱：/mycli arena stash；共享补给：/mycli guild shared",inventory.returns()));
+            Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
+            return specs;
+        }
         for (SpellGuide.Entry spell : spells) {
             String id = "cast." + spell.id();
             specs.putIfAbsent(id, new Spec(id, "magic", "cast", spell.command(), spell.effect(),
@@ -355,12 +391,15 @@ final class AgentCliCatalog {
         }
         return specs;
     }
+    private static void nativeSpec(Map<String,Spec> specs,String id,String mode,String usage,String summary,String requires){
+        specs.put(id,new Spec(id,"adventure",mode,usage+" [--json]",summary,requires,"私有回执；查询确认真实状态，未知结果不自动重放"));
+    }
 
     static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
     /** Standard --help/-h discovery never runs the requested gameplay command. */
     static void commandHelp(Player player,String[] args) {
         boolean json=java.util.Arrays.asList(args).contains("--json");
-        JsonObject out=helpData(args);
+        JsonObject out=helpData(args,SpellGuide.entries(),nativeBackend());
         if(json){stamp(player,out);player.sendMessage("MC_CLI_HELP "+out);return;}
         AgentCliText.help(out).forEach(player::sendMessage);
     }
@@ -370,6 +409,9 @@ final class AgentCliCatalog {
         return helpData(raw,SpellGuide.entries());
     }
     static JsonObject helpData(String[] raw,List<SpellGuide.Entry> spells) {
+        return helpData(raw,spells,false);
+    }
+    static JsonObject helpData(String[] raw,List<SpellGuide.Entry> spells,boolean nativeRpg) {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);
         try{
             var words=new ArrayList<String>();int page=1;boolean seenPage=false,json=false;
@@ -385,7 +427,12 @@ final class AgentCliCatalog {
                 if(word.startsWith("-"))throw new IllegalArgumentException("未知帮助选项 "+word);
                 words.add(word.toLowerCase(Locale.ROOT));
             }
-            Map<String,Spec> specs=catalogSpecs(spells);String id="";int matched=0;
+            if(nativeRpg&&!words.isEmpty()){
+                if(words.getFirst().equals("rpg"))words.removeFirst();
+                if(!words.isEmpty())words.set(0,switch(words.getFirst()){case "class","职业"->"profession";case "quests","任务路线"->"tasks";case "spells","技能"->"skills";default->words.getFirst();});
+                if(words.size()>1&&words.getFirst().equals("skills"))words.set(1,switch(words.get(1)){case "equip"->"prepare";case "explain"->"info";default->words.get(1);});
+            }
+            Map<String,Spec> specs=catalogSpecs(spells,nativeRpg);String id="";int matched=0;
             for(int count=words.size();count>0;count--){String candidate=String.join(".",words.subList(0,count));if(specs.containsKey(candidate)){id=candidate;matched=count;break;}}
             if(!words.isEmpty()&&id.isEmpty())throw new IllegalArgumentException("未知命令");
             String path=id.isEmpty()?"/mycli":"/mycli "+id.replace('.',' ');
@@ -402,26 +449,34 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=prefix.equals("dungeon.")?List.of("list","info","status","start","join","claim","leave"):
-                        List.of("status","tasks","skills","dungeon","profession","inventory","rules");
+                var order=switch(prefix){case ""->List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
                 out.addProperty("usage",path+" <命令> [参数]");out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",list.size());
+                Spec parent=specs.get(id);if(parent!=null&&parent.mode().equals("gui"))out.addProperty("defaultAction","无子命令时："+parent.summary()+"；"+parent.requires());
                 var rows=new com.google.gson.JsonArray();
                 list.stream().skip((long)(page-1)*PAGE_SIZE).limit(PAGE_SIZE).forEach(spec->{JsonObject row=new JsonObject();row.addProperty("name",spec.id().substring(prefix.length()));row.addProperty("summary",spec.summary());rows.add(row);});out.add("commands",rows);
                 if(page<pages)out.addProperty("nextCommand",path+" --help --page "+(page+1)+(json?" --json":""));
             }else{
                 if(page!=1)throw new IllegalArgumentException("具体命令帮助只有1页");Spec spec=specs.get(id);if(spec==null)throw new IllegalArgumentException("未知命令");
                 out.addProperty("usage",spec.usage());out.addProperty("summary",spec.summary());JsonObject semantic=semantics(spec);
+                if(nativeRpg&&nativeEntry(id))nativeSemantics(spec,semantic);
                 for(String key:List.of("operation","parameters","permission","requirements","consumption","resultQuery"))out.add(key,semantic.get(key));
-                out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",jsonSupported(id));
+                out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",nativeRpg&&nativeEntry(id)||jsonSupported(id));
             }
         }catch(IllegalArgumentException invalid){out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("errorCode","INVALID_ARGUMENT");out.addProperty("message",invalid.getMessage());out.addProperty("nextCommand","/mycli --help");}
         return out;
     }
+    private static boolean nativeEntry(String id){return Set.of("status","progress","profession","skills","cast","tasks","tasks.list","tasks.info","tasks.status","tasks.accept","tasks.claim").contains(id)||id.startsWith("profession.")||id.startsWith("skills.");}
+    private static void nativeSemantics(Spec spec,JsonObject out){
+        boolean read=spec.mode().equals("read");out.addProperty("operation",read?"query":spec.mode().equals("group")?"group":"execute");out.addProperty("readOnly",read);
+        var effects=new com.google.gson.JsonArray();effects.add(read?"只读取并发送本人信息，不选职、不接任务、不学习、不消耗资源":spec.mode().equals("group")?"由具体子动作决定，先查子命令帮助":spec.mode().equals("gui")?"只请求打开界面；不代表已选择或学习，点击动作另行结算":"明确执行所请求动作；以最终回执和真实状态核对，未知结果不重放");out.add("sideEffects",effects);
+        out.addProperty("consumption",read?"无游戏内资源消耗":spec.requires());
+        out.addProperty("resultQuery",spec.id().startsWith("tasks")?"/mycli tasks status <ID>":spec.id().startsWith("profession")?"/mycli profession status":spec.id().startsWith("skills")||spec.id().equals("cast")?"/mycli skills status；/mycli skills info <ID>":"/mycli status");
+    }
     private static int idEmptyPriority(String prefix,String id,List<String> order){
-        String key=prefix.isEmpty()?id:prefix.equals("dungeon.")?id.substring(prefix.length()):"";
+        String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
     private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
@@ -465,7 +520,7 @@ final class AgentCliCatalog {
             item.addProperty("category", spec.category());
             item.addProperty("mode", spec.mode());
             item.addProperty("summary", spec.summary());
-            item.addProperty("operation",semantics(spec).get("operation").getAsString());
+            item.addProperty("operation",currentSemantics(spec).get("operation").getAsString());
             stamp(player,item);
             player.sendMessage("MC_CLI_ITEM " + item);
         }
@@ -496,7 +551,7 @@ final class AgentCliCatalog {
         detail.addProperty("requires", spec.requires());
         detail.addProperty("returns", spec.returns());
         detail.addProperty("discoveryReadOnly",!recordEvidence);
-        detail.add("semantics",semantics(spec));
+        detail.add("semantics",currentSemantics(spec));
         if (id.startsWith("cast.")) {
             SpellGuide.Entry spell = SpellGuide.find(id);
             if (spell != null) detail.add("spell", spell.json());
@@ -505,6 +560,7 @@ final class AgentCliCatalog {
         if(recordEvidence)org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_detail");
     }
 
+    private static JsonObject currentSemantics(Spec spec){JsonObject out=semantics(spec);if(nativeBackend()&&nativeEntry(spec.id()))nativeSemantics(spec,out);return out;}
     private static JsonObject semantics(Spec spec) {
         String id=spec.id();boolean mixed=(spec.root()&&Set.of("archive","tasks","challenge","world","photo","profession","skills","spells","coach","arena","dungeon","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
                 ||Set.of("world.story","world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);

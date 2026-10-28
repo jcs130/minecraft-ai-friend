@@ -2,7 +2,7 @@
 
 ## 版本与生效范围
 
-Vortex原生接管沿用下列少量主入口；职业、技能和任务以服务端实际后端为准。先 `/mycli intro` 读四步入门；[引导修复](RPG_GUIDANCE_20261028.md)说明旧技能停用与原版附魔保留。完整源码中的其他候选不代表已生效。
+Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精简入口；本轮 `.23 / RPG 0.2.2` 的帮助统一与任务分页仍为待发布候选，状态及验收见 [CLI 修订](AGENT_CLI_REDESIGN_20261028.md)。生产版本以 [部署清单](../manifests/current-deployment.json) 为准，源码更新不等于已上线。
 
 ## Agent 只需先记这些
 
@@ -15,13 +15,13 @@ Vortex原生接管沿用下列少量主入口；职业、技能和任务以服�
 /mycli progress
 ```
 
-- `status`：本人生命、饱食、魔力、真实认证观测、当前活动与下一步。认证未知不等于未登录。
+- `status`：本人生命、饱食、职业等级、魔力、当前活动与下一步；不自动选职、接任务或领奖。它不是登录验收，认证仍以真实 `MC_AUTH_SUCCESS` 和可用世界为准。
 - `--help`：当前命令目录，首页只有七项常用入口；照返回的下一页逐步查。`help` 和不带参数的 `/mycli` 使用同一目录。
-- `tasks list`：可选路线，探索、战斗、制造、补给与生活均可自选。查询不接单。
-- `tasks status`：当前委托阶段、真实缺项、位置与下一步；完成当前阶段后再按回执交付。
+- `tasks list`：当前原生 RPG 冒险任务，查询不接单；新候选每页最多七项，按返回的下一页继续。旧分类查询仍兼容原公会路线。
+- `tasks status`：进行中原生任务的真实缺项；新候选可加一个任务 ID 聚焦查询。旧探索单用 `progress guild` / `guild status`，不会因查原生任务而被取消。
 - `skills status`：本人当前后端的技能概览；单项用 `skills info <ID>`，`skills status <ID>` 保持兼容。以实际返回字段为准，未返回的冷却不能推成零。
 - Vortex选职后初始主动技可用，learn按详情学习节点，prepare设置点击技能，cast施放主动技；通用技能无需重学。只读详情不代学，选职业不代花点，具体罗盘操作见[技能四步](SKILL_USAGE_QUICKSTART.md)。
-- `progress`：主线、专项实练、公会委托、挑战与剧情分别显示。专项完成不等于主线毕业；首页合并专项摘要，细看用 `progress training`。
+- `progress`：裸命令汇总原生任务与冒险者段位、考试、在途公会委托；`progress main/training/guild/challenge/story` 按原分区查询与分页，专项完成不等于主线毕业。
 
 规则用 `/mycli rules`。不要一次读取全目录或背下所有参数；先看当前状态，再按需要读取一个命令的帮助。
 
@@ -34,7 +34,7 @@ Vortex原生接管沿用下列少量主入口；职业、技能和任务以服�
 /mycli protect --help
 ```
 
-帮助由实际 `AgentCliCatalog` 生成，说明用法、查询/动作类型、前置条件、消耗和结果核对入口。查询帮助本身不会报名、接单、学习或施法。首页优先 status、tasks、skills、inventory、protect、progress、rules；试炼、地下城、照片和其他功能仍在后续页，不增加新顶层命令。
+帮助由同一个 `AgentCliCatalog` 按实际后端生成，说明用法、查询/动作类型、前置条件、消耗和结果核对入口。查询帮助不会报名、接单、学习或施法。首页为 status、tasks、skills、dungeon、profession、inventory、rules；其他功能在后续页，未删功能，也不增加顶层命令。`inventory --help` 可找到个人箱和公共补给；`arena stash --help` 明示裸命令会开箱及费用。
 
 - 默认帮助、状态、进度和技能状态为精炼中文，真人和 Agent 相同。
 - 分页复用现有参数或返回的下一页命令，不增加第二套分页语法。
@@ -51,9 +51,9 @@ Vortex原生接管沿用下列少量主入口；职业、技能和任务以服�
 /mycli tasks info --help --json
 ```
 
-显式 JSON 保留 `MC_STATUS`、`MC_PAGE`、`MC_CLI_HELP` 等现有协议及关联字段。完整 UUID、会话和观测时间仍用于程序校对，默认短文本不重复展示。认证、安全、危险与死亡等必要回执保留。不是把所有历史命令或客户端工具输出都改成中文。
+显式 JSON 按实际后端保留 `MC_RPG`（当前 Vortex）、`MC_STATUS`（旧后端）、`MC_PAGE`、`MC_CLI_HELP` 等协议，不能写死所有状态都是 `MC_STATUS`。默认短文本不重复 UUID、会话和时间戳。认证、安全、危险与死亡等必要回执保留。
 
-旧后端的兼容调用端可按帮助使用 `--json`；Vortex的状态/任务以当前回执为准，`intro` 固定返回精炼入门文本，不承诺旧 GUIDE JSON。`world board`、`coach next` 和 `coach guide` 的帮助支持 `--json`。
+旧入口仅在帮助明确支持时使用 `--json`，不支持会在动作前拒绝。新候选的原生 RPG 查询/动作支持格式旗标前置或后置；`intro --json` 返回简短只读 `MC_INTRO`。通用施法仍沿原回执，不冒称全部旧动作均已支持 JSON。
 
 旧 `list`、`explain`、`capabilities`、`spells` 和 `status full` 继续可用，不重复宣传为另一套主入口。`list`、`explain` 等旧阅读入口可能给已报名的专项记录证明；`status full` 还有原详细状态/刷新行为。做指定 CLI 实练时按课程执行；普通发现用 `--help`，查进度用 `progress`。
 
@@ -65,13 +65,13 @@ Vortex原生接管沿用下列少量主入口；职业、技能和任务以服�
 | 多处方块是否受保护 | `/mycli protect batch --help`；最多64目标，默认按相同判定合并，不逐格刷长文 |
 | 找公共装备与补给 | `/mycli guild shared`；门内私人物资需主人授权 |
 | 个人大背包 | `/minepacks:backpack open`，54格；与任务物品袋、个人奖励箱独立 |
-| 远程个人箱 | 学会`travel`后，`/mycli arena stash`打开；`/mycli arena stash pages`选10页共540格。成功远程开页2魔力，实体箱旁免费 |
+| 远程个人箱 | `/mycli arena stash`打开；`/mycli arena stash pages`选10页共540格。通用travel已可用，无需学习；成功远程开页2魔力，实体箱旁免费 |
 | 拍照 | `/mycli photo menu`；耗2魔力，无需准备空地图，成片自动进入个人奖励箱 |
+| 练习试炼塔 | `/mycli arena --help`，与正式攻略通关分开 |
+| 遗迹地下城 | `/mycli dungeon --help`；先看难度与装备，主动开场或加入 |
+| 私聊 | 原版 `/minecraft:msg <在线玩家名> <内容>` |
 
-个人箱的`travel`资格在技能目录叫“传送点术”：先`/mycli skills info travel`，未学才用`/mycli skills learn travel`。无需先传送或施法，开箱直接用上表命令。`/mycli arena rewards list`查待入箱奖励，`/mycli arena stash list`查已装入箱格；领奖后开箱才装入，箱满继续保存。等实际窗口、槽位和光标更新后再继续存取，超时先查，不重复操作。
-| 试炼塔 | `/mycli arena --help`，按层战斗 |
-| 遗迹地下城 | `/mycli dungeon --help`，逐室探索，按真实凭据结算 |
-| 私聊 | 原版 `/msg <在线玩家名> <内容>`，不向公屏发送工具反馈 |
+个人箱无需先传送或施法；`travel` 是“传送点术”，当前 Vortex 下不用学习。`arena rewards list`查待入箱队列，`arena stash list`查已装入箱格；领奖后开箱才装入，箱满继续保存。等实际窗口、槽位和光标更新后再继续存取，超时先查，不重复操作。
 
 动作发出或 pending 不等于完成。超时、断线、背包快照不一致时先查询，不自动重复存取、施法、交易或领奖。所有个人反馈只给本人；不广播别人的查询或工具结果。
 
