@@ -13,7 +13,10 @@ import json
 import logging
 from pathlib import Path
 import secrets
+import select
+import socket
 import sys
+import threading
 import time
 from urllib.parse import urlsplit
 import wave
@@ -28,12 +31,40 @@ DEFAULT_STATE = ROOT / "server" / "drama3-service"
 MAX_JSON_BYTES = 64 * 1024
 MAX_MULTIPART_BYTES = MAX_UPLOAD_BYTES + 16 * 1024
 MODEL_OPTIONS = {"language", "seed", "max_seconds", "top_k", "top_p", "temperature", "experts_on_cpu"}
+MAX_CHUNK_SECONDS = 30.0
 
 
 class APIError(Exception):
     def __init__(self, status: int, message: str, *, param: str | None = None, code: str = "invalid_request") -> None:
         super().__init__(message)
         self.status, self.param, self.code = status, param, code
+
+
+class PeerCancellation:
+    """A queued request can check its socket immediately after acquiring the model lock."""
+
+    def __init__(self, connection: socket.socket) -> None:
+        self.connection = connection
+        self.event = threading.Event()
+
+    def is_set(self) -> bool:
+        if self.event.is_set():
+            return True
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            if readable and not self.connection.recv(1, socket.MSG_PEEK):
+                self.event.set()
+        except (OSError, ValueError):
+            self.event.set()
+        return self.event.is_set()
+
+    def wait(self, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.is_set():
+                return True
+            self.event.wait(min(0.05, deadline - time.monotonic()))
+        return self.is_set()
 
 
 class VoiceHTTPServer(ThreadingHTTPServer):
@@ -91,7 +122,11 @@ class VoiceHandler(BaseHTTPRequestHandler):
                 self._json(200, {"object": "list", "data": [{
                     "id": "drama-3", "object": "model", "created": int(time.time()),
                     "owned_by": "speech.cpp", "version": self.server.engine.version,
-                    "defaults": {"top_k": 4097, "max_seconds": 10}, "speech": info,
+                    "defaults": {"top_k": 4097, "max_seconds": MAX_CHUNK_SECONDS},
+                    "chunking": {"mode": "native_context", "max_seconds_scope": "per_chunk",
+                                 "max_seconds_limit": MAX_CHUNK_SECONDS,
+                                 "chunk_bytes": "about 300 UTF-8 bytes; fixed by model"},
+                    "speech": info,
                 }]})
             elif path == "/v1/audio/voices":
                 self._json(200, {"object": "list", "data": self.server.registry.list()})
@@ -197,7 +232,7 @@ class VoiceHandler(BaseHTTPRequestHandler):
         if fmt not in ("wav", "pcm") or (stream_format is not None and (fmt != "pcm" or stream_format != "sse")):
             raise APIError(400, "response_format must be wav or pcm; stream_format may be sse only for pcm",
                            param="response_format")
-        options = {"voice": voice, "max_seconds": 10.0, "top_k": 4097,
+        options = {"voice": voice, "max_seconds": MAX_CHUNK_SECONDS, "top_k": 4097,
                    "seed": secrets.randbelow(2**53)}
         for name in MODEL_OPTIONS:
             if name in body:
@@ -213,17 +248,24 @@ class VoiceHandler(BaseHTTPRequestHandler):
                 if name == "language" and not isinstance(value, str):
                     raise APIError(400, "language must be a string", param=name)
                 options[name] = float(value) if name in ("max_seconds", "top_p", "temperature") else value
-        if not (0 < options["max_seconds"] <= 10):
-            raise APIError(400, "max_seconds must be greater than 0 and at most 10 on this host", param="max_seconds")
+        if not (0 < options["max_seconds"] <= MAX_CHUNK_SECONDS):
+            raise APIError(400, f"max_seconds is per native chunk and must be greater than 0 and at most {MAX_CHUNK_SECONDS:g} on this host",
+                           param="max_seconds")
+        request_id = secrets.token_hex(6)
         if fmt == "wav":
             chunks: list[bytes] = []
             try:
-                result = self.server.engine.synthesize(prompt, options, chunks.append)
+                result = self._synthesize(prompt, options, chunks.append, request_id)
             except SpeechError as exc:
                 raise APIError(400 if exc.status in (-1, -2, -3) else 500,
                                str(exc), param=exc.option or None, code="native_synthesis_error") from None
+            if result["stop"] == "cancelled":
+                self.close_connection = True
+                return
             if result["samples"] == 0:
                 raise APIError(500, "native synthesis returned no audio", code="empty_audio")
+            if result["samples"] != sum(len(chunk) // 2 for chunk in chunks):
+                raise APIError(500, "native and WAV sample counts differ", code="sample_count_mismatch")
             with io.BytesIO() as output:
                 with wave.open(output, "wb") as wav:
                     wav.setnchannels(1)
@@ -238,13 +280,48 @@ class VoiceHandler(BaseHTTPRequestHandler):
             self.send_header("X-Sample-Rate", str(self.server.engine.SAMPLE_RATE))
             self.send_header("X-Speech-Seed", str(result["seed"]))
             self.send_header("X-Speech-Stop", result["stop"])
+            self.send_header("X-Request-Id", request_id)
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionResetError):
+                logging.info("speech client disconnected request=%s voice=%s", request_id, voice)
+                self.close_connection = True
         else:
-            self._stream_pcm(prompt, options, sse=stream_format == "sse")
+            self._stream_pcm(prompt, options, sse=stream_format == "sse", request_id=request_id)
 
-    def _stream_pcm(self, prompt: str, options: dict, *, sse: bool) -> None:
+    def _synthesize(self, prompt: str, options: dict, on_pcm: object, request_id: str) -> dict:
+        """Cancel this request if its HTTP peer leaves, including while it waits for the model."""
+        disconnected = PeerCancellation(self.connection)
+        finished = threading.Event()
+
+        def watch_peer() -> None:
+            while not finished.wait(0.05):
+                if disconnected.is_set():
+                    return
+
+        watcher = threading.Thread(target=watch_peer, name="drama3-http-disconnect", daemon=True)
+        watcher.start()
+        started = time.monotonic()
+        try:
+            result = self.server.engine.synthesize(prompt, options, on_pcm, cancellation=disconnected)
+            logging.info("speech request=%s client=%s voice=%s seed=%s chars=%s max_chunk_seconds=%s "
+                         "stop=%s samples=%s elapsed=%.3f",
+                         request_id, self.client_address[0], options["voice"], result["seed"], len(prompt),
+                         options["max_seconds"], result["stop"], result["samples"], time.monotonic() - started)
+            return result
+        except Exception:
+            logging.exception("speech request=%s client=%s voice=%s seed=%s chars=%s failed after %.3f s",
+                              request_id, self.client_address[0], options["voice"], options["seed"],
+                              len(prompt), time.monotonic() - started)
+            raise
+        finally:
+            finished.set()
+            watcher.join()
+
+    def _stream_pcm(self, prompt: str, options: dict, *, sse: bool, request_id: str) -> None:
         started = False
+        sent_samples = 0
 
         def begin() -> None:
             nonlocal started
@@ -255,6 +332,9 @@ class VoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Transfer-Encoding", "chunked")
             self.send_header("X-Sample-Rate", str(self.server.engine.SAMPLE_RATE))
             self.send_header("X-Speech-Seed", str(options["seed"]))
+            self.send_header("X-Request-Id", request_id)
+            if sse:
+                self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             started = True
 
@@ -264,17 +344,24 @@ class VoiceHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         def on_pcm(data: bytes) -> None:
+            nonlocal sent_samples
             if sse:
                 event = {"type": "speech.audio.delta", "audio": base64.b64encode(data).decode("ascii")}
                 send(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode())
             else:
                 send(data)
+            sent_samples += len(data) // 2
 
         try:
-            result = self.server.engine.synthesize(prompt, options, on_pcm)
+            result = self._synthesize(prompt, options, on_pcm, request_id)
+            if result["stop"] == "cancelled":
+                self.close_connection = True
+                return
+            if result["samples"] != sent_samples:
+                raise RuntimeError(f"native samples {result['samples']} differ from streamed {sent_samples}")
             if sse:
                 event = {"type": "speech.audio.done", "seed": result["seed"],
-                         "samples": result["samples"], "stop": result["stop"]}
+                         "samples": sent_samples, "stop": result["stop"]}
                 send(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode())
             begin()
             self.wfile.write(b"0\r\n\r\n")
@@ -282,7 +369,17 @@ class VoiceHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             if started:
                 logging.exception("PCM stream failed after headers: %s", exc)
-                self.close_connection = True
+                if sse:
+                    try:
+                        event = {"type": "speech.audio.done", "seed": options["seed"],
+                                 "samples": sent_samples, "stop": "error", "error": str(exc)}
+                        send(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode())
+                        self.wfile.write(b"0\r\n\r\n")
+                        self.wfile.flush()
+                    except OSError:
+                        self.close_connection = True
+                else:
+                    self.close_connection = True
             elif isinstance(exc, SpeechError):
                 raise APIError(400 if exc.status in (-1, -2, -3) else 500,
                                str(exc), param=exc.option or None, code="native_synthesis_error") from None
