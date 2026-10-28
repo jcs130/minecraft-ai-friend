@@ -17,6 +17,13 @@
     "QwenPawGameChannel": "0.3.2",
     "LanTts": "1.6.0"
   },
+  "goddessChatGuidance": {
+    "enabled": true,
+    "intervalSeconds": 300,
+    "framework": "existing QwenPaw mc_godness native cron",
+    "releaseManifest": "paper/manifests/goddess-chat-review-20261028.json",
+    "gameRestartRequired": false
+  },
   "liveArtifactDigests": {
     "QiandengjiMcbot-0.1.0.jar": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59",
     "numen_api-paper-1.21.1-0.1.4.jar": "6bfea19c81b3000586949dde6f128efad7534c8932fbe485a39933e4d55e9239",

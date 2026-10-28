@@ -33,6 +33,30 @@ def plan_jobs(existing, definitions=None):
     return result
 
 
+def plan_chat_review(existing, definition=None):
+    """One dedicated native job; the original six specs are never modified here."""
+    definition = definition or json.loads(Path(__file__).with_name('chat-review-job.json').read_text(encoding='utf-8'))
+    matches = [j for j in existing if j['name'] == definition['name']]
+    if len(matches) > 1:
+        raise ValueError('duplicate public-chat review jobs')
+    templates = matches or [j for j in existing if j['name'] == 'qiandengji-daily-patrol']
+    if len(templates) != 1:
+        raise ValueError('one original native Goddess patrol identity is required')
+    job = deepcopy(templates[0])
+    if not matches:
+        job['id'] = None
+        job['meta'] = {'managedBy': 'goddess-chat-review', 'revision': 1}
+    job['name'], job['task_type'], job['text'] = definition['name'], 'agent', definition['text']
+    job['enabled'] = matches[0]['enabled'] if matches else True
+    job['schedule'] = {'type': 'cron', 'cron': definition['cron'], 'timezone': 'Asia/Shanghai'}
+    job['request']['input'] = [{'role': 'user', 'type': 'message', 'content': [{'type': 'text', 'text': definition['text']}]}]
+    job['runtime'].update(max_concurrency=1, timeout_seconds=definition['timeout'],
+                          misfire_grace_seconds=60, share_session=False)
+    job['dispatch']['silent'] = True
+    job['save_result_to_inbox'] = False
+    return job
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)

@@ -1,0 +1,65 @@
+{
+  "status": "deployed_and_verified_with_limits",
+  "date": "2026-10-28",
+  "agent": "mc_godness",
+  "jobName": "qiandengji-public-chat-review",
+  "jobId": "a5ea2c57-402b-435a-9587-f7e9d8166ff1",
+  "nativeCron": "2-59/5 * * * *",
+  "timezone": "Asia/Shanghai",
+  "runtime": {
+    "maxConcurrency": 1,
+    "timeoutSeconds": 180,
+    "shareSession": false,
+    "silent": true,
+    "saveResultToInbox": false,
+    "originalJobsPreserved": 6,
+    "enabledMcpTools": 22
+  },
+  "budgets": {
+    "maxNewLogBytes": 262144,
+    "maxMessageAgeSeconds": 600,
+    "maxMessagesPerBatch": 24,
+    "maxPreviousContextMessages": 12,
+    "maxWhisperCharacters": 140,
+    "maxWhispersPerBatchAndFiveMinutes": 2,
+    "playerCooldownSeconds": 600,
+    "playerTopicCooldownSeconds": 1800,
+    "batchLeaseSeconds": 240
+  },
+  "deployedSources": {
+    "paper/ops/goddess-mcp.py": "080a12b0e36786967a82a55f813087407f07952136dbd5efa830995340bf0392",
+    "paper/ops/goddess_chat_review.py": "7b35b6df74710c3d80593f0dddd9c287b9b5bc4d309f19c1f6791fa4bf283b97"
+  },
+  "checks": {
+    "offline": 59,
+    "nativeRunsObserved": 4,
+    "manualRuns": 1,
+    "scheduledRuns": 3,
+    "publicMessagesReadAndFinished": 13,
+    "naturalCorrectionsSent": 0,
+    "nativeWhisperReceiptSelfTest": {
+      "recipient": "Goddess",
+      "originalCommandResult": 1,
+      "temporaryReceiptCleaned": true,
+      "publicBroadcast": false,
+      "otherPlayersMessaged": false
+    },
+    "gameJarsUnchanged": 49,
+    "goddessProfileAndDriverPolicyPreserved": true,
+    "gameRestarted": false
+  },
+  "evidence": {
+    "primary": "E:/MC/ops/repairs/goddess-chat-guidance-20261028",
+    "mirror": "F:/MC-backups/repairs/goddess-chat-guidance-20261028",
+    "nativeHistoryWindow": "20:30-20:43 Asia/Shanghai",
+    "notes": "Original R1 metadata-only refresh and transient inactive failure retained; final scoped native MCP reconnect waited for readiness. R2 adds independently read native command receipts. Installation scripts consumed; do not replay."
+  },
+  "limits": [
+    "Four natural runs chose silence; no natural player correction or long-term judgement quality is claimed.",
+    "A successful native command receipt does not prove recipient UI delivery or that the message was read.",
+    "Bounded tails may skip older backlog; coverage gaps are explicit.",
+    "Evidence annotations are audited, not independently proven by the transport helper.",
+    "The separate AF.26 / bridge0.2.5 RPG candidate remains undeployed."
+  ],
+  "document": "paper/docs/GODDESS_CHAT_GUIDANCE.md"
+}
