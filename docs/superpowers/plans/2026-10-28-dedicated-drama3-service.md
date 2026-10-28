@@ -4,7 +4,7 @@
 
 **Goal:** Run the RTX 3090 host as a persistent LAN Drama 3 speech server, with the local Qwen GPU container retired from autostart.
 
-**Architecture:** Use the already verified speech.cpp 0.9.0 Windows Vulkan binary and Q4_K GGUF with pre-encoded Kirito, Yui, and two-speaker voices. Windows Task Scheduler starts the native speech process at boot and a second periodic task checks its HTTP health. The Windows firewall allows port 18120 only from the 192.168.3.0/24 LAN; the service does not accept public Internet traffic.
+**Architecture:** Use the already verified speech.cpp 0.9.0 Windows Vulkan binary and Q4_K GGUF with pre-encoded Kirito, Yui, and two-speaker voices. Windows Task Scheduler starts the native speech process at interactive user logon and a second periodic task checks its HTTP health. An elevated installation configures the Windows firewall to allow port 18120 only from the 192.168.3.0/24 LAN; the service does not accept public Internet traffic.
 
 **Tech Stack:** PowerShell 7, Windows Task Scheduler, Windows Defender Firewall, speech.cpp 0.9.0, Docker CLI, Python stdlib smoke test.
 
@@ -20,7 +20,7 @@
 
 ## Review Focus
 
-- A boot task running as SYSTEM may not see the Vulkan GPU; start it and verify an actual synthesis, then switch to an interactive logon principal if needed.
+- A boot task running as SYSTEM gave `/health` 200 but every real synthesis returned `vk::Queue::submit: ErrorDeviceLost` on this host. Use an interactive logon principal and require a three-voice synthesis smoke in the installer.
 - The 24GB card has less than 1GB free at full model load; check steady-state VRAM and reject simultaneous LLM startup.
 - A task may report Running even when HTTP is unhealthy; the watchdog must restart the task only after a bounded failed health check.
 - Source reference voice files are Japanese; verify actual Chinese audio and document uncertain character-name pronunciation.
@@ -45,8 +45,8 @@
 **Interfaces:** `http://192.168.3.133:18120/health`, `/v1/models`, and `/v1/audio/speech`.
 
 - [x] Record the current Qwen container restart policy and LAN proxy task state, then stop and disable only those exact local LLM components.
-- [ ] Install the firewall and scheduled tasks, start `Drama3-Speech`, and wait for HTTP health.
-- [ ] Verify the task principal, active process, GPU allocation, firewall scope, and watchdog behavior after an intentional service-task stop. Current-user task, GPU, and stop/restart verified; SYSTEM/firewall awaits Windows UAC.
+- [ ] Install the scoped firewall and interactive user scheduled tasks, then require actual Kirito/Yui/cast synthesis. The SYSTEM trial installed the firewall but failed generation; replacement is pending another UAC confirmation.
+- [ ] Verify the task principal, active process, GPU allocation, firewall scope, and watchdog behavior after an intentional service-task stop. The earlier user-mode task, GPU, and stop/restart were verified; the final combined setup remains pending.
 
 ### Task 3: Real speech smoke and documentation
 
