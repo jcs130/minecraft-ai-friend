@@ -283,27 +283,26 @@ function Rcon([string]$command) {
 }
 
 function PlayerRoster {
-    # The plain list command uses display names such as "[Agent] CortiLan".
-    # UUID mode reports real login names, which are safe for maintenance gating.
+    # The private-output filter can shorten list uuids to 512 characters.
+    # Obtain each vanilla UUID separately, then verify the declared count.
     $reply = Rcon 'minecraft:list uuids'
-    if ($reply -notmatch '(?m)^There are (\d+) of a max of \d+ players online:\s*([^\r\n]*)') {
+    if ($reply -notmatch 'There are (\d+) of a max of \d+ players online:') {
         throw "Could not parse Minecraft player roster: $reply"
     }
     $count = [int]$Matches[1]
+    $data = Rcon 'minecraft:execute as @a run minecraft:data get entity @s UUID'
+    $rows = [regex]::Matches($data, '(?<name>[A-Za-z0-9_.]{1,16}) has the following entity data: \[I; (-?\d+), (-?\d+), (-?\d+), (-?\d+)\]')
     $names = @()
     $uuids = @{}
-    $text = $Matches[2].Trim()
-    if ($text) {
-        foreach ($entry in @($text -split ',\s*')) {
-            if ($entry -notmatch '^([^\s(),<>\r\n]{1,16}) \(([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\)$') {
-                throw "Minecraft player roster is incomplete or malformed: $reply"
-            }
-            $names += $Matches[1]
-            $uuids[$Matches[1]] = $Matches[2].ToLowerInvariant()
-        }
+    foreach ($row in $rows) {
+        $name = $row.Groups['name'].Value
+        if ($uuids.ContainsKey($name)) { throw 'Duplicate Minecraft player roster entry' }
+        $hex = (1..4 | ForEach-Object { ([int]$row.Groups[$_].Value).ToString('x8') }) -join ''
+        $names += $name
+        $uuids[$name] = '{0}-{1}-{2}-{3}-{4}' -f $hex.Substring(0,8),$hex.Substring(8,4),$hex.Substring(12,4),$hex.Substring(16,4),$hex.Substring(20,12)
     }
     if ($names.Count -ne $count) {
-        throw "Minecraft player roster is incomplete or malformed: $reply"
+        throw 'Minecraft player roster changed or entity data is incomplete'
     }
     return [pscustomobject]@{ Count = $count; Names = $names; Uuids = $uuids }
 }

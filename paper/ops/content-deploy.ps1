@@ -52,7 +52,7 @@ function Content-MultiverseTarget([string]$relative) {
 }
 
 function Content-NativeRpgJar([string]$relative) {
-    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','QiandengjiRpg-0.2.0.jar','Vault-1.7.3.jar')
+    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','Vault-1.7.3.jar')
 }
 
 function Content-NativeRpgTarget([string]$relative) {
@@ -144,6 +144,19 @@ function Deploy-PendingContent {
             $target = Join-Path $opsDir $relative.Substring(4)
         } elseif ($relative -eq 'libraries/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar') {
             $target = Join-Path $serverDir $relative
+        } elseif ($relative -ceq 'ops.json' -and $plan.id -ceq 'basic-survival-release-20261028') {
+            # Owner explicitly requested OP on the existing live observer. This
+            # single release cannot change any other operator or UUID.
+            $target = Join-Path $serverDir 'ops.json'
+            $previousOps = Get-Content -LiteralPath $target -Raw -Encoding UTF8 | ConvertFrom-Json
+            $nextOps = Get-Content -LiteralPath $file.source -Raw -Encoding UTF8 | ConvertFrom-Json
+            $liveUuid = '4e620aee-9f79-368f-9919-34e608edf0c3'
+            $beforeOther = @($previousOps | Where-Object { $_.uuid -cne $liveUuid }) | ConvertTo-Json -Depth 8 -Compress
+            $afterOther = @($nextOps | Where-Object { $_.uuid -cne $liveUuid }) | ConvertTo-Json -Depth 8 -Compress
+            $liveOps = @($nextOps | Where-Object { $_.uuid -ceq $liveUuid })
+            if ($beforeOther -cne $afterOther -or $liveOps.Count -ne 1 -or
+                $liveOps[0].name -cne 'live' -or $liveOps[0].level -ne 4 -or
+                $liveOps[0].bypassesPlayerLimit -ne $false) { throw 'Only the approved live operator may change' }
         } elseif ($relative -eq 'commands.yml') {
             # Explicit server aliases resolve Minepacks/BetonQuest's backpack collision.
             # This one root file uses the same stopped E/F snapshots, pinned hashes,
@@ -182,7 +195,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.removeJars)) {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
-        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name)) {
+        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name) -or (Content-NativeRpgJar $file.name)) {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
             # This exact reviewed replacement is necessary: FAWE provides the
