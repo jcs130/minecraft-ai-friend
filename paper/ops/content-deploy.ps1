@@ -1,4 +1,4 @@
-﻿# Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
+# Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
 function Content-FirstPartyPreviousJar([string]$name) {
     # Deployed hotfixes such as 0.4.47.3 use a fourth numeric component.
     # Keep the first-party filename boundary; deployment still pins its SHA256.
@@ -9,6 +9,10 @@ function Content-NumenPaperJar([string]$name) {
     # Reviewed Paper artifacts from the pinned upstream build. Fabric/NeoForge
     # releases are not interchangeable with these two plugins.
     return $name -cmatch '^(?:numen(?:_api)?-paper-1\.21\.1-0\.1\.4|NumenBedrock-0\.1\.0)\.jar$'
+}
+
+function Content-McbotJar([string]$name) {
+    return $name -ceq 'QiandengjiMcbot-0.1.0.jar'
 }
 
 function Content-AgentVisionJar([string]$name) {
@@ -114,7 +118,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative)) { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative) -and -not (Content-McbotJar $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }

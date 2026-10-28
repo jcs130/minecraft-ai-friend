@@ -1,3 +1,9 @@
+## 2026-10-28 连接、名单及mcbot修复已正式上线
+
+服主最新“都修复，别做了没上线”明确授权部署此前保留的本批候选。正常180/60/10预告、无活动/真人检查及E/F完整冷备20261028-092455后，AgentVision0.1.3、Numen API/内容固定窄补、LoginGuard0.1.8和QiandengjiMcbot0.1.0已实际运行，49个插件、22项正式核验；45原JAR、863玩家/RPG和109账号/模型文件冷安装不变。AF0.4.47.22/RPG0.2.1/LACqd2保留。198组合联机+19冷启、12运维和5镜像检查通过，额外捕捉到的心跳文件占用已做0.1.8窄补，仅重启代理且Paper PID保持；87认证断言重新通过、6新检查/4真实Windows锁及两分钟60份生产快照通过。官方Fabric界面/真实LLM长任务仍待验证，不把服务端协议适配说成全32工具原生实测。
+
+进程去重已在09:36真实清理旧Eye watcher，精确主模块、PID创建时间及原维护锁保持。第一轮因新Coobot未确认自动取消且没停服，后经服主确认其可重连，原UUID已进入维护登记；修正预复制镜像方案后使用全新R2计划，原冷备及摘要门禁保留。维护脚本已消费，勿重放。实际状态看paper/manifests/current-deployment.json和paper/docs/CONNECTION_FIXES_20261028.md；下方“保留候选”是已被本次授权替代的历史记录。以后必须明确区分候选、安装待验收和实际生效。world-activity.py/shared_file_read.py是独立修改，不提交。
+
 ## 2026-10-28 RPG引导与旧技能迁移已上线
 
 服主批准修复后重启，另明确确认ag_NekoYui3可自动重连；只在本次一跑脚本按确切UUID放行，未永久放宽维护分类。完成180/60/10秒预告、无活动副本复查、正常停启与E/F完整冷备20261028-040412。正式AF0.4.47.22-vortex/QiandengjiRpg0.2.1/LAC1.2.6-qd2；Vortexqd27与45个其他JAR保持，761份玩家/RPG文件冷安装不变。35引导附魔+6冷启跨版+57六职业及44迁移/6线程测试通过，正式18项。原版附魔有效，旧技能明确skill_retired、物品和费用保留；intro统一说明当前玩法，release-revision2按账号私发一次且教练关闭也能收到。LAC原生属性异步争用已改主线程快照，检测策略保持。
@@ -669,3 +675,4 @@ survivor qd15 增加真实sleep回执/原生10分钟Cron复盘信号队列（MCP
 - 2026-09-08 用户另外明确授权升级游戏 QwenPaw，可使用 `qwenpaw update`。游戏镜像更新为 `qiandengji-qwenpaw-game:2.2.0-qd1`（含禁用 default 时的就绪兼容补丁），仅重建游戏 QwenPaw；保留即时模型选择、会话、角色身份和已有生成限额，不按历史模型文档覆盖用户设置。升级与回退见 `world/ops/QWENPAW-LOCAL.md`。Minecraft、world、运营容器和宿主 QwenPaw 不随游戏容器升级重启。
 - 快照需要短时关闭源服自动存盘时必须 try/finally 恢复，不停止原服；SQLite 用 backup API。
 - **体系谕（造物主 2026-09-09，工程师与验收角色时刻记得）**：打造的是 **Agent-LLM 自主驱动的体系**，不是写一大堆规则。优先给角色可核实的工具、真实回执与清晰职责，让模型自己观察、判断、行动、复盘；硬规则只收敛在安全与权限的最小边界（身份绑定、授权面、不可逆操作闸门），不以静态断言山替代角色自主。验收看真实回执与自主闭环是否转起来，新增一层规则前先问：能不能改成给 Agent 一份证据或一个工具？
+2026-10-28 此 Windows 3090 主机已改作 Drama 3 专用试验服务：speech.cpp 0.9.0 + Q4_K GGUF 在 `192.168.3.133:18120` 提供 OpenAI 风格语音接口，桐人/结衣/双人参考音及真实中文短句在交互式用户会话中已验；看门狗由 `Drama3-Speech`、`Drama3-Watchdog` 两个计划任务负责，实际任务模式及防火墙状态须读取被忽略的 `server/drama3-service/deployment.json` 并现场实测。**SYSTEM 任务虽可使 `/health` 返回 200，但真实合成稳定报 `vk::Queue::submit: ErrorDeviceLost`；必须用用户登录会话运行 GPU，并以三音色真实合成验收。**原本机 `qwen38-27b-lan` 已停止且 restart=no，`TqLLM LAN Proxy` 已禁用；LLM 应在别处部署，QwenPaw 供应商与游戏 IndexTTS-2.5 `/tts` 入口未自动改路由。部署、健康冒烟、回退与许可见 `docs/DRAMA3-DEDICATED-SERVICE.md`；量化中文错词及本机速度见 `docs/research/DRAMA3-LOCAL-DEPLOYMENT-2026-10-28.md`。模型、参考音、日志和运行数据不入 Git。
