@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.118
+
+- Pin canonical core rc.118 from d4d294ac: reject repeated already-satisfied navigation within the existing stationary guard, without inventing tasks or cancelling native work. Keep the first truthful arrival receipt and allow a fresh check after movement or expiry.
+- Preserve the locked non-core dependencies, standalone host boundary, existing native queue and runtime verification, including the installer's existing executable-shebang normalization.
+
 ## 0.2.110
 
 - Pin canonical core rc.108, including surrounding awareness independent of camera direction; keep the synchronized b99464bb viewer build.
