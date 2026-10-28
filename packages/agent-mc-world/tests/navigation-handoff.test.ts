@@ -89,6 +89,29 @@ it.each([false, true])('labels near-only arrival without adding movement (queued
   } finally { executor.shutdown(); }
 });
 
+it('does not report repeated already-satisfied goto as new completed work; position changes and expiry permit fresh checks', () => {
+  vi.useFakeTimers(); const { bot } = rig(); const reports: TaskReport[] = []; let ids = 0;
+  const log = { child() { return this; }, info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {} };
+  const executor = new Executor({ getBot: () => bot, report: r => reports.push(r), log: log as never,
+    nextId: () => ++ids, fleeHealth: () => 0 });
+  const calls = [{ skill: 'goto' as const, at: [-425, 24, 678] }];
+  const original = structuredClone(calls);
+  try {
+    expect(executor.submitDetailed(calls, 'append')).toMatchObject({ accepted: true, completedImmediately: true });
+    const repeated = executor.submitDetailed(calls, 'now');
+    expect(repeated).toMatchObject({ accepted: false, rejection: { kind: 'repeat', rule: 'navigation.already-satisfied' } });
+    expect(repeated.completedImmediately).toBeUndefined();
+    expect(repeated.receipt).toContain('本单未派发');
+    expect(ids).toBe(0); expect(reports).toHaveLength(0);
+    expect(bot.pathfinder.goto).not.toHaveBeenCalled();
+    bot.entity.position.z -= 1;
+    expect(executor.submitDetailed(calls, 'append')).toMatchObject({ accepted: true, completedImmediately: true });
+    vi.advanceTimersByTime(15_001);
+    expect(executor.submitDetailed(calls, 'append')).toMatchObject({ accepted: true, completedImmediately: true });
+    expect(calls).toEqual(original); expect(ids).toBe(0);
+  } finally { executor.shutdown(); }
+});
+
 it('returns an actionable goal field correction and preserves the existing goal after rejection', async () => {
   const world = new MinecraftWorld({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) });
   const call = (args: Record<string, unknown>) => world.tools().find(t => t.name === 'mc_goal')!.handler(args, {} as never);
