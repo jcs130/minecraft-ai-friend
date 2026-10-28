@@ -45,7 +45,7 @@
 **Interfaces:** `http://192.168.3.133:18120/health`, `/v1/models`, and `/v1/audio/speech`.
 
 - [x] Record the current Qwen container restart policy and LAN proxy task state, then stop and disable only those exact local LLM components.
-- [ ] Install the scoped firewall and interactive user scheduled tasks, then require actual Kirito/Yui/cast synthesis. The SYSTEM trial installed the firewall but failed generation; replacement is pending another UAC confirmation.
+- [ ] Install the scoped firewall and interactive user scheduled tasks, then require actual Kirito/Yui/cast synthesis. The SYSTEM trial failed generation. The user task passed initial smoke but a watchdog restart exposed Vulkan OOM; the `max_seconds=10` service limit passed two three-voice rounds and awaits deployment plus restart smoke.
 - [ ] Verify the task principal, active process, GPU allocation, firewall scope, and watchdog behavior after an intentional service-task stop. The earlier user-mode task, GPU, and stop/restart were verified; the final combined setup remains pending.
 
 ### Task 3: Real speech smoke and documentation

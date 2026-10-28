@@ -12,6 +12,8 @@
 
 `cast` 是同一段音频中的两个人物：桐人用 `<|speaker:0|>`，结衣用 `<|speaker:1|>`。短句直播建议 `response_format: "pcm"`，服务端边生成边发 44.1kHz、16-bit、单声道 PCM；需要普通文件时设 `"wav"`。`top_k: 4097` 是本机已验证的设置；固定 `seed` 可重现同一设备上的音频。服务一次处理一个合成请求，调用端应限制排队与超时。[接口文档](https://github.com/nyosegawa/speech.cpp/blob/main/docs/server.md)
 
+安装脚本会把常驻任务的单段生成上限设为 `max_seconds: 10`。旧任务的默认上限在冷重启后使三音色合成触发 Vulkan 显存不足；10 秒上限下独立服务进程两轮共六段短句均成功。直播台词应拆成短句，长篇语音需要另行测试和分段。修改脚本后仍需重新安装任务，检查 `Drama3-Speech` 的实际动作含 `--max-seconds 10`，并在重启后不传额外请求上限运行三音色冒烟。
+
 Python 标准库调用示例：
 
 ```python
@@ -21,7 +23,7 @@ import urllib.request
 body = {
     "model": "drama-3", "voice": "kirito",
     "input": "<|speaker:0|> 大家晚上好，我是桐人。",
-    "response_format": "wav", "top_k": 4097,
+    "response_format": "wav", "top_k": 4097, "max_seconds": 10,
 }
 request = urllib.request.Request(
     "http://192.168.3.133:18120/v1/audio/speech",
@@ -58,7 +60,7 @@ python D:\Projects\QiandengJi\tools\drama3\drama3_health.py --base http://192.16
 nvidia-smi --query-gpu=memory.used,memory.free --format=csv,noheader,nounits
 ```
 
-`--smoke` 会在被忽略的 `server/drama3-service/smoke/` 下保存三段可复听 WAV，并检查长度、采样率和非静音。语音识别在试验中对中文人物名识别不稳定，一句桐人短句也偏离原文；自动冒烟不等于音色和发音已经人工验收。
+`--smoke` 会在被忽略的 `server/drama3-service/smoke/` 下保存三段可复听 WAV，并检查长度、采样率和非静音。默认不传 `max_seconds`，用于验证服务任务的默认设置；在仍运行旧任务配置时可加 `--max-seconds 10` 验证请求端临时方案。语音识别在试验中对中文人物名识别不稳定，一句桐人短句也偏离原文；自动冒烟不等于音色和发音已经人工验收。
 
 如需临时停止服务：`Stop-ScheduledTask -TaskName Drama3-Speech`，随后禁用 `Drama3-Watchdog`，否则看门狗会再次拉起。恢复时先启用看门狗，再 `Start-ScheduledTask -TaskName Drama3-Speech`。如要恢复此前本机 LLM 部署，先停止并禁用两个 Drama 3 任务，读取 `server/drama3-service/previous-state.json`，再按其中记录恢复 Docker restart policy、容器运行状态和 `TqLLM LAN Proxy`。不要在 Drama 3 仍占显存时启动本机 Qwen。
 

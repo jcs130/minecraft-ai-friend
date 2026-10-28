@@ -105,7 +105,7 @@ try {
     $serviceArguments = @(
         'serve', $model,
         '--host', '0.0.0.0', '--port', '18120',
-        '--device', 'Vulkan0', '--threads', '12', '--top-k', '4097',
+        '--device', 'Vulkan0', '--threads', '12', '--top-k', '4097', '--max-seconds', '10',
         '--add-voice', ('kirito=' + (Join-Path $runtime 'kirito.voice.gguf')),
         '--add-voice', ('yui=' + (Join-Path $runtime 'yui.voice.gguf')),
         '--add-voice', ('cast=' + (Join-Path $runtime 'cast.voice.gguf'))
