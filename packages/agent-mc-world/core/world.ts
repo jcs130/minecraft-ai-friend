@@ -4764,7 +4764,7 @@ export class MinecraftWorld implements World {
         }
         try {
           const data = observeSpatial(bot, parsed);
-          return { text: JSON.stringify(data), data };
+          return { text: JSON.stringify(data), data, meta: { observation: data.readout } };
         } catch (error) {
           if (!(error instanceof SkillBlocked)) throw error;
           const data = { status: 'blocked', reason: error.message, completed: 0, remaining: null,
