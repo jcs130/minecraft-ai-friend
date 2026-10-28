@@ -25,17 +25,18 @@ public final class McbotTransportTest {
         });
         LoginGuard guard=new LoginGuard(null,null);AuthObservationTest.set(guard,"libre",libre);
         ((Set<Player>)AuthObservationTest.get(guard,"authenticated")).add(player);
-        var channel=MinecraftChannelIdentifier.create("mcbot","c2s");
+        for(var channel:List.of(MinecraftChannelIdentifier.create("mcbot","c2s"),MinecraftChannelIdentifier.create("mcagent","voice"))){
         for(int state=0;state<6;state++){
             AuthObservationTest.set(guard,"ready",state!=0);granted.set(state>=2);paper.set(state>=3);totp.set(state==4);
-            var event=new PluginMessageEvent(player,connection,channel,new byte[]{1});guard.mcbotTransport(event);
+            var event=new PluginMessageEvent(player,connection,channel,new byte[]{1});if(channel.getId().equals("mcagent:voice"))guard.voiceTransport(event);else guard.mcbotTransport(event);
             AuthObservationTest.check(event.getResult().isAllowed()==(state==3||state==5),"exact actual authorization/PLAY gate "+state);
         }
-        var spoof=new PluginMessageEvent(connection,player,channel,new byte[]{1});guard.mcbotTransport(spoof);
+        var spoof=new PluginMessageEvent(connection,player,channel,new byte[]{1});if(channel.getId().equals("mcagent:voice"))guard.voiceTransport(spoof);else guard.mcbotTransport(spoof);
         AuthObservationTest.check(!spoof.getResult().isAllowed(),"server cannot impersonate client driver");
+        }
         var other=new PluginMessageEvent(player,connection,MinecraftChannelIdentifier.create("other","channel"),new byte[]{1});guard.mcbotTransport(other);
         AuthObservationTest.check(other.getResult().isAllowed(),"unrelated payload unchanged");
         AuthObservationTest.check(((Set<?>)AuthObservationTest.get(guard,"authenticated")).size()==1,"gate never grants or revokes login");
-        System.out.println("PASS "+AuthObservationTest.checks+" mcbot live authentication cases");
+        System.out.println("PASS "+AuthObservationTest.checks+" mcbot/voice live authentication cases");
     }
 }

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "qiandeng_native_camera",
+  "version": "0.1.0",
+  "name": "Qiandengji Native Camera",
+  "environment": "client",
+  "entrypoints": {"client": ["org.qiandeng.camera.NativeCameraClient"]},
+  "mixins": ["qiandeng-camera.mixins.json"],
+  "depends": {"fabricloader": ">=0.16.13", "minecraft": "1.21.1", "java": ">=21", "fabric-api": "*", "yes_steve_model": "2.4.1"}
+}

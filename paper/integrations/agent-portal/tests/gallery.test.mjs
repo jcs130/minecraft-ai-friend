@@ -5,11 +5,18 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { createPortal } from '../src/server.mjs';
 import { loadConfig, projectRoot } from '../src/config.mjs';
-import { PhotoReader, validatePhotos } from '../src/gallery.mjs';
+import { PhotoReader, validatePhotos, MAX_PHOTO_BYTES } from '../src/gallery.mjs';
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=', 'base64');
 const token = 'srv_' + 'h'.repeat(43), id = '11111111-1111-4111-8111-111111111112';
 const photo = () => ({ id, author: 'ag_CorMy', title: '麦田边的家', story: '收完麦子，和伙伴一起回家。', capturedAt: '2026-10-20T12:00:00Z', sha256: createHash('sha256').update(png).digest('hex'), bytes: png.length, width: 1, height: 1 });
+test('native camera originals over 2 MiB are accepted within the shared 8 MiB budget',()=>{
+  const original={...photo(),bytes:3*1024*1024,width:1536,height:1536};
+  assert.equal(validatePhotos([original])[0].bytes,original.bytes);
+  assert.equal(MAX_PHOTO_BYTES,8*1024*1024);
+  assert.throws(()=>validatePhotos([{...original,bytes:MAX_PHOTO_BYTES+1}]),/格式无效/);
+  assert.throws(()=>validatePhotos([{...original,width:4097}]),/格式无效/);
+});
 async function fixture(t) {
   const base = path.resolve(projectRoot, '.local/tests'), root = path.join(base, 'gallery-' + randomUUID());
   const config = loadConfig({ skipLocalConfig: true, host: '127.0.0.1', port: 0, dataDir: root, sourceMode: 'cloud', cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') } });
@@ -78,7 +85,7 @@ test('photo metadata is bounded, allowlisted and rejects duplicate identities', 
   const value = { ...photo(), owner: randomUUID(), url: 'file:///private', x: 1, examRun: 'private' };
   assert.deepEqual(validatePhotos([value]), [photo()]);
   assert.throws(() => validatePhotos([photo(), photo()]), /目录/);
-  assert.throws(() => validatePhotos([{ ...photo(), bytes: 2 * 1024 * 1024 + 1 }]), /目录/);
+  assert.throws(() => validatePhotos([{ ...photo(), bytes: MAX_PHOTO_BYTES + 1 }]), /目录/);
 });
 
 test('home photo reader includes only published game works and never follows imageIndex input outside ImageFrame data', async t => {

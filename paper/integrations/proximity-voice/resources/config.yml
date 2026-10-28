@@ -1,0 +1,7 @@
+# The existing TTS is not changed. Only the media adapter listens on loopback.
+backend: http://127.0.0.1:8857
+backend-token-file: bridge.token
+caption-distance-cap: 48.0
+max-concurrent-speech: 16
+max-utterance-seconds: 15
+captions-default: true

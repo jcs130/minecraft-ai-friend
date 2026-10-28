@@ -15,6 +15,16 @@ function Content-McbotJar([string]$name) {
     return $name -ceq 'QiandengjiMcbot-0.1.0.jar'
 }
 
+function Content-ProximityVoiceJar([string]$name) {
+    return $name -cin @('voicechat-bukkit-2.6.27.jar','QiandengVoice-0.1.0.jar')
+}
+
+function Content-ProximityVoiceTarget([string]$relative) {
+    return (Content-ProximityVoiceJar $relative) -or $relative -cin @(
+        'plugins/QiandengVoice/config.yml','plugins/QiandengVoice/bridge.token',
+        'plugins/voicechat/voicechat-server.properties')
+}
+
 function Content-AgentVisionJar([string]$name) {
     return $name -ceq 'AgentVision-0.1.0.jar' -or $name -ceq 'AgentVision-0.1.1.jar' -or $name -ceq 'AgentVision-0.1.2.jar'
 }
@@ -112,6 +122,13 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     # notes are UTF-8, including Chinese punctuation next to JSON quotes.
     $plan = Get-Content -LiteralPath $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
+    $voiceChange = @($plan.files | Where-Object { Content-ProximityVoiceTarget ([string]$_.target) }).Count -gt 0 -or
+        @($plan.removeJars | Where-Object { Content-ProximityVoiceJar ([string]$_.name) }).Count -gt 0
+    if ($voiceChange -and (-not $coldBackup -or -not $mirrorBackup -or
+        -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete')) -or
+        -not (Test-Path -LiteralPath (Join-Path $mirrorBackup '.complete')))) {
+        throw 'Voice deployment requires both complete cold backups'
+    }
     $moneyHelper = Join-Path $opsDir 'rpg-economy-migration.py'
     if ($plan.unifyEconomy) {
         if ($plan.id -cne 'rpg-unified-release-20261028-r1' -or -not $coldBackup -or -not $mirrorBackup -or
@@ -126,12 +143,12 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative) -and -not (Content-McbotJar $relative)) { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative) -and -not (Content-McbotJar $relative) -and -not (Content-ProximityVoiceJar $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
             $target = Join-Path $serverDir $relative
-        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative) -or (Content-NativeRpgTarget $relative)) {
+        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative) -or (Content-NativeRpgTarget $relative) -or (Content-ProximityVoiceTarget $relative)) {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'plugins/OlEncounters/schematics/qd_forest_camp.schem') {
             $target = Join-Path $serverDir $relative
@@ -178,10 +195,10 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
             # Only this authored item pack and its exact mapping can be deployed.
             # Preserve stopped-server, dual-snapshot, digest and rollback gates.
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -eq 'ops/photo-image-quality.mjs') {
+        } elseif ($relative -eq 'ops/photo-image-quality.mjs' -or $relative -eq 'ops/native-photo-renderer.mjs') {
             # Pure screenshot metrics imported by the existing local camera.
             # Same stopped-server, E/F backup and pinned-hash gates as the worker.
-            $target = Join-Path $opsDir 'photo-image-quality.mjs'
+            $target = Join-Path $opsDir $relative.Substring(4)
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
@@ -203,7 +220,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     foreach ($file in @($plan.removeJars)) {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
-        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name) -or (Content-NativeRpgJar $file.name)) {
+        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name) -or (Content-NativeRpgJar $file.name) -or (Content-ProximityVoiceJar $file.name)) {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
             # This exact reviewed replacement is necessary: FAWE provides the

@@ -9,7 +9,7 @@
 
 最新修复：基础生存技能、普通组队、职业菜单和失败指引，桐人原生频道0.3.2已生效；原物品、职业与未知回执保持。[0.4.47.25发布与回退](docs/BASIC_SURVIVAL_RELEASE_20261028.md) · [局域网TTS自建音色](integrations/lan-tts/README.md)。
 
-存储维护：E/F 新冷备及本轮到期清理已完成，[NVMe 切换](docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，原 E 盘服已恢复开放；修正版通过 57 项隔离检查，等待 Windows 确认。[近场语音](docs/PROXIMITY_VOICE.md)为调研方案，尚未安装。
+存储维护：E/F 新冷备及本轮到期清理已完成，[NVMe 切换](docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，原 E 盘服已恢复开放；修正版通过 57 项隔离检查，等待 Windows 确认。[近场语音](docs/PROXIMITY_VOICE.md)已完成本机TTS/CPU ASR及隔离联机候选，正式服尚未安装；[核显原生相机](docs/NATIVE_GODDESS_CAMERA.md)待真实渲染验收，原相机保持。
 
 
 [mcbot独立Paper适配](integrations/mcbot/README.md)与[玩家假上下线修复](docs/PLAYER_ROSTER_OCCLUSION_20261028.md)已部署，官方Fabric界面与长期模型任务仍未验证。

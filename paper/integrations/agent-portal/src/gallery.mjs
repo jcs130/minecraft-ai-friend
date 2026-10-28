@@ -5,7 +5,8 @@ import { UUID } from './game-data.mjs';
 import { playerNameValid } from './world-catalog.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
-export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+// Match the camera's bounded original PNG budget; catalog pages still carry metadata only.
+export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 function pngSize(bytes) {
   if (bytes.length < 33 || !bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) || bytes.readUInt32BE(8) !== 13 || bytes.toString('ascii', 12, 16) !== 'IHDR') throw fail(400, 'PHOTO_FORMAT', '照片需要有效的 PNG 文件');

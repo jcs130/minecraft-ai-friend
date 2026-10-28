@@ -1,0 +1,10 @@
+{
+  "port": 8857,
+  "token_file": "E:/MC/private/proximity-voice/bridge.token",
+  "state_directory": "E:/MC/private/proximity-voice/state",
+  "tts_endpoint": "http://127.0.0.1:8017/v1/audio/speech",
+  "tts_model": "Cormy-TTS",
+  "asr_model_directory": "E:/MC/assets/asr/paraformer-small-20240309",
+  "asr_threads": 2,
+  "audio_cache_bytes": 67108864
+}

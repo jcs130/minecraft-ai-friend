@@ -4,6 +4,8 @@
 
 运维状态：原 E 盘服已恢复开放。[NVMe 迁移](paper/docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，修正版通过 57 项隔离检查，仍待 Windows 确认；C 盘候选副本尚未启用。
 
+开发候选：[附近语音与Agent听说](paper/docs/PROXIMITY_VOICE.md)已打通本机TTS、CPU ASR及隔离联机，正式服尚未安装；[原生高画质女神相机](paper/docs/NATIVE_GODDESS_CAMERA.md)已接入原照片流程，核显与YSM真实渲染仍待验收，现役相机保持原方式。
+
 
 统一版 `.27 / 桥0.2.6` 已正式部署并通过核验：任务/回收/试炼/商店/委托共用金币，旧技能成长归档，背包满会提示直接远程存箱。见[发布与验收](paper/docs/RPG_UNIFIED_20261028.md)。
 

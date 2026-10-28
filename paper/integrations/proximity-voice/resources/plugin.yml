@@ -1,0 +1,13 @@
+name: QiandengVoice
+version: 0.1.0
+main: dev.god.godvoice.PaperVoicePlugin
+api-version: '1.21'
+depend: [voicechat]
+description: Nearby speech, local TTS and CPU ASR for players and Agents
+commands:
+  voice:
+    description: Nearby voice and Agent speech
+    usage: /voice
+permissions:
+  qiandeng.voice.use:
+    default: true
