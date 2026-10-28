@@ -11,7 +11,7 @@
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "dd9dd63e56dd87f5c3f0a502c4ff2d2ed602615fc3536f63ceade0f9def2ff89",
+    "package.json": "406098199254eafbb2536a57a2c83b80fba4a06a6d66ac819d3c9127c02cfa6c",
     "dist/build.json": "743a5245e764c40f4ed486b916090ee3f6cbffb9a7eeb7f453c735226a3336fd",
     "dist/types/manifest.json": "6200d8ec891e3db35c8f2558739c8a9fe388578079f70423d9caf72fc334a683",
     "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
