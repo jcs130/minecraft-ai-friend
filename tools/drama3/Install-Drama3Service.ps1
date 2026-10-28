@@ -17,7 +17,7 @@ $firewallName = 'Qiandeng-Drama3-LAN-18120'
 $hashExpected = '2A57B14C9B208A2FF833AB7305B920CA8F154AD807004A52D96A86A90A55523E'
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
-if ($Mode -eq 'Auto') { $Mode = if ($admin) { 'System' } else { 'User' } }
+if ($Mode -eq 'Auto') { $Mode = 'User' }
 if ($Mode -eq 'System' -and -not $admin) { throw 'System mode needs an elevated PowerShell session' }
 
 foreach ($path in @($exe, $model, $watchScript, $pwsh,
@@ -67,6 +67,7 @@ if (-not (Test-Path -LiteralPath $backup)) {
 
 $changedLLM = $false
 $firewallCreated = $false
+$firewallConfigured = $false
 $previousTasks = @{}
 try {
     foreach ($name in @($serviceTask, $watchTask)) {
@@ -76,7 +77,10 @@ try {
                 xml = Export-ScheduledTask -TaskName $name
                 running = $existing.State -eq 'Running'
             }
-            if ($existing.State -eq 'Running') { Stop-ScheduledTask -TaskName $name }
+            if ($existing.State -eq 'Running') {
+                Stop-ScheduledTask -TaskName $name
+                if ($name -eq $serviceTask) { Start-Sleep -Seconds 2 }
+            }
             Unregister-ScheduledTask -TaskName $name -Confirm:$false
         }
     }
@@ -116,13 +120,24 @@ try {
     Register-ScheduledTask -TaskName $watchTask -Action $watchAction -Trigger @($onStart, $repeat) `
         -Principal $principal -Settings $watchSettings -Description 'Restart Drama 3 when HTTP health is lost' -Force | Out-Null
 
-    if ($Mode -eq 'System') {
+    if ($admin) {
         $oldRule = Get-NetFirewallRule -Name $firewallName -ErrorAction SilentlyContinue
-        if ($null -ne $oldRule) { Remove-NetFirewallRule -Name $firewallName }
-        New-NetFirewallRule -Name $firewallName -DisplayName 'Drama 3 speech LAN 18120' `
-            -Direction Inbound -Protocol TCP -LocalPort 18120 -RemoteAddress '192.168.3.0/24' `
-            -Profile Private -Action Allow -Enabled True | Out-Null
-        $firewallCreated = $true
+        if ($null -ne $oldRule) {
+            $portFilter = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $oldRule
+            $addressFilter = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $oldRule
+            if ($oldRule.Direction -ne 'Inbound' -or $oldRule.Action -ne 'Allow' -or
+                $oldRule.Enabled -ne 'True' -or $oldRule.Profile -ne 'Private' -or
+                $portFilter.Protocol -ne 'TCP' -or $portFilter.LocalPort -ne '18120' -or
+                ($addressFilter.RemoteAddress -join ',') -ne '192.168.3.0/24') {
+                throw "Existing firewall rule $firewallName has an unexpected scope"
+            }
+        } else {
+            New-NetFirewallRule -Name $firewallName -DisplayName 'Drama 3 speech LAN 18120' `
+                -Direction Inbound -Protocol TCP -LocalPort 18120 -RemoteAddress '192.168.3.0/24' `
+                -Profile Private -Action Allow -Enabled True | Out-Null
+            $firewallCreated = $true
+        }
+        $firewallConfigured = $true
     }
 
     if ($containerPresent) {
@@ -151,6 +166,8 @@ try {
         if ($task.State -ne 'Running' -and $attempt -gt 5) { break }
     }
     if (-not $healthy) { throw 'Drama 3 HTTP health did not become ready' }
+    & python (Join-Path $PSScriptRoot 'drama3_health.py') --smoke
+    if ($LASTEXITCODE -ne 0) { throw 'Drama 3 real speech smoke failed' }
     Start-ScheduledTask -TaskName $watchTask
     @{
         installed_at = (Get-Date).ToString('o')
@@ -159,7 +176,7 @@ try {
         endpoint = 'http://192.168.3.133:18120/v1'
         service_task = $serviceTask
         watchdog_task = $watchTask
-        firewall_rule = if ($Mode -eq 'System') { $firewallName } else { $null }
+        firewall_rule = if ($firewallConfigured) { $firewallName } else { $null }
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stateDir 'deployment.json') -Encoding UTF8
     Write-Output "Drama 3 ready; mode=$Mode; endpoint=http://192.168.3.133:18120/v1"
 } catch {

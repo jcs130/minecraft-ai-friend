@@ -41,13 +41,13 @@ with open("kirito.wav", "wb") as output:
 
 源码：`tools/drama3/Install-Drama3Service.ps1` 注册 `Drama3-Speech` 和每分钟检查的 `Drama3-Watchdog`。`Drama3-Speech` 的任务动作**直接运行 speech.exe**，因此停止任务也停止进程；用 PowerShell 包装会遗留子进程，已在部署试验中排除。看门狗对冷启动留 90 秒加载窗口；失去健康应答后重新启动原任务。安装脚本先检查模型长度与 SHA-256，再保存本地 LLM 容器和代理任务的原状态到 `server/drama3-service/previous-state.json`。之后仅停止 `qwen38-27b-lan`、将其 Docker restart policy 设为 `no`，并停用 `TqLLM LAN Proxy`。它不删除模型、容器或旧数据。
 
-有管理员权限时执行：
+以管理员 PowerShell 执行：
 
 ```powershell
-& 'D:\Projects\QiandengJi\tools\drama3\Install-Drama3Service.ps1' -Mode System
+& 'D:\Projects\QiandengJi\tools\drama3\Install-Drama3Service.ps1' -Mode User
 ```
 
-`System` 模式设置开机任务及仅允许家庭网段的 Windows 防火墙规则 `Qiandeng-Drama3-LAN-18120`。没有管理员权限时的 `-Mode User` 会创建登录后启动的当前用户任务，**不会**创建防火墙规则；这只能作为有登录会话时的运行方式。重复安装会重新登记同名任务，运行前应确认当前没有长语音请求。故障会恢复本次调用之前 Qwen 容器及代理任务的状态，并禁用新任务。
+在这台 Windows RTX 3090 上，`SYSTEM` 任务的 `/health` 虽返回 200，真实合成却稳定返回 `vk::Queue::submit: ErrorDeviceLost`，显存也未加载模型；不能用 HTTP 健康状态代替合成验收。部署因此采用当前用户的交互式 GPU 会话，**登录 Windows 后自动启动**。管理员执行 `-Mode User` 时，同时创建或核验只允许 `192.168.3.0/24` 的入站规则 `Qiandeng-Drama3-LAN-18120`；非管理员执行则无法创建规则。安装结束前自动合成桐人、结衣与双人语音，三者都通过才写入成功状态。`-Mode System` 保留作诊断选项，不作为此机的生产模式。重复安装会重新登记同名任务，运行前应确认当前没有长语音请求。故障会恢复本次调用之前 Qwen 容器及代理任务的状态，并恢复原任务配置。
 
 常用检查：
 

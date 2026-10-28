@@ -3,8 +3,9 @@ $stateDir = 'D:\Projects\QiandengJi\server\drama3-service'
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 $log = Join-Path $stateDir 'install-system.log'
 $result = Join-Path $stateDir 'install-system-result.json'
+Remove-Item -LiteralPath $result -ErrorAction SilentlyContinue
 try {
-    & (Join-Path $PSScriptRoot 'Install-Drama3Service.ps1') -Mode System *> $log
+    & (Join-Path $PSScriptRoot 'Install-Drama3Service.ps1') -Mode User *> $log
     @{ ok = $true; completed_at = (Get-Date).ToString('o') } |
         ConvertTo-Json | Set-Content -LiteralPath $result -Encoding UTF8
     exit 0

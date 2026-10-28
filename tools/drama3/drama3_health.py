@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import time
+import urllib.error
 import urllib.request
 import wave
 
@@ -100,6 +101,10 @@ def main() -> int:
             ]
         print(json.dumps(result, ensure_ascii=True))
         return 0
+    except urllib.error.HTTPError as error:
+        detail = error.read(1024).decode("utf-8", "replace")
+        print(json.dumps({"ok": False, "error": f"HTTP {error.code}: {detail}"}, ensure_ascii=True), file=sys.stderr)
+        return 1
     except Exception as error:
         print(json.dumps({"ok": False, "error": str(error)}, ensure_ascii=True), file=sys.stderr)
         return 1
