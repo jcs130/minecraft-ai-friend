@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+Version 0.2.116 retains the core's typed repeat-attempt metadata in planner
+outcomes and compact strategic reviews, including completed tasks whose compared
+readings stayed unchanged. Long receipts and later observations cannot silently
+erase these historical samples. Completion still does not verify a goal;
+unknown/changed samples retain their original meaning and authorize no replay.
+
 Version 0.2.115 rejects invalid `mc_original` pagination before opening the
 dispatch uncertainty journal. The planner receives a normal failed-tool result
 with the actual 1..1000 page bound and can continue playing. Native action and

@@ -43,11 +43,41 @@ def body_event_view(value):
             "sampled_at": _bounded(value.get("sampled_at", reference.get("ts")), 80), "original_event": reference}
 
 
+REPEAT_GUIDANCE = ("Historical native attempt samples only. completed means the action ended, not that stock or a goal was obtained. "
+                   "unchanged covers only the core's compared position, inventory and, for target scope, block readings; "
+                   "unknown does not establish no change. Use current prerequisites and original receipts to choose the next action. "
+                   "This evidence does not authorize replay, cancellation or goal changes.")
+
+
+def repeat_evidence_view(value):
+    """Validate the core's typed attempt metadata without inferring from prose."""
+    if (not isinstance(value, dict) or type(value.get("taskId")) is not int or not 0 <= value["taskId"] <= 2**53 - 1
+            or type(value.get("attempts")) is not int or not 3 <= value["attempts"] <= 2**53 - 1
+            or not isinstance(value.get("scope"), str) or not isinstance(value.get("observation"), str)
+            or value.get("scope") not in {"target", "shape"}
+            or value.get("observation") not in {"unchanged", "changed", "unknown"}):
+        return None
+    return {key: value[key] for key in ("taskId", "attempts", "scope", "observation")}
+
+
+def terminal_repeat_evidence(event):
+    """Only the matching original task terminal can attest these samples."""
+    execution = event.get("execution") or {}
+    evidence = repeat_evidence_view((event.get("meta") or {}).get("repeatFailure"))
+    if (not evidence or execution.get("kind") != "task" or execution.get("terminal") is not True
+            or execution.get("phase") not in {"completed", "partial", "blocked"}
+            or not isinstance(execution.get("id"), str)
+            or not execution["id"].endswith(":" + str(evidence["taskId"]))):
+        return None
+    return evidence
+
+
 def native_outcome_view(value):
     if (not isinstance(value, dict) or not isinstance(value.get("execution_id"), str)
             or value.get("terminal") is False):
         return None
     observations = spatial_observations(value.get("receipt", "")) if "observations" not in value else value["observations"]
+    repeat = repeat_evidence_view(value.get("repeat_evidence"))
     return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
             **({"execution_kind": _bounded(value["execution_kind"], 40)} if isinstance(value.get("execution_kind"), str) else {}),
             "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
@@ -58,6 +88,7 @@ def native_outcome_view(value):
                 "observation_guidance": "Observed samples only. An unknown cell is occluded or unloaded, not air or safe ground. Repeating the same scan from the same place cannot establish missing support; change viewpoint/method or choose feasible local work."}
                if isinstance(observations, list) and observations else {}),
             **({"step_outcomes": step_outcomes_view(value["step_outcomes"])} if "step_outcomes" in value else {}),
+            **({"repeat_evidence": repeat, "repeat_guidance": REPEAT_GUIDANCE} if repeat else {}),
             "original_event": event_reference(value.get("original_event"))}
 
 
@@ -190,7 +221,7 @@ def feedback_signal(feedback):
     body = feedback["body_events"][-1:]
     outcomes = [row for row in feedback["native_outcomes"] if not row["observation_only"]][-1:]
     selected = [feedback["bodyRestriction"], [(row["id"], row["phase"], row["text"]) for row in body],
-                [(row["execution_id"], row["phase"], row["receipt"], row.get("step_outcomes")) for row in outcomes]]
+                [(row["execution_id"], row["phase"], row["receipt"], row.get("step_outcomes"), row.get("repeat_evidence")) for row in outcomes]]
     return hashlib.sha256(json.dumps(selected, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 

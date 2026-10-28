@@ -1,5 +1,18 @@
 # Agent MC World
 
+Development candidate **rc.117** adds the public `FactUpdateStream`,
+`applyFactUpdate` and `FACT_UPDATE_GUIDANCE` SDK exports and the
+`agent-mc/fact-update/v1` contract under `agent-mc-world/contracts`.
+Hosts can append an initial full snapshot and ordered changes instead of
+rewriting older model messages. Unchanged fields, explicit nulls and removals
+remain distinct; run/dimension changes and explicit history compaction establish
+a fresh snapshot. `preview()` does not advance the baseline: call `commit()` only
+after the host admits that frame to durable history. This pure presentation API
+does not call a model, operate a body, replace personal memory or truncate facts.
+MCP consumers may apply the same SDK helper to existing `mc_protocol` facts.
+The host still owns bounded history, permission boundaries and current-state
+verification. Source/build candidates are not publication or live-success evidence.
+
 Development candidate **rc.115** freezes shared viewer `c0b9a7a6`: first-person
 cave section visibility, legacy server-skin preview normalization and exact
 original armor paths including modern copper equipment. All shipped asset
