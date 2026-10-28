@@ -44,6 +44,7 @@ from .observations import (
     spatial_observations,
     spatial_text,
     terminal_step_outcomes,
+    terminal_repeat_evidence,
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
@@ -606,6 +607,9 @@ class Controller:
                         "step_outcomes": terminal_step_outcomes(execution, arguments),
                         "receipt": receipt if self.settings.context_mode == "full" else spatial_text(receipt),
                         "observations": observations, "original_event": reference}
+                    repeat = terminal_repeat_evidence(event)
+                    if repeat:
+                        native_outcome["repeat_evidence"] = repeat
                     self.native_outcomes.append(native_outcome if self.settings.context_mode == "full" else native_outcome_view(native_outcome))
                     if self.settings.context_mode == "full":
                         while len(self.native_outcomes) > 1 and len(encode(self.native_outcomes).encode("utf-8")) > self.settings.context_tokens:
