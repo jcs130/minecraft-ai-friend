@@ -5,6 +5,7 @@ from __future__ import annotations
 from array import array
 import io
 import json
+import http.client
 from pathlib import Path
 import sys
 import tempfile
@@ -18,6 +19,7 @@ import wave
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from voice_registry import VoiceRegistry  # noqa: E402
 from voice_service import VoiceHTTPServer  # noqa: E402
+from speech_native import SpeechError  # noqa: E402
 
 
 def reference_wav() -> bytes:
@@ -41,6 +43,12 @@ class FakeEngine:
         self.encoded = 0
         self.added: list[str] = []
         self.spoken: list[str] = []
+        self.options: list[dict] = []
+        self.next_stop = "complete"
+        self.fail_after_audio = False
+        self.wait_for_disconnect = False
+        self.started = threading.Event()
+        self.cancelled = threading.Event()
 
     def make_voice(self, reference: Path, transcript: str, output: Path) -> None:
         if self.gate is not None:
@@ -63,10 +71,19 @@ class FakeEngine:
     def info(self) -> dict:
         return {"name": "drama-3", "voices": [{"name": name} for name in ("none", *self.added)]}
 
-    def synthesize(self, text: str, options: dict, on_pcm: object) -> dict:
+    def synthesize(self, text: str, options: dict, on_pcm: object,
+                   cancellation: threading.Event | None = None) -> dict:
         self.spoken.append(options["voice"])
+        self.options.append(options.copy())
+        self.started.set()
+        if self.wait_for_disconnect:
+            if cancellation is not None and cancellation.wait(timeout=2):
+                self.cancelled.set()
+                return {"samples": 0, "stop": "cancelled", "seed": options["seed"]}
         on_pcm(array("h", [2000] * 4410).tobytes())
-        return {"samples": 4410, "stop": "complete", "seed": options["seed"]}
+        if self.fail_after_audio:
+            raise SpeechError(-6, "simulated native device failure")
+        return {"samples": 4410, "stop": self.next_stop, "seed": options["seed"]}
 
 
 def wait_status(registry: VoiceRegistry, voice_id: str, status: str) -> dict:
@@ -199,11 +216,109 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(json.loads(response)["error"]["code"], "unsupported_value")
         self.assertEqual(self.engine.spoken, ["cormy"])
-        payload = json.dumps({"input": "测试", "voice": "cormy", "max_seconds": 11}).encode()
+        payload = json.dumps({"input": "测试", "voice": "cormy", "max_seconds": 31}).encode()
         status, response = self.request("/v1/audio/speech", payload)
         self.assertEqual(status, 400)
         self.assertEqual(json.loads(response)["error"]["param"], "max_seconds")
         self.assertEqual(self.engine.spoken, ["cormy"])
+
+    def test_long_form_uses_one_request_and_explicit_seed(self) -> None:
+        status, model_body = self.request("/v1/models")
+        self.assertEqual(status, 200)
+        model = json.loads(model_body)["data"][0]
+        self.assertEqual(model["chunking"]["max_seconds_scope"], "per_chunk")
+        self.assertEqual(model["chunking"]["max_seconds_limit"], 30)
+        long_text = "今晚大家先沿着河边走。" * 20
+        self.assertGreater(len(long_text), 172)
+        payload = json.dumps({"model": "drama-3", "input": long_text, "voice": "yui",
+                              "response_format": "pcm", "stream_format": "sse",
+                              "seed": 20261021, "max_seconds": 30}).encode()
+        status, response = self.request("/v1/audio/speech", payload)
+        self.assertEqual(status, 200, response[:200])
+        events = [json.loads(line[6:]) for line in response.splitlines() if line.startswith(b"data: ")]
+        self.assertEqual([event["type"] for event in events], ["speech.audio.delta", "speech.audio.done"])
+        self.assertEqual(events[-1]["seed"], 20261021)
+        self.assertEqual(events[-1]["samples"], 4410)
+        self.assertEqual(events[-1]["stop"], "complete")
+        self.assertEqual(self.engine.spoken, ["yui"])
+        self.assertEqual(self.engine.options[0]["max_seconds"], 30.0)
+        self.assertEqual(self.engine.options[0]["seed"], 20261021)
+
+    def test_native_truncation_and_post_audio_error_are_truthful(self) -> None:
+        payload = json.dumps({"input": "测试", "voice": "yui", "response_format": "pcm",
+                              "stream_format": "sse", "seed": 77}).encode()
+        self.engine.next_stop = "max_seconds"
+        status, response = self.request("/v1/audio/speech", payload)
+        self.assertEqual(status, 200)
+        events = [json.loads(line[6:]) for line in response.splitlines() if line.startswith(b"data: ")]
+        self.assertEqual(events[-1]["stop"], "max_seconds")
+        self.assertEqual(events[-1]["samples"], 4410)
+        self.engine.fail_after_audio = True
+        status, response = self.request("/v1/audio/speech", payload)
+        self.assertEqual(status, 200)
+        events = [json.loads(line[6:]) for line in response.splitlines() if line.startswith(b"data: ")]
+        self.assertEqual(events[-1]["type"], "speech.audio.done")
+        self.assertEqual(events[-1]["stop"], "error")
+        self.assertEqual(events[-1]["samples"], 4410)
+        self.assertIn("native device failure", events[-1]["error"])
+
+    def test_disconnected_client_cancels_running_request(self) -> None:
+        self.engine.wait_for_disconnect = True
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        payload = json.dumps({"input": "等待取消", "voice": "yui", "response_format": "pcm",
+                              "stream_format": "sse"}).encode()
+        connection.request("POST", "/v1/audio/speech", payload,
+                           {"Content-Type": "application/json"})
+        self.assertTrue(self.engine.started.wait(timeout=2))
+        connection.close()
+        self.assertTrue(self.engine.cancelled.wait(timeout=1), "native request was not cancelled on disconnect")
+
+    def test_disconnected_client_does_not_run_after_serial_queue(self) -> None:
+        class SerialFakeEngine(FakeEngine):
+            def __init__(self) -> None:
+                super().__init__()
+                self.serial = threading.Lock()
+                self.first_started = threading.Event()
+                self.release_first = threading.Event()
+                self.second_queued = threading.Event()
+                self.second_cancelled = threading.Event()
+
+            def synthesize(self, text: str, options: dict, on_pcm: object,
+                           cancellation: threading.Event | None = None) -> dict:
+                if text == "second":
+                    self.second_queued.set()
+                with self.serial:
+                    if text == "first":
+                        self.first_started.set()
+                        self.release_first.wait(timeout=3)
+                    if cancellation is not None and cancellation.is_set():
+                        self.second_cancelled.set()
+                        return {"samples": 0, "stop": "cancelled", "seed": options["seed"]}
+                    return super().synthesize(text, options, on_pcm, cancellation)
+
+        engine = SerialFakeEngine()
+        self.server.engine = engine
+        first = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        second = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        headers = {"Content-Type": "application/json"}
+        payload = lambda text: json.dumps({"input": text, "voice": "yui", "response_format": "pcm",
+                                           "stream_format": "sse"}).encode()
+        try:
+            first.request("POST", "/v1/audio/speech", payload("first"), headers)
+            self.assertTrue(engine.first_started.wait(timeout=1))
+            second.request("POST", "/v1/audio/speech", payload("second"), headers)
+            self.assertTrue(engine.second_queued.wait(timeout=1))
+            second.close()
+            engine.release_first.set()
+            with first.getresponse() as response:
+                self.assertEqual(response.status, 200)
+                response.read()
+            self.assertTrue(engine.second_cancelled.wait(timeout=1))
+            self.assertEqual(engine.spoken, ["yui"])
+        finally:
+            engine.release_first.set()
+            first.close()
+            second.close()
 
     def test_cast_tags_and_streaming_pcm(self) -> None:
         payload = json.dumps({"input": "<|speaker:0|>你好。<|speaker:1|>好呀。",
