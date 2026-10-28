@@ -91,6 +91,8 @@ def _receipt(transaction):
 
 
 def require_no_pending_acknowledgement(host, *, same_id=None):
+    from .local_rejection_recovery import require_no_pending_local_reconciliation
+    require_no_pending_local_reconciliation(host)
     for transaction in _transactions(host):
         if transaction.is_symlink():
             raise RuntimeError("outcome_unknown: recovery receipt requires inspection")
