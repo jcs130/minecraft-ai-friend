@@ -1,8 +1,11 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.21、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.0已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.113，源码更新不冒充外部客户端已升级。
+**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.22、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.1已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
 
 **六职业共用一套成长：**骑士、法师、游侠、牧师、驯兽师和工程师，由本人主动选择。原生技能、天赋、经验与金币，八张冒险委托、五处活动、首层攻略及组队救援已接入原`/mycli`；旧职业停止写入并保留归档。先看[技能与装备](paper/docs/SKILL_USAGE_QUICKSTART.md)。完整0.4.48仍含其他候选，不可直接替换正式JAR。
+
+最新修复：原版附魔保留；旧技能停用会给原因与下一步，`/mycli intro`查看选职、技能、任务和副本整备。更新提醒按账号私下一次，反作弊异步属性读取已修复。[0.4.47.22发布与回退](paper/docs/RPG_GUIDANCE_20261028.md)。
+
 
 副本新开场和加入须穿齐四件护甲，携带近战、弓弩或本职业法器，不强制带剑；缺项会返回补给入口。装备使用原版物品承载，普通Java、基岩、Mineflayer和Numen无需为RPG额外安装模组。原村庄与起始之城实体传送门已开放，每次6魔力；三位原NPC接待已改为艾基尔、克莱因和阿尔戈的剧情指引，身体仍为原村民。详见[接管与实测](paper/integrations/vortex-rpg/TAKEOVER.md)。
 
@@ -82,10 +85,10 @@ python paper/self-host/selfhost.py doctor
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.21** / VortexRPG **1.2.2-alpha-qd27** / QiandengjiRpg **0.2.0** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.22** / VortexRPG **1.2.2-alpha-qd27** / QiandengjiRpg **0.2.1** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
-| 通用 MC 核心 | [主干 **0.5.7-rc.113**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
+| 通用 MC 核心 | [主干 **0.5.7-rc.116**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。

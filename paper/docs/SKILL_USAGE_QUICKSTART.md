@@ -1,12 +1,13 @@
-# 技能怎样学习和使用
+# 破晓攻略：职业、技能与冒险
 
-Vortex原生版先用 `/mycli status` 核对实际后端；发布状态见[破晓攻略](NATIVE_RPG_RELEASE_20261027.md)。旧四职业归档，背包和成绩保留，新职业由本人选择。
+入口 `/mycli intro`，以本人实际后端和回执为准。0.4.47.22 修复旧技能提示和更新通知，状态见[版本记录](RPG_GUIDANCE_20261028.md)。查询不会代选职业、学习或接任务。
 
-1. `profession list/info` 看六职业，再主动 `choose <ID>`。
-2. `skills list/info <ID>` 查本人技能和费用。选职后初始主动技可用，`cast <ID>`施放；`skills prepare <ID>`设置武器点击技。
-3. `skills learn <节点ID>`按详情花学习点或天赋点；`skills tree`查本职业天赋，被动不能cast。通用 `home/travel/prospect/night/feather` 无需重学。
+1. `/mycli profession list` 看六职业，`profession info <ID>` 看条件，再主动 `profession choose <ID>`。
+2. `/mycli skills list` 看本职技能，`skills info <ID>` 看目标、效果、等级、耗魔和冷却。初始主动技选职后可直接 `/mycli cast <ID>`；`skills prepare <ID>` 设置职业装备的点击技能。`skills learn <节点ID>` 仅按详情花点；被动不能施放。
+3. `/mycli tasks list` 看讨伐、巡访、打造和攻略；先 `tasks info <ID>` 再 `tasks accept <ID>`，按 `tasks status` 的真实缺项行动，达标再 `tasks claim <ID>`。原公会在途单用 `/mycli guild status` 继续。
+4. 穿齐护甲、备好职业武器与补给，`/mycli dungeon list`、`dungeon info <ID>` 看难度再入场。公共补给 `/mycli guild shared`，个人箱 `/mycli arena stash`。
 
-| 职业 | 初始主动技 | 初始战斗装备的原版载体 |
+| 职业 | 初始主动技 | 初始装备的原版载体 |
 | --- | --- | --- |
 | 骑士 knight | fortify | 铁剑 |
 | 法师 mage | arcane_bolt | 烈焰棒法杖 |
@@ -15,39 +16,22 @@ Vortex原生版先用 `/mycli status` 核对实际后端；发布状态见[破�
 | 驯兽师 beastmaster | beast_call | 骨头图腾 |
 | 工程师 engineer | deploy_turret | 时钟工具包 |
 
-装备由服务端真实标记识别，原版Java、Mineflayer、Numen和基岩均可使用，无需额外模组；真人按说明点击，Agent可装备交互或直接cast。普通改名的书或木棍不能冒充。驯兽和工程初始技是伤害战技，不会生成常驻宠物或炮塔。
+装备由服务端真实标记识别，Java、Mineflayer、Numen、基岩沿用原版物品协议，无需额外模组。改名书或木棍不能冒充职业法器；驯兽和工程初始技当前是伤害战技，不会生成常驻宠物或炮塔。
 
-副本新开场、加入和试炼入口须穿齐头、胸、腿、脚四件护甲，携带近战、弓弩或本人职业可用的法器，**不强制带剑**。缺项返回`equipment_required`和公共补给 `/mycli guild shared`；拒绝不创建场次或加入名单。弓手仍需备箭，难度和组队建议另查 `dungeon info`。
+副本新开场、加入和试炼入口需要头、胸、腿、脚四件护甲，以及近战、弓弩或本人职业可用的法器，不强制剑；缺项返回 `equipment_required` 和补给入口，不创建场次。弓手仍需备箭。
 
-## 旧后端历史说明（Vortex启用时不适用）
+## 旧装备与旧技能
 
-游戏入口是技能罗盘，命令入口是 `/mycli guide magic`。通用技能学会即可使用；职业技能按下面四步。选职业只解锁学习资格，不自动花技能点。
+原版效率、锋利、保护、经验修补继续生效。旧装备、附魔、自定义刻印标签和履历保留；保留旧刻印不代表旧技能可施放。旧四职业及旧战斗、生活法术已归档，不能再按旧学习和准备槽操作。
 
-| 步骤 | 罗盘操作 | Agent 命令 |
-| --- | --- | --- |
-| 选职业 | 职业与传承，选择一个方向 | `/mycli profession menu` |
-| 看条件、学习 | 技能学习与升级：右键看条件，左键花点学习或升级 | `/mycli skills info <ID>`，确认后 `/mycli skills learn <ID>` |
-| 准备 | 我的职业技能：左键准备或取消，已有自动准备时无需重复 | `/mycli skills prepare <ID>` |
-| 施放 | 持说明要求的装备，职业技能页右键 | `/mycli cast <ID>` |
+通用 `home/travel/prospect/night/feather` 复用原效果，无需重学。个人箱成功远程开页消耗2魔力，实体箱旁免费；`arena stash list` 查箱格，`arena rewards list` 查待入箱，空箱不等于奖励丢失。
 
-普通职业技能最多同时准备4项，传承另占1项。通用技能不占职业准备槽。学习花技能点，施放按本人等级消耗魔力并进入冷却。失败先读具体原因；`/mycli skills status <ID>` 查本人资格、装备、魔力与冷却，按需再查详情。
+| 回执 | 含义与下一步 |
+| --- | --- |
+| `skill_retired` | 旧技能已停用；未施放、不扣魔力、物品、经验或青金石。转 `/mycli intro` 或本人技能目录。 |
+| `unknown_skill` | 当前与旧目录均无此ID；查 `skills list`，不要重复猜测。 |
+| `class_required` | 尚未选职；先查 `profession list`，由本人选择。 |
+| `skill_locked` | 非本职业可用或尚未解锁；看 `skills info <ID>`。 |
+| `skill_node_not_castable` | 被动或天赋节点，不能作为主动技施放。 |
 
-## 已上线的职业机动和祝福
-
-| 技能 | 一级学习 | 一级使用 | 操作 |
-| --- | --- | --- | --- |
-| 战士·凌空跃击 `warrior_sky_leap` | 2技能点 | 6魔力，冷却20秒 | 站稳地面、头顶开阔后施放，自动起跳；自行横移和落地。目标跃高约8格，缓降20秒，没有附带攻击。 |
-| 法师·御空术 `mage_soar` | 3技能点 | 8魔力，冷却90秒 | 施放即进入飞行；方向键或摇杆移动，跳跃上升、潜行下降，持续20秒后缓降。 |
-| 牧师·同行祝福 `priest_blessing` | 3技能点 | 8魔力，冷却30秒 | 队友进入8格范围再施放；可见生存友军含本人，一级最多2人，迅捷I与抗性I持续8秒。 |
-
-二、三级分别需要对应的基础、进阶能力证书及升级点数；具体条件看本人 `skills info`。各级数值在[职业认证](SKILL_CERTIFICATIONS.md)，团队减伤与治疗在[组队技能](TRIAL_RESCUE_FEEDBACK.md)。
-
-例如已有战士想学凌空跃击，先查 `/mycli skills info warrior_sky_leap`，确认点数后学习，未准备时再准备，最后 `/mycli cast warrior_sky_leap`。法师和牧师把ID换成表中对应ID；不要为了试一个技能擅自换掉已有职业。
-
-## 当前发布范围
-
-2026-10-27正式AgentFriend0.4.47.18有20项通用技能、23项战法牧与坦克技能。职业技艺均可查学习、准备、耗魔与冷却要求，上面三项也有实际操控说明；原角色的学习与升级记录保留。
-
-四职业和艾恩葛朗特第一层正式攻略已发布，详见[发布记录](RPG_RELEASE_20261027.md)。新章节增加“实际学会并准备一项战斗技能”的剧情步骤，`guide magic`展开为四步短文本；没有增加命令树。原角色的职业与技能履历保留，已接章节继续使用其冻结定义，不能用看说明或进地图代替学习和正式通关。
-
-突刺等攻击遵守原版受击间隔，避免与普通攻击在同一瞬间发出。正式版把这个情况从“目标受保护”纠正为 `target_recovering`，没有扣魔力或冷却；等待约半秒后重新瞄准再施放一次。真正被其他插件拒绝的伤害仍返回 `protected_target`，不绕过保护。
+`skills status <ID>`、`skills explain <ID>` 是单项详情兼容入口。失败按原因和下一步处理；超时先查询，不自动重复施法、存取或领奖。旧后端说明仅保留在历史版本，不能当作现役攻略。

@@ -16,6 +16,8 @@ final class NativeRpg {
         selected="vortex".equals(owner.getConfig().getString("rpg-backend", "legacy"));
     }
     boolean selected(){return selected;}
+    static boolean common(String raw){return COMMON.contains(skillId(raw.trim().split("\\s+",2)[0]));}
+    static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡术","回城"->"home";case "传送点术"->"travel";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "霜环"->"frostnova";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
     private Plugin backend() {
         Plugin p=Bukkit.getPluginManager().getPlugin("QiandengjiRpg");
         if(p==null||!p.isEnabled())throw new IllegalStateException("RPG服务未就绪；稍后查询 /mycli status，不要重复执行。");
@@ -92,14 +94,20 @@ final class NativeRpg {
             }
         }
         if(group.equals("rpg"))return route(p,Arrays.copyOfRange(args,1,args.length));
+        if(group.equals("guide")&&(args.length==1||Set.of("start","magic","next","onboarding").contains(args[1])))return route(p,new String[]{"intro"});
         if(group.equals("help")&&args.length>1&&!Set.of("profession","skills","cast","tasks","status").contains(args[1].toLowerCase(Locale.ROOT)))return false;
         if(Set.of("help","--help","-h","guide","capabilities","list").contains(group)){
             if(group.equals("help")&&args.length>1)return delegate(p,args[1],"--help");
             return delegate(p,"--help");
         }
         if(group.equals("intro")){
-            p.sendMessage("§6[入门] 规则：/mycli rules；先选职业，再学技能、打怪练级、组队攻略。公共装备：/mycli guild shared");
-            return delegate(p,"status");
+            JsonObject s=state(p);if(!s.has("available")||!s.get("available").getAsBoolean()){p.sendMessage("§e角色仍在加载；稍后查询 /mycli status，未替你选职或接任务。");return true;}
+            p.sendMessage("§6[破晓攻略·MMORPG] 原版装备与附魔继续有效；旧四职业和旧战斗/生活法术已归档，不再使用旧学习/准备槽。home/travel/prospect/night/feather 为通用技。");
+            boolean chosen=s.has("combat")&&!s.get("combat").getAsString().isEmpty();
+            p.sendMessage("§b[1 职业] "+(chosen?"已选 "+s.get("combat").getAsString()+"，不用重选。":"先 /mycli profession list，再按本人偏好 profession choose <ID>；不自动选职。"));
+            p.sendMessage("§b[2 技能] /mycli skills list 查本职可用技；skills info <ID>看目标、等级和耗魔；cast <ID>施放，skills prepare <ID>设置武器点击技；learn只按详情花点。");
+            p.sendMessage("§b[3 冒险] /mycli tasks list → tasks info <ID> → tasks accept <ID>，打怪/探索后 tasks status/claim <ID>。四件护甲+本职业武器或法器备齐后 /mycli dungeon list。补给 guild shared；个人箱 arena stash。");
+            return true;
         }
         if(group.equals("progress")){delegate(p,Arrays.asList(args).contains("--json")?new String[]{"tasks","status","--json"}:new String[]{"tasks","status"});adventureProgress(p,Arrays.asList(args).contains("--json"));return true;}
         if(group.equals("guild")&&args.length>=2&&args[1].equalsIgnoreCase("party")){
@@ -112,9 +120,9 @@ final class NativeRpg {
             boolean handled=delegate(p,normalized);if(group.equals("status")&&!Arrays.asList(args).contains("--json"))adventureProgress(p,false);return handled;
         }
         if(group.equals("cast")||group.equals("施法")||group.equals("咏唱")) {
-            String id=args.length>1?args[1].toLowerCase(Locale.ROOT):"";
+            String id=args.length>1?skillId(args[1]):"";
             if(COMMON.contains(id))return false;
-            String[] normalized=args.clone();normalized[0]="cast";return delegate(p,normalized);
+            String[] normalized=args.clone();normalized[0]="cast";if(normalized.length>1)normalized[1]=id;return delegate(p,normalized);
         }
         return false;
     }

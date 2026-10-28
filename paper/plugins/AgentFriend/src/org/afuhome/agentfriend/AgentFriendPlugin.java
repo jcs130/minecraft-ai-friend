@@ -1467,6 +1467,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗、探矿与探索法术由 AgentFriend 管冷却。");
     }
     private void cast(Player p, String raw) {
+        if(nativeRpg.selected()){String[] tokens=raw.split("\\s+",2);raw=NativeRpg.skillId(tokens[0])+(tokens.length>1?" "+tokens[1]:"");}
         if (isDowned(p)) { p.sendMessage("§e倒地中，请等待队友靠近救援或清场复活。"); return; }
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
@@ -2174,6 +2175,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         openMenu(player, "imprint");
     }
     private void imprint(Player player, String id) {
+        if(nativeRpg.selected()&&!NativeRpg.common(id)){nativeRpg.delegate(player,"skills","info",id);return;}
         FocusSpell spell = focusDefinition(id);
         if (spell == null) { player.sendMessage(ChatColor.RED + "没有这个可刻印法术；/mycli imprint list 查看 ID。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能刻印；请使用生存角色持工具在附魔台4格内操作，/mycli imprint list 查可用技能。"); return; }
@@ -2229,6 +2231,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else p.sendMessage(ChatColor.RED + "背包已满；腾出一格后输入 /mycli focus give 领取法杖。");
     }
     private void bindFocus(Player p, String id) {
+        if(nativeRpg.selected()&&!NativeRpg.common(id)){nativeRpg.delegate(p,"skills","info",id);return;}
         FocusSpell spell = focusDefinition(id);
         if (spell == null) { p.sendMessage(ChatColor.RED + "没有这个可绑定技能；使用 /mycli focus list 查看 ID。"); return; }
         ItemStack[] storage = p.getInventory().getStorageContents();
@@ -2241,6 +2244,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.RED + "背包中没有灵纹法杖；先用 /mycli focus give 领取。");
     }
     private void listFocus(Player p) {
+        if(nativeRpg.selected()){p.sendMessage("§d当前通用刻印/法杖："+FOCUS_SPELLS.stream().filter(s->NativeRpg.common(s.id())).map(FocusSpell::id).collect(java.util.stream.Collectors.joining("、"))+"。旧技能刻印已停用，物品和原版附魔保留；职业技能：/mycli skills list；完整指引：/mycli intro");return;}
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可绑定的法杖技能 ID（均可用于 /mycli focus bind <ID>）：");
         for (int start = 0; start < FOCUS_SPELLS.size(); start += 8) {
             String ids = FOCUS_SPELLS.subList(start, Math.min(start + 8, FOCUS_SPELLS.size()))
@@ -2563,14 +2567,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(16, item(Material.AMETHYST_SHARD, "§d探附近矿脉", "寻找最近的任意矿物"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("focus")) {
-            for (FocusSpell spell : FOCUS_SPELLS)
-                inv.setItem(spell.slot(), item(spell.icon(), spell.title(), spell.hint(),
-                        SpellGuide.costLine(spell.id()), "点击绑定；之后手持法杖一按即施放"));
+            for (FocusSpell spell : FOCUS_SPELLS){
+                boolean retired=nativeRpg.selected()&&!NativeRpg.common(spell.id());
+                inv.setItem(spell.slot(), retired?item(Material.BARRIER,"§8[已停用] "+ChatColor.stripColor(spell.title()),"旧技能已归档，不再绑定或扣费","当前职业技能：/mycli skills list"):item(spell.icon(), spell.title(), spell.hint(),
+                        SpellGuide.costLine(spell.id()), "点击绑定；之后手持法杖一按即施放"));}
             inv.setItem(0, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("imprint")) {
             for (int i = 0; i < FOCUS_SPELLS.size(); i++) {
                 FocusSpell spell = FOCUS_SPELLS.get(i);
-                inv.setItem(i, item(spell.icon(), spell.title(), spell.hint(), SpellGuide.costLine(spell.id()),
+                boolean retired=nativeRpg.selected()&&!NativeRpg.common(spell.id());
+                inv.setItem(i,retired?item(Material.BARRIER,"§8[已停用] "+ChatColor.stripColor(spell.title()),"不会扣经验、青金石或改装备","当前职业技能：/mycli skills list"):item(spell.icon(), spell.title(), spell.hint(), SpellGuide.costLine(spell.id()),
                         "点击刻印手中工具；3 经验等级 + 1 青金石"));
             }
             inv.setItem(45, item(Material.ENCHANTING_TABLE, "§5刻印说明",
@@ -2692,6 +2698,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (SkillTome.isTome(event.getItem())) {
             event.setCancelled(true);
+            if(nativeRpg.selected()){event.getPlayer().sendMessage("§e[旧技能书] 旧版学习已停用，书本保留、不消耗。职业技能与学习点：/mycli skills list；攻略入门：/mycli intro");return;}
             SkillTome.use(event.getPlayer(), event.getPlayer().getInventory().getHeldItemSlot(), spellMastery);
             return;
         }
