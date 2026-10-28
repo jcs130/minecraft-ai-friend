@@ -1,3 +1,7 @@
+## 2026-10-28 Tau 原生 Mineflayer 接口候选已验收
+
+integrations/tau-ceti/native-bridge 提供普通登录身体的8项原生接口、可选服务端组件与独立无依赖SDK；同一玩家连接发送原始物品/菜单/配方，不新建Numen身体或公网端口。527原模组+本组件的隔离服26项真实操作、17客户端、15Java策略、17原管理回归和4打包消费者通过；含魂符真实ID、厨锅放入/关闭、1原木→4木板、requestId去重及跨连接对账。构建a1826bfa…0d2390eb，原始源码/配方补丁有哈希；不能把未知配方、魔力或专用模组按钮说成已接通。当前仅候选，正式服尚未安装/重启，正在等待本次维护窗口答复；Paper未改。私有证据和发布预案在E:/MC/ops/repairs/tau-native-player-20261028，说明见integrations/tau-ceti/NATIVE_PLAYER_VALIDATION.md。不要部署早期build-1至6，或把早期失败改成成功。
+
 ## 2026-10-28 正式营地红帐篷通行已修复
 
 Paper/AgentFriend0.4.47.21在线稀疏调整25格，南口X[-1139,-1137]/Z[-573,-568]三格宽平路，Y63石砖、Y64/65空气；床箱/上方屋顶与建筑地坪保护保持。服务端5项结构/保护检查、非OP三条实际步行与库存核验4项通过；测试客户端旧物品解码警告保留，完整隔离套件未重跑。未移动Corti、未重启/换JAR，实时与CoreProtect已证实她离开帐篷正常采矿；不要凭旧聊天说她仍原地卡住。E/F前像/日志在repairs/corti-stuck-20261028，自动保存已恢复；不能在线覆盖region回退。未来重建模板要保留入口补丁并实走。见paper/docs/WAYFARER_CAMP.md及paper/content/wayfarer-tent-access-20261028.json。下方Tau是独立实例。

@@ -1,0 +1,12 @@
+{
+  "name": "@qiandengji/tau-native-client",
+  "version": "0.1.0",
+  "description": "Native original-item, recipe and menu receipts over an existing authenticated Mineflayer connection",
+  "type": "commonjs",
+  "main": "native-client.cjs",
+  "exports": {".": "./native-client.cjs", "./operations": "./operations.json"},
+  "files": ["native-client.cjs", "operations.json", "README.md"],
+  "engines": {"node": ">=20"},
+  "license": "MIT",
+  "scripts": {"test": "node --test native-client.test.cjs"}
+}
