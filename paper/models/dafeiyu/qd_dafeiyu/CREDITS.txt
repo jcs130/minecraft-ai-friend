@@ -1,3 +1,4 @@
-QianDengJi original fat fish 1.0.0
-Geometry, texture, animations: original, CC0 1.0.
-No third-party encrypted .ysm was read, decrypted, copied, or used as a source.
+Whale-maid character reference: Mingyue by 上善无形; maid adaptation by ZipZipPipe.
+New block mesh, painted atlas and animation: jcs130 / Codex, 2026-10-28.
+Character fan work, non-commercial, retain attribution and original character rights.
+No encrypted YSM, third-party geometry or source-image pixels used.
