@@ -3,6 +3,7 @@ $ErrorActionPreference='Stop'
 $taskCases=@(
  @('VortexRPG-1.2.2-alpha-qd27-zh.jar',$true),@('QiandengjiRpg-0.2.0.jar',$true),@('Vault-1.7.3.jar',$true),
  @('VortexRPG-1.2.2-alpha-qd29.jar',$true),@('QiandengjiRpg-0.2.4.jar',$true),
+ @('QiandengjiRpg-0.2.6.jar',$true),@('QiandengjiRpg-0.2.7.jar',$false),
  @('plugins/VortexRPG/quests.yml',$true),@('plugins/VortexRPG/talents.yml',$true),
  @('plugins/QiandengjiRpg/config.yml',$true),@('plugins/AuraSkills/stats.yml',$true),
  @('plugins/VortexRPG/questdata/test.json',$false),@('plugins/VortexRPG/playerdata/test.json',$false),

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "state": "candidate-verified-maintenance-in-progress",
+  "releaseId": "rpg-unified-release-20261028-r1",
+  "runtimeTarget": {
+    "AgentFriend": "0.4.47.27-vortex",
+    "QiandengjiRpg": "0.2.6",
+    "VortexRPG": "1.2.2-alpha-qd29 (unchanged)"
+  },
+  "artifacts": {
+    "AgentFriend-0.4.47.27.jar": "ad40b4e32a46ef69cb0e73798b501d638d8eb237eec0ea198b7cf0d2c65ba8f8",
+    "QiandengjiRpg-0.2.6.jar": "cecdf5b5f4c43d68ce77c2df28845bbd56f45dded28e6daf7cc125cc2959e2c8",
+    "plugins/AgentFriend/onboarding.yml": "541d054a4ed018c7bf15bceeb400fa61071a8775eda46a3599b8ee1fd99e8c7d"
+  },
+  "validation": {
+    "offlineNative": 236,
+    "migrationFaultTests": 14,
+    "deploymentBoundaries": 20,
+    "actualConnectionChecks": {
+      "journey": 36,
+      "journeyCold": 6,
+      "storage": 21,
+      "storageFault": 8,
+      "storageCold": 5,
+      "moneyFinal": 32,
+      "moneyColdFinal": 5
+    },
+    "finalMoneyArtifacts": "AF .27-r9 / bridge .2.6-r5",
+    "regressionArtifacts": "AF .27-r7 / bridge .2.6-r5",
+    "regressionReuse": "Final patch changes only ArenaEconomy query flag, decimal contract balances and NativeRpg status-full alias; changed paths retested with final money/cold probe",
+    "normalQaStops": true,
+    "qaJarsRestored": true
+  },
+  "authority": {
+    "classGrowthManaSkills": "VortexRPG",
+    "money": "same Vortex Vault/Essentials provider",
+    "legacySkillGrowth": "archived read-only; common effects retain native mana and level scaling",
+    "worldActivities": "existing maps, achievements, exams and active quest IDs retained as world content"
+  },
+  "migration": {
+    "rate": "1:1",
+    "status": "awaiting verified complete cold backups",
+    "previewAccounts": 5,
+    "previewGold": 3202,
+    "neverRepeat": true,
+    "unknownTransactions": "journal and pending index, no automatic replay"
+  },
+  "knownLimits": [
+    "Native auction disabled after reproduced charge-without-delivery bug",
+    "No remote Java/Bedrock/mobile visual or long-term autonomous combat claim",
+    "Skill/MCP reference source updated; download bundles not republished"
+  ],
+  "releaseDocument": "paper/docs/RPG_UNIFIED_20261028.md"
+}

@@ -1,8 +1,8 @@
 name: QiandengjiRpg
-version: 0.2.5
+version: 0.2.6
 main: org.qiandengji.vortex.VortexBridge
 api-version: '1.21'
-depend: [VortexRPG]
+depend: [VortexRPG, Vault]
 softdepend: [AgentFriend, LightAntiCheat]
 commands:
   qdrpg:

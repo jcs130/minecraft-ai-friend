@@ -48,7 +48,7 @@ steps:
   complete:
     title: 攻略路线已开启
     message: 先 /mycli profession list 选择职业，再 skills list / skills info <ID> 查本人技能。职业初始主动技可直接cast；prepare设置点击技能，learn仅按详情花点学节点，通用能力无需重学。
-release-revision: 4
+release-revision: 5
 release-notice:
 - '[RPG指引更新] 本人当前目标：/mycli intro。饥饿用food，圣愈只回血；任务分进行中、待交付、已交付。走路、击杀、制作需亲自行动，查询不推进。'
-- '[出征准备] 公会补给guild shared；个人箱arena stash；金币trade wallet。原生拍卖交付故障暂时维护，本次不改职业、任务或物品。'
+- '[背包与回收] 材料可远程存个人箱：arena stash putslot <背包槽> <数量>，成功2魔力；装备回收arena recycle list→quote→sell，收益是RPG金币，余额trade wallet。旧余额1:1并入金币；商店/试炼/委托同币种，旧研习改用skills status/tree。'

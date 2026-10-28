@@ -27,6 +27,15 @@ final class SkillTome {
     static ItemStack create(String spell, int practice) {
         if (!SpellMastery.NAMES.containsKey(spell) || practice != 4 && practice != 8)
             throw new IllegalArgumentException("Invalid skill tome");
+        var af=org.bukkit.Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if(af instanceof AgentFriendPlugin owner&&owner.nativeRpg().selected()){
+            // Keep the existing loot table's slot without minting retired skill
+            // upgrades. These are vanilla enchanting XP, never RPG experience.
+            ItemStack supply=new ItemStack(Material.EXPERIENCE_BOTTLE,practice);
+            var meta=supply.getItemMeta();meta.setDisplayName("§a附魔经验补给");
+            meta.setLore(List.of("§7原版附魔经验；职业成长用Vortex学习点", "§7当前技能：/mycli skills list"));
+            supply.setItemMeta(meta);return supply;
+        }
         // Written books have a native Use action on Java and Bedrock controllers.
         ItemStack book = new ItemStack(Material.WRITTEN_BOOK);
         BookMeta meta = (BookMeta) book.getItemMeta();
@@ -59,6 +68,12 @@ final class SkillTome {
     static String spellId(ItemStack item) { return spell(item); }
 
     static void command(Player player, String[] args, SpellMastery mastery) {
+        if(mastery.retired()&&args.length==2&&args[1].equalsIgnoreCase("list")){
+            int found=0;
+            for(int slot=0;slot<36;slot++){ItemStack item=player.getInventory().getItem(slot);String id=spell(item);
+                if(id!=null){found++;player.sendMessage("MC_SKILLBOOK action=list archived=true slot="+slot+" id="+id+" count="+item.getAmount());}}
+            player.sendMessage("§e旧研习书已归档，共"+found+"格；保留、不消耗。升级用Vortex学习点和天赋：/mycli skills status");return;
+        }
         if (args.length == 2 && args[1].equalsIgnoreCase("list")) {
             int count = 0;
             for (int slot = 0; slot < 36; slot++) {
@@ -90,6 +105,10 @@ final class SkillTome {
     }
 
     static void use(Player player, int slot, SpellMastery mastery) {
+        if(mastery.retired()){
+            player.sendMessage("MC_SKILLBOOK action=use ok=false reason=legacy_progression_retired slot="+slot+" changed=false");
+            player.sendMessage("§e[legacy_progression_retired] 旧研习书已归档，本次未消耗。基础技能无需研习；职业升级统一用Vortex学习点和天赋。下一步：/mycli skills status");return;
+        }
         ItemStack item = player.getInventory().getItem(slot);
         String id = spell(item);
         if (id == null) {

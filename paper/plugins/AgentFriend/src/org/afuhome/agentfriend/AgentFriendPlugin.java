@@ -589,6 +589,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     int miningLevel(Player player) {
+        if(nativeRpg.selected())return nativeRpg.level(player);
         SkillsUser user = skillsUser(player);
         return user == null ? 0 : user.getSkillLevel(Skills.MINING);
     }
@@ -702,6 +703,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     SpellMastery mastery() { return spellMastery; }
 
     int auraLevel(Player player, Skills skill) {
+        if(nativeRpg.selected())return nativeRpg.level(player);
         SkillsUser user = skillsUser(player);
         return user == null ? 0 : user.getSkillLevel(skill);
     }

@@ -52,7 +52,7 @@ function Content-MultiverseTarget([string]$relative) {
 }
 
 function Content-NativeRpgJar([string]$relative) {
-    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','Vault-1.7.3.jar')
+    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','Vault-1.7.3.jar')
 }
 
 function Content-NativeRpgTarget([string]$relative) {
@@ -104,7 +104,7 @@ function Content-KiritoAppearanceTarget([string]$relative) {
     throw 'Unexpected Kirito appearance target'
 }
 
-function Deploy-PendingContent {
+function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='') {
     $planPath = Join-Path $opsDir 'content-plugins.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
     if (Listener) { throw 'Content deployment requires stopped Paper' }
@@ -112,6 +112,14 @@ function Deploy-PendingContent {
     # notes are UTF-8, including Chinese punctuation next to JSON quotes.
     $plan = Get-Content -LiteralPath $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
+    $moneyHelper = Join-Path $opsDir 'rpg-economy-migration.py'
+    if ($plan.unifyEconomy) {
+        if ($plan.id -cne 'rpg-unified-release-20261028-r1' -or -not $coldBackup -or -not $mirrorBackup -or
+            $plan.unifyEconomy.helperSha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $moneyHelper -Algorithm SHA256).Hash -ne $plan.unifyEconomy.helperSha256) {
+            throw 'Unreviewed economy migration or missing complete cold backups'
+        }
+    }
     $allowed = @('AgentFriend','BetonQuest','FancyNpcs','Citizens','Denizen','ConditionalEvents','WorldEvents','MythicMobs','Shopkeepers','NPCSpeak','ImageFrame','FancyAnalytics','WorldVariety','VillagerLife','Sentinel','OlEncounters','CommandAPI','FastAsyncWorldEdit')
     $worldVarietyPacks = @('more-chinese-structures','chinese-village','zhengsz-wonderland','aoe4mc','japanese-castle','castles-castles','grim-kingdoms-lost-structures-ruins','caleari-castle','ati-structures-vanilla-edition','towns-and-towers','ct-overhaul-village','lukis-grand-capitals','adorabuild-structures','dungeons-and-taverns-end-castle-standalone','hopo-better-ruined-portals','hopo-better-underwater-ruins','moogs-voyager-structures','when-dungeons-arise','when-dungeons-arise-seven-seas','sky-villages','peakscape','mss-moogs-soaring-structures','mes-moogs-end-structures','mmv-moogs-missing-villages','mtr-moogs-temples-reimagined','hopo-better-mineshaft')
     $entries = @(); $seen = @{}
@@ -211,7 +219,7 @@ function Deploy-PendingContent {
     $rollback = Join-Path $opsDir "repairs\$($plan.id)\deployment-rollback"
     if (Test-Path -LiteralPath $rollback) { throw 'Content rollback directory already exists' }
     New-Item -ItemType Directory -Path $rollback | Out-Null
-    $applied = @(); $index = 0
+    $applied = @(); $index = 0; $moneyApplied = $false
     try {
         foreach ($entry in $entries) {
             $entry.Backup = Join-Path $rollback "$index.original"
@@ -229,6 +237,12 @@ function Deploy-PendingContent {
             $applied += $entry
             $index++
         }
+        if ($plan.unifyEconomy) {
+            $moneyResult = & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 $moneyHelper apply --release $plan.id --backup $coldBackup --mirror $mirrorBackup
+            if ($LASTEXITCODE -ne 0) { throw 'Cold native economy migration failed; inspect private evidence' }
+            $moneyApplied = $true
+            Log ('Native gold migration: ' + ($moneyResult -join ' '))
+        }
         # Windows PowerShell 5 Select-Object reads the hashtable's CLR properties,
         # not its keys. Emit actual recovery paths rather than null journal rows.
         $entries | ForEach-Object { [pscustomobject]@{Target=$_.Target;Hash=$_.Hash;Before=$_.Before;Backup=$_.Backup} } |
@@ -237,6 +251,11 @@ function Deploy-PendingContent {
         Log "Content plugins deployed: $($plan.id), $($entries.Count) verified files"
     } catch {
         $failure = $_
+        if ($moneyApplied) {
+            & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 $moneyHelper rollback --release $plan.id --backup $coldBackup --mirror $mirrorBackup | Out-Null
+            if ($LASTEXITCODE -ne 0) { $script:contentRecoveryBlocked = $true; Log 'CRITICAL: native economy rollback incomplete' }
+        }
+        if (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')) { $script:contentRecoveryBlocked = $true }
         [array]::Reverse($applied)
         foreach ($entry in $applied) {
             try {

@@ -1459,7 +1459,7 @@ final class DungeonManager implements Listener {
             if (difficulty.walletBonus > 0) {
                 int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
                 int creditedBalance = economy.creditDifficulty(id, scale.wallet(bonusBalance));
-                p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：绿宝石余额 +" + creditedBalance
+                p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：金币 +" + creditedBalance
                         + "；可在入口商人购买补给，不占背包。");
                 p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="
                         + difficulty.id + " amount=" + creditedBalance);

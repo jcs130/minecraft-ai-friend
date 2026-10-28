@@ -22,6 +22,10 @@ public final class RpgJourneyTest {
         check(RpgJourney.next(facts("knight",20,8,20,0,List.of()),List.of(hunt),none).command().equals("/mycli cast selfheal"),"low health and adequate food select healing");
         check(RpgJourney.next(facts("",20,30,20,0,List.of()),List.of(hunt),none).command().equals("/mycli profession list"),"unselected player gets choice not automatic selection");
         check(RpgJourney.next(healthy,List.of(hunt),none).command().equals("/mycli tasks list"),"selected player moves to own available tasks");
+        check(RpgJourney.next(healthy,List.of(hunt),none,0).reason().equals("inventory_full"),"full bag is a concrete blocker before another task");
+        check(RpgJourney.next(healthy,List.of(hunt),none,0).action().contains("putslot"),"full bag explains direct remote deposit not physical travel");
+        check(RpgJourney.next(healthy,List.of(hunt),none,0).command().isEmpty(),"unknown item selection cannot pretend another query frees a slot");
+        check(RpgJourney.next(facts("knight",0,8,20,0,List.of()),List.of(hunt),none,0).step().equals("survival"),"starvation remains higher priority than storage");
         var started=QuestProgress.start(hunt);var active=data(hunt,started);var next=RpgJourney.next(healthy,List.of(hunt),active);
         check(next.command().isEmpty()&&next.verify().endsWith("hunt"),"world action separated from verification query");
         check(next.action().contains("还差 2")&&next.text().contains("查询不会推进"),"missing count and anti-query-loop explanation");

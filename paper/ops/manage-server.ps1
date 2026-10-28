@@ -483,6 +483,9 @@ function Apply-AuraSkillsCachePatch {
 }
 
 function Start-Server {
+    if (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')) {
+        throw 'Native economy recovery requires inspection; refusing startup'
+    }
     if (Listener) {
         $status = Probe
         $null = Rcon 'minecraft:list'
@@ -937,14 +940,15 @@ function Backup-Server {
         # Pending deployments require both verified recovery copies before any JAR changes.
         Mirror-LatestBackup
         Deploy-PendingPaperCore $dest (Join-Path $mirrorRoot $stamp)
-        Deploy-PendingContent
+        Deploy-PendingContent $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
         Deploy-PendingGeyser
     }
     finally {
-        if ($wasRunning -and $script:coreUpgradeRecoveryBlocked) {
+        if ($wasRunning -and ($script:coreUpgradeRecoveryBlocked -or $script:contentRecoveryBlocked -or
+            (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')))) {
             Log 'CRITICAL: Core file rollback requires inspection; automatic startup remains paused'
             throw 'Core file recovery incomplete; refusing automatic restart'
         } elseif ($wasRunning) {

@@ -18,6 +18,16 @@ final class NativeRpg {
     }
     boolean selected(){return selected;}
     static boolean common(String raw){return COMMON.contains(skillId(raw.trim().split("\\s+",2)[0]));}
+    private static SpellGuide.Entry commonGuide(String id){
+        var e=SpellGuide.find(id);String scaling=switch(id){
+            case "starbolt"->"固定基础伤害5；Vortex角色每20级+1，最多+2；不再计旧熟练度。";
+            case "frostnova"->"基础伤害2、减速4秒；Vortex角色每20级+1伤害，最多+2；不再计旧熟练度。";
+            case "prospect"->"基础半径24格；Vortex角色每5级+2，最多40；刻印工具再+8；固定标记12秒。";
+            default->"基础效果固定；当前职业成长统一用Vortex学习点和天赋。";
+        };
+        String requires=Set.of("night","feather").contains(id)?"通用技能，无需学习；满足Vortex魔力与冷却要求。":e.requires();
+        return new SpellGuide.Entry(e.id(),e.name(),e.category(),e.icon(),e.command(),e.effect(),e.target(),e.mana(),e.cooldownSeconds(),requires,e.failure(),scaling,e.tip());
+    }
     static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡","归乡术","回城"->"home";case "传送点术"->"travel";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "寒霜","寒霜术","冰霜","霜环","霜环术"->"frostnova";case "造物","造物术"->"give";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
     private Plugin backend() {
         Plugin p=Bukkit.getPluginManager().getPlugin("QiandengjiRpg");
@@ -33,6 +43,27 @@ final class NativeRpg {
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}
     }
     JsonElement mana(Player p){JsonObject s=state(p);return s.has("mana")?s.get("mana"):JsonNull.INSTANCE;}
+    JsonObject recyclingState(Player p){
+        try{return JsonParser.parseString((String)call("recyclingState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
+        catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("pending",true);return out;}
+    }
+    void settleRecycling(Player p,String quote,long coins,String snapshot,Runnable remove,java.util.function.Consumer<String> finish){
+        call("settleRecycling",new Class<?>[]{Player.class,String.class,long.class,String.class,Runnable.class,java.util.function.Consumer.class},p,quote,coins,snapshot,remove,finish);
+    }
+    double goldBalance(UUID owner){return ((Number)call("goldBalance",new Class<?>[]{UUID.class},owner)).doubleValue();}
+    JsonObject settleMoney(Player p,String request,long delta,String snapshot,Runnable domainWrite){
+        return JsonParser.parseString((String)call("settleMoney",new Class<?>[]{Player.class,String.class,long.class,String.class,Runnable.class},p,request,delta,snapshot,domainWrite)).getAsJsonObject();
+    }
+    void saveConfigVerified(){
+        java.nio.file.Path file=owner.getDataFolder().toPath().resolve("config.yml"),temp=file.resolveSibling("config.yml.gold.tmp");
+        try{
+            byte[] bytes=owner.getConfig().saveToString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try(var channel=java.nio.channels.FileChannel.open(temp,java.nio.file.StandardOpenOption.CREATE,java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,java.nio.file.StandardOpenOption.WRITE)){
+                var buffer=java.nio.ByteBuffer.wrap(bytes);while(buffer.hasRemaining())channel.write(buffer);channel.force(true);
+            }
+            java.nio.file.Files.move(temp,file,java.nio.file.StandardCopyOption.ATOMIC_MOVE,java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }catch(java.io.IOException error){throw new IllegalStateException("domain save unconfirmed",error);}
+    }
     JsonArray abilities(Player p){
         JsonObject s=state(p);JsonArray out=s.has("abilities")?s.getAsJsonArray("abilities"):new JsonArray();
         if(!s.has("mana"))return out;
@@ -142,10 +173,13 @@ final class NativeRpg {
             catch(RuntimeException e){p.sendMessage("§e[service_unavailable] 组队服务暂不可用；先查 /mycli guild party status，不重复创建或接受邀请。");}return true;
         }
         if(Set.of("status","profession","职业","skills","spells","技能","tasks","任务路线").contains(group)) {
-            if(group.equals("status")&&args.length>1&&args[1].equalsIgnoreCase("full"))return false;
+            if(group.equals("status")&&args.length>1&&args[1].equalsIgnoreCase("full")){
+                if(Arrays.stream(args).skip(2).anyMatch(a->!a.equals("--json"))){p.sendMessage("§e[invalid_argument] status full 仅接受可选--json；未执行。下一步：/mycli status");return true;}
+                boolean json=Arrays.asList(args).contains("--json");journey(p,false,json);if(!json)adventureProgress(p,false,false);return true;
+            }
             if(Set.of("skills","spells","技能").contains(group)&&args.length>=3&&Set.of("info","explain","status").contains(args[1].toLowerCase(Locale.ROOT))&&COMMON.contains(skillId(args[2]))){
                 if(Arrays.stream(args).skip(3).anyMatch(a->!a.equals("--json"))){p.sendMessage("§e[invalid_argument] 查询只接受一个技能ID；下一步：/mycli skills --help");return true;}
-                var entry=SpellGuide.find(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
+                var entry=commonGuide(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
                 if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准前方可站立的地面；平视空中可能没有合法落点，拒绝时不扣魔力。");
                 if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；瞄准前方可站立的地面，空中无落点会拒绝":"")+"。用法："+entry.command());return true;
             }

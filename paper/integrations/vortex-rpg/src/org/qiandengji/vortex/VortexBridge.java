@@ -47,6 +47,7 @@ public final class VortexBridge extends JavaPlugin {
             items=vortex.qiandengjiItems();
             Objects.requireNonNull(quests);Objects.requireNonNull(mana);
             validateShops();Bukkit.getPluginManager().registerEvents(new TwinCityGates(this),this);
+            Bukkit.getPluginManager().registerEvents(new LegacyRpgCommands(),this);
             vortex.spellbookService().addCastListener((player,id)->Bukkit.getScheduler().runTask(this,()->{
                 FortifyDefence.confirmed(player,id);
                 notifyAgentFriend("nativeCastConfirmed",new Class<?>[]{Player.class,String.class},player,id);
@@ -109,6 +110,22 @@ public final class VortexBridge extends JavaPlugin {
                 "cooldownRemainingMs",vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),s.id()),
                 "cooldownMs",s.cooldownMillis(),"manaCost",io.vortexcore.combat.ManaGate.cost(vortex,s.id()))).toList()));
     }
+    private RecyclingSettlement recycling;
+    private RecyclingSettlement recycling(){
+        if(recycling==null)recycling=new RecyclingSettlement(this,vortex.qiandengjiVault());
+        return recycling;
+    }
+    public String recyclingState(Player p){return recycling().state(p);}
+    public double goldBalance(UUID owner){
+        if(!Bukkit.isPrimaryThread()||!vortex.qiandengjiVault().isAvailable())throw new IllegalStateException("native economy unavailable");
+        return vortex.qiandengjiVault().balance(Bukkit.getOfflinePlayer(owner));
+    }
+    public String settleMoney(Player p,String request,long delta,String snapshot,Runnable domainWrite){
+        return recycling().money(p,request,delta,snapshot,domainWrite);
+    }
+    public void settleRecycling(Player p,String quote,long coins,String snapshot,Runnable remove,java.util.function.Consumer<String> finish){
+        recycling().settle(p,quote,coins,snapshot,remove,finish);
+    }
     public boolean consumeCommonMana(Player p,double amount){
         if(!Bukkit.isPrimaryThread()||!Double.isFinite(amount)||amount<0||!p.isOnline())return false;
         profile(p);return mana.consumeMana(p.getUniqueId(),amount);
@@ -130,7 +147,18 @@ public final class VortexBridge extends JavaPlugin {
                     !p.isDead()&&(!context.has("canAct")||context.get("canAct").getAsBoolean()),
                     context.has("downed")&&context.get("downed").getAsBoolean(),context.has("inDungeon")&&context.get("inDungeon").getAsBoolean(),
                     pending.contains(p.getUniqueId()),quests.qiandengjiPendingRewards(p.getUniqueId()),missing,p.getWorld().getName());
-                var advice=RpgJourney.next(facts,quests.registry().all().values(),questsData);
+                int freeSlots=(int)Arrays.stream(p.getInventory().getStorageContents()).filter(i->i==null||i.getType().isAir()).count();
+                var advice=RpgJourney.next(facts,quests.registry().all().values(),questsData,freeSlots);
+                if(advice.reason().equals("inventory_full")&&mana.getMana(p.getUniqueId())>=2){
+                    // Suggest one reversible transfer of common plain surplus,
+                    // never automatically move it or select bound/held/custom gear.
+                    Set<String> surplus=Set.of("COBBLESTONE","COBBLED_DEEPSLATE","DIRT","STONE","ANDESITE","DIORITE","GRANITE","WHEAT_SEEDS","ROTTEN_FLESH");
+                    for(int slot=0;slot<36;slot++){
+                        var item=p.getInventory().getItem(slot);
+                        if(item==null||slot==p.getInventory().getHeldItemSlot()||!surplus.contains(item.getType().name())||item.hasItemMeta())continue;
+                        advice=new RpgJourney.Advice("storage","inventory_full","可先把第"+slot+"格 "+item.getType().getKey()+" ×"+item.getAmount()+" 存入本人个人箱；成功2魔力，不用先开界面或传送","/mycli arena stash putslot "+slot+" "+item.getAmount(),"/mycli inventory","",List.of());break;
+                    }
+                }
                 var out=new LinkedHashMap<String,Object>();out.put("readOnly",true);out.put("queryOnly",true);out.put("backend","vortex");out.put("authority","VortexRPG");
                 out.put("class",intro?id:id.isEmpty()?"none":id);out.put("level",state.level());out.put("xp",state.experience());
                 out.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
@@ -140,6 +168,7 @@ public final class VortexBridge extends JavaPlugin {
                 out.put("preview",!getConfig().getString("backend","preview").equals("vortex"));out.put("guide",advice.data());out.put("nextAction",advice.action());out.put("verifyCommand",advice.verify());
                 if(!advice.command().isEmpty())out.put("nextCommand",advice.command());
                 out.put("helpCommand","/mycli --help");out.put("rulesCommand","/mycli rules");
+                out.put("inventory",Map.of("freeStorageSlots",freeSlots,"storageCommand","/mycli arena stash","recycleCommand","/mycli arena recycle list"));
                 if(json){p.sendMessage((intro?"MC_INTRO ":"MC_RPG ")+gson.toJson(out));return;}
                 p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪"));
                 p.sendMessage("[RPG] "+advice.text());

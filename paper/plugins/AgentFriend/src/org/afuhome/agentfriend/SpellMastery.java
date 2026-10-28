@@ -60,8 +60,10 @@ final class SpellMastery {
     int uses(Player player, String spell) {
         return uses.getOrDefault(player.getUniqueId(), Map.of()).getOrDefault(spell, 0);
     }
+    boolean retired(){return plugin.nativeRpg().selected();}
 
     int rank(Player player, String spell) {
+        if(retired())return 1; // Common spells have fixed effects; Vortex owns all current skill growth.
         int count = uses(player, spell);
         return count >= RANK_THREE ? 3 : count >= RANK_TWO ? 2 : 1;
     }
@@ -79,6 +81,7 @@ final class SpellMastery {
     }
 
     void successfulCast(Player player, String spell) {
+        if(retired())return;
         if (!NAMES.containsKey(spell)) return;
         int before = rank(player, spell);
         int count = uses(player, spell);
@@ -92,6 +95,7 @@ final class SpellMastery {
     }
 
     int grantTraining(Player player, String spell, int practice) {
+        if(retired())return 0;
         if (!NAMES.containsKey(spell) || practice <= 0) return 0;
         int before = rank(player, spell);
         int count = uses(player, spell);
@@ -115,6 +119,10 @@ final class SpellMastery {
     }
 
     void report(Player player) {
+        if(retired()){
+            player.sendMessage("§e[legacy_progression_retired] 旧熟练度已归档，基础技能固定可用；当前成长统一为Vortex学习点和天赋。下一步：/mycli skills status");
+            plugin.nativeRpg().route(player,new String[]{"skills","status"});return;
+        }
         player.sendMessage(ChatColor.GOLD + "【技能熟练度】成功施放才累计；8 次升 2 级、24 次升 3 级，上限 3 级。");
         for (String[] group : new String[][] {
                 {"战斗", "starbolt", "frostnova", "flamewave"},
@@ -133,6 +141,7 @@ final class SpellMastery {
     }
 
     void save() {
+        if(retired())return;
         if (!dirty) return;
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("schema-version", 1);

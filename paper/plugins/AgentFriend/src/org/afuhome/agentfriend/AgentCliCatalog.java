@@ -249,8 +249,8 @@ final class AgentCliCatalog {
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");
         add(specs,"arena.shop","adventure","gui","/mycli arena shop","打开入口或第七层余额商店；旧实体绿宝石交易可用 shop merchant","在试炼入口或第七层驿站","原版菜单或拒绝原因");
         add(specs,"arena.shop.list","storage","read","/mycli arena shop list","列出余额商店的护甲、武器与补给","在线玩家","私有 MC_ARENA_ECONOMY JSON");
-        add(specs,"arena.shop.buy","storage","item","/mycli arena shop buy <商品ID> [1–16]","用个人绿宝石余额购买；商品进入个人箱待领取队列","余额足够且队列有容量","私有 MC_ARENA_ECONOMY JSON");
-        add(specs,"arena.wallet","storage","read","/mycli arena wallet","查询本人的绿宝石余额","在线玩家","私有 MC_ARENA_ECONOMY JSON");
+        add(specs,"arena.shop.buy","storage","item","/mycli arena shop buy <商品ID> [1–16]","用统一RPG金币购买；商品进入个人箱待领取队列","余额足够且队列有容量","私有 MC_ARENA_ECONOMY JSON");
+        add(specs,"arena.wallet","storage","read","/mycli arena wallet","查询本人的统一RPG金币余额","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.loot","adventure","read","/mycli arena loot","查看试炼装备、下一件法术刻印装备及本游戏日已领奖层数","在线玩家","私有 MC_DUNGEON_SET 进度回执");
         add(specs,"arena.layout","adventure","read","/mycli arena layout","读取本人当前战斗房间的绝对中心、范围、奖励箱和地形危险类型","本人正在当前层参赛","私有 MC_DUNGEON_LAYOUT 回执");
         add(specs,"arena.recycle","storage","read","/mycli arena recycle <动作>","查询可回收装备、获取报价，再明确出售","list查询免费；quote生成报价；sell才转移实际物品","MC_ARENA_ECONOMY；按quoteId与实际余额核对");
@@ -263,8 +263,8 @@ final class AgentCliCatalog {
         add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人第一页54格双箱；10页共540格；支持原版箱子操作","需先学travel：skills info travel / skills learn travel；成功远程开页2魔力，实体箱旁免费，无需先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；先学travel，成功远程开页2魔力","原版分页选择菜单");
         add(specs,"arena.stash.page","storage","gui","/mycli arena stash page <1–10>","打开个人箱指定页","原槽位1–54保留，全局最大540","原版54格箱子");
-        add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用现有绿宝石余额；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
-        add(specs,"commission.publish","adventure","write","/mycli commission publish delivery <物品ID> <数量> <报酬> <标题>；hunt <怪物ID> <数量> <报酬> <标题>；explore <维度> <报酬> <标题>；structure <结构ID> <报酬> <标题>","托管实际绿宝石余额并发布物资或同行委托","生存；余额足够；物资只收普通物品；结伴需发布者32格内同行","MC_COMMISSION_RESULT / MC_COMMISSION");
+        add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用统一RPG金币；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
+        add(specs,"commission.publish","adventure","write","/mycli commission publish delivery <物品ID> <数量> <报酬> <标题>；hunt <怪物ID> <数量> <报酬> <标题>；explore <维度> <报酬> <标题>；structure <结构ID> <报酬> <标题>","托管实际RPG金币并发布物资或同行委托","生存；余额足够；物资只收普通物品；结伴需发布者32格内同行","MC_COMMISSION_RESULT / MC_COMMISSION");
         add(specs,"commission.accept","adventure","write","/mycli commission accept <ID>","接取一张玩家委托","不能自己接自己的；同时最多承接一单，与公会槽位独立","MC_COMMISSION_RESULT");
         add(specs,"commission.claim","adventure","write","/mycli commission claim [ID]","真实交付物资或验收战斗/探索，领取已托管报酬","收购扣实际普通物品；探索须路线证据及返程；防重复结算","MC_COMMISSION_RESULT");
         add(specs,"commission.abandon","adventure","write","/mycli commission abandon [ID]","放弃接单，委托重新开放","不领取报酬；交付处理中禁止放弃","MC_COMMISSION_RESULT");
@@ -354,7 +354,7 @@ final class AgentCliCatalog {
         Map<String, Spec> specs = new LinkedHashMap<>(SPECS);
         if(nativeRpg){
             nativeSpec(specs,"intro","read","/mycli intro","按真实饥饿、职业、装备和任务给一个当前目标","免费只读，不代选职、接取、学习或领奖；物理目标须实际行动，verifyCommand仅核对");
-            nativeSpec(specs,"trade.wallet","read","/mycli trade wallet","查Vortex任务金币余额","金币、背包绿宝石、旧试炼余额分别记账；服务不可用不伪造0余额");
+            nativeSpec(specs,"trade.wallet","read","/mycli trade wallet","查Vortex任务金币余额","任务、回收、试炼奖励和商店共用金币；实体绿宝石仍是物品；服务不可用不伪造0余额");
             nativeSpec(specs,"trade.auction","read","/mycli trade auction","查玩家拍卖维护状态：交付故障，暂不能使用","免费只读，未上架、未扣款；不把扣钱或成功台词当作收到物品");
             var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；wallet；auction","村民交易报价和位置；wallet查任务金币，auction查维护状态",trade.requires()+"；金币入口只读取本人经济账户",trade.returns()));
             // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
@@ -386,6 +386,13 @@ final class AgentCliCatalog {
                 Spec old=specs.get(id);specs.put(id,new Spec(id,old.category(),old.mode(),old.usage(),old.summary(),"成功远程开页2魔力，实体箱旁免费；通用travel已可用，无需学习；未开箱时不扣费",old.returns()));
             }
             Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；个人箱：/mycli arena stash；共享补给：/mycli guild shared",inventory.returns()));
+            nativeSpec(specs,"arena.recycle","group","/mycli arena recycle list|quote bag|chest <槽> [数量]|sell <报价ID>|status","多余武器护甲回收为RPG金币；先报价再确认；不会自动出售","手持、穿戴、绑定/任务/职业法器不回收；石头木头存个人箱；旧试炼余额按1:1迁入同一金币账户");
+            nativeSpec(specs,"arena.recycle.sell","item","/mycli arena recycle sell <报价ID>","按30秒有效的原物品报价出售，等待真实金币到账","只执行一次；未知或pending不重发，查arena recycle status并联系服主；金币余额trade wallet");
+            nativeSpec(specs,"arena.recycle.status","read","/mycli arena recycle status","查RPG金币服务、余额与待对账回收","只读，不补发金币或物品；arena wallet是同一金币余额的兼容入口");
+            nativeSpec(specs,"mastery","read","/mycli mastery","旧熟练度已归档，转查Vortex当前技能状态","基础技能固定可用；职业成长用学习点和天赋：skills status/tree");
+            nativeSpec(specs,"skillbook","group","/mycli skillbook list","只读列出保留的旧研习书；use已停用","书不消耗、不再写旧熟练度；升级查询skills status，学习skills learn <ID>");
+            nativeSpec(specs,"skillbook.use","read","/mycli skillbook use <槽位>","兼容旧调用并解释迁移；不会消耗书或升级旧技能","基础技能无需研习；职业升级统一Vortex学习点和天赋");
+            Spec stashPut=specs.get("arena.stash.putslot");specs.put(stashPut.id(),new Spec(stashPut.id(),stashPut.category(),stashPut.mode(),stashPut.usage(),"按背包精确槽位直接远程存箱，无需先传送或打开GUI","通用travel已可用；成功2魔力；绑定保护保持；按moved和stash list核对",stashPut.returns()));
             Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
             nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","原生队伍：默认status；create/invite/accept组队，副本仍须分别join","复用原Vortex权限；不授OP；会话队伍不代表已加入副本");
             for(String action:List.of("status","create","invite","accept","decline","leave","disband","kick","menu"))nativeSpec(specs,"guild.party."+action,action.equals("status")?"read":action.equals("menu")?"gui":"write","/mycli guild party "+action+(Set.of("invite","kick").contains(action)?" <在线玩家名>":""),switch(action){case "status"->"查本人队长和成员；无队伍是正常状态";case "create"->"创建原生队伍，不自动邀请或开副本";case "invite"->"邀请在线队友，需对方主动accept";case "accept"->"接受本人有效邀请，不会自动进入副本";case "decline"->"拒绝本人待接受邀请";case "leave"->"退出原生队伍；原副本场次另查status";case "disband"->"队长解散原生队伍";case "kick"->"依原生队伍职权移出在线成员";default->"打开原生组队菜单";},"仅本人；原生组队权限；操作免费，邀请和队伍为会话状态；成功后用guild party status核对");

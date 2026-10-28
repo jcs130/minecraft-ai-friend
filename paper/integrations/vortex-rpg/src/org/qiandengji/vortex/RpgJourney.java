@@ -43,6 +43,9 @@ public final class RpgJourney {
         case "cooldown"->"冷却中";default->"可接取";
     };}
     public static Advice next(Facts f,Collection<QuestDefinition> definitions,PlayerQuestData data){
+        return next(f,definitions,data,-1);
+    }
+    public static Advice next(Facts f,Collection<QuestDefinition> definitions,PlayerQuestData data,int freeSlots){
         if(f.downed())return advice("rescue","downed","倒地等待队友靠近救援；不要重放技能或任务动作","","/mycli dungeon status");
         if(!f.canAct())return advice("recover","state_blocked","先恢复为可行动角色；死亡需先重生，观战角色不必做战斗引导","","/mycli status");
         if(f.pending())return advice("confirm","operation_pending","上一操作仍在保存；先核对结果，不要重复执行","/mycli progress","/mycli progress");
@@ -57,6 +60,7 @@ public final class RpgJourney {
             return advice("survival","heal_unavailable","生命偏低，先撤到安全处、进食或等治疗冷却；不要重复施法","/mycli skills info selfheal","/mycli status");
         }
         if(f.inDungeon())return advice("dungeon","in_dungeon","正在副本中；按本场目标推进，倒地等队友救援，清场后按回执返回结算","/mycli dungeon status","/mycli dungeon status");
+        if(freeSlots==0)return advice("storage","inventory_full","随身36格已占用；选择材料用 arena stash putslot <槽> <数量> 直接远程存箱（成功2魔力）；多余装备 arena recycle list；查询不会腾出格子","","/mycli inventory");
         var active=definitions.stream().filter(q->{var p=data.quests().get(q.id());return p!=null&&p.state()==QuestState.ACTIVE;})
             .sorted(Comparator.<QuestDefinition>comparingInt(q->QuestText.ready(q,data.quests().get(q.id()))?0:1)
                 .thenComparing(Comparator.comparingDouble((QuestDefinition q)->fraction(q,data.quests().get(q.id()))).reversed()).thenComparing(QuestDefinition::id)).toList();

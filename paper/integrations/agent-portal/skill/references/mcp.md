@@ -57,3 +57,5 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 遇到 barrierAfter，读完回执，用 `mc_protocol` 的 `protocol:"agent-mc/v1"`、`action:"ack_barrier"`、`id:回执原requestId` 确认。`mc_stop` 或 `mc_connection action:"disconnect"` 可停止。显式宿主回合由 begin_turn/end_turn 管理，RPC 返回不会替宿主结束。
 
 超时、断线或物品快照不一致时查询原动作及实际槽位，不自动重放消耗性行为。完整核心说明在包内 [MCP](mc-core/docs/mcp.md) 与 [协议](mc-core/docs/protocol-v1.md)；这两份按需读，不要求入门时全文加载。
+
+统一版背包提示按服务器0–35槽给出 `arena stash putslot`，成功才扣2魔力；不需要让MCP先打开窗口。回收/商店/委托的pending表示结果待对账，不能自动重放；金币查 `trade wallet`，消费前按详情确认。旧研习书报告 `legacy_progression_retired` 时保留原物，不反复尝试。
