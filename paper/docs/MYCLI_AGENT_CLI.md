@@ -4,6 +4,8 @@
 
 Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精简入口；`.24 / RPG 0.2.3` 候选接续帮助统一与任务分页，并补齐组队、技能详情和失败指引，仍未部署，见 [RPG 可用性](RPG_USABILITY_20261028.md)。生产版本以 [部署清单](../manifests/current-deployment.json) 为准，源码更新不等于已上线。
 
+服主明确寒霜、星芒箭、闪现、归乡、圣愈、饱食和造物是基础生存技能；后续`.25 / RPG 0.2.4`候选恢复原效果，免选职和学习，不占职业点击槽。入口`skills list common`，单项`skills info <ID>`；基础施放不加`--json`。见[基础生存说明](BASIC_SURVIVAL_SKILLS_20261028.md)。
+
 ## Agent 只需先记这些
 
 ```text

@@ -22,4 +22,6 @@
 
 `menus.mjs` 用两个非OP客户端验证职业/技能真实窗口及私有回执不广播；`--legacy-fault` 只用于隔离服故意载入固定旧qd27，检验接口不兼容时给明确失败和可用的文字查询。测试后正常停服恢复qd29，再检查正常菜单，不能将故障注入包带到生产或把“请求打开”当成“窗口已到达”。
 
+`basic-survival.mjs` 验证未选职角色七项基础生存技能的真实效果、原生魔力和失败无消耗；先等区块，再建立并确认实际QA落脚场地。`basic-cold.mjs` 使用前序bs5成功记录，核对冷启动后的基础可用性、不安全归乡、旁观和缺魔力拒绝。村庄warp仅在QA临时改到测试平台，测试后恢复其原QA配置；绝不改正式warp或授予测试角色OP/管理传送权限。
+
 QwenPaw 使用固定2.2.2环境，在 `paper/integrations/numen-paper/qwenpaw` 运行 `python -m unittest discover -s . -p "test_*.py"`。不设独立联机的 opt-in 配置时，原有6项跳过；不会调用模型。新版 MC_RPG/旧版 MC_STATUS、缺失读数和动作回执均有覆盖。

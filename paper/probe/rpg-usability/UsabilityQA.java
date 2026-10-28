@@ -18,11 +18,15 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
             case "points"->{int n=Integer.parseInt(args[2]);if(n<0||n>20)throw new IllegalArgumentException("bounded points");state.putMetadata("rpg.skill_points",Integer.toString(n));}
             case "armor"->{p.getInventory().setArmorContents(new ItemStack[]{new ItemStack(Material.IRON_BOOTS),new ItemStack(Material.IRON_LEGGINGS),new ItemStack(Material.IRON_CHESTPLATE),new ItemStack(Material.IRON_HELMET)});}
             case "heal"->{p.setHealth(p.getMaxHealth());p.setNoDamageTicks(0);}
+            case "hunger"->{int n=Integer.parseInt(args[2]);if(n<0||n>20)throw new IllegalArgumentException("bounded hunger");p.setFoodLevel(n);p.setSaturation(0);}
+            case "fullbag"->{for(int i=0;i<36;i++)p.getInventory().setItem(i,new ItemStack(Material.STONE,64));}
+            case "emptybag"->{for(int i=0;i<36;i++)p.getInventory().setItem(i,null);}
             case "clearhostiles"->{for(var entity:p.getNearbyEntities(24,24,24))if(entity instanceof Monster)entity.remove();}
             case "inspect"->{}
             default->throw new IllegalArgumentException("unknown fixture action");
         }
         var resistance=p.getPotionEffect(org.bukkit.potion.PotionEffectType.RESISTANCE);var damage=observed.get(p.getUniqueId());
-        String party=vortex.expeditionPartyManager().partyOf(p.getUniqueId()).map(s->s.name()+"/"+s.members().size()).orElse("none");sender.sendMessage("QA mana="+vortex.qiandengjiMana().getMana(p.getUniqueId())+" health="+p.getHealth()+" maxHealth="+p.getMaxHealth()+" level="+state.level()+" xp="+state.experience()+" points="+vortex.classSkillService().unspentSkillPoints(state)+" balance="+vortex.qiandengjiVault().balance(p)+" party="+party+" resistance="+(resistance==null?-1:resistance.getAmplifier())+" resistanceTicks="+(resistance==null?0:resistance.getDuration())+" damageEvents="+(damage==null?0:damage.count())+" cancelled="+(damage!=null&&damage.cancelled()?1:0)+" finalDamage="+(damage==null?-1:damage.damage()));return true;
+        var ray=p.getWorld().rayTraceBlocks(p.getEyeLocation(),p.getEyeLocation().getDirection(),25);
+        String party=vortex.expeditionPartyManager().partyOf(p.getUniqueId()).map(s->s.name()+"/"+s.members().size()).orElse("none");sender.sendMessage("QA mana="+vortex.qiandengjiMana().getMana(p.getUniqueId())+" health="+p.getHealth()+" maxHealth="+p.getMaxHealth()+" level="+state.level()+" xp="+state.experience()+" points="+vortex.classSkillService().unspentSkillPoints(state)+" balance="+vortex.qiandengjiVault().balance(p)+" party="+party+" resistance="+(resistance==null?-1:resistance.getAmplifier())+" resistanceTicks="+(resistance==null?0:resistance.getDuration())+" damageEvents="+(damage==null?0:damage.count())+" cancelled="+(damage!=null&&damage.cancelled()?1:0)+" finalDamage="+(damage==null?-1:damage.damage())+" yaw="+p.getYaw()+" pitch="+p.getPitch()+" ray="+(ray==null?"none":ray.getHitBlock().getLocation().toVector()));return true;
     }
 }

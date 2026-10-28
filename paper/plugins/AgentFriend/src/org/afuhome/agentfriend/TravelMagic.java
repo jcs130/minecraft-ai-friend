@@ -80,6 +80,11 @@ final class TravelMagic implements Listener {
             player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return false;
         }
         if (!plugin.hasMana(player, mana)) return false;
+        // A fixed public home spell must not depend on the player's administrative warp command.
+        if (plugin.nativeRpg().selected() && id.equals("home") && command.equals("warp village")) {
+            if (!safeHome(expected)) { player.sendMessage("§e[unsafe_destination] 归乡落点暂不可用；未传送、未耗魔。请联系服主检查村庄传送点。查询：/mycli skills info home"); return false; }
+            return teleport(player,expected,id,name,mana);
+        }
         UUID uuid = player.getUniqueId();
         Pending request = new Pending(id, name, mana, expected == null ? null : expected.clone(),
                 System.currentTimeMillis() + COMMAND_WINDOW_MS);
@@ -87,6 +92,15 @@ final class TravelMagic implements Listener {
         if (player.performCommand(command)) return true;
         pending.remove(uuid, request);
         return false;
+    }
+
+    private boolean safeHome(Location at) {
+        if(at==null||at.getWorld()==null)return false;
+        int x=at.getBlockX()>>4,z=at.getBlockZ()>>4;
+        if(!at.getWorld().isChunkGenerated(x,z)||!at.getWorld().isChunkLoaded(x,z)&&!at.getWorld().getChunkAt(x,z).load(false))return false;
+        var feet=at.getBlock();var head=feet.getRelative(0,1,0);var below=feet.getRelative(0,-1,0);
+        return feet.isPassable()&&head.isPassable()&&!feet.isLiquid()&&!head.isLiquid()&&below.getType().isSolid()
+                &&!Set.of(org.bukkit.Material.MAGMA_BLOCK,org.bukkit.Material.CACTUS,org.bukkit.Material.CAMPFIRE,org.bukkit.Material.SOUL_CAMPFIRE).contains(below.getType());
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

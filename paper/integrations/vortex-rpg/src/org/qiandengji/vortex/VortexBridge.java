@@ -160,7 +160,7 @@ public final class VortexBridge extends JavaPlugin {
     private boolean skillFailure(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(!(r.group().equals("cast")||r.group().equals("skills")&&Set.of("info","explain","status","learn","prepare","equip").contains(r.action()))||r.arguments().size()!=1)return false;
         String id=r.arguments().getFirst();
-        if(List.of("home","travel","prospect","night","feather").contains(id))return false;
+        if(SkillTransition.COMMON.contains(id))return false;
         boolean spell=vortex.spellbookService().editorSpellSnapshots().stream().anyMatch(s->s.id().equals(id));
         boolean node=vortex.classSkillService().skillsFor(state).stream().anyMatch(s->s.id().equals(id))
             ||vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(t->t.find(id)).isPresent();
@@ -176,16 +176,16 @@ public final class VortexBridge extends JavaPlugin {
     }
     private void skills(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(Set.of("explain","status").contains(r.action())&&r.arguments().size()==1){skills(p,state,new BridgeRules.Request(r.group(),"info",r.arguments(),r.json(),r.help()));return;}
-        if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",List.of("home","travel","prospect","night","feather"),"queryOnly",true),"通用技能：home回城、travel传送点、prospect探矿、night夜视、feather羽落；无需重复学习。详情：/mycli skills info <ID>");return;}
+        if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",SkillTransition.COMMON,"queryOnly",true),"基础：home归乡、selfheal圣愈、food饱食、blink闪现、starbolt星芒箭、frostnova寒霜、give造物；其他通用：travel/prospect/night/feather。无需选职或学习，耗魔与冷却按详情。详情：/mycli skills info <ID>");return;}
         switch(r.action()){
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
                 async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("talentPoints",data.talentPoints(),"allocated",data.allocatedNodes(),"nodes",tree.nodes(),"summary","天赋点 "+data.talentPoints()+"；"+String.join("、",tree.nodes().values().stream().map(n->n.id()+" "+n.displayName()+"("+n.cost()+"点)").toList())+"。查看条件：/mycli skills info <ID>")),"天赋资料暂不可用");}
             case "menu"->{noArgs(r);vortex.classSkillService().openSkillMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","skills","learningConfirmed",false,"nextCommand","/mycli skills status"),"已请求打开技能菜单；尚未学习。");}
             case "list", "status", "mine", "points"->{noArgs(r);var ids=vortex.spellbookService().availableSpells(state);var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
                 String active=vortex.spellbookService().activeSpellId(state).orElse("");
-                emit(p,r,Map.of("available",ids,"common",List.of("home","travel","prospect","night","feather"),"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSpell",active),
-                    "通用：home/travel/prospect/night/feather；职业可用："+String.join("、",ids)+"；当前点击技 "+(active.isEmpty()?"未设置":active)+"；学习点 "+vortex.classSkillService().unspentSkillPoints(state)+"；可学："+String.join("、",learnable.stream().map(k->k.id()+"("+k.cost()+"点,Lv"+k.requiredLevel()+")").toList())+"。详情：/mycli skills info <ID>");}
-            case "prepare", "equip"->{String id=BridgeRules.id(r);write(p,r,()->{vortex.spellbookService().setActiveSpell(state,id);return CompletableFuture.completedFuture(null);},true,"已设置点击技能并保存；施放：/mycli cast "+id);}
+                emit(p,r,Map.of("available",ids,"common",SkillTransition.COMMON,"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSpell",active),
+                    "基础：home/selfheal/food/blink/starbolt/frostnova/give；其他通用：travel/prospect/night/feather；职业可用："+String.join("、",ids)+"；当前点击技 "+(active.isEmpty()?"未设置":active)+"；学习点 "+vortex.classSkillService().unspentSkillPoints(state)+"；可学："+String.join("、",learnable.stream().map(k->k.id()+"("+k.cost()+"点,Lv"+k.requiredLevel()+")").toList())+"。详情：/mycli skills info <ID>");}
+            case "prepare", "equip"->{String id=BridgeRules.id(r);if(SkillTransition.COMMON.contains(id)){emit(p,r,Map.of("success",false,"reason","common_direct_cast","changed",false,"nextCommand","/mycli skills info "+id),"基础通用技直接施放或用原法杖绑定；无需学习，也不占职业点击技。下一步：/mycli skills info "+id);return;}write(p,r,()->{vortex.spellbookService().setActiveSpell(state,id);return CompletableFuture.completedFuture(null);},true,"已设置点击技能并保存；施放：/mycli cast "+id);}
             case "info"->{String id=BridgeRules.id(r);
                 var node=vortex.classSkillService().skillsFor(state).stream().filter(k->k.id().equals(id)).findFirst();
                 if(node.isPresent()){
@@ -202,7 +202,7 @@ public final class VortexBridge extends JavaPlugin {
                     }else text+="；被动常驻，学会后自动生效，无需prepare或cast";
                     out.put("nextCommand",next);emit(p,r,out,text+"。下一步："+next);return;
                 }
-                if(List.of("home","travel","prospect","night","feather").contains(id)){emit(p,r,Map.of("id",id,"common",true,"available",true,"learned",true),"通用技能已可用，无需选职、学习或花点；原效果与安全检查保留。施放：/mycli cast "+id);return;}
+                if(SkillTransition.COMMON.contains(id)){emit(p,r,Map.of("id",id,"common",true,"available",true,"learned",true),"通用技能已可用，无需选职、学习或花点；原效果与安全检查保留。施放：/mycli cast "+id);return;}
                 var talent=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(tree->tree.find(id));
                 if(talent.isPresent()){var n=talent.get();String classId=vortex.classSkillService().selectedClassDefinition(state).orElseThrow().id();async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->{boolean learned=data.allocatedNodes().entrySet().stream().anyMatch(e->e.getKey().toString().equalsIgnoreCase(classId)&&e.getValue().contains(id));String next=learned?"/mycli skills tree":"/mycli skills learn "+id;return Map.<String,Object>of("talent",n,"queryOnly",true,"learned",learned,"talentPoints",data.talentPoints(),"nextCommand",next,"summary",n.displayName()+"；"+(learned?"已学会，自动生效":"消耗 "+n.cost()+"天赋点，当前 "+data.talentPoints())+"；前置 "+(n.prerequisites().isEmpty()?"无":String.join("、",n.prerequisites()))+"；"+n.description()+"。被动天赋无需施放。下一步："+next);}),"天赋资料暂不可用");return;}
                 var spell=vortex.spellbookService().editorSpellSnapshots().stream().filter(s->s.id().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("未知技能"));
@@ -217,7 +217,7 @@ public final class VortexBridge extends JavaPlugin {
                 if(!FortifyDefence.effects(id).isEmpty())out.put("serverEffects",FortifyDefence.effects(id));
                 emit(p,r,out,vortex.spellbookService().spellLabel(id)+"；"+condition+"；需要Lv"+spell.minLevel()+"；消耗 "+io.vortexcore.combat.ManaGate.cost(vortex,id)+"魔力；冷却 "+spell.cooldownMillis()/1000.0+"秒；目标："+SkillTransition.targets(spell.targeters())+"；效果："+SkillTransition.effects(spell.mechanics())+FortifyDefence.description(id)+"。下一步："+next);}
             case "learn"->{String id=BridgeRules.id(r);
-                if(List.of("home","travel","prospect","night","feather").contains(id)){emit(p,r,Map.of("id",id,"common",true,"learned",true,"changed",false),"通用技能已可用，无需重复学习或花点。施放：/mycli cast "+id);return;}
+                if(SkillTransition.COMMON.contains(id)){emit(p,r,Map.of("id",id,"common",true,"learned",true,"changed",false),"通用技能已可用，无需重复学习或花点。施放：/mycli cast "+id);return;}
                 if(vortex.classSkillService().skillsFor(state).stream().noneMatch(k->k.id().equals(id))&&vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(tree->tree.find(id)).isPresent()){
                     write(p,r,()->vortex.qiandengjiTalents().allocateNode(p,id).thenAccept(result->{if(!result.success())throw new IllegalStateException(result.message());}),true,"天赋已学习并保存；查询：/mycli skills tree");return;}
                 write(p,r,()->vortex.classSkillService().unlockSkill(p,state,id).thenAccept(result->{if(!result.success())throw new IllegalStateException(result.message());}),true,"技能已学习并保存；查询：/mycli skills list");}

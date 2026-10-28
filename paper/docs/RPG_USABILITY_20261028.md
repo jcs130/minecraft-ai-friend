@@ -2,6 +2,8 @@
 
 状态：隔离验收中的后续候选，未更新正式服。它接续 [CLI 精简候选](AGENT_CLI_REDESIGN_20261028.md)；以 [实际部署清单](../manifests/current-deployment.json) 判断是否生效。
 
+服主随后明确七项基础生存技不应停用；后续[基础技能修复](BASIC_SURVIVAL_SKILLS_20261028.md)接续本批，更新基础技能集合与用法。下方`.24 / 0.2.3`的摘要和测试保留对应历史候选，不代表已部署。
+
 ## 已复现并修复
 
 1. 原 `guild party status --json` 返回原生帮助；`create --json` 竟把 `--json` 当队名，`list` 又要求管理员权限。现统一解析格式旗标，裸命令/status/list 查本人队伍，create/invite/accept/leave 复用原 Vortex 队伍管理器和权限。队长权限不提升；个人结果与邀请不广播公屏。

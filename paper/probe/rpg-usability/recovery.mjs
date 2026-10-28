@@ -11,7 +11,7 @@ try{
  bot=mf.createBot({host:'127.0.0.1',port:25928,username:'ag_RUE'+label,auth:'offline',version:'1.21.1',hideErrors:true,checkTimeoutInterval:60000});bot.messages=[];bot.on('messagestr',s=>bot.messages.push(s));bot.on('error',()=>{});installRecipePacketBypass(bot._client);await until(()=>bot.entity&&bot.world.getColumnAt(bot.entity.position),'world');bot.physicsEnabled=false;await sleep(1600);
  let card=await json('/mycli skills info no_such_skill --json');check('unknown skill does not loop into the same invalid ID',card.reason==='unknown_skill'&&card.nextCommand==='/mycli profession list');
  card=await json('/mycli skills info fortify --json');check('unselected spell info points to profession directory',!card.available&&card.nextCommand==='/mycli profession list');
- card=await json('/mycli cast blink --json');check('retired magic has explicit migration guidance',card.reason==='skill_retired'&&card.changed===false&&card.nextCommand==='/mycli profession list');
+ card=await json('/mycli cast flamewave --json');check('retired magic has explicit migration guidance',card.reason==='skill_retired'&&card.changed===false&&card.nextCommand==='/mycli profession list');
  await json('/mycli profession choose knight --json');const list=await json('/mycli skills list --json'),node=list.learnable.find(s=>s.grantedSpellId);assert(node);
  card=await json('/mycli skills info '+node.id+' --json');check('unlearned high-level node points to leveling instead of a rejected learn',!card.learned&&card.playerLevel===1&&card.nextCommand==='/mycli tasks list');
  card=await json('/mycli skills info '+node.grantedSpellId+' --json');check('locked spell info does not recommend casting it',!card.available&&card.nextCommand==='/mycli tasks list');

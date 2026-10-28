@@ -20,6 +20,9 @@ public final class NativeCliCatalogTest {
         for(String alias:List.of("list","info","join","gui"))check(!help("guild party "+alias+" --help").has("errorCode"),"party alias discoverable "+alias);
         check(help("guild party status --help").get("actionReadOnly").getAsBoolean(),"party status read-only");
         check(help("guild party accept --help").get("resultQuery").getAsString().equals("/mycli guild party status"),"party action checks native membership");
+        for(String id:NativeRpg.COMMON_IDS){var h=help("cast "+id+" --help");check(!h.has("errorCode")&&!h.get("jsonSupported").getAsBoolean(),"common format honest "+id);check(h.get("requirements").toString().contains("不支持--json"),"common effect path documented "+id);}
+        for(String name:List.of("寒霜","星芒箭","闪现","归乡","圣愈术","饱食术","造物术"))check(NativeRpg.common(name),"requested Chinese common alias "+name);
+        check(NativeRpg.COMMON.equals(Set.copyOf(org.qiandengji.vortex.SkillTransition.COMMON)),"both adapters agree on common skills");
         for(String line:List.of("--help --page 999","skills bogus --help","--help --page 1 --page 2"))check(help(line).has("errorCode"),"invalid help "+line);
         for(String group:List.of("skills","profession","tasks")){var h=help(group+" --help");check(String.join("\n",AgentCliText.help(h)).length()<1100,"compact group "+group);}
         System.out.println("native catalog="+checks);

@@ -48,7 +48,7 @@ steps:
   complete:
     title: 攻略路线已开启
     message: 先 /mycli profession list 选择职业，再 skills list / skills info <ID> 查本人技能。职业初始主动技可直接cast；prepare设置点击技能，learn仅按详情花点学节点，通用能力无需重学。
-release-revision: 2
+release-revision: 3
 release-notice:
-- '[更新 0.4.47.22·破晓攻略] 已切换Vortex六职业MMORPG：旧职业/旧战斗法术已归档，装备与原版附魔继续有效。请先 /mycli intro 看四步入门；不会替你选职或接任务。'
-- '[开始攻略] profession list 选职→skills list 查技能→tasks list 接讨伐/探索→dungeon list 查难度。施放用 /mycli cast <ID>；补给 guild shared，个人箱 arena stash；通用home/travel/prospect/night/feather保留。'
+- '[基础生存已恢复] 寒霜、星芒箭、闪现、归乡、圣愈、饱食、造物人人可用，无需选职或学习；按原魔力和冷却施放。目录：/mycli skills list common'
+- '[开始攻略] 职业技能仍用skills list/info；任务tasks list；补给guild shared；个人箱arena stash。基础技能施放不加--json，未知结果先核对。入门：/mycli intro'

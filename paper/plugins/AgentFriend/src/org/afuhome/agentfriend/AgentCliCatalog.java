@@ -362,13 +362,14 @@ final class AgentCliCatalog {
             nativeSpec(specs,"profession.choose","write","/mycli profession choose <ID>","选择职业并保存，领取原生初始装备","需未选职且处于可行动状态；免费；只能选一次");
             nativeSpec(specs,"profession.menu","gui","/mycli profession menu","打开职业菜单，点击选择才变更职业","打开免费；选择后以 profession status 核对");
             nativeSpec(specs,"skills","group","/mycli skills <动作>","技能：list/info 查询，learn 学习，prepare 设置点击技","Vortex 为唯一成长权威；不再使用旧准备槽和 upgrade");
-            for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common]":action.equals("status")?" [ID]":""),"查本职可用技能、待学节点与点数","免费只读；list common 查无需选职的五项通用技");
+            for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common]":action.equals("status")?" [ID]":""),"查本职可用技能、待学节点与点数","免费只读；list common 查基础生存与通用技能，无需选职或学习");
             nativeSpec(specs,"skills.info","read","/mycli skills info <ID>","查目标、效果、等级、费用与冷却","免费只读；主动技能、学习节点和被动天赋分别说明");
             nativeSpec(specs,"skills.tree","read","/mycli skills tree","查本职天赋点、节点与前置条件","免费只读；需要已选职业");
             nativeSpec(specs,"skills.learn","write","/mycli skills learn <节点ID>","学习职业节点或被动天赋并保存","按 skills info 明示的等级、前置与学习点/天赋点扣费；通用技无需学习");
             nativeSpec(specs,"skills.prepare","write","/mycli skills prepare <技能ID>","设置已解锁的武器点击技能","仅已解锁的主动技能；不扣学习点、不施法；被动不能准备");
             nativeSpec(specs,"skills.menu","gui","/mycli skills menu","打开原生技能菜单","打开免费，点击学习按对应节点费用结算");
             nativeSpec(specs,"cast","cast","/mycli cast <技能ID> [参数]","施放技能；先 info 查目标、耗魔和冷却","职业技支持 --json；通用技沿用原回执，prospect 需要矿种等参数；不支持的格式会在执行前拒绝");
+            for(String basic:NativeRpg.COMMON_IDS){var old=SPECS.get("cast."+basic);if(old==null&&basic.equals("travel"))old=new Spec("cast.travel","travel","gui","/mycli waypoint menu","传送点术使用航点菜单；实际传送用goto","落点安全、活动允许；实际传送6魔力","航点菜单及实际传送回执");specs.put("cast."+basic,new Spec(old.id(),"magic",old.mode(),old.usage(),"基础通用，无需选职或学习；"+old.summary(),old.requires()+"；不支持--json，沿用原效果回执；详情skills info "+basic,"技能效果、物品/位置与status核对；未确认不重放"));}
             nativeSpec(specs,"tasks","group","/mycli tasks <动作>","冒险任务：list/info/status 查询，accept 接取，claim 交付","不自动接单；旧路线分类、menu/pause/resume 保持兼容");
             nativeSpec(specs,"tasks.list","read","/mycli tasks list [--page 页码]","分页查原生讨伐、探索与制作任务","每页最多7项，免费只读；旧路线分类另沿原公会任务");
             nativeSpec(specs,"tasks.info","read","/mycli tasks info <ID>","查条件、前置、奖励和接取命令","免费只读；ID 从 list 复制，不猜测任务名");
@@ -448,7 +449,7 @@ final class AgentCliCatalog {
                 if(!compatibility.contains(child)&&specs.containsKey(child))children.putIfAbsent(child,specs.get(child));
             }
             out.addProperty("path",path);
-            if(!children.isEmpty()){
+            if(!children.isEmpty()&&!(id.equals("cast")&&words.size()>matched)){
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");

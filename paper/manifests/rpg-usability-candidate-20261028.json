@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "rpg-usability-20261028",
-  "status": "validated_candidate_pending_restart_approval",
+  "status": "superseded_candidate_not_deployed",
   "productionChanged": false,
   "requiresNormalPaperRestart": true,
   "requiresNativeQwenChannelLifecycleReload": true,
@@ -125,5 +125,6 @@
     "Production must keep latest player/config/reward/certificate data",
     "LLM long-term tactics, full floor balance and physical Bedrock client validation are not claimed",
     "Skill/MCP reference source updated; public download not republished"
-  ]
+  ],
+  "supersededBy": "basic-survival-candidate-20261028.json"
 }

@@ -5,7 +5,7 @@ p=argparse.ArgumentParser();p.add_argument('--base',type=Path,required=True);p.a
 base_sha='015bdcd18c3ad07a03eed0e05f6e3c56b42cb7ec6c0f2a5b32d8d88096f06f13'
 assert not a.output.exists() and hashlib.sha256(a.base.read_bytes()).hexdigest()==base_sha
 root=Path(__file__).resolve().parents[1];build=a.output.parent/(a.output.stem+'.build');build.mkdir(parents=True);classes=build/'classes';classes.mkdir()
-names=['NativeRpg','AgentCliCatalog','AgentCliText','SiteDungeonManager'];prefix='org/afuhome/agentfriend/'
+names=['NativeRpg','AgentCliCatalog','AgentCliText','SiteDungeonManager','TravelMagic'];prefix='org/afuhome/agentfriend/'
 sources=[root/'src'/prefix/(name+'.java') for name in names]
 cp=os.pathsep.join(map(str,[a.base,*sorted((a.server/'libraries').rglob('*.jar')),*sorted((a.server/'versions').rglob('*.jar')),*sorted((a.server/'plugins').glob('*.jar'))]))
 args=['-proc:none','-implicit:none','--release','21','-encoding','UTF-8','-cp',cp,'-d',str(classes),*map(str,sources)]
@@ -19,12 +19,17 @@ with zipfile.ZipFile(a.base)as src,zipfile.ZipFile(a.output,'w',zipfile.ZIP_DEFL
  for entry in src.infolist():
   if own(entry.filename):continue
   data=src.read(entry)
-  if entry.filename=='plugin.yml':assert b'0.4.47.22-vortex'in data;data=data.replace(b'0.4.47.22-vortex',b'0.4.47.24-vortex')
+  if entry.filename=='plugin.yml':assert b'0.4.47.22-vortex'in data;data=data.replace(b'0.4.47.22-vortex',b'0.4.47.25-vortex')
+  elif entry.filename=='onboarding.yml':
+   fresh=(root/'resources/onboarding.yml').read_bytes();key=b'release-revision:'
+   new_prefix,new_suffix=fresh.split(key,1);assert fresh.count(key)==1 and new_suffix.startswith(b' 3') and b'release-notice:'in new_suffix
+   old_prefix=data.split(key,1)[0] if key in data else data.rstrip()+b'\n'
+   data=old_prefix+key+new_suffix
   else:retained+=1
   out.writestr(entry,data)
  for name,data in compiled.items():out.writestr(name,data)
 with zipfile.ZipFile(a.base)as before,zipfile.ZipFile(a.output)as after:
  for name in before.namelist():
-  if not own(name) and name!='plugin.yml':assert before.read(name)==after.read(name),name
+  if not own(name) and name not in {'plugin.yml','onboarding.yml'}:assert before.read(name)==after.read(name),name
 a.output.with_suffix('.json').write_text(json.dumps({'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'baseSha256':base_sha,'retainedEntries':retained,'changedClasses':sorted(compiled),'sources':{f.name:hashlib.sha256(f.read_bytes()).hexdigest()for f in sources},'productionChanged':False},indent=2)+'\n',encoding='utf8')
 print(f'CLI-only candidate: {retained} other entries retained')
