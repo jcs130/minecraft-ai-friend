@@ -11,6 +11,7 @@ import {SPATIAL_QUERY_LIMITS,DEFAULT_VOXEL_BOUNDS,VOXEL_CURSOR_MAX_LENGTH,VOXEL_
 export {DEFAULT_VOXEL_BOUNDS} from './voxel-query-contract.ts';
 export {SPATIAL_QUERY_SCHEMA,SPATIAL_QUERY_EXAMPLE,spatialArgumentDiagnostic} from './spatial-query-schema.ts';
 import { openVoxelQuery, voxelPage, visibleVoxelCells, voxelContinuation, type VoxelInput, type VoxelQuery } from './voxel-paging.ts';
+import { spatialReadout, SPATIAL_READOUT_TEXT_RESERVE } from './spatial-readout.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
@@ -230,14 +231,14 @@ function visibleVoxelObservation(q: VoxelQuery, common: { source: string; observ
         readAttemptedCount:samples.length,unreturnedAttemptedCount:samples.length-take,partialReasons},
       palette,order:'blocks:[absolute x,y,z,palette index]',blocks,next:voxelContinuation(q,end),
       note:'仅返回当前视线可见的非空气表面方块；遮挡/超距部分为不可见，不展开格子，不能据此断言不存在。未加载、细节未返回分别计数。空气数量不证明净空或安全通行。按原点由近到远检查，预算内最多512个表面；按需续读，每页新现场，非同刻快照。'});
-    if(JSON.stringify(result).length<=SPATIAL_OBSERVATION_LIMITS.text)return result;
+    if(JSON.stringify(result).length<=SPATIAL_OBSERVATION_LIMITS.text-SPATIAL_READOUT_TEXT_RESERVE)return result;
     textLimited=true;
     if(take>1){take=Math.max(1,Math.floor(take/2));continue;}
     omitDetail=true;
   }
 }
 
-export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
+function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
   const parsed=parseSpatialObservation(input as unknown as Record<string,unknown>);
   if('error' in parsed)throw new SkillBlocked(parsed.error);
   input=parsed;
@@ -352,7 +353,7 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
           partialReasons, omittedEntityCount: Math.max(0,nearby.length-entityCap) }, next: page.next,
         bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells, entities: nearby.slice(0,entityCap),
         geometry: 'collision boxes in local block coordinates; null=unread, []=no collision; liquids remain materials; no support/passability judgement' });
-      if (JSON.stringify(result).length <= SPATIAL_OBSERVATION_LIMITS.text) return result;
+      if (JSON.stringify(result).length <= SPATIAL_OBSERVATION_LIMITS.text-SPATIAL_READOUT_TEXT_RESERVE) return result;
       textLimited = true;
       if (entityCap && nearby.length) { entityCap = Math.floor(Math.min(entityCap,nearby.length)/2); continue; }
       if (cap > 1) { cap = Math.max(1,Math.floor(cap/2)); continue; }
@@ -379,6 +380,12 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
   });
   return { ...common, kind: 'rays' as const, rays, blockReads: cache.size, unreadEntityIds,
     geometry: 'eye-origin collision rays; yaw 0=north, positive yaw=left, positive pitch=up; offsets are degrees; one-cell shape collar; unknown collar stops verification; liquids and textures do not occlude; entity boxes from this connection, not rendered meshes' };
+}
+
+/** Put coverage interpretation before dense geometry; keep the full native data. */
+export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
+  const data = readSpatialObservation(bot, input);
+  return { readout: spatialReadout(data), ...data };
 }
 
 export function spatialObservationText(bot: Bot, input: SpatialObserveInput): string {
