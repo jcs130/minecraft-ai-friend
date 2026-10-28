@@ -8,12 +8,12 @@
 - 家庭局域网：`http://192.168.3.133:18120/v1`
 - 健康：`GET /health`，返回 `{"status":"ok"}`
 - 模型：`GET /v1/models`，当前模型 ID 为 `drama-3`
-- 合成：`POST /v1/audio/speech`，音色为 `kirito`、`yui`、`cast`，也可用 `none`
+- 合成：`POST /v1/audio/speech`，音色为 `cormy`、`kirito`、`yui`、`cast`，也可用 `none`
 - 自定义音色：`POST /v1/audio/voices`、`GET /v1/audio/voices`、`GET /v1/audio/voices/{voice_id}`
 
 `cast` 是同一段音频中的两个人物：桐人用 `<|speaker:0|>`，结衣用 `<|speaker:1|>`。短句直播建议 `response_format: "pcm"`，服务端边生成边发 44.1kHz、16-bit、单声道 PCM；需要普通文件时设 `"wav"`。`top_k: 4097` 是本机已验证的设置；固定 `seed` 可重现同一设备上的音频。服务一次处理一个合成请求，调用端应限制排队与超时。[接口文档](https://github.com/nyosegawa/speech.cpp/blob/main/docs/server.md)
 
-服务内部把单段生成上限固定为 `max_seconds: 10`，请求也不能超过 10 秒。旧原生服务的默认 47.6 秒上限在冷重启后使三音色合成触发 Vulkan 显存不足；10 秒上限下独立服务进程两轮共六段短句均成功。直播台词应拆成短句，长篇语音需要另行测试和分段。新服务不依赖任务命令行设置该上限，需在重启后不传额外请求上限运行三音色冒烟。
+当前默认和本机上限都是 `max_seconds: 30`，**单位是 speech.cpp 每个原生文本块，不是整次 HTTP 请求**。原生模型自动将长文本按约 300 UTF-8 字节切块，在同一个 `speech_synthesize` 请求内让后块继承首块和近期块的声学历史；服务不另行拆句发起独立克隆。先前的 10 秒本机限制曾使 204 字测试台词约 28.793 秒后以 `max_seconds` 结束；改为每块 30 秒后，同一台词约 46.997 秒并返回 `complete`。该模型没有 `options.text_chunk_size`、`text_chunk_mode` 参数；请求选项直接放在 JSON 顶层，`max_seconds` 最高 30。`seed` 可显式传入 0 至 2^53−1；未传时服务为**每个请求**抽取一次并返回，固定 seed 仅用于重现样本，不能代替音色试听。上游契约见 [Drama 3 模型说明](https://github.com/nyosegawa/speech.cpp/blob/main/docs/models/drama3.md)。
 
 Python 标准库调用示例：
 
@@ -24,7 +24,7 @@ import urllib.request
 body = {
     "model": "drama-3", "voice": "kirito",
     "input": "<|speaker:0|> 大家晚上好，我是桐人。",
-    "response_format": "wav", "top_k": 4097, "max_seconds": 10,
+    "response_format": "wav", "top_k": 4097, "max_seconds": 30,
 }
 request = urllib.request.Request(
     "http://192.168.3.133:18120/v1/audio/speech",
@@ -44,36 +44,63 @@ with open("kirito.wav", "wb") as output:
 
 Drama 3 的原生契约是：**参考录音必须配准确的逐字参考文本**，先由模型 codec 编码成 `*.voice.gguf`，再加载到运行模型。原生 `speech serve` 不提供注册接口，也不能把 WAV 直接作为 Drama 3 音色加载；本站的接口通过 speech.cpp 0.9.0 C API `speech_voice_make_from` 和 `speech_voice_add` 完成这两步。[模型说明](https://github.com/nyosegawa/speech.cpp/blob/main/docs/models/drama3.md)、[C API](https://github.com/nyosegawa/speech.cpp/blob/main/docs/c-api.md)
 
-注册请求为 `multipart/form-data`，字段 `voice_id`、`audio` 和 `reference_text` 必填，`model` 可选且只能是 `drama-3`。`voice_id` 使用小写英文字母开头，后续可用小写字母、数字、下划线和短横线，最长 32 字符；已有 ID 及 `none`、`kirito`、`yui`、`cast` 不可覆盖。重新录制时应选新 ID。**可米的音频尚未上传，`cormy` 目前不是可用音色**；下面的请求供调用方拿到她的原始录音后使用：
+注册请求为 `multipart/form-data`，字段 `voice_id`、`audio` 和 `reference_text` 必填，`model` 可选且只能是 `drama-3`。`voice_id` 使用小写英文字母开头，后续可用小写字母、数字、下划线和短横线，最长 32 字符；已有 ID 及 `none`、`kirito`、`yui`、`cast` 不可覆盖。**`cormy` 已由调用方注册并处于 ready；不要覆盖或重新注册她的参考资料。**下面只示例未来新音色的注册格式：
 
 ```bash
 curl -sS -X POST 'http://192.168.3.133:18120/v1/audio/voices' \
-  -F 'voice_id=cormy' \
+  -F 'voice_id=new_voice_id' \
   -F 'model=drama-3' \
   -F 'reference_text=这里填写音频中实际说出的每一个字' \
-  -F 'audio=@cormy.wav;type=audio/wav'
-curl -sS 'http://192.168.3.133:18120/v1/audio/voices/cormy'
+  -F 'audio=@new_voice.wav;type=audio/wav'
+curl -sS 'http://192.168.3.133:18120/v1/audio/voices/new_voice_id'
 curl -sS 'http://192.168.3.133:18120/v1/audio/voices'
 ```
 
-注册返回 HTTP 202、`status: "pending"` 和 `Location: /v1/audio/voices/cormy`；轮询单项直到 `ready` 后才可合成。编码或热加载失败为 `failed`，`error` 写明原生失败原因；未知 ID 的查询为 404。输入必须是未压缩的 **16/24/32-bit PCM WAV**，单声道或双声道、8–96 kHz、**3–20 秒**、至多 **16 MiB**。服务端保留原 WAV 和原文，原生编码器会混成单声道并重采样至 44.1 kHz。MP3、AAC、WAV 浮点格式应先转换为 PCM WAV。参考文本必填，需与录音实际说的话一致；服务无法自动核对逐字准确性，错配会影响克隆质量。
+注册返回 HTTP 202、`status: "pending"` 和对应的 `Location`；轮询单项直到 `ready` 后才可合成。编码或热加载失败为 `failed`，`error` 写明原生失败原因；未知 ID 的查询为 404。输入必须是未压缩的 **16/24/32-bit PCM WAV**，单声道或双声道、8–96 kHz、**3–20 秒**、至多 **16 MiB**。服务端保留原 WAV 和原文，原生编码器会混成单声道并重采样至 44.1 kHz。MP3、AAC、WAV 浮点格式应先转换为 PCM WAV。参考文本必填，需与录音实际说的话一致；服务无法自动核对逐字准确性，错配会影响克隆质量。
 
 `ready` 后合成：
 
 ```bash
 curl -sS 'http://192.168.3.133:18120/v1/audio/speech' \
   -H 'Content-Type: application/json' \
-  --data-raw '{"model":"drama-3","input":"你好，我是可米。","voice":"cormy","response_format":"wav","max_seconds":10,"top_k":4097}' \
+  --data-raw '{"model":"drama-3","input":"你好，我是可米。","voice":"cormy","seed":20261021,"response_format":"wav","max_seconds":30,"top_k":4097}' \
   -o cormy.wav
 ```
 
-输出 WAV 为 44.1 kHz、16-bit、单声道；`response_format: "pcm"` 继续提供流式原始 PCM，`stream_format: "sse"` 继续提供分块事件。`max_seconds` 仍不得超过 10。未知音色的合成明确返回 HTTP 400 `unsupported_value`；`pending` 和 `failed` 返回 HTTP 409 `voice_not_ready`，**不会自动改用现有音色或默认音色**。
+输出 WAV 为 **44.1 kHz、16-bit、单声道**，与 `cormy` 的 **48 kHz 参考录音**无关；WAV 响应的 `X-Speech-Stop` 标明 `complete`、`max_seconds` 或 `model_limit`。`response_format: "pcm"` 为边生成边输出的原始 PCM16；`stream_format: "sse"` 的 `speech.audio.delta` 携带 base64 PCM，最后的 `speech.audio.done` 携带实际已发样本数、seed 和 stop。SSE 原生错误在可写连接上以 `stop: "error"` 和错误文字收尾；客户端断开时原生请求取消，已断连接无法接收尾事件，服务日志记录 `cancelled`。原始 PCM 流不含尾事件，需要终态的调用方应选 SSE；其生成失败时连接被截断。未知音色返回 HTTP 400 `unsupported_value`；`pending` 和 `failed` 返回 HTTP 409 `voice_not_ready`，**不会自动改用现有音色或默认音色**。
 
 注册资料位于被 Git 忽略的 `server/drama3-service/voices/<voice_id>/`：`reference.wav`、`reference.txt`、`voice.gguf` 与 `manifest.json`。清单记录 schema/引擎版本、codec 哈希、音频与原文 SHA-256、编码 GGUF SHA-256、时间和状态。注册异步编码一次，热加载成功才标记 `ready`；合成只用缓存的 GGUF。服务重启时校验哈希并直接热加载所有 `ready` 音色，恢复 `pending` 作业，保留 `failed` 原因。当前接口不提供同名覆盖或删除。
 
 本机隔离测试使用**现有桐人测试录音**注册 `qa_kirito`，不是可米录音：2026-10-28 11:50 接口先返回 pending，约 4 秒后 ready，编码产物 6144 字节；同一文本和 seed 123 下 `qa_kirito` 与 `yui` 的 WAV 时长分别为 3.947 秒和 3.065 秒，SHA-256 不同。测试服务重启后 GGUF 哈希和修改时间未变，`qa_kirito` 自动恢复为 ready，同一合成的 SHA-256 仍为 `80f9a13cda59d2060790fe246da29ff21064bddba7f38215aac1e065ae9059e9`。这证明独立音色经原生路径影响合成以及重启复用；可米本人音色的听感仍需调用方上传后验收。
 
-正式端口另注册了 `qa_kirito_20261028`，明确是桐人 QA 录音。注册返回 pending 后转为 ready；固定文本与 seed 123 的 WAV SHA-256 为 `c125605e4f00000e6c8fff4b5c8ba88d4ce25ca1fb6fa04da4d78613199a53e7`，同设置下 `yui` 为 `a4875b0385216945b020c11a64752505a0b38bea645166a4bf954cd888d1b1c6`。正式任务重启后，缓存 GGUF 的 SHA-256 和修改时间均不变，QA 合成哈希仍一致。看门狗实际恢复任务后，QA 合成及桐人、结衣、`cast` 三段再验通过。`cormy` 查询仍为 404，合成为 400 `unsupported_value`；这些 QA 结果**不代表可米音色已经验收**。
+正式端口另注册了 `qa_kirito_20261028`，明确是桐人 QA 录音。注册返回 pending 后转为 ready；固定文本与 seed 123 的 WAV SHA-256 为 `c125605e4f00000e6c8fff4b5c8ba88d4ce25ca1fb6fa04da4d78613199a53e7`，同设置下 `yui` 为 `a4875b0385216945b020c11a64752505a0b38bea645166a4bf954cd888d1b1c6`。正式任务重启后，缓存 GGUF 的 SHA-256 和修改时间均不变，QA 合成哈希仍一致。看门狗实际恢复任务后，QA 合成及桐人、结衣、`cast` 三段再验通过。后来调用方真实上传了 `cormy`，这段早期 QA 历史不再代表她的当前音色状态；当前状态与长台词验收见下节。
+
+### 一次生成的长台词与流式终态
+
+可执行的 SSE 请求 JSON；**整条台词只发一次**，不用客户端逐句另行克隆后拼接：
+
+```json
+{
+  "model": "drama-3",
+  "voice": "cormy",
+  "input": "今晚的风把村口的灯吹得轻轻摇晃，可米和桐人沿着石桥走到河边，结衣在后面提醒我们别踩进浅水。地图上显示营地在东侧的山坡，坐标是X一百二十八、Y六十四、Z负三百零二，我们先核对方位，再沿着火把一直向前。到了树林边缘，我发现一只小狐狸躲在倒下的树旁，背包里的面包还剩三块，大家可以在聊天里帮我决定先补给还是先搭一座桥。如果夜色突然变深，我们就回到亮着灯的屋子，记下今天看到的路标，明天继续探索这片陌生又漂亮的世界。",
+  "seed": 20261021,
+  "max_seconds": 30,
+  "top_k": 4097,
+  "response_format": "pcm",
+  "stream_format": "sse"
+}
+```
+
+将 JSON 保存为 `request.json` 后执行 `curl -sN -H 'Content-Type: application/json' --data-binary @request.json http://192.168.3.133:18120/v1/audio/speech`。本仓库的 `tools/drama3/longform_probe.py` 会发送同一类请求，把每个 delta 记录并还原为可试听的原始 WAV；`tools/drama3/disconnect_probe.py` 验证运行中断线，`tools/drama3/queue_disconnect_probe.py` 验证排队中断线。探针只写入被 Git 忽略的 `server/drama3-service/longform-acceptance/`。
+
+2026-10-28 20:07–20:11 正式 RTX 3090 验收：`cormy` 是 `ready` 且模型真实列出该音色；原参考 WAV、逐字稿、GGUF 的 SHA-256 分别为 `b40ec6f0799071da8b4d7c3176267034a2442ab7c06c88f1785d2ac131051c7d`、`4d403427fbd957a920a91a4b172f5213f80fa6ff024cb8ecb0890d646812ea16`、`3ae79d3e3dfef209fc50c24b2ee085d5f7a9e41a79d4243a023b4940663a5ed3`，升级前后相同，未重新注册或编码。204 字/606 UTF-8 字节长句在旧每块 10 秒限制下首段 0.595 秒、28.793 秒音频、`stop=max_seconds`；改为每块 30 秒后，首段 0.467 秒、总请求 45.698 秒、46.997 秒音频、`stop=complete`、`samples=2072576`，与实际 PCM16 样本数相同，未见 Vulkan OOM。短句和名字/坐标句也以 `complete` 收尾，首段分别在 1.003 和 2.854 秒到达；名字句首段受串行队列等待影响。相同短句/seed 的直接 WAV 与 SSE 还原 WAV 的 PCM 逐字节一致，直接 WAV 响应 `X-Speech-Stop=complete`、`X-Sample-Rate=44100`。长 SSE 首段后主动断线，原生请求约 0.8 秒内记录为 `stop=cancelled`。
+
+20:25 再次**仅重启 `Drama3-Speech`**；日志在 20:26:03 记录模型与 `cormy` 就绪，20:26:06 的首条合成即为相同 204 字长句。冷机首段 1.059 秒、总请求 51.969 秒、音频 46.997 秒、`stop=complete`，PCM 哈希与热机相同，未复现 Vulkan OOM。显式 `max_seconds=1` 的短句真实返回 `stop=max_seconds`、`samples=43008`，证明截断终态没有被改写为成功。排队取消实测：第一条正在合成的请求断线后记录 `stop=cancelled samples=24576`，其后排队且已断线的另一请求记录 `stop=cancelled samples=0`，没有进入模型生成。冷机后 `cormy`、`kirito`、`yui`、`cast` 四音色真合成冒烟再次通过。
+
+独立 CPU Qwen3-ASR-0.6B 对 47 秒长 WAV 转写出了从开头到结尾的所有句段，未发现整段台词缺失；短句逐字一致。它把长句中部分人物名写成近音字，名字/数字坐标句还把 `Z=-302` 识别成正数；这可能是 TTS 发音，也可能是 ASR 错词，**不能据此宣称专名和负号发音已准确**。用户于 20:22 试听下方的 204 字单请求原始 WAV，反馈“全程音色基本一致”；该人工听感只覆盖这段样本，不由 HTTP 200、哈希相同或单一 ASR 推广到任意台词。文件与逐事件日志：`server/drama3-service/longform-acceptance/{short,names,long}-max30-seed20261021.wav`、对应 `.request.json`/`.log.json`、`asr-qwen3-0.6b.jsonl`。服务日志按请求 ID 写 voice、seed、字符数、块预算、stop、样本数和耗时，不记录台词或参考音内容。
+
+20:31 的真实日志仍见另一个局域网客户端以 `max_seconds=10` 连续提交 6–27 字独立请求；服务只能保证**每个 HTTP 请求内部**连续生成，调用端必须停止那条逐句独立克隆拼接路径，才能让整条台词共享原生声学历史。
 
 ## 本机运维
 
@@ -99,7 +126,7 @@ python D:\Projects\QiandengJi\tools\drama3\drama3_health.py --base http://127.0.
 nvidia-smi --query-gpu=memory.used,memory.free --format=csv,noheader,nounits
 ```
 
-`--smoke` 会在被忽略的 `server/drama3-service/smoke/` 下保存三段可复听 WAV，并检查长度、采样率和非静音。默认不传 `max_seconds`，用于验证服务的 10 秒默认设置；诊断旧原生任务时才需加 `--max-seconds 10`。10:58 的旧 `speech.exe` 任务确曾带 `--max-seconds 10` 并通过六段测试。12:00 已将正式任务切换为直接运行 Python 音色服务，12:16 看门狗停机恢复后从本机 LAN IP 进行 QA 和三音色真实合成通过。另一台局域网设备的连通性仍待从该设备实测；自动冒烟不等于音色和发音已经人工验收。
+`--smoke` 会在被忽略的 `server/drama3-service/smoke/` 下保存三段可复听 WAV，并检查长度、采样率和非静音。默认不传 `max_seconds`，用于验证当前服务的 **每块 30 秒默认设置**；诊断旧原生任务时才需加 `--max-seconds 10`。10:58 的旧 `speech.exe` 任务确曾带 `--max-seconds 10` 并通过六段测试。12:00 已将正式任务切换为直接运行 Python 音色服务；20:07 仅重启 `Drama3-Speech` 并再次确认桐人、结衣、`cast` 三段真合成。局域网设备 `192.168.3.152` 的请求已抵达本机，其他设备连通性需各自测试；自动冒烟不等于音色和发音已经人工验收。
 
 ### 3090 显存边界
 
