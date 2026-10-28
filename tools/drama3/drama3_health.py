@@ -40,16 +40,22 @@ def check_service(base: str) -> dict:
     return {"ok": True, "model_ids": [item["id"] for item in data]}
 
 
-def synthesize(base: str, output_dir: Path, label: str, prompt: str, seed: int) -> dict:
+def synthesize(
+    base: str, output_dir: Path, label: str, prompt: str, seed: int,
+    max_seconds: float | None = None,
+) -> dict:
+    payload = {
+        "input": prompt,
+        "voice": label,
+        "seed": seed,
+        "top_k": 4097,
+        "response_format": "pcm",
+    }
+    if max_seconds is not None:
+        payload["max_seconds"] = max_seconds
     request = urllib.request.Request(
         base + "/v1/audio/speech",
-        data=json.dumps({
-            "input": prompt,
-            "voice": label,
-            "seed": seed,
-            "top_k": 4097,
-            "response_format": "pcm",
-        }, ensure_ascii=False).encode("utf-8"),
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -89,6 +95,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="http://127.0.0.1:18120")
     parser.add_argument("--smoke", action="store_true", help="render real Kirito, Yui and cast samples")
+    parser.add_argument("--max-seconds", type=float, help="send an explicit request limit; omission tests the service default")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     base = args.base.rstrip("/")
@@ -96,7 +103,7 @@ def main() -> int:
         result = check_service(base)
         if args.smoke:
             result["samples"] = [
-                synthesize(base, args.output_dir, label, prompt, seed)
+                synthesize(base, args.output_dir, label, prompt, seed, args.max_seconds)
                 for label, prompt, seed in SAMPLES
             ]
         print(json.dumps(result, ensure_ascii=True))
