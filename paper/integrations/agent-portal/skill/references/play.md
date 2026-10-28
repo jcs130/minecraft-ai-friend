@@ -6,7 +6,7 @@
 {"name":"mc_do","arguments":{"steps":[{"skill":"chat","text":"/mycli status"}]}}
 ```
 
-先记 `/mycli status` 和 `/mycli --help`，再看返回的下一步。命令帮助按组展开；更多故事、技能与任务在游戏里学习，不预读整套玩法。
+先用 `/mycli intro` 或 `/mycli status` 看本人当前目标，按需 `/mycli <分组> --help`。若返回 `requiresWorldAction:true`，下一步是实际走路、击杀或制作；`verifyCommand` 只查进度，不会帮你完成目标。更多故事、技能与任务在游戏里学习，不预读整套玩法。
 
 当前正式服已启用 Vortex 六职业，按需读[原生RPG](rpg-native.md)。原职业已归档，不因资料更新而替已有角色重选职业。命令和参数以服内 `--help` 为准，源码中的新候选不等于已上线。
 

@@ -1,0 +1,92 @@
+{
+  "status": "candidate_not_deployed",
+  "createdAt": "2026-10-28T19:45:14.549666+08:00",
+  "productionChanged": false,
+  "versions": {
+    "AgentFriend": "0.4.47.26-vortex",
+    "QiandengjiRpg": "0.2.5",
+    "VortexRPG": "1.2.2-alpha-qd29 unchanged"
+  },
+  "artifacts": [
+    {
+      "name": "AgentFriend-0.4.47.26-r3.jar",
+      "sha256": "5abc24a4b04383a48cf2e6b215ab0b083f86b55f01991dc9914a3de9dbe98883",
+      "baseSha256": "46b590db9fd01d0129f9c8f090ca7c0d5e2c1ee0544d3c1a267aed2df1cd62d6",
+      "delta": {
+        "unchangedEntries": 586,
+        "changedEntries": [
+          "onboarding.yml",
+          "org/afuhome/agentfriend/AgentCliCatalog.class",
+          "org/afuhome/agentfriend/NativeRpg.class",
+          "plugin.yml"
+        ],
+        "addedEntries": [],
+        "removedEntries": []
+      }
+    },
+    {
+      "name": "QiandengjiRpg-0.2.5-r3.jar",
+      "sha256": "a6fa42dfa5f1aba92a6b90a7b1371a926fffe366b05bf2910b770c583de1392c",
+      "baseSha256": "e93fb3210038b17b8a11730d3b5b0d9f4a0dc5485890e9ea168d041e79fafed9",
+      "delta": {
+        "unchangedEntries": 15,
+        "changedEntries": [
+          "org/qiandengji/vortex/QuestText.class",
+          "org/qiandengji/vortex/VortexBridge$1.class",
+          "org/qiandengji/vortex/VortexBridge.class",
+          "plugin.yml"
+        ],
+        "addedEntries": [
+          "org/qiandengji/vortex/AuctionSafety$Installed.class",
+          "org/qiandengji/vortex/AuctionSafety.class",
+          "org/qiandengji/vortex/RpgJourney$Advice.class",
+          "org/qiandengji/vortex/RpgJourney$Facts.class",
+          "org/qiandengji/vortex/RpgJourney.class"
+        ],
+        "removedEntries": []
+      }
+    }
+  ],
+  "tests": {
+    "offlineChecks": 221,
+    "liveChecks": 36,
+    "coldChecks": 6,
+    "normalQaStops": [
+      true,
+      true
+    ],
+    "realLlmInvoked": false,
+    "bedrockHardwareTested": false
+  },
+  "scope": [
+    "dynamic intro/status advice",
+    "own quest state and completion-aware details",
+    "basic cooldown text",
+    "read-only Vault coin balance",
+    "guard reproduced native auction non-delivery before any new action",
+    "private once-per-account revision4 notice"
+  ],
+  "deployment": {
+    "requiresNormalPaperRestart": true,
+    "noReload": true,
+    "noPasswordOrIdentityChanges": true,
+    "noPlayerStorageMigration": true,
+    "configMergeOnly": [
+      "release-revision",
+      "release-notice"
+    ],
+    "staticCopiesVerifiedOn": [
+      "E",
+      "F"
+    ],
+    "fullColdBackupPrepared": false,
+    "currentDeploymentManifestUnchanged": true
+  },
+  "limits": [
+    "native player auction is unavailable, not repaired delivery",
+    "no claim of autonomous long-term RPG mastery",
+    "Skill/MCP reference source updated; downloadable bundle not republished",
+    "QA-only identities, stores and test plugins are never deployable"
+  ],
+  "rollback": "normal maintenance; restore both original JARs together and only original notice fields; preserve latest player, RPG, economy, quest and auction records"
+}

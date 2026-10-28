@@ -24,6 +24,7 @@ public final class VortexBridge extends JavaPlugin {
     private ManaManager mana;
     private CustomItemService items;
     private YamlConfiguration city;
+    private final AuctionSafety auctionSafety=new AuctionSafety();
     public void partyCommand(Player player,String[] args){if(!Bukkit.isPrimaryThread())throw new IllegalStateException("party command requires primary thread");new NativeParties(vortex).command(player,args);}
     private final Set<UUID> pending=ConcurrentHashMap.newKeySet();
     private final Gson gson=new GsonBuilder().registerTypeAdapter(Instant.class,(JsonSerializer<Instant>)(value,type,context)->new JsonPrimitive(value.toString())).create();
@@ -57,13 +58,15 @@ public final class VortexBridge extends JavaPlugin {
                     if(p!=null&&event.getEntity() instanceof org.bukkit.entity.Monster)notifyAgentFriend("nativeKillConfirmed",new Class<?>[]{Player.class},p);
                 }
             },this);
-            getLogger().info("Vortex精炼CLI就绪；原生职业/技能/经验/魔力为唯一权威。");
+            auctionSafety.install(vortex);
+            getLogger().info("Vortex精炼CLI就绪；原生职业/技能/经验/魔力为唯一权威。原生拍卖交付故障已阻止新增操作。");
         }catch(Exception|LinkageError error){
             getLogger().severe("Vortex适配不可用："+error.getClass().getSimpleName());
             if(vortex!=null)Bukkit.getPluginManager().disablePlugin(vortex);
             Bukkit.getPluginManager().disablePlugin(this);
         }
     }
+    @Override public void onDisable(){auctionSafety.restore();}
     private void notifyAgentFriend(String name,Class<?>[] types,Object...args){
         var af=Bukkit.getPluginManager().getPlugin("AgentFriend");if(af==null||!af.isEnabled())return;
         try{af.getClass().getMethod(name,types).invoke(af,args);}catch(Exception error){getLogger().warning("冒险证明未能确认："+name+"；不伪造考试完成。");}
@@ -109,6 +112,56 @@ public final class VortexBridge extends JavaPlugin {
     public boolean consumeCommonMana(Player p,double amount){
         if(!Bukkit.isPrimaryThread()||!Double.isFinite(amount)||amount<0||!p.isOnline())return false;
         profile(p);return mana.consumeMana(p.getUniqueId(),amount);
+    }
+    /** Internal bounded advice context supplied by AgentFriend, never by command arguments. */
+    public void describeJourney(Player p,String contextJson,boolean intro,boolean json){
+        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
+        var context=JsonParser.parseString(contextJson).getAsJsonObject();
+        var request=new BridgeRules.Request("status","list",List.of(),json,false);
+        profile(p);
+        quests.questData(p.getUniqueId()).thenApply(data->data).orTimeout(5,TimeUnit.SECONDS).whenComplete((questsData,error)->{if(!isEnabled())return;Bukkit.getScheduler().runTask(this,()->{
+            if(!p.isOnline())return;
+            try{
+                if(error!=null)throw new IllegalStateException("任务资料暂不可用，未推断为空任务",error);
+                var state=profile(p);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("");
+                var missing=new ArrayList<String>();if(context.has("missingEquipment"))context.getAsJsonArray("missingEquipment").forEach(v->missing.add(v.getAsString()));
+                var facts=new RpgJourney.Facts(id,state.level(),p.getHealth(),p.getMaxHealth(),p.getFoodLevel(),mana.getMana(p.getUniqueId()),
+                    cooldown(context,"foodCooldownMs"),cooldown(context,"selfhealCooldownMs"),
+                    !p.isDead()&&(!context.has("canAct")||context.get("canAct").getAsBoolean()),
+                    context.has("downed")&&context.get("downed").getAsBoolean(),context.has("inDungeon")&&context.get("inDungeon").getAsBoolean(),
+                    pending.contains(p.getUniqueId()),quests.qiandengjiPendingRewards(p.getUniqueId()),missing,p.getWorld().getName());
+                var advice=RpgJourney.next(facts,quests.registry().all().values(),questsData);
+                var out=new LinkedHashMap<String,Object>();out.put("readOnly",true);out.put("queryOnly",true);out.put("backend","vortex");out.put("authority","VortexRPG");
+                out.put("class",intro?id:id.isEmpty()?"none":id);out.put("level",state.level());out.put("xp",state.experience());
+                out.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
+                out.put("mana",Math.round(mana.getMana(p.getUniqueId())));out.put("maxMana",Math.round(mana.getMaxMana(p)));out.put("pending",pending.contains(p.getUniqueId()));
+                boolean economyReady=vortex.qiandengjiVault().isAvailable();
+                out.put("economy",economyReady?Map.of("available",true,"balance",vortex.qiandengjiVault().balance(p),"currency","金币"):Map.of("available",false,"currency","金币"));
+                out.put("preview",!getConfig().getString("backend","preview").equals("vortex"));out.put("guide",advice.data());out.put("nextAction",advice.action());out.put("verifyCommand",advice.verify());
+                if(!advice.command().isEmpty())out.put("nextCommand",advice.command());
+                out.put("helpCommand","/mycli --help");out.put("rulesCommand","/mycli rules");
+                if(json){p.sendMessage((intro?"MC_INTRO ":"MC_RPG ")+gson.toJson(out));return;}
+                p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪"));
+                p.sendMessage("[RPG] "+advice.text());
+                if(intro){
+                    var starter=vortex.classSkillService().classProfile(id).map(c->c.starterSpellId()).filter(s->s!=null&&!s.isBlank());
+                    p.sendMessage("[RPG] "+starter.map(s->"本职起始技 "+s+"；目标/耗魔：/mycli skills info "+s).orElse("基础技无需选职或学习：/mycli skills list common")+"。个人箱：/mycli arena stash；交易金币：/mycli trade wallet。规则：/mycli rules");
+                }
+            }catch(Exception|LinkageError failure){failure(p,request,failure);}
+        });});
+    }
+    private static long cooldown(JsonObject context,String key){return context.has(key)&&!context.get(key).isJsonNull()?Math.max(0,context.get(key).getAsLong()):-1;}
+    public void tradeCommand(Player p,String[] raw){
+        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");profile(p);
+        boolean json=Arrays.asList(raw).contains("--json");var words=new ArrayList<>(Arrays.asList(raw));words.removeIf(s->s.equals("--json"));
+        String action=words.isEmpty()?"":words.getFirst().toLowerCase(Locale.ROOT);
+        boolean menu=words.equals(List.of("auction","menu"));
+        if(!(words.size()==1&&Set.of("wallet","auction").contains(action))&&!menu||menu&&json){p.sendMessage("[RPG] [invalid_argument] 用法：/mycli trade wallet [--json] 或 trade auction [--json]；打开菜单：trade auction menu。未交易。");return;}
+        if(action.equals("auction")){if(json)p.sendMessage("MC_RPG "+gson.toJson(Map.of("queryOnly",true,"available",false,"changed",false,"reason","auction_unavailable","nextCommand","/mycli trade wallet")));else p.sendMessage(AuctionSafety.MESSAGE);return;}
+        if(!vortex.qiandengjiVault().isAvailable()){if(json)p.sendMessage("MC_RPG "+gson.toJson(Map.of("queryOnly",true,"available",false,"reason","economy_unavailable","nextCommand","/mycli trade wallet")));else p.sendMessage("[RPG] [economy_unavailable] 金币服务未就绪；本次未交易，不能把未知余额当作0。稍后查询：/mycli trade wallet");return;}
+        var out=new LinkedHashMap<String,Object>();out.put("queryOnly",true);out.put("available",true);out.put("currency","金币");out.put("balance",vortex.qiandengjiVault().balance(p));out.put("auctionAvailable",false);out.put("nextCommand","/mycli tasks list");
+        String text="金币余额 "+out.get("balance")+"；Vortex任务奖励到账此账户，和背包绿宝石、旧试炼余额分别记账。玩家拍卖交付故障暂时维护；本次只查询，不扣款。公共补给：/mycli guild shared。";
+        if(json)p.sendMessage("MC_RPG "+gson.toJson(out));else p.sendMessage("[RPG] "+text);
     }
     private UnifiedPlayer profile(Player p){
         if(vortex.playerProfileService().qiandengjiLoading(p.getUniqueId()))throw new IllegalStateException("角色资料仍在加载，请稍后查询 status；不要重复执行。");
@@ -226,8 +279,14 @@ public final class VortexBridge extends JavaPlugin {
     }
     private void quests(Player p,BridgeRules.Request r){
         switch(r.action()){
-            case "list"->{noArgs(r);var defs=quests.registry().all().values().stream().sorted(Comparator.comparing(QuestDefinition::id)).toList();var shown=BridgeRules.page(defs,r);var out=new LinkedHashMap<String,Object>(BridgeRules.pagination(defs.size(),r));out.put("quests",shown);out.put("queryOnly",true);emit(p,r,out,"[任务 "+r.page()+"/"+BridgeRules.pages(defs.size())+"] "+String.join("；",shown.stream().map(q->q.id()+" "+q.name()).toList())+"。详情：/mycli tasks info <ID>"+BridgeRules.nextPage(defs.size(),r));}
-            case "info"->{String id=BridgeRules.id(r);var q=quest(id);emit(p,r,Map.of("quest",q,"queryOnly",true),QuestText.info(q));}
+            case "list"->{noArgs(r);int level=profile(p).level();async(p,r,quests.questData(p.getUniqueId()).thenApply(data->{
+                var rank=List.of("ready_to_claim","active","available","level_required","prerequisite_required","cooldown","completed");
+                var defs=quests.registry().all().values().stream().sorted(Comparator.<QuestDefinition>comparingInt(q->rank.indexOf(RpgJourney.availability(q,data,level))).thenComparingInt(QuestDefinition::requiredLevel).thenComparingInt(q->q.objectives().stream().mapToInt(QuestObjectiveDefinition::amount).sum()).thenComparing(QuestDefinition::id)).toList();
+                var shown=BridgeRules.page(defs,r);var out=new LinkedHashMap<String,Object>(BridgeRules.pagination(defs.size(),r));out.put("quests",shown);out.put("queryOnly",true);
+                out.put("states",shown.stream().map(q->Map.of("id",q.id(),"state",RpgJourney.availability(q,data,level))).toList());
+                out.put("summary","[任务 "+r.page()+"/"+BridgeRules.pages(defs.size())+"] "+String.join("；",shown.stream().map(q->q.id()+" "+q.name()+"["+RpgJourney.label(RpgJourney.availability(q,data,level))+"]").toList())+"。任选讨伐/巡访/制作，详情：/mycli tasks info <ID>"+BridgeRules.nextPage(defs.size(),r));return out;
+            }),"任务列表暂不可用，不根据空结果重接任务。");}
+            case "info"->{String id=BridgeRules.id(r);var q=quest(id);int level=profile(p).level();async(p,r,quests.questData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("quest",q,"queryOnly",true,"state",RpgJourney.availability(q,data,level),"nextCommand",QuestText.nextCommand(q,data,level),"summary",QuestText.info(q,data,level))),"任务详情暂不可用，不重复接取。");}
             case "status"->{String focus=r.arguments().isEmpty()?null:BridgeRules.id(r);if(focus!=null)quest(focus);async(p,r,quests.questData(p.getUniqueId()).thenApply(data->{
                 if(focus!=null){var progress=data.quests().get(focus);int awaiting=quests.qiandengjiPendingRewards(p.getUniqueId());String summary=progress==null?focus+"："+(data.completedQuestLog().contains(focus)?"已交付；下一步：/mycli tasks list":"未接取；先读条件：/mycli tasks info "+focus):QuestText.progress(quest(focus),progress);if(awaiting>0)summary+="；有 "+awaiting+"笔奖励待核对，勿重复领取，请联系服主。";return Map.<String,Object>of("id",focus,"summary",summary,"pendingRewardCount",awaiting,"queryOnly",true);}
                 var active=data.quests().values().stream().filter(v->v.state()==QuestState.ACTIVE).sorted(Comparator.comparing(QuestProgress::questId)).toList();

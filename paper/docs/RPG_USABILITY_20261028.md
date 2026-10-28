@@ -1,5 +1,29 @@
 # RPG 可用性与 Agent 指引检查
 
+## 逐步 RPG 指引候选：尚未部署
+
+AF **0.4.47.26-vortex** / 桥 **0.2.5** 接续正式 AF.25 / 桥0.2.4 / Vortex qd29，不增加成长系统、顶层命令或第二份教学账本。
+
+`/mycli intro` 和 `status` 根据本人生命、饥饿、真实冷却、职业、穿戴及原生任务给一个当前目标。饥饿优先饱食，不让治疗替代进食；冷却和缺魔力给替代路径。待交付优先提示领奖，已交付任务不推荐重接；战斗缺护甲给确切缺项，制作说明“持有不算制作”，跨世界调查给实际传送入口及魔力条件。已有职业不重选，查询不代报名、学习、接取或领奖。
+
+默认短中文；JSON 保留状态原字段，新增 `guide.step/reason/nextAction/verifyCommand/requiresWorldAction`。需要实际走路、击杀或制作时不制造 `nextCommand`；`verifyCommand` 只是查询，不能当成任务进展。`MC_INTRO` 保留原前缀及未选职的空职业表示。任务列表/详情增加本人可接、进行中、待交付、已交付和条件不足的状态，原 ID、目标和奖励不变。
+
+金币沿用 Vault / Essentials，只加 `trade wallet` 只读入口。原生拍卖存在**实际扣款但不交付物品**的故障：隔离卖家面包3→0、买家面包0→0，买家金币50→45，卖家50→54.75；服务端独立背包查询也没有面包。这是复现，不是成功交易。候选在原生 auction、命名空间及 vrp 转发入口执行前明确拒绝，保留物品和金币；不修改第三方 JAR、历史拍卖记录或经济余额。guard 只作用于拍卖，其他原生命令转交原执行器；关闭本桥时只恢复自己安装的包装。完整安全交易仍未实现，不能向玩家宣称可用。
+
+修订4仅准备两项私有一次性通知字段，正式部署须合并当前 onboarding.yml 的 `release-revision/release-notice`，不覆盖其他配置或玩家接收记录。Skill/MCP 参考源同步，官网下载包未重发。最终摘要、验证和静态回退见 [候选清单](../manifests/rpg-journey-candidate-20261028.json)；实际部署清单保持原版本。
+
+最终候选通过221项离线检查（包含既有回归）、36项真实非OP联机检查与正常重启后的6项保存/指引检查。E/F静态候选及当前JAR/通知配置已逐项核对；这不是发布前完整冷备份。普通原版协议与Mineflayer实际收发已验，基岩/手机/CortiEye真机像素、长期自主攻略效果未验；没有调用模型或操作真实玩家。
+
+### 本地复验
+
+`build-rpg-journey.py` 从固定 AF.25 基包只重编 `NativeRpg` 与 `AgentCliCatalog`，保留585项其他条目；本桥用 `integrations/vortex-rpg/build.py` 构建。传入自己的隔离依赖路径，输出必须是新文件；不可把完整未发布 AgentFriend 树或 QA 存档复制到正式服。
+
+离线入口 `integrations/vortex-rpg/tests/native.py --vortex <qd29> --bridge <新桥> --agentfriend <新AF> --server <隔离目录> --java <JDK21/bin>`。真实联机入口 `probe/rpg-usability/journey.mjs <短标签>`，正常停启同一 QA JVM 后再运行 `journey-cold.mjs <同标签>`。只接受既有 `.qa-only` 回环场地25928/25929，使用新非OP身份、实际饱食/治疗/击杀/结算/穿戴/隐私及冷启动记录；不调用模型。
+
+`auction-audit.mjs` 是旧原生故障复现，只在未安装 guard 的同一隔离场地运行；会花掉测试金币并丢失测试面包，不能对正式角色运行，不能把退出码0当作交易成功，必须看 `deliveryConfirmed`。候选正式验收改为验证所有已知入口拒绝且库存/金币保持。
+
+以下为 AF.25 已发布的前一批修复记录。
+
 状态：修复已并入AF.25/桥0.2.4/Vortex qd29和Qwen频道0.3.2正式发布。见[发布记录](BASIC_SURVIVAL_RELEASE_20261028.md)及[实际部署清单](../manifests/current-deployment.json)；下方保留各轮候选的原验证证据。
 
 服主随后明确七项基础生存技不应停用；后续[基础技能修复](BASIC_SURVIVAL_SKILLS_20261028.md)接续本批，更新基础技能集合与用法。下方`.24 / 0.2.3`的摘要和测试保留对应历史候选，不代表已部署。

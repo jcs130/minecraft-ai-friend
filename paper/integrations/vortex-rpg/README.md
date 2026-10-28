@@ -1,10 +1,10 @@
 # VortexRPG原生接管
 
-本目录是API适配和窄补丁。**2026-10-28已发布**AgentFriend0.4.47.22、VortexRPG1.2.2-alpha-qd27和QiandengjiRpg0.2.1（[引导修复](../../docs/RPG_GUIDANCE_20261028.md)）；[发布与回滚](../../docs/NATIVE_RPG_RELEASE_20261027.md)、[固定摘要清单](../../manifests/native-rpg-release-20261027.json)为当前状态。较早[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留调查历史。
+本目录是API适配和窄补丁。**2026-10-28已发布**AgentFriend0.4.47.25、VortexRPG qd29、QiandengjiRpg0.2.4；基础生存技能、职业/技能/任务与回执修复见[正式发布](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。
 
-后续 `.24 / RPG 0.2.3 / qd29` 是**未部署候选**：帮助统一、任务分页、原生组队与明确失败指引，补齐坦克实际防御及空目标攻击退款。构建与验收范围见 [RPG 可用性](../../docs/RPG_USABILITY_20261028.md)，不覆盖原玩家配置或迁移存档。`patch-cast-targets.py` 只接受固定 qd28 输入，改空目标分支，复用原生失败退款和清冷却；`self/ray/location` 目标类型不改变。`FortifyDefence` 在原生 fortify 成功回调补抗性I，耗魔、冷却和原恢复效果仍归 Vortex 管理。
+后续 `.26 / RPG0.2.5` 是**未部署候选**：`intro/status` 以真实生存、装备和任务给一个当前目标，任务列表/详情分清本人状态，`trade wallet` 查任务金币。已在隔离服复现原生拍卖扣款不交货，候选明确拒绝新增拍卖操作，不能宣传交易已完成。构建和验收范围见 [RPG 可用性](../../docs/RPG_USABILITY_20261028.md)，不覆盖玩家配置或迁移存档；不新增 Agent 循环或模型调用。
 
-其后 `.25 / RPG0.2.4` 候选恢复服主指定的基础生存技能，仍不要求选职或学习；实际效果、耗魔和安全规则复用原实现，Vortex继续管理职业成长。见[基础生存技能](../../docs/BASIC_SURVIVAL_SKILLS_20261028.md)，未部署时不要声称正式服已解封。
+`patch-cast-targets.py` 的 qd29 修复已上线，固定 qd28 输入且只改空目标分支；骑士 fortify 的抗性由 `FortifyDefence` 在原生成功回调处理。基础通用技能由既有实现执行，不要求选职或学习；Vortex继续管理职业成长与魔力。
 
 服主明确改用原生六职业，旧职业归档。接管停止旧职业写入及旧战斗成长，保留地图活动、救援、证书和只读归档，通用效果复用既有实现；[接管与实测](TAKEOVER.md)区分最终验证与较早独立预览记录。不能直接部署含其他候选的完整AgentFriend0.4.48。
 

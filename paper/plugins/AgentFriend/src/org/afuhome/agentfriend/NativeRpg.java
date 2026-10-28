@@ -81,6 +81,18 @@ final class NativeRpg {
         if(details&&exam.has("nextCommand"))p.sendMessage("§e[考试下一步] "+exam.get("nextAction").getAsString()+" "+exam.get("nextCommand").getAsString());
         if(details&&!guild.get("status").getAsString().equals("none"))p.sendMessage("§e[在途委托] "+guild.get("title").getAsString()+"；下一步："+guild.get("nextCommand").getAsString());
     }
+    private boolean journey(Player p,boolean intro,boolean json){
+        try{
+            var context=new JsonObject();context.addProperty("canAct",owner.nativeRpgMayAct(p));
+            context.addProperty("downed",owner.isDowned(p));context.addProperty("inDungeon",owner.dungeonParticipant(p));
+            context.add("missingEquipment",new Gson().toJsonTree(DungeonLoadout.missing(p)));
+            for(String id:List.of("food","selfheal")){
+                Long left=owner.readBasicCooldown(p,id);context.add(id+"CooldownMs",left==null?JsonNull.INSTANCE:new JsonPrimitive(left));
+            }
+            call("describeJourney",new Class<?>[]{Player.class,String.class,boolean.class,boolean.class},p,context.toString(),intro,json);
+        }catch(RuntimeException unavailable){p.sendMessage("§e[service_unavailable] RPG指引资料暂不可用；未替你选职或接任务。稍后查询：/mycli status");}
+        return true;
+    }
     boolean route(Player p,String[] args) {
         if(!selected)return false;
         if(args.length==0){AgentCliCatalog.commandHelp(p,new String[]{"--help"});return true;}
@@ -111,14 +123,14 @@ final class NativeRpg {
         if(group.equals("guide")&&(args.length==1||Set.of("start","magic","next","onboarding").contains(args[1])))return route(p,Arrays.asList(args).contains("--json")?new String[]{"intro","--json"}:new String[]{"intro"});
         if(group.equals("intro")){
             if(Arrays.stream(args).skip(1).anyMatch(a->!a.equals("--json"))){p.sendMessage("§e[invalid_argument] intro 无位置参数；未执行。下一步：/mycli intro");return true;}
-            JsonObject s=state(p);if(!s.has("available")||!s.get("available").getAsBoolean()){p.sendMessage("§e角色仍在加载；稍后查询 /mycli status，未替你选职或接任务。");return true;}
-            if(Arrays.asList(args).contains("--json")){var out=new JsonObject();out.addProperty("readOnly",true);out.addProperty("backend","vortex");out.addProperty("class",s.has("combat")?s.get("combat").getAsString():"");out.addProperty("helpCommand","/mycli --help");out.addProperty("rulesCommand","/mycli rules");out.addProperty("nextCommand","/mycli status");p.sendMessage("MC_INTRO "+out);return true;}
-            p.sendMessage("§6[破晓攻略·MMORPG] 原版装备与附魔继续有效；旧四职业与专属技能已归档。基础生存技人人可用，无需选职或学习：/mycli skills list common。");
-            boolean chosen=s.has("combat")&&!s.get("combat").getAsString().isEmpty();
-            p.sendMessage("§b[1 职业] "+(chosen?"已选 "+s.get("combat").getAsString()+"，不用重选。":"先 /mycli profession list，再按本人偏好 profession choose <ID>；不自动选职。"));
-            p.sendMessage("§b[2 技能] /mycli skills list 查本职可用技；skills info <ID>看目标、等级和耗魔；cast <ID>施放，skills prepare <ID>设置武器点击技；learn只按详情花点。");
-            p.sendMessage("§b[3 冒险] /mycli tasks list → tasks info <ID> → tasks accept <ID>，打怪/探索后 tasks status/claim <ID>。四件护甲+本职业武器或法器备齐后 /mycli dungeon list。补给 guild shared；个人箱 arena stash。");
-            return true;
+            return journey(p,true,Arrays.asList(args).contains("--json"));
+        }
+        if(group.equals("status")&&Arrays.stream(args).skip(1).allMatch(a->a.equals("--json"))){
+            boolean json=Arrays.asList(args).contains("--json");journey(p,false,json);if(!json)adventureProgress(p,false,false);return true;
+        }
+        if(group.equals("trade")&&args.length>=2&&Set.of("wallet","auction").contains(args[1].toLowerCase(Locale.ROOT))){
+            try{call("tradeCommand",new Class<?>[]{Player.class,String[].class},p,Arrays.copyOfRange(args,1,args.length));}
+            catch(RuntimeException unavailable){p.sendMessage("§e[service_unavailable] 金币资料暂不可用；未进行交易。稍后查询：/mycli trade wallet");}return true;
         }
         if(group.equals("progress")){
             // Explicit legacy sections must reach their real parser, never be ignored.
@@ -135,7 +147,7 @@ final class NativeRpg {
                 if(Arrays.stream(args).skip(3).anyMatch(a->!a.equals("--json"))){p.sendMessage("§e[invalid_argument] 查询只接受一个技能ID；下一步：/mycli skills --help");return true;}
                 var entry=SpellGuide.find(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
                 if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准前方可站立的地面；平视空中可能没有合法落点，拒绝时不扣魔力。");
-                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+(entry.id().equals("blink")?"；瞄准前方可站立的地面，空中无落点会拒绝":"")+"。用法："+entry.command());return true;
+                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；瞄准前方可站立的地面，空中无落点会拒绝":"")+"。用法："+entry.command());return true;
             }
             String[] normalized=args.clone();
             normalized[0]=switch(group){case "职业"->"profession";case "spells","技能"->"skills";case "任务路线"->"tasks";default->group;};

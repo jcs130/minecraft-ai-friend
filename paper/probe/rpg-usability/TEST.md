@@ -25,3 +25,5 @@
 `basic-survival.mjs` 验证未选职角色七项基础生存技能的真实效果、原生魔力和失败无消耗；先等区块，再建立并确认实际QA落脚场地。`basic-cold.mjs` 使用前序bs5成功记录，核对冷启动后的基础可用性、不安全归乡、旁观和缺魔力拒绝。村庄warp仅在QA临时改到测试平台，测试后恢复其原QA配置；绝不改正式warp或授予测试角色OP/管理传送权限。
 
 QwenPaw 使用固定2.2.2环境，在 `paper/integrations/numen-paper/qwenpaw` 运行 `python -m unittest discover -s . -p "test_*.py"`。不设独立联机的 opt-in 配置时，原有6项跳过；不会调用模型。新版 MC_RPG/旧版 MC_STATUS、缺失读数和动作回执均有覆盖。
+
+`journey.mjs` 检查逐步指引的实际饱食/治疗、真实击杀与任务金币、装备缺项、查询不代做、私有反馈和拍卖故障前置拒绝。`journey-cold.mjs` 在正常停启同一候选后读取原UUID、职业、金币与任务，使用前序的同一标签。`auction-audit.mjs` 仅用于旧原生拍卖缺少交货的故障复现；它会消耗测试物品与金币，退出0不代表功能正常，须读取deliveryConfirmed；不得对正式服运行。

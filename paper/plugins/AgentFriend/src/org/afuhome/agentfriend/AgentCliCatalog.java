@@ -353,6 +353,10 @@ final class AgentCliCatalog {
     private static Map<String, Spec> catalogSpecs(List<SpellGuide.Entry> spells,boolean nativeRpg) {
         Map<String, Spec> specs = new LinkedHashMap<>(SPECS);
         if(nativeRpg){
+            nativeSpec(specs,"intro","read","/mycli intro","按真实饥饿、职业、装备和任务给一个当前目标","免费只读，不代选职、接取、学习或领奖；物理目标须实际行动，verifyCommand仅核对");
+            nativeSpec(specs,"trade.wallet","read","/mycli trade wallet","查Vortex任务金币余额","金币、背包绿宝石、旧试炼余额分别记账；服务不可用不伪造0余额");
+            nativeSpec(specs,"trade.auction","read","/mycli trade auction","查玩家拍卖维护状态：交付故障，暂不能使用","免费只读，未上架、未扣款；不把扣钱或成功台词当作收到物品");
+            var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；wallet；auction","村民交易报价和位置；wallet查任务金币，auction查维护状态",trade.requires()+"；金币入口只读取本人经济账户",trade.returns()));
             // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
             specs.keySet().removeIf(id->Set.of("profession","skills","spells","cast").contains(id.split("\\.")[0]));
             nativeSpec(specs,"profession","group","/mycli profession <动作>","职业：list/info 查询，choose 主动选择，status 核对","choose 只选一次，授予本职业初始装备；查询免费");
@@ -441,7 +445,7 @@ final class AgentCliCatalog {
             if(!words.isEmpty()&&id.isEmpty())throw new IllegalArgumentException("未知命令");
             String path=id.isEmpty()?"/mycli":"/mycli "+id.replace('.',' ');
             String prefix=id.isEmpty()?"":id+".";
-            Set<String> compatibility=Set.of("help","intro","list","explain","spells","status.full","challenge.begin");
+            Set<String> compatibility=Set.of("help","list","explain","spells","status.full","challenge.begin");
             var children=new LinkedHashMap<String,Spec>();
             for(Spec spec:specs.values()){
                 if(!spec.id().startsWith(prefix)||spec.id().equals(id)||compatibility.contains(spec.id()))continue;
@@ -453,7 +457,7 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=switch(prefix){case ""->List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
+                var order=switch(prefix){case ""->nativeRpg?List.of("intro","status","profession","skills","tasks","dungeon","inventory"):List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
@@ -483,7 +487,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -591,6 +595,7 @@ final class AgentCliCatalog {
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
         if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";
         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";
+        if(id.equals("trade.wallet")||id.startsWith("trade.auction"))query="/mycli trade wallet；/mycli inventory；实际拍卖窗口";
         out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
         return out;
     }
