@@ -585,16 +585,25 @@ function CompleteSnapshots([string]$path) {
     } | Sort-Object Name -Descending)
 }
 
-function PruneSnapshots([string]$path) {
-    # Keep 14 most recent snapshots plus one from each of the latest 14 backup
-    # days. Manual maintenance must not erase every older recovery point.
+function RetainedSnapshots([array]$completed, [datetime]$asOf = (Get-Date)) {
+    # Owner requested smaller history after the native RPG release. Keep a
+    # recent recovery window, seven calendar days, and explicit recovery pins.
+    $recent = @($completed | Select-Object -First 3)
+    $cutoff = $asOf.Date.AddDays(-6).ToString('yyyyMMdd')
+    $daily = @($completed | Where-Object { $_.Name.Substring(0,8) -ge $cutoff } |
+        Group-Object { $_.Name.Substring(0,8) } |
+        ForEach-Object { $_.Group | Select-Object -First 1 })
+    $pinned = @($completed | Where-Object {
+        (Test-Path -LiteralPath (Join-Path $_.FullName '.keep')) -or
+        (Test-Path -LiteralPath (Join-Path $_.FullName '.pinned'))
+    })
+    return @($recent + $daily + $pinned | ForEach-Object { $_.FullName } | Select-Object -Unique)
+}
+
+function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
     $root = [IO.Path]::GetFullPath($path).TrimEnd('\')
     $completed = @(CompleteSnapshots $root)
-    $recent = @($completed | Select-Object -First 14)
-    $daily = @($completed | Group-Object { $_.Name.Substring(0, 8) } |
-        ForEach-Object { $_.Group | Select-Object -First 1 } |
-        Sort-Object Name -Descending | Select-Object -First 14)
-    $keep = @($recent + $daily | ForEach-Object { $_.FullName } | Select-Object -Unique)
+    $keep = @(RetainedSnapshots $completed $asOf)
     foreach ($old in @($completed | Where-Object { $keep -notcontains $_.FullName })) {
         $resolved = [IO.Path]::GetFullPath($old.FullName).TrimEnd('\')
         if (-not $resolved.StartsWith(($root + '\'), [StringComparison]::OrdinalIgnoreCase) -or

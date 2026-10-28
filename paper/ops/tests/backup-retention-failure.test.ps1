@@ -14,8 +14,8 @@ function Remove-Item([string]$LiteralPath,[switch]$Recurse,[switch]$Force,[strin
  throw [IO.DirectoryNotFoundException]::new('Simulated long client dependency path')
 }
 PruneSnapshots $taskRoot
-if($script:taskDeletes -ne 2 -or $script:taskWarnings.Count -ne 2){throw 'Retention failure was not handled'}
-if(@(CompleteSnapshots $taskRoot).Count -ne 14){throw 'Incomplete removal still advertises a complete snapshot'}
+if($script:taskDeletes -ne 13 -or $script:taskWarnings.Count -ne 13){throw 'Retention failure was not handled'}
+if(@(CompleteSnapshots $taskRoot).Count -ne 3){throw 'Incomplete removal still advertises a complete snapshot'}
 if(@(Get-ChildItem -LiteralPath $taskRoot -Directory).Count -ne 16){throw 'Mock deleted a directory'}
-if(@(Get-ChildItem -LiteralPath $taskRoot -Recurse -Force -Filter '.pruning').Count -ne 2){throw 'Missing incomplete markers'}
+if(@(Get-ChildItem -LiteralPath $taskRoot -Recurse -Force -Filter '.pruning').Count -ne 13){throw 'Missing incomplete markers'}
 'Backup retention failure: 4 checks passed; production untouched'

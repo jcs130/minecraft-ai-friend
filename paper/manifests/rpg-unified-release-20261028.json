@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "state": "candidate-verified-maintenance-in-progress",
+  "state": "deployed-and-verified",
   "releaseId": "rpg-unified-release-20261028-r1",
   "runtimeTarget": {
     "AgentFriend": "0.4.47.27-vortex",
@@ -39,16 +39,33 @@
   },
   "migration": {
     "rate": "1:1",
-    "status": "awaiting verified complete cold backups",
+    "status": "committed-and-no-replay-verified",
     "previewAccounts": 5,
     "previewGold": 3202,
     "neverRepeat": true,
-    "unknownTransactions": "journal and pending index, no automatic replay"
+    "unknownTransactions": "journal and pending index, no automatic replay",
+    "accounts": 5,
+    "coins": 3202
   },
   "knownLimits": [
     "Native auction disabled after reproduced charge-without-delivery bug",
     "No remote Java/Bedrock/mobile visual or long-term autonomous combat claim",
     "Skill/MCP reference source updated; download bundles not republished"
   ],
-  "releaseDocument": "paper/docs/RPG_UNIFIED_20261028.md"
+  "releaseDocument": "paper/docs/RPG_UNIFIED_20261028.md",
+  "verifiedAt": "2026-10-28T23:42:49.222343+08:00",
+  "backup": {
+    "stamp": "20261028-230739",
+    "bothComplete": true
+  },
+  "formalChecks": 81,
+  "unrelatedJarsPreserved": 47,
+  "sourceCommit": "01a3b105",
+  "maintenance": {
+    "outerBackupTaskResult": 267014,
+    "independentCompletionVerified": true,
+    "additionalPaperRestart": false,
+    "backupTaskTimeLimitNow": "PT2H",
+    "nativeTaskDefinitionPreserved": true
+  }
 }

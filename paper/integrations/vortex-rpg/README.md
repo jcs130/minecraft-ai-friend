@@ -1,8 +1,8 @@
 # VortexRPG原生接管
 
-本目录是API适配和窄补丁。**2026-10-28已发布**AgentFriend0.4.47.25、VortexRPG qd29、QiandengjiRpg0.2.4；基础生存技能、职业/技能/任务与回执修复见[正式发布](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。
+本目录是API适配和窄补丁。**2026-10-28已发布**AgentFriend0.4.47.27、VortexRPG qd29、QiandengjiRpg0.2.6；技能、金币与储物统一见[正式发布](../../docs/RPG_UNIFIED_20261028.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[基础生存修复](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)、[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。
 
-后续 `.26 / RPG0.2.5` 是**未部署候选**：`intro/status` 以真实生存、装备和任务给一个当前目标，任务列表/详情分清本人状态，`trade wallet` 查任务金币。已在隔离服复现原生拍卖扣款不交货，候选明确拒绝新增拍卖操作，不能宣传交易已完成。构建和验收范围见 [RPG 可用性](../../docs/RPG_USABILITY_20261028.md)，不覆盖玩家配置或迁移存档；不新增 Agent 循环或模型调用。
+此前 `.26 / RPG0.2.5` 的指引已合入正式 `.27 / 桥0.2.6`，并完成[RPG金币与技能统一](../../docs/RPG_UNIFIED_20261028.md)：`intro/status` 以真实生存、装备和任务给一个当前目标，任务列表/详情分清本人状态，`trade wallet` 查任务金币。已在隔离服复现原生拍卖扣款不交货，当前版本明确拒绝新增拍卖操作，不能宣传拍卖交付已修复。构建和验收范围见 [RPG 可用性](../../docs/RPG_USABILITY_20261028.md)，旧余额经停服双盘核验后1:1迁入金币，其他存档保留；不新增Agent循环或模型调用。
 
 `patch-cast-targets.py` 的 qd29 修复已上线，固定 qd28 输入且只改空目标分支；骑士 fortify 的抗性由 `FortifyDefence` 在原生成功回调处理。基础通用技能由既有实现执行，不要求选职或学习；Vortex继续管理职业成长与魔力。
 

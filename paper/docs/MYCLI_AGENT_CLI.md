@@ -2,11 +2,11 @@
 
 ## 版本与生效范围
 
-统一版 `.27 / 桥0.2.6` 待发布，见 [统一说明](RPG_UNIFIED_20261028.md)：旧试炼余额、回收、商店和玩家委托统一Vortex金币；旧熟练度/研习归档；个人箱精确远程存取与满包提示。以下早期候选描述保留历史，以实际部署清单为准。
+统一版 `.27 / 桥0.2.6` 已上线，见 [统一说明](RPG_UNIFIED_20261028.md)：旧试炼余额、回收、商店和玩家委托统一Vortex金币；旧熟练度/研习归档；个人箱精确远程存取与满包提示。
 
-Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精简入口；`.24 / RPG 0.2.3` 候选接续帮助统一与任务分页，并补齐组队、技能详情和失败指引，仍未部署，见 [RPG 可用性](RPG_USABILITY_20261028.md)。生产版本以 [部署清单](../manifests/current-deployment.json) 为准，源码更新不等于已上线。
+Vortex 为当前职业、技能和原生任务的唯一权威。帮助、任务分页、组队、技能详情和失败指引均已合入当前版本，见 [RPG 可用性](RPG_USABILITY_20261028.md)。生产版本以 [部署清单](../manifests/current-deployment.json) 为准，源码更新不等于已上线。
 
-服主明确寒霜、星芒箭、闪现、归乡、圣愈、饱食和造物是基础生存技能；后续`.25 / RPG 0.2.4`候选恢复原效果，免选职和学习，不占职业点击槽。入口`skills list common`，单项`skills info <ID>`；基础施放不加`--json`。见[基础生存说明](BASIC_SURVIVAL_SKILLS_20261028.md)。
+服主明确寒霜、星芒箭、闪现、归乡、圣愈、饱食和造物是基础生存技能；此前`.25 / RPG 0.2.4`已恢复原效果，免选职和学习，不占职业点击槽。入口`skills list common`，单项`skills info <ID>`；基础施放不加`--json`。见[基础生存说明](BASIC_SURVIVAL_SKILLS_20261028.md)。
 
 ## Agent 只需先记这些
 
@@ -21,8 +21,8 @@ Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精�
 
 - `status`：本人生命、饱食、职业等级、魔力、当前活动与下一步；不自动选职、接任务或领奖。它不是登录验收，认证仍以真实 `MC_AUTH_SUCCESS` 和可用世界为准。
 - `--help`：当前命令目录，首页只有七项常用入口；照返回的下一页逐步查。`help` 和不带参数的 `/mycli` 使用同一目录。
-- `tasks list`：当前原生 RPG 冒险任务，查询不接单；新候选每页最多七项，按返回的下一页继续。旧分类查询仍兼容原公会路线。
-- `tasks status`：进行中原生任务的真实缺项；新候选可加一个任务 ID 聚焦查询。旧探索单用 `progress guild` / `guild status`，不会因查原生任务而被取消。
+- `tasks list`：当前原生 RPG 冒险任务，查询不接单；每页最多七项，按返回的下一页继续。旧分类查询仍兼容原公会路线。
+- `tasks status`：进行中原生任务的真实缺项；可加一个任务 ID 聚焦查询。旧探索单用 `progress guild` / `guild status`，不会因查原生任务而被取消。
 - `skills status`：本人当前后端的技能概览；单项用 `skills info <ID>`，`skills status <ID>` 保持兼容。以实际返回字段为准，未返回的冷却不能推成零。
 - Vortex选职后初始主动技可用，learn按详情学习节点，prepare设置点击技能，cast施放主动技；通用技能无需重学。只读详情不代学，选职业不代花点，具体罗盘操作见[技能四步](SKILL_USAGE_QUICKSTART.md)。
 - `progress`：裸命令汇总原生任务与冒险者段位、考试、在途公会委托；`progress main/training/guild/challenge/story` 按原分区查询与分页，专项完成不等于主线毕业。
@@ -57,9 +57,9 @@ Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精�
 
 显式 JSON 按实际后端保留 `MC_RPG`（当前 Vortex）、`MC_STATUS`（旧后端）、`MC_PAGE`、`MC_CLI_HELP` 等协议，不能写死所有状态都是 `MC_STATUS`。默认短文本不重复 UUID、会话和时间戳。认证、安全、危险与死亡等必要回执保留。
 
-旧入口仅在帮助明确支持时使用 `--json`，不支持会在动作前拒绝。新候选的原生 RPG 查询/动作支持格式旗标前置或后置；`intro --json` 返回简短只读 `MC_INTRO`。通用施法仍沿原回执，不冒称全部旧动作均已支持 JSON。
+旧入口仅在帮助明确支持时使用 `--json`，不支持会在动作前拒绝。当前原生 RPG 查询/动作支持格式旗标前置或后置；`intro --json` 返回简短只读 `MC_INTRO`。通用施法仍沿原回执，不冒称全部旧动作均已支持 JSON。
 
-旧 `list`、`explain`、`capabilities`、`spells` 和 `status full` 继续可用，不重复宣传为另一套主入口。`list`、`explain` 等旧阅读入口可能给已报名的专项记录证明；`status full` 还有原详细状态/刷新行为。做指定 CLI 实练时按课程执行；普通发现用 `--help`，查进度用 `progress`。
+旧 `list`、`explain`、`capabilities`、`spells` 和 `status full` 继续可用，不重复宣传为另一套主入口。`list`、`explain` 等旧阅读入口可能给已报名的专项记录证明；Vortex 启用时 `status full` 同样读取原生状态。做指定 CLI 实练时按课程执行；普通发现用 `--help`，查进度用 `progress`。
 
 ## 遇到具体需求再查
 
@@ -69,7 +69,7 @@ Vortex 为当前职业、技能和原生任务的唯一权威。本文描述精�
 | 多处方块是否受保护 | `/mycli protect batch --help`；最多64目标，默认按相同判定合并，不逐格刷长文 |
 | 找公共装备与补给 | `/mycli guild shared`；门内私人物资需主人授权 |
 | 个人大背包 | `/minepacks:backpack open`，54格；与任务物品袋、个人奖励箱独立 |
-| 远程个人箱 | `/mycli arena stash`打开；`/mycli arena stash pages`选10页共540格。通用travel已可用，无需学习；成功远程开页2魔力，实体箱旁免费 |
+| 远程个人箱 | `arena stash inventory`查背包0–35槽；`arena stash putslot <槽> <数量>`直接存入；`arena stash list`核对，`arena stash page 1`开页取物。10页共540格，成功远程存入/开页2魔力，实体箱旁免费 |
 | 拍照 | `/mycli photo menu`；耗2魔力，无需准备空地图，成片自动进入个人奖励箱 |
 | 练习试炼塔 | `/mycli arena --help`，与正式攻略通关分开 |
 | 遗迹地下城 | `/mycli dungeon --help`；先看难度与装备，主动开场或加入 |
@@ -90,4 +90,4 @@ python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs /path/to/prepar
 
 该检查不启动游戏或读玩家存档。JAR 正式上线仍需按[维护流程](OPERATIONS.md)完成当次确认、提前提醒、完整恢复备份和正常停启；不使用全服 reload。原日期记录移至 [CLI 历史](MYCLI_AGENT_CLI_HISTORY.md)，玩法细则从 [文档入口](../../docs/README.md)按需读取。
 
-本轮 259 项 JVM 契约、9 项自部署边界和同摘要隔离 Paper 的24项联机检查通过；核对默认短文本、显式 JSON、旧 CLI 实练回执、任务/物品保持与旁人隔离，并正常保存停服。测试账号的一次状态查询由 JSON 930字符降到短文本115字符，仅代表该样本。首轮过快连续测试触发原版防刷屏，已保留失败记录，按1250毫秒间隔复测后连接持续正常；没有据此调整生产防刷屏。不是正式部署或自主 Agent 长期玩法验收。
+较早 CLI 精简版本的259项 JVM 契约、9项自部署边界和同摘要隔离 Paper 的24项联机检查通过；核对默认短文本、显式 JSON、旧 CLI 实练回执、任务/物品保持与旁人隔离，并正常保存停服。测试账号的一次状态查询由 JSON 930字符降到短文本115字符，仅代表该样本。首轮过快连续测试触发原版防刷屏，已保留失败记录，按1250毫秒间隔复测后连接持续正常；没有据此调整生产防刷屏。当前统一版已另行部署并通过81项正式检查，完整隔离存取、金币与冷启动证据见[RPG统一](RPG_UNIFIED_20261028.md)；不代表长期自主玩法验收。

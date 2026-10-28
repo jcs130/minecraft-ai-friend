@@ -1,9 +1,9 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.25、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.4已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
+**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.27、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.6已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/RPG_UNIFIED_20261028.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
 
 
-统一版 `.27 / 桥0.2.6` 已通过隔离验证并进入已批准维护：金币统一、旧技能成长归档、满包提示和直接远程存箱，见[本批说明](paper/docs/RPG_UNIFIED_20261028.md)。完成正式启动验收后更新顶部版本；此段不代表安装已完成。
+统一版 `.27 / 桥0.2.6` 已正式部署并通过核验：任务/回收/试炼/商店/委托共用金币，旧技能成长归档，背包满会提示直接远程存箱。见[发布与验收](paper/docs/RPG_UNIFIED_20261028.md)。
 
 连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
