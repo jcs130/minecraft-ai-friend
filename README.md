@@ -2,6 +2,9 @@
 
 **当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.22、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.1已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/NATIVE_RPG_RELEASE_20261027.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心已到rc.116，源码更新不冒充外部客户端已升级。
 
+
+连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
+
 **六职业共用一套成长：**骑士、法师、游侠、牧师、驯兽师和工程师，由本人主动选择。原生技能、天赋、经验与金币，八张冒险委托、五处活动、首层攻略及组队救援已接入原`/mycli`；旧职业停止写入并保留归档。先看[技能与装备](paper/docs/SKILL_USAGE_QUICKSTART.md)。完整0.4.48仍含其他候选，不可直接替换正式JAR。
 
 最新修复：原版附魔保留；旧技能停用会给原因与下一步，`/mycli intro`查看选职、技能、任务和副本整备。更新提醒按账号私下一次，反作弊异步属性读取已修复。[0.4.47.22发布与回退](paper/docs/RPG_GUIDANCE_20261028.md)。

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Watchdog', 'Backup', 'Mirror')]
     [string]$Action = 'Status'
 )
@@ -96,14 +96,36 @@ function Stop-SpectateWatcher {
     Log 'Spectate watcher stopped'
 }
 
+function Test-AgentEyeWatcherCommandLine([string]$line) {
+    # Match Node's main module, not another program mentioning the watcher.
+    $exe = [regex]::Escape($node)
+    $main = [regex]::Escape($agentEyeWatcherScript)
+    return $line -match ('^\s*(?:"' + $exe + '"|' + $exe + ')\s+(?:"' + $main + '"|' + $main + ')(?:\s|$)')
+}
+
 function AgentEyeWatcherProcess {
     @(Get-CimInstance Win32_Process -Filter "name='node.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.ExecutablePath -eq $node -and $_.CommandLine -like "*$agentEyeWatcherScript*" })
+        Where-Object { $_.ExecutablePath -eq $node -and (Test-AgentEyeWatcherCommandLine $_.CommandLine) } |
+        Sort-Object ProcessId -Unique)
 }
 
 function Start-AgentEyeWatcher {
     $existing = @(AgentEyeWatcherProcess)
-    if ($existing.Count -gt 1) { throw 'Multiple Agent Eye watcher processes; manual inspection required.' }
+    if ($existing.Count -gt 1) {
+        # Called under the existing maintenance lock. Keep the newest verified
+        # watcher and remove only duplicate instances of this exact main module.
+        $keep = $existing | Sort-Object CreationDate,ProcessId -Descending | Select-Object -First 1
+        foreach ($duplicate in @($existing | Where-Object { $_.ProcessId -ne $keep.ProcessId })) {
+            $fresh = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $duplicate.ProcessId) -ErrorAction Stop
+            if ($fresh.CreationDate -ne $duplicate.CreationDate -or $fresh.ExecutablePath -ne $node -or
+                -not (Test-AgentEyeWatcherCommandLine $fresh.CommandLine)) { throw 'Watcher identity changed; duplicate recovery refused.' }
+            Stop-Process -Id $fresh.ProcessId -Confirm:$false -ErrorAction Stop
+            Log ("Stopped duplicate Agent Eye watcher PID=" + $fresh.ProcessId + "; kept PID=" + $keep.ProcessId)
+        }
+        Start-Sleep -Milliseconds 500
+        $existing = @(AgentEyeWatcherProcess)
+        if ($existing.Count -ne 1 -or $existing[0].ProcessId -ne $keep.ProcessId) { throw 'Watcher recovery did not leave one verified instance.' }
+    }
     if ($existing.Count -eq 1) { return }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $opsDir "agent-eye-watcher-$stamp.stdout.log"

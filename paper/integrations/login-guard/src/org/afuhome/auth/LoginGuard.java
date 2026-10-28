@@ -293,13 +293,12 @@ public final class LoginGuard {
         } catch(Throwable e) { ready=false; diagnostic("refresh",e); }
         publishHeartbeat();
     }
-    void publishHeartbeat() {
+    synchronized void publishHeartbeat() {
         if(heartbeat!=null) try {
             var names=server.getAllPlayers().stream().filter(this::authorized).map(Player::getUsername).toList();
             var tmp=Path.of(heartbeat+".tmp"); Files.createDirectories(heartbeat.getParent());
             var observations=server.getAllPlayers().stream().map(this::authenticationState).toList();
-            Files.writeString(tmp,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names,"sessionStates",observations)));
-            Files.move(tmp,heartbeat,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
+            AtomicHeartbeatSnapshot.write(heartbeat,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names,"sessionStates",observations)));
         } catch(Exception e) {
             // A read-side observation failing to reach disk cannot revoke a
             // live LibreLogin session. Existing commands still check the real
