@@ -60,9 +60,9 @@ python D:\Projects\QiandengJi\tools\drama3\drama3_health.py --base http://192.16
 nvidia-smi --query-gpu=memory.used,memory.free --format=csv,noheader,nounits
 ```
 
-`--smoke` 会在被忽略的 `server/drama3-service/smoke/` 下保存三段可复听 WAV，并检查长度、采样率和非静音。默认不传 `max_seconds`，用于验证服务任务的默认设置；在仍运行旧任务配置时可加 `--max-seconds 10` 验证请求端临时方案。语音识别在试验中对中文人物名识别不稳定，一句桐人短句也偏离原文；自动冒烟不等于音色和发音已经人工验收。
+`--smoke` 会在被忽略的 `server/drama3-service/smoke/` 下保存三段可复听 WAV，并检查长度、采样率和非静音。默认不传 `max_seconds`，用于验证服务任务的默认设置；排查旧任务配置时可加 `--max-seconds 10` 验证请求端临时方案。2026-10-28 10:58 的管理员安装已将实际任务动作设为 `--max-seconds 10`；从本机 LAN IP 不传额外上限的安装后合成、独立合成和看门狗重启后连续两轮三音色合成均通过。11:00 的定时看门狗检查返回 0，服务未重启；其他局域网设备的连通性仍待从该设备实测。语音识别在试验中对中文人物名识别不稳定，一句桐人短句也偏离原文；自动冒烟不等于音色和发音已经人工验收。
 
-如需临时停止服务：`Stop-ScheduledTask -TaskName Drama3-Speech`，随后禁用 `Drama3-Watchdog`，否则看门狗会再次拉起。恢复时先启用看门狗，再 `Start-ScheduledTask -TaskName Drama3-Speech`。如要恢复此前本机 LLM 部署，先停止并禁用两个 Drama 3 任务，读取 `server/drama3-service/previous-state.json`，再按其中记录恢复 Docker restart policy、容器运行状态和 `TqLLM LAN Proxy`。不要在 Drama 3 仍占显存时启动本机 Qwen。
+如需临时停止服务：在管理员 PowerShell 中先禁用 `Drama3-Watchdog`，再 `Stop-ScheduledTask -TaskName Drama3-Speech`，否则看门狗会再次拉起；当前非管理员会话无权禁用该任务。恢复时先启用看门狗，再 `Start-ScheduledTask -TaskName Drama3-Speech`。如要恢复此前本机 LLM 部署，先停止并禁用两个 Drama 3 任务，读取 `server/drama3-service/previous-state.json`，再按其中记录恢复 Docker restart policy、容器运行状态和 `TqLLM LAN Proxy`。不要在 Drama 3 仍占显存时启动本机 Qwen。
 
 这台 3090 机器专用于 Drama 3 后，LLM 应由另一台机器提供；本服务不会自动改写 QwenPaw 的模型供应商地址，也不会替换现有游戏 `/tts`/IndexTTS-2.5 兼容网关。要让游戏角色实际改用此接口，客户端或兼容网关需按调用契约单独接入和验收。
 
