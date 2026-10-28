@@ -38,6 +38,7 @@ const connectionSpec: Tool = {
 const eventsSpec: Tool = {
   name: 'mc_events', description: 'Read bounded Minecraft events after a cursor: chat, announcements, task completion, '
     + 'damage and observed state. Poll while an accepted action is running; acceptance alone is not completion. '
+    + 'readout.execution reports registered work for this runtime/generation and its latest terminal; a newer event cursor alone is not execution progress. Earlier runs remain outside that snapshot. '
     + 'For after >0, include BOTH the exact returned run and nextCursor. A cursor error returns an explicit recovery read; do not repeat the invalid cursor. A gap means some events have left the recent buffer. '
     + 'Archived events are excluded unless explicitly requested. Reading does not prove the Agent has acted on a message.',
   inputSchema: { type: 'object', properties: {
@@ -162,7 +163,8 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
         return outcome({ text: JSON.stringify(runtime.status()) });
       }
       if (name === events.name) {
-        return outcome({ text: JSON.stringify(await runtime.events(args, extra.signal)) });
+        const page=await runtime.events(args, extra.signal);
+        return outcome({ text:JSON.stringify(page),data:page,meta:{eventRead:page.readout} });
       }
       if (name === artifact.name) {
         if (args.action === 'put') {
