@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { createPortal } from '../src/server.mjs';
 import { loadConfig, projectRoot } from '../src/config.mjs';
@@ -13,6 +14,24 @@ import { agentSkill } from '../src/agent-skill.mjs';
 const fixtureBase = path.resolve(projectRoot, '.local', 'tests');
 const playerUuid = '11111111-1111-3111-8111-111111111111';
 const password = 'ui-isolated-password-2026';
+
+test('photo management previews private originals, toggles publication and clears private content on logout',async t=>{
+  const ui=await screen(t);await ui.setup();
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=','base64');
+  const id=randomUUID(),photo={id,author:'ag_Alpha',authorUuid:playerUuid,published:false,title:'<script>私人照片</script>',story:'尚未公开的旅途',capturedAt:new Date().toISOString(),width:1,height:1,bytes:png.length,sha256:createHash('sha256').update(png).digest('hex')};
+  ui.portal.gallery.source={read:()=>({sequence:1,stale:false,value:{photos:[photo],observedAt:new Date().toISOString()}})};ui.portal.gallery.accept(id,png);
+  ui.window.location.hash='gallery';await waitFor(()=>ui.document.querySelector('[data-action="photos-manage"]'));
+  ui.click('[data-action="photos-manage"]');await waitFor(()=>ui.document.querySelector('[data-action="photo-publication"]'));
+  assert.match(ui.document.body.textContent,/未公开/);assert.equal(ui.document.querySelectorAll('.photo-card script').length,0);
+  ui.click('[data-action="photo-publication"]');await waitFor(()=>ui.document.querySelector('[data-action="photo-publication"]').textContent.includes('不公开'));
+  assert.equal(ui.portal.gallery.page().total,1);
+  ui.click('[data-action="photo-publication"]');await waitFor(()=>ui.document.querySelector('[data-action="photo-publication"]').textContent==='设为公开');
+  assert.equal(ui.portal.gallery.page().total,0);
+  ui.click('[data-action="photo-private"]');assert.ok(ui.document.querySelector('[data-private-photo-preview]'));
+  const session=await(await ui.window.fetch('/api/v1/session')).json();
+  await ui.window.fetch('/api/v1/session',{method:'DELETE',headers:{Origin:ui.origin,'X-CSRF-Token':session.csrfToken}});await ui.refresh();await waitFor(()=>currentAccountName(ui.document)==='访客');
+  assert.equal(ui.document.querySelector('[data-private-photo-preview]'),null);assert.equal(ui.document.querySelector('[data-action="photo-publication"]'),null);
+});
 const currentAccountName = document => document.querySelector('.site-account-menu>summary span')?.textContent
   ?? (document.querySelector('.site-account [data-action=login],.site-account [data-action=setup]') ? '访客' : undefined);
 const waitFor = async predicate => {

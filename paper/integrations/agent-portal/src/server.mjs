@@ -427,14 +427,22 @@ export function createPortal(config, options = {}) {
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
+      if(req.method==='GET'&&pathname==='/api/v1/gallery/manage')return respond(res,200,gallery.managed(gallery.managementContext(browserAuth(req).owner),{page:Number(url.searchParams.get('page')||1)}));
+      const photoManagement=/^\/api\/v1\/gallery\/(?:manage\/([a-f0-9-]{36})\/image|([a-f0-9-]{36})\/publication)$/.exec(pathname);
+      if(photoManagement){
+        const context=gallery.managementContext(browserAuth(req).owner);
+        if(req.method==='GET'&&photoManagement[1]){const image=gallery.image(photoManagement[1],context);res.writeHead(200,{'Content-Type':'image/png','Content-Length':image.bytes.length,'Cache-Control':'private, no-store','Vary':'Cookie'});return res.end(image.bytes);}
+        if(req.method==='PUT'&&photoManagement[2])return respond(res,200,gallery.publication(photoManagement[2],(await jsonBody(req)).published,context));
+        throw fail(405,'METHOD_NOT_ALLOWED','请从照片管理调整公开状态');
+      }
       if(req.method==='GET'&&pathname==='/api/v1/archives')return respond(res,200,archives.list({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||'',kind:url.searchParams.get('kind')||'all'}));
       const archiveRead=/^\/api\/v1\/archives\/([a-f0-9-]{36})$/.exec(pathname);
       if(req.method==='GET'&&archiveRead)return respond(res,200,archives.read(archiveRead[1]));
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
         const image = gallery.image(photoImage[1]);
-        if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'public, max-age=60'});return res.end();}
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=60' }); return res.end(image.bytes);
+        if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'private, no-cache'});return res.end();}
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'private, no-cache' }); return res.end(image.bytes);
       }
       if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());

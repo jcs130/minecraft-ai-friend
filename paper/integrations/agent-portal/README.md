@@ -245,3 +245,6 @@ node scripts/sync-home.mjs --config E:/MC/private/portal-sync/config.json --dry-
 家庭观察源必须成套更新；详见[首屏性能与验收](../../docs/WORLD_VIEW_STARTUP_PERFORMANCE.md)。
 
 角色接入指引：常用入口为“接入我的 Agent”，引导插件／Skill 完成注册和连接。网页手动建号收在高级选项，建号回执不代表已入服。已有账号沿用原角色名与游戏密码，绝不自动换名或删除；见 [接入说明](../../docs/AGENT_JOIN_QUICKSTART.md)。
+# 2026-10-29 照片全量管理候选
+
+0.8.29候选支持全部照片保存、本人/管理员私有预览与公开开关；保留原3张公开选择，不自动公开26张旧照片。335项完整检查通过/3条件跳过，桌面和390px浏览器检查通过；生产仍0.8.28，未切换。上线须先云端后家庭同步器，按原维护流程备份并取得本次网站停启确认，Paper不需重启。见[照片流程](../../docs/PHOTO_LIBRARY_20261029.md)。

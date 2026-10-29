@@ -10,7 +10,7 @@ assert (a.stage/'.qa-only').read_text()=='VORTEX_TAKEOVER_QA_ONLY'
 assert not a.output.exists()
 with socket.socket()as s:s.bind(('127.0.0.1',25928))
 classes=a.output.with_suffix('.build');classes.mkdir()
-cp=os.pathsep.join(map(str,[a.vortex,*a.stage.rglob('libraries/**/*.jar')]))
+cp=os.pathsep.join(map(str,[a.vortex,a.stage/'plugins/Vault-1.7.3.jar',*a.stage.rglob('libraries/**/*.jar')]))
 subprocess.run(['E:/MC/jdk/jdk-21.0.12.1+1/bin/javac.exe','-proc:none','--release','21','-encoding','UTF-8','-cp',cp,'-d',str(classes),str(Path(__file__).with_name('UsabilityQA.java'))],check=True)
 with zipfile.ZipFile(a.output,'w',zipfile.ZIP_DEFLATED)as z:
  for f in classes.rglob('*.class'):z.write(f,f.relative_to(classes).as_posix())
