@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+Version 0.2.129 adds an explicit offline operator profile for a confirmed clean
+disconnect whose cancelled event waiter left a restart fence. It verifies the
+current native tool index, returned requests and archived terminal effects,
+then records an immutable acknowledgement through the existing CAS recovery
+contract. Missing or unknown action effects still refuse recovery. It does not
+start a body, replay work, change planner policy or certify a game goal.
+
 Version 0.2.128 consumes independently built core rc.130, retaining raw player
 packet identity, bounded server chat decoration and non-waking own echoes.
 World identity and position/container memory isolation from rc.129 are included.

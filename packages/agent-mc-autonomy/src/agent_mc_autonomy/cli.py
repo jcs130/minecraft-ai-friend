@@ -76,6 +76,7 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
     parser.add_argument("--evidence-id", default="")
     parser.add_argument("--attest-prior-processes-exited", action="store_true")
     parser.add_argument("--acknowledge-unknown", action="store_true", help="Explicitly retain old outcome as unknown; never verifies/replays it")
+    parser.add_argument("--clean-stop-read-gap", action="store_true", help="Offline recovery profile: confirmed disconnect and all indexed actions have native terminals")
     args = parser.parse_args(argv)
     try:
         raw = tomllib.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -107,20 +108,23 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
             from .runtime_bundle import apply_runtime_defaults
             raw = apply_runtime_defaults(raw, bundle_root=args.bundle_root, registration_file=args.bundle_registration)
         settings = Settings.parse(raw)
+        if args.clean_stop_read_gap and (args.command not in {"recovery-assess", "acknowledge-unknown"} or args.native_request_id):
+            raise ValueError("clean_stop_read_gap_requires_offline_recovery_and_native_tool_index")
         data = args.data.resolve() if args.data else settings.data_root(Path("runtime").resolve())
         directory = data / "sessions" / settings.identity / "host"
         mailbox = Mailbox(directory)
         if args.command in {"recovery-assess", "acknowledge-unknown"}:
-            from .recovery import acknowledge_unknown, assess
+            from .recovery import acknowledge_unknown, assess, assess_clean_stop
             if args.command == "recovery-assess":
-                result = assess(settings, data, native_request_ids=args.native_request_id)
+                result = assess_clean_stop(settings, data) if args.clean_stop_read_gap else assess(settings, data, native_request_ids=args.native_request_id)
             else:
                 result = acknowledge_unknown(settings, data, expected_identity=args.expected_identity,
                     expected_session=args.expected_session, expected_run=args.expected_run,
                     expected_state_sha256=args.expected_state_sha256, expected_status_sha256=args.expected_status_sha256,
                     acknowledgement_id=args.request_id, operator=args.operator, reason=args.reason,
                     evidence_id=args.evidence_id, attest_prior_processes_exited=args.attest_prior_processes_exited,
-                    choice="acknowledge-unknown" if args.acknowledge_unknown else "", native_request_ids=args.native_request_id)
+                    choice=("acknowledge-clean-stop-read-gap" if args.clean_stop_read_gap else "acknowledge-unknown")
+                        if args.acknowledge_unknown else "", native_request_ids=args.native_request_id)
         elif args.command == "status":
             result = observation(directory)
         elif args.command == "receipt":

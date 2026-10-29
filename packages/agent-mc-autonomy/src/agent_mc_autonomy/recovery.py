@@ -120,7 +120,9 @@ def require_no_pending_acknowledgement(host, *, same_id=None):
                 raise RuntimeError("recovery_original_binding_pair_missing")
             state_raw, status_raw = _read(host / "host-state.json", 65536), _read(host / "status.json")
             state, status = json.loads(state_raw), json.loads(status_raw)
-            if (not isinstance(state, dict) or not isinstance(status, dict) or status.get("phase") != "failed"
+            clean_stop = (isinstance(status, dict) and status.get("phase") == "stopped" and status.get("disconnect_confirmed") is True
+                          and status.get("game_connected") is False and status.get("autonomy_running") is False)
+            if (not isinstance(state, dict) or not isinstance(status, dict) or not (status.get("phase") == "failed" or clean_stop)
                     or state.get("stopped") is not True or state.get("uncertain") is not True
                     or state.get("pending") != [] or "inflight_request" not in state or state["inflight_request"] is not None):
                 raise RuntimeError("recovery_pre_mutation_not_established")
@@ -235,6 +237,105 @@ def assess(settings, data_root, *, native_request_ids=()):
             "eligible_shape": shape and not pending_ack, "classification": "unknown", "verified": False, **evidence}
 
 
+def _clean_stop_evidence(host, status, run, native_request_ids=()):
+    """Prove returned calls and archived terminals; never infer a goal result."""
+    if native_request_ids:
+        raise ValueError("recovery_clean_stop_uses_native_tool_index")
+    result = _evidence(host, status, run, ())
+    client = host.parent / "client"
+    archive_raw = _read(client / f"events-{run}.jsonl")
+    terminals, admitted = {}, set()
+    def unknown(value):
+        execution = value.get("execution") or {}
+        if not isinstance(execution, dict) or not isinstance(execution.get("evidence") or {}, dict):
+            raise RuntimeError("recovery_native_execution_invalid")
+        evidence = execution.get("evidence") or {}
+        data = value.get("data")
+        return ((isinstance(data, dict) and data.get("status") == "unknown") or evidence.get("outcomeUnknown") is True
+                or evidence.get("outcomeKnown") is False or evidence.get("nativeStatus") == "unknown")
+    for line in archive_raw.splitlines():
+        if not line.strip():
+            continue
+        event = json.loads(line)
+        execution = event.get("execution") or {}
+        if not execution.get("id"):
+            continue
+        key = (execution.get("kind"), execution["id"])
+        if unknown(event):
+            raise RuntimeError("recovery_native_action_unknown")
+        if execution.get("terminal") is True:
+            if execution.get("phase") not in {"completed", "blocked", "cancelled", "failed", "expired"}:
+                raise RuntimeError("recovery_native_terminal_invalid")
+            terminals[key] = execution["phase"]
+        else:
+            admitted.add(key)
+    if admitted - terminals.keys():
+        raise RuntimeError("recovery_native_terminal_missing")
+    index_raw = _read(client / "tools.jsonl", 64 * 1024 * 1024)
+    requests = {}
+    for line in index_raw.splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("run") != run:
+            continue
+        request = row.get("callId")
+        if not isinstance(request, str) or not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,200}", request):
+            raise RuntimeError("recovery_tool_index_request_invalid")
+        # These are the coordinator's numbered observation/control calls, not
+        # model actions. A cancelled event waiter is the gap being acknowledged.
+        if (re.fullmatch(r"[0-9a-f-]{36}:\d+", request)
+                and row.get("name") in {"mc_queue", "mc_events", "mc_protocol"}):
+            continue
+        requests[request] = row.get("name")
+    if not requests or len(requests) > 4096:
+        raise RuntimeError("recovery_tool_index_request_limit")
+    request_hashes, linked, total_bytes = [], 0, 0
+    for request in sorted(requests):
+        raw = _read(client / "requests" / (_hash(request.encode()) + ".json"), 1024 * 1024)
+        total_bytes += len(raw)
+        if total_bytes > 64 * 1024 * 1024:
+            raise RuntimeError("recovery_evidence_limit")
+        record = json.loads(raw)
+        outcome = record.get("outcome")
+        if record.get("requestId") != request or record.get("phase") != "returned" or not isinstance(outcome, dict):
+            raise RuntimeError("recovery_native_request_unreturned")
+        if unknown(outcome):
+            raise RuntimeError("recovery_native_action_unknown")
+        execution = outcome.get("execution") or {}
+        if execution.get("id"):
+            key = (execution.get("kind"), execution["id"])
+            if key not in terminals:
+                raise RuntimeError("recovery_native_terminal_missing")
+            linked += 1
+        request_hashes.append([request, _hash(raw)])
+    if not linked:
+        raise RuntimeError("recovery_native_terminal_link_required")
+    if _hash(archive_raw) != result["sources"][0]["sha256"]:
+        raise RuntimeError("recovery_native_evidence_changed")
+    result["sources"] += [{"role": "native_tool_index", "sha256": _hash(index_raw)},
+                          {"role": "returned_request_index", "sha256": _hash(_encode(request_hashes)), "count": len(requests)}]
+    result["returned_request_count"] = len(requests)
+    result["linked_terminal_count"] = linked
+    result["read_gap_only"] = True
+    return result
+
+
+def assess_clean_stop(settings, data_root):
+    """Readonly operator profile for a confirmed disconnected clean stop."""
+    observed = assess(settings, data_root)
+    host = _root(settings, data_root)
+    status = _json(host / "status.json")
+    closed = (status.get("phase") == "stopped" and status.get("disconnect_confirmed") is True
+              and status.get("game_connected") is False and status.get("autonomy_running") is False
+              and status.get("pending") == [])
+    observed.update(_clean_stop_evidence(host, status, observed["native_run"]))
+    observed["eligible_shape"] = (closed and observed["stopped"] and observed["uncertain"]
+        and observed["pending_empty"] and observed["inflight_empty"] and not observed["dispatching_count"]
+        and not observed["owner_held"] and not observed["pending_acknowledgement"])
+    return observed
+
+
 def _write_immutable(path, body):
     if path.exists():
         if _read(path) != body:
@@ -283,10 +384,14 @@ def acknowledge_unknown(settings, data_root, *, expected_identity, expected_sess
     for digest in (expected_state_sha256, expected_status_sha256):
         if not isinstance(digest, str) or not re.fullmatch("[a-f0-9]{64}", digest):
             raise ValueError("recovery_sha256_required")
-    if expected_identity != settings.identity or choice != "acknowledge-unknown" or attest_prior_processes_exited is not True:
+    clean_stop = choice == "acknowledge-clean-stop-read-gap"
+    if (expected_identity != settings.identity or choice not in {"acknowledge-unknown", "acknowledge-clean-stop-read-gap"}
+            or attest_prior_processes_exited is not True):
         raise ValueError("recovery_explicit_operator_attestation_required")
-    if not native_request_ids:
+    if not native_request_ids and not clean_stop:
         raise ValueError("recovery_original_native_request_required")
+    if clean_stop and native_request_ids:
+        raise ValueError("recovery_clean_stop_uses_native_tool_index")
     metadata = {"operator": _text(operator, 120), "reason": _text(reason, 600), "evidence_id": _text(evidence_id, 200),
                 "prior_processes_exited": "externally_attested_not_independently_verified"}
     contract = {"identity": expected_identity, "runtime_session": expected_session, "native_run": expected_run,
@@ -310,7 +415,7 @@ def acknowledge_unknown(settings, data_root, *, expected_identity, expected_sess
         if receipt := committed_first():
             return receipt
         require_no_pending_acknowledgement(host, same_id=acknowledgement_id)
-        observed = assess(settings, data_root, native_request_ids=native_request_ids)
+        observed = assess_clean_stop(settings, data_root) if clean_stop else assess(settings, data_root, native_request_ids=native_request_ids)
         if (observed["runtime_session"] != expected_session or observed["native_run"] != expected_run
                 or observed["status_sha256"] != expected_status_sha256 or observed["dispatching_count"]):
             raise RuntimeError("recovery_binding_changed")
@@ -333,7 +438,9 @@ def acknowledge_unknown(settings, data_root, *, expected_identity, expected_sess
                     or not observed["pending_empty"] or not observed["inflight_empty"]):
                 raise RuntimeError("recovery_empty_stopped_unknown_required")
             status = json.loads(before_status)
-            if status.get("phase") != "failed" or status.get("game_connected") is not False or status.get("autonomy_running") is not False:
+            closed = clean_stop and status.get("phase") == "stopped" and status.get("disconnect_confirmed") is True and status.get("pending") == []
+            if (not (status.get("phase") == "failed" and not clean_stop or closed)
+                    or status.get("game_connected") is not False or status.get("autonomy_running") is not False):
                 raise RuntimeError("recovery_failed_offline_status_required")
             if any(row["classification"] == "unlinked_unknown" for row in observed["old_work"]):
                 raise RuntimeError("recovery_unlinked_old_work")
@@ -355,7 +462,8 @@ def acknowledge_unknown(settings, data_root, *, expected_identity, expected_sess
         # Recheck both authoritative files after preparing the immutable evidence.
         if _hash(_read(host / "status.json")) != expected_status_sha256:
             raise RuntimeError("recovery_status_changed")
-        if _evidence(host, json.loads(before_status), expected_run, native_request_ids)["sources"] != prepared["sources"]:
+        evidence_reader = _clean_stop_evidence if clean_stop else _evidence
+        if evidence_reader(host, json.loads(before_status), expected_run, native_request_ids)["sources"] != prepared["sources"]:
             raise RuntimeError("recovery_native_evidence_changed")
         if _hash(_read(host / "host-state.json", 65536)) == expected_state_sha256:
             _replace_state(host / "host-state.json", after_state, expected_state_sha256)
