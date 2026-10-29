@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.134",
+  "version": "0.5.7-rc.134-planreview.2",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -31,6 +31,10 @@
     "minecraft-agent-knowledge": "./bin/minecraft-agent-knowledge.mjs"
   },
   "exports": {
+    "./review": {
+      "types": "./dist/types/src/client/plan-review.d.ts",
+      "default": "./dist/runtime/src/client/plan-review.js"
+    },
     "./observations": {
       "types": "./dist/types/src/observations.d.ts",
       "default": "./dist/runtime/src/observations.js"
