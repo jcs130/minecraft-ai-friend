@@ -57,7 +57,7 @@ from .planner import (
 )
 from .reply_quality import repeated_plain_reply
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
-from .tool_schema import argument_error, provider_schema
+from .tool_schema import argument_error, provider_schema, validated_selector
 from .viewer_public import tool_receipt
 
 PROTOCOL = "agent-mc/v1"
@@ -85,10 +85,18 @@ def conversation_event(event):
             and not (event.get("meta") or {}).get("staleEpoch"))
 
 
-def observation_call(name, arguments):
+def observation_call(name, arguments, catalogue=(), result=None):
     """Classify native queued reads without treating their task IDs as actions."""
     if name in READ_ACTIVITY_TOOLS or empty_catalogue_query(name, arguments):
         return True
+    if not (result or {}).get('execution'):
+        spec = next((tool for tool in catalogue if tool['name'] == name), {})
+        tags = spec.get('_meta', {}).get(PROTOCOL, {}).get('tags', [])
+        access = (result or {}).get('meta', {}).get('readAccess', {})
+        if access.get('protocol') == 'agent-mc-read-access/v1' and access.get('readOnly') is True:
+            return True
+        if spec.get('annotations', {}).get('readOnlyHint') is True or ('read' in tags and not {'write', 'act', 'speak'}.intersection(tags)):
+            return True
     if name != "mc_do":
         return False
     steps = arguments.get("steps")
@@ -152,7 +160,7 @@ def admission_fingerprint(facts):
     return encode(parts) if parts else None
 
 
-def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="default"):
+def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="default", exposed_tools=()):
     # Native catalogues can repeat a tool. Dispatch/help use the first schema;
     # advertise that same contract exactly once to providers that reject names.
     unique = {}
@@ -176,7 +184,8 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
             for key, item in value.items():
                 # Short parameter semantics (units, coordinate order, volume
                 # limits) are needed to use a schema, not optional long manuals.
-                if descriptions and key == "description" and isinstance(item, str) and len(item) <= 240 and (numeric_field(value) or len(item) <= 120):
+                if descriptions and key == "description" and isinstance(item, str) and (
+                        len(item) <= 120 or numeric_field(value) and len(item) <= 1200):
                     result[key] = item
                     continue
                 if key in {"description", "title", "examples", "$comment", "default"}:
@@ -193,6 +202,7 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
     direct = DIRECT_TOOLS | ({"mc_capabilities", "mc_operations", "mc_result", "mc_wait", "mc_cancel", "mc_notices"} if native else set())
     available = sorted(tool["name"] for tool in catalogue if tool["name"] not in HIDDEN_TOOLS)
     advanced = [name for name in available if name not in direct]
+    direct |= set(exposed_tools).intersection(available)
     if context_mode == "full":
         # The native manuals use native names for goals, methods, memory and
         # tactics. Full mode must expose those actual contracts, not silently
@@ -225,7 +235,7 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
         if tool["name"] == "mc_protocol":
             description = PROTOCOL_PLANNER_DESCRIPTION
         elif tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
-            description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
+            description = 'Execute real flat steps. goto uses at=[absolute x,y,z] or [x,z]; relative components require "~n" (bare -64 is absolute). find requires target; even with direction, an initial match can return without walking. For gathering use collect block/count; craft uses item/count. Read mc_help for exact parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed.'
         elif tool["name"] == "mc_scout" and not description:
             description = "Read-only observations/dry runs; use mc_do for real actions. Read mc_help for the selected skill's native parameters, limits and returned coverage."
         # Scout paging/defaults belong to the native contract. An older local
@@ -487,6 +497,11 @@ class Controller:
         self.effect_recovery = EffectRecovery()
         self.container_recovery = ContainerRecovery()
         self.skill_references = {}
+        self.discovered_tools = []
+        self.efficiency = {'schemaVersion': 1, 'scope': 'current_runtime', 'model_requests': 0,
+            'proposed_tool_calls': 0, 'executed_tool_calls': 0, 'validation_rejections': 0,
+            'successful_read_calls': 0, 'accepted_native_tasks': 0, 'resolved_schema_failures': 0,
+            'observed_body_change_samples': 0, 'goal_verified': False}
         self.action_requests = {}
         self.action_scopes = {}
         self.native_outcomes = []
@@ -505,11 +520,13 @@ class Controller:
 
     def observe_game_facts(self, facts):
         if body_changed(self.game_facts, facts):
+            self.count_efficiency('observed_body_change_samples')
             self.clear_read_activity()
         self.game_facts = facts
         fresh_scope = identity(facts)
         life = lifecycle(facts)
         if fresh_scope != self.game_scope:
+            self.discovered_tools.clear()
             self.read_activity.clear()
             self.observation_reads.clear()
             self.spatial_handoffs = 0
@@ -588,7 +605,10 @@ class Controller:
 
     def record_tool_failure(self, name, arguments, result, request_id=None):
         failure = failure_context(self.bridge.tools, name, arguments, result)
-        failure["observation_only"] = observation_call(name, arguments)
+        if result.get('origin') == 'controller_schema' and result.get('dispatched') is False:
+            failure['validation'] = {'phase': 'schema', 'dispatched': False,
+                                     'selector': validated_selector(self.bridge.tools, name, arguments)}
+        failure["observation_only"] = observation_call(name, arguments, self.bridge.tools, result)
         failure["receipt"] = {"request_id": request_id, "turn_id": self.turn,
                               "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
         self.retain_tool_failure(failure)
@@ -623,7 +643,10 @@ class Controller:
     def retain_tool_failure(self, failure):
         # A failed read is not a new body plan. Keep both causes, with the body
         # rejection first so budgeted context cannot evict it in favor of a read.
-        if failure.get("observation_only") and self.tool_failure and not self.tool_failure.get("observation_only"):
+        if failure.get('validation') and self.tool_failure and self.tool_failure.get('native_execution'):
+            self.tool_failure['call_failure'] = {key: failure[key] for key in
+                ('tool', 'error', 'next_step', 'receipt', 'validation') if key in failure}
+        elif failure.get("observation_only") and self.tool_failure and not self.tool_failure.get("observation_only"):
             self.tool_failure["observation_failure"] = {
                 key: failure[key] for key in ("tool", "error", "next_step", "receipt") if key in failure}
         else:
@@ -631,6 +654,49 @@ class Controller:
         # The planner's full diagnostic stays local. Other hosts receive the
         # same actual error plus a reference, without private arguments/schema.
         self.publish(tool_failure=tool_failure_view(self.tool_failure))
+
+    def resolve_schema_failure(self, name, arguments):
+        """A valid same-selector call repairs input, never a body/goal failure."""
+        failure = self.tool_failure
+        if not failure:
+            return
+        def matching(row):
+            validation = row.get('validation') or {}
+            return (row.get('tool') == name and validation.get('phase') == 'schema'
+                    and validation.get('dispatched') is False and not row.get('native_execution')
+                    and all(k in arguments and encode(arguments[k]) == encode(v) for k, v in validation.get('selector', {}).items()))
+        if matching(failure):
+            self.tool_failure = None
+        elif isinstance(failure.get('call_failure'), dict) and matching(failure['call_failure']):
+            failure.pop('call_failure')
+        else:
+            return
+        self.count_efficiency('resolved_schema_failures')
+        self.publish(tool_failure=tool_failure_view(self.tool_failure) if self.tool_failure else None)
+
+    def count_efficiency(self, field, amount=1):
+        self.efficiency[field] += amount
+        self.publish(efficiency=dict(self.efficiency))
+
+    def discover_requested_tool(self, name, arguments, result):
+        if result.get('failed') or result.get('execution'):
+            return
+        if name == 'mc_tool_help':
+            target = arguments.get('name')
+        elif observation_call(name, arguments, self.bridge.tools, result):
+            # prepare_call unwraps an explicit mc_invoke before dispatch. The
+            # successful requested read is discovery too; no extra help call is
+            # required merely to expose that same tool's real schema.
+            target = name
+        else:
+            return
+        available = {tool['name'] for tool in self.bridge.tools} - HIDDEN_TOOLS - DIRECT_TOOLS
+        if not isinstance(target, str) or target not in available:
+            return
+        if target in self.discovered_tools:
+            self.discovered_tools.remove(target)
+        self.discovered_tools.append(target)
+        self.discovered_tools = self.discovered_tools[-4:]
 
     def receipt(self, value):
         if uncertain(value):
@@ -1017,10 +1083,14 @@ class Controller:
                     "action": "put", "text": original[offset:offset + 16000], "mime": "text/plain"})) ["handle"])
             # The legacy context fallback counts UTF-8 bytes, not characters. Chinese
             # help pages must not become a 10 KiB preview that evicts its own reply.
-            preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
-            view = {"text": preview, "failed": result.get("failed"),
-                    "execution": view.get("execution"),
-                    "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"}
+            from .receipt_projection import typed_receipt_preview
+            structured = typed_receipt_preview(view)
+            if structured is not None:
+                view = structured
+            else:
+                preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
+                view = {"text": preview, "failed": result.get("failed"), "execution": view.get("execution")}
+            view.update(original_chunks=refs, retrieve="mc_original(handle,offset,limit), chunks in order")
             admission = (result.get("meta") or {}).get("admission")
             if isinstance(admission, dict) and admission.get("accepted") is False:
                 view["meta"] = {"admission": {key: admission[key] for key in ("accepted", "rule", "kind") if key in admission}}
@@ -1554,7 +1624,7 @@ class Controller:
         if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
             raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
         if error := argument_error(self.bridge.tools, name, arguments):
-            self.record_tool_failure(name, arguments, {"text": error})
+            self.record_tool_failure(name, arguments, {"text": error, 'origin': 'controller_schema', 'dispatched': False})
             raise ModelCallRejected(error)
         if self.lookahead_anchor and (name not in IMMEDIATE_READ_TOOLS | {"mc_do", "mc_scout"}
                 or name in {"mc_do", "mc_scout"} and arguments.get("queue", "append") != "append"):
@@ -1706,6 +1776,7 @@ class Controller:
             result = queue_error
             compact = await self.archive_receipt(request_id, name, result)
         else:
+            self.count_efficiency('executed_tool_calls')
             result, compact = await self.dispatch(name, arguments, request_id,
                 attribution={"controller": "system2", **({"decisionId": self.turn} if self.turn else {})})
         self.publish(viewer_action=tool_receipt(name, arguments, result))
@@ -1721,7 +1792,7 @@ class Controller:
                                    "or explain a real waiting condition. Behavioral improvement remains unverified.")
             self.publish(planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
             return result, compact, True
-        read_only = observation_call(name, arguments)
+        read_only = observation_call(name, arguments, self.bridge.tools, result)
         data = result.get("data")
         if (name == "mc_do" and not read_only and not result.get("failed")
                 and result.get("execution") is None and not self.current_work()
@@ -1741,6 +1812,8 @@ class Controller:
             return result, compact, True
         correction_boundary = False
         if not result.get("failed"):
+            self.resolve_schema_failure(name, arguments)
+            self.discover_requested_tool(name, arguments, result)
             if name in REUSABLE_IMMEDIATE_READS and not result.get("execution"):
                 if len(self.read_answers) >= 32:
                     self.read_answers.pop(next(iter(self.read_answers)))
@@ -1748,12 +1821,14 @@ class Controller:
                     "at": time.monotonic(), "answer": json.loads(compact),
                     "received_at": datetime.now(timezone.utc).isoformat(), "request_id": request_id, "turn_id": self.turn}
             if read_only:
+                self.count_efficiency('successful_read_calls')
                 self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
                 # Acceptance owns a task, not physical progress. Only validated
                 # terminal effect readbacks above may reset the read history.
                 self.unactioned_replies = 0
+                self.count_efficiency('accepted_native_tasks')
                 self.publish(unactioned_replies=0)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
@@ -1799,6 +1874,7 @@ class Controller:
         # Validation is not an uncertain action. Keep the exact response above,
         # let the next bounded decision correct it, and leave the body connected.
         self.invalid_tool_calls += 1
+        self.count_efficiency('validation_rejections')
         self.planner_notice = "No tool was dispatched. " + str(error)
         calls = response.get("tool_calls") if isinstance(response, dict) else None
         if isinstance(error, ToolJSONRejected):
@@ -1943,6 +2019,11 @@ class Controller:
                 # chooses its own work; originals and unresolved tools remain.
                 excluded = self.deferred_read_tools(facts)
                 round_tools = [tool for tool in tools if tool["function"]["name"] not in excluded]
+                promoted = model_tools(self.bridge.tools, context_mode=self.settings.context_mode,
+                    tool_schema_profile=self.tool_schema_profile, exposed_tools=self.discovered_tools)
+                existing_names = {tool['function']['name'] for tool in round_tools}
+                round_tools += [tool for tool in promoted if tool['function']['name'] in self.discovered_tools
+                                and tool['function']['name'] not in existing_names | excluded]
                 if self.lookahead_anchor:
                     round_tools = self.lookahead_tools(round_tools)
                 notice = self.planner_notice
@@ -2060,6 +2141,7 @@ class Controller:
                     return False if round_index==0 else None
                 try:
                     self.model_started_at = datetime.now(timezone.utc).isoformat()
+                    self.count_efficiency('model_requests')
                     self.publish(planner_activity={"phase": "model", **self.model_timing()})
                     death_context=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal) if self.settings.decision_policy.enabled else None
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
@@ -2137,6 +2219,8 @@ class Controller:
                 consumed_ids = {id(consumed[index]) for index in budget["event_delivery"]["included_indices"]}
                 self.recent = [event for event in self.recent if id(event) not in consumed_ids]
                 calls = response.get("tool_calls") or []
+                if isinstance(calls, list):
+                    self.count_efficiency('proposed_tool_calls', len(calls))
                 self.publish(last_message=(response.get("content") or "")[:1200], viewer_decision_at=datetime.now(timezone.utc).isoformat())
                 def offer_narration():
                     if narration_enabled and not self.stop_requested() and not self.preempted:

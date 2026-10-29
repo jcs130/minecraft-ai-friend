@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 1,
+  "scope": "isolated_testing",
+  "observedAt": "2026-10-29T17:58:41.391471+00:00",
+  "model": "qwen3.7-plus",
+  "provider": "online_tokenplan",
+  "imageInput": false,
+  "body": "ag_Kirito",
+  "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+  "core": "0.5.7-rc.130",
+  "autonomy": "0.2.129",
+  "runs": [
+    {
+      "goalRequestId": "08616c78-78a6-4c65-9b4b-cdaf3e93a59c",
+      "goal": "从本人已经完成的原生任务中领取一把真正的武器奖励，并装备到主手；用实际背包和装备状态核对，完成后报告。",
+      "firstModelRequestAt": "2026-10-29T17:21:32.843314+00:00",
+      "plannerReportAt": "2026-10-29T17:22:24.104109+00:00",
+      "modelResponses": 11,
+      "proposedToolCalls": 11,
+      "toolCallNames": [
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_bag",
+        "mc_do",
+        "goal_report"
+      ],
+      "localGoalReportCalls": 1,
+      "failedToolReceipts": 0,
+      "modelAndToolsElapsedSeconds": 51.261,
+      "plannerReportVerified": false,
+      "freshClientObservation": {
+        "at": "2026-10-29T17:22:23.567Z",
+        "dimension": "minecraft:overworld",
+        "position": {
+          "x": 1503.6826517878071,
+          "y": 64,
+          "z": -1311.5153203460004
+        },
+        "health": 20,
+        "food": 20,
+        "inventory": {
+          "mod_1cab0b39:adventurer_guide": 1,
+          "patchouli:guide_book": 2,
+          "oak_log": 4,
+          "pfm:furniture_book": 1,
+          "simukraft:guide_book": 1,
+          "slashblade:proudsoul_tiny": 1,
+          "bread": 8,
+          "wooden_sword": 1,
+          "mod_1cab0b39:record_crystal": 1,
+          "mod_1cab0b39:healing_crystal": 3,
+          "mod_1cab0b39:refining_stone": 4,
+          "mod_1cab0b39:stag_whistle": 1,
+          "touhou_little_maid:smart_slab_init": 1
+        }
+      },
+      "gear": "手里拿着初心者之剑。包里有：面包×8、橡木原木×4、mod_1cab0b39:refining_stone×4、mod_1cab0b39:healing_crystal×3、patchouli:guide_book×2、mod_1cab0b39:adventurer_guide×1、pfm:furniture_book×1、simukraft:guide_book×1、slashblade:proudsoul_tiny×1、初心者之剑 耐久59/59×1、mod_1cab0b39:record_crystal×1、mod_1cab0b39:stag_whistle×1、touhou_little_maid:smart_slab_init×1。鼠标光标空着。",
+      "nativeEffects": [
+        {
+          "operation": "sao.reward.claim",
+          "requestId": "sao_bbc9da0b17281e47cad5ac66ce873dbe3f61e028",
+          "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+          "observedAt": "2026-10-29T17:22:09.097896300Z",
+          "status": "completed",
+          "ok": true,
+          "reason": "native_reward_claimed",
+          "outcomeKnown": true,
+          "changed": true,
+          "inventoryChanges": [
+            {
+              "slot": 37,
+              "before": null,
+              "after": {
+                "id": "minecraft:wooden_sword",
+                "count": 1,
+                "componentFingerprint": "082f54b6faa2fcd0d6621bf8bd0e93222f717024d8014c5c15f83bcef9160fdd",
+                "snbt": "{Count:1b,id:\"minecraft:wooden_sword\",tag:{Damage:0,display:{Name:'{\"text\":\"初心者之剑\",\"italic\":false,\"color\":\"aqua\"}'}}}",
+                "componentsComplete": true
+              }
+            }
+          ]
+        }
+      ],
+      "operatorProvidedGoal": true,
+      "injectedQuestIds": false,
+      "adminItemsGiven": false
+    },
+    {
+      "goalRequestId": "5285932a-6927-48ca-ac05-b3fb91089a3b",
+      "goal": "从本人尚未领取的原生任务奖励中领取一种真正的食物作为补给，用实际背包变化核对，然后报告。原来已有的面包不算本次新增补给。",
+      "firstModelRequestAt": "2026-10-29T17:27:34.871515+00:00",
+      "plannerReportAt": "2026-10-29T17:28:16.381763+00:00",
+      "modelResponses": 8,
+      "proposedToolCalls": 8,
+      "toolCallNames": [
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_invoke",
+        "mc_bag",
+        "mc_sao",
+        "mc_sao",
+        "goal_report"
+      ],
+      "localGoalReportCalls": 1,
+      "failedToolReceipts": 1,
+      "modelAndToolsElapsedSeconds": 41.51,
+      "plannerReportVerified": false,
+      "freshClientObservation": {
+        "at": "2026-10-29T17:28:15.771Z",
+        "dimension": "minecraft:overworld",
+        "position": {
+          "x": 1503.6826517878071,
+          "y": 64,
+          "z": -1311.5153203460004
+        },
+        "health": 20,
+        "food": 20,
+        "inventory": {
+          "mod_1cab0b39:adventurer_guide": 1,
+          "patchouli:guide_book": 2,
+          "oak_log": 4,
+          "pfm:furniture_book": 1,
+          "simukraft:guide_book": 1,
+          "slashblade:proudsoul_tiny": 1,
+          "bread": 8,
+          "wooden_sword": 1,
+          "mod_1cab0b39:record_crystal": 1,
+          "farmersdelight:egg_sandwich": 8,
+          "mod_1cab0b39:healing_crystal": 3,
+          "mod_1cab0b39:refining_stone": 4,
+          "mod_1cab0b39:stag_whistle": 1,
+          "touhou_little_maid:smart_slab_init": 1
+        }
+      },
+      "gear": "手里拿着初心者之剑。包里有：面包×8、farmersdelight:egg_sandwich×8、橡木原木×4、mod_1cab0b39:refining_stone×4、mod_1cab0b39:healing_crystal×3、patchouli:guide_book×2、mod_1cab0b39:adventurer_guide×1、pfm:furniture_book×1、simukraft:guide_book×1、slashblade:proudsoul_tiny×1、初心者之剑 耐久59/59×1、mod_1cab0b39:record_crystal×1、mod_1cab0b39:stag_whistle×1、touhou_little_maid:smart_slab_init×1。鼠标光标空着。",
+      "nativeEffects": [
+        {
+          "operation": "sao.reward.claim",
+          "requestId": "sao_089d4bc0f7a72793ff47729773b4eb790e8a0e32",
+          "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+          "observedAt": "2026-10-29T17:28:08.120794800Z",
+          "status": "completed",
+          "ok": true,
+          "reason": "native_reward_claimed",
+          "outcomeKnown": true,
+          "changed": true,
+          "inventoryChanges": [
+            {
+              "slot": 40,
+              "before": null,
+              "after": {
+                "id": "farmersdelight:egg_sandwich",
+                "count": 8,
+                "componentFingerprint": "9dce8065ad332a9ce54d209edfc0b515b3d50e6a74ee9b667e1e574f8791d1b6",
+                "snbt": "{Count:8b,id:\"farmersdelight:egg_sandwich\"}",
+                "componentsComplete": true
+              }
+            }
+          ]
+        }
+      ],
+      "operatorProvidedGoal": true,
+      "injectedQuestIds": false,
+      "adminItemsGiven": false
+    },
+    {
+      "goalRequestId": "57cf8541-5ec0-4789-87c8-5bf061fb011c",
+      "goal": "完成一个实际采集里程碑：在普通野外新增4个原木，树种不限，使随身各类原木合计从4达到至少8。依据工具契约选择采集能力，核对实际库存增量后报告；不要把读任务书当作本次采木进展，不猜测未核实的坐标。遇到障碍保留实际失败。",
+      "firstModelRequestAt": "2026-10-29T17:37:14.511015+00:00",
+      "plannerReportAt": "2026-10-29T17:41:12.505999+00:00",
+      "modelResponses": 47,
+      "proposedToolCalls": 46,
+      "toolCallNames": [
+        "mc_do",
+        "mc_bag",
+        "mc_do",
+        "mc_do",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_tool_help",
+        "mc_tool_help",
+        "mc_scout",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_original",
+        "mc_do",
+        "mc_queue",
+        "mc_do",
+        "mc_queue",
+        "mc_bag",
+        "mc_bag",
+        "mc_do",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "mc_queue",
+        "goal_report"
+      ],
+      "localGoalReportCalls": 1,
+      "failedToolReceipts": 2,
+      "modelAndToolsElapsedSeconds": 237.995,
+      "plannerReportVerified": false,
+      "freshClientObservation": {
+        "at": "2026-10-29T17:41:11.772Z",
+        "dimension": "minecraft:overworld",
+        "position": {
+          "x": 1465.5,
+          "y": 72,
+          "z": -1298.5
+        },
+        "health": 20,
+        "food": 20,
+        "inventory": {
+          "bread": 8,
+          "patchouli:guide_book": 2,
+          "oak_log": 8,
+          "pfm:furniture_book": 1,
+          "simukraft:guide_book": 1,
+          "slashblade:proudsoul_tiny": 1,
+          "dirt": 1,
+          "mod_1cab0b39:adventurer_guide": 1,
+          "wooden_sword": 1,
+          "mod_1cab0b39:record_crystal": 1,
+          "farmersdelight:egg_sandwich": 8,
+          "mod_1cab0b39:healing_crystal": 3,
+          "mod_1cab0b39:refining_stone": 4,
+          "mod_1cab0b39:stag_whistle": 1,
+          "touhou_little_maid:smart_slab_init": 1
+        }
+      },
+      "actualInventoryDelta": {
+        "oak_log": {
+          "before": 4,
+          "after": 8,
+          "delta": 4
+        }
+      },
+      "operatorProvidedGoal": true,
+      "injectedTargetCoordinates": false,
+      "operatorTeleportedDuringTask": false,
+      "adminItemsGiven": false,
+      "recovery": "Native surface task reached dry supported ground after initial breathing_unconfirmed; no breath guard was bypassed",
+      "nativeTerminalExcerpts": [
+        "[01:40:07→01:41:05 共 58s] 任务#12「去坐标 (1465,72,-1300);采集 4 个橡木原木」完成:\n第 1 步 {\"skill\":\"goto\",\"at\":[1465,72,-1300]} 用时 13s: 到了 (1466, 72, -1300);本次满足目标 (1465, 72, -1300) 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true;沿现有通路到达，未挖掘或垫脚\n第 2 步 {\"skill\":\"collect\",\"block\":\"oak_log\",\"count\":4} 用时 45s: 挖了 4 块橡木原木,实际入包 4 个。mod_1cab0b39:adventurer_guide挖橡木原木不掉东西;工具:橡木原木可徒手采集,已换下耐久工具"
+      ]
+    }
+  ],
+  "artifacts": {
+    "host": "kirito-runtime/data/sessions/923b69d6b199861d747b587d/host",
+    "journals": [
+      "decisions.jsonl",
+      "receipts.jsonl",
+      "backend.log"
+    ]
+  },
+  "limits": [
+    "Explicit operator milestones, not autonomous story selection",
+    "Planner reports remain unverified; native receipts plus independently produced inventory/equipment facts establish the stated outcomes",
+    "Long-term autonomous survival, all mod recipes, special quests and combat are not certified",
+    "These are different tasks, not a controlled A/B speedup experiment",
+    "The first two runs predate the numeric-description fix; the third predates the final find initial-match clarification",
+    "A preceding wood goal was explicitly stopped after a mistaken absolute destination (~,~,-64); it is not counted as success",
+    "Wood recovery required many calls and wait/read traffic; autonomous task selection and navigation efficiency still need work"
+  ],
+  "stoppedFailedAttempt": {
+    "goalRequestId": "7ac11616-a400-4457-9288-8fd36e53a7ef",
+    "stopRequestId": "8bbff33f-8397-4aa5-b22f-e6e19820b074",
+    "reason": "model used an absolute -64 component while saying it intended a relative move",
+    "inputPreserved": [
+      "~",
+      "~",
+      "-64"
+    ],
+    "countedAsSuccess": false,
+    "autoRewritten": false
+  },
+  "validation": {
+    "autonomyPytest": {
+      "passed": 1719,
+      "skipped": 25,
+      "failed": 6,
+      "failures": [
+        "tests/test_installer_paths.py::test_present_long_build_file_does_not_depend_on_hosts_long_path_manifest",
+        "tests/test_runtime_bundle.py::test_bundle_verification_does_not_require_hosts_long_path_manifest",
+        "tests/test_server_login_material.py::test_private_login_material_uses_the_native_scoped_contract",
+        "tests/test_server_login_material.py::test_empty_password_preserves_material_but_never_reuses_another_identity",
+        "tests/test_server_login_material.py::test_missing_or_changed_managed_material_is_not_reported_as_saved",
+        "tests/test_server_login_material.py::test_private_credential_preparation_supports_a_deep_windows_data_directory"
+      ],
+      "knownBaseline": "Unmodified c7da224a reproduced these Windows long-path/DPAPI failures in the previous acceptance; see kirito-acceptance-20261029.json",
+      "log": "analysis/optimization-full-pytest-final.log"
+    },
+    "saoNode": {
+      "passed": 39,
+      "failed": 0,
+      "log": "analysis/optimization-node-tests-final.log"
+    },
+    "saoPython": {
+      "passed": 3,
+      "subtestsPassed": 6
+    },
+    "installedWheelConsumer": {
+      "passed": true,
+      "sourcePathInjected": false,
+      "networkAndChildProcessesDeniedDuringProbe": true,
+      "autonomousAndQueueOnlyVerified": true,
+      "log": "analysis/optimization-packed-consumer-final.log"
+    },
+    "historicalNativeEvidenceRecheck": {
+      "passed": 26,
+      "replayedGameActions": false
+    }
+  },
+  "composition": {
+    "scope": "isolated_testing",
+    "core": "0.5.7-rc.130",
+    "autonomy": "0.2.129",
+    "body": "ag_Kirito",
+    "transport": "mineflayer_forge_native_registry",
+    "adapterFiles": {
+      "integrations\\sao-compat\\craft-fence.cjs": "bda0f8fd5276ba06b2ddd84df999540817a587e19738fb7bf50142da9f78df9d",
+      "integrations\\sao-compat\\forge_client.cjs": "3518b8eac4455d70fb119d1cd296730661abd0996a479e03fc0cbcd8059b3410",
+      "integrations\\sao-compat\\native_registry.cjs": "de31456416351695f08ef75abd8f3b51d6c3be57f785383fb6cf62c459c5d86b",
+      "integrations\\sao-compat\\protection-client.cjs": "57b7f874592fa763fe4c6dfd91bc84a8eca831cf95e59818d29a655256c2df86",
+      "integrations\\sao-compat\\sao_bot.cjs": "dfaa3a8113f6273534aab86538b15d1751da48f995f58b166bd96c15edc8d059",
+      "integrations\\sao-compat\\sao-engine.mjs": "86fba5ec89fff07aa0e54e67b3da3a339b6dafbb0eb8c6def1a4446d0c3fdee3",
+      "integrations\\tau-ceti\\native-bridge\\native-client.cjs": "2179cc02f40057bd9313abe00229dcab33790e87c2f8c7e4fde3d61561794449",
+      "integrations\\tau-ceti\\native-bridge\\operations.json": "627c2113bf6d06bae97b91ac77d2f5e7e64dd633fac2e121bae2913783779ff3",
+      "integrations\\sao-compat\\sao-client.cjs": "28560a55c63f1a43097b2405ca7072fd2fcc19c8dac6b93a46bd7bdca9b93b6b",
+      "integrations\\sao-compat\\sao-operations.json": "7f7f1615347744d2f2fe7a742954e35b3bdd16b54be1a05e2c6ef76567e69d12",
+      "integrations\\sao-compat\\sao-tools.cjs": "6157816fb254386f2f912a1e05f0567ca9054dd9f05063a3389b6258e200b068"
+    },
+    "engineSha256": "79d9060e27437d446b312c2a2c7454e8bb9b41730c2274348ce3edbc3b8d6bf9",
+    "modelKeyStored": false,
+    "paperMemoriesCopied": false,
+    "continuous": true,
+    "coreSourceRevision": "d38ff88ac262ca04a5a938ea4361cbe5f8b4abea",
+    "canonicalCoreSha256": "5a87ee19acfbc30315343b513e851cabc719bb95dd6a58b7555e68f9d7e36db3",
+    "automaticCraftAvailable": false,
+    "saoGameplay": "on_demand_v1",
+    "optimization": "typed_receipts_progressive_discovery_coordinate_contract_v1",
+    "autonomyWheelSha256": "2d945afedb11bca043120003d148c4b39174ccbc58dd193931eab23947592582"
+  },
+  "sourceFiles": {
+    "packages/agent-mc-autonomy/src/agent_mc_autonomy/controller.py": "10b987ffae01c769aa8ee7e5ca0bd2ded4f0749062bba64dc9b269cac180e89d",
+    "packages/agent-mc-autonomy/src/agent_mc_autonomy/receipt_projection.py": "b381e3c0cce496becaeb8b467c3d3ca51d1b87b4ea66b37d10fcd03fbf9f6907",
+    "packages/agent-mc-autonomy/src/agent_mc_autonomy/tool_schema.py": "2d5665453fb75b846878a0c6caa680701ccc3157070e0a732408c5b03d76be66",
+    "integrations/sao-compat/sao-tools.cjs": "6157816fb254386f2f912a1e05f0567ca9054dd9f05063a3389b6258e200b068"
+  },
+  "unverifiedSkillRetest": {
+    "goalRequestId": "6b4ed203-9bdf-44b4-b6e4-17e5f4cc24b1",
+    "modelResponsesBeforeStop": 48,
+    "proposedToolCallsBeforeStop": 48,
+    "publishedCastLinksReceived": true,
+    "nativeReceipts": [
+      {
+        "requestId": "sao_8e391fae865efe7e07bd4f5bfc35f8d020418b16",
+        "observedAt": "2026-10-29T17:52:17.029491200Z",
+        "status": "blocked",
+        "ok": false,
+        "changed": false,
+        "reason": "native_cast_refused_check_resource_cooldown_and_target",
+        "outcomeKnown": true
+      },
+      {
+        "requestId": "sao_25ec755737db6a0d243cedf4ac5505d9664db1b9",
+        "observedAt": "2026-10-29T17:52:42.581493600Z",
+        "status": "blocked",
+        "ok": false,
+        "changed": false,
+        "reason": "native_cast_refused_check_resource_cooldown_and_target",
+        "outcomeKnown": true
+      },
+      {
+        "requestId": "sao_05d37b280c0d1a4bcd79302c96f9e1e4d0b99e9e",
+        "observedAt": "2026-10-29T17:54:30.071782300Z",
+        "status": "completed",
+        "ok": true,
+        "changed": true,
+        "reason": "cast_started_not_hit_confirmed",
+        "outcomeKnown": true
+      }
+    ],
+    "goalVerified": false,
+    "countedAsSuccess": false,
+    "endedBy": "explicit_operator_stop",
+    "reason": "Native cast refusals retained; repeated help/state reads still occurred. No skill gates bypassed."
+  },
+  "finalRuntime": {
+    "observedAt": "2026-10-29T18:00:52.561118+00:00",
+    "phase": "running",
+    "gameConnected": true,
+    "autonomyRunning": true,
+    "uncertain": false,
+    "currentGoal": {
+      "id": "ca6775ef-aca5-40e2-8db3-c1a16bda7d31",
+      "origin": "user",
+      "goal": "在当前营地附近做一次实地巡查：沿已经核实可走的野外路线移动16至32格，核验实际起终点，记录一个看见的资源点或结构的绝对坐标，然后报告。保留实际障碍与已完成部分，完成后再继续成长。",
+      "queue_policy_consumed": false
+    },
+    "observation": {
+      "at": "2026-10-29T18:00:47.624Z",
+      "dimension": "minecraft:overworld",
+      "position": {
+        "x": 1465.5,
+        "y": 72,
+        "z": -1298.5
+      },
+      "health": 20,
+      "food": 20,
+      "inventory": {
+        "bread": 8,
+        "patchouli:guide_book": 2,
+        "oak_log": 8,
+        "pfm:furniture_book": 1,
+        "simukraft:guide_book": 1,
+        "slashblade:proudsoul_tiny": 1,
+        "dirt": 1,
+        "mod_1cab0b39:adventurer_guide": 1,
+        "wooden_sword": 1,
+        "mod_1cab0b39:record_crystal": 1,
+        "farmersdelight:egg_sandwich": 8,
+        "mod_1cab0b39:healing_crystal": 3,
+        "mod_1cab0b39:refining_stone": 4,
+        "mod_1cab0b39:stag_whistle": 1,
+        "touhou_little_maid:smart_slab_init": 1
+      }
+    },
+    "sourceAndRuntimeHashesMatch": true,
+    "serverJvmUnchanged": true
+  }
+}

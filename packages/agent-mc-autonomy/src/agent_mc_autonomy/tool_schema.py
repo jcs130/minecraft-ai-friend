@@ -7,6 +7,25 @@ from jsonschema import validators
 from referencing import Registry
 
 
+def validated_selector(catalogue, name, arguments):
+    """Only already-valid scalar discriminators; never repair an invalid selector."""
+    schema = next((tool.get('inputSchema', {}) for tool in catalogue if tool['name'] == name), {})
+    result = {}
+    for key, spec in schema.get('properties', {}).items():
+        if key not in arguments or not isinstance(spec, dict):
+            continue
+        value = arguments[key]
+        if type(value) not in {str, int, float, bool, type(None)}:
+            continue
+        choices = spec.get('enum', [spec['const']] if 'const' in spec else [])
+        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        if len(encoded.encode()) <= 180 and any(encoded == json.dumps(v, ensure_ascii=False, sort_keys=True) for v in choices):
+            result[key] = value
+        if len(result) == 8:
+            break
+    return result
+
+
 def provider_schema(schema, *, profile="default", wire=False):
     """Project tuple contracts for homogeneous-items provider APIs only.
 

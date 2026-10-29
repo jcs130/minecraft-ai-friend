@@ -18,7 +18,7 @@ def test_visual_progressive_help_invoke_fresh_frame_and_text_fallback(framework_
     async def decide(messages, tools):
         requests.append(messages)
         advertised = {row["function"]["name"]: row["function"] for row in tools}
-        assert "mc_visual" not in advertised
+        assert ("mc_visual" in advertised) is (len(requests) > 1)
         assert "mc_visual" in advertised["mc_tool_help"]["parameters"]["properties"]["name"]["enum"]
         assert "mc_visual" in advertised["mc_invoke"]["parameters"]["properties"]["name"]["enum"]
         if len(requests) == 1:
@@ -26,7 +26,7 @@ def test_visual_progressive_help_invoke_fresh_frame_and_text_fallback(framework_
         if len(requests) == 2:
             assert "raw" in json.dumps(messages)
             assert "observed/historical terrain" in json.dumps(messages)
-            return call("mc_invoke", {"name": "mc_visual", "arguments": {"mode": "first", "raw": True}})
+            return call("mc_visual", {"mode": "first", "raw": True})
         assert has_images(messages) is (vision_enabled and not capture_failed)
         return {"content": "Use fresh textual facts if no image is attached.", "tool_calls": []}
     module, bridge, controller = setup(framework_module, tmp_path, decide)

@@ -7,10 +7,26 @@ SAO_TOOL.description+=' Exact detail example: {"operation":"help","arguments":{"
 SAO_TOOL.description+=' Returned read/help/availableActions contain exact mc_invoke calls; use those observed links.'
 function link(operation,args={}){return {tool:'mc_invoke',arguments:{name:'mc_sao',arguments:{operation,arguments:args}}}}
 /** Derived invocation links, never invented world facts or automatically followed actions. */
-function navigable(reply){
- if(!reply.ok||!reply.data||reply.complete===false)return reply
+function navigable(reply,input={}){
+ if(!reply.ok){
+  if(reply.readOnly&&reply.operation==='sao.quest.show'&&reply.reason==='quest_not_found')return {...structuredClone(reply),retryable:false,next_safe_read:link('sao.quests.list',{filter:'available'})}
+  return reply
+ }
+ if(!reply.data||reply.complete===false)return reply
  const out=structuredClone(reply),d=out.data
- if(reply.operation==='sao.quests.list')for(const q of d.quests??[])q.read=link('sao.quest.show',{quest_id:q.id})
+ if(reply.operation==='sao.status'){
+  for(const row of d.loadout??[])if(row.equipped===true&&row.unlocked===true&&['sword','profession'].includes(row.kind)&&Number.isInteger(row.slot)&&row.slot>=0&&row.slot<(row.kind==='sword'?2:6)){
+   row.castRequest=link('sao.skill.cast',{kind:row.kind,slot:row.slot})
+   row.castHelp=link('help',{operation:'sao.skill.cast'})
+   row.requestIsNotAvailabilityGuarantee=true
+  }
+ }
+ if(reply.operation==='sao.quests.list'){
+  for(const q of d.quests??[])q.read=link('sao.quest.show',{quest_id:q.id})
+  const scope={};for(const k of ['chapter_id','query','limit'])if(input[k]!==undefined)scope[k]=input[k]
+  d.queryOptions={unclaimed:link('sao.quests.list',{...scope,filter:'unclaimed',offset:0}),available:link('sao.quests.list',{...scope,filter:'available',offset:0})}
+  if(Number.isInteger(d.nextOffset)&&d.nextOffset>=0)d.next=link('sao.quests.list',{...scope,filter:d.filter??input.filter??'available',offset:d.nextOffset})
+ }
  if(reply.operation==='sao.professions'){
   for(const p of d.professions??[])p.read=link('sao.professions',{profession_id:p.id})
   if(Number.isInteger(d.id))d.availableActions=[link('sao.profession.choose',{profession_id:d.id})]
@@ -33,7 +49,7 @@ async function executeSaoTool(port,args,ctx,enqueue){
  let requestId,submissionStarted=false
  try{
   ctx?.signal?.throwIfAborted()
-  if(spec.readOnly){const reply=navigable(await port.read(operation,input));return {text:JSON.stringify(reply),failed:reply.ok===false}}
+  if(spec.readOnly){const reply=navigable(await port.read(operation,input),input);return {text:`${operation}: ${reply.status??'unknown'}${reply.reason?' ('+reply.reason+')':''}`,data:{response:reply},failed:reply.ok===false,meta:{readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}}}}
   requestId=args.request_id??port.requestId(ctx?.callId)
   const prepared=await port.prepare(operation,input,requestId)
   ctx?.signal?.throwIfAborted()
@@ -42,7 +58,8 @@ async function executeSaoTool(port,args,ctx,enqueue){
   if(typeof queued==='string'||queued.failed)return queued
   const receipt=await prepared.wait()
   const data={...queued.data,serverOperationRequestId:requestId,serverReceipt:receipt,nativeActionCompleted:receipt.status==='completed'&&receipt.outcomeKnown!==false,goal_completed:false,next_safe_read:link('sao.action_status',{action_request_id:requestId})}
-  return {...queued,text:queued.text+'\n'+JSON.stringify(data),data}
- }catch(error){return {text:JSON.stringify({status:submissionStarted?'unknown':'blocked',reason:error.message,diagnostic:error.diagnostic,example:error.example,requestId,outcomeKnown:!submissionStarted,completed:submissionStarted?null:0,retryable:false,retryAutomatically:false,...(submissionStarted?{next_safe_read:link('sao.action_status',{action_request_id:requestId})}:{})}),failed:true}}
+  if(receipt.status==='unknown')data.status='unknown'
+  return {...queued,text:`${operation}: server=${receipt.status??'unknown'}; reason=${receipt.reason??'unavailable'}. Native queue: ${queued.execution?.id??'not_observed'}. Queue acceptance is separate from the server operation and the overall goal.`,data,failed:queued.failed===true||receipt.ok===false&&receipt.outcomeKnown===true}
+ }catch(error){const data={status:submissionStarted?'unknown':'blocked',reason:error.message,diagnostic:error.diagnostic,example:error.example,requestId,outcomeKnown:!submissionStarted,completed:submissionStarted?null:0,retryable:false,retryAutomatically:false,...(submissionStarted?{next_safe_read:link('sao.action_status',{action_request_id:requestId})}:{})};return {text:JSON.stringify(data),data,failed:true}}
 }
 module.exports={SAO_TOOL,executeSaoTool,navigable}

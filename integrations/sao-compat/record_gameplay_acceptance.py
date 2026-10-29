@@ -77,7 +77,11 @@ def verify(root, output):
                 effects.append({'requestId': receipt['requestId'], 'bodyId': receipt['bodyId'], 'operation': receipt['operation'], 'observedAt': receipt['observedAt'], 'task': receipt['data'].get('task'), 'questCompleted': True})
             if row.get('tool') == 'mc_sao':
                 try:
-                    read = json.loads(result.get('text', ''))
+                    # Current tools return typed data; older immutable evidence
+                    # used a JSON text body. Accept both without inventing data.
+                    read = result.get('data', {}).get('response')
+                    if not isinstance(read, dict):
+                        read = json.loads(result.get('text', ''))
                     if read.get('readOnly') and datetime.fromisoformat(read['observedAt']) >= started:
                         read_times.append(datetime.fromisoformat(read['observedAt']))
                 except (ValueError, KeyError):

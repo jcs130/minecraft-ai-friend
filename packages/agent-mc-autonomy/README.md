@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+Version 0.2.129 preserves typed native results in bounded receipt previews,
+resolves a corrected call's old pre-dispatch schema rejection, and exposes up to
+four advanced schemas after explicit help or a successful requested read. Existing
+`mc_invoke` links remain usable. Runtime efficiency counters measure actual calls,
+rejections and observed body changes; they do not certify task completion.
+See [progressive tools and receipts](docs/progressive-tools-and-receipts.md).
+The independently built core remains rc.130; action ownership, unknown outcomes,
+stopping and native authorization are unchanged.
+
 Version 0.2.128 pins the independently built core rc.130 and accepts an explicit
 Minecraft 1.20.1 Mineflayer engine port with a validated local module/hash pair.
 This opt-in supports the separate SAO Forge acceptance consumer; Java 1.21.1

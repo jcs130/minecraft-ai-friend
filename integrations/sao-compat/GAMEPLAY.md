@@ -36,6 +36,16 @@ FTB 任务通常在满足前置后自动可做，没有人工制造的“已接�
 
 所有原生回执只通过该玩家连接的 `maw_agent:sao_state` 单播，不发送聊天副本。只读请求走 `maw_agent:sao_query`，原始 UTF-8 JSON，查询上限 4 KiB、回复上限 16 KiB；超出回复预算明确标记部分/信息不可用。保护查询和 Forge 自动合成拒绝规则保持。
 
+### 工具展示层（autonomy 0.2.129）
+
+`mc_sao` 的只读 ToolOutcome 把完整原生回执放在 `data.response`，`text` 只保留操作、状态和原因，避免同一 JSON 再次转义复制。写操作仍分别保留原队列的 `execution` 和 `data.serverReceipt`；排队受理、原生操作完成、玩家目标完成分别表达。提交后的未知状态同时写入结构化 `data.status=unknown`，原宿主门禁继续阻止重放。
+
+任务页提供准确的 `read`、`queryOptions.unclaimed`、`queryOptions.available` 和必要的 `next` 调用链接；续页保留原筛选、章节和搜索条件。无效任务 ID 保留 `quest_not_found`，并给出安全的任务列表查询入口，不替玩家挑选任务。所有链接都由模型自行决定是否调用，不自动遍历全部任务。
+
+`sao.status` 仅为本人已经装备且解锁的槽位提供 `castRequest` 和单项 `castHelp`，带真实的 `kind/slot` 参数。冷却读数保留，`requestIsNotAvailabilityGuarantee=true` 明确链接不是可施放保证；资源、目标、原生风格等门禁仍在执行时检查。没有自动绑定、施法或消耗。
+
+这些是工具展示层的兼容改动，原始插件消息、SDK `read()`、服务端回执格式和动作 ID 未改。旧的文本回执证据仍可由 `record_gameplay_acceptance.py` 读取；直接消费当前 ToolOutcome 的程序应读 `data.response`，不能继续对简短 `text` 做 JSON 解码。
+
 ## 重连对账
 
 写操作使用调用 ID 派生或调用者指定的 `request_id`。服务端按本人 UUID 持久化请求和参数指纹，相同请求返回历史结果，换参数复用 ID 明确拒绝；中断的不确定结果保持 `unknown`。不要换编号重放未知操作。
