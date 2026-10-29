@@ -340,7 +340,7 @@ def test_identical_rejected_call_is_not_dispatched_again(framework_module, tmp_p
     run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
     assert len([c for c in bridge.calls if c[0] == "mc_do"]) == 1
     assert len(seen) == 2
-    assert controller.continuation_needed and controller.planner_retry_at > 0
+    assert controller.continuation_needed and controller.planner_retry_at == 0
     assert not controller.pending and controller.inflight_request is None
 
 
@@ -458,7 +458,7 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     if bad_call['arguments'] == '{':
         assert controller.continuation_ready  # One known pre-dispatch JSON correction can run promptly.
     else:
-        assert controller.planner_retry_at > module.time.monotonic()
+        assert controller.planner_retry_at == 0
     assert not bridge.closed and controller.inflight_request is None
     assert not json.loads(controller.state_path.read_text()).get("uncertain")
     assert all(name == "mc_events" or (name == "mc_protocol" and args["action"] in {"begin_turn", "facts", "end_turn"})
@@ -578,7 +578,7 @@ def test_invalid_later_call_rejects_whole_batch_before_reading(framework_module,
     assert "JSON" in controller.planner_notice
 
 
-def test_multiple_mutating_calls_are_rejected_as_a_whole_and_rate_limited(framework_module, tmp_path, run_async):
+def test_multiple_mutating_calls_are_rejected_as_a_whole_without_freezing_other_decisions(framework_module, tmp_path, run_async):
     async def decide(*_):
         result = choose()
         result["tool_calls"] += [{**result["tool_calls"][0], "id": "call-2"}]
@@ -589,9 +589,8 @@ def test_multiple_mutating_calls_are_rejected_as_a_whole_and_rate_limited(framew
     delays = []
     for _ in range(5):
         run_async(controller.turn_once("survive", "prefix", tools))
-        delays.append(controller.planner_retry_at - module.time.monotonic())
-    assert all(delay > 0 for delay in delays)
-    assert delays[-1] >= 59 and delays[-1] <= 60
+        delays.append(controller.planner_retry_at)
+    assert delays == [0] * 5
     assert not any(row[0] == "mc_do" for row in bridge.calls)
     assert controller.inflight_request is None and not bridge.closed
 
