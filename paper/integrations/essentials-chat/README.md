@@ -1,6 +1,6 @@
 # 附近聊天：复用官方 EssentialsXChat
 
-状态：2026-10-29 隔离候选，**尚未安装正式服**。主服已有官方 EssentialsX 2.22.0，新增同版 Chat 模块；不自行实现聊天分发器。
+状态：2026-10-29 已完成正式发布与26项核对，见[发布说明](../../docs/NEARBY_COMMUNICATION_RELEASE_20261029.md)。主服已有官方 EssentialsX 2.22.0，新增同版 Chat 模块；不自行实现聊天分发器。
 
 普通聊天默认只到同一 Bukkit 世界实例的 48 格球形范围内。`!内容` 为本次全服喊话，不切换下一条的默认频道。原版 `/msg 玩家 内容` 继续私聊，可跨世界。格式包含来源世界；附近无人时由原插件私发下一步。Java/Mineflayer 不要求客户端模组，基岩经现有 Geyser 转换，实际基岩显示尚待真机验证。
 
@@ -29,7 +29,7 @@
 
 现代 `player_chat` 同时带原文、真实发送者 UUID 和服务器装饰组件。Mineflayer 的 `messagestr` 可能只显示签名原文；要读频道和世界标签，应读取 `message.unsigned`，保留原数据包身份，不能从标签猜 UUID。原版 whisper 类型及其翻译参数仍是私聊的主要证据。
 
-`/mycli locate list` 已包含世界。新的桥 0.2.10 候选为 `status`、`intro`、原生队伍查询补真实 world key、Bukkit world UUID、位置；仅在同世界计算距离。没有新增一套组队服务、地图或顶层 CLI。
+`/mycli locate list` 已包含世界。已发布的桥 0.2.10为 `status`、`intro`、原生队伍查询补真实 world key、Bukkit world UUID、位置；仅在同世界计算距离。没有新增一套组队服务、地图或顶层 CLI。
 
 ## 验证
 
@@ -39,4 +39,4 @@
 
 早期夹具失败已保留：曾把 Mineflayer 签名正文误当装饰文本，又把 Bukkit 临时权限当作 Essentials 的 LuckPerms 权限；纠正夹具后再验证，不归咎为插件缺陷。
 
-正式安装 JAR 须按既有流程正常停启和发布验收；当前文档及源码提交均不代表附近聊天已经生效。
+本轮已按既有流程正常停启与双盘冷备，附近聊天已生效；后续安装仍需独立维护及实际验收，不能重放已消费脚本。

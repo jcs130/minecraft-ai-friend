@@ -2,8 +2,8 @@
 
 ## 实际证据与上线边界
 
-- 正式仍桥 **0.2.9**、普通全服聊天；没有新增世界事件通道。
-- 桥 **0.2.10** + 官方 EssentialsXChat 为隔离候选，34 项真实联机、248 项原生规则通过；源码范围是 `PlayerLocationView.java`、`VortexBridge.java`、`NativeParties.java`。
+- 正式已为桥 **0.2.10** 与官方附近聊天；没有新增世界事件通道。
+- 桥 **0.2.10** + 官方 EssentialsXChat 已正式发布，34 项真实联机、248 项原生规则通过；源码范围是 `PlayerLocationView.java`、`VortexBridge.java`、`NativeParties.java`。
 - 另4项独立原版协议检查通过。直连同版本 Paper 1.21.1 的 `login.worldState` 为 `{name:"minecraft:overworld",dimension:0}`；换世界后的 `respawn.worldState` 为 `{name:"minecraft:aincrad",dimension:0}`，换回恢复原名。该 Mineflayer 的 `bot.game.dimension` 三次均是 `overworld`。因此 dimension type 不能作为容器/地标/附近事实的唯一索引。
 - 上述原始数据包是在隔离服直接捕获。正式服真实 Bukkit 世界已只读核对，但本轮没有借用真实角色重新登录捕获代理后的完整线上协议；不能把隔离结果说成代理每条路径均已验收。
 

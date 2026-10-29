@@ -7,13 +7,18 @@ export function publicDialogueText(value, maximum = 2000) {
   return clean && !sensitive.test(clean) ? clean : null;
 }
 
-// Actual Paper vanilla chat envelopes only. A forged join line inside a chat
+// Actual Paper vanilla or the deployed official EssentialsXChat envelopes. A forged join line inside a chat
 // stays speech, titles/UUIDs are never inferred from its content. Whisper
 // commands are not accepted: a command log is not proof it was delivered.
 export function parsePublicDialogue(line, date) {
-  const match = /^\[(\d{2}:\d{2}:\d{2})\] \[(?:Server thread|Async Chat Thread - #\d+)\/INFO\]: (?:\[Not Secure\] )?<(?<name>\.?[A-Za-z0-9_]{1,16})> (?<body>.+)$/.exec(line);
+  const envelope=/^\[(\d{2}:\d{2}:\d{2})\] \[(?:Server thread|Async Chat Thread - #\d+)\/INFO\]: (?:\[Not Secure\] )?(?<content>.+)$/.exec(line);
+  if(!envelope)return null;
+  const match = /^<(?<name>\.?[A-Za-z0-9_]{1,16})> (?<body>.+)$/.exec(envelope.groups.content)
+    || /^\[(?<channel>附近|大喇叭)\]\s*\[(?<world>[^\[\]\r\n]{1,64})\] (?<name>\.?[A-Za-z0-9_]{1,16}): (?<body>.+)$/.exec(envelope.groups.content);
   if (!match || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const body = publicDialogueText(match.groups.body), occurredAt = Date.parse(`${date}T${match[1]}+08:00`);
+  const body = publicDialogueText(match.groups.body), occurredAt = Date.parse(`${date}T${envelope[1]}+08:00`);
   if (!body || !Number.isFinite(occurredAt)) return null;
-  return {kind:'chat', playerName:match.groups.name, title:match.groups.name+' 说', body, occurredAt, precision:'second', source:'minecraft.public-chat'};
+  const context=match.groups.channel?`（${match.groups.channel}·${match.groups.world}）`:'';
+  const title=publicDialogueText(match.groups.name+context+' 说',400);if(!title)return null;
+  return {kind:'chat', playerName:match.groups.name, title, body, occurredAt, precision:'second', source:'minecraft.public-chat'};
 }
