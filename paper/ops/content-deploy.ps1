@@ -246,9 +246,11 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
                 $temp = $entry.Target + '.installing'
                 Copy-Item -LiteralPath $entry.Source -Destination $temp
                 if ((Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash -ne $entry.Hash) { throw 'Content copy hash mismatch' }
-                # Windows PowerShell coerces $null to an empty string for this
-                # framework overload. Use an explicit recovery path instead.
-                if ($entry.Before) { [IO.File]::Replace($temp, $entry.Target, ($entry.Backup + '.replace-original')) }
+                # PowerShell 5 coerces plain $null to an empty string. A rollback
+                # file under ops may also be on E: while a junction puts the
+                # target on C:. Keep the verified copy above and pass a real
+                # null: ReplaceFile's optional backup cannot cross volumes.
+                if ($entry.Before) { [IO.File]::Replace($temp, $entry.Target, [System.Management.Automation.Language.NullString]::Value) }
                 else { Move-Item -LiteralPath $temp -Destination $entry.Target }
             } else { Remove-Item -LiteralPath $entry.Target }
             $applied += $entry
@@ -278,7 +280,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
             try {
                 if ($entry.Before) { Copy-Item -LiteralPath $entry.Backup -Destination $entry.Target -Force }
                 elseif (Test-Path -LiteralPath $entry.Target) { Remove-Item -LiteralPath $entry.Target }
-            } catch { Log "CRITICAL content rollback: $($entry.Target): $_" }
+            } catch { $script:contentRecoveryBlocked = $true; Log "CRITICAL content rollback: $($entry.Target): $_" }
         }
         foreach ($entry in $entries) {
             $temp = $entry.Target + '.installing'
