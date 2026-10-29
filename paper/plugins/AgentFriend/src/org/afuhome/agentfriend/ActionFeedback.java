@@ -97,6 +97,10 @@ final class ActionFeedback {
             case "dungeon" -> switch (reason) {
                 case "walk_to_first_room", "party_full_or_not_at_first_room" -> a("未到首室，或队伍已满8人。", "用 " + dungeon + " 核对入口和首室坐标；沿原通道进入首室。加入需在10秒集结期且有空位，否则等下一场。", dungeon);
                 case "muster_closed" -> a("本场10秒集结期已关闭。", "用 /mycli dungeon status 查看场次；等本场结束后到首室与队友重新开场，不要强行加入。", "/mycli dungeon status", dungeon);
+                case "party_data_unavailable" -> a("队伍资料暂不可用，未开场。", "稍后重新查询队伍；不会把未知队伍当单人，也不要重复开场。", "/mycli guild party status");
+                case "party_leader_required" -> a("组队开场须由队长发起，未开场。", "先核对队长；全员到首室后由队长 start，符合准入的全队会一起登记。", "/mycli guild party status", dungeon);
+                case "party_not_ready" -> a("队伍尚未全部在首室就绪，未开场。", "全队须在线、穿齐护甲并带本职业武器、结束其他活动，到首室后由队长 start；不要在外面等待自动加入。", "/mycli guild party status", dungeon);
+                case "party_pending_reward" -> a("队友尚有此副本待领奖凭据，未开场。", "请每位队友查询并领取自己的旧奖励，再到首室由队长开场。", "/mycli dungeon status");
                 case "site_busy" -> a("该地点已有挑战队伍。", "用 /mycli dungeon status 查看，等待结束或从 /mycli dungeon list 选另一处。", "/mycli dungeon status", "/mycli dungeon list");
                 case "already_in_site_dungeon" -> a("你已有地下城或正式攻略场次，不能重复开场。", "先查本人当前场次；故障暂停且已恢复条件时用resume继续，决定放弃时用leave退出后再开场。", "/mycli dungeon status", "/mycli dungeon resume", "/mycli dungeon leave");
                 case "conquest_profession_required" -> a("正式攻略需要先选择战斗职业。", "选择战士、坦克、法师或牧师，再学习合适的技能。", "/mycli profession menu");

@@ -101,7 +101,7 @@ public final class VortexBridge extends JavaPlugin {
     public String selfState(Player p){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
         var state=profile(p);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("");
-        return gson.toJson(Map.of("available",true,"backend","vortex","combat",id,"level",state.level(),"xp",state.experience(),
+        var result=new LinkedHashMap<String,Object>(Map.of("available",true,"backend","vortex","combat",id,"level",state.level(),"xp",state.experience(),
             "skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSkill",vortex.spellbookService().activeSpellId(state).orElse(""),
             "mana",Map.of("current",mana.getMana(p.getUniqueId()),"max",mana.getMaxMana(p)),
             "economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)),
@@ -109,6 +109,39 @@ public final class VortexBridge extends JavaPlugin {
                 "id","mycli:"+s.id(),"name",vortex.spellbookService().spellLabel(s.id()),"level",1,"learned",true,
                 "cooldownRemainingMs",vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),s.id()),
                 "cooldownMs",s.cooldownMillis(),"manaCost",io.vortexcore.combat.ManaGate.cost(vortex,s.id()))).toList()));
+        result.put("className",BridgeRules.className(id));
+        result.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));
+        return gson.toJson(result);
+    }
+    /** Read-only native roster; no commands, invitation, teleport or enrollment. */
+    public String partyState(Player p){
+        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
+        var result=new LinkedHashMap<String,Object>();result.put("available",true);
+        var party=vortex.expeditionPartyManager().partyOf(p.getUniqueId());result.put("inParty",party.isPresent());
+        result.put("members",party.map(s->s.members().stream().map(UUID::toString).sorted().toList()).orElse(List.of()));
+        party.ifPresent(s->result.put("leaderUuid",s.leaderId().toString()));
+        return gson.toJson(result);
+    }
+    private final Map<UUID,CompletableFuture<JsonObject>> viewerTalents=new HashMap<>();
+    private final Map<UUID,Long> viewerTalentTimes=new HashMap<>();
+    /** Bounded display projection. Never waits for a database future on the tick thread. */
+    public String viewerState(Player p){
+        var result=JsonParser.parseString(selfState(p)).getAsJsonObject();
+        result.add("party",JsonParser.parseString(partyState(p)));
+        long now=System.currentTimeMillis();UUID id=p.getUniqueId();
+        viewerTalents.keySet().removeIf(uuid->Bukkit.getPlayer(uuid)==null);
+        viewerTalentTimes.keySet().retainAll(viewerTalents.keySet());
+        var future=viewerTalents.get(id);
+        if(future==null||future.isDone()&&now-viewerTalentTimes.getOrDefault(id,0L)>=1000){
+            future=vortex.qiandengjiTalents().talentData(id).thenApply(data->{
+                var value=new JsonObject();value.addProperty("available",true);value.addProperty("points",data.talentPoints());
+                value.add("allocated",gson.toJsonTree(data.allocatedNodes()));return value;
+            }).exceptionally(error->{var value=new JsonObject();value.addProperty("available",false);return value;});
+            viewerTalents.put(id,future);viewerTalentTimes.put(id,now);
+        }
+        var unavailable=new JsonObject();unavailable.addProperty("available",false);
+        result.add("talents",future.getNow(unavailable));
+        return gson.toJson(result);
     }
     private RecyclingSettlement recycling;
     private RecyclingSettlement recycling(){
@@ -162,6 +195,8 @@ public final class VortexBridge extends JavaPlugin {
                 var out=new LinkedHashMap<String,Object>();out.put("readOnly",true);out.put("queryOnly",true);out.put("backend","vortex");out.put("authority","VortexRPG");
                 out.put("class",intro?id:id.isEmpty()?"none":id);out.put("level",state.level());out.put("xp",state.experience());
                 out.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
+                if(context.has("keepInventory"))out.put("keepInventory",context.get("keepInventory").getAsBoolean());
+                if(context.has("rescue"))out.put("rescue",gson.fromJson(context.get("rescue"),Map.class));
                 out.put("mana",Math.round(mana.getMana(p.getUniqueId())));out.put("maxMana",Math.round(mana.getMaxMana(p)));out.put("pending",pending.contains(p.getUniqueId()));
                 boolean economyReady=vortex.qiandengjiVault().isAvailable();
                 out.put("economy",economyReady?Map.of("available",true,"balance",vortex.qiandengjiVault().balance(p),"currency","金币"):Map.of("available",false,"currency","金币"));
@@ -170,7 +205,7 @@ public final class VortexBridge extends JavaPlugin {
                 out.put("helpCommand","/mycli --help");out.put("rulesCommand","/mycli rules");
                 out.put("inventory",Map.of("freeStorageSlots",freeSlots,"storageCommand","/mycli arena stash","recycleCommand","/mycli arena recycle list"));
                 if(json){p.sendMessage((intro?"MC_INTRO ":"MC_RPG ")+gson.toJson(out));return;}
-                p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪"));
+                p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪")+(Boolean.TRUE.equals(out.get("keepInventory"))?"；死亡保留背包装备":""));
                 p.sendMessage("[RPG] "+advice.text());
                 if(intro){
                     var starter=vortex.classSkillService().classProfile(id).map(c->c.starterSpellId()).filter(s->s!=null&&!s.isBlank());

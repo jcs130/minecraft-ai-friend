@@ -24,6 +24,10 @@ public final class ProtectionQueryTest {
         return out;
     }
     public static void main(String[] args) {
+        var permanent=ProtectionQuery.compact(result(0,"deny","site_dungeon",null));
+        check("dungeon compact verdict explains permanence and route",permanent.get("nextAction").getAsString().contains("永久")&&permanent.get("nextAction").getAsString().contains("dungeon layout")&&!permanent.get("nextAction").getAsString().contains("主人授权"));
+        var dungeonHelp=AgentCliCatalog.helpData(new String[]{"dungeon","start","--help"},List.of());
+        check("team entry help explains one leader admission",dungeonHelp.get("summary").getAsString().contains("队长"));
         for (String action : List.of("break", "place", "container", "use")) {
             var q = parse(action + " -1 64 0 --json");
             check("legacy " + action, !q.batch() && q.json() && q.action().equals(action) && q.points().getFirst().x() == -1);

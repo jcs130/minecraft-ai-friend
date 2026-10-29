@@ -38,6 +38,9 @@ final class BlockAccessPolicy implements Listener {
     }
     boolean allows(Player player, Location at) {
         if (player == null || at == null || at.getWorld() == null || plugin.isObserver(player)) return false;
+        // Free wilderness construction must not override authored dungeon buildings.
+        if (plugin.siteDungeons() != null && plugin.siteDungeons().activityArea(at)) return trustedEditor(player);
+        if (plugin.dungeon() != null && plugin.dungeon().deniesEdit(at)) return trustedEditor(player);
         return rules.open(player.getUniqueId(), at.getWorld().getName(), at.getBlockX(), at.getBlockZ());
     }
     boolean trustedEditor(Player player) {

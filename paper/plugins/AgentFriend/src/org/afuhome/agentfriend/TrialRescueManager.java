@@ -64,7 +64,7 @@ final class TrialRescueManager implements Listener {
         long now = System.currentTimeMillis();
         if (now - lastNotice.getOrDefault(p.getUniqueId(), 0L) < 1500) return;
         lastNotice.put(p.getUniqueId(), now);
-        p.sendMessage("§e你已倒地，不能移动、攻击或施法。队友在4格内停留10秒，或清完本层/本室即可复活；全队倒下才撤离。");
+        p.sendMessage("§e你是倒地、尚未死亡，背包装备没有掉落；不能移动、攻击或施法。队友在4格内停留10秒，或清完本层/本室即可复活；全队倒下才撤离。");
         p.sendMessage("MC_TRIAL_RESCUE status=denied reason=downed radius=4 seconds=10");
     }
 
@@ -159,6 +159,7 @@ final class TrialRescueManager implements Listener {
         if (!downed(e.getPlayer())) return;
         String[] parts = e.getMessage().substring(1).trim().split("\\s+");
         String root = parts[0].toLowerCase(Locale.ROOT).replaceFirst("^.*:", "");
+        if(Set.of("msg","tell","w").contains(root))return;
         if (root.equals("mycli") && readCommand(Arrays.copyOfRange(parts, 1, parts.length))) return;
         // Chat is still usable to call for help; world-changing commands are disabled while downed.
         e.setCancelled(true); notice(e.getPlayer());
@@ -354,6 +355,11 @@ final class TrialRescueManager implements Listener {
         state.addProperty("radius", RADIUS); state.addProperty("seconds", RESCUE_MS / 1000);
         state.addProperty("instruction", "试炼塔/遗迹地下城组队挑战倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；上方显示进度与剩余秒数，离开范围重计。金色圈标记救援范围，绿色表示救援进度。清完本层/本室自动复活队友；全队倒下才失败撤离。");
         Team team = team(p.getUniqueId()); JsonArray teammates = new JsonArray();
+        int count=team==null?0:team.members.size();
+        state.addProperty("participants",count);state.addProperty("rescueEnabled",count>=2);
+        state.addProperty("lifeState",downed(p)?"downed":p.isDead()?"dead":"alive");
+        state.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(GameRule.KEEP_INVENTORY)));
+        if(count<2)state.addProperty("instruction",count==1?"当前本场仅登记1人，不启用队友救援；死亡是否掉物以实际死亡回执为准。想组队：先原生邀请并接受，全员到首室由队长开场。":"尚未参加试炼/遗迹场次。原生组队后全员到首室，由队长开场；本场登记2人以上才启用倒地救援。");
         if (team != null) for (UUID id : team.members) {
             Down d = downs.get(id); if (d == null) continue;
             JsonObject target = new JsonObject(); target.addProperty("uuid", id.toString());

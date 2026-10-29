@@ -74,6 +74,20 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
             case "xp"->{long n=Long.parseLong(args[2]);if(n<0||n>10000)throw new IllegalArgumentException("bounded xp");vortex.playerProfileService().grantExperience(p,n,"isolated-usability-fixture");}
             case "points"->{int n=Integer.parseInt(args[2]);if(n<0||n>20)throw new IllegalArgumentException("bounded points");state.putMetadata("rpg.skill_points",Integer.toString(n));}
             case "armor"->{p.getInventory().setArmorContents(new ItemStack[]{new ItemStack(Material.IRON_BOOTS),new ItemStack(Material.IRON_LEGGINGS),new ItemStack(Material.IRON_CHESTPLATE),new ItemStack(Material.IRON_HELMET)});}
+            case "integrity"->{
+                int x=2400,y=81,z=2400;
+                var block=p.getWorld().getBlockAt(x+2,y,z);block.setType(Material.STONE);
+                var breaking=new org.bukkit.event.block.BlockBreakEvent(block,p);Bukkit.getPluginManager().callEvent(breaking);
+                var change=new org.bukkit.event.entity.EntityChangeBlockEvent(p,block,Material.AIR.createBlockData());Bukkit.getPluginManager().callEvent(change);
+                var list=new java.util.ArrayList<org.bukkit.block.Block>();list.add(block);var outside=p.getWorld().getBlockAt(x+80,y,z);list.add(outside);
+                var blast=new org.bukkit.event.entity.EntityExplodeEvent(p,block.getLocation(),list,1,org.bukkit.ExplosionResult.DESTROY);Bukkit.getPluginManager().callEvent(blast);
+                var from=p.getWorld().getBlockAt(x-25,y,z);from.setType(Material.PISTON);var to=from.getRelative(org.bukkit.block.BlockFace.EAST);
+                var piston=new org.bukkit.event.block.BlockPistonExtendEvent(from,java.util.List.of(from),org.bukkit.block.BlockFace.EAST);Bukkit.getPluginManager().callEvent(piston);
+                var fluid=new org.bukkit.event.block.BlockFromToEvent(from,to);Bukkit.getPluginManager().callEvent(fluid);
+                sender.sendMessage("QA_INTEGRITY break="+breaking.isCancelled()+" entityChange="+change.isCancelled()+" explosionProtectedRemoved="+!blast.blockList().contains(block)+" explosionOutsideRetained="+blast.blockList().contains(outside)+" piston="+piston.isCancelled()+" fluid="+fluid.isCancelled());
+            }
+            case "freezehostiles"->{for(var entity:p.getNearbyEntities(24,24,24))if(entity instanceof Mob mob)mob.setAI(false);}
+            case "hud"->{try{var af=Bukkit.getPluginManager().getPlugin("AgentFriend");sender.sendMessage("QA_HUD "+af.getClass().getMethod("nativeViewerState",Player.class).invoke(af,p));}catch(Exception error){throw new IllegalStateException(error);}}
             case "heal"->{p.setHealth(p.getMaxHealth());p.setNoDamageTicks(0);}
             case "hunger"->{int n=Integer.parseInt(args[2]);if(n<0||n>20)throw new IllegalArgumentException("bounded hunger");p.setFoodLevel(n);p.setSaturation(0);}
             case "fullbag"->{for(int i=0;i<36;i++)p.getInventory().setItem(i,new ItemStack(Material.STONE,64));}

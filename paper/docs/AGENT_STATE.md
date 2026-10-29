@@ -1,5 +1,7 @@
 # Agent 魔力与技能冷却状态频道
 
+2026-10-29候选补充：`mcviewer:state.rpg` 为Vortex真实职业、等级、经验、学习点、天赋、金币和队伍；`vitals.experienceLevel` 仍为原版经验。`rescue`/`keepInventory` 表达倒地与规则，未知不可推成0。注册的Java Eye与无账号Web观察源共用只读HUD接口，待发布范围见[本轮说明](DUNGEON_INTEGRITY_20261029.md)。
+
 观战聊天补充：CortiEyeMirror 0.1.15已上线不镜像合法 `MC_* {…}` 与旧式 `MC_* field=value` 系统回执，保留普通私聊/中文提示；Agent 本体和私有状态频道不变。真人保护提示和显式 `protect --json` 见 [保护查询](AGENT_PROTECTION.md)。下文“镜像系统聊天”不表示向全服广播，也不表示新版会显示机器 JSON。
 
 0.3.96 增加可选 `trialRescue`，schemaVersion 仍为 1。字段为 `downed/radius/seconds/instruction/downedTeammates[]`，后者含 UUID、姓名、世界、x/y/z、按秒更新的 `progressMs`。系统提示明确：同队存活队员在倒地者 4 格内连续停留 10 秒自动救起，清完当前层/室也会自动复活，全队倒下才失败撤离。倒地者停止移动、攻击和施法，等待恢复回执。规则见[组队救援](TRIAL_RESCUE.md)。

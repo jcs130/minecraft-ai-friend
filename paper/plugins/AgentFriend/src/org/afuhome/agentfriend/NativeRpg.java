@@ -43,6 +43,14 @@ final class NativeRpg {
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}
     }
     JsonElement mana(Player p){JsonObject s=state(p);return s.has("mana")?s.get("mana"):JsonNull.INSTANCE;}
+    JsonObject party(Player p){
+        try{return JsonParser.parseString((String)call("partyState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
+        catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);return out;}
+    }
+    JsonObject viewerState(Player p){
+        try{return JsonParser.parseString((String)call("viewerState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
+        catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}
+    }
     JsonObject recyclingState(Player p){
         try{return JsonParser.parseString((String)call("recyclingState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("pending",true);return out;}
@@ -65,7 +73,10 @@ final class NativeRpg {
         }catch(java.io.IOException error){throw new IllegalStateException("domain save unconfirmed",error);}
     }
     JsonArray abilities(Player p){
-        JsonObject s=state(p);JsonArray out=s.has("abilities")?s.getAsJsonArray("abilities"):new JsonArray();
+        return abilities(p,state(p));
+    }
+    JsonArray abilities(Player p,JsonObject s){
+        JsonArray out=s.has("abilities")?s.getAsJsonArray("abilities"):new JsonArray();
         if(!s.has("mana"))return out;
         for(String id:COMMON_IDS){
             var guide=SpellGuide.find(id);var row=new JsonObject();row.addProperty("id","mycli:"+id);row.addProperty("name",guide.name());row.addProperty("level",1);
@@ -116,6 +127,8 @@ final class NativeRpg {
         try{
             var context=new JsonObject();context.addProperty("canAct",owner.nativeRpgMayAct(p));
             context.addProperty("downed",owner.isDowned(p));context.addProperty("inDungeon",owner.dungeonParticipant(p));
+            context.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(org.bukkit.GameRule.KEEP_INVENTORY)));
+            if(owner.trialRescue()!=null)context.add("rescue",owner.trialRescue().state(p));
             context.add("missingEquipment",new Gson().toJsonTree(DungeonLoadout.missing(p)));
             for(String id:List.of("food","selfheal")){
                 Long left=owner.readBasicCooldown(p,id);context.add(id+"CooldownMs",left==null?JsonNull.INSTANCE:new JsonPrimitive(left));

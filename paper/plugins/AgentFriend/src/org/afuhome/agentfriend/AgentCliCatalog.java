@@ -231,7 +231,7 @@ final class AgentCliCatalog {
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
         add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查空闲可开、占用、故障、当前房间或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认只给当前一步；--json含真实状态和凭据；完整旧结果用--verbose");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
-        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
+        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在首室发起挑战；原生队伍全员到场后由队长一次登记全队","全员在线、生存模式、装备达标且未参加其他活动；最多8人，登记2人以上启用倒地救援","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
         add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出自己的遗迹挑战，留在原地","只影响本人；未登记的奖励不发放","MC_SITE_DUNGEON_RESULT；队伍空后清理该队标记怪");
         add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后重试暂停的挑战","须为该队成员；失败不清场、不发奖、不自动连续刷怪","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");

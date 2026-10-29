@@ -173,23 +173,32 @@ final class ViewerStatePublisher implements Listener {
     private JsonObject buildState(Player player) {
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
-        SkillsUser user = AuraSkillsApi.get().getUser(player.getUniqueId());
-        if (user == null || !user.isLoaded()) {
-            root.add("mana", JsonNull.INSTANCE);
-            root.add("skills", new JsonArray());
-        } else {
-            JsonObject mana = new JsonObject();
-            mana.addProperty("current", finite(user.getMana()));
-            mana.addProperty("max", finite(user.getMaxMana()));
-            root.add("mana", mana);
-            root.add("skills", skills(user));
+        if(plugin.nativeRpg().selected()){
+            JsonObject nativeState=plugin.nativeRpg().viewerState(player);
+            root.add("mana",nativeState.has("mana")?nativeState.get("mana"):JsonNull.INSTANCE);
+            root.add("skills",new JsonArray());root.add("abilities",plugin.nativeRpg().abilities(player,nativeState));
+            nativeState.remove("abilities");root.add("rpg",nativeState);
+            if(plugin.trialRescue()!=null)root.add("rescue",plugin.trialRescue().state(player));
+            root.addProperty("keepInventory",Boolean.TRUE.equals(player.getWorld().getGameRuleValue(org.bukkit.GameRule.KEEP_INVENTORY)));
+        }else{
+            SkillsUser user=AuraSkillsApi.get().getUser(player.getUniqueId());
+            boolean loaded=user!=null&&user.isLoaded();JsonObject mana=new JsonObject();
+            if(loaded){mana.addProperty("current",finite(user.getMana()));mana.addProperty("max",finite(user.getMaxMana()));}
+            root.add("mana",loaded?mana:JsonNull.INSTANCE);root.add("skills",loaded?skills(user):new JsonArray());
+            root.add("abilities",abilities(player,loaded?user:null));
+            if(plugin.professions()!=null)root.add("profession",plugin.professions().state(player));
         }
-        if(plugin.nativeRpg().selected())root.add("mana",plugin.nativeRpg().mana(player));
-        root.add("abilities", abilities(player, user != null && user.isLoaded() ? user : null));
-        if (plugin.professions() != null) root.add("profession", plugin.professions().state(player));
         if (plugin.skillAssessments() != null) root.add("academy",plugin.skillAssessments().summary(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
         return root;
+    }
+
+    String snapshot(Player player){
+        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
+        JsonObject state=buildState(player);state.addProperty("playerUuid",player.getUniqueId().toString());
+        byte[] payload=encodeBounded(state);
+        if(payload==null)throw new IllegalStateException("viewer state too large");
+        return new String(payload,StandardCharsets.UTF_8);
     }
 
     private JsonArray skills(SkillsUser user) {

@@ -58,6 +58,25 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
     private List<String> configurationPackets;
     private Map<String,Object> renderRegistries;
     private long totalEncodeNanos, maxTickNanos;
+    private record RpgSnapshot(int tick,UUID world,Map<String,Object> value) {}
+    private final Map<UUID,RpgSnapshot> rpgSnapshots=new HashMap<>();
+    private Map<String,Object> rpgState(Player player){
+        var cached=rpgSnapshots.get(player.getUniqueId());
+        if(cached!=null&&cached.world().equals(player.getWorld().getUID())&&tick-cached.tick()<10)return cached.value();
+        Map<String,Object> value=new LinkedHashMap<>();value.put("schemaVersion",1);value.put("source","server_rpg_snapshot");
+        value.put("playerUuid",player.getUniqueId().toString());value.put("skills",List.of());value.put("abilities",List.of());
+        value.put("keepInventory",Boolean.TRUE.equals(player.getWorld().getGameRuleValue(org.bukkit.GameRule.KEEP_INVENTORY)));
+        try{
+            var plugin=Bukkit.getPluginManager().getPlugin("AgentFriend");
+            if(plugin==null||!plugin.isEnabled())throw new IllegalStateException("rpg unavailable");
+            var state=JsonParser.parseString((String)plugin.getClass().getMethod("nativeViewerState",Player.class).invoke(plugin,player)).getAsJsonObject();
+            for(String key:List.of("mana","rpg","rescue"))if(state.has(key)&&state.get(key).isJsonObject())value.put(key,JSON.fromJson(state.get(key),Map.class));
+            if(state.has("abilities"))value.put("abilities",JSON.fromJson(state.get("abilities"),List.class));
+            if(!value.containsKey("rpg"))value.put("rpg",Map.of("available",false));
+        }catch(ReflectiveOperationException|RuntimeException error){value.put("rpg",Map.of("available",false,"backend","vortex"));}
+        rpgSnapshots.keySet().removeIf(id->Bukkit.getPlayer(id)==null);
+        rpgSnapshots.put(player.getUniqueId(),new RpgSnapshot(tick,player.getWorld().getUID(),value));return value;
+    }
 
     private record Wire(long sequence, String packet, int bytes) {}
     private static final class View {
@@ -212,6 +231,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         value.put("position",Map.of("x",loc.getX(),"y",loc.getY(),"z",loc.getZ()));
         value.put("yawDegrees",loc.getYaw());value.put("pitchDegrees",loc.getPitch());value.put("eyeHeight",player.getEyeHeight());
         value.put("health",player.getHealth());value.put("food",player.getFoodLevel());value.put("experienceLevel",player.getLevel());value.put("experienceProgress",player.getExp());
+        value.put("viewerState",rpgState(player));
         value.put("onGround",player.isOnGround());value.put("sneaking",player.isSneaking());value.put("sprinting",player.isSprinting());value.put("flying",player.isFlying());
         value.put("maxHealth",p.getMaxHealth());value.put("armor",p.getArmorValue());value.put("usingItem",p.isUsingItem());value.put("useItemRemainingTicks",p.getUseItemRemainingTicks());
         value.put("spinAttack",p.isAutoSpinAttack());value.put("observedAt",System.currentTimeMillis());value.put("serverTick",tick);

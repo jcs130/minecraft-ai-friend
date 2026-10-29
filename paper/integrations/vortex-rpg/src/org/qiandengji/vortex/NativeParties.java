@@ -40,7 +40,7 @@ final class NativeParties {
         if(!result.success()){String reason=result.message().toLowerCase(Locale.ROOT);String message=reason.contains("pending")||reason.contains("expired")?"没有有效的待接受邀请；请让队长重新邀请，不会自行加入":reason.contains("already in a party")?"已经在队伍中；先查当前成员，不自动退出或换队":reason.contains("leader")||reason.contains("officer")||reason.contains("rank")?"需要队长或相应管理身份；不会提升权限":reason.contains("full")?"队伍人数已满；请队长协调空位":reason.contains("yourself")?"不能邀请或踢出自己；退出用 leave":reason.contains("create a party first")?"尚未建队；由队长先 create":reason.contains("not in")?"当前不在对应队伍中；先查本人状态":"队伍状态已变化；先查成员与邀请，不重复提交";
             send(p,json,false,reason.contains("pending")||reason.contains("expired")?"invite_required":"party_rejected",message,"/mycli guild party status");return;
         }
-        String message=switch(action){case "create"->"已创建原生队伍；下一步邀请在线队友";case "invite"->"已向 "+target.getName()+" 发送邀请，需对方主动 accept";case "accept"->"已接受邀请并加入队伍；进入副本仍须本人在集结期 dungeon join <ID>";case "decline"->"已拒绝邀请";case "leave"->"已离开队伍";case "disband"->"已解散队伍";case "kick"->"已移出该成员";default->"队伍已更新";};
+        String message=switch(action){case "create"->"已创建原生队伍；下一步邀请在线队友";case "invite"->"已向 "+target.getName()+" 发送邀请，需对方主动 accept";case "accept"->"已加入队伍；全员穿好装备到副本首室，由队长 start，全队一起登记并启用倒地救援";case "decline"->"已拒绝邀请";case "leave"->"已离开队伍";case "disband"->"已解散队伍";case "kick"->"已移出该成员";default->"队伍已更新";};
         send(p,json,true,"completed",message,"/mycli guild party status");
         if(action.equals("invite"))target.sendMessage("§b[组队邀请] "+p.getName()+" 邀请你组队。接受：/mycli guild party accept；拒绝：/mycli guild party decline");
         if(action.equals("disband"))before.ifPresent(party->party.members().stream().filter(id->!id.equals(p.getUniqueId())).map(Bukkit::getPlayer).filter(Objects::nonNull).forEach(member->member.sendMessage("§e[队伍] 队长已解散队伍；你的副本参与状态另用 /mycli dungeon status 核对。")));
@@ -49,7 +49,7 @@ final class NativeParties {
         var out=new LinkedHashMap<String,Object>();out.put("type","party");out.put("queryOnly",true);out.put("sessionOnly",true);out.put("inParty",party.isPresent());
         String next=party.isPresent()?"/mycli dungeon list":"/mycli guild party create";out.put("nextCommand",next);
         String text="尚未组队；可由队长创建，再 invite 玩家，对方 accept";
-        if(party.isPresent()){var s=party.get();var members=s.members().stream().map(id->Map.of("uuid",id.toString(),"name",name(id),"role",s.roles().get(id).name())).sorted(Comparator.comparing(row->row.get("name"))).toList();out.put("leader",name(s.leaderId()));out.put("members",members);text="队长 "+name(s.leaderId())+"；成员 "+String.join("、",s.members().stream().map(NativeParties::name).sorted().toList())+"；Vortex队伍为会话状态，副本仍须分别 start/join";}
+        if(party.isPresent()){var s=party.get();var members=s.members().stream().map(id->Map.of("uuid",id.toString(),"name",name(id),"role",s.roles().get(id).name())).sorted(Comparator.comparing(row->row.get("name"))).toList();out.put("leader",name(s.leaderId()));out.put("members",members);text="队长 "+name(s.leaderId())+"；成员 "+String.join("、",s.members().stream().map(NativeParties::name).sorted().toList())+"；全员到副本首室，队长 start 后全队一起登记；本场2人以上启用倒地救援。队伍为会话状态，重启后须重组";}
         if(json)p.sendMessage("MC_RPG "+gson.toJson(out));else p.sendMessage("§b[队伍] "+text+"。下一步："+next);
     }
     private static String name(UUID id){Player online=Bukkit.getPlayer(id);return online==null?id.toString():online.getName();}

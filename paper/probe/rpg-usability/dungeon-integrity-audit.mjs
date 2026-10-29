@@ -1,0 +1,102 @@
+/** Real isolated protocol clients; no production role or production world writes. */
+import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {randomUUID} from 'node:crypto';import {setTimeout as sleep} from 'node:timers/promises';
+import {command} from '../../ops/rcon-client.mjs';import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs';
+const stage='E:/MC/staging/vortex-takeover-20261027',out=process.argv[2];assert(out?.startsWith('E:/MC/ops/repairs/rpg-integrity-20261029-'));
+const tag=process.argv[3]??'i2';assert(/^[a-z0-9]{1,4}$/.test(tag));
+assert.equal(await fs.readFile(stage+'/.qa-only','utf8'),'VORTEX_TAKEOVER_QA_ONLY');
+const mf=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('mineflayer');
+const report={checks:[],receipts:[],productionChanged:false},bots=[];
+const check=(name,condition)=>{assert(condition,name);report.checks.push(name);console.log('PASS '+name);};
+const until=async(fn,label,ms=25000)=>{for(const end=Date.now()+ms;Date.now()<end;){const value=await fn();if(value)return value;await sleep(100);}throw Error('timeout '+label);};
+const rc=async q=>{const text=await command(q,15000,{port:25929,properties:stage+'/server.properties'});report.receipts.push({q,text});return text;};
+async function connect(name){const b=mf.createBot({host:'127.0.0.1',port:25928,username:name,version:'1.21.1',auth:'offline',respawn:true,hideErrors:true,checkTimeoutInterval:60000});bots.push(b);b.messages=[];b.viewer=[];b.deaths=0;b.on('messagestr',s=>b.messages.push(s));b.on('death',()=>b.deaths++);b.on('error',e=>report.receipts.push({player:name,error:String(e)}));
+ b._client.on('custom_payload',p=>{if(p.channel==='mcviewer:state')try{b.viewer.push(JSON.parse(p.data.toString()));}catch{}});installRecipePacketBypass(b._client);
+ await until(()=>b.entity&&b.world.getColumnAt(b.entity.position),'spawn '+name);b.physicsEnabled=false;
+ b._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('mcviewer:state')});return b;
+}
+async function ask(b,q,prefix='MC_RPG '){const mark=b.messages.length;b.chat(q);const text=await until(()=>b.messages.slice(mark).find(s=>s.startsWith(prefix)),q);const data=JSON.parse(text.slice(prefix.length));report.receipts.push({player:b.username,q,data});return data;}
+const dungeon=(b,q,prefix='MC_SITE_DUNGEON_RESULT ')=>(ask(b,'/mycli dungeon '+q+' --json',prefix));
+const count=b=>b.inventory.items().reduce((n,i)=>n+(i.name==='diamond'?i.count:0),0);
+async function hud(b){const s=await rc('qduse hud '+b.username);return JSON.parse(s.slice(s.indexOf('QA_HUD ')+7,s.lastIndexOf('\nQA mana=')<0?undefined:s.lastIndexOf('\nQA mana=')));}
+try{
+ await fs.writeFile(stage+'/qa-eyes-integrity.json',JSON.stringify({schemaVersion:1,freeObservers:['ag_RUEye'+tag],autoNameEyes:false,pairs:[]}));
+ const [a,b,eye]=await Promise.all(['ag_RUA'+tag,'ag_RUB'+tag,'ag_RUEye'+tag].map(connect));
+ await rc('minecraft:gamerule keepInventory true');
+ for(const x of [a,b]){await rc('minecraft:gamemode survival '+x.username);await rc('minecraft:tp '+x.username+' 2400.5 81 2400.5');await rc('qduse armor '+x.username);await rc('minecraft:give '+x.username+' minecraft:diamond_sword');await rc('minecraft:give '+x.username+' minecraft:diamond 3');}
+ await sleep(1000);
+ await rc('minecraft:fill 2395 80 2395 2405 80 2405 stone');await rc('minecraft:fill 2395 81 2395 2405 85 2405 air');
+ check('QA room has a server-confirmed solid floor before spawning enemies',/Test passed/.test(await rc('minecraft:execute if block 2396 80 2396 minecraft:stone')));
+ check('native class choice succeeds for first ordinary player',(await ask(a,'/mycli profession choose mage --json')).saved);
+ check('native class choice succeeds for second ordinary player',(await ask(b,'/mycli profession choose ranger --json')).saved);
+ await rc('qduse xp '+a.username+' 2000');await rc('qduse xp '+b.username+' 500');
+ await rc('minecraft:experience set '+a.username+' 91 levels');await rc('minecraft:experience set '+b.username+' 17 levels');
+ const own=await hud(a);check('shared HUD ABI reports native class and level, not vanilla XP',own.rpg.available&&own.rpg.combat==='mage'&&own.rpg.level!==91&&own.mana.max>0);
+ check('native class and learned/basic abilities share one snapshot',own.abilities.some(x=>x.id==='mycli:starbolt')&&own.abilities.some(x=>x.id==='mycli:home'));
+ await rc('minecraft:gamemode spectator '+eye.username);await rc('minecraft:tp '+eye.username+' 2400 82 2400');
+ await rc('minecraft:spectate '+a.username+' '+eye.username);
+ const v=await until(()=>eye.viewer.find(s=>s.viewerSession?.playerUuid===a._client.uuid&&s.rpg?.combat==='mage'),'Eye target RPG');
+ check('Java Eye receives target native RPG and actual vanilla XP separately',v.vitals.experienceLevel===91&&v.rpg.level===own.rpg.level);
+ const mark=eye.viewer.length;await rc('minecraft:spectate '+b.username+' '+eye.username);
+ const switched=await until(()=>eye.viewer.slice(mark).find(s=>s.viewerSession?.playerUuid===b._client.uuid&&s.rpg?.combat==='ranger'),'Eye switch');
+ check('switching Java Eye replaces class and XP with the new target',switched.vitals.experienceLevel===17&&switched.rpg.combat==='ranger');
+ const key=(await fs.readFile(stage+'/plugins/WorldObserver/worker.key','utf8')).trim();
+ const response=await fetch('http://127.0.0.1:28996/v1/poll',{method:'POST',headers:{authorization:'Bearer '+key,'content-type':'application/json'},body:JSON.stringify({schemaVersion:1,targets:[{uuid:a._client.uuid,lease:randomUUID(),after:0}]})});
+ const wire=await response.json();report.webSnapshot={status:response.status,rpg:wire.targets?.[0]?.player?.viewerState?.rpg};
+ check('account-free observer carries exactly the same native class and RPG level',response.ok&&wire.targets[0].player.viewerState.rpg.combat==='mage'&&wire.targets[0].player.viewerState.rpg.level===own.rpg.level&&wire.targets[0].player.experienceLevel===91);
+ const proof=await rc('qduse integrity '+a.username);check('idle dungeon blocks break, entity grief, explosion, piston and incoming fluid',/break=true entityChange=true explosionProtectedRemoved=true explosionOutsideRetained=true piston=true fluid=true/.test(proof));
+ const protect=await ask(a,'/mycli protect break 2402 81 2400 --json','MC_PROTECTION ');check('preflight reports permanent dungeon denial in free wilderness',protect.allowed===false&&protect.reason==='site_dungeon');
+ check('compact protection feedback explains permanent building protection',protect.nextAction.includes('永久')&&protect.nextAction.includes('dungeon layout'));
+ await rc('minecraft:tp '+a.username+' 2400.5 110 2400.5');await sleep(800);
+ const roof=await ask(a,'/mycli protect break 2402 110 2400 --json','MC_PROTECTION ');
+ check('authored roof/shaft pieces remain protected outside combat height',roof.allowed===false&&roof.reason==='site_dungeon');
+ const sky=await ask(a,'/mycli protect break 2403 110 2400 --json','MC_PROTECTION ');
+ check('a building piece does not protect unrelated adjacent sky',sky.allowed===true);
+ await rc('minecraft:tp '+a.username+' 2400.5 81 2400.5');await sleep(500);
+ await rc('minecraft:give '+a.username+' minecraft:diamond_pickaxe');await a.equip(a.inventory.items().find(i=>i.name==='diamond_pickaxe'),'hand');
+ const wall=a.blockAt(new (createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('vec3'))(2402,81,2400));
+ let denied=false;await Promise.race([a.dig(wall).catch(()=>{denied=true;}),sleep(3000).then(()=>{denied=true;a.stopDigging();})]);
+ await sleep(500);report.clientDigReportedDenial=denied;
+ check('real protocol digging cannot remove idle dungeon wall',/Test passed/.test(await rc('minecraft:execute if block 2402 81 2400 minecraft:stone')));
+ await rc('minecraft:tp '+a.username+' 2480.5 81 2400.5');await rc('minecraft:setblock 2482 81 2400 stone');await sleep(1200);
+ const normal=await ask(a,'/mycli protect break 2482 81 2400 --json','MC_PROTECTION ');check('ordinary wilderness still reports construction allowed',normal.allowed===true);
+ await a.dig(a.blockAt(new (createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('vec3'))(2482,81,2400)));
+ check('ordinary player can still really mine wilderness stone',/Test passed/.test(await rc('minecraft:execute if block 2482 81 2400 minecraft:air')));
+ await ask(a,'/mycli guild party create --json');await ask(a,'/mycli guild party invite '+b.username+' --json');await ask(b,'/mycli guild party accept --json');
+ const far=await dungeon(a,'start qa_integrity');check('missing party at entrance rejects start atomically',far.reason==='walk_to_first_room');
+ await rc('minecraft:tp '+a.username+' 2400.5 81 2400.5');await rc('minecraft:tp '+b.username+' 2480.5 81 2400.5');
+ const missing=await dungeon(a,'start qa_integrity');check('leader cannot silently start a solo run when teammate is absent',missing.reason==='party_not_ready'&&missing.blockedPlayer===b.username);
+ await rc('minecraft:tp '+b.username+' 2403.5 81 2400.5');check('non-leader cannot create another team run',(await dungeon(b,'start qa_integrity')).reason==='party_leader_required');
+ await rc('minecraft:item replace entity '+b.username+' armor.head with minecraft:air');
+ const gear=await dungeon(a,'start qa_integrity');check('teammate missing armor returns explicit failure to the initiating leader',gear.success===false&&gear.blockedPlayer===b.username&&gear.missingEquipment.length>0);
+ await rc('qduse armor '+b.username);
+ check('leader start enrolls both native party members without join race',(await dungeon(a,'start qa_integrity')).success===true);
+ const teamState=await dungeon(b,'status qa_integrity','MC_SITE_DUNGEON_STATE ');check('second player is an actual dungeon participant',teamState.participant===true);
+ const beforeA=count(a),beforeB=count(b);await rc('qduse heal '+a.username);await rc('minecraft:damage '+a.username+' 1000 minecraft:generic');await sleep(600);
+ const down=await hud(a);check('team lethal damage downs in place without true death or item loss',down.rescue.downed&&down.rescue.rescueEnabled&&down.rescue.participants===2&&a.deaths===0&&count(a)===beforeA);
+ const progress=await until(async()=>{const s=await hud(a);return s.rescue.downedTeammates.some(t=>t.progress>0)?s:null;},'rescue progress',6000);
+ check('rescue exposes real progress and remaining time',progress.rescue.downedTeammates.some(t=>t.progress>0&&t.remainingMs<10000));
+ await until(async()=>{await rc('qduse freezehostiles '+a.username);return !(await hud(a)).rescue.downed;},'nearby resurrection',18000);
+ check('nearby teammate revives after sustained ten seconds, inventory stays',a.deaths===0&&count(a)===beforeA&&count(b)===beforeB&&a.entity.position.distanceTo(b.entity.position)<6);
+ check('live dungeon stays protected',(await ask(a,'/mycli protect break 2402 81 2400 --json','MC_PROTECTION ')).allowed===false);
+ check('first participant can explicitly leave the actual run',(await dungeon(a,'leave')).success===true);
+ check('last participant can end the actual run',(await dungeon(b,'leave')).success===true);
+ check('completed/left run does not unlock its building',(await ask(a,'/mycli protect break 2402 81 2400 --json','MC_PROTECTION ')).allowed===false);
+ await ask(a,'/mycli guild party leave --json');await ask(b,'/mycli guild party leave --json');
+ await rc('minecraft:tp '+a.username+' 2600.5 81 2400.5');await sleep(1200);
+ await rc('minecraft:fill 2595 80 2395 2605 80 2405 stone');await rc('minecraft:fill 2595 81 2395 2605 85 2405 air');
+ check('a genuine solo run remains supported',(await dungeon(a,'start qa_solo')).success===true);
+ await rc('qduse heal '+a.username);const prior=a.messages.length,diamonds=count(a);await rc('minecraft:damage '+a.username+' 1000 minecraft:generic');
+ await until(()=>a.deaths>0,'actual solo death');await until(()=>a.messages.slice(prior).some(s=>s.includes('[死亡结果]')&&s.includes('背包和已穿装备保留')),'accurate keep-inventory receipt');
+ await until(()=>a.health>0&&a.entity,'actual vanilla respawn');await sleep(800);
+ await until(()=>count(a)===diamonds,'retained inventory after respawn');check('real solo death retains inventory and sends an explicit authoritative hint',count(a)===diamonds);
+ await dungeon(a,'leave');
+ await ask(a,'/mycli guild party create --json');await ask(a,'/mycli guild party invite '+b.username+' --json');await ask(b,'/mycli guild party accept --json');
+ for(const x of [a,b])await rc('minecraft:tp '+x.username+' 2800.5 81 2400.5');await sleep(1200);
+ await rc('minecraft:fill 2795 80 2395 2805 80 2405 stone');await rc('minecraft:fill 2795 81 2395 2805 85 2405 air');
+ check('new full-team run can start after solo death',(await dungeon(a,'start qa_wipe')).success===true);
+ const deaths=a.deaths+b.deaths;for(const x of [a,b]){await rc('qduse heal '+x.username);await rc('minecraft:damage '+x.username+' 1000 minecraft:generic');}
+ await until(async()=>{const s=await hud(a);return !s.rescue.downed&&s.rescue.participants===0;},'full party defeat cleanup',5000);
+ check('only full party defeat ends rescue and preserves items without another true death',a.deaths+b.deaths===deaths&&count(a)===diamonds&&count(b)===beforeB);
+ report.complete=true;
+}catch(error){report.failed=String(error);throw error;}
+finally{for(const b of bots)b.quit();await fs.writeFile(out+'/dungeon-integrity-audit.json',JSON.stringify(report,null,2)+'\n');}

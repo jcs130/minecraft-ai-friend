@@ -70,6 +70,8 @@ final class SiteDungeonManager implements Listener {
     }
     private final AgentFriendPlugin plugin;
     private Map<String,Site> sites=Map.of();
+    private record BuildingAreas(ProtectionArea envelope,List<ProtectionArea> pieces) {}
+    private Map<String,BuildingAreas> protectionAreas=Map.of();
     private final Map<String,Run> runs=new LinkedHashMap<>();
     private final Map<Inventory,Menu> menus=new IdentityHashMap<>();
     private final Map<UUID,Shot> shots=new HashMap<>();
@@ -122,7 +124,7 @@ final class SiteDungeonManager implements Listener {
         if(!new File(plugin.getDataFolder(),"dungeons.yml").exists())plugin.saveResource("dungeons.yml",false);
         reload();plugin.getServer().getPluginManager().registerEvents(this,plugin);
         for(World world:Bukkit.getWorlds())for(Entity e:world.getEntities())if(owned(e)||e.getScoreboardTags().contains(SHOT_TAG))e.remove();
-        restore();Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
+        restore();new DungeonIntegrity(plugin);Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
     private static void require(boolean yes,String reason){if(!yes)throw new IllegalArgumentException(reason);}
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
@@ -130,17 +132,11 @@ final class SiteDungeonManager implements Listener {
     boolean isParticipant(Player p){return own(p)!=null;}
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
     List<String> ids(){return new ArrayList<>(sites.keySet());}
-    boolean activityArea(Location at){return sites.values().stream().anyMatch(s->s.contains(at));}
+    boolean activityArea(Location at){return protectionArea(at)!=null;}
     ProtectionArea protectionArea(Location at) {
-        for (Run run : runs.values()) {
-            Site s = run.site; if (!s.contains(at)) continue;
-            return ProtectionArea.box("site_dungeon_" + s.id, "挑战中的" + s.name, at.getWorld(),
-                    s.rooms.stream().mapToInt(Room::x).min().orElseThrow() - 24,
-                    s.rooms.stream().mapToInt(Room::y).min().orElseThrow() - 8,
-                    s.rooms.stream().mapToInt(Room::z).min().orElseThrow() - 24,
-                    s.rooms.stream().mapToInt(Room::x).max().orElseThrow() + 24,
-                    s.rooms.stream().mapToInt(Room::y).max().orElseThrow() + 12,
-                    s.rooms.stream().mapToInt(Room::z).max().orElseThrow() + 24);
+        for(BuildingAreas building:protectionAreas.values()){
+            if(!building.envelope.contains(at))continue;
+            for(ProtectionArea area:building.pieces)if(area.contains(at))return area;
         }
         return null;
     }
@@ -190,12 +186,15 @@ final class SiteDungeonManager implements Listener {
         }else p.sendMessage("[地下城] 当前没有已开启的本人场次；查询不会开场。选择地点：/mycli dungeon list");
     }
     private void result(Player p,String action,String site,String reason){
+        result(p,action,site,reason,Map.of());
+    }
+    private void result(Player p,String action,String site,String reason,Map<String,?> detail){
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
         data.put("success",reason.equals("success"));data.put("reason",reason);
         ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
         if(advice!=null){data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());}
         if(reason.equals("claim_previous_reward_first"))data.put("pendingReward",pendingReward(p.getUniqueId(),site));
-        send(p,"MC_SITE_DUNGEON_RESULT",data);
+        data.putAll(detail);send(p,"MC_SITE_DUNGEON_RESULT",data);
         if(advice!=null&&!jsonOutput.get()&&!Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(reason))advice.send(p);
         if(reason.equals("claim_previous_reward_first"))explainPending(p,List.of(site));
         else if(reason.equals("specify_dungeon_id"))explainPending(p,pendingSites(p.getUniqueId()));
@@ -329,7 +328,26 @@ final class SiteDungeonManager implements Listener {
                 for(Site prior:next.values())require(!prior.contains(first.center(Bukkit.getWorld(world)))&&!s.contains(prior.rooms.getFirst().center(Bukkit.getWorld(prior.world))),"overlapping_sites");
                 next.put(id,s);
             }
-            sites=Collections.unmodifiableMap(next);ready=true;return "success";
+            Map<String,BuildingAreas> areas=new LinkedHashMap<>();
+            for(Site s:next.values()){
+                World world=Bukkit.getWorld(s.world);List<ProtectionArea> pieces=new ArrayList<>();
+                pieces.add(ProtectionArea.box("site_dungeon_"+s.id,"副本建筑·"+s.name,world,
+                    s.rooms.stream().mapToInt(Room::x).min().orElseThrow()-24,s.rooms.stream().mapToInt(Room::y).min().orElseThrow()-8,s.rooms.stream().mapToInt(Room::z).min().orElseThrow()-24,
+                    s.rooms.stream().mapToInt(Room::x).max().orElseThrow()+24,s.rooms.stream().mapToInt(Room::y).max().orElseThrow()+12,s.rooms.stream().mapToInt(Room::z).max().orElseThrow()+24));
+                var declared=defs.getConfigurationSection(s.id).getList("protection-boxes",List.of());require(declared.size()<=256,"protection_boxes_limit_256");
+                for(Object raw:declared){
+                    require(raw instanceof List<?> b&&b.size()==6,"invalid_protection_box");List<?> b=(List<?>)raw;int[] v=new int[6];
+                    for(int i=0;i<6;i++){require(b.get(i) instanceof Number n&&n.doubleValue()==n.intValue(),"integer_protection_box_required");v[i]=((Number)b.get(i)).intValue();}
+                    require(v[0]<=v[3]&&v[1]<=v[4]&&v[2]<=v[5]&&v[1]>=world.getMinHeight()&&v[4]<world.getMaxHeight(),"protection_box_bounds");
+                    Room first=s.rooms.getFirst();require(Math.abs((long)v[0]-first.x)<=256&&Math.abs((long)v[3]-first.x)<=256&&Math.abs((long)v[2]-first.z)<=256&&Math.abs((long)v[5]-first.z)<=256,"protection_box_distance");
+                    pieces.add(ProtectionArea.box("site_dungeon_"+s.id+"_building_"+pieces.size(),"副本建筑·"+s.name,world,v[0],v[1],v[2],v[3],v[4],v[5]));
+                }
+                var envelope=ProtectionArea.box("site_dungeon_"+s.id+"_envelope","副本建筑·"+s.name,world,
+                    pieces.stream().mapToInt(ProtectionArea::minX).min().orElseThrow(),pieces.stream().mapToInt(ProtectionArea::minY).min().orElseThrow(),pieces.stream().mapToInt(ProtectionArea::minZ).min().orElseThrow(),
+                    pieces.stream().mapToInt(ProtectionArea::maxX).max().orElseThrow(),pieces.stream().mapToInt(ProtectionArea::maxY).max().orElseThrow(),pieces.stream().mapToInt(ProtectionArea::maxZ).max().orElseThrow());
+                areas.put(s.id,new BuildingAreas(envelope,List.copyOf(pieces)));
+            }
+            sites=Collections.unmodifiableMap(next);protectionAreas=Collections.unmodifiableMap(areas);ready=true;return "success";
         }catch(Exception e){plugin.getLogger().warning("Dungeon sites configuration retained: "+e.getMessage());return "invalid_configuration";}
     }
     void admin(CommandSender sender,String action){
@@ -421,9 +439,33 @@ final class SiteDungeonManager implements Listener {
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
         if(!loadout(p,"start",s))return;
-        Run r=new Run(s,mode);r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
+        List<Player> entrants=new ArrayList<>();entrants.add(p);
+        if(plugin.nativeRpg().selected()){
+            var team=plugin.nativeRpg().party(p);
+            require(team.has("available")&&team.get("available").getAsBoolean(),"party_data_unavailable");
+            if(team.has("members")&&team.getAsJsonArray("members").size()>1){
+                require(p.getUniqueId().toString().equals(team.get("leaderUuid").getAsString()),"party_leader_required");
+                require(team.getAsJsonArray("members").size()<=PARTY_LIMIT,"party_full_or_not_at_first_room");
+                entrants.clear();
+                for(var member:team.getAsJsonArray("members")){
+                    Player mate=Bukkit.getPlayer(UUID.fromString(member.getAsString()));
+                    if(!playing(mate)||!s.contains(mate.getLocation())||!s.rooms.getFirst().contains(mate.getLocation())
+                            ||own(mate)!=null||plugin.dungeonParticipant(mate)||plugin.pvpParticipant(mate)){
+                        String who=mate==null?Objects.toString(Bukkit.getOfflinePlayer(UUID.fromString(member.getAsString())).getName(),"离线队员"):mate.getName();
+                        result(p,"start",s.id,"party_not_ready",Map.of("blockedPlayer",who,"errorMessage","队友 "+who+" 尚未就绪；全队须在线、结束其他活动并到首室 "+s.world+" "+s.rooms.getFirst().x+","+s.rooms.getFirst().y+","+s.rooms.getFirst().z+"。未开场、未消耗。"));return;
+                    }
+                    try{conquestAdmission(mate,s);}catch(IllegalArgumentException admission){
+                        result(p,"start",s.id,admission.getMessage(),Map.of("blockedPlayer",mate.getName(),"errorMessage","队友 "+mate.getName()+" 不满足本层职业或等级条件（"+admission.getMessage()+"），全队未开场。"));return;
+                    }
+                    require(receipt(mate.getUniqueId(),s.id)==null,"party_pending_reward");
+                    if(!loadout(mate,"start",s)){if(mate!=p)result(p,"start",s.id,"party_not_ready",Map.of("blockedPlayer",mate.getName(),"missingEquipment",DungeonLoadout.missing(mate),"errorMessage","队友 "+mate.getName()+" 装备不足："+String.join("、",DungeonLoadout.missing(mate))+"。全队未开场、未消耗。"));return;}
+                    entrants.add(mate);
+                }
+            }
+        }
+        Run r=new Run(s,mode);for(Player mate:entrants){r.party.add(mate.getUniqueId());r.attendance.put(mate.getUniqueId(),0);}runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
-        result(p,"start",s.id,"success");tell(r,"§6"+s.name+"〔"+mode.label+"〕集结10秒；队友需主动 dungeon join "+s.id+"。房间清怪后自行前进，掉线宽限5分钟。");
+        result(p,"start",s.id,"success");tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；本场已登记 "+r.party.size()+" 人："+String.join("、",entrants.stream().map(Player::getName).toList())+"。"+(r.party.size()>1?"致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活；全队倒下才撤离。":"当前单人场次，无队友救援；想组队应先邀请并接受，全员到首室由队长开场。")+" 清怪后自行前进，掉线宽限5分钟。");
     }
     private void join(Player p,Site s){
         conquestAdmission(p,s);
@@ -762,9 +804,9 @@ final class SiteDungeonManager implements Listener {
     @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留；dungeon status 查看当前室，5分钟内步行返回即可续打，不自动免费传送。");}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){
-        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
+        if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){
-        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
+        if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     private ItemStack icon(Material material,String name,String... lore){ItemStack item=new ItemStack(material);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
