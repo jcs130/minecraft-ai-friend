@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+Version 0.2.124 also yields already-satisfied native plans and unchanged saved
+death lessons at the normal decision cadence, without a whole-planner delay or
+incrementing the plain-reply inactivity counter. The exact native receipt stays
+in history; neither result proves new movement, learning or goal completion.
+Real provider retries and the configured idle cadence for plain replies remain.
+
 Version 0.2.123 removes whole-planner exponential waits for rejected operations
 and malformed tool calls. Exact invalid calls remain fenced; corrected arguments,
 help and other operations continue at normal decision cadence. Native validation,

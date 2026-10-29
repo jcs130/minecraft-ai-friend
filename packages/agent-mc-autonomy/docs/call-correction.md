@@ -29,3 +29,13 @@ It does not remove provider outage/rate-limit handling, explicit native waits,
 the configured minimum decision cadence or the bounded maximum tool rounds.
 The first known JSON syntax error still has one immediate correction opportunity;
 subsequent errors return to normal cadence without a busy retry loop.
+
+Since 0.2.124, successful tool no-ops also end only the current bounded turn:
+an already-satisfied native plan and an unchanged saved death lesson do not
+install a planner deadline or increment the plain-reply inactivity counter.
+The next decision can choose other useful work at the configured minimum
+cadence. Original receipts remain in context and the journal; there is no
+invented movement, new lesson, task or verified goal completion. An independent
+provider deadline, explicit stop and unknown-dispatch fences still apply.
+This is distinct from plain replies with no tools, which retain their bounded
+idle retry policy, and from real model-provider outages.

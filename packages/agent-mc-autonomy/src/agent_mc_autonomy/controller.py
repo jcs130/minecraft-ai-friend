@@ -1713,15 +1713,13 @@ class Controller:
             # A successful no-op is neither new memory nor a game action. End
             # this read chain with the real receipt; keep corrections and all
             # native stop/unknown/death boundaries available on the next turn.
-            self.unactioned_replies += 1
-            delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
-                        * 2 ** min(6, self.unactioned_replies - 1))
-            self.planner_retry_at = time.monotonic() + delay
+            # Yield at normal decision cadence, without treating a completed
+            # tool result as a plain unacted reply or suspending other work.
             self.continuation_needed = True
             self.planner_notice = ("The unchanged death lesson was already saved. No new memory or game action occurred. "
                                    "Do not repeat that report; use fresh facts to choose useful work, revise with new evidence, "
                                    "or explain a real waiting condition. Behavioral improvement remains unverified.")
-            self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+            self.publish(planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
             return result, compact, True
         read_only = observation_call(name, arguments)
         data = result.get("data")
@@ -1734,16 +1732,12 @@ class Controller:
             # The native arrival shortcut can complete without creating a task.
             # Keep its exact receipt, but do not fill another read round or
             # count it as new work. Unknown results were fenced by dispatch.
-            self.unactioned_replies += 1
-            delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
-                        * 2 ** min(6, self.unactioned_replies - 1))
-            self.planner_retry_at = time.monotonic() + delay
             self.continuation_needed = True
             self.planner_notice = ("The plan completed immediately with no new task. This is not evidence of new "
                 "movement or project progress. Read the original receipt; do not repeat an already-satisfied action. "
                 "Choose feasible next work from current facts, or explain a real waiting condition. "
                 "Arguments and native arrival rules have not been changed.")
-            self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+            self.publish(planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
             return result, compact, True
         correction_boundary = False
         if not result.get("failed"):

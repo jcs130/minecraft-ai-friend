@@ -1,6 +1,5 @@
 import dataclasses
 import json
-import time
 
 from test_controller import packed, setup
 from test_death_memory import SCOPE, event, facts
@@ -57,7 +56,7 @@ def test_deferred_main_reflection_is_not_a_demand_for_another_planner_report(tmp
     assert "deferred" in context["next"]
 
 
-def test_duplicate_report_yields_bounded_backoff_without_native_dispatch(framework_module, tmp_path, run_async):
+def test_duplicate_report_yields_without_pausing_other_work(framework_module, tmp_path, run_async):
     published = []
     _, bridge, controller = setup(framework_module, tmp_path, None)
     controller.publish = lambda **value: published.append(value)
@@ -66,16 +65,16 @@ def test_duplicate_report_yields_bounded_backoff_without_native_dispatch(framewo
     first, _, boundary = run_async(controller.execute_model_call("death_review", report()))
     assert json.loads(first["text"])["saved"] is True and not boundary
     for _ in range(8):
-        before = time.monotonic()
         result, compact, boundary = run_async(controller.execute_model_call("death_review", report()))
         assert result["failed"] is False and boundary
         assert result["code"] == "death_lesson_unchanged"
         assert json.loads(compact)["code"] == "death_lesson_unchanged"
-        assert 0 < controller.planner_retry_at - before <= 300.1
+        assert controller.planner_retry_at == 0
+        assert controller.unactioned_replies == 0
         assert controller.continuation_needed
     assert not bridge.calls and not controller.pending and controller.inflight_request is None
     assert not controller.death_waiting
-    assert any(row.get("planner_retry_seconds") == 300 for row in published)
+    assert published[-1]["planner_retry_seconds"] == 0
     changed, _, boundary = run_async(controller.execute_model_call("death_review", report(lesson="Use new observed clearance")))
     assert json.loads(changed["text"])["saved"] is True and not boundary
 
