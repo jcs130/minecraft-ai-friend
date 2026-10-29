@@ -5012,7 +5012,12 @@ export class Executor {
       lane: 'task', event: 'preempted', taskId: t?.id ?? dropped[0]?.id, msg: text,
       data: { reason, dropped: dropped.length, releasedHold: held, landings },
     });
-    this.opts.report({ kind: 'superseded', text, taskId: t?.id ?? dropped[0]?.id });
+    const primary = t?.id ?? dropped[0]?.id;
+    this.opts.report({ kind: 'superseded', text, taskId: primary });
+    // Each accepted queue identity needs its own terminal. The aggregate notice
+    // covers only the primary task; omitted IDs would remain accepted forever.
+    for (const task of dropped) if (task.id !== primary)
+      this.reportCancelled(task, `自保反射:${reason}`, Executor.frozenProgress(task));
   }
 
   /** 抢占回执附带账上仍有原料或成品的炉子，并标明是上次看见的数量。 */

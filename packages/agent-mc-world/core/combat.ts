@@ -37,6 +37,7 @@ import {
 } from './combat-context.ts';
 import { HOSTILE, bestWeapon, dropOwnedGoal, meleeCooldownMs, releaseBody, setOwnedGoal } from './executor.ts';
 import { weaponScore } from './melee.ts';
+import { createDefensiveWeaponSelector } from './defensive-weapon.ts';
 import { combatLoadout } from './combat-loadout.ts';
 import { equipHandConfirmed } from './equipment.ts';
 import { walkOnlyPath } from './travel.ts';
@@ -52,7 +53,6 @@ import { itemsInReach } from './inventory.ts';
 import { RISKY_FOODS } from './nutrition.ts';
 import {
   RANGED_EXIT_RANGE,
-  chooseHybridWeapon,
   inKiteRange,
   type BowEvent,
   type BowShotResult,
@@ -400,6 +400,7 @@ export class CombatSession {
   private landed = 0;
   private lastSwingTargetId = -1;
   private hybridWeapon: HybridWeapon = 'melee';
+  private readonly selectDefensiveWeapon = createDefensiveWeaponSelector();
   private rangedOwner: object | null = null;
   private rangedPendingOwner: object | null = null;
   private nextRangedAt = 0;
@@ -531,7 +532,10 @@ export class CombatSession {
     const foe = bot.entities[action.targetId];
     if (!foe || !this.engagementTargets().includes(action.targetId) || combatLoadout(bot).canEngage !== true) return false;
     if (this.tracking) {
-      this.trackingLease = null; this.state = 'fighting'; this.rangedOwner = {}; this.armMelee(bot);
+      this.trackingLease = null; this.state = 'fighting'; this.rangedOwner = {};
+      this.hybridWeapon = this.selectDefensiveWeapon({phase:'start',current:this.hybridWeapon,heldItem:bot.heldItem?.name??null,
+        rangedReady:this.rangedReady(bot),meleeReady:Boolean(bestWeapon(bot)),distance:null});
+      if(this.hybridWeapon==='melee')this.armMelee(bot);
       this.lastLandedAt = this.lastProgressAt = this.lastRealProgressAt = Date.now();
     } else if (!this.fighting && !this.engage(foe.name ?? '', false)) return false;
     if (this.fighting) {
@@ -801,7 +805,8 @@ export class CombatSession {
     this.swings = 0;
     this.landed = 0;
     this.lastSwingTargetId = -1;
-    this.hybridWeapon = 'melee';
+    this.hybridWeapon = this.selectDefensiveWeapon({phase:'start',current:'melee',heldItem:bot.heldItem?.name??null,
+      rangedReady:this.rangedReady(bot),meleeReady:Boolean(bestWeapon(bot)),distance:null});
     this.rangedOwner = {};
     this.rangedPendingOwner = null;
     this.nextRangedAt = now;
@@ -819,7 +824,8 @@ export class CombatSession {
     this.opts.suspendTasks(`战斗:${trialClear ? '试炼清怪' : hurt ? '被' : ''}${zhEntity(firstName)}${hurt ? '打了' : trialClear ? '' : '贴到跟前'}`);
     this.releaseWalkOnly ??= walkOnlyPath(bot);
     this.hook(bot);
-    const held = initial === 'fighting' ? this.armMelee(bot) : '';
+    const held = initial === 'fighting' ? this.hybridWeapon === 'ranged'
+      ? ',保留已经拿好的弓，拉开距离还击' : this.armMelee(bot) : '';
     this.opts.emit(
       initial === 'tracking' ? `先和${zhEntity(firstName)}保持距离，跟进观察，不主动出手。`
       : hurt
@@ -1171,8 +1177,8 @@ export class CombatSession {
     // Having a bow does not make the empty melee hand armed. With no melee
     // weapon, keep the ranged controller's spacing instead of choosing fists
     // merely because the hostile crossed the hybrid distance threshold.
-    const weapon = rangedReady && !bestWeapon(bot)
-      ? 'ranged' : chooseHybridWeapon(this.hybridWeapon, target.reach, rangedReady);
+    const weapon = this.selectDefensiveWeapon({phase:'tick',current:this.hybridWeapon,heldItem:bot.heldItem?.name??null,
+      rangedReady,meleeReady:Boolean(bestWeapon(bot)),distance:target.reach});
     if (weapon !== this.hybridWeapon) this.switchWeapon(bot, weapon);
     if (this.hybridWeapon === 'ranged') {
       this.driveRanged(bot, target, visibleFoes, now);
