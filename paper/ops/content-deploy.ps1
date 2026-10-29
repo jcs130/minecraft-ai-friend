@@ -62,7 +62,7 @@ function Content-MultiverseTarget([string]$relative) {
 }
 
 function Content-NativeRpgJar([string]$relative) {
-    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','Vault-1.7.3.jar')
+    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','QiandengjiRpg-0.2.9.jar','Vault-1.7.3.jar')
 }
 
 function Content-NativeRpgTarget([string]$relative) {
@@ -220,7 +220,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     foreach ($file in @($plan.removeJars)) {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
-        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name) -or (Content-NativeRpgJar $file.name) -or (Content-ProximityVoiceJar $file.name)) {
+        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name) -or (Content-AgentAntiCheatJar $file.name) -or (Content-MultiverseJar $file.name) -or (Content-NativeRpgJar $file.name) -or (Content-ProximityVoiceJar $file.name) -or ($file.name -ceq 'WorldObserver-0.1.0.jar')) {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
             # This exact reviewed replacement is necessary: FAWE provides the

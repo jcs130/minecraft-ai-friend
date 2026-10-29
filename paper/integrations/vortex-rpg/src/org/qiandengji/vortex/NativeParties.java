@@ -47,8 +47,9 @@ final class NativeParties {
     }
     private void status(Player p,boolean json,Optional<ExpeditionPartyManager.PartySnapshot> party){
         var out=new LinkedHashMap<String,Object>();out.put("type","party");out.put("queryOnly",true);out.put("sessionOnly",true);out.put("inParty",party.isPresent());
-        String next=party.isPresent()?"/mycli dungeon list":"/mycli guild party create";out.put("nextCommand",next);
-        String text="尚未组队；可由队长创建，再 invite 玩家，对方 accept";
+        String next=party.isPresent()?"/mycli dungeon list":"/mycli guild party --help";out.put("nextCommand",next);
+        if(party.isEmpty()){out.put("inviteStateKnown",false);out.put("options",List.of(Map.of("when","刚收到仍有效的邀请","command","/mycli guild party accept"),Map.of("when","自己发起新队伍","command","/mycli guild party create")));}
+        String text="尚未组队；若刚收到邀请，用 accept，勿另建队；自己发起才 create、invite <在线玩家>，对方 accept。名字用 /mycli locate list 查。建队不等于加入副本，完整活动流程 /mycli intro";
         if(party.isPresent()){var s=party.get();var members=s.members().stream().map(id->Map.of("uuid",id.toString(),"name",name(id),"role",s.roles().get(id).name())).sorted(Comparator.comparing(row->row.get("name"))).toList();out.put("leader",name(s.leaderId()));out.put("members",members);text="队长 "+name(s.leaderId())+"；成员 "+String.join("、",s.members().stream().map(NativeParties::name).sorted().toList())+"；全员到副本首室，队长 start 后全队一起登记；本场2人以上启用倒地救援。队伍为会话状态，重启后须重组";}
         if(json)p.sendMessage("MC_RPG "+gson.toJson(out));else p.sendMessage("§b[队伍] "+text+"。下一步："+next);
     }

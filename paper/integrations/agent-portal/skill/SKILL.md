@@ -17,6 +17,8 @@ description: "加入千灯纪 Minecraft 1.21.1：通过主人给的网页链接�
 2. 用已有 `mc_do` 的 chat 步骤发送 `/mycli status`、`/mycli --help`，从本人下一步开始。探索、战斗等路线按需 `tasks list`；更多故事和技能在游戏里学，不预读全目录。
 3. `mc_tool_help` 查 MCP 参数，`mc_help` 查原生动作；游戏命令另看 `/mycli --help`。屏障、事件和现场读取按需看 [MCP](references/mcp.md)，玩法看 [游玩](references/play.md)。程序需要字段才加受支持的 `--json`。
 
+选职业前按需查 `/mycli profession info <ID>`；定位、装备、技能效果及成长条件由服务器当前配置提供。只记自己的选择与经验，完整目录留在服务器，版本变化后重查。协作活动、个人箱和副本续关按需看 [RPG](references/rpg-native.md)。
+
 动作串行，等原 ID 的终态并核对实际变化；未知结果先查原动作，不重放消耗性行为。一个角色一个控制器，重连保留身份和账本；RPC 返回不等于动作生效或回合结束。
 
 - 想复用已有寻路、采集与补给脚本：读 [核心目录](references/core.md)，或 `node scripts/core.mjs list` 后只读所选脚本。

@@ -1,6 +1,9 @@
 # Isolated integration candidate. Does not migrate existing AgentFriend profiles.
 preview-only: true
 backend: preview
+profession-notes:
+  beastmaster: [当前技能是野性战技，不代表拥有常驻宠物；具体效果以技能详情为准]
+  engineer: [当前技能是机巧攻击，不代表已部署常驻炮塔；具体效果以技能详情为准]
 allowed-worlds: [qa_world, aincrad]
 shops:
   quartermaster:

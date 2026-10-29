@@ -59,8 +59,8 @@ public final class RpgJourney {
             if(f.mana()>=6&&f.healCooldownMs()==0)return advice("survival","low_health","生命偏低，先用圣愈术恢复；遇敌先撤到安全位置","/mycli cast selfheal","/mycli status");
             return advice("survival","heal_unavailable","生命偏低，先撤到安全处、进食或等治疗冷却；不要重复施法","/mycli skills info selfheal","/mycli status");
         }
-        if(f.inDungeon())return advice("dungeon","in_dungeon","正在副本中；按本场目标推进，倒地等队友救援，清场后按回执返回结算","/mycli dungeon status","/mycli dungeon status");
         if(freeSlots==0)return advice("storage","inventory_full","随身36格已占用；选择材料用 arena stash putslot <槽> <数量> 直接远程存箱（成功2魔力）；多余装备 arena recycle list；查询不会腾出格子","","/mycli inventory");
+        if(f.inDungeon())return advice("dungeon","in_dungeon","正在副本中；按本场目标推进，倒地等队友救援；遗迹战败自动回存档点，整场三次战败才结束；查询不会推进战斗","/mycli dungeon status","/mycli dungeon status");
         var active=definitions.stream().filter(q->{var p=data.quests().get(q.id());return p!=null&&p.state()==QuestState.ACTIVE;})
             .sorted(Comparator.<QuestDefinition>comparingInt(q->QuestText.ready(q,data.quests().get(q.id()))?0:1)
                 .thenComparing(Comparator.comparingDouble((QuestDefinition q)->fraction(q,data.quests().get(q.id()))).reversed()).thenComparing(QuestDefinition::id)).toList();
