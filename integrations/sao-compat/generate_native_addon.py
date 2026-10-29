@@ -28,6 +28,7 @@ def generate(root):
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent e)->{LAST_READ.remove(e.getEntity().getUUID());SUBSCRIPTIONS.remove(e.getEntity().getUUID());ACTION_RATES.remove(e.getEntity().getUUID());});
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStartedEvent e)->RegistryExport.write(e.getServer(),EPOCH));
         StructureProtection.install();
+        SaoGameplay.install();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e)->{
             if(e.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
             var server=net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
@@ -64,6 +65,9 @@ def generate(root):
         lines.append(line)
     text='\n'.join(lines)+'\n'
     text=text.replace('PlayerAuthBridge.authenticated(p)','loggedIn(p)')
+    mana='self.add("mana",JsonNull.INSTANCE);self.addProperty("manaUnavailableReason","mod_mana_provider_not_adapted");'
+    if mana not in text:raise ValueError('native_mana_binding_source_changed')
+    text=text.replace(mana,'self.add("mana",SaoRpg.mana(p));')
     text=text.replace('stack.saveOptional(p.registryAccess()).toString()','stack.save(new net.minecraft.nbt.CompoundTag()).toString()')
     text=text.replace('ComponentSerialization.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE,p.registryAccess()),stack.getHoverName()).getOrThrow()','JsonParser.parseString(net.minecraft.network.chat.Component.Serializer.toJson(stack.getHoverName()))')
     text=text.replace('stack.get(DataComponents.FOOD)','stack.getFoodProperties(p)').replace('food.nutrition()','food.getNutrition()').replace('food.saturation()','food.getSaturationModifier()')
@@ -85,6 +89,7 @@ def generate(root):
     policy=native/'src/dev/qiandeng/maw/taunative/NativePolicy.java'
     (package/'NativePolicy.java').write_text(policy.read_text('utf-8').replace('package dev.qiandeng.maw.taunative;','package dev.qiandeng.maw.saoforge;'),encoding='utf-8')
     shutil.copyfile(native/'operations.json',destination/'src/main/resources/native-operations.json')
+    shutil.copyfile(here/'sao-operations.json',destination/'src/main/resources/sao-operations.json')
     record={'shared_source':{str(p.relative_to(here.parent.parent)):digest(p) for p in (source,policy,native/'operations.json')},'generator_sha256':digest(Path(__file__)),'minecraft':'1.20.1','forge':'47.4.10','recipe_provider':False,'game_login_identity_only':True,'source_destination':str(destination)}
     (root/'native-generation.json').write_text(json.dumps(record,indent=2),encoding='utf-8')
     print(json.dumps(record,indent=2))

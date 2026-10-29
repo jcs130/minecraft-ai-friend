@@ -12,11 +12,14 @@ export async function createSAOEnginePort({ root, packageDirectory, adapterDirec
   const {createSAOBot}=requireAdapter('./sao_bot.cjs');
   const {attachProtection}=requireAdapter('./protection-client.cjs');
   const {blockedCraft,craftFenceDeclaration,fenceVanillaRecipes,unavailableCraft}=requireAdapter('./craft-fence.cjs');
+  const {attachSaoGameplay}=requireAdapter('./sao-client.cjs');
+  const {SAO_TOOL,executeSaoTool}=requireAdapter('./sao-tools.cjs');
   const SERVER_TOOLS=[
     {name:'mc_native',description:'Read this connection’s real mod state, inventory, menu or capabilities. Includes namespaced item IDs and complete ItemStack evidence. Read-only; does not click menus or change the body. Missing providers remain explicitly unavailable.',parameters:{type:'object',properties:{section:{type:'string',enum:['state','inventory','menu','capabilities']}},required:['section'],additionalProperties:false}},
     {name:'mc_protect',description:'Read the server’s current break/place rule for one absolute integer block coordinate within 64 blocks. deny/unknown never mean air or permission. This read does not change a block or load a chunk.',parameters:{type:'object',properties:{action:{type:'string',enum:['break','place']},x:{type:'integer'},y:{type:'integer'},z:{type:'integer'}},required:['action','x','y','z'],additionalProperties:false}}
   ];
   for(const tool of SERVER_TOOLS)tool.tags=['read'];
+  SERVER_TOOLS.push(SAO_TOOL);
   const coreDo=MINECRAFT_TOOL_DECLS.find(tool=>tool.name==='mc_do');
   if(!coreDo)throw Error('missing_core_do_contract');
   SERVER_TOOLS.push(craftFenceDeclaration(coreDo));
@@ -29,15 +32,18 @@ export async function createSAOEnginePort({ root, packageDirectory, adapterDirec
       }});instance=this;
     }
     createBot(options){return createSAOBot({root,username:options.username,botOptions:options})}
+    attachServerProtocols(bot){bot.sao=attachSaoGameplay(bot)}
     createProtectionPort(bot,onReply){return bot.saoProtection??=(attachProtection(bot,onReply))}
   }
   class EngineWorld extends TacticalMinecraftWorld {
     createBridge(options){return new EngineBridge(options)}
     tools(){
-      return [...super.tools().map(tool=>tool.name!=='mc_do'?tool:{...craftFenceDeclaration(tool),handler:(args,ctx)=>blockedCraft(args.steps)?unavailableCraft():tool.handler(args,ctx)}),...SERVER_TOOLS.filter(tool=>tool.name!=='mc_do').map(decl=>({...decl,handler:async args=>{
+      const base=super.tools(),doTool=base.find(tool=>tool.name==='mc_do');
+      return [...base.map(tool=>tool.name!=='mc_do'?tool:{...craftFenceDeclaration(tool),handler:(args,ctx)=>blockedCraft(args.steps)?unavailableCraft():tool.handler(args,ctx)}),...SERVER_TOOLS.filter(tool=>tool.name!=='mc_do').map(decl=>({...decl,handler:async (args,ctx)=>{
         const bot=this.bridge?.bot;
         if(!bot)return {text:JSON.stringify({status:'offline',reason:'body_not_connected'}),failed:true};
         await bot.nativeReady;
+        if(decl.name==='mc_sao')return executeSaoTool(bot.sao,args,ctx,(input,context)=>doTool.handler(input,context));
         if(decl.name==='mc_protect'){
           const value=await bot.saoProtection.check(args.action,String(bot.game.dimension),args,true);
           return {text:JSON.stringify(value)};

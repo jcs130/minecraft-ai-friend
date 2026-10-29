@@ -1,5 +1,7 @@
 # SAO 0.76.1-lite：Numen / Mineflayer 隔离接入
 
+任务、职业与技能采用按需查询接口 `mc_sao`；不预装整本任务书进上下文。原生提交/领奖、职业及技能接入方法与边界见 [GAMEPLAY.md](GAMEPLAY.md)。
+
 后续已启用桐人 `ag_Kirito`：自研 autonomy 0.2.128 + core rc.130，经 Mineflayer/Forge 原生桥接，由线上 qwen3.7-plus 驱动。已实际采集 4 个橡木原木。运行、停止、记忆及已知缺口见 [KIRITO.md](KIRITO.md)；建筑保护和真实村庄验收见 [PROTECTION.md](PROTECTION.md)。隔离性质与原端口保持。
 
 2026-10-29 的实验候选。现役 Paper 与 Tau 1.21.1 的目录、进程、网关、防火墙、端口转发和自动启动保持原状。本目录不包含世界、模型密钥或第三方模组二进制。

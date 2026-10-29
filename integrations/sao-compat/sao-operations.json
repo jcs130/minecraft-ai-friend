@@ -1,0 +1,443 @@
+{
+  "schemaVersion": 1,
+  "bridgeId": "maw_sao_gameplay",
+  "version": "0.1.0",
+  "scope": "requesting_player_only",
+  "limits": {
+    "queryBytes": 4096,
+    "stateBytes": 16384,
+    "pageDefault": 8,
+    "pageMax": 12,
+    "actionCommandChars": 240
+  },
+  "operations": [
+    {
+      "id": "sao.capabilities",
+      "readOnly": true,
+      "description": "Read a short operation index, or one exact operation schema/example. No quest book or skill table is injected automatically.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "type": "string",
+            "pattern": "^sao\\.[a-z_.]+$",
+            "maxLength": 80
+          }
+        },
+        "required": []
+      },
+      "example": {}
+    },
+    {
+      "id": "sao.status",
+      "readOnly": true,
+      "description": "Read own native SAO level, profession, resource, skill loadout and talent points. Separate from vanilla XP and FTB team progress. Cooldowns use milliseconds.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "example": {}
+    },
+    {
+      "id": "sao.quests.list",
+      "readOnly": true,
+      "description": "Page visible quests for your own FTB team; default filter=available includes actionable quests and unclaimed rewards. Optional query searches visible titles, chapter_id restricts a returned chapter ID. No artificial accept state: eligible FTB quests start automatically.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "filter": {
+            "type": "string",
+            "pattern": "^(available|visible|completed|unclaimed)$",
+            "maxLength": 12
+          },
+          "chapter_id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{16}$",
+            "maxLength": 16
+          },
+          "query": {
+            "type": "string",
+            "pattern": "^[^\\r\\n]{1,80}$",
+            "maxLength": 80
+          }
+        },
+        "required": []
+      },
+      "example": {
+        "offset": 0,
+        "limit": 8,
+        "filter": "available"
+      }
+    },
+    {
+      "id": "sao.quest.show",
+      "readOnly": true,
+      "description": "Read a visible quest, real prerequisites/tasks/rewards and native progress. Hidden details remain unavailable. task_offset/reward_offset select bounded pages; nothing is marked complete.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "quest_id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{16}$",
+            "maxLength": 16
+          },
+          "task_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "reward_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "quest_id"
+        ]
+      },
+      "example": {
+        "quest_id": "4C2ED6FA2C94A4F0"
+      }
+    },
+    {
+      "id": "sao.professions",
+      "readOnly": true,
+      "description": "Read runtime profession names and skills, including installed extensions. Omit profession_id for a bounded profession index; supply one returned ID for skills/costs/requirements.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profession_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          }
+        },
+        "required": []
+      },
+      "example": {}
+    },
+    {
+      "id": "sao.talents",
+      "readOnly": true,
+      "description": "Read one native talent page: ranks, level requirements, available points and buy/refund eligibility. Default 8, maximum 12; nextOffset is optional continuation.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          }
+        },
+        "required": []
+      },
+      "example": {}
+    },
+    {
+      "id": "sao.attributes",
+      "readOnly": true,
+      "description": "Read the independent P-screen attribute points and each stat restriction. These are separate from talent-tree points.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "example": {}
+    },
+    {
+      "id": "sao.action_status",
+      "readOnly": true,
+      "description": "Reconcile this player’s original action request. Missing IDs are unknown, never proof of non-execution. Historical terminal receipts are not fresh state.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action_request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9:_-]{1,64}$",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "action_request_id"
+        ]
+      },
+      "example": {
+        "action_request_id": "my-quest-claim-1"
+      }
+    },
+    {
+      "id": "sao.task.submit",
+      "readOnly": false,
+      "description": "Press the normal native submission/checkmark button for one visible, eligible task. Native FTB rules perform checks and consumption. Automatic/custom/observation/screen-only conditions are not force-completed.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{16}$",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      },
+      "example": {
+        "task_id": "51F117D0DF5D36AE"
+      }
+    },
+    {
+      "id": "sao.reward.claim",
+      "readOnly": false,
+      "description": "Claim one actual visible reward of a completed quest, using native FTB claim bookkeeping and hooks. Duplicate request IDs do not grant twice. Inventory space and unsupported reward types fail explicitly.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reward_id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{16}$",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "reward_id"
+        ]
+      },
+      "example": {
+        "reward_id": "6204F8971646E9F8"
+      }
+    },
+    {
+      "id": "sao.quest.track",
+      "readOnly": false,
+      "description": "Pin an eligible visible quest for this player; this is tracking, not task completion.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "quest_id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{16}$",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "quest_id"
+        ]
+      },
+      "example": {
+        "quest_id": "4C2ED6FA2C94A4F0"
+      }
+    },
+    {
+      "id": "sao.profession.choose",
+      "readOnly": false,
+      "description": "Choose a runtime profession through the same server handler as the Java GUI. Native scroll cost, combat and switch cooldown apply; no OP or free respec.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profession_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          }
+        },
+        "required": [
+          "profession_id"
+        ]
+      },
+      "example": {
+        "profession_id": 1
+      }
+    },
+    {
+      "id": "sao.loadout.bind",
+      "readOnly": false,
+      "description": "Bind a native profession/sword skill to a slot. Profession slots/skills are 0..5, sword slots 0..1/skills 0..3. Native style and level gates apply.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "profession",
+              "sword"
+            ],
+            "pattern": "^(profession|sword)$",
+            "maxLength": 10
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "skill": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "kind",
+          "slot",
+          "skill"
+        ]
+      },
+      "example": {
+        "kind": "profession",
+        "slot": 0,
+        "skill": 0
+      }
+    },
+    {
+      "id": "sao.skill.cast",
+      "readOnly": false,
+      "description": "Activate an observed equipped native skill slot, using the normal aim, costs, cooldown and combat rules. A started cast is not proof of a hit/kill.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "profession",
+              "sword"
+            ],
+            "pattern": "^(profession|sword)$",
+            "maxLength": 10
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "kind",
+          "slot"
+        ]
+      },
+      "example": {
+        "kind": "profession",
+        "slot": 0
+      }
+    },
+    {
+      "id": "sao.talent.buy",
+      "readOnly": false,
+      "description": "Buy one native talent rank using real available points and level/prerequisite gates.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "node": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "required": [
+          "node"
+        ]
+      },
+      "example": {
+        "node": 0
+      }
+    },
+    {
+      "id": "sao.talent.refund",
+      "readOnly": false,
+      "description": "Refund one native rank only when the mod allows it; dependent nodes and combat rules remain.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "node": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "required": [
+          "node"
+        ]
+      },
+      "example": {
+        "node": 0
+      }
+    },
+    {
+      "id": "sao.attribute.buy",
+      "readOnly": false,
+      "description": "Allocate one real attribute point through the mod API. Native profession restrictions and point availability apply.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "node": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "required": [
+          "node"
+        ]
+      },
+      "example": {
+        "node": 1
+      }
+    },
+    {
+      "id": "sao.attribute.refund",
+      "readOnly": false,
+      "description": "Refund one real attribute rank through the native mod API; combat and refund rules remain.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "node": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "required": [
+          "node"
+        ]
+      },
+      "example": {
+        "node": 1
+      }
+    }
+  ]
+}

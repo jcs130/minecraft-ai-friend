@@ -23,7 +23,7 @@ def setup(root):
     core=runtime/'core';core.mkdir(exist_ok=True)
     (core/'package.json').write_text(json.dumps({'name':'sao-kirito-core-runtime','private':True,'dependencies':{'agent-mc-world':'file:../packages/agent-mc-world-0.5.7-rc.130.tgz'}}),encoding='utf-8')
     adapter=runtime/'adapter/integrations/sao-compat';adapter.mkdir(parents=True,exist_ok=True)
-    files=['package.json','package-lock.json','sao_bot.cjs','sao-engine.mjs','protection-client.cjs','craft-fence.cjs','native_registry.cjs','forge_client.cjs']
+    files=['package.json','package-lock.json','sao_bot.cjs','sao-engine.mjs','protection-client.cjs','craft-fence.cjs','native_registry.cjs','forge_client.cjs','sao-client.cjs','sao-tools.cjs','sao-operations.json']
     hashes={}
     for name in files:
         shutil.copyfile(here/name,adapter/name);hashes[name]=hashlib.sha256((adapter/name).read_bytes()).hexdigest()

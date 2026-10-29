@@ -35,6 +35,9 @@ def resident(root, source):
         text=text.replace('case ConvoState.Msg.Tool t->','else if(msg instanceof ConvoState.Msg.Tool t) ')
         text=text.replace('default->throw new IllegalStateException("invalid_protocol_view");','else throw new IllegalStateException("invalid_protocol_view");')
         if name=='HeadlessRuntime.java':
+            old='net.minecraftforge.fml.ModList.get().isLoaded("maw_agent_bridge")?new NativeModBridge():null'
+            if text.count(old)!=1:raise ValueError('review_changed_mod_provider_selection')
+            text=text.replace(old,'net.minecraftforge.fml.ModList.get().isLoaded("maw_sao_native")?new NativeModBridge("dev.qiandeng.maw.saoforge.SaoGameplay"):null')
             # Other mods (notably FTB Teams/Quests) finish their own started
             # listeners after ours. Restore bodies on the next server tick,
             # after the entire lifecycle event, not inside our started callback.
@@ -147,7 +150,7 @@ displayName="Agent MC World SAO Numen Resident"
 displayTest="IGNORE_SERVER_VERSION"
 description="Owner-scoped external controller for persistent native Numen bodies. GUI adapters unavailable."
 ''',encoding='utf-8')
-    record={'resident_source':str(source),'source_sha256':hashes,'generator_sha256':digest(Path(__file__)),'optional_network_mixin_sha256':digest(optional),'minecraft':'1.20.1','gui_adapters':False,'native_mod_adapter':False,'owner_scoped':True,'original_source_preserved':True,'numen_client_optional':True}
+    record={'resident_source':str(source),'source_sha256':hashes,'generator_sha256':digest(Path(__file__)),'optional_network_mixin_sha256':digest(optional),'minecraft':'1.20.1','gui_adapters':False,'native_mod_adapter':True,'native_mod_provider':'sao_native','owner_scoped':True,'original_source_preserved':True,'numen_client_optional':True}
     (root/'resident-generation.json').write_text(json.dumps(record,indent=2),encoding='utf-8');print(json.dumps(record))
 
 if __name__=='__main__':

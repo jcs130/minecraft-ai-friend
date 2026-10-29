@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "scope": "isolated_testing",
+  "observedAt": "2026-10-29T15:23:15.457680+00:00",
+  "serverPid": 12592,
+  "checks": [
+    {
+      "name": "native_profession_changed_0_to_1",
+      "passed": true
+    },
+    {
+      "name": "real_switch_scroll_consumed",
+      "passed": true
+    },
+    {
+      "name": "native_reward_has_real_inventory_delta",
+      "passed": true
+    },
+    {
+      "name": "reconnect_and_duplicate_did_not_double_reward",
+      "passed": true
+    },
+    {
+      "name": "snapshot_uses_real_mana_provider",
+      "passed": true
+    },
+    {
+      "name": "same_request_returns_history",
+      "passed": true
+    },
+    {
+      "name": "changed_parameters_reusing_id_are_refused",
+      "passed": true
+    },
+    {
+      "name": "cross_restart_history_retains_old_observation",
+      "passed": true
+    },
+    {
+      "name": "native_checkmark_progress_0_to_1",
+      "passed": true
+    },
+    {
+      "name": "tracking_is_separate_from_completion",
+      "passed": true
+    },
+    {
+      "name": "sao.talent.buy_no_points_no_change",
+      "passed": true
+    },
+    {
+      "name": "sao.attribute.buy_no_points_no_change",
+      "passed": true
+    },
+    {
+      "name": "level_requirement_no_change",
+      "passed": true
+    },
+    {
+      "name": "slot_not_equipped_no_change",
+      "passed": true
+    },
+    {
+      "name": "real_cast_spends_resource_and_sets_cooldown",
+      "passed": true
+    },
+    {
+      "name": "cast_does_not_claim_a_hit",
+      "passed": true
+    },
+    {
+      "name": "native_active_skills_and_passives_are_distinct",
+      "passed": true
+    },
+    {
+      "name": "declared_timing_is_not_misreported_as_effective",
+      "passed": true
+    },
+    {
+      "name": "two_real_pages_have_consistent_counts_and_no_overlap",
+      "passed": true
+    },
+    {
+      "name": "query_over_limit_has_accurate_field_diagnostic",
+      "passed": true
+    },
+    {
+      "name": "other_numen_body_cannot_read_probe_action",
+      "passed": true
+    },
+    {
+      "name": "numen_default_catalog_is_short_not_all_schemas",
+      "passed": true
+    },
+    {
+      "name": "numen_lease_queue_reached_native_terminal",
+      "passed": true
+    },
+    {
+      "name": "probe_has_no_op",
+      "passed": true
+    },
+    {
+      "name": "all_native_replies_respect_16k_budget",
+      "passed": true
+    },
+    {
+      "name": "isolated_server_is_ready_on_loopback",
+      "passed": true
+    }
+  ],
+  "passed": 26,
+  "addonSha256": "4f5273e1fac5fbed7edbb999d5889dd6c71a587da5c32687ebe65a58a438ee14",
+  "evidenceFile": "acceptance/gameplay-SAOQuestProbe.jsonl",
+  "limits": [
+    "Not a full 934-quest completion audit",
+    "Does not prove every class combat outcome or automatic crafting",
+    "Model discovery quality is recorded separately from native API success"
+  ],
+  "modelAcceptance": {
+    "model": "qwen3.7-plus",
+    "provider": "online_tokenplan",
+    "imageInput": false,
+    "scenario": "SAO discovery to first confirmed tutorial checkmark",
+    "focusedOperatorFeedbackProvided": true,
+    "firstReadAt": "2026-10-29T15:14:15.739945+00:00",
+    "firstConfirmedEffectAt": "2026-10-29T15:14:30.079013+00:00",
+    "modelToolCallsBetween": 4,
+    "confirmedNativeEffects": [
+      {
+        "requestId": "sao_6cd425b5ffa53c0ed04cb00f1e2e9d95478ad79a",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:14:30.079013200Z",
+        "task": {
+          "id": "02336CD7B7E0DC8F",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      },
+      {
+        "requestId": "sao_dd31c7bf765411dae01be5715d1703ea0b305ff4",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:17:51.738601100Z",
+        "task": {
+          "id": "7FA706ADEEEC8963",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      },
+      {
+        "requestId": "sao_71aad1f4cd3c713dd5a0a17dbffd9e547978682f",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:18:55.787156800Z",
+        "task": {
+          "id": "41867E33C1F1298E",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      },
+      {
+        "requestId": "sao_f3d35685ede05d78a738c2e353989c3c21432f85",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:19:38.079863600Z",
+        "task": {
+          "id": "4C9ADC03553B600B",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      },
+      {
+        "requestId": "sao_9ca97bb318ba5cab5604dc133f6c778da60b2f53",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:20:06.105431Z",
+        "task": {
+          "id": "3388EF76F8517707",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      },
+      {
+        "requestId": "sao_0f7059a51ebb5e800217c4eba1585aef057ad663",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:20:52.444369400Z",
+        "task": {
+          "id": "6C0238973D5540BA",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      },
+      {
+        "requestId": "sao_d92a33221ef6b808b9ad128ca8b199417b0267d9",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "operation": "sao.task.submit",
+        "observedAt": "2026-10-29T15:21:28.555220100Z",
+        "task": {
+          "id": "719BF562DF7641E2",
+          "title": "已了解",
+          "type": "CheckmarkTask",
+          "completed": true,
+          "progress": 1,
+          "required": 1,
+          "submissionMode": "submit",
+          "definitionSnbt": "{title:\"已了解\"}",
+          "definitionComplete": true
+        },
+        "questCompleted": true
+      }
+    ],
+    "fullAutonomousStoryVerified": false
+  }
+}
