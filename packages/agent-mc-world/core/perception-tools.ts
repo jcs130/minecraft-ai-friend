@@ -73,7 +73,8 @@ export class AttentionReader {
     const selected=rows.filter(row=>entityId!==undefined?row.entity.id===entityId:risk||this.mode==='combat'
       ?['warning','hostile'].includes(row.kind):true).sort((a,b)=>priority(a)-priority(b)||a.distance-b.distance).slice(0,limit);
     return {sampledAt:now,mode:this.mode,source:'current-entity-observations',observation:entityObservationScope(bot),
-      highlights:selected.map(({entity:e,observation,kind,distance,prediction})=>({id:e.id,label:zhEntity(e.name??'unknown'),kind,distance:round(distance),
+      highlights:selected.map(({entity:e,observation,kind,distance,prediction})=>({id:e.id,entityId:e.id,
+        target:(e.type==='player'||e.name==='player'?e.username:e.name)??null,label:zhEntity(e.name??'unknown'),kind,distance:round(distance),
         visible:observation.visibility==='visible',observation,
         at:[round(e.position.x),round(e.position.y),round(e.position.z)],relation:kind==='player'?'未确认':undefined,
         ...(risk?{attackRange:null,sightRange:null,prediction,priority:kind==='warning'?'高':distance<6?'近距注意':'观察'}:{})})),

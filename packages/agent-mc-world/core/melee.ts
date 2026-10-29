@@ -172,6 +172,7 @@ export function underwaterOxygenNote(bot: Bot): string {
 export function rangedTargetOf(entity: NonNullable<Bot['entities'][string]>): RangedTarget {
   return {
     id: entity.id,
+    ...(typeof entity.uuid === 'string' ? { uuid: entity.uuid } : {}),
     position: entity.position,
     ...(entity.height === undefined ? {} : { height: entity.height }),
     ...(entity.width === undefined ? {} : { width: entity.width }),
@@ -256,6 +257,8 @@ export const HOSTILE = new Set([
  */
 const FAR_TARGETS: Record<string, number> = { end_crystal: 128, ender_dragon: 128 };
 
+export function attackTargetRadius(target: string): number { return FAR_TARGETS[target.toLowerCase()] ?? 32; }
+
 /**
  * 末影水晶不是活物,打掉时只有移除包,没有死亡状态;服务端紧接着在它的坐标上炸一次,
  * 爆炸包只发给 64 格内的玩家。爆心就是水晶坐标,0.5 格只容浮点误差。
@@ -275,9 +278,10 @@ export async function skillAttack(
   target: string,
   mode: AttackMode = 'auto',
   ctx: SkillContext,
+  entityId?: number,
 ): Promise<string> {
   if (!isKnownTarget(bot, target)) {
-    throw new SkillBlocked(`不认识「${target}」这种东西,认不出要打谁`);
+    throw new SkillBlocked(`不认识「${target}」这种目标；attack.target 要实体英文类型或玩家名，数字实体编号另填 entityId 并同时提供实际类型；未选择或攻击其他实体`);
   }
   // Auto selects usable weapons, not an implicit unarmed fallback. Recheck at execution, after any earlier
   // equip/craft/container steps. This does not disable spell programs or the cornered self-defence policy.
@@ -293,10 +297,26 @@ export async function skillAttack(
         + '；auto 未改为空手挥击，未开始攻击。补给后重新核对实际背包与主手；法术和避险可单独选择');
     }
   }
-  const radius = FAR_TARGETS[target] ?? 32;
-  const entity = findEntity(bot, target, radius, (candidate) => canSeeEntity(bot, candidate));
+  const radius = attackTargetRadius(target);
+  const entity = findEntity(bot, target, radius, (candidate) => candidate.isValid !== false
+    && (entityId === undefined || candidate.id === entityId) && canSeeEntity(bot, candidate));
+  if (!entity && entityId !== undefined) {
+    throw new SkillBlocked(`当前连接 ${radius} 格内没有可见的 ${target} entityId=${entityId}；ID 失效、类型不符或被遮挡，未改打其他实体；重新观察`);
+  }
   // 要打的东西不在场 = 无事可做:没打输,是没得打(见 SkillNoop)
   if (!entity) throw new SkillNoop(`附近 ${radius} 格内没看见${zhEntity(target)}，不能隔墙选它作攻击目标`);
+  const selectedUuid = typeof entity.uuid === 'string' ? entity.uuid : undefined;
+  const checkNamedTarget = (requireSight = false): void => {
+    if (entityId === undefined) return;
+    checkAbort(ctx);
+    if (bot.entities[entityId] !== entity || entity.isValid === false
+        || (selectedUuid !== undefined && entity.uuid !== selectedUuid)) {
+      throw new SkillBlocked(`点名实体 entityId=${entityId} 已失效；未改打其他实体，重新观察`);
+    }
+    // Ordinary brief occlusion keeps the existing 1.5-second tracking grace.
+    // Recheck sight immediately before a physical swing or bow preparation.
+    if (requireSight && !canSeeEntity(bot, entity)) throw new SkillBlocked(`点名实体 entityId=${entityId} 已被遮挡；未继续攻击，重新观察`);
+  };
   const ranged = ctx.attack.ranged;
   const forcedRanged = mode === 'ranged' || mode === 'kite';
   if (forcedRanged) {
@@ -332,6 +352,7 @@ export async function skillAttack(
     let active = true;
     const checkEquipmentActive = (): void => {
       checkAbort(ctx);
+      checkNamedTarget();
       if (!active) throw new SkillBlocked('原攻击已结束，不继续换手');
       if (stats.disconnected) throw new SkillBlocked('换手期间连接断开');
       if (!desperate && dangerous && ctx.fleeHealth() > 0 && (bot.health ?? 20) < ctx.fleeHealth()) {
@@ -379,6 +400,7 @@ export async function skillAttack(
       await sleep(50);
       checkAbort(ctx);
       if (stats.disconnected) throw new SkillBlocked(`连接断了,主动攻击已取消;${attackStats(stats)}`);
+      checkNamedTarget();
       if (!canSeeEntity(bot, entity)) {
         outOfSightSince ||= Date.now();
         releaseMelee(bot);
@@ -463,6 +485,7 @@ export async function skillAttack(
           strafeAt = Date.now() + STRAFE_MS;
         }
         await aimAt(bot, entity);
+        checkNamedTarget(true);
         pressRanged(bot, d, mode, strafeLeft);
         // Explicit kite asks for spacing first. Auto/ranged may shoot while
         // making room; the hybrid weapon preference is not a bow range limit.
@@ -547,6 +570,7 @@ export async function skillAttack(
       if (d <= MELEE_REACH && Date.now() - lastSwing >= attackCooldownMs(bot)) {
         if (weaponScore(bot.heldItem?.name ?? '') < 0) await equipMelee();
         await meleeSwing(bot, entity, () => {
+          checkNamedTarget(true);
           stats.lastSwingAt = Date.now();
           stats.lastSwingTargetId = entity.id;
           stats.swings += 1;

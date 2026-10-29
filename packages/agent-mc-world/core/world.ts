@@ -6986,6 +6986,7 @@ export class MinecraftWorld implements World {
         if (!entity?.isValid || !entity.position) return null;
         return {
           id,
+          ...(typeof entity.uuid === 'string' ? { uuid: entity.uuid } : {}),
           position: entity.position,
           height: entity.height,
           width: entity.width,

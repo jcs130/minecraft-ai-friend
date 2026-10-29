@@ -39,6 +39,8 @@ interface Point3 {
 
 export interface RangedTarget {
   id: number;
+  /** When observed, keep this identity through the draw; a reused numeric ID is not the same target. */
+  uuid?: string;
   position: Point3;
   height?: number;
   width?: number;
@@ -374,6 +376,7 @@ interface BowControllerOptions {
 interface Drawing {
   bot: Bot;
   targetId: number;
+  targetUuid?: string;
   leaseToken: unknown;
   bowType: number;
   cancelSlot: number;
@@ -429,6 +432,7 @@ export class BowController {
     const drawing: Drawing = {
       bot,
       targetId: target.id,
+      ...(target.uuid === undefined ? {} : { targetUuid: target.uuid }),
       leaseToken,
       bowType: bow.type,
       cancelSlot: -1,
@@ -585,13 +589,14 @@ export class BowController {
     const resolved = this.opts.resolveTarget
       ? this.opts.resolveTarget(drawing.targetId)
       : fallback;
-    if (!resolved || resolved.id !== drawing.targetId) return null;
+    if (!resolved || resolved.id !== drawing.targetId || (drawing.targetUuid !== undefined && resolved.uuid !== drawing.targetUuid)) return null;
     const at = this.now();
     this.motion.observe(resolved.id, resolved.position, at);
     const estimate = this.motion.estimate(resolved.id, at);
     return {
       target: {
         id: resolved.id,
+        ...(resolved.uuid === undefined ? {} : { uuid: resolved.uuid }),
         position: estimate?.position ?? copyPoint(resolved.position),
         ...(resolved.height === undefined ? {} : { height: resolved.height }),
         ...(resolved.width === undefined ? {} : { width: resolved.width }),
