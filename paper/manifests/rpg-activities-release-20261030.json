@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "rpg-activities-release-20261030-r1",
-  "state": "candidate-not-deployed",
+  "id": "rpg-activities-scheduled-20261030-r2",
+  "state": "queued-in-existing-scheduled-maintenance",
   "sourceBase": "db2dfa0a9a90cc053f8fce126bb1be7b46938cc7",
   "includesPriorReview": "d15f55686f3c34cd9c0e4e7bfda83c506a38f93a",
   "artifacts": {
@@ -50,7 +50,8 @@
     "productionModified": false,
     "combatFixture": "Native enemies frozen/repositioned in disposable QA; real player attacks and callbacks, not autonomous combat balance.",
     "realPaperCommunicationSkillAndTaskChecks": 73,
-    "repeatStartNoticeChecks": 2
+    "repeatStartNoticeChecks": 2,
+    "existingNativeInstallerActualCrossVolumeChecks": 9
   },
   "scope": [
     "18 existing gameplay categories in paged world list",
@@ -75,5 +76,19 @@
     "human voice listening/Bedrock pixels"
   ],
   "releaseDocument": "paper/docs/RPG_ACTIVITIES_20261030.md",
-  "normalTrialRule": "Every ordinary arena start begins at floor 1; old clears do not skip floors. Unlocked arena rest is separate."
+  "normalTrialRule": "Every ordinary arena start begins at floor 1; old clears do not skip floors. Unlocked arena rest is separate.",
+  "supersedes": "rpg-activities-release-20261030-r1",
+  "operationalScope": {
+    "nativeTask": "Afu-MC-DailyBackup",
+    "snapshot": "20261030-040022",
+    "originalStopLocal": "2026-10-30T04:00:22+08:00",
+    "extraRestart": false,
+    "taskDefinitionChanged": false,
+    "bothColdCopiesVerified": false
+  },
+  "runtimeArtifactTargets": {
+    "AgentFriend-0.4.47.32.jar": "AgentFriend-0.4.47.32.jar",
+    "QiandengjiRpg-0.2.12.jar": "QiandengjiRpg-0.2.10.jar",
+    "VortexRPG-1.2.2-alpha-qd30.jar": "VortexRPG-1.2.2-alpha-qd29.jar"
+  }
 }
