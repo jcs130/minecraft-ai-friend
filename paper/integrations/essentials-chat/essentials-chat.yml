@@ -1,0 +1,17 @@
+# Merge only these keys into the existing Essentials config. Not a full config.
+chat:
+  radius: 48
+  shout-default: false
+  persist-shout: false
+  question-enabled: false
+  paper-chat-events: true
+  format:
+    normal: '&7[{WORLD}] &f{DISPLAYNAME}&7: &f{MESSAGE}'
+    local: '&7[{WORLD}] &f{DISPLAYNAME}&7: &f{MESSAGE}'
+    shout: '&7[{WORLD}] &f{DISPLAYNAME}&7: &f{MESSAGE}'
+    question: '&7[{WORLD}] &f{DISPLAYNAME}&7: &f{MESSAGE}'
+  world-aliases:
+    world: 主世界
+    aincrad: 艾恩葛朗特
+    world_nether: 下界
+    world_the_end: 末地

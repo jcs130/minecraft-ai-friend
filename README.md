@@ -1,15 +1,17 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.27、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.6已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/RPG_UNIFIED_20261028.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.124，源码更新不冒充外部客户端已升级。照片全量管理0.8.29与罗盘修复0.4.47.28为待部署候选。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.30、QiandengjiRpg0.2.9、VortexRPG1.2.2-alpha-qd29已上线，32项正式核对通过。官网0.8.28及匹配观战后台已更新，34项正式、8项四角色现场与4项真实游客观战检查通过；语音服务端及自启已安装，公网UDP仍待验收。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布与状态](paper/docs/RPG_INTERACTION_20261029.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.127，源码更新不代表外部客户端已升级。照片全量管理0.8.29仍为候选；罗盘修复已随.30合入。
 
-运维状态：原 E 盘服已恢复开放。[NVMe 迁移](paper/docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，修正版通过 57 项隔离检查，仍待 Windows 确认；C 盘候选副本尚未启用。
+运维状态：[NVMe迁移](paper/docs/NVME_RUNTIME_20261029.md)已完成，原E盘入口联接到C盘NVMe，原目录保留。本轮E/F完整恢复点已冷刷新最新游戏与认证；两次失败尝试的前像和回执保留，新版游戏端已实际运行，后台收尾不需再停Paper。
 
-开发候选：[附近语音与Agent听说](paper/docs/PROXIMITY_VOICE.md)已打通本机TTS、CPU ASR及隔离联机，正式服尚未安装；[原生高画质女神相机](paper/docs/NATIVE_GODDESS_CAMERA.md)已接入原照片流程，核显与YSM真实渲染仍待验收，现役相机保持原方式。
+[Paper现成插件复用与附近聊天方案](paper/docs/PAPER_PLUGIN_REUSE_20261029.md)：同版官方EssentialsXChat与世界/队伍标识候选已通过34项联机检查，正式普通聊天仍为全服。优先用已有Vortex、BetonQuest/Citizens、Shopkeepers和MythicMobs，新增交易插件先独立验证。
+
+附近语音：服务端插件已安装并连接现有TTS与CPU ASR，语音模组可选；自启已运行，公网UDP仍待核验，见[语音状态](paper/docs/PROXIMITY_VOICE.md)。[原生高画质女神相机](paper/docs/NATIVE_GODDESS_CAMERA.md)的核显与YSM真实渲染仍待验收，现役相机保持。
 
 
-统一版 `.27 / 桥0.2.6` 已正式部署并通过核验：任务/回收/试炼/商店/委托共用金币，旧技能成长归档，背包满会提示直接远程存箱。见[发布与验收](paper/docs/RPG_UNIFIED_20261028.md)。
+职业详情现在按服务器加载配置返回属性、装备、技能效果和成长条件；满包优先指引直接远程存箱，遗迹支持三次战败和存档点、Boss房间排他。旧金币统一规则保持，见[本轮发布](paper/docs/RPG_INTERACTION_20261029.md)。
 
-连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
+连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.9与mcbot Paper适配；51插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
 Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、失败指引、坦克防御及桐人状态兼容；[发布与验收](paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md)。
 
@@ -95,14 +97,14 @@ python paper/self-host/selfhost.py doctor
 
 ## 当前版本与开发边界
 
-截至 **2026-10-27**：
+截至 **2026-10-29**（正式状态以[部署清单](paper/manifests/current-deployment.json)为准）：
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.25** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.4** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.30** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.9** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
-| 通用 MC 核心 | [主干 **0.5.7-rc.124**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
+| 通用 MC 核心 | [主干 **0.5.7-rc.127**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。

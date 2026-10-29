@@ -1,6 +1,6 @@
 # 附近语音与 Agent 听说接入
 
-2026-10-29 状态：已完成 Paper 候选、CPU ASR、本机 TTS 接入和真实隔离联机，正式 Paper 尚未安装。NVMe 迁移不夹带语音插件或端口变更。玩家使用与构建入口见 [proximity-voice/README](../integrations/proximity-voice/README.md)。
+2026-10-29：QiandengVoice0.1.0、Simple Voice Chat2.6.27与LoginGuard0.1.9已在正式Paper1.21.1加载；原TTS/CPU ASR进程保留，有限权限开机自启已运行，Windows UDP24454规则已创建。客户端模组可选；真实公网UDP与真人麦克风/耳听仍待验收。玩家使用和构建见[proximity-voice/README](../integrations/proximity-voice/README.md)。
 
 ## 本轮实现和实际验收
 

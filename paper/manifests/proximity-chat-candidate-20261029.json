@@ -1,0 +1,48 @@
+{
+  "state": "tested-candidate-not-deployed",
+  "date": "2026-10-29",
+  "document": "paper/docs/PAPER_PLUGIN_REUSE_20261029.md",
+  "chatAuthority": "official EssentialsXChat 2.22.0",
+  "artifacts": {
+    "EssentialsXChat-2.22.0.jar": {
+      "url": "https://github.com/EssentialsX/Essentials/releases/download/2.22.0/EssentialsXChat-2.22.0.jar",
+      "bytes": 21800,
+      "sha256": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a"
+    },
+    "QiandengjiRpg-0.2.10.jar": {
+      "sha256": "9060363980584815cec86f752df1240277be2cf6023456423f242deea3843b40",
+      "baseSha256": "6ce52479a3317db83442cd00817608ff6b3e70dafdf9d072c79dc2d2f8c2c8e9",
+      "unrelatedEntriesPreserved": 25,
+      "changes": "Read-only self/party actual Bukkit world identity and position; distance only in the same instance."
+    }
+  },
+  "behavior": {
+    "defaultChat": "same actual world, 48-block 3D radius",
+    "explicitGlobal": "!message",
+    "nativeWhisper": "unchanged minecraft:msg/tell/w",
+    "chatSpy": "explicit permission only; not evidence of physical presence",
+    "newTopLevelCliCommands": 0,
+    "newPartyOrCurrencyAuthority": false
+  },
+  "verification": {
+    "paper": "1.21.1 build133",
+    "realMineflayerChatAndRpgChecks": 34,
+    "nativeProtocolWorldChecks": 4,
+    "offlineNativeRpgChecks": 248,
+    "dedicatedLoopbackPorts": [29086, 29087],
+    "freshQaWorldAndPlayers": true,
+    "productionWorldOrAccountsCopied": false,
+    "qaStoppedNormally": true,
+    "candidateAndStaticRollbackMirroredEF": true,
+    "fullProductionColdBackupForThisCandidate": false,
+    "realBedrockDisplayVerified": false
+  },
+  "deployment": {
+    "productionChanged": false,
+    "paperRestartRequired": true,
+    "preserveNativeWhisperAliases": true,
+    "preserveOtherEssentialsSettings": true,
+    "currentBridgeRemains": "0.2.9",
+    "liveDeploymentManifest": "paper/manifests/current-deployment.json"
+  }
+}
