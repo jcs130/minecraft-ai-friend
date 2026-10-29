@@ -1603,9 +1603,15 @@ class Controller:
         if not repeat and name == "mc_do" and not self.pending and not queue_error:
             repeat = self.container_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch)
         if repeat and not observation_call(name, arguments):
-            container_failure = repeat.get("kind") == "failed_container_take"
+            container_failure = repeat.get("kind") in {"failed_container_take", "unopened_container"}
             code = "repeated_container_failure" if container_failure else "repeated_no_effect"
-            self.planner_notice = (("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
+            self.planner_notice = (("Two measured interactions at this coordinate and face failed to open a container; "
+                "the dependent take step was skipped, so no withdrawal was attempted. The same approach and inventory remain observed. "
+                "This entire batch was NOT dispatched. Correct the target or interaction using the dated native evidence, "
+                "obtain a genuinely different approach or prerequisites, choose other useful work, or report the stage blocked. "
+                "The refusal expires within 120 seconds; it does not establish current block state, permissions or goal success.")
+                if repeat.get("kind") == "unopened_container" else
+                ("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
                 "Walking, reopening it, new narration or a different later batch do not resolve that failure. "
                 "The entire proposed batch was NOT dispatched. Use the dated native evidence to correct the item/container, "
                 "obtain prerequisites through real work, query a specific missing fact, choose different work, or wait for changed conditions. "

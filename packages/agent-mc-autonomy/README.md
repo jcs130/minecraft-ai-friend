@@ -1,6 +1,7 @@
 # Agent MC Autonomy
 
-Version 0.2.121 pins independently built core rc.124. Explicitly included
+Version 0.2.122 adds measured failed-open recovery, including skipped dependent
+withdrawals and explicit interaction faces. Version 0.2.121 pins independently built core rc.124. Explicitly included
 shortcut sorting can use cursor-free exchanges while retaining native per-click
 confirmation. MCP results match JSON wire semantics. Existing carried items and
 unknown actions are not silently cleared; the planner and personal-memory ports
