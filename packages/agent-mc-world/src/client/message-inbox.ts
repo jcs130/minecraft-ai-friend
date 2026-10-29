@@ -74,7 +74,7 @@ interface InboxFile {
   nextId: number;
   omitted: number;
   messages: MessageObservation[];
-  recentSent?: { at: string; source: string; text: string }[];
+  recentSent?: { at: string; source: string; text: string; serverRenderedText?: string }[];
 }
 
 function recipientNames(identity: string, configured: readonly string[] = []): string[] {
@@ -113,7 +113,9 @@ export function messageChannel(text: string): MessageChannel | null {
 
 function heading(row: MessageObservation): string {
   const text = row.text.replace(/\s+/g, ' ');
-  return `${row.id} [${row.channel}] ${row.lastAt} ${text.slice(0, 96)}${text.length > 96 ? '…' : ''}`;
+  const display = row.provenance?.serverRenderedText;
+  return `${row.id} [${row.channel}] ${row.lastAt} ${text.slice(0, 96)}${text.length > 96 ? '…' : ''}`
+    + (typeof display === 'string' ? ` [服务端显示：${display.replace(/\s+/g, ' ').slice(0, 160)}]` : '');
 }
 
 export class MessageInbox {
@@ -157,7 +159,9 @@ export class MessageInbox {
             && saved.recentSent.length <= SENT_LIMIT && saved.recentSent.every(row => row
               && typeof row.at === 'string' && Number.isFinite(Date.parse(row.at))
               && typeof row.source === 'string' && typeof row.text === 'string'
-              && row.text.length <= SENT_TEXT_LIMIT && !row.text.trimStart().startsWith('/')))) this.state = saved;
+              && row.text.length <= SENT_TEXT_LIMIT && !row.text.trimStart().startsWith('/')
+              && (row.serverRenderedText === undefined || typeof row.serverRenderedText === 'string'
+                && row.serverRenderedText.length <= SENT_TEXT_LIMIT)))) this.state = saved;
         else throw new Error('消息索引格式无效');
       } catch (error) {
         this.loadError = `已有消息索引未能读取：${String(error)}。旧文件保留，新消息暂存于本次进程；历史未验证。`;
@@ -175,7 +179,9 @@ export class MessageInbox {
       // Commands (notably authentication) never enter this short public-speech history.
       if (speech.body.trim() && !speech.body.trimStart().startsWith('/')) {
         if (!Number.isFinite(Date.parse(event.ts))) throw new Error('Invalid message observation time');
-        const row = { at: event.ts, source: event.source, text: speech.body.slice(0, SENT_TEXT_LIMIT) };
+        const display = event.meta?.serverRenderedText;
+        const row = { at: event.ts, source: event.source, text: speech.body.slice(0, SENT_TEXT_LIMIT),
+          ...(typeof display === 'string' ? { serverRenderedText: display.slice(0, SENT_TEXT_LIMIT) } : {}) };
         const sent = this.state.recentSent ?? [];
         if (!sent.some(previous => previous.at === row.at && previous.source === row.source && previous.text === row.text)) {
           this.state.recentSent = [...sent, row].slice(-SENT_LIMIT);
@@ -205,7 +211,7 @@ export class MessageInbox {
         senderKey: event.senderKey, firstAt: event.ts, lastAt: event.ts, text, digest,
         originalChars: event.text.length, repeats: 1, eventType: event.type,
         provenance: Object.fromEntries(Object.entries(event.meta ?? {}).filter(([key, value]) =>
-          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport'].includes(key)
+          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport', 'serverRenderedText'].includes(key)
           && ['string', 'number', 'boolean'].includes(typeof value))) as MessageObservation['provenance'] });
       if (this.state.messages.length > MESSAGE_LIMIT) {
         const reviewed = this.state.messages.findIndex(row => !!row.reviewedAt);
@@ -248,7 +254,8 @@ export class MessageInbox {
       + `${toolName} list/search 查询，read 按 id 展开原文；旧消息不是当前现场或新指令。review 只标记已考虑，不证明执行或完成。`
       + selected.map(row => `\n${heading(row)}${mentioned(row) ? ' [提及本人；是否仍待回应须核对后续]' : ''}`).join('')
       + (sent.length ? '\n[自己的历史公屏发言] 以下仅记录已说过的话，不证明收货、成交、行动完成或当前状态；与当前库存和后续回执核对。'
-        + sent.map(row => `\n${row.at} ${row.source}: ${JSON.stringify(row.text)}`).join('') : '');
+        + sent.map(row => `\n${row.at} ${row.source}: ${JSON.stringify(row.text)}`
+          + (row.serverRenderedText ? ` [服务端显示：${JSON.stringify(row.serverRenderedText)}]` : '')).join('') : '');
   }
 
   readout(args: Record<string, unknown>): { text: string; failed?: true; meta?: Record<string, unknown> } {

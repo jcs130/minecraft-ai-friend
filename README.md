@@ -1,6 +1,6 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.30、QiandengjiRpg0.2.10、VortexRPG1.2.2-alpha-qd29已上线，32项正式核对通过。官网0.8.28及匹配观战后台已更新，34项正式、8项四角色现场与4项真实游客观战检查通过；语音服务端、自启和公网UDP已验收，真人耳听仍待验证。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布与状态](paper/docs/RPG_INTERACTION_20261029.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.129，源码更新不代表外部客户端已升级。照片全量管理0.8.29仍为候选；罗盘修复已随.30合入。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.30、QiandengjiRpg0.2.10、VortexRPG1.2.2-alpha-qd29已上线，32项正式核对通过。官网0.8.28及匹配观战后台已更新，34项正式、8项四角色现场与4项真实游客观战检查通过；语音服务端、自启和公网UDP已验收，真人耳听仍待验证。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布与状态](paper/docs/RPG_INTERACTION_20261029.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.130，源码更新不代表外部客户端已升级。照片全量管理0.8.29仍为候选；罗盘修复已随.30合入。
 
 运维状态：[NVMe迁移](paper/docs/NVME_RUNTIME_20261029.md)已完成，原E盘入口联接到C盘NVMe，原目录保留。本轮E/F完整恢复点已冷刷新最新游戏与认证；两次失败尝试的前像和回执保留，新版游戏端已实际运行，后台收尾不需再停Paper。
 
@@ -104,7 +104,7 @@ python paper/self-host/selfhost.py doctor
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.30** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.9** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
-| 通用 MC 核心 | [主干 **0.5.7-rc.129**](packages/agent-mc-world/package.json)，含[原版世界身份与位置记忆隔离](packages/agent-mc-world/docs/world-identity.md)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
+| 通用 MC 核心 | [主干 **0.5.7-rc.130**](packages/agent-mc-world/package.json)，含[原版世界身份与位置记忆隔离](packages/agent-mc-world/docs/world-identity.md)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。

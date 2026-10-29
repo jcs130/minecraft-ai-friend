@@ -7520,6 +7520,18 @@ export class MinecraftWorld implements World {
           { meta: { uname: whisper.username, channel: 'private', socialScope: 'minecraft-server', ...whisper.identity } }, whisper.username);
         return;
       }
+      const publicChat = chatProvenance.publicChat(jsonMsg, bot.players, bot.registry);
+      if (publicChat) {
+        markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
+        const { username, message, identity, serverRenderedText } = publicChat;
+        const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
+        if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
+        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, !fromSelf && mentionedInChat(message),
+          { ...(fromSelf ? { deliver: false } : {}), meta: { uname: username, channel: 'public',
+            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}),
+            ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
+        return;
+      }
       let unchangedQueryFeedback = false;
       let independentQueryReply = false;
       if (position === 'system') {
