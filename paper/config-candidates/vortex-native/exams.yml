@@ -1,0 +1,16 @@
+combat_basic:
+  title: 冒险战技认证
+  description: 开考后成功施放一次Vortex职业技能，并真实击杀一只敌对怪物。只发命令、施法失败或杀动物不算；新旧背包和装备不清空。
+  primitive: native_lesson
+  proofs: [native_cast, native_kill]
+  all-proofs: true
+  reuse-training: false
+  timeout-seconds: 1800
+conquest_basic:
+  title: 副本攻略认证
+  description: 开考后完整攻略一处开放的遗迹副本，全部房间完成并返回首室；服务器实际结算才算，抵达入口或单独杀怪不算。
+  primitive: contract_record
+  proofs: [native_clear]
+  all-proofs: true
+  reuse-training: false
+  timeout-seconds: 86400

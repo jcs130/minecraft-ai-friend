@@ -17,6 +17,14 @@ function pool(low=64,high=68,range=4) {
  return h;
 }
 describe('oxygen-aware loaded-water routes',()=>{
+ it('ascends a vertical waypoint without turning toward sub-deadband horizontal drift',async()=>{
+  const h=pool();h.bot.entity.position=new Vec3(.51,65,.49);h.bot.entity.yaw=1.1;
+  const id=h.runner.start(prepareWorkRoutine('swim_route',{dimension:'overworld',at:[0,67,0]})).id;
+  const until=Date.now()+7000;while(h.runner.read(id)[0]?.status==='running'&&Date.now()<until)await new Promise(r=>setTimeout(r,20));
+  expect(h.runner.read(id)[0],JSON.stringify(h.runner.read(id)[0])).toMatchObject({status:'completed',result:{goalCompleted:true}});
+  expect(h.bot.entity.yaw).toBeCloseTo(1.1,5);
+  expect(h.bot.entity.position.y).toBeGreaterThan(66.2);
+ },10000);
  it('plans cardinal three-dimensional detours with no mutation or diagonal corner clipping',async()=>{
   const h=pool();for(let y=64;y<=68;y++)h.set(1,y,0,'stone');
   const before=h.bot.entity.position.clone();const p=await planSwim(h.bot as unknown as Bot,[3,65,0]);

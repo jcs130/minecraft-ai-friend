@@ -24,6 +24,7 @@ import org.bukkit.util.Vector;
 final class ProfessionEffects implements Listener {
     private final AgentFriendPlugin plugin;
     private final ProfessionManager manager;
+    private final TankCombatEffects tank;
     private final Map<UUID, Guard> guards = new HashMap<>();
     private final Map<UUID, Immunity> immunities = new HashMap<>();
     private final Map<EntityDamageByEntityEvent, Reduction> reductions = new IdentityHashMap<>();
@@ -43,11 +44,14 @@ final class ProfessionEffects implements Listener {
 
     ProfessionEffects(AgentFriendPlugin plugin, ProfessionManager manager) {
         this.plugin = plugin; this.manager = manager;
+        tank = new TankCombatEffects(plugin, manager);
         raids = manager.ledger.ready() ? manager.ledger.data().getAsJsonObject("raids").deepCopy() : new JsonObject();
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 10L, 10L);
     }
     void cast(Player p, ProfessionCatalog.Skill skill, String target) {
         switch (skill.effect()) {
+            case "tank_taunt" -> tank.taunt(p, skill);
+            case "tank_bastion" -> tank.bastion(p, skill);
             case "sword_thrust", "sword_cone", "sword_beam", "sword_combo", "arcane_bolt", "frost_cone", "flame_cone" -> strike(p, skill);
             case "sword_parry", "ward" -> guard(p, skill);
             case "sword_step" -> step(p, skill);
@@ -106,8 +110,12 @@ final class ProfessionEffects implements Listener {
         double facing = switch (skill.effect()) { case "sword_cone", "frost_cone", "flame_cone" -> .5; case "arcane_bolt" -> .98; default -> .85; };
         List<Enemy> targets = targets(p, skill.range(), skill.targets(), facing);
         if (targets.isEmpty()) { manager.result(p, "cast", "no_target", skill.id()); return; }
+        double firstDamage = skill.effect().equals("sword_combo") ? skill.power() / 4 : skill.power();
+        targets = targets.stream().filter(t -> !ProfessionHitRules.recovering(
+                t.getNoDamageTicks(), t.getMaximumNoDamageTicks(), t.getLastDamage(), firstDamage)).toList();
+        if (targets.isEmpty()) { manager.result(p, "cast", "target_recovering", skill.id()); return; }
         if (!manager.begin(p, skill)) return;
-        double firstDamage = skill.effect().equals("sword_combo") ? skill.power() / 4 : skill.power(); int hit = 0;
+        int hit = 0;
         for (Enemy target : targets) if (damage(p, target, firstDamage)) {
             trail(p, target.getEyeLocation(), skill.effect()); hit++;
             if (skill.effect().equals("frost_cone") && !target.isDead())
@@ -152,6 +160,7 @@ final class ProfessionEffects implements Listener {
                 event.setCancelled(true); return;
             }
         }
+        if (tank.reduce(event)) return; // Immunity first; never multiply two defensive reductions.
         Guard guard = guards.get(target.getUniqueId()); if (guard == null || guard.until <= System.currentTimeMillis() || guard.world != target.getWorld()) return;
         Player caster = Bukkit.getPlayer(guard.caster); ProfessionCatalog.Skill skill = manager.skill(guard.skill);
         LivingEntity attacker = attacker(event.getDamager());
@@ -275,6 +284,7 @@ final class ProfessionEffects implements Listener {
             if (event.isCancelled()) continue;
             amount = Math.min(amount, Math.max(0, event.getAmount())); if (amount <= 0) continue;
             target.setHealth(Math.min(target.getMaxHealth(), target.getHealth() + amount)); restored += amount;
+            if (plugin.combatRpg() != null) plugin.combatRpg().healed(p, target, amount);
             target.getWorld().spawnParticle(Particle.HEART, target.getLocation().add(0, 1.3, 0), 4, .2, .3, .2, 0);
             recordHealing(p, target, amount);
             var rank = manager.rank(p,skill.id());

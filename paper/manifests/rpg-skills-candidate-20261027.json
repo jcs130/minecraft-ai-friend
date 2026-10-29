@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "id": "rpg-skills-candidate-20261027",
+  "state": "prepared_not_deployed",
+  "productionApproved": false,
+  "production": {
+    "minecraft": "1.21.1",
+    "paperBuild": 133,
+    "agentFriend": "0.4.47.17",
+    "jarSha256": "909b4d7b077ab601d36d4851f01a69fccbf0182bc2110e2352c2e24206761906",
+    "portal": "0.8.28",
+    "aincradDifficulty": "Easy"
+  },
+  "liveTextUpdate": {
+    "professionSkills": 19,
+    "mechanicsUnchanged": true,
+    "ledgerUnchangedAtReload": true,
+    "source": "skill-guide-live.json",
+    "goddessHandbookUpdated": true,
+    "goddessReadVerified": false
+  },
+  "candidate": {
+    "agentFriend": "0.4.47.18",
+    "jarSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+    "compiledInputSha256": "15cbf20b9bab98326f2dc8c43b1d9ee37e758b1e67b7023ed2fbf2981fb8ac5a",
+    "unchangedJarEntries": 521,
+    "internalMemberChecks": 33361,
+    "preserveBaselineClasses": [
+      "GuildHallManager",
+      "GuildStorageOwnership",
+      "LandManager",
+      "PhotoJournal"
+    ],
+    "tab": "6.2.1",
+    "mythicMobs": "5.9.5 existing",
+    "storyRevision": 5,
+    "vortexInstalled": false
+  },
+  "scope": [
+    "four-step profession learning and actual combat preparation",
+    "native hurt-window timing denial without resource spend or immunity bypass",
+    "one formal first-floor dungeon on the already imported protected map",
+    "combat XP independent of farming and practice tower proofs",
+    "four professions including shield tank",
+    "TAB sidebar using cached immutable text",
+    "durable independent rewards, team rescue and safe all-downed outcome"
+  ],
+  "validation": {
+    "rules": {
+      "combat": 234,
+      "story": 30,
+      "conquest": 16,
+      "protectionSamples": 24529,
+      "compactCli": 97,
+      "cliContract": 80,
+      "journeyCatalog": 80,
+      "hitTiming": 8
+    },
+    "installer": 18,
+    "probes": [
+      {
+        "label": "strike49",
+        "checks": 7,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 1,
+        "clientReportSha256": "adba1eaa6ee6f1a47c4a31d21accb066ceddce738e75a896231ef95b23fd4807"
+      },
+      {
+        "label": "skills51",
+        "checks": 12,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 2,
+        "clientReportSha256": "b6cf07668621d77772cab566219c23d56fb41456d120674a15921c931ab901b9"
+      },
+      {
+        "label": "soloeasy50",
+        "checks": 28,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 1,
+        "clientReportSha256": "28ee0475d1277fcf833fc3335dd08f1697533f1ef3a102e99146638c8a781475"
+      },
+      {
+        "label": "rescue52",
+        "checks": 9,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 2,
+        "clientReportSha256": "9e53cd86bad21f42f658489b18e168b74ac2987c6cf845ea81dbbdf25d56cde1"
+      },
+      {
+        "label": "coldsolo50",
+        "checks": 9,
+        "artifactSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+        "normalStop": true,
+        "clientProtocolWarnings": 1,
+        "clientReportSha256": "79df89cfb90a9376549c24d02c1fbb8a20c30fd6fec4a2c4bef8bfc1d289a7ad"
+      }
+    ],
+    "portalSavedDataChecks": 8,
+    "qaUploadedToProduction": false,
+    "migration": {
+      "originalProfiles": 95,
+      "allOriginalProfilesDeepEqual": true,
+      "productionProfilesOverwritten": false,
+      "replicaSourceSha256": "45c8796be303832622a43c88544e3987aa37e513f61f78d4e0cc8c79310ba72c"
+    },
+    "solo": {
+      "difficulty": "Easy matching current map",
+      "startLevel": 1,
+      "endLevel": 3,
+      "xp": 292,
+      "kills": 7,
+      "basicAttackPackets": 47,
+      "successfulOffensiveSkills": 4,
+      "legitimateSelfHeals": 1,
+      "adminRecoveries": 0
+    },
+    "failedEvidencePreserved": [
+      "solo49: Normal difficulty level-one character died; not a clear",
+      "skills48/skills50 and rescue50: fixture enemy targeted a different player, so WorldGuard correctly denied indirect PvP",
+      "rescue51: client attack phase did not complete; retained as a failed attempt, not a clear",
+      "earlier interrupted navigation and pre-final artifact probes retained"
+    ],
+    "limitations": [
+      "not a long-term autonomous LLM or all-server regression",
+      "QA copy has existing unavailable protection masks, photo service and some structure definitions; those paths remain fail closed",
+      "Mineflayer ArmorTrimMaterial/SlotComponent partial-read warnings remain",
+      "current public website and downloadable Skill have not been republished"
+    ]
+  },
+  "deployment": {
+    "reviewSchema": 0,
+    "pendingWritten": false,
+    "staticFiles": [
+      {
+        "target": "AgentFriend-0.4.47.18.jar",
+        "sha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155"
+      },
+      {
+        "target": "plugins/AgentFriend/professions.yml",
+        "sha256": "5cfbab53b1ecd328229a7dc01a6c213de89af25b6f3440bd505631eebd79b363"
+      },
+      {
+        "target": "plugins/AgentFriend/skills.yml",
+        "sha256": "00cad9727dfcf4cfaa782861359bcf346b25c3065707a6306754f07af643a73c"
+      },
+      {
+        "target": "plugins/AgentFriend/skill-points.yml",
+        "sha256": "2d76239809129bc392e7f9fabf9e2662fe9e0952effb70c885d8b6a98aa9e4a7"
+      },
+      {
+        "target": "plugins/AgentFriend/dungeons.yml",
+        "sha256": "fe881fdd647d327ebc059fdec9ff7cd2a88fd67a318d9c7fd5f4eb92a9ef5666"
+      },
+      {
+        "target": "plugins/AgentFriend/rpg-story.yml",
+        "sha256": "7a164fc60b7a2d5f651b58c150bec196299f0fd61a8c6673a6b8efae44988fd4"
+      },
+      {
+        "target": "plugins/AgentFriend/onboarding.yml",
+        "sha256": "52fd3986258eb526be3f40be69127bfb4105b023510ffd27b9099674534c166c"
+      },
+      {
+        "target": "plugins/AgentFriend/agent-guide.yml",
+        "sha256": "65094000be5041de6da331660012ab9494968e41e23d4e82244baa32a9455625"
+      },
+      {
+        "target": "plugins/MythicMobs/Mobs/qiandengji-aincrad.yml",
+        "sha256": "1bf4bbc1c3e5c706bb6540fd37b3cec4d73faa1c1a8157e2a43cd6868b9cf78a"
+      },
+      {
+        "target": "plugins/MythicMobs/Skills/qiandengji-aincrad-skills.yml",
+        "sha256": "189ce810c37742428b303f236297af1fa9e3f034dcdcced9a2ef7434c16360ba"
+      },
+      {
+        "target": "TAB-6.2.1-Paper-1.20.5-1.21.4.jar",
+        "sha256": "bdf8ea4e6b194197a02fdd7abee9845e1000183bc4df9c0e5280505fc1f51c24"
+      },
+      {
+        "target": "plugins/TAB/config.yml",
+        "sha256": "eba547a870180d57844eaf89eb93101f5fa00af1fef64ea4d10d1e5555798648"
+      },
+      {
+        "target": "ops/content-deploy.ps1",
+        "sha256": "d831098fe51a9f31c774cf5bdbc46d640a1dd254fd7820fd5a06183216cd21fb"
+      }
+    ],
+    "deferredPlayerConfig": {
+      "target": "plugins/AgentFriend/config.yml",
+      "method": "only after approved normal stop and fresh matching E/F cold backups, preserve current bytes and append two feature flags"
+    },
+    "required": [
+      "new restart approval",
+      "original notices and human/activity gates",
+      "original maintenance lock, normal save/stop and full E/F snapshots",
+      "pinned original installer and real post-start checks"
+    ],
+    "rollback": "Before adoption restore pinned original code/static config; after new tank/progression data keep compatible reader and disable new controllers, preserve latest profiles/items/receipts."
+  }
+}

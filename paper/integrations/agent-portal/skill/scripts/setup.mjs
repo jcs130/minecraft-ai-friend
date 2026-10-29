@@ -32,6 +32,15 @@ export function verifyRuntime(root=SKILL_ROOT,manifest=verifyBundle(root)) {
   catch{throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');}
   if(installed.name!=='agent-mc-world'||installed.version!==manifest.sdk?.version)
     throw Error('installed_core_version_mismatch_run_npm_ci_in_assets_runtime');
+  // npm writes this completion lock only after installing the dependency tree.
+  // A lone SDK package.json left by an interrupted install is not readiness.
+  let completed;
+  try{completed=JSON.parse(readFileSync(join(root,'assets/runtime/node_modules/.package-lock.json'),'utf8'));}
+  catch{throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');}
+  if(completed.packages?.['node_modules/agent-mc-world']?.version!==installed.version
+    ||!existsSync(join(dirname(file),'dist/runtime/src/client/index.js'))
+    ||!existsSync(join(dirname(file),'dist/runtime/src/mcp/stdio.js')))
+    throw Error('runtime_dependencies_missing_run_npm_ci_in_assets_runtime');
   return installed.version;
 }
 function writeJson(file, data) { writeFileSync(file, JSON.stringify(data,null,2)+'\n', {flag:'wx',mode:0o600}); }
@@ -85,6 +94,25 @@ function npmCli(explicit) {
   const candidates=[explicit,process.env.npm_execpath,join(dirname(process.execPath),'node_modules/npm/bin/npm-cli.js'),
     resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli.js'),'/usr/share/nodejs/npm/bin/npm-cli.js'].filter(Boolean);
   const found=candidates.find(file=>existsSync(file));if(!found)throw Error('npm_cli_not_found_pass_npm_cli_or_run_npm_ci_in_assets_runtime');return found;
+}
+// Account creation and local dependency installation are separate outcomes.
+// Never discard a registered identity or repeat registration because npm is
+// missing, offline, or interrupted. A subsequent join checks the same profile.
+export function prepareRuntime({root=SKILL_ROOT,skipInstall=false,npmPath,resolveNpm=npmCli,run=execFileSync}={}) {
+  const manifest=verifyBundle(root);
+  const current=()=>{try{return verifyRuntime(root,manifest);}catch{return null;}};
+  let version=current();
+  if(version)return{dependenciesReady:true,sdkVersion:version};
+  const waiting=reason=>({dependenciesReady:false,reason,
+    nextAction:'账号与身份保留。用同一 Node 环境的 npm 在 Skill 的 assets/runtime 执行 npm ci --ignore-scripts --no-audit --no-fund，再运行原 join 命令；不要重新建号。'});
+  if(skipInstall)return waiting('runtime_dependencies_missing');
+  let cli;
+  try{cli=resolveNpm(npmPath);}catch{return waiting('npm_unavailable');}
+  try{run(process.execPath,[cli,'ci','--ignore-scripts','--no-audit','--no-fund'],
+    {cwd:join(root,'assets','runtime'),windowsHide:true,stdio:['ignore','pipe','pipe'],maxBuffer:2*1024*1024});}
+  catch{return waiting('dependency_install_failed');} // npm output may contain private local paths or registry credentials.
+  version=current();
+  return version?{dependenciesReady:true,sdkVersion:version}:waiting('runtime_dependencies_missing');
 }
 export async function main(argv=process.argv.slice(2)) {
   const command=argv.shift();

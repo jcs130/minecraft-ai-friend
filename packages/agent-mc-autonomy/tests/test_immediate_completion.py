@@ -1,6 +1,5 @@
 import dataclasses
 import json
-import time
 
 import pytest
 from test_controller import action, setup
@@ -20,13 +19,12 @@ def test_immediate_completion_yields_without_inventing_work(framework_module, tm
     _, bridge, controller = setup(framework_module, tmp_path, None)
     controller.publish = lambda **value: published.append(value)
     bridge.result = immediate()
-    before = time.monotonic()
     result, compact, boundary = run_async(controller.execute_model_call("mc_do", PLAN))
     assert boundary
     assert result["data"] == bridge.result["data"]
     assert json.loads(compact)["text"] == bridge.result["text"]
-    assert controller.unactioned_replies == 1
-    assert 0 < controller.planner_retry_at - before <= 300.1
+    assert controller.unactioned_replies == 0
+    assert controller.planner_retry_at == 0
     assert controller.continuation_needed and "no new task" in controller.planner_notice
     assert not controller.pending and controller.inflight_request is None
     assert controller.action_requests == {}
@@ -34,7 +32,7 @@ def test_immediate_completion_yields_without_inventing_work(framework_module, tm
     assert sent == {**PLAN, "queue": "append"}  # Existing queue policy, unchanged steps.
     rows = [json.loads(line) for line in (tmp_path / "receipts.jsonl").read_text().splitlines()]
     assert len(rows) == 1 and rows[0]["result"]["execution"] is None
-    assert any(row.get("unactioned_replies") == 1 for row in published)
+    assert published[-1]["planner_retry_seconds"] == 0
     bridge.result = {"protocol": "agent-mc/v1", "text": "accepted", "execution": action()}
     run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "goto", "at": [12, 64, 20]}]}))
     assert controller.unactioned_replies == 0 and ("task", "body-1") in controller.pending

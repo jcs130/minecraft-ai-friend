@@ -6,10 +6,11 @@ import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CombatSession, footingAhead, type CombatTuning } from '../core/combat.ts';
 import type { CombatRangedActions } from '../core/combat.ts';
-import type { RangedTarget } from '../core/ranged.ts';
+import { BowController, type RangedTarget } from '../core/ranged.ts';
 import { MinecraftLog } from '../core/log.ts';
 import { Executor, type TaskReport } from '../core/executor.ts';
 import { skillEat } from '../core/skills-craft.ts';
+import { skillAttack } from '../core/melee.ts';
 import type { CombatResult } from '../core/combat-observation.ts';
 import type { Logger } from '../src/client/contracts.ts';
 
@@ -143,6 +144,119 @@ async function drive(bot: EventEmitter, ms: number, stepMs = 50): Promise<void> 
     await sleep(stepMs);
   }
 }
+
+describe('combat death and respawn boundary', () => {
+  it('does not reopen combat on the dead body during the 250ms watch or count respawn as escape', async () => {
+    const enemy=foe(7,'zombie',2.5),{bot,controls}=combatRigBot([enemy]),b=bot as any;
+    b.respawn=()=>{};
+    const lifecycle=installDeathLifecycle(b,4000,()=>true);
+    const {session,combatReports,calls,events}=rig(bot,{arena:true});
+    try{
+      session.start();await drive(bot,300);
+      expect(session.active).toBe(true);
+      b.health=0;bot.emit('death');
+      expect(combatReports).toHaveLength(1);
+      const episode=b.deathLifecycle.episodeId;
+      expect(combatReports[0]).toMatchObject({reason:'death',healthAfter:0,deathEpisodeId:episode});
+      await drive(bot,1000);
+      expect(session.onHurtBy(7,'zombie')).toBe(false); // delayed lethal hit
+      expect(session.active).toBe(false);
+      expect(calls.suspended).toBe(1);
+      b.health=26;await drive(bot,300); // health can precede native spawn
+      expect(session.active).toBe(false);
+      b.entities={};b.entity.position=new Vec3(1463,64,0.5);
+      bot.emit('respawn');bot.emit('spawn');await drive(bot,2000);
+      expect(combatReports).toHaveLength(1);
+      expect(events.some(e=>/跑开了|撤出来了|血只剩 0/.test(e.text))).toBe(false);
+      expect(calls.resumed).toBe(0);
+      expect(Object.values(controls).some(Boolean)).toBe(false);
+      const fresh=foe(9,'zombie',1465);b.entities={9:fresh};
+      expect(session.onHurtBy(9,'zombie')).toBe(true);
+      session.stop();
+      expect(combatReports[1]).toMatchObject({healthBefore:26,reason:'gone'});
+      expect(combatReports[1].deathEpisodeId).toBeUndefined();
+    }finally{session.stop();lifecycle.dispose();}
+  });
+
+  it.each(['zero','pending-positive'] as const)('rejects all combat admissions for %s body state',async mode=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    b.health=mode==='zero'?0:26;
+    if(mode==='pending-positive')b.deathLifecycle={episodeId:'pending',phase:'respawn_pending',observedAt:new Date().toISOString(),respawnAt:null};
+    const {session,calls,events,combatReports}=rig(bot,{arena:true});
+    try{
+      session.start();await drive(bot,600);
+      expect(session.engagementTargets()).toEqual([]);
+      expect(session.trackingTargets()).toEqual([]);
+      expect(session.canRetreat()).toBe(false);
+      expect(session.react({kind:'retreat'})).toBe(false);
+      expect(session.react({kind:'engage',targetId:7})).toBe(false);
+      expect(session.onHurtBy(7,'zombie')).toBe(false);
+      expect(session.active).toBe(false);
+      expect(calls.suspended).toBe(0);expect(calls.resumed).toBe(0);
+      expect(combatReports).toEqual([]);expect(events).toEqual([]);
+    }finally{session.stop();}
+  });
+
+  it('settles a lethal health sample before the native death event once, without a success or task resume',async()=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    const {session,calls,combatReports,events}=rig(bot);
+    try{
+      b.health=9;session.onHurtBy(7,'zombie');await drive(bot,200);
+      b.health=0;await drive(bot,100);
+      expect(session.active).toBe(false);
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0]).toMatchObject({reason:'death',healthBefore:9,healthAfter:0});
+      bot.emit('death');await drive(bot,100);
+      expect(combatReports).toHaveLength(1);expect(calls.resumed).toBe(0);
+      expect(events.some(e=>/跑开了|撤出来了/.test(e.text))).toBe(false);
+    }finally{session.stop();}
+  });
+
+  it('does not lend a new alive death episode to an old retreat if native death delivery was missed',async()=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    b.health=9;
+    const {session,combatReports,calls,events}=rig(bot);
+    try{
+      session.onHurtBy(7,'zombie');await drive(bot,300);
+      b.deathLifecycle={episodeId:'next-life',phase:'alive',observedAt:new Date().toISOString(),respawnAt:null};
+      b.health=26;b.entities={};b.entity.position=new Vec3(1463,64,0.5);
+      await drive(bot,2000);
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0]).toMatchObject({reason:'death',deathEpisodeId:'next-life',healthBefore:9,healthAfter:0});
+      expect(combatReports[0].controlSummary?.retreat?.movement.observedHorizontalDistance).toBe(0);
+      expect(calls.resumed).toBe(0);
+      expect(events.some(e=>/跑开了|撤出来了/.test(e.text))).toBe(false);
+    }finally{session.stop();}
+  });
+
+  it.each(['missing-entity','unknown-health'] as const)('keeps %s and connection loss distinct from a witnessed death',async mode=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    const {session,combatReports,calls}=rig(bot);
+    try{
+      session.onHurtBy(7,'zombie');
+      if(mode==='missing-entity')b.entity=null;else b.health=undefined;
+      session.onConnectionLost();
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0].reason).toBe('gone');
+      expect(combatReports[0].deathEpisodeId).toBeUndefined();
+      expect(calls.resumed).toBe(0);
+    }finally{session.stop();}
+  });
+
+  it.each(['requestStop','standDown'] as const)('does not acknowledge %s as a retreat on a terminal body',method=>{
+    const {bot}=combatRigBot([foe(7,'zombie',2.5)]),b=bot as any;
+    const {session,combatReports,calls,events}=rig(bot);
+    try{
+      session.onHurtBy(7,'zombie');b.health=0;
+      expect(session.reactionState()).toMatchObject({canStep:false,targetId:null,retreating:false});
+      expect(session[method]()).toBeNull();
+      expect(combatReports).toHaveLength(1);
+      expect(combatReports[0].reason).toBe('death');
+      expect(calls.resumed).toBe(0);
+      expect(events.some(e=>/跑开了|撤出来了|先不打了/.test(e.text))).toBe(false);
+    }finally{session.stop();}
+  });
+});
 
 describe('战斗补给', () => {
   it('tracks proactively, keeps the chosen range on physics ticks and never swings until told to engage', async () => {
@@ -379,6 +493,216 @@ describe('standable 认岩浆', () => {
 });
 
 describe('战斗会话:进入(夺手不夺嘴)', () => {
+  it('fast engagement cannot immediately reopen a stuck fight, but observed injury still permits self defence', async () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 6)]);
+    const { session } = rig(bot);
+    try {
+      expect(session.react({ type: 'engage', targetId: 7 })).toBe(true);
+      await drive(bot, 7_000);
+      expect(session.active).toBe(false);
+      expect(session.engagementTargets()).toEqual([]);
+      expect(session.react({ type: 'engage', targetId: 7 })).toBe(false);
+      expect(session.onHurtBy(7, 'zombie')).toBe(true);
+      expect(session.active).toBe(true);
+    } finally { session.stop(); }
+  });
+
+  it.each(['equip', 'busy'] as const)('a bow-only body retreats on %s failure and cannot corner itself into punching with bread', async cause => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = { name: 'bread', type: 3, count: 5 };
+    b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const ranged = rangedRig();
+    ranged.actions.shoot = vi.fn(async () => ({ kind: 'blocked' as const, reason: 'aborted' as const, cause }));
+    const diag = new MinecraftLog(), { session, events } = rig(bot, {}, diag, ranged.actions);
+    try {
+      session.onHurtBy(7, 'zombie'); await drive(bot, 2_000);
+      expect(session.reactionState().retreating).toBe(true);
+      for (let i = 0; i < 9; i++) { // sustained injury while escape has no net movement
+        session.onHurtBy(7, 'zombie'); await drive(bot, 1_000);
+      }
+      expect(session.reactionState().retreating).toBe(true);
+      expect(attacks).toHaveLength(0);
+      expect(events.filter(event => event.text.includes('弓箭未能出手'))).toHaveLength(1);
+      expect(diag.after(0).find(event => event.event === 'ranged-blocked')?.data)
+        .toMatchObject({ cause, held: 'bread', targetId: 7 });
+    } finally { session.stop(); }
+  });
+
+  it('a cornered bow-only body still uses its bow rather than food as a melee fallback', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = { name: 'bread', type: 3, count: 5 };
+    b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const ranged = rangedRig(), { session } = rig(bot, {}, undefined, ranged.actions);
+    try {
+      session.onHurtBy(7, 'zombie');
+      // Same state transition as retreat's cornered recovery, without making
+      // the mock no-damage body repeatedly fail before the assertion.
+      (session as any).desperate = true;
+      await drive(bot, 500);
+      expect(ranged.shots.length).toBeGreaterThan(0);
+      expect(attacks).toHaveLength(0);
+    } finally { session.stop(); }
+  });
+  it.each(['cancel', 'low-health', 'timeout'] as const)('pending explicit attack equipment yields its body on %s before a late equip confirmation', async cause => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' }; b.heldItem = null;
+    let finish!: () => void, cancelled = false;
+    b.equip = () => new Promise<void>(resolve => { finish = () => { b.heldItem = { name: 'iron_sword', type: 1, count: 1 }; resolve(); }; });
+    const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
+      hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
+    const release = vi.fn();
+    const result = skillAttack(bot, 'zombie', 'melee', { aborted: () => cancelled, fleeHealth: () => 10,
+      escape: { active: false }, attack: { acquire: () => stats, release }, log } as never)
+      .then(value => ({ value, error: null }), error => ({ value: null, error }));
+    await drive(bot, 100);
+    if (cause === 'cancel') cancelled = true;
+    if (cause === 'low-health') b.health = 5;
+    await drive(bot, cause === 'timeout' ? 3000 : 100);
+    expect((await result).error).toBeInstanceOf(Error);
+    expect(release).toHaveBeenCalledTimes(1); expect(attacks).toHaveLength(0);
+    expect(Object.values(controls).every(value => !value)).toBe(true);
+    finish(); await drive(bot, 100);
+    expect(release).toHaveBeenCalledTimes(1); expect(attacks).toHaveLength(0);
+  });
+
+  it.each([[], ['bread'], ['bow'], ['bow', 'bread']].map(names => ({ names })))('auto attack refuses unusable starting equipment $names before acquiring an attack lease', async ({ names }) => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };
+    b.inventory.items = () => names.map((name: string, index: number) => ({ name, type: index + 1, count: 1 }));
+    b.heldItem = names.includes('bread') ? { name: 'bread' } : null;
+    const acquire = vi.fn();
+    await expect(skillAttack(bot, 'zombie', 'auto', { aborted: () => false,
+      attack: { acquire, ranged: { ready: () => false } } } as never)).rejects.toThrow('未开始攻击');
+    expect(acquire).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
+  });
+
+  it('auto attack does not treat death-respawn inventory as current equipment', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };b.deathLifecycle = { inventorySynced: false };
+    const acquire = vi.fn();
+    await expect(skillAttack(bot, 'zombie', 'auto', { aborted: () => false, attack: { acquire } } as never))
+      .rejects.toThrow('背包读数尚未确认');
+    expect(acquire).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
+  });
+
+  it.each(['blocked', 'unavailable'] as const)('auto attack with only a bow reports %s rather than silently using fists', async failure => {
+    const enemy = foe(7, 'zombie', 2.5), { bot, attacks, controls } = combatRigBot([enemy]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };
+    b.heldItem = null; b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
+      hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
+    const ranged = rangedRig(), release = vi.fn();
+    if (failure === 'unavailable') ranged.actions.shoot = async () => {
+      ranged.actions.ready = () => false;
+      return { kind: 'released', shotId: 1, targetId: 7, ownerToken: stats.token,
+        at: Date.now(), aim: enemy.position, hitWindow: { from: Date.now(), until: Date.now() + 1500 } };
+    };
+    const result = skillAttack(bot, 'zombie', 'auto', { aborted: () => false, fleeHealth: () => 0,
+      escape: { active: false }, attack: { acquire: () => stats, release, ranged: ranged.actions }, log } as never)
+      .then(value => ({ value, error: null }), error => ({ value: null, error }));
+    await drive(bot, 300);
+    expect(String((await result).error)).toContain('未改为空手攻击');
+    expect(attacks).toHaveLength(0); expect(release).toHaveBeenCalledWith(stats);
+    expect(Object.values(controls).every(value => !value)).toBe(true);
+  });
+
+  it('a ranged-only loadout keeps distance instead of switching to an empty melee hand at close range', async () => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null; b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];
+    const ranged = rangedRig(), { session } = rig(bot, {}, undefined, ranged.actions);
+    try {
+      session.onHurtBy(7, 'zombie'); await drive(bot, 1200);
+      expect(attacks).toHaveLength(0); expect(Object.values(controls).some(Boolean)).toBe(true);
+      expect(session.reactionState().retreating).toBe(false); // the ranged body is actively making space
+    } finally { session.stop(); }
+  });
+
+  it('a bow-only body trapped in close terrain actually releases arrows instead of waiting for 5.5 blocks', async () => {
+    const enemy = foe(7, 'zombie', 2.5), { bot, attacks, controls } = combatRigBot([enemy]), b = bot as any;
+    const bow = { name: 'bow', type: 2, count: 1 }, arrows = { name: 'arrow', type: 3, count: 15 };
+    b.heldItem = bow; b.quickBarSlot = 0; b.inventory.hotbarStart = 36;
+    b.inventory.items = () => [bow, arrows]; b.inventory.slots[36] = bow;
+    b.equip = async () => { b.heldItem = bow; };
+    b.activateItem = vi.fn(() => { b.usingHeldItem = true; });
+    b.deactivateItem = vi.fn(() => { b.usingHeldItem = false; });
+    b.setQuickBarSlot = (slot: number) => { b.quickBarSlot = slot; b.usingHeldItem = false; };
+    // The real body has no safe lateral/backward cell; LOS towards the enemy
+    // is independently known clear. No artificial movement should be forced.
+    b.blockAt = () => ({ name: 'stone', boundingBox: 'block', shapes: [[0, 0, 0, 1, 1, 1]], getProperties: () => ({}) });
+    let session: CombatSession;
+    const bowBody = new BowController({ getBot: () => bot, resolveTarget: () => enemy,
+      leaseValid: token => session.ownsRanged(token), emit: event => session.onBowEvent(event) });
+    ({ session } = rig(bot, {}, undefined, {
+      ready: () => true, active: () => bowBody.active,
+      shoot: (target, owner) => bowBody.shoot(target, owner), abort: () => bowBody.abort(),
+    }));
+    try {
+      session.onHurtBy(7, 'zombie'); await drive(bot, 1300);
+      expect(b.deactivateItem).toHaveBeenCalledTimes(1);
+      expect(attacks).toHaveLength(0);
+      expect(Object.values(controls).every(value => !value)).toBe(true);
+      expect(session.reactionState().retreating).toBe(false);
+    } finally { session.stop(); }
+  });
+
+  it.each(['reject', 'unconfirmed'] as const)('explicit attack surfaces %s equipment failure and releases its lease without a fist swing', async failure => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.registry.entitiesByName.zombie = { name: 'zombie' };
+    b.heldItem = null;
+    b.equip = async () => { if (failure === 'reject') throw Error('server denied equip'); };
+    const stats = { token: {}, targetId: 7, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
+      hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1, dead: false, disconnected: false };
+    const release = vi.fn();
+    await expect(skillAttack(bot, 'zombie', 'melee', { aborted: () => false, fleeHealth: () => 0,
+      escape: { active: false }, attack: { acquire: () => stats, release }, log } as never)).rejects.toThrow('未改为空手攻击');
+    expect(attacks).toHaveLength(0); expect(release).toHaveBeenCalledWith(stats);
+    expect(Object.values(controls).every(value => !value)).toBe(true);
+  });
+
+  it('does not swing while a bag weapon is still equipping, then attacks after the real hand reading', async () => {
+    const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null;
+    let finish!: () => void;
+    b.equip = vi.fn((item: unknown) => new Promise<void>(resolve => { finish = () => { b.heldItem = item; resolve(); }; }));
+    const { session } = rig(bot);
+    try {
+      session.onHurtBy(7, 'zombie');
+      await drive(bot, 900);
+      expect(attacks).toHaveLength(0);
+      expect(b.equip).toHaveBeenCalledTimes(1);
+      expect(Object.values(controls).some(Boolean)).toBe(true); // maneuvering is not held by inventory wait
+      finish(); await drive(bot, 900);
+      expect(attacks.length).toBeGreaterThan(0);
+    } finally { session.stop(); finish?.(); }
+  });
+
+  it.each(['reject', 'unconfirmed', 'timeout'] as const)('failed equip %s cannot turn into normal barehand attacks', async failure => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null;
+    b.equip = vi.fn(() => failure === 'reject' ? Promise.reject(Error('denied'))
+      : failure === 'timeout' ? new Promise<void>(() => {}) : Promise.resolve());
+    const { session } = rig(bot);
+    try {
+      session.onHurtBy(7, 'zombie');
+      await drive(bot, failure === 'timeout' ? 3_100 : 200);
+      expect(attacks).toHaveLength(0);
+      expect(session.reactionState().retreating).toBe(true);
+      expect(b.equip).toHaveBeenCalledTimes(1);
+    } finally { session.stop(); }
+  });
+
+  it('a cancelled equip cannot report failure or revive the ended combat session', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+    b.heldItem = null;
+    let reject!: (error: Error) => void;
+    b.equip = () => new Promise<void>((_, no) => { reject = no; });
+    const { session, events } = rig(bot);
+    session.onHurtBy(7, 'zombie'); session.stop();
+    const count = events.length;
+    reject(Error('late rejection')); await sleep(100);
+    expect(session.active).toBe(false); expect(attacks).toHaveLength(0); expect(events).toHaveLength(count);
+  });
+
   it('换武器没成:接敌播报不说手里是它,换手结果出来后照实补一条', async () => {
     const { bot } = combatRigBot([foe(7, 'zombie', 2.5)]);
     const b = bot as unknown as Record<string, unknown>;
@@ -1054,20 +1378,34 @@ describe('弓与近战的同一战斗会话', () => {
 });
 
 describe('战斗会话:打与收', () => {
-  it('出手打中目标后 claims 生效;打死由会话说「砍翻了」,收工报战果并恢复队列', async () => {
+  it.each(['known-uuid', 'id-only'] as const)('does not associate a reused-ID %s death with the original engaged target', async source => {
+    const zombie = Object.assign(foe(7, 'zombie', 2.5), { uuid: 'original-target' });
+    const { bot, attacks } = combatRigBot([zombie]), b = bot as any;
+    const { session, events, combatReports } = rig(bot);
+    try {
+      session.onHurtBy(7, 'zombie'); b.entity.velocity.y = -.1;
+      await drive(bot, 600); expect(attacks).toContain(7);
+      b.entities[7] = { ...zombie, uuid: 'replacement-target' };
+      bot.emit('entityDead', source === 'id-only' ? { id: 7, name: 'zombie' } : b.entities[7]);
+      expect(events.some(e => e.text.includes('观察到僵尸死亡'))).toBe(false);
+      session.stop();
+      expect(combatReports.at(-1)).toMatchObject({ kills: null, targetDeaths: {}, killAttribution: 'unavailable' });
+    } finally { session.stop(); }
+  });
+  it('出手后观察到目标死亡，归属未知，正常收工并恢复队列', async () => {
     const zombie = foe(7, 'zombie', 2.5);
     const { bot, attacks } = combatRigBot([zombie]);
-    const { session, events, calls } = rig(bot);
+    const { session, events, calls, combatReports } = rig(bot);
     session.onHurtBy(7, 'zombie');
     // 暴击相位:起跳后下落中出手
     (bot as unknown as { entity: { velocity: { y: number } } }).entity.velocity.y = -0.1;
     await drive(bot as unknown as EventEmitter, 600);
     expect(attacks).toContain(7);
     expect(session.claims(7)).toBe(true);
-    // 打死了:会话自己说,不再由 World 补「死了」
+    // 死亡事件没有killer；出手和目标死亡也不能合成为本人击杀。
     (bot as unknown as EventEmitter).emit('entityDead', { id: 7, name: 'zombie' });
-    expect(events.some((e) => e.text.includes('砍翻了僵尸'))).toBe(true);
-    expect(events.some((e) => e.text.includes('砍翻了僵尸') && e.text.includes('周围没别的了'))).toBe(true);
+    expect(events.some((e) => e.text.includes('观察到僵尸死亡') && e.text.includes('未确认本人击杀归属'))).toBe(true);
+    expect(events.some((e) => e.text.includes('观察到僵尸死亡') && e.text.includes('周围没别的了'))).toBe(true);
     expect(session.claims(7)).toBe(false);
     // Mineflayer 的实体表还没删掉死亡对象、生命又已掉到撤退线；这一拍仍应按清场处理。
     (bot as unknown as { health: number }).health = 5;
@@ -1079,6 +1417,7 @@ describe('战斗会话:打与收', () => {
     expect(calls.resumed).toBe(1);
     expect(events.some((e) => e.text.includes('打完了') && e.text.includes('僵尸'))).toBe(true);
     expect(events.some((e) => e.text.includes('接着做'))).toBe(true);
+    expect(combatReports.at(-1)).toMatchObject({ reason: 'clear', kills: null, killAttribution: 'unavailable', targetDeaths: { zombie: 1 } });
     session.stop();
   }, 15_000);
 
@@ -1102,7 +1441,7 @@ describe('战斗会话:打与收', () => {
     await waitUntil(() => !session.active, 2000);
     expect(session.active).toBe(false);
     // 「还剩几只」也按退出口径报:远处那只没交过手的不算在内
-    expect(events.some((e) => e.text.includes('砍翻了僵尸') && e.text.includes('周围没别的了'))).toBe(true);
+    expect(events.some((e) => e.text.includes('观察到僵尸死亡') && e.text.includes('周围没别的了'))).toBe(true);
     session.stop();
   }, 15_000);
 
@@ -1436,7 +1775,7 @@ describe('战斗:水里与逃不掉', () => {
     expect(Buffer.byteLength(JSON.stringify(r.controlSummary))).toBeLessThanOrEqual(2048);
     expect(calls.resumed).toBe(0);
     expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(false);
-    b.health = 9; session.onHurtBy(7, 'drowned'); session.stop();
+    b.health = 9; bot.emit('respawn'); bot.emit('spawn'); session.onHurtBy(7, 'drowned'); session.stop();
     expect(combatReports[1].deathEpisodeId).toBeUndefined();
     lifecycle.dispose();
   });
@@ -2179,6 +2518,15 @@ describe('异步战术动作共用战斗控制器', () => {
     r.session.stop();
   });
 
+  it('rechecks weapons at fast engagement admission without disabling withdrawal or explicit task combat', () => {
+    const {bot,attacks}=combatRigBot([foe(7,'zombie',5)]);
+    const r=rig(bot);
+    (bot as any).inventory.items=()=>[];(bot as any).heldItem=null;
+    expect(r.session.react({kind:'engage',targetId:7})).toBe(false);
+    expect(r.calls.suspended).toBe(0);expect(attacks).toHaveLength(0);
+    expect(r.session.react({kind:'retreat'})).toBe(true);
+    r.session.stop();
+  });
   it('接敌候选沿用控制器的中立生物、危险目标和距离判据，采样不接管身体', () => {
     const { bot } = combatRigBot([foe(7, 'enderman', 3), foe(8, 'zombie', 5.5),
       foe(9, 'warden', 3), foe(10, 'zombie', 20)]);

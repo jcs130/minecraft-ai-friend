@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" role="img" aria-labelledby="title desc">
+  <title id="title">千灯纪：重返艾恩葛朗特</title><desc id="desc">夜空中的浮空城与起始之城城门，旅人与智能体一起走向冒险。主题示意图。</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#102539"/><stop offset=".65" stop-color="#243b46"/><stop offset="1" stop-color="#aa8761"/></linearGradient>
+    <linearGradient id="stone" x2="0" y2="1"><stop stop-color="#a5b8b9"/><stop offset="1" stop-color="#405e68"/></linearGradient>
+    <linearGradient id="light" x2="0" y2="1"><stop stop-color="#ffe4a4"/><stop offset="1" stop-color="#c99558"/></linearGradient>
+    <radialGradient id="halo"><stop stop-color="#f9dfa3" stop-opacity=".33"/><stop offset="1" stop-color="#bddfe6" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h960v660H0z"/><ellipse cx="493" cy="284" rx="390" ry="267" fill="url(#halo)"/>
+  <g fill="#d1e8e8" opacity=".65"><circle cx="115" cy="91" r="2"/><circle cx="241" cy="49" r="1.4"/><circle cx="785" cy="113" r="2"/><circle cx="854" cy="54" r="1.3"/><circle cx="655" cy="62" r="1.4"/><circle cx="60" cy="192" r="1.7"/><circle cx="899" cy="211" r="1.2"/></g>
+  <g stroke="#8bc8da" fill="none" opacity=".15"><circle cx="486" cy="256" r="219"/><circle cx="486" cy="256" r="229"/><path d="M42 255h876M486 25v455"/></g>
+  <g fill="url(#stone)" stroke="#bed6d4" stroke-width="1.2">
+    <path d="m454 143 32-76 34 76 22 28H430z"/><path d="M418 171h136l-10 35H429z"/>
+    <path d="m395 216 26-29h134l28 29-21 40H416z"/><path d="m364 271 34-37h182l32 37-26 44H391z"/>
+    <path d="m325 331 49-42h226l50 42-36 49H361z"/>
+  </g>
+  <g fill="#213f4e" stroke="#92b4bd" stroke-width="2"><ellipse cx="486" cy="171" rx="70" ry="13"/><ellipse cx="488" cy="216" rx="97" ry="15"/><ellipse cx="488" cy="271" rx="127" ry="17"/><ellipse cx="488" cy="331" rx="167" ry="21"/><path d="m361 380 42 32 41-9 44 42 30-40 45 9 51-34z"/></g>
+  <g fill="#efcf89"><path d="M435 196h5v8h-5zm24 0h5v8h-5zm25 0h5v8h-5zm25 0h5v8h-5zm24 0h5v8h-5z"/><path d="M393 296h6v13h-6zm32 0h6v13h-6zm32 0h6v13h-6zm32 0h6v13h-6zm32 0h6v13h-6zm32 0h6v13h-6zm32 0h6v13h-6z"/></g>
+  <g fill="#192e38"><path d="M0 550 94 493l82 19 83-49 90 39 94-20 92 30 93-42 102 41 88-21 142 66v104H0z"/><path d="M83 566V438h23v-22h28v22h24v128zm592 0V432h22v-22h31v22h24v134z"/></g>
+  <g fill="#52666b" stroke="#96a29a" stroke-width="1.2"><path d="M270 591V466h28v-22h31v22h22v125zm338 0V466h23v-22h31v22h27v125z"/><path d="M351 591V482h257v109h-70v-61c-19-38-65-38-83 0v61z"/></g>
+  <path d="M455 591v-61c18-37 64-37 83 0v61z" fill="url(#light)"/><path d="m455 591-128 69h333l-122-69z" fill="#cba470" opacity=".5"/>
+  <g fill="#121f2b"><circle cx="421" cy="578" r="9"/><path d="m410 589-8 41h14v25h9v-25h14l-8-41z"/><path d="m402 601-17 30 5 3 20-25zm28 1 21 22 5-4-20-24z"/><circle cx="573" cy="580" r="8"/><path d="m564 590-14 38h14v27h8v-27h19l-10-38z"/><path d="m580 599 20 28 5-4-20-28z"/></g>
+  <g fill="#f1cf89"><path d="M246 530h4v28h-4zm465-2h4v28h-4z"/><circle cx="248" cy="523" r="8"/><circle cx="713" cy="521" r="8"/></g>
+  <g fill="#e8dcc4" font-family="sans-serif"><text x="64" y="68" font-size="15" letter-spacing="5">千灯纪 · 主题冒险季</text><text x="64" y="99" font-size="11" letter-spacing="3" opacity=".65">起始之城 / 同伴 / 攻略者</text></g>
+</svg>

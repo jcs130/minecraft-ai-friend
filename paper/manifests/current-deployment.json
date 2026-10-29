@@ -1,0 +1,175 @@
+{
+  "state": "deployed-and-verified",
+  "latestRelease": "proximity-chat-release-20261029-r1",
+  "verifiedAt": "2026-10-29T20:07:18.7714116+08:00",
+  "releaseDocument": "paper/docs/NEARBY_COMMUNICATION_RELEASE_20261029.md",
+  "runtime": {
+    "paper": "1.21.1 build133",
+    "plugins": 52,
+    "AgentFriend": "0.4.47.30-vortex",
+    "QiandengjiRpg": "0.2.10",
+    "VortexRPG": "1.2.2-alpha-qd29",
+    "LightAntiCheat": "1.2.6-qd2",
+    "AgentVision": "0.1.3",
+    "LoginGuard": "0.1.9",
+    "Numen": "0.1.4 + pinned mcbot/control fixes",
+    "QiandengjiMcbot": "0.1.0",
+    "QwenPawGameChannel": "0.3.2",
+    "LanTts": "1.6.0",
+    "WorldObserver": "0.1.1",
+    "QiandengVoice": "0.1.0",
+    "SimpleVoiceChat": "2.6.27",
+    "EssentialsChat": "2.22.0"
+  },
+  "goddessChatGuidance": {
+    "enabled": true,
+    "intervalSeconds": 300,
+    "framework": "existing QwenPaw mc_godness native cron",
+    "releaseManifest": "paper/manifests/goddess-chat-review-20261028.json",
+    "gameRestartRequired": false
+  },
+  "liveArtifactDigests": {
+    "QiandengjiMcbot-0.1.0.jar": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59",
+    "numen_api-paper-1.21.1-0.1.4.jar": "6bfea19c81b3000586949dde6f128efad7534c8932fbe485a39933e4d55e9239",
+    "numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
+    "ysm-proxy/LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
+    "AgentVision-0.1.2.jar": "e7e0b46c9bc9df9ea8f8e7ba00dbe7df8e415ac8eea00aed32cf4c21c1a10a65",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "e16481eabaee1e18cdaaa6d230bfef65bd7e1178247a703215c3bf9b91119d8d",
+    "AgentFriend-0.4.47.30.jar": "e49605e47f57ef8e4866eb06a1462c67d94476d392e8cffc59ce36dfad988dc7",
+    "WorldObserver-0.1.1.jar": "f1b4d51fca8bb87b1a945f939a190ce01acc0b372e81dd18b57d8b2c02022d3d",
+    "QiandengVoice-0.1.0.jar": "db28cbb28eb72ca385681a8c39e9f8bbebe625f6e08482a819a7f3a16057ede4",
+    "voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
+    "QiandengjiRpg-0.2.10.jar": "9060363980584815cec86f752df1240277be2cf6023456423f242deea3843b40",
+    "EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a"
+  },
+  "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
+  "stillUnverified": [
+    "original Fabric mcbot GUI",
+    "real LLM long tasks",
+    "remote live native client after OP change",
+    "long autonomous combat balance",
+    "physical Bedrock rendering"
+  ],
+  "scopeNotice": "Chat/world-aware RPG queries and optional voice are deployed. Public voice UDP and automatic lease renewal were tested; human microphone/listening, browser voice for vanilla/Bedrock and native Intel camera remain unverified or unimplemented.",
+  "verification": {
+    "gameRuntimeChecks": 32,
+    "backup": "20261029-040022",
+    "backupColdRefreshedAt": "2026-10-29T17:15:54+08:00",
+    "unrelatedPluginJarsPreserved": 50,
+    "existingAccountCredentialsPreserved": 68,
+    "finalReturningAuthenticationConfirmed": true,
+    "publicSkillDownloadRepublished": false,
+    "backgroundCompletionVerified": true,
+    "formalRuntimeChecks": 34,
+    "observerLiveChecks": 8,
+    "observerLiveRoles": 4,
+    "publicWebsiteRpgChecks": 4,
+    "lastReleaseCoreChecks": 26,
+    "lastReleaseCloudObserverChecks": 4
+  },
+  "rpgUnified": {
+    "bank": "Vortex/Vault/Essentials",
+    "legacyMigration": {
+      "accounts": 5,
+      "coins": 3202,
+      "rate": "1:1"
+    },
+    "backup": "20261028-230739",
+    "oldSkillGrowth": "archived",
+    "publicAuction": "disabled_pending_delivery_fix",
+    "formalChecks": 81
+  },
+  "previousBasicSurvivalVerification": {
+    "liveChecks": 37,
+    "backup": "20261028-152444",
+    "unrelatedPluginJarsPreserved": 46,
+    "oldRetentionErrorRecoveredWithoutAnotherPaperRestart": true,
+    "publicSkillDownloadRepublished": false
+  },
+  "backupMaintenance": {
+    "retention": {
+      "recentComplete": 3,
+      "calendarDays": 7,
+      "daily": "latest per day",
+      "pinMarkers": [
+        ".keep",
+        ".pinned"
+      ]
+    },
+    "executionTimeLimit": "PT2H",
+    "nativeTaskDefinitionPreserved": true,
+    "releaseRecoveryAnchor": "20261028-230739",
+    "document": "paper/docs/BACKUP_RETENTION_20261029.md",
+    "historicalCleanup": {
+      "state": "partially-completed-rest-deferred-offline",
+      "directoriesRemoved": 17,
+      "remainingDirectories": 12,
+      "spaceReclaimedBytes": 698215063552,
+      "retainedCompletePerDrive": 9,
+      "onlineBulkDeletion": false
+    },
+    "helperSha256": "3141475be29d67e978bae5896ae1e706695aaeed9cfc12d4a3c8dd0e8b32579c",
+    "safetyChecks": 27
+  },
+  "loginRecovery": {
+    "state": "recovered-and-actual-world-entry-verified",
+    "verifiedAt": "2026-10-29T01:01:41.770379+08:00",
+    "credentialsPreserved": 68,
+    "paperRestarted": false,
+    "confirmedActualWorldEntry": [
+      "ag_CorMy",
+      "DeepFish",
+      "Yui"
+    ],
+    "document": "paper/docs/LOGIN_IO_RECOVERY_20261029.md",
+    "lastCheckedAt": "2026-10-29T01:14:29.927381+08:00",
+    "freshSnapshotVerified": true,
+    "refreshErrorsSinceRecovery": 0,
+    "transientHeartbeatPublishWarnings": 1
+  },
+  "previousUnifiedVerification": {
+    "liveChecks": 81,
+    "backup": "20261028-230739",
+    "unrelatedPluginJarsPreserved": 47,
+    "outerBackupTaskResult": 267014,
+    "independentCompletionVerified": true,
+    "additionalPaperRestart": false,
+    "publicSkillDownloadRepublished": false
+  },
+  "runtimeStorage": {
+    "active": "NVMe",
+    "legacyEntrypoints": "directory junctions",
+    "originalRuntimeDirectoriesRetained": true,
+    "migrationDocument": "paper/docs/NVME_RUNTIME_20261029.md"
+  },
+  "backgroundUpdate": {
+    "websiteRpgAssetsPublished": true,
+    "systemObserverRendererSwitched": true,
+    "voiceMediaAutoStartupInstalled": true,
+    "voiceWindowsFirewallRuleInstalled": true,
+    "voicePublicUdpVerified": true,
+    "paperRestartNeededToFinish": false,
+    "state": "deployed-and-verified",
+    "voiceNetworkLeaseRenewal": "daily and startup; Limited task; actual lease renewed"
+  },
+  "voiceConfiguration": {
+    "originalPropertiesPreserved": 8,
+    "generatedDefaultProperties": 10,
+    "preStartupExactByteChecks": true,
+    "postStartupSemanticChecks": true,
+    "startupWritebackTests": 7
+  },
+  "previousRelease": "rpg-interaction-release-20261029-r3",
+  "nearbyCommunication": {
+    "state": "deployed-and-verified",
+    "defaultRadius": 48,
+    "scope": "same actual Bukkit world",
+    "shoutPrefix": "!",
+    "privateMessages": "native minecraft whisper",
+    "worldIdentityInRpgStatusAndParty": true,
+    "formalCoreChecks": 26,
+    "originalPermissionsPreserved": true,
+    "websiteChatFormatCompatible": true,
+    "websiteMessagesVerified": 18
+  }
+}

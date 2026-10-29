@@ -19,7 +19,7 @@ function rig() {
     equip: vi.fn(async () => { bot.heldItem = stack; }),
     consume: vi.fn(async () => { stack.count--; bot.food += 3; }),
     clearControlStates() {}, stopDigging() {}, chat: vi.fn(),
-    pathfinder: { stop() {}, setGoal() {} },
+    pathfinder: { goal:null as unknown, stop() {}, setGoal(goal:unknown) { this.goal=goal; } },
   });
   let id = 0;
   const reports: any[] = [];
@@ -31,6 +31,21 @@ function rig() {
   });
   return { bot, stack, exec, world, reports, tick: () => world.autoEatTick(bot) };
 }
+
+it('rejects a known inedible meal immediately without losing earlier queued work or suggesting seeds', () => {
+  const r=rig();
+  const hold=r.exec.pauseForEnvironment('drowning recovery');
+  r.exec.submit([{skill:'chat',text:'/original'}],'append');
+  const before=r.exec.status().waiting.map(t=>t.id);
+  const rejected=r.exec.submitDetailed([{skill:'eat',item:'wheat'}],'append');
+  expect(rejected.accepted).toBe(false);
+  expect(rejected.receipt).toContain('不是可进食物品');
+  expect(rejected.receipt).not.toContain('wheat_seeds');
+  expect(rejected.receipt).toContain('生牛肉');
+  expect(r.exec.status().waiting.map(t=>t.id)).toEqual(before);
+  expect(r.bot.consume).not.toHaveBeenCalled();
+  r.exec.resumeAfterEnvironment(hold);r.exec.shutdown();
+});
 
 it.each(['raw_beef', 'beef'])('a queued future %s meal does not suppress a safe native meal', async item => {
   const r = rig();
@@ -63,16 +78,24 @@ it('yields real frozen movement to one meal, preserves its task ID, and waits fo
   expect(r.exec.hasPendingEat()).toBe(false);
   r.tick();
   expect(r.bot.consume).not.toHaveBeenCalled();
+  let confirmMeal!: () => void;
+  r.bot.consume.mockImplementation(() => new Promise<void>(resolve => {
+    confirmMeal = () => { r.stack.count--; r.bot.food += 3; resolve(); };
+  }));
   r.exec.resumeAfterEnvironment(hold);
   r.tick();
   r.tick();
   await vi.advanceTimersByTimeAsync(100);
-  expect(r.bot.consume).not.toHaveBeenCalled(); // The running follow still owns its action.
-  ally.isValid = false; // Native follow completes; the executor now has a safe boundary.
+  expect(r.bot.consume).toHaveBeenCalledTimes(1); // Grounded follow now offers a real checkpoint.
+  expect(r.stack.count).toBe(3);expect(r.bot.food).toBe(0); // No receipt yet.
+  confirmMeal();
   await vi.advanceTimersByTimeAsync(2000);
   expect(r.bot.consume, JSON.stringify({ status: r.exec.status(), reports: r.reports, diag: r.world.diag.write.mock.calls })).toHaveBeenCalledTimes(1);
   expect(r.stack.count).toBe(2);
   expect(r.bot.food).toBe(3);
+  expect(r.exec.status().running,JSON.stringify(r.reports)).toMatchObject({id:original,skill:'follow'});
+  ally.isValid = false;
+  await vi.advanceTimersByTimeAsync(200);
   expect(r.reports.some(row => row.taskId === original && row.kind === 'suspended')).toBe(true);
   expect(r.reports.some(row => row.taskId === original && row.text.includes('raw_beef'))).toBe(true);
   expect(r.reports.some(row => row.kind === 'done' && row.text.includes('0 → 3'))).toBe(true);

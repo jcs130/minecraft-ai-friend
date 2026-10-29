@@ -24,6 +24,7 @@ import { zhDimension, zhEntity, zhName } from './names.ts';
 import { invItemNamed, noSuchItem } from './inventory.ts';
 import { itemCustomName } from './item-display.ts';
 import { bestRangedWeapon, hasRangedLos, hasUsableArrows, type RangedTarget } from './ranged.ts';
+import { attackTargetRadius, bestWeapon } from './melee.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { inventoryIdentityText } from './item-identities.ts';
@@ -188,15 +189,10 @@ export function notFoodText(bot: Bot, item: string): string {
   const head = Object.keys(known).length === 0 || known[item]
     ? `${zhName(item)}不是可进食物品`
     : `没有 ${item} 这样的物品`;
-  const roots = new Set(item.split('_').filter((t) => t !== 'raw' && t !== 'item' && t !== 'block'));
-  const like = [...new Set(bot.inventory.items()
-    .filter((i) => i.count > 0 && i.name !== item)
-    .filter((i) => i.name.split('_').some((t) => roots.has(t)))
-    .map((i) => i.name))];
-  const near = like.length > 0
-    ? `;包里名字最像的是 ${like.map((n) => `${n}(${zhName(n)})`).join('、')}`
-    : '';
-  return `${head}${near}`;
+  // Similar names are not edible substitutes (wheat -> wheat_seeds caused a
+  // repeated failed meal queue). Only offer registry-confirmed carried food.
+  const food = edibleInBag(bot);
+  return `${head}；${food ?? '未见已确认可直接进食的随身食物；原料须先按真实配方加工'}`;
 }
 
 /** 无食物时的事实读数，由 renderPrecheckNotes 渲染为独立的 [口粮] 行。 */
@@ -577,20 +573,21 @@ function precheckTarget(bot: Bot, target: string, radius: number, rule: string):
   return { level: 'soft', text: `${radius} 格内这会儿没有${zhEntity(target)}`, rule };
 }
 
-function attackEntity(bot: Bot, target: string): RangedTarget | null {
+function attackEntity(bot: Bot, target: string, entityId?: number): RangedTarget | null {
   const want = target.toLowerCase();
   const p = bot.entity?.position;
   if (!p) return null;
   let best: { target: RangedTarget; distance: number } | null = null;
   for (const entity of Object.values(bot.entities ?? {})) {
     const e = entity as {
-      id?: number; name?: string; username?: string; type?: string;
+      id?: number; name?: string; username?: string; type?: string; isValid?: boolean;
       position?: { x: number; y: number; z: number }; height?: number; width?: number;
     };
     const label = e.type === 'player' ? e.username : e.name;
-    if (typeof e.id !== 'number' || !e.position || label?.toLowerCase() !== want) continue;
+    if (entity === bot.entity || e.isValid === false || typeof e.id !== 'number' || !e.position
+        || label?.toLowerCase() !== want || (entityId !== undefined && e.id !== entityId)) continue;
     const distance = Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z);
-    if (distance > 32 || (best && best.distance <= distance)) continue;
+    if (distance > attackTargetRadius(target) || (best && best.distance <= distance)) continue;
     best = {
       target: {
         id: e.id, position: e.position,
@@ -603,17 +600,41 @@ function attackEntity(bot: Bot, target: string): RangedTarget | null {
   return best?.target ?? null;
 }
 
-/** 强制远程的确定性缺口；auto/melee 不在试算阶段替任务选择武器。 */
+function precheckAttackTarget(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
+  if (!bot.entity?.position || attackEntity(bot, call.target, call.entityId)) return null;
+  return { level: 'soft', rule: 'attack.noTarget', text: `${attackTargetRadius(call.target)} 格内当前没有${zhEntity(call.target)}`
+    + (call.entityId === undefined ? '' : ` entityId=${call.entityId}；没有改选同类，执行时仍需重新核对当前身份与视线`) };
+}
+
+/** Report the requested mode's current equipment without selecting a different mode. */
 function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
-  if (call.mode !== 'ranged' && call.mode !== 'kite') return precheckTarget(bot, call.target, 32, 'attack.noTarget');
+  if ((!call.mode || call.mode === 'auto') && inventoryReadConfirmed(bot) && !bestWeapon(bot)
+    && (!bestRangedWeapon(bot) || !hasUsableArrows(bot))) {
+    const target = precheckAttackTarget(bot, call);
+    if (target) return target;
+    return { level: 'soft', rule: 'attack.autoLoadout', text: `当前没有可用近战武器或弓箭组合，主手为 ${bot.heldItem?.name ?? '空手'}；`
+      + 'auto 不会降级为空手挥击。若前序步骤取到武器，执行时重查；否则本步会明确受阻，法术与避险不受此检查限制。' };
+  }
+  if (call.mode === 'melee' && inventoryReadConfirmed(bot) && !bestWeapon(bot)) {
+    const target = precheckAttackTarget(bot, call);
+    if (target) return target;
+    const bow = bestRangedWeapon(bot);
+    const arrows = hasUsableArrows(bot);
+    return { level: 'soft', rule: 'attack.meleeLoadout',
+      text: `当前随身没有执行器可自动选用的近战武器，主手为 ${bot.heldItem?.name ?? '空'}；`
+        + '本步明确指定 melee，只会近战挥击，不会射箭。'
+        + (bow ? `当前有 ${bow.name}${arrows ? '和普通箭' : '，但没有普通箭'}；远程命中与安全位置尚未验证。` : '')
+        + '这是受理时库存，执行前会重查；未改写模式或代为补给。' };
+  }
+  if (call.mode !== 'ranged' && call.mode !== 'kite') return precheckAttackTarget(bot, call);
   if (!bestRangedWeapon(bot)) {
     return { level: 'hard', text: '包里没有可用的弓;强制远程不会改用近战', rule: 'attack.noBow' };
   }
   if (!hasUsableArrows(bot)) {
     return { level: 'hard', text: '包里没有普通箭;强制远程不会改用近战', rule: 'attack.noArrow' };
   }
-  const target = attackEntity(bot, call.target);
-  if (!target) return precheckTarget(bot, call.target, 32, 'attack.noTarget');
+  const target = attackEntity(bot, call.target, call.entityId);
+  if (!target) return precheckAttackTarget(bot, call);
   if (!hasRangedLos(bot, target)) {
     return { level: 'hard', text: `现在看不见${zhEntity(call.target)}的射线;强制远程不会改用近战`, rule: 'attack.noLos' };
   }

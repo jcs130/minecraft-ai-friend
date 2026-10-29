@@ -60,7 +60,7 @@ export class SkillBlocked extends Error {
   readonly scene: string[];
   /** 机器可读原因；调用方不靠中文回执做重复失败判定。 */
   readonly code?: 'target-not-visible' | 'target-not-ready' | 'container-window-changed' | 'container-window-rollback' | 'inventory-click-sync' | 'use-hand-changed' | 'resource-unavailable'
-    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path' | 'container-full' | 'protection-denied';
+    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path' | 'container-full' | 'protection-denied' | 'interaction-hand-unavailable' | 'food-consumption-unconfirmed' | 'attack-target-unconfirmed';
   readonly decision?: Partial<StepDecision>;
   /**
    * 受阻来源：server 表示操作后的回读或服务端结果，local 表示本地前置判断。
@@ -217,6 +217,8 @@ export interface SkillContext {
   progress?: (done: number, total: number) => void;
   /** 当前技能阶段的现场读数；执行器在进度采样时现读，不计为已完成单位。 */
   progressDetail?: () => string;
+  /** Structured evidence for the current step; observations never certify the Agent's goal. */
+  recordObservation?: (value: Record<string, unknown>) => void;
   /** 常驻规矩(mc_policy;World 持有并落盘)。技能只读它,改由工具面走 */
   policy?: {
     get(): PolicySettings;
@@ -257,6 +259,8 @@ export interface SkillContext {
   digBackoffSince?: (ts: number) => Array<{ x: number; y: number; z: number }>;
   /** 容器账本(World 持有,跨任务):箱子内容、炉子槽位与到期、自备工作站的来历 */
   chests?: ChestBook;
+  /** Resolve once per operation; an explicit travel may cross worlds within the same task. */
+  getChests?: () => ChestBook;
   /**
    * 成果登记(World 持有,跨任务跨场次):她做成的蓝图格、耕地、作物。
    * 技能只往里记与读事实,不据此阻断任何动作。
@@ -282,6 +286,7 @@ export interface SkillContext {
    * 容器连续存取共用窗口时，登记过的后续步由执行器按各自结果落账。
    */
   batch?: {
+    taskId?: number;
     steps: readonly SkillCall[];
     index: number;
     absorb(stepIndex: number, receipt: string, ok?: boolean): void;
@@ -378,6 +383,8 @@ export interface TaskAttackLease {
   lastSwingAt: number;
   lastSwingTargetId: number;
   dead: boolean;
+  /** Exact target's native death event, not proof of our damage or kill. */
+  deathObservedAt?: number | null;
   disconnected: boolean;
 }
 

@@ -1,20 +1,245 @@
 {
   "source": "SkinsRestorer bundled recommendations.json, signed skin properties",
   "skins": [
-    {"name": "afu_gnome", "sourceId": "gnome"},
-    {"name": "afu_capybara", "sourceId": "capybara"},
-    {"name": "afu_frog", "sourceId": "frog"},
-    {"name": "afu_desert_cat", "sourceId": "desert-cat"},
-    {"name": "afu_flower_girl", "sourceId": "flower-girl"},
-    {"name": "afu_wizard_boy", "sourceId": "boy-wizzard"},
-    {"name": "afu_wizard_girl", "sourceId": "girl-wizzard"},
-    {"name": "afu_turtle", "sourceId": "turtle"},
-    {"name": "afu_polar_bear", "sourceId": "polar-bear"},
-    {"name": "afu_fox", "sourceId": "fox"},
-    {"name": "afu_penguin", "sourceId": "pinguin"},
-    {"name": "afu_knight", "sourceId": "knight"},
-    {"name": "afu_pirate", "sourceId": "pirate"},
-    {"name": "afu_rainbow_slime", "sourceId": "rainbow-slime"},
-    {"name": "afu_panda", "sourceId": "panda"}
+    {
+      "name": "afu_gnome",
+      "sourceId": "gnome",
+      "label": "森林侏儒",
+      "style": "幻想"
+    },
+    {
+      "name": "afu_capybara",
+      "sourceId": "capybara",
+      "label": "卡皮巴拉",
+      "style": "动物"
+    },
+    {
+      "name": "afu_frog",
+      "sourceId": "frog",
+      "label": "青蛙",
+      "style": "动物"
+    },
+    {
+      "name": "afu_desert_cat",
+      "sourceId": "desert-cat",
+      "label": "沙漠猫",
+      "style": "动物"
+    },
+    {
+      "name": "afu_flower_girl",
+      "sourceId": "flower-girl",
+      "label": "花间少女",
+      "style": "自然幻想"
+    },
+    {
+      "name": "afu_wizard_boy",
+      "sourceId": "boy-wizzard",
+      "label": "少年法师",
+      "style": "法师"
+    },
+    {
+      "name": "afu_wizard_girl",
+      "sourceId": "girl-wizzard",
+      "label": "少女法师",
+      "style": "法师"
+    },
+    {
+      "name": "afu_turtle",
+      "sourceId": "turtle",
+      "label": "海龟",
+      "style": "动物"
+    },
+    {
+      "name": "afu_polar_bear",
+      "sourceId": "polar-bear",
+      "label": "北极熊",
+      "style": "动物"
+    },
+    {
+      "name": "afu_fox",
+      "sourceId": "fox",
+      "label": "狐狸",
+      "style": "动物"
+    },
+    {
+      "name": "afu_penguin",
+      "sourceId": "pinguin",
+      "label": "企鹅",
+      "style": "动物"
+    },
+    {
+      "name": "afu_knight",
+      "sourceId": "knight",
+      "label": "重装骑士",
+      "style": "骑士"
+    },
+    {
+      "name": "afu_pirate",
+      "sourceId": "pirate",
+      "label": "海盗",
+      "style": "冒险者"
+    },
+    {
+      "name": "afu_rainbow_slime",
+      "sourceId": "rainbow-slime",
+      "label": "彩虹史莱姆",
+      "style": "幻想"
+    },
+    {
+      "name": "afu_panda",
+      "sourceId": "panda",
+      "label": "熊猫",
+      "style": "动物"
+    },
+    {
+      "name": "afu_link",
+      "sourceId": "link",
+      "label": "林克·冒险剑士",
+      "style": "剑士"
+    },
+    {
+      "name": "afu_viking",
+      "sourceId": "boy-viking",
+      "label": "北境战士",
+      "style": "战士"
+    },
+    {
+      "name": "afu_old_wizard",
+      "sourceId": "old-wizard",
+      "label": "年长巫师",
+      "style": "法师"
+    },
+    {
+      "name": "afu_jedi",
+      "sourceId": "girl-jedi",
+      "label": "星际女剑士",
+      "style": "剑士"
+    },
+    {
+      "name": "afu_zenitsu",
+      "sourceId": "zenitsu",
+      "label": "我妻善逸",
+      "style": "动漫剑士"
+    },
+    {
+      "name": "afu_medieval",
+      "sourceId": "medival",
+      "label": "中世纪旅人",
+      "style": "冒险者"
+    },
+    {
+      "name": "afu_explorer",
+      "sourceId": "investigator",
+      "label": "调查员",
+      "style": "探索者"
+    },
+    {
+      "name": "afu_anime_boy",
+      "sourceId": "anime-boy",
+      "label": "动漫少年",
+      "style": "日常"
+    },
+    {
+      "name": "afu_anime_girl",
+      "sourceId": "anime-girl",
+      "label": "动漫少女",
+      "style": "日常"
+    },
+    {
+      "name": "afu_rem",
+      "sourceId": "rem",
+      "label": "雷姆",
+      "style": "动漫"
+    },
+    {
+      "name": "afu_shark_girl",
+      "sourceId": "shark-girl",
+      "label": "鲨鱼少女",
+      "style": "兽耳幻想"
+    },
+    {
+      "name": "afu_frog_girl",
+      "sourceId": "frog-girl",
+      "label": "青蛙少女",
+      "style": "自然幻想"
+    },
+    {
+      "name": "afu_cat_boots",
+      "sourceId": "cat-with-boots",
+      "label": "穿靴子的猫",
+      "style": "猫族冒险者"
+    },
+    {
+      "name": "afu_mc_cat",
+      "sourceId": "mc-cat",
+      "label": "方块猫",
+      "style": "动物"
+    },
+    {
+      "name": "afu_axolotl",
+      "sourceId": "boy-axolotl",
+      "label": "美西螈少年",
+      "style": "水生幻想"
+    },
+    {
+      "name": "afu_bear",
+      "sourceId": "bear",
+      "label": "棕熊",
+      "style": "动物"
+    },
+    {
+      "name": "afu_astronaut",
+      "sourceId": "space-suit",
+      "label": "宇航员",
+      "style": "科幻"
+    },
+    {
+      "name": "afu_samus",
+      "sourceId": "samus",
+      "label": "萨姆斯",
+      "style": "科幻装甲"
+    },
+    {
+      "name": "afu_stormtrooper",
+      "sourceId": "star-trooper",
+      "label": "星际白甲兵",
+      "style": "科幻装甲"
+    },
+    {
+      "name": "afu_spiderman",
+      "sourceId": "spider-man",
+      "label": "蜘蛛侠",
+      "style": "英雄"
+    },
+    {
+      "name": "afu_deadpool",
+      "sourceId": "deadpool",
+      "label": "死侍",
+      "style": "英雄"
+    },
+    {
+      "name": "afu_mario",
+      "sourceId": "mario",
+      "label": "马里奥",
+      "style": "游戏角色"
+    },
+    {
+      "name": "afu_yoshi",
+      "sourceId": "yoshi-mario",
+      "label": "耀西",
+      "style": "游戏角色"
+    },
+    {
+      "name": "afu_villager",
+      "sourceId": "villager",
+      "label": "村民旅人",
+      "style": "原版"
+    },
+    {
+      "name": "afu_steve",
+      "sourceId": "mc-steve",
+      "label": "史蒂夫",
+      "style": "原版"
+    }
   ]
 }

@@ -1,0 +1,17 @@
+/** Cold-start basic availability, fixed-home safety and native-mana guards. */
+import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {setTimeout as sleep} from 'node:timers/promises';import {command} from '../../ops/rcon-client.mjs';import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs';
+const stage='E:/MC/staging/vortex-takeover-20261027',label=process.argv[2];assert.equal(await fs.readFile(stage+'/.qa-only','utf8'),'VORTEX_TAKEOVER_QA_ONLY');assert(JSON.parse(await fs.readFile(stage+'/basic-survival-bs5.json','utf8')).passed);
+const mf=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('mineflayer'),report={checks:[],receipts:[],productionChanged:false};let bot,last=0;
+const check=(n,v)=>{assert(v,n);report.checks.push(n);console.log('PASS '+n);};const until=async(f,n)=>{for(let end=Date.now()+25000;Date.now()<end;){const v=await f();if(v)return v;await sleep(100);}throw Error(n);};
+const rc=async q=>{const text=await command(q,15000,{port:25929,properties:stage+'/server.properties'});report.receipts.push({q,text});return text;};
+const mana=async()=>Number((await rc('qduse inspect '+bot.username)).match(/mana=([\d.]+)/)?.[1]);
+async function ask(q,pattern=/MC_RPG /){await sleep(Math.max(0,1100-(Date.now()-last)));last=Date.now();const at=bot.messages.length;bot.chat(q);const text=await until(()=>bot.messages.slice(at).find(s=>pattern.test(s)),q);report.receipts.push({q,text});return text;}
+async function json(q){return JSON.parse((await ask(q)).slice(7));}
+try{
+ bot=mf.createBot({host:'127.0.0.1',port:25928,username:'ag_RUBbs5',auth:'offline',version:'1.21.11',hideErrors:true,checkTimeoutInterval:60000});bot.messages=[];bot.on('messagestr',s=>bot.messages.push(s));bot.on('error',()=>{});installRecipePacketBypass(bot._client);await until(()=>bot.entity&&bot.world.getColumnAt(bot.entity.position),'world');bot.physicsEnabled=false;await sleep(1500);
+ check('basic account remains unclassed after cold start',(await json('/mycli profession status --json')).class==='none');const common=(await json('/mycli skills list common --json')).common;for(const id of ['home','selfheal','food','blink','starbolt','frostnova','give'])check('basic remains discoverable after cold start '+id,common.includes(id));
+ await rc('minecraft:setblock 2402 80 2102 air');await rc('qduse mana '+bot.username+' 20');const before=await mana();check('unsafe home has an explicit no-cost refusal',(await ask('/mycli cast home',/unsafe_destination/)).includes('未耗魔')&&await mana()>=before);await rc('minecraft:setblock 2402 80 2102 stone');
+ await rc('minecraft:gamemode spectator '+bot.username);await rc('qduse mana '+bot.username+' 20');const spec=await mana();check('spectator restored spell is denied without cost',(await ask('/mycli cast selfheal',/旁观者/)).includes('旁观者')&&await mana()>=spec);await rc('minecraft:gamemode survival '+bot.username);
+ await rc('qduse hunger '+bot.username+' 10');await rc('qduse mana '+bot.username+' 0');await ask('/mycli cast food',/魔力不足/);check('insufficient native mana prevents food effect',(await json('/mycli status --json')).food===10);
+ check('failed basic actions do not change profession',(await json('/mycli profession status --json')).class==='none');report.passed=true;
+}catch(e){report.error=e.stack;throw e;}finally{bot?.quit();await fs.writeFile(stage+'/basic-cold-'+label+'.json',JSON.stringify(report,null,2));}

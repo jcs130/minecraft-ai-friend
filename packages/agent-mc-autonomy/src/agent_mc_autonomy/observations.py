@@ -43,11 +43,41 @@ def body_event_view(value):
             "sampled_at": _bounded(value.get("sampled_at", reference.get("ts")), 80), "original_event": reference}
 
 
+REPEAT_GUIDANCE = ("Historical native attempt samples only. completed means the action ended, not that stock or a goal was obtained. "
+                   "unchanged covers only the core's compared position, inventory and, for target scope, block readings; "
+                   "unknown does not establish no change. Use current prerequisites and original receipts to choose the next action. "
+                   "This evidence does not authorize replay, cancellation or goal changes.")
+
+
+def repeat_evidence_view(value):
+    """Validate the core's typed attempt metadata without inferring from prose."""
+    if (not isinstance(value, dict) or type(value.get("taskId")) is not int or not 0 <= value["taskId"] <= 2**53 - 1
+            or type(value.get("attempts")) is not int or not 3 <= value["attempts"] <= 2**53 - 1
+            or not isinstance(value.get("scope"), str) or not isinstance(value.get("observation"), str)
+            or value.get("scope") not in {"target", "shape"}
+            or value.get("observation") not in {"unchanged", "changed", "unknown"}):
+        return None
+    return {key: value[key] for key in ("taskId", "attempts", "scope", "observation")}
+
+
+def terminal_repeat_evidence(event):
+    """Only the matching original task terminal can attest these samples."""
+    execution = event.get("execution") or {}
+    evidence = repeat_evidence_view((event.get("meta") or {}).get("repeatFailure"))
+    if (not evidence or execution.get("kind") != "task" or execution.get("terminal") is not True
+            or execution.get("phase") not in {"completed", "partial", "blocked"}
+            or not isinstance(execution.get("id"), str)
+            or not execution["id"].endswith(":" + str(evidence["taskId"]))):
+        return None
+    return evidence
+
+
 def native_outcome_view(value):
     if (not isinstance(value, dict) or not isinstance(value.get("execution_id"), str)
             or value.get("terminal") is False):
         return None
     observations = spatial_observations(value.get("receipt", "")) if "observations" not in value else value["observations"]
+    repeat = repeat_evidence_view(value.get("repeat_evidence"))
     return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
             **({"execution_kind": _bounded(value["execution_kind"], 40)} if isinstance(value.get("execution_kind"), str) else {}),
             "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
@@ -58,6 +88,7 @@ def native_outcome_view(value):
                 "observation_guidance": "Observed samples only. An unknown cell is occluded or unloaded, not air or safe ground. Repeating the same scan from the same place cannot establish missing support; change viewpoint/method or choose feasible local work."}
                if isinstance(observations, list) and observations else {}),
             **({"step_outcomes": step_outcomes_view(value["step_outcomes"])} if "step_outcomes" in value else {}),
+            **({"repeat_evidence": repeat, "repeat_guidance": REPEAT_GUIDANCE} if repeat else {}),
             "original_event": event_reference(value.get("original_event"))}
 
 
@@ -190,7 +221,7 @@ def feedback_signal(feedback):
     body = feedback["body_events"][-1:]
     outcomes = [row for row in feedback["native_outcomes"] if not row["observation_only"]][-1:]
     selected = [feedback["bodyRestriction"], [(row["id"], row["phase"], row["text"]) for row in body],
-                [(row["execution_id"], row["phase"], row["receipt"], row.get("step_outcomes")) for row in outcomes]]
+                [(row["execution_id"], row["phase"], row["receipt"], row.get("step_outcomes"), row.get("repeat_evidence")) for row in outcomes]]
     return hashlib.sha256(json.dumps(selected, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
@@ -235,7 +266,55 @@ def spatial_summary(value):
     result = {k: value[k] for k in ("source", "observedAt", "dimension", "kind", "bounds", "unknownCells") if k in value}
     result["feet"] = value.get("frame", {}).get("feet")
     result["detail"] = "Summary of observed samples only; query original for collision geometry and omitted samples."
-    if value.get("kind") == "voxels":
+    if "readout" in value:
+        readout = value["readout"]
+        if (not isinstance(readout, dict) or readout.get("protocol") != "agent-mc-spatial-read/v1"
+                or readout.get("historical") is not False or readout.get("kind") != value.get("kind")
+                or any(not isinstance(readout.get(k), str) or not re.fullmatch(r"[0-9a-f]{64}", readout[k])
+                       for k in ("selection", "revision"))
+                or any(readout.get(k) is not None and type(readout[k]) is not bool
+                       for k in ("scanComplete", "knownComplete", "retryable"))
+                or type(readout.get("continuationAvailable")) is not bool
+                or any(readout.get(k) is not None and (type(readout[k]) is not int or not 0 <= readout[k] <= 2**53 - 1)
+                       for k in ("remainingCount", "unknownCount"))
+                or readout.get("unknownUnit") not in {None, "cells", "sites"}
+                or len(json.dumps(readout, ensure_ascii=False).encode("utf-8")) > 2400):
+            return None
+        # These are producer-owned coverage facts, not a host decision that the
+        # scene is safe or that a native action/whole goal remains pending.
+        result["readout"] = readout
+    if value.get("kind") == "voxels" and value.get("format") == "visible":
+        blocks, palette, coverage = value.get("blocks"), value.get("palette"), value.get("coverage")
+        if (value.get("coordinate_system") != "absolute_block" or not isinstance(blocks, list)
+                or len(blocks) > 512 or not isinstance(palette, list) or len(palette) > 512
+                or not isinstance(coverage, dict) or len(json.dumps(coverage).encode("utf-8")) > 3500):
+            return None
+        counts, samples = Counter(), {}
+        for block in blocks:
+            if (not isinstance(block, list) or len(block) != 4 or any(type(n) is not int for n in block)
+                    or not 0 <= block[3] < len(palette)):
+                return None
+            material = palette[block[3]]
+            if not isinstance(material, dict) or not isinstance(material.get("name"), str):
+                return None
+            name = material["name"]
+            counts[name] += 1
+            samples.setdefault(name, []).append(block[:3])
+        feet = result["feet"]
+        if isinstance(feet, list) and len(feet) == 3 and all(type(n) in {int, float} for n in feet):
+            for positions in samples.values():
+                positions.sort(key=lambda p: sum((p[i] - feet[i]) ** 2 for i in range(3)))
+        result.update(format="visible", coordinate_system="absolute_block", coverage=coverage,
+                      materials=[{"name": name, "count": count, "example_at": samples[name][0]}
+                                 for name, count in sorted(counts.items())[:24]],
+                      materials_omitted=max(0, len(counts) - 24))
+        result["frame"] = {k: value["frame"][k] for k in ("feet", "eye", "yawDeg", "pitchDeg") if k in value.get("frame", {})}
+        for key in ("requested_bounds", "next_safe_read"):
+            if key in value:
+                result[key] = value[key]
+        result["detail"] = ("Returned visible surface samples only; counts are not all blocks/resources in the area. "
+                            "Hidden/unloaded cells are not expanded into air or a safe route. Query the original for geometry.")
+    elif value.get("kind") == "voxels":
         bounds, cells, palette = value.get("bounds"), value.get("cells"), value.get("palette")
         if (value.get("order") != "y,z,x; x fastest" or not isinstance(bounds, list) or len(bounds) != 6
                 or not all(type(n) is int for n in bounds) or not isinstance(cells, list) or not isinstance(palette, list)):
@@ -263,6 +342,9 @@ def spatial_summary(value):
                                for name, count in sorted(counts.items())][:24]
         result["materials_omitted"] = max(0, len(counts) - 24)
         result["entities"] = value.get("entities", [])[:6]
+    elif "readout" in result and value.get("kind") == "sites" and isinstance(value.get("sites"), list):
+        result["sites"] = [{key: row[key] for key in ("at", "target", "below", "body") if key in row}
+                           for row in value["sites"][:8] if isinstance(row, dict)]
     elif value.get("kind") == "rays" and isinstance(value.get("rays"), list):
         # Ray angles are relative to the current eye frame. Keeping the offsets
         # without that frame turns an upward scan after mining into an apparent
@@ -289,14 +371,41 @@ def spatial_summary(value):
     return result
 
 
+def _spatial_objects(text):
+    """Find native JSON objects without treating object key order as a schema.
+
+    Current cores prefix the source with a machine readout. Decoding complete
+    objects also avoids scanning their quoted JSON strings as fresh evidence.
+    Unknown/malformed objects are left verbatim by both consumers below.
+    """
+    decoder, cursor, attempts = json.JSONDecoder(), 0, 0
+    while attempts < 512:
+        start = text.find("{", cursor)
+        if start < 0:
+            return
+        attempts += 1
+        try:
+            value, length = decoder.raw_decode(text[start:])
+        except ValueError:
+            cursor = start + 1
+            continue
+        end = start + length
+        if isinstance(value, dict) and value.get("source") in {"client-loaded-world", "client-visible-world"}:
+            yield start, end, value
+            cursor = end
+        else:
+            # A non-spatial wrapper can contain a real observation, but JSON
+            # strings escape their quotes and cannot decode as nested objects.
+            cursor = start + 1
+
+
 def spatial_observations(text):
     """Keep each measured result before a terminal receipt's header is truncated."""
     if not isinstance(text, str):
         return []
-    decoder, results = json.JSONDecoder(), []
-    for match in re.finditer(r'\{"source"\s*:\s*"client-(?:loaded|visible)-world"', text):
+    results = []
+    for _, _, value in _spatial_objects(text):
         try:
-            value, _ = decoder.raw_decode(text[match.start():])
             summary = spatial_summary(value)
         except (ValueError, TypeError, AttributeError):
             continue
@@ -304,8 +413,9 @@ def spatial_observations(text):
             # All spatial coordinates here are the native absolute result, never
             # the request's foot-relative bounds. Full geometry stays archived.
             results.append({key: summary[key] for key in (
-                "kind", "bounds", "unknownCells", "feet", "frame", "materials", "rays", "observedAt") if key in summary})
-        elif value.get("kind") == "sites" and isinstance(value.get("sites"), list):
+                "kind", "bounds", "unknownCells", "feet", "frame", "materials", "rays", "observedAt",
+                "format", "coordinate_system", "requested_bounds", "coverage", "readout", "next_safe_read", "sites") if key in summary})
+        elif "readout" not in value and value.get("kind") == "sites" and isinstance(value.get("sites"), list):
             results.append({"kind": "sites", "observedAt": value.get("observedAt"),
                 "sites": [{key: row[key] for key in ("at", "target", "below", "body") if key in row}
                           for row in value["sites"][:8] if isinstance(row, dict)]})
@@ -317,18 +427,15 @@ def spatial_observations(text):
 
 def spatial_text(text):
     """Replace only recognized native observation objects inside receipt text."""
-    decoder, output, cursor = json.JSONDecoder(), [], 0
-    for match in re.finditer(r'\{"source"\s*:\s*"client-(?:loaded|visible)-world"', text):
-        if match.start() < cursor:
-            continue
+    output, cursor = [], 0
+    for start, end, value in _spatial_objects(text):
         try:
-            value, length = decoder.raw_decode(text[match.start():])
             summary = spatial_summary(value)
         except (ValueError, TypeError, AttributeError):
             continue
         if summary is not None:
-            output.extend([text[cursor:match.start()], json.dumps(summary, ensure_ascii=False, separators=(",", ":"))])
-            cursor = match.start() + length
+            output.extend([text[cursor:start], json.dumps(summary, ensure_ascii=False, separators=(",", ":"))])
+            cursor = end
     output.append(text[cursor:])
     return "".join(output)
 

@@ -17,7 +17,7 @@ public final class AgentCliTextTest {
     public static void main(String[] args) throws Exception {
         JsonObject root = help("--help");
         List<String> names = root.getAsJsonArray("commands").asList().stream().map(item -> item.getAsJsonObject().get("name").getAsString()).toList();
-        check("seven familiar entries instead of a new CLI", names.equals(List.of("status","tasks","skills","inventory","protect","progress","rules")));
+        check("seven familiar entries put adventuring and profession on the first page", names.equals(List.of("status","tasks","skills","dungeon","profession","inventory","rules")));
         String brief = text(AgentCliText.help(root));
         check("home help bounded", brief.length() < 1000 && !brief.contains("MC_CLI_") && !brief.contains("observedAt"));
         check("group does not promise JSON for every action", !root.get("usage").getAsString().contains("--json"));

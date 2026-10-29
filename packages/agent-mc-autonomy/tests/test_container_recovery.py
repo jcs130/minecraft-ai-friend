@@ -121,3 +121,127 @@ def test_incomplete_or_ambiguous_measurements_never_block(broken):
         guard.record(plan(), end, "world", 0, reference)
     facts = {"run": "native-run", "observation": {"dimension": "minecraft:overworld", "inventory": {"oak_planks": 2, "coal": 10}}}
     assert guard.repeated(plan(), facts, "world", 0) is None
+
+
+def unopened_plan():
+    args = plan()
+    args["steps"][1]["face"] = "east"
+    return args
+
+
+def unopened_terminal():
+    end = terminal()
+    use = measured("use", at=[1, 61, 2])
+    for sample in (use["before"], use["after"]):
+        sample["target"] = {"name": "grass_block", "stateId": 9}
+    end["evidence"]["steps"][1] = {"step": 2, "outcome": "fail", "observedEffect": use}
+    end["evidence"]["steps"][2] = {"step": 3, "outcome": "skip", "why": "No accessible window after step 2"}
+    return end
+
+
+def unopened_facts():
+    return {"run": "native-run", "observation": {"dimension": "minecraft:overworld",
+            "inventory": {"oak_planks": 2, "coal": 10}, "position": {"x": 1.5, "y": 61, "z": 1.5}}}
+
+
+def test_failed_open_with_face_and_skipped_take_is_not_requeued(framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    controller.game_facts = unopened_facts()
+    for cursor in (58, 59):
+        assert run_async(controller.execute_model_call("mc_do", unopened_plan()))[0].get("execution")
+        end = unopened_terminal()
+        controller.receipt({"execution": end, "events": [{"run": "native-run", "cursor": cursor, "execution": end}]})
+    result = run_async(controller.execute_model_call("mc_do", unopened_plan()))[0]
+    assert result["code"] == "repeated_container_failure" and result["dispatched"] is False
+    assert result["previous_outcome"]["kind"] == "unopened_container"
+    assert result["previous_outcome"]["original_event"] == {"run": "native-run", "cursor": 59}
+    assert result["previous_outcome"]["goal_verified"] is False
+    assert "no withdrawal was attempted" in result["text"]
+    assert len([x for x in bridge.calls if x[0] == "mc_do"]) == 2
+    assert not controller.pending
+
+
+@pytest.mark.parametrize("change", ["face", "target", "position", "inventory", "run", "scope", "death", "expiry", "acquisition"])
+def test_failed_open_allows_changed_prerequisites(change, monkeypatch):
+    import agent_mc_autonomy.container_recovery as module
+    guard = module.ContainerRecovery()
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    for cursor in (58, 59):
+        guard.record(unopened_plan(), unopened_terminal(), "world", 0, {"run": "native-run", "cursor": cursor})
+    args, facts, scope, epoch = unopened_plan(), unopened_facts(), "world", 0
+    assert guard.repeated(args, facts, scope, epoch)
+    if change == "face":
+        args["steps"][1]["face"] = "west"
+    elif change == "target":
+        args["steps"][1]["at"] = [2, 61, 2]
+    elif change == "position":
+        facts["observation"]["position"]["x"] += 1
+    elif change == "inventory":
+        facts["observation"]["inventory"]["oak_planks"] += 1
+    elif change == "run":
+        facts["run"] = "next-native-run"
+    elif change == "scope":
+        scope = "next-world"
+    elif change == "death":
+        epoch = 1
+    elif change == "expiry":
+        clock[0] += 121
+    else:
+        args["steps"].insert(0, {"skill": "collect", "target": "oak_log", "count": 1})
+    assert guard.repeated(args, facts, scope, epoch) is None
+
+
+@pytest.mark.parametrize("broken", ["unknown_target", "unknown_position", "changed", "use_skipped", "take_failed", "missing_effect", "not_terminal"])
+def test_failed_open_requires_exact_complete_measurement(broken):
+    from agent_mc_autonomy.container_recovery import ContainerRecovery
+    guard, end = ContainerRecovery(), unopened_terminal()
+    rows = end["evidence"]["steps"]
+    if broken == "unknown_target":
+        rows[1]["observedEffect"]["after"]["target"] = None
+    elif broken == "unknown_position":
+        rows[1]["observedEffect"]["after"]["position"] = None
+    elif broken == "changed":
+        effect = rows[1]["observedEffect"]
+        effect["after"]["position"][0] += 1
+        effect["changed"]["position"] = True
+        effect["status"] = "changed"
+    elif broken == "use_skipped":
+        rows[1]["outcome"] = "skip"
+    elif broken == "take_failed":
+        rows[2]["outcome"] = "fail"
+    elif broken == "missing_effect":
+        rows[1].pop("observedEffect")
+    else:
+        end["terminal"] = False
+    for cursor in (58, 59):
+        guard.record(unopened_plan(), end, "world", 0, {"run": "native-run", "cursor": cursor})
+    assert guard.repeated(unopened_plan(), unopened_facts(), "world", 0) is None
+
+
+@pytest.mark.parametrize("change,blocked", [("timestamp", True), ("jitter", True), ("target", False), ("position", False)])
+def test_failed_open_compares_measured_state_across_receipts(change, blocked):
+    from agent_mc_autonomy.container_recovery import ContainerRecovery
+    guard = ContainerRecovery()
+    guard.record(unopened_plan(), unopened_terminal(), "world", 0, {"run": "native-run", "cursor": 58})
+    end = unopened_terminal()
+    sample = end["evidence"]["steps"][1]["observedEffect"]
+    for state in (sample["before"], sample["after"]):
+        if change == "timestamp":
+            state["at"] = "2026-10-18T07:05:10Z"
+        elif change in {"jitter", "position"}:
+            state["position"][0] += .01 if change == "jitter" else 1
+        else:
+            state["target"] = {"name": "chest", "stateId": 2973}
+    guard.record(unopened_plan(), end, "world", 0, {"run": "native-run", "cursor": 59})
+    assert bool(guard.repeated(unopened_plan(), unopened_facts(), "world", 0)) is blocked
+
+
+@pytest.mark.parametrize("face", [[], {}, True, None, "automatic"])
+def test_invalid_face_is_not_accepted_by_recovery(face):
+    from agent_mc_autonomy.container_recovery import ContainerRecovery
+    guard, args = ContainerRecovery(), unopened_plan()
+    args["steps"][1]["face"] = face
+    for cursor in (58, 59):
+        guard.record(args, unopened_terminal(), "world", 0, {"run": "native-run", "cursor": cursor})
+    assert guard.repeated(args, unopened_facts(), "world", 0) is None

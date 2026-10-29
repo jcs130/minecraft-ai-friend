@@ -158,6 +158,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             require_no_pending_acknowledgement(directory)
             config = directory / "client.json"
             client_config = settings.client_config(data_root)
+            server_engine = ({"module": settings.server_engine_module, "sha256": settings.server_engine_sha256}
+                             if settings.server_engine_module else None)
             if settings.viewer_renderer_directory:
                 client_config["viewerIntegration"] = {
                     "packageDirectory": str(entry.parent.parent), "rendererDirectory": settings.viewer_renderer_directory,
@@ -167,10 +169,14 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                     "selectionScope": settings.identity,
                     "presentationModule": settings.server_presentation_module,
                     "presentationSha256": settings.server_presentation_sha256,
+                    "serverEngine": server_engine,
                     "stateFile": str(directory / "viewer-state.json"), "session": viewer_session,
                     "agentStateFile": str(directory / "viewer-agent.json"),
                 }
                 entry = Path(viewer_entry) if viewer_entry else Path(__file__).parent / "integrations" / "viewer-stdio.mjs"
+            elif server_engine:
+                client_config["serverEngineIntegration"] = {**server_engine, "packageDirectory": str(entry.parent.parent)}
+                entry = Path(__file__).parent / "integrations" / "server-stdio.mjs"
             config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
             update()
             memory_env = {**bundle_env, **settings.memory.environment()}

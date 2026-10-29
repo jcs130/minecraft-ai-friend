@@ -131,7 +131,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'brew'; at?: Anchor; input: string; bottle: string; count: number; fuel: string }
   | { skill: 'enchant'; at: Anchor; item: string; index?: number }
   | { skill: 'eat'; item: string }
-  | { skill: 'attack'; target: string; mode?: AttackMode }
+  | { skill: 'attack'; target: string; entityId?: number; mode?: AttackMode }
   | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; target?: string; pick?: string }
@@ -852,6 +852,17 @@ const ANVIL_NAME_MAX = 50;
 const PICK_DOC = '同 id 的几件里挑哪一件:写清单括号里的字(「无限」「效率IV」,英文附魔 id 也认);'
   + '不写 = 撞上哪件算哪件。按内容匹配,不是序号,存掉一件不影响其余几件怎么写';
 
+/** 精确攻击沿用 use/ride 的类型或玩家名 + 本连接 ID；省略 ID 不默认选 0。 */
+function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
+  if (c.entityId !== undefined && (typeof c.entityId !== 'number' || !Number.isSafeInteger(c.entityId)
+      || c.entityId < 0 || c.entityId > 2_147_483_647)) {
+    return { error: `${at} attack 的 entityId 要是本连接里观察到的非负整数实体 ID；target 仍填实体英文类型或玩家名` };
+  }
+  const parsed = parseByFields(SKILL_INDEX.get('attack')!, c, at);
+  if ('step' in parsed && c.entityId === undefined) delete (parsed.step as Extract<SkillCall, { skill: 'attack' }>).entityId;
+  return parsed;
+}
+
 /** 骑乘:off / target / to 三个入参的横向规则都在这儿说清,不静默吃字段。 */
 function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
   const off = c.off === true;
@@ -1130,7 +1141,7 @@ const SKILLS: readonly SkillSpec[] = [
   {
     name: 'control',
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。
-{"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。自动踩水与防溺水共用 reflex.antiDrown 开关，关闭后结束也不自动上浮；启用时低氧/环境自救仍可接管。回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
+{"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。reflex.antiDrown 只控制普通踩水；独立 reflex.emergencyDrown 默认开启，低氧/环境自救仍可接管，脱险后不重放已中断控制段。回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
 {"skill":"control","keys":["forward","jump"],"durationMs":1000,"mode":"flight","yawDeg":30} 先相对当前视角左转 30 度，再向前上方斜飞。飞行必须已有服务端许可，可与授予许可的 chat 同单用 needs 连接；最多等待许可 2 秒。
 keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 WASD 水平移动，jump 上升、sneak 下降，可边平移边升降；forward+sprint 水平加速，升降速度不翻倍。方向按当前视角水平朝向，pitch 不改变升降。受控短时飞行使用服务端能力速度及保守步长，不复刻完整创造模式惯性。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
 ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight 检查身位碰撞和区块加载，遇遮挡停止；不会绕路。位置修正、死亡、断线或身体被其他任务接管时结束本步，不从旧坐标继续移动。
@@ -1749,13 +1760,17 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'attack',
-    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断近战或弓(8 格切弓、5.5 格切回近战);
+    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断可用近战武器或弓箭(8 格切弓、5.5 格切回近战)，两者都不可用时明确受阻，不降级为空手;
+{"skill":"attack","target":"zombie","entityId":42} 精确指定现场观察到的这一只；target 是英文类型或玩家名，编号另填 entityId，不把 "42" 写成 target。
+                                                 ID 只在当前连接有效；失效、类型不符或被遮挡时不改打附近同类，重新观察。
                                                  melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
                                                  ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
                                                  auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。
                                                  end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
+    parse: parseAttack,
     fields: [
-      { key: 'target', kind: 'string', required: true, hint: '实体英文 id 或玩家名' },
+      { key: 'target', kind: 'string', required: true, hint: '实体英文类型或玩家名；数字实体编号另填 entityId' },
+      { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；与 target 一起精确指定本连接观察到的实体 ID；省略时选最近同类，指定后不改选其他实体' },
       {
         key: 'mode', kind: 'enum', values: ['auto', 'melee', 'ranged', 'kite'],
         error: 'attack 的 mode 只认 auto/melee/ranged/kite',
@@ -1837,7 +1852,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  带 rules 还要合堆须显式 sort:false；还要合堆并排序须显式 sort:true。服务器可能固定入口道具的位置，不应为一次取舍附带整包排序。
                                                  规则可按 pick 选具体标签；取舍会使用随身所有主背包槽（包括快捷栏），不脱装备或副手。没有规则就不会存放或丢弃。
 {"skill":"use","item":"大背包"},{"skill":"organize","target":"open"} 整理当前真实储物容器，不是选择菜单或工作站输入/输出格；不自动跨容器搬物。
-                                                 dryRun:true 只读当前方案；正式执行重读槽位。每次交换等待服务端槽位和光标确认，取消或确认不明会停止，保留已发生的结果；终态核对空位及物品总量。`,
+                                                 dryRun:true 只读当前方案；正式执行重读槽位。明确 includeHotbar:true 时，现代客户端的排序换位使用原子快捷键交换，不暂留光标；合堆仍单独确认。
+                                                 每次交换等待服务端槽位和光标确认，取消或确认不明会停止，保留已发生的结果；终态核对空位及物品总量。`,
     parse: parseOrganize,
     fields: [
       { key: 'target', kind: 'enum', values: ['inventory', 'open'], error: 'target 只认 inventory/open', doc: '默认 inventory；open 整理当前真实储物窗口' },
@@ -1863,7 +1879,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     parse: parseTake,
     fields: [
       { key: 'item', kind: 'string', hint: '物品英文 id', doc: '定量取物时与 count 一起写' },
-      { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1, doc: '定量取物必须显式写;不再默认成 1' },
+      { key: 'count', kind: 'opaque', schema: { type: 'integer', minimum: 1, maximum: 64 }, doc: '定量取物必须显式写;不默认数量' },
       { key: 'at', kind: 'anchor', error: `take 的 at 要 [x,y,z](${RELATIVE_HINT})`, doc: '点名哪一格容器' },
       { key: 'from', kind: 'enum', values: ['open'], error: 'from 只认 open', doc: '从当前打开的容器窗口取;不写 = 找附近箱子' },
       { key: 'all', kind: 'flag', doc: 'at+all:true 取指定容器;炉子有原料时保留原料和燃料' },
@@ -2066,6 +2082,9 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
     let variants: Record<string, unknown>[];
     if (spec.name === 'craft') {
       variants = [variant(['item', 'count'], ['item']), variant(['grid', 'count'], ['grid'])];
+    } else if (spec.name === 'take') {
+      variants = [variant(['item', 'count', 'at', 'from', 'pick'], ['item', 'count']),
+        variant(['at', 'all'], ['at', 'all'], { all: { type: 'boolean', const: true } })];
     } else if (spec.name === 'observe') {
       variants = [variant(['mode','format','bounds'], ['mode'], { mode: { const: 'voxels' } }),
         variant(['mode','format','cursor'], ['mode','cursor'], { mode: { const: 'voxels' } }),

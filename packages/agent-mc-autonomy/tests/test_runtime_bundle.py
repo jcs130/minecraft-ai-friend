@@ -91,6 +91,51 @@ def test_complete_bundle_and_prepared_defaults(bundle):
     verify_settings_runtime(settings)
 
 
+def test_prepared_catalog_accepts_logical_path_after_app_data_redirection(bundle, tmp_path, monkeypatch):
+    """Node keeps the logical LOCALAPPDATA path; packaged Python resolves its physical view."""
+    root, _, registration = bundle
+    record = json.loads(registration.read_text())
+    catalog_file = Path(record["catalog"])
+    catalog = json.loads(catalog_file.read_text())
+    catalog["packs"][0]["assetDirectory"] = str(root / "assets")
+    catalog_file.write_text(json.dumps(catalog))
+    original = Path.resolve
+    redirected = tmp_path / "packaged-app-view" / "assets"
+
+    def resolve(path, *args, **kwargs):
+        return redirected if path == root / "assets" else original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    effective = apply_runtime_defaults({}, registration_file=registration)
+    assert resolve_prepared_bundle(registration_file=registration).root == root
+    assert verify_settings_runtime(Settings.parse(effective))["AGENT_MC_BROWSER_EXECUTABLE"]
+    # The canonical spelling remains valid too; no catalog rewrite is required.
+    catalog["packs"][0]["assetDirectory"] = str(redirected)
+    catalog_file.write_text(json.dumps(catalog))
+    assert resolve_prepared_bundle(registration_file=registration).root == root
+    verify_settings_runtime(Settings.parse(effective))
+
+
+@pytest.mark.parametrize("asset", ["assets", "unrelated", "alias-to-assets"])
+def test_prepared_catalog_still_rejects_other_paths(bundle, tmp_path, monkeypatch, asset):
+    root, _, registration = bundle
+    record = json.loads(registration.read_text())
+    catalog_file = Path(record["catalog"])
+    catalog = json.loads(catalog_file.read_text())
+    value = asset if asset == "assets" else str(tmp_path / asset)
+    catalog["packs"][0]["assetDirectory"] = value
+    catalog_file.write_text(json.dumps(catalog))
+    original = Path.resolve
+
+    def resolve(path, *args, **kwargs):
+        # Resolving an arbitrary alias to the assets must not authorize it.
+        return root / "assets" if str(path) == str(tmp_path / "alias-to-assets") else original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    with pytest.raises(m.BundleError, match="prepared_catalog_mismatch"):
+        resolve_prepared_bundle(registration_file=registration)
+
+
 @pytest.mark.parametrize("raw", [
     {"backend": {"node": "custom-node"}}, {"backend": {"directory": "custom-core"}},
     {"viewer": {"renderer_directory": "custom-viewer"}}, {"viewer": {"catalog_file": "custom.json"}},
@@ -195,7 +240,7 @@ def test_reparse_point_rejected(bundle, monkeypatch):
     class Reparse:
         st_mode = 0
         st_file_attributes = 0x400
-    monkeypatch.setattr(Path, "lstat", lambda path: Reparse() if path == root / "node" else original(path))
+    monkeypatch.setattr(Path, "lstat", lambda path: Reparse() if path == m.verification_path(root / "node") else original(path))
     with pytest.raises(m.BundleError, match="link_forbidden"):
         m.verify_bundle(root, full=False)
 
@@ -255,6 +300,65 @@ def test_extracted_source_selects_cached_installation_by_identity(bundle, tmp_pa
     # Removing only this test's extracted source cannot break the installed selection.
     shutil.rmtree(source)
     assert resolve_prepared_bundle(registration_file=selected).node == root / "node/node.exe"
+
+
+def test_extracted_source_prefers_short_cache_with_full_hash_identity(bundle, tmp_path, monkeypatch):
+    import shutil
+    root, manifest, registration = bundle
+    local = tmp_path / "recipient-local"
+    identity = m.digest(root / m.MANIFEST)
+    installations = local / "AgentMCWorld/installations"
+    selected = installations / ("r-" + identity[:32]) / "registration.json"
+    selected.parent.mkdir(parents=True)
+    shutil.copyfile(registration, selected)
+    # A stale legacy registration cannot override the newly prepared copy.
+    legacy = installations / (manifest["id"] + "-" + identity) / "registration.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("{}")
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    assert resolve_prepared_bundle(bundle_root=root).root == root
+    record = json.loads(selected.read_text())
+    record["manifestSha256"] = identity[:32] + ("0" * 32 if identity[32:] != "0" * 32 else "1" * 32)
+    selected.write_text(json.dumps(record))
+    with pytest.raises(m.BundleError, match="registration_root_mismatch"):
+        resolve_prepared_bundle(bundle_root=root)
+
+
+def test_bundle_verification_does_not_require_hosts_long_path_manifest(bundle, monkeypatch):
+    import os
+    # bundle mocks sys.platform to exercise portable manifest validation. The
+    # extended filesystem syntax itself still requires real Windows paths.
+    if os.name != "nt":
+        pytest.skip("Windows legacy MAX_PATH regression")
+    root, manifest, _ = bundle
+    relative = "assets/" + "nested-resource-segment/" * 10 + "actual.bin"
+    target = root / relative
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"complete recipient resource")
+    manifest["files"][relative] = {"bytes": target.stat().st_size, "sha256": m.digest(target)}
+    update(root, manifest)
+    assert len(str(target)) > 260
+    original_lstat, original_open = Path.lstat, Path.open
+
+    def check_legacy_path(path):
+        if len(str(path)) >= 260 and not str(path).startswith("\\\\?\\"):
+            raise FileNotFoundError(3, "legacy host path limit", os.fspath(path))
+
+    def legacy_lstat(path, *args, **kwargs):
+        check_legacy_path(path)
+        return original_lstat(path, *args, **kwargs)
+
+    def legacy_open(path, *args, **kwargs):
+        check_legacy_path(path)
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", legacy_lstat)
+    monkeypatch.setattr(Path, "open", legacy_open)
+    assert m.verify_bundle(root)["integrityVerified"] is True
+    with original_open(target, "wb") as stream:
+        stream.write(b"tampered")
+    with pytest.raises(m.BundleError, match="file_hash_mismatch"):
+        m.verify_bundle(root)
 
 
 def test_rehashed_wrong_viewer_source_cannot_claim_the_pin(bundle):

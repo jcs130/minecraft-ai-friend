@@ -64,7 +64,7 @@ final class TrialRescueManager implements Listener {
         long now = System.currentTimeMillis();
         if (now - lastNotice.getOrDefault(p.getUniqueId(), 0L) < 1500) return;
         lastNotice.put(p.getUniqueId(), now);
-        p.sendMessage("§e你已倒地，不能移动、攻击或施法。队友在4格内停留10秒，或清完本层/本室即可复活；全队倒下才撤离。");
+        p.sendMessage("§e你是倒地、尚未死亡，背包装备没有掉落；不能移动、攻击或施法。队友在4格内停留10秒，或清完本层/本室即可复活；全队倒下才撤离。");
         p.sendMessage("MC_TRIAL_RESCUE status=denied reason=downed radius=4 seconds=10");
     }
 
@@ -79,7 +79,7 @@ final class TrialRescueManager implements Listener {
         if (downed(p)) { e.setCancelled(true); return; }
         if (e.getFinalDamage() < p.getHealth() || !standing(p)) return;
         Team team = team(p.getUniqueId());
-        if (team == null || team.members.size() < 2 || !team.contains.test(p.getLocation())) return;
+        if (team == null || team.members.size() < 2 && !team.id.startsWith("site:") || !team.contains.test(p.getLocation())) return;
         // Let vanilla consume a real totem before using the trial rescue rule.
         if (p.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING
                 || p.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING) return;
@@ -90,7 +90,7 @@ final class TrialRescueManager implements Listener {
         p.setFallDistance(0);
         persist();
         audit(d, "downed", "lethal_damage");
-        tell(team, "§c" + p.getName() + " 已倒地！队友靠近4格并停留10秒可自动救起；清完本层/本室也会自动复活。");
+        tell(team, team.members.size()==1?"§c本次遭到致命伤害，正在返回遗迹存档点；背包装备保留，整场第三次战败才结束。":"§c" + p.getName() + " 已倒地！队友靠近4格并停留10秒可自动救起；清完本层/本室也会自动复活。");
         for (UUID id : team.members) {
             Player member = Bukkit.getPlayer(id);
             if (member != null) member.sendMessage("MC_TRIAL_RESCUE status=downed player=" + p.getUniqueId()
@@ -99,7 +99,7 @@ final class TrialRescueManager implements Listener {
                 member.sendMessage("§e[系统·队友救援] 用现有移动能力走到倒地队友4格内并连续停留10秒，无需点击或施法。"
                         + "救援离开范围会重新计时；也可清完本层/本室自动复活队友。arena status / dungeon status 可重新查询倒地坐标。");
         }
-        p.sendTitle("§c倒地等待救援", "§e队友靠近10秒，或清场后自动复活", 5, 80, 10);
+        p.sendTitle(team.members.size()==1?"§e返回存档点":"§c倒地等待救援",team.members.size()==1?"§e正在恢复，背包装备保留":"§e队友靠近10秒，或清场后自动复活", 5, 80, 10);
         display(p, d, team, System.currentTimeMillis());
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -159,6 +159,7 @@ final class TrialRescueManager implements Listener {
         if (!downed(e.getPlayer())) return;
         String[] parts = e.getMessage().substring(1).trim().split("\\s+");
         String root = parts[0].toLowerCase(Locale.ROOT).replaceFirst("^.*:", "");
+        if(Set.of("msg","tell","w").contains(root))return;
         if (root.equals("mycli") && readCommand(Arrays.copyOfRange(parts, 1, parts.length))) return;
         // Chat is still usable to call for help; world-changing commands are disabled while downed.
         e.setCancelled(true); notice(e.getPlayer());
@@ -354,6 +355,16 @@ final class TrialRescueManager implements Listener {
         state.addProperty("radius", RADIUS); state.addProperty("seconds", RESCUE_MS / 1000);
         state.addProperty("instruction", "试炼塔/遗迹地下城组队挑战倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；上方显示进度与剩余秒数，离开范围重计。金色圈标记救援范围，绿色表示救援进度。清完本层/本室自动复活队友；全队倒下才失败撤离。");
         Team team = team(p.getUniqueId()); JsonArray teammates = new JsonArray();
+        int count=team==null?0:team.members.size();
+        state.addProperty("participants",count);state.addProperty("rescueEnabled",count>=2);
+        state.addProperty("lifeState",downed(p)?"downed":p.isDead()?"dead":"alive");
+        state.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(GameRule.KEEP_INVENTORY)));
+        if(count<2)state.addProperty("instruction",count==1?"当前本场仅登记1人，不启用队友救援；死亡是否掉物以实际死亡回执为准。想组队：先原生邀请并接受，全员到首室由队长开场。":"尚未参加试炼/遗迹场次。原生组队后全员到首室，由队长开场；本场登记2人以上才启用倒地救援。");
+        Map<String,Object> checkpoint=plugin.siteDungeons().checkpointState(p.getUniqueId());
+        if(!checkpoint.isEmpty()){
+            state.add("checkpoint",new Gson().toJsonTree(checkpoint));
+            state.addProperty("instruction",(count>1?"致命伤害先倒地，队友4格内停留10秒或清室可复活；救援成功不扣次数。":"单人致命伤害自动返回存档点，背包装备保留。")+"单人或全队战败回上个存档点，整场第3次战败才结束；断线和服务器故障不扣次数。剩余机会 "+checkpoint.get("attemptsRemaining")+"/3。");
+        }
         if (team != null) for (UUID id : team.members) {
             Down d = downs.get(id); if (d == null) continue;
             JsonObject target = new JsonObject(); target.addProperty("uuid", id.toString());

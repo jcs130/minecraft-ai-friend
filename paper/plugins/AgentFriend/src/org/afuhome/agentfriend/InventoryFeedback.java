@@ -9,6 +9,7 @@ import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.ItemStack;
@@ -21,6 +22,10 @@ final class InventoryFeedback implements Listener {
     private final Map<UUID, List<Gift>> pending = new HashMap<>();
     private final Map<UUID, Set<String>> explained = new HashMap<>();
     private final Set<UUID> scheduled = new HashSet<>();
+    private final Map<UUID, Long> fullHints = new HashMap<>();
+    private static final Set<Material> PLAIN_SURPLUS=Set.of(Material.COBBLESTONE,Material.COBBLED_DEEPSLATE,
+            Material.DIRT,Material.STONE,Material.ANDESITE,Material.DIORITE,Material.GRANITE,
+            Material.WHEAT_SEEDS,Material.ROTTEN_FLESH);
     private record Gift(UUID giver, ItemStack item, int amount, int beforeCount, EntityPickupItemEvent event) {}
     InventoryFeedback(AgentFriendPlugin plugin) {
         this.plugin = plugin; identity = new ItemIdentity(plugin);
@@ -49,6 +54,7 @@ final class InventoryFeedback implements Listener {
             identity.describe(item).append(row, false); ItemAppearances.appendDescription(item, row); rows.add(row);
         }
         p.sendMessage("§b【服务器随身背包】" + rows.size() + "格有物品，" + empty + "格空位；含快捷栏，不含54格大背包、任务物品袋和个人奖励箱。显示不一致用 /mycli inventory refresh；收到装备也请查看快捷栏。");
+        if(empty==0)storageHint(p,false);
         // Prismarine-chat messagestr is limited to 4096 characters. Send complete
         // bounded pages, retaining schemaVersion/id/amount/slot fields for clients.
         List<List<JsonObject>> pages = new ArrayList<>(); List<JsonObject> batch = new ArrayList<>(); int chars = 0;
@@ -112,6 +118,29 @@ final class InventoryFeedback implements Listener {
         if (event.getPlayer() instanceof Player p) scheduleNotice(p, 1L);
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void blockedPickup(PlayerAttemptPickupItemEvent event) {
+        Player p=event.getPlayer();
+        if(plugin.isObserver(p)||event.getRemaining()<1)return;
+        // No world scan or forced inventory refresh; do not cancel natural pickup.
+        ItemStack item=event.getItem().getItemStack();
+        if(item==null||item.getType().isAir())return;
+        storageHint(p,true);
+    }
+    private void storageHint(Player p,boolean cooldown){
+        long now=System.currentTimeMillis();
+        if(cooldown&&now-fullHints.getOrDefault(p.getUniqueId(),0L)<60000)return;
+        fullHints.put(p.getUniqueId(),now);
+        String next="先 /mycli inventory 选非绑定物品槽，再 /mycli arena stash putslot <槽> <数量> 远程存箱";
+        // Main inventory first; never nominate held, named, bound or custom gear.
+        for(int i=0;i<36;i++){
+            int slot=(i+9)%36;ItemStack item=p.getInventory().getItem(slot);
+            if(slot==p.getInventory().getHeldItemSlot()||item==null||!PLAIN_SURPLUS.contains(item.getType())
+                    ||item.hasItemMeta()||plugin.isSoulbound(item))continue;
+            next="可先存「"+identity.describe(item).name()+"」×"+item.getAmount()+"。命令：/mycli arena stash putslot "+slot+" "+item.getAmount();break;
+        }
+        p.sendMessage("§e【inventory_full】"+(cooldown?"物品未全部装入背包。":"随身没有空槽。")+next+"（成功2魔力，无需开界面或传送）。收到 moved>0 才算完成，再继续拾取；多余装备先 /mycli arena recycle list 报价回收，绑定物品保留。");
+    }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void pickup(EntityPickupItemEvent event) {
         if (!(event.getEntity() instanceof Player p) || plugin.isObserver(p)) return;
         scheduleNotice(p, 1L);
@@ -145,6 +174,6 @@ final class InventoryFeedback implements Listener {
                 .filter(sample::isSimilar).mapToInt(ItemStack::getAmount).sum();
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
-        UUID id = event.getPlayer().getUniqueId(); refreshed.remove(id); explained.remove(id); scheduled.remove(id);
+        UUID id = event.getPlayer().getUniqueId(); refreshed.remove(id); explained.remove(id); scheduled.remove(id); fullHints.remove(id);
     }
 }

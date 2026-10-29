@@ -40,6 +40,7 @@ replication lists durable sync receipts; sync(id,expectedRevision) reconciles un
 search tags matches any exact tag (case-insensitive), never partial names. Player notes use
 player:<account-name> and, when actually observed, player-uuid:<uuid>. Names are not cross-platform identity.
 remember needs kind, summary, content, source. source.kind is agent_note, user_report or hypothesis;
+Identical remember retries reuse the existing id/revision (deduplicated:true,written:false), without refreshing time or expiry. Changed evidence or content remains distinct; use revise for an explicit correction.
 user_report also needs speaker and reference. reference is a pointer, not verified evidence.
 Use action:help,topic:remember for an executable argument example and the required fields.
 capture records ONLY fresh position/health/food/inventory with engine-owned provenance; disconnected capture fails.
@@ -70,7 +71,7 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
     + 'remember needs top-level kind/summary/content/source (your conclusion: source.kind=agent_note). '
     + 'capture only samples current runtime facts. Use action:help,topic:remember for exact arguments. '
-    + 'Use action:experience,operation:help for shared decision/execution evidence and evidence-linked local reflection. Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
+    + 'experience/list returns paginated evidence summaries; experience/get with input:{id} expands one record. Use action:experience,operation:help for filters and evidence-linked reflection. Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service', 'experience'] },
     preference: { type: 'string', enum: ['local-first', 'balanced', 'remote-first'], description: 'Only search: choose retrieval emphasis for this task. Does not disable local persistence or enable an unconfigured service.' },
@@ -212,7 +213,6 @@ export class GameMemoryBook {
     }
     if (existing && args.expectedRevision !== existing.versions.length) throw new Error(`Revision conflict: expectedRevision must be ${existing.versions.length}; read before revising`);
     if (existing && existing.versions.length >= MAX_REVISIONS) throw new Error('Revision limit reached; create a new note referencing this history');
-    if (!existing && book.entries.length >= MAX_ENTRIES) throw new Error('Memory capacity reached; export/rotate the store explicitly. No notes evicted');
     const sampled = action === 'capture' ? context.capture?.() : undefined;
     now = this.now();
     if (action === 'capture' && !sampled) throw new Error('No connected runtime observation available');
@@ -246,6 +246,18 @@ export class GameMemoryBook {
         tags: [...new Set((args.tags as unknown[] | undefined ?? []).map(t => text(t, 'tag', 48)))],
         expiresAt: args.expiresAt == null ? null : date(args.expiresAt, 'expiresAt'), archived: false };
     }
+    // A retry of the same attributed note is not a new observation. Keep the
+    // original timestamp/revision (including expiry), even across restarts.
+    if (action === 'remember') {
+      const identity = (v: Revision) => JSON.stringify({ kind: v.kind, summary: v.summary,
+        content: v.content, source: v.source, dimension: v.dimension,
+        tags: [...v.tags].sort(), expiresAt: v.expiresAt });
+      const key = identity(version);
+      const duplicate = book.entries.find(e => !e.versions.at(-1)!.archived && identity(e.versions.at(-1)!) === key);
+      if (duplicate) return { ...envelope, entry: view(duplicate, duplicate.versions.at(-1)!, true),
+        saved: true, deduplicated: true, written: false, goalCompleted: false };
+    }
+    if (!existing && book.entries.length >= MAX_ENTRIES) throw new Error('Memory capacity reached; export/rotate the store explicitly. No notes evicted');
     const entry = existing ?? { id: randomUUID(), versions: [] };
     entry.versions.push(version);
     if (!existing) book.entries.push(entry);

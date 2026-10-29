@@ -10,6 +10,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from ..filesystem import verification_path as _verification_path
+
 SOURCE_DIR = Path(__file__).resolve().parent
 SOURCE = json.loads((SOURCE_DIR / "source.json").read_text(encoding="utf-8"))
 
@@ -20,8 +22,9 @@ def runtime_entry(directory: Path) -> Path:
 
 def verify_runtime(directory: Path) -> Path:
     entry = runtime_entry(directory)
-    manifest = entry.parent.parent / "package.json"
-    if not entry.is_file() or not manifest.is_file():
+    filesystem_entry = _verification_path(entry)
+    manifest = filesystem_entry.parent.parent / "package.json"
+    if not filesystem_entry.is_file() or not manifest.is_file():
         raise ValueError("backend_missing: install the pinned backend first (see README).")
     try:
         package = json.loads(manifest.read_text(encoding="utf-8"))
@@ -33,7 +36,8 @@ def verify_runtime(directory: Path) -> Path:
     def check_file(name: str, expected: str):
         target = (root / name).resolve()
         if not target.is_relative_to(root) or not target.is_file():
-            raise ValueError("backend_build_mismatch: missing or invalid build path.")
+            raise ValueError(f"backend_build_mismatch: missing or invalid build path ({name}). "
+                             "Prepare the complete matching runtime again; no verification was skipped.")
         data = target.read_bytes()
         # npm normalizes only a bin's CRLF shebang. All other bytes remain pinned.
         if name.startswith("bin/") and data.startswith(b"#!"):

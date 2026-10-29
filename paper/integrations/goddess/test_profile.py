@@ -14,7 +14,7 @@ class ProfileTests(unittest.TestCase):
                           schedule={'type': 'cron', 'cron': '0 14 * * sun', 'timezone': 'Asia/Shanghai'},
                           request={'user_id': 'owner', 'session_id': 'original', 'input': []},
                           runtime={'max_concurrency': 1, 'tool_safety': False, 'share_session': True, 'timeout_seconds': 600},
-                          dispatch={'channel': 'existing', 'silent': True}, meta={'migration': 'preserve'})
+                          dispatch={'channel': 'existing', 'silent': True, 'target': {'user_id': 'owner', 'session_id': 'original'}}, meta={'migration': 'preserve'})
                      for i, name in enumerate(self.defs)]
 
     def test_preserves_identity_targets_and_permissions(self):
@@ -43,6 +43,25 @@ class ProfileTests(unittest.TestCase):
     def test_other_job_unchanged(self):
         other = {'name': 'unrelated', 'id': 'outside', 'dispatch': {'private': 'unchanged'}}
         self.assertEqual(p.plan_jobs(self.jobs + [other])[-1], other)
+
+    def test_chat_review_uses_original_native_identity_without_touching_jobs(self):
+        before = json.dumps(self.jobs, sort_keys=True)
+        job = p.plan_chat_review(self.jobs)
+        source = next(j for j in self.jobs if j['name'] == 'qiandengji-daily-patrol')
+        self.assertEqual(before, json.dumps(self.jobs, sort_keys=True))
+        self.assertIsNone(job['id'])
+        self.assertEqual(job['request']['user_id'], source['request']['user_id'])
+        self.assertEqual(job['dispatch']['target'], source['dispatch']['target'])
+        self.assertTrue(job['dispatch']['silent'])
+        self.assertFalse(job['save_result_to_inbox'])
+        self.assertFalse(job['runtime']['share_session'])
+        self.assertEqual(job['runtime']['tool_safety'], source['runtime']['tool_safety'])
+
+    def test_chat_review_update_is_idempotent_preserves_pause_and_id(self):
+        job = p.plan_chat_review(self.jobs)
+        job.update(id='native-generated-id', enabled=False)
+        self.assertEqual(p.plan_chat_review(self.jobs + [job]), job)
+        with self.assertRaises(ValueError): p.plan_chat_review(self.jobs + [job, job])
 
 
 if __name__ == '__main__': unittest.main()

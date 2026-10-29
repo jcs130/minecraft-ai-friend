@@ -240,15 +240,18 @@ final class AgentCoach implements Listener {
     private void tick() {
         long now = System.currentTimeMillis();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.isOnline() || player.isDead() || plugin.isDowned(player) || !enabled(player)) continue;
+            if (!player.isOnline() || player.isDead() || plugin.isDowned(player)) continue;
             Session state = session(player);
+            // One private persisted release notice is independent of optional idle coaching.
+            if(onboarding.pollRelease(player,now,state.quietUntil))continue;
+            if(!enabled(player))continue;
             if (now < state.quietUntil || onboarding.paused(player, now)
                     || plugin.dungeonParticipant(player) || plugin.pvpParticipant(player)) continue;
             if (player.getPersistentDataContainer().has(pendingDeathKey, PersistentDataType.BYTE)) {
                 if (deaths(player, now) == 0) player.getPersistentDataContainer().remove(pendingDeathKey);
                 else if (send(player, now, "deaths", deaths(player, now),
                         "连续死亡后先检查状态和可用技能；必要时回出生村整理装备。",
-                        "/mycli status", "/mycli spells explain selfheal", "/mycli goto village")) {
+                        "/mycli status", plugin.nativeRpg().selected()?"/mycli skills list":"/mycli spells explain selfheal", "/mycli goto village")) {
                     player.getPersistentDataContainer().remove(pendingDeathKey);
                     state.idleSent = true;
                     state.unusedSent = true;

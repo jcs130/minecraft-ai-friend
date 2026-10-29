@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { installServerLogin, readProtectedCredential } from '../core/server-login.mjs';
+import { installServerLogin } from '../src/client/index.ts';
+import { readProtectedCredential } from '../core/server-login.mjs';
 
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(d => rmSync(d, { recursive: true, force: true })));

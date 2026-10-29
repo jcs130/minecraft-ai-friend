@@ -1,5 +1,5 @@
 name: WorldObserver
-version: '0.1.0'
+version: '0.1.1'
 main: org.qiandeng.observer.WorldObserverPlugin
 api-version: '1.21'
 depend: [ProtocolLib]

@@ -2,3 +2,5 @@
 export {itemCustomName} from '../core/item-display.ts';
 export {entitySnapshot,type EntitySnapshotSource} from '../core/entity-snapshot.ts';
 export {footingFromBot,narrateFooting,type FootingReading} from '../core/footing.ts';
+export { readWorldIdentity } from '../core/world-scope.ts';
+export type { WorldIdentityObservation } from './contracts/world-scope.ts';

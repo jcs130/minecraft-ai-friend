@@ -1,6 +1,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { readDurability, type ItemLike } from './item-facts.ts';
+import { equipHandConfirmed } from './equipment.ts';
 
 /** 未交战时允许进入远程候选池的最大距离。感知命中本身不触发开火。 */
 export const RANGED_ENTER_RANGE = 32;
@@ -38,6 +39,8 @@ interface Point3 {
 
 export interface RangedTarget {
   id: number;
+  /** When observed, keep this identity through the draw; a reused numeric ID is not the same target. */
+  uuid?: string;
   position: Point3;
   height?: number;
   width?: number;
@@ -326,6 +329,7 @@ export type BowAbortCause =
   | 'bot_lost'
   | 'target_lost'
   | 'equip'
+  | 'equip_timeout'
   | 'activate'
   | 'release'
   | 'cancel_slot'
@@ -372,6 +376,7 @@ interface BowControllerOptions {
 interface Drawing {
   bot: Bot;
   targetId: number;
+  targetUuid?: string;
   leaseToken: unknown;
   bowType: number;
   cancelSlot: number;
@@ -418,13 +423,16 @@ export class BowController {
     const bow = bestRangedWeapon(bot);
     if (!bow) return this.blocked('aborted', 'bow_lost');
     if (!hasUsableArrows(bot)) return this.blocked('no_arrow');
-    if (!target.cell && rangedTargetDistance(bot, target) <= HYBRID_MELEE_AT) return this.blocked('too_close');
+    // HYBRID_MELEE_AT chooses a preferred weapon; it is not a bow or protocol
+    // minimum range. A bow-only body must still be able to defend itself when
+    // a hostile closes in. Actual shot validity remains LOS, aim and lease.
     if (!this.hasLos(bot, target)) return this.blocked('no_los');
     if (!this.validLease(leaseToken)) return this.blocked('aborted', 'lease');
 
     const drawing: Drawing = {
       bot,
       targetId: target.id,
+      ...(target.uuid === undefined ? {} : { targetUuid: target.uuid }),
       leaseToken,
       bowType: bow.type,
       cancelSlot: -1,
@@ -434,10 +442,32 @@ export class BowController {
     };
     this.drawing = drawing;
     try {
+      let equipmentGuard: ReturnType<typeof setInterval> | undefined;
       try {
-        await bot.equip(bow, 'hand');
+        // Inventory prediction is not server confirmation. In particular, a
+        // delayed 1.21 slot snapshot can otherwise put food back into the hand
+        // after activateItem(), leaving the combat owner waiting for an arrow.
+        const deadline = this.now() + 3_000;
+        const checkEquipment = (): void => {
+          const stopped = this.validateOwner(drawing);
+          if (stopped) throw new Error(`Bow equipment cancelled: ${stopped.cause}`);
+          if (this.drawing !== drawing) throw new Error('Bow equipment owner ended');
+          if (this.now() >= deadline) {
+            drawing.abortCause = 'equip_timeout';
+            throw new Error('Bow equipment confirmation timed out');
+          }
+        };
+        const interrupted = new Promise<never>((_resolve, reject) => {
+          equipmentGuard = setInterval(() => {
+            try { checkEquipment(); } catch (error) { reject(error); }
+          }, AIM_STEP_MS);
+        });
+        await Promise.race([equipHandConfirmed(bot, bow, checkEquipment), interrupted]);
       } catch {
-        return await this.finishBlocked(drawing, 'aborted', 'equip');
+        const stopped = this.validateOwner(drawing);
+        return await this.finishBlocked(drawing, 'aborted', stopped?.cause ?? 'equip');
+      } finally {
+        if (equipmentGuard !== undefined) clearInterval(equipmentGuard);
       }
       drawing.cancelSlot = findSafeCancelSlot(bot, drawing.bowType);
       if (drawing.cancelSlot < 0) return await this.finishBlocked(drawing, 'aborted', 'cancel_slot');
@@ -543,9 +573,6 @@ export class BowController {
       return { kind: 'blocked', reason: 'aborted', cause: 'bow_lost' };
     }
     if (!hasUsableArrows(drawing.bot)) return { kind: 'blocked', reason: 'no_arrow' };
-    if (!target.cell && rangedTargetDistance(drawing.bot, target) <= HYBRID_MELEE_AT) {
-      return { kind: 'blocked', reason: 'too_close' };
-    }
     if (!this.hasLos(drawing.bot, target)) return { kind: 'blocked', reason: 'no_los' };
     return null;
   }
@@ -562,13 +589,14 @@ export class BowController {
     const resolved = this.opts.resolveTarget
       ? this.opts.resolveTarget(drawing.targetId)
       : fallback;
-    if (!resolved || resolved.id !== drawing.targetId) return null;
+    if (!resolved || resolved.id !== drawing.targetId || (drawing.targetUuid !== undefined && resolved.uuid !== drawing.targetUuid)) return null;
     const at = this.now();
     this.motion.observe(resolved.id, resolved.position, at);
     const estimate = this.motion.estimate(resolved.id, at);
     return {
       target: {
         id: resolved.id,
+        ...(resolved.uuid === undefined ? {} : { uuid: resolved.uuid }),
         position: estimate?.position ?? copyPoint(resolved.position),
         ...(resolved.height === undefined ? {} : { height: resolved.height }),
         ...(resolved.width === undefined ? {} : { width: resolved.width }),

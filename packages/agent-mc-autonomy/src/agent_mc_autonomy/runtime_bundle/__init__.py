@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..filesystem import verification_path
 from .manifest import BundleError, fail, read_json, verify_bundle
 
 
@@ -28,6 +29,20 @@ def registration_path() -> Path:
     return Path(value) / "AgentMCWorld/current.json"
 
 
+def _require_prepared_catalog(root: Path, manifest: dict, catalog: dict) -> None:
+    portable = read_json(root / manifest["resources"]["catalog"], 65536)
+    assets = root / manifest["resources"]["assetDirectory"]
+    # Node's installer keeps the logical LOCALAPPDATA spelling. In a packaged
+    # Windows host Python may resolve that same directory into its app-data view.
+    # Accept only these two spellings of the already-verified bundle member;
+    # arbitrary aliases, foreign directories and other catalog changes still fail.
+    for spelling in (str(assets), str(assets.resolve())):
+        portable["packs"][0]["assetDirectory"] = spelling
+        if catalog == portable:
+            return
+    fail("prepared_catalog_mismatch")
+
+
 def resolve_prepared_bundle(*, bundle_root: Path | None = None, registration_file: Path | None = None,
                             verify_integrity: bool = False) -> PreparedBundle:
     """Read bounded registration/manifest metadata; full integrity is explicit at start."""
@@ -36,7 +51,12 @@ def resolve_prepared_bundle(*, bundle_root: Path | None = None, registration_fil
     if bundle_root is not None and registration_file is None:
         metadata = verify_bundle(Path(bundle_root), full=False)
         selected_hash = metadata["manifestSha256"]
-        selected = selected.parent / "installations" / (metadata["id"] + "-" + metadata["manifestSha256"]) / "registration.json"
+        installations = selected.parent / "installations"
+        selected = installations / ("r-" + selected_hash[:32]) / "registration.json"
+        # Previously prepared downloads remain usable. A present but invalid
+        # short registration must fail instead of silently selecting another.
+        if not verification_path(selected).exists():
+            selected = installations / (metadata["id"] + "-" + selected_hash) / "registration.json"
     registration = read_json(selected, 65536)
     if registration.get("schema") != "agent-mc-runtime-registration/v1":
         fail("registration_invalid")
@@ -49,10 +69,7 @@ def resolve_prepared_bundle(*, bundle_root: Path | None = None, registration_fil
         manifest = verify_bundle(root, expected_manifest_sha256=registration["manifestSha256"], full=verify_integrity)
         catalog_path = Path(registration["catalog"])
         catalog = read_json(catalog_path, 65536)
-        portable = read_json(root / manifest["resources"]["catalog"], 65536)
-        portable["packs"][0]["assetDirectory"] = str((root / manifest["resources"]["assetDirectory"]).resolve())
-        if catalog != portable:
-            fail("prepared_catalog_mismatch")
+        _require_prepared_catalog(root, manifest, catalog)
         return PreparedBundle(root, root / manifest["node"]["path"], root / manifest["core"]["directory"],
                               root / manifest["viewer"]["directory"], catalog_path,
                               root / manifest["resources"]["appearanceCatalog"], manifest["manifestSha256"])
@@ -95,10 +112,7 @@ def verify_settings_runtime(settings) -> dict[str, str]:
     if any(Path(value).resolve() != (root / name).resolve() for value, name in selected):
         fail("component_mismatch")
     catalog = read_json(Path(settings.viewer_catalog_file), 65536)
-    portable = read_json(root / manifest["resources"]["catalog"], 65536)
-    portable["packs"][0]["assetDirectory"] = str((root / manifest["resources"]["assetDirectory"]).resolve())
-    if catalog != portable:
-        fail("prepared_catalog_mismatch")
+    _require_prepared_catalog(root, manifest, catalog)
     return {"AGENT_MC_BROWSER_EXECUTABLE": os.environ.get("AGENT_MC_BROWSER_EXECUTABLE", str(root / manifest["browser"]["path"]))}
 
 

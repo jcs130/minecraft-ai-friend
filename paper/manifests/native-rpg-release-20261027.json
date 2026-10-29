@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "id": "vortex-native-rpg-20261027",
+  "name": "千灯纪：重返艾恩葛朗特·破晓攻略",
+  "status": "deployed",
+  "version": "0.4.47.21",
+  "sourceTag": "server-0.4.47.21",
+  "server": "Paper 1.21.1 build133",
+  "startedAt": "2026-10-27T22:30:42+08:00",
+  "backup": "20261027-220757",
+  "dualCompleteColdBackup": true,
+  "artifacts": {
+    "AgentFriend-0.4.47.21.jar": "21ca97582f26fc2f71ec1a6a1f99af36bfd9d1cacea74fc9dbef73296431a179",
+    "QiandengjiRpg-0.2.0.jar": "60c799d3817be70e335c66c68f85f3c5c86ca79232038f69cf98feca50b95207",
+    "VortexRPG-1.2.2-alpha-qd27-zh.jar": "3091f10513855b6116d53534de309fdee29f8689fdcff1b184f2dadc1f51bc38",
+    "Vault-1.7.3.jar": "a6b5ed97f43a5cf5bbaf00a7c8cd23c5afc9bd003f849875af8b36e6cf77d01d"
+  },
+  "sourcePins": {
+    "vortexUpstream": "3e5babaf13f390ef135782f5b1d5158e34ff22ff",
+    "agentFriendBuildBaseSha256": "5b8344fd26a6a8c719f086024b1322b566634e4baba7d1c359a45f8574b63593",
+    "unrelatedBaseEntriesRetained": 528,
+    "fullAgentFriendDevelopmentJarDeployed": false
+  },
+  "coldInstall": {
+    "playerFilesCompared": 1042,
+    "otherJarsUnchanged": 44,
+    "latestPlayerConfigPrefixPreserved": true,
+    "retiredLedgerUnchanged": true,
+    "qaPlayerDataCopied": false
+  },
+  "features": {
+    "classes": [
+      "knight",
+      "mage",
+      "ranger",
+      "cleric",
+      "beastmaster",
+      "engineer"
+    ],
+    "growthAuthority": "VortexRPG",
+    "retiredProfessions": "read_only_archive",
+    "operatedQuests": 8,
+    "authoredSites": 5,
+    "formalFloors": 1,
+    "pluginsEnabled": 48,
+    "dungeonLoadout": {
+      "armorSlots": [
+        "head",
+        "chest",
+        "legs",
+        "feet"
+      ],
+      "weapons": "melee, bow/crossbow, or verified matching native class item",
+      "swordRequired": false,
+      "checksBeforeRunCreationOrJoin": true,
+      "rejectReason": "equipment_required",
+      "nextCommand": "/mycli guild shared",
+      "runningPlayersEjected": false
+    },
+    "clientModsRequiredForRpg": false,
+    "dedicatedNpcModelsInstalled": false,
+    "persistentPetOrTurretImplemented": false,
+    "appearanceHint": "private_once_per_role"
+  },
+  "postStartQuestMigrationFix": {
+    "beforeQuests": 13,
+    "afterQuests": 8,
+    "resourceVersion": 2,
+    "beforeSha256": "382d4d36620151fce3c78773180c6cbd22b0d3ea052d243ffb76aabca2e29573",
+    "sha256": "0b3ee888d7bf9737b14a8b00de2dc9478a5e0ff3b09777114f3b033e41300807",
+    "nativeReloadReceipt": "Reloaded 8 quest definition(s).",
+    "coldChecks": 3,
+    "playerQuestDataChanged": false,
+    "paperRestartedAgain": false,
+    "initialFrozenPlanNotRewritten": true
+  },
+  "gates": {
+    "blocksAdded": 24,
+    "onlyAirReplaced": true,
+    "existingEntitiesMoved": false,
+    "temporaryTicketsReleased": 2,
+    "village": {
+      "world": "world",
+      "position": [
+        -555,
+        67,
+        -439
+      ]
+    },
+    "aincrad": {
+      "world": "aincrad",
+      "position": [
+        -582,
+        67,
+        919
+      ]
+    },
+    "mana": 6,
+    "physicalFrameRequired": true
+  },
+  "tests": {
+    "offlineFinal": 164,
+    "sixClasses": 57,
+    "bedrock": 9,
+    "loadoutRules": 26,
+    "loadoutRealConnections": 16,
+    "nativeFullClear": 13,
+    "reconnectAndColdStart": 7,
+    "catalogueColdMigration": 3,
+    "productionChecks": 30,
+    "websiteLinux": 330,
+    "websiteBrowserViews": 4,
+    "websiteBrowserWidths": [
+      1280,
+      390
+    ],
+    "scope": "Final qd27 engine and r30 bridge; gear probe used identical gear classes before the final unrelated exam wording change. Full-clear enemies were frozen by the QA fixture; this is not an autonomous LLM balance test. Earlier iteration evidence remains historical."
+  },
+  "website": {
+    "websiteVersion": "0.8.28",
+    "image": "qiandengji-portal:0.8.28-vortex-r23-d6115a67f59f",
+    "imageId": "sha256:9ae71f0449a0d1ae9bdafd39d94116687c800dd811810d3b41bfdf7b557b05e3",
+    "vortexSeasonSourceRevision": "native-rpg-20261027-qd27",
+    "runtimeFilesVerified": 92,
+    "protectedTables": 17,
+    "latestDatabaseKept": true,
+    "downloadsUnchanged": true,
+    "sha256": {
+      "public/app.js": "4ffe8fc879e5caf4aac0f9796edcb610c864289d865b47f03775d1a11dda40b5",
+      "public/aincrad.html": "d6115a67f59fd22c799c6c35d7ca5f07f28648c907524eaae23b8ec6fc232b7c",
+      "public/aincrad.css": "2442229dbdd448dbbc5b820b7ab4c1f6d4845bf63fa067b3efcf0dc16dc54494",
+      "src/game-data.mjs": "dd81e0db446e2f5c7df0a9f1990b3a2745d0cab826de6cafd561d09e1c6820b3",
+      "src/world-catalog.mjs": "53cea2bf639503fc17a8349029c4de00dcfc2a4cbb291c3ffae4750c723d3881"
+    }
+  },
+  "publisher": {
+    "nativeSavedProfileProjection": true,
+    "accountSynchronizerChanged": false,
+    "freshProfilesNotInventedFromVanillaXp": true
+  },
+  "goddess": {
+    "currentResourcesUpdated": true,
+    "existingJobsPreserved": 6,
+    "modelCredentialsAndPermissionsChanged": false
+  },
+  "downloads": {
+    "skill": "1.3.3",
+    "bundledCore": "0.5.7-rc.95",
+    "repackagedInThisRelease": false,
+    "mainCore": "0.5.7-rc.113"
+  },
+  "limits": [
+    "Upstream alpha; no claim of 100 floors, complete shops or dedicated NPC YSM bodies.",
+    "Resource packs change appearance; RPG abilities work on vanilla carrier items.",
+    "Reward side effects interrupted between file persistence and economy retain unknown state for audit, without automatic replay.",
+    "Existing multiple Eye watcher warnings remain outside this release."
+  ],
+  "rollback": "paper/docs/NATIVE_RPG_RELEASE_20261027.md#发布与回滚",
+  "secretsOrPlayerDataPublished": false
+}

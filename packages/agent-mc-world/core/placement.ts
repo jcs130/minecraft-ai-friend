@@ -1101,6 +1101,10 @@ export async function ensureStation(
     } catch (err) {
       checkAbort(ctx);
       if (!(err instanceof SkillBlocked)) throw err;
+      // Inventory/hand prerequisites do not improve by trying every station.
+      // Return the real cause so queued recovery can run; do not mark the
+      // station itself unreachable or blacklist it after inventory changes.
+      if (err.code === 'interaction-hand-unavailable') throw err;
       failures.set(stationFailureKey(bot, candidate), Date.now() + STATION_RETRY_MS);
       skipped.push(`${label} (${candidate.x}, ${candidate.y}, ${candidate.z}) 走不过去:${err.message}`);
       continue;

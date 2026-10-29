@@ -43,6 +43,8 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         private Job(Player p, String name, String mode, int tiles) { this(UUID.randomUUID(), UUID.randomUUID().toString(), p.getUniqueId(), name, mode, tiles, p.getWorld().getUID(), System.currentTimeMillis()); }
     }
     private Location origin;
+    private UUID nativeRendererId;
+    private Location nativeRendererOrigin;
     private long started;
     private String phase = "idle";
     private boolean uploadSent;
@@ -56,6 +58,8 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         cooldown = Math.clamp(cfg.getInt("cooldown-seconds", 60), 10, 3600);
         timeout = Math.clamp(cfg.getInt("capture-timeout-seconds", 60), 20, 90);
         manaCost = Math.clamp(cfg.getDouble("mana-cost",2),1,20);
+        String nativeId=cfg.getString("native-renderer-uuid","").strip();
+        if(!nativeId.isEmpty())try{nativeRendererId=UUID.fromString(nativeId);}catch(IllegalArgumentException invalid){enabled=false;plugin.getLogger().warning("Invalid native photo renderer UUID; camera disabled until reviewed");}
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
         Bukkit.getMessenger().registerIncomingPluginChannel(plugin, CHANNEL, this);
@@ -65,7 +69,9 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 10L, 10L);
     }
 
-    boolean ready() { return enabled && pendingUploads != null && System.currentTimeMillis() - heartbeat < 15_000 && plugin.goddessLandAdministrator() != null; }
+    private Player nativeRenderer(){return nativeRendererId==null?null:Bukkit.getPlayer(nativeRendererId);}
+    private boolean nativeReady(){Player renderer=nativeRenderer();return nativeRendererId==null||renderer!=null&&renderer.getGameMode()==GameMode.SPECTATOR&&renderer!=plugin.goddessLandAdministrator();}
+    boolean ready() { return enabled && nativeReady() && pendingUploads != null && System.currentTimeMillis() - heartbeat < 15_000 && plugin.goddessLandAdministrator() != null; }
     PhotoJournal journal(){return journal;}
 
     void command(Player p, String[] args) {
@@ -129,14 +135,17 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
             if (queue.isEmpty() || !ready() || !workerIdle) return;
             Player camera = plugin.goddessLandAdministrator();
             if (camera.getSpectatorTarget() != null) return; // Existing manual observer session owns the camera.
+            Player renderer=nativeRenderer();if(renderer!=null&&renderer.getSpectatorTarget()!=null)return;
             Job next = queue.remove(); Player owner = Bukkit.getPlayer(next.owner);
             if (owner == null || !owner.isOnline() || !owner.getWorld().getUID().equals(next.world) || !materials(owner, next.tiles)) return;
             active = next; phase = "preparing"; started = System.currentTimeMillis(); uploadSent = false;
             nativeUpload=null;importStarted=false;
             origin = camera.getLocation().clone();
+            nativeRendererOrigin=renderer==null?null:renderer.getLocation().clone();
             last.put(owner.getUniqueId(), started);
             if (!camera.teleport(owner.getLocation())) { finish(false, "无法同步观察镜头，请稍后再拍。"); return; }
             camera.setSpectatorTarget(owner);
+            if(renderer!=null){if(!renderer.teleport(owner.getLocation())){finish(false,"原生相机镜头未能到达，请稍后再拍；本次未扣魔力。");return;}renderer.setSpectatorTarget(owner);}
             notice(owner, phase, "拍摄中，请保持静止；成片自动存入个人奖励箱。");
             messages.begin(owner.getUniqueId(), next.name, text -> {
                 try { Object upload=pending(next.owner,next.name);return upload!=null && text.contains(upload.getClass().getMethod("getId").invoke(upload).toString()); }
@@ -161,6 +170,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 Player camera = plugin.goddessLandAdministrator();
                 if (owner == null || !owner.isOnline() || owner.isDead() || !owner.getWorld().getUID().equals(active.world)
                     || camera == null || camera.getSpectatorTarget() != owner) { finish(false, "角色或镜头状态已改变，停止拍照；请稳定后重新拍摄。"); return; }
+                if(nativeRendererId!=null&&(!nativeReady()||nativeRenderer().getSpectatorTarget()!=owner)){finish(false,"原生相机连接或观察目标改变，停止拍照；请先查相册，勿重复创建。");return;}
                 if (System.currentTimeMillis() - started > timeout * 1000L) finish(false, "拍照等待超时。先查看 photo album 和个人奖励箱确认结果；已上传的照片仍可能完成入箱，勿连续重拍。");
             } catch (Exception e) { finish(false, "相册确认失败，请先查看 /imageframe list，勿重复创建同一照片。"); }
         }
@@ -198,6 +208,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         if (active != expected || !phase.equals("preparing")) return;
         Player owner = Bukkit.getPlayer(expected.owner), camera = plugin.goddessLandAdministrator();
         if (owner == null || camera == null || camera.getSpectatorTarget() != owner) return;
+        if(nativeRendererId!=null&&(!nativeReady()||nativeRenderer().getSpectatorTarget()!=owner))return;
         try {
             JsonObject out = envelope(expected, "capture");
             out.addProperty("owner", expected.owner.toString()); out.addProperty("entityId", owner.getEntityId());
@@ -328,12 +339,17 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 camera.setSpectatorTarget(null); if (origin != null) camera.teleport(origin);
             }
         }
+        Player renderer=nativeRenderer();
+        if(renderer!=null&&renderer.getSpectatorTarget()!=null&&renderer.getSpectatorTarget().getUniqueId().equals(previous.owner)){
+            renderer.setSpectatorTarget(null);if(nativeRendererOrigin!=null)renderer.teleport(nativeRendererOrigin);
+        }
         if (!success) try {
             Object uploads = imageFrame.getField("imageUploadManager").get(null);
             if (pending(previous.owner, previous.name) != null)
                 uploads.getClass().getMethod("invalidatePendingUploads", UUID.class).invoke(uploads, previous.owner);
         } catch (Exception ignored) { }
         active = null; phase = "idle"; origin = null;
+        nativeRendererOrigin=null;
         capturedAt=null;capturedContext=null;capturedScene=null;capturedImage=null;capturedTime=0;
         nativeUpload=null;importStarted=false;
         messages.end(previous.owner);

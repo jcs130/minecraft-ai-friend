@@ -1,0 +1,3 @@
+# Optional Paper backend. Model calls and keys remain on the owner's client.
+# Use only behind the existing authenticated login proxy / trusted backend gate.
+max-action-ticks: 2400

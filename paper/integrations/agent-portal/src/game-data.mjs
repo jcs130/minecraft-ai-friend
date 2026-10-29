@@ -200,6 +200,7 @@ export class GameData {
     const guild = gameplay.data?.['guild-players']?.[uuid];
     const personalLife = life.data?.players?.[uuid];
     const profile = essentials.data;
+    const native = await this.rpgProfile(uuid,gameplay.data);
     return { schemaVersion: 1, agent, freshness: data ? 'saved' : 'unavailable',
       source: 'Paper.saved-player-data', observedAt: new Date().toISOString(), savedAt: player.savedAt,
       connectionEpoch: null, seq: null,
@@ -215,8 +216,21 @@ export class GameData {
       account: { lastLoginAt: iso(profile?.timestamps?.login), lastLogoutAt: iso(profile?.timestamps?.logout),
         balance: profile?.money != null ? String(profile.money) : null, source: 'Essentials.saved-profile', savedAt: essentials.savedAt },
       progress: { savedAt: gameplay.savedAt, guildSavedAt: gameplay.savedAt, lifeSavedAt: life.savedAt, professionSavedAt: professions.savedAt, guild: guild || null, life: personalLife || null,
-        profession: professions.data?.players?.[uuid] || professions.data?.[uuid] || null },
+        profession: native || professions.data?.players?.[uuid] || professions.data?.[uuid] || null },
       connection: { body: 'external', portalConnected: false, controlAvailable: false,
         reason: '目前只读取服务器记录，接管需要原执行器提供暂停与释放回执' } };
+  }
+  async rpgProfile(uuid,gameplay) {
+    if(!UUID.test(uuid)||gameplay?.['rpg-backend']!=='vortex')return null;
+    const [saved,certificates]=await Promise.all([
+      this.document(path.join(this.config.serverDir,'plugins','VortexRPG','playerdata',uuid+'.json')),
+      this.plugin('adventure-certificates.json')
+    ]);
+    const value=saved.data,valid=value?.playerId===uuid&&Number.isInteger(value.level)&&value.level>=1&&value.level<=1000&&Number.isFinite(value.experience)&&value.experience>=0;
+    const academy=certificates.data?.players?.[uuid]?.academy;
+    const selected=valid?value.metadata?.['rpg.class']:null;
+    return {backend:'vortex',available:valid,combat:['knight','mage','ranger','cleric','beastmaster','engineer'].includes(selected)?selected:'',
+      level:valid?value.level:null,xp:valid?value.experience:null,savedAt:saved.savedAt,
+      academy:academy?{grade:academy.grade,certificates:Object.fromEntries(Object.keys(academy.certificates||{}).filter(id=>/^[a-z0-9_]{2,40}$/.test(id)).slice(0,32).map(id=>[id,{}]))}:null};
   }
 }

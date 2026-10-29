@@ -1,6 +1,7 @@
 param(
     [string]$ServerRoot = 'E:\MC\server',
-    [ValidateSet('1.20.6', '1.21.1')][string]$MinecraftVersion = '1.21.1'
+    [ValidateSet('1.20.6', '1.21.1')][string]$MinecraftVersion = '1.21.1',
+    [string]$TabJar = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,7 +13,14 @@ $worldGuard = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -Fi
 if ($worldGuard.Count -ne 1) { throw 'Exactly one enabled WorldGuard JAR is required for a reproducible build.' }
 $worldEdit = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -File | Where-Object { $_.Name -match '^(worldedit-bukkit-|FastAsyncWorldEdit(?:-Paper)?-).*\.jar$' })
 if ($worldEdit.Count -ne 1) { throw 'Exactly one enabled WorldEdit or FastAsyncWorldEdit JAR is required.' }
+if (-not $TabJar) {
+    $tabCandidates = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -Filter 'TAB*.jar' -File)
+    if ($tabCandidates.Count -ne 1) { throw 'Supply -TabJar with the official TAB 6.2.1 Paper API JAR (runtime integration is optional).' }
+    $TabJar = $tabCandidates[0].FullName
+}
+if (-not (Test-Path -LiteralPath $TabJar -PathType Leaf)) { throw 'TAB compile dependency is missing.' }
 $classpath = @(
+    $TabJar
     $paper
     Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'libraries') -Recurse -Filter '*.jar' -File | ForEach-Object { $_.FullName }
     Join-Path $ServerRoot 'plugins\MagicSpells-4.0-Beta-15.jar'
@@ -24,6 +32,18 @@ $classpath = @(
 ) -join ';'
 $build = Join-Path $root "build-0.4.48-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
+# Removed inner classes must not leak from an earlier incremental build into
+# a release (e.g. the abandoned void-map generator). Only delete class files
+# in this exact build directory; resources are refreshed below.
+$resolvedBuild = [IO.Path]::GetFullPath($build).TrimEnd('\')
+$expectedBuild = [IO.Path]::GetFullPath((Join-Path $root "build-0.4.48-mc-$MinecraftVersion")).TrimEnd('\')
+if ($resolvedBuild -ne $expectedBuild -or (Get-Item -LiteralPath $resolvedBuild).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'Unsafe class output directory' }
+if (Get-ChildItem -LiteralPath $resolvedBuild -Recurse -Force | Where-Object { $_.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint) }) { throw 'Build directory contains a reparse point' }
+$oldClasses = @(Get-ChildItem -LiteralPath $resolvedBuild -Recurse -File -Filter '*.class')
+foreach ($classFile in $oldClasses) {
+    if (-not [IO.Path]::GetFullPath($classFile.FullName).StartsWith(($resolvedBuild + '\'), [StringComparison]::OrdinalIgnoreCase)) { throw 'Class file escaped build directory' }
+}
+foreach ($classFile in $oldClasses) { Remove-Item -LiteralPath $classFile.FullName -Force }
 # The isolated server path plus both library generations can exceed Windows'
 # command-line limit. A UTF-8 argument file also handles paths containing spaces.
 $compileArguments = @('-encoding', 'UTF-8', '-source', '21', '-target', '21', '-cp', $classpath, '-d', $build,

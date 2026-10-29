@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "id": "adventure-rpg-20261027",
+  "name": "千灯纪：重返艾恩葛朗特",
+  "status": "deployed",
+  "version": "0.4.47.20",
+  "server": "Paper 1.21.1 build133",
+  "backup": "20261027-141626",
+  "dualCompleteColdBackup": true,
+  "playerBearingConfigUnchangedAtColdInstall": true,
+  "otherOriginalJarsUnchanged": 41,
+  "artifacts": {
+    "AgentFriend-0.4.47.20.jar": "5b8344fd26a6a8c719f086024b1322b566634e4baba7d1c359a45f8574b63593",
+    "LightAntiCheat-1.2.6-qd1.jar": "3faca3e44d2b54c8b2098d206d739cbba74fc27d6c70886674e3ebbe7d83414f",
+    "QiandengjiAntiCheat-0.1.0.jar": "f8e540eed3bad1434e28ba736739725c4840dca92672b641676c675740d3a378",
+    "Multiverse-Core-5.8.1.jar": "bc3f34e2d747fdf024f44868747bb016b08fa11d98ccb4ffcac958f083151a83"
+  },
+  "features": {
+    "professions": 4,
+    "classSkills": 23,
+    "dungeons": 5,
+    "formalAincradFloors": 1,
+    "pluginsEnabled": 45,
+    "multiverseAincradImported": true,
+    "restrictiveCityBorder": false,
+    "privatePersistentReleaseNotice": true,
+    "cliFrequencyIsHintOnly": true,
+    "newSdkIdentityOnlyInSourceNotOldDownloads": true,
+    "vortexProductionMigration": false
+  },
+  "npcs": [
+    {
+      "id": "aincrad_guild",
+      "name": "安丽卡（公会接待）",
+      "world": "aincrad",
+      "position": [
+        -512.5,
+        67.0,
+        889.5
+      ],
+      "sha256": "c24ad4842865a62e13955d8d2bcfd57c670743bb3518f509f8aaaa9f54800295",
+      "greetingCharacters": 64
+    },
+    {
+      "id": "aincrad_mentor",
+      "name": "欧文（职业导师）",
+      "world": "aincrad",
+      "position": [
+        -500.5,
+        67.0,
+        917.5
+      ],
+      "sha256": "310d0fe650412ccc357fc22af644815c30b34e7c9612ccf2db98988cdf186e28",
+      "greetingCharacters": 55
+    },
+    {
+      "id": "aincrad_scout",
+      "name": "琉音（攻略情报员）",
+      "world": "aincrad",
+      "position": [
+        -567.5,
+        67.0,
+        853.5
+      ],
+      "sha256": "0799c8d9b6d6d2d42456ef5dc1d10cd5f2cfddf27b055e424e53e2588436a298",
+      "greetingCharacters": 58
+    }
+  ],
+  "npcDialogue": {
+    "firstDraftAuthor": "Goddess",
+    "nativeQwenPawFinalStatusVerified": true,
+    "sampleCount": 1,
+    "sample": "欢迎，旅人！第一步先选职业：输入 /mycli profession list，看看战士、法师、牧师、坦克四个职业，选定一个再来找我学技能。",
+    "operatorNpcChecks": 31,
+    "continuingProject": "aincrad-npc-director",
+    "projectPhase": "planned",
+    "goddessReadbackMatchesNewPositions": true,
+    "existingCronJobsPreserved": 6
+  },
+  "localization": {
+    "shopkeepersVersion": "2.23.3",
+    "languageKeys": 430,
+    "placeholderSetsPreserved": true,
+    "playerLocale": "zh_CN",
+    "perClientLocaleOverride": false,
+    "untranslatedNpcSpeakHint": true,
+    "technicalIdsAndAdministrativeDiagnosticsNotTranslated": true,
+    "skinsRestorerRconReloadFinalReplyNotObserved": true,
+    "actualPlayerAndReloadProofIsolated": true
+  },
+  "tests": {
+    "sameAf20RealChecks": 96,
+    "dungeonRules": 68,
+    "messagePolicy": 76,
+    "cliSuites": [
+      84,
+      97,
+      80
+    ],
+    "sdkIdentity": 3,
+    "opsIdentity": 11,
+    "mvInstaller": 17,
+    "anticheatInstaller": 21,
+    "finalNpcAndLocaleSuite": {
+      "label": "npccheck20",
+      "npc": 34,
+      "playerLocaleAndNativeReload": 10
+    },
+    "localeBytePreservationUnitTests": 4,
+    "portalDomHttp": 51,
+    "browserSizes": [
+      1280,
+      390
+    ],
+    "browserViews": 4,
+    "productionStartup": 24
+  },
+  "website": {
+    "version": "0.8.28",
+    "image": "qiandengji-portal:0.8.28-aincrad-338ea6471623",
+    "imageId": "sha256:063574b0d09ef589476f732a7378cb21db7854f1e59f42773313f162c2b017e0",
+    "sourceCommit": "e86b5caaa060a11ba9de716bb76498aa6af65bd2",
+    "runtimeFilesVerified": 92,
+    "protectedTables": 17,
+    "sha256": {
+      "public/app.js": "338ea6471623f0275c638a38274a9cba25392a65d9dde89385df7960a874cf74",
+      "public/index.html": "44764225f70e3ef944554a6588f1be1d62e3420bf1d401d6b5b1d84335a54299",
+      "public/aincrad.html": "d3895ab46f289b537c72727b48336b630a97954cbe4619bb2d570e1b217b2f8b",
+      "public/aincrad.css": "5fe1354b1128d3a8d974ff22d8a66ca0208221d540cd6fa26d7c053c0228417a",
+      "public/assets/aincrad-season.svg": "ce70642d3f17a8dcb4769bcb4e618f5ab87b04bfed0274997a8918d8203edcc2"
+    },
+    "downloadsUnchanged": true,
+    "backupGrantRevoked": true
+  },
+  "notInThisRelease": [
+    "Vortex native migration of production profiles",
+    "canonical SAO NPC skins and additional YSM models",
+    "two-city physical portals",
+    "additional formal Aincrad floors"
+  ],
+  "boundaries": [
+    "Original failed canaries retained; nested command teleports still obey player travel qualification",
+    "NPCSpeak native reload replaces NPC entity UUIDs; fixed story IDs retained",
+    "No claim of Bedrock phone/Xbox visual acceptance",
+    "Old multiple-Eye-watcher warning not repaired in this release",
+    "Skill1.3.3/core rc.95 downloads kept; updated documentation and SDK identity are source changes"
+  ]
+}

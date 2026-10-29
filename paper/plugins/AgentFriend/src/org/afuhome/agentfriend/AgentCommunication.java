@@ -82,10 +82,17 @@ final class AgentCommunication {
         JsonObject out = envelope(p, "state"); out.addProperty("name", p.getName()); out.addProperty("mode", p.getGameMode().name());
         out.addProperty("health", p.getHealth()); out.addProperty("maxHealth",p.getMaxHealth());out.addProperty("food", p.getFoodLevel());
         out.addProperty("adventurerRank",plugin.guild().adventurerRankName(p));out.add("profession",plugin.professions().readProfession(p));
+        if (plugin.combatRpg() != null) out.add("combatRpg",plugin.combatRpg().state(p));
         var user = AuraSkillsApi.get().getUser(p.getUniqueId()); boolean manaKnown = user != null && user.isLoaded();
         out.add("mana", manaKnown ? new JsonPrimitive(user.getMana()) : JsonNull.INSTANCE);
         out.add("maxMana", manaKnown ? new JsonPrimitive(user.getMaxMana()) : JsonNull.INSTANCE);
         out.addProperty("manaStatus", manaKnown ? "known" : "unknown_not_loaded");
+        if(plugin.nativeRpg().selected()){
+            var nativeMana=plugin.nativeRpg().mana(p);
+            out.add("mana",nativeMana.isJsonObject()?nativeMana.getAsJsonObject().get("current"):JsonNull.INSTANCE);
+            out.add("maxMana",nativeMana.isJsonObject()?nativeMana.getAsJsonObject().get("max"):JsonNull.INSTANCE);
+            out.addProperty("manaStatus",nativeMana.isJsonObject()?"known_vortex":"unknown_not_loaded");
+        }
         out.add("authentication", authentication(p));
         JsonObject next = plugin.agentCoach().entryState(p);
         if (next.has("step")) {
@@ -196,6 +203,7 @@ final class AgentCommunication {
         if(root.equals("rules")) {plugin.agentEntry().rules(p,args,true);return;}
         if(root.equals("capabilities")) {plugin.agentEntry().capabilities(p,args);return;}
         if(root.equals("challenge")) {plugin.lifeChallenges().jsonCommand(p,args);return;}
+        if(root.equals("dungeon")) {plugin.siteDungeons().command(p,raw);return;}
         if(root.equals("tasks")) {
             String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
             plugin.taskMarket().routes().command(p,query);return;

@@ -15,6 +15,12 @@ public final class AgentMessagePolicyTest {
         for(String invalid:new String[]{"{}",hello.replace("1","2"),hello.replace("payload","chat"),hello.replace("hello","login"),"x",hello.replace("\"op\"","\"authorized\":true,\"op\"")})
             check(!AgentMessagePolicy.hello(invalid.getBytes(StandardCharsets.UTF_8)),"invalid hello "+invalid);
         check(!AgentMessagePolicy.hello(new byte[257]),"bounded handshake");
+        String identity="{\"op\":\"identity\",\"protocol\":1,\"control\":\"agent\",\"reconnect\":true}";
+        check(Boolean.TRUE.equals(AgentMessagePolicy.identity(identity.getBytes(StandardCharsets.UTF_8))),"explicit runtime identity");
+        check(Boolean.FALSE.equals(AgentMessagePolicy.identity(identity.replace("true","false").getBytes(StandardCharsets.UTF_8))),"non reconnecting controller stays behind maintenance gate");
+        for(String invalid:new String[]{"{}",identity.replace(":1,",":1.5,"),identity.replace("true","\"true\""),identity.replace("agent","human"),identity.replace("identity","login"),identity.replace("\"op\"","\"authorized\":true,\"op\""),hello})
+            check(AgentMessagePolicy.identity(invalid.getBytes(StandardCharsets.UTF_8))==null,"invalid identity ignored");
+        check(AgentMessagePolicy.identity(new byte[257])==null,"bounded identity declaration");
         for(String prefix:new String[]{"MC_AUTH_STATE","MC_GUIDE","MC_STATUS","MC_GUIDE_NEXT"}) {
             String input=prefix+" {\"sessionId\":\"random\",\"playerUuid\":\"uuid\",\"observedAt\":99,\"sequence\":4,\"authentication\":{\"authSessionId\":\"random\",\"status\":\"authenticated\",\"authorized\":true,\"passwordSet\":false},\"message\":\"营地地坪受保护，X=-1146..-1078、Z=-638..-567\",\"guide\":{\"x\":-1116,\"y\":64,\"z\":-600},\"nextCommand\":\"/mycli rules\"}";
             String result=AgentMessagePolicy.compact(input);

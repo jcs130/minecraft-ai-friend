@@ -22,6 +22,7 @@ import { cancelControlInput, waterControlActive } from './skills-control.ts';
 import { groundPathIssueOf } from './path-waypoints.ts';
 import { corridorSafe } from './idle-actions.ts';
 import { onConnectionEnd } from './connection-end.ts';
+import { navigationInteractionFailureOf } from './hand-interaction.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -86,7 +87,7 @@ function targetSubmerged(bot: Bot): boolean {
   return false;
 }
 
-/** Passive ascent is opt-in and shares the host's live anti-drowning switch. */
+/** Passive ascent is opt-in; critical oxygen rescue uses a separate reflex switch. */
 export function installTreadWater(bot: Bot, enabled: () => boolean = () => false): () => void {
   const existing = treadControllers.get(bot);
   if (existing) { existing.enabled = enabled; return existing.dispose; }
@@ -759,6 +760,11 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   const deadline = Date.now() + GOTO_DEADLINE_MS;
   const supportSeq = pathSupportFailureOf(bot)?.seq ?? 0;
   const geometrySeq = groundPathIssueOf(bot)?.sequence ?? 0;
+  const interactionSeq = navigationInteractionFailureOf(bot)?.sequence ?? 0;
+  const interactionBlocked = (): SkillBlocked | null => {
+    const failure = navigationInteractionFailureOf(bot);
+    return failure && failure.sequence > interactionSeq && failure.goal === goal ? failure.error : null;
+  };
   const geometryBlocked = (): string | null => {
     const issue = groundPathIssueOf(bot);
     return issue && issue.sequence > geometrySeq ? issue.reason : null;
@@ -842,6 +848,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     const searchFailed = (noPath || (err as Error).name === 'NoPath')
       && bot.pathfinder.goal === goal && goalOwnerOf(bot)?.goal === goal;
     dropGoal(bot, 'task', '寻路报错,技能退出', ctx.diag);
+    if (interactionBlocked()) throw interactionBlocked()!;
     if (geometryBlocked()) throw new SkillBlocked(geometryBlocked()!);
     const support = supportBlocked();
     if (support) {
@@ -862,6 +869,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     bot.off?.('path_update', onPath);
   }
   checkAbort(ctx);
+  if (interactionBlocked()) throw interactionBlocked()!;
   const support = supportBlocked();
   if (geometryBlocked()) {
     dropGoal(bot, 'task', '路径内部几何校验未通过', ctx.diag);

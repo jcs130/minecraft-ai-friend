@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-27",
+  "state": "resource_hot_update_verified",
+  "paperVersion": "1.21.1",
+  "agentFriendVersion": "0.4.47.20",
+  "newModels": [
+    "qd_frieren",
+    "qd_kazuha",
+    "qd_lappland",
+    "qd_mega_knight",
+    "qd_ryza"
+  ],
+  "skinPresets": 40,
+  "oldModelFilesUnchanged": 185,
+  "modelServiceProcessesUnchanged": true,
+  "playerBindingsChanged": false,
+  "processRestarted": false,
+  "backupsVerified": 2,
+  "validation": {
+    "archivePreparationTests": 7,
+    "nativeModelSelections": 14,
+    "webModelsReviewed": 12,
+    "webIdleWalkRunAccepted": 8,
+    "realSkinChecks": 13,
+    "sharedRendererPasses": 58,
+    "sharedRendererConditionalSkips": 13
+  },
+  "notes": [
+    "Shared renderer fix is published separately; website still uses its prior renderer.",
+    "Vortex class/mana migration remains an isolated candidate.",
+    "Original author notices and hashes are retained; no third-party binaries in Git."
+  ]
+}

@@ -1,0 +1,9 @@
+name: QiandengjiAntiCheat
+version: 0.1.0
+main: org.qiandengji.anticheat.AgentAntiCheat
+api-version: '1.21'
+depend: [LightAntiCheat]
+softdepend: [numen_api, AgentFriend, VortexRPG, MagicSpells, MythicMobs]
+commands:
+  agentac:
+    description: 仅维护台读取反作弊适配计数

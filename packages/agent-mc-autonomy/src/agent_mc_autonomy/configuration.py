@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from .decision_profiles import DecisionSettings
 from .fast import FastSettings
+from .native_settings import NativeSettings
 
 DEFAULT_CONTEXT_TOKENS = 65536
 
@@ -168,6 +169,8 @@ class Settings:
     viewer_listen_port: int = 28985
     server_presentation_module: str = ""
     server_presentation_sha256: str = ""
+    server_engine_module: str = ""
+    server_engine_sha256: str = ""
     min_decision_seconds: int = 10
     idle_decision_seconds: int = 60
     max_tool_rounds: int = 6
@@ -188,6 +191,7 @@ class Settings:
     memory: MemorySettings = field(default_factory=MemorySettings)
     knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
     decision_policy: DecisionSettings = field(default_factory=DecisionSettings)
+    native: NativeSettings = field(default_factory=NativeSettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -259,8 +263,14 @@ class Settings:
         if len(appearance) > 128 or not re.fullmatch(r"(?:server|bundled:[A-Za-z0-9_-]+|native:[A-Za-z0-9_/-]+:[A-Za-z0-9_-]+)", appearance):
             raise SettingsValidationError("viewer.default_appearance", "invalid_default_appearance")
         extension = raw.get("server_extension", {})
-        if not isinstance(extension, dict) or set(extension) - {"presentation_module", "presentation_sha256"}:
-            raise ValueError("server_extension supports only an explicit optional presentation port")
+        if not isinstance(extension, dict) or set(extension) - {"presentation_module", "presentation_sha256", "engine_module", "engine_sha256"}:
+            raise ValueError("server_extension supports explicit optional presentation and engine ports")
+        engine_module = _text(extension, "engine_module")
+        engine_sha256 = _text(extension, "engine_sha256")
+        if (bool(engine_module) != bool(engine_sha256) or len(engine_module) > 4096
+                or engine_module and (not Path(engine_module).is_absolute() or "://" in engine_module or not engine_module.endswith((".mjs", ".js")))
+                or engine_sha256 and not re.fullmatch(r"[a-f0-9]{64}", engine_sha256)):
+            raise SettingsValidationError("server_extension.engine_module", "invalid_engine_port")
         presentation_module = _text(extension, "presentation_module")
         presentation_sha256 = _text(extension, "presentation_sha256")
         if (bool(presentation_module) != bool(presentation_sha256) or len(presentation_module) > 4096
@@ -281,6 +291,7 @@ class Settings:
             viewer_default_appearance=appearance,
             viewer_listen_port=_integer(viewer, "listen_port", 28985, 1024, 65535),
             server_presentation_module=presentation_module, server_presentation_sha256=presentation_sha256,
+            server_engine_module=engine_module, server_engine_sha256=engine_sha256,
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
             max_output_tokens=maximum_output,
@@ -297,6 +308,7 @@ class Settings:
             memory=MemorySettings.parse(raw.get("memory", {})),
             knowledge=KnowledgeSettings.parse(raw.get("knowledge", {})),
             decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),
+            native=NativeSettings.parse(raw.get("native", {})),
         )
 
     def require_server(self) -> None:
@@ -329,6 +341,7 @@ class Settings:
             "metricsPort": 0, "consolePort": self.console_port,
             **({"operatorIdentity": self.identity} if self.console_port else {}),
             "world": {
+                **self.native.client_config(),
                 **({"provider": "java-client", "javaClient": self.java_client} if self.body_provider == "java-client" else {}),
                 "host": self.host, "port": self.port, "username": self.username, "auth": self.auth,
                 "version": self.version, "profilesFolder": str(private / "auth"),
@@ -337,7 +350,8 @@ class Settings:
                 "memory": self.memory.client_config(),
                 **({"knowledge": self.knowledge.client_config()} if self.knowledge.minedojo_index_file else {}),
                 **({"memoryAgentId": self.memory.agent_id} if self.memory.agent_id else {}),
-                "perception": {"mineralVision": self.mineral_vision},
+                "perception": {"mineralVision": self.mineral_vision,
+                               **self.native.client_config().get("perception", {})},
                 "performanceBridge": {"module": "", "endpoint": ""},
                 "local": {"startWithWorld": False, "serverDir": "", "cheats": False},
                 "client": {"enabled": False}, "player": {"enabled": False},

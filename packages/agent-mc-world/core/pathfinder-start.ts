@@ -3,6 +3,7 @@ import type { Bot } from 'mineflayer';
 import type { Move, Movements } from 'mineflayer-pathfinder';
 import type { Vec3 } from 'vec3';
 import { configureWaterMovements, repairWaterWaypoints } from './water-navigation.ts';
+import { awaitPathGoal } from './navigation-result.ts';
 
 const require = createRequire(import.meta.url);
 const pfRequire = createRequire(require.resolve('mineflayer-pathfinder/package.json'));
@@ -41,6 +42,9 @@ export function installPartialBlockStartRepair(bot: Bot): void {
   const finder = bot.pathfinder;
   if (installed.has(finder)) return;
   installed.add(finder);
+  // Repair the pinned plugin at the connection adapter, retaining goto as the
+  // shared contract for executor, SDK and any caller wrapping its lifecycle.
+  finder.goto = goal => awaitPathGoal(bot, goal);
   const original = finder.getPathFromTo.bind(finder);
   finder.getPathFromTo = function* (movements, startPos, goal, options = {}) {
     configureWaterMovements(bot, movements);

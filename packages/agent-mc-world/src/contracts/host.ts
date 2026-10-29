@@ -82,7 +82,12 @@ export interface WorldHost {
   log: Logger;
 }
 export interface WorldRequestFacts {
-  text: string; snapshotTypes: readonly string[]; parts?: readonly { key: string; text: string }[];
+  /** Native world identity, separate from the dimension type; absent on legacy producers. */
+  world?: import('./world-scope.ts').WorldIdentityObservation;
+  /** Event state streams fully represented by these current facts. This permits
+   * request-only replacement of old state snapshots, not deletion of the event
+   * ledger, terminal outcomes or evidence of historical progress. */
+  text: string; snapshotTypes: readonly string[]; parts?: readonly import('./protocol.ts').FactPart[];
   /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */
   workStates?: readonly import('./work-state.ts').WorkState[];
   /** Bounded current capability discovery; not execution eligibility or a model-selected plan. */
@@ -93,7 +98,19 @@ export interface WorldRequestFacts {
   /** Fresh typed fields for optional host-side bounded decision stability checks. */
   decisionStability?: { sampledAtMs: number; identity: unknown; dimension: string | null;
     position: readonly [number, number, number] | null; health: number | null; food: number | null;
-    guards: Readonly<Record<string, unknown>> };
+    guards: Readonly<Record<string, unknown>>;
+    /** Producer-owned current navigation identity, not permission to interrupt or execute a route. */
+    route?: { generation: number; positionEpoch: number; speedBlocksPerSec: number;
+      policy: import('../../core/journey.ts').JourneyChoicePolicy; risks: readonly string[];
+      task: { id: number; stepIndex: number; stepCount: number; step: string; skill: string;
+        resumable: boolean; destination: readonly number[]; dimension: string } | null;
+      waiting: readonly { id: number; label: string }[]; hold: string | null; goalOwner: string | null;
+      fighting: boolean; environment: string | null; windowOpen: boolean; cursorOccupied: boolean;
+      footing: { kind: string; block: string | null; grounded: boolean | null } | null;
+      entities: readonly { id:number|null;name:string;kind:string;visible:boolean|null;position:readonly[number,number,number]|null;
+        health:number|null;note:string|null;item:unknown }[];
+      journeyId: string | null;
+      journeyCues: readonly { position: readonly [number,number,number]; observedAtMs:number }[] } };
 }
 export interface StoragePart {
   key: string; label: string; kind: 'disk' | 'memory'; location?: string; danger?: boolean; note?: string; order?: number;

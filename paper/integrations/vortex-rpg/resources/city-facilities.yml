@@ -1,0 +1,50 @@
+schema-version: 1
+world: aincrad
+state: surveyed_not_operating
+source-map-sha256: 0ddf2c3f8c767d2acdfa3be793293a47fd7cb3d45a34bb997ff9d5861970518f
+# Existing buildings: candidate uses only their verified door/interior geometry.
+# No room is declared operational until NPC placement and walking are verified.
+facilities:
+  adventurers_guild:
+    name: 起始之城·冒险者公会
+    entrance: [-512, 67, 887]
+    inside: [-512, 67, 886]
+    roofed-floor-cells: 425
+    function: 接待、战斗任务、攻略情报和队伍招募
+  weapon_shop:
+    name: 起始之城·武具工房
+    entrance: [-504, 67, 917]
+    inside: [-503, 67, 917]
+    roofed-floor-cells: 75
+    function: Vortex武器、锻造材料和原版交易
+  armor_shop:
+    name: 起始之城·防具铺
+    entrance: [-512, 67, 965]
+    inside: [-511, 67, 965]
+    roofed-floor-cells: 59
+    function: 护甲、盾牌和属性说明
+  supply_shop:
+    name: 起始之城·行旅补给站
+    entrance: [-656, 67, 903]
+    inside: [-657, 67, 903]
+    roofed-floor-cells: 59
+    function: 食物、火把与冒险补给
+  inn:
+    name: 起始之城·旅人酒馆
+    entrance: [-656, 67, 965]
+    inside: [-657, 67, 965]
+    roofed-floor-cells: 59
+    function: 休整、组队公告和旅人故事
+  clinic:
+    name: 起始之城·圣愈所
+    entrance: [-632, 67, 867]
+    inside: [-633, 67, 867]
+    roofed-floor-cells: 61
+    function: 牧师教学、救援说明与治疗用品
+  archive:
+    name: 起始之城·冒险档案馆
+    entrance: [-571, 67, 853]
+    inside: [-570, 67, 853]
+    roofed-floor-cells: 34
+    existing-bookshelf-samples: 2
+    function: 地图、技能资料、日记和照片索引

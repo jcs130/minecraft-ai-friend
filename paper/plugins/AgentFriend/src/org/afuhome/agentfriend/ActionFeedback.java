@@ -13,7 +13,7 @@ final class ActionFeedback {
             JsonArray values = new JsonArray(); commands.forEach(values::add); data.add("nextCommands", values);
             String reason=data.has("reason")?data.get("reason").getAsString():"unknown";
             data.addProperty("errorCode",reason.toUpperCase(java.util.Locale.ROOT));
-            boolean transientReason=java.util.Set.of("cooldown","insufficient_mana","not_enough_mana","no_target","unsafe_path","already_effective").contains(reason);
+            boolean transientReason=java.util.Set.of("cooldown","insufficient_mana","not_enough_mana","no_target","target_recovering","unsafe_path","already_effective").contains(reason);
             boolean unknownResult=reason.contains("save")||reason.contains("journal")||reason.contains("conflict")||reason.equals("data_unavailable")||reason.equals("unknown");
             data.add("retryable",unknownResult?com.google.gson.JsonNull.INSTANCE:new com.google.gson.JsonPrimitive(transientReason));
             data.addProperty("retryPolicy",unknownResult?"结果未知，先查询核对；不要自动重复提交":"先按nextCommands解决条件；不自动重放动作");
@@ -62,6 +62,7 @@ final class ActionFeedback {
                 case "cooldown" -> a("技能仍在冷却。", "按回执 cooldownRemainingMs 等待剩余秒数，再施放一次；反复执行不会缩短冷却。", skill);
                 case "insufficient_mana" -> mana();
                 case "no_target" -> a("没有有效目标。", "按 " + skill + " 的范围靠近可见目标；治疗需有受伤友军，攻击需有效敌人，再施法。", skill);
+                case "target_recovering" -> a("目标正处于原版受击间隔，本次未施放。", "停止连击，等约半秒后重新瞄准再施放一次；不要把普通攻击和剑技同时发出。本次未扣魔力或冷却。", skill);
                 case "protected_target" -> a("目标受保护。", "停止攻击该目标；根据 " + skill + " 选择可攻击的敌对生物，不攻击村民、队友或私产。", skill);
                 case "unsafe_path" -> a("路径或落点不安全。", "移到无遮挡的平地，确认脚下有支撑、头顶两格净空后再试，不要拆开受保护建筑。", skill);
                 case "prepared_limit" -> a("技能准备槽已满。", "用 /mycli skills mine 查看当前准备项，选一项执行 /mycli skills unprepare <ID>，再准备所需技能。", "/mycli skills mine");
@@ -96,7 +97,17 @@ final class ActionFeedback {
             case "dungeon" -> switch (reason) {
                 case "walk_to_first_room", "party_full_or_not_at_first_room" -> a("未到首室，或队伍已满8人。", "用 " + dungeon + " 核对入口和首室坐标；沿原通道进入首室。加入需在10秒集结期且有空位，否则等下一场。", dungeon);
                 case "muster_closed" -> a("本场10秒集结期已关闭。", "用 /mycli dungeon status 查看场次；等本场结束后到首室与队友重新开场，不要强行加入。", "/mycli dungeon status", dungeon);
+                case "party_data_unavailable" -> a("队伍资料暂不可用，未开场。", "稍后重新查询队伍；不会把未知队伍当单人，也不要重复开场。", "/mycli guild party status");
+                case "party_leader_required" -> a("组队开场须由队长发起，未开场。", "先核对队长；全员到首室后由队长 start，符合准入的全队会一起登记。", "/mycli guild party status", dungeon);
+                case "party_not_ready" -> a("队伍尚未全部在首室就绪，未开场。", "全队须在线、穿齐护甲并带本职业武器、结束其他活动，到首室后由队长 start；不要在外面等待自动加入。", "/mycli guild party status", dungeon);
+                case "party_pending_reward" -> a("队友尚有此副本待领奖凭据，未开场。", "请每位队友查询并领取自己的旧奖励，再到首室由队长开场。", "/mycli dungeon status");
                 case "site_busy" -> a("该地点已有挑战队伍。", "用 /mycli dungeon status 查看，等待结束或从 /mycli dungeon list 选另一处。", "/mycli dungeon status", "/mycli dungeon list");
+                case "already_in_site_dungeon" -> a("你已有地下城或正式攻略场次，不能重复开场。", "先查本人当前场次；故障暂停且已恢复条件时用resume继续，决定放弃时用leave退出后再开场。", "/mycli dungeon status", "/mycli dungeon resume", "/mycli dungeon leave");
+                case "conquest_profession_required" -> a("正式攻略需要先选择战斗职业。", "选择战士、坦克、法师或牧师，再学习合适的技能。", "/mycli profession menu");
+                case "conquest_level_required" -> a("战斗等级尚未达到本层要求。", "先查询本层最低等级；探索与击败敌对生物获得战斗经验，种地不会增加战斗等级。", dungeon,"/mycli status");
+                case "previous_floor_required" -> a("尚未完成上一正式楼层。", "练习塔与正式攻略分开计分；先核对攻略层数，再挑战已解锁楼层。", "/mycli status");
+                case "combat_progress_unavailable" -> a("战斗成长记录暂不可用。", "请联系女神检查存档；不要重复报名或领奖。", "/mycli status");
+                case "conquest_map_unavailable" -> a("正式攻略地图尚未就绪。", "请联系女神核对地图与场地配置；不要重复开场。原有地下城和练习塔可另查目录。", "/mycli dungeon list");
                 case "site_cooldown" -> a("场地处于开场冷却（最长120秒）。", "等待冷却结束，到首室再 start 一次；可先用 " + dungeon + " 查看规则。", dungeon);
                 case "claim_previous_reward_first" -> a("上次地下城奖励尚未领取，本次未开场或加入。", "先 /mycli dungeon claim " + id + " 领取到个人奖励箱，再重新 start 或 join；无需重打旧场次。", "/mycli dungeon claim " + id, "/mycli dungeon status " + id);
                 case "no_pending_reward" -> a("本人没有这份待领奖凭据，未发放奖励。", "用 /mycli dungeon status 查待领奖记录和最近结果；已领取的用 /mycli arena rewards 查看。新挑战需每室参战并返回首室，生成凭据后才能领。", "/mycli dungeon status", "/mycli arena rewards");

@@ -5,3 +5,6 @@ mana-cost: 2
 queue-limit: 16
 cooldown-seconds: 60
 capture-timeout-seconds: 90
+# Optional dedicated native renderer, already authenticated and in spectator mode.
+# Blank preserves the existing camera. Never use the UUID of a normal player.
+native-renderer-uuid: ''

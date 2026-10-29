@@ -1,6 +1,107 @@
 # Agent MC Autonomy
 
-The 0.2.100 development distribution pins core rc.90, which preserves legitimate
+Version 0.2.127 consumes current sparse visible-surface observations regardless
+of JSON property order. Bounded previews and retained native outcomes preserve
+the producer's scan/unknown/continuation fields, absolute sample coordinates and
+original receipt references. An exhausted scan is distinct from complete world
+knowledge. Native turn ownership and the pinned core rc.128 are unchanged;
+offline consumption checks do not establish improved live navigation.
+
+Version 0.2.126 consumes the independently built engine-only core rc.128. Attack
+receipts distinguish an observed target death from an unverified own kill, and
+preserve released arrows across the death-event race. Explicit entity targeting
+and bounded message continuity remain. The exact source, archive, companion lock
+and build hashes stay pinned. Planner policy, identity, goals and personal memory
+are unchanged; updating source does not reload an active player.
+
+Version 0.2.124 also yields already-satisfied native plans and unchanged saved
+death lessons at the normal decision cadence, without a whole-planner delay or
+incrementing the plain-reply inactivity counter. The exact native receipt stays
+in history; neither result proves new movement, learning or goal completion.
+Real provider retries and the configured idle cadence for plain replies remain.
+
+Version 0.2.123 removes whole-planner exponential waits for rejected operations
+and malformed tool calls. Exact invalid calls remain fenced; corrected arguments,
+help and other operations continue at normal decision cadence. Native validation,
+pending/unknown work, stop and provider outage deadlines remain authoritative.
+See [call correction scheduling](docs/call-correction.md). The body remains pinned
+to independently built core rc.124.
+
+Version 0.2.122 adds measured failed-open recovery, including skipped dependent
+withdrawals and explicit interaction faces. Version 0.2.121 pins independently built core rc.124. Explicitly included
+shortcut sorting can use cursor-free exchanges while retaining native per-click
+confirmation. MCP results match JSON wire semantics. Existing carried items and
+unknown actions are not silently cleared; the planner and personal-memory ports
+remain unchanged.
+
+Version 0.2.120 uses a valid producer-owned `stateRevision` when comparing
+admission/read-reuse state. A sample clock alone no longer invalidates a dated
+answer when the producer explicitly declares unchanged semantic state. Facts
+without this optional contract, or with malformed metadata, still compare full
+text. Raw dated facts remain in model context and archives; scope, expiry,
+pending work and unknown-dispatch safeguards are unchanged. This does not prove
+a prior answer remains current or that a game goal has succeeded.
+
+Version 0.2.119 retains current native RPG state and observed combat capabilities
+ahead of optional bulk world detail in compact decision requests. These remain
+dated observations, not permission to use a skill or verified progression; the
+existing archive handles and context budget still apply.
+
+Planner-facing protocol schemas, progressive help and validation corrections share the same runtime ownership projection. The planner can read `task`, `facts`, `archive` and `archive_runs`; turn boundaries and barrier acknowledgement remain with the coordinator. A backend's broader transport manual must not reintroduce hidden control operations. Other progressive tool help continues to use the native shared contract. This lookup needs no model or game action.
+
+Version 0.2.116 retains the core's typed repeat-attempt metadata in planner
+outcomes and compact strategic reviews, including completed tasks whose compared
+readings stayed unchanged. Long receipts and later observations cannot silently
+erase these historical samples. Completion still does not verify a goal;
+unknown/changed samples retain their original meaning and authorize no replay.
+
+Version 0.2.115 rejects invalid `mc_original` pagination before opening the
+dispatch uncertainty journal. The planner receives a normal failed-tool result
+with the actual 1..1000 page bound and can continue playing. Native action and
+unknown-dispatch safeguards are unchanged.
+
+The administrator-only `python -m agent_mc_autonomy.local_rejection_recovery`
+command can reconcile this historical pre-dispatch validation failure. It
+requires exact failed-state/status/last-decision hashes, the original validation
+trace, an idle ownership lease, an empty native queue, and explicit prior-process
+attestation. It preserves original evidence and records rejection rather than
+action success; it never replays work or starts a game. An interrupted prepared
+audit blocks ordinary startup until an explicit same-ID recovery completes.
+
+The 0.2.114 source candidate pins the independently built core rc.116 and adds
+an explicit optional server-engine composition port. A host supplies a local
+module and SHA-256; the same engine and bridge can be composed with the viewer
+or used headlessly. This does not select a server, model or account, and does
+not enable autonomous gameplay by default. Verification hashes are derived from
+the engine-only archive itself and checked against an independently extracted
+installation. Server behavior remains in the
+separately installed server package.
+
+The 0.2.103 installer automatically uses a short per-user runtime cache. Users do
+not need administrator privileges, registry changes or a long-path system toggle.
+The full manifest hash still authenticates every installation; shortened folder
+names never permit a conflicting payload to be replaced. Existing prepared
+registrations remain readable. Resource and backend verification both use exact
+extended Windows paths, including when the host executable lacks long-path support.
+
+The 0.2.102 distribution pins core rc.99, including rejected-plan repair contracts,
+terminal death boundaries, observed command recovery and independent declared
+server queries. `mc_query` retains its native schema in both context modes and
+can be used as an immediate read during navigation; its sent receipts are not
+body tasks or goal completion, and the framework does not cache or resend them.
+Core query permissions, reply provenance, native barriers and model deadlines remain.
+Windows backend verification uses extended filesystem paths so a host without
+long-path awareness can verify installed files beyond MAX_PATH. Missing members
+name their relative build path; absent, altered and escaping files remain rejected.
+
+The 0.2.101 development distribution pins the integrated core rc.95. Authored
+opening spells recheck actual combat and body admission; read-only script workers
+do not claim the native body. Current task progress and unavailable observations
+have explicit snapshot coverage. Message batches retain source/result revisions,
+and identical attributed note retries reuse their original persistent entry.
+The composter repair, fixed viewer/resources, model choices and native barriers remain.
+
+The 0.2.100 distribution pins core rc.90, which preserves legitimate
 composter interactions with crop items and reports actual level/inventory effects.
 Scout tools retain the native paging description instead of an obsolete local
 total-volume limit. The existing viewer, model settings and native barriers remain.
@@ -45,7 +146,7 @@ alternatives only with the explicit `llamacpp` wire profile. Required fields
 such as `harvest.at` are constrained during generation; other providers retain
 the flat declaration. Native validation remains authoritative. Proven
 no-dispatch argument failures retain their typed correction across world drift
-and clock expiry, and repeated failures yield with bounded backoff. No arguments
+and clock expiry; repeated failures now yield at normal cadence without a global backoff. No arguments
 or replacement activities are selected automatically; stop, unknown inventory,
 the sole native queue and inference deadlines are unchanged.
 
@@ -127,7 +228,7 @@ truncated outputs still must not be acknowledged or applied.
 excerpt in the next selected planner notice, so window eviction cannot leave
 only a generic error. One first, known no-dispatch syntax error can request an
 immediate correction when the body is idle; repeated invalid replies retain
-normal bounded backoff. Native pending/unknown work and stop still fence it.
+normal decision cadence. Native pending/unknown work and stop still fence it.
 Arguments are never repaired, guessed or executed automatically.
 
 0.2.54 carries still-applicable, dated generic bag/queue/failure answers in the

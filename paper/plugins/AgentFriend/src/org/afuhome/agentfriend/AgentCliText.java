@@ -24,15 +24,16 @@ final class AgentCliText {
     }
 
     static List<String> help(JsonObject data) {
-        if (data.has("errorCode")) return List.of("[提示] " + shortText(value(data, "message", "参数错误"), 180) + "。命令：/mycli --help");
+        if (data.has("errorCode")) return List.of("[invalid_argument] " + shortText(value(data, "message", "参数错误"), 180) + "。下一步："+command(data,"nextCommand","/mycli --help"));
         List<String> lines = new ArrayList<>();
         lines.add("用法：" + value(data, "usage", "/mycli --help"));
+        if(data.has("defaultAction"))lines.add(value(data,"defaultAction",""));
         if (data.has("commands")) {
             for (JsonElement item : data.getAsJsonArray("commands")) {
                 JsonObject row = item.getAsJsonObject();
-                lines.add(value(row, "name", "") + "：" + shortText(value(row, "summary", ""), 60));
+                lines.add(value(data,"path","/mycli")+" "+value(row, "name", "") + "：" + shortText(value(row, "summary", ""), 60));
             }
-            lines.add("详情：<命令> --help；仅详情标明支持时使用 --json。");
+            lines.add("详情："+value(data,"path","/mycli")+" <命令> --help；仅详情标明支持时使用 --json。");
         } else {
             lines.add(shortText(value(data, "summary", ""), 160));
             String operation = switch (value(data, "operation", "")) {
@@ -58,10 +59,13 @@ final class AgentCliText {
         }
         String activity = yes(data, "downed") ? "倒地，等队友救援" : yes(data, "inPvp") ? "竞技中" : yes(data, "inDungeon") ? "参战中" : "自由活动";
         String mana = value(data, "mana", "未知") + "/" + value(data, "maxMana", "未知");
-        return List.of("[状态] " + value(data, "name", "本人") + " · " + value(data, "adventurerRank", "等级未知")
+        JsonObject combat=data.has("combatRpg")?data.getAsJsonObject("combatRpg"):new JsonObject();
+        String growth=combat.has("level")?" · 战斗Lv."+value(combat,"level","")+" · 正式攻略"+value(combat,"conquestFloor","0")+"层":"";
+        return List.of("[状态] " + value(data, "name", "本人") + " · " + value(data, "adventurerRank", "等级未知")+growth
                         + " · 生命 " + value(data, "health", "未知") + "/" + value(data, "maxHealth", "未知")
                         + " · 饱食 " + value(data, "food", "未知") + " · 魔力 " + mana,
-                "认证：" + auth + "；" + activity + "；主线：" + (yes(data, "mainlineGraduated") ? "已毕业" : "未毕业或待核对"),
+                "认证：" + auth + "；" + activity + "；入门：" + (yes(data, "mainlineGraduated") ? "已毕业" : "未毕业或待核对")
+                    +(combat.has("level")?"；升级还需"+value(combat,"xpToNext","未知")+"经验（"+switch(value(combat,"saveState","unavailable")){case "saved"->"已保存";case "pending"->"保存中";default->"保存异常，请勿重复领奖";}+"）":""),
                 "下一步：" + command(data, "nextCommand", "/mycli progress"));
     }
 

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import { afterEach, expect, it, vi } from 'vitest';
-import { equipSlotConfirmed } from '../core/equipment.ts';
+import { equipHandConfirmed, equipSlotConfirmed } from '../core/equipment.ts';
 import { clickInventoryConfirmed, installInventoryClickSync, inventoryClickState } from '../core/inventory-click-sync.ts';
 import { installInventoryWindowSyncGuard } from '../core/inventory-window-sync.ts';
 
@@ -15,9 +15,10 @@ function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip =
   const client = Object.assign(new EventEmitter(), { write: (_name: string, _packet: unknown) => {} });
   const bot = Object.assign(new EventEmitter(), { registry, version, _client: client, QUICK_BAR_START: 36,
     supportFeature: (name: string) => registry.supportFeature(name),
-    getEquipmentDestSlot: (name: string) => name === 'off-hand' ? 45 : 5,
+    getEquipmentDestSlot: (name: string) => name === 'hand' ? 36 + bot.quickBarSlot : name === 'off-hand' ? 45 : 5,
   }) as unknown as Bot;
   mf('mineflayer/lib/plugins/inventory.js')(bot, { hideErrors: true });
+  mf('mineflayer/lib/plugins/simple_inventory.js')(bot);
   bot.quickBarSlot = 0;
   const full = () => client.emit('window_items', { windowId: 0, stateId: ++stateId,
     items: server.slots.map((item: unknown) => Item.toNotch(item)), carriedItem: Item.toNotch(server.selectedItem) });
@@ -53,6 +54,26 @@ function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip =
   return { bot, server, clicks, full, seed, raw, notes };
 }
 afterEach(() => vi.useRealTimers());
+
+it.each(['1.20.6', '1.21.1'])('equips a stored weapon with native %s clicks while retaining a protected selected shortcut', async version => {
+  vi.useFakeTimers(); const r = nativeServer(version, false, false, 0);
+  r.seed(36, 'player_head', true); r.seed(9, 'iron_sword'); r.seed(38, 'bread'); r.full();
+  const before = structuredClone(r.raw()); let error: unknown;
+  const operation = equipHandConfirmed(r.bot, r.bot.inventory.slots[9]!).catch(e => { error = e; });
+  await vi.advanceTimersByTimeAsync(49);
+  expect(r.bot.quickBarSlot).toBe(0);
+  await vi.runAllTimersAsync(); await operation;
+  expect(error).toBeUndefined();
+  expect(r.clicks).toHaveLength(1);
+  expect(r.clicks[0]).toMatchObject({ slot: 9, mouseButton: 1, mode: 2 });
+  expect(r.server.slots[37]?.name).toBe('iron_sword');
+  expect(r.bot.quickBarSlot).toBe(1); expect(r.bot.heldItem?.name).toBe('iron_sword');
+  const after = r.raw();
+  for (let slot = 0; slot < before.length; slot++) if (![9, 37].includes(slot)) expect(after[slot]).toEqual(before[slot]);
+  expect(after.map(x => JSON.stringify(x)).sort()).toEqual(before.map(x => JSON.stringify(x)).sort());
+  expect(r.bot.inventory.selectedItem).toBeNull(); expect(r.server.selectedItem).toBeNull();
+  expect(inventoryClickState(r.bot).phase).toBe('ready');
+});
 
 it.each(['1.20.6', '1.21.1'])('swaps a stored item directly with offhand without touching a protected unrelated hotbar on %s', async version => {
   vi.useFakeTimers(); const r = nativeServer(version, false, false, 0);

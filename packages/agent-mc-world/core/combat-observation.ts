@@ -35,6 +35,10 @@ export function validControlSummary(value: unknown): value is CombatControlSumma
 
 export function sanitizeCombatResult<T extends CombatResult>(result: T): T {
   const clean = structuredClone(result);
+  if (!['unavailable', 'legacy-unverified'].includes(clean.killAttribution ?? ''))
+    clean.killAttribution = clean.kills === null ? 'unavailable' : 'legacy-unverified';
+  if (clean.targetDeaths !== undefined && (!clean.targetDeaths || typeof clean.targetDeaths !== 'object'
+    || Array.isArray(clean.targetDeaths) || Object.values(clean.targetDeaths).some(n => !Number.isSafeInteger(n) || n < 0))) delete clean.targetDeaths;
   if (!validControlSummary(clean.controlSummary)) delete clean.controlSummary;
   if (clean.reason !== 'death' || typeof clean.deathEpisodeId !== 'string' || !clean.deathEpisodeId.length || clean.deathEpisodeId.length > 80) delete clean.deathEpisodeId;
   if (!clean.scope || Object.keys(clean.scope).length !== 3 || !['realm', 'account', 'agent'].every(k => {
@@ -45,6 +49,7 @@ export function sanitizeCombatResult<T extends CombatResult>(result: T): T {
 }
 
 export interface CombatScene {
+  loadout?: import('./combat-loadout.ts').CombatLoadout;
   dimension: string | null;
   position: { x: number; y: number; z: number };
   hostileRadius: number;
@@ -61,7 +66,11 @@ export interface CombatResult {
   reason: string;
   healthBefore: number | null;
   healthAfter: number | null;
-  kills: Record<string, number>;
+  /** Own kill credit; null when native entityDead supplies no killer. Historical maps need attribution. */
+  kills: Record<string, number> | null;
+  killAttribution?: 'unavailable' | 'legacy-unverified';
+  /** Observed deaths of engaged targets; neither damage nor final kill ownership. */
+  targetDeaths?: Record<string, number>;
   swings: number;
   meleeLanded: number;
   arrows: number;

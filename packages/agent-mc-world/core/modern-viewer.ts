@@ -375,7 +375,7 @@ function equipmentArmor(equipment: unknown[]): number {
   }, 0);
 }
 
-function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false, remoteTextures = false, localSkin?: Pick<ReturnType<typeof configuredPlayerSkin>,'skinUrl'|'skinModel'|'skinSource'> | null): Record<string, unknown> {
+function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false, remoteTextures = false, localSkin?: Pick<ReturnType<typeof configuredPlayerSkin>,'skinUrl'|'skinModel'|'skinSource'> | null, shieldHand: 'mainhand' | 'offhand' = 'offhand'): Record<string, unknown> {
   const entity = bot.entity as unknown as Record<string, unknown>;
   const velocity = entity.velocity as { x?: number; y?: number; z?: number } | undefined;
   const speed = Math.hypot(Number(velocity?.x) || 0, Number(velocity?.z) || 0);
@@ -398,16 +398,20 @@ function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false
     : footing.kind === 'fluid' ? bot.blockAt(bot.entity.position) : null;
   const foodRegistry = (bot.registry as unknown as { foodsByName?: Record<string, unknown> }).foodsByName;
   const held = bot.heldItem as unknown as { name?: string; components?: Array<{ type?: string }> } | null;
+  const usingItem = bot.usingHeldItem === true || (Number((entity.metadata as unknown[] | undefined)?.[8]) & 1) !== 0;
+  const shieldItem = shieldHand === 'offhand' ? bot.inventory?.slots?.[45] : bot.heldItem;
+  const blocking = shieldRaised && usingItem && rawHealth > 0 && shieldItem?.name === 'shield';
   return {
     seq: sequence, sequence, capturedAt: Date.now(), entity: ownEntity(bot, remoteTextures, localSkin),
     movementState: viewerMovementState(speed, sprinting, sneaking),
     horizontalSpeed: speed,
     verticalSpeed: Number(velocity?.y) || 0,
     velocity: { x: Number(velocity?.x) || 0, y: Number(velocity?.y) || 0, z: Number(velocity?.z) || 0 },
-    onGround: entity.onGround === true, inWater: entity.isInWater === true, shieldRaised,
+    onGround: entity.onGround === true, inWater: entity.isInWater === true, shieldRaised: blocking,
+    shieldHand: blocking ? shieldHand : null,
     burning: entity.isOnFire === true || (Number((entity.metadata as unknown[] | undefined)?.[0]) & 1) !== 0,
     usingHeldItem: bot.usingHeldItem === true || (Number((entity.metadata as unknown[] | undefined)?.[8]) & 1) !== 0,
-    usingOffhand: (Number((entity.metadata as unknown[] | undefined)?.[8]) & 2) !== 0,
+    usingOffhand: blocking ? shieldHand === 'offhand' : (Number((entity.metadata as unknown[] | undefined)?.[8]) & 2) !== 0,
     heldItemEdible: !!(held?.name && foodRegistry?.[held.name.replace(/^minecraft:/, '')]) ||
       (held?.components?.some(component => component.type?.replace(/^minecraft:/, '') === 'food') ?? false),
     surfaceBlock: surface ? { name: surface.name, stateId: surface.stateId } : null,
@@ -869,6 +873,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   const first = new SocketServer(server, { path: '/socket.io', serveClient: false, allowRequest });
   const third = new SocketServer(server, { path: '/third/socket.io', serveClient: false, allowRequest });
   let shieldRaised = false;
+  let shieldHand: 'mainhand' | 'offhand' = 'offhand';
   let tradeState: ViewerTrades | null = null;
   const decodeTradeItem = (raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null;
@@ -1032,6 +1037,27 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       pendingEntities.delete(id);
       if (knownEntities.delete(id) && socket.connected) socket.emit('entity', { id: entity.id, delete: true });
     };
+    // Keep the shared viewer's short-lived projectile policy: real samples are
+    // sent immediately, never extended or replayed after the server removes them.
+    const transientEntity = (entity: ViewerEntity) => entity.type === 'projectile' || ['arrow', 'spectral_arrow', 'trident', 'eye_of_ender']
+      .includes(String(entity.name ?? '').replace(/^minecraft:/, ''));
+    const entityTransportWritable = () => {
+      const connection = socket.conn as unknown as { transport?: { writable?: boolean }; writeBuffer?: unknown[] } | undefined;
+      return active && socket.connected && connection?.transport?.writable !== false && (connection?.writeBuffer?.length ?? 0) <= 4;
+    };
+    const sendEntity = (entity: ViewerEntity, full: boolean) => {
+      if (!nearby(entity)) { removeEntity(entity); return; }
+      const id = String(entity.id);
+      if (!knownEntities.has(id) && knownEntities.size >= 128) return;
+      const complete = full || !knownEntities.has(id);
+      const velocity = entity.velocity;
+      socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) :
+        { id: entity.id, pos: { x: entity.position.x, y: entity.position.y, z: entity.position.z }, yaw: entity.yaw, pitch: entity.pitch,
+          headYaw: (entity as unknown as { headYaw?: number }).headYaw,
+          ...(transientEntity(entity) && velocity && [velocity.x, velocity.y, velocity.z].every(Number.isFinite)
+            ? { velocity: { x: velocity.x, y: velocity.y, z: velocity.z } } : {}) });
+      knownEntities.add(id);
+    };
     const queueEntity = (entity: ViewerEntity, full = false) => {
       if (!active || !entity || entity.id === undefined) return;
       if (!nearby(entity)) { removeEntity(entity); return; }
@@ -1039,6 +1065,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (pendingEntities.size < 256 || pendingEntities.has(id)) pendingEntities.set(id, {
         entity, full: full || pendingEntities.get(id)?.full === true,
       });
+      if (transientEntity(entity) && entityTransportWritable()) {
+        const pending = pendingEntities.get(id);
+        if (pending) { pendingEntities.delete(id); sendEntity(pending.entity, pending.full); }
+      }
     };
     const entitySpawn = (entity: ViewerEntity) => queueEntity(entity, true);
     const entityMoved = (entity: ViewerEntity) => queueEntity(entity);
@@ -1048,23 +1078,14 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if(entity)queueEntity(entity,true);
     };
     const flushEntities = () => {
-      if (!active || !socket.connected || socket.conn?.transport?.writable === false) return;
+      if (!entityTransportWritable()) return;
       for (const id of knownEntities) {
         const entity = bot.entities[id];
         if (!entity || !nearby(entity)) removeEntity(entity ?? { id: Number(id) } as ViewerEntity);
       }
       const rows = [...pendingEntities.values()];
       pendingEntities.clear();
-      for (const { entity, full } of rows) {
-        if (!nearby(entity)) { removeEntity(entity); continue; }
-        const id = String(entity.id);
-        if (!knownEntities.has(id) && knownEntities.size >= 128) continue;
-        const complete = full || !knownEntities.has(id);
-        socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) :
-          { id: entity.id, pos: entity.position, yaw: entity.yaw, pitch: entity.pitch,
-            headYaw: (entity as unknown as { headYaw?: number }).headYaw });
-        knownEntities.add(id);
-      }
+      for (const { entity, full } of rows) sendEntity(entity, full);
     };
     const entityTimer = setInterval(flushEntities, 100);
     const publishDigging = () => {
@@ -1090,7 +1111,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     };
     const publishAvatar = () => {
       if (active && bot.entity && socket.connected) {
-        socket.emit('avatarState', avatarState(bot, ++sequence, shieldRaised, options.remoteTextures, ownSkin));
+        socket.emit('avatarState', avatarState(bot, ++sequence, shieldRaised, options.remoteTextures, ownSkin, shieldHand));
         publishDigging();
       }
     };
@@ -1387,7 +1408,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     for (const socket of viewerSockets) if (socket.connected) socket.emit('rangedUse', event);
   });
   const stopShieldUse = observeViewerShieldUse(protocol, () => bot.inventory?.slots?.[45]?.name,
-    (raised) => { shieldRaised = raised; });
+    (raised, hand) => { shieldRaised = raised; shieldHand = hand ?? 'offhand'; }, () => bot.heldItem?.name);
   const stopFishing = observeViewerFishingCatch(bot, event => {
     if (!closed) for (const socket of viewerSockets) if (socket.connected) socket.emit('fishingCatch', event);
   }, viewerItem);

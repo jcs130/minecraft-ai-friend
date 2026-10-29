@@ -1,7 +1,11 @@
 import { operationInventory } from './operation-experience.ts';
+import { withFactState } from './fact-state.ts';
+import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
+import { TaskProgressReading } from './task-progress-reading.ts';
+import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
-import {JourneyObserver,journeyOpportunityText,type JourneyCue} from './journey.ts';
+import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from './knowledge.ts';
 import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex } from './options.ts';
@@ -28,7 +32,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   ConfigGroup, World, WorldHost, WorldConsoleDecl, WorldPanelDecl, WorldRequestFacts,
-  ExecutionReceipt, BlobInput, EventTag, StoragePart, ToolCallContext, ToolDef, ToolOutcome, TriggerMode,
+  ExecutionReceipt, BlobInput, EventTag, StoragePart, ToolCallContext, ToolDef, ToolOutcome, TriggerMode, FactPart,
 } from './support/host-contract.ts';
 import { MAP_SIZE, exploredShare, mapStateOf, renderMapPng } from './map-view.ts';
 import { selfDamageText, takeSelfDamage } from './damage-source.ts';
@@ -36,6 +40,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
+import { ServerQueryLane, SERVER_QUERY_TOOL, type ServerQueryDefinition } from './server-query.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -113,7 +118,7 @@ import { MinecraftAuthentication } from '../src/client/authentication.ts';
 import { GameClient, type ClientState } from './client.ts';
 import {
   Executor, Reflexes, releaseBody, parseNoteText, parseQueueMode, parseScoutSteps, parseSteps, sendChat,
-  QUEUE_SCHEMA, renderQueue,
+  QUEUE_SCHEMA, renderQueue, goalOwnerKind,
   SCOUT_SKILL_DOC, SCOUT_STEP_SCHEMA, SKILL_STEP_SCHEMA,
   type BlueprintDesk, type BlueprintSurvey, type MarkDesk, type MarkLookup,
   type ParseNote, type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
@@ -486,10 +491,11 @@ export const MINECRAFT_STORAGE_DECLS: ReadonlyArray<Omit<StoragePart, 'stat' | '
   },
   {
     key: 'minecraft-pwsr',
-    label: '暂态表(目标/路标等)',
-    kind: 'memory',
-    note: 'PWSR 暂态:她从笔记投影进来的目标与路标,外加蓝图施工进度那张视图,按世界分命名空间。'
-      + '本来就不跨重启,清了等于提前进了下一场',
+    label: '目标恢复与暂态表',
+    kind: 'disk',
+    location: 'data/minecraft-goals/',
+    note: '目标意图在配置 dataDir 时按世界/账号/Agent 保存；重启只恢复计划与历史判断，现场条件重新核验。'
+      + '路标仍为内存暂态。清除会同时移除所有目标恢复记录与暂态表，不执行旧动作。',
   },
 ];
 
@@ -500,8 +506,8 @@ export const MINECRAFT_STORAGE_DECLS: ReadonlyArray<Omit<StoragePart, 'stat' | '
 /**
  * 一张 realm 域暂态表的登记项。
  *
- * PWSR 的暂态**不是 World 的持久状态**:真身写在她自己的笔记里,World 这一份只是她
- * 运行时投影进来的可计算副本(so World 与 memory 互相匿名,她本人是同步协议)。
+ * PWSR 管理运行时的可计算投影，不持有个人记忆。目标表另由 GoalCheckpointBook
+ * 保存有限的意图恢复记录；其余表的持久化由各自实现负责。
  * 于是每张表只需要交代三件事 —— **叫什么、清的时候怎么说、现状一行贡献什么**;
  * 命名空间归骨架管(换世界即换空间,旧数据留在旧空间**不删**),内容归表自己管。
  *
@@ -624,6 +630,8 @@ const GOAL_SLOTS = 5;
 
 /** 一条目标。`slot` 是她认的号(#1..#5);撤掉之后那个号空出来,下一次 add 补上 */
 export interface MinecraftGoal {
+  /** Saved intention checkpoint time; never the time of a current observation. */
+  recoveredAt?: number;
   revision?: number;
   slot: number;
   text: string;
@@ -823,7 +831,7 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
         progress.unit = unit;
       }
     }
-    const plan=parseGoalPlan(r.plan);if('error' in plan)return plan;
+    const plan=parseGoalPlan(r.plan,'revise.plan');if('error' in plan)return plan;
     return {kind:'revise',slot:Number(r.slot),expectedRevision:Number(r.expectedRevision),text:(r.text as string).trim(),plan,reason:(r.reason as string).trim(),...(progress !== undefined ? {progress} : {})};
   }
   if (which === 'milestone' || which === 'reopen') {
@@ -870,6 +878,7 @@ function renderGoalQuery(list: readonly MinecraftGoal[], now: number, note?: Blu
       const head = `${goalLine(g, note)} —— ${goalAge(g, now)}`;
       return [
         head,
+        ...(g.recoveredAt === undefined ? [] : [`  意图恢复自 ${new Date(g.recoveredAt).toISOString()}；历史判断保留，机械条件重新现读，未重放动作。`]),
         ...g.plan.steps.map((step, index) => {
           const state = step.state === 'verified' ? '机械旁证符合'
             : step.state === 'judged' ? '已判断' : '待完成';
@@ -2230,6 +2239,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   GAME_MEMORY_TOOL,
   KNOWLEDGE_TOOL,
   OPTIONS_TOOL,
+  SERVER_QUERY_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2260,7 +2270,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Nearby blocks: {find:{names:["water"],maxDistance:8,count:4},waitMs:1000} runs a bounded read recipe without scan loops. name is optional for code; omitted names use its stable source hash. Explicit names are1–80 characters. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
-      + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible}; snapshot.entitiesOmitted reports truncation. '
+      + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible,observation?}; observation distinguishes visible from nearby tracked occluded/unknown entities, never inferred sound or attack permission. snapshot.entitiesOmitted reports truncation. '
       + 'snapshot.blocksScanned is false here; empty nearbyBlocks/terrain do not establish water depth or traversability. Missing fields are unknown observations. '
       + 'await mc.do(steps) submits one ordered group to the normal executor and waits for its actual terminal result: accepted, taskId, kind, done, receipt, steps and fresh state. '
       + 'A sent server command still needs observed effects; done is the executor result, not proof of an external quest. '
@@ -2305,7 +2315,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_do',
     tags: ['act'],
     description:
-      'Queue an ordered group of Minecraft skills and return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
+      'Queue Minecraft actions; queue:"afterCheckpoint" inserts a safe detour and resumes the original task. Return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
     parameters: {
       type: 'object',
       properties: {
@@ -2428,8 +2438,9 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'evidence for understood information, conversation and server command results. '
       + 'For observable position, inventory or entity conditions, use verify probes. A failed observation or a scan without a hit does not establish absence or safety. '
       + 'Judgment registration records the host claim; it is not independent world verification. '
-      + 'Call with no fields to read them all back. Tied to the current world and empty after a restart '
-      + 'or a world change, so the lasting copy belongs in your own notes.' + GOAL_CLOSURE_CONTRACT,
+      + 'Call with no fields to read them all back. Scoped to world, account and Agent. When dataDir is configured, '
+      + 'intentions and historical judgments survive restarts; mechanical conditions are rechecked and no actions are replayed. '
+      + 'Without dataDir this table is temporary. Personal memories remain in your own notes.' + GOAL_CLOSURE_CONTRACT,
     parameters: {
       type: 'object',
       properties: {
@@ -2770,6 +2781,7 @@ export class MinecraftWorld implements World {
   private readonly viewerActivity = new AgentActivityHistory();
   protected itemBreak: ItemBreakDecoder | null = null;
   protected executor: Executor | null = null;
+  private readonly taskProgressReading = new TaskProgressReading();
   protected readonly methodTasks = new Map<number, (report: TaskReport) => void>();
   protected readonly methodTerminals = new Map<number, TaskReport>();
   protected readonly methods = new MethodRunner({
@@ -2800,6 +2812,7 @@ export class MinecraftWorld implements World {
   protected rangedGeneration = 0;
   protected worldTimer: ReturnType<typeof setInterval> | null = null;
   protected lastReported: WorldSnapshot | null = null;
+  protected spatialRealm: string | null = null;
   protected lastTickTime: number | null = null;
   protected lastLowHealthAt = 0;
   protected lastAutoEatAttemptAt = 0;
@@ -2837,7 +2850,7 @@ export class MinecraftWorld implements World {
   private readonly methodLibraries = new Map<string, MethodLibrary>();
 
   protected methodLibrary(): MethodLibrary {
-    const scope = createHash('sha256').update(JSON.stringify([this.realmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
+    const scope = createHash('sha256').update(JSON.stringify([this.serverRealmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
     let library = this.methodLibraries.get(scope);
     if (!library) {
       library = new MethodLibrary(this.dataDir ? join(this.dataDir, 'minecraft-methods', scope) : null);
@@ -2845,8 +2858,10 @@ export class MinecraftWorld implements World {
     }
     return library;
   }
-  /** 按 realmKey 隔离的内存暂态表，不落盘。 */
+  /** 按 realmKey 隔离的运行时投影；目标的意图恢复记录另行落盘。 */
   protected readonly pwsr = new PwsrTables();
+  protected readonly goalCheckpoints: GoalCheckpointBook;
+  private readonly goalCheckpointScopes = new WeakMap<GoalTable, string>();
   /**
    * 当前世界的目标表(句柄每次现取,换世界后自动指向新命名空间)。
    * `status` 换成带蓝图进度的那一版:目标行上「(蓝图 home-v2:已施工 34%)」的来源。
@@ -2939,6 +2954,7 @@ export class MinecraftWorld implements World {
       emit: (event) => this.logBodyLease(event),
     });
     this.dataDir = opts.dataDir ?? '';
+    this.goalCheckpoints = new GoalCheckpointBook(this.dataDir ? join(this.dataDir, 'minecraft-goals') : null);
     this.photography = new PhotographyService({
       directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
       capture: (args, signal) => this.capturePhoto(args, signal),
@@ -3481,14 +3497,15 @@ export class MinecraftWorld implements World {
   }
 
   requestFacts(): WorldRequestFacts | null {
-    if (!this.bridge?.connected) return null;
+    if (!this.bridge?.connected) return this.unavailableRequestFacts('disconnected');
     // SDK hosts need not drain deferred event renders. Sample cheap live
     // state here, independently of that delivery cache; no 16-block scan.
     const snap = this.snapshot({ scanBlocks: false });
-    if (!snap) return null;
-    const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
+    if (!snap) return this.unavailableRequestFacts('snapshot-unavailable');
+    const parts: FactPart[] = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) },
+      { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
       { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
@@ -3505,15 +3522,17 @@ export class MinecraftWorld implements World {
     try { parts.push({ key: 'methods', text: this.methodLibrary().facts() }); }
     catch { parts.push({ key: 'methods', text: '[动作方法索引] 读取失败，已有方法状态未验证；mc_script {api:"authoring"} 可读编写及恢复入口。' }); }
     if (bot) {
-      parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(),
+      parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(), world: readWorldIdentity(bot),
         account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName }) });
       const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
       parts.unshift({ key: 'deathLifecycle', text: JSON.stringify(lifecycle ?? { phase: 'alive' }) });
-      if (lifecycle) parts.push({ key: 'recoveryState', text: JSON.stringify({
-        sampledAt: snap.realTime, episodeId: lifecycle.episodeId, dimension: normalizeDimension(snap.dimension),
-        position: snap.position, health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
-        inventory: snap.invSynced ? snap.inventory.slice(0, 40).map(item => ({ name: item.name, count: item.count })) : null,
-      }) });
+      if (lifecycle) {
+        const state = { episodeId: lifecycle.episodeId ?? null, dimension: normalizeDimension(snap.dimension),
+          position: { x: snap.position.x, y: snap.position.y, z: snap.position.z },
+          health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
+          inventory: snap.invSynced ? snap.inventory.slice(0, 40).map(item => ({ name: item.name, count: item.count })) : null };
+        parts.push(withFactState({ key: 'recoveryState', text: JSON.stringify({ sampledAt: snap.realTime, ...state }) }, state));
+      }
     }
     if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
@@ -3527,7 +3546,17 @@ export class MinecraftWorld implements World {
     parts.push({ key: 'lastTask', text: outcome });
     const queue = this.executor?.status();
     const threats = snap.entities.filter(entity => entity.kind === 'hostile');
-    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options,
+    const observedJourney = this.journeyObserver.reading(this.journeyScope(), String(this.connectionGeneration));
+    const journey = observedJourney && running?.travel && observedJourney.journey.taskId === running.id
+      && observedJourney.journey.stepIndex === running.stepIndex && observedJourney.journey.dimension === running.travel.dimension
+      && JSON.stringify(observedJourney.journey.destination) === JSON.stringify(running.travel.destination) ? observedJourney : null;
+    if (journey) {
+      const current = journey.observations.every(cue => Date.now() - cue.observedAtMs <= 10_000
+        && Math.hypot(cue.position[0] - snap.position.x, cue.position[1] - snap.position.y, cue.position[2] - snap.position.z) <= 32);
+      parts.push({ key: 'journey', text: journeyOpportunityText(journey, { guidance: false })
+        + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
+    }
+    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
@@ -3548,11 +3577,58 @@ export class MinecraftWorld implements World {
         position: [snap.position.x, snap.position.y, snap.position.z], health: snap.health, food: snap.food,
         guards: { body: [snap.inWater, snap.inWater ? snap.oxygen : null],
           place: [snap.biome, snap.standingOn, snap.dimension, snap.gameMode],
-          clock: [snap.timeOfDay >= 13000 && snap.timeOfDay < 23000, snap.raining, snap.light === null ? null : snap.light <= 7] } },
+          clock: [snap.timeOfDay >= 13000 && snap.timeOfDay < 23000, snap.raining, snap.light === null ? null : snap.light <= 7] },
+        route: { generation: this.connectionGeneration, positionEpoch: this.routePositionEpoch, speedBlocksPerSec: snap.speed,
+          policy: journeyChoicePolicy(this.cfg.journey),
+          risks: [
+            ...(threats.some(e => e.visible) ? ['visible-hostile-species-not-attack-intent'] : []),
+            ...(threats.some(e => !e.visible) ? ['nearby-occluded-hostile-species-not-attack-intent'] : []),
+            ...(snap.health !== null && snap.health <= this.cfg.reflex.fleeHealth ? ['low-health'] : []),
+            ...snap.effects.filter(effect => ['poison','wither'].includes(effect.name)).map(effect => `effect:${effect.name}`),
+          ],
+          task: running?.travel ? { id: running.id, stepIndex: running.stepIndex, stepCount: running.stepCount,
+            step: running.step, skill: running.skill ?? '', resumable: running.resumable === true,
+            destination: [...running.travel.destination], dimension: running.travel.dimension } : null,
+          waiting: queue?.waiting.map(task => ({ id: task.id, label: task.label })) ?? [], hold: queue?.hold ?? null,
+          goalOwner: bot ? goalOwnerKind(bot) : null, fighting: this.combat?.active ?? false,
+          environment: this.reflexes?.environmentOwnerKind ?? null, windowOpen: !!bot?.currentWindow,
+          cursorOccupied: !!bot?.inventory?.selectedItem,
+          footing: snap.footing ? { kind: snap.footing.kind, block: snap.footing.block, grounded: snap.footing.grounded } : null,
+          entities: snap.entities.map(reading => {
+            const entity = reading.entityId === undefined ? undefined : bot?.entities[reading.entityId];
+            const position = entity?.position;
+            const health = (entity as {health?:unknown}|undefined)?.health;
+            return { id:reading.entityId??null,name:reading.name,kind:reading.kind,visible:reading.visible??null,
+              position:position?[position.x,position.y,position.z] as [number,number,number]:null,
+              health:typeof health==='number'&&Number.isFinite(health)?health:null,note:reading.note??null,item:reading.item??null };
+          }).sort((a,b)=>(a.id??-1)-(b.id??-1)),
+          journeyId: journey?.id ?? null,
+          journeyCues: journey?.observations.map(cue => ({ position: [...cue.position] as [number,number,number], observedAtMs: cue.observedAtMs })) ?? [] } },
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
-      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'] };
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
+  }
+
+  /** A loss of observation replaces current-state streams with explicit unknowns.
+   * Returning null made hosts resurrect every historical delta as required context.
+   * Keep local intent and attributed terminal evidence, never cached body readings.
+   */
+  private unavailableRequestFacts(reason: 'disconnected' | 'snapshot-unavailable'): WorldRequestFacts {
+    const last = this.lastFinishedTask;
+    const parts = [
+      { key: 'identity', text: JSON.stringify({ realm: null, world: readWorldIdentity(null) }) },
+      { key: 'availability', text: JSON.stringify({ observedAt: new Date().toISOString(), reason,
+        connection: this.connectionReadiness(), currentWorldVerified: false,
+        position: null, dimension: null, health: null, inventory: null, nearby: null,
+        bodyTask: null, taskProgress: null }) },
+      { key: 'observationBoundary', text: 'Minecraft 当前现场读数不可用；位置、维度、生命、背包、周围环境及身体任务进展均未验证，null 表示未知，不表示空或没有任务。历史快照和增量不能充当当前状态；原文仍在事件账本。恢复后重新读取现场，并核对原动作终态再决定下一步。' },
+      { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
+      { key: 'lastTask', text: renderLastTaskReadout(last
+        ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
+    ];
+    return { text: parts.map(part => part.text).join('\n'), parts, world: readWorldIdentity(null),
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 
   private initialSceneStop: (() => void) | null = null;
@@ -4063,8 +4139,8 @@ export class MinecraftWorld implements World {
   protected storageParts(): NonNullable<WorldConsoleDecl['storage']> {
     const impl: Record<string, Pick<StoragePart, 'stat' | 'clear'>> = {
       'minecraft-chests': {
-        stat: () => this.chests.stat(),
-        clear: () => this.chests.clear(),
+        stat: () => this.chestBook().stat(),
+        clear: () => this.chestBook().clear(),
       },
       'minecraft-deaths': {
         stat: () => this.deaths.stat(),
@@ -4102,7 +4178,7 @@ export class MinecraftWorld implements World {
       },
       'minecraft-pwsr': {
         stat: () => this.pwsr.stat(),
-        clear: () => this.pwsr.clear(),
+        clear: () => { this.goalCheckpoints.clear(); return this.pwsr.clear(); },
       },
     };
     return MINECRAFT_STORAGE_DECLS.map((d) => ({ ...d, ...impl[d.key]! }));
@@ -4120,6 +4196,7 @@ export class MinecraftWorld implements World {
 
     this.executor = new Executor({
       getBot: () => this.bridge?.bot ?? null,
+      chatDispatch: (text, send, context) => this.dispatchServerChat(text, send, context),
       admissionCheck: steps => this.extensionAdmission(steps),
       report: (r) => this.onTaskReport(r),
       log,
@@ -4167,7 +4244,7 @@ export class MinecraftWorld implements World {
       marks: () => this.markDesk(),
       // queue:"now" 夺手:战斗当场交还身体,不再走"腾出手就做"
       stopCombat: (firstStep) => this.combat?.standDown(firstStep) ?? null,
-      chests: this.chests,
+      getChests: () => this.chestBook(),
       directionalSweeps: this.directionalSweeps,
       works: this.works,
       explored: (dimension, direction, distance, biome) => this.explored.record(dimension, direction, distance, biome),
@@ -4177,6 +4254,7 @@ export class MinecraftWorld implements World {
       }),
       // 周期份捎带、计数过半升常规;卡没卡住由 agent 看净位移自己判断
       onProgress: (p) => {
+        this.taskProgressReading.observe(p);
         const cnt = p.count ? `,进度 ${p.count.done}/${p.count.total}` : '';
         const detail = p.detail ? `;${p.detail}` : '';
         const where = p.pos ? `;我在 (${p.pos.x}, ${p.pos.y}, ${p.pos.z})` : '';
@@ -4280,6 +4358,7 @@ export class MinecraftWorld implements World {
       },
       reactCooldownSec: () => this.cfg.reflex.reactCooldownSec,
       antiDrown: () => this.cfg.reflex.antiDrown,
+      emergencyDrown: () => this.cfg.reflex.emergencyDrown !== false,
       antiLava: () => this.cfg.reflex.antiLava,
       currentTask: () => this.executor?.currentTask ?? null,
       combatHurt: (id, name) => (
@@ -4329,6 +4408,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.serverQueries.reset('游戏连接已断开，查询结果未知；重连后需重新读取');
         this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
         this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
@@ -4394,6 +4474,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.serverQueries.reset('Minecraft World 已停止，查询结果未知');
     this.pendingDeathCause = null;
     this.photography.stop();
     this.initialSceneStop?.(); this.initialSceneStop = null;
@@ -4405,6 +4486,7 @@ export class MinecraftWorld implements World {
     this.methodTerminals.clear();
     this.taskReadouts.clear();
     this.lastFinishedTask = null;
+    this.taskProgressReading.clear();
     this.visualInFlight?.controller.abort(new Error('Minecraft World 已停止'));
     this.requestFactsCache = null;
     this.idleBehavior?.stop();
@@ -4462,6 +4544,59 @@ export class MinecraftWorld implements World {
   }
 
   protected extensionTools(): ToolDef[] { return []; }
+  /** Explicit server capabilities, never inferred from command keywords. */
+  protected serverQueryDefinitions(): readonly ServerQueryDefinition[] { return []; }
+  protected readonly serverQueries = new ServerQueryLane({ onTerminal: outcome => {
+    this.emit('minecraft.event', outcome.text, false,
+      { trigger: outcome.data?.phase === 'cancelled' ? 'piggyback' : 'debounce', meta: { serverQuery: outcome.data } });
+  } });
+  private serverQueryMessageSequence = 0;
+
+  private queryGeneration(): string {
+    return `${this.executionEpoch}:${this.connectionGeneration}:${this.cfg.host}:${this.cfg.port}:${this.bridge?.bot?.game.dimension ?? 'unknown'}`;
+  }
+
+  /** This hook wraps actual transport dispatch, not task admission. */
+  private chatDeliverySequence = 0;
+  private dispatchServerChat(text: string, send: () => void, context?: ChatDispatchContext): ChatDeliveryReceipt | undefined {
+    const previous = new Map(this.recentSystemMessages);
+    const mutates = !this.serverActionWait.isReadOnlyQuery(text);
+    let delivery: ChatDeliveryReceipt | undefined;
+    if (mutates) this.recentSystemMessages.clear();
+    try { this.serverActionWait.dispatchChat(text, () => {
+      send();
+      const message = chatDeliveryMessage(text);
+      if (!message) return;
+      delivery = { protocol: 'agent-mc/chat-delivery/v1', id: `${this.executionEpoch}:chat:${++this.chatDeliverySequence}`,
+        status: 'sent', sentAt: new Date().toISOString(), ...message, boundary: 'client-transport', recipientRead: 'unknown',
+        ...(context?.callId ? { callId: context.callId } : {}),
+        ...(context?.taskId !== undefined ? { taskExecutionId: `${this.executionEpoch}:${context.taskId}` } : {}),
+        ...(context?.stepIndex !== undefined ? { stepIndex: context.stepIndex } : {}) };
+      this.emit('minecraft.chat.sent', `已向${message.to ? `玩家 ${message.to}` : '游戏公屏'}发送一条逻辑消息；仅确认客户端传输，不证明对方已读。`, false,
+        { trigger: 'piggyback', meta: { outgoing: true, direction: 'outgoing', channel: message.channel,
+          socialScope: 'minecraft-server', chatDelivery: delivery } }, this.chatName());
+    }); }
+    catch (error) {
+      if (mutates) {
+        this.recentSystemMessages.clear();
+        for (const [key, value] of previous) this.recentSystemMessages.set(key, value);
+      }
+      throw error;
+    }
+    return delivery;
+  }
+
+  protected queryServer(args: Record<string, unknown>): ToolOutcome {
+    const bot = this.bridge?.bot;
+    const connected = bot && this.bridge?.connected && this.bridge.connectionState?.ready !== false;
+    return this.serverQueries.call(args, this.serverQueryDefinitions(), connected ? {
+      generation: this.queryGeneration(), username: bot.username || this.chatName(),
+      afterSequence: this.serverQueryMessageSequence,
+      // A read has its own correlation slot and must not replace an active
+      // body action's wait/cooldown evidence or clear its system-message cache.
+      send: command => sendChat(bot, command),
+    } : null);
+  }
   protected bodyInhibitReason: string | null = null;
   private bodyInhibitHold: QueueHoldToken | null = null;
 
@@ -4502,6 +4637,8 @@ export class MinecraftWorld implements World {
   protected extensionRespawn(): void {}
   protected extensionRealm(_key: string): void {}
   protected extensionMessage(_text: string): boolean { return false; }
+  /** Server-position feedback after player/private chat provenance exclusions. */
+  protected extensionServerFeedback(_text: string): void {}
   protected extensionImportantMessage(_text: string): boolean { return false; }
   protected attachExtension(_bot: Bot): void {}
   protected disposeExtension(): void {}
@@ -4512,6 +4649,7 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
@@ -4616,7 +4754,7 @@ export class MinecraftWorld implements World {
         } catch (error) { return { text: this.toolLog('mc_script', args, String(error)), failed: true }; }
       },
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
-      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
+      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller, ctx),
       mc_observe: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         const parsed = parseSpatialObservation(args.mode === 'voxels' && args.format === undefined && args.cursor === undefined ? {...args,format:'dense'} : args);
@@ -4632,7 +4770,7 @@ export class MinecraftWorld implements World {
         }
         try {
           const data = observeSpatial(bot, parsed);
-          return { text: JSON.stringify(data), data };
+          return { text: JSON.stringify(data), data, meta: { observation: data.readout } };
         } catch (error) {
           if (!(error instanceof SkillBlocked)) throw error;
           const data = { status: 'blocked', reason: error.message, completed: 0, remaining: null,
@@ -4733,6 +4871,13 @@ export class MinecraftWorld implements World {
       temporaryScaffolds: bot ? temporaryScaffoldReadout(bot) : null,
       queue: this.executor?.status() ?? null, bodyRestriction: this.bodyInhibitReason, combatActive: this.combat?.active ?? false,
       combat: this.extensionState() };
+  }
+
+  /** A live worker is not itself a body lease: reads and pure computation may overlap combat. */
+  protected methodOwnsBody(): boolean {
+    const current = this.methods.current;
+    return !!current && (this.nativeMethod?.runId === current.id && this.nativeMethod.session.ownsBody
+      || this.methodTasks.size > 0);
   }
 
   protected async methodCall(method: MethodOperation, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
@@ -5195,7 +5340,7 @@ export class MinecraftWorld implements World {
         text: `[mc_bag] 看不了背包：${this.unavailableConnectionText()}`,
       };
     }
-    const records = this.chests.chestsIn(snap.dimension);
+    const records = this.chestBook().chestsIn(snap.dimension);
     if (item?.trim()) {
       const bot = this.bridge?.bot;
       const win = bot?.currentWindow;
@@ -5308,6 +5453,7 @@ export class MinecraftWorld implements World {
     const table = this.goalTable();
     const writeState = (): string => JSON.stringify(table.list.map((goal) => ({
       slot: goal.slot,
+      revision: goal.revision,
       text: goal.text,
       kind: goal.kind,
       target: goal.target,
@@ -5315,6 +5461,7 @@ export class MinecraftWorld implements World {
       blueprint: goal.blueprint,
       plan: goal.plan.steps.map((step) => ({
         do: step.do,
+        verify: step.verify,
         state: step.state,
         judgment: step.judgment,
         note: step.evidence && 'note' in step.evidence ? step.evidence.note : null,
@@ -5348,7 +5495,16 @@ export class MinecraftWorld implements World {
     const after = op.kind === 'done' ? [] : this.coordinateGoalPlans();
     const notices = [...before, ...after];
     if (notices.length > 0) receipt += `\n[目标旁证] ${notices.join('；')}`;
-    if (writeState() !== writeBefore) this.markGoalWrite();
+    if (writeState() !== writeBefore) {
+      this.markGoalWrite();
+      try {
+        if (op.kind !== 'query') this.goalCheckpoints.save(this.goalCheckpointScope(), table.list);
+        if (this.dataDir) receipt = receipt.replaceAll(PWSR_OVERNIGHT_NOTE, '(目标意图已保存；重启后重新核验现场条件，不重放动作。)');
+      } catch (error) {
+        this.host?.log.warn('目标恢复记录未保存', { err: String(error) });
+        receipt += '\n[恢复记录未保存] 本次只改了内存目标；原文件保留。请先修复存储，不能假定重启可恢复。';
+      }
+    }
     return receipt;
   }
 
@@ -5639,7 +5795,7 @@ export class MinecraftWorld implements World {
     // 槽位事务中光标所持栈不在 items() 中，须计入随身库存以免误记消耗。
     const cursor = bot?.currentWindow?.selectedItem ?? bot?.inventory?.selectedItem;
     if (cursor) carried[cursor.name] = (carried[cursor.name] ?? 0) + cursor.count;
-    return { carried, stored: this.chests.tally(String(bot?.game?.dimension ?? 'overworld')) };
+    return { carried, stored: this.chestBook().tally(String(bot?.game?.dimension ?? 'overworld')) };
   }
 
   /**
@@ -6521,6 +6677,7 @@ export class MinecraftWorld implements World {
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
     role?: string,
     controller?: 'system1' | 'system2' | 'human' | 'unknown',
+    callContext?: Pick<ToolCallContext, 'callId'>,
   ): string | ToolOutcome {
     // Proven pre-dispatch rejection: no queue mutation, navigation or interaction took place.
     const invalidArguments = (rule: string, text: string,
@@ -6576,16 +6733,21 @@ export class MinecraftWorld implements World {
         const connection = this.bridge?.connectionState;
         const reason = connection && connection.protocolState !== 'closed' && !connection.ready
           ? '正在等待服务器登录或出生点就绪' : '当前没有连接服务器';
-        return { text: this.toolLog(name, args, `[${name} 失败] ${reason}，聊天未发送`), failed: true };
+        return { text: this.toolLog(name, args, `[${name} 失败] ${reason}，聊天未发送`), failed: true,
+          meta: { chatDelivery: { protocol: 'agent-mc/chat-delivery/v1', status: 'rejected', dispatchStarted: false } } };
       }
+      let dispatchStarted = false;
       try {
         this.interruptIdle('outgoing-chat');
-        sendChat(bot, only.text);
+        let delivery: ChatDeliveryReceipt | undefined;
+        sendChat(bot, only.text, (text, send) => { delivery = this.dispatchServerChat(text,
+          () => { dispatchStarted = true; send(); }, { callId: callContext?.callId }); });
         const notes = parsed.notes?.map(parseNoteText) ?? [];
-        return this.toolLog(name, args, `[游戏聊天] 已发送：${only.text}。当前任务和待办保留`
-          + (notes.length > 0 ? `\n${notes.join(';')}。` : ''));
+        return { text: this.toolLog(name, args, `[游戏聊天] 已发送：${only.text}。当前任务和待办保留`
+          + (notes.length > 0 ? `\n${notes.join(';')}。` : '')), ...(delivery ? { meta: { chatDelivery: delivery } } : {}) };
       } catch (error) {
-        return { text: this.toolLog(name, args, `[${name} 失败] 聊天没有发出：${String(error)}`), failed: true };
+        return { text: this.toolLog(name, args, `[${name} 失败] ${dispatchStarted ? '客户端发送调用异常，实际发送结果未知，请核对原回执后再决定是否重发' : '聊天未发送'}：${String(error)}`), failed: true,
+          ...(!dispatchStarted ? { meta: { chatDelivery: { protocol: 'agent-mc/chat-delivery/v1', status: 'rejected', dispatchStarted: false } } } : {}) };
       }
     }
     const directUse = name === 'mc_do' && parsed.steps.length === 1 && parsed.steps[0].skill === 'use'
@@ -6621,15 +6783,9 @@ export class MinecraftWorld implements World {
       methodAdmission?.({ accepted: value, receipt: '', retryAfterMs, completedImmediately: completed,
         rejection: rejected, taskId });
     }, () => {
-      const currentMethod = this.methods.current;
-      const ownsNativeBody = currentMethod && this.nativeMethod?.runId === currentMethod.id && this.nativeMethod.session.ownsBody;
-      if (!methodAdmission && (ownsNativeBody || this.methodTasks.size > 0)) this.methods.stop('新的身体任务已受理，原身体方法取消');
+      if (!methodAdmission && this.methodOwnsBody()) this.methods.stop('新的身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
     });
-    if (admitted && directChat) {
-      this.serverActionWait.noteChat(directChat);
-      if (!this.serverActionWait.isReadOnlyQuery(directChat)) this.recentSystemMessages.clear();
-    }
     // 受理回执附当前队列状态，与结局回执和世界快照共用渲染。
     const queue = renderQueue(this.executor.status());
     const receipt = this.toolLog(
@@ -6685,6 +6841,7 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.serverQueries.reset('游戏连接代次已改变，原查询结果未知');
     this.pendingDeathCause = null;
     this.deathRespawnConfirmation = null;
     this.bodyInhibitReason = null; this.bodyInhibitHold = null;
@@ -6697,6 +6854,7 @@ export class MinecraftWorld implements World {
     // 新连接还没有现场读数，不能沿用上一代连接的事实。
     this.requestFactsCache = null;
     const connectionGeneration = ++this.connectionGeneration;
+    this.taskProgressReading.clear();
     this.idleContext.clear();
 
     this.resetBodyOwners();
@@ -6710,6 +6868,7 @@ export class MinecraftWorld implements World {
     this.syncRealm();
 
     // 重连后的世界可能整个换了(重生点、另一台服务器):快照基线作废
+    this.spatialRealm = this.realmKey();
     this.snapshotAnchorPending = true;
     this.setPersonalSpawn(undefined, '重连,等待核实', { announce: false });
     this.hydratePersonalSpawn();
@@ -6748,6 +6907,7 @@ export class MinecraftWorld implements World {
         this.pwsr.statusLine() ?? '',
       ].filter(Boolean).join('\n'),
       true,
+      { meta: { connection: { phase: 'spawned', generation: connectionGeneration } } },
     );
     // 服务端起来时回读到的难度:挂到这一刻才送得到她眼前(见 onServerDifficulty)
     this.initialSceneStop = observeInitialScene(bot, () => this.bridge?.bot === bot, () => {
@@ -6766,6 +6926,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.serverQueries.reset('重生或维度已改变，原查询结果未知');
     this.pendingDeathCause = null;
     this.setBodyInhibited(null);
     this.attention.reset();
@@ -6774,6 +6935,8 @@ export class MinecraftWorld implements World {
     this.bodyLease.revive(now);
     // 新一期身体不继承旧 owner 实例:死时已清过一次,死到重生之间还可能又攒了几个
     this.resetBodyOwners();
+    if (this.spatialRealm !== null && this.spatialRealm !== undefined && this.spatialRealm !== this.realmKey())
+      this.observeNativeWorldChange(this.bridge?.bot);
     const lifecycle = (this.bridge?.bot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
     if (lifecycle?.phase === 'alive' && this.deathRespawnConfirmation) this.emit('minecraft.event', '[Minecraft] 已收到重生后的生命读数。', false,
       { trigger: 'flush', meta: { deathLifecycle: lifecycle } });
@@ -6829,6 +6992,7 @@ export class MinecraftWorld implements World {
         if (!entity?.isValid || !entity.position) return null;
         return {
           id,
+          ...(typeof entity.uuid === 'string' ? { uuid: entity.uuid } : {}),
           position: entity.position,
           height: entity.height,
           width: entity.width,
@@ -6886,7 +7050,7 @@ export class MinecraftWorld implements World {
 
   /** 世界身份:托管中的那份目录优先(activeServerDir),否则同 proxy 侧读配置里的目录 */
   protected worldIdentity(): WorldIdentity {
-    return worldIdentityOf(this.mcServer.directory(), `${this.cfg.host}:${this.cfg.port}`);
+    return worldIdentityOf(this.mcServer?.directory() ?? this.cfg.local?.serverDir ?? '', `${this.cfg.host}:${this.cfg.port}`);
   }
 
   /**
@@ -6901,13 +7065,22 @@ export class MinecraftWorld implements World {
    * 也是 World 判断自己在玩本地托管世界的既有口径。前提不成立时一律走弱身份,
    * 宁可多分一个命名空间(顶多少恢复一次),也不能把两个世界并成一个。
    */
-  protected realmKey(): string {
+  protected serverRealmKey(): string {
     const world = this.worldIdentity();
     if (world.local) {
-      const uuid = this.mcServer.realm()?.uuid;
+      const uuid = this.mcServer?.realm()?.uuid;
       if (uuid) return `uuid:${uuid}`;
     }
     return `weak:${this.cfg.host}:${this.cfg.port}|${world.local ? world.key : ''}`;
+  }
+
+  protected realmKey(): string {
+    return worldScopedRealm(this.serverRealmKey(), this.bridge?.bot);
+  }
+
+  /** Each operation retains a view of the world in which it started. */
+  protected chestBook(): ChestBook {
+    return this.chests.forRealm(this.realmKey());
   }
 
   /**
@@ -6923,6 +7096,13 @@ export class MinecraftWorld implements World {
     // 骨架的「下桌」那几句里有一句要问蓝图表旧世界那边还剩什么
     this.blueprints.useRealm(key, normalizeDimension(this.bridge?.bot?.game?.dimension));
     const cleared = this.pwsr.switchTo(key);
+    const table = this.goals(), scope = this.goalCheckpointScope(key), identity = JSON.stringify(scope);
+    if (this.goalCheckpointScopes.get(table) !== identity) {
+      this.goalCheckpointScopes.set(table, identity);
+      table.list = [];
+      try { table.list = this.goalCheckpoints.load(scope); }
+      catch (error) { this.host?.log.warn('目标恢复记录读取失败，保留原文件', { err: String(error) }); }
+    }
     // 碰一下新命名空间里的蓝图视图:记录先存在,下一次换世界才说得出这边有什么下桌
     this.blueprintView();
     this.syncBlueprintResources();
@@ -6935,15 +7115,19 @@ export class MinecraftWorld implements World {
     return this.goals();
   }
 
+  protected goalCheckpointScope(realm = this.realmKey()): GoalCheckpointScope {
+    return { realm, account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName };
+  }
+
   /**
    * 进服后核对实际世界身份；切换世界时通告位置类记忆失效，首次进服只落盘。
    * 暂态表已在 onSpawn 的 syncRealm 中切换命名空间，此处报告切换结果。
    */
-  protected noteWorldSwitch(): void {
+  protected noteWorldSwitch(announce = true): void {
     const cleared = this.realmCleared;
     this.realmCleared = [];
     const clearedText = cleared.length > 0 ? `暂态已清:${cleared.join('、')}随旧世界下桌。` : '';
-    const cur = this.worldIdentity().key;
+    const cur = this.realmKey();
     let prev: string | null = null;
     if (this.worldFile) {
       try {
@@ -6957,17 +7141,55 @@ export class MinecraftWorld implements World {
         }
       }
     }
-    if (prev && prev !== cur) {
+    if (announce && prev && prev !== cur) {
       this.emit(
         'minecraft.event',
-        `[Minecraft] 世界换了:现在是「${cur}」。之前在「${prev}」记的坐标、路线、据点在这里都不算数;`
+        `[Minecraft] 世界身份已改变:现在是「${readWorldIdentity(this.bridge?.bot).key ?? '未核实世界'}」。之前记的坐标、路线、据点需要在当前世界重新核实;`
         + `做法经验照旧有效。${clearedText}`,
         true,
       );
       return;
     }
     // 世界名没变而命名空间换了(弱身份补上了 uuid 一类):清单照样得有人说
-    if (clearedText) this.emit('minecraft.event', `[Minecraft] ${clearedText}`, true);
+    if (announce && clearedText) this.emit('minecraft.event', `[Minecraft] ${clearedText}`, true);
+  }
+
+  /** Native world names can change while both worlds use the overworld physics type. */
+  protected observeNativeWorldChange(bot: Bot | null | undefined): void {
+    if (!bot || (this.bridge?.bot && this.bridge.bot !== bot)) return;
+    const dim = bot.game?.dimension ? normalizeDimension(bot.game.dimension) : '';
+    const scope = this.realmKey();
+    const worldChanged = this.spatialRealm !== null && this.spatialRealm !== undefined && this.spatialRealm !== scope;
+    const typeChanged = !!dim && this.lastDimension !== null && this.lastDimension !== undefined && dim !== this.lastDimension;
+    if (worldChanged || typeChanged) {
+      const from = this.lastDimension ?? dim;
+      const fromWorld = this.lastReported?.world?.key ?? null;
+      const toWorld = readWorldIdentity(bot).key;
+      this.requestFactsCache = null;
+      this.lastReported = null;
+      this.lastPosForTeleport = null;
+      this.snapshotArmedAt = null;
+      this.journeyBlocks = null;
+      this.snapshotAnchorPending = true;
+      this.proximity.clear(); this.playerObservations.clear(); this.flocks.clear(); this.matureAnnounced.clear();
+      this.idleContext.clear();
+      this.setPersonalSpawn(undefined, '世界身份已改变，等待核实', { announce: false });
+      this.serverQueries.reset('世界身份已改变，旧查询结果未知');
+      this.spatialRealm = scope;
+      this.lastDimension = dim || null;
+      this.syncRealm();
+      const cancelled = this.executor?.cancelForDimensionChange(from, dim, worldChanged ? { from: fromWorld, to: toWorld } : undefined) ?? null;
+      this.combat?.onConnectionLost();
+      this.reflexes?.stop();
+      this.reflexes?.start();
+      this.noteWorldSwitch(false);
+      this.emit('minecraft.event', worldChanged
+        ? `[Minecraft] 世界已切换到「${toWorld ?? '身份未核实'}」（维度类型 ${dim || '未知'}）。旧坐标和附近读数需要重新观察。${cancelled ?? ''}`
+        : `[Minecraft] 从${zhDimension(from)}进入了${zhDimension(dim)}。${cancelled ? `${cancelled}。` : ''}`, true,
+      { meta: { worldTransition: { from: fromWorld, to: toWorld, dimensionType: dim || null } } });
+      this.resyncSpectatorForDimension(dim);
+    }
+    if (dim) this.lastDimension = dim;
   }
 
   /** 将服务器相位变化投递为事件。 */
@@ -7264,7 +7486,7 @@ export class MinecraftWorld implements World {
       if (t) this.emit('minecraft.event', `[Minecraft] 屏幕大字:${t}`, false);
     });
     // 高层 chat/whisper 由 Mineflayer 的英文格式正则识别；没匹配上的聊天由 message 补送。
-    bot.on('message', (jsonMsg: { translate?: string; with?: Array<{ toString(): string }>; toString(): string }, position: string) => {
+    bot.on('message', (jsonMsg: { translate?: string; with?: Array<{ toString(): string }>; toString(): string }, position: string, sender?: string | null) => {
       const loginMessage = !this.hookedBots.has(bot);
       const key = String(jsonMsg?.translate ?? '');
       if (key === SET_SPAWN_TRANSLATE) {
@@ -7299,25 +7521,38 @@ export class MinecraftWorld implements World {
         return;
       }
       let unchangedQueryFeedback = false;
+      let independentQueryReply = false;
       if (position === 'system') {
         const reply = jsonMsg.toString().trim();
         const taskId = this.executor?.currentTask?.id ?? null;
+        const queryGeneration = this.queryGeneration();
+        const querySequence = ++this.serverQueryMessageSequence;
+        let extensionConsumed = false;
         // Mineflayer may recognize a player/private chat only after `message`.
         // Keep consumed extension errors too, without relabeling player quotes.
         if (!loginMessage) queueMicrotask(() => {
           if (this.bridge?.bot === bot && !matchedChatMessages.has(jsonMsg) && !this.chatClaimed.has(jsonMsg)
             && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.')) {
-            this.serverFeedback.note(reply, 'system', taskId);
-            const denial=parseServerActionDenial(reply);
-            if (denial && this.bridge?.noteServerActionDenied?.(denial)
-              && taskId!==null && this.executor?.currentTask?.id===taskId) {
-              this.executor.blockCurrentFromServer(reply);
+            if (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender)) {
+              independentQueryReply = this.serverQueries.receive(reply, queryGeneration, bot.username || this.chatName(), querySequence);
+              if (!independentQueryReply && !extensionConsumed) unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
+              this.extensionServerFeedback(reply);
+            }
+            // A correlated read result belongs to its query receipt, not to the
+            // unrelated body task that happened to be running at arrival.
+            if (!independentQueryReply) {
+              this.serverFeedback.note(reply, 'system', taskId);
+              const denial=parseServerActionDenial(reply);
+              if (denial && this.bridge?.noteServerActionDenied?.(denial)
+                && taskId!==null && this.executor?.currentTask?.id===taskId) {
+                this.executor.blockCurrentFromServer(reply);
+              }
             }
           }
         });
         // 服务器扩展可消费自己的机器可读回执。
-        if (this.extensionMessage(reply)) return;
-        unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
+        extensionConsumed = this.extensionMessage(reply);
+        if (extensionConsumed) return;
 
       }
       if (position === 'system') {
@@ -7373,7 +7608,7 @@ export class MinecraftWorld implements World {
           return;
         }
         // 明确的方块保护拒绝会终止当前任务；其他插件回执按文本识别并即时投递。
-        if (/can't break that block here|你不能破坏这里的方块|不能在这里破坏方块|不许破坏|不允许破坏|禁止.{0,12}(?:深挖|破坏|挖掘)|这块属于村庄原有建筑|受保护.*(?:破坏|挖掘)/i.test(text)) {
+        if (!independentQueryReply && /can't break that block here|你不能破坏这里的方块|不能在这里破坏方块|不许破坏|不允许破坏|禁止.{0,12}(?:深挖|破坏|挖掘)|这块属于村庄原有建筑|受保护.*(?:破坏|挖掘)/i.test(text)) {
           const notice = `[MC 系统] ${text}`;
           this.bridge?.noteServerBreakDenied(text);
           if (this.executor?.currentTask) {
@@ -7515,30 +7750,9 @@ export class MinecraftWorld implements World {
     this.lastDimension = bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null;
     this.lastLevel = typeof bot.experience?.level === 'number' && Number.isFinite(bot.experience.level)
       ? bot.experience.level : null;
-    bot.on('game', () => {
-      const dim = bot.game?.dimension ? normalizeDimension(bot.game.dimension) : '';
-      if (dim && this.lastDimension !== null && dim !== this.lastDimension) {
-        const from = this.lastDimension;
-        this.lastReported = null;
-        this.lastPosForTeleport = null;
-        this.snapshotArmedAt = null;
-        this.proximity.clear();
-        this.playerObservations.clear();
-        this.flocks.clear();
-        this.matureAnnounced.clear();
-        this.lastDimension = dim;
-        this.syncRealm();
-        const cancelled = this.executor?.cancelForDimensionChange(from, dim) ?? null;
-        this.emit(
-          'minecraft.event',
-          `[Minecraft] 从${zhDimension(from)}进入了${zhDimension(dim)}。${cancelled ? `${cancelled}。` : ''}`,
-          true,
-        );
-        this.resyncSpectatorForDimension(dim);
-      }
-      if (dim) this.lastDimension = dim;
-    });
+    bot.on("game", () => this.observeNativeWorldChange(bot));
     bot.on('forcedMove', () => {
+      this.routePositionEpoch++;
       this.interruptIdle('forced-move');
       const p = bot.entity?.position;
       if (!p) return;
@@ -7607,13 +7821,13 @@ export class MinecraftWorld implements World {
     bot.on('entityTamed', (entity: { name?: string }) => {
       this.emit('minecraft.event', `[Minecraft] 驯服了${zhEntity(entity?.name ?? '')}!`, false);
     });
-    bot.on('entityDead', (entity: { id?: number; name?: string; position?: { distanceTo(o: unknown): number } }) => {
+    bot.on('entityDead', (entity: { id?: number; uuid?: string; name?: string; position?: { distanceTo(o: unknown): number } }) => {
       if (!entity?.position || !bot.entity?.position || !entity.name) return;
       // 自身死亡由死亡专报处理，此处只报告其他实体。
       if ((entity as unknown) === (bot.entity as unknown) || entity.id === bot.entity.id) return;
       if (typeof entity.id === 'number') this.proximity.delete(entity.id);
-      if (typeof entity.id === 'number') this.executor?.noteCombatTargetDead(entity.id);
-      // 战斗会话打死的由它自己说「砍翻了」,这里不再补一句「死了」
+      if (typeof entity.id === 'number') this.executor?.noteCombatTargetDead(entity);
+      // 交战目标的死亡由原攻击/战斗回执报告，不把死亡事件本身归因于本人击杀。
       if (typeof entity.id === 'number' && (this.executor?.claimsCombat(entity.id) || this.combat?.claims(entity.id))) return;
       const d = entity.position.distanceTo(bot.entity.position);
       if (d > PROXIMITY_EXIT) return;
@@ -7718,11 +7932,14 @@ export class MinecraftWorld implements World {
       const gloss = cause ? deathCauseZh(cause.key) : null;
       const causeLine = cause ? `服务端记的死因:${cause.text}${gloss ? `(${gloss})` : ''}。` : '';
       const hereLine = toll.hereToday > 1 ? `你今天第 ${toll.hereToday} 次死在这一格。` : '';
+      const deathId = lifecycle?.episodeId ?? randomUUID();
       this.emit(
         'minecraft.event',
         `[Minecraft] 你死了(今天第 ${toll.today} 次)。${causeLine}${this.deathNote(bot, dropAt)}${hereLine}`,
         true,
-        { meta: { deathLifecycle: lifecycle, death: { id: lifecycle?.episodeId ?? randomUUID(),
+        { execution: { kind: 'observation', id: deathId, phase: 'completed', terminal: true,
+          goalCompleted: false, evidence: { outcome: 'death', health: 0 } },
+          meta: { deathLifecycle: lifecycle, death: { id: deathId,
           observed_at: lifecycle?.observedAt ?? new Date(this.lastDeathAt).toISOString(),
           scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
           position: dropAt, health: bot.health, food: bot.food,
@@ -7936,9 +8153,9 @@ export class MinecraftWorld implements World {
    * 服务端不持续同步未打开的炉子槽位，实际结果需取货时核验。
    */
   protected furnaceTick(): void {
-    const due = this.chests.due(Date.now());
+    const due = this.chestBook().due(Date.now());
     for (const rec of due) {
-      this.chests.markNotified(rec.dimension, rec);
+      this.chestBook().markNotified(rec.dimension, rec);
       const f = rec.furnace!;
       const load = f.input ? `${zhName(f.input.name)}×${f.input.count}` : '料';
       const when = nowIso(this.timezone, new Date(f.loadedAt)).slice(11, 19);
@@ -8048,6 +8265,8 @@ export class MinecraftWorld implements World {
   protected readonly flocks = new Map<string, boolean>();
   protected lastThunder = false;
   protected lastPosForTeleport: { x: number; y: number; z: number } | null = null;
+  /** Every server position correction expires outstanding route advice, including short teleports. */
+  protected routePositionEpoch = 0;
   protected lastDeathAt = 0;
   /** 挂起的官方死因(死亡广播通常先于 death 事件一拍到);随死亡专报投一次,过期作废 */
   protected pendingDeathCause: { text: string; key: string; at: number } | null = null;
@@ -8756,7 +8975,7 @@ export class MinecraftWorld implements World {
       const snap = snapshotFromBot(bot, {
         invSynced: this.bridge?.invSynced,
         timezone: this.timezone,
-        chestOf: (dim, p) => this.chests.get(dim, p),
+        chestOf: (dim, p) => this.chestBook().get(dim, p),
         ...opts,
       });
       // 在线名单排除 bot 自身与观察摄像机;两者都不是 goto_player 的有效目标。
@@ -8824,13 +9043,14 @@ export class MinecraftWorld implements World {
     ];
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...fullSegments.map(({ key, text }) => ({ key, text })),
+      { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'explored', text: this.explored.summary(normalizeDimension(snap.dimension)) }];
     const journey=this.journeyObserver.reading(this.journeyScope(),String(this.connectionGeneration),now);
     if(journey)parts.push({key:'journey',text:journeyOpportunityText(journey,{guidance:false})});
     this.requestFactsCache = {
       text: parts.map(part => part.text).filter(Boolean).join('\n'),
       parts,
-      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'],
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'],
     };
     // 按变化量发:与上一拍比没有实质变化、人也没挪窝,这一拍整条不发(基线不动,
     // 下一次真变了照样按段差分)。全量锚那一拍不受这道闸管,漂移由它兜住。
@@ -8904,6 +9124,10 @@ export class MinecraftWorld implements World {
   ): void {
     if (!this.host) return;
     const player = opts?.meta?.uname;
+    // Server status/action-bar payloads share the chat transport, but are not
+    // player conversation. Consumers must not interrupt a reply for every poll.
+    if (type === 'minecraft.chat' && typeof player !== 'string' && !opts?.meta?.channel)
+      opts = { ...opts, meta: { ...opts?.meta, channel: 'system' } };
     if (opts?.deliver !== false && typeof player === 'string' && player !== this.chatName() && !this.isCamera(player)
       && (type === 'minecraft.chat' || type === 'minecraft.enter' || !!opts?.meta?.minecraftPlayerObservation)) {
       const uuid = typeof opts?.meta?.senderUuid === 'string' ? opts.meta.senderUuid : this.bridge?.bot?.players?.[player]?.uuid;
@@ -8949,3 +9173,6 @@ export class MinecraftWorld implements World {
     ).catch((e) => this.host?.log.warn('事件投递失败', { type, err: String(e) }));
   }
 }
+import { chatDeliveryMessage } from './chat-delivery.ts';
+import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
+import type { ChatDispatchContext } from './executor.ts';

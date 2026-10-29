@@ -2,6 +2,7 @@ import type { ConfigGroup } from './support/host-contract.ts';
 import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-service.ts';
 import { COMBAT_EXECUTION_DEFAULTS } from './combat-decision-types.ts';
 import { PHOTOGRAPHY_DEFAULTS } from './photo-image.ts';
+import { OBSERVATION_DEFAULTS } from './perception-sight.ts';
 
 
 export const MINECRAFT_DEFAULTS = {
@@ -23,7 +24,7 @@ export const MINECRAFT_DEFAULTS = {
   keepAliveTimeoutMs: 60_000,
   chatDuplicateWindowMs: 120_000,
   deathRespawnDelayMs: 4000,
-  perception: { mineralVision: false },
+  perception: structuredClone(OBSERVATION_DEFAULTS),
   skinModel: 'classic' as 'classic' | 'slim',
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
@@ -98,7 +99,7 @@ export const MINECRAFT_DEFAULTS = {
     afterArrival: false,
     allowMovement: false,
   },
-  journey: {enabled:true},
+  journey: {enabled:true,choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5},
   reflex: {
     /** 受击反击 */
     fightBack: true,
@@ -107,6 +108,8 @@ export const MINECRAFT_DEFAULTS = {
     /** 两次受击反应的最短间隔 */
     reactCooldownSec: 8,
     antiDrown: true,
+    /** Critical oxygen rescue is independent of ordinary passive surface swimming. */
+    emergencyDrown: true,
     /**
      * 挨烧就跑。这一条不能交给主脑:岩浆浇脸、蹭到流动岩浆柱都是环境自己找上门,
      * 20 血在岩浆里只够活两秒半,等她下一轮想明白再动人已经烧没了。挖掘绕开岩浆
@@ -210,7 +213,7 @@ export const MINECRAFT_DEFAULTS = {
 
 export interface MinecraftConfigSection {
   /** Observed journey opportunities wake the host; never force a stop or start inference in the core. */
-  journey?: {enabled:boolean};
+  journey?: {enabled:boolean;choiceMinBlocks?:number;choiceMaxBlocks?:number;dangerChoiceMaxBlocks?:number};
   provider?: 'mineflayer' | 'java-client';
   javaClient?: import('../src/contracts/java-client.ts').JavaClientConfiguration;
   /** Generic fast-tactic execution permissions; no model endpoint or credentials. */
@@ -278,7 +281,7 @@ export interface MinecraftConfigSection {
   };
   reflex: {
     fightBack: boolean; fleeHealth: number;
-    reactCooldownSec: number; antiDrown: boolean; antiLava: boolean;
+    reactCooldownSec: number; antiDrown: boolean; emergencyDrown?: boolean; antiLava: boolean;
   };
   combat: {
     enabled: boolean; engageRadius: number; chaseMax: number; maxSec: number;
@@ -439,6 +442,12 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.minecraft.perception.mineralVision': { type:'boolean',title:'矿物透视查询','x-hot':false,
         description:'默认关闭，只返回真实视线内的方块。开启仅扩展方块查询至 32 格内已接收的矿物，不代表亲眼看见，也不放宽身体动作权限。' },
+      'worlds.minecraft.perception.entityView': { type:'string',enum:['surroundings','camera'],title:'实体观察范围','x-hot':true,
+        description:'surroundings 默认观察周围无遮挡实体；camera 额外按当前朝向限制到水平 110°、垂直 80°。两者都保留遮挡、未加载和隐身检查。' },
+      'worlds.minecraft.perception.entityRange': { type:'integer',minimum:1,maximum:64,title:'实体感知距离','x-suffix':'格','x-hot':true,
+        description:'默认 64 格，世界快照、注意力、战场摘要和显式视线查询使用同一范围。近处遮挡实体另按配置报告来源；交互与攻击距离单独核验。' },
+      'worlds.minecraft.perception.nearbyOccludedRange': { type:'integer',minimum:0,maximum:16,title:'近处遮挡实体感知','x-suffix':'格','x-hot':true,
+        description:'默认 8 格，0 关闭。只报告服务端当前同步的近处实体，标明遮挡或视线未知，不当作看见、听见、可交互或可攻击。不超过实体感知距离。' },
       'worlds.minecraft.memoryAgentId': { type:'string',title:'游戏笔记稳定角色标识','x-hot':false,
         description:'可选。与显示名称分离，用于同一服务器与账号的持久笔记；修改会切换命名空间，不迁移或合并旧笔记。' },
       'worlds.minecraft.skinModel': { type:'string',enum:['classic','slim'],title:'本地预览皮肤手臂','x-hot':false },
@@ -518,8 +527,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.reflex.reactCooldownSec': {
         type: 'integer', title: '受击反应冷却', minimum: 1, maximum: 120, 'x-suffix': 's', 'x-hot': true,
       },
-      'worlds.minecraft.reflex.antiDrown': { type: 'boolean', title: '自动踩水与防溺水上浮', 'x-hot': true,
-        description: '关闭后不再自动按跳跃、找岸或冻结水中任务，并释放已发生的上浮接管。手动游泳、潜水程序与正常寻路继续可用；氧气和伤害观测仍保留。' },
+      'worlds.minecraft.reflex.antiDrown': { type: 'boolean', title: '普通自动踩水', 'x-hot': true,
+        description: '控制空闲时普通踩水。关闭后手动游泳、潜水程序与正常寻路继续可用；不关闭独立的低氧紧急自救。' },
+      'worlds.minecraft.reflex.emergencyDrown': { type: 'boolean', title: '低氧紧急自救', 'x-hot': true,
+        description: '默认开启。头在水下低氧、持续缺少可信氧气读数或受到水下环境伤害时，本地反射暂停身体任务并上浮找岸，不等模型。独立于普通自动踩水；关闭会释放正在进行的防溺水接管，氧气和伤害观测仍保留。' },
       'worlds.minecraft.reflex.antiLava': {
         type: 'boolean', title: '挨烧自动逃离', 'x-hot': true,
         description: '碰到岩浆/火就立刻手动冲出去,再交给寻路器。判定看碰撞箱压着什么,'
@@ -533,6 +544,18 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.journey.enabled': {
         type:'boolean',title:'旅途新发现提醒','x-hot':true,
         description:'长途经过新的可见村民、告示牌或地标时，提供保留原目的地的短探索选择；是否停留由Agent判断，不自动改路或打断任务。',
+      },
+      'worlds.minecraft.journey.choiceMinBlocks': {
+        type:'number',title:'路线建议常规位移容差起点',minimum:1,maximum:64,'x-suffix':'格','x-hot':true,
+        description:'默认10格。建议有效距离=min(上限,起点+实测速度×决策耗时)，只允许同一任务的短期位移；不改变寻路与安全让位判定。',
+      },
+      'worlds.minecraft.journey.choiceMaxBlocks': {
+        type:'number',title:'路线建议常规位移容差上限',minimum:1,maximum:64,'x-suffix':'格','x-hot':true,
+        description:'默认20格，不能小于起点。目标、身体控制权、受伤、战斗和服务端传送变化仍立即使旧建议失效。',
+      },
+      'worlds.minecraft.journey.dangerChoiceMaxBlocks': {
+        type:'number',title:'有风险时路线建议位移上限',minimum:1,maximum:64,'x-suffix':'格','x-hot':true,
+        description:'默认5格。已见敌对种类、低生命或伤害效果时缩小建议容差；附近玩家不自动算敌人。这不是自动接敌或通行安全证明。',
       },
       'worlds.minecraft.combat.engageRadius': {
         type: 'integer', title: '战斗触发半径', minimum: 2, maximum: 8, 'x-suffix': '格', 'x-hot': true,

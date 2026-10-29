@@ -52,7 +52,7 @@ final class OnboardingGuide implements Listener {
     private final AgentFriendPlugin plugin;
     private final File file;
     private final Map<UUID, Session> sessions = new HashMap<>();
-    private final NamespacedKey welcomeRevision, welcomeAt, reminderAt, lastStep, mutedUntil, deliveredAt;
+    private final NamespacedKey welcomeRevision, welcomeAt, reminderAt, lastStep, mutedUntil, deliveredAt, releaseRevision;
     private YamlConfiguration settings;
 
     OnboardingGuide(AgentFriendPlugin plugin) {
@@ -62,6 +62,7 @@ final class OnboardingGuide implements Listener {
         welcomeRevision = key("onboarding_welcome_revision"); welcomeAt = key("onboarding_welcome_at");
         reminderAt = key("onboarding_reminder_at"); lastStep = key("onboarding_last_step");
         mutedUntil = key("onboarding_muted_until"); deliveredAt = key("coach_delivered_at");
+        releaseRevision = key("onboarding_release_revision");
         if (!reload().equals("success")) {
             settings = YamlConfiguration.loadConfiguration(new InputStreamReader(
                     java.util.Objects.requireNonNull(plugin.getResource("onboarding.yml")), StandardCharsets.UTF_8));
@@ -84,6 +85,13 @@ final class OnboardingGuide implements Listener {
         List<String> intro = c.getStringList("welcome");
         if (intro.isEmpty() || intro.size() > 4) throw new IllegalArgumentException("welcome");
         for (String line : intro) validateText(line, 240);
+        int release = c.getInt("release-revision", 0);
+        if (release < 0) throw new IllegalArgumentException("release-revision");
+        if (release > 0) {
+            List<String> notes = c.getStringList("release-notice");
+            if (notes.isEmpty() || notes.size() > 2) throw new IllegalArgumentException("release-notice");
+            for (String line : notes) validateText(line, 240);
+        }
         for (String id : STEPS) {
             validateText(c.getString("steps." + id + ".title", ""), 50);
             validateText(c.getString("steps." + id + ".message", ""), 360);
@@ -118,9 +126,23 @@ final class OnboardingGuide implements Listener {
                 && (!settings.getBoolean("agents-only") || plugin.isRegisteredAgent(p));
     }
     private boolean safe(Player p, long now, long quietUntil) {
-        return p.getGameMode() == GameMode.SURVIVAL && !p.isDead() && !plugin.isDowned(p)
+        return (p.getGameMode() == GameMode.SURVIVAL||p.getGameMode()==GameMode.ADVENTURE) && !p.isDead() && !plugin.isDowned(p)
                 && !plugin.dungeonParticipant(p) && !plugin.pvpParticipant(p) && now >= quietUntil
                 && p.getOpenInventory().getTopInventory().getType() == InventoryType.CRAFTING;
+    }
+    boolean pollRelease(Player p,long now,long quietUntil){
+        int release=settings.getInt("release-revision",0);
+        if(release<=p.getPersistentDataContainer().getOrDefault(releaseRevision,PersistentDataType.INTEGER,0)||!target(p)
+                ||paused(p,now)||!safe(p,now,quietUntil)||!gapReady(p,now))return false;
+        Session session=sessions.computeIfAbsent(p.getUniqueId(),id->new Session(now,ms("welcome-delay-seconds")));
+        if(now-session.joined<ms("welcome-delay-seconds"))return false;
+        if(plugin.nativeRpg().selected()){
+            JsonObject current=plugin.nativeRpg().state(p);
+            if(!current.has("available")||!current.get("available").getAsBoolean())return false;
+        }
+        for(String line:settings.getStringList("release-notice"))p.sendMessage(line);
+        p.getPersistentDataContainer().set(releaseRevision,PersistentDataType.INTEGER,release);delivered(p,now);
+        session.nextCheck=now+ms("poll-seconds");return true;
     }
     boolean poll(Player p, long now, long quietUntil) {
         Session session = sessions.computeIfAbsent(p.getUniqueId(), id -> new Session(now, ms("welcome-delay-seconds")));
@@ -133,6 +155,7 @@ final class OnboardingGuide implements Listener {
         // This only checks a player's safety/PDC; ledgers are read after the checks pass.
         session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
         if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
+        if(pollRelease(p,now,quietUntil))return true;
         boolean compact=plugin.communication().compact(p), justEntered=!session.entrySent;
         // Join discovery is one persistent, short human hint. Agents query help
         // themselves. Never push GUIDE + STATUS + NEXT on each reconnect.
@@ -188,6 +211,15 @@ final class OnboardingGuide implements Listener {
             } else if (flag(life, "ready")) step = new Step("life_claim", value(life, "title") + " " + life.get("progress") + "/" + life.get("target"), List.of("/mycli life claim"));
             else step = new Step("life_progress", value(life, "title") + " " + life.get("progress") + "/" + life.get("target") + "；" + value(life, "instruction"), List.of("/mycli life status", "/mycli life locations"));
         } else step = new Step("complete", "入门已毕业；先 tasks list exploration 看近郊分段调查，arena status 看按层试炼，dungeon list 看逐室遗迹。已有委托用 tasks status 收尾，试炼/地下城可独立参加。出发前 guild shared 查公共装备。", List.of("/mycli tasks list exploration", "/mycli arena status", "/mycli dungeon list", "/mycli guild shared", "/mycli tasks list"));
+        if(registered&&plugin.combatRpg()!=null){
+            boolean retired=RetiredActivities.retired(value(guild,"activeId"));
+            String next=plugin.combatRpg().next(p,retired);
+            if(retired||plugin.dungeonParticipant(p)||!plugin.combatRpg().profession(p).isEmpty()&&lived)
+                step=new Step("complete","攻略路线：整备装备 → 学习技能 → 战斗练级 → 探索迷宫 → 讨伐楼层首领。旧试炼塔只作练习，正式层数单独统计。"
+                    +(retired?"当前是已撤下的农耕委托；可主动暂存，保留历史进度。":""),List.of(next,"/mycli world story list ranking"));
+            else if(plugin.combatRpg().profession(p).isEmpty())step=new Step("route_choose","先选战斗职业：战士、坦克、法师或牧师；均可单人练级或组队。",List.of(next));
+        }
+        if(plugin.nativeRpg().selected()){boolean chosen=!plugin.nativeRpg().profession(p).isEmpty();step=new Step(chosen?"complete":"route_choose",chosen?"Vortex职业已选；查看技能学习点，接讨伐和探索，再组队攻略。":"先选原生职业：骑士、法师、游侠、牧师、驯兽师、工程师。少量通用技无需选职。",List.of(chosen?"/mycli skills list":"/mycli profession list","/mycli tasks list","/mycli guild shared"));}
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);

@@ -37,6 +37,14 @@ public final class RpgStoryRulesTest {
         rejected(()->new RpgStoryRules.Stage("bad","标题",RpgStoryRules.Kind.TALK,"yingdeng","简介","/op somePlayer"));
         rejected(()->RpgStoryRules.text("line\ncommand",40));
         check(chapter.requires().isEmpty(),"no hidden mandatory farming prerequisite");
+        var ready=stage("prepare_combat",RpgStoryRules.Kind.COMBAT_READY,"");
+        var roleOnly=new RpgStoryRules.Facts(false,false,false,false,false,"",Set.of(),Set.of(),true,1,Set.of(),false);
+        var learnedPrepared=new RpgStoryRules.Facts(false,false,false,false,false,"",Set.of(),Set.of(),true,1,Set.of(),true);
+        check(!RpgStoryRules.matches(ready,roleOnly),"choosing a role does not learn or prepare combat skills");
+        check(RpgStoryRules.matches(ready,learnedPrepared),"server verified prepared combat skill satisfies training");
+        check(!RpgStoryRules.matches(ready,new RpgStoryRules.Facts(false,false,false,false,false,"",Set.of(),Set.of(),false,1,Set.of(),true)),"preparation without active profession cannot pass");
+        var conquest=stage("clear_floor",RpgStoryRules.Kind.CONQUEST_CLEAR,"1");
+        check(!RpgStoryRules.matches(conquest,learnedPrepared),"preparation and browsing are not floor completion");
         System.out.println("RpgStoryRulesTest: "+checks+" checks passed");
     }
 }

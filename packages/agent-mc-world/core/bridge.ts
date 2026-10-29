@@ -1,6 +1,8 @@
 import { loadViewerRelay } from './relay-port.ts';
 import { installDeathLifecycle } from './death-lifecycle.ts';
+import { advertiseAgentIdentity } from './server-identity.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
+import { installWorldIdentity } from './world-scope.ts';
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
  * 重连会替换 bot 实例，World 与执行器须通过 bridge.bot 取得当前实例。
@@ -569,6 +571,7 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    this.bagFor(gen).register('world-identity', installWorldIdentity(bot));
     this._spawnPositionPending = true;
     this.deathRecovery = installDeathLifecycle(bot, this.opts.deathRespawnDelayMs,
       () => !this.stopped && this._bot === bot && this.generation === gen && !this.opts.shuttingDown?.());
@@ -811,6 +814,8 @@ export class Bridge {
       this.reconnectAttempt = 0;
       this.refusedStreak = 0;
       this.installSpawnGear(bot, gen);
+      // Only activate() runs after both server authentication and world spawn.
+      advertiseAgentIdentity(bot._client, !this.opts.shuttingDown?.());
       this.opts.onSpawn();
     };
     bot.on('spawn', () => {

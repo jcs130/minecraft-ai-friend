@@ -1,0 +1,406 @@
+{
+  "source": "SkinsRestorer bundled recommendations.json, signed skin properties",
+  "skins": [
+    {
+      "name": "afu_gnome",
+      "sourceId": "gnome",
+      "label": "森林侏儒",
+      "style": "幻想",
+      "url": "https://textures.minecraft.net/texture/446d14fbc9770072360e4bbc221fa4b65ea08ca689fe7cc675a05ca35629a8ee",
+      "sha256": "446d14fbc9770072360e4bbc221fa4b65ea08ca689fe7cc675a05ca35629a8ee",
+      "bytes": 1023,
+      "model": "slim"
+    },
+    {
+      "name": "afu_capybara",
+      "sourceId": "capybara",
+      "label": "卡皮巴拉",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/4558a173087511a4a48853de71373ea8f502b04ecc776d4413a45393a0ea995c",
+      "sha256": "4558a173087511a4a48853de71373ea8f502b04ecc776d4413a45393a0ea995c",
+      "bytes": 1780,
+      "model": "classic"
+    },
+    {
+      "name": "afu_frog",
+      "sourceId": "frog",
+      "label": "青蛙",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/e0d3fc0838a1009d3c56fd33fddeefabfb1f3ffe2679cff0760b41220f734fc6",
+      "sha256": "e0d3fc0838a1009d3c56fd33fddeefabfb1f3ffe2679cff0760b41220f734fc6",
+      "bytes": 1135,
+      "model": "classic"
+    },
+    {
+      "name": "afu_desert_cat",
+      "sourceId": "desert-cat",
+      "label": "沙漠猫",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/e6f25d209cac00fcd859bf2d42afdc2e699bafd77f22d8bae8c859bb5b5d0c24",
+      "sha256": "e6f25d209cac00fcd859bf2d42afdc2e699bafd77f22d8bae8c859bb5b5d0c24",
+      "bytes": 1277,
+      "model": "classic"
+    },
+    {
+      "name": "afu_flower_girl",
+      "sourceId": "flower-girl",
+      "label": "花间少女",
+      "style": "自然幻想",
+      "url": "https://textures.minecraft.net/texture/c725a1532a8f221eb53aedeb2ef09d7ba9d70ed88b02a0565c179af751e9f72f",
+      "sha256": "c725a1532a8f221eb53aedeb2ef09d7ba9d70ed88b02a0565c179af751e9f72f",
+      "bytes": 2079,
+      "model": "slim"
+    },
+    {
+      "name": "afu_wizard_boy",
+      "sourceId": "boy-wizzard",
+      "label": "少年法师",
+      "style": "法师",
+      "url": "https://textures.minecraft.net/texture/6f6aa4f1d20f719f462ae4fb0d598f34b336ee3a8dd1e23afeb3a1d4f1c9d933",
+      "sha256": "6f6aa4f1d20f719f462ae4fb0d598f34b336ee3a8dd1e23afeb3a1d4f1c9d933",
+      "bytes": 1562,
+      "model": "slim"
+    },
+    {
+      "name": "afu_wizard_girl",
+      "sourceId": "girl-wizzard",
+      "label": "少女法师",
+      "style": "法师",
+      "url": "https://textures.minecraft.net/texture/68cba595a57d795d3d0338d9f924d0bb8f523904b6d68a38401835389c3e0122",
+      "sha256": "68cba595a57d795d3d0338d9f924d0bb8f523904b6d68a38401835389c3e0122",
+      "bytes": 2940,
+      "model": "classic"
+    },
+    {
+      "name": "afu_turtle",
+      "sourceId": "turtle",
+      "label": "海龟",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/e937a3f44147dc752e8a9c7e6e230d7db0ab75e0490c00bf2765369510372104",
+      "sha256": "e937a3f44147dc752e8a9c7e6e230d7db0ab75e0490c00bf2765369510372104",
+      "bytes": 1024,
+      "model": "classic"
+    },
+    {
+      "name": "afu_polar_bear",
+      "sourceId": "polar-bear",
+      "label": "北极熊",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/1e98779e8151814f3c816b7a9712eca996d32427320a19ac80d4a96d59f3e5d4",
+      "sha256": "1e98779e8151814f3c816b7a9712eca996d32427320a19ac80d4a96d59f3e5d4",
+      "bytes": 964,
+      "model": "slim"
+    },
+    {
+      "name": "afu_fox",
+      "sourceId": "fox",
+      "label": "狐狸",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/c823bceddc2ad07ccbe585ac68a06d8834086869f261d3becb08884633a51f53",
+      "sha256": "c823bceddc2ad07ccbe585ac68a06d8834086869f261d3becb08884633a51f53",
+      "bytes": 3570,
+      "model": "classic"
+    },
+    {
+      "name": "afu_penguin",
+      "sourceId": "pinguin",
+      "label": "企鹅",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/39c88e18ebc1a9da89e148823a8ebbf01e1fc6a9df6534425a2bda3dccf325cf",
+      "sha256": "39c88e18ebc1a9da89e148823a8ebbf01e1fc6a9df6534425a2bda3dccf325cf",
+      "bytes": 1792,
+      "model": "slim"
+    },
+    {
+      "name": "afu_knight",
+      "sourceId": "knight",
+      "label": "重装骑士",
+      "style": "骑士",
+      "url": "https://textures.minecraft.net/texture/4aaee68d3b498eb753f753458124958f17a897703a23d87eba3d3471a5854544",
+      "sha256": "4aaee68d3b498eb753f753458124958f17a897703a23d87eba3d3471a5854544",
+      "bytes": 1634,
+      "model": "classic"
+    },
+    {
+      "name": "afu_pirate",
+      "sourceId": "pirate",
+      "label": "海盗",
+      "style": "冒险者",
+      "url": "https://textures.minecraft.net/texture/a84854802dd073632921e8f5732527186a8ac88ae93e646c9e31dce19376a9ca",
+      "sha256": "a84854802dd073632921e8f5732527186a8ac88ae93e646c9e31dce19376a9ca",
+      "bytes": 5312,
+      "model": "classic"
+    },
+    {
+      "name": "afu_rainbow_slime",
+      "sourceId": "rainbow-slime",
+      "label": "彩虹史莱姆",
+      "style": "幻想",
+      "url": "https://textures.minecraft.net/texture/e4853aadd2796f9f8bed2d891c689e51eecf6bfd5221fbdbfce98764cf5c1ea5",
+      "sha256": "e4853aadd2796f9f8bed2d891c689e51eecf6bfd5221fbdbfce98764cf5c1ea5",
+      "bytes": 2103,
+      "model": "classic"
+    },
+    {
+      "name": "afu_panda",
+      "sourceId": "panda",
+      "label": "熊猫",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/33fcffc6da075e8e5d003b483c05886694510e3ae54593dd0670175205a5519b",
+      "sha256": "33fcffc6da075e8e5d003b483c05886694510e3ae54593dd0670175205a5519b",
+      "bytes": 1167,
+      "model": "slim"
+    },
+    {
+      "name": "afu_link",
+      "sourceId": "link",
+      "label": "林克·冒险剑士",
+      "style": "剑士",
+      "url": "https://textures.minecraft.net/texture/41b8dbada89f0ec4643b0591bc894dbb935cf0c12e34c6501c2888da37ac3b77",
+      "sha256": "41b8dbada89f0ec4643b0591bc894dbb935cf0c12e34c6501c2888da37ac3b77",
+      "bytes": 2162,
+      "model": "classic"
+    },
+    {
+      "name": "afu_viking",
+      "sourceId": "boy-viking",
+      "label": "北境战士",
+      "style": "战士",
+      "url": "https://textures.minecraft.net/texture/e70cf084a040c82859f5e9dfa5f91ff41721196a846f9a4205bfae49518ba962",
+      "sha256": "e70cf084a040c82859f5e9dfa5f91ff41721196a846f9a4205bfae49518ba962",
+      "bytes": 2440,
+      "model": "classic"
+    },
+    {
+      "name": "afu_old_wizard",
+      "sourceId": "old-wizard",
+      "label": "年长巫师",
+      "style": "法师",
+      "url": "https://textures.minecraft.net/texture/f6ed92849b5c887c61d4ec8474c5f422f720f7537245992fe49891a71994d3ab",
+      "sha256": "f6ed92849b5c887c61d4ec8474c5f422f720f7537245992fe49891a71994d3ab",
+      "bytes": 1301,
+      "model": "classic"
+    },
+    {
+      "name": "afu_jedi",
+      "sourceId": "girl-jedi",
+      "label": "星际女剑士",
+      "style": "剑士",
+      "url": "https://textures.minecraft.net/texture/329a467ed4b79e3779a776e56e72f896bb3bad921f8aba10320a5ab1729e3093",
+      "sha256": "329a467ed4b79e3779a776e56e72f896bb3bad921f8aba10320a5ab1729e3093",
+      "bytes": 1505,
+      "model": "classic"
+    },
+    {
+      "name": "afu_zenitsu",
+      "sourceId": "zenitsu",
+      "label": "我妻善逸",
+      "style": "动漫剑士",
+      "url": "https://textures.minecraft.net/texture/e96c6309efc2bf90fb80d24aa3d3c571df7ba68467efbeb355bbde7359be8070",
+      "sha256": "e96c6309efc2bf90fb80d24aa3d3c571df7ba68467efbeb355bbde7359be8070",
+      "bytes": 1705,
+      "model": "classic"
+    },
+    {
+      "name": "afu_medieval",
+      "sourceId": "medival",
+      "label": "中世纪旅人",
+      "style": "冒险者",
+      "url": "https://textures.minecraft.net/texture/83bed4bbd796a91a2f19f16e9c0211db11a3f80943e0e9c82e6313b59edd8191",
+      "sha256": "83bed4bbd796a91a2f19f16e9c0211db11a3f80943e0e9c82e6313b59edd8191",
+      "bytes": 1463,
+      "model": "classic"
+    },
+    {
+      "name": "afu_explorer",
+      "sourceId": "investigator",
+      "label": "调查员",
+      "style": "探索者",
+      "url": "https://textures.minecraft.net/texture/d860b42fa018921ee17ef4c413970ea42d76258046ebe31592c5cab85600e196",
+      "sha256": "d860b42fa018921ee17ef4c413970ea42d76258046ebe31592c5cab85600e196",
+      "bytes": 2801,
+      "model": "slim"
+    },
+    {
+      "name": "afu_anime_boy",
+      "sourceId": "anime-boy",
+      "label": "动漫少年",
+      "style": "日常",
+      "url": "https://textures.minecraft.net/texture/6240559f5cfc9f180c127c11d79e18ec6ed579a180d8d10738c3e51cee8695b5",
+      "sha256": "6240559f5cfc9f180c127c11d79e18ec6ed579a180d8d10738c3e51cee8695b5",
+      "bytes": 3898,
+      "model": "classic"
+    },
+    {
+      "name": "afu_anime_girl",
+      "sourceId": "anime-girl",
+      "label": "动漫少女",
+      "style": "日常",
+      "url": "https://textures.minecraft.net/texture/eabd4efe80e8acf3024e303d5f16b853fe6f12d39aaf7eed79d87475788d0cd3",
+      "sha256": "eabd4efe80e8acf3024e303d5f16b853fe6f12d39aaf7eed79d87475788d0cd3",
+      "bytes": 1323,
+      "model": "slim"
+    },
+    {
+      "name": "afu_rem",
+      "sourceId": "rem",
+      "label": "雷姆",
+      "style": "动漫",
+      "url": "https://textures.minecraft.net/texture/5d872f0e8fb5371e0e86c02d8f87bed26908c60b6410a4a48ccd18956ea6b447",
+      "sha256": "5d872f0e8fb5371e0e86c02d8f87bed26908c60b6410a4a48ccd18956ea6b447",
+      "bytes": 1862,
+      "model": "slim"
+    },
+    {
+      "name": "afu_shark_girl",
+      "sourceId": "shark-girl",
+      "label": "鲨鱼少女",
+      "style": "兽耳幻想",
+      "url": "https://textures.minecraft.net/texture/9775f2e1641b5c6bed4764b3b3b4ad392e4f15a780155dc201c766fdee4ce35f",
+      "sha256": "9775f2e1641b5c6bed4764b3b3b4ad392e4f15a780155dc201c766fdee4ce35f",
+      "bytes": 1830,
+      "model": "slim"
+    },
+    {
+      "name": "afu_frog_girl",
+      "sourceId": "frog-girl",
+      "label": "青蛙少女",
+      "style": "自然幻想",
+      "url": "https://textures.minecraft.net/texture/eadf304ce7f771286e9fe4a112ebab9fd3bec77f50a95cf621cb903387d11d2",
+      "sha256": "0eadf304ce7f771286e9fe4a112ebab9fd3bec77f50a95cf621cb903387d11d2",
+      "bytes": 1622,
+      "model": "slim"
+    },
+    {
+      "name": "afu_cat_boots",
+      "sourceId": "cat-with-boots",
+      "label": "穿靴子的猫",
+      "style": "猫族冒险者",
+      "url": "https://textures.minecraft.net/texture/fd8a18dff27c44788592a1d6652e6f3a1cdf0678a90e76b511e32aada267c8c9",
+      "sha256": "fd8a18dff27c44788592a1d6652e6f3a1cdf0678a90e76b511e32aada267c8c9",
+      "bytes": 2894,
+      "model": "classic"
+    },
+    {
+      "name": "afu_mc_cat",
+      "sourceId": "mc-cat",
+      "label": "方块猫",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/e5f2958cd72533c80d974076d16727db89dbed06eb8163e4939e540fa35fb2e5",
+      "sha256": "e5f2958cd72533c80d974076d16727db89dbed06eb8163e4939e540fa35fb2e5",
+      "bytes": 1491,
+      "model": "slim"
+    },
+    {
+      "name": "afu_axolotl",
+      "sourceId": "boy-axolotl",
+      "label": "美西螈少年",
+      "style": "水生幻想",
+      "url": "https://textures.minecraft.net/texture/83a28c7c2512601a45c780617692ba7125fb11ff7e7c53d1a70b8ca8015b286",
+      "sha256": "083a28c7c2512601a45c780617692ba7125fb11ff7e7c53d1a70b8ca8015b286",
+      "bytes": 1170,
+      "model": "slim"
+    },
+    {
+      "name": "afu_bear",
+      "sourceId": "bear",
+      "label": "棕熊",
+      "style": "动物",
+      "url": "https://textures.minecraft.net/texture/a5eedc785746f1a20cf3de2e0bfe64142789be5c0eee0581ffd2532389e35329",
+      "sha256": "a5eedc785746f1a20cf3de2e0bfe64142789be5c0eee0581ffd2532389e35329",
+      "bytes": 1221,
+      "model": "classic"
+    },
+    {
+      "name": "afu_astronaut",
+      "sourceId": "space-suit",
+      "label": "宇航员",
+      "style": "科幻",
+      "url": "https://textures.minecraft.net/texture/f7f9315248aeb6f0ae9c5028e3bb7fc47db6692edf9f5949fd82a7076f701af9",
+      "sha256": "f7f9315248aeb6f0ae9c5028e3bb7fc47db6692edf9f5949fd82a7076f701af9",
+      "bytes": 906,
+      "model": "slim"
+    },
+    {
+      "name": "afu_samus",
+      "sourceId": "samus",
+      "label": "萨姆斯",
+      "style": "科幻装甲",
+      "url": "https://textures.minecraft.net/texture/fd9c7dd551ac5479ba67acf31d0025cdb01c91fb8925283f8629305b3cf60e8a",
+      "sha256": "fd9c7dd551ac5479ba67acf31d0025cdb01c91fb8925283f8629305b3cf60e8a",
+      "bytes": 3601,
+      "model": "classic"
+    },
+    {
+      "name": "afu_stormtrooper",
+      "sourceId": "star-trooper",
+      "label": "星际白甲兵",
+      "style": "科幻装甲",
+      "url": "https://textures.minecraft.net/texture/dd85c62e99c880103b316f3f9a3c2fb5fe302b407e7d649ddea3888c4cad1123",
+      "sha256": "dd85c62e99c880103b316f3f9a3c2fb5fe302b407e7d649ddea3888c4cad1123",
+      "bytes": 1713,
+      "model": "classic"
+    },
+    {
+      "name": "afu_spiderman",
+      "sourceId": "spider-man",
+      "label": "蜘蛛侠",
+      "style": "英雄",
+      "url": "https://textures.minecraft.net/texture/ae81cbfdf05d7a577f485b8aee8de712ae603bfb700c9a12a4848cf230f40a18",
+      "sha256": "ae81cbfdf05d7a577f485b8aee8de712ae603bfb700c9a12a4848cf230f40a18",
+      "bytes": 1135,
+      "model": "classic"
+    },
+    {
+      "name": "afu_deadpool",
+      "sourceId": "deadpool",
+      "label": "死侍",
+      "style": "英雄",
+      "url": "https://textures.minecraft.net/texture/54a55c5f715cf8e33ddf294968f13701a5556125a0e265c6c875562d798b91c5",
+      "sha256": "54a55c5f715cf8e33ddf294968f13701a5556125a0e265c6c875562d798b91c5",
+      "bytes": 1940,
+      "model": "classic"
+    },
+    {
+      "name": "afu_mario",
+      "sourceId": "mario",
+      "label": "马里奥",
+      "style": "游戏角色",
+      "url": "https://textures.minecraft.net/texture/b4ba66c146e83479eacc0617f77690d83c72bd8451f93cca760ae586c0328db5",
+      "sha256": "b4ba66c146e83479eacc0617f77690d83c72bd8451f93cca760ae586c0328db5",
+      "bytes": 866,
+      "model": "classic"
+    },
+    {
+      "name": "afu_yoshi",
+      "sourceId": "yoshi-mario",
+      "label": "耀西",
+      "style": "游戏角色",
+      "url": "https://textures.minecraft.net/texture/293f9430104050470fb2eb6d2f204d63dc362660a9b1859f02b4b0588f9ebbcd",
+      "sha256": "293f9430104050470fb2eb6d2f204d63dc362660a9b1859f02b4b0588f9ebbcd",
+      "bytes": 1308,
+      "model": "classic"
+    },
+    {
+      "name": "afu_villager",
+      "sourceId": "villager",
+      "label": "村民旅人",
+      "style": "原版",
+      "url": "https://textures.minecraft.net/texture/bc6f81af31e0dcd4fee4bbb0797de0c0a95499af2e03a364248a4052017b3e6d",
+      "sha256": "bc6f81af31e0dcd4fee4bbb0797de0c0a95499af2e03a364248a4052017b3e6d",
+      "bytes": 860,
+      "model": "classic"
+    },
+    {
+      "name": "afu_steve",
+      "sourceId": "mc-steve",
+      "label": "史蒂夫",
+      "style": "原版",
+      "url": "https://textures.minecraft.net/texture/cd17f453c69e60760f0ab8427b03fea723e8662a7f775433c16d100d610219fa",
+      "sha256": "cd17f453c69e60760f0ab8427b03fea723e8662a7f775433c16d100d610219fa",
+      "bytes": 1771,
+      "model": "classic"
+    }
+  ],
+  "status": "installed"
+}

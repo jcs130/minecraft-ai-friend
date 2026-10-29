@@ -658,7 +658,8 @@ final class DungeonManager implements Listener {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 " + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。");
             return;
         }
-        List<Player> group = groupNearLobbyButton(lobbyButton());
+        if(!DungeonLoadout.ready(starter))return;
+        List<Player> group = groupNearLobbyButton(lobbyButton()).stream().filter(DungeonLoadout::ready).toList();
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
@@ -702,6 +703,8 @@ final class DungeonManager implements Listener {
         }
         List<Player> group = nearLobbyButton(starter, lobbyButton())
                 ? groupNearLobbyButton(lobbyButton()) : List.of(starter);
+        if(!DungeonLoadout.ready(starter))return;
+        group=group.stream().filter(DungeonLoadout::ready).toList();
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(REST_FLOOR, group) == 0) {
@@ -1456,7 +1459,7 @@ final class DungeonManager implements Listener {
             if (difficulty.walletBonus > 0) {
                 int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
                 int creditedBalance = economy.creditDifficulty(id, scale.wallet(bonusBalance));
-                p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：绿宝石余额 +" + creditedBalance
+                p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：金币 +" + creditedBalance
                         + "；可在入口商人购买补给，不占背包。");
                 p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="
                         + difficulty.id + " amount=" + creditedBalance);
@@ -1833,6 +1836,11 @@ final class DungeonManager implements Listener {
                 entries++;
             }
             player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/" + STASH_SIZE + " page="+page+" pages=10 capacity=540");
+            // Listing is read-only. Ledger rewards are materialized on opening,
+            // so an empty stored page must not imply that a new reward was lost.
+            int queued=bonusItems(id).size()+PhotoRewards.pending(plugin,id);
+            for(Material material:REWARD_TYPES)if(pending(id,material)>0)queued++;
+            if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程需travel，2魔力）。");
             return;
         }
         if (action.equals("putslot") && args.length == 5) {

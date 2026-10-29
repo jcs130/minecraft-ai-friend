@@ -27,9 +27,25 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     import * as stdio from '../dist/types/src/mcp/stdio.js';
     import {createRelay} from '../dist/types/bridges/performance/relay.mjs';
     import * as extension from '../dist/types/src/extension.js';
-    import { readMinecraftKnowledge, KNOWLEDGE_TOOL } from '../dist/types/src/client/index.js';
+    const selectedAttack: extension.SkillCall = {skill:'attack',target:'zombie',entityId:42,mode:'auto'};
+    const selectedSteps = extension.parseSteps([selectedAttack]);
+    void selectedSteps;
+    import { readMinecraftKnowledge, KNOWLEDGE_TOOL, withFactState, type FactState } from '../dist/types/src/client/index.js';
+    import type { FactPart } from '../dist/types/src/contracts/index.js';
+    const semantic: FactState = { position: [1,64,2], mana: null, lastCastAt: 'dated' };
+    const dated: FactPart = withFactState({key:'state',text:'raw dated evidence'}, semantic);
+    void dated.stateRevision;
+    import { planInventoryShortcutExchange, type InventoryShortcutExchange } from '../dist/types/src/client/index.js';
+    const exchanges: InventoryShortcutExchange[] | null = planInventoryShortcutExchange([], {kind:'swap',from:0,to:1,source:'',destination:''},0,2,0);
+    void exchanges;
     const reference: Record<string, unknown> = readMinecraftKnowledge({action:'get',id:'food/beef'},'1.21.1');
     void reference; void KNOWLEDGE_TOOL;
+    import {ReadProgressBook, readTextPage, renderToolTextPage, runtimeExecutionState, type TextPage} from '../dist/types/src/client/index.js';
+    const textPage: TextPage = readTextPage('whole text','log:'+'a'.repeat(64),{offset:0,maxChars:2});
+    const readBook = new ReadProgressBook({limit:2}); readBook.reset();
+    const pending: number = runtimeExecutionState('run',1,'started',[],{calls:1,tactics:0}).pendingCalls;
+    const projection: string | null = renderToolTextPage({structuredContent:{failed:false,text:textPage.text,data:textPage}}, {budgetChars:1500,toolPrefix:'mc'});
+    void pending; void projection;
     void mcp;void stdio;void createRelay;void extension;
     import {Bridge, type MinecraftBot} from '../dist/types/src/extension.js';
     class ServerBridge extends Bridge {

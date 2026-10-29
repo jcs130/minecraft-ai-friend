@@ -34,7 +34,7 @@ npcs:
         action: backpack
       rewards:
         title: 奖励和照片放在哪里？
-        text: 个人奖励箱用 /mycli arena stash pages。奖励、装备和自动照片在这里；箱满安全排队。远程开箱需先学travel并耗2魔力；也可到试炼场实体箱旁免费开。提示未学先查skills info travel，不要重复领奖。
+        text: 远程个人箱用 /mycli arena stash，stash pages选10页。先查skills info travel，未学用skills learn travel；保持2魔力，开页才扣费，不用先传送。领奖后开箱装入，箱满保留；arena rewards list查待入箱，stash list查箱格。实体箱旁免费，大背包另用/minepacks:backpack open。
         action: rewards
       rules:
         title: 城里有什么需要注意？

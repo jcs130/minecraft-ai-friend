@@ -22,7 +22,8 @@ export function publicGrowth(guild, profession, level) {
       grade = Math.min(legacy, Number.isInteger(certified) && certified >= 0 ? certified : legacy) * 3;
     }
   }
-  const combat = ['warrior', 'mage', 'priest'].includes(profession?.combat) ? profession.combat : null;
+  const classes=profession?.backend==='vortex'?['knight','mage','ranger','cleric','beastmaster','engineer']:['warrior','mage','priest','tank'];
+  const combat = classes.includes(profession?.combat) ? profession.combat : null;
   return { level: nonnegative(level), fame, completed: nonnegative(guild?.completed),
     gradeIndex: grade, rank: grade === null ? null : `${RANKS[Math.floor(grade / 3)]} ${DIVISIONS[grade % 3]}`,
     profession: combat, certificates: profession?.academy?.certificates && typeof profession.academy.certificates === 'object' ? Object.keys(profession.academy.certificates).length : null };
@@ -63,9 +64,10 @@ export class WorldCatalog {
         const batch = await Promise.all(roster.slice(start, start + 8).filter(row => row.available && row.kind !== 'observer' && row.kind !== 'admin').map(async row => {
           const saved = await this.game.playerNbt(row.playerUuid);
           const guild = gameplay.data?.['guild-players']?.[row.playerUuid];
-          const profession = professions.data?.players?.[row.playerUuid];
-          return { ...this.game.publicAgent(row), growth: publicGrowth(guild, profession, saved.data?.XpLevel),
-            savedAt: saved.savedAt, progressionSavedAt: professions.savedAt, source: 'Paper.saved-player-data' };
+          const native = typeof this.game.rpgProfile==='function'?await this.game.rpgProfile(row.playerUuid,gameplay.data):null;
+          const profession = native || professions.data?.players?.[row.playerUuid];
+          return { ...this.game.publicAgent(row), growth: publicGrowth(guild, profession, native?native.level:saved.data?.XpLevel),
+            savedAt: saved.savedAt, progressionSavedAt: native?native.savedAt:professions.savedAt, source: native?'VortexRPG.saved-player-data':'Paper.saved-player-data' };
         }));
         players.push(...batch);
       }

@@ -1,0 +1,17 @@
+/** Final cold read, including the completed exam and the new human-readable heal target. */
+import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {setTimeout as sleep} from 'node:timers/promises';
+import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs';
+const stage='E:/MC/staging/vortex-takeover-20261027',label=process.argv[2];assert.equal(await fs.readFile(stage+'/.qa-only','utf8'),'VORTEX_TAKEOVER_QA_ONLY');assert(/^[a-z0-9]+$/.test(label));
+const prior=JSON.parse(await fs.readFile(stage+'/rpg-cold-exam-ru8s.json','utf8'));assert(prior.passed);const mf=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('mineflayer'),report={checks:[],receipts:[],productionChanged:false};let bot,last=0;
+const check=(name,value)=>{assert(value,name);report.checks.push(name);};const until=async(f,label)=>{for(let end=Date.now()+30000;Date.now()<end;){const v=await f();if(v)return v;await sleep(100);}throw Error(label);};
+async function connect(name){bot=mf.createBot({host:'127.0.0.1',port:25928,username:name,auth:'offline',version:'1.21.11',hideErrors:true,checkTimeoutInterval:60000});bot.messages=[];bot.on('messagestr',s=>bot.messages.push(s));bot.on('error',()=>{});installRecipePacketBypass(bot._client);await until(()=>bot.entity&&bot.world.getColumnAt(bot.entity.position),'world');bot.physicsEnabled=false;await sleep(2000);}
+async function ask(q,prefix){await sleep(Math.max(0,1100-(Date.now()-last)));last=Date.now();const at=bot.messages.length;bot.chat(q);await until(()=>bot.messages.slice(at).some(s=>s.startsWith(prefix)),q);await sleep(100);const text=bot.messages.slice(at).join('\n');report.receipts.push({q,text});return text;}
+async function json(q,prefix='MC_RPG'){const t=await ask(q,prefix+' ');return JSON.parse(t.split('\n').find(s=>s.startsWith(prefix+' ')).slice(prefix.length+1));}
+try{
+ await connect(prior.identity.name);check('same identity after exam cold start',bot.player.uuid===prior.identity.uuid);const s=await json('/mycli status --json');check('native state still supplies complete real vitals',Number.isFinite(s.health)&&Number.isFinite(s.maxHealth)&&Number.isFinite(s.food));check('prepared skill remains after another cold start',(await json('/mycli skills status --json')).activeSpell==='war_stomp');
+ const book=JSON.parse(await fs.readFile(stage+'/plugins/AgentFriend/adventure-certificates.json','utf8'));check('earned certificate survives normal cold start',!!book.players[bot.player.uuid].academy.certificates.combat_basic);
+ const progress=await json('/mycli progress --json','MC_ADVENTURE');check('runtime progress recognizes the saved certificate',progress.exam.certificateCount>=1);
+ const bad=await json('/mycli profession choose mage --json');check('reselection still gives one explicit recovery',bad.reason==='class_already_selected'&&bad.nextCommand==='/mycli profession status');report.identity=prior.identity;bot.quit();await sleep(500);
+ await connect('ag_RUS3ru8s');const card=await ask('/mycli skills info radiant_pulse','[RPG] ');check('default group-heal description exposes real nearby-player range',card.includes('附近其他玩家')&&card.includes('格')&&card.includes('消耗'));
+ check('group heal saved as current click skill',(await json('/mycli skills status --json')).activeSpell==='radiant_pulse');report.passed=true;
+}catch(e){report.error=e.stack;throw e;}finally{bot?.quit();await fs.writeFile(stage+'/rpg-certificate-cold-'+label+'.json',JSON.stringify(report,null,2));}

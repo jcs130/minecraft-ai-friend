@@ -152,10 +152,14 @@ export async function skillSwim(bot: Bot, call: {at: Cell;reserveOxygen?:number;
         }
         index++;continue;
       }
-      const dx=destination.x-before.x,dz=destination.z-before.z,desired=Math.atan2(-dx,-dz),delta=desired-(reading.yaw??0);
+      const dx=destination.x-before.x,dz=destination.z-before.z,horizontal=Math.hypot(dx,dz);
+      const desired=Math.atan2(-dx,-dz),delta=desired-(reading.yaw??0);
       const keys:Array<'forward'|'jump'>=[];
-      if(Math.hypot(dx,dz)>.2)keys.push('forward');if(destination.y-before.y>.18 || (waypoint.breathe && reading.headWet===true))keys.push('jump');
-      await skillControl(bot,{skill:'control',mode:'water',keys,durationMs:200,yawDeg:Math.atan2(Math.sin(delta),Math.cos(delta))*180/Math.PI},ctx);
+      if(horizontal>.2)keys.push('forward');if(destination.y-before.y>.18 || (waypoint.breathe && reading.headWet===true))keys.push('jump');
+      // Vertical travel must not aim at tiny horizontal drift: atan2 around the
+      // waypoint centre flips by pi while no horizontal input is even active.
+      await skillControl(bot,{skill:'control',mode:'water',keys,durationMs:200,
+        ...(horizontal>.2 ? {yawDeg:Math.atan2(Math.sin(delta),Math.cos(delta))*180/Math.PI} : {})},ctx);
       pulses++;
       const progress=dist-bot.entity.position.distanceTo(destination);
       stalled=progress<.02?stalled+1:0;

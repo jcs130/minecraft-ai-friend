@@ -35,6 +35,7 @@ final class AgentEntry {
         var mana=AuraSkillsApi.get().getUser(p.getUniqueId());
         self.addProperty("manaLoaded",mana!=null&&mana.isLoaded());
         if(mana!=null&&mana.isLoaded()){self.addProperty("mana",mana.getMana());self.addProperty("maxMana",mana.getMaxMana());}
+        if(plugin.nativeRpg().selected()){var current=plugin.nativeRpg().mana(p);self.addProperty("manaLoaded",current.isJsonObject());if(current.isJsonObject()){self.add("mana",current.getAsJsonObject().get("current"));self.add("maxMana",current.getAsJsonObject().get("max"));}}
         self.addProperty("adventurerRank",plugin.guild().adventurerRankName(p));out.add("self",self);
         out.addProperty("rulesCommand","/mycli rules");out.addProperty("stateCommand","/mycli status");
         out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli progress");
@@ -48,7 +49,7 @@ final class AgentEntry {
         out.addProperty("inventoryAdvice","存取以服务器槽位和光标核对；超时结果未知，先重新查询，不自动重放。54格大背包与任务袋、个人奖励箱独立。");
         if(!jsonOnly){p.sendMessage("§6【千灯纪入门】/mycli --help 查看命令；/mycli status 查本人状态；/mycli rules 读规则。");
         p.sendMessage("§b【本人】"+p.getName()+" · "+self.get("adventurerRank").getAsString()+" · 生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()
-                +(flag(self,"manaLoaded")?" · 魔力 "+Math.round(mana.getMana())+"/"+Math.round(mana.getMaxMana()):" · 魔力尚未加载，等候后再查"));
+                +(flag(self,"manaLoaded")?" · 魔力 "+Math.round(self.get("mana").getAsDouble())+"/"+Math.round(self.get("maxMana").getAsDouble()):" · 魔力尚未加载，等候后再查"));
         p.sendMessage("§e【建议下一步】"+out.get("nextAdvice").getAsString()+" "+out.get("nextCommand").getAsString());}
         if(jsonOnly){plugin.communication().stamp(p,out);p.sendMessage("MC_INTRO "+out);}
     }

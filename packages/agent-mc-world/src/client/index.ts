@@ -4,13 +4,22 @@ export { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_ENVIRONME
 export type { JavaClientServices } from './java-memory.ts';
 export * from '../contracts/java-client.ts';
 export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
+/** Transport/authentication hooks for hosts retaining an existing Mineflayer body. */
+export { installConfigurationPhaseGuard, installConfigurationRoundCleanup, configurationTransportReady } from '../../core/configuration-round.ts';
+export { installServerLogin, serverLoginFailureText } from '../../core/server-login.mjs';
+export type { ServerAuthState } from '../../core/server-login.mjs';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAddress, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';
+export { runtimeExecutionState, type RuntimeExecutionState, type ExecutionIdentity } from './execution-state.ts';
+export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,type TextPage,type TextToolResult} from './text-pages.ts';
+export {ReadProgressBook,readOnlyToolResult,type ReadProgressEvidence} from './read-progress.ts';
 export * from './schema-reading.ts';
+export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.ts';
+export { withFactState, type FactState } from '../../core/fact-state.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,
@@ -22,7 +31,7 @@ export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '
 export { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from '../../core/memory-cpu-vector.ts';
 export { configuredPlayerSkin, type LocalPlayerSkin } from '../../core/viewer-local-skin.ts';
 export { setStoredSkin, storedSkinInfo } from '../../core/client-skins.ts';
-export { configureObservationPolicy, type ObservationPolicy } from '../../core/perception-sight.ts';
+export { configureObservationPolicy, entityObservationScope, entityAwareness, OBSERVATION_DEFAULTS, type ObservationPolicy, type EntityAwareness } from '../../core/perception-sight.ts';
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 export { MINEDOJO_SOURCE, REFERENCE_INDEX_SCHEMA, buildReferenceIndex, readReferenceIndex, validateReferenceConfig,
   type MinecraftKnowledgeConfig, type ReferenceIndexConfig, type ReferenceEmbeddingConfig } from '../../core/reference-index.ts';
@@ -41,6 +50,10 @@ export type { PublicAccountState, AuthenticationMode } from './authentication.ts
 
 export { planLegacyConfiguration, copyLegacyData } from './migration.ts';
 export * from './world-storage.ts';
+export { FactUpdateStream, applyFactUpdate, FACT_UPDATE_GUIDANCE,
+  type FactUpdate, type FactUpdateState, type FactValue, type FactValues } from './fact-updates.ts';
+export { GoalCheckpointBook, createGoalCheckpoint, restoreGoalCheckpoint,
+  type GoalCheckpoint, type GoalCheckpointScope } from '../../core/goal-checkpoint.ts';
 export * from './world-namespace.ts';
 
 export { GameMemoryLearning } from '../../core/game-memory-learning.ts';
@@ -54,8 +67,8 @@ export { renderVoxelPhoto } from '../../core/voxel-photo.ts';
 export * from '../contracts/photography.ts';
 export * from '../../core/voxel-scene.ts';
 export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';
-export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
+export { planInventoryOrganization, planInventoryShortcutExchange, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
   type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
-  type InventoryOrganizationPlan } from '../../core/inventory-organization.ts';
+  type InventoryOrganizationPlan, type InventoryShortcutExchange } from '../../core/inventory-organization.ts';
 
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';

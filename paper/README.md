@@ -1,15 +1,25 @@
 # 千灯纪：Paper 跨端服务器
 
-## 当前状态（2026-10-23）
+## 当前状态（2026-10-29）
 
-正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.12 / CortiEyeMirror 0.1.17**。源码完整 AgentFriend 为 **0.4.48 开发候选**，并非正式 JAR 的逐字重建。网站正式 **0.8.19**；源码 **0.8.21** 为公开世界足迹、共享观战与作品存档候选。AgentFriend **0.4.47.15** 最小回补日记和罗盘个人箱入口，尚未部署，见[本批说明](docs/PUBLIC_WORLD_TRAIL.md)。
+
+连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.8与mcbot Paper适配；49插件正常。[实际运行与验收](docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](manifests/current-deployment.json)。
+
+正式服：**Paper 1.21.1 build 133 / Java 21 / AgentFriend 0.4.47.27 / VortexRPG1.2.2-alpha-qd29 / QiandengjiRpg0.2.6**，官网 **0.8.28**。职业、经验、魔力和金币已统一到 Vortex，原背包、个人箱、任务和成绩保留；[最新发布与回退](docs/RPG_UNIFIED_20261028.md)。副本准入识别四护甲及近战、弓弩或本职业法器，不强制带剑。Multiverse5.8.1、起始之城保护和原村庄往返保持。完整0.4.48仍有其他候选，不可直接替换现役JAR。
+
+最新修复：基础生存技能、普通组队、职业菜单和失败指引，桐人原生频道0.3.2已生效；原物品、职业与未知回执保持。[0.4.47.25发布与回退](docs/BASIC_SURVIVAL_RELEASE_20261028.md) · [局域网TTS自建音色](integrations/lan-tts/README.md)。
+
+存储维护：E/F 新冷备及本轮到期清理已完成，[NVMe 切换](docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，原 E 盘服已恢复开放；修正版通过 57 项隔离检查，等待 Windows 确认。[近场语音](docs/PROXIMITY_VOICE.md)已完成本机TTS/CPU ASR及隔离联机候选，正式服尚未安装；[核显原生相机](docs/NATIVE_GODDESS_CAMERA.md)待真实渲染验收，原相机保持。
+
+
+[mcbot独立Paper适配](integrations/mcbot/README.md)与[玩家假上下线修复](docs/PLAYER_ROSTER_OCCLUSION_20261028.md)已部署，官方Fabric界面与长期模型任务仍未验证。
 
 官网：[mc.kangqiang.site](https://mc.kangqiang.site)；宣传片：[B 站](https://www.bilibili.com/video/BV13fnW6CEzi/)。
 
 ## 入口
 
 - 玩家与 Agent：完成认证、进入世界后，用 `/mycli help`、`/mycli status` 和 `/mycli tasks list`。
-- 公共装备与补给：`/mycli guild shared`；原有农事可自愿继续，附近探索、试炼与遗迹亦可选择。
+- 公共装备与补给：`/mycli guild shared`；优先附近探索、试炼与遗迹，农耕活动已撤下新接入口。
 - 默认任务反馈为精炼中文，需要程序数据时显式使用支持的 `--json`。
 - 自己搭建：[独立部署](../docs/SELF_HOSTING.md)，使用 `self-host/selfhost.py`，从新目录下载校验公开依赖并编译。
 - 网站：`integrations/agent-portal/` 为已上线版本；配置自己的账号库、桥与 Key，不使用维护者私有配置。

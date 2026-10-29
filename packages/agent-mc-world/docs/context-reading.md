@@ -39,6 +39,13 @@ a labelled excerpt of the original event. At most four unsuccessful steps are
 shown, with omitted steps counted. A completion for another task does not resolve
 this task or its goal. The host owns persistence, expiry and selection for requests.
 
+Native death observations carry `execution.kind: "observation"`, the same death
+episode ID, `terminal: true`, `goalCompleted: false`, and evidence with
+`outcome: "death"` and zero health. Terminal here means an observed outcome,
+not successful completion. Later server leave/cleanup receipts do not change that
+earlier outcome. Hosts can keep this small dated cause alongside recent state
+without retaining the entire snapshot history in each model request.
+
 `omitContextSchemaAnnotations(schema)` leaves validation keywords, fields and
 alternatives intact while moving `x-agent-mc-skill-contracts` behind complete
 help. The annotation contains on-demand generation material, not input-schema
@@ -52,3 +59,28 @@ Agent. Native tool call/result pairing, recent/protected records, pending user
 intent, memory, exact expansion and model scheduling remain with the host.
 Include extra expansion calls and catalogue costs when measuring token savings;
 smaller individual previews alone do not establish lower total cost or latency.
+
+## Current task progress coverage (rc.90 candidate)
+
+Mineflayer current facts include a `taskProgress` part and declare
+`minecraft.task.progress` in `snapshotTypes`, alongside world and queue state.
+The part distinguishes the current task/step, waiting work and body holds from
+the latest matching periodic sample. The sample retains its original observation
+time, net displacement, count and detail; reading it does not refresh its age.
+A different task, a different step or a new connection cannot inherit that sample.
+Missing samples remain unknown. Completion and failure still use independent
+task terminal receipts.
+
+Hosts may replace historical progress *state snapshots* in a model request when
+this complete fact part is available. Preserve the raw event ledger and an
+attributed retrieval index for historical movement, counts and outcomes. A null
+or disconnected fact reading supplies no coverage. SDK status, extension facts
+and MCP `mc_protocol` facts share this same core part; no model call is required.
+
+`MovementProgress` also counts repeated ground modifier-key requests without
+resetting the movement streak. Its `kind: 'control'` is a request-pattern hint,
+not evidence of failed execution or absent world progress. Water descent,
+flight ascent/descent, directional controls and view changes have unknown motion
+in this input contract and do not yield a no-movement verdict. Check actual
+position/height, constraints and task terminals before a host intervenes. This
+helper does not cancel work, close goals or schedule model calls.

@@ -1,5 +1,7 @@
 # Agent 角色皮肤
 
+2026-10-26：本人YSM选装及Agent皮肤/模型上传已上线，见[本人外观](AGENT_APPEARANCE.md)。当前AgentAppearance0.3.4／官网0.8.24／Skill1.3.2；Paper未重启。旧`ag_NarutoPi`和现在的`ag_Naruto`是两个UUID，下面的旧绑定不会自动继承。
+
 ## 鸣人普通皮肤（2026-10-15核验，已在线生效）
 
 `ag_NarutoPi`（`3a0d9481-2a8f-3bdd-9f56-b5d57c7aafd0`）已在线绑定现有签名预设 `afu_naruto`，细手臂（slim）。外观为黄发、木叶头带、橙黑忍服；普通原版皮肤与 `qiandengji_naruto/skin` 的 YSM 绑定同时保存，未修改既有 YSM 选择或强制标志。不装 YSM 的客户端可通过普通玩家皮肤协议显示；手机/Xbox最终画面仍需真机确认，不能把普通皮肤当成完整 YSM 几何与动画。

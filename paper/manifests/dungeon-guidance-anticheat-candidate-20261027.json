@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "dungeon-guidance-anticheat-20261027",
+  "state": "held_by_owner_continue_improving",
+  "productionApproved": false,
+  "queued": false,
+  "productionModified": false,
+  "ownerDecision": "先保留候选，继续完善",
+  "candidate": {
+    "agentFriend": "0.4.47.19",
+    "sha256": "475eb0e7d76ea4020f724e8070f6d28fb72e3eaf2b1ebb9144472411111bf77d",
+    "unchangedEntries": 562,
+    "baseVersion": "0.4.47.18",
+    "baseSha256": "95ae800b66d7baed75daff7dcc3b166f889350c1213d8bc5f7862ba51841a155",
+    "lightAntiCheat": "1.2.6-qd1",
+    "lightAntiCheatSha256": "3faca3e44d2b54c8b2098d206d739cbba74fc27d6c70886674e3ebbe7d83414f",
+    "guardSha256": "f8e540eed3bad1434e28ba736739725c4840dca92672b641676c675740d3a378",
+    "vortexIncluded": false
+  },
+  "validation": {
+    "rules": 68,
+    "nativeDungeonChecks": 22,
+    "defaultDungeonInfoChars": 343,
+    "defaultFiveSiteListChars": 525,
+    "realLegitimateSkillsAndFlightChecks": 17,
+    "legitimatePhaseFlags": 0,
+    "illegalFlightCorrection": true,
+    "installerBoundaries": 21,
+    "publicCredentialScanFindings": 0,
+    "cliContractChecks": 84,
+    "compactCliChecks": 97,
+    "journeyChecks": 80,
+    "publishedArchiveDiscoveryPreserved": true
+  },
+  "backups": {
+    "staticCandidateAndRollbackOnTwoDisks": true,
+    "newFullColdBackupCompleted": false
+  },
+  "preserved": [
+    "existing task snapshots and completion requirements",
+    "dungeon settlement, attendance and reward deduplication",
+    "current profession, skill, inventory and stash records",
+    "authentication, model and spectator services"
+  ],
+  "nextReleaseRequires": "new owner approval, live human/activity gates, normal stop and full cold backups",
+  "supersededCandidate": {
+    "sha256": "bdc4949df3e0b17477ef396f636c2c181ce85ad020bc544405720c48ea2f04c4",
+    "reason": "candidate-only archive discovery omission detected and corrected before deployment"
+  }
+}

@@ -29,7 +29,7 @@ def test_json_correction_preserves_existing_native_and_stop_fences(
     assert (controller.pending, controller.inflight_request) == original
 
 
-def test_json_syntax_error_gets_one_immediate_correction_then_normal_backoff(
+def test_json_syntax_error_gets_one_immediate_correction_then_normal_cadence(
         framework_module, tmp_path, run_async, monkeypatch):
     import agent_mc_autonomy.controller as module
     monkeypatch.setattr(module.time, 'monotonic', lambda: 1000)
@@ -39,9 +39,9 @@ def test_json_syntax_error_gets_one_immediate_correction_then_normal_backoff(
 
     _, bridge, controller = setup(framework_module, tmp_path, decide)
     tools = module.model_tools(bridge.tools)
-    for index, delay in enumerate((0, 20, 40, 60)):
+    for index in range(4):
         run_async(controller.turn_once('survive', 'body', tools))
-        assert controller.planner_retry_at == 1000 + delay
+        assert controller.planner_retry_at == 0
         assert controller.continuation_ready is (index == 0)
     assert not any(row[0] == 'mc_do' for row in bridge.calls)
     assert not controller.pending and controller.inflight_request is None

@@ -340,7 +340,7 @@ def test_identical_rejected_call_is_not_dispatched_again(framework_module, tmp_p
     run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
     assert len([c for c in bridge.calls if c[0] == "mc_do"]) == 1
     assert len(seen) == 2
-    assert controller.continuation_needed and controller.planner_retry_at > 0
+    assert controller.continuation_needed and controller.planner_retry_at == 0
     assert not controller.pending and controller.inflight_request is None
 
 
@@ -458,7 +458,7 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     if bad_call['arguments'] == '{':
         assert controller.continuation_ready  # One known pre-dispatch JSON correction can run promptly.
     else:
-        assert controller.planner_retry_at > module.time.monotonic()
+        assert controller.planner_retry_at == 0
     assert not bridge.closed and controller.inflight_request is None
     assert not json.loads(controller.state_path.read_text()).get("uncertain")
     assert all(name == "mc_events" or (name == "mc_protocol" and args["action"] in {"begin_turn", "facts", "end_turn"})
@@ -578,7 +578,7 @@ def test_invalid_later_call_rejects_whole_batch_before_reading(framework_module,
     assert "JSON" in controller.planner_notice
 
 
-def test_multiple_mutating_calls_are_rejected_as_a_whole_and_rate_limited(framework_module, tmp_path, run_async):
+def test_multiple_mutating_calls_are_rejected_as_a_whole_without_freezing_other_decisions(framework_module, tmp_path, run_async):
     async def decide(*_):
         result = choose()
         result["tool_calls"] += [{**result["tool_calls"][0], "id": "call-2"}]
@@ -589,14 +589,14 @@ def test_multiple_mutating_calls_are_rejected_as_a_whole_and_rate_limited(framew
     delays = []
     for _ in range(5):
         run_async(controller.turn_once("survive", "prefix", tools))
-        delays.append(controller.planner_retry_at - module.time.monotonic())
-    assert all(delay > 0 for delay in delays)
-    assert delays[-1] >= 59 and delays[-1] <= 60
+        delays.append(controller.planner_retry_at)
+    assert delays == [0] * 5
     assert not any(row[0] == "mc_do" for row in bridge.calls)
     assert controller.inflight_request is None and not bridge.closed
 
 
-def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_module, tmp_path, run_async, monkeypatch):
+@pytest.mark.parametrize("confirmed_disconnect", [True, False])
+def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_module, tmp_path, run_async, monkeypatch, confirmed_disconnect):
     decisions, polls, stopped = [], [], False
 
     async def decide(*_):
@@ -604,6 +604,16 @@ def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_modu
         return choose()
 
     module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: stopped)
+    published = {}
+    controller.publish = lambda **patch: published.update(patch)
+    original_call = bridge.call
+
+    async def call(name, args, **kwargs):
+        if name == "mc_connection" and args.get("action") == "disconnect" and not confirmed_disconnect:
+            return packed({"phase": "unconfirmed"})
+        return await original_call(name, args, **kwargs)
+
+    bridge.call = call
     clock = [1000]
     monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
     original_sleep = asyncio.sleep
@@ -625,7 +635,15 @@ def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_modu
     assert len(decisions) == 1
     assert bridge.closed
     state = json.loads((tmp_path / "host-state.json").read_text())
-    assert state["stopped"] is True and state["pending"] == []
+    assert state["stopped"] is True
+    if confirmed_disconnect:
+        assert state["pending"] == [] and published["pending"] == []
+        assert published["disconnect_confirmed"] is True
+        # Disconnect is a lifecycle receipt, never invented native completion.
+        assert not published.get("native_outcomes")
+    else:
+        assert state["pending"] and published["pending"]
+        assert state["uncertain"] is True and published["disconnect_confirmed"] is False
 
 
 def test_stop_during_model_wait_blocks_late_action(framework_module, tmp_path, run_async):

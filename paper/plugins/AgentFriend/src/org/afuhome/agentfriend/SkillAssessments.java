@@ -47,7 +47,9 @@ final class SkillAssessments implements Listener {
         double combatSupport;int checkpoint;
     }
     SkillAssessments(AgentFriendPlugin plugin) {
-        this.plugin=plugin;ledger=plugin.professions().ledger;
+        this.plugin=plugin;ledger=plugin.nativeRpgSelected()
+            ?ProfessionLedger.academy(new File(plugin.getDataFolder(),"adventure-certificates.json").toPath(),plugin.professions().ledger)
+            :plugin.professions().ledger;
         supplies=new ExamSupplies(plugin,this);
         for(String name:List.of("skill-assessments.yml","adventurer-grades.yml"))if(!new File(plugin.getDataFolder(),name).exists())plugin.saveResource(name,false);
         reload();validateLedger();
@@ -153,7 +155,7 @@ final class SkillAssessments implements Listener {
         if(!save(p,r)){reply(p,"data_unavailable",d);return;}
         runs.put(p.getUniqueId(),r);
         supplies.automaticPhoto(p,d,r.id,result->supplyReply(p,result,plugin.communication().compact(p)));
-        if(d.primitive().equals("native_lesson")) {plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
+        if(d.primitive().equals("native_lesson")&&!d.proofs().contains("native_cast")) {plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
         show(p);if(!plugin.communication().compact(p))p.sendMessage("§a考试已开始："+d.title()+"。"+d.description()+"；公会→训练与考试→当前考试指引，按步骤操作。");
     }
     private Run newRun(AssessmentCatalog.Definition d,String market) {
@@ -178,7 +180,7 @@ final class SkillAssessments implements Listener {
             String deny=eligibility(p,d);if(!deny.equals("ready"))return null;
             r=newRun(d,token);if(!save(p,r))return null;runs.put(p.getUniqueId(),r);
             p.sendMessage("§b能力阶段已开始："+d.title()+"；/mycli guild exam status 查看当前目标。技能须在本阶段开始后施放。");
-            if(d.primitive().equals("native_lesson")){plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
+            if(d.primitive().equals("native_lesson")&&!d.proofs().contains("native_cast")){plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
         }
         if(r!=null&&durableSurvey(r)&&r.state.equals("interrupted")&&Set.of("logout","server_restart").contains(r.reason)
                 &&System.currentTimeMillis()<r.expires&&definition(r.definition.id())!=null&&definition(r.definition.id()).enabled()) {
@@ -581,8 +583,10 @@ final class SkillAssessments implements Listener {
     }
     private void reply(Player p,String reason,AssessmentCatalog.Definition d) {
         JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason",reason);
-        out.addProperty("nextCommand",reason.equals("task_slot_busy")?"/mycli guild exam status":"/mycli guild exam promotion");
+        out.addProperty("nextCommand",reason.equals("guild_registration_required")?"/mycli guild join":reason.equals("task_slot_busy")?"/mycli guild exam status":"/mycli guild exam promotion");
+        if(reason.equals("guild_registration_required"))out.addProperty("errorMessage","尚未登记冒险者；先免费登记，再报名考试。");
         if(d!=null)out.addProperty("examId",d.id());send(p,"MC_GUILD_EXAM",out);
+        if(reason.equals("guild_registration_required")){p.sendMessage("§e[考试] 尚未登记冒险者。免费登记：/mycli guild join");return;}
         if(plugin.communication().compact(p))return;
         p.sendMessage("§e未开始/未交付："+reason+"。"+(reason.equals("go_to_start")&&d!=null&&d.course()!=null?"请正常前往出发台 "+d.course().world()+" "+d.course().start()+"，落地后开考。":
                 reason.equals("task_slot_busy")?"先 /mycli guild status 或 guild exam status 查看当前任务；交付或主动放弃后再开考。":

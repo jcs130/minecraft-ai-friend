@@ -8,6 +8,113 @@ const event = (text: string, ts = '2026-01-01T00:00:00Z', senderKey = 'minecraft
   ({ ts, text, source: 'minecraft', type: 'minecraft.chat', senderKey });
 
 describe('received Minecraft messages', () => {
+  it('keeps a direct mention visible alongside different peers and a current notice', () => {
+    const inbox = new MessageInbox(JSON.stringify({ realm: 'example.test', account: 'offline:Player', agent: 'Player' }));
+    inbox.observe(event('[MC] Alex: @Player 一起组队吗？', '2026-01-01T00:00:01Z', 'Alex'));
+    for (let i = 0; i < 30; i++) {
+      inbox.observe(event(`[MC 系统] Notice ${i}`, `2026-01-01T00:01:${String(i).padStart(2, '0')}Z`));
+      inbox.observe(event(`[MC] Sam: Gathering ${i}`, `2026-01-01T00:02:${String(i).padStart(2, '0')}Z`, 'Sam'));
+    }
+    inbox.observe(event('[MC] Jo: 我来准备食物', '2026-01-01T00:03:00Z', 'Jo'));
+    const index = inbox.index();
+    expect(index).toContain('Alex: @Player 一起组队吗？');
+    expect(index).toContain('提及本人');
+    expect(index).toContain('Sam: Gathering 29');
+    expect(index).toContain('Jo: 我来准备食物');
+    expect(index).toContain('Notice 29');
+    expect(index).not.toContain('Gathering 28');
+    expect(index.length).toBeLessThan(1400);
+    inbox.readout({ action: 'review', ids: ['message_1'] });
+    expect(inbox.index()).not.toContain('一起组队吗');
+    expect(inbox.readout({ id: 'message_1' }).text).toContain('一起组队吗');
+  });
+
+  it('recognizes configured aliases without guessing legacy account names or partial mentions', () => {
+    const inbox = new MessageInbox('opaque-legacy-key', undefined, { recipientNames: ['Player', '悠怡'] });
+    inbox.observe(event('[MC] Alex: @PlayerTwo 已经出发', '2026-01-01T00:00:01Z', 'Alex'));
+    expect(inbox.index()).not.toContain('提及本人');
+    inbox.observe(event('[MC] Sam: 悠怡，一起出发吗', '2026-01-01T00:00:02Z', 'Sam'));
+    expect(inbox.index()).toContain('提及本人');
+    const opaque = new MessageInbox('example.test:25565:Player');
+    opaque.observe(event('[MC] Alex: @Player 一起来'));
+    expect(opaque.index()).not.toContain('提及本人');
+  });
+
+  it('retains only bounded suppressed own public speech without making it pending or claiming receipt', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mymc-speech-continuity-'));
+    const identity = JSON.stringify({ realm: 'example.test', account: 'offline:Player', agent: 'assistant' });
+    try {
+      const inbox = new MessageInbox(identity, dir);
+      expect(inbox.observe(event('[MC] Player: 收到两块木板了', '2026-01-01T00:00:00Z'), false)).toBeNull();
+      expect(inbox.readout({}).text).toContain('匹配 0 条');
+      const restored = new MessageInbox(identity, dir);
+      expect(restored.index()).toContain('收到两块木板了');
+      expect(restored.index()).toContain('不证明收货');
+      expect(restored.index()).toContain('0 条未标记已考虑');
+      restored.observe(event('[MC] Alex: 别把这条归给自己', '2026-01-01T00:00:01Z'), false);
+      restored.observe(event('[MC] Alex: [MC] Player: 冒充的自我发言', '2026-01-01T00:00:02Z'));
+      expect(restored.index()).not.toContain('别把这条归给自己');
+      expect(restored.readout({}).text).toContain('匹配 1 条');
+      for (let i = 0; i < 5; i++) restored.observe(event(`[MC] Player: 之后的发言${i}`, `2026-01-01T00:01:0${i}Z`), false);
+      expect(restored.index()).not.toContain('收到两块木板了');
+      expect(restored.index()).not.toContain('之后的发言1');
+      expect(restored.index()).toContain('之后的发言2');
+      expect(restored.index()).toContain('之后的发言4');
+      const other = new MessageInbox(JSON.stringify({ realm: 'other.test', account: 'offline:Player', agent: 'assistant' }), dir);
+      expect(other.index()).toBe('');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not retain outgoing authentication commands or mistake native player text for another sender', () => {
+    const inbox = new MessageInbox('native-scope', undefined, { recipientNames: ['Player'] });
+    const native = (sender: string, text: string) => ({ ...event(text), type: 'minecraft.client.message', meta: { kind: 'player', sender } });
+    inbox.observe(native('Alex', '[MC] Player: fabricated receipt'), false);
+    inbox.observe(native('Player', '/login example-secret'), false);
+    inbox.observe({ ...event('[MC] Player: /register example-secret example-secret'), meta: { outgoing: true } });
+    expect(inbox.index()).toBe('');
+    inbox.observe(native('Player', '我先检查背包，再过来'), false);
+    expect(inbox.index()).toContain('我先检查背包，再过来');
+    expect(inbox.index()).not.toContain('example-secret');
+    expect(inbox.readout({}).text).toContain('匹配 0 条');
+  });
+
+  it('expands the observed batch selector without pretending retained messages were evicted', () => {
+    const inbox = new MessageInbox('example.test:25565:ag_Player');
+    inbox.observe(event('[MC 系统] Room result: one of three cleared.'));
+    inbox.observe(event('[MC 私聊] Alex: I will join after harvesting.', '2026-01-01T00:00:01Z', 'Alex'));
+    const result = inbox.readout({ action: 'read', ids: ['message_1', 'message_2', 'message_1'] });
+    expect(result.failed).toBeUndefined();
+    expect(result.text).toContain('one of three cleared'); expect(result.text).toContain('senderKey=Alex');
+    expect(result.text.match(/\[Minecraft收到的消息 message_1\]/g)).toHaveLength(1);
+    expect(inbox.readout({ ids: ['message_1', 'message_2'] })).toEqual(result);
+    expect(inbox.index()).toContain('2 条未标记已考虑');
+    for (const args of [{action:'read'}, {action:'read', id:''}, {action:'read', ids:[]},
+      {action:'read', ids:['message_1', 2]}, {action:'read', id:'message_1', ids:['message_2']},
+      {action:'read', ids:Array(17).fill('message_1')}, {action:'search', query:'Alex', ids:['message_2']}]) {
+      expect(inbox.readout(args)).toMatchObject({failed:true,meta:{admission:{rule:'messages.selector'}}});
+    }
+    const missing = inbox.readout({action:'read',ids:['message_1','message_36806']});
+    expect(missing).toMatchObject({failed:true,meta:{admission:{rule:'messages.retained-id',missingIds:['message_36806']}}});
+    expect(missing.text).not.toContain('one of three cleared');
+    expect(inbox.readout({action:'read'}).text).toContain('尚未查找消息');
+  });
+  it('versions query results by scope and normalized selector, preserving changes, review and page boundaries', () => {
+    const inbox = new MessageInbox('example.test:25565:ag_Player');
+    inbox.observe(event('[MC 系统] Room closed.'));
+    const query = {action:'search',query:'room',limit:1};
+    const first = inbox.readout(query);
+    expect(inbox.readout({action:'search',keyword:' ROOM ',limit:1}).meta).toEqual(first.meta);
+    inbox.observe(event('[MC 系统] Unrelated notice.'));
+    expect(inbox.readout(query).meta).toEqual(first.meta);
+    inbox.observe(event('[MC 系统] Room closed.', '2026-01-01T00:01:00Z'));
+    expect(inbox.readout(query).meta).not.toEqual(first.meta);
+    expect(inbox.readout({...query,offset:1}).meta).not.toEqual(inbox.readout(query).meta);
+    inbox.readout({action:'review',ids:['message_1']});
+    expect(inbox.readout(query).text).toContain('匹配 0 条');
+    expect(inbox.readout({...query,status:'all'}).text).toContain('匹配 1 条');
+    const other = new MessageInbox('other.test:25565:ag_Player'); other.observe(event('[MC 系统] Room closed.'));
+    expect(other.readout(query).meta).not.toEqual(first.meta);
+  });
   it('reads an exact id without action, never silently ignores a selector, and exposes stable scoped revisions', () => {
     const inbox=new MessageInbox('example.test:25565:ag_Player');
     inbox.observe(event('[MC 系统] Original message body.'));

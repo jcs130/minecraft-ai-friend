@@ -1,0 +1,63 @@
+schema-version: 1
+welcome-revision: 15
+enabled: true
+agents-only: false
+poll-seconds: 60
+welcome-delay-seconds: 2
+welcome-cooldown-seconds: 21600
+session-grace-seconds: 60
+reminder-seconds: 600
+progress-delay-seconds: 20
+min-gap-seconds: 60
+combat-quiet-seconds: 30
+complete-reminder-seconds: 3600
+pause-seconds: 1800
+welcome:
+- 欢迎来到千灯纪，Agent与玩家共同冒险的RPG世界。/mycli status 看本人下一步，/mycli guide magic 学会职业技能，/mycli
+  dungeon list 选择遗迹和楼层攻略。
+- 规则用 /mycli rules；公共补给用 /mycli guild shared。远程个人箱 /mycli arena stash 需要已学travel和2魔力；操作完成后核对窗口、物品及光标。
+steps:
+  register:
+    title: 先登记为冒险者
+    message: 旅人营地的石质地坪、地基和地标受保护。采集、建造请到 X=-1146..-1078、Z=-638..-567 范围外，先用 /mycli
+      protect 查询。引路人阿晴(-1099,65,-601)，主城东偏南约600格(-543,67,-439)。/mycli guild join 免费登记，不自动接任务。
+  guide_start:
+    title: 报名小满的新手实习
+    message: 用 /mycli world guide start 自愿报名。三项证明是报名后读技能目录、成功施法、完整交付任选路线委托；战斗、制造、探索、后勤、工程、生活都可以，不必先种田。
+  catalog:
+    title: 看看自己能学什么
+    message: 先 /mycli guide magic 查职业和技能四步，再 /mycli skills list profession 读本职业技艺。skills
+      info <ID> 查资格、耗魔与冷却；查询不会代学或选职。
+  cast:
+    title: 亲手成功施放一次技能
+    message: 职业技能先主动learn，再prepare，最后cast；可用 /mycli guide magic 查看完整示例。已准备且魔力足够后，成功施放一次才计入实习。
+  life_accept:
+    title: 开启新的冒险
+    message: 先 /mycli tasks list exploration 选近郊调查，或 tasks list combat 选讨伐；guild shared
+      查看公共补给。旧生活委托也可自愿收尾。
+  route_choose:
+    title: 选择自己的委托路线
+    message: 先用 /mycli tasks list exploration 或 tasks list combat，查看近郊调查、讨伐和副本；tasks
+      info <ID> 看步骤，guild accept <ID> 主动接单。也可自选制造、工程、补给或游记创作。
+  life_progress:
+    title: 继续当前生活委托
+    message: 按自己已接的任务真实行动；只计算合规的原版操作。保护拒绝时停止，换获准位置；别为了提醒放弃在途任务。
+  life_claim:
+    title: 生活委托已达标，记得交付
+    message: 用 /mycli life claim 结算当前委托。奖励进入个人奖励箱或待入箱队列，空间不足不等于奖励丢失。
+  guild_accept:
+    title: 接取第一张冒险委托
+    message: tasks list 按兴趣选战斗、制造、探索、后勤、工程或生活，先看条件再接单；与居民事务共用公会任务槽。任选一项完整交付即可计实习，不必补做种田。
+  guild_progress:
+    title: 完成当前冒险委托并交付
+    message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
+  complete:
+    title: 入门已完成，选择自己的生活
+    message: 入门完成后，先用 /mycli guide magic 学会职业技能；/mycli dungeon list 选择遗迹与楼层攻略，/mycli
+      arena status 查看练习塔。/mycli status 查本人下一步；个人箱用 /mycli arena stash，物资用 /mycli guild
+      shared。
+release-revision: 1
+release-notice:
+- '[更新 0.4.47.20] 职业技能：/mycli guide magic。先选职→学习→准备→施放；已有职业无需重选。'
+- '[冒险指南] /mycli tasks status 查委托，/mycli dungeon list 选副本；罗盘也可操作。个人奖励箱：/mycli arena
+  stash。'

@@ -1,0 +1,28 @@
+/** Independent actual-damage observations for fortify; no production or player resets. */
+import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {setTimeout as sleep} from 'node:timers/promises';
+import {command} from '../../ops/rcon-client.mjs';import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs';
+const stage='E:/MC/staging/vortex-takeover-20261027',label=process.argv[2];assert(/^[a-z0-9]{1,7}$/.test(label));assert.equal(await fs.readFile(stage+'/.qa-only','utf8'),'VORTEX_TAKEOVER_QA_ONLY');
+const mf=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json')('mineflayer'),report={checks:[],receipts:[],passed:false,productionChanged:false};let bot,last=0;
+const check=(name,v)=>{assert(v,name);report.checks.push(name);console.log('PASS '+name);};
+const until=async(f,label)=>{for(let end=Date.now()+30000;Date.now()<end;){const v=await f();if(v)return v;await sleep(100);}throw Error(label);};
+const rc=async q=>{const result=await command(q,15000,{port:25929,properties:stage+'/server.properties'});report.receipts.push({q,result});return result;};
+const num=(t,k)=>Number(t.match(new RegExp(k+'=(-?[\\d.]+)'))?.[1]);
+async function ask(q,prefix='MC_RPG '){await sleep(Math.max(0,1100-(Date.now()-last)));last=Date.now();const at=bot.messages.length;bot.chat(q);await until(()=>bot.messages.slice(at).some(t=>t.startsWith(prefix)),q);await sleep(120);const text=bot.messages.slice(at).join('\n');report.receipts.push({q,text});return text;}
+async function json(q){const t=await ask(q);return JSON.parse(t.split('\n').find(t=>t.startsWith('MC_RPG ')).slice(7));}
+async function damage(){for(let attempt=0;attempt<4;attempt++){const before=num(await rc('qduse inspect '+bot.username),'damageEvents');await rc('qduse heal '+bot.username);await rc(`execute at ${bot.username} run minecraft:damage ${bot.username} 8 minecraft:mob_attack by @e[tag=qd_fortify_test,distance=..8,limit=1]`);const observed=await rc('qduse inspect '+bot.username);if(num(observed,'damageEvents')>before&&num(observed,'cancelled')===0&&num(observed,'finalDamage')>0)return num(observed,'finalDamage');await sleep(1200);}throw Error('No new uncancelled damage event; stale lastDamageCause is not evidence');}
+try{
+ await rc('minecraft:gamerule doMobSpawning false');await rc('minecraft:gamerule naturalRegeneration false');await rc('minecraft:time set midnight');
+ bot=mf.createBot({host:'127.0.0.1',port:25928,username:'ag_RUT'+label,auth:'offline',version:'1.21.1',hideErrors:true,checkTimeoutInterval:60000});bot.messages=[];bot.on('messagestr',s=>bot.messages.push(s));bot.on('error',()=>{});installRecipePacketBypass(bot._client);await until(()=>bot.entity&&bot.world.getColumnAt(bot.entity.position),'world');bot.physicsEnabled=false;
+ await rc('minecraft:fill 2040 80 2038 2048 80 2046 stone');await rc('minecraft:tp '+bot.username+' 2042.5 81 2042.5');await rc('minecraft:gamemode survival '+bot.username);await sleep(4500);
+ check('native knight selection saved',(await json('/mycli profession choose knight --json')).saved);await rc('qduse clearhostiles '+bot.username);await rc(`execute at ${bot.username} run minecraft:summon zombie ~2 ~ ~ {Tags:["qd_fortify_test"],NoAI:1b,NoGravity:1b,Silent:1b}`);
+ await rc('minecraft:effect clear '+bot.username);const initial=await rc('qduse inspect '+bot.username);check('no initial resistance effect',num(initial,'resistance')===-1);
+ await rc('qduse mana '+bot.username+' 0');check('failed mana gate is a real failure',(await json('/mycli cast fortify --json')).reason==='insufficient_mana');check('failed cast grants no resistance',num(await rc('qduse inspect '+bot.username),'resistance')===-1);
+ const plain=await ask('/mycli skills info fortify','[RPG] ');check('default text describes actual reduction and duration',plain.includes('抗性I持续8秒')&&plain.includes('减免20%'));
+ const info=await json('/mycli skills info fortify --json');check('structured info describes measured server effect',info.serverEffects?.some(e=>e.type==='resistance'&&e.durationTicks===160&&e.reduction===0.2));
+ const before=await damage();check('baseline damage independently observed',before>0);await sleep(1300);await rc('qduse mana '+bot.username+' 28');check('native successful fortify confirmed',(await json('/mycli cast fortify --json')).success);await sleep(100);
+ const buff=await rc('qduse inspect '+bot.username);check('successful cast grants temporary Resistance I',num(buff,'resistance')===0&&num(buff,'resistanceTicks')>0&&num(buff,'resistanceTicks')<=160);
+ const during=await damage();check('actual received damage is reduced twenty percent',Math.abs(during-before*.8)<1e-5);report.damage={before,during};
+ check('native cooldown still rejects repeated casting',(await json('/mycli cast fortify --json')).reason==='cooldown');await sleep(8100);check('resistance actually expires',num(await rc('qduse inspect '+bot.username),'resistance')===-1);
+ const after=await damage();check('damage returns to original value after expiry',Math.abs(after-before)<1e-5);report.damage.after=after;
+ await rc('minecraft:effect give '+bot.username+' minecraft:resistance 30 1 true');await rc('qduse mana '+bot.username+' 28');check('cast succeeds with stronger existing effect',(await json('/mycli cast fortify --json')).success);check('stronger Resistance II is preserved',num(await rc('qduse inspect '+bot.username),'resistance')===1);report.passed=true;
+}catch(e){report.error=e.stack;throw e;}finally{if(bot?.entity)await rc(`execute at ${bot.username} run minecraft:kill @e[tag=qd_fortify_test,distance=..16]`).catch(()=>{});bot?.quit();await fs.writeFile(stage+'/rpg-tank-'+label+'.json',JSON.stringify(report,null,2));}

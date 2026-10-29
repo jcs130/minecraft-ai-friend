@@ -55,7 +55,7 @@ function validReceipt(value: unknown): value is CombatReceipt {
     && time(r.startedAt) && time(r.endedAt) && Date.parse(r.endedAt) >= Date.parse(r.startedAt)
     && typeof r.reason === 'string' && r.reason.length <= 64
     && reading(r.healthBefore) && reading(r.healthAfter)
-    && counts(r.kills) && (r.sceneBefore === undefined || validScene(r.sceneBefore))
+    && (r.kills === null || counts(r.kills)) && (r.sceneBefore === undefined || validScene(r.sceneBefore))
     && [r.swings, r.meleeLanded, r.arrows, r.rangedLanded].every(count)
     && (r.tacticAtEnd === null || validCombatTactic(r.tacticAtEnd))
     && typeof r.castsTruncated === 'boolean' && Array.isArray(r.casts) && r.casts.length <= 16

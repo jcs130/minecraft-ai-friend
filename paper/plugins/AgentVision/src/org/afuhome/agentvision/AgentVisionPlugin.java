@@ -10,8 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import org.afuhome.agentfriend.AgentVisionBridge;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -50,11 +48,13 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         int remainingVisits;
         Viewer(Player player) { this.player = player; }
         Target target(Entity entity) {
-            return targets.computeIfAbsent(entity.getUniqueId(), id -> {
-                Target target = new Target(entity);
+            Target target = targets.get(entity.getUniqueId());
+            if (target == null || target.entity != entity) {
+                target = new Target(entity);
+                targets.put(entity.getUniqueId(), target);
                 pending.addLast(target);
-                return target;
-            });
+            }
+            return target;
         }
     }
 
@@ -148,6 +148,13 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         if (viewer == null || entity == viewer.player || !ordinary(entity)) return;
         Target target = viewer.target(entity);
         if (viewer.approvedSpawn == target) return; // Same synchronous result, no duplicate ray work on showEntity.
+        // A rejected spatial pairing can be retried by Paper every tick. Reuse
+        // this filter's current decision instead of treating budget deferral as
+        // a new hide of an already-visible player.
+        if (target.nextCheck > Bukkit.getCurrentTick()) {
+            if (target.hidden) { event.setCancelled(true); forgetCancelledPair(viewer, target); }
+            return;
+        }
         boolean visible;
         if (target.revealUntil > System.currentTimeMillis()) visible = true;
         else if (reserve()) visible = visible(viewer, target);
@@ -155,8 +162,19 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         target.nextCheck = Bukkit.getCurrentTick() + interval;
         if (!visible) {
             event.setCancelled(true);
+            forgetCancelledPair(viewer, target);
             hide(viewer, target);
         }
+    }
+
+    private void forgetCancelledPair(Viewer viewer, Target target) {
+        if (!(target.entity instanceof Player)) return;
+        // Paper 1.21.1 adds seenBy BEFORE firing the cancellable track event,
+        // and does not roll it back after cancellation. No spawn was sent for
+        // this pairing: remove only that bookkeeping entry, without a destroy
+        // or tab-list packet. Otherwise a later reveal cannot pair the player.
+        var tracker = ((CraftEntity) target.entity).getHandle().moonrise$getTrackedEntity();
+        if (tracker != null) tracker.seenBy.remove(((CraftPlayer) viewer.player).getHandle().connection);
     }
 
     private boolean visible(Viewer viewer, Target target) {
@@ -247,26 +265,30 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
 
     private void hide(Viewer viewer, Target target) {
         if (target.hidden) return;
-        boolean previouslyVisible = viewer.player.canSee(target.entity);
         target.hidden = true;
-        viewer.player.hideEntity(this, target.entity);
+        if (target.entity instanceof Player) {
+            // CraftPlayer.hideEntity also removes a player from the tab list.
+            // Spatial visibility must only remove the entity pairing; onTrack
+            // prevents Paper from pairing it again while the target is hidden.
+            var tracker = ((CraftEntity) target.entity).getHandle().moonrise$getTrackedEntity();
+            if (tracker != null) tracker.removePlayer(((CraftPlayer) viewer.player).getHandle());
+        } else viewer.player.hideEntity(this, target.entity);
         hides++;
-        // Tab-list presence is not spatial perception. Keep vanilla sender UUIDs/names for chat identification.
-        if (previouslyVisible && target.entity instanceof Player other && other.isOnline())
-            ((CraftPlayer) viewer.player).getHandle().connection.send(ClientboundPlayerInfoUpdatePacket
-                    .createPlayerInitializing(List.of(((CraftPlayer) other).getHandle())));
     }
 
     private void restore(Viewer viewer, Target target) {
         if (!target.hidden) return;
         target.hidden = false;
         viewer.approvedSpawn = target;
-        try { viewer.player.showEntity(this, target.entity); }
+        try {
+            if (target.entity instanceof Player other) {
+                var tracker = ((CraftEntity) other).getHandle().moonrise$getTrackedEntity();
+                if (tracker != null && other.isOnline() && viewer.player.getWorld() == other.getWorld() && viewer.player.canSee(other))
+                    tracker.updatePlayer(((CraftPlayer) viewer.player).getHandle());
+            } else viewer.player.showEntity(this, target.entity);
+        }
         finally { viewer.approvedSpawn = null; }
         shows++;
-        if (target.entity instanceof Player other && !other.isOnline())
-            ((CraftPlayer) viewer.player).getHandle().connection.send(
-                    new ClientboundPlayerInfoRemovePacket(List.of(other.getUniqueId())));
     }
 
     private void removeViewer(Viewer viewer, boolean restore) {
@@ -302,8 +324,10 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         Viewer leaving = viewers.get(player.getUniqueId());
         if (leaving != null) removeViewer(leaving, false);
         for (Viewer viewer : new ArrayList<>(viewers.values())) {
-            Target target = viewer.targets.remove(player.getUniqueId());
-            if (target != null) restore(viewer, target);
+            // Player spatial hiding never sets Bukkit's hidden-UUID state.
+            // Nothing needs restoring on genuine exit; spawning it again here
+            // would briefly expose an occluded player just before logout.
+            viewer.targets.remove(player.getUniqueId());
         }
     }
 

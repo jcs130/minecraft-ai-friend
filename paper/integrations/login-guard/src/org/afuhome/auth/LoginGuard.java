@@ -68,6 +68,8 @@ public final class LoginGuard {
     private final Map<Player,String> authenticationMethods=new ConcurrentHashMap<>();
     private final Set<Player> authenticationNotified=ConcurrentHashMap.newKeySet();
     private static final MinecraftChannelIdentifier AGENT_CHANNEL=MinecraftChannelIdentifier.create("qiandengji","agent");
+    private static final MinecraftChannelIdentifier MCBOT_CHANNEL=MinecraftChannelIdentifier.create("mcbot","c2s");
+    private static final MinecraftChannelIdentifier VOICE_CHANNEL=MinecraftChannelIdentifier.create("mcagent","voice");
     private final Set<Player> payloadPeers=ConcurrentHashMap.newKeySet();
     private final Map<String,Long> diagnosticTimes=new ConcurrentHashMap<>();
 
@@ -92,6 +94,8 @@ public final class LoginGuard {
     }
     @Subscribe(order=PostOrder.LAST) public void start(ProxyInitializeEvent event) throws Exception {
         server.getChannelRegistrar().register(AGENT_CHANNEL);
+        server.getChannelRegistrar().register(MCBOT_CHANNEL);
+        server.getChannelRegistrar().register(VOICE_CHANNEL);
         var cfg = new Properties();
         try (var in=Files.newInputStream(Path.of("plugins/login-guard/config.properties"))) { cfg.load(in); }
         heartbeat=Path.of(cfg.getProperty("heartbeat"));
@@ -291,13 +295,12 @@ public final class LoginGuard {
         } catch(Throwable e) { ready=false; diagnostic("refresh",e); }
         publishHeartbeat();
     }
-    void publishHeartbeat() {
+    synchronized void publishHeartbeat() {
         if(heartbeat!=null) try {
             var names=server.getAllPlayers().stream().filter(this::authorized).map(Player::getUsername).toList();
             var tmp=Path.of(heartbeat+".tmp"); Files.createDirectories(heartbeat.getParent());
             var observations=server.getAllPlayers().stream().map(this::authenticationState).toList();
-            Files.writeString(tmp,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names,"sessionStates",observations)));
-            Files.move(tmp,heartbeat,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
+            AtomicHeartbeatSnapshot.write(heartbeat,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names,"sessionStates",observations)));
         } catch(Exception e) {
             // A read-side observation failing to reach disk cannot revoke a
             // live LibreLogin session. Existing commands still check the real
@@ -336,6 +339,20 @@ public final class LoginGuard {
         // receives the same hello; server-originated packets cannot opt in a player.
         if(e.getIdentifier().equals(AGENT_CHANNEL) && e.getSource() instanceof Player p
                 && AuthMessages.agent(p.getUsername()) && AuthMessages.hello(e.getData()))payloadPeers.add(p);
+    }
+    @Subscribe(order=PostOrder.FIRST) public void voiceTransport(PluginMessageEvent e) {
+        if(!e.getIdentifier().equals(VOICE_CHANNEL))return;
+        if(!(e.getSource() instanceof Player p)||!inPaper(p)||!authorized(p)
+                ||p.getCurrentServer().filter(c->c==e.getTarget()).isEmpty())
+            e.setResult(PluginMessageEvent.ForwardResult.handled());
+    }
+    @Subscribe(order=PostOrder.FIRST) public void mcbotTransport(PluginMessageEvent e) {
+        if(!e.getIdentifier().equals(MCBOT_CHANNEL))return;
+        // A game-client driver is a gameplay action, not a new authentication
+        // method. Consult the live provider; disk heartbeats cannot grant it.
+        if(!(e.getSource() instanceof Player p)||!inPaper(p)||!authorized(p)
+                ||p.getCurrentServer().filter(c->c==e.getTarget()).isEmpty())
+            e.setResult(PluginMessageEvent.ForwardResult.handled());
     }
     private void notifyAuthenticated(Player p) {
         if(!p.isActive() || !inPaper(p))return;

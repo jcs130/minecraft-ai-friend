@@ -38,6 +38,11 @@ public final class AgentCliContractTest {
         check("help never pretends to execute",create.get("readOnly").getAsBoolean()&&!create.get("actionReadOnly").getAsBoolean());
         check("leaf exposes real parameters and resource rules",create.has("parameters")&&create.has("consumption")&&create.has("permission")&&create.has("resultQuery"));
         check("JSON actions advertised",create.get("jsonSupported").getAsBoolean());
+        check("dungeon info supports optional JSON",help("dungeon info --help").get("jsonSupported").getAsBoolean());
+        check("dungeon start JSON remains an action",help("dungeon start --help").get("jsonSupported").getAsBoolean()&&!help("dungeon start --help").get("actionReadOnly").getAsBoolean());
+        check("legacy dungeon menu does not pretend JSON support",!help("dungeon menu --help").get("jsonSupported").getAsBoolean());
+        var dungeonHelp=help("dungeon --help").getAsJsonArray("commands");
+        check("dungeon essential steps fit page one",dungeonHelp.size()==7&&dungeonHelp.get(0).getAsJsonObject().get("name").getAsString().equals("list")&&dungeonHelp.get(2).getAsJsonObject().get("name").getAsString().equals("status"));
         check("exam status explicitly supports JSON",help("guild exam status --help --json").get("jsonSupported").getAsBoolean());
         check("exam info explicitly supports JSON",help("guild exam info survey_basic --help --json").get("jsonSupported").getAsBoolean());
         check("supplies claim is an explicit JSON action",help("guild exam supplies claim map --help --json").get("jsonSupported").getAsBoolean()&&!help("guild exam supplies claim map --help --json").get("actionReadOnly").getAsBoolean());

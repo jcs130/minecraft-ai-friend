@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "id": "basic-survival-20261028",
+  "status": "deployed_and_verified",
+  "productionChanged": true,
+  "requiresNormalPaperRestart": true,
+  "requiresOnboardingReleaseOnlyMerge": true,
+  "candidate": {
+    "AgentFriend-0.4.47.25.jar": "46b590db9fd01d0129f9c8f090ca7c0d5e2c1ee0544d3c1a267aed2df1cd62d6",
+    "QiandengjiRpg-0.2.4.jar": "e93fb3210038b17b8a11730d3b5b0d9f4a0dc5485890e9ea168d041e79fafed9",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "e16481eabaee1e18cdaaa6d230bfef65bd7e1178247a703215c3bf9b91119d8d"
+  },
+  "builds": {
+    "AgentFriend": "0.4.47.25-r6",
+    "QiandengjiRpg": "0.2.4-r1",
+    "Vortex": "qd29"
+  },
+  "rollback": {
+    "AgentFriend-0.4.47.22.jar": {
+      "sha256": "015bdcd18c3ad07a03eed0e05f6e3c56b42cb7ec6c0f2a5b32d8d88096f06f13",
+      "metadataVersion": "0.4.47.22-vortex"
+    },
+    "QiandengjiRpg-0.2.0.jar": {
+      "sha256": "231a13974c7592b1427cd2c94ca021fc4af5f38bc66b08e9ad478ae21a424794",
+      "metadataVersion": "0.2.1"
+    },
+    "VortexRPG-1.2.2-alpha-qd27-zh.jar": {
+      "sha256": "3091f10513855b6116d53534de309fdee29f8689fdcff1b184f2dadc1f51bc38",
+      "metadataVersion": "1.2.2-alpha"
+    }
+  },
+  "commonSkills": [
+    "home",
+    "selfheal",
+    "food",
+    "blink",
+    "starbolt",
+    "frostnova",
+    "give",
+    "travel",
+    "prospect",
+    "night",
+    "feather"
+  ],
+  "tests": {
+    "pureChecks": 489,
+    "basicEffects": 42,
+    "basicColdAndSafety": 12,
+    "recoveryRegression": 15,
+    "certificateRegression": 8,
+    "realLlmOrPhysicalBedrock": false
+  },
+  "evidence": {
+    "basic-survival-bs5.json": {
+      "checks": 42,
+      "sha256": "dc9dfed7fb7f027c26a0e1b0cb27afc5a9918510a5fb84823898eff89af3df0e"
+    },
+    "basic-cold-bs6.json": {
+      "checks": 12,
+      "sha256": "2b152aa88c7cd903d4e06a0216023d4e8caa98711f7c3fefe96f5bf49282908a"
+    },
+    "rpg-recovery-bs6.json": {
+      "checks": 15,
+      "sha256": "9e85e91e16e8669ecbc267bbdec138faa018e2eabdebf30247706f9377635577"
+    },
+    "rpg-certificate-cold-bs6.json": {
+      "checks": 8,
+      "sha256": "2fb604f77502ba7407969da493c29116472c1268f31bbea97a890c2e56c4c701"
+    }
+  },
+  "inheritedRpgAndQwenCandidate": "rpg-usability-candidate-20261028.json",
+  "qwenCandidateSources": {
+    "native_plugin/plugin.py": "5c2adf2fb4fa0907ebf3e3be49ef4354f7840b3d0d01aaccdb0f131ea9145c0d",
+    "native_plugin/plugin.json": "473aa0c3d6ce136965536485161c7a714f77fdae35a83113bffca73475547a89",
+    "numen_controller.py": "0021f0d10b96593c203746f8d2aadaa5f9b950ce818408c70f2b46578e24d605"
+  },
+  "onboardingReleaseOnly": {
+    "release-revision": 3,
+    "release-notice": [
+      "[基础生存已恢复] 寒霜、星芒箭、闪现、归乡、圣愈、饱食、造物人人可用，无需选职或学习；按原魔力和冷却施放。目录：/mycli skills list common",
+      "[开始攻略] 职业技能仍用skills list/info；任务tasks list；补给guild shared；个人箱arena stash。基础技能施放不加--json，未知结果先核对。入门：/mycli intro"
+    ]
+  },
+  "coldBackupCompleted": true,
+  "actualQwenRuntimeBackupCompleted": true,
+  "stateMigration": false,
+  "publicSkillDownloadRepublished": false,
+  "preservedAgentFriendEntries": 574,
+  "releaseDocument": "paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md",
+  "verifiedAt": "2026-10-28T08:03:57.630Z",
+  "coldBackup": "20261028-152444",
+  "liveChecks": 37,
+  "historicalCandidateNotes": [
+    "Not an executable deployment plan",
+    "Only fixed home to village bypasses the Essentials command; no administrative warp permission granted",
+    "Native mana, original effects and cooldowns reused",
+    "Latest onboarding config must preserve every key except release revision and notice",
+    "Static review copies are not a complete cold backup",
+    "No QA fixture, warp, player or world data may be deployed",
+    "Production remains .22 / bridge .2.1 / qd27; no restart performed"
+  ],
+  "notes": [
+    "This candidate was deployed as basic-survival-release-20261028; do not replay the consumed plan.",
+    "QwenPaw and TTS were independently verified; original passwords, player identities and unknown action records retained.",
+    "The first maintenance wrapper reported a post-install old snapshot retention error. Original failure retained and continuation verified; no additional Paper restart."
+  ]
+}

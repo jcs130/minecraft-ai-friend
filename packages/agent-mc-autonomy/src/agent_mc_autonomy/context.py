@@ -441,12 +441,12 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         raise ValueError("context_budget_exceeded: stable rules, goal, tool schemas and output reserve do not fit")
     # Current state replaces by key; omit old keys that are absent in this sample.
     unique = {part["key"]: part for part in facts.get("parts", [])}
-    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "life", "serverFeedback", "messages", "terrain", "structure", "lastTask"))}
+    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "nativeRpg", "combatCapabilities", "life", "serverFeedback", "messages", "terrain", "structure", "lastTask"))}
     omitted = []
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
         # The internal change-detection hash is not gameplay evidence. Repeating
         # it beside every original handle can evict the actual action outcome.
-        fact = {name: value for name, value in fact.items() if name != "revision"}
+        fact = {name: value for name, value in fact.items() if name not in {"revision", "stateRevision"}}
         if key == "lastTask":
             fact = {**fact, "text": spatial_text(fact.get("text", ""))}
         if key == "serverFeedback" and len(fact.get("text", "").encode("utf-8")) > 1800:

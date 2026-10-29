@@ -1,5 +1,14 @@
 import {expect,it} from 'vitest';
-import {JourneyObserver,journeyOpportunityText,type JourneySample} from '../core/journey.ts';
+import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneySample} from '../core/journey.ts';
+it('normalizes the public route advice policy without treating it as path safety',()=>{
+  expect(journeyChoicePolicy()).toEqual({choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5});
+  expect(journeyChoicePolicy({choiceMinBlocks:12,choiceMaxBlocks:18,dangerChoiceMaxBlocks:3}))
+    .toEqual({choiceMinBlocks:12,choiceMaxBlocks:18,dangerChoiceMaxBlocks:3});
+  expect(journeyChoicePolicy({choiceMinBlocks:30,choiceMaxBlocks:5,dangerChoiceMaxBlocks:100}))
+    .toEqual({choiceMinBlocks:30,choiceMaxBlocks:30,dangerChoiceMaxBlocks:30});
+  expect(journeyChoicePolicy({choiceMinBlocks:NaN,choiceMaxBlocks:Infinity,dangerChoiceMaxBlocks:-2}))
+    .toEqual({choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:1});
+});
 function sample():JourneySample{return{scope:'realm:account',generation:'1',atMs:1000,dimension:'overworld',position:[0,64,0],safeToConsider:true,
   intent:{taskId:1,stepIndex:0,destination:[500,64,0],dimension:'overworld'},
   cues:[{kind:'npc',key:'entity:7',label:'villager',position:[8,64,0],source:'visible-entity',observedAtMs:1000}]};}

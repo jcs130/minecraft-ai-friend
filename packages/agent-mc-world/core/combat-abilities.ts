@@ -65,7 +65,9 @@ export class CombatAbilities {
   /** Builds model choices from current game facts without consuming a combat tick or issuing a command. */
   decisionFrame(bot: Bot, battlefield: Battlefield, maxCandidates: number, now = Date.now()): CombatDecisionFrame {
     const rules = this.tactic?.rules ?? [];
-    const skills = [...new Set(rules.map(r => r.spell))].map(spell => ({ spell,
+    const observed = [...new Set([...rules.map(r => r.spell), ...this.available])];
+    const skills = observed.slice(0,32).map(spell => ({ spell,
+      configured: rules.some(rule => rule.spell === spell),
       available: this.available.has(spell), manaCost: this.costs.get(spell) ?? null,
       cooldownRemainingMs: this.serverReadyAt.has(spell) ? Math.max(0, this.serverReadyAt.get(spell)! - now,
         this.lastSent.has(spell) ? this.cooldownOf(spell) - (now - this.lastSent.get(spell)!) : 0) : null,
@@ -74,7 +76,7 @@ export class CombatAbilities {
         : !this.serverReadyAt.has(spell) ? 'cooldown-unknown'
         : this.mana === null || this.manaLoading ? 'mana-unknown' : this.manualCastBlock(spell, now) }));
     const facts: Omit<CombatRuleFacts, 'cost'> = { ...this.ruleFacts(bot),
-      enemies: battlefield.actors.flatMap(e => e.relation === 'hostile' && e.distance !== null
+      enemies: battlefield.actors.flatMap(e => e.relation === 'hostile' && e.lineOfSight === true && e.distance !== null
         && e.distance <= 16 && e.health.current !== 0 ? [{ type: e.type ?? '', distance: e.distance }] : []) };
     const candidates = rules.flatMap(rule => {
       const skill = skills.find(s => s.spell === rule.spell)!;
@@ -86,7 +88,19 @@ export class CombatAbilities {
       return [{ id: rule.id, kind: 'cast' as const, ruleId: rule.id, spell: rule.spell, intent: rule.intent, manaCost: skill.manaCost }];
     });
     return { battlefield, tacticRevision: this.book.current().revision, mana: this.mana, skills,
+      skillsOmitted: Math.max(0, observed.length - skills.length),
       candidates: candidates.slice(0, maxCandidates), omittedCandidates: Math.max(0, candidates.length - maxCandidates) };
+  }
+
+  /** Small current capability index; no history, guessed spells or automatic rule expansion. */
+  capabilityIndex(now = Date.now()): string {
+    const selected = this.tactic?.rules?.length ? this.tactic.rules.map(rule => rule.spell) : this.tactic?.spells ?? this.defaultSpells;
+    const ids = [...new Set([...selected, ...this.available])];
+    const skills = ids.slice(0,32).map(id => ({id, observed:this.available.has(id), configured:selected.includes(id),
+      mana:this.costs.get(id) ?? null, cooldownMs:this.serverReadyAt.has(id)
+        ? Math.max(0,this.serverReadyAt.get(id)!-now,this.lastSent.has(id)?this.cooldownOf(id)-(now-this.lastSent.get(id)!):0) : null}));
+    return '[战斗能力现读] '+JSON.stringify({revision:this.book.current().revision,mana:this.mana,manaLoading:this.manaLoading,skills,omitted:Math.max(0,ids.length-skills.length)})
+      +'；observed是本连接已确认能力；configured是当前自动编排，两者不同。未编排不会自动施放；mc_combat_tactic读取/修订条件，技能效果和目标要求查能力提供方原文，null为未知。';
   }
 
   wantsHeal(health: number): boolean {
@@ -246,7 +260,8 @@ export class CombatAbilities {
         : this.manualCastBlock(spell, now) }));
     const recent = state.reports.slice(-3).map((r) => ({ id: r.id, endedAt: r.endedAt,
       reason: r.reason, healthBefore: r.healthBefore, healthAfter: r.healthAfter,
-      kills: r.kills, tacticRevision: r.tacticRevision,
+      kills: null, killAttribution: r.killAttribution ?? 'legacy-unverified',
+      targetDeaths: r.targetDeaths ?? null, tacticRevision: r.tacticRevision,
       spellsSent: r.casts.map((cast) => cast.spell), castsTruncated: r.castsTruncated }));
     return `[战术状态] 版本 ${state.revision}，修改时间 ${state.updatedAt ?? '未设置'}；已按世界保存。\n`
       + JSON.stringify({ observedAt: new Date(now).toISOString(), mana: this.mana,

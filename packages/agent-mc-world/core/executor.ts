@@ -70,6 +70,7 @@ import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } f
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { sampleEffect, observedEffect } from './observed-effect.ts';
+import { captureDeathTarget, matchesDeathTarget, type DeathTargetIdentity } from './entity-death-identity.ts';
 import type { ObservedEffect } from '../src/contracts/observed-effect.ts';
 import { assertInventoryClicksReady, isInventoryClickError } from './inventory-click-sync.ts';
 import { ContainerWindowOwnership } from './container-window-ownership.ts';
@@ -638,10 +639,17 @@ function fleeTimeoutText(
     + `人在 ${cellText(feetOf(bot))};${chaser};${around}`;
 }
 
-export function sendChat(bot: Bot, text: string): void {
+/** Observe the synchronous transport boundary, after validation and deduplication. */
+export interface ChatDispatchContext { taskId?: number; stepIndex?: number; callId?: string }
+export type ChatDispatch = (text: string, send: () => void, context?: ChatDispatchContext) => void;
+
+export function sendChat(bot: Bot, text: string, dispatch?: ChatDispatch, context?: ChatDispatchContext): void {
   const error = chatInputError(text);
   if (error) throw new SkillBlocked(error);
-  const result = sendDeduplicatedChat(bot, text, () => bot.chat(text));
+  const result = sendDeduplicatedChat(bot, text, () => {
+    if (dispatch) dispatch(text, () => bot.chat(text), context);
+    else bot.chat(text);
+  });
   if (!result.sent) throw new SkillNoop(`相同接收范围和内容已于 ${new Date(result.previousAt!).toISOString()} 发送；期间没有新的对方消息，本次未重复发送。去重窗口 ${result.windowMs} 毫秒，可由 chatDuplicateWindowMs 配置。`);
 }
 
@@ -659,7 +667,9 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
     ? `;本次满足目标 ${cellText(target)} 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true` : '';
 }
 
-async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<string> {
+async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
+  // A dispatched travel can change worlds within one task. Freeze each operation, not the whole task.
+  if (ctx.getChests) ctx = { ...ctx, chests: ctx.getChests() };
   // An unresolved click is a protocol transaction barrier, independent of item
   // dependencies. Observing, walking and speaking remain available; the lower
   // click guard also covers inventory changes initiated by background actions.
@@ -767,6 +777,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
           await runLeg(sceneTarget, levelTravelGoal(leg.x, leg.z));
           const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
           if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
+          // A leg can settle before navigateWithCheckpoints polls pending work.
+          // Offer that completed boundary without reviving the released path.
+          await ctx.checkpoint?.(() => settleOnGround(bot, ctx, 1_500));
+          checkAbort(ctx);
         }
         sceneTarget = target;
         await runLeg(target, finalGoal, !call.groundY && !call.exact);
@@ -814,7 +828,27 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       setOwnedGoal(bot, goal, 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
       try {
         // 战斗会挂起本步并原样续做。旧实例醒来时不能撤掉新持有者的目标。
-        while (!ctx.aborted() && e.isValid) await sleep(100);
+        while (!ctx.aborted() && e.isValid) {
+          await sleep(100);
+          checkAbort(ctx);
+          if (!e.isValid) break;
+          let stopped = false;
+          await ctx.checkpoint?.(async () => {
+            const owner = goalOwnerOf(bot);
+            if (owner?.kind !== 'task' || owner.goal !== goal || bot.pathfinder.goal !== goal) {
+              throw new Aborted('跟随目标已由其他动作接管');
+            }
+            dropGoal(bot, 'task', '安全检查点暂停跟随', ctx.diag);
+            stopped = true;
+            await settleOnGround(bot, ctx, 1_500);
+          });
+          if (stopped) {
+            checkAbort(ctx); // Successful yields unwind this instance before another task starts.
+            if (bot.pathfinder.goal || goalOwnerKind(bot)) throw new Aborted('检查点收尾期间跟随已被接管');
+            // A changed safety condition can defer the handoff after its path was stopped.
+            if (e.isValid) setOwnedGoal(bot, goal, 'task', `继续跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
+          }
+        }
       } finally {
         if (goalOwnerOf(bot)?.goal === goal) dropGoal(bot, 'task', '跟随结束', ctx.diag);
         releaseWalkOnly();
@@ -881,12 +915,15 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       // 跳键不许漏出这个技能:它会污染后续所有任务。松开推迟到登岸这一程走完为止,
       // 超时那条出口正靠它继续上浮。
       try {
-        const land = findNearbyAirColumn(bot, 32, landSearchUp(bot));
-        if (!land) {
+        const lands = [...nearbyAirColumns(bot, 32, landSearchUp(bot))];
+        if (!lands.length) {
           throw new SkillBlocked(`${head},但 32 格内没找到可站立的岸;只换到气,还没有脱离液体`);
         }
         try {
-          await gotoGoal(bot, new goals.GoalBlock(land.x, land.y, land.z), ctx);
+          // Geometry identifies candidates, not an attainable shore. One search
+          // chooses among them; never spend a whole surface task on the first
+          // dry cliff top while a reachable bank exists in another direction.
+          await gotoGoal(bot, new goals.GoalCompositeAny(lands.map(land => new goals.GoalBlock(land.x, land.y, land.z))), ctx);
         } catch (err) {
           if (err instanceof Aborted) throw err;
           throw new SkillBlocked(`${head},但游不到看见的那处岸(${(err as Error).message});还没有脱离液体`);
@@ -949,8 +986,8 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
     case 'smelt': return skillSmelt(bot, call.input, call.count, call.fuel, ctx, call.at);
     case 'brew': return skillBrew(bot, call, ctx);
     case 'enchant': return skillEnchant(bot, call, ctx);
-    case 'eat': return skillEat(bot, call.item);
-    case 'attack': return skillAttack(bot, call.target, call.mode ?? 'auto', ctx);
+    case 'eat': return skillEat(bot, call.item, () => checkAbort(ctx));
+    case 'attack': return skillAttack(bot, call.target, call.mode ?? 'auto', ctx, call.entityId);
     case 'equip': return skillEquip(bot, call);
     case 'pickup': return withBlueprintGain(bot, ctx, () => skillPickup(bot, ctx, call.item));
     case 'toss': return skillToss(bot, call, ctx);
@@ -971,7 +1008,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       // accepted or waiting step. Synchronous game events from chat are covered.
       const endTransition = ctx.beginDimensionTransition?.(destination ?? undefined);
       try {
-        sendChat(bot, call.command);
+        sendChat(bot, call.command, chatDispatch);
         const until = Date.now() + 6_000;
         while (Date.now() < until) {
           checkAbort(ctx);
@@ -988,7 +1025,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
       const needsWindow = call.text.startsWith('/') && consumesOpenWindow(next);
       const beforeWindow = bot.currentWindow;
-      sendChat(bot, call.text);
+      sendChat(bot, call.text, chatDispatch, ctx.batch ? { taskId: ctx.batch.taskId, stepIndex: ctx.batch.index } : undefined);
       publishViewerCastCommand(bot, call.text);
       if (needsWindow && bot.currentWindow !== beforeWindow && storageWindow(bot.currentWindow)) {
         ctx.holdWindow?.(bot.currentWindow!);
@@ -1276,12 +1313,13 @@ interface CheckpointDrain {
   continuation: QueuedTask | null;
 }
 
-/** 当前步骤重放时仍有固定空间目标，或按实际采集计数扣除已完成量。 */
+/** 按固定空间目标、可重新核验的跟随对象，或实际采集计数恢复当前步骤。 */
 function checkpointReplayable(call: SkillCall): boolean {
   const fixed = (at: readonly unknown[] | undefined): boolean =>
     at !== undefined && at.every((value) => typeof value === 'number' && Number.isFinite(value));
   switch (call.skill) {
     case 'collect': return true;
+    case 'follow': return true; // Re-resolve the explicitly named target when resuming.
     case 'goto': return fixed(call.at);
     case 'excavate': return call.anchors.every(fixed);
     case 'build':
@@ -1878,6 +1916,8 @@ interface ExecutorOptions {
   onHoldsReleased?: () => void;
   /** 开过的箱子账本 */
   chests?: ChestBook;
+  /** A frozen world-scoped view for each precheck or operation. */
+  getChests?: () => ChestBook;
   /** Persist completed empty directional routes across World restarts. */
   directionalSweeps?: DirectionalSweepBook;
   /** 成果登记(World 持久化) */
@@ -1896,6 +1936,8 @@ interface ExecutorOptions {
   /** 白天点床时重生点已经悄悄搬走了没有(World 持有 set_spawn 的时刻) */
   spawnNote?: SkillContext['spawnNote'];
   serverFeedbackSince?: SkillContext['serverFeedbackSince'];
+  /** Called only at actual chat transport dispatch, never while merely queued. */
+  chatDispatch?: ChatDispatch;
   /** 个人重生点那一格(World 持有);受理刻的重生锚闸与技能回执共读一份 */
   spawnAnchor?: SkillContext['spawnAnchor'];
   /** 蓝图施工面(World 持有);build 的蓝图形态、两道受理刻的闸与采集搭车共读一份 */
@@ -1944,6 +1986,7 @@ export class Executor {
   private stopped = false;
   private executionEpoch = 0;
   private activeAttack: TaskAttackLease | null = null;
+  private activeAttackTarget: DeathTargetIdentity | null = null;
   /** 战斗挂起中的任务(断点冻结,战后 resume 放回队头续做) */
   private frozen: QueuedTask | null = null;
   /** 让位收尾涵盖整个旧 run；清请求不能提前解除这道执行屏障。 */
@@ -2045,6 +2088,10 @@ export class Executor {
 
   constructor(private readonly opts: ExecutorOptions) {
     this.directionalSweeps = opts.directionalSweeps ?? new DirectionalSweepBook(null);
+  }
+
+  private chestBook(): ChestBook | undefined {
+    return this.opts.getChests?.() ?? this.opts.chests;
   }
 
   /** 当前任务在做什么;空闲为 null */
@@ -2205,9 +2252,19 @@ export class Executor {
     const frozen = p ? freezeFirstStep(steps, { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) }) : null;
     const calls = frozen?.steps ?? steps;
     const satisfiedGoto = this.satisfiedGotoReceipt(calls);
-    if (satisfiedGoto) return {
-      receipt: `[${this.clock(at)}] ${satisfiedGoto}`, accepted: true, completedImmediately: true,
-    };
+    if (satisfiedGoto) {
+      // The first no-movement arrival is useful evidence. Repeating it must
+      // not bypass the same-position guard and manufacture successful work.
+      // This branch is only reached after fresh arrival verification while
+      // idle; it never changes or interrupts an owned task/queue.
+      const repeat = this.repeatStationaryGotoNote(calls, this.opts.getBot(), at);
+      if (repeat) return {
+        receipt: `[${this.clock(at)}] ${satisfiedGoto}\n[重复无效移动] ${repeat}。`
+          + '到达条件已满足，本单未派发。请根据原回执选择后续动作或真实等待条件；重发相同 goto 不会增加位移，也不证明长期目标完成。',
+        accepted: false, rejection: { kind: 'repeat', rule: 'navigation.already-satisfied' },
+      };
+      return { receipt: `[${this.clock(at)}] ${satisfiedGoto}`, accepted: true, completedImmediately: true };
+    }
     const id = this.opts.nextId();
     const task: QueuedTask = { id, steps: [...calls], enqueuedAt: at,
       priorContext: this.priorOutcomeContext(calls) ?? undefined };
@@ -2627,7 +2684,7 @@ export class Executor {
       .slice(0, 3);
     if (visible.length) return `附近实际看见的容器: ${visible.map((spot) =>
       `${zhName(spot.name)}(${spot.x},${spot.y},${spot.z})`).join('、')}；请先核验容量与访问权限，不要逐格猜坐标`;
-    const known = knownChestNote(bot, this.opts.chests);
+    const known = knownChestNote(bot, this.chestBook());
     return known
       ? `32 格内没观察到容器；${known}。先去现场核验，不要逐格猜坐标`
       : '32 格内没观察到容器；先寻找或制作并放置储物箱，不要逐格猜坐标';
@@ -2681,7 +2738,7 @@ export class Executor {
               return `指定位置 (${target.x},${target.y},${target.z}) 附近方块尚不可读，容器是否存在仍未知；${this.storageAlternativeNote(bot, target)}`;
             }
             if (!CONTAINER_FIND.includes(block.name)) {
-              this.opts.chests?.forget(dimensionOf(bot), target);
+              this.chestBook()?.forget(dimensionOf(bot), target);
               return `指定位置 (${target.x},${target.y},${target.z}) 实际是${zhName(block.name)}，不是储物箱；${this.storageAlternativeNote(bot, target)}`;
             }
           }
@@ -2722,12 +2779,13 @@ export class Executor {
       try { target = resolveAt(bot, step.at); }
       catch { continue; }
       const dimension = dimensionOf(bot);
-      if (!this.opts.chests?.get(dimension, target)) continue;
+      const chests = this.chestBook();
+      if (!chests?.get(dimension, target)) continue;
       const position = new Vec3(target.x, target.y, target.z);
       if (bot.entity.position.distanceTo(position) > 16) continue;
       const block = bot.blockAt(position);
       if (!block || CONTAINER_FIND.includes(block.name) || FURNACE_KINDS.has(block.name)) continue;
-      this.opts.chests.forget(dimension, target);
+      chests.forget(dimension, target);
       return `账本里的容器 (${target.x},${target.y},${target.z}) 现场已是${zhName(block.name)}；已清除过期记录；当前操作仍按实际方块核验`;
     }
     return null;
@@ -2756,12 +2814,12 @@ export class Executor {
       if (!block) continue; // An unloaded chunk is unknown, not proof of absence.
       if (!CONTAINER_FIND.includes(block.name) && !FURNACE_KINDS.has(block.name)
         && block.name !== 'brewing_stand') {
-        this.opts.chests?.forget(dimensionOf(bot), target);
+        this.chestBook()?.forget(dimensionOf(bot), target);
         return { text: `目标格 (${target.x},${target.y},${target.z}) 当前是${zhName(block.name)}，不是可取物容器。先 find chest 核对实际方块坐标；本单不入队，原队列保留`,
           retryAfterMs: 8_000, step, proof: 'not-container' };
       }
       if (!step.item) continue;
-      const rec = this.opts.chests?.get(dimensionOf(bot), target);
+      const rec = this.chestBook()?.get(dimensionOf(bot), target);
       if (!rec?.observedAt || now - rec.observedAt > 30_000 || hasItem(rec, step.item, bot?.registry)) continue;
       return { text: `容器 (${target.x},${target.y},${target.z}) 上次开窗未见${zhName(step.item)}；这不是当前内容的确认，本次开窗会重新核验`,
         retryAfterMs: 8_000, step, proof: 'missing-item' };
@@ -2773,6 +2831,11 @@ export class Executor {
   private impossibleCraftStartNote(steps: readonly SkillCall[]): string | null {
     const bot = this.opts.getBot();
     for (const [index, step] of steps.entries()) {
+      if (bot && step.skill === 'eat' && step.item && this.opts.precheck?.() !== false
+        && Object.keys(bot.registry?.foodsByName ?? {}).length > 0
+        && bot.registry?.itemsByName?.[step.item] && !bot.registry?.foodsByName?.[step.item]) {
+        return `第 ${index + 1} 步${notFoodText(bot, step.item)}；本单未入队，原队列保留`;
+      }
       if (step.skill === 'craft' && step.grid && step.item) {
         return `合成同时写了 item 和 grid；实际只会按 grid 摆，item 会被忽略。若要做${zhName(step.item)}，只写 item 走官方配方；若要试自摆配方，只写 grid。原队列保留`;
       }
@@ -2823,7 +2886,7 @@ export class Executor {
   /** 账本合并了同类槽位；仅计入能保证腾出的格数，再扣除本单先前存物。 */
   private plannedFreeSlots(bot: Bot, target: { x: number; y: number; z: number },
     earlierSteps: readonly SkillCall[]): number {
-    const rec = this.opts.chests?.get(dimensionOf(bot), target);
+    const rec = this.chestBook()?.get(dimensionOf(bot), target);
     if (!rec?.observedAt || Date.now() - rec.observedAt > 120_000) return 0;
     let openedAt: { x: number; y: number; z: number } | null = null;
     const taken = new Map<string, number>();
@@ -2864,7 +2927,7 @@ export class Executor {
   private recentFullChestNote(bot: Bot, target: { x: number; y: number; z: number },
     item: string, count: number, earlierSteps: readonly SkillCall[]): string | null {
     if (earlierSteps.some((step) => step.skill === 'build')) return null;
-    const rec = this.opts.chests?.get(dimensionOf(bot), target);
+    const rec = this.chestBook()?.get(dimensionOf(bot), target);
     if (!rec?.observedAt || Date.now() - rec.observedAt > 120_000
       || rec.slots <= 0) return null;
     // A cross-container transfer first increases the carried count. Do not take
@@ -3223,7 +3286,7 @@ export class Executor {
         const block = bot.blockAt(new Vec3(cell.x, cell.y, cell.z));
         const isContainer = block && (CONTAINER_FIND.includes(block.name)
           || FURNACE_KINDS.has(block.name) || block.name === 'brewing_stand');
-        const rec = this.opts.chests?.get(dimensionOf(bot), cell);
+        const rec = this.chestBook()?.get(dimensionOf(bot), cell);
         const evidence = entry.admissionRule ? this.takeEvidenceNote(steps, now) : null;
         if ((evidence && entry.admissionRule !== `take.${evidence.proof}`)
           || (entry.takeProof === 'not-container' && isContainer)
@@ -3632,7 +3695,7 @@ export class Executor {
     const here = bot.entity?.position;
     if (!here || typeof bot.blockAt !== 'function') return '';
     const hints: string[] = [];
-    const known = [-1, 0, 1].map((dy) => this.opts.chests?.get(dimensionOf(bot),
+    const known = [-1, 0, 1].map((dy) => this.chestBook()?.get(dimensionOf(bot),
       { x: target.x, y: target.y + dy, z: target.z })).find(Boolean);
     if (known) hints.push(`账本记有容器 (${known.x},${known.y},${known.z})；那是方块坐标，goto 应选附近可站立格，开箱用 use at`);
     const cx = Math.floor(here.x), cy = Math.floor(here.y), cz = Math.floor(here.z);
@@ -3908,7 +3971,7 @@ export class Executor {
       },
       blockAt: (cell) => blockAtCell(bot, cell),
       lastAte: () => lastAteOf(bot),
-      chests: this.opts.chests,
+      chests: this.chestBook(),
     };
   }
 
@@ -4161,10 +4224,10 @@ export class Executor {
     // Native programs own an opaque continuation, not replayable skill steps.
     if (!boundary && (!call || !checkpointReplayable(call)
       || (call.skill === 'collect' && !task.count))) return;
-    // A fixed goto can stop its owned path at a grounded checkpoint. Other work
+    // A fixed goto or explicit follow can stop its owned path at a grounded checkpoint. Other work
     // retains its existing atomic boundaries; settling never interrupts a dig,
     // placement, container operation or another body owner.
-    const navigation = !boundary && !!settle && call?.skill === 'goto';
+    const navigation = !boundary && !!settle && (call?.skill === 'goto' || call?.skill === 'follow');
     if (this.checkpointDrain || !this.checkpointReady(task, bot, navigation || !settle, boundary, navigation)) return;
     const drain: CheckpointDrain = { task, bot, resumeFrom, boundary, phase: 'settling', continuation: null };
     this.checkpointDrain = drain;
@@ -4660,10 +4723,15 @@ export class Executor {
     attack.lastSwingTargetId = -1;
   }
 
-  noteCombatTargetDead(targetId: number): void {
+  noteCombatTargetDead(target: number | { id?: number; uuid?: string }): void {
     const attack = this.activeAttack;
-    if (!attack || attack.targetId !== targetId) return;
+    const selected = this.activeAttackTarget;
+    if (!attack || !selected || attack.disconnected) return;
+    // Keep the selected entity/UUID identity through despawn and asynchronous
+    // preparation. A new entity reusing the numeric ID is not this target's death.
+    if (!matchesDeathTarget(this.opts.getBot()?.entities, selected, target)) return;
     attack.dead = true;
+    attack.deathObservedAt ??= Date.now();
     this.opts.ranged?.abort();
     dropGoal(this.opts.getBot(), 'task', '交战目标死了', this.opts.diag);
   }
@@ -4748,8 +4816,11 @@ export class Executor {
       swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
       hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1,
       dead: false, disconnected: false,
+      deathObservedAt: null,
     };
     this.activeAttack = lease;
+    const entity = this.opts.getBot()?.entities[targetId];
+    this.activeAttackTarget = entity ? captureDeathTarget(entity) : null;
     return lease;
   }
 
@@ -4757,12 +4828,14 @@ export class Executor {
     if (this.activeAttack !== lease) return;
     this.opts.ranged?.abort();
     this.activeAttack = null;
+    this.activeAttackTarget = null;
   }
 
   private cancelActiveAttack(): void {
     if (!this.activeAttack) return;
     this.opts.ranged?.abort();
     this.activeAttack = null;
+    this.activeAttackTarget = null;
   }
 
   /** 死亡是执行边界：旧身体上的当前、冻结和排队工作全部失效。 */
@@ -4826,7 +4899,7 @@ export class Executor {
    * 当刻撤单并撤掉寻路目标(包括逃生目标),每一件各自投递取消终态。
    * 返回给 bot 的说明;没有可撤的东西时为 null。
    */
-  cancelForDimensionChange(from: string, to: string): string | null {
+  cancelForDimensionChange(from: string, to: string, worlds?: { from: string | null; to: string | null }): string | null {
     const t = this.task;
     if (t?.steps[t.stepIndex]?.skill === 'transit') return null;
     const transition = t?.dimensionTransition;
@@ -4845,8 +4918,9 @@ export class Executor {
       this.frozen = null;
     }
     if (!t && dropped.length === 0) return goal ? '旧维度的寻路目标已撤' : null;
-    const by = `维度变化中止(从${zhDimension(from)}进入了${zhDimension(to)},`
-      + `计划里的坐标是按${zhDimension(from)}写的)`;
+    const by = worlds
+      ? `世界变化中止(从${worlds.from ?? '未核实世界'}进入${worlds.to ?? '未核实世界'}，旧坐标需要重新观察)`
+      : `维度变化中止(从${zhDimension(from)}进入了${zhDimension(to)},计划里的坐标是按${zhDimension(from)}写的)`;
     if (expected) {
       transition!.observed = true;
       for (const d of dropped) this.reportCancelled(d, by, Executor.frozenProgress(d));
@@ -4945,7 +5019,7 @@ export class Executor {
   private furnaceNote(): string {
     const bot = this.opts.getBot();
     if (!bot?.game) return '';
-    const cooking = this.opts.chests?.loadedFurnaces(String(bot.game.dimension ?? 'overworld')) ?? [];
+    const cooking = this.chestBook()?.loadedFurnaces(String(bot.game.dimension ?? 'overworld')) ?? [];
     if (cooking.length === 0) return '';
     const one = (r: (typeof cooking)[number]): string => {
       const f = r.furnace!;
@@ -5122,7 +5196,7 @@ export class Executor {
     };
     const windows = new ContainerWindowOwnership(bot, {
       valid: () => !flag.aborted && !this.stopped && flag.epoch === this.executionEpoch && this.opts.getBot() === bot,
-      scope: () => normalizeDimension(dimensionOf(bot)),
+      scope: () => JSON.stringify([normalizeDimension(dimensionOf(bot)), this.opts.searchContext?.().realm ?? 'current']),
       onEvent: ({ kind, window, source, heldWindow, candidateWindow, changedFields }) => {
         const event = `hold-window-${kind}`;
         this.opts.diag?.write({ lane: 'skill', event, taskId: id,
@@ -5178,8 +5252,9 @@ export class Executor {
         queueHold: this.holdReason(),
         frozenTaskId: this.frozen?.id ?? null,
       }),
-      chests: this.opts.chests,
+      chests: this.chestBook(),
       works: this.opts.works,
+      getChests: this.opts.getChests,
       probeMemo: this.probeMemo,
       explored: this.opts.explored,
       search: {
@@ -5506,6 +5581,7 @@ export class Executor {
           : null;
         task.stepIndex = i;
         ctx.progressDetail = undefined;
+        ctx.recordObservation = value => observations.set(i, value);
         task.escape.active = false; // 逃生标记只属于置位它的那一步
         // 续做步从打断前的读数起算:第一次进度回调之前再被挂起,断点里的进度也不能是空
         task.count = carried ? { done: carried.done, total: carried.total } : null;
@@ -5593,7 +5669,7 @@ export class Executor {
         const gainBase = collectGainBase(bot, call) ?? undefined;
         // 这一步能不能顺手把后面几步也做掉(目前只有 stow 用):它自己看剩下的步
         ctx.batch = {
-          steps, index: i,
+          steps, index: i, taskId: id,
           absorb: (n, receipt, ok = true) => { (task.absorbed ??= new Map()).set(n, { receipt, ok }); },
         };
         windowStep = i + 1;
@@ -5624,7 +5700,7 @@ export class Executor {
             || ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
           let skillResult: string;
           try {
-            skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
+            skillResult = await runSkill(bot, run, ctx, this.opts.chatDispatch).finally(() => releaseTread?.());
             if (run.skill === 'observe') observations.set(i, JSON.parse(skillResult));
           }
           finally {
@@ -6076,7 +6152,7 @@ export class Executor {
     }
     if (!this.bagLowArmed) return '';
     this.bagLowArmed = false;
-    const chest = knownChestNote(bot, this.opts.chests);
+    const chest = knownChestNote(bot, this.chestBook());
     return `\n[背包] 包里只剩 ${free} 格空位,快满了${chest ?? ';账上本维度还没有记过箱子'}`;
   }
 
@@ -6170,8 +6246,10 @@ interface ReflexOptions {
   onWaterTrap?: () => void;
   /** 两次受击反应之间的最短间隔(秒) */
   reactCooldownSec: () => number;
-  /** 防溺水上浮 */
+  /** Legacy combined switch; retained for callers that do not provide emergencyDrown. */
   antiDrown: () => boolean;
+  /** Critical oxygen rescue, independent of passive surface swimming. */
+  emergencyDrown?: () => boolean;
   /** 挨烧就跑(岩浆、火);关掉则连手动冲刺一起松手 */
   antiLava: () => boolean;
   /** 执行器手上正在跑的任务;灭火找水不在它跑的时候抢身体 */
@@ -6365,7 +6443,7 @@ export class Reflexes {
     // not authorize a new rescue while Mineflayer still reports a dead body.
     if ((bot as Bot & { isAlive?: boolean }).isAlive === false || bot.health <= 0) return;
     // Turning a reflex off also releases its existing input, path and queue hold.
-    if (!this.opts.antiDrown()) this.endDrown(bot);
+    if (!this.drownRescueEnabled()) this.endDrown(bot);
     // 防溺水与防烧在各自开关启用时逐心跳检查；关闭防烧时调用 endLavaEscape 收尾。
     // 执行器清空冻结后，持续危机会重申环境租约，仍受 beginEnvironment 的超时放弃限制。
     if (this.environmentHoldStale) {
@@ -6374,7 +6452,7 @@ export class Reflexes {
         this.beginEnvironment(`${Reflexes.ownerText(this.environmentOwnerKind)}危机还在,重申队列冻结`);
       }
     }
-    if (this.opts.antiDrown()) void this.antiDrown(bot);
+    if (this.drownRescueEnabled()) void this.antiDrown(bot);
     if (this.opts.antiLava()) void this.antiLava(bot);
     else this.endLavaEscape(bot, false);
     if (this.buried !== null) void this.antiSuffocate(bot);
@@ -7225,7 +7303,7 @@ export class Reflexes {
     if (this.opts.antiLava()) void this.antiLava(bot);
     if (headInWater(bot)) {
       this.hurtUnderwaterAt = now;
-      if (this.opts.antiDrown()) void this.antiDrown(bot);
+      if (this.drownRescueEnabled()) void this.antiDrown(bot);
     }
     // hurting=true:实心方块闷头那一路(圆石/石头)只在掉血时起手,口径在这条挂钩上
     void this.antiSuffocate(bot, true);
@@ -7485,6 +7563,10 @@ export class Reflexes {
   /** 本轮溺水里零推进撤销过的目标格,登岸/换气点都不再选它;危机解除清空 */
   private readonly drownExcluded = new Set<string>();
 
+  private drownRescueEnabled(): boolean {
+    return this.opts.emergencyDrown?.() ?? this.opts.antiDrown();
+  }
+
   private endDrown(bot: Bot): void {
     const active = this.drowning;
     const escape = this.escapeGoal;
@@ -7497,16 +7579,16 @@ export class Reflexes {
     if (escape?.kind === 'drown') {
       this.escapeGoal = null;
       if (bot.pathfinder?.goal === escape.goal) {
-        dropGoal(bot, 'escape', '自动上浮已关闭', this.opts.diag);
+        dropGoal(bot, 'escape', '紧急防溺水已关闭', this.opts.diag);
       }
     }
     if (!active && escape?.kind !== 'drown') return;
     if (this.lavaEscape === null && this.buried === null && !waterControlActive(bot)) {
       bot.setControlState('jump', false);
     }
-    this.releaseEnvironmentHoldNow(bot, '自动上浮已关闭，交还控制权');
+    this.releaseEnvironmentHoldNow(bot, '紧急防溺水已关闭，交还控制权');
     this.opts.diag?.write({ lane: 'reflex', event: 'drown-disabled',
-      msg: '自动上浮已关闭，撤销本反射的按键、寻路与冻结租约',
+      msg: '紧急防溺水已关闭，撤销本反射的按键、寻路与冻结租约',
       data: { position: bot.entity.position, oxygen: bot.oxygenLevel ?? null } });
   }
 
@@ -7898,13 +7980,22 @@ function findBreathingCell(
 
 /**
  * 寻找最近的可站立登岸点；脚下有支撑、脚头不在水中且路线无实心阻隔。
- * maxUp 由实测水柱确定，搜索从半径一格逐圈扩展；找不到返回 null。
+ * maxUp 由实测水柱确定，搜索从半径一格逐圈扩展；反射只取直线候选。
  */
 function findNearbyAirColumn(
   bot: Bot, maxR = 12, maxUp = 3, excluded: (c: Cell) => boolean = () => false,
 ): { x: number; y: number; z: number } | null {
+  const p = bot.entity.position.floored();
+  for (const cell of nearbyAirColumns(bot, maxR, maxUp, excluded)) {
+    if (reachableFromWater(bot, p, cell)) return cell;
+  }
+  return null;
+}
+
+function* nearbyAirColumns(
+  bot: Bot, maxR: number, maxUp: number, excluded: (c: Cell) => boolean = () => false,
+): Generator<Cell, void, unknown> {
   const base = bot.entity.position.floored();
-  const me: Cell = { x: base.x, y: base.y, z: base.z };
   for (let r = 1; r <= maxR; r += 1) {
     for (let dx = -r; dx <= r; dx += 1) {
       for (let dz = -r; dz <= r; dz += 1) {
@@ -7917,11 +8008,12 @@ function findNearbyAirColumn(
           if (!below || !at || !head) continue;
           if (below.boundingBox !== 'block' || at.name !== 'air' || head.name !== 'air') continue;
           const cell: Cell = { x: feet.x, y: feet.y, z: feet.z };
-          if (excluded(cell) || !reachableFromWater(bot, me, cell)) continue;
-          return cell;
+          // A dry cell is only a candidate. Explicit surface uses path search
+          // so a wall on the straight ray must not hide a bank around a bend.
+          if (excluded(cell)) continue;
+          yield cell;
         }
       }
     }
   }
-  return null;
 }

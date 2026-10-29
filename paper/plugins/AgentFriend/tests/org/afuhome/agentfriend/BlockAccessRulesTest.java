@@ -63,6 +63,26 @@ public final class BlockAccessRulesTest {
         }
         try {new BlockAccessRules(true,Set.of(),List.of());throw new AssertionError("empty retained villages");}
         catch(IllegalArgumentException correct){checks++;}
+        var retained = new ArrayList<>(facilities);
+        retained.add(new BlockAccessRules.Area("world",-701,-490,-635,-472));
+        var adventure = new BlockAccessRules.Area("aincrad",-BlockAccessRules.LIMIT,-BlockAccessRules.LIMIT,
+                BlockAccessRules.LIMIT,BlockAccessRules.LIMIT);
+        retained.add(adventure);
+        var mapRules = new BlockAccessRules(true,Set.of(owner),retained);
+        check(mapRules.outside("aincrad").isEmpty(),"whole map has no wilderness allow overlay");
+        for(int x:List.of(-BlockAccessRules.LIMIT,-582,0,856,BlockAccessRules.LIMIT))
+            for(int z:List.of(-BlockAccessRules.LIMIT,-1144,0,934,BlockAccessRules.LIMIT)) {
+                check(!mapRules.open(guest,"aincrad",x,z),"ordinary map blocks stay protected");
+                check(mapRules.open(owner,"aincrad",x,z),"exact trusted editor still allowed");
+            }
+        check(mapRules.open(guest,"world",0,0),"normal wilderness remains open");
+        check(!mapRules.open(guest,"world",-590,-317),"previous facilities are retained");
+        check(mapRules.outside("world_nether").size()==1,"unrelated dimension unchanged");
+        while(retained.size()<16)retained.add(adventure);
+        check(new BlockAccessRules(true,Set.of(),retained).outside("aincrad").isEmpty(),"bounded sixteen areas accepted");
+        retained.add(adventure);
+        try {new BlockAccessRules(true,Set.of(),retained);throw new AssertionError("unbounded retained areas");}
+        catch(IllegalArgumentException correct){checks++;}
         System.out.println("BlockAccessRulesTest checks="+checks);
     }
 }

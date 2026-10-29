@@ -2,7 +2,7 @@ import {describe,it,expect,vi} from 'vitest';
 import {EventEmitter} from 'node:events';
 import {Vec3} from 'vec3';
 import {HearingLedger,audibleHint,attachHearing,hearingOf} from '../core/perception-hearing.ts';
-import {clearObservationRay,observedEntity,observationView} from '../core/perception-sight.ts';
+import {clearObservationRay,observedEntity,observationView,configureObservationPolicy} from '../core/perception-sight.ts';
 import {observeSpatial} from '../core/spatial-observation.ts';
 import {AttentionReader,perceptionArgs,validDetection} from '../core/perception-tools.ts';
 import {narrateWorldSegments,snapshotFromBot} from '../core/terrain.ts';
@@ -101,7 +101,7 @@ describe('perception evidence boundaries',()=>{
     bot.emit('end');expect(bot._client.listenerCount('sound_effect')).toBe(0);stop();
   });
   it('rejects walls, unknown geometry, diagonal grazes and outside view; hidden target query does not reveal existence',()=>{
-    const bot=rig();expect(observedEntity(bot,bot.entities[9])).toBe(true);
+    const bot=rig();configureObservationPolicy(bot,()=>({nearbyOccludedRange:0}));expect(observedEntity(bot,bot.entities[9])).toBe(true);
     bot.blockAt=()=>stone;expect(observedEntity(bot,bot.entities[9])).toBe(false);
     expect(new AttentionReader().read(bot,3,1000,true,9).highlights).toEqual([]);
     bot.blockAt=()=>null as never;expect(observedEntity(bot,bot.entities[9])).toBe(false);
@@ -110,14 +110,16 @@ describe('perception evidence boundaries',()=>{
   it('forecasts only across two visible observations and drops an occluded track',()=>{
     const bot=rig(),reader=new AttentionReader();const first=reader.read(bot,3,1000,true);
     expect(first.highlights[0]).toMatchObject({attackRange:null,sightRange:null,prediction:null});
+    expect(first.highlights[0]).toMatchObject({id:9,entityId:9,target:'zombie'});
     bot.entities[9].position.x=1;
     expect(reader.read(bot,3,1500,true).highlights[0]?.prediction?.probability).toBeNull();
-    bot.blockAt=()=>stone;expect(reader.read(bot,3,1600,true).highlights).toEqual([]);
+    bot.blockAt=()=>stone;expect(reader.read(bot,3,1600,true).highlights[0]).toMatchObject({visible:false,prediction:null});
     bot.blockAt=()=>air;expect(reader.read(bot,3,1700,true).highlights[0]?.prediction).toBeNull();
   });
   it('does not turn a stored invisible entity into an invented heard sound or omitted count',()=>{
     const bot={...rig(),registry:{items:{},blocksByName:{}},game:{dimension:'overworld'},time:{},
       inventory:{items:()=>[],slots:[]},players:{},blockAt:()=>stone,findBlocks:()=>[]};
+    (bot.entities[9] as any).invisible=true;
     const snapshot=snapshotFromBot(bot,{scanBlocks:false});expect(snapshot.entities).toEqual([]);
     expect(snapshot.entitiesOmitted).toBe(0);
     const text=narrateWorldSegments({...snapshot,entities:[{name:'zombie',kind:'hostile',distance:7,dy:0,direction:'north',visible:false}]}).map(s=>s.text).join('\n');

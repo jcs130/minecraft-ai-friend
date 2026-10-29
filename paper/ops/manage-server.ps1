@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Watchdog', 'Backup', 'Mirror')]
     [string]$Action = 'Status'
 )
@@ -34,9 +34,12 @@ $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
 $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
 $pendingContentDeploy = Join-Path $opsDir 'content-plugins.pending.json'
 $pendingPaperCoreUpgrade = Join-Path $opsDir 'paper-core-upgrade.pending.json'
+$pendingRuntimeRelocation = Join-Path $opsDir 'runtime-relocation.pending.json'
 . (Join-Path $PSScriptRoot 'content-deploy.ps1')
 . (Join-Path $PSScriptRoot 'paper-core-upgrade.ps1')
 . (Join-Path $PSScriptRoot 'ysm-services.ps1')
+. (Join-Path $PSScriptRoot 'agent-client-identity.ps1')
+. (Join-Path $PSScriptRoot 'runtime-relocation.ps1')
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -95,14 +98,36 @@ function Stop-SpectateWatcher {
     Log 'Spectate watcher stopped'
 }
 
+function Test-AgentEyeWatcherCommandLine([string]$line) {
+    # Match Node's main module, not another program mentioning the watcher.
+    $exe = [regex]::Escape($node)
+    $main = [regex]::Escape($agentEyeWatcherScript)
+    return $line -match ('^\s*(?:"' + $exe + '"|' + $exe + ')\s+(?:"' + $main + '"|' + $main + ')(?:\s|$)')
+}
+
 function AgentEyeWatcherProcess {
     @(Get-CimInstance Win32_Process -Filter "name='node.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.ExecutablePath -eq $node -and $_.CommandLine -like "*$agentEyeWatcherScript*" })
+        Where-Object { $_.ExecutablePath -eq $node -and (Test-AgentEyeWatcherCommandLine $_.CommandLine) } |
+        Sort-Object ProcessId -Unique)
 }
 
 function Start-AgentEyeWatcher {
     $existing = @(AgentEyeWatcherProcess)
-    if ($existing.Count -gt 1) { throw 'Multiple Agent Eye watcher processes; manual inspection required.' }
+    if ($existing.Count -gt 1) {
+        # Called under the existing maintenance lock. Keep the newest verified
+        # watcher and remove only duplicate instances of this exact main module.
+        $keep = $existing | Sort-Object CreationDate,ProcessId -Descending | Select-Object -First 1
+        foreach ($duplicate in @($existing | Where-Object { $_.ProcessId -ne $keep.ProcessId })) {
+            $fresh = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $duplicate.ProcessId) -ErrorAction Stop
+            if ($fresh.CreationDate -ne $duplicate.CreationDate -or $fresh.ExecutablePath -ne $node -or
+                -not (Test-AgentEyeWatcherCommandLine $fresh.CommandLine)) { throw 'Watcher identity changed; duplicate recovery refused.' }
+            Stop-Process -Id $fresh.ProcessId -Confirm:$false -ErrorAction Stop
+            Log ("Stopped duplicate Agent Eye watcher PID=" + $fresh.ProcessId + "; kept PID=" + $keep.ProcessId)
+        }
+        Start-Sleep -Milliseconds 500
+        $existing = @(AgentEyeWatcherProcess)
+        if ($existing.Count -ne 1 -or $existing[0].ProcessId -ne $keep.ProcessId) { throw 'Watcher recovery did not leave one verified instance.' }
+    }
     if ($existing.Count -eq 1) { return }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $opsDir "agent-eye-watcher-$stamp.stdout.log"
@@ -260,27 +285,26 @@ function Rcon([string]$command) {
 }
 
 function PlayerRoster {
-    # The plain list command uses display names such as "[Agent] CortiLan".
-    # UUID mode reports real login names, which are safe for maintenance gating.
+    # The private-output filter can shorten list uuids to 512 characters.
+    # Obtain each vanilla UUID separately, then verify the declared count.
     $reply = Rcon 'minecraft:list uuids'
-    if ($reply -notmatch '(?m)^There are (\d+) of a max of \d+ players online:\s*([^\r\n]*)') {
+    if ($reply -notmatch 'There are (\d+) of a max of \d+ players online:') {
         throw "Could not parse Minecraft player roster: $reply"
     }
     $count = [int]$Matches[1]
+    $data = Rcon 'minecraft:execute as @a run minecraft:data get entity @s UUID'
+    $rows = [regex]::Matches($data, '(?<name>[A-Za-z0-9_.]{1,16}) has the following entity data: \[I; (-?\d+), (-?\d+), (-?\d+), (-?\d+)\]')
     $names = @()
     $uuids = @{}
-    $text = $Matches[2].Trim()
-    if ($text) {
-        foreach ($entry in @($text -split ',\s*')) {
-            if ($entry -notmatch '^([^\s(),<>\r\n]{1,16}) \(([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\)$') {
-                throw "Minecraft player roster is incomplete or malformed: $reply"
-            }
-            $names += $Matches[1]
-            $uuids[$Matches[1]] = $Matches[2].ToLowerInvariant()
-        }
+    foreach ($row in $rows) {
+        $name = $row.Groups['name'].Value
+        if ($uuids.ContainsKey($name)) { throw 'Duplicate Minecraft player roster entry' }
+        $hex = (1..4 | ForEach-Object { ([int]$row.Groups[$_].Value).ToString('x8') }) -join ''
+        $names += $name
+        $uuids[$name] = '{0}-{1}-{2}-{3}-{4}' -f $hex.Substring(0,8),$hex.Substring(8,4),$hex.Substring(12,4),$hex.Substring(16,4),$hex.Substring(20,12)
     }
     if ($names.Count -ne $count) {
-        throw "Minecraft player roster is incomplete or malformed: $reply"
+        throw 'Minecraft player roster changed or entity data is incomplete'
     }
     return [pscustomobject]@{ Count = $count; Names = $names; Uuids = $uuids }
 }
@@ -296,21 +320,17 @@ function NumenBodyUuids {
     }
 }
 
+function RuntimeControllerUuids {
+    # Current authenticated connection only; join/quit clear the marker.
+    $reply=Rcon 'minecraft:execute as @a if data entity @s BukkitValues{"agentfriend:automation_reconnect":1b} if data entity @s BukkitValues."agentfriend:automation_session" run minecraft:data get entity @s UUID'
+    Maintenance-UuidsFromNbt $reply
+}
+
 function HumanPlayers {
-    # Keep the restart safety gate conservative: only verified service accounts.
-    # feiyu_bot was explicitly confirmed as a bot by the owner on 2026-10-06.
-    # ag_Kirito was explicitly identified as an Agent by the owner (verified 2026-10-08).
-    # ag_NEKO explicitly confirmed by the owner as a reconnectable Agent on 2026-10-08.
-    # ag_CorMy is the replacement Agent account identified by the owner on 2026-10-11.
-    # ag_neko_eye is the owner's explicitly identified NEKO spectator account.
-    # yubeen explicitly confirmed as a reconnectable Agent by the owner on 2026-10-12.
-    # ag_NarutoPi is the Naruto Agent identified by the owner on 2026-10-14.
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'ag_NarutoPi', 'live', 'yubeen')
-    $roster = PlayerRoster
-    $unknown = @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
-    if (-not $unknown.Count) { return }
-    $bodies = @(NumenBodyUuids)
-    @($unknown | Where-Object { $bodies -notcontains $roster.Uuids[$_] })
+    $roster=PlayerRoster
+    $evidence=@(NumenBodyUuids)+@(RuntimeControllerUuids)+@(Maintenance-OwnerAgentUuids (Join-Path $opsDir 'maintenance-identities.private.json'))
+    # Names are labels only. Unknown UUIDs, including frequent CLI users, block restart.
+    @($roster.Names | Where-Object { $evidence -notcontains $roster.Uuids[$_] })
 }
 
 function Probe {
@@ -465,6 +485,12 @@ function Apply-AuraSkillsCachePatch {
 }
 
 function Start-Server {
+    if (Test-Path -LiteralPath (Join-Path $opsDir 'runtime-relocation.recovery.blocked')) {
+        throw 'Runtime relocation recovery requires inspection; refusing startup'
+    }
+    if (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')) {
+        throw 'Native economy recovery requires inspection; refusing startup'
+    }
     if (Listener) {
         $status = Probe
         $null = Rcon 'minecraft:list'
@@ -564,24 +590,65 @@ function CompleteSnapshots([string]$path) {
     } | Sort-Object Name -Descending)
 }
 
-function PruneSnapshots([string]$path) {
-    # Keep 14 most recent snapshots plus one from each of the latest 14 backup
-    # days. Manual maintenance must not erase every older recovery point.
+function RetainedSnapshots([array]$completed, [datetime]$asOf = (Get-Date)) {
+    # Owner requested smaller history after the native RPG release. Keep a
+    # recent recovery window, seven calendar days, and explicit recovery pins.
+    $recent = @($completed | Select-Object -First 3)
+    $cutoff = $asOf.Date.AddDays(-6).ToString('yyyyMMdd')
+    $daily = @($completed | Where-Object { $_.Name.Substring(0,8) -ge $cutoff } |
+        Group-Object { $_.Name.Substring(0,8) } |
+        ForEach-Object { $_.Group | Select-Object -First 1 })
+    $pinned = @($completed | Where-Object {
+        (Test-Path -LiteralPath (Join-Path $_.FullName '.keep')) -or
+        (Test-Path -LiteralPath (Join-Path $_.FullName '.pinned'))
+    })
+    return @($recent + $daily + $pinned | ForEach-Object { $_.FullName } | Select-Object -Unique)
+}
+
+function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
     $root = [IO.Path]::GetFullPath($path).TrimEnd('\')
+    # Millions of dependency files can stall world/auth database writes on the
+    # same host. Bulk retention belongs inside the existing cold maintenance.
+    if ($root -in @('E:\MC\backups\scheduled', 'F:\MC-backups\scheduled') -and (Listener)) {
+        Log "WARN backup cleanup deferred until Paper is stopped: $root"
+        return
+    }
     $completed = @(CompleteSnapshots $root)
-    $recent = @($completed | Select-Object -First 14)
-    $daily = @($completed | Group-Object { $_.Name.Substring(0, 8) } |
-        ForEach-Object { $_.Group | Select-Object -First 1 } |
-        Sort-Object Name -Descending | Select-Object -First 14)
-    $keep = @($recent + $daily | ForEach-Object { $_.FullName } | Select-Object -Unique)
-    foreach ($old in @($completed | Where-Object { $keep -notcontains $_.FullName })) {
+    $keep = @(RetainedSnapshots $completed $asOf)
+    # Only a previous native prune's explicit marker permits resuming an
+    # interrupted deletion. Unmarked partial backups remain for inspection.
+    $resuming = @(Get-ChildItem -LiteralPath $root -Directory | Where-Object {
+        $_.Name -match '^\d{8}-\d{6}$' -and
+        (Test-Path -LiteralPath (Join-Path $_.FullName '.pruning')) -and
+        -not (Test-Path -LiteralPath (Join-Path $_.FullName '.complete')) -and
+        -not (Test-Path -LiteralPath (Join-Path $_.FullName '.keep')) -and
+        -not (Test-Path -LiteralPath (Join-Path $_.FullName '.pinned'))
+    })
+    $expired = @($completed | Where-Object { $keep -notcontains $_.FullName })
+    foreach ($old in @($expired + $resuming)) {
         $resolved = [IO.Path]::GetFullPath($old.FullName).TrimEnd('\')
         if (-not $resolved.StartsWith(($root + '\'), [StringComparison]::OrdinalIgnoreCase) -or
             $old.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
             throw "Unsafe backup retention path: $resolved"
         }
-        Remove-Item -LiteralPath $resolved -Recurse -Force
-        Log "Expired backup removed: $resolved"
+        try {
+            if ((Test-Path -LiteralPath (Join-Path $resolved '.keep')) -or
+                (Test-Path -LiteralPath (Join-Path $resolved '.pinned'))) { continue }
+            # Never advertise a partly deleted snapshot as a recovery point.
+            # Preserve the validated absolute root before adding Win32's long-
+            # path prefix for bundled client dependencies.
+            if (Test-Path -LiteralPath (Join-Path $resolved '.complete')) {
+                Rename-Item -LiteralPath (Join-Path $resolved '.complete') -NewName '.pruning' -ErrorAction Stop
+            } elseif (-not (Test-Path -LiteralPath (Join-Path $resolved '.pruning'))) {
+                throw 'Backup pruning marker changed; inspect before retrying.'
+            }
+            Remove-Item -LiteralPath ('\\?\' + $resolved) -Recurse -Force -ErrorAction Stop
+            Log "Expired backup removed: $resolved"
+        } catch {
+            # Retention is housekeeping after a successful cold backup and
+            # deployment. It must not suppress the already completed release.
+            Log "WARN expired backup cleanup incomplete: $resolved; $($_.Exception.GetType().Name)"
+        }
     }
 }
 
@@ -819,6 +886,12 @@ function Deploy-PendingEyeMirror {
 }
 
 function Backup-Server {
+    if(Test-Path -LiteralPath $pendingRuntimeRelocation) {
+        $null=Relocation-ValidatePlan (Get-Content -LiteralPath $pendingRuntimeRelocation -Raw -Encoding UTF8 | ConvertFrom-Json)
+        foreach($other in @($pendingAgentFriendDeploy,$pendingEyeMirrorDeploy,$pendingGeyserDeploy,$pendingContentDeploy,$pendingPaperCoreUpgrade,$pendingServerSettings)) {
+            if(Test-Path -LiteralPath $other) { throw 'Runtime relocation must not be mixed with another deployment.' }
+        }
+    }
     $sourceBytes = Backup-TreeBytes $serverDir
     $freeBytes = (Get-PSDrive -Name E).Free
     if ($null -eq $freeBytes -or $freeBytes -lt ($sourceBytes + 1GB)) {
@@ -842,6 +915,7 @@ function Backup-Server {
                  (Test-Path -LiteralPath $pendingEyeMirrorDeploy) -or
                  (Test-Path -LiteralPath $pendingContentDeploy) -or
                  (Test-Path -LiteralPath $pendingPaperCoreUpgrade) -or
+                 (Test-Path -LiteralPath $pendingRuntimeRelocation) -or
                  (Test-Path -LiteralPath $pendingServerSettings)) -and (DungeonActive)) {
                 Log 'Backup and pending deployment skipped: dungeon run active'
                 return
@@ -868,7 +942,7 @@ function Backup-Server {
         # Resident MCP drivers keep a Windows byte-range lock until they exit.
         # The PID lease is rebuilt at startup and is not restorable state.
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'runtime-relocation.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Details: $opsCopyLog. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -908,15 +982,21 @@ function Backup-Server {
         Log "Backup complete: $dest"
         # Pending deployments require both verified recovery copies before any JAR changes.
         Mirror-LatestBackup
+        # Finish E: retention while Paper and authentication are still stopped.
+        # A standalone Mirror also defers pruning if players are already back.
+        PruneSnapshots $backupRoot
+        Deploy-PendingRuntimeRelocation $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingPaperCore $dest (Join-Path $mirrorRoot $stamp)
-        Deploy-PendingContent
+        Deploy-PendingContent $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
         Deploy-PendingGeyser
     }
     finally {
-        if ($wasRunning -and $script:coreUpgradeRecoveryBlocked) {
+        if ($wasRunning -and ($script:coreUpgradeRecoveryBlocked -or $script:contentRecoveryBlocked -or
+            (Test-Path -LiteralPath (Join-Path $opsDir 'runtime-relocation.recovery.blocked')) -or
+            (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')))) {
             Log 'CRITICAL: Core file rollback requires inspection; automatic startup remains paused'
             throw 'Core file recovery incomplete; refusing automatic restart'
         } elseif ($wasRunning) {
@@ -927,7 +1007,6 @@ function Backup-Server {
             Remove-Item -LiteralPath $pausedFile -Force -ErrorAction SilentlyContinue
         }
     }
-    PruneSnapshots $backupRoot
 }
 
 if ($Action -eq 'Status') {

@@ -32,6 +32,7 @@ final class AgentAbilityState {
     }
 
     JsonArray build(Player player) {
+        if(plugin.nativeRpg().selected())return plugin.nativeRpg().abilities(player);
         JsonArray result = new JsonArray();
         add(result, "mycli:starbolt", "星芒箭", plugin.mastery().rank(player, "starbolt"),
                 CombatSpells.totalCooldownMs("starbolt"), combat.remainingCooldownMs(player, "starbolt"),

@@ -1,0 +1,100 @@
+# Candidate only. Import SAOFloorOne.zip separately; never replace the live exploration map.
+schema-version: 1
+sites:
+  aincrad_01:
+    name: 艾恩葛朗特·第一层攻略
+    world: aincrad
+    conquest-floor: 1
+    minimum-combat-level: 1
+    entry:
+    - 856
+    - 69
+    - -1144
+    icon: IRON_SWORD
+    hint: 真实第一层地图北部环形遗迹：前哨(856,69,-1144)→守卫区(844,69,-1160)→领主区(832,69,-1176)。可单人或主动组队；清场后回前哨领奖。建议战斗Lv.3、铁甲、盾和治疗；首领近身蓄力时后撤，低血量换剑。场地和数值按Minecraft改编，并非原作地图逐室复刻。
+    reward:
+      emeralds: 12
+      item: IRON_INGOT
+      count: 6
+    rooms:
+    - name: 第一阶段·前哨侦察
+      center:
+      - 856
+      - 69
+      - -1144
+      radius: 6
+      spawn-points:
+      - - 852
+        - 69
+        - -1148
+      - - 860
+        - 69
+        - -1148
+      - - 852
+        - 69
+        - -1140
+      - - 860
+        - 69
+        - -1140
+      mobs:
+      - type: HUSK
+        count: 2
+        health: 24
+        name: 迷宫斥候
+    - name: 第二阶段·迷宫守卫
+      center:
+      - 844
+      - 69
+      - -1160
+      radius: 6
+      spawn-points:
+      - - 840
+        - 69
+        - -1164
+      - - 848
+        - 69
+        - -1164
+      - - 840
+        - 69
+        - -1156
+      - - 848
+        - 69
+        - -1156
+      mobs:
+      - type: SKELETON
+        count: 1
+        health: 28
+        name: 哨戒弓手
+      - type: HUSK
+        count: 2
+        health: 28
+        name: 迷宫守卫
+    - name: 第三阶段·狗头人领主
+      center:
+      - 832
+      - 69
+      - -1176
+      radius: 6
+      spawn-points:
+      - - 828
+        - 69
+        - -1180
+      - - 836
+        - 69
+        - -1180
+      - - 828
+        - 69
+        - -1172
+      - - 836
+        - 69
+        - -1172
+      mobs:
+      - type: VINDICATOR
+        count: 1
+        health: 120
+        name: 狗头人领主·伊尔芬格
+        mythic: QD_Aincrad_Illfang
+      - type: HUSK
+        count: 1
+        health: 24
+        name: 领主卫兵

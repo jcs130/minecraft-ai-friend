@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-cli-redesign-20261028",
+  "status": "superseded_candidate_not_deployed",
+  "productionChanged": false,
+  "requiresNormalPaperRestart": true,
+  "candidate": {
+    "AgentFriend-0.4.47.23.jar": "4d1e9cc19fe3b2a856c96bfadfc5e7e7e128c4ff53ea9ea72b797c5c7d928285",
+    "QiandengjiRpg-0.2.2.jar": "8d5796a99721d7dd023af9d1da18c7b612696e892b83af3fbf7723eaf55b14b9",
+    "VortexRPG-1.2.2-alpha-qd28.jar": "538726562c443a791cacf71782d68ea8658ebb8c063b7a17dc9be662c73e79bd"
+  },
+  "rollback": {
+    "AgentFriend-0.4.47.22.jar": "015bdcd18c3ad07a03eed0e05f6e3c56b42cb7ec6c0f2a5b32d8d88096f06f13",
+    "QiandengjiRpg-0.2.0.jar": "231a13974c7592b1427cd2c94ca021fc4af5f38bc66b08e9ad478ae21a424794",
+    "VortexRPG-1.2.2-alpha-qd27-zh.jar": "3091f10513855b6116d53534de309fdee29f8689fdcff1b184f2dadc1f51bc38"
+  },
+  "coldBackupCompleted": false,
+  "stateMigration": false,
+  "tests": {
+    "pureChecks": 366,
+    "nativeChecks": 92,
+    "coldChecks": 8,
+    "protocols": [
+      "1.21.1",
+      "1.21.11"
+    ],
+    "realPhoneOrXbox": false
+  },
+  "changeScope": {
+    "AgentFriend": [
+      "NativeRpg",
+      "AgentCliCatalog",
+      "AgentCliText"
+    ],
+    "VortexRPG": [
+      "CustomItemService.applyCustomModelData"
+    ],
+    "QiandengjiRpg": "existing native CLI adapter"
+  },
+  "publicSkillDownloadRepublished": false,
+  "artifactSourceTag": null,
+  "notes": [
+    "Not an executable deployment plan",
+    "366 pure assertions plus 92 native and 8 cold-start assertions",
+    "Static E/F original JAR copies are not a complete cold backup",
+    "Public Skill downloads not republished; references only"
+  ],
+  "supersededBy": "rpg-usability-candidate-20261028.json"
+}

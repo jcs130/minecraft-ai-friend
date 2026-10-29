@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createMinecraftChoiceTool } from './choice.ts';
+import { runtimeExecutionState } from './execution-state.ts';
+import {readTextPage} from './text-pages.ts';
 import { familiarStepAction } from './familiar-action.ts';
 import { ClientOperationLearning } from './operation-learning.ts';
 import { operationObservation, type OperationAttribution } from '../../core/operation-experience.ts';
@@ -63,6 +65,7 @@ export class MinecraftAgentClient {
   private readonly requests: RequestLedger;
   private readonly calls = new Map<string, { signature: string; controller: AbortController; promise: Promise<ToolOutcome>; pending: boolean }>();
   private readonly executions = new Map<string, ExecutionReceipt>();
+  private readonly executionGenerations = new Map<string, number>();
   private readonly facts: CurrentFacts;
   private readonly lease: AgentConnectionLease;
   private offlineMemoryCalls = 0;
@@ -104,12 +107,13 @@ export class MinecraftAgentClient {
   }
 
   get profile() { return this.binding.profile; }
-  private recordExecution(receipt: ExecutionReceipt): void {
+  private recordExecution(receipt: ExecutionReceipt, generation = this.epoch): void {
     this.learning.execution(receipt);
     const key = `${receipt.kind}:${receipt.id}`, previous = this.executions.get(key);
     // A very fast background operation can finish before its admission RPC returns.
     if (previous?.terminal && !receipt.terminal) return;
-    this.executions.set(key, receipt);
+    this.executions.delete(key);this.executions.set(key, receipt);
+    this.executionGenerations.set(key,generation);
   }
   get toolPrefix() { return this.binding.toolPrefix; }
   /** Pure preparation on the selected tool; preserves backend-specific validation and exact IDs. */
@@ -283,6 +287,20 @@ export class MinecraftAgentClient {
 
   task(kind: ExecutionReceipt['kind'], id: string) { return this.executions.get(`${kind}:${id}`) ?? null; }
 
+  /** Registered execution evidence only. Unresolved earlier generations are not silently cleared. */
+  executionState() {
+    return runtimeExecutionState(this.journal.run,this.epoch,this.phase,[...this.executions].map(([key,receipt])=>({
+      generation:this.executionGenerations.get(key)!,receipt})),{
+        calls:[...this.calls.values()].filter(x=>x.pending).length,tactics:[...this.tacticCalls.values()].filter(x=>x.pending).length});
+  }
+
+  /** Immutable local text read; never re-executes the tool that produced it. */
+  readTextArtifact(handle:string,options:{offset?:number;maxChars?:number}={}) {
+    const saved=this.journal.blob(handle);if(!saved)throw new Error('Execution artifact not found');
+    if(saved.mime!=='application/json'&&!saved.mime.startsWith('text/'))throw new Error('Only UTF-8 text artifacts support paging');
+    return readTextPage(Buffer.from(saved.bytes).toString('utf8'),handle,{...options,mime:saved.mime});
+  }
+
   currentFacts() {
     const current = this.phase === 'started' ? this.world.requestFacts?.() as import('./contracts.ts').WorldRequestFacts | null : null;
     const connection = { key: 'connection', text: JSON.stringify({ phase: this.phase, host: this.options.cfg.host,
@@ -290,7 +308,8 @@ export class MinecraftAgentClient {
     return { protocol: PROTOCOL, run: this.journal.run,
       ...(current?.decisionStability ? { decisionStability: structuredClone(current.decisionStability) } : {}),
       observation: operationObservation(current?.experience?.observation), parts: this.facts.replace({ text: '', snapshotTypes: [],
-      parts: [connection, ...(current?.parts ?? (current?.text ? [{key:'world',text:current.text}] : []))] }) };
+      parts: [connection,{key:'executionState',text:JSON.stringify(this.executionState())},
+        ...(current?.parts ?? (current?.text ? [{key:'world',text:current.text}] : []))] }) };
   }
 
   async prepareContext(budget: ContextBudget, history = '', countTokens?: (text: string) => number, tools?: import('./contracts.ts').ToolSchema[]) {
@@ -317,7 +336,10 @@ export class MinecraftAgentClient {
         if (combined.aborted) abort();
       });
     } while (true);
-    return this.journal.read(after, options.limit ?? 64, options.run, options.includeArchived === true);
+    const page=this.journal.read(after,options.limit??64,options.run,options.includeArchived===true);
+    return {readout:{protocol:'agent-mc-event-read/v1' as const,returnedCount:page.events.length,
+      cursor:{after,nextCursor:page.nextCursor,latestCursor:page.latestCursor,gap:page.gap,hasMore:page.hasMore},
+      execution:this.executionState()},...page};
   }
 
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
@@ -359,7 +381,7 @@ export class MinecraftAgentClient {
     }
     const controller = new AbortController();
     const combined = AbortSignal.any([this.lifetime.signal, controller.signal, ...(signal ? [signal] : [])]);
-    const turn = this.turn;
+    const turn = this.turn, executionGeneration=this.epoch;
     const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
     this.calls.set(callId, state);
     state.promise = Promise.resolve().then(async () => {
@@ -391,7 +413,7 @@ export class MinecraftAgentClient {
       outcome.control = { protocol: PROTOCOL, requestId: callId, ...(turn ? { turnId: turn.id } : {}),
         barrierAfter: tool.barrierAfter === true, endTurnRequested: outcome.endsTurn === true || tool.endsTurn === true, turnEnded: false };
       if (turn && outcome.control.endTurnRequested) this.endRequested = true;
-      if (outcome.execution) this.recordExecution(outcome.execution);
+      if (outcome.execution) this.recordExecution(outcome.execution,executionGeneration);
       if (queued.length) outcome.events = [...(outcome.events ?? []), ...queued];
       if (queued.length) outcome.text += '\n[Game events returned with this call]\n' + JSON.stringify(queued);
       this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
@@ -475,11 +497,21 @@ export class MinecraftAgentClient {
       throw new Error('Local world identity is not initialized; connect explicitly before using its notebook');
     const directory = join(this.options.dataDir, 'minecraft-memory');
     const memory = new GameMemoryService(new GameMemoryBook(directory), directory);
-    const result = await memory.execute(args, { scope: {
-      realm: marker ? `uuid:${marker.uuid}` : `weak:${address}|`,
-      account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: cfg.memoryAgentId ?? this.options.agentName ?? cfg.username,
-    }, dimension: null }, cfg.memory, signal);
-    return { text: JSON.stringify(result), meta: { gameMemory: result } };
+    try {
+      const result = await memory.execute(args, { scope: {
+        realm: marker ? `uuid:${marker.uuid}` : `weak:${address}|`,
+        account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: cfg.memoryAgentId ?? this.options.agentName ?? cfg.username,
+      }, dimension: null }, cfg.memory, signal);
+      return { text: JSON.stringify(result), meta: { gameMemory: result } };
+    } catch (error) {
+      signal.throwIfAborted();
+      // A failed evidence read has no action outcome to reconcile. Preserve its
+      // contract error through the request ledger/MCP instead of hiding it as
+      // request_outcome_unknown. Mutating and remote-service uncertainty stays.
+      if (args.action === 'experience' && ['help', 'list', 'get', 'stats'].includes(String(args.operation ?? 'help')))
+        return { text: `[mc_memory] ${String(error)}`, failed: true };
+      throw error;
+    }
   }
 }
 

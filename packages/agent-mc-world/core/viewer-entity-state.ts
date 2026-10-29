@@ -74,23 +74,29 @@ export function observeViewerRangedUse(
   return () => { if (protocol.write === viewerWrite) protocol.write = originalWrite; };
 }
 
-/** The offhand shield has no useful client pose until its actual use packet is mirrored. */
+/** Mirror the actual selected hand; possession alone never means blocking. */
 export function observeViewerShieldUse(
   protocol: { write(name: string, params?: Record<string, unknown>): void },
   offhandItemName: () => string | undefined,
-  publish: (raised: boolean) => void,
+  publish: (raised: boolean, hand?: 'mainhand' | 'offhand') => void,
+  mainhandItemName: () => string | undefined = () => undefined,
 ): () => void {
   const originalWrite = protocol.write;
   let raised = false;
-  const setRaised = (next: boolean) => {
-    if (next === raised) return;
+  let activeHand: 'mainhand' | 'offhand' = 'offhand';
+  const setRaised = (next: boolean, hand = activeHand) => {
+    if (next === raised && hand === activeHand) return;
     raised = next;
-    publish(next);
+    activeHand = hand;
+    publish(next, hand);
   };
   const viewerWrite: typeof protocol.write = (name, params) => {
     originalWrite.call(protocol, name, params);
-    if (name === 'use_item' && params?.hand === 1 &&
-        String(offhandItemName() || '').replace(/^minecraft:/, '') === 'shield') setRaised(true);
+    if (name === 'use_item') {
+      const offhand = params?.hand === 1;
+      setRaised(String((offhand ? offhandItemName() : mainhandItemName()) || '').replace(/^minecraft:/, '') === 'shield',
+        offhand ? 'offhand' : 'mainhand');
+    }
     else if ((name === 'block_dig' && params?.status === 5) || name === 'held_item_slot') setRaised(false);
   };
   protocol.write = viewerWrite;

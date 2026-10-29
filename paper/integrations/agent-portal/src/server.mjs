@@ -24,8 +24,10 @@ import { packageAt, packageLocation, publicDownloads } from './download-catalog.
 import { agentSkill, serveAgentSkill, skillAt } from './agent-skill.mjs';
 import { AgentAccess } from './agent-access.mjs';
 import { isTrialAgent } from './trial-pool.mjs';
-import { agentOnboarding } from './agent-onboarding.mjs';
+import { agentOnboarding, renderJoinPage } from './agent-onboarding.mjs';
+import { skillMirrorUrl } from './download-mirror.mjs';
 import { Appearance } from './appearance.mjs';
+import { agentAppearanceRoute } from './agent-appearance-routes.mjs';
 import { MAX_APPEARANCE_BYTES } from './appearance-files.mjs';
 import { Memories } from './memories.mjs';
 import { memoryRoute } from './memory-routes.mjs';
@@ -166,6 +168,19 @@ export function createPortal(config, options = {}) {
     if (agent.identityConflict) throw fail(409, 'IDENTITY_CONFLICT', '角色身份出现冲突，请联系服主核对原 UUID 后继续');
     return { ...context, agent };
   }
+  async function selfAppearance(req) {
+    if (req.headers.authorization?.startsWith('Bearer qda_')) {
+      const context = agentAccess.authorize(req);
+      return { ...context, agent: await agentAccess.selfAgent(context) };
+    }
+    let context;
+    try { context = auth(req, ['appearance.write']); }
+    catch (error) { if (error.reason === 'SCOPE_REQUIRED') throw fail(403, 'SCOPE_REQUIRED', '当前凭据未获外观管理权限，请让主人在连接中心新建凭据并勾选“本人外观管理”；原只读凭据保持只读'); throw error; }
+    if (!context.credential || !context.owner) throw fail(401, 'INVALID_CREDENTIAL', '请使用本人 Agent 接入身份，或由主人签发带外观管理权限的单角色凭据');
+    const agent = (await game.roster()).find(row => row.playerUuid === context.credential.agent_uuid);
+    if (!agent || agent.identityConflict || !store.ownedUuids(context.owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '角色归属已变化，请让当前主人在连接中心重新授权本人角色的外观管理');
+    return { ...context, agent };
+  }
   function csrf(req) {
     const current = sessionFrom(req);
     if (!current || !sameSecret(req.headers['x-csrf-token'], current.csrf)) throw fail(403, 'CSRF_REQUIRED', '会话已更新，请刷新页面后继续');
@@ -186,9 +201,11 @@ export function createPortal(config, options = {}) {
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
       if (pathname.startsWith('/watch/') && await (await nativeReady)?.http(req, res)) return;
-      if (pathname === '/join') {
+      if (['/join','/join.html','/downloads.html'].includes(pathname)) {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
-        const bytes = await fs.readFile(path.join(config.publicDir, 'join.html'));
+        const template = await fs.readFile(path.join(config.publicDir, pathname==='/downloads.html'?'downloads.html':'join.html'), 'utf8');
+        const bytes = Buffer.from(renderJoinPage(template,{skill:agentSkill,
+          downloadUrl:skillMirrorUrl(config,agentSkill)||agentSkill.url,gameAddress:config.publicGameAddress}));
         res.setHeader('Referrer-Policy', 'no-referrer');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': bytes.length });
         return res.end(req.method === 'HEAD' ? undefined : bytes);
@@ -216,7 +233,19 @@ export function createPortal(config, options = {}) {
         await jsonBody(req, 1024);
         return respond(res, 200, worldView.poll(await game.roster()));
       }
-      if (pathname.startsWith('/api/')) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      // Browser traffic and authenticated home publishers may share one NAT.
+      // Verify the exact service/route before isolating its quota; the route's
+      // existing service cap, body checks and authorization still run below.
+      // Invalid tokens, browser context and wrong methods keep the public cap.
+      let trustedSync = false;
+      if (!req.headers.origin && !req.headers.cookie) {
+        const authority = req.method === 'POST' && pathname === '/api/v1/internal/accounts/poll' ? accountCloud
+          : req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll' ? appearance
+          : req.method === 'PUT' && (['/api/v1/internal/snapshot', '/api/v1/internal/challenges', '/api/v1/internal/archives'].includes(pathname)
+            || /^\/api\/v1\/internal\/photos\/[a-f0-9-]{36}$/.test(pathname)) ? cloud : null;
+        if (authority) try { authority.authorize(req); trustedSync = true; } catch { /* Spend the public budget before the normal denial. */ }
+      }
+      if (pathname.startsWith('/api/') && !trustedSync) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if (req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll') {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'APPEARANCE_WORKER_REQUIRED', '请从家庭端外观同步器调用');
@@ -257,6 +286,7 @@ export function createPortal(config, options = {}) {
         await context();
         if (await memoryRoute({ req, res, pathname, url, memories, context, jsonBody, respond, rate })) return;
       }
+      if (await agentAppearanceRoute({ req, res, pathname, context: () => selfAppearance(req), appearance, jsonBody, respond, rate })) return;
       const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
@@ -397,14 +427,22 @@ export function createPortal(config, options = {}) {
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
+      if(req.method==='GET'&&pathname==='/api/v1/gallery/manage')return respond(res,200,gallery.managed(gallery.managementContext(browserAuth(req).owner),{page:Number(url.searchParams.get('page')||1)}));
+      const photoManagement=/^\/api\/v1\/gallery\/(?:manage\/([a-f0-9-]{36})\/image|([a-f0-9-]{36})\/publication)$/.exec(pathname);
+      if(photoManagement){
+        const context=gallery.managementContext(browserAuth(req).owner);
+        if(req.method==='GET'&&photoManagement[1]){const image=gallery.image(photoManagement[1],context);res.writeHead(200,{'Content-Type':'image/png','Content-Length':image.bytes.length,'Cache-Control':'private, no-store','Vary':'Cookie'});return res.end(image.bytes);}
+        if(req.method==='PUT'&&photoManagement[2])return respond(res,200,gallery.publication(photoManagement[2],(await jsonBody(req)).published,context));
+        throw fail(405,'METHOD_NOT_ALLOWED','请从照片管理调整公开状态');
+      }
       if(req.method==='GET'&&pathname==='/api/v1/archives')return respond(res,200,archives.list({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||'',kind:url.searchParams.get('kind')||'all'}));
       const archiveRead=/^\/api\/v1\/archives\/([a-f0-9-]{36})$/.exec(pathname);
       if(req.method==='GET'&&archiveRead)return respond(res,200,archives.read(archiveRead[1]));
       const photoImage = /^\/api\/v1\/gallery\/([a-f0-9-]{36})\/image$/.exec(pathname);
       if (photoImage && req.method === 'GET') {
         const image = gallery.image(photoImage[1]);
-        if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'public, max-age=60'});return res.end();}
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'public, max-age=60' }); return res.end(image.bytes);
+        if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'private, no-cache'});return res.end();}
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'private, no-cache' }); return res.end(image.bytes);
       }
       if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
@@ -603,7 +641,11 @@ export function createPortal(config, options = {}) {
         const { agent } = await authorizedAgent(req, body.agentId);
         if (typeof body.label !== 'string' || body.label.trim().length < 1 || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请输入 1–60 字的客户端名称');
         const scopes = body.scopes || ['state.read'];
-        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包和角色设定读取');
+        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取和本人外观管理');
+        if (scopes.includes('appearance.write')) {
+          if (!store.ownedUuids(owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '只有本人已绑定角色可以授权外观管理；请先通过游戏内证明认领');
+          appearance.assertAgent(agent);
+        }
         const days = Number(body.expiresInDays || 30);
         if (!Number.isInteger(days) || days < 1 || days > 90) throw fail(400, 'INVALID_EXPIRY', '有效期需为 1–90 天');
         const token = 'pat_' + newSecret(); const id = randomUUID(); const now = Date.now();

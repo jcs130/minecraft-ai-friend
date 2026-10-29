@@ -58,6 +58,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     # The hash is a change detector, not evidence; original text/handles stay intact.
     for part in unique.values():
         part.pop("revision", None)
+        part.pop("stateRevision", None)
     event_copies = [project_values(event) for event in events]
     tail = {"current_goal": goal, "current_facts": list(unique.values()), "events": event_copies, "omitted_facts": [],
             "context_omissions": {"history_groups": 0, "events": 0, "sections": []},

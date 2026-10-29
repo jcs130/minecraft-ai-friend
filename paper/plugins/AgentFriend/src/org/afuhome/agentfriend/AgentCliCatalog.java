@@ -104,8 +104,8 @@ final class AgentCliCatalog {
         add(specs,"visuals","magic","read","/mycli visuals","查看原版技能粒子和播放预算；特效只在成功施法后出现","查询免费；不改变技能资格、耗魔、冷却和实际伤害范围","本人MC_VISUALS JSON；画面不作为命中或验收证据");
         add(specs,"say","life","chat","/mycli say <公开发言>","公开说话并在角色头顶显示短暂文字气泡；普通聊天同样有效","沿用普通聊天的接收者和取消规则；非观战/隐身角色才有气泡；附近24格且视线可达；私聊不显示","原版聊天及TextDisplay；连续发言更新同一个气泡；超长内容气泡省略，完整正文仍在聊天栏");
         add(specs,"bubbles","life","read","/mycli bubbles","查看玩家/NPC文字气泡状态和多人预算","查询免费；NPC私有对白仅本人及当前附身Eye可见；Java、基岩及Agent沿用原客户端","本人MC_BUBBLES JSON；基岩由Geyser转文字标签，外观可能不同；语音功能尚未启用");
-        add(specs,"skills","magic","read","/mycli skills list [分类] [页码]|info <ID>|mine|points|learn <ID>|upgrade <ID>","基础和战法牧技能图鉴；list profession 直接查看职业技艺，默认列表有多页","查询免费；学习与升级耗点，施法需要本人资格","MC_SPELL_*、MC_SKILL、MC_SKILL_POINTS、MC_SKILL_ASSESSMENT");
-        add(specs,"skills.list","magic","read","/mycli skills list [all|common|profession|warrior|mage|priest] [页码]","分页发现基础和职业技能；如 list priest 查看抚愈、净化、高阶圣愈","查询免费；旧 list <页码> 保留；按 pages 和 MC_SPELL_NEXT 读后续页","MC_SPELL_LIST 含分类/总量/版本，MC_SPELL_ITEM 含效果摘要/职业/详情命令");
+        add(specs,"skills","magic","read","/mycli skills list [分类] [页码]|info <ID>|mine|points|learn <ID>|upgrade <ID>","基础与四种战斗职业技能图鉴；list profession 直接查看职业技艺，默认列表有多页","查询免费；学习与升级耗点，施法需要本人资格","MC_SPELL_*、MC_SKILL、MC_SKILL_POINTS、MC_SKILL_ASSESSMENT");
+        add(specs,"skills.list","magic","read","/mycli skills list [all|common|profession|warrior|tank|mage|priest] [页码]","分页发现基础和职业技能；如 list priest 查看抚愈、净化、高阶圣愈","查询免费；旧 list <页码> 保留；按 pages 和 MC_SPELL_NEXT 读后续页","MC_SPELL_LIST 含分类/总量/版本，MC_SPELL_ITEM 含效果摘要/职业/详情命令");
         add(specs,"skills.explain","magic","read","/mycli skills explain <ID>","读取法术图鉴说明；逐级数值、技能点和本人条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");
         add(specs,"skills.mine","magic","read","/mycli skills mine","查看本人新技能、装备、资格、来源和实际能力统计","查询免费；未学技能也显示获取途径","MC_SKILL、MC_SKILL_POINTS 与 MC_SKILL_ASSESSMENT");
         add(specs,"skills.status","magic","read","/mycli skills status [mine|all|技能ID] [页码]","读取本人当前技能资格、实际魔力成本、剩余冷却和已知阻碍","只读，不刷新点数；supported/unlocked/learned/canUseNow分开；未知为null，目标/落点仍由实际施法检查","MC_PAGE；mine默认只列已学及资格未知项；详情用skills info <ID>");
@@ -125,7 +125,7 @@ final class AgentCliCatalog {
         add(specs,"status","info","read","/mycli status","本人即时状态：连接标识、观测时间、认证、生命魔力、活动和主线下一步","已登录普通玩家；只读，不刷新任务、不记实练；旧公告不覆盖当前状态，缺认证桥接为unknown","MC_STATUS；更多任务用progress all 1、技能用skills status、物品用inventory status");
         add(specs,"status.full","info","read","/mycli status full","兼容旧版详细状态，附带公会与试炼输出","旧入口可刷新任务和记录已报名实练证明；只读状态用status","旧版个人状态、MC_GUILD、MC_DUNGEON等");
         add(specs,"coach.practice","info","write","/mycli coach practice status","主动读取并记录状态实练证明，普通status查询不会完成实练","先coach enroll；不会报名、施法或花费资源；已有证明不会重复发放","MC_STATUS及MC_COACH type=feature_proof；失败查coach lessons");
-        add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
+        add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/tank/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
         add(specs,"mastery","magic","read","/mycli mastery","查看本人法术熟练度与升级门槛","在线玩家","熟练度报告");
         add(specs,"skillbook","magic","item","/mycli skillbook list|use [槽位]","列出或使用实体技艺研习书；也可手持右键","背包有研习书且对应技能未满级","MC_SKILLBOOK 私有回执");
         add(specs,"cast","magic","cast","/mycli cast <技能ID> [参数]","施放生活、战斗或探索法术","本人非旁观者；魔力/学习/冷却由技能检查","技能结果；部分返回 MC_* 坐标");
@@ -178,7 +178,7 @@ final class AgentCliCatalog {
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
         add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z> [--verbose] [--json]","预判能否放置；多个目标用protect batch","整数坐标；同维度、16 格内、区块已加载","一份MC_PROTECTION摘要；deny停止，unknown暂缓；--verbose展开规则");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
-        add(specs,"spells.list","magic","read","/mycli spells list [分类] [页码]","skills list 的兼容别名；profession/warrior/mage/priest 可直接查职业技能","查询免费；默认 all 多页，旧 list <页码> 保留","MC_SPELL_LIST/ITEM/NEXT");
+        add(specs,"spells.list","magic","read","/mycli spells list [分类] [页码]","skills list 的兼容别名；profession/warrior/tank/mage/priest 可直接查职业技能","查询免费；默认 all 多页，旧 list <页码> 保留","MC_SPELL_LIST/ITEM/NEXT");
         add(specs,"spells.explain","magic","read","/mycli spells explain <ID>","skills explain 的兼容别名；各级价格和条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");
         add(specs,"skillbook.list","magic","read","/mycli skillbook list","列出背包内真实研习书、槽位、技能与可得熟练度","本人在线","MC_SKILLBOOK action=list|summary");
         add(specs,"skillbook.use","magic","item","/mycli skillbook use [背包槽位0–35]","消耗一册研习书增加对应技能熟练度；满级不消耗","本人持有该书且未满 3 级","MC_SKILLBOOK action=use");
@@ -228,10 +228,10 @@ final class AgentCliCatalog {
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
-        add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查选中地下城的首室深度和逐室路线","只读免费；地点ID从dungeon list读取","私有MC_SITE_DUNGEON_INFO；抵达入口不等于进入首室");
-        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查本人场次、暂停原因与待领奖凭据","只读免费；有凭据无需重打旧场次；查询不领奖或开场","MC_SITE_DUNGEON_STATE；pendingRewards/pendingRewardDetails给出实际领取命令");
+        add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
+        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查当前房间、存档点、剩余机会、占用或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认当前一步及剩余机会；--json含真实状态和凭据；完整旧结果用--verbose");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
-        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
+        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","首室由队长登记全队；战败回存档点，第三次战败结束，Boss房间排他","全员在线、生存模式、装备达标且未参加其他活动；最多8人，登记2人以上启用倒地救援","MC_SITE_DUNGEON_RESULT；战败自动回存档点，整场第三次战败结束；Boss房间仅本场队伍进入，清完后返回首室领奖");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
         add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出自己的遗迹挑战，留在原地","只影响本人；未登记的奖励不发放","MC_SITE_DUNGEON_RESULT；队伍空后清理该队标记怪");
         add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后重试暂停的挑战","须为该队成员；失败不清场、不发奖、不自动连续刷怪","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
@@ -249,30 +249,30 @@ final class AgentCliCatalog {
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");
         add(specs,"arena.shop","adventure","gui","/mycli arena shop","打开入口或第七层余额商店；旧实体绿宝石交易可用 shop merchant","在试炼入口或第七层驿站","原版菜单或拒绝原因");
         add(specs,"arena.shop.list","storage","read","/mycli arena shop list","列出余额商店的护甲、武器与补给","在线玩家","私有 MC_ARENA_ECONOMY JSON");
-        add(specs,"arena.shop.buy","storage","item","/mycli arena shop buy <商品ID> [1–16]","用个人绿宝石余额购买；商品进入个人箱待领取队列","余额足够且队列有容量","私有 MC_ARENA_ECONOMY JSON");
-        add(specs,"arena.wallet","storage","read","/mycli arena wallet","查询本人的绿宝石余额","在线玩家","私有 MC_ARENA_ECONOMY JSON");
+        add(specs,"arena.shop.buy","storage","item","/mycli arena shop buy <商品ID> [1–16]","用统一RPG金币购买；商品进入个人箱待领取队列","余额足够且队列有容量","私有 MC_ARENA_ECONOMY JSON");
+        add(specs,"arena.wallet","storage","read","/mycli arena wallet","查询本人的统一RPG金币余额","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.loot","adventure","read","/mycli arena loot","查看试炼装备、下一件法术刻印装备及本游戏日已领奖层数","在线玩家","私有 MC_DUNGEON_SET 进度回执");
         add(specs,"arena.layout","adventure","read","/mycli arena layout","读取本人当前战斗房间的绝对中心、范围、奖励箱和地形危险类型","本人正在当前层参赛","私有 MC_DUNGEON_LAYOUT 回执");
         add(specs,"arena.recycle","storage","read","/mycli arena recycle <动作>","查询可回收装备、获取报价，再明确出售","list查询免费；quote生成报价；sell才转移实际物品","MC_ARENA_ECONOMY；按quoteId与实际余额核对");
         add(specs,"arena.recycle.list","storage","read","/mycli arena recycle list","列出本人箱子与背包中可回收装备","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取30秒报价","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
-        add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","远程开启 2 魔力；站在实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","列出箱满后尚未入箱的奖励","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
+        add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
         add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–7|9–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人第一页54格双箱；10页共540格；支持原版箱子操作","远程开启 2 魔力；站在实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；远程开页2魔力","原版分页选择菜单");
+        add(specs,"arena.stash","storage","gui","/mycli arena stash","本人540格个人箱；Agent可直接putslot存、list查、take取，无需开界面","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；无需学习，成功远程开页2魔力","原版分页选择菜单");
         add(specs,"arena.stash.page","storage","gui","/mycli arena stash page <1–10>","打开个人箱指定页","原槽位1–54保留，全局最大540","原版54格箱子");
-        add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用现有绿宝石余额；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
-        add(specs,"commission.publish","adventure","write","/mycli commission publish delivery <物品ID> <数量> <报酬> <标题>；hunt <怪物ID> <数量> <报酬> <标题>；explore <维度> <报酬> <标题>；structure <结构ID> <报酬> <标题>","托管实际绿宝石余额并发布物资或同行委托","生存；余额足够；物资只收普通物品；结伴需发布者32格内同行","MC_COMMISSION_RESULT / MC_COMMISSION");
+        add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用统一RPG金币；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
+        add(specs,"commission.publish","adventure","write","/mycli commission publish delivery <物品ID> <数量> <报酬> <标题>；hunt <怪物ID> <数量> <报酬> <标题>；explore <维度> <报酬> <标题>；structure <结构ID> <报酬> <标题>","托管实际RPG金币并发布物资或同行委托","生存；余额足够；物资只收普通物品；结伴需发布者32格内同行","MC_COMMISSION_RESULT / MC_COMMISSION");
         add(specs,"commission.accept","adventure","write","/mycli commission accept <ID>","接取一张玩家委托","不能自己接自己的；同时最多承接一单，与公会槽位独立","MC_COMMISSION_RESULT");
         add(specs,"commission.claim","adventure","write","/mycli commission claim [ID]","真实交付物资或验收战斗/探索，领取已托管报酬","收购扣实际普通物品；探索须路线证据及返程；防重复结算","MC_COMMISSION_RESULT");
         add(specs,"commission.abandon","adventure","write","/mycli commission abandon [ID]","放弃接单，委托重新开放","不领取报酬；交付处理中禁止放弃","MC_COMMISSION_RESULT");
         add(specs,"commission.cancel","adventure","write","/mycli commission cancel <ID>","撤回本人未接委托并退回托管余额","有人接单后不能单方面撤回","MC_COMMISSION_RESULT");
         add(specs,"arena.stash.inventory","storage","read","/mycli arena stash inventory","列出本人背包槽位 0–35","在线玩家","MC_INVENTORY、MC_INVENTORY_SUMMARY");
-        add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","分页列出全局1–540槽位，默认第一页","在线玩家","MC_STASH、MC_STASH_SUMMARY");
-        add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved 数量与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按精确背包槽存入；保留附魔与自定义物品","背包槽有物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved 数量与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","只查已装入箱格，默认第一页；待入箱奖励另用arena rewards list，开箱后装入","在线玩家","MC_STASH、MC_STASH_SUMMARY");
+        add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
+        add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按背包0–35槽直接远程存入；非绑定装备保留附魔和外观","背包槽有物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
         add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–540> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位；远程成功取出 2 魔力","MC_STASH_TAKE moved 数量与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.leave","adventure","teleport","/mycli arena leave","退出试炼返回入口","正在试炼区域内","传送或拒绝原因");
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用；6 魔力","成功后 MC_TRAVEL 或失败原因");
@@ -344,10 +344,60 @@ final class AgentCliCatalog {
     }
 
     private static Map<String, Spec> catalogSpecs() {
-        return catalogSpecs(SpellGuide.entries());
+        return catalogSpecs(SpellGuide.entries(),nativeBackend());
     }
+    private static boolean nativeBackend(){return org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).nativeRpg().selected();}
     private static Map<String, Spec> catalogSpecs(List<SpellGuide.Entry> spells) {
+        return catalogSpecs(spells,false);
+    }
+    private static Map<String, Spec> catalogSpecs(List<SpellGuide.Entry> spells,boolean nativeRpg) {
         Map<String, Spec> specs = new LinkedHashMap<>(SPECS);
+        if(nativeRpg){
+            nativeSpec(specs,"intro","read","/mycli intro","按真实饥饿、职业、装备和任务给一个当前目标","免费只读，不代选职、接取、学习或领奖；物理目标须实际行动，verifyCommand仅核对");
+            nativeSpec(specs,"trade.wallet","read","/mycli trade wallet","查Vortex任务金币余额","任务、回收、试炼奖励和商店共用金币；实体绿宝石仍是物品；服务不可用不伪造0余额");
+            nativeSpec(specs,"trade.auction","read","/mycli trade auction","查玩家拍卖维护状态：交付故障，暂不能使用","免费只读，未上架、未扣款；不把扣钱或成功台词当作收到物品");
+            var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；wallet；auction","村民交易报价和位置；wallet查任务金币，auction查维护状态",trade.requires()+"；金币入口只读取本人经济账户",trade.returns()));
+            // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
+            specs.keySet().removeIf(id->Set.of("profession","skills","spells","cast").contains(id.split("\\.")[0]));
+            nativeSpec(specs,"profession","group","/mycli profession <动作>","职业：list/info 查询，choose 主动选择，status 核对","choose 只选一次，授予本职业初始装备；查询免费");
+            nativeSpec(specs,"profession.status","read","/mycli profession status","查本人当前职业","免费只读；不会重选或发装备");
+            nativeSpec(specs,"profession.list","read","/mycli profession list","列六职业 ID 与定位","免费只读；先 info 了解，再主动 choose");
+            nativeSpec(specs,"profession.info","read","/mycli profession info <ID>","查职业定位与初始技能","免费只读；ID 来自 profession list");
+            nativeSpec(specs,"profession.choose","write","/mycli profession choose <ID>","选择职业并保存，领取原生初始装备","需未选职且处于可行动状态；免费；只能选一次");
+            nativeSpec(specs,"profession.menu","gui","/mycli profession menu","打开职业菜单，点击选择才变更职业","打开免费；选择后以 profession status 核对");
+            nativeSpec(specs,"skills","group","/mycli skills <动作>","技能：list/info 查询，learn 学习，prepare 设置点击技","Vortex 为唯一成长权威；不再使用旧准备槽和 upgrade");
+            for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common]":action.equals("status")?" [ID]":""),"查本职可用技能、待学节点与点数","免费只读；list common 查基础生存与通用技能，无需选职或学习");
+            nativeSpec(specs,"skills.info","read","/mycli skills info <ID>","查目标、效果、等级、费用与冷却","免费只读；主动技能、学习节点和被动天赋分别说明");
+            nativeSpec(specs,"skills.tree","read","/mycli skills tree","查本职天赋点、节点与前置条件","免费只读；需要已选职业");
+            nativeSpec(specs,"skills.learn","write","/mycli skills learn <节点ID>","学习职业节点或被动天赋并保存","按 skills info 明示的等级、前置与学习点/天赋点扣费；通用技无需学习");
+            nativeSpec(specs,"skills.prepare","write","/mycli skills prepare <技能ID>","设置已解锁的武器点击技能","仅已解锁的主动技能；不扣学习点、不施法；被动不能准备");
+            nativeSpec(specs,"skills.menu","gui","/mycli skills menu","打开原生技能菜单","打开免费，点击学习按对应节点费用结算");
+            nativeSpec(specs,"cast","cast","/mycli cast <技能ID> [参数]","施放技能；先 info 查目标、耗魔和冷却","职业技支持 --json；通用技沿用原回执，prospect 需要矿种等参数；不支持的格式会在执行前拒绝");
+            for(String basic:NativeRpg.COMMON_IDS){var old=SPECS.get("cast."+basic);if(old==null&&basic.equals("travel"))old=new Spec("cast.travel","travel","gui","/mycli waypoint menu","传送点术使用航点菜单；实际传送用goto","落点安全、活动允许；实际传送6魔力","航点菜单及实际传送回执");specs.put("cast."+basic,new Spec(old.id(),"magic",old.mode(),old.usage(),"基础通用，无需选职或学习；"+old.summary(),old.requires()+"；不支持--json，沿用原效果回执；详情skills info "+basic,"技能效果、物品/位置与status核对；未确认不重放"));}
+            nativeSpec(specs,"tasks","group","/mycli tasks <动作>","冒险任务：list/info/status 查询，accept 接取，claim 交付","不自动接单；旧路线分类、menu/pause/resume 保持兼容");
+            nativeSpec(specs,"tasks.list","read","/mycli tasks list [--page 页码]","分页查原生讨伐、探索与制作任务","每页最多7项，免费只读；旧路线分类另沿原公会任务");
+            nativeSpec(specs,"tasks.info","read","/mycli tasks info <ID>","查条件、前置、奖励和接取命令","免费只读；ID 从 list 复制，不猜测任务名");
+            nativeSpec(specs,"tasks.status","read","/mycli tasks status [ID] [--page 页码]","查进行中任务的实际缺项及下一步；可聚焦一项","免费只读；指定 ID 时不使用 --page；旧委托查 progress guild");
+            nativeSpec(specs,"tasks.accept","write","/mycli tasks accept <ID>","主动接取指定原生任务并保存","按 info 核对等级与前置；不代做目标；超时先查 status，勿重接");
+            nativeSpec(specs,"tasks.claim","write","/mycli tasks claim <ID>","满足真实目标后交付并结算奖励","以最终保存与奖励回执为准；待核对时不重复领取");
+            nativeSpec(specs,"status","read","/mycli status","查生命、饱食、职业等级、魔力与下一步","免费只读；不代选职业、接任务或领奖");
+            nativeSpec(specs,"progress","read","/mycli progress [all|main|training|guild|challenge|story] [页码]","总览RPG任务与冒险；指定分区查原有独立进度","裸 progress 汇总，显式分区保留原分页；专项完成不等于主线毕业");
+            for(String id:List.of("arena.stash","arena.stash.pages","arena.stash.page")){
+                Spec old=specs.get(id);specs.put(id,new Spec(id,old.category(),old.mode(),old.usage(),old.summary(),"成功远程开页2魔力，实体箱旁免费；通用travel已可用，无需学习；未开箱时不扣费",old.returns()));
+            }
+            Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；个人箱：/mycli arena stash；共享补给：/mycli guild shared",inventory.returns()));
+            nativeSpec(specs,"arena.recycle","group","/mycli arena recycle list|quote bag|chest <槽> [数量]|sell <报价ID>|status","多余武器护甲回收为RPG金币；先报价再确认；不会自动出售","手持、穿戴、绑定/任务/职业法器不回收；石头木头存个人箱；旧试炼余额按1:1迁入同一金币账户");
+            nativeSpec(specs,"arena.recycle.sell","item","/mycli arena recycle sell <报价ID>","按30秒有效的原物品报价出售，等待真实金币到账","只执行一次；未知或pending不重发，查arena recycle status并联系服主；金币余额trade wallet");
+            nativeSpec(specs,"arena.recycle.status","read","/mycli arena recycle status","查RPG金币服务、余额与待对账回收","只读，不补发金币或物品；arena wallet是同一金币余额的兼容入口");
+            nativeSpec(specs,"mastery","read","/mycli mastery","旧熟练度已归档，转查Vortex当前技能状态","基础技能固定可用；职业成长用学习点和天赋：skills status/tree");
+            nativeSpec(specs,"skillbook","group","/mycli skillbook list","只读列出保留的旧研习书；use已停用","书不消耗、不再写旧熟练度；升级查询skills status，学习skills learn <ID>");
+            nativeSpec(specs,"skillbook.use","read","/mycli skillbook use <槽位>","兼容旧调用并解释迁移；不会消耗书或升级旧技能","基础技能无需研习；职业升级统一Vortex学习点和天赋");
+            Spec stashPut=specs.get("arena.stash.putslot");specs.put(stashPut.id(),new Spec(stashPut.id(),stashPut.category(),stashPut.mode(),stashPut.usage(),"按背包精确槽位直接远程存箱，无需先传送或打开GUI","通用travel已可用；成功2魔力；绑定保护保持；按moved和stash list核对",stashPut.returns()));
+            Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
+            nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","原生队伍：默认status；create/invite/accept组队，副本仍须分别join","复用原Vortex权限；不授OP；会话队伍不代表已加入副本");
+            for(String action:List.of("status","create","invite","accept","decline","leave","disband","kick","menu"))nativeSpec(specs,"guild.party."+action,action.equals("status")?"read":action.equals("menu")?"gui":"write","/mycli guild party "+action+(Set.of("invite","kick").contains(action)?" <在线玩家名>":""),switch(action){case "status"->"查本人队长和成员；无队伍是正常状态";case "create"->"创建原生队伍，不自动邀请或开副本";case "invite"->"邀请在线队友，需对方主动accept";case "accept"->"接受本人有效邀请，不会自动进入副本";case "decline"->"拒绝本人待接受邀请";case "leave"->"退出原生队伍；原副本场次另查status";case "disband"->"队长解散原生队伍";case "kick"->"依原生队伍职权移出在线成员";default->"打开原生组队菜单";},"仅本人；原生组队权限；操作免费，邀请和队伍为会话状态；成功后用guild party status核对");
+            return specs;
+        }
         for (SpellGuide.Entry spell : spells) {
             String id = "cast." + spell.id();
             specs.putIfAbsent(id, new Spec(id, "magic", "cast", spell.command(), spell.effect(),
@@ -355,12 +405,15 @@ final class AgentCliCatalog {
         }
         return specs;
     }
+    private static void nativeSpec(Map<String,Spec> specs,String id,String mode,String usage,String summary,String requires){
+        specs.put(id,new Spec(id,"adventure",mode,usage+" [--json]",summary,requires,"私有回执；查询确认真实状态，未知结果不自动重放"));
+    }
 
     static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
     /** Standard --help/-h discovery never runs the requested gameplay command. */
     static void commandHelp(Player player,String[] args) {
         boolean json=java.util.Arrays.asList(args).contains("--json");
-        JsonObject out=helpData(args);
+        JsonObject out=helpData(args,SpellGuide.entries(),nativeBackend());
         if(json){stamp(player,out);player.sendMessage("MC_CLI_HELP "+out);return;}
         AgentCliText.help(out).forEach(player::sendMessage);
     }
@@ -370,6 +423,9 @@ final class AgentCliCatalog {
         return helpData(raw,SpellGuide.entries());
     }
     static JsonObject helpData(String[] raw,List<SpellGuide.Entry> spells) {
+        return helpData(raw,spells,false);
+    }
+    static JsonObject helpData(String[] raw,List<SpellGuide.Entry> spells,boolean nativeRpg) {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);
         try{
             var words=new ArrayList<String>();int page=1;boolean seenPage=false,json=false;
@@ -385,12 +441,18 @@ final class AgentCliCatalog {
                 if(word.startsWith("-"))throw new IllegalArgumentException("未知帮助选项 "+word);
                 words.add(word.toLowerCase(Locale.ROOT));
             }
-            Map<String,Spec> specs=catalogSpecs(spells);String id="";int matched=0;
+            if(nativeRpg&&!words.isEmpty()){
+                if(words.getFirst().equals("rpg"))words.removeFirst();
+                if(!words.isEmpty())words.set(0,switch(words.getFirst()){case "class","职业"->"profession";case "quests","任务路线"->"tasks";case "spells","技能"->"skills";default->words.getFirst();});
+                if(words.size()>1&&words.getFirst().equals("skills"))words.set(1,switch(words.get(1)){case "equip"->"prepare";case "explain"->"info";default->words.get(1);});
+                if(words.size()>2&&words.getFirst().equals("guild")&&words.get(1).equals("party"))words.set(2,switch(words.get(2)){case "list","info"->"status";case "join"->"accept";case "gui","open"->"menu";default->words.get(2);});
+            }
+            Map<String,Spec> specs=catalogSpecs(spells,nativeRpg);String id="";int matched=0;
             for(int count=words.size();count>0;count--){String candidate=String.join(".",words.subList(0,count));if(specs.containsKey(candidate)){id=candidate;matched=count;break;}}
             if(!words.isEmpty()&&id.isEmpty())throw new IllegalArgumentException("未知命令");
             String path=id.isEmpty()?"/mycli":"/mycli "+id.replace('.',' ');
             String prefix=id.isEmpty()?"":id+".";
-            Set<String> compatibility=Set.of("help","intro","list","explain","spells","status.full","challenge.begin");
+            Set<String> compatibility=Set.of("help","list","explain","spells","status.full","challenge.begin");
             var children=new LinkedHashMap<String,Spec>();
             for(Spec spec:specs.values()){
                 if(!spec.id().startsWith(prefix)||spec.id().equals(id)||compatibility.contains(spec.id()))continue;
@@ -398,29 +460,41 @@ final class AgentCliCatalog {
                 if(!compatibility.contains(child)&&specs.containsKey(child))children.putIfAbsent(child,specs.get(child));
             }
             out.addProperty("path",path);
-            if(!children.isEmpty()){
+            if(!children.isEmpty()&&!(id.equals("cast")&&words.size()>matched)){
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=List.of("status","tasks","skills","inventory","protect","progress","rules");
+                var order=switch(prefix){case ""->nativeRpg?List.of("intro","status","profession","skills","tasks","dungeon","inventory"):List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
                 out.addProperty("usage",path+" <命令> [参数]");out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",list.size());
+                Spec parent=specs.get(id);if(parent!=null&&parent.mode().equals("gui"))out.addProperty("defaultAction","无子命令时："+parent.summary()+"；"+parent.requires());
                 var rows=new com.google.gson.JsonArray();
                 list.stream().skip((long)(page-1)*PAGE_SIZE).limit(PAGE_SIZE).forEach(spec->{JsonObject row=new JsonObject();row.addProperty("name",spec.id().substring(prefix.length()));row.addProperty("summary",spec.summary());rows.add(row);});out.add("commands",rows);
                 if(page<pages)out.addProperty("nextCommand",path+" --help --page "+(page+1)+(json?" --json":""));
             }else{
                 if(page!=1)throw new IllegalArgumentException("具体命令帮助只有1页");Spec spec=specs.get(id);if(spec==null)throw new IllegalArgumentException("未知命令");
                 out.addProperty("usage",spec.usage());out.addProperty("summary",spec.summary());JsonObject semantic=semantics(spec);
+                if(nativeRpg&&nativeEntry(id))nativeSemantics(spec,semantic);
                 for(String key:List.of("operation","parameters","permission","requirements","consumption","resultQuery"))out.add(key,semantic.get(key));
-                out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",jsonSupported(id));
+                out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",nativeRpg&&nativeEntry(id)||jsonSupported(id));
             }
         }catch(IllegalArgumentException invalid){out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("errorCode","INVALID_ARGUMENT");out.addProperty("message",invalid.getMessage());out.addProperty("nextCommand","/mycli --help");}
         return out;
     }
-    private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return (id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean nativeEntry(String id){return Set.of("status","progress","profession","skills","cast","tasks","tasks.list","tasks.info","tasks.status","tasks.accept","tasks.claim","guild.party").contains(id)||id.startsWith("profession.")||id.startsWith("skills.")||id.startsWith("guild.party.");}
+    private static void nativeSemantics(Spec spec,JsonObject out){
+        boolean read=spec.mode().equals("read");out.addProperty("operation",read?"query":spec.mode().equals("group")?"group":"execute");out.addProperty("readOnly",read);
+        var effects=new com.google.gson.JsonArray();effects.add(read?"只读取并发送本人信息，不选职、不接任务、不学习、不消耗资源":spec.mode().equals("group")?"由具体子动作决定，先查子命令帮助":spec.mode().equals("gui")?"只请求打开界面；不代表已选择或学习，点击动作另行结算":"明确执行所请求动作；以最终回执和真实状态核对，未知结果不重放");out.add("sideEffects",effects);
+        out.addProperty("consumption",read?"无游戏内资源消耗":spec.requires());
+        out.addProperty("resultQuery",spec.id().startsWith("guild.party")?"/mycli guild party status":spec.id().startsWith("tasks")?"/mycli tasks status <ID>":spec.id().startsWith("profession")?"/mycli profession status":spec.id().startsWith("skills")||spec.id().equals("cast")?"/mycli skills status；/mycli skills info <ID>":"/mycli status");
+    }
+    private static int idEmptyPriority(String prefix,String id,List<String> order){
+        String key=prefix.isEmpty()?id:id.substring(prefix.length());
+        return order.contains(key)?order.indexOf(key):order.size();
+    }
+    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -461,7 +535,7 @@ final class AgentCliCatalog {
             item.addProperty("category", spec.category());
             item.addProperty("mode", spec.mode());
             item.addProperty("summary", spec.summary());
-            item.addProperty("operation",semantics(spec).get("operation").getAsString());
+            item.addProperty("operation",currentSemantics(spec).get("operation").getAsString());
             stamp(player,item);
             player.sendMessage("MC_CLI_ITEM " + item);
         }
@@ -492,7 +566,7 @@ final class AgentCliCatalog {
         detail.addProperty("requires", spec.requires());
         detail.addProperty("returns", spec.returns());
         detail.addProperty("discoveryReadOnly",!recordEvidence);
-        detail.add("semantics",semantics(spec));
+        detail.add("semantics",currentSemantics(spec));
         if (id.startsWith("cast.")) {
             SpellGuide.Entry spell = SpellGuide.find(id);
             if (spell != null) detail.add("spell", spell.json());
@@ -501,6 +575,7 @@ final class AgentCliCatalog {
         if(recordEvidence)org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_detail");
     }
 
+    private static JsonObject currentSemantics(Spec spec){JsonObject out=semantics(spec);if(nativeBackend()&&nativeEntry(spec.id()))nativeSemantics(spec,out);return out;}
     private static JsonObject semantics(Spec spec) {
         String id=spec.id();boolean mixed=(spec.root()&&Set.of("archive","tasks","challenge","world","photo","profession","skills","spells","coach","arena","dungeon","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
                 ||Set.of("world.story","world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
@@ -527,6 +602,7 @@ final class AgentCliCatalog {
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
         if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";
         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";
+        if(id.equals("trade.wallet")||id.startsWith("trade.auction"))query="/mycli trade wallet；/mycli inventory；实际拍卖窗口";
         out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
         return out;
     }

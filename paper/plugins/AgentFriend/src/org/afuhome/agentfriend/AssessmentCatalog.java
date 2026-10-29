@@ -12,7 +12,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 final class AssessmentCatalog {
     static final Gson JSON = new Gson();
     static final Set<String> PROOFS = Set.of("cli_list", "cli_detail", "cli_status", "backpack_retrieve",
-            "door_passage", "ladder_ascent", "shelter", "survey", "survey_photo", "rescue", "party_clear", "project", "supply");
+            "door_passage", "ladder_ascent", "shelter", "survey", "survey_photo", "rescue", "party_clear", "project", "supply", "native_cast", "native_kill", "native_clear");
     record Point(double x, double y, double z) {
         double distance(Point b) { return Math.sqrt(Math.pow(x-b.x,2)+Math.pow(y-b.y,2)+Math.pow(z-b.z,2)); }
     }

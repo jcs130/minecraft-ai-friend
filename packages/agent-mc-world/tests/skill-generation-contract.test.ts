@@ -9,6 +9,20 @@ function generation(schema = SKILL_STEP_SCHEMA) {
 }
 
 describe('opt-in per-skill generation contracts from the native registry', () => {
+  it('requires an explicit take quantity or the separate whole-container alternative', () => {
+    const validate = generation();
+    for (const bad of [{ skill: 'take', item: 'iron_sword' },
+      { skill: 'take', item: 'iron_sword', count: 1, index: 1 },
+      { skill: 'take', all: true }]) {
+      expect(validate(bad)).toBe(false);
+    }
+    for (const good of [{ skill: 'take', item: 'iron_sword', count: 1, at: [1, 64, 0] },
+      { skill: 'take', item: 'bread', count: 2, from: 'open' },
+      { skill: 'take', all: true, at: [1, 64, 0] }]) {
+      expect(validate(good)).toBe(true);
+      expect(parseSteps([good])).not.toHaveProperty('error');
+    }
+  });
   it('rejects the captured missing-coordinate harvest without changing legacy parsing', () => {
     const bad = { skill: 'harvest', block: 'wheat', replant: true, text: 'at', tolerance: 1 };
     expect(new Ajv({ strict: false }).compile(SKILL_STEP_SCHEMA)(bad)).toBe(true);

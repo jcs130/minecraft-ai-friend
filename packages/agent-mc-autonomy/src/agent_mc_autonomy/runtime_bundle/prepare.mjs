@@ -132,7 +132,9 @@ function prepare() {
   const { manifest, catalog, files, manifestSha256 } = verify();
   if (!process.env.LOCALAPPDATA || !path.isAbsolute(process.env.LOCALAPPDATA)) fail('localappdata_unavailable');
   const namespace = path.join(process.env.LOCALAPPDATA, 'AgentMCWorld');
-  const installation = path.join(namespace, 'installations', manifest.id + '-' + manifestSha256);
+  // The directory is deliberately short; every selection still verifies the
+  // complete SHA-256. A conflicting target fails below and is never replaced.
+  const installation = path.join(namespace, 'installations', 'r-' + manifestSha256.slice(0, 32));
   const installedRoot = path.join(installation, 'runtime');
   const catalogPath = path.join(installation, 'viewer-catalog.json');
   catalog.packs[0].assetDirectory = path.resolve(installedRoot, manifest.resources.assetDirectory);
@@ -145,7 +147,7 @@ function prepare() {
   const selectRoot = target => { root = target; realRoot = fs.realpathSync(root); checked.clear(); };
   if (!fs.existsSync(installation)) {
     // An interrupted copy leaves only its uniquely owned stage; the old pointer stays valid.
-    const stage = path.join(namespace, 'installations', '.stage-' + manifest.id + '-' + randomUUID());
+    const stage = path.join(namespace, 'installations', '.stage-' + randomUUID());
     const stagedRoot = path.join(stage, 'runtime');
     fs.mkdirSync(stagedRoot, { recursive: true });
     const names = [...Object.keys(files), 'runtime-files.json', 'runtime-manifest.json'];

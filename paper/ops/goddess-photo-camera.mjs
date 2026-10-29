@@ -7,6 +7,7 @@ import {randomBytes, createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
 import {photoImageQuality} from './photo-image-quality.mjs';
+import {createNativePhotoRenderer} from './native-photo-renderer.mjs';
 
 const CHANNEL = 'mcagent:photo';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,7 +35,7 @@ export function validatePhotoJob(job) {
 export function startGoddessPhotoCamera(bot, options = {}) {
   const log = options.log ?? (() => {});
   const skinCache = new Map(); let skinCacheBytes = 0;
-  let settings, browser, active, cameraId, heartbeat, stopped = false, available = false;
+  let settings, browser, nativeRenderer, active, cameraId, heartbeat, stopped = false, available = false;
   const reply = (type, job) => {
     if (bot._client.state !== 'play') return;
     bot._client.write('custom_payload', {channel:CHANNEL, data:Buffer.from(JSON.stringify({type, ...(type === 'ready' ? {idle:active == null} : {}), ...(job ? {job:job.job,nonce:job.nonce,...(job.reason ? {reason:job.reason} : {}),...(job.image?{image:job.image}:{})} : {})}))});
@@ -63,6 +64,15 @@ export function startGoddessPhotoCamera(bot, options = {}) {
 
   async function initialize() {
     settings = options.settings ?? JSON.parse(await readFile('E:/MC/ops/goddess-photo-camera.json','utf8'));
+    if(settings.renderer==='native'){
+      const dependencies=createRequire(pathToFileURL(settings.nativeDependencyRoot+'/package.json'));
+      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG});
+      await nativeRenderer.probe();
+      if(stopped)return;
+      available=true;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});reply('ready');
+      let checking=false;heartbeat=setInterval(async()=>{if(checking||stopped)return;checking=true;try{await nativeRenderer.probe();available=true;reply('ready');}catch{available=false;stopJob();}finally{checking=false;}},5000);heartbeat.unref();
+      log('private Intel native photo camera ready; original photo ownership and upload flow retained');return;
+    }
     if (!path.isAbsolute(settings.assetsRoot) || !path.isAbsolute(settings.viewerRoot) || !path.isAbsolute(settings.browserPath)) throw Error('PHOTO_CONFIGURATION_INVALID');
     await Promise.all([access(settings.assetsRoot + '/dist/modern-viewer.js'), access(settings.browserPath)]);
     // Warm one bounded headless browser; every request gets a fresh, disposable context.
@@ -90,6 +100,14 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       return target;
     };
     guard();
+    if(nativeRenderer){
+      const {png,image,diagnostics}=await nativeRenderer.capture(job,{guard,signal});guard();
+      const body=new FormData();body.append('image',new Blob([png],{type:'image/png'}),'photo.png');reply('uploading',{...job,image});
+      const response=await fetch(job.uploadBase+'/upload?id='+job.uploadId,{method:'POST',body,redirect:'error',signal});
+      if(!response.ok)throw Error('PHOTO_IMPORT_REJECTED');await response.arrayBuffer();reply('uploaded',{...job,image});
+      log(`photo job=${job.job} native uploaded bytes=${png.length} sha256=${image.sha256}; game confirmation pending`);
+      if(options.onCapture)await options.onCapture({job:job.job,owner:job.owner,world:job.world,mode:job.mode,anchor:{x:job.anchorX,y:job.anchorY,z:job.anchorZ},png,diagnostics});return;
+    }
     const playerSkins = new Map(), skinImages = new Map();
     for (const entity of Object.values(bot.entities)) {
       if (entity.id === bot.entity?.id || entity.id === job.entityId && job.mode === 'first'

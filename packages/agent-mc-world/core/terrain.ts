@@ -8,7 +8,7 @@
  */
 import { Vec3 } from 'vec3';
 import { headWaterObservation } from './water-observation.ts';
-import { observedEntity, observationView } from './perception-sight.ts';
+import { entityAwareness, observationView, entityObservationScope, type EntityAwareness } from './perception-sight.ts';
 import { spatialSites } from './spatial-site.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
@@ -30,6 +30,8 @@ import { inventoryReadState, narrateInventorySync, type InventoryReadState } fro
 import { footingFromBot, narrateFooting, type FootingReading } from './footing.ts';
 import { WATER_BLOCKS } from './fluid-blocks.ts';
 import { CHEST_BLOCKS, FURNACE_BLOCKS } from './chests.ts';
+import { readWorldIdentity } from './world-scope.ts';
+import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 import { entityMaxHealth } from './entity-max-health.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
@@ -100,8 +102,9 @@ interface EntityInfo {
   direction: Direction | null;
   /** 相对我的高度差,四舍五入到格 */
   dy: number;
-  /** 当前视线确认；false 仅为旧快照兼容，不是听觉证据。 */
+  /** 当前视线确认；false 不是听觉证据，也不赋予交互权限。 */
   visible: boolean;
+  observation?: EntityAwareness;
   /** 掉落物实体上读到的物品;没有元数据时缺省 */
   item?: ItemStack;
   /** 可见实体的身份与当前元数据读数。 */
@@ -148,6 +151,8 @@ interface StatusEffect {
 }
 
 export interface WorldSnapshot {
+  /** Native level identity. dimension remains the registry/physics type. */
+  world?: WorldIdentityObservation;
   /** Current client vehicle attachment; undefined=unobserved, null=no reported attachment. */
   vehicle?: VehicleReading | null;
   position: { x: number; y: number; z: number };
@@ -190,6 +195,7 @@ export interface WorldSnapshot {
   entities: EntityInfo[];
   /** 截断掉了几条:她无从分辨"没报"是没有还是没给,这个数把两者分开 */
   entitiesOmitted: number;
+  entityObservation?: ReturnType<typeof entityObservationScope>;
   /** 实际脚部接触的支撑/流体；null 为未知，air 为未接地。 */
   standingOn: string | null;
   footing?: FootingReading;
@@ -362,7 +368,7 @@ export function snapshotFingerprint(s: WorldSnapshot): string {
     ? hostiles.reduce((a, b) => (a.distance <= b.distance ? a : b))
     : null;
   return [
-    s.dimension, s.gameMode, flightFingerprint(s.flight), vehicleFingerprint(s.vehicle),
+    s.dimension, s.world?.key ?? 'world?', s.gameMode, flightFingerprint(s.flight), vehicleFingerprint(s.vehicle),
     s.health === null ? 'hp?' : `hp${Math.ceil(s.health)}`,
     s.food === null ? 'fd?' : `fd${Math.round(s.food)}`,
     s.xpLevel === null ? 'xp?' : 'xp',
@@ -406,7 +412,7 @@ export function narrateWorldSegments(
     `我在${zhBiome(s.biome)}，${s.footing ? narrateFooting(s.footing, zhName)
       : s.standingOn ? `脚下是${zhName(s.standingOn)}` : '脚下支撑未知'}，` +
     `${s.vehicle ? '位于格' : '站在格'} (${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)})${near ? `，${near}` : ''}，` +
-    `${zhDimension(s.dimension)}。` +
+    `${zhDimension(s.dimension)}${s.world ? `，世界 ${s.world.key ?? '身份未核实'}` : ''}。` +
     `${motionPhrase(s)}，面朝${DIRECTION_ZH[s.facing]}。`;
   segs.push({ key: 'place', text: place, cmp: place });
   segs.push({ key: 'vehicle', text: narrateVehicleState(s.vehicle), cmp: vehicleFingerprint(s.vehicle) });
@@ -473,7 +479,9 @@ export function narrateWorldSegments(
   const seen = s.entities.filter((e) => e.visible);
   const seenMobs = seen.filter((e) => !isDroppedItem(e));
   const seenDrops = seen.filter((e) => isDroppedItem(e));
-  const lifeLines: string[] = [];
+  const lifeLines: string[] = s.entityObservation
+    ? [`${s.entityObservation.view === 'camera' ? '朝向视野' : '周边视线'}（${s.entityObservation.range} 格；近处 ${s.entityObservation.nearbyOccludedRange ?? 0} 格内未直视实体另列，来自当前实体同步，不是声音）。`]
+    : [];
   if (seenMobs.length > 0) {
     lifeLines.push(
       '看得见的：' +
@@ -487,9 +495,15 @@ export function narrateWorldSegments(
         '。',
     );
   }
-  if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个更远的没列进来。`);
+  const nearbyTracked = s.entities.filter(e => !e.visible && e.observation?.source === 'nearby-entity-tracking');
+  if (nearbyTracked.length) lifeLines.push('近处未直视：' + nearbyTracked.map(e =>
+    `${whereIs(e.direction,e.distance,e.dy)}有${zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
+  if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个感知实体未展开；可按需查询，未列出不等于没有。`);
   lifeLines.push(...narrateDrops(seenDrops));
   const lifeCmp = [
+    ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}|${s.entityObservation.nearbyOccludedRange}`] : []),
+    ...nearbyTracked.map(e => `近:${e.entityId}|${e.name}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
+    `省略:${s.entitiesOmitted}`,
     ...seenMobs.map((e) => `见:${e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
       `落:${e.item?.name ?? 'item'}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? 1}`,
@@ -961,9 +975,6 @@ const FARMLAND_MAX_MOISTURE = 7;
  */
 const CONTAINER_BLOCKS = new Set<string>([...CHEST_BLOCKS, ...FURNACE_BLOCKS]);
 const CONTAINER_NEARBY_CAP = 4;
-
-/** 自动摘要的近景预算；听觉独立消费真实声音包。 */
-const SNAPSHOT_ENTITY_RANGE = 16;
 
 /**
  * 视线射线允许穿过各色普通玻璃、玻璃板与铁栏杆的碰撞箱。
@@ -1764,38 +1775,42 @@ export function snapshotFromBot(
   const maxEntities = opts?.maxEntities ?? 12;
   const me = bot.entity;
   const pos = me.position;
+  const entityObservation = entityObservationScope(bot);
 
   const entities: EntityInfo[] = [];
   for (const id of Object.keys(bot.entities)) {
     const e = bot.entities[id];
     if (!e || e === me || !e.position) continue;
     const d = e.position.distanceTo(pos);
-    if (d > SNAPSHOT_ENTITY_RANGE) continue;
+    if (d > entityObservation.range) continue;
     const name = e.type === 'player' ? (e.username ?? 'player') : (e.name ?? e.displayName ?? 'unknown');
     // 飞行中/插在地上的射弹:看得见也不报
     if (e.name && NOISE_ENTITIES.has(e.name)) continue;
     const kind = e.name === 'piglin' && piglinIsHostile(bot, e)
       ? 'hostile'
       : classifyEntity(e.type, e.name);
-    const visible = observedEntity(bot, e);
-    // Entity tracking is not evidence of sound. Actual packets are available
-    // separately through mc_hear, without hidden identities/distances/counts.
-    if (!visible) continue;
-    const stack = droppedStackOf(e, bot.registry?.items);
+    const observation = entityAwareness(bot, e);
+    if (!observation) continue;
+    const visible = observation.visibility === 'visible';
+    const stack = visible ? droppedStackOf(e, bot.registry?.items) : null;
     const note = visible ? entityObservationNote(bot, e) : null;
     entities.push({
-      ...(visible && Number.isInteger(e.id) ? { entityId: e.id } : {}),
+      ...(Number.isInteger(e.id) ? { entityId: e.id } : {}),
       name,
       kind,
       distance: d,
       direction: bearing(e.position.x - pos.x, e.position.z - pos.z),
       dy: Math.round(e.position.y - pos.y),
       visible,
+      observation,
       ...(stack ? { item: stack } : {}),
       ...(note ? { note } : {}),
     });
   }
-  entities.sort((a, b) => a.distance - b.distance);
+  // Drops must not fill the compact budget and hide a player or a nearby threat.
+  const importance = (e: EntityInfo) => e.kind === 'hostile' && e.distance <= 8 ? 0
+    : e.kind === 'player' ? 1 : e.kind === 'hostile' ? 2 : isDroppedItem(e) ? 4 : 3;
+  entities.sort((a, b) => importance(a) - importance(b) || a.distance - b.distance);
 
   const nearbyBlocks: WorldSnapshot['nearbyBlocks'] = [];
   const registry = bot.registry;
@@ -1910,6 +1925,7 @@ export function snapshotFromBot(
     position: { x: pos.x, y: pos.y, z: pos.z },
     vehicle: vehicleStateFromBot(bot),
     dimension: String(bot.game.dimension ?? 'overworld'),
+    world: readWorldIdentity(bot),
     health: typeof bot.health === 'number' && Number.isFinite(bot.health) ? bot.health : null,
     maxHealth: entityMaxHealth(bot.entity),
     food: typeof bot.food === 'number' && Number.isFinite(bot.food) ? bot.food : null,
@@ -1935,6 +1951,7 @@ export function snapshotFromBot(
     effects: readEffects(bot),
     entities: entities.slice(0, maxEntities),
     entitiesOmitted: Math.max(0, entities.length - maxEntities),
+    entityObservation,
     standingOn: footing.block,
     footing,
     nearbyBlocks,

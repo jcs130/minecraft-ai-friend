@@ -1,0 +1,101 @@
+{
+  "id": "server-connection-fixes-20261028",
+  "state": "deployed-and-verified",
+  "deployedAt": "2026-10-28T09:54:14.5493341+08:00",
+  "verifiedAt": "2026-10-28T02:18:55.368Z",
+  "backup": "20261028-092455",
+  "scope": "completed connection/roster/control fixes and optional mcbot Paper adapter",
+  "files": [
+    {
+      "target": "QiandengjiMcbot-0.1.0.jar",
+      "sha256": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59"
+    },
+    {
+      "target": "numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "6bfea19c81b3000586949dde6f128efad7534c8932fbe485a39933e4d55e9239",
+      "beforeSha256": "7380a3260ab8b291536c748ae6c7094daf3cbb921643f8700d1193b50c0fd31a"
+    },
+    {
+      "target": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
+      "beforeSha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1"
+    },
+    {
+      "target": "ysm-proxy/LoginGuard-0.1.5.jar",
+      "sha256": "a9ccb8fb93eb905851cb375679ea96f15c94416af04e7677e3ffd602380aea72",
+      "beforeSha256": "5f7311d2b1ae22b10311302c12c31d9e1123314debaf975033d8384e61eb5852",
+      "intermediateSha256": "15a9fe181d45db4965512fb0c4f5138710479f6f26cfbde806f2f547ce990757"
+    },
+    {
+      "target": "AgentVision-0.1.2.jar",
+      "sha256": "e7e0b46c9bc9df9ea8f8e7ba00dbe7df8e415ac8eea00aed32cf4c21c1a10a65",
+      "beforeSha256": "05054e5d69da5bda49bc63d015421d94ac02fbe2f3ace52d25d9821d932fdd73"
+    }
+  ],
+  "unchangedPaperJars": 45,
+  "preservedPlayerAndRpgFiles": 863,
+  "preservedAuthAndModelFiles": 109,
+  "verification": {
+    "roster-backlog1.json": 14,
+    "vision-backlog1.json": 21,
+    "mcbot-blg1a.json": 55,
+    "mcbot-blg1b.json": 51,
+    "mcbot-persistence-blgcold1.json": 19,
+    "sixNativeClasses": 57,
+    "watcherIdentityAndRecovery": 12,
+    "warmMirrorBoundaries": 5,
+    "guardAssertionsFromSameFrozenBuild": 87,
+    "productionChecks": 22
+  },
+  "unchangedGameplay": [
+    "AgentFriend0.4.47.22-vortex",
+    "QiandengjiRpg0.2.1",
+    "VortexRPG1.2.2-alpha-qd27",
+    "LightAntiCheat1.2.6-qd2"
+  ],
+  "watcherDuplicateRecoveredAt": "2026-10-28T09:36:24+08:00",
+  "notVerified": [
+    "original Fabric mcbot GUI",
+    "real LLM long tasks"
+  ],
+  "clientPacksRepublished": false,
+  "initialAttempt": "cancelled before any stop: previously unconfirmed Coobot; owner subsequently confirmed reconnectable; fresh revision 2 used",
+  "runtimePasswordsAndKeysReset": false,
+  "initialFiles": [
+    {
+      "target": "QiandengjiMcbot-0.1.0.jar",
+      "sha256": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59"
+    },
+    {
+      "target": "numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "6bfea19c81b3000586949dde6f128efad7534c8932fbe485a39933e4d55e9239",
+      "beforeSha256": "7380a3260ab8b291536c748ae6c7094daf3cbb921643f8700d1193b50c0fd31a"
+    },
+    {
+      "target": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
+      "beforeSha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1"
+    },
+    {
+      "target": "ysm-proxy/LoginGuard-0.1.5.jar",
+      "sha256": "15a9fe181d45db4965512fb0c4f5138710479f6f26cfbde806f2f547ce990757",
+      "beforeSha256": "5f7311d2b1ae22b10311302c12c31d9e1123314debaf975033d8384e61eb5852"
+    },
+    {
+      "target": "AgentVision-0.1.2.jar",
+      "sha256": "e7e0b46c9bc9df9ea8f8e7ba00dbe7df8e415ac8eea00aed32cf4c21c1a10a65",
+      "beforeSha256": "05054e5d69da5bda49bc63d015421d94ac02fbe2f3ace52d25d9821d932fdd73"
+    }
+  ],
+  "heartbeatHotfix": {
+    "version": "0.1.8",
+    "proxyOnly": true,
+    "paperRestarted": false,
+    "preservedAuthAndModelFiles": 109,
+    "liveSamples": 60,
+    "maxHeartbeatAgeMs": 1011,
+    "authenticationRegressionAssertions": 87,
+    "newSnapshotChecks": 6,
+    "realWindowsLockCases": 4
+  }
+}

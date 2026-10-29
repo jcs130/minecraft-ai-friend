@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate_not_activated",
+  "viewerRepository": "jcs130/mc-visual-console",
+  "viewerCommit": "20dd179cd24d4ac870a6bc9db6378dd578508268",
+  "viewerSourceSha256": "72b33b95ad86dadad3618f9b506d5a5b3cf04dcda1bb80c29618d780ff8d333e",
+  "sourceFilesVerified": 705,
+  "siteFilesVerified": 13,
+  "sitePackageBytes": 1513501,
+  "websiteVersionUnchanged": "0.8.27",
+  "observerVersionUnchanged": "0.1.3",
+  "tests": {
+    "rendererPassed": 1359,
+    "rendererConditionalSkipped": 37,
+    "originalResourceFocusedPassed": 69,
+    "compatibilityEquipmentPassed": 12,
+    "typeChecksPassed": 2,
+    "isolatedBrowserVerified": true,
+    "isolatedObserverInitializationPassed": true
+  },
+  "dualDiskCandidateAndRollbackVerified": true,
+  "originalModelAssetsChanged": false,
+  "productionChanged": false,
+  "activationAuthorized": false,
+  "paperRestartRequired": false,
+  "proxyRestartRequired": false,
+  "websiteRestartRequired": true,
+  "observerRestartRequired": true,
+  "completeJavaPixelParityVerified": false
+}

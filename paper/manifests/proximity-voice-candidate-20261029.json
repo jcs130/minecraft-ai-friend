@@ -1,0 +1,63 @@
+{
+  "id": "proximity-voice-release-20261029-r3",
+  "state": "candidate-not-deployed",
+  "scope": "Paper voice and existing login channel gate only",
+  "helper": {
+    "beforeSha256": "a1e6913247138ee667a0d4ad693e3e7f7cc94f7f480e58ce57f59b7a9646d832",
+    "sha256": "fae41cfafd8c59f0ebaeccacd333a9b00edfc3ddae0c74da4acde34f375d1a30"
+  },
+  "files": [
+    {
+      "target": "QiandengVoice-0.1.0.jar",
+      "sha256": "db28cbb28eb72ca385681a8c39e9f8bbebe625f6e08482a819a7f3a16057ede4"
+    },
+    {
+      "target": "voicechat-bukkit-2.6.27.jar",
+      "sha256": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e"
+    },
+    {
+      "target": "ysm-proxy/LoginGuard-0.1.5.jar",
+      "sha256": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
+      "beforeSha256": "a9ccb8fb93eb905851cb375679ea96f15c94416af04e7677e3ffd602380aea72"
+    },
+    {
+      "target": "plugins/QiandengVoice/config.yml",
+      "sha256": "d305f151dc7b36c3244651a80f9fbf8d5ede01a765c9a22c969a735d50df9569"
+    },
+    {
+      "target": "plugins/voicechat/voicechat-server.properties",
+      "sha256": "8ae606659eca3ca155faf174171ff5c3c6a45065d8e88571867795ec264ddbdf"
+    }
+  ],
+  "fullColdBackup": false,
+  "productionChanged": false,
+  "cameraIncluded": false,
+  "voiceProxyPluginIncluded": false,
+  "serviceOrigin": "http://127.0.0.1:8857",
+  "plannedVoiceUdp": 24454,
+  "checks": {
+    "javaVoiceBoundaryAssertions": 19,
+    "javaReceiptSequenceAssertions": 15,
+    "pythonMediaTests": 11,
+    "nodeClientTests": 4,
+    "authAssertions": 43,
+    "deploymentAssertions": 19,
+    "cameraTests": 9,
+    "galleryTests": 8
+  },
+  "document": "paper/docs/PROXIMITY_VOICE.md",
+  "nativeCamera": "blocked-on-verified-Intel-rendering; existing web camera retained",
+  "packetReceiptSemantics": "cancelled retains exact owner/disconnect/world-change reason",
+  "finalWorldAndUploadIdentityVerified": true,
+  "realChecks": {
+    "nearBlocks": 3,
+    "farBlocks": 200,
+    "microphoneNearPackets": 273,
+    "microphoneFarPackets": 0,
+    "duplicatePacketsBefore": 546,
+    "duplicatePacketsAfter": 546,
+    "worldChange": "cancelled/ACTOR_WORLD_CHANGED",
+    "changedAudioSameRequest": "rejected/REQUEST_ID_REUSED",
+    "unmodifiedOriginalRequestStill": "sent"
+  }
+}

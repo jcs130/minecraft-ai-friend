@@ -16,6 +16,17 @@ const server = (id: string, intents: MinecraftOption['intents']): MinecraftOptio
   source: { kind: 'server-observation', reference: 'test', observedAt: '2026-10-17T00:00:00Z' } });
 
 describe('outcome-oriented capability discovery', () => {
+  it('reports carried weapon gaps and focused storage, memory and recipe paths without declaring remote stock empty', () => {
+    const s=minecraftOptionsFromSnapshot(snapshot({inventory:[{name:'bow',count:3},{name:'iron_ingot',count:4},{name:'stick',count:4}]}),foods,state);
+    expect(s.context).toMatchObject({meleeEquipment:[],arrows:0});
+    const read=JSON.stringify(readMinecraftOptions(s,{intent:'equipment'}));
+    expect(read).toContain('未见'); expect(read).toContain('mc_bag');expect(read).toContain('mc_memory');
+    expect(read).toContain('当前版本配方');expect(read).toContain('内容未知');
+    expect(renderMinecraftOptionIndex(s)).toContain('武器与装备→');
+    const armed=minecraftOptionsFromSnapshot(snapshot({inventory:[{name:'iron_sword',count:1}]}),foods,state);
+    expect(renderMinecraftOptionIndex(armed)).not.toContain('武器与装备→');
+    expect(minecraftOptionsFromSnapshot(snapshot({invSynced:false}),foods,state).context.meleeEquipment).toBeNull();
+  });
   it('keeps unsynchronized stock and unclassified custom food unknown instead of declaring supplies absent', () => {
     const unready = minecraftOptionsFromSnapshot(snapshot({ invSynced: false }), foods, state);
     expect(unready.context.carriedFood).toBeNull();

@@ -1,5 +1,5 @@
 /** Discovery data, not an executable plan, current permission or model policy. */
-export const MINECRAFT_OPTION_INTENTS = ['food', 'travel', 'water', 'inventory', 'explore', 'method'] as const;
+export const MINECRAFT_OPTION_INTENTS = ['food', 'equipment', 'travel', 'water', 'inventory', 'explore', 'method'] as const;
 export type MinecraftOptionIntent = typeof MINECRAFT_OPTION_INTENTS[number];
 export interface MinecraftOption {
   id: string;
@@ -22,6 +22,9 @@ export interface MinecraftOptionContext {
   /** null means unavailable/unclassified; zero means observed none in carried inventory only. */
   carriedFood: number | null;
   carriedBoats: number | null;
+  /** Recognized native melee gear and ordinary arrows in the current carried sample only. */
+  meleeEquipment?: readonly string[] | null;
+  arrows?: number | null;
   freeSlots: number | null;
   travelling: boolean;
   bodyTask: string | null;

@@ -132,7 +132,7 @@ class NativeGame(unittest.IsolatedAsyncioTestCase):
         channel = self.channel()
         channel.invoke = AsyncMock(return_value={"content":[{"type":"text","text":'MC_STATUS {"food":20,"health":20,"maxHealth":20}'}]})
         self.assertFalse(await channel.heartbeat_once())
-        channel.invoke.assert_awaited_once_with("command", {"line":"/mycli status"})
+        channel.invoke.assert_awaited_once_with("command", {"line":"/mycli status --json"})
         channel._enqueue.assert_not_called()
 
     async def test_active_native_goal_can_continue_via_heartbeat(self):

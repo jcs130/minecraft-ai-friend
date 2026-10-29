@@ -152,7 +152,7 @@ final class SpellGuide {
         }
         if (args.length < 3 || !(args[1].equalsIgnoreCase("explain")
                 || args[1].equalsIgnoreCase("info") || args[1].equalsIgnoreCase("describe"))) {
-            error(player, "INVALID_ARGUMENT", "用法：/mycli skills list [all|common|profession|warrior|mage|priest] [页码] 或 explain <技能ID>");
+            error(player, "INVALID_ARGUMENT", "用法：/mycli skills list [all|common|profession|warrior|tank|mage|priest] [页码] 或 explain <技能ID>");
             return;
         }
         detail(player, String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
@@ -170,13 +170,13 @@ final class SpellGuide {
     static void discoveryHint(Player player) {
         int count = professions().size();
         player.sendMessage(ChatColor.AQUA + "[系统·技能目录] 当前基础" + SPELLS.size() + "项、职业" + count
-                + "项；/mycli skills list profession 查看职业技艺，list warrior|mage|priest 按战法牧查询。技能有多页，请读 pages/MC_SPELL_NEXT。");
+                + "项；/mycli skills list profession 查看职业技艺，list warrior|tank|mage|priest 按战士、坦克、法师、牧师查询。技能有多页，请读 pages/MC_SPELL_NEXT。");
         player.sendMessage(ChatColor.GRAY + "用 /mycli skills info <ID> 查各级效果、点数和解锁条件；看到技能不等于已经学会。组队倒地救援是副本规则，靠近4格10秒或清场自动复活，无需学习/施法。");
     }
     private static void list(Player player, String filter, int page) {
         List<Entry> all = entries(); Map<String, String> roles = professions();
         if (!List.of("all", "common", "profession").contains(filter) && !roles.containsValue(filter)) {
-            error(player, "UNKNOWN_FILTER", "分类：all、common、profession、warrior、mage、priest"); return;
+            error(player, "UNKNOWN_FILTER", "分类：all、common、profession、warrior、tank、mage、priest"); return;
         }
         List<Entry> SPELLS = all.stream().filter(entry -> filter.equals("all")
                 || filter.equals("common") && !roles.containsKey(entry.id())

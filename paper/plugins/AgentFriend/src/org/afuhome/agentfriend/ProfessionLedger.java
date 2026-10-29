@@ -14,7 +14,10 @@ final class ProfessionLedger {
     private JsonObject data;
     private boolean ready;
     private String error = "";
-    ProfessionLedger(Path file) {
+    private final boolean readOnly;
+    ProfessionLedger(Path file) { this(file, false); }
+    ProfessionLedger(Path file, boolean readOnly) {
+        this.readOnly=readOnly;
         this.file = file;
         try {
             if (Files.exists(file)) {
@@ -83,6 +86,19 @@ final class ProfessionLedger {
         } catch (Exception invalid) { error = invalid.toString(); data = new JsonObject(); }
     }
     boolean ready() { return ready; }
+    static ProfessionLedger academy(Path target,ProfessionLedger legacy) {
+        boolean exists=Files.exists(target);var next=new ProfessionLedger(target);
+        if(exists)return next;
+        if(!legacy.ready()||!next.ready()){next.ready=false;next.error="academy source unavailable";return next;}
+        if(!next.write(data->{
+            for(var entry:legacy.data().getAsJsonObject("players").entrySet()){
+                var profile=entry.getValue().getAsJsonObject();
+                if(profile.has("academy"))ProfessionLedger.profile(data,UUID.fromString(entry.getKey())).add("academy",profile.get("academy").deepCopy());
+            }
+            data.addProperty("academyMigration",1);
+        })){next.ready=false;}
+        return next;
+    }
     private static boolean finitePositive(JsonElement value, double maximum) {
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) return false;
         double number = value.getAsDouble(); return Double.isFinite(number) && number >= 0 && number <= maximum;
@@ -110,7 +126,7 @@ final class ProfessionLedger {
         if (!players.has(id.toString())) players.add(id.toString(), empty()); return players.getAsJsonObject(id.toString());
     }
     boolean write(Consumer<JsonObject> edit) {
-        if (!ready) return false;
+        if (!ready || readOnly) return false;
         JsonObject next = data.deepCopy();
         try {
             edit.accept(next); byte[] bytes = next.toString().getBytes(StandardCharsets.UTF_8);

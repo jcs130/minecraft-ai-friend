@@ -9,6 +9,9 @@ export interface ExecutionReceipt {
   terminal: boolean;
   /** Only the host can judge its goal; execution completion never makes this true. */
   goalCompleted: false;
+  /** An observation terminal may carry `outcome` (e.g. death). This records an
+   * observed event, not successful action or goal completion. Preserve its
+   * original event timestamp when retaining causal history beside newer state. */
   evidence?: Record<string, unknown>;
 }
 export interface CallOptions { requestId?: string; turnId?: string; signal?: AbortSignal; attribution?: import('../../core/operation-experience.ts').OperationAttribution }
@@ -29,7 +32,15 @@ export interface ArchiveQuery {
   type?: string;
   keyword?: string;
 }
-export interface CurrentFact { key: string; text: string; revision: string; original: string }
+export interface FactPart {
+  key: string; text: string;
+  /** Optional producer-owned semantic state digest (sha256:<64 lowercase hex>).
+   * Comparison only: raw text, observation times and archive hashes stay intact.
+   * Never establishes freshness, permissions or a completed action. Producers
+   * must include all meaningful state and omit only explicitly declared sample metadata. */
+  stateRevision?: string;
+}
+export interface CurrentFact extends FactPart { revision: string; original: string }
 export interface ContextBudget { contextTokens: number; reservedOutputTokens: number }
 export interface PreparedContext {
   protocol: ProtocolVersion;

@@ -1,0 +1,92 @@
+# Native Vortex objectives. Queries never accept or settle a quest.
+# Coordinates are surveyed existing places; entering a place is not a dungeon clear.
+# Authored v2 is newer than the pinned upstream v1 examples. Its migrator must
+# not merge unrelated example quests back into this operated catalogue.
+resource-version: 2
+quests:
+  qd_first_hunt:
+    name: 初战·夜路清剿
+    description: 在村外合法战斗区域击杀2只僵尸；可先去公会共享箱领取装备。白天找不到目标时可先选择城市调查，不必等待。
+    required-level: 1
+    repeatable: false
+    objectives:
+      zombies: {type: KILL_MOB, target: zombie, amount: 2, description: 实际击杀僵尸}
+    rewards:
+      - {type: EXPERIENCE, amount: 180}
+      - {type: CURRENCY, amount: 50}
+  qd_city_scout:
+    name: 起始之城·三站巡访
+    description: /warp aincrad到起始之城，依次在公会、导师和情报员附近8格内走访；传送需6魔力。无需开箱或破坏建筑。
+    required-level: 1
+    repeatable: false
+    objectives:
+      guild: {type: VISIT_LOCATION, target: 'aincrad:-512.5:67:889.5:8', amount: 1, description: 到公会接待处}
+      mentor: {type: VISIT_LOCATION, target: 'aincrad:-500.5:67:917.5:8', amount: 1, description: 到职业导师处}
+      scout: {type: VISIT_LOCATION, target: 'aincrad:-567.5:67:853.5:8', amount: 1, description: 到攻略情报处}
+    rewards:
+      - {type: EXPERIENCE, amount: 180}
+      - {type: CURRENCY, amount: 50}
+  qd_field_kit:
+    name: 出征准备·武器与盾
+    description: 实际制作铁剑与盾牌各1件；只拿起旧装备不算制作。原有装备保留，不交走物品。
+    required-level: 1
+    repeatable: false
+    objectives:
+      blade: {type: CRAFT_ITEM, target: iron_sword, amount: 1, description: 制作铁剑}
+      shield: {type: CRAFT_ITEM, target: shield, amount: 1, description: 制作盾牌}
+    rewards:
+      - {type: EXPERIENCE, amount: 140}
+      - {type: CURRENCY, amount: 35}
+  first_blood:
+    name: 讨伐·林野先锋
+    description: 实际击杀5只僵尸与3只骷髅。建议战斗Lv.2、铁制武器、盾与熟食；先查现场危险，不要求独自作战。
+    required-level: 1
+    repeatable: false
+    objectives:
+      kill_zombies: {type: KILL_MOB, target: zombie, amount: 5, description: 击杀僵尸}
+      kill_skeletons: {type: KILL_MOB, target: skeleton, amount: 3, description: 击杀骷髅}
+    rewards:
+      - {type: EXPERIENCE, amount: 150}
+      - {type: CURRENCY, amount: 50}
+  qd_road_watch:
+    name: 讨伐·林道警戒
+    description: 讨伐蜘蛛和苦力怕；建议战斗Lv.3、盾、远程武器与足够食物。战斗证据来自实际击杀。
+    required-level: 2
+    repeatable: false
+    objectives:
+      spiders: {type: KILL_MOB, target: spider, amount: 3, description: 击杀蜘蛛}
+      creepers: {type: KILL_MOB, target: creeper, amount: 2, description: 击杀苦力怕}
+    rewards:
+      - {type: EXPERIENCE, amount: 260}
+      - {type: CURRENCY, amount: 60}
+  qd_floor_scout:
+    name: 首层攻略·战备调查
+    description: 先查/mycli dungeon info aincrad_01；用/mycli dungeon travel aincrad_01到入口（8魔力），在前哨8格内勘察。本单只查勘，不等于通关。
+    required-level: 2
+    repeatable: false
+    objectives:
+      entry: {type: VISIT_LOCATION, target: 'aincrad:856:69:-1144:8', amount: 1, description: 实地勘察第一层前哨}
+    rewards:
+      - {type: EXPERIENCE, amount: 160}
+      - {type: CURRENCY, amount: 40}
+  qd_floor_clear:
+    name: 首层攻略·破晓之剑
+    description: 完成aincrad_01的三段战斗并返回首室，由服务器确认完整结算。可单人或组队；建议战斗Lv.3、铁甲、盾、治疗。接任务后再开场，失败或故障按dungeon status指引处理。
+    required-level: 3
+    required-quest: qd_floor_scout
+    repeatable: false
+    objectives:
+      clear: {type: KILL_BOSS, target: site_aincrad_01, amount: 1, description: 实际完整攻略第一层并返回首室}
+    rewards:
+      - {type: EXPERIENCE, amount: 500}
+      - {type: CURRENCY, amount: 150}
+  qd_crypt_clear:
+    name: 遗迹攻略·亡灵墓穴
+    description: 完成undead_crypt三室并返回首室，由服务器确认结算。建议战斗Lv.5、完整铁甲、盾和治疗，骑士前排、输出与牧师配合更稳妥；先查/mycli dungeon info undead_crypt，关闭或故障时换目标。
+    required-level: 4
+    repeatable: false
+    objectives:
+      clear: {type: KILL_BOSS, target: site_undead_crypt, amount: 1, description: 完整攻略亡灵墓穴并返回首室}
+    rewards:
+      - {type: EXPERIENCE, amount: 650}
+      - {type: CURRENCY, amount: 200}

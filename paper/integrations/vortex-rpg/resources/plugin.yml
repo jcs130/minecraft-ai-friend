@@ -1,0 +1,11 @@
+name: QiandengjiRpg
+version: 0.2.10
+main: org.qiandengji.vortex.VortexBridge
+api-version: '1.21'
+depend: [VortexRPG, Vault]
+softdepend: [AgentFriend, LightAntiCheat]
+commands:
+  qdrpg:
+    description: 千灯纪 Vortex RPG 精炼入口
+    aliases: [mycli]
+    usage: /mycli rpg --help

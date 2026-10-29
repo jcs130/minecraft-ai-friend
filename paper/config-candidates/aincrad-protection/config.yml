@@ -1,0 +1,4 @@
+# Only this authored world enables the event checks required for flow/fire flags.
+regions:
+  titles-always-use-default-times: true
+  high-frequency-flags: true

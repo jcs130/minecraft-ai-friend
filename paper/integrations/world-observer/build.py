@@ -12,7 +12,7 @@ classes=a.output/'classes';classes.mkdir()
 args=['-proc:none','-encoding','UTF-8','--release','21','-cp',os.pathsep.join(str(f.resolve()) for f in cp),'-d',str(classes.resolve()),*map(str,sorted((root/'src').rglob('*.java')))]
 af=a.output/'javac.args';af.write_text('\n'.join('"'+v.replace('\\','/')+'"' for v in args),encoding='utf8')
 subprocess.run([str(a.jdk/'bin'/('javac.exe' if os.name=='nt' else 'javac')),'@'+str(af)],check=True)
-jar=a.output/'WorldObserver-0.1.0.jar'
+jar=a.output/'WorldObserver-0.1.1.jar'
 with zipfile.ZipFile(jar,'x',compression=zipfile.ZIP_DEFLATED) as z:
  for f in sorted(classes.rglob('*.class')):z.write(f,f.relative_to(classes).as_posix())
  for name in ['plugin.yml','config.yml']:z.write(root/name,name)

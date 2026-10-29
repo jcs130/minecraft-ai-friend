@@ -17,7 +17,25 @@ vi.mock('node:child_process',()=>({fork:vi.fn(()=>{
 import {MinecraftWorldProxy} from '../core/proxy.ts';
 import {MINECRAFT_CLIENT_DEFAULTS} from '../src/client/config.ts';
 import {FakeHost} from './method-host.ts';
+import {MinecraftClientWorld} from '../src/client/world.ts';
 afterEach(()=>{vi.useRealTimers();state.children.length=0;});
+it('preserves typed route guards and journey facts through status IPC and the generic facade',async()=>{
+  const cfg=structuredClone(MINECRAFT_CLIENT_DEFAULTS),proxy=new MinecraftWorldProxy({cfg}),host=new FakeHost();
+  const started=proxy.start(host),child=state.children[0],init=child.sent.find((m:any)=>m.req?.kind==='init');
+  child.emit('message',{t:'rep',id:init.id,ok:true,value:null});await started;
+  const facts={text:'journey current',snapshotTypes:['minecraft.world.snapshot'],parts:[{key:'journey',text:'journey current'}],
+    decisionStability:{sampledAtMs:Date.now(),identity:['realm','account'],dimension:'minecraft:overworld',position:[0,64,0],health:20,food:20,guards:{},
+      route:{generation:7,positionEpoch:3,speedBlocksPerSec:4,policy:{choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5},risks:[],
+        task:{id:44,stepIndex:0,stepCount:1,step:'goto',skill:'goto',resumable:true,destination:[128,64,0],dimension:'minecraft:overworld'},
+        waiting:[],hold:null,goalOwner:'task',fighting:false,environment:null,windowOpen:false,cursorOccupied:false,
+        footing:{kind:'support',block:'stone',grounded:true},entities:[],journeyId:'journey:7:44:0:1',journeyCues:[]}}};
+  child.emit('message',JSON.parse(JSON.stringify({t:'note',note:{kind:'status',decl:{},storage:[],promptVars:{},requestFacts:facts}})));
+  const facade=new MinecraftClientWorld({cfg},proxy);
+  expect(proxy.requestFacts()?.decisionStability).toEqual(facts.decisionStability);
+  expect(facade.requestFacts()?.decisionStability).toEqual(facts.decisionStability);
+  expect(facade.requestFacts()?.parts?.find(p=>p.key==='journey')?.text).toBe('journey current');
+  await proxy.stop();expect(facade.requestFacts()).toBeNull();
+});
 it('forwards fresh server readiness through the child proxy and expires missing or stale status without RPC',async()=>{
   vi.useFakeTimers();
   const proxy=new MinecraftWorldProxy({cfg:structuredClone(MINECRAFT_CLIENT_DEFAULTS)}),host=new FakeHost();

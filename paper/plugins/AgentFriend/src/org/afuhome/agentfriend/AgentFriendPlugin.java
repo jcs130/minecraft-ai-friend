@@ -252,7 +252,28 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private LifeChallenges lifeChallenges;
     private SpellMastery spellMastery;
     private ProfessionManager professions;
+    private NativeRpg nativeRpg;
+    NativeRpg nativeRpg(){return nativeRpg;}
+    public boolean nativeRpgSelected(){return nativeRpg!=null&&nativeRpg.selected();}
+    /** Main-thread read-only HUD ABI shared by Java Eye and account-free web observation. */
+    public String nativeViewerState(Player p){return viewerStatePublisher.snapshot(p);}
+    public boolean nativeRpgMayAct(Player p){return p.isOnline()&&!p.isDead()&&!isDowned(p)&&!isObserver(p)
+        &&Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode())&&!pvpParticipant(p);}
+    /** Existing travel authority reused by the two city gates; never an OP warp. */
+    public boolean nativeCityTravel(Player p,String warp){
+        if(!Set.of("aincrad","village").contains(warp)||isDowned(p)||dungeonParticipant(p)||pvpParticipant(p)
+                ||siteDungeons!=null&&siteDungeons.isParticipant(p)||p.isInsideVehicle()){
+            p.sendMessage("§e当前不能使用城门；先结束战斗、离开载具或完成救援。查询：/mycli status");return false;
+        }
+        try{
+            var essentials=(com.earth2me.essentials.Essentials)Bukkit.getPluginManager().getPlugin("Essentials");
+            Location target=essentials.getWarps().getWarp(warp);
+            return travelMagic.command(p,"warp "+warp,target,"travel","双城传送门",TravelMagic.LOCAL_MANA);
+        }catch(Exception unavailable){p.sendMessage("§e城门目标尚未就绪，本次不传送；可查询 /mycli waypoint。");return false;}
+    }
     private TrialRescueManager trialRescue;
+    private CombatRpg combatRpg;
+    private boolean conquestWorldReady;
     private PlayerContracts playerContracts;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
@@ -266,6 +287,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private AgentCoach agentCoach;
     private AgentEntry agentEntry;
     private AgentCommunication communication;
+    private AppearanceGuide appearanceGuide;
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
@@ -291,6 +313,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        nativeRpg=new NativeRpg(this);
         worldLife = new WorldLifeManager(this);
         featureTutorials = new FeatureTutorials(this);
         traversalPractice = new NativeTraversalPractice(this);
@@ -342,6 +365,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentEntry = new AgentEntry(this);
         agentCoach = new AgentCoach(this);
         communication = new AgentCommunication(this);
+        appearanceGuide = new AppearanceGuide(this);
         archives = new PublicArchives(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
@@ -354,6 +378,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dailyBoard = new DailyBoardManager(this);
         taskMarket = new TaskMarketManager(this);
         playerContracts = new PlayerContracts(this);
+        try { conquestWorldReady=ConquestWorld.load(this); }
+        catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE,"Formal conquest unavailable; other activities retained",failure); }
         siteDungeons = new SiteDungeonManager(this);
         new WorldLifeActions(this);
         soulboundGear = new SoulboundGear(this);
@@ -364,6 +390,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         tradeDirectory = new TradeDirectory(this);
         trialRescue = new TrialRescueManager(this);
         lifeChallenges = new LifeChallenges(this);
+        try { if (nativeRpg.selected() || CombatRpgRules.activate(getConfig().getBoolean("combat-rpg.enabled",false),
+                getServer().getPluginManager().isPluginEnabled("VortexRPG"))) combatRpg = new CombatRpg(this); }
+        catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE, "Combat RPG unavailable; original progression retained", failure); }
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         agentStatePublisher = new AgentStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
@@ -383,6 +412,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (combatRpg != null) combatRpg.close();
         if (lifeChallenges != null) lifeChallenges.shutdown();
         if (privateChatNames != null) privateChatNames.stop();
         if (itemAppearances != null) itemAppearances.stop();
@@ -446,6 +476,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean bypassBlockProtection(Player player, Location at) {
         return blockAccess != null && blockAccess.allows(player, at);
     }
+    boolean trustedBlockEditor(Player player) { return blockAccess!=null&&blockAccess.trustedEditor(player); }
     GeneratedStructureProtection generatedStructures() { return generatedStructures; }
     NativeTraversalPractice traversalPractice() { return traversalPractice; }
     LandManager lands() { return lands; }
@@ -469,6 +500,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     LifeGuildManager lifeGuild() { return lifeGuild; }
     TrialRescueManager trialRescue() { return trialRescue; }
+    CombatRpg combatRpg() { return combatRpg; }
+    boolean conquestWorldReady() { return conquestWorldReady; }
     boolean isDowned(Player p) { return trialRescue != null && trialRescue.downed(p); }
     PlayerContracts playerContracts() { return playerContracts; }
     PvpArenaManager pvp() { return pvpArena; }
@@ -558,6 +591,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     int miningLevel(Player player) {
+        if(nativeRpg.selected())return nativeRpg.level(player);
         SkillsUser user = skillsUser(player);
         return user == null ? 0 : user.getSkillLevel(Skills.MINING);
     }
@@ -568,6 +602,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     boolean hasMana(Player p, double amount) {
+        if(nativeRpg.selected())return nativeRpg.hasMana(p,amount);
         SkillsUser user = skillsUser(p);
         if (user == null) { p.sendMessage(ChatColor.RED + "魔力数据还没加载；等几秒后 /mycli status 确认已加载再施法，持续异常请联系服主。"); return false; }
         if (user.getMana() + 0.0001 < amount) {
@@ -579,6 +614,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     boolean spendMana(Player p, double amount) {
+        if(nativeRpg.selected())return nativeRpg.spend(p,amount);
         if (!hasMana(p, amount)) return false;
         SkillsUser user = skillsUser(p);
         boolean consumed = user.consumeMana(amount);
@@ -600,6 +636,21 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (featureTutorials != null) featureTutorials.cast(player, spell);
         if (taskMarket != null) taskMarket.worldAction(player, GuildManager.Goal.SKILL_CAST,
                 spell, "cast:" + java.util.UUID.randomUUID(), System.currentTimeMillis());
+    }
+    public void nativeCastConfirmed(Player p,String id) {
+        if(!nativeRpg.selected()||!p.isOnline()||!id.matches("[a-z0-9_]{1,48}"))return;
+        recordWorldLesson(p,"cast");
+        if(skillAssessments!=null)skillAssessments.proof(p,"native_cast","vortex:"+id);
+        if(featureTutorials!=null)featureTutorials.cast(p,id);
+        if(taskMarket!=null)taskMarket.worldAction(p,GuildManager.Goal.SKILL_CAST,id,"vortex:"+java.util.UUID.randomUUID(),System.currentTimeMillis());
+    }
+    public void nativeKillConfirmed(Player p) {
+        if(nativeRpg.selected()&&skillAssessments!=null)skillAssessments.proof(p,"native_kill","vortex_hostile_kill");
+    }
+    void nativeSiteCompleted(Player p,String site,String run) {
+        if(!nativeRpg.selected())return;
+        if(skillAssessments!=null)skillAssessments.proof(p,"native_clear","site:"+site+":"+run);
+        nativeRpg.siteCompleted(p,site,run);
     }
 
     private WorldLifeManager worldLife;
@@ -646,6 +697,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     boolean hasLearnedSkill(Player player, String spell) {
+        if(nativeRpg.selected())return NativeRpg.COMMON.contains(spell);
         NamespacedKey key = skillKey(spell);
         return key != null && learned(player, key);
     }
@@ -653,6 +705,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     SpellMastery mastery() { return spellMastery; }
 
     int auraLevel(Player player, Skills skill) {
+        if(nativeRpg.selected())return nativeRpg.level(player);
         SkillsUser user = skillsUser(player);
         return user == null ? 0 : user.getSkillLevel(skill);
     }
@@ -686,8 +739,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。");
             return;
         }
-        SkillsUser user = skillsUser(p);
-        if (user == null || user.getMana() + 0.0001 < cost) {
+        if (!hasMana(p,cost)) {
             event.setCancelled(true);
             p.sendMessage(ChatColor.RED + "魔力不足：需要 " + Math.round(cost) + "。用 /mycli status 或命格书查看；停止耗魔等自然恢复，足够后再施放一次。");
         } else if (event.getSpell().getInternalName().equalsIgnoreCase("blink") && travelMagic != null)
@@ -700,9 +752,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Double cost = SPELL_MANA_COSTS.get(event.getSpell().getInternalName());
         if (cost == null || event.getSpellCastState() != Spell.SpellCastState.NORMAL
                 || event.getPostCastAction() != Spell.PostCastAction.HANDLE_NORMALLY) return;
-        SkillsUser user = skillsUser(p);
-        if (user == null || !user.consumeMana(cost)) {
-            getLogger().severe("Successful spell was not charged in AuraSkills: "
+        if (!spendMana(p,cost)) {
+            getLogger().severe("Successful spell was not charged in the selected mana backend: "
                     + event.getSpell().getInternalName() + " caster=" + p.getUniqueId());
         }
         if (agentStatePublisher != null) agentStatePublisher.afterCast(p);
@@ -772,6 +823,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler public void onStarterJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         communication.joined(player);
+        appearanceGuide.joined(player);
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
             int backpackChanges = BackpackShortcutMigration.migrate(player);
@@ -830,6 +882,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if(sender instanceof Player p&&nativeRpg.selected()){
+            if(trialRescue!=null&&trialRescue.blockCommand(p,args))return true;
+            if(nativeRpg.route(p,args))return true;
+        }
         if(sender instanceof Player p&&args.length>0&&(args[0].equalsIgnoreCase("archive")||args[0].equals("档案"))){
             // Preserve the archive's literal body after --, including examples
             // containing --help/--json. Other legacy command parsing is unchanged.
@@ -1234,6 +1290,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (agentCoach != null) agentCoach.mycliUsed(player);
         if (trialRescue != null && trialRescue.blockCommand(player, args)) return true;
+        if(nativeRpg.selected()&&nativeRpg.route(player,args))return true;
         if (args.length == 0) { help(player); return true; }
         if (args[0].equalsIgnoreCase("help")) {
             if (args.length == 1) help(player);
@@ -1241,6 +1298,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             else AgentCliCatalog.commandHelp(player,java.util.Arrays.copyOfRange(args,1,args.length));
             return true;
         }
+        if(nativeRpg.route(player,args))return true;
         String action = args[0].toLowerCase(Locale.ROOT);
         switch (action) {
             case "intro", "入门状态" -> agentEntry.intro(player);
@@ -1359,8 +1417,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 p.sendMessage(ChatColor.GRAY + "挖掘/放置前：/mycli protect break|place <x> <y> <z>；deny 不动、unknown 暂缓、allow_likely 可尝试。");
             }
             case "magic", "魔法" -> {
-                p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】罗盘「法术图鉴」先看说明，再点施放；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli skills list profession；list warrior|mage|priest 按方向查询；/mycli skills info <ID> 查各级效果与学习条件；/mycli skills points 查点数。学习 learn、升级 upgrade、准备 prepare 后再 cast；/mycli focus list 看法杖，/mycli status 看魔力。");
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "【技能入门】罗盘→法术图鉴看用途。通用技能学会即可用；职业技能按下面四步，选职业只解锁学习资格。");
+                p.sendMessage(ChatColor.GRAY + "①选职业：罗盘→职业与传承，或 /mycli profession menu。已有职业可继续用。");
+                p.sendMessage(ChatColor.GRAY + "②学习：罗盘→技能学习与升级，右键看条件，左键花点学习/升级。Agent先 /mycli skills info <ID>，再 /mycli skills learn <ID>。");
+                p.sendMessage(ChatColor.GRAY + "③准备：罗盘→我的职业技能，左键准备/取消；已自动准备无需重复。Agent用 /mycli skills prepare <ID>；最多4项普通职业技和1项传承。");
+                p.sendMessage(ChatColor.GRAY + "④施放：持详情要求的剑/盾等装备，职业技能页右键，或 /mycli cast <ID>。先 /mycli skills status <ID> 查本人缺项、魔力和冷却；不要反复重发失败动作。");
             }
             case "gear", "装备", "刻印" -> {
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "【工具刻印】手持镐、剑等工具，在附魔台旁潜行使用附魔台，选择要刻印的法术；之后潜行对方块使用工具施法。");
@@ -1410,9 +1471,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗、探矿与探索法术由 AgentFriend 管冷却。");
     }
     private void cast(Player p, String raw) {
+        if(nativeRpg.selected()){String[] tokens=raw.split("\\s+",2);raw=NativeRpg.skillId(tokens[0])+(tokens.length>1?" "+tokens[1]:"");}
         if (isDowned(p)) { p.sendMessage("§e倒地中，请等待队友靠近救援或清场复活。"); return; }
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
+        if(nativeRpg.selected()&&!NativeRpg.COMMON.contains(id.split("\\s+",2)[0])){
+            nativeRpg.delegate(p,"cast",raw);return;
+        }
         if (professions.skill(id.split("\\s+", 2)[0]) != null) { professions.cast(p, raw); return; }
         if (id.equals("support") || id.equals("支援") || id.equals("支援传送术")) {
             villageWatch.support(p, null); return;
@@ -2114,6 +2179,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         openMenu(player, "imprint");
     }
     private void imprint(Player player, String id) {
+        if(nativeRpg.selected()&&!NativeRpg.common(id)){nativeRpg.delegate(player,"skills","info",id);return;}
         FocusSpell spell = focusDefinition(id);
         if (spell == null) { player.sendMessage(ChatColor.RED + "没有这个可刻印法术；/mycli imprint list 查看 ID。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能刻印；请使用生存角色持工具在附魔台4格内操作，/mycli imprint list 查可用技能。"); return; }
@@ -2169,6 +2235,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else p.sendMessage(ChatColor.RED + "背包已满；腾出一格后输入 /mycli focus give 领取法杖。");
     }
     private void bindFocus(Player p, String id) {
+        if(nativeRpg.selected()&&!NativeRpg.common(id)){nativeRpg.delegate(p,"skills","info",id);return;}
         FocusSpell spell = focusDefinition(id);
         if (spell == null) { p.sendMessage(ChatColor.RED + "没有这个可绑定技能；使用 /mycli focus list 查看 ID。"); return; }
         ItemStack[] storage = p.getInventory().getStorageContents();
@@ -2181,6 +2248,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.RED + "背包中没有灵纹法杖；先用 /mycli focus give 领取。");
     }
     private void listFocus(Player p) {
+        if(nativeRpg.selected()){p.sendMessage("§d当前通用刻印/法杖："+FOCUS_SPELLS.stream().filter(s->NativeRpg.common(s.id())).map(FocusSpell::id).collect(java.util.stream.Collectors.joining("、"))+"。旧技能刻印已停用，物品和原版附魔保留；职业技能：/mycli skills list；完整指引：/mycli intro");return;}
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可绑定的法杖技能 ID（均可用于 /mycli focus bind <ID>）：");
         for (int start = 0; start < FOCUS_SPELLS.size(); start += 8) {
             String ids = FOCUS_SPELLS.subList(start, Math.min(start + 8, FOCUS_SPELLS.size()))
@@ -2250,6 +2318,19 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         meta.setAuthor("千灯纪");
         meta.setDisplayName(ChatColor.GOLD + "❖ 命格书 ❖");
         meta.setLore(List.of("使用键：查看状态与旅途指引", "手柄可用翻页键；未找到时可用 /mycli book 补领"));
+        if(nativeRpg.selected()){
+            var state=nativeRpg.state(p);
+            meta.setPages("§6千灯纪 · 重返艾恩葛朗特§r\n\n"+p.getName()+"\n生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())
+                    +"\nVortex职业 "+(state.has("combat")&&!state.get("combat").getAsString().isEmpty()?state.get("combat").getAsString():"未选择")
+                    +"\n战斗等级 "+nativeRpg.level(p)+"\n\n/mycli status 查看实时状态。",
+                "§6冒险四步§r\n\n/mycli profession list\n主动choose <ID>选职。\n\n/mycli skills list\n查看等级/学习点要求，主动learn <节点ID>。\n\n/mycli cast <技能ID>\n手持职业装备，核对实际效果。\n\n/mycli tasks list\n接讨伐或探索，达标后主动claim。",
+                "§b通用技能§r\n\nhome 归乡\ntravel 传送点\nprospect 探矿\nnight 夜视\nfeather 羽落\n\n无需选职；复用原有效果与冷却，消耗同一个Vortex魔力池。旧职业已归档，不再重复培养。",
+                "§e补给与个人箱§r\n\n/mycli guild shared\n查看公会共享装备与补给，亲自前往领取。\n\n/mycli arena stash\n远程个人奖励箱；成功开页2魔力。照片成片也在这里。\n\n54格大背包独立，不是个人奖励箱。",
+                "§d组队与攻略§r\n\n/mycli guild party\n原生组队入口。\n\n/mycli dungeon list\n正式遗迹和攻略；先看难度、装备和下一步，再报名。\n\n/mycli arena status\n练习试炼塔；不等于正式爬塔通关。\n\n倒地可等待队友救援。",
+                "§a世界与同伴§r\n\n/mycli world npcs\n找引路NPC，走近再交谈。\n\n/mycli photo menu\n拍照直接成片进个人奖励箱。\n\n/mycli archive help\n写公开日记与攻略。\n\n服务器回执才证明完成；不把命令发出当作成功。"
+            );
+            meta.getPersistentDataContainer().set(statusBookKey,PersistentDataType.BYTE,(byte)1);stack.setItemMeta(meta);return stack;
+        }
         SkillsUser user = skillsUser(p);
         String manaLine = user == null ? "魔力数据加载中" : "魔力 " + Math.round(user.getMana())
                 + "/" + Math.round(user.getMaxMana());
@@ -2320,6 +2401,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(button.slot(), item(button.icon(), (button.slot() < 9 ? "§d" : button.slot() < 18 ? "§a" : "§b")
                     + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力"
                     : button.action().equals("stash") ? "只打开本人奖励箱；照片成片也存这里；选择页码不扣魔力" : "点击查看；打开页面不会施法"));
+        if(nativeRpg.selected()){
+            var common=List.of("home","travel","prospect","night","feather");
+            for(int i=0;i<9;i++){
+                String id=i<common.size()?common.get(i):null;
+                inv.setItem(36+i,id==null?item(Material.GRAY_STAINED_GLASS_PANE,"§7职业技能在技能书中查看"):item(SpellGuide.find(id).icon(),"§e"+SpellGuide.find(id).name(),SpellGuide.find(id).costLine(),"通用技能；无需职业，点击施放"));
+            }return;
+        }
         for (int slot = 27; slot < 36; slot++)
             inv.setItem(slot, item(Material.GRAY_STAINED_GLASS_PANE, "§7↓ 底排常用技能 · 点击施法",
                     "未学技能先打开学习页，不会自动扣技能点", "技能的魔力、冷却、范围与安全规则保持"));
@@ -2332,6 +2420,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void compassClick(Player p, int slot, boolean rightClick) {
+        if(nativeRpg.selected()&&slot>=36&&slot<45){
+            var common=List.of("home","travel","prospect","night","feather");
+            if(slot-36<common.size())cast(p,common.get(slot-36));else nativeRpg.delegate(p,"skills","menu");return;
+        }
         if (slot >= 36 && slot < 45) {
             String id = COMPASS_QUICK.get(slot - 36);
             if (compassKnown(p, id)) cast(p, id);
@@ -2480,14 +2572,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(16, item(Material.AMETHYST_SHARD, "§d探附近矿脉", "寻找最近的任意矿物"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("focus")) {
-            for (FocusSpell spell : FOCUS_SPELLS)
-                inv.setItem(spell.slot(), item(spell.icon(), spell.title(), spell.hint(),
-                        SpellGuide.costLine(spell.id()), "点击绑定；之后手持法杖一按即施放"));
+            for (FocusSpell spell : FOCUS_SPELLS){
+                boolean retired=nativeRpg.selected()&&!NativeRpg.common(spell.id());
+                inv.setItem(spell.slot(), retired?item(Material.BARRIER,"§8[已停用] "+ChatColor.stripColor(spell.title()),"旧技能已归档，不再绑定或扣费","当前职业技能：/mycli skills list"):item(spell.icon(), spell.title(), spell.hint(),
+                        SpellGuide.costLine(spell.id()), "点击绑定；之后手持法杖一按即施放"));}
             inv.setItem(0, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("imprint")) {
             for (int i = 0; i < FOCUS_SPELLS.size(); i++) {
                 FocusSpell spell = FOCUS_SPELLS.get(i);
-                inv.setItem(i, item(spell.icon(), spell.title(), spell.hint(), SpellGuide.costLine(spell.id()),
+                boolean retired=nativeRpg.selected()&&!NativeRpg.common(spell.id());
+                inv.setItem(i,retired?item(Material.BARRIER,"§8[已停用] "+ChatColor.stripColor(spell.title()),"不会扣经验、青金石或改装备","当前职业技能：/mycli skills list"):item(spell.icon(), spell.title(), spell.hint(), SpellGuide.costLine(spell.id()),
                         "点击刻印手中工具；3 经验等级 + 1 青金石"));
             }
             inv.setItem(45, item(Material.ENCHANTING_TABLE, "§5刻印说明",
@@ -2609,6 +2703,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (SkillTome.isTome(event.getItem())) {
             event.setCancelled(true);
+            if(nativeRpg.selected()){event.getPlayer().sendMessage("§e[旧技能书] 旧版学习已停用，书本保留、不消耗。职业技能与学习点：/mycli skills list；攻略入门：/mycli intro");return;}
             SkillTome.use(event.getPlayer(), event.getPlayer().getInventory().getHeldItemSlot(), spellMastery);
             return;
         }

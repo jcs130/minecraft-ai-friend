@@ -6,6 +6,7 @@ import asyncio
 import copy
 import json
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -44,6 +45,7 @@ from .observations import (
     spatial_observations,
     spatial_text,
     terminal_step_outcomes,
+    terminal_repeat_evidence,
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
@@ -60,10 +62,15 @@ from .viewer_public import tool_receipt
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
+PROTOCOL_PLANNER_DESCRIPTION = (
+    "Read native tasks, facts and original archives. Only task, facts, archive and archive_runs are exposed. "
+    "The host owns turn boundaries, barrier acknowledgement and cancellation; do not manage that lifecycle.")
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
-DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages"}
-READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices", "mc_messages"}
+DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages", "mc_query"}
+READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices", "mc_messages", "mc_query"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
+# Query deduplication and reply freshness belong to the native server-query lane.
+# Never cache its sent/timeout receipts as reusable local observation answers.
 REUSABLE_IMMEDIATE_READS = {"mc_bag", "mc_queue", "mc_blocked"}
 READ_RECOVERY_SECONDS = 300
 
@@ -131,7 +138,16 @@ def fact_fingerprint(facts):
 def admission_fingerprint(facts):
     # Re-reading clocks is not new evidence that a rejected recipe/plan works.
     # Expiry below still permits checking server-side changes not in these facts.
-    parts = [(p["key"], p["text"]) for p in facts.get("parts", [])
+    def state(part):
+        revision = part.get("stateRevision")
+        # Producers explicitly distinguish semantic state from sample metadata.
+        # Unknown/malformed metadata stays conservative; do not strip text fields
+        # or infer timestamp semantics here. Raw facts remain dated evidence.
+        if isinstance(revision, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", revision):
+            return ["stateRevision", revision]
+        return part["text"]
+
+    parts = [(p["key"], state(p)) for p in facts.get("parts", [])
              if p["key"] not in {"sample", "realclock", "clock", "lastTask"}]
     return encode(parts) if parts else None
 
@@ -186,9 +202,7 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
     for tool in sorted(catalogue, key=lambda row: row["name"]):
         if tool["name"] not in direct:
             continue
-        schema = structural(tool["inputSchema"])
-        if tool["name"] == "mc_protocol":
-            schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+        schema = structural(planner_tool_schema(tool))
         if tool["name"] in {"mc_do", "mc_scout"}:
             schema.setdefault("properties", {})["queue"] = {"enum": ["append", "afterCheckpoint", "now"]}
             step = schema["properties"].get("steps", {}).get("items", {})
@@ -208,7 +222,9 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
                     # Retain it intact rather than inventing a find-only ID rule.
                     properties["target"]["description"] = target
         description = tool.get("description", "") if context_mode == "full" else tool.get("description", "")[:450]
-        if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
+        if tool["name"] == "mc_protocol":
+            description = PROTOCOL_PLANNER_DESCRIPTION
+        elif tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
             description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
         elif tool["name"] == "mc_scout" and not description:
             description = "Read-only observations/dry runs; use mc_do for real actions. Read mc_help for the selected skill's native parameters, limits and returned coverage."
@@ -247,12 +263,58 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
         tool["function"]["parameters"], profile=tool_schema_profile, wire=True)}} for tool in tools]
 
 
+def planner_tool_schema(tool):
+    """One ownership projection for advertisement, documentation and recovery."""
+    schema = copy.deepcopy(tool["inputSchema"])
+    if tool["name"] == "mc_protocol":
+        schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+    return schema
+
+
+def protocol_planner_help(catalogue, arguments):
+    """Progressive documentation for this runtime's protocol read capability."""
+    native = next((tool for tool in catalogue if tool["name"] == "mc_protocol"), None)
+    if native is None:
+        raise ValueError("Protocol tool is not available")
+    value = planner_tool_schema(native)
+    path = arguments.get("path", "")
+    if not isinstance(path, str) or path and not path.startswith("/") or re.search(r"~(?![01])", path):
+        raise ValueError("path must be a JSON pointer")
+    for encoded in path.split("/")[1:]:
+        token = encoded.replace("~1", "/").replace("~0", "~")
+        if isinstance(value, list) and (not token.isdecimal() or token != str(int(token))):
+            raise ValueError("Array path must use a returned nonnegative index")
+        value = value[int(token)] if isinstance(value, list) else value[token]
+    reply = {"protocol": "agent-mc-tool-help/v1", "name": "mc_protocol", "path": path,
+             "description": PROTOCOL_PLANNER_DESCRIPTION}
+    if arguments.get("full"):
+        reply.update(schema=value, complete=True)
+    else:
+        scalars, children = {}, []
+        if not isinstance(value, (dict, list)):
+            summary = {"value": value, "complete": True, "children": []}
+        else:
+            for key, child in (value.items() if isinstance(value, dict) else enumerate(value)):
+                if not isinstance(child, (dict, list)) or isinstance(child, list) and all(
+                        not isinstance(item, (dict, list)) for item in child):
+                    scalars[str(key)] = child
+                else:
+                    keys = list(child) if isinstance(child, dict) else list(map(str, range(len(child))))
+                    children.append({"path": path + "/" + str(key).replace("~", "~0").replace("/", "~1"),
+                                     "kind": "array" if isinstance(child, list) else "object", "keys": keys[:32],
+                                     "omittedKeys": max(0, len(keys) - 32)})
+            summary = {"scalarFields": scalars, "complete": not children, "children": children}
+        reply["schemaSummary"] = summary
+    return {"protocol": PROTOCOL, "text": encode(reply), "dispatched": False, "origin": "controller_contract"}
+
+
 def tool_help(catalogue, arguments):
     value = next(tool for tool in catalogue if tool["name"] == arguments["name"])
     # Expose the same host-owned control restriction in expanded documentation.
     value = json.loads(encode(value))
+    value["inputSchema"] = planner_tool_schema(value)
     if value["name"] == "mc_protocol":
-        value["inputSchema"]["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+        value["description"] = PROTOCOL_PLANNER_DESCRIPTION
     if value["name"] == "mc_visual":
         value["planner_guidance"] = (
             "Use supported synchronous raw PNG when useful; actual modes and limits come from this schema and body receipt. "
@@ -301,7 +363,8 @@ def failure_context(catalogue, name, arguments, result):
     Generic enum errors alone do not say which values belong to which tool.
     Keep only the submitted fields' original constraints, bounded at the tail.
     """
-    schema = next((t["inputSchema"] for t in catalogue if t["name"] == name), {})
+    selected = next((tool for tool in catalogue if tool["name"] == name), None)
+    schema = planner_tool_schema(selected) if selected else {}
     properties = schema.get("properties", {})
     fields = [(key, properties.get(key, {})) for key in arguments if key != "steps"]
     steps = arguments.get("steps")
@@ -532,6 +595,11 @@ class Controller:
         return failure
 
     def defer_argument_correction(self, name, failure):
+        """Bound the correction chain without suspending the whole planner.
+
+        Exact rejected calls are fenced below. Syntax errors are neither an
+        unavailable provider nor an unresolved native execution.
+        """
         correction = self.argument_corrections.record(name, failure, self.game_scope)
         if correction is None:
             return False
@@ -539,13 +607,18 @@ class Controller:
         self.retain_tool_failure(failure)
         if correction["attempts"] < 2:
             return False  # One immediate, model-selected correction remains possible.
-        delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
-                    * 2 ** min(6, correction["attempts"] - 2))
-        self.planner_retry_at = time.monotonic() + delay
-        self.continuation_needed = True
-        self.publish(planner_error="repeated_argument_correction", rejected_tool=name,
-                     planner_retry_seconds=delay)
+        self.publish_call_correction(name, "repeated_argument_correction")
         return True
+
+    def publish_call_correction(self, name, code):
+        # Yield at normal decision cadence. Never add a whole-planner timer
+        # for a rejected operation, or erase an independent provider deadline.
+        self.continuation_needed = True
+        self.publish(planner_error=code, rejected_tool=name,
+                     planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)),
+                     planner_correction={"kind": "rejected_call", "scope": "call", "tool": name,
+                         "global_backoff_added": False, "corrected_arguments_allowed": True,
+                         "other_tools_allowed": True})
 
     def retain_tool_failure(self, failure):
         # A failed read is not a new body plan. Keep both causes, with the body
@@ -604,6 +677,9 @@ class Controller:
                         "step_outcomes": terminal_step_outcomes(execution, arguments),
                         "receipt": receipt if self.settings.context_mode == "full" else spatial_text(receipt),
                         "observations": observations, "original_event": reference}
+                    repeat = terminal_repeat_evidence(event)
+                    if repeat:
+                        native_outcome["repeat_evidence"] = repeat
                     self.native_outcomes.append(native_outcome if self.settings.context_mode == "full" else native_outcome_view(native_outcome))
                     if self.settings.context_mode == "full":
                         while len(self.native_outcomes) > 1 and len(encode(self.native_outcomes).encode("utf-8")) > self.settings.context_tokens:
@@ -1224,6 +1300,13 @@ class Controller:
             result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
                       "text": "That transport/control tool belongs to the runtime coordinator; it is not a planner capability."}
             return result, await self.archive_receipt(request_id, name, result)
+        if name == "mc_tool_help" and shared_help and arguments.get("name") == "mc_protocol":
+            try:
+                result = protocol_planner_help(self.bridge.tools, arguments)
+            except (LookupError, TypeError, ValueError):
+                result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
+                          "origin": "controller_validation", "text": "Read mc_tool_help(name=mc_protocol) and use a returned schema path; this planner's host-owned control actions are unavailable."}
+            return result, await self.archive_receipt(request_id, name, result)
         if name == "mc_tool_help" and not shared_help:
             # This is a local schema lookup. A guessed field/index has not sent
             # anything to the body and must not poison its uncertainty journal.
@@ -1240,6 +1323,13 @@ class Controller:
                           "text": "Invalid arguments: mc_tool_help requires an available tool and a documented JSON-pointer path. No native call was dispatched. Read mc_tool_help(name) first and copy an actual child path; for a skill manual use mc_help(skill), not a skill name as a schema property."}
                 return result, await self.archive_receipt(request_id, name, result)
         # Journal before sending: unknown delivery never gets a new request ID.
+        if name == "mc_original":
+            from .original_query import original_query_error
+            if error := original_query_error(arguments):
+                result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                          "dispatched": False, "origin": "controller_validation",
+                          "code": "invalid_original_page", "text": error}
+                return result, await self.archive_receipt(request_id, name, result)
         self.inflight_request = request_id
         self.persist(inflight_request=request_id, uncertain=True)
         if name == "goal_report":
@@ -1523,9 +1613,15 @@ class Controller:
         if not repeat and name == "mc_do" and not self.pending and not queue_error:
             repeat = self.container_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch)
         if repeat and not observation_call(name, arguments):
-            container_failure = repeat.get("kind") == "failed_container_take"
+            container_failure = repeat.get("kind") in {"failed_container_take", "unopened_container"}
             code = "repeated_container_failure" if container_failure else "repeated_no_effect"
-            self.planner_notice = (("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
+            self.planner_notice = (("Two measured interactions at this coordinate and face failed to open a container; "
+                "the dependent take step was skipped, so no withdrawal was attempted. The same approach and inventory remain observed. "
+                "This entire batch was NOT dispatched. Correct the target or interaction using the dated native evidence, "
+                "obtain a genuinely different approach or prerequisites, choose other useful work, or report the stage blocked. "
+                "The refusal expires within 120 seconds; it does not establish current block state, permissions or goal success.")
+                if repeat.get("kind") == "unopened_container" else
+                ("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
                 "Walking, reopening it, new narration or a different later batch do not resolve that failure. "
                 "The entire proposed batch was NOT dispatched. Use the dated native evidence to correct the item/container, "
                 "obtain prerequisites through real work, query a specific missing fact, choose different work, or wait for changed conditions. "
@@ -1534,9 +1630,8 @@ class Controller:
                 "It was NOT dispatched again. Use the original terminal evidence and native skill help to correct the prerequisites, choose different useful work, "
                 "or report this proposed stage blocked. This dated client-visible evidence does not prove permissions or goal success."))
             self.continuation_needed = True
-            delay = max(30, self.settings.min_decision_seconds)
-            self.planner_retry_at = time.monotonic() + delay
-            self.publish(action_recovery=repeat, planner_error=code, planner_retry_seconds=delay)
+            self.publish_call_correction(name, code)
+            self.publish(action_recovery=repeat)
             result = {"failed": True, "dispatched": False, "origin": "controller_validation", "code": code,
                       "text": self.planner_notice, "previous_outcome": repeat}
             return result, await self.archive_receipt(request_id, name, result), True
@@ -1593,12 +1688,8 @@ class Controller:
                     "They were NOT dispatched again. Position, clocks and new call IDs cannot supply a missing field. "
                     "Use the retained typed correction contract and correct the actual arguments, or inspect a missing prerequisite.")
             self.retain_tool_failure(prior_admission["failure"])
-            syntax_deferred = self.defer_argument_correction(name, prior_admission["failure"])
-            if not syntax_deferred:
-                self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
-            self.continuation_needed = True
-            self.publish(planner_error="repeated_admission_rejection", rejected_tool=name,
-                         planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
+            self.defer_argument_correction(name, prior_admission["failure"])
+            self.publish_call_correction(name, "repeated_admission_rejection")
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                       "text": self.planner_notice, "previous_failure": self.tool_failure}
             compact = await self.archive_receipt(request_id, name, result)
@@ -1607,9 +1698,7 @@ class Controller:
             # A known pre-dispatch rejection cannot be replayed by a later batch.
             self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
             self.retain_tool_failure(self.rejected_calls[rejected_key])
-            self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
-            self.continuation_needed = True
-            self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
+            self.publish_call_correction(name, "repeated_invalid_tool_call")
             result = {"failed": True, "dispatched": False, "origin": "controller_validation", "text": self.planner_notice,
                       "previous_failure": self.tool_failure}
             return result, encode(result), True
@@ -1624,15 +1713,13 @@ class Controller:
             # A successful no-op is neither new memory nor a game action. End
             # this read chain with the real receipt; keep corrections and all
             # native stop/unknown/death boundaries available on the next turn.
-            self.unactioned_replies += 1
-            delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
-                        * 2 ** min(6, self.unactioned_replies - 1))
-            self.planner_retry_at = time.monotonic() + delay
+            # Yield at normal decision cadence, without treating a completed
+            # tool result as a plain unacted reply or suspending other work.
             self.continuation_needed = True
             self.planner_notice = ("The unchanged death lesson was already saved. No new memory or game action occurred. "
                                    "Do not repeat that report; use fresh facts to choose useful work, revise with new evidence, "
                                    "or explain a real waiting condition. Behavioral improvement remains unverified.")
-            self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+            self.publish(planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
             return result, compact, True
         read_only = observation_call(name, arguments)
         data = result.get("data")
@@ -1645,16 +1732,12 @@ class Controller:
             # The native arrival shortcut can complete without creating a task.
             # Keep its exact receipt, but do not fill another read round or
             # count it as new work. Unknown results were fenced by dispatch.
-            self.unactioned_replies += 1
-            delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
-                        * 2 ** min(6, self.unactioned_replies - 1))
-            self.planner_retry_at = time.monotonic() + delay
             self.continuation_needed = True
             self.planner_notice = ("The plan completed immediately with no new task. This is not evidence of new "
                 "movement or project progress. Read the original receipt; do not repeat an already-satisfied action. "
                 "Choose feasible next work from current facts, or explain a real waiting condition. "
                 "Arguments and native arrival rules have not been changed.")
-            self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+            self.publish(planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
             return result, compact, True
         correction_boundary = False
         if not result.get("failed"):
@@ -1758,13 +1841,13 @@ class Controller:
                 **({"json_diagnostic": error.diagnostic} if isinstance(error, ToolJSONRejected) else {})}) + "\n")
         immediate = (isinstance(error, ToolJSONRejected) and self.invalid_tool_calls == 1
                      and not self.pending and self.inflight_request is None and not self.stop_requested())
-        delay = 0 if immediate else min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
-        self.planner_retry_at = time.monotonic() + delay
         self.continuation_ready = immediate
         self.continuation_needed = True
         self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls,
-                     planner_retry_seconds=delay, planner_correction={"kind": "json_syntax" if isinstance(error, ToolJSONRejected) else "validation",
-                         "attempt": self.invalid_tool_calls, "immediate": immediate, "dispatched": False})
+                     planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)),
+                     planner_correction={"kind": "json_syntax" if isinstance(error, ToolJSONRejected) else "validation",
+                         "attempt": self.invalid_tool_calls, "immediate": immediate, "dispatched": False,
+                         "scope": "call", "global_backoff_added": False})
 
     def retain_history(self):
         if self.settings.context_mode != "full":
@@ -2297,6 +2380,7 @@ class Controller:
                     # Generic core disconnect explicitly stops its own action queue.
                     # This must not be reused for Numen, whose remote body stays alive.
                     self.persist(pending=[])
+                    self.publish(disconnect_confirmed=True, pending=[])
                 except Exception:
                     if self.pending or self.inflight_request:
                         self.persist(uncertain=True)

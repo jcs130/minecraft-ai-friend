@@ -1,10 +1,70 @@
 # Agent MC World
 
-Published package: **0.5.7-rc.89** on npm's **next** tag and [GitHub Release](https://github.com/jcs130/minecraft-ai-friend/releases/tag/agent-mc-world-v0.5.7-rc.89). Install this preview with `npm install agent-mc-world@0.5.7-rc.89`. Java **1.21.1** remains the primary target; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
+Development candidate **rc.128** separates observed target death from own kill
+credit in structured attack and passive combat receipts. Native death can settle
+an action, but unavailable killer attribution remains `null`; lost tracking
+stays unknown. See [combat evidence](docs/entity-targeting.md#death-observations-and-kill-attribution-rc128).
 
-Development candidate **0.5.7-rc.90** fixes crop items being incorrectly rejected
-as planting when used on a composter. Receipts distinguish compost level, item
-consumption and actual bone-meal gain. This candidate is not an npm release.
+The rc.126 changes give `attack` an optional explicit `entityId`
+alongside the target's registry type or actual player name. Attention/risk reads
+provide both fields; lost, mismatched or occluded named entities never fall back
+to another target. Observed UUIDs remain bound during a bow draw. Existing
+nearest-type calls and numeric player names keep their meanings. See
+[observed entity targeting](docs/entity-targeting.md).
+
+Development candidate **rc.124** avoids a transient carried stack during sorting
+exchanges when shortcuts were explicitly included. It preserves per-click server
+confirmation, component identity, partial results and unknown-action fences.
+See [inventory exchange scope](docs/inventory-shortcut-exchange.md). Existing
+carried items are not silently cleared by this change.
+
+Development candidate **rc.121** adds the optional producer-owned
+`FactPart.stateRevision` comparison contract and `withFactState` SDK helper.
+Recovery facts keep their raw sample time and original content hashes while
+comparing explicitly selected position, life and inventory state. Unknown
+producers retain text comparison; no timestamp fields are stripped by name.
+The digest is not freshness, action permission or a completed task.
+
+Development candidate **rc.117** adds the public `FactUpdateStream`,
+`applyFactUpdate` and `FACT_UPDATE_GUIDANCE` SDK exports and the
+`agent-mc/fact-update/v1` contract under `agent-mc-world/contracts`.
+Hosts can append an initial full snapshot and ordered changes instead of
+rewriting older model messages. Unchanged fields, explicit nulls and removals
+remain distinct; run/dimension changes and explicit history compaction establish
+a fresh snapshot. `preview()` does not advance the baseline: call `commit()` only
+after the host admits that frame to durable history. This pure presentation API
+does not call a model, operate a body, replace personal memory or truncate facts.
+MCP consumers may apply the same SDK helper to existing `mc_protocol` facts.
+The host still owns bounded history, permission boundaries and current-state
+verification. Source/build candidates are not publication or live-success evidence.
+
+Development candidate **rc.115** freezes shared viewer `c0b9a7a6`: first-person
+cave section visibility, legacy server-skin preview normalization and exact
+original armor paths including modern copper equipment. All shipped asset
+versions were rebuilt. See [viewer scope](docs/viewer-rc115.md). Host model
+continuation remains a host policy, with no additional model loop in this SDK.
+
+The inherited rc.113 changes add [logical chat transport receipts](docs/chat-delivery.md)
+so SDK/MCP and host consumers can distinguish admitted chat from actual client
+dispatch and correlate queued messages to their task step. Sending does not imply
+recipient acknowledgment or completion of an action described in the message.
+
+Published npm preview at preparation time: **0.5.7-rc.99** on **next**. The rc.115 candidate is not an npm publication; verify final release receipts before changing a production pin. Java **1.21.1** remains primary; supported protocols remain selectable and the host owns its model, personality, decisions and personal memory.
+
+Development candidate **0.5.7-rc.99** includes independent, explicitly declared
+[read-only server queries](docs/server-query-lifecycle.md) that do not wait behind
+navigation. Queued command reply tracking begins at the actual transport call,
+not task admission. It also includes self-contained task progress,
+explicit unknowns when world snapshots are unavailable, validated batch message
+reads, verified opening-spell candidates, script-worker versus body-lease checks,
+and idempotent attributed-note retries. It retains the rc.90 composter fix, whose
+receipts distinguish compost level, item consumption and actual bone-meal gain.
+The rc.99 preview is now published; the following notes preserve its feature scope.
+
+[Journey decisions](docs/journey-decisions.md) retain current route observations
+and configurable movement tolerance while the host considers a short visit.
+Safe checkpoint insertion preserves the original task; no hidden model loop or
+automatic detour is introduced.
 
 When exact prebuilt vanilla materials are absent, the web viewer automatically selects compatible materials while preserving the actual connection's block IDs in the browser and mesher. Unknown materials use local placeholders; optional icons, fonts, paintings or audio do not block terrain. An incomplete old cache can fall back to bundled resources. Refreshing the viewer keeps the body and session. Users can connect without building resources; exact materials remain an optional enhancement. See [viewer resources](docs/viewer-resources.md).
 
@@ -33,6 +93,7 @@ The rc.77 candidate adds [bounded observations and trustworthy tool receipts](do
 - [MCP setup and minimal calls](docs/mcp.md): configure one body, discover tools, connect explicitly and verify actual readiness.
 - [SDK and client](docs/minecraft-client.md); [login lifecycle](docs/server-auth-lifecycle.md).
 - [Progressive context reading](docs/context-reading.md): engine-free source previews and current-fact formatting through `agent-mc-world/context` (rc.72+), preserving source identities and uncertainty. This does not add MCP tools or start a connection.
+- [Bounded tool text and read progress](docs/tool-text-progress.md): immutable guide/query continuation with truthful model-visible offsets, and metadata-only repeated-read evidence guarded by registered work and pending admissions.
 - [Minecraft skill](skills/minecraft-agent/SKILL.md): a short entry, with detailed references only when needed.
 - `mc_connection` checks the body connection; `mc_protocol action:facts` reads body facts. Server gameplay commands are separate and discovered in that server's help.
 - `mc_tool_help` reads tool parameters; `mc_help` reads native action/skill manuals. Do not preload all tool schemas or manuals into each decision.
@@ -66,6 +127,11 @@ This package owns the Mineflayer connection, inventory synchronization, navigati
 validated actions, executable methods, evidence receipts, current facts/archive,
 deduplication, goal revisions, cancellation, SDK/MCP and the viewer integration.
 The host owns personality, goals, planning model calls, decisions and personal long-term memory.
+
+The core's five-slot goal projection can survive a reload through the configured
+`dataDir`, scoped to world/account/Agent. It restores intentions and historical
+judgments, rechecks mechanical conditions, and never replays actions. See
+[goal recovery and combat equipment](docs/goal-recovery.md).
 The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
 
 The SDK/MCP native backend uses that same notebook. A host mounting the body
@@ -137,6 +203,23 @@ as well as engagement. Tracking maintains a 5–8 block band on physics ticks un
 a short renewable lease; it stops on lost identity/sight or expiry and checks
 loaded safe ground before moving. Set `maxCandidates` to at least 3 to expose the
 different tactics. No host selector or inference starts by importing the package.
+
+With `allowEngage:true`, authored spell rules with an `intent` may be offered
+before the native melee controller starts, including when there is no sword or
+usable bow. Ability availability, mana/cost/cooldown, visible hostiles in the
+configured engagement scope, rule predicates, health and body admission must
+all pass again at dispatch. Sampling never casts a spell. `fight:off`, emergency
+ownership and a noninterruptible body task still prevent an opening. This does
+not grant spell range, aim, server success or melee capability.
+An active read-only/computational script is not a body lease and does not hide
+fast combat choices. A native script holding control, or a script awaiting its
+executor task, still owns the body. A second authored method cannot start while
+the first worker remains active.
+
+Server messages using the chat transport carry `meta.channel:"system"` when
+there is no named player source. Player speech and outgoing private echoes keep
+their original provenance, so host reply/speech lanes can distinguish telemetry
+from a new conversation without parsing server-specific text.
 
 ## Spatial observations
 
@@ -219,3 +302,17 @@ The public SDK exposes optional metadata-only `status().connection` (`ready`, `p
 `standingOn` identifies a collision face touching the player's footprint, including block edges and fractional-height blocks. The feet's center cell can be air while an adjacent block supports the body. Unloaded or unresolved support remains unknown; it is never narrated as air. Airborne motion does not claim a block below as current support. The viewer surface readout uses the same calculation.
 
 `serverFeedback` retains up to three recent server rejection/error observations for ten minutes, including system messages and raw action-bar packets. It is historical server text with channel, receipt time and task identity, not a permission grant or proof of an action's effect. Matching blocked/partial task receipts also preserve text received during that task, without claiming causation. Full messages remain in the event archive. Repeated HUD values, player chat and duplicate raw/high-level packets do not create new error observations. Server-specific decoding and protection policy belong to optional extensions.
+
+`mc_messages read` accepts one `id` or an explicit `ids` batch of 1–16 retained message IDs, preserving each source and reception time. Missing/malformed selectors return `messages.selector` with a correction; only valid but absent IDs return `messages.retained-id`. Reading never marks messages reviewed. Successful `list`, `search` and `read` receipts expose `meta.readback` (`agent-mc-readback/v1`) with a realm/account-scoped resource and content revision. Equivalent keyword/query filters share a resource; changed observations, pagination and review state remain distinguishable. Consumers may use this to recognize repeated results; an unchanged history query proves neither current world state nor goal progress. The inbox does not cache away calls, trigger model work or choose an action.
+
+The bounded facts preview keeps up to four different player senders, prioritizing mentions of the recipient, alongside a private message and server notice. `MessageInboxOptions.recipientNames` may provide explicit login/display aliases; normal client scopes supply their account/agent names. A recognized suppressed own public echo retains at most three dated utterances, outside received-message counts and review state. These quotes preserve what the agent said, never prove delivery, receipt, trade or current inventory, and never wake a model or replay an event. Outgoing slash commands are excluded from this short speech history.
+
+### Current combat capabilities and movement
+
+Tactical request facts expose a bounded `combatCapabilities` index of observed abilities and the current authored configuration. Fast decision frames likewise include observed, unconfigured skills with `configured: false`; this does not authorize a cast. Costs and cooldowns remain `null` until observed, and excess skills are counted explicitly. Hosts can read the existing tactic and skill-source contracts before proposing a revision; the core neither invents abilities nor silently adds rules.
+
+Known inedible items are rejected before an action batch replaces or extends the body queue. The diagnostic lists confirmed edible inventory instead of similarly named ingredients. Unresolved custom items retain their existing behavior. Vertical swim waypoints preserve heading inside the horizontal movement deadband; support, oxygen checks and cancellation ownership remain unchanged.
+
+### Remember retries
+
+Identical normalized `mc_memory remember` notes in the same realm/account/agent scope reuse the latest unarchived entry ID and revision. The receipt adds `deduplicated: true, written: false`; `saved: true` still means local persistence, not successful remote indexing. Source, speaker, observed time, content, dimension, tag set and expiry must all match. Recorded time and expiry are never refreshed. Explicit revisions/captures and changed evidence remain separate; existing duplicates are not deleted.

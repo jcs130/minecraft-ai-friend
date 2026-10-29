@@ -27,6 +27,11 @@ export function transferTrialAgent(store, uuid, owner, proof) {
   // Keep the original creation receipt reachable by the same Agent identity.
   // No game password, UUID, inventory or login session is recreated here.
   store.db.prepare("UPDATE account_jobs SET owner_id=? WHERE id=? AND owner_id=? AND state='succeeded'").run(owner.id, client.game_request_id, pool);
+  // Self-service appearances follow the verified body through pool claiming.
+  // Preserve pending/in-flight receipts and original assets, scoped by UUID.
+  for (const table of ['appearance_assets', 'appearance_jobs']) {
+    if (store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)) store.db.prepare('UPDATE ' + table + ' SET owner_id=? WHERE player_uuid=? AND owner_id=?').run(owner.id, uuid, pool);
+  }
   store.audit(owner.id, 'agent.trial.claim', client.id);
 }
 

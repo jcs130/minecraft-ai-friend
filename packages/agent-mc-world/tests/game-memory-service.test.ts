@@ -19,6 +19,15 @@ function setup(respond: (url: URL, body: Record<string, any>, init: RequestInit)
 }
 const vectorConfig: Partial<GameMemoryConfig> = { mode: 'vector', endpoint: 'http://fixture.invalid/v1/embeddings', model: 'test' };
 
+it.each(['stored', 'pending'])('does not repeat a remote %s write when the same note is remembered again', async status => {
+  const { service, request } = setup(() => json({ status: status === 'pending' ? 'PENDING' : status, event_id: 'existing-event' }));
+  const config = { mode: 'remote' as const, provider: 'http' as const, endpoint: 'https://fixture.invalid' };
+  const first = await service.execute(note, ctx, config);
+  const retry = await service.execute(note, ctx, config);
+  expect(retry).toMatchObject({ saved: true, deduplicated: true, written: false, entry: { id: id(first) }, index: { status } });
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
 it('works without any model or network and only sends explicitly indexed game notes', async () => {
   const { service, request } = setup(() => { throw new Error('Network must remain unused'); });
   const saved = await service.execute(note, ctx);

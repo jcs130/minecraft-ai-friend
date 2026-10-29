@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.2.122
+
+Bound repeated failed container opening even when its dependent take step is
+skipped. Require two native terminal measurements, a known unchanged target,
+inventory, window and approach; bind explicit face, connection, scope and death
+epoch. Changed prerequisites remain eligible. Dated refusals expire within
+120 seconds and never certify contents or a goal. Core remains rc.124.
+
+## 0.2.121
+
+- Pin the independently built core rc.124, including cursor-free sorting exchanges for explicitly included shortcuts and the MCP JSON wire-semantics fix. Keep the same planner, personality ports, native queue and uncertainty safeguards.
+- Retain semantic fact comparison from 0.2.120; this pin does not erase an older carried item or prove a goal completed.
+
+## 0.2.120
+
+- Compare optional producer-owned semantic fact digests without dropping raw sampled evidence. Unknown producers and invalid digests retain full-text comparison; native pending/unknown, connection scope and answer expiry are unchanged.
+- Pin the independently built core rc.121 from 4556b9ec with checked source/runtime/type receipts. Recovery-state sample time no longer invalidates an otherwise unchanged prior read. Native RPG and combat text without an explicit producer digest remains conservative.
+
+## 0.2.118
+
+- Pin canonical core rc.118 from d4d294ac: reject repeated already-satisfied navigation within the existing stationary guard, without inventing tasks or cancelling native work. Keep the first truthful arrival receipt and allow a fresh check after movement or expiry.
+- Preserve the locked non-core dependencies, standalone host boundary, existing native queue and runtime verification, including the installer's existing executable-shebang normalization.
+
+## 0.2.110
+
+- Pin canonical core rc.108, including surrounding awareness independent of camera direction; keep the synchronized b99464bb viewer build.
+
+- Add explicit preparation from a fixed public runtime ZIP with bounded streaming, download and expanded-size limits, SHA256 validation, checked extraction, cancellation and the existing fully verified short-cache installer. Importing the framework never downloads or launches anything.
+- Pin shared viewer b99464bb: preserve observed startup position, original held-item transforms, short projectile observations and shield-use presentation. Keep the rc.107 execution core, Node/browser/resources, permissions and one native task queue unchanged.
+
+## 0.2.109
+
+- Publish the confirmed stopped-connection state without stale pending actions after the native disconnect has stopped its queue. Keep failed-disconnect uncertainty and original native task outcomes intact.
+- Consume core rc.107's confirmed transfer to an empty hotbar slot before changing the held item; keep protected selected stacks, cursor checks and denial barriers intact.
+
+## 0.2.108
+
+- Pin core rc.106, preserving equipment-confirmed ranged combat, original navigation hand failures, bounded paginated operation evidence and actual projectile/shield observations.
+- Keep the existing viewer, all 256 non-core npm lock entries and the single native execution queue.
+
+## 0.2.107
+
+- Accept the installer's logical resource-directory spelling when a packaged Windows host resolves the same verified runtime into its redirected application-data view. Keep the canonical spelling valid without rewriting user metadata.
+- Continue rejecting relative, foreign or arbitrary alias paths and catalog changes; full payload, link, source and component verification remain required at start.
+
+## 0.2.106
+
+- Pin core rc.103: preserve original death observations, expose observed abilities separately from automatic tactics, require known usable weapons for native fast engagement, and reject registry-confirmed inedible queued food before replacing work.
+- Retain the existing viewer, all 256 non-core npm lock entries and the one native execution queue.
+
+## 0.2.105
+
+- Pin verified core rc.102 with actionable reflection errors, weapon admission and critical drowning recovery. Runtime Python behavior is unchanged.
+
+## 0.2.104
+
+- Pin core rc.100, retaining scoped goal recovery and the latest combat/equipment lifecycle guards.
+- Prepare server/account-scoped login references for the existing native login client. Windows credentials use current-user DPAPI; portable files retain private permissions. Passwords never enter ordinary settings or public status.
+- Forward explicit typed combat, reflex, journey, idle, container pacing and scaffold options. Unset values keep native defaults; process, permission, inventory and unknown-dispatch controls remain outside this surface.
+
+## 0.2.103
+
+- Prepare offline runtimes in a short per-user cache automatically, without administrator rights or registry changes; retain complete SHA-256 identity checks, atomic preparation and compatibility with existing registrations.
+- Verify complete Windows bundles and backend members with extended filesystem paths, preserving link, containment, inventory and hash checks when the host lacks long-path awareness.
+
+## 0.2.102
+
+- Pin core rc.99 and expose its declared read-only server query lane with native schemas and receipt semantics.
+- Verify long Windows backend paths and include the relative missing member in configuration diagnostics without revealing host paths.
+
+## 0.2.101
+
+- Pin the integrated core rc.95 with authored opening-spell admission, accurate script body ownership, task progress snapshots and explicit unknown current facts when observation is unavailable.
+- Consume bounded batch message reads with scoped result revisions, server-message provenance and idempotent retries of identical attributed game notes.
+- Retain the composter repair, fixed renderer/resources, model selection, native queue, inventory confirmation and stop/unknown boundaries.
+
 ## 0.2.100
 
 - Consume core rc.90: seeds used on a composter no longer fail soil admission or execution; read compost level, consumed items and bone-meal gain separately.

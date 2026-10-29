@@ -116,6 +116,7 @@ final class AgentStatePublisher implements Listener {
             mana.addProperty("max", finite(user.getMaxMana()));
             root.add("mana", mana);
         }
+        if(plugin.nativeRpg().selected())root.add("mana",plugin.nativeRpg().mana(player));
         root.add("abilities", abilities.build(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
         if (plugin.trialRescue() != null) root.add("trialRescue", plugin.trialRescue().state(player));
