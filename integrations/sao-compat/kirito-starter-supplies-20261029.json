@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "scope": "isolated_testing",
+  "observedAt": "2026-10-29T13:51:20.070246+00:00",
+  "body": "ag_Kirito",
+  "reason": "hunger_low_before_autonomous_food_supply_verified",
+  "operatorSupplied": {
+    "item": "minecraft:bread",
+    "count": 12
+  },
+  "autonomousGatheringCredit": false,
+  "privateSourceNoticeSent": true,
+  "lastObserved": {
+    "at": "2026-10-29T13:51:10.151Z",
+    "dimension": "minecraft:overworld",
+    "position": {
+      "x": 1412.3633037385146,
+      "y": 107,
+      "z": -1126.500245734399
+    },
+    "health": 20,
+    "food": 1,
+    "inventory": {
+      "mod_1cab0b39:adventurer_guide": 1,
+      "patchouli:guide_book": 2,
+      "oak_log": 4,
+      "pfm:furniture_book": 1,
+      "dirt": 1,
+      "simukraft:guide_book": 1,
+      "mod_1cab0b39:record_crystal": 1,
+      "mod_1cab0b39:profession_switch_scroll": 1,
+      "mod_1cab0b39:healing_crystal": 3,
+      "mod_1cab0b39:refining_stone": 4,
+      "mod_1cab0b39:stag_whistle": 1,
+      "touhou_little_maid:smart_slab_init": 1
+    }
+  }
+}

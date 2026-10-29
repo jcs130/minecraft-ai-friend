@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "scope": "isolated_testing",
+  "observedAt": "2026-10-29T14:00:27.701078+00:00",
+  "phase": "running",
+  "gameConnected": true,
+  "autonomyRunning": true,
+  "runtimeSession": "b094d393-57d0-4b9e-bd67-cf19d12ee49c",
+  "observed": {
+    "at": "2026-10-29T14:00:21.031Z",
+    "dimension": "minecraft:overworld",
+    "position": {
+      "x": 1412.3633037385146,
+      "y": 107,
+      "z": -1126.500245734399
+    },
+    "health": 20,
+    "food": 20,
+    "inventory": {
+      "mod_1cab0b39:adventurer_guide": 1,
+      "patchouli:guide_book": 2,
+      "oak_log": 4,
+      "pfm:furniture_book": 1,
+      "dirt": 1,
+      "bread": 8,
+      "simukraft:guide_book": 1,
+      "mod_1cab0b39:record_crystal": 1,
+      "mod_1cab0b39:profession_switch_scroll": 1,
+      "mod_1cab0b39:healing_crystal": 3,
+      "mod_1cab0b39:refining_stone": 4,
+      "mod_1cab0b39:stag_whistle": 1,
+      "touhou_little_maid:smart_slab_init": 1
+    }
+  },
+  "operatorFoodGrant": {
+    "item": "minecraft:bread",
+    "quantity": 12,
+    "autonomousGatheringCredit": false,
+    "consumptionObserved": 4
+  },
+  "unsupportedAutomaticCraft": {
+    "previousTask": 43,
+    "reportedSuccess": false,
+    "oldRequestReplayed": false,
+    "controllerStoppedAndNoInflightOrUncertainBeforeRestart": true,
+    "schemaExcludesCraft": true,
+    "runtimeRejectsWholeBatchBeforeDispatch": true,
+    "vanillaRecipeHelpersRefencedAfterCorePlugins": true
+  },
+  "adapterTestsPassed": 18,
+  "packedMcpNoDispatchCheckPassed": true,
+  "reports": {
+    "sao-tests-craft-fence.log": "160b9f43a7ce2a0f9545efa7c77d0d76001a8e324c0ba0844ab720a301c4cbe5",
+    "craft-fence-packed.json": "81698c6a8c6ca07c5fa9fc9f8c674b1e3d7d238f1da252005a579d59c0c51253"
+  }
+}
