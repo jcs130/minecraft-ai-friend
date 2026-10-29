@@ -73,4 +73,28 @@ describe('executable waypoint guard', () => {
       expect(checkGroundPath(r.bot as never,[goal])?.rise).toBe(1.5);
     } finally {r.close();}
   });
+  it('certifies real step landings without accepting a vertical wall, an air jump or unknown collision', () => {
+    const r=methodHarness('1.21.1');
+    try {
+      r.set(1,64,0,'stone');
+      for(const x of [2,3])for(const y of [64,65])r.set(x,y,0,'stone');
+      const target=node(2.5,66),before=r.bot.entity.position.clone();
+      expect(checkGroundPath(r.bot as never,[target])).toBeNull();
+      expect(r.bot.entity.position).toEqual(before);
+      expect(Object.values(r.keys).every(value=>!value)).toBe(true);
+      // A solid two-block wall has no intermediate higher landing.
+      r.set(1,65,0,'stone');
+      expect(checkGroundPath(r.bot as never,[node(1.5,66)])?.rise).toBe(2);
+      r.set(1,65,0,'air');
+      // A true starting support is needed before ordinary jumping can certify anything.
+      r.set(0,63,0,'air');
+      expect(checkGroundPath(r.bot as never,[target])?.rise).toBe(2);
+      r.set(0,63,0,'stone');
+      const known=r.bot.blockAt;
+      r.bot.blockAt=p=>p.floored().equals(new Vec3(1,64,0))?null as never:known(p);
+      expect(checkGroundPath(r.bot as never,[target])?.rise).toBe(2);
+      expect(r.bot.entity.position).toEqual(before);
+      expect(Object.values(r.keys).every(value=>!value)).toBe(true);
+    } finally {r.close();}
+  });
 });
