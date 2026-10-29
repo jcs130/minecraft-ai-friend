@@ -17,7 +17,7 @@ public final class BridgeRules {
     private static final Map<String,Set<String>> ACTIONS=Map.of(
         "class",Set.of("status","list","info","choose","menu"),
         "skills",Set.of("status","list","mine","points","info","explain","learn","prepare","equip","tree","menu"),
-        "quests",Set.of("status","list","info","accept","claim"),
+        "quests",Set.of("status","list","info","accept","claim","abandon"),
         "shop",Set.of("list","info","open"),"town",Set.of("list","info"));
     public static String publicGroup(String group){return switch(group){case "class"->"profession";case "quests"->"tasks";case "shop"->"trade";case "town"->"waypoint";default->group;};}
     public static Request parse(String[] raw) {
@@ -48,7 +48,7 @@ public final class BridgeRules {
             if(!action.equals("list"))throw invalid("status 无参数","/mycli status");
         }else if(!ACTIONS.get(group).contains(action))throw invalid("未知动作 "+action,"/mycli "+publicGroup(group)+" --help");
         Request r=new Request(group,action,List.copyOf(words),json,false,page);
-        boolean id=Set.of("info","explain","choose","learn","prepare","equip","accept","claim","open","cast").contains(action);
+        boolean id=Set.of("info","explain","choose","learn","prepare","equip","accept","claim","abandon","open","cast").contains(action);
         boolean optional=action.equals("status")&&Set.of("skills","quests").contains(group)||group.equals("skills")&&action.equals("list");
         if(id&&words.size()!=1||!id&&words.size()>(optional?1:0))throw invalid("参数不匹配；用法：/mycli "+publicGroup(group)+(group.equals("cast")?" <ID>":" "+action+(id?" <ID>":optional?" [ID]":"")),"/mycli "+publicGroup(group)+" --help");
         for(String w:words)if(!w.matches("[a-z0-9_]{1,48}"))throw invalid("ID只用字母、数字和下划线","/mycli "+publicGroup(group)+" --help");

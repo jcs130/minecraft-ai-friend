@@ -446,8 +446,9 @@ final class SiteDungeonManager implements Listener {
     void command(Player p,String[] raw){
         DungeonAdvice.Request request;
         try{request=DungeonAdvice.parse(raw);}catch(IllegalArgumentException e){
-            if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_SITE_DUNGEON_RESULT "+JSON.toJson(Map.of("schemaVersion",1,"success",false,"reason","INVALID_ARGUMENT","errorMessage",e.getMessage(),"retryable",false,"nextCommand","/mycli dungeon --help")));
-            else p.sendMessage("[地下城] 未执行（INVALID_ARGUMENT）："+e.getMessage()+"。命令：/mycli dungeon --help");return;
+            String next=e instanceof DungeonAdvice.Usage usage?usage.nextCommand:"/mycli dungeon --help";
+            if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_SITE_DUNGEON_RESULT "+JSON.toJson(Map.of("schemaVersion",1,"success",false,"changed",false,"reason","INVALID_ARGUMENT","errorMessage",e.getMessage(),"retryable",false,"nextCommand",next)));
+            else p.sendMessage("[地下城] 未执行（INVALID_ARGUMENT）："+e.getMessage()+"。命令："+next);return;
         }
         format(request.json(),request.verbose(),()->execute(p,request.args(),request.page()));
     }
@@ -615,7 +616,7 @@ final class SiteDungeonManager implements Listener {
             try{persist(()->saveOutcome(p.getUniqueId(),r.site.id,outcome));}catch(RuntimeException e){r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),count);throw e;}
             r.roomParticipants.remove(p.getUniqueId());explainOutcome(p,outcome);
         }
-        result(p,"leave",r.site.id,"success");p.sendMessage("§e已退出"+label(r.site)+"；留在原地，可步行离开或自行使用传送技能。");
+        result(p,"leave",r.site.id,"success");p.sendMessage("§e已退出"+label(r.site)+"；留在原地。若要回村：/mycli cast home，成功耗6魔力；先核对 /mycli status。");
     }
     private int receiptCount(){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts");if(c==null)return 0;int total=0;for(String owner:c.getKeys(false)){var section=c.getConfigurationSection(owner);if(section!=null)total+=section.getKeys(false).size();}return total;}
     private ConfigurationSection receipt(UUID id,String site){return plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id+"."+site);}

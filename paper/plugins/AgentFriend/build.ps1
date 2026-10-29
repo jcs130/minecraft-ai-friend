@@ -28,6 +28,7 @@ $classpath = @(
     $worldGuard[0].FullName
     $worldEdit[0].FullName
     Join-Path $ServerRoot 'plugins\EssentialsX-2.22.0.jar'
+    Join-Path $ServerRoot 'plugins\SkinsRestorer.jar'
     Join-Path $ServerRoot 'plugins\ProtocolLib-5.3.0.jar'
 ) -join ';'
 $build = Join-Path $root "build-0.4.48-mc-$MinecraftVersion"

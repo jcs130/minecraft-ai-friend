@@ -380,6 +380,7 @@ final class AgentCliCatalog {
             nativeSpec(specs,"tasks.status","read","/mycli tasks status [ID] [--page 页码]","查进行中任务的实际缺项及下一步；可聚焦一项","免费只读；指定 ID 时不使用 --page；旧委托查 progress guild");
             nativeSpec(specs,"tasks.accept","write","/mycli tasks accept <ID>","主动接取指定原生任务并保存","按 info 核对等级与前置；不代做目标；超时先查 status，勿重接");
             nativeSpec(specs,"tasks.claim","write","/mycli tasks claim <ID>","满足真实目标后交付并结算奖励","以最终保存与奖励回执为准；待核对时不重复领取");
+            nativeSpec(specs,"tasks.abandon","write","/mycli tasks abandon <ID>","主动放弃指定进行中的RPG任务","再次接取重新计数；未领取奖励不发放，已获物品和奖励保留；不退出副本、不回城；超时先查tasks status <ID>，不重复提交");
             nativeSpec(specs,"status","read","/mycli status","查生命、饱食、职业等级、魔力与下一步","免费只读；不代选职业、接任务或领奖");
             nativeSpec(specs,"progress","read","/mycli progress [all|main|training|guild|challenge|story] [页码]","总览RPG任务与冒险；指定分区查原有独立进度","裸 progress 汇总，显式分区保留原分页；专项完成不等于主线毕业");
             for(String id:List.of("arena.stash","arena.stash.pages","arena.stash.page")){
