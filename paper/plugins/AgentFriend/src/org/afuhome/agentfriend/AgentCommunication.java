@@ -11,7 +11,7 @@ import org.bukkit.entity.Player;
  * Authentication is informational, supplied only by the proxy's local heartbeat file;
  * missing/expired data is unknown and is never used to grant permissions. */
 final class AgentCommunication {
-    static final String GUIDE_VERSION = "2026-10-23.9";
+    static final String GUIDE_VERSION = "2026-10-30.1";
     static final long SNAPSHOT_TTL = 300_000L, AUTH_TTL = 15_000L;
     private static final class Session {
         final String id = UUID.randomUUID().toString(); final long joinedAt=System.currentTimeMillis();long sequence;
@@ -72,11 +72,16 @@ final class AgentCommunication {
         out.addProperty("detailCommand", "/mycli coach guide"); out.addProperty("authCommand", "/authstatus");
         out.addProperty("backpackCommand","/minepacks:backpack open");
         out.addProperty("storyCommand","/mycli world story status");
+        out.add("communication",AgentChatPolicy.observe(plugin,p));
         out.addProperty("backpackAdvice","54格个人大背包可普通存取，独立于任务袋和奖励箱。等待服务端槽位与光标确认，关闭重开核对；超时先查询，不自动重放。");
         send(p, "MC_GUIDE", out); state(p,true);
     }
     void state(Player p) {
         state(p,false);
+    }
+    void chatPolicy(Player p) {
+        JsonObject out=envelope(p,"communication");out.add("communication",AgentChatPolicy.observe(plugin,p));
+        send(p,"MC_COMMUNICATION",out);
     }
     void state(Player p,boolean jsonOnly) {
         JsonObject out = envelope(p, "state"); out.addProperty("name", p.getName()); out.addProperty("mode", p.getGameMode().name());
@@ -94,6 +99,7 @@ final class AgentCommunication {
             out.addProperty("manaStatus",nativeMana.isJsonObject()?"known_vortex":"unknown_not_loaded");
         }
         out.add("authentication", authentication(p));
+        out.add("communication",AgentChatPolicy.observe(plugin,p));
         JsonObject next = plugin.agentCoach().entryState(p);
         if (next.has("step")) {
             out.add("mainStage", next.get("step")); out.add("mainlineGraduated", next.get("completed"));
