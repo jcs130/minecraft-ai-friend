@@ -1,3 +1,7 @@
+## 2026-10-29 SAO 0.76.1-lite 接入仅为回环实验候选
+
+integrations/sao-compat 在 E:/MC/research/sao-0.76.1-agent-20261029 建立独立 MC1.20.1 / Forge47.4.10 / Java17 候选；171 个作者服务端 JAR 加最新对应 Numen0.1.4.1 与自有桥，共173个。游戏TCP39676、Owner Token MCP TCP39689均仅127.0.0.1，未接现役Watchdog或公网；现役Paper及Tau1.21.1（28976/28977）不变，不能据本条切换主服。Numen身体及Mineflayer+原生SDK都已登录、实际移动和操作农夫乐事锅；原UUID重启恢复、动作去重、停止、7项真实鉴权检查已验，28项源码回归通过。每JVM导出真实ID并校验epoch，原版配方流保留原字节且快捷静态合成拒绝；不要冒称完整玩法或渲染已适配。Numen客户端可选仅修改其本身频道缺席策略，其他模组/游戏权限保持。Ftb标题、作者FTB客户端辅助、Vzling公共初始化及KubeJS残片访问均为精确兼容修复，不分发改造过的第三方JAR。配方目录/魔力、完整战斗和任务书、真人全界面/Web/基岩、远程注册表分发尚待验；初期分块保存并发异常、现存启动诊断和FML握手警告保留跟踪。说明及证据见 integrations/sao-compat/README.md、VALIDATION.md；不要把实验服的命令/补丁应用到现役服。
+
 ## 2026-10-28 Tau 原生 Mineflayer 接口已正式发布
 
 integrations/tau-ceti/native-bridge 提供普通登录身体的8项原生接口、可选服务端组件与独立无依赖SDK；同一玩家连接发送原始物品/菜单/配方，不新建Numen身体或公网端口。服主明确授权后正常退出0、E/F完整冷备58,700文件（压缩包3.56GB、双盘SHA一致），安装前后3027原世界/配置/认证/模组等文件核验保持，已发布构建a1826bfa…0d2390eb及匹配冻结网关。现役11项局域网登录/本人数据/配方/原物品栏/未知回执检查通过，监护健康且维护暂停解除，原Numen35项能力保持；Paper未操作。此前隔离26实操+5只读、17客户端、15Java、17原管理和4打包消费者通过。SDK须由Agent运行时显式附加，不宣称全部模组、真人GUI、基岩和Web像素已验。完整证据在E:/MC/ops/repairs/tau-native-player-20261028，说明/发布清单见integrations/tau-ceti/NATIVE_PLAYER_VALIDATION.md及native-player-release-20261028.json。维护已结束，不重放旧停服/安装脚本，不部署早期build-1至6。

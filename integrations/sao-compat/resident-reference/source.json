@@ -1,0 +1,36 @@
+{
+  "repository": "https://github.com/jcs130/minecraft-ai-friend",
+  "commit": "78ec7abb4745f0f5e4a840af03a2fbe3166265cc",
+  "path": "world/numen-server-src",
+  "files": {
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessAuth.java": "336e72ba44c5e8f1d6bc60eba129eba992dbcc505bfbb981d82094fad1cbc0a0",
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessRuntime.java": "52b16a1c367064a54485cfa90b7c9651ddc66a7a813343445e9b4cc03c077483",
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessBrain.java": "88993780e01495344c5f5db1ea33eee46a9a2f4fd7c4d3a192947c414fdaa17a",
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessHttp.java": "69bfa0412ceb268766f7c11fee0b58c73e02e021ef167992297d29e1a73b3c95",
+    "src/main/java/dev/qiandeng/maw/numenserver/PrivateStore.java": "9f638d7d89ca44d80cdb24c0f4367448379a5def82753ced4b0a92173366e55d",
+    "src/main/java/dev/qiandeng/maw/numenserver/SafeAnchor.java": "38355db6619aa1ba0f2d27ef78126ba3570e0e9d42a6e87bb03e70753ea8a2b1",
+    "src/main/java/dev/qiandeng/maw/numenserver/NativeModBridge.java": "bea750f167e925e88788e137eb0f1e7964ff292012246be3f85a79601932f97d",
+    "src/main/java/dev/qiandeng/maw/numenserver/NativeReturnContracts.java": "d4e69fd4059fa425ede6328c3d130dfdd226cc065e3f6f19e23b35e7a27128bc",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/EventDeliveryMixin.java": "73f7dc4a4e223bf872dc1b86f4d9443da35652693cdccfc4184d7cd26121595b",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/ItemUseReturnMixin.java": "99c811799c2a39d97936d0a8998f7b7f19e3f78fcac50fe82173283524224bb0",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/ProgramOwnershipMixin.java": "8d8e3360961cd6ff1c1737b87509ea43e1865a793e5d8cd0709f8752639b2210",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/TaskRestoreMixin.java": "5239560bf5a0341c18bc2da8ac3f413b6074e32a9b4f1f54524ad32c87a1893b",
+    "src/main/resources/maw_numen_server.mixins.json": "73838c5e3a9395e6f4c872160dc6e76468b7cfab6b6843ed3e272ed07d70cb70"
+  },
+  "originalWorktreeSha256": {
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessAuth.java": "336e72ba44c5e8f1d6bc60eba129eba992dbcc505bfbb981d82094fad1cbc0a0",
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessRuntime.java": "52b16a1c367064a54485cfa90b7c9651ddc66a7a813343445e9b4cc03c077483",
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessBrain.java": "058a87ec65ad13950da3d3834f17c487c97ff33480cb3724af134379f479cd66",
+    "src/main/java/dev/qiandeng/maw/numenserver/HeadlessHttp.java": "69bfa0412ceb268766f7c11fee0b58c73e02e021ef167992297d29e1a73b3c95",
+    "src/main/java/dev/qiandeng/maw/numenserver/PrivateStore.java": "9f638d7d89ca44d80cdb24c0f4367448379a5def82753ced4b0a92173366e55d",
+    "src/main/java/dev/qiandeng/maw/numenserver/SafeAnchor.java": "38355db6619aa1ba0f2d27ef78126ba3570e0e9d42a6e87bb03e70753ea8a2b1",
+    "src/main/java/dev/qiandeng/maw/numenserver/NativeModBridge.java": "bea750f167e925e88788e137eb0f1e7964ff292012246be3f85a79601932f97d",
+    "src/main/java/dev/qiandeng/maw/numenserver/NativeReturnContracts.java": "d4e69fd4059fa425ede6328c3d130dfdd226cc065e3f6f19e23b35e7a27128bc",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/EventDeliveryMixin.java": "73f7dc4a4e223bf872dc1b86f4d9443da35652693cdccfc4184d7cd26121595b",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/ItemUseReturnMixin.java": "99c811799c2a39d97936d0a8998f7b7f19e3f78fcac50fe82173283524224bb0",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/ProgramOwnershipMixin.java": "8d8e3360961cd6ff1c1737b87509ea43e1865a793e5d8cd0709f8752639b2210",
+    "src/main/java/dev/qiandeng/maw/numenserver/mixin/TaskRestoreMixin.java": "5239560bf5a0341c18bc2da8ac3f413b6074e32a9b4f1f54524ad32c87a1893b",
+    "src/main/resources/maw_numen_server.mixins.json": "73838c5e3a9395e6f4c872160dc6e76468b7cfab6b6843ed3e272ed07d70cb70"
+  },
+  "lineEndings": "normalized_lf"
+}

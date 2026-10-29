@@ -1,0 +1,1103 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-29T07:16:46.499113+00:00",
+  "scope": "isolated_testing",
+  "minecraft": "1.20.1",
+  "forge": "47.4.10",
+  "numen": "0.1.4.1",
+  "packSha256": "707f8a9db948a9ad5855b28246ec46738a9a7fe953ed30d0531e4291967360bd",
+  "installedJarCount": 173,
+  "installedMods": [
+    {
+      "filename": "[Macaw 的家具 ／ 麦考的家具] mcw-furniture-3.4.1-mc1.20.1forge.jar",
+      "sha256": "9f068315ac5ae7c4b76a6ac0679cde9be59d5cbf37488a477f13b95fe1cbc37d",
+      "bytes": 2174615,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[Paladin的家具] paladin-furniture-mod-1.5.0-forge-mc1.20.1.jar",
+      "sha256": "5059e7b6dafc172018833b11602cedcc3de768cee5b52584c57c41d2688eb1b6",
+      "bytes": 6262179,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[作物盛景] Croptopia-1.20.1-FORGE-4.0.1.jar",
+      "sha256": "bbd35cbdbe8b9d20a70ab79a42781a82f19f51de068861c431879becbce66d28",
+      "bytes": 2155802,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[农夫乐事] FarmersDelight-1.20.1-1.3.4.jar",
+      "sha256": "34f03eb671ea1ca579b00c98e4541404cb96d1a292014aed9cc5eb45ad8afbce",
+      "bytes": 3311051,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[地牢浮现之时] DungeonsArise-1.20.x-2.1.58-release.jar",
+      "sha256": "f8f1254dbe7ed7c1d5403f20361a36f0d0587c82b71313e3f427c7f1ce7c8a90",
+      "bytes": 8762342,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[森罗物语：厨房] kaleidoscopecookery-1.5.1-forge+mc1.20.1.jar",
+      "sha256": "5150421f584fa68590f1205d1037615b7cda54fa0c2dda3df1e9aa6d3902e605",
+      "bytes": 3597135,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[沉浸农艺] letsdo-farm_and_charm-forge-1.0.14.jar",
+      "sha256": "2311790589a58678640cb788de13bebd40efe3ed92f03e82a8fa871850a382eb",
+      "bytes": 2328624,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[烛火晚宴] letsdo-candlelight-forge-2.0.5.jar",
+      "sha256": "6c384737ebc26a0efb50a0688e4ff38f59bce9db30c4b61dcbb1118095b34688",
+      "bytes": 2507744,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[盛节精酿] letsdo-brewery-forge-1.1.9.jar",
+      "sha256": "f889cf1258b6365873b83fb3e533e9a58da4ee381377e55d58f13a4b3cfb4840",
+      "bytes": 2228646,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[精巧手艺] handcrafted-forge-1.20.1-3.0.6.jar",
+      "sha256": "1da3c7c524bfb656bb370757af55f08f1678e8e1cb934e1c4c04aa773ed64a79",
+      "bytes": 7111059,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[美化！] beautify-2.0.2.jar",
+      "sha256": "d14eca2341539a9186599e335c72315a4210f90f8e2d8007200c1da70b27bf15",
+      "bytes": 838292,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[节气] Ecliptic-Seasons-1.20.1-forge-0.15.3.1-all.jar",
+      "sha256": "64ca8d52ae955be5bdf2501c0a163a192cdae548c09e619550e6b133e2ad9bd4",
+      "bytes": 10296701,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[节气：多维修补] Ecliptic-Seasons-MultiMod-Patch-1.20.1-forge-0.30.5-all.jar",
+      "sha256": "aeeb5ed2d8c85aaa3e6898a7724faf0f9a90b790534ec7243a2f3b5e53cb6d54",
+      "bytes": 1000432,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "[馥郁烘焙] letsdo-bakery-forge-2.0.6.jar",
+      "sha256": "feb70544c3b8409122c26b9a80d86691c8e36508b95e24fe7bd89e3a973a947e",
+      "bytes": 1222186,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "aaa_particles-forge-1.20.1-2.2.3.jar",
+      "sha256": "2d9e540e61feb5b7795c77014662f1556c73aee063391f1b0297ad60e62424fc",
+      "bytes": 5253752,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "AdvancedCoreInfo-forge-1.20.1-1.2.0.jar",
+      "sha256": "f7549a110866e6ab90e8ca55c27f36a79792ed9855e99d910325f69bf7db1428",
+      "bytes": 101275,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "AdvancedLootInfo-forge-1.20.1-2.2.0.jar",
+      "sha256": "6f74e1b1463d1df3d6b2509ec8a02a905a5c71ab8301ffa0441eefe22e5df622",
+      "bytes": 623341,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "aether-1.20.1-1.5.2-neoforge.jar",
+      "sha256": "b6b586eb6fdc9ce4b3645cab43642ba87817c5deadef4d87ab884e4fe20ef282",
+      "bytes": 39746073,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "alexscaves-2.0.2.jar",
+      "sha256": "131e205ce3eed384d701b336d8a0d4a671108ed56b6eff6014f0e407db2997f0",
+      "bytes": 74871657,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "alltheleaks-1.1.3+1.20.1-forge.jar",
+      "sha256": "4bb5a05d7f9caa9e689e43c4b4b65540b67afe53bb7c9e810465f63da4744685",
+      "bytes": 1274165,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Apotheosis-1.20.1-7.4.8.jar",
+      "sha256": "5ed8c17cf62837bb649d1054e3e4fe93c4d9bdec98fe9f332e2637a260da30da",
+      "bytes": 2803994,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ApothicAttributes-1.20.1-1.3.7.jar",
+      "sha256": "68487b11c0d4e2f67a85f2b04bf65e99ac15294f2923f4391f83e9542293187a",
+      "bytes": 227511,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "appleskin-forge-mc1.20.1-2.5.1.jar",
+      "sha256": "e12419e43e3babc810af289403c5cd96bd7f09809b389acc6bb2f122b4b2a426",
+      "bytes": 47428,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "aquamirae-forge-1.20.1-7.1.14.jar",
+      "sha256": "5439edc57af3075a1600effe0906ba322e89346077bcb80b761a4bff4cbff59b",
+      "bytes": 25920958,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "architectury-9.2.14-forge.jar",
+      "sha256": "218b471d0b8a1f6cda14cfc1beb9eeb0df54304500acc6c5613d9b88ec65d9af",
+      "bytes": 580602,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "artifacts-forge-9.5.19.jar",
+      "sha256": "f1e4dc786866b6e4f2a48142f2acf63bb9bee54ac2f31621ad5d8f18ab54c7b0",
+      "bytes": 850974,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "astemirlib-1.20.1-1.25.jar",
+      "sha256": "f710d966cd2ae36de3cec84e91ea268780745f8b320bcfb78e3aa74197929652",
+      "bytes": 370350,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "async-locator-forge-1.20-1.3.0.jar",
+      "sha256": "d171fdddd8dad64cba4c8c67cd2a0bdfc2697ff35e11f9fb666b7464e1e9468b",
+      "bytes": 264951,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "AttributeFix-Forge-1.20.1-21.0.4.jar",
+      "sha256": "5d8cc8928ce480288d5b504663bb13104df56ac72ce5bf36f2743ec27c701112",
+      "bytes": 19471,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "balm-forge-1.20.1-7.3.43.jar",
+      "sha256": "1ef7820c2587d2ecee26a8b941427f08bbc1058a8dd376cf45e3fa6df1cba69e",
+      "bytes": 561741,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "bc_particle-0.0.6-forge-1.20.1.jar",
+      "sha256": "3a47394a3d3f0c0d29dc6c3ba3b80d98bc9ced1807e4954799e0953a06328791",
+      "bytes": 143121,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "bettercombat-forge-1.9.0+1.20.1.jar",
+      "sha256": "49c69dccf2c641246b4e3deca81ebac21f0ee119e81fc713b838b8e33569eea1",
+      "bytes": 1054339,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "BiomesOPlenty-forge-1.20.1-19.0.0.96.jar",
+      "sha256": "84bbfe8fa25a453dae3a8e6c46e8e129f48f7d9df58e33bb7f3d28b90f591b3f",
+      "bytes": 22381010,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "BOMD-Forge-1.20.1-1.1.2.jar",
+      "sha256": "2b17c8333d2c63ee60ee3d316a2d75d5c19d581cbb7dce9f38a9931aab221188",
+      "bytes": 1753623,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "CerbonsAPI-Forge-1.20.1-1.1.0.jar",
+      "sha256": "54a0a20da56ab1af2d0d7f5cf1133c059a7523485d567521084f822e81505dfb",
+      "bytes": 241148,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Chunky-1.3.146.jar",
+      "sha256": "996a3c9b53e6c0e0850fb9e78d3546d2c37a1b789ddaf529b17e4fe62ab23141",
+      "bytes": 341451,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "citadel-2.6.3-1.20.1.jar",
+      "sha256": "56c7ab87348a5292583aac787b6cf11b5193e77f02af1d17ea75a96f8640b3ce",
+      "bytes": 3185275,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "cloth-config-11.1.136-forge.jar",
+      "sha256": "1e895e85cf5b1e1905ef3178ec155c8badfe22a1577b92c09143a5aa1f4ce0f2",
+      "bytes": 1181413,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Clumps-forge-1.20.1-12.0.0.4.jar",
+      "sha256": "8af01712c0dc32cebaff31795ca6d223fddff2ea9b1f5efbd9c3a586a0dacbc0",
+      "bytes": 20300,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "connectivity-1.20.1-7.7.jar",
+      "sha256": "c77023b250e6d7227b8c1ca92c8dd071a0d98ceadf62cfd9736cdc0eb153b4f8",
+      "bytes": 122337,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "constructionwand-1.20.1-2.11.jar",
+      "sha256": "b55ca6f0e734bad848adb06949675136f1d05cb4fb3efdde084c9842c40e1eec",
+      "bytes": 210312,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "craftingtweaks-forge-1.20.1-18.2.9.jar",
+      "sha256": "2f5e753a9b528015fbaabdc3d04c5ca768831033f05fba67e2ab1db166a955a8",
+      "bytes": 230696,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "cupboard-1.20.1-4.2.jar",
+      "sha256": "6a384b880c2429e017f83657438e1fc00d091592cc2860d6d2986094bac5d48f",
+      "bytes": 33422,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "curios-forge-5.14.1+1.20.1.jar",
+      "sha256": "1e817919a35b37cf30524aaec73f0ca5130452f23f168f844854df282eb8e51f",
+      "bytes": 398066,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "CustomSkinLoader-Common-15.1.jar",
+      "sha256": "0230bc0b3a53f2ae7adebacabf2662b70fcc6300c6ec9c3161a98ce5998f91fa",
+      "bytes": 126559,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "deeperdarker-forge-1.20.1-1.3.3.jar",
+      "sha256": "d07dc6155e0b751c7d1ec26dabb7284a41798c85e48b0d809fd1254e489ed455",
+      "bytes": 17844266,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "dummmmmmy-1.20-2.0.11-forge.jar",
+      "sha256": "dc6e4c7ba39d30c6840cc137c85cffee8bbc043af5b9d2688d6d259638e126ac",
+      "bytes": 839907,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "DungeonsAriseSevenSeas-1.19.2-1.0.2-forge.jar",
+      "sha256": "2ba5913026e2e4296f97aceee5fbd6ed332ed916bd84de68bda2e67742ec5ce4",
+      "bytes": 248171,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "EpheroLib-1.20.1-FORGE-1.2.0.jar",
+      "sha256": "8924a015f28348c806e6680addc2d5a8bcaf8439dd51ce48ce3b2f2b0e522407",
+      "bytes": 756864,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "explore_ruins_aether-1.0.0-forge-1.20.1.jar",
+      "sha256": "b5a9152d08e721f27ab9dc4e5677d193854498ebb9f0e7acdc6498a02af2f13c",
+      "bytes": 149012,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ExplorersCompass-1.20.1-1.4.0-forge.jar",
+      "sha256": "0d9a7705f39a9eac19c33e0fbe5422280048991a341dc0d9471bff32111c502c",
+      "bytes": 174387,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "fancymenu_forge_3.9.12_MC_1.20.1.jar",
+      "sha256": "60aa6a94e0c021c989bbea978ea6a233ac2e23e364f15825a8beb7b5ab0b94cf",
+      "bytes": 26181250,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "FastEvent-1.20.1-1.1.1.jar",
+      "sha256": "fad6bd3c5d882a924934f119d4df83570c24610a06c4f76ac2c36b487edc7727",
+      "bytes": 32785,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "FastFurnace-1.20.1-8.0.2.jar",
+      "sha256": "970c11c090e7a364e2e006aabb5e573f79901e710e97195334ee5802317776e8",
+      "bytes": 6170,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ferritecore-6.0.1-forge.jar",
+      "sha256": "9c2c9396a49e796d88497758caa4637d2bcbb433c318e2dd9cebcffbaf0f6c54",
+      "bytes": 123034,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "fragmentum-5.1.1+1.20.1-forge.jar",
+      "sha256": "b80cc2fae3e3b908839671478a0bd7dc9830175f3c2dc1a301033466ccc6a19b",
+      "bytes": 7950475,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftb-chunks-forge-2001.3.8.jar",
+      "sha256": "783f7aa42089b6f72500801284796f7cc8eb641ecddcf76f65bf586c017efb02",
+      "bytes": 1159043,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftb-essentials-forge-2001.2.4.jar",
+      "sha256": "e0022bfe29dc10e373947701dae1bc4ce75ee15fe21f6d89269677fbb9aebf73",
+      "bytes": 157732,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftb-library-forge-2001.2.13.jar",
+      "sha256": "41810281b65336265cae2c88412022d02f2f0a3f28c66a06173d86f98acf14a7",
+      "bytes": 780558,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftb-quests-forge-2001.4.22.jar",
+      "sha256": "9ea9d159a78a2724cfe0457b024680fdb52a2126eff9cfa5280a30578f647a68",
+      "bytes": 1255469,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftb-teams-forge-2001.3.2.jar",
+      "sha256": "59ab427d061b7697160b7028ffd99998af833c9472af0a5402bc41716d41546e",
+      "bytes": 249032,
+      "source": "teams-server-fix.json"
+    },
+    {
+      "filename": "ftb-ultimine-forge-2001.1.8.jar",
+      "sha256": "b80dde55b2c91fd27f09f15ed2aefb0756c7bd704316e488ae8a06b179e85730",
+      "bytes": 129653,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftb-xmod-compat-forge-2.1.3.jar",
+      "sha256": "16a8eb9de88d5c33d29cb076cc39dfb337b2c54348e1ef1efe9dd60cf85e5f72",
+      "bytes": 129725,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ftbchunkscompatibility-forge-1.20.1-1.0.1.jar",
+      "sha256": "12316eb74462b126e53e25bbe29a98c7e5507a4d22007207696ddea8127ed6c5",
+      "bytes": 15176,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "fzzy_config-0.7.6+1.20.1+forge.jar",
+      "sha256": "d39cd5d6b23b86468937e306776dc70faba900072c7e359ce9348d8a3c26982e",
+      "bytes": 2374667,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "geckolib-forge-1.20.1-4.8.4.jar",
+      "sha256": "4518779a31b6c2abb92c98b5ad17ef3d60177df68626bfc86c44de2764913c2b",
+      "bytes": 1038209,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "GlitchCore-forge-1.20.1-0.0.1.1.jar",
+      "sha256": "dedd857b1ee356f002471ec97a2174c7d193d6d1aede60782d0bbe2c241b2a7f",
+      "bytes": 87551,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "hadean_breathe-0.25.5-1.20.1-forge.jar",
+      "sha256": "2b6e10e04c77abaed65ac141165f97a5d054357a930cac410cb1e20bb19dc9db",
+      "bytes": 4908492,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "illageandspillagerespillaged-1.2.8.jar",
+      "sha256": "295bdc3948c4ac0cd2621d835324003441ad1ad61fe6e430e3a16419335cc133",
+      "bytes": 33578108,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "immersive_optimization-forge-1.20.1-0.1.0.jar",
+      "sha256": "4b1ddb65d9c3b98c8781c34eb19f01c5f49b8ba7cefdf781d96dc9518f5821e7",
+      "bytes": 51912,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Jade-1.20.1-Forge-11.13.3.jar",
+      "sha256": "a632c77975e5aedff6322b0072f8b0db3f5d4bf914df6bdcc87d1aea4d5f55f4",
+      "bytes": 553487,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "jei-1.20.1-forge-15.56.0.205.jar",
+      "sha256": "6b251e60a4719c874da89d750af97aa6498f6f4475e3ae79cb1288c7bf0cb65c",
+      "bytes": 1778129,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "JustEnoughAdvancements-1.20.1-5.0.1.jar",
+      "sha256": "04e319c4e97310dfd58547e0fd76682147bbab0fd3baab7d7db8da6e7cc9a946",
+      "bytes": 37823,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "JustEnoughProfessions-forge-1.20.1-3.0.1.jar",
+      "sha256": "85b644b2f6cbcc3a73d240229065692717713e3d2cd2b60cb0c8eea9946f0535",
+      "bytes": 24607,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "kaleidoscope_immersiveEating-forge1.20.1-1.5.0.jar",
+      "sha256": "3a313705f740617a75011cd56c16002ea30c58784a3626ff4e98a9de4dccb259",
+      "bytes": 2691149,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "kleiders_custom_renderer-7.4.1-forge-1.20.1.jar",
+      "sha256": "9e7bf7f20560120ec6de86f76ca88bb2f1c6ad22e98980bce119599f1e0c809e",
+      "bytes": 47876,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "konkrete_forge_1.8.0_MC_1.20-1.20.1.jar",
+      "sha256": "e78686b92c3761ec26eb9d3c53efdd3d6ca77981cbd3723995e1163b7103ae0b",
+      "bytes": 625185,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "kotlinforforge-4.11.0-all.jar",
+      "sha256": "ef988f86d170af499d147ea8a5c34c99dbd6d8f4a5ad236a4b43818dc4470a10",
+      "bytes": 7193768,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "kubejs-forge-2001.6.5-build.26.jar",
+      "sha256": "1769312192fbf9d72f45054ba61130523bfb471b5f480a4bff8c210ec09400bb",
+      "bytes": 1658792,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "L_Enders_Cataclysm-3.31.jar",
+      "sha256": "c29dcf940168208517b72f2d9965828b106a6b94cbea55d5001558c69a27b362",
+      "bytes": 73916104,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ldlib-forge-1.20.1-1.0.52.a.jar",
+      "sha256": "a9b0827d264e0d15f90482de0d4783a28fc2dad9dfb477f344dc5e959168838d",
+      "bytes": 3125867,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "legendarymonsters-2.2.3 MC 1.20.1.jar",
+      "sha256": "a90a3009e502ba4f235e5bd9a7493c2307e4060f0ee21fd02e62f9893912321c",
+      "bytes": 44954907,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "letsdo-API-forge-1.2.15-forge.jar",
+      "sha256": "d08b99df112cfffb46e289635c79d4ac8397223320abd6469b47e202e23fa28c",
+      "bytes": 1440591,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "LibX-1.20.1-5.0.12.jar",
+      "sha256": "2de52bac5d699e6a2cbf74e94b0b3e6afdcb2e3b939dc2449fc1c6dfb8c9a96c",
+      "bytes": 1253011,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "lionfishapi-3.0.jar",
+      "sha256": "d2fdaf7e9bc53fde7da4a86ab17018a3ed6c16fc2d46de5054e5a83e2bef7871",
+      "bytes": 101931,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "lithostitched-forge-1.20.1-1.4.11.jar",
+      "sha256": "c19a5a36c0e6cb3782cf7ca5b9648fb1bce5fc41fd737bed423a1f4971bccf75",
+      "bytes": 476347,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "lootr-forge-1.20-0.7.35.94.jar",
+      "sha256": "01200ee5889e6bcc3c5fa8f32b7b49a4bd58e653699eeb655c6f2dd314e3ce51",
+      "bytes": 463485,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "lostcities-1.20-7.5.5.jar",
+      "sha256": "83f174d010b2841eee47b1be4971d0c010739db38294653f35b2413e59793e3a",
+      "bytes": 1420565,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "lostsouls-1.20-4.1.7.jar",
+      "sha256": "cb5640f9423db41b872b7ae85054a6fb2503d3613b8db6aede36919321821291",
+      "bytes": 47902,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "lrtactical-1.20.1-0.4.3.jar",
+      "sha256": "930372cab33e1f563f597c74f9155b5ed25e6f2b0ff7e12dfc86255e1020ef2d",
+      "bytes": 6614642,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "maw-sao-native-0.1.0.jar",
+      "sha256": "11fd73f6bb470f71c7e880ebee303e0089aa8e2367eb02a40d1874c769efaa5b",
+      "bytes": 123459,
+      "source": "self_built_forge_addon"
+    },
+    {
+      "filename": "meetyourfight-1.20.1-1.6.2.jar",
+      "sha256": "624624471b8b3aefa98a798ae6d20ff6efef02d74f4702c05c21306714b02bda",
+      "bytes": 23676644,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "melody_forge_1.0.3_MC_1.20.1-1.20.4.jar",
+      "sha256": "933e2a7e79c4594f965f7f7d00b1f28a98ec2a180ad8f9f90310a266fe5cf5d8",
+      "bytes": 37178,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "memoryleakfix-forge-1.17+-1.1.5.jar",
+      "sha256": "925c3db4e1d085a43c4d2beaa4eec18367c22abc90c2ce8594b8a129fd3f28dd",
+      "bytes": 227925,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "mod_1cab0b39_1cab0b39-1.2.0-r234.jar",
+      "sha256": "d64bb5b72b2748c8b101489eca7fc2b5bfdd3254bf4a19c97d7b637703adafdf",
+      "bytes": 21395651,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "modernfix-forge-5.26.2+mc1.20.1.jar",
+      "sha256": "e9f00f787a78a976b8493eafeee63ff08fadb31bcb0a1e938d7b940d17ac70ae",
+      "bytes": 826829,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "moonlight-1.20-2.16.35-forge.jar",
+      "sha256": "55e60e041318c5fabcb02d41e989db2c8b784ba7a991525fa461c6522a67719e",
+      "bytes": 1425229,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "mowziesmobs-1.8.2.jar",
+      "sha256": "e8ce1768cda6f1e1fadd2321c92921b473bd0cee45ba4b8387fb30f8326cb31c",
+      "bytes": 36033850,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "MutantMonsters-v8.0.8-1.20.1-Forge.jar",
+      "sha256": "9a1835dd388a04c37acb1384e7c39650804103b3dd9d4b3910fd49022d18a4bf",
+      "bytes": 1335037,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "NaNny-1.0.1.jar",
+      "sha256": "ded54029203f0bf5f6564216ff76052b46970dd9c583080566c9e0f33cddf11f",
+      "bytes": 5086,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "NaturesCompass-1.20.1-1.12.0-forge.jar",
+      "sha256": "bc3601e9e050802569647de843fe9d3160934c5f31412cba62ca2ea8c1485197",
+      "bytes": 227495,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "noisium-forge-2.3.0+mc1.20-1.20.1.jar",
+      "sha256": "b0b020250c81e8cce7776c3dc8f7085f269e2007570d5fbd492c4497ad60685c",
+      "bytes": 218152,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Not Enough Recipe Book-FORGE-0.4.1+1.20.1.jar",
+      "sha256": "8f05afb56310b21e91d2f1d1200a9c0d98a34a9689b9b6288a6507c0498b299d",
+      "bytes": 21667,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "numen-forge-1.20.1-0.1.4.1-all.jar",
+      "sha256": "28b94da62bec326b9216a1f345b71620a68000cde82ded44c1e27b4541aa9f8c",
+      "bytes": 4555907,
+      "source": "numen-quests-server-fix.json"
+    },
+    {
+      "filename": "ocs-1.0.jar",
+      "sha256": "64b6ce92b7718d7896a60bc1524c4ca25c34eb43d8d95b1c897a2a50a0fed402",
+      "bytes": 21636,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "OctoLib-FORGE-0.5.0.1+1.20.1.jar",
+      "sha256": "5bb146c691f2c5054752f006a61aab6335ecb1cd9718a9643733de5367971047",
+      "bytes": 424035,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "packetfixer-3.3.1-1.18-1.20.4-merged.jar",
+      "sha256": "4f641e4e204315a55b3f5a33e3039076ba08c95b68ac9280ea0081fb27470c13",
+      "bytes": 188673,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Patchouli-1.20.1-85-FORGE.jar",
+      "sha256": "05f7b5d52f6b8f0fd7f8b4822fa07a192d1394d83a264309c9d221d6d4fd21c5",
+      "bytes": 642732,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Pehkui-3.8.2+1.20.1-forge.jar",
+      "sha256": "54210f454c166f65a1bcbbfe4ea52e6f73e07844a793c7132f1af4076a0f42fc",
+      "bytes": 671605,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "photon-forge-1.20.1-1.1.17.jar",
+      "sha256": "3bd09a759744e9e3b3e7315eaafa9dcd27945ef13331148e8b8169950560e5fb",
+      "bytes": 5078005,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Placebo-1.20.1-8.6.3.jar",
+      "sha256": "1cdf906cfbcbb5e5be2ef1bb721f79a24b01bd2ac559c8cdbfb7693f62421571",
+      "bytes": 282474,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "player-animation-lib-forge-1.0.2-rc1+1.20.jar",
+      "sha256": "90d9965cb9efdbda29fdc5610be3914cf7008bf5c392ff34f7ab25f96a852691",
+      "bytes": 181437,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "polymorph-forge-0.49.10+1.20.1.jar",
+      "sha256": "cbe63a0a1cb6ae8dbc0e29bb96d149a137cd4e714b295fa49d230994091d157f",
+      "bytes": 299601,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "PuzzlesLib-v8.1.36-1.20.1-Forge.jar",
+      "sha256": "103f1d46c16023e346802a9b2024db885cf8dc3a43ee5106bcd5ed8165073efd",
+      "bytes": 1790007,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "repurposed_structures-7.1.25+1.20.1-forge.jar",
+      "sha256": "e252a6a5682ba9d2b362d81a429f7700bf79c7914adc51065af73cac9a581fcb",
+      "bytes": 8236925,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "resourcefulconfig-forge-1.20.1-2.1.3.jar",
+      "sha256": "c404b9e5cf8595427a72d4ca6ee5730289168762b463f169be3ae5dfe3727ded",
+      "bytes": 136923,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "resourcefullib-forge-1.20.1-2.1.29.jar",
+      "sha256": "b13afb95231d88e1caea5a045967e0fc291b29020b0d26ad39e6f9e9a551fee8",
+      "bytes": 432753,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "rhino-forge-2001.2.3-build.10.jar",
+      "sha256": "fed2211429301bf043864183cab9ab8e92d4cc4dbb9e488ce6c75217c54584a6",
+      "bytes": 1798244,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-arena-0.75.0.jar",
+      "sha256": "207cb4a58901370af2ebefc3b543de37ec1b566ca855c8f410ded853151e2dc0",
+      "bytes": 52287,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-boss-combat-1.20.1-1.1.0.jar",
+      "sha256": "ada5524e31978bc94b5a7059f22fc7f3783d55fbd6b744193c3dcf3fb9a5c4fb",
+      "bytes": 15308,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-boss-mechanics-0.75.0.jar",
+      "sha256": "5dcdd358e7356e96267184c11ef28a9475a4d0c6fbc8dbbe6d701ddb28b564fe",
+      "bytes": 13022,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-boss-retirement-1.20.1-1.0.0.jar",
+      "sha256": "b80f0fd3e465992fcda2050bb1fc8f0b642dea97da08661fb2b91f3e3b65d7d8",
+      "bytes": 11410,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-casting-vfx-1.20.1-1.0.0.jar",
+      "sha256": "a56f354f1fadf0aa87923dc6dff253ba9821af1814ade9588205f34b4eabc273",
+      "bytes": 221757,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-elemental-war-0.75.0.jar",
+      "sha256": "3f50d4c4ee8fda8cbf61a16c40c8179a104148a486277461f9871630b4695379",
+      "bytes": 20649,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-gameplay-fixes-1.20.1-1.0.0.jar",
+      "sha256": "25a8fce9dd7e86375c0890036875ae694f644920e24fbc64532256ee8d62eb33",
+      "bytes": 304966,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-misc073-1.20.1-1.0.0.jar",
+      "sha256": "fa47506dd795a438cac13198522065684c9d3d41dc42e94809d5231afed085a7",
+      "bytes": 6114,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-performance-0.75.0.jar",
+      "sha256": "1d0c4ede175c44e709db6b3865ecabf74a0335fd3f64c666b4214a357e9049e3",
+      "bytes": 12035,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-personal-hud-1.20.1-1.0.0.jar",
+      "sha256": "87a9db67a501628ae025ddfd8800f59fc10923ebfd91f9ca5ba201502bdc7025",
+      "bytes": 3995,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-player-trade-1.20.1-1.0.0.jar",
+      "sha256": "ac32dae399f4ce909b9ff8f736dbaa8d544a25ac09becd6af3f1418b2f18f8b6",
+      "bytes": 5669,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-points-0.75.2.jar",
+      "sha256": "f0b35f622ce95ace13011e26ad08172dc92cbff7ce7774b20492a1083b8ad701",
+      "bytes": 69692,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-talents-1.20.1-0.1.0.jar",
+      "sha256": "cd782845345a97bd71ada5b019beba4be723efeccf0b99fc5aa758a0e9e3b903",
+      "bytes": 34528,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao-ui-polish-1.20.1-1.0.0.jar",
+      "sha256": "09363ca3e4c3ba7fbe9b8a904eea8e4e7ab4b02cdc29c46f121984d2329ef1b4",
+      "bytes": 729303,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao_archer-0.5.1.jar",
+      "sha256": "c3e0e45709b1ac7a127e47422f965bac2a182b66ccefc326aed7930237e2ee9b",
+      "bytes": 110006,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao_battle_report-1.0.0.jar",
+      "sha256": "1c2c62b9b95cb4b8b695258094aa5bba72de41a06443ddd7ef98276558d3f6b9",
+      "bytes": 13200,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao_enchanter-0.74.0.jar",
+      "sha256": "3d9a080d916107ceaeff0f96120c564abee8bb71b6e78fe3d1e33d9808a48921",
+      "bytes": 19536,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao_interface_packui-0.76.1.jar",
+      "sha256": "d3aa99160a23e4d518e28841b6d23743844a4ee724c2f08b6c2984ac730da48d",
+      "bytes": 33828182,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao_models-1.0.0.jar",
+      "sha256": "0d9903728ff4dd7888cce85e430117a8a6675cf914aa82aa4f20b496bf5e720d",
+      "bytes": 4713913,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sao_rules074-0.75.0.jar",
+      "sha256": "fcca9d713c2fe94fe645a6d952abd5799d6c4562724907b265b13443ee2b79dc",
+      "bytes": 2230396,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "shipwreckfix-1.20.1-1.0-SNAPSHOT.jar",
+      "sha256": "aa56d9fdcc670fd250b47b27f60e811ec8ff302c4b10da00a5b43ec0055b21ca",
+      "bytes": 11848,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "simukraft-1.1.0-fix-v1-1.20.1.jar",
+      "sha256": "15299e97bb5a86bc13cc08348bd56f7ed4ac5083438b36b9c195e75128bfa0b3",
+      "bytes": 32274587,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "SlashBladeResharped-1.20.1-1.9.65.jar",
+      "sha256": "2a6eb8d2ead295cb3838b551b9f3cf0e81de97966dbc91b84cf2c7589f3a4361",
+      "bytes": 3852898,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "smsn-forge-1.3.6-1.20.1.jar",
+      "sha256": "25466c6570c2da75e4114e0940f37a6f16e665cf6f05e2e1b831cfc114263b8a",
+      "bytes": 121707,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sophisticatedbackpacks-1.20.1-3.26.9.2194.jar",
+      "sha256": "569187c5a2d9765cbdb621511d211cbac92b6b618a2413f5eaeaa4fb34c315f3",
+      "bytes": 1215727,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sophisticatedcore-1.20.1-1.5.6.2378.jar",
+      "sha256": "5a4826f73f3dd2a62c24ccda6784a6da756b001737d2e2f7805253dedb8408b9",
+      "bytes": 1758791,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "sophisticatedstorage-1.20.1-1.5.1.2158.jar",
+      "sha256": "52539640420de37680dce6850545723a2fd6bd3ccdfb633dbb179a075576ed7f",
+      "bytes": 1919182,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "spark-1.10.53-forge.jar",
+      "sha256": "eba275ba9bb0cb5b542913c3138c6eeff6a752898266d63d125d185f26ac99ed",
+      "bytes": 3114590,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "stalwart-dungeons-1.20.1-1.2.8.jar",
+      "sha256": "c0b967220e751629da248151a30d8d21f9cf3afc6c92da0aa8bd838a05f8fd7a",
+      "bytes": 1049721,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "structure_layout_optimizer-forge-1.0.11.jar",
+      "sha256": "14bfc4b1e82ea24118402fccd90dffde45fa6d9e2238bfaa19a43b3fb88ee49c",
+      "bytes": 246413,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "tacz-1.20.1-1.1.8-hotfix.jar",
+      "sha256": "9ed8ada1283ed7a793a70cc1b51c4a340f367ce84707e1a7b8cf21ee3d288d77",
+      "bytes": 57465167,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "tectonic-3.0.17-forge-1.20.1.jar",
+      "sha256": "c6de479b27cf090510de3f029918afc9fe17226981bd703e0002f7a25f4d8969",
+      "bytes": 322575,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "TerraBlender-forge-1.20.1-3.0.1.11.jar",
+      "sha256": "63da472e55998162159ef3038ee9561bf5c23a4430e4155301cbecbf65d1e80a",
+      "bytes": 107575,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "Terralith_1.20.x_v2.5.4.jar",
+      "sha256": "8f65f309d8f2723754bf4b60c7b5763d3ab6ed04b01c172109ba6564e981b95f",
+      "bytes": 3156901,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "thedawnera-1.20.1-0.642.jar",
+      "sha256": "296c4b1ebf55b23b28a65965816fb97d82b5009cdfe25645d3d62b818481107a",
+      "bytes": 6302911,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "torchmaster-20.1.9.jar",
+      "sha256": "7c8984a2dc11c29147d0677958e9146a18578068bc00fbfcb1cddbaa60557682",
+      "bytes": 119348,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "touhoulittlemaid-1.5.3-forge+mc1.20.1.jar",
+      "sha256": "8c341567e57aa3c006f9fa85c7a5e3bc36a53b1cca4e3538c3db705eeeea1bbc",
+      "bytes": 24413134,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "twilightfinalexpansion-1.3.0-forge-1.20.1.jar",
+      "sha256": "1d88b9d2991d3c17635749db7838606b735084034784794ee6b8953bafbb0395",
+      "bytes": 14144969,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "twilightforest-1.20.1-4.3.2508-universal.jar",
+      "sha256": "0bdc89263616d1b35c32ef82c5e9c14cbd20368e2fe8b468c72a28320be7a778",
+      "bytes": 23332091,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "ultimine_rewind-2.0.0.jar",
+      "sha256": "885a3695c072f0ee444b647ab66974be68acf72c5789fdb84977e62a7aa29156",
+      "bytes": 949838,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "vzling-0.98.7-1.20.1-forge.jar",
+      "sha256": "deec1c06b6fa19d23250a62403037880bf991c01ca94a17fe55e5c5f7e58ac44",
+      "bytes": 581320,
+      "source": "vzling-server-fix.json"
+    },
+    {
+      "filename": "waystones-forge-1.20.1-14.1.21.jar",
+      "sha256": "fd6fe3c645328ea7be5bc6723d02c881e34650e0cbd4527ba59e42fa4cbe3c80",
+      "bytes": 536782,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "worldedit-mod-7.2.15.jar",
+      "sha256": "17db6b3e94f52d25426684663e1e1846823cbb7907f1c365ac329e5bc7bfaf2c",
+      "bytes": 5825402,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsApi-1.20-Forge-4.0.6.jar",
+      "sha256": "101c30d01d0cf9d86190f578eb1e43bd06b64092e95662a00ef52946f472c7b1",
+      "bytes": 370524,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterDesertTemples-1.20-Forge-3.0.3.jar",
+      "sha256": "5a74294725232c665b908af6e25224d111550cf69d74613e415b9f48ff150d16",
+      "bytes": 918012,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterDungeons-1.20-Forge-4.0.4.jar",
+      "sha256": "93c24e4075c51da0866f3fc92322bdb60e590ac2cd78dce275460839c54c36f5",
+      "bytes": 792381,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterEndIsland-1.20-Forge-2.0.6.jar",
+      "sha256": "05c2f43a67116f0bbca32d903b55ce1655b9319ed6554080de02bd1d0c232a83",
+      "bytes": 387111,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterJungleTemples-1.20-Forge-2.0.5.jar",
+      "sha256": "728c0a807742356887edf7d4f736b3870b7c84007ec9c495c27da1dc0b61078d",
+      "bytes": 806652,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterMineshafts-1.20-Forge-4.0.4.jar",
+      "sha256": "6632e7bcc58325098e85bcb755483de7cb3af92a5ea548f3b5c0162cbf0dc1dc",
+      "bytes": 492998,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterNetherFortresses-1.20-Forge-2.0.6.jar",
+      "sha256": "12cffc99dccca69d294ba5bc39c331367794b339061572a6f3773620303a2f51",
+      "bytes": 619255,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterOceanMonuments-1.20-Forge-3.0.4.jar",
+      "sha256": "bea2640c4afeb5231362a756d886ca4f246c7951175c91348272b3ce5d483bae",
+      "bytes": 1033262,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterStrongholds-1.20-Forge-4.0.3.jar",
+      "sha256": "054b0a1be86510ed6bd05de66a29200f13f5603c0c9eb7e62074ddc3d19cb0e4",
+      "bytes": 473564,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBetterWitchHuts-1.20-Forge-3.0.3.jar",
+      "sha256": "24b3bdc844755e8a39571b5000d8dd829543f7b150d154016ccd926e47d06a71",
+      "bytes": 179190,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsBridges-1.20-Forge-4.0.3.jar",
+      "sha256": "728e49e81a088291c75835130f59357fe772d77c1f2de91c63872579d5485f6c",
+      "bytes": 136236,
+      "source": "author_pack_verified_original"
+    },
+    {
+      "filename": "YungsExtras-1.20-Forge-4.0.3.jar",
+      "sha256": "3def0d66debef6185df82f6b777ec382a59dc66da47c8f081e69cc059da1d98d",
+      "bytes": 200341,
+      "source": "author_pack_verified_original"
+    }
+  ],
+  "registry": {
+    "states": 261125,
+    "items": 12037,
+    "entities": 940
+  },
+  "verified": {
+    "numenOnline": true,
+    "numenOriginalBodyId": "d15ab346-35e2-4814-a1bf-1f0e3d88c011",
+    "numenPosition": {
+      "x": 3.539806347705196,
+      "y": 100.0,
+      "z": 0.5
+    },
+    "numenStopTerminal": true,
+    "mineflayerConnectedPlayerUuid": "dd36d8d2-da9b-39a6-b865-988af891cad9",
+    "numenClientAbsent": true,
+    "nativeOperationCount": 7,
+    "nativePotMenu": "farmersdelight:cooking_pot",
+    "nativeCarrotsBefore": 8,
+    "nativeCarrotsAfter": 8,
+    "walkBefore": {
+      "x": 0.5,
+      "y": 100,
+      "z": 0.5
+    },
+    "walkAfter": {
+      "x": 2.651729338673233,
+      "y": 100,
+      "z": 0.49999999999971245
+    },
+    "securityChecks": 7
+  },
+  "sourceTests": {
+    "newNode": 9,
+    "sharedNativeClient": 17,
+    "python": 2
+  },
+  "testReportSha256": {
+    "nodeJUnit": "8d5b15e0482ea2c4892645aa50472f0700e11317cebab271769ec7b5b2d4e121",
+    "pythonLog": "390de4340115a2e6b0bff546fedeab321d289085049da0835ff51d87eeb2476e"
+  },
+  "productionModified": false,
+  "publicAccessEnabled": false,
+  "allModsVerified": false,
+  "pending": [
+    "native_recipes_and_auto_craft",
+    "mod_mana_skills_and_cooldowns",
+    "full_combat_and_quest_coverage",
+    "java_full_ui",
+    "web_and_bedrock_rendering",
+    "remote_registry_distribution",
+    "long_run_chunk_save_stability"
+  ]
+}
