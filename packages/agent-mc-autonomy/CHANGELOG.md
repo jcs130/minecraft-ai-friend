@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.120
+
+- Compare optional producer-owned semantic fact digests without dropping raw sampled evidence. Unknown producers and invalid digests retain full-text comparison; native pending/unknown, connection scope and answer expiry are unchanged.
+- Pin the independently built core rc.121 from 4556b9ec with checked source/runtime/type receipts. Recovery-state sample time no longer invalidates an otherwise unchanged prior read. Native RPG and combat text without an explicit producer digest remains conservative.
+
 ## 0.2.118
 
 - Pin canonical core rc.118 from d4d294ac: reject repeated already-satisfied navigation within the existing stationary guard, without inventing tasks or cancelling native work. Keep the first truthful arrival receipt and allow a fresh check after movement or expiry.

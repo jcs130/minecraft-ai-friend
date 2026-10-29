@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+Version 0.2.120 uses a valid producer-owned `stateRevision` when comparing
+admission/read-reuse state. A sample clock alone no longer invalidates a dated
+answer when the producer explicitly declares unchanged semantic state. Facts
+without this optional contract, or with malformed metadata, still compare full
+text. Raw dated facts remain in model context and archives; scope, expiry,
+pending work and unknown-dispatch safeguards are unchanged. This does not prove
+a prior answer remains current or that a game goal has succeeded.
+
 Version 0.2.119 retains current native RPG state and observed combat capabilities
 ahead of optional bulk world detail in compact decision requests. These remain
 dated observations, not permission to use a skill or verified progression; the

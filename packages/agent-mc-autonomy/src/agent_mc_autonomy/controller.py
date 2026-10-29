@@ -138,7 +138,16 @@ def fact_fingerprint(facts):
 def admission_fingerprint(facts):
     # Re-reading clocks is not new evidence that a rejected recipe/plan works.
     # Expiry below still permits checking server-side changes not in these facts.
-    parts = [(p["key"], p["text"]) for p in facts.get("parts", [])
+    def state(part):
+        revision = part.get("stateRevision")
+        # Producers explicitly distinguish semantic state from sample metadata.
+        # Unknown/malformed metadata stays conservative; do not strip text fields
+        # or infer timestamp semantics here. Raw facts remain dated evidence.
+        if isinstance(revision, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", revision):
+            return ["stateRevision", revision]
+        return part["text"]
+
+    parts = [(p["key"], state(p)) for p in facts.get("parts", [])
              if p["key"] not in {"sample", "realclock", "clock", "lastTask"}]
     return encode(parts) if parts else None
 
