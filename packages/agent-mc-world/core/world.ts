@@ -4592,14 +4592,18 @@ export class MinecraftWorld implements World {
       send();
       const message = chatDeliveryMessage(text);
       if (!message) return;
+      const audience = message.channel === 'public' ? this.extensionChatAudience(text) : undefined;
       delivery = { protocol: 'agent-mc/chat-delivery/v1', id: `${this.executionEpoch}:chat:${++this.chatDeliverySequence}`,
         status: 'sent', sentAt: new Date().toISOString(), ...message, boundary: 'client-transport', recipientRead: 'unknown',
+        ...(audience ? { audience } : {}),
         ...(context?.callId ? { callId: context.callId } : {}),
         ...(context?.taskId !== undefined ? { taskExecutionId: `${this.executionEpoch}:${context.taskId}` } : {}),
         ...(context?.stepIndex !== undefined ? { stepIndex: context.stepIndex } : {}) };
-      this.emit('minecraft.chat.sent', `已向${message.to ? `玩家 ${message.to}` : '游戏公屏'}发送一条逻辑消息；仅确认客户端传输，不证明对方已读。`, false,
+      const target = message.to ? `玩家 ${message.to}` : audience?.channel === 'nearby' ? '附近聊天频道'
+        : audience?.channel === 'shout' ? '全服喊话频道' : '服务器默认聊天频道';
+      this.emit('minecraft.chat.sent', `已向${target}发送一条逻辑消息；仅确认客户端传输，不证明任何收件人收到或已读。`, false,
         { trigger: 'piggyback', meta: { outgoing: true, direction: 'outgoing', channel: message.channel,
-          socialScope: 'minecraft-server', chatDelivery: delivery } }, this.chatName());
+          socialScope: 'minecraft-server', chatDelivery: delivery, ...this.chatAudienceMeta(audience) } }, this.chatName());
     }); }
     catch (error) {
       if (mutates) {
@@ -4664,6 +4668,12 @@ export class MinecraftWorld implements World {
   protected extensionMessage(_text: string): boolean { return false; }
   /** Server-position feedback after player/private chat provenance exclusions. */
   protected extensionServerFeedback(_text: string): void {}
+  /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
+  protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
+  private chatAudienceMeta(audience: import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined): Record<string, unknown> {
+    return audience ? { chatChannel: audience.channel, chatScope: audience.scope, chatRoutingSource: audience.source,
+      ...(audience.radius === undefined ? {} : { chatRadius: audience.radius }), ...(audience.observedAt ? { chatPolicyObservedAt: audience.observedAt } : {}) } : {};
+  }
   protected extensionImportantMessage(_text: string): boolean { return false; }
   protected attachExtension(_bot: Bot): void {}
   protected disposeExtension(): void {}
@@ -7485,8 +7495,7 @@ export class MinecraftWorld implements World {
     const mentionedInChat = (message: string): boolean => {
       const lower = message.toLocaleLowerCase();
       return lower.includes(this.chatName().toLocaleLowerCase())
-        || lower.includes(this.botName.toLocaleLowerCase())
-        || lower.includes('corti') || message.includes('可缇');
+        || lower.includes(this.botName.toLocaleLowerCase());
     };
     const markMatched = (jsonMsg: unknown): boolean => {
       if (!jsonMsg || typeof jsonMsg !== 'object') return false;
@@ -7499,15 +7508,20 @@ export class MinecraftWorld implements World {
       if (!identity) return;
       if (markMatched(jsonMsg)) return;
       if (jsonMsg && typeof jsonMsg === 'object') this.chatClaimed.add(jsonMsg);
+      const decorated = chatProvenance.publicChat(jsonMsg as Parameters<typeof chatProvenance.publicChat>[0], bot.players, bot.registry)?.serverRenderedText;
+      const audience = this.extensionChatAudience(message, decorated, 'incoming');
       if (username === this.chatName()) {
         // 自己说的话:落库存档,但不投递——拿自己的话叫醒自己没有意义
-        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false });
+        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false,
+          meta: { uname: username, channel: 'public', outgoing: true, direction: 'outgoing', ...identity,
+            ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
         return;
       }
       noteChatInput(bot, username, false);
       this.interruptIdle('chat');
       this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentionedInChat(message),
-        { meta: { uname: username, socialScope: 'minecraft-server', ...identity } }, username);
+        { meta: { uname: username, channel: 'public', socialScope: 'minecraft-server', ...identity,
+          ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
     });
     // Private identity is parsed from the raw component below. Mineflayer's
     // default whisper regex can mistake a rank/tag (or a public quote) for a
@@ -7555,11 +7569,12 @@ export class MinecraftWorld implements World {
       if (publicChat) {
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
         const { username, message, identity, serverRenderedText } = publicChat;
+        const audience = this.extensionChatAudience(message, serverRenderedText, 'incoming');
         const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
         if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
         this.emit('minecraft.chat', `[MC] ${username}: ${message}`, !fromSelf && mentionedInChat(message),
           { ...(fromSelf ? { deliver: false } : {}), meta: { uname: username, channel: 'public',
-            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}),
+            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}), ...this.chatAudienceMeta(audience),
             ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
         return;
       }

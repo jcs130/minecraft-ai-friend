@@ -11,6 +11,21 @@ it('separates public/vanilla private messages from commands and authentication',
     expect(chatDeliveryMessage(command)).toBeNull();
 });
 
+it('keeps an unknown server default unknown and publishes adapter routing evidence without widening the send', async()=>{
+  const r=methodHarness('1.21.1');
+  try{
+    const tool=r.world.tools().find(t=>t.name==='mc_do')!;
+    await tool.handler({steps:[{skill:'chat',text:'hello'}]},{role:'test',log:r.host.log});
+    const unknown=r.host.events.find(e=>e.type==='minecraft.chat.sent')!;
+    expect(unknown.text).toContain('服务器默认聊天频道');expect(unknown.meta?.chatDelivery).not.toHaveProperty('audience');
+    Object.assign(r.world,{extensionChatAudience:()=>({channel:'nearby',scope:'same-world-range',radius:48,source:'server-policy'})});
+    const result=await tool.handler({steps:[{skill:'chat',text:'@Alex hello'}]},{role:'test',log:r.host.log});
+    expect(result).toMatchObject({meta:{chatDelivery:{text:'@Alex hello',audience:{channel:'nearby',radius:48}}}});
+    expect(r.said).toEqual(['hello','@Alex hello']);
+    expect(r.host.events.filter(e=>e.type==='minecraft.chat.sent').at(-1)?.meta).toMatchObject({chatChannel:'nearby',chatRadius:48});
+  }finally{r.close();}
+});
+
 it('returns and emits one logical-send receipt only after the chat transport call succeeds', async () => {
   const r = methodHarness('1.21.1');
   try {
