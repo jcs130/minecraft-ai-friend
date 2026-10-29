@@ -293,6 +293,9 @@ export class Bridge {
 
   protected createProtectionPort(_bot: mineflayer.Bot, _reply: (reply: ProtectReply) => void): BlockProtectionPort | null { return null; }
   protected attachServerProtocols(_bot: mineflayer.Bot, _generation: number): void {}
+  /** Explicit transport extension. Must return one fresh body synchronously;
+   * lifecycle, ownership, cancellation and reconnect remain owned by this bridge. */
+  protected createBot(options: mineflayer.BotOptions): mineflayer.Bot { return mineflayer.createBot(options); }
   protected viewerServerProtocol(): import('./viewer-extension.ts').ViewerServerProtocol | undefined { return undefined; }
   constructor(protected readonly opts: BridgeOptions) {
     this.protection = new BreakPermissions(opts.protectionFile ?? null, `${opts.host}:${opts.port}`);
@@ -559,7 +562,7 @@ export class Bridge {
     }
     let bot: mineflayer.Bot;
     try {
-      bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
+      bot = this.createBot({ host, port, username, version: protocolVersion(version) || undefined,
         ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
         checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
         ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
