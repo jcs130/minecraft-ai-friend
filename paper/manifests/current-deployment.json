@@ -189,18 +189,33 @@
     "auditedAt": "2026-10-29T21:04:28+08:00",
     "document": "docs/PROJECT_STATUS.md",
     "manifest": "paper/manifests/release-readiness-20261029.json",
-    "pendingItems": 22,
-    "productionCodeChanged": false,
-    "servicesRestarted": false,
-    "sourceReconciledAt": "2026-10-29T13:09:56.439Z"
+    "pendingItems": 19,
+    "productionCodeChanged": true,
+    "servicesRestarted": true,
+    "sourceReconciledAt": "2026-10-29T13:09:56.439Z",
+    "updatedAt": "2026-10-29T22:24:04+08:00",
+    "deployedFromAudit": 3
   },
   "distribution": {
     "coreSource": "0.5.7-rc.130",
-    "publicSkill": "1.3.3",
-    "publicSkillCore": "0.5.7-rc.95",
-    "harnessBodyCore": "0.5.7-rc.95",
-    "website": "0.8.28",
-    "photoLibraryCandidate": "0.8.29",
-    "npmSourceCorePublished": false
+    "publicSkill": "1.3.4",
+    "publicSkillCore": "0.5.7-rc.130",
+    "harnessBodyCore": "0.5.7-rc.130",
+    "website": "0.8.29",
+    "photoLibraryCandidate": null,
+    "npmSourceCorePublished": false,
+    "verifiedAt": "2026-10-29T22:24:04+08:00",
+    "manifest": "paper/manifests/all-features-release-20261029.json"
+  },
+  "websiteRelease": {
+    "release": "all-features-release-20261029-r1",
+    "version": "0.8.29",
+    "verifiedAt": "2026-10-29T22:24:04+08:00",
+    "photosStored": 29,
+    "publicPhotos": 3,
+    "privatePhotos": 26,
+    "protectedTables": 17,
+    "gameRestarted": false,
+    "document": "paper/docs/ALL_FEATURES_RELEASE_20261029.md"
   }
 }

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "auditedAt": "2026-10-29T21:04:28+08:00",
-  "state": "read-only-audit-recorded",
+  "state": "first-batch-deployed",
   "sourceCommitBeforeAudit": "c7da224a92146389ff0ca6e9685406f89d8a5532",
-  "scope": "Runtime versions, public website API, installed Harness package, live configuration, immutable release receipts and all 162 manifest JSON files; no new gameplay, client GUI or human listening acceptance.",
-  "productionCodeChanged": false,
-  "servicesRestarted": false,
+  "scope": "Current rollout ledger; first website/Skill/Harness batch verified, other implementation or real-client acceptance remains separate.",
+  "productionCodeChanged": true,
+  "servicesRestarted": true,
   "observed": {
-    "website": "0.8.28",
+    "website": "0.8.29",
     "AgentFriend": "0.4.47.30-vortex",
     "QiandengjiRpg": "0.2.10",
     "WorldObserver": "0.1.1",
@@ -15,9 +15,9 @@
     "Freesia": "2.5.1+2.4.1.af5",
     "bedrockAppearance": "0.1.0",
     "coreSource": "0.5.7-rc.130",
-    "publicSkill": "1.3.3",
-    "publicSkillCore": "0.5.7-rc.95",
-    "harnessBodyCore": "0.5.7-rc.95",
+    "publicSkill": "1.3.4",
+    "publicSkillCore": "0.5.7-rc.130",
+    "harnessBodyCore": "0.5.7-rc.130",
     "photoCandidates": 29,
     "publicGallery": 3,
     "privatePhotos": 26,
@@ -29,7 +29,8 @@
     "networkServerDirectoryStatus": 404,
     "activeStorage": "NVMe",
     "completeBackupMarkersPerDisk": 8,
-    "npmSourceCorePublished": false
+    "npmSourceCorePublished": false,
+    "cloudPhotos": 29
   },
   "manifestInventory": {
     "filesScanned": 162,
@@ -40,34 +41,36 @@
   "items": [
     {
       "id": "photo-library",
-      "state": "candidate_needs_refresh",
+      "state": "deployed",
       "title": "所有照片上传、本人/管理员决定公开",
       "priority": "P1",
-      "current": "官网实测0.8.28，仍仅3张公开照片；本地29张原片含26张未公开。0.8.29已隔离验证，未切换。",
-      "nextAction": "在当前官网/采集器上重封候选并回归；先云端后家庭端，核对29张入库、游客仍只见3张及真实账号公开/撤展。",
+      "current": "官网0.8.29和家庭采集器已切换，29张原片/归属实收，3公开/26私有，原账号与内容保持。",
+      "nextAction": "真实主人在正式管理页公开/撤展，补录人工验收；隔离权限及持久化测试已通过。",
       "evidence": [
-        "paper/docs/PHOTO_LIBRARY_20261029.md"
+        "paper/docs/PHOTO_LIBRARY_20261029.md",
+        "paper/docs/ALL_FEATURES_RELEASE_20261029.md"
       ]
     },
     {
       "id": "skill-core-distribution",
-      "state": "distribution_pending",
+      "state": "deployed",
       "title": "官网Skill跟进MC核心rc.130",
       "priority": "P1",
-      "current": "main已到0.5.7-rc.130；官网Skill1.3.3仍锁rc.95。npm指定rc.130查询404。源码完成不等于已发包。",
-      "nextAction": "用已核验产物更新Skill依赖、文档、SHA256和下载；隔离安装/MCP/真实授权与世界切换验收后发布，不静默替换用户宿主。",
+      "current": "Skill1.3.4内置固定源码构建core rc.130；161文件及隔离安装/MCP通过，官网307直达已校验OSS。npm上游rc.130仍未发布。",
+      "nextAction": "已有用户主动更新后独立联测；不把包发布当作所有宿主已自动更新。",
       "evidence": [
         "packages/agent-mc-world/docs/world-identity.md",
-        "paper/integrations/agent-portal/public/downloads/qiandengji-agent-1.3.3.json"
+        "paper/integrations/agent-portal/public/downloads/qiandengji-agent-1.3.3.json",
+        "paper/integrations/agent-portal/public/downloads/qiandengji-agent-1.3.4.json"
       ]
     },
     {
       "id": "harness-body-core",
-      "state": "distribution_pending",
+      "state": "deployed",
       "title": "本机Harness身体内置核心更新",
       "priority": "P1",
-      "current": "实际node_modules仍0.5.7-rc.95，原Python控制器0.1.27保持。",
-      "nextAction": "独立更新并验收原身体/MCP；保留账号、模型、记忆、原控制器和旧未知动作，不借此新建Agent循环。",
+      "current": "本机body已从rc.95更新rc.130，原Python0.1.27/模型/身份/记忆保持；实际安装目录MCP40工具、8项断线边界调用通过。",
+      "nextAction": "真实模型游戏任务独立验收；本批没有启动或替换原Agent循环。",
       "evidence": [
         "paper/docs/AGENT_COMPONENT_AUDIT_20261026.md"
       ]
@@ -121,11 +124,11 @@
     },
     {
       "id": "native-camera",
-      "state": "blocked_hardware",
+      "state": "investigation_in_progress",
       "title": "核显原生高画质女神相机",
       "priority": "P2",
-      "current": "原生客户端已准备；Intel未接显示输出，实际渲染曾落独显，Mesa/Zink加YSM报err54，生产仍网页相机。",
-      "nextAction": "主板视频输出连接显示器/适配器后验证Intel真实渲染器、YSM及光影成片，再合并当前Paper和官网8MiB配套。",
+      "current": "物理显示器不是前提；已探测现有虚拟显示与WSLg，尚未获得Intel硬件上下文，surfaceless仅llvmpipe。官网8MiB配套已上线，生产仍网页相机。",
+      "nextAction": "继续排查WSLg/D3D12或虚拟显示的真实Intel渲染，再验收YSM＋光影；不要求用户连接物理显示器。",
       "evidence": [
         "paper/docs/NATIVE_GODDESS_CAMERA.md"
       ]
@@ -375,5 +378,55 @@
     "world-stories"
   ],
   "sourceReconciledDuringAudit": "bd7d1845",
-  "sourceReconciledAt": "2026-10-29T13:09:56.439Z"
+  "sourceReconciledAt": "2026-10-29T13:09:56.439Z",
+  "initialReadOnlyAudit": {
+    "auditedAt": "2026-10-29T21:04:28+08:00",
+    "state": "read-only-audit-recorded",
+    "observed": {
+      "website": "0.8.28",
+      "AgentFriend": "0.4.47.30-vortex",
+      "QiandengjiRpg": "0.2.10",
+      "WorldObserver": "0.1.1",
+      "MultiverseCore": "5.8.1",
+      "Freesia": "2.5.1+2.4.1.af5",
+      "bedrockAppearance": "0.1.0",
+      "coreSource": "0.5.7-rc.130",
+      "publicSkill": "1.3.3",
+      "publicSkillCore": "0.5.7-rc.95",
+      "harnessBodyCore": "0.5.7-rc.95",
+      "photoCandidates": 29,
+      "publicGallery": 3,
+      "privatePhotos": 26,
+      "localArchiveEvents": 129,
+      "publicBooksAndNotices": 0,
+      "websiteMemories": 4,
+      "archiveDesks": 0,
+      "playerClassSwap": false,
+      "networkServerDirectoryStatus": 404,
+      "activeStorage": "NVMe",
+      "completeBackupMarkersPerDisk": 8,
+      "npmSourceCorePublished": false
+    },
+    "productionCodeChanged": false,
+    "servicesRestarted": false
+  },
+  "updatedAt": "2026-10-29T22:24:04+08:00",
+  "releaseManifest": "paper/manifests/all-features-release-20261029.json",
+  "rolloutSummary": {
+    "deployedItems": 3,
+    "remainingItems": 19,
+    "states": {
+      "deployed": 3,
+      "distribution_pending": 1,
+      "consumer_adaptation_pending": 1,
+      "candidate_needs_refresh": 4,
+      "deployment_pending": 1,
+      "investigation_in_progress": 1,
+      "acceptance_pending": 3,
+      "implementation_incomplete": 5,
+      "operations_not_accepted": 1,
+      "evaluation_pending": 1,
+      "deferred_by_owner": 1
+    }
+  }
 }

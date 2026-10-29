@@ -1,6 +1,6 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.30、QiandengjiRpg0.2.10、VortexRPG1.2.2-alpha-qd29已上线，32项正式核对通过。官网0.8.28及匹配观战后台已更新，34项正式、8项四角色现场与4项真实游客观战检查通过；语音服务端、自启和公网UDP已验收，真人耳听仍待验证。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布与状态](paper/docs/RPG_INTERACTION_20261029.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.130，源码更新不代表外部客户端已升级。照片全量管理0.8.29仍为候选；罗盘修复已随.30合入。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.30、QiandengjiRpg0.2.10、VortexRPG1.2.2-alpha-qd29已上线，32项正式核对通过。官网0.8.29及匹配观战后台已更新，34项正式、8项四角色现场与4项真实游客观战检查通过；语音服务端、自启和公网UDP已验收，真人耳听仍待验证。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布与状态](paper/docs/RPG_INTERACTION_20261029.md)。Skill1.3.4和本机Harness身体已跟进MC核心rc.130；官网已保存29张照片，由所属用户/管理员管理公开，游客目前可见3张。下载直达OSS，外部客户端需主动更新。[本批发布](paper/docs/ALL_FEATURES_RELEASE_20261029.md)；罗盘修复已随.30合入。
 
 运维状态：[NVMe迁移](paper/docs/NVME_RUNTIME_20261029.md)已完成，原E盘入口联接到C盘NVMe，原目录保留。本轮E/F完整恢复点已冷刷新最新游戏与认证；两次失败尝试的前像和回执保留，新版游戏端已实际运行，后台收尾不需再停Paper。
 

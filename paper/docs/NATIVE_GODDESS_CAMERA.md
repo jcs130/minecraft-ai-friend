@@ -18,13 +18,15 @@
 - 原YSM2.4.1、Iris1.8.8、Sodium0.6.13、ForgeConfigAPIPort21.1.6；候选光影MakeUp UltraFast9.6。
 - 独立 `goddess-camera-java`，相机专用GPU偏好；不更改共享服务器Java或两张推理显卡的设置。
 - 1536×1536、视距6、帧率上限30、FOV70；隐藏HUD，创建后台窗口。需要有图形环境的登录会话和有效OpenGL上下文，不是 `java.awt.headless=true` 或SYSTEM Session0渲染。
-- 官网原图预算由2 MiB改为与相机一致的8 MiB，仍限4096尺寸、SHA256和已发布目录；目录分页不携带像素。此官网配套源码未发布。
+- 官网原图预算由2 MiB改为与相机一致的8 MiB，仍限4096尺寸和SHA256；目录分页不携带像素。此配套已随官网0.8.29发布，未公开原片由本人或管理员管理。
 
-## 本机实际阻塞
+## 无物理显示器方案与本机实测
 
-Intel UHD770驱动存在，但没有连接显示器。给专用Java设置 Windows 节能GPU偏好后，实际 `GL_RENDERER` 仍为RTX PRO5000；相机按Intel硬门禁停止。这里不能仅凭显卡清单声称在用核显。
+物理显示器不是硬性前提。服主明确要求无需连接显示器；后续使用虚拟显示或离屏上下文验证，不再把插主板视频线作为操作前置。当前机器已有GameViewer虚拟显示驱动、WSL2 Ubuntu24.04及WSLg，尚未新增驱动或修改全局GPU设置。
 
-另试过仅装入专用相机目录的 Mesa/Zink，并用进程环境只枚举Intel Vulkan ICD；YSM原版2.4.1初始化抛 `RuntimeException: err: 54`，没有产生合格截图。具体内部原因尚未确认，未修改或绕过YSM原生模块。实验DLL已在相机私有运行时禁用，没有安装系统驱动或改全局OpenGL。需要主板视频输出连接显示器／HDMI欺骗器后，继续实测原生Intel WGL；这一步已询问服主，尚待操作。
+此前给专用Java设置Windows节能GPU偏好，实际 `GL_RENDERER` 仍为RTX PRO5000，相机按Intel门禁停止。私有Mesa/Zink加Intel Vulkan ICD时，YSM2.4.1初始化抛 `RuntimeException: err: 54`；原因未确认，实验DLL已在专用目录禁用，没有修改或绕过YSM原生模块。
+
+本轮另以进程环境 `MESA_D3D12_DEFAULT_ADAPTER_NAME=Intel` 探测现有WSLg。GLX尚未取得可用上下文，surfaceless EGL报告llvmpipe软件渲染，不能算核显成功。这里只在私有目录解包mesa-utils诊断程序，没有升级WSL、重启推理服务或更改驱动。下一步排查WSLg显示服务与D3D12适配器，再做真实Intel＋YSM＋光影成片验收；现役网页相机继续服务。
 
 ## 准备与使用
 
@@ -53,4 +55,4 @@ python paper/integrations/native-camera/launch.py --game <相机游戏目录> --
 
 当前9项相机／原质量检查及8项相册测试通过；相机客户端、可选Paper分支对实际依赖编译通过。测试握手使用夹具，不冒称已经真实渲染。启用时需同时部署相机模块、Paper可选镜头配置和官网8 MiB配套版本；不可只覆盖单个JS文件。
 
-参考：[GLFW窗口上下文](https://www.glfw.org/docs/latest/window_guide.html)、[NVIDIA显示器与GPU选择说明](https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/3D%20Settings/Manage_3D_Settings_%28reference%29.htm)、[Mesa设备选择](https://docs.mesa3d.org/envvars.html)。
+参考：[GLFW窗口上下文](https://www.glfw.org/docs/latest/window_guide.html)、[WSLg官方GPU选择](https://github.com/microsoft/wslg/wiki/GPU-selection-in-WSLg)、[Mesa D3D12驱动](https://docs.mesa3d.org/drivers/d3d12.html)。

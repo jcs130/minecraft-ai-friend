@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "state": "first-batch-deployed-and-verified",
+  "verifiedAt": "2026-10-29T22:24:04+08:00",
+  "authorization": "都上线吧",
+  "sourceCommit": "dcbea256d743757ebc9b9a58f11e87edb1b32322",
+  "website": {
+    "version": "0.8.29",
+    "image": "qiandengji-portal:0.8.29-all-c8cdd4c098fb",
+    "imageId": "sha256:cd95271ceb52a6a8d93711bc6dc1490839dfa605c3600e301eca687516beab99",
+    "linuxTestPasses": 347,
+    "protectedTables": 17,
+    "photosStored": 29,
+    "publicPhotos": 3,
+    "privatePhotos": 26,
+    "allPhotoOwnershipKnown": true,
+    "homePublisherVersion": "0.8.29",
+    "gameAccountBridgeReady": true
+  },
+  "skill": {
+    "version": "1.3.4",
+    "coreVersion": "0.5.7-rc.130",
+    "sha256": "44117277f1fa41209be05fd01f1dc9c99d92dbaead2943121d8184b593a7b235",
+    "bytes": 4283990,
+    "url": "https://mc.kangqiang.site/downloads/agent-skill",
+    "downloadStorage": "OSS",
+    "websiteResponse": 307,
+    "bundleFileChecks": 161,
+    "isolatedInstallPassed": true,
+    "packedMcpVerified": true,
+    "canonicalNpmReleasePublished": false
+  },
+  "harness": {
+    "bodyCoreBefore": "0.5.7-rc.95",
+    "bodyCoreAfter": "0.5.7-rc.130",
+    "controllerVersion": "0.1.27",
+    "profileUnchanged": true,
+    "plannerChanged": false,
+    "actualInstalledBodyMcpTools": 40,
+    "boundaryCalls": 8,
+    "gameConnectedInThisRelease": false,
+    "modelCalledInThisRelease": false
+  },
+  "coreBuild": {
+    "sourceCommit": "bca0abf761625b6109e692f4d864cfae85dd6810",
+    "version": "0.5.7-rc.130",
+    "headlessTgzSha256": "d1a23298aebb5b17f471e3eed8a3be8b79bd9478a2400f8daa4dc12ec9ce0d43",
+    "testPasses": 2549,
+    "testFailures": 0,
+    "conditionalPending": 7,
+    "jdk": 21
+  },
+  "preservation": {
+    "paperRestarted": false,
+    "loginProxyRestarted": false,
+    "independentAccountPublisherRestarted": false,
+    "nearbyDialogueModuleUnchanged": true,
+    "oldDownloadPackagesKept": true,
+    "latestDatabaseKept": true,
+    "owners": 13,
+    "ownerships": 23,
+    "credentials": 1,
+    "memories": 4
+  },
+  "evidence": "Private E/F repairs/all-features-release-20261029-r1; cloud deployment-transaction-r2 and postflight receipts",
+  "releaseDocument": "paper/docs/ALL_FEATURES_RELEASE_20261029.md",
+  "allBacklogItemsComplete": false,
+  "stillRequiresAcceptance": [
+    "Real owner production photo publication/withdrawal",
+    "Clients consuming the new chat/world/voice capabilities",
+    "Real model task on the updated Harness body",
+    "Native Intel/YSM/shader camera"
+  ],
+  "storage": {
+    "publicArtifacts": "Existing OSS releases/<sha256>/<filename>",
+    "privateArchives": "Private ACL and AES256 server-side encryption; separate from public download routes",
+    "historicalArchiveOffload": "in-progress",
+    "currentQaImageAndSourceTarRemoved": true
+  }
+}
