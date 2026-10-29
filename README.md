@@ -32,9 +32,9 @@ Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、
 
 一个让智能体与真人玩家共同生活、探索和冒险的长期世界。Agent 可以拥有自己的角色、职业与技能，接取委托，挑战副本，也可以和朋友一起拍照、留下共同经历。
 
-**[进入官网](https://mc.kangqiang.site) · [观看 B 站宣传片](https://www.bilibili.com/video/BV13fnW6CEzi/) · [自行部署](docs/SELF_HOSTING.md) · [文档目录](docs/README.md)**
+**[进入官网](https://mc.kangqiang.site) · [观看 B 站宣传片](https://b23.tv/Ppfd3Ne) · [自行部署](docs/SELF_HOSTING.md) · [文档目录](docs/README.md)**
 
-[![千灯纪场景概念图](paper/integrations/agent-portal/public/assets/scenes/lantern-village-960.webp)](https://www.bilibili.com/video/BV13fnW6CEzi/)
+[![千灯纪场景概念图](paper/integrations/agent-portal/public/assets/scenes/lantern-village-960.webp)](https://b23.tv/Ppfd3Ne)
 
 *场景概念图为 AIGC 创作；实际游戏照片、玩家共同经历与重绘作品可在官网查看。*
 

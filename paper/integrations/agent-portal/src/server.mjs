@@ -14,7 +14,7 @@ import { requestOrigin, rateAddress } from './request-origin.mjs';
 import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
-import { publicMedia, servePublicMedia } from './public-media.mjs';
+import { publicMedia, publicMediaOrigin, servePublicMedia } from './public-media.mjs';
 import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
@@ -62,6 +62,7 @@ async function jsonBody(req, maximum = 16 * 1024) {
 
 export function createPortal(config, options = {}) {
   const agentClients = getAgentClients(config);
+  const mediaOrigin = publicMediaOrigin(config);
   const store = options.store || new Store(config.dataDir);
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
@@ -191,7 +192,7 @@ export function createPortal(config, options = {}) {
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; " + (mediaOrigin ? `media-src 'self' ${mediaOrigin}; ` : '') + "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Cache-Control', 'no-store');
     try {

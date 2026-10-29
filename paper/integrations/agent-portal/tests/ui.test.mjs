@@ -15,6 +15,16 @@ const fixtureBase = path.resolve(projectRoot, '.local', 'tests');
 const playerUuid = '11111111-1111-3111-8111-111111111111';
 const password = 'ui-isolated-password-2026';
 
+test('the latest Bilibili promotional link replaces the old local video without loading a third-party player', async t => {
+  const ui = await screen(t, { initialView: 'home', media: { video: 'old-intro.mp4', videoLink: 'https://b23.tv/Ppfd3Ne', videoTitle: '<script>一起自由冒险</script>', poster: 'poster.jpg' } });
+  const link = ui.document.querySelector('.home-film-link');
+  assert.ok(link); assert.equal(link.href, 'https://b23.tv/Ppfd3Ne');
+  assert.equal(link.target, '_blank'); assert.match(link.rel, /noopener/); assert.match(link.rel, /noreferrer/);
+  assert.match(link.textContent, /一起自由冒险/); assert.equal(link.querySelector('script'), null);
+  assert.equal(ui.document.querySelector('.home-film video'), null);
+  assert.equal(ui.document.querySelector('.home-film iframe'), null);
+});
+
 test('photo management previews private originals, toggles publication and clears private content on logout',async t=>{
   const ui=await screen(t);await ui.setup();
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=','base64');
