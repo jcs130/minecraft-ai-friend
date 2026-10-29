@@ -27,6 +27,9 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     import * as stdio from '../dist/types/src/mcp/stdio.js';
     import {createRelay} from '../dist/types/bridges/performance/relay.mjs';
     import * as extension from '../dist/types/src/extension.js';
+    const selectedAttack: extension.SkillCall = {skill:'attack',target:'zombie',entityId:42,mode:'auto'};
+    const selectedSteps = extension.parseSteps([selectedAttack]);
+    void selectedSteps;
     import { readMinecraftKnowledge, KNOWLEDGE_TOOL, withFactState, type FactState } from '../dist/types/src/client/index.js';
     import type { FactPart } from '../dist/types/src/contracts/index.js';
     const semantic: FactState = { position: [1,64,2], mana: null, lastCastAt: 'dated' };

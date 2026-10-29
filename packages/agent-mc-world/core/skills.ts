@@ -131,7 +131,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'brew'; at?: Anchor; input: string; bottle: string; count: number; fuel: string }
   | { skill: 'enchant'; at: Anchor; item: string; index?: number }
   | { skill: 'eat'; item: string }
-  | { skill: 'attack'; target: string; mode?: AttackMode }
+  | { skill: 'attack'; target: string; entityId?: number; mode?: AttackMode }
   | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; target?: string; pick?: string }
@@ -851,6 +851,17 @@ const ANVIL_NAME_MAX = 50;
  */
 const PICK_DOC = '同 id 的几件里挑哪一件:写清单括号里的字(「无限」「效率IV」,英文附魔 id 也认);'
   + '不写 = 撞上哪件算哪件。按内容匹配,不是序号,存掉一件不影响其余几件怎么写';
+
+/** 精确攻击沿用 use/ride 的类型或玩家名 + 本连接 ID；省略 ID 不默认选 0。 */
+function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
+  if (c.entityId !== undefined && (typeof c.entityId !== 'number' || !Number.isSafeInteger(c.entityId)
+      || c.entityId < 0 || c.entityId > 2_147_483_647)) {
+    return { error: `${at} attack 的 entityId 要是本连接里观察到的非负整数实体 ID；target 仍填实体英文类型或玩家名` };
+  }
+  const parsed = parseByFields(SKILL_INDEX.get('attack')!, c, at);
+  if ('step' in parsed && c.entityId === undefined) delete (parsed.step as Extract<SkillCall, { skill: 'attack' }>).entityId;
+  return parsed;
+}
 
 /** 骑乘:off / target / to 三个入参的横向规则都在这儿说清,不静默吃字段。 */
 function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
@@ -1750,12 +1761,16 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'attack',
     doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断可用近战武器或弓箭(8 格切弓、5.5 格切回近战)，两者都不可用时明确受阻，不降级为空手;
+{"skill":"attack","target":"zombie","entityId":42} 精确指定现场观察到的这一只；target 是英文类型或玩家名，编号另填 entityId，不把 "42" 写成 target。
+                                                 ID 只在当前连接有效；失效、类型不符或被遮挡时不改打附近同类，重新观察。
                                                  melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
                                                  ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
                                                  auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。
                                                  end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
+    parse: parseAttack,
     fields: [
-      { key: 'target', kind: 'string', required: true, hint: '实体英文 id 或玩家名' },
+      { key: 'target', kind: 'string', required: true, hint: '实体英文类型或玩家名；数字实体编号另填 entityId' },
+      { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；与 target 一起精确指定本连接观察到的实体 ID；省略时选最近同类，指定后不改选其他实体' },
       {
         key: 'mode', kind: 'enum', values: ['auto', 'melee', 'ranged', 'kite'],
         error: 'attack 的 mode 只认 auto/melee/ranged/kite',

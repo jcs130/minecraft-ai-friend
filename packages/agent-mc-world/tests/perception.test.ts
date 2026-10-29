@@ -110,6 +110,7 @@ describe('perception evidence boundaries',()=>{
   it('forecasts only across two visible observations and drops an occluded track',()=>{
     const bot=rig(),reader=new AttentionReader();const first=reader.read(bot,3,1000,true);
     expect(first.highlights[0]).toMatchObject({attackRange:null,sightRange:null,prediction:null});
+    expect(first.highlights[0]).toMatchObject({id:9,entityId:9,target:'zombie'});
     bot.entities[9].position.x=1;
     expect(reader.read(bot,3,1500,true).highlights[0]?.prediction?.probability).toBeNull();
     bot.blockAt=()=>stone;expect(reader.read(bot,3,1600,true).highlights[0]).toMatchObject({visible:false,prediction:null});

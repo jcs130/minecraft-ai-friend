@@ -1,5 +1,12 @@
 # Agent MC World
 
+Development candidate **rc.126** gives `attack` an optional explicit `entityId`
+alongside the target's registry type or actual player name. Attention/risk reads
+provide both fields; lost, mismatched or occluded named entities never fall back
+to another target. Observed UUIDs remain bound during a bow draw. Existing
+nearest-type calls and numeric player names keep their meanings. See
+[observed entity targeting](docs/entity-targeting.md).
+
 Development candidate **rc.124** avoids a transient carried stack during sorting
 exchanges when shortcuts were explicitly included. It preserves per-click server
 confirmation, component identity, partial results and unknown-action fences.
