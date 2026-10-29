@@ -192,6 +192,8 @@ public final class VortexBridge extends JavaPlugin {
                         advice=new RpgJourney.Advice("storage","inventory_full","可先把第"+slot+"格 "+item.getType().getKey()+" ×"+item.getAmount()+" 存入本人个人箱；成功2魔力，不用先开界面或传送","/mycli arena stash putslot "+slot+" "+item.getAmount(),"/mycli inventory","",List.of());break;
                     }
                 }
+                advice=RpgJourney.withContext(advice,context.has("guild")?gson.fromJson(context.get("guild"),Map.class):null,
+                    context.has("trial")?gson.fromJson(context.get("trial"),Map.class):null);
                 var out=new LinkedHashMap<String,Object>();out.put("readOnly",true);out.put("queryOnly",true);out.put("backend","vortex");out.put("authority","VortexRPG");
                 out.put("class",intro?id:id.isEmpty()?"none":id);out.put("level",state.level());out.put("xp",state.experience());out.put("location",PlayerLocationView.location(p));
                 out.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
@@ -219,9 +221,9 @@ public final class VortexBridge extends JavaPlugin {
     private static long cooldown(JsonObject context,String key){return context.has(key)&&!context.get(key).isJsonNull()?Math.max(0,context.get(key).getAsLong()):-1;}
     private static List<String> activityGuide(){return List.of(
         "组队：队长 /mycli guild party create，再 invite <玩家>；对方 accept，status核对成员。遗迹全员穿甲带武器到首室，由队长 /mycli dungeon start <ID>；建队不等于入场。",
-        "练习塔：先 /mycli arena status 查入口，所有队员到按钮12格内、穿甲带武器且各有8魔力，由一人 /mycli arena start；再查 arena status 核对实际参战。",
+        "试炼塔：主世界world（-596,92,-313）；/mycli goto arena 到入口（6魔力），穿齐四甲、带武器、伙伴到按钮12格内，一人 /mycli arena start（开场免费）。从第1层起，清层自动下楼；第2层不在creeping_crypt。核对：/mycli arena status。",
         "买卖：/mycli commission list；买方 publish delivery <物品ID> <数量> <金币报酬> <标题> 托管金币，卖方 accept <ID> 后 claim <ID> 交物领钱。报价/查询不算成交；原生拍卖仍维护。",
-        "满包：按 status 给出的 arena stash putslot <背包0–35槽> <数量> 直接远程存箱，收到moved>0才完成；无需开界面或回城。多余装备 /mycli arena recycle list，再quote/sell。");}
+        "满包：按 status 给出的 arena stash putslot <背包0–35槽> <数量> 直接远程存箱，收到moved>0才完成；无需开界面或回城。多余装备 /mycli arena recycle list，再quote/sell。更多玩法：/mycli world list；随机集结：/mycli world events。");}
     public void tradeCommand(Player p,String[] raw){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");profile(p);
         boolean json=Arrays.asList(raw).contains("--json");var words=new ArrayList<>(Arrays.asList(raw));words.removeIf(s->s.equals("--json"));

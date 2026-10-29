@@ -433,7 +433,8 @@ final class DungeonManager implements Listener {
 
     private boolean nearLobbyButton(Player player, Location button) {
         Location at = player.getLocation();
-        return player.isOnline() && !player.isDead() && player.getGameMode() != GameMode.SPECTATOR
+        return player.isOnline() && !player.isDead() && !plugin.isObserver(player)
+                && (player.getGameMode()==GameMode.SURVIVAL||player.getGameMode()==GameMode.ADVENTURE)
                 && sameWorld(at) && Math.abs(at.getY() - button.getY()) <= 4
                 && at.distanceSquared(button) <= BUTTON_GROUP_RADIUS_SQUARED;
     }
@@ -452,7 +453,7 @@ final class DungeonManager implements Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
                     && player.getGameMode() != GameMode.ADVENTURE)
-                    || !inFloor(player.getLocation(), floor)
+                    || plugin.isObserver(player) || !inFloor(player.getLocation(), floor)
                     || plugin.pvpParticipant(player)
                     || (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(player))
                     || !participants.add(player.getUniqueId())) continue;
@@ -468,11 +469,42 @@ final class DungeonManager implements Listener {
         if (changed) persistRun();
     }
 
+    com.google.gson.JsonObject guidance(Player player){
+        double mana=-1;
+        if(plugin.nativeRpg().selected()){
+            var value=plugin.nativeRpg().mana(player);
+            if(value.isJsonObject()&&value.getAsJsonObject().has("current"))mana=value.getAsJsonObject().get("current").getAsDouble();
+        }else{
+            var user=dev.aurelium.auraskills.api.AuraSkillsApi.get().getUser(player.getUniqueId());
+            if(user!=null&&user.isLoaded())mana=user.getMana();
+        }
+        int remaining=0;for(UUID id:mobs){Entity e=Bukkit.getEntity(id);if(e instanceof LivingEntity living&&e.isValid()&&!living.isDead())remaining++;}
+        long cooldown=active?0:Math.max(0,COOLDOWN_MS-(System.currentTimeMillis()-lastRun));
+        var facts=new TrialGuide.Facts(built,isParticipant(player),active,pausedAt>0,spawned,cleared,floor,floorAt(player.getLocation()),
+            remaining,maxFloor(),plugin.isObserver(player),plugin.nativeRpgMayAct(player),plugin.isDowned(player),plugin.pvpParticipant(player)
+            ||plugin.siteDungeons()!=null&&plugin.siteDungeons().isParticipant(player),world()!=null&&nearLobbyButton(player,lobbyButton()),mana,cooldown,DungeonLoadout.missing(player));
+        var out=new com.google.gson.Gson().toJsonTree(TrialGuide.next(facts)).getAsJsonObject();
+        out.addProperty("activityType","trial_tower");out.addProperty("participant",isParticipant(player));out.addProperty("active",active);
+        out.addProperty("floor",active?floor:0);out.addProperty("selfFloor",floorAt(player.getLocation()));out.addProperty("maxFloor",maxFloor());
+        out.addProperty("remainingMobs",remaining);out.addProperty("selectedDifficulty",chosenDifficulty(player).id);
+        out.addProperty("world",world()==null?"unknown":world().getName());
+        if(world()!=null){out.addProperty("worldKey",world().getKey().toString());out.addProperty("worldUuid",world().getUID().toString());}
+        out.add("entrance",new com.google.gson.Gson().toJsonTree(Map.of("x",-596,"y",92,"z",-313)));
+        return out;
+    }
+    private void showGuidance(Player player){var guide=guidance(player);player.sendMessage("§e[试炼下一步] "+guide.get("nextAction").getAsString()+"。命令："+guide.get("nextCommand").getAsString());}
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
-        if (sub.equals("status")) player.sendMessage("§6【试炼塔】地面入口选难度，按层战斗、清层后自动下楼；进度和操作用 /mycli arena。奖励逐层存入个人奖励箱，/mycli arena rewards 查看，/mycli arena stash 取出。");
+        if(Set.of("start","rest","checkpoint","next","leave").contains(sub)&&args.length!=2){player.sendMessage("§e[invalid_argument] 本次未执行；用法：/mycli arena "+sub+"。查询：/mycli arena status");return;}
+        if(sub.equals("status")||sub.equals("entrance")){
+            if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
+        }
+        if(sub.equals("status")&&!java.util.Arrays.asList(args).contains("--json")&&!java.util.Arrays.asList(args).contains("--verbose")){
+            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":"本人未参赛；当前空闲")+"。清层自动下楼，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
+        }
         switch (sub) {
             case "status" -> {
+                player.sendMessage("MC_TRIAL_STATE "+guidance(player));
                 boolean participant = active && participants.contains(player.getUniqueId());
                 int selfFloor = floorAt(player.getLocation());
                 int remaining = 0, missing = 0, outside = 0;
@@ -532,7 +564,7 @@ final class DungeonManager implements Listener {
                         + " chestZ=" + chestZ(floor) + " scope=global participant=" + participant);
             }
             case "start" -> start(player);
-            case "entrance" -> plugin.trialButtons().describe(player);
+            case "entrance" -> {plugin.trialButtons().describe(player,java.util.Arrays.asList(args).contains("--json"));showGuidance(player);}
             case "difficulty", "难度" -> chooseDifficulty(player, args);
             case "rest", "checkpoint", "驿站" -> startAtRest(player);
             case "next" -> next(player);
@@ -644,13 +676,14 @@ final class DungeonManager implements Listener {
     }
 
     private void start(Player starter) {
+        if(starter.isDead()||plugin.isDowned(starter)||plugin.isObserver(starter)
+            ||!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(starter.getGameMode())){starter.sendMessage("§e[actor_unavailable] 当前角色不能参赛；未开场。命令：/mycli status");return;}
         if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
             starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave 再参加试炼塔。"); return;
         }
         if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动挑战；请使用生存角色，/mycli arena status 查看入口和规则。"); return; }
         if (!nearLobbyButton(starter, lobbyButton())) {
-            starter.sendMessage(ChatColor.RED + "请站到地面入口石按钮附近 12 格内再启动。 "
-                    + LocationOutput.fields(lobbyButton())); return;
+            showGuidance(starter);return;
         }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔；/mycli arena status 查看，等本场结束后再开场，或 dungeon list 选择别处。"); return; }
         long now = System.currentTimeMillis();
@@ -1336,6 +1369,9 @@ final class DungeonManager implements Listener {
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
             if (p == null || p.isDead() || !inFloor(p.getLocation(), floor)) continue;
+            // A real clear counts for an accepted contract even when today's
+            // loot was already claimed. The clear callback runs once per room.
+            plugin.guildFloorCleared(p, floor, partySize);
             long gameDay = world().getFullTime() / 24000L;
             String claimPath = DAILY_CLAIMS + id + "." + floor;
             if (plugin.getConfig().getLong(claimPath, Long.MIN_VALUE) == gameDay) {
@@ -1465,7 +1501,6 @@ final class DungeonManager implements Listener {
                         + difficulty.id + " amount=" + creditedBalance);
             }
             plugin.getConfig().set(claimPath, gameDay);
-            plugin.guildFloorCleared(p, floor, partySize);
             plugin.saveConfig();
             p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
             p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的个人箱里；像普通箱子一样取放。");

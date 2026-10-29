@@ -138,6 +138,13 @@ final class NativeRpg {
             context.addProperty("downed",owner.isDowned(p));context.addProperty("inDungeon",owner.dungeonParticipant(p));
             context.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(org.bukkit.GameRule.KEEP_INVENTORY)));
             if(owner.trialRescue()!=null)context.add("rescue",owner.trialRescue().state(p));
+            if(owner.dungeon().isParticipant(p))context.add("trial",owner.dungeon().guidance(p));
+            var guild=owner.guild().progressState(p);
+            if(guild.has("activeId")&&!guild.get("activeId").getAsString().isEmpty()&&!(guild.has("retired")&&guild.get("retired").getAsBoolean())){
+                var brief=new JsonObject();for(String key:List.of("activeId","title","status","nextCommand","advice","requiresWorldAction"))if(guild.has(key))brief.add(key,guild.get(key).deepCopy());
+                if(brief.has("advice")&&brief.get("advice").getAsString().length()>500)brief.addProperty("advice",brief.get("advice").getAsString().substring(0,500));
+                context.add("guild",brief);
+            }
             context.add("missingEquipment",new Gson().toJsonTree(DungeonLoadout.missing(p)));
             for(String id:List.of("food","selfheal")){
                 Long left=owner.readBasicCooldown(p,id);context.add(id+"CooldownMs",left==null?JsonNull.INSTANCE:new JsonPrimitive(left));

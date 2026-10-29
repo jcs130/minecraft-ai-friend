@@ -14,7 +14,7 @@
 
 推荐节奏：选职业→领公共补给并学一项战斗技能→查入口与退路→单人start或集结期join→逐段清怪→返回首处结算→claim→打开个人箱确认实物。坦克持盾拉敌，战士近战，法师控制，牧师有效治疗；实际能力以skills info为准。失败时先区分等级/技能/魔力/场次/落点，不把任何拒绝都说成“状态错了”。已有暂停场次先status，再依回执resume或由本人决定leave；不要反复start。
 
-远程个人箱明确教法：`/mycli skills info travel`，未学则`/mycli skills learn travel`；有2魔力后`/mycli arena stash`打开，`stash pages`选10页。无需先施放传送术，也无需走回试炼场；实体箱旁操作免费。`arena rewards list`是待入箱奖励，`stash list`是已有箱格，领奖后开箱才装入，箱满保留。等真实窗口、槽位和光标确认再继续；空箱不等于丢失。大背包另用`/minepacks:backpack open`。
+远程个人箱明确教法：Vortex下travel是通用能力，无需重学；有2魔力后`/mycli arena stash`打开，`stash pages`选10页，或先`stash inventory`核对真实背包槽再`stash putslot <槽> <数量>`。无需先施放传送术，也无需走回试炼场；实体箱旁操作免费。`arena rewards list`是待入箱奖励，`stash list`是已有箱格，领奖后开箱才装入，箱满保留。等真实窗口、槽位和光标确认再继续；空箱不等于丢失。大背包另用`/minepacks:backpack open`。
 
 先读取 `E:/MC/ops/state/world-activity/snapshot.json` 的时间、可用性、覆盖范围与分项状态；使用委托分类、公共仓库存入/取出、已核实捐赠、在途/放弃及内容供给数据。不能把接单、查询、阶段完成当完整委托交付，不能把仓库存量增长直接归因给某人，也不能把物品件数当等价经济价值。
 

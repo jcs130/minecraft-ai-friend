@@ -42,7 +42,10 @@ final class TaskProgressGuidance {
                 : "还需 " + Math.max(0, target - current) + "；" + requirement(quest, combat));
         if (!ready && verify) action += " " + verificationHint(verificationReason, evidence);
         out.addProperty("nextAction", action);
-        out.addProperty("nextCommand", ready ? "/mycli guild claim" : verify ? "/mycli guild verify" : "/mycli tasks status");
+        boolean trial=TrialGuide.goal(quest.goal())||quest.goal()==GuildManager.Goal.KILLS&&combat==null;
+        out.addProperty("nextCommand", ready ? "/mycli guild claim" : verify ? "/mycli guild verify" : trial?TrialGuide.STATUS:"/mycli guild status");
+        out.addProperty("verifyCommand","/mycli guild status");out.addProperty("requiresWorldAction",!ready&&!verify);
+        if(!ready&&trial)out.addProperty("nextAction",action+" "+TrialGuide.route());
         if (verify && !ready && java.util.Set.of("not_at_site", "area_unloaded", "site_not_reserved").contains(verificationReason)) {
             out.addProperty("phase", "not_at_site".equals(verificationReason) ? "reach_site" : "check_site");
             out.addProperty("reason", verificationReason.toUpperCase(java.util.Locale.ROOT));
@@ -206,7 +209,7 @@ final class TaskProgressGuidance {
             case "REPLANT_SITE_NOT_HARVESTED" -> "这个种植位置不在本单先前收获的位置记录内；回到本单收获过的同种作物田格补种。";
             default -> "本次行动没有形成当前阶段的有效证据。";
         };
-        return fix + (combat == null ? "先 /mycli tasks status 核对当前条件。" : combatRequirement(combat));
+        return fix + (combat == null ? "先 /mycli guild status 核对当前条件。" : combatRequirement(combat));
     }
 
     private static void objective(JsonArray out, String id, String title, boolean done, boolean current) {

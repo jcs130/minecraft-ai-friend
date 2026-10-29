@@ -48,7 +48,7 @@ steps:
   complete:
     title: 攻略路线已开启
     message: 先 /mycli profession list 选择职业，再 skills list / skills info <ID> 查本人技能。职业初始主动技可直接cast；prepare设置点击技能，learn仅按详情花点学节点，通用能力无需重学。
-release-revision: 6
+release-revision: 8
 release-notice:
-- '[副本更新] 建筑不可拆改。组队先 /mycli guild party --help；邀请被接受后，全员穿好装备到首室，由队长start。用 /mycli dungeon status 核对本人参战。'
-- '[生存规则] 本场2人以上时先倒地，队友4格内停留10秒或清室复活，全队倒下才撤离。死亡背包装备保留，先核对回执，不必盲目找掉落。查询：/mycli status'
+- '[攻略更新] 试炼塔请用 /mycli arena status；/mycli goto arena 前往入口（6魔力），穿甲带武器、伙伴靠近按钮12格，一人arena start，开场免费、清层自动下楼。旧公会单查guild status，新RPG任务查tasks status。'
+- '[玩法目录] /mycli world list 分页查职业、技能、组队、遗迹、交易、个人箱、NPC、照片、日记、外观和语音；/mycli world events 查随机集结。活动自主参加，不自动开场或领奖。'

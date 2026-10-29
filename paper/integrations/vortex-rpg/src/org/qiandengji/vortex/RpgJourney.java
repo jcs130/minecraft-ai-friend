@@ -23,6 +23,19 @@ public final class RpgJourney {
     private static Advice advice(String step,String reason,String action,String command,String verify){
         return new Advice(step,reason,action,command,verify,"",List.of());
     }
+    /** AF supplies only this player's current observations; never dispatch an advised command here. */
+    public static Advice withContext(Advice original,Map<String,?> guild,Map<String,?> trial){
+        if(trial!=null&&Boolean.TRUE.equals(trial.get("participant"))&&Set.of("in_dungeon","downed").contains(original.reason()))
+            return advice("trial",String.valueOf(trial.get("reason")),String.valueOf(trial.get("nextAction")),Boolean.TRUE.equals(trial.get("requiresWorldAction"))?"":safeCommand(trial.get("nextCommand")),"/mycli arena status");
+        if(guild!=null&&Set.of("quest_available","no_eligible_task").contains(original.reason())
+            &&Set.of("active","needs_verification","ready_to_submit").contains(String.valueOf(guild.get("status")))){
+            String action=String.valueOf(guild.getOrDefault("advice",null));
+            if(action.equals("null")||action.isBlank())action="仍有在途公会委托；先核对当前阶段，不重复接取";
+            return new Advice("guild","guild_task_active",action,Boolean.TRUE.equals(guild.get("requiresWorldAction"))?"":safeCommand(guild.get("nextCommand")),"/mycli guild status",String.valueOf(guild.get("activeId")),List.of());
+        }
+        return original;
+    }
+    private static String safeCommand(Object value){String command=String.valueOf(value);return command.startsWith("/mycli ")&&command.length()<=320&&!command.contains("\n")&&!command.contains("\r")?command:"/mycli guild status";}
     public static boolean completed(QuestDefinition q,PlayerQuestData data){
         var p=data.quests().get(q.id());
         return p!=null&&p.state()==QuestState.COMPLETED||data.completedQuestLog().contains(q.id());

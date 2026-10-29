@@ -75,7 +75,7 @@ final class AgentCliCatalog {
         add(specs,"world.story.track","life","write","/mycli world story track [on|off] [--json]","开启或关闭本人剧情追踪","免费；只有本人和实际附身Eye看到；有公会任务或副本时避让原进度条","MC_STORY tracking；不取消章节或任务");
         add(specs,"world.story.cancel","life","write","/mycli world story cancel [--json]","主动取消当前剧情章节","免费；当前剧情步骤停止，已完成章节保留；不放弃公会委托或清物品","MC_STORY；再次start会重新接受当前章节定义");
         add(specs,"world.story.menu","life","gui","/mycli world story menu [人物ID]","打开旅途手记或人物原版菜单","查看免费；开始、选择、接单都需明确点击；人物对话需八格内","原版箱式GUI；不要求客户端模组");
-        add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
+        add(specs,"world.list","life","read","/mycli world list [--page 页码] [--json]","分页查看RPG、试炼、遗迹、组队、交易、NPC、摄影、日记、外观与语音入口","每页6项；免费只读，未就绪能力明确标注；不预加载全部玩法规则","MC_WORLD type=catalog；gameplay/page/nextCommand");
         add(specs,"world.board","life","read","/mycli world board [menu]","居民事务：农耕集市、照片展与遗迹调查；查看真实步骤及本人状态","与公会共享任务槽；guild accept接单，每阶段guild claim；最终入个人箱","MC_WORLD type=board；可选45格原版菜单");
         add(specs,"world.shops","life","read","/mycli world shops","查看真实集市商人的位置、农产收购与旅行补给","亲自到场交易，实际消耗原版物品；选中配方还不算成交","MC_WORLD type=shops");
         add(specs,"trade","life","read","/mycli trade menu|list [页]|find <物品> [页]|buy|sell [物品] [页]|info|locate <商人ID>|stop|hall","商旅公会交易板：聚合真实村民/集市商店报价与位置；可查询谁出售或收购物品","只读，查询免费；只含已加载商人，不强制加载区块；报价最多缓存3秒，实际成交窗口为准","私有 MC_TRADE schema=1；原版45格分页菜单；点击报价定位，不远程交易");
@@ -88,7 +88,7 @@ final class AgentCliCatalog {
         add(specs,"world.end","life","write","/mycli world end","结束村民对话，恢复普通公屏聊天","本人的当前对话","MC_WORLD type=talk status=ended");
         add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：读技能目录、成功施法、完整交付任选路线委托；旧生活证明保留","主动开始；tasks list看路线，不必种田；失败施法/自称完成不计进度；不代学不花点","MC_WORLD type=guide/guide_progress");
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
-        add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
+        add(specs,"world.events","life","read","/mycli world events","查看WorldEvents当前的试炼集结、遗迹远征与探索活动","查询免费；自愿参加，不自动开场、传送或发奖","MC_WORLD type=events与WorldEvents当前列表");
         add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，成片自动存入本人个人奖励箱；arena stash pages取照片；无需截图上传；原first/third/top参数继续可用","无需空地图或主背包空位；开始拍摄默认2魔力，每人60秒，串行排队；箱满安全排队，腾位重开","MC_PHOTO success表示照片已持久存入个人奖励箱或其待入箱队列；storage=personal_reward_box；storageCommand给取件入口");
         add(specs,"photo.album","life","read","/mycli photo album [页]；photo info <本人照片名|公开作品ID>","旅行纪念册：查询实地照片是否合格、重拍建议、署名与故事","只读，不自动报名或投稿；旧相册仍用 /imageframe list","私有 MC_PHOTO_ALBUM、MC_PHOTO_RECORD；照片质量不能代替走查与返程");
         add(specs,"photo.gallery","life","read","/mycli photo gallery [页]","艺术厅摄影展：查看公开作品、摄影者、地点和作者故事","原版地图菜单及成书，Java/基岩/Agent可读；故事为作者自述","MC_PHOTO_ALBUM、MC_PHOTO_RECORD；slot为空表示等待适合的实体展位");
@@ -226,7 +226,7 @@ final class AgentCliCatalog {
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
-        add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
+        add(specs,"arena.status","adventure","read","/mycli arena status [--json|--verbose]","查询当前入场缺项或战斗下一步；默认短文本","只读；入口传送6魔力，开场免费，直达驿站8魔力；不要求另找第2层入口","MC_TRIAL_STATE；显式JSON/verbose兼容MC_DUNGEON status及救援字段");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
         add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查当前房间、存档点、剩余机会、占用或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认当前一步及剩余机会；--json含真实状态和凭据；完整旧结果用--verbose");
@@ -243,7 +243,7 @@ final class AgentCliCatalog {
         add(specs,"pvp.lobby","adventure","teleport","/mycli pvp lobby","前往天空竞技场观众平台","竞技场已建；比赛中不可用；6 魔力","本人 MC_PVP、MC_TRAVEL 与大厅绝对坐标");
         add(specs,"pvp.board","adventure","read","/mycli pvp board","查看积分榜","在线玩家","私人 MC_PVP_RANK 列表");
         add(specs,"arena.start","adventure","write","/mycli arena start","与入口按钮附近队友一起开始试炼；组队全员倒地才失败撤离","在入口且符合组队/冷却条件；队友靠近4格停留10秒或清场可复活倒地者","挑战开始或拒绝原因；倒地回执 MC_TRIAL_RESCUE");
-        add(specs,"arena.entrance","adventure","read","/mycli arena entrance","查看试炼塔普通、冒险、末日三个实体按钮的世界坐标及确认开场规则","在线玩家；查询免费，不传送、不选择或启动挑战","私有 MC_TRIAL_BUTTONS JSON，含三个按钮、ready与confirmationRequired");
+        add(specs,"arena.entrance","adventure","read","/mycli arena entrance [--json]","查询主世界三个按钮、坐标与准确开场步骤；命令可代替按钮","查询免费；先goto arena（6魔力），伙伴到按钮12格内，一人arena start（免费）","显式JSON返回MC_TRIAL_BUTTONS；未加载区块为未知，不猜入口被拆");
         add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [auto|normal|adventure|apocalypse]","按冒险者公会等级自动匹配，或手动选择下次本人发起试炼的难度；高等级打低难度奖励减少","在线玩家；多人由按钮发起者决定，奖励按各自等级结算","私有 MC_DUNGEON_DIFFICULTY 回执，含推荐档位与选择模式");
         add(specs,"arena.rest","adventure","teleport","/mycli arena rest","从远处直达深层驿站并继续挑战","满足驿站解锁与挑战条件；每名入场者 8 魔力","成功后 MC_TRAVEL 或拒绝原因");
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");
@@ -495,7 +495,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);

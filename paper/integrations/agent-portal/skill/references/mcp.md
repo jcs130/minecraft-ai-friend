@@ -1,6 +1,6 @@
 # MCP 最小用法
 
-倒地不等于死亡；先读副本 `rescueEnabled`、救援进度、剩余挑战次数和死亡保留回执，不凭经验推断物品已丢。组队、交易和续关流程见 [RPG](rpg-native.md)，正式启用以实际版本/回执为准。
+倒地不等于死亡；先读副本 `rescueEnabled`、救援进度、剩余挑战次数和死亡保留回执，不凭经验推断物品已丢。组队、交易和续关流程见 [RPG](rpg-native.md)，正式启用以实际版本/回执为准。试炼用`arena status`，遗迹用`dungeon`；旧公会单用`guild status/claim`。`world list`分页发现玩法，`world events`查随机集结，无需给宿主增加另一套工具。
 
 优先用 `/mycli status`、`tasks status`、`skills status` 获取精炼文本与当前一步；大版本变化先 `/mycli intro`，按需逐层 `--help`，不用预加载另一套命令表。`skill_retired` 表示旧技能已停用，转本人技能目录，不重复尝试。副本的 `active` 只表示是否已有场次，不能当作是否开放。命令发出、API返回或菜单打开，都不等于已开场、施法生效或奖励入箱；错误先按原因核对，不重放消耗动作。
 

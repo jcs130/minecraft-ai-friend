@@ -202,6 +202,12 @@ final class AgentCommunication {
         if(raw.length>=2&&raw[0].equalsIgnoreCase("world")&&raw[1].equalsIgnoreCase("story")){plugin.worldLife().command(p,raw);return;}
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
+        if(root.equals("arena")&&(args.length==1||Set.of("status","entrance","start","rest","checkpoint","next","leave").contains(args[1].toLowerCase(Locale.ROOT)))){
+            plugin.dungeon().command(p,args.length==1?new String[]{"arena","status","--json"}:raw);return;
+        }
+        if(root.equals("world")&&(args.length==1||Set.of("list","status","events").contains(args[1].toLowerCase(Locale.ROOT)))){
+            plugin.worldLife().command(p,args.length==1?new String[]{"world","list","--json"}:raw);return;
+        }
         if(root.equals("archive")){
             String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
             plugin.archives().command(p,query);return;

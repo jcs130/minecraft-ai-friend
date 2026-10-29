@@ -1,6 +1,6 @@
 # 原生 RPG：只读当前需要的一步
 
-截至2026-10-30，正式服运行 AF.30 / 桥0.2.10 / Vortex qd29：六职业、技能成长、魔力及金币统一，旧书/熟练度归档，基础生存技能继续可用；以本人实际回执为准。本页新增的任务放弃入口仍是待发布候选，先查服内帮助。
+2026-10-30活动更新的配套说明：六职业、技能成长、魔力及金币统一，旧书/熟练度归档，基础生存技能继续可用；先查服内帮助和本人实际回执，旧客户端资料不能覆盖服务器规则。
 
 先用 `/mycli intro` 或 `/mycli status`。如果回执带 `guide`：`nextAction` 是当前目标；有 `nextCommand` 才执行该命令，仍须等实际结果。`requiresWorldAction:true` 表示该走路、击杀或制作了，使用自己框架的现有动作完成；`verifyCommand` 只核对，不会推进任务。不要反复查询代替行动，每完成一步或条件变化后再查。
 
@@ -22,7 +22,11 @@
 
 战斗前穿好护甲、携带可用武器。正式副本要求四件护甲及近战、弓弩或本职业真实法器，不强制剑。先 `dungeon list/info <ID>` 核对难度、条件与准备，再按回执开场或加入。`active:false` 只表示没有场次；占用、故障或关闭时改选或联系服主，不死等墓穴。
 
-组队用 `guild party`：队长 create/invite，对方本人 accept。现役 `.30` 要求全员在线、装备达标到首室，由队长 `dungeon start <ID>` 一次登记全队；缺少队员时全队不开场。始终查 `dungeon status <ID>` 确认本人参战和 `rescueEnabled`；原生队伍不等于已在副本。练习试炼塔是另一入口：所有参与者到按钮12格内、装备达标且各有8魔力，一人 `arena start`，再查 `arena status` 的实际名单。
+组队用 `guild party`：队长 create/invite，对方本人 accept。遗迹要求全员在线、装备达标到首室，由队长 `dungeon start <ID>` 一次登记全队；缺少队员时全队不开场。始终查 `dungeon status <ID>` 确认本人参战和 `rescueEnabled`；原生队伍不等于已在副本。
+
+试炼塔是另一个地点，不要去遗迹找第2层。先 `arena status` 看真实下一步；`goto arena` 成功6魔力到主世界入口，按钮 `(-596,92,-313)`。穿齐四甲、带本职业可用武器，参与者到按钮12格内，一人 `arena start` **开场免费**；存档点续战 `arena rest` 才需8魔力。塔按附近合格玩家登记，不能只凭原生队伍推断名单；用 `arena status` 核对实际参战。所有人从第1层起，清层后10秒自动下楼，无需另找第2层入口。状态要求击杀时应实际战斗，查询不推进任务。旧公会的通关委托完成后 `guild claim`，不要误用新RPG的 `tasks claim`。
+
+`world list --page 1` 是现有玩法目录，共3页，每页6项；只读需要的一项。`world events` 查当前随机集结，公告自愿参加，不会自动接单、传送或发奖；没有公告也可自行开塔或探索。`arena status` 默认两行短提示，需要结构字段再加 `--json`。
 
 本场两人以上时致命伤害先倒地，队友4格内停留10秒或清室可复活，成功救援不扣机会。配套 `.30` 的遗迹单人战败或全队倒下，前两次回上个已清房间的存档点，第三次结束；查剩余次数，断线和重启不扣命。Boss房间被挑战时其他队伍不能进入，观战除外。倒地不是死亡，不要寻找掉落物。真正死亡也先读最终死亡结果、重生后核对库存；`keepInventory=true` 时背包装备保留，不能凭死亡自行推断丢失。金币/经验另查状态。建筑拒绝表示沿原门、楼梯通行，不能凿墙绕过。
 
@@ -38,4 +42,4 @@
 
 统一版已把旧熟练度/研习书归档并保留原书；基础技能固定可用，成长只查Vortex学习点和天赋。背包满的私有提示不会自动丢弃或回收。装备先 `arena recycle list`，按完整物品报价后 `sell`；pending/unknown 查 `arena recycle status` 并联系服主，不重发买卖或补钱。
 
-任务不做时先查 `/mycli tasks --help`：服务器列出 `abandon` 后可用 `tasks abandon <ID>`，重新接取会重新计数，未领取奖励不发放；超时先 `tasks status <ID>`。旧公会单用 `guild abandon`，玩家委托用 `commission abandon <ID>`。退出遗迹是 `dungeon leave`（不带ID，留原地），回村另用 `cast home`（成功6魔力）。候选未发布前不要自行猜用法。
+任务不做时先查 `/mycli tasks --help`：服务器列出 `abandon` 后可用 `tasks abandon <ID>`，重新接取会重新计数，未领取奖励不发放；超时先 `tasks status <ID>`。旧公会单用 `guild abandon`，玩家委托用 `commission abandon <ID>`。退出遗迹是 `dungeon leave`（不带ID，留原地），回村另用 `cast home`（成功6魔力）。

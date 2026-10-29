@@ -203,6 +203,11 @@ final class GuildManager implements Listener {
             out.addProperty("advice", "旧农耕委托已撤下；用 tasks pause 暂存原阶段和进度，再选探索或讨伐；也可自愿继续收尾。");
             out.addProperty("nextCommand", "/mycli tasks pause");
         }
+        if(current<quest.target()&&(TrialGuide.goal(quest.goal())||quest.goal()==Goal.KILLS&&!out.has("market"))){
+            var trial=dungeon.guidance(p);out.add("trial",trial);out.addProperty("advice",trial.get("nextAction").getAsString());out.addProperty("nextCommand",trial.get("nextCommand").getAsString());out.add("requiresWorldAction",trial.get("requiresWorldAction"));
+        }
+        else if(out.has("market")&&out.getAsJsonObject("market").has("guidance")){var guide=out.getAsJsonObject("market").getAsJsonObject("guidance");if(guide.has("requiresWorldAction"))out.add("requiresWorldAction",guide.get("requiresWorldAction"));}
+        else if(out.has("guidance"))out.add("requiresWorldAction",out.getAsJsonObject("guidance").get("requiresWorldAction"));
         return out;
     }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
@@ -347,7 +352,7 @@ final class GuildManager implements Listener {
         for (DailyBoardManager.Card card : plugin.dailyBoard().cards()) {
             Contract quest = card.contract();
             player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
-                    + " · " + quest.description() + " · 声望+" + quest.fame()
+                    + " · " + TaskGuidance.step(quest.goal(),quest.description()) + " · 声望+" + quest.fame()
                     + " / 绿宝石×" + quest.emeralds()
                     + " [" + (doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : "可接") + "]");
         }
@@ -362,7 +367,7 @@ final class GuildManager implements Listener {
             String gate = quest.minRank() > rank ? "需" + RANKS[quest.minRank()] : "可接";
             String state = doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : gate;
             player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
-                    + " · " + quest.description() + " · 声望+" + quest.fame()
+                    + " · " + TaskGuidance.step(quest.goal(),quest.description()) + " · 声望+" + quest.fame()
                     + " / 绿宝石×" + quest.emeralds() + " [" + DIMS[quest.dim()] + "|" + state + "]");
         }
         player.sendMessage(ChatColor.GRAY + "每日轮换开放约 " + DAILY_POOL + " 张；当日完成 3 个不同维度，声望 +20%。"
@@ -397,6 +402,7 @@ final class GuildManager implements Listener {
         else if (quest != null) {
             var guide=TaskProgressGuidance.guide(quest,progress(player),null,"",new com.google.gson.JsonObject());
             player.sendMessage("§a下一步："+guide.get("nextAction").getAsString());
+            if(progress(player)<quest.target()&&TrialGuide.goal(quest.goal()))dungeon.command(player,new String[]{"arena","status"});
         }
     }
 
@@ -412,7 +418,7 @@ final class GuildManager implements Listener {
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单；请使用生存角色，/mycli guild board 查看委托。"); return; }
         boolean market = plugin.taskMarket().isMarket(id);
         if (!dungeon.isBuilt() && !market) { player.sendMessage(ChatColor.RED + "地下城暂未建成；/mycli guild board 选择其他开放任务，或联系服主检查场地。"); return; }
-        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "已有在途任务；先 /mycli tasks status 查进度，完成后 guild claim。一次性纯探索远征可 tasks pause 保留进度后换单；其他单如主动 guild abandon 会清零，不会自动替换。"); return; }
+        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "已有在途任务；先 /mycli guild status 查进度，完成后 guild claim。一次性纯探索远征可 tasks pause 保留进度后换单；其他单如主动 guild abandon 会清零，不会自动替换。"); return; }
         if (plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId()) + ".active.id", ""))) {
             player.sendMessage(ChatColor.RED + "在途任务快照异常，已保留记录；请联系服主修复，不能覆盖任务。"); return;
         }
@@ -462,7 +468,7 @@ final class GuildManager implements Listener {
         plugin.getConfig().set(base(player.getUniqueId()) + ".attempts." + quest.id(),
                 plugin.getConfig().getInt(base(player.getUniqueId()) + ".attempts." + quest.id(), 0) + 1);
         plugin.saveConfig();
-        player.sendMessage(ChatColor.GREEN + "已接公会委托：" + quest.title() + "。" + quest.description()
+        player.sendMessage(ChatColor.GREEN + "已接公会委托：" + quest.title() + "。" + TaskGuidance.step(quest.goal(),quest.description())
                 + "；完成后用 /mycli guild claim 领取声望与箱中物资。");
         showBiomeBorderRequirement(player, quest);
         if (quest.siteId() != null && quest.goal() == Goal.EXPLORE) player.sendMessage(ChatColor.AQUA
@@ -1084,7 +1090,7 @@ final class GuildManager implements Listener {
         for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
             Contract quest = dynamic.get(i).contract();
             inventory.setItem(1 + i, icon(quest.icon(), "§6今日 §e" + quest.title() + " §7(" + quest.id() + ")",
-                    quest.description(), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(),
+                    TaskGuidance.step(quest.goal(),quest.description()), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(),
                     doneToday(player, quest) ? "今天已完成" : "点击接单"));
         }
         for (int i = 0; i < CONTRACTS.size(); i++) {
@@ -1094,7 +1100,7 @@ final class GuildManager implements Listener {
                     : doneToday(player, quest) ? "今天已完成"
                     : quest.minRank() > rank ? "需要" + RANKS[quest.minRank()] : "点击接单";
             inventory.setItem(10 + i, icon(quest.icon(), "§e" + quest.title() + " §7(" + quest.id() + ")",
-                new String[]{"§7维度：" + DIMS[quest.dim()], quest.description(),
+                new String[]{"§7维度：" + DIMS[quest.dim()], TaskGuidance.step(quest.goal(),quest.description()),
                     "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(), state}));
         }
         Contract quest = active(player);

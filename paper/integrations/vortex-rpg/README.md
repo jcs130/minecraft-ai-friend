@@ -1,5 +1,7 @@
 # VortexRPG原生接管
 
+2026-10-30试炼/集结及原生进服资料候选见[说明](../../docs/RPG_ACTIVITIES_20261030.md)。qd30的`build-profile-readiness.py`必须接在累计qd29后，固定摘要、只修改一个类并加入有界进服调度；防止角色卡加载及未加载占位资料在关服覆盖存档。JDK21由`--java-home`、JAVA_HOME或PATH提供。ProfileJoinDispatchTest、ProfileLoadingSaveTest和真实Paper冷启动覆盖此路径。未取得实际发布回执前，下方qd29仍为现役。
+
 本目录是API适配和窄补丁。**2026-10-29已发布**AgentFriend0.4.47.30、VortexRPG qd29、QiandengjiRpg0.2.10；职业实际配置说明、直接远程储物和遗迹存档点见[本轮发布](../../docs/RPG_INTERACTION_20261029.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[基础生存修复](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)、[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。
 
 **0.2.10已发布：**`status/intro`及原生队伍返回实际世界名称、key、Bukkit UUID与坐标；同世界才计算距离，离线不复用旧位置。只扩充查询，未新建队伍或成长系统。官方EssentialsXChat与本桥组合34项联机、248项原生离线检查通过，正式26项及4项云端观战核对通过；见[插件复用方案](../../docs/PAPER_PLUGIN_REUSE_20261029.md)。`build-location-release.py`仅在固定0.2.9基包上编译三个所属类，保留25个其他条目，资源与账号数据不从QA复制。
