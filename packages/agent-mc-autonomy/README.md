@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+Version 0.2.125 consumes the independently built engine-only core rc.127, including
+explicit entity targeting and bounded message continuity. The exact source,
+archive, companion dependency lock and build hashes stay pinned. Planner policy,
+identity, goals and personal memory are unchanged; updating source does not
+reload an active player.
+
 Version 0.2.124 also yields already-satisfied native plans and unchanged saved
 death lessons at the normal decision cadence, without a whole-planner delay or
 incrementing the plain-reply inactivity counter. The exact native receipt stays
