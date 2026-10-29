@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.121
+
+- Pin the independently built core rc.124, including cursor-free sorting exchanges for explicitly included shortcuts and the MCP JSON wire-semantics fix. Keep the same planner, personality ports, native queue and uncertainty safeguards.
+- Retain semantic fact comparison from 0.2.120; this pin does not erase an older carried item or prove a goal completed.
+
 ## 0.2.120
 
 - Compare optional producer-owned semantic fact digests without dropping raw sampled evidence. Unknown producers and invalid digests retain full-text comparison; native pending/unknown, connection scope and answer expiry are unchanged.

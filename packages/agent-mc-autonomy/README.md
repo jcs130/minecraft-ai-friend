@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+Version 0.2.121 pins independently built core rc.124. Explicitly included
+shortcut sorting can use cursor-free exchanges while retaining native per-click
+confirmation. MCP results match JSON wire semantics. Existing carried items and
+unknown actions are not silently cleared; the planner and personal-memory ports
+remain unchanged.
+
 Version 0.2.120 uses a valid producer-owned `stateRevision` when comparing
 admission/read-reuse state. A sample clock alone no longer invalidates a dated
 answer when the producer explicitly declares unchanged semantic state. Facts
