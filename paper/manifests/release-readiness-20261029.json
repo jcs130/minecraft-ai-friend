@@ -14,11 +14,10 @@
     "MultiverseCore": "5.8.1",
     "Freesia": "2.5.1+2.4.1.af5",
     "bedrockAppearance": "0.1.0",
-    "coreSource": "0.5.7-rc.129",
+    "coreSource": "0.5.7-rc.130",
     "publicSkill": "1.3.3",
     "publicSkillCore": "0.5.7-rc.95",
     "harnessBodyCore": "0.5.7-rc.95",
-    "npmCore129Published": false,
     "photoCandidates": 29,
     "publicGallery": 3,
     "privatePhotos": 26,
@@ -29,7 +28,8 @@
     "playerClassSwap": false,
     "networkServerDirectoryStatus": 404,
     "activeStorage": "NVMe",
-    "completeBackupMarkersPerDisk": 8
+    "completeBackupMarkersPerDisk": 8,
+    "npmSourceCorePublished": false
   },
   "manifestInventory": {
     "filesScanned": 162,
@@ -52,9 +52,9 @@
     {
       "id": "skill-core-distribution",
       "state": "distribution_pending",
-      "title": "官网Skill跟进MC核心rc.129",
+      "title": "官网Skill跟进MC核心rc.130",
       "priority": "P1",
-      "current": "main已到0.5.7-rc.129；官网Skill1.3.3仍锁rc.95。npm指定rc.129查询404。源码完成不等于已发包。",
+      "current": "main已到0.5.7-rc.130；官网Skill1.3.3仍锁rc.95。npm指定rc.130查询404。源码完成不等于已发包。",
       "nextAction": "用已核验产物更新Skill依赖、文档、SHA256和下载；隔离安装/MCP/真实授权与世界切换验收后发布，不静默替换用户宿主。",
       "evidence": [
         "packages/agent-mc-world/docs/world-identity.md",
@@ -89,7 +89,7 @@
       "state": "consumer_adaptation_pending",
       "title": "客户端消费世界、聊天身份与语音",
       "priority": "P1",
-      "current": "服务端世界字段和附近频道已上线；客户端线仍在处理发送者UUID/unsigned装饰、自身回声及世界隔离，未统一替换现役。语音SDK已提供。",
+      "current": "服务端世界字段和附近频道已上线；rc.130源码已补发送者UUID/unsigned装饰与自身回声，尚未统一替换现役。语音SDK已提供。",
       "nextAction": "客户端实际加载后联测跨世界/同世界48格、本人回声、原版私聊及音频上传/附近ASR；分别记录客户端版本和真实回执。",
       "evidence": [
         "paper/integrations/essentials-chat/WORLD_IDENTITY.md",
@@ -373,5 +373,7 @@
     "class-respec",
     "auction",
     "world-stories"
-  ]
+  ],
+  "sourceReconciledDuringAudit": "bd7d1845",
+  "sourceReconciledAt": "2026-10-29T13:09:56.439Z"
 }
