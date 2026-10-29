@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -24,9 +25,13 @@ it('SDK/MCP preserve the latest terminal independently of noisy event cursors, w
     expect(active.readout.execution.active[0]).toMatchObject({id:'original-body:1',terminal:false});
     await emit(receipt('completed',true));const state=runtime.executionState();
     expect(state).toMatchObject({activeCount:0,detachedCount:0,latestTerminal:{id:'original-body:1',terminal:true,phase:'completed',goalCompleted:false},previousRuns:'not-covered'});
-    await host.pushEvent({source:'fixture',ts:new Date().toISOString(),type:'minecraft.chat',text:'untrusted chat '.repeat(3000)});
+    await host.pushEvent({source:'fixture',ts:new Date().toISOString(),type:'minecraft.chat',text:'untrusted chat '.repeat(3000),
+      senderKey:undefined,meta:{optionalReading:undefined,observedCount:0}});
     const result=await client.callTool({name:'mc_events',arguments:{after:active.nextCursor,run:active.run}});
     const value=result.structuredContent as any;
+    expect(isDeepStrictEqual(result,JSON.parse(JSON.stringify(result)))).toBe(true);
+    expect(value.data.events[1].meta).toEqual({observedCount:0});
+    expect(Object.hasOwn(runtime.journal.store.get(3)!.meta!,'optionalReading')).toBe(true);
     expect(value.meta.eventRead.execution).toEqual(state);
     expect(value.data.readout).toEqual(value.meta.eventRead);
     expect(value.text).toBe(JSON.stringify(value.data));

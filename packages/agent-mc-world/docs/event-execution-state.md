@@ -29,3 +29,8 @@ partial-content markers when limiting model-visible receipts. Cutting encoded
 JSON at a character offset can hide terminals and produce an invalid envelope.
 The full receipt remains in the ordinary SDK/MCP result and original journal;
 these readouts do not add a model call or an autonomous game action.
+
+MCP call results are materialized with ordinary JSON wire semantics even for
+in-memory SDK transports. Undefined optional fields are omitted there; the
+native SDK event/fact objects are not mutated. This prevents strict hosts from
+rejecting an otherwise valid event page before its renderer runs.

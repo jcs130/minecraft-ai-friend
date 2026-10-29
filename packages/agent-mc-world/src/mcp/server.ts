@@ -103,13 +103,16 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     return [{ type: 'resource_link' as const, uri: `${prefix}-artifact://${ref.handle.slice(4)}`,
       name: ref.name ?? ref.handle, mimeType: ref.mime, description: ref.fallbackText }];
   });
-  const outcome = (result: ToolOutcome): CallToolResult => ({
+  // In-memory SDK transports do not perform a JSON wire roundtrip. Match the
+  // real MCP boundary here, including omission of undefined optional fields;
+  // strict hosts must receive the same JSON value on either transport.
+  const outcome = (result: ToolOutcome): CallToolResult => JSON.parse(JSON.stringify({
     content: [{ type: 'text', text: result.text }, ...contents(runtime.journal.saveBlobs(result.blobs))],
     structuredContent: { ...result, protocol: PROTOCOL, text: result.text, failed: result.failed === true,
       endsTurn: result.endsTurn === true, control: result.control ?? null, execution: result.execution ?? null,
       events: result.events ?? [], blobs: runtime.journal.saveBlobs(result.blobs) },
     ...(result.failed && !['blocked','partial','unknown','noop'].includes(String(result.data?.status)) ? { isError: true } : {}),
-  });
+  }));
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: advertised }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
