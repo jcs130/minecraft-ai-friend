@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "generatedStructurePieces": true,
+  "regions": [
+    {"id":"sao-lab-camp","dimension":"minecraft:overworld","x1":-8,"y1":98,"z1":-8,"x2":8,"y2":108,"z2":8}
+  ]
+}

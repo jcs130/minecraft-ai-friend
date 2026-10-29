@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+Version 0.2.128 pins the independently built core rc.130 and accepts an explicit
+Minecraft 1.20.1 Mineflayer engine port with a validated local module/hash pair.
+This opt-in supports the separate SAO Forge acceptance consumer; Java 1.21.1
+remains the default. It does not select a mod transport automatically, loosen
+permissions, start a model, or imply every mod GUI/recipe is implemented.
+
+
 Version 0.2.127 consumes current sparse visible-surface observations regardless
 of JSON property order. Bounded previews and retained native outcomes preserve
 the producer's scan/unknown/continuation fields, absolute sample coordinates and

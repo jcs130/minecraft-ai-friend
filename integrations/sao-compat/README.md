@@ -1,5 +1,7 @@
 # SAO 0.76.1-lite：Numen / Mineflayer 隔离接入
 
+后续已启用桐人 `ag_Kirito`：自研 autonomy 0.2.128 + core rc.130，经 Mineflayer/Forge 原生桥接，由线上 qwen3.7-plus 驱动。已实际采集 4 个橡木原木。运行、停止、记忆及已知缺口见 [KIRITO.md](KIRITO.md)；建筑保护和真实村庄验收见 [PROTECTION.md](PROTECTION.md)。隔离性质与原端口保持。
+
 2026-10-29 的实验候选。现役 Paper 与 Tau 1.21.1 的目录、进程、网关、防火墙、端口转发和自动启动保持原状。本目录不包含世界、模型密钥或第三方模组二进制。
 
 ## 环境与隔离
@@ -22,7 +24,7 @@
 | 接入 | 身体与状态 | 模型及记忆 |
 | --- | --- | --- |
 | Numen MCP | 游戏 JVM 中的原生假玩家，持久 UUID、背包、位置、动作账本；Owner Token 与控制租约 | 外部 Agent 管理；本轮没有启动托管模型循环 |
-| Mineflayer + SDK | 真实登录玩家；FML3 协商、当前 JVM 注册表、本人原生菜单及 ItemStack | 外部 Agent 管理；复用 Mineflayer 移动等能力 |
+| Mineflayer + SDK | 真实登录玩家；FML3 协商、当前 JVM 注册表、本人原生菜单及 ItemStack | 桐人使用自研 autonomy/core；模型与记忆由宿主管理 |
 
 Numen 身体不依赖主人常开 Minecraft 客户端。Numen 网络适配仅对 `numen_api:main` 增加缺席客户端支持，已安装客户端仍校验原协议版本；缺席客户端不接收 Numen GUI 消息。其他模组的网络检查、游戏权限和碰撞规则保持。本轮包含缺席 Numen 的协议联机验证，尚未做真人客户端全部界面验收。
 

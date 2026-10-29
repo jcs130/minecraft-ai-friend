@@ -239,7 +239,14 @@ class Settings:
         if len(username) > 254 or (username and auth == "offline" and not re.fullmatch(r"[A-Za-z0-9_]{1,16}", username)):
             raise SettingsValidationError("server.username", "invalid_username")
         version = _text(server, "version", "1.21.1")
-        if version != "1.21.1" and not (body_provider == "java-client" and version == "1.20.6"):
+        # A legacy Forge world needs an explicit, hash-checked engine port; it
+        # must never silently select the ordinary vanilla transport. Full port
+        # validation below remains authoritative, including paired local paths.
+        engine_hint = raw.get("server_extension", {})
+        legacy_forge = (version == "1.20.1" and body_provider == "mineflayer"
+                        and isinstance(engine_hint, dict) and bool(engine_hint.get("engine_module"))
+                        and bool(engine_hint.get("engine_sha256")))
+        if version != "1.21.1" and not (body_provider == "java-client" and version == "1.20.6") and not legacy_forge:
             raise SettingsValidationError("server.version", "unsupported_version")
         if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
             raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")

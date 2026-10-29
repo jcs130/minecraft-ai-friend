@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.128
+
+- Pin canonical engine-only core rc.130, including its explicit protected transport construction hook.
+- Allow the separate 1.20.1 Forge consumer only with a validated, hash-paired local engine port. Preserve 1.21.1 defaults, the original native queue, ownership, unknown-result fence and model/personality ports.
+- The SAO integration verifies actual entry and gathering separately. This release does not claim full mod interfaces, recipes, quest-book rendering or sustained survival acceptance.
+
 ## 0.2.122
 
 Bound repeated failed container opening even when its dependent take step is

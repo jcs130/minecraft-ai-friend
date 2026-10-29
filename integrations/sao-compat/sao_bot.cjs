@@ -6,14 +6,17 @@ const { attachForge } = require('./forge_client.cjs')
 const { applyNativeRegistry } = require('./native_registry.cjs')
 const { attachTauNativeClient } = require('../tau-ceti/native-bridge/native-client.cjs')
 
-function createSAOBot ({ root, username = 'SAOBridgeProbe' }) {
+function createSAOBot ({ root, username = 'SAOBridgeProbe', botOptions = {} }) {
   root = path.resolve(root)
   if (JSON.parse(fs.readFileSync(path.join(root, 'pack-source.json'))).scope !== 'isolated_testing') throw new Error('marked_lab_required')
   // Validate and prepare before opening a socket, so a stale cache cannot leave
   // an accidental half-connected body behind when construction throws.
   const prepared = require('prismarine-registry')('1.20.1')
   const metadata = applyNativeRegistry(prepared, root)
-  const bot = mineflayer.createBot({ host: '127.0.0.1', port: 39676, username, version: '1.20.1', auth: 'offline',
+  for (const [key,expected] of Object.entries({host:'127.0.0.1',port:39676,version:'1.20.1',auth:'offline'})) {
+    if (botOptions[key] !== undefined && botOptions[key] !== expected) throw new Error(`SAO_LAB_CONNECTION_MISMATCH:${key}`)
+  }
+  const bot = mineflayer.createBot({ ...botOptions, host: '127.0.0.1', port: 39676, username, version: '1.20.1', auth: 'offline',
     hideErrors: true, physicsEnabled: false,
     customPackets: { '1.20': { play: { toClient: { types: {
       packet_declare_recipes: ['container',[{name:'nativeRecipeBytes',type:'restBuffer'}]]

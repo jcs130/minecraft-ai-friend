@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "scope": "isolated_testing",
+  "observedAt": "2026-10-29T13:47:05.703499+00:00",
+  "productionTouched": false,
+  "core": {
+    "version": "0.5.7-rc.130",
+    "sourceRevision": "d38ff88ac262ca04a5a938ea4361cbe5f8b4abea",
+    "archiveSha256": "5a87ee19acfbc30315343b513e851cabc719bb95dd6a58b7555e68f9d7e36db3",
+    "canonicalBuildPnpm": "11.5.0",
+    "fullTests": {
+      "passed": 2548,
+      "skipped": 7,
+      "failed": 0
+    }
+  },
+  "autonomy": {
+    "version": "0.2.128",
+    "fullTests": {
+      "passed": 1708,
+      "skipped": 25,
+      "failed": 6
+    },
+    "sameSixFailuresReproducedOnUpstream": "c7da224a",
+    "configurationTestsPassed": 68
+  },
+  "adapterTestsPassed": 14,
+  "live": {
+    "phase": "running",
+    "gameConnected": true,
+    "autonomyRunning": true,
+    "runtimeSession": "11cfc20f-ed02-4c12-a706-2dc5c3b06339",
+    "bodyName": "ag_Kirito",
+    "bodyUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "transport": "mineflayer_forge_native",
+    "observed": {
+      "at": "2026-10-29T13:47:05.167Z",
+      "dimension": "minecraft:overworld",
+      "position": {
+        "x": 1379.4998091474854,
+        "y": 89.24918707874468,
+        "z": -1115.843913588
+      },
+      "health": 20,
+      "food": 13,
+      "inventory": {
+        "mod_1cab0b39:adventurer_guide": 1,
+        "patchouli:guide_book": 2,
+        "oak_log": 4,
+        "pfm:furniture_book": 1,
+        "simukraft:guide_book": 1,
+        "mod_1cab0b39:record_crystal": 1,
+        "mod_1cab0b39:profession_switch_scroll": 1,
+        "mod_1cab0b39:healing_crystal": 3,
+        "mod_1cab0b39:refining_stone": 4,
+        "mod_1cab0b39:stag_whistle": 1,
+        "touhou_little_maid:smart_slab_init": 1
+      }
+    },
+    "model": {
+      "route": "standalone_text",
+      "image_used": false,
+      "provider": "openai-compatible",
+      "protocol": "chat",
+      "model": "qwen3.7-plus",
+      "stream": false,
+      "latency_ms": 7829,
+      "first_output_ms": null,
+      "usage": {
+        "prompt_tokens": 18308,
+        "completion_tokens": 432,
+        "total_tokens": 18740,
+        "cached_tokens": 12032
+      }
+    },
+    "decisionsInCurrentSession": 32,
+    "initialPlacementByMaintainer": true,
+    "modelMemoryCopiedFromPaper": false,
+    "windowsAutostart": false
+  },
+  "protection": {
+    "config": "server/config/maw-structure-protection.json",
+    "explicitRegions": [
+      "sao-lab-camp"
+    ],
+    "generatedStructurePieces": true,
+    "actualVillageChecked": "minecraft:village_plains",
+    "sampleProtectedRoof": {
+      "x": 1258,
+      "y": 89,
+      "z": -962
+    },
+    "numenActualDigDenied": true,
+    "containerStillWorks": true,
+    "packedClientRules": [
+      "deny",
+      "allow_likely",
+      "unknown"
+    ],
+    "allModDirectWorldWritesVerified": false,
+    "rawMineflayerPredictionAnomalyObserved": true
+  },
+  "limitations": [
+    "Initial distant village generation stalled tick for approximately 53 seconds and a probe timed out.",
+    "Full client book GUI, Forge recipe discovery/crafting, web/Bedrock rendering and complete mod gameplay remain unverified.",
+    "No main city map is included; imported/manual buildings require explicit region registration."
+  ],
+  "reports": {
+    "core-rc130-tests-built.log": "ddbe237cb45a7c1e544aa2e94c99362a1296eb8366c0823d32849c1b31404118",
+    "core-rc130-typecheck.log": "09991df1034b9afeaaa4113c68c4aabd61fdbaa09daf8300bc729b6a7feb16f7",
+    "autonomy128-tests-final.log": "f360996bff908a8bfa81d4d0c1a207bb33eb4a94804de2cee1f94c4967d4e84b",
+    "autonomy-upstream-windows-baseline.log": "77edd7dc9a28878b501decbfd47b719c2c9b8a52f18d95d67519bed8ff39e09b",
+    "sao-tests-final.log": "b5b8783929a305ae2a57d7007ee1a12422f34e24cd2aeba5a499f6f661f46341",
+    "autonomy128-configuration.log": "8ea53ee2a20adbe6d816eaa98e9e3f8e49c79e05fa7385d3cc75ae8b37448be3",
+    "core-packed-forge-live.json": "c5212d0f875e17990eb6a198f937ae2ff951e58dc46680105276604d34392e9d",
+    "protection-live.json": "3e4ae97a26370cab691769be3b5f3e48bb720f171ebe31d88aaea623e05893ac"
+  }
+}

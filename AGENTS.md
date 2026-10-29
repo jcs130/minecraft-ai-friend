@@ -1,3 +1,7 @@
+## 2026-10-29 SAO 桐人已自主运行，建筑保护已启用
+
+仅 SAO 回环实验服39676/39689：桐人ag_Kirito使用自研autonomy0.2.128+core rc.130与线上qwen3.7-plus，通过Mineflayer/Forge原生桥接持续运行；实际自主采木0→4、普通移动/容器交互、正常停止/原身份重连已验，不等于完整模组剧情或长期生存。MC核心已合入上游c7da224a并增加显式createBot扩展点；独立d38ff88a源码归档以pnpm11.5.0正式构建，核心2548通过/7跳过、14项SAO及正式打包实连三态保护回执通过。自主全量1708通过/25跳过/6项Windows长路径及DPAPI环境失败，未改上游同6失败已复现。服务端保护人工登记区域及原生生成结构piece，普通Numen/Mineflayer拆放被拦，草木/容器保留；真实村庄屋顶实挖未损。只登记实验营地，包无主城地图；导入/手建城市须登记范围，任意模组直接世界写入尚未全验。初次远处村庄生成曾阻塞53秒使测试连接超时，后续重连/采木成功不代表生成性能已解决。原Paper/Tau、网络及监护未变；实验没有Windows开机自启，勿把原探针/维护命令重放。见integrations/sao-compat/KIRITO.md、PROTECTION.md及kirito-acceptance-20261029.json；客户端书页、Forge自动配方、Web/基岩仍待接入。
+
 ## 2026-10-29 SAO 0.76.1-lite 接入仅为回环实验候选
 
 integrations/sao-compat 在 E:/MC/research/sao-0.76.1-agent-20261029 建立独立 MC1.20.1 / Forge47.4.10 / Java17 候选；171 个作者服务端 JAR 加最新对应 Numen0.1.4.1 与自有桥，共173个。游戏TCP39676、Owner Token MCP TCP39689均仅127.0.0.1，未接现役Watchdog或公网；现役Paper及Tau1.21.1（28976/28977）不变，不能据本条切换主服。Numen身体及Mineflayer+原生SDK都已登录、实际移动和操作农夫乐事锅；原UUID重启恢复、动作去重、停止、7项真实鉴权检查已验，28项源码回归通过。每JVM导出真实ID并校验epoch，原版配方流保留原字节且快捷静态合成拒绝；不要冒称完整玩法或渲染已适配。Numen客户端可选仅修改其本身频道缺席策略，其他模组/游戏权限保持。Ftb标题、作者FTB客户端辅助、Vzling公共初始化及KubeJS残片访问均为精确兼容修复，不分发改造过的第三方JAR。配方目录/魔力、完整战斗和任务书、真人全界面/Web/基岩、远程注册表分发尚待验；初期分块保存并发异常、现存启动诊断和FML握手警告保留跟踪。说明及证据见 integrations/sao-compat/README.md、VALIDATION.md；不要把实验服的命令/补丁应用到现役服。

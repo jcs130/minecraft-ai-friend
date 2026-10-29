@@ -27,6 +27,7 @@ def generate(root):
         register("maw_agent:menu_action",ACTION_BYTES,true);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent e)->{LAST_READ.remove(e.getEntity().getUUID());SUBSCRIPTIONS.remove(e.getEntity().getUUID());ACTION_RATES.remove(e.getEntity().getUUID());});
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStartedEvent e)->RegistryExport.write(e.getServer(),EPOCH));
+        StructureProtection.install();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e)->{
             if(e.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
             var server=net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();

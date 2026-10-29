@@ -1,0 +1,40 @@
+# 桐人：SAO 隔离世界
+
+2026-10-29，`ag_Kirito` 已用线上 `qwen3.7-plus` 进入本服，并实际完成天然树木采集：原木从 0 增到 4，生命/饥饿均为 20。模型使用结构化游戏工具，本轮 `image_used=false`。最初测试营地和后来村庄附近的初始位置由维护者准备，不能算成 Agent 自主建造或长途寻路成果。
+
+## 组成和边界
+
+- 游戏：SAO 0.76.1-lite / Forge 1.20.1，`127.0.0.1:39676`。
+- 桐人身体：普通生存 Mineflayer 玩家，经 FML3 和当前 JVM 原生注册表接入。此次没有把桐人换成 Numen 假玩家；Numen 入口及原测试身体仍保留。
+- 执行：`agent-mc-world 0.5.7-rc.130`。通用核心增加显式 `Bridge.createBot` 扩展点；服务器代码在包外，原队列、任务身份、取消和未知结果门禁保持。
+- 宿主：自研 `agent-mc-autonomy 0.2.128`，拥有唯一模型循环。当前 `max_decisions=0` 为持续运行；没有新增另一套动作调度器。
+- 模型：已有 QwenPaw 原生凭据库的 `builtin/aliyun-tokenplan.json`，由维护启动器解密后只传给子进程环境。没有写入 Git、游戏聊天或启动参数。
+- 记忆：`kirito-runtime/data/sessions/`，按当前服务器/账号及核心世界作用域隔离。未复制 Paper 桐人的个人记忆、背包或进度。账号名字/离线 UUID 相同不代表两个世界共享存档。
+
+已实际使用：状态和真实模组物品读取、原队列移动、箱子交互、野外采木、停止与原身份重连。初始 4 原木里程碑完成后，维护者把第二阶段目标设为寻找食物、探索村庄及记录绝对坐标，避免反复尝试尚未桥接的客户端书页。这不是自主学会任务书或完成剧情的证据。
+
+`mc_native` 只读本人原生状态/库存/菜单/能力，`mc_protect` 只读本人的拆放规则；通过原 MCP 工具目录及 `mc_invoke` 调用。两者都有 `read` 标签。菜单写入仍须经原动作所有权和队列，不能因为服务端 SDK 可点击就另开一条宿主写队列。
+
+## 维护
+
+运行目录：`E:/MC/research/sao-0.76.1-agent-20261029/kirito-runtime`。`process.json` 记录维护启动器 PID；真正状态以 `data/sessions/<identity>/host/status.json` 为准。检查 `phase`、`game_connected`、`autonomy_running`、观测时间、`pending` 和 `planner_error`，不要仅凭进程存在判断正常。
+
+前台启动（后台使用 PowerShell `Start-Process -WindowStyle Hidden` 并分别重定向输出）：
+
+```powershell
+& 'C:/Users/lzl19/.qwenpaw/venv-2.2.2-20261016/Scripts/python.exe' -X utf8 integrations/sao-compat/launch_kirito.py --root E:/MC/research/sao-0.76.1-agent-20261029 --provider builtin/aliyun-tokenplan.json --goal-file E:/MC/research/sao-0.76.1-agent-20261029/kirito-runtime/goal.txt
+```
+
+同一条命令追加 `--command status` 可读状态。停止时追加 `--command stop --request-id <UUID>`；为这一停止请求保留原 UUID，对账后确认 `phase=stopped`、`pending=[]`、原游戏连接已断，再升级或重启。不要重放未知动作、清空日志或启动两个控制器。目标改变用原自主框架的 `feedback`/`submit-goal` 信箱，不另写游戏操作循环。
+
+`setup_kirito.py` 只创建全新空目录，读取哈希锁定的独立核心归档，冻结适配源码与插件契约；已有部署拒绝覆盖。Numen、原生桥及保护组件升级仍须正常保存退出实验 JVM。没有加入现役自动启动/Watchdog，也没有配置 Windows 开机自启。
+
+## 验收与限制
+
+核心全量：2548 通过、7 跳过；类型检查、正式 engine 构建及独立安装核验通过。SAO 协议/注册表/保护客户端 14 项通过；自主配置相关 68 项通过。正式打包消费者实连收到本人原生物品，并分别获得 `deny`、`allow_likely`、`unknown`，随后正常断线。
+
+自主框架全量为 1708 通过、25 跳过、6 失败；6 项涉及当前 Windows 的长路径夹具和 DPAPI 凭据写入，已在未改动的上游 `c7da224a` 独立目录复现同样 6 项失败。本次缺失旧核心归档的问题由更新 rc.130 的正式归档和锁定信息解决，归档安装检查已通过。不能写成全套全部通过，也没有改变操作系统或放松凭据/归档校验。
+
+已有确实的模型决策、原生任务和实际库存变化；长期存活、完整战斗及全模组玩法仍未验收。Forge 配方目录/自动合成、客户端专属书页和完整任务书操作、Web/基岩界面仍待接入。普通物品使用返回“发出请求、效果未知”不能当成已读书页或已完成任务。
+
+首次定位/生成远处村庄曾阻塞 tick 约 53 秒，并造成测试连接心跳超时；这是维护者初始放置产生的负载。之后桐人已从原位置重连并真实采木，不能据此称大型新区生成或战斗负载已解决。原整合包的既有 FML/客户端类诊断继续保留。
