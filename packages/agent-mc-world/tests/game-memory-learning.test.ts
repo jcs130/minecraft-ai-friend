@@ -98,6 +98,22 @@ it('retains bounded PreparedContext and exact citations without automatic inject
   await expect(bad.service.execute(call('prepare', { query: 'water' }), ctx, cfg)).rejects.toThrow('Invalid learning response');
 });
 
+it('retains an existing service binding across native maps without renaming local notes or relaxing actor ownership',async()=>{
+ const content='Historical, source-attributed context.';
+ const f=setup(()=>json({schema:'powercontext.prepared-context.v1',status:'ready',content,content_bytes:Buffer.byteLength(content)}));
+ const prepare=call('prepare',{query:'existing history',max_bytes:512});
+ // Establish exactly the pre-upgrade server/account/agent binding.
+ await f.service.execute(prepare,ctx,cfg);
+ const mapA={...ctx,scope:{...ctx.scope,realm:JSON.stringify([ctx.scope.realm,'native-map-a'])},serviceScope:ctx.scope};
+ const mapB={...mapA,scope:{...ctx.scope,realm:JSON.stringify([ctx.scope.realm,'native-map-b'])}};
+ await expect(f.reopen().execute(prepare,mapA,cfg)).resolves.toMatchObject({result:{content}});
+ await expect(f.reopen().execute(prepare,mapB,cfg)).resolves.toMatchObject({result:{content}});
+ expect(f.request).toHaveBeenCalledTimes(3);
+ await expect(f.service.execute(prepare,{...mapA,serviceScope:{...ctx.scope,agent:'other'}},cfg)).rejects.toThrow('active game account and agent');
+ await expect(f.service.execute(prepare,{...mapA,serviceScope:{...ctx.scope,realm:'another-server'}},cfg)).rejects.toThrow('another server/account/agent');
+ expect(f.request).toHaveBeenCalledTimes(3);
+});
+
 it('blocks invented/self evidence, duplicate samples, injected scopes, unbound accounts and incorrect targets before a write', async () => {
   const { service, request } = setup(() => json(artifactReply()));
   await expect(service.execute(call('record_outcome', { ...outcome, observations: [{ text: 'Success', basis: 'verified', evidence: [] }] }, 'bad1'), ctx, cfg)).rejects.toThrow('prior exact');

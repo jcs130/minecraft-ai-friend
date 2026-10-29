@@ -4832,13 +4832,14 @@ export class MinecraftWorld implements World {
           const bot = this.bridge?.bot;
           const result = await this.gameMemoryService.execute(args, {
             scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
+            serviceScope: { realm: this.serverRealmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             dimension: bot?.entity && bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null,
             capture: () => {
               const snap = this.snapshot({ scanBlocks: false });
               if (!snap || !bot?.entity || !bot.game?.dimension) throw new Error('Minecraft not connected; cannot capture historical cached facts as current');
               return { observedAt: new Date().toISOString(), dimension: normalizeDimension(snap.dimension),
                 reference: `runtime:${this.executionEpoch}:connection:${this.connectionGeneration}`,
-                content: JSON.stringify({ position: snap.position, dimension: snap.dimension,
+                content: JSON.stringify({ world: readWorldIdentity(bot), position: snap.position, dimension: snap.dimension,
                   health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
                   inventory: snap.invSynced ? snap.inventory.map(i => ({ name: i.name, count: i.count })) : null,
                   inventorySync: snap.inventorySync ?? null }) };

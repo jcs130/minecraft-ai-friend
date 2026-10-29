@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.7-rc.131
+
+Keep the existing server/account/agent binding for optional memory-service workflows across native map changes. Local spatial notes retain their separate native-map namespaces and captures include native world identity. Preserve ownership rejection and pending-correction checks; do not rebind or rewrite existing memory ledgers.
+
 ## 0.5.7-rc.130
 
 Keep durable goal intentions scoped to server/account/agent across native map changes; map-specific runtime proof is re-read. Preserve the original checkpoint namespace instead of silently replacing it when upgrading world identity isolation.

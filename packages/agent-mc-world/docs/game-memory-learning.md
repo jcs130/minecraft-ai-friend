@@ -27,6 +27,8 @@ N.E.K.O / standalone `[memory]` uses `scope_id`, `api_key_env`, `search_mode`, `
 
 **Select an existing Scope dedicated to this game's server, account and Agent.** Notebook replication's `kind` filter alone cannot isolate service-wide experience/context recall. The core persists a service-Scope → game-identity binding and refuses another identity within that data directory. Separate installations still require correctly isolated Scopes and service-side credentials/permissions. A shared administrator token is not proof of authorship. The core never treats a remembered authorization as current authorization.
 
+The service binding remains stable when the player changes native maps on the same server. Local spatial notes stay partitioned by native map, and captured observations name their actual native world. This preserves existing service bindings without merging local notebooks, rewriting remote memory, or treating historical locations as current facts. SDK integrations that provide `GameMemoryContext` directly may supply a trusted `serviceScope` with the same account and Agent; tool arguments cannot override it.
+
 ## Progressive tool use
 
 Start with:

@@ -24,6 +24,8 @@ export type MemoryCandidate = Revision & { id: string };
 interface Book { version: 1; scopeKey: string; entries: Entry[] }
 export interface GameMemoryContext {
   scope: GameMemoryScope;
+  /** Host-owned stable service identity; local historical records can still be partitioned by native map. */
+  serviceScope?: GameMemoryScope;
   dimension: string | null;
   /** Must read current, connected runtime facts; never return cached disconnected state. */
   capture?: () => { observedAt: string; dimension: string; content: string; reference: string };

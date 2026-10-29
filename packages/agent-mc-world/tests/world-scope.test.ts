@@ -9,7 +9,7 @@ import { installWorldIdentity, readWorldIdentity, worldScopedRealm } from '../co
 import { ChestBook } from '../core/chests.ts';
 import { Executor } from '../core/executor.ts';
 import { MinecraftWorld } from '../core/world.ts';
-import { nullLogger } from '../src/client/index.ts';
+import { MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
 
 const require = createRequire(import.meta.url);
 const mf = createRequire(require.resolve('mineflayer'));
@@ -164,6 +164,25 @@ it('the actual World realm key changes for a native level switch even when the d
   expect(world.realmKey()).not.toBe(original);
   expect(world.realmKey()).toContain('minecraft:aincrad');
   expect(b.game.dimension).toBe('overworld');
+});
+
+it('the actual memory tool retains the server service identity while local notes follow the native map', async () => {
+  const b = bot(); installWorldIdentity(b); enter(b, 'minecraft:overworld');
+  const world: any = new MinecraftWorld({ cfg: { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), enabled: false,
+    host: 'fixture.test', username: 'fixture', memoryAgentId: 'fixture-agent' } });
+  world.bridge = { bot: b };
+  world.host = { log: nullLogger() };
+  const execute = vi.fn(async () => ({ fixture: true }));
+  world.gameMemoryService = { execute };
+  const tool = world.tools().find((value: any) => value.name === 'mc_memory');
+  const args = { action: 'service', operation: 'prepare', payload: { query: 'historical route' } };
+  await tool.handler(args, { role: 'main', log: nullLogger() });
+  enter(b, 'minecraft:aincrad', 'respawn');
+  await tool.handler(args, { role: 'main', log: nullLogger() });
+  const [first, second] = execute.mock.calls.map(call => call[1] as any);
+  expect(second.scope.realm).not.toBe(first.scope.realm);
+  expect(second.serviceScope).toEqual(first.serviceScope);
+  expect(first.serviceScope).toEqual({ realm: world.serverRealmKey(), account: 'offline:fixture', agent: 'fixture-agent' });
 });
 
 it('replaces a lost world observation with explicit unknown rather than leaving the prior identity current', () => {
