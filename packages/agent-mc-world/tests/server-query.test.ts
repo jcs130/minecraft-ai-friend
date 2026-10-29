@@ -53,6 +53,19 @@ describe('read-only server query lane', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('returns only the rejected query contract so a missing subject can be repaired without guessing or retrying', () => {
+    const {lane,send,context}=setup();
+    const selected={...definitions[1],description:'Read one inventory. arguments:["observed_inventory_id"].'};
+    const result=lane.call({query:'inventory'},[definitions[0],selected],context);
+    expect(result.data?.queryDefinition).toEqual({id:selected.id,description:selected.description});
+    expect(result.text).toContain('observed_inventory_id');
+    expect(send).not.toHaveBeenCalled();
+    const repaired=lane.call({query:'inventory',arguments:['personal']},[definitions[0],selected],context);
+    expect(repaired.data).toMatchObject({phase:'sent'});
+    expect(send).toHaveBeenCalledOnce();expect(send).toHaveBeenCalledWith('/inventory personal');
+    lane.reset('Fixture finished');
+  });
+
   it('lists configured protocols offline and does not become a body/barrier tool', () => {
     const { lane } = setup();
     expect(lane.call({}, definitions, null).data?.queries).toEqual(definitions.map(({ id, description }) => ({ id, description })));

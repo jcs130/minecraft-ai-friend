@@ -150,10 +150,15 @@ export class ServerQueryLane {
       }
     }
     let command: string | null;
+    const argumentFailure = (message: string): ToolOutcome => {
+      const queryDefinition = {id:definition.id,description:definition.description.slice(0,1024)};
+      return {text:message+'\n'+JSON.stringify({queryDefinition,next_safe_read:{tool:'mc_query',arguments:{}}}),
+        failed:true,data:{goal_completed:false,queryDefinition,next_safe_read:{tool:'mc_query',arguments:{}}}};
+    };
     try { command = definition.command(Object.freeze([...arguments_])); }
-    catch { return failure('The query definition rejected its arguments. No query was sent.'); }
+    catch { return argumentFailure('The query definition rejected its arguments. No query was sent.'); }
     if (typeof command !== 'string' || command.length === 0 || command.length > 1024 || /[\r\n\0]/u.test(command)) {
-      return failure('Invalid arguments for this server query. No query was sent.');
+      return argumentFailure('Invalid arguments for this server query. Read the selected definition below and correct its arguments. No query was sent.');
     }
     const sentAtMs = this.now();
     const record: Record_ = { definition, key, dispatching: true, receipt: {

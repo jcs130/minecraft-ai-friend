@@ -158,13 +158,21 @@ export function knownChestNote(bot: Bot, chests: ChestBook | undefined): string 
   if (!best) return null;
   const r = best.rec;
   const origin = r.placedAt !== undefined ? '你放的' : '你开过的';
+  // The ledger is a previous observation, not a live block lookup. Retain it
+  // when the block changes, but show the contradiction before suggesting travel.
+  const live = typeof bot.blockAt === 'function' ? blockAtCell(bot, r) : null;
+  const clock = new Date(r.observedAt ?? NaN);
+  const observed = Number.isFinite(clock.getTime()) ? clock.toISOString() : '时间未知';
+  const current = !live ? '该格当前未加载，现状未知'
+    : CONTAINER_FIND.includes(live.name) ? `该格现读为${zhName(live.name)}，内容仍须开窗核验`
+      : `该格现读为${zhName(live.name)}，不是容器，不能沿用旧箱位置与库存`;
   return `;账上本维度最近的是${origin}${zhName(chestBlockName(r))}`
-    + ` (${r.x}, ${r.y}, ${r.z}),直线 ${Math.round(best.d)} 格(上次看见)`;
+    + ` (${r.x}, ${r.y}, ${r.z}),直线 ${Math.round(best.d)} 格(历史观测 ${observed})；${current}`;
 }
 
 /** 附近一个容器都扫不到:两处(stow / take)共用同一句措辞与同一段账本补注 */
 export function noContainerNearby(bot: Bot, ctx: SkillContext): SkillBlocked {
-  return new SkillBlocked(`32 格内没有箱子${knownChestNote(bot, ctx.chests) ?? ''}`);
+  return new SkillBlocked(`当前已加载方块中，32 格内未找到可识别的容器；未加载区域与插件虚拟仓储未由此查询确认${knownChestNote(bot, ctx.chests) ?? ''}`);
 }
 
 /**
