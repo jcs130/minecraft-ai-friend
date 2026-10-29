@@ -101,11 +101,13 @@ python paper/self-host/selfhost.py doctor
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.30** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.9** |
+| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.30** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.10** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
-| 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
+| 网站 | 正式 **0.8.28**（源码0.8.29照片管理仍候选）：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
 | 通用 MC 核心 | [主干 **0.5.7-rc.129**](packages/agent-mc-world/package.json)，含[原版世界身份与位置记忆隔离](packages/agent-mc-world/docs/world-identity.md)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
+
+**未发布与未完成事项：**照片全量管理、Skill/Harness与离线包核心更新、基岩高清YSM、核显原生相机、跨服账号、换职/洗点和拍卖等见[逐项核查](docs/PROJECT_STATUS.md)及[机器清单](paper/manifests/release-readiness-20261029.json)。旧候选清单不是当前发布队列。
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。
 

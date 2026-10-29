@@ -19,7 +19,11 @@
     "WorldObserver": "0.1.1",
     "QiandengVoice": "0.1.0",
     "SimpleVoiceChat": "2.6.27",
-    "EssentialsChat": "2.22.0"
+    "EssentialsChat": "2.22.0",
+    "MultiverseCore": "5.8.1",
+    "Freesia": "2.5.1+2.4.1.af5",
+    "AgentAppearance": "0.3.4",
+    "AgentAppearanceBedrock": "0.1.0"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -54,7 +58,7 @@
   "verification": {
     "gameRuntimeChecks": 32,
     "backup": "20261029-040022",
-    "backupColdRefreshedAt": "2026-10-29T17:15:54+08:00",
+    "backupColdRefreshedAt": "2026-10-29T19:48:24.7047483+08:00",
     "unrelatedPluginJarsPreserved": 50,
     "existingAccountCredentialsPreserved": 68,
     "finalReturningAuthenticationConfirmed": true,
@@ -101,12 +105,21 @@
     "releaseRecoveryAnchor": "20261028-230739",
     "document": "paper/docs/BACKUP_RETENTION_20261029.md",
     "historicalCleanup": {
-      "state": "partially-completed-rest-deferred-offline",
-      "directoriesRemoved": 17,
-      "remainingDirectories": 12,
-      "spaceReclaimedBytes": 698215063552,
-      "retainedCompletePerDrive": 9,
-      "onlineBulkDeletion": false
+      "state": "original-partial-attempt-completed-in-subsequent-offline-maintenance",
+      "originalPartialAttempt": {
+        "state": "partially-completed-rest-deferred-offline",
+        "directoriesRemoved": 17,
+        "remainingDirectories": 12,
+        "spaceReclaimedBytes": 698215063552,
+        "retainedCompletePerDrive": 9,
+        "onlineBulkDeletion": false
+      },
+      "latestKnownStatus": {
+        "remainingPlannedDirectories": 0,
+        "completeMarkersPerDrive": 8,
+        "offlineCompletionDocument": "paper/docs/BACKUP_RETENTION_20261029.md",
+        "markerCountAuditedAt": "2026-10-29T21:04:28+08:00"
+      }
     },
     "helperSha256": "3141475be29d67e978bae5896ae1e706695aaeed9cfc12d4a3c8dd0e8b32579c",
     "safetyChecks": 27
@@ -171,5 +184,22 @@
     "originalPermissionsPreserved": true,
     "websiteChatFormatCompatible": true,
     "websiteMessagesVerified": 18
+  },
+  "releaseReadinessAudit": {
+    "auditedAt": "2026-10-29T21:04:28+08:00",
+    "document": "docs/PROJECT_STATUS.md",
+    "manifest": "paper/manifests/release-readiness-20261029.json",
+    "pendingItems": 22,
+    "productionCodeChanged": false,
+    "servicesRestarted": false
+  },
+  "distribution": {
+    "coreSource": "0.5.7-rc.129",
+    "publicSkill": "1.3.3",
+    "publicSkillCore": "0.5.7-rc.95",
+    "harnessBodyCore": "0.5.7-rc.95",
+    "website": "0.8.28",
+    "photoLibraryCandidate": "0.8.29",
+    "npmCore129Published": false
   }
 }
