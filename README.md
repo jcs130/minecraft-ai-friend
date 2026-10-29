@@ -1,6 +1,6 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.27、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.6已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/RPG_UNIFIED_20261028.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.120，源码更新不冒充外部客户端已升级。
+**当前正式版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.27、VortexRPG1.2.2-alpha（1.21.1兼容及中文补丁）、QiandengjiRpg0.2.6已上线；官网0.8.28同步原生RPG指南。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布、验证与回滚](paper/docs/RPG_UNIFIED_20261028.md)。Skill下载仍为1.3.3、内置核心rc.95；主干MC核心为0.5.7-rc.124，源码更新不冒充外部客户端已升级。照片全量管理0.8.29与罗盘修复0.4.47.28为待部署候选。
 
 运维状态：原 E 盘服已恢复开放。[NVMe 迁移](paper/docs/NVME_RUNTIME_20261029.md)因逐文件权限校验中止，修正版通过 57 项隔离检查，仍待 Windows 确认；C 盘候选副本尚未启用。
 
@@ -102,7 +102,7 @@ python paper/self-host/selfhost.py doctor
 | 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.25** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.4** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站源码 | 正式 **0.8.28**：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
-| 通用 MC 核心 | [主干 **0.5.7-rc.116**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
+| 通用 MC 核心 | [主干 **0.5.7-rc.124**](packages/agent-mc-world/package.json)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
 | FOM 模组世界 | **敬请期待**，尚未正式开放 |
 
 近期任务改进见 [旅途与短文本指引](paper/docs/TASK_ROUTE_DISCOVERY.md)。组件对应关系与已知限制见 [项目状态](docs/PROJECT_STATUS.md)；历史工程完整保存在 [legacy/pre-paper-main-20261023](https://github.com/jcs130/minecraft-ai-friend/tree/legacy/pre-paper-main-20261023)，分支说明见 [这里](docs/BRANCHES.md)。
