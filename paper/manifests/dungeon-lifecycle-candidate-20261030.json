@@ -1,0 +1,58 @@
+{
+  "status": "candidate-not-deployed",
+  "date": "2026-10-30",
+  "baseline": {
+    "version": "0.4.47.32-vortex",
+    "sha256": "b0249c75fe62e5d0dafbbe730f98aaf328e44789fb8fdc59934e7f82ba848374"
+  },
+  "candidate": {
+    "version": "0.4.47.34-candidate",
+    "artifact": "AgentFriend-0.4.47.34-candidate.jar",
+    "sha256": "42022bb92d8738a873ad1ebb1152c7b2d461a29b0f1e8032284d369604e643e9",
+    "includesRecipientReviewCommit": "9312886c",
+    "changedZipEntries": [
+      "org/afuhome/agentfriend/SiteDungeonManager.class",
+      "org/afuhome/agentfriend/TrialRescueManager.class",
+      "plugin.yml"
+    ],
+    "preservedZipEntries": 597,
+    "homeWarpConfigIncluded": false
+  },
+  "behavior": {
+    "standingExitPolicy": "stay-in-place-with-explicit-withdrawal-notice",
+    "downedRecovery": "existing-logic",
+    "activeRuleChanged": false,
+    "newCommands": false,
+    "newScheduler": false,
+    "newAutomaticTeleport": false,
+    "privateReceiptsOnly": true,
+    "nativeStateClearsExpiredCheckpoint": true,
+    "historicalOutcomesAreNotRescueGuarantees": true
+  },
+  "verification": {
+    "fullCompile": true,
+    "unitAndRegressionChecks": 207,
+    "realProtocolAndColdChecks": 38,
+    "baselineNegativeCheck": true,
+    "realDamageDuringValidRun": true,
+    "actualNativeCustomPayloadAfterTimeout": true,
+    "otherTeamDoesNotReviveMembership": true,
+    "memberLeavePreservesOtherMemberRun": true,
+    "oldFormatOutcomeAfterColdStart": true,
+    "standingLocationAndInventoryPreserved": true,
+    "qaNormalStopAndBaselineRestored": true,
+    "firstFixtureConfigFailureRetained": true,
+    "autonomousCombatBalanceVerified": false,
+    "actualThirtyMinuteWait": false
+  },
+  "production": {
+    "changed": false,
+    "restartPerformed": false,
+    "playersMovedOrReset": false,
+    "credentialsChanged": false,
+    "skillDownloadUpdated": false,
+    "goddessGuidanceUpdated": false,
+    "deployed": false,
+    "liveEffectVerified": false
+  }
+}
