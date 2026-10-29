@@ -25,6 +25,12 @@ function Content-ProximityVoiceTarget([string]$relative) {
         'plugins/voicechat/voicechat-server.properties')
 }
 
+function Content-NearbyChatTarget([string]$relative) {
+    # One official companion module and two reviewed static files only.
+    return $relative -cin @('EssentialsXChat-2.22.0.jar',
+        'plugins/Essentials/config.yml','plugins/Essentials/messages/messages_zh.properties')
+}
+
 function Content-AgentVisionJar([string]$name) {
     return $name -ceq 'AgentVision-0.1.0.jar' -or $name -ceq 'AgentVision-0.1.1.jar' -or $name -ceq 'AgentVision-0.1.2.jar'
 }
@@ -62,7 +68,7 @@ function Content-MultiverseTarget([string]$relative) {
 }
 
 function Content-NativeRpgJar([string]$relative) {
-    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','QiandengjiRpg-0.2.9.jar','Vault-1.7.3.jar')
+    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','QiandengjiRpg-0.2.9.jar','QiandengjiRpg-0.2.10.jar','Vault-1.7.3.jar')
 }
 
 function Content-NativeRpgTarget([string]$relative) {
@@ -143,12 +149,12 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative) -and -not (Content-McbotJar $relative) -and -not (Content-ProximityVoiceJar $relative)) { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative) -and -not (Content-McbotJar $relative) -and -not (Content-ProximityVoiceJar $relative) -and -not (Content-NearbyChatTarget $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
             if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
             $target = Join-Path $serverDir $relative
-        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative) -or (Content-NativeRpgTarget $relative) -or (Content-ProximityVoiceTarget $relative)) {
+        } elseif ((Content-AincradProtectionTarget $relative) -or (Content-ConquestScoreboardTarget $relative) -or (Content-AgentAntiCheatTarget $relative) -or (Content-MultiverseTarget $relative) -or (Content-NativeRpgTarget $relative) -or (Content-ProximityVoiceTarget $relative) -or (Content-NearbyChatTarget $relative)) {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'plugins/OlEncounters/schematics/qd_forest_camp.schem') {
             $target = Join-Path $serverDir $relative

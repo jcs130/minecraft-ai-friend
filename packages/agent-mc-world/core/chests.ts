@@ -38,6 +38,8 @@ export interface ChestRecord {
   y: number;
   z: number;
   dimension: string;
+  /** Server AND native world namespace. Absent on legacy records; never inferred on load. */
+  realm?: string;
   items: ItemStack[];
   usedSlots: number;
   slots: number;
@@ -95,8 +97,8 @@ export function matchMaterialName(
   return name.endsWith(`_${query}`);
 }
 
-function chestKey(dimension: string, p: { x: number; y: number; z: number }): string {
-  return `${dimension}:${p.x},${p.y},${p.z}`;
+function chestKey(dimension: string, p: { x: number; y: number; z: number }, realm: string | null): string {
+  return realm === null ? `${dimension}:${p.x},${p.y},${p.z}` : JSON.stringify([realm, dimension, p.x, p.y, p.z]);
 }
 
 /** 容量包括空槽和同种物品的未满栈；stackMax 必须取自物品注册表。 */
@@ -110,14 +112,34 @@ export function hasItem(rec: ChestRecord, item: string, reg?: NameRegistry | nul
 }
 
 export class ChestBook {
-  private readonly map = new Map<string, ChestRecord>();
+  private readonly map: Map<string, ChestRecord>;
+  private readonly realm: string | null;
 
-  constructor(private readonly file: string | null) {
-    this.load();
+  constructor(private readonly file: string | null, shared?: { records: Map<string, ChestRecord>; realm: string }) {
+    this.map = shared?.records ?? new Map();
+    this.realm = shared?.realm ?? null;
+    if (!shared) this.load();
+  }
+
+  /** Frozen operation view: a late result keeps its original world, even after a world switch. */
+  forRealm(realm: string): ChestBook {
+    return new ChestBook(this.file, { records: this.map, realm });
+  }
+
+  private belongs(rec: ChestRecord): boolean {
+    return (rec.realm ?? null) === this.realm;
+  }
+
+  private key(dimension: string, p: { x: number; y: number; z: number }): string {
+    return chestKey(dimension, p, this.realm);
+  }
+
+  private scope(): Pick<ChestRecord, 'realm'> {
+    return this.realm === null ? {} : { realm: this.realm };
   }
 
   get(dimension: string, p: { x: number; y: number; z: number }): ChestRecord | undefined {
-    return this.map.get(chestKey(dimension, p));
+    return this.map.get(this.key(dimension, p));
   }
 
   remember(
@@ -128,14 +150,14 @@ export class ChestBook {
     slots: number,
   ): void {
     /** 刷新内容时保留原 placedAt。 */
-    const prev = this.map.get(chestKey(dimension, p));
+    const prev = this.map.get(this.key(dimension, p));
     const rec: ChestRecord = {
-      x: p.x, y: p.y, z: p.z, dimension, items, usedSlots, slots,
+      x: p.x, y: p.y, z: p.z, dimension, items, usedSlots, slots, ...this.scope(),
       observedAt: Date.now(),
       ...(prev?.name !== undefined ? { name: prev.name } : {}),
       ...(prev?.placedAt !== undefined ? { placedAt: prev.placedAt } : {}),
     };
-    this.map.set(chestKey(dimension, p), rec);
+    this.map.set(this.key(dimension, p), rec);
     this.save();
   }
 
@@ -146,10 +168,10 @@ export class ChestBook {
     name: string,
     placedAt?: number,
   ): void {
-    const k = chestKey(dimension, p);
+    const k = this.key(dimension, p);
     const prev = this.map.get(k);
     this.map.set(k, {
-      x: p.x, y: p.y, z: p.z, dimension,
+      x: p.x, y: p.y, z: p.z, dimension, ...this.scope(),
       items: prev?.items ?? [],
       usedSlots: prev?.usedSlots ?? 0,
       slots: prev?.slots ?? 0,
@@ -170,11 +192,11 @@ export class ChestBook {
     loadedAt: number,
     expectedDoneAt: number | null,
   ): void {
-    const k = chestKey(dimension, p);
+    const k = this.key(dimension, p);
     const prev = this.map.get(k);
     const items = [state.input, state.fuel, state.output].filter((s): s is ItemStack => s !== null);
     this.map.set(k, {
-      x: p.x, y: p.y, z: p.z, dimension,
+      x: p.x, y: p.y, z: p.z, dimension, ...this.scope(),
       items, usedSlots: items.length, slots: 3,
       observedAt: loadedAt,
       name,
@@ -188,13 +210,13 @@ export class ChestBook {
     const out: ChestRecord[] = [];
     for (const rec of this.map.values()) {
       const f = rec.furnace;
-      if (f && f.expectedDoneAt !== null && f.expectedDoneAt <= now && !f.notified) out.push(rec);
+      if (this.belongs(rec) && f && f.expectedDoneAt !== null && f.expectedDoneAt <= now && !f.notified) out.push(rec);
     }
     return out;
   }
 
   markNotified(dimension: string, p: { x: number; y: number; z: number }): void {
-    const rec = this.map.get(chestKey(dimension, p));
+    const rec = this.map.get(this.key(dimension, p));
     if (!rec?.furnace || rec.furnace.notified) return;
     rec.furnace.notified = true;
     this.save();
@@ -204,7 +226,7 @@ export class ChestBook {
     const out: ChestRecord[] = [];
     for (const rec of this.map.values()) {
       const f = rec.furnace;
-      if (rec.dimension !== dimension || !f) continue;
+      if (!this.belongs(rec) || rec.dimension !== dimension || !f) continue;
       if (f.input || f.output) out.push(rec);
     }
     return out;
@@ -217,21 +239,21 @@ export class ChestBook {
   chestsIn(dimension: string): ChestRecord[] {
     const out: ChestRecord[] = [];
     for (const rec of this.map.values()) {
-      if (rec.dimension !== dimension || rec.furnace) continue;
+      if (!this.belongs(rec) || rec.dimension !== dimension || rec.furnace) continue;
       if (CHEST_KINDS.has(chestBlockName(rec))) out.push(rec);
     }
     return out;
   }
 
   forget(dimension: string, p: { x: number; y: number; z: number }): boolean {
-    const removed = this.map.delete(chestKey(dimension, p));
+    const removed = this.map.delete(this.key(dimension, p));
     if (removed) this.save();
     return removed;
   }
 
   inCells(dimension: string, cells: ReadonlyArray<{ x: number; y: number; z: number }>): ChestRecord[] {
     if (this.map.size === 0) return [];
-    const keys = new Set(cells.map((c) => chestKey(dimension, c)));
+    const keys = new Set(cells.map((c) => this.key(dimension, c)));
     const out: ChestRecord[] = [];
     for (const [k, rec] of this.map) {
       if (keys.has(k)) out.push(rec);
@@ -243,7 +265,7 @@ export class ChestBook {
   tally(dimension: string): Record<string, number> {
     const out: Record<string, number> = {};
     for (const rec of this.map.values()) {
-      if (rec.dimension !== dimension) continue;
+      if (!this.belongs(rec) || rec.dimension !== dimension) continue;
       for (const it of rec.items) out[it.name] = (out[it.name] ?? 0) + it.count;
     }
     return out;
@@ -251,26 +273,23 @@ export class ChestBook {
 
   /** Exact item counts from each recorded container; absence of a timestamp remains unknown. */
   itemSources(dimension: string, item: string): StoredItemSource[] {
-    return [...this.map.values()].filter((rec) => rec.dimension === dimension).flatMap((rec) => {
+    return [...this.map.values()].filter((rec) => this.belongs(rec) && rec.dimension === dimension).flatMap((rec) => {
       const count = rec.items.reduce((total, entry) => total + (entry.name === item ? entry.count : 0), 0);
       return count > 0 ? [{ x: rec.x, y: rec.y, z: rec.z, count, observedAt: rec.observedAt }] : [];
     });
   }
 
   stat(): string {
-    const n = this.map.size;
+    const n = [...this.map.values()].filter(rec => this.belongs(rec)).length;
     if (!this.file || !existsSync(this.file)) return n === 0 ? '(无文件)' : `${n} 个(未落盘)`;
     const kb = (this.fileSize() / 1024).toFixed(1);
-    return `${n} 个 / ${kb}KB`;
+    return `${n} 个 / ${kb}KB${this.map.size > n ? `（另有 ${this.map.size - n} 条历史或其他世界记录）` : ''}`;
   }
 
   clear(): string {
-    const n = this.map.size;
-    this.map.clear();
-    if (this.file) {
-      mkdirSync(dirname(this.file), { recursive: true });
-      writeFileSync(this.file, '{}\n', 'utf8');
-    }
+    let n = 0;
+    for (const [key, record] of this.map) if (this.belongs(record)) { this.map.delete(key); n++; }
+    this.save();
     return n === 0 ? '容器账本是空的' : `容器账本已清空(${n} 个)`;
   }
 
@@ -283,11 +302,19 @@ export class ChestBook {
     const raw = readFileSync(this.file, 'utf8').trim();
     if (!raw) return;
     const data = JSON.parse(raw) as Record<string, ChestRecord>;
-    for (const [k, v] of Object.entries(data)) {
+    for (const [storedKey, v] of Object.entries(data)) {
       if (typeof v?.x === 'number' && typeof v.y === 'number' && typeof v.z === 'number') {
         const f = v.furnace;
-        this.map.set(k, {
+        let realm = typeof v.realm === 'string' && v.realm.length > 0 ? v.realm : null;
+        // Earlier consumers preserve map keys but may omit unfamiliar record fields when saving.
+        if (realm === null) try {
+          const key = JSON.parse(storedKey);
+          if (Array.isArray(key) && key.length === 5 && typeof key[0] === 'string' && key[0].length > 0
+            && key[1] === v.dimension && key[2] === v.x && key[3] === v.y && key[4] === v.z) realm = key[0];
+        } catch { /* Legacy dimension:xyz keys carry no world evidence. */ }
+        this.map.set(chestKey(typeof v.dimension === 'string' ? v.dimension : 'overworld', v, realm), {
           x: v.x, y: v.y, z: v.z,
+          ...(realm === null ? {} : { realm }),
           dimension: typeof v.dimension === 'string' ? v.dimension : 'overworld',
           items: Array.isArray(v.items) ? v.items : [],
           usedSlots: typeof v.usedSlots === 'number' ? v.usedSlots : 0,

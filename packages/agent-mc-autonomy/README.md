@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+Version 0.2.127 consumes current sparse visible-surface observations regardless
+of JSON property order. Bounded previews and retained native outcomes preserve
+the producer's scan/unknown/continuation fields, absolute sample coordinates and
+original receipt references. An exhausted scan is distinct from complete world
+knowledge. Native turn ownership and the pinned core rc.128 are unchanged;
+offline consumption checks do not establish improved live navigation.
+
 Version 0.2.126 consumes the independently built engine-only core rc.128. Attack
 receipts distinguish an observed target death from an unverified own kill, and
 preserve released arrows across the death-event race. Explicit entity targeting

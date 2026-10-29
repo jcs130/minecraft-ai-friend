@@ -3,6 +3,7 @@ import { Vec3 } from 'vec3';
 import type { TaskReport } from '../core/executor.ts';
 import { parseSteps, readSkillHelp, SKILL_STEP_SCHEMA } from '../core/skills.ts';
 import { methodHarness } from './method-harness.ts';
+import { ChestBook } from '../core/chests.ts';
 
 const rigs: ReturnType<typeof methodHarness>[] = [];
 beforeEach(() => vi.useFakeTimers());
@@ -17,6 +18,39 @@ const travel = { skill: 'server_travel' as const, command: '/home', at: [10, 64,
 const idleBody = { skill: 'control' as const, keys: ['sneak' as const], durationMs: 2000, mode: 'ground' as const };
 
 describe('server travel task lifecycle', () => {
+  it('records a container opened after same-type world travel in the destination world of the same task', async () => {
+    const r = rig(), book = new ChestBook(null); let realm = 'world-A';
+    (r.exec as any).opts.getChests = () => book.forRealm(realm);
+    r.set(11, 64, 10, 'chest');
+    const window: any = { id: 1, type: 'minecraft:generic_9x3', title: 'Chest', inventoryStart: 27,
+      slots: Array.from({ length: 63 }, (_, index) => index === 0 ? { name: 'arrow', count: 16, type: 1, slot: 0 } : null) };
+    Object.assign(r.bot, { activateBlock: async () => { r.bot.currentWindow = window; r.bot.emit('windowOpen', window); },
+      closeWindow: () => { r.bot.currentWindow = null; r.bot.emit('windowClose', window); } });
+    r.bot.chat = vi.fn(text => {
+      r.said.push(text);
+      if (text !== '/home') return;
+      realm = 'world-B';
+      r.exec.cancelForDimensionChange('overworld', 'overworld', { from: 'minecraft:overworld', to: 'minecraft:aincrad' });
+      r.bot.entity.position = new Vec3(10.5, 64, 10.5);
+    });
+    const task = r.exec.submitDetailed([travel, { skill: 'use', at: [11, 64, 10] }], 'append');
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(r.reports.find(report => report.taskId === task.taskId)?.kind, JSON.stringify(r.reports)).toBe('done');
+    expect(book.forRealm('world-B').get('overworld', { x: 11, y: 64, z: 10 })?.items).toEqual([{ name: 'arrow', count: 16 }]);
+    expect(book.forRealm('world-A').get('overworld', { x: 11, y: 64, z: 10 })).toBeUndefined();
+  });
+  it('cancels old coordinate work on a different native world even with the same dimension type', async () => {
+    const r = rig();
+    const active = r.exec.submitDetailed([idleBody], 'append');
+    const queued = r.exec.submitDetailed([travel], 'append');
+    await vi.advanceTimersByTimeAsync(20);
+    r.exec.cancelForDimensionChange('overworld', 'overworld', { from: 'minecraft:overworld', to: 'minecraft:aincrad' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(r.reports.filter(report => [active.taskId, queued.taskId].includes(report.taskId)).map(report => report.kind))
+      .toEqual(['cancelled', 'cancelled']);
+    expect(r.reports.every(report => !report.text.includes('进入了主世界'))).toBe(true);
+    expect(r.said).toEqual([]);
+  });
   it.each([
     ['relative current cell', ['~', '~', '~']],
     ['absolute current cell', [0, 64, 0]],

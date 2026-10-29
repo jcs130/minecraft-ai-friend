@@ -30,6 +30,8 @@ import { inventoryReadState, narrateInventorySync, type InventoryReadState } fro
 import { footingFromBot, narrateFooting, type FootingReading } from './footing.ts';
 import { WATER_BLOCKS } from './fluid-blocks.ts';
 import { CHEST_BLOCKS, FURNACE_BLOCKS } from './chests.ts';
+import { readWorldIdentity } from './world-scope.ts';
+import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 import { entityMaxHealth } from './entity-max-health.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
@@ -149,6 +151,8 @@ interface StatusEffect {
 }
 
 export interface WorldSnapshot {
+  /** Native level identity. dimension remains the registry/physics type. */
+  world?: WorldIdentityObservation;
   /** Current client vehicle attachment; undefined=unobserved, null=no reported attachment. */
   vehicle?: VehicleReading | null;
   position: { x: number; y: number; z: number };
@@ -364,7 +368,7 @@ export function snapshotFingerprint(s: WorldSnapshot): string {
     ? hostiles.reduce((a, b) => (a.distance <= b.distance ? a : b))
     : null;
   return [
-    s.dimension, s.gameMode, flightFingerprint(s.flight), vehicleFingerprint(s.vehicle),
+    s.dimension, s.world?.key ?? 'world?', s.gameMode, flightFingerprint(s.flight), vehicleFingerprint(s.vehicle),
     s.health === null ? 'hp?' : `hp${Math.ceil(s.health)}`,
     s.food === null ? 'fd?' : `fd${Math.round(s.food)}`,
     s.xpLevel === null ? 'xp?' : 'xp',
@@ -408,7 +412,7 @@ export function narrateWorldSegments(
     `我在${zhBiome(s.biome)}，${s.footing ? narrateFooting(s.footing, zhName)
       : s.standingOn ? `脚下是${zhName(s.standingOn)}` : '脚下支撑未知'}，` +
     `${s.vehicle ? '位于格' : '站在格'} (${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)})${near ? `，${near}` : ''}，` +
-    `${zhDimension(s.dimension)}。` +
+    `${zhDimension(s.dimension)}${s.world ? `，世界 ${s.world.key ?? '身份未核实'}` : ''}。` +
     `${motionPhrase(s)}，面朝${DIRECTION_ZH[s.facing]}。`;
   segs.push({ key: 'place', text: place, cmp: place });
   segs.push({ key: 'vehicle', text: narrateVehicleState(s.vehicle), cmp: vehicleFingerprint(s.vehicle) });
@@ -1921,6 +1925,7 @@ export function snapshotFromBot(
     position: { x: pos.x, y: pos.y, z: pos.z },
     vehicle: vehicleStateFromBot(bot),
     dimension: String(bot.game.dimension ?? 'overworld'),
+    world: readWorldIdentity(bot),
     health: typeof bot.health === 'number' && Number.isFinite(bot.health) ? bot.health : null,
     maxHealth: entityMaxHealth(bot.entity),
     food: typeof bot.food === 'number' && Number.isFinite(bot.food) ? bot.food : null,

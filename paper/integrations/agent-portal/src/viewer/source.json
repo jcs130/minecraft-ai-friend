@@ -1,10 +1,11 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "0311fcac046c1f7adcbf7fd22b137b6d89af64e0",
+  "commit": "9d322c8d27962432fca766daf460e8b7a5e00708",
   "normalization": "CRLF-to-LF and listed relative imports",
   "transforms": {
     "spectator-public.mjs": {
-      "../src/native-viewer/native-item-stack.js": "./native-item-stack.js"
+      "../src/native-viewer/native-item-stack.js": "./native-item-stack.js",
+      "../src/native-viewer/native-rpg-state.js": "./native-rpg-state.js"
     }
   },
   "files": {
@@ -12,7 +13,8 @@
     "spectator-relay.mjs": "18aeb6fffecabf59ae25597346aef3ee3f21848271be20e2f15ba6745d0eab44",
     "spectator-site.mjs": "69ea76533bc70215aac0d81af407c2ad1c31fca9bf7856c7c371ab92b4e0b261",
     "spectator-fanout.mjs": "34b488f6ebe0b92ba6c3b454c270230363e81123c923659bd3b55368a4ab2948",
-    "spectator-public.mjs": "7c0a2a2876e4277ec3fd55ba3c31174df9919ce9c21d611f7c91adc79efd3033",
-    "native-item-stack.js": "3548831a7e87e6e38c85fcf3673c31edffe03691863479aa0815a7019b49d3b4"
+    "spectator-public.mjs": "ff7d61d6a8f017c2c9a4b2a282ffa65cc3ec9d9fbd8d24610b8be58cf71e67d8",
+    "native-item-stack.js": "3548831a7e87e6e38c85fcf3673c31edffe03691863479aa0815a7019b49d3b4",
+    "native-rpg-state.js": "e23f3ee795b7c5d57569f9e78c55f28e39a512681cb955d3d4f3a4ba2746e4d6"
   }
 }

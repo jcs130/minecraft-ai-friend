@@ -1,4 +1,5 @@
 import { publicNativeItemStack } from './native-item-stack.js';
+import { projectNativeRpgSkills } from './native-rpg-state.js';
 
 const pick=(value,keys)=>value&&typeof value==='object'?Object.fromEntries(keys.filter(k=>Object.hasOwn(value,k)).map(k=>[k,value[k]])):value;
 const selfKeys='uuid name playerUuid entityId position yaw pitch eyeHeight bodyYaw headYaw health maxHealth absorption food saturation armor oxygen airSupply maxAirSupply experienceLevel experienceProgress experiencePoints quickBarSlot mainArm onGround sprinting flying inWater surfaceBlock sneaking crouching velocity skin paperAppearance locomotion pose spinAttack swinging usingItem useItemRemainingTicks attackAnim climbing isPassenger vehicleType ysm handAnimation'.split(' ');
@@ -23,7 +24,7 @@ function inventory(row){
 export function publicSpectatorPresentation(value){
   if(!value)return null;
   const out=pick(value,'schemaVersion playerUuid available source sampledAt reason profile serverItemPackId nativeState renderRegistries entityRenderStates contraptionRenderStates time weather'.split(' '));
-  out.self=self(value.self);out.inventory=inventory(value.inventory);out.nativeMenu=null;out.gameMessages=publicGameMessages(value.gameMessages);out.skills=null;out.modOperations=[];out.agentPlayback=null;
+  out.self=self(value.self);out.inventory=inventory(value.inventory);out.nativeMenu=null;out.gameMessages=publicGameMessages(value.gameMessages);out.skills=projectNativeRpgSkills(value.skills,value.playerUuid);out.modOperations=[];out.agentPlayback=null;
   return out;
 }
 function state(value){

@@ -1,6 +1,8 @@
 # VortexRPG原生接管
 
-本目录是API适配和窄补丁。**2026-10-28已发布**AgentFriend0.4.47.27、VortexRPG qd29、QiandengjiRpg0.2.6；技能、金币与储物统一见[正式发布](../../docs/RPG_UNIFIED_20261028.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[基础生存修复](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)、[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。
+本目录是API适配和窄补丁。**2026-10-29已发布**AgentFriend0.4.47.30、VortexRPG qd29、QiandengjiRpg0.2.10；职业实际配置说明、直接远程储物和遗迹存档点见[本轮发布](../../docs/RPG_INTERACTION_20261029.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[基础生存修复](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)、[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。
+
+**0.2.10已发布：**`status/intro`及原生队伍返回实际世界名称、key、Bukkit UUID与坐标；同世界才计算距离，离线不复用旧位置。只扩充查询，未新建队伍或成长系统。官方EssentialsXChat与本桥组合34项联机、248项原生离线检查通过，正式26项及4项云端观战核对通过；见[插件复用方案](../../docs/PAPER_PLUGIN_REUSE_20261029.md)。`build-location-release.py`仅在固定0.2.9基包上编译三个所属类，保留25个其他条目，资源与账号数据不从QA复制。
 
 此前 `.26 / RPG0.2.5` 的指引已合入正式 `.27 / 桥0.2.6`，并完成[RPG金币与技能统一](../../docs/RPG_UNIFIED_20261028.md)：`intro/status` 以真实生存、装备和任务给一个当前目标，任务列表/详情分清本人状态，`trade wallet` 查任务金币。已在隔离服复现原生拍卖扣款不交货，当前版本明确拒绝新增拍卖操作，不能宣传拍卖交付已修复。构建和验收范围见 [RPG 可用性](../../docs/RPG_USABILITY_20261028.md)，旧余额经停服双盘核验后1:1迁入金币，其他存档保留；不新增Agent循环或模型调用。
 

@@ -55,6 +55,8 @@ export { zhName } from '../core/names.ts';
 export { invCount, itemPredOf, invItemNamed } from '../core/inventory.ts';
 export { matchItemName, CONTAINER_FIND } from '../core/chests.ts';
 export { resolveAt } from '../core/cell-facts.ts';
+export { installWorldIdentity, readWorldIdentity, worldScopedRealm } from '../core/world-scope.ts';
+export type { WorldIdentityObservation } from './contracts/world-scope.ts';
 export type { SkillCall } from '../core/skills.ts';
 export { listWorkRoutines, readWorkRoutine, prepareWorkRoutine } from '../core/work-routines.ts';
 export { parseTypedChoice } from '../core/support/typed-decision.ts';
