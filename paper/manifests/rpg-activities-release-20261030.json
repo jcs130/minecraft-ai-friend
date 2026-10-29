@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "rpg-activities-scheduled-20261030-r2",
-  "state": "queued-in-existing-scheduled-maintenance",
+  "state": "deployed-and-verified",
   "sourceBase": "db2dfa0a9a90cc053f8fce126bb1be7b46938cc7",
   "includesPriorReview": "d15f55686f3c34cd9c0e4e7bfda83c506a38f93a",
   "artifacts": {
@@ -47,11 +47,16 @@
     "deploymentBoundaryChecks": 36,
     "realCrossVolumeInstallChecks": 11,
     "nativeBuildCliEquivalentEntries": true,
-    "productionModified": false,
+    "productionModified": true,
     "combatFixture": "Native enemies frozen/repositioned in disposable QA; real player attacks and callbacks, not autonomous combat balance.",
     "realPaperCommunicationSkillAndTaskChecks": 73,
     "repeatStartNoticeChecks": 2,
-    "existingNativeInstallerActualCrossVolumeChecks": 9
+    "existingNativeInstallerActualCrossVolumeChecks": 9,
+    "formalRuntimeChecks": 34,
+    "existingAccountCredentialsPreserved": 68,
+    "unrelatedPluginJarsPreserved": 49,
+    "postStopPreinstallNativeProfilesRetained": 15,
+    "profileProofScope": "after scheduled shutdown/preinstall through new runtime; no pre-shutdown proof claimed"
   },
   "scope": [
     "18 existing gameplay categories in paged world list",
@@ -84,11 +89,19 @@
     "originalStopLocal": "2026-10-30T04:00:22+08:00",
     "extraRestart": false,
     "taskDefinitionChanged": false,
-    "bothColdCopiesVerified": false
+    "bothColdCopiesVerified": true,
+    "restoredLocal": "2026-10-30T04:48:04+08:00"
   },
   "runtimeArtifactTargets": {
     "AgentFriend-0.4.47.32.jar": "AgentFriend-0.4.47.32.jar",
     "QiandengjiRpg-0.2.12.jar": "QiandengjiRpg-0.2.10.jar",
     "VortexRPG-1.2.2-alpha-qd30.jar": "VortexRPG-1.2.2-alpha-qd29.jar"
+  },
+  "verifiedAt": "2026-10-30T04:48:20.240208+08:00",
+  "goddessGuide": {
+    "published": true,
+    "originalJobsRestored": 7,
+    "identityOrModelChanged": false,
+    "agentAlreadyReadIt": false
   }
 }
