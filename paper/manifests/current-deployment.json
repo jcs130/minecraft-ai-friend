@@ -1,14 +1,14 @@
 {
   "state": "deployed-and-verified",
-  "latestRelease": "proximity-chat-release-20261029-r1",
-  "verifiedAt": "2026-10-29T20:07:18.7714116+08:00",
-  "releaseDocument": "paper/docs/NEARBY_COMMUNICATION_RELEASE_20261029.md",
+  "latestRelease": "rpg-activities-scheduled-20261030-r2",
+  "verifiedAt": "2026-10-30T04:48:20.240208+08:00",
+  "releaseDocument": "paper/docs/RPG_ACTIVITIES_20261030.md",
   "runtime": {
     "paper": "1.21.1 build133",
     "plugins": 52,
-    "AgentFriend": "0.4.47.30-vortex",
-    "QiandengjiRpg": "0.2.10",
-    "VortexRPG": "1.2.2-alpha-qd29",
+    "AgentFriend": "0.4.47.32-vortex",
+    "QiandengjiRpg": "0.2.12",
+    "VortexRPG": "1.2.2-alpha-qd30",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.3",
     "LoginGuard": "0.1.9",
@@ -38,13 +38,13 @@
     "numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "ysm-proxy/LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
     "AgentVision-0.1.2.jar": "e7e0b46c9bc9df9ea8f8e7ba00dbe7df8e415ac8eea00aed32cf4c21c1a10a65",
-    "VortexRPG-1.2.2-alpha-qd29.jar": "e16481eabaee1e18cdaaa6d230bfef65bd7e1178247a703215c3bf9b91119d8d",
-    "AgentFriend-0.4.47.30.jar": "e49605e47f57ef8e4866eb06a1462c67d94476d392e8cffc59ce36dfad988dc7",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "9437787768e54b4a10b04702ecbc1001088c57c51aed461ecadf7dcd882f001a",
     "WorldObserver-0.1.1.jar": "f1b4d51fca8bb87b1a945f939a190ce01acc0b372e81dd18b57d8b2c02022d3d",
     "QiandengVoice-0.1.0.jar": "db28cbb28eb72ca385681a8c39e9f8bbebe625f6e08482a819a7f3a16057ede4",
     "voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
-    "QiandengjiRpg-0.2.10.jar": "9060363980584815cec86f752df1240277be2cf6023456423f242deea3843b40",
-    "EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a"
+    "QiandengjiRpg-0.2.10.jar": "b019698d7b60b9dc1500e743beb52f3db2590a7a1d9e980563a6a0fe4c14be0a",
+    "EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a",
+    "AgentFriend-0.4.47.32.jar": "b0249c75fe62e5d0dafbbe730f98aaf328e44789fb8fdc59934e7f82ba848374"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -57,9 +57,8 @@
   "scopeNotice": "Chat/world-aware RPG queries and optional voice are deployed. Public voice UDP and automatic lease renewal were tested; human microphone/listening, browser voice for vanilla/Bedrock and native Intel camera remain unverified or unimplemented.",
   "verification": {
     "gameRuntimeChecks": 32,
-    "backup": "20261029-040022",
-    "backupColdRefreshedAt": "2026-10-29T19:48:24.7047483+08:00",
-    "unrelatedPluginJarsPreserved": 50,
+    "backup": "20261030-040022",
+    "unrelatedPluginJarsPreserved": 49,
     "existingAccountCredentialsPreserved": 68,
     "finalReturningAuthenticationConfirmed": true,
     "publicSkillDownloadRepublished": false,
@@ -68,8 +67,19 @@
     "observerLiveChecks": 8,
     "observerLiveRoles": 4,
     "publicWebsiteRpgChecks": 4,
-    "lastReleaseCoreChecks": 26,
-    "lastReleaseCloudObserverChecks": 4
+    "lastReleaseCoreChecks": 34,
+    "lastReleaseCloudObserverChecks": 4,
+    "backupColdCreatedAt": "2026-10-30T04:20:24+08:00",
+    "backupColdMirroredAt": "2026-10-30T04:40:56+08:00",
+    "returningFinalAuthenticated": [
+      "Coobot",
+      "DeepFish",
+      "Goddess",
+      "Yui",
+      "ag_CorMy"
+    ],
+    "nativeProfilesProofScope": "post-stop/preinstall to new runtime, 15 retained",
+    "currentPaperPid": 5204
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -235,5 +245,26 @@
     "scope": "city only; place allowed, break denied; wilderness open; dungeon protection retained",
     "hotReload": true,
     "gameRestarted": false
+  },
+  "runtimeArtifactTargets": {
+    "QiandengjiRpg-0.2.12": "QiandengjiRpg-0.2.10.jar",
+    "VortexRPG-qd30": "VortexRPG-1.2.2-alpha-qd29.jar",
+    "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions."
+  },
+  "rpgActivities": {
+    "state": "deployed-and-verified",
+    "manifest": "paper/manifests/rpg-activities-release-20261030.json",
+    "catalogCategories": 18,
+    "catalogPages": 3,
+    "randomGatherings": 3,
+    "normalStartFloor": 1,
+    "historicalClearsSkipFloors": false,
+    "ordinaryEntryMana": 0,
+    "entranceTravelMana": 6,
+    "unlockedRestMana": 8,
+    "sameDayClearsAdvanceContracts": true,
+    "dailyLootLimitRetained": true,
+    "onboardingReleaseRevision": 8,
+    "extraManualRestart": false
   }
 }

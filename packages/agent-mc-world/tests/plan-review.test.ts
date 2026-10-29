@@ -60,3 +60,29 @@ it('does not mix the same coordinates across reported dimensions',()=>{
  const b=new PlanReviewBook();for(let i=1;i<=2;i++){call(b,i);b.recordEvents([terminal(i,'blocked',[{step:1,outcome:'fail',observedEffect:{schema:'agent-mc-observed-effect/v1',dimension:i===1?'overworld':'nether',status:'unchanged'}}])]);}
  expect(b.priority('r')).toBeNull();expect(b.snapshot().episodes).toHaveLength(2);
 });
+it('retains an unattributed consumption during generation and the first later failure without calling either automatic replay',()=>{
+ const b=new PlanReviewBook({now:()=>3000}),e={schema:'agent-mc-observed-effect/v1',skill:'eat',dimension:'overworld',status:'changed',before:{inventory:{cod:1}},after:{inventory:{}}};
+ const consumed={...terminal(769,'completed',[{step:1,outcome:'ok',observedEffect:e}]),ts:new Date(1000).toISOString()};
+ b.recordEvents([consumed,consumed]);expect(b.snapshot().recentEffects).toHaveLength(1);
+ expect(b.context('r').recentEffects[0]).toMatchObject({executionId:'epoch:769',submission:'unattributed',historical:true,goalVerified:false,inventoryChanges:[{item:'cod',before:1,after:0}]});
+ call(b,770,{steps:[{skill:'eat',item:'cod'},{skill:'chat',text:'private statement'}]});
+ b.recordEvents([{...terminal(770,'blocked',[{step:1,outcome:'fail',why:'No cod in current stock',observedEffect:{...e,status:'unchanged',before:{inventory:{}},after:{inventory:{}}}},{step:2,outcome:'ok'}]),ts:new Date(2000).toISOString()}]);
+ expect(b.context('r').episodes[0].failedSteps[0].why).toContain('No cod');expect(b.priority('r')).toBeNull();
+ expect(JSON.stringify(b.snapshot())).not.toMatch(/No cod|private statement/);expect(b.context('foreign').recentEffects).toEqual([]);
+});
+it('keeps unknown inventory and missing timestamps unknown, and permits a later exact tool correlation without duplicate effects',()=>{
+ const b=new PlanReviewBook({now:()=>3000}),e={schema:'agent-mc-observed-effect/v1',skill:'eat',status:'changed',before:{inventory:null},after:{inventory:{cod:1}}};
+ b.recordEvents([{...terminal(1,'completed',[{step:1,outcome:'ok',observedEffect:e}]),ts:new Date(1000).toISOString()}]);expect(b.snapshot().recentEffects).toEqual([]);
+ const row=terminal(2,'completed',[{step:1,outcome:'ok',observedEffect:{...e,before:{inventory:{}},after:{inventory:{cod:1}}}}]);
+ b.recordEvents([row]);expect(b.snapshot().recentEffects).toEqual([]);
+ b.recordEvents([{...row,ts:new Date(2000).toISOString()}]);call(b,2);b.recordEvents([{...row,ts:new Date(2000).toISOString()}]);
+ expect(b.snapshot().recentEffects).toHaveLength(1);expect(b.context('r').recentEffects[0].submission).toBe('matched-tool-call');
+});
+it('bounds changed-item metadata and retains newer effects when historical reads arrive late',()=>{
+ let now=20000;const b=new PlanReviewBook({now:()=>now,windowMs:1000});
+ for(let id=1;id<=12;id++)b.recordEvents([{...terminal(id,'partial',[{step:1,outcome:'partial',observedEffect:{schema:'agent-mc-observed-effect/v1',skill:'collect',status:'changed',before:{inventory:{}},after:{inventory:Object.fromEntries(Array.from({length:12},(_,i)=>['item_'+i,1]))}}}]),ts:new Date(id*1000).toISOString()}]);
+ b.recordEvents([{...terminal(1,'completed',[{step:1,outcome:'ok',observedEffect:{schema:'agent-mc-observed-effect/v1',skill:'fish',status:'changed',before:{inventory:{}},after:{inventory:{cod:1}}}}]),ts:new Date(1000).toISOString()}]);
+ expect(b.snapshot().recentEffects).toHaveLength(8);expect(b.snapshot().recentEffects.at(-1)?.executionId).toBe('epoch:12');
+ expect(b.snapshot().recentEffects[0].changesTruncated).toBe(true);expect(b.snapshot().recentEffects[0].inventoryChanges).toHaveLength(8);expect(b.context('r').recentEffects).toEqual([]);
+ now=12500;expect(b.context('r').recentEffects.map(e=>e.executionId)).toEqual(['epoch:12']);
+});

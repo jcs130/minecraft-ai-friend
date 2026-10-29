@@ -1,5 +1,5 @@
 {
-  "state": "candidate-not-deployed",
+  "state": "superseded-by-published-cumulative-release",
   "date": "2026-10-30",
   "sourceBase": "db2dfa0a9a90cc053f8fce126bb1be7b46938cc7",
   "reviewedCommit": "31f7199c3f8f25f317546ca9cad02aa9caa1255c",
@@ -106,5 +106,11 @@
     "required": "New approved normal maintenance, fresh complete dual-drive backup, exact player/dungeon gates and post-release verification.",
     "stagedBackups": "Static artifact/config preimages only; not a new complete world backup.",
     "reloadPermitted": false
+  },
+  "releasedThrough": "rpg-activities-scheduled-20261030-r2",
+  "standaloneCandidateDeployed": false,
+  "publishedVersions": {
+    "AgentFriend": "0.4.47.32-vortex",
+    "QiandengjiRpg": "0.2.12"
   }
 }

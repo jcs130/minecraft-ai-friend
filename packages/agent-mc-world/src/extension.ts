@@ -39,6 +39,7 @@ export * from './client/world-namespace.ts';
 export { MethodLibrary, METHOD_LIBRARY_SCHEMA, type MethodReview } from '../core/method-library.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './client/tool-help.ts';
 export type { ToolHelpOptions } from './client/tool-help.ts';
+export { createServerToolRouter, SERVER_TOOL_PORT_TOOL } from './client/server-tools.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions } from './client/message-inbox.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
