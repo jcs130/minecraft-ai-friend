@@ -70,6 +70,7 @@ import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } f
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { sampleEffect, observedEffect } from './observed-effect.ts';
+import { captureDeathTarget, matchesDeathTarget, type DeathTargetIdentity } from './entity-death-identity.ts';
 import type { ObservedEffect } from '../src/contracts/observed-effect.ts';
 import { assertInventoryClicksReady, isInventoryClickError } from './inventory-click-sync.ts';
 import { ContainerWindowOwnership } from './container-window-ownership.ts';
@@ -1981,6 +1982,7 @@ export class Executor {
   private stopped = false;
   private executionEpoch = 0;
   private activeAttack: TaskAttackLease | null = null;
+  private activeAttackTarget: DeathTargetIdentity | null = null;
   /** 战斗挂起中的任务(断点冻结,战后 resume 放回队头续做) */
   private frozen: QueuedTask | null = null;
   /** 让位收尾涵盖整个旧 run；清请求不能提前解除这道执行屏障。 */
@@ -4712,10 +4714,15 @@ export class Executor {
     attack.lastSwingTargetId = -1;
   }
 
-  noteCombatTargetDead(targetId: number): void {
+  noteCombatTargetDead(target: number | { id?: number; uuid?: string }): void {
     const attack = this.activeAttack;
-    if (!attack || attack.targetId !== targetId) return;
+    const selected = this.activeAttackTarget;
+    if (!attack || !selected || attack.disconnected) return;
+    // Keep the selected entity/UUID identity through despawn and asynchronous
+    // preparation. A new entity reusing the numeric ID is not this target's death.
+    if (!matchesDeathTarget(this.opts.getBot()?.entities, selected, target)) return;
     attack.dead = true;
+    attack.deathObservedAt ??= Date.now();
     this.opts.ranged?.abort();
     dropGoal(this.opts.getBot(), 'task', '交战目标死了', this.opts.diag);
   }
@@ -4800,8 +4807,11 @@ export class Executor {
       swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0,
       hurts: 0, lastHurtAt: 0, lastSwingAt: 0, lastSwingTargetId: -1,
       dead: false, disconnected: false,
+      deathObservedAt: null,
     };
     this.activeAttack = lease;
+    const entity = this.opts.getBot()?.entities[targetId];
+    this.activeAttackTarget = entity ? captureDeathTarget(entity) : null;
     return lease;
   }
 
@@ -4809,12 +4819,14 @@ export class Executor {
     if (this.activeAttack !== lease) return;
     this.opts.ranged?.abort();
     this.activeAttack = null;
+    this.activeAttackTarget = null;
   }
 
   private cancelActiveAttack(): void {
     if (!this.activeAttack) return;
     this.opts.ranged?.abort();
     this.activeAttack = null;
+    this.activeAttackTarget = null;
   }
 
   /** 死亡是执行边界：旧身体上的当前、冻结和排队工作全部失效。 */
@@ -5558,6 +5570,7 @@ export class Executor {
           : null;
         task.stepIndex = i;
         ctx.progressDetail = undefined;
+        ctx.recordObservation = value => observations.set(i, value);
         task.escape.active = false; // 逃生标记只属于置位它的那一步
         // 续做步从打断前的读数起算:第一次进度回调之前再被挂起,断点里的进度也不能是空
         task.count = carried ? { done: carried.done, total: carried.total } : null;

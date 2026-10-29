@@ -1,6 +1,11 @@
 # Agent MC World
 
-Development candidate **rc.126** gives `attack` an optional explicit `entityId`
+Development candidate **rc.128** separates observed target death from own kill
+credit in structured attack and passive combat receipts. Native death can settle
+an action, but unavailable killer attribution remains `null`; lost tracking
+stays unknown. See [combat evidence](docs/entity-targeting.md#death-observations-and-kill-attribution-rc128).
+
+The rc.126 changes give `attack` an optional explicit `entityId`
 alongside the target's registry type or actual player name. Attention/risk reads
 provide both fields; lost, mismatched or occluded named entities never fall back
 to another target. Observed UUIDs remain bound during a bow draw. Existing

@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+Version 0.2.126 consumes the independently built engine-only core rc.128. Attack
+receipts distinguish an observed target death from an unverified own kill, and
+preserve released arrows across the death-event race. Explicit entity targeting
+and bounded message continuity remain. The exact source, archive, companion lock
+and build hashes stay pinned. Planner policy, identity, goals and personal memory
+are unchanged; updating source does not reload an active player.
+
 Version 0.2.124 also yields already-satisfied native plans and unchanged saved
 death lessons at the normal decision cadence, without a whole-planner delay or
 incrementing the plain-reply inactivity counter. The exact native receipt stays
