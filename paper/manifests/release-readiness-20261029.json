@@ -7,7 +7,7 @@
   "productionCodeChanged": true,
   "servicesRestarted": true,
   "observed": {
-    "website": "0.8.29",
+    "website": "0.8.30",
     "AgentFriend": "0.4.47.30-vortex",
     "QiandengjiRpg": "0.2.10",
     "WorldObserver": "0.1.1",
@@ -44,7 +44,7 @@
       "state": "deployed",
       "title": "所有照片上传、本人/管理员决定公开",
       "priority": "P1",
-      "current": "官网0.8.29和家庭采集器已切换，29张原片/归属实收，3公开/26私有，原账号与内容保持。",
+      "current": "官网已更新0.8.30，家庭采集器0.8.29；29张原片/归属实收，3公开/26私有，原账号与内容保持。",
       "nextAction": "真实主人在正式管理页公开/撤展，补录人工验收；隔离权限及持久化测试已通过。",
       "evidence": [
         "paper/docs/PHOTO_LIBRARY_20261029.md",
@@ -410,7 +410,7 @@
     "productionCodeChanged": false,
     "servicesRestarted": false
   },
-  "updatedAt": "2026-10-29T22:24:04+08:00",
+  "updatedAt": "2026-10-29T23:01:26+08:00",
   "releaseManifest": "paper/manifests/all-features-release-20261029.json",
   "rolloutSummary": {
     "deployedItems": 3,
@@ -428,5 +428,6 @@
       "evaluation_pending": 1,
       "deferred_by_owner": 1
     }
-  }
+  },
+  "websiteStorageRelease": "paper/manifests/portal-oss-media-release-20261029.json"
 }

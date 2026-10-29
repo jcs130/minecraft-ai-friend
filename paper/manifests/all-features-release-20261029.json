@@ -74,7 +74,10 @@
   "storage": {
     "publicArtifacts": "Existing OSS releases/<sha256>/<filename>",
     "privateArchives": "Private ACL and AES256 server-side encryption; separate from public download routes",
-    "historicalArchiveOffload": "in-progress",
-    "currentQaImageAndSourceTarRemoved": true
-  }
+    "historicalArchiveOffload": "verified-plan-completed",
+    "currentQaImageAndSourceTarRemoved": true,
+    "privateArchiveCount": 26
+  },
+  "latestWebsiteVersion": "0.8.30",
+  "followupRelease": "paper/manifests/portal-oss-media-release-20261029.json"
 }

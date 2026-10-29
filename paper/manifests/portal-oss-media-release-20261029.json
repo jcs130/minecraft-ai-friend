@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed-and-verified",
+  "verifiedAt": "2026-10-29T23:01:26+08:00",
+  "websiteVersion": "0.8.30",
+  "sourceCommit": "550825b4a74fa80de638c802b5e2e9c5be5a4b1c",
+  "imageId": "sha256:2e96456341c6dd6b68076d8210d6e07f2cc1a948f34e0ac5e0a279c13077f5b4",
+  "promotionalVideo": {
+    "url": "https://b23.tv/Ppfd3Ne",
+    "title": "让玩家和智能体一起来自由探索冒险吧～【B站AI创造公开赛】",
+    "mode": "explicit-external-link",
+    "oldLocalVideoPreferred": false,
+    "bilibiliVideoDownloaded": false,
+    "realPublicBrowserWidths": [
+      1280,
+      390
+    ]
+  },
+  "storage": {
+    "publicDownloads": "direct-OSS",
+    "privateArchives": 26,
+    "privateArchiveBytes": 3312628200,
+    "archiveAcl": "private",
+    "archiveServerSideEncryption": "AES256",
+    "anonymousArchiveReadStatus": 403,
+    "eAndFArchiveCopiesRetained": true,
+    "oldTestDependencyBytesRemoved": 1639393690,
+    "localVideoBytesRemoved": 115979556,
+    "freeBytesAtVerification": 5988941824,
+    "databaseAndPrivatePhotoOriginalsKept": true
+  },
+  "checks": {
+    "linuxWebsitePasses": 351,
+    "windowsWebsitePasses": 348,
+    "windowsConditionalSkips": 3,
+    "targetedMediaAndUiPasses": 57,
+    "runtimeFilesChecked": 98,
+    "changedRuntimeFiles": 9,
+    "protectedTables": 19,
+    "publicPhotoCount": 3,
+    "storedPhotoCount": 29,
+    "servedAppAndCssMatch": true,
+    "gameAccountBridgeReady": true
+  },
+  "paperRestarted": false,
+  "loginProxyRestarted": false,
+  "sourcePublisherRestartedInThisStep": false,
+  "releaseDocument": "paper/docs/OSS_STORAGE_20261029.md",
+  "allBacklogItemsComplete": false
+}
