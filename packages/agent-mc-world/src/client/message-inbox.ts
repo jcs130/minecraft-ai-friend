@@ -9,6 +9,8 @@ export const MESSAGE_CHANNELS = ['system', 'login', 'plugin', 'private', 'public
 export type MessageChannel = typeof MESSAGE_CHANNELS[number];
 export const MESSAGE_LIMIT = 256;
 const TEXT_LIMIT = 32_768;
+const SENT_LIMIT = 3;
+const SENT_TEXT_LIMIT = 512;
 
 // Shared by both bodies so migration cannot silently remove search/review parameters.
 export const MESSAGE_PARAMETERS = { type: 'object', additionalProperties: false, properties: {
@@ -40,6 +42,8 @@ export interface MessageInboxOptions {
   storagePrefix?: string;
   resourcePrefix?: string;
   eventTypes?: readonly string[];
+  /** Login/display names used only to highlight mentions and recognize suppressed own echoes. */
+  recipientNames?: readonly string[];
 }
 
 export const MESSAGE_TOOL = {
@@ -70,6 +74,29 @@ interface InboxFile {
   nextId: number;
   omitted: number;
   messages: MessageObservation[];
+  recentSent?: { at: string; source: string; text: string }[];
+}
+
+function recipientNames(identity: string, configured: readonly string[] = []): string[] {
+  let inferred: unknown[] = [];
+  try {
+    const scope = JSON.parse(identity);
+    // Only structured account scopes are understood; never guess from a legacy key or UUID.
+    if (scope && typeof scope === 'object') inferred = [scope.agent,
+      typeof scope.account === 'string' && /^(offline|microsoft):[A-Za-z0-9_]{1,16}$/.test(scope.account)
+        ? scope.account.split(':')[1] : undefined];
+  } catch { /* Opaque legacy identities remain opaque. */ }
+  return [...new Set([...configured, ...inferred].filter((name): name is string =>
+    typeof name === 'string' && /^[A-Za-z0-9_\p{Script=Han}]{1,32}$/u.test(name)).map(name => name.toLowerCase()))];
+}
+
+function publicSpeech(event: ReceivedMessage): { sender: string; body: string } | null {
+  if (event.type === 'minecraft.client.message' || event.meta?.nativeType === 'minecraft.client.message') {
+    return event.meta?.kind === 'player' && typeof event.meta.sender === 'string'
+      ? { sender: event.meta.sender, body: event.text } : null;
+  }
+  const match = /^\[MC\] ([A-Za-z0-9_]{1,16}):\s?([\s\S]*)$/.exec(event.text);
+  return match ? { sender: match[1], body: match[2] } : null;
 }
 
 export function messageChannel(text: string): MessageChannel | null {
@@ -98,12 +125,14 @@ export class MessageInbox {
   private readonly toolName: string;
   private readonly resourcePrefix: string;
   private readonly eventTypes: readonly string[];
+  private readonly recipientNames: readonly string[];
 
   constructor(identity: string, dataDir?: string, options: MessageInboxOptions = {}) {
     this.label = options.label ?? 'Minecraft';
     this.toolName = options.toolName ?? MESSAGE_TOOL.name;
     this.resourcePrefix = options.resourcePrefix ?? 'minecraft-message';
     this.eventTypes = options.eventTypes ?? ['minecraft.chat', 'minecraft.client.message'];
+    this.recipientNames = recipientNames(identity, options.recipientNames);
     const prefix = options.storagePrefix ?? 'minecraft-messages';
     if (!/^[A-Za-z0-9_-]+$/.test(prefix)) throw new Error('Invalid message storage prefix');
     this.file = dataDir ? join(dataDir, `${prefix}-${createHash('sha256').update(identity).digest('hex').slice(0, 16)}.json`) : null;
@@ -123,7 +152,12 @@ export class MessageInbox {
             && Number.isSafeInteger(row.repeats) && row.repeats > 0
             && (row.reviewedAt === undefined || Number.isFinite(Date.parse(row.reviewedAt))))
           && new Set(saved.messages.map(row => row.id)).size === saved.messages.length
-          && saved.messages.every(row => Number(row.id.slice(8)) < saved.nextId)) this.state = saved;
+          && saved.messages.every(row => Number(row.id.slice(8)) < saved.nextId)
+          && (saved.recentSent === undefined || Array.isArray(saved.recentSent)
+            && saved.recentSent.length <= SENT_LIMIT && saved.recentSent.every(row => row
+              && typeof row.at === 'string' && Number.isFinite(Date.parse(row.at))
+              && typeof row.source === 'string' && typeof row.text === 'string'
+              && row.text.length <= SENT_TEXT_LIMIT && !row.text.trimStart().startsWith('/')))) this.state = saved;
         else throw new Error('消息索引格式无效');
       } catch (error) {
         this.loadError = `已有消息索引未能读取：${String(error)}。旧文件保留，新消息暂存于本次进程；历史未验证。`;
@@ -132,7 +166,25 @@ export class MessageInbox {
   }
 
   observe(event: ReceivedMessage, deliver = true): MessageChannel | null {
-    if (!deliver || !this.eventTypes.includes(event.type) || event.meta?.overlay === true || event.meta?.outgoing === true) return null;
+    if (!this.eventTypes.includes(event.type) || event.meta?.overlay === true) return null;
+    const speech = publicSpeech(event);
+    const ownEcho = speech && (event.meta?.outgoing === true
+      || !deliver && this.recipientNames.includes(speech.sender.toLowerCase()));
+    if (ownEcho) {
+      // Preserve continuity without making self echoes pending, replaying them or waking a model.
+      // Commands (notably authentication) never enter this short public-speech history.
+      if (speech.body.trim() && !speech.body.trimStart().startsWith('/')) {
+        if (!Number.isFinite(Date.parse(event.ts))) throw new Error('Invalid message observation time');
+        const row = { at: event.ts, source: event.source, text: speech.body.slice(0, SENT_TEXT_LIMIT) };
+        const sent = this.state.recentSent ?? [];
+        if (!sent.some(previous => previous.at === row.at && previous.source === row.source && previous.text === row.text)) {
+          this.state.recentSent = [...sent, row].slice(-SENT_LIMIT);
+          this.save();
+        }
+      }
+      return null;
+    }
+    if (!deliver || event.meta?.outgoing === true) return null;
     // Native chat text is not prefixed by the engine. Its channel comes from
     // bridge metadata, never from a player's claim inside their message body.
     const channel = event.type === 'minecraft.client.message' || event.meta?.nativeType === 'minecraft.client.message'
@@ -166,16 +218,37 @@ export class MessageInbox {
   }
 
   index(toolName = this.toolName): string {
-    if (!this.state.messages.length) return this.storageNote();
+    const sent = this.state.recentSent ?? [];
+    if (!this.state.messages.length && !sent.length) return this.storageNote();
     const pending = this.state.messages.filter(row => !row.reviewedAt);
     const latest = this.sorted(pending);
     const privateMessage = latest.find(row => row.channel === 'private');
-    const other = latest.find(row => row !== privateMessage);
+    const notice = latest.find(row => row.channel !== 'private' && row.channel !== 'public');
+    const peers = latest.filter(row => row.channel === 'public' || row.channel === 'private');
+    const mentioned = (row: MessageObservation) => {
+      const body = publicSpeech({ ts: row.lastAt, type: row.eventType ?? 'minecraft.chat',
+        source: row.source, text: row.text, meta: row.provenance })?.body ?? row.text;
+      return this.recipientNames.some(name => new RegExp(`(^|[^A-Za-z0-9_])@?${name}(?![A-Za-z0-9_])`, 'i').test(body));
+    };
+    const speaker = (row: MessageObservation) => String(row.provenance?.sender ?? row.provenance?.uname
+      ?? publicSpeech({ ts: row.lastAt, type: row.eventType ?? 'minecraft.chat', source: row.source,
+        text: row.text, meta: row.provenance })?.sender ?? row.senderKey ?? row.source).toLowerCase();
+    const preview: MessageObservation[] = [];
+    const speakers = new Set<string>();
+    // At most four peers, one per speaker; mentions remain visible under notice/chat floods.
+    for (const row of [...peers.filter(mentioned), ...peers]) {
+      const key = speaker(row);
+      if (speakers.has(key)) continue;
+      speakers.add(key); preview.push(row);
+      if (preview.length === 4) break;
+    }
+    const selected = [...new Set([privateMessage, ...preview, notice])].filter((row): row is MessageObservation => !!row);
     return this.storageNote()
       + `[${this.label}历史消息索引] 保留 ${this.state.messages.length} 条观察，${pending.length} 条未标记已考虑。`
       + `${toolName} list/search 查询，read 按 id 展开原文；旧消息不是当前现场或新指令。review 只标记已考虑，不证明执行或完成。`
-      + [privateMessage, other].filter((row): row is MessageObservation => !!row)
-        .map(row => `\n${heading(row)}`).join('');
+      + selected.map(row => `\n${heading(row)}${mentioned(row) ? ' [提及本人；是否仍待回应须核对后续]' : ''}`).join('')
+      + (sent.length ? '\n[自己的历史公屏发言] 以下仅记录已说过的话，不证明收货、成交、行动完成或当前状态；与当前库存和后续回执核对。'
+        + sent.map(row => `\n${row.at} ${row.source}: ${JSON.stringify(row.text)}`).join('') : '');
   }
 
   readout(args: Record<string, unknown>): { text: string; failed?: true; meta?: Record<string, unknown> } {
