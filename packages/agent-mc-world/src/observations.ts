@@ -4,3 +4,5 @@ export {entitySnapshot,type EntitySnapshotSource} from '../core/entity-snapshot.
 export {footingFromBot,narrateFooting,type FootingReading} from '../core/footing.ts';
 export { readWorldIdentity } from '../core/world-scope.ts';
 export type { WorldIdentityObservation } from './contracts/world-scope.ts';
+export { MinecraftChatProvenance } from './chat-provenance.ts';
+export type { ChatIdentityEvidence } from './chat-provenance.ts';

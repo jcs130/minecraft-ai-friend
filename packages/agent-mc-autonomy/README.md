@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+Version 0.2.128 consumes independently built core rc.130, retaining raw player
+packet identity, bounded server chat decoration and non-waking own echoes.
+World identity and position/container memory isolation from rc.129 are included.
+Canonical archive, source, lock and build hashes stay pinned. Planner, model,
+persona and standing-goal policy remain unchanged; loading and real cooperation
+require separate native evidence.
+
 Version 0.2.127 consumes current sparse visible-surface observations regardless
 of JSON property order. Bounded previews and retained native outcomes preserve
 the producer's scan/unknown/continuation fields, absolute sample coordinates and
