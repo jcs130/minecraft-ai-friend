@@ -668,6 +668,8 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
 }
 
 async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
+  // A dispatched travel can change worlds within one task. Freeze each operation, not the whole task.
+  if (ctx.getChests) ctx = { ...ctx, chests: ctx.getChests() };
   // An unresolved click is a protocol transaction barrier, independent of item
   // dependencies. Observing, walking and speaking remain available; the lower
   // click guard also covers inventory changes initiated by background actions.
@@ -1914,6 +1916,8 @@ interface ExecutorOptions {
   onHoldsReleased?: () => void;
   /** 开过的箱子账本 */
   chests?: ChestBook;
+  /** A frozen world-scoped view for each precheck or operation. */
+  getChests?: () => ChestBook;
   /** Persist completed empty directional routes across World restarts. */
   directionalSweeps?: DirectionalSweepBook;
   /** 成果登记(World 持久化) */
@@ -2084,6 +2088,10 @@ export class Executor {
 
   constructor(private readonly opts: ExecutorOptions) {
     this.directionalSweeps = opts.directionalSweeps ?? new DirectionalSweepBook(null);
+  }
+
+  private chestBook(): ChestBook | undefined {
+    return this.opts.getChests?.() ?? this.opts.chests;
   }
 
   /** 当前任务在做什么;空闲为 null */
@@ -2676,7 +2684,7 @@ export class Executor {
       .slice(0, 3);
     if (visible.length) return `附近实际看见的容器: ${visible.map((spot) =>
       `${zhName(spot.name)}(${spot.x},${spot.y},${spot.z})`).join('、')}；请先核验容量与访问权限，不要逐格猜坐标`;
-    const known = knownChestNote(bot, this.opts.chests);
+    const known = knownChestNote(bot, this.chestBook());
     return known
       ? `32 格内没观察到容器；${known}。先去现场核验，不要逐格猜坐标`
       : '32 格内没观察到容器；先寻找或制作并放置储物箱，不要逐格猜坐标';
@@ -2730,7 +2738,7 @@ export class Executor {
               return `指定位置 (${target.x},${target.y},${target.z}) 附近方块尚不可读，容器是否存在仍未知；${this.storageAlternativeNote(bot, target)}`;
             }
             if (!CONTAINER_FIND.includes(block.name)) {
-              this.opts.chests?.forget(dimensionOf(bot), target);
+              this.chestBook()?.forget(dimensionOf(bot), target);
               return `指定位置 (${target.x},${target.y},${target.z}) 实际是${zhName(block.name)}，不是储物箱；${this.storageAlternativeNote(bot, target)}`;
             }
           }
@@ -2771,12 +2779,13 @@ export class Executor {
       try { target = resolveAt(bot, step.at); }
       catch { continue; }
       const dimension = dimensionOf(bot);
-      if (!this.opts.chests?.get(dimension, target)) continue;
+      const chests = this.chestBook();
+      if (!chests?.get(dimension, target)) continue;
       const position = new Vec3(target.x, target.y, target.z);
       if (bot.entity.position.distanceTo(position) > 16) continue;
       const block = bot.blockAt(position);
       if (!block || CONTAINER_FIND.includes(block.name) || FURNACE_KINDS.has(block.name)) continue;
-      this.opts.chests.forget(dimension, target);
+      chests.forget(dimension, target);
       return `账本里的容器 (${target.x},${target.y},${target.z}) 现场已是${zhName(block.name)}；已清除过期记录；当前操作仍按实际方块核验`;
     }
     return null;
@@ -2805,12 +2814,12 @@ export class Executor {
       if (!block) continue; // An unloaded chunk is unknown, not proof of absence.
       if (!CONTAINER_FIND.includes(block.name) && !FURNACE_KINDS.has(block.name)
         && block.name !== 'brewing_stand') {
-        this.opts.chests?.forget(dimensionOf(bot), target);
+        this.chestBook()?.forget(dimensionOf(bot), target);
         return { text: `目标格 (${target.x},${target.y},${target.z}) 当前是${zhName(block.name)}，不是可取物容器。先 find chest 核对实际方块坐标；本单不入队，原队列保留`,
           retryAfterMs: 8_000, step, proof: 'not-container' };
       }
       if (!step.item) continue;
-      const rec = this.opts.chests?.get(dimensionOf(bot), target);
+      const rec = this.chestBook()?.get(dimensionOf(bot), target);
       if (!rec?.observedAt || now - rec.observedAt > 30_000 || hasItem(rec, step.item, bot?.registry)) continue;
       return { text: `容器 (${target.x},${target.y},${target.z}) 上次开窗未见${zhName(step.item)}；这不是当前内容的确认，本次开窗会重新核验`,
         retryAfterMs: 8_000, step, proof: 'missing-item' };
@@ -2877,7 +2886,7 @@ export class Executor {
   /** 账本合并了同类槽位；仅计入能保证腾出的格数，再扣除本单先前存物。 */
   private plannedFreeSlots(bot: Bot, target: { x: number; y: number; z: number },
     earlierSteps: readonly SkillCall[]): number {
-    const rec = this.opts.chests?.get(dimensionOf(bot), target);
+    const rec = this.chestBook()?.get(dimensionOf(bot), target);
     if (!rec?.observedAt || Date.now() - rec.observedAt > 120_000) return 0;
     let openedAt: { x: number; y: number; z: number } | null = null;
     const taken = new Map<string, number>();
@@ -2918,7 +2927,7 @@ export class Executor {
   private recentFullChestNote(bot: Bot, target: { x: number; y: number; z: number },
     item: string, count: number, earlierSteps: readonly SkillCall[]): string | null {
     if (earlierSteps.some((step) => step.skill === 'build')) return null;
-    const rec = this.opts.chests?.get(dimensionOf(bot), target);
+    const rec = this.chestBook()?.get(dimensionOf(bot), target);
     if (!rec?.observedAt || Date.now() - rec.observedAt > 120_000
       || rec.slots <= 0) return null;
     // A cross-container transfer first increases the carried count. Do not take
@@ -3277,7 +3286,7 @@ export class Executor {
         const block = bot.blockAt(new Vec3(cell.x, cell.y, cell.z));
         const isContainer = block && (CONTAINER_FIND.includes(block.name)
           || FURNACE_KINDS.has(block.name) || block.name === 'brewing_stand');
-        const rec = this.opts.chests?.get(dimensionOf(bot), cell);
+        const rec = this.chestBook()?.get(dimensionOf(bot), cell);
         const evidence = entry.admissionRule ? this.takeEvidenceNote(steps, now) : null;
         if ((evidence && entry.admissionRule !== `take.${evidence.proof}`)
           || (entry.takeProof === 'not-container' && isContainer)
@@ -3686,7 +3695,7 @@ export class Executor {
     const here = bot.entity?.position;
     if (!here || typeof bot.blockAt !== 'function') return '';
     const hints: string[] = [];
-    const known = [-1, 0, 1].map((dy) => this.opts.chests?.get(dimensionOf(bot),
+    const known = [-1, 0, 1].map((dy) => this.chestBook()?.get(dimensionOf(bot),
       { x: target.x, y: target.y + dy, z: target.z })).find(Boolean);
     if (known) hints.push(`账本记有容器 (${known.x},${known.y},${known.z})；那是方块坐标，goto 应选附近可站立格，开箱用 use at`);
     const cx = Math.floor(here.x), cy = Math.floor(here.y), cz = Math.floor(here.z);
@@ -3962,7 +3971,7 @@ export class Executor {
       },
       blockAt: (cell) => blockAtCell(bot, cell),
       lastAte: () => lastAteOf(bot),
-      chests: this.opts.chests,
+      chests: this.chestBook(),
     };
   }
 
@@ -4890,7 +4899,7 @@ export class Executor {
    * 当刻撤单并撤掉寻路目标(包括逃生目标),每一件各自投递取消终态。
    * 返回给 bot 的说明;没有可撤的东西时为 null。
    */
-  cancelForDimensionChange(from: string, to: string): string | null {
+  cancelForDimensionChange(from: string, to: string, worlds?: { from: string | null; to: string | null }): string | null {
     const t = this.task;
     if (t?.steps[t.stepIndex]?.skill === 'transit') return null;
     const transition = t?.dimensionTransition;
@@ -4909,8 +4918,9 @@ export class Executor {
       this.frozen = null;
     }
     if (!t && dropped.length === 0) return goal ? '旧维度的寻路目标已撤' : null;
-    const by = `维度变化中止(从${zhDimension(from)}进入了${zhDimension(to)},`
-      + `计划里的坐标是按${zhDimension(from)}写的)`;
+    const by = worlds
+      ? `世界变化中止(从${worlds.from ?? '未核实世界'}进入${worlds.to ?? '未核实世界'}，旧坐标需要重新观察)`
+      : `维度变化中止(从${zhDimension(from)}进入了${zhDimension(to)},计划里的坐标是按${zhDimension(from)}写的)`;
     if (expected) {
       transition!.observed = true;
       for (const d of dropped) this.reportCancelled(d, by, Executor.frozenProgress(d));
@@ -5009,7 +5019,7 @@ export class Executor {
   private furnaceNote(): string {
     const bot = this.opts.getBot();
     if (!bot?.game) return '';
-    const cooking = this.opts.chests?.loadedFurnaces(String(bot.game.dimension ?? 'overworld')) ?? [];
+    const cooking = this.chestBook()?.loadedFurnaces(String(bot.game.dimension ?? 'overworld')) ?? [];
     if (cooking.length === 0) return '';
     const one = (r: (typeof cooking)[number]): string => {
       const f = r.furnace!;
@@ -5186,7 +5196,7 @@ export class Executor {
     };
     const windows = new ContainerWindowOwnership(bot, {
       valid: () => !flag.aborted && !this.stopped && flag.epoch === this.executionEpoch && this.opts.getBot() === bot,
-      scope: () => normalizeDimension(dimensionOf(bot)),
+      scope: () => JSON.stringify([normalizeDimension(dimensionOf(bot)), this.opts.searchContext?.().realm ?? 'current']),
       onEvent: ({ kind, window, source, heldWindow, candidateWindow, changedFields }) => {
         const event = `hold-window-${kind}`;
         this.opts.diag?.write({ lane: 'skill', event, taskId: id,
@@ -5242,8 +5252,9 @@ export class Executor {
         queueHold: this.holdReason(),
         frozenTaskId: this.frozen?.id ?? null,
       }),
-      chests: this.opts.chests,
+      chests: this.chestBook(),
       works: this.opts.works,
+      getChests: this.opts.getChests,
       probeMemo: this.probeMemo,
       explored: this.opts.explored,
       search: {
@@ -6141,7 +6152,7 @@ export class Executor {
     }
     if (!this.bagLowArmed) return '';
     this.bagLowArmed = false;
-    const chest = knownChestNote(bot, this.opts.chests);
+    const chest = knownChestNote(bot, this.chestBook());
     return `\n[背包] 包里只剩 ${free} 格空位,快满了${chest ?? ';账上本维度还没有记过箱子'}`;
   }
 

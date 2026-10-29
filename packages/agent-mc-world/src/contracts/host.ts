@@ -82,6 +82,8 @@ export interface WorldHost {
   log: Logger;
 }
 export interface WorldRequestFacts {
+  /** Native world identity, separate from the dimension type; absent on legacy producers. */
+  world?: import('./world-scope.ts').WorldIdentityObservation;
   /** Event state streams fully represented by these current facts. This permits
    * request-only replacement of old state snapshots, not deletion of the event
    * ledger, terminal outcomes or evidence of historical progress. */

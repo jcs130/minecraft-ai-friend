@@ -1,5 +1,6 @@
 import { operationInventory } from './operation-experience.ts';
 import { withFactState } from './fact-state.ts';
+import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
@@ -2811,6 +2812,7 @@ export class MinecraftWorld implements World {
   protected rangedGeneration = 0;
   protected worldTimer: ReturnType<typeof setInterval> | null = null;
   protected lastReported: WorldSnapshot | null = null;
+  protected spatialRealm: string | null = null;
   protected lastTickTime: number | null = null;
   protected lastLowHealthAt = 0;
   protected lastAutoEatAttemptAt = 0;
@@ -2848,7 +2850,7 @@ export class MinecraftWorld implements World {
   private readonly methodLibraries = new Map<string, MethodLibrary>();
 
   protected methodLibrary(): MethodLibrary {
-    const scope = createHash('sha256').update(JSON.stringify([this.realmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
+    const scope = createHash('sha256').update(JSON.stringify([this.serverRealmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
     let library = this.methodLibraries.get(scope);
     if (!library) {
       library = new MethodLibrary(this.dataDir ? join(this.dataDir, 'minecraft-methods', scope) : null);
@@ -3520,7 +3522,7 @@ export class MinecraftWorld implements World {
     try { parts.push({ key: 'methods', text: this.methodLibrary().facts() }); }
     catch { parts.push({ key: 'methods', text: '[动作方法索引] 读取失败，已有方法状态未验证；mc_script {api:"authoring"} 可读编写及恢复入口。' }); }
     if (bot) {
-      parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(),
+      parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(), world: readWorldIdentity(bot),
         account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName }) });
       const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
       parts.unshift({ key: 'deathLifecycle', text: JSON.stringify(lifecycle ?? { phase: 'alive' }) });
@@ -3554,7 +3556,7 @@ export class MinecraftWorld implements World {
       parts.push({ key: 'journey', text: journeyOpportunityText(journey, { guidance: false })
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
     }
-    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options,
+    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
@@ -3615,6 +3617,7 @@ export class MinecraftWorld implements World {
   private unavailableRequestFacts(reason: 'disconnected' | 'snapshot-unavailable'): WorldRequestFacts {
     const last = this.lastFinishedTask;
     const parts = [
+      { key: 'identity', text: JSON.stringify({ realm: null, world: readWorldIdentity(null) }) },
       { key: 'availability', text: JSON.stringify({ observedAt: new Date().toISOString(), reason,
         connection: this.connectionReadiness(), currentWorldVerified: false,
         position: null, dimension: null, health: null, inventory: null, nearby: null,
@@ -3624,7 +3627,7 @@ export class MinecraftWorld implements World {
       { key: 'lastTask', text: renderLastTaskReadout(last
         ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
     ];
-    return { text: parts.map(part => part.text).join('\n'), parts,
+    return { text: parts.map(part => part.text).join('\n'), parts, world: readWorldIdentity(null),
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 
@@ -4136,8 +4139,8 @@ export class MinecraftWorld implements World {
   protected storageParts(): NonNullable<WorldConsoleDecl['storage']> {
     const impl: Record<string, Pick<StoragePart, 'stat' | 'clear'>> = {
       'minecraft-chests': {
-        stat: () => this.chests.stat(),
-        clear: () => this.chests.clear(),
+        stat: () => this.chestBook().stat(),
+        clear: () => this.chestBook().clear(),
       },
       'minecraft-deaths': {
         stat: () => this.deaths.stat(),
@@ -4241,7 +4244,7 @@ export class MinecraftWorld implements World {
       marks: () => this.markDesk(),
       // queue:"now" 夺手:战斗当场交还身体,不再走"腾出手就做"
       stopCombat: (firstStep) => this.combat?.standDown(firstStep) ?? null,
-      chests: this.chests,
+      getChests: () => this.chestBook(),
       directionalSweeps: this.directionalSweeps,
       works: this.works,
       explored: (dimension, direction, distance, biome) => this.explored.record(dimension, direction, distance, biome),
@@ -5337,7 +5340,7 @@ export class MinecraftWorld implements World {
         text: `[mc_bag] 看不了背包：${this.unavailableConnectionText()}`,
       };
     }
-    const records = this.chests.chestsIn(snap.dimension);
+    const records = this.chestBook().chestsIn(snap.dimension);
     if (item?.trim()) {
       const bot = this.bridge?.bot;
       const win = bot?.currentWindow;
@@ -5792,7 +5795,7 @@ export class MinecraftWorld implements World {
     // 槽位事务中光标所持栈不在 items() 中，须计入随身库存以免误记消耗。
     const cursor = bot?.currentWindow?.selectedItem ?? bot?.inventory?.selectedItem;
     if (cursor) carried[cursor.name] = (carried[cursor.name] ?? 0) + cursor.count;
-    return { carried, stored: this.chests.tally(String(bot?.game?.dimension ?? 'overworld')) };
+    return { carried, stored: this.chestBook().tally(String(bot?.game?.dimension ?? 'overworld')) };
   }
 
   /**
@@ -6865,6 +6868,7 @@ export class MinecraftWorld implements World {
     this.syncRealm();
 
     // 重连后的世界可能整个换了(重生点、另一台服务器):快照基线作废
+    this.spatialRealm = this.realmKey();
     this.snapshotAnchorPending = true;
     this.setPersonalSpawn(undefined, '重连,等待核实', { announce: false });
     this.hydratePersonalSpawn();
@@ -6931,6 +6935,8 @@ export class MinecraftWorld implements World {
     this.bodyLease.revive(now);
     // 新一期身体不继承旧 owner 实例:死时已清过一次,死到重生之间还可能又攒了几个
     this.resetBodyOwners();
+    if (this.spatialRealm !== null && this.spatialRealm !== undefined && this.spatialRealm !== this.realmKey())
+      this.observeNativeWorldChange(this.bridge?.bot);
     const lifecycle = (this.bridge?.bot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
     if (lifecycle?.phase === 'alive' && this.deathRespawnConfirmation) this.emit('minecraft.event', '[Minecraft] 已收到重生后的生命读数。', false,
       { trigger: 'flush', meta: { deathLifecycle: lifecycle } });
@@ -7044,7 +7050,7 @@ export class MinecraftWorld implements World {
 
   /** 世界身份:托管中的那份目录优先(activeServerDir),否则同 proxy 侧读配置里的目录 */
   protected worldIdentity(): WorldIdentity {
-    return worldIdentityOf(this.mcServer.directory(), `${this.cfg.host}:${this.cfg.port}`);
+    return worldIdentityOf(this.mcServer?.directory() ?? this.cfg.local?.serverDir ?? '', `${this.cfg.host}:${this.cfg.port}`);
   }
 
   /**
@@ -7059,13 +7065,22 @@ export class MinecraftWorld implements World {
    * 也是 World 判断自己在玩本地托管世界的既有口径。前提不成立时一律走弱身份,
    * 宁可多分一个命名空间(顶多少恢复一次),也不能把两个世界并成一个。
    */
-  protected realmKey(): string {
+  protected serverRealmKey(): string {
     const world = this.worldIdentity();
     if (world.local) {
-      const uuid = this.mcServer.realm()?.uuid;
+      const uuid = this.mcServer?.realm()?.uuid;
       if (uuid) return `uuid:${uuid}`;
     }
     return `weak:${this.cfg.host}:${this.cfg.port}|${world.local ? world.key : ''}`;
+  }
+
+  protected realmKey(): string {
+    return worldScopedRealm(this.serverRealmKey(), this.bridge?.bot);
+  }
+
+  /** Each operation retains a view of the world in which it started. */
+  protected chestBook(): ChestBook {
+    return this.chests.forRealm(this.realmKey());
   }
 
   /**
@@ -7108,11 +7123,11 @@ export class MinecraftWorld implements World {
    * 进服后核对实际世界身份；切换世界时通告位置类记忆失效，首次进服只落盘。
    * 暂态表已在 onSpawn 的 syncRealm 中切换命名空间，此处报告切换结果。
    */
-  protected noteWorldSwitch(): void {
+  protected noteWorldSwitch(announce = true): void {
     const cleared = this.realmCleared;
     this.realmCleared = [];
     const clearedText = cleared.length > 0 ? `暂态已清:${cleared.join('、')}随旧世界下桌。` : '';
-    const cur = this.worldIdentity().key;
+    const cur = this.realmKey();
     let prev: string | null = null;
     if (this.worldFile) {
       try {
@@ -7126,17 +7141,55 @@ export class MinecraftWorld implements World {
         }
       }
     }
-    if (prev && prev !== cur) {
+    if (announce && prev && prev !== cur) {
       this.emit(
         'minecraft.event',
-        `[Minecraft] 世界换了:现在是「${cur}」。之前在「${prev}」记的坐标、路线、据点在这里都不算数;`
+        `[Minecraft] 世界身份已改变:现在是「${readWorldIdentity(this.bridge?.bot).key ?? '未核实世界'}」。之前记的坐标、路线、据点需要在当前世界重新核实;`
         + `做法经验照旧有效。${clearedText}`,
         true,
       );
       return;
     }
     // 世界名没变而命名空间换了(弱身份补上了 uuid 一类):清单照样得有人说
-    if (clearedText) this.emit('minecraft.event', `[Minecraft] ${clearedText}`, true);
+    if (announce && clearedText) this.emit('minecraft.event', `[Minecraft] ${clearedText}`, true);
+  }
+
+  /** Native world names can change while both worlds use the overworld physics type. */
+  protected observeNativeWorldChange(bot: Bot | null | undefined): void {
+    if (!bot || (this.bridge?.bot && this.bridge.bot !== bot)) return;
+    const dim = bot.game?.dimension ? normalizeDimension(bot.game.dimension) : '';
+    const scope = this.realmKey();
+    const worldChanged = this.spatialRealm !== null && this.spatialRealm !== undefined && this.spatialRealm !== scope;
+    const typeChanged = !!dim && this.lastDimension !== null && this.lastDimension !== undefined && dim !== this.lastDimension;
+    if (worldChanged || typeChanged) {
+      const from = this.lastDimension ?? dim;
+      const fromWorld = this.lastReported?.world?.key ?? null;
+      const toWorld = readWorldIdentity(bot).key;
+      this.requestFactsCache = null;
+      this.lastReported = null;
+      this.lastPosForTeleport = null;
+      this.snapshotArmedAt = null;
+      this.journeyBlocks = null;
+      this.snapshotAnchorPending = true;
+      this.proximity.clear(); this.playerObservations.clear(); this.flocks.clear(); this.matureAnnounced.clear();
+      this.idleContext.clear();
+      this.setPersonalSpawn(undefined, '世界身份已改变，等待核实', { announce: false });
+      this.serverQueries.reset('世界身份已改变，旧查询结果未知');
+      this.spatialRealm = scope;
+      this.lastDimension = dim || null;
+      this.syncRealm();
+      const cancelled = this.executor?.cancelForDimensionChange(from, dim, worldChanged ? { from: fromWorld, to: toWorld } : undefined) ?? null;
+      this.combat?.onConnectionLost();
+      this.reflexes?.stop();
+      this.reflexes?.start();
+      this.noteWorldSwitch(false);
+      this.emit('minecraft.event', worldChanged
+        ? `[Minecraft] 世界已切换到「${toWorld ?? '身份未核实'}」（维度类型 ${dim || '未知'}）。旧坐标和附近读数需要重新观察。${cancelled ?? ''}`
+        : `[Minecraft] 从${zhDimension(from)}进入了${zhDimension(dim)}。${cancelled ? `${cancelled}。` : ''}`, true,
+      { meta: { worldTransition: { from: fromWorld, to: toWorld, dimensionType: dim || null } } });
+      this.resyncSpectatorForDimension(dim);
+    }
+    if (dim) this.lastDimension = dim;
   }
 
   /** 将服务器相位变化投递为事件。 */
@@ -7697,29 +7750,7 @@ export class MinecraftWorld implements World {
     this.lastDimension = bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null;
     this.lastLevel = typeof bot.experience?.level === 'number' && Number.isFinite(bot.experience.level)
       ? bot.experience.level : null;
-    bot.on('game', () => {
-      const dim = bot.game?.dimension ? normalizeDimension(bot.game.dimension) : '';
-      if (dim && this.lastDimension !== null && dim !== this.lastDimension) {
-        const from = this.lastDimension;
-        this.lastReported = null;
-        this.lastPosForTeleport = null;
-        this.snapshotArmedAt = null;
-        this.proximity.clear();
-        this.playerObservations.clear();
-        this.flocks.clear();
-        this.matureAnnounced.clear();
-        this.lastDimension = dim;
-        this.syncRealm();
-        const cancelled = this.executor?.cancelForDimensionChange(from, dim) ?? null;
-        this.emit(
-          'minecraft.event',
-          `[Minecraft] 从${zhDimension(from)}进入了${zhDimension(dim)}。${cancelled ? `${cancelled}。` : ''}`,
-          true,
-        );
-        this.resyncSpectatorForDimension(dim);
-      }
-      if (dim) this.lastDimension = dim;
-    });
+    bot.on("game", () => this.observeNativeWorldChange(bot));
     bot.on('forcedMove', () => {
       this.routePositionEpoch++;
       this.interruptIdle('forced-move');
@@ -8122,9 +8153,9 @@ export class MinecraftWorld implements World {
    * 服务端不持续同步未打开的炉子槽位，实际结果需取货时核验。
    */
   protected furnaceTick(): void {
-    const due = this.chests.due(Date.now());
+    const due = this.chestBook().due(Date.now());
     for (const rec of due) {
-      this.chests.markNotified(rec.dimension, rec);
+      this.chestBook().markNotified(rec.dimension, rec);
       const f = rec.furnace!;
       const load = f.input ? `${zhName(f.input.name)}×${f.input.count}` : '料';
       const when = nowIso(this.timezone, new Date(f.loadedAt)).slice(11, 19);
@@ -8944,7 +8975,7 @@ export class MinecraftWorld implements World {
       const snap = snapshotFromBot(bot, {
         invSynced: this.bridge?.invSynced,
         timezone: this.timezone,
-        chestOf: (dim, p) => this.chests.get(dim, p),
+        chestOf: (dim, p) => this.chestBook().get(dim, p),
         ...opts,
       });
       // 在线名单排除 bot 自身与观察摄像机;两者都不是 goto_player 的有效目标。

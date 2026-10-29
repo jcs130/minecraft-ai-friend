@@ -259,6 +259,8 @@ export interface SkillContext {
   digBackoffSince?: (ts: number) => Array<{ x: number; y: number; z: number }>;
   /** 容器账本(World 持有,跨任务):箱子内容、炉子槽位与到期、自备工作站的来历 */
   chests?: ChestBook;
+  /** Resolve once per operation; an explicit travel may cross worlds within the same task. */
+  getChests?: () => ChestBook;
   /**
    * 成果登记(World 持有,跨任务跨场次):她做成的蓝图格、耕地、作物。
    * 技能只往里记与读事实,不据此阻断任何动作。

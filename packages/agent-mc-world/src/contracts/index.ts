@@ -12,3 +12,4 @@ export type { InventoryOrganization, InventoryDisposition, OrganizationStack, Or
   InventoryOrganizationPlan, InventoryShortcutExchange } from '../../core/inventory-organization.ts';
 export * from './chat-delivery.ts';
 export * from './fact-updates.ts';
+export * from './world-scope.ts';
