@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createMinecraftChoiceTool } from './choice.ts';
 import { runtimeExecutionState } from './execution-state.ts';
+import {readTextPage} from './text-pages.ts';
 import { familiarStepAction } from './familiar-action.ts';
 import { ClientOperationLearning } from './operation-learning.ts';
 import { operationObservation, type OperationAttribution } from '../../core/operation-experience.ts';
@@ -289,7 +290,15 @@ export class MinecraftAgentClient {
   /** Registered execution evidence only. Unresolved earlier generations are not silently cleared. */
   executionState() {
     return runtimeExecutionState(this.journal.run,this.epoch,this.phase,[...this.executions].map(([key,receipt])=>({
-      generation:this.executionGenerations.get(key)!,receipt})));
+      generation:this.executionGenerations.get(key)!,receipt})),{
+        calls:[...this.calls.values()].filter(x=>x.pending).length,tactics:[...this.tacticCalls.values()].filter(x=>x.pending).length});
+  }
+
+  /** Immutable local text read; never re-executes the tool that produced it. */
+  readTextArtifact(handle:string,options:{offset?:number;maxChars?:number}={}) {
+    const saved=this.journal.blob(handle);if(!saved)throw new Error('Execution artifact not found');
+    if(saved.mime!=='application/json'&&!saved.mime.startsWith('text/'))throw new Error('Only UTF-8 text artifacts support paging');
+    return readTextPage(Buffer.from(saved.bytes).toString('utf8'),handle,{...options,mime:saved.mime});
   }
 
   currentFacts() {

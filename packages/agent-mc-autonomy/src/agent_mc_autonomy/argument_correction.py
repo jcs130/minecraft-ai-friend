@@ -1,4 +1,4 @@
-"""Bound proven syntax corrections without treating game failures as syntax."""
+"""Track proven correction contracts without imposing whole-planner delays."""
 import hashlib
 import json
 
@@ -29,5 +29,6 @@ class ArgumentCorrections:
                 "world_changes_do_not_correct_argument_shape": True,
                 "next_step": "Supply the required typed fields from the native correction contract. "
                              "Writing a field name inside text is not supplying that field. "
+                             "Only identical rejected arguments are fenced; corrected arguments and other tools remain available. "
                              "Alternatively inspect a genuinely missing prerequisite or explain a real wait; "
                              "no replacement action is automatically selected."}

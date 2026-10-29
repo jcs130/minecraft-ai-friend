@@ -15,6 +15,8 @@ export { AgentJournal, EventCursorError } from './journal.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';
 export { runtimeExecutionState, type RuntimeExecutionState, type ExecutionIdentity } from './execution-state.ts';
+export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,type TextPage,type TextToolResult} from './text-pages.ts';
+export {ReadProgressBook,readOnlyToolResult,type ReadProgressEvidence} from './read-progress.ts';
 export * from './schema-reading.ts';
 export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.ts';
 export { withFactState, type FactState } from '../../core/fact-state.ts';

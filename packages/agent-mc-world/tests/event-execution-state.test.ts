@@ -57,3 +57,19 @@ it('bounded identity previews retain exact counts and include every identity in 
   expect(runtimeExecutionState('run',2,'started',changed).revision).not.toBe(first.revision);
   expect(runtimeExecutionState('new-run',2,'started',[])).toMatchObject({activeCount:0,detachedCount:0,latestTerminal:null,previousRuns:'not-covered'});
 });
+
+it('includes unresolved admission calls and tactics independently of accepted execution receipts',async()=>{
+  let release!:()=>void,entered!:()=>void;
+  const started=new Promise<void>(r=>{entered=r;}),pending=new Promise<void>(r=>{release=r;});
+  const dir=await mkdtemp(join(tmpdir(),'mc-pending-state-'));
+  const world={id:'pending-fixture',tools:()=>[{name:'mc_fixture',description:'pending fixture',tags:['read'],parameters:{type:'object'},
+    handler:async()=>{entered();await pending;return{text:'complete read'};}}],envPromptVars:()=>null,start:async()=>{},stop:async()=>{}};
+  const runtime=new MinecraftAgentClient({cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'fixture.invalid',username:'PendingQA'},dataDir:dir,log:nullLogger()},world);
+  try{
+    await runtime.connect();const before=runtime.executionState();const call=runtime.call('mc_fixture',{}, {requestId:'pending-read'});await started;
+    expect(runtime.executionState()).toMatchObject({activeCount:0,pendingCalls:1,pendingTactics:0});
+    expect(runtime.executionState().revision).not.toBe(before.revision);release();await call;
+    expect(runtime.executionState().pendingCalls).toBe(0);
+    expect(runtimeExecutionState('r',1,'started',[],{calls:0,tactics:2})).toMatchObject({activeCount:0,pendingTactics:2});
+  }finally{release();await runtime.disconnect();await rm(dir,{recursive:true,force:true});}
+});

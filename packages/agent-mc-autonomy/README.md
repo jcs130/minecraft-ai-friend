@@ -1,6 +1,14 @@
 # Agent MC Autonomy
 
-Version 0.2.121 pins independently built core rc.124. Explicitly included
+Version 0.2.123 removes whole-planner exponential waits for rejected operations
+and malformed tool calls. Exact invalid calls remain fenced; corrected arguments,
+help and other operations continue at normal decision cadence. Native validation,
+pending/unknown work, stop and provider outage deadlines remain authoritative.
+See [call correction scheduling](docs/call-correction.md). The body remains pinned
+to independently built core rc.124.
+
+Version 0.2.122 adds measured failed-open recovery, including skipped dependent
+withdrawals and explicit interaction faces. Version 0.2.121 pins independently built core rc.124. Explicitly included
 shortcut sorting can use cursor-free exchanges while retaining native per-click
 confirmation. MCP results match JSON wire semantics. Existing carried items and
 unknown actions are not silently cleared; the planner and personal-memory ports
@@ -118,7 +126,7 @@ alternatives only with the explicit `llamacpp` wire profile. Required fields
 such as `harvest.at` are constrained during generation; other providers retain
 the flat declaration. Native validation remains authoritative. Proven
 no-dispatch argument failures retain their typed correction across world drift
-and clock expiry, and repeated failures yield with bounded backoff. No arguments
+and clock expiry; repeated failures now yield at normal cadence without a global backoff. No arguments
 or replacement activities are selected automatically; stop, unknown inventory,
 the sole native queue and inference deadlines are unchanged.
 
@@ -200,7 +208,7 @@ truncated outputs still must not be acknowledged or applied.
 excerpt in the next selected planner notice, so window eviction cannot leave
 only a generic error. One first, known no-dispatch syntax error can request an
 immediate correction when the body is idle; repeated invalid replies retain
-normal bounded backoff. Native pending/unknown work and stop still fence it.
+normal decision cadence. Native pending/unknown work and stop still fence it.
 Arguments are never repaired, guessed or executed automatically.
 
 0.2.54 carries still-applicable, dated generic bag/queue/failure answers in the

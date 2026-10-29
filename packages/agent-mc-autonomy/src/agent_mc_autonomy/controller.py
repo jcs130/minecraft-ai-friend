@@ -595,6 +595,11 @@ class Controller:
         return failure
 
     def defer_argument_correction(self, name, failure):
+        """Bound the correction chain without suspending the whole planner.
+
+        Exact rejected calls are fenced below. Syntax errors are neither an
+        unavailable provider nor an unresolved native execution.
+        """
         correction = self.argument_corrections.record(name, failure, self.game_scope)
         if correction is None:
             return False
@@ -602,13 +607,18 @@ class Controller:
         self.retain_tool_failure(failure)
         if correction["attempts"] < 2:
             return False  # One immediate, model-selected correction remains possible.
-        delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
-                    * 2 ** min(6, correction["attempts"] - 2))
-        self.planner_retry_at = time.monotonic() + delay
-        self.continuation_needed = True
-        self.publish(planner_error="repeated_argument_correction", rejected_tool=name,
-                     planner_retry_seconds=delay)
+        self.publish_call_correction(name, "repeated_argument_correction")
         return True
+
+    def publish_call_correction(self, name, code):
+        # Yield at normal decision cadence. Never add a whole-planner timer
+        # for a rejected operation, or erase an independent provider deadline.
+        self.continuation_needed = True
+        self.publish(planner_error=code, rejected_tool=name,
+                     planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)),
+                     planner_correction={"kind": "rejected_call", "scope": "call", "tool": name,
+                         "global_backoff_added": False, "corrected_arguments_allowed": True,
+                         "other_tools_allowed": True})
 
     def retain_tool_failure(self, failure):
         # A failed read is not a new body plan. Keep both causes, with the body
@@ -1603,9 +1613,15 @@ class Controller:
         if not repeat and name == "mc_do" and not self.pending and not queue_error:
             repeat = self.container_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch)
         if repeat and not observation_call(name, arguments):
-            container_failure = repeat.get("kind") == "failed_container_take"
+            container_failure = repeat.get("kind") in {"failed_container_take", "unopened_container"}
             code = "repeated_container_failure" if container_failure else "repeated_no_effect"
-            self.planner_notice = (("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
+            self.planner_notice = (("Two measured interactions at this coordinate and face failed to open a container; "
+                "the dependent take step was skipped, so no withdrawal was attempted. The same approach and inventory remain observed. "
+                "This entire batch was NOT dispatched. Correct the target or interaction using the dated native evidence, "
+                "obtain a genuinely different approach or prerequisites, choose other useful work, or report the stage blocked. "
+                "The refusal expires within 120 seconds; it does not establish current block state, permissions or goal success.")
+                if repeat.get("kind") == "unopened_container" else
+                ("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
                 "Walking, reopening it, new narration or a different later batch do not resolve that failure. "
                 "The entire proposed batch was NOT dispatched. Use the dated native evidence to correct the item/container, "
                 "obtain prerequisites through real work, query a specific missing fact, choose different work, or wait for changed conditions. "
@@ -1614,9 +1630,8 @@ class Controller:
                 "It was NOT dispatched again. Use the original terminal evidence and native skill help to correct the prerequisites, choose different useful work, "
                 "or report this proposed stage blocked. This dated client-visible evidence does not prove permissions or goal success."))
             self.continuation_needed = True
-            delay = max(30, self.settings.min_decision_seconds)
-            self.planner_retry_at = time.monotonic() + delay
-            self.publish(action_recovery=repeat, planner_error=code, planner_retry_seconds=delay)
+            self.publish_call_correction(name, code)
+            self.publish(action_recovery=repeat)
             result = {"failed": True, "dispatched": False, "origin": "controller_validation", "code": code,
                       "text": self.planner_notice, "previous_outcome": repeat}
             return result, await self.archive_receipt(request_id, name, result), True
@@ -1673,12 +1688,8 @@ class Controller:
                     "They were NOT dispatched again. Position, clocks and new call IDs cannot supply a missing field. "
                     "Use the retained typed correction contract and correct the actual arguments, or inspect a missing prerequisite.")
             self.retain_tool_failure(prior_admission["failure"])
-            syntax_deferred = self.defer_argument_correction(name, prior_admission["failure"])
-            if not syntax_deferred:
-                self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
-            self.continuation_needed = True
-            self.publish(planner_error="repeated_admission_rejection", rejected_tool=name,
-                         planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)))
+            self.defer_argument_correction(name, prior_admission["failure"])
+            self.publish_call_correction(name, "repeated_admission_rejection")
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                       "text": self.planner_notice, "previous_failure": self.tool_failure}
             compact = await self.archive_receipt(request_id, name, result)
@@ -1687,9 +1698,7 @@ class Controller:
             # A known pre-dispatch rejection cannot be replayed by a later batch.
             self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
             self.retain_tool_failure(self.rejected_calls[rejected_key])
-            self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
-            self.continuation_needed = True
-            self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
+            self.publish_call_correction(name, "repeated_invalid_tool_call")
             result = {"failed": True, "dispatched": False, "origin": "controller_validation", "text": self.planner_notice,
                       "previous_failure": self.tool_failure}
             return result, encode(result), True
@@ -1838,13 +1847,13 @@ class Controller:
                 **({"json_diagnostic": error.diagnostic} if isinstance(error, ToolJSONRejected) else {})}) + "\n")
         immediate = (isinstance(error, ToolJSONRejected) and self.invalid_tool_calls == 1
                      and not self.pending and self.inflight_request is None and not self.stop_requested())
-        delay = 0 if immediate else min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
-        self.planner_retry_at = time.monotonic() + delay
         self.continuation_ready = immediate
         self.continuation_needed = True
         self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls,
-                     planner_retry_seconds=delay, planner_correction={"kind": "json_syntax" if isinstance(error, ToolJSONRejected) else "validation",
-                         "attempt": self.invalid_tool_calls, "immediate": immediate, "dispatched": False})
+                     planner_retry_seconds=max(0, round(self.planner_retry_at - time.monotonic(), 3)),
+                     planner_correction={"kind": "json_syntax" if isinstance(error, ToolJSONRejected) else "validation",
+                         "attempt": self.invalid_tool_calls, "immediate": immediate, "dispatched": False,
+                         "scope": "call", "global_backoff_added": False})
 
     def retain_history(self):
         if self.settings.context_mode != "full":

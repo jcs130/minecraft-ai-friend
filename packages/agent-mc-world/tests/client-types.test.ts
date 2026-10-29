@@ -37,6 +37,12 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     void exchanges;
     const reference: Record<string, unknown> = readMinecraftKnowledge({action:'get',id:'food/beef'},'1.21.1');
     void reference; void KNOWLEDGE_TOOL;
+    import {ReadProgressBook, readTextPage, renderToolTextPage, runtimeExecutionState, type TextPage} from '../dist/types/src/client/index.js';
+    const textPage: TextPage = readTextPage('whole text','log:'+'a'.repeat(64),{offset:0,maxChars:2});
+    const readBook = new ReadProgressBook({limit:2}); readBook.reset();
+    const pending: number = runtimeExecutionState('run',1,'started',[],{calls:1,tactics:0}).pendingCalls;
+    const projection: string | null = renderToolTextPage({structuredContent:{failed:false,text:textPage.text,data:textPage}}, {budgetChars:1500,toolPrefix:'mc'});
+    void pending; void projection;
     void mcp;void stdio;void createRelay;void extension;
     import {Bridge, type MinecraftBot} from '../dist/types/src/extension.js';
     class ServerBridge extends Bridge {

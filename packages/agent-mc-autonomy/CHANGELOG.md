@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.122
+
+Bound repeated failed container opening even when its dependent take step is
+skipped. Require two native terminal measurements, a known unchanged target,
+inventory, window and approach; bind explicit face, connection, scope and death
+epoch. Changed prerequisites remain eligible. Dated refusals expire within
+120 seconds and never certify contents or a goal. Core remains rc.124.
+
 ## 0.2.121
 
 - Pin the independently built core rc.124, including cursor-free sorting exchanges for explicitly included shortcuts and the MCP JSON wire-semantics fix. Keep the same planner, personality ports, native queue and uncertainty safeguards.
