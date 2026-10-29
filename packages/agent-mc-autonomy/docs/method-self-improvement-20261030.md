@@ -1,0 +1,7 @@
+# Evidence-driven method improvement
+
+The planner now receives explicit authoring and review guidance when the real core catalogue exposes `mc_script`, directly or through `mc_invoke`. It connects a recurring failure to a testable cause, a bounded method, syntax validation, an immutable revision, a natural trial, original execution evidence, review and explicit adoption. Existing native protection remains available while the planner works. Retrieving a memory, selecting thinking effort, saving code and verifying an improvement remain distinct operations.
+
+The workflow is part of the stable request prefix. Current evidence remains at the tail. No new model loop, tool, game connection or automatic adoption is introduced. Optional `mc_practice` guidance appears only when both the script and actual practice tools are present; physics evidence cannot establish combat or spell success. A host without a method port needs that capability wired through the core, rather than instructions to call nonexistent tools.
+
+Validation used the real request assembler in compact/full catalogue modes, including `mc_invoke`, stable-prefix checks and absent-capability cases. The package suite passed 1,741 tests with 25 existing optional skips after supplying the exact engine archive already pinned in `source.json`. Packed-consumer verification and live loading are separate checks. This source change does not claim that a live Agent has adopted an improved method.

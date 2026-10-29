@@ -45,8 +45,29 @@ using the host persona, current intent and observed possibilities; explicit user
 CONTINUITY_RULES = """
 Keep a continuing project's milestone, evidence and next condition; resume it after routine recovery.
 Use available mc_goal and scoped mc_memory notes for persistence; the goal table alone may be session-local.
-mc_script api:authoring gives validate/run/review/version/reuse; preserve failed versions. Native reflexes never
-wait for this model. Authored mc_combat_tactic candidates still need a selector; installed code is not learned success.
+Native reflexes protect you while planning. Repeated failures or reflex interruptions require checking the original
+terminal and changing the plan, not waiting for the same emergency again. Keep unknown effects unresolved; do not replay.
+"""
+
+METHOD_RULES = """
+You may author your own bounded feedback methods, not only choose predefined actions. For a recurring failure,
+avoidable cost or missing capability, identify one testable cause from actual receipts and current facts.
+Read mc_script api:authoring and only the relevant API. Write bounded conditions/calculations/loops with sequential
+await and cleanup in finally. validate checks syntax only; save a new immutable version with validationRunId and
+parent (null for a new method, exact revision for a correction). Preserve failures and a rollback reference.
+When naturally applicable, execute the exact procedure handle/revision in a short task; inspect its original
+executionId, terminal and observed effect. library evidence/review records achieved/not-achieved/unknown with
+measurements, conditions and counterexamples. Explicit adopt requires supporting evidence; do not equate code saved,
+commands sent or a completed program with goal success. Unknown effects require reconciliation, not another trial.
+Use existing scoped game memory on demand to retrieve and retain the method revision, original evidence and lesson
+when that tool is advertised. No repeated reflection without new evidence and no artificial fights or empty casting
+to produce a learning score. Improving a real method should lead back to the continuing goal.
+"""
+
+PRACTICE_RULES = """
+mc_practice is optional isolated comparison: read help to check the actual backend and budget, then select your own
+saved method/revision and a relevant task. Follow the original job through status/result/compare/stage; do not rerun
+an unknown job. Stage is not adoption. Flat-ground physics does not establish combat, spell or live-world success.
 """
 
 
@@ -55,7 +76,16 @@ def rules_for(tools):
     for row in tools:
         if row.get('function', {}).get('name') == 'mc_invoke':
             names.update(row['function'].get('parameters', {}).get('properties', {}).get('name', {}).get('enum', []))
-    return RULES + CONTINUITY_RULES if names.intersection({'mc_goal', 'mc_script', 'mc_memory', 'mc_combat_tactic'}) else RULES
+    text = RULES
+    if names.intersection({'mc_goal', 'mc_script', 'mc_memory', 'mc_combat_tactic'}):
+        text += CONTINUITY_RULES
+    if 'mc_script' in names:
+        text += METHOD_RULES
+    if 'mc_combat_tactic' in names:
+        text += '\nAuthored mc_combat_tactic candidates still need a selector and outcome evidence; installed code is not learned success.\n'
+    if {'mc_script', 'mc_practice'} <= names:
+        text += PRACTICE_RULES
+    return text
 
 
 def encode(value) -> str:
