@@ -19,6 +19,19 @@ test('actual vanilla/async Paper public chat preserves speech and sender without
  for(const content of ['ag_Alpha issued server command: /msg ag_Beta hello','[SomePlugin] <ag_Alpha> made up','ag_Alpha whispers to you: hello'])assert.equal(parsePublicDialogue('[12:00:00] [Server thread/INFO]: '+content,'2026-10-25'),null);
 });
 
+test('official nearby and shout chat stays archived with its channel and sender world',()=>{
+ for(const [prefix,channel]of [['[附近][艾恩葛朗特]','附近'],['[大喇叭] [主世界]','大喇叭']]){
+  const row=parsePublicDialogue('[19:50:00] [Async Chat Thread - #2/INFO]: [Not Secure] '+prefix+' ag_Alpha: 一起去冒险吧','2026-10-29');
+  assert.equal(row.playerName,'ag_Alpha');assert.equal(row.body,'一起去冒险吧');assert.ok(row.title.includes(channel));assert.match(row.title,/艾恩葛朗特|主世界/);
+ }
+});
+
+test('new chat envelopes retain the real outer author and never ingest whispers, spy or authentication',()=>{
+ const prefix='[19:50:00] [Server thread/INFO]: ';
+ const quoted=parsePublicDialogue(prefix+'[附近][主世界] ag_Alpha: [大喇叭][主世界] ag_Beta: 一起走','2026-10-29');assert.equal(quoted.playerName,'ag_Alpha');
+ for(const value of ['[附近][监听][主世界] ag_Alpha: 旁听','[私聊][主世界] ag_Alpha: 私聊','[附近][主世界] ag_Alpha: /login never-publish-test','[附近][主世界] ag_Alpha: MC_AUTH_STATE {}'])assert.equal(parsePublicDialogue(prefix+value,'2026-10-29'),null);
+});
+
 test('dialogue survives rereads and restart; real repeated same-second messages stay distinct, unsafe/unknown lines never persist',async t=>{
  const f=await siteFixture(t),file=path.join(f.root,'game/logs/latest.log');
  const line='[12:02:00] [Async Chat Thread - #1/INFO]: [Not Secure] <ag_Alpha> 大家来组队吧\n';

@@ -21,3 +21,16 @@ test('caption events require an explicit handler; malformed data is ignored',()=
 test('invalid audio never uploads; actor identity cannot be supplied',async()=>{
  const bot=fake(),voice=attachProximityVoice(bot);await assert.rejects(voice.upload(Buffer.from('mp3')),/PCM16_WAV/);assert.throws(()=>voice.say('x'.repeat(201)),/MAX_200/);voice.close();
 });
+
+test('external audio uploads through the same body without requesting server TTS',async()=>{
+ const bot=fake(),voice=attachProximityVoice(bot,{timeoutMs:1000}),requestId=randomUUID(),ops=[],chunks=[];
+ bot.on('write',packet=>{
+  if(packet.channel!=='mcagent:voice')return;
+  if(packet.data[0]===2){chunks.push(packet.data.subarray(21));return;}
+  const row=JSON.parse(packet.data.subarray(1).toString());ops.push(row.op);
+  if(row.op==='begin')receipt(bot,requestId,'uploading');
+  if(row.op==='finish'){receipt(bot,requestId,'queued');receipt(bot,requestId,'playing');receipt(bot,requestId,'sent');}
+ });
+ const wav=Buffer.alloc(44+16000);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(16000,40);
+ const result=await voice.upload(wav,{requestId});assert.equal(result.state,'sent');assert.deepEqual(ops,['begin','finish']);assert.deepEqual(Buffer.concat(chunks),wav);voice.close();
+});

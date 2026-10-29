@@ -1,5 +1,5 @@
 {
-  "state": "tested-candidate-not-deployed",
+  "state": "superseded-by-verified-release",
   "date": "2026-10-29",
   "document": "paper/docs/PAPER_PLUGIN_REUSE_20261029.md",
   "chatAuthority": "official EssentialsXChat 2.22.0",
@@ -29,20 +29,24 @@
     "realMineflayerChatAndRpgChecks": 34,
     "nativeProtocolWorldChecks": 4,
     "offlineNativeRpgChecks": 248,
-    "dedicatedLoopbackPorts": [29086, 29087],
+    "dedicatedLoopbackPorts": [
+      29086,
+      29087
+    ],
     "freshQaWorldAndPlayers": true,
     "productionWorldOrAccountsCopied": false,
     "qaStoppedNormally": true,
     "candidateAndStaticRollbackMirroredEF": true,
-    "fullProductionColdBackupForThisCandidate": false,
+    "fullProductionColdBackupForThisCandidate": true,
     "realBedrockDisplayVerified": false
   },
   "deployment": {
-    "productionChanged": false,
+    "productionChanged": true,
     "paperRestartRequired": true,
     "preserveNativeWhisperAliases": true,
     "preserveOtherEssentialsSettings": true,
-    "currentBridgeRemains": "0.2.9",
+    "currentBridgeRemains": "0.2.10",
     "liveDeploymentManifest": "paper/manifests/current-deployment.json"
-  }
+  },
+  "releaseManifest": "paper/manifests/proximity-chat-release-20261029.json"
 }

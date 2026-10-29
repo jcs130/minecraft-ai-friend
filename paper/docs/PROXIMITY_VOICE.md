@@ -1,6 +1,6 @@
 # 附近语音与 Agent 听说接入
 
-2026-10-29：QiandengVoice0.1.0、Simple Voice Chat2.6.27与LoginGuard0.1.9已在正式Paper1.21.1加载；原TTS/CPU ASR进程保留，有限权限开机自启已运行，Windows UDP24454规则已创建。客户端模组可选；真实公网UDP与真人麦克风/耳听仍待验收。玩家使用和构建见[proximity-voice/README](../integrations/proximity-voice/README.md)。
+2026-10-29：QiandengVoice0.1.0、Simple Voice Chat2.6.27与LoginGuard0.1.9已在正式Paper1.21.1加载；原TTS/CPU ASR进程保留，有限权限开机自启已运行，Windows UDP24454规则已创建。客户端模组可选；公网UDP与每日端口续期已验收，真人麦克风/耳听仍待验证。玩家使用和构建见[proximity-voice/README](../integrations/proximity-voice/README.md)。
 
 ## 本轮实现和实际验收
 
@@ -15,9 +15,9 @@
 
 官方 Velocity 语音插件当前对应2.6.26，Bukkit为2.6.27。隔离对照中，加入该代理插件会使同一 Mineflayer1.21.1连接立即收到 internal error；移除后同配置成功出生并收到 `/voice`，随后 `voicechat:request_secret` 的兼容版本20握手也成功返回56字节。尚未确定代理插件内部的具体异常分支，不把它作为已确认的上游根因。
 
-**候选不安装这份 Velocity 语音插件**。采用[官方文档支持的无语音代理插件路线](https://dev.modrepo.de/minecraft/voicechat/wiki/proxy_setup)：游戏仍沿原登录／YSM代理，声音直接连Paper的独立UDP端口。计划LAN24454/UDP；公网还须核对Windows防火墙和路由器映射。本轮未开新公网端口，也未验证真人公网UDP。不能把内部API实测当作公网听音验收。
+**现役未安装这份 Velocity 语音插件**。采用[官方文档支持的无语音代理插件路线](https://dev.modrepo.de/minecraft/voicechat/wiki/proxy_setup)：游戏仍沿原登录／YSM代理，声音直接连Paper的独立UDP端口。LAN及公网UDP24454已开放并从阿里云实收nonce回包，低权限每日/开机续期已验。真人听音仍待验证。不能把内部API实测当作公网听音验收。
 
-本次准备的是 E/F 静态候选与登录代理JAR前像，不能称为发布前完整冷备。正式安装仍须当前维护确认、原身份／副本门禁、3分钟预告和完整双盘冷备；不使用 `/reload`。
+本轮已完成维护授权、身份／副本门禁、3分钟预告及E/F完整冷备。发布记录见[附近交流发布](NEARBY_COMMUNICATION_RELEASE_20261029.md)，不使用全服 `/reload`。
 
 最终跨维度实测：正在发声的同一角色从主世界进入下界，原请求返回 `cancelled / ACTOR_WORLD_CHANGED`，未续播。同请求同音频返回原sent，改变音频后复用请求ID明确拒绝 `REQUEST_ID_REUSED`，原结果仍为sent。早期测试发现取消原因被统一覆盖、另一次夹具角色已在下界没有真正换维度，失败记录保留；修复与明确起始维度后的复验通过。最终静态候选为 `proximity-voice-release-20261029-r3`，R1/R2未部署且已被替代。
 
@@ -36,7 +36,7 @@
 | `MicCapture/CaptureInterval/CaptureFence` | 保留首末音包时间、停止包与去重；录音槽和 Opus decoder 改为每位说话者独立 |
 | `mic_asr_watcher.py` | 复用音频归一化、原子任务及收据；当前仅萌萌白名单、只给女神的旧路由不满足多人附近听觉 |
 
-旧模块不能直接放进Paper。历史 `docs/VOICE-INTEGRATION.md` 是旧NeoForge环境的部署记录，不能据此启动退役服务或重新消费旧语音队列。本次新建媒体适配器、复用现役TTS并完成CPU真实转写；新入口尚未发布为正式游戏能力。
+旧模块不能直接放进Paper。历史 `docs/VOICE-INTEGRATION.md` 是旧NeoForge环境的部署记录，不能据此启动退役服务或重新消费旧语音队列。本次新建媒体适配器、复用现役TTS并完成CPU真实转写；新入口已发布为可选游戏能力。
 
 ## 两条实际链路
 
@@ -60,10 +60,10 @@ Java 玩家原生听说需要匹配 MC 版本的 Simple Voice Chat 客户端模�
 
 基岩／不装模组者可评估自托管浏览器桥：[Simple Web Voice Chat](https://github.com/muzaaqi/simple-web-voice-chat) 已公开 Paper ↔ 官网后端 ↔ 浏览器的 SVC 桥接协议；[Bedrock Simple Voice](https://modrinth.com/plugin/bedrock-simple-voice) 提供浏览器配对与自托管模式。后者较新，仍须审查实际源码、版本和手机后台表现。候选不等于已经采用；共用服务器的密钥必须留在后端，不能下发到浏览器。
 
-SVC 通常额外使用 UDP 24454，不能复用 Geyser 的同一 UDP 监听。现有 Velocity/YSM 登录链路仍须实测握手和公网 UDP 路由；本次没有打开新防火墙或路由器端口。浏览器麦克风走官网 HTTPS 和配对身份；手机切到游戏后可能被系统挂起，不能承诺所有手机都能后台持续通话。
+SVC 通常额外使用 UDP 24454，不能复用 Geyser 的同一 UDP 监听。现有 Velocity/YSM 登录链路仍须实测握手和公网 UDP 路由；Windows与路由器UDP24454已开放且外网实测通过。浏览器麦克风走官网 HTTPS 和配对身份；手机切到游戏后可能被系统挂起，不能承诺所有手机都能后台持续通话。
 
 ## 验收与上线边界
 
 先在独立 Paper 端口验证双向 Opus、实体移动、近远距离与跨维度；再验证多人同时说话、断线重连、重复包、取消／积压、迟到 ASR 不泄露给新听众，以及不把语音或数据刷到公屏。必须包含原版无模组入服、真实 Java 麦克风／耳听、Mineflayer 接收、Numen 身体及网页／基岩浏览器，不能用健康接口或单元测试代替。
 
-官方资料：[API 示例](https://dev.modrepo.de/minecraft/voicechat/api/examples)、[麦克风事件](https://voicechat.modrepo.de/de/maxhenkel/voicechat/api/events/MicrophonePacketEvent.html)、[服务端配置](https://dev.modrepo.de/minecraft/voicechat/wiki/server_config)。安装新 Paper JAR 仍需原维护授权、预告、身份／副本检查及双盘冷备。现阶段没有将语音功能写成官网已支持或给 Agent 虚构可用命令。
+官方资料：[API 示例](https://dev.modrepo.de/minecraft/voicechat/api/examples)、[麦克风事件](https://voicechat.modrepo.de/de/maxhenkel/voicechat/api/events/MicrophonePacketEvent.html)、[服务端配置](https://dev.modrepo.de/minecraft/voicechat/wiki/server_config)。安装新 Paper JAR 仍需原维护授权、预告、身份／副本检查及双盘冷备。现有Agent接口见proximity-voice/README；不把尚未实现的浏览器音频桥写成已支持。
