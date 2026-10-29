@@ -3,6 +3,7 @@ interface ChatMessage {
   translate?: string;
   with?: Array<string | { toString(): string }>;
   json?: { translate?: string; with?: Array<string | { toString(): string }> };
+  unsigned?: { toString(): string };
   toString?(): string;
 }
 
@@ -55,6 +56,32 @@ export class MinecraftChatProvenance {
       this.sources.set(message, { position, sender: sender ?? null });
   }
 
+  /** Modern raw chat types may contain only content. The packet UUID, rather
+   * than a formatted display name, supplies the speaker. Unsigned decoration
+   * is server presentation evidence, never identity or private authority. */
+  publicChat(message: ChatMessage, players: Record<string, Player> = {}, registry?: unknown) {
+    const source = this.sources.get(message);
+    if (source?.position !== 'chat' || !source.sender
+      || incomingPrivateParts(message, registry) || outgoingPrivateParts(message, registry)) return null;
+    const listed = Object.entries(players).find(([, player]) => player.uuid === source.sender);
+    const username = listed && (listed[1].username ?? listed[0]);
+    if (!username || !/^\w{1,16}$/.test(username)) return null;
+    const key = message.translate ?? message.json?.translate;
+    const parts = message.with ?? message.json?.with;
+    const formats = Object.values((registry as { chatFormattingByName?: Record<string,
+      { formatString?: string; parameters?: string[] }> } | undefined)?.chatFormattingByName ?? {})
+      .filter(format => format.formatString === key && Array.isArray(format.parameters));
+    const indexes = new Set(formats.map(format => format.parameters!.indexOf('content')));
+    const contentIndex = key === 'chat.type.text' ? 1
+      : indexes.size === 1 && !indexes.has(-1) ? [...indexes][0] : undefined;
+    const body = contentIndex === undefined ? message.toString?.() : parts?.[contentIndex]?.toString();
+    if (!body?.trim()) return null;
+    const serverRenderedText = message.unsigned?.toString().slice(0, 32_768);
+    return { username, message: body,
+      identity: { chatTransport: source.position, identityEvidence: 'packet-sender' as const, senderUuid: source.sender },
+      ...(serverRenderedText ? { serverRenderedText } : {}) };
+  }
+
   /** Never promote public quotes to whispers; a packet UUID mismatch wins
    * over a claimed name. Rank/tag text is not identity evidence. */
   incomingWhisper(message: ChatMessage, players: Record<string, Player> = {}, registry?: unknown) {
@@ -70,6 +97,9 @@ export class MinecraftChatProvenance {
       const identity = this.identify(incoming.username, message, players);
       return identity ? { ...incoming, identity } : null;
     }
+    // A decorated modern public packet can quote a whisper verbatim. Only its
+    // native private type above can grant private-channel authority.
+    if (message.unsigned) return null;
     const text = message.toString?.().replace(/§[0-9A-FK-ORX]/gi, '') ?? '';
     if (/^\s*</.test(text)) return null;
     const match = /(?<!\w)(\w{1,16}) whispers to you: ?([^\r\n]*)$/i.exec(text);
@@ -88,6 +118,7 @@ export class MinecraftChatProvenance {
     const source = this.sources.get(message);
     if (!source || source.position === 'game_info') return null;
     const canonical = outgoingPrivateParts(message, registry);
+    if (message.unsigned && !canonical) return null;
     const text = message.toString?.().replace(/§[0-9A-FK-ORX]/gi, '') ?? '';
     const match = /(?<!\w)You whisper to (\w{1,16}): ?([^\r\n]*)$/i.exec(text);
     if (!canonical && (!match || /[<>:\r\n]/.test(text.slice(0, match.index)))) return null;

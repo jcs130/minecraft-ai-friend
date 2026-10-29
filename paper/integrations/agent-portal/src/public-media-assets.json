@@ -1,0 +1,14 @@
+[
+  {
+    "filename": "intro-v8-720-bgm.mp4",
+    "bytes": 58789297,
+    "sha256": "f8e1080a7c1d4027b1a58e85009e08a17bc3491a39b66ee5c808daed50b2fcdb",
+    "mime": "video/mp4"
+  },
+  {
+    "filename": "intro-720-native-voice-no-added-bgm.mp4",
+    "bytes": 57190259,
+    "sha256": "26fc006e8357135023dcc25921b163aea4d7abd72dabb7015c476e12595b64a3",
+    "mime": "video/mp4"
+  }
+]

@@ -1,5 +1,29 @@
 # Private failures and explicit offline recovery (0.1.77)
 
+## Confirmed clean-stop event read gaps (0.2.129)
+
+A normal stop can cancel an outstanding native event waiter and retain the
+restart fence even after the local body confirmed its disconnect. The explicit
+`recovery-assess --clean-stop-read-gap` profile accepts only a stopped,
+disconnected, unowned local session with empty pending/inflight state and no
+dispatching mailbox command. It scans the same native run's archive and tool
+index, verifies each indexed model/action request returned, and requires native
+terminals for every admitted execution. Missing terminals, unknown action
+effects, unreturned requests, foreign runs and a missing disconnect confirmation
+refuse this profile. Numbered coordinator queue/event/protocol observations do
+not become game-action evidence.
+
+The operator can use `acknowledge-unknown --clean-stop-read-gap` with the existing
+explicit acknowledgement flag, identity/session/run, original state/status
+hashes, stable acknowledgement ID, operator reason and prior-process exit
+attestation. Do not pass `--native-request-id`: this profile verifies the closed
+run's tool index, rather than selecting a convenient old task. The same immutable
+prepared/committed audit, owner lease, CAS and same-ID recovery rules apply.
+Only the restart fence is acknowledged. Originals and stopped state remain;
+the result stays `verified=false`, `autostart=false`, `native_replay=false` and
+does not certify a goal, delivery, kill or past audio playback. This is an
+administrator interface, never an automatic startup or planner tool.
+
 Runtime failures remain failures. The first exception is retained before status
 publication or host-state persistence cleanup can mask it. A private
 `host/runtime-diagnostics/<UUID>.json` records at most12 exceptions, eight bounded

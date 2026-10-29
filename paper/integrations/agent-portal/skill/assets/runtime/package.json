@@ -2,9 +2,9 @@
   "name": "qiandengji-agent-skill-runtime",
   "private": true,
   "type": "module",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "dependencies": {
-    "agent-mc-world": "file:agent-mc-world-0.5.7-rc.95-headless.tgz"
+    "agent-mc-world": "file:agent-mc-world-0.5.7-rc.130-headless.tgz"
   },
   "engines": {
     "node": ">=22"

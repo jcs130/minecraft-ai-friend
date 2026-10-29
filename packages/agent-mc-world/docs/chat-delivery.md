@@ -25,3 +25,22 @@ Hosts can persist a bounded outbox linked to their own source messages, keep
 queued/unknown entries distinct from sent replies, and reconcile by call or
 task/step identity. The core supplies execution evidence; it does not decide
 which human message a Persona has answered or maintain another personal memory.
+
+## Received modern decorated player chat
+
+Core rc.130 resolves public speakers from the packet UUID and current player
+list even when the registered chat format contains only `content`. The event
+keeps the canonical `[MC] LoginName: body` text, `uname`, `senderUuid`,
+`identityEvidence=packet-sender` and `channel=public`. The server's unsigned
+display component is separately retained as `meta.serverRenderedText`; rank,
+nickname, world and channel labels in that text never grant identity or private
+authority. `MinecraftChatProvenance` is exported from `agent-mc-world/observations`
+for thin native consumers using the same Mineflayer packet events.
+
+Own echoes are archived with `deliver=false` and outgoing metadata. They do
+not interrupt the current operation, become an inbound invitation or release
+chat deduplication. The message inbox preserves a bounded server display beside
+received text and the short own-speech history, allowing the model to read
+actual server channel labels. These labels and a client send receipt still do
+not prove another player received or acknowledged the message. Unknown packet
+UUIDs remain unattributed; native translated whispers keep their existing path.

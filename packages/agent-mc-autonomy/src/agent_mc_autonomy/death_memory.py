@@ -17,7 +17,14 @@ def scope_key(scope):
 def identity(facts):
     try:
         value = json.loads(next(p["text"] for p in facts.get("parts", []) if p["key"] == "identity"))
-        return value if scope_key(value) else None
+        # Native identity facts may include world observation metadata. Only
+        # these three authoritative fields form a persisted host/game scope;
+        # keep scope_key strict for stored records and never derive a realm
+        # from a dimension label or an optional world object.
+        if not isinstance(value, dict) or set(value) - {"realm", "account", "agent", "world"}:
+            return None
+        scope = {key: value[key] for key in ("realm", "account", "agent")}
+        return scope if scope_key(scope) else None
     except (StopIteration, KeyError, TypeError, ValueError):
         return None
 

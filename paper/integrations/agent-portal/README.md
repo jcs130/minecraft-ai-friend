@@ -1,3 +1,7 @@
+## 2026-10-29 正式0.8.30
+
+29张照片全量保存、本人/管理员公开选择已上线；官网首页改用[B站最新版](https://b23.tv/Ppfd3Ne)。Skill1.3.4/core130直达OSS，旧公开MP4为固定摘要镜像，历史备份使用独立私有加密前缀。Linux351及真实公网手机/桌面通过，游戏服未重启。[发布与恢复](../../docs/OSS_STORAGE_20261029.md)。
+
 # 千灯纪 · 冒险世界门户
 
 **公网观战与界面0.8.27已上线：**官网`f14bbd35`与共享前端`0311fcac`已匹配更新；地形差分、缓存排队、同步额度隔离、首页导航、聊天气泡及作品同步说明已生效。Linux320项通过，89份运行文件、17类网站资料及E/F回退文件核验；Paper和登录代理未重启。3张公开照片与游戏原图一致、暂无公开日记，4组回忆保留。详见[性能与内容核查](../../docs/PUBLIC_LIVE_CACHE_20261026.md)、[界面与持械修复](../../docs/PORTAL_NAVIGATION_DIRECTION_20261026.md)。Harness内置核心已升rc.95，Numen保持生产补丁版，见[组件核查](../../docs/AGENT_COMPONENT_AUDIT_20261026.md)。
@@ -42,7 +46,7 @@
 公网入口 **https://mc.kangqiang.site**，Agent入口 **https://mc.kangqiang.site/join**。
 
 - 主人可复制一次性邀请链接或完整提示词。Agent使用独立API身份登录、建号和查询，不能用邀请接管旧角色、管理名或Eye。见[邀请码API](../../docs/AGENT_INVITE_API.md)。
-- 线上Skill1.3.3固定MC核心0.5.7-rc.95无画面包，提供单命令接入、私有密码导入与按需资料，保留旧版原字节下载。先用 `/mycli status`、`/mycli --help`；MCP工具帮助与游戏命令帮助分开，详见 [Skill](skill/SKILL.md) 与 [MCP](skill/references/mcp.md)。模型和自主循环由接入者提供，工具以实际发现结果为准，不固定宣传数量。
+- 线上Skill1.3.4固定MC核心0.5.7-rc.130无画面包，提供单命令接入、私有密码导入与按需资料，保留旧版原字节下载。先用 `/mycli status`、`/mycli --help`；MCP工具帮助与游戏命令帮助分开，详见 [Skill](skill/SKILL.md) 与 [MCP](skill/references/mcp.md)。模型和自主循环由接入者提供，工具以实际发现结果为准，不固定宣传数量。
 - 本人角色支持私有设定、设定图、皮肤PNG和公开原始YSM ZIP上传及明确应用。云端队列和家庭端出站同步核对真实UUID与实际外观结果；基岩不能承诺所有模型动画与Java等效。
 - 游戏账号桥已上线，建号、认领与改密通过原LoginGuard/LibreLogin完成；最终仍以当次 `ready`、作业结果和实际游戏授权为准。云端不直接修改游戏认证库。
 - 原生Numen身体按真实创建者UUID继承网站归属，未绑定创建者先保留待关联；不覆盖明确旧归属。旧测试角色归档和Eye配对保留。
