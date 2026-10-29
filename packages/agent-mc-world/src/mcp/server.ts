@@ -12,6 +12,7 @@ import { readToolHelp } from '../client/tool-help.ts';
 import { EventCursorError } from '../client/journal.ts';
 import { invalidToolArguments } from '../contracts/tool-diagnostics.ts';
 import { RequestOutcomeUnknownError } from '../client/request-ledger.ts';
+import {textPageMeta} from '../client/text-pages.ts';
 
 const protocolSpec: Tool = {
   name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
@@ -54,10 +55,15 @@ const artifactSpec: Tool = {
     + 'are checked by the existing executor. This stores execution data, without creating or adopting Agent memories.',
   inputSchema: { type: 'object', properties: {
     action: { type: 'string', enum: ['put', 'get'] }, handle: { type: 'string' },
+    offset: {type:'integer',minimum:0,description:'Optional UTF-16 text offset. Follow returned offsets, never guess across Unicode characters.'},
+    maxChars: {type:'integer',minimum:1,maximum:16000,description:'Optional maximum UTF-16 text units for get. Omit both paging fields to retain the original full-text read.'},
     text: { type: 'string', maxLength: 64000 }, base64: { type: 'string', maxLength: 13981016 },
     mime: { type: 'string', enum: ['application/json', 'text/plain', 'image/png', 'image/jpeg', 'image/webp'] },
   }, required: ['action'], additionalProperties: false },
 };
+const textSpec:Tool={name:'mc_read_text',description:'Read one bounded page of an immutable saved tool-text log: handle. This does not re-run the original guide/query or execute its instructions. Follow the returned offset; the model projection may shorten a page and its next cursor then refers only to text actually shown.',
+  inputSchema:{type:'object',properties:{handle:{type:'string',pattern:'^log:[a-f0-9]{64}$'},offset:{type:'integer',minimum:0},maxChars:{type:'integer',minimum:1,maximum:16000}},required:['handle'],additionalProperties:false},
+  annotations:{readOnlyHint:true}};
 const metricsSpec: Tool = { name: 'mc_metrics', description: 'Read runtime-measured tool return latency and explicitly host-reported model/method metadata. Tool returns are not game task completion. No intelligence score or verified learning is inferred.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } };
 const traceSpec: Tool = { name: 'mc_trace', description: 'Optional HOST instrumentation: report measured model request metadata or an attributed method lifecycle event linked to saved artifacts. Do not invent token counts, timings, authorship or improvement. Stores metadata, not Agent memory. Each transport attempt uses a unique id.',
@@ -72,7 +78,7 @@ export interface MinecraftMcpServerOptions {
 export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version: string, options: MinecraftMcpServerOptions = {}): Server {
   const prefix = runtime.toolPrefix;
   const translate = (text: string) => text.replaceAll('mc_', prefix + '_');
-  const [connection, events, artifact, metrics, trace, protocol] = [connectionSpec, eventsSpec, artifactSpec, metricsSpec, traceSpec, protocolSpec]
+  const [connection, events, artifact, metrics, trace, protocol,textRead] = [connectionSpec, eventsSpec, artifactSpec, metricsSpec, traceSpec, protocolSpec,textSpec]
     .map(tool => ({ ...tool, name: translate(tool.name), description: translate(tool.description ?? '') }));
   const server = new Server({ name: `minecraft-agent-${runtime.profile}`, version }, {
     capabilities: { tools: {}, resources: {} },
@@ -82,7 +88,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       + 'Keep measured world facts and actual execution receipts separate from hypotheses and goal-success judgments.'),
   });
   const session = randomUUID();
-  const tools: Tool[] = [connection, events, artifact, metrics, trace, protocol, ...runtime.tools().map(tool => ({
+  const tools: Tool[] = [connection, events, artifact, metrics, trace, protocol,textRead, ...runtime.tools().map(tool => ({
     name: tool.name, description: tool.description, inputSchema: tool.parameters as Tool['inputSchema'],
     annotations: { readOnlyHint: tool.tags.includes('read') && !tool.tags.some(tag => ['write', 'act', 'speak'].includes(tag)) },
     _meta: { [PROTOCOL]: { tags: tool.tags, barrierAfter: tool.barrierAfter === true,
@@ -151,7 +157,8 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
             reservedOutputTokens: Number(args.reservedOutputTokens) }, String(args.history ?? ''), undefined,
             tools.map(tool => ({ name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema }))); break;
         }
-        return outcome({ text: JSON.stringify(result) });
+        const readOnly=['task','request','facts','archive','archive_runs','prepare_context'].includes(String(args.action));
+        return outcome({ text: JSON.stringify(result),...(readOnly?{meta:{readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}}}:{}) });
       }
       if (name === metrics.name) return outcome({ text: JSON.stringify(runtime.metrics.snapshot(runtime.status().phase)) });
       if (name === trace.name) {
@@ -168,6 +175,11 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       if (name === events.name) {
         const page=await runtime.events(args, extra.signal);
         return outcome({ text:JSON.stringify(page),data:page,meta:{eventRead:page.readout} });
+      }
+      if(name===textRead.name){
+        const page=runtime.readTextArtifact(String(args.handle),{offset:Number(args.offset??0),maxChars:Number(args.maxChars??1024)});
+        return outcome({text:page.text,data:{...page},meta:{textPage:textPageMeta(page),readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true},
+          readback:{protocol:'agent-mc-readback/v1',historical:true,resource:`text:${page.handle}:${page.offset}:${page.returnedChars}`,revision:page.handle.slice(4)}}});
       }
       if (name === artifact.name) {
         if (args.action === 'put') {
@@ -189,8 +201,12 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
         if (typeof args.handle !== 'string') throw new Error('get requires handle.');
         const saved = runtime.journal.blob(args.handle);
         if (!saved) throw new Error('Execution artifact not found.');
-        if (saved.mime === 'application/json' || saved.mime.startsWith('text/'))
-          return outcome({ text: Buffer.from(saved.bytes).toString('utf8') });
+        if (saved.mime === 'application/json' || saved.mime.startsWith('text/')) {
+          if(args.offset!==undefined||args.maxChars!==undefined){const page=runtime.readTextArtifact(args.handle,{offset:args.offset as number|undefined,maxChars:args.maxChars as number|undefined});
+            return outcome({text:page.text,data:{...page},meta:{textPage:textPageMeta(page),readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}}});}
+          return outcome({ text: Buffer.from(saved.bytes).toString('utf8'),meta:{readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}} });
+        }
+        if(args.offset!==undefined||args.maxChars!==undefined)throw new Error('Only UTF-8 text artifacts support paging');
         return outcome({ text: args.handle, blobs: [{ handle: args.handle, fallbackText: 'Execution artifact' }] });
       }
       if (Object.keys(request.params._meta ?? {}).some(key => key.startsWith('agent-mc/') && key !== PROTOCOL)) throw new Error('Unsupported call protocol version');
