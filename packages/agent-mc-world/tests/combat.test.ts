@@ -137,6 +137,19 @@ function rangedRig() {
   };
 }
 
+it('automatic defense keeps an equipped ready bow instead of drawing the inventory sword',async()=>{
+  const {bot,attacks}=combatRigBot([foe(7,'zombie',2.5)]);
+  const equip=vi.fn(async()=>{});Object.assign(bot,{heldItem:{name:'bow'},equip});
+  const ranged=rangedRig(),{session,events}=rig(bot,{},undefined,ranged.actions);
+  try{
+    expect(session.onHurtBy(7,'zombie')).toBe(true);
+    await drive(bot,600,50);
+    expect(equip).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
+    expect(ranged.shots.length).toBeGreaterThan(0);
+    expect(events.some(e=>e.text.includes('保留已经拿好的弓'))).toBe(true);
+  }finally{session.stop();}
+});
+
 /** 每拍先发 physicsTick,再推进同一时钟上的定时器与 Date。 */
 async function drive(bot: EventEmitter, ms: number, stepMs = 50): Promise<void> {
   for (let t = 0; t < ms; t += stepMs) {
