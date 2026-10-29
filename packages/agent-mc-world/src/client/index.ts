@@ -22,6 +22,7 @@ export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.
 export { withFactState, type FactState } from '../../core/fact-state.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
+export { createServerToolRouter, SERVER_TOOL_PORT_TOOL } from './server-tools.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,
   type WakeCategory, type WakeOptions, type WakeDecision, type CompactEvent, type CompactCatalogOptions,
   MovementProgress, isIdleControlStep, type MovementProgressOptions, type MovementVerdict } from './context-budget.ts';
