@@ -1,10 +1,10 @@
 {
-  "version": "1.3.3",
-  "sdkVersion": "0.5.7-rc.95",
-  "sdkArchive": "agent-mc-world-0.5.7-rc.95-headless.tgz",
-  "sdkSha256": "46b9aea945c20cad4e63841d8c200203fd47164bb27770a3ab10dabeb679328b",
-  "sdkBytes": 3713624,
-  "sdkSourceCommit": "d21f036d72f6ae8aa07083d6981627c49886efc1",
+  "version": "1.3.4",
+  "sdkVersion": "0.5.7-rc.130",
+  "sdkArchive": "agent-mc-world-0.5.7-rc.130-headless.tgz",
+  "sdkSha256": "d1a23298aebb5b17f471e3eed8a3be8b79bd9478a2400f8daa4dc12ec9ce0d43",
+  "sdkBytes": 3854617,
+  "sdkSourceCommit": "bca0abf761625b6109e692f4d864cfae85dd6810",
   "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world",
   "channel": "github-main-candidate",
   "viewerIncluded": false
