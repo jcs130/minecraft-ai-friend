@@ -227,5 +227,13 @@
     "archiveBytesOffloaded": 3312628200,
     "historicalArchiveOffloadCompletedForVerifiedPlan": true,
     "unmatchedArchivesPreserved": true
+  },
+  "aincradProtection": {
+    "state": "deployed-and-verified",
+    "verifiedAt": "2026-10-29T23:56:22.148660+08:00",
+    "manifest": "paper/manifests/aincrad-city-policy-20261029.json",
+    "scope": "city only; place allowed, break denied; wilderness open; dungeon protection retained",
+    "hotReload": true,
+    "gameRestarted": false
   }
 }

@@ -1,0 +1,368 @@
+# Merge into current regions; NEVER replace the whole runtime file.
+regions:
+  qd_aincrad_outside_se:
+    members: {}
+    flags:
+      build: allow
+      passthrough: allow
+      block-break: allow
+      block-place: allow
+    owners: {}
+    type: poly2d
+    priority: 1000000
+    max-y: 319
+    min-y: -64
+    points:
+    - x: -218
+      z: 934
+    - x: -218
+      z: 1300
+    - x: -584
+      z: 1300
+    - x: -548
+      z: 1299
+    - x: -513
+      z: 1293
+    - x: -478
+      z: 1285
+    - x: -444
+      z: 1273
+    - x: -411
+      z: 1257
+    - x: -380
+      z: 1239
+    - x: -352
+      z: 1217
+    - x: -325
+      z: 1193
+    - x: -301
+      z: 1166
+    - x: -279
+      z: 1138
+    - x: -261
+      z: 1107
+    - x: -245
+      z: 1074
+    - x: -233
+      z: 1040
+    - x: -225
+      z: 1005
+    - x: -219
+      z: 970
+  qd_aincrad_map:
+    members: {}
+    flags:
+      other-explosion: deny
+      deny-message: §e[起始之城] 城区可放置，不能拆毁；城外可挖掘建造，副本建筑另受保护。
+      lava-fire: deny
+      water-flow: deny
+      use: allow
+      greeting: §6[起始之城] 城内可放置、不可拆；城外自由挖掘建造。/aincrad
+      snow-fall: deny
+      ice-melt: deny
+      block-trampling: deny
+      chest-access: allow
+      fire-spread: deny
+      enderdragon-block-damage: deny
+      mob-damage: allow
+      block-break: deny
+      entity-painting-destroy: deny
+      ravager-grief: deny
+      lightning: deny
+      ice-form: deny
+      wither-damage: deny
+      lighter: deny
+      enderman-grief: deny
+      pistons: deny
+      block-place: allow
+      item-drop: allow
+      creeper-explosion: deny
+      build: allow
+      item-pickup: allow
+      damage-animals: allow
+      snow-melt: deny
+      tnt: deny
+      lava-flow: deny
+      entity-item-frame-destroy: deny
+      ghast-fireball: deny
+    owners: {}
+    type: poly2d
+    priority: 1000000
+    max-y: 319
+    min-y: -64
+    points:
+    - x: -218
+      z: 934
+    - x: -219
+      z: 970
+    - x: -225
+      z: 1005
+    - x: -233
+      z: 1040
+    - x: -245
+      z: 1074
+    - x: -261
+      z: 1107
+    - x: -279
+      z: 1138
+    - x: -301
+      z: 1166
+    - x: -325
+      z: 1193
+    - x: -352
+      z: 1217
+    - x: -380
+      z: 1239
+    - x: -411
+      z: 1257
+    - x: -444
+      z: 1273
+    - x: -478
+      z: 1285
+    - x: -513
+      z: 1293
+    - x: -548
+      z: 1299
+    - x: -584
+      z: 1300
+    - x: -620
+      z: 1299
+    - x: -655
+      z: 1293
+    - x: -690
+      z: 1285
+    - x: -724
+      z: 1273
+    - x: -757
+      z: 1257
+    - x: -788
+      z: 1239
+    - x: -816
+      z: 1217
+    - x: -843
+      z: 1193
+    - x: -867
+      z: 1166
+    - x: -889
+      z: 1138
+    - x: -907
+      z: 1107
+    - x: -923
+      z: 1074
+    - x: -935
+      z: 1040
+    - x: -943
+      z: 1005
+    - x: -949
+      z: 970
+    - x: -950
+      z: 934
+    - x: -949
+      z: 898
+    - x: -943
+      z: 863
+    - x: -935
+      z: 828
+    - x: -923
+      z: 794
+    - x: -907
+      z: 761
+    - x: -889
+      z: 730
+    - x: -867
+      z: 702
+    - x: -843
+      z: 675
+    - x: -816
+      z: 651
+    - x: -788
+      z: 629
+    - x: -757
+      z: 611
+    - x: -724
+      z: 595
+    - x: -690
+      z: 583
+    - x: -655
+      z: 575
+    - x: -620
+      z: 569
+    - x: -584
+      z: 568
+    - x: -548
+      z: 569
+    - x: -513
+      z: 575
+    - x: -478
+      z: 583
+    - x: -444
+      z: 595
+    - x: -411
+      z: 611
+    - x: -380
+      z: 629
+    - x: -352
+      z: 651
+    - x: -325
+      z: 675
+    - x: -301
+      z: 702
+    - x: -279
+      z: 730
+    - x: -261
+      z: 761
+    - x: -245
+      z: 794
+    - x: -233
+      z: 828
+    - x: -225
+      z: 863
+    - x: -219
+      z: 898
+  qd_aincrad_outside_ne:
+    members: {}
+    flags:
+      build: allow
+      passthrough: allow
+      block-break: allow
+      block-place: allow
+    owners: {}
+    type: poly2d
+    priority: 1000000
+    max-y: 319
+    min-y: -64
+    points:
+    - x: -584
+      z: 568
+    - x: -218
+      z: 568
+    - x: -218
+      z: 934
+    - x: -219
+      z: 898
+    - x: -225
+      z: 863
+    - x: -233
+      z: 828
+    - x: -245
+      z: 794
+    - x: -261
+      z: 761
+    - x: -279
+      z: 730
+    - x: -301
+      z: 702
+    - x: -325
+      z: 675
+    - x: -352
+      z: 651
+    - x: -380
+      z: 629
+    - x: -411
+      z: 611
+    - x: -444
+      z: 595
+    - x: -478
+      z: 583
+    - x: -513
+      z: 575
+    - x: -548
+      z: 569
+  qd_aincrad_outside_nw:
+    members: {}
+    flags:
+      build: allow
+      passthrough: allow
+      block-break: allow
+      block-place: allow
+    owners: {}
+    type: poly2d
+    priority: 1000000
+    max-y: 319
+    min-y: -64
+    points:
+    - x: -950
+      z: 934
+    - x: -950
+      z: 568
+    - x: -584
+      z: 568
+    - x: -620
+      z: 569
+    - x: -655
+      z: 575
+    - x: -690
+      z: 583
+    - x: -724
+      z: 595
+    - x: -757
+      z: 611
+    - x: -788
+      z: 629
+    - x: -816
+      z: 651
+    - x: -843
+      z: 675
+    - x: -867
+      z: 702
+    - x: -889
+      z: 730
+    - x: -907
+      z: 761
+    - x: -923
+      z: 794
+    - x: -935
+      z: 828
+    - x: -943
+      z: 863
+    - x: -949
+      z: 898
+  qd_aincrad_outside_sw:
+    members: {}
+    flags:
+      build: allow
+      passthrough: allow
+      block-break: allow
+      block-place: allow
+    owners: {}
+    type: poly2d
+    priority: 1000000
+    max-y: 319
+    min-y: -64
+    points:
+    - x: -584
+      z: 1300
+    - x: -950
+      z: 1300
+    - x: -950
+      z: 934
+    - x: -949
+      z: 970
+    - x: -943
+      z: 1005
+    - x: -935
+      z: 1040
+    - x: -923
+      z: 1074
+    - x: -907
+      z: 1107
+    - x: -889
+      z: 1138
+    - x: -867
+      z: 1166
+    - x: -843
+      z: 1193
+    - x: -816
+      z: 1217
+    - x: -788
+      z: 1239
+    - x: -757
+      z: 1257
+    - x: -724
+      z: 1273
+    - x: -690
+      z: 1285
+    - x: -655
+      z: 1293
+    - x: -620
+      z: 1299

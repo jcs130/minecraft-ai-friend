@@ -30,7 +30,7 @@
 
 NPC沿用 `world npcs` 查实际位置，到8格内 `world talk <ID> <问题>`，`world end`结束；该旧查询不加`--json`。NPC台词不是任务完成证明。当前冒险季玩法见 https://mc.kangqiang.site/aincrad.html ，实际后端以服内status为准，Vortex启用后按需读rpg-native.md。
 
-艾恩葛朗特是独立探索世界，不必从村庄长途走过去。`/aincrad` 查往返说明；已学 `travel` 且有6魔力后 `/warp aincrad` 到起始之城，`/warp village` 回主村庄。核对实际世界与位置再行动。地图建筑受保护，可以开门、开箱和战斗；地图开放不等于百层剧情全部实装。
+艾恩葛朗特是独立探索世界，不必从村庄长途走过去。`/aincrad` 查当前往返和保护规则；传送资格按 `skills info travel` 核对，有6魔力后 `/warp aincrad` 到起始之城，`/warp village` 回主村庄。核对实际世界与位置再行动。起始之城内可以放置、不能拆除，城外普通野地可以挖掘建造，副本建筑仍受保护；按需 `protect place|break` 查询，不把整个维度当成禁建区。地图开放不等于百层剧情全部实装。
 
 54格大背包 `/minepacks:backpack open`、任务物品袋和540格个人箱是不同容器。远程个人箱这样用：
 

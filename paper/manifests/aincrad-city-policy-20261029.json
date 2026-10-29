@@ -1,0 +1,60 @@
+{
+  "state": "deployed-and-verified",
+  "at": "2026-10-29T23:56:22.148660+08:00",
+  "configOnly": true,
+  "restart": false,
+  "cityCenter": [
+    -584,
+    934
+  ],
+  "cityRadius": 366,
+  "cityVertices": 64,
+  "envelope": {
+    "min-x": -950,
+    "min-z": 568,
+    "max-x": -218,
+    "max-z": 1300
+  },
+  "cityBreak": false,
+  "cityPlace": true,
+  "wildernessBreakAndPlace": true,
+  "editorsPreserved": 2,
+  "otherRetainedAreasPreserved": 8,
+  "dungeonProtectionPreserved": true,
+  "otherWorldGuardWorldsPreserved": 3,
+  "filePermissionGrantsPreserved": true,
+  "worldsAndPlayerDataModified": false,
+  "afterSha256": {
+    "policy": "63757098b03da9c11f1444ef58a68e2dcf107756e9386dd0d51fded6605322bb",
+    "regions": "79777246622073959442c7899b5dfa4faba70b83475ae33bc61a075beb5316ba",
+    "guide": "99d5f24bb50e058bd2859e7878b09ea27202b09c7dd0ec3208c03660693d8472"
+  },
+  "schemaVersion": 1,
+  "release": "aincrad-city-policy-20261029",
+  "paper": "1.21.1 build133",
+  "agentFriend": "0.4.47.30-vortex",
+  "verification": {
+    "pureTests": 6,
+    "paperAssertions": 48,
+    "repeatedAfterNativeAndWorldGuardReload": true,
+    "realClientChecks": 18,
+    "nonOp": true,
+    "bedrockDeviceTested": false,
+    "newCliCommands": 0,
+    "productionRuntimeManagerSavedAndCompared": true,
+    "paperRestarted": false
+  },
+  "backups": {
+    "mirrors": [
+      "E",
+      "F"
+    ],
+    "type": "configuration-preimages",
+    "newFullWorldBackup": false
+  },
+  "failedTransactions": [
+    "R1 Windows path comparison; rolled back",
+    "R2 raw ACL representation comparison; rolled back"
+  ],
+  "finalTransaction": "R3 committed"
+}

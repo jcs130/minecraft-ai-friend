@@ -1,0 +1,6 @@
+# Replace only the existing aincrad entry; preserve other areas and editors.
+world: aincrad
+min-x: -950
+min-z: 568
+max-x: -218
+max-z: 1300
