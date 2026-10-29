@@ -85,3 +85,8 @@ export { PHOTOGRAPHY_DEFAULTS } from '../core/photo-image.ts';
 export { ObservedCommandCatalog, type ObservedCommandUsage, type CommandRouteMismatch } from '../core/observed-command-catalog.ts';
 export { ServerQueryLane, SERVER_QUERY_TOOL, type ServerQueryDefinition, type ServerQueryContext,
   type ServerQueryReceipt } from '../core/server-query.ts';
+
+export {attachProximityVoice, inspectVoiceWav} from './proximity-voice.ts';
+export {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from '../core/proximity-voice-lane.ts';
+export type {ProximityVoiceConfig,ProximityVoiceContext,GameVoiceReceipt} from '../core/proximity-voice-lane.ts';
+export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from './proximity-voice.ts';

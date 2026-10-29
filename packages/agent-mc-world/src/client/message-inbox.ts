@@ -5,7 +5,7 @@ import {extendWorldHost} from './world-namespace.ts';
 import { join } from 'node:path';
 import type { ToolDef, WorldHost, WorldRequestFacts } from './contracts.ts';
 
-export const MESSAGE_CHANNELS = ['system', 'login', 'plugin', 'private', 'public'] as const;
+export const MESSAGE_CHANNELS = ['system', 'login', 'plugin', 'private', 'public', 'nearby-voice'] as const;
 export type MessageChannel = typeof MESSAGE_CHANNELS[number];
 export const MESSAGE_LIMIT = 256;
 const TEXT_LIMIT = 32_768;
@@ -95,18 +95,19 @@ function publicSpeech(event: ReceivedMessage): { sender: string; body: string } 
     return event.meta?.kind === 'player' && typeof event.meta.sender === 'string'
       ? { sender: event.meta.sender, body: event.text } : null;
   }
-  const match = /^\[MC\] ([A-Za-z0-9_]{1,16}):\s?([\s\S]*)$/.exec(event.text);
+  const match = /^\[MC(?: 附近语音)?\] ([A-Za-z0-9_\p{Script=Han}]{1,64}):\s?([\s\S]*)$/u.exec(event.text);
   return match ? { sender: match[1], body: match[2] } : null;
 }
 
 export function messageChannel(text: string): MessageChannel | null {
-  const prefix = /^\[MC(?: (系统|插件|登录消息|私聊))?\] /.exec(text);
+  const prefix = /^\[MC(?: (系统|插件|登录消息|私聊|附近语音))?\] /.exec(text);
   if (!prefix) return null;
   switch (prefix[1]) {
     case '系统': return 'system';
     case '插件': return 'plugin';
     case '登录消息': return 'login';
     case '私聊': return 'private';
+    case '附近语音': return 'nearby-voice';
     default: return 'public';
   }
 }
@@ -195,7 +196,7 @@ export class MessageInbox {
     const text = event.text.slice(0, TEXT_LIMIT);
     const digest = createHash('sha256').update(event.text).digest('hex');
     // Recurring system notices keep one observation; repeated player speech remains separate.
-    const previous = channel !== 'private' && channel !== 'public'
+    const previous = channel !== 'private' && channel !== 'public' && channel !== 'nearby-voice'
       ? this.state.messages.find(row => row.channel === channel && row.source === event.source
         && row.senderKey === event.senderKey && row.digest === digest)
       : undefined;
@@ -205,7 +206,7 @@ export class MessageInbox {
         senderKey: event.senderKey, firstAt: event.ts, lastAt: event.ts, text, digest,
         originalChars: event.text.length, repeats: 1, eventType: event.type,
         provenance: Object.fromEntries(Object.entries(event.meta ?? {}).filter(([key, value]) =>
-          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport'].includes(key)
+          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport', 'utteranceId', 'deliveryWorldKey', 'transcript'].includes(key)
           && ['string', 'number', 'boolean'].includes(typeof value))) as MessageObservation['provenance'] });
       if (this.state.messages.length > MESSAGE_LIMIT) {
         const reviewed = this.state.messages.findIndex(row => !!row.reviewedAt);
@@ -223,8 +224,8 @@ export class MessageInbox {
     const pending = this.state.messages.filter(row => !row.reviewedAt);
     const latest = this.sorted(pending);
     const privateMessage = latest.find(row => row.channel === 'private');
-    const notice = latest.find(row => row.channel !== 'private' && row.channel !== 'public');
-    const peers = latest.filter(row => row.channel === 'public' || row.channel === 'private');
+    const notice = latest.find(row => row.channel !== 'private' && row.channel !== 'public' && row.channel !== 'nearby-voice');
+    const peers = latest.filter(row => row.channel === 'public' || row.channel === 'private' || row.channel === 'nearby-voice');
     const mentioned = (row: MessageObservation) => {
       const body = publicSpeech({ ts: row.lastAt, type: row.eventType ?? 'minecraft.chat',
         source: row.source, text: row.text, meta: row.provenance })?.body ?? row.text;

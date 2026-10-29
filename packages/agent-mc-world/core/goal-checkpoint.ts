@@ -94,9 +94,10 @@ export function restoreGoalCheckpoint(value: unknown, scope: GoalCheckpointScope
  * A corrupt existing file is kept intact until explicit storage clear/repair. */
 export class GoalCheckpointBook {
   private readonly invalid = new Set<string>();
+  private readonly memory = new Map<string,GoalCheckpoint>();
   constructor(private readonly directory: string | null) {}
   load(scope: GoalCheckpointScope): MinecraftGoal[] {
-    if (!this.directory) return [];
+    if (!this.directory) {const saved=this.memory.get(scopeKey(scope));return saved?restoreGoalCheckpoint(saved,scope):[];}
     const key = scopeKey(scope), file = join(this.directory, `${key}.json`);
     try {
       if (statSync(file).size > MAX_BYTES) throw Error('Goal checkpoint exceeds size limit');
@@ -107,16 +108,18 @@ export class GoalCheckpointBook {
     }
   }
   save(scope: GoalCheckpointScope, goals: readonly MinecraftGoal[]): void {
-    if (!this.directory) return;
     const key = scopeKey(scope);
     if (this.invalid.has(key)) throw Error('Existing goal checkpoint is invalid; retained for explicit repair');
-    const data = JSON.stringify(createGoalCheckpoint(scope, goals));
+    const checkpoint=createGoalCheckpoint(scope, goals);
+    if(!this.directory){this.memory.set(key,checkpoint);return;}
+    const data = JSON.stringify(checkpoint);
     mkdirSync(this.directory, { recursive: true });
     const file = join(this.directory, `${key}.json`), temp = `${file}.${randomUUID()}.tmp`;
     try { writeFileSync(temp, data, { flag: 'wx', mode: 0o600 }); renameSync(temp, file); }
     finally { try { unlinkSync(temp); } catch { /* renamed or no temporary file */ } }
   }
   clear(): void {
+    this.memory.clear();
     if (this.directory) {
       let names: string[];
       try { names = readdirSync(this.directory); }

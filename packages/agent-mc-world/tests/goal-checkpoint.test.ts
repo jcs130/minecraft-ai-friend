@@ -13,7 +13,11 @@ import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 const dirs: string[] = [];
 function directory() { const d = mkdtempSync(join(tmpdir(), 'mc-goals-')); dirs.push(d); return d; }
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
-class World extends MinecraftWorld { goalsNow() { return this.goalTable().list; } }
+class World extends MinecraftWorld {
+  map = 'map-a';
+  goalsNow() { return this.goalTable().list; }
+  protected realmKey() {return JSON.stringify([this.serverRealmKey(),this.map]);}
+}
 function world(dataDir?: string, fields: Record<string, unknown> = {}, botName = 'fixture') {
   return new World({ cfg: { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), ...fields }, dataDir, botName });
 }
@@ -21,6 +25,16 @@ const call = (w: MinecraftWorld, args: Record<string, unknown>) => w.tools().fin
 const plan = [{ do: 'Read the invitation', judgment: 'Original invitation receipt' },
   { do: 'Carry iron', verify: { source: 'inventory', item: 'iron_ingot', count: '>=3' } },
   { do: 'Arrive in the specified dimension', verify: { source: 'position', region: [[0, 50, 0], [4, 75, 4]], dimension: 'minecraft:the_nether' } }];
+
+it.each([true,false])('retains server intentions across native maps while discarding spatial proof (disk=%s)',async disk=>{
+  const dir=disk?directory():undefined,w=world(dir);await call(w,{add:{text:'Journey through the portal',plan}});
+  const original=w.goalsNow()[0];original.plan.steps[1].state='verified';
+  original.plan.steps[1].evidence={observedAt:42,connectionGeneration:1,realm:'old-map',dimension:'overworld',verdict:'ok',results:[]};
+  w.map='map-b';expect(w.goalsNow()[0]).toMatchObject({text:'Journey through the portal',at:original.at});
+  expect(w.goalsNow()[0].plan.steps[1]).toMatchObject({state:'pending',evidence:null});
+  await call(w,{drop:1});w.map='map-a';expect(w.goalsNow()).toEqual([]);
+  if(dir){const restored=world(dir);expect(restored.goalsNow()).toEqual([]);}
+});
 
 it('restores scoped goals with identity and host history, but without mechanical proof or body work', async () => {
   const dir = directory(), first = world(dir);

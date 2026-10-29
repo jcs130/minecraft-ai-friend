@@ -15,7 +15,7 @@ test('timeout is unknown and sends once; disconnect releases waiters without rep
 });
 test('caption events require an explicit handler; malformed data is ignored',()=>{
  const bot=fake();let heard;const voice=attachProximityVoice(bot,{onHearing:row=>heard=row});
- for(const value of ['not-json',JSON.stringify({type:'nearby_voice',utteranceId:randomUUID(),text:'去公会'})])bot._client.emit('custom_payload',{channel:'mcagent:voice',data:Buffer.concat([Buffer.from([1]),Buffer.from(value)])});
+ for(const value of ['not-json',JSON.stringify({type:'nearby_voice',speaker:'小鱼',speakerUuid:randomUUID(),utteranceId:randomUUID(),text:'去公会'})])bot._client.emit('custom_payload',{channel:'mcagent:voice',data:Buffer.concat([Buffer.from([1]),Buffer.from(value)])});
  assert.equal(heard.text,'去公会');voice.close();
 });
 test('invalid audio never uploads; actor identity cannot be supplied',async()=>{

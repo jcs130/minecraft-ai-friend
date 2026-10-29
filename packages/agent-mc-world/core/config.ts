@@ -22,6 +22,7 @@ export const MINECRAFT_DEFAULTS = {
   loginConfigFile: '',
   /** Maximum gap between server keepalive packets; not an action retry budget. */
   keepAliveTimeoutMs: 60_000,
+  proximityVoice: { enabled:false, audioProducerUrl:'', outputMode:'game-only' as const },
   chatDuplicateWindowMs: 120_000,
   deathRespawnDelayMs: 4000,
   perception: structuredClone(OBSERVATION_DEFAULTS),
@@ -212,6 +213,7 @@ export const MINECRAFT_DEFAULTS = {
 } as const;
 
 export interface MinecraftConfigSection {
+  proximityVoice?: import('./proximity-voice-lane.ts').ProximityVoiceConfig;
   /** Observed journey opportunities wake the host; never force a stop or start inference in the core. */
   journey?: {enabled:boolean;choiceMinBlocks?:number;choiceMaxBlocks?:number;dangerChoiceMaxBlocks?:number};
   provider?: 'mineflayer' | 'java-client';
@@ -514,6 +516,9 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean', title: '允许空闲短步', 'x-hot': true,
         description: '只走已加载、连续实心平地上的短步，不挖掘、搭路或进入水中。',
       },
+      'worlds.minecraft.proximityVoice.enabled': {type:'boolean',title:'游戏附近语音',description:'按需发给附近玩家，复用当前已认证连接；不自动配音游戏文字。'},
+      'worlds.minecraft.proximityVoice.audioProducerUrl': {type:'string',title:'演出音频服务',description:'显式配置的音频产物服务地址。音色与 TTS 由演出扩展维护。'},
+      'worlds.minecraft.proximityVoice.outputMode': {type:'string',enum:['game-only','live-and-game'],title:'游戏语音输出',description:'game-only 仅游戏；live-and-game 同一音频也进入直播队列。观众解说始终不转发游戏。','x-hot':true},
       'worlds.minecraft.chatDuplicateWindowMs': { type: 'integer', title: '相同回复去重窗口', minimum: 0, 'x-suffix': 'ms', 'x-hot': true,
         description: '只去重同频道/同私聊接收人的相同文字；收到对方新消息即允许回复。0 关闭。不限制新内容，不拦业务命令。' },
       'worlds.minecraft.reflex.fightBack': {

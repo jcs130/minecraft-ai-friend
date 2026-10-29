@@ -182,7 +182,7 @@ it.each([false, true])('World invalidates spatial facts only when the native wor
   const world: any = Object.assign(Object.create(MinecraftWorld.prototype), {
     cfg: { host: 'fixture.test', port: 25565 }, bridge: { bot: b },
     worldIdentity: () => ({ key: 'fixture.test:25565', local: false }),
-    serverQueries: { reset: vi.fn() }, setBodyInhibited: vi.fn(), attention: { reset: vi.fn() },
+    serverQueries: { reset: vi.fn() }, proximityVoice: {disconnect:vi.fn()}, setBodyInhibited: vi.fn(), attention: { reset: vi.fn() },
     extensionRespawn: vi.fn(), bodyLease: { revive: vi.fn() }, resetBodyOwners: vi.fn(),
     idleContext: { clear: vi.fn() }, setPersonalSpawn: vi.fn(), syncRealm: vi.fn(),
     noteWorldSwitch: vi.fn(), scheduleRespawnConfirmation: vi.fn(),
@@ -196,6 +196,7 @@ it.each([false, true])('World invalidates spatial facts only when the native wor
   enter(b, change ? 'minecraft:aincrad' : 'minecraft:overworld', 'respawn');
   world.onRespawn();
   expect(world.syncRealm).toHaveBeenCalledTimes(change ? 1 : 0);
+  expect(world.proximityVoice.disconnect).toHaveBeenCalledTimes(change ? 1 : 0);
   expect(world.noteWorldSwitch).toHaveBeenCalledTimes(change ? 1 : 0);
   expect(world.executor.cancelForDimensionChange).toHaveBeenCalledTimes(change ? 1 : 0);
   expect(world.combat.onConnectionLost).toHaveBeenCalledTimes(change ? 1 : 0);

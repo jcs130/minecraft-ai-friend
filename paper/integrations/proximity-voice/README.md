@@ -58,3 +58,7 @@ python service/voice_service.py --config E:/MC/private/proximity-voice/service.j
 测试专用 `QiandengVoiceQA.jar` 提供控制台音频夹具，绝不能装进正式服。构建产物和第三方 JAR 不入 Git。
 
 完整验收、候选边界及正式维护见 [附近语音方案与实测](../../docs/PROXIMITY_VOICE.md)。
+
+## Canonical client distribution
+
+`client.mjs` is a dependency-free standalone distribution of `packages/agent-mc-world/core/proximity-voice.mjs`. Update the core first, then run `node sync-client.mjs`; verify with `node sync-client.mjs --check`. SDK users can import `agent-mc-world/proximity-voice`. Authentication/native-world gates and durable request recovery are supplied by the core World lane; the low-level helper never creates another bot.

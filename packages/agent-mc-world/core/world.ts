@@ -1,6 +1,7 @@
 import { operationInventory } from './operation-experience.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
+import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
@@ -2240,6 +2241,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   KNOWLEDGE_TOOL,
   OPTIONS_TOOL,
   SERVER_QUERY_TOOL,
+  PROXIMITY_VOICE_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2820,6 +2822,7 @@ export class MinecraftWorld implements World {
   protected readonly activeEffects = new Set<string>();
   protected hookedBots = new WeakSet<object>();
   protected readonly attention = new AttentionReader();
+  protected readonly proximityVoice: ProximityVoiceLane;
   protected hearingDetach: (() => void) | null = null;
   protected hookedMessageBots = new WeakSet<object>();
   /** 服务端同一条系统提示在短时间连发时只投递首条；原始重复次数进诊断。 */
@@ -2862,6 +2865,7 @@ export class MinecraftWorld implements World {
   protected readonly pwsr = new PwsrTables();
   protected readonly goalCheckpoints: GoalCheckpointBook;
   private readonly goalCheckpointScopes = new WeakMap<GoalTable, string>();
+  private goalLoadedRealm: string | null = null;
   /**
    * 当前世界的目标表(句柄每次现取,换世界后自动指向新命名空间)。
    * `status` 换成带蓝图进度的那一版:目标行上「(蓝图 home-v2:已施工 34%)」的来源。
@@ -2954,6 +2958,25 @@ export class MinecraftWorld implements World {
       emit: (event) => this.logBodyLease(event),
     });
     this.dataDir = opts.dataDir ?? '';
+    this.proximityVoice = new ProximityVoiceLane({
+      config: () => ({enabled:false,audioProducerUrl:'',outputMode:'game-only',...this.cfg.proximityVoice}),
+      context: () => {
+        const bot=this.bridge?.bot;
+        if(!bot||!this.bridge?.connected||this.bridge.connectionState?.ready!==true||bot._client?.state!=='play')return null;
+        const world=readWorldIdentity(bot),generation=String(this.connectionGeneration);
+        return {bot,generation,world,stillCurrent:()=>this.bridge?.bot===bot&&this.bridge?.connectionState?.ready===true
+          &&bot._client?.state==='play'&&readWorldIdentity(bot).key===world.key&&readWorldIdentity(bot).revision===world.revision,
+          disableAutoSpeech:()=>sendChat(bot,'/voice auto off')};
+      },
+      blob:handle=>this.host?.blob(handle)??null,
+      hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`,true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
+        utteranceId:row.utteranceId,channel:'nearby-voice',socialScope:'minecraft-server',
+        source:'mcagent:voice/nearby_voice',sourceWorld:null,deliveryWorld:world,deliveryWorldKey:world.key,transcript:true}},row.speaker),
+      changed:receipt=>this.emit('minecraft.voice',`[Minecraft 附近语音] ${receipt.requestId} 游戏=${receipt.game.state}，直播=${receipt.broadcast.state}。`
+        +(receipt.game.state==='sent'&&receipt.requestedText?` 本次台词输入：${receipt.requestedText}。`:'')
+        +'音频帧发送不证明对方听见或全文生成完整；按原请求ID查状态。',false,{trigger:'piggyback',meta:{proximityVoice:receipt}}),
+      file:this.dataDir?join(this.dataDir,'minecraft-voice',createHash('sha256').update(JSON.stringify([this.cfg.host,this.cfg.port,this.cfg.auth,this.cfg.username])).digest('hex')+'.json'):null,
+    });
     this.goalCheckpoints = new GoalCheckpointBook(this.dataDir ? join(this.dataDir, 'minecraft-goals') : null);
     this.photography = new PhotographyService({
       directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
@@ -4408,6 +4431,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.proximityVoice.disconnect('Minecraft disconnected; query original voice request');
         this.serverQueries.reset('游戏连接已断开，查询结果未知；重连后需重新读取');
         this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
@@ -4474,6 +4498,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    await this.proximityVoice.stop();
     this.serverQueries.reset('Minecraft World 已停止，查询结果未知');
     this.pendingDeathCause = null;
     this.photography.stop();
@@ -4649,6 +4674,7 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
       mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
@@ -7096,9 +7122,12 @@ export class MinecraftWorld implements World {
     // 骨架的「下桌」那几句里有一句要问蓝图表旧世界那边还剩什么
     this.blueprints.useRealm(key, normalizeDimension(this.bridge?.bot?.game?.dimension));
     const cleared = this.pwsr.switchTo(key);
-    const table = this.goals(), scope = this.goalCheckpointScope(key), identity = JSON.stringify(scope);
-    if (this.goalCheckpointScopes.get(table) !== identity) {
+    // Goals are server/account intentions, including journeys through portals.
+    // Only their runtime mechanical evidence belongs to a particular native map.
+    const table = this.goals(), scope = this.goalCheckpointScope(), identity = JSON.stringify(scope);
+    if (this.goalCheckpointScopes.get(table) !== identity || this.goalLoadedRealm !== key) {
       this.goalCheckpointScopes.set(table, identity);
+      this.goalLoadedRealm = key;
       table.list = [];
       try { table.list = this.goalCheckpoints.load(scope); }
       catch (error) { this.host?.log.warn('目标恢复记录读取失败，保留原文件', { err: String(error) }); }
@@ -7115,7 +7144,7 @@ export class MinecraftWorld implements World {
     return this.goals();
   }
 
-  protected goalCheckpointScope(realm = this.realmKey()): GoalCheckpointScope {
+  protected goalCheckpointScope(realm = this.serverRealmKey()): GoalCheckpointScope {
     return { realm, account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName };
   }
 
@@ -7174,6 +7203,7 @@ export class MinecraftWorld implements World {
       this.proximity.clear(); this.playerObservations.clear(); this.flocks.clear(); this.matureAnnounced.clear();
       this.idleContext.clear();
       this.setPersonalSpawn(undefined, '世界身份已改变，等待核实', { announce: false });
+      this.proximityVoice.disconnect('Native world changed; do not replay game voice');
       this.serverQueries.reset('世界身份已改变，旧查询结果未知');
       this.spatialRealm = scope;
       this.lastDimension = dim || null;
@@ -8070,6 +8100,7 @@ export class MinecraftWorld implements World {
   }
 
   protected worldTick(): void {
+    this.proximityVoice.sync();
     // 1s 心跳里做昼夜检测(转换点不能等节流窗口),节流窗口做世界摘要
     void this.syncManagedServerLifecycle();
     const bot = this.bridge?.bot;
