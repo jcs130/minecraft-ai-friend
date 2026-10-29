@@ -81,6 +81,37 @@ Relocation-CopyAccess $taskSource $taskCopy
 Check (@(Compare-Object @(Relocation-Access $taskRelocated) @(Relocation-Access $taskAccessTarget)).Count -eq 0) 'Parent access update broadened a copied child'
 Reject {Relocation-CopyAccess $taskRelocated (Join-Path $taskCopy 'nested')} 'Accepted mismatched access item types'
 
+# A real WorldGuard file had both explicit and inherited Administrators FA.
+# Freezing inheritance coalesces those identical ACEs. Multiplicity changes
+# the representation, not the permitted identities, rights or propagation.
+$taskDuplicate=Join-Path $taskSource 'duplicate-access.txt'
+$taskDuplicateCopy=Join-Path $taskCopy 'duplicate-access.txt'
+[IO.File]::WriteAllText($taskDuplicate,'synthetic duplicate permission')
+[IO.File]::WriteAllText($taskDuplicateCopy,'synthetic duplicate permission')
+$taskAdmin=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+$taskDupAcl=Get-Acl -LiteralPath $taskDuplicate
+$taskDupAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($taskAdmin,'FullControl','Allow'))
+Set-Acl -LiteralPath $taskDuplicate -AclObject $taskDupAcl
+$taskAdminRules=@((Get-Acl -LiteralPath $taskDuplicate).GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]) | Where-Object {$_.IdentityReference -eq $taskAdmin -and $_.FileSystemRights -eq 'FullControl'})
+Check ($taskAdminRules.Count -ge 2) 'Fixture did not reproduce inherited and explicit duplicate ACEs'
+Relocation-CopyAccess $taskDuplicate $taskDuplicateCopy
+Check (@(Compare-Object @(Relocation-Access $taskDuplicate) @(Relocation-Access $taskDuplicateCopy)).Count -eq 0) 'Redundant ACE normalization changed effective permissions'
+Check (Get-Acl -LiteralPath $taskDuplicateCopy).AreAccessRulesProtected 'Duplicate-ACE copy must remain protected'
+$taskGuests=[Security.Principal.SecurityIdentifier]::new('S-1-5-32-546')
+$taskAccessOnly=[Security.AccessControl.AccessControlSections]::Access
+foreach($taskVariant in @(@{name='extra-allow.txt';rights='Read';kind='Allow'},@{name='extra-deny.txt';rights='Write';kind='Deny'})){
+    # Use a new owned file: the sealed copy intentionally no longer inherits
+    # the fixture owner's WRITE_DAC, so editing that copy needs elevation.
+    $taskVariantPath=Join-Path $taskSource $taskVariant.name
+    [IO.File]::WriteAllText($taskVariantPath,'synthetic changed permission')
+    $taskChangedAcl=[Security.AccessControl.FileSecurity]::new()
+    $taskChangedAcl.SetSecurityDescriptorSddlForm((Get-Acl -LiteralPath $taskDuplicate).GetSecurityDescriptorSddlForm($taskAccessOnly),$taskAccessOnly)
+    $taskChangedAcl.SetAccessRuleProtection($true,$true)
+    $taskChangedAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($taskGuests,$taskVariant.rights,$taskVariant.kind))
+    Set-Acl -LiteralPath $taskVariantPath -AclObject $taskChangedAcl
+    Check (@(Compare-Object @(Relocation-Access $taskDuplicate) @(Relocation-Access $taskVariantPath)).Count -gt 0) ('Changed '+$taskVariant.kind+' rights were ignored')
+}
+
 $taskText=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../manage-server.ps1') -Raw -Encoding UTF8
 Check ($taskText.Contains("'runtime-relocation.pending.json'")) 'One-shot request is not excluded from backups'
 Check ($taskText.Contains('Runtime relocation recovery requires inspection; refusing startup')) 'Missing crash recovery startup gate'

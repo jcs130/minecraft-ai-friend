@@ -66,7 +66,10 @@ function Relocation-Compare($before,$after) {
 function Relocation-Access([string]$path) {
     @((Get-Acl -LiteralPath $path -ErrorAction Stop).Access | ForEach-Object {
         '{0}|{1}|{2}|{3}|{4}' -f $_.IdentityReference.Value,[int64]$_.FileSystemRights,$_.AccessControlType,$_.InheritanceFlags,$_.PropagationFlags
-    } | Sort-Object)
+    # Windows coalesces identical explicit/inherited ACEs when inheritance is
+    # frozen. Compare unique grants/denials, retaining every identity, right
+    # and propagation flag; duplicate multiplicity does not grant more access.
+    } | Sort-Object -Unique)
 }
 
 function Relocation-CopyAccess([string]$source,[string]$target) {
@@ -125,9 +128,9 @@ function Deploy-PendingRuntimeRelocation([string]$backup,[string]$mirror) {
     $partition=Get-Partition -DriveLetter C -ErrorAction Stop
     if((Get-Disk -Number $partition.DiskNumber -ErrorAction Stop).BusType -ne 'NVMe') { throw 'C: is not the expected NVMe volume.' }
     $available=(Get-PSDrive C).Free
-    $evidence=Join-Path $opsDir 'repairs\nvme-runtime-20261029-r7'
+    $evidence=Join-Path $opsDir 'repairs\nvme-runtime-20261029-r9'
     New-Item -ItemType Directory -Path $evidence -Force | Out-Null
-    $otherEvidence='F:\MC-backups\repairs\nvme-runtime-20261029-r7'
+    $otherEvidence='F:\MC-backups\repairs\nvme-runtime-20261029-r9'
     New-Item -ItemType Directory -Path $otherEvidence -Force | Out-Null
     $blocked=Join-Path $opsDir 'runtime-relocation.recovery.blocked'
     if(Test-Path -LiteralPath $blocked) { throw 'A previous runtime relocation requires inspection.' }
