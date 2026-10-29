@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 1,
+  "auditedAt": "2026-10-29T21:04:28+08:00",
+  "state": "read-only-audit-recorded",
+  "sourceCommitBeforeAudit": "c7da224a92146389ff0ca6e9685406f89d8a5532",
+  "scope": "Runtime versions, public website API, installed Harness package, live configuration, immutable release receipts and all 162 manifest JSON files; no new gameplay, client GUI or human listening acceptance.",
+  "productionCodeChanged": false,
+  "servicesRestarted": false,
+  "observed": {
+    "website": "0.8.28",
+    "AgentFriend": "0.4.47.30-vortex",
+    "QiandengjiRpg": "0.2.10",
+    "WorldObserver": "0.1.1",
+    "MultiverseCore": "5.8.1",
+    "Freesia": "2.5.1+2.4.1.af5",
+    "bedrockAppearance": "0.1.0",
+    "coreSource": "0.5.7-rc.130",
+    "publicSkill": "1.3.3",
+    "publicSkillCore": "0.5.7-rc.95",
+    "harnessBodyCore": "0.5.7-rc.95",
+    "photoCandidates": 29,
+    "publicGallery": 3,
+    "privatePhotos": 26,
+    "localArchiveEvents": 129,
+    "publicBooksAndNotices": 0,
+    "websiteMemories": 4,
+    "archiveDesks": 0,
+    "playerClassSwap": false,
+    "networkServerDirectoryStatus": 404,
+    "activeStorage": "NVMe",
+    "completeBackupMarkersPerDisk": 8,
+    "npmSourceCorePublished": false
+  },
+  "manifestInventory": {
+    "filesScanned": 162,
+    "objectManifests": 159,
+    "oldCandidateFlags": 63,
+    "rule": "Frozen candidate statuses describe their build time. They are not a current deployment queue; consult current-deployment.json, release evidence and this ledger."
+  },
+  "items": [
+    {
+      "id": "photo-library",
+      "state": "candidate_needs_refresh",
+      "title": "所有照片上传、本人/管理员决定公开",
+      "priority": "P1",
+      "current": "官网实测0.8.28，仍仅3张公开照片；本地29张原片含26张未公开。0.8.29已隔离验证，未切换。",
+      "nextAction": "在当前官网/采集器上重封候选并回归；先云端后家庭端，核对29张入库、游客仍只见3张及真实账号公开/撤展。",
+      "evidence": [
+        "paper/docs/PHOTO_LIBRARY_20261029.md"
+      ]
+    },
+    {
+      "id": "skill-core-distribution",
+      "state": "distribution_pending",
+      "title": "官网Skill跟进MC核心rc.130",
+      "priority": "P1",
+      "current": "main已到0.5.7-rc.130；官网Skill1.3.3仍锁rc.95。npm指定rc.130查询404。源码完成不等于已发包。",
+      "nextAction": "用已核验产物更新Skill依赖、文档、SHA256和下载；隔离安装/MCP/真实授权与世界切换验收后发布，不静默替换用户宿主。",
+      "evidence": [
+        "packages/agent-mc-world/docs/world-identity.md",
+        "paper/integrations/agent-portal/public/downloads/qiandengji-agent-1.3.3.json"
+      ]
+    },
+    {
+      "id": "harness-body-core",
+      "state": "distribution_pending",
+      "title": "本机Harness身体内置核心更新",
+      "priority": "P1",
+      "current": "实际node_modules仍0.5.7-rc.95，原Python控制器0.1.27保持。",
+      "nextAction": "独立更新并验收原身体/MCP；保留账号、模型、记忆、原控制器和旧未知动作，不借此新建Agent循环。",
+      "evidence": [
+        "paper/docs/AGENT_COMPONENT_AUDIT_20261026.md"
+      ]
+    },
+    {
+      "id": "offline-client-bundles",
+      "state": "distribution_pending",
+      "title": "Cortico/DSH/NEKO官网离线包跟进",
+      "priority": "P1",
+      "current": "官网Cortico rc.14、DSH rc.12、NEKO0.6.109（说明内置core rc.99）；Cortico/DSH说明仍带Skill1.2.1。",
+      "nextAction": "分别核对适配器与核心/现代可视化/千灯纪资料，重打完整和分包、安装验收后更新OSS与摘要；不把main更新当作这些包已更新。",
+      "evidence": [
+        "paper/integrations/agent-portal/src/offline-downloads.json",
+        "paper/docs/AGENT_JOIN_QUICKSTART.md"
+      ]
+    },
+    {
+      "id": "client-channel-consumption",
+      "state": "consumer_adaptation_pending",
+      "title": "客户端消费世界、聊天身份与语音",
+      "priority": "P1",
+      "current": "服务端世界字段和附近频道已上线；rc.130源码已补发送者UUID/unsigned装饰与自身回声，尚未统一替换现役。语音SDK已提供。",
+      "nextAction": "客户端实际加载后联测跨世界/同世界48格、本人回声、原版私聊及音频上传/附近ASR；分别记录客户端版本和真实回执。",
+      "evidence": [
+        "paper/integrations/essentials-chat/WORLD_IDENTITY.md",
+        "paper/integrations/proximity-voice/README.md"
+      ]
+    },
+    {
+      "id": "public-facility-permissions",
+      "state": "candidate_needs_refresh",
+      "title": "公共设施使用与私人领地权限细分",
+      "priority": "P1",
+      "current": "0.4.47.13旧候选未发布；现役lands没有public-facility字段。部分已登记共享箱可用，不等于15处设施整体策略已启用。",
+      "nextAction": "移植到当前.30最小基线，逐设施核对用途与共享范围；保留私人容器和建筑保护后按维护流程发布，禁止装旧.13。",
+      "evidence": [
+        "paper/docs/LANDS.md",
+        "paper/manifests/public-facilities-candidate-20261024.json"
+      ]
+    },
+    {
+      "id": "archive-hall",
+      "state": "deployment_pending",
+      "title": "公共档案馆实体阅览场地",
+      "priority": "P2",
+      "current": "日记/公告数据库与CLI已上线，但public-archives.yml的desks为[]；问旅堂讲台和借阅设施未正式启用。",
+      "nextAction": "复核当前场地，按逐块前像施工/登记讲台与公共容器，再用普通玩家验证借阅及建筑保护。",
+      "evidence": [
+        "paper/docs/PUBLIC_ARCHIVES.md"
+      ]
+    },
+    {
+      "id": "native-camera",
+      "state": "blocked_hardware",
+      "title": "核显原生高画质女神相机",
+      "priority": "P2",
+      "current": "原生客户端已准备；Intel未接显示输出，实际渲染曾落独显，Mesa/Zink加YSM报err54，生产仍网页相机。",
+      "nextAction": "主板视频输出连接显示器/适配器后验证Intel真实渲染器、YSM及光影成片，再合并当前Paper和官网8MiB配套。",
+      "evidence": [
+        "paper/docs/NATIVE_GODDESS_CAMERA.md"
+      ]
+    },
+    {
+      "id": "voice-human-acceptance",
+      "state": "acceptance_pending",
+      "title": "真人麦克风、耳听与Agent音频互通",
+      "priority": "P1",
+      "current": "SVC2.6.27/Voice0.1.0、CPU ASR、TTS、公网UDP和续期已上线；真人耳听/麦克风尚无完成验收。",
+      "nextAction": "用匹配Simple Voice Chat客户端做真人近远/跨世界耳听和麦克风ASR，远端Agent用实际WAV上传；sent不当作人已听见。",
+      "evidence": [
+        "paper/docs/PROXIMITY_VOICE.md"
+      ]
+    },
+    {
+      "id": "browser-bedrock-voice",
+      "state": "implementation_incomplete",
+      "title": "基岩及无语音模组者的浏览器语音桥",
+      "priority": "P2",
+      "current": "可正常进入游戏；网页/基岩的配对、听音与麦克风桥尚未实现，现有SVC不自动提供此能力。",
+      "nextAction": "评估已调研的SVC浏览器桥并隔离实现/真机验证；维持语音模组可选。",
+      "evidence": [
+        "paper/docs/PROXIMITY_VOICE.md"
+      ]
+    },
+    {
+      "id": "bedrock-hd-ysm",
+      "state": "candidate_needs_refresh",
+      "title": "基岩高清YSM资源包和动作",
+      "priority": "P2",
+      "current": "运行扩展仍0.1.0；高清资源包0.2.0是旧隔离候选，手机/Xbox像素、握持与完整动作未验收。",
+      "nextAction": "针对当前Geyser/协议更新候选，验证包下载、身份和性能，再做手机/Xbox画面验收。",
+      "evidence": [
+        "paper/docs/YSM_BEDROCK_RESOURCE_PACK.md",
+        "paper/manifests/ysm-bedrock-resource-pack-candidate-20261013.json"
+      ]
+    },
+    {
+      "id": "extra-ysm-models",
+      "state": "candidate_needs_refresh",
+      "title": "额外三套可选YSM",
+      "priority": "P2",
+      "current": "40皮肤和5套新增YSM已上线；帕派瑞斯/杉斯/塔胡仍未加入现役资源目录。旧文档等待的网页渲染器已被后续新版替代。",
+      "nextAction": "先对当前共享前端重新验收三套模型，确认许可、动作与预算后热加入；不为已更新的渲染器重复部署旧包。",
+      "evidence": [
+        "paper/content/appearance-gallery/README.md",
+        "paper/content/appearance-gallery/catalogue.json"
+      ]
+    },
+    {
+      "id": "network-accounts",
+      "state": "candidate_needs_refresh",
+      "title": "跨服务器统一账号与游戏密码",
+      "priority": "P2",
+      "current": "0.9.0/旧Guard1.6/FOM账号桥为独立候选；正式/api/v1/servers为404，当前Guard为1.9，FOM仍未开放。",
+      "nextAction": "将候选移植到现役官网/认证修复，验证跨服部分成功/未知对账与旧账号；不得用旧Guard回退登录修复。FOM保持preparing。",
+      "evidence": [
+        "paper/docs/NETWORK_ACCOUNTS.md",
+        "paper/manifests/network-accounts-candidate-20261023.json"
+      ]
+    },
+    {
+      "id": "class-respec",
+      "state": "implementation_incomplete",
+      "title": "换职业、职业技能洗点与统一说明",
+      "priority": "P1",
+      "current": "现役allow-player-swap=false；天赋reset已真实退点扣500金币，但不能据此声称职业学习点可全部重置。",
+      "nextAction": "明确换职/洗点消耗、装备与技能保留规则，补CLI和中文错误后隔离验收；不先打开开关或重置玩家。",
+      "evidence": [
+        "paper/docs/RPG_AUDIT_20261029.md",
+        "paper/docs/RPG_INTERACTION_20261029.md"
+      ]
+    },
+    {
+      "id": "auction",
+      "state": "implementation_incomplete",
+      "title": "原生拍卖实际交货",
+      "priority": "P1",
+      "current": "已复现扣款不交货，入口仍维护；可用的是物资收购委托、补给商店和装备回收。",
+      "nextAction": "修复资金/物品交付、满包、掉线、重启及未知结果对账，验证实物和余额后再开放拍卖。",
+      "evidence": [
+        "paper/docs/RPG_UNIFIED_20261028.md"
+      ]
+    },
+    {
+      "id": "full-mmo-content",
+      "state": "implementation_incomplete",
+      "title": "更多攻略楼层、剧情NPC与专用外观",
+      "priority": "P1",
+      "current": "六职业、8张冒险任务、5处活动和首层三段已接通；不是100层完整剧情。现有剧情接待沿原NPC身体，专用模型未完整验收。",
+      "nextAction": "沿Vortex、既有结构与女神导演项目逐段建设、汉化、联测难度/队伍/掉落，逐层发布；不把插件默认目录当全部玩法。",
+      "evidence": [
+        "paper/docs/NATIVE_RPG_RELEASE_20261027.md",
+        "paper/docs/GODDESS_WORLD_EVOLUTION.md"
+      ]
+    },
+    {
+      "id": "full-localization",
+      "state": "implementation_incomplete",
+      "title": "RPG所有玩家可见分支汉化",
+      "priority": "P2",
+      "current": "主要mycli入口与职业配置有中文，但原生失败、管理和部分菜单分支仍有英文，尚未全量验收。",
+      "nextAction": "按真实六职业、天赋、任务、交易和组队路径核对语言资源，复用实际定义维护中文说明。",
+      "evidence": [
+        "paper/docs/RPG_AUDIT_20261029.md",
+        "paper/docs/RPG_INTERACTION_20261029.md"
+      ]
+    },
+    {
+      "id": "world-stories",
+      "state": "operations_not_accepted",
+      "title": "新日记、共同故事、漫画与视频生产链",
+      "priority": "P1",
+      "current": "档案/网站读数已上线；当前本地129条事件、29张照片、书/公告0，官网4篇回忆。女神调度已接入，不等于新作品已生成发布。",
+      "nextAction": "沿女神原项目台账从真实经历生成可核对的故事/书与配图候选，保留来源及公开选择，验收入库/网页阅读和后续策展。",
+      "evidence": [
+        "paper/docs/PUBLIC_ARCHIVES.md",
+        "paper/docs/GODDESS_WORLD_EVOLUTION.md",
+        "paper/docs/PHOTO_LIBRARY_20261029.md"
+      ]
+    },
+    {
+      "id": "numen-upstream",
+      "state": "evaluation_pending",
+      "title": "Numen上游后续合并",
+      "priority": "P2",
+      "current": "现役为带本服协议/身份/控制补丁的0.1.4；上游新主线没有整体合入。10月26日核查是历史窗口，不承诺今天已是上游最新。",
+      "nextAction": "重新核对上游固定提交，保留本服补丁，针对官方旧/新客户端、原版、基岩、假玩家重连和Key隔离逐项验证。",
+      "evidence": [
+        "paper/docs/AGENT_COMPONENT_AUDIT_20261026.md",
+        "paper/docs/NUMEN_PAPER.md"
+      ]
+    },
+    {
+      "id": "mcbot-client-acceptance",
+      "state": "acceptance_pending",
+      "title": "官方mcbot界面和真实长模型任务",
+      "priority": "P2",
+      "current": "Paper适配层已上线；官方Fabric界面、真实LLM长任务及手机/基岩完整画面仍不在已完成验收中。",
+      "nextAction": "按真实客户端/账号独立联测，保留未知动作与原请求，不用服务端协议测试冒充全部客户端功能已可用。",
+      "evidence": [
+        "paper/docs/CONNECTION_FIXES_20261028.md"
+      ]
+    },
+    {
+      "id": "email-real-delivery",
+      "state": "acceptance_pending",
+      "title": "真实邮箱收取验证码验收",
+      "priority": "P2",
+      "current": "用户名密码注册与可选邮箱流程已开放，DirectMail DNS/TLS/SMTP认证已测；缺少收件方确认验证码实际到达的最终证据。",
+      "nextAction": "由真实邮箱完成收信、校验、过期/重发与密码恢复；不把SMTP成功当作用户已收到。",
+      "evidence": [
+        "paper/docs/AGENT_SKILL_HANDOFF.md"
+      ]
+    },
+    {
+      "id": "phone-wechat",
+      "state": "deferred_by_owner",
+      "title": "手机号及微信扫码登录",
+      "priority": "P3",
+      "current": "用户此前选择先做邮箱；官网能力明确phone/wechat unavailable，尚无配套平台配置。",
+      "nextAction": "维持关闭，待有对应服务/应用与明确安排后独立接入，不作为本轮待部署包。",
+      "evidence": [
+        "paper/docs/AGENT_SKILL_HANDOFF.md"
+      ]
+    }
+  ],
+  "alreadyDeployed": [
+    {
+      "feature": "Vortex六职业/八张冒险委托/基础术/唯一成长与金币",
+      "evidence": "paper/docs/RPG_UNIFIED_20261028.md"
+    },
+    {
+      "feature": "540格远程个人箱、满包提示、装备回收、补给商店、委托托管交易",
+      "evidence": "paper/docs/RPG_INTERACTION_20261029.md"
+    },
+    {
+      "feature": "遗迹三次战败存档点、队友倒地救援、Boss房间排他、永久建筑保护与88块恢复",
+      "evidence": "paper/docs/DUNGEON_INTEGRITY_20261029.md"
+    },
+    {
+      "feature": "观战RPG/46槽背包/生命/死亡保留、共享缓存与第三人称/自由视角",
+      "evidence": "paper/docs/RPG_INTERACTION_20261029.md"
+    },
+    {
+      "feature": "同实际世界48格附近聊天、!喊话、原版私聊、带世界的状态与队伍",
+      "evidence": "paper/docs/NEARBY_COMMUNICATION_RELEASE_20261029.md"
+    },
+    {
+      "feature": "SVC/Voice服务端、外部WAV入口、TTS/CPU ASR、自启和公网UDP续期",
+      "evidence": "paper/docs/PROXIMITY_VOICE.md"
+    },
+    {
+      "feature": "公共作品数据库、原图存档、日记CLI、公开聊天与旧回忆展示",
+      "evidence": "paper/docs/PUBLIC_ARCHIVES.md"
+    },
+    {
+      "feature": "NVMe正式迁移、关闭休眠、离线备份清理策略及延期清理收尾",
+      "evidence": "paper/docs/NVME_RUNTIME_20261029.md"
+    },
+    {
+      "feature": "Multiverse/原地图保护、mcbot服务端、Numen身体复用与本服控制修复",
+      "evidence": "paper/docs/CONNECTION_FIXES_20261028.md"
+    },
+    {
+      "feature": "40款签名皮肤及5套新增YSM；af5包含旧af4恢复门禁类",
+      "evidence": "paper/content/appearance-gallery/README.md"
+    }
+  ],
+  "historicalCandidateExamplesAlreadyCovered": {
+    "multiverse-core-candidate-20261027.json": "adventure-release-20261027.json",
+    "proximity-voice-candidate-20261029.json": "current-deployment.json",
+    "mcbot-paper-candidate-20261028.json": "connection-fixes-release-20261028.json",
+    "rpg-journey-candidate-20261028.json": "rpg-unified-release-20261028.json",
+    "public-world-candidate-20261026.json": "public-world-live-release-20261026.json",
+    "aincrad-rpg-candidate-20261027.json": "native-rpg-release-20261027.json",
+    "personal-stash-menu-candidate-20261024.json": "public-world-live-release-20261026.json",
+    "ysm-grip-initial-pose-candidate-20261026.json": "ysm-grip-initial-pose-release-20261026.json",
+    "world-view-cormy-animation-candidate-20261025.json": "world-view-cormy-animation-release-20261025.json",
+    "world-observer-fluidity-20261025.json": "world-observer-delivery-20261025.json"
+  },
+  "notSelectedImplementationOptions": [
+    "WebRTC视频传输不是当前已采用方案；现役为共享3D场景/差分/缓存分发。",
+    "全世界持久地形数据库/任意远处自由飞行尚未提供；当前自由视角只游览已接收缓存。",
+    "不能为清理候选而整体安装AgentFriend0.4.48、旧Guard1.6或旧网站0.9.0。"
+  ],
+  "followupApplied": {
+    "feature": "Coobot男性YSM",
+    "model": "qd_kazuha",
+    "texture": "texture",
+    "workerConfirmed": true,
+    "webResourceReady": true,
+    "publicWebsiteModelProjectionVerified": true,
+    "otherRolesUnchanged": true,
+    "gameRestarted": false
+  },
+  "suggestedOrder": [
+    "client-channel-consumption",
+    "skill-core-distribution",
+    "harness-body-core",
+    "offline-client-bundles",
+    "photo-library",
+    "public-facility-permissions",
+    "class-respec",
+    "auction",
+    "world-stories"
+  ],
+  "sourceReconciledDuringAudit": "bd7d1845",
+  "sourceReconciledAt": "2026-10-29T13:09:56.439Z"
+}

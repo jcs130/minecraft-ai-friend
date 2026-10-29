@@ -1,3 +1,7 @@
+## 2026-10-29 现役为af5，旧af4不是待安装包
+
+实际代理运行目录仅有Freesia2.5.1+2.4.1-af5（SHA256 47ec3fc898852919c11451f60976f5246e0e194be8318061921e16108a1a8d0a），包含WorkerStateRestoreGate及其Ticket/Slot类；本人换装文档也记录af5基线。下文“正式af3、af4未部署”是旧实验窗口，不应据此再次降级安装af4。原生Java完整动作、基岩高清与真人画面验收仍独立核对。[当前外观入口](AGENT_APPEARANCE.md)与[未完成项目](../../docs/PROJECT_STATUS.md)。
+
 # YSM 原生客户端补发其他玩家模型
 
 ## 2026-10-18 af4 候选：恢复无 YSM 本体的实时模型状态，未部署
