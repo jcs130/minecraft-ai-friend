@@ -7790,13 +7790,13 @@ export class MinecraftWorld implements World {
     bot.on('entityTamed', (entity: { name?: string }) => {
       this.emit('minecraft.event', `[Minecraft] 驯服了${zhEntity(entity?.name ?? '')}!`, false);
     });
-    bot.on('entityDead', (entity: { id?: number; name?: string; position?: { distanceTo(o: unknown): number } }) => {
+    bot.on('entityDead', (entity: { id?: number; uuid?: string; name?: string; position?: { distanceTo(o: unknown): number } }) => {
       if (!entity?.position || !bot.entity?.position || !entity.name) return;
       // 自身死亡由死亡专报处理，此处只报告其他实体。
       if ((entity as unknown) === (bot.entity as unknown) || entity.id === bot.entity.id) return;
       if (typeof entity.id === 'number') this.proximity.delete(entity.id);
-      if (typeof entity.id === 'number') this.executor?.noteCombatTargetDead(entity.id);
-      // 战斗会话打死的由它自己说「砍翻了」,这里不再补一句「死了」
+      if (typeof entity.id === 'number') this.executor?.noteCombatTargetDead(entity);
+      // 交战目标的死亡由原攻击/战斗回执报告，不把死亡事件本身归因于本人击杀。
       if (typeof entity.id === 'number' && (this.executor?.claimsCombat(entity.id) || this.combat?.claims(entity.id))) return;
       const d = entity.position.distanceTo(bot.entity.position);
       if (d > PROXIMITY_EXIT) return;

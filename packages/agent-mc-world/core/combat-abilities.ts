@@ -260,7 +260,8 @@ export class CombatAbilities {
         : this.manualCastBlock(spell, now) }));
     const recent = state.reports.slice(-3).map((r) => ({ id: r.id, endedAt: r.endedAt,
       reason: r.reason, healthBefore: r.healthBefore, healthAfter: r.healthAfter,
-      kills: r.kills, tacticRevision: r.tacticRevision,
+      kills: null, killAttribution: r.killAttribution ?? 'legacy-unverified',
+      targetDeaths: r.targetDeaths ?? null, tacticRevision: r.tacticRevision,
       spellsSent: r.casts.map((cast) => cast.spell), castsTruncated: r.castsTruncated }));
     return `[战术状态] 版本 ${state.revision}，修改时间 ${state.updatedAt ?? '未设置'}；已按世界保存。\n`
       + JSON.stringify({ observedAt: new Date(now).toISOString(), mana: this.mana,

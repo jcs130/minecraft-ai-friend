@@ -49,3 +49,17 @@ it('emits the existing combat event with the native account scope and saved rece
   expect(events[1][0]).toBe('minecraft.event');
   expect(book.current().reports).toHaveLength(1);
 });
+
+it('round-trips unknown own kill credit separately from target deaths and labels legacy counts without rewriting their file', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'combat-attribution-')), file = join(dir, 'book.json');
+  try {
+    const book = new CombatTacticBook(file); book.useRealm('realm');
+    book.record({ ...result(), kills: null, killAttribution: 'unavailable', targetDeaths: { skeleton: 1 } }, []);
+    book.record({ ...result(), kills: { zombie: 1 } }, []);
+    const before = readFileSync(file, 'utf8');
+    const reloaded = new CombatTacticBook(file); reloaded.useRealm('realm');
+    expect(reloaded.current().reports[0]).toMatchObject({ kills: null, killAttribution: 'unavailable', targetDeaths: { skeleton: 1 } });
+    expect(reloaded.current().reports[1]).toMatchObject({ kills: { zombie: 1 }, killAttribution: 'legacy-unverified' });
+    expect(readFileSync(file, 'utf8')).toBe(before);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

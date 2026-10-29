@@ -23,6 +23,7 @@ import { chooseHybridWeapon, type HybridWeapon } from './ranged.ts';
 import { zhErrorText } from './receipt.ts';
 import { itemsInReach } from './inventory.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
+import type { AttackEvidence } from '../src/contracts/attack-evidence.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -311,11 +312,11 @@ export async function skillAttack(
     checkAbort(ctx);
     if (bot.entities[entityId] !== entity || entity.isValid === false
         || (selectedUuid !== undefined && entity.uuid !== selectedUuid)) {
-      throw new SkillBlocked(`点名实体 entityId=${entityId} 已失效；未改打其他实体，重新观察`);
+      throw new SkillBlocked(`点名实体 entityId=${entityId} 已失效；未改打其他实体，重新观察`, [], 'local', 'attack-target-unconfirmed');
     }
     // Ordinary brief occlusion keeps the existing 1.5-second tracking grace.
     // Recheck sight immediately before a physical swing or bow preparation.
-    if (requireSight && !canSeeEntity(bot, entity)) throw new SkillBlocked(`点名实体 entityId=${entityId} 已被遮挡；未继续攻击，重新观察`);
+    if (requireSight && !canSeeEntity(bot, entity)) throw new SkillBlocked(`点名实体 entityId=${entityId} 已被遮挡；未继续攻击，重新观察`, [], 'local', 'attack-target-unconfirmed');
   };
   const ranged = ctx.attack.ranged;
   const forcedRanged = mode === 'ranged' || mode === 'kite';
@@ -400,6 +401,7 @@ export async function skillAttack(
       await sleep(50);
       checkAbort(ctx);
       if (stats.disconnected) throw new SkillBlocked(`连接断了,主动攻击已取消;${attackStats(stats)}`);
+      if (stats.dead) break;
       checkNamedTarget();
       if (!canSeeEntity(bot, entity)) {
         outOfSightSince ||= Date.now();
@@ -407,7 +409,7 @@ export async function skillAttack(
         ranged?.abort();
         dropGoal(bot, 'task', '目标离开视线', ctx.diag);
         if (Date.now() - outOfSightSince >= 1_500) {
-          throw new SkillBlocked(`${zhEntity(target)}离开视线，停止攻击;${attackStats(stats)}`);
+          throw new SkillBlocked(`${zhEntity(target)}离开视线，停止攻击;${attackStats(stats)}`, [], 'local', 'attack-target-unconfirmed');
         }
         continue;
       }
@@ -485,6 +487,7 @@ export async function skillAttack(
           strafeAt = Date.now() + STRAFE_MS;
         }
         await aimAt(bot, entity);
+        if (stats.dead) break;
         checkNamedTarget(true);
         pressRanged(bot, d, mode, strafeLeft);
         // Explicit kite asks for spacing first. Auto/ranged may shoot while
@@ -495,12 +498,11 @@ export async function skillAttack(
         }
         const result = await ranged.shoot(rangedTargetOf(entity), stats.token);
         checkAbort(ctx);
-        // entityDead can arrive while the bow controller is still settling its draw.
-        // The target's terminal event owns that race; a late shoot result must not spend
-        // an arrow in the task receipt or start a fallback attack.
+        // Count an actual release even if death arrives before its RPC settles.
+        // A cancelled draw is still zero arrows; neither result proves our kill.
+        if (result.kind === 'released') stats.arrows += 1;
         if (stats.dead) break;
         if (result.kind === 'released') {
-          stats.arrows += 1;
           continue;
         }
         // 拉弓时目标已被移除(前一支箭打掉了水晶):交给循环后的结算
@@ -566,10 +568,12 @@ export async function skillAttack(
         strafeAt = Date.now() + STRAFE_MS;
       }
       await aimAt(bot, entity);
+      if (stats.dead) break;
       pressMelee(bot, entity, dangerous ? strafeLeft : null);
       if (d <= MELEE_REACH && Date.now() - lastSwing >= attackCooldownMs(bot)) {
         if (weaponScore(bot.heldItem?.name ?? '') < 0) await equipMelee();
         await meleeSwing(bot, entity, () => {
+          if (stats.dead) throw new SkillBlocked('目标已确认死亡，未继续挥击');
           checkNamedTarget(true);
           stats.lastSwingAt = Date.now();
           stats.lastSwingTargetId = entity.id;
@@ -586,6 +590,10 @@ export async function skillAttack(
         onBlast = () => { clearTimeout(timer); resolve(); };
       });
     }
+  } catch (error) {
+    // A matching death may settle while navigation, aim or equipment is waiting.
+    // Preserve that observed terminal, but never swallow cancellation or link loss.
+    if (!(stats.dead && !stats.disconnected && !ctx.aborted() && error instanceof SkillBlocked)) throw error;
   } finally {
     if (crystal) bot._client.removeListener('explosion', onExplosion);
     releaseMelee(bot);
@@ -593,9 +601,21 @@ export async function skillAttack(
     ctx.escape.active = false;
     ctx.attack.release(stats);
     releaseWalkOnly();
+    let targetState: AttackEvidence['targetState'] = stats.dead ? 'death-observed'
+      : blasted ? 'explosion-observed' : !entity.isValid || bot.entities[entity.id] !== entity
+        || (selectedUuid !== undefined && entity.uuid !== selectedUuid) ? 'untracked' : 'unknown';
+    if (targetState === 'unknown' && !stats.disconnected) {
+      try { targetState = canSeeEntity(bot, entity) ? 'visible' : 'occluded'; } catch { /* unknown */ }
+    }
+    const evidence: AttackEvidence = { schema: 'agent-mc-attack-evidence/v1', sampledAt: new Date().toISOString(),
+      target: { entityId: entity.id, uuid: selectedUuid ?? null, name: entity.name ?? target }, targetState,
+      deathObservedAt: typeof stats.deathObservedAt === 'number' ? new Date(stats.deathObservedAt).toISOString() : null,
+      ownKillCredit: null, attempts: { meleeSwings: stats.swings, arrowsReleased: stats.arrows },
+      observedHits: { melee: stats.meleeHits, ranged: stats.rangedHits }, goalVerified: false };
+    try { ctx.recordObservation?.({ ...evidence }); } catch { /* A failed evidence sink never changes the native verdict. */ }
   }
   if (blasted) {
-    // 水晶受击不发受击事件,命中数读不到;炸了就是被打掉了
+    // A nearby explosion is observed, but it does not identify who caused it.
     return `${zhEntity(target)}在原位炸了(放箭 ${stats.arrows} 支,挥击 ${stats.swings} 次)${underwaterOxygenNote(bot)}`;
   }
   if (crystal && !entity.isValid) {
@@ -606,14 +626,14 @@ export async function skillAttack(
     );
   }
   if (stats.dead) {
-    return `打死了${zhEntity(target)}(${attackStats(stats)})${retreatFailed ? ';撤退没走开后回身打完' : ''}${underwaterOxygenNote(bot)}`;
+    return `确认${zhEntity(target)}死亡，未确认本人击杀归属(${attackStats(stats)})${retreatFailed ? ';撤退期间观察到目标死亡' : ''}${underwaterOxygenNote(bot)}`;
   }
   if (!entity.isValid) {
-    throw new SkillBlocked(`交手中${zhEntity(target)}离开了视野,没有把“消失”算成击杀;${attackStats(stats)}${underwaterOxygenNote(bot)}`);
+    throw new SkillBlocked(`交手中${zhEntity(target)}离开了视野,没有把“消失”算成击杀;${attackStats(stats)}${underwaterOxygenNote(bot)}`, [], 'local', 'attack-target-unconfirmed');
   }
   if (entity.isValid) {
     throw new SkillBlocked(
-      `${attackStats(stats)}没打死${zhEntity(target)},超时收手${underwaterOxygenNote(bot)}`,
+      `${attackStats(stats)}未确认${zhEntity(target)}死亡,超时收手${underwaterOxygenNote(bot)}`,
     );
   }
   throw new SkillBlocked(`没有确认${zhEntity(target)}死亡;${attackStats(stats)}`);

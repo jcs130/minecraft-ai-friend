@@ -1378,20 +1378,34 @@ describe('弓与近战的同一战斗会话', () => {
 });
 
 describe('战斗会话:打与收', () => {
-  it('出手打中目标后 claims 生效;打死由会话说「砍翻了」,收工报战果并恢复队列', async () => {
+  it.each(['known-uuid', 'id-only'] as const)('does not associate a reused-ID %s death with the original engaged target', async source => {
+    const zombie = Object.assign(foe(7, 'zombie', 2.5), { uuid: 'original-target' });
+    const { bot, attacks } = combatRigBot([zombie]), b = bot as any;
+    const { session, events, combatReports } = rig(bot);
+    try {
+      session.onHurtBy(7, 'zombie'); b.entity.velocity.y = -.1;
+      await drive(bot, 600); expect(attacks).toContain(7);
+      b.entities[7] = { ...zombie, uuid: 'replacement-target' };
+      bot.emit('entityDead', source === 'id-only' ? { id: 7, name: 'zombie' } : b.entities[7]);
+      expect(events.some(e => e.text.includes('观察到僵尸死亡'))).toBe(false);
+      session.stop();
+      expect(combatReports.at(-1)).toMatchObject({ kills: null, targetDeaths: {}, killAttribution: 'unavailable' });
+    } finally { session.stop(); }
+  });
+  it('出手后观察到目标死亡，归属未知，正常收工并恢复队列', async () => {
     const zombie = foe(7, 'zombie', 2.5);
     const { bot, attacks } = combatRigBot([zombie]);
-    const { session, events, calls } = rig(bot);
+    const { session, events, calls, combatReports } = rig(bot);
     session.onHurtBy(7, 'zombie');
     // 暴击相位:起跳后下落中出手
     (bot as unknown as { entity: { velocity: { y: number } } }).entity.velocity.y = -0.1;
     await drive(bot as unknown as EventEmitter, 600);
     expect(attacks).toContain(7);
     expect(session.claims(7)).toBe(true);
-    // 打死了:会话自己说,不再由 World 补「死了」
+    // 死亡事件没有killer；出手和目标死亡也不能合成为本人击杀。
     (bot as unknown as EventEmitter).emit('entityDead', { id: 7, name: 'zombie' });
-    expect(events.some((e) => e.text.includes('砍翻了僵尸'))).toBe(true);
-    expect(events.some((e) => e.text.includes('砍翻了僵尸') && e.text.includes('周围没别的了'))).toBe(true);
+    expect(events.some((e) => e.text.includes('观察到僵尸死亡') && e.text.includes('未确认本人击杀归属'))).toBe(true);
+    expect(events.some((e) => e.text.includes('观察到僵尸死亡') && e.text.includes('周围没别的了'))).toBe(true);
     expect(session.claims(7)).toBe(false);
     // Mineflayer 的实体表还没删掉死亡对象、生命又已掉到撤退线；这一拍仍应按清场处理。
     (bot as unknown as { health: number }).health = 5;
@@ -1403,6 +1417,7 @@ describe('战斗会话:打与收', () => {
     expect(calls.resumed).toBe(1);
     expect(events.some((e) => e.text.includes('打完了') && e.text.includes('僵尸'))).toBe(true);
     expect(events.some((e) => e.text.includes('接着做'))).toBe(true);
+    expect(combatReports.at(-1)).toMatchObject({ reason: 'clear', kills: null, killAttribution: 'unavailable', targetDeaths: { zombie: 1 } });
     session.stop();
   }, 15_000);
 
@@ -1426,7 +1441,7 @@ describe('战斗会话:打与收', () => {
     await waitUntil(() => !session.active, 2000);
     expect(session.active).toBe(false);
     // 「还剩几只」也按退出口径报:远处那只没交过手的不算在内
-    expect(events.some((e) => e.text.includes('砍翻了僵尸') && e.text.includes('周围没别的了'))).toBe(true);
+    expect(events.some((e) => e.text.includes('观察到僵尸死亡') && e.text.includes('周围没别的了'))).toBe(true);
     session.stop();
   }, 15_000);
 
