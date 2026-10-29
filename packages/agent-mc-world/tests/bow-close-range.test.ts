@@ -30,6 +30,18 @@ function fixture(distance: number, height = 1.95, y = 64) {
 }
 
 describe('short-range bow safety versus preferred weapon distance', () => {
+  it.each(['reused', 'unknown'] as const)('cancels a draw when the observed UUID becomes %s under the same numeric ID', async kind => {
+    const f = fixture(8); f.target.uuid = 'original';
+    const shot = f.controller.shoot(f.target);
+    await vi.advanceTimersByTimeAsync(200);
+    if (kind === 'reused') f.target.uuid = 'replacement';
+    else delete f.target.uuid;
+    await vi.advanceTimersByTimeAsync(900);
+    expect(await shot).toMatchObject({ kind: 'blocked', cause: 'target_lost' });
+    expect(f.events.some(event => event.kind === 'released')).toBe(false);
+    expect(f.controller.noteHit(7)).toBeNull();
+    expect(f.bot.setQuickBarSlot).toHaveBeenCalled();
+  });
   it.each(['timeout', 'lease'] as const)('a stalled equipment promise releases the bow owner on %s; late completion cannot fire', async cause => {
     const f = fixture(9.8);
     let finish!: () => void;
