@@ -17,6 +17,7 @@ export * from './execution-reading.ts';
 export { runtimeExecutionState, type RuntimeExecutionState, type ExecutionIdentity } from './execution-state.ts';
 export * from './schema-reading.ts';
 export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.ts';
+export { withFactState, type FactState } from '../../core/fact-state.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,

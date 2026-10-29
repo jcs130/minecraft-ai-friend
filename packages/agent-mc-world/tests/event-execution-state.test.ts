@@ -32,6 +32,7 @@ it('SDK/MCP preserve the latest terminal independently of noisy event cursors, w
     expect(value.text).toBe(JSON.stringify(value.data));
     expect(value.data.nextCursor).toBeGreaterThan(active.nextCursor);
     expect(value.meta.eventRead.returnedCount).toBe(2);
+    expect(value.meta.eventRead.cursor).toMatchObject({after:active.nextCursor,nextCursor:value.data.nextCursor,gap:false,hasMore:false});
     expect(runtime.executionState().revision).toBe(state.revision);
     expect(runtime.currentFacts().parts.find(x=>x.key==='executionState')?.text).toBe(JSON.stringify(state));
     expect(actions).toBe(0);

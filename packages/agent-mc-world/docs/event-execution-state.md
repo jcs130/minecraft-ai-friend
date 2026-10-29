@@ -5,6 +5,8 @@ expose `agent-mc-execution-state/v1`. `events()` also includes that state under
 `readout.execution`; MCP `mc_events` preserves the full page in `data` and repeats
 the bounded header in `meta.eventRead` (`agent-mc-event-read/v1`). Existing JSON
 `text` and cursor fields remain available.
+The typed header also preserves `cursor` and `returnedCount` when a host presents
+only a partial event body; an omitted body is not an empty original page.
 
 `activeCount` counts registered nonterminal receipts in the current connection
 generation. `detachedCount` counts registered nonterminal receipts left in an

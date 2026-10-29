@@ -1,4 +1,5 @@
 import { operationInventory } from './operation-experience.ts';
+import { withFactState } from './fact-state.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
@@ -30,7 +31,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   ConfigGroup, World, WorldHost, WorldConsoleDecl, WorldPanelDecl, WorldRequestFacts,
-  ExecutionReceipt, BlobInput, EventTag, StoragePart, ToolCallContext, ToolDef, ToolOutcome, TriggerMode,
+  ExecutionReceipt, BlobInput, EventTag, StoragePart, ToolCallContext, ToolDef, ToolOutcome, TriggerMode, FactPart,
 } from './support/host-contract.ts';
 import { MAP_SIZE, exploredShare, mapStateOf, renderMapPng } from './map-view.ts';
 import { selfDamageText, takeSelfDamage } from './damage-source.ts';
@@ -3499,7 +3500,7 @@ export class MinecraftWorld implements World {
     // state here, independently of that delivery cache; no 16-block scan.
     const snap = this.snapshot({ scanBlocks: false });
     if (!snap) return this.unavailableRequestFacts('snapshot-unavailable');
-    const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
+    const parts: FactPart[] = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
@@ -3523,11 +3524,13 @@ export class MinecraftWorld implements World {
         account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.cfg.memoryAgentId ?? this.botName }) });
       const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
       parts.unshift({ key: 'deathLifecycle', text: JSON.stringify(lifecycle ?? { phase: 'alive' }) });
-      if (lifecycle) parts.push({ key: 'recoveryState', text: JSON.stringify({
-        sampledAt: snap.realTime, episodeId: lifecycle.episodeId, dimension: normalizeDimension(snap.dimension),
-        position: snap.position, health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
-        inventory: snap.invSynced ? snap.inventory.slice(0, 40).map(item => ({ name: item.name, count: item.count })) : null,
-      }) });
+      if (lifecycle) {
+        const state = { episodeId: lifecycle.episodeId ?? null, dimension: normalizeDimension(snap.dimension),
+          position: { x: snap.position.x, y: snap.position.y, z: snap.position.z },
+          health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
+          inventory: snap.invSynced ? snap.inventory.slice(0, 40).map(item => ({ name: item.name, count: item.count })) : null };
+        parts.push(withFactState({ key: 'recoveryState', text: JSON.stringify({ sampledAt: snap.realTime, ...state }) }, state));
+      }
     }
     if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });

@@ -27,7 +27,11 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     import * as stdio from '../dist/types/src/mcp/stdio.js';
     import {createRelay} from '../dist/types/bridges/performance/relay.mjs';
     import * as extension from '../dist/types/src/extension.js';
-    import { readMinecraftKnowledge, KNOWLEDGE_TOOL } from '../dist/types/src/client/index.js';
+    import { readMinecraftKnowledge, KNOWLEDGE_TOOL, withFactState, type FactState } from '../dist/types/src/client/index.js';
+    import type { FactPart } from '../dist/types/src/contracts/index.js';
+    const semantic: FactState = { position: [1,64,2], mana: null, lastCastAt: 'dated' };
+    const dated: FactPart = withFactState({key:'state',text:'raw dated evidence'}, semantic);
+    void dated.stateRevision;
     const reference: Record<string, unknown> = readMinecraftKnowledge({action:'get',id:'food/beef'},'1.21.1');
     void reference; void KNOWLEDGE_TOOL;
     void mcp;void stdio;void createRelay;void extension;

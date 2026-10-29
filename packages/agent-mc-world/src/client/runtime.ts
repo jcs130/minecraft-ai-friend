@@ -328,7 +328,9 @@ export class MinecraftAgentClient {
       });
     } while (true);
     const page=this.journal.read(after,options.limit??64,options.run,options.includeArchived===true);
-    return {readout:{protocol:'agent-mc-event-read/v1' as const,returnedCount:page.events.length,execution:this.executionState()},...page};
+    return {readout:{protocol:'agent-mc-event-read/v1' as const,returnedCount:page.events.length,
+      cursor:{after,nextCursor:page.nextCursor,latestCursor:page.latestCursor,gap:page.gap,hasMore:page.hasMore},
+      execution:this.executionState()},...page};
   }
 
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
