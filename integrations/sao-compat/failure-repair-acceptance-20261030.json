@@ -1,0 +1,1483 @@
+{
+  "schemaVersion": 1,
+  "scope": "isolated_testing",
+  "observedAt": "2026-10-29T18:23:47.047297+00:00",
+  "autonomy": "0.2.130",
+  "core": "0.5.7-rc.130",
+  "checks": [
+    {
+      "name": "ordinary_wooden_sword_reports_weapon_requirement",
+      "passed": true
+    },
+    {
+      "name": "refused_sword_cast_does_not_consume_resource",
+      "passed": true
+    },
+    {
+      "name": "profession_cast_has_real_resource_cost",
+      "passed": true
+    },
+    {
+      "name": "profession_cast_has_actual_positive_cooldown",
+      "passed": true
+    },
+    {
+      "name": "cast_is_not_misreported_as_hit",
+      "passed": true
+    },
+    {
+      "name": "duplicate_request_returns_original_history",
+      "passed": true
+    },
+    {
+      "name": "busy_request_has_no_additional_resource_cost",
+      "passed": true
+    },
+    {
+      "name": "cooldown_expires_without_reset_or_grant",
+      "passed": true
+    },
+    {
+      "name": "probe_is_not_op",
+      "passed": true
+    },
+    {
+      "name": "online_model_selected_a_real_profession_cast",
+      "passed": true
+    },
+    {
+      "name": "model_milestone_completed_in_five_tool_calls",
+      "passed": true
+    },
+    {
+      "name": "native_plugin_messages_remain_bounded",
+      "passed": true
+    },
+    {
+      "name": "deployed_addon_matches_built_artifact",
+      "passed": true
+    },
+    {
+      "name": "canonical_build_source_matches_SaoRpg.java",
+      "passed": true
+    },
+    {
+      "name": "canonical_build_source_matches_CastEvidence.java",
+      "passed": true
+    }
+  ],
+  "passed": 15,
+  "release": {
+    "scope": "isolated_testing",
+    "observedAt": "2026-10-29T18:14:06.732512+00:00",
+    "backup": "E:\\MC\\research\\sao-0.76.1-agent-20261029\\backups\\cast-readiness-20261030-021353",
+    "oldSha256": "4f5273e1fac5fbed7edbb999d5889dd6c71a587da5c32687ebe65a58a438ee14",
+    "newSha256": "a7b5519c7c2a5af82c60f8ccc7233e0db28b6d5f1a5effbd78cba0ec38cac793",
+    "previousJvmExitCode": 0,
+    "body": "ag_Kirito",
+    "permissionsChanged": false
+  },
+  "nativeReceipts": [
+    {
+      "schemaVersion": 1,
+      "provider": "sao_native",
+      "operation": "sao.skill.cast",
+      "requestId": "repair-sword-20261030-1",
+      "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "serverEpoch": "5c13ed1b-528b-4676-961d-7223eea163bc",
+      "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+      "observedAt": "2026-10-29T18:16:54.781724300Z",
+      "readOnly": false,
+      "retryAutomatically": false,
+      "fingerprint": "76edb5906870c61eb8f3921e1c445dd3407f3a57297f4e60440b1a223ba5ba51",
+      "ok": false,
+      "status": "blocked",
+      "reason": "weapon_not_supported_for_sword_skill",
+      "outcomeKnown": true,
+      "changed": false,
+      "goalCompleted": false,
+      "data": {
+        "ok": false,
+        "reason": "weapon_not_supported_for_sword_skill",
+        "changed": false,
+        "before": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 100,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 0,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": true,
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        },
+        "after": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 100,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 0,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": true,
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        }
+      },
+      "inventorySlotScheme": "vanilla_player_menu_0_45",
+      "inventoryChanges": []
+    },
+    {
+      "schemaVersion": 1,
+      "provider": "sao_native",
+      "operation": "sao.skill.cast",
+      "requestId": "repair-profession-20261030-1",
+      "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "serverEpoch": "5c13ed1b-528b-4676-961d-7223eea163bc",
+      "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+      "observedAt": "2026-10-29T18:16:54.788733300Z",
+      "readOnly": false,
+      "retryAutomatically": false,
+      "fingerprint": "5a9fde637e477692b5941fdf0976bd7f1a7f1a0a10d92c1ca91f2070f6132a46",
+      "ok": true,
+      "status": "completed",
+      "reason": "cast_started_not_hit_confirmed",
+      "outcomeKnown": true,
+      "changed": true,
+      "goalCompleted": false,
+      "data": {
+        "ok": true,
+        "reason": "cast_started_not_hit_confirmed",
+        "changed": true,
+        "before": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 100,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 0,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": true,
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        },
+        "after": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 88,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 10000,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 4050,
+              "available": false,
+              "blockedReason": "native_cast_busy",
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        }
+      },
+      "inventorySlotScheme": "vanilla_player_menu_0_45",
+      "inventoryChanges": []
+    },
+    {
+      "schemaVersion": 1,
+      "provider": "sao_native",
+      "operation": "sao.skill.cast",
+      "requestId": "repair-profession-20261030-1",
+      "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "serverEpoch": "5c13ed1b-528b-4676-961d-7223eea163bc",
+      "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+      "observedAt": "2026-10-29T18:16:54.788733300Z",
+      "readOnly": false,
+      "retryAutomatically": false,
+      "fingerprint": "5a9fde637e477692b5941fdf0976bd7f1a7f1a0a10d92c1ca91f2070f6132a46",
+      "ok": true,
+      "status": "completed",
+      "reason": "cast_started_not_hit_confirmed",
+      "outcomeKnown": true,
+      "changed": true,
+      "goalCompleted": false,
+      "data": {
+        "ok": true,
+        "reason": "cast_started_not_hit_confirmed",
+        "changed": true,
+        "before": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 100,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 0,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": true,
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        },
+        "after": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 88,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 10000,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 4050,
+              "available": false,
+              "blockedReason": "native_cast_busy",
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        }
+      },
+      "inventorySlotScheme": "vanilla_player_menu_0_45",
+      "inventoryChanges": [],
+      "replayed": true,
+      "historical": true
+    },
+    {
+      "schemaVersion": 1,
+      "provider": "sao_native",
+      "operation": "sao.skill.cast",
+      "requestId": "repair-profession-20261030-busy",
+      "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "serverEpoch": "5c13ed1b-528b-4676-961d-7223eea163bc",
+      "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+      "observedAt": "2026-10-29T18:16:54.818767500Z",
+      "readOnly": false,
+      "retryAutomatically": false,
+      "fingerprint": "5a9fde637e477692b5941fdf0976bd7f1a7f1a0a10d92c1ca91f2070f6132a46",
+      "ok": false,
+      "status": "blocked",
+      "reason": "native_cast_busy",
+      "outcomeKnown": true,
+      "changed": false,
+      "goalCompleted": false,
+      "data": {
+        "ok": false,
+        "reason": "native_cast_busy",
+        "changed": false,
+        "before": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 89,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 9950,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 4000,
+              "available": false,
+              "blockedReason": "native_cast_busy",
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        },
+        "after": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 89,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 9950,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 4000,
+              "available": false,
+              "blockedReason": "native_cast_busy",
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        }
+      },
+      "inventorySlotScheme": "vanilla_player_menu_0_45",
+      "inventoryChanges": []
+    }
+  ],
+  "model": {
+    "provider": "online_tokenplan",
+    "model": "qwen3.7-plus",
+    "imageInput": false,
+    "goalRequestId": "8607abac-3efb-46be-b8a6-3aa76dc98d5d",
+    "operatorProvidedMilestone": true,
+    "providedSkillIdsOrCoordinates": false,
+    "toolCalls": 5,
+    "modelAndToolsSeconds": 24.524,
+    "nativeEffect": {
+      "schemaVersion": 1,
+      "provider": "sao_native",
+      "operation": "sao.skill.cast",
+      "requestId": "sao_d1df36f4d65f7b23ac753e43940e8db0f2edce23",
+      "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "serverEpoch": "5c13ed1b-528b-4676-961d-7223eea163bc",
+      "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+      "observedAt": "2026-10-29T18:18:41.912669700Z",
+      "readOnly": false,
+      "retryAutomatically": false,
+      "fingerprint": "5a9fde637e477692b5941fdf0976bd7f1a7f1a0a10d92c1ca91f2070f6132a46",
+      "ok": true,
+      "status": "completed",
+      "reason": "cast_started_not_hit_confirmed",
+      "outcomeKnown": true,
+      "changed": true,
+      "goalCompleted": false,
+      "data": {
+        "ok": true,
+        "reason": "cast_started_not_hit_confirmed",
+        "changed": true,
+        "before": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 100,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 0,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": true,
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        },
+        "after": {
+          "professionId": 1,
+          "professionName": "觉醒战士",
+          "level": 1,
+          "xp": 0,
+          "levelProgressPercent": 0,
+          "floor": 1,
+          "mana": {
+            "current": 0,
+            "max": 0
+          },
+          "nativeResource": {
+            "id": "stamina",
+            "current": 88,
+            "max": 100
+          },
+          "hydration": 100,
+          "switchCooldownRemainingMs": 0,
+          "combatCooldownRemainingMs": 10000,
+          "weaponStyle": -1,
+          "mainHandItem": "minecraft:wooden_sword",
+          "loadout": [
+            {
+              "kind": "sword",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "weapon_not_supported_for_sword_skill"
+            },
+            {
+              "kind": "sword",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement"
+            },
+            {
+              "kind": "profession",
+              "slot": 0,
+              "skill": 0,
+              "equipped": true,
+              "requiredLevel": 1,
+              "unlocked": true,
+              "cooldownRemainingMs": 4050,
+              "available": false,
+              "blockedReason": "native_cast_busy",
+              "name": "残暴连击"
+            },
+            {
+              "kind": "profession",
+              "slot": 1,
+              "skill": 1,
+              "equipped": true,
+              "requiredLevel": 5,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "凶猛重斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 2,
+              "skill": 4,
+              "equipped": true,
+              "requiredLevel": 20,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "血誓屏障"
+            },
+            {
+              "kind": "profession",
+              "slot": 3,
+              "skill": 5,
+              "equipped": true,
+              "requiredLevel": 30,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "level_requirement",
+              "name": "怒焰终斩"
+            },
+            {
+              "kind": "profession",
+              "slot": 4,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            },
+            {
+              "kind": "profession",
+              "slot": 5,
+              "skill": -1,
+              "equipped": false,
+              "requiredLevel": 0,
+              "unlocked": false,
+              "cooldownRemainingMs": 0,
+              "available": false,
+              "blockedReason": "slot_not_equipped"
+            }
+          ],
+          "talentPoints": 0,
+          "attributePoints": 0,
+          "attributeLevel": 1
+        }
+      },
+      "inventorySlotScheme": "vanilla_player_menu_0_45",
+      "inventoryChanges": []
+    },
+    "plannerReportVerified": false
+  },
+  "validation": {
+    "autonomy": {
+      "passed": 1728,
+      "skipped": 25,
+      "failed": 0,
+      "log": "analysis/failure-repair-full-pytest.log"
+    },
+    "node": {
+      "passed": 39,
+      "failed": 0
+    },
+    "plainJavaAssertions": 12,
+    "forgeBuild": "successful; Gradle NO-SOURCE not counted as tests",
+    "installedWheelConsumer": "passed with -I; source path not injected; network/model/game processes denied"
+  },
+  "windowsEncryption": {
+    "nativeAvailableInMaintenanceSession": false,
+    "winerror": 5,
+    "dotNetCurrentUserProtectAlsoDenied": true,
+    "credentialFileTestsUseAnExplicitFakeProtectionPort": true,
+    "nativeAdapterTestsCoverUserScopeWipeReleaseAndDenial": true,
+    "plaintextFallbackEnabled": false,
+    "machineScopeFallbackEnabled": false,
+    "limitation": "Test success does not restore Windows DPAPI access. Native credential saving remains safely rejected in this session."
+  },
+  "limits": [
+    "One ordinary player and one profession skill; not every weapon/breathing style/hit verified",
+    "Planner goal_report remains an unverified self-report; native before/after establish the recorded cast",
+    "Previously failed skill trace remains in the historical optimization report"
+  ],
+  "finalRuntime": {
+    "phase": "running",
+    "connected": true,
+    "autonomyRunning": true,
+    "sourceAndInstalledFilesMatch": true,
+    "composition": {
+      "scope": "isolated_testing",
+      "core": "0.5.7-rc.130",
+      "autonomy": "0.2.130",
+      "realm": "E:\\MC\\research\\sao-0.76.1-agent-20261029",
+      "body": "ag_Kirito",
+      "transport": "mineflayer_forge_native_registry",
+      "adapterFiles": {
+        "integrations\\sao-compat\\craft-fence.cjs": "bda0f8fd5276ba06b2ddd84df999540817a587e19738fb7bf50142da9f78df9d",
+        "integrations\\sao-compat\\forge_client.cjs": "3518b8eac4455d70fb119d1cd296730661abd0996a479e03fc0cbcd8059b3410",
+        "integrations\\sao-compat\\native_registry.cjs": "de31456416351695f08ef75abd8f3b51d6c3be57f785383fb6cf62c459c5d86b",
+        "integrations\\sao-compat\\protection-client.cjs": "57b7f874592fa763fe4c6dfd91bc84a8eca831cf95e59818d29a655256c2df86",
+        "integrations\\sao-compat\\sao_bot.cjs": "dfaa3a8113f6273534aab86538b15d1751da48f995f58b166bd96c15edc8d059",
+        "integrations\\sao-compat\\sao-engine.mjs": "86fba5ec89fff07aa0e54e67b3da3a339b6dafbb0eb8c6def1a4446d0c3fdee3",
+        "integrations\\tau-ceti\\native-bridge\\native-client.cjs": "2179cc02f40057bd9313abe00229dcab33790e87c2f8c7e4fde3d61561794449",
+        "integrations\\tau-ceti\\native-bridge\\operations.json": "627c2113bf6d06bae97b91ac77d2f5e7e64dd633fac2e121bae2913783779ff3",
+        "integrations\\sao-compat\\sao-client.cjs": "28560a55c63f1a43097b2405ca7072fd2fcc19c8dac6b93a46bd7bdca9b93b6b",
+        "integrations\\sao-compat\\sao-operations.json": "7f7f1615347744d2f2fe7a742954e35b3bdd16b54be1a05e2c6ef76567e69d12",
+        "integrations\\sao-compat\\sao-tools.cjs": "59b7236d1fb7ca41c324bcb10432e5e63fa0d6858b78487464dfdc639a76688b"
+      },
+      "engineSha256": "79d9060e27437d446b312c2a2c7454e8bb9b41730c2274348ce3edbc3b8d6bf9",
+      "modelKeyStored": false,
+      "paperMemoriesCopied": false,
+      "continuous": true,
+      "coreSourceRevision": "d38ff88ac262ca04a5a938ea4361cbe5f8b4abea",
+      "canonicalCoreSha256": "5a87ee19acfbc30315343b513e851cabc719bb95dd6a58b7555e68f9d7e36db3",
+      "automaticCraftAvailable": false,
+      "saoGameplay": "on_demand_v1",
+      "optimization": "typed_receipts_progressive_discovery_coordinate_contract_v1",
+      "autonomyWheelSha256": "a24caeb488461ae495a4c78dc3a10b7ae8de830d56b178062f0a343f359aa522",
+      "saoAddonSha256": "a7b5519c7c2a5af82c60f8ccc7233e0db28b6d5f1a5effbd78cba0ec38cac793"
+    }
+  }
+}

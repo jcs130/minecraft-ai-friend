@@ -1,3 +1,9 @@
+## 2026-10-30 SAO 施法与失败测试已修复（系统DPAPI拒绝仍保留）
+
+仅SAO回环实验服：旧JVM存档退出0并完整冷备世界/配置/账本后发布自有组件a7b5519c…38cac793，其他服/网络/权限不变。普通木剑不是原生SAO剑技武器；修正weaponStyle/mainHandItem/available/blockedReason、剑技cd<风格>_<技能>字段和职业名，不给已知不可用槽位castRequest。仅资源减少/准确冷却增加/施法活动启动作为发动证据，不能用无关NBT变化冒称成功；原生条件保持。同一非OP桐人职业“残暴连击”100→88、实际4050ms，原ID去重和busy拒绝已验；线上qwen3.7-plus 5调用/24.524秒完成同一里程碑，非命中/击杀证明。原48次失败历史保留，不重放旧探针请求。
+
+自主已安装0.2.130（core仍rc.130）：全量1728通过/25跳过/0失败，原6失败未改成跳过；2长路径测试正确创建/篡改扩展路径夹具，4凭据文件单测隔离宿主加密，另覆盖用户作用域、内存擦除/释放、拒绝不落盘。39 Node、12纯Java断言、15实机/部署核验及正式wheel -I消费者通过。真实Windows CryptProtectData及.NET CurrentUser Protect仍拒绝访问错误5，新增安全错误码windows_dpapi_error_5，绝无明文/机器作用域回退；测试转绿不等于系统DPAPI可用。桐人恢复在线，世界/记忆/原动作保留；特殊武器流派、完整战斗/全配方仍有限制。见integrations/sao-compat/FAILURE_REPAIR.md、failure-repair-acceptance-20261030.json。
+
 ## 2026-10-30 SAO 桐人工具调用优化已发布到隔离运行目录
 
 通用自主框架0.2.129（执行core仍rc.130）修复同步读成功后旧schema错误滞留、长回执丢失原生data；成功帮助/显式只读后最多开放4项已请求schema，旧mc_invoke兼容；补回坐标说明与find初始命中不必行走的语义，新增运行计数但goal_verified始终false。SAO工具读结果在data.response、写结果仍data.serverReceipt，原插件/SDK消息与动作队列未改；任务筛选/续页、未知ID恢复、已解锁槽位castRequest均是可选请求，不自动执行，不保证可用。仅回环实验39676/39689，原Paper/Tau/JVM/权限/网络/Watchdog不变。正式wheel私有安装/源码哈希/独立消费者已验；自主全量1719通过/25跳过/6项既有Windows长路径与DPAPI环境失败（原上游已复现），SAO39 Node+3 Python及6子项通过，26历史原生回执只读复核。

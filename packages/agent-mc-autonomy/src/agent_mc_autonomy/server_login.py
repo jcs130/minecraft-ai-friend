@@ -10,6 +10,13 @@ from pathlib import Path
 from .filesystem import verification_path
 
 
+class CredentialProtectionError(ValueError):
+    """Sanitized native failure; never fall back to a weaker credential format."""
+    def __init__(self, winerror):
+        self.winerror = winerror
+        super().__init__(f'login_credential_write_failed: windows_dpapi_error_{winerror}')
+
+
 def _protect(value: bytes) -> bytes:
     """Use the current Windows user's DPAPI; the core already reads this format."""
     import ctypes
@@ -29,7 +36,7 @@ def _protect(value: bytes) -> bytes:
     source, result = Blob(len(value), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte))), Blob()
     try:
         if not crypt.CryptProtectData(ctypes.byref(source), None, None, None, None, 1, ctypes.byref(result)):
-            raise ValueError('login_credential_write_failed')
+            raise CredentialProtectionError(ctypes.get_last_error())
         return ctypes.string_at(result.data, result.size)
     finally:
         ctypes.memset(buffer, 0, len(buffer))

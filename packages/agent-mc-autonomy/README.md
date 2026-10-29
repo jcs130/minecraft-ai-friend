@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+Version 0.2.130 fixes long-path test setup on legacy Windows hosts and separates
+credential-file unit tests from the host's DPAPI policy. Native adapter tests
+cover user-scoped flags, buffer wiping, native memory release and denial without
+credential files. Production DPAPI errors now preserve a sanitized Windows error
+code and still fail closed; encryption availability is not inferred from tests.
+
 Version 0.2.129 preserves typed native results in bounded receipt previews,
 resolves a corrected call's old pre-dispatch schema rejection, and exposes up to
 four advanced schemas after explicit help or a successful requested read. Existing

@@ -87,7 +87,7 @@ mode = "local"
     if configfile.exists():raise FileExistsError('keep_existing_kirito_configuration')
     configfile.write_text(config,encoding='utf-8')
     shutil.copyfile(here/'KIRITO_GOAL.txt',runtime/'goal.txt')
-    (runtime/'composition.json').write_text(json.dumps({'scope':'isolated_testing','core':'0.5.7-rc.130','autonomy':'0.2.129','realm':str(root),'body':'ag_Kirito','transport':'mineflayer_forge_native_registry','adapterFiles':hashes,'engineSha256':sha,'modelKeyStored':False,'paperMemoriesCopied':False},indent=2),encoding='utf-8')
+    (runtime/'composition.json').write_text(json.dumps({'scope':'isolated_testing','core':'0.5.7-rc.130','autonomy':'0.2.130','realm':str(root),'body':'ag_Kirito','transport':'mineflayer_forge_native_registry','adapterFiles':hashes,'engineSha256':sha,'modelKeyStored':False,'paperMemoriesCopied':False},indent=2),encoding='utf-8')
     print(json.dumps({'runtime':str(runtime),'core':'0.5.7-rc.130','body':'ag_Kirito','credentialsStored':False}))
 
 if __name__=='__main__':

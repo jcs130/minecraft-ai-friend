@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from agent_mc_autonomy.core_distribution import install
+from agent_mc_autonomy.filesystem import verification_path
 
 
 def runtime_fixture(tmp_path, monkeypatch, *, long_file=False):
@@ -17,10 +18,10 @@ def runtime_fixture(tmp_path, monkeypatch, *, long_file=False):
     manifest.write_text(json.dumps({"name": install.SOURCE["name"], "version": install.SOURCE["version"]}), encoding="utf-8")
     relative = "dist/runtime/" + ("nested-source-segment/" * 10 if long_file else "") + "entry.js"
     code = root / relative
-    code.parent.mkdir(parents=True, exist_ok=True)
-    code.write_bytes(b"export const actual = 1;\n")
+    verification_path(code).parent.mkdir(parents=True, exist_ok=True)
+    verification_path(code).write_bytes(b"export const actual = 1;\n")
     receipt = {"schema": "agent-mc-build/v1", "viewer": {"included": False}, "sourceFiles": [],
-               "files": [{"file": relative, "sha256": hashlib.sha256(code.read_bytes()).hexdigest()}]}
+               "files": [{"file": relative, "sha256": hashlib.sha256(verification_path(code).read_bytes()).hexdigest()}]}
     (root / "dist/build.json").write_text(json.dumps(receipt), encoding="utf-8")
     (root / "dist/types").mkdir()
     (root / "dist/types/manifest.json").write_text('{"files":[]}', encoding="utf-8")
@@ -47,7 +48,7 @@ def test_present_long_build_file_does_not_depend_on_hosts_long_path_manifest(tmp
     monkeypatch.setattr(type(code), "is_file", legacy_is_file)
     assert not code.is_file()
     assert install.verify_runtime(directory) == install.runtime_entry(directory)
-    code.write_bytes(b"tampered")
+    verification_path(code).write_bytes(b"tampered")
     with pytest.raises(ValueError, match="backend_build_mismatch"):
         install.verify_runtime(directory)
 

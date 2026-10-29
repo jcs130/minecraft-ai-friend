@@ -15,6 +15,12 @@ readline.createInterface({input:process.stdin,terminal:false}).on('line',line=>{
  if(q.op==='quit'){bot.quit('gameplay acceptance complete');setTimeout(()=>process.exit(0),1000).unref();return}
  if(q.op==='read')return record(q.operation,await port.read(q.operation,q.arguments??{}))
  if(q.op==='snapshot')return record('snapshot',await bot.native.snapshot())
+ if(q.op==='equip'){
+  const item=bot.inventory.items().find(item=>item.name===q.item||'minecraft:'+item.name===q.item)
+  if(!item)throw Error('observed_inventory_item_required')
+  await bot.equip(item,'hand');await bot.waitForTicks(2)
+  return record('equip',{item:bot.heldItem?.name,slot:bot.heldItem?.slot})
+ }
  if(q.op==='mutate'){
   const prepared=await port.prepare(q.operation,q.arguments??{},q.requestId)
   bot.chat(prepared.command) // Probe only: production EngineWorld uses its existing mc_do queue.

@@ -2,7 +2,7 @@
 
 任务、职业与技能采用按需查询接口 `mc_sao`；不预装整本任务书进上下文。原生提交/领奖、职业及技能接入方法与边界见 [GAMEPLAY.md](GAMEPLAY.md)。
 
-后续已启用桐人 `ag_Kirito`：自研 autonomy 0.2.129 + core rc.130，经 Mineflayer/Forge 原生桥接，由线上 qwen3.7-plus 驱动。已实际采集 4 个橡木原木，并通过原生任务领取、装备初心者之剑。调用优化与实际结果见 [OPTIMIZATION.md](OPTIMIZATION.md)。运行、停止、记忆及已知缺口见 [KIRITO.md](KIRITO.md)；建筑保护和真实村庄验收见 [PROTECTION.md](PROTECTION.md)。隔离性质与原端口保持。
+后续已启用桐人 `ag_Kirito`：自研 autonomy 0.2.130 + core rc.130，经 Mineflayer/Forge 原生桥接，由线上 qwen3.7-plus 驱动。已实际采木、领取并装备初心者之剑、领取食物，并发动职业技能；普通木剑不支持原生剑技，接口现已准确表达。调用优化见 [OPTIMIZATION.md](OPTIMIZATION.md)，施法和失败测试修复见 [FAILURE_REPAIR.md](FAILURE_REPAIR.md)。运行、停止、记忆及已知缺口见 [KIRITO.md](KIRITO.md)；建筑保护和真实村庄验收见 [PROTECTION.md](PROTECTION.md)。隔离性质与原端口保持。
 
 2026-10-29 的实验候选。现役 Paper 与 Tau 1.21.1 的目录、进程、网关、防火墙、端口转发和自动启动保持原状。本目录不包含世界、模型密钥或第三方模组二进制。
 

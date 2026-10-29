@@ -326,6 +326,7 @@ def test_extracted_source_prefers_short_cache_with_full_hash_identity(bundle, tm
 
 def test_bundle_verification_does_not_require_hosts_long_path_manifest(bundle, monkeypatch):
     import os
+    from agent_mc_autonomy.filesystem import verification_path
     # bundle mocks sys.platform to exercise portable manifest validation. The
     # extended filesystem syntax itself still requires real Windows paths.
     if os.name != "nt":
@@ -333,9 +334,9 @@ def test_bundle_verification_does_not_require_hosts_long_path_manifest(bundle, m
     root, manifest, _ = bundle
     relative = "assets/" + "nested-resource-segment/" * 10 + "actual.bin"
     target = root / relative
-    target.parent.mkdir(parents=True)
-    target.write_bytes(b"complete recipient resource")
-    manifest["files"][relative] = {"bytes": target.stat().st_size, "sha256": m.digest(target)}
+    verification_path(target).parent.mkdir(parents=True)
+    verification_path(target).write_bytes(b"complete recipient resource")
+    manifest["files"][relative] = {"bytes": verification_path(target).stat().st_size, "sha256": m.digest(target)}
     update(root, manifest)
     assert len(str(target)) > 260
     original_lstat, original_open = Path.lstat, Path.open
@@ -355,7 +356,7 @@ def test_bundle_verification_does_not_require_hosts_long_path_manifest(bundle, m
     monkeypatch.setattr(Path, "lstat", legacy_lstat)
     monkeypatch.setattr(Path, "open", legacy_open)
     assert m.verify_bundle(root)["integrityVerified"] is True
-    with original_open(target, "wb") as stream:
+    with original_open(verification_path(target), "wb") as stream:
         stream.write(b"tampered")
     with pytest.raises(m.BundleError, match="file_hash_mismatch"):
         m.verify_bundle(root)

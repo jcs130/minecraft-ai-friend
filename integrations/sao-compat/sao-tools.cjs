@@ -15,7 +15,7 @@ function navigable(reply,input={}){
  if(!reply.data||reply.complete===false)return reply
  const out=structuredClone(reply),d=out.data
  if(reply.operation==='sao.status'){
-  for(const row of d.loadout??[])if(row.equipped===true&&row.unlocked===true&&['sword','profession'].includes(row.kind)&&Number.isInteger(row.slot)&&row.slot>=0&&row.slot<(row.kind==='sword'?2:6)){
+  for(const row of d.loadout??[])if(row.equipped===true&&row.unlocked===true&&row.available!==false&&['sword','profession'].includes(row.kind)&&Number.isInteger(row.slot)&&row.slot>=0&&row.slot<(row.kind==='sword'?2:6)){
    row.castRequest=link('sao.skill.cast',{kind:row.kind,slot:row.slot})
    row.castHelp=link('help',{operation:'sao.skill.cast'})
    row.requestIsNotAvailabilityGuarantee=true

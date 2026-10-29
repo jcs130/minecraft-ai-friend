@@ -15,6 +15,21 @@ final class SaoRpg {
     static int role(ServerPlayer p){return number(call(professions(),"role",p));}
     static int level(ServerPlayer p){return number(call(player(),"level",p));}
     static int style(ServerPlayer p){return number(call(type(BASE+"Combat"),"style",p));}
+    static int cooldown(CompoundTag t, boolean profession, int role, int style, int skill){
+        String key=profession&&role>0?(String)call(professions(),"cd",role,skill):CastEvidence.swordCooldownKey(style,skill);
+        return Math.max(0,t.getInt(key));
+    }
+    static int activity(CompoundTag t,boolean profession){
+        return profession?t.getInt("professionBusy"):Math.max(t.getInt("windup"),Math.max(t.getInt("hitsLeft"),t.getInt("recovery")));
+    }
+    static String castGate(ServerPlayer p,boolean profession,int skill){
+        var t=data(p);int weapon=style(p),role=role(p);
+        boolean busy=t.getInt("professionBusy")>0||t.getInt("windup")>0||t.getInt("hitsLeft")>0||t.getInt("recovery")>0
+            ||t.getBoolean("elementalActive")||(profession&&t.getBoolean("voidActive"))||yes(call(type(BASE+"BreathMoves"),"busy",p));
+        boolean breathing=profession&&yes(call(type(BASE+"Combat"),"isBreathing",p));
+        return CastEvidence.gate(yes(call(field(type(BASE+"SaoConfig"),"COMBAT"),"get")),p.isAlive(),p.isSpectator(),
+            yes(call(type(BASE+"SocialSystem"),"downed",p)),profession,breathing?1:role,weapon,busy,cooldown(t,profession,role,weapon,skill));
+    }
     static int need(ServerPlayer p,boolean profession,int skill){
         CompoundTag copy=data(p).copy();copy.putInt("level",level(p));var rules=type("local.sao.gameplay.ProgressionRules");
         call(rules,"metadata",copy);return number(call(rules,"clientNeed",copy,profession,skill));
@@ -31,12 +46,17 @@ final class SaoRpg {
         var resource=new JsonObject();resource.addProperty("id",(String)call(player(),"activeResource",p));resource.addProperty("current",number(call(player(),"resource",p)));resource.addProperty("max",number(call(player(),"maxResource",p)));out.add("nativeResource",resource);
         out.addProperty("hydration",t.getInt("hydration"));out.addProperty("switchCooldownRemainingMs",Math.max(0,t.getInt("cdProfessionSwitch"))*50L);
         out.addProperty("combatCooldownRemainingMs",Math.max(0,t.getInt("cdProfessionCombat"))*50L);
+        int weaponStyle=style(p);out.addProperty("weaponStyle",weaponStyle);
+        out.addProperty("mainHandItem",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).toString());
         var loadout=new JsonArray();for(boolean profession:new boolean[]{false,true})for(int slot=0;slot<(profession?6:2);slot++){
             int skill=number(call(type(BASE+"SkillLoadout"),"get",t,style(p),profession,slot));
             var row=new JsonObject();row.addProperty("kind",profession?"profession":"sword");row.addProperty("slot",slot);row.addProperty("skill",skill);
             row.addProperty("equipped",skill>=0);row.addProperty("requiredLevel",need(p,profession,skill));row.addProperty("unlocked",skill>=0&&level(p)>=need(p,profession,skill));
-            String cd=profession&&r>0?(String)call(professions(),"cd",r,skill):"cd"+skill;
-            row.addProperty("cooldownRemainingMs",Math.max(0,t.getInt(cd))*50L);loadout.add(row);
+            row.addProperty("cooldownRemainingMs",skill>=0?cooldown(t,profession,r,weaponStyle,skill)*50L:0);
+            String blocked=skill<0?"slot_not_equipped":level(p)<need(p,profession,skill)?"level_requirement":castGate(p,profession,skill);
+            row.addProperty("available",blocked==null);if(blocked!=null)row.addProperty("blockedReason",blocked);
+            if(profession&&r>0&&skill>=0&&skill<6)row.addProperty("name",((String[][])field(professions(),"SKILLS"))[r-1][skill]);
+            loadout.add(row);
         }out.add("loadout",loadout);
         out.addProperty("talentPoints",number(call(type("local.sao.talents.TalentData"),"available",p)));
         out.addProperty("attributePoints",number(call(type("local.sao.points.PointsData"),"available",p)));
@@ -80,7 +100,18 @@ final class SaoRpg {
         switch(op){
             case "sao.profession.choose"->{int r=args.get("profession_id").getAsInt();if(!yes(call(professions(),"valid",r)))throw new IllegalArgumentException("profession_not_installed");if(role(p)==r){success=true;reason="already_selected";}else{action(p,5,r);success=role(p)==r;if(success)reason="profession_selected";else if(data(p).getInt("cdProfessionSwitch")>0||data(p).getInt("cdProfessionCombat")>0)reason="combat_or_switch_cooldown";else if(!yes(call(player(),"has",p,"profession_switch_scroll",1)))reason="profession_switch_scroll_required";}}
             case "sao.loadout.bind"->{boolean profession=args.get("kind").getAsString().equals("profession");int slot=args.get("slot").getAsInt(),skill=args.get("skill").getAsInt();if(slot>=(profession?6:2)||skill>=(profession?6:4))throw new IllegalArgumentException("loadout_slot_or_skill_out_of_range");action(p,profession?9:8,slot*(profession?6:4)+skill);success=number(call(type(BASE+"SkillLoadout"),"get",data(p),style(p),profession,slot))==skill;reason=success?"bound":"native_binding_refused";}
-            case "sao.skill.cast"->{boolean profession=args.get("kind").getAsString().equals("profession");int slot=args.get("slot").getAsInt();if(slot>=(profession?6:2))throw new IllegalArgumentException("loadout_slot_out_of_range");int skill=number(call(type(BASE+"SkillLoadout"),"get",data(p),style(p),profession,slot));if(skill<0){reason="slot_not_equipped";break;}if(level(p)<need(p,profession,skill)){reason="level_requirement";break;}var old=data(p).copy();action(p,profession?11:10,slot);success=!old.equals(data(p));reason=success?"cast_started_not_hit_confirmed":"native_cast_refused_check_resource_cooldown_and_target";}
+            case "sao.skill.cast"->{
+                boolean profession=args.get("kind").getAsString().equals("profession");int slot=args.get("slot").getAsInt();
+                if(slot>=(profession?6:2))throw new IllegalArgumentException("loadout_slot_out_of_range");
+                int skill=number(call(type(BASE+"SkillLoadout"),"get",data(p),style(p),profession,slot));
+                if(skill<0){reason="slot_not_equipped";break;}
+                if(level(p)<need(p,profession,skill)){reason="level_requirement";break;}
+                String blocked=castGate(p,profession,skill);if(blocked!=null){reason=blocked;break;}
+                int oldResource=number(call(player(),"resource",p)),oldCd=cooldown(data(p),profession,role(p),style(p),skill),oldActivity=activity(data(p),profession);
+                action(p,profession?11:10,slot);
+                success=CastEvidence.started(oldResource,number(call(player(),"resource",p)),oldCd,cooldown(data(p),profession,role(p),style(p),skill),oldActivity,activity(data(p),profession));
+                reason=success?"cast_started_not_hit_confirmed":"native_cast_refused_check_resource_cooldown_and_target";
+            }
             case "sao.talent.buy","sao.talent.refund"->{int node=args.get("node").getAsInt();Object[] values=(Object[])call(type("local.sao.talents.Talent"),"values");if(node>=values.length)throw new IllegalArgumentException("talent_node_out_of_range");int[] was=(int[])call(type("local.sao.talents.TalentData"),"ranks",p);String message=(String)call(type("local.sao.talents.TalentData"),op.endsWith(".buy")?"buy":"refund",p,node);call(type("local.sao.talents.TalentNetwork"),"sync",p);int[] now=(int[])call(type("local.sao.talents.TalentData"),"ranks",p);success=was[node]!=now[node];reason=success?"talent_updated":message;}
             case "sao.attribute.buy","sao.attribute.refund"->{int node=args.get("node").getAsInt();Object[] values=(Object[])call(type("local.sao.points.Stat"),"values");if(node>=values.length)throw new IllegalArgumentException("attribute_node_out_of_range");success=yes(call(type("local.sao.points.PointsData"),op.endsWith(".buy")?"allocate":"refund",p,values[node]));reason=success?"attribute_updated":"native_attribute_refused_check_points_profession_and_combat";}
             default->throw new IllegalArgumentException("unsupported_rpg_operation");

@@ -44,6 +44,8 @@ FTB 任务通常在满足前置后自动可做，没有人工制造的“已接�
 
 `sao.status` 仅为本人已经装备且解锁的槽位提供 `castRequest` 和单项 `castHelp`，带真实的 `kind/slot` 参数。冷却读数保留，`requestIsNotAvailabilityGuarantee=true` 明确链接不是可施放保证；资源、目标、原生风格等门禁仍在执行时检查。没有自动绑定、施法或消耗。
 
+后续施法修复加入 `weaponStyle/mainHandItem` 和每槽的已知前提 `available/blockedReason`。已明确不可用的槽位不提供 `castRequest`；职业名称来自原生数据，普通木剑不支持剑技的事实不会被“已解锁”覆盖。实际冷却按武器风格和技能读取，发动证据与命中分开。详见 [FAILURE_REPAIR.md](FAILURE_REPAIR.md)。
+
 这些是工具展示层的兼容改动，原始插件消息、SDK `read()`、服务端回执格式和动作 ID 未改。旧的文本回执证据仍可由 `record_gameplay_acceptance.py` 读取；直接消费当前 ToolOutcome 的程序应读 `data.response`，不能继续对简短 `text` 做 JSON 解码。
 
 ## 重连对账
