@@ -226,7 +226,7 @@ final class AgentCliCatalog {
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
-        add(specs,"arena.status","adventure","read","/mycli arena status [--json|--verbose]","查询当前入场缺项或战斗下一步；默认短文本","只读；入口传送6魔力，开场免费，直达驿站8魔力；不要求另找第2层入口","MC_TRIAL_STATE；显式JSON/verbose兼容MC_DUNGEON status及救援字段");
+        add(specs,"arena.status","adventure","read","/mycli arena status [--json|--verbose]","查询当前入场缺项或战斗下一步；默认短文本","每次start从第1层开始，历史通关不自动跳层；清层自动下楼。传送6魔力、开场免费，已解锁驿站rest需8魔力","MC_TRIAL_STATE；显式JSON/verbose兼容MC_DUNGEON status及救援字段");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
         add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查当前房间、存档点、剩余机会、占用或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认当前一步及剩余机会；--json含真实状态和凭据；完整旧结果用--verbose");

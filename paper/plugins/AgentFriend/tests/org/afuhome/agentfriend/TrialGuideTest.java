@@ -14,6 +14,8 @@ public final class TrialGuideTest {
         check(TrialGuide.next(facts("busy")).get("nextCommand").equals("/mycli dungeon list"),"busy chooses alternative");
         check(TrialGuide.next(facts("dead")).get("reason").equals("actor_unavailable"),"dead cannot be ready");
         check(TrialGuide.route().contains("从第1层")&&!TrialGuide.route().contains("各有8"),"accurate tower route");
+        check(ready.get("nextAction").toString().contains("每次新开从第1层开始")&&ready.get("nextAction").toString().contains("历史通关不自动跳层"),"repeat start cannot be mistaken for automatic checkpoint resume");
+        check(TrialGuide.route().contains("每次新开从第1层开始")&&TrialGuide.route().contains("已解锁第7层驿站"),"ordinary start distinguished from unlocked rest entry");
         for(var goal:GuildManager.Goal.values())check(TrialGuide.goal(goal)==Set.of("FLOOR","PARTY_FLOOR","FAST_FLOOR","NO_DEATH","LIGHT_FLOOR","STONE_FLOOR","WITCH_KILLS","CLAIMS").contains(goal.name()),"goal "+goal);
         System.out.println("TrialGuideTest: "+checks+" passed");
     }

@@ -43,7 +43,7 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·试炼塔
-    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>召集10分钟，可单人或结伴；主世界world（-596,92,-313）。/mycli goto arena（6魔力）到入口，穿齐四甲、带武器；伙伴到按钮12格内，一人 /mycli arena start（免费）。从第1层起，清层自动下楼；/mycli arena status 查实际下一步。活动不自动报名。</gray>'
+    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>召集10分钟，可单人或结伴；主世界world（-596,92,-313）。/mycli goto arena（6魔力）到入口，穿齐四甲、带武器；伙伴到按钮12格内，一人 /mycli arena start（免费）。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。/mycli arena status 查下一步，活动不自动报名。</gray>'
     symbol: ⚔
     weight: 45
     bossbar-color: BLUE

@@ -47,6 +47,7 @@ try{
   }
   const intro=json(await ask(alice,'/mycli intro --json','MC_INTRO '));check(intro.guide.reason==='guild_task_active'&&intro.guide.nextCommand==='/mycli goto arena','intro exposes exact trial route for old guild objective');
   check(!intro.activityGuide.some(s=>s.includes('各有8魔力'))&&intro.activityGuide.some(s=>s.includes('开场免费')),'intro corrects the old cost misinformation');
+  check(intro.activityGuide.some(s=>s.includes('每次新开从第1层开始')&&s.includes('历史通关不自动跳层')),'real intro states every ordinary run restarts at floor one');
   const far=json(await ask(alice,'/mycli arena status --json','MC_TRIAL_STATE '));check(far.reason==='reach_trial_entrance'&&far.worldUuid&&far.worldKey&&far.entryMana===0,'trial state has real world identity and actual fees');
   await pause(1000);let from=alice.received.length;await send(alice,'/mycli arena status');await pause(500);check(alice.received.slice(from).filter(s=>s.startsWith('[试炼')).length===2&&!alice.received.slice(from).some(s=>s.startsWith('MC_TRIAL_STATE '))&&alice.received.slice(from).some(s=>s.includes('/mycli goto arena')),'default trial status is concise actionable text');
   from=alice.received.length;await send(alice,'/mycli arena start --json');await pause(500);check(alice.received.slice(from).some(s=>s.includes('invalid_argument'))&&!(await state(alice)).active,'unsupported start flags rejected before mutation');

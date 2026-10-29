@@ -50,5 +50,5 @@ steps:
     message: 先 /mycli profession list 选择职业，再 skills list / skills info <ID> 查本人技能。职业初始主动技可直接cast；prepare设置点击技能，learn仅按详情花点学节点，通用能力无需重学。
 release-revision: 8
 release-notice:
-- '[攻略更新] 试炼塔请用 /mycli arena status；/mycli goto arena 前往入口（6魔力），穿甲带武器、伙伴靠近按钮12格，一人arena start，开场免费、清层自动下楼。旧公会单查guild status，新RPG任务查tasks status。'
+- '[攻略更新] 试炼塔先 /mycli arena status；goto arena前往（6魔力），穿甲带武器、伙伴到按钮12格，一人arena start免费开场。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。旧公会单guild status，新RPG任务tasks status。'
 - '[玩法目录] /mycli world list 分页查职业、技能、组队、遗迹、交易、个人箱、NPC、照片、日记、外观和语音；/mycli world events 查随机集结。活动自主参加，不自动开场或领奖。'

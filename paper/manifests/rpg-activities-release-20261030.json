@@ -6,28 +6,28 @@
   "includesPriorReview": "d15f55686f3c34cd9c0e4e7bfda83c506a38f93a",
   "artifacts": {
     "agent-guide.yml": {
-      "sha256": "2fc7b190e11cbc8a204cb8feb17d51d103a0244b9244c749bc502a33201e8b44",
-      "bytes": 3051
+      "sha256": "98603047372de0f1e2d740c24a2add073688901ebbdaa7a7de07fc82ea091810",
+      "bytes": 3092
     },
     "AgentFriend-0.4.47.32.jar": {
-      "sha256": "3bb2e3d8a442ef97b574f2fe7e877f0f5d9c83936799536b06741036b708d0da",
-      "bytes": 15472219
+      "sha256": "b0249c75fe62e5d0dafbbe730f98aaf328e44789fb8fdc59934e7f82ba848374",
+      "bytes": 15472428
     },
     "messages_zh.properties": {
       "sha256": "af162c4b2e06d5428af683f0fe6152eef60a6d14d569f24120fa14d747dd0847",
       "bytes": 299
     },
     "onboarding.yml": {
-      "sha256": "e253c9234ba25dcdc18bb4bea859d874246574a6b6039361c17966476fbf130a",
-      "bytes": 3980
+      "sha256": "00bf2da76126226b17cf61f281f6b430153eb15f9dd5fdee7b90eff603251218",
+      "bytes": 4012
     },
     "qiandengji.yml": {
-      "sha256": "9f000a3bf1ff7825bacb70bae83cfb5a9b7b1754fae2b6415dbef72b83e1487a",
-      "bytes": 3273
+      "sha256": "ec6405f184e8b99b69a8b42c8b2f2048374ac4aada82cc18c1c718a6c7a35e6b",
+      "bytes": 3312
     },
     "QiandengjiRpg-0.2.12.jar": {
-      "sha256": "b8c79a0914f42e119203f50cf406ed4d30b80900ee4fb0d98caa677dc561f881",
-      "bytes": 114283
+      "sha256": "b019698d7b60b9dc1500e743beb52f3db2590a7a1d9e980563a6a0fe4c14be0a",
+      "bytes": 114352
     },
     "VortexRPG-1.2.2-alpha-qd30.jar": {
       "sha256": "9437787768e54b4a10b04702ecbc1001088c57c51aed461ecadf7dcd882f001a",
@@ -41,15 +41,16 @@
     "plugins": 52
   },
   "verification": {
-    "pureRuleChecks": 788,
+    "pureRuleChecks": 790,
     "nativeProfileChecks": 14,
-    "realPaperTrialAndColdChecks": 51,
+    "realPaperTrialAndColdChecks": 52,
     "deploymentBoundaryChecks": 36,
     "realCrossVolumeInstallChecks": 11,
     "nativeBuildCliEquivalentEntries": true,
     "productionModified": false,
     "combatFixture": "Native enemies frozen/repositioned in disposable QA; real player attacks and callbacks, not autonomous combat balance.",
-    "realPaperCommunicationSkillAndTaskChecks": 73
+    "realPaperCommunicationSkillAndTaskChecks": 73,
+    "repeatStartNoticeChecks": 2
   },
   "scope": [
     "18 existing gameplay categories in paged world list",
@@ -73,5 +74,6 @@
     "native Intel camera",
     "human voice listening/Bedrock pixels"
   ],
-  "releaseDocument": "paper/docs/RPG_ACTIVITIES_20261030.md"
+  "releaseDocument": "paper/docs/RPG_ACTIVITIES_20261030.md",
+  "normalTrialRule": "Every ordinary arena start begins at floor 1; old clears do not skip floors. Unlocked arena rest is separate."
 }

@@ -99,7 +99,7 @@ final class TrialEntranceControls {
             b.addProperty("command", "/mycli arena difficulty " + c.id()); buttons.add(b);
         }
         out.add("buttons", buttons);
-        sender.sendMessage("试炼塔：主世界world（-596,92,-313）；普通绿、冒险橙、末日紫。/mycli goto arena 前往（6魔力）；穿齐护甲、带武器、伙伴到按钮12格内，一人 /mycli arena start，开场免费。按实体按钮不是必需步骤。");
+        sender.sendMessage("试炼塔：主世界world（-596,92,-313）；普通绿、冒险橙、末日紫。/mycli goto arena 前往（6魔力）；穿齐护甲、带武器、伙伴到按钮12格内，一人 /mycli arena start，开场免费。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。按实体按钮不是必需步骤。");
         if(json)sender.sendMessage("MC_TRIAL_BUTTONS " + out);
     }
     boolean handleInteract(PlayerInteractEvent event) {
@@ -113,7 +113,7 @@ final class TrialEntranceControls {
                 return true;
             }
             plugin.dungeon().command(p, new String[]{"arena", "difficulty", c.id()});
-            p.sendMessage("§e已按下「" + c.label() + "」按钮。请核对队友和难度，再点「开始" + c.label() + "试炼」。");
+            p.sendMessage("§e已选择「" + c.label() + "」；每次新开从第1层开始，历史通关不自动跳层，清层自动下楼。请核对队友，再点「开始" + c.label() + "试炼」。");
             // Open after other native interaction listeners (including backpack items).
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (p.isOnline()) plugin.openDungeonDifficultyMenu(p);

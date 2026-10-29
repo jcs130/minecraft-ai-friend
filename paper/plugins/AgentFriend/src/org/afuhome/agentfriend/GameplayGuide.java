@@ -20,7 +20,7 @@ final class GameplayGuide {
         add(out,"profession","六职业与升级","/mycli profession list",rpg,"定位、装备和成长查info；当前不开放换职");
         add(out,"skills","技能与天赋","/mycli skills list",rpg,"按info看目标、费用、学习点；完整洗点未开放");
         add(out,"quests","RPG任务","/mycli tasks list",rpg,"info→accept→实际行动→claim；放弃用abandon <ID>");
-        add(out,"trial","结伴试炼塔","/mycli arena status",trialBuilt,"单人或结伴，从第1层起；清层自动下楼；不是遗迹入口");
+        add(out,"trial","结伴试炼塔","/mycli arena status",trialBuilt,"每次新开从第1层开始，历史通关不自动跳层；清层自动下楼；不是遗迹入口");
         add(out,"dungeons","遗迹与攻略Boss","/mycli dungeon list",enabled.contains("AgentFriend"),"按info核对难度、装备和职业搭配；占用或故障时换目标");
         add(out,"party","组队协作","/mycli guild party status",rpg,"队长create/invite，对方accept；建队不等于副本参战");
         add(out,"events","随机集结活动","/mycli world events",enabled.contains("WorldEvents"),"公告邀请，自主参加；集结结束不会中止已开始的挑战");
