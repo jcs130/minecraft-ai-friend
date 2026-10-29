@@ -2400,8 +2400,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力"
                     : button.action().equals("stash") ? "只打开本人奖励箱；照片成片也存这里；选择页码不扣魔力" : "点击查看；打开页面不会施法"));
         if(nativeRpg.selected()){
+            var common=List.of("home","travel","prospect","night","feather");
             for(int i=0;i<9;i++){
-                String id=i<NativeRpg.COMMON.size()?List.of("home","travel","prospect","night","feather").get(i):null;
+                String id=i<common.size()?common.get(i):null;
                 inv.setItem(36+i,id==null?item(Material.GRAY_STAINED_GLASS_PANE,"§7职业技能在技能书中查看"):item(SpellGuide.find(id).icon(),"§e"+SpellGuide.find(id).name(),SpellGuide.find(id).costLine(),"通用技能；无需职业，点击施放"));
             }return;
         }

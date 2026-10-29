@@ -96,8 +96,10 @@ export class CloudSource {
     if(input.photoManifest!==undefined){
       const ids=input.photoManifest?.publishedIds;
       const withdrawn=input.photoManifest?.withdrawnIds||[];
-      if(input.photoManifest?.complete!==true||!Array.isArray(ids)||ids.length>10000||ids.some(id=>!UUID.test(id))||new Set(ids).size!==ids.length||value.photos.some(row=>!ids.includes(row.id))||!Array.isArray(withdrawn)||withdrawn.length>10000||withdrawn.some(id=>!UUID.test(id)||ids.includes(id)))throw fail(400,'PHOTO_CATALOG','照片发布目录无效');
-      value.photoManifest={complete:true,publishedIds:ids,withdrawnIds:[...new Set(withdrawn)]};
+      const all=input.photoManifest?.allIds??ids;
+      const allSet=new Set(Array.isArray(all)?all:[]),publicSet=new Set(Array.isArray(ids)?ids:[]);
+      if(input.photoManifest?.complete!==true||!Array.isArray(ids)||ids.length>10000||ids.some(id=>!UUID.test(id))||publicSet.size!==ids.length||!Array.isArray(all)||all.length>10000||all.some(id=>!UUID.test(id))||allSet.size!==all.length||ids.some(id=>!allSet.has(id))||value.photos.some(row=>!allSet.has(row.id)||row.published===false&&publicSet.has(row.id)||row.published===true&&!publicSet.has(row.id))||!Array.isArray(withdrawn)||withdrawn.length>10000||withdrawn.some(id=>!UUID.test(id)||publicSet.has(id)))throw fail(400,'PHOTO_CATALOG','照片同步或发布目录无效');
+      value.photoManifest={complete:true,publishedIds:ids,withdrawnIds:[...new Set(withdrawn)],...(input.photoManifest.allIds?{allIds:all}:{})};
     }
     noCredentials(value);
     const payload = JSON.stringify(value), hash = createHash('sha256').update(payload).digest('hex');

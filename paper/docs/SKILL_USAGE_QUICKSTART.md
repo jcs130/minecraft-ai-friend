@@ -1,11 +1,13 @@
 # 破晓攻略：职业、技能与冒险
 
-入口 `/mycli intro`，以本人实际后端和回执为准。当前0.4.47.25已恢复基础生存技能并修复RPG目录、组队与施法回执，见[发布记录](BASIC_SURVIVAL_RELEASE_20261028.md)。寒霜、星芒箭、闪现、归乡、圣愈、饱食、造物无需选职或学习，先查 `/mycli skills list common`；查询不会代选职业、学习或接任务。
+入口 `/mycli intro`，以本人实际后端和回执为准。当前正式0.4.47.27已统一Vortex等级、魔力和金币，见[发布记录](RPG_UNIFIED_20261028.md)。寒霜、星芒箭、闪现、归乡、圣愈、饱食、造物无需选职或学习，先查 `/mycli skills list common`；查询不会代选职业、学习或接任务。
 
 1. `/mycli profession list` 看六职业，`profession info <ID>` 看条件，再主动 `profession choose <ID>`。
 2. `/mycli skills list` 看本职技能，`skills info <ID>` 看目标、效果、等级、耗魔和冷却。初始主动技选职后可直接 `/mycli cast <ID>`；`skills prepare <ID>` 设置职业装备的点击技能。`skills learn <节点ID>` 仅按详情花点；被动不能施放。
 3. `/mycli tasks list` 看讨伐、巡访、打造和攻略；先 `tasks info <ID>` 再 `tasks accept <ID>`，按 `tasks status` 的真实缺项行动，达标再 `tasks claim <ID>`。原公会在途单用 `/mycli guild status` 继续。
 4. 穿齐护甲、备好职业武器与补给，`/mycli dungeon list`、`dungeon info <ID>` 看难度再入场。公共补给 `/mycli guild shared`，个人箱 `/mycli arena stash`。
+
+当前不开放玩家自行换职业；不要反复 `profession choose` 尝试覆盖旧职业。天赋点与职业技能学习点分开：原生 `/talent reset` 会扣 **500金币**、清除天赋树并返还天赋点；先 `/mycli trade wallet` 确认余额，决定重置后才执行。这不代表职业技能点也能洗；`/mycli skills reset` 当前没有实现，不要调用。详见[实际检查](RPG_AUDIT_20261029.md)。
 
 | 职业 | 初始主动技 | 初始装备的原版载体 |
 | --- | --- | --- |

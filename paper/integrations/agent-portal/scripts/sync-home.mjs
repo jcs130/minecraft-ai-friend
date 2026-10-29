@@ -60,7 +60,7 @@ try {
     try {
       sequence++; await persistSequence();
       const photos = await photoReader.read();
-      const activePhotos = new Set(photoReader.manifest?.publishedIds||photos.map(row=>row.metadata.id));
+      const activePhotos = new Set(photoReader.manifest?.allIds||photos.map(row=>row.metadata.id));
       for (const key of uploaded) if (!activePhotos.has(key.split(':')[0])) uploaded.delete(key);
       const eventBatch=await world.pendingEvents();
       const snapshot = await buildSnapshot(game, world, sequence, photos.map(row => row.metadata), {events:eventBatch,photoManifest:photoReader.manifest}), body = JSON.stringify(snapshot);
@@ -88,7 +88,7 @@ try {
         for (const photo of photos) {
           const key = photo.metadata.id + ':' + photo.metadata.sha256;
           if (Array.isArray(result.wantedPhotos) ? !result.wantedPhotos.includes(photo.metadata.id) : uploaded.has(key)) continue;
-          const png = await fs.readFile(photo.file);
+          const png = photo.original||await fs.readFile(photo.file);
           const upload = await fetch(new URL('/api/v1/internal/photos/' + photo.metadata.id, endpoint), { method: 'PUT', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
           if (!upload.ok) throw Object.assign(Error('Photo synchronization rejected'), { status: upload.status });
           uploaded.add(key);
