@@ -203,6 +203,7 @@ public final class VortexBridge extends JavaPlugin {
                 out.put("preview",!getConfig().getString("backend","preview").equals("vortex"));out.put("guide",advice.data());out.put("nextAction",advice.action());out.put("verifyCommand",advice.verify());
                 if(!advice.command().isEmpty())out.put("nextCommand",advice.command());
                 out.put("helpCommand","/mycli --help");out.put("rulesCommand","/mycli rules");
+                if(intro)out.put("activityGuide",activityGuide());
                 out.put("inventory",Map.of("freeStorageSlots",freeSlots,"storageCommand","/mycli arena stash","recycleCommand","/mycli arena recycle list"));
                 if(json){p.sendMessage((intro?"MC_INTRO ":"MC_RPG ")+gson.toJson(out));return;}
                 p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪")+(Boolean.TRUE.equals(out.get("keepInventory"))?"；死亡保留背包装备":""));
@@ -210,11 +211,17 @@ public final class VortexBridge extends JavaPlugin {
                 if(intro){
                     var starter=vortex.classSkillService().classProfile(id).map(c->c.starterSpellId()).filter(s->s!=null&&!s.isBlank());
                     p.sendMessage("[RPG] "+starter.map(s->"本职起始技 "+s+"；目标/耗魔：/mycli skills info "+s).orElse("基础技无需选职或学习：/mycli skills list common")+"。个人箱：/mycli arena stash；交易金币：/mycli trade wallet。规则：/mycli rules");
+                    for(String line:activityGuide())p.sendMessage("[活动] "+line);
                 }
             }catch(Exception|LinkageError failure){failure(p,request,failure);}
         });});
     }
     private static long cooldown(JsonObject context,String key){return context.has(key)&&!context.get(key).isJsonNull()?Math.max(0,context.get(key).getAsLong()):-1;}
+    private static List<String> activityGuide(){return List.of(
+        "组队：队长 /mycli guild party create，再 invite <玩家>；对方 accept，status核对成员。遗迹全员穿甲带武器到首室，由队长 /mycli dungeon start <ID>；建队不等于入场。",
+        "练习塔：先 /mycli arena status 查入口，所有队员到按钮12格内、穿甲带武器且各有8魔力，由一人 /mycli arena start；再查 arena status 核对实际参战。",
+        "买卖：/mycli commission list；买方 publish delivery <物品ID> <数量> <金币报酬> <标题> 托管金币，卖方 accept <ID> 后 claim <ID> 交物领钱。报价/查询不算成交；原生拍卖仍维护。",
+        "满包：按 status 给出的 arena stash putslot <背包0–35槽> <数量> 直接远程存箱，收到moved>0才完成；无需开界面或回城。多余装备 /mycli arena recycle list，再quote/sell。");}
     public void tradeCommand(Player p,String[] raw){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");profile(p);
         boolean json=Arrays.asList(raw).contains("--json");var words=new ArrayList<>(Arrays.asList(raw));words.removeIf(s->s.equals("--json"));
@@ -224,7 +231,7 @@ public final class VortexBridge extends JavaPlugin {
         if(action.equals("auction")){if(json)p.sendMessage("MC_RPG "+gson.toJson(Map.of("queryOnly",true,"available",false,"changed",false,"reason","auction_unavailable","nextCommand","/mycli trade wallet")));else p.sendMessage(AuctionSafety.MESSAGE);return;}
         if(!vortex.qiandengjiVault().isAvailable()){if(json)p.sendMessage("MC_RPG "+gson.toJson(Map.of("queryOnly",true,"available",false,"reason","economy_unavailable","nextCommand","/mycli trade wallet")));else p.sendMessage("[RPG] [economy_unavailable] 金币服务未就绪；本次未交易，不能把未知余额当作0。稍后查询：/mycli trade wallet");return;}
         var out=new LinkedHashMap<String,Object>();out.put("queryOnly",true);out.put("available",true);out.put("currency","金币");out.put("balance",vortex.qiandengjiVault().balance(p));out.put("auctionAvailable",false);out.put("nextCommand","/mycli tasks list");
-        String text="金币余额 "+out.get("balance")+"；Vortex任务奖励到账此账户，和背包绿宝石、旧试炼余额分别记账。玩家拍卖交付故障暂时维护；本次只查询，不扣款。公共补给：/mycli guild shared。";
+        String text="金币余额 "+out.get("balance")+"；任务、回收、试炼和商店共用此账户。玩家买卖用金币托管委托：/mycli commission list；原生拍卖交付故障仍在维护。公共补给：/mycli guild shared。";
         if(json)p.sendMessage("MC_RPG "+gson.toJson(out));else p.sendMessage("[RPG] "+text);
     }
     private UnifiedPlayer profile(Player p){
@@ -268,8 +275,8 @@ public final class VortexBridge extends JavaPlugin {
         switch(r.action()){
             case "status"->{noArgs(r);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("none");emit(p,r,Map.of("class",id,"queryOnly",true),id.equals("none")?"尚未选职。下一步：/mycli profession list":BridgeRules.className(id)+"；技能：/mycli skills status");}
             case "menu"->{noArgs(r);vortex.classSkillService().openClassMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","profession","selectionConfirmed",false,"nextCommand","/mycli profession status"),"已请求打开职业菜单；尚未选择。");}
-            case "list"->{noArgs(r);var ids=vortex.classSkillService().registeredClassIds();emit(p,r,Map.of("classes",ids),String.join("；",ids.stream().map(id->id+" "+BridgeRules.className(id)).toList())+"。详情：/mycli profession info <ID>");}
-            case "info"->{String id=BridgeRules.id(r);var d=vortex.classSkillService().classProfile(id).orElseThrow(()->new IllegalArgumentException("[unknown_class] 未知职业 "+id+"；未执行。下一步：/mycli profession list"));emit(p,r,Map.of("id",id,"starterSpell",d.starterSpellId(),"queryOnly",true),BridgeRules.className(id)+"；起始技能 "+d.starterSpellId()+"。主动选择：/mycli profession choose "+id);}
+            case "list"->{noArgs(r);var definitions=ClassInfoView.definitions(vortex);var ids=vortex.classSkillService().registeredClassIds();emit(p,r,Map.of("classes",ids,"queryOnly",true,"catalogVersion",vortex.getDescription().getVersion()+":"+ClassInfoView.revision(definitions),"details",definitions.stream().map(d->Map.of("id",d.get("id"),"name",d.get("name"),"description",d.get("description"),"detailsCommand","/mycli profession info "+d.get("id"))).toList()),String.join("；",definitions.stream().map(d->d.get("id")+" "+d.get("name")+"："+d.get("description")).toList())+"。按需查询属性、装备和成长：/mycli profession info <ID>");}
+            case "info"->{String id=BridgeRules.id(r);var v=ClassInfoView.info(vortex,p,state,id,getConfig().getStringList("profession-notes."+id),getCommand("qdrpg")!=null&&getCommand("qdrpg").testPermissionSilent(p));emit(p,r,v.data(),v.text());}
             case "choose"->{String id=BridgeRules.id(r);if(vortex.classSkillService().classProfile(id).isEmpty())throw new IllegalArgumentException("[unknown_class] 未知职业 "+id+"；未执行。下一步：/mycli profession list");write(p,r,()->vortex.classSkillService().chooseClass(p,state,id),true,"职业已选择并保存。下一步：/mycli skills list");}
             default->throw new IllegalArgumentException("class 仅 list/info/choose；查询不自动选职。");
         }

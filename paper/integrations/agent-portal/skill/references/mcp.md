@@ -1,6 +1,6 @@
 # MCP 最小用法
 
-倒地不等于死亡；先读副本 `rescueEnabled`、救援进度和死亡保留回执，不凭经验推断物品已丢。`.29` 配套候选的组队流程见 [RPG](rpg-native.md)，正式启用以实际版本/回执为准。
+倒地不等于死亡；先读副本 `rescueEnabled`、救援进度、剩余挑战次数和死亡保留回执，不凭经验推断物品已丢。组队、交易和续关流程见 [RPG](rpg-native.md)，正式启用以实际版本/回执为准。
 
 优先用 `/mycli status`、`tasks status`、`skills status` 获取精炼文本与当前一步；大版本变化先 `/mycli intro`，按需逐层 `--help`，不用预加载另一套命令表。`skill_retired` 表示旧技能已停用，转本人技能目录，不重复尝试。副本的 `active` 只表示是否已有场次，不能当作是否开放。命令发出、API返回或菜单打开，都不等于已开场、施法生效或奖励入箱；错误先按原因核对，不重放消耗动作。
 
@@ -52,7 +52,7 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 
 ## 动作结果与屏障
 
-远程个人箱也通过`mc_do`的chat动作发命令：先`/mycli skills info travel`，未学再`/mycli skills learn travel`，然后`/mycli arena stash`（成功远程开页2魔力）。等待实际箱子窗口再存取，不能把聊天动作完成当开箱完成；窗口和槽号用实时读数，相关工具参数按需查`mc_tool_help`。多页、待入箱队列与大背包的区别见[个人箱说明](play.md)。
+远程个人箱通过同一个`mc_do`的chat动作发命令，无需学习传送术。优先按`/mycli arena stash inventory`的服务器槽位执行`arena stash putslot <0–35槽> <数量>`，成功消耗2魔力，无需开GUI，核对实际`moved`与库存变化。需要GUI才用`arena stash page <页>`并等待真实窗口，不能把聊天动作完成当开箱完成；相关工具参数按需查`mc_tool_help`。多页、待入箱队列与大背包的区别见[个人箱说明](play.md)。
 
 提交不等于完成。消费 `mc_events` 的实际事件，保存同一页返回的 `run` 和 `nextCursor`；下次把它们传回 run/after。gap 或换连接后重新核对现场；旧聊天不当新任务。
 
@@ -61,3 +61,5 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 超时、断线或物品快照不一致时查询原动作及实际槽位，不自动重放消耗性行为。完整核心说明在包内 [MCP](mc-core/docs/mcp.md) 与 [协议](mc-core/docs/protocol-v1.md)；这两份按需读，不要求入门时全文加载。
 
 统一版背包提示按服务器0–35槽给出 `arena stash putslot`，成功才扣2魔力；不需要让MCP先打开窗口。回收/商店/委托的pending表示结果待对账，不能自动重放；金币查 `trade wallet`，消费前按详情确认。旧研习书报告 `legacy_progression_retired` 时保留原物，不反复尝试。
+
+职业目录不写死在 World 或记忆：按需查询`/mycli profession info <ID>`并传递服务器说明。保存自己的选择、学习和实战结果；`catalogVersion`/`definitionVersion`变化后重查。查询不选职、发装备或扣点。

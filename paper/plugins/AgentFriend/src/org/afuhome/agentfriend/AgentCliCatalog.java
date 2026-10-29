@@ -229,9 +229,9 @@ final class AgentCliCatalog {
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
-        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查空闲可开、占用、故障、当前房间或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认只给当前一步；--json含真实状态和凭据；完整旧结果用--verbose");
+        add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查当前房间、存档点、剩余机会、占用或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认当前一步及剩余机会；--json含真实状态和凭据；完整旧结果用--verbose");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
-        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在首室发起挑战；原生队伍全员到场后由队长一次登记全队","全员在线、生存模式、装备达标且未参加其他活动；最多8人，登记2人以上启用倒地救援","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
+        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","首室由队长登记全队；战败回存档点，第三次战败结束，Boss房间排他","全员在线、生存模式、装备达标且未参加其他活动；最多8人，登记2人以上启用倒地救援","MC_SITE_DUNGEON_RESULT；战败自动回存档点，整场第三次战败结束；Boss房间仅本场队伍进入，清完后返回首室领奖");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
         add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出自己的遗迹挑战，留在原地","只影响本人；未登记的奖励不发放","MC_SITE_DUNGEON_RESULT；队伍空后清理该队标记怪");
         add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后重试暂停的挑战","须为该队成员；失败不清场、不发奖、不自动连续刷怪","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
@@ -257,11 +257,11 @@ final class AgentCliCatalog {
         add(specs,"arena.recycle.list","storage","read","/mycli arena recycle list","列出本人箱子与背包中可回收装备","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取30秒报价","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
-        add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","需先学travel：skills info travel / skills learn travel；成功远程开页2魔力，实体箱旁免费，无需先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
         add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–7|9–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人第一页54格双箱；10页共540格；支持原版箱子操作","需先学travel：skills info travel / skills learn travel；成功远程开页2魔力，实体箱旁免费，无需先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；先学travel，成功远程开页2魔力","原版分页选择菜单");
+        add(specs,"arena.stash","storage","gui","/mycli arena stash","本人540格个人箱；Agent可直接putslot存、list查、take取，无需开界面","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；无需学习，成功远程开页2魔力","原版分页选择菜单");
         add(specs,"arena.stash.page","storage","gui","/mycli arena stash page <1–10>","打开个人箱指定页","原槽位1–54保留，全局最大540","原版54格箱子");
         add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用统一RPG金币；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
         add(specs,"commission.publish","adventure","write","/mycli commission publish delivery <物品ID> <数量> <报酬> <标题>；hunt <怪物ID> <数量> <报酬> <标题>；explore <维度> <报酬> <标题>；structure <结构ID> <报酬> <标题>","托管实际RPG金币并发布物资或同行委托","生存；余额足够；物资只收普通物品；结伴需发布者32格内同行","MC_COMMISSION_RESULT / MC_COMMISSION");
@@ -271,8 +271,8 @@ final class AgentCliCatalog {
         add(specs,"commission.cancel","adventure","write","/mycli commission cancel <ID>","撤回本人未接委托并退回托管余额","有人接单后不能单方面撤回","MC_COMMISSION_RESULT");
         add(specs,"arena.stash.inventory","storage","read","/mycli arena stash inventory","列出本人背包槽位 0–35","在线玩家","MC_INVENTORY、MC_INVENTORY_SUMMARY");
         add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","只查已装入箱格，默认第一页；待入箱奖励另用arena rewards list，开箱后装入","在线玩家","MC_STASH、MC_STASH_SUMMARY");
-        add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved 数量与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按精确背包槽存入；保留附魔与自定义物品","背包槽有物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved 数量与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
+        add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按背包0–35槽直接远程存入；非绑定装备保留附魔和外观","背包槽有物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
         add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–540> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位；远程成功取出 2 魔力","MC_STASH_TAKE moved 数量与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.leave","adventure","teleport","/mycli arena leave","退出试炼返回入口","正在试炼区域内","传送或拒绝原因");
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用；6 魔力","成功后 MC_TRAVEL 或失败原因");

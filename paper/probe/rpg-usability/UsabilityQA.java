@@ -6,6 +6,9 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
     private net.milkbowl.vault.economy.Economy injectedEconomy;
     private record DamageRead(long count,double damage,boolean cancelled){}
     private final java.util.Map<java.util.UUID,DamageRead> observed=new java.util.HashMap<>();
+    private final java.util.Map<java.util.UUID,Integer> pickups=new java.util.HashMap<>();
+    @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.MONITOR)
+    public void pickup(org.bukkit.event.player.PlayerAttemptPickupItemEvent event){if(event.getPlayer().getName().matches("ag_RU[a-zA-Z0-9]{1,10}")){int n=pickups.merge(event.getPlayer().getUniqueId(),1,Integer::sum);if(n<=3)getLogger().info("QA_PICKUP name="+event.getPlayer().getName()+" remaining="+event.getRemaining()+" cancelled="+event.isCancelled()+" canPickup="+event.getPlayer().getCanPickupItems());}}
     @Override public void onEnable(){try{if(getServer().getPort()!=25928||!getServer().getIp().equals("127.0.0.1")||!Files.readString(Path.of(".qa-only")).equals("VORTEX_TAKEOVER_QA_ONLY"))throw new IllegalStateException("not marked QA");}catch(Exception e){throw new IllegalStateException(e);}vortex=(VortexCorePlugin)getServer().getPluginManager().getPlugin("VortexRPG");Bukkit.getPluginManager().registerEvents(this,this);}
     @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.MONITOR)
     public void damage(org.bukkit.event.entity.EntityDamageEvent event){if(event.getEntity() instanceof Player p&&p.getName().matches("ag_RU[a-zA-Z0-9]{1,10}")){var old=observed.get(p.getUniqueId());observed.put(p.getUniqueId(),new DamageRead(old==null?1:old.count()+1,event.getFinalDamage(),event.isCancelled()));}}
@@ -73,6 +76,7 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
             case "mana"->{double n=Double.parseDouble(args[2]);if(!Double.isFinite(n)||n<0||n>500)throw new IllegalArgumentException("bounded mana");vortex.qiandengjiMana().setMana(p.getUniqueId(),n);}
             case "xp"->{long n=Long.parseLong(args[2]);if(n<0||n>10000)throw new IllegalArgumentException("bounded xp");vortex.playerProfileService().grantExperience(p,n,"isolated-usability-fixture");}
             case "points"->{int n=Integer.parseInt(args[2]);if(n<0||n>20)throw new IllegalArgumentException("bounded points");state.putMetadata("rpg.skill_points",Integer.toString(n));}
+            case "kitpreview"->{int n=Integer.parseInt(args[2]);if(n<1||n>3)throw new IllegalArgumentException("bounded preview");vortex.getConfig().set("class-selection.rewards.classes.knight.items.knight_iron_resolve",n);}
             case "armor"->{p.getInventory().setArmorContents(new ItemStack[]{new ItemStack(Material.IRON_BOOTS),new ItemStack(Material.IRON_LEGGINGS),new ItemStack(Material.IRON_CHESTPLATE),new ItemStack(Material.IRON_HELMET)});}
             case "integrity"->{
                 int x=2400,y=81,z=2400;
@@ -91,6 +95,7 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
             case "heal"->{p.setHealth(p.getMaxHealth());p.setNoDamageTicks(0);}
             case "hunger"->{int n=Integer.parseInt(args[2]);if(n<0||n>20)throw new IllegalArgumentException("bounded hunger");p.setFoodLevel(n);p.setSaturation(0);}
             case "fullbag"->{for(int i=0;i<36;i++)p.getInventory().setItem(i,new ItemStack(Material.STONE,64));}
+            case "pickup"->{var item=p.getWorld().dropItem(p.getLocation(),new ItemStack(Material.COBBLESTONE,3));item.setPickupDelay(0);item.setVelocity(new org.bukkit.util.Vector());sender.sendMessage("QA_PICKUP at="+p.getLocation().getX()+","+p.getLocation().getY()+","+p.getLocation().getZ()+" canPickup="+p.getCanPickupItems()+" attempts="+pickups.getOrDefault(p.getUniqueId(),0));}
             case "emptybag"->{for(int i=0;i<36;i++)p.getInventory().setItem(i,null);}
             case "clearhostiles"->{for(var entity:p.getNearbyEntities(24,24,24))if(entity instanceof Monster)entity.remove();}
             case "inspect"->{}
