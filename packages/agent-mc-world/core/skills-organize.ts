@@ -7,7 +7,7 @@ import { itemPredOf, invCountIn, playerInvIn } from './inventory.ts';
 import { skillStow, skillToss } from './skills-container.ts';
 import { consumesOpenWindow, selectionMenuTitle } from './window-semantics.ts';
 import { inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals, organizationSlotState,
-  planInventoryOrganization, type OrganizationMove, type OrganizationStack } from './inventory-organization.ts';
+  planInventoryOrganization, planInventoryShortcutExchange, type OrganizationMove, type OrganizationStack } from './inventory-organization.ts';
 
 type Call = Extract<SkillCall, { skill: 'organize' }>;
 type Window = NonNullable<Bot['currentWindow']>;
@@ -33,8 +33,43 @@ function rangeOf(win: Window, call: Call): { start: number; end: number } {
   return { start, end };
 }
 
-/** One confirmed pick/place/exchange; cancellation returns only the cursor this operation owns. */
-async function performMove(bot: Bot, win: Window, move: OrganizationMove, ctx: SkillContext): Promise<void> {
+/** Number-key exchanges never expose a carried stack or temporarily empty a full
+ * bag. A scratch shortcut is allowed only inside the explicitly included range.
+ * Each click still has its own authoritative boundary; partial/unknown exchanges
+ * are retained rather than followed by inverse clicks on cancellation. */
+async function shortcutSwap(bot: Bot, win: Window, move: OrganizationMove,
+  range: { start: number; end: number }, ctx: SkillContext): Promise<boolean> {
+  if (move.kind !== 'swap' || bot.supportFeature?.('stateIdUsed') !== true) return false;
+  const exchanges = planInventoryShortcutExchange(cells(win), move, Math.max(range.start, win.inventoryStart),
+    Math.min(range.end, win.inventoryEnd), win.hotbarStart);
+  if (!exchanges) return false;
+  const expected = new Map([...new Set(exchanges.flatMap(x => [x.slot, x.shortcut]))]
+    .map(slot => [slot, organizationSlotState(cells(win)[slot])]));
+  const unchanged = () => !win.selectedItem && [...expected].every(([slot, state]) => organizationSlotState(cells(win)[slot]) === state);
+  let confirmed = 0;
+  for (const { slot, shortcut, button } of exchanges) {
+    sameWindow(bot, win); checkAbort(ctx);
+    if (!unchanged()) throw new SkillBlocked('快捷换位前槽位或光标已变化；已发生的交换保留，后续点击未发送');
+    const expectedSlot = expected.get(shortcut)!, expectedShortcut = expected.get(slot)!;
+    await clickInventoryConfirmed(bot, slot, button, 2, win, () => {
+      sameWindow(bot, win, false); checkAbort(ctx);
+      if (win.selectedItem || [...expected].some(([index, state]) => organizationSlotState(cells(win)[index])
+        !== (index === slot ? expectedSlot : index === shortcut ? expectedShortcut : state)))
+        throw new SkillBlocked('快捷换位的槽位在派发前变化；后续点击未发送');
+    });
+    expected.set(slot, expectedSlot); expected.set(shortcut, expectedShortcut);
+    sameWindow(bot, win);
+    if (!unchanged())
+      throw new SkillBlocked('快捷换位后的槽位或光标变化；已发生的交换保留，后续未执行');
+    ctx.diag?.write({ lane: 'inventory', event: 'organize-shortcut-confirmed', taskId: ctx.taskId,
+      msg: '整理快捷换位已获服务端确认；光标为空', data: { confirmed: ++confirmed, total: exchanges.length, slot, shortcut } });
+  }
+  return true;
+}
+
+/** One confirmed exchange; cancellation returns only the cursor this operation owns. */
+async function performMove(bot: Bot, win: Window, move: OrganizationMove, ctx: SkillContext,
+  shortcutRange?: { start: number; end: number }): Promise<void> {
   sameWindow(bot, win); checkAbort(ctx);
   const checkSlots = () => {
     sameWindow(bot, win); checkAbort(ctx);
@@ -43,6 +78,7 @@ async function performMove(bot: Bot, win: Window, move: OrganizationMove, ctx: S
       throw new SkillBlocked('整理计划的源槽或目标槽已变化，剩余步骤未执行；先读取当前背包');
   };
   checkSlots();
+  if (shortcutRange && await shortcutSwap(bot, win, move, shortcutRange, ctx)) return;
   const source = cells(win)[move.from]!, destination = cells(win)[move.to];
   const picked = { ...source, componentMap: source.componentMap };
   const priorDestination = destination ? { ...destination, componentMap: destination.componentMap } : null;
@@ -157,7 +193,8 @@ export async function skillOrganize(bot: Bot, call: Call, ctx: SkillContext): Pr
   let merges = 0, swaps = 0;
   if (bot.currentWindow === win) ctx.holdWindow?.(win);
   for (const move of plan.moves) {
-    try { await performMove(bot, win, move, ctx); }
+    try { await performMove(bot, win, move, ctx,
+      (call.target ?? 'inventory') === 'inventory' && call.includeHotbar === true ? range : undefined); }
     catch (error) {
       const summary = `整理已确认合堆 ${merges} 次、换位 ${swaps} 次；剩余未执行，先核对槽位和光标`;
       ctx.diag?.write({ lane: 'skill', event: 'inventory-organize-partial', taskId: ctx.taskId,

@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationTotals } from '../core/inventory-organization.ts';
+import { planInventoryOrganization, planInventoryShortcutExchange, inventoryOrganizationKey, inventoryOrganizationTotals } from '../core/inventory-organization.ts';
 import { skillOrganize } from '../core/skills-organize.ts';
 import { parseScoutSteps, parseSteps, SKILL_STEP_SCHEMA } from '../core/skills.ts';
 import { installInventoryClickSync, inventoryClickState } from '../core/inventory-click-sync.ts';
@@ -75,6 +75,22 @@ function rig(version = '1.21.1') {
 async function complete(operation: Promise<unknown>) { await vi.runAllTimersAsync(); return operation; }
 
 describe('portable organization planner', () => {
+  it('proposes shortcut exchanges only inside the explicitly supplied range and leaves inputs unchanged', () => {
+    const slots = Array.from({ length: 46 }, () => null) as any[];
+    slots[9] = { type: 1, name: 'bone', count: 3 }; slots[10] = { type: 2, name: 'blaze_rod', count: 1 };
+    slots[37] = { type: 3, name: 'dirt', count: 64 };
+    const move = { kind: 'swap' as const, from: 10, to: 9, source: 'source', destination: 'destination' };
+    const before = JSON.stringify(slots);
+    expect(planInventoryShortcutExchange(slots, move, 9, 36, 36)).toBeNull();
+    expect(planInventoryShortcutExchange(slots, move, 9, 45, 36)).toEqual([
+      { slot: 10, shortcut: 37, button: 1 }, { slot: 9, shortcut: 37, button: 1 }, { slot: 10, shortcut: 37, button: 1 }]);
+    expect(planInventoryShortcutExchange(slots, { ...move, from: 37 }, 9, 45, 36)).toEqual([{ slot: 9, shortcut: 37, button: 1 }]);
+    expect(planInventoryShortcutExchange(slots, { ...move, kind: 'merge' }, 9, 45, 36)).toBeNull();
+    expect(planInventoryShortcutExchange(slots, { ...move, from: -1 }, 9, 45, 36)).toBeNull();
+    expect(planInventoryShortcutExchange(slots, move, 9, 47, 36)).toBeNull();
+    expect(planInventoryShortcutExchange(slots, move, 9, 45, NaN)).toBeNull();
+    expect(JSON.stringify(slots)).toBe(before);
+  });
   it('does not merge distinct modern components or mutate source data', () => {
     const base = { type: 1, name: 'stone', count: 20, stackSize: 64 };
     const slots = [{ ...base, components: [{ type: 'custom_name', data: 'A' }] },
@@ -180,6 +196,87 @@ describe('native organization with server-confirmed slots and cursor', () => {
     expect(r.bot.inventory.selectedItem).toBeNull();
     expect(inventoryOrganizationTotals(r.bot.inventory.slots)).toBe(totals);
     expect(r.notes.at(-1).data).toMatchObject({ beforeFree: 0, afterFree: 0 });
+  });
+  it.each(['1.21.1', '1.20.6'])('keeps a full explicitly included quickbar sort cursor-free when a freed slot would receive a pickup (%s)', async version => {
+    const r = rig(version), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    r.put(9, 'bone', 3); r.put(10, 'blaze_rod'); r.full(bag);
+    const original = inventoryOrganizationTotals(bag.slots);
+    let exposedCursor = false, externalPickup = false;
+    r.onAck(() => {
+      if (!bag.selectedItem) return;
+      exposedCursor = true;
+      const empty = bag.slots.findIndex((item: unknown, slot: number) => slot >= 9 && slot < 45 && !item);
+      if (empty < 0) return;
+      r.put(empty, 'cod'); r.full(bag); externalPickup = true;
+    });
+    const result = await complete(r.start({ includeHotbar: true }).then(value => ({ value, error: null }),
+      error => ({ value: null, error: String(error) }))) as { value: string | null; error: string | null };
+    expect(result.error).toBeNull();
+    expect(exposedCursor).toBe(false); expect(externalPickup).toBe(false);
+    expect(bag.slots[9].name).toBe('blaze_rod'); expect(bag.slots[10].name).toBe('bone');
+    expect(bag.selectedItem).toBeNull(); expect(inventoryOrganizationTotals(bag.slots)).toBe(original);
+    expect(r.clicks.every(click => click.mode === 2)).toBe(true);
+  });
+  it('retains a partially completed shortcut exchange on cancellation without a cleanup replay', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    r.put(9, 'bone', 3); r.put(10, 'blaze_rod'); r.full(bag);
+    const original = inventoryOrganizationTotals(bag.slots);
+    r.onAck(() => r.controller.abort());
+    const result = await complete(r.start({ includeHotbar: true }).then(() => null, error => error));
+    expect(result).toBeTruthy(); expect(r.clicks).toHaveLength(1);
+    expect(bag.selectedItem).toBeNull(); expect(inventoryOrganizationTotals(bag.slots)).toBe(original);
+    expect(r.notes.filter(x => x.event === 'organize-shortcut-confirmed')).toHaveLength(1);
+  });
+  it('does not continue a shortcut exchange after an unrelated participant slot changes', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    r.put(9, 'bone', 3); r.put(10, 'blaze_rod'); r.full(bag);
+    r.onAck(() => { if (r.clicks.length === 1) { r.put(9, 'cod'); r.full(bag); } });
+    const result = await complete(r.start({ includeHotbar: true }).then(() => null, error => error));
+    expect(result).toBeTruthy(); expect(r.clicks).toHaveLength(1);
+    expect(bag.selectedItem).toBeNull(); expect(bag.slots[9].name).toBe('cod');
+    expect(r.notes.at(-1).event).toBe('inventory-organize-partial');
+  });
+  it('keeps an unacknowledged shortcut exchange unknown with no retry or inverse click', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    r.put(9, 'bone', 3); r.put(10, 'blaze_rod'); r.full(bag); r.acknowledge(false);
+    const failure = expect(r.start({ includeHotbar: true })).rejects.toMatchObject({ code: 'inventory-click-sync' });
+    await vi.runAllTimersAsync(); await failure;
+    expect(r.clicks).toHaveLength(1); expect(bag.selectedItem).toBeNull();
+    expect(inventoryClickState(r.bot).phase).toBe('quarantined');
+    expect(r.notes.some(x => x.event === 'organize-shortcut-confirmed')).toBe(false);
+  });
+  it('does not choose another shortcut after the server rejects the first one', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    r.put(9, 'bone', 3); r.put(10, 'blaze_rod'); r.full(bag);
+    const original = inventoryOrganizationTotals(bag.slots); r.rejectSlot(10);
+    const result = await complete(r.start({ includeHotbar: true }).then(() => null, error => error));
+    expect(result).toBeTruthy(); expect(r.clicks).toHaveLength(1);
+    expect(bag.selectedItem).toBeNull(); expect(inventoryOrganizationTotals(bag.slots)).toBe(original);
+  });
+  it('preserves custom components with full quickbar sorting', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    bag.updateSlot(9, r.named('paper', 'B', 3)); bag.updateSlot(10, r.named('paper', 'A', 5)); r.full(bag);
+    const original = inventoryOrganizationTotals(bag.slots);
+    await complete(r.start({ includeHotbar: true }));
+    expect(bag.selectedItem).toBeNull(); expect(inventoryOrganizationTotals(bag.slots)).toBe(original);
+    expect(r.clicks.every(click => click.mode === 2)).toBe(true);
+  });
+  it('uses container-relative player shortcuts without touching its storage', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    for (let slot = 9; slot < 45; slot++) r.put(slot, 'dirt', 64);
+    r.put(9, 'bone', 3); r.put(10, 'blaze_rod'); r.full(bag);
+    const win = r.open(); r.put(0, 'diamond', 42); r.full(win);
+    const original = inventoryOrganizationTotals(win.slots);
+    await complete(r.start({ includeHotbar: true }));
+    expect(win.selectedItem).toBeNull(); expect(win.slots[0].name).toBe('diamond'); expect(win.slots[0].count).toBe(42);
+    expect(inventoryOrganizationTotals(win.slots)).toBe(original);
+    expect(r.clicks.every(click => click.mode === 2 && click.windowId === 1)).toBe(true);
   });
   it('swaps same-ID custom variants instead of trusting the native legacy merge prediction', async () => {
     const r = rig(), bag = r.bot.inventory;

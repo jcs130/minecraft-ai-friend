@@ -446,7 +446,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
         # The internal change-detection hash is not gameplay evidence. Repeating
         # it beside every original handle can evict the actual action outcome.
-        fact = {name: value for name, value in fact.items() if name != "revision"}
+        fact = {name: value for name, value in fact.items() if name not in {"revision", "stateRevision"}}
         if key == "lastTask":
             fact = {**fact, "text": spatial_text(fact.get("text", ""))}
         if key == "serverFeedback" and len(fact.get("text", "").encode("utf-8")) > 1800:
