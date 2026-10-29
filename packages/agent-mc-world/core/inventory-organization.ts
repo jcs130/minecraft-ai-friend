@@ -38,6 +38,23 @@ export interface OrganizationMove {
   destination: string;
 }
 
+export interface InventoryShortcutExchange { slot: number; shortcut: number; button: number }
+
+/** Pure proposal inside a caller-supplied allowed range. No permission, snapshot
+ * freshness or completion is implied; the executor must revalidate every click. */
+export function planInventoryShortcutExchange(slots: readonly (OrganizationStack | null | undefined)[],
+  move: OrganizationMove, start: number, end: number, hotbarStart: number): InventoryShortcutExchange[] | null {
+  if (move.kind !== 'swap' || ![start, end, hotbarStart, move.from, move.to].every(Number.isSafeInteger)
+    || start < 0 || start >= end || end > slots.length || hotbarStart < 0 || hotbarStart + 9 > slots.length
+    || move.from < start || move.from >= end || move.to < start || move.to >= end || move.from === move.to) return null;
+  const shortcuts = Array.from({ length: 9 }, (_, i) => hotbarStart + i).filter(slot => slot >= start && slot < end);
+  if (!shortcuts.length) return null;
+  const scratch = shortcuts.find(slot => !!slots[slot]) ?? shortcuts[0];
+  const pairs = shortcuts.includes(move.from) ? [[move.to, move.from]] : shortcuts.includes(move.to) ? [[move.from, move.to]]
+    : [[move.from, scratch], [move.to, scratch], [move.from, scratch]];
+  return pairs.map(([slot, shortcut]) => ({ slot, shortcut, button: shortcut - hotbarStart }));
+}
+
 function stable(value: unknown): unknown {
   if (typeof value === 'bigint') return { bigint: value.toString() };
   if (value instanceof Map) return [...value].sort(([a], [b]) => String(a).localeCompare(String(b)))

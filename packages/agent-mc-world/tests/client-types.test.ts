@@ -32,6 +32,9 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     const semantic: FactState = { position: [1,64,2], mana: null, lastCastAt: 'dated' };
     const dated: FactPart = withFactState({key:'state',text:'raw dated evidence'}, semantic);
     void dated.stateRevision;
+    import { planInventoryShortcutExchange, type InventoryShortcutExchange } from '../dist/types/src/client/index.js';
+    const exchanges: InventoryShortcutExchange[] | null = planInventoryShortcutExchange([], {kind:'swap',from:0,to:1,source:'',destination:''},0,2,0);
+    void exchanges;
     const reference: Record<string, unknown> = readMinecraftKnowledge({action:'get',id:'food/beef'},'1.21.1');
     void reference; void KNOWLEDGE_TOOL;
     void mcp;void stdio;void createRelay;void extension;

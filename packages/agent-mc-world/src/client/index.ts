@@ -65,8 +65,8 @@ export { renderVoxelPhoto } from '../../core/voxel-photo.ts';
 export * from '../contracts/photography.ts';
 export * from '../../core/voxel-scene.ts';
 export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';
-export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
+export { planInventoryOrganization, planInventoryShortcutExchange, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
   type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
-  type InventoryOrganizationPlan } from '../../core/inventory-organization.ts';
+  type InventoryOrganizationPlan, type InventoryShortcutExchange } from '../../core/inventory-organization.ts';
 
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';

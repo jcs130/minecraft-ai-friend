@@ -1,5 +1,11 @@
 # Agent MC World
 
+Development candidate **rc.124** avoids a transient carried stack during sorting
+exchanges when shortcuts were explicitly included. It preserves per-click server
+confirmation, component identity, partial results and unknown-action fences.
+See [inventory exchange scope](docs/inventory-shortcut-exchange.md). Existing
+carried items are not silently cleared by this change.
+
 Development candidate **rc.121** adds the optional producer-owned
 `FactPart.stateRevision` comparison contract and `withFactState` SDK helper.
 Recovery facts keep their raw sample time and original content hashes while

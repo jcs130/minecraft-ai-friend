@@ -1837,7 +1837,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  带 rules 还要合堆须显式 sort:false；还要合堆并排序须显式 sort:true。服务器可能固定入口道具的位置，不应为一次取舍附带整包排序。
                                                  规则可按 pick 选具体标签；取舍会使用随身所有主背包槽（包括快捷栏），不脱装备或副手。没有规则就不会存放或丢弃。
 {"skill":"use","item":"大背包"},{"skill":"organize","target":"open"} 整理当前真实储物容器，不是选择菜单或工作站输入/输出格；不自动跨容器搬物。
-                                                 dryRun:true 只读当前方案；正式执行重读槽位。每次交换等待服务端槽位和光标确认，取消或确认不明会停止，保留已发生的结果；终态核对空位及物品总量。`,
+                                                 dryRun:true 只读当前方案；正式执行重读槽位。明确 includeHotbar:true 时，现代客户端的排序换位使用原子快捷键交换，不暂留光标；合堆仍单独确认。
+                                                 每次交换等待服务端槽位和光标确认，取消或确认不明会停止，保留已发生的结果；终态核对空位及物品总量。`,
     parse: parseOrganize,
     fields: [
       { key: 'target', kind: 'enum', values: ['inventory', 'open'], error: 'target 只认 inventory/open', doc: '默认 inventory；open 整理当前真实储物窗口' },
