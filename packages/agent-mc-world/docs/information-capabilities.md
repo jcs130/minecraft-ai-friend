@@ -19,7 +19,7 @@ facts, artifacts and events. Merely updating another host does not update its pi
 | Tools and exact parameter contracts | `mc_tool_help` / `src/client/tool-help.ts` | Generated from effective definitions. JSON-pointer expansion or explicit `full:true`; never executes the inspected tool. |
 | Action and JavaScript manuals | `mc_help`, `mc_script {api:...}` | Discover the actual backend subset with capabilities; do not guess unsupported methods. |
 | Vanilla foods, recipes, blocks and mining references | `mc_knowledge` / `core/knowledge.ts` | Versioned references, not proof of current stock or server-modified rules. |
-| Received chat, private messages and server notices | `mc_messages` / `src/client/message-inbox.ts` | Historical, bounded and scoped; retains sender/source/time. `review` only marks consideration. |
+| Received chat, private messages and server notices | `mc_messages` / `src/client/message-inbox.ts` | Historical, bounded and scoped; retains sender/source/time. The preview includes different speakers and mentions of the configured recipient. `review` only marks consideration. |
 | Native pre-attachment message buffer | `mc_notices` / `src/client/java-client.ts` | Read-only buffer with sequence coverage; old requests are not replayed as new commands. |
 | Images, structured visual fallback, maps and photography | `mc_visual`, `mc_view_map`, `mc_photo` | Images require host image capability. Structured fallback is not image understanding; authored enhancement is not game evidence. |
 | Execution admission, completion, failure and original receipts | `agent-mc/v1`, `mc_queue`, `mc_blocked`, SDK `task`, MCP `mc_protocol` | Admission, method completion and host-goal success are different. Preserve IDs and unknown effects. |
