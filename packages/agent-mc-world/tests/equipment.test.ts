@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
+import { Vec3 } from 'vec3';
 import { clearOffHandConfirmed, equipHandConfirmed, equipSlotConfirmed, unequipSlotConfirmed } from '../core/equipment.ts';
 import { skillEquip } from '../core/skills-craft.ts';
+import { takeWornItem, wornItemNamed } from '../src/equipment-access.ts';
+import { invItemNamed } from '../core/inventory.ts';
+import { skillAnvil } from '../core/skills-interact.ts';
 import { installInventoryClickSync, INVENTORY_CLICK_CONFIRM_MS } from '../core/inventory-click-sync.ts';
 
 const require = createRequire(import.meta.url);
@@ -17,7 +21,7 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
   const server = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
   const client = new EventEmitter() as EventEmitter & { write(name: string, packet: Record<string, any>): void };
   const bot = Object.assign(new EventEmitter(), {
-    registry, inventory, currentWindow: null, _client: client,
+    registry, inventory, currentWindow: null, _client: client, entity: { position: new Vec3(.5, 64, .5) },
     supportFeature: (feature: string) => registry.supportFeature(feature),
     quickBarSlot: 8,
     getEquipmentDestSlot: (dest: string) => dest === 'hand' ? 36 + bot.quickBarSlot
@@ -73,6 +77,65 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
 }
 
 afterEach(() => vi.useRealTimers());
+
+describe('explicit access to worn equipment', () => {
+  it.each(['1.21.1', '1.20.6'])('moves worn armor to the hand with native %s ACKs and leaves other armor alone', async version => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version });
+    rig.seed(5, 'iron_helmet'); rig.seed(7, 'iron_leggings'); rig.seed(44, 'iron_sword');
+    expect(invItemNamed(rig.bot, 'iron_helmet')).toBeUndefined();
+    expect(wornItemNamed(rig.bot, 'iron_helmet')).toMatchObject({ slot: 5, destination: 'head' });
+    const work = skillEquip(rig.bot, { skill: 'equip', item: 'iron_helmet', hand: 'main' });
+    await vi.runAllTimersAsync();
+    expect(await work).toContain('手里拿起');
+    expect(rig.server.slots[5]).toBeNull();
+    expect(rig.server.slots[36 + rig.bot.quickBarSlot].name).toBe('iron_helmet');
+    expect(rig.bot.heldItem?.name).toBe('iron_helmet');
+    expect(rig.server.slots[7].name).toBe('iron_leggings');
+    expect(rig.server.items().find((i: any) => i.name === 'iron_sword')).toBeTruthy();
+    expect(rig.server.selectedItem).toBeNull();
+    expect(rig.sent).not.toContain(-999);
+  });
+
+  it('keeps implicit armor equip unchanged and diagnoses anvil inventory before opening it', async () => {
+    const rig = equipmentServer({ version: '1.21.1' });
+    rig.seed(5, 'iron_helmet');
+    expect(await skillEquip(rig.bot, { skill: 'equip', item: 'iron_helmet' })).toContain('本来就');
+    await expect(skillAnvil(rig.bot, { skill: 'anvil', op: 'repair', item: 'iron_helmet', with: 'iron_ingot', at: [0, 64, 0] },
+      { aborted: () => false } as never)).rejects.toThrow('穿在身上');
+    expect(rig.sent).toEqual([]);
+    expect(rig.server.slots[5].name).toBe('iron_helmet');
+  });
+
+  it.each(['full', 'cursor', 'window'] as const)('refuses %s without taking off or dropping equipment', async obstruction => {
+    const rig = equipmentServer({ version: '1.21.1' }); rig.seed(5, 'iron_helmet');
+    if (obstruction === 'full') for (let slot = 9; slot < 45; slot++) rig.seed(slot, 'cobblestone', 64);
+    if (obstruction === 'cursor') { rig.seed(10, 'stone'); rig.inventory.selectedItem = rig.inventory.slots[10]; }
+    if (obstruction === 'window') rig.bot.currentWindow = {} as never;
+    expect(await takeWornItem(rig.bot, 'iron_helmet')).toMatchObject({ status: 'blocked', goal_completed: false });
+    expect(rig.sent).toEqual([]);
+    expect(rig.server.slots[5].name).toBe('iron_helmet');
+  });
+
+  it('checks selectors and cancellation before any body command', async () => {
+    const rig = equipmentServer({ version: '1.21.1' }); rig.seed(5, 'iron_helmet');
+    expect(wornItemNamed(rig.bot, 'diamond_helmet')).toBeNull();
+    expect(await takeWornItem(rig.bot, 'diamond_helmet')).toMatchObject({ status: 'not-worn' });
+    await expect(takeWornItem(rig.bot, 'iron_helmet', undefined, () => { throw Error('cancelled'); }))
+      .rejects.toThrow('cancelled');
+    expect(rig.sent).toEqual([]);
+  });
+
+  it('keeps missing server confirmation unknown and does not retry or continue to a hand swap', async () => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1', silent: true }); rig.seed(5, 'iron_helmet');
+    const work = takeWornItem(rig.bot, 'iron_helmet');
+    await vi.runAllTimersAsync();
+    expect(await work).toMatchObject({ status: 'unknown', goal_completed: false });
+    expect(rig.sent).toEqual([5]);
+    expect(rig.sent).not.toContain(-999);
+  });
+});
 
 describe('equipment server confirmation', () => {
   it.each(['1.21.1', '1.20.6'])('stops cancelled %s hand selection after the original cursor ACK without dispatching a new swap', async version => {

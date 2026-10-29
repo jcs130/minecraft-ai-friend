@@ -132,6 +132,8 @@ The core's five-slot goal projection can survive a reload through the configured
 `dataDir`, scoped to world/account/Agent. It restores intentions and historical
 judgments, rechecks mechanical conditions, and never replays actions. See
 [goal recovery and combat equipment](docs/goal-recovery.md).
+Explicit worn-armor access for equipment and repair uses the same confirmed
+inventory primitive in SDK and host consumers; see [equipment access](docs/equipment-access.md).
 The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
 
 The SDK/MCP native backend uses that same notebook. A host mounting the body

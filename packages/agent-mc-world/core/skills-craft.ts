@@ -30,6 +30,7 @@ import { taggedCraftChoice } from './tagged-crafting.ts';
 import { isInventoryClickError, resumeInventoryCursor } from './inventory-click-sync.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { clearOffHandConfirmed, equipHandConfirmed, equipSlotConfirmed } from './equipment.ts';
+import { takeWornItem } from './equipment-access.ts';
 
 /**
  * `bot.craft` 吃的配方数据面(见 mineflayer-fixes 的覆写版):
@@ -533,13 +534,19 @@ async function emptyOffHand(bot: Bot): Promise<string> {
 }
 
 /** item 缺省时腾空 hand 指的那只手(默认主手)；air 别名由 parseEquip 归一化。 */
-export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'equip' }>): Promise<string> {
+export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'equip' }>, ctx?: SkillContext): Promise<string> {
   const want = call.item;
   if (!want) return call.hand === 'off' ? emptyOffHand(bot) : emptyHand(bot);
   // 精确名优先;退而求其次才用后缀(iron→iron_pickaxe),`includes` 会让
   // equip "iron" 命中哪一件全看物品栏顺序,那不是她说的意思
   const items = bot.inventory.items();
-  const item = invItemNamed(bot, want, call.pick);
+  let item = invItemNamed(bot, want, call.pick);
+  if (!item && call.hand) {
+    const access = await takeWornItem(bot, want, call.pick, ctx ? () => checkAbort(ctx) : undefined);
+    if (access.status === 'blocked' || access.status === 'unknown') throw new SkillBlocked(access.reason!, [], access.status === 'unknown' ? 'server' : 'local');
+    if (access.status === 'moved') item = invItemNamed(bot, want, call.pick);
+  }
+  if (ctx) checkAbort(ctx);
   const fromOffHand = !!item && item === offHandItem(bot);
   const worn = item && !fromOffHand ? null : equippedAlready(bot, want, call.hand, call.pick);
   if (worn) return `${worn.displayName ?? zhName(worn.name)}本来就${worn.where}`;

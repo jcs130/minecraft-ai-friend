@@ -988,7 +988,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
     case 'enchant': return skillEnchant(bot, call, ctx);
     case 'eat': return skillEat(bot, call.item, () => checkAbort(ctx));
     case 'attack': return skillAttack(bot, call.target, call.mode ?? 'auto', ctx, call.entityId);
-    case 'equip': return skillEquip(bot, call);
+    case 'equip': return skillEquip(bot, call, ctx);
     case 'pickup': return withBlueprintGain(bot, ctx, () => skillPickup(bot, ctx, call.item));
     case 'toss': return skillToss(bot, call, ctx);
     case 'lead': return skillLead(bot, call, ctx);

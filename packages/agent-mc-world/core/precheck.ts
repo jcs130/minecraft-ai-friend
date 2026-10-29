@@ -15,7 +15,7 @@ import type { SkillCall } from './skills.ts';
 import type { BlockFace, Cell } from './geometry.ts';
 import { matchItemName, type ChestBook } from './chests.ts';
 import { equipDestOf, equippedAlready } from './tools.ts';
-import { itemsInReach, offHandItem } from './inventory.ts';
+import { itemsInReach, offHandItem, wornItemNamed } from './inventory.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { RISKY_FOODS } from './nutrition.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
@@ -768,7 +768,8 @@ export function precheckStep(bot: Bot, call: SkillCall, deps: PrecheckDeps,
       case 'tunnel': return precheckTunnel(bot, call as never, deps.resolve, projectedStart) ?? precheckDeepKit(bot, call, deps);
       case 'excavate': return precheckDeepKit(bot, call, deps);
       case 'equip':
-        return call.item && (equippedAlready(bot, call.item, call.hand, call.pick) || offHandHas(bot, call.item, call.pick))
+        return call.item && (equippedAlready(bot, call.item, call.hand, call.pick) || offHandHas(bot, call.item, call.pick)
+          || (call.hand && wornItemNamed(bot, call.item, call.pick)))
           ? null : precheckItemStep(bot, call, '拿');
       case 'toss': return precheckItemStep(bot, call, '扔');
       case 'stow': return precheckStow(bot, call, deps);
