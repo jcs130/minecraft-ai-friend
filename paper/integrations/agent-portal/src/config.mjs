@@ -28,6 +28,13 @@ export function loadConfig(overrides = {}) {
   config.cloudAccounts = { ...defaults.cloudAccounts, ...local.cloudAccounts, ...overrides.cloudAccounts };
   config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
   config.agentAccess = { ...defaults.agentAccess, ...local.agentAccess, ...overrides.agentAccess };
+  config.nekoAuth = { ...defaults.nekoAuth, ...local.nekoAuth, ...overrides.nekoAuth };
+  config.nekoAuth.clientId = process.env.PORTAL_NEKO_OAUTH_CLIENT_ID || config.nekoAuth.clientId;
+  config.nekoAuth.clientSecret = process.env.PORTAL_NEKO_OAUTH_CLIENT_SECRET || config.nekoAuth.clientSecret;
+  if (typeof config.nekoAuth.enabled !== 'boolean' || typeof config.nekoAuth.clientId !== 'string'
+      || config.nekoAuth.clientId && !/^[A-Za-z0-9._-]{3,128}$/.test(config.nekoAuth.clientId)
+      || ['neko-desktop', 'neko-servers-desktop-prod', 'neko-servers-web-prod'].includes(config.nekoAuth.clientId))
+    throw new Error('Register a separate Qiandengji OAuth client; desktop/market/community clients cannot be reused');
   config.downloads = { baseUrl: '', enabledPackages: [], ...defaults.downloads, ...local.downloads, ...overrides.downloads };
   config.downloads.baseUrl = downloadBaseUrl(config.downloads.baseUrl);
   config.publicMedia = { ...defaults.publicMedia, ...local.publicMedia, ...overrides.publicMedia };
