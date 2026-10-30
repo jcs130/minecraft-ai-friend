@@ -26,7 +26,13 @@ it.each(['1.20.6','1.21.1'])('classifies the two real plugin sentences end to en
 it.each(['◆黑铁 [Agent] ','[Agent] ','[Agent]','◆黑铁',''])('recognizes plain chat prefixes %j with online-list evidence',prefix=>{
   const p=new MinecraftChatProvenance(),message={toString:()=>prefix+'ag_CorMy whispers to you: hello'};
   p.observe(message,'chat');
-  expect(p.incomingWhisper(message,players)).toMatchObject({username:'ag_CorMy',message:'hello',identity:{identityEvidence:'player-list-format'}});
+  expect(p.incomingWhisper(message,players)).toMatchObject({username:'ag_CorMy',message:'hello',identity:{identityEvidence:'player-list-format',senderUuid:'uuid-cormy'}});
+});
+it('does not invent UUID evidence for a direct plugin event or an online-list entry without a UUID',()=>{
+  const p=new MinecraftChatProvenance(),message={toString:()=> 'ag_CorMy whispers to you: hello'};
+  expect(p.identify('ag_CorMy',message,players)).toEqual({chatTransport:'unknown',identityEvidence:'explicit-chat-event'});
+  p.observe(message,'chat');
+  expect(p.incomingWhisper(message,{ag_CorMy:{username:'ag_CorMy'}})?.identity).toEqual({chatTransport:'chat',identityEvidence:'player-list-format'});
 });
 it.each(['<Jojo> You whisper to ag_CorMy: quoted','Jojo: You whisper to ag_CorMy: quoted','Jojo:You whisper to ag_CorMy: quoted','You whisper to Unknown: hi'])('does not accept ambiguous outgoing text %s',text=>{
   const p=new MinecraftChatProvenance(),message={toString:()=>text};p.observe(message,'chat');

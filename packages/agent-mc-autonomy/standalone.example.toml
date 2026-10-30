@@ -83,3 +83,15 @@ project_id = "agent-mc"
 scope_id = "" # Existing PowerContext Scope. No discovery or automatic creation.
 search_mode = "text" # PowerContext: text | vector | hybrid.
 learning_enabled = false # Optional PowerContext / HTTP game evidence and reviewed experience workflows.
+
+[social]
+# Opt-in only after verifying the actual account/UUID roster (including self).
+# Members use {name = "actual_account", uuid = "actual_full_uuid"}.
+enabled = false
+members = []
+batch_seconds = 2
+cooldown_seconds = 15
+quiet_reset_seconds = 180
+max_peer_turns = 4
+ttl_seconds = 300
+duplicate_seconds = 600
