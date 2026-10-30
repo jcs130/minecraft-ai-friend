@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+Version 0.2.135 consumes canonical core rc.145. Surface routes continue without
+waiting for an unrelated full-oxygen refill, while the next submerged leg still
+requires confirmed breathing. Water discovery distinguishes feet contact from
+head submersion and exposes the existing continuous swim action. The fixed
+archive and complete source/build/type receipts are checked independently of
+the host; existing goals, model selection and personal memory are unchanged.
+
 Version 0.2.133 retains bounded review evidence when the native executor repeatedly
 marks the same public-chat-only plan as `noop`. `ChatNoopReview` is a public Python
 export; the controller passes its `chat_noop_review` through full, compact and

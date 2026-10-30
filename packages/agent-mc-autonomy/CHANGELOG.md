@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.135
+
+- Pin the canonical rc.145 core with continuous surface swimming and separate body/head water discovery. Preserve the native queue, oxygen checks before underwater travel and unknown/cancelled results.
+- Keep model, goals, personal memory and server protocols owned by their existing providers. This dependency update does not reload a running host or establish live navigation improvement.
+
 ## 0.2.134
 
 - Pin the complete canonical engine-only rc.141 build, retaining rc.140's
