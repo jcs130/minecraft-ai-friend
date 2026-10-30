@@ -1,3 +1,7 @@
+## 2026-10-31 相机恢复候选已实拍验证，待桥重连确认
+
+定位02:24–02:32四次拍照失败，两次地形加载超时（169列未网格完成/126列缺43列）、一次租约变化及一条信息不足的Error。新相机默认半径4并仅选本连接完整足迹，仍1536px；流失败及时停止、补模型/头部诊断，共享页修隐藏人物的状态总数误判。14规则和隔离Youer三角度真实截图/原生ImageFrame/个人箱交付9项通过，16–18秒，测试服已正常停止并恢复临时文件。首轮缺Floodgate拒绝保留身份的失败保留，未放宽门禁。E/F仅本批代码/配置回退、正式只读预检通过；当前未改生产，正等服主相机桥重连确认。别重放旧维护或自动重拍失败单；本批不更新游戏JAR/YSM/原生客户端。见paper/docs/SERVER_PHOTOGRAPHY.md与E/F photo-recovery-20261031-r1。
+
 ## 2026-10-31 原版私聊默认开放已在线生效
 
 服主明确授权后，LuckPerms default 组新增 minecraft.command.msg=true 与 essentials.msg=true；后者兼容现役MC_COMMUNICATION/旧客户端的错误单节点判断，实际msg/w/tell仍走原版minecraft:msg、whisper沿原Denizen。02:16四个实际在线UUID/名字核对均允许，E/F一致导出完整差异仅两节点，无需重启/JAR替换；不冒称重新验过收件送达。外层协调锁失败未终止的错误已记录并补fail-closed入口，本批started已消费禁止重放。详见paper/docs/PRIVATE_CHAT.md与current-deployment。保留main现有宿主turn/NEKO登录改动及主检出两个独立ops修改。

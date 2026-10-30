@@ -7,10 +7,24 @@ import {randomBytes, createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
 import {photoImageQuality} from './photo-image-quality.mjs';
-import {createNativePhotoRenderer} from './native-photo-renderer.mjs';
 
 const CHANNEL = 'mcagent:photo';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Inspect only columns this connection already received. Never load disk/world data.
+export function photoLoadedRadius(world, position, maximum = 4) {
+  if (!world || ![position?.x,position?.z].every(Number.isFinite)) return 0;
+  const cx=Math.floor(position.x/16),cz=Math.floor(position.z/16);
+  const limit=Math.max(2,Math.min(8,Math.trunc(Number.isFinite(maximum)?maximum:4)));
+  for(let radius=limit;radius>=2;radius--){
+    let complete=true;
+    for(let x=cx-radius;x<=cx+radius&&complete;x++)for(let z=cz-radius;z<=cz+radius;z++){
+      const column=world.getColumn?.(x,z);
+      if(!column||typeof column.then==='function'||typeof column.toJson!=='function'){complete=false;break;}
+    }
+    if(complete)return radius;
+  }
+  return 0;
+}
 export function nativePhotoSkin(data) {
   if (!data?.url) return null;
   const url = new URL(data.url);
@@ -65,6 +79,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
   async function initialize() {
     settings = options.settings ?? JSON.parse(await readFile('E:/MC/ops/goddess-photo-camera.json','utf8'));
     if(settings.renderer==='native'){
+      const {createNativePhotoRenderer}=await import('./native-photo-renderer.mjs');
       const dependencies=createRequire(pathToFileURL(settings.nativeDependencyRoot+'/package.json'));
       nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG});
       await nativeRenderer.probe();
@@ -108,6 +123,17 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       log(`photo job=${job.job} native uploaded bytes=${png.length} sha256=${image.sha256}; game confirmation pending`);
       if(options.onCapture)await options.onCapture({job:job.job,owner:job.owner,world:job.world,mode:job.mode,anchor:{x:job.anchorX,y:job.anchorY,z:job.anchorZ},png,diagnostics});return;
     }
+    const requestedDistance = Math.max(2,Math.min(8,Math.trunc(settings.renderDistance ?? 4)));
+    const terrainDeadline=Date.now()+5000;
+    let distance=0;
+    do {
+      guard(); distance=photoLoadedRadius(bot.world,job,requestedDistance);
+      if(distance===requestedDistance)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }while(Date.now()<terrainDeadline);
+    guard(); distance=photoLoadedRadius(bot.world,job,requestedDistance);
+    if(!distance)throw Error('PHOTO_TERRAIN_NOT_READY');
+    log(`photo job=${job.job} terrain radius=${distance} requested=${requestedDistance} columns=${(2*distance+1)**2}`);
     const playerSkins = new Map(), skinImages = new Map();
     for (const entity of Object.values(bot.entities)) {
       if (entity.id === bot.entity?.id || entity.id === job.entityId && job.mode === 'first'
@@ -147,7 +173,6 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     const bridge = createViewerContentBridge(bot);
     const appearances = createViewerAppearanceBridge(bot);
     const headTextures = createViewerHeadTextures();
-    const distance = Math.max(2,Math.min(8,Math.trunc(settings.renderDistance ?? 6)));
     const resolution = Math.max(768,Math.min(2048,Math.trunc(settings.resolution ?? 1536)));
     const authenticated = req => req.headers.cookie?.split(';').some(s => s.trim() === `photo=${token}`);
     app.use((req,res,next) => {
@@ -169,7 +194,10 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     const io = new Server(server,{serveClient:false,maxHttpBufferSize:2048,allowRequest:(req,done) => done(null,authenticated(req) && (!req.headers.origin || req.headers.origin === origin))});
     io.on('connection',socket => {
       // Stream radius is exclusive. Use only columns already sent by the game server.
-      const chunks = createViewerChunkStream({bot,socket,viewDistance:distance+1,emit:(name,value) => socket.emit(name,value)});
+      const chunks = createViewerChunkStream({bot,socket,viewDistance:distance+1,emit:(name,value) => socket.emit(name,value),onError:reason=>{
+        log(`photo job=${job.job} terrain stream=${reason}`);
+        abort.abort(new Error('PHOTO_TERRAIN_STREAM_FAILED'));
+      }});
       // Camera owner is hidden, and no observer inventory, chat, HUD, or gameplay controls are forwarded.
       const serialize = e => {
         if (e.id === bot.entity?.id || e.id === job.entityId && job.mode === 'first') return null;
@@ -212,10 +240,12 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       if (options.onPreview) await options.onPreview({url:photoUrl,job:job.job});
       try { await page.waitForFunction(() => globalThis.__photoReady?.() === true,{timeout:65_000}); }
       catch (error) {
-        const diagnostics = await page.evaluate(() => ({chunks:globalThis.__lanternRenderer?.chunkLoading ?? null,content:globalThis.cortiViewerContent?.stats?.(),boot:document.querySelector('.boot')?.textContent ?? null})).catch(()=>null);
-        log(`photo job=${job.job} renderer=${JSON.stringify(diagnostics?.chunks ?? null)} errors=${pageErrors.length}`);
+        const diagnostics = await page.evaluate(() => ({chunks:globalThis.__lanternRenderer?.chunkLoading ?? null,content:globalThis.cortiViewerContent?.stats?.(),heads:globalThis.itemHeadDiagnostics?.(),boot:document.querySelector('.boot')?.textContent ?? null})).catch(()=>null);
+        const ysm=diagnostics?.content?.ysm;
+        log(`photo job=${job.job} renderer=${JSON.stringify(diagnostics?.chunks ?? null)} models=${JSON.stringify(ysm?{pending:ysm.pending,failed:ysm.failed,unavailable:ysm.unavailable,rendered:ysm.rendered,states:ysm.states}:null)} heads=${JSON.stringify(diagnostics?.heads??null)} errors=${pageErrors.length}`);
         if (options.onRenderFailure) await options.onRenderFailure({diagnostics,pageErrors,png:await page.screenshot({type:'png'})});
-        throw error;
+        signal.throwIfAborted();
+        throw new Error('PHOTO_RENDER_TIMEOUT',{cause:error});
       }
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       guard();

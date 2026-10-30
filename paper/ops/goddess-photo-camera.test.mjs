@@ -1,8 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePhotoJob,nativePhotoSkin} from './goddess-photo-camera.mjs';
+import {validatePhotoJob,nativePhotoSkin,photoLoadedRadius} from './goddess-photo-camera.mjs';
 const id = '2e254cab-2738-40bb-b9bf-4f65a3c3be12';
 const job = {type:'capture',job:id,nonce:id,owner:id,world:id,uploadId:id,entityId:12,mode:'first',x:0,y:64,z:0,yaw:0,pitch:0,anchorX:0,anchorY:64,anchorZ:0,uploadBase:'http://127.0.0.1:8517'};
+
+test('photography selects a complete actual footprint without accepting holes or loading columns',()=>{
+  const columns=new Map(),column={toJson:()=>'{"actual":true}'};
+  const world={getColumn:(x,z)=>columns.get(`${x},${z}`),getColumnAt:()=>{throw Error('must not load world');}};
+  assert.equal(photoLoadedRadius(world,{x:-.5,z:32},6),0);
+  for(let x=-5;x<=3;x++)for(let z=-2;z<=6;z++)columns.set(`${x},${z}`,column);
+  assert.equal(photoLoadedRadius(world,{x:-.5,z:32},6),4,'server-limited columns choose a complete 9x9 photograph');
+  assert.equal(photoLoadedRadius(world,{x:-.5,z:32},3),3,'explicit smaller budget is respected');
+  columns.delete('-1,2');assert.equal(photoLoadedRadius(world,{x:-.5,z:32},6),0,'central holes cannot be counted as hidden');
+  columns.set('-1,2',Promise.resolve(column));assert.equal(photoLoadedRadius(world,{x:-.5,z:32},6),0,'async loading does not establish receipt');
+  assert.equal(photoLoadedRadius(world,{x:NaN,z:32},6),0);
+});
 test('actual skin properties preserve the original texture identity and model; arbitrary downloads are rejected',()=>{
   const hash='a'.repeat(64);
   assert.deepEqual(nativePhotoSkin({url:'http://textures.minecraft.net/texture/'+hash,model:'slim'}),{hash,url:'https://textures.minecraft.net/texture/'+hash,model:'slim'});
