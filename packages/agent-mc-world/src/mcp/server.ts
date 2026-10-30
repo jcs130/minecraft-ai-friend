@@ -133,9 +133,9 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
          return outcome({ text: JSON.stringify(data), data, failed: true });
        }
       if (extra.signal.aborted) throw new Error('Request cancelled before submission.');
-      if (name === `${prefix}_tool_help`) return outcome(readToolHelp(tools.map(tool => ({
+      if (name === `${prefix}_tool_help`) {const read=readToolHelp(tools.map(tool => ({
         name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema,
-      })), args));
+      })), args);if(!read.failed&&args.name===`${prefix}_do`)runtime.noteMotionInspection();return outcome(read);}
       if (name === protocol.name) {
         requireProtocol(String(args.protocol));
         const id = () => { if (typeof args.id !== 'string' || !args.id) throw new Error('id is required'); return args.id; };
@@ -174,10 +174,12 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       }
       if (name === events.name) {
         const page=await runtime.events(args, extra.signal);
+        if (page.events.length) runtime.noteCommandInspection();
         return outcome({ text:JSON.stringify(page),data:page,meta:{eventRead:page.readout} });
       }
       if(name===textRead.name){
         const page=runtime.readTextArtifact(String(args.handle),{offset:Number(args.offset??0),maxChars:Number(args.maxChars??1024)});
+        if (page.returnedChars) runtime.noteCommandInspection();
         return outcome({text:page.text,data:{...page},meta:{textPage:textPageMeta(page),readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true},
           readback:{protocol:'agent-mc-readback/v1',historical:true,resource:`text:${page.handle}:${page.offset}:${page.returnedChars}`,revision:page.handle.slice(4)}}});
       }

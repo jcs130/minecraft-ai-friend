@@ -1,5 +1,6 @@
 /** Passive evidence for the host's next decision. Never refuses, retries or cancels work. */
 import { createHash } from 'node:crypto';
+import { MotionReviewBook } from './motion-review.ts';
 
 type Row = Record<string, any>;
 const object = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -47,7 +48,8 @@ export class PlanReviewBook {
   private readonly latest = new Map<string, { hash: string; id: string }>();
   private readonly quotes = new Map<string, Row[]>();
   private readonly effects = new Map<string, RecentPlanEffect>();
-  constructor(private readonly options: { now?: () => number; windowMs?: number } = {}) {}
+  private readonly motion: MotionReviewBook;
+  constructor(private readonly options: { now?: () => number; windowMs?: number } = {}) { this.motion = new MotionReviewBook(options); }
   private now() { return this.options.now?.() ?? Date.now(); }
   private fresh(e: FailedPlanEpisode) { return this.now() - e.lastAt <= (this.options.windowMs ?? 900000); }
   recordCall(input: { run: string; name: string; args: unknown; result: unknown }): void {
@@ -63,6 +65,7 @@ export class PlanReviewBook {
     while (this.submitted.size > 128) this.submitted.delete(this.submitted.keys().next().value!);
   }
   recordEvents(events: readonly unknown[]): void {
+    this.motion.recordEvents(events);
     for (const raw of events) {
       if (!object(raw)) continue;
       const x = raw.execution;
@@ -128,7 +131,7 @@ export class PlanReviewBook {
     return { protocol: 'agent-mc-plan-review/v1', episodes: structuredClone([...this.episodes.values()]),recentEffects:structuredClone([...this.effects.values()]) };
   }
   context(run: string) {
-    return { protocol: 'agent-mc-plan-review/v1',recentEffects:structuredClone([...this.effects.values()].filter(e=>e.run===run&&this.now()-e.at<=(this.options.windowMs??900000)).slice(-3)), episodes: [...this.episodes.values()].filter(e => e.run === run && e.active && this.fresh(e)).slice(-2).map(e => {
+    return { protocol: 'agent-mc-plan-review/v1',motionReview:this.motion.context(run),recentEffects:structuredClone([...this.effects.values()].filter(e=>e.run===run&&this.now()-e.at<=(this.options.windowMs??900000)).slice(-3)), episodes: [...this.episodes.values()].filter(e => e.run === run && e.active && this.fresh(e)).slice(-2).map(e => {
       return { ...e, failedSteps: this.quotes.get(e.key) ?? [], receiptIsUntrusted: true,
         original: e.localId === null ? { executionId: e.latestExecutionId } : { tool: `${e.toolPrefix}_queue`, arguments: { taskId: e.localId, detail: true } } };
     }), guidance: 'Historical receipts, not current stock. Unattributed source stays unknown. Body work can change prerequisites during generation. State change does not turn a failed step into progress. Read original terminal/failed step and current stock before repeating. Declare needs for dependent actions/chat; partial or command-sent is not verified success. Probe success cannot repair failed movement; unknown cells do not imply pending pages. No automatic replay/cancel/adoption.' };
