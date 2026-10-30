@@ -4,6 +4,28 @@ import { structuredVisual } from '../src/client/visual.ts';
 import { readBossBarHud } from '../src/client/index.ts';
 
 describe.each(['1.21.1', '1.20.6'])('current server HUD %s', version => {
+  it('keeps countdown ticks in current HUD facts without burying player or audience input in per-second events', () => {
+    const r = methodHarness(version);
+    try {
+      const emit = vi.spyOn(r.world as never as { emit(...args: unknown[]): unknown }, 'emit').mockImplementation(() => undefined);
+      (r.world as never as { hookBotEvents(bot: unknown): void }).hookBotEvents(r.bot);
+      const bar = { entityUUID: 'activity', title: { text: '探索留影 | 2:14' }, health: 0.22 };
+      Object.assign(r.bot, { bossBars: { activity: bar } });
+      r.bot.emit('bossBarCreated', bar); emit.mockClear();
+      for (let second = 13; second >= 1; second--) {
+        bar.title = { text: `探索留影 | 2:${String(second).padStart(2, '0')}` };
+        r.bot.emit('bossBarUpdated', bar);
+      }
+      expect(emit).not.toHaveBeenCalled();
+      expect(r.world.requestFacts()!.parts?.find(p => p.key === 'hud')?.text).toContain('2:01');
+      bar.health = 0.26; r.bot.emit('bossBarUpdated', bar);
+      expect(emit).toHaveBeenCalledTimes(1);
+      bar.title = { text: '探索留影 | 已完成 1/3' }; r.bot.emit('bossBarUpdated', bar);
+      expect(emit).toHaveBeenCalledTimes(2);
+      r.bot.emit('bossBarDeleted', bar);
+      expect(emit).toHaveBeenCalledTimes(3);
+    } finally { r.close(); }
+  });
   it('reports a new stage title even when progress does not decrease, and keeps it in fresh request facts', () => {
     const r = methodHarness(version);
     try {

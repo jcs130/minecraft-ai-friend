@@ -73,7 +73,7 @@ import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
-import { classifyBossBarTitle, readBossBarHud, renderBossBarHud } from './boss-bar.ts';
+import { bossBarStageTitle, classifyBossBarTitle, readBossBarHud, renderBossBarHud } from './boss-bar.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { MinecraftChatProvenance, incomingPrivateParts } from '../src/chat-provenance.ts';
 import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
@@ -7945,7 +7945,9 @@ export class MinecraftWorld implements World {
       this.bossQuarter.set(key, quarter);
       // Status bars may advance, reset or change phase with unchanged progress.
       // Boss health keeps its existing damage threshold; identical updates stay quiet.
-      if (title !== previousTitle || (kind === 'boss' ? quarter < prev : quarter !== prev)) {
+      const titleChanged = kind === 'boss' ? title !== previousTitle
+        : previousTitle === undefined || bossBarStageTitle(title) !== bossBarStageTitle(previousTitle);
+      if (titleChanged || (kind === 'boss' ? quarter < prev : quarter !== prev)) {
         this.emit('minecraft.event', `[Minecraft] ${title} ${kind === 'boss' ? '血量剩' : '状态条进度为'} ${Math.round(health * 100)}%。`, false);
       }
     });
