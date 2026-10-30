@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.140",
+  "version": "0.5.7-rc.141",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -134,6 +134,8 @@
     "src/mcp/stdio.ts",
     "src/index.ts",
     "src/context.ts",
+    "src/server-tools.ts",
+    "src/equipment-access.ts",
     "src/observations.ts",
     "src/chat-provenance.ts",
     "src/collect-contract.ts",

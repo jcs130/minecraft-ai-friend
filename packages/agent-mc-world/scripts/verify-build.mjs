@@ -6,10 +6,10 @@ const packed = process.argv.includes('--packed');
 const manifest = JSON.parse(await readFile(new URL('dist/build.json', root), 'utf8'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 // Source builds verify every input and both generated copies. Installed npm
-// consumers verify the complete shipped runtime, not an omitted build archive.
+// consumers also verify every declared source input, alongside the shipped
+// runtime, without requiring an omitted third-party build archive.
 const shipped = manifest.files.filter(entry => /^dist\/(?:runtime\/|monitor\/)/.test(entry.file));
-const training = manifest.sourceFiles.filter(entry => entry.file.startsWith('training/'));
-for (const entry of packed ? [...shipped, ...training] : [...manifest.sourceFiles, ...manifest.files]) {
+for (const entry of packed ? [...shipped, ...manifest.sourceFiles] : [...manifest.sourceFiles, ...manifest.files]) {
   if (entry.file.includes('..') || entry.file.startsWith('/')) throw new Error('Invalid build path');
   if (hash(await readFile(new URL(entry.file, root))) !== entry.sha256) throw new Error('Build differs from source: ' + entry.file);
 }

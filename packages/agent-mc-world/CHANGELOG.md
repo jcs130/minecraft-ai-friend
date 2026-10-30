@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.7-rc.141
+
+- Include the public server-tool and equipment source entries already declared
+  by the canonical build receipt in npm archives.
+- Verify every declared source input in installed-package checks, so a working
+  runtime cannot conceal an incomplete source inventory. Runtime behavior is
+  unchanged from rc.140.
+
 ## 0.5.7-rc.140
 
 - Expose the existing verified food-risk reference through public SDK/extension exports and live backpack, food-reserve and low-health facts.
