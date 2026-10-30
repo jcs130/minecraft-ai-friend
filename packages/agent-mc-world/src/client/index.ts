@@ -12,10 +12,11 @@ export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAd
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
+export { PlanReviewBook, type FailedPlanEpisode, type RecentPlanEffect } from './plan-review.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';
 export { runtimeExecutionState, type RuntimeExecutionState, type ExecutionIdentity } from './execution-state.ts';
-export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,type TextPage,type TextToolResult} from './text-pages.ts';
+export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,TextPageRangeError,TextReadRecoveryBook,type TextPage,type TextPageFailure,type TextToolResult} from './text-pages.ts';
 export {ReadProgressBook,readOnlyToolResult,type ReadProgressEvidence} from './read-progress.ts';
 export * from './schema-reading.ts';
 export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.ts';

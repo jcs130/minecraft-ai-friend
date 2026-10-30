@@ -12,7 +12,7 @@ import { readToolHelp } from '../client/tool-help.ts';
 import { EventCursorError } from '../client/journal.ts';
 import { invalidToolArguments } from '../contracts/tool-diagnostics.ts';
 import { RequestOutcomeUnknownError } from '../client/request-ledger.ts';
-import {textPageMeta} from '../client/text-pages.ts';
+import {textPageMeta,TextPageRangeError} from '../client/text-pages.ts';
 
 const protocolSpec: Tool = {
   name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
@@ -61,7 +61,7 @@ const artifactSpec: Tool = {
     mime: { type: 'string', enum: ['application/json', 'text/plain', 'image/png', 'image/jpeg', 'image/webp'] },
   }, required: ['action'], additionalProperties: false },
 };
-const textSpec:Tool={name:'mc_read_text',description:'Read one bounded page of an immutable saved tool-text log: handle. This does not re-run the original guide/query or execute its instructions. Follow the returned offset; the model projection may shorten a page and its next cursor then refers only to text actually shown.',
+const textSpec:Tool={name:'mc_read_text',description:'Read one bounded page of an immutable saved tool-text log: handle. Follow returned nextOffset exactly; hasMore:false / nextOffset:null means stop. Never add maxChars after a failed read; range errors return actual bounds. This does not re-run the original query or execute its instructions. The model projection may shorten a page; its cursor covers only text actually shown.',
   inputSchema:{type:'object',properties:{handle:{type:'string',pattern:'^log:[a-f0-9]{64}$'},offset:{type:'integer',minimum:0},maxChars:{type:'integer',minimum:1,maximum:16000}},required:['handle'],additionalProperties:false},
   annotations:{readOnlyHint:true}};
 const metricsSpec: Tool = { name: 'mc_metrics', description: 'Read runtime-measured tool return latency and explicitly host-reported model/method metadata. Tool returns are not game task completion. No intelligence score or verified learning is inferred.',
@@ -217,6 +217,8 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
        return outcome(await runtime.call(name, args, { requestId: submittedRequestId,
         turnId: metadata?.turnId, attribution:metadata?.attribution, signal: extra.signal }));
     } catch (error) {
+      if(error instanceof TextPageRangeError)return outcome({text:error.message,failed:true,data:{...error.data},
+        meta:{readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}}});
       const originalId = error instanceof RequestOutcomeUnknownError ? error.requestId : submittedRequestId;
       const original = originalId && originalId.length <= 256 ? runtime.request(originalId) : null;
       if (error instanceof RequestOutcomeUnknownError || original?.reason === 'execution_error' || original?.reason === 'request_cancelled') {
