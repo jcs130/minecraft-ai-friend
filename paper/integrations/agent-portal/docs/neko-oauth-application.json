@@ -1,0 +1,10 @@
+{
+  "client_name": "千灯纪网站登录",
+  "client_uri": "https://mc.kangqiang.site",
+  "redirect_uris": ["https://mc.kangqiang.site/api/v1/auth/neko/callback"],
+  "grant_types": ["authorization_code"],
+  "response_types": ["code"],
+  "scope": "openid",
+  "token_endpoint_auth_method": "none",
+  "id_token_signed_response_alg": "RS256"
+}

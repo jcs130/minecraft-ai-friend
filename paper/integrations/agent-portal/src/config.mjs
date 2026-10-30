@@ -29,6 +29,10 @@ export function loadConfig(overrides = {}) {
   config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
   config.agentAccess = { ...defaults.agentAccess, ...local.agentAccess, ...overrides.agentAccess };
   config.nekoAuth = { ...defaults.nekoAuth, ...local.nekoAuth, ...overrides.nekoAuth };
+  if (process.env.PORTAL_NEKO_OAUTH_ENABLED !== undefined) {
+    if (!['true', 'false'].includes(process.env.PORTAL_NEKO_OAUTH_ENABLED)) throw new Error('PORTAL_NEKO_OAUTH_ENABLED must be true or false');
+    config.nekoAuth.enabled = process.env.PORTAL_NEKO_OAUTH_ENABLED === 'true';
+  }
   config.nekoAuth.clientId = process.env.PORTAL_NEKO_OAUTH_CLIENT_ID || config.nekoAuth.clientId;
   config.nekoAuth.clientSecret = process.env.PORTAL_NEKO_OAUTH_CLIENT_SECRET || config.nekoAuth.clientSecret;
   if (typeof config.nekoAuth.enabled !== 'boolean' || typeof config.nekoAuth.clientId !== 'string'

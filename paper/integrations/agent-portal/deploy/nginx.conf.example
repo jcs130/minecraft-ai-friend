@@ -1,4 +1,7 @@
 # qiandengji-agent-portal
+# Include from nginx's http context. OIDC code/state and other query values
+# must not enter the access log or referrer fields.
+log_format qiandengji_safe escape=json '{"method":"$request_method","path":"$uri","status":$status,"bytes":$body_bytes_sent,"duration":$request_time}';
 server {
     listen 80;
     server_name mc.kangqiang.site;
@@ -17,16 +20,22 @@ server {
     ssl_session_cache shared:qd_portal_tls:1m;
     ssl_session_timeout 1d;
     client_max_body_size 9m;
-    access_log /var/log/nginx/qiandengji-portal.access.log;
+    access_log /var/log/nginx/qiandengji-portal.access.log qiandengji_safe;
     error_log /var/log/nginx/qiandengji-portal.error.log;
+    proxy_http_version 1.1;
+    proxy_set_header Host mc.kangqiang.site;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Connection "";
+    proxy_read_timeout 25s;
+    proxy_send_timeout 25s;
+    location = /api/v1/auth/neko/callback {
+        # Ordinary upstream errors include request URI in nginx error logs.
+        # Keep the status in the safe access log; suppress per-request errors.
+        error_log /var/log/nginx/qiandengji-portal.error.log crit;
+        proxy_pass http://127.0.0.1:8790;
+    }
     location / {
         proxy_pass http://127.0.0.1:8790;
-        proxy_http_version 1.1;
-        proxy_set_header Host mc.kangqiang.site;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header Connection "";
-        proxy_read_timeout 25s;
-        proxy_send_timeout 25s;
     }
 }

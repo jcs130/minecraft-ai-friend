@@ -17,7 +17,13 @@
 
 发现文档：<https://auth.project-neko.cn/.well-known/openid-configuration>。当前发现文档没有动态客户端注册端点；不可借用 `neko-desktop`、`neko-servers-desktop-prod` 或 `neko-servers-web-prod`。Client ID 不是用户密码；如服务方要求 Client Secret，放在服务器私有环境中，不写入仓库、插件包或对话。
 
-在现有正式 `publicOrigin=https://mc.kangqiang.site` 的私有配置中启用 `nekoAuth.enabled=true`，通过 `PORTAL_NEKO_OAUTH_CLIENT_ID` 提供该应用的 Client ID；机密客户端另设 `PORTAL_NEKO_OAUTH_CLIENT_SECRET`。也可通过私有 `nekoAuth.clientId` 配置非敏感 ID。未配置、非 HTTPS 或借用其他应用 ID 时，能力接口返回不可用，插件不提交角色申请。
+在实际运行容器的私有环境中设置 `PORTAL_NEKO_OAUTH_ENABLED=true`、`PORTAL_NEKO_OAUTH_CLIENT_ID=平台实际登记的ID` 和 `PORTAL_PUBLIC_ORIGIN=https://mc.kangqiang.site`；机密客户端另设 `PORTAL_NEKO_OAUTH_CLIENT_SECRET`。`ENABLED` 只接受小写 `true/false`，默认关闭。也可在真正挂载到 `/app/config.local.json` 的私有配置中设置 `nekoAuth.enabled=true/clientId`，不能只把文件放在宿主机而不挂载。默认镜像不会复制私有配置。未配置、非 HTTPS 或借用其他应用 ID 时，能力接口返回不可用，插件不提交角色申请。
+
+登记材料见 [neko-oauth-application.json](neko-oauth-application.json)，它是待提交模板，不是登记回执。交给猫娘计划身份平台的应用管理者，要求启用 PKCE S256；若平台要求机密客户端，则明确登记 `client_secret_post` 并私下配置 secret。不要猜测或对公开 auth 域名调用管理 API。官方 [neko-auth-client](https://github.com/Project-N-E-K-O/neko-auth-client) 是网站登录 SDK，不提供生产客户端登记权限；目前未查到可核实的普通用户自助登记入口。
+
+实际启用按以下顺序进行：平台返回独立应用登记 → 整合当前官网并备份配置、SQLite 与持久卷 → 配置容器环境和可信 HTTPS 代理 → 正常发布官网 → 匿名检查 `/api/v1/auth/neko` 为 200/available=true、`/neko-login.js` 为 200 → 本人真实登录与回调 → 插件批准一次固定角色申请 → 验证建号结果和游戏自动登录。原账号关联应单独测试归属、密码和角色保持。未完成真实授权前不发布为可用能力。
+
+部署同时使用已脱敏的 `deploy/nginx.conf.example`：访问日志只记路径，不记查询串或 Referer；精确回调抑制普通代理错误中的请求 URI。还需检查实际 CDN、负载均衡和其他代理日志。这个源码示例修订没有应用到线上，不能据此声称现有线上日志已脱敏或曾经泄露。权限和日志策略由站点维护者在真实部署中核实。
 
 部署前先整合最新官网候选，备份网站私有配置和数据；不能用旧公开源码覆盖更新的线上内容。本功能不要求重启或部署 Paper、LoginGuard、Java、模型或 Neko。实际 OAuth 和完整新账号入服应在登记和网站部署后另行验收，未由离线通过代替。
 
