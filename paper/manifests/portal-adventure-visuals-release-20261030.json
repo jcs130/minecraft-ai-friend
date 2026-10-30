@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed-and-verified",
+  "websiteVersion": "0.8.31",
+  "deployedAt": "2026-10-30T03:11:47.946731+00:00",
+  "verifiedAt": "2026-10-30T11:19:41.831879+08:00",
+  "website": "https://mc.kangqiang.site/",
+  "guide": "https://mc.kangqiang.site/aincrad.html",
+  "guideServerVersion": "0.4.47.34-vortex",
+  "sourceCommit": "44e1234149e9c545ada416cc4d15a6853d383ecd",
+  "imageId": "sha256:31087b33872c149c7b93c721d18c38888834bc2285d9d0b6216da8a8aeb74fc9",
+  "sourceBundleSha256": "6d601d0993428ae2a92d0f511760c92c099a3181359335f8764201f3a6c7b746",
+  "artwork": {
+    "generator": "built-in image_gen",
+    "conceptImages": 4,
+    "responsiveVariants": 9,
+    "allVariantsBytes": 1228550,
+    "largestHeroBytes": 319348,
+    "promptManifest": "paper/integrations/agent-portal/design/artwork-20261030.json",
+    "files": [
+      {
+        "path": "/season-art/aincrad-dusk-20261030-640.webp",
+        "width": 640,
+        "bytes": 85700,
+        "sha256": "839f1e9b141bbbedfffff5099eb006b4ebfff636a977b4ad00c4c6a708d60be6"
+      },
+      {
+        "path": "/season-art/aincrad-dusk-20261030-960.webp",
+        "width": 960,
+        "bytes": 173412,
+        "sha256": "88c65ebeb4849d5136b096b1f2a1961e78a792e555ce8214ee4c9a8c97ae3f58"
+      },
+      {
+        "path": "/season-art/aincrad-dusk-20261030-1440.webp",
+        "width": 1440,
+        "bytes": 319348,
+        "sha256": "730fdd6606fb457a26ed7737880a972629f3001764bd658cad80e9cd187905df"
+      },
+      {
+        "path": "/season-art/guild-preparation-20261030-640.webp",
+        "width": 640,
+        "bytes": 58682,
+        "sha256": "f272beaa3579e3c803af5c83182c6287d10dfa8c4ab9e3f460bfdd02667ed218"
+      },
+      {
+        "path": "/season-art/guild-preparation-20261030-960.webp",
+        "width": 960,
+        "bytes": 111384,
+        "sha256": "b5e50836e2cd0b3d2789ff9997e34d9617ef5f6bf53ca1faa283519feb2c9edb"
+      },
+      {
+        "path": "/season-art/ruins-expedition-20261030-640.webp",
+        "width": 640,
+        "bytes": 75594,
+        "sha256": "e09aeb5eed887370977c6611cba756666dd6ddd8a9f72a92fb476212671d84e7"
+      },
+      {
+        "path": "/season-art/ruins-expedition-20261030-960.webp",
+        "width": 960,
+        "bytes": 159852,
+        "sha256": "60a3a5ba7ff754d70e12f208b9a82d8c581005ee689d4abba86cf3b03edc7ff2"
+      },
+      {
+        "path": "/season-art/lantern-homecoming-20261030-640.webp",
+        "width": 640,
+        "bytes": 81512,
+        "sha256": "d1736295f5d07bad61fa847fbbfc84a92993f314e4aacdccd00edc2f2dac276e"
+      },
+      {
+        "path": "/season-art/lantern-homecoming-20261030-960.webp",
+        "width": 960,
+        "bytes": 163066,
+        "sha256": "8bb988698c9d79892f48b1eed5459d22064bd513c05e0fc6700feaaf1fa6ed35"
+      }
+    ]
+  },
+  "verification": {
+    "windowsPassed": 349,
+    "windowsConditionalSkipped": 3,
+    "linuxPassed": 352,
+    "runtimeFiles": 107,
+    "changedRuntimeFiles": 14,
+    "unrelatedRuntimeFilesPreserved": true,
+    "protectedTables": 20,
+    "publicPhotosPreservedAtSwitch": 7,
+    "accountBridgeReady": true,
+    "skill134OssRedirectPreserved": true,
+    "desktopAnd390pxMobileVerified": true,
+    "allNinePublicArtworkSha256Verified": true,
+    "consistentWebsiteBackupVerifiedOnEAndF": true,
+    "temporaryBackupTransferRevoked": true
+  },
+  "gameRestarted": false,
+  "loginProxyRestarted": false,
+  "observerSourceRestarted": false,
+  "configurationChanged": false,
+  "frozenSkillRebuilt": false,
+  "attemptHistory": [
+    {
+      "stage": "initial isolated build",
+      "result": "stopped before production; invalid Docker base image ID syntax; corrected to verified existing tag"
+    },
+    {
+      "stage": "first website switch",
+      "result": "automatically reverted; content guard included the regular archive observedAt heartbeat; account and content rows proved unchanged"
+    },
+    {
+      "stage": "final website switch",
+      "result": "committed; only two proven heartbeat timestamps normalized, twenty content and account tables preserved"
+    }
+  ]
+}

@@ -296,5 +296,15 @@
     "staticNestedOperationsAssetsReused": true,
     "goddessGuidancePublished": true,
     "goddessAlreadyReadIt": false
+  },
+  "website": {
+    "state": "deployed-and-verified",
+    "version": "0.8.31",
+    "verifiedAt": "2026-10-30T11:19:41.831879+08:00",
+    "releaseDocument": "paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md",
+    "releaseManifest": "paper/manifests/portal-adventure-visuals-release-20261030.json",
+    "guideServerVersion": "0.4.47.34-vortex",
+    "gameRestartedForWebsite": false,
+    "skillDownload": "1.3.4 unchanged"
   }
 }

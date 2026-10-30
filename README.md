@@ -1,6 +1,8 @@
 # 千灯纪：重返艾恩葛朗特
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.30、QiandengjiRpg0.2.10、VortexRPG1.2.2-alpha-qd29已上线，32项正式核对通过。官网0.8.30及匹配观战后台已更新，34项正式、8项四角色现场与4项真实游客观战检查通过；语音服务端、自启和公网UDP已验收，真人耳听仍待验证。[版本与玩法](https://mc.kangqiang.site/aincrad.html) · [发布与状态](paper/docs/RPG_INTERACTION_20261029.md)。Skill1.3.4和本机Harness身体已跟进MC核心rc.130；官网已保存29张照片，由所属用户/管理员管理公开，游客目前可见3张。下载直达OSS，外部客户端需主动更新。[本批发布](paper/docs/ALL_FEATURES_RELEASE_20261029.md)；罗盘修复已随.30合入。 起始之城保护已热更新：城内可放不可拆，城外可挖可建，副本建筑仍受保护。[范围说明](paper/docs/AINCRAD_CITY_POLICY_20261029.md)。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.34-vortex、QiandengjiRpg0.2.12、VortexRPG1.2.2-alpha-qd30已上线，28项正式核对、6位重回在线及5路最终认证通过。[本次游戏更新](paper/docs/DUNGEON_LIFECYCLE_20261030.md)明确遗迹30分钟时限、本人参战与救援有效性；原生职业、存档点续关和副本成绩保留。**官网0.8.31已发布**：四幅新冒险场景、手机适配及最新[版本玩法指南](https://mc.kangqiang.site/aincrad.html)，[视觉与发布证据](paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md)。公开Skill1.3.4与Harness身体仍锁MC核心rc.130，外部客户端需自行更新；主干核心推进不等于所有宿主自动更新。29张照片已保存，公开选择由本人/管理员管理，以线上展廊为准。下载直达OSS。起始之城内可放不可拆，城外可挖可建，独立副本建筑保护保持。
+
+![千灯纪：灯火初上的起始之城与浮空城，AI场景概念图](paper/integrations/agent-portal/public/season-art/aincrad-dusk-20261030-960.webp)
 
 运维状态：[NVMe迁移](paper/docs/NVME_RUNTIME_20261029.md)已完成，原E盘入口联接到C盘NVMe，原目录保留。本轮E/F完整恢复点已冷刷新最新游戏与认证；两次失败尝试的前像和回执保留，新版游戏端已实际运行，后台收尾不需再停Paper。
 
