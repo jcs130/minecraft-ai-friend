@@ -9,6 +9,22 @@ import path from 'node:path';
 import {photoImageQuality} from './photo-image-quality.mjs';
 
 const CHANNEL = 'mcagent:photo';
+export function photoLeaseActor(bot,job,cameraId) {
+  const target=bot.entities[job.entityId];
+  if(cameraId!==job.entityId||!target?.position||target.uuid?.toLowerCase()!==job.owner.toLowerCase()
+    ||![target.position.x,target.position.y,target.position.z].every(Number.isFinite)
+    ||Math.hypot(target.position.x-job.anchorX,target.position.y-job.anchorY,target.position.z-job.anchorZ)>.75)throw Error('PHOTO_CAMERA_LEASE_LOST');
+  return target;
+}
+export async function awaitPhotoLease(ready,{signal,timeoutMs=3000,intervalMs=50}={}) {
+  const deadline=Date.now()+timeoutMs;
+  while(true){
+    signal?.throwIfAborted();
+    if(ready())return;
+    if(Date.now()>=deadline)throw Error('PHOTO_CAMERA_LEASE_LOST');
+    await new Promise(resolve=>setTimeout(resolve,intervalMs));
+  }
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Inspect only columns this connection already received. Never load disk/world data.
 export function photoLoadedRadius(world, position, maximum = 4) {
@@ -54,8 +70,8 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     if (bot._client.state !== 'play') return;
     bot._client.write('custom_payload', {channel:CHANNEL, data:Buffer.from(JSON.stringify({type, ...(type === 'ready' ? {idle:active == null} : {}), ...(job ? {job:job.job,nonce:job.nonce,...(job.reason ? {reason:job.reason} : {}),...(job.image?{image:job.image}:{})} : {})}))});
   };
-  const stopJob = () => { active?.abort.abort(); };
-  const onCamera = p => { cameraId = p.cameraId; if (active && cameraId !== active.job.entityId) stopJob(); };
+  const stopJob = reason => { active?.abort.abort(reason); };
+  const onCamera = p => { cameraId = p.cameraId; if (active?.leaseAcquired && cameraId !== active.job.entityId) stopJob(new Error('PHOTO_CAMERA_LEASE_LOST')); };
   const onPayload = packet => {
     if (packet.channel !== CHANNEL || packet.data.length > 8192) return;
     let data; try { data = JSON.parse(packet.data.toString('utf8')); } catch { return; }
@@ -68,7 +84,8 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     const state = {job,abort:new AbortController(),physics:bot.physicsEnabled}; active = state; bot.physicsEnabled = false;
     reply('ready');
     void capture(state).catch(error => {
-      const reason = /^PHOTO_[A-Z_]+$/.test(error?.message ?? '') ? error.message : error?.code ?? error?.name ?? 'Error';
+      const failure=state.abort.signal.aborted&&state.abort.signal.reason instanceof Error?state.abort.signal.reason:error;
+      const reason = /^PHOTO_[A-Z_]+$/.test(failure?.message ?? '') ? failure.message : failure?.code ?? failure?.name ?? 'Error';
       log(`photo job=${job.job} failed=${reason}`);
       reply('failed', {...job,reason:reason === 'TimeoutError' ? 'PHOTO_RENDER_TIMEOUT' : /^PHOTO_[A-Z_]+$/.test(reason) ? reason : 'PHOTO_RENDER_FAILED'});
     }).finally(() => { if (active === state) {active = null;bot.physicsEnabled=state.physics;if(available)reply('ready');} });
@@ -107,13 +124,25 @@ export function startGoddessPhotoCamera(bot, options = {}) {
   async function capture(state) {
     const {job,abort} = state;
     const signal = AbortSignal.any([abort.signal,AbortSignal.timeout(options.captureTimeoutMs ?? 80_000)]);
+    let leaseWorld;
     const guard = () => {
       signal.throwIfAborted();
-      const target = bot.entities[job.entityId];
-      if (cameraId !== job.entityId || !target || target.uuid?.toLowerCase() !== job.owner.toLowerCase()
-        || Math.hypot(target.position.x-job.anchorX, target.position.y-job.anchorY, target.position.z-job.anchorZ) > .75) throw Error('PHOTO_CAMERA_LEASE_LOST');
-      return target;
+      if(leaseWorld&&bot.world!==leaseWorld)throw Error('PHOTO_CAMERA_LEASE_LOST');
+      return photoLeaseActor(bot,job,cameraId);
     };
+    // A remote teleport can deliver camera/payload before the tracked entity.
+    // Wait only for the exact requested identity; after acquisition stay strict.
+    const leaseStarted=Date.now();
+    try{await awaitPhotoLease(()=>{
+      try{guard();return true;}catch(error){if(error.message==='PHOTO_CAMERA_LEASE_LOST'&&!signal.aborted)return false;throw error;}
+    },{signal});}catch(error){
+      const target=bot.entities[job.entityId];
+      const delta=target?.position?Math.hypot(target.position.x-job.anchorX,target.position.y-job.anchorY,target.position.z-job.anchorZ):null;
+      log(`photo job=${job.job} lease unavailable camera=${cameraId??null} expected=${job.entityId} entity=${Boolean(target)} identityMatches=${target?.uuid?.toLowerCase()===job.owner.toLowerCase()} anchorDelta=${Number.isFinite(delta)?delta:null}`);
+      throw error;
+    }
+    state.leaseAcquired=true;leaseWorld=bot.world;
+    log(`photo job=${job.job} camera lease acquired ms=${Date.now()-leaseStarted}`);
     guard();
     if(nativeRenderer){
       const {png,image,diagnostics}=await nativeRenderer.capture(job,{guard,signal});guard();
@@ -213,7 +242,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
         socket.emit(name,value);
       }});
       const sync = () => {
-        try { guard(); } catch { abort.abort(); return; }
+        try { guard(); } catch (error) { abort.abort(error); return; }
         socket.emit('position',{pos:{x:job.x,y:job.y,z:job.z},yaw:job.yaw,pitch:job.pitch});
         socket.emit('time',bot.time.timeOfDay);
         socket.emit('weather',{raining:bot.isRaining,thunder:bot.thunderState ?? 0});
@@ -242,7 +271,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       catch (error) {
         const diagnostics = await page.evaluate(() => ({chunks:globalThis.__lanternRenderer?.chunkLoading ?? null,content:globalThis.cortiViewerContent?.stats?.(),heads:globalThis.itemHeadDiagnostics?.(),boot:document.querySelector('.boot')?.textContent ?? null})).catch(()=>null);
         const ysm=diagnostics?.content?.ysm;
-        log(`photo job=${job.job} renderer=${JSON.stringify(diagnostics?.chunks ?? null)} models=${JSON.stringify(ysm?{pending:ysm.pending,failed:ysm.failed,unavailable:ysm.unavailable,rendered:ysm.rendered,states:ysm.states}:null)} heads=${JSON.stringify(diagnostics?.heads??null)} errors=${pageErrors.length}`);
+        log(`photo job=${job.job} renderer=${JSON.stringify(diagnostics?.chunks ?? null)} models=${JSON.stringify(ysm?{pending:ysm.pending,failed:ysm.failed,unavailable:ysm.unavailable,rendered:ysm.rendered,states:ysm.states,errors:ysm.errors?.slice(0,4).map(value=>String(value).slice(0,96))}:null)} heads=${JSON.stringify(diagnostics?.heads??null)} errors=${pageErrors.length}`);
         if (options.onRenderFailure) await options.onRenderFailure({diagnostics,pageErrors,png:await page.screenshot({type:'png'})});
         signal.throwIfAborted();
         throw new Error('PHOTO_RENDER_TIMEOUT',{cause:error});
