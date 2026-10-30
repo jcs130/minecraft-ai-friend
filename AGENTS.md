@@ -1,3 +1,7 @@
+## 2026-10-31 原版私聊默认开放已在线生效
+
+服主明确授权后，LuckPerms default 组新增 minecraft.command.msg=true 与 essentials.msg=true；后者兼容现役MC_COMMUNICATION/旧客户端的错误单节点判断，实际msg/w/tell仍走原版minecraft:msg、whisper沿原Denizen。02:16四个实际在线UUID/名字核对均允许，E/F一致导出完整差异仅两节点，无需重启/JAR替换；不冒称重新验过收件送达。外层协调锁失败未终止的错误已记录并补fail-closed入口，本批started已消费禁止重放。详见paper/docs/PRIVATE_CHAT.md与current-deployment。保留main现有宿主turn/NEKO登录改动及主检出两个独立ops修改。
+
 ## 2026-10-31 基础成长与入口修复已正式上线
 
 本轮完成180/60/10秒预告、正常停启和E/F040022当前游戏/认证冷刷新；原运行树另存，嵌套静态运维资产复用。现役AF.37-rpg/桥.13/qd31-growth，54插件、51无关JAR与Youer/mods保持；313规则、34真实联机冷启、12实际跨盘安装回退及32正式核验通过。职业经验修本级进度，不改XP/等级；Aura11项成长原记录保留，六有限原生被动、单Vortex魔力，旧SpellMastery/职业归档；夜视羽落旧门槛和遗迹冷区块空值修复，归乡Y67保持。女神7任务恢复，角色冷安装证明通过，源码/Skill参考更新但下载1.3.4未重发，六段地图未夹带。此前等待超时、旧JAR名拒绝和保留目录冲突的回执保留；两次安装前失败均正常恢复旧服，R3补齐停服前路径预检；本批started/安装已消费，禁止重放。语音当前内核合成输入近处273音频包/1字幕、200格外和跨维度均0；当前正式发声回执空/auto关，真人耳听与所有Agent宿主消费仍未验。详见RPG_GROWTH_20261030、VOICE_STATUS_20261030和本批清单；main新core与两个独立ops修改保留。

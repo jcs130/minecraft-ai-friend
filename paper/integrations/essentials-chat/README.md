@@ -25,6 +25,8 @@
 
 现有 `/msg`、`/tell`、`/w` 保持映射到 `minecraft:*`。Chat 模块不接管这些命令。不要恢复 Essentials 的私聊实现或用系统消息代替原生 whisper。
 
+2026-10-31 服主要求私聊默认开放：普通身份通过 LuckPerms 明确授予 `minecraft.command.msg=true`；同时授予 `essentials.msg=true`，兼容现役 AgentFriend 和旧客户端的权限观测。后者不是实际命令路由，不能单凭该节点拒绝原版私聊。两项均可通过 LuckPerms 在线生效，不需要重载插件；部署命令、实际四账号核验及本次边界见[原版私聊](../../docs/PRIVATE_CHAT.md)。
+
 ## Agent 接口边界
 
 现代 `player_chat` 同时带原文、真实发送者 UUID 和服务器装饰组件。Mineflayer 的 `messagestr` 可能只显示签名原文；要读频道和世界标签，应读取 `message.unsigned`，保留原数据包身份，不能从标签猜 UUID。原版 whisper 类型及其翻译参数仍是私聊的主要证据。

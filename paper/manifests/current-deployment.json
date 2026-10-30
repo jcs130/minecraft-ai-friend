@@ -3,6 +3,23 @@
   "latestRelease": "rpg-growth-unification-20261031-r3",
   "verifiedAt": "2026-10-31T01:01:59.347988+08:00",
   "releaseDocument": "paper/docs/RPG_GROWTH_20261030.md",
+  "privateChatDefaultPolicy": {
+    "state": "deployed-and-verified",
+    "appliedAt": "2026-10-31T02:16:27+08:00",
+    "document": "paper/docs/PRIVATE_CHAT.md",
+    "provider": "minecraft:msg",
+    "defaultGroupPermissions": {
+      "minecraft.command.msg": true,
+      "essentials.msg": true
+    },
+    "legacyEssentialsNodePurpose": "Compatibility with the existing Bukkit permission observation; does not change the native whisper route",
+    "nativeOnlineAccountsVerified": 4,
+    "permissionExportDelta": "Only two context-free default group permission grants",
+    "recipientDeliveryRetested": false,
+    "restartRequired": false,
+    "jarChanged": false,
+    "executionNote": "The initial wrapper did not stop on coordination-lock failure. The permission change was subsequently verified; the wrapper now fails closed. The consumed batch must not be replayed."
+  },
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 54,

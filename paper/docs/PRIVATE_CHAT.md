@@ -1,3 +1,18 @@
+# 2026-10-31：普通玩家和 Agent 默认开放原版私聊
+
+服主明确要求默认开放私聊后，02:16 在现役 Youer 上通过 LuckPerms 原生命令 为 `default` 组明确设置：
+
+```text
+lp group default permission set minecraft.command.msg true
+lp group default permission set essentials.msg true
+```
+
+第一项是实际原版私聊权限；第二项兼容当前 AgentFriend `MC_COMMUNICATION.permissionNodes` 及旧客户端正在读取的 Essentials 权限观测。实际 `/msg`、`/w`、`/tell` 仍经现有 `commands.yml` 指向 `minecraft:msg`，`/whisper` 使用现有 Denizen 别名；Essentials 自己的 `msg` 继续禁用。不能把单独的 `essentials.msg=false` 当作原版私聊必然被禁止，也不能把任一权限为 true 当作消息已送达。
+
+本次即时生效，无需重启或重载插件。Coobot、Yui、DeepFish、ag_CorMy 按实际账号名及 UUID 核验，在线 Bukkit 权限观测均为 `minecraft.command.msg=true`、`essentials.msg=true`、`essentials.chat.shout=true`。没有向这四个账号发送测试私聊，不能声称本轮重新验收了收件人送达；原生 whisper 类型及真实发送者身份契约沿用下文。
+
+更新前后 LuckPerms 一致导出均保留在 E/F 本批私有目录，完整逻辑差异仅为这两项无上下文默认授权，原用户、其他权限和分组保持。执行入口最初未将协调锁获取失败作为终止错误，导致授权继续执行；该外层失败保留在执行记录，后续复核确认授权及差异，并补为获取锁失败即停止的入口。本批 `started.json` 已消费，禁止重放。此次未更换 AgentFriend JAR，旧权限字段也未删除。
+
 # 原版私聊与命令权限
 
 ## 2026-10-20 显式原版路由已上线
