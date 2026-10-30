@@ -1,0 +1,16 @@
+Original voice recordings bundled with Touhou Little Maid 1.5.3 retain their respective authors' terms.
+
+Amitaro / あみたろの声素材工房
+  https://amitaro.net/voice/
+
+LittleMaid PECO / littleMaidMob俺得VoicePack
+  Voice: 秋野かえで (CV)
+  Pack: Tamemaru
+  https://booth.pm/ja/items/1903163
+
+Original voice metadata and credits are retained in each generated Java/Bedrock resource pack.
+OGG recordings are copied unchanged. Adaptation only changes sound identifiers and resource layout.
+No new voice synthesis, cloning or model inference is involved.
+
+Voice recordings are NOT relicensed under the model artwork's CC BY-NC-SA license.
+Refer to the original voice-author terms for use and distribution.

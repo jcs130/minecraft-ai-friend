@@ -1,0 +1,13 @@
+# Merge these exact presentation fields into the CURRENT rpg-story.yml.
+# Keep all chapter/stage/topic IDs, conditions, progress and unrelated content.
+revision: 7
+chapters:
+  aincrad_departure:
+    stages:
+      aincrad_clear_one:
+        description: 先接首层攻略委托；travel到前哨(856,69,-1144)，沿东墙向北到低拱首室(844,69,-1210)再start。单人或10秒集结组队，逐段清理低拱、北廊、柱廊、南拱、上层看台和中央首领。每段status查路线，打完回低拱首室结算。建议战斗Lv.5、铁甲、职业武器、盾与治疗。
+npcs:
+  gufeng:
+    topics:
+      aincrad:
+        text: 第一层在aincrad世界；travel到前哨(856,69,-1144)，沿东墙向北到低拱(844,69,-1210)开场。低拱→北廊→柱廊→南拱→上层看台→中央首领，共六段；上层从东南原石梯绕行，status给当前路线。建议Lv.5、铁甲、职业武器、盾和治疗，2–3人分工更稳。清完回低拱首室，再claim入个人箱。

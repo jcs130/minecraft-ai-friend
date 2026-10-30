@@ -61,7 +61,7 @@ quests:
       - {type: CURRENCY, amount: 60}
   qd_floor_scout:
     name: 首层攻略·战备调查
-    description: 先查/mycli dungeon info aincrad_01；用/mycli dungeon travel aincrad_01到入口（8魔力），在前哨8格内勘察。本单只查勘，不等于通关。
+    description: 先查/mycli dungeon info aincrad_01；用/mycli dungeon travel aincrad_01到前哨（8魔力），在8格内勘察。前哨不是首室；正式攻略沿东墙向北到(844,69,-1210)低拱开场。本单只查勘，不等于通关。
     required-level: 2
     repeatable: false
     objectives:
@@ -71,7 +71,7 @@ quests:
       - {type: CURRENCY, amount: 40}
   qd_floor_clear:
     name: 首层攻略·破晓之剑
-    description: 完成aincrad_01的三段战斗并返回首室，由服务器确认完整结算。可单人或组队；建议战斗Lv.3、铁甲、盾、治疗。接任务后再开场，失败或故障按dungeon status指引处理。
+    description: 接单后攻略aincrad_01的六段原图路线：低拱、北廊、柱廊、南拱、上层看台、中央首领，再回低拱首室结算。建议战斗Lv.5、铁甲、职业武器、盾和治疗；单人或组队均可。每段用dungeon status查当前路线，失败或故障按回执处理。
     required-level: 3
     required-quest: qd_floor_scout
     repeatable: false

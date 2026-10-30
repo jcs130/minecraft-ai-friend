@@ -10,6 +10,7 @@ import java.time.*;
 import java.util.*;
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.type.Slab;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -34,7 +35,7 @@ final class SiteDungeonManager implements Listener {
     private static final Gson JSON=new Gson();
     private static final Set<Material> HAZARDS=Set.of(Material.LAVA,Material.WATER,Material.FIRE,Material.SOUL_FIRE,
             Material.MAGMA_BLOCK,Material.CACTUS,Material.SWEET_BERRY_BUSH,Material.CAMPFIRE,Material.SOUL_CAMPFIRE,Material.POWDER_SNOW);
-    private record Room(String name,int x,int y,int z,int radius,List<DungeonWaveCatalog.Enemy> enemies,List<List<Integer>> spawnPoints) {
+    private record Room(String name,int x,int y,int z,int radius,List<DungeonWaveCatalog.Enemy> enemies,List<List<Integer>> spawnPoints,String hint) {
         Location center(World w){return new Location(w,x+.5,y,z+.5);}
         boolean contains(Location l){return Math.abs(l.getX()-(x+.5))<=radius+2&&Math.abs(l.getZ()-(z+.5))<=radius+2&&Math.abs(l.getY()-y)<=3;}
     }
@@ -120,6 +121,10 @@ final class SiteDungeonManager implements Listener {
         List<String> nativeEnemies=s.rooms.stream().flatMap(room->room.enemies.stream()).map(DungeonWaveCatalog.Enemy::mythic).filter(mob->mob!=null&&!mob.isEmpty()).distinct().toList();
         if(!nativeEnemies.isEmpty()){out.put("nativeEnemies",nativeEnemies);out.put("nativeContent",s.conquestFloor>0?"普通难度也启用Mythic首领机制":"冒险与末日启用Mythic精英；普通保留原版战斗");}
         if(out.get("state").equals("approach")&&!s.hint.isBlank())out.put("nextAction",out.get("nextAction")+" 路线："+(s.hint.length()>180?s.hint.substring(0,180)+"…":s.hint));
+        if(run!=null&&run.party.contains(p.getUniqueId())&&Set.of("moving","fighting").contains(out.get("state"))&&!run.room().hint.isBlank()){
+            out.put("routeHint",run.room().hint);
+            out.put("nextAction",out.get("nextAction")+" 路线："+run.room().hint);
+        }
         out.put("difficulty",List.of(Map.of("id","normal","label","普通","stars",prep.stars(),"healthMultiplier",1.0,"damageMultiplier",1.0),Map.of("id","adventure","label","冒险","stars",Math.min(5,prep.stars()+1),"healthMultiplier",1.5,"damageMultiplier",1.25),Map.of("id","apocalypse","label","末日","stars",5,"healthMultiplier",2.1,"damageMultiplier",1.6)));
         return out;
     }
@@ -422,7 +427,8 @@ final class SiteDungeonManager implements Listener {
                         }
                         require(spawnPoints.size()>=enemies.size()&&spawnPoints.size()<=24,"spawn_points_limit_24");
                     }
-                    rooms.add(new Room(Objects.toString(row.get("name"),"战斗室"),x,y,z,radius,enemies,List.copyOf(spawnPoints)));
+                    String roomHint=Objects.toString(row.get("hint"),"").strip();require(roomHint.length()<=220,"room_hint_limit_220");
+                    rooms.add(new Room(Objects.toString(row.get("name"),"战斗室"),x,y,z,radius,enemies,List.copyOf(spawnPoints),roomHint));
                 }
                 require(!rooms.isEmpty()&&rooms.size()<=6,"rooms_limit_6");Room first=rooms.getFirst();
                 for(Room r:rooms)require(Math.abs(r.x-first.x)<=128&&Math.abs(r.z-first.z)<=128&&Math.abs(r.y-first.y)<=128,"site_bounds");
@@ -783,12 +789,19 @@ final class SiteDungeonManager implements Listener {
             int x=point.get(0),y=point.get(1),z=point.get(2);if(!w.isChunkLoaded(x>>4,z>>4))continue;
             Block feet=w.getBlockAt(x,y,z),head=feet.getRelative(0,1,0),floor=feet.getRelative(0,-1,0);
             if(!feet.isPassable()||!head.isPassable()||!floor.getType().isSolid()||HAZARDS.contains(feet.getType())||HAZARDS.contains(head.getType())||HAZARDS.contains(floor.getType()))continue;
-            if(feet.isLiquid()||head.isLiquid()||floor.getType().name().endsWith("_LEAVES")||floor.getType().name().endsWith("_SLAB")||floor.getType().name().endsWith("_STAIRS"))continue;
+            if(feet.isLiquid()||head.isLiquid()||!flatSpawnSupport(floor))continue;
             Location at=new Location(w,x+.5,y,z+.5);
             double clearance=room.radius<=3?4:9;
             if(present.stream().noneMatch(p->p.getLocation().distanceSquared(at)<clearance))spots.add(at);
         }
         return spots;
+    }
+    static boolean flatSpawnSupport(Block floor){
+        String name=floor.getType().name();
+        // Double slabs have a complete top surface. Half slabs and stairs still
+        // need another surveyed point; legacy map IDs alone do not prove shape.
+        return floor.getType().isSolid()&&!name.endsWith("_LEAVES")&&!name.endsWith("_STAIRS")
+                &&(!name.endsWith("_SLAB")||floor.getBlockData() instanceof Slab slab&&slab.getType()==Slab.Type.DOUBLE);
     }
     private void spawn(Run r){
         World w=Bukkit.getWorld(r.site.world);Room room=r.room();List<Location> spots=safeSpots(r);
@@ -875,7 +888,7 @@ final class SiteDungeonManager implements Listener {
         // Keep old interior checkpoints byte compatible. Optional presentation
         // and spawn fields are serialized only when they actually alter rules.
         var value=JSON.toJsonTree(site).getAsJsonObject();if(!site.outdoor)value.remove("outdoor");
-        for(var room:value.getAsJsonArray("rooms")){var object=room.getAsJsonObject();if(object.getAsJsonArray("spawnPoints").isEmpty())object.remove("spawnPoints");}
+        for(var room:value.getAsJsonArray("rooms")){var object=room.getAsJsonObject();if(object.getAsJsonArray("spawnPoints").isEmpty())object.remove("spawnPoints");object.remove("hint");}
         return JSON.toJson(value);
     }
     private void restore(){

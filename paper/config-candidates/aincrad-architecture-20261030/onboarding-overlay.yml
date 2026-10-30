@@ -1,0 +1,6 @@
+# Merge only release-revision / release-notice at a verified deployment.
+# Do not reset welcome or per-player delivery records.
+release-revision: 9
+release-notice:
+  - '[首层攻略] aincrad_01改为原图六段：低拱、拱廊、柱廊、南拱、上层看台和中央首领。travel仍到前哨，沿东墙向北到(844,69,-1210)低拱开场。先查 /mycli dungeon info aincrad_01。'
+  - '[战备与路线] 建议战斗Lv.5、完整铁甲、职业武器、盾和治疗；可单人或组队。每段 /mycli dungeon status aincrad_01 查当前路线与剩余次数；清完回低拱首室，再claim入个人箱。'

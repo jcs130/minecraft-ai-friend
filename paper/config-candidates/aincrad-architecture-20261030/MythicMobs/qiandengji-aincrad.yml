@@ -1,0 +1,79 @@
+# Candidate only. All adds are native tracked room enemies, never summoned by a timer.
+QD_Aincrad_Guard:
+  Type: HUSK
+  Display: '&6遗迹近卫'
+  Health: 48
+  Damage: 4
+  Equipment:
+  - IRON_SWORD HAND
+  - IRON_HELMET HEAD
+  - IRON_CHESTPLATE CHEST
+  Options:
+    PreventOtherDrops: true
+    PreventRandomEquipment: true
+    PreventSunburn: true
+    Despawn: false
+    MovementSpeed: 0.23
+QD_Aincrad_Archer:
+  Type: SKELETON
+  Display: '&e遗迹弓手'
+  Health: 40
+  Equipment:
+  - BOW HAND
+  - IRON_HELMET HEAD
+  Options:
+    PreventOtherDrops: true
+    PreventRandomEquipment: true
+    PreventSunburn: true
+    Despawn: false
+    MovementSpeed: 0.23
+QD_Aincrad_Hexer:
+  Type: WITCH
+  Display: '&5遗迹咒术师'
+  Health: 52
+  Options:
+    PreventOtherDrops: true
+    PreventRandomEquipment: true
+    Despawn: false
+    MovementSpeed: 0.23
+QD_Aincrad_Captain:
+  Type: VINDICATOR
+  Display: '&6领主近卫长'
+  Health: 80
+  Damage: 4
+  Equipment:
+  - IRON_AXE HAND
+  - IRON_HELMET HEAD
+  - IRON_CHESTPLATE CHEST
+  Options:
+    PreventOtherDrops: true
+    PreventRandomEquipment: true
+    Despawn: false
+    MovementSpeed: 0.23
+QD_Aincrad_Illfang:
+  Type: VINDICATOR
+  Display: '&c狗头人领主·Illfang'
+  Health: 320
+  Damage: 5
+  Equipment:
+  - IRON_AXE HAND
+  - IRON_CHESTPLATE CHEST
+  Options:
+    MovementSpeed: 0.24
+    PreventOtherDrops: true
+    PreventRandomEquipment: true
+    PreventSunburn: true
+    PreventRenaming: true
+    AlwaysShowName: true
+    Despawn: false
+    KnockbackResistance: 0.35
+  BossBar:
+    Enabled: true
+    Title: '&c第一层 · Illfang'
+    Range: 24
+    Color: RED
+    Style: SEGMENTED_10
+  Skills:
+  - skill{s=QD_Illfang_Desperation} @self ~onDamaged <30%
+  - skill{s=QD_Illfang_Cleave} @self ~onTimer:40
+  - skill{s=QD_Illfang_Pursuit} @self ~onTimer:100
