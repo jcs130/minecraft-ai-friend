@@ -102,6 +102,28 @@ it('the read-recovery book ignores raw unrendered text references and clears onl
   expect(book.context('r')).toBeNull();expect(book.snapshot().knownEnds).toBe(1);
 });
 
+it('reverse pagination over fully delivered text remains repeat evidence rather than becoming new progress',()=>{
+  const book=new TextReadRecoveryBook(),text='x'.repeat(12890);let id=0;
+  const observe=(offset:number,maxChars=650)=>{const page=readTextPage(text,handle,{offset,maxChars});
+    const model=JSON.parse(renderToolTextPage({structuredContent:{failed:false,text:page.text,data:page,meta:{textPage:page}}},{budgetChars:1500,toolPrefix:'mc'})!);
+    book.observe({run:'r',requestId:String(++id),name:'mc_read_text',result:{structuredContent:model}});return model;};
+  for(let offset=0;offset<text.length;){const model=observe(offset);if(!model.meta.textPage.hasMore)break;offset=model.meta.textPage.nextOffset;}
+  expect(book.context('r')?.delivery).toMatchObject({coveredChars:12890,allDelivered:true,missingRanges:[]});
+  for(let offset=12240;offset>=0;offset-=650){observe(offset);
+    expect(book.context('r')?.read?.newlyDeliveredChars).toBe(0);expect(book.context('r')?.delivery.allDelivered).toBe(true);}
+  expect(JSON.stringify(book.snapshot())).not.toContain('x'.repeat(100));
+});
+
+it('a final page alone leaves earlier delivery unknown and interval bounds never fill an unobserved gap',()=>{
+  const book=new TextReadRecoveryBook();let id=0;
+  const observe=(offset:number,text:string)=>book.observe({run:'r',requestId:String(++id),name:'mc_read_text',result:{structuredContent:{failed:false,text,meta:{textPage:{protocol:'agent-mc-text-page/v1',handle,offset,returnedChars:text.length,totalChars:1000,hasMore:offset+text.length<1000,nextOffset:offset+text.length<1000?offset+text.length:null}}}}});
+  observe(900,'x'.repeat(100));expect(book.context('r')?.delivery).toMatchObject({coveredChars:100,allDelivered:false,missingRanges:[[0,900]]});
+  for(let offset=0;offset<150;offset+=2)observe(offset,'x');
+  observe(900,'x'.repeat(100));const cue=book.context('r')!;
+  expect(cue.delivery.allDelivered).toBe(false);expect(cue.delivery.trackingTruncated).toBe(true);expect(cue.delivery.coveredChars).toBeLessThan(1000);
+  expect(book.snapshot().deliveryDocuments).toBe(1);
+});
+
 it('ordinary/error/write/data receipts are not archived and tiny soft budgets never loop on an empty page',()=>{
   const save=()=>{throw Error('Must not archive');};
   for(const value of [{structuredContent:{failed:false,text:'small'}},{isError:true,structuredContent:{failed:false,text:'large'.repeat(500)}},

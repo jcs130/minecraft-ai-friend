@@ -52,24 +52,41 @@ export class TextReadRecoveryBook {
   private run:string|null=null;
   private seen=new Set<string>();
   private ends=new Map<string,{at:number;requestId:string;totalChars:number}>();
-  private latest:{at:number;handle:string;requestId:string;totalChars:number;failure:TextPageFailure|null;attempts:number}|null=null;
+  private deliveries=new Map<string,{totalChars:number;ranges:[number,number][];pages:number;trackingTruncated:boolean}>();
+  private latest:{at:number;handle:string;requestId:string;totalChars:number;failure:TextPageFailure|null;attempts:number;
+    read?:{offset:number;returnedChars:number;newlyDeliveredChars:number}}|null=null;
   constructor(private options:{now?:()=>number;ttlMs?:number}={}){
     if(options.ttlMs!==undefined&&(!Number.isSafeInteger(options.ttlMs)||options.ttlMs<1))throw Error('Invalid text-read recovery TTL');
   }
   observe(input:{run:string;requestId:string;name:string;result:TextToolResult}):void {
     if(!input.run||!input.requestId)return;
-    if(this.run!==input.run){this.run=input.run;this.seen.clear();this.ends.clear();this.latest=null;}
+    if(this.run!==input.run){this.run=input.run;this.seen.clear();this.ends.clear();this.deliveries.clear();this.latest=null;}
     if(this.seen.has(input.requestId))return;
     this.seen.add(input.requestId);while(this.seen.size>64)this.seen.delete(this.seen.values().next().value!);
     const now=(this.options.now??Date.now)(),s=input.result.structuredContent??input.result;
     const p=s?.meta?.textPage,f=s?.data;
     if(!input.result.isError&&s?.failed===false&&p?.protocol==='agent-mc-text-page/v1'&&handleOk(p.handle)
-      &&Number.isSafeInteger(p.totalChars)&&p.totalChars>=0&&Number.isSafeInteger(p.offset)&&p.offset>=0
-      &&typeof s.text==='string'&&s.text.length===p.returnedChars&&p.offset+p.returnedChars===p.totalChars
-      &&p.hasMore===false&&p.nextOffset===null){
-      this.ends.delete(p.handle);this.ends.set(p.handle,{at:now,requestId:input.requestId,totalChars:p.totalChars});
-      while(this.ends.size>8)this.ends.delete(this.ends.keys().next().value!);
-      this.latest={at:now,handle:p.handle,requestId:input.requestId,totalChars:p.totalChars,failure:null,attempts:0};return;
+      &&Number.isSafeInteger(p.totalChars)&&p.totalChars>=0&&Number.isSafeInteger(p.offset)&&p.offset>=0&&Number.isSafeInteger(p.returnedChars)&&p.returnedChars>=0
+      &&typeof s.text==='string'&&s.text.length===p.returnedChars&&p.offset+p.returnedChars<=p.totalChars
+      &&typeof p.hasMore==='boolean'&&(p.hasMore?p.nextOffset===p.offset+p.returnedChars&&p.nextOffset<p.totalChars:p.nextOffset===null&&p.offset+p.returnedChars===p.totalChars)){
+      let delivery=this.deliveries.get(p.handle);
+      if(delivery&&delivery.totalChars!==p.totalChars){this.latest=null;return;}
+      delivery??={totalChars:p.totalChars,ranges:[],pages:0,trackingTruncated:false};
+      const start=p.offset,end=start+p.returnedChars;
+      const overlap=delivery.ranges.reduce((n,[a,b])=>n+Math.max(0,Math.min(end,b)-Math.max(start,a)),0);
+      const newlyDeliveredChars=p.returnedChars-overlap,ranges:[number,number][]=[];
+      for(const[a,b]of[...delivery.ranges,...(end>start?[[start,end] as [number,number]]:[])].sort((a,b)=>a[0]-b[0])){
+        const previous=ranges[ranges.length-1];if(previous&&a<=previous[1])previous[1]=Math.max(previous[1],b);else ranges.push([a,b]);
+      }
+      if(ranges.length>64){ranges.splice(0,ranges.length-64);delivery.trackingTruncated=true;}
+      delivery.ranges=ranges;delivery.pages++;this.deliveries.delete(p.handle);this.deliveries.set(p.handle,delivery);
+      while(this.deliveries.size>8)this.deliveries.delete(this.deliveries.keys().next().value!);
+      const allDelivered=ranges.reduce((n,[a,b])=>n+b-a,0)===p.totalChars;
+      if(p.hasMore===false){this.ends.delete(p.handle);this.ends.set(p.handle,{at:now,requestId:input.requestId,totalChars:p.totalChars});
+        while(this.ends.size>8)this.ends.delete(this.ends.keys().next().value!);}
+      this.latest=p.hasMore===false||allDelivered||p.returnedChars>0&&newlyDeliveredChars===0
+        ?{at:now,handle:p.handle,requestId:input.requestId,totalChars:p.totalChars,failure:null,attempts:0,read:{offset:p.offset,returnedChars:p.returnedChars,newlyDeliveredChars}}:null;
+      return;
     }
     if((input.result.isError||s?.failed===true)&&f?.protocol==='agent-mc-text-read-error/v1'&&handleOk(f.handle)
       &&['TEXT_OFFSET_OUT_OF_RANGE','TEXT_PAGE_SIZE_INVALID','TEXT_OFFSET_SPLITS_CHARACTER'].includes(f.code)
@@ -86,12 +103,16 @@ export class TextReadRecoveryBook {
   context(run:string){
     const latest=this.latest,now=(this.options.now??Date.now)();
     if(run!==this.run||!latest||now-latest.at>(this.options.ttlMs??120000))return null;
-    const end=this.ends.get(latest.handle);
+    const end=this.ends.get(latest.handle),delivery=this.deliveries.get(latest.handle),missingRanges:[number,number][]=[];
+    let cursor=0;for(const[a,b]of delivery?.ranges??[]){if(a>cursor)missingRanges.push([cursor,a]);cursor=b;}if(cursor<latest.totalChars)missingRanges.push([cursor,latest.totalChars]);
+    const coveredChars=delivery?.ranges.reduce((n,[a,b])=>n+b-a,0)??0;
     return{protocol:'agent-mc-text-read-recovery/v1',run,...latest,
       observedEnd:end?.totalChars===latest.totalChars?{...end,hasMore:false,nextOffset:null}:null,
-      guidance:'A returned end is final for this immutable document. A failed read returns no text and creates no next offset; do not keep incrementing it. Use only actual returned cursors. An observed final page does not prove every earlier page was read. Choose another needed observation or action, or explicitly read a missing valid part. This is read evidence, not game progress or a completed goal.'};
+      delivery:{coveredChars,totalChars:latest.totalChars,allDelivered:coveredChars===latest.totalChars,observedPages:delivery?.pages??0,
+        missingRanges:missingRanges.slice(0,3),missingRangesTruncated:missingRanges.length>3,trackingTruncated:delivery?.trackingTruncated??false},
+      guidance:'These ranges were actually shown in this runtime, not necessarily understood. allDelivered means no unseen text remains in this immutable document; repeatedly reading it forward/backward adds no information. Re-read a specific detail only when needed, then use the actual failure and current facts to revise the plan. A failed read returns no text and no continuation; never increment its offset. A final page alone does not prove earlier ranges were delivered. This is delivery evidence, not learning, game progress or goal completion.'};
   }
-  snapshot(){return{run:this.run,seenRequests:this.seen.size,knownEnds:this.ends.size,latest:this.latest&&{...this.latest}};}
+  snapshot(){return{run:this.run,seenRequests:this.seen.size,knownEnds:this.ends.size,deliveryDocuments:this.deliveries.size,latest:this.latest&&{...this.latest}};}
 }
 
 /** Archive only an oversized, successful, declared read. Original values stay
