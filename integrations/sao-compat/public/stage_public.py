@@ -27,6 +27,8 @@ def stage(root,work,source):
     root,work,source=Path(root).resolve(),Path(work).resolve(),Path(source).resolve()
     if root!=ROOT.resolve()or(root/'ops/service.json').exists():raise ValueError('new_owned_sao_config_required')
     if json.loads((root/'pack-source.json').read_text())['scope']!='managed_server':raise ValueError('cold_promoted_server_required')
+    from ali_login_compat import EXCEPTION,verify_mods
+    verify_mods(root/'server/mods')
     ops=root/'ops';gw=ops/'gateway';gw.mkdir();node=Path('C:/Users/lzl19/AppData/Local/hermes/node/node.exe');shutil.copy2(node,gw/'node.exe')
     shutil.copytree(source/'node_modules',gw/'node_modules')
     dest=gw/'integrations/sao-compat';dest.mkdir(parents=True)
@@ -44,7 +46,7 @@ def stage(root,work,source):
     for role,port in [('java_front',38976),('agent_front',38977)]:
         value={'host':'127.0.0.1','port':port,'backendPort':39676,'assetsRoot':str(ops/'public-assets')if role=='agent_front'else None};(ops/('front-'+role+'.json')).write_text(json.dumps(value,indent=2),encoding='utf-8')
     auth=root/'server/world/serverconfig';auth.mkdir(parents=True,exist_ok=True)
-    (auth/'DirectAuth-config.json').write_text(json.dumps({'language':'en','sessionGracePeriod':0,'minPasswordLength':8,'maxPasswordLength':72,'maxAccountsPerIP':32,'heldPayloadExceptions':['maw_agent:world_query']}),encoding='utf-8')
+    (auth/'DirectAuth-config.json').write_text(json.dumps({'language':'en','sessionGracePeriod':0,'minPasswordLength':8,'maxPasswordLength':72,'maxAccountsPerIP':32,'heldPayloadExceptions':['maw_agent:world_query',EXCEPTION]}),encoding='utf-8')
     (auth/'DirectAuth-lang-en.json').write_text(json.dumps({'msgLoginRequest':'§e请输入 /login <密码> 登录。','msgRegisterRequest':'§e首次进入，请使用 /register <密码> 注册（至少8位）。','msgAuthReminder':'§e请先注册或登录，再开始游玩。','msgLoginSuccess':'§a登录成功，欢迎来到 SAO！','errWrongPassword':'§c密码不正确。','errAlreadyRegistered':'§e此账号已注册，请使用 /login <密码>。'},ensure_ascii=False),encoding='utf-8')
     voice=root/'server/config/voicechat';voice.mkdir(exist_ok=True)
     original=Path('E:/MC/servers/tau-ceti-1.3.3/server/config/voicechat/voicechat-server.properties').read_text(encoding='utf-8')

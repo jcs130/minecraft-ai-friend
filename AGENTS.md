@@ -1,3 +1,11 @@
+## 2026-10-30 23:14 SAO 真人 ALI 初始化与认证循环等待已热修
+
+LittleFish0510反馈窗口无响应及ALI无法获取掉落数据。外网TCP正常、已进服和60秒认证超时不能证明客户端正常；本次定位AdvancedLootInfo2.2.0客户端同步等待目录，而DirectAuth将其请求留到认证后，形成循环等待。原R2客户端与服务端同源，依赖/内嵌模组hash已验，并非发错另一份1.0包。
+
+现役仅热增heldPayloadExceptions的精确ali:network#4，保留maw_agent:world_query。ALI先注册接收1/2/3号再注册服务器4号空参数目录请求，不能猜成1号或放行整个频道；其实际SHA6f74e1b1…e5df622已固定。密码、权限、60秒超时、零宽限及其他消息门禁保持；没有换JAR/世界、重启或要求重下安装包。E/F配置前像已验，正常控制台execute run directauth reload已成功；原请求d1548656-01dc-4bbe-9939-399fed9ff880勿重放。源码新部署默认与审核工具亦修复，现役冻结网关文件未热改。
+
+无密码/无登录/无游戏动作的SaoAliProbe，修复前8030ms无响应，修复后52ms收到17/17片533673字节及开始/完成，来源脚本带JAR指纹再验56ms；前后authenticated均false。13项回归通过，JVM45544/监督器9556保持健康，桐人在线自主。真实玩家23:14:30有目录同步记录，但当次仍认证超时，不能冒称真人完整UI/最终登录已验；需新连接与实际游戏密码确认。源码、运维/局限与验收见integrations/sao-compat/ALI_LOGIN_COMPAT.md、ali-login-repair-20261030.json；不要撤现役修复重跑held基线，不用关闭认证或加长超时掩盖初始化依赖。
+
 ## 2026-10-30 SAO 客户端 OSS、网站 0.8.32 与共用游戏账号已发布
 
 网站 https://mc.kangqiang.site/sao.html 和下载中心提供 SAO 0.76.1-lite-20261030.2 / MC1.20.1 / Forge47.4.10 客户端 .mrpack（189,698,558 字节，SHA e858aee6…ddb612）。匿名完整下载哈希已验；首次仍需下载178项依赖，包无维护者账号、密钥或世界。网站在现役0.8.31镜像上增量升级0.8.32，13个原网站身份、23条归属、原九个下载及观战挂载保留。不要用仓库早期门户整体覆盖现役；补丁与网站交接见 integrations/sao-compat/portal/README.md。

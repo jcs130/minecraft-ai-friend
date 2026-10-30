@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-30T15:24:18.270143+00:00",
+  "cause": "ALI synchronous pre-login metadata request held until DirectAuth authentication; the blocked client could not complete authentication",
+  "fix": {
+    "exception": "ali:network#4",
+    "aliSha256": "6f74e1b1463d1df3d6b2509ec8a02a905a5c71ab8301ffa0441eefe22e5df622",
+    "modifiedField": "heldPayloadExceptions",
+    "otherAuthFieldsUnchanged": true,
+    "nativeReloadConfirmed": true,
+    "reloadRequestId": "d1548656-01dc-4bbe-9939-399fed9ff880",
+    "reloadWasNotAutomaticallyReplayed": true,
+    "serverRestarted": false,
+    "javaPid": 45544,
+    "supervisorPid": 9556,
+    "clientPackageChanged": false,
+    "clientPackageSha256": "e858aee6e22b249a32c33c3a379274683bdedf5b26bd7f682a379f69c6ddb612"
+  },
+  "before": {
+    "schemaVersion": 1,
+    "mode": "held",
+    "username": "SaoAliProbe",
+    "observedAt": "2026-10-30T15:11:18.384Z",
+    "passwordProvided": false,
+    "loginCommandSent": false,
+    "gameActionsSent": false,
+    "channel": "ali:network",
+    "requestDiscriminator": 4,
+    "authenticationBefore": {
+      "provider": "directauth",
+      "required": true,
+      "authenticated": false
+    },
+    "elapsedMs": 8030,
+    "startReceived": false,
+    "doneReceived": false,
+    "expectedChunks": null,
+    "returnedChunks": 0,
+    "compressedBytes": 0,
+    "authenticationAfter": {
+      "provider": "directauth",
+      "required": true,
+      "authenticated": false
+    },
+    "passed": true
+  },
+  "after": {
+    "schemaVersion": 1,
+    "mode": "released",
+    "username": "SaoAliProbe",
+    "observedAt": "2026-10-30T15:14:31.654Z",
+    "passwordProvided": false,
+    "loginCommandSent": false,
+    "gameActionsSent": false,
+    "channel": "ali:network",
+    "requestDiscriminator": 4,
+    "authenticationBefore": {
+      "provider": "directauth",
+      "required": true,
+      "authenticated": false
+    },
+    "elapsedMs": 52,
+    "startReceived": true,
+    "doneReceived": true,
+    "expectedChunks": 17,
+    "returnedChunks": 17,
+    "compressedBytes": 533673,
+    "compressedSha256": "c5547f9672e41c115c4ae697f79a091207ac16ac15378ca557d7af75cbfb292d",
+    "authenticationAfter": {
+      "provider": "directauth",
+      "required": true,
+      "authenticated": false
+    },
+    "passed": true
+  },
+  "sourceProbe": {
+    "schemaVersion": 1,
+    "mode": "released",
+    "username": "SaoAliProbe",
+    "observedAt": "2026-10-30T15:21:44.859Z",
+    "passwordProvided": false,
+    "loginCommandSent": false,
+    "gameActionsSent": false,
+    "channel": "ali:network",
+    "requestDiscriminator": 4,
+    "authenticationBefore": {
+      "provider": "directauth",
+      "required": true,
+      "authenticated": false
+    },
+    "elapsedMs": 56,
+    "startReceived": true,
+    "doneReceived": true,
+    "expectedChunks": 17,
+    "returnedChunks": 17,
+    "compressedBytes": 533673,
+    "compressedSha256": "c5547f9672e41c115c4ae697f79a091207ac16ac15378ca557d7af75cbfb292d",
+    "authenticationAfter": {
+      "provider": "directauth",
+      "required": true,
+      "authenticated": false
+    },
+    "passed": true
+  },
+  "regressions": {
+    "passed": 13,
+    "skipped": 0,
+    "failed": 0
+  },
+  "preservation": {
+    "worldAndJarsUnchanged": true,
+    "authenticationStillRequired": true,
+    "passwordNotProvidedToProbe": true,
+    "liveKirito": {
+      "phase": "running",
+      "game_connected": true,
+      "autonomy_running": true
+    },
+    "allServicesHealthy": true
+  },
+  "backups": {
+    "primary": "E:\\MC\\backups\\sao-ali-preauth-20261030-2316",
+    "secondary": "F:\\MC-backups\\sao-ali-preauth-20261030-2316",
+    "beforeSha256": "68deb9591a86e5dd2c120651300b288b61c7e07266728db7a5361ac431d1d32a",
+    "writtenAfterSha256": "1a206080810c52f57b5d4066dbab343abcb6c76fdc3e510c96e30f445b0df7e8",
+    "actualReloadedConfigSha256": "00bcfc3717da323ae805ee08ee75a92f4e27f8c6e2fb29c7c9d7f799ecb52cea",
+    "dualPreimagesVerified": true
+  },
+  "realPlayerEvidence": {
+    "player": "LittleFish0510",
+    "metadataSyncStartedAndFinished": true,
+    "fullClientUiAndFinalLoginVerified": false,
+    "note": "That connection still hit the authentication deadline. A new connection and actual game password login are required for player-side acceptance."
+  },
+  "limitations": [
+    "No real GUI/FPS acceptance on the reporting player computer.",
+    "The live test validates complete wire-level metadata, not the full recipe-viewer rendering.",
+    "The existing FML unexpected-index warning from the Mineflayer acceptance client is retained; it did not prevent metadata receipt.",
+    "No claim of all client mods or interfaces verified."
+  ]
+}
