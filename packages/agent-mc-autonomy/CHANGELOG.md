@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.132
+
+- Connect planning to advertised method authoring, immutable versions and original execution review. Retain the 0.2.131 explicit-failure evidence fix while integrating current main.
+- Method validation, saving, live trial, review and adoption remain separate. This source update does not reload existing hosts, replay unknown actions or prove gameplay improvement.
+
 ## 0.2.131
 
 - Retain a measured native failed plan even when its steps moved the body or
