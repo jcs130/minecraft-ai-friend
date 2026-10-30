@@ -10,6 +10,13 @@ export function classifyBossBarTitle(title: string): 'skillExperience' | 'boss' 
   return 'status';
 }
 
+/** Countdown ticks update the live HUD, not the language-model event history.
+ * Keep stage names, coordinates and objective counts intact; only standalone
+ * clock tokens are normalized when comparing successive status-bar titles. */
+export function bossBarStageTitle(title: string): string {
+  return title.replace(/(^|[\s|｜])\d{1,3}:[0-5]\d(?=$|[\s|｜])/g, '$1<clock>');
+}
+
 export interface BossBarReading {
   id: string | null;
   title: string;

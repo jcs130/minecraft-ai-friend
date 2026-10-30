@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7-rc.144
+
+- Use the existing four-block interaction reach throughout a block-approach route, rather than requiring a second two-block arrival goal after the route starts. Keep cancellation, native hand preparation and effect verification unchanged; prevent needless approach failures at chests and ledges.
+- Retain countdown ticks in live HUD facts while publishing status-bar stage changes and progress bands. Preserve objective counts, coordinates, appearance/removal and boss damage signals instead of flooding language-model event history every second.
+
 ## 0.5.7-rc.143
 
 - Support an explicit host-owned MCP turn boundary. Enforce the same operation subset in execution, discovery and environment text; retain standalone caller-owned turns and the host SDK lifecycle.

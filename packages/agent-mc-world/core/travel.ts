@@ -1142,10 +1142,22 @@ export async function settleOnGround(bot: Bot, ctx: SkillContext, budgetMs = 5_0
   }
 }
 
-/** 走到够得着那一格的地方 */
+/** Path nodes are feet-cell coordinates, whereas reach is measured from the
+ * actual feet to the target block centre. Use the same boundary throughout a
+ * route: an arbitrary two-block goal can keep walking after reach is satisfied,
+ * then stall against a chest, wall or ledge before the interaction ever runs. */
+class GoalWithinBlockReach extends goals.GoalNear {
+  override isEnd(node: Parameters<InstanceType<typeof goals.GoalNear>['isEnd']>[0]): boolean {
+    return Math.hypot(node.x - this.x, node.y - this.y - 0.5, node.z - this.z) <= PLACE_REACH;
+  }
+}
+
+/** 走到够得着那一格的地方。原生交互仍负责手持物、目标和效果核验。 */
 export async function reachCell(bot: Bot, c: Cell, ctx: SkillContext): Promise<void> {
+  checkAbort(ctx);
   const me = bot.entity.position;
   const d = Math.hypot(me.x - (c.x + 0.5), me.y - (c.y + 0.5), me.z - (c.z + 0.5));
   if (d <= PLACE_REACH) return;
-  await gotoGoal(bot, new goals.GoalNear(c.x, c.y, c.z, 2), ctx);
+  await gotoGoal(bot, new GoalWithinBlockReach(c.x, c.y, c.z, PLACE_REACH), ctx);
+  checkAbort(ctx);
 }
