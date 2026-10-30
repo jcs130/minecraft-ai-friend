@@ -1,0 +1,51 @@
+{
+  "releaseId": "agentvision-youer-fix-20261030-r1",
+  "state": "authorized-maintenance-in-progress",
+  "runtimeKernel": "Youer 1.21.1 build920 / NeoForge 21.1.252",
+  "kernelChanged": false,
+  "nativeModsChanged": false,
+  "artifacts": {
+    "AgentVision-0.1.2.jar": {
+      "metadataVersion": "0.1.4",
+      "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c"
+    },
+    "AgentFriend-0.4.47.36-compat.jar": {
+      "metadataVersion": "0.4.47.36-compat",
+      "sha256": "48fee27293e134b5495857441b831dc5bf1722e6e301e0fd28a932ca9c882ebe",
+      "changedMethods": 1,
+      "otherMethodsPreserved": 275,
+      "unrelatedJarEntriesPreserved": 598
+    },
+    "alreadyStagedMaidBridge": {
+      "metadataVersion": "0.1.5",
+      "sha256": "f972b477472f62b729f5b7fe143874495f69e472e6e31a7de7e22c3df797c0c4"
+    }
+  },
+  "configuration": {
+    "proxyBackendProtocol": 767,
+    "authAndDefaultProtocol": 766,
+    "Minepacks.UseDynamicTitle": false,
+    "Minepacks.Database.UseDynamicTitle": false,
+    "backpackSlots": 54
+  },
+  "isolatedVerification": {
+    "paperVision": 17,
+    "youerVision": 17,
+    "nullableCompass": 4,
+    "backpackWithServerInventoryAndReconnect": 7,
+    "villagerAndNativeMaidDeath": 6,
+    "relayClientVersions": ["1.20.6", "1.21.1", "1.21.4"],
+    "publicCompassBuilderMatchesFrozenArtifact": true,
+    "actualProductionPlayersUsedForTesting": false
+  },
+  "scope": {
+    "sixStageAincradCandidateInstalled": false,
+    "coarseHearingAndRangerPerceptionImplemented": false,
+    "remoteOriginalModdedClientRetested": false,
+    "originalReportedMaidDeathIncidentProvenResolved": false,
+    "charactersRevivedOrDeleted": false,
+    "backpacksClearedOrReplaced": false
+  },
+  "knownSeparateIssue": "LightAntiCheat illegal asynchronous teleport observed in an independent movement event; unchanged by this release.",
+  "report": "paper/docs/NATIVE_COMPATIBILITY_20261030.md"
+}

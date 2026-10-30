@@ -2032,9 +2032,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return;
         }
         UUID id = viewer.getUniqueId();
-        savedCompassTargets.putIfAbsent(id, viewer.getCompassTarget().clone());
         Location current = viewer.getCompassTarget();
-        if (!current.getWorld().equals(target.getWorld()) || current.getBlockX() != target.getBlockX()
+        // Hybrid servers can have no compass target after a world/respawn change.
+        if (current != null) savedCompassTargets.putIfAbsent(id, current.clone());
+        if (current == null || current.getWorld() == null || !current.getWorld().equals(target.getWorld()) || current.getBlockX() != target.getBlockX()
                 || current.getBlockY() != target.getBlockY() || current.getBlockZ() != target.getBlockZ()) {
             viewer.setCompassTarget(target);
         }

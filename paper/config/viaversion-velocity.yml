@@ -73,7 +73,7 @@ velocity-ping-save: false
 velocity-servers:
   default: 766
   auth: 766
-  paper: 766
+  paper: 767
 #
 #----------------------------------------------------------#
 #                  GLOBAL PACKET LIMITER                   #

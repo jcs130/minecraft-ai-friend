@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
 import org.afuhome.agentfriend.AgentVisionBridge;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -29,6 +30,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 /** Only world-entity visibility is filtered; the server retains normal gameplay and tab-list identity. */
 public final class AgentVisionPlugin extends JavaPlugin implements Listener, AgentVisionBridge.Reveals {
@@ -61,6 +63,8 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
     private final Map<UUID, Viewer> viewers = new LinkedHashMap<>();
     private final ArrayDeque<Viewer> roundRobin = new ArrayDeque<>();
     private boolean running;
+    private NativeTracking tracking;
+    private BukkitTask tickTask;
     private double radiusSquared;
     private int interval, maxChecks, maxVisits;
     private long budgetNanos;
@@ -82,10 +86,11 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         budgetNanos = micros * 1000;
         // Fail before installing any filter if the shared Numen implementation is incompatible.
         NearbyEntities.work();
+        tracking = new NativeTracking();
         running = true;
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getServicesManager().register(AgentVisionBridge.Reveals.class, this, this, ServicePriority.Normal);
-        Bukkit.getScheduler().runTaskTimer(this, this::tick, 1, 1);
+        tickTask = Bukkit.getScheduler().runTaskTimer(this, this::tickSafely, 1, 1);
         Bukkit.getOnlinePlayers().forEach(this::ensureViewer);
         Command command = new Command("agentvision") {
             @Override public boolean execute(CommandSender sender, String label, String[] args) {
@@ -100,7 +105,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
                 var work = NearbyEntities.work();
                 long targets = viewers.values().stream().mapToLong(v -> v.targets.size()).sum();
                 sender.sendMessage("MC_VISION {\"enabled\":" + running + ",\"viewers\":" + viewers.size()
-                        + ",\"queuedViewers\":" + roundRobin.size()
+                        + ",\"platform\":\"" + tracking.platform() + "\",\"queuedViewers\":" + roundRobin.size()
                         + ",\"targets\":" + targets + ",\"checks\":" + checks + ",\"hides\":" + hides
                         + ",\"shows\":" + shows + ",\"deferred\":" + deferrals
                         + ",\"maxTickMicros\":" + maxTickNanos / 1000 + ",\"maxChecks\":" + maxChecks
@@ -173,8 +178,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         // and does not roll it back after cancellation. No spawn was sent for
         // this pairing: remove only that bookkeeping entry, without a destroy
         // or tab-list packet. Otherwise a later reveal cannot pair the player.
-        var tracker = ((CraftEntity) target.entity).getHandle().moonrise$getTrackedEntity();
-        if (tracker != null) tracker.seenBy.remove(((CraftPlayer) viewer.player).getHandle().connection);
+        tracking.forgetCancelledPair(viewer.player, target.entity);
     }
 
     private boolean visible(Viewer viewer, Target target) {
@@ -205,6 +209,15 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         return true;
     }
 
+    private void tickSafely() {
+        try { tick(); }
+        catch (RuntimeException | LinkageError failure) {
+            running = false;
+            if (tickTask != null) tickTask.cancel();
+            getLogger().log(Level.SEVERE, "Entity visibility update stopped; existing decisions retained. Repair AgentVision before resuming.", failure);
+        }
+    }
+
     private void tick() {
         long start = System.nanoTime();
         int visits = 0;
@@ -227,7 +240,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
             // and world transfer while Bukkit still reports the player online.
             // Keep the queue and visibility decisions until the stream resumes;
             // CraftPlayer.isChunkSent dereferences this nullable loader.
-            if (((CraftPlayer) viewer.player).getHandle().moonrise$getChunkLoader() == null) {
+            if (!tracking.streamReady(viewer.player)) {
                 remaining -= viewer.remainingVisits;
                 viewer.remainingVisits = 0;
                 deferrals++;
@@ -245,7 +258,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
             if (viewer.targets.get(target.entity.getUniqueId()) != target) continue;
             if (!target.entity.isValid() || !ordinary(target.entity)
                     || target.entity.getWorld() != viewer.player.getWorld()
-                    || !viewer.player.isChunkSent(((CraftEntity) target.entity).getHandle().chunkPosition().toLong())) {
+                    || !tracking.chunkSent(viewer.player, target.entity)) {
                 viewer.targets.remove(target.entity.getUniqueId());
                 restore(viewer, target);
                 continue;
@@ -270,8 +283,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
             // CraftPlayer.hideEntity also removes a player from the tab list.
             // Spatial visibility must only remove the entity pairing; onTrack
             // prevents Paper from pairing it again while the target is hidden.
-            var tracker = ((CraftEntity) target.entity).getHandle().moonrise$getTrackedEntity();
-            if (tracker != null) tracker.removePlayer(((CraftPlayer) viewer.player).getHandle());
+            tracking.hidePlayer(viewer.player, (Player) target.entity);
         } else viewer.player.hideEntity(this, target.entity);
         hides++;
     }
@@ -282,9 +294,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         viewer.approvedSpawn = target;
         try {
             if (target.entity instanceof Player other) {
-                var tracker = ((CraftEntity) other).getHandle().moonrise$getTrackedEntity();
-                if (tracker != null && other.isOnline() && viewer.player.getWorld() == other.getWorld() && viewer.player.canSee(other))
-                    tracker.updatePlayer(((CraftPlayer) viewer.player).getHandle());
+                tracking.restorePlayer(viewer.player, other);
             } else viewer.player.showEntity(this, target.entity);
         }
         finally { viewer.approvedSpawn = null; }
@@ -333,6 +343,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
 
     @Override public void onDisable() {
         running = false;
+        if (tickTask != null) tickTask.cancel();
         Bukkit.getServicesManager().unregisterAll(this);
         for (Viewer viewer : new ArrayList<>(viewers.values())) removeViewer(viewer, true);
         roundRobin.clear();
