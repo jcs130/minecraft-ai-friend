@@ -153,8 +153,16 @@ class EffectRecovery:
         kind = "failed_step" if changed else "no_effect"
         previous = self.rows.get(key, {})
         def state(effect):
+            after = {k: v for k, v in effect.get("after", {}).items() if k != "at"}
+            window = after.get("window")
+            if isinstance(window, dict):
+                # A server allocates a new protocol window ID on each opening.
+                # Reopening the same menu does not repair a failed interaction.
+                # Keep its type/other readings and retain the original ID in
+                # the dated effect receipt; only this comparison ignores it.
+                after["window"] = {k: v for k, v in window.items() if k != "id"}
             return {"dimension": effect.get("dimension"), "at": effect.get("at"),
-                    "after": {k: v for k, v in effect.get("after", {}).items() if k != "at"}}
+                    "after": after}
         same = (previous.get("scope") == scope and previous.get("epoch") == epoch
                 and previous.get("kind") == kind and previous.get("failed_steps") == failed_steps
                 and time.monotonic() - previous.get("at", 0) < 120

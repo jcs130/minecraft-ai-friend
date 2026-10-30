@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+Version 0.2.136 keeps failed-plan recovery stable across transient native window
+IDs. Reopening the same menu does not reset the measured failure count. Original
+IDs and changed-window evidence stay in the dated receipts; menu type, target,
+inventory, position, scope, death and expiry checks remain. This addresses a
+failed interaction, not an instruction to choose a particular next action or
+a claim that a game goal completed. Host loading and real gameplay require
+separate verification.
+
 Version 0.2.135 consumes canonical core rc.145. Surface routes continue without
 waiting for an unrelated full-oxygen refill, while the next submerged leg still
 requires confirmed breathing. Water discovery distinguishes feet contact from
