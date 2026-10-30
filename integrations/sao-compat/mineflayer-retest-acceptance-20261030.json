@@ -1,0 +1,1192 @@
+{
+  "schemaVersion": 1,
+  "acceptedAt": "2026-10-30T02:50:12.542998+00:00",
+  "scope": "isolated_sao_1.20.1_only",
+  "transport": "mineflayer_forge_native_registry",
+  "runtime": {
+    "core": "0.5.7-rc.130",
+    "autonomy": "0.2.130",
+    "model": "qwen3.7-plus",
+    "online": true,
+    "images": false
+  },
+  "server": {
+    "pid": 46368,
+    "bind": "127.0.0.1",
+    "port": 39676,
+    "phase": "ready"
+  },
+  "registry": {
+    "schemaVersion": 1,
+    "minecraft": "1.20.1",
+    "forge": "47.4.10",
+    "serverEpoch": "dd70547e-5a77-47dd-b9c2-db8b7066312b",
+    "processId": 46368,
+    "states": 261125,
+    "items": 12037,
+    "entities": 940,
+    "directory": ".\\maw-sao\\registry\\dd70547e-5a77-47dd-b9c2-db8b7066312b",
+    "observedAt": "2026-10-30T02:33:24.135062800Z"
+  },
+  "body": {
+    "id": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "kind": "connected_player",
+    "operator": false
+  },
+  "checks": {
+    "current_jvm_registry_matches": true,
+    "ordinary_mineflayer_body": true,
+    "not_operator": true,
+    "frozen_adapter_matches_canonical": true,
+    "all_46_slots_match": true,
+    "all_16_numeric_item_ids_match": true,
+    "actual_mod_ids_observed": true,
+    "native_and_mineflayer_position_match": true,
+    "actual_walk_between_three_and_six_blocks": true,
+    "two_walks_have_completed_native_terminals": true,
+    "failed_routes_remain_blocked": true,
+    "cast_has_actual_resource_and_cooldown_change": true,
+    "original_action_reconciles_without_replay": true,
+    "stopped_with_no_unknown_or_pending_work": true
+  },
+  "metrics": {
+    "modelResponses": 15,
+    "proposedToolCalls": 15,
+    "validationRejectionRecords": 3,
+    "elapsedSeconds": 142.399,
+    "controlledAB": false,
+    "scope": "one short login/item/movement/cast milestone; not long-term survival"
+  },
+  "context": {
+    "mode": "compact",
+    "budgetBefore": 65536,
+    "budgetAfter": 131072,
+    "units": "conservative UTF-8 byte upper bound; not provider token usage",
+    "firstAttempt": {
+      "decisionRecords": 37,
+      "proposedToolCalls": 32,
+      "fullMilestoneCompleted": false,
+      "humanFeedback": {
+        "requestId": "00d8d44f-e389-4126-91e3-0d741889e0e3",
+        "at": "2026-10-30T02:41:04.780263+00:00",
+        "goal": "验收纠正（这条是人工指导，要在结果中保留）：刚才 goto 到 [1463,80,-1315] 已明确失败，不能当成已经移动，也不要重复这个固定高度目标。可见表面数据存在坡度，并非全平地；仅水平短路可用 goto 的 [x,z] 形式，让正常寻路选择落脚高度，不能把没返回的格子当空气或安全。为避免反复查询，先完成一次本人可用的职业技能实放及原生资源/冷却核验，再选择附近有地形依据的一条3至6格短路实际移动；不能传送、不能拆放建筑、不能跳过碰撞和权限。按真实结果汇报，受阻就如实报告。原始模组物品ID读取已验证，不必重读所有帮助。"
+      }
+    },
+    "finalModelContext": {
+      "counter": "utf8-byte-upper-bound+1024-framing",
+      "units": "token_upper_bound",
+      "input": 99691,
+      "output_reserve": 1536,
+      "framing_reserve": 1024,
+      "total": 102251,
+      "limit": 131072,
+      "omitted": [],
+      "event_delivery": {
+        "available": 1,
+        "included": 1,
+        "omitted": 0,
+        "included_indices": [
+          0
+        ],
+        "included_refs": [
+          {
+            "run": "f0ee9428-6b36-4885-928d-4e6f096391ad",
+            "cursor": 26
+          }
+        ]
+      },
+      "answered_reads": {
+        "available": 0,
+        "included": 0
+      },
+      "superseded_rejected_plans": 0,
+      "host_context": {
+        "persona": false,
+        "memories": 0,
+        "current_intent": false
+      },
+      "host_recent_context": {
+        "available": false,
+        "reason": "binding_unavailable"
+      },
+      "image_reserve": 0
+    },
+    "note": "Budget/config tuning retained existing framework evidence; no new memory implementation or permission bypass."
+  },
+  "movement": {
+    "before": {
+      "x": 1459.3164706698726,
+      "y": 80,
+      "z": -1314.0453727228603
+    },
+    "after": {
+      "x": 1459.5032301851957,
+      "y": 80,
+      "z": -1318.409856003659
+    },
+    "distanceBlocks": 4.368477243266144,
+    "completed": [
+      {
+        "tool": "mc_do",
+        "execution_id": "8333bdf8-e397-4bc0-aa43-1446555edfd4:4",
+        "execution_kind": "task",
+        "phase": "completed",
+        "observation_only": false,
+        "terminal": true,
+        "goalCompleted": false,
+        "goal_verified": false,
+        "receipt": "[10:45:13→10:45:14 共 0.5s] 任务#4完成: {\"skill\":\"goto\",\"at\":[1459,80,-1318]}: 到了 (1459, 80, -1317);本次满足目标 (1459, 80, -1318) 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true;沿现有通路到达，未挖掘或垫脚",
+        "step_outcomes": {
+          "status": "available",
+          "total": 1,
+          "valid": 1,
+          "invalid": 0,
+          "omitted": 0,
+          "counts": {
+            "ok": 1,
+            "noop": 0,
+            "partial": 0,
+            "fail": 0,
+            "skip": 0,
+            "cut": 0
+          },
+          "samples": [
+            {
+              "step": 1,
+              "outcome": "ok",
+              "why": null,
+              "observed_effect": {
+                "skill": "goto",
+                "dimension": "minecraft:overworld",
+                "at": [
+                  1459,
+                  80,
+                  -1318
+                ],
+                "status": "changed",
+                "changed": {
+                  "target": false,
+                  "inventory": false,
+                  "position": true,
+                  "window": false
+                },
+                "coverage": "client-visible-only",
+                "goal_verified": false
+              }
+            }
+          ],
+          "mixed": false,
+          "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"
+        },
+        "original_event": {
+          "run": "f0ee9428-6b36-4885-928d-4e6f096391ad",
+          "cursor": 14,
+          "ts": "2026-10-30T10:45:14.102+08:00"
+        }
+      },
+      {
+        "tool": "mc_do",
+        "execution_id": "8333bdf8-e397-4bc0-aa43-1446555edfd4:5",
+        "execution_kind": "task",
+        "phase": "completed",
+        "observation_only": false,
+        "terminal": true,
+        "goalCompleted": false,
+        "goal_verified": false,
+        "receipt": "[10:45:25→10:45:26 共 0.4s] 任务#5完成: {\"skill\":\"goto\",\"at\":[1459,80,-1320]}: 到了 (1459, 80, -1319);本次满足目标 (1459, 80, -1320) 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true;沿现有通路到达，未挖掘或垫脚",
+        "step_outcomes": {
+          "status": "available",
+          "total": 1,
+          "valid": 1,
+          "invalid": 0,
+          "omitted": 0,
+          "counts": {
+            "ok": 1,
+            "noop": 0,
+            "partial": 0,
+            "fail": 0,
+            "skip": 0,
+            "cut": 0
+          },
+          "samples": [
+            {
+              "step": 1,
+              "outcome": "ok",
+              "why": null,
+              "observed_effect": {
+                "skill": "goto",
+                "dimension": "minecraft:overworld",
+                "at": [
+                  1459,
+                  80,
+                  -1320
+                ],
+                "status": "changed",
+                "changed": {
+                  "target": false,
+                  "inventory": false,
+                  "position": true,
+                  "window": false
+                },
+                "coverage": "client-visible-only",
+                "goal_verified": false
+              }
+            }
+          ],
+          "mixed": false,
+          "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"
+        },
+        "original_event": {
+          "run": "f0ee9428-6b36-4885-928d-4e6f096391ad",
+          "cursor": 15,
+          "ts": "2026-10-30T10:45:26.217+08:00"
+        }
+      }
+    ],
+    "blocked": [
+      {
+        "tool": "mc_do",
+        "execution_id": "8333bdf8-e397-4bc0-aa43-1446555edfd4:2",
+        "execution_kind": "task",
+        "phase": "blocked",
+        "observation_only": false,
+        "terminal": true,
+        "goalCompleted": false,
+        "goal_verified": false,
+        "receipt": "[10:44:33→10:44:47 共 15s] 任务#2: {\"skill\":\"goto\",\"at\":[1462,80,-1312]}: 去坐标 (1462,80,-1312)没做成(钉在原地: 10s 一格都没挪动过,跳/退解卡也没能动一下;这不是路难走,是人动不了(最近到过 直线 3.5 格,现在 直线 3.5 格),人在 (1459, 80, -1315),脚下是草方块)\n[现场] 出发前按三种走法的试算:\n- 按当前风格（规划落差≤2格、跑酷关闭、挖掘开启、垫脚料0块…",
+        "step_outcomes": {
+          "status": "available",
+          "total": 1,
+          "valid": 1,
+          "invalid": 0,
+          "omitted": 0,
+          "counts": {
+            "ok": 0,
+            "noop": 0,
+            "partial": 0,
+            "fail": 1,
+            "skip": 0,
+            "cut": 0
+          },
+          "samples": [
+            {
+              "step": 1,
+              "outcome": "fail",
+              "why": "钉在原地: 10s 一格都没挪动过,跳/退解卡也没能动一下;这不是路难走,是人动…",
+              "observed_effect": {
+                "skill": "goto",
+                "dimension": "minecraft:overworld",
+                "at": [
+                  1462,
+                  80,
+                  -1312
+                ],
+                "status": "unchanged",
+                "changed": {
+                  "target": false,
+                  "inventory": false,
+                  "position": false,
+                  "window": false
+                },
+                "coverage": "client-visible-only",
+                "goal_verified": false
+              }
+            }
+          ],
+          "mixed": false,
+          "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"
+        },
+        "original_event": {
+          "run": "f0ee9428-6b36-4885-928d-4e6f096391ad",
+          "cursor": 11,
+          "ts": "2026-10-30T10:44:48.113+08:00"
+        }
+      },
+      {
+        "tool": "mc_do",
+        "execution_id": "8333bdf8-e397-4bc0-aa43-1446555edfd4:3",
+        "execution_kind": "task",
+        "phase": "blocked",
+        "observation_only": false,
+        "terminal": true,
+        "goalCompleted": false,
+        "goal_verified": false,
+        "receipt": "[10:44:54→10:44:56 共 2s] 任务#3: {\"skill\":\"goto\",\"at\":[1462,80,-1315]}: 去坐标 (1462,80,-1315)没做成(目标附近有能容身的空位 (1462, 80, -1315)，但脚下缺少支撑；没有核实到该高度可站立的落点;探路到 (1462, 80, -1315):\n目标附近有能容身的空位 (1462, 80, -1315)，但脚下缺少支撑；没有核实到该高度可站立的落点\n- 只靠走（规划落差≤2格、跑酷关闭、挖掘关闭…",
+        "step_outcomes": {
+          "status": "available",
+          "total": 1,
+          "valid": 1,
+          "invalid": 0,
+          "omitted": 0,
+          "counts": {
+            "ok": 0,
+            "noop": 0,
+            "partial": 0,
+            "fail": 1,
+            "skip": 0,
+            "cut": 0
+          },
+          "samples": [
+            {
+              "step": 1,
+              "outcome": "fail",
+              "why": "目标附近有能容身的空位 (1462, 80, -1315)，但脚下缺少支撑；没有…",
+              "observed_effect": {
+                "skill": "goto",
+                "dimension": "minecraft:overworld",
+                "at": [
+                  1462,
+                  80,
+                  -1315
+                ],
+                "status": "unchanged",
+                "changed": {
+                  "target": false,
+                  "inventory": false,
+                  "position": false,
+                  "window": false
+                },
+                "coverage": "client-visible-only",
+                "goal_verified": false
+              }
+            }
+          ],
+          "mixed": false,
+          "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"
+        },
+        "original_event": {
+          "run": "f0ee9428-6b36-4885-928d-4e6f096391ad",
+          "cursor": 12,
+          "ts": "2026-10-30T10:44:56.653+08:00"
+        }
+      }
+    ]
+  },
+  "cast": {
+    "schemaVersion": 1,
+    "provider": "sao_native",
+    "operation": "sao.skill.cast",
+    "requestId": "sao_824196f8dc5d4ec59862f283bd77ee5245a89dea",
+    "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "serverEpoch": "6e1bb632-6c1e-411c-ad39-e92df41624eb",
+    "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+    "observedAt": "2026-10-30T02:46:01.856666800Z",
+    "readOnly": false,
+    "retryAutomatically": false,
+    "fingerprint": "5a9fde637e477692b5941fdf0976bd7f1a7f1a0a10d92c1ca91f2070f6132a46",
+    "ok": true,
+    "status": "completed",
+    "reason": "cast_started_not_hit_confirmed",
+    "outcomeKnown": true,
+    "changed": true,
+    "goalCompleted": false,
+    "data": {
+      "ok": true,
+      "reason": "cast_started_not_hit_confirmed",
+      "changed": true,
+      "before": {
+        "professionId": 1,
+        "professionName": "觉醒战士",
+        "level": 1,
+        "xp": 0,
+        "levelProgressPercent": 0,
+        "floor": 1,
+        "mana": {
+          "current": 0,
+          "max": 0
+        },
+        "nativeResource": {
+          "id": "stamina",
+          "current": 100,
+          "max": 100
+        },
+        "hydration": 100,
+        "switchCooldownRemainingMs": 0,
+        "combatCooldownRemainingMs": 0,
+        "weaponStyle": -1,
+        "mainHandItem": "mod_1cab0b39:adventurer_guide",
+        "loadout": [
+          {
+            "kind": "sword",
+            "slot": 0,
+            "skill": 0,
+            "equipped": true,
+            "requiredLevel": 1,
+            "unlocked": true,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "weapon_not_supported_for_sword_skill"
+          },
+          {
+            "kind": "sword",
+            "slot": 1,
+            "skill": 1,
+            "equipped": true,
+            "requiredLevel": 5,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement"
+          },
+          {
+            "kind": "profession",
+            "slot": 0,
+            "skill": 0,
+            "equipped": true,
+            "requiredLevel": 1,
+            "unlocked": true,
+            "cooldownRemainingMs": 0,
+            "available": true,
+            "name": "残暴连击"
+          },
+          {
+            "kind": "profession",
+            "slot": 1,
+            "skill": 1,
+            "equipped": true,
+            "requiredLevel": 5,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement",
+            "name": "凶猛重斩"
+          },
+          {
+            "kind": "profession",
+            "slot": 2,
+            "skill": 4,
+            "equipped": true,
+            "requiredLevel": 20,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement",
+            "name": "血誓屏障"
+          },
+          {
+            "kind": "profession",
+            "slot": 3,
+            "skill": 5,
+            "equipped": true,
+            "requiredLevel": 30,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement",
+            "name": "怒焰终斩"
+          },
+          {
+            "kind": "profession",
+            "slot": 4,
+            "skill": -1,
+            "equipped": false,
+            "requiredLevel": 0,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "slot_not_equipped"
+          },
+          {
+            "kind": "profession",
+            "slot": 5,
+            "skill": -1,
+            "equipped": false,
+            "requiredLevel": 0,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "slot_not_equipped"
+          }
+        ],
+        "talentPoints": 0,
+        "attributePoints": 0,
+        "attributeLevel": 1
+      },
+      "after": {
+        "professionId": 1,
+        "professionName": "觉醒战士",
+        "level": 1,
+        "xp": 0,
+        "levelProgressPercent": 0,
+        "floor": 1,
+        "mana": {
+          "current": 0,
+          "max": 0
+        },
+        "nativeResource": {
+          "id": "stamina",
+          "current": 88,
+          "max": 100
+        },
+        "hydration": 100,
+        "switchCooldownRemainingMs": 0,
+        "combatCooldownRemainingMs": 10000,
+        "weaponStyle": -1,
+        "mainHandItem": "mod_1cab0b39:adventurer_guide",
+        "loadout": [
+          {
+            "kind": "sword",
+            "slot": 0,
+            "skill": 0,
+            "equipped": true,
+            "requiredLevel": 1,
+            "unlocked": true,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "weapon_not_supported_for_sword_skill"
+          },
+          {
+            "kind": "sword",
+            "slot": 1,
+            "skill": 1,
+            "equipped": true,
+            "requiredLevel": 5,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement"
+          },
+          {
+            "kind": "profession",
+            "slot": 0,
+            "skill": 0,
+            "equipped": true,
+            "requiredLevel": 1,
+            "unlocked": true,
+            "cooldownRemainingMs": 4050,
+            "available": false,
+            "blockedReason": "native_cast_busy",
+            "name": "残暴连击"
+          },
+          {
+            "kind": "profession",
+            "slot": 1,
+            "skill": 1,
+            "equipped": true,
+            "requiredLevel": 5,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement",
+            "name": "凶猛重斩"
+          },
+          {
+            "kind": "profession",
+            "slot": 2,
+            "skill": 4,
+            "equipped": true,
+            "requiredLevel": 20,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement",
+            "name": "血誓屏障"
+          },
+          {
+            "kind": "profession",
+            "slot": 3,
+            "skill": 5,
+            "equipped": true,
+            "requiredLevel": 30,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "level_requirement",
+            "name": "怒焰终斩"
+          },
+          {
+            "kind": "profession",
+            "slot": 4,
+            "skill": -1,
+            "equipped": false,
+            "requiredLevel": 0,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "slot_not_equipped"
+          },
+          {
+            "kind": "profession",
+            "slot": 5,
+            "skill": -1,
+            "equipped": false,
+            "requiredLevel": 0,
+            "unlocked": false,
+            "cooldownRemainingMs": 0,
+            "available": false,
+            "blockedReason": "slot_not_equipped"
+          }
+        ],
+        "talentPoints": 0,
+        "attributePoints": 0,
+        "attributeLevel": 1
+      }
+    },
+    "inventorySlotScheme": "vanilla_player_menu_0_45",
+    "inventoryChanges": []
+  },
+  "reconnectedInventory": {
+    "schemaVersion": 1,
+    "ok": true,
+    "readOnly": true,
+    "observedAt": "2026-10-30T02:48:09.984Z",
+    "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "bodyKind": "connected_player",
+    "serverEpoch": "dd70547e-5a77-47dd-b9c2-db8b7066312b",
+    "registryEpoch": "dd70547e-5a77-47dd-b9c2-db8b7066312b",
+    "position": {
+      "x": 1459.5032301851957,
+      "y": 80,
+      "z": -1318.409856003659
+    },
+    "nativePosition": {
+      "x": 1459.5032301851957,
+      "y": 80,
+      "z": -1318.409856003659
+    },
+    "health": 20,
+    "nativeHealth": 20,
+    "slotCount": 46,
+    "nativeSlotCount": 46,
+    "nonEmptySlots": 16,
+    "items": [
+      {
+        "slot": 9,
+        "id": "mod_1cab0b39:refining_stone",
+        "count": 4,
+        "type": 10697,
+        "nativeNumericId": 10697,
+        "displayName": "楼层精炼石",
+        "componentsComplete": true,
+        "componentBytes": 43
+      },
+      {
+        "slot": 10,
+        "id": "mod_1cab0b39:healing_crystal",
+        "count": 3,
+        "type": 10690,
+        "nativeNumericId": 10690,
+        "displayName": "治疗结晶",
+        "componentsComplete": true,
+        "componentBytes": 44
+      },
+      {
+        "slot": 11,
+        "id": "minecraft:oak_log",
+        "count": 10,
+        "type": 110,
+        "nativeNumericId": 110,
+        "displayName": "Oak Log",
+        "componentsComplete": true,
+        "componentBytes": 34
+      },
+      {
+        "slot": 12,
+        "id": "pfm:furniture_book",
+        "count": 1,
+        "type": 8238,
+        "nativeNumericId": 8238,
+        "displayName": "Paladin's Furniture",
+        "componentsComplete": true,
+        "componentBytes": 34
+      },
+      {
+        "slot": 13,
+        "id": "simukraft:guide_book",
+        "count": 1,
+        "type": 10554,
+        "nativeNumericId": 10554,
+        "displayName": "New:Sim-U-Kraft Guide",
+        "componentsComplete": true,
+        "componentBytes": 36
+      },
+      {
+        "slot": 14,
+        "id": "slashblade:proudsoul_tiny",
+        "count": 1,
+        "type": 1425,
+        "nativeNumericId": 1425,
+        "displayName": "Tiny Proud Soul",
+        "componentsComplete": true,
+        "componentBytes": 41
+      },
+      {
+        "slot": 15,
+        "id": "patchouli:guide_book",
+        "count": 1,
+        "type": 9447,
+        "nativeNumericId": 9447,
+        "displayName": "Memorizable Gensokyo",
+        "componentsComplete": true,
+        "componentBytes": 101
+      },
+      {
+        "slot": 36,
+        "id": "patchouli:guide_book",
+        "count": 1,
+        "type": 9447,
+        "nativeNumericId": 9447,
+        "displayName": "Chronicle of Shadows",
+        "componentsComplete": true,
+        "componentBytes": 88
+      },
+      {
+        "slot": 37,
+        "id": "minecraft:wooden_sword",
+        "count": 1,
+        "type": 777,
+        "nativeNumericId": 777,
+        "displayName": "初心者之剑",
+        "componentsComplete": true,
+        "componentBytes": 127
+      },
+      {
+        "slot": 38,
+        "id": "minecraft:oak_sapling",
+        "count": 1,
+        "type": 35,
+        "nativeNumericId": 35,
+        "displayName": "Oak Sapling",
+        "componentsComplete": true,
+        "componentBytes": 37
+      },
+      {
+        "slot": 39,
+        "id": "minecraft:bread",
+        "count": 8,
+        "type": 815,
+        "nativeNumericId": 815,
+        "displayName": "Bread",
+        "componentsComplete": true,
+        "componentBytes": 31
+      },
+      {
+        "slot": 40,
+        "id": "mod_1cab0b39:record_crystal",
+        "count": 1,
+        "type": 10694,
+        "nativeNumericId": 10694,
+        "displayName": "记录结晶",
+        "componentsComplete": true,
+        "componentBytes": 43
+      },
+      {
+        "slot": 41,
+        "id": "farmersdelight:egg_sandwich",
+        "count": 8,
+        "type": 9043,
+        "nativeNumericId": 9043,
+        "displayName": "Egg Sandwich",
+        "componentsComplete": true,
+        "componentBytes": 43
+      },
+      {
+        "slot": 42,
+        "id": "mod_1cab0b39:adventurer_guide",
+        "count": 1,
+        "type": 10698,
+        "nativeNumericId": 10698,
+        "displayName": "冒险者攻略手册",
+        "componentsComplete": true,
+        "componentBytes": 45
+      },
+      {
+        "slot": 43,
+        "id": "mod_1cab0b39:stag_whistle",
+        "count": 1,
+        "type": 10664,
+        "nativeNumericId": 10664,
+        "displayName": "Stag Whistle",
+        "componentsComplete": true,
+        "componentBytes": 41
+      },
+      {
+        "slot": 44,
+        "id": "touhou_little_maid:smart_slab_init",
+        "count": 1,
+        "type": 9120,
+        "nativeNumericId": 9120,
+        "displayName": "Soul Spell",
+        "componentsComplete": true,
+        "componentBytes": 121
+      }
+    ],
+    "mismatches": [],
+    "footing": {
+      "name": "grass_block",
+      "stateId": 9,
+      "shapes": [
+        [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    "registryCounts": {
+      "states": 261125,
+      "items": 12037,
+      "entities": 940
+    }
+  },
+  "reconciliation": {
+    "schemaVersion": 1,
+    "observedAt": "2026-10-30T02:49:19.846Z",
+    "ok": true,
+    "readOnly": true,
+    "replayedMutation": false,
+    "reply": {
+      "schemaVersion": 1,
+      "provider": "sao_native",
+      "operation": "sao.action_status",
+      "requestId": "6b50eea0-0e3e-4337-a75e-425b9b9e27e2",
+      "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "serverEpoch": "6e1bb632-6c1e-411c-ad39-e92df41624eb",
+      "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+      "observedAt": "2026-10-30T02:49:19.822590500Z",
+      "readOnly": true,
+      "retryAutomatically": false,
+      "data": {
+        "schemaVersion": 1,
+        "provider": "sao_native",
+        "operation": "sao.skill.cast",
+        "requestId": "sao_824196f8dc5d4ec59862f283bd77ee5245a89dea",
+        "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "playerUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+        "serverEpoch": "6e1bb632-6c1e-411c-ad39-e92df41624eb",
+        "worldId": "92aa54d1-f73c-4b87-816e-ffde975af262",
+        "observedAt": "2026-10-30T02:46:01.856666800Z",
+        "readOnly": false,
+        "retryAutomatically": false,
+        "fingerprint": "5a9fde637e477692b5941fdf0976bd7f1a7f1a0a10d92c1ca91f2070f6132a46",
+        "ok": true,
+        "status": "completed",
+        "reason": "cast_started_not_hit_confirmed",
+        "outcomeKnown": true,
+        "changed": true,
+        "goalCompleted": false,
+        "data": {
+          "ok": true,
+          "reason": "cast_started_not_hit_confirmed",
+          "changed": true,
+          "before": {
+            "professionId": 1,
+            "professionName": "觉醒战士",
+            "level": 1,
+            "xp": 0,
+            "levelProgressPercent": 0,
+            "floor": 1,
+            "mana": {
+              "current": 0,
+              "max": 0
+            },
+            "nativeResource": {
+              "id": "stamina",
+              "current": 100,
+              "max": 100
+            },
+            "hydration": 100,
+            "switchCooldownRemainingMs": 0,
+            "combatCooldownRemainingMs": 0,
+            "weaponStyle": -1,
+            "mainHandItem": "mod_1cab0b39:adventurer_guide",
+            "loadout": [
+              {
+                "kind": "sword",
+                "slot": 0,
+                "skill": 0,
+                "equipped": true,
+                "requiredLevel": 1,
+                "unlocked": true,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "weapon_not_supported_for_sword_skill"
+              },
+              {
+                "kind": "sword",
+                "slot": 1,
+                "skill": 1,
+                "equipped": true,
+                "requiredLevel": 5,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement"
+              },
+              {
+                "kind": "profession",
+                "slot": 0,
+                "skill": 0,
+                "equipped": true,
+                "requiredLevel": 1,
+                "unlocked": true,
+                "cooldownRemainingMs": 0,
+                "available": true,
+                "name": "残暴连击"
+              },
+              {
+                "kind": "profession",
+                "slot": 1,
+                "skill": 1,
+                "equipped": true,
+                "requiredLevel": 5,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement",
+                "name": "凶猛重斩"
+              },
+              {
+                "kind": "profession",
+                "slot": 2,
+                "skill": 4,
+                "equipped": true,
+                "requiredLevel": 20,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement",
+                "name": "血誓屏障"
+              },
+              {
+                "kind": "profession",
+                "slot": 3,
+                "skill": 5,
+                "equipped": true,
+                "requiredLevel": 30,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement",
+                "name": "怒焰终斩"
+              },
+              {
+                "kind": "profession",
+                "slot": 4,
+                "skill": -1,
+                "equipped": false,
+                "requiredLevel": 0,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "slot_not_equipped"
+              },
+              {
+                "kind": "profession",
+                "slot": 5,
+                "skill": -1,
+                "equipped": false,
+                "requiredLevel": 0,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "slot_not_equipped"
+              }
+            ],
+            "talentPoints": 0,
+            "attributePoints": 0,
+            "attributeLevel": 1
+          },
+          "after": {
+            "professionId": 1,
+            "professionName": "觉醒战士",
+            "level": 1,
+            "xp": 0,
+            "levelProgressPercent": 0,
+            "floor": 1,
+            "mana": {
+              "current": 0,
+              "max": 0
+            },
+            "nativeResource": {
+              "id": "stamina",
+              "current": 88,
+              "max": 100
+            },
+            "hydration": 100,
+            "switchCooldownRemainingMs": 0,
+            "combatCooldownRemainingMs": 10000,
+            "weaponStyle": -1,
+            "mainHandItem": "mod_1cab0b39:adventurer_guide",
+            "loadout": [
+              {
+                "kind": "sword",
+                "slot": 0,
+                "skill": 0,
+                "equipped": true,
+                "requiredLevel": 1,
+                "unlocked": true,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "weapon_not_supported_for_sword_skill"
+              },
+              {
+                "kind": "sword",
+                "slot": 1,
+                "skill": 1,
+                "equipped": true,
+                "requiredLevel": 5,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement"
+              },
+              {
+                "kind": "profession",
+                "slot": 0,
+                "skill": 0,
+                "equipped": true,
+                "requiredLevel": 1,
+                "unlocked": true,
+                "cooldownRemainingMs": 4050,
+                "available": false,
+                "blockedReason": "native_cast_busy",
+                "name": "残暴连击"
+              },
+              {
+                "kind": "profession",
+                "slot": 1,
+                "skill": 1,
+                "equipped": true,
+                "requiredLevel": 5,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement",
+                "name": "凶猛重斩"
+              },
+              {
+                "kind": "profession",
+                "slot": 2,
+                "skill": 4,
+                "equipped": true,
+                "requiredLevel": 20,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement",
+                "name": "血誓屏障"
+              },
+              {
+                "kind": "profession",
+                "slot": 3,
+                "skill": 5,
+                "equipped": true,
+                "requiredLevel": 30,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "level_requirement",
+                "name": "怒焰终斩"
+              },
+              {
+                "kind": "profession",
+                "slot": 4,
+                "skill": -1,
+                "equipped": false,
+                "requiredLevel": 0,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "slot_not_equipped"
+              },
+              {
+                "kind": "profession",
+                "slot": 5,
+                "skill": -1,
+                "equipped": false,
+                "requiredLevel": 0,
+                "unlocked": false,
+                "cooldownRemainingMs": 0,
+                "available": false,
+                "blockedReason": "slot_not_equipped"
+              }
+            ],
+            "talentPoints": 0,
+            "attributePoints": 0,
+            "attributeLevel": 1
+          }
+        },
+        "inventorySlotScheme": "vanilla_player_menu_0_45",
+        "inventoryChanges": [],
+        "historical": true
+      },
+      "ok": true,
+      "status": "ok",
+      "outcomeKnown": true
+    }
+  },
+  "goalReport": {
+    "outcome": "reported_done",
+    "evidence": "Mineflayer实机验证完成：1)持有模组物品ID mod_1cab0b39:adventurer_guide；2)从(1459,80,-1315)移动到(1459,80,-1319)，移动4格符合3-6格要求，沿现有通路未拆放方块；3)施放职业技\"残暴连击\"(profession slot 0)，服务器回执cast_started_not_hit_confirmed，stamina从100降至88，combatCooldown设为10000ms，技能cooldown设为4050ms，游戏聊天显示[MC动作栏]残暴连击。所有步骤用原生回执和世界变化核验。",
+    "verified": false,
+    "source": "planner_report",
+    "original_receipts": "receipts.jsonl"
+  },
+  "pausedControllerState": {
+    "stopped": true,
+    "inflight_request": null,
+    "uncertain": false,
+    "pending": []
+  },
+  "tests": {
+    "node": {
+      "passed": 39,
+      "failed": 0
+    },
+    "python": {
+      "passed": 3,
+      "subtestsPassed": 6,
+      "failed": 0
+    },
+    "frameworkCodeChanged": false,
+    "fullAutonomySuiteRerun": false
+  },
+  "evidenceFilesAtAcceptance": {
+    "kirito-runtime/data/sessions/923b69d6b199861d747b587d/host/decisions.jsonl": {
+      "sha256": "49267a0f0318d2669177c521accb64816199e951e6fc3157b9c4162aade619d7",
+      "bytes": 6250979
+    },
+    "kirito-runtime/data/sessions/923b69d6b199861d747b587d/host/receipts.jsonl": {
+      "sha256": "6f950422629caa8c100fe5e5f8b88c3c0296003f15801f61b39eb584021f75d0",
+      "bytes": 13899918
+    },
+    "analysis/mineflayer-reconnect-20261030.json": {
+      "sha256": "7277955ddc08243f2c556ce77418adb25a8c45d50952349da6bb24b1730428fa",
+      "bytes": 4730
+    },
+    "analysis/mineflayer-reconcile-20261030.json": {
+      "sha256": "6993354017089296d31ced609def500ad4e35960fa9aa258d752734e99009f36",
+      "bytes": 8910
+    }
+  },
+  "limits": [
+    "Remote registry distribution is not implemented; current factory uses local per-JVM files.",
+    "Forge recipe discovery/automatic crafting and full mod-specific menus remain incomplete.",
+    "One accepted milestone is not full SAO story, combat balance or long-term survival acceptance.",
+    "First route failures, schema rejections and the prior repeated casts remain in original journals.",
+    "Previous lab process vanished without a new crash report; root cause not established.",
+    "Original mod startup/FML warnings remain; this pass is not a clean-server certification."
+  ],
+  "resumedRuntime": {
+    "phase": "running",
+    "game_connected": true,
+    "autonomy_running": true,
+    "updated_at": "2026-10-30T02:51:59.208482+00:00",
+    "current_goal": null,
+    "planner_error": null,
+    "launcherPid": 37812,
+    "pendingCount": 0,
+    "uncertain": false,
+    "position": {
+      "x": 1459.5032301851957,
+      "y": 80,
+      "z": -1318.409856003659
+    }
+  }
+}

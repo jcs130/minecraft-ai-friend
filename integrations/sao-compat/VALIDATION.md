@@ -80,3 +80,6 @@ autonomy 0.2.129 已在同一隔离运行目录安装：修复同步成功读取
 autonomy 0.2.130 全量 **1728 通过、25 跳过、0 失败**。长路径夹具实际创建/篡改真实长路径文件，凭据文件测试隔离宿主 DPAPI，原生端口另测用户作用域、擦除、释放和拒绝不落盘；没有把原失败改为跳过。实际 DPAPI 在维护会话仍错误 5，继续安全拒绝，不能称系统加密已恢复。
 
 原生 SAO 组件已修复武器适用性、准确冷却键和发动证据。Java 12 断言、SAO Node 39 项、正式 wheel 独立消费者通过；15 项真实回执/身份/部署核验通过。普通木剑的剑技被准确拒绝，而同一普通账号的职业技能体力 100→88、冷却 4050ms；重复请求返回历史、忙碌请求未再消耗。线上 qwen3.7-plus 以 5 次调用完成该技能里程碑，不宣称命中/全部技能。见 [FAILURE_REPAIR.md](FAILURE_REPAIR.md) 和 [failure-repair-acceptance-20261030.json](failure-repair-acceptance-20261030.json)。
+## 2026-10-30 后续 Mineflayer 实机复测
+
+仅 SAO 回环实验：14 项真实一致性核验通过，普通登录桐人 46 槽/16 件原始物品与本人原生 ItemStack 相符，实际位移 4.368 格，职业施法体力 100→88/冷却4050ms，原 UUID 重连与原请求只读对账通过。39 Node、3 Python/6 子项通过；本轮自主包和核心未改，不重复宣称完整套件已重跑。SAO 新部署默认及运行配置提升 compact 的保守输入预算到131072，前一次未完成、两次拒绝路线及参数纠正保留；不是受控 A/B 或全模组验收。见 [MINEFLAYER_RETEST.md](MINEFLAYER_RETEST.md) 与 [实际回执](mineflayer-retest-acceptance-20261030.json)。

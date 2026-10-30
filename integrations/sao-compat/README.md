@@ -1,5 +1,7 @@
 # SAO 0.76.1-lite：Numen / Mineflayer 隔离接入
 
+2026-10-30 后续 Mineflayer 实机复测已完成：46 槽原始同步与本人原生物品一致，线上桐人实际步行 4.368 格并发动职业技能；断线后按原请求只读对账通过。SAO 部署提高紧凑上下文的保守预算，保留前一次未完成尝试与错误路线。结果、调用数量和边界见 [MINEFLAYER_RETEST.md](MINEFLAYER_RETEST.md)。
+
 任务、职业与技能采用按需查询接口 `mc_sao`；不预装整本任务书进上下文。原生提交/领奖、职业及技能接入方法与边界见 [GAMEPLAY.md](GAMEPLAY.md)。
 
 后续已启用桐人 `ag_Kirito`：自研 autonomy 0.2.130 + core rc.130，经 Mineflayer/Forge 原生桥接，由线上 qwen3.7-plus 驱动。已实际采木、领取并装备初心者之剑、领取食物，并发动职业技能；普通木剑不支持原生剑技，接口现已准确表达。调用优化见 [OPTIMIZATION.md](OPTIMIZATION.md)，施法和失败测试修复见 [FAILURE_REPAIR.md](FAILURE_REPAIR.md)。运行、停止、记忆及已知缺口见 [KIRITO.md](KIRITO.md)；建筑保护和真实村庄验收见 [PROTECTION.md](PROTECTION.md)。隔离性质与原端口保持。
