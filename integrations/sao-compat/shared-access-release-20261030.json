@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-30T09:51:39.629867+00:00",
+  "scope": "SAO client download and native shared game accounts",
+  "website": {
+    "url": "https://mc.kangqiang.site/sao.html",
+    "version": "0.8.32",
+    "image": "qiandengji-portal:0.8.32-sao-770114e29b1a",
+    "existingOwners": 13,
+    "existingOwnerships": 23,
+    "existingDownloads": 9,
+    "viewerMountRetained": true
+  },
+  "client": {
+    "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/e858aee6e22b249a32c33c3a379274683bdedf5b26bd7f682a379f69c6ddb612/MyAgentWorld-SAO-0.76.1-lite-1.20.1-r2.mrpack",
+    "bytes": 189698558,
+    "sha256": "e858aee6e22b249a32c33c3a379274683bdedf5b26bd7f682a379f69c6ddb612",
+    "anonymousFullGetHashVerified": true,
+    "publishedRouteHeadVerified": true
+  },
+  "accounts": {
+    "nativeCredentialAuthority": "existing Qiandengji LibreLogin",
+    "websiteLoginPasswordSeparate": true,
+    "roleCount": 17,
+    "authorityReady": true,
+    "forgeJarSha256": "53baee2cc6037542f0719281c55285513280d32569e7b7bfe3dcce9e45a0afc2",
+    "velocityJarSha256": "2eb3ca4602dc4299cd8d4faf206179c4a4bcdc743a9009d54c7716efb062f76b",
+    "legacySaoRequiresExplicitTwoIdentityLink": true,
+    "originalLoginGuardUnchanged": true,
+    "uuidInventoryAndPermissionNotMerged": true
+  },
+  "server": {
+    "minecraft": "1.20.1",
+    "forge": "47.4.10",
+    "serverModCount": 176,
+    "prior175ModHashesRetained": true,
+    "frozenFiles": 6820,
+    "releaseSha256": "f176e80b3c79d42341c5f9b3fab301da518a6dbc524caa3a2f70e92505d6fe42",
+    "allServicesReady": true,
+    "paused": false,
+    "shutdownRequested": false,
+    "paperWorldNotRestarted": true,
+    "kiritoOriginalRuntimeAndCredentialsRetained": true,
+    "kiritoConnectedAndAutonomyRunning": true
+  },
+  "network": {
+    "schemaVersion": 1,
+    "observedAt": "2026-10-30T09:45:02.809902+00:00",
+    "source": "external-cloud-host",
+    "host": "micro.kangqiang.site",
+    "resolved": "36.20.73.61",
+    "java": {
+      "port": 28976,
+      "version": {
+        "name": "1.20.1",
+        "protocol": 763
+      },
+      "latencyMs": 78.3
+    },
+    "agent": {
+      "port": 28977,
+      "version": {
+        "name": "1.20.1",
+        "protocol": 763
+      },
+      "latencyMs": 84.2
+    },
+    "bedrock": {
+      "port": 28988,
+      "protocol": 2193,
+      "version": "26.52",
+      "motd": "My Agent World SAO",
+      "latencyMs": 33.2
+    },
+    "sdk": {
+      "bytes": 33742,
+      "sha256": "371ac1f4090662897019c9e81d87ecf853ac583de0fdd2a2bcb585d8821ec373",
+      "headerMatches": true
+    }
+  },
+  "backups": {
+    "sao": {
+      "schemaVersion": 1,
+      "root": "E:\\MC\\servers\\sao-0.76.1",
+      "primary": "E:\\MC\\backups\\sao-shared-access-20261030\\sao-before.zip",
+      "secondary": "F:\\MC-backups\\sao-shared-access-20261030\\sao-before.zip",
+      "fileCount": 212608,
+      "sourceBytes": 6207645164,
+      "archiveBytes": 1918996995,
+      "sha256": "6de8a231bcb895ea97a40541510f208ead94fe91e2bcd11d790dd18494171444",
+      "fullContentVerified": true,
+      "normalJavaExit": 0,
+      "sourceRetained": true
+    },
+    "primary": {
+      "schemaVersion": 1,
+      "primary": "E:\\MC\\backups\\sao-shared-access-20261030\\primary-before",
+      "secondary": "F:\\MC-backups\\sao-shared-access-20261030\\primary-before",
+      "sourceWasNormallyStopped": true,
+      "authorityKeyAndTokenIncluded": true,
+      "fileCount": 753
+    },
+    "website": {
+      "primary": "E:\\MC\\backups\\sao-shared-access-20261030\\website-before.zip",
+      "secondary": "F:\\MC-backups\\sao-shared-access-20261030\\website-before.zip",
+      "sha256": "1edac99995a90a733c0684eb659305d76dba4d6348f187ae1594c1ec7a4350a5",
+      "bytes": 36943752,
+      "fullMembersVerified": true,
+      "sshGrantOneShotConsumed": true
+    }
+  },
+  "cleanup": {
+    "temporarySourceAndBackupGrantsAbsent": true,
+    "exportCopyRemoved": true,
+    "rootBackupRetained": true,
+    "localTemporaryTransferKeysAbsent": true
+  },
+  "isolatedNativeTests": {
+    "native-lab-report-r7": {
+      "schemaVersion": 1,
+      "productionChanged": false,
+      "checks": [
+        "real-LibreLogin-provider-verified-test-fixtures-existing-hashes-unchanged",
+        "resumed-verified-legacy-seed-without-register-or-give-replay",
+        "restart-shared-binding-and-primary-password-persisted",
+        "old-body-authenticated-then-explicitly-linked",
+        "existing-inventory-preserved",
+        "old-local-password-no-longer-authoritative",
+        "old-body-primary-password-login-preserves-items",
+        "first-failed-login-then-disconnect-can-complete-original-new-body"
+      ],
+      "normalStops": true
+    },
+    "native-protocol-report-r8": {
+      "schemaVersion": 1,
+      "productionChanged": false,
+      "checks": [
+        "native-primary-verification",
+        "same-id-deduplicated-with-identical-receipt",
+        "conflicting-reused-id-does-not-change-password",
+        "primary-uuid-mismatch-denied",
+        "native-administrator-policy-preserved",
+        "accepted-running-fixture-becomes-unknown-after-restart-without-replay",
+        "existing-website-encrypted-mailbox-and-native-password-writer",
+        "primary-website-old-password-rejected-in-sao",
+        "primary-website-new-password-works-in-sao-with-original-inventory"
+      ],
+      "normalStops": true
+    },
+    "native-outage-guard-report-r9": {
+      "schemaVersion": 1,
+      "productionChanged": false,
+      "checks": [
+        "established-binding-uses-native-authority-during-website-outage",
+        "expired-ownership-feed-cannot-enroll-new-body",
+        "missing-key-cannot-reenable-local-password-fallback",
+        "disabled-cannot-reenable-local-password-fallback"
+      ],
+      "successfulServicesNormalStops": true,
+      "expectedStartupGuardExitCodes": {
+        "missing-key": 0,
+        "disabled": 0
+      }
+    },
+    "native-alias-report-r10": {
+      "schemaVersion": 1,
+      "productionChanged": false,
+      "checks": [
+        "fresh-bedrock-style-body-explicit-primary-account-login",
+        "ordinary-primary-cannot-enroll-local-op-body"
+      ],
+      "normalStops": true
+    },
+    "native-clean-world-report-r11": {
+      "schemaVersion": 1,
+      "productionChanged": false,
+      "checks": [
+        "pending-first-link-world-starts-and-commits-native-binding",
+        "durable-active-marker-matches-completed-membership"
+      ],
+      "normalStops": true
+    },
+    "native-online-guard-report-r12": {
+      "schemaVersion": 1,
+      "productionChanged": false,
+      "checks": [
+        "linked-body-blocks-native-online-register-unregister-without-inventory-or-uuid-change",
+        "same-native-password-and-body-login-after-blocked-mode-switch",
+        "durable-active-marker-matches-completed-membership"
+      ],
+      "normalStops": true
+    }
+  },
+  "sourceTests": {
+    "siteFull": {
+      "passed": 354,
+      "skipped": 3
+    },
+    "portalOwnership": {
+      "passed": 5
+    },
+    "publicDeploymentPython": {
+      "passed": 7
+    },
+    "clockMapping": {
+      "passed": 5
+    },
+    "velocityRebuiltClassBytesMatchPublished": true,
+    "desktopAndPhoneWidthUiVerified": true
+  },
+  "limitations": [
+    "Import still downloads 178 dependencies; not a full offline installer.",
+    "No real premium or Bedrock handset SSO acceptance in this release.",
+    "Bedrock complex mod models and menus remain partially adapted.",
+    "No claim of complete autonomous story progression or all mod content.",
+    "First external probe failed before execution because its ContentEncoding parameter was omitted; corrected read-only probe succeeded.",
+    "Startup mixin and empty account datapack warnings remain recorded; health and native authentication tests passed."
+  ]
+}

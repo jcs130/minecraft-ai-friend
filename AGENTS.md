@@ -1,3 +1,13 @@
+## 2026-10-30 SAO 客户端 OSS、网站 0.8.32 与共用游戏账号已发布
+
+网站 https://mc.kangqiang.site/sao.html 和下载中心提供 SAO 0.76.1-lite-20261030.2 / MC1.20.1 / Forge47.4.10 客户端 .mrpack（189,698,558 字节，SHA e858aee6…ddb612）。匿名完整下载哈希已验；首次仍需下载178项依赖，包无维护者账号、密钥或世界。网站在现役0.8.31镜像上增量升级0.8.32，13个原网站身份、23条归属、原九个下载及观战挂载保留。不要用仓库早期门户整体覆盖现役；补丁与网站交接见 integrations/sao-compat/portal/README.md。
+
+原生 LibreLogin 是游戏密码唯一来源；网站登录密码仍独立。新增 RealmAccounts0.1.0 和服务端 Forge maw-shared-accounts0.1.0（本次SHA53baee2c…a0afc2），原 LoginGuard/LibreLogin/DirectAuth JAR 保持。网站受限只读归属目录17项同步正常，不含密码或邮箱。新SAO身体用 /login 游戏密码，名字不同可 /login 千灯纪角色名 游戏密码；旧身体先用原密码登录再 /sharedaccount link 双端核验。关联后网站游戏改密与 /changepassword 写同一原生提供器；原UUID/背包/权限不合并。已关联身体的原生online/register/unregister被拦，不能回退本地身份；操作未知按原ID查询，不重放。
+
+仅正常停启登录/模型代理，Paper世界未重启；SAO正常退出0后E/F完整冷备212,608文件，1,918,996,995字节归档，每个成员及双盘SHA6de8a231…71444已验。增加一项服务端组件（现176个JAR，原175项hash保持），账号配置纳入6820项冻结清单。现健康/维护暂停解除，桐人按原ag_Kirito及原记忆/目标/凭据恢复在线自主循环；外部云端新鲜28976/28977状态、28988 Pong及SDK字节哈希通过。语音28989仍原JVM监听，后台/MCP仅回环，未改端口/路由。
+
+隔离原生双向改密、旧身体/UUID/物品保持、重连/重启、去重/冲突/未知不重放、网站离线/过期、本地OP及降级拒绝均有真实消费者证据；最后补验online模式拦截及原身份重连。网站354通过/3既有跳过，相关增量与7部署/5时钟回归通过，桌面/手机宽度网页已验；不当真人正版或手机SSO、完整模组渲染/剧情自主验收。启动资源包等原始警告保留，外网探针首次编码错误也保留后重新只读验证。临时传输授权已撤。备份必须另含全局 E:/MC/private/shared-realm-accounts/sao，不能只备世界。来源、运维与事实见 integrations/shared-realm-accounts/README.md 及 integrations/sao-compat/shared-access-release-20261030.json；不要重放本轮一次性发布脚本或恢复旧数据库覆盖新增数据。
+
 ## 2026-10-30 SAO 已替换原 Tau 公网入口，基岩兼容体验已上线
 
 SAO 0.76.1-lite / MC1.20.1 / Forge47.4.10，E:/MC/servers/sao-0.76.1 现役；Java TCP28976、原生 Mineflayer SDK TCP28977、基岩 UDP28988 三项外网新鲜状态探测通过。语音 UDP28989，Numen39689/后端39676/健康28985仍回环。旧Tau正常退出0、65,271文件E/F成员级和双盘SHA冷备完成，原目录/世界保留；6个已注册账号保留密码/UUID，未降版本搬世界。Paper未动。当前用户登录自启改SAO并撤旧FOM独立基岩启动，监护健康/暂停解除。

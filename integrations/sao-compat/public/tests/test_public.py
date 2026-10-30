@@ -3,8 +3,21 @@ BASE=pathlib.Path(__file__).resolve().parents[1];sys.path.insert(0,str(BASE))
 from migrate_mixauth import prepared
 from bedrock_health import decode_pong,MAGIC
 from listener_policy import validate_voice
+from stage_public import freeze
 
 class PublicDeploymentContract(unittest.TestCase):
+ def test_shared_account_policy_is_sealed_when_installed(self):
+  with tempfile.TemporaryDirectory()as directory:
+   root=pathlib.Path(directory)
+   for relative in ['java/jdk/bin/java.exe','server/user_jvm_args.txt','server/libraries/net/minecraftforge/forge/1.20.1-47.4.10/win_args.txt','server/mods/accounts.jar']:
+    p=root/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b'fixture')
+   (root/'ops').mkdir();freeze(root)
+   key='server/config/maw-shared-accounts.properties'
+   self.assertNotIn(key,json.loads((root/'ops/release.json').read_text())['files'])
+   policy=root/key;policy.parent.mkdir(parents=True);policy.write_text('enabled=true\n')
+   freeze(root);before=json.loads((root/'ops/release.json').read_text())['files'][key]
+   policy.write_text('enabled=false\n');freeze(root)
+   self.assertNotEqual(before,json.loads((root/'ops/release.json').read_text())['files'][key])
  def test_voice_normal_rewrite_is_allowed_but_exposure_changes_are_rejected(self):
   with tempfile.TemporaryDirectory()as directory:
    p=pathlib.Path(directory)/'voice.properties'

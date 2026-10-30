@@ -18,6 +18,9 @@ def freeze(root):
     for relative in ['pack-source.json','agent-connection.json','ops/front-java_front.json','ops/front-agent_front.json','ops/compat.json','ops/bedrock/ViaProxy-3.4.14.jar','ops/bedrock/plugins/Geyser-ViaProxy.jar','ops/bedrock/plugins/Geyser/config.yml','ops/bedrock/plugins/Geyser/maw-native-items.json','ops/bedrock/plugins/Geyser/packs/maw-native-icons.mcpack','ops/bedrock/plugins/Geyser/custom_mappings/maw-native-icons.json']:
         p=root/relative
         if p.exists():files[relative]=digest(p)
+    # The shared-account authority paths and enabled flag are deployment policy.
+    p=root/'server/config/maw-shared-accounts.properties'
+    if p.exists():files[p.relative_to(root).as_posix()]=digest(p)
     p=root/'ops/release.json';p.write_text(json.dumps({'schemaVersion':1,'minecraft':'1.20.1','mods':mods,'files':files},indent=2),encoding='utf-8')
     return len(files)
 def stage(root,work,source):

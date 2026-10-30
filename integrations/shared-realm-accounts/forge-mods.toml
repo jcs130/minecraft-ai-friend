@@ -1,0 +1,21 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+[[mods]]
+modId="maw_shared_accounts"
+version="0.1.0"
+displayName="My Agent World Shared Accounts"
+displayTest="IGNORE_SERVER_VERSION"
+description='''Server-only bridge to the existing Qiandengji native account authority.'''
+[[dependencies.maw_shared_accounts]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.10,)"
+ordering="NONE"
+side="SERVER"
+[[dependencies.maw_shared_accounts]]
+modId="directauth"
+mandatory=true
+versionRange="[1.3.1,1.3.2)"
+ordering="AFTER"
+side="SERVER"
