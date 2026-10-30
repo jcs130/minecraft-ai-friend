@@ -58,3 +58,28 @@ export function omitRejectedMinecraftSpeech(input: unknown, rejected: readonly n
   });
   return { supported: true, steps: remaining, kept, omitted, dependent };
 }
+
+/** A host may start an explicitly requested body suffix while checking a leading
+ * social utterance. Explicit queue ordering, speech dependencies/expectations,
+ * interleaved commands and unknown shapes retain the original ordered batch.
+ * Native validation, admission and cancellation still belong to the World.
+ * This is a pure partition; it never submits work or authorizes an extra step. */
+export function independentMinecraftSpeechPrefix(args: Readonly<Record<string, unknown>>): ReturnType<typeof omitRejectedMinecraftSpeech> {
+  if (args.queue != null && args.queue !== 'replace') return { supported: false, reason: 'Explicit queue ordering must be retained' };
+  if (!Array.isArray(args.steps)) return { supported: false, reason: 'No action batch' };
+  const count = args.steps.findIndex(step => minecraftStepRequestKind(step) !== 'speech');
+  if (count < 1 || count >= args.steps.length) return { supported: false, reason: 'No leading speech and body suffix' };
+  if (args.steps.slice(count).some(step => minecraftStepRequestKind(step) === 'speech')) {
+    return { supported: false, reason: 'Interleaved speech retains native order' };
+  }
+  if (args.steps.slice(0, count).some(step => step.expect != null || step.needs != null
+    && (!Array.isArray(step.needs) || step.needs.length !== 0))) {
+    return { supported: false, reason: 'Speech has an explicit execution dependency or expectation' };
+  }
+  const result = omitRejectedMinecraftSpeech(args.steps, Array.from({ length: count }, (_, index) => index));
+  if (!result.supported) return result;
+  if (result.dependent.length || !result.steps.some(step => minecraftStepRequestKind(step) === 'action')) {
+    return { supported: false, reason: 'Body depends on speech or has no independent action' };
+  }
+  return result;
+}

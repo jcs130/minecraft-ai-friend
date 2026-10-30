@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { minecraftRequestKinds, omitRejectedMinecraftSpeech } from '../core/request-intent.ts';
+import { minecraftRequestKinds, omitRejectedMinecraftSpeech, independentMinecraftSpeechPrefix } from '../core/request-intent.ts';
 
 it('classifies actual batch contents and treats commands, camera motion and ignored dryRun as actions', () => {
   expect(minecraftRequestKinds([{ skill: 'chat', text: 'hello' }, { skill: 'chat', text: '/w 玩家_甲 hello' }])).toEqual({ kinds: ['speech'], unknown: 0 });
@@ -33,4 +33,24 @@ it('does not drop server commands, accept unknown operations or repair invalid d
     expect(omitRejectedMinecraftSpeech(batch, [0])).toHaveProperty('supported', false);
   }
   expect(omitRejectedMinecraftSpeech([{ skill: 'chat', text: 'hello' }], [0])).toEqual({ supported: true, steps: [], kept: [], omitted: [0], dependent: [] });
+});
+
+it('partitions only an independent body suffix and preserves its original dependency order', () => {
+  const args = { steps: [{ skill: 'chat', text: 'I am coming.' }, { skill: 'eat', item: 'bread' },
+    { skill: 'goto', at: [3, 64, 1], needs: [2] }] };
+  const before = structuredClone(args);
+  expect(independentMinecraftSpeechPrefix(args)).toEqual({ supported: true, omitted: [0], kept: [1, 2], dependent: [],
+    steps: [args.steps[1], { ...args.steps[2], needs: [1] }] });
+  expect(args).toEqual(before);
+});
+
+it('keeps ordered, dependent, interleaved and unknown batches on the original native lane', () => {
+  const speech = { skill: 'chat', text: 'Hello' }, walk = { skill: 'goto', at: [1, 64, 0] };
+  for (const args of [
+    { queue: 'append', steps: [speech, walk] }, { queue: 'now', steps: [speech, walk] },
+    { steps: [speech, { ...walk, needs: [1] }] }, { steps: [{ ...speech, expect: { alive: true } }, walk] },
+    { steps: [walk, speech] }, { steps: [speech, walk, speech] },
+    { steps: [{ ...speech, needs: [1] }, walk] }, { steps: [speech, { skill: 'unknown' }] },
+    { steps: [speech, { skill: 'observe' }] }, { steps: [speech] },
+  ]) expect(independentMinecraftSpeechPrefix(args)).toHaveProperty('supported', false);
 });

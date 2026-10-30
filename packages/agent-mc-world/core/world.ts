@@ -6743,7 +6743,11 @@ export class MinecraftWorld implements World {
     const parsed = parse(args.steps);
     if ('error' in parsed) {
       const correction = describeSkillInputCorrection(args.steps, parsed.error);
-      return invalidArguments('arguments.steps', `${parsed.error}\nmc_help ${JSON.stringify(correction.helpArguments)}\n整批未提交，当前任务和待办保留。`, correction);
+      // Text-only hosts otherwise lose the structured correction in data/meta
+      // and force another model round just to discover the missing fields.
+      const visible = { errors: correction.errors.map(({ path, expected, problem }) => ({ path, expected, problem })),
+        minimal_legal_example: correction.minimal_legal_example };
+      return invalidArguments('arguments.steps', `${parsed.error}\n[参数修正；示例仅演示格式，不是建议目标或自动重试]\n${JSON.stringify(visible)}\nmc_help ${JSON.stringify(correction.helpArguments)}\n整批未提交，当前任务和待办保留。`, correction);
     }
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
     // A stopped login cannot execute a new body task. Reject before queue=replace

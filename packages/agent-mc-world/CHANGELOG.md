@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7-rc.142
+
+- Expose a pure conservative partition for independent body suffixes behind leading social speech. Preserve explicit queue order, cross-step dependencies, commands and native admission.
+- Include the existing parameter error path, expected field and validated example in text receipts, so text-only host projections retain the correction without loading every skill contract.
+
 ## 0.5.7-rc.141
 
 - Include the public server-tool and equipment source entries already declared

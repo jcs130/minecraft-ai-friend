@@ -117,6 +117,21 @@ describe('real bounded world reads (no mocked visibility)', () => {
     const validate=new Ajv({strict:false}).compile({anyOf:generation});
     expect(validate({skill:'observe',mode:'voxels',bounds:[0,0,0,0,0,0],cursor:{}})).toBe(false);
   });
+  it.each([{ skill: 'stow', includeHotbar: false }, { skill: 'server_travel', target: 'guild' }, { skill: 'craft' }])(
+    'retains the exact parameter correction in a text-only receipt without mutating the native queue (%j)', async step => {
+      const r = rig(), before = r.exec.status();
+      const outcome = await r.world.tools().find(t => t.name === 'mc_do')!.handler({ steps: [step] }, { role: 'test', log: r.host.log }) as any;
+      expect(outcome.failed).toBe(true);
+      const text = JSON.parse(outcome.text.split('\n').find((line: string) => line.startsWith('{"errors":'))!);
+      expect(text.errors[0].path).toBe(outcome.data.errors[0].path);
+      expect(text.errors[0].expected).toEqual(outcome.data.errors[0].expected);
+      expect(text.minimal_legal_example).toEqual(outcome.data.minimal_legal_example);
+      expect(text.minimal_legal_example).not.toBeNull();
+      expect(parseSteps(text.minimal_legal_example.steps)).not.toHaveProperty('error');
+      expect(outcome.data.executed).toBe(false);
+      expect(r.exec.status().running?.id).toBe(before.running?.id);
+      expect(r.exec.status().waiting.map(t => t.id)).toEqual(before.waiting.map(t => t.id));
+    });
   it('reports an immature crop as a business block with zero effects and a concrete safe read', async () => {
     const r=rig(); r.set(0,64,-2,'wheat'); r.set(0,63,-2,'farmland');
     const dig=vi.fn(); Object.assign(r.bot,{dig});
