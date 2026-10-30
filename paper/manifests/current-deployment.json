@@ -1,14 +1,14 @@
 {
   "state": "deployed-and-verified",
-  "latestRelease": "agentvision-youer-fix-20261030-r1",
-  "verifiedAt": "2026-10-30T20:55:16.074649+08:00",
-  "releaseDocument": "paper/docs/NATIVE_COMPATIBILITY_20261030.md",
+  "latestRelease": "rpg-growth-unification-20261031-r3",
+  "verifiedAt": "2026-10-31T01:01:59.347988+08:00",
+  "releaseDocument": "paper/docs/RPG_GROWTH_20261030.md",
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 54,
-    "AgentFriend": "0.4.47.36-compat",
-    "QiandengjiRpg": "0.2.12",
-    "VortexRPG": "1.2.2-alpha-qd30",
+    "AgentFriend": "0.4.47.37-rpg",
+    "QiandengjiRpg": "0.2.13",
+    "VortexRPG": "1.2.2-alpha-qd31-growth",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.4",
     "LoginGuard": "0.1.9",
@@ -40,14 +40,14 @@
     "numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "ysm-proxy/LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
     "AgentVision-0.1.2.jar": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
-    "VortexRPG-1.2.2-alpha-qd29.jar": "9437787768e54b4a10b04702ecbc1001088c57c51aed461ecadf7dcd882f001a",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "4751b69a677b33d35be859de405929b31e8f36b3a0254d7ab2c2b650a6c495d4",
     "WorldObserver-0.1.1.jar": "f1b4d51fca8bb87b1a945f939a190ce01acc0b372e81dd18b57d8b2c02022d3d",
     "QiandengVoice-0.1.0.jar": "db28cbb28eb72ca385681a8c39e9f8bbebe625f6e08482a819a7f3a16057ede4",
     "voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
-    "QiandengjiRpg-0.2.10.jar": "b019698d7b60b9dc1500e743beb52f3db2590a7a1d9e980563a6a0fe4c14be0a",
+    "QiandengjiRpg-0.2.10.jar": "5c091bc967d8041c2669abfcf9164bb4c810cdce2fe89004def5b664f37c1257",
     "EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a",
-    "AgentFriend-0.4.47.36-compat.jar": "48fee27293e134b5495857441b831dc5bf1722e6e301e0fd28a932ca9c882ebe",
-    "qiandengji-maid-native-0.1.4.jar": "f972b477472f62b729f5b7fe143874495f69e472e6e31a7de7e22c3df797c0c4"
+    "qiandengji-maid-native-0.1.4.jar": "f972b477472f62b729f5b7fe143874495f69e472e6e31a7de7e22c3df797c0c4",
+    "AgentFriend-0.4.47.37-rpg.jar": "ece9fa6a7dfbebd8ed7336f6b1478ee95b4f8b8b714c629cbe9b037b3ef3ae5b"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -57,29 +57,18 @@
     "long autonomous combat balance",
     "physical Bedrock rendering",
     "original remote modded client after native protocol correction",
-    "original reported maid death disconnect incident"
+    "original reported maid death disconnect incident",
+    "real player microphone and human hearing in current runtime",
+    "all third-party agent hosts consuming nearby voice"
   ],
-  "scopeNotice": "Native tracking, standard backpack menus, null-safe compass and native backend protocol route. Youer/mods/credentials/native RPG retained. Six-stage Aincrad and coarse hearing/Ranger changes remain candidates.",
+  "scopeNotice": "Native-level XP display; eleven AuraSkills foundation tracks and six bounded native passives; common night/feather access; existing cold dungeon entry compatibility. Native mods, credentials, inventory and class XP retained. Six-stage route and public Skill download not included.",
   "verification": {
-    "formalProduction": 26,
-    "paperVision": 17,
-    "youerVision": 17,
-    "nullableCompass": 4,
-    "backpackWithServerInventoryAndReconnect": 7,
-    "villagerAndNativeMaidDeath": 6,
-    "relayClientVersions": [
-      "1.20.6",
-      "1.21.1",
-      "1.21.4"
-    ],
-    "existingCredentialsPreserved": 69,
-    "existingBackpacksPreserved": 38,
-    "backpackOwnerRowsPreserved": 211,
-    "nativeProfilesMatchedColdAtStartup": 18,
+    "formalProduction": 32,
+    "ruleChecks": 313,
+    "realGameplayAndColdRestartChecks": 34,
+    "crossVolumeInstallAndRollbackChecks": 12,
     "unrelatedJarsPreserved": 51,
-    "valueOrPasswordExported": false,
-    "originalGuardErrorRecoveredReadOnly": true,
-    "observedNativeProtocolClients": 5
+    "secretsExported": false
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -89,7 +78,7 @@
       "rate": "1:1"
     },
     "backup": "20261028-230739",
-    "oldSkillGrowth": "archived",
+    "oldSkillGrowth": "AuraSkills foundation XP retained with limited native passives; SpellMastery and retired classes archived",
     "publicAuction": "disabled_pending_delivery_fix",
     "formalChecks": 81
   },
@@ -182,7 +171,7 @@
     "postStartupSemanticChecks": true,
     "startupWritebackTests": 7
   },
-  "previousRelease": "rpg-interaction-release-20261029-r3",
+  "previousRelease": "agentvision-youer-fix-20261030-r1",
   "nearbyCommunication": {
     "state": "deployed-and-verified",
     "defaultRadius": 48,
@@ -249,7 +238,9 @@
   "runtimeArtifactTargets": {
     "QiandengjiRpg-0.2.12": "QiandengjiRpg-0.2.10.jar",
     "VortexRPG-qd30": "VortexRPG-1.2.2-alpha-qd29.jar",
-    "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions."
+    "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions.",
+    "QiandengjiRpg-0.2.13": "QiandengjiRpg-0.2.10.jar",
+    "VortexRPG-qd31-growth": "VortexRPG-1.2.2-alpha-qd29.jar"
   },
   "rpgActivities": {
     "state": "deployed-and-verified",
@@ -321,5 +312,58 @@
     "gameRestartedForWebsite": false,
     "skillDownload": "1.3.4 unchanged"
   },
-  "compatibilityReleaseManifest": "paper/manifests/native-compatibility-20261030.json"
+  "compatibilityReleaseManifest": "paper/manifests/native-compatibility-20261030.json",
+  "previousCompatibilityVerification": {
+    "formalProduction": 26,
+    "paperVision": 17,
+    "youerVision": 17,
+    "nullableCompass": 4,
+    "backpackWithServerInventoryAndReconnect": 7,
+    "villagerAndNativeMaidDeath": 6,
+    "relayClientVersions": [
+      "1.20.6",
+      "1.21.1",
+      "1.21.4"
+    ],
+    "existingCredentialsPreserved": 69,
+    "existingBackpacksPreserved": 38,
+    "backpackOwnerRowsPreserved": 211,
+    "nativeProfilesMatchedColdAtStartup": 18,
+    "unrelatedJarsPreserved": 51,
+    "valueOrPasswordExported": false,
+    "originalGuardErrorRecoveredReadOnly": true,
+    "observedNativeProtocolClients": 5
+  },
+  "foundationGrowth": {
+    "state": "deployed-and-verified",
+    "tracks": 11,
+    "nativePassives": [
+      "light_fall",
+      "anti_hunger",
+      "sword_master",
+      "axe_master",
+      "bow_master",
+      "mob_master"
+    ],
+    "query": "/mycli skills list passive",
+    "mana": "VortexRPG only",
+    "recordReset": false,
+    "document": "paper/docs/RPG_GROWTH_20261030.md",
+    "goddessGuidancePublished": true,
+    "goddessAlreadyRead": false
+  },
+  "voiceAudit": {
+    "document": "paper/docs/VOICE_STATUS_20261030.md",
+    "nativeSyntheticInputPassed": true,
+    "nearPackets": 273,
+    "nearCaptions": 1,
+    "farPackets": 0,
+    "farCaptions": 0,
+    "crossWorldPackets": 0,
+    "crossWorldCaptions": 0,
+    "agentSpeechRequestsObserved": 0,
+    "autoSpeechEnabledProfiles": 0,
+    "realMicrophoneVerified": false,
+    "humanHearingVerified": false
+  }
 }

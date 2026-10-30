@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "release": "rpg-growth-unification-20261031-r2",
-  "state": "approved-maintenance-in-progress",
+  "release": "rpg-growth-unification-20261031-r3",
+  "state": "deployed-and-verified",
   "document": "paper/docs/RPG_GROWTH_20261030.md",
-  "runtimeChanged": false,
+  "runtimeChanged": true,
   "homeWarpHotfixApplied": true,
   "candidate": {
     "AgentFriend": "0.4.47.37-rpg",
@@ -44,8 +44,8 @@
     "realGameplayAndColdRestartChecks": 34,
     "crossVolumeInstallAndRollbackChecks": 12,
     "testsPassed": true,
-    "isolatedOnly": true,
-    "productionPostflight": "pending",
+    "isolatedOnly": false,
+    "productionPostflight": 32,
     "currentNativeVoiceSyntheticInput": {
       "passed": true,
       "nearAudioPackets": 273,
@@ -63,7 +63,13 @@
       "nativeTargetChecks": 24,
       "realCrossVolumeInstallRollbackChecks": 11,
       "newFrozenPreflightChecks": 32
-    }
+    },
+    "recoveryPreflight": {
+      "productionInputChecks": 14,
+      "validAndRefusalRegressionCases": 5
+    },
+    "backupPoint": "20261030-040022",
+    "goddessSevenOriginalJobsRestored": true
   },
   "boundaries": [
     "six-stage Aincrad architecture not included",
@@ -78,5 +84,18 @@
     "cause": "previous first-party filename validation omitted compat suffix",
     "configRollbackVerified": true,
     "originalFailureReceiptRetained": true
-  }
+  },
+  "verifiedAt": "2026-10-31T01:01:59.347988+08:00",
+  "failedAttempts": [
+    {
+      "release": "rpg-growth-unification-20261030-r1",
+      "cause": "compat filename rejected before JAR mutation",
+      "oldRuntimeRecovered": true
+    },
+    {
+      "release": "rpg-growth-unification-20261031-r2",
+      "cause": "retained recovery path already existed; stopped before backup changes or installation",
+      "oldRuntimeRecovered": true
+    }
+  ]
 }

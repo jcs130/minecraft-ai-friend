@@ -34,6 +34,8 @@ import { memoryRoute } from './memory-routes.mjs';
 import { LoginThrottle } from './login-throttle.mjs';
 import { PublicArchives } from './public-archives.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
+import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
+import {NekoPluginLinks} from './neko-plugin-links.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -94,6 +96,8 @@ export function createPortal(config, options = {}) {
   const profiles = new AgentProfiles(store);
   const emailAuth = new EmailAuth(config, store, options.emailSender);
   const agentAccess = new AgentAccess(config, store, game, accounts);
+  const nekoAuth = new NekoAuth(config,store,{fetcher:options.nekoFetch});
+  const nekoLinks = new NekoPluginLinks(config,store,accounts,nekoAuth);
   const appearance = new Appearance(config, store, game);
   const memories = new Memories(store);
   const loginThrottle = new LoginThrottle(store, options.now);
@@ -135,7 +139,8 @@ export function createPortal(config, options = {}) {
   }
   function sessionData(session) {
     return { owner: store.ownerPublic(session?.owner_id ? store.ownerById(session.owner_id) : null), csrfToken: session?.csrf || null,
-      allowRegistration: config.allowRegistration && (config.emailAuth.registrationMode !== 'email' || emailAuth.capabilities().available), emailAuth: emailAuth.capabilities() };
+      allowRegistration: config.allowRegistration && (config.emailAuth.registrationMode !== 'email' || emailAuth.capabilities().available), emailAuth: emailAuth.capabilities(),
+      nekoAuth:nekoAuth.capabilities(session?.owner_id?store.ownerById(session.owner_id):null) };
   }
   function auth(req, scopes = []) {
     const bearer = req.headers.authorization;
@@ -259,6 +264,34 @@ export function createPortal(config, options = {}) {
         const bytes = appearance.signingImage(signingSkin[1]);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length }); return res.end(bytes);
       }
+      if(req.method==='GET'&&pathname==='/api/v1/auth/neko')return respond(res,200,nekoAuth.capabilities());
+      if(req.method==='GET'&&pathname===NEKO_CALLBACK){
+        if(req.portalOrigin.origin!==config.publicOrigin||!req.portalOrigin.secure)throw fail(400,'NEKO_AUTH_HTTPS_REQUIRED','请使用千灯纪正式 HTTPS 授权入口');
+        let location='/join?neko=failed';
+        try{
+          const completed=await nekoAuth.complete(url,req.headers.cookie||'',device(req));
+          cookie(req,res,completed.token,true);
+          location='/join?neko=connected'+(completed.requestId?'&neko_request='+encodeURIComponent(completed.requestId):'');
+        }catch{/* No provider code, token, subject or raw upstream error enters the response. */}
+        const current=res.getHeader('Set-Cookie');
+        res.setHeader('Set-Cookie',[...(Array.isArray(current)?current:current?[current]:[]),nekoAuth.clearCookie()]);
+        res.writeHead(303,{Location:location,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});return res.end();
+      }
+      const nekoLink=/^\/api\/v1\/neko-plugin\/requests\/([a-f0-9-]{36})\/(preview|status|activate|approve|renew)$/.exec(pathname);
+      if(pathname==='/api/v1/neko-plugin/requests'&&req.method==='POST'||nekoLink&&['status','activate','renew'].includes(nekoLink[2])){
+        if(req.headers.origin||req.headers.cookie)throw fail(403,'NEKO_PLUGIN_CLIENT_REQUIRED','请由插件本机接入，不使用网站或猫娘计划令牌');
+        rate('neko-plugin:'+digest(rateAddress(req,config)),60,60000);
+        if(pathname==='/api/v1/neko-plugin/requests')return respond(res,200,nekoLinks.create(await jsonBody(req,8192)));
+        const row=nekoLinks.authorize(nekoLink[1],req.headers.authorization,{allowExpired:nekoLink[2]!=='activate'});
+        if(nekoLink[2]==='status'&&req.method==='GET')return respond(res,200,await nekoLinks.status(row));
+        if(nekoLink[2]==='activate'&&req.method==='POST')return respond(res,202,await nekoLinks.activate(row,await jsonBody(req,8192)));
+        if(nekoLink[2]==='renew'&&req.method==='POST')return respond(res,200,await nekoLinks.renew(row));
+        throw fail(405,'METHOD_NOT_ALLOWED','接入操作与接口不匹配');
+      }
+      if(nekoLink?.[2]==='preview'&&req.method==='GET'){
+        rate('neko-plugin-preview:'+digest(rateAddress(req,config)),60,60000);
+        return respond(res,200,nekoLinks.preview(nekoLink[1]));
+      }
       if (req.method === 'GET' && pathname === '/api/v1/agent-access') return respond(res, 200, await agentAccess.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/agent-access/invitation') {
         if (req.headers.origin && req.headers.origin !== req.portalOrigin.origin) throw fail(403, 'INVALID_ORIGIN', '请从接入页或 Agent 本机读取邀请');
@@ -373,6 +406,20 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if(req.method==='POST'&&pathname==='/api/v1/auth/neko/start'){
+        const session=sessionFrom(req),body=await jsonBody(req,1024);
+        if(!session||req.portalOrigin.origin!==config.publicOrigin||!req.portalOrigin.secure)throw fail(400,'NEKO_AUTH_HTTPS_REQUIRED','请使用千灯纪正式 HTTPS 授权入口');
+        if(body.mode&&!['login','link','reauth'].includes(body.mode))throw fail(400,'INVALID_AUTH_MODE','请选择登录、关联或重新验证');
+        if(body.requestId)nekoLinks.row(body.requestId);
+        rate('neko-auth:'+session.id_hash,10,60000);
+        const started=nekoAuth.begin(session,{mode:body.mode||'login',requestId:body.requestId||null});
+        res.setHeader('Set-Cookie',started.cookie);
+        return respond(res,200,{authorizationUrl:started.authorizationUrl,expiresAt:started.expiresAt});
+      }
+      if(nekoLink?.[2]==='approve'&&req.method==='POST'){
+        const {owner}=browserAuth(req,false,true);
+        return respond(res,200,nekoLinks.approve(nekoLink[1],owner));
+      }
       if (await memoryRoute({ req, res, pathname, url, memories, context: async required => {
         if (required) return { owner: browserAuth(req).owner, actor: null };
         const session = sessionFrom(req);
@@ -760,5 +807,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, archives, emailAuth, agentAccess, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

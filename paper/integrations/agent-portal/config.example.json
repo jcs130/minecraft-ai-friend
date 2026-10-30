@@ -23,6 +23,10 @@
   ],
   "localOrigins": [],
   "allowRegistration": true,
+  "nekoAuth": {
+    "enabled": false,
+    "clientId": ""
+  },
   "emailAuth": {
     "enabled": true,
     "registrationMode": "optional-email",
