@@ -15,7 +15,7 @@ Minecraft 1.21.1 / Java 21。服务端目前使用 Youer 和原生 Touhou Little
 
 ## 配套下载
 
-官网入口：`https://mc.kangqiang.site/downloads.html#maid-client`。固定链接为 `/downloads/maid-client`（启动器导入 `.mrpack`）、`/downloads/maid-mods`（手动 ZIP）；文件由专用 OSS 直接分发，保留账号隔离与原下载限频。
+官网入口已发布：[女仆客户端下载](https://mc.kangqiang.site/downloads.html#maid-client)。固定链接为 [启动器导入包](https://mc.kangqiang.site/downloads/maid-client)（`.mrpack`）、[手动安装包](https://mc.kangqiang.site/downloads/maid-mods)（ZIP）；文件由专用 OSS 直接分发，保留原下载限频。
 
 当前客户端资源版本 **1.0.0-20261030**：
 
@@ -24,7 +24,7 @@ Minecraft 1.21.1 / Java 21。服务端目前使用 Youer 和原生 Touhou Little
 - 1.5.3 官方原始客户端 SHA256：`f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27`。
 - 包内没有服务端改版 JAR、测试控制器、账号、Key、存档或 Minecraft 本体。
 
-版本、完整摘要和公开对象链接见 [client-release.json](client-release.json)。资源已上传并逐个匿名完整下载校验；官网按钮的实际发布状态记录在本批发布清单，不能只据源码链接认定已上线。
+版本、完整摘要和公开对象链接见 [client-release.json](client-release.json)。四个资源已逐个匿名完整下载校验；官网 0.8.32 上的两条固定链接、公网 1440px/390px 页面和 OSS 响应均已验收。原 SAO 下载、账号与观战功能保留；本次未重启游戏服或登录代理。见[发布记录](../../docs/MAID_CLIENT_RELEASE_20261030.md)。
 
 官方版本：[Modrinth 1.5.3](https://modrinth.com/mod/touhou-little-maid/version/tXG1TkGx)；[原作者源码](https://github.com/TartaricAcid/TouhouLittleMaid)。代码 MIT、美术等资源 CC BY-NC-SA 4.0，语音按原声明；随包保留 [原许可](licenses/)。
 

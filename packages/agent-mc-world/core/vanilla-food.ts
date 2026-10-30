@@ -24,7 +24,7 @@ export const FOOD_CAUTIONS: Readonly<Record<string, string>> = {
   rotten_flesh: '腐肉有 80% 概率附加饥饿 I 30 秒，饱和度很低；原版没有把腐肉烧成熟肉的配方。',
   poisonous_potato: '毒马铃薯有 60% 概率中毒 5 秒，不是可烧成烤马铃薯的普通马铃薯。',
   spider_eye: '蜘蛛眼必定中毒 5 秒，不能当日常安全口粮。',
-  pufferfish: '河豚附加剧毒、饥饿与反胃；原版没有可消毒的熟河豚配方。',
+  pufferfish: '河豚原版必定附加中毒 II 60 秒、饥饿 III 15 秒和反胃 I 15 秒；不能当作普通安全生鱼，原版没有可消毒的熟河豚配方。',
   chorus_fruit: '紫颂果食用后可能随机传送，位置和可通行性必须重新观察。',
   suspicious_stew: '谜之炖菜效果由 minecraft:suspicious_stew_effects 组件决定；仅凭物品名无法确认安全。',
   ominous_bottle: '不祥之瓶不走普通补饥饿路径；饮用附加不祥之兆 6000 秒，等级取决于组件，不是口粮。',

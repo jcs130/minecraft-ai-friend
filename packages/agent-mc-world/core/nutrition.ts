@@ -1,5 +1,6 @@
 /** Routine food selection. Explicit player/agent eat requests remain unrestricted. */
-import { FOOD_COOKING } from './vanilla-food.ts';
+import { FOOD_COOKING, FOOD_CAUTIONS, FOOD_EFFECTS, VANILLA_KNOWLEDGE_VERSION, MOJANG_1211_SOURCE,
+  type FoodEffect } from './vanilla-food.ts';
 export const RISKY_FOODS = new Set([
   'pufferfish', 'spider_eye', 'poisonous_potato', 'rotten_flesh', 'chicken',
   'chorus_fruit', 'suspicious_stew', 'ominous_bottle',
@@ -8,6 +9,23 @@ export const RISKY_FOODS = new Set([
 export interface FoodStack { name: string; count: number }
 export interface FoodValue { foodPoints?: number; saturation?: number }
 const SPECIAL_FOODS = new Set(['golden_apple', 'enchanted_golden_apple']);
+
+/** Reference semantics, never a claim about a stack's server-overridden components or current effects. */
+export interface FoodRiskReference {
+  item: string;
+  caution: string;
+  effects: FoodEffect[];
+  source: { kind: 'vanilla-reference'; version: string; url: string };
+  knowledgeId: string;
+  serverComponentsVerified: false;
+}
+
+export function foodRiskReference(item: string): FoodRiskReference | null {
+  if (!RISKY_FOODS.has(item) || !FOOD_CAUTIONS[item]) return null;
+  return { item, caution: FOOD_CAUTIONS[item], effects: (FOOD_EFFECTS[item] ?? []).map(effect => ({ ...effect })),
+    source: { kind: 'vanilla-reference', version: VANILLA_KNOWLEDGE_VERSION, url: MOJANG_1211_SOURCE },
+    knowledgeId: 'food/' + item, serverComponentsVerified: false };
+}
 
 /** Counts are from synchronized carried inventory. knownItems is the same versioned registry
  * as foods; absence from foods alone is not evidence that a custom/unknown item is inedible. */
@@ -54,6 +72,7 @@ export function renderFoodReserveReadout(
     const label = `${nameOf(name)}×${amount}` + (name === 'ominous_bottle' ? '（不补饥饿）'
       : `（${value(food.foodPoints)}/${value(food.saturation)}`
         + (name === 'rotten_flesh' ? '；原版饥饿风险80%' : name === 'chicken' ? '；原版饥饿风险30%' : '')
+        + (foodRiskReference(name) ? `；1.21.1原版参考：${FOOD_CAUTIONS[name]}` : '')
         + (cooked && foods[cooked] ? `；烹饪成${nameOf(cooked)} ${value(foods[cooked]!.foodPoints)}/${value(foods[cooked]!.saturation)}` : '') + '）');
     if (RISKY_FOODS.has(name)) risky.push(label);
     else if (SPECIAL_FOODS.has(name)) special.push(label);
@@ -64,7 +83,7 @@ export function renderFoodReserveReadout(
     + `随身口粮储备：常规 ${count} 个（${normal.join('、') || '无'}；基础补饥饿值合计 ${points} 点，不含浪费与后续消耗）。`
     + (risky.length ? `有风险或特殊副作用：${risky.join('、')}。` : '')
     + (special.length ? `特殊食物：${special.join('、')}。` : '')
-    + '括号为原版基础饥饿/饱和点，非当前饱和或直接回血；优先已有安全熟食，危急时可先用安全生食。'
+    + '括号为原版基础饥饿/饱和点，非当前饱和或直接回血；风险参考不证明服务器或物品组件没有覆盖。优先已有安全熟食，危急时可先用安全生食。'
     + '仅计已同步的随身物品，未计仓库或食物原料；当前不饿不表示已有储备。';
 }
 

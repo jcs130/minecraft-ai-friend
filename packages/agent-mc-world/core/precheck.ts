@@ -17,7 +17,7 @@ import { matchItemName, type ChestBook } from './chests.ts';
 import { equipDestOf, equippedAlready } from './tools.ts';
 import { itemsInReach, offHandItem, wornItemNamed } from './inventory.ts';
 import { DRINKABLES } from './item-facts.ts';
-import { RISKY_FOODS } from './nutrition.ts';
+import { RISKY_FOODS, foodRiskReference } from './nutrition.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
@@ -162,8 +162,11 @@ function precheckEat(
     const safer = itemsInReach(bot).find((item) => item.count > 0 && foods[item.name]
       && !RISKY_FOODS.has(item.name) && item.name !== 'golden_apple'
       && item.name !== 'enchanted_golden_apple');
-    if (safer) return { level: 'soft', rule: 'eat.riskyWithSafe',
-      text: `${zhName(call.item)}可能带来不利效果，包里还有${zhName(safer.name)}；仍会按点名物品进食，事后核对状态效果` };
+    const reference = foodRiskReference(call.item)!;
+    return { level: 'soft', rule: safer ? 'eat.riskyWithSafe' : 'eat.risky',
+      text: `${reference.caution}（Java ${reference.source.version} 原版参考，服务器/物品组件可能覆盖）。`
+        + (safer ? `包里还有${zhName(safer.name)}；` : '未见常规安全替代口粮；')
+        + `仍会按点名物品进食，不自动替换；详情查 mc_knowledge ${reference.knowledgeId}，事后核对状态效果` };
   }
   return null;
 }

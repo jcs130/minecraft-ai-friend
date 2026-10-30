@@ -2,8 +2,8 @@ import type { FamiliarAction } from '../contracts/host.ts';
 import type { JavaClientState } from '../contracts/java-client.ts';
 import { translateJavaLegacy } from './java-legacy.ts';
 import { navigationGoal } from '../../core/navigation-goal.ts';
+import { RISKY_FOODS } from '../../core/nutrition.ts';
 const familiar = new Set(['goto', 'look', 'equip', 'eat', 'fish', 'surface', 'flee']);
-const riskyFood = new Set(['pufferfish', 'rotten_flesh', 'spider_eye', 'poisonous_potato', 'chicken', 'chorus_fruit']);
 const plain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 /** Pure recognition of exact caller-authorized work. No action, model or input rewrite. */
@@ -16,7 +16,7 @@ export function familiarStepAction(args: Record<string, unknown>): FamiliarActio
     if (!plain(s) || !familiar.has(String(s.skill)) || s.dryRun === true || ['command', 'script', 'text', 'queue'].some(k => k in s)
       || Buffer.byteLength(JSON.stringify(s)) > 1800) return null;
     if (s.skill === 'goto' && (!Array.isArray(s.at) || s.at.length !== 3 || !s.at.every(finite) || s.walkOnly !== true)) return null;
-    if (s.skill === 'eat' && (typeof s.item !== 'string' || riskyFood.has(s.item.replace(/^minecraft:/, '')))) return null;
+    if (s.skill === 'eat' && (typeof s.item !== 'string' || RISKY_FOODS.has(s.item.replace(/^minecraft:/, '')))) return null;
   }
   return { steps: structuredClone(args.steps), command: structuredClone(args),
     label: 'Planner-authorized familiar operation', condition: 'Execute these exact authorized steps only when fresh body, queue, equipment and target facts permit them; escalate danger, missing facts or a failed prerequisite.' };

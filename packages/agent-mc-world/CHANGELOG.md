@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.7-rc.140
+
+- Expose the existing verified food-risk reference through public SDK/extension exports and live backpack, food-reserve and low-health facts.
+- Keep concrete explicit-meal preflight cautions even without safe alternatives. Retain requested items, soft warnings and actual post-consumption effects; do not add a blanket risky-food prohibition.
+- Share the routine risk catalogue with familiar-action recognition and retain safe raw food and the existing emergency fallback.
+- Integrate the latest upstream explicit no-action decision-review contracts without removing the deployed rc.139 capability line.
+
 ## 0.5.7-rc.131
 
 Keep the existing server/account/agent binding for optional memory-service workflows across native map changes. Local spatial notes retain their separate native-map namespaces and captures include native world identity. Preserve ownership rejection and pending-correction checks; do not rebind or rewrite existing memory ledgers.

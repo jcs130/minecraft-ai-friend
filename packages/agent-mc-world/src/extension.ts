@@ -85,6 +85,7 @@ export { planInventoryOrganization, planInventoryShortcutExchange, inventoryOrga
 
 export { PHOTOGRAPHY_DEFAULTS } from '../core/photo-image.ts';
 export { ObservedCommandCatalog, type ObservedCommandUsage, type CommandRouteMismatch } from '../core/observed-command-catalog.ts';
+export { foodRiskReference, type FoodRiskReference } from '../core/nutrition.ts';
 export { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, type ServerQueryDefinition, type ServerQueryContext,
   type ServerQueryReceipt } from '../core/server-query.ts';
 

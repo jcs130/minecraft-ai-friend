@@ -6,6 +6,7 @@ import re
 from collections import Counter
 
 from .effects import effect_view, projected_effect
+from .chat_noop import chat_noop_view
 
 
 def runtime_error_code(error):
@@ -78,6 +79,7 @@ def native_outcome_view(value):
         return None
     observations = spatial_observations(value.get("receipt", "")) if "observations" not in value else value["observations"]
     repeat = repeat_evidence_view(value.get("repeat_evidence"))
+    chat_noop = chat_noop_view(value.get("chat_noop_review"))
     return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
             **({"execution_kind": _bounded(value["execution_kind"], 40)} if isinstance(value.get("execution_kind"), str) else {}),
             "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
@@ -89,6 +91,7 @@ def native_outcome_view(value):
                if isinstance(observations, list) and observations else {}),
             **({"step_outcomes": step_outcomes_view(value["step_outcomes"])} if "step_outcomes" in value else {}),
             **({"repeat_evidence": repeat, "repeat_guidance": REPEAT_GUIDANCE} if repeat else {}),
+            **({"chat_noop_review": chat_noop} if chat_noop else {}),
             "original_event": event_reference(value.get("original_event"))}
 
 

@@ -166,7 +166,7 @@ import { ItemBreakDecoder, type ItemBreakFact } from './item-break.ts';
 import { WorksBook } from './works.ts';
 import { CombatSession } from './combat.ts';
 import { corridorSafe } from './idle-actions.ts';
-import { chooseRoutineFood, renderFoodReserveReadout } from './nutrition.ts';
+import { chooseRoutineFood, renderFoodReserveReadout, foodRiskReference } from './nutrition.ts';
 
 import {
   BowController,
@@ -5299,7 +5299,10 @@ export class MinecraftWorld implements World {
     }
     if (available.size === 0) return `饥饿 ${hunger}/20，包里没看到食物`;
     return `饥饿 ${hunger}/20，包里的食物：${[...available]
-      .map(([name, count]) => `${zhName(name)}(${name})×${count}`).join('、')}`;
+      .map(([name, count]) => {
+        const risk = foodRiskReference(name);
+        return `${zhName(name)}(${name})×${count}` + (risk ? `（1.21.1原版风险参考：${risk.caution}）` : '');
+      }).join('、')}`;
   }
 
   /** 一轮一答闸的账(见 round.ts);三个只读原语共用一本,各占一格 */
@@ -5389,12 +5392,15 @@ export class MinecraftWorld implements World {
             items: containerStacks(win, bot.registry as never).items }
         : null;
       const text = renderStoredItemReadout(snap, records, item, opened, bot?.registry);
-      return { stamp: `${bagStamp(snap)}|stock:${item}|${text}`, text };
+      const risk = foodRiskReference(item.trim());
+      const riskText = risk ? `\n[物品风险参考，未核服务器/组件覆盖] Java ${risk.source.version}：${risk.caution}` : '';
+      return { stamp: `${bagStamp(snap)}|stock:${item}|${text}${riskText}`, text: text + riskText };
     }
     const storage = renderStorageReadout(snap, records);
+    const foodReserve = this.currentFoodReserve(snap, true);
     return {
-      stamp: `${bagStamp(snap)}|${storage ?? ''}`,
-      text: `${renderBagReadout(snap)}${storage ? `\n${storage}` : ''}`,
+      stamp: `${bagStamp(snap)}|${storage ?? ''}|${foodReserve}`,
+      text: `${renderBagReadout(snap)}\n${foodReserve}${storage ? `\n${storage}` : ''}`,
     };
   }
 

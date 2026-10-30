@@ -47,6 +47,18 @@ it('rejects a known inedible meal immediately without losing earlier queued work
   r.exec.resumeAfterEnvironment(hold);r.exec.shutdown();
 });
 
+it('accepts an explicit harmful meal with a concrete warning even when all carried food is risky', () => {
+  const r = rig();
+  r.stack.name = 'pufferfish'; r.stack.type = minecraftData('1.21.1').itemsByName.pufferfish.id;
+  r.exec.pauseForEnvironment('isolated preflight');
+  const submitted = r.exec.submitDetailed([{ skill: 'eat', item: 'pufferfish' }], 'append');
+  expect(submitted.accepted).toBe(true);
+  expect(submitted.receipt).toContain('中毒 II 60 秒');
+  expect(r.exec.status().waiting[0].label).toContain('吃河豚');
+  expect(r.bot.consume).not.toHaveBeenCalled();
+  r.exec.shutdown();
+});
+
 it.each(['raw_beef', 'beef'])('a queued future %s meal does not suppress a safe native meal', async item => {
   const r = rig();
   const hold = r.exec.pauseForEnvironment('drowning recovery');

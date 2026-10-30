@@ -15,6 +15,7 @@ export { AgentJournal, EventCursorError } from './journal.ts';
 export { PlanReviewBook, type FailedPlanEpisode, type RecentPlanEffect } from './plan-review.ts';
 export { CommandRepetitionGuard, type CommandSubmission } from './command-repetition.ts';
 export { MotionReviewBook, MotionReviewGate, type MotionReview, type MotionAdmission } from './motion-review.ts';
+export { DecisionReviewBook, type DecisionReview, type DecisionRound } from './decision-review.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';
 export { runtimeExecutionState, type RuntimeExecutionState, type ExecutionIdentity } from './execution-state.ts';
