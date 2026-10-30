@@ -174,10 +174,12 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       }
       if (name === events.name) {
         const page=await runtime.events(args, extra.signal);
+        if (page.events.length) runtime.noteCommandInspection();
         return outcome({ text:JSON.stringify(page),data:page,meta:{eventRead:page.readout} });
       }
       if(name===textRead.name){
         const page=runtime.readTextArtifact(String(args.handle),{offset:Number(args.offset??0),maxChars:Number(args.maxChars??1024)});
+        if (page.returnedChars) runtime.noteCommandInspection();
         return outcome({text:page.text,data:{...page},meta:{textPage:textPageMeta(page),readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true},
           readback:{protocol:'agent-mc-readback/v1',historical:true,resource:`text:${page.handle}:${page.offset}:${page.returnedChars}`,revision:page.handle.slice(4)}}});
       }

@@ -25,6 +25,7 @@ import { GameMemoryService } from '../../core/game-memory-service.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
+import { CommandRepetitionGuard } from './command-repetition.ts';
 
 export interface MinecraftClientOptions {
   cfg: MinecraftClientConfig;
@@ -35,6 +36,8 @@ export interface MinecraftClientOptions {
   decisions?: WorldHost['decisions'];
   /** Explicit script mode; releases a barrier only after its call has settled. */
   autoAcknowledgeBarriers?: boolean;
+  /** Consecutive opaque command submissions before a deliberate inspection; 0 explicitly disables this guard. */
+  commandRepetitionLimit?: number;
   log: Logger;
 }
 
@@ -67,6 +70,7 @@ export class MinecraftAgentClient {
   private readonly executions = new Map<string, ExecutionReceipt>();
   private readonly executionGenerations = new Map<string, number>();
   private readonly facts: CurrentFacts;
+  private readonly commandRepetition: CommandRepetitionGuard;
   private readonly lease: AgentConnectionLease;
   private offlineMemoryCalls = 0;
   private readonly tacticCalls = new Map<string, { signature: string; pending: boolean; controller: AbortController; promise: Promise<ToolOutcome> }>();
@@ -80,6 +84,7 @@ export class MinecraftAgentClient {
         timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
     this.journal = new AgentJournal(options.dataDir, 1024, world.id);
+    this.commandRepetition = new CommandRepetitionGuard(options.commandRepetitionLimit);
     this.learning = new ClientOperationLearning(options.dataDir, this.journal.run,
       () => this.world.requestFacts?.() as WorldRequestFacts | null,
       () => ({realm:`weak:${options.cfg.host}:${options.cfg.port}|`,account:`${options.cfg.auth??'offline'}:${options.cfg.username}`,
@@ -318,6 +323,11 @@ export class MinecraftAgentClient {
       countTokens ? 'host-tokenizer' : 'utf8-byte-upper-bound');
   }
 
+  /** An explicit caller inspection returned; it does not verify a server effect.
+   * Background event/fact polling must not acknowledge an inspection.
+   */
+  noteCommandInspection(): void { this.commandRepetition.inspected(); }
+
   async events(options: { after?: number; run?: string; limit?: number; waitMs?: number; includeArchived?: boolean } = {}, signal?: AbortSignal) {
     const after = options.after ?? 0, waitMs = options.waitMs ?? 0;
     if (!Number.isFinite(waitMs) || waitMs < 0 || waitMs > 30000) throw new Error('Invalid event wait');
@@ -390,12 +400,24 @@ export class MinecraftAgentClient {
     try {
       this.metrics.toolStarted(callId, name);
       combined.throwIfAborted();
-      const result = await cancellable(offlineKnowledge
+      const command = this.commandRepetition.admit(name, args, callId, this.journal.read(0, 1).latestCursor);
+      const denied: ToolOutcome | null = command && !command.admitted ? {
+        text: 'The same opaque server command was submitted repeatedly without an intervening inspection. '
+          + 'Sending or completing its chat task does not verify the requested game effect. '
+          + 'Read the original receipts and server feedback, then inspect prerequisites or choose another plan. No command was sent by this request.',
+        failed: true, data: { status: 'blocked', reason: 'command_repetition_requires_inspection', retryable: false,
+          next_safe_read: { tool: `${this.toolPrefix}_events`, arguments: { run: this.journal.run, after: command.after, limit: 16 } } },
+        meta: { commandRepetition: command, admission: { accepted: false, dispatched: false, kind: 'repeat', rule: 'command_feedback_inspection' } },
+      } : null;
+      const result = denied ?? await cancellable<string | ToolOutcome>(offlineKnowledge
         ? queryMinecraftKnowledge(args, this.options.cfg.version, this.options.cfg.knowledge, combined).then(value => ({ text: JSON.stringify(value) }))
         : offlineMemory && this.options.cfg.provider !== 'java-client' ? this.callOfflineMemory(args, combined) : tool.handler(args, {
         role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined, attribution,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };
+      if (command) outcome.meta = { ...outcome.meta, commandRepetition: command };
+      if (!outcome.failed && /_(?:observe|state|bag|tool_help|help|protocol|query|knowledge|read_text)$/.test(name))
+        this.commandRepetition.inspected();
       const recorded = this.learning.finish(experience,outcome);
       // Observation artifacts have immutable metadata shared by capture and later reads.
       if(recorded&&outcome.execution?.kind!=='observation') outcome.meta={...outcome.meta,experience:recorded};
