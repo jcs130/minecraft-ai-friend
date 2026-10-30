@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "maid-client-downloads-20261030-r3",
+  "state": "deployed-and-verified",
+  "websiteVersion": "0.8.32",
+  "contentVersion": "1.0.0-20261030",
+  "runtimeSourceCommit": "b71c01ef8469c342b1c44f437aa282633d807c3a",
+  "baseWebsiteVersion": "0.8.32",
+  "changedRuntimeFiles": [
+    "public/downloads.html",
+    "src/download-catalog.mjs",
+    "src/maid-client-downloads.json"
+  ],
+  "downloads": [
+    {
+      "id": "maids-client-pack",
+      "url": "https://mc.kangqiang.site/downloads/maid-client",
+      "bytes": 11580,
+      "sha256": "100bed28de217904debeebbea8103233ff0228f2a10f696ac403b607b868e1d2"
+    },
+    {
+      "id": "maids-client-mods",
+      "url": "https://mc.kangqiang.site/downloads/maid-mods",
+      "bytes": 30295566,
+      "sha256": "ac6b584c054de3e01e91051caccacd728a5d41aa13c2ee6eebd1220692a433ed"
+    }
+  ],
+  "verification": {
+    "linuxHttpChecks": 28,
+    "originalObjectsFullyDownloadedAndVerified": 4,
+    "publicViewports": [1440, 390],
+    "downloadRedirectAndOssVerified": true,
+    "unchangedOtherPackages": 10,
+    "unchangedFrozenSkill": true,
+    "protectedOriginalTables": 20,
+    "protectedOriginalRowsPreserved": true,
+    "consistentOnlineWebsiteBackupOnEandF": true,
+    "coldDatabaseAtSwitchOnCloud": true,
+    "temporaryTransferRevoked": true,
+    "originalDownloadRateLimitPreserved": true
+  },
+  "gameRestarted": false,
+  "loginProxyRestarted": false,
+  "gameObserved": {
+    "kernel": "Youer 1.21.1",
+    "AgentFriend": "0.4.47.34-vortex",
+    "maidBridge": "0.1.4",
+    "pendingMaidBridge": "0.1.5",
+    "aincradRooms": 3,
+    "newGameCandidateDeployed": false
+  },
+  "artifactManifest": "paper/integrations/touhou-maids/client-release.json",
+  "document": "paper/docs/MAID_CLIENT_RELEASE_20261030.md"
+}
