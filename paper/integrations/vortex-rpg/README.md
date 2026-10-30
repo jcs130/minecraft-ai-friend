@@ -1,5 +1,7 @@
 # VortexRPG原生接管
 
+2026-10-30基础成长候选：`build-growth-release.py`在现役AF.36/桥.12/qd30上窄构建AF.37/桥.13/qd31-growth，职业经验采用实际曲线的只读本级投影。保留AuraSkills基础熟练度和历史经验，有限被动由原插件执行；职业技能/天赋/魔力仍归Vortex。夜视/羽落移除残余旧学习门槛，归乡落点另已热修。尚未发布；构建、配置合并、API语义与真实联机边界见[成长说明](../../docs/RPG_GROWTH_20261030.md)，不热加载或重放旧维护。
+
 2026-10-30 04:48已发布AF.32/桥0.2.12/原生qd30；试炼/集结及原生进服资料见[说明](../../docs/RPG_ACTIVITIES_20261030.md)。qd30的`build-profile-readiness.py`必须接在累计qd29后，固定摘要、只修改一个类并加入有界进服调度；防止角色卡加载及未加载占位资料在关服覆盖存档。JDK21由`--java-home`、JAVA_HOME或PATH提供。ProfileJoinDispatchTest、ProfileLoadingSaveTest和真实Paper冷启动覆盖此路径。两个原稳定JAR文件名继续保留，真实构建与摘要以部署清单为准；下方qd29段落是历史。
 
 本目录是API适配和窄补丁。**2026-10-29已发布**AgentFriend0.4.47.30、VortexRPG qd29、QiandengjiRpg0.2.10；职业实际配置说明、直接远程储物和遗迹存档点见[本轮发布](../../docs/RPG_INTERACTION_20261029.md)，准确版本看[实际部署清单](../../manifests/current-deployment.json)。较早[基础生存修复](../../docs/BASIC_SURVIVAL_RELEASE_20261028.md)、[迁移发布](../../docs/NATIVE_RPG_RELEASE_20261027.md)和[集成记录](../../docs/VORTEX_MMO_INTEGRATION.md)保留各自时点。

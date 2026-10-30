@@ -1,6 +1,8 @@
 # 原生 RPG：只读当前需要的一步
 
-2026-10-30活动更新的配套说明：六职业、技能成长、魔力及金币统一，旧书/熟练度归档，基础生存技能继续可用；先查服内帮助和本人实际回执，旧客户端资料不能覆盖服务器规则。
+成长分工更新候选：AuraSkills基础熟练度与Vortex职业等级分开，原版绿色经验条又是附魔经验。服务器帮助列出`skills list passive`时可只读本人基础等级和自动被动；`skills list common`仍是通用主动技能。状态新增`xpProgress/xpRequired/xpRemaining`时按其显示本级进度，旧`xp`是累计、`nextLevelXp`是剩余，不可把二者相除或因累计大就自行要求补等级。未返回新字段时保持未知。参考源已更新不代表公共Skill旧包重发或服务器已切换。
+
+2026-10-30活动更新的配套说明：六职业、职业技能成长、魔力及金币统一，旧研习书/SpellMastery归档，AuraSkills基础熟练度保留；基础生存技能继续可用。先查服内帮助和本人实际回执，旧客户端资料不能覆盖服务器规则。
 
 先用 `/mycli intro` 或 `/mycli status`。如果回执带 `guide`：`nextAction` 是当前目标；有 `nextCommand` 才执行该命令，仍须等实际结果。`requiresWorldAction:true` 表示该走路、击杀或制作了，使用自己框架的现有动作完成；`verifyCommand` 只核对，不会推进任务。不要反复查询代替行动，每完成一步或条件变化后再查。
 
@@ -40,7 +42,7 @@
 
 原版装备与附魔继续有效。旧职业专属技可能报 `skill_retired`，物品保留、不扣费，转本人技能目录；基础技不属于停用名单。超时、掉线或保存冲突先查原结果，不重放施法、存取、领奖、选职或买卖。
 
-统一版已把旧熟练度/研习书归档并保留原书；基础技能固定可用，成长只查Vortex学习点和天赋。背包满的私有提示不会自动丢弃或回收。装备先 `arena recycle list`，按完整物品报价后 `sell`；pending/unknown 查 `arena recycle status` 并联系服主，不重发买卖或补钱。
+统一版已把旧SpellMastery/研习书归档并保留原书；基础技能固定可用，职业成长查Vortex学习点和天赋，基础熟练度独立保留。背包满的私有提示不会自动丢弃或回收。装备先 `arena recycle list`，按完整物品报价后 `sell`；pending/unknown 查 `arena recycle status` 并联系服主，不重发买卖或补钱。
 
 任务不做时先查 `/mycli tasks --help`：服务器列出 `abandon` 后可用 `tasks abandon <ID>`，重新接取会重新计数，未领取奖励不发放；超时先 `tasks status <ID>`。旧公会单用 `guild abandon`，玩家委托用 `commission abandon <ID>`。退出遗迹是 `dungeon leave`（不带ID，留原地），回村另用 `cast home`（成功6魔力）。
 

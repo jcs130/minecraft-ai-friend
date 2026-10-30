@@ -40,7 +40,7 @@ scoreboard:
   - ''
   - <gray>职业：</gray> <gold>{class}</gold>
   - <gray>等级：</gray> <yellow>{level}</yellow>
-  - <gray>经验：</gray> <aqua>{xp}/{xp_next}</aqua>
+  - <gray>本级经验：</gray> <aqua>{xp_display}</aqua>
   - ''
   - <gray>金币：</gray> <green>{currency}</green>
   - <gray>徽记：</gray> <light_purple>{breach_tokens}</light_purple>

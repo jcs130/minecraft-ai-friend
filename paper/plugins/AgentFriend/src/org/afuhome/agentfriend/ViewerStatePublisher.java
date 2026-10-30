@@ -178,6 +178,7 @@ final class ViewerStatePublisher implements Listener {
             root.add("mana",nativeState.has("mana")?nativeState.get("mana"):JsonNull.INSTANCE);
             root.add("skills",new JsonArray());root.add("abilities",plugin.nativeRpg().abilities(player,nativeState));
             nativeState.remove("abilities");root.add("rpg",nativeState);
+            root.add("foundation",FoundationGrowth.view(player));
             if(plugin.trialRescue()!=null)root.add("rescue",plugin.trialRescue().state(player));
             root.addProperty("keepInventory",Boolean.TRUE.equals(player.getWorld().getGameRuleValue(org.bukkit.GameRule.KEEP_INVENTORY)));
         }else{

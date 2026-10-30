@@ -531,7 +531,7 @@ final class SiteDungeonManager implements Listener {
         World w=Bukkit.getWorld(s.world);int x=s.entry.get(0),y=s.entry.get(1),z=s.entry.get(2);
         require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");Location origin=p.getLocation().clone();
         boolean requestedJson=jsonOutput.get(),requestedVerbose=verboseOutput.get();
-        w.getChunkAtAsync(x>>4,z>>4,false).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(requestedJson,requestedVerbose,()->{
+        ExistingChunkAccess.load(plugin,w,x>>4,z>>4).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(requestedJson,requestedVerbose,()->{
             if(!p.isOnline())return;
             if(error!=null||chunk==null){result(p,"travel",s.id,"entry_unavailable");return;}
             if(!playing(p)||own(p)!=null||plugin.dungeonParticipant(p)||plugin.pvpParticipant(p)||p.getWorld()!=origin.getWorld()||p.getLocation().distanceSquared(origin)>4){result(p,"travel",s.id,"player_state_changed");return;}

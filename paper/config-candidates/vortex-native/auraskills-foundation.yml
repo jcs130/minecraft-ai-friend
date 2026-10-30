@@ -1,0 +1,31 @@
+# Merge each named file into the existing AuraSkills configuration.
+# Never replace userdata/rewards or enable a second mana/stat implementation.
+config.yml:
+  mana: {enabled: false}
+  action_bar: {enabled: false}
+  boss_bar: {enabled: false}
+  leveler:
+    title: {enabled: true}
+    sound: {enabled: false}
+skills.yml:
+  skills:
+    auraskills/agility:
+      # This installation has no endurance track. Reuse its existing agility
+      # progression for the native hunger passive rather than enabling an orphan.
+      abilities: [auraskills/light_fall, auraskills/jumper, auraskills/golden_heal, auraskills/fleeting, auraskills/meal_steal, auraskills/anti_hunger]
+abilities.yml:
+  abilities:
+    auraskills/light_fall: {enabled: true, base_value: 2.0, value_per_level: 1.0, max_level: 10}
+    auraskills/anti_hunger: {enabled: true, base_value: 2.0, value_per_level: 1.0, max_level: 9}
+    auraskills/sword_master: {enabled: true, base_value: 0.5, value_per_level: 0.5, max_level: 10}
+    auraskills/axe_master: {enabled: true, base_value: 0.5, value_per_level: 0.5, max_level: 10}
+    auraskills/bow_master: {enabled: true, base_value: 0.5, value_per_level: 0.5, max_level: 10}
+    auraskills/mob_master: {enabled: true, base_value: 0.25, value_per_level: 0.25, max_level: 12}
+messages/messages_zh-CN.yml:
+  leveler:
+    skill_level_up: 基础熟练度提升（非职业等级）
+    level_up: '基础熟练度：{skill}提升'
+messages/messages_en.yml:
+  leveler:
+    skill_level_up: Foundation proficiency (not class level)
+    level_up: 'Foundation proficiency: {skill}'

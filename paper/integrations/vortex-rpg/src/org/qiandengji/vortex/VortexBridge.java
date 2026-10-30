@@ -110,7 +110,7 @@ public final class VortexBridge extends JavaPlugin {
                 "cooldownRemainingMs",vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),s.id()),
                 "cooldownMs",s.cooldownMillis(),"manaCost",io.vortexcore.combat.ManaGate.cost(vortex,s.id()))).toList()));
         result.put("className",BridgeRules.className(id));
-        result.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));
+        result.putAll(io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).fields());
         return gson.toJson(result);
     }
     /** Read-only native roster; no commands, invitation, teleport or enrollment. */
@@ -196,7 +196,7 @@ public final class VortexBridge extends JavaPlugin {
                     context.has("trial")?gson.fromJson(context.get("trial"),Map.class):null);
                 var out=new LinkedHashMap<String,Object>();out.put("readOnly",true);out.put("queryOnly",true);out.put("backend","vortex");out.put("authority","VortexRPG");
                 out.put("class",intro?id:id.isEmpty()?"none":id);out.put("level",state.level());out.put("xp",state.experience());out.put("location",PlayerLocationView.location(p));
-                out.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
+                out.putAll(io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).fields());out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
                 if(context.has("keepInventory"))out.put("keepInventory",context.get("keepInventory").getAsBoolean());
                 if(context.has("rescue"))out.put("rescue",gson.fromJson(context.get("rescue"),Map.class));
                 out.put("mana",Math.round(mana.getMana(p.getUniqueId())));out.put("maxMana",Math.round(mana.getMaxMana(p)));out.put("pending",pending.contains(p.getUniqueId()));
@@ -208,7 +208,7 @@ public final class VortexBridge extends JavaPlugin {
                 if(intro)out.put("activityGuide",activityGuide());
                 out.put("inventory",Map.of("freeStorageSlots",freeSlots,"storageCommand","/mycli arena stash","recycleCommand","/mycli arena recycle list"));
                 if(json){p.sendMessage((intro?"MC_INTRO ":"MC_RPG ")+gson.toJson(out));return;}
-                p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；位置 "+PlayerLocationView.text(p)+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪")+(Boolean.TRUE.equals(out.get("keepInventory"))?"；死亡保留背包装备":""));
+                p.sendMessage("[RPG] "+(intro?"[破晓攻略] ":"[状态] ")+BridgeRules.className(id)+" Lv."+state.level()+"；本级经验 "+io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).display()+"；位置 "+PlayerLocationView.text(p)+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"/20；魔力 "+out.get("mana")+"/"+out.get("maxMana")+"；金币 "+(economyReady?vortex.qiandengjiVault().balance(p):"未就绪")+(Boolean.TRUE.equals(out.get("keepInventory"))?"；死亡保留背包装备":""));
                 p.sendMessage("[RPG] "+advice.text());
                 if(intro){
                     var starter=vortex.classSkillService().classProfile(id).map(c->c.starterSpellId()).filter(s->s!=null&&!s.isBlank());
@@ -267,11 +267,11 @@ public final class VortexBridge extends JavaPlugin {
         String next="/mycli "+(id.equals("none")?"profession list":"tasks status");
         var data=new LinkedHashMap<String,Object>();
         data.put("authority","VortexRPG");data.put("class",id);data.put("level",state.level());data.put("xp",state.experience());data.put("location",PlayerLocationView.location(p));
-        data.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));data.put("mana",Math.round(mana.getMana(p.getUniqueId())));data.put("maxMana",Math.round(mana.getMaxMana(p)));
+        data.putAll(io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).fields());data.put("mana",Math.round(mana.getMana(p.getUniqueId())));data.put("maxMana",Math.round(mana.getMaxMana(p)));
         data.put("health",p.getHealth());data.put("maxHealth",p.getMaxHealth());data.put("food",p.getFoodLevel());data.put("mode",p.getGameMode().name());
         data.put("pending",pending.contains(p.getUniqueId()));data.put("queryOnly",true);data.put("nextCommand",next);
         data.put("economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)));data.put("preview",!getConfig().getString("backend","preview").equals("vortex"));
-        emit(p,r,data,"[状态] "+BridgeRules.className(id)+" Lv."+state.level()+"；位置 "+PlayerLocationView.text(p)+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"；魔力 "+data.get("mana")+"/"+data.get("maxMana")+"；升级还需 "+data.get("nextLevelXp")+"经验"+(pending.contains(p.getUniqueId())?"；上一操作确认中，勿重复执行":"")+"。下一步："+next);
+        emit(p,r,data,"[状态] "+BridgeRules.className(id)+" Lv."+state.level()+"；本级经验 "+io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).display()+"；位置 "+PlayerLocationView.text(p)+"；生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())+"；饱食 "+p.getFoodLevel()+"；魔力 "+data.get("mana")+"/"+data.get("maxMana")+"；升级还需 "+data.get("nextLevelXp")+"经验"+(pending.contains(p.getUniqueId())?"；上一操作确认中，勿重复执行":"")+"。下一步："+next);
     }
     private void classes(Player p,UnifiedPlayer state,BridgeRules.Request r){
         switch(r.action()){

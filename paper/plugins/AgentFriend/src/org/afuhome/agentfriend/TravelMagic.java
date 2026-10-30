@@ -91,6 +91,7 @@ final class TravelMagic implements Listener {
         pending.put(uuid, request);
         if (player.performCommand(command)) return true;
         pending.remove(uuid, request);
+        player.sendMessage("§e[travel_command_rejected] 目标传送未受理；未传送、未耗魔。下一步：/mycli waypoint");
         return false;
     }
 

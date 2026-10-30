@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "release": "rpg-growth-unification-20261030-r1",
+  "state": "approved-awaiting-human-safe-window",
+  "document": "paper/docs/RPG_GROWTH_20261030.md",
+  "runtimeChanged": false,
+  "homeWarpHotfixApplied": true,
+  "candidate": {
+    "AgentFriend": "0.4.47.37-rpg",
+    "QiandengjiRpg": "0.2.13",
+    "VortexRPG": "1.2.2-alpha",
+    "VortexBuild": "qd31-growth",
+    "artifacts": {
+      "AgentFriend-0.4.47.37-rpg.jar": "ece9fa6a7dfbebd8ed7336f6b1478ee95b4f8b8b714c629cbe9b037b3ef3ae5b",
+      "QiandengjiRpg-0.2.13.jar": "5c091bc967d8041c2669abfcf9164bb4c810cdce2fe89004def5b664f37c1257",
+      "VortexRPG-1.2.2-alpha-qd31.jar": "4751b69a677b33d35be859de405929b31e8f36b3a0254d7ab2c2b650a6c495d4"
+    },
+    "existingFilenameTargets": {
+      "QiandengjiRpg-0.2.13.jar": "QiandengjiRpg-0.2.10.jar",
+      "VortexRPG-1.2.2-alpha-qd31.jar": "VortexRPG-1.2.2-alpha-qd29.jar"
+    }
+  },
+  "features": {
+    "experienceProjection": "loaded native curve; current-level progress, remaining and cap kept distinct",
+    "foundation": "eleven existing AuraSkills tracks and records retained",
+    "nativePassives": ["light_fall", "anti_hunger", "sword_master", "axe_master", "bow_master", "mob_master"],
+    "singleManaAuthority": "VortexRPG",
+    "legacySpellMasteryAndClasses": "archived",
+    "nightAndFeather": "no legacy learning gate under Vortex; native mana and cooldown retained",
+    "coldDungeonEntry": "one existing chunk loaded without generation only after null async result",
+    "voice": "audit only; no voice artifact or automatic speech settings changed"
+  },
+  "verification": {
+    "candidateBuild": "build-r10",
+    "ruleSuites": 15,
+    "ruleChecks": 313,
+    "realGameplayAndColdRestartChecks": 34,
+    "crossVolumeInstallAndRollbackChecks": 12,
+    "testsPassed": true,
+    "isolatedOnly": true,
+    "productionPostflight": "pending"
+  },
+  "boundaries": [
+    "six-stage Aincrad architecture not included",
+    "other async chunk call sites not declared fixed",
+    "public Skill 1.3.4 download not rebuilt",
+    "real microphone and human hearing not newly verified",
+    "no player XP, profession, password or inventory rewrite"
+  ]
+}

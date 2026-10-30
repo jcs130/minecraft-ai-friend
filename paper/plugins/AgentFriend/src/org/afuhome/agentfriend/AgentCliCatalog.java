@@ -365,8 +365,8 @@ final class AgentCliCatalog {
             nativeSpec(specs,"profession.info","read","/mycli profession info <ID>","查职业定位与初始技能","免费只读；ID 来自 profession list");
             nativeSpec(specs,"profession.choose","write","/mycli profession choose <ID>","选择职业并保存，领取原生初始装备","需未选职且处于可行动状态；免费；只能选一次");
             nativeSpec(specs,"profession.menu","gui","/mycli profession menu","打开职业菜单，点击选择才变更职业","打开免费；选择后以 profession status 核对");
-            nativeSpec(specs,"skills","group","/mycli skills <动作>","技能：list/info 查询，learn 学习，prepare 设置点击技","Vortex 为唯一成长权威；不再使用旧准备槽和 upgrade");
-            for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common]":action.equals("status")?" [ID]":""),"查本职可用技能、待学节点与点数","免费只读；list common 查基础生存与通用技能，无需选职或学习");
+            nativeSpec(specs,"skills","group","/mycli skills <动作>","技能：list/info 查询，learn 学习，prepare 设置点击技","Vortex管理职业成长和魔力；AuraSkills保留基础熟练度与被动；不再使用旧准备槽和upgrade");
+            for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common|passive]":action.equals("status")?" [ID]":""),action.equals("list")?"查职业技能；common通用生存技，passive基础被动":"查本职可用技能、待学节点与点数","免费只读；list common查通用生存技，list passive查基础熟练度和自动被动；无需为基础成长改职业");
             nativeSpec(specs,"skills.info","read","/mycli skills info <ID>","查目标、效果、等级、费用与冷却","免费只读；主动技能、学习节点和被动天赋分别说明");
             nativeSpec(specs,"skills.tree","read","/mycli skills tree","查本职天赋点、节点与前置条件","免费只读；需要已选职业");
             nativeSpec(specs,"skills.learn","write","/mycli skills learn <节点ID>","学习职业节点或被动天赋并保存","按 skills info 明示的等级、前置与学习点/天赋点扣费；通用技无需学习");

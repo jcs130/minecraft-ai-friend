@@ -34,8 +34,10 @@ final class NativeRpg {
             case "prospect"->"基础半径24格；Vortex角色每5级+2，最多40；刻印工具再+8；固定标记12秒。";
             default->"基础效果固定；当前职业成长统一用Vortex学习点和天赋。";
         };
-        String requires=Set.of("night","feather").contains(id)?"通用技能，无需学习；满足Vortex魔力与冷却要求。":e.requires();
-        return new SpellGuide.Entry(e.id(),e.name(),e.category(),e.icon(),e.command(),e.effect(),e.target(),e.mana(),e.cooldownSeconds(),requires,e.failure(),scaling,e.tip());
+        String requires="通用技能，无需选职或学习；使用同一个Vortex魔力池与原冷却。"+(Set.of("night","feather").contains(id)?"":e.requires());
+        String tip=id.equals("selfheal")?"给自己恢复生命；团队治疗使用本职已学技能，查询 /mycli skills list。":e.tip();
+        String name=id.equals("frostnova")?"寒霜术（霜环）":e.name();
+        return new SpellGuide.Entry(e.id(),name,e.category(),e.icon(),e.command(),e.effect(),e.target(),e.mana(),e.cooldownSeconds(),requires,e.failure(),scaling,tip);
     }
     static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡","归乡术","回城"->"home";case "传送点术"->"travel";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "寒霜","寒霜术","冰霜","霜环","霜环术"->"frostnova";case "造物","造物术"->"give";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
     private Plugin backend() {
@@ -205,6 +207,10 @@ final class NativeRpg {
             catch(RuntimeException e){p.sendMessage("§e[service_unavailable] 组队服务暂不可用；先查 /mycli guild party status，不重复创建或接受邀请。");}return true;
         }
         if(Set.of("status","profession","职业","skills","spells","技能","tasks","任务路线").contains(group)) {
+            if(Set.of("skills","spells","技能").contains(group)&&args.length>=3&&args[1].equalsIgnoreCase("list")&&args[2].equalsIgnoreCase("passive")){
+                for(int i=3;i<args.length;i++)if(!args[i].equals("--json")){p.sendMessage("§e[invalid_argument] passive 仅接受可选--json；未执行。下一步：/mycli skills list passive");return true;}
+                FoundationGrowth.describe(p,Arrays.asList(args).contains("--json"));return true;
+            }
             if(group.equals("status")&&args.length>1&&args[1].equalsIgnoreCase("full")){
                 if(Arrays.stream(args).skip(2).anyMatch(a->!a.equals("--json"))){p.sendMessage("§e[invalid_argument] status full 仅接受可选--json；未执行。下一步：/mycli status");return true;}
                 boolean json=Arrays.asList(args).contains("--json");journey(p,false,json);if(!json)adventureProgress(p,false,false);return true;

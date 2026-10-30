@@ -1642,21 +1642,21 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void castOrLearn(Player p, String id) {
-        if (learned(p, skillKey(id))) cast(p, id);
+        if (nativeRpg.selected() && NativeRpg.COMMON.contains(id) || learned(p, skillKey(id))) cast(p, id);
         else if (learnSkill(p, id)) openMenu(p, "skills");
     }
 
     private void goddessSpell(Player p, String id) {
         if (!professions.basicAllowed(p,id)) return;
         NamespacedKey key = skillKey(id);
-        if (key == null || !learned(p, key)) {
+        if (key == null || !nativeRpg.selected() && !learned(p, key)) {
             p.sendMessage(ChatColor.RED + "还没学会这项女神技艺；输入 /mycli goddess skills。");
             return;
         }
         long now = System.currentTimeMillis();
         String cooldownKey = p.getUniqueId() + ":" + id;
         long until = goddessCooldown.getOrDefault(cooldownKey, 0L);
-        if (now < until) { p.sendMessage(ChatColor.RED + "此技能还需 " + ((until - now + 999) / 1000) + " 秒。"); return; }
+        if (now < until) { p.sendMessage("§e[cooldown] "+(id.equals("night")?"夜视术":"羽落术")+"还需 "+((until-now+999)/1000)+"秒；未施放、未耗魔。查询：/mycli skills info "+id); return; }
         if (!spendMana(p, 2)) return;
         goddessCooldown.put(cooldownKey, now + totalBuiltinCooldownMs(id));
         if (id.equals("feather")) {
@@ -1722,10 +1722,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (PUBLIC_PLACES.stream().anyMatch(place -> place.id().equals(id))) {
             Location destination = publicWarp(id);
             if (destination == null) { p.sendMessage(ChatColor.RED + "公共传送点不可用；/mycli waypoint 查看当前有效地点，另选公开目标；持续异常请联系服主。"); return; }
-            if (!travelMagic.command(p, "warp " + id, destination, homeSpell ? "home" : id,
-                    homeSpell ? "归乡术" : "公共传送术", TravelMagic.LOCAL_MANA))
-                p.sendMessage(ChatColor.RED + "公共传送点未受理。");
-            else {
+            if (travelMagic.command(p, "warp " + id, destination, homeSpell ? "home" : id,
+                    homeSpell ? "归乡术" : "公共传送术", TravelMagic.LOCAL_MANA)) {
                 p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(destination));
             }
             return;
@@ -1735,9 +1733,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!name.matches("[A-Za-z0-9_-]{1,24}")) { p.sendMessage(ChatColor.RED + "私人传送点名只用英文、数字、_、-，最长 24 字符。"); return; }
             Location destination = personalHome(p, name);
             if (destination == null) { p.sendMessage(ChatColor.RED + "私人传送点不可用；/mycli waypoint list 查看本人有效地点，确认名字；需要新点可站在安全平地 waypoint add <名字>。"); return; }
-            if (!travelMagic.command(p, "home " + name, destination, "personal:" + name,
-                    "私人传送术", TravelMagic.LOCAL_MANA)) p.sendMessage(ChatColor.RED + "私人传送点未受理。");
-            else {
+            if (travelMagic.command(p, "home " + name, destination, "personal:" + name,
+                    "私人传送术", TravelMagic.LOCAL_MANA)) {
                 p.sendMessage("MC_DESTINATION id=personal:" + name + " " + LocationOutput.fields(destination));
             }
             return;
@@ -2325,7 +2322,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     +"\nVortex职业 "+(state.has("combat")&&!state.get("combat").getAsString().isEmpty()?state.get("combat").getAsString():"未选择")
                     +"\n战斗等级 "+nativeRpg.level(p)+"\n\n/mycli status 查看实时状态。",
                 "§6冒险四步§r\n\n/mycli profession list\n主动choose <ID>选职。\n\n/mycli skills list\n查看等级/学习点要求，主动learn <节点ID>。\n\n/mycli cast <技能ID>\n手持职业装备，核对实际效果。\n\n/mycli tasks list\n接讨伐或探索，达标后主动claim。",
-                "§b通用技能§r\n\nhome 归乡\ntravel 传送点\nprospect 探矿\nnight 夜视\nfeather 羽落\n\n无需选职；复用原有效果与冷却，消耗同一个Vortex魔力池。旧职业已归档，不再重复培养。",
+                "§b通用生存技能§r\n\nhome 归乡\nselfheal 圣愈\nfood 饱食\nblink 闪现\nstarbolt 星芒箭\nfrostnova 寒霜\ngive 造物\n\n另有travel传送点、prospect探矿、night夜视、feather羽落。\n\n无需选职或学习，统一使用Vortex魔力。详情：/mycli skills info <ID>",
                 "§e补给与个人箱§r\n\n/mycli guild shared\n查看公会共享装备与补给，亲自前往领取。\n\n/mycli arena stash\n远程个人奖励箱；成功开页2魔力。照片成片也在这里。\n\n54格大背包独立，不是个人奖励箱。",
                 "§d组队与攻略§r\n\n/mycli guild party\n原生组队入口。\n\n/mycli dungeon list\n正式遗迹和攻略；先看难度、装备和下一步，再报名。\n\n/mycli arena status\n练习试炼塔；不等于正式爬塔通关。\n\n倒地可等待队友救援。",
                 "§a世界与同伴§r\n\n/mycli world npcs\n找引路NPC，走近再交谈。\n\n/mycli photo menu\n拍照直接成片进个人奖励箱。\n\n/mycli archive help\n写公开日记与攻略。\n\n服务器回执才证明完成；不把命令发出当作成功。"
