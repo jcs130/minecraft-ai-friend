@@ -29,8 +29,11 @@ test('approved mirrors serve GET and HEAD redirects for exact plugin paths witho
   const data = (await f.client().request('/downloads')).data;
   for (const row of data.packages) {
     assert.equal(row.available, true);
+    // Each matrix row represents a separate downloader. Do not let catalogue
+    // growth turn this routing test into a burst-limit test; that is below.
+    const downloader = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
     for (const method of ['GET', 'HEAD']) {
-      const reply = await fetch(f.origin + row.url + '?token=private&target=https://evil.test/', { method, redirect: 'manual' });
+      const reply = await fetch(downloader.origin + row.url + '?token=private&target=https://evil.test/', { method, redirect: 'manual' });
       assert.equal(reply.status, 307); assert.equal(reply.headers.get('location'), baseUrl + row.sha256 + '/' + row.filename);
       assert.equal(reply.headers.get('referrer-policy'), 'no-referrer'); assert.equal(reply.headers.get('cache-control'), 'no-store');
       assert.equal(reply.headers.get('x-checksum-sha256'), row.sha256); assert.equal((await reply.arrayBuffer()).byteLength, 0);
@@ -44,6 +47,16 @@ test('approved mirrors serve GET and HEAD redirects for exact plugin paths witho
   assert.deepEqual(site.agentClients.map(row => row.id), ['core', 'neko', 'cortico', 'dsh']);
   assert.equal(site.agentClients.find(row => row.id === 'neko').downloads.length, 1);
   assert.equal(site.agentClients.find(row => row.id === 'neko').downloads[0].id, 'neko-base');
+});
+
+test('adding client packs preserves the twenty-per-minute download burst limit',async t=>{
+ const f=await siteFixture(t,{downloads:{baseUrl,enabledPackages}});
+ for(let i=0;i<20;i++){
+  const response=await fetch(f.origin+'/downloads/maid-client',{method:'HEAD',redirect:'manual'});
+  assert.equal(response.status,307);
+ }
+ const blocked=await fetch(f.origin+'/downloads/maid-client',{method:'HEAD',redirect:'manual'});
+ assert.equal(blocked.status,429);assert.equal(blocked.headers.get('location'),null);
 });
 
 test('mirror activation requires an explicit reviewed package id, not just a base URL', async t => {

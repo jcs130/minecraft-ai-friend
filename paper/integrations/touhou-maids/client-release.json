@@ -1,0 +1,67 @@
+{
+  "artifacts": [
+    {
+      "bytes": 6972104,
+      "filename": "neoforge-21.1.248-installer.jar",
+      "sha256": "68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c",
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c/neoforge-21.1.248-installer.jar"
+    },
+    {
+      "bytes": 11580,
+      "filename": "qiandengji-maids-1.21.1-neoforge-20261030.mrpack",
+      "sha256": "100bed28de217904debeebbea8103233ff0228f2a10f696ac403b607b868e1d2",
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/100bed28de217904debeebbea8103233ff0228f2a10f696ac403b607b868e1d2/qiandengji-maids-1.21.1-neoforge-20261030.mrpack"
+    },
+    {
+      "bytes": 30295566,
+      "filename": "qiandengji-maids-1.21.1-neoforge-20261030.zip",
+      "sha256": "ac6b584c054de3e01e91051caccacd728a5d41aa13c2ee6eebd1220692a433ed",
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/ac6b584c054de3e01e91051caccacd728a5d41aa13c2ee6eebd1220692a433ed/qiandengji-maids-1.21.1-neoforge-20261030.zip"
+    },
+    {
+      "bytes": 24408776,
+      "filename": "touhoulittlemaid-1.5.3-neoforge-mc1.21.1.jar",
+      "sha256": "f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27",
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27/touhoulittlemaid-1.5.3-neoforge-mc1.21.1.jar"
+    }
+  ],
+  "client": {
+    "bedrockRequiredMods": [],
+    "includesMinecraftOrAccounts": false,
+    "java": 21,
+    "limitations": [
+      "Fabric实例不能加载NeoForge模组；使用独立实例。",
+      "玩家YSM和Numen为可选功能，另选对应NeoForge版本；本包不含Fabric JAR。",
+      "基岩模型由服务器资源映射提供，不能安装Java JAR。",
+      "实际耳听、物理基岩画面和完整棋局仍未验收。"
+    ],
+    "loader": {
+      "id": "neoforge",
+      "installerSha256": "68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c",
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c/neoforge-21.1.248-installer.jar",
+      "version": "21.1.248"
+    },
+    "minecraft": "1.21.1",
+    "mod": {
+      "bytes": 24408776,
+      "filename": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "id": "touhou_little_maid",
+      "modified": false,
+      "sha1": "f96507810deaa2ffd8c3bd86a79d6ccbd56ca32e",
+      "sha256": "f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27",
+      "sha512": "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe",
+      "source": "https://modrinth.com/mod/touhou-little-maid/version/tXG1TkGx",
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27/touhoulittlemaid-1.5.3-neoforge-mc1.21.1.jar",
+      "version": "1.5.3-neoforge+mc1.21.1"
+    },
+    "optionalClient": true,
+    "privateProfilesIncluded": false,
+    "schema": 1,
+    "serverAddress": "micro.kangqiang.site:25702",
+    "vanillaJavaRequiredMods": [],
+    "version": "1.0.0-20261030",
+    "website": "https://mc.kangqiang.site"
+  },
+  "schema": 1,
+  "version": "1.0.0-20261030"
+}

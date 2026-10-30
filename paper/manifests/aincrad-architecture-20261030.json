@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "id": "aincrad-architecture-release-20261030-r1",
+  "state": "verified-candidate-not-deployed",
+  "verifiedAt": "2026-10-30T16:14:10.703285+08:00",
+  "candidate": {
+    "version": "0.4.47.35-vortex",
+    "file": "AgentFriend-0.4.47.35.jar",
+    "bytes": 15474524,
+    "sha256": "083879421b3f6e6c2dfc0e65b9e4aeb0b25de12db55221b80bc2e085834dad2c",
+    "changedEntries": [
+      "org/afuhome/agentfriend/SiteDungeonManager$Room.class",
+      "org/afuhome/agentfriend/SiteDungeonManager.class",
+      "plugin.yml"
+    ],
+    "otherEntriesPreserved": 597,
+    "metadataOnlyAfterQA": true
+  },
+  "currentProduction": {
+    "AgentFriend": "0.4.47.34-vortex",
+    "aincradRooms": 3,
+    "observedKernel": "Youer 1.21.1 e3158632",
+    "kernelReplacementIncluded": false
+  },
+  "verification": {
+    "originalRegressionChecks": 207,
+    "surfaceAndLegacySignatureChecks": 9,
+    "paperInitialRouteChecks": 49,
+    "youerFinalRouteChecks": 54,
+    "actualClientWaypoints": 82,
+    "surveyedWalkingSteps": 628,
+    "safeSpawnLocations": 107,
+    "nativeArcherShot": true,
+    "nativeBossPhase": true,
+    "savedSixStageCompletion": true,
+    "combatBalanceVerified": false,
+    "productionConnectedByProbe": false,
+    "nativeInstallerChecks": 11
+  },
+  "configuration": {
+    "siteId": "aincrad_01",
+    "rooms": 6,
+    "enemies": 24,
+    "maximumActiveEnemies": 4,
+    "coveredStages": 4,
+    "entryUnchanged": [
+      856,
+      69,
+      -1144
+    ],
+    "firstRoom": [
+      844,
+      69,
+      -1210
+    ],
+    "currentHintsOnly": true,
+    "newTopLevelCliCommands": 0,
+    "unchangedOtherSites": 4,
+    "nativeQuestObjectivesAndRewardsPreserved": true
+  },
+  "candidateAndRollbackMirrored": true,
+  "fullNewColdBackup": false,
+  "productionPendingWritten": false,
+  "runtimeFiles": [
+    {
+      "path": "plugins/AgentFriend/dungeons.yml",
+      "before": "8112e19038048be42a0edfdaa0090c0b194e4a4e4cc85f7bf6a8f2949375d7a4",
+      "after": "666c51434ddcbba5d14c91514590990f746f72450346242dd844f6939e2e80f6"
+    },
+    {
+      "path": "plugins/AgentFriend/rpg-story.yml",
+      "before": "9ddbf62bffbd41a35f0aca6530d2f11f58b83ed7910e981c3f3aff8fe128a5ee",
+      "after": "4fca4101bf73039ac18d1ebe03717458e49a36b46480aa5e038e06582a009bda"
+    },
+    {
+      "path": "plugins/AgentFriend/onboarding.yml",
+      "before": "00bf2da76126226b17cf61f281f6b430153eb15f9dd5fdee7b90eff603251218",
+      "after": "8ed304241681bc833058a5ed1b5cdb26eb5117291fe2dee2080922b320d68135"
+    },
+    {
+      "path": "plugins/VortexRPG/quests.yml",
+      "before": "0b3ee888d7bf9737b14a8b00de2dc9478a5e0ff3b09777114f3b033e41300807",
+      "after": "a851465ab12ae0a678a141b189e9efb371d77d599b96c072cda7f0a923228051"
+    },
+    {
+      "path": "plugins/MythicMobs/mobs/qiandengji-aincrad.yml",
+      "before": "1bf4bbc1c3e5c706bb6540fd37b3cec4d73faa1c1a8157e2a43cd6868b9cf78a",
+      "after": "a090e67b36c2209f66482a441e14d7f4583c26a9e978c8d7b090d95435ebeb60"
+    },
+    {
+      "path": "plugins/MythicMobs/skills/qiandengji-aincrad-skills.yml",
+      "before": "189ce810c37742428b303f236297af1fa9e3f034dcdcced9a2ef7434c16360ba",
+      "after": "989bab1a3fda091f10c7aff0c3b0649bf50db44b49164c85dac9f8ab70a4e7d1"
+    }
+  ],
+  "sourceFiles": {
+    "paper/config-candidates/aincrad-architecture-20261030/dungeons-overlay.yml": "ca508ab33bddb35da195d48dc86d9369b1eb883dc322396aafa6ae7860c1aba7",
+    "paper/config-candidates/aincrad-architecture-20261030/onboarding-overlay.yml": "4fb08abd5feea7a270cb542bafe917aea7e09d0492149f1a42cabe17f6447998",
+    "paper/config-candidates/aincrad-architecture-20261030/rpg-story-overlay.yml": "be7bbbaaea17185b714b8168f1076e67cfcf28bec0fbd55b0b7953b12c068638",
+    "paper/config-candidates/aincrad-architecture-20261030/MythicMobs/qiandengji-aincrad-skills.yml": "989bab1a3fda091f10c7aff0c3b0649bf50db44b49164c85dac9f8ab70a4e7d1",
+    "paper/config-candidates/aincrad-architecture-20261030/MythicMobs/qiandengji-aincrad.yml": "a090e67b36c2209f66482a441e14d7f4583c26a9e978c8d7b090d95435ebeb60",
+    "paper/config-candidates/vortex-native/quests.yml": "4a76911799fc4157f3a5cfcbb1e49d4671dd7b73017254b0c7fe80c6783dad19"
+  },
+  "deploymentRequires": [
+    "current runtime identity and baseline digests",
+    "all live activities ended",
+    "normal notice and stop",
+    "latest complete game/auth backup on E and F",
+    "post-start plugin, native maid update, login and dungeon checks"
+  ],
+  "stillUnverified": [
+    "long autonomous solo and party combat balance",
+    "physical Bedrock controls and visuals in the new route"
+  ],
+  "document": "paper/docs/AINCRAD_ARCHITECTURE_20261030.md",
+  "sourceDigestEncoding": "UTF-8 text normalized to LF"
+}

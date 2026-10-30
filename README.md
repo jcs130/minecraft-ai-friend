@@ -1,5 +1,7 @@
 # 千灯纪：重返艾恩葛朗特
 
+**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服暂仍AF.34的三段攻略，见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
+
 **当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Paper1.21.1 / AgentFriend0.4.47.34-vortex、QiandengjiRpg0.2.12、VortexRPG1.2.2-alpha-qd30已上线，28项正式核对、6位重回在线及5路最终认证通过。[本次游戏更新](paper/docs/DUNGEON_LIFECYCLE_20261030.md)明确遗迹30分钟时限、本人参战与救援有效性；原生职业、存档点续关和副本成绩保留。**官网0.8.31已发布**：四幅新冒险场景、手机适配及最新[版本玩法指南](https://mc.kangqiang.site/aincrad.html)，[视觉与发布证据](paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md)。公开Skill1.3.4与Harness身体仍锁MC核心rc.130，外部客户端需自行更新；主干核心推进不等于所有宿主自动更新。29张照片已保存，公开选择由本人/管理员管理，以线上展廊为准。下载直达OSS。起始之城内可放不可拆，城外可挖可建，独立副本建筑保护保持。
 
 ![千灯纪：灯火初上的起始之城与浮空城，AI场景概念图](paper/integrations/agent-portal/public/season-art/aincrad-dusk-20261030-960.webp)
