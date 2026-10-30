@@ -7,7 +7,7 @@ import java.util.regex.*;
 public final class RpgFailure {
     public record Advice(String reason,String message,String nextCommand,String outcome,Long retryAfterMs){
         public String text(){return "["+reason+"] "+message+"。下一步："+nextCommand;}
-        public Map<String,Object> data(){var out=new LinkedHashMap<String,Object>();out.put("success",false);out.put("reason",reason);out.put("message",message);out.put("nextCommand",nextCommand);out.put("outcome",outcome);out.put("retryPolicy","先核对状态和条件；不自动重放消耗动作");out.put("saveState",outcome.equals("unknown")?"unverified":"not_applicable");out.put("saved",false);if(retryAfterMs!=null)out.put("retryAfterMs",retryAfterMs);return out;}
+        public Map<String,Object> data(){var out=new LinkedHashMap<String,Object>();out.put("success",false);out.put("reason",reason);out.put("message",message);out.put("nextCommand",nextCommand);out.put("outcome",outcome);if(outcome.equals("not_executed"))out.put("changed",false);out.put("retryPolicy","先核对状态和条件；不自动重放消耗动作");out.put("saveState",outcome.equals("unknown")?"unverified":"not_applicable");out.put("saved",false);if(retryAfterMs!=null)out.put("retryAfterMs",retryAfterMs);return out;}
     }
     public static Advice describe(Throwable error,BridgeRules.Request request){
         Set<Throwable> seen=Collections.newSetFromMap(new IdentityHashMap<>());while(error.getCause()!=null&&seen.add(error))error=error.getCause();
@@ -33,6 +33,7 @@ public final class RpgFailure {
         if(lower.contains("choose a class first")||raw.contains("先选择职业"))return a("class_required","请先查看六职业，再主动选择；本次未执行","/mycli profession list","not_executed");
         if(lower.contains("unknown class")||raw.contains("unknown_class"))return a("unknown_class","职业ID不存在；从目录复制准确ID","/mycli profession list","not_executed");
         if(lower.contains("unknown task")||raw.contains("unknown_task"))return a("unknown_task","任务ID不存在；从当前任务目录复制准确ID","/mycli tasks list","not_executed");
+        if(raw.contains("quest_not_active"))return a("quest_not_active","该任务不在进行中，本次未放弃；已交付记录和奖励保持",query,"not_executed");
         if(lower.contains("belongs to")||raw.contains("所属职业"))return a("class_mismatch","该节点不属于本人职业；查看本职技能，不会替你改职业","/mycli skills list","not_executed");
         if(raw.contains("上一操作仍在确认"))return a("operation_pending","上一操作仍在确认；先查状态，不叠加新的学习、领奖或施法","/mycli status","unknown");
         if(raw.contains("角色资料")&&(raw.contains("加载")||raw.contains("不可用")))return a("profile_loading","角色资料尚未就绪；稍后查询一次，不重新选职或接任务","/mycli status","not_executed");

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.132
+
+- Connect planning to advertised method authoring, immutable versions and original execution review. Retain the 0.2.131 explicit-failure evidence fix while integrating current main.
+- Method validation, saving, live trial, review and adoption remain separate. This source update does not reload existing hosts, replay unknown actions or prove gameplay improvement.
+
+## 0.2.131
+
+- Retain a measured native failed plan even when its steps moved the body or
+  consumed an item. Separate observed activity from a successful outcome; a
+  later jump cannot erase an earlier failed use in the same batch.
+- Successful measured work retires only that exact plan's failure. Keep the
+  existing same-state, scope, death-epoch, known-terminal and 120-second bounds;
+  uncertain effects and changed prerequisites still permit retries. No action
+  is replayed and no goal is certified by this policy.
+
 ## 0.2.122
 
 Bound repeated failed container opening even when its dependent take step is

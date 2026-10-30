@@ -34,7 +34,7 @@ public final class QuestText {
         String state=RpgJourney.availability(q,data,level);
         return definition+"；本人："+RpgJourney.label(state)+"。"+switch(state){
             case "completed"->"已交付，无需重复接取或领奖。改选：/mycli tasks list";
-            case "active","ready_to_claim"->progress(q,data.quests().get(q.id()))+"；核对：/mycli tasks status "+q.id();
+            case "active","ready_to_claim"->progress(q,data.quests().get(q.id()))+"；核对：/mycli tasks status "+q.id()+"；若要放弃：/mycli tasks abandon "+q.id()+"（重新接取会重新计数，不回城）";
             case "level_required"->"需要Lv"+q.requiredLevel()+"，本人Lv"+level+"；先选较短任务：/mycli tasks list";
             case "prerequisite_required"->"先交付前置 "+q.requiredQuest()+"；核对：/mycli tasks status "+q.requiredQuest();
             case "cooldown"->"任务冷却中，先选其他任务：/mycli tasks list";

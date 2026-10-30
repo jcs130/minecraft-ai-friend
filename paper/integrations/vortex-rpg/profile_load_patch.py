@@ -1,4 +1,9 @@
-"""Patch the pinned native join/load lifecycle; cache hits can finish in JoinEvent."""
+"""Historical qd27 source step; cache hits can finish in JoinEvent.
+
+The cumulative qd29 runtime still needs build-profile-readiness.py afterwards:
+a single deferred tick does not guarantee Paper's first actor is valid. That
+narrow qd30 step also prevents shutdown from saving unloaded placeholders.
+"""
 def patch_profiles(text, replace_once):
     text=replace_once(text,'repository.loadPlayer(player.getUniqueId()).whenComplete((snapshot, error) -> {','''CompletableFuture<?> previousSave=pendingSaves.get(player.getUniqueId());
         CompletableFuture<?> saveGate=previousSave==null?CompletableFuture.completedFuture(null):previousSave;

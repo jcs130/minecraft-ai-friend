@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "state": "candidate-not-deployed",
+  "sourceBase": "2a0ed6c2f28025495bb2560f28ca00a6796684f9",
+  "liveAgentFriend": "0.4.47.32-vortex",
+  "baselineSha256": "b0249c75fe62e5d0dafbbe730f98aaf328e44789fb8fdc59934e7f82ba848374",
+  "candidateAgentFriend": "0.4.47.33-vortex",
+  "candidateSha256": "281c3382e18137f3027c4e2c039878bc01c32857738c0dd193e363e6cfb899f9",
+  "changedEntries": [
+    "plugin.yml",
+    "org/afuhome/agentfriend/SiteDungeonManager.class"
+  ],
+  "otherEntriesPreserved": 598,
+  "verification": {
+    "fullBuild": true,
+    "baselineNegativeReproduced": true,
+    "serializerChecks": 42,
+    "realLoopbackProtocolChecks": 13,
+    "qaNormalStopAndBaselineRestored": true,
+    "productionGameplayActions": false
+  },
+  "homeCandidate": {
+    "state": "private-configuration-candidate-only",
+    "world": "world",
+    "position": [
+      -543.5,
+      66.9375,
+      -439.5
+    ],
+    "candidateY": 67.0,
+    "onlyChangedKey": "y",
+    "currentGround": "grass_block",
+    "candidateFeet": "redstone_wire, passable",
+    "candidateHead": "air",
+    "liveWarpChanged": false,
+    "safetyRelaxed": false,
+    "realPlayerTeleported": false
+  },
+  "extraRestartPerformed": false,
+  "document": "paper/docs/DUNGEON_RECIPIENT_REVIEW_20261030.md",
+  "supersededByVerifiedRelease": {
+    "id": "dungeon-lifecycle-release-20261030-r1",
+    "version": "0.4.47.34-vortex",
+    "artifactSha256": "6e94b4a69301e8cf48871752a2c1e01b2484840e43300c833ad8db162e857c53",
+    "candidateArchiveItselfDeployed": false,
+    "homeWarpConfigurationIncluded": false
+  }
+}

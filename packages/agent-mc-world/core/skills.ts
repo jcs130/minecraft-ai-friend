@@ -1782,6 +1782,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     name: 'equip',
     doc: `{"skill":"equip","item":"stone_sword"}           手持物品;盔甲、鞘翅、盾牌和不死图腾会自动放进对应装备槽。
 {"skill":"equip","item":"filled_map","hand":"off"}  hand 指定哪只手:off = 副手,main = 主手;写了就不按物品自动分槽。
+{"skill":"equip","item":"iron_helmet","hand":"main"} 明确指定手时，可先把身上的对应装备收回背包再拿起；需空位和原生确认，不自动脱下其他装备。
                                                  不写 item = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)`,
     parse: parseEquip,
     fields: [

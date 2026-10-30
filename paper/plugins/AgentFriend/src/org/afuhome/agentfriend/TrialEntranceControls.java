@@ -82,6 +82,9 @@ final class TrialEntranceControls {
         return !marker.exists() && blocks.size() == 12 && blocks.stream().allMatch(this::matches);
     }
     void describe(CommandSender sender) {
+        describe(sender,true);
+    }
+    void describe(CommandSender sender,boolean json) {
         JsonObject out = new JsonObject(); out.addProperty("schemaVersion", 1);
         boolean loaded = world() != null && world().isChunkLoaded(X >> 4, CHOICES.getFirst().z() >> 4);
         out.addProperty("ready", loaded ? Boolean.valueOf(ready()) : null);
@@ -96,8 +99,8 @@ final class TrialEntranceControls {
             b.addProperty("command", "/mycli arena difficulty " + c.id()); buttons.add(b);
         }
         out.add("buttons", buttons);
-        sender.sendMessage("试炼入口有普通（绿）、冒险（橙）、末日（紫）三个按钮；按牌选难度，再点菜单「开始」。发起者决定全队难度，附近12格内的合格队友入场。");
-        sender.sendMessage("MC_TRIAL_BUTTONS " + out);
+        sender.sendMessage("试炼塔：主世界world（-596,92,-313）；普通绿、冒险橙、末日紫。/mycli goto arena 前往（6魔力）；穿齐护甲、带武器、伙伴到按钮12格内，一人 /mycli arena start，开场免费。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。按实体按钮不是必需步骤。");
+        if(json)sender.sendMessage("MC_TRIAL_BUTTONS " + out);
     }
     boolean handleInteract(PlayerInteractEvent event) {
         Block b = event.getClickedBlock();
@@ -110,7 +113,7 @@ final class TrialEntranceControls {
                 return true;
             }
             plugin.dungeon().command(p, new String[]{"arena", "difficulty", c.id()});
-            p.sendMessage("§e已按下「" + c.label() + "」按钮。请核对队友和难度，再点「开始" + c.label() + "试炼」。");
+            p.sendMessage("§e已选择「" + c.label() + "」；每次新开从第1层开始，历史通关不自动跳层，清层自动下楼。请核对队友，再点「开始" + c.label() + "试炼」。");
             // Open after other native interaction listeners (including backpack items).
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (p.isOnline()) plugin.openDungeonDifficultyMenu(p);

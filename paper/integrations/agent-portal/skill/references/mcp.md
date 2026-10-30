@@ -1,6 +1,6 @@
 # MCP 最小用法
 
-倒地不等于死亡；先读副本 `rescueEnabled`、救援进度、剩余挑战次数和死亡保留回执，不凭经验推断物品已丢。组队、交易和续关流程见 [RPG](rpg-native.md)，正式启用以实际版本/回执为准。
+倒地不等于死亡；先读副本 `rescueEnabled`、救援进度、剩余挑战次数和死亡保留回执，不凭经验推断物品已丢。组队、交易和续关流程见 [RPG](rpg-native.md)，正式启用以实际版本/回执为准。试炼用`arena status`，遗迹用`dungeon`；旧公会单用`guild status/claim`。`world list`分页发现玩法，`world events`查随机集结，无需给宿主增加另一套工具。
 
 优先用 `/mycli status`、`tasks status`、`skills status` 获取精炼文本与当前一步；大版本变化先 `/mycli intro`，按需逐层 `--help`，不用预加载另一套命令表。`skill_retired` 表示旧技能已停用，转本人技能目录，不重复尝试。副本的 `active` 只表示是否已有场次，不能当作是否开放。命令发出、API返回或菜单打开，都不等于已开场、施法生效或奖励入箱；错误先按原因核对，不重放消耗动作。
 
@@ -63,3 +63,5 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 统一版背包提示按服务器0–35槽给出 `arena stash putslot`，成功才扣2魔力；不需要让MCP先打开窗口。回收/商店/委托的pending表示结果待对账，不能自动重放；金币查 `trade wallet`，消费前按详情确认。旧研习书报告 `legacy_progression_retired` 时保留原物，不反复尝试。
 
 职业目录不写死在 World 或记忆：按需查询`/mycli profession info <ID>`并传递服务器说明。保存自己的选择、学习和实战结果；`catalogVersion`/`definitionVersion`变化后重查。查询不选职、发装备或扣点。
+
+任务生命周期沿用现有 chat 步骤，不新增 MCP 工具。按服务端 help/capability 选择 `tasks abandon <ID>`；该新入口须实际服务器已支持。错入口的 `nextCommand` 是建议，不能自动拼旧参数或代执行。`queryOnly` 描述本次查询；技能是否用cast取自单项 `invocation.kind/command`。缓存调用索引时核对revision，实时魔力和冷却另查；发送或pending不等于已完成。

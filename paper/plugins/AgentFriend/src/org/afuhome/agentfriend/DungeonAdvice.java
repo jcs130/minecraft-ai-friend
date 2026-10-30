@@ -8,6 +8,10 @@ import java.util.*;
 final class DungeonAdvice {
     private DungeonAdvice() { }
     record Request(String[] args,boolean json,boolean verbose,int page) { }
+    static final class Usage extends IllegalArgumentException {
+        final String nextCommand;
+        Usage(String message,String nextCommand){super(message);this.nextCommand=nextCommand;}
+    }
     static Request parse(String[] raw){
         List<String> words=new ArrayList<>();boolean json=false,verbose=false;int page=1;boolean seenPage=false;
         for(int i=0;i<raw.length;i++){
@@ -21,10 +25,14 @@ final class DungeonAdvice {
         if(words.isEmpty())words.add("dungeon");
         if(words.size()==1)words.add("list");
         String action=words.get(1).toLowerCase(Locale.ROOT);words.set(0,"dungeon");words.set(1,action);
+        if(Set.of("abandon","cancel","quit").contains(action))throw new Usage("副本退出用 leave，不是放弃任务；留在原地，不自动回城。返城用 /mycli cast home，成功耗6魔力","/mycli dungeon leave");
         if(!Set.of("list","info","travel","start","join","status","resume","leave","claim","menu").contains(action))throw new IllegalArgumentException("未知动作；用 dungeon --help 分页查看");
         int size=words.size();
         boolean valid=switch(action){case "list","resume","leave"->size==2;case "info","travel","join"->size==3;case "start"->size==3||size==4;default->size==2||size==3;};
-        if(!valid)throw new IllegalArgumentException("参数数量不符；先查该动作的 --help");
+        if(!valid){
+            if(action.equals("leave"))throw new Usage("leave 不带地点ID，只退出本人当前场次并留在原地；回城另用 /mycli cast home，成功耗6魔力","/mycli dungeon leave");
+            throw new IllegalArgumentException("参数数量不符；先查该动作的 --help");
+        }
         if(size>=3&&!words.get(2).matches("[a-z0-9_]{1,32}"))throw new IllegalArgumentException("地点ID需从 dungeon list 选择");
         if(size==4&&!Set.of("normal","adventure","apocalypse").contains(words.get(3)))throw new IllegalArgumentException("难度为normal、adventure、apocalypse");
         if(seenPage&&!action.equals("list"))throw new IllegalArgumentException("--page只用于地点列表");

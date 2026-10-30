@@ -1614,7 +1614,8 @@ class Controller:
             repeat = self.container_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch)
         if repeat and not observation_call(name, arguments):
             container_failure = repeat.get("kind") in {"failed_container_take", "unopened_container"}
-            code = "repeated_container_failure" if container_failure else "repeated_no_effect"
+            failed_step = repeat.get("kind") == "failed_step"
+            code = "repeated_container_failure" if container_failure else "repeated_failed_plan" if failed_step else "repeated_no_effect"
             self.planner_notice = (("Two measured interactions at this coordinate and face failed to open a container; "
                 "the dependent take step was skipped, so no withdrawal was attempted. The same approach and inventory remain observed. "
                 "This entire batch was NOT dispatched. Correct the target or interaction using the dated native evidence, "
@@ -1626,6 +1627,10 @@ class Controller:
                 "The entire proposed batch was NOT dispatched. Use the dated native evidence to correct the item/container, "
                 "obtain prerequisites through real work, query a specific missing fact, choose different work, or wait for changed conditions. "
                 "The refusal expires within 120 seconds and does not establish current contents, permissions or goal success.") if container_failure else
+                ("The same native plan ended twice with a failed step, despite measured changes, and its final position/inventory/dimension remain observed. "
+                "It was NOT dispatched again. Movement, item consumption or a later successful step did not resolve the recorded failure. "
+                "Use the original terminal evidence and native skill help to correct the prerequisites, choose different useful work, "
+                "or report the stage blocked. This refusal expires within 120 seconds; it does not prove permissions or goal success.") if failed_step else
                 ("The same native plan already ended twice without any measured change, and position/inventory/dimension are still unchanged. "
                 "It was NOT dispatched again. Use the original terminal evidence and native skill help to correct the prerequisites, choose different useful work, "
                 "or report this proposed stage blocked. This dated client-visible evidence does not prove permissions or goal success."))

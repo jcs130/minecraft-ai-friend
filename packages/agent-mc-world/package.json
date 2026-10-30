@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.134",
+  "version": "0.5.7-rc.135-planreview.6",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -31,6 +31,14 @@
     "minecraft-agent-knowledge": "./bin/minecraft-agent-knowledge.mjs"
   },
   "exports": {
+    "./text": {
+      "types": "./dist/types/src/client/text-pages.d.ts",
+      "default": "./dist/runtime/src/client/text-pages.js"
+    },
+    "./review": {
+      "types": "./dist/types/src/client/plan-review.d.ts",
+      "default": "./dist/runtime/src/client/plan-review.js"
+    },
     "./observations": {
       "types": "./dist/types/src/observations.d.ts",
       "default": "./dist/runtime/src/observations.js"
@@ -42,6 +50,14 @@
     "./client": {
       "types": "./dist/types/src/client/index.d.ts",
       "default": "./dist/runtime/src/client/index.js"
+    },
+    "./server-tools": {
+      "types": "./dist/types/src/server-tools.d.ts",
+      "default": "./dist/runtime/src/server-tools.js"
+    },
+    "./equipment": {
+      "types": "./dist/types/src/equipment-access.d.ts",
+      "default": "./dist/runtime/src/equipment-access.js"
     },
     "./context": {
       "types": "./dist/types/src/context.d.ts",

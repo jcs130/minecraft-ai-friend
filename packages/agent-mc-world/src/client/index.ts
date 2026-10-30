@@ -12,16 +12,18 @@ export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAd
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
+export { PlanReviewBook, type FailedPlanEpisode, type RecentPlanEffect } from './plan-review.ts';
 export * from './context-reading.ts';
 export * from './execution-reading.ts';
 export { runtimeExecutionState, type RuntimeExecutionState, type ExecutionIdentity } from './execution-state.ts';
-export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,type TextPage,type TextToolResult} from './text-pages.ts';
+export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,TextPageRangeError,TextReadRecoveryBook,type TextPage,type TextPageFailure,type TextToolResult} from './text-pages.ts';
 export {ReadProgressBook,readOnlyToolResult,type ReadProgressEvidence} from './read-progress.ts';
 export * from './schema-reading.ts';
 export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.ts';
 export { withFactState, type FactState } from '../../core/fact-state.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
+export { createServerToolRouter, SERVER_TOOL_PORT_TOOL } from './server-tools.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,
   type WakeCategory, type WakeOptions, type WakeDecision, type CompactEvent, type CompactCatalogOptions,
   MovementProgress, isIdleControlStep, type MovementProgressOptions, type MovementVerdict } from './context-budget.ts';

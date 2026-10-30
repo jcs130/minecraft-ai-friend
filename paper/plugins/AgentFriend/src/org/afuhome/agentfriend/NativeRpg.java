@@ -17,6 +17,15 @@ final class NativeRpg {
         selected="vortex".equals(owner.getConfig().getString("rpg-backend", "legacy"));
     }
     boolean selected(){return selected;}
+    private void invocationIndex(Player p){
+        var out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("kind","skill_invocations");
+        out.addProperty("queryOnly",true);var entries=new JsonArray();var commands=new LinkedHashMap<String,String>();
+        for(String id:COMMON_IDS){var e=commonGuide(id);var row=new JsonObject();
+            row.addProperty("id",id);commands.put(id,e.command());
+            row.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(id,e.command())));entries.add(row);}
+        out.addProperty("revision",AgentCommunicationContract.invocationRevision(commands));
+        out.add("entries",entries);p.sendMessage("MC_RPG "+out);
+    }
     static boolean common(String raw){return COMMON.contains(skillId(raw.trim().split("\\s+",2)[0]));}
     private static SpellGuide.Entry commonGuide(String id){
         var e=SpellGuide.find(id);String scaling=switch(id){
@@ -129,12 +138,22 @@ final class NativeRpg {
             context.addProperty("downed",owner.isDowned(p));context.addProperty("inDungeon",owner.dungeonParticipant(p));
             context.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(org.bukkit.GameRule.KEEP_INVENTORY)));
             if(owner.trialRescue()!=null)context.add("rescue",owner.trialRescue().state(p));
+            if(owner.dungeon().isParticipant(p))context.add("trial",owner.dungeon().guidance(p));
+            var guild=owner.guild().progressState(p);
+            if(guild.has("activeId")&&!guild.get("activeId").getAsString().isEmpty()&&!(guild.has("retired")&&guild.get("retired").getAsBoolean())){
+                var brief=new JsonObject();for(String key:List.of("activeId","title","status","nextCommand","advice","requiresWorldAction"))if(guild.has(key))brief.add(key,guild.get(key).deepCopy());
+                if(brief.has("advice")&&brief.get("advice").getAsString().length()>500)brief.addProperty("advice",brief.get("advice").getAsString().substring(0,500));
+                context.add("guild",brief);
+            }
             context.add("missingEquipment",new Gson().toJsonTree(DungeonLoadout.missing(p)));
             for(String id:List.of("food","selfheal")){
                 Long left=owner.readBasicCooldown(p,id);context.add(id+"CooldownMs",left==null?JsonNull.INSTANCE:new JsonPrimitive(left));
             }
             call("describeJourney",new Class<?>[]{Player.class,String.class,boolean.class,boolean.class},p,context.toString(),intro,json);
         }catch(RuntimeException unavailable){p.sendMessage("§e[service_unavailable] RPG指引资料暂不可用；未替你选职或接任务。稍后查询：/mycli status");}
+        // status/intro/status full all return through this fast path before the
+        // generic delegate branch below. Publish the actual chat observation here.
+        owner.communication().chatPolicy(p,json);
         return true;
     }
     boolean route(Player p,String[] args) {
@@ -192,18 +211,36 @@ final class NativeRpg {
             }
             if(Set.of("skills","spells","技能").contains(group)&&args.length>=3&&Set.of("info","explain","status").contains(args[1].toLowerCase(Locale.ROOT))&&COMMON.contains(skillId(args[2]))){
                 if(Arrays.stream(args).skip(3).anyMatch(a->!a.equals("--json"))){p.sendMessage("§e[invalid_argument] 查询只接受一个技能ID；下一步：/mycli skills --help");return true;}
-                var entry=commonGuide(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
+                var entry=commonGuide(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);
+                data.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(entry.id(),entry.command())));
+                Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
                 if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准前方可站立的地面；平视空中可能没有合法落点，拒绝时不扣魔力。");
                 if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；瞄准前方可站立的地面，空中无落点会拒绝":"")+"。用法："+entry.command());return true;
             }
             String[] normalized=args.clone();
             normalized[0]=switch(group){case "职业"->"profession";case "spells","技能"->"skills";case "任务路线"->"tasks";default->group;};
             if(normalized[0].equals("skills")&&normalized.length>2&&COMMON.contains(skillId(normalized[2])))normalized[2]=skillId(normalized[2]);
-            boolean handled=delegate(p,normalized);if(group.equals("status")&&!Arrays.asList(args).contains("--json"))adventureProgress(p,false,false);return handled;
+            boolean handled=delegate(p,normalized);
+            if(handled&&normalized[0].equals("skills")&&(normalized.length==1||Set.of("status","list").contains(normalized[1].toLowerCase(Locale.ROOT)))
+                &&(normalized.length<3||normalized[2].equals("--json"))){
+                if(Arrays.asList(args).contains("--json"))invocationIndex(p);
+                else p.sendMessage("§7[技能用法] travel 是地点管理：/mycli waypoint menu；其他技能先查 /mycli skills info <ID>，按其用法执行。");
+            }
+            if(group.equals("status")&&!Arrays.asList(args).contains("--json"))adventureProgress(p,false,false);return handled;
         }
         if(group.equals("cast")||group.equals("施法")||group.equals("咏唱")) {
             String id=args.length>1?skillId(args[1]):"";
             if(COMMON.contains(id)){
+                var entry=commonGuide(id);
+                if(!AgentCommunicationContract.castable(id,entry.command())){
+                    var data=entry.json();data.addProperty("success",false);data.addProperty("changed",false);
+                    data.addProperty("reason","command_route_mismatch");data.addProperty("queryOnly",false);
+                    data.addProperty("nextCommand",entry.command());
+                    data.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(id,entry.command())));
+                    if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);
+                    else p.sendMessage("§e[command_route_mismatch] "+entry.name()+"不是cast入口；用法："+entry.command()+"。本次未执行、未扣费；不能将原参数直接附加到新入口。");
+                    return true;
+                }
                 boolean unsupported=Arrays.stream(args).skip(2).anyMatch(a->a.startsWith("-"));
                 boolean excess=!Set.of("give","prospect").contains(id)&&args.length>2||id.equals("prospect")&&args.length>3;
                 if(unsupported||excess){

@@ -4,9 +4,8 @@ import copy
 import json
 
 import pytest
-from test_controller import action, setup
-
 from agent_mc_autonomy.context import assemble
+from test_controller import action, setup
 
 PLAN = {
     "steps": [
@@ -178,6 +177,77 @@ def test_identical_no_effect_plan_cannot_loop_by_changing_narration_or_queue(
         "cursor": 96,
     }
     assert result["previous_outcome"]["goal_verified"] is False
+
+
+def test_failed_plan_with_incidental_change_retains_failure_and_native_reference(
+    framework_module, tmp_path, run_async
+):
+    bridge, controller = prepare(framework_module, tmp_path)
+    # A failed skill can consume an item or move the body without doing its job.
+    # Those measured effects must remain visible, not turn failure into success.
+    controller.game_facts["observation"]["inventory"] = effect(True)["after"]["inventory"]
+    finish(controller, run_async, changed=True)
+    finish(controller, run_async, changed=True)
+    result = run_async(controller.execute_model_call("mc_do", copy.deepcopy(PLAN)))[0]
+    assert result.get("dispatched") is False
+    assert result["code"] == "repeated_failed_plan"
+    assert result["previous_outcome"]["effect"]["status"] == "changed"
+    assert result["previous_outcome"]["failed_steps"] == [1]
+    assert result["previous_outcome"]["goal_verified"] is False
+    assert result["previous_outcome"]["original_event"] == {"run": "native-run", "cursor": 96}
+    assert "without any measured change" not in result["text"]
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
+
+
+def test_failed_use_and_successful_jump_do_not_erase_the_failed_batch():
+    from agent_mc_autonomy.effects import EffectRecovery
+
+    recovery = EffectRecovery()
+    args = {"steps": [{"skill": "use", "item": "ladder"}, {"skill": "jump", "ms": 800}]}
+    failed, jumped = effect(), effect()
+    failed["skill"], jumped["skill"] = "use", "jump"
+    jumped["after"]["position"][1] += 1.25
+    jumped["changed"]["position"] = True
+    jumped["status"] = "changed"
+    terminal = {"id": "native-use-jump", "phase": "blocked", "evidence": {"steps": [
+        {"step": 1, "outcome": "fail", "observedEffect": failed},
+        {"step": 2, "outcome": "ok", "observedEffect": jumped},
+    ]}}
+    for _ in range(2):
+        assert recovery.record(args, terminal, "world-account", 0, {"cursor": 1477}) is True
+    p = jumped["after"]["position"]
+    facts = {"observation": {"dimension": jumped["dimension"],
+        "inventory": jumped["after"]["inventory"], "position": dict(zip(("x", "y", "z"), p))}}
+    repeated = recovery.repeated(args, facts, "world-account", 0)
+    assert repeated["attempts"] == 2
+    assert repeated["failed_steps"] == [1]
+    assert repeated["kind"] == "failed_step"
+    assert repeated["goal_verified"] is False
+    # After landing, facts have changed again: a retry is not prohibited by an
+    # airborne sample, even though the dated failure remains in recovery memory.
+    facts["observation"]["position"]["y"] -= 1.25
+    assert recovery.repeated(args, facts, "world-account", 0) is None
+
+
+def test_unrelated_success_does_not_forget_same_state_failed_plan(
+    framework_module, tmp_path, run_async
+):
+    _, controller = prepare(framework_module, tmp_path)
+    finish(controller, run_async)
+    finish(controller, run_async)
+    recovery = controller.effect_recovery
+    successful = {"steps": [{"skill": "smelt", "input": "raw_iron", "fuel": "coal"}]}
+    assert recovery.record(successful, {"id": "different-plan", "phase": "completed", "evidence": {
+        "steps": [{"step": 1, "outcome": "ok", "observedEffect": effect(True)}]
+    }}, controller.game_scope, controller.death_epoch, {"cursor": 97}) is True
+    result = run_async(controller.execute_model_call("mc_do", copy.deepcopy(PLAN)))[0]
+    assert result["code"] == "repeated_no_effect"
+    assert result["previous_outcome"]["effect"]["status"] == "unchanged"
+    # A successful execution of that exact plan does retire its dated failure.
+    assert recovery.record(PLAN, {"id": "same-plan-success", "phase": "completed", "evidence": {
+        "steps": [{"step": 1, "outcome": "ok", "observedEffect": effect(True)}]
+    }}, controller.game_scope, controller.death_epoch, {"cursor": 98}) is True
+    assert recovery.repeated(PLAN, controller.game_facts, controller.game_scope, controller.death_epoch) is None
 
 
 def test_completed_existing_stock_does_not_bypass_exact_plan_recovery(

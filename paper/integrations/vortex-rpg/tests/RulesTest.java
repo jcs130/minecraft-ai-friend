@@ -13,6 +13,8 @@ public final class RulesTest {
         check(BridgeRules.parse(new String[]{"rpg","status","--json"}).json());
         for(var entry:Map.of("profession","class","tasks","quests","trade","shop","waypoint","town").entrySet())check(BridgeRules.parse(new String[]{entry.getKey(),"list"}).group().equals(entry.getValue()));
         check(BridgeRules.parse(new String[]{"skills","status"}).action().equals("status"));
+        check(BridgeRules.parse(new String[]{"tasks","abandon","qd_first_hunt","--json"}).arguments().equals(List.of("qd_first_hunt")));
+        rejects("tasks","abandon");rejects("tasks","abandon","qd_first_hunt","other");
         for(String[] words:List.of(new String[]{"other"},new String[]{"status","extra"},new String[]{"class","choose","../x"},new String[]{"--oops"},new String[]{"cast"},new String[]{"class","choose","a","b","c"}))rejects(words);
         check(QuestService.locationMatches("aincrad:1:67:2:4","aincrad",1,67,2));
         check(!QuestService.locationMatches("aincrad:1:67:2:4","world",1,67,2));

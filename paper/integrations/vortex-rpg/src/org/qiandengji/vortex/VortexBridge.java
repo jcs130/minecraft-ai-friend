@@ -192,6 +192,8 @@ public final class VortexBridge extends JavaPlugin {
                         advice=new RpgJourney.Advice("storage","inventory_full","可先把第"+slot+"格 "+item.getType().getKey()+" ×"+item.getAmount()+" 存入本人个人箱；成功2魔力，不用先开界面或传送","/mycli arena stash putslot "+slot+" "+item.getAmount(),"/mycli inventory","",List.of());break;
                     }
                 }
+                advice=RpgJourney.withContext(advice,context.has("guild")?gson.fromJson(context.get("guild"),Map.class):null,
+                    context.has("trial")?gson.fromJson(context.get("trial"),Map.class):null);
                 var out=new LinkedHashMap<String,Object>();out.put("readOnly",true);out.put("queryOnly",true);out.put("backend","vortex");out.put("authority","VortexRPG");
                 out.put("class",intro?id:id.isEmpty()?"none":id);out.put("level",state.level());out.put("xp",state.experience());out.put("location",PlayerLocationView.location(p));
                 out.put("nextLevelXp",vortex.playerProfileService().experienceToNextLevel(state));out.put("health",p.getHealth());out.put("maxHealth",p.getMaxHealth());out.put("food",p.getFoodLevel());out.put("mode",p.getGameMode().name());
@@ -219,9 +221,9 @@ public final class VortexBridge extends JavaPlugin {
     private static long cooldown(JsonObject context,String key){return context.has(key)&&!context.get(key).isJsonNull()?Math.max(0,context.get(key).getAsLong()):-1;}
     private static List<String> activityGuide(){return List.of(
         "组队：队长 /mycli guild party create，再 invite <玩家>；对方 accept，status核对成员。遗迹全员穿甲带武器到首室，由队长 /mycli dungeon start <ID>；建队不等于入场。",
-        "练习塔：先 /mycli arena status 查入口，所有队员到按钮12格内、穿甲带武器且各有8魔力，由一人 /mycli arena start；再查 arena status 核对实际参战。",
+        "试炼塔：主世界world（-596,92,-313）；/mycli goto arena 到入口（6魔力），穿齐四甲、带武器、伙伴到按钮12格内，一人 /mycli arena start（开场免费）。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼，第2层不在creeping_crypt。已解锁驿站可另用arena rest（8魔力）。核对：/mycli arena status。",
         "买卖：/mycli commission list；买方 publish delivery <物品ID> <数量> <金币报酬> <标题> 托管金币，卖方 accept <ID> 后 claim <ID> 交物领钱。报价/查询不算成交；原生拍卖仍维护。",
-        "满包：按 status 给出的 arena stash putslot <背包0–35槽> <数量> 直接远程存箱，收到moved>0才完成；无需开界面或回城。多余装备 /mycli arena recycle list，再quote/sell。");}
+        "满包：按 status 给出的 arena stash putslot <背包0–35槽> <数量> 直接远程存箱，收到moved>0才完成；无需开界面或回城。多余装备 /mycli arena recycle list，再quote/sell。更多玩法：/mycli world list；随机集结：/mycli world events。");}
     public void tradeCommand(Player p,String[] raw){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");profile(p);
         boolean json=Arrays.asList(raw).contains("--json");var words=new ArrayList<>(Arrays.asList(raw));words.removeIf(s->s.equals("--json"));
@@ -371,7 +373,8 @@ public final class VortexBridge extends JavaPlugin {
             }),"查询暂不可用；不要重复接取。");}
             case "accept"->{String id=BridgeRules.id(r);quest(id);write(p,r,()->quests.startQuest(p,id).thenAccept(result->{if(!result.success())throw new IllegalStateException(result.message());}),false,"任务已接取并保存；查询：/mycli tasks status");}
             case "claim"->{String id=BridgeRules.id(r);quest(id);write(p,r,()->quests.completeQuest(p,id).thenAccept(ok->{if(!ok)throw new IllegalStateException("目标未完成、已领取或当前不能交付；查询：/mycli tasks status");}),false,"任务已交付，奖励已确认；查询：/mycli tasks status");}
-            default->throw new IllegalArgumentException("quests 仅 list/info/status/accept/claim。");
+            case "abandon"->{String id=BridgeRules.id(r);quest(id);write(p,r,()->quests.abandonQuest(p,id).thenAccept(ok->{if(!ok)throw new IllegalStateException("[quest_not_active] 该任务不在进行中，本次未放弃");}),false,"已放弃任务 "+id+" 并保存；未领取奖励不发放；再次接取会重新计数，已获物品和奖励保留。此操作不退出副本、不回城；查询：/mycli tasks status "+id);}
+            default->throw new IllegalArgumentException("tasks 仅 list/info/status/accept/claim/abandon；放弃：/mycli tasks abandon <ID>。");
         }
     }
     private QuestDefinition quest(String id){return quests.registry().find(id).orElseThrow(()->new IllegalArgumentException("[unknown_task] 未知任务 "+id+"；未执行。下一步：/mycli tasks list"));}
@@ -390,13 +393,15 @@ public final class VortexBridge extends JavaPlugin {
         emit(p,r,Map.of("opened",true,"currency","emerald","purchaseConfirmed",false),"已打开原版交易窗口；尚未购买。按窗口报价交易，库存确认后再继续。");
     }
     private void town(Player p,BridgeRules.Request r){var facilities=city.getConfigurationSection("facilities");if(r.action().equals("list")){noArgs(r);var ids=facilities.getKeys(false);emit(p,r,Map.of("state","surveyed_not_operating","world","aincrad","facilities",ids),"起始之城："+String.join("、",ids.stream().map(id->facilities.getString(id+".name")).toList())+"。建筑已勘察，设施未开业；详情：/mycli waypoint info <ID>");return;}if(!r.action().equals("info"))throw new IllegalArgumentException("town 仅 list/info，查询不会传送或建造。");String id=BridgeRules.id(r);var c=facilities.getConfigurationSection(id);if(c==null)throw new IllegalArgumentException("未知设施");emit(p,r,Map.of("id",id,"world","aincrad","entrance",c.getIntegerList("entrance"),"function",c.getString("function"),"state","surveyed_not_operating"),c.getString("name")+"；aincrad入口 "+c.getIntegerList("entrance")+"；用途："+c.getString("function")+"。尚未开业，不会自动接任务。");}
-    private void help(Player p,BridgeRules.Request r){String text=switch(r.group()){case "class"->"profession list/info <ID>/choose <ID>/menu：查询只读；choose选择一次并授予原生初始装备。";case "skills"->"skills list/info <ID>/learn <ID>/prepare <法术ID>/tree/menu：learn花学习点或天赋点，详情会注明；被动不能cast。施放：/mycli cast <法术ID>";case "quests"->"tasks list/info <ID>/status/accept <ID>/claim <ID>：查询只读；接取和领奖需主动执行。旧探索委托：/mycli guild status。";case "shop"->"shop list/info <ID>/open <ID>：预览商店用绿宝石；打开不购买。正式交易沿用 /mycli trade --help。";default->"先查 /mycli status。RPG：profession、skills、cast、tasks；按需 /mycli <分组> --help。考试与声望：/mycli progress；副本：/mycli dungeon list。个人箱：/mycli arena stash；公共补给：/mycli guild shared。默认短文本，可选 --json。";};emit(p,r,Map.of("help",text,"queryOnly",true),text);}
+    private void help(Player p,BridgeRules.Request r){String text=switch(r.group()){case "class"->"profession list/info <ID>/choose <ID>/menu：查询只读；choose选择一次并授予原生初始装备。";case "skills"->"skills list/info <ID>/learn <ID>/prepare <法术ID>/tree/menu：learn花学习点或天赋点，详情会注明；被动不能cast。施放：/mycli cast <法术ID>";case "quests"->"tasks list/info <ID>/status/accept <ID>/claim <ID>/abandon <ID>：放弃会使重新接取时重新计数，未领取奖励不发放、已获奖励保留；不会退出副本或回城。旧公会委托：/mycli guild status；放弃旧单：/mycli guild abandon。";case "shop"->"shop list/info <ID>/open <ID>：预览商店用绿宝石；打开不购买。正式交易沿用 /mycli trade --help。";default->"先查 /mycli status。RPG：profession、skills、cast、tasks；按需 /mycli <分组> --help。考试与声望：/mycli progress；副本：/mycli dungeon list。个人箱：/mycli arena stash；公共补给：/mycli guild shared。默认短文本，可选 --json。";};emit(p,r,Map.of("help",text,"queryOnly",true),text);}
     private static void noArgs(BridgeRules.Request r){if(!r.arguments().isEmpty())throw new IllegalArgumentException("此查询无额外参数");}
     private void write(Player p,BridgeRules.Request r,java.util.function.Supplier<CompletableFuture<Void>> operation,boolean save,String success){
         if(!io.vortexcore.combat.PlayerStateGate.allowed(p))throw new IllegalStateException("当前状态不能执行；请先等待救援或使用对应生存角色。查询：/mycli status");
         if(!pending.add(p.getUniqueId()))throw new IllegalStateException("上一操作仍在确认，请稍后查询；不要重复执行。");
         try{CompletableFuture<Void> f=operation.get();if(save)f=f.thenCompose(ignored->vortex.playerProfileService().qiandengjiSave(p).thenApply(snapshot->null));
-            f.whenComplete((ignored,error)->Bukkit.getScheduler().runTask(this,()->{pending.remove(p.getUniqueId());if(!p.isOnline())return;if(error!=null){failure(p,r,error);return;}boolean durable=save||r.group().equals("quests");emit(p,r,Map.of("success",true,"saved",durable,"saveState",durable?"saved":"not_applicable","reason","completed","message",success),success);}));
+            f.whenComplete((ignored,error)->Bukkit.getScheduler().runTask(this,()->{pending.remove(p.getUniqueId());if(!p.isOnline())return;if(error!=null){failure(p,r,error);return;}boolean durable=save||r.group().equals("quests");var data=new LinkedHashMap<String,Object>(Map.of("success",true,"saved",durable,"saveState",durable?"saved":"not_applicable","reason","completed","message",success));
+                if(r.group().equals("quests")&&r.action().equals("abandon")){data.put("id",r.arguments().getFirst());data.put("state","abandoned");data.put("changed",true);data.put("nextCommand","/mycli tasks status "+r.arguments().getFirst());}
+                emit(p,r,data,success);}));
         }catch(Exception|LinkageError error){pending.remove(p.getUniqueId());throw error;}
     }
     private void async(Player p,BridgeRules.Request r,CompletableFuture<Map<String,Object>> f,String text){f.whenComplete((data,error)->Bukkit.getScheduler().runTask(this,()->{if(p.isOnline()){if(error!=null)failure(p,r,error);else emit(p,r,data,String.valueOf(data.getOrDefault("summary",text)));}}));}

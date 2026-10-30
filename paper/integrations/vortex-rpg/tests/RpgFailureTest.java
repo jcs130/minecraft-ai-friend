@@ -11,6 +11,8 @@ public final class RpgFailureTest {
         var cooldown=RpgFailure.describe(new IllegalStateException("技能尚在冷却，剩余：6.922s"),cast);check(cooldown.retryAfterMs()==6922L,"actual cooldown retained");
         var unknown=RpgFailure.describe(new IllegalStateException("SQL error with private/path"),cast);check(unknown.outcome().equals("unknown")&&!unknown.text().contains("private/path"),"unknown result not leaked or misclassified as unexecuted");
         var task=new BridgeRules.Request("quests","claim",List.of("qd_first_hunt"),true,false);var a=RpgFailure.describe(new IllegalStateException("目标未完成、已领取或当前不能交付；查询：/mycli tasks status"),task);check(a.nextCommand().equals("/mycli tasks status qd_first_hunt"),"focused quest recovery");
+        var abandon=new BridgeRules.Request("quests","abandon",List.of("qd_first_hunt"),true,false);var stopped=RpgFailure.describe(new IllegalStateException("[quest_not_active] 该任务不在进行中"),abandon);
+        check(stopped.reason().equals("quest_not_active")&&stopped.outcome().equals("not_executed"),"not-active abandon has a definite rejection");check(stopped.nextCommand().equals("/mycli tasks status qd_first_hunt"),"abandon rejection has focused recovery");
         var menu=new BridgeRules.Request("class","menu",List.of(),true,false);var linkage=RpgFailure.describe(new NoSuchMethodError("private internal interface"),menu);check(linkage.reason().equals("service_unavailable"),"runtime API incompatibility has a recovery");check(linkage.nextCommand().equals("/mycli profession status"),"failed menu recovers to a text query");check(linkage.outcome().equals("unknown")&&!linkage.text().contains("private internal"),"no false completion or private API leak");
         System.out.println("RPG failure guidance="+count);
     }

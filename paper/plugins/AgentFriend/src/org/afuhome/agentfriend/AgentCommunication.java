@@ -11,7 +11,7 @@ import org.bukkit.entity.Player;
  * Authentication is informational, supplied only by the proxy's local heartbeat file;
  * missing/expired data is unknown and is never used to grant permissions. */
 final class AgentCommunication {
-    static final String GUIDE_VERSION = "2026-10-23.9";
+    static final String GUIDE_VERSION = "2026-10-30.1";
     static final long SNAPSHOT_TTL = 300_000L, AUTH_TTL = 15_000L;
     private static final class Session {
         final String id = UUID.randomUUID().toString(); final long joinedAt=System.currentTimeMillis();long sequence;
@@ -72,11 +72,27 @@ final class AgentCommunication {
         out.addProperty("detailCommand", "/mycli coach guide"); out.addProperty("authCommand", "/authstatus");
         out.addProperty("backpackCommand","/minepacks:backpack open");
         out.addProperty("storyCommand","/mycli world story status");
+        out.add("communication",AgentChatPolicy.observe(plugin,p));
         out.addProperty("backpackAdvice","54格个人大背包可普通存取，独立于任务袋和奖励箱。等待服务端槽位与光标确认，关闭重开核对；超时先查询，不自动重放。");
         send(p, "MC_GUIDE", out); state(p,true);
     }
     void state(Player p) {
         state(p,false);
+    }
+    void chatPolicy(Player p) {
+        chatPolicy(p,true);
+    }
+    void chatPolicy(Player p,boolean json) {
+        JsonObject policy=AgentChatPolicy.observe(plugin,p);
+        if(!json){
+            String channel=policy.get("defaultChannel").getAsString();
+            if(channel.equals("unknown")){p.sendMessage("§7[聊天] 当前默认频道未确认；不要把发送成功当作对方收到。查询：/mycli status --json");return;}
+            String range=channel.equals("nearby")?"同一实际世界"+policy.getAsJsonObject("nearby").get("radius").getAsInt()+"格内":"全服";
+            String prefix=policy.getAsJsonObject("shout").get("prefix").getAsString();
+            p.sendMessage("§7[聊天] 普通聊天为"+range+"，@不扩大范围。全服："+prefix+"内容；私聊：/msg 玩家 内容。发送不等于送达。");return;
+        }
+        JsonObject out=envelope(p,"communication");out.add("communication",policy);
+        send(p,"MC_COMMUNICATION",out);
     }
     void state(Player p,boolean jsonOnly) {
         JsonObject out = envelope(p, "state"); out.addProperty("name", p.getName()); out.addProperty("mode", p.getGameMode().name());
@@ -94,6 +110,7 @@ final class AgentCommunication {
             out.addProperty("manaStatus",nativeMana.isJsonObject()?"known_vortex":"unknown_not_loaded");
         }
         out.add("authentication", authentication(p));
+        out.add("communication",AgentChatPolicy.observe(plugin,p));
         JsonObject next = plugin.agentCoach().entryState(p);
         if (next.has("step")) {
             out.add("mainStage", next.get("step")); out.add("mainlineGraduated", next.get("completed"));
@@ -185,6 +202,12 @@ final class AgentCommunication {
         if(raw.length>=2&&raw[0].equalsIgnoreCase("world")&&raw[1].equalsIgnoreCase("story")){plugin.worldLife().command(p,raw);return;}
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
+        if(root.equals("arena")&&(args.length==1||Set.of("status","entrance","start","rest","checkpoint","next","leave").contains(args[1].toLowerCase(Locale.ROOT)))){
+            plugin.dungeon().command(p,args.length==1?new String[]{"arena","status","--json"}:raw);return;
+        }
+        if(root.equals("world")&&(args.length==1||Set.of("list","status","events").contains(args[1].toLowerCase(Locale.ROOT)))){
+            plugin.worldLife().command(p,args.length==1?new String[]{"world","list","--json"}:raw);return;
+        }
         if(root.equals("archive")){
             String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
             plugin.archives().command(p,query);return;

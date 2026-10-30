@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -89,7 +90,7 @@ final class WorldLifeManager implements Listener {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "list";
         try {
             switch (sub) {
-                case "list", "status" -> list(p);
+                case "list", "status" -> list(p,args);
                 case "menu" -> menu(p);
                 case "story" -> {
                     if (story == null) { denied(p, "story_unavailable"); return; }
@@ -105,10 +106,7 @@ final class WorldLifeManager implements Listener {
                 case "practice" -> plugin.traversalPractice().command(p, args.length > 2 ? args[2] : "status");
                 case "events" -> {
                     if (!enabled("WorldEvents")) { denied(p, "events_unavailable"); return; }
-                    Bukkit.dispatchCommand(p, "wevent list");
-                    JsonObject out = new JsonObject(); out.addProperty("status", "listed");
-                    out.addProperty("instruction", "关注世界事件的中文开始/结束公告与 Boss 血条；事件不会自动完成公会任务。");
-                    emit(p, "events", out);
+                    events(p,java.util.Arrays.asList(args).contains("--json"));
                 }
                 case "photos" -> {
                     if (!enabled("ImageFrame")) { denied(p, "photos_unavailable"); return; }
@@ -126,7 +124,9 @@ final class WorldLifeManager implements Listener {
             denied(p, "content_adapter_unavailable");
         }
     }
-    private void list(Player p) {
+    private void list(Player p,String[] args) {
+        GameplayGuide.Query query;
+        try{query=GameplayGuide.parse(args);}catch(IllegalArgumentException invalid){p.sendMessage("§e[invalid_argument] "+invalid.getMessage()+"；查询未执行。命令：/mycli world list --help");return;}
         JsonObject out = new JsonObject(); JsonArray components = new JsonArray();
         for (String name : DEPENDENCIES) {
             JsonObject component = new JsonObject(); component.addProperty("id", name);
@@ -152,9 +152,34 @@ final class WorldLifeManager implements Listener {
         out.addProperty("boardCommand", "/mycli world board");
         out.addProperty("shopCommand", "/mycli world shops");
         out.addProperty("tradeCommand", "/mycli trade menu");
-        emit(p, "catalog", out);
-        p.sendMessage(ChatColor.GREEN + "世界生活：新手实习、村民聊天、世界事件、村民商店、照片地图。");
-        p.sendMessage("/mycli world board | shops | guide start | practice start|status|stop | npcs | talk <NPC ID> <话> | end | events | photos | menu");
+        var providers=new java.util.HashSet<String>();for(Plugin component:Bukkit.getPluginManager().getPlugins())if(component.isEnabled())providers.add(component.getName());
+        var entries=GameplayGuide.entries(providers,plugin.nativeRpg().selected(),plugin.dungeon().isBuilt(),cameraReady);
+        var rows=GameplayGuide.page(entries,query.page());out.add("gameplay",new com.google.gson.Gson().toJsonTree(rows));
+        out.addProperty("page",query.page());out.addProperty("pages",(entries.size()+5)/6);out.addProperty("queryOnly",true);
+        String next="/mycli world list --page "+(query.page()+1)+(query.json()?" --json":"");
+        if(query.page()*6<entries.size())out.addProperty("nextCommand",next);
+        if(query.json()){emit(p,"catalog",out);return;}
+        p.sendMessage("§b[玩法目录] "+query.page()+"/"+((entries.size()+5)/6)+"页；只查需要的一项，查询不会报名或发奖。");
+        for(var row:rows)p.sendMessage("§e"+row.name()+"§f："+row.command()+"；"+row.note());
+        if(query.page()*6<entries.size())p.sendMessage("§7下一页："+next);
+    }
+    private void events(Player p,boolean json)throws ReflectiveOperationException{
+        Plugin provider=Bukkit.getPluginManager().getPlugin("WorldEvents");
+        Object manager=property(provider,"getEventManager");Object observed=property(manager,"getActiveEventsMap");
+        if(!(observed instanceof Map<?,?> active))throw new IllegalStateException("WorldEvents active state unavailable");
+        JsonObject out=new JsonObject();out.addProperty("status",active.isEmpty()?"idle":"active");out.addProperty("queryOnly",true);
+        JsonArray rows=new JsonArray();long now=System.currentTimeMillis();int count=0;
+        for(Object value:active.values()){
+            if(count++>=4)break;Object event=property(value,"getEvent");String id=String.valueOf(property(event,"getName"));
+            JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("name",String.valueOf(property(event,"getDisplayName")));
+            row.addProperty("remainingSeconds",Math.max(0,(((Number)property(value,"getEndTime")).longValue()-now+999)/1000));
+            String command=id.equals("qd-trial-gather")?"/mycli arena status":id.equals("qd-ruins-gather")?"/mycli dungeon list":id.equals("qd-explorers-gather")||id.equals("qd-traveler")?"/mycli waypoint list":"/mycli world list";
+            row.addProperty("nextCommand",command);rows.add(row);
+            if(!json)p.sendMessage("§e[活动] "+row.get("name").getAsString()+"；剩"+row.get("remainingSeconds").getAsLong()+"秒。命令："+command);
+        }
+        out.add("events",rows);out.addProperty("instruction","集结自愿参加；公告不会报名、传送或推进任务。集结结束不终止已开始的副本。");
+        if(json)emit(p,"events",out);
+        else if(active.isEmpty())p.sendMessage("§7[活动] 当前没有集结。可直接 /mycli arena status 查试炼，或 /mycli dungeon list 选遗迹，不必等公告。");
     }
     private void board(Player p, boolean open, boolean json) {
         JsonObject out = new JsonObject(); JsonArray cards = new JsonArray(); java.util.ArrayList<String> ids = new java.util.ArrayList<>();

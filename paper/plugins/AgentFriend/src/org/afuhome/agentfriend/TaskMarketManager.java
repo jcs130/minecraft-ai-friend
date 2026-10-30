@@ -191,7 +191,7 @@ final class TaskMarketManager implements Listener {
         out.addProperty("scope", "planning"); out.addProperty("ready", false);
         out.addProperty("summary", "这是出发前的目标线索；浏览不会接单，也不证明已到场。");
         if (step.exploration.area() != null) out.addProperty("nextAction", step.description + "；" + out.get("nextAction").getAsString());
-        if (!out.has("optionalExpedition")) out.addProperty("nextCommand", "/mycli tasks status"); return out;
+        if (!out.has("optionalExpedition")) out.addProperty("nextCommand", "/mycli guild status"); return out;
     }
     static void showGuidance(Player player, JsonObject guide) {
         player.sendMessage("§b【当前阶段】" + guide.get("summary").getAsString());
@@ -969,7 +969,7 @@ final class TaskMarketManager implements Listener {
             out.addProperty("id", task.id()); out.addProperty("title", task.title());
             out.addProperty("stage", saved.getInt("market.step") + 1); out.addProperty("progress", saved.getInt("progress"));
             out.addProperty("nextCommand", "/mycli tasks resume");
-        } catch (Exception invalid) { out.addProperty("errorCode", "PAUSED_RECORD_INVALID"); out.addProperty("nextCommand", "/mycli tasks status"); }
+        } catch (Exception invalid) { out.addProperty("errorCode", "PAUSED_RECORD_INVALID"); out.addProperty("nextCommand", "/mycli guild status"); }
         return out;
     }
     JsonObject pauseOrResume(Player p, boolean pause) {
@@ -986,15 +986,15 @@ final class TaskMarketManager implements Listener {
         } else if (pause && (task == null || !RetiredActivities.pausable(task.id(), task.project, task.repeatOnce, task.steps.stream().allMatch(s -> s.exploration != null)))) {
             denial="TASK_NOT_PAUSABLE"; advice="一次性纯探索远征或已撤下的农耕旧单可暂存，保留进度后换新冒险；其他任务保持原流程。用 tasks status 核对当前单。";
         } else if (!pause && !paused.get("present").getAsBoolean()) {
-            if (occupied && task != null) { out.addProperty("status", "already_active"); out.addProperty("nextCommand", "/mycli tasks status"); return out; }
+            if (occupied && task != null) { out.addProperty("status", "already_active"); out.addProperty("nextCommand", "/mycli guild status"); return out; }
             denial="NO_PAUSED_TASK"; advice="没有暂存远征；tasks list exploration 查看可选任务。";
         } else if (!pause && (occupied || paused.has("errorCode"))) { denial=occupied?"ACTIVE_SLOT_OCCUPIED":"PAUSED_RECORD_INVALID"; advice="先完成当前委托，再 tasks resume；异常暂存记录请服主检查，不能覆盖。"; }
         if (!denial.isEmpty()) {
-            out.addProperty("status", "denied"); out.addProperty("errorCode", denial); out.addProperty("advice", advice); out.addProperty("nextCommand", "/mycli tasks status"); return out;
+            out.addProperty("status", "denied"); out.addProperty("errorCode", denial); out.addProperty("advice", advice); out.addProperty("nextCommand", "/mycli guild status"); return out;
         }
         boolean saved = ExplorationPauseStore.move(plugin.getConfig(), plugin.getDataFolder().toPath().resolve("config.yml"), p.getUniqueId(), pause);
         out.addProperty("status", saved ? "success" : "denied"); out.addProperty("durable", saved);
-        out.addProperty("nextCommand", pause && saved ? "/mycli tasks list exploration" : "/mycli tasks status");
+        out.addProperty("nextCommand", pause && saved ? "/mycli tasks list exploration" : "/mycli guild status");
         if (saved) {
             exploration.forget(p); frozenTasks.remove(p.getUniqueId()); lastActions.remove(p.getUniqueId()); actionNotices.remove(p.getUniqueId()); tracker.remove(p.getUniqueId());
             out.addProperty("advice", pause ? "原远征、接单规则和走查记录已保存；现在可自选附近委托，之后 tasks resume 继续。没有领奖或重接。" : "已恢复原远征、原阶段和走查记录；继续 tasks status 的下一步。没有发物或重接。");
@@ -1180,7 +1180,7 @@ final class TaskMarketManager implements Listener {
         }
         JsonObject shortNotice = new JsonObject(); shortNotice.addProperty("type", type);
         shortNotice.addProperty("schemaVersion", 1);
-        String command="/mycli tasks status";
+        String command="/mycli guild status";
         if(data.has("task")){Task current=find(player,data.get("task").getAsString());
             if(current!=null&&current.sites().size()>0)command="/mycli guild engineering "+current.id();}
         if(data.has("guidance")) {

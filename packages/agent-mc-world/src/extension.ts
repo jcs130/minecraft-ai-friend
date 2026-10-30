@@ -39,6 +39,7 @@ export * from './client/world-namespace.ts';
 export { MethodLibrary, METHOD_LIBRARY_SCHEMA, type MethodReview } from '../core/method-library.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './client/tool-help.ts';
 export type { ToolHelpOptions } from './client/tool-help.ts';
+export { createServerToolRouter, SERVER_TOOL_PORT_TOOL } from './client/server-tools.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions } from './client/message-inbox.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
@@ -52,7 +53,8 @@ export type { StepDecision } from '../core/step-decision.ts';
 export { minecraftStepRequestKind, minecraftRequestKinds, omitRejectedMinecraftSpeech } from '../core/request-intent.ts';
 export type { MinecraftRequestKind } from '../core/request-intent.ts';
 export { zhName } from '../core/names.ts';
-export { invCount, itemPredOf, invItemNamed } from '../core/inventory.ts';
+export { invCount, itemPredOf, invItemNamed, wornItemNamed } from '../core/inventory.ts';
+export { takeWornItem, type WornItemAccessResult } from '../core/equipment-access.ts';
 export { matchItemName, CONTAINER_FIND } from '../core/chests.ts';
 export { resolveAt } from '../core/cell-facts.ts';
 export { installWorldIdentity, readWorldIdentity, worldScopedRealm } from '../core/world-scope.ts';

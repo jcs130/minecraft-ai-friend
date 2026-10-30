@@ -14,7 +14,7 @@ events:
     enabled: true
     type: POTION_EFFECT
     duration: 180
-    announcement: <aqua>[旅人顺风]</aqua> <gray>3分钟速度I，带上公共补给，去发现村外的新故事。命令：/mycli tasks list exploration</gray>
+    announcement: <aqua>[旅人顺风]</aqua> <gray>3分钟速度I，带上补给探索双城与地标，核对目标所在世界。命令：/mycli waypoint list</gray>
     display-name: 旅人顺风
     symbol: ☆
     weight: 20
@@ -28,7 +28,7 @@ events:
     enabled: true
     type: POTION_EFFECT
     duration: 180
-    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视，结伴巡查林道与遗迹，留下一张旅途照片。命令：/mycli tasks list combat</gray>
+    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视，结伴探索遗迹，先看难度与装备条件。命令：/mycli dungeon list</gray>
     display-name: 星灯夜巡
     symbol: ☾
     weight: 20
@@ -38,3 +38,39 @@ events:
       - type: NIGHT_VISION
         amplifier: 0
         duration: 180
+  qd-trial-gather:
+    enabled: true
+    type: CONSOLE_COMMAND
+    duration: 600
+    display-name: 冒险者集结·试炼塔
+    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>召集10分钟，可单人或结伴；主世界world（-596,92,-313）。/mycli goto arena（6魔力）到入口，穿齐四甲、带武器；伙伴到按钮12格内，一人 /mycli arena start（免费）。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。/mycli arena status 查下一步，活动不自动报名。</gray>'
+    symbol: ⚔
+    weight: 45
+    bossbar-color: BLUE
+    conditions: {min-players: 2}
+    start-commands: []
+    end-commands: []
+  qd-ruins-gather:
+    enabled: true
+    type: CONSOLE_COMMAND
+    duration: 600
+    display-name: 冒险者集结·遗迹远征
+    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>召集10分钟；先 /mycli dungeon list 选开放地点，再info查难度、等级、装备与职业搭配。队长guild party create/invite，对方accept；全员到首室后队长dungeon start 地点ID，用status核对参战。占用或故障就换目标，不等墓穴。遗迹不是试炼塔。</gray>'
+    symbol: ◈
+    weight: 35
+    bossbar-color: PURPLE
+    conditions: {min-players: 2}
+    start-commands: []
+    end-commands: []
+  qd-explorers-gather:
+    enabled: true
+    type: CONSOLE_COMMAND
+    duration: 600
+    display-name: 冒险者集结·探索留影
+    announcement: '<aqua>[公会集结·探索留影]</aqua> <gray>选一处新地标，带食物、护甲与武器，和伙伴探路。/mycli waypoint list 查地点，注意世界不同不能比较距离；途中 /mycli photo take 旅途留影，成片自动进个人箱。日记与公告可留档：/mycli archive status。</gray>'
+    symbol: ☆
+    weight: 30
+    bossbar-color: GREEN
+    conditions: {min-players: 1}
+    start-commands: []
+    end-commands: []

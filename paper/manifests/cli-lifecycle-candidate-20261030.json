@@ -1,0 +1,116 @@
+{
+  "state": "superseded-by-published-cumulative-release",
+  "date": "2026-10-30",
+  "sourceBase": "db2dfa0a9a90cc053f8fce126bb1be7b46938cc7",
+  "reviewedCommit": "31f7199c3f8f25f317546ca9cad02aa9caa1255c",
+  "reviewApproach": "Only the requested commit was transplanted; native task abandonment and review corrections were added on the latest baseline.",
+  "versions": {
+    "AgentFriend": "0.4.47.31-vortex",
+    "QiandengjiRpg": "0.2.11",
+    "VortexRPG": "1.2.2-alpha-qd29 (unchanged)"
+  },
+  "artifacts": {
+    "AgentFriend-0.4.47.31.jar": {
+      "sha256": "64b111d600a202bca61dcce47d30c2f711effc6b86e45abdc5307e57800464c7",
+      "bytes": 15456763
+    },
+    "messages_zh.properties": {
+      "sha256": "af162c4b2e06d5428af683f0fe6152eef60a6d14d569f24120fa14d747dd0847",
+      "bytes": 299
+    },
+    "QiandengjiRpg-0.2.11.jar": {
+      "sha256": "82dab9de871d667e3ec01d93b800cf036afd33fb873a9180f3bb0962a833fcaa",
+      "bytes": 113319
+    }
+  },
+  "narrowPackage": {
+    "agentFriendChangedEntries": [
+      "plugin.yml",
+      "org/afuhome/agentfriend/AgentCommunication.class",
+      "org/afuhome/agentfriend/DungeonAdvice$Preparation.class",
+      "org/afuhome/agentfriend/DungeonAdvice.class",
+      "org/afuhome/agentfriend/AgentCliCatalog.class",
+      "org/afuhome/agentfriend/NativeRpg.class",
+      "org/afuhome/agentfriend/SiteDungeonManager.class",
+      "org/afuhome/agentfriend/AgentChatPolicy.class",
+      "org/afuhome/agentfriend/AgentCommunicationContract.class",
+      "org/afuhome/agentfriend/DungeonAdvice$Usage.class"
+    ],
+    "agentFriendPreservedEntries": 585,
+    "rpgChangedEntries": [
+      "org/qiandengji/vortex/BridgeRules$InvalidArgument.class",
+      "org/qiandengji/vortex/BridgeRules$Request.class",
+      "org/qiandengji/vortex/BridgeRules.class",
+      "org/qiandengji/vortex/QuestText$1.class",
+      "org/qiandengji/vortex/QuestText.class",
+      "org/qiandengji/vortex/RpgFailure$Advice.class",
+      "org/qiandengji/vortex/RpgFailure.class",
+      "plugin.yml",
+      "org/qiandengji/vortex/VortexBridge$1.class",
+      "org/qiandengji/vortex/VortexBridge.class"
+    ],
+    "rpgUnrelatedEntriesPreserved": 20,
+    "localeChangedKeys": [
+      "localNoOne"
+    ]
+  },
+  "productionBeforeAndStillRunning": {
+    "AgentFriend-0.4.47.30.jar": {
+      "sha256": "e49605e47f57ef8e4866eb06a1462c67d94476d392e8cffc59ce36dfad988dc7"
+    },
+    "QiandengjiRpg-0.2.10.jar": {
+      "sha256": "9060363980584815cec86f752df1240277be2cf6023456423f242deea3843b40"
+    },
+    "messages_zh.properties": {
+      "sha256": "dac0d03d740f1089a1ebe0ebc1b106b505b479ba729940bb1b6a240da48076d6"
+    }
+  },
+  "verification": {
+    "completeSourceBuild": true,
+    "pureChecks": 102,
+    "paperIntegrationChecks": 73,
+    "paperIntegrationByMode": {
+      "vortex": 48,
+      "language": 8,
+      "cold": 9,
+      "legacy": 8
+    },
+    "allQaNormalStops": true,
+    "qaPortsClosed": true,
+    "modelsCalled": false,
+    "productionConnectedDuringQa": false,
+    "effectiveSpellsVerified": [
+      "food hunger",
+      "give inventory",
+      "starbolt target health"
+    ],
+    "durability": "Native abandonment persisted after a normal cold restart; repeated abandon is a definite no-op.",
+    "fullSourceJarNotAReleaseArtifact": true
+  },
+  "preservation": {
+    "productionModified": false,
+    "productionRestarted": false,
+    "playerDataCopiedToGit": false,
+    "legacyGuildCommissionAndDungeonRules": "unchanged; only exit argument and text guidance corrected",
+    "skillDocs": "source-only; public 1.3.4 download not republished",
+    "goddessRuntime": "not changed by this candidate"
+  },
+  "knownLimits": [
+    "QA has no LuckPerms; native Essentials permission fallback differs from a single Bukkit node observation.",
+    "No production player or autonomous LLM session was operated.",
+    "Invocation revision covers invocation routes only, not the complete skill state.",
+    "The chat observation is not a recipient-delivery or read acknowledgement.",
+    "Early fixture errors and unrelated QA startup warnings were retained; no claim of a clean production log."
+  ],
+  "deployment": {
+    "required": "New approved normal maintenance, fresh complete dual-drive backup, exact player/dungeon gates and post-release verification.",
+    "stagedBackups": "Static artifact/config preimages only; not a new complete world backup.",
+    "reloadPermitted": false
+  },
+  "releasedThrough": "rpg-activities-scheduled-20261030-r2",
+  "standaloneCandidateDeployed": false,
+  "publishedVersions": {
+    "AgentFriend": "0.4.47.32-vortex",
+    "QiandengjiRpg": "0.2.12"
+  }
+}
