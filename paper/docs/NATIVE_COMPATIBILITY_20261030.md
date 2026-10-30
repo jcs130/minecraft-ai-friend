@@ -90,3 +90,20 @@ Do not run an older consumed maintenance launcher.
 
 An independent LightAntiCheat movement event also attempted a teleport from an
 asynchronous thread. It is recorded separately and is not fixed by this release.
+
+## Deployment receipt
+
+The approved maintenance has now completed with 26 formal production checks.
+54 plugins are enabled; 51 unrelated plugin jars, 69 credential rows, 38
+backpacks and 211 backpack owner rows are preserved. All 18 Vortex profile
+files matched the cold preimages during startup. Five native-protocol clients
+and the original server-side Kirito reconnected. The current E/F game/auth
+cold copies are complete; original nested static ops assets were retained.
+
+An operator guard lowercased the actual database hash but compared it with an
+uppercase expected hash. The original failure receipt is retained. Read-only
+SQLite row comparisons and profile checks resolved this guard failure, followed
+by formal verification and the release notice. No second restart or restoration
+over live data was performed. The interrupted before-start profile checkpoint
+is not claimed as having executed. Original remote modded-client and reported
+maid-death confirmation remain pending.

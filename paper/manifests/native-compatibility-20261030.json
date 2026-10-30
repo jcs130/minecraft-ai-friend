@@ -1,6 +1,6 @@
 {
   "releaseId": "agentvision-youer-fix-20261030-r1",
-  "state": "authorized-maintenance-in-progress",
+  "state": "deployed-and-verified",
   "runtimeKernel": "Youer 1.21.1 build920 / NeoForge 21.1.252",
   "kernelChanged": false,
   "nativeModsChanged": false,
@@ -34,7 +34,11 @@
     "nullableCompass": 4,
     "backpackWithServerInventoryAndReconnect": 7,
     "villagerAndNativeMaidDeath": 6,
-    "relayClientVersions": ["1.20.6", "1.21.1", "1.21.4"],
+    "relayClientVersions": [
+      "1.20.6",
+      "1.21.1",
+      "1.21.4"
+    ],
     "publicCompassBuilderMatchesFrozenArtifact": true,
     "actualProductionPlayersUsedForTesting": false
   },
@@ -47,5 +51,18 @@
     "backpacksClearedOrReplaced": false
   },
   "knownSeparateIssue": "LightAntiCheat illegal asynchronous teleport observed in an independent movement event; unchanged by this release.",
-  "report": "paper/docs/NATIVE_COMPATIBILITY_20261030.md"
+  "report": "paper/docs/NATIVE_COMPATIBILITY_20261030.md",
+  "verifiedAt": "2026-10-30T20:55:16.074649+08:00",
+  "formalProductionChecks": 26,
+  "livePluginCount": 54,
+  "unrelatedPluginsPreserved": 51,
+  "existingCredentialsPreserved": 69,
+  "existingBackpacksPreserved": 38,
+  "backpackOwnerRowsPreserved": 211,
+  "nativeProfilesMatchedColdAtStartup": 18,
+  "originalNativeGoddessJobsRestored": 7,
+  "realNativeProtocolClientsReconnected": 5,
+  "internalKiritoReconnected": true,
+  "originalGuardFalseFailureRetained": true,
+  "additionalRestartForFinalization": false
 }

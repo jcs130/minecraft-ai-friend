@@ -1,8 +1,8 @@
 # 千灯纪：重返艾恩葛朗特
 
-**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服暂仍AF.34的三段攻略，见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
+**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服为AF.36兼容修复后的原三段攻略，见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。兼容工作已把运行核心迁为 Youer 1.21.1，保留 Bukkit 插件；AgentFriend0.4.47.34-vortex、QiandengjiRpg0.2.12、VortexRPG1.2.2-alpha-qd30继续运行。原[游戏更新](paper/docs/DUNGEON_LIFECYCLE_20261030.md)明确遗迹30分钟时限、本人参战与救援有效性，职业、存档点续关和成绩保持。**官网0.8.32及女仆客户端下载已发布**：[SAO兼容入口](https://mc.kangqiang.site/sao.html)、[可选女仆客户端](https://mc.kangqiang.site/downloads.html#maid-client)、四幅新场景和手机适配；见[下载发布记录](paper/docs/MAID_CLIENT_RELEASE_20261030.md)与[视觉发布记录](paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md)。公开Skill1.3.4与Harness身体仍锁MC核心rc.130，外部客户端需自行更新；主干核心推进不等于所有宿主自动更新。29张照片已保存，公开选择由本人/管理员管理，以线上展廊为准。下载直达OSS。起始之城内可放不可拆，城外可挖可建，独立副本建筑保护保持。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。兼容工作已把运行核心迁为 Youer 1.21.1，保留 Bukkit 插件；AgentFriend0.4.47.36-compat、QiandengjiRpg0.2.12、VortexRPG1.2.2-alpha-qd30继续运行。原[游戏更新](paper/docs/DUNGEON_LIFECYCLE_20261030.md)明确遗迹30分钟时限、本人参战与救援有效性，职业、存档点续关和成绩保持。**官网0.8.32及女仆客户端下载已发布**：[SAO兼容入口](https://mc.kangqiang.site/sao.html)、[可选女仆客户端](https://mc.kangqiang.site/downloads.html#maid-client)、四幅新场景和手机适配；见[下载发布记录](paper/docs/MAID_CLIENT_RELEASE_20261030.md)与[视觉发布记录](paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md)。公开Skill1.3.4与Harness身体仍锁MC核心rc.130，外部客户端需自行更新；主干核心推进不等于所有宿主自动更新。29张照片已保存，公开选择由本人/管理员管理，以线上展廊为准。下载直达OSS。起始之城内可放不可拆，城外可挖可建，独立副本建筑保护保持。
 
 ![千灯纪：灯火初上的起始之城与浮空城，AI场景概念图](paper/integrations/agent-portal/public/season-art/aincrad-dusk-20261030-960.webp)
 
@@ -15,7 +15,7 @@
 
 职业详情现在按服务器加载配置返回属性、装备、技能效果和成长条件；满包优先指引直接远程存箱，遗迹支持三次战败和存档点、Boss房间排他。旧金币统一规则保持，见[本轮发布](paper/docs/RPG_INTERACTION_20261029.md)。
 
-连接修复已生效：AgentVision0.1.3、Numen控制窄补、LoginGuard0.1.9与mcbot Paper适配；52插件正常。[实际运行与验收](paper/docs/CONNECTION_FIXES_20261028.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
+连接修复已生效：AgentVision0.1.4、标准背包开窗、原生后端协议和罗盘兼容，女仆桥0.1.5已加载；54插件正常。[实际运行与验收](paper/docs/NATIVE_COMPATIBILITY_20261030.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
 Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、失败指引、坦克防御及桐人状态兼容；[发布与验收](paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md)。
 
@@ -105,7 +105,7 @@ python paper/self-host/selfhost.py doctor
 
 | 组件 | 当前状态 |
 | --- | --- |
-| 正式游戏服 | Paper **1.21.1 build 133** / Java 21 / AgentFriend **0.4.47.30** / VortexRPG **1.2.2-alpha-qd29** / QiandengjiRpg **0.2.10** |
+| 正式游戏服 | Youer **1.21.1 build920** / Java 21 / AgentFriend **0.4.47.36-compat** / VortexRPG **1.2.2-alpha-qd30** / QiandengjiRpg **0.2.12** |
 | 本仓库完整 AgentFriend 源码 | **0.4.48 开发候选**，包含尚未上线的功能；不能当作正式 JAR 的逐字重建 |
 | 网站 | 正式 **0.8.28**（源码0.8.29照片管理仍候选）：六职业指南、原生进度投影；本人外观、邀请、档案与现代观战保持；[接入说明](paper/docs/AGENT_JOIN_QUICKSTART.md) |
 | 通用 MC 核心 | [主干 **0.5.7-rc.130**](packages/agent-mc-world/package.json)，含[原版世界身份与位置记忆隔离](packages/agent-mc-world/docs/world-identity.md)；官网现役 **Skill1.3.3**仍内置rc.95；不静默替换外部客户端 |
