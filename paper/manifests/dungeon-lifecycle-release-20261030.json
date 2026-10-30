@@ -1,0 +1,33 @@
+{
+  "id": "dungeon-lifecycle-release-20261030-r1",
+  "status": "approved-awaiting-windows-confirmation",
+  "version": "0.4.47.34-vortex",
+  "sourceCandidateCommit": "5c3afeafb980de383be1359edc9bb01fabe0d597",
+  "releaseJarSha256": "6e94b4a69301e8cf48871752a2c1e01b2484840e43300c833ad8db162e857c53",
+  "candidateMetadataOnlyChange": true,
+  "scope": [
+    "private dungeon recipient binding",
+    "live personal dungeon lifecycle and rescue eligibility",
+    "real countdown and explicit termination notices"
+  ],
+  "verification": {
+    "unitAndRegression": 207,
+    "protocolAndCold": 38,
+    "actualWindowsInstaller": 3,
+    "readOnlyPreflight": 25
+  },
+  "production": {
+    "agentFriendStill": "0.4.47.32-vortex",
+    "changed": false,
+    "restarted": false,
+    "maintenanceStarted": false
+  },
+  "maintenance": {
+    "authorization": "owner approved these optimizations",
+    "windowsConfirmation": "latest request cancelled; no started receipt",
+    "safeGates": "existing UUID evidence and no active dungeon",
+    "backup": "fresh stopped game/auth copies on E/F; original 20261030-040022 runtime retained before refresh; original nested static assets reused",
+    "worldOrActorReset": false
+  },
+  "publicSkillDownloadUpdated": false
+}

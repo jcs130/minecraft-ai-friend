@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {expect,it} from 'vitest';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
-import {MinecraftAgentClient,MINECRAFT_CLIENT_DEFAULTS,nullLogger,readTextPage,referenceToolText,renderToolTextPage,readOnlyToolResult} from '../src/client/index.ts';
+import {MinecraftAgentClient,MINECRAFT_CLIENT_DEFAULTS,nullLogger,readTextPage,referenceToolText,renderToolTextPage,readOnlyToolResult,TextPageRangeError,TextReadRecoveryBook} from '../src/client/index.ts';
 import {createMinecraftMcpServer} from '../src/mcp/server.ts';
 const handle='log:'+'a'.repeat(64);
 
@@ -52,10 +52,54 @@ it('MCP snapshots and their model-sized continuations expose all text without re
     expect(legacy.structuredContent.text).toBe(text);expect(legacy.structuredContent.data).toBeUndefined();
     const explicit:any=await client.callTool({name:'mc_artifact',arguments:{action:'get',handle:handles[0],offset:0,maxChars:10}});
     expect(explicit.structuredContent.data.protocol).toBe('agent-mc-text-page/v1');
+    for(const name of ['mc_read_text','mc_artifact']){
+      const invalid:any=await client.callTool({name,arguments:{...(name==='mc_artifact'?{action:'get'}:{}),handle:handles[0],offset:text.length+650,maxChars:650}});
+      expect(invalid.isError).toBe(true);expect(invalid.structuredContent.failed).toBe(true);
+      expect(invalid.structuredContent.data).toMatchObject({protocol:'agent-mc-text-read-error/v1',code:'TEXT_OFFSET_OUT_OF_RANGE',handle:handles[0],
+        requestedOffset:text.length+650,totalChars:text.length,returnedChars:0,nextOffset:null});
+      expect(invalid.structuredContent.text).toContain('Do not add maxChars');expect(calls).toBe(1);
+      expect(renderToolTextPage(invalid,{budgetChars:1500,toolPrefix:'mc'})).toBeNull();
+    }
     const binary=runtime.journal.saveBlobs([{bytes:Buffer.from([1,2]),mime:'application/octet-stream'}])[0];
     expect(()=>runtime.readTextArtifact(binary.handle)).toThrow('UTF-8');
     const bad:any=await client.callTool({name:'mc_read_text',arguments:{handle,offset:0}});expect(bad.isError).toBe(true);
   }finally{await client.close();await server.close();await runtime.disconnect();await rm(dir,{recursive:true,force:true});}
+});
+
+it('an invalid range preserves the actual bounds without pretending that unseen pages were read',()=>{
+  let error:TextPageRangeError|undefined;
+  try{readTextPage('one🐟two',handle,{offset:123456,maxChars:650});}catch(e){error=e as TextPageRangeError;}
+  expect(error).toBeInstanceOf(TextPageRangeError);expect(error!.data).toEqual({protocol:'agent-mc-text-read-error/v1',code:'TEXT_OFFSET_OUT_OF_RANGE',
+    handle,unit:'utf16',requestedOffset:123456,maxChars:650,totalChars:8,returnedChars:0,nextOffset:null});
+  expect(()=>readTextPage('one🐟two',handle,{offset:4})).toThrow('Unicode');
+  const end=readTextPage('one🐟two',handle,{offset:8,maxChars:650});expect(end.returnedChars).toBe(0);expect(end.hasMore).toBe(false);
+});
+
+it('projected document ends and varying invalid offsets survive request boundaries as bounded recovery evidence',()=>{
+  let now=1000;const book=new TextReadRecoveryBook({now:()=>now}),run='original-run';
+  const eof={structuredContent:{failed:false,text:'',meta:{textPage:{protocol:'agent-mc-text-page/v1',handle,offset:12890,totalChars:12890,returnedChars:0,nextOffset:null,hasMore:false}}}};
+  book.observe({run,requestId:'eof',name:'mc_read_text',result:eof});
+  expect(book.context(run)?.observedEnd).toMatchObject({requestId:'eof',totalChars:12890,hasMore:false});
+  const failed=(offset:number)=>{let e;try{readTextPage('x'.repeat(12890),handle,{offset,maxChars:650});}catch(error){e=error as TextPageRangeError;}
+    return{isError:true,structuredContent:{failed:true,data:e!.data}};};
+  book.observe({run,requestId:'failed-1',name:'mc_read_text',result:failed(13540)});
+  book.observe({run,requestId:'failed-2',name:'mc_read_text',result:failed(14190)});
+  book.observe({run,requestId:'failed-2',name:'mc_read_text',result:failed(14190)});
+  expect(book.context(run)?.attempts).toBe(2);expect(book.context(run)?.failure?.requestedOffset).toBe(14190);
+  expect(book.context(run)?.observedEnd?.requestId).toBe('eof');expect(JSON.stringify(book.snapshot())).not.toContain('x'.repeat(100));
+  now+=120001;expect(book.context(run)).toBeNull();
+  book.observe({run:'different-run',requestId:'other',name:'mc_events',result:{}});
+  expect(book.context(run)).toBeNull();expect(book.snapshot().knownEnds).toBe(0);
+});
+
+it('the read-recovery book ignores raw unrendered text references and clears only its request cue on other work',()=>{
+  const book=new TextReadRecoveryBook();
+  book.observe({run:'r',requestId:'full',name:'mc_query',result:{structuredContent:{failed:false,text:'not yet rendered',meta:{textReference:{protocol:'agent-mc-text-reference/v1',handle,totalChars:16}}}}});
+  expect(book.context('r')).toBeNull();
+  book.observe({run:'r',requestId:'eof',name:'mc_read_text',result:{structuredContent:{failed:false,text:'last',meta:{textPage:{protocol:'agent-mc-text-page/v1',handle,offset:0,returnedChars:4,totalChars:4,hasMore:false,nextOffset:null}}}}});
+  expect(book.context('r')).not.toBeNull();
+  book.observe({run:'r',requestId:'act',name:'mc_do',result:{structuredContent:{execution:{id:'original-task',phase:'accepted'}}}});
+  expect(book.context('r')).toBeNull();expect(book.snapshot().knownEnds).toBe(1);
 });
 
 it('ordinary/error/write/data receipts are not archived and tiny soft budgets never loop on an empty page',()=>{

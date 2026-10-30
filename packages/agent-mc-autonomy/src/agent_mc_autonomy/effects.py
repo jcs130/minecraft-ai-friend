@@ -134,29 +134,38 @@ class EffectRecovery:
             if effect is None or not isinstance(steps[i], dict) or effect["skill"] != steps[i].get("skill"):
                 return False
             effects.append(effect)
-        if any(e["status"] == "changed" for e in effects):
-            self.rows.clear()
-            return True
-        if (scope is None or execution.get("phase") not in {"blocked", "completed", "partial"}
-                or any(e["status"] != "unchanged" for e in effects)
-                # A completed skill may have found its target already satisfied.
-                # Its ok receipt still does not establish a measured effect.
+        if (execution.get("phase") not in {"blocked", "completed", "partial"}
                 or any(row.get("outcome") not in {"fail", "noop", "ok"} for row in raw)):
             return False
+        changed = any(e["status"] == "changed" for e in effects)
         key = self.key(arguments)
+        failed_steps = [i + 1 for i, row in enumerate(raw) if row["outcome"] == "fail"]
+        if changed and execution["phase"] == "completed" and all(row["outcome"] == "ok" for row in raw):
+            # Success can retire this exact plan's failure, not unrelated plans.
+            self.rows.pop(key, None)
+            return True
+        if (scope is None or any(e["status"] == "unknown" for e in effects)
+                or (changed and not failed_steps)):
+            return changed
+        # A failed skill can move the body or consume an item. A later successful
+        # jump also does not repair an earlier failed use in the same batch.
+        # Report the observed change separately from retaining that failure.
+        kind = "failed_step" if changed else "no_effect"
         previous = self.rows.get(key, {})
         def state(effect):
             return {"dimension": effect.get("dimension"), "at": effect.get("at"),
                     "after": {k: v for k, v in effect.get("after", {}).items() if k != "at"}}
         same = (previous.get("scope") == scope and previous.get("epoch") == epoch
+                and previous.get("kind") == kind and previous.get("failed_steps") == failed_steps
                 and time.monotonic() - previous.get("at", 0) < 120
                 and state(previous.get("effect", {})) == state(effects[-1]))
         if len(self.rows) >= 16 and key not in self.rows:
             self.rows.pop(next(iter(self.rows)))
         self.rows[key] = {"scope": scope, "epoch": epoch, "at": time.monotonic(),
             "count": previous.get("count", 0) + 1 if same else 1, "effect": copy.deepcopy(effects[-1]),
+            "kind": kind, "failed_steps": failed_steps,
             "original_event": dict(reference), "execution_id": execution["id"]}
-        return False
+        return changed
 
     def repeated(self, arguments, facts, scope, epoch):
         row = self.rows.get(self.key(arguments))
@@ -172,6 +181,7 @@ class EffectRecovery:
                 or not _inventory(current.get("inventory")) or current["inventory"] != after.get("inventory")):
             return None
         return {"attempts": row["count"], "execution_id": row["execution_id"],
+                "kind": row["kind"], "failed_steps": row["failed_steps"],
                 "original_event": row["original_event"], "goal_verified": False,
                 "effect": {k: row["effect"][k] for k in ("skill", "dimension", "at", "status", "changed")},
                 "fresh": False, "coverage": "client-visible-only"}

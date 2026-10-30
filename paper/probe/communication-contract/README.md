@@ -20,3 +20,7 @@
 本次私有驱动、世界、凭据和原始日志不随源码提交。失败记录保留，包括初始反射方法名、语言文件位置、过快指令和英文反馈匹配错误；不能将这些夹具错误称为生产故障。正常停机后的QA数据也不能复制回生产。
 
 活动批次另用`RpgActivitiesFixture.java`和`rpg-activities-client.mjs`，相同回环门禁。装入候选AF.32/桥.12/原生qd30和本批配置；先`flow`，正常停止重启后`cold`，二者使用同一个新输出目录，以native-before-cold.json核对真实职业、等级、经验、技能点和已准备技能。夹具只创建两个一次性房间，使用实际出怪和攻击回调；敌人冻结/位移不等于自主战斗平衡。还验证真实迎新加载器、3个WorldEvents集结和全部18项目录，说明见[RPG活动](../../docs/RPG_ACTIVITIES_20261030.md)。
+
+遗迹生命周期另用 `DungeonLifecycleFixture.java` 与 `dungeon-lifecycle.mjs`。同样只允许 `127.0.0.1:29395`、专用标记和 `ag_LifeAlice/Bob/Eye`，夹具命令仅控制台可用。QA 配置增加独立 `qa_lifecycle` 两室：主世界 `(4200,81,4200)` 与 `(4212,81,4200)`、半径4，各一只20生命僵尸，使用合法奖励定义，但测试不通关、不发奖。Java夹具main为 `org.qdqa.DungeonLifecycleFixture`，声明 `qd_life_fixture` 命令，依赖先载入 AgentFriend；绝不能放正式服。
+
+先跑 `node paper/probe/communication-contract/dungeon-lifecycle.mjs <本批run输出目录> flow`，正常停止后再启动同一QA，跑 `cold`。`age` 仅调整这一个 QA 场次的起始时钟，由实际原生 tick 触发超时；不直接调用结束方法或伪造通关。检查真实单人致命伤害续关、超时/本人退出后的身份与原生自定义数据包失效、外部观战者不收结束私信、新队伍不恢复旧身份、原有存活者原地保留，以及旧格式结果经冷启动仍标为历史。详细字段和上线边界见[遗迹生命周期候选](../../docs/DUNGEON_LIFECYCLE_20261030.md)。

@@ -43,3 +43,9 @@ new pages or changed result versions provide new information. The producer's
 executes/cancels actions nor infers goal success. Hosts may use it to offer a
 bounded reconsideration or an existing temporary-rest policy, without blocking
 fresh pages or replaying unknown actions.
+## Document-end and range-error recovery
+
+`agent-mc-world/text` exports the pure `TextPageRangeError` and `TextReadRecoveryBook` helpers, also available from `/client`. An invalid text range remains a failed read and exposes `agent-mc-text-read-error/v1`: the exact handle, requested offset, UTF-16 length, zero returned characters and no next offset. It never clamps a request, silently rewinds or reruns the original tool. Explicitly reading at the exact end remains an empty successful final page.
+
+Hosts may feed the recovery book only the actual model-visible projection, correlated with the original request ID and runtime run. The book keeps bounded recent document ends/errors through normal request boundaries and offers a short next-request cue. A final page does not prove all earlier pages were read; an error does not constitute information progress. Different erroneous offsets for the same immutable document retain their shared failure evidence. Duplicate delivery does not add an attempt, a changed run clears the scope, and unrelated work clears the transient cue without changing the original journal. No tool rejection, body-idle assumption, new inference, memory adoption or automatic replay is introduced.
+
