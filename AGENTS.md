@@ -1,3 +1,11 @@
+## 2026-10-31 SAO 正版免密与私人账号回执已发布
+
+服主明确“小鱼是mc正版账号，直接进去就行”。RealmAccounts/Forge伴随组件均0.1.1，原LoginGuard/LibreLogin/DirectAuth不替换。主服已绑定正版角色经原生Mojang会话挑战后免游戏密码，保持原身体UUID；本人管理员同名同UUID可证明身份，别名不能接管OP。TOTP不跳过，原生验证器缺失时拒绝；管理员/TOTP仍在原生入口改密。SAO原生库保留随机影子凭据，不持久化一个可脱离主服的premium授权；预备绑定不是登录成功。真人默认简短文字，Agent注册mcagent:account收本人UTF8 JSON；SDK0.1.1自动注册。旧MC_SHARED_ACCOUNT仅明确format json连接保留，断线清除。
+
+50Node/18Python/19纯策略、11原生联机及正式SDK5项通过；实际主服小鱼原UUID/管理员/正版绑定/TOTP=false已只读确认，69凭据和原OP/guard保持。SAO正常退出0后E/F250987文件/1,956,584,027字节完整归档，成员及双盘SHA59f50a53…4271bd已验；其余175模组、认证配置和私有登录器/引擎保持。新冻结6823项、SDK SHA9d9e3977…c02d53、JVM注册表epoch7db1870d-4bfc-439d-abb4-ab01b1bb3dff。云端Java/SDK与基岩新鲜nonce通过，语音仍原JVM28989；未改端口或R2包。桐人原身份/记忆/目标已恢复在线自主，维护暂停解除。另一会话的Youer维护与本次独立，未在持锁时交叉部署；本次只正常重启共享登录/模型代理与SAO。
+
+小鱼真实微软会话完整入服尚未观察，不能把离线冒名收到挑战/被拒当正向证明。首次裸协议缺Forge握手及首个SDK探针错误假设字段的失败记录保留，正式路径后通过；不改门禁制造成功。说明见integrations/shared-realm-accounts/PREMIUM_LOGIN.md与premium-login-release-20261031.json，私有E/F备份及验收E:/MC/research/sao-account-fix-20261031。一次性维护请求/脚本已消费，禁止重放或覆盖旧数据库；回退保留当前绑定和最新进度。网站文案已同步授权会话，不能假称其发布已完成。
+
 ## 2026-10-30 23:14 SAO 真人 ALI 初始化与认证循环等待已热修
 
 LittleFish0510反馈窗口无响应及ALI无法获取掉落数据。外网TCP正常、已进服和60秒认证超时不能证明客户端正常；本次定位AdvancedLootInfo2.2.0客户端同步等待目录，而DirectAuth将其请求留到认证后，形成循环等待。原R2客户端与服务端同源，依赖/内嵌模组hash已验，并非发错另一份1.0包。

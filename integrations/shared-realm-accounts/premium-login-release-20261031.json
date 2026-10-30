@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "version": "0.1.1",
-  "state": "primary-deployed-sao-backup-in-progress",
+  "state": "deployed-and-verified",
   "components": {
     "forge": {
       "sha256": "70a08dfd1059bc07ae3bbab42a239355fd9b6d69ba84d0b62a55e8185a22ada1",
@@ -20,16 +20,53 @@
     "existingPrimaryCredentialsPreserved": 69,
     "actualPrimaryPremiumAdministratorIdentityConfirmed": true,
     "realMicrosoftSessionPositiveObserved": false,
-    "isolatedTotpProviderAvailable": false
+    "isolatedTotpProviderAvailable": false,
+    "productionSdkChecksPassed": 5,
+    "productionJavaFrontNativeMojangChallenge": true,
+    "offlinePremiumImpostorCouldEnter": false,
+    "originalBodyUuidPreserved": true,
+    "permanentNativePremiumFlag": false,
+    "externalJavaStatusPassed": true,
+    "externalAgentRegistryAndSdkHashPassed": true,
+    "externalBedrockFreshNoncePassed": true,
+    "existingR2ClientReplaced": false
   },
   "sourceOfCredentials": "original LibreLogin native provider",
   "originalLoginGuardUnchanged": true,
   "originalPrimaryOpsUnchanged": true,
   "clientModpackReplaced": false,
   "newPublicPorts": false,
-  "saoDeploymentComplete": false,
+  "saoDeploymentComplete": true,
   "knownLimits": [
     "A real Microsoft-session join by LittleFish0510 is still pending.",
     "The isolated native TOTP provider is absent and correctly fails closed."
+  ],
+  "releasedAt": "2026-10-31T01:50:38.997557+08:00",
+  "implementationCommit": "8de53fc3",
+  "sdkVersion": "0.1.1",
+  "sdkSha256": "9d9e3977dbdee4428523f54f5c9ace0b0c595f9620b21c61516ef3849dc02d53",
+  "serverEpoch": "7db1870d-4bfc-439d-abb4-ab01b1bb3dff",
+  "frozenFiles": 6823,
+  "unrelatedModJarsPreserved": 175,
+  "worldAndMemoryReplaced": false,
+  "residentRestored": true,
+  "automaticRecoveryPaused": false,
+  "backup": {
+    "fileCount": 250987,
+    "sourceBytes": 6377915799,
+    "archiveBytes": 1956584027,
+    "sha256": "59f50a53d91484c348fbcbfe1ca76a4ba6d465de66296a61383fe2967c4271bd",
+    "fullContentVerified": true,
+    "normalJavaExit": 0
+  },
+  "publicEndpoints": {
+    "javaTcp": 28976,
+    "agentTcp": 28977,
+    "bedrockUdp": 28988,
+    "voiceUdp": 28989
+  },
+  "probeLimits": [
+    "The first plain protocol probe did not complete Forge negotiation; the production Forge handshake subsequently received the real native encryption challenge.",
+    "The first SDK probe assumed authentication fields in a subsequent receipt and failed; the successful check uses the SDK validated readiness receipt and a separate actual body query. Original failed reports are retained."
   ]
 }
