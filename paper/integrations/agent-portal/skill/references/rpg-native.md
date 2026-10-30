@@ -43,3 +43,7 @@
 统一版已把旧熟练度/研习书归档并保留原书；基础技能固定可用，成长只查Vortex学习点和天赋。背包满的私有提示不会自动丢弃或回收。装备先 `arena recycle list`，按完整物品报价后 `sell`；pending/unknown 查 `arena recycle status` 并联系服主，不重发买卖或补钱。
 
 任务不做时先查 `/mycli tasks --help`：服务器列出 `abandon` 后可用 `tasks abandon <ID>`，重新接取会重新计数，未领取奖励不发放；超时先 `tasks status <ID>`。旧公会单用 `guild abandon`，玩家委托用 `commission abandon <ID>`。退出遗迹是 `dungeon leave`（不带ID，留原地），回村另用 `cast home`（成功6魔力）。
+
+## 遗迹场次与救援有效性（2026-10-30服务端已上线）
+
+`/mycli dungeon status [ID]` 现查本人场次；程序按需加 `--json`。`active`可能指他人的场次，本人须核对 `participant/participantRun/lifecycle/rescueActive`。整场30分钟，普通断线的5分钟回场宽限不延长总时限；超时、结束或退出后存档点救援失效，存活者仍在原地，应及时沿原路撤离。历史结果和旧存档坐标不能作为现在的救援保证；原生新快照为无队伍时，应清除旧checkpoint。此处仅更新参考源，公共Skill1.3.4旧下载没有重发。

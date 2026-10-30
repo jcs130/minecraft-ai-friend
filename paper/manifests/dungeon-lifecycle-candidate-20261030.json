@@ -54,5 +54,12 @@
     "goddessGuidanceUpdated": false,
     "deployed": false,
     "liveEffectVerified": false
+  },
+  "supersededByVerifiedRelease": {
+    "id": "dungeon-lifecycle-release-20261030-r1",
+    "version": "0.4.47.34-vortex",
+    "artifactSha256": "6e94b4a69301e8cf48871752a2c1e01b2484840e43300c833ad8db162e857c53",
+    "candidateArchiveItselfDeployed": false,
+    "homeWarpConfigurationIncluded": false
   }
 }

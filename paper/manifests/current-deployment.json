@@ -1,12 +1,12 @@
 {
   "state": "deployed-and-verified",
-  "latestRelease": "rpg-activities-scheduled-20261030-r2",
-  "verifiedAt": "2026-10-30T04:48:20.240208+08:00",
-  "releaseDocument": "paper/docs/RPG_ACTIVITIES_20261030.md",
+  "latestRelease": "dungeon-lifecycle-release-20261030-r1",
+  "verifiedAt": "2026-10-30T10:08:29.6290840+08:00",
+  "releaseDocument": "paper/docs/DUNGEON_LIFECYCLE_20261030.md",
   "runtime": {
     "paper": "1.21.1 build133",
     "plugins": 52,
-    "AgentFriend": "0.4.47.32-vortex",
+    "AgentFriend": "0.4.47.34-vortex",
     "QiandengjiRpg": "0.2.12",
     "VortexRPG": "1.2.2-alpha-qd30",
     "LightAntiCheat": "1.2.6-qd2",
@@ -44,7 +44,7 @@
     "voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
     "QiandengjiRpg-0.2.10.jar": "b019698d7b60b9dc1500e743beb52f3db2590a7a1d9e980563a6a0fe4c14be0a",
     "EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a",
-    "AgentFriend-0.4.47.32.jar": "b0249c75fe62e5d0dafbbe730f98aaf328e44789fb8fdc59934e7f82ba848374"
+    "AgentFriend-0.4.47.34.jar": "6e94b4a69301e8cf48871752a2c1e01b2484840e43300c833ad8db162e857c53"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -54,32 +54,18 @@
     "long autonomous combat balance",
     "physical Bedrock rendering"
   ],
-  "scopeNotice": "Chat/world-aware RPG queries and optional voice are deployed. Public voice UDP and automatic lease renewal were tested; human microphone/listening, browser voice for vanilla/Bedrock and native Intel camera remain unverified or unimplemented.",
+  "scopeNotice": "Dungeon lifecycle and recipient changes only. Original gear, native RPG, rewards and other plugins retained; immutable Skill download and other independent candidates not republished.",
   "verification": {
-    "gameRuntimeChecks": 32,
-    "backup": "20261030-040022",
-    "unrelatedPluginJarsPreserved": 49,
-    "existingAccountCredentialsPreserved": 68,
-    "finalReturningAuthenticationConfirmed": true,
-    "publicSkillDownloadRepublished": false,
-    "backgroundCompletionVerified": true,
-    "formalRuntimeChecks": 34,
-    "observerLiveChecks": 8,
-    "observerLiveRoles": 4,
-    "publicWebsiteRpgChecks": 4,
-    "lastReleaseCoreChecks": 34,
-    "lastReleaseCloudObserverChecks": 4,
-    "backupColdCreatedAt": "2026-10-30T04:20:24+08:00",
-    "backupColdMirroredAt": "2026-10-30T04:40:56+08:00",
-    "returningFinalAuthenticated": [
-      "Coobot",
-      "DeepFish",
-      "Goddess",
-      "Yui",
-      "ag_CorMy"
-    ],
-    "nativeProfilesProofScope": "post-stop/preinstall to new runtime, 15 retained",
-    "currentPaperPid": 5204
+    "rulesAndRegression": 207,
+    "protocolAndCold": 38,
+    "actualWindowsInstaller": 3,
+    "readOnlyPreflight": 25,
+    "formalProduction": 28,
+    "existingCredentialsPreserved": 68,
+    "unrelatedJarsPreserved": 51,
+    "nativeProfilesPreservedDuringInstall": 15,
+    "authenticatedClientConnections": 5,
+    "valueOrPasswordExported": false
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -266,5 +252,49 @@
     "dailyLootLimitRetained": true,
     "onboardingReleaseRevision": 8,
     "extraManualRestart": false
+  },
+  "previousRpgActivitiesVerification": {
+    "gameRuntimeChecks": 32,
+    "backup": "20261030-040022",
+    "unrelatedPluginJarsPreserved": 49,
+    "existingAccountCredentialsPreserved": 68,
+    "finalReturningAuthenticationConfirmed": true,
+    "publicSkillDownloadRepublished": false,
+    "backgroundCompletionVerified": true,
+    "formalRuntimeChecks": 34,
+    "observerLiveChecks": 8,
+    "observerLiveRoles": 4,
+    "publicWebsiteRpgChecks": 4,
+    "lastReleaseCoreChecks": 34,
+    "lastReleaseCloudObserverChecks": 4,
+    "backupColdCreatedAt": "2026-10-30T04:20:24+08:00",
+    "backupColdMirroredAt": "2026-10-30T04:40:56+08:00",
+    "returningFinalAuthenticated": [
+      "Coobot",
+      "DeepFish",
+      "Goddess",
+      "Yui",
+      "ag_CorMy"
+    ],
+    "nativeProfilesProofScope": "post-stop/preinstall to new runtime, 15 retained",
+    "currentPaperPid": 5204
+  },
+  "dungeonLifecycle": {
+    "release": "dungeon-lifecycle-release-20261030-r1",
+    "manifest": "paper/manifests/dungeon-lifecycle-release-20261030.json",
+    "version": "0.4.47.34-vortex",
+    "rescueApplicabilityExplicit": true,
+    "timerSeconds": 1800,
+    "standingPlayersStayInPlace": true,
+    "privateTerminalNotices": true,
+    "oldOutcomesNotActiveGuarantees": true,
+    "recipientBoundToActualReceiver": true,
+    "homeWarpCandidateIncluded": false,
+    "backupPoint": "20261030-040022",
+    "originalRuntimeRetained": true,
+    "freshGameAndAuthenticationCopiesVerifiedOnBothDisks": true,
+    "staticNestedOperationsAssetsReused": true,
+    "goddessGuidancePublished": true,
+    "goddessAlreadyReadIt": false
   }
 }

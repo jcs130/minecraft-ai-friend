@@ -1,6 +1,6 @@
 {
   "id": "dungeon-lifecycle-release-20261030-r1",
-  "status": "approved-awaiting-windows-confirmation",
+  "status": "deployed-and-verified",
   "version": "0.4.47.34-vortex",
   "sourceCandidateCommit": "5c3afeafb980de383be1359edc9bb01fabe0d597",
   "releaseJarSha256": "6e94b4a69301e8cf48871752a2c1e01b2484840e43300c833ad8db162e857c53",
@@ -14,20 +14,35 @@
     "unitAndRegression": 207,
     "protocolAndCold": 38,
     "actualWindowsInstaller": 3,
-    "readOnlyPreflight": 25
+    "readOnlyPreflight": 25,
+    "formalProduction": 28,
+    "authenticatedClientConnections": 5
   },
   "production": {
-    "agentFriendStill": "0.4.47.32-vortex",
-    "changed": false,
-    "restarted": false,
-    "maintenanceStarted": false
+    "AgentFriend": "0.4.47.34-vortex",
+    "changed": true,
+    "paperRestarted": true,
+    "maintenanceStarted": true,
+    "onlineAtPostflight": 6,
+    "unrelatedJarsPreserved": 51,
+    "existingCredentialsPreserved": 68,
+    "playerDataReset": false
   },
   "maintenance": {
     "authorization": "owner approved these optimizations",
-    "windowsConfirmation": "latest request cancelled; no started receipt",
+    "windowsConfirmation": "accepted at 09:59; native maintenance completed",
     "safeGates": "existing UUID evidence and no active dungeon",
     "backup": "fresh stopped game/auth copies on E/F; original 20261030-040022 runtime retained before refresh; original nested static assets reused",
-    "worldOrActorReset": false
+    "worldOrActorReset": false,
+    "backupRefreshComplete": true,
+    "originalRuntimeRetained": true
   },
-  "publicSkillDownloadUpdated": false
+  "publicSkillDownloadUpdated": false,
+  "verifiedAt": "2026-10-30T10:08:29.6290840+08:00",
+  "goddessGuidance": {
+    "published": true,
+    "originalJobsRestored": 7,
+    "identityAndModelPreserved": true,
+    "agentAlreadyReadIt": false
+  }
 }
