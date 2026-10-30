@@ -382,5 +382,31 @@
     "autoSpeechEnabledProfiles": 0,
     "realMicrophoneVerified": false,
     "humanHearingVerified": false
+  },
+  "photoCameraRepair": {
+    "state": "deployed-and-production-photo-verified",
+    "verifiedAt": "2026-10-30T19:47:32.319531+00:00",
+    "renderer": "webgl",
+    "resolution": [
+      1536,
+      1536
+    ],
+    "configuredRadius": 3,
+    "maximumColumns": 49,
+    "sharedRendererSource": "35227aa55782c1523fbf1788055bf5313adeedef",
+    "bundleSha256": "892efb2a3bfc7745d4088025c8254f9d76b321905019aeaab127f7e687fc246a",
+    "adapterSha256": "e7aff270b16e613cb47f88caac8bd77cdcde55c92852e71b1d2eb3695e3e3c01",
+    "configSha256": "a3ae62b1ec7f252f13e17b9ee19a9e38063133e82feb1c3edd08c7bd388ae0a1",
+    "actualCaptureMs": 23534,
+    "nativeImageFrameImport": true,
+    "personalRewardBox": true,
+    "originalYsmUnchanged": true,
+    "gameRestarted": false,
+    "proxyRestarted": false,
+    "fullNativeSceneParityVerified": false,
+    "remainingVisualIssue": "Local missing block texture observed; native shaders/DH client not activated.",
+    "releaseDocument": "paper/docs/SERVER_PHOTOGRAPHY.md",
+    "privateEvidence": "E/F repairs/photo-recovery-20261031-r5",
+    "priorFailedAttemptsRetained": true
   }
 }
