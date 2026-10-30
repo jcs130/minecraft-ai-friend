@@ -86,6 +86,9 @@ def resident(root, source):
     optional=Path(__file__).with_name('resident-forge')/'mixin/OptionalNetworkMixin.java'
     shutil.copyfile(optional,package/'mixin/OptionalNetworkMixin.java')
     mixins['server'].append('OptionalNetworkMixin')
+    status=Path(__file__).with_name('resident-forge')/'mixin/OptionalServerStatusMixin.java'
+    shutil.copyfile(status,package/'mixin/OptionalServerStatusMixin.java')
+    mixins['server'].append('OptionalServerStatusMixin')
     (output/'src/main/resources/maw_numen_server.mixins.json').write_text(json.dumps(mixins,indent=2),encoding='utf-8')
     (package/'HeadlessMod.java').write_text('''package dev.qiandeng.maw.numenserver;
 @net.minecraftforge.fml.common.Mod("maw_numen_server")
@@ -145,7 +148,7 @@ tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-proc:none
     toml.write_text(toml.read_text('utf-8')+'''
 [[mods]]
 modId="maw_numen_server"
-version="0.1.0"
+version="0.1.1"
 displayName="Agent MC World SAO Numen Resident"
 displayTest="IGNORE_SERVER_VERSION"
 description="Owner-scoped external controller for persistent native Numen bodies. GUI adapters unavailable."

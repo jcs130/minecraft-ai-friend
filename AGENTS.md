@@ -1,3 +1,15 @@
+## 2026-10-31 SAO R2 列表兼容与真实村庄出生已发布
+
+用户明确截图使用官网 R2 .mrpack。红色 FML 提示定位为额外 Numen 的列表声明：numen/numen_api 及 numen_api:main、numen_tlm:outfit 误报必需。自有组件0.1.1只在专用服、已审核Numen/API0.1.4.1及协议1时修正新建ServerStatusPing；握手谓词和认证不改，其他声明保持，未知版本不代为放行。SDK0.1.2不再假装安装Numen女仆联动频道。R2原SHA e858aee6…ddb612保持，170共有JAR一致、2项既有服务端兼容补丁，未要求重发客户端。
+
+原主世界出生点(0,100,0)是旧实验平台，正常地形仍在。可选maw-arrival.json现将默认出生设为已有村庄道路(1259.5,84,-952.5)，运行时落地碰撞/空间校验通过，随机半径0。只列CNxhy与LittleFish0510原UUID，须认证成功、存活、未处理且仍在旧平台边界才移动；其他位置/维度不拉回，背包/床/任务/职业/经验不改。两个离线玩家.dat与冷备相同，实际玩家迁移待其本人登录；勿冒称已代其登录。配置纳入冻结清单，审计在world/data/maw-arrivals.jsonl，原平台/箱子保留。
+
+50 Node、13 Python、21纯Java策略断言、9项实际FML/登录/迁移/重连/库存及保存检查通过；旧45类字节码保持。准备失败均留证：初次生成超时、隔离缺保护配置、错误的超平坦高度/注册表等待预算，以及反向账号名过长。修正探针后原包允许缺少Placebo子频道，未为制造拒绝改门禁；这些反向尝试不计通过，未声称实机覆盖所有错误版本拒绝或R2最终像素画面。
+
+在线仅SAONumen/ag_Kirito后正常停桐人、Java存档退出0；E/F完整冷备276052文件、1,978,222,821字节归档，逐成员及双盘SHA dd7f61ee…adcd764已验。原生桥SHA e7d5a98b…17e8f91，其他175模组、DirectAuth/ALI例外、私有broker/engine/目标及记忆保持，未碰主服或端口。冻结6825项；监督器35236/JVM42944、epoch5fa7ebe4-1009-45da-b8c8-c5e475b4e2ee，暂停已解除/健康。正式SDK5项实连通过，SDK SHA3cc43a14…ed2b279；云端Java FML字节指纹、同epoch/SDK和基岩新鲜nonce通过。桐人原UUID已恢复在线自主，未复制控制器或重放未知动作。
+
+说明和发布事实见integrations/sao-compat/R2_CLIENT_SPAWN.md、client-spawn-release-20261031.json。私有验收目录E:/MC/research/sao-client-spawn-fix-20261031；本轮维护请求/脚本已消费，不可重放。回退仅组件/配置并保留新增玩家进度，不恢复旧账号/世界/记忆覆盖当前数据。
+
 ## 2026-10-31 SAO 正版免密与私人账号回执已发布
 
 服主明确“小鱼是mc正版账号，直接进去就行”。RealmAccounts/Forge伴随组件均0.1.1，原LoginGuard/LibreLogin/DirectAuth不替换。主服已绑定正版角色经原生Mojang会话挑战后免游戏密码，保持原身体UUID；本人管理员同名同UUID可证明身份，别名不能接管OP。TOTP不跳过，原生验证器缺失时拒绝；管理员/TOTP仍在原生入口改密。SAO原生库保留随机影子凭据，不持久化一个可脱离主服的premium授权；预备绑定不是登录成功。真人默认简短文字，Agent注册mcagent:account收本人UTF8 JSON；SDK0.1.1自动注册。旧MC_SHARED_ACCOUNT仅明确format json连接保留，断线清除。

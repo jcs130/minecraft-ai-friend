@@ -18,9 +18,10 @@ def freeze(root):
     for relative in ['pack-source.json','agent-connection.json','ops/front-java_front.json','ops/front-agent_front.json','ops/compat.json','ops/bedrock/ViaProxy-3.4.14.jar','ops/bedrock/plugins/Geyser-ViaProxy.jar','ops/bedrock/plugins/Geyser/config.yml','ops/bedrock/plugins/Geyser/maw-native-items.json','ops/bedrock/plugins/Geyser/packs/maw-native-icons.mcpack','ops/bedrock/plugins/Geyser/custom_mappings/maw-native-icons.json']:
         p=root/relative
         if p.exists():files[relative]=digest(p)
-    # The shared-account authority paths and enabled flag are deployment policy.
-    p=root/'server/config/maw-shared-accounts.properties'
-    if p.exists():files[p.relative_to(root).as_posix()]=digest(p)
+    # Account authority and arrival settings are sealed deployment policy.
+    for relative in ['server/config/maw-shared-accounts.properties','server/config/maw-arrival.json']:
+        p=root/relative
+        if p.exists():files[p.relative_to(root).as_posix()]=digest(p)
     p=root/'ops/release.json';p.write_text(json.dumps({'schemaVersion':1,'minecraft':'1.20.1','mods':mods,'files':files},indent=2),encoding='utf-8')
     return len(files)
 def stage(root,work,source):
@@ -39,7 +40,7 @@ def stage(root,work,source):
     tools=ops/'service-tools';tools.mkdir()
     for name in ['sao_service.py','publish_assets.py','bedrock_health.py','listener_policy.py']:shutil.copy2(source/'public'/name,tools/name)
     shutil.copy2('E:/MC/servers/tau-ceti-1.3.3/ops/maw_service.py',tools/'maw_service.py')
-    jar=work/'sao-native-build/build/libs/maw-sao-native-0.1.0.jar';shutil.copy2(jar,root/'server/mods'/jar.name)
+    jar=work/'sao-native-build/build/libs/maw-sao-native-0.1.1.jar';shutil.copy2(jar,root/'server/mods'/jar.name)
     (root/'agent-connection.json').write_text(json.dumps({'host':'127.0.0.1','port':39676,'loginUsername':'ag_Kirito','loginPasswordEnv':'SAO_GAME_PASSWORD'},indent=2),encoding='utf-8')
     config={'schemaVersion':1,'root':str(root),'publicGameAccess':False,'bedrockEnabled':False,'java':str(next((root/'java').glob('*/bin/java.exe'))),'bridgeJava':'E:/MC/jdk/jdk-21.0.12.1+1/bin/java.exe','sourceDirectory':str(dest)}
     (ops/'service.json').write_text(json.dumps(config,indent=2),encoding='utf-8')

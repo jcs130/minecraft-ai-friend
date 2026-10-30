@@ -25,7 +25,7 @@ def relocate(root,source):
  config=(dest/'config.toml').read_text();config=config.replace(str(old).replace('\\','\\\\'),str(root).replace('\\','\\\\'));config=re.sub(r'engine_sha256 = "[a-f0-9]+"','engine_sha256 = "'+engine_sha+'"',config);(dest/'config.toml').write_text(config)
  composition=json.loads((dest/'composition.json').read_text());composition.update(scope='managed_server',realm=str(root),engineSha256=engine_sha)
  for relative in composition['adapterFiles']:composition['adapterFiles'][relative]=hashlib.sha256((dest/'adapter'/relative).read_bytes()).hexdigest()
- composition['saoAddonSha256']=hashlib.sha256((root/'server/mods/maw-sao-native-0.1.0.jar').read_bytes()).hexdigest();(dest/'composition.json').write_text(json.dumps(composition,indent=2))
+ composition['saoAddonSha256']=hashlib.sha256((root/'server/mods/maw-sao-native-0.1.1.jar').read_bytes()).hexdigest();(dest/'composition.json').write_text(json.dumps(composition,indent=2))
  memory_root=extended(origin/'data');memory_files=list(memory_root.rglob('*'));verified=0
  for p in memory_files:
   if p.is_file():

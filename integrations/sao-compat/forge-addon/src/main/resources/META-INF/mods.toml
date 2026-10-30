@@ -3,7 +3,7 @@ loaderVersion="[47,)"
 license="MIT"
 [[mods]]
 modId="maw_sao_native"
-version="0.1.0"
+version="0.1.1"
 displayName="Agent MC World SAO Native Bridge"
 description="Native own-player data and transactional menus for the isolated Forge 1.20.1 integration."
 displayTest="IGNORE_SERVER_VERSION"

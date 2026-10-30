@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "publishedAt": "2026-10-30T19:14:02.045264+00:00",
+  "root": "E:\\MC\\servers\\sao-0.76.1",
+  "minecraft": "1.20.1",
+  "forge": "47.4.10",
+  "client": "existing-website-R2-mrpack",
+  "r2Sha256": "e858aee6e22b249a32c33c3a379274683bdedf5b26bd7f682a379f69c6ddb612",
+  "clientRedownloadRequired": false,
+  "nativeAddon": {
+    "version": "0.1.1",
+    "sha256": "e7d5a98be3647732f3f706d3a9113bfc0cd95fe3d6f4f01699a6e3cce17e8f91"
+  },
+  "sdk": {
+    "version": "0.1.2",
+    "sha256": "3cc43a1474b4c8a0a017d8298327882b23824deb9a02dcc7a7d96f6faed2b279"
+  },
+  "optionalStatus": {
+    "reviewedNumenVersion": "0.1.4.1",
+    "mods": [
+      "numen",
+      "numen_api"
+    ],
+    "channels": [
+      "numen_api:main",
+      "numen_tlm:outfit"
+    ],
+    "protocolsUnchanged": true,
+    "handshakePredicatesChanged": false,
+    "otherStatusFlagsPreserved": true
+  },
+  "arrival": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "dimension": "minecraft:overworld",
+    "landing": {
+      "x": 1259.5,
+      "y": 84,
+      "z": -952.5,
+      "yaw": 180
+    },
+    "spawnRadius": 0,
+    "legacyDimension": "minecraft:overworld",
+    "legacyBounds": {
+      "x1": -8,
+      "y1": 98,
+      "z1": -8,
+      "x2": 8,
+      "y2": 108,
+      "z2": 8
+    },
+    "migrateUuids": [
+      "2065eef3-9caf-36ce-9d14-5dc6b668f460",
+      "9c1cde51-cf76-34a7-8574-19f37b63f50f"
+    ],
+    "message": "欢迎来到 SAO 冒险村。打开任务书查看冒险目标，沿道路探索村庄与周围的世界。"
+  },
+  "backup": {
+    "schemaVersion": 1,
+    "root": "E:\\MC\\servers\\sao-0.76.1",
+    "primary": "E:\\MC\\backups\\sao-client-spawn-fix-20261031\\sao-before.zip",
+    "secondary": "F:\\MC-backups\\sao-client-spawn-fix-20261031\\sao-before.zip",
+    "fileCount": 276052,
+    "sourceBytes": 6513764576,
+    "archiveBytes": 1978222821,
+    "sha256": "dd7f61ee235bbd3d6aa00aec85d394274853ee1827bc63fefc18686a3adcd764",
+    "fullContentVerified": true,
+    "normalJavaExit": 0,
+    "sourceRetained": true
+  },
+  "validation": {
+    "nodePassed": 50,
+    "pythonPassed": 13,
+    "pureJavaAssertionsPassed": 21,
+    "unchangedOriginalClasses": 45,
+    "nativeActualChecks": [
+      "actual-packed-FML-status-only-two-reviewed-numen-mods-and-channels-optional",
+      "ArrivalLegacy-first-auth-real-position-inventory-and-absent-numen",
+      "ArrivalLegacy-reconnect-real-position-inventory-and-absent-numen",
+      "ArrivalAway-first-auth-real-position-inventory-and-absent-numen",
+      "ArrivalNew-first-auth-real-position-inventory-and-absent-numen",
+      "ArrivalLegacy-uuid-inventory-fixture-and-position-persisted",
+      "ArrivalAway-uuid-inventory-fixture-and-position-persisted",
+      "configured-default-spawn-persisted",
+      "exactly-one-completed-migration"
+    ],
+    "formalSdkChecks": [
+      "formal-sdk-original-body-login",
+      "native-authentication-confirmed",
+      "own-account-status-through-private-plugin-with-no-json-chat",
+      "actual-native-body-query-compatible",
+      "current-jvm-registry-epoch-matches-sdk"
+    ],
+    "external": {
+      "readOnly": true,
+      "observedAt": 1793387385.0142384,
+      "publicPortsChanged": false,
+      "java": {
+        "ok": true,
+        "protocol": 763,
+        "online": 1,
+        "forgeStatusSha256": "e7d00e2c9079d2d357e202565a7e08d9a25c3b69f7d439ff8ff7e5dc4b28a4ef",
+        "currentOptionalFmlMetadataVerified": true
+      },
+      "nativeManifest": {
+        "ok": true,
+        "serverEpoch": "5fa7ebe4-1009-45da-b8c8-c5e475b4e2ee"
+      },
+      "sdk": {
+        "sha256": "3cc43a1474b4c8a0a017d8298327882b23824deb9a02dcc7a7d96f6faed2b279",
+        "ok": true
+      },
+      "bedrock": {
+        "ok": true,
+        "freshNonceEchoed": true,
+        "protocol": "2193",
+        "version": "26.52"
+      },
+      "passed": true
+    },
+    "savedOfflinePlayerData": [
+      {
+        "bodyUuid": "2065eef3-9caf-36ce-9d14-5dc6b668f460",
+        "savedPlayerDataUnchanged": true
+      },
+      {
+        "bodyUuid": "9c1cde51-cf76-34a7-8574-19f37b63f50f",
+        "savedPlayerDataUnchanged": true
+      }
+    ],
+    "negativeAttemptsCountedAsPassed": false,
+    "negativeLimitations": [
+      "initial-negative-name-exceeded-Minecraft-16-character-limit",
+      "a-missing-placebo-subchannel-is-accepted-by-the-existing-pack; no policy changed to force a rejection",
+      "present-mismatched-channel-version-not-runtime-verified"
+    ]
+  },
+  "runtime": {
+    "healthy": true,
+    "paused": false,
+    "supervisorPid": 35236,
+    "javaPid": 42944,
+    "serverEpoch": "5fa7ebe4-1009-45da-b8c8-c5e475b4e2ee",
+    "frozenFiles": 6825,
+    "resident": {
+      "body": "ag_Kirito",
+      "uuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "phase": "running",
+      "gameConnected": true,
+      "autonomyRunning": true,
+      "originalProviderGoalAndMemoryPreserved": true
+    }
+  },
+  "scope": {
+    "unrelatedModsUnchanged": 175,
+    "nativeAuthConfigUnchanged": true,
+    "privateBrokerAndEngineUnchanged": true,
+    "worldReset": false,
+    "inventoryOrQuestCommandsSent": false,
+    "publicPortsChanged": false,
+    "primaryServerChanged": false
+  },
+  "limitations": {
+    "humanR2PixelsVerified": false,
+    "humanMicrosoftPositiveLoginVerified": false,
+    "bedrockFullModRenderingVerified": false
+  },
+  "evidenceDirectory": "E:\\MC\\research\\sao-client-spawn-fix-20261031",
+  "consumedMaintenanceRequestIds": {
+    "kiritoStop": "c624d3e6-c9fd-4d7b-9324-4698094c63d2",
+    "saoShutdown": "7820ee59-51ed-47e6-98f8-759666d6b29e",
+    "saoResume": "fcae1a86-ff50-4244-b288-82fdcaf7f2c1"
+  }
+}

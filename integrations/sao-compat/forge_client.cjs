@@ -39,8 +39,8 @@ function withoutNumen (data) {
   function list(read) { const n=r.uint();if(n>4096)throw new Error('forge_list_budget');return Array.from({length:n},read) }
   const mods=list(()=>r.string()),channels=list(()=>({name:r.string(),marker:r.string()})),registries=list(()=>r.string())
   list(()=>r.string());r.done() // server's datapack-registry advertisements
-  return Buffer.concat([uint(2),array(mods.filter(m=>!['numen','numen_api'].includes(m)),string),
-    array(channels.filter(c=>c.marker!=='FML3'&&!c.name.startsWith('numen:')&&!c.name.startsWith('numen_api:')),c=>Buffer.concat([string(c.name),string(c.marker)])),
+  return Buffer.concat([uint(2),array(mods.filter(m=>!['numen','numen_api','numen_tlm'].includes(m)),string),
+    array(channels.filter(c=>c.marker!=='FML3'&&!['numen','numen_api','numen_tlm'].includes(c.name.split(':')[0])),c=>Buffer.concat([string(c.name),string(c.marker)])),
     array(registries,name=>Buffer.concat([string(name),string('1.0')]))])
 }
 function extraHandshake (channel, payload) {

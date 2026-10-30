@@ -29,12 +29,12 @@ test('malformed varints, utf8, lengths and trailing bytes are diagnosed', () => 
 })
 test('a client without Numen still advertises the other required mod channels unchanged', () => {
   const list=(rows,encode)=>Buffer.concat([uint(rows.length),...rows.map(encode)])
-  const mods=['forge','numen','numen_api','othermod']
-  const channels=[['numen:main','1'],['numen_api:main','1'],['othermod:main','2'],['maw_agent:world_query','1']]
+  const mods=['forge','numen','numen_api','numen_tlm','othermod']
+  const channels=[['numen:main','1'],['numen_api:main','1'],['numen_tlm:outfit','1'],['othermod:main','2'],['maw_agent:world_query','1'],['numen_tools:main','3']]
   const input=Buffer.concat([uint(1),list(mods,string),list(channels,c=>Buffer.concat(c.map(string))),list(['minecraft:item'],string),uint(0)])
   const r=new Reader(withoutNumen(input));assert.equal(r.uint(),2)
   const readList=read=>Array.from({length:r.uint()},read)
   assert.deepEqual(readList(()=>r.string()),['forge','othermod'])
-  assert.deepEqual(readList(()=>[r.string(),r.string()]),[['othermod:main','2'],['maw_agent:world_query','1']])
+  assert.deepEqual(readList(()=>[r.string(),r.string()]),[['othermod:main','2'],['maw_agent:world_query','1'],['numen_tools:main','3']])
   assert.deepEqual(readList(()=>[r.string(),r.string()]),[['minecraft:item','1.0']]);r.done()
 })

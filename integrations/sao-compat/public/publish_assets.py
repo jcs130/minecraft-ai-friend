@@ -20,7 +20,7 @@ def publish(root, source):
     manifest={'schemaVersion':1,'minecraft':'1.20.1','serverEpoch':epoch,'metadata':metadata,'files':files,'containsWorldData':False}
     asset('/native-manifest.json','native-manifest.json',json.dumps(manifest,separators=(',',':')).encode(),'application/json')
     payloads={}
-    package=json.loads((source/'package.json').read_text());package.update(name='myagentworld-sao-client',version='0.1.1',private=False,main='index.cjs');package.pop('scripts',None)
+    package=json.loads((source/'package.json').read_text());package.update(name='myagentworld-sao-client',version='0.1.2',private=False,main='index.cjs');package.pop('scripts',None)
     lock=json.loads((source/'package-lock.json').read_text());lock.update(name=package['name'],version=package['version']);lock['packages'][''].update(name=package['name'],version=package['version'])
     payloads['package.json']=json.dumps(package,indent=2).encode();payloads['package-lock.json']=json.dumps(lock,indent=2).encode();payloads['index.cjs']=(source/'public/sdk.cjs').read_bytes()
     for name in ['sao_bot.cjs','account-receipts.cjs','forge_client.cjs','native_registry.cjs','sao-client.cjs','sao-operations.json','sao-tools.cjs','sao-engine.mjs','protection-client.cjs','craft-fence.cjs']:
