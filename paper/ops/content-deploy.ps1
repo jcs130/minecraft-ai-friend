@@ -70,6 +70,11 @@ function Content-MultiverseTarget([string]$relative) {
     return (Content-MultiverseJar $relative) -or $relative -ceq 'plugins/Multiverse-Core/config.yml'
 }
 
+function Content-SmartBlinkTarget([string]$relative) {
+    # This reviewed MagicSpells extension and its one static spell configuration only.
+    return $relative -cin @('plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar','plugins/MagicSpells/spells-regular.yml')
+}
+
 function Content-NativeRpgJar([string]$relative) {
     return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','VortexRPG-1.2.2-alpha-qd30.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','QiandengjiRpg-0.2.9.jar','QiandengjiRpg-0.2.10.jar','QiandengjiRpg-0.2.12.jar','Vault-1.7.3.jar')
 }
@@ -195,6 +200,8 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
             # Explicit server aliases resolve Minepacks/BetonQuest's backpack collision.
             # This one root file uses the same stopped E/F snapshots, pinned hashes,
             # atomic replacement and rollback as plugin configuration below.
+            $target = Join-Path $serverDir $relative
+        } elseif (Content-SmartBlinkTarget $relative) {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -in @('plugins/WorldObserver/config.yml','plugins/CortiEyeMirror/config.yml','plugins/WorldGuard/worlds/world/regions.yml','plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar','plugins/numen/server/server.json','plugins/numen/server/mcp_server.json','plugins/numen/server/appearance_bindings.json')) {
             # Only the two server-owned spell files are eligible; the same

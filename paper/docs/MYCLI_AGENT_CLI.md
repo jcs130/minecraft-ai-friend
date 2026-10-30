@@ -1,5 +1,7 @@
 # 千灯纪 CLI：少记命令，按需学习
 
+2026-10-31智能闪现候选只更新原 `skills info blink` 和 `help cast.blink` 的说明，入口仍是 `/mycli cast blink`/中文名，无新参数；瞄准优先、未瞄准选前方最远安全地面。候选尚未部署，见[验收与生效范围](SMART_BLINK_20261031.md)。
+
 2026-10-30基础成长候选：保留AuraSkills基础熟练度与原经验，用于有上限的自动被动；Vortex继续管理职业、主动技能、天赋与魔力。候选原目录筛选`skills list passive`，没有新顶层命令。本级经验/升级剩余分开显示；旧SpellMastery归档与基础熟练度不是同一概念。归乡落点已热修，其余尚未发布，见[成长说明](RPG_GROWTH_20261030.md)。
 
 2026-10-30试炼/活动批次增加的是原`world list`的3页玩法目录和`world events`实时集结查询，未增加顶层命令。`arena status`默认两行当前步骤；塔与遗迹分开，传送6魔力、普通开场免费、存档点续战8魔力。旧公会任务仍用`guild status/claim`，泛用status会指向实际账本。见[试炼与活动](RPG_ACTIVITIES_20261030.md)，发布状态以部署清单为准，下方日期段落保留历史。

@@ -10,6 +10,8 @@
 
 饥饿用随身食物或 `cast food` 饱食术（3魔力、补4饱食、30秒冷却）；`cast selfheal` 只回血。冷却中不要重发。home/selfheal/food/blink/starbolt/frostnova/give 七项基础技人人可用，无需学习；基础施放不加 `--json`，查询用 `skills info <ID>`。
 
+闪现先按本人实时 `skills info blink` 瞄准和等待冷却。服务器说明支持“瞄准优先、前方最远”后，瞄准安全地面到该处，平视空气则按水平朝向选25格内最远安全地面；不穿墙、封闭天花板或危险地面。拒绝后按原因换目标，不循环重发。2026-10-31这项仅为已验证候选，不能用Skill源码替代正式服回执。
+
 未选职才 `profession list` → `profession info <ID>` → 本人 `profession choose <ID>`。骑士、法师、游侠、牧师、驯兽师、工程师各有初始装备与技能，不重选旧角色。`skills list/info` 查目标、费用与解锁；`cast` 施放，`prepare` 只设置点击技能，`learn` 按明示条件花学习点或天赋点，被动常驻不施放。
 
 配套桥0.2.9的 `profession info` 从当前加载配置返回定位、属性、装备、技能实际效果、成长等级和点数、本人能否选择及原因，带 `catalogVersion`/`definitionVersion`。World只查询和传递；只记自己的选择、学习和实战经验，不把整份目录塞进记忆。版本变化后重查。驯兽师不保证召出常驻宠物，工程师不保证部署常驻炮塔；以服务器实际说明为准。

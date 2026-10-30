@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "release": "smart-blink-release-20261031-r1",
+  "state": "verified-candidate-awaiting-restart-approval",
+  "document": "paper/docs/SMART_BLINK_20261031.md",
+  "verifiedAt": "2026-10-31T04:34:23.949535+08:00",
+  "productionChanged": false,
+  "pendingPlanWritten": false,
+  "runtime": {
+    "AgentFriend": "0.4.47.37-rpg",
+    "core": "Youer 1.21.1 build920",
+    "MagicSpells": "4.0-Beta-15"
+  },
+  "candidate": {
+    "AgentFriend": "0.4.47.38-rpg",
+    "SmartBlink": "0.1.0",
+    "artifacts": {
+      "AgentFriend-0.4.47.38-rpg.jar": "dac1286d7193bc533a0b6b7b0cbc6de161c02a27087649c73802f2ec685bd4a1",
+      "plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar": "a49349697e81bc6e3023ea6d513453b81ef9519dcaae4b0ef60b9ef958e372da",
+      "plugins/MagicSpells/spells-regular.yml": "c541dcccf01c8dd535dcf67265ce4e63aa1ffe838affb0b2ecd2713ea7e7b3e3",
+      "ops/content-deploy.ps1": "2010c73be5fc3edb135912681b9c3d411615c7b9b2437d3298134d1e76859ab5"
+    }
+  },
+  "contract": {
+    "command": "/mycli cast blink",
+    "alias": "/mycli cast 闪现术",
+    "range": 25,
+    "mana": 4,
+    "cooldownSeconds": 8,
+    "aimed": "Prefer explicitly aimed safe grounded landing",
+    "fallback": "Farthest safe grounded landing along horizontal yaw",
+    "forwardSamplingBlocks": 0.5,
+    "maximumLoadedBlockReadsPerScan": 4096,
+    "failedCastChargesMana": false,
+    "failedCastStartsCooldown": false,
+    "newCommands": false,
+    "newPersistence": false,
+    "chunkGenerationRequested": false
+  },
+  "verification": {
+    "nativeScenarios": 17,
+    "nativeClientChecks": 47,
+    "unloadedWorldChecks": 4,
+    "existingNativeRpgChecks": 251,
+    "exactDeploymentPathChecks": 10,
+    "realCrossVolumeInstallRollbackRefusalChecks": 28,
+    "existingNativeDeploymentBoundaryChecks": 24,
+    "publicAddonEntriesMatchFrozenCandidate": true,
+    "normalStageStop": true,
+    "temporaryStageFilesRestored": 6,
+    "initialBorderFailureRetained": true,
+    "retiredCommandTestExpectationFailureRetained": true,
+    "existingStageWarningsRetained": true
+  },
+  "releaseRequirements": [
+    "Fresh normal-restart approval",
+    "Existing human and dungeon safety gate",
+    "180/60/10 second reminders",
+    "Complete stopped E/F game and auth recovery points",
+    "Native post-install verification"
+  ],
+  "backupScope": "Candidate and code/config preimages only; not a new full world/player cold backup",
+  "publicSkillArchiveRepublished": false,
+  "skillAndMcpReferenceSourcesUpdated": true,
+  "privateEvidence": "E:/MC/ops/repairs/smart-blink-20261031-r1 and F:/MC-backups/smart-blink-20261031-r1"
+}

@@ -220,8 +220,8 @@ final class NativeRpg {
                 var entry=commonGuide(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);
                 data.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(entry.id(),entry.command())));
                 Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
-                if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准前方可站立的地面；平视空中可能没有合法落点，拒绝时不扣魔力。");
-                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；瞄准前方可站立的地面，空中无落点会拒绝":"")+"。用法："+entry.command());return true;
+                if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准安全地面优先到该处；平视空气时沿水平朝向选25格内最远安全落点。不会穿墙、穿封闭天花板或落入悬空/危险地面；拒绝不扣魔力或冷却。");
+                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；不会穿墙或进入危险落点；拒绝未耗魔、无冷却":"")+"。用法："+entry.command());return true;
             }
             String[] normalized=args.clone();
             normalized[0]=switch(group){case "职业"->"profession";case "spells","技能"->"skills";case "任务路线"->"tasks";default->group;};

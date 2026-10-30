@@ -185,7 +185,7 @@ final class AgentCliCatalog {
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗 8 格内所有受伤玩家（含自己）","非旁观者；6 魔力；12 秒冷却；无需瞄准","治疗人数、视觉提示与私有技能事件");
         add(specs,"cast.food","magic","cast","/mycli cast food","恢复饥饿","非旁观者；MagicSpells 魔力与冷却检查","施法结果");
         add(specs,"cast.home","magic","teleport","/mycli cast home","归乡到出生村庄","非旁观者；村庄传送可用；6 魔力","成功后 MC_TRAVEL、技能特效和绝对坐标；失败不扣费");
-        add(specs,"cast.blink","magic","cast","/mycli cast blink","短距闪现","非旁观者；MagicSpells 魔力与冷却检查","施法结果");
+        add(specs,"cast.blink","magic","cast","/mycli cast blink","瞄准安全落点；未瞄准时向前选最远安全地面","非旁观者；25格内安全落点；统一魔力与原冷却","施法结果");
         add(specs,"cast.give","magic","cast","/mycli cast give <物品名>","造物：固定 8 种即时造出；其他物品申请女神审核","非旁观者；固定配方耗魔力；申请需女神在线","物品或申请送达/拒绝原因");
         add(specs,"cast.fireworks","magic","cast","/mycli cast fireworks","释放观赏烟花","非旁观者；冷却检查","粒子与声音");
         add(specs,"cast.starlight","magic","cast","/mycli cast starlight","释放观赏星尘","非旁观者；冷却检查","粒子与声音");
