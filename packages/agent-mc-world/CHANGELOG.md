@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.7-rc.143
+
+- Support an explicit host-owned MCP turn boundary. Enforce the same operation subset in execution, discovery and environment text; retain standalone caller-owned turns and the host SDK lifecycle.
+
 ## 0.5.7-rc.142
 
 - Expose a pure conservative partition for independent body suffixes behind leading social speech. Preserve explicit queue order, cross-step dependencies, commands and native admission.
