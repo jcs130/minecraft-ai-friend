@@ -16,6 +16,17 @@ const server = (id: string, intents: MinecraftOption['intents']): MinecraftOptio
   source: { kind: 'server-observation', reference: 'test', observedAt: '2026-10-17T00:00:00Z' } });
 
 describe('outcome-oriented capability discovery', () => {
+  it('keeps water choices available while the feet remain in water and the head is breathing', () => {
+    const s=minecraftOptionsFromSnapshot(snapshot({inWater:false,oxygen:20,standingOn:'water',
+      footing:{kind:'fluid',block:'water',grounded:false}}),foods,state);
+    expect(s.context).toMatchObject({inWater:true,headInWater:false,oxygen:null});
+    expect(renderMinecraftOptionIndex(s)).toContain('水路与潜水→core.swim');
+    const swim=s.options.find(o=>o.id==='core.swim')!;
+    expect(swim.read.some(r=>r.tool==='mc_help'&&(r.args.skills as string[]|undefined)?.includes('swim'))).toBe(true);
+    expect(swim.evidence.join('')).toContain('头部浸水=false');
+    const dry=minecraftOptionsFromSnapshot(snapshot({standingOn:'stone',footing:{kind:'support',block:'stone',grounded:true}}),foods,state);
+    expect(renderMinecraftOptionIndex(dry)).not.toContain('水路与潜水→');
+  });
   it('reports carried weapon gaps and focused storage, memory and recipe paths without declaring remote stock empty', () => {
     const s=minecraftOptionsFromSnapshot(snapshot({inventory:[{name:'bow',count:3},{name:'iron_ingot',count:4},{name:'stick',count:4}]}),foods,state);
     expect(s.context).toMatchObject({meleeEquipment:[],arrows:0});

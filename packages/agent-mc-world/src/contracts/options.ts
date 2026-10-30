@@ -18,7 +18,10 @@ export interface MinecraftOptionContext {
   backend: 'mineflayer' | 'java-client';
   food: number | null;
   oxygen: number | null;
+  /** Water at the head or observed feet contact; a breathing surface swimmer remains in water. */
   inWater: boolean | null;
+  /** Kept separate from body contact; surfaced oxygen is not treated as a confirmed refill. */
+  headInWater?: boolean | null;
   /** null means unavailable/unclassified; zero means observed none in carried inventory only. */
   carriedFood: number | null;
   carriedBoats: number | null;

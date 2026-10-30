@@ -1,13 +1,15 @@
-import {afterEach,describe,expect,it} from 'vitest';
+import {afterEach,describe,expect,it,vi} from 'vitest';
 import type {Bot} from 'mineflayer';
 import {Vec3} from 'vec3';
-import {planSwim,lastSwimResult} from '../core/swim-route.ts';
+import {planSwim,lastSwimResult,skillSwim} from '../core/swim-route.ts';
+import {movementReadout} from '../core/skills-control.ts';
+import type {SkillContext} from '../core/skill-context.ts';
 import {prepareWorkRoutine} from '../core/work-routines.ts';
 import {parseSteps} from '../core/skills.ts';
 import {methodHarness,methodEnded} from './method-harness.ts';
 
 const fixtures:ReturnType<typeof methodHarness>[]=[];
-afterEach(()=>fixtures.splice(0).forEach(h=>h.close()));
+afterEach(()=>{fixtures.splice(0).forEach(h=>h.close());vi.useRealTimers();});
 function pool(low=64,high=68,range=4) {
  const h=methodHarness();fixtures.push(h);
  for(let x=-range;x<=range;x++)for(let z=-range;z<=range;z++){
@@ -17,6 +19,50 @@ function pool(low=64,high=68,range=4) {
  return h;
 }
 describe('oxygen-aware loaded-water routes',()=>{
+ it.each([undefined,12])('crosses a surface route without inventing or waiting for an oxygen refill (%s)',async oxygen=>{
+  vi.useFakeTimers();const h=methodHarness('1.21.1');fixtures.push(h);
+  for(let x=-2;x<=7;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=65;y++)h.set(x,y,z,'water');
+  h.bot.entity.position=new Vec3(.5,65.3,.5);h.bot.entity.onGround=false;h.bot.oxygenLevel=oxygen as never;
+  let settled=false;
+  const result=skillSwim(h.bot as unknown as Bot,{at:[4,65,0],maxDurationMs:15000},
+   {taskId:91,aborted:()=>false} as SkillContext).then(value=>({value}),error=>({error})).finally(()=>{settled=true;});
+  for(let i=0;i<310&&!settled;i++)await vi.advanceTimersByTimeAsync(50);
+  expect(await result).toHaveProperty('value');
+  expect(lastSwimResult(h.bot as unknown as Bot)).toMatchObject({complete:true,breathStops:0});
+  expect(h.bot.entity.position.x).toBeGreaterThan(3.7);
+  expect(movementReadout(h.bot as unknown as Bot)).toMatchObject({headWet:false,oxygen:oxygen??null});
+  expect(Object.values(h.keys).every(v=>!v)).toBe(true);
+ });
+ it('cancels while waiting for an underwater-leg refill and releases the surface controls',async()=>{
+  vi.useFakeTimers();const h=methodHarness('1.21.1');fixtures.push(h);
+  for(let x=-2;x<=7;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=65;y++)h.set(x,y,z,'water');
+  for(let x=2;x<=7;x++)for(let z=-2;z<=2;z++)h.set(x,66,z,'water');
+  h.bot.entity.position=new Vec3(.5,65.3,.5);h.bot.entity.onGround=false;h.bot.oxygenLevel=undefined as never;
+  const started=Date.now();let settled=false;
+  const result=skillSwim(h.bot as unknown as Bot,{at:[4,65,0],maxDurationMs:15000},
+   {taskId:93,aborted:()=>Date.now()-started>=1500} as SkillContext)
+   .then(value=>({value}),error=>({error})).finally(()=>{settled=true;});
+  for(let i=0;i<310&&!settled;i++)await vi.advanceTimersByTimeAsync(50);
+  expect(await result).toHaveProperty('error');
+  expect(lastSwimResult(h.bot as unknown as Bot)).toMatchObject({complete:false,reason:'cancelled',breathStops:1});
+  expect(h.bot.entity.position.x).toBeLessThan(2);
+  expect(Object.values(h.keys).every(v=>!v)).toBe(true);
+ });
+ it('still refuses an unconfirmed refill before a route enters submerged cells',async()=>{
+  vi.useFakeTimers();const h=methodHarness('1.21.1');fixtures.push(h);
+  for(let x=-2;x<=7;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=65;y++)h.set(x,y,z,'water');
+  for(let x=2;x<=7;x++)for(let z=-2;z<=2;z++)h.set(x,66,z,'water');
+  h.bot.entity.position=new Vec3(.5,65.3,.5);h.bot.entity.onGround=false;h.bot.oxygenLevel=undefined as never;
+  let settled=false;
+  const result=skillSwim(h.bot as unknown as Bot,{at:[4,65,0],maxDurationMs:15000},
+   {taskId:92,aborted:()=>false} as SkillContext).then(value=>({value}),error=>({error})).finally(()=>{settled=true;});
+  for(let i=0;i<310&&!settled;i++)await vi.advanceTimersByTimeAsync(50);
+  expect(await result).toHaveProperty('error');
+  expect(lastSwimResult(h.bot as unknown as Bot)).toMatchObject({complete:false,reason:'breathing_unconfirmed',breathStops:1});
+  expect(h.bot.entity.position.x).toBeLessThan(2);
+  expect(movementReadout(h.bot as unknown as Bot).oxygen).toBeNull();
+  expect(Object.values(h.keys).every(v=>!v)).toBe(true);
+ });
  it('ascends a vertical waypoint without turning toward sub-deadband horizontal drift',async()=>{
   const h=pool();h.bot.entity.position=new Vec3(.51,65,.49);h.bot.entity.yaw=1.1;
   const id=h.runner.start(prepareWorkRoutine('swim_route',{dimension:'overworld',at:[0,67,0]})).id;
