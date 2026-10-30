@@ -26,6 +26,7 @@ import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from '../../core/knowledge.ts
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
 import { CommandRepetitionGuard } from './command-repetition.ts';
+import { MotionReviewGate } from './motion-review.ts';
 
 export interface MinecraftClientOptions {
   cfg: MinecraftClientConfig;
@@ -38,6 +39,8 @@ export interface MinecraftClientOptions {
   autoAcknowledgeBarriers?: boolean;
   /** Consecutive opaque command submissions before a deliberate inspection; 0 explicitly disables this guard. */
   commandRepetitionLimit?: number;
+  /** Identical control-only requests require inspection when measured motion repeats or stays still; 0 disables. */
+  motionRepetitionLimit?: number;
   log: Logger;
 }
 
@@ -71,6 +74,7 @@ export class MinecraftAgentClient {
   private readonly executionGenerations = new Map<string, number>();
   private readonly facts: CurrentFacts;
   private readonly commandRepetition: CommandRepetitionGuard;
+  private readonly motionReview: MotionReviewGate;
   private readonly lease: AgentConnectionLease;
   private offlineMemoryCalls = 0;
   private readonly tacticCalls = new Map<string, { signature: string; pending: boolean; controller: AbortController; promise: Promise<ToolOutcome> }>();
@@ -85,6 +89,7 @@ export class MinecraftAgentClient {
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
     this.journal = new AgentJournal(options.dataDir, 1024, world.id);
     this.commandRepetition = new CommandRepetitionGuard(options.commandRepetitionLimit);
+    this.motionReview = new MotionReviewGate(options.motionRepetitionLimit);
     this.learning = new ClientOperationLearning(options.dataDir, this.journal.run,
       () => this.world.requestFacts?.() as WorldRequestFacts | null,
       () => ({realm:`weak:${options.cfg.host}:${options.cfg.port}|`,account:`${options.cfg.auth??'offline'}:${options.cfg.username}`,
@@ -96,7 +101,8 @@ export class MinecraftAgentClient {
     this.host = {
       pushEvent: async (event, opts) => {
         if (event.execution) this.recordExecution(event.execution);
-        return this.journal.pushEvent(event, opts);
+        const stored=await this.journal.pushEvent(event, opts);
+        this.motionReview.book.recordEvents([stored]);return stored;
       },
       pushDeferred: (event, opts) => this.journal.pushDeferred(event, opts),
       drainPendingEvents: filter => this.journal.drainPendingEvents(filter),
@@ -159,6 +165,7 @@ export class MinecraftAgentClient {
     if (this.offlineMemoryCalls) throw new Error('Wait for pending offline memory calls before connecting');
     this.validateConfig();
     this.lease.acquire();
+    this.motionReview.reset();
     const epoch = ++this.epoch;
     this.lifetime = new AbortController();
     this.phase = 'starting';
@@ -327,6 +334,8 @@ export class MinecraftAgentClient {
    * Background event/fact polling must not acknowledge an inspection.
    */
   noteCommandInspection(): void { this.commandRepetition.inspected(); }
+  /** A successful deliberate spatial/tool-help read; event polling alone is not reconsideration. */
+  noteMotionInspection(): void { this.motionReview.inspected(); }
 
   async events(options: { after?: number; run?: string; limit?: number; waitMs?: number; includeArchived?: boolean } = {}, signal?: AbortSignal) {
     const after = options.after ?? 0, waitMs = options.waitMs ?? 0;
@@ -401,6 +410,7 @@ export class MinecraftAgentClient {
       this.metrics.toolStarted(callId, name);
       combined.throwIfAborted();
       const command = this.commandRepetition.admit(name, args, callId, this.journal.read(0, 1).latestCursor);
+      const motion = this.motionReview.admit(name, args, callId, this.journal.run);
       const denied: ToolOutcome | null = command && !command.admitted ? {
         text: 'The same opaque server command was submitted repeatedly without an intervening inspection. '
           + 'Sending or completing its chat task does not verify the requested game effect. '
@@ -408,6 +418,14 @@ export class MinecraftAgentClient {
         failed: true, data: { status: 'blocked', reason: 'command_repetition_requires_inspection', retryable: false,
           next_safe_read: { tool: `${this.toolPrefix}_events`, arguments: { run: this.journal.run, after: command.after, limit: 16 } } },
         meta: { commandRepetition: command, admission: { accepted: false, dispatched: false, kind: 'repeat', rule: 'command_feedback_inspection' } },
+      } : motion&&!motion.admitted ? {
+        text:'The same control plan was repeated while measured recent motion stayed still or returned within a compact area. '
+          +'No new controls were dispatched. Existing work is untouched. Inspect current surroundings or control tool help before repeating; '
+          +'control.yawDeg is a relative turn on EACH call, not an absolute heading. A completed key press is not destination progress. '
+          +'Circling may be intentional; choose the next action from the objective and actual receipts.',
+        failed:true,data:{status:'blocked',reason:'observed_motion_requires_review',retryable:false,
+          next_safe_read:{tool:`${this.toolPrefix}_tool_help`,arguments:{name:`${this.toolPrefix}_do`}}},
+        meta:{motionReview:motion.review,admission:{accepted:false,dispatched:false,kind:'repeat',rule:'observed_motion_review'}},
       } : null;
       const result = denied ?? await cancellable<string | ToolOutcome>(offlineKnowledge
         ? queryMinecraftKnowledge(args, this.options.cfg.version, this.options.cfg.knowledge, combined).then(value => ({ text: JSON.stringify(value) }))
@@ -418,6 +436,7 @@ export class MinecraftAgentClient {
       if (command) outcome.meta = { ...outcome.meta, commandRepetition: command };
       if (!outcome.failed && /_(?:observe|state|bag|tool_help|help|protocol|query|knowledge|read_text)$/.test(name))
         this.commandRepetition.inspected();
+      if(!outcome.failed&&outcome.execution?.terminal!==false&&/_(?:observe|scout|state|tool_help)$/.test(name))this.motionReview.inspected();
       const recorded = this.learning.finish(experience,outcome);
       // Observation artifacts have immutable metadata shared by capture and later reads.
       if(recorded&&outcome.execution?.kind!=='observation') outcome.meta={...outcome.meta,experience:recorded};
