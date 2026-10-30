@@ -472,6 +472,7 @@ final class TaskMarketManager implements Listener {
         else out.add("guidance", TaskProgressGuidance.guide(task.contract(stage), progress,
                 step.combat() == null ? null : step.combat().json(),
                 plugin.getConfig().getString(marketPath(player) + ".last-reason", ""), savedSurvey(player, stage)));
+        if(step.goal()==GuildManager.Goal.PEAK)out.add("guidance",PeakSurvey.guide(out.getAsJsonObject("guidance"),PeakSurvey.inspect(player.getLocation())));
         if(step.combat()!=null)out.add("combat",step.combat().json());
         JsonObject guide = actionGuidance(player, task, out.getAsJsonObject("guidance"));
         out.add("guidance", guide);
@@ -1086,6 +1087,7 @@ final class TaskMarketManager implements Listener {
     }
     private void detail(Player player, Task task) {
         JsonObject data = summary(task); JsonArray steps = new JsonArray();
+        player.sendMessage("§b[委托] "+task.title+"（"+task.id()+"），共"+task.steps.size()+"阶段；奖励声望+"+task.fame+"、"+(plugin.nativeRpg().selected()?"绿宝石实物":"绿宝石")+"×"+task.emeralds+"。接取：/mycli guild accept "+task.id());
         JsonObject current = progressState(player);
         List<String> rewards = task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))
                 ? plugin.getConfig().getStringList(marketPath(player) + ".skill-rewards") : plugin.professions().rewards("guild_contract", task.id());
@@ -1103,6 +1105,7 @@ final class TaskMarketManager implements Listener {
             row.addProperty("goal", step.goal.name().toLowerCase(Locale.ROOT)); row.addProperty("target", step.target);
             row.addProperty("floor", step.floor); row.addProperty("site", step.site == null ? "" : step.site);
             row.addProperty("chest", step.chest);
+            if(i<3)player.sendMessage("§7[阶段 "+(i+1)+"/"+task.steps.size()+"] "+step.title+"："+TaskGuidance.step(step.goal,step.description));
             if (step.combat != null) row.add("combat", step.combat.json());
             if (step.map != null) {
                 row.add("mapHunt", step.map.json());
@@ -1149,6 +1152,7 @@ final class TaskMarketManager implements Listener {
             steps.add(row);
         }
         data.add("steps", steps); data.addProperty("beneficiary", task.beneficiary);
+        if(task.steps.size()>3)player.sendMessage("§7这里只预览前三阶段；接取后 /mycli guild status 按当前阶段继续，阶段交付不会跳过后续目标。");
         if (task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))) data.addProperty("currentStep", index(player) + 1);
         send(player, "MC_MARKET_DETAIL", data);
         player.sendMessage("§7备料可用公会门口公共箱 /mycli guild shared；公共设施内补给箱可取放，个人箱仍归本人。每阶段 guild claim 交付，末阶段统一领奖。");
@@ -1178,6 +1182,8 @@ final class TaskMarketManager implements Listener {
             else ((CraftPlayer) player).getHandle().connection.send(new ClientboundCustomPayloadPacket(
                     new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
         }
+        // Detail already emitted short private text. Keep the original data channel, without an empty JSON echo.
+        if(type.equals("MC_MARKET_DETAIL"))return;
         JsonObject shortNotice = new JsonObject(); shortNotice.addProperty("type", type);
         shortNotice.addProperty("schemaVersion", 1);
         String command="/mycli guild status";

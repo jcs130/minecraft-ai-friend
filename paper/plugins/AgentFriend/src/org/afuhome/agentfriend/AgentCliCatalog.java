@@ -225,7 +225,7 @@ final class AgentCliCatalog {
         add(specs,"locate.list","team","read","/mycli locate list","列出可见在线队友位置","在线玩家","每人一条 MC_PLAYER 绝对坐标");
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
-        add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
+        add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","队友传送术：安全到伙伴附近，复用罗盘找队友","目标在线可见；8魔力、20秒冷却；有安全落点；双方非副本/PvP参战","成功后 MC_TRAVEL 与绝对坐标；失败不扣费或开始冷却；不代建队/参战");
         add(specs,"arena.status","adventure","read","/mycli arena status [--json|--verbose]","查询当前入场缺项或战斗下一步；默认短文本","每次start从第1层开始，历史通关不自动跳层；清层自动下楼。传送6魔力、开场免费，已解锁驿站rest需8魔力","MC_TRIAL_STATE；显式JSON/verbose兼容MC_DUNGEON status及救援字段");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
@@ -373,7 +373,13 @@ final class AgentCliCatalog {
             nativeSpec(specs,"skills.prepare","write","/mycli skills prepare <技能ID>","设置已解锁的武器点击技能","仅已解锁的主动技能；不扣学习点、不施法；被动不能准备");
             nativeSpec(specs,"skills.menu","gui","/mycli skills menu","打开原生技能菜单","打开免费，点击学习按对应节点费用结算");
             nativeSpec(specs,"cast","cast","/mycli cast <技能ID> [参数]","施放技能；先 info 查目标、耗魔和冷却","职业技支持 --json；通用技沿用原回执，prospect 需要矿种等参数；不支持的格式会在执行前拒绝");
-            for(String basic:NativeRpg.COMMON_IDS){var old=SPECS.get("cast."+basic);if(old==null&&basic.equals("travel"))old=new Spec("cast.travel","travel","gui","/mycli waypoint menu","传送点术使用航点菜单；实际传送用goto","落点安全、活动允许；实际传送6魔力","航点菜单及实际传送回执");specs.put("cast."+basic,new Spec(old.id(),"magic",old.mode(),old.usage(),"基础通用，无需选职或学习；"+old.summary(),old.requires()+"；不支持--json，沿用原效果回执；详情skills info "+basic,"技能效果、物品/位置与status核对；未确认不重放"));}
+            for(String basic:NativeRpg.COMMON_IDS){
+                var guide=SpellGuide.find(basic);boolean cast=AgentCommunicationContract.castable(basic,guide.command());
+                String requirements=Set.of("night","feather").contains(basic)?"非旁观或倒地；通用技能已可用，无需旧经验等级或炼金门槛。":guide.requires();
+                specs.put("cast."+basic,new Spec("cast."+basic,"magic",cast?"cast":basic.equals("team")?"teleport":"read",guide.command(),
+                    "基础通用，无需选职或学习；"+(cast?"": "使用所列实际入口，不执行cast；")+guide.effect(),
+                    requirements+"；"+guide.costLine()+"；详情skills info "+basic,"核对原效果回执和实际状态；未确认不重放"));
+            }
             nativeSpec(specs,"tasks","group","/mycli tasks <动作>","冒险任务：list/info/status 查询，accept 接取，claim 交付","不自动接单；旧路线分类、menu/pause/resume 保持兼容");
             nativeSpec(specs,"tasks.list","read","/mycli tasks list [--page 页码]","分页查原生讨伐、探索与制作任务","每页最多7项，免费只读；旧路线分类另沿原公会任务");
             nativeSpec(specs,"tasks.info","read","/mycli tasks info <ID>","查条件、前置、奖励和接取命令","免费只读；ID 从 list 复制，不猜测任务名");
@@ -395,7 +401,7 @@ final class AgentCliCatalog {
             nativeSpec(specs,"skillbook.use","read","/mycli skillbook use <槽位>","兼容旧调用并解释迁移；不会消耗书或升级旧技能","基础技能无需研习；职业升级统一Vortex学习点和天赋");
             Spec stashPut=specs.get("arena.stash.putslot");specs.put(stashPut.id(),new Spec(stashPut.id(),stashPut.category(),stashPut.mode(),stashPut.usage(),"按背包精确槽位直接远程存箱，无需先传送或打开GUI","通用travel已可用；成功2魔力；绑定保护保持；按moved和stash list核对",stashPut.returns()));
             Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
-            nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","原生队伍：默认status；create/invite/accept组队，副本仍须分别join","复用原Vortex权限；不授OP；会话队伍不代表已加入副本");
+            nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","先status查邀请/成员/集合；create→invite→对方accept才组队，聊天约定不算","复用原Vortex权限；集合可locate tp；会话队伍不代表副本参战，原生重启后须重组");
             for(String action:List.of("status","create","invite","accept","decline","leave","disband","kick","menu"))nativeSpec(specs,"guild.party."+action,action.equals("status")?"read":action.equals("menu")?"gui":"write","/mycli guild party "+action+(Set.of("invite","kick").contains(action)?" <在线玩家名>":""),switch(action){case "status"->"查本人队长和成员；无队伍是正常状态";case "create"->"创建原生队伍，不自动邀请或开副本";case "invite"->"邀请在线队友，需对方主动accept";case "accept"->"接受本人有效邀请，不会自动进入副本";case "decline"->"拒绝本人待接受邀请";case "leave"->"退出原生队伍；原副本场次另查status";case "disband"->"队长解散原生队伍";case "kick"->"依原生队伍职权移出在线成员";default->"打开原生组队菜单";},"仅本人；原生组队权限；操作免费，邀请和队伍为会话状态；成功后用guild party status核对");
             return specs;
         }

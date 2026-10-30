@@ -1,5 +1,7 @@
 # 千灯纪 CLI：少记命令，按需学习
 
+2026-10-31[结伴探索组合候选](COOPERATIVE_EXPLORATION_20261031.md)仍未部署：原`guild party status`给原生邀请和集合阶段，`skills info team`引到已有`locate tp <名字>`，地点管理先`waypoint list`。不新增顶层命令；委托详情补私有文字，登高改查山地地形。当前正式仍AF.37，不能把源码帮助当成已生效。
+
 2026-10-31智能闪现候选只更新原 `skills info blink` 和 `help cast.blink` 的说明，入口仍是 `/mycli cast blink`/中文名，无新参数；瞄准优先、未瞄准选前方最远安全地面。候选尚未部署，见[验收与生效范围](SMART_BLINK_20261031.md)。
 
 2026-10-30基础成长候选：保留AuraSkills基础熟练度与原经验，用于有上限的自动被动；Vortex继续管理职业、主动技能、天赋与魔力。候选原目录筛选`skills list passive`，没有新顶层命令。本级经验/升级剩余分开显示；旧SpellMastery归档与基础熟练度不是同一概念。归乡落点已热修，其余尚未发布，见[成长说明](RPG_GROWTH_20261030.md)。

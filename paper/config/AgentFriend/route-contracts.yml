@@ -98,6 +98,18 @@ tasks:
     reward: {fame: 5, emeralds: 2, bonus: MAP, bonus-count: 1}
     steps:
       - {title: 附近路线走查, description: 主世界内实际走过三个不同的十六格区域，至少四十八格新路线与十五秒有效行进；重复绕圈、原地等候和传送不增加探索证据。看 guild status 缺项再 guild claim。, goal: dimension, dimension: overworld, target: 3, zone-size: 16, min-distance: 48, min-seconds: 15}
+  mountain_outlook:
+    route: exploration
+    beginner: false
+    repeat: once
+    title: 山路笔记·山脊远望
+    description: 为旅人阿岚走查一段山路，再到开阔山脊观景。不是在村庄垫方块刷高度；山顶可自愿建小观景台、拍照留念，建造和照片都不是验收硬门槛。
+    beneficiary: 旅人阿岚
+    icon: SPYGLASS
+    reward: {fame: 7, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    steps:
+      - {title: 走查山路, description: 先备食物、羽落和返程办法。在主世界亲自走查四个不同十六格区域、至少九十六格新路线与二十秒有效行进；可结伴，不要求组队才接单。绕圈、传送和原地等待不补探索证据，达标后 guild claim 进入山脊阶段。, goal: dimension, dimension: overworld, target: 4, zone-size: 16, min-distance: 96, min-seconds: 20}
+      - {title: 山脊远望, description: 沿真实山坡探索到开阔的Y≥120山脊，周围须有连片厚实地表，落地横向走动后 guild status 核对，再 guild claim。平地垫柱和独立屋顶不算，不要求雪山；没有就近路线时可放弃改做附近委托，别困在搭柱上。完成后可先 protect 查权限，再自愿建小观景台或拍照。, goal: peak, target: 1}
   restock_light:
     route: supply
     beginner: true

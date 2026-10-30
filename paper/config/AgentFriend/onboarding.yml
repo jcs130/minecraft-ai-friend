@@ -51,3 +51,7 @@ steps:
   complete:
     title: 入门已完成，选择自己的生活
     message: 先选近郊探索，再尝试普通试炼塔和遗迹地下城：tasks list exploration、arena status、dungeon list。农事日常可选，毕业不需反复种田；出发用 guild shared 取公共补给。已有任务按 tasks status 收尾，试炼和地下城不占公会委托槽。
+release-revision: 9
+release-notice:
+  - '[组队更新] 聊天答应不算入队；/mycli guild party status 查邀请和成员。队长create、invite，对方accept；集合用 /mycli locate tp <名字>（8魔力、20秒冷却），不代加入副本。'
+  - '[探索更新] 登高改为山地走查，村庄垫柱、独立屋顶不算；观景台和合影可自愿留念。闪现支持瞄准优先、无目标前向择点；按 /mycli skills info <ID> 查实际入口，不反复cast travel。'

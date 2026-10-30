@@ -115,11 +115,11 @@ public final class VortexBridge extends JavaPlugin {
     }
     /** Read-only native roster; no commands, invitation, teleport or enrollment. */
     public String partyState(Player p){
-        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
-        var result=new LinkedHashMap<String,Object>();result.put("available",true);
-        var party=vortex.expeditionPartyManager().partyOf(p.getUniqueId());result.put("inParty",party.isPresent());
-        result.put("members",party.map(s->s.members().stream().map(UUID::toString).sorted().toList()).orElse(List.of()));
-        party.ifPresent(s->result.put("leaderUuid",s.leaderId().toString()));
+        var result=new LinkedHashMap<>(NativePartyView.state(vortex,p));
+        // Existing AgentFriend ABI expects UUID strings here; rich rows remain under memberDetails.
+        result.put("memberDetails",result.get("members"));
+        result.put("members",vortex.expeditionPartyManager().membersOf(p.getUniqueId()).stream()
+            .filter(id->Boolean.TRUE.equals(result.get("inParty"))).map(UUID::toString).sorted().toList());
         return gson.toJson(result);
     }
     private final Map<UUID,CompletableFuture<JsonObject>> viewerTalents=new HashMap<>();

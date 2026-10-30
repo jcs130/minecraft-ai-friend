@@ -63,7 +63,7 @@ final class GuildManager implements Listener {
                     Goal.EXPLORE, 1, 0, 1, 12, 5, Material.IRON_SWORD, 1, "bunker"),
             new Contract("biome_border", "边界巡礼", "在同一世界实际移动跨过两种群系的交界，支持自定义群系；不限制离接单地点多远，传送本身不计", Material.MOSSY_COBBLESTONE,
                     Goal.BIOME_BORDER, 1, 0, 0, 6, 2, Material.OAK_SAPLING, 2, null, 0),
-            new Contract("high_peak", "制高点", "到达 Y≥120 的高处（天然山峰或建筑均可），不要求积雪；到达后走动一步。", Material.SPYGLASS,
+            new Contract("high_peak", "山脊远望", "探索Y≥120的开阔山地，周围须有连片自然地表；平地垫柱和屋顶不算。观景台、合影可自愿留念。", Material.SPYGLASS,
                     Goal.PEAK, 1, 0, 0, 6, 2, Material.SNOWBALL, 8, null, 0),
             // —— 战斗执行（dim 1）——
             new Contract("first_step", "初探苔穴", "通关地下城第 1 层", Material.MOSS_BLOCK,
@@ -186,6 +186,7 @@ final class GuildManager implements Listener {
         else if(current>=quest.target())missing.add("尚需 guild claim 交付本阶段；多阶段全部交付后才算整单完成");
         if (!out.has("market")) {
             var guide=TaskProgressGuidance.guide(quest,current,null,"",new com.google.gson.JsonObject());
+            if(quest.goal()==Goal.PEAK)guide=PeakSurvey.guide(guide,PeakSurvey.inspect(p.getLocation()));
             out.add("guidance",guide);out.addProperty("advice",guide.get("nextAction").getAsString());
             out.addProperty("nextCommand",guide.get("nextCommand").getAsString());
         }
@@ -565,7 +566,7 @@ final class GuildManager implements Listener {
         if (event.getTo() == null) return;
         Player player = event.getPlayer();
         Contract quest = active(player);
-        if (quest != null && quest.goal() == Goal.BIOME_BORDER) return;
+        if (quest != null && (quest.goal() == Goal.BIOME_BORDER || quest.goal() == Goal.PEAK)) return;
         if (quest != null && quest.goal() == Goal.PILGRIMAGE) {
             plugin.getConfig().set(base(player.getUniqueId()) + ".active.far", 0);
             plugin.saveConfig();
@@ -653,7 +654,7 @@ final class GuildManager implements Listener {
 
     private void showPeakRequirement(Player player, Contract quest) {
         if (quest == null || quest.goal() != Goal.PEAK) return;
-        player.sendMessage(ChatColor.AQUA + "「" + quest.title() + "」验收：到达 Y≥120 即可，天然山峰、山上建筑、屋顶和高塔均可；不要求积雪或全程徒步。"
+        player.sendMessage(ChatColor.AQUA + "「" + quest.title() + "」验收："+PeakSurvey.requirement()
                 + "当前 Y=" + player.getLocation().getBlockY() + "；到达后横向走过一格记录，/mycli guild status 查进度，完成后 /mycli guild claim 领取。");
     }
 
@@ -689,7 +690,7 @@ final class GuildManager implements Listener {
             case EXPLORE -> {
                 if (quest.siteId() != null && DungeonExpeditions.reached(to, quest.siteId())) advance(player, quest);
             }
-            case PEAK -> { if (to.getBlockY() >= 120) advance(player, quest); }
+            case PEAK -> { if (from.getWorld()==to.getWorld()&&(from.getBlockX()!=to.getBlockX()||from.getBlockZ()!=to.getBlockZ())&&PeakSurvey.reached(player,to)) advance(player, quest); }
             case BIOME_BORDER -> checkBiomeBorder(player, from, to);
             case PRAYER_ROAD -> {
                 String path = base(player.getUniqueId());
@@ -869,7 +870,7 @@ final class GuildManager implements Listener {
         List<String> pool = new java.util.ArrayList<>();
         for (Contract quest : focus) pool.add(quest.id());
         for (int i = 0; i < others.size() && pool.size() < DAILY_POOL; i++) pool.add(others.get(i).id());
-        pool.add("high_peak"); // 保底：每人每天都有一张简单感知委托可做
+        // Mountain exploration is optional; never force every resident into the same altitude objective.
         return pool;
     }
 
