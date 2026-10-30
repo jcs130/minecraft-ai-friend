@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.136
+
+- Keep failed-plan recovery stable when reopening the same native menu allocates
+  a different protocol window ID. Preserve original effect receipts, measured
+  window changes, type/target/stock/position distinctions and the existing
+  scope, death, known-terminal and 120-second bounds. Successful interactions
+  still retire only their own failure. No error is hidden or marked successful.
+- Verify the real controller dispatch boundary and isolated packed consumer.
+  Source/build checks do not establish live recovery or task completion.
+
 ## 0.2.135
 
 - Pin the canonical rc.145 core with continuous surface swimming and separate body/head water discovery. Preserve the native queue, oxygen checks before underwater travel and unknown/cancelled results.
