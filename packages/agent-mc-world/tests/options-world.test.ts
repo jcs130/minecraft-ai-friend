@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { methodHarness } from './method-harness.ts';
 
 describe.each(['1.21.1', '1.20.6'])('live discovery port %s', version => {
+  it('includes surface-water choices in current facts without starting a task', () => {
+    const r=methodHarness(version);
+    try {
+      r.bot.entity.position.y=64.3;r.bot.entity.onGround=false;r.set(0,64,0,'water');
+      const before=r.exec.status();const facts=r.world.requestFacts()!;
+      expect(facts.options?.context).toMatchObject({inWater:true,headInWater:false,oxygen:null});
+      expect(facts.parts?.find(p=>p.key==='options')?.text).toContain('水路与潜水');
+      expect(r.exec.status()).toEqual(before);expect(r.said).toEqual([]);
+    } finally {r.close();}
+  });
   it('exports fresh options through the actual tool and request-tail parts without starting work or chat', async () => {
     const r = methodHarness(version);
     try {

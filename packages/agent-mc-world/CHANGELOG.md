@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7-rc.145
+
+- Continue surface-only swim routes without demanding an unrelated full-oxygen refill at every waypoint. Confirm a refill before the next submerged leg and maintain bounded surface input while waiting; preserve unknown oxygen, cancellation and incomplete results.
+- Keep water-travel discovery visible while the feet remain in water and the head is breathing. Report head submersion separately and expose the existing continuous `swim` action alongside short controls and agent-authored programs.
+
 ## 0.5.7-rc.144
 
 - Use the existing four-block interaction reach throughout a block-approach route, rather than requiring a second two-block arrival goal after the route starts. Keep cancellation, native hand preparation and effect verification unchanged; prevent needless approach failures at chests and ledges.
