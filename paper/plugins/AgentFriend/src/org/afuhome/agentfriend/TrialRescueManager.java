@@ -60,6 +60,18 @@ final class TrialRescueManager implements Listener {
                 && (p.getGameMode() == GameMode.SURVIVAL || p.getGameMode() == GameMode.ADVENTURE);
     }
     private boolean same(Team team, Down d) { return team != null && team.id.equals(d.team); }
+    private boolean covers(Team team, Player p) {
+        return team != null && (team.members.size() >= 2 || team.id.startsWith("site:"))
+                && team.contains.test(p.getLocation());
+    }
+    boolean rescueActive(Player p) {
+        return p != null && rescueActive(team(p.getUniqueId()),p);
+    }
+    private boolean rescueActive(Team team,Player p) {
+        return p.isOnline() && !p.isDead()
+                && (p.getGameMode() == GameMode.SURVIVAL || p.getGameMode() == GameMode.ADVENTURE)
+                && covers(team, p);
+    }
     private void notice(Player p) {
         long now = System.currentTimeMillis();
         if (now - lastNotice.getOrDefault(p.getUniqueId(), 0L) < 1500) return;
@@ -79,7 +91,7 @@ final class TrialRescueManager implements Listener {
         if (downed(p)) { e.setCancelled(true); return; }
         if (e.getFinalDamage() < p.getHealth() || !standing(p)) return;
         Team team = team(p.getUniqueId());
-        if (team == null || team.members.size() < 2 && !team.id.startsWith("site:") || !team.contains.test(p.getLocation())) return;
+        if (!covers(team, p)) return;
         // Let vanilla consume a real totem before using the trial rescue rule.
         if (p.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING
                 || p.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING) return;
@@ -355,7 +367,10 @@ final class TrialRescueManager implements Listener {
         state.addProperty("radius", RADIUS); state.addProperty("seconds", RESCUE_MS / 1000);
         state.addProperty("instruction", "试炼塔/遗迹地下城组队挑战倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；上方显示进度与剩余秒数，离开范围重计。金色圈标记救援范围，绿色表示救援进度。清完本层/本室自动复活队友；全队倒下才失败撤离。");
         Team team = team(p.getUniqueId()); JsonArray teammates = new JsonArray();
+        boolean rescueHere=rescueActive(team,p);
         int count=team==null?0:team.members.size();
+        state.addProperty("active",team!=null);state.addProperty("team",team==null?"":team.id);
+        state.addProperty("rescueActive",rescueHere);
         state.addProperty("participants",count);state.addProperty("rescueEnabled",count>=2);
         state.addProperty("lifeState",downed(p)?"downed":p.isDead()?"dead":"alive");
         state.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(GameRule.KEEP_INVENTORY)));
@@ -365,6 +380,9 @@ final class TrialRescueManager implements Listener {
             state.add("checkpoint",new Gson().toJsonTree(checkpoint));
             state.addProperty("instruction",(count>1?"致命伤害先倒地，队友4格内停留10秒或清室可复活；救援成功不扣次数。":"单人致命伤害自动返回存档点，背包装备保留。")+"单人或全队战败回上个存档点，整场第3次战败才结束；断线和服务器故障不扣次数。剩余机会 "+checkpoint.get("attemptsRemaining")+"/3。");
         }
+        if(team==null)state.addProperty("instruction","当前没有有效试炼/遗迹参战身份，存档点与倒地救援未生效；历史场次和旧坐标不能作为救援保证。查询：/mycli dungeon status。");
+        else if(!rescueHere)state.addProperty("instruction","当前不满足本场救援条件（登记人数、范围或生存状态）；此处不保证倒地或返回存档点。先查本场状态并核对维度、位置：/mycli dungeon status。");
+        else state.addProperty("instruction",state.get("instruction").getAsString()+"仅在本场有效且身处挑战范围时适用；超时、结束或退出后失效。");
         if (team != null) for (UUID id : team.members) {
             Down d = downs.get(id); if (d == null) continue;
             JsonObject target = new JsonObject(); target.addProperty("uuid", id.toString());
