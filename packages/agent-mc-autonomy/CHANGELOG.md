@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.134
+
+- Pin the complete canonical engine-only rc.141 build, retaining rc.140's
+  including current native query, action-result, navigation and food-risk
+  contracts and the complete packaged source inventory. Keep the bounded chat
+  noop review and method learning integration.
+- Update the exact archive, source/build/type receipts and companion lock.
+  Viewer, audio and appearance resources remain separate checked inputs.
+  Loading and actual gameplay effects still require independent acceptance.
+
 ## 0.2.132
 
 - Connect planning to advertised method authoring, immutable versions and original execution review. Retain the 0.2.131 explicit-failure evidence fix while integrating current main.
