@@ -51,6 +51,15 @@ describe('opaque command repetition', () => {
     expect(new Set(receipts.map(r => r?.commandHash)).size).toBe(1);
     expect(receipts.every(r => r?.serverEffect === 'unverified')).toBe(true);
   });
+  it('does not forget an uninspected command just because another command was interleaved',()=>{
+    const book=new CommandRepetitionGuard(2);
+    expect(book.admit('mc_do',command('/opaque travel'),'t1',0)?.admitted).toBe(true);
+    expect(book.admit('mc_do',command('/opaque info'),'i1',1)?.admitted).toBe(true);
+    expect(book.admit('mc_do',command('/opaque travel'),'t2',2)?.admitted).toBe(true);
+    expect(book.admit('mc_do',command('/opaque info'),'i2',3)?.admitted).toBe(true);
+    expect(book.admit('mc_do',command('/opaque travel'),'t3',4)?.admitted).toBe(false);
+    book.inspected();expect(book.admit('mc_do',command('/opaque travel'),'t4',5)?.admitted).toBe(true);
+  });
   for (const prefix of ['mc', 'mymc'] as const) it(`guards ${prefix} SDK/MCP dispatch while retaining pending work and idempotent receipts`, async () => {
     let dispatched = 0;
     const epoch = '11111111-1111-4111-8111-111111111111';

@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.138-commandreview.1",
+  "version": "0.5.7-rc.138-commandreview.2",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -31,6 +31,10 @@
     "minecraft-agent-knowledge": "./bin/minecraft-agent-knowledge.mjs"
   },
   "exports": {
+    "./motion-review": {
+      "types": "./dist/types/src/client/motion-review.d.ts",
+      "default": "./dist/runtime/src/client/motion-review.js"
+    },
     "./command-repetition": {
       "types": "./dist/types/src/client/command-repetition.d.ts",
       "default": "./dist/runtime/src/client/command-repetition.js"

@@ -16,6 +16,7 @@ export interface CommandSubmission {
 /** No command text is retained. Inspection permits reconsideration, not proof of success. */
 export class CommandRepetitionGuard {
   private current: Omit<CommandSubmission, 'admitted' | 'tracked' | 'serverEffect'> | null = null;
+  private readonly plans = new Map<string, NonNullable<CommandRepetitionGuard['current']>>();
   private readonly requests = new Map<string, { hash: string; result: CommandSubmission }>();
   constructor(readonly limit = 3) {
     if (!Number.isSafeInteger(limit) || limit < 0 || limit > 100) throw new TypeError('Invalid command repetition limit');
@@ -42,8 +43,10 @@ export class CommandRepetitionGuard {
       if (previous.hash !== hash) throw Error('Command request id reused with different arguments');
       return structuredClone(previous.result);
     }
-    if (this.current?.commandHash !== hash) this.current = { commandHash: hash, submissions: 0, limit: this.limit,
+    this.current = this.plans.get(hash) ?? { commandHash: hash, submissions: 0, limit: this.limit,
       firstRequestId: requestId, latestRequestId: requestId, after };
+    this.plans.delete(hash);this.plans.set(hash,this.current);
+    while(this.plans.size>16)this.plans.delete(this.plans.keys().next().value!);
     const admitted = this.current.submissions < this.limit;
     if (admitted) { this.current.submissions++; this.current.latestRequestId = requestId; }
     const result: CommandSubmission = { ...this.current, tracked: true, admitted, serverEffect: 'unverified' };
@@ -52,7 +55,7 @@ export class CommandRepetitionGuard {
     return structuredClone(result);
   }
   /** An explicit inspection returned. Background fact/event polling must not call this. */
-  inspected(): void { this.current = null; }
+  inspected(): void { this.current = null;this.plans.clear(); }
   /** Return only bounded hashes and request identities. */
   snapshot() { return { protocol: 'agent-mc-command-repetition/v1', current: this.current && structuredClone(this.current) }; }
 }

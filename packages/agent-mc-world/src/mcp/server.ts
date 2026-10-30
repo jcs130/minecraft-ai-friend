@@ -133,9 +133,9 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
          return outcome({ text: JSON.stringify(data), data, failed: true });
        }
       if (extra.signal.aborted) throw new Error('Request cancelled before submission.');
-      if (name === `${prefix}_tool_help`) return outcome(readToolHelp(tools.map(tool => ({
+      if (name === `${prefix}_tool_help`) {const read=readToolHelp(tools.map(tool => ({
         name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema,
-      })), args));
+      })), args);if(!read.failed&&args.name===`${prefix}_do`)runtime.noteMotionInspection();return outcome(read);}
       if (name === protocol.name) {
         requireProtocol(String(args.protocol));
         const id = () => { if (typeof args.id !== 'string' || !args.id) throw new Error('id is required'); return args.id; };
