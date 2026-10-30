@@ -1,8 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePhotoJob,nativePhotoSkin,photoLoadedRadius} from './goddess-photo-camera.mjs';
+import {validatePhotoJob,nativePhotoSkin,photoLoadedRadius,photoLeaseActor,awaitPhotoLease} from './goddess-photo-camera.mjs';
 const id = '2e254cab-2738-40bb-b9bf-4f65a3c3be12';
 const job = {type:'capture',job:id,nonce:id,owner:id,world:id,uploadId:id,entityId:12,mode:'first',x:0,y:64,z:0,yaw:0,pitch:0,anchorX:0,anchorY:64,anchorZ:0,uploadBase:'http://127.0.0.1:8517'};
+
+test('remote camera acquisition tolerates delayed entity packets without guessing another actor',async()=>{
+  const bot={entities:{}},target={uuid:id,position:{x:0,y:64,z:0}};let camera=0,observations=0;
+  await awaitPhotoLease(()=>{
+    observations++;if(observations===2)camera=12;if(observations===4)bot.entities[12]=target;
+    try{return !!photoLeaseActor(bot,job,camera);}catch{return false;}
+  },{timeoutMs:150,intervalMs:5});
+  assert.equal(observations,4);assert.equal(photoLeaseActor(bot,job,camera),target);
+  target.position.x=1;assert.throws(()=>photoLeaseActor(bot,job,camera),/PHOTO_CAMERA_LEASE_LOST/);
+  target.position.x=0;target.uuid='a'.repeat(36);assert.throws(()=>photoLeaseActor(bot,job,camera),/PHOTO_CAMERA_LEASE_LOST/);
+  target.uuid=id;assert.throws(()=>photoLeaseActor(bot,job,99),/PHOTO_CAMERA_LEASE_LOST/);
+});
+test('camera acquisition times out or cancels rather than rendering an unverified target',async()=>{
+  await assert.rejects(awaitPhotoLease(()=>false,{timeoutMs:10,intervalMs:3}),/PHOTO_CAMERA_LEASE_LOST/);
+  const cancelled=new AbortController();cancelled.abort(new Error('OWNER_CANCELLED'));
+  await assert.rejects(awaitPhotoLease(()=>true,{signal:cancelled.signal}),/OWNER_CANCELLED/);
+});
 
 test('photography selects a complete actual footprint without accepting holes or loading columns',()=>{
   const columns=new Map(),column={toJson:()=>'{"actual":true}'};
