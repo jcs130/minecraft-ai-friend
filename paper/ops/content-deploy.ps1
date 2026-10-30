@@ -2,7 +2,10 @@
 function Content-FirstPartyPreviousJar([string]$name) {
     # Deployed hotfixes such as 0.4.47.3 use a fourth numeric component.
     # Keep the first-party filename boundary; deployment still pins its SHA256.
-    return $name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\.jar$'
+    # These named AgentFriend builds are already deployed; arbitrary suffixes
+    # and third-party removals remain ineligible.
+    return ($name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\.jar$') -or
+        ($name -cmatch '^AgentFriend-[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?-(?:compat|vortex|rpg)\.jar$')
 }
 
 function Content-NumenPaperJar([string]$name) {

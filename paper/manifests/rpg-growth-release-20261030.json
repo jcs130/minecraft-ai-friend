@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "release": "rpg-growth-unification-20261030-r1",
-  "state": "approved-awaiting-human-safe-window",
+  "release": "rpg-growth-unification-20261031-r2",
+  "state": "approved-maintenance-in-progress",
   "document": "paper/docs/RPG_GROWTH_20261030.md",
   "runtimeChanged": false,
   "homeWarpHotfixApplied": true,
@@ -23,7 +23,14 @@
   "features": {
     "experienceProjection": "loaded native curve; current-level progress, remaining and cap kept distinct",
     "foundation": "eleven existing AuraSkills tracks and records retained",
-    "nativePassives": ["light_fall", "anti_hunger", "sword_master", "axe_master", "bow_master", "mob_master"],
+    "nativePassives": [
+      "light_fall",
+      "anti_hunger",
+      "sword_master",
+      "axe_master",
+      "bow_master",
+      "mob_master"
+    ],
     "singleManaAuthority": "VortexRPG",
     "legacySpellMasteryAndClasses": "archived",
     "nightAndFeather": "no legacy learning gate under Vortex; native mana and cooldown retained",
@@ -38,7 +45,25 @@
     "crossVolumeInstallAndRollbackChecks": 12,
     "testsPassed": true,
     "isolatedOnly": true,
-    "productionPostflight": "pending"
+    "productionPostflight": "pending",
+    "currentNativeVoiceSyntheticInput": {
+      "passed": true,
+      "nearAudioPackets": 273,
+      "nearCaptions": 1,
+      "farAudioPackets": 0,
+      "farCaptions": 0,
+      "crossWorldAudioPackets": 0,
+      "crossWorldCaptions": 0,
+      "realMicrophone": false,
+      "humanHearing": false,
+      "productionJarsPreserved": true
+    },
+    "installerRepair": {
+      "filenameChecks": 19,
+      "nativeTargetChecks": 24,
+      "realCrossVolumeInstallRollbackChecks": 11,
+      "newFrozenPreflightChecks": 32
+    }
   },
   "boundaries": [
     "six-stage Aincrad architecture not included",
@@ -46,5 +71,12 @@
     "public Skill 1.3.4 download not rebuilt",
     "real microphone and human hearing not newly verified",
     "no player XP, profession, password or inventory rewrite"
-  ]
+  ],
+  "initialAttempt": {
+    "release": "rpg-growth-unification-20261030-r1",
+    "state": "installer-rejected-before-jar-mutation-old-runtime-restored",
+    "cause": "previous first-party filename validation omitted compat suffix",
+    "configRollbackVerified": true,
+    "originalFailureReceiptRetained": true
+  }
 }

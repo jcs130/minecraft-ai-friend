@@ -4,6 +4,9 @@ $taskCases=@(
     @('AgentFriend-0.4.47.jar',$true),
     @('AgentFriend-0.4.47.3.jar',$true),
     @('AgentFriend-0.4.47.4.jar',$true),
+    @('AgentFriend-0.4.47.36-compat.jar',$true),
+    @('AgentFriend-0.4.47.34-vortex.jar',$true),
+    @('AgentFriend-0.4.47.37-rpg.jar',$true),
     @('CortiEyeMirror-0.1.16.jar',$true),
     @('CortiEyeMirror-0.1.16.1.jar',$true),
     @('OtherPlugin-0.4.47.3.jar',$false),
@@ -11,6 +14,10 @@ $taskCases=@(
     @('AgentFriend-0.4.47.3.jar.disabled',$false),
     @('AgentFriend-0.4.47.3.1.jar',$false),
     @('AgentFriend-0.4.47-beta.jar',$false),
+    @('AgentFriend-0.4.47.36-compat.jar.disabled',$false),
+    @('../AgentFriend-0.4.47.36-compat.jar',$false),
+    @('AgentFriend-0.4.47.36-unknown.jar',$false),
+    @('CortiEyeMirror-0.1.16-compat.jar',$false),
     @('AgentFriend-0.4.jar',$false),
     @('AgentFriend-0.4.47.3.jar/elsewhere',$false)
 )
