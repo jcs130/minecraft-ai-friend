@@ -73,13 +73,28 @@ export interface MinecraftMcpServerOptions {
   /** 'compact' advertises condensed tool text and collapsed wide field pools; validation and *_tool_help keep the exact schemas. */
   catalog?: 'full' | 'compact';
   compact?: CompactCatalogOptions;
+  /** The host calls SDK turn/barrier methods; model-facing MCP cannot mutate those same lifecycle boundaries. Default: caller-owned standalone MCP. */
+  turnOwnership?: 'caller' | 'host';
 }
 
 export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version: string, options: MinecraftMcpServerOptions = {}): Server {
+  if (options.turnOwnership !== undefined && !['caller', 'host'].includes(options.turnOwnership))
+    throw new Error('Invalid turnOwnership: expected caller or host');
   const prefix = runtime.toolPrefix;
   const translate = (text: string) => text.replaceAll('mc_', prefix + '_');
   const [connection, events, artifact, metrics, trace, protocol,textRead] = [connectionSpec, eventsSpec, artifactSpec, metricsSpec, traceSpec, protocolSpec,textSpec]
     .map(tool => ({ ...tool, name: translate(tool.name), description: translate(tool.description ?? '') }));
+  const hostTurnActions = new Set(['begin_turn', 'end_turn', 'ack_barrier']);
+  if (options.turnOwnership === 'host') {
+    protocol.inputSchema = structuredClone(protocol.inputSchema);
+    const actions = protocol.inputSchema.properties!.action as { enum: string[] };
+    actions.enum = actions.enum.filter(action => !hostTurnActions.has(action));
+    for (const rule of (protocol.inputSchema.allOf ?? []) as Array<{if?:{properties?:{action?:{enum?:string[]}}}}>) {
+      const condition=rule.if?.properties?.action;
+      if(condition?.enum)condition.enum=condition.enum.filter(action=>!hostTurnActions.has(action));
+    }
+    protocol.description = 'Read current facts, execution receipts, original archives or context budgets; cancel an explicitly identified request. Decision turns and tool barriers are managed by the host through the SDK, not by this model-facing tool.';
+  }
   const server = new Server({ name: `minecraft-agent-${runtime.profile}`, version }, {
     capabilities: { tools: {}, resources: {} },
     instructions: translate('This server supplies Minecraft observation, execution and an optional game-only notebook (mc_memory action:help). You own goals, personal memory, reasoning and wakeups. '
@@ -127,6 +142,13 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     try {
       const validate = validators.get(name);
       if (!validate) throw new Error(`Unknown tool: ${name}`);
+      if (options.turnOwnership === 'host' && name === protocol.name && args.protocol === PROTOCOL && hostTurnActions.has(String(args.action))) {
+        const text = 'HOST_MANAGED_TURN: the host already opens/closes decision turns and acknowledges barriers. '
+          + 'No lifecycle call or game action was submitted. Do not invent another turn id or retry begin_turn/end_turn/ack_barrier. '
+          + 'Read facts or execution receipts with the advertised protocol actions, or choose an advertised game tool. The host retains the current turn.';
+        return outcome({ text, failed: true, data: { code: 'HOST_MANAGED_TURN', action: args.action,
+          lifecycleSubmitted: false, gameActionSubmitted: false, retryable: false } });
+      }
        if (!validate(args)) {
          const schema = tools.find(t => t.name === name)!.inputSchema;
          const data = invalidToolArguments(name, validate.errors, schema, ajv.errorsText(validate.errors));
@@ -168,7 +190,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       if (name === connection.name) {
         if (args.action === 'connect') await runtime.connect();
         else if (args.action === 'disconnect') await runtime.disconnect();
-        else if (args.action === 'environment') return outcome({ text: await runtime.environment() });
+        else if (args.action === 'environment') return outcome({ text: await runtime.environment({ turnOwnership: options.turnOwnership }) });
         else if(args.action==='viewer-status'||args.action==='viewer-retry')return outcome({text:JSON.stringify(await runtime.viewerResources(args.action==='viewer-retry'?'retry':'status'))});
         return outcome({ text: JSON.stringify(runtime.status()) });
       }
