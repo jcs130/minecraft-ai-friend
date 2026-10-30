@@ -38,11 +38,26 @@ it('does not correlate foreign or unaccepted outcomes and never retains chat bod
  for(let i=1;i<=2;i++){call(b,i,{steps:[{skill:'chat',message:'private fixture chat'}]});b.recordEvents([terminal(i)]);}
  expect(b.context('r').episodes[0].failedSteps[0].why).toBeNull();expect(JSON.stringify(b.snapshot())).not.toContain('private fixture chat');
 });
-it('keeps new changed-world evidence and a different chosen plan out of the priority repair slot',()=>{
+it('preserves changed-world metadata without erasing explicit failures; a different chosen plan ends priority',()=>{
  const b=new PlanReviewBook();for(let i=1;i<=2;i++){call(b,i);b.recordEvents([{...terminal(i),meta:{repeatFailure:{observation:'changed'}}}]);}
- expect(b.priority('r')).toBeNull();
+ expect(b.priority('r')).toMatchObject({observation:'changed',failureKind:'failed-step',count:2});
  call(b,3);b.recordEvents([terminal(3)]);expect(b.priority('r')).not.toBeNull();
  call(b,4,{steps:[{skill:'goto',at:[1,64,1]}]});expect(b.priority('r')).toBeNull();
+});
+it('retains repeated failed smelting when moving inputs out of inventory changed state but produced nothing',()=>{
+ const b=new PlanReviewBook({now:()=>3000});for(let id=1;id<=2;id++){
+  call(b,id,{steps:[{skill:'smelt',input:'pufferfish',fuel:'coal',at:[1,64,1],count:1}]});
+  b.recordEvents([{...terminal(id,'blocked',[{step:1,outcome:'fail',why:'Loaded inputs but no smelting progress or output',observedEffect:{schema:'agent-mc-observed-effect/v1',skill:'smelt',dimension:'overworld',status:'changed',changed:{inventory:true,position:id===1},before:{inventory:{pufferfish:1,coal:1}},after:{inventory:{}}}}]),ts:new Date(id*1000).toISOString(),meta:{repeatFailure:{observation:'changed'}}}]);
+ }
+ expect(b.priority('r')).toMatchObject({count:2,failureKind:'failed-step',observation:'changed'});
+ expect(b.context('r').episodes[0].failedSteps[0].why).toContain('no smelting progress');
+ expect(b.context('r').recentEffects[0]).toMatchObject({goalVerified:false,inventoryChanges:[{item:'coal',before:1,after:0},{item:'pufferfish',before:1,after:0}]});
+});
+it('does not let a different partial gain erase a failed step or infer a failed step from an unknown changed terminal',()=>{
+ const b=new PlanReviewBook();for(let id=1;id<=2;id++){call(b,id);b.recordEvents([terminal(id,'partial',[{step:1,outcome:'fail',why:'route remains blocked',observedEffect:'changed'},{step:2,outcome:'partial',why:'one item gained',observedEffect:'changed'}])]);}
+ expect(b.priority('r')?.count).toBe(2);expect(b.context('r').episodes[0].failedSteps[0].why).toContain('blocked');
+ const unknown=new PlanReviewBook();for(let id=1;id<=2;id++){call(unknown,id);unknown.recordEvents([{...terminal(id,'blocked',[]),meta:{repeatFailure:{observation:'changed'}}}]);}
+ expect(unknown.priority('r')).toBeNull();expect(unknown.context('r').episodes[0].failureKind).toBe('incomplete-terminal');
 });
 it('reads the real observed-effect object, keeps target geometry and ignores measured partial inventory gains',()=>{
  const b=new PlanReviewBook();for(let i=1;i<=2;i++){call(b,i);b.recordEvents([terminal(i,'blocked',[{step:1,outcome:'fail',why:'Route failed',detail:{text:'Target occupied; pure walking has no route'},observedEffect:{schema:'agent-mc-observed-effect/v1',dimension:'overworld',status:'unchanged',before:{target:{name:'stone',stateId:1}},changed:{position:false}}}])]);}

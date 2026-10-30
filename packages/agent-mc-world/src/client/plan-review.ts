@@ -29,6 +29,7 @@ export interface FailedPlanEpisode {
   toolPrefix: string;
   firstAt: number; lastAt: number; dimension: string | null;
   observation: 'changed' | 'unchanged' | 'unknown';
+  failureKind: 'failed-step' | 'incomplete-terminal';
 }
 export interface RecentPlanEffect {
   run: string; executionId: string; step: number; at: number; dimension: string | null; skill: string;
@@ -90,7 +91,11 @@ export class PlanReviewBook {
       const negative = ['blocked', 'partial'].includes(x.phase) || failed.length > 0;
       const dimension = steps.map(p => effect(p)?.dimension).find(d => typeof d === 'string') ?? null;
       const slot = `${s.run}:${dimension ?? '?'}:${s.planHash}`;
-      if (failed.some(p => status(p) === 'changed')) { const old = this.episodes.get(slot); if (old) {old.active = false;this.quotes.delete(old.key);} continue; }
+      // Loading inputs, spending fuel or merely moving can change state while
+      // the intended operation still fails. Only measured partial work without
+      // an explicitly failed step can close a no-progress episode.
+      const hasFailedStep=failed.some(p=>p.outcome==='fail');
+      if (!hasFailedStep&&failed.some(p => p.outcome==='partial'&&status(p) === 'changed')) { const old = this.episodes.get(slot); if (old) {old.active = false;this.quotes.delete(old.key);} continue; }
       if (!negative) {
         if (x.phase === 'completed' && steps.length && steps.every(p => ['ok', 'noop'].includes(p.outcome))) {
           const old = this.episodes.get(slot); if (old) {old.active = false;this.quotes.delete(old.key);}
@@ -103,6 +108,7 @@ export class PlanReviewBook {
         firstExecutionId: continuing ? old.firstExecutionId : x.id, latestExecutionId: x.id,
         localId: s.localId, count: continuing ? old.count + 1 : 1, active: true, stepKinds: s.stepKinds, toolPrefix: s.toolPrefix,
         firstAt: continuing ? old.firstAt : Date.parse(raw.ts) || this.now(), lastAt: Date.parse(raw.ts) || this.now(), dimension,
+        failureKind:hasFailedStep?'failed-step':'incomplete-terminal',
         observation: ['changed', 'unchanged'].includes(raw.meta?.repeatFailure?.observation) ? raw.meta.repeatFailure.observation
           : failed.length && failed.every(p => status(p) === 'unchanged') ? 'unchanged' : 'unknown' };
       this.episodes.delete(slot); this.episodes.set(slot, entry);
@@ -116,7 +122,7 @@ export class PlanReviewBook {
   }
   priority(run: string): FailedPlanEpisode | null {
     const latest=this.latest.get(run);if(!latest||!this.seen.has(latest.id))return null;
-    return structuredClone([...this.episodes.values()].reverse().find(e => e.run === run && e.active && this.fresh(e) && e.count >= 2&&e.observation!=='changed'&&e.planHash===latest.hash) ?? null);
+    return structuredClone([...this.episodes.values()].reverse().find(e => e.run === run && e.active && this.fresh(e) && e.count >= 2&&(e.observation!=='changed'||e.failureKind==='failed-step')&&e.planHash===latest.hash) ?? null);
   }
   snapshot(): { protocol: string; episodes: FailedPlanEpisode[]; recentEffects: RecentPlanEffect[] } {
     return { protocol: 'agent-mc-plan-review/v1', episodes: structuredClone([...this.episodes.values()]),recentEffects:structuredClone([...this.effects.values()]) };
@@ -125,6 +131,6 @@ export class PlanReviewBook {
     return { protocol: 'agent-mc-plan-review/v1',recentEffects:structuredClone([...this.effects.values()].filter(e=>e.run===run&&this.now()-e.at<=(this.options.windowMs??900000)).slice(-3)), episodes: [...this.episodes.values()].filter(e => e.run === run && e.active && this.fresh(e)).slice(-2).map(e => {
       return { ...e, failedSteps: this.quotes.get(e.key) ?? [], receiptIsUntrusted: true,
         original: e.localId === null ? { executionId: e.latestExecutionId } : { tool: `${e.toolPrefix}_queue`, arguments: { taskId: e.localId, detail: true } } };
-    }), guidance: 'Historical receipts, not current stock. Unattributed source stays unknown. Body work can change prerequisites during generation. Read original terminal/failed step and current stock before repeating. Declare needs for dependent actions/chat; partial or command-sent is not verified success. Probe success cannot repair failed movement; unknown cells do not imply pending pages. No automatic replay/cancel/adoption.' };
+    }), guidance: 'Historical receipts, not current stock. Unattributed source stays unknown. Body work can change prerequisites during generation. State change does not turn a failed step into progress. Read original terminal/failed step and current stock before repeating. Declare needs for dependent actions/chat; partial or command-sent is not verified success. Probe success cannot repair failed movement; unknown cells do not imply pending pages. No automatic replay/cancel/adoption.' };
   }
 }

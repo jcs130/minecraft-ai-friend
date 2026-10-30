@@ -30,6 +30,7 @@ import { DIRECTION_ZH, bearing, canSeeEntity, droppedStackOf } from './terrain.t
 import { findEntity, gotoGoal, reachCell } from './travel.ts';
 import { type SkillCall } from './skills.ts';
 import { skillTrade } from './skills-gather.ts';
+import { wornItemNamed } from './inventory.ts';
 import { consumeHeldFood, equipNamed } from './skills-craft.ts';
 import { isRealId, matchItemName } from './chests.ts';
 import {
@@ -2047,6 +2048,10 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
   const withPred: InvPred = (n, it) => matchesName(call.with, n, it) && itemMatchesPick(call.withPick, it, reg);
   const main = bot.inventory.items().find((i) => mainPred(i.name, i));
   if (!main) {
+    const worn = wornItemNamed(bot, call.item, call.pick);
+    if (worn) throw new SkillBlocked(`${itemAsked(call.item, call.pick)}现在穿在身上，不能直接放进铁砧；先用 `
+      + JSON.stringify({ skill: 'equip', item: call.item, hand: 'main', ...(call.pick ? { pick: call.pick } : {}) })
+      + ' 明确取下，再维修；本次没有脱装、开窗或消耗材料');
     throw noSuchItem(bot, call.item, call.pick, bot.inventory.items().filter((i) => i.name === call.item));
   }
   const withOne = call.with === undefined

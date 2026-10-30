@@ -35,13 +35,30 @@ export function itemsInReach(bot: Bot): InvItem[] {
  * 副手那件也在候选里;同一档名字下包里的先于副手的。
  */
 export function invItemNamed(bot: Bot, want: string, pick?: string): InvItem | undefined {
-  const items = itemsInReach(bot)
+  return itemNamedAmong(bot, itemsInReach(bot), want, pick);
+}
+
+function itemNamedAmong(bot: Bot, candidates: InvItem[], want: string, pick?: string): InvItem | undefined {
+  const items = candidates
     .filter((i) => itemMatchesPick(pick, i, bot.registry as never));
   const exact = items.find((i) => i.name === want);
   if (exact || isRealId(bot.registry, want)) return exact;
   return items.find((i) => itemCustomName(i) === want)
     ?? items.find((i) => i.name.endsWith(`_${want}`))
     ?? items.find((i) => i.name.startsWith(`${want}_`));
+}
+
+export type WornDestination = 'head' | 'torso' | 'legs' | 'feet';
+/** Read-only selection. Worn armor never joins ordinary crafting/mining stock. */
+export function wornItemNamed(bot: Bot, want: string, pick?: string): { item: InvItem; destination: WornDestination; slot: number } | null {
+  if (typeof bot.getEquipmentDestSlot !== 'function') return null;
+  const destinations: WornDestination[] = ['head', 'torso', 'legs', 'feet'];
+  const rows = destinations.map(destination => {
+    const slot = bot.getEquipmentDestSlot(destination);
+    return { destination, slot, item: bot.inventory?.slots?.[slot] as InvItem | null | undefined };
+  }).filter((row): row is { destination: WornDestination; slot: number; item: InvItem } => !!row.item);
+  const item = itemNamedAmong(bot, rows.map(row => row.item), want, pick);
+  return rows.find(row => row.item === item) ?? null;
 }
 
 /** invItemNamed 的名字口径,摊开给"这个名字下有哪几件"用 */
