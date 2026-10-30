@@ -167,9 +167,14 @@ export class GameMemoryService {
     if (!['local', 'local-vector', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');
     if (!['local-first', 'balanced', 'remote-first'].includes(cfg.readPreference)) throw new Error('Unknown memory read preference');
     if (args.action === 'service') {
-      const scope = this.book.execute({ action: 'search', limit: 1, query: '' }, ctx).scopeKey;
+      if (ctx.serviceScope && (ctx.serviceScope.account !== ctx.scope.account || ctx.serviceScope.agent !== ctx.scope.agent))
+        throw new Error('Service scope must retain the active game account and agent');
+      const serviceContext = ctx.serviceScope ? { ...ctx, scope: ctx.serviceScope } : ctx;
+      const scope = this.book.execute({ action: 'search', limit: 1, query: '' }, serviceContext).scopeKey;
+      const localScope = this.book.execute({ action: 'search', limit: 1, query: '' }, ctx).scopeKey;
       if (args.operation === 'prepare' && cfg.mode === 'remote' && cfg.provider === 'powercontext'
-        && this.hasPendingPowerCorrection(cfg, String(scope), ctx))
+        && (this.hasPendingPowerCorrection(cfg, String(scope), serviceContext)
+          || (scope !== localScope && this.hasPendingPowerCorrection(cfg, String(localScope), ctx))))
         throw new Error('A local notebook correction has unconfirmed remote replication; use local search and explicitly reconcile sync before prepared remote recall');
       return new GameMemoryLearning(this.directory, this.request).execute(args, String(scope), cfg, signal);
     }

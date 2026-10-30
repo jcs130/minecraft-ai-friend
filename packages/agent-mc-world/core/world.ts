@@ -1,6 +1,7 @@
 import { operationInventory } from './operation-experience.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
+import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
@@ -40,7 +41,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
-import { ServerQueryLane, SERVER_QUERY_TOOL, type ServerQueryDefinition } from './server-query.ts';
+import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, type ServerQueryDefinition } from './server-query.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -2240,6 +2241,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   KNOWLEDGE_TOOL,
   OPTIONS_TOOL,
   SERVER_QUERY_TOOL,
+  PROXIMITY_VOICE_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2820,6 +2822,7 @@ export class MinecraftWorld implements World {
   protected readonly activeEffects = new Set<string>();
   protected hookedBots = new WeakSet<object>();
   protected readonly attention = new AttentionReader();
+  protected readonly proximityVoice: ProximityVoiceLane;
   protected hearingDetach: (() => void) | null = null;
   protected hookedMessageBots = new WeakSet<object>();
   /** 服务端同一条系统提示在短时间连发时只投递首条；原始重复次数进诊断。 */
@@ -2862,6 +2865,7 @@ export class MinecraftWorld implements World {
   protected readonly pwsr = new PwsrTables();
   protected readonly goalCheckpoints: GoalCheckpointBook;
   private readonly goalCheckpointScopes = new WeakMap<GoalTable, string>();
+  private goalLoadedRealm: string | null = null;
   /**
    * 当前世界的目标表(句柄每次现取,换世界后自动指向新命名空间)。
    * `status` 换成带蓝图进度的那一版:目标行上「(蓝图 home-v2:已施工 34%)」的来源。
@@ -2954,6 +2958,25 @@ export class MinecraftWorld implements World {
       emit: (event) => this.logBodyLease(event),
     });
     this.dataDir = opts.dataDir ?? '';
+    this.proximityVoice = new ProximityVoiceLane({
+      config: () => ({enabled:false,audioProducerUrl:'',outputMode:'game-only',...this.cfg.proximityVoice}),
+      context: () => {
+        const bot=this.bridge?.bot;
+        if(!bot||!this.bridge?.connected||this.bridge.connectionState?.ready!==true||bot._client?.state!=='play')return null;
+        const world=readWorldIdentity(bot),generation=String(this.connectionGeneration);
+        return {bot,generation,world,stillCurrent:()=>this.bridge?.bot===bot&&this.bridge?.connectionState?.ready===true
+          &&bot._client?.state==='play'&&readWorldIdentity(bot).key===world.key&&readWorldIdentity(bot).revision===world.revision,
+          disableAutoSpeech:()=>sendChat(bot,'/voice auto off')};
+      },
+      blob:handle=>this.host?.blob(handle)??null,
+      hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`,true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
+        utteranceId:row.utteranceId,channel:'nearby-voice',socialScope:'minecraft-server',
+        source:'mcagent:voice/nearby_voice',sourceWorld:null,deliveryWorld:world,deliveryWorldKey:world.key,transcript:true}},row.speaker),
+      changed:receipt=>this.emit('minecraft.voice',`[Minecraft 附近语音] ${receipt.requestId} 游戏=${receipt.game.state}，直播=${receipt.broadcast.state}。`
+        +(receipt.game.state==='sent'&&receipt.requestedText?` 本次台词输入：${receipt.requestedText}。`:'')
+        +'音频帧发送不证明对方听见或全文生成完整；按原请求ID查状态。',false,{trigger:'piggyback',meta:{proximityVoice:receipt}}),
+      file:this.dataDir?join(this.dataDir,'minecraft-voice',createHash('sha256').update(JSON.stringify([this.cfg.host,this.cfg.port,this.cfg.auth,this.cfg.username])).digest('hex')+'.json'):null,
+    });
     this.goalCheckpoints = new GoalCheckpointBook(this.dataDir ? join(this.dataDir, 'minecraft-goals') : null);
     this.photography = new PhotographyService({
       directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
@@ -4408,6 +4431,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.proximityVoice.disconnect('Minecraft disconnected; query original voice request');
         this.serverQueries.reset('游戏连接已断开，查询结果未知；重连后需重新读取');
         this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
@@ -4474,6 +4498,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    await this.proximityVoice.stop();
     this.serverQueries.reset('Minecraft World 已停止，查询结果未知');
     this.pendingDeathCause = null;
     this.photography.stop();
@@ -4567,14 +4592,18 @@ export class MinecraftWorld implements World {
       send();
       const message = chatDeliveryMessage(text);
       if (!message) return;
+      const audience = message.channel === 'public' ? this.extensionChatAudience(text) : undefined;
       delivery = { protocol: 'agent-mc/chat-delivery/v1', id: `${this.executionEpoch}:chat:${++this.chatDeliverySequence}`,
         status: 'sent', sentAt: new Date().toISOString(), ...message, boundary: 'client-transport', recipientRead: 'unknown',
+        ...(audience ? { audience } : {}),
         ...(context?.callId ? { callId: context.callId } : {}),
         ...(context?.taskId !== undefined ? { taskExecutionId: `${this.executionEpoch}:${context.taskId}` } : {}),
         ...(context?.stepIndex !== undefined ? { stepIndex: context.stepIndex } : {}) };
-      this.emit('minecraft.chat.sent', `已向${message.to ? `玩家 ${message.to}` : '游戏公屏'}发送一条逻辑消息；仅确认客户端传输，不证明对方已读。`, false,
+      const target = message.to ? `玩家 ${message.to}` : audience?.channel === 'nearby' ? '附近聊天频道'
+        : audience?.channel === 'shout' ? '全服喊话频道' : '服务器默认聊天频道';
+      this.emit('minecraft.chat.sent', `已向${target}发送一条逻辑消息；仅确认客户端传输，不证明任何收件人收到或已读。`, false,
         { trigger: 'piggyback', meta: { outgoing: true, direction: 'outgoing', channel: message.channel,
-          socialScope: 'minecraft-server', chatDelivery: delivery } }, this.chatName());
+          socialScope: 'minecraft-server', chatDelivery: delivery, ...this.chatAudienceMeta(audience) } }, this.chatName());
     }); }
     catch (error) {
       if (mutates) {
@@ -4639,6 +4668,12 @@ export class MinecraftWorld implements World {
   protected extensionMessage(_text: string): boolean { return false; }
   /** Server-position feedback after player/private chat provenance exclusions. */
   protected extensionServerFeedback(_text: string): void {}
+  /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
+  protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
+  private chatAudienceMeta(audience: import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined): Record<string, unknown> {
+    return audience ? { chatChannel: audience.channel, chatScope: audience.scope, chatRoutingSource: audience.source,
+      ...(audience.radius === undefined ? {} : { chatRadius: audience.radius }), ...(audience.observedAt ? { chatPolicyObservedAt: audience.observedAt } : {}) } : {};
+  }
   protected extensionImportantMessage(_text: string): boolean { return false; }
   protected attachExtension(_bot: Bot): void {}
   protected disposeExtension(): void {}
@@ -4649,6 +4684,7 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
       mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
@@ -4806,13 +4842,14 @@ export class MinecraftWorld implements World {
           const bot = this.bridge?.bot;
           const result = await this.gameMemoryService.execute(args, {
             scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
+            serviceScope: { realm: this.serverRealmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             dimension: bot?.entity && bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null,
             capture: () => {
               const snap = this.snapshot({ scanBlocks: false });
               if (!snap || !bot?.entity || !bot.game?.dimension) throw new Error('Minecraft not connected; cannot capture historical cached facts as current');
               return { observedAt: new Date().toISOString(), dimension: normalizeDimension(snap.dimension),
                 reference: `runtime:${this.executionEpoch}:connection:${this.connectionGeneration}`,
-                content: JSON.stringify({ position: snap.position, dimension: snap.dimension,
+                content: JSON.stringify({ world: readWorldIdentity(bot), position: snap.position, dimension: snap.dimension,
                   health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
                   inventory: snap.invSynced ? snap.inventory.map(i => ({ name: i.name, count: i.count })) : null,
                   inventorySync: snap.inventorySync ?? null }) };
@@ -4858,7 +4895,10 @@ export class MinecraftWorld implements World {
       },
       mc_escape: async () => this.toolLog('mc_escape', {}, await this.doEscape()),
     };
-    return [...minecraftToolDecls().map((decl) => ({ ...decl, handler: handlers[decl.name] })), ...this.extensionTools()];
+    return [...minecraftToolDecls().map((decl) => ({
+      ...(decl.name === 'mc_query' ? serverQueryTool(this.serverQueryDefinitions()) : decl),
+      handler: handlers[decl.name],
+    })), ...this.extensionTools()];
   }
 
   protected methodState(): Record<string, unknown> {
@@ -7096,9 +7136,12 @@ export class MinecraftWorld implements World {
     // 骨架的「下桌」那几句里有一句要问蓝图表旧世界那边还剩什么
     this.blueprints.useRealm(key, normalizeDimension(this.bridge?.bot?.game?.dimension));
     const cleared = this.pwsr.switchTo(key);
-    const table = this.goals(), scope = this.goalCheckpointScope(key), identity = JSON.stringify(scope);
-    if (this.goalCheckpointScopes.get(table) !== identity) {
+    // Goals are server/account intentions, including journeys through portals.
+    // Only their runtime mechanical evidence belongs to a particular native map.
+    const table = this.goals(), scope = this.goalCheckpointScope(), identity = JSON.stringify(scope);
+    if (this.goalCheckpointScopes.get(table) !== identity || this.goalLoadedRealm !== key) {
       this.goalCheckpointScopes.set(table, identity);
+      this.goalLoadedRealm = key;
       table.list = [];
       try { table.list = this.goalCheckpoints.load(scope); }
       catch (error) { this.host?.log.warn('目标恢复记录读取失败，保留原文件', { err: String(error) }); }
@@ -7115,7 +7158,7 @@ export class MinecraftWorld implements World {
     return this.goals();
   }
 
-  protected goalCheckpointScope(realm = this.realmKey()): GoalCheckpointScope {
+  protected goalCheckpointScope(realm = this.serverRealmKey()): GoalCheckpointScope {
     return { realm, account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName };
   }
 
@@ -7174,6 +7217,7 @@ export class MinecraftWorld implements World {
       this.proximity.clear(); this.playerObservations.clear(); this.flocks.clear(); this.matureAnnounced.clear();
       this.idleContext.clear();
       this.setPersonalSpawn(undefined, '世界身份已改变，等待核实', { announce: false });
+      this.proximityVoice.disconnect('Native world changed; do not replay game voice');
       this.serverQueries.reset('世界身份已改变，旧查询结果未知');
       this.spatialRealm = scope;
       this.lastDimension = dim || null;
@@ -7454,8 +7498,7 @@ export class MinecraftWorld implements World {
     const mentionedInChat = (message: string): boolean => {
       const lower = message.toLocaleLowerCase();
       return lower.includes(this.chatName().toLocaleLowerCase())
-        || lower.includes(this.botName.toLocaleLowerCase())
-        || lower.includes('corti') || message.includes('可缇');
+        || lower.includes(this.botName.toLocaleLowerCase());
     };
     const markMatched = (jsonMsg: unknown): boolean => {
       if (!jsonMsg || typeof jsonMsg !== 'object') return false;
@@ -7468,15 +7511,20 @@ export class MinecraftWorld implements World {
       if (!identity) return;
       if (markMatched(jsonMsg)) return;
       if (jsonMsg && typeof jsonMsg === 'object') this.chatClaimed.add(jsonMsg);
+      const decorated = chatProvenance.publicChat(jsonMsg as Parameters<typeof chatProvenance.publicChat>[0], bot.players, bot.registry)?.serverRenderedText;
+      const audience = this.extensionChatAudience(message, decorated, 'incoming');
       if (username === this.chatName()) {
         // 自己说的话:落库存档,但不投递——拿自己的话叫醒自己没有意义
-        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false });
+        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false,
+          meta: { uname: username, channel: 'public', outgoing: true, direction: 'outgoing', ...identity,
+            ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
         return;
       }
       noteChatInput(bot, username, false);
       this.interruptIdle('chat');
       this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentionedInChat(message),
-        { meta: { uname: username, socialScope: 'minecraft-server', ...identity } }, username);
+        { meta: { uname: username, channel: 'public', socialScope: 'minecraft-server', ...identity,
+          ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
     });
     // Private identity is parsed from the raw component below. Mineflayer's
     // default whisper regex can mistake a rank/tag (or a public quote) for a
@@ -7524,11 +7572,12 @@ export class MinecraftWorld implements World {
       if (publicChat) {
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
         const { username, message, identity, serverRenderedText } = publicChat;
+        const audience = this.extensionChatAudience(message, serverRenderedText, 'incoming');
         const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
         if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
         this.emit('minecraft.chat', `[MC] ${username}: ${message}`, !fromSelf && mentionedInChat(message),
           { ...(fromSelf ? { deliver: false } : {}), meta: { uname: username, channel: 'public',
-            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}),
+            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}), ...this.chatAudienceMeta(audience),
             ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
         return;
       }
@@ -8082,6 +8131,7 @@ export class MinecraftWorld implements World {
   }
 
   protected worldTick(): void {
+    this.proximityVoice.sync();
     // 1s 心跳里做昼夜检测(转换点不能等节流窗口),节流窗口做世界摘要
     void this.syncManagedServerLifecycle();
     const bot = this.bridge?.bot;

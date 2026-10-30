@@ -22,3 +22,10 @@ Regression coverage uses the installed pathfinder and local voxel physics with a
 closed gate, full inventory, multiple workstations, queued work, and cancellation.
 These isolated results do not establish live gameplay improvement until the
 matching core package has been loaded and observed.
+
+Exact feet-cell goals receive the local occupancy diagnosis when route probes
+found no complete route. Horizontal and near goals retain their own arrival
+semantics; a complete route can supersede an occupancy diagnosis. Container
+failure receipts scope their search to loaded blocks and compare the nearest
+same-dimension historical chest location with its current block. The old
+contents and observation clock remain historical and are not erased or refreshed.

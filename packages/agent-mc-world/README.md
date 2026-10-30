@@ -326,3 +326,7 @@ Known inedible items are rejected before an action batch replaces or extends the
 The separate `MotionReviewGate` is used by the SDK/MCP to decline further identical control-only plans after eight submissions when those measured receipts show a compact loop or stationary body. It returns `observed_motion_requires_review` and a tool-help read without dispatching or cancelling anything. A successful deliberate spatial read or the selected action-tool help permits reconsideration; routine event polling does not. Different controls and mixed plans stay available. SDK owners may select `motionRepetitionLimit: 0` to disable this gate, or explicitly call `noteMotionInspection()` after presenting a real review. The gate does not declare that intentional circling failed, choose a new direction or finish a goal.
 
 Identical normalized `mc_memory remember` notes in the same realm/account/agent scope reuse the latest unarchived entry ID and revision. The receipt adds `deduplicated: true, written: false`; `saved: true` still means local persistence, not successful remote indexing. Source, speaker, observed time, content, dimension, tag set and expiry must all match. Recorded time and expiry are never refreshed. Explicit revisions/captures and changed evidence remain separate; existing duplicates are not deleted.
+
+### Optional nearby voice
+
+[Game voice, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md): one authenticated player connection, one audio artifact, independent game/broadcast receipts and explicit output mode.

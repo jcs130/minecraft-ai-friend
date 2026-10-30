@@ -23,6 +23,10 @@ import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
+const STEP_DEPENDENCY_DOC = '依赖本次 steps 内更早步骤的1起序号；第一步只能省略或写[]。'
+  + '省略只推导物品及定点交互依赖，不推测台词含义；[]=独立步。'
+  + '确认前步结果的chat须显式needs。上游ok或partial才放行，partial不等于全部完成。';
+
 /** 步骤依赖与验收的可选覆写；省略时使用执行器推导的因果依赖和验收规则。 */
 export interface StepBounds {
   /**
@@ -1903,6 +1907,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     name: 'chat',
     doc: `{"skill":"chat","text":"大家好"}               发送游戏内公屏聊天，其他玩家能否收到以服务端与对方客户端为准
 默认用普通文本在公屏交流，可用「@玩家名 内容」点名回应；收到其他玩家公屏消息后，自行判断是否相关并决定是否回复，不必句句回应。
+确认前步结果的发言须显式 needs，例如第1步赠物后 {"skill":"chat","text":"已尝试交付，请核对掉落物。","needs":[1]}；前步失败时跳过这条发言，无关聊天可独立。需要报告实际数量或对方已领取时，先读取终态/拾取证据再决定台词；partial或抛出不证明足量送达。
 明确选择私聊时优先使用原版 /tell 玩家名 内容（/minecraft:tell 是原版命名空间形式）；/msg 和 /w 只是别名，不依赖插件私聊。使用完整登录名，以真实回执确认可用性。未知或失败的私聊不自动重发到公屏；若改用公屏 @人，要明确选择公开内容，不泄露原私聊，不用私聊绕过公屏限额。
 {"skill":"chat","text":"/help"}               在游戏聊天栏输入服务端命令，结果看随后服务端消息
 命令 chat 的任务 completed 只证明发送完毕，不证明传送、施法、购买等游戏效果。先读原任务之后的服务端回执，遇到拒绝或缺少条件时查证前置条件并换方案；不要原样反复提交。只有观测到位置、状态或资源等对应变化，才能确认该效果。
@@ -2076,7 +2081,8 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
       properties: {
         skill: { type: 'string', const: spec.name },
         ...Object.fromEntries(keys.map(key => [key, fields[key]])),
-        needs: { type: 'array', items: { type: 'integer', minimum: 1 } },
+        needs: { type: 'array', items: { type: 'integer', minimum: 1 },
+          ...(spec.name === 'chat' ? { description: STEP_DEPENDENCY_DOC } : {}) },
         ...overrides,
       },
       required: ['skill', ...required], additionalProperties: false,
@@ -2145,8 +2151,7 @@ function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
       ...Object.fromEntries(fields),
       needs: {
         type: 'array', items: { type: 'integer' },
-        description: '任何技能都可带:依赖本次 steps 数组内哪些更早的步(每次调用重新从 1 起，第一步只能省略或写 [])。' +
-          '不写=只拦因果:要用更早某步的产出、那一步又没做成时才跳过,其余照跑;[]=独立步',
+        description: STEP_DEPENDENCY_DOC,
       },
       // `expect` 不进 schema、也不进技能表:两轮实验(0821 给回显、0822 回显 791 次
       // 而声明 0/5440)之后放弃「让她自己声明验收标准」这条路,只留自动推导 + 回执回显。

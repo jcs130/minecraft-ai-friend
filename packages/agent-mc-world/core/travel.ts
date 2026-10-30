@@ -315,7 +315,7 @@ export function withRouteScene(
   // 是脚下高度凑出来的、根本不是目标的一部分,拿它去分诊会凭空造出「站不进人」。
   const probes = ctx.probeRoutes?.(target, goal);
   const waterNote = underwaterRouteNote(bot, target, goal);
-  const diag = waterNote || goal || probes?.some((probe) => probe.status === 'complete')
+  const diag = waterNote || (goal && !(goal instanceof goals.GoalBlock)) || probes?.some((probe) => probe.status === 'complete')
     ? null : ctx.probeTarget?.(target) ?? null;
   const scene = [
     ...extra,
@@ -372,7 +372,10 @@ export function routeNote(bot: Bot, ctx: SkillContext, target: { x: number; y: n
   const startDist = goal instanceof goals.GoalNearXZ
     ? Math.hypot(me.x - target.x, me.z - target.z)
     : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
-  const diag = !waterNote && !goal && !probes.some((probe) => probe.status === 'complete')
+  // GoalBlock is an exact feet cell. It needs the same measured occupancy
+  // diagnosis as a local coordinate, unlike a horizontal/near goal whose Y or
+  // centre need not be standable. A complete route may still dig a valid landing.
+  const diag = !waterNote && (!goal || goal instanceof goals.GoalBlock) && !probes.some((probe) => probe.status === 'complete')
     ? ctx.probeTarget?.(target) ?? null : null;
   if (diag && diag.kind !== 'open') {
     throw new SkillBlocked(renderRouteMenu(probes, target, { startDist, diag }));

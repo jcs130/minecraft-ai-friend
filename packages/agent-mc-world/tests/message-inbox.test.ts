@@ -8,6 +8,17 @@ const event = (text: string, ts = '2026-01-01T00:00:00Z', senderKey = 'minecraft
   ({ ts, text, source: 'minecraft', type: 'minecraft.chat', senderKey });
 
 describe('received Minecraft messages', () => {
+  it('indexes nearby voice separately from text/private chat and preserves real UUID and utterance provenance',()=>{
+    const inbox=new MessageInbox('voice-fixture',undefined,{recipientNames:['Player']});
+    const heard={...event('[MC 附近语音] 小鱼: @Player 一起走吗？','2026-01-01T00:00:02Z','小鱼'),
+      meta:{channel:'nearby-voice',uname:'小鱼',senderUuid:'cb44d9d4-7980-4a02-bbd8-813710eed6cd',
+        utteranceId:'c2a3b471-14cd-4253-bc5e-49b5d8b2c7da',deliveryWorldKey:'minecraft:aincrad',transcript:true}};
+    expect(inbox.observe(heard)).toBe('nearby-voice');
+    expect(inbox.index()).toContain('提及本人');
+    const read=inbox.readout({channel:'nearby-voice'}).text;expect(read).toContain('小鱼');
+    const detail=inbox.readout({id:'message_1'}).text;expect(detail).toContain(heard.meta.senderUuid);expect(detail).toContain(heard.meta.utteranceId);expect(detail).toContain('minecraft:aincrad');
+    expect(inbox.readout({channel:'private'}).text).toContain('匹配 0 条');
+  });
   it('keeps a direct mention visible alongside different peers and a current notice', () => {
     const inbox = new MessageInbox(JSON.stringify({ realm: 'example.test', account: 'offline:Player', agent: 'Player' }));
     inbox.observe(event('[MC] Alex: @Player 一起组队吗？', '2026-01-01T00:00:01Z', 'Alex'));

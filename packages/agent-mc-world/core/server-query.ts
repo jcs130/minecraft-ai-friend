@@ -5,9 +5,33 @@ import type { ToolDef, ToolOutcome } from './support/host-contract.ts';
 export type ServerQueryDefinition = {
   id: string;
   description: string;
+  /** Public argument contract for discovery; command() remains the dispatch authority. */
+  argumentsSchema?: { type: 'array'; minItems: number; maxItems: number;
+    items: { type: 'string'; pattern?: string; maxLength?: number; description?: string } };
   command(arguments_: readonly string[]): string | null;
   matchReply(text: string, args: readonly string[], username: string): { data?: unknown; ok?: boolean } | null;
 };
+
+/** Keep mounted tools and offline discovery on the configured protocol's same facts. */
+export function serverQueryTool(definitions: readonly ServerQueryDefinition[]): Omit<ToolDef, 'handler'> {
+  if (!definitions.length) return SERVER_QUERY_TOOL;
+  return { ...SERVER_QUERY_TOOL, parameters: { ...SERVER_QUERY_TOOL.parameters,
+    properties: { ...SERVER_QUERY_TOOL.parameters.properties,
+      query: { ...SERVER_QUERY_TOOL.parameters.properties.query,
+        enum: [...new Set(definitions.map(definition => definition.id))] },
+    } } };
+}
+
+function queryContract({ id, description, argumentsSchema }: ServerQueryDefinition) {
+  return { id, description: description.slice(0, 1024), ...(argumentsSchema ? { argumentsSchema } : {}) };
+}
+
+function queryArgumentFailure(message: string, definition: ServerQueryDefinition): ToolOutcome {
+  const queryDefinition = queryContract(definition);
+  const next_safe_read = { tool: 'mc_query', arguments: {} };
+  return { text: message + '\n' + JSON.stringify({ queryDefinition, next_safe_read }), failed: true,
+    data: { goal_completed: false, queryDefinition, next_safe_read } };
+}
 
 export type ServerQueryContext = {
   generation: string;
@@ -36,7 +60,7 @@ export type ServerQueryReceipt = {
   reason?: string;
 };
 
-export const SERVER_QUERY_TOOL: Omit<ToolDef, 'handler'> = {
+export const SERVER_QUERY_TOOL = {
   name: 'mc_query',
   tags: ['read'],
   description: 'Query an explicitly configured read-only server protocol without occupying the body or waiting for chat. '
@@ -53,7 +77,7 @@ export const SERVER_QUERY_TOOL: Omit<ToolDef, 'handler'> = {
       requestId: { type: 'string', minLength: 1, maxLength: 128 },
     },
   },
-};
+} satisfies Omit<ToolDef, 'handler'>;
 
 const TIMEOUT_MS = 5000;
 const REUSE_MS = 5000;
@@ -114,7 +138,7 @@ export class ServerQueryLane {
     }
     const keys = Object.keys(args);
     if (keys.length === 0) {
-      const data = { queries: definitions.map(({ id, description }) => ({ id, description })),
+      const data = { queries: definitions.map(queryContract),
         pendingRequestId: this.pending?.receipt.requestId ?? null, requestNonce: false, goal_completed: false };
       return { text: 'Available read-only server queries. Sending returns immediately as sent/awaiting reply; it does not complete a goal. '
         + 'Read requestId later. Timeout is unknown, with no automatic retry.\n' + JSON.stringify(data), data };
@@ -151,9 +175,9 @@ export class ServerQueryLane {
     }
     let command: string | null;
     try { command = definition.command(Object.freeze([...arguments_])); }
-    catch { return failure('The query definition rejected its arguments. No query was sent.'); }
+    catch { return queryArgumentFailure('The query definition rejected its arguments. No query was sent.', definition); }
     if (typeof command !== 'string' || command.length === 0 || command.length > 1024 || /[\r\n\0]/u.test(command)) {
-      return failure('Invalid arguments for this server query. No query was sent.');
+      return queryArgumentFailure('Invalid arguments for this server query. Read the selected definition below and correct its arguments. No query was sent.', definition);
     }
     const sentAtMs = this.now();
     const record: Record_ = { definition, key, dispatching: true, receipt: {

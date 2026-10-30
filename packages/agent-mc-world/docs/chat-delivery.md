@@ -1,5 +1,14 @@
 # Chat transport receipts
 
+The optional `audience` field describes routing evidence supplied by an enabled
+server adapter: `channel` (nearby, shout, or server-default), `scope`, source,
+and, when observed, radius and policy timestamp. `channel=public` remains the
+generic non-private address category for compatibility; it does not mean all
+players receive the message. Without server evidence the receipt says server
+default and keeps scope unknown. The core never upgrades a mention or a failed
+nearby send to a shout or private message. Incoming decoration is interpreted
+separately from outgoing policy; neither changes canonical packet identity.
+
 Core rc.113 adds the public `ChatDeliveryReceipt` and `ChatDeliveryRejection`
 types under `agent-mc-world/contracts`. The engine emits `minecraft.chat.sent`
 as a non-waking, piggyback event only after its actual client transport call

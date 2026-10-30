@@ -36,6 +36,14 @@ async function until(test:()=>boolean) {
   while(!test()){if(Date.now()>end)throw new Error('fixture timed out');await new Promise(r=>setTimeout(r,10));}
 }
 describe('independent server query through the public World tool',()=>{
+  it('uses the configured query IDs in the mounted tool schema without adding an execution barrier', () => {
+    const r = rig();
+    const tool = r.world.tools().find(tool => tool.name === 'mc_query')!;
+    expect(tool.parameters.properties).toMatchObject({ query: { enum: ['self', 'access'] } });
+    expect(tool.barrierAfter).not.toBe(true);
+    expect(tool.endsTurn).not.toBe(true);
+    expect(r.said).toEqual([]);
+  });
   it('sends during real pathfinder movement, preserving navigation and queued commands',async()=>{
     const r=rig();pathfinderPkg.pathfinder(r.bot as unknown as Bot);
     const run=r.runner.start({name:'query-while-walking',code:'await bot.pathfinder.goto(new goals.GoalBlock(30,64,0));'});

@@ -77,3 +77,6 @@ export { planInventoryOrganization, planInventoryShortcutExchange, inventoryOrga
   type InventoryOrganizationPlan, type InventoryShortcutExchange } from '../../core/inventory-organization.ts';
 
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';
+
+export {attachProximityVoice, inspectVoiceWav} from '../proximity-voice.ts';
+export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from '../proximity-voice.ts';

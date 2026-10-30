@@ -9,7 +9,7 @@ import { installWorldIdentity, readWorldIdentity, worldScopedRealm } from '../co
 import { ChestBook } from '../core/chests.ts';
 import { Executor } from '../core/executor.ts';
 import { MinecraftWorld } from '../core/world.ts';
-import { nullLogger } from '../src/client/index.ts';
+import { MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
 
 const require = createRequire(import.meta.url);
 const mf = createRequire(require.resolve('mineflayer'));
@@ -166,6 +166,25 @@ it('the actual World realm key changes for a native level switch even when the d
   expect(b.game.dimension).toBe('overworld');
 });
 
+it('the actual memory tool retains the server service identity while local notes follow the native map', async () => {
+  const b = bot(); installWorldIdentity(b); enter(b, 'minecraft:overworld');
+  const world: any = new MinecraftWorld({ cfg: { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), enabled: false,
+    host: 'fixture.test', username: 'fixture', memoryAgentId: 'fixture-agent' } });
+  world.bridge = { bot: b };
+  world.host = { log: nullLogger() };
+  const execute = vi.fn(async () => ({ fixture: true }));
+  world.gameMemoryService = { execute };
+  const tool = world.tools().find((value: any) => value.name === 'mc_memory');
+  const args = { action: 'service', operation: 'prepare', payload: { query: 'historical route' } };
+  await tool.handler(args, { role: 'main', log: nullLogger() });
+  enter(b, 'minecraft:aincrad', 'respawn');
+  await tool.handler(args, { role: 'main', log: nullLogger() });
+  const [first, second] = execute.mock.calls.map(call => call[1] as any);
+  expect(second.scope.realm).not.toBe(first.scope.realm);
+  expect(second.serviceScope).toEqual(first.serviceScope);
+  expect(first.serviceScope).toEqual({ realm: world.serverRealmKey(), account: 'offline:fixture', agent: 'fixture-agent' });
+});
+
 it('replaces a lost world observation with explicit unknown rather than leaving the prior identity current', () => {
   const world: any = Object.assign(Object.create(MinecraftWorld.prototype), {
     connectionReadiness: () => ({ ready: false, phase: 'retrying' }), goalTable: () => ({ list: [] }),
@@ -182,7 +201,7 @@ it.each([false, true])('World invalidates spatial facts only when the native wor
   const world: any = Object.assign(Object.create(MinecraftWorld.prototype), {
     cfg: { host: 'fixture.test', port: 25565 }, bridge: { bot: b },
     worldIdentity: () => ({ key: 'fixture.test:25565', local: false }),
-    serverQueries: { reset: vi.fn() }, setBodyInhibited: vi.fn(), attention: { reset: vi.fn() },
+    serverQueries: { reset: vi.fn() }, proximityVoice: {disconnect:vi.fn()}, setBodyInhibited: vi.fn(), attention: { reset: vi.fn() },
     extensionRespawn: vi.fn(), bodyLease: { revive: vi.fn() }, resetBodyOwners: vi.fn(),
     idleContext: { clear: vi.fn() }, setPersonalSpawn: vi.fn(), syncRealm: vi.fn(),
     noteWorldSwitch: vi.fn(), scheduleRespawnConfirmation: vi.fn(),
@@ -196,6 +215,7 @@ it.each([false, true])('World invalidates spatial facts only when the native wor
   enter(b, change ? 'minecraft:aincrad' : 'minecraft:overworld', 'respawn');
   world.onRespawn();
   expect(world.syncRealm).toHaveBeenCalledTimes(change ? 1 : 0);
+  expect(world.proximityVoice.disconnect).toHaveBeenCalledTimes(change ? 1 : 0);
   expect(world.noteWorldSwitch).toHaveBeenCalledTimes(change ? 1 : 0);
   expect(world.executor.cancelForDimensionChange).toHaveBeenCalledTimes(change ? 1 : 0);
   expect(world.combat.onConnectionLost).toHaveBeenCalledTimes(change ? 1 : 0);

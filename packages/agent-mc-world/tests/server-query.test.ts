@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SERVER_QUERY_TOOL, ServerQueryLane, type ServerQueryContext, type ServerQueryDefinition } from '../core/server-query.ts';
+import { SERVER_QUERY_TOOL, serverQueryTool, ServerQueryLane, type ServerQueryContext, type ServerQueryDefinition } from '../core/server-query.ts';
 import type { ToolOutcome } from '../core/support/host-contract.ts';
 
 const definitions: ServerQueryDefinition[] = [{ id: 'status', description: 'Read my server status',
@@ -20,6 +20,21 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-26T09:
 afterEach(() => { vi.useRealTimers(); });
 
 describe('read-only server query lane', () => {
+  it('publishes selected argument contracts and rejects missing arguments without guessing a subject or dispatching', () => {
+    const { lane, send, context } = setup();
+    const query: ServerQueryDefinition = { ...definitions[1], argumentsSchema: {
+      type: 'array', minItems: 1, maxItems: 1, items: { type: 'string', pattern: '^[a-z]+$' },
+    } };
+    expect(lane.call({}, [query], null).data?.queries).toEqual([{
+      id: query.id, description: query.description, argumentsSchema: query.argumentsSchema,
+    }]);
+    expect(lane.call({ query: 'inventory' }, [query], context)).toMatchObject({ failed: true,
+      data: { goal_completed: false, queryDefinition: { id: 'inventory', argumentsSchema: query.argumentsSchema } } });
+    expect(send).not.toHaveBeenCalled();
+    expect(serverQueryTool([query]).parameters.properties.query).toMatchObject({ enum: ['inventory'] });
+    expect(serverQueryTool([])).toBe(SERVER_QUERY_TOOL);
+    expect(SERVER_QUERY_TOOL.parameters.properties.query).not.toHaveProperty('enum');
+  });
   it.each([{ query: 'missing' }, { query: 'status', requestId: 'invented' }, { command: '/status' }])(
     'returns configured repair information with rejected %j without dispatching', args => {
       const { lane, send, context } = setup();
@@ -51,6 +66,19 @@ describe('read-only server query lane', () => {
     expect(result.data).toMatchObject({ found: false, outcomeUnknown: true, goal_completed: false });
     expect(result.data?.recovery).toBeUndefined();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('returns only the rejected query contract so a missing subject can be repaired without guessing or retrying', () => {
+    const {lane,send,context}=setup();
+    const selected={...definitions[1],description:'Read one inventory. arguments:["observed_inventory_id"].'};
+    const result=lane.call({query:'inventory'},[definitions[0],selected],context);
+    expect(result.data?.queryDefinition).toEqual({id:selected.id,description:selected.description});
+    expect(result.text).toContain('observed_inventory_id');
+    expect(send).not.toHaveBeenCalled();
+    const repaired=lane.call({query:'inventory',arguments:['personal']},[definitions[0],selected],context);
+    expect(repaired.data).toMatchObject({phase:'sent'});
+    expect(send).toHaveBeenCalledOnce();expect(send).toHaveBeenCalledWith('/inventory personal');
+    lane.reset('Fixture finished');
   });
 
   it('lists configured protocols offline and does not become a body/barrier tool', () => {

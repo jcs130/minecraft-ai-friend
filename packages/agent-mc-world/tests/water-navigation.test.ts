@@ -47,7 +47,8 @@ it.each(['water', 'kelp', 'tall_seagrass'] as const)('plans %s as a water route 
     new pathfinderPkg.goals.GoalBlock(0, 65, -5), { timeout: 500, tickTimeout: 10 })) result = probe.result;
   expect(result).toBeDefined();
   if (!result) return;
-  expect(result.status).toBe('success');
+  expect(result.status, JSON.stringify({ status: result.status, time: result.time,
+    visitedNodes: result.visitedNodes, generatedNodes: result.generatedNodes, path: result.path })).toBe('success');
   expect(result.path.length).toBeGreaterThan(0);
   expect(result.path.every(p => p.y === 65 && !p.toBreak.length && !p.toPlace.length), JSON.stringify(result.path)).toBe(true);
 });
