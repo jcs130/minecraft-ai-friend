@@ -609,9 +609,11 @@ test('resident scene art and promotion preserve playback while background state 
   assert.equal(video.getAttribute('preload'), 'none'); assert.equal(video.querySelector('source').getAttribute('src'), '/media/intro.mp4');
   assert.equal(ui.document.querySelector('.character-feature'), null);
   assert.equal(ui.document.querySelector('.world-hero-resident'), null);
-  assert.equal(ui.document.querySelector('.world-hero-art img').getAttribute('src'), '/assets/aincrad-season.svg');
+  assert.equal(ui.document.querySelector('.world-hero-art img').getAttribute('src'), '/season-art/aincrad-dusk-20261030-960.webp');
+  assert.match(ui.document.querySelector('.world-hero-art img').getAttribute('srcset'), /640w.*960w.*1440w/);
   assert.equal(ui.document.querySelectorAll('.world-scenes img[loading="lazy"]').length, 3);
-  assert.match(ui.document.querySelector('.world-art-label').textContent, /千灯纪：重返艾恩葛朗特.*主题示意/s);
+  assert.match(ui.document.querySelector('.world-art-label').textContent, /千灯纪：重返艾恩葛朗特.*场景概念图/s);
+  assert.equal(ui.document.querySelector('.season-update').getAttribute('href'), '/aincrad.html#latest');
   assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico/);
   video.currentTime = 42;
   ui.outage(); await ui.refresh(false);

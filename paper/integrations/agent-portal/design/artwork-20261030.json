@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-30",
+  "generator": "Built-in image_gen",
+  "purpose": "Website concept artwork; not gameplay screenshots or additional playable floors.",
+  "assets": [
+    {
+      "key": "aincrad-dusk",
+      "source": "exec-f37306a6-f4a9-4790-ba40-03b04527d209.png",
+      "width": 1536,
+      "height": 1024,
+      "prompt": "Use case: stylized-concept. Asset type: finished website hero artwork for 千灯纪, a Minecraft-derived MMORPG world where humans and AI companions adventure together. Create ONE exceptionally beautiful, art-directed fantasy environment illustration, landscape aspect ratio 3:2, suitable for a premium game website. The existing website has a deep forest-green background and warm pale-gold typography; the artwork should bring atmosphere and richness.\nScene: dusk at a lantern-lit starting city, viewed from a stone overlook above timber-and-stone rooftops, a river and arched bridges. In the distant sky rises an immense inhabited floating fortress inspired by Aincrad: several vast receding terraces covered with actual miniature cities, cathedral spires, cliffs, hanging gardens and waterfalls, joined into a convincing towering stone world. It must feel architectural and inhabited, never like a simple stack of discs, a Christmas tree or a UFO. Cloud layers reveal depth, warm windows draw the eye up toward the high castle. The foreground path, bridge and stairs clearly invite exploration.\nA tiny group of three adventurers, seen naturally from the back on the overlook, gives the landscape scale. One is Cormy, a petite cream-white-haired cat-eared traveler wearing an oversized ivory field jacket, a brown scarf, practical boots, with one small cream-and-orange fluffy tail and a lantern; another carries a shield, another a sheathed sword. Characters occupy less than ten percent of the frame. This is a world scene, not a character sheet.\nStyle: sophisticated hand-painted anime game concept art, textured stone and wood, restrained voxel/stepped terrain cues connecting it to Minecraft, painterly detail with clean composition, cinematic atmospheric perspective, luminous muted amber windows, teal-green shadows, soft blue dusk sky. Beautiful tangible place, elegant and inviting, no generic oversaturated fantasy poster treatment. Keep the floating castle, city and path legible at mobile thumbnail size. Important subjects grouped within the middle 75 percent of the image so responsive cropping works.\nConstraints: no lettering, no words, no logos, no interface, no watermark, no collage, no split panels, no farming scene, no frontal full-body character pose, no glowing neon circles everywhere. Generate the actual final artwork, not a web mockup.",
+      "originalSha256": "637ce9baacefd598823e648063049bedcedfcbcf980ac885e268871e5d4b86e6",
+      "variants": [
+        {
+          "path": "/season-art/aincrad-dusk-20261030-640.webp",
+          "width": 640,
+          "bytes": 85700,
+          "sha256": "839f1e9b141bbbedfffff5099eb006b4ebfff636a977b4ad00c4c6a708d60be6"
+        },
+        {
+          "path": "/season-art/aincrad-dusk-20261030-960.webp",
+          "width": 960,
+          "bytes": 173412,
+          "sha256": "88c65ebeb4849d5136b096b1f2a1961e78a792e555ce8214ee4c9a8c97ae3f58"
+        },
+        {
+          "path": "/season-art/aincrad-dusk-20261030-1440.webp",
+          "width": 1440,
+          "bytes": 319348,
+          "sha256": "730fdd6606fb457a26ed7737880a972629f3001764bd658cad80e9cd187905df"
+        }
+      ]
+    },
+    {
+      "key": "guild-preparation",
+      "source": "exec-ffeac8d3-6ea5-4c82-b939-e7236a081454.png",
+      "width": 1672,
+      "height": 941,
+      "prompt": "Use case: illustration-story. Asset: one finished landscape scene illustration for the 千灯纪 adventure game website, 16:9 composition. Same art direction as a premium hand-painted fantasy RPG: richly textured stone and timber, deep forest-green shadows, warm golden lanterns, restrained cream and muted teal, cinematic but gentle lighting. Make this a convincing candid scene of companions preparing an expedition in a lantern-lit adventurers' guild, rather than a generic character poster.\nScene: an open timber guild hall at blue hour, with the distant stone city visible beyond a tall arch. A well-composed map table, a shield leaning against a bench, a few rolled maps and travel packs. Three adult adventurers discuss the route, naturally interacting: Cormy, a petite adult cat-eared woman with cream-white shoulder-length hair, orange-brown ear accents, amber eyes, an oversized ivory field jacket with brown straps and scarf, practical travel boots and a single cream-and-orange fluffy tail, leaning over the map; a black-haired male swordsman in a dark traveling coat and a shield-bearer with modest practical armor listening nearby. Keep equipment recognizable, hands anatomically plausible and not over-emphasized. A small warm lantern is Cormy's visual signature. The characters feel like friends with a shared task, not posed for a group photograph.\nComposition: medium-wide environmental storytelling, characters and the table sit comfortably in the center two thirds, guild architecture frames the scene, clean foreground-to-background depth, quiet detailed background. Preserve enough space around heads and boots for a 16:9 website card crop. Subtle squared stone masonry and stepped architectural forms connect the world to Minecraft without chunky toy heads. Warm faces readable, no plasticky 3D materials, no over-processed glow, no fake UI, no big magical symbols.\nNo text of any language, no legible map words, no signatures, no watermark, no logos, no collage, no split panels, no character sheet, no frontal full-body lineup. Generate the actual final illustration.",
+      "originalSha256": "01063d01a8aac1f7cfd1bb3688297a0b26223abdfc22600ed77166619a09adb2",
+      "variants": [
+        {
+          "path": "/season-art/guild-preparation-20261030-640.webp",
+          "width": 640,
+          "bytes": 58682,
+          "sha256": "f272beaa3579e3c803af5c83182c6287d10dfa8c4ab9e3f460bfdd02667ed218"
+        },
+        {
+          "path": "/season-art/guild-preparation-20261030-960.webp",
+          "width": 960,
+          "bytes": 111384,
+          "sha256": "b5e50836e2cd0b3d2789ff9997e34d9617ef5f6bf53ca1faa283519feb2c9edb"
+        }
+      ]
+    },
+    {
+      "key": "ruins-expedition",
+      "source": "exec-e1409ce0-2582-4b15-a7e3-fce15a8e6275.png",
+      "width": 1672,
+      "height": 941,
+      "prompt": "Use case: illustration-story. Asset: finished landscape scene artwork for the 千灯纪 fantasy adventure website, 16:9. Create an exceptionally beautiful hand-painted anime RPG environment illustration: a party carefully exploring an ancient half-buried cathedral ruin in a forest ravine, broken stone arches and a shallow reflective stream, roots around square masonry and steps, a distant carved doorway revealing a warm glint. The scene is mysterious and inviting, not a square arena. Three adult companions naturally coordinate: a dark-coated black-haired male swordsman holds his sheathed sword ready while surveying the path, a practical armored shield-bearer leads across the stepping stones, and Cormy follows with a small amber lantern. Cormy is a petite adult cat-eared woman with cream-white shoulder-length hair, orange-brown ear accents, an ivory field jacket, brown scarf and boots and one cream-and-orange fluffy tail. Characters occupy a modest part of the scene; the world and the way ahead are the primary subject. Composition uses the ruined arch to frame the route and companions in the center two thirds; layered depth, tangible textured stone, moss and timber. Restrained forest green, soft blue daylight, rich warm lantern accents, elegant painterly details, subtle stepped Minecraft-derived terrain cues, plausible anatomy and equipment. Cinematic atmosphere without exaggerated glow. No visible combat injury, no cartoon toy heads, no text, no letters, no logos, no watermark, no UI, no collage, no split panels, no posed character sheet. Generate final art, not a website mockup.",
+      "originalSha256": "5e6f2c7a0c2243b3ff7b1287a27cf5fe31c47ca1b88efb631dd929a18f26d9c4",
+      "variants": [
+        {
+          "path": "/season-art/ruins-expedition-20261030-640.webp",
+          "width": 640,
+          "bytes": 75594,
+          "sha256": "e09aeb5eed887370977c6611cba756666dd6ddd8a9f72a92fb476212671d84e7"
+        },
+        {
+          "path": "/season-art/ruins-expedition-20261030-960.webp",
+          "width": 960,
+          "bytes": 159852,
+          "sha256": "60a3a5ba7ff754d70e12f208b9a82d8c581005ee689d4abba86cf3b03edc7ff2"
+        }
+      ]
+    },
+    {
+      "key": "lantern-homecoming",
+      "source": "exec-a6311fc8-76b4-42b8-80fe-57e67c02a40e.png",
+      "width": 1672,
+      "height": 941,
+      "prompt": "Use case: illustration-story. Asset: final landscape 16:9 concept illustration for 千灯纪, an inviting long-lived fantasy game world shared by human players and AI companions. Paint a beautiful quiet homecoming after an expedition: three adult travelers crossing an old stone arch bridge toward a timber-and-stone town glowing with amber lanterns, a river reflecting windows, a distant guild tower, stone stairs and flower boxes. Cormy walks near the center beside her companions, naturally seen in three-quarter back view: petite adult cat-eared woman with cream-white hair, orange-brown ear accents, ivory field jacket, brown scarf, practical boots, one cream-and-orange fluffy tail, carrying a little lantern. A black-haired male swordsman and practical shield-bearer chat as they walk. The environmental storytelling matters more than faces; tiny scuffs on packs and relaxed body language suggest shared adventure. Hand-painted anime RPG environment art with sophisticated textured stone and wood, subtly squared masonry and stepped terrain connecting to Minecraft, layered forest-green and blue dusk, warm pale-gold lanterns, gentle cinematic atmospheric perspective, elegant detailed composition without visual clutter. Bridge path draws the eye inward, travelers fully contained in central two thirds for responsive cropping, wide environmental view. No farm or fishing, no gigantic character portrait, no photo-real 3D plastic, no excessive bloom, no text, no signs with words, no logos, no watermark, no UI, no split panels, no collage. Produce the actual finished scene artwork, not a web page mockup.",
+      "originalSha256": "aca247a336aedf8a0a8e4e569fa3096b2e7c4bfd9e4a11b5edd2e3a293b84973",
+      "variants": [
+        {
+          "path": "/season-art/lantern-homecoming-20261030-640.webp",
+          "width": 640,
+          "bytes": 81512,
+          "sha256": "d1736295f5d07bad61fa847fbbfc84a92993f314e4aacdccd00edc2f2dac276e"
+        },
+        {
+          "path": "/season-art/lantern-homecoming-20261030-960.webp",
+          "width": 960,
+          "bytes": 163066,
+          "sha256": "8bb988698c9d79892f48b1eed5459d22064bd513c05e0fc6700feaaf1fa6ed35"
+        }
+      ]
+    }
+  ]
+}
