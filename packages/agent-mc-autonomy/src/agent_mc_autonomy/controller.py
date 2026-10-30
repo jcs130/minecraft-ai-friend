@@ -35,6 +35,7 @@ from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
 from .effects import EffectRecovery, body_changed
+from .chat_noop import ChatNoopReview
 from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
 from .observations import (
@@ -485,6 +486,7 @@ class Controller:
         self.read_answers = {}
         self.read_recovery_tools = {}
         self.effect_recovery = EffectRecovery()
+        self.chat_noop_review = ChatNoopReview()
         self.container_recovery = ContainerRecovery()
         self.skill_references = {}
         self.action_requests = {}
@@ -680,6 +682,9 @@ class Controller:
                     repeat = terminal_repeat_evidence(event)
                     if repeat:
                         native_outcome["repeat_evidence"] = repeat
+                    chat_noop = self.chat_noop_review.record(arguments, execution, self.game_scope, self.death_epoch, reference) if name == "mc_do" and not read_only else None
+                    if chat_noop:
+                        native_outcome["chat_noop_review"] = chat_noop
                     self.native_outcomes.append(native_outcome if self.settings.context_mode == "full" else native_outcome_view(native_outcome))
                     if self.settings.context_mode == "full":
                         while len(self.native_outcomes) > 1 and len(encode(self.native_outcomes).encode("utf-8")) > self.settings.context_tokens:

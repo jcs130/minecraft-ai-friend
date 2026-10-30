@@ -1,5 +1,16 @@
 # Agent MC Autonomy
 
+Version 0.2.133 retains bounded review evidence when the native executor repeatedly
+marks the same public-chat-only plan as `noop`. `ChatNoopReview` is a public Python
+export; the controller passes its `chat_noop_review` through full, compact and
+strategic outcome views. Two distinct original terminals are required. The
+16-entry, 120-second ledger records hashes and native references, without storing
+another copy of dialogue. Missing physical effects remain unknown; a new message
+or objective completion is never inferred. This evidence does not block calls,
+cancel native work or replay plans. Scope/death/run changes, expiry and a matching
+successful chat retire an episode. Commands and mixed physical plans are excluded.
+Offline checks verify delivery of the review, not improved live behavior.
+
 Version 0.2.129 adds an explicit offline operator profile for a confirmed clean
 disconnect whose cancelled event waiter left a restart fence. It verifies the
 current native tool index, returned requests and archived terminal effects,
