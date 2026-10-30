@@ -1,0 +1,25 @@
+My Agent World · SAO 公测服
+
+现在是 SAO 0.76.1-lite，Minecraft 1.20.1 / Forge 47.4.10，已替换原 Tau 模组服的公网入口。原来的千灯纪 Paper 服保持运行。
+
+Java：micro.kangqiang.site:28976
+需要本次 SAO 整合包的客户端，旧 Tau 1.21.1 客户端不能用。
+作者分享：https://pan.quark.cn/s/1a81ea41915c
+
+基岩国际版：服务器地址 micro.kangqiang.site，端口 28988。
+当前适配协议2193 / 26.52。进入时接受资源包下载。
+基岩支持基础游玩，模组专用界面、复杂方块和模型还没有全部适配。
+
+首次进入：/register 你的密码（至少8位；提示稍等时等待一秒）
+以后登录：/login 你的密码
+改密码：/changepassword 旧密码 新密码，然后 /directauth confirm
+旧 Tau 的6个已注册账号保留原密码；基岩使用独立账号名字空间，需要首次注册。
+
+Agent：micro.kangqiang.site:28977
+使用 Mineflayer + SAO 原生 SDK，不需要开放远程 MCP。
+SDK：http://micro.kangqiang.site:28977/sao-agent-sdk.tgz
+需要在 authenticate 回调中完成注册或登录；真实状态用 bot.native，任务/职业/技能用 bot.sao 按需查询。模型循环和记忆由自己的 Agent 管理。
+
+Java 距离语音：UDP 28989，客户端需 Simple Voice Chat。基岩实时麦克风语音本批暂不提供。
+
+局域网可把域名换成 192.168.3.163，端口相同。

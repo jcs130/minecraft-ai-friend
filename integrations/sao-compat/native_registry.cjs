@@ -1,6 +1,7 @@
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 const value = text => text === 'true' ? true : text === 'false' ? false : /^-?\d+$/.test(text) ? Number(text) : text
 const nativeName = name => name.startsWith('minecraft:') ? name.slice(10) : name
 const fullCube = [[0, 0, 0, 1, 1, 1]]
@@ -28,12 +29,22 @@ function validateProduct (rows, props) {
   })
 }
 function applyNativeRegistry (registry, root) {
-  const processState = JSON.parse(fs.readFileSync(path.join(root, 'lab-process.json')))
-  const base = path.join(root, 'server/maw-sao/registry')
+  const downloaded = fs.existsSync(path.join(root, 'registry-bundle.json'))
+  const bundle = downloaded ? JSON.parse(fs.readFileSync(path.join(root, 'registry-bundle.json'))) : null
+  const processState = downloaded ? null : JSON.parse(fs.readFileSync(path.join(root, 'lab-process.json')))
+  const base = path.join(root, downloaded ? 'registry' : 'server/maw-sao/registry')
   const meta = JSON.parse(fs.readFileSync(path.join(base, 'current.json')))
-  if (meta.minecraft !== '1.20.1' || processState.phase !== 'ready' || processState.pid !== meta.processId ||
+  if (meta.minecraft !== '1.20.1' || (!downloaded && (processState.phase !== 'ready' || processState.pid !== meta.processId)) ||
       !/^[a-f0-9-]{36}$/.test(meta.serverEpoch)) throw new Error('stale_or_unready_native_registry')
   const directory = path.join(base, meta.serverEpoch)
+  if (downloaded) {
+    if (bundle.schemaVersion !== 1 || bundle.serverEpoch !== meta.serverEpoch) throw new Error('invalid_downloaded_registry_identity')
+    for (const name of ['states.jsonl', 'items.jsonl', 'entities.jsonl']) {
+      const file = path.join(directory, name), expected = bundle.files?.[name]
+      if (!expected || !/^[a-f0-9]{64}$/.test(expected.sha256) || fs.lstatSync(file).isSymbolicLink() || fs.statSync(file).size > 192 * 1024 * 1024 ||
+          crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') !== expected.sha256) throw new Error('downloaded_native_registry_hash_mismatch')
+    }
+  }
   const oldBlocks = registry.blocksByName, oldItems = registry.itemsByName, oldEntities = registry.entitiesByName
   registry.blocks = {}; registry.blocksByName = {}; registry.blocksByStateId = {}; registry.blocksArray = []
   registry.items = {}; registry.itemsByName = {}; registry.itemsArray = []
@@ -74,13 +85,22 @@ function applyNativeRegistry (registry, root) {
     for (const r of rows) registry.blocksByStateId[r.id] = block
   }
   let itemCount = 0
+  const foods = {}, foodsByName = {}
   jsonLines(path.join(directory, 'items.jsonl'), row => {
     const name = nativeName(row.name), template = oldItems[name]
     if (registry.items[row.id]) throw new Error('duplicate_native_item_id')
     const item = { ...(template || {}), id: row.id, name, nativeId: row.name,
       displayName: template?.displayName || row.name, stackSize: row.stackSize, translationKey: row.descriptionId }
     registry.items[row.id] = item; registry.itemsByName[name] = item; registry.itemsArray.push(item); itemCount++
+    const food = row.foodMetadataAvailable === true ? row.food : registry.foodsByName?.[name]
+    if (food && Number.isFinite(food.nutrition ?? food.foodPoints)) {
+      const nutrition = food.nutrition ?? food.foodPoints
+      const entry = { ...food, id: row.id, name, displayName: item.displayName,
+        foodPoints: nutrition, saturation: Number.isFinite(food.saturationModifier) ? nutrition * food.saturationModifier * 2 : food.saturation }
+      foods[row.id] = entry; foodsByName[name] = entry
+    }
   })
+  registry.foods = foods; registry.foodsByName = foodsByName; registry.foodsArray = Object.values(foods)
   let entityCount = 0
   jsonLines(path.join(directory, 'entities.jsonl'), row => {
     const name = nativeName(row.name), template = oldEntities?.[name]

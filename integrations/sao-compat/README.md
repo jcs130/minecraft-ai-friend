@@ -1,3 +1,5 @@
+> 2026-10-30：本集成已发布到原模组服公网入口；当前连接方式与兼容边界见 [PUBLIC_ACCESS.md](PUBLIC_ACCESS.md)。下方为早期回环实验说明。
+
 # SAO 0.76.1-lite：Numen / Mineflayer 隔离接入
 
 2026-10-30 后续 Mineflayer 实机复测已完成：46 槽原始同步与本人原生物品一致，线上桐人实际步行 4.368 格并发动职业技能；断线后按原请求只读对账通过。SAO 部署提高紧凑上下文的保守预算，保留前一次未完成尝试与错误路线。结果、调用数量和边界见 [MINEFLAYER_RETEST.md](MINEFLAYER_RETEST.md)。

@@ -40,7 +40,17 @@ final class RegistryExport {
                 }
             }
             try(var output=Files.newBufferedWriter(directory.resolve("items.jsonl"),StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW)) {
-                for(var item:BuiltInRegistries.ITEM){JsonObject row=new JsonObject();row.addProperty("id",BuiltInRegistries.ITEM.getId(item));row.addProperty("name",BuiltInRegistries.ITEM.getKey(item).toString());row.addProperty("descriptionId",item.getDescriptionId());row.addProperty("stackSize",item.getMaxStackSize());output.write(row.toString());output.newLine();items++;}
+                for(var item:BuiltInRegistries.ITEM){
+                    JsonObject row=new JsonObject();row.addProperty("id",BuiltInRegistries.ITEM.getId(item));row.addProperty("name",BuiltInRegistries.ITEM.getKey(item).toString());row.addProperty("descriptionId",item.getDescriptionId());row.addProperty("stackSize",item.getMaxStackSize());
+                    var stack=item.getDefaultInstance();row.addProperty("metadataScope","default_item_stack_not_live_inventory");
+                    try {
+                        var food=stack.getFoodProperties(null);
+                        if(food==null)row.add("food",JsonNull.INSTANCE);else {var f=new JsonObject();f.addProperty("nutrition",food.getNutrition());f.addProperty("saturationModifier",food.getSaturationModifier());f.addProperty("canAlwaysEat",food.canAlwaysEat());row.add("food",f);}
+                        row.addProperty("foodMetadataAvailable",true);
+                    }catch(RuntimeException contextual){row.addProperty("foodMetadataAvailable",false);row.addProperty("foodUnavailableReason","requires_live_item_context");}
+                    try{row.addProperty("useAnimation",stack.getUseAnimation().name());row.addProperty("useDurationTicks",stack.getUseDuration());}catch(RuntimeException contextual){row.addProperty("useMetadataAvailable",false);}
+                    output.write(row.toString());output.newLine();items++;
+                }
             }
             try(var output=Files.newBufferedWriter(directory.resolve("entities.jsonl"),StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW)) {
                 for(var entity:BuiltInRegistries.ENTITY_TYPE){JsonObject row=new JsonObject();row.addProperty("id",BuiltInRegistries.ENTITY_TYPE.getId(entity));row.addProperty("name",BuiltInRegistries.ENTITY_TYPE.getKey(entity).toString());row.addProperty("category",entity.getCategory().getName());output.write(row.toString());output.newLine();entities++;}

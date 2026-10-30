@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 1,
+  "deployedAt": "2026-10-30T04:58:04.785417+00:00",
+  "status": "public_running",
+  "root": "E:\\MC\\servers\\sao-0.76.1",
+  "minecraft": "1.20.1",
+  "forge": "47.4.10",
+  "modJars": 175,
+  "ports": {
+    "javaTcp": 28976,
+    "nativeAgentTcp": 28977,
+    "bedrockUdp": 28988,
+    "javaVoiceUdp": 28989
+  },
+  "domain": "micro.kangqiang.site",
+  "privatePorts": {
+    "gameBackendTcp": 39676,
+    "numenOwnerMcpTcp": 39689,
+    "bridgeTcp": [
+      39694,
+      39695
+    ],
+    "healthTcp": 28985
+  },
+  "backups": [
+    {
+      "schemaVersion": 1,
+      "root": "E:\\MC\\servers\\tau-ceti-1.3.3",
+      "primary": "E:\\MC\\backups\\sao-public-cutover-20261030\\tau-cold-121808.zip",
+      "secondary": "F:\\MC-backups\\sao-public-cutover-20261030\\tau-cold-121808.zip",
+      "fileCount": 65271,
+      "sourceBytes": 18792876619,
+      "archiveBytes": 3906565905,
+      "sha256": "6ce1c48f501035a0be2b45572b21a80f868796b49aa7bddf8a022de0b1471f0e",
+      "fullContentVerified": true,
+      "normalJavaExit": 0,
+      "sourceRetained": true
+    },
+    {
+      "schemaVersion": 1,
+      "root": "E:\\MC\\servers\\sao-0.76.1",
+      "primary": "E:\\MC\\backups\\sao-public-cutover-20261030\\sao-candidate-cold-121806.zip",
+      "secondary": "F:\\MC-backups\\sao-public-cutover-20261030\\sao-candidate-cold-121806.zip",
+      "fileCount": 22053,
+      "sourceBytes": 4480548318,
+      "archiveBytes": 1598235197,
+      "sha256": "f7de433a101d5283f1c2eaacf007e2aa0372ebfd11995488bc5a1f61825bff87",
+      "fullContentVerified": true,
+      "normalJavaExit": 0,
+      "sourceRetained": true
+    }
+  ],
+  "sourceTests": {
+    "nodePassed": 47,
+    "pythonPassed": 6
+  },
+  "sdk": {
+    "sha256": "371ac1f4090662897019c9e81d87ecf853ac583de0fdd2a2bcb585d8821ec373",
+    "bytes": 33742,
+    "from": "http://192.168.3.163:28977/sao-agent-sdk.tgz"
+  },
+  "sdkAcceptance": {
+    "schemaVersion": 1,
+    "observedAt": "2026-10-30T04:42:07.395Z",
+    "host": "192.168.3.163",
+    "port": 28977,
+    "checks": {
+      "authenticationRequired": true,
+      "notAlreadyAuthenticated": true,
+      "privateStateBlockedBeforeLogin": true,
+      "authenticated": true,
+      "realBody": true,
+      "currentRegistry": true,
+      "nativeInventory": true,
+      "nativeProfession": true,
+      "nativeFood": true
+    },
+    "serverEpoch": "cad376eb-e9e0-4d6d-9edb-32673590a57f",
+    "bodyId": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "position": {
+      "x": 1460.0478677295125,
+      "y": 80.78796799243165,
+      "z": -1313.490154351235
+    }
+  },
+  "bedrockCandidateAcceptance": {
+    "passed": true,
+    "checks": {
+      "realBedrockUdpSpawn": true,
+      "authPromptPrivate": true,
+      "nativeAuthentication": true,
+      "resourcePackOffered": true,
+      "realInventory": true,
+      "staysConnected": true
+    },
+    "chunks": 110,
+    "customDefinitions": 2656,
+    "physicalDeviceVerified": false
+  },
+  "bedrockCompatibility": {
+    "protocol": 2193,
+    "advertisedVersion": "26.52",
+    "nativeIcons": 2656,
+    "unconvertedSpecialItems": 8126,
+    "allModScreensSupported": false,
+    "allNativeModelsSupported": false,
+    "physicalPhoneVisualsVerified": false
+  },
+  "accountMigration": {
+    "schemaVersion": 1,
+    "sourceKnownAccounts": 32,
+    "importedRegisteredAccounts": 6,
+    "premiumAccounts": 0,
+    "existingOwnedAccountsPreserved": true,
+    "canonicalUuidsPreserved": true,
+    "unregisteredVisitorsSkipped": 26,
+    "plaintextStored": false
+  },
+  "paperModified": false,
+  "previousTauDirectoryRetained": true,
+  "automaticRecoveryPaused": false,
+  "logonStartupMigrated": true,
+  "residentMemoryFilesVerified": 28355,
+  "externalStatusProbes": [
+    {
+      "online": true,
+      "ip": "36.20.73.61",
+      "port": 28976,
+      "version": "1.20.1",
+      "protocol": {
+        "version": 763,
+        "name": "1.20.1"
+      },
+      "motd": {
+        "raw": [
+          "My Agent World SAO 0.76.1-lite | Java + Agent + Bedrock§r"
+        ],
+        "clean": [
+          "My Agent World SAO 0.76.1-lite | Java + Agent + Bedrock"
+        ],
+        "html": [
+          "My Agent World SAO 0.76.1-lite | Java + Agent + Bedrock"
+        ]
+      },
+      "debug": {
+        "ping": true,
+        "query": false,
+        "bedrock": false,
+        "srv": false,
+        "querymismatch": false,
+        "ipinsrv": false,
+        "cnameinsrv": false,
+        "animatedmotd": false,
+        "cachehit": false,
+        "cachetime": 1793335209,
+        "cacheexpire": 1793335509,
+        "apiversion": 3,
+        "dns": {
+          "records": [
+            {
+              "name": "micro.kangqiang.site",
+              "type": "A",
+              "address": "36.20.73.61"
+            }
+          ]
+        },
+        "errors": [
+          {
+            "type": "query",
+            "message": "Failed to read from socket."
+          }
+        ]
+      }
+    },
+    {
+      "online": true,
+      "ip": "36.20.73.61",
+      "port": 28977,
+      "version": "1.20.1",
+      "protocol": {
+        "version": 763,
+        "name": "1.20.1"
+      },
+      "motd": {
+        "raw": [
+          "My Agent World SAO 0.76.1-lite | Java + Agent + Bedrock§r"
+        ],
+        "clean": [
+          "My Agent World SAO 0.76.1-lite | Java + Agent + Bedrock"
+        ],
+        "html": [
+          "My Agent World SAO 0.76.1-lite | Java + Agent + Bedrock"
+        ]
+      },
+      "debug": {
+        "ping": true,
+        "query": false,
+        "bedrock": false,
+        "srv": false,
+        "querymismatch": false,
+        "ipinsrv": false,
+        "cnameinsrv": false,
+        "animatedmotd": false,
+        "cachehit": false,
+        "cachetime": 1793335209,
+        "cacheexpire": 1793335509,
+        "apiversion": 3,
+        "dns": {
+          "records": [
+            {
+              "name": "micro.kangqiang.site",
+              "type": "A",
+              "address": "36.20.73.61"
+            }
+          ]
+        },
+        "errors": [
+          {
+            "type": "query",
+            "message": "Failed to read from socket."
+          }
+        ]
+      }
+    },
+    {
+      "online": true,
+      "ip": "36.20.73.61",
+      "port": 28988,
+      "version": "26.52",
+      "protocol": {
+        "version": 2193,
+        "name": "1.26.51"
+      },
+      "motd": {
+        "raw": [
+          "My Agent World SAO"
+        ],
+        "clean": [
+          "My Agent World SAO"
+        ],
+        "html": [
+          "My Agent World SAO"
+        ]
+      },
+      "debug": {
+        "ping": false,
+        "query": false,
+        "bedrock": true,
+        "srv": false,
+        "querymismatch": false,
+        "ipinsrv": false,
+        "cnameinsrv": false,
+        "animatedmotd": false,
+        "cachehit": false,
+        "cachetime": 1793335211,
+        "cacheexpire": 1793335511,
+        "apiversion": 3,
+        "dns": {
+          "records": [
+            {
+              "name": "micro.kangqiang.site",
+              "type": "A",
+              "address": "36.20.73.61"
+            }
+          ]
+        },
+        "errors": [
+          {
+            "type": "query",
+            "message": "Failed to read from socket."
+          }
+        ]
+      }
+    }
+  ],
+  "resident": {
+    "scope": "managed_server",
+    "body": "ag_Kirito",
+    "phaseAtObservation": "running",
+    "gameConnected": true,
+    "autonomyRunning": true,
+    "observedAt": "2026-10-30T04:53:19.672961+00:00",
+    "model": "online_qwen3.7-plus",
+    "privateBrokerPinned": {
+      "private-login.cjs": "575f717fa80fa0962d69d7353ea0006c953bc668df10a4b5d393ce812a83ac92",
+      "game_login_broker.py": "9b49f5bf8fec1b7f03307bb72134f34459d57d6d1ef7652f02cd3ace70e20578"
+    },
+    "environmentAllowlistPreserved": true,
+    "sharedCoreModified": false,
+    "memoryFilesVerified": 28355,
+    "newJournalFilesCheckedForGamePassword": 124,
+    "gamePasswordMatches": 0,
+    "fullStoryAutonomyVerified": false
+  },
+  "retainedFailureNotes": [
+    "initial chunk width and declared-height conversion failures fixed before public deployment",
+    "registration attempted before native cooldown was explicitly rejected; subsequent waited registration succeeded",
+    "voice config comments were rewritten normally; semantic listener validation replaced the false byte-change alarm",
+    "resident game password env not forwarded through harness allowlist; pinned private broker added without widening allowlist",
+    "one immediate broker snapshot check failed; subsequent explicit read-only snapshots verified authentication and real body state"
+  ]
+}

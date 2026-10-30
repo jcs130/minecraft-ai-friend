@@ -1,0 +1,10 @@
+{
+  "maw_bedrock_resources.py": {
+    "source": "fom-2.42 frozen service-tools release",
+    "sha256": "bef1373c7ec769d9b14aebdf6c73be5d6134ce6e55f33fb9c74a594e1fc6a9af"
+  },
+  "native_resource_priority.py": {
+    "source": "fom-2.42 frozen service-tools release",
+    "sha256": "60e3125db49026f0cea726dc070e9a20f8c2bd54a6f9f3d20db6a8020ad5b27b"
+  }
+}
