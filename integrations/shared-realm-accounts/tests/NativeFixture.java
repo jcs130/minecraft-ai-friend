@@ -27,12 +27,15 @@ public final class NativeFixture {
   }
   try{
    var cfg=JsonParser.parseString(Files.readString(Path.of("../private/test-credentials.json"))).getAsJsonObject();
-   for(String field:List.of("newName","oldName","retryName")){
+   for(String field:List.of("newName","oldName","retryName","adminName","totpName","premiumName","premiumRealName")){
     if(!cfg.has(field))continue;
     String passwordKey=cfg.has(field+"PasswordKey")?cfg.get(field+"PasswordKey").getAsString():field.equals("newName")&&cfg.has("newPasswordWasChanged")&&cfg.get("newPasswordWasChanged").getAsBoolean()?"changedPassword":"password";
     String name=cfg.get(field).getAsString(),password=cfg.get(passwordKey).getAsString();var user=libre.getDatabaseProvider().getByName(name);
     if(user==null){var now=new Timestamp(System.currentTimeMillis());var hash=libre.getDefaultCryptoProvider().createHash(password);libre.getDatabaseProvider().insertUser(libre.createUser(UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8)),null,hash,name,now,now,null,null,null,null,null));user=libre.getDatabaseProvider().getByName(name);}
     if(!user.isRegistered()||!user.getLastNickname().equals(name)||!libre.getCryptoProvider(user.getHashedPassword().algo()).matches(password,user.getHashedPassword()))throw new IllegalStateException("NATIVE_FIXTURE_PROOF_FAILED");
+    // Only synthetic, explicitly configured isolated accounts get test factors.
+    if(field.equals("totpName")){String secret=cfg.get("totpSecret").getAsString();if(user.getSecret()!=null&&!user.getSecret().equals(secret))throw new IllegalStateException("FIXTURE_SECRET_CHANGED");user.setSecret(secret);libre.getDatabaseProvider().updateUser(user);}
+    if(field.equals("premiumName")||field.equals("premiumRealName")){UUID premium=UUID.fromString(cfg.get(field+"Uuid").getAsString());if(user.getPremiumUUID()!=null&&!user.getPremiumUUID().equals(premium))throw new IllegalStateException("FIXTURE_PREMIUM_CHANGED");user.setPremiumUUID(premium);libre.getDatabaseProvider().updateUser(user);}
    }
    Files.writeString(Path.of("../native-fixture-proof.json"),"{\"nativeProviderVerified\":true,\"existingHashesOverwritten\":false}");
   }catch(Exception invalid){throw new IllegalStateException("ISOLATED_FIXTURE_FAILURE",invalid);}

@@ -20,14 +20,13 @@ import org.slf4j.Logger;
 import static dev.qiandeng.accounts.BridgeFiles.text;
 
 /** The primary realm owns the credential. Other realms never copy its hash. */
-@Plugin(id="realm-accounts",name="Shared Realm Accounts",version="0.1.0",dependencies={@Dependency(id="login-guard"),@Dependency(id="librelogin")})
+@Plugin(id="realm-accounts",name="Shared Realm Accounts",version="0.1.1",dependencies={@Dependency(id="login-guard"),@Dependency(id="librelogin")})
 public final class RealmAuthority {
     private final ProxyServer proxy;private final Logger log;
     private final ExecutorService worker=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"realm-account-authority");t.setDaemon(true);return t;});
     private final AtomicBoolean scanning=new AtomicBoolean();
     private BridgeFiles bridge;private LibreLoginPlugin<Player,RegisteredServer> libre;private Object guard;
-    private Field guardReady;private Method reserved,password;
-    private final Map<UUID,long[]> failures=new HashMap<>();
+    private Field guardReady;private Method password;private NativePolicy policy;
     private volatile boolean closed;
     private long lastHeartbeat,lastWarning;
     @Inject public RealmAuthority(ProxyServer proxy,Logger log){this.proxy=proxy;this.log=log;}
@@ -37,7 +36,7 @@ public final class RealmAuthority {
         if(!p.getProperty("enabled","false").equals("true"))return;
         guard=proxy.getPluginManager().getPlugin("login-guard").flatMap(x->x.getInstance()).orElseThrow();
         guardReady=guard.getClass().getDeclaredField("ready");guardReady.setAccessible(true);
-        reserved=guard.getClass().getDeclaredMethod("portalReserved",String.class);reserved.setAccessible(true);
+        policy=new NativePolicy(guard);
         password=guard.getClass().getDeclaredMethod("portalPassword",String.class,UUID.class,String.class,String.class);password.setAccessible(true);
         Object provider=proxy.getPluginManager().getPlugin("librelogin").flatMap(x->x.getInstance()).orElseThrow();
         libre=((LibreLoginProvider<Player,RegisteredServer>)provider).getLibreLogin();
@@ -79,18 +78,33 @@ public final class RealmAuthority {
             // password, UUID, registration, reserved-role and TOTP policy.
             if(!linked){JsonObject role=bridge.role(name);
                 if(role==null||!name.equals(text(role,"name"))||!uuid.toString().equals(text(role,"uuid")))throw new Problem("WEBSITE_ROLE_REQUIRED");}
-            if((boolean)reserved.invoke(guard,name))throw new Problem("RESERVED_ACCOUNT");
-            if(!Set.of("verify","password").contains(operation))throw new Problem("OPERATION_UNSUPPORTED");
+            if(!Set.of("verify","password","identity").contains(operation))throw new Problem("OPERATION_UNSUPPORTED");
             var user=libre.getDatabaseProvider().getByName(name);
-            if(user==null||!user.getUuid().equals(uuid)||!user.getLastNickname().equals(name)||!user.isRegistered())throw new Problem("IDENTITY_MISMATCH");
-            if(user.getSecret()!=null)throw new Problem("TOTP_IN_PRIMARY_REALM");
-            long[] counter=failures.computeIfAbsent(uuid,k->new long[]{now,0});if(now-counter[0]>300000){counter[0]=now;counter[1]=0;}
-            if(counter[1]>=3)throw new Problem("PASSWORD_BLOCKED");
+            if(user==null||!user.getUuid().equals(uuid)||!user.getLastNickname().equals(name))throw new Problem("IDENTITY_MISMATCH");
+            if(!user.isRegistered()&&!(operation.equals("identity")&&user.getPremiumUUID()!=null))throw new Problem("PASSWORD_NOT_CONFIGURED");
+            var observedHash=user.getHashedPassword();String observedSecret=user.getSecret();
+            String category=policy.identity(name,uuid,text(request,"bodyName"),UUID.fromString(text(request,"bodyUuid")));
+            var bodyOwner=libre.getDatabaseProvider().getByName(text(request,"bodyName"));
+            if(bodyOwner!=null&&(bodyOwner.isRegistered()||bodyOwner.getPremiumUUID()!=null)&&!bodyOwner.getUuid().equals(uuid))throw new Problem("BODY_IDENTITY_OWNED_ELSEWHERE");
+            if(operation.equals("identity")){
+                result=bridge.result(request,"succeeded","IDENTITY_READY");result.addProperty("identityClass",category);
+                if(user.getPremiumUUID()!=null)result.addProperty("premiumUuid",user.getPremiumUUID().toString());else result.add("premiumUuid",JsonNull.INSTANCE);
+                result.addProperty("totpRequired",user.getSecret()!=null);result.addProperty("permitExpiresAt",now+120000);
+                bridge.write(resultFile,"result:"+id,result,false);Files.delete(file);return;
+            }
+            if(operation.equals("password")&&(!category.equals("player")||user.getSecret()!=null))throw new Problem("PASSWORD_CHANGE_IN_PRIMARY");
+            long retry=policy.retryAfter(name);if(retry>0)throw new Problem("PASSWORD_BLOCKED");
             String supplied=text(request,"password");
-            if(supplied.isEmpty()||supplied.length()>128||!libre.getCryptoProvider(user.getHashedPassword().algo()).matches(supplied,user.getHashedPassword())){counter[1]++;throw new Problem("PASSWORD_INCORRECT");}
+            if(supplied.isEmpty()||supplied.length()>128||!libre.getCryptoProvider(observedHash.algo()).matches(supplied,observedHash)){policy.wrong(name);throw new Problem("PASSWORD_INCORRECT");}
+            String otp=text(request,"otp");
+            if(observedSecret!=null){
+                if(otp.isEmpty())throw new Problem("TOTP_REQUIRED");
+                if(!otp.matches("[0-9]{6}"))throw new Problem("TOTP_FORMAT");
+                if(libre.getTOTPProvider()==null)throw new Problem("TOTP_PROVIDER_UNAVAILABLE");
+                if(!libre.getTOTPProvider().verify(Integer.valueOf(otp),observedSecret)){policy.wrong(name);throw new Problem("TOTP_INCORRECT");}
+            }else if(!otp.isEmpty())throw new Problem("TOTP_NOT_CONFIGURED");
             var current=libre.getDatabaseProvider().getByName(name);
-            if(current==null||!current.getUuid().equals(uuid)||!current.getHashedPassword().equals(user.getHashedPassword()))throw new Problem("PASSWORD_CHANGED");
-            counter[1]=0;
+            if(current==null||!current.getUuid().equals(uuid)||!current.getHashedPassword().equals(observedHash)||!Objects.equals(current.getSecret(),observedSecret))throw new Problem("PASSWORD_CHANGED");
             if(operation.equals("password")){
                 String next=text(request,"newPassword");
                 if(next.length()<6||next.length()>64||next.matches(".*\\s.*")||Set.of("123456","12345678","password","qwerty").contains(next.toLowerCase(Locale.ROOT)))throw new Problem("PASSWORD_WEAK");
@@ -99,7 +113,9 @@ public final class RealmAuthority {
                 try{password.invoke(guard,name,uuid,supplied,next);}catch(InvocationTargetException error){throw new Problem(nativeReason(error.getCause()));}
             }
             result=bridge.result(request,"succeeded",operation.equals("password")?"PASSWORD_CHANGED":"VERIFIED");
-        } catch(Problem error){result=bridge.result(request,error.reason.equals("AUTH_RESULT_UNKNOWN")?"unknown":"failed",error.reason);}
+            result.addProperty("identityClass",category);
+        } catch(Problem error){result=bridge.result(request,error.reason.equals("AUTH_RESULT_UNKNOWN")?"unknown":error.reason.equals("TOTP_REQUIRED")?"challenge":"failed",error.reason);}
+        catch(NativePolicy.Rejected error){result=bridge.result(request,"failed",error.reason);}
         catch(Exception error){result=bridge.result(request,"unknown",Files.exists(resultFile)?"AUTH_RESULT_UNKNOWN":"AUTHORITY_UNAVAILABLE");}
         bridge.write(resultFile,"result:"+id,result,false);Files.delete(file);
     }

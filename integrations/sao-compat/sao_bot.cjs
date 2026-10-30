@@ -26,6 +26,7 @@ function createSAOBot ({ root, username = 'SAOBridgeProbe', botOptions = {}, aut
     customPackets: { '1.20': { play: { toClient: { types: {
       packet_declare_recipes: ['container',[{name:'nativeRecipeBytes',type:'restBuffer'}]]
     } } } } } })
+  require('./account-receipts.cjs').attachAccountReceipts(bot)
   // A Forge recipe stream contains custom ingredient/serializer codecs. Preserve
   // the bytes and use the advertised native catalog; never call it an empty list.
   bot._client.on('declare_recipes', packet => {

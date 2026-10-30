@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.1",
+  "state": "primary-deployed-sao-backup-in-progress",
+  "components": {
+    "forge": {
+      "sha256": "70a08dfd1059bc07ae3bbab42a239355fd9b6d69ba84d0b62a55e8185a22ada1",
+      "bytes": 37359
+    },
+    "velocity": {
+      "sha256": "c2d923dc8c88d6b055fbaa9d953ae67b536d24cffbc861c59b94b1127b9b4b15",
+      "bytes": 19068
+    }
+  },
+  "verification": {
+    "nodePassed": 50,
+    "pythonPassed": 18,
+    "policyChecksPassed": 19,
+    "nativeLoginChecksPassed": 11,
+    "existingPrimaryCredentialsPreserved": 69,
+    "actualPrimaryPremiumAdministratorIdentityConfirmed": true,
+    "realMicrosoftSessionPositiveObserved": false,
+    "isolatedTotpProviderAvailable": false
+  },
+  "sourceOfCredentials": "original LibreLogin native provider",
+  "originalLoginGuardUnchanged": true,
+  "originalPrimaryOpsUnchanged": true,
+  "clientModpackReplaced": false,
+  "newPublicPorts": false,
+  "saoDeploymentComplete": false,
+  "knownLimits": [
+    "A real Microsoft-session join by LittleFish0510 is still pending.",
+    "The isolated native TOTP provider is absent and correctly fails closed."
+  ]
+}

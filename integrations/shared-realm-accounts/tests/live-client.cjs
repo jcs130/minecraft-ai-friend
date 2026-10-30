@@ -7,15 +7,17 @@ const cfg=JSON.parse(fs.readFileSync(process.env.MAW_TEST_CREDENTIALS,'utf8'));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function connect(name){
  const bot=mineflayer.createBot({host:'127.0.0.1',port:cfg.port,username:name,auth:'offline',version:'1.20.1'});
- const messages=[];bot.on('messagestr',m=>messages.push(m));bot.on('error',()=>{});
+ const messages=[],receipts=[];bot.on('messagestr',m=>messages.push(m));bot.on('error',()=>{});
+ bot._client.on('custom_payload',p=>{if(p.channel==='mcagent:account')receipts.push(JSON.parse(p.data.toString('utf8')))});
+ bot.once('spawn',()=>bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('mcagent:account')}));
  await new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error('SPAWN_TIMEOUT')),20000);bot.once('spawn',()=>{clearTimeout(t);resolve();});bot.once('kicked',()=>{clearTimeout(t);reject(Error('UNEXPECTED_KICK'));});});
- await sleep(1000);return {bot,messages};
+ await sleep(1000);return {bot,messages,receipts};
 }
 async function until(fn){for(let n=0;n<160;n++){const result=fn();if(result)return result;await sleep(100);}throw Error('RECEIPT_TIMEOUT');}
 async function structured(c,command){
  for(let attempt=0;attempt<2;attempt++){
-  const start=c.messages.length;c.bot.chat(command);
-  const r=await until(()=>c.messages.slice(start).find(m=>m.startsWith('MC_SHARED_ACCOUNT '))&&JSON.parse(c.messages.slice(start).find(m=>m.startsWith('MC_SHARED_ACCOUNT ')).slice('MC_SHARED_ACCOUNT '.length)));
+  const start=c.receipts.length;c.bot.chat(command);
+  const r=await until(()=>c.receipts.slice(start)[0]);
   if(r.reason==='LOGIN_COOLDOWN'&&r.accepted===false&&attempt===0){await sleep(r.retryAfterMs+150);continue;}
   return r;
  }
@@ -37,7 +39,7 @@ async function main(){
  }
  if(mode==='explicit-alias'){
   let c=await connect('b_SaoAliasQa');let r=await structured(c,'/login '+cfg.retryName+' '+cfg.password);assert.equal(r.state,'succeeded');assert.equal(r.authenticated,true);assert.equal(r.primaryName,cfg.retryName);assert.equal(r.bodyName,'b_SaoAliasQa');pass('fresh-bedrock-style-body-explicit-primary-account-login');await close(c);
-  c=await connect('b_AdminQa');r=await structured(c,'/login '+cfg.retryName+' '+cfg.password);assert.equal(r.state,'failed');assert.equal(r.reason,'RESERVED_ACCOUNT');assert.equal(r.accepted,false);pass('ordinary-primary-cannot-enroll-local-op-body');await close(c);console.log(JSON.stringify({mode,checks}));return;
+  c=await connect('b_AdminQa');r=await structured(c,'/login '+cfg.retryName+' '+cfg.password);assert.equal(r.state,'failed');assert.equal(r.reason,'PRIVILEGED_IDENTITY_MISMATCH');assert.equal(r.accepted,false);pass('ordinary-primary-cannot-enroll-local-op-body');await close(c);console.log(JSON.stringify({mode,checks}));return;
  }
  if(mode==='offline-feed'){
   let c=await connect(cfg.oldName);let r=await structured(c,'/login '+cfg.sitePassword);assert.equal(r.state,'succeeded');assert.equal(r.authenticated,true);pass('established-binding-uses-native-authority-during-website-outage');await close(c);

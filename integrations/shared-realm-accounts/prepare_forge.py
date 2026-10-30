@@ -8,13 +8,13 @@ for source in ['java','forge']:
  shutil.copytree(root/source,a.out/'src/main/java',dirs_exist_ok=True)
 r=a.out/'src/main/resources';(r/'META-INF').mkdir(parents=True)
 shutil.copy2(root/'forge-mods.toml',r/'META-INF/mods.toml')
-(r/'maw_shared_accounts.mixins.json').write_text(json.dumps({'required':True,'minVersion':'0.8','package':'dev.qiandeng.accounts.mixin','compatibilityLevel':'JAVA_17','mixins':['NoSharedGrace'],'injectors':{'defaultRequire':1}}))
+(r/'maw_shared_accounts.mixins.json').write_text(json.dumps({'required':True,'minVersion':'0.8','package':'dev.qiandeng.accounts.mixin','compatibilityLevel':'JAVA_17','mixins':['NoSharedGrace','AccountRegistration','PremiumLookup'],'injectors':{'defaultRequire':1}}))
 (a.out/'auth-libs').mkdir();shutil.copy2(a.directauth,a.out/'auth-libs'/a.directauth.name)
 shutil.copytree(a.verified_maven,a.out/'verified-maven')
 (a.out/'settings.gradle').write_text("pluginManagement { repositories { gradlePluginPortal(); maven { url = 'https://maven.minecraftforge.net/' } } }\nrootProject.name='maw-shared-accounts'\n")
 (a.out/'build.gradle').write_text("""plugins { id 'java'; id 'net.minecraftforge.gradle' version '6.0.54' }
 group='dev.qiandeng.maw'
-version='0.1.0'
+version='0.1.1'
 java.toolchain.languageVersion=JavaLanguageVersion.of(17)
 minecraft { mappings channel:'official', version:'1.20.1' }
 repositories { maven { url=uri('verified-maven') }; mavenCentral(); maven { url='https://libraries.minecraft.net/' }; maven { url='https://maven.minecraftforge.net/' } }

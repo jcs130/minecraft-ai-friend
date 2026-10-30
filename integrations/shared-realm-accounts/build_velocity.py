@@ -11,9 +11,9 @@ for f,h in expected.items():assert hashlib.sha256(f.read_bytes()).hexdigest()==h
 deps=[a.proxy/'velocity.jar',a.libre,*sorted((a.proxy/'plugins/librelogin/lib').rglob('*.jar'))]
 sources=[*root.joinpath('java').rglob('*.java'),*root.joinpath('velocity').rglob('*.java')]
 subprocess.run([str(a.jdk/'bin/javac.exe'),'-proc:none','-encoding','UTF-8','--release','21','-cp',';'.join(map(str,deps)),'-d',str(classes),*map(str,sources)],check=True)
-jar=a.out/'RealmAccounts-0.1.0.jar'
+jar=a.out/'RealmAccounts-0.1.1.jar'
 with zipfile.ZipFile(jar,'w',zipfile.ZIP_DEFLATED) as z:
  for f in sorted(classes.rglob('*.class')):z.write(f,f.relative_to(classes).as_posix())
- z.writestr('velocity-plugin.json',json.dumps({'id':'realm-accounts','name':'Shared Realm Accounts','version':'0.1.0','main':'dev.qiandeng.accounts.RealmAuthority','dependencies':[{'id':'login-guard','optional':False},{'id':'librelogin','optional':False}]}))
+ z.writestr('velocity-plugin.json',json.dumps({'id':'realm-accounts','name':'Shared Realm Accounts','version':'0.1.1','main':'dev.qiandeng.accounts.RealmAuthority','dependencies':[{'id':'login-guard','optional':False},{'id':'librelogin','optional':False}]}))
 (a.out/'build.json').write_text(json.dumps({'sha256':hashlib.sha256(jar.read_bytes()).hexdigest(),'unchangedDependencies':{str(f):h for f,h in expected.items()}},indent=2))
 print('Built separate RealmAccounts companion; original LoginGuard unchanged')
