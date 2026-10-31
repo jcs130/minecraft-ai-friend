@@ -9,13 +9,17 @@ final class BedrockProjection {
     private final Path config;
     BedrockProjection(Path config) { this.config=config; }
     void write(String epoch, Collection<Map<String,Object>> states) throws Exception {
+        write(epoch,states,"freesia_worker");
+    }
+    void write(String epoch, Collection<Map<String,Object>> states,String source) throws Exception {
+        if(!Set.of("freesia_worker","ysm_native_backend").contains(source))throw new IllegalArgumentException("YSM_SOURCE_UNSUPPORTED");
         JsonObject options=JsonParser.parseString(Files.readString(config)).getAsJsonObject();
         if(!options.has("bedrockStateFile"))return; // Explicit opt-in; no new listener.
         Path target=Path.of(options.get("bedrockStateFile").getAsString());
         if(!target.isAbsolute() || !Files.isDirectory(target.getParent()) || Files.isSymbolicLink(target))
             throw new IllegalArgumentException("YSM_BEDROCK_STATE_PATH_INVALID");
         if(states.size()>40)throw new IllegalArgumentException("YSM_BEDROCK_STATE_BUDGET");
-        Map<String,Object> data=Map.of("schemaVersion",1,"source","freesia_worker","epoch",epoch,
+        Map<String,Object> data=Map.of("schemaVersion",1,"source",source,"epoch",epoch,
             "writtenAt",System.currentTimeMillis(),"players",states);
         byte[] bytes=new Gson().toJson(data).getBytes(java.nio.charset.StandardCharsets.UTF_8);
         if(bytes.length>96*1024)throw new IllegalArgumentException("YSM_BEDROCK_STATE_BUDGET");

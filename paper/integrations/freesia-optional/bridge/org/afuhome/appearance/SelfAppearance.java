@@ -13,11 +13,15 @@ final class SelfAppearance {
     private final Map<UUID, Selection> pending = new HashMap<>();
     private final Map<UUID, Long> changed = new HashMap<>();
 
+    static boolean validTarget(UUID player, String target) {
+        return target != null && (target.matches("[A-Za-z0-9_]{1,16}") || target.equals(player.toString()));
+    }
+
     synchronized Result begin(UUID player, Object connection, long epoch, String name,
                               boolean ready, int workers, Map<String, List<String>> catalog,
                               String[] args, long now) {
         if (!ready || epoch < 0) return new Result("请先完成游戏登录并进入世界，再执行 /appearance set。", null);
-        if (!name.matches("[A-Za-z0-9_]{1,16}")) return new Result("这个角色未经过当前 Java 外观入口；请用官网本人外观管理。", null);
+        if (!validTarget(player, name)) return new Result("这个角色未经过当前 Java 外观入口；请用官网本人外观管理。", null);
         if (workers != 1) return new Result("模型服务尚未就绪；稍后 /appearance status 查询，尚未换装。", null);
         if (args.length < 2 || args.length > 3) return new Result("用法：/appearance set <模型ID> [贴图ID]；先 /appearance list 查看。只能修改本人。", null);
         String model = args[1];
@@ -58,4 +62,8 @@ final class SelfAppearance {
     }
 
     synchronized void left(UUID player) { pending.remove(player); }
+
+    synchronized void abandon(Selection selection) {
+        if (pending.remove(selection.player, selection)) changed.remove(selection.player, selection.started);
+    }
 }

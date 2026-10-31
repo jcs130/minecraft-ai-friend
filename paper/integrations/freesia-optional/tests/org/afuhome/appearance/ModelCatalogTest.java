@@ -19,6 +19,14 @@ public final class ModelCatalogTest {
         try(var zip=new ZipOutputStream(Files.newOutputStream(custom.resolve("uploaded_zip.zip")))){for(var entry:originals.entrySet()){zip.putNextEntry(new ZipEntry("nested/"+entry.getKey()));zip.write(entry.getValue());zip.closeEntry();}}
         catalog.scan();catalog.scan();check(catalog.get("uploaded_zip").available(),"wrapped user ZIP auto-converts without extraction");
         Files.writeString(custom.resolve("encrypted.ysm"),"encrypted source fixture");catalog.scan();check("YSM_ENCRYPTED_SOURCE_REQUIRED".equals(catalog.get("encrypted").reason()),"encrypted models report original-source requirement");
+        ModelCatalog nativeCatalog=new ModelCatalog(config,"2.6.5");nativeCatalog.scan();nativeCatalog.scan();
+        check(nativeCatalog.get("uploaded_zip.zip").available()&&nativeCatalog.get("uploaded_zip")==null,"native profile preserves the registry's ZIP extension");
+        check("YSM_ENCRYPTED_SOURCE_REQUIRED".equals(nativeCatalog.get("encrypted.ysm").reason()),"native encrypted ID preserves its extension without exporting geometry");
+        try(var in=new GZIPInputStream(new ByteArrayInputStream(nativeCatalog.get("uploaded_zip.zip").gzip()))){
+            var bundle=com.google.gson.JsonParser.parseString(new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            check(bundle.get("ysmVersion").getAsString().equals("2.6.5")&&bundle.get("modelId").getAsString().equals("uploaded_zip.zip"),"native asset bundle carries its matching profile and native ID");
+        }
+        try{new ModelCatalog(config,"unknown");throw new AssertionError("unknown profile accepted");}catch(IllegalArgumentException expected){check(expected.getMessage().equals("YSM_PROFILE_UNSUPPORTED"),"unknown native profiles are rejected");}
         try(var zip=new ZipOutputStream(Files.newOutputStream(custom.resolve("traversal.zip")))){zip.putNextEntry(new ZipEntry("../secret"));zip.write(1);zip.closeEntry();}
         catalog.scan();check("YSM_FILE_PATH_INVALID".equals(catalog.get("traversal").reason())&&!Files.exists(root.resolve("secret")),"ZIP traversal rejected with zero extracted files");
         Files.delete(custom.resolve("uploaded_zip.zip"));catalog.scan();check(catalog.get("uploaded_zip")==null,"removed model immediately disappears from public catalog");

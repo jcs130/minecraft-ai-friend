@@ -16,13 +16,18 @@ final class ModelCatalog {
         boolean available(){return gzip!=null;}
     }
     private final Path config;
+    private final String ysmVersion;
     private volatile Map<String,Asset> assets=Map.of();
     private final Map<String,String> fingerprints=new HashMap<>();
     private final Map<String,String> observed=new HashMap<>();
     private volatile String revision="";
     String revision(){return revision;}
     void invalidate(){assets=Map.of();revision="";}
-    ModelCatalog(Path config){this.config=config;}
+    ModelCatalog(Path config){this(config,"2.4.1");}
+    ModelCatalog(Path config,String ysmVersion){
+        if(!Set.of("2.4.1","2.6.5").contains(ysmVersion))throw new IllegalArgumentException("YSM_PROFILE_UNSUPPORTED");
+        this.config=config;this.ysmVersion=ysmVersion;
+    }
     Asset get(String id){return assets.get(id);}
     Map<String,List<String>> catalog(){Map<String,List<String>> out=new TreeMap<>();assets.forEach((id,a)->{if(a.available())out.put(id,a.textures);});return out;}
     synchronized void scan() throws Exception {
@@ -41,6 +46,7 @@ final class ModelCatalog {
             boolean folder=file.equals("ysm.json"), zip=file.toLowerCase(Locale.ROOT).endsWith(".zip"), encrypted=file.toLowerCase(Locale.ROOT).endsWith(".ysm");
             if(!folder && !zip && !encrypted)continue;
             id=folder?p.getParent().getFileName().toString():file.substring(0,file.lastIndexOf('.'));
+            if(ysmVersion.equals("2.6.5"))id=root.relativize(folder?p.getParent():p).toString().replace('\\','/');
             if(!validId(id))continue;
             if(next.size()>=64)throw new IOException("YSM_MODEL_COUNT_BUDGET");
             Asset asset;
@@ -55,7 +61,7 @@ final class ModelCatalog {
                         continue; // Require two stable scans while an uploader is still writing files.
                     }
                     if(fingerprint.equals(fingerprints.get(id)) && previous!=null)asset=previous;
-                    else {asset=convert(id,files);fingerprints.put(id,fingerprint);}
+                    else {asset=convert(id,files,ysmVersion);fingerprints.put(id,fingerprint);}
                 }
             } catch(Exception error){asset=new Asset(id,null,null,List.of(),error.getMessage()!=null && error.getMessage().startsWith("YSM_")?error.getMessage():"YSM_MODEL_INVALID");}
             if(next.containsKey(id))asset=new Asset(id,null,null,List.of(),"YSM_DUPLICATE_MODEL_ID");
@@ -101,6 +107,9 @@ final class ModelCatalog {
     }
     private static JsonObject json(byte[] bytes){return JsonParser.parseString(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();}
     static Asset convert(String id,Map<String,byte[]> files) throws Exception {
+        return convert(id,files,"2.4.1");
+    }
+    private static Asset convert(String id,Map<String,byte[]> files,String ysmVersion) throws Exception {
         byte[] definition=require(files,"ysm.json");JsonObject spec=json(definition);
         if(spec.get("spec").getAsInt()!=2)throw new IOException("YSM_SPEC_UNSUPPORTED");
         // The public custom directory is intentionally separate from licensed/auth-only models.
@@ -134,7 +143,7 @@ final class ModelCatalog {
             String name=texture.substring(texture.lastIndexOf('/')+1).replaceFirst("\\.png$","");
             if(texturePaths.put(name,texture)!=null)throw new IOException("YSM_DUPLICATE_TEXTURE_ID");selected.put(texture,png);
         }
-        JsonObject bundle=new JsonObject();bundle.addProperty("schemaVersion",1);bundle.addProperty("modelId",id);bundle.addProperty("ysmVersion","2.4.1");
+        JsonObject bundle=new JsonObject();bundle.addProperty("schemaVersion",1);bundle.addProperty("modelId",id);bundle.addProperty("ysmVersion",ysmVersion);
         bundle.addProperty("format","ysm-bedrock-original");bundle.addProperty("sourceSha256",digest(files));bundle.addProperty("model",model);bundle.addProperty("animation",animation);
         bundle.add("textures",JSON.toJsonTree(texturePaths));bundle.add("animations",JSON.toJsonTree(animations));
         bundle.add("controllers",JSON.toJsonTree(controllers));JsonObject entries=new JsonObject();
