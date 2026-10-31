@@ -23,7 +23,13 @@ def main():
             if name.startswith('META-INF/jars/') and name.endswith('.jar'):
                 (deps/Path(name).name).write_bytes(archive.read(name))
     minecraft=next((args.game/'.fabric/remappedJars').glob('**/*client-intermediary.jar'))
-    bridge=repo/'packages/agent-mc-java-bridge/build/agent-mc-bridge-0.1.0-fabric-1.21.1.jar'
+    # Compile against the renderer's installed bridge. A repository build directory
+    # may be absent or belong to a newer, independently tested core candidate.
+    bridge=args.game/'mods/agent-mc-bridge-0.1.0-fabric-1.21.1.jar'
+    if not bridge.is_file():bridge=repo/'packages/agent-mc-java-bridge/build/agent-mc-bridge-0.1.0-fabric-1.21.1.jar'
+    if not bridge.is_file():raise SystemExit('Build/install the matching MC bridge before compiling the camera')
+    with zipfile.ZipFile(bridge) as archive:
+        if 'org/agentmc/bridge/ClientBridge.class' not in archive.namelist():raise SystemExit('Installed bridge lacks the required ClientBridge API')
     shared=(repo/'packages/agent-mc-world/client-appearance/YsmAccess.java').read_text()
     if 'static String enforce' not in shared:raise SystemExit('Shared read-only YSM contract changed; review required')
     reader=shared.split('    static String enforce',1)[0]+'}\n'
@@ -38,7 +44,9 @@ def main():
     target=out/'qiandeng-native-camera-0.1.0.jar'
     subprocess.run([str(args.jdk/'bin/jar.exe'),'--create','--file',str(target),'-C',str(classes),'.'],check=True)
     if args.install:
-        for file in (target,bridge):shutil.copyfile(file,args.game/'mods'/file.name)
+        for file in (target,bridge):
+            destination=args.game/'mods'/file.name
+            if file.resolve()!=destination.resolve():shutil.copyfile(file,destination)
     print(target)
 
 if __name__=='__main__':main()

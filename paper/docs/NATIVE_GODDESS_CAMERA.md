@@ -1,5 +1,19 @@
 # 核显原生女神相机
 
+## 2026-10-31晚：原生核显候选，等待虚拟屏安装
+
+已确认WSLg的Weston以约104秒周期发生signal11退出，匹配[上游故障41552](https://github.com/microsoft/WSL/issues/41552)，不能把旧GLX/EGL超时归咎于核显算力。后续优先在Windows原生路径验证，未重启WSL、游戏服、推理或TTS。
+
+原专用Java实为Temurin21.0.12.1，旧YSM初始化有err54。[YSM官方安装说明](https://yesstevemodel.github.io/en/wiki/install/)建议此错误改用其测试的JVM；已在独立目录准备官方Microsoft21.0.13.0.2并核验官方SHA256，没有替换服务器Java。尚未完成同场景对照，不能断言旧err54只由JVM导致。官方文档还限制较新YSM的Linux客户端支持，故不把WSLg修好等同于可直接运行整套YSM客户端。
+
+Windows Mesa D3D12探测实际仍选RTX PRO5000，严格核显门禁拒绝该结果；Zink限定Intel后进入真实Intel Vulkan驱动，但上下文在30秒限时内未创建成功，记录保留并停止自己的探测进程。这些均不是合格照片。
+
+已准备[Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver)25.7.23与其官方使用的NefCon1.14.0。CAT、驱动DLL、安装工具签名均Valid；单独1536×1536@30Hz、Intel UHD770的配置和移除入口在E/F核对。当前没有原MttVDD设备，不改现有GameViewer/NVIDIA设备、不更改证书库或关闭签名验证。新增显示设备需要Windows管理员令牌；本轮系统确认已取消，尚未安装，不能称核显相机已上线。
+
+隔离客户端不复制账号/模型认证缓存，不连接服务器，不启动模型循环。相机窗口可从自己的`native-camera-display.json`读取已核对虚拟屏坐标，在WGL创建上下文前定位隐藏窗口；实际GL_RENDERER仍必须含Intel，否则退出。相机编译器现优先复用此客户端已安装的MC bridge，并检查ClientBridge API，避免默用不存在或另一路新核心的构建目录；新模块已对原客户端依赖编译通过。尚无Intel＋YSM＋光影实拍，正式网页相机继续服务。
+
+准备入口`launch.py`只读取相机目录内可选显示配置，不修改显示设置；文件格式为`schema:1`、`expectedGpu:"Intel"`、整数`windowX/windowY`。坐标仅用于窗口放置，不是GPU成功证据；必须以新鲜运行诊断和实际像素验收。
+
 2026-10-31晚补充：服主再次指定优先使用闲置核显。实机Intel UHD770、驱动32.0.101.7092状态正常；无物理显示器不作为拒绝条件。本轮只创建微型离屏诊断上下文，没有启动游戏、修改显示驱动或重启WSL/推理服务。GLX未取得X显示连接；Wayland连接进入EGL初始化但在10秒限时内未完成，均没有取得Intel渲染器或照片，不能称高画质核显版上线。现役网页相机重启后ready/idle，继续服务。后续需先修复图形上下文，再验证真实Intel＋原YSM＋光影成片、耗时和稳定性。
 
 2026-10-29：原生客户端和拍照接入候选已构建，**高画质原生相机尚未上线、尚无 Intel＋YSM＋光影的真实成片验收**。正式女神相机继续使用现有网页渲染器；不把编译或菜单启动当作高画质拍照成功。

@@ -15,6 +15,15 @@ def main():
     manifest=json.loads((root/'launch.json').read_text())
     if not any((root/'mods').glob('qiandeng-native-camera-*.jar')):raise SystemExit('Build/install the camera policy first')
     arguments=['-Dqiandeng.camera.enabled=true','-Dqiandeng.camera.hidden=true']+manifest['arguments']
+    # The monitor is prepared separately by the operator. This only places the
+    # hidden camera window; it never installs a driver or moves another window.
+    display_profile=root/'native-camera-display.json'
+    if display_profile.is_file():
+        display=json.loads(display_profile.read_text(encoding='utf-8-sig'))
+        if display.get('schema')!=1 or display.get('expectedGpu')!='Intel':raise SystemExit('Unreviewed camera display profile')
+        coordinates=[display.get('windowX'),display.get('windowY')]
+        if not all(type(value)is int and -32768<=value<=32767 for value in coordinates):raise SystemExit('Invalid camera monitor coordinates')
+        arguments=['-Dqiandeng.camera.windowX='+str(coordinates[0]),'-Dqiandeng.camera.windowY='+str(coordinates[1])]+arguments
     if args.server:
         host,port=args.server.rsplit(':',1)
         if not host or not 1<=int(port)<=65535:raise SystemExit('Expected explicit server:port')
