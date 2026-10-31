@@ -22,8 +22,9 @@ class SelfHostTest(unittest.TestCase):
             self.assertFalse(guard.private_path(path),path)
     def test_public_lock_is_complete_and_does_not_contain_account_material(self):
         lock=module.load_lock()
-        self.assertEqual(len(lock['artifacts']),9)
-        self.assertEqual(len({r['path'] for r in lock['artifacts']}),9)
+        self.assertEqual(len(lock['artifacts']),11)
+        self.assertEqual(len({r['path'] for r in lock['artifacts']}),11)
+        self.assertTrue({'TAB','SkinsRestorer'} <= {r['component'] for r in lock['artifacts']})
         self.assertNotRegex(json.dumps(lock).lower(),r'password|api_key|authorization|privatekey')
 
     def test_eula_is_required_before_directory_creation_or_download(self):

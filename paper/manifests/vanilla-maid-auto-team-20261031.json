@@ -41,6 +41,15 @@
     "coldGameBackupTakenForThisCandidate": false
   },
   "releasePolicy": {
+    "skillCandidate": {
+      "version": "1.3.6",
+      "sha256": "ea519eaa49b3f09828708eb86e57b2bf32e351a86a888e0e1abd0cda38e536cf",
+      "sdkVersionUnchanged": "0.5.7-rc.130",
+      "entryCharacters": 1455,
+      "archiveAcceptanceTests": 8,
+      "ossBytesVerified": true,
+      "websitePointerSwitched": false
+    },
     "previouslyApprovedPhotoCombinationPreserved": true,
     "combinedScopeConfirmationPending": true,
     "dualDiskCandidateAndStaticPreimagesVerified": true,
