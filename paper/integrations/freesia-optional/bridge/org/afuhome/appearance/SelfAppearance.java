@@ -58,4 +58,8 @@ final class SelfAppearance {
     }
 
     synchronized void left(UUID player) { pending.remove(player); }
+
+    synchronized void abandon(Selection selection) {
+        if (pending.remove(selection.player, selection)) changed.remove(selection.player, selection.started);
+    }
 }

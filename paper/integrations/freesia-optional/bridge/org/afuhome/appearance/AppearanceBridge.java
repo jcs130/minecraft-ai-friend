@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Path;
 
 /** Server-authoritative metadata; no client handshake emulation or gameplay action. */
-@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.4",
+@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.5",
     dependencies={@Dependency(id="freesia"), @Dependency(id="packetevents")})
 public final class AppearanceBridge {
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("mcagent:appearance");
@@ -36,6 +36,7 @@ public final class AppearanceBridge {
     private final Map<UUID,Transfer> transfers = new ConcurrentHashMap<>();
     private final Map<UUID,Long> requested = new ConcurrentHashMap<>();
     private final SelfAppearance selfAppearance = new SelfAppearance();
+    private final AutomaticAppearance automatic = new AutomaticAppearance(Path.of("plugins/agentappearance/models.json"));
     private record Transfer(ModelCatalog.Asset asset, String request, int index) { }
     private static final Gson JSON = new Gson();
     private static final String YSM_SHA = "ec51cfae84d219a45fac5098a31bfe980bcb7c2d8b413e8fffbd05a411a85680";
@@ -55,7 +56,7 @@ public final class AppearanceBridge {
         server.getScheduler().buildTask(this,this::poll).repeat(Duration.ofSeconds(1)).schedule();
         server.getScheduler().buildTask(this,()->{
             try {
-                models.scan();String revision=models.revision();
+                models.scan();automatic.reload();String revision=models.revision();
                 if(!revision.isEmpty() && !revision.equals(requestedRevision) && Freesia.registedWorkers.size()==1 && System.nanoTime()-modelReloaded>Duration.ofSeconds(30).toNanos()) {
                     // Reload only YSM's Worker catalog, never the game server/plugins/world.
                     modelReloaded=System.nanoTime();
@@ -72,6 +73,7 @@ public final class AppearanceBridge {
         UUID uuid=event.getPlayer().getUniqueId();last.remove(uuid);states.remove(uuid);delivered.remove(uuid);refreshed.remove(uuid);
         transfers.remove(uuid);requested.remove(uuid);
         selfAppearance.left(uuid);
+        automatic.left(uuid);
     }
     @Subscribe public void stop(ProxyShutdownEvent event) { transfers.clear(); requested.clear(); server.getChannelRegistrar().unregister(ASSETS); }
     @Subscribe public void assetRequest(PluginMessageEvent event) {
@@ -149,6 +151,20 @@ public final class AppearanceBridge {
                 Freesia.mapperManager.isPlayReady(owner, session), (String)row.get("modelId"),
                 (String)row.get("texture"), System.currentTimeMillis());
             if (selectionResult != null) tell(owner,"[外观] " + selectionResult);
+            var automaticAction = automatic.tick(owner.getUniqueId(), owner, session, owner.getUsername(),
+                Freesia.mapperManager.isPlayReady(owner, session), Freesia.registedWorkers.size(),
+                (String)row.get("modelId"), (String)row.get("texture"), models.catalog(), states.values(),
+                selfAppearance, System.currentTimeMillis());
+            if (automaticAction != null) {
+                tell(owner, "[外观] " + automaticAction.message());
+                if (automaticAction.selection() != null) {
+                    try {
+                        Freesia.registedWorkers.values().iterator().next().dispatchCommandToWorker(automaticAction.selection().command(), feedback -> {
+                            if (feedback == null) automatic.unknown(owner.getUniqueId());
+                        });
+                    } catch (Exception unavailable) { automatic.unknown(owner.getUniqueId()); }
+                }
+            }
             String serial=JSON.toJson(row);
             if(!serial.equals(last.put(owner.getUniqueId(),serial))) for(Set<UUID> set:delivered.values()) set.remove(owner.getUniqueId());
         }
@@ -214,6 +230,7 @@ public final class AppearanceBridge {
                 tell(player,"[外观] " + result.message());
                 if(result.selection()!=null) {
                     var selection=result.selection();
+                    automatic.manual(player.getUniqueId(), selection.model(), selection.texture(), System.currentTimeMillis());
                     try {
                         Freesia.registedWorkers.values().iterator().next().dispatchCommandToWorker(selection.command(),feedback->{
                             // Command feedback is not proof of application. poll() confirms the actual native state.
@@ -230,7 +247,8 @@ public final class AppearanceBridge {
                 Map<String,Object> state=states.get(player.getUniqueId());
                 if(state==null)state=Map.of("available",false,"reason","YSM_WORKER_STATE_UNAVAILABLE","stateStatus","awaiting_initial_poll");
                 tell(source,stateMessage(state));
-                tell(source,"MC_APPEARANCE_STATUS "+JSON.toJson(state));return;
+                tell(source,"MC_APPEARANCE_STATUS "+JSON.toJson(state));
+                tell(source,"MC_APPEARANCE_ASSIGNMENT "+JSON.toJson(automatic.status(player.getUniqueId())));return;
             }
             if(args.length==5 && args[0].equals("admin") && args[1].equals("set")) {
                 if(source!=server.getConsoleCommandSource()) { tell(source,"仅服务器控制台可分配模型。请联系服主；查看本人状态用 /appearance status。");return; }
@@ -238,6 +256,7 @@ public final class AppearanceBridge {
                 if(target==null || !models.catalog().getOrDefault(args[3],List.of()).contains(args[4]) || !args[3].matches("[a-zA-Z0-9_/-]{1,96}") || !args[4].matches("[a-zA-Z0-9_.-]{1,96}")) { tell(source,"目标须在线，且模型/材质必须来自 /appearance list；含中文的模型由原 YSM 菜单选择。");return; }
                 if(Freesia.registedWorkers.size()!=1) { tell(source,"模型 Worker 未就绪或数量异常；等待恢复后再试，玩家可继续游戏。");return; }
                 String command="ysm model set "+target.getUsername()+" \""+args[3]+"\" "+args[4]+" true";
+                automatic.manual(target.getUniqueId(), args[3], args[4], System.currentTimeMillis());
                 Freesia.registedWorkers.values().iterator().next().dispatchCommandToWorker(command,feedback->{
                     if(feedback==null) {tell(source,"Worker 未确认；先查 /appearance status，勿当作成功。");return;}
                     tell(source,"MC_APPEARANCE_REQUESTED 已请求；以实际 Worker 状态为准。若提示玩家不存在，等待模型服务恢复后重试。");
