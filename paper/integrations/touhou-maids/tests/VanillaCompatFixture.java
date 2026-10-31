@@ -69,7 +69,12 @@ public final class VanillaCompatFixture extends JavaPlugin {
                 p.getInventory().setItem(i,CraftItemStack.asCraftMirror(stack));
             }
         }else if(action.equals("health")){
-            p.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).setBaseValue(35);
+            // Leave Vortex's authoritative base alone. Model a real additive
+            // equipment bonus; the native transient modifier is never saved.
+            ((CraftPlayer)p).getHandle().getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH)
+                .addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                    ResourceLocation.parse("compatqa:health_view"),15,
+                    net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
             p.setHealthScaled(false);p.setHealth(24);p.setFoodLevel(17);p.setSaturation(0);
         }else if(action.equals("refill")){
             var vortex=(io.vortexcore.VortexCorePlugin)Bukkit.getPluginManager().getPlugin("VortexRPG");
