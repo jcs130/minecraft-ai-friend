@@ -1,0 +1,13 @@
+{
+  "schema": "agent-mc.crafting-experiment/v1",
+  "enabled": false,
+  "evidenceKind": "deterministic-recipe-stock",
+  "baselineOrigin": "New deliberately limited reference policy; not an exported online Agent configuration",
+  "baselineParams": {"wood": "oak", "logs": 1},
+  "editable": ["skills/minecraft-method/scripts/params.json"],
+  "parameterBounds": {"wood": ["oak", "birch", "spruce", "observed"], "logs": {"min": 1, "max": 4}},
+  "objective": "success",
+  "mode": "parallel",
+  "k": 1,
+  "budget": {"modelCalls": 6, "trials": 8, "wallMs": 120000, "trialMs": 5000, "contextBytes": 600000}
+}

@@ -1,5 +1,5 @@
 /// <reference path="../../core/pathfinder-lib.d.ts" />
-export { MinecraftAgentClient, type MinecraftClientOptions, type ClientEnvironment } from './runtime.ts';
+export { MinecraftAgentClient, type MinecraftClientOptions, type MinecraftPracticeOptions, type ClientEnvironment } from './runtime.ts';
 export { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 export type { JavaClientServices } from './java-memory.ts';
 export * from '../contracts/java-client.ts';
