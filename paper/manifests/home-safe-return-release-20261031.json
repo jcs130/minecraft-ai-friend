@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "release": "home-safe-return-release-20261031-r3",
+  "state": "verified-candidate-not-deployed",
+  "document": "paper/docs/HOME_SAFE_RETURN_20261031.md",
+  "verifiedAt": "2026-10-31T08:47:59.133872+08:00",
+  "productionChanged": false,
+  "pendingPlanWritten": false,
+  "currentRuntimeAgentFriend": "0.4.47.37-rpg",
+  "candidateAgentFriend": "0.4.47.40-rpg",
+  "parentCandidate": "cooperative-exploration-release-20261031-r2",
+  "cumulativeDependencies": {
+    "QiandengjiRpg": "0.2.14",
+    "VortexBuild": "qd32-cooperation",
+    "SmartBlink": "0.1.0"
+  },
+  "scope": [
+    "bounded safe alternate for fixed village home",
+    "specific private obstacle and recovery message",
+    "actual home destination receipt",
+    "home summary and conditions match behavior",
+    "parent cooperation/exploration/blink candidate retained without other changes"
+  ],
+  "limits": {
+    "horizontalRadius": 3,
+    "verticalDifference": 2,
+    "maxBlockReads": 512,
+    "maximumGeneratedAnchorChunkLoads": 1,
+    "newChunkGeneration": false,
+    "neighborChunkLoads": false,
+    "worldEdits": false
+  },
+  "artifacts": {
+    "AgentFriend-0.4.47.40-rpg.jar": "46416fef8628e34159f944211063effa5982efab3868aa6fd13875d4c40e6bce",
+    "QiandengjiRpg-0.2.10.jar": "3ecd856c78c72b092658b2a2aee7b57c19e98ca7ac706c06d6f2c21da00d28f6",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
+    "plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar": "a49349697e81bc6e3023ea6d513453b81ef9519dcaae4b0ef60b9ef958e372da",
+    "plugins/MagicSpells/spells-regular.yml": "c541dcccf01c8dd535dcf67265ce4e63aa1ffe838affb0b2ecd2713ea7e7b3e3",
+    "plugins/AgentFriend/route-contracts.yml": "2a40ef88ce972f6ed989b2e45e4c333b28c8007019100c6ec40421851ddfd76a",
+    "plugins/AgentFriend/onboarding.yml": "dd6f4dac1313808fa0dda4550ffd475c8e0556e3952bc8f28ad5f27b10fd125d",
+    "ops/content-deploy.ps1": "2010c73be5fc3edb135912681b9c3d411615c7b9b2437d3298134d1e76859ab5"
+  },
+  "verification": {
+    "homeNativeClientChecks": 49,
+    "cooperationNativeClientChecks": 31,
+    "blinkNativeClientChecks": 47,
+    "existingNativeRpgChecks": 255,
+    "unavailableTerrainRules": 6,
+    "crossVolumeInstallRollbackAndRefusalChecks": 44,
+    "isolatedNormalStop": true,
+    "stageTemporaryFilesRestoredAndHashed": 49
+  },
+  "preservation": {
+    "travel": {
+      "reviewedTravelMethods": 5,
+      "unrelatedTravelMethodsPreserved": 10,
+      "removed": "safeHome",
+      "addedField": "homeLandings"
+    },
+    "destinationReceipt": {
+      "changedMethods": 2,
+      "otherMethodsPreserved": 274
+    },
+    "homeGuide": {
+      "homeGuideStringsChanged": 4,
+      "otherInstructionsPreserved": true
+    },
+    "unrelatedJarEntriesPreserved": 602,
+    "unloadedRules": "home-unavailable-checks=6 passed=true blockReads=0"
+  },
+  "sourceSha256": {
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/HomeLanding.java": "ddf540137df3a066da5e4de0cace849567b76e6805e17ad18bc8d91a4f237c04",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TravelMagic.java": "797d4296a0d75ee7091d4af8ddcdf80be99d5d0ed90457cc6d6dabffaf909ab9",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java": "b484afdc32394ffd73025763418dcdfbf553563171f7dde092cbe23fe6c417db",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SpellGuide.java": "1f885626fa10fce417549874d61274a35a5974191cd3e3aea8d348ae1474889e",
+    "paper/ops/patches/CompassMethodPatch.java": "c6e73c67a5b93124881500590841c902575f0a52d669d7efde1babf816207541",
+    "paper/ops/patches/HomeReturnPatch.java": "3ec4a9025ec1894335eb0374836063f3a54e4db049aec5b5852dac2f984223d2",
+    "paper/integrations/vortex-rpg/tests/HomeLandingUnavailableTest.java": "01964a6fedbf65ff0eed0380c07fe9c796853eb31e53d75f1f37aa4ca579abaf"
+  },
+  "productionHomeAnchor": {
+    "world": "minecraft:overworld",
+    "x": -543.5,
+    "y": 67,
+    "z": -439.5
+  },
+  "isolatedExampleAlternate": {
+    "world": "minecraft:overworld",
+    "x": 304.5,
+    "y": 126,
+    "z": 98.5
+  },
+  "productionAlternateValidated": false,
+  "productionAlternateReason": "Village chunk was unloaded on later read-only check; no forced load or player replay was performed.",
+  "approval": {
+    "newCumulativeScopeRequired": true,
+    "oldCooperationApprovalAutomaticallyExpanded": false,
+    "restartInvoked": false
+  },
+  "backupScope": "candidate files and code/config preimages only; not a fresh world/account cold backup",
+  "privateEvidence": "E/F repairs/home-safe-return-20261031-r1",
+  "publicSkillArchiveRepublished": false
+}

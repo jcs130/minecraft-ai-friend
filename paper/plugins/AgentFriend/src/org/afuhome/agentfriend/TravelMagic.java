@@ -44,6 +44,7 @@ final class TravelMagic implements Listener {
     private final Map<UUID, Long> adminTeleports = new HashMap<>();
     private final Map<UUID, Long> spellTeleports = new HashMap<>();
     private final Set<UUID> internal = new java.util.HashSet<>();
+    private final Map<UUID, Location> homeLandings = new HashMap<>();
 
     TravelMagic(AgentFriendPlugin plugin) { this.plugin = plugin; }
 
@@ -65,8 +66,18 @@ final class TravelMagic implements Listener {
         if (!moved) {
             player.sendMessage(ChatColor.RED + "传送被保护规则取消；未耗魔。先 /mycli land here 核对权限，再 /mycli waypoint 另选公开安全目标；持续异常联系服主。"); return false;
         }
+        Location homeAnchor = homeLandings.get(player.getUniqueId());
+        if (homeAnchor != null && !HomeLanding.accepts(player, homeAnchor, player.getLocation())) {
+            homeLandings.remove(player.getUniqueId());
+            internal.add(player.getUniqueId());
+            try { player.teleport(departure); }
+            finally { internal.remove(player.getUniqueId()); }
+            player.sendMessage("§e[unsafe_destination] 归乡目标被其他插件改为不安全位置，已尝试返回出发点；未耗魔。下一步：/mycli waypoint list");
+            return false;
+        }
         if (!plugin.spendMana(player, mana)) {
             plugin.getLogger().severe("Accepted travel could not be charged: " + player.getUniqueId());
+            homeLandings.remove(player.getUniqueId());
             player.teleport(departure);
             return false;
         }
@@ -82,8 +93,19 @@ final class TravelMagic implements Listener {
         if (!plugin.hasMana(player, mana)) return false;
         // A fixed public home spell must not depend on the player's administrative warp command.
         if (plugin.nativeRpg().selected() && id.equals("home") && command.equals("warp village")) {
-            if (!safeHome(expected)) { player.sendMessage("§e[unsafe_destination] 归乡落点暂不可用；未传送、未耗魔。请联系服主检查村庄传送点。查询：/mycli skills info home"); return false; }
-            return teleport(player,expected,id,name,mana);
+            HomeLanding.Selection landing = new HomeLanding(player, expected).select();
+            if (!landing.found()) {
+                player.sendMessage("§e[unsafe_destination] 归乡失败：" + landing.originalIssue().description()
+                        + "；附近3格、上下2格无已核实安全落点。未传送、未耗魔。下一步：/mycli waypoint list；请服主检查 village。");
+                return false;
+            }
+            homeLandings.put(player.getUniqueId(), expected.clone());
+            try {
+                boolean moved = teleport(player, landing.destination(), id, name, mana);
+                if (moved && landing.alternate()) player.sendMessage("§e[home_alternate] 原归乡点" + landing.originalIssue().description()
+                        + "；已使用附近安全落点。" + LocationOutput.fields(player.getLocation()));
+                return moved;
+            } finally { homeLandings.remove(player.getUniqueId()); }
         }
         UUID uuid = player.getUniqueId();
         Pending request = new Pending(id, name, mana, expected == null ? null : expected.clone(),
@@ -93,15 +115,6 @@ final class TravelMagic implements Listener {
         pending.remove(uuid, request);
         player.sendMessage("§e[travel_command_rejected] 目标传送未受理；未传送、未耗魔。下一步：/mycli waypoint");
         return false;
-    }
-
-    private boolean safeHome(Location at) {
-        if(at==null||at.getWorld()==null)return false;
-        int x=at.getBlockX()>>4,z=at.getBlockZ()>>4;
-        if(!at.getWorld().isChunkGenerated(x,z)||!at.getWorld().isChunkLoaded(x,z)&&!at.getWorld().getChunkAt(x,z).load(false))return false;
-        var feet=at.getBlock();var head=feet.getRelative(0,1,0);var below=feet.getRelative(0,-1,0);
-        return feet.isPassable()&&head.isPassable()&&!feet.isLiquid()&&!head.isLiquid()&&below.getType().isSolid()
-                &&!Set.of(org.bukkit.Material.MAGMA_BLOCK,org.bukkit.Material.CACTUS,org.bukkit.Material.CAMPFIRE,org.bukkit.Material.SOUL_CAMPFIRE).contains(below.getType());
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -158,6 +171,11 @@ final class TravelMagic implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTeleportCheck(PlayerTeleportEvent event) {
+        Location homeAnchor = homeLandings.get(event.getPlayer().getUniqueId());
+        if (homeAnchor != null && !HomeLanding.accepts(event.getPlayer(), homeAnchor, event.getTo())) {
+            event.setCancelled(true);
+            return;
+        }
         Pending request = request(event);
         if (request != null && (!plugin.professions().basicAllowed(event.getPlayer(),request.id().equals("home") ? "home" : "travel") || !plugin.hasMana(event.getPlayer(), request.mana()))) {
             event.setCancelled(true);
@@ -213,5 +231,6 @@ final class TravelMagic implements Listener {
         pending.remove(event.getPlayer().getUniqueId());
         adminTeleports.remove(event.getPlayer().getUniqueId());
         spellTeleports.remove(event.getPlayer().getUniqueId());
+        homeLandings.remove(event.getPlayer().getUniqueId());
     }
 }

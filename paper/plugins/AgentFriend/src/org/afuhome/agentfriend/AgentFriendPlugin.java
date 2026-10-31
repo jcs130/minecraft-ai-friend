@@ -1725,7 +1725,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (destination == null) { p.sendMessage(ChatColor.RED + "公共传送点不可用；/mycli waypoint 查看当前有效地点，另选公开目标；持续异常请联系服主。"); return; }
             if (travelMagic.command(p, "warp " + id, destination, homeSpell ? "home" : id,
                     homeSpell ? "归乡术" : "公共传送术", TravelMagic.LOCAL_MANA)) {
-                p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(destination));
+                p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(homeSpell ? p.getLocation() : destination));
             }
             return;
         }
