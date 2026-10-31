@@ -9,7 +9,7 @@ import org.bukkit.entity.Player;
 
 /** Existing guild party facade, using only the native manager and original permissions. */
 final class NativeParties {
-    private static final Set<String> BASIC=Set.of("status","create","invite","accept","decline","leave","disband","kick","menu");
+    private static final Set<String> BASIC=Set.of("status","plan","create","invite","accept","decline","leave","disband","kick","menu");
     private static final Set<String> ADVANCED=Set.of("promote","demote","transfer","chat","toggle","summon","ready","rename");
     private final VortexCorePlugin vortex;private final Gson gson=new Gson();
     NativeParties(VortexCorePlugin vortex){this.vortex=vortex;}
@@ -21,6 +21,10 @@ final class NativeParties {
         if(!BASIC.contains(action)){
             if(ADVANCED.contains(action)&&!json){Bukkit.dispatchCommand(p,"vortexrpg:party "+String.join(" ",raw));return;}
             send(p,json,false,ADVANCED.contains(action)?"unsupported_format":"invalid_argument","该操作不在简明组队入口中；未执行。高级原命令沿用原生帮助","/mycli guild party --help");return;
+        }
+        if(action.equals("plan")){
+            if(!p.hasPermission("vortex.player.party.info")){send(p,json,false,"permission_denied","缺少原生队伍查询权限；未执行", "/mycli guild party status");return;}
+            plan(p,json,args);return;
         }
         int count=Set.of("invite","kick").contains(action)?1:0;
         if(args.size()!=count||count==1&&!args.getFirst().matches("[\\p{L}\\p{N}_.]{1,16}")){send(p,json,false,"invalid_argument","参数不匹配；未执行。用法：/mycli guild party "+action+(count==1?" <在线玩家名>":""),"/mycli guild party --help");return;}
@@ -47,6 +51,25 @@ final class NativeParties {
         send(p,json,true,"completed",message,"/mycli guild party status");
         if(action.equals("invite"))target.sendMessage("§b[组队邀请] "+p.getName()+" 邀请你组队。接受：/mycli guild party accept；拒绝：/mycli guild party decline");
         if(action.equals("disband"))before.ifPresent(party->party.members().stream().filter(id->!id.equals(p.getUniqueId())).map(Bukkit::getPlayer).filter(Objects::nonNull).forEach(member->member.sendMessage("§e[队伍] 队长已解散队伍；你的副本参与状态另用 /mycli dungeon status 核对。")));
+    }
+    private void plan(Player p,boolean json,List<String> names){
+        if(names.size()<2||names.size()>5||names.stream().anyMatch(n->!n.matches("[\\p{L}\\p{N}_.]{1,16}"))){
+            send(p,json,false,"invalid_argument","plan <发起者> <伙伴...>：2到5个名字，四人列四个；只读，不会代建队或接受邀请", "/mycli guild party --help");return;
+        }
+        var manager=vortex.expeditionPartyManager();var actors=new ArrayList<PartyFormation.Actor>();
+        var teams=new HashMap<UUID,PartyFormation.Team>();var invites=new HashMap<UUID,PartyFormation.Invitation>();
+        for(String name:names){
+            Player actor=Bukkit.getPlayerExact(name);
+            if(actor==null){send(p,json,false,"player_offline","目标名字不在线；保留原队伍，重连后再核对名册", "/mycli guild party status");return;}
+            UUID id=actor.getUniqueId();actors.add(new PartyFormation.Actor(id,actor.getName(),actor.isOnline()));
+            manager.partyOf(id).ifPresent(s->teams.put(id,new PartyFormation.Team(s.partyId(),s.leaderId(),s.members())));
+            manager.pendingInviteOf(id).ifPresent(i->invites.put(id,new PartyFormation.Invitation(i.partyId(),i.inviterId())));
+        }
+        try{
+            var view=PartyFormation.plan(p.getUniqueId(),actors,teams,invites);
+            if(json)p.sendMessage("MC_RPG "+gson.toJson(view));
+            else p.sendMessage("§b[多人结伴·"+view.get("phase")+"] "+view.get("explanation")+"；本人下一步："+view.get("nextCommand"));
+        }catch(IllegalArgumentException invalid){send(p,json,false,"invalid_argument","名单须包含本人且名字和UUID不能重复；未执行", "/mycli guild party status");}
     }
     private void status(Player p,boolean json,Optional<ExpeditionPartyManager.PartySnapshot> party){
         var view=NativePartyView.state(vortex,p);
