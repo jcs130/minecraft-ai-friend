@@ -1,3 +1,7 @@
+## 2026-10-31 原生YSM2.6.5适配只在隔离服验证
+
+AgentAppearanceNative0.4.0候选在Youer920/原版NeoForge2.6.5通过12联机/3冷启检查，共享84与目录14回归通过；实际原普通换装处理器保留mandatory=false，原包大肥鱼/white及旁观无人机迁移都按真实身体确认。正式仍2.4.1，未更新生产JAR、消费端和客户端下载；相机会话【克隆原版 Cortico 与 Minecraft World】跨机工具不可达，已提供提示词，未冒称消息送达。网页/基岩/监督器及完整代理链仍需匹配发布，不能把新插件与旧频道发布器并装。隔离JVM正常停止，负面记录保留；见docs/YSM_265_MIGRATION_20261031.md与integrations/ysm-native/README.md。
+
 ## 2026-10-31 初始YSM优先不重复，模型桥候选未部署
 
 live已按原UUID确认旁观模式3及能力invulnerable=1，无重启追加并实际应用原创qd_observer_drone；229旧公开资源保持，E/F在线资源前像核对，最终4原生／3共享渲染预览通过，不改相机隐藏自身规则。普通玩家自动分配仍未部署。原大肥鱼包在独立2.6.5实际NBT确认model_id=大肥鱼_1.1.ysm、texture=white，原包未修改／解密，正式DeepFish未换；服主已选升级2.6.5，继续协议／下载适配，勿直接覆盖独立维护的2.4.1 live客户端。见docs/YSM_265_MIGRATION_20261031.md。

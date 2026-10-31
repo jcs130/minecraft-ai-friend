@@ -103,6 +103,24 @@ public final class AutomaticAppearanceTest {
         tick(registered,new SelfAppearance(),id(13),connection,1,List.of());
         check(tick(registered,new SelfAppearance(),id(13),connection,6001,List.of())==null,"invalid observer evidence disables automatic changes");
         check(registered.status(id(13)).get("reason").equals("AUTO_APPEARANCE_CONFIG_INVALID"),"invalid observer registry is explicit");
+        Path migrateConfig=settings(true,List.of("first"),List.of(id(21)));
+        Path migrateFile=migrateConfig.resolveSibling("automatic-appearances.json");
+        Files.writeString(migrateFile,JSON.toJson(Map.of("schemaVersion",1,"players",Map.of(
+            id(21).toString(),Map.of("model","third","texture","t","phase","restore_pending","at",0),
+            id(22).toString(),Map.of("model","unavailable","texture","t","phase","restore_pending","at",0),
+            id(23).toString(),Map.of("model","third","texture","t","phase","restore_pending","at",0)))));
+        var migration=policy(migrateConfig);var restoreSelection=new SelfAppearance();
+        check(tick(migration,restoreSelection,id(21),connection,1,List.of())==null,"trusted migration waits for stable native identity");
+        var restore=tick(migration,restoreSelection,id(21),connection,6001,List.of());
+        check(restore!=null&&restore.selection().model().equals("third"),"explicit old observer choice restores outside the random pool");
+        check(restore.message().contains("恢复原YSM")&&!restore.message().contains("用满"),"restoration is not misreported as an exhausted random pool");
+        check(migration.status(id(21)).get("phase").equals("issued"),"migration dispatch still requires real application readback");
+        check(tick(migration,restoreSelection,id(21),new Object(),6002,List.of())==null,"migration never replays an issued request on reconnect");
+        tick(migration,new SelfAppearance(),id(22),connection,1,List.of());
+        check(tick(migration,new SelfAppearance(),id(22),connection,12001,List.of())==null,"missing old choice never silently rerolls");
+        check(migration.status(id(22)).get("reason").equals("PREVIOUS_MODEL_UNAVAILABLE"),"unavailable old model is explicit");
+        migration.tick(id(23),connection,1,id(23).toString(),true,1,"second","t",CATALOG,List.of(),new SelfAppearance(),1);
+        check(migration.status(id(23)).get("model").equals("second")&&migration.status(id(23)).get("phase").equals("manual"),"a new personal native choice wins over a pending migration");
         System.out.println("AutomaticAppearanceTest: "+checks+" checks passed");
     }
 }

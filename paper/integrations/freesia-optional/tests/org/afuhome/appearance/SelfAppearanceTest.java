@@ -14,6 +14,9 @@ public final class SelfAppearanceTest {
     }
     public static void main(String[] args) throws Exception {
         var flow=new SelfAppearance();var connection=new Object();long now=1_000_000;
+        check(SelfAppearance.validTarget(PLAYER,PLAYER.toString()),"native API may bind its exact own UUID");
+        check(!SelfAppearance.validTarget(PLAYER,UUID.randomUUID().toString()),"another body's UUID is not an own target");
+        check(!SelfAppearance.validTarget(PLAYER,"角色名;stop"),"native UUID path does not permit command text");
         check(begin(flow,connection,1,false,1,now,"set","qiandengji_naruto").selection()==null,"unauthenticated/limbo connection refused");
         check(begin(flow,connection,-1,true,1,now,"set","qiandengji_naruto").selection()==null,"unknown session refused");
         check(begin(flow,connection,1,true,0,now,"set","qiandengji_naruto").selection()==null,"offline worker refused");

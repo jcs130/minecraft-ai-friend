@@ -5,7 +5,7 @@ import java.nio.file.*;
 import java.nio.channels.FileChannel;
 import java.util.*;
 
-/** Initial appearances use the existing selection owner and native Worker. No new game body. */
+/** Initial appearances use the existing selection owner and verified native state. No new game body. */
 final class AutomaticAppearance {
     record Pick(String model, String texture) {}
     record Entry(String model, String texture, String phase, long at) {}
@@ -33,7 +33,7 @@ final class AutomaticAppearance {
                     var value = row.getValue().getAsJsonObject();
                     Entry entry = new Entry(value.get("model").getAsString(), value.get("texture").getAsString(),
                         value.get("phase").getAsString(), value.get("at").getAsLong());
-                    if (!valid(new Pick(entry.model, entry.texture)) || !Set.of("existing", "manual", "issued", "applied", "unknown").contains(entry.phase)) throw new IllegalArgumentException();
+                    if (!valid(new Pick(entry.model, entry.texture)) || !Set.of("existing", "manual", "issued", "applied", "unknown", "restore_pending").contains(entry.phase)) throw new IllegalArgumentException();
                     entries.put(UUID.fromString(row.getKey()), entry);
                 }
             }
@@ -104,7 +104,7 @@ final class AutomaticAppearance {
         if (!model.equals("default")) {
             if (!valid(new Pick(model, texture))) return null;
             if (old != null && old.model.equals(model) && old.texture.equals(texture)
-                    && Set.of("issued", "unknown").contains(old.phase)) {
+                    && Set.of("issued", "unknown", "restore_pending").contains(old.phase)) {
                 put(id, new Entry(model, texture, "applied", now));
                 return new Action(null, "已为你分配初始YSM：" + model + " / " + texture + "。可随时 /appearance list 自选，再 /appearance set <模型> [贴图] 更换。");
             }
@@ -112,8 +112,9 @@ final class AutomaticAppearance {
             seen.remove(id); return null;
         }
         // Any earlier assignment or explicit selection, including default, survives reconnect/reset.
-        if (old != null) { if (old.phase.equals("issued") && now - old.at > 15000) unknown(id); return null; }
-        if (!enabled || !healthy || excluded.contains(id) || workers != 1 || !name.matches("[A-Za-z0-9_]{1,16}")) return null;
+        boolean restoring = old != null && old.phase.equals("restore_pending");
+        if (old != null && !restoring) { if (old.phase.equals("issued") && now - old.at > 15000) unknown(id); return null; }
+        if (!enabled || !healthy || excluded.contains(id) && !restoring || workers != 1 || !SelfAppearance.validTarget(id, name)) return null;
         Seen first = seen.get(id);
         if (first == null || first.connection != connection || first.epoch != epoch) { seen.put(id, new Seen(connection, epoch, now)); return null; }
         if (now - first.at < 5000 || now < nextDispatch) return null;
@@ -124,18 +125,19 @@ final class AutomaticAppearance {
             try { occupied.computeIfAbsent(UUID.fromString((String)row.get("playerUuid")), unused -> new HashSet<>()).add((String)row.get("modelId")); } catch (RuntimeException ignored) {}
         }
         Map<String, Integer> counts = new HashMap<>(); occupied.values().forEach(values -> values.forEach(value -> { if (value != null) counts.merge(value, 1, Integer::sum); }));
-        Pick selected = pool.stream().filter(pick -> catalog.getOrDefault(pick.model, List.of()).contains(pick.texture))
+        Pick selected = restoring ? (catalog.getOrDefault(old.model, List.of()).contains(old.texture) ? new Pick(old.model, old.texture) : null) : pool.stream().filter(pick -> catalog.getOrDefault(pick.model, List.of()).contains(pick.texture))
             .min(Comparator.<Pick>comparingInt(pick -> counts.getOrDefault(pick.model, 0))
                 .thenComparingLong(pick -> Integer.toUnsignedLong(Objects.hash(id, pick.model)))
                 .thenComparing(Pick::model)).orElse(null);
-        if (selected == null) { reasons.put(id, "NO_COMPATIBLE_INITIAL_MODEL"); return null; }
+        if (selected == null) { reasons.put(id, restoring ? "PREVIOUS_MODEL_UNAVAILABLE" : "NO_COMPATIBLE_INITIAL_MODEL"); return null; }
         var request = selections.begin(id, connection, epoch, name, ready, workers, catalog,
             new String[]{"set", selected.model, selected.texture}, now);
         if (request.selection() == null) return null;
         put(id, new Entry(selected.model, selected.texture, "issued", now));
         if (!healthy) { selections.abandon(request.selection()); return null; }
         nextDispatch = now + 3000; reasons.remove(id);
-        return new Action(request.selection(), "正在分配初始YSM；以实际模型回执为准。" +
+        return new Action(request.selection(), restoring ? "正在恢复原YSM选择；以实际模型回执为准。" :
+            "正在分配初始YSM；以实际模型回执为准。" +
             (counts.getOrDefault(selected.model, 0) > 0 ? "兼容模型池已用满，本次选用人数较少的模型；仍可自行更换。" : ""));
     }
     synchronized Map<String, Object> status(UUID id) {
