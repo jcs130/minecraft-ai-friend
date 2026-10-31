@@ -1,3 +1,11 @@
+## 2026-11-01 Intel camera frames, clean photos; stability still fails
+
+Signed VDD installation/configuration confirmations are consumed; extra ROOT\DISPLAY\0001 is Intel-backed. Do not replay old elevation entries. Isolated Intel D3D12 + original YSM2.6.5 BigFish yielded first/third/top photos with HUD/toasts hidden and scene names preserved. Iris-on native memory still grows ~1GiB/s even without YSM, reaching the QA-only 8GiB cap; shader-off was bounded. Mesa/visibility/DSA/buffer-storage/fence controls failed, and ineffective bypass source was removed. No production renderer/model switch or game/inference/TTS/WSL restart occurred. Activation stays closed pending sustained stability and actual FPS/album/reward acceptance. Details: paper/docs/NATIVE_GODDESS_CAMERA.md.
+
+## 2026-10-31 核显相机继续推进，尚未启用
+
+正式AF.43/官网.33/Skill1.3.6/匹配观战已全部上线，旧维护不可重放。本轮只推进核显相机：发现WSLg约104秒Weston崩溃，WindowsD3D12忽略核显偏好仍选NVIDIA已拒绝，限定Intel的Zink30秒初始化超时；旧Temurin/YSM err54按官方建议改备相机专用Microsoft21，未替换系统Java。独立客户端无连接/模型认证缓存，定位隐藏窗口和复用已安装bridge的相机模块已真实编译；未启动客户端、未拍到Intel照片。签名VDD25.7.23/NefCon1.14.0、单Intel1536方屏、预检和移除入口E/F已备；Windows确认取消，display-started不存在，不能称已装或已上线。现有同意覆盖继续准备和核显验证；当前需要的是安装显示设备的OS确认，不重复申请游戏发布授权。私有入口E:/MC/ops/repairs/igpu-native-camera-20261031-r1，桌面Qiandengji-Camera-Display.cmd；先查display-started/result/accepted，勿重复受理。详见paper/docs/NATIVE_GODDESS_CAMERA.md和新候选清单。原相机/两卡推理和TTS保持。
+
 ## 2026-10-31 自动参战、原版女仆与网页兼容已上线
 
 21:28配套切换完成，21:32正式复核：AF.43/桥.15/qd32-cooperation/原生平台.6/Observer.2已运行，官网0.8.33、Skill1.3.6和匹配399文件的网页资源已发布。122预检、180/60/10预告、正常停启、E/F当时游戏/认证冷刷新后安装；40正式检查通过，235角色相关文件/20职业档案冷安装一致、71原凭据行保持、50无关插件未变，原女神7任务恢复，6角色已回连，相机ready与观战新心跳已核。

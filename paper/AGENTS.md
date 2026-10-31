@@ -1,3 +1,11 @@
+## 2026-11-01 Native Intel camera remains isolated
+
+Extra VDD ROOT\DISPLAY\0001 is installed/configured; prior OS confirmations are consumed. Intel D3D12 + original YSM2.6.5 produced clean first/third/top photos, suppressing HUD/toasts while retaining scene labels. Shaders still cause native memory growth even without YSM; the 8GiB QA cap is protection, not a fix. Failed buffer/fence bypasses were removed. Do not activate native photos or claim formal YSM migration from frames. Production WebGL and separately maintained live remain. See docs/NATIVE_GODDESS_CAMERA.md; game/inference/TTS/WSL were not restarted.
+
+## 2026-10-31 核显相机候选，等待系统确认
+
+现役游戏/官网/观战维护已完成，不重放原脚本。本轮WSLg崩溃与WindowsD3D12错误选卡均有实证，Intel限定Zink仍超时；独立Microsoft21与原YSM2.4.1客户端已备，相机定位/安装bridge编译已通过，无真实Intel照片。单Intel1536x1536@30虚拟屏、签名检查、移除入口及E/F预检完成，Windows确认取消未安装。继续安装需OS令牌，原游戏/推理/TTS不重启；先读私有igpu-native-camera-20261031-r1的display-started/result，禁止重放已消费入口。见docs/NATIVE_GODDESS_CAMERA.md与manifests/igpu-camera-candidate-20261031.json；此候选不能写成正式相机已切换。
+
 ## 2026-10-31 自动参战、原版女仆与网页兼容已上线
 
 21:28配套切换完成，21:32正式复核：AF.43/桥.15/qd32-cooperation/原生平台.6/Observer.2已运行，官网0.8.33、Skill1.3.6和匹配399文件的网页资源已发布。122预检、180/60/10预告、正常停启、E/F当时游戏/认证冷刷新后安装；40正式检查通过，235角色相关文件/20职业档案冷安装一致、71原凭据行保持、50无关插件未变，原女神7任务恢复，6角色已回连，相机ready与观战新心跳已核。

@@ -120,10 +120,12 @@ def provision(root, java, cached_mods, username):
                 if entry.filename.lower().endswith(".dll"):
                     (root / "natives" / Path(entry.filename).name).write_bytes(archive.read(entry))
     copied = []
-    for name in ("fabric-api-0.115.4+1.21.1.jar", "yesstevemodel-fabric-1.21.1-2.4.1-release.jar"):
+    for name in ("fabric-api-0.115.4+1.21.1.jar", "ysm-2.6.5-fabric+mc1.21.1-release.jar"):
         source_path = Path(cached_mods) / name
         with zipfile.ZipFile(source_path) as archive:
-            json.loads(archive.read("fabric.mod.json"))
+            mod=json.loads(archive.read("fabric.mod.json"))
+            if name.startswith("ysm-") and (mod.get("id")!="yes_steve_model" or mod.get("version")!="2.6.5-fabric+mc1.21.1" or digest(source_path,"sha256")!="a66b7265a2761d639c48f61a64179206adf5d81c38f360763fc8275a0fec9fa5"):
+                raise RuntimeError("Unreviewed YSM 2.6.5 artifact")
         shutil.copy2(source_path, root / "mods" / name)
         copied.append({"name": name, "sha256": digest(source_path, "sha256")})
     mods = [modrinth("iris", "1.8.8"), modrinth("sodium", "0.6.13"), modrinth("forge-config-api-port", "21.1.6"), modrinth("simple-voice-chat", "2.6.27")]
@@ -132,7 +134,7 @@ def provision(root, java, cached_mods, username):
     shader = modrinth("makeup-ultra-fast-shaders", shader=True)
     fetch(shader["url"], root / "shaderpacks" / shader["filename"], shader["hashes"]["sha512"], "sha512")
     (root / "config/iris.properties").write_text("enableShaders=true\nshaderPack=" + shader["filename"] + "\n", encoding="utf-8")
-    (root / "options.txt").write_text("version:3955\nrenderDistance:6\nsimulationDistance:4\nmaxFps:30\npauseOnLostFocus:false\nfov:0.0\nguiScale:2\nsoundCategory_master:0.0\n", encoding="utf-8")
+    (root / "options.txt").write_text("version:3955\nrenderDistance:6\nsimulationDistance:5\nmaxFps:30\nenableVsync:false\npauseOnLostFocus:false\nonboardAccessibility:false\ntutorialStep:none\nfov:0.0\nguiScale:2\nsoundCategory_master:0.0\n", encoding="utf-8")
     value = hashlib.md5(("OfflinePlayer:" + username).encode()).digest()
     offline = uuid.UUID(bytes=value, version=3)
     arguments = ["-Xms512M", "-Xmx2G", "-Dfile.encoding=UTF-8", "-Djava.library.path=" + str(root / "natives"), "-Dorg.lwjgl.librarypath=" + str(root / "natives"), "-cp", os.pathsep.join(map(str, libraries + [client_file])), loader["mainClass"], "--username", username, "--version", loader["id"], "--gameDir", str(root), "--assetsDir", str(root / "assets"), "--assetIndex", index["id"], "--uuid", str(offline), "--accessToken", "0", "--userType", "legacy", "--versionType", "release", "--width", "1536", "--height", "1536"]

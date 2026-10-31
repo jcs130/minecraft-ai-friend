@@ -23,7 +23,16 @@ public final class NativeCameraClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STARTED.register(client->{
             String renderer=String.valueOf(GL11.glGetString(GL11.GL_RENDERER));
             if(!renderer.toLowerCase(Locale.ROOT).contains("intel"))throw new IllegalStateException("CAMERA_INTEL_GPU_REQUIRED: "+renderer);
-            if(!System.getProperty("qiandeng.camera.hidden","true").equals("false"))GLFW.glfwHideWindow(client.method_22683().method_4490());
+            // Iris uses the options perspective, not Camera's render-lease flag,
+            // when deciding whether to draw the local first-person hands. This
+            // dedicated photographer must never render its own hands over a
+            // requested view. The lease still sets first/third/top eye geometry.
+            client.field_1690.method_31043(net.minecraft.class_5498.field_26665);
+            long window=client.method_22683().method_4490();
+            Integer x=Integer.getInteger("qiandeng.camera.windowX"),y=Integer.getInteger("qiandeng.camera.windowY");
+            if(x!=null&&y!=null)GLFW.glfwSetWindowPos(window,x,y);
+            if(!System.getProperty("qiandeng.camera.hidden","true").equals("false"))GLFW.glfwHideWindow(window);
+            else GLFW.glfwShowWindow(window);
             System.out.println("[QiandengCamera] Verified Intel renderer: "+renderer);
             sample(client);
         });
@@ -35,7 +44,15 @@ public final class NativeCameraClient implements ClientModInitializer {
             data.put("schema","qiandeng-native-camera/v1");data.put("instanceId",instance);
             data.put("at",Instant.now().toString());data.put("pid",ProcessHandle.current().pid());
             data.put("renderer",GL11.glGetString(GL11.GL_RENDERER));data.put("vendor",GL11.glGetString(GL11.GL_VENDOR));
-            data.put("opengl",GL11.glGetString(GL11.GL_VERSION));data.put("cleanHud",true);data.put("fps",client.method_47599());
+            data.put("opengl",GL11.glGetString(GL11.GL_VERSION));data.put("cleanHud",true);data.put("cleanToasts",true);data.put("fps",client.method_47599());
+            data.put("perspective",client.field_1690.method_31044().name());
+            long window=client.method_22683().method_4490();
+            data.put("windowVisible",GLFW.glfwGetWindowAttrib(window,GLFW.GLFW_VISIBLE)==GLFW.GLFW_TRUE);
+            data.put("windowIconified",GLFW.glfwGetWindowAttrib(window,GLFW.GLFW_ICONIFIED)==GLFW.GLFW_TRUE);
+            int[] wx=new int[1],wy=new int[1];GLFW.glfwGetWindowPos(window,wx,wy);data.put("windowPosition",List.of(wx[0],wy[0]));
+            Integer expectedX=Integer.getInteger("qiandeng.camera.windowX"),expectedY=Integer.getInteger("qiandeng.camera.windowY");
+            data.put("expectedWindowPosition",expectedX==null||expectedY==null?null:List.of(expectedX,expectedY));
+            data.put("screenOpen",client.field_1755!=null);
             data.put("connected",client.field_1724!=null&&client.field_1687!=null);
             data.put("playerUuid",client.field_1724==null?null:client.field_1724.method_5667().toString());
             data.put("server",client.method_1558()==null?"":client.method_1558().field_3761);

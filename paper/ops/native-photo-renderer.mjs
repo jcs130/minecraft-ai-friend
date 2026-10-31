@@ -7,7 +7,8 @@ async function json(file,maximum){if((await stat(file)).size>maximum)throw Error
 export function validateNativeCamera(state,now=Date.now()){
   const at=Date.parse(state?.at??'');
   if(state?.schema!=='qiandeng-native-camera/v1'||!UUID.test(state.instanceId??'')||!UUID.test(state.playerUuid??'')||!state.connected||!Number.isFinite(at)||now-at>2000||at>now+1000
-    ||!String(state.renderer).toLowerCase().includes('intel')||state.shadersEnabled!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server)throw Error('PHOTO_NATIVE_NOT_READY');
+    ||!String(state.renderer).toLowerCase().includes('intel')||state.shadersEnabled!==true||state.cleanHud!==true||state.cleanToasts!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server||state.screenOpen===true
+    ||String(state.renderer).toLowerCase().includes('d3d12')&&(state.windowVisible!==true||state.windowIconified===true||!Array.isArray(state.windowPosition)||!Array.isArray(state.expectedWindowPosition)||state.windowPosition.length!==2||state.expectedWindowPosition.length!==2||state.windowPosition.some((value,index)=>value!==state.expectedWindowPosition[index])))throw Error('PHOTO_NATIVE_NOT_READY');
   return state;
 }
 export function nativeCameraPose(job,state,now=Date.now()){
@@ -49,6 +50,7 @@ export function createNativePhotoRenderer({gameDir,PNG,fetchImpl=fetch}){
       let encoded='',bytes=0;for await(const chunk of response.body){bytes+=chunk.length;if(bytes>24*1024*1024)throw Error('PHOTO_IMAGE_SIZE_INVALID');encoded+=Buffer.from(chunk).toString('utf8');}
       const envelope=JSON.parse(encoded);const shot=envelope.result??envelope;
       if(shot.mime!=='image/png'||typeof shot.base64!=='string'||shot.state?.uuid!==ready.playerUuid||shot.state?.server!==ready.server||shot.state?.controllerId)throw Error('PHOTO_NATIVE_CAPTURE_IDENTITY_CHANGED');
+      if(shot.state?.screen)throw Error('PHOTO_NATIVE_GUI_VISIBLE');
       const png=Buffer.from(shot.base64,'base64');if(png.length<1024||png.length>8*1024*1024||png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('PHOTO_IMAGE_SIZE_INVALID');
       const width=png.readUInt32BE(16),height=png.readUInt32BE(20);if(width<256||height<256||width>4096||height>4096)throw Error('PHOTO_IMAGE_SIZE_INVALID');
       const pixels=PNG.sync.read(png,{checkCRC:true});const image={...photoImageQuality(pixels),sha256:createHash('sha256').update(png).digest('hex')};guard();
