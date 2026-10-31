@@ -17,6 +17,26 @@ function pool(low=64,high=68,range=4) {
  return h;
 }
 describe('oxygen-aware loaded-water routes',()=>{
+ it('continues an observed surface route without inventing an initial oxygen update',async()=>{
+  const h=pool(63,64);h.bot.oxygenLevel=undefined as never;
+  for(let x=-4;x<=4;x++)for(let z=-4;z<=4;z++)h.set(x,65,z,'air');
+  const id=h.runner.start(prepareWorkRoutine('swim_route',{dimension:'overworld',at:[2,64,0]})).id;
+  const end=Date.now()+12000;while(h.runner.read(id)[0]?.status==='running'&&Date.now()<end)await new Promise(r=>setTimeout(r,20));
+  expect(h.runner.read(id)[0],JSON.stringify(h.runner.read(id)[0])).toMatchObject({status:'completed',result:{goalCompleted:true}});
+  expect(lastSwimResult(h.bot as unknown as Bot)).toMatchObject({complete:true,breathStops:0});
+  expect(h.bot.oxygenLevel).toBeUndefined();
+  expect(h.bot.entity.position.distanceTo(new Vec3(2.5,64,.5))).toBeLessThan(.81);
+ },15000);
+ it('still requires confirmed oxygen before leaving a surface waypoint for a dive',async()=>{
+  const h=pool(63,64);h.bot.oxygenLevel=undefined as never;
+  h.set(0,65,0,'air');h.set(1,65,0,'air');h.set(2,65,0,'water');h.set(2,66,0,'water');
+  const id=h.runner.start(prepareWorkRoutine('swim_route',{dimension:'overworld',at:[2,64,0]})).id;
+  const end=Date.now()+12000;while(h.runner.read(id)[0]?.status==='running'&&Date.now()<end)await new Promise(r=>setTimeout(r,20));
+  expect(lastSwimResult(h.bot as unknown as Bot)).toMatchObject({complete:false,reason:'breathing_unconfirmed'});
+  expect(h.bot.entity.position.x).toBeLessThan(1.8);
+  expect(h.bot.oxygenLevel).toBeUndefined();
+  expect(Object.values(h.keys).every(v=>!v)).toBe(true);
+ },15000);
  it('ascends a vertical waypoint without turning toward sub-deadband horizontal drift',async()=>{
   const h=pool();h.bot.entity.position=new Vec3(.51,65,.49);h.bot.entity.yaw=1.1;
   const id=h.runner.start(prepareWorkRoutine('swim_route',{dimension:'overworld',at:[0,67,0]})).id;

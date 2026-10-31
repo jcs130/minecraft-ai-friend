@@ -141,7 +141,10 @@ export async function skillSwim(bot: Bot, call: {at: Cell;reserveOxygen?:number;
       if(!waypoint) {reason='route_end_unconfirmed';break;}
       const destination=target(waypoint.at),before=bot.entity.position.clone(),dist=before.distanceTo(destination);
       if(dist<=.55 && (!waypoint.breathe || reading.headWet===false)) {
-        if(waypoint.breathe && index<plan.waypoints.length-1 && !remainingWaterBreathingMs(bot) && (reading.oxygen===null || reading.oxygen<20)) {
+        // Surface-only movement does not spend an underwater oxygen budget.
+        // Require a confirmed refill before the next actual dive, while keeping
+        // unknown oxygen unknown and checking head immersion on every pulse.
+        if(waypoint.breathe && plan.waypoints[index+1]?.breathe===false && !remainingWaterBreathingMs(bot) && (reading.oxygen===null || reading.oxygen<20)) {
           breathStops++;const until=Math.min(deadline,Date.now()+3000);
           while(Date.now()<until) {
             checkAbort(ctx);const r=movementReadout(bot);if(r.headWet || !r.bodyWet)break;

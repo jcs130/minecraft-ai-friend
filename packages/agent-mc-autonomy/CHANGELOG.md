@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.130+sao.recovery.1
+
+- Reassess owned indefinite native follow tasks at the configured idle decision interval through the existing planner, even without a terminal event. Finite task scheduling, model backoff and explicit user stop retain priority.
+- Preserve the native queue and task identity. Reviews neither cancel tasks automatically nor verify completion; the model can inspect facts and explicitly stop work that no longer serves its goal. Terminal or world changes invalidate an in-flight review.
+
 ## 0.2.128
 
 - Pin canonical engine-only core rc.130, including its explicit protected transport construction hook.
