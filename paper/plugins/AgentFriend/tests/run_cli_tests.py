@@ -29,6 +29,10 @@ def main():
     if not (version.stdout + version.stderr).startswith("javac 21."):
         raise ValueError("CLI checks require JDK 21.")
     sources = [root / "org/afuhome/agentfriend" / (name + ".java") for name in tests]
+    # The catalog contract compares the two real adapters. Compile the pure
+    # transition policy too; do not require a private/native RPG build or drop
+    # the cross-adapter equality assertion from the public source checks.
+    sources.append(root.parents[2] / "integrations/vortex-rpg/src/org/qiandengji/vortex/SkillTransition.java")
     options = ["-proc:none", "-encoding", "UTF-8", "--release", "21", "-cp", classpath, "-d", str(output), *map(str, sources)]
     argfile = output / "javac.args"
     argfile.write_text("\n".join('"' + word.replace("\\", "/") + '"' for word in options), encoding="utf-8")
