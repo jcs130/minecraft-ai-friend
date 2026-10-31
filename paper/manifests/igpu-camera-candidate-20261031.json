@@ -25,12 +25,12 @@
   "evidence": {
     "wslg": "Observed recurrent Weston signal 11 exits about 104 seconds apart; upstream WSL issue 41552",
     "windowsD3d12Probe": "Actual Intel UHD770 renderer and pixel checks passed with an application-local Mesa D3D12 runtime",
-    "windowsZinkProbe": "Intel Vulkan driver selected; bounded 30-second context initialization timeout, not a successful render",
+    "windowsZinkProbe": "Intel Vulkan driver selected; initial 30-second and Mesa26.2.5 staged 45-second context initialization timeouts, not a successful render",
     "isolatedClient": "First/third/top original encrypted BigFish photos captured on the marked loopback fixture; game UI/toasts suppressed and scene name rendering retained",
     "cameraModule": "Compiled against installed bridge and reviewed YSM2.6.5 Fabric bytes, using the matching shared MC-core reader",
     "systemConfirmation": "Both signed display installation and configuration confirmations consumed; no pending display approval",
     "stability": "Iris-on native private memory grows about 1GiB/s and crashes at the protective 8GiB process cap; removing YSM also reproduces it. Shader-off control peaked near 1.8GiB and exited normally",
-    "failedControls": "Mesa26.2.4/26.1.8, lighter shader, smaller frame, performance mods, correct visible monitor placement, DSA/buffer-storage masks and synchronous frames did not resolve growth",
+    "failedControls": "Mesa26.2.4/26.1.8/26.2.5, latest matching Iris/Sodium, lighter shader, smaller frame, performance mods, visible HUD, removing camera/core hooks, correct visible monitor placement, DSA/buffer-storage masks and synchronous frames did not resolve growth; application-local controls restored",
     "proxyClient": "Actual native2.6.5 through real Velocity loaded the original encrypted fish with clean UI at 30FPS, shaders disabled; not high-quality photo acceptance"
   },
   "document": "paper/docs/NATIVE_GODDESS_CAMERA.md"
