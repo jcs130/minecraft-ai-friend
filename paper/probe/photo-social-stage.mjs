@@ -1,0 +1,114 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {createHash,randomUUID} from 'node:crypto';
+import {setTimeout as sleep} from 'node:timers/promises';
+import {command} from 'file:///E:/MC/ops/rcon-client.mjs';
+import {installRecipePacketBypass} from 'file:///E:/MC/ops/mineflayer-client-compat.mjs';
+import {fix1206PotionProtocol} from 'file:///E:/MC/ops/minecraft-1206-potion.mjs';
+import {startGoddessPhotoCamera} from '../ops/goddess-photo-camera.mjs';
+import {PhotoReader} from '../integrations/agent-portal/src/gallery.mjs';
+import {ArchiveReader} from '../integrations/agent-portal/src/public-archives.mjs';
+import {createPortal} from '../integrations/agent-portal/src/server.mjs';
+import {loadConfig} from '../integrations/agent-portal/src/config.mjs';
+import {png as uploadFixturePng} from '../integrations/agent-portal/tests/appearance-fixtures.mjs';
+import {hashPassword} from '../integrations/agent-portal/src/store.mjs';
+const [stage,root]=process.argv.slice(2);
+if(!path.isAbsolute(stage||'')||!path.isAbsolute(root||'')||!stage.replaceAll('\\','/').startsWith('E:/MC/staging/')
+    ||fs.readFileSync(stage+'/.communication-qa','utf8').trim()!=='127.0.0.1:29397 20261030'||fs.existsSync(root+'/social-result.json'))throw Error('Fresh marked loopback only');
+const require=createRequire('E:/MC/probe/package.json'),cameraRequire=createRequire('E:/Cortico/package.json');fix1206PotionProtocol(cameraRequire);
+const bots=[],report={passed:false,productionChanged:false,checks:[],samples:{},logs:[]};let adapter,portal;
+const rc=q=>command(q,15000,{properties:stage+'/server.properties',port:29398});
+const check=(ok,name)=>{if(!ok)throw Error(name);report.checks.push(name);console.log('PASS '+name);};
+async function until(fn,label,ms=20000){const end=Date.now()+ms;while(Date.now()<end){const v=await fn();if(v)return v;await sleep(120);}throw Error('TIMEOUT '+label);}
+async function join(name,version='1.21.1'){
+    const bot=(version==='1.20.6'?cameraRequire:require)('mineflayer').createBot({host:'127.0.0.1',port:29397,username:name,version,auth:'offline',viewDistance:'far',checkTimeoutInterval:90000});bots.push(bot);bot.notes=[];bot.photos=[];
+    installRecipePacketBypass(bot._client,{enabled:true});bot.on('messagestr',s=>bot.notes.push(s));bot.on('error',e=>report.logs.push(name+': '+e.name));
+    bot._client.on('disconnect',reason=>report.logs.push(name+': disconnect '+JSON.stringify(reason).slice(0,400)));
+    bot._client.on('custom_payload',p=>{if(p.channel==='mcagent:photo')try{bot.photos.push(JSON.parse(p.data.toString()));}catch{}});
+    await new Promise((resolve,reject)=>{bot.once('spawn',resolve);bot.once('error',reject);bot.once('kicked',k=>reject(Error('JOIN_KICKED '+JSON.stringify(k))));setTimeout(()=>reject(Error('SPAWN_TIMEOUT')),40000).unref();});
+    bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('mcagent:photo')});return bot;
+}
+async function archive(bot,text){const at=bot.notes.length;await sleep(250);bot.chat('/mycli archive '+text+' --json');return until(()=>bot.notes.slice(at).map(s=>{try{return s.startsWith('MC_ARCHIVE ')?JSON.parse(s.slice(11)):null;}catch{return null;}}).find(Boolean),'archive '+text.slice(0,20));}
+const count=(bot,name)=>bot.inventory.items().filter(i=>i.name===name).reduce((sum,i)=>sum+i.count,0);
+const archiveBooks=(bot,id)=>bot.inventory.items().filter(i=>i.name==='written_book'&&JSON.stringify(i.components??i.nbt,(_k,v)=>typeof v==='bigint'?String(v):v).includes(id));
+async function startPortal(config){portal=createPortal(config);await new Promise(resolve=>portal.server.listen(config.port,'127.0.0.1',resolve));return 'http://127.0.0.1:'+portal.server.address().port;}
+try{
+    check((await rc('version AgentFriend')).includes('0.4.47.41-rpg'),'actual cumulative candidate loaded');
+    check((await rc('version ImageFrame')).includes('2026.1.5.0'),'actual supported ImageFrame dependency loaded');
+    const actor=await join('ag_PS'+Date.now().toString(36).slice(-8));await rc('minecraft:gamemode survival '+actor.username);
+    await rc('minecraft:clear '+actor.username);await rc('minecraft:fill -4 79 -4 4 79 4 minecraft:grass_block');
+    await rc('minecraft:fill -4 80 -4 4 83 4 minecraft:air');await rc('minecraft:tp '+actor.username+' 0.5 80 0.5 0 0');await sleep(1200);
+    const title='隔离测试的冒险日记',body='今天与同伴调查遗迹，记住一起走过的路。这是隔离验收内容，不是正式世界历史。',request='social-'+randomUUID();
+    let result=await archive(actor,'create '+title+'|'+body+' --request-id '+request);
+    check(result.durable&&result.printed===false&&result.state==='stored_digital'&&result.published,'no-book diary is durably archived with explicit publication state');
+    const diaryId=result.id;check(archiveBooks(actor,diaryId).length===0,'digital diary creates no physical copy of the new entry');
+    await rc('minecraft:give '+actor.username+' minecraft:writable_book 1');await sleep(400);
+    const replay=await archive(actor,'create '+title+'|'+body+' --request-id '+request);
+    check(replay.id===diaryId&&replay.replayed&&replay.printed===false,'idempotent retry never prints the previously digital entry');
+    check(count(actor,'writable_book')===1,'retry retains newly acquired quill');
+    const printed=await archive(actor,'create 手写测试|保留原来的书与笔写作入口。 --request-id social-printed-'+randomUUID());
+    check(printed.durable&&printed.printed,'existing quill path still produces the native signed book');
+    await until(()=>archiveBooks(actor,printed.id).length===1,'one printed archive book');check(count(actor,'writable_book')===0,'quill path consumes exactly one quill');
+    const missing=await archive(actor,'restore '+diaryId+' --request-id social-restore-'+randomUUID());
+    check(missing.errorCode==='MATERIAL_REQUIRED','physical restoration still requires its material');
+    await rc('minecraft:give '+actor.username+' minecraft:writable_book 1');await sleep(300);
+    const restored=await archive(actor,'restore '+diaryId+' --request-id social-restore-ok-'+randomUUID());
+    check(restored.printed===true&&restored.id===diaryId,'digital original can later be restored using a quill');
+    const camera=await join('Goddess','1.20.6');camera.physicsEnabled=false;
+    await rc('minecraft:op Goddess');await rc('minecraft:gamemode spectator Goddess');
+    const permission=await rc('socialqa '+actor.username);check(permission.includes('ordinary=true photo=true'),'ordinary actor has only the intended temporary photo permission');
+    adapter=startGoddessPhotoCamera(camera,{settings:JSON.parse(fs.readFileSync(root+'/photo-settings.json','utf8')),log:s=>report.logs.push(s),onCapture:async info=>{fs.writeFileSync(root+'/capture.png',info.png);report.samples.capture={bytes:info.png.length,diagnostics:info.diagnostics};}});
+    await until(async()=>(await rc('mycli admin photo status')).includes('"ready":true'),'renderer ready',40000);
+    const name='合影_'+Date.now().toString(36),caption='今天与队友走过遗迹门口，想记住一起冒险的这一刻。';
+    const at=actor.photos.length;actor.chat('/mycli photo take '+name+' third 1 --story '+caption);
+    const receipt=await until(()=>actor.photos.slice(at).find(r=>['success','stopped','denied'].includes(r.status)),'real photo delivery',90000);
+    report.samples.photoReceipt=receipt;
+    check(receipt.status==='success','photo with author caption captures and reaches personal reward storage');
+    check(report.samples.capture?.bytes>1024,'a real rendered PNG was produced');
+    const journal=()=>JSON.parse(fs.readFileSync(stage+'/plugins/AgentFriend/photo-journal.json','utf8'));
+    const photo=await until(()=>Object.values(journal().players||{}).flatMap(p=>Object.values(p.photos||{})).find(p=>p.name===name),'caption journal commit');
+    check(photo.story===caption&&photo.published===false,'caption is stored atomically with the private original');
+    check(actor.notes.some(s=>s.includes('会随原片同步官网')),'delivery explains website sync and owner publication');
+    const reader=new PhotoReader({serverDir:stage});const photoRow=(await reader.read()).find(p=>p.metadata.id===photo.id);
+    check(photoRow?.metadata.story===caption&&photoRow.metadata.published===false,'real website collector reads the caption and private state');
+    const token='srv_'+randomUUID().replaceAll('-','').padEnd(43,'x');
+    const config=loadConfig({skipLocalConfig:true,emailAuth:{registrationMode:'username'},host:'127.0.0.1',port:29402,dataDir:root+'/portal-data',sourceMode:'cloud',cloudSync:{enabled:true,tokenHash:createHash('sha256').update(token).digest('hex')}});
+    let origin=await startPortal(config),sequence=1;
+    const syncPhoto=(metadata)=>portal.cloud.accept({schemaVersion:1,observedAt:new Date().toISOString(),sequence:sequence++,roster:[],players:[],states:{},events:[],summary:{},photos:[metadata],photoManifest:reader.manifest});
+    syncPhoto(photoRow.metadata);portal.gallery.accept(photo.id,photoRow.original||fs.readFileSync(photoRow.file));
+    check(!portal.gallery.catalog().some(p=>p.id===photo.id),'uploading a caption does not publish a private photo');
+    portal.gallery.publication(photo.id,true,{ownerId:'qa-admin',admin:true,uuids:new Set()});
+    let website=await(await fetch(origin+'/api/v1/gallery')).json();check(website.photos.some(p=>p.id===photo.id&&p.story===caption),'published website card contains the exact author caption');
+    const updated=caption+' 这是后来补写的描述。';const editAt=actor.notes.length;actor.chat('/mycli photo story '+name+' '+updated);
+    await until(()=>actor.notes.slice(editAt).some(s=>s.includes('作品说明已保存')),'caption edit');
+    const updatedRow=(await reader.read()).find(p=>p.metadata.id===photo.id);syncPhoto(updatedRow.metadata);
+    check(updatedRow.metadata.sha256===photoRow.metadata.sha256&&portal.gallery.known(photo.id).story===updated,'metadata update syncs without resending unchanged image bytes');
+    const archives=new ArchiveReader({serverDir:stage});let found=false;
+    for(let i=0;i<10;i++){const batch=await archives.read();portal.archives.accept(batch);archives.acknowledge();if(batch.entries.some(e=>e.id===diaryId)){found=true;break;}}
+    check(found,'actual archive collector delivers the new digital diary');
+    const written=await(await fetch(origin+'/api/v1/archives/'+diaryId)).json();check(written.body===body&&written.title===title,'website reads the exact game diary text');
+    portal.gallery.publication(photo.id,false,{ownerId:'qa-admin',admin:true,uuids:new Set()});await portal.close();portal=null;origin=await startPortal(config);
+    check(portal.gallery.known(photo.id).story===updated&&!portal.gallery.published(photo.id),'website restart preserves caption and withdrawal');
+    check(portal.archives.read(diaryId).body===body,'website restart preserves the diary');
+    const owner=portal.store.createOwner('photo-stage-owner',await hashPassword('Own-isolated-photo-stage-password'),'admin');
+    const authorUuid=actor._client.uuid;
+    portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,authorUuid,'own native stage actor',Date.now());
+    const uploaded=portal.photoUploads.upload(owner,{name:actor.username,playerUuid:authorUuid},uploadFixturePng(),{requestId:randomUUID(),title:'隔离地图画验证',story:'这是测试上传图片，不是游戏实拍。'});
+    check(!portal.gallery.published(uploaded.id),'a real upload remains private before map creation');
+    const importLink=portal.photoUploads.issue(uploaded.id,portal.gallery.managementContext(owner),origin);
+    await rc('minecraft:give '+actor.username+' minecraft:map 1');await sleep(250);
+    const maps=count(actor,'filled_map'),empty=count(actor,'map'),seen=actor.notes.length,otherNotes=camera.notes.length;
+    actor.chat(importLink.command);
+    await until(()=>count(actor,'filled_map')>maps,'ImageFrame creates the native filled map from private website URL',45000);
+    check(count(actor,'map')===empty-1,'map art consumes one native blank map');
+    check(count(actor,'filled_map')===maps+1,'ordinary actor actually receives one new native map');
+    check(!camera.notes.slice(otherNotes).some(s=>s.includes('/import/')),'temporary private image URL is not broadcast to another player');
+    const mapName=importLink.command.split(' ')[2],directory=stage+'/plugins/ImageFrame/data';
+    const image=await until(()=>fs.readdirSync(directory).map(n=>directory+'/'+n+'/data.json').filter(f=>fs.existsSync(f)).map(f=>({file:f,data:JSON.parse(fs.readFileSync(f,'utf8'))})).find(row=>row.data.name===mapName),'native image persistence');
+    report.samples.map={owner:authorUuid,name:mapName,metadataFile:path.relative(stage,image.file),messages:actor.notes.slice(seen).filter(s=>!s.includes('/import/'))};
+    check(String(image.data.creator).toLowerCase()===authorUuid.toLowerCase(),'native ImageFrame map belongs to the uploading actor UUID');
+    const originals=fs.readdirSync(path.dirname(image.file)).filter(n=>n.endsWith('.png'));check(originals.length>0,'native ImageFrame retains the uploaded image tiles');
+    report.samples.photo={id:photo.id,name,caption,updated};report.samples.diary={id:diaryId,title};report.passed=true;
+}catch(error){report.error=String(error.stack);report.samples.actorReceipts=bots.map(b=>({name:b.username,photos:b.photos?.slice(-6),messages:b.notes?.slice(-12)}));process.exitCode=1;console.error(report.error);}
+finally{if(portal)await portal.close();adapter?.close();for(const bot of bots){if(typeof bot.quit==='function')bot.quit('Isolated photo and diary verification complete');else bot._client?.end('Own QA cleanup');}await sleep(350);fs.writeFileSync(root+'/social-result.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({passed:report.passed,checks:report.checks.length,error:report.error}));}

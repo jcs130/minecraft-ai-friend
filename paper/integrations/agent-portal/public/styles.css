@@ -85,3 +85,14 @@ dialog{border:1px solid #405544;border-radius:12px;background:#172225;color:var(
 #game-password-rules { font-size:13px; line-height:1.7; }
 @media(max-width:600px) { .trail-person { padding:16px; } .trail-filter .field { flex-basis:100%; } .trail-person .btn { flex:1 1 40%; } }
 .home-film-link{position:relative;display:block;aspect-ratio:16/9;overflow:hidden;border:1px solid #49604c;border-radius:8px;background:#17251c;color:#fff;text-decoration:none}.home-film-link>img{display:block;width:100%;height:100%;object-fit:cover}.home-film-link:after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 35%,#08100de8)}.home-film-play{position:absolute;z-index:1;top:42%;left:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:64px;height:64px;padding-left:4px;border:1px solid #ffffff80;border-radius:50%;background:#12251abf;font-size:25px}.home-film-caption{position:absolute;z-index:1;left:5%;right:5%;bottom:7%;display:grid;gap:9px}.home-film-caption strong{font-size:clamp(16px,2.5vw,27px);line-height:1.5}.home-film-caption>span{font-size:13px;color:#d4ddbf}.home-film-link:focus-visible{outline:3px solid #ddbf7d;outline-offset:4px}@media(max-width:480px){.home-film-play{width:45px;height:45px;font-size:19px;top:35%}.home-film-caption{gap:4px;bottom:6%}.home-film-caption>span{font-size:12px}}
+.photo-post{overflow:hidden;border:1px solid #344b40;border-radius:16px;background:rgba(24,39,33,.8)}
+.photo-post-header{display:flex;align-items:center;gap:12px;padding:18px 20px 0}
+.photo-post-avatar{display:grid;place-items:center;flex:0 0 40px;height:40px;border-radius:12px;background:#344f42;color:#f4d593;font-size:19px}
+.photo-post-header>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.photo-post-header a{color:inherit;text-decoration:none;font-weight:600;overflow-wrap:anywhere}
+.photo-post-header time{color:#a6b2a8;font-size:12px}
+.photo-post .photo-caption{padding:14px 20px 20px}
+.photo-post .photo-caption h3{margin:0 0 8px;font-size:19px}
+.photo-post .photo-story{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.85;margin:0;color:#d7dfd6}
+.photo-post>button{border-radius:0;display:block;width:100%}
+.photo-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.photo-map-command{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all;max-width:100%;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:12px}

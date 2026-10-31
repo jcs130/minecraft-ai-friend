@@ -96,6 +96,8 @@ export class Gallery {
       CREATE INDEX IF NOT EXISTS gallery_photo_owner ON gallery_catalog(json_extract(metadata,'$.authorUuid'));
       CREATE TABLE IF NOT EXISTS gallery_publication(id TEXT PRIMARY KEY,published INTEGER NOT NULL,owner_id TEXT NOT NULL,updated_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS gallery_originals(sha256 TEXT PRIMARY KEY,png BLOB NOT NULL,received_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS gallery_uploads(id TEXT PRIMARY KEY,author_uuid TEXT NOT NULL,request_id TEXT NOT NULL,request_digest TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(author_uuid,request_id));
+      CREATE TABLE IF NOT EXISTS gallery_import_links(token_hash TEXT PRIMARY KEY,photo_id TEXT NOT NULL,expires_at INTEGER NOT NULL,remaining INTEGER NOT NULL);
       INSERT OR IGNORE INTO gallery_originals SELECT sha256,png,received_at FROM gallery_images;`);
   }
   refreshCatalog() {
@@ -106,7 +108,9 @@ export class Gallery {
         const ids=new Set(value.photoManifest?.publishedIds??(value.photos||[]).filter(row=>row.published!==false).map(row=>row.id));
         const withdrawn=new Set(value.photoManifest?.withdrawnIds||[]);
         const decisions=new Map(this.store.db.prepare('SELECT id,published FROM gallery_publication').all().map(row=>[row.id,row.published]));
+        const uploads=new Set(this.store.db.prepare('SELECT id FROM gallery_uploads').all().map(row=>row.id));
         for(const row of value.photos||[]){
+          if(uploads.has(row.id))continue;
           const before=this.store.db.prepare('SELECT metadata FROM gallery_catalog WHERE id=?').get(row.id);
           const old=before?JSON.parse(before.metadata):null,record={...row,...(!row.authorUuid&&old?.authorUuid?{authorUuid:old.authorUuid}:{})};
           if(old?.authorUuid&&old.authorUuid!==record.authorUuid){this.store.db.prepare('DELETE FROM gallery_publication WHERE id=?').run(row.id);decisions.delete(row.id);}
@@ -114,6 +118,7 @@ export class Gallery {
         }
         const update=this.store.db.prepare('UPDATE gallery_catalog SET visible=? WHERE id=?');
         for(const row of this.store.db.prepare('SELECT id,visible FROM gallery_catalog').all()){
+          if(uploads.has(row.id))continue;
           const decision=decisions.get(row.id);
           if(decision!==undefined){if(row.visible!==decision)update.run(decision,row.id);continue;}
           if(ids.has(row.id)&&!row.visible)update.run(1,row.id);
@@ -141,7 +146,9 @@ export class Gallery {
     if(published&&!this.store.db.prepare('SELECT id FROM gallery_images WHERE id=? AND sha256=?').get(id,photo.sha256))throw fail(409,'PHOTO_PENDING','照片正在上传，完成后再公开');
     this.store.db.exec('BEGIN IMMEDIATE');try{
       this.store.db.prepare('INSERT OR REPLACE INTO gallery_publication VALUES(?,?,?,?)').run(id,Number(published),context.ownerId,Date.now());
-      this.store.db.prepare('UPDATE gallery_catalog SET visible=? WHERE id=?').run(Number(published),id);this.store.db.exec('COMMIT');
+      this.store.db.prepare('UPDATE gallery_catalog SET visible=? WHERE id=?').run(Number(published),id);
+      if(!published)this.store.db.prepare('DELETE FROM gallery_import_links WHERE photo_id=?').run(id);
+      this.store.db.exec('COMMIT');
     }catch(error){this.store.db.exec('ROLLBACK');throw error;}
     return {id,published,saved:true};
   }

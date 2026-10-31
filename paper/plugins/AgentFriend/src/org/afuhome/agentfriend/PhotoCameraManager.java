@@ -39,8 +39,10 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private JsonObject capturedContext,capturedScene,capturedImage;
     private Location capturedAt;
     private long capturedTime;
-    private record Job(UUID id, String nonce, UUID owner, String name, String mode, int tiles, UUID world, long queued) {
-        private Job(Player p, String name, String mode, int tiles) { this(UUID.randomUUID(), UUID.randomUUID().toString(), p.getUniqueId(), name, mode, tiles, p.getWorld().getUID(), System.currentTimeMillis()); }
+    private record Job(UUID id, String nonce, UUID owner, String name, String mode, int tiles, UUID world, long queued, String story) {
+        private Job(UUID id,String nonce,UUID owner,String name,String mode,int tiles,UUID world,long queued){this(id,nonce,owner,name,mode,tiles,world,queued,"");}
+        private Job(Player p, String name, String mode, int tiles) { this(p,name,mode,tiles,""); }
+        private Job(Player p, String name, String mode, int tiles, String story) { this(UUID.randomUUID(), UUID.randomUUID().toString(), p.getUniqueId(), name, mode, tiles, p.getWorld().getUID(), System.currentTimeMillis(),story); }
     }
     private Location origin;
     private UUID nativeRendererId;
@@ -80,11 +82,10 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         if(Set.of("album","gallery","info","title","story","exhibit","withdraw").contains(action)){journal.command(p,args);return;}
         if (action.equals("menu")) { menu(p); return; }
         if (action.equals("take")) {
-            String name = args.length > 2 ? args[2] : "生活_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMdd_HHmmss"));
-            String mode = args.length > 3 ? args[3].toLowerCase(Locale.ROOT) : "first";
-            mode = switch (mode) { case "第一人称" -> "first"; case "第三人称" -> "third"; case "俯视" -> "top"; default -> mode; };
-            int tiles = args.length > 4 && args[4].equals("2") ? 2 : 1;
-            if (!name.matches("[\\p{L}\\p{N}_-]{1,32}") || args.length > 5 || args.length > 4 && !Set.of("1", "2").contains(args[4]) || !Set.of("first", "third", "top").contains(mode)) { deny(p, "从技能罗盘→女神相机或 /mycli photo menu 点击拍照；命令：/mycli photo take <名字> [第一人称|第三人称|俯视] [1|2]。1为单幅照片，2为2×2清晰海报；无需空地图，成片自动存入个人奖励箱。原first/third/top参数继续可用。"); return; }
+            PhotoRequest request;
+            try { request=PhotoRequest.parse(args,"生活_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMdd_HHmmss"))); }
+            catch(IllegalArgumentException invalid){deny(p,invalid.getMessage());return;}
+            String name=request.name(),mode=request.mode();int tiles=request.tiles();
             if (plugin.isObserver(p) || p.isDead()) { deny(p, "请用正常存活角色拍照；观察账号不能代领照片。"); return; }
             if (!ready()) { deny(p, "女神相机暂未就绪，请稍后用 /mycli photo status 查询；无需访问网页或上传公网文件。"); return; }
             if (owns(p.getUniqueId())) { deny(p, "你已有拍照请求。用 /mycli photo status 查看，或 photo cancel 取消尚未上传的请求。"); return; }
@@ -96,7 +97,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 if (map(p.getUniqueId(), name) != null) { deny(p, "本人已有同名照片，请换一个名字。"); return; }
             } catch (Exception e) { deny(p, "相册服务暂不可用，请稍后重试。"); return; }
             if (!materials(p, tiles)) return;
-            queue.add(new Job(p, name, mode, tiles));
+            queue.add(new Job(p, name, mode, tiles,request.story()));
             if (active != null || queue.size() > 1 || !workerIdle) notice(p, "queued", "已排队，前面 " + ((active == null ? 0 : 1) + queue.size() - 1) + " 人。");
             tick();
         } else if (action.equals("cancel")) {
@@ -310,7 +311,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 Object created=((java.util.concurrent.Future<?>)nativeTask).get(45,java.util.concurrent.TimeUnit.SECONDS);managerClass.getMethod("addMap",cl.loadClass(prefix+"ImageMap")).invoke(manager,created);
                 Bukkit.getScheduler().runTask(plugin,()->{try{
                     if(!storeReward(expected,created))throw new IllegalStateException("photo reward save failed");
-                    if(shotAt!=null)journal.delivered(owner,expected.id,expected.name,expected.mode,shotTime,shotAt,shotContext,shotScene,shotImage,created);
+                    if(shotAt!=null)journal.delivered(owner,expected.id,expected.name,expected.mode,shotTime,shotAt,shotContext,shotScene,shotImage,created,expected.story);
                     if(active==expected)finish(true,"照片「"+expected.name+"」已存入个人奖励箱；/mycli arena stash pages 取出。"+(expected.tiles==2?"按(1,1)到(2,2)挂成海报。":""));
                 }catch(Exception e){plugin.getLogger().warning("Photo reward pending owner="+expected.owner+" job="+expected.id+" error="+e.getClass().getSimpleName());}});
             }catch(Exception e){
@@ -331,7 +332,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         Player camera = plugin.goddessLandAdministrator(), owner = Bukkit.getPlayer(previous.owner);
         // Photo delivery is authoritative even if a separate journal write fails. Never resend maps.
         if(success&&owner!=null&&capturedAt!=null)try {
-            journal.delivered(owner,previous.id,previous.name,previous.mode,capturedTime,capturedAt,capturedContext,capturedScene,capturedImage,map(previous.owner,previous.name));
+            journal.delivered(owner,previous.id,previous.name,previous.mode,capturedTime,capturedAt,capturedContext,capturedScene,capturedImage,map(previous.owner,previous.name),previous.story);
         }catch(Exception e){owner.sendMessage("§e照片已存入个人奖励箱，纪念册未完成记录；请联系管理员核对，不要重复领图。");plugin.getLogger().warning("Photo journal job="+previous.id+" failed="+e.getClass().getSimpleName());}
         if (camera != null) {
             send(camera, envelope(previous, "cancel"));

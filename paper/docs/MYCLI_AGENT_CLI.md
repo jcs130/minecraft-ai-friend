@@ -1,3 +1,5 @@
+> 2026-10-31：AF.41的拍照描述、数字日记与网站上传仍为候选，见[本批边界](PHOTO_SOCIAL_20261031.md)。正式AF.37帮助未更新时不要发送新选项；不增加 /mycli 顶层入口。
+
 # 千灯纪 CLI：少记命令，按需学习
 
 2026-10-31[结伴探索组合候选](COOPERATIVE_EXPLORATION_20261031.md)仍未部署：原`guild party status`给原生邀请和集合阶段，`skills info team`引到已有`locate tp <名字>`，地点管理先`waypoint list`。不新增顶层命令；委托详情补私有文字，登高改查山地地形。当前正式仍AF.37，不能把源码帮助当成已生效。

@@ -35,7 +35,7 @@ final class AgentCliCatalog {
         add(specs,"archive.list","life","read","/mycli archive list [book|photo|notice|event] [--page 页码]","分页查公开作品及本人未公开照片","免费只读；每页最多7项，不输出正文","MC_ARCHIVE items/page/hasNext；info/read看选中作品");
         add(specs,"archive.info","life","read","/mycli archive info <作品UUID> [--version 版本]","查作者、标题、版本与保存状态","免费只读；旧私有照片只对作者开放","MC_ARCHIVE entry；read用原版分页书阅读正文");
         add(specs,"archive.read","life","gui","/mycli archive read <作品UUID> [--version 版本]","打开原版书籍阅读公开正文，不生成物品","免费；Java、基岩和Mineflayer用原版书组件；只改变当前界面","MC_ARCHIVE与原版open_book；不发任务证明");
-        add(specs,"archive.create","life","write","/mycli archive create <书名>|<正文> [--request-id 标识]","写公开日记并持久归档，生成真实签名书","耗1本本人空白书与笔；书名1–32字；正文1–10000字；旁观者只读；原版编辑器也可签名归档","先落盘后扣物；MC_ARCHIVE durable/printed/id/requestId；重试用同标识，不重复打印");
+        add(specs,"archive.create","life","write","/mycli archive create <书名>|<正文> [--request-id 标识]","写公开日记并持久归档，同步官网档案馆","无需书与笔也可数字归档；若有空白书与笔则写成实体书；书名1–32字、正文1–10000字；旁观者只读","先落盘；无书不扣物、不发写作奖励；MC_ARCHIVE durable/printed/id/requestId；同标识重试不重复打印");
         add(specs,"archive.notice","life","write","/mycli archive notice <标题>|<正文> [--request-id 标识]","在公共档案目录发布署名公告并写成书","耗1本空白书与笔；公开正文是作者内容；有奖励的委托仍用commission托管","MC_ARCHIVE与真实书；不会向公屏广播正文或机器回执");
         add(specs,"archive.restore","life","write","/mycli archive restore <作品UUID> [--version 版本] [--request-id 标识]","从数据库恢复遗失书籍的普通副本","耗1本本人空白书与笔；只支持book/notice；保留原作者/版本，不增加写作/照片/任务奖励","MC_ARCHIVE copyId/printed；结果未知先查背包与info，不能盲目重放");
         add(specs,"archive.menu","life","gui","/mycli archive menu [book|photo|notice|event] [--page 页码]","打开公共档案目录，点击作品阅读","免费；浏览不打印、不报名；照片实物仍在原个人奖励箱","原版箱式菜单与MC_ARCHIVE");
@@ -89,7 +89,7 @@ final class AgentCliCatalog {
         add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：读技能目录、成功施法、完整交付任选路线委托；旧生活证明保留","主动开始；tasks list看路线，不必种田；失败施法/自称完成不计进度；不代学不花点","MC_WORLD type=guide/guide_progress");
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
         add(specs,"world.events","life","read","/mycli world events","查看WorldEvents当前的试炼集结、遗迹远征与探索活动","查询免费；自愿参加，不自动开场、传送或发奖","MC_WORLD type=events与WorldEvents当前列表");
-        add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，成片自动存入本人个人奖励箱；arena stash pages取照片；无需截图上传；原first/third/top参数继续可用","无需空地图或主背包空位；开始拍摄默认2魔力，每人60秒，串行排队；箱满安全排队，腾位重开","MC_PHOTO success表示照片已持久存入个人奖励箱或其待入箱队列；storage=personal_reward_box；storageCommand给取件入口");
+        add(specs,"photo","life","write","/mycli photo take <名字> [third|first|top] [1|2] [--story <经历>]；status|cancel","拍照可直接附上本人描述，成片与描述保存到同一纪念册并同步官网；个人奖励箱取原片","描述1–400字作者自述，不作为考试证明；默认私有，由主人或管理员公开；无需空地图，开始默认2魔力、每人60秒","MC_PHOTO success表示原片已持久入箱；photo info <名字>查描述；以后可用photo story补写或修改");
         add(specs,"photo.album","life","read","/mycli photo album [页]；photo info <本人照片名|公开作品ID>","旅行纪念册：查询实地照片是否合格、重拍建议、署名与故事","只读，不自动报名或投稿；旧相册仍用 /imageframe list","私有 MC_PHOTO_ALBUM、MC_PHOTO_RECORD；照片质量不能代替走查与返程");
         add(specs,"photo.gallery","life","read","/mycli photo gallery [页]","艺术厅摄影展：查看公开作品、摄影者、地点和作者故事","原版地图菜单及成书，Java/基岩/Agent可读；故事为作者自述","MC_PHOTO_ALBUM、MC_PHOTO_RECORD；slot为空表示等待适合的实体展位");
         add(specs,"photo.title","life","write","/mycli photo title <本人照片名> <题目>","为自己的旅行照片起标题","1至64字普通文字；作者UUID、实际地点和原片不能更改；已投稿作品同步展签","photo info <照片名> 核对结果");

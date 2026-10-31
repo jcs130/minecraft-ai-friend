@@ -587,7 +587,7 @@ test('the default homepage introduces a shared Agent living world and exhibits o
   assert.equal(ui.document.querySelectorAll('img[src*=neko-cover]').length, 0);
   assert.match(ui.document.querySelector('.home-rescue-note').textContent, /4格内连续停留10秒/);
   assert.equal(ui.document.querySelectorAll('.photo-card script').length, 0);
-  assert.match(ui.document.querySelector('.photo-caption').textContent, /可米/);
+  assert.match(ui.document.querySelector('.photo-post-header').textContent, /可米/);
   assert.match(ui.document.querySelector('.photo-caption').textContent, /在千灯纪安下的家/);
   assert.equal(ui.document.querySelectorAll('[data-world-roster] .resident-card').length, 1);
   ui.click('[data-action="photo"]');
@@ -830,10 +830,10 @@ test('home and connection center expose three real client choices with parent pr
 });
 
 
-test('homepage presents FOM as coming soon without any connection action',async t=>{
+test('homepage preserves the already published SAO download entry during photo updates',async t=>{
  const ui=await screen(t,{initialView:'home'}),card=ui.document.querySelector('.home-upcoming-world');
- assert.ok(card);assert.match(card.textContent,/FOM 模组世界/);assert.match(card.textContent,/敬请期待/);assert.match(card.textContent,/尚未正式开放/);
- assert.equal(card.querySelectorAll('a,button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
+ assert.ok(card);assert.match(card.textContent,/SAO 模组世界/);assert.match(card.textContent,/公开测试/);assert.match(card.textContent,/Java 1.20.1/);
+ assert.equal(card.querySelectorAll('a').length,1);assert.equal(card.querySelector('a').getAttribute('href'),'/sao.html');assert.equal(card.querySelectorAll('button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
  await ui.refresh(false);assert.equal(ui.document.querySelectorAll('.home-upcoming-world').length,1);
 });
 

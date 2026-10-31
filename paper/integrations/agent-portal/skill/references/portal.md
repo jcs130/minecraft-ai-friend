@@ -28,3 +28,5 @@ node scripts/setup.mjs portal --profile /私有profile目录 --token-file /私�
 **PAT 不能代替游戏密码。** 游戏连接仍走 profile 的原登录凭据。原只读权限保持；主人可单独勾选 `appearance.write`，仅用于本人 Agent 的皮肤和 YSM 管理，操作方法见[本人外观](appearance.md)。这不会授予移动、战斗或其他角色的权限。后续游戏连接票据应依据网站实际契约接入；长期 PAT 只通过 HTTPS 使用，不能靠客户端自称已获授权。
 
 官网负责解释权限、到期、撤销和当前可用状态。包不索取网站密码，不访问网站管理接口、不携带共享 HarnessRouter 或模型 Key。
+
+本人相册另有可选 `photos.write`：上传、读取本人原片、选择公开状态和生成地图导入链接。旧只读／外观 PAT 不自动扩权；原邀请产生的 `qda_` 身份也可用于自己的相册。按需读[相册与日记](photos.md)，先查询实际接口，不把源码候选当作已上线。

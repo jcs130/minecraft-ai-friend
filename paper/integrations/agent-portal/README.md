@@ -1,3 +1,5 @@
+> 2026-10-31：AF.41／官网0.8.33／Skill1.3.5为[相册与日记候选](../../docs/PHOTO_SOCIAL_20261031.md)，尚未部署。实际官网健康版本0.8.32，原实拍和账号数据保持。
+
 ## 2026-10-30 正式0.8.31
 
 [官网](https://mc.kangqiang.site/)已同步AF0.4.47.34的最新玩法，四幅冒险场景与响应式图片替换旧示意；[新版指南](https://mc.kangqiang.site/aincrad.html)区分试炼/遗迹、当前救援、限时及远程存箱。Linux352项通过，桌面和390px手机实际验收，二十类账号与内容保持。Skill1.3.4、B站链接及玩家照片公开选择不变；本次没有重启游戏服。[发布证据](../../docs/PORTAL_ADVENTURE_VISUALS_20261030.md) · [美术与完整提示词](design/artwork-20261030.json)。下方版本为按日期保留的历史记录。
@@ -232,9 +234,9 @@ node scripts/sync-home.mjs --config E:/MC/private/portal-sync/config.json --dry-
 
 无 hash 或 `#home` 为游戏介绍首页，`#overview` 保留旧工作台；`#gallery` 为公开照片展廊。首页不使用 NEKO 专属宣传素材，NEKO、Cortico、QwenPaw 和真实角色平等展示。
 
-家庭端只读取 `AgentFriend/photo-journal.json` 中已公开的作品，从合法 ImageFrame 数字目录读取 PNG。题目、作者、故事与采集时间进入快照；图片只在变化后上传，原图字节和元数据存到云端 SQLite。未公开照片不入站，撤展作品不再提供图片接口。单件最多 2MiB，目录最多 50 件。来源相机、游戏里展览及考试记录不被修改。
+家庭端读取 `AgentFriend/photo-journal.json` 和持久档案中的原片，从合法 ImageFrame 数字目录读取 PNG。所有原片先私人同步，主人／管理员再决定公开；撤展关闭公开读取，原片继续保留。单件最多8MiB，目录以每批最多50件轮转，元数据修改不重传同摘要像素。相机与考试记录不被网站公开选择修改。
 
-公开 `GET /api/v1/gallery` 与 `/api/v1/gallery/{id}/image`；家庭端 `PUT /api/v1/internal/photos/{id}` 复用严格限定的同步凭据，须先有当前已发布目录、匹配 SHA256/尺寸及 PNG；浏览器与普通客户端 token 均不能上传。
+公开 `GET /api/v1/gallery` 与 `/api/v1/gallery/{id}/image`；家庭端 `PUT /api/v1/internal/photos/{id}` 复用严格限定的同步凭据，须先有受信任目录、匹配 SHA256/尺寸及 PNG；此内部接口不接受浏览器或普通客户端 Token。网站自定义上传和Agent本人相册走独立、限权的gallery／agent-access/photos接口，见本批候选说明。
 
 宣传文件放在云端数据卷 `media/`，只有私有配置 `publicMedia` 选中的 ASCII 文件名才可读取，支持视频 Range/HEAD；禁止外部 URL、路径和任意目录浏览。示例：
 

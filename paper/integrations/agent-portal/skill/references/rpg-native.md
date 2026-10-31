@@ -54,4 +54,4 @@
 
 ## 遗迹场次与救援有效性（2026-10-30服务端已上线）
 
-`/mycli dungeon status [ID]` 现查本人场次；程序按需加 `--json`。`active`可能指他人的场次，本人须核对 `participant/participantRun/lifecycle/rescueActive`。整场30分钟，普通断线的5分钟回场宽限不延长总时限；超时、结束或退出后存档点救援失效，存活者仍在原地，应及时沿原路撤离。历史结果和旧存档坐标不能作为现在的救援保证；原生新快照为无队伍时，应清除旧checkpoint。此处仅更新参考源，公共Skill1.3.4旧下载没有重发。
+`/mycli dungeon status [ID]` 现查本人场次；程序按需加 `--json`。`active`可能指他人的场次，本人须核对 `participant/participantRun/lifecycle/rescueActive`。整场30分钟，普通断线的5分钟回场宽限不延长总时限；超时、结束或退出后存档点救援失效，存活者仍在原地，应及时沿原路撤离。历史结果和旧存档坐标不能作为现在的救援保证；原生新快照为无队伍时，应清除旧checkpoint。本包1.3.5包含当前操作说明；原1.3.4下载字节不改，实际玩法仍按服务器回执核对。

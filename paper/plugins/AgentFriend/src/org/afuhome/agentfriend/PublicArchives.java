@@ -97,7 +97,7 @@ final class PublicArchives implements Listener {
                 if(action.equals("status")){
                     JsonObject out=base("status",true);out.addProperty("ready",ready);out.addProperty("state",ready?"ready":problem);
                     out.addProperty("publicBooks",true);out.addProperty("nextCommand","/mycli archive list");
-                    out.addProperty("advice","日记是公开实体书；create 写新书，read 阅读，restore 用一本空白书与笔恢复副本。委托仍用 commission。");reply(p,q,out,"公共档案馆："+(ready?"可用":"准备中")+"；/mycli archive list 查目录，archive --help 看用法。");return;
+                    out.addProperty("advice","create <标题>|<正文> 写公开日记并同步官网，无书也能数字归档；read 阅读，restore 用一本空白书与笔领取实体副本。委托仍用 commission。");reply(p,q,out,"公共档案馆："+(ready?"可用":"准备中")+"；日记无需书与笔：/mycli archive create <标题>|<正文>；目录：/mycli archive list。");return;
                 }
                 work(p,q,()->store.list(kind,p.getUniqueId().toString(),q.page),rows->{
                     if(action.equals("menu"))open(p,kind,q.page,rows);
@@ -142,20 +142,19 @@ final class PublicArchives implements Listener {
         String title=plain(joined.substring(0,split)).trim(),body=plain(joined.substring(split+1)).trim();
         if(title.isEmpty()||title.length()>32||body.isEmpty()||body.length()>10000)throw new IllegalArgumentException("书名1–32字、正文1–10000字；长篇也可用原版书与笔编辑签名");
         if(!beginWriting(p,q))return;int slot=blank(p);
-        if(slot<0){writing.remove(p.getUniqueId());error(p,q.json,"MATERIAL_REQUIRED","请在本人背包准备一本空白书与笔；不消耗已写内容或特殊道具。",false);return;}
-        ItemStack material=p.getInventory().getItem(slot).clone();String candidate=UUID.randomUUID().toString();
+        ItemStack material=slot<0?null:p.getInventory().getItem(slot).clone();String candidate=UUID.randomUUID().toString();
         JsonObject meta=new JsonObject();meta.addProperty("source","server_book_authoring");meta.addProperty("world",p.getWorld().getKey().toString());
         var entry=new ArchiveStore.Entry(candidate,q.action.equals("notice")?"notice":"book",p.getUniqueId().toString(),p.getName(),title,body,meta.toString(),true,System.currentTimeMillis(),1);
         work(p,q,()->store.create(q.request,entry),saved->{
             writing.remove(p.getUniqueId());boolean first=saved.id().equals(candidate);boolean printed=false;
-            if(first&&!p.isDead()&&p.getGameMode()!=GameMode.SPECTATOR&&material.equals(p.getInventory().getItem(slot))){
+            if(first&&material!=null&&slot>=0&&!p.isDead()&&p.getGameMode()!=GameMode.SPECTATOR&&material.equals(p.getInventory().getItem(slot))){
                 p.getInventory().setItem(slot,book(saved,"original"));printed=true;
                 if(saved.kind().equals("book"))plugin.lifeGuild().written(p,body);
             }
             JsonObject out=summary(saved);out.addProperty("type",q.action);out.addProperty("readOnly",false);out.addProperty("durable",true);out.addProperty("printed",printed);
             out.addProperty("requestId",q.request);out.addProperty("replayed",!first);out.addProperty("nextCommand","/mycli archive info "+saved.id());
-            out.addProperty("state",printed?"stored_and_printed":"stored_print_not_confirmed");
-            reply(p,q,out,printed?"《"+saved.title()+"》已归档并写成公开实体书，留在原书与笔的位置；可以放进箱子或讲台供大家阅读。":"作品已归档；本次没有再次扣物或打印。请核对背包，缺书可用 archive restore "+saved.id()+" 恢复副本。");
+            out.addProperty("state",printed?"stored_and_printed":slot<0?"stored_digital":"stored_print_not_confirmed");
+            reply(p,q,out,printed?"《"+saved.title()+"》已公开归档并写成实体书，将同步官网档案馆；书留在原书与笔的位置。":"《"+saved.title()+"》已公开数字归档，将同步官网档案馆；未扣物、未重复打印。需要实体书时准备一本空白书与笔，再 /mycli archive restore "+saved.id()+"。");
         });
     }
     void legacyWrite(Player p,String title,String body){create(p,new Query("create",List.of(title+"|"+body),false,1,UUID.randomUUID().toString(),0));}

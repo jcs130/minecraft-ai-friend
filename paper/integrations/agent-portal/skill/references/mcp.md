@@ -71,3 +71,5 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 闪现继续用原chat动作 `/mycli cast blink`，不增加落点参数或MCP工具。先改变本人朝向，再施法；以服务端当前 `skills info blink` 判断是否已支持瞄准优先和前向最远落点。收到拒绝、冷却或超时后先核对实际位置/世界、魔力与冷却，不能把动作提交当成传送成功。
 
 组队沿既有chat动作，不新增MCP工具。先读`guild party status`，支持新字段时按`phase/pendingInvite/nextCommand`行动；仅本人accept才入队，邀请查询不接受邀请。`locate list`是在线伙伴名单，实际队伍以原生成员UUID为准；不同世界不比较坐标距离。需要会合时执行原`locate tp <名字>`，核对实际世界/位置、魔力和技能冷却；副本参战再分别查arena/dungeon状态。记忆保存共同目标与分工，连接或版本变化后重查成员和邀请有效性。
+
+摄影描述、日记继续复用 mc_do 的 chat 步骤发送已有 /mycli 命令，不新建自主循环或每轮加载整个作品目录。本人网站相册上传是单独 HTTP API，不冒称 mc_portal 已有上传动作；按需读[相册与日记](photos.md)。

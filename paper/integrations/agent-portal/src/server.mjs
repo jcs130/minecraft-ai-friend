@@ -14,6 +14,8 @@ import { requestOrigin, rateAddress } from './request-origin.mjs';
 import { GameAccounts } from './game-accounts.mjs';
 import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
+import { PhotoUploads, MAX_UPLOAD_BYTES } from './photo-uploads.mjs';
+import { agentPhotoRoute } from './photo-upload-routes.mjs';
 import { publicMedia, publicMediaOrigin, servePublicMedia } from './public-media.mjs';
 import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
@@ -90,6 +92,7 @@ export function createPortal(config, options = {}) {
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
+  const photoUploads = new PhotoUploads(gallery, { now: options.now });
   const archives = new PublicArchives(store);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
@@ -185,6 +188,19 @@ export function createPortal(config, options = {}) {
     if (!context.credential || !context.owner) throw fail(401, 'INVALID_CREDENTIAL', '请使用本人 Agent 接入身份，或由主人签发带外观管理权限的单角色凭据');
     const agent = (await game.roster()).find(row => row.playerUuid === context.credential.agent_uuid);
     if (!agent || agent.identityConflict || !store.ownedUuids(context.owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '角色归属已变化，请让当前主人在连接中心重新授权本人角色的外观管理');
+    return { ...context, agent };
+  }
+  async function selfPhotos(req) {
+    if (req.headers.authorization?.startsWith('Bearer qda_')) {
+      const context = agentAccess.authorize(req);
+      return { ...context, agent: await agentAccess.selfAgent(context) };
+    }
+    let context;
+    try { context = auth(req, ['photos.write']); }
+    catch (error) { if (error.reason === 'SCOPE_REQUIRED') throw fail(403, 'SCOPE_REQUIRED', '请让主人在连接中心签发勾选“本人相册上传”的单角色凭据；原只读和外观凭据不会自动增加上传权限'); throw error; }
+    if (!context.credential || !context.owner) throw fail(401, 'INVALID_CREDENTIAL', '请使用本人 Agent 接入身份，或由主人签发带 photos.write 的单角色凭据');
+    const agent = (await game.roster()).find(row => row.playerUuid === context.credential.agent_uuid);
+    photoUploads.context(context.owner, agent);
     return { ...context, agent };
   }
   function csrf(req) {
@@ -321,6 +337,7 @@ export function createPortal(config, options = {}) {
         if (await memoryRoute({ req, res, pathname, url, memories, context, jsonBody, respond, rate })) return;
       }
       if (await agentAppearanceRoute({ req, res, pathname, context: () => selfAppearance(req), appearance, jsonBody, respond, rate })) return;
+      if (await agentPhotoRoute({ req, res, pathname, url, context: () => selfPhotos(req), uploads: photoUploads, respond, rate, jsonBody, origin: config.publicOrigin || req.portalOrigin.origin })) return;
       const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
@@ -476,6 +493,24 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
       if(req.method==='GET'&&pathname==='/api/v1/gallery/manage')return respond(res,200,gallery.managed(gallery.managementContext(browserAuth(req).owner),{page:Number(url.searchParams.get('page')||1)}));
+      if(req.method==='POST'&&pathname==='/api/v1/gallery/upload'){
+        const {owner}=browserAuth(req);rate('photo-upload-owner:'+owner.id,12);
+        const body=await jsonBody(req,6*1024*1024),{agent}=await authorizedAgent(req,body.agentId);
+        if(typeof body.pngBase64!=='string'||body.pngBase64.length>Math.ceil(MAX_UPLOAD_BYTES/3)*4||body.pngBase64.length%4||!/^[A-Za-z0-9+/]*={0,2}$/.test(body.pngBase64))throw fail(400,'PHOTO_PNG_REQUIRED','请上传有效 PNG 图片，最大 4MB');
+        return respond(res,201,photoUploads.upload(owner,agent,Buffer.from(body.pngBase64,'base64'),body));
+      }
+      const mapImport=/^\/api\/v1\/gallery\/([a-f0-9-]{36})\/import$/.exec(pathname);
+      if(mapImport&&req.method==='POST'){
+        const {owner}=browserAuth(req);rate('photo-import-owner:'+owner.id,12);
+        return respond(res,201,photoUploads.issue(mapImport[1],gallery.managementContext(owner),config.publicOrigin||req.portalOrigin.origin));
+      }
+      const importedImage=/^\/api\/v1\/gallery\/([a-f0-9-]{36})\/import\/([A-Za-z0-9_-]{43})\/image\.png$/.exec(pathname);
+      if(importedImage&&['GET','HEAD'].includes(req.method)){
+        const bytes=photoUploads.imported(importedImage[1],importedImage[2],req.method==='GET');
+        res.writeHead(200,{'Content-Type':'image/png','Content-Length':bytes.length,'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'});return res.end(req.method==='HEAD'?undefined:bytes);
+      }
+      const removePhoto=/^\/api\/v1\/gallery\/([a-f0-9-]{36})$/.exec(pathname);
+      if(removePhoto&&req.method==='DELETE')return respond(res,200,photoUploads.remove(removePhoto[1],gallery.managementContext(browserAuth(req).owner)));
       const photoManagement=/^\/api\/v1\/gallery\/(?:manage\/([a-f0-9-]{36})\/image|([a-f0-9-]{36})\/publication)$/.exec(pathname);
       if(photoManagement){
         const context=gallery.managementContext(browserAuth(req).owner);
@@ -689,7 +724,8 @@ export function createPortal(config, options = {}) {
         const { agent } = await authorizedAgent(req, body.agentId);
         if (typeof body.label !== 'string' || body.label.trim().length < 1 || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请输入 1–60 字的客户端名称');
         const scopes = body.scopes || ['state.read'];
-        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取和本人外观管理');
+        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write', 'photos.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取、本人外观管理和本人相册上传');
+        if(scopes.includes('photos.write'))photoUploads.context(owner,agent);
         if (scopes.includes('appearance.write')) {
           if (!store.ownedUuids(owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '只有本人已绑定角色可以授权外观管理；请先通过游戏内证明认领');
           appearance.assertAgent(agent);
@@ -807,5 +843,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoUploads, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

@@ -64,11 +64,14 @@ final class PhotoJournal implements Listener {
     }
     /** Called after every tile is durably stored in the owner's personal reward chest or private overflow. */
     void delivered(Player p,UUID id,String name,String mode,long captured,Location at,JsonObject context,JsonObject scene,JsonObject image,Object map) throws Exception {
+        delivered(p,id,name,mode,captured,at,context,scene,image,map,"");
+    }
+    void delivered(Player p,UUID id,String name,String mode,long captured,Location at,JsonObject context,JsonObject scene,JsonObject image,Object map,String story) throws Exception {
         if(rows(p.getUniqueId()).has(id.toString()))return;
         if(rows(p.getUniqueId()).size()>=64){say(p,"照片已存入个人奖励箱，但纪念册达到64份上限；请联系管理员归档，考试尚未计入。");return;}
         PhotoEvidence.Review review=PhotoEvidence.review(scene,image);
         JsonObject row=new JsonObject();row.addProperty("id",id.toString());row.addProperty("owner",p.getUniqueId().toString());row.addProperty("author",p.getName());
-        row.addProperty("name",name);row.addProperty("title",name);row.addProperty("story","");row.addProperty("mode",mode);row.addProperty("capturedAt",captured);
+        row.addProperty("name",name);row.addProperty("title",name);row.addProperty("story",story.isEmpty()?"":PhotoEvidence.text(story,400));row.addProperty("mode",mode);row.addProperty("capturedAt",captured);
         row.addProperty("world",at.getWorld().getName());row.addProperty("worldUuid",at.getWorld().getUID().toString());
         row.addProperty("x",at.getBlockX());row.addProperty("y",at.getBlockY());row.addProperty("z",at.getBlockZ());
         row.addProperty("biome",WorldBiomes.at(at));
@@ -79,6 +82,7 @@ final class PhotoJournal implements Listener {
         if(!ledger.write(data->rows(data,p.getUniqueId()).add(id.toString(),row))) {say(p,"照片已存入个人奖励箱，但纪念册保存失败，考试尚未计入；请联系管理员核对，勿重复领取。");return;}
         plugin.archives().syncSources();
         say(p,review.advice()+" /mycli photo info "+name+" 查看作品。");
+        say(p,story.isEmpty()?"写照片描述：/mycli photo story "+name+" <经历>。日记：/mycli archive create <标题>|<正文>。照片会同步官网“我的照片”，由本人或管理员选择公开。":"照片描述已归档，会随原片同步官网“我的照片”；由本人或管理员选择公开。日记：/mycli archive create <标题>|<正文>。");
         if(context!=null)say(p,"探索照片进度：/mycli guild exam status；原来的走查和返程条件仍需完成。");
         else if(!plugin.skillAssessments().photoExam(p).isEmpty())say(p,"这张照片没有匹配当前考试的探索目的地，不计入考试。用 /mycli guild status 查当前阶段，先到该阶段的目标实地再拍。");
     }
