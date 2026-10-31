@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "minecraft": "1.21.1",
+  "loader": "neoforge",
+  "clientLoaderVersion": "21.1.248",
+  "serverLoaderVersion": "21.1.252",
+  "core": "Youer 1.21.1-e3158632",
+  "deployment": "isolated_only",
+  "artifacts": [
+    {
+      "project": "twilightforest",
+      "version": "4.8.3345",
+      "versionType": "release",
+      "filename": "twilightforest-1.21.1-4.8.3345-universal.jar",
+      "url": "https://mediafilez.forgecdn.net/files/7797/302/twilightforest-1.21.1-4.8.3345-universal.jar",
+      "bytes": 27154121,
+      "sha256": "493da16d10210f9f53a3c33b3d8fcb4ae9b14016ee420d753c894562bd9aba35",
+      "sha512": "371dd7079b174091363327df70ed64c84e8e36fcab49b4c33bbcbe39650f6bccc12d3e14818cdfbbaa519a999f64a0a92c03ec981f55a315b044dc7cb5c27ef4"
+    },
+    {
+      "project": "lootr",
+      "version": "1.21.1-1.11.38.127",
+      "versionType": "release",
+      "filename": "lootr-neoforge-1.21.1-1.11.38.127.jar",
+      "url": "https://cdn.modrinth.com/data/EltpO5cN/versions/SPOrIzX8/lootr-neoforge-1.21.1-1.11.38.127.jar",
+      "bytes": 1075929,
+      "sha256": "5c74de4709d1c13b25880fdd241a89d5d9f331346d20edc76f80ccd4d99dc66c",
+      "sha512": "7496051c1ba98f8801b8eb81773d1baec16166c3d2c5682476bd6f9433f794095099cea609fd5610525edb7c450b1bacd0011a31763e91c77c9a0034c8245ca3"
+    },
+    {
+      "project": "yes-steve-model",
+      "version": "2.6.5-neoforge+mc1.21.1",
+      "versionType": "release",
+      "filename": "ysm-2.6.5-neoforge+mc1.21.1-release.jar",
+      "url": "https://cdn.modrinth.com/data/86xjpqqS/versions/HZWaR0LY/ysm-2.6.5-neoforge%2Bmc1.21.1-release.jar",
+      "bytes": 63463229,
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
+      "sha512": "75a655fe095565d949aeea5e333f3e1501443b796b250aeabe1ac230c47a99cbac6b7470956b4458f5c982c2cf8a17f170b53e0805b4f4079874fc9975b10dce"
+    },
+    {
+      "project": "touhou-little-maid",
+      "version": "1.5.3-neoforge+mc1.21.1",
+      "versionType": "release",
+      "filename": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar",
+      "bytes": 24408776,
+      "sha256": "f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27",
+      "sha512": "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe"
+    },
+    {
+      "project": "better-combat",
+      "version": "2.4.0+1.21.1-neoforge",
+      "versionType": "release",
+      "filename": "bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/5sy6g3kz/versions/VhIOvcXP/bettercombat-neoforge-2.4.0%2B1.21.1.jar",
+      "bytes": 1045389,
+      "sha256": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a",
+      "sha512": "db24730a42ae7e2dd546ee031d2f5e0dd6f9896418417a529fa21a44121761ebb29c8b8299db8f20500f7497f7b60a7d793b66c93abf37a8ea0aa3edafd80eb6"
+    },
+    {
+      "project": "cloth-config",
+      "version": "15.0.140+neoforge",
+      "versionType": "release",
+      "filename": "cloth-config-15.0.140-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/9s6osm5g/versions/izKINKFg/cloth-config-15.0.140-neoforge.jar",
+      "bytes": 1163890,
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+      "sha512": "aaf9b010955b8cd294e5a92f069985b18729fd5e2cf22d351f1dff9680f15488688803ec41e77e941cbde130ceb535014ca4c868047d80ab69c2d508e216654d"
+    },
+    {
+      "project": "playeranimator",
+      "version": "2.0.4+1.21.1-forge",
+      "versionType": "beta",
+      "filename": "player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/gedNE4y2/versions/HJZB6bmA/player-animation-lib-forge-2.0.4%2B1.21.1.jar",
+      "bytes": 203149,
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92",
+      "sha512": "fc00450fb6c95ec1779021bdc726122dacb5915c6baddaacc981cd221b01b8db35f2a0dfde5d6fa6766d877266dc82f58854f571ea53cc5c4d468b80e1548a5f"
+    }
+  ]
+}

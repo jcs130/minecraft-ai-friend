@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-31T02:45:46.129522+00:00",
+  "deployment": "isolated_only",
+  "productionModified": false,
+  "productionReleaseReady": false,
+  "runtime": {
+    "serverStoppedNormally": true,
+    "finalJvmExitCode": 0,
+    "loopbackOnly": true,
+    "serverLoader": "21.1.252",
+    "clientLoader": "21.1.248",
+    "formalPluginStackTested": false
+  },
+  "nativeJava": {
+    "scenariosPassed": 7,
+    "independentLootPlayers": 2,
+    "actualSavedLootOwners": 2,
+    "ordinaryRightClickAndShiftClick": true,
+    "perPlayerLootPreservedAcrossRestart": true,
+    "actualTwilightDimension": true,
+    "nativeTwilightRenderers": true,
+    "betterCombatActualHeldKey": true,
+    "clientAndServerDamageMatch": true,
+    "attackRangeValidationEnabled": true,
+    "trainingTargetAiDisabled": true,
+    "secondCombatFixtureKnockbackResistance": 1,
+    "gearProvidedBySeparateFixture": true,
+    "damage": [
+      {
+        "before": 100.0,
+        "after": 64.576004
+      },
+      {
+        "before": 64.576004,
+        "after": 29.152008
+      }
+    ],
+    "ysmOriginalUserModel": "大肥鱼_1.1.ysm",
+    "ysmNativeRenderScreenshotInspected": true,
+    "agentAutonomyTested": false,
+    "bossProgressionTested": false
+  },
+  "vanillaJava": {
+    "status": "blocked",
+    "reason": "required NeoForge channels"
+  },
+  "mineflayer": {
+    "status": "blocked_direct",
+    "authenticatedModBridgeReady": false,
+    "baseCandidateRejected": true,
+    "additionalCandidateRejected": true
+  },
+  "bedrock": {
+    "status": "not_tested",
+    "fullModMappingReady": false
+  },
+  "cortiEyeAndWeb": {
+    "status": "not_tested"
+  },
+  "clientPack": {
+    "filename": "qiandengji-native-adventure-0.1.0-test.mrpack",
+    "sha256": "9bfeb26cf86196aefea07e80ada6ba372ef87e7cd26062afef007d5ec38d63ac",
+    "reviewedUpstreamArtifacts": 7,
+    "unitTestsPassed": 8,
+    "sameModBytesAsNativeClient": true,
+    "freshLauncherImportTested": false,
+    "productionPublished": false,
+    "userModelsIncluded": false,
+    "qaModIncluded": false
+  },
+  "retainedFailures": [
+    "Initial PowerShell JVM argument parsing error before startup; corrected quoting.",
+    "First fixture operations correctly rejected unloaded target chunks; prepared only the explicit QA footprint.",
+    "First TOML text match also matched a differently named key; replaced only complete assignment lines.",
+    "First dimension client missed an exact tick after an external teleport; corrected dimension-scoped readiness.",
+    "Initial guessed YSM name was rejected; used actual native model suggestions and full original filename.",
+    "A late positioning helper only observed an already-closed client; bounded failure retained, added original-process liveness check.",
+    "Initial console EOF prompt spin avoided by an owned open input pipe and console flags.",
+    "Earlier QA restart was launched during the old JVM final shutdown interval; terminal-receipt preflight now rejects overlap."
+  ],
+  "evidence": [
+    {
+      "file": "clients/TwilightQA1-first-r1/twilight-client-qa.json",
+      "sha256": "0262c90daf58b568f96c8d5985f55e660eecf0570573114854cf5b02b1a9df01",
+      "bytes": 1928
+    },
+    {
+      "file": "clients/TwilightQA2-first-r1/twilight-client-qa.json",
+      "sha256": "1e016a6a919d90526b616247377b84c5f3096ad3b799ef9b431f22cdcc70024f",
+      "bytes": 1925
+    },
+    {
+      "file": "clients/TwilightQA1-dimension-r2/twilight-client-qa.json",
+      "sha256": "c9ed4e0532caacc4e89b00ed305902254a3f18ab6b937c098a9ac7970090aa52",
+      "bytes": 4967
+    },
+    {
+      "file": "clients/TwilightQA1-reconnect-r1/twilight-client-qa.json",
+      "sha256": "bc07000e8e0dd6ff005e579fa1ef9190c1be7ad616fa4492c3b6e1e49fa14997",
+      "bytes": 1845
+    },
+    {
+      "file": "clients/TwilightQA1-combat-r1/twilight-client-qa.json",
+      "sha256": "b75de61fc800d914186deac7c9e30c1d59796e81d08230b3d14f67da6c430d94",
+      "bytes": 826
+    },
+    {
+      "file": "clients/TwilightQA1-combat-r3/twilight-client-qa.json",
+      "sha256": "68b4de61564cc5fbaaaa9a5bf4b4d9eca99128245be71cf34d66158d4db786c7",
+      "bytes": 830
+    },
+    {
+      "file": "clients/TwilightQA2-catalog-r3/twilight-client-qa.json",
+      "sha256": "20895c7cf61574b39a0dceb0f93b732f868e3b573dd060d6bec7eeb53d7592b9",
+      "bytes": 1154
+    },
+    {
+      "file": "clients/TwilightQA1-combat-r3/fixture-position.json",
+      "sha256": "dab542cc4ffcf01001febc48a4ef33c553ce626427d0f15f91c80c6e192f89a8",
+      "bytes": 2364
+    },
+    {
+      "file": "clients/TwilightQA1-combat-r3/screenshots/ysm-native-player.png",
+      "sha256": "7b556a31174a5bc2a4cd6c9ce5847f2d6f6e259479adf354f894202c02d932ef",
+      "bytes": 190316
+    },
+    {
+      "file": "clients/TwilightQA1-first-r1/screenshots/lootr-native-menu.png",
+      "sha256": "8f514357a2ec52426074d4086949d862130dd3cd59e68926f3aa2e257bd6adec",
+      "bytes": 91384
+    },
+    {
+      "file": "clients/TwilightQA1-dimension-r2/screenshots/twilight-native-world.png",
+      "sha256": "964612fe85d1283bd7775a22d527e8728ffb19d093f8ef06e280df3df08a03d7",
+      "bytes": 109260
+    },
+    {
+      "file": "persistence-final-cold.json",
+      "sha256": "9641072591d8007b1f36f0baa46ecd387da10f79ac9db47e8c99dcb585557c8a",
+      "bytes": 4364
+    },
+    {
+      "file": "production-preserved.json",
+      "sha256": "0b6dffaf85c12d6cb0b4018d575ff117b266a980869941a1c12ad26a03a8bb76",
+      "bytes": 683
+    },
+    {
+      "file": "pack-consumer-proof.json",
+      "sha256": "98a77406cd015f6f8e4e25be5a193aa65b33d6f2f0d7cd15565d2cbb5e313570",
+      "bytes": 1038
+    },
+    {
+      "file": "requests/8afa2f32-e562-4190-9664-f568c3d4ac6d.json",
+      "sha256": "af1e37a3eac77a8c2493293e54b6602fd90d27d44433366047355775c15361f0",
+      "bytes": 503
+    },
+    {
+      "file": "requests/f1268cc1-c91b-4c71-8c8e-daf05c82dd04.json",
+      "sha256": "094ab94e20867d62ae6866a516a34405e4247ac1745a57d95263d5e3dd2b59d8",
+      "bytes": 503
+    }
+  ]
+}
