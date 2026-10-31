@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 17
+welcome-revision: 18
 enabled: true
 agents-only: false
 poll-seconds: 60
@@ -47,7 +47,7 @@ steps:
     message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
   complete:
     title: 攻略路线已开启
-    message: 先 /mycli profession list 选择职业，再 skills list / skills info <ID> 查本人技能。职业初始主动技可直接cast；prepare设置点击技能，learn仅按详情花点学节点，通用能力无需重学。
+    message: 用 /mycli dungeon list 选遗迹，或 /mycli arena status 查试炼。带护甲和本职业武器，同场自动参战、可中途进出；一人开场即可，不必邀请。离场保留实际贡献，通关后用 /mycli dungeon status 查领奖；职业、技能、任务看 /mycli intro。
 release-revision: 8
 release-notice:
 - '[攻略更新] 试炼塔先 /mycli arena status；goto arena前往（6魔力），穿甲带武器、伙伴到按钮12格，一人arena start免费开场。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。旧公会单guild status，新RPG任务tasks status。'

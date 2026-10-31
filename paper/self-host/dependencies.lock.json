@@ -74,6 +74,22 @@
       "algorithm": "sha256",
       "digest": "e697df15be3f95219d80773c5f1002030e33e932adda186c1c86fd51df6691a9",
       "licenseSource": "https://github.com/xerial/sqlite-jdbc"
+    },
+    {
+      "component": "TAB",
+      "path": "plugins/TAB-6.2.1-Paper-1.20.5-1.21.4.jar",
+      "url": "https://github.com/NEZNAMY/TAB/releases/download/6.2.1/TAB.v6.2.1.-.Paper.1.20.5.-.1.21.4.jar",
+      "algorithm": "sha256",
+      "digest": "bdf8ea4e6b194197a02fdd7abee9845e1000183bc4df9c0e5280505fc1f51c24",
+      "licenseSource": "https://github.com/NEZNAMY/TAB"
+    },
+    {
+      "component": "SkinsRestorer",
+      "path": "plugins/SkinsRestorer.jar",
+      "url": "https://github.com/SkinsRestorer/SkinsRestorer/releases/download/15.12.6/SkinsRestorer.jar",
+      "algorithm": "sha256",
+      "digest": "a85b4a370f988741c9a38f4d0498262edacbf3220314790ac1c127461996359c",
+      "licenseSource": "https://github.com/SkinsRestorer/SkinsRestorer"
     }
   ]
 }

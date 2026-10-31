@@ -448,7 +448,7 @@ final class DungeonManager implements Listener {
     }
 
     private void enrollPlayersOnCurrentFloor() {
-        if (!active || pausedAt > 0) return;
+        if (!active) return;
         boolean changed = false;
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
@@ -842,12 +842,15 @@ final class DungeonManager implements Listener {
     private void tick() {
         if (!active) return;
         long now = System.currentTimeMillis();
+        enrollPlayersOnCurrentFloor();
         if (pausedAt > 0) {
+            if(participants.stream().map(Bukkit::getPlayer).anyMatch(p->p!=null&&p.isOnline()&&!p.isDead()&&!plugin.isDowned(p)&&inFloor(p.getLocation(),floor)))resumeRun(now);
+            else{
             if (now - pausedAt > REJOIN_GRACE_MS)
                 finish(false, "reconnect_timeout", "断线重连等待已满 10 分钟；已赢得的奖励保存在个人箱子里。");
             return;
+            }
         }
-        enrollPlayersOnCurrentFloor();
         if (waveCleared() && plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         boolean anyone = false;
         for (UUID id : participants) {

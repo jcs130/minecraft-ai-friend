@@ -31,7 +31,8 @@ public final class JourneyCatalogTest {
         var onboarding = new YamlConfiguration(); onboarding.load(new File(root, "onboarding.yml"));
         String complete = onboarding.getString("steps.complete.message");
         check("graduate has dungeon and trial entrances", complete.contains("dungeon list") && complete.contains("arena status"));
-        check("one welcome not repeat spam", onboarding.getInt("welcome-revision") == 15);
+        check("graduate can join without invitation commands", complete.contains("自动参战") && complete.contains("不必邀请"));
+        check("current one-time welcome revision", onboarding.getInt("welcome-revision") == 18);
         System.out.println("JourneyCatalogTest: " + checks + " passed");
     }
 }

@@ -171,7 +171,9 @@ final class WaypointManager implements Listener {
             if (current == null && own(p).size() >= limit()) { result(p, action, false, "limit_reached", null); return; }
             String denied = actor(p);
             Location at = p.getLocation();
-            at.setX(at.getBlockX() + .5); at.setY(at.getBlockY()); at.setZ(at.getBlockZ() + .5);
+            // Retain the real collision height (paths, farmland and slabs are
+            // fractional); flooring Y embeds an otherwise safe point in its floor.
+            at.setX(at.getBlockX() + .5); at.setZ(at.getBlockZ() + .5);
             if (denied == null) denied = safe(p, at);
             if (denied != null) { result(p, action, false, denied, null); return; }
             Point saved = new Point(current == null ? UUID.randomUUID() : current.id, p.getUniqueId(), p.getName(), value,
@@ -252,13 +254,6 @@ final class WaypointManager implements Listener {
         String reason = actor(p);
         return reason == null ? safe(p, at) : reason;
     }
-    private static boolean hazard(Material type) {
-        return switch (type) {
-            case LAVA, WATER, FIRE, SOUL_FIRE, MAGMA_BLOCK, CACTUS, CAMPFIRE, SOUL_CAMPFIRE,
-                    SWEET_BERRY_BUSH, WITHER_ROSE, POWDER_SNOW, NETHER_PORTAL, END_PORTAL, END_GATEWAY -> true;
-            default -> false;
-        };
-    }
     private String safe(Player p, Location at) {
         World w = at.getWorld();
         if (w == null) return "world_unavailable";
@@ -268,16 +263,10 @@ final class WaypointManager implements Listener {
         if (!w.getWorldBorder().isInside(at.clone().add(.3, 0, .3)) || !w.getWorldBorder().isInside(at.clone().add(-.3, 0, -.3))) return "world_border";
         if (!w.isChunkLoaded(x >> 4, z >> 4)) return "chunk_unavailable";
         if (plugin.dungeon().deniesEdit(at) || plugin.namedTravelActivityArea(at)) return "activity_area";
-        Block floor = w.getBlockAt(x, y - 1, z), feet = w.getBlockAt(x, y, z), head = w.getBlockAt(x, y + 1, z);
-        if (hazard(floor.getType()) || hazard(feet.getType()) || hazard(head.getType()) || !feet.isPassable() || !head.isPassable()) return "unsafe_landing";
-        var box = floor.getBoundingBox();
-        if (!floor.getType().isSolid() || box.getMinX() > x || box.getMaxX() < x + 1
-                || box.getMinZ() > z || box.getMaxZ() < z + 1 || box.getMaxY() < y) return "unsafe_landing";
-        for (int[] d : new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
-            int xx = x + d[0], zz = z + d[1];
-            if (!w.isChunkLoaded(xx >> 4, zz >> 4)) return "chunk_unavailable";
-            if (hazard(w.getBlockAt(xx, y, zz).getType())) return "unsafe_landing";
-        }
+        // A safe recorded path/farmland/slab can have a fractional feet height.
+        // Validate its actual collision shape and full body, not an assumed whole cube below floor(y).
+        HomeLanding.Issue issue = HomeLanding.exactIssue(p, at);
+        if (issue != null) return issue.code().equals("chunk_unavailable") ? "chunk_unavailable" : "unsafe_landing";
         try {
             var query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
             if (!query.testState(BukkitAdapter.adapt(at), WorldGuardPlugin.inst().wrapPlayer(p), Flags.ENTRY)) return "protected_entry";

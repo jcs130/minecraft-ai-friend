@@ -1,5 +1,6 @@
 /** Connection-scoped battle facts from native entities and optional server party telemetry. */
 import type { Bot } from 'mineflayer';
+import { declareDecodedChannels } from './decoded-channels.ts';
 import { metaOf } from './animal-state.ts';
 import { HOSTILE } from './melee.ts';
 import { piglinIsHostile } from './piglin.ts';
@@ -109,6 +110,8 @@ export class BattlefieldObserver {
       if (serverChannel && packet.channel === serverChannel) this.noteServerPayload(packet.data);
     };
     const end = () => { this.reset(); this.detach?.(); this.bot = null; };
+    const register = () => { declareDecodedChannels(bot._client,[serverChannel]); };
+    bot.on('spawn',register);register();
     bot._client.on('entity_metadata', metadata);
     bot._client.on('custom_payload', payload);
     bot._client.on('end', end);
@@ -118,6 +121,7 @@ export class BattlefieldObserver {
       bot._client.removeListener('custom_payload', payload);
       bot._client.removeListener('end', end);
       bot.removeListener('health', health); bot.removeListener('entityGone', gone);
+      bot.removeListener('spawn',register);
       this.detach = null;
     };
   }

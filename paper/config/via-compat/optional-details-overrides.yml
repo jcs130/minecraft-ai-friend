@@ -1,0 +1,3 @@
+# Official optional version-detail messages are not required for protocol conversion.
+send-player-details: false
+send-server-details: false
