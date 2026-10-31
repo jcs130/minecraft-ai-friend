@@ -1,0 +1,63 @@
+{
+  "maw:gather_logs": {
+    "title": {"en_us":"A place to begin","zh_cn":"旅居起步：采集木材"},
+    "description": {"en_us":"Accept first, then collect 4 logs of any species. Claim your reward with /quest claim maw:gather_logs.","zh_cn":"先接取，再采集任意种类的4块原木。完成后用 /quest claim maw:gather_logs 领取奖励。不要拆村民的房屋。"},
+    "category":"settlement",
+    "objectives":[{"type":"justquests:collect_item","item":"#minecraft:logs","count":4}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:bread","count":4},{"type":"justquests:xp","amount":5}]
+  },
+  "maw:workbench": {
+    "title":{"en_us":"Tools of a new home","zh_cn":"安家第一步：工作台"},
+    "description":{"en_us":"Craft one crafting table. A 2x2 inventory grid is enough.","zh_cn":"把原木制成木板，再用背包的2×2合成格制作一个工作台。"},
+    "category":"crafting","requires":["maw:gather_logs"],
+    "objectives":[{"type":"justquests:craft_item","item":"minecraft:crafting_table","count":1}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:torch","count":8}]
+  },
+  "maw:shared_roof": {
+    "title":{"en_us":"Build a shared shelter","zh_cn":"建筑委托：共同的屋檐"},
+    "description":{"en_us":"Place 16 planks for a shelter on land where building is allowed. Leave village houses intact.","zh_cn":"在允许建造的位置搭建住所，放置16块任意木板。保留村庄原有建筑和公共道路。"},
+    "category":"building",
+    "objectives":[{"type":"justquests:place_block","block":"#minecraft:planks","count":16}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:glass","count":8}],
+    "repeatable":true,"cooldown_hours":24
+  },
+  "maw:harvest": {
+    "title":{"en_us":"Stock the pantry","zh_cn":"农业委托：收获补给"},
+    "description":{"en_us":"Collect 12 wheat, keeping farmland planted for the next visitor.","zh_cn":"采集12份小麦，收割后请补种，为后来者留下农田。"},
+    "category":"farming",
+    "objectives":[{"type":"justquests:collect_item","item":"minecraft:wheat","count":12}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:carrot","count":4}],
+    "repeatable":true,"cooldown_hours":12
+  },
+  "maw:kitchen": {
+    "title":{"en_us":"Dinner with Farmer's Delight","zh_cn":"料理委托：一碗蔬菜汤"},
+    "description":{"en_us":"Obtain one Farmer's Delight vegetable soup. Use a cooking pot or trade for food; inspect the live recipe rather than guessing ingredients.","zh_cn":"获得一碗农夫乐事蔬菜汤。可使用烹饪锅或交易；先查询实际配方，勿猜测材料和锅的槽位。"},
+    "category":"cooking",
+    "objectives":[{"type":"justquests:have_item","item":"farmersdelight:vegetable_soup","count":1}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:emerald","count":2}],
+    "repeatable":true,"cooldown_hours":12
+  },
+  "maw:watch": {
+    "title":{"en_us":"Keep the roads safe","zh_cn":"守卫委托：清理道路威胁"},
+    "description":{"en_us":"Defeat two zombies. Attack hostile creatures only; villagers and other travelers are not targets.","zh_cn":"击败两只僵尸。只攻击敌对生物，村民、其他旅人和宠物不属于目标。"},
+    "category":"combat",
+    "objectives":[{"type":"justquests:kill_mob","entity":"minecraft:zombie","count":2}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:arrow","count":8}],
+    "repeatable":true,"cooldown_hours":12
+  },
+  "maw:breeder": {
+    "title":{"en_us":"A growing homestead","zh_cn":"畜牧委托：牧场新生命"},
+    "description":{"en_us":"Breed cows twice through normal feeding.","zh_cn":"正常喂养并完成两次牛的繁殖，为聚落建立可持续的牧场。"},
+    "category":"farming",
+    "objectives":[{"type":"justquests:breed_animal","entity":"minecraft:cow","count":2}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:lead","count":1}],
+    "repeatable":true,"cooldown_hours":24
+  },
+  "maw:enchanter": {
+    "title":{"en_us":"The next adventure","zh_cn":"装备委托：第一次附魔"},
+    "description":{"en_us":"Enchant one item with an enchanting table.","zh_cn":"使用附魔台为一件物品附魔，准备下一次探索。"},
+    "category":"magic",
+    "objectives":[{"type":"justquests:enchant_item","count":1}],
+    "rewards":[{"type":"justquests:give_item","item":"minecraft:lapis_lazuli","count":4}]
+  }
+}

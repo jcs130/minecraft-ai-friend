@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "environment": "independent-loopback-fabric-lab",
+  "minecraft": "26.3",
+  "loader": "0.20.1",
+  "java": "Temurin 25.0.5+8",
+  "productionModified": false,
+  "publicAccessEnabled": false,
+  "autonomousModelLoopRunning": false,
+  "entry": {"game": "127.0.0.1:39781", "management": "127.0.0.1:39782", "managementTokenPublished": false},
+  "body": {"name": "GraalScout", "uuid": "706bcf10-c2e5-3423-a558-093f58484ee7", "op": false, "mode": "survival", "currentlyConnected": false},
+  "artifacts": {"lockedModrinthEntries": 30, "externalClientEntries": 2, "serverTopLevelJars": 30, "clientTopLevelJars": 31},
+  "verified": [
+    {"kind": "movement", "requestId": "fabric263-walk-01", "result": "actual client reached short-distance goal", "adminTeleportUsedForThisMovement": false},
+    {"kind": "gather-and-reward", "requestId": "fabric263-gather-contract-01", "logsGathered": 4, "breadReward": 4, "progressWrittenByTest": false},
+    {"kind": "craft-and-reward", "requestId": "fabric263-craft-after-compat-02", "craftingTablesAdded": 1, "logsConsumed": 1, "torchReward": 8, "progressWrittenByTest": false},
+    {"kind": "native-village-story", "requestId": "fabric263-village-native-state-02", "screenClass": "de.quest.client.screen.JournalScreen", "read": ["story", "nextAction", "currency", "fiveReputations"]},
+    {"kind": "native-spell", "requestId": "fabric263-cast-static-02", "spellId": "wizards:arcane_bolt", "targetType": "minecraft:husk", "healthBefore": 20, "healthAfter": 15.8, "authoritativeServerHealth": 15.8, "adminNoAIFixture": true, "autonomousCombatVerified": false, "fixtureRemoved": true, "temporaryNaturalMobNoAIReverted": true},
+    {"kind": "cold-restart-reconnect", "stateRequestId": "fabric263-postrestart-state-01", "questRequestId": "fabric263-postrestart-quest-01", "sameBodyUuid": true, "inventoryRetained": true, "questCount": 38, "completed": ["maw:gather_logs", "maw:workbench"], "fixtureSuppliesExcludedFromSurvivalAchievement": ["wizards:wand_arcane", "runes:arcane_stone", "minecraft:iron_sword"]},
+    {"kind": "client-shutdown", "requestId": "fabric263-close-workers-01", "pinnedCacheExecutorSavedAndStopped": true, "processExited": true, "newWatchdogReport": false, "ordinaryWindowClosePatched": false}
+  ],
+  "performance": {"source": "vanilla tick query", "sampleTicks": 100, "clients": 1, "averageMs": 4.5, "p50Ms": 4.2, "p95Ms": 6.8, "p99Ms": 8.9, "targetTps": 20, "worldLoadSpikesRemain": true, "multiAgentLoadVerified": false},
+  "regression": {"command": "python -m unittest test_prepare test_probe test_backup test_install_content", "passed": 21, "failed": 0},
+  "coldBackup": {"copies": ["E:/MC/backups/fabric263-lab-20261101/after-native-validation.zip", "F:/MC-backups/fabric263-lab-20261101/after-native-validation.zip"], "sha256": "ab3e281402cb78c7dba4f659d094e05c478444ab3b726ce231e2e66da99b490c", "files": 130, "bytes": 6062068, "bothCopiesVerified": true},
+  "distribution": {"path": "E:/MC/releases/my-agent-world-fabric26.3-0.1.0-lab.2.mrpack", "sha256": "67939dc75cb8ddd5b310e77f9887e1c311fc46cbce012fe6288217fe4f19640e", "bytes": 8836, "originalDownloadEntries": 32, "containsAccountTokensOrWorlds": false},
+  "notYetVerified": ["all magic classes and group healing", "cooking pot full process", "shop transactions", "custom NPC stories", "all dungeon and structure types", "self-authored core autonomous survival loop", "Mineflayer 26.3 gateway", "Numen 26.3", "Bedrock bridge and resource pack", "Web renderer for this pack", "shared production login and protection"],
+  "knownWarnings": ["resource hot-reload knife-tag failure retained; use cold content updates", "optional ranged_weapon:haste attribute warning", "offline Realms/profile authentication errors", "Windows OSHI process metrics warnings", "earlier Baritone shutdown watchdog reports retained", "idle QA body deaths recorded; not autonomous combat acceptance"],
+  "evidence": {"requestReceipts": "local-only runtime/fabric263-lab/requests", "screenshots": ["2026-11-01_01.44.49.png", "2026-11-01_02.02.23.png"], "gameGoalRequiresObservedWorldChanges": true, "previousActionIdsMustNotBeReplayed": true}
+}

@@ -1,3 +1,15 @@
+## 2026-11-01 Fabric 26.3 独立组合实验服
+
+用户指定 Village Quest、JustQuests、Terralith、Towns and Towers、Dungeons and Taverns、Farmer's Delight Refabricated、Wizards + Paladins、Better Combat、Universal Shops、Easy NPC 全部一起加入。已在 E:/MC/servers/agent-world-fabric-26.3-lab / E:/MC/clients/agent-world-fabric-26.3-lab 组合冷启动；MC26.3/Fabric0.20.1/私有Java25.0.5+8，30服务端/31客户端顶层JAR（含依赖与自有兼容组件）。仅127.0.0.1:39781游戏、39782鉴权管理；未改SAO、千灯纪、路由、防火墙、网站、共用身份或模型循环。不能直接把离线实验入口改公网。
+
+可复现源码、锁、文档、21项回归在 integrations/fabric263-world。GraalWeave0.1.1 + 官方Baritone1.20.0控制匹配真实Java客户端，普通无OP生存角色GraalScout。实测走路、自然采木4块/领奖4面包、真实2×2合成工作台/领奖8火把、38项本人任务、Village Quest原生Journal与本人主线/声望。奥术箭在显式NoAI训练尸壳上20→15.8，服务端data回读一致；不是自主战斗。测试靶已精准清除，临时冻结的附近自然尸壳已恢复AI。角色闲置被正常怪物击杀记录保留，当前已下线，不是常驻LLM生存验收。
+
+自有maw-fabric263-compat0.1.0修复JustQuests0.4.5快速合成onTake空ItemStack漏计数，取真实移出栈/数量，只让原任务钩子计数，不改进度奖励或权限；严格锁原始Jar哈希与Mixin命中。Structure Pool API/Lithostitched按硬依赖传播客户端，不能信项目目录端侧标签删掉。准备脚本可幂等验证5229游戏/库/资源文件，拒绝覆盖不同字节或写入不属于本实验的目录。
+
+冷备 E:/MC/backups/fabric263-lab-20261101/after-native-validation.zip 和 F:/MC-backups/fabric263-lab-20261101/after-native-validation.zip，130文件、6062068字节、sha256 ab3e2814…99b490c，归档内逐文件与两副本均验证。重启/同UUID回连后库存与两项完成委托保持。客户端候选 E:/MC/releases/my-agent-world-fabric26.3-0.1.0-lab.2.mrpack，sha256 67939dc7…f19640e；不交付此前缺依赖的lab.1草稿，不上传现役网站。私有路径/Token/世界/日志/供应商资产不入Git。
+
+已知资源热更农夫乐事knives标签异常、可选ranged_weapon:haste、离线Realms/profile401、Windows OSHI统计告警保留，内容改动采用冷启动。Baritone非daemon缓存线程导致的退出看门狗已定位；close_client.py仅对精确官方Jar保存缓存/停审核过的执行器再退出，实测无新增报告；普通窗口关闭未修补。该脚本后不可同进程继续寻路。游戏目标须核实际变化，unknown按原ID对账、不重放。一次性测试脚本/旧ID不得自动重跑。全部料理/商店/NPC/副本/职业、自研核心持续loop、Mineflayer26.3/Numen/基岩/Web渲染及生产登录保护仍需分别接入验收，不能用启动成功替代。
+
 ## 2026-10-31 SAO 真实数据与普通操作已发布
 
 仅升级 E:/MC/servers/sao-0.76.1（MC1.20.1/Forge47.4.10），原生组件0.1.3，SDK0.1.3。Jar 8f0e1fdd…f97792，SDK a3a30f4a…5089b；公开TCP28976/28977、基岩UDP28988、语音UDP28989不变，原R2无需重下，千灯纪主服未改。native.recipes/sao.recipes按需读取实际RecipeManager和成功Forge/KubeJS解码对象快照；KubeJS2001.6.5-build.26已审定，替换或缺失定义仍未知。单页最多12项/16KiB、默认6项，不自动续读；513个不可据此筛选的类型明确保留未知，不能宣称全目录覆盖。原版静态bot.craft仍拒绝，真实菜单操作另验。

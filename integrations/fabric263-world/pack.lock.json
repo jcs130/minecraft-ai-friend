@@ -1,0 +1,1002 @@
+{
+  "schemaVersion": 1,
+  "name": "My Agent World: Living Adventures",
+  "version": "0.1.0-lab.1",
+  "minecraft": "26.3",
+  "loader": "0.20.1",
+  "specSha256": "264662184143bda03d6fcba17500ba6c2c9f2a3ab07205eb045ae9c5f616f662",
+  "mods": [
+    {
+      "projectId": "onz2NN2n",
+      "slug": "armor-model-api",
+      "versionId": "1smYVF1k",
+      "version": "1.1.2+26.3-fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/armor-model-api",
+      "filename": "armor_model_api-fabric-1.1.2+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/onz2NN2n/versions/1smYVF1k/armor_model_api-fabric-1.1.2%2B26.3.jar",
+      "hashes": {
+        "sha512": "ed2f56f08979b16928ec86cf9fc58d027b1bb5a8e62cba8fb0b8a459d4feae70f29a39087822ce1ea00b6a665b44d62d5388d9860ea2f679aa29e03fc48cf5a3",
+        "sha1": "ad42a4703f3b3dd2151c5a8269868308af37bf87"
+      },
+      "size": 101021,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "5sy6g3kz",
+      "slug": "better-combat",
+      "versionId": "8Vyq1h9a",
+      "version": "3.2.2+26.3-fabric",
+      "role": "combat",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/better-combat",
+      "filename": "bettercombat-fabric-3.2.2+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/5sy6g3kz/versions/8Vyq1h9a/bettercombat-fabric-3.2.2%2B26.3.jar",
+      "hashes": {
+        "sha1": "74e2f4053d26349699ce1fd5722149ecb02c9ffb",
+        "sha512": "bfa8af89795747de669e396e74bd8473ff991c2bddd52549a5a45d7c8efb56bf29a78e41232a996e865fa3b0746ec3502eb8bc27287e10fbfbb96bb4bf23a384"
+      },
+      "size": 931245,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "9s6osm5g",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "ha1mEyJS",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LicenseRef-All-Rights-Reserved"
+    },
+    {
+      "projectId": "n8QN6Z1a",
+      "slug": "bundle-api",
+      "versionId": "mQ3mo5tp",
+      "version": "5.0.0+26.3-fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/bundle-api",
+      "filename": "bundle-api-fabric-5.0.0+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/n8QN6Z1a/versions/mQ3mo5tp/bundle-api-fabric-5.0.0%2B26.3.jar",
+      "hashes": {
+        "sha1": "7883e38c21bcfc97503848796f26e1998ec7b9fe",
+        "sha512": "de58f657b581222a74c91e62bda6b180a902dab535a73590fc159acca6342770de7ccccd526f82cbad03ae1942ff5c46cee2ad287d20fdd8152d6c2f63121ae7"
+      },
+      "size": 110433,
+      "dependencies": [],
+      "license": "MIT"
+    },
+    {
+      "projectId": "9s6osm5g",
+      "slug": "cloth-config",
+      "versionId": "fg2uyxOW",
+      "version": "26.3.159+fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "optional",
+      "source": "https://modrinth.com/mod/cloth-config",
+      "filename": "cloth-config-fabric-26.3.159.jar",
+      "url": "https://cdn.modrinth.com/data/9s6osm5g/versions/fg2uyxOW/cloth-config-fabric-26.3.159.jar",
+      "hashes": {
+        "sha1": "9a5cce069380a2047250831dcb19f4ef1b15872d",
+        "sha512": "8924e19d41845096724fa10f3717bc51964a0edbbbcad0ff1e6c6187a398b08f356e49579a657c2dc44a7f92e3850771f3ca70bf8c1f654de60425163b91dbb1"
+      },
+      "size": 1135009,
+      "dependencies": [],
+      "license": "LGPL-3.0-only"
+    },
+    {
+      "projectId": "cl223EMc",
+      "slug": "cristel-lib",
+      "versionId": "rWxmPrGC",
+      "version": "fabric-26.3-3.1.13",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/cristel-lib",
+      "filename": "cristellib-fabric-26.3-3.1.13.jar",
+      "url": "https://cdn.modrinth.com/data/cl223EMc/versions/rWxmPrGC/cristellib-fabric-26.3-3.1.13.jar",
+      "hashes": {
+        "sha512": "96198dfc067ce7003cad9b211286e58e36efcaa29729af3c09c643d3e8bd8a54e5814eb8d88680a38caf9e6328a541151b6c6b1bd9ac117d9c7278d93d6de88c",
+        "sha1": "9cc655e54a8e613ccacdd0e372e360067986174d"
+      },
+      "size": 588323,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "9s6osm5g",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "CC-BY-NC-ND-4.0"
+    },
+    {
+      "projectId": "tpehi7ww",
+      "slug": "dungeons-and-taverns",
+      "versionId": "hn5CugpP",
+      "version": "6.1.0+mod",
+      "role": "dungeons",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/dungeons-and-taverns",
+      "filename": "dungeons-and-taverns-6.1.0.jar",
+      "url": "https://cdn.modrinth.com/data/tpehi7ww/versions/hn5CugpP/dungeons-and-taverns-6.1.0.jar",
+      "hashes": {
+        "sha512": "b143a1780d8eda2b548307f6cbd22b9e8b7a8b34e7f65de63179c94331ce875d72a2bdc0e01b885cfdeb09c13f215dfb8016d00f4511270ba9dd3c0744fcff9e",
+        "sha1": "4e720945fda993b5f8da5c206dd1d5e8a46aecb8"
+      },
+      "size": 42595560,
+      "dependencies": [],
+      "license": "LicenseRef-All-Rights-Reserved"
+    },
+    {
+      "projectId": "CgGEe1h3",
+      "slug": "easy-npc",
+      "versionId": "xiHI3wez",
+      "version": "7.17.1",
+      "role": "custom-npcs",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/easy-npc",
+      "filename": "easy_npc_bundle-fabric-26.3-7.17.1.jar",
+      "url": "https://cdn.modrinth.com/data/CgGEe1h3/versions/xiHI3wez/easy_npc_bundle-fabric-26.3-7.17.1.jar",
+      "hashes": {
+        "sha1": "2252b9a9668a8dc8d544db7335bdec2cf1d9bc82",
+        "sha512": "be705f4fec7880bb432501595f97c3bd433285d4b1ec1ebd98a06a759e336b3655ceccf809c4e4955597ca799e113e7cd01e05be8a2e2daf369216bfddcf3c29"
+      },
+      "size": 25254,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "ngLoLP1P",
+          "file_name": null,
+          "dependency_type": "optional"
+        },
+        {
+          "version_id": null,
+          "project_id": "uTGjf7vA",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "2RKFTmiB",
+          "file_name": null,
+          "dependency_type": "optional"
+        },
+        {
+          "version_id": null,
+          "project_id": "Epm6R3P2",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "uTGjf7vA",
+      "slug": "easy-npc-config-ui",
+      "versionId": "CSyUM7sU",
+      "version": "7.17.1",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/easy-npc-config-ui",
+      "filename": "easy_npc_config_ui-fabric-26.3-7.17.1.jar",
+      "url": "https://cdn.modrinth.com/data/uTGjf7vA/versions/CSyUM7sU/easy_npc_config_ui-fabric-26.3-7.17.1.jar",
+      "hashes": {
+        "sha1": "c282dfd5fd7533d70ac7957270315778b7c86a55",
+        "sha512": "adc4379cc3373fefdb9cabf50a498cbcf07a5335360b837c185fa06f852944d0f9d7b6fd2f8d69c2dbe374ecd9965c7381f7d589345dedff168c91236045f734"
+      },
+      "size": 1142616,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "ngLoLP1P",
+          "file_name": null,
+          "dependency_type": "optional"
+        },
+        {
+          "version_id": null,
+          "project_id": "Epm6R3P2",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "Epm6R3P2",
+      "slug": "easy-npc-core",
+      "versionId": "FcOxLvGC",
+      "version": "7.17.1",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/easy-npc-core",
+      "filename": "easy_npc-fabric-26.3-7.17.1.jar",
+      "url": "https://cdn.modrinth.com/data/Epm6R3P2/versions/FcOxLvGC/easy_npc-fabric-26.3-7.17.1.jar",
+      "hashes": {
+        "sha1": "38feaa5db7ad9fcc2602f0933fcbaba851187ae1",
+        "sha512": "c878b21810b7cf8c7a57b147e2471495630c3176eaa7edb15b1c971bcde4790f00dba1466fc3ef812d30b2343b0ed13589d681ec1ed1810e20013808a75e2dfc"
+      },
+      "size": 3152743,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "ngLoLP1P",
+          "file_name": null,
+          "dependency_type": "optional"
+        },
+        {
+          "version_id": null,
+          "project_id": "2RKFTmiB",
+          "file_name": null,
+          "dependency_type": "optional"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "P7dR8mSH",
+      "slug": "fabric-api",
+      "versionId": "EQKgpeKu",
+      "version": "0.165.0+26.3",
+      "role": "platform",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "optional",
+      "source": "https://modrinth.com/mod/fabric-api",
+      "filename": "fabric-api-0.165.0+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/P7dR8mSH/versions/EQKgpeKu/fabric-api-0.165.0%2B26.3.jar",
+      "hashes": {
+        "sha512": "0a4b8a14e847b71567b557b43d906c2167fa263eeeef37454a821ba286996e3da1616dc2d9647736d28a250d5ecf400541cae808359b29a62324a8a6f2ad5e30",
+        "sha1": "8f8a23d6c9fbf7b075b31b4fb0a1007b0488d1d2"
+      },
+      "size": 1778588,
+      "dependencies": [],
+      "license": "Apache-2.0"
+    },
+    {
+      "projectId": "7vxePowz",
+      "slug": "farmers-delight-refabricated",
+      "versionId": "dRScyUeE",
+      "version": "26.3-3.6.30",
+      "role": "cooking-farming",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/farmers-delight-refabricated",
+      "filename": "FarmersDelight-26.3-3.6.30+refabricated.jar",
+      "url": "https://cdn.modrinth.com/data/7vxePowz/versions/dRScyUeE/FarmersDelight-26.3-3.6.30%2Brefabricated.jar",
+      "hashes": {
+        "sha512": "099f724599022ac9232f265d62907fdde6ad48a73b246d45930d938a7f850be6a8b520244ffa218a59fdef96b0170fc0c04f00ff91f108b5a02bbc4cb2a013bc",
+        "sha1": "691967a54ec63e012c7447ff3960eb595ca31d13"
+      },
+      "size": 3482244,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "5VolwT6c",
+          "file_name": null,
+          "dependency_type": "optional"
+        },
+        {
+          "version_id": null,
+          "project_id": "u6dRKJwZ",
+          "file_name": null,
+          "dependency_type": "optional"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "uXXizFIs",
+      "slug": "ferrite-core",
+      "versionId": "d5ddUdiB",
+      "version": "9.0.0-fabric",
+      "role": "memory",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "optional",
+      "source": "https://modrinth.com/mod/ferrite-core",
+      "filename": "ferritecore-9.0.0-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/uXXizFIs/versions/d5ddUdiB/ferritecore-9.0.0-fabric.jar",
+      "hashes": {
+        "sha1": "eac76ff0f3753422c61b2c44487d0d195d88d4bc",
+        "sha512": "d81fa97e11784c19d42f89c2f433831d007603dd7193cee45fa177e4a6a9c52b384b198586e04a0f7f63cd996fed713322578bde9a8db57e1188854ae5cbe584"
+      },
+      "size": 72677,
+      "dependencies": [],
+      "license": "MIT"
+    },
+    {
+      "projectId": "dHVehhni",
+      "slug": "justquests",
+      "versionId": "p5eVUjxG",
+      "version": "fabric-26.3-0.4.5",
+      "role": "guild-contracts",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/justquests",
+      "filename": "JustQuests-fabric-26.3-0.4.5.jar",
+      "url": "https://cdn.modrinth.com/data/dHVehhni/versions/p5eVUjxG/JustQuests-fabric-26.3-0.4.5.jar",
+      "hashes": {
+        "sha1": "2684a03bd7cbc01745d2bc1711c17d3c566b3f59",
+        "sha512": "0761f0e66dbbf77ed05f2851e0865e907ea804ae589698dd1bfca3366baf1a1273bfdd44802fc674a8af45afa025866fad7d34abaad6e60be57f1b0789a1264e"
+      },
+      "size": 787172,
+      "dependencies": [],
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "projectId": "gvQqBUqZ",
+      "slug": "lithium",
+      "versionId": "fWv5bnZk",
+      "version": "mc26.3-0.26.3-fabric",
+      "role": "server-performance",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "optional",
+      "source": "https://modrinth.com/mod/lithium",
+      "filename": "lithium-fabric-0.26.3+mc26.3.jar",
+      "url": "https://cdn.modrinth.com/data/gvQqBUqZ/versions/fWv5bnZk/lithium-fabric-0.26.3%2Bmc26.3.jar",
+      "hashes": {
+        "sha512": "2ca92fb530135d2baddf0ba4cc4f93976234876a38c4aa02b487b2552400f005afcfbeebf5373fb4396fe2020537a42d7597b8da5a52b904355ef51d5fef07ad",
+        "sha1": "2d3afe9d43bb2549e23479d8d93e644ff366bebf"
+      },
+      "size": 919892,
+      "dependencies": [],
+      "license": "LGPL-3.0-only"
+    },
+    {
+      "projectId": "XaDC71GB",
+      "slug": "lithostitched",
+      "versionId": "pZgI6b2t",
+      "version": "2.0.6-fabric-26.3",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "unsupported",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/lithostitched",
+      "filename": "lithostitched-2.0.6-fabric-26.3.jar",
+      "url": "https://cdn.modrinth.com/data/XaDC71GB/versions/pZgI6b2t/lithostitched-2.0.6-fabric-26.3.jar",
+      "hashes": {
+        "sha512": "d7ffe9bb3ea653ae70317f8621c546e3331369c0dd3cd6cadb374cc71283ca1fae1e7de7d2d16eb5724e96f7159c8b043e15a618f32dad88c8e70a7d8d1db4ee",
+        "sha1": "c1b73f95795985bbede0b6d43513304448bc5603"
+      },
+      "size": 997092,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "FxXkHaLe",
+      "slug": "paladins-and-priests",
+      "versionId": "miPZjBNT",
+      "version": "3.1.4.1+26.3-fabric",
+      "role": "healing-magic",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/paladins-and-priests",
+      "filename": "paladins-fabric-3.1.4.1+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/FxXkHaLe/versions/miPZjBNT/paladins-fabric-3.1.4.1%2B26.3.jar",
+      "hashes": {
+        "sha512": "89e326d1d37823344b51af051d4011176f0d76d02f5ac0626ab5720cf94b4823873a7d9aeebe66e7ca6c2a63a095f525caca1f78456b0d1f1709a4b7fba707fe",
+        "sha1": "fca854f8ee6c42218181e5ea850ad6a55e336500"
+      },
+      "size": 3139847,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "onz2NN2n",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "LrYZi08Q",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "lP9Yrr1E",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "XvoWJaA2",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LicenseRef-All-Rights-Reserved"
+    },
+    {
+      "projectId": "ha1mEyJS",
+      "slug": "player-animation-library",
+      "versionId": "xJ30QmpE",
+      "version": "1.2.8",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "optional",
+      "source": "https://modrinth.com/mod/player-animation-library",
+      "filename": "PlayerAnimationLibMerged-1.2.8+mc.26.3.jar",
+      "url": "https://cdn.modrinth.com/data/ha1mEyJS/versions/xJ30QmpE/PlayerAnimationLibMerged-1.2.8%2Bmc.26.3.jar",
+      "hashes": {
+        "sha512": "d6870759e2f5f83c6a74b2d02aeabab937d6d8da8c46245566646bc6e8efaeeb06c978edc43a50b57a0de2d015b341c284382bc5d4ae2e450d1b6aa5f8e2e97e",
+        "sha1": "e878fad023249fb2e039ddc6ce67821e1ba22960"
+      },
+      "size": 406793,
+      "dependencies": [],
+      "license": "MIT"
+    },
+    {
+      "projectId": "xGdtZczs",
+      "slug": "polymer",
+      "versionId": "3fDXSiRx",
+      "version": "0.18.5+26.3",
+      "role": "dependency",
+      "sides": [
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/polymer",
+      "filename": "polymer-bundled-0.18.5+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/xGdtZczs/versions/3fDXSiRx/polymer-bundled-0.18.5%2B26.3.jar",
+      "hashes": {
+        "sha512": "9a8c31e505048571b8679d3406794ba1b75bb072758aaff5ee956fb2ff33db00a12b420fb8953a390cab4ea9c93e43e5eff37e7f3ae2e07bbecffa5a58193a47",
+        "sha1": "abbda5a13ff4f4c6d8612900bc23bfe35e34e216"
+      },
+      "size": 1438885,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LGPL-3.0-only"
+    },
+    {
+      "projectId": "lP9Yrr1E",
+      "slug": "runes",
+      "versionId": "PwSpmtFJ",
+      "version": "1.3.2+26.3-fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/runes",
+      "filename": "runes-fabric-1.3.2+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/lP9Yrr1E/versions/PwSpmtFJ/runes-fabric-1.3.2%2B26.3.jar",
+      "hashes": {
+        "sha512": "a2b3d1af9a2eaf918a34b56f8ea07c2c72c3e9cc418f1aa7628cc5d9ed6bbbae17d4865d52a66f14afa19ef16981759f0627244cae66ae0ae8225dada9de7f4c",
+        "sha1": "7b1bf05fdecc57754d32b3a4748225861a29376c"
+      },
+      "size": 386519,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "n8QN6Z1a",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LicenseRef-All-Rights-Reserved"
+    },
+    {
+      "projectId": "AANobbMI",
+      "slug": "sodium",
+      "versionId": "bAZQdGpg",
+      "version": "mc26.3-0.9.2-fabric",
+      "role": "client-performance",
+      "sides": [
+        "client"
+      ],
+      "clientSide": "required",
+      "serverSide": "unsupported",
+      "source": "https://modrinth.com/mod/sodium",
+      "filename": "sodium-fabric-0.9.2+mc26.3.jar",
+      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/bAZQdGpg/sodium-fabric-0.9.2%2Bmc26.3.jar",
+      "hashes": {
+        "sha1": "9acfe851e36f4fb27d7c5baa224e8bd4e0334283",
+        "sha512": "f3f260f204b8ce5e8777c2c73f537956755ec61f3817b0b78b5e5568e8aa40f14891f146475075109747665c7c88a45ca0ca9a8df3c68d79c58ecdaa8d8c4b93"
+      },
+      "size": 1908068,
+      "dependencies": [],
+      "license": "LicenseRef-Polyform-Shield-1.0.0"
+    },
+    {
+      "projectId": "l6YH9Als",
+      "slug": "spark",
+      "versionId": "e3hsPc1o",
+      "version": "1.10.187-fabric",
+      "role": "profiling",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "optional",
+      "source": "https://modrinth.com/mod/spark",
+      "filename": "spark-1.10.187-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/l6YH9Als/versions/e3hsPc1o/spark-1.10.187-fabric.jar",
+      "hashes": {
+        "sha512": "c74bf5d5a16b2445ec6ea717eac756412b272a8015e91f91a7bf5a27e6f2f99c4a11878d434510f941f37b0344b3a7d1ba0dd6c34e80642762c48fb6e9a93894",
+        "sha1": "0940b4089affdfca37d6b6d0ea5ecae4dbd8fe98"
+      },
+      "size": 3838499,
+      "dependencies": [],
+      "license": "GPL-3.0-only"
+    },
+    {
+      "projectId": "XvoWJaA2",
+      "slug": "spell-engine",
+      "versionId": "kgVsejrW",
+      "version": "1.10.9+26.3-fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/spell-engine",
+      "filename": "spell_engine-fabric-1.10.9+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/XvoWJaA2/versions/kgVsejrW/spell_engine-fabric-1.10.9%2B26.3.jar",
+      "hashes": {
+        "sha1": "7315ceea437dd46789559eb3852a7db9fa1bdb74",
+        "sha512": "b6e9e1b0e6b5e2b51912385d0a0af79eab911bedd97a5ec1b9174110736385f9d386e3f3715fb9b32ac95fb94476d0793831b48eca8ff82d0a1a3076d0c27dba"
+      },
+      "size": 4763225,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "XaT8sLP6",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "9s6osm5g",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "8ooWzSQP",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "ha1mEyJS",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "GPL-3.0-only"
+    },
+    {
+      "projectId": "8ooWzSQP",
+      "slug": "spell-power",
+      "versionId": "YdRPWTj8",
+      "version": "1.6.2+26.3-fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/spell-power",
+      "filename": "spell_power-fabric-1.6.2+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/8ooWzSQP/versions/YdRPWTj8/spell_power-fabric-1.6.2%2B26.3.jar",
+      "hashes": {
+        "sha512": "26fbf824391fd4acf3a2e91d660705c745c6bf144d76eddf5a74e05f87fa3d0fc16e3f616b972e00657a93c590ecc85d822895133eb3cfc34882d28cab5e9be4",
+        "sha1": "5b59aa59eb9ab307a5543d1556725f4187853eba"
+      },
+      "size": 226520,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LGPL-3.0-only"
+    },
+    {
+      "projectId": "LrYZi08Q",
+      "slug": "structure-pool-api",
+      "versionId": "Zxs162Py",
+      "version": "1.3.0+26.3-fabric",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "unsupported",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/structure-pool-api",
+      "filename": "structure_pool_api-fabric-1.3.0+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/LrYZi08Q/versions/Zxs162Py/structure_pool_api-fabric-1.3.0%2B26.3.jar",
+      "hashes": {
+        "sha1": "1b0a4ed5f7800ea0641cafb086ed0618dc328874",
+        "sha512": "3848879b5cdbc78d9be10fb94b98b65db24868560a96464f21247649d5688bd41f1f1ca34b4fa63d77d807aae0c2fcc7c3721454b6f5082a43f83a6b1d178561"
+      },
+      "size": 127264,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "MIT"
+    },
+    {
+      "projectId": "8oi3bsk5",
+      "slug": "terralith",
+      "versionId": "aGE3hYAA",
+      "version": "2.6.5+26.3",
+      "role": "biomes",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/terralith",
+      "filename": "Terralith_26.3_v2.6.5+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/8oi3bsk5/versions/aGE3hYAA/Terralith_26.3_v2.6.5%2B26.3.jar",
+      "hashes": {
+        "sha1": "725bd469bc72d6e366ecbf4818e0438524ca5741",
+        "sha512": "918b232df7a855bae89c7fa85affb5ce134e236c4726fa14a5bdaa179eb1e010f040a9fa981f006a0e26e421a2a961bc29a75e99a4500fd18361a8ba81478071"
+      },
+      "size": 2954218,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "XaDC71GB",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LicenseRef-Stardust-Labs-License"
+    },
+    {
+      "projectId": "DjLobEOy",
+      "slug": "towns-and-towers",
+      "versionId": "vHZIKy6e",
+      "version": "1.13.13",
+      "role": "villages-ships",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "optional",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/towns-and-towers",
+      "filename": "t_and_t-fabric-neoforge-1.13.13.jar",
+      "url": "https://cdn.modrinth.com/data/DjLobEOy/versions/vHZIKy6e/t_and_t-fabric-neoforge-1.13.13.jar",
+      "hashes": {
+        "sha512": "bd0469d23a80d1bbbb0a3696b3c1a62f90cc5ad16e4cc58fe9e0e08e7453c3015ff7619b1d429106a034279b46fe909a0962b6dc9e970920f717fc518d9e292d",
+        "sha1": "02e5907b2a2db5337fc84f56f2221ddc77abd74e"
+      },
+      "size": 3194933,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "cl223EMc",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "CC-BY-NC-SA-4.0"
+    },
+    {
+      "projectId": "XaT8sLP6",
+      "slug": "trinkets-updated",
+      "versionId": "lVR1OKgV",
+      "version": "4.2.1+26.3",
+      "role": "dependency",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/trinkets-updated",
+      "filename": "trinkets-4.2.1+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/XaT8sLP6/versions/lVR1OKgV/trinkets-4.2.1%2B26.3.jar",
+      "hashes": {
+        "sha1": "134fa691e3afac2236bd72e8a07ebfeabaacd531",
+        "sha512": "d4038e93b95462cff05075dad5b97669871f62212c0228ec6483782e22476d0354d1869f0e523fdb23b2a233fa0f15ff01d497fd2c8a5292ab20838dc464d15a"
+      },
+      "size": 663821,
+      "dependencies": [],
+      "license": "MIT"
+    },
+    {
+      "projectId": "cnIatHrN",
+      "slug": "universal-shops",
+      "versionId": "nQOUyX9T",
+      "version": "1.16.0+26.3",
+      "role": "market",
+      "sides": [
+        "server"
+      ],
+      "clientSide": "unsupported",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/universal-shops",
+      "filename": "universal_shops-1.16.0+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/cnIatHrN/versions/nQOUyX9T/universal_shops-1.16.0%2B26.3.jar",
+      "hashes": {
+        "sha1": "cb7e09789dff8a3d242c6df90f0f0c32df9a1a56",
+        "sha512": "5617c900118ab3fdc9bcc63efc1da54d6c1481b5d3393ee0112b61c2256d8d7f03c7b28bbb995dae7bf37de25efb38ecec2963def6c3bd64e6376234741d165f"
+      },
+      "size": 619888,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "xGdtZczs",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LGPL-3.0-only"
+    },
+    {
+      "projectId": "eJsPPGy9",
+      "slug": "village-quest",
+      "versionId": "NeqIcfxe",
+      "version": "2.6.3",
+      "role": "world-story",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/village-quest",
+      "filename": "village-quest-2.6.3-mc26.3.jar",
+      "url": "https://cdn.modrinth.com/data/eJsPPGy9/versions/NeqIcfxe/village-quest-2.6.3-mc26.3.jar",
+      "hashes": {
+        "sha512": "135bb721d964f8372d780fc8e993c712b74f51edf0edc166f88f0754950f1b404ad1b53be674406f6ab1c74016542d87b28dc695991ccbc1a4b2cb9d8071ab7a",
+        "sha1": "cbb1a50b77da93e93e42c4f13170c6d1eb17c02f"
+      },
+      "size": 19601551,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "projectId": "NkGaQMDA",
+      "slug": "wizards",
+      "versionId": "KQuYpfVP",
+      "version": "3.1.4+26.3-fabric",
+      "role": "magic",
+      "sides": [
+        "client",
+        "server"
+      ],
+      "clientSide": "required",
+      "serverSide": "required",
+      "source": "https://modrinth.com/mod/wizards",
+      "filename": "wizards-fabric-3.1.4+26.3.jar",
+      "url": "https://cdn.modrinth.com/data/NkGaQMDA/versions/KQuYpfVP/wizards-fabric-3.1.4%2B26.3.jar",
+      "hashes": {
+        "sha1": "d068d42039c59811fa5e7b2ac3fd21e990510548",
+        "sha512": "c93d1034a348c9ec29316b5e6a80fe4f29b35868ed7f27090c6c809ac4f2a018a87baa602c31071b6a3adba4cecec22925c9e5df0eed0461bf9f9f972f602e71"
+      },
+      "size": 4570044,
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "onz2NN2n",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "LrYZi08Q",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "P7dR8mSH",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "XvoWJaA2",
+          "file_name": null,
+          "dependency_type": "required"
+        },
+        {
+          "version_id": null,
+          "project_id": "lP9Yrr1E",
+          "file_name": null,
+          "dependency_type": "required"
+        }
+      ],
+      "license": "LicenseRef-All-Rights-Reserved"
+    }
+  ],
+  "external": [
+    {
+      "name": "GraalWeave",
+      "filename": "graalweave-0.1.1.jar",
+      "version": "0.1.1",
+      "source": "https://github.com/daife/GraalWeave/releases/tag/v0.1.1",
+      "url": "https://github.com/daife/GraalWeave/releases/download/v0.1.1/graalweave-0.1.1.jar",
+      "sides": [
+        "client"
+      ],
+      "hashes": {
+        "sha256": "bb55d4ffdc61b06270050aa997ccbe3bc827b89911d09664971f3149519905f3",
+        "sha512": "88af4413f09ae29d71cb5fe69b0a58632c8a736c73ea0fdf8221d0f96c8fbf97743c913a9ea72cec36a8059f3e3eae6e1918d3922dba9e4689e92b36011192f4"
+      },
+      "size": 56648681
+    },
+    {
+      "name": "Baritone",
+      "filename": "baritone-api-fabric-1.20.0.jar",
+      "version": "1.20.0",
+      "source": "https://github.com/cabaletta/baritone/releases/tag/v1.20.0",
+      "url": "https://github.com/cabaletta/baritone/releases/download/v1.20.0/baritone-api-fabric-1.20.0.jar",
+      "sha256": "49adfc063cfbfd0b6f08e9d814359807baa2d1768c0d39d6c5968268547cbca6",
+      "sides": [
+        "client"
+      ],
+      "hashes": {
+        "sha256": "49adfc063cfbfd0b6f08e9d814359807baa2d1768c0d39d6c5968268547cbca6",
+        "sha512": "d915610de65fff3e5aff720ca769ad6a2ef9fe96e1c0f374a39032909edc64d0019fa60bba1ac04b36f238e992c5551212c24272e93eda2cd416dbc33dfe9da3"
+      },
+      "size": 4821430
+    }
+  ],
+  "sideRulesVersion": 2
+}

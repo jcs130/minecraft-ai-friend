@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "name": "My Agent World: Living Adventures",
+  "version": "0.1.0-lab.1",
+  "minecraft": "26.3",
+  "loader": "0.20.1",
+  "installer": "1.1.2",
+  "java": 25,
+  "roots": [
+    {"slug":"fabric-api","versionId":"EQKgpeKu","role":"platform"},
+    {"slug":"village-quest","versionId":"NeqIcfxe","role":"world-story"},
+    {"slug":"justquests","versionId":"p5eVUjxG","role":"guild-contracts"},
+    {"slug":"terralith","versionId":"aGE3hYAA","role":"biomes"},
+    {"slug":"towns-and-towers","versionId":"vHZIKy6e","role":"villages-ships"},
+    {"slug":"dungeons-and-taverns","versionId":"hn5CugpP","role":"dungeons"},
+    {"slug":"farmers-delight-refabricated","versionId":"dRScyUeE","role":"cooking-farming"},
+    {"slug":"wizards","versionId":"KQuYpfVP","role":"magic"},
+    {"slug":"paladins-and-priests","versionId":"miPZjBNT","role":"healing-magic"},
+    {"slug":"player-animation-library","versionId":"xJ30QmpE","role":"required-animation-beta-reviewed"},
+    {"slug":"better-combat","versionId":"8Vyq1h9a","role":"combat"},
+    {"slug":"universal-shops","versionId":"nQOUyX9T","role":"market"},
+    {"slug":"easy-npc","versionId":"xiHI3wez","role":"custom-npcs"},
+    {"slug":"lithium","versionId":"fWv5bnZk","role":"server-performance"},
+    {"slug":"ferrite-core","versionId":"d5ddUdiB","role":"memory"},
+    {"slug":"spark","versionId":"e3hsPc1o","role":"profiling"},
+    {"slug":"sodium","versionId":"bAZQdGpg","role":"client-performance","sides":["client"]}
+  ],
+  "external": [
+    {
+      "name":"GraalWeave",
+      "filename":"graalweave-0.1.1.jar",
+      "version":"0.1.1",
+      "source":"https://github.com/daife/GraalWeave/releases/tag/v0.1.1",
+      "url":"https://github.com/daife/GraalWeave/releases/download/v0.1.1/graalweave-0.1.1.jar",
+      "sides":["client"]
+    },
+    {
+      "name":"Baritone",
+      "filename":"baritone-api-fabric-1.20.0.jar",
+      "version":"1.20.0",
+      "source":"https://github.com/cabaletta/baritone/releases/tag/v1.20.0",
+      "url":"https://github.com/cabaletta/baritone/releases/download/v1.20.0/baritone-api-fabric-1.20.0.jar",
+      "sha256":"49adfc063cfbfd0b6f08e9d814359807baa2d1768c0d39d6c5968268547cbca6",
+      "sides":["client"]
+    }
+  ]
+}
