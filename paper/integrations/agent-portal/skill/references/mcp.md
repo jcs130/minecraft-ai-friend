@@ -67,3 +67,7 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 职业目录不写死在 World 或记忆：按需查询`/mycli profession info <ID>`并传递服务器说明。保存自己的选择、学习和实战结果；`catalogVersion`/`definitionVersion`变化后重查。查询不选职、发装备或扣点。
 
 任务生命周期沿用现有 chat 步骤，不新增 MCP 工具。按服务端 help/capability 选择 `tasks abandon <ID>`；该新入口须实际服务器已支持。错入口的 `nextCommand` 是建议，不能自动拼旧参数或代执行。`queryOnly` 描述本次查询；技能是否用cast取自单项 `invocation.kind/command`。缓存调用索引时核对revision，实时魔力和冷却另查；发送或pending不等于已完成。
+
+闪现继续用原chat动作 `/mycli cast blink`，不增加落点参数或MCP工具。先改变本人朝向，再施法；以服务端当前 `skills info blink` 判断是否已支持瞄准优先和前向最远落点。收到拒绝、冷却或超时后先核对实际位置/世界、魔力与冷却，不能把动作提交当成传送成功。
+
+组队沿既有chat动作，不新增MCP工具。先读`guild party status`，支持新字段时按`phase/pendingInvite/nextCommand`行动；仅本人accept才入队，邀请查询不接受邀请。`locate list`是在线伙伴名单，实际队伍以原生成员UUID为准；不同世界不比较坐标距离。需要会合时执行原`locate tp <名字>`，核对实际世界/位置、魔力和技能冷却；副本参战再分别查arena/dungeon状态。记忆保存共同目标与分工，连接或版本变化后重查成员和邀请有效性。

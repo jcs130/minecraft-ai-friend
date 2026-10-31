@@ -229,6 +229,65 @@ def test_failed_use_and_successful_jump_do_not_erase_the_failed_batch():
     assert recovery.repeated(args, facts, "world-account", 0) is None
 
 
+def test_failed_menu_interaction_survives_window_identity_changes(
+    framework_module, tmp_path, run_async
+):
+    bridge, controller = prepare(framework_module, tmp_path)
+    args = {"steps": [{"skill": "use", "at": [1, 61, 2], "text": "test"}]}
+    for cursor, window_id in [(96, 54), (97, 55)]:
+        run_async(controller.execute_model_call("mc_do", copy.deepcopy(args)))
+        value = effect()
+        value["skill"] = "use"
+        value["before"]["target"] = {"name": "oak_sign", "stateId": 4303}
+        value["after"]["target"] = copy.deepcopy(value["before"]["target"])
+        value["after"]["window"] = {"id": window_id, "type": "minecraft:generic_9x6"}
+        value["changed"]["window"] = True
+        value["status"] = "changed"
+        terminal = {**action(True), "phase": "blocked", "evidence": {
+            "receipt": "Text readback stayed unchanged; an unrelated task menu opened.",
+            "steps": [{"step": 1, "outcome": "fail", "observedEffect": value}],
+        }}
+        controller.receipt({"execution": terminal, "events": [
+            {"run": "native-run", "cursor": cursor, "execution": terminal}
+        ]})
+    result = run_async(controller.execute_model_call("mc_do", copy.deepcopy(args)))[0]
+    assert result.get("dispatched") is False
+    assert result["code"] == "repeated_failed_plan"
+    assert result["previous_outcome"]["attempts"] == 2
+    assert result["previous_outcome"]["original_event"]["cursor"] == 97
+    assert result["previous_outcome"]["effect"]["changed"]["window"] is True
+    assert controller.effect_recovery.rows[controller.effect_recovery.key(args)]["effect"]["after"]["window"]["id"] == 55
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
+
+
+def test_window_identity_comparison_keeps_type_and_material_changes_distinct():
+    from agent_mc_autonomy.effects import EffectRecovery
+
+    recovery = EffectRecovery()
+    args = {"steps": [{"skill": "use", "at": [1, 61, 2], "text": "test"}]}
+    def record(window_id, window_type, *, phase="blocked", state_id=4303):
+        value = effect()
+        value["skill"] = "use"
+        value["before"]["target"] = {"name": "oak_sign", "stateId": state_id}
+        value["after"]["target"] = copy.deepcopy(value["before"]["target"])
+        value["after"]["window"] = {"id": window_id, "type": window_type}
+        value["changed"]["window"] = True
+        value["status"] = "changed"
+        recovery.record(args, {"id": "window-" + str(window_id), "phase": phase, "evidence": {
+            "steps": [{"step": 1, "outcome": "ok" if phase == "completed" else "fail", "observedEffect": value}]
+        }}, "world-account", 0, {"cursor": window_id})
+        return value
+    record(54, "minecraft:generic_9x6")
+    record(55, "minecraft:generic_9x6")
+    assert recovery.rows[recovery.key(args)]["count"] == 2
+    record(56, "minecraft:generic_9x3")
+    assert recovery.rows[recovery.key(args)]["count"] == 1
+    record(57, "minecraft:generic_9x3", state_id=4304)
+    assert recovery.rows[recovery.key(args)]["count"] == 1
+    record(58, "minecraft:generic_9x3", phase="completed", state_id=4304)
+    assert recovery.key(args) not in recovery.rows, "a genuinely successful menu interaction still retires its own failure"
+
+
 def test_unrelated_success_does_not_forget_same_state_failed_plan(
     framework_module, tmp_path, run_async
 ):

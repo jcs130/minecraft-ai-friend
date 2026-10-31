@@ -32,6 +32,7 @@ from .context_evidence import (
     project_values,
     retire_native_sources,
 )
+from .control_motion import derive_control_motion
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
@@ -687,6 +688,9 @@ class Controller:
                     chat_noop = self.chat_noop_review.record(arguments, execution, self.game_scope, self.death_epoch, reference) if name == "mc_do" and not read_only else None
                     if chat_noop:
                         native_outcome["chat_noop_review"] = chat_noop
+                    control_motion = derive_control_motion(arguments, execution) if name == "mc_do" and not read_only else None
+                    if control_motion:
+                        native_outcome["control_motion"] = control_motion
                     self.native_outcomes.append(native_outcome if self.settings.context_mode == "full" else native_outcome_view(native_outcome))
                     if self.settings.context_mode == "full":
                         while len(self.native_outcomes) > 1 and len(encode(self.native_outcomes).encode("utf-8")) > self.settings.context_tokens:
@@ -698,6 +702,10 @@ class Controller:
                     self.publish(native_outcomes=[native_outcome_view(row) for row in self.native_outcomes[-6:]])
                     effect_changed = not read_only and self.effect_recovery.record(
                         arguments, execution, self.game_scope, self.death_epoch, reference)
+                    if control_motion and control_motion["returns_to_start"] and not control_motion["other_effects_observed"]:
+                        # Successful legs can end at the origin. Preserve their
+                        # success without retiring an earlier native failure.
+                        effect_changed = False
                     if effect_changed:
                         self.clear_read_activity()
                     if not read_only:

@@ -1,5 +1,7 @@
 # 破晓攻略：职业、技能与冒险
 
+结伴时先 `/mycli guild party status`。聊天说好组队仍须队长create/invite、对方accept；罗盘“找队友”或 `/mycli locate tp <名字>` 可会合（8魔力、20秒冷却），不自动登记副本。本轮新增的邀请阶段、技能目录和山地探索说明仍是[未部署候选](COOPERATIVE_EXPLORATION_20261031.md)，按本人实时回执判断支持范围。
+
 入口 `/mycli intro`，以本人实际后端和回执为准。当前正式0.4.47.27已统一Vortex等级、魔力和金币，见[发布记录](RPG_UNIFIED_20261028.md)。寒霜、星芒箭、闪现、归乡、圣愈、饱食、造物无需选职或学习，先查 `/mycli skills list common`；查询不会代选职业、学习或接任务。
 
 1. `/mycli profession list` 看六职业，`profession info <ID>` 看条件，再主动 `profession choose <ID>`。

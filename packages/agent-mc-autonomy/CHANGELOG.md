@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.137
+
+- Preserve completed control batches' measured net displacement in planner,
+  public status and strategic-review evidence. Jumping out and landing at the
+  origin no longer erases an earlier native failure merely because each leg moved.
+- Preserve successful steps, deliberate round trips, unknown samples and dispatch.
+  Other observed effects and real net movement still count; gameplay improvement
+  and all server effects remain separate from the measured geometry.
+
+## 0.2.136
+
+- Keep failed-plan recovery stable when reopening the same native menu allocates
+  a different protocol window ID. Preserve original effect receipts, measured
+  window changes, type/target/stock/position distinctions and the existing
+  scope, death, known-terminal and 120-second bounds. Successful interactions
+  still retire only their own failure. No error is hidden or marked successful.
+- Verify the real controller dispatch boundary and isolated packed consumer.
+  Source/build checks do not establish live recovery or task completion.
+
+## 0.2.135
+
+- Pin the canonical rc.145 core with continuous surface swimming and separate body/head water discovery. Preserve the native queue, oxygen checks before underwater travel and unknown/cancelled results.
+- Keep model, goals, personal memory and server protocols owned by their existing providers. This dependency update does not reload a running host or establish live navigation improvement.
+
 ## 0.2.134
 
 - Pin the complete canonical engine-only rc.141 build, retaining rc.140's

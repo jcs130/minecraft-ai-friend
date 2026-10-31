@@ -785,6 +785,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     let bestPos = { x: 0, y: 0, z: 0 };
     // 这一段里离 bestPos 最远到过多少:区分"钉在原地"与"绕远路没更近"
     let wander = 0;
+    let motionSinceProgress: boolean | null = null;
     // 上一次看到"正在挖/搭"的时刻:两段挖之间 isMining 会闪断一拍,
     // 不留观察期的话攒了一阵的账龄会把 10s 闸当场引爆
     let lastWorkAt = 0;
@@ -803,6 +804,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
       // 挖穿一格、搭一段路的时候人本来就该站着不动:钟走慢档,不按 10 秒计——
       // 但不能停走(见 GOTO_WORK_STALL_MS:挖-放振荡全程都算"在干活")
       const working = Boolean(bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.());
+      const motion = navigationMotionEvidence(bot);
       // 还在挪窝就不算卡住:绕远路时直线距离可以一直不降,人却一路在走
       const moved = Math.hypot(here.x - bestPos.x, here.y - bestPos.y, here.z - bestPos.z);
       wander = Math.max(wander, moved);
@@ -812,14 +814,20 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
         bestAt = now;
         bestPos = { x: here.x, y: here.y, z: here.z };
         wander = 0;
-      } else if (working
+        motionSinceProgress = motion;
+      } else {
+        motionSinceProgress = motionSinceProgress === true || motion === true ? true
+          : motionSinceProgress === null || motion === null ? null : false;
+      }
+      if (best !== Infinity && (working
         ? now - bestAt > GOTO_WORK_STALL_MS
-        : now - bestAt > GOTO_STALL_MS && now - lastWorkAt > 4_000) {
+        : now - bestAt > GOTO_STALL_MS && now - lastWorkAt > 4_000)) {
         stalled = {
           best, now: dist, at: feetOf(bot), metric: goalDistanceMetric(goal),
           ms: now - bestAt, gate: working ? 'work' : 'idle',
           // 挖/搭那一档不算钉住:人本来就该站着不动
-          wedged: !working && wander < GOTO_WEDGE_MOVE,
+          wedged: !working && wander < GOTO_WEDGE_MOVE && motionSinceProgress !== false,
+          activity: working ? 'work' : motionSinceProgress === false ? 'planning' : 'movement',
           leg: goalCell(goal),
         };
         // 撤目标之前采样:dropGoal 会把 digging/placing/控制键一起清掉,
@@ -1000,6 +1008,18 @@ export interface Stall {
   wedged: boolean;
   /** 这一段寻路目标的那一格;拿不到全部三轴时 null(GoalNearXZ 没有 y) */
   leg: Cell | null;
+  /** Native motor evidence during this no-progress interval, not inferred from displacement. */
+  activity?: 'planning' | 'movement' | 'work';
+}
+
+/** No motor command is a planning/idle observation, not proof of physical
+ * immobilization. Unknown accessors stay unknown instead of assuming false. */
+export function navigationMotionEvidence(bot: Bot): boolean | null {
+  const moving = bot.pathfinder?.isMoving?.();
+  const controls = ['forward', 'back', 'left', 'right', 'jump'].map(key =>
+    bot.controlState?.[key as keyof typeof bot.controlState]);
+  if (moving === true || controls.some(value => value === true)) return true;
+  return moving === false && controls.every(value => value === false) ? false : null;
 }
 
 export type DistanceMetric = '水平' | '直线';
@@ -1031,16 +1051,19 @@ export function stallBlocked(bot: Bot, s: Stall, unwedged: number | null = null)
   // 段的目标不是步的终点:点名这一格,免得同一条回执里两个"目标"指着两处
   const leg = s.leg ? `这一段的落点 ${cellText(s.leg)}` : '这一段的落点';
   const near = s.best <= REACHED_NEARBY_BLOCKS;
-  const head = s.wedged
+  const head = s.activity === 'planning'
+    ? `寻路暂未形成可执行的行走: ${held} 未观察到行走或移动按键；不能据此判断人物被困或服务器冻结。核对${leg}的高度、落脚支撑与入口，必要时改用已观察到的航点`
+    : s.wedged
     ? `钉在原地: ${held} 一格都没挪动过,${unwedged !== null && unwedged >= UNWEDGE_MOVED
       ? `跳/退解卡挪开了 ${fmtDist(unwedged)} 格,接着走还是没动`
-      : '跳/退解卡也没能动一下'};这不是路难走,是人动不了`
+      : unwedged === null ? '尚未执行安全解卡' : '安全解卡未取得有效位移'}；本段没有位移，不等于已证明所有路线不可达`
     : near
       ? `够不到${leg}: 已经到它旁边(${s.metric} ${fmtDist(s.best)} 格),${held} 没能再靠近一步${gate}`
       : `走不过去: ${held} 没能离${leg}更近一步${gate}`;
   return new SkillBlocked(
     `${head}(最近到过 ${s.metric} ${fmtDist(s.best)} 格,现在 ${s.metric} ${fmtDist(s.now)} 格),` +
-    `人在 ${cellText(s.at)},脚下是${under ? zhName(under.name) : '空的'}`,
+    `人在 ${cellText(s.at)},脚下${under ? '是' + zhName(under.name) : '方块未读取'}`,
+    [], 'local', s.activity === 'planning' ? 'pathfinder-planning-stalled' : undefined,
   );
 }
 

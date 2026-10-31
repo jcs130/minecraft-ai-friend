@@ -20,7 +20,7 @@ import { AIR_NAMES, LIQUIDS, blockAtCell, cellKeyOf, cellText, dimensionOf, feet
 import { droppedStackOf, type ItemStack } from './terrain.ts';
 import { flushActionAim } from './action-orientation.ts';
 import { CONTAINER_FIND, FURNACE_KINDS, matchItemName, matchMaterialName } from './chests.ts';
-import { dropGoal, gotoGoal } from './travel.ts';
+import { dropGoal, gotoGoal, reachCell } from './travel.ts';
 import { type SkillCall } from './skills.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf, pickedText, type PickTarget } from './item-pick.ts';
 import {
@@ -918,7 +918,7 @@ export async function skillTakeAt(
   ctx: SkillContext,
 ): Promise<string> {
   const cell = resolveAt(bot, call.at!);
-  await gotoGoal(bot, new goals.GoalNear(cell.x, cell.y, cell.z, 2), ctx);
+  await reachCell(bot, cell, ctx);
   checkAbort(ctx);
   const block = blockAtCell(bot, cell);
   if (!block) throw new SkillBlocked(`${cellText(cell)} 所在区块没加载`);
@@ -1501,7 +1501,7 @@ export async function skillSmelt(
   if (pinAt) {
     // 指定了炉子就用那一座:她点名的决定不再被"就近"覆盖
     const cell = resolveAt(bot, pinAt);
-    await gotoGoal(bot, new goals.GoalNear(cell.x, cell.y, cell.z, 2), ctx);
+    await reachCell(bot, cell, ctx);
     const block = bot.blockAt(new Vec3(cell.x, cell.y, cell.z));
     if (!block || !FURNACE_KINDS.has(block.name)) {
       throw new SkillBlocked(
@@ -1757,7 +1757,7 @@ export async function skillEnchant(
   ctx: SkillContext,
 ): Promise<string> {
   const cell = resolveAt(bot, call.at);
-  await gotoGoal(bot, new goals.GoalNear(cell.x, cell.y, cell.z, 2), ctx);
+  await reachCell(bot, cell, ctx);
   checkAbort(ctx);
   const block = blockAtCell(bot, cell);
   if (!block) throw new SkillBlocked(`${cellText(cell)} 所在区块没加载`);
@@ -1883,7 +1883,7 @@ export async function skillBrew(
   let at: StationAt;
   if (call.at) {
     const cell = resolveAt(bot, call.at);
-    await gotoGoal(bot, new goals.GoalNear(cell.x, cell.y, cell.z, 2), ctx);
+    await reachCell(bot, cell, ctx);
     const block = blockAtCell(bot, cell);
     if (!block || block.name !== 'brewing_stand') {
       throw new SkillBlocked(

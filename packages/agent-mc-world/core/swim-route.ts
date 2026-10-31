@@ -141,21 +141,27 @@ export async function skillSwim(bot: Bot, call: {at: Cell;reserveOxygen?:number;
       if(!waypoint) {reason='route_end_unconfirmed';break;}
       const destination=target(waypoint.at),before=bot.entity.position.clone(),dist=before.distanceTo(destination);
       if(dist<=.55 && (!waypoint.breathe || reading.headWet===false)) {
-        if(waypoint.breathe && index<plan.waypoints.length-1 && !remainingWaterBreathingMs(bot) && (reading.oxygen===null || reading.oxygen<20)) {
+        // Surface travel does not spend the planner's underwater air budget.
+        // Verify a refill before the next submerged leg, not at every surface cell.
+        if(waypoint.breathe && plan.waypoints[index+1]?.breathe===false && !remainingWaterBreathingMs(bot) && (reading.oxygen===null || reading.oxygen<20)) {
           breathStops++;const until=Math.min(deadline,Date.now()+3000);
           while(Date.now()<until) {
-            checkAbort(ctx);const r=movementReadout(bot);if(r.headWet || !r.bodyWet)break;
-            if(r.oxygen!==null && r.oxygen>=20)break;await sleep(100);
+            checkAbort(ctx);const r=movementReadout(bot);if(r.headWet!==false || r.bodyWet!==true)break;
+            if(r.oxygen!==null && r.oxygen>=20)break;
+            await skillControl(bot,{skill:'control',mode:'water',keys:bot.entity.position.y<destination.y+.25?['jump']:[],
+              durationMs:Math.min(200,until-Date.now())},ctx);
+            pulses++;
           }
           const r=movementReadout(bot);
-          if(r.headWet || r.oxygen===null || r.oxygen<20) {reason='breathing_unconfirmed';break;}
+          if(r.headWet!==false || r.oxygen===null || r.oxygen<20) {reason='breathing_unconfirmed';break;}
         }
         index++;continue;
       }
       const dx=destination.x-before.x,dz=destination.z-before.z,horizontal=Math.hypot(dx,dz);
       const desired=Math.atan2(-dx,-dz),delta=desired-(reading.yaw??0);
       const keys:Array<'forward'|'jump'>=[];
-      if(horizontal>.2)keys.push('forward');if(destination.y-before.y>.18 || (waypoint.breathe && reading.headWet===true))keys.push('jump');
+      if(horizontal>.2)keys.push('forward');
+      if(destination.y-before.y>.18 || (waypoint.breathe && (reading.headWet===true || before.y<destination.y+.25)))keys.push('jump');
       // Vertical travel must not aim at tiny horizontal drift: atan2 around the
       // waypoint centre flips by pi while no horizontal input is even active.
       await skillControl(bot,{skill:'control',mode:'water',keys,durationMs:200,

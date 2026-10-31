@@ -75,7 +75,7 @@ try{
   await rc('save-all flush');check('reward recorded once',own(a).completed===before.completed+1);
   await text(a,'guild claim');await rc('save-all flush');check('repeated submit cannot issue a second reward',own(a).completed===before.completed+1);
   await text(a,'guild accept high_peak');const legacy=(await status(a)).adventure;
-  check('legacy task receives actionable roof guidance',legacy.activeId==='high_peak'&&legacy.guidance.nextAction.includes('屋顶'));
+  check('legacy task receives mountain exploration guidance',legacy.activeId==='high_peak'&&legacy.guidance.nextAction.includes('山地'));
   const goddess=await observation(a.username);check('Goddess reads legacy task identity and progress',goddess.currentContract.available===true&&goddess.currentContract.id==='high_peak'&&goddess.currentContract.progress===legacy.progress);
   await text(a,'life accept builder_home');const both=await status(a);
   check('independent life task names missing building requirements and next action',both.life.activeId==='builder_home'&&both.life.nextAction.includes('屋顶')&&both.life.remaining>0&&both.life.nextCommand==='/mycli life status');

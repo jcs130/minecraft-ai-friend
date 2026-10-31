@@ -53,11 +53,14 @@ final class SpellGuide {
                     "/mycli cast home", "传送回出生村庄的安全落点。", "自己", 6, 0,
                     "目标传送点可用且落脚处安全；非旁观者；6 魔力。", "落点被阻挡或传送失败时留在原地，不扣魔力。", "无熟练度升级。", "迷路、任务结束或离开危险区域时使用。"),
             new Entry("travel", "传送点术", "travel", Material.LODESTONE,
-                    "/mycli waypoint menu", "记录亲自到达的安全地点并起名；返回私人地点或别人主动分享的地点，支持主世界、下界和末地。", "本人地点或有效分享码", 6, 0,
-                    "生存/冒险角色；落点安全、保护规则允许；不在试炼/PvP 活动中。", "落点受阻、分享撤回、地点失效或魔力不足时不传送、不扣费。", "记录、列表、改名、分享免费；实际传送每次 6 魔力，无熟练度升级。", "到达后 /mycli waypoint add 下界营地；/mycli goto personal:下界营地；share 后别人用 shared:分享码。"),
+                    "/mycli waypoint list", "记录亲自到达的安全地点并起名；返回私人地点或别人主动分享的地点，支持主世界、下界和末地。", "本人地点或有效分享码", 6, 0,
+                    "生存/冒险角色；落点安全、保护规则允许；不在试炼/PvP 活动中。", "落点受阻、分享撤回、地点失效或魔力不足时不传送、不扣费。", "记录、列表、改名、分享免费；实际传送每次 6 魔力，无熟练度升级。", "先 waypoint list 选地点，再 goto personal:<名字>；去队友身边用 /mycli locate tp <在线名字>，不是 cast travel。"),
+            new Entry("team", "队友传送术", "travel", Material.PLAYER_HEAD,
+                    "/mycli locate tp <在线玩家名>", "安全传送到可见在线伙伴附近，复用罗盘找队友入口；不会自动建队或加入副本。", "明确指定的在线伙伴；nearest只选同世界最近伙伴", 8, 20,
+                    "非旁观/倒地；双方不在试炼、遗迹或PvP参战，目标附近有安全落点。", "离线、冷却、缺魔力、活动锁定、保护取消或无落点均不扣费。", "固定8魔力/20秒冷却，不要求选职或学习。", "先 guild party status 核对成员和世界；locate list 复制准确名字，再 locate tp <名字>。"),
             new Entry("blink", "闪现术", "travel", Material.ENDER_PEARL,
-                    "/mycli cast blink", "沿视线短距闪现，最远约 25 格；不能穿越封闭天花板。", "自己朝向", 4, 8,
-                    "面向可到达的安全位置；非旁观者。", "目标不安全时 MagicSpells 拒绝传送。", "无熟练度升级。", "越过小沟或快速躲开近身怪物；先确认落点。"),
+                    "/mycli cast blink", "优先到瞄准的安全落点；未瞄准落点时沿水平朝向寻找最远安全地面，最多25格。", "瞄准落点；未瞄准时按面向方向", 4, 8,
+                    "面向可到达的安全位置；非旁观者。", "无安全落点、保护取消或地形未加载时不传送、不耗魔、不进入冷却。", "无熟练度升级。", "瞄准近处安全地面可精确落地；平视空气可前向闪现，不能穿过封闭墙体或天花板。"),
             new Entry("give", "造物术", "creation", Material.CRAFTING_TABLE,
                     "/mycli cast give <物品>", "固定配方：bread×4、torch×4、oak_log×8、cobblestone×16、crafting_table×1、chest×1、cake×1、glass×8。其他物品转交女神审核，不会立即生成。", "自己的背包；缺项交女神", 4, 20,
                     "固定配方需背包有空间；缺项申请需女神在线，申请本身不扣魔力。", "背包满则固定配方拒绝；女神不在线则申请未送达。", "固定配方无熟练度升级；缺项申请有独立 60 秒间隔。", "缺建材或食物时选固定配方；不要把申请当作已得到物品。"),
@@ -113,6 +116,7 @@ final class SpellGuide {
         if (id.equals("village.support")) id = "support";
         if (id.startsWith("prospect ")) id = "prospect";
         if (id.startsWith("give ")) id = "give";
+        for (Entry entry : SPELLS) if (entry.id().equals(id)) return entry;
         for (Entry entry : entries()) if (entry.id().equals(id)) return entry;
         return null;
     }

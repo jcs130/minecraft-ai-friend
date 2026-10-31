@@ -683,6 +683,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     Long readBasicCooldown(Player player, String id) {
         return switch (id) {
             case "home", "travel" -> 0L;
+            case "team" -> Math.max(0L,teamTeleportAt.getOrDefault(player.getUniqueId(),0L)+TEAM_TELEPORT_COOLDOWN_MS-System.currentTimeMillis());
             case "fireworks", "starlight", "heal", "feather", "night" -> remainingBuiltinCooldownMs(player,id);
             case "leap", "flight", "golem", "sense" -> utilitySpells.remainingCooldownMs(player,id);
             case "starbolt", "frostnova", "flamewave" -> combatSpells.remainingCooldownMs(player,id);
@@ -1436,8 +1437,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；远程开箱需 2 魔力。");
             }
             case "team", "队友" -> {
-                p.sendMessage(ChatColor.AQUA + "【结伴】罗盘 → 找队友，可让指针追踪队友，也可安全传送到她身边。女神是旁观服主，不在队友列表。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli locate list；/mycli locate nearest；/mycli locate tp nearest；/mycli locate off。");
+                p.sendMessage(ChatColor.AQUA + "【结伴】先 /mycli guild party status 看真实成员或邀请。发起者 create，再 invite <在线名字>，对方本人 accept；聊天答应不会自动入队。");
+                p.sendMessage(ChatColor.GRAY + "集合用 /mycli locate tp <队友名字>（8魔力、20秒冷却），罗盘→找队友也可用；先 locate list 核对世界与名字。试炼塔按入口附近玩家登记，遗迹由队长 start，分别查 arena status 或 dungeon status 确认参战。");
             }
             default -> p.sendMessage(ChatColor.RED + "指南主题：start|explore|magic|gear|guild|dungeon|team；/mycli guide menu 打开手柄菜单。");
         }
@@ -1869,7 +1870,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         List<Player> visible = trackablePlayers(viewer);
         if (choice.equalsIgnoreCase("list")) {
             if (visible.isEmpty()) { viewer.sendMessage(ChatColor.GRAY + "当前没有可定位的在线队友；等待队友上线后 /mycli locate list 刷新，当前可继续自己的探索。"); return; }
-            viewer.sendMessage(ChatColor.AQUA + "在线队友：");
+            viewer.sendMessage(ChatColor.AQUA + "在线伙伴（这份名单不等于已组队；真实队伍查 /mycli guild party status）：");
             for (Player target : visible) {
                 Location at = target.getLocation();
                 viewer.sendMessage(ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " · "
@@ -1925,8 +1926,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         for (int dy : new int[]{0, 1, -1, 2, -2}) for (int[] offset : offsets) {
             int x = at.getBlockX() + offset[0], y = at.getBlockY() + dy, z = at.getBlockZ() + offset[1];
             if (y < at.getWorld().getMinHeight() + 1 || y > at.getWorld().getMaxHeight() - 2) continue;
+            if(!at.getWorld().isChunkLoaded(x>>4,z>>4))continue;
             Block feet = at.getWorld().getBlockAt(x, y, z);
-            if (safeLanding(feet)) return new Location(at.getWorld(), x + 0.5, y, z + 0.5, at.getYaw(), 0);
+            Location landing=new Location(at.getWorld(),x+.5,y,z+.5,at.getYaw(),0);
+            if(safeLanding(feet)&&TeamTravelSafety.insideBorder(landing)
+                &&!namedTravelActivityArea(landing))return landing;
         }
         return null;
     }
@@ -1934,7 +1938,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void teleportToTeammate(Player viewer, UUID targetId) {
         Player target = Bukkit.getPlayer(targetId);
         if (target == null || !trackablePlayers(viewer).contains(target)) {
-            viewer.sendMessage(ChatColor.RED + "队友已离线或不可传送，请重新打开罗盘。"); return;
+            viewer.sendMessage(ChatColor.RED + "[team_target_unavailable] 队友已离线或不可传送；未耗魔。下一步：/mycli locate list"); return;
+        }
+        if(isDowned(viewer)||viewer.isDead()||viewer.isInsideVehicle()||viewer.isGliding()||viewer.isFlying()){
+            viewer.sendMessage("§e[team_actor_blocked] 当前倒地、死亡、载具或飞行状态不能传送；未传送、未耗魔。下一步：/mycli status");return;
+        }
+        if(namedTravelBlocked(viewer)||namedTravelBlocked(target)||isDowned(target)||target.isDead()){
+            viewer.sendMessage("§e[team_activity_locked] 本人或目标正在试炼、遗迹、PvP或等待救援；不能用队友传送跳过房门和参战登记，未耗魔。先正常结束或离场再集合。下一步：/mycli status");return;
         }
         long now = System.currentTimeMillis();
         long wait = teamTeleportAt.getOrDefault(viewer.getUniqueId(), 0L) + TEAM_TELEPORT_COOLDOWN_MS - now;

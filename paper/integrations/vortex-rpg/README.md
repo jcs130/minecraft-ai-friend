@@ -1,5 +1,7 @@
 # VortexRPG原生接管
 
+2026-10-31结伴探索候选：`build-cooperative-exploration.py`固定现役qd31/桥.13及已验证AF.38输入，构建qd32只读邀请API、桥.14的原生阶段查询与AF.39窄补丁。复用原队伍、传送和任务账本，支持分清邀请/会合/参战，修复普通文字看不到委托详情及登高刷柱；未部署，见[范围和设计依据](../../docs/COOPERATIVE_EXPLORATION_20261031.md)。这是维护构建器，不能把它当作任意上游JAR的通用安装程序；桥源码需要本补丁的`pendingInviteOf`原生API。自建时须先应用对应原生API再编译桥，不能混用旧内核与新桥。
+
 2026-10-30基础成长候选：`build-growth-release.py`在现役AF.36/桥.12/qd30上窄构建AF.37/桥.13/qd31-growth，职业经验采用实际曲线的只读本级投影。保留AuraSkills基础熟练度和历史经验，有限被动由原插件执行；职业技能/天赋/魔力仍归Vortex。夜视/羽落移除残余旧学习门槛，归乡落点另已热修。尚未发布；构建、配置合并、API语义与真实联机边界见[成长说明](../../docs/RPG_GROWTH_20261030.md)，不热加载或重放旧维护。
 
 2026-10-30 04:48已发布AF.32/桥0.2.12/原生qd30；试炼/集结及原生进服资料见[说明](../../docs/RPG_ACTIVITIES_20261030.md)。qd30的`build-profile-readiness.py`必须接在累计qd29后，固定摘要、只修改一个类并加入有界进服调度；防止角色卡加载及未加载占位资料在关服覆盖存档。JDK21由`--java-home`、JAVA_HOME或PATH提供。ProfileJoinDispatchTest、ProfileLoadingSaveTest和真实Paper冷启动覆盖此路径。两个原稳定JAR文件名继续保留，真实构建与摘要以部署清单为准；下方qd29段落是历史。

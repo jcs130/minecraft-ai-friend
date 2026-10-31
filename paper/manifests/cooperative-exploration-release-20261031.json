@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "release": "cooperative-exploration-release-20261031-r2",
+  "state": "verified-candidate-awaiting-normal-restart-approval",
+  "document": "paper/docs/COOPERATIVE_EXPLORATION_20261031.md",
+  "verifiedAt": "2026-10-31T05:38:52.064195+08:00",
+  "productionChanged": false,
+  "pendingPlanWritten": false,
+  "runtimeAgentFriend": "0.4.47.37-rpg",
+  "candidate": {
+    "AgentFriend": "0.4.47.39-rpg",
+    "QiandengjiRpg": "0.2.14",
+    "VortexBuild": "qd32-cooperation",
+    "SmartBlink": "0.1.0",
+    "artifacts": {
+      "AgentFriend-0.4.47.39-rpg.jar": "56a6a768cb45dbbe79fd76f6a21c443b2594c9bd0f7c5f091e07104d0ace8bbb",
+      "QiandengjiRpg-0.2.10.jar": "3ecd856c78c72b092658b2a2aee7b57c19e98ca7ac706c06d6f2c21da00d28f6",
+      "VortexRPG-1.2.2-alpha-qd29.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
+      "plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar": "a49349697e81bc6e3023ea6d513453b81ef9519dcaae4b0ef60b9ef958e372da",
+      "plugins/MagicSpells/spells-regular.yml": "c541dcccf01c8dd535dcf67265ce4e63aa1ffe838affb0b2ecd2713ea7e7b3e3",
+      "plugins/AgentFriend/route-contracts.yml": "2a40ef88ce972f6ed989b2e45e4c333b28c8007019100c6ec40421851ddfd76a",
+      "plugins/AgentFriend/onboarding.yml": "dd6f4dac1313808fa0dda4550ffd475c8e0556e3952bc8f28ad5f27b10fd125d",
+      "ops/content-deploy.ps1": "2010c73be5fc3edb135912681b9c3d411615c7b9b2437d3298134d1e76859ab5"
+    }
+  },
+  "scope": [
+    "Native invitation read API, explicit party phases and rendezvous guidance",
+    "Existing team teleport: 8 mana, 20 seconds; activity and safe-landing gates",
+    "Mountain exploration criterion and optional two-stage contract; no tower-building requirement",
+    "Private text quest details alongside original data packets",
+    "Two once-per-account release notices",
+    "Previously verified smart blink explicitly included"
+  ],
+  "preserved": {
+    "nativeUnrelatedJarEntries": 2854,
+    "bridgeUnrelatedJarEntries": 27,
+    "friendUnrelatedJarEntriesFromReviewedBase": 592,
+    "existingQuestDefinitionsUnchanged": true,
+    "existingOnboardingSettingsUnchangedExceptTwoReleaseKeys": true,
+    "playerDataMigration": false,
+    "credentialsChanged": false,
+    "newPartyOrManaLedger": false
+  },
+  "verification": {
+    "cooperationLiveClientChecks": 31,
+    "blinkLiveClientChecks": 47,
+    "nativeInvitationRules": 22,
+    "peakTerrainRules": 23,
+    "existingNativeRpgChecks": 255,
+    "crossVolumeInstallRollbackRefusalChecks": 44,
+    "smartBlinkTargetBoundaryChecks": 10,
+    "existingNativeTargetBoundaryChecks": 24,
+    "normalStageStop": true,
+    "stageFilesRestoredAndHashChecked": 47,
+    "temporaryOfficialRegistryPacks": 36,
+    "privateQuestTextAndActualEmeraldItemRewardVerified": true,
+    "goddessReadsNativeParty": true,
+    "realLlmLongTermAdoptionVerified": false,
+    "productionEffectivePartyPermissionsVerified": false,
+    "permissionAuditNote": "RCON LuckPerms checks returned empty replies; these were not treated as proof. Ordinary non-OP fixture permissions and actual actions passed."
+  },
+  "limitations": [
+    "Terrain geometry check is not block-generation provenance",
+    "Native parties remain session-scoped",
+    "Legacy guild rewards still use physical emeralds; this release does not migrate them to Vortex gold",
+    "Existing isolated-stage mask/camera/update-check warnings retained; not a claim of a completely clean log",
+    "Skill/MCP reference sources updated; public Skill archive not republished"
+  ],
+  "releaseRequirements": [
+    "Fresh approval for this combined scope",
+    "Existing real-player and dungeon maintenance gate",
+    "180/60/10 second reminders",
+    "Complete stopped E/F game and auth recovery points",
+    "Native post-install checks"
+  ],
+  "backupScope": "Candidates and code/config preimages only; not a new complete world/player cold backup",
+  "priorFailedEvidenceRetained": true,
+  "privateEvidence": "E:/MC/ops/repairs/cooperative-exploration-20261031-r1; F:/MC-backups/cooperative-exploration-20261031-r1",
+  "sources": {
+    "gameDesignSkill": "https://github.com/ncdlek/game-dev-agent-skills/tree/main/skills/game-quest-narrative-architect",
+    "cooperationResearch": "https://arxiv.org/abs/2504.17950",
+    "recentTeamRun": "https://arxiv.org/abs/2610.22319"
+  },
+  "sourceSha256": {
+    "paper/integrations/vortex-rpg/build-cooperative-exploration.py": "653bd284472f4e76c423bbe9b5423e64250af0783cfde629fa958529ea1ea24d",
+    "paper/ops/patches/PartyObservationPatch.java": "c59a1568bcf43d58a721877803cba40d6daf02fa943dd29bf45041dab97af06c",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java": "26885e359f0484ded0a8f05cf18fffd47f082614d91822b6cafc26eb91095521",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/NativeRpg.java": "7853a1c9b4322c1ba898d5d70a2bafafc72881396ecdd2319cad058c5bb6c2be",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SpellGuide.java": "db0dcdd47bd55ce744b020c771d7af903087dbb1a8fd6beeafad9c7af1a7d890",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java": "ccd635f9c0b5f654fa04eb9b760d8e696bbbd9333443aed874f71a0e415277a8",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildManager.java": "e7278f50e6862f7a68a47e57c3decd64c4f654c32f1079f0fa4fbab050a27109",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskGuidance.java": "18d4c3c0135047ac8683291c3da40e416a1da3772c4570bbfe20d5046d163d6e",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskProgressGuidance.java": "805e00e73f9e17bb0d831657263120c34252ed2177d62e95880290255a33d250",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskMarketManager.java": "1f8a32a8da2d2e44f1e4cf650bf12907097a95b46399c084ac6aaa515e257f0b",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PeakSurvey.java": "eacefb27214750d9d60ecc25261656869bb3a8ff4e057ff81ac9fa6cef882f10",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PartyObservation.java": "e8afad0bc17ea2eba882163a65f48a56a5ef3b3267cedc35a6c8db4c50d5f0cc",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TeamTravelSafety.java": "11288f03764e264540c9e4d7395d867a4924f13860822fa6c48ff065dcbdd320",
+    "paper/integrations/vortex-rpg/src/org/qiandengji/vortex/VortexBridge.java": "23546beaffbe8cb768fc76705b58c09b19fe603bd982bb1506ee701303c4d5e5",
+    "paper/integrations/vortex-rpg/src/org/qiandengji/vortex/NativeParties.java": "2745fcaecda21c0bb0c2620c4cdaddcbd33057eb0fcfefdc3953ab7273dd2261",
+    "paper/integrations/vortex-rpg/src/org/qiandengji/vortex/NativePartyView.java": "8f33a6d341d48d388ac4c7deaaf9a695123a961893213cdbc6a8de176aef7e38"
+  }
+}

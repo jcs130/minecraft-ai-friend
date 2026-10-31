@@ -1,5 +1,7 @@
 # 位移与远程物品操作的施法成本
 
+2026-10-31[结伴探索候选](COOPERATIVE_EXPLORATION_20261031.md)补齐原队友传送发现路径：`skills info team` → `/mycli locate tp <在线名字>`，8魔力/20秒冷却保持；与原生组队和副本登记分别核对。双方参战/倒地等状态明确拒绝，不用传送跳房门；候选尚未部署。
+
 从 AgentFriend 0.3.81 起，玩家主动发起的非原版瞬移统一通过 AuraSkills 魔力结算。Java、基岩、Mineflayer Agent 使用同一服务端判定；成功后给本人原版标题、粒子、音效和 `MC_TRAVEL id=<ID> mana=<数值> dimension=... x=... y=... z=...`。`mcagent:event` 的 `home` 或 `travel` 事件与本人 `mcagent:state` 魔力更新同步提供给 Agent。未找到目标、落点受阻、保护规则取消、魔力不足时不扣费，也不发送成功特效。
 
 | 主动能力 | 魔力 | 入口 |

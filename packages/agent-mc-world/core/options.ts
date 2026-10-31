@@ -1,5 +1,6 @@
 import type { ToolDef } from './support/host-contract.ts';
 import type { WorldSnapshot } from './terrain.ts';
+import { WATER_BLOCKS } from './fluid-blocks.ts';
 import { RISKY_FOODS, type FoodValue } from './nutrition.ts';
 import { weaponScore } from './melee.ts';
 import { MINECRAFT_OPTION_INTENTS, type MinecraftOption, type MinecraftOptionIntent,
@@ -36,7 +37,8 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
   const vehicles = snapshot.entities.filter(e => e.visible && /boat|raft|horse|donkey|mule|pig$|strider/.test(e.name))
     .slice(0, 4).map(e => `${e.name} ${e.distance}格`);
   const context = { sampledAt: snapshot.realTime, backend: 'mineflayer' as const, food: snapshot.food,
-    oxygen: snapshot.inWater ? snapshot.oxygen : null, inWater: snapshot.inWater,
+    oxygen: snapshot.inWater ? snapshot.oxygen : null, headInWater: snapshot.inWater,
+    inWater: snapshot.inWater || WATER_BLOCKS.has(snapshot.footing?.block ?? snapshot.standingOn ?? ''),
     carriedFood: edible?.reduce((n, s) => n + s.count, 0) ?? null,
     carriedBoats: boats?.reduce((n, s) => n + s.count, 0) ?? null,
     meleeEquipment: inventory ? [...new Set(inventory.filter(s => s.count > 0 && weaponScore(s.name) >= 0).map(s => s.name))] : null,
@@ -70,10 +72,11 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     { id: 'core.horse-travel', intents: ['travel'], title: '骑马赶路（驾驶尚不支持）', purpose: '区分观察、上马/驯服与实际驾驶能力。',
       support: 'unsupported', evidence: ['当前 ride 实现可上马和下马；不支持马/驴/骡驾驶'],
       checks: ['不能把坐上去当成能骑行；驯服、鞍、归属和可通行路线还需现场核验'], read: [guide({ skill: 'ride' })], source },
-    { id: 'core.swim', intents: ['water'], title: '游泳或有意潜水', purpose: '按实际氧气、生命和回程预算选择短步游动、下潜或换气。',
-      support: 'supported', evidence: [`头部浸水=${snapshot.inWater}；水下氧气=${context.oxygen ?? '不适用'}`],
-      checks: ['水流、净空、呼吸点、当前控制权及实测回程时间；不因碰水自动选上浮'],
-      read: [guide({ skills: ['control', 'surface'] }), { tool: 'mc_script', args: { api: 'diving' } }, method('diving')], source },
+    { id: 'core.swim', intents: ['water'], title: '游泳或有意潜水', purpose: '用 swim 持续执行已加载水体内的有界路线，或按实际氧气、生命和回程预算选择短步、下潜与换气。',
+      support: 'supported', evidence: [`身体接触水=${context.inWater}；头部浸水=${snapshot.inWater}；水下氧气=${context.oxygen ?? '不适用'}`],
+      checks: ['水流、净空、呼吸点、当前控制权及实测回程时间；不因碰水自动选上浮',
+        'swim 单段最多32格；连续短输入可同单排队或由同一原生程序持有，每段按实际终态修订，停键等待模型不算持续游泳'],
+      read: [guide({ skills: ['swim', 'control', 'surface'] }), { tool: 'mc_script', args: { api: 'diving' } }, method('diving')], source },
     { id: 'core.inventory', intents: ['inventory'], title: '使用、整理、转存或丢弃', purpose: '按物品实际用途和补给需求取舍，核对净空位变化。',
       support: 'supported', evidence: [`随身空位=${context.freeSlots ?? '未知'}；这不是远处箱子或扩展背包容量`],
       checks: ['保留当前目标需要的物品；自定义物品先读说明；抛出后可能自动捡回'],

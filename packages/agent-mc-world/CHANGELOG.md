@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.7-rc.147
+
+- Use the same interaction-reach approach for coordinate-targeted withdrawals, pinned furnaces and brewing stands, and enchanting tables as ordinary container activation. A container already within reach no longer requires an unnecessary two-block landing. Preserve cancellation, native window admission, item transfer accounting and post-operation confirmation.
+
+## 0.5.7-rc.146
+
+- Distinguish a no-progress route with no native movement or motor commands from a collision while walking. End the stalled owned route with planning evidence rather than running an irrelevant unwedge or claiming the player/server is frozen. Retain actual movement/work stalls, deadline, cancellation and unknown readings.
+
+## 0.5.7-rc.145
+
+- Continue surface-only swim routes without demanding an unrelated full-oxygen refill at every waypoint. Confirm a refill before the next submerged leg and maintain bounded surface input while waiting; preserve unknown oxygen, cancellation and incomplete results.
+- Keep water-travel discovery visible while the feet remain in water and the head is breathing. Report head submersion separately and expose the existing continuous `swim` action alongside short controls and agent-authored programs.
+
 ## 0.5.7-rc.144
 
 - Use the existing four-block interaction reach throughout a block-approach route, rather than requiring a second two-block arrival goal after the route starts. Keep cancellation, native hand preparation and effect verification unchanged; prevent needless approach failures at chests and ledges.

@@ -11,7 +11,7 @@ final class TaskGuidance {
     static String step(GuildManager.Goal goal, String original) {
         if(TrialGuide.goal(goal))return original.replace("地下城","试炼塔")+"（从第1层开始，清层自动下楼；非遗迹dungeon）";
         return switch (goal) {
-            case PEAK -> "到达 Y≥120 的高处，天然山峰、建筑屋顶和高塔均可；不要求积雪或全程徒步。横向走过一格记录，再 guild status 查询、guild claim 交付。";
+            case PEAK -> PeakSurvey.requirement()+"先准备食物和羽落，再看周边山坡；到达后落地横向走动，再 guild status 查询、guild claim 交付。";
             case PHOTO -> photo();
             case MAP_HUNT -> original.replace("天然藏宝箱须亲自新开，旧空箱、自制箱或只到坐标不算。", "遗迹图需进入原目标走查，不要求开箱；仅埋藏宝藏须亲自新开天然箱。地表标记不是入口，旧空箱、自制箱或只到坐标不算。");
             default -> original;

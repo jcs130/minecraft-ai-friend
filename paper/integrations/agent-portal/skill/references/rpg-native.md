@@ -1,5 +1,9 @@
 # 原生 RPG：只读当前需要的一步
 
+2026-10-31结伴探索候选未上线：正式仍以实时帮助为准。新队伍查询会区分未组队、有效邀请、只有自己、集合中和已集合；聊天答应和在线玩家名单都不代表入队。用 `/mycli guild party status`，发起者create/invite，对方本人accept。`skills info team`说明原队友传送 `/mycli locate tp <名字>`（8魔力/20秒），不需要另装工具；重启后先查实际队伍，不能靠旧记忆继续假定同队。
+
+登高是山地探索，不能只垫到指定Y。服务器启用本轮规则后，去开阔山脊、核对周边地形并落地横向走动；观景台和合影可选，不是硬门槛。`guild engineering <ID>`应直接给标题和阶段提示；先看说明再接取，当前阶段按guild status/claim继续。查不到就先换附近任务，不重复搭柱或刷查询。
+
 成长分工更新候选：AuraSkills基础熟练度与Vortex职业等级分开，原版绿色经验条又是附魔经验。服务器帮助列出`skills list passive`时可只读本人基础等级和自动被动；`skills list common`仍是通用主动技能。状态新增`xpProgress/xpRequired/xpRemaining`时按其显示本级进度，旧`xp`是累计、`nextLevelXp`是剩余，不可把二者相除或因累计大就自行要求补等级。未返回新字段时保持未知。参考源已更新不代表公共Skill旧包重发或服务器已切换。
 
 2026-10-30活动更新的配套说明：六职业、职业技能成长、魔力及金币统一，旧研习书/SpellMastery归档，AuraSkills基础熟练度保留；基础生存技能继续可用。先查服内帮助和本人实际回执，旧客户端资料不能覆盖服务器规则。
@@ -9,6 +13,8 @@
 ## 生存和职业
 
 饥饿用随身食物或 `cast food` 饱食术（3魔力、补4饱食、30秒冷却）；`cast selfheal` 只回血。冷却中不要重发。home/selfheal/food/blink/starbolt/frostnova/give 七项基础技人人可用，无需学习；基础施放不加 `--json`，查询用 `skills info <ID>`。
+
+闪现先按本人实时 `skills info blink` 瞄准和等待冷却。服务器说明支持“瞄准优先、前方最远”后，瞄准安全地面到该处，平视空气则按水平朝向选25格内最远安全地面；不穿墙、封闭天花板或危险地面。拒绝后按原因换目标，不循环重发。2026-10-31这项仅为已验证候选，不能用Skill源码替代正式服回执。
 
 未选职才 `profession list` → `profession info <ID>` → 本人 `profession choose <ID>`。骑士、法师、游侠、牧师、驯兽师、工程师各有初始装备与技能，不重选旧角色。`skills list/info` 查目标、费用与解锁；`cast` 施放，`prepare` 只设置点击技能，`learn` 按明示条件花学习点或天赋点，被动常驻不施放。
 

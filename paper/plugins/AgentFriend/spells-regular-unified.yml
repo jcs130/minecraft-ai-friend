@@ -2,18 +2,18 @@
 # Keep this file small: no terrain edits, custom items, or client resource packs.
 
 blink:
-    spell-class: ".targeted.BlinkSpell"
+    spell-class: "org.qiandengji.magic.SmartBlinkSpell"
     always-granted: true
     cooldown: 8
     cast-item: stick
-    description: Teleport a short distance.
+    description: "瞄准落点优先；未瞄准时沿朝向寻找最远安全地面。"
     range: 25
     pass-through-ceiling: false
-    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    cost: [] # AgentFriend charges the selected shared mana backend only after success.
     str-cost: 4 shared mana
-    str-cast-self: You blink away!
-    str-cast-others: "%a blinks away!"
-    str-cant-blink: You cannot blink there.
+    str-cast-self: ""
+    str-cast-others: ""
+    str-cant-blink: "未找到安全落点；未传送、未耗魔。"
     effects:
         pos1:
             position: pos1

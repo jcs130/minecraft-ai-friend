@@ -8,7 +8,7 @@ import org.bukkit.plugin.Plugin;
 
 /** Optional Vortex front door. Legacy storage stays read-only; no second RPG engine. */
 final class NativeRpg {
-    static final List<String> COMMON_IDS = List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","prospect","night","feather");
+    static final List<String> COMMON_IDS = List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","team","prospect","night","feather");
     static final Set<String> COMMON = Set.copyOf(COMMON_IDS);
     private final AgentFriendPlugin owner;
     private final boolean selected;
@@ -39,7 +39,7 @@ final class NativeRpg {
         String name=id.equals("frostnova")?"寒霜术（霜环）":e.name();
         return new SpellGuide.Entry(e.id(),name,e.category(),e.icon(),e.command(),e.effect(),e.target(),e.mana(),e.cooldownSeconds(),requires,e.failure(),scaling,tip);
     }
-    static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡","归乡术","回城"->"home";case "传送点术"->"travel";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "寒霜","寒霜术","冰霜","霜环","霜环术"->"frostnova";case "造物","造物术"->"give";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
+    static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡","归乡术","回城"->"home";case "传送点术"->"travel";case "队友传送术"->"team";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "寒霜","寒霜术","冰霜","霜环","霜环术"->"frostnova";case "造物","造物术"->"give";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
     private Plugin backend() {
         Plugin p=Bukkit.getPluginManager().getPlugin("QiandengjiRpg");
         if(p==null||!p.isEnabled())throw new IllegalStateException("RPG服务未就绪；稍后查询 /mycli status，不要重复执行。");
@@ -220,8 +220,8 @@ final class NativeRpg {
                 var entry=commonGuide(skillId(args[2]));var data=entry.json();data.addProperty("available",true);data.addProperty("common",true);data.addProperty("queryOnly",true);
                 data.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(entry.id(),entry.command())));
                 Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
-                if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准前方可站立的地面；平视空中可能没有合法落点，拒绝时不扣魔力。");
-                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；瞄准前方可站立的地面，空中无落点会拒绝":"")+"。用法："+entry.command());return true;
+                if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准安全地面优先到该处；平视空气时沿水平朝向选25格内最远安全落点。不会穿墙、穿封闭天花板或落入悬空/危险地面；拒绝不扣魔力或冷却。");
+                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；不会穿墙或进入危险落点；拒绝未耗魔、无冷却":"")+"。用法："+entry.command());return true;
             }
             String[] normalized=args.clone();
             normalized[0]=switch(group){case "职业"->"profession";case "spells","技能"->"skills";case "任务路线"->"tasks";default->group;};
@@ -230,7 +230,7 @@ final class NativeRpg {
             if(handled&&normalized[0].equals("skills")&&(normalized.length==1||Set.of("status","list").contains(normalized[1].toLowerCase(Locale.ROOT)))
                 &&(normalized.length<3||normalized[2].equals("--json"))){
                 if(Arrays.asList(args).contains("--json"))invocationIndex(p);
-                else p.sendMessage("§7[技能用法] travel 是地点管理：/mycli waypoint menu；其他技能先查 /mycli skills info <ID>，按其用法执行。");
+                else p.sendMessage("§7[技能用法] 地点传送：/mycli waypoint list；队友传送：/mycli locate tp <名字>；先查 /mycli skills info <ID>，按实际用法执行，不把所有能力都拼成cast。");
             }
             if(group.equals("status")&&!Arrays.asList(args).contains("--json"))adventureProgress(p,false,false);return handled;
         }
