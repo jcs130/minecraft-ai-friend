@@ -1,3 +1,13 @@
+## 2026-10-31 SAO 真实数据与普通操作已发布
+
+仅升级 E:/MC/servers/sao-0.76.1（MC1.20.1/Forge47.4.10），原生组件0.1.3，SDK0.1.3。Jar 8f0e1fdd…f97792，SDK a3a30f4a…5089b；公开TCP28976/28977、基岩UDP28988、语音UDP28989不变，原R2无需重下，千灯纪主服未改。native.recipes/sao.recipes按需读取实际RecipeManager和成功Forge/KubeJS解码对象快照；KubeJS2001.6.5-build.26已审定，替换或缺失定义仍未知。单页最多12项/16KiB、默认6项，不自动续读；513个不可据此筛选的类型明确保留未知，不能宣称全目录覆盖。原版静态bot.craft仍拒绝，真实菜单操作另验。
+
+增加实际槽位条件/容量/活动状态、关闭后原版全量库存同步；SDK按上个回执后的间隔排只读查询，不改服务端限流或重放写操作。隔离验收无OP实际工作台4稻草→1帆布，普通库存与原生数据一致、同UUID重连/原ID对账和跨账号隔离通过；最终QA冷盘4帆布。常驻Numen此前被DirectAuth拒绝，新增只认当前NumenPlayer实例、同服务器主线程、管理登记、在线对象和一致Owner的身份钩子；普通玩家原登录、Owner Token/写租约/模式/保护不变，无公网MCP。原SAONumen正式只读查询通过；错误Token、其他Owner、普通玩家冒充均拒绝。79 Node+18 Python、5实际Owner回归通过；48原类字节保持，1匿名类只改调试信息。不能据此声称全部模组机器、基岩完整外观或模型自主合成已验。
+
+已完整冷备337670文件/6746165864字节，E:/MC/backups/sao-native-data-20261031/sao-full-before 与 F:/MC-backups/sao-native-data-20261031/sao-full-before逐文件全验，manifest a7bd0b6b…f4cd56；外部共用账号资料另备份。追加376文件的最新世界/桥接快照 before-owned-auth-world-r2.zip，原Agent在完整基线后尚未恢复，记忆保持。顺序归档及两次私人校验/快照夹具失败保留，不把未验证ZIP当备份。Windows超260路径须用完整路径访问。一次性维护、消费、测试脚本及请求ID不得重放。
+
+最终及其他正常启动的QA JVM已正常退出0，早期两次夹具配置启动失败的JVM已精准终止并保留失败；所有回环前端已停。正式监督器36960/JVM9456、五服务ready、paused=false。原ag_Kirito（8e7b99e0-595d-3402-935c-7139ac6814e3）已恢复running/game_connected/autonomy_running，保留core0.5.7-rc.130.sao-recovery.1与autonomy0.2.130+sao.recovery.1及原模型/目标/记忆。原有FML/客户端类/掉落诊断保留，不宣称日志全净。源码a241dfc0/ff69b3d1，当前说明及验收在 integrations/sao-compat/NATIVE_DATA.md、native-data-release-20261031.json；私有证据 E:/MC/research/sao-native-data-20261031。prepare_native_data.py仅审核旧1.1来源，不能对现役1.3盲重跑。
+
 ## 2026-10-31 Mineflayer 原版动作与自动原生数据已隔离验收，未发布主服
 
 服主强调Agent按真实消息操作，不依赖图像。新增自有网关输出层和可选标准Mineflayer插件；未订阅者不发MCNP/目录，mod物品兼容栈带只读真实ID/名称且不写回原物品。明确Lootr与暮色楼梯/台阶只在原生属性、静态碰撞完全相符时调整载体，1202状态匹配、32不冒称精确；不添加多对一放置反表。原版createBot在回环候选实际移动/打开Lootr/普通箱存取/装备铁木剑/魂符右键召唤和普通攻击；训练尸壳94.096→89.58251，NoAI，不当正常AI/连击/模型自主证明。0条未订阅额外镜像/目录。

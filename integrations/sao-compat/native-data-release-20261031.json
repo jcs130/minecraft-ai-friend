@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "publishedAt": "2026-10-31T08:16:24.782029+00:00",
+  "root": "E:\\MC\\servers\\sao-0.76.1",
+  "implementationCommit": "ff69b3d1",
+  "minecraft": "1.20.1",
+  "forge": "47.4.10",
+  "nativeAddon": {
+    "version": "0.1.3",
+    "sha256": "8f0e1fdda5c8db62fa26dc70201e777cda46969f1253baf480a6e5c8c8f97792"
+  },
+  "sdk": {
+    "version": "0.1.3",
+    "sha256": "a3a30f4af0dd5c7143ee4689124a0838b14f3f1507fcead1eb51a8d067c5089b",
+    "url": "http://micro.kangqiang.site:28977/sao-agent-sdk.tgz"
+  },
+  "clientPack": "existing website R2, unchanged",
+  "clientRedownloadRequired": false,
+  "validation": {
+    "nodePassed": 79,
+    "pythonPassed": 18,
+    "unchangedOriginalClasses": 48,
+    "oneAnonymousClassOnlyDebugLinesChanged": true,
+    "actualNativeChecks": [
+      "authenticated actual capability and prelogin private reads denied",
+      "loaded mod recipe and exact source, inputs and output",
+      "Mineflayer tool and shared SAO/Numen provider expose the same real recipe",
+      "one real bounded partial page with accurate continuation, no auto-read",
+      "Forge machine recipe has its true type, serializer and exact native definition",
+      "actual native mod item crafted by normal table clicks with material and output verification",
+      "same UUID and real crafted inventory preserved; original action reconciled without replay",
+      "each connection has own native state and action ledger"
+    ],
+    "standardInventoryEqualsNative": true,
+    "actualCraft": "4 farmersdelight:straw consumed for 1 farmersdelight:canvas; repeated known tests leave 4 canvas in cold saved inventory",
+    "recipePage": {
+      "returned": 1,
+      "remaining": 5480,
+      "matched": 5481,
+      "nextOffset": 1,
+      "unknownTypes": 513,
+      "bytes": 3300
+    },
+    "machineRecipeRead": {
+      "id": "farmersdelight:cooking/apple_cider",
+      "type": "farmersdelight:cooking",
+      "serializer": "farmersdelight:cooking"
+    },
+    "productionReadOnlySdk": [
+      "original dormant body authenticates through unchanged private broker",
+      "own actual state and native menu rules available after authentication",
+      "production actual KubeJS recipe and ingredients, bounded to one row",
+      "shared gameplay provider reads the same native recipe for the same body",
+      "formal SDK tool reads real Forge machine type and serializer",
+      "downloaded SDK and actual current JVM epoch agree"
+    ],
+    "productionNumenReadOnly": [
+      "owner-scoped Numen catalog advertises native recipe schema",
+      "original Numen body restored and online",
+      "real server-resident body reads its own actual recipe through the shared provider"
+    ],
+    "imagesOrModelInferenceUsedForQa": false,
+    "negativeAttemptsCountedAsPassed": false
+  },
+  "backup": {
+    "schemaVersion": 1,
+    "mode": "verified_full_directory",
+    "root": "E:\\MC\\servers\\sao-0.76.1",
+    "primary": "E:\\MC\\backups\\sao-native-data-20261031\\sao-full-before",
+    "secondary": "F:\\MC-backups\\sao-native-data-20261031\\sao-full-before",
+    "fileCount": 337670,
+    "sourceBytes": 6746165864,
+    "manifestSha256": "a7bd0b6bcd23f4b567d0a9f79925971192f026728fd04fcde36ec8f27cf4cd56",
+    "fullContentVerified": true,
+    "normalJavaExit": 0,
+    "sourceRetained": true,
+    "copies": [
+      {
+        "target": "E:\\MC\\backups\\sao-native-data-20261031\\sao-full-before",
+        "exitCode": 1,
+        "log": "E:\\MC\\research\\sao-native-data-20261031\\copy-E.log"
+      },
+      {
+        "target": "F:\\MC-backups\\sao-native-data-20261031\\sao-full-before",
+        "exitCode": 1,
+        "log": "E:\\MC\\research\\sao-native-data-20261031\\copy-F.log"
+      }
+    ],
+    "at": "2026-10-31T15:38:28.078086+08:00"
+  },
+  "externalAuthorityBackup": {
+    "primary": "E:\\MC\\backups\\sao-native-data-20261031\\external-shared-authority-before.zip",
+    "secondary": "F:\\MC-backups\\sao-native-data-20261031\\external-shared-authority-before.zip",
+    "sha256": "925090a024a9d27e741e85d983a0600c06d1d33df894dbd72a0208cf06fa41db",
+    "fullContentVerified": true,
+    "credentialFilesRechecked": true,
+    "fileCount": 46,
+    "sourceRetained": true,
+    "globalAtomicSnapshot": false
+  },
+  "worldAndBridgeDeltaBackup": {
+    "primary": "E:\\MC\\backups\\sao-native-data-20261031\\before-owned-auth-world-r2.zip",
+    "secondary": "F:\\MC-backups\\sao-native-data-20261031\\before-owned-auth-world-r2.zip",
+    "sha256": "f4c9a68f2d15300edaeed81a3f63da88edeb31b279598a63f1099af1f4430a6e",
+    "files": 376,
+    "sourceBytes": 196086223,
+    "fullContentVerified": true,
+    "normalJavaExit": 0,
+    "baseManifestSha256": "a7bd0b6bcd23f4b567d0a9f79925971192f026728fd04fcde36ec8f27cf4cd56"
+  },
+  "runtime": {
+    "healthy": true,
+    "paused": false,
+    "supervisorPid": 36960,
+    "javaPid": 9456,
+    "serverEpoch": "ed7bb13d-3cf0-4f73-ade0-834466371d40",
+    "originalResident": {
+      "body": "ag_Kirito",
+      "uuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+      "phase": "running",
+      "gameConnected": true,
+      "autonomyRunning": true,
+      "core": "0.5.7-rc.130.sao-recovery.1",
+      "autonomy": "0.2.130+sao.recovery.1"
+    }
+  },
+  "scope": {
+    "unrelatedModsUnchanged": 175,
+    "frozenFiles": 6826,
+    "ordinaryPlayerAuthPolicyArrivalProviderGoalEngineUnchanged": true,
+    "attestedResidentIdentityAdded": true,
+    "worldReset": false,
+    "playerInventoriesReplaced": false,
+    "publicPortsChanged": false,
+    "primaryServerModified": false,
+    "publicMcpOpened": false
+  },
+  "limitations": {
+    "allModMachinesPlayableVerified": false,
+    "machineCookingExecutionVerified": false,
+    "newNumenGameplayActionsVerifiedThisTurn": false,
+    "fullBedrockModRenderingVerified": false,
+    "freshExternalInternetProbePerformed": false,
+    "recipeFilterUnknownsPreserved": true
+  },
+  "evidenceDirectory": "E:\\MC\\research\\sao-native-data-20261031",
+  "negativeEvidence": [
+    "native-client-r1.json",
+    "native-client-r2.json",
+    "native-client-r3.json",
+    "native-client-r4.json",
+    "native-client-r5.json (weaker stock assertion, superseded)",
+    "native-client-r6.json",
+    "backup-parallel.log (Windows long-path verifier failure)"
+  ],
+  "finalLabEvidence": "native-client-r8.json",
+  "liveOwnerIdentityRegression": {
+    "passed": true,
+    "checks": [
+      "existing native body online",
+      "owned body reads actual native recipe",
+      "foreign owner denied",
+      "ordinary player cannot be selected as a resident",
+      "invalid token remains unauthorized"
+    ],
+    "readOnly": true,
+    "gameActions": 0
+  },
+  "partialArchiveRetainedVerifiedFalse": true
+}
