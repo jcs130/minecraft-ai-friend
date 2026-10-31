@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "status": "isolated_agent_paths_verified",
+  "productionReleaseReady": false,
+  "primaryModified": false,
+  "saoPublicModified": false,
+  "portsOrFirewallChanged": false,
+  "modelInferenceStarted": false,
+  "minecraft": "1.21.1",
+  "core": "Youer 1.21.1-e3158632",
+  "neoforge": "21.1.252",
+  "numen": {
+    "bodyKind": "persistent server-native fake player",
+    "opGranted": false,
+    "hostedBrainStarted": false,
+    "operationsFunctionsObserved": 73,
+    "activeNativeExtensionOperations": 6,
+    "nativeMovementAndTerminalReceipt": true,
+    "lootrTake": {
+      "emerald": 2,
+      "bread": 3
+    },
+    "soulSlabSpawnedOwnedMaid": true,
+    "ownedMaidListVerified": 1,
+    "ironwoodSwordEquippedAndUsed": true,
+    "targetHealthBefore": 100,
+    "targetHealthAfter": 94.096,
+    "originalBodyRestoredAcrossRestart": true,
+    "durableTerminalReconciledAcrossRestart": true,
+    "duplicateDidNotReexecute": true,
+    "wrongOwnerTokenRejected": true,
+    "foreignBodyRejected": true,
+    "secondControllerRejected": true
+  },
+  "observedAt": "2026-10-31T11:49:56.306214+08:00",
+  "privateEvidenceRoot": "E:\\MC\\research\\native-adventure-agents-20261031",
+  "modsSha256": {
+    "bettercombat-neoforge-2.4.0+1.21.1.jar": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a",
+    "cloth-config-15.0.140-neoforge.jar": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+    "lootr-neoforge-1.21.1-1.11.38.127.jar": "5c74de4709d1c13b25880fdd241a89d5d9f331346d20edc76f80ccd4d99dc66c",
+    "maw-native-adventure-access-0.1.1.jar": "bcadeb16a2ad27764c8bc22f6d791c79d622ec6b672b308d69725f06dc7c8931",
+    "maw-numen-compat-0.1.1-youer252.jar": "58da07d3f655a7e3f6e0d691c8e2853b41aa9a04c8a406e43094840735065e74",
+    "maw_numen_mods-0.1.0-tau234.jar": "5302b8f47807566c26bd68d4b008e49adfc0d89592d5c31927c3065ab3455fc0",
+    "maw_numen_server-0.2.1-tau234.jar": "0328897dcb6553874ec08ffe61a6450b1c12c524b86ba415e4f82a7716f90cb2",
+    "numen-neoforge-1.21.1-0.1.4.1.jar": "ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226",
+    "player-animation-lib-forge-2.0.4+1.21.1.jar": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92",
+    "qiandengji-native-platform-0.1.4.jar": "d8da69fb6bec29efe0d12d0728d1bab98fb876ba2eda8efe2110316333f517e2",
+    "touhoulittlemaid-1.5.3-qiandengji.jar": "f4bb0ec576f7b2226430808efa177521be48d36dd3176080ee0f76bfbaa4e23b",
+    "twilightforest-1.21.1-4.8.3345-universal.jar": "493da16d10210f9f53a3c33b3d8fcb4ae9b14016ee420d753c894562bd9aba35",
+    "ysm-2.6.5-neoforge+mc1.21.1-release.jar": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+  },
+  "offlineChecks": {
+    "nodeTests": 32,
+    "pythonTests": 16,
+    "javaPolicyAssertions": 27,
+    "passed": 75,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mineflayer": {
+    "gatewayAndSdkRequired": true,
+    "plainDirectBackendRejected": true,
+    "realIdentityAndFullComponents": true,
+    "nativeWorldSource": "same connection original chunks, trusted JVM registry hash",
+    "vanillaCarriersExcludedFromBoundBlockReads": true,
+    "actualCoreVersion": "0.5.7-rc.130",
+    "actualCoreSitesObserved": 3,
+    "ownConnectionOnly": true,
+    "actualMovement": true,
+    "nativeRecipeCodec": true,
+    "lootrTake": {
+      "emerald": 2,
+      "bread": 3
+    },
+    "publicChestPutAndTake": true,
+    "soulSlabSpawnedOwnedMaid": true,
+    "ironwoodSwordEquippedAndUsed": true,
+    "targetHealthBefore": 100,
+    "targetHealthAfter": 94.096,
+    "shortReconnectAndDeduplication": true,
+    "staleComponentsRejected": true,
+    "oldEpochReturnsUnknown": true
+  },
+  "optionalJavaClient": {
+    "withoutNumenJoinsAndOpensLootr": true,
+    "withOriginalNumenJoinsAndOpensLootr": true,
+    "incapableClientReceivesNoOutfitAttachment": true,
+    "capableClientObservedLiveModels": [
+      "touhou_little_maid:hakurei_reimu",
+      "none",
+      "touhou_little_maid:hakurei_reimu"
+    ],
+    "onlyOneCosmeticAttachmentFilteredPerIncapableConnection": true,
+    "globalRegistryAndSavedDataPreserved": true
+  },
+  "finalColdPersistence": {
+    "playerCount": 4,
+    "eachRetainsEmerald": 2,
+    "eachRetainsBread": 3,
+    "lootrInventories": 4,
+    "rewardRegenerationObserved": false,
+    "jvmExitCode": 0,
+    "stoppedAt": "2026-10-31T11:46:21.660300+08:00"
+  },
+  "clientPackage": {
+    "name": "qiandengji-native-adventure-client-0.1.0-test.1-final.tgz",
+    "sha256": "359e600def68c5f1ab65b78da708d9358eabbb36dfb46dc1db3bdf0da192990c",
+    "files": 11,
+    "extractedConsumerActuallyConnected": true,
+    "published": false
+  },
+  "evidenceSha256": {
+    "mineflayer-r1.json": "160b79a34f73590739b5ef921ea2916702ddf3eabcf90f091bdf63c1c38a5d4f",
+    "mineflayer-loot-r1.json": "40da2ea9b6f0371b2e11e5a28521ca3475cabd0148236a1105ccd92b51ce97ee",
+    "mineflayer-native-play-r2.json": "bb67ea2f9e8541f25af81028fd9eac0b504d8f6cf9b7035e0a9d31acec54fa06",
+    "sdk-consumer-proof-final.json": "0f4dfa85497ae11f224e61ccee89f4034e327d3ad6a33c7a3e23fa88b7a66843",
+    "numen-move-final.json": "f19309813d23542fd30523788bf3a3e446bdc01af5af6f1aba8733e479b8b182",
+    "numen-lootr-r1.json": "999b45fe5f9f9605944e9502e46246775a7dc54a596d491bbed897c2c42f353a",
+    "numen-native-play-r2.json": "874473a57659df3f786a837fdc2ba1cc6b2bfee2604469e475fc6bb8419e22d5",
+    "numen-maid-list-corrected.json": "2b730738f80adf84304c7ca428286959b9b87a2825bf9c3f8b3cc56f5e837fa4",
+    "numen-reconnect-auth-proof.json": "4b9cc5d82de0575de410a44cf11e710c670764dac775de457ff25707ebe3f507",
+    "optional-client-transition-proof.json": "72bb5992ee493dfeb8ca846c8e0abe8f2c618879935a2bc54fd7b46d4e445f16",
+    "persistence-final-cold.json": "d20e5085c8b2e704b561d5f6a55587456c323b47ba0e70eee69b6ffc070e3fbc",
+    "primary-preserved-final.json": "52063acdb762e95793c525cacc9d2948193bf1c93bab085d62c32bffcc937e5d"
+  },
+  "retainedFailures": [
+    "ordinary direct Mineflayer still cannot negotiate mandatory NeoForge channels",
+    "build-r1 lacked patched NeoForge classpath and optional recipe APIs; replaced hard recipe dependencies with native codecs",
+    "first private loot probe used wrong receiver event shape before any item action",
+    "first native Java regression rejected numen_tlm:tlm_model; fixed precise optional registry and attachment sync",
+    "first live-watch probe omitted its delayed finishing tick; clients stayed online but reports timed out; corrected and separately reran",
+    "first maid-count probe used length of Household object; corrected to Household.here without changing ownership permissions",
+    "GitHub release API rate-limited; no unverified binary upgrade"
+  ],
+  "limits": [
+    "not a model-driven autonomous survival or training benchmark",
+    "training targets had NoAI; no boss/normal monster balance claim",
+    "full production plugin and LoginGuard/RealmAccounts integration remains",
+    "Bedrock and Eye/Web upgraded-mod parity remains unverified",
+    "ordinary raw Mineflayer inventory still uses projected carriers; native SDK is required for original item identity",
+    "not all Mineflayer findBlocks, mining, physics, dynamic shapes or mod vehicles are adapted",
+    "native recipe definitions do not verify every machine operation or probabilistic byproduct",
+    "Better Combat combo animation parity not claimed"
+  ]
+}

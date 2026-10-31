@@ -7,7 +7,7 @@ function readChannelManifest (file) {
   return channelKnowledge(JSON.parse(fs.readFileSync(file, 'utf8')))
 }
 function channelKnowledge (raw) {
-  if (raw?.schemaVersion !== 1 || raw.minecraft !== '1.21.1' || !['21.1.234', '21.1.248'].includes(raw.neoforge) ||
+  if (raw?.schemaVersion !== 1 || raw.minecraft !== '1.21.1' || !['21.1.234', '21.1.248', '21.1.252'].includes(raw.neoforge) ||
       !raw.protocols || Array.isArray(raw.protocols)) throw Error('CHANNEL_MANIFEST_VERSION')
   const result = new Map()
   for (const [bucket, entries] of Object.entries(raw.protocols)) {

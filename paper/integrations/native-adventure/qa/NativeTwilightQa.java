@@ -35,6 +35,9 @@ public final class NativeTwilightQa {
     private float healthBefore;
     private net.minecraft.world.entity.LivingEntity combatTarget;
     private boolean requestedCatalog;
+    private long optionalWatchUntil;
+    private String lastOptionalOutfit;
+    private final JsonArray optionalTransitions = new JsonArray();
 
     public NativeTwilightQa() {
         if (!Boolean.getBoolean("qd.twilight.qa")) throw new IllegalStateException("QA launch property required");
@@ -45,8 +48,32 @@ public final class NativeTwilightQa {
     }
     private void finish(Minecraft mc, Throwable error) {
         if (done) return;
+        if (error == null && Boolean.getBoolean("qd.optional.watch")) {
+            if (optionalWatchUntil == 0) optionalWatchUntil = System.nanoTime() + 40_000_000_000L;
+            if (System.nanoTime() < optionalWatchUntil) return;
+        }
         done = true;
         mc.options.keyAttack.setDown(false);
+        try {
+            report.addProperty("numenClientInstalled", ModList.get().isLoaded("numen"));
+            var id = net.minecraft.resources.ResourceLocation.parse("numen_tlm:tlm_model");
+            var type = net.neoforged.neoforge.registries.NeoForgeRegistries.ATTACHMENT_TYPES.get(id);
+            report.addProperty("numenOutfitAttachmentRegistered", type != null);
+            JsonArray peers = new JsonArray();
+            if (mc.level != null) for (var peer : mc.level.players()) {
+                if (!peer.getGameProfile().getName().equals("TwilightNumen")) continue;
+                JsonObject entry = new JsonObject();
+                entry.addProperty("name", peer.getGameProfile().getName());
+                Object model = type == null ? null : peer.getExistingDataOrNull(type);
+                entry.addProperty("model", model == null ? null : model.toString());
+                peers.add(entry);
+            }
+            report.add("observedNumenOutfits", peers);
+            report.add("optionalOutfitTransitions", optionalTransitions);
+        } catch (RuntimeException inspection) {
+            report.addProperty("optionalInspectionFailure", inspection.toString());
+            if (error == null) error = inspection;
+        }
         report.addProperty("pass", error == null);
         report.addProperty("observedAt", java.time.Instant.now().toString());
         if (error != null) report.addProperty("error", error.toString());
@@ -75,6 +102,22 @@ public final class NativeTwilightQa {
         Minecraft mc = Minecraft.getInstance();
         if (done) return;
         try {
+            if (Boolean.getBoolean("qd.optional.watch") && mc.level != null) {
+                var type = net.neoforged.neoforge.registries.NeoForgeRegistries.ATTACHMENT_TYPES.get(
+                    net.minecraft.resources.ResourceLocation.parse("numen_tlm:tlm_model"));
+                for (var peer : mc.level.players()) if (peer.getGameProfile().getName().equals("TwilightNumen")) {
+                    Object value = type == null ? null : peer.getExistingDataOrNull(type);
+                    String observed = type == null ? "client_capability_absent" : value == null ? "none" : value.toString();
+                    if (!observed.equals(lastOptionalOutfit)) {
+                        JsonObject entry = new JsonObject();entry.addProperty("at", java.time.Instant.now().toString());
+                        entry.addProperty("model", observed);optionalTransitions.add(entry);lastOptionalOutfit = observed;
+                    }
+                }
+            }
+            if (optionalWatchUntil != 0 && System.nanoTime() >= optionalWatchUntil) {
+                finish(mc, null);
+                return;
+            }
             if (++ticks == 1) GLFW.glfwHideWindow(mc.getWindow().getWindow());
             if (ticks > 2400 || System.nanoTime() > deadline) throw new IllegalStateException("Client timeout: " + (mc.screen == null ? "world" : mc.screen.getClass().getName()));
             if (mc.level == null || mc.player == null || mc.gameMode == null) return;

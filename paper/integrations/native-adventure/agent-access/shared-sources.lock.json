@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "78ec7abb4745f0f5e4a840af03a2fbe3166265cc",
+  "normalization": "CRLF_to_LF_only",
+  "files": {
+    "world/society-bridge-src/src/main/java/dev/qiandeng/maw/NativeRegistryDump.java": "c4a9bac80b0a9d1846048cc8424f8f651c46cf7d7ec4780b7ebe76b7bd8cccff",
+    "world/numen-compat-src/src/main/java/dev/qiandeng/maw/numencompat/mixin/NumenClientTransportMixin.java": "d969ac3b384d4da5e8a1a22915d26681152f78ba5545181efb4fea2fe5efe04e",
+    "world/numen-compat-src/src/main/java/dev/qiandeng/maw/numencompat/mixin/NumenNetworkChannelMixin.java": "f251e3ffce838c95a2dfc79a64e79b876b4b1af04805618ea88da3542e7712ee",
+    "world/numen-compat-src/src/main/java/dev/qiandeng/maw/numencompat/NumenCompat.java": "806b00ed26abe8019b5da5b3efd9c1d4c1f22ebdb708ebd54b196e4e9fad31ee",
+    "world/numen-compat-src/src/main/resources/maw_numen_compat.mixins.json": "c0fbc1cba88d791925bc9feca8e897eb70db7ebfe3ab526a481cff8d968d5661",
+    "world/numen-compat-src/src/main/resources/META-INF/neoforge.mods.toml": "7ee3e6579668cb0d05dc38e5697440a58ba232f140228b15b17a089c4bdc9580"
+  }
+}
