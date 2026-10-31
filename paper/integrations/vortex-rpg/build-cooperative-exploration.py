@@ -5,6 +5,12 @@ import argparse,copy,hashlib,json,os,re,subprocess,zipfile
 p=argparse.ArgumentParser(description=__doc__)
 for name in ['server','native-source','jdk','base-friend','output']:p.add_argument('--'+name,type=Path,required=True)
 a=p.parse_args();here=Path(__file__).resolve().parent;paper=here.parents[1]
+# This frozen qd32/.14 recipe must not silently package newer party sources
+# under its old, already reviewed artifact names.
+frozen_party_sources={'NativeParties':'4035c88d8ca0d5b308209ddb65da9fc2c59163a115eea79311aecabf69abebd7',
+                      'NativePartyView':'8f33a6d341d48d388ac4c7deaaf9a695123a961893213cdbc6a8de176aef7e38'}
+if any(hashlib.sha256((here/'src/org/qiandengji/vortex'/(name+'.java')).read_text(encoding='utf-8').encode('utf-8')).hexdigest()!=pin for name,pin in frozen_party_sources.items()):
+ raise SystemExit('Frozen cooperation source changed. Use build-four-player-party.py with the frozen cooperation artifacts, or check out the original cooperation source; no output was written.')
 base={'native':a.server/'plugins/VortexRPG-1.2.2-alpha-qd29.jar','bridge':a.server/'plugins/QiandengjiRpg-0.2.10.jar','friend':a.base_friend}
 sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
 pins={'native':'4751b69a677b33d35be859de405929b31e8f36b3a0254d7ab2c2b650a6c495d4','bridge':'5c091bc967d8041c2669abfcf9164bb4c810cdce2fe89004def5b664f37c1257','friend':'dac1286d7193bc533a0b6b7b0cbc6de161c02a27087649c73802f2ec685bd4a1'}

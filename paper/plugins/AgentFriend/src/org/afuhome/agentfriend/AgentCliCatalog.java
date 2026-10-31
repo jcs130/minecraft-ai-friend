@@ -402,6 +402,7 @@ final class AgentCliCatalog {
             Spec stashPut=specs.get("arena.stash.putslot");specs.put(stashPut.id(),new Spec(stashPut.id(),stashPut.category(),stashPut.mode(),stashPut.usage(),"按背包精确槽位直接远程存箱，无需先传送或打开GUI","通用travel已可用；成功2魔力；绑定保护保持；按moved和stash list核对",stashPut.returns()));
             Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
             nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","先status查邀请/成员/集合；create→invite→对方accept才组队，聊天约定不算","复用原Vortex权限；集合可locate tp；会话队伍不代表副本参战，原生重启后须重组");
+            nativeSpec(specs,"guild.party.plan","read","/mycli guild party plan <发起者> <伙伴...>","多人组队的本人下一步；四人列四个准确名字，复用同一原生队伍","只读，不代建队/邀请/接受；已在不同队伍时先协商，不自动退队。人数上限由原生管理器执行，名单不是入队证明");
             for(String action:List.of("status","create","invite","accept","decline","leave","disband","kick","menu"))nativeSpec(specs,"guild.party."+action,action.equals("status")?"read":action.equals("menu")?"gui":"write","/mycli guild party "+action+(Set.of("invite","kick").contains(action)?" <在线玩家名>":""),switch(action){case "status"->"查本人队长和成员；无队伍是正常状态";case "create"->"创建原生队伍，不自动邀请或开副本";case "invite"->"邀请在线队友，需对方主动accept";case "accept"->"接受本人有效邀请，不会自动进入副本";case "decline"->"拒绝本人待接受邀请";case "leave"->"退出原生队伍；原副本场次另查status";case "disband"->"队长解散原生队伍";case "kick"->"依原生队伍职权移出在线成员";default->"打开原生组队菜单";},"仅本人；原生组队权限；操作免费，邀请和队伍为会话状态；成功后用guild party status核对");
             return specs;
         }

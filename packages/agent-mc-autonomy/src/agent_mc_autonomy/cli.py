@@ -50,7 +50,7 @@ async def play(settings, entry, data, brain_config, goal, viewer_entry=None, *, 
 
 def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_factory=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check", "status", "run", "submit-goal", "feedback", "submit", "receipt", "stop",
+    parser.add_argument("command", choices=["check", "status", "social-status", "run", "submit-goal", "feedback", "submit", "receipt", "stop",
                                             "recovery-assess", "acknowledge-unknown",
                                             "model-config", "model-list", "model-check", "auth-login", "auth-forget"])
     parser.add_argument("--config", type=Path, required=True)
@@ -125,6 +125,9 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
                     evidence_id=args.evidence_id, attest_prior_processes_exited=args.attest_prior_processes_exited,
                     choice=("acknowledge-clean-stop-read-gap" if args.clean_stop_read_gap else "acknowledge-unknown")
                         if args.acknowledge_unknown else "", native_request_ids=args.native_request_id)
+        elif args.command == "social-status":
+            from .social_diagnostics import inspect_social
+            result = inspect_social(directory, settings)
         elif args.command == "status":
             result = observation(directory)
         elif args.command == "receipt":

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .argument_correction import ArgumentCorrections, syntactic
 from .bridge import json_content, outcome, text_content
+from .chat_noop import ChatNoopReview
 from .container_recovery import ContainerRecovery
 from .context import (
     assemble,
@@ -31,12 +32,11 @@ from .context_evidence import (
     project_values,
     retire_native_sources,
 )
+from .control_motion import derive_control_motion
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
 from .effects import EffectRecovery, body_changed
-from .control_motion import derive_control_motion
-from .chat_noop import ChatNoopReview
 from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
 from .observations import (
@@ -46,8 +46,8 @@ from .observations import (
     receipt_view,
     spatial_observations,
     spatial_text,
-    terminal_step_outcomes,
     terminal_repeat_evidence,
+    terminal_step_outcomes,
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
@@ -58,6 +58,7 @@ from .planner import (
     PlannerUnavailableError,
 )
 from .reply_quality import repeated_plain_reply
+from .social import SocialInbox
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .tool_schema import argument_error, provider_schema
 from .viewer_public import tool_receipt
@@ -450,6 +451,7 @@ class Controller:
         self.pending = {}
         self.action_owners = {}
         self.recent = []
+        self.social = SocialInbox(data, settings.social, settings.username)
         self.groups = []
         self.outcome_history_ids = set()
         self.turn = None
@@ -776,9 +778,24 @@ class Controller:
                 life = lifecycle(self.game_facts)
                 if current and isinstance(life, dict) and life.get("episodeId") == current["id"]:
                     self.publish(death_episode=current)
+        for event in value.get("events", []):
+            self.social.note_transport(event)
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
-                           and (foreign_execution_key is None or ((e.get("execution") or {}).get("kind"), (e.get("execution") or {}).get("id")) != foreign_execution_key))
+                           and (foreign_execution_key is None or ((e.get("execution") or {}).get("kind"), (e.get("execution") or {}).get("id")) != foreign_execution_key)
+                           and not self.social.offer(e))
         self.recent = retain_events(self.recent, byte_limit=self.settings.context_tokens if self.settings.context_mode == "full" else None)
+
+    def refresh_social(self):
+        if not self.settings.social.enabled:
+            return False
+        # The durable inbox is the single pending lane for companion chat.
+        # Native tasks, human input and barriers retain their original ownership.
+        queued = self.social.ready(busy=self.stop_requested() or self.death_waiting
+                                   or self.death_recovery is not None)
+        self.recent = [e for e in self.recent if not self.social.owns(e)]
+        self.recent.extend({**e, "trigger": "debounce"} for e in queued)
+        self.publish(social_scheduling=self.social.status())
+        return bool(queued)
 
     def clear_read_activity(self):
         self.read_activity.clear()
@@ -1001,8 +1018,8 @@ class Controller:
             self.receipt({"events": [event], "execution": event.get("execution")})
             trigger = event.get("trigger")
             trigger = trigger.get("type") if isinstance(trigger, dict) else trigger
-            wake |= terminal or trigger in {"preempt", "interrupt", "flush", "debounce"}
-            urgent |= trigger in {"preempt", "interrupt"}
+            wake |= terminal or (not self.social.owns(event) and trigger in {"preempt", "interrupt", "flush", "debounce"})
+            urgent |= not self.social.owns(event) and trigger in {"preempt", "interrupt"}
         if self.death_recovery and not page.get("hasMore", False):
             # Poll only native facts while recovering; cancellation receipts must
             # drain before one fresh decision can bypass the ordinary throttle.
@@ -1012,6 +1029,7 @@ class Controller:
                 self.continuation_ready = True
                 self.continuation_needed = True
                 wake = True
+        wake |= self.refresh_social()
         return wake, urgent, page.get("hasMore", False)
 
     async def archive_receipt(self, request_id, name, result, *, local_only=False):
@@ -1283,6 +1301,8 @@ class Controller:
             result = {"protocol": PROTOCOL, "failed": True, "execution": None,
                       "dispatched": False, "origin": "controller_validation", "text": error}
             return result, await self.archive_receipt(request_id, name, result)
+        if problem := self.social.speech_problem(name, arguments):
+            return problem, await self.archive_receipt(request_id, name, problem)
         if name == "goal_report" and not self.active_goal:
             # A report about the standing goal is a local planning error, not a
             # failed game connection or an uncertain mutation. Preserve the reply
@@ -1932,6 +1952,7 @@ class Controller:
         return window
 
     async def turn_once(self, goal, prefix, tools):
+        self.refresh_social()
         if self._event_poll is not None or self._deferred_event_drain:
             self.preempted = True
             self.continuation_needed = True
@@ -1964,6 +1985,8 @@ class Controller:
                 if self.lookahead_anchor:
                     round_tools = self.lookahead_tools(round_tools)
                 notice = self.planner_notice
+                if self.settings.social.enabled:
+                    notice = (notice + "\n" if notice else "") + encode(self.social.context())
                 if self.lookahead_anchor:
                     notice = (notice + "\n" if notice else "") + (
                         f"Planning ahead of still-owned native execution {self.lookahead_anchor[1]}. "
@@ -2083,7 +2106,11 @@ class Controller:
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
                     profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
                         death=bool(episode_id and episode_id!=self.profile_death_id))
+                    self.social.model_started(
+                        [consumed[i] for i in budget["event_delivery"]["included_indices"]], self.turn)
                     response = await self.decide_with_events(messages, wire_tools, profile)
+                    if response is not None:
+                        self.social.model_finished(self.turn)
                 except (PlannerResponseError, PlannerUnavailableError, PlannerRequestRejectedError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                         output.write(encode({**self.model_timing(), "turnId": self.turn, "rejected": error.diagnostic, "dispatched": False,

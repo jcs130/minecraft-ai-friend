@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from .decision_profiles import DecisionSettings
 from .fast import FastSettings
 from .native_settings import NativeSettings
+from .social import SocialSettings
 
 DEFAULT_CONTEXT_TOKENS = 65536
 
@@ -192,6 +193,7 @@ class Settings:
     knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
     decision_policy: DecisionSettings = field(default_factory=DecisionSettings)
     native: NativeSettings = field(default_factory=NativeSettings)
+    social: SocialSettings = field(default_factory=SocialSettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -309,6 +311,7 @@ class Settings:
             knowledge=KnowledgeSettings.parse(raw.get("knowledge", {})),
             decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),
             native=NativeSettings.parse(raw.get("native", {})),
+            social=SocialSettings.parse(raw.get("social", {})),
         )
 
     def require_server(self) -> None:

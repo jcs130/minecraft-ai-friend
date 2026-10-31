@@ -145,6 +145,9 @@ export class MinecraftChatProvenance {
       return { chatTransport: source.position, identityEvidence: 'packet-sender', senderUuid: source.sender };
     }
     const player = listed.find(([key, value]) => (value.username ?? key).toLowerCase() === username.toLowerCase());
-    return player ? { chatTransport: source.position, identityEvidence: 'player-list-format' } : null;
+    return player ? { chatTransport: source.position, identityEvidence: 'player-list-format',
+      // Preserve the actual online-list identity for downstream companion routing.
+      // This is still format/list evidence, never upgraded to a signed packet.
+      ...(player[1].uuid ? { senderUuid: player[1].uuid } : {}) } : null;
   }
 }

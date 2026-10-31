@@ -14,7 +14,8 @@ final class NativePartyView {
         var out=new LinkedHashMap<String,Object>();out.put("available",true);out.put("type","party");
         out.put("queryOnly",true);out.put("sessionOnly",true);out.put("inParty",party.isPresent());
         out.put("inviteStateKnown",true);out.put("location",PlayerLocationView.location(p));
-        out.put("members",List.of());
+        out.put("selfUuid",p.getUniqueId().toString());out.put("partyId",null);
+        out.put("members",List.of());out.put("memberCount",0);
         var invite=manager.pendingInviteOf(p.getUniqueId());
         out.put("pendingInvite",invite.map(i->Map.of("inviterUuid",i.inviterId().toString(),"inviter",name(i.inviterId()),
             "expiresInSeconds",Math.max(0,(i.expiresAtEpochMillis()-System.currentTimeMillis()+999)/1000),
@@ -24,7 +25,8 @@ final class NativePartyView {
             else next(out,"not_in_party","尚未组队；口头约定不会建队。发起者先 create，再 invite <在线名字>；对方本人 accept。先查可见玩家名","/mycli locate list");
             return out;
         }
-        var s=party.get();out.put("leaderUuid",s.leaderId().toString());out.put("leader",name(s.leaderId()));
+        var s=party.get();out.put("partyId",s.partyId().toString());
+        out.put("leaderUuid",s.leaderId().toString());out.put("leader",name(s.leaderId()));
         var members=s.members().stream().map(id->{var row=new LinkedHashMap<String,Object>();
             row.put("uuid",id.toString());row.put("name",name(id));row.put("role",s.roles().get(id).name());
             row.putAll(PlayerLocationView.relative(p,Bukkit.getPlayer(id)));return row;
