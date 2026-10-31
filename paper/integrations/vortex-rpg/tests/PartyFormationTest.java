@@ -62,6 +62,23 @@ public final class PartyFormationTest {
         try{PartyFormation.plan(E,FOUR,Map.of(),Map.of());throw new AssertionError("outsider accepted");}
         catch(IllegalArgumentException expected){checks++;}
         var source=team(A,B);var before=new HashMap<>(source);plan(A,source,invites);check(source.equals(before));
+        // Outsiders still occupy native slots. Do not advertise invitations or
+        // acceptance which cannot form the requested roster under the real cap.
+        UUID extra=new UUID(0,6);
+        var full=team(A,B,C,E,extra);var fullBefore=new HashMap<>(full);
+        for(UUID self:List.of(A,B,C,D)){
+            var blocked=plan(self,full,Map.of(D,new PartyFormation.Invitation(PARTY,A)));
+            phase(blocked,"capacity_conflict","inspect");
+            check(blocked.get("nextCommand").equals("/mycli guild party status"));
+            check(blocked.get("nativeCapacity").equals(5));
+        }
+        check(full.equals(fullBefore));
+        phase(plan(A,team(A,B,E,extra),Map.of()),"capacity_conflict","inspect");
+        // An exact fit is still actionable; a fifth existing member does not
+        // invalidate a roster which has already joined successfully.
+        phase(plan(A,team(A,B,C,E),Map.of()),"inviting","invite");
+        check(plan(A,team(A,B,C,E),Map.of()).get("nextCommand").equals("/mycli guild party invite Peer4"));
+        phase(plan(A,team(A,B,C,D,E),Map.of()),"formed","inspect_gathering");
         // Existing two-member parties stay valid; no four-person-only global restriction.
         check(PartyFormation.plan(A,List.of(actor(A),actor(B)),two,Map.of()).get("membershipConfirmed").equals(true));
         System.out.println("four-party-checks="+checks+" passed=true");

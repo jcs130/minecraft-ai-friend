@@ -10,11 +10,13 @@ final class PartyFormation {
     }
     record Invitation(UUID party, UUID inviter) {}
     private static final String STATUS = "/mycli guild party status";
+    // Matches the source-pinned native manager, including members outside this plan.
+    private static final int NATIVE_CAPACITY = 5;
     private PartyFormation() {}
 
     static Map<String,Object> plan(UUID self, List<Actor> requested,
             Map<UUID,Team> nativeTeams, Map<UUID,Invitation> nativeInvites) {
-        if (self == null || requested == null || requested.size() < 2 || requested.size() > 5)
+        if (self == null || requested == null || requested.size() < 2 || requested.size() > NATIVE_CAPACITY)
             throw new IllegalArgumentException("invalid_party_plan");
         var actors = new LinkedHashMap<UUID,Actor>();
         var names = new HashSet<String>();
@@ -39,6 +41,7 @@ final class PartyFormation {
         var out = new LinkedHashMap<String,Object>();
         out.put("type", "partyPlan"); out.put("queryOnly", true); out.put("sessionOnly", true);
         out.put("requiredMembers", actors.size()); out.put("membershipConfirmed", false);
+        out.put("nativeCapacity", NATIVE_CAPACITY);
         out.put("nearbyHearingVerified", false); out.put("activityParticipationVerified", false);
         out.put("requested", actors.values().stream().map(a -> Map.of("uuid", a.id().toString(),
             "name", a.name(), "online", a.online())).toList());
@@ -59,6 +62,11 @@ final class PartyFormation {
                 return step(out, "formed", "inspect_gathering", STATUS,
                     "所列成员已在同一个真实队伍中；再查世界和集合，入队不等于听见聊天、完成分工或副本参战");
             }
+            long missing = actors.keySet().stream().filter(id -> !team.members().contains(id)).count();
+            if (team.members().size() + missing > NATIVE_CAPACITY)
+                return step(out, "capacity_conflict", "inspect", STATUS,
+                    "原生队伍已有" + team.members().size() + "人，名单还缺" + missing
+                    + "人，超过五人容量；先协商调整名单或队伍，不反复邀请、不自动踢人或退队");
         }
         if (!actors.containsKey(leader))
             return step(out, "leader_outside_roster", "inspect", STATUS,
