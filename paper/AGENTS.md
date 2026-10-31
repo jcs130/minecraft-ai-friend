@@ -1,5 +1,7 @@
 ## 2026-11-01 Native2.6.5 remains candidate
 
+Website 0.8.34 / Skill 1.3.7 remain prepared only: 375 portal pass / 3 existing skips, 13 immutable-package/download checks, structure validation, 4 verified new OSS objects. Old releases and the formal stable download alias are unchanged. Matching renderer runtime has 8913 frozen files and verified native-profile imports. PR offline lint retains 16 inherited main errors; this branch does not change autonomy source. Production activation and the native shader memory issue remain outstanding.
+
 Actual relay11 + Numen3 + catalog17 + hint60 + consumer21 checks pass; native shader-off original BigFish client frame is real, not shader/photo-service acceptance. Shared renderer PR13 merged; production2.4.1, website/observer/Bedrock/native installs still require coordinated activation. Keep original native-platform/TLM for Numen HybridBodyChunks, authentication/UUID/inventory unchanged. Prepared32 exact choices are private snapshots requiring cold refresh, never world restore. AF44/bridge16 travel candidates retain byte-identical already-verified implementations. See docs/YSM_265_MIGRATION_20261031.md.
 
 ## 2026-10-31 自动参战、原版女仆与网页兼容已上线

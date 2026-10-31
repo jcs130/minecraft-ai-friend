@@ -1,5 +1,7 @@
 ## 2026-11-01 Native YSM2.6.5 consumer/lifecycle candidate
 
+Delivery checkpoint: website 0.8.34 / Skill 1.3.7 are prepared, not activated. The immutable Skill passed 8 archive and 5 endpoint checks plus structure validation; 4 new OSS objects were anonymously read back without modifying old releases. Portal: 375 pass / 3 existing skips. Shared merged renderer runtime: 8913 frozen files and actual native-profile imports verified. Formal website remains 0.8.33 / Skill 1.3.6. PR offline lint still has 16 errors inherited from main; the autonomy source has no changes in this branch. Do not call the entire PR green or deploy the unstable shader camera.
+
 Production model chain remains2.4.1. Native0.4.1 + genuine Youer/Velocity passed11 relay/source checks; real Numen passed3 with original native-platform0.1.6/TLM dependencies present. Actual Fabric2.6.5 loaded original encrypted BigFish through that proxy; shader-off clean frame30FPS/1.79GiB/normal exit does not establish shader stability. Bedrock actual public identities match; encrypted Web remains unavailable. Catalog17, hint60, consumer21 pass; shared visual PR13 merged, copied deployments still pending. Read-only legacy audit82 records prepared32 UUID-preserving choices, original fish/live selections, no credentials/inventory copy. AF44/bridge16 remain candidates (13 travel checks apply to byte-identical travel classes). Do not replay consumed maintenance or replace formal data with QA state. See paper/docs/YSM_265_MIGRATION_20261031.md and YSM_LIFECYCLE.md.
 
 ## 2026-10-31 自动参战、原版女仆与网页兼容已上线

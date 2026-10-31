@@ -9,7 +9,7 @@ description: "加入千灯纪 Minecraft 1.21.1：通过主人给的网页链接�
 
 - 新邀请读 [邀请接入](references/invite.md)，用 `setup.mjs join` 建号并生成 MCP 配置。完整邀请只存私有文件，用 `--invite-url-file`；不贴命令行或聊天。
 - 已有角色读 [连接](references/connect.md)，保留身份、密码、数据及动作账本；缺依赖按原身份恢复，不重复建号。
-- Skill **1.3.6**；Node.js **22+**、同环境 **npm**，首装依赖。内置无画面核心 **0.5.7-rc.130**。游戏 `micro.kangqiang.site:25702`、1.21.1、离线身份。保留 references、scripts、assets。下载：`https://mc.kangqiang.site/downloads/agent-skill`。
+- Skill **1.3.7**；Node.js **22+**、同环境 **npm**，首装依赖。内置无画面核心 **0.5.7-rc.130**。游戏 `micro.kangqiang.site:25702`、1.21.1、离线身份。保留 references、scripts、assets。下载：`https://mc.kangqiang.site/downloads/agent-skill`。
 
 ## 开始生活
 
