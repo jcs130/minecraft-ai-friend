@@ -72,6 +72,16 @@ final class ModelCatalog {
         revision=sha(JSON.toJson(next.values().stream().map(a->a.id+":"+a.sha256+":"+a.reason).toList()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
     static boolean validId(String id){return id!=null && id.length()<=96 && id.matches("[\\p{L}\\p{N}_./-]+") && !id.contains("..") && !id.startsWith("/");}
+    /** Export one registered public source using the same bounds and converter as scan(). */
+    static Asset exportSource(Path base,String id,String version) throws Exception {
+        if(!Set.of("2.4.1","2.6.5").contains(version)||!validId(id))throw new IOException("YSM_EXPORT_ARGUMENTS");
+        Path root=base.toRealPath(),source=root.resolve(id).normalize();
+        if(!root.getFileName().toString().equals("custom")||!source.startsWith(root)||!source.toRealPath().equals(source)||Files.isSymbolicLink(source))throw new IOException("YSM_EXPORT_PATH");
+        if(Files.isDirectory(source))return convert(id,folder(source),version);
+        if(version.equals("2.6.5")&&source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip"))return convert(id,archive(source),version);
+        if(source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ysm"))throw new IOException("YSM_ENCRYPTED_SOURCE_REQUIRED");
+        throw new IOException("YSM_SOURCE_NOT_REGISTERED");
+    }
     private static boolean safe(String name){return name!=null && name.length()<=256 && !name.startsWith("/") && !name.contains("\\") && !name.contains(":") && !Arrays.asList(name.split("/",-1)).contains("..");}
     private static byte[] read(InputStream in,int limit) throws IOException {byte[] bytes=in.readNBytes(limit+1);if(bytes.length>limit)throw new IOException("YSM_FILE_BYTE_BUDGET");return bytes;}
     private static Map<String,byte[]> folder(Path root) throws IOException {

@@ -1,6 +1,6 @@
 # Optional native YSM adapter — isolated candidate
 
-`AgentAppearanceNative 0.4.0` runs on Youer 1.21.1 with the original NeoForge YSM **2.6.5**. It reads the actual player's native attachment, invokes the original ordinary-player selection handler, and publishes appearance metadata through the existing `mcagent:appearance` and `mcagent:ysm_asset` channels. It creates no player, model worker, HTTP listener, native handshake, OP permission, or model ownership grant.
+`AgentAppearanceNative 0.4.1` runs on Youer 1.21.1 with the original NeoForge YSM **2.6.5**. It reads the actual player's native attachment, invokes the original ordinary-player selection handler, and publishes appearance metadata through the existing `mcagent:appearance` and `mcagent:ysm_asset` channels. It creates no player, model worker, HTTP listener, native handshake, OP permission, or model ownership grant.
 
 This is an isolated integration candidate, **not a deployed model-chain migration**. The production model proxy, viewer consumers, client downloads and separately maintained camera must be migrated and verified together. Do not install it beside the old appearance publisher: two publishers would compete for the same channels.
 
@@ -32,3 +32,7 @@ A stopped, verified migration may seed a private ledger entry with `phase: "rest
 The marked loopback Youer fixture passed 12 integration checks plus three checks after a normal cold restart: distinct initial choices, original public assets and hash, personal selection isolation, exact prior-model restoration, spectator drone restoration, observer exclusion, the original encrypted fish/white model, preserved UUID/body/inventory, saved choices and no setup replay. Shared regression checks: 8 identity + 31 self-selection + 45 automatic-selection; catalog checks: 14 including both version profiles. Earlier failed probes are retained privately, including a localized Chinese RCON receipt initially tested with an English-only assertion.
 
 These checks do not establish modded-client pixels, live camera compatibility, a complete modpack/proxy migration, or browser/Bedrock scene parity. See the [migration checklist](../../docs/YSM_265_MIGRATION_20261031.md).
+
+2026-11-01 follow-up: 0.4.1 and the shared single-source exporter passed 17 catalog checks, 11 real Youer/Velocity/public-source checks, and three genuine Numen body checks. The original encrypted fish also loaded in an actual 2.6.5 Fabric client through that proxy; a shader-disabled 30 FPS clean-UI image was verified. Bedrock consumed the same actual public UUID/body/source hashes and omitted the encrypted model. The shared renderer change is merged in mc-visual-console PR13; deployed copies still need a matched build. Native shader stability is a separate unresolved issue.
+
+The isolated Numen fixture initially omitted the existing native-platform mod and failed on `HybridBodyChunks`. The matching native-platform 0.1.6 plus TLM dependencies resolved that fixture failure. Preserve those production dependencies during a model-chain migration. No real accounts, passwords, inventory or world progress were copied into this fixture.

@@ -165,7 +165,7 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
                 }catch(Exception unavailable){source.sendMessage("原生状态或模型授权未确认；请查询实际模型，未绕过原生规则。");}
                 return true;
             }
-            source.sendMessage("AgentAppearanceNative 0.4.0；原生YSM2.6.5；实际模型见角色 /appearance status。");return true;
+            source.sendMessage("AgentAppearanceNative 0.4.1；原生YSM2.6.5；实际模型见角色 /appearance status。");return true;
         }
         if(!player.isOnline()){tell(player,"请先完成游戏登录并进入世界。");return true;}
         if(args.length==1&&args[0].equals("status")){

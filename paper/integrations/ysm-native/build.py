@@ -22,12 +22,12 @@ sources = list((ROOT / 'src').rglob('*.java')) + [shared / name for name in [
 assert all(source.is_file() for source in sources)
 subprocess.run([str(args.jdk / 'bin/javac.exe'), '-proc:none', '-encoding', 'UTF-8', '--release', '21',
                 '-cp', ';'.join(map(str, args.classpath)), '-d', str(classes), *map(str, sources)], check=True)
-jar = out / 'AgentAppearanceNative-0.4.0.jar'
+jar = out / 'AgentAppearanceNative-0.4.1.jar'
 with zipfile.ZipFile(jar, 'w', zipfile.ZIP_DEFLATED) as archive:
     for file in classes.rglob('*.class'):
         archive.write(file, file.relative_to(classes).as_posix())
     archive.writestr('plugin.yml', '''name: AgentAppearanceNative
-version: 0.4.0
+version: 0.4.1
 main: org.afuhome.appearance.NativeAppearance
 api-version: '1.21'
 description: Optional original-body YSM metadata and self selection for Youer.

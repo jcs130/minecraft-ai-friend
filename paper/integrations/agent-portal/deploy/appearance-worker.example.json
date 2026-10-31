@@ -5,7 +5,8 @@
   "serverDir": "E:/MC/server",
   "rconClientModule": "E:/MC/ops/rcon-client.mjs",
   "rconPort": 25575,
-  "modelRoot": "E:/MC/private/ysm/worker/config/yes_steve_model/custom",
-  "appearanceStateFile": "E:/MC/private/ysm/appearance-state.json",
+  "ysmVersion": "2.6.5",
+  "modelRoot": "E:/MC/private/ysm/native-265/custom",
+  "appearanceStateFile": "E:/MC/private/ysm/native-265/appearance-state.json",
   "ysmServicesConfig": "E:/MC/ops/ysm-services.json"
 }

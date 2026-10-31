@@ -1,5 +1,13 @@
 # YSM 服务启动维护与回退
 
+## 2026-11-01 原生2.6.5候选
+
+显式`appearanceBackend: "native265"`保留现有认证代理，只监管Proxy一个JVM；不启动旧Worker，也不伪造Worker存活状态。新部署可省略Worker配置，旧配置可保留供回退核对。需要`native.stateFile`、`native.properties`、`native.rconPort`和已核验原NeoForge JAR摘要。状态文件须在受备份的私有根内；模型原始源放在私有`native-265/custom`，模型消费者用直接路径，避免跨盘改名或符号链接绕过上传校验。
+
+已有认证控制器的模型白名单在此模式转发到实际游戏RCON；原生插件仍按真实UUID/身体调用原普通选择处理器。命令受理后继续读取实际状态，不把受理回执当成功。`restart-worker`明确返回原生模式没有Worker，不会因此重启游戏。`ysm model reload`仍是显式白名单操作。未知请求和原子日志规则保持。
+
+PowerShell停启/备份兼容省略Worker的新配置；保留旧目录时仍检查残留监听与备份一致性。上线必须协调原生模组/插件、旧发布器停用、原选择、网页/基岩配置及源码冻结。认证代理的端口、转服、凭据和心跳保持；不能用隔离无认证代理的成功代替正式认证验收。实机候选证据及剩余门禁见[YSM迁移](YSM_265_MIGRATION_20261031.md)。以下旧Proxy/Worker章节保留历史版本说明。
+
 生命周期代码接入原 `manage-server.ps1`，正式生效状态见 [YSM适配](YSM_ADAPTATION.md) 和 [版本说明](SERVER_UPDATES.md)。维护、Watchdog、网关和女神共用同一配置；不新增计划任务或公网入口。
 
 ## 服务关系

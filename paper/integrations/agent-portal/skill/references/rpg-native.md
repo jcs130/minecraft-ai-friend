@@ -1,8 +1,10 @@
 # 原生 RPG：只读当前需要的一步
 
-AF.43 自动参战规则为待部署候选，先看实际 `/mycli dungeon --help`。服务端说明自动同队后：一人在首室开场，进入同一遗迹挑战区且装备、职业等级达标者自动参战；不需要create/invite/accept或join。中途加入、离开与断线不抹去真实参战记录，通关后有贡献者均生成个人奖励凭据，直接claim，无需返回首室。首次查询确认participant；日常长期队伍仍用guild party，不能把旧队伍或历史场次当现在的参战身份。
+AF.43 自动参战规则已于2026-10-31正式发布，仍先看实际 `/mycli dungeon --help`：一人在首室开场，进入同一遗迹挑战区且装备、职业等级达标者自动参战；不需要create/invite/accept或join。中途加入、离开与断线不抹去真实参战记录，通关后有贡献者均生成个人奖励凭据，直接claim，无需返回首室。首次查询确认participant；日常长期队伍仍用guild party，不能把旧队伍或历史场次当现在的参战身份。
 
-2026-10-31结伴探索候选未上线：正式仍以实时帮助为准。新队伍查询会区分未组队、有效邀请、只有自己、集合中和已集合；聊天答应和在线玩家名单都不代表入队。用 `/mycli guild party status`，发起者create/invite，对方本人accept。`skills info team`说明原队友传送 `/mycli locate tp <名字>`（8魔力/20秒），不需要另装工具；重启后先查实际队伍，不能靠旧记忆继续假定同队。
+结伴探索已随AF.43上线：队伍查询区分未组队、有效邀请、只有自己、集合中和已集合；聊天答应和在线玩家名单都不代表入队。用 `/mycli guild party status`，发起者create/invite，对方本人accept。`skills info team`说明原队友传送 `/mycli locate tp <名字>`（8魔力/20秒），不需要另装工具；重启后先查实际队伍，不能靠旧记忆继续假定同队。
+
+常用移动功能仍保留：到安全地点后 `waypoint add 营地` 记录，`waypoint list` 查询，`goto personal:营地` 返回（成功6魔力）；可用 `waypoint share 营地` 生成分享目标。组队集合或去伙伴身边求助用 `locate tp <准确在线名字>`（8魔力、20秒），先核对队伍、维度和实际到达。村庄敌情支援用警报给的 `village support <事件ID>`；它选择敌人附近安全落点，不能把玩家名当事件ID。不要把传送点术或队友传送硬写成 `cast travel/team`；先 `skills info travel/team` 取服务器给出的入口。
 
 登高是山地探索，不能只垫到指定Y。服务器启用本轮规则后，去开阔山脊、核对周边地形并落地横向走动；观景台和合影可选，不是硬门槛。`guild engineering <ID>`应直接给标题和阶段提示；先看说明再接取，当前阶段按guild status/claim继续。查不到就先换附近任务，不重复搭柱或刷查询。
 
@@ -16,7 +18,7 @@ AF.43 自动参战规则为待部署候选，先看实际 `/mycli dungeon --help
 
 饥饿用随身食物或 `cast food` 饱食术（3魔力、补4饱食、30秒冷却）；`cast selfheal` 只回血。冷却中不要重发。home/selfheal/food/blink/starbolt/frostnova/give 七项基础技人人可用，无需学习；基础施放不加 `--json`，查询用 `skills info <ID>`。
 
-闪现先按本人实时 `skills info blink` 瞄准和等待冷却。服务器说明支持“瞄准优先、前方最远”后，瞄准安全地面到该处，平视空气则按水平朝向选25格内最远安全地面；不穿墙、封闭天花板或危险地面。拒绝后按原因换目标，不循环重发。2026-10-31这项仅为已验证候选，不能用Skill源码替代正式服回执。
+闪现先按本人实时 `skills info blink` 瞄准和等待冷却。AF.43已上线“瞄准优先、前方最远”：瞄准安全地面到该处，平视空气则按水平朝向选25格内最远安全地面；不穿墙、封闭天花板或危险地面。拒绝后按原因换目标，不循环重发。
 
 未选职才 `profession list` → `profession info <ID>` → 本人 `profession choose <ID>`。骑士、法师、游侠、牧师、驯兽师、工程师各有初始装备与技能，不重选旧角色。`skills list/info` 查目标、费用与解锁；`cast` 施放，`prepare` 只设置点击技能，`learn` 按明示条件花学习点或天赋点，被动常驻不施放。
 

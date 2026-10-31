@@ -1,3 +1,7 @@
+## 2026-11-01 Native2.6.5 remains candidate
+
+Actual relay11 + Numen3 + catalog17 + hint60 + consumer21 checks pass; native shader-off original BigFish client frame is real, not shader/photo-service acceptance. Shared renderer PR13 merged; production2.4.1, website/observer/Bedrock/native installs still require coordinated activation. Keep original native-platform/TLM for Numen HybridBodyChunks, authentication/UUID/inventory unchanged. Prepared32 exact choices are private snapshots requiring cold refresh, never world restore. AF44/bridge16 travel candidates retain byte-identical already-verified implementations. See docs/YSM_265_MIGRATION_20261031.md.
+
 ## 2026-10-31 自动参战、原版女仆与网页兼容已上线
 
 21:28配套切换完成，21:32正式复核：AF.43/桥.15/qd32-cooperation/原生平台.6/Observer.2已运行，官网0.8.33、Skill1.3.6和匹配399文件的网页资源已发布。122预检、180/60/10预告、正常停启、E/F当时游戏/认证冷刷新后安装；40正式检查通过，235角色相关文件/20职业档案冷安装一致、71原凭据行保持、50无关插件未变，原女神7任务恢复，6角色已回连，相机ready与观战新心跳已核。

@@ -34,11 +34,14 @@ final class AppearanceGuide {
                     if(Files.size(path)>1024*1024)return;
                     var state=JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                     long age=System.currentTimeMillis()-state.get("writtenAt").getAsLong();
-                    if(!"freesia_worker".equals(state.get("source").getAsString())||age< -1000||age>15000)return;
+                    String source=state.get("source").getAsString();
+                    if(!java.util.Set.of("freesia_worker","ysm_native_backend").contains(source)||age< -1000||age>15000)return;
                     for(var entry:state.getAsJsonArray("players")){
                         var row=entry.getAsJsonObject();
                         if(uuid.toString().equalsIgnoreCase(row.get("playerUuid").getAsString())
                                 &&row.get("entityId").getAsInt()==entity&&row.get("available").getAsBoolean()){
+                            if(!AppearanceHintPolicy.trustedProfile(source,row.has("ysmVersion")?row.get("ysmVersion").getAsString():null,
+                                row.has("protocolVersion")?row.get("protocolVersion").getAsString():null,row.has("jarSha256")?row.get("jarSha256").getAsString():null))return;
                             model=AppearanceHintPolicy.customModel(row.get("modelId").getAsString());break;
                         }
                     }

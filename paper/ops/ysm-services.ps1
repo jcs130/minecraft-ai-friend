@@ -11,6 +11,12 @@ function Ysm-Control([string]$action) {
     if ($LASTEXITCODE -ne 0) { throw "YSM control $action failed: $($output -join ' ')" }
     return (($output -join "`n") | ConvertFrom-Json)
 }
+function Ysm-ChildPorts($c) {
+    $ports=@($c.proxy.port)
+    if ($c.PSObject.Properties.Name -contains 'worker' -and $null -ne $c.worker) { $ports+=@($c.worker.port) }
+    if ($c.PSObject.Properties.Name -contains 'workerControllerPort') { $ports+=@($c.workerControllerPort) }
+    return $ports
+}
 function Start-YsmServices {
     $c = Ysm-Config
     if (-not $c -or -not $c.enabled) { return }
@@ -47,21 +53,26 @@ function Stop-YsmServices {
         if ((Get-Date) -gt $deadline) { throw 'YSM services did not stop cleanly; backup cancelled' }
         Start-Sleep -Milliseconds 500
     }
-    foreach ($port in @($c.proxy.port,$c.worker.port,$c.workerControllerPort)) {
+    foreach ($port in @(Ysm-ChildPorts $c)) {
         if (Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { throw 'YSM child listener remains; backup cancelled' }
     }
-    Log 'YSM Proxy/Worker stopped cleanly'
+    Log 'Configured YSM services stopped cleanly'
 }
 function Backup-YsmServices([string]$destination) {
     $c = Ysm-Config
     if (-not $c -or -not (Test-Path -LiteralPath $c.root)) { return }
-    foreach ($port in @($c.controlPort,$c.proxy.port,$c.worker.port,$c.workerControllerPort)) {
+    foreach ($port in @($c.controlPort)+@(Ysm-ChildPorts $c)) {
         if (Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { throw 'YSM snapshot requires stopped services' }
     }
     $target = Join-Path $destination 'ysm-private'
     & robocopy.exe $c.root $target /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'logs' 'tmp' | Out-Null
     if ($LASTEXITCODE -ge 8) { throw 'YSM private snapshot failed' }
-    foreach ($relative in @('proxy\velocity.toml','worker\server.properties','proxy\plugins\agentappearance\models.json')) {
+    $requiredFiles=@('proxy\velocity.toml')
+    $nativeMode=$c.PSObject.Properties.Name -contains 'appearanceBackend' -and $c.appearanceBackend -eq 'native265'
+    foreach ($legacy in @('worker\server.properties','proxy\plugins\agentappearance\models.json')) {
+        if (-not $nativeMode -or (Test-Path -LiteralPath (Join-Path $c.root $legacy))) { $requiredFiles+=@($legacy) }
+    }
+    foreach ($relative in $requiredFiles) {
         if ((Get-FileHash -LiteralPath (Join-Path $c.root $relative)).Hash -ne (Get-FileHash -LiteralPath (Join-Path $target $relative)).Hash) { throw "YSM private snapshot mismatch: $relative" }
     }
 }
