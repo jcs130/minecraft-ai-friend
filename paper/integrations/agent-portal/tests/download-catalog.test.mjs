@@ -85,10 +85,13 @@ test('download page separates three host bundles, two shared components and orig
   t.after(() => dom.window.close());
   dom.window.fetch = url => fetch(new URL(url, f.origin));
   dom.window.eval(await fs.readFile(new URL('../public/downloads.js', import.meta.url), 'utf8'));
+  // Native client releases have their own static cards. Verify these three
+  // dynamic host/component/legacy groups without counting unrelated releases.
+  const cards=()=>dom.window.document.querySelectorAll('#package-downloads .download-card,#component-downloads .download-card,#advanced-downloads .download-card');
   const deadline = Date.now() + 4000;
-  while (dom.window.document.querySelectorAll('.download-card').length !== 9 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(dom.window.document.querySelectorAll('.download-card').length, 9);
-  assert.equal(dom.window.document.querySelectorAll('.download-card a[download]').length, 9);
+  while (cards().length !== 9 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(cards().length, 9);
+  assert.ok([...cards()].every(card=>card.querySelectorAll('a[download]').length===1));
   assert.equal(dom.window.document.querySelectorAll('#package-downloads .download-card').length, 3);
   assert.equal(dom.window.document.querySelectorAll('#component-downloads .download-card').length, 2);
   assert.equal(dom.window.document.querySelectorAll('#advanced-downloads .download-card').length, 4);

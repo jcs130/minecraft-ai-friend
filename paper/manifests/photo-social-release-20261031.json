@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "release": "photo-social-release-20261031-r1",
-  "state": "verified-local-candidate-not-deployed",
+  "state": "approved-awaiting-windows-confirmation-and-safe-window",
   "document": "paper/docs/PHOTO_SOCIAL_20261031.md",
   "productionChanged": false,
   "pendingPlanWritten": false,
@@ -57,7 +57,24 @@
     "desktopWidth": 1440,
     "mobileWidth": 390,
     "skillStructureValid": true,
-    "linuxValidation": "pending"
+    "linuxValidation": "passed-on-active-shared-realm-runtime",
+    "linuxWebsiteRuntimePassed": 360,
+    "linuxWebsiteRuntimeFailed": 0,
+    "linuxUnpublishedNekoTestFilesExcluded": 3,
+    "linuxSkillFreshInstallAndMcp": {
+      "passed": true,
+      "version": "1.3.5",
+      "sdk": "0.5.7-rc.130",
+      "freshNpmInstall": true,
+      "mcpInitialized": true,
+      "tools": 41,
+      "gameConnections": 0
+    },
+    "windowsCredentialProfile": "This background Windows identity receives DPAPI access denied; no plain fallback",
+    "imageFilesVerified": 115,
+    "unrelatedRuntimeFilesPreserved": true,
+    "websiteConsistentOnlineBackupOnBothDisks": true,
+    "websiteTemporaryReadOnlyTransferRevoked": true
   },
   "preservation": {
     "unrelatedParentJarEntries": 606,
@@ -78,5 +95,53 @@
     "rendered": false,
     "driverAndMemoryPrerequisitesMet": false
   },
-  "verifiedAt": "2026-10-31T10:13:47.106428+08:00"
+  "verifiedAt": "2026-10-31T10:42:52.277505+08:00",
+  "websiteRuntime": {
+    "image": "qiandengji-portal:0.8.33-photos-83b132507138",
+    "imageId": "sha256:e7faeb9ac69c0868b6142e2493b3838bd3be54791fea19b7ad61b37478811ff4",
+    "previousImageId": "sha256:1105c8ebb734a7dd809c03ea844f5de1dfa3198abb43bc0e4d9e0213e8942a18",
+    "previousContainerId": "546a5f269fcfefc4954e974f9ead5e10390c045f3c04fc5beb5f1f3fd18385bc",
+    "configSha256": "972313744d7f4dd0fb26e3c162ca97f98af22c51da2b1a9b1b6091d2c0d2ca1b",
+    "changedRuntimeFiles": [
+      "package-lock.json",
+      "package.json",
+      "public/app.js",
+      "public/downloads/qiandengji-agent-1.3.5.json",
+      "public/downloads/qiandengji-agent-1.3.5.zip",
+      "public/styles.css",
+      "src/agent-skill.mjs",
+      "src/gallery.mjs",
+      "src/photo-upload-routes.mjs",
+      "src/photo-uploads.mjs",
+      "src/server.mjs"
+    ],
+    "source": "narrow photo delta on active 0.8.32 shared-realm backend",
+    "nginxBodyLimits": [
+      "50M",
+      "9m"
+    ]
+  },
+  "maintenanceApproval": {
+    "approved": true,
+    "at": "2026-10-31T02:52:48.530867+00:00",
+    "scope": "photo/diary/upload/map plus reviewed cooperation/blink/home; excludes new YSM/RTX",
+    "started": false,
+    "systemConfirmation": "not received; previous requests returned cancelled",
+    "liveObserverIdentityRegistered": true,
+    "lastGate": {
+      "unconfirmedHumans": 0,
+      "activeDungeon": true
+    }
+  },
+  "deepFishModel": {
+    "productionAppearanceChanged": false,
+    "currentCompatibleVersion": "1.1.0",
+    "compatibleFilesEqualLatestBuild": 10,
+    "originalUpload": "dafeiyu-1.1",
+    "originalSha256": "e359cd467d880196142d02095a30f37890d829263440e3262f823652dd689dfe",
+    "currentYsm": "2.4.1",
+    "originalLoadFailure": "Unsupported ysm format version : 32",
+    "newNativeRenderVerified": false,
+    "includedInApprovedMaintenance": false
+  }
 }
