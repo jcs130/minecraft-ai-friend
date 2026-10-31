@@ -92,7 +92,12 @@ def generate(root):
     (package/'NativeBridge.java').write_text(text,encoding='utf-8')
     policy=native/'src/dev/qiandeng/maw/taunative/NativePolicy.java'
     (package/'NativePolicy.java').write_text(policy.read_text('utf-8').replace('package dev.qiandeng.maw.taunative;','package dev.qiandeng.maw.saoforge;'),encoding='utf-8')
-    contract=json.loads((native/'operations.json').read_bytes());contract['version']='0.1.2'
+    contract=json.loads((native/'operations.json').read_bytes());contract['version']='0.1.3'
+    sao_contract=json.loads((here/'sao-operations.json').read_bytes())
+    recipe_help=next(op for op in sao_contract['operations']if op['id']=='sao.recipes')
+    for op in contract['operations']:
+        if op['id']=='native.recipes':
+            op.update(description=recipe_help['description'],example=recipe_help['example'])
     (destination/'src/main/resources/native-operations.json').write_text(json.dumps(contract,indent=2),encoding='utf-8')
     shutil.copyfile(here/'sao-operations.json',destination/'src/main/resources/sao-operations.json')
     record={'shared_source':{str(p.relative_to(here.parent.parent)):digest(p) for p in (source,policy,native/'operations.json')},'generator_sha256':digest(Path(__file__)),'minecraft':'1.20.1','forge':'47.4.10','recipe_provider':True,'game_login_identity_only':True,'source_destination':str(destination)}

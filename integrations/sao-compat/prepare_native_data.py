@@ -44,22 +44,32 @@ def prepare(baseline_build,baseline_jar,output):
     if gameplay.count(before)!=1:raise ValueError('sao_read_receipt_changed')
     gameplay=gameplay.replace(before,before+'if(operation.equals("sao.recipes")){var d=out.getAsJsonObject("data");out.add("status",d.get("status"));out.add("complete",d.get("complete"));if(d.has("partialReason"))out.add("partialReason",d.get("partialReason"));}')
     (dest/'SaoGameplay.java').write_text(gameplay,encoding='utf-8')
+    resident=output/'src/main/java/dev/qiandeng/maw/numenserver/HeadlessRuntime.java'
+    resident_text=resident.read_text(encoding='utf-8')
+    anchor='    public static boolean managed(UUID id) { HeadlessRuntime r=INSTANCE;return r!=null&&r.bodies.containsKey(id); }'
+    if resident_text.count(anchor)!=1:raise ValueError('owned_resident_identity_anchor_changed')
+    reference=(HERE/'resident-reference/src/main/java/dev/qiandeng/maw/numenserver/HeadlessRuntime.java').read_text(encoding='utf-8')
+    begin=reference.index('    /** Attest only the actual current owner-bound native body, never a login name. */')
+    end=reference.index('    public static boolean authorizedDispatch()',begin)
+    resident.write_text(resident_text.replace(anchor,anchor+'\n'+reference[begin:end]),encoding='utf-8')
+    shutil.copy2(HERE/'forge-addon/src/main/java/dev/qiandeng/maw/saoforge/mixins/OwnedNumenAuthenticationMixin.java',dest/'mixins/OwnedNumenAuthenticationMixin.java')
     for name in ['RecipeDefinitions.java','SaoRecipes.java','MenuFacts.java','mixins/RecipeManagerMixin.java','mixins/KubeRecipeDecodeMixin.java','mixins/KubeRecipeReloadMixin.java']:shutil.copy2(HERE/'forge-addon/src/main/java/dev/qiandeng/maw/saoforge'/name,dest/name)
     resources=output/'src/main/resources'
     shutil.copy2(HERE/'sao-operations.json',resources/'sao-operations.json')
     shutil.copy2(HERE/'forge-addon/src/main/resources/maw_sao_recipes.mixins.json',resources/'maw_sao_recipes.mixins.json')
-    gradle=(output/'build.gradle').read_text(encoding='utf-8').replace("version = '0.1.1'","version = '0.1.2'")
+    auth_mixin=resources/'maw_sao_auth.mixins.json';auth_config=json.loads(auth_mixin.read_bytes());auth_config['mixins'].append('OwnedNumenAuthenticationMixin');auth_mixin.write_text(json.dumps(auth_config),encoding='utf-8')
+    gradle=(output/'build.gradle').read_text(encoding='utf-8').replace("version = '0.1.1'","version = '0.1.3'")
     gradle+='\njar { manifest { attributes("MixinConfigs": "maw_numen_server.mixins.json,maw_sao_auth.mixins.json,maw_sao_recipes.mixins.json") } }\n'
     (output/'build.gradle').write_text(gradle,encoding='utf-8')
-    meta=resources/'META-INF/mods.toml';meta.write_text(meta.read_text(encoding='utf-8').replace('version="0.1.1"','version="0.1.2"'),encoding='utf-8')
-    contract_file=resources/'native-operations.json';contract=json.loads(contract_file.read_bytes());contract['version']='0.1.2'
+    meta=resources/'META-INF/mods.toml';meta.write_text(meta.read_text(encoding='utf-8').replace('version="0.1.1"','version="0.1.3"'),encoding='utf-8')
+    contract_file=resources/'native-operations.json';contract=json.loads(contract_file.read_bytes());contract['version']='0.1.3'
     for op in contract['operations']:
         if op['id']=='native.recipes':
             op['description']='Read this authenticated player connection\'s loaded Forge recipes and exact successful decoder inputs. Up to 12 rows and 16 KiB, nextOffset on partial pages. Select recipeId/type/outputId; output matches declared display results only. Ingredients are alternative choices, not simultaneous inputs. Missing source definitions and context-dependent outputs stay explicit. Read definitions do not execute or verify a machine.'
             op['example']={'outputId':'farmersdelight:canvas','limit':2}
     contract_file.write_text(json.dumps(contract,indent=2),encoding='utf-8')
     files={p.relative_to(output).as_posix():sha(p) for p in output.rglob('*') if p.is_file()}
-    record={'schemaVersion':1,'baselineSha256':BASELINE_SHA,'candidateVersion':'0.1.2','installed':False,'authenticationChanged':False,
+    record={'schemaVersion':1,'baselineSha256':BASELINE_SHA,'candidateVersion':'0.1.3','installed':False,'authenticationChanged':True,'ordinaryPlayerAuthenticationUnchanged':True,
         'thirdPartyModified':False,'sourceFiles':files,'builderSha256':sha(Path(__file__))}
     (output/'native-data-build.json').write_text(json.dumps(record,indent=2),encoding='utf-8')
     return {'prepared':str(output),'installed':False,'baselineSha256':BASELINE_SHA,'files':len(files)}

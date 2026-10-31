@@ -16,6 +16,7 @@ def prepare(build, mixauth, expected_sha256):
         (java/name).write_bytes((source/name).read_bytes())
     (java/'mixins').mkdir(exist_ok=True)
     (java/'mixins/SaoLegacyPasswordMixin.java').write_bytes((source/'mixins/SaoLegacyPasswordMixin.java').read_bytes())
+    (java/'mixins/OwnedNumenAuthenticationMixin.java').write_bytes((source/'mixins/OwnedNumenAuthenticationMixin.java').read_bytes())
     native = java/'NativeBridge.java'; text = native.read_text(encoding='utf-8')
     old = 'private static boolean loggedIn(ServerPlayer p){return p.getServer()!=null&&p.getServer().getPlayerList().getPlayer(p.getUUID())==p;}'
     if old not in text: raise ValueError('native_auth_binding_changed')
@@ -35,7 +36,7 @@ def prepare(build, mixauth, expected_sha256):
     resources = build/'src/main/resources'; config = json.loads((resources/'maw_numen_server.mixins.json').read_text())
     # Existing mixins use a different package, so keep this optional binding in
     # its own config instead of changing the Numen package or defaultRequire.
-    (resources/'maw_sao_auth.mixins.json').write_text(json.dumps({'required':False,'minVersion':'0.8','package':'dev.qiandeng.maw.saoforge.mixins','compatibilityLevel':'JAVA_17','mixins':['SaoLegacyPasswordMixin'],'injectors':{'defaultRequire':0}}),encoding='utf-8')
+    (resources/'maw_sao_auth.mixins.json').write_text(json.dumps({'required':False,'minVersion':'0.8','package':'dev.qiandeng.maw.saoforge.mixins','compatibilityLevel':'JAVA_17','mixins':['SaoLegacyPasswordMixin','OwnedNumenAuthenticationMixin'],'injectors':{'defaultRequire':0}}),encoding='utf-8')
     with zipfile.ZipFile(mixauth) as archive:
         original=json.loads(archive.read('META-INF/jarjar/metadata.json')); rows=[]; provenance={}
         for row in original['jars']:

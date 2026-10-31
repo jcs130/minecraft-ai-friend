@@ -23,6 +23,7 @@ class NativeDataContract(unittest.TestCase):
             a=next(op for op in native['operations'] if op['id']=='native.recipes')
             b=next(op for op in CONTRACT['operations'] if op['id']=='sao.recipes')
             self.assertEqual(a['parameters'],b['parameters'])
+            self.assertEqual(a['example'],b['example'])
             self.assertEqual(json.loads((root/'native-generation.json').read_bytes())['recipe_provider'],True)
     def test_unreviewed_or_unprotected_old_source_does_not_get_a_silent_auth_upgrade(self):
         for text in ['', 'private static boolean recipeAvailable(){return false;}', 'return SaoAuthentication.loggedIn(p);']:

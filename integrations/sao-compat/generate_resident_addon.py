@@ -148,7 +148,7 @@ tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-proc:none
     toml.write_text(toml.read_text('utf-8')+'''
 [[mods]]
 modId="maw_numen_server"
-version="0.1.2"
+version="0.1.3"
 displayName="Agent MC World SAO Numen Resident"
 displayTest="IGNORE_SERVER_VERSION"
 description="Owner-scoped external controller for persistent native Numen bodies. GUI adapters unavailable."

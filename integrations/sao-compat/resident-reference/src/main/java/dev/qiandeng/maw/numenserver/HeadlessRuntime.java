@@ -74,6 +74,15 @@ public final class HeadlessRuntime {
         }
     }
     public static boolean managed(UUID id) { HeadlessRuntime r=INSTANCE;return r!=null&&r.bodies.containsKey(id); }
+    /** Attest only the actual current owner-bound native body, never a login name. */
+    public static boolean authenticatedBody(ServerPlayer player) {
+        HeadlessRuntime r=INSTANCE;
+        if(r==null||player==null||player.getServer()!=r.server||!r.server.isSameThread()||!(player instanceof NumenPlayer))return false;
+        UUID id=player.getUUID();JsonObject body=r.bodies.get(id);
+        if(body==null||NumenPlayer.findByUuid(r.server,id)!=player||r.server.getPlayerList().getPlayer(id)!=player)return false;
+        try {var entry=CompanionRegistry.get(r.server).find(id);return entry!=null&&entry.owner().equals(UUID.fromString(text(body,"ownerUuid",36)));}
+        catch(RuntimeException unavailable){return false;}
+    }
     public static boolean authorizedDispatch() { return DISPATCH.get(); }
     public static boolean deliver(NumenPlayer body,EventQueue.Entry entry) {
         HeadlessRuntime r=INSTANCE;if(r==null||!r.bodies.containsKey(body.getUUID()))return false;
