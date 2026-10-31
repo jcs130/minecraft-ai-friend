@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "bridgeId": "maw_sao_gameplay",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "scope": "requesting_player_only",
   "limits": {
     "queryBytes": 4096,
@@ -437,6 +437,48 @@
       },
       "example": {
         "node": 1
+      }
+    },
+    {
+      "id": "sao.recipes",
+      "readOnly": true,
+      "description": "Read this body's loaded Forge recipes and exact successful decoder inputs on demand, including mod recipes. Up to 12 rows/16 KiB; nextOffset never auto-fetches. Match recipeId/recipeType/outputId (declared display outputs only). Missing source definitions remain explicit. Definitions do not execute crafting or machines.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "recipeId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 160
+          },
+          "recipeType": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 160
+          },
+          "outputId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 160
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "default": 6
+          }
+        }
+      },
+      "example": {
+        "outputId": "farmersdelight:canvas",
+        "limit": 2
       }
     }
   ]

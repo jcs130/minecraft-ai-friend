@@ -1,6 +1,6 @@
 'use strict'
 const {contract}=require('./sao-client.cjs')
-const SAO_TOOL={name:'mc_sao',tags:['read','act'],description:'On-demand SAO server API for your own quests, profession, equipped skills and points. Start with operation:"help" (short index), then help with arguments.operation for ONE schema/example. Read one requested page/detail only. Mutations use the existing core queue and return a requestId to reconcile; no extra controller or automatic retries.',parameters:{type:'object',additionalProperties:false,properties:{operation:{type:'string',maxLength:80},arguments:{type:'object',additionalProperties:true},request_id:{type:'string',pattern:'^[A-Za-z0-9:_-]{1,64}$',maxLength:64}},required:['operation']}}
+const SAO_TOOL={name:'mc_sao',tags:['read','act'],description:'On-demand SAO server API for your own quests, profession, equipped skills, points and loaded mod recipes. Start with operation:"help" (short index), then help with arguments.operation for ONE schema/example. Read one requested page/detail only. Mutations use the existing core queue and return a requestId to reconcile; no extra controller or automatic retries.',parameters:{type:'object',additionalProperties:false,properties:{operation:{type:'string',maxLength:80},arguments:{type:'object',additionalProperties:true},request_id:{type:'string',pattern:'^[A-Za-z0-9:_-]{1,64}$',maxLength:64}},required:['operation']}}
 // A short name enum is discovery, not an injected quest book or every action schema.
 SAO_TOOL.parameters.properties.operation.enum=['help',...contract.operations.map(op=>op.id)]
 SAO_TOOL.description+=' Exact detail example: {"operation":"help","arguments":{"operation":"sao.quest.show"}}. Put that operation\'s parameters inside arguments, e.g. {"operation":"sao.quest.show","arguments":{"quest_id":"<observed ID>"}}.'
@@ -11,6 +11,11 @@ function navigable(reply,input={}){
  if(!reply.ok){
   if(reply.readOnly&&reply.operation==='sao.quest.show'&&reply.reason==='quest_not_found')return {...structuredClone(reply),retryable:false,next_safe_read:link('sao.quests.list',{filter:'available'})}
   return reply
+ }
+ if(reply.operation==='sao.recipes'&&reply.data){
+  const out=structuredClone(reply),d=out.data
+  if(Number.isSafeInteger(d.nextOffset)&&d.nextOffset>=0)d.next=link('sao.recipes',{...input,offset:d.nextOffset})
+  return out
  }
  if(!reply.data||reply.complete===false)return reply
  const out=structuredClone(reply),d=out.data

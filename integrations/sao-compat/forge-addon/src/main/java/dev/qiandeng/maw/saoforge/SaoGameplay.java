@@ -59,7 +59,7 @@ public final class SaoGameplay {
         if(spec.get("readOnly").getAsBoolean()!=readOnly){fail(out,"read_write_channel_mismatch",true);return out;}
         var problem=NativePolicy.validate(args,spec.getAsJsonObject("parameters"),"arguments");if(problem!=null){fail(out,"invalid_arguments",true);var bad=new JsonObject();bad.addProperty("field",problem.field());bad.addProperty("expected",problem.expected());bad.addProperty("issue",problem.issue());out.add("diagnostic",bad);out.add("example",spec.get("example").deepCopy());return out;}
         if(directory==null){fail(out,"server_not_ready",true);return out;}
-        if(readOnly){try{out.add("data",query(p,operation,args));out.addProperty("ok",true);out.addProperty("status","ok");out.addProperty("outcomeKnown",true);}catch(RuntimeException failure){fail(out,safe(failure),true);org.slf4j.LoggerFactory.getLogger("maw-sao").error("SAO read failed op={} request={}",operation,requestId,failure);}return bounded(out);}
+        if(readOnly){try{out.add("data",query(p,operation,args));out.addProperty("ok",true);out.addProperty("status","ok");out.addProperty("outcomeKnown",true);if(operation.equals("sao.recipes")){var d=out.getAsJsonObject("data");out.add("status",d.get("status"));out.add("complete",d.get("complete"));if(d.has("partialReason"))out.add("partialReason",d.get("partialReason"));}}catch(RuntimeException failure){fail(out,safe(failure),true);org.slf4j.LoggerFactory.getLogger("maw-sao").error("SAO read failed op={} request={}",operation,requestId,failure);}return bounded(out);}
         Path file=directory.resolve(p.getUUID().toString()).resolve(NativePolicy.sha(requestId)+".json");String fingerprint=NativePolicy.sha(operation+":"+NativePolicy.canonical(args));
         try{
             if(Files.isRegularFile(file)){JsonObject old=JsonParser.parseString(Files.readString(file)).getAsJsonObject();if(!fingerprint.equals(old.get("fingerprint").getAsString())){fail(out,"request_id_conflict",true);return out;}old.addProperty("replayed",true);old.addProperty("historical",true);return bounded(old);}
@@ -78,6 +78,7 @@ public final class SaoGameplay {
     private static JsonObject query(ServerPlayer p,String op,JsonObject args){return switch(op){
         case "sao.capabilities"->{if(args.has("operation"))yield catalog(args.get("operation").getAsString());var out=new JsonObject();var index=new JsonArray();for(var entry:CONTRACT.getAsJsonArray("operations")){var full=entry.getAsJsonObject();var row=new JsonObject();row.add("id",full.get("id"));row.add("readOnly",full.get("readOnly"));index.add(row);}out.add("operations",index);out.addProperty("details","Request capabilities with operation for that one schema/example. No book or profession tables are loaded automatically.");yield out;}
         case "sao.status"->SaoRpg.status(p);
+        case "sao.recipes"->{var recipes=new JsonObject();SaoRecipes.query(p,args,recipes);yield recipes;}
         case "sao.quests.list"->SaoQuests.list(p,args);
         case "sao.quest.show"->SaoQuests.show(p,args);
         case "sao.professions"->SaoRpg.catalog(p,args);

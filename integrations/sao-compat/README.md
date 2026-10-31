@@ -1,5 +1,7 @@
 > 2026-10-30：本集成已发布到原模组服公网入口；当前连接方式与兼容边界见 [PUBLIC_ACCESS.md](PUBLIC_ACCESS.md)。下方为早期回环实验说明。
 
+> 2026-10-31：新增“真实信息 + 普通玩家操作”的 SAO 原生配方、菜单规则和 SDK 候选。使用方式与边界见 [NATIVE_DATA.md](NATIVE_DATA.md)；候选版本不等于线上已发布版本。
+
 # SAO 0.76.1-lite：Numen / Mineflayer 隔离接入
 
 2026-10-30 后续 Mineflayer 实机复测已完成：46 槽原始同步与本人原生物品一致，线上桐人实际步行 4.368 格并发动职业技能；断线后按原请求只读对账通过。SAO 部署提高紧凑上下文的保守预算，保留前一次未完成尝试与错误路线。结果、调用数量和边界见 [MINEFLAYER_RETEST.md](MINEFLAYER_RETEST.md)。
@@ -54,13 +56,13 @@ const state = await bot.native.snapshot()
 
 适配在内部插件注入前安装当前 JVM 的真实方块、物品、实体 ID；261,125 个方块状态的属性组合逐项校验。启动 PID、版本、注册表计数及服务端 epoch 不匹配会拒绝启用身体。注册表是静态类型定义，不是远处世界观测；未知/未加载方块仍不能当作空气。玻璃的透光属性与碰撞形状分别保留。
 
-`bot.native.operations()` 返回本服实际提供的 7 项能力：`native.capabilities`、`body.snapshot`、`inventory.inspect`、`menu.current`、`menu.click`、`menu.close`、`control.actionStatus`。复用 [原生客户端契约](../tau-ceti/native-bridge/operations.json)，不按玩家名筛选。
+`bot.native.operations()` 返回本服实际提供的能力：原 7 项为 `native.capabilities`、`body.snapshot`、`inventory.inspect`、`menu.current`、`menu.click`、`menu.close`、`control.actionStatus`。0.1.2 候选另加 `native.recipes`，必须以连接返回的实际目录为准。复用 [原生客户端契约](../tau-ceti/native-bridge/operations.json)，不按玩家名筛选。
 
 物品带真实命名空间、显示名组件、完整 SNBT/完整性标记及指纹。模组菜单提供实际 windowId/stateId、槽位坐标、库存归属、光标物品和原生进度数字。未知模组窗口走原生接口，不猜成普通箱子。点击采用已观察槽位、完整组件和 epoch 的比较校验；结果未知时查询原 requestId，不自动重放。
 
 此候选的注册表缓存来自同机文件；尚未封装远程下载/授权分发。不要把本工厂写成普通原版 Mineflayer 公网入口。每个 Forge worker 使用独立 Node 进程：上游 NMP 的 customPackets 编译缓存按版本共享，本适配的配方包覆盖不能与同进程普通客户端混用。
 
-Forge 配方包含模组专用序列化器。客户端保留 `nativeRecipeStream` 原始字节及观测时间，避免原版解析器阻塞后续区块和心跳。服务端配方目录尚未回移，故不广告 `native.recipes`；原版静态 `recipesFor/recipesAll/craft` 快捷调用明确拒绝，不能据此猜配方。已知配方可通过实际原生工作台/机器菜单操作；自动发现及自动合成仍待补齐。
+Forge 配方包含模组专用序列化器。客户端保留 `nativeRecipeStream` 原始字节及观测时间，避免原版解析器阻塞后续区块和心跳。0.1.2 候选通过服务端 `native.recipes` 按需返回实际加载配方；原版静态 `recipesFor/recipesAll/craft` 快捷调用仍明确拒绝。配方读取不等于机器执行能力，实际操作与结果需要逐项验证，见 [NATIVE_DATA.md](NATIVE_DATA.md)。
 
 ## Numen 外部控制
 

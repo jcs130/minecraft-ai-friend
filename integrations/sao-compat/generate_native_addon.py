@@ -77,9 +77,13 @@ def generate(root):
     private static void sendMenu(ServerPlayer p,JsonObject out){send(p,"maw_agent:menu_state",out);}
 '''+text[end:]
     start=text.index('    private static boolean recipeAvailable()');end=text.index('\n',start)
-    text=text[:start]+'    private static boolean recipeAvailable(){return false;}'+text[end:]
+    text=text[:start]+'    private static boolean recipeAvailable(){return true;}'+text[end:]
     start=text.index('                case "recipes" -> {');end=text.index('                case "action_status" -> {',start)
-    text=text[:start]+'                case "recipes" -> {error(out,"forge_recipe_adapter_not_yet_available","blocked");}\n'+text[end:]
+    text=text[:start]+'                case "recipes" -> {SaoRecipes.query(p,args,out);}\n'+text[end:]
+    if text.count('p.closeContainer();')!=1:raise ValueError('native_menu_close_anchor_changed')
+    text=text.replace('p.closeContainer();','p.closeContainer();p.inventoryMenu.broadcastFullState();')
+    text=text.replace('row.addProperty("mayPickup",s.mayPickup(p));layout.add(row);','row.addProperty("mayPickup",s.mayPickup(p));MenuFacts.slot(p,m,s,row);layout.add(row);')
+    text=text.replace('out.addProperty("selectedHotbarSlot",p.getInventory().selected);','out.addProperty("selectedHotbarSlot",p.getInventory().selected);MenuFacts.menu(p,m,out);')
     destination=root/'native-addon-build'
     destination.mkdir(exist_ok=True)
     shutil.copytree(here/'forge-addon',destination,dirs_exist_ok=True)
@@ -88,9 +92,10 @@ def generate(root):
     (package/'NativeBridge.java').write_text(text,encoding='utf-8')
     policy=native/'src/dev/qiandeng/maw/taunative/NativePolicy.java'
     (package/'NativePolicy.java').write_text(policy.read_text('utf-8').replace('package dev.qiandeng.maw.taunative;','package dev.qiandeng.maw.saoforge;'),encoding='utf-8')
-    shutil.copyfile(native/'operations.json',destination/'src/main/resources/native-operations.json')
+    contract=json.loads((native/'operations.json').read_bytes());contract['version']='0.1.2'
+    (destination/'src/main/resources/native-operations.json').write_text(json.dumps(contract,indent=2),encoding='utf-8')
     shutil.copyfile(here/'sao-operations.json',destination/'src/main/resources/sao-operations.json')
-    record={'shared_source':{str(p.relative_to(here.parent.parent)):digest(p) for p in (source,policy,native/'operations.json')},'generator_sha256':digest(Path(__file__)),'minecraft':'1.20.1','forge':'47.4.10','recipe_provider':False,'game_login_identity_only':True,'source_destination':str(destination)}
+    record={'shared_source':{str(p.relative_to(here.parent.parent)):digest(p) for p in (source,policy,native/'operations.json')},'generator_sha256':digest(Path(__file__)),'minecraft':'1.20.1','forge':'47.4.10','recipe_provider':True,'game_login_identity_only':True,'source_destination':str(destination)}
     (root/'native-generation.json').write_text(json.dumps(record,indent=2),encoding='utf-8')
     print(json.dumps(record,indent=2))
 

@@ -1,9 +1,9 @@
 'use strict'
-const REASON='forge_native_recipe_catalog_unavailable'
+const REASON='forge_native_recipe_execution_requires_actual_menu'
 function blockedCraft(steps){return Array.isArray(steps)&&steps.some(step=>step?.skill==='craft')}
 function craftFenceDeclaration(declaration){
  return {...declaration,
-  description:declaration.description+' SAO Forge: automatic skill:"craft" is UNAVAILABLE until the native recipe catalog is implemented. It is excluded by this transport schema. Never use vanilla recipe IDs; query mc_native capabilities. Other skills keep the original contract.',
+  description:declaration.description+' SAO Forge: automatic skill:"craft" has no native execution adapter and is UNAVAILABLE in this transport schema. Query mc_native capabilities and recipes; use actual crafting/menu operations with real materials. A readable recipe does not prove automated execution. Never use the vanilla static recipe table for native mod items. Other skills keep the original contract.',
   parameters:{...structuredClone(declaration.parameters),allOf:[...(declaration.parameters.allOf??[]),{not:{type:'object',required:['steps'],properties:{steps:{type:'array',contains:{type:'object',properties:{skill:{const:'craft'}},required:['skill']}}}}}]}}
 }
 function fenceVanillaRecipes(bot){

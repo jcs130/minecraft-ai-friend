@@ -3,7 +3,7 @@ plugins {
     id 'net.minecraftforge.gradle' version '6.0.54'
 }
 group = 'dev.qiandeng.maw'
-version = '0.1.1'
+version = '0.1.2'
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 minecraft { mappings channel: 'official', version: '1.20.1' }
 repositories {
@@ -15,3 +15,4 @@ repositories {
 dependencies { minecraft 'net.minecraftforge:forge:1.20.1-47.4.10' }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 jar.finalizedBy('reobfJar')
+jar { manifest { attributes('MixinConfigs': 'maw_sao_recipes.mixins.json') } }

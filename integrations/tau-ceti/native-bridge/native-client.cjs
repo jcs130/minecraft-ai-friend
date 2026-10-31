@@ -37,7 +37,7 @@ function attachTauNativeClient (bot, { timeoutMs = 5000, readIntervalMs = 110 } 
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) throw Error('INVALID_NATIVE_TIMEOUT')
   if (!Number.isInteger(readIntervalMs) || readIntervalMs < 0 || readIntervalMs > 5000) throw Error('INVALID_NATIVE_READ_INTERVAL')
   const pending = new Map(), writes = new Map(), diagnostics = [], subscribers = new Set()
-  let closed = false, generation = 0, lastSent = 0, reading = Promise.resolve(), menu = null, capabilities = null, unknown = null
+  let closed = false, generation = 0, lastReadBoundary = 0, reading = Promise.resolve(), menu = null, capabilities = null, unknown = null
   const identity = () => UUID.test(bot._client.uuid || '') ? bot._client.uuid.toLowerCase() : null
   const unavailable = (requestId, code, readOnly, more = {}) => ({ schemaVersion: 1, playerUuid: identity(), requestId,
     status: readOnly ? 'unavailable' : 'unknown', ok: false, code, readOnly, outcomeKnown: readOnly,
@@ -127,9 +127,14 @@ function attachTauNativeClient (bot, { timeoutMs = 5000, readIntervalMs = 110 } 
     const problem = parameterProblem(args, op.parameters); if (problem) return invalid(op, problem)
     const epoch = generation
     const work = reading.catch(() => {}).then(async () => {
-      const wait = Math.max(0, lastSent + readIntervalMs - Date.now()); if (wait) await new Promise(resolve => setTimeout(resolve, wait))
+      const wait = Math.max(0, lastReadBoundary + readIntervalMs - Date.now()); if (wait) await new Promise(resolve => setTimeout(resolve, wait))
       if (epoch !== generation || closed) return unavailable(null, 'native_body_context_changed', true)
-      lastSent = Date.now(); return send(op.query, args, randomUUID(), true)
+      // The preceding dispatch may have spent most of its interval waiting for
+      // a server tick. Space the next read from its receipt, without replaying it
+      // or weakening the server's own rate limit. Writes keep their original IDs.
+      lastReadBoundary = Date.now()
+      try { return await send(op.query, args, randomUUID(), true) }
+      finally { lastReadBoundary = Date.now() }
     })
     reading = work; return work
   }

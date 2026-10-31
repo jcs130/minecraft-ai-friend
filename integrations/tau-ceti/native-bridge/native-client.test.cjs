@@ -80,6 +80,17 @@ test('partial recipe coverage and continuation are preserved without auto-readin
   assert.equal(result.capturedAt, '2026-10-28T00:00:00Z'); assert.equal(f.packets.length, 1)
 })
 
+test('queued reads retain their budget after a slow server tick without a retry', async t => {
+  const f=fixture({timeoutMs:500,readIntervalMs:40});t.after(()=>f.client.detach())
+  const original=f.wire.write;let secondSentAt
+  f.wire.write=(...args)=>{original(...args);if(f.packets.length===2){secondSentAt=Date.now();f.reply(f.packets[1])}}
+  const first=f.client.snapshot();await pause();const second=f.client.inspect(1)
+  await new Promise(resolve=>setTimeout(resolve,70));const firstReplyAt=Date.now();f.reply(f.packets[0])
+  assert.equal((await first).ok,true);assert.equal((await second).ok,true)
+  assert(secondSentAt-firstReplyAt>=39,'read spacing must follow the actual receipt, not the earlier dispatch')
+  assert.equal(f.packets.length,2)
+})
+
 test('click sends complete native CAS and identical ID is deduplicated after state changes', async t => {
   const f = fixture(); t.after(() => f.client.detach()); f.payload('maw_agent:menu_state', f.menu())
   const promise = f.client.click({ slot: 1, requestId: 'action-1' }); await pause()

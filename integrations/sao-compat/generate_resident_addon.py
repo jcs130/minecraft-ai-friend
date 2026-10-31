@@ -141,14 +141,14 @@ dependencies {
     compileOnly fg.deobf('dev.qiandeng.vendor:numen-forge-1.20.1:0.1.4.1:all')
     compileOnly fg.deobf('dev.qiandeng.vendor:numen_api-forge-1.20.1:0.1.4.1')
 }
-jar { manifest { attributes('MixinConfigs': 'maw_numen_server.mixins.json') } }
+jar { manifest { attributes('MixinConfigs': 'maw_numen_server.mixins.json,maw_sao_recipes.mixins.json') } }
 tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-proc:none'] }
 ''',encoding='utf-8')
     toml=output/'src/main/resources/META-INF/mods.toml'
     toml.write_text(toml.read_text('utf-8')+'''
 [[mods]]
 modId="maw_numen_server"
-version="0.1.1"
+version="0.1.2"
 displayName="Agent MC World SAO Numen Resident"
 displayTest="IGNORE_SERVER_VERSION"
 description="Owner-scoped external controller for persistent native Numen bodies. GUI adapters unavailable."

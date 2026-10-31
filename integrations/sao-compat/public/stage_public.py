@@ -33,7 +33,7 @@ def stage(root,work,source):
     ops=root/'ops';gw=ops/'gateway';gw.mkdir();node=Path('C:/Users/lzl19/AppData/Local/hermes/node/node.exe');shutil.copy2(node,gw/'node.exe')
     shutil.copytree(source/'node_modules',gw/'node_modules')
     dest=gw/'integrations/sao-compat';dest.mkdir(parents=True)
-    for name in ['package.json','package-lock.json','sao_bot.cjs','account-receipts.cjs','forge_client.cjs','native_registry.cjs','sao-client.cjs','sao-operations.json','sao-tools.cjs','sao-engine.mjs','protection-client.cjs','craft-fence.cjs']:shutil.copy2(source/name,dest/name)
+    for name in ['package.json','package-lock.json','sao_bot.cjs','account-receipts.cjs','forge_client.cjs','native_registry.cjs','sao-client.cjs','sao-operations.json','sao-tools.cjs','sao-engine.mjs','protection-client.cjs','craft-fence.cjs','native-read-tool.cjs']:shutil.copy2(source/name,dest/name)
     shutil.copytree(source/'public',gw/'public');shutil.copytree(source/'public',dest/'public')
     other=gw/'integrations/tau-ceti/native-bridge';other.mkdir(parents=True)
     for name in ['native-client.cjs','operations.json']:shutil.copy2(source.parent/'tau-ceti/native-bridge'/name,other/name)

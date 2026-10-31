@@ -47,7 +47,9 @@ def prepare(build, mixauth, expected_sha256):
     if len(rows)!=2:raise ValueError('exact_bcrypt_and_bytes_libraries_required')
     (resources/'META-INF/jarjar/metadata.json').write_text(json.dumps({'jars':rows}),encoding='utf-8')
     gradle=build/'build.gradle'; text=gradle.read_text(encoding='utf-8')
-    text+='\ndependencies { compileOnly files(fileTree("auth-libs") { include "*.jar" }) }\njar { manifest { attributes("MixinConfigs": "maw_numen_server.mixins.json,maw_sao_auth.mixins.json") } }\n'
+    configs='maw_numen_server.mixins.json,maw_sao_auth.mixins.json'
+    if (resources/'maw_sao_recipes.mixins.json').is_file():configs+=',maw_sao_recipes.mixins.json'
+    text+='\ndependencies { compileOnly files(fileTree("auth-libs") { include "*.jar" }) }\njar { manifest { attributes("MixinConfigs": "'+configs+'") } }\n'
     gradle.write_text(text,encoding='utf-8')
     (build/'auth-dependencies.json').write_text(json.dumps({'sourceSha256':expected_sha256,'libraries':provenance},indent=2),encoding='utf-8')
     return provenance

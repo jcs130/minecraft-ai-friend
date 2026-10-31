@@ -10,7 +10,7 @@ KIND={'type':'string','enum':['profession','sword'],'pattern':'^(profession|swor
 def op(id,read,description,properties=None,required=None,example=None):
     return {'id':'sao.'+id,'readOnly':read,'description':description,
             'parameters':{'type':'object','additionalProperties':False,'properties':properties or {},'required':required or []},'example':example or {}}
-CONTRACT={'schemaVersion':1,'bridgeId':'maw_sao_gameplay','version':'0.1.0','scope':'requesting_player_only',
+CONTRACT={'schemaVersion':1,'bridgeId':'maw_sao_gameplay','version':'0.1.1','scope':'requesting_player_only',
  'limits':{'queryBytes':4096,'stateBytes':16384,'pageDefault':8,'pageMax':12,'actionCommandChars':240},
  'operations':[
  op('capabilities',True,'Read a short operation index, or one exact operation schema/example. No quest book or skill table is injected automatically.',{'operation':text('^sao\\.[a-z_.]+$',80)}),
@@ -32,6 +32,11 @@ CONTRACT={'schemaVersion':1,'bridgeId':'maw_sao_gameplay','version':'0.1.0','sco
 CONTRACT['operations'].extend([
  op('attribute.buy',False,'Allocate one real attribute point through the mod API. Native profession restrictions and point availability apply.',{'node':integer(0,255)},['node'],{'node':1}),
  op('attribute.refund',False,'Refund one real attribute rank through the native mod API; combat and refund rules remain.',{'node':integer(0,255)},['node'],{'node':1})])
+NATIVE=json.loads((Path(__file__).parent.parent/'tau-ceti/native-bridge/operations.json').read_bytes())
+RECIPE=next(row for row in NATIVE['operations'] if row['id']=='native.recipes')
+CONTRACT['operations'].append({'id':'sao.recipes','readOnly':True,
+ 'description':'Read this body\'s loaded Forge recipes and exact successful decoder inputs on demand, including mod recipes. Up to 12 rows/16 KiB; nextOffset never auto-fetches. Match recipeId/recipeType/outputId (declared display outputs only). Missing source definitions remain explicit. Definitions do not execute crafting or machines.',
+ 'parameters':RECIPE['parameters'],'example':{'outputId':'farmersdelight:canvas','limit':2}})
 
 if __name__=='__main__':
     Path(__file__).with_name('sao-operations.json').write_bytes((json.dumps(CONTRACT,ensure_ascii=False,indent=2)+'\n').encode())
