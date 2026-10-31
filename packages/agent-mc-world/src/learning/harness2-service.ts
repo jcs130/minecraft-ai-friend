@@ -166,7 +166,7 @@ export class Harness2PracticeService {
       const journal=JSON.parse(readFileSync(join(this.options.directory,row.job.id,'journal.json'),'utf8'));
       const result=journal.result as Harness2Result;
       return {status:'completed',result,source:{id:row.source.id,revision:row.source.revision,sourceHash:row.source.sourceHash},
-        applicability:this.options.capability,next:'Candidate is isolated and unadopted. Recheck source parent before validate/save; retain the old version and test actual world change before review/adopt.'};
+        applicability:this.options.capability,next:'Candidate is isolated and unadopted. Carry result.selected.params into the natural mc_script params; saving code alone does not persist parameter defaults. Recheck source parent before validate/save; retain the old version and test actual world change before review/adopt.'};
     }
     if(args.op==='cancel'){
       this.record(args.id);

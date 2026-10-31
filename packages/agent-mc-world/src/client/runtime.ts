@@ -27,6 +27,10 @@ import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
 import { CommandRepetitionGuard } from './command-repetition.ts';
 import { MotionReviewGate } from './motion-review.ts';
+import {Harness2PracticeService,HARNESS2_PRACTICE_TOOL,type Harness2PracticeOptions} from '../learning/harness2-service.ts';
+import {parseProcedure} from '../../core/support/procedure.ts';
+
+export type MinecraftPracticeOptions=Omit<Harness2PracticeOptions,'source'|'readMethod'|'stageCandidate'|'directory'> & {directory?:string};
 
 export interface MinecraftClientOptions {
   cfg: MinecraftClientConfig;
@@ -35,6 +39,8 @@ export interface MinecraftClientOptions {
   agentName?: string;
   modelFacts?: ModelFacts;
   decisions?: WorldHost['decisions'];
+  /** Host-owned model and dedicated practice body. No experiment runs until mc_practice start. */
+  practice?:MinecraftPracticeOptions;
   /** Explicit script mode; releases a barrier only after its call has settled. */
   autoAcknowledgeBarriers?: boolean;
   /** Consecutive opaque command submissions before a deliberate inspection; 0 explicitly disables this guard. */
@@ -76,6 +82,7 @@ export class MinecraftAgentClient {
   private readonly commandRepetition: CommandRepetitionGuard;
   private readonly motionReview: MotionReviewGate;
   private readonly lease: AgentConnectionLease;
+  private practiceService:Harness2PracticeService|null=null;
   private offlineMemoryCalls = 0;
   private readonly tacticCalls = new Map<string, { signature: string; pending: boolean; controller: AbortController; promise: Promise<ToolOutcome> }>();
   private readonly hostChoice = createMinecraftChoiceTool(() => this.host,
@@ -115,6 +122,37 @@ export class MinecraftAgentClient {
         at: new Date().toISOString(), run: this.journal.run, usage, metadata }) + '\n'),
       log: options.log,
     };
+    this.initializePractice();
+  }
+
+  private initializePractice():void {
+    const options=this.options.practice;if(!options||this.practiceService)return;
+    this.practiceService=new Harness2PracticeService({...options,directory:options.directory??join(this.options.dataDir,'harness2'),
+      source:()=>{
+        if(this.phase!=='started')return null;
+        const scope=(this.world.requestFacts?.() as WorldRequestFacts|null)?.experience?.scope;
+        return scope?{instanceId:this.journal.run,scope}:null;
+      },
+      readMethod:async(id,revision,signal)=>{
+        const tool=this.world.tools().find(t=>t.name===`${this.toolPrefix}_script`);
+        if(!tool)throw Error('This Minecraft body has no method library');
+        const reply=await tool.handler({library:{op:'read',id,revision}},{role:this.options.agentName??'agent',log:this.options.log,signal});
+        if(typeof reply!=='string'&&reply.failed)throw Error(reply.text);
+        return parseProcedure(JSON.parse(typeof reply==='string'?reply:reply.text));
+      },
+      settled:async event=>{
+        await this.journal.pushEvent({type:'minecraft.practice',source:'minecraft',origin:'internal',ts:new Date().toISOString(),
+          text:JSON.stringify({id:event.id,status:event.status,eligible:event.eligible,adopted:false}),meta:{practice:true}},{trigger:'flush'});
+        await options.settled?.(event);
+      }});
+  }
+  /** Same core monitor used by SDK, console and optional read-only Lab source. */
+  experiments(){return this.practiceService?.snapshot()??{schema:'agent-mc.experiments/v1',sampledAt:Date.now(),enabled:false,scope:'isolated-practice-only',jobs:[]};}
+  private requestFacts():WorldRequestFacts|null {
+    const facts=this.world.requestFacts?.() as WorldRequestFacts|null;
+    if(!facts||!this.practiceService)return facts;
+    const practice=this.practiceService.context();
+    return {...facts,parts:[...(facts.parts??[]),{key:'practice',text:JSON.stringify(practice)}]};
   }
 
   get profile() { return this.binding.profile; }
@@ -138,8 +176,18 @@ export class MinecraftAgentClient {
 
   tools() {
     const tools = this.world.tools(), name = `${this.toolPrefix}_choose`;
-    return this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
+    const choices=this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
       ? [...tools, { ...this.hostChoice, name }] : tools;
+    const practiceName=`${this.toolPrefix}_practice`;
+    if(choices.some(t=>t.name===practiceName))return choices;
+    return [...choices,{...HARNESS2_PRACTICE_TOOL,name:practiceName,
+      readOnlyCall:(args:Record<string,unknown>)=>['help','status','result','compare'].includes(String(args.op)),
+      handler:async(args:Record<string,unknown>,context:import('./contracts.ts').ToolCallContext)=>{
+        if(this.practiceService)return this.practiceService.tool(practiceName).handler(args,context);
+        const unavailable={available:false,reason:'Host has not configured a practice model, worker and dedicated execution port.',
+          setup:'Supply MinecraftClientOptions.practice with the existing Harness2PracticeService ports. Import/connect/tool discovery never launches an experiment.',adopted:false};
+        return args.op==='help'||args.op==='status'?{text:JSON.stringify(unavailable)}:{text:JSON.stringify(unavailable),failed:true as const};
+      }}];
   }
 
   /** Owner notebook port; no body action, model call or decision-turn mutation. Uses the Agent's same notebook. */
@@ -163,6 +211,7 @@ export class MinecraftAgentClient {
     if (this.phase === 'stopping') throw new Error('Game runtime is stopping.');
     if (this.startupPending) throw new Error('Previous engine startup is still draining');
     if (this.offlineMemoryCalls) throw new Error('Wait for pending offline memory calls before connecting');
+    this.initializePractice();
     this.validateConfig();
     this.lease.acquire();
     this.motionReview.reset();
@@ -191,14 +240,15 @@ export class MinecraftAgentClient {
   }
 
   async disconnect(): Promise<void> {
-    if (this.phase === 'disconnected') { this.lifetime.abort(new Error('Runtime stopped')); this.journal.clearDeferred(); return; }
     if (this.phase === 'stopping') return this.transition;
+    const practice=this.practiceService;this.practiceService=null;
+    if (this.phase === 'disconnected') { this.lifetime.abort(new Error('Runtime stopped')); this.journal.clearDeferred();await practice?.close(); return; }
     ++this.epoch;
     this.phase = 'stopping';
     this.lifetime.abort(new Error('Runtime stopped'));
     this.turn = null; this.barrier = null; this.endRequested = false;
     this.journal.clearDeferred();
-    this.transition = this.world.stop().finally(() => { this.phase = 'disconnected'; this.lease.release(); });
+    this.transition = Promise.resolve().then(()=>practice?.close()).finally(()=>this.world.stop()).finally(() => { this.phase = 'disconnected'; this.lease.release(); });
     return this.transition;
   }
 
@@ -210,7 +260,7 @@ export class MinecraftAgentClient {
       connection: connection && typeof connection.ready === 'boolean' && typeof connection.phase === 'string'
         ? { ready: connection.ready, phase: connection.phase } : null,
       lamps: console?.lamps ?? [], links: console?.links ?? [],
-      facts: this.phase === 'started' ? this.world.requestFacts?.() ?? null : null };
+      facts: this.phase === 'started' ? this.requestFacts() : null };
   }
 
   /** Human/operator surface only. Device codes must not enter mc://status, MCP events or model facts. */
@@ -320,7 +370,7 @@ export class MinecraftAgentClient {
   }
 
   currentFacts() {
-    const current = this.phase === 'started' ? this.world.requestFacts?.() as import('./contracts.ts').WorldRequestFacts | null : null;
+    const current = this.phase === 'started' ? this.requestFacts() : null;
     const connection = { key: 'connection', text: JSON.stringify({ phase: this.phase, host: this.options.cfg.host,
       port: this.options.cfg.port, username: this.options.cfg.username, version: this.options.cfg.version }) };
     return { protocol: PROTOCOL, run: this.journal.run,
@@ -371,7 +421,8 @@ export class MinecraftAgentClient {
     const { requestId: callId = randomUUID(), turnId, signal = legacySignal, attribution } = typeof options === 'string' ? { requestId: options } : options;
     const offlineMemory = this.phase === 'disconnected' && name === `${this.toolPrefix}_memory`;
     const offlineKnowledge = this.phase === 'disconnected' && name === `${this.toolPrefix}_knowledge`;
-    const offlineCall = offlineMemory || offlineKnowledge;
+    const offlinePractice = this.phase === 'disconnected' && name === `${this.toolPrefix}_practice` && ['help','status'].includes(String(args.op));
+    const offlineCall = offlineMemory || offlineKnowledge || offlinePractice;
     if (this.phase !== 'started' && !offlineCall) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
     if (typeof callId !== 'string' || !callId || callId.length > 256) throw new Error('Invalid request id');
     const signature = createHash('sha256').update(JSON.stringify([name, args, turnId ?? this.turn?.id, ...(attribution ? [attribution] : [])])).digest('hex');

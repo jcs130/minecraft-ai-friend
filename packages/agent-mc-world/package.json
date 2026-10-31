@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.147",
+  "version": "0.5.7-rc.148",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -177,6 +177,7 @@
     "scripts/client-appearance-targets.mjs",
     "scripts/build-client-graphics.mjs",
     "scripts/build-mesa-presentation.mjs",
+    "scripts/verify-practice-server.mjs",
     "scripts/client-graphics-loader.mjs",
     "client-graphics",
     "client-appearance",

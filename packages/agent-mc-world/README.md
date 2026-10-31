@@ -1,5 +1,7 @@
 # Agent MC World
 
+Development candidate **rc.148** exposes `mc_practice` through the actual SDK/MCP runtime. A host can supply its existing model/worker and a dedicated connected practice client; experiments use the original game executor, method library and independent inventory observations. Unconfigured help reports the missing ports. See [connected practice setup and real-server verification](docs/connected-practice.md). This is a source/package candidate, with no automatic strategy adoption or production deployment.
+
 Development candidate **rc.128** separates observed target death from own kill
 credit in structured attack and passive combat receipts. Native death can settle
 an action, but unavailable killer attribution remains `null`; lost tracking

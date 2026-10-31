@@ -124,6 +124,8 @@ const result = await runner.run({
 
 ## 验证与回退
 
+新增[多步骤合成最小实验](crafting-practice.md)：通过现有 MethodPracticeExecutor 执行受限参数策略，使用固定配方/库存 fixture 比较原版与两份留出。它是离线执行与验收链路测试，不是实际 Minecraft 服务端或自主生存提升证据；真实环境验收步骤见该文档。
+
 默认单元测试不需要模型、Python或网络：`vitest run tests/harness2.test.ts`。设置 `HARNESS2_TEST_WORKER` 为 worker JSON 后，`tests/harness2-upstream.test.ts` 执行原版算法、实际物理、两个递归模式、反思及恢复检查，使用明确标记的确定性模型替身；它不证明真实 LLM 提升。
 
 停用宿主的显式练习入口即可停止新任务；取消当前请求后仍须确认原清理终态。不要删除未知账本。源码回退用本提交的 `git revert`，包回退到先前锁定版本；线上采用始终另行操作，所以本集成没有替换当前线上方法或权重。

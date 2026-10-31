@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.7-rc.148
+
+- Wire the existing Harness² practice service into the core SDK/MCP tool catalogue, request facts, completion events, console monitor and disconnect/reconnect lifecycle. Hosts explicitly supply the model, worker and isolated execution port; unconfigured help reports unavailable without starting anything.
+- Add `createClientMethodPractice`: execute through a dedicated connected client's existing `mc_script` and canonical MethodLibrary, independently read complete inventories, retain original UUIDs/call evidence, and fence unresolved trials across restart. No copied game executor or automatic adoption.
+- Include an explicit two-vanilla-server integration verifier covering actual crafting, independent holdouts, MCP discovery/start/result/cancel and service reconstruction. Real-model quality and production deployment remain separate acceptance steps.
+
 ## 0.5.7-rc.147
 
 - Use the same interaction-reach approach for coordinate-targeted withdrawals, pinned furnaces and brewing stands, and enchanting tables as ordinary container activation. A container already within reach no longer requires an unnecessary two-block landing. Preserve cancellation, native window admission, item transfer accounting and post-operation confirmation.
