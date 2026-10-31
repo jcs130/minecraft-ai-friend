@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.138
+
+- Reassess owned indefinite native follow tasks at the configured idle decision interval through the existing planner, even without a terminal event. Finite task scheduling, model backoff and explicit user stop retain priority.
+- Reviews preserve the native task and do not cancel automatically or verify completion. Terminal or world changes invalidate an in-flight review so a stale stop cannot affect successor work.
+
 ## 0.2.137
 
 - Preserve completed control batches' measured net displacement in planner,
