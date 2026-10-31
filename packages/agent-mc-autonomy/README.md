@@ -1,5 +1,15 @@
 # Agent MC Autonomy
 
+Version 0.2.137 exposes `derive_control_motion` and `control_motion_view` for
+known, contiguous multi-step native controls. The `agent-mc-control-motion/v1`
+record preserves start/end positions and measured net displacement in planner,
+status and strategic-review views. Intermediate jumping can end at the origin;
+without other observed stock/window effects that terminal no longer retires an
+earlier native failure. Intentional round trips remain valid, no tool is blocked
+or replayed, and unknown/discontinuous/mixed evidence is not called zero motion.
+Current live observations still invalidate reads normally. This does not certify
+route progress, all server effects, or improvement after deployment.
+
 Version 0.2.136 keeps failed-plan recovery stable across transient native window
 IDs. Reopening the same menu does not reset the measured failure count. Original
 IDs and changed-window evidence stay in the dated receipts; menu type, target,

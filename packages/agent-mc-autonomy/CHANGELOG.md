@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.137
+
+- Preserve completed control batches' measured net displacement in planner,
+  public status and strategic-review evidence. Jumping out and landing at the
+  origin no longer erases an earlier native failure merely because each leg moved.
+- Preserve successful steps, deliberate round trips, unknown samples and dispatch.
+  Other observed effects and real net movement still count; gameplay improvement
+  and all server effects remain separate from the measured geometry.
+
 ## 0.2.136
 
 - Keep failed-plan recovery stable when reopening the same native menu allocates

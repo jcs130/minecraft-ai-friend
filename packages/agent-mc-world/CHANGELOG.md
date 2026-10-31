@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.7-rc.147
+
+- Use the same interaction-reach approach for coordinate-targeted withdrawals, pinned furnaces and brewing stands, and enchanting tables as ordinary container activation. A container already within reach no longer requires an unnecessary two-block landing. Preserve cancellation, native window admission, item transfer accounting and post-operation confirmation.
+
 ## 0.5.7-rc.146
 
 - Distinguish a no-progress route with no native movement or motor commands from a collision while walking. End the stalled owned route with planning evidence rather than running an irrelevant unwedge or claiming the player/server is frozen. Retain actual movement/work stalls, deadline, cancellation and unknown readings.
