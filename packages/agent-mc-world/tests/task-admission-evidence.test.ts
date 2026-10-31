@@ -3,6 +3,22 @@ import { readSkillHelp } from '../core/skills.ts';
 import { methodHarness } from './method-harness.ts';
 
 afterEach(() => vi.restoreAllMocks());
+it('returns correlated no-effect admission and ends only this decision turn, preserving the task terminal', async () => {
+  const r = methodHarness();
+  try {
+    vi.spyOn(r.exec, 'submit').mockImplementation((_steps, _mode, _wrote, onDecision) => {
+      onDecision?.(false, undefined, false, { kind:'repeat', rule:'task.no-observed-effect', review: {
+        protocol:'agent-mc-no-effect-plan-review/v1',planHash:'a'.repeat(64),completedNoopTasks:2,
+        firstTaskId:41,latestTaskId:42,observedAt:Date.now(),observation:'unchanged',goalVerified:false,
+      } });
+      return 'Prior task completed with noop; identical selection was not dispatched';
+    });
+    const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler({steps:[{skill:'pickup',item:'phantom_membrane'}]}, {role:'test',log:r.host.log});
+    expect(result).toMatchObject({failed:true,endsTurn:true,data:{status:'blocked',goal_completed:false,
+      next_safe_read:{tool:'mc_queue',arguments:{taskId:42,detail:true}}},meta:{admission:{kind:'repeat',rule:'task.no-observed-effect',review:{latestTaskId:42}}}});
+    expect(result).not.toHaveProperty('execution');
+  } finally { r.close(); }
+});
 
 it('rejects invalid coordinates before replacing, navigating or dispatching any earlier step', async () => {
   const r = methodHarness();

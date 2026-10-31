@@ -1,6 +1,41 @@
 import { expect, it } from 'vitest';
 import { PlanReviewBook } from '../src/client/plan-review.ts';
+import { observedEffect } from '../core/observed-effect.ts';
 const steps = [{ skill: 'goto', at: [-462,67,-488] }, { skill: 'probe', shape:'box', anchors:[[-468,67,-494],[-456,67,-482]] }];
+const unchanged = (skill: string) => observedEffect(skill, 'overworld', null,
+ {at:'2026-10-31T12:00:00Z',target:null,inventory:{phantom_membrane:2},position:[0,75,0],window:null},
+ {at:'2026-10-31T12:00:01Z',target:null,inventory:{phantom_membrane:2},position:[0,75,0],window:null});
+it('reviews mixed completed goto/noop work and does not call another arrival a pickup gain',()=>{
+ const b=new PlanReviewBook(),args={steps:[{skill:'goto',at:[0,75,0]},{skill:'pickup',item:'phantom_membrane',needs:[1]}]};
+ const outcomes=()=>[{step:1,outcome:'ok',observedEffect:unchanged('goto')},{step:2,outcome:'noop',why:'No matching drops',observedEffect:unchanged('pickup')}];
+ for(let i=1;i<=2;i++){call(b,i,args);b.recordEvents([terminal(i,'completed',outcomes())]);}
+ expect(b.priority('r')).toMatchObject({count:2,failureKind:'no-observed-effect',observation:'unchanged'});
+ expect(b.context('r').episodes[0].failedSteps[0]).toMatchObject({step:2,outcome:'noop',skill:'pickup'});
+ const key=b.priority('r')!.key,moved=outcomes();moved[0].observedEffect.status='changed';moved[0].observedEffect.changed.position=true;
+ call(b,3,args);b.recordEvents([terminal(3,'completed',moved)]);expect(b.priority('r')).toMatchObject({key,count:3});
+ call(b,4,args);b.recordEvents([terminal(4,'completed',[{step:1,outcome:'ok'},{step:2,outcome:'ok'}])]);
+ expect(b.priority('r')?.key).toBe(key);
+ const gained=outcomes();gained[1].outcome='ok';gained[1].observedEffect.status='changed';gained[1].observedEffect.changed.inventory=true;
+ call(b,5,args);b.recordEvents([terminal(5,'completed',gained)]);expect(b.priority('r')).toBeNull();
+ expect(b.snapshot()).not.toHaveProperty('adopted');
+});
+it('independent chat success cannot erase a correlated pickup noop or failed material handoff',()=>{
+ const b=new PlanReviewBook(),args={steps:[{skill:'goto',at:[0,75,0]},
+  {skill:'pickup',item:'bread'},{skill:'chat',text:'independent statement',needs:[]}]};
+ for(let i=1;i<=2;i++){call(b,i,args);b.recordEvents([terminal(i,'completed',[
+  {step:1,outcome:'ok',observedEffect:unchanged('goto')},
+  {step:2,outcome:'noop',observedEffect:unchanged('pickup')},{step:3,outcome:'ok'}
+ ])]);}
+ expect(b.priority('r')).toMatchObject({count:2,failureKind:'no-observed-effect',observation:'unchanged'});
+ expect(JSON.stringify(b.snapshot())).not.toContain('independent statement');
+ const failed=new PlanReviewBook(),handoff={steps:[{skill:'take',item:'bread',at:[0,64,0]},
+  {skill:'toss',item:'bread',needs:[1]},{skill:'chat',text:'independent claim'}]};
+ for(let i=3;i<=4;i++){call(failed,i,handoff);failed.recordEvents([terminal(i,'blocked',[
+  {step:1,outcome:'fail',why:'Not a container',observedEffect:unchanged('take')},
+  {step:2,outcome:'skip'},{step:3,outcome:'ok'}
+ ])]);}
+ expect(failed.priority('r')).toMatchObject({count:2,failureKind:'failed-step'});
+});
 function call(book: PlanReviewBook, id: number, args: unknown = { steps }, run='r') {
  book.recordCall({ run, name:'mymc_do', args, result:{ structuredContent:{ execution:{kind:'task',id:`epoch:${id}`,phase:'accepted',terminal:false,evidence:{localId:id}}}} });
 }

@@ -88,3 +88,38 @@ remain opt-in exports; compatibility strings are not framework imports.
   state preservation and actual inventory/game results are recorded separately.
 
 This extraction is maintenance work, not an Agent-authored learning result.
+
+## Completed tasks with no observed effect
+
+`taskEffectProgress` reports measured task and work effects separately from the
+terminal state. A completed `goto` followed by a `pickup` noop remains completed;
+it does not prove an inventory gain or the Agent's goal. Moving to the collection
+site cannot erase a repeated no-effect pickup episode. `PlanReviewBook` correlates
+these episodes with accepted task IDs, retains unknown measurements, and clears
+them when measured work changes. Hosts may use this evidence in their existing
+reflection policy without starting another model loop.
+
+`NoEffectPlanBook` gates only a new, identical choice after comparable completed
+noops. The executor currently supplies complete comparison context for pickup
+batches with optional navigation, looking and waiting: dimension, position,
+inventory, window, loaded navigation targets and existing item entities within
+the pickup skill's 24-block range. New item/state observations permit a fresh
+attempt. Missing comparison fields and other action/backend coverage remain
+unknown; they cannot authorize a refusal. This is not a fixed retry timer or
+proof that the requested goal failed.
+
+A known no-effect refusal preserves all prior terminals, queue ownership and
+unknown effects. Its typed admission references the original task for inspection
+and ends only the current decision turn. The host retains the original goal and
+chooses another action or a real waiting condition. The gate neither cancels work
+nor replays a pending request, invents a successful outcome, or changes personality,
+memory or model settings.
+
+Success reports use the existing explicit `needs` contract. For example, a chat
+following pickup uses `needs:[1]`, and a report after a dependent toss refers to
+that toss step. Failed, skipped and noop upstream steps do not release such a
+report. `partial` still requires reading the actual quantity; neither a thrown
+item nor a sent chat proves that another player received it. An independent
+request for help can use `needs:[]`. The executor does not infer a chat's intent
+or truth from its wording, and a chat's `ok` result never constitutes material
+progress. This distinction applies through the shared SDK, MCP and host ports.

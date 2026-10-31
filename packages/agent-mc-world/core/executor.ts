@@ -70,6 +70,8 @@ import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } f
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { sampleEffect, observedEffect } from './observed-effect.ts';
+import { taskEffectProgress, type TaskEffectProgress } from './task-effect-progress.ts';
+import { NoEffectPlanBook, type NoEffectPlanReview } from './no-effect-plans.ts';
 import { captureDeathTarget, matchesDeathTarget, type DeathTargetIdentity } from './entity-death-identity.ts';
 import type { ObservedEffect } from '../src/contracts/observed-effect.ts';
 import { assertInventoryClicksReady, isInventoryClickError } from './inventory-click-sync.ts';
@@ -1064,6 +1066,8 @@ export interface TaskReport {
   text: string;
   /** 这条汇报说的是哪个任务;反射不属于任何任务,没有 */
   taskId?: number;
+  /** Task completion alone is not evidence that the intended game state changed. */
+  progress?: TaskEffectProgress;
   /** Last completed step of a successful task. */
   lastSkill?: SkillCall['skill'];
   steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null;
@@ -1830,6 +1834,7 @@ export interface TaskAdmissionRejection {
   /** A fresh correction permits replanning; known refusals and waits end this turn. */
   kind: 'correction' | 'repeat' | 'wait';
   rule: string;
+  review?: NoEffectPlanReview;
 }
 
 export interface TaskAdmissionDecision {
@@ -2004,6 +2009,8 @@ export class Executor {
    * 成功清除相同现场的旧账；不同现场的原因不会转交给新尝试。
    */
   private readonly priorOutcomes = new Map<string, PriorOutcome>();
+  private readonly noEffectPlans = new NoEffectPlanBook();
+  private noEffectBot: Bot | null = null;
   private readonly unresolvedIntents = new Map<string, {
     attempts: number; at: number; evidence: string; after: TaskObservation | null;
   }>();
@@ -2251,6 +2258,14 @@ export class Executor {
     const p = this.opts.getBot()?.entity?.position;
     const frozen = p ? freezeFirstStep(steps, { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) }) : null;
     const calls = frozen?.steps ?? steps;
+    const noEffect = this.noEffectPlans.review(this.noEffectKey(calls), this.noEffectContext(calls));
+    if (noEffect) return {
+      receipt: `[${this.clock(at)}] 同一选择已有 ${noEffect.completedNoopTasks} 次完成回执，但可比的现场和背包均未改变，且有 noop 步骤。`
+        + `原任务#${noEffect.latestTaskId} 已结束；这次没有新派发，原队列和目标保留。`
+        + '请读取原终态并重新选择；如果是在守点等待掉落物，应等待新的相关物体或现场变化，而不是重复制造同一组 goto/pickup。'
+        + '新掉落物、位置、背包或相关现场改变后会重新核验；这是客户端可见读数，不是目标完成判断。',
+      accepted: false, rejection: { kind: 'repeat', rule: 'task.no-observed-effect', review: noEffect },
+    };
     const satisfiedGoto = this.satisfiedGotoReceipt(calls);
     if (satisfiedGoto) {
       // The first no-movement arrival is useful evidence. Repeating it must
@@ -5936,11 +5951,17 @@ export class Executor {
     // (上次没成这次成了,再拿旧账去提醒她就是散布过期事实)。
     // 一步没成、全程无事可做也算没达到目的 —— 找牛找了 20 分钟一头没见着,
     // 任务层面是「做完了」,可她想要的那件事一次没发生。
+    const measured = taskEffectProgress(task.stepLog.map(p => ({ ...p, skill: steps[p.step - 1]?.skill })));
+    const completedNoop = blockedSteps.length === 0 && partialSteps.length === 0
+      && measured.observation === 'unchanged' && measured.noopSteps > 0;
     const kind: PriorOutcome['kind'] | null = blockedSteps.length > 0 ? 'blocked'
       : partialSteps.length > 0 ? 'partial'
-        : results.length === 0 && noopSteps.length > 0 ? 'noop'
+        : completedNoop || results.length === 0 && noopSteps.length > 0 ? 'noop'
           : null;
     const finishedAt = Date.now();
+    if (blockedSteps.length === 0 && partialSteps.length === 0) this.noEffectPlans.record({
+      key: this.noEffectKey(steps), taskId: task.id, context: this.noEffectContext(steps), progress: measured,
+    });
     this.notePriorOutcome(task, kind, firstWhy ?? '没说清为什么', finishedAt);
     const repeatFailure = this.noteRepeatOutcome(task, kind, finishedAt);
     this.recordExactOutcome(steps, kind === 'blocked' || kind === 'noop', firstWhy ?? '没说清为什么');
@@ -5980,6 +6001,7 @@ export class Executor {
         kind: 'done',
         text: `${span()}${label()}${onlyTrials ? '试算结束（没有执行移动、施法、放置或挖掘）' : '完成'}:${listOf(results)}${nothingToDo}${scene}`,
         taskId: id,
+        progress: measured,
         ...(repeatFailure ? { repeatFailure } : {}),
       });
       return;
@@ -6016,6 +6038,45 @@ export class Executor {
       return;
     }
     this.priorOutcomes.set(sig, { kind, why, at, context: task.priorContext, taskId: task.id, label: labelOf(task) });
+  }
+
+  private noEffectKey(steps: readonly SkillCall[]): string {
+    const bot = this.opts.getBot();
+    return JSON.stringify([bot ? normalizeDimension(dimensionOf(bot)) : null, exactTaskKey(steps)]);
+  }
+
+  /** Comparable pickup context only: other backend/action coverage stays unknown.
+   * Reads existing entity/inventory state; it performs no scan, subscription or action. */
+  private noEffectContext(steps: readonly SkillCall[]): string | null {
+    const bot = this.opts.getBot();
+    if (bot !== this.noEffectBot) { this.noEffectBot = bot; this.noEffectPlans.clear(); }
+    if (!steps.some(s => s.skill === 'pickup') || steps.some(s => !['goto', 'pickup', 'look', 'wait'].includes(s.skill))) return null;
+    if (!bot || !inventoryReadConfirmed(bot) || !bot.entities || !bot.entity?.position) return null;
+    try {
+      const sample = sampleEffect(bot, null), entities = Object.values(bot.entities);
+      if (!sample.position || !sample.inventory || sample.window === undefined || entities.length > 4096) return null;
+      const drops: Array<{ id: number; name: string; count: number; position: number[] }> = [];
+      const pickups = steps.filter((s): s is Extract<SkillCall, {skill:'pickup'}> => s.skill === 'pickup');
+      for (const entity of entities) {
+        if (!entity.position || entity.position.distanceTo(bot.entity.position) > 24) continue;
+        const item = droppedStackOf(entity, bot.registry?.items);
+        if (!item) continue;
+        if (item.name === 'item' || !Number.isSafeInteger(item.count) || item.count < 0) return null;
+        if (!pickups.some(s => !s.item || matchItemName(s.item, item.name, bot.registry))) continue;
+        const p = entity.position;
+        if (![entity.id, item.count, p.x, p.y, p.z].every(Number.isFinite)) return null;
+        drops.push({ id: entity.id, name: item.name, count: item.count,
+          position: [p.x, p.y, p.z].map(n => Math.round(n * 10) / 10) });
+      }
+      const targets = steps.filter((s): s is Extract<SkillCall, {skill:'goto'}> => s.skill === 'goto').map(s => {
+        const at = resolveAt(bot, s.at), b = blockAtCell(bot, at);
+        return b ? [at.x, at.y, at.z, b.name, b.stateId] : null;
+      });
+      if (targets.some(t => t === null)) return null;
+      return JSON.stringify({ dimension: normalizeDimension(dimensionOf(bot)), position: sample.position.map(n => Math.round(n * 10) / 10),
+        inventory: Object.fromEntries(Object.entries(sample.inventory).sort(([a], [b]) => a.localeCompare(b))),
+        window: sample.window, targets, drops: drops.sort((a, b) => a.id - b.id) });
+    } catch { return null; }
   }
 
   private observeTask(steps: readonly SkillCall[]): TaskObservation | null {

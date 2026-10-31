@@ -6868,8 +6868,10 @@ export class MinecraftWorld implements World {
     return {text:receipt, data: { status: admitted ? completedImmediately ? 'completed' : 'accepted' : 'blocked',
       reason: rejection?.rule ?? null, completed: admitted ? completedImmediately ? parsed.steps.length : null : 0,
       remaining: admitted ? completedImmediately ? 0 : null : parsed.steps.length, retryable:false, retry_after:null,
-      next_safe_read: { tool:'mc_queue', arguments:admittedTaskId === undefined ? {} : { taskId:admittedTaskId } },
-      goal_completed:false }, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}), ...(!admitted ? { failed: true } : {})};
+      next_safe_read: { tool:'mc_queue', arguments:admittedTaskId === undefined
+        ? rejection?.review ? { taskId:rejection.review.latestTaskId, detail:true } : {} : { taskId:admittedTaskId } },
+      goal_completed:false }, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}),
+      ...(!admitted ? { failed: true, ...(rejection?.rule === 'task.no-observed-effect' ? { endsTurn:true } : {}) } : {})};
   }
 
   protected perceptionReadout(name:string,args:Record<string,unknown>):ToolOutcome {
@@ -8942,7 +8944,7 @@ export class MinecraftWorld implements World {
     this.emit('minecraft.task', `[执行器] ${reportText}${queue}`, !workSubtask && r.kind !== 'cancelled',
       {...(workSubtask ? { trigger: 'piggyback' as const } : {}), execution: r.taskId === undefined ? undefined : {kind:'task',id:`${this.executionEpoch}:${r.taskId}`,
         phase:r.kind==='done'?'completed':r.kind,
-        terminal:!['suspended','resumed','reflex'].includes(r.kind),goalCompleted:false,evidence:{receipt:reportText,steps:r.steps??[]}},
+        terminal:!['suspended','resumed','reflex'].includes(r.kind),goalCompleted:false,evidence:{receipt:reportText,steps:r.steps??[],...(r.progress?{progress:r.progress}:{})}},
         ...(r.repeatFailure ? { meta: { repeatFailure: {
         taskId: r.taskId, attempts: r.repeatFailure.attempts, scope: r.repeatFailure.scope,
         observation: r.repeatFailure.observation,
