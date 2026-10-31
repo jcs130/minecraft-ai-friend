@@ -3,8 +3,13 @@ import { Vec3 } from 'vec3';
 import type { EffectSample, ObservedEffect } from '../src/contracts/observed-effect.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 
+export interface EffectSampleOptions {
+  /** Retained-body hosts supply false until their own slots/click outcome are confirmed.
+   * true cannot bypass the core's pending/quarantined inventory guard. */
+  inventoryReady?: boolean;
+}
 /** Observation failures must never change an action's outcome or invent zero values. */
-export function sampleEffect(bot: Bot, cell: [number, number, number] | null): EffectSample {
+export function sampleEffect(bot: Bot, cell: [number, number, number] | null, options: EffectSampleOptions = {}): EffectSample {
   const sample: EffectSample = { at: new Date().toISOString(), target: null, inventory: null, position: null };
   try {
     const p = bot.entity?.position;
@@ -15,7 +20,7 @@ export function sampleEffect(bot: Bot, cell: [number, number, number] | null): E
     }
   } catch { /* Unloaded cells remain unknown. */ }
   try {
-    if (inventoryReadConfirmed(bot)) {
+    if (options.inventoryReady !== false && inventoryReadConfirmed(bot)) {
       const stacks = bot.inventory.items();
       if (stacks.length <= 128 && stacks.every(s => typeof s.name === 'string' && Number.isSafeInteger(s.count) && s.count >= 0)) {
         sample.inventory = {};

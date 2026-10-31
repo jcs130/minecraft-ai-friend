@@ -123,3 +123,16 @@ item nor a sent chat proves that another player received it. An independent
 request for help can use `needs:[]`. The executor does not infer a chat's intent
 or truth from its wording, and a chat's `ok` result never constitutes material
 progress. This distinction applies through the shared SDK, MCP and host ports.
+
+Retained-body adapters import `causalNeeds`, `sampleEffect`, `observedEffect`,
+`taskEffectProgress` and `NoEffectPlanBook` from `agent-mc-world/client`, with
+`SkillCall`, `StepOutcome`, `EffectSample`, `ObservedEffect` and
+`EffectSampleOptions` types from the same export. These are the core's existing
+implementations, not a second executor. `causalNeeds` infers material edges only;
+the body still honors explicitly declared `needs` (including independent `[]`),
+spatial admission and its own step outcomes. It does not infer chat semantics.
+A retained body passes `inventoryReady:false` to `sampleEffect` until its own
+server slots and click outcomes are confirmed; unavailable observations stay
+unknown. Merely importing helpers does not install these ports or validate live
+behavior: the host must wire per-step capture, real dependency gating and
+selection review into its sole queue, without changing unknown effects.

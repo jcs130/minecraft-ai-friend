@@ -13,6 +13,11 @@ export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetBase, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
 export { PlanReviewBook, type FailedPlanEpisode, type RecentPlanEffect } from './plan-review.ts';
+/** Shared evidence/dependency helpers for hosts retaining their sole native body queue. */
+export { causalNeeds, type StepOutcome } from '../../core/executor.ts';
+export type { SkillCall, Expectation } from '../../core/skills.ts';
+export { sampleEffect, observedEffect, type EffectSampleOptions } from '../../core/observed-effect.ts';
+export type { EffectSample, ObservedEffect } from '../contracts/observed-effect.ts';
 export { CommandRepetitionGuard, type CommandSubmission } from './command-repetition.ts';
 export { MotionReviewBook, MotionReviewGate, type MotionReview, type MotionAdmission } from './motion-review.ts';
 export { DecisionReviewBook, type DecisionReview, type DecisionRound } from './decision-review.ts';

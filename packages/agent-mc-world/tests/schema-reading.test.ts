@@ -43,3 +43,34 @@ it('keeps identically named argument properties and literal data intact', () => 
   expect(view.allOf).toEqual([{required:[annotation]}]);
   const untouched={type:'number',minimum:0,maximum:3};expect(omitContextSchemaAnnotations(untouched)).toBe(untouched);
 });
+
+it('full and compact action catalogues reject malformed dependency indices while accepting independent help', () => {
+  const tool=MINECRAFT_TOOL_DECLS.find(tool=>tool.name==='mc_do')!;
+  for(const schema of [tool.parameters,compactToolSchema(tool,tool.parameters).schema]) {
+    const validate=validator(schema);
+    for(const needs of [[],[1]]) {
+      expect(validate({steps:[{skill:'pickup',item:'bread'},{skill:'chat',text:'fixture',needs}]}).valid).toBe(true);
+    }
+    for(const needs of [[0],[-1],[1.5],['1'],'1']) {
+      expect(validate({steps:[{skill:'chat',text:'fixture',needs}]}).valid,JSON.stringify(needs)).toBe(false);
+    }
+  }
+});
+
+it('collapsed array fields retain scalar item bounds, literal constraints and uniqueness without prose', () => {
+  const fields={
+    ids:{type:'array',uniqueItems:true,items:{type:'integer',minimum:1,maximum:9,multipleOf:2,description:'long note'}},
+    names:{type:'array',items:{type:'string',minLength:2,maxLength:4,pattern:'^[a-z]+$',description:'long note'}},
+    ratios:{type:'array',items:{type:'number',exclusiveMinimum:0,exclusiveMaximum:1}},
+    flags:{type:'array',items:{type:['boolean','null'],const:true}},
+  };
+  const schema={type:'object',properties:{steps:{type:'array',items:{type:'object',properties:fields}}}};
+  const compact=compactToolSchema({name:'fixture'},schema,{collapseProperties:1}).schema as any;
+  expect(compact.properties.steps.items.properties.ids.items).toEqual({type:'integer',minimum:1,maximum:9,multipleOf:2});
+  const full=validator(schema),slim=validator(compact);
+  for(const fields of [{ids:[2,4],names:['ab'],ratios:[.5],flags:[true]},
+    {ids:[0]},{ids:[10]},{ids:[3]},{ids:[2,2]},{names:['a']},{names:['abcde']},{names:['AB']},
+    {ratios:[0]},{ratios:[1]},{flags:[false]}]) {
+    const input={steps:[fields]}; expect(slim(input).valid).toBe(full(input).valid);
+  }
+});

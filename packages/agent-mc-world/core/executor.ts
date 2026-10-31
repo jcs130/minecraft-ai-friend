@@ -1113,7 +1113,7 @@ interface StepLanding {
 }
 
 /** 一步落地的终态。闸门、账本、结局回执三处同一套判词 */
-type StepOutcome = 'ok' | 'noop' | 'partial' | 'fail' | 'skip';
+export type StepOutcome = 'ok' | 'noop' | 'partial' | 'fail' | 'skip';
 
 /** 被切断那一刻补的一条:正在跑的那一步。只出现在终态回投里,不进账本 */
 interface CutLanding {
