@@ -173,6 +173,9 @@ final class CombatRpg implements Listener {
         contributions.entrySet().removeIf(e->{e.getValue().values().removeIf(c->now-c.at>60_000);return e.getValue().isEmpty();});
         flush();
         for(Player p:Bukkit.getOnlinePlayers()){
+            // Vortex owns real HP. Keep the vanilla HUD at two HP per heart;
+            // this only removes a legacy visual scale, never changes health.
+            if(plugin.nativeRpg().selected()&&p.isHealthScaled())p.setHealthScaled(false);
             boolean eligible=eligible(p);int level=level(p);
             modifier(p,Attribute.GENERIC_MAX_HEALTH,healthKey,!plugin.nativeRpg().selected()&&eligible?CombatRpgRules.healthBonus(level):0);
             modifier(p,Attribute.GENERIC_ATTACK_DAMAGE,attackKey,!plugin.nativeRpg().selected()&&eligible?CombatRpgRules.attackBonus(level):0);

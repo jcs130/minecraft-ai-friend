@@ -118,11 +118,15 @@ export function terseField(schema: unknown, depth = 0): Schema | undefined {
   const isArray = schema.type === 'array' || (Array.isArray(schema.type) && schema.type.includes('array'));
   if (!isArray) return undefined;
   const out: Schema = { type: schema.type };
-  for (const k of ['minItems', 'maxItems']) if (schema[k] !== undefined) out[k] = schema[k];
+  for (const k of ['minItems', 'maxItems', 'uniqueItems']) if (schema[k] !== undefined) out[k] = schema[k];
   const items = schema.items;
   if (isObject(items)) {
-    const inner = Array.isArray(items.enum) ? { enum: items.enum } : items.type === 'array' && depth < 2 ? terseField(items, depth + 1)
-      : ['integer', 'number', 'string', 'boolean'].includes(items.type as string) ? { type: items.type } : undefined;
+    // Scalar item types alone lose constraints such as needs >= 1. Retain the
+    // original validation keywords while removing only prose annotations.
+    const scalarTypes = Array.isArray(items.type) ? items.type : [items.type];
+    const scalar = scalarTypes.length > 0 && scalarTypes.every(t => ['integer','number','string','boolean','null'].includes(t as string));
+    const inner = Array.isArray(items.enum) || Object.hasOwn(items, 'const') || scalar ? slim(items, 0, {})
+      : items.type === 'array' && depth < 2 ? terseField(items, depth + 1) : undefined;
     if (inner) out.items = inner;
   }
   return out;

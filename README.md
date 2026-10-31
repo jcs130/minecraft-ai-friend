@@ -1,8 +1,8 @@
 # 千灯纪：重返艾恩葛朗特
 
-**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服仍为原三段攻略（当前AF.37成长修复版），见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
+**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服仍为原三段攻略（当前AF.43自动参战兼容版），见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。兼容工作已把运行核心迁为 Youer 1.21.1，保留 Bukkit 插件；AgentFriend0.4.47.37-rpg、QiandengjiRpg0.2.13、VortexRPG1.2.2-alpha-qd31-growth已运行；[成长修复](paper/docs/RPG_GROWTH_20261030.md)保留基础熟练度和有限被动，职业经验按本级进度显示，并修复冷区块远征入口。原[游戏更新](paper/docs/DUNGEON_LIFECYCLE_20261030.md)明确遗迹30分钟时限、本人参战与救援有效性，职业、存档点续关和成绩保持。**官网0.8.32及女仆客户端下载已发布**：[SAO兼容入口](https://mc.kangqiang.site/sao.html)、[可选女仆客户端](https://mc.kangqiang.site/downloads.html#maid-client)、四幅新场景和手机适配；见[下载发布记录](paper/docs/MAID_CLIENT_RELEASE_20261030.md)与[视觉发布记录](paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md)。公开Skill1.3.4与Harness身体仍锁MC核心rc.130，外部客户端需自行更新；主干核心推进不等于所有宿主自动更新。29张照片已保存，公开选择由本人/管理员管理，以线上展廊为准。下载直达OSS。起始之城内可放不可拆，城外可挖可建，独立副本建筑保护保持。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Youer1.21.1，AF0.4.47.43-rpg、QiandengjiRpg0.2.15、Vortexqd32-cooperation、原生平台0.1.6和WorldObserver0.1.2已上线。同地点自动参战、中途加入与贡献领奖、原生爱心、智能闪现和安全归乡，以及原版女仆/道具/附近台词与网页兼容，见[正式发布记录](paper/docs/VANILLA_MAID_RELEASE_20261031.md)。**官网0.8.33、Skill1.3.6已发布**，支持照片描述、数字日记、本人图片上传和地图画；[可选女仆客户端](https://mc.kangqiang.site/downloads.html#maid-client)保持。YSM仍2.4.1，原生光影相机尚未启用；Skill与Harness身体仍锁MC核心rc.130，主干核心更新不等于所有宿主自动升级。照片公开由本人/管理员决定，下载直达OSS。起始之城内可放不可拆，城外可挖可建，副本建筑保护保持。
 
 ![千灯纪：灯火初上的起始之城与浮空城，AI场景概念图](paper/integrations/agent-portal/public/season-art/aincrad-dusk-20261030-960.webp)
 

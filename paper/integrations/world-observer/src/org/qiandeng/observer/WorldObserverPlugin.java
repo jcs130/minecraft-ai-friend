@@ -239,7 +239,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             var using=p.getUseItem();value.put("useItemDurationTicks",using.getUseDuration(p));
             value.put("useItemAnimation",using.getUseAnimation().name().toLowerCase(Locale.ROOT));
             value.put("activeHand",p.getUsedItemHand()==net.minecraft.world.InteractionHand.OFF_HAND?"offhand":"mainhand");
-            value.put("activeItemName",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(using.getItem()).toString());
+            value.put("activeItemName",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(NativeObserverProjection.item(using).getItem()).toString());
         }
         value.put("attackAnim",p.getAttackAnim(1));value.put("mainArm",p.getMainArm().toString().toLowerCase(Locale.ROOT));
         value.put("airSupply",p.getAirSupply());value.put("maxAirSupply",p.getMaxAirSupply());value.put("inWater",p.isInWater());
@@ -249,8 +249,12 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         value.put("selectedHotbarSlot",player.getInventory().getHeldItemSlot());
         List<Map<String,Object>> inventory=new ArrayList<>();
         for(int slot=0;slot<46;slot++) {
-            var stack=p.inventoryMenu.getSlot(slot).getItem();Map<String,Object> item=new LinkedHashMap<>();item.put("slot",slot);
-            if(!stack.isEmpty())item.put("item",Map.of("name",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),"count",stack.getCount(),"snbt",stack.saveOptional(level.registryAccess()).toString()));
+            var source=p.inventoryMenu.getSlot(slot).getItem();var stack=NativeObserverProjection.item(source);Map<String,Object> item=new LinkedHashMap<>();item.put("slot",slot);
+            if(!stack.isEmpty()){
+                Map<String,Object> visual=new LinkedHashMap<>();visual.put("name",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());visual.put("count",stack.getCount());visual.put("snbt",stack.saveOptional(level.registryAccess()).toString());
+                if(source!=stack){visual.put("sourceName",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(source.getItem()).toString());visual.put("view","vanilla_compatibility");}
+                item.put("item",visual);
+            }
             else item.put("item",null); inventory.add(item);
         }
         value.put("inventory",inventory);
@@ -264,7 +268,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++)if(player.getWorld().isChunkLoaded(x+dx,z+dz))loaded.add(Chunk.getChunkKey(x+dx,z+dz));
             return loaded;
         }
-        return player.getSentChunkKeys();
+        return NativeObserverProjection.sentChunks(player,radius);
     }
     private void tick() {
         tick++;long started=System.nanoTime();boolean encodedChunk=false;
@@ -299,7 +303,10 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             if(!encodedChunk && !view.pendingChunks.isEmpty()) {
                 long key=view.pendingChunks.remove();var level=((CraftPlayer)player).getHandle().serverLevel();
                 var chunk=level.getChunkSource().getChunkNow((int)key,(int)(key>>32));
-                if(chunk!=null && visibleChunks(player).contains(key)) {add(view,new ClientboundLevelChunkWithLightPacket(chunk,level.getLightEngine(),null,null,false));view.sent.add(key);view.chunkTicks.put(key,tick);}
+                if(chunk!=null && visibleChunks(player).contains(key)) {
+                    try{add(view,NativeObserverProjection.chunk(chunk,level.getLightEngine()));if(view.fault==null){view.sent.add(key);view.chunkTicks.put(key,tick);}}
+                    catch(RuntimeException|LinkageError unavailable){view.fault="OBSERVER_CHUNK_CODEC_UNAVAILABLE";getLogger().log(java.util.logging.Level.WARNING,"Observation chunk failed; target paused without touching its game connection",unavailable);}
+                }
                 encodedChunk=true;
             }
             if(tick%4==0)updateEntities(view,player);
@@ -345,6 +352,14 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         long start=System.nanoTime();
         var buffer=Unpooled.buffer();
         try {
+            packet=NativeObserverProjection.project(view.uuid,packet);
+            if(packet==null)return;
+            // Bundle delimiters are a connection transport concern, not an
+            // encodable game packet. Queue each projected child in order.
+            if(packet instanceof ClientboundBundlePacket bundle){
+                for(var child:bundle.subPackets())add(view,child);
+                return;
+            }
             packetCodec.encode(buffer,packet);
             int size=buffer.readableBytes();if(size>2*1024*1024 || view.bytes+size>QUEUE_BYTES){view.fault="OBSERVATION_BACKPRESSURE";return;}
             byte[] bytes=new byte[size];buffer.readBytes(bytes);

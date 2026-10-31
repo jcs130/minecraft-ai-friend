@@ -4,18 +4,13 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import dev.aurelium.auraskills.api.AuraSkillsApi;
 import dev.aurelium.auraskills.api.user.SkillsUser;
-import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.DiscardedPayload;
-import net.minecraft.resources.ResourceLocation;
 import org.bukkit.Bukkit;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -104,7 +99,7 @@ final class AgentStatePublisher implements Listener {
     }
 
     private void publish(Player player, boolean force, boolean recovery) {
-        if (!player.isOnline()) return;
+        if (!player.isOnline() || !player.getListeningPluginChannels().contains(CHANNEL)) return;
         SkillsUser user = AuraSkillsApi.get().getUser(player.getUniqueId());
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
@@ -135,16 +130,7 @@ final class AgentStatePublisher implements Listener {
             if (json.equals(last.json())) return;
             if (recovery && now - last.sentAt() < RECOVERY_INTERVAL_MS) return;
         }
-        if (player.getListeningPluginChannels().contains(CHANNEL)) {
-            player.sendPluginMessage(plugin, CHANNEL, bytes);
-        } else {
-            // Mineflayer clients currently do not register plugin channels.
-            // Paper's messenger silently drops those; send the same raw payload
-            // to this connection alone, as mcagent:protection already does.
-            CraftPlayer craft = (CraftPlayer) player;
-            craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
-        }
+        player.sendPluginMessage(plugin, CHANNEL, bytes);
         lastStates.put(player.getUniqueId(), new LastState(json, now));
     }
 

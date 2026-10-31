@@ -110,7 +110,7 @@ final class ActionFeedback {
                 case "conquest_map_unavailable" -> a("正式攻略地图尚未就绪。", "请联系女神核对地图与场地配置；不要重复开场。原有地下城和练习塔可另查目录。", "/mycli dungeon list");
                 case "site_cooldown" -> a("场地处于开场冷却（最长120秒）。", "等待冷却结束，到首室再 start 一次；可先用 " + dungeon + " 查看规则。", dungeon);
                 case "claim_previous_reward_first" -> a("上次地下城奖励尚未领取，本次未开场或加入。", "先 /mycli dungeon claim " + id + " 领取到个人奖励箱，再重新 start 或 join；无需重打旧场次。", "/mycli dungeon claim " + id, "/mycli dungeon status " + id);
-                case "no_pending_reward" -> a("本人没有这份待领奖凭据，未发放奖励。", "用 /mycli dungeon status 查待领奖记录和最近结果；已领取的用 /mycli arena rewards 查看。新挑战需每室参战并返回首室，生成凭据后才能领。", "/mycli dungeon status", "/mycli arena rewards");
+                case "no_pending_reward" -> a("本人没有这份待领奖凭据，未发放奖励。", "用 /mycli dungeon status 查待领奖记录和最近结果；已领取的用 /mycli arena rewards 查看。进入进行中的遗迹会自动参战；有真实参战记录且全场通关后生成凭据，不需返回首室。", "/mycli dungeon status", "/mycli arena rewards");
                 case "specify_dungeon_id" -> a("有多处地下城奖励待领取，请选择一处。", "用 /mycli dungeon status 查看每份奖励及其准确领取命令，或点下方对应的领取按钮。", "/mycli dungeon status");
                 case "personal_reward_queue_full" -> a("个人奖励队列已满，尚不能装入。", "清出 /mycli arena stash 的页面空位并重新开箱，把待入箱奖励取走，再 dungeon claim；不要丢弃贵重物品腾位。", "/mycli arena stash", "/mycli arena rewards");
                 case "not_participating" -> a("你没有参加当前地下城。", "用 /mycli dungeon status 核对；想挑战请先到入口首室并主动 start，或在集结期 join。", "/mycli dungeon status", dungeon);

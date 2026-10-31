@@ -1,0 +1,6 @@
+# Merge into AuraSkills/stats.yml; do not replace the complete stats or records.
+# Vortex owns actual maximum HP. Vanilla Java and Bedrock use 2 HP per heart.
+traits:
+  auraskills/hp:
+    health_scaling: false
+    ensure_scaling_disabled: true

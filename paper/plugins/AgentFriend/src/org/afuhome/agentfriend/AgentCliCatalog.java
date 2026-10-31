@@ -231,11 +231,11 @@ final class AgentCliCatalog {
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
         add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查当前房间、存档点、剩余机会、占用或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认当前一步及剩余机会；--json含真实状态和凭据；完整旧结果用--verbose");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
-        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","首室由队长登记全队；战败回存档点，第三次战败结束，Boss房间排他","全员在线、生存模式、装备达标且未参加其他活动；最多8人，登记2人以上启用倒地救援","MC_SITE_DUNGEON_RESULT；战败自动回存档点，整场第三次战败结束；Boss房间仅本场队伍进入，清完后返回首室领奖");
-        add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
-        add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出自己的遗迹挑战，留在原地","只影响本人；未登记的奖励不发放","MC_SITE_DUNGEON_RESULT；队伍空后清理该队标记怪");
+        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","一人在首室开场，遗迹内达标者自动同队；可中途加入和离开","生存模式、穿齐护甲并携带可用武器或职业法器，未参加其他活动；不要求日常组队","MC_SITE_DUNGEON_RESULT；战败回存档点，第三次战败结束；真实参战者通关后均生成个人奖励凭据，无须返程");
+        add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","兼容入口：确认加入当前挑战；正常进入遗迹即自动加入","同地点、装备与职业等级达标；不限开场十秒","MC_SITE_DUNGEON_RESULT；只影响本场，不修改日常队伍；已参战记录离场后保留");
+        add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出当前在场参战，留在原地并保留贡献","倒地先等待救援；退出期间不自动加入，离开遗迹再回来即可续接","MC_SITE_DUNGEON_RESULT；同伴通关后，真实参与者仍有待领奖凭据");
         add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后重试暂停的挑战","须为该队成员；失败不清场、不发奖、不自动连续刷怪","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
-        add(specs,"dungeon.claim","adventure","item","/mycli dungeon claim [ID]","把完整探索凭据结算到个人奖励箱","每处上海日期每日奖励一次；队列满保留凭据，可重试","MC_SITE_DUNGEON_RESULT success/reason；结算与去重在同一原子配置写入");
+        add(specs,"dungeon.claim","adventure","item","/mycli dungeon claim [ID]","把通关参战奖励结算到个人奖励箱","每处上海日期每日奖励一次；队列满保留凭据，可重试；无需回首室","MC_SITE_DUNGEON_RESULT success/reason；结算与去重在同一原子配置写入");
         add(specs,"dungeon.menu","adventure","gui","/mycli dungeon menu","选择不同地点的地下城、路线、难度和组队","Java/基岩共用原版箱式菜单；地点罗盘有入口","普通箱式菜单；点击详情不会自动开始或传送");
         add(specs,"pvp.status","adventure","read","/mycli pvp status","本人积分、胜负、匹配及对手状态和大厅绝对坐标","在线玩家","本人 MC_PVP JSON");
         add(specs,"pvp.join","adventure","write","/mycli pvp join","传送入场并匹配；第二人加入后自动倒数","非旁观者、未在试炼中；6 魔力；原物品先安全暂存","本人 MC_PVP action=join 与成功后 MC_TRAVEL");

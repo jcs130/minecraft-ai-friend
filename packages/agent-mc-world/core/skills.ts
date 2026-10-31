@@ -2150,7 +2150,7 @@ function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
       skill: { type: 'string', enum: skills.map((s) => s.name) },
       ...Object.fromEntries(fields),
       needs: {
-        type: 'array', items: { type: 'integer' },
+        type: 'array', items: { type: 'integer', minimum: 1 },
         description: STEP_DEPENDENCY_DOC,
       },
       // `expect` 不进 schema、也不进技能表:两轮实验(0821 给回显、0822 回显 791 次

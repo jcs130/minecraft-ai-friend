@@ -12,6 +12,13 @@ final class DungeonAdvice {
         final String nextCommand;
         Usage(String message,String nextCommand){super(message);this.nextCommand=nextCommand;}
     }
+    static String[] menuArgs(String action,String id,String difficulty){
+        return switch(action){
+            case "start"->new String[]{"dungeon",action,id,difficulty};
+            case "leave"->new String[]{"dungeon",action};
+            default->new String[]{"dungeon",action,id};
+        };
+    }
     static Request parse(String[] raw){
         List<String> words=new ArrayList<>();boolean json=false,verbose=false;int page=1;boolean seenPage=false;
         for(int i=0;i<raw.length;i++){
@@ -85,13 +92,13 @@ final class DungeonAdvice {
                 action="原场次等待成员回场；按房间坐标返回，勿另开一场。";command=base+"status "+id;
             }else if(phase.equals("returning")) {
                 state="returning";reason="RETURN_AND_SETTLE";
-                action="房间已清，返回首室 "+text(f,"firstRoom")+" 后领取结算；未结算不算委托清场。";command=base+"claim "+id;
+                action="房间已清，系统正在登记真实参战奖励；无需返回首室。";command=base+"status "+id;
             }else if(phase.equals("fighting")) {
                 state="fighting";reason="DEFEAT_ROOM_ENEMIES";
                 action="前往当前房间 "+text(f,"target")+"，击败剩余 "+number(f,"remainingMobs")+" 个场次敌人；仅查询不会清怪。";command=base+"status "+id;
             }else if(phase.equals("muster")) {
                 state="muster";reason="MUSTER_STARTED";
-                action="已开场，留在首室等待这次10秒集结完成；队友需在首室主动 join。无需重复 start。";command=base+"status "+id;
+                action="已开场，等待这次10秒集结完成；遗迹内装备达标的同伴自动参战，中途可加入或离开。无需 join 或重复 start。";command=base+"status "+id;
             }else {
                 state="moving";reason="REACH_NEXT_ROOM";
                 action="沿实际通道进入当前房间 "+text(f,"target")+"，到场才会触发战斗；不要在上一室等刷怪。";command=base+"status "+id;
@@ -106,9 +113,9 @@ final class DungeonAdvice {
             state="requirements";reason="EQUIPMENT_REQUIRED";
             action="缺少："+text(f,"missingLoadout")+"。穿齐四件护甲，携带近战武器、弓弩或本职业法器；不强制带剑。";command="/mycli guild shared";
         }else if(yes(f,"occupied")) {
-            if(yes(f,"joinable")&&yes(f,"atFirstRoom")) {
+            if(yes(f,"joinable")) {
                 state="joinable";reason="PARTY_MUSTER_OPEN";
-                action="此处已有队伍正在集结；若要参加，由本人主动加入。";command=base+"join "+id;
+                action="此处有正在进行的共同挑战；进入遗迹后装备达标即自动同队，无需加入指令。";command=base+"info "+id;
             }else {
                 state="occupied";reason="DUNGEON_OCCUPIED";
                 action="已有队伍进行中，你尚未参战；不要在场外等刷新，改选空闲地点。";command=base+"list";

@@ -4,7 +4,7 @@ import java.util.*;
 
 /** Explains retired abilities; never silently grants or casts their replacements. */
 public final class SkillTransition {
-    public static final List<String> COMMON=List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","prospect","night","feather");
+    public static final List<String> COMMON=List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","team","prospect","night","feather");
     public static final Set<String> LEGACY=Set.of("support","heal","fireworks","starlight","flamewave","leap","flight","golem","sense",
         "tank_taunt","tank_bastion","tank_bash","tank_cover","warrior_sky_leap","mage_soar","priest_blessing","sword_thrust","sword_parry","sword_arc","sword_step","sword_beam","twin_legacy","guardian_ward","guardian_oath","scout_mark","scout_watch","healer_mend","healer_cleanse","healer_beacon","mage_bolt","mage_frost","mage_flame");
     public static String reason(String id){return LEGACY.contains(id)?"skill_retired":"unknown_skill";}

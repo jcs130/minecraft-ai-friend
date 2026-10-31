@@ -4,6 +4,8 @@
 
 `mc_query {query:"declared-id",arguments:[]}` sends without taking the body queue or cancelling navigation. It returns a request ID and an honest `sent` state. Read `mc_query {requestId:"..."}` for its result. One query may be in flight per connection; duplicates reuse its identity, and recent replies are briefly reusable. There is no automatic resend. History is bounded and a disconnect/respawn invalidates outstanding work.
 
+The mounted tool schema keeps flat `query`, `arguments` and `requestId` fields, and binds each registered query to its declared argument count, item pattern and length. Its call-form union separates index reads, sends and receipt reads. These constraints survive catalogue compaction; queries with the same argument shape share one branch. A required subject must still come from observed server data: schema validity cannot establish that an ID exists, and the definition's command builder remains the dispatch authority.
+
 Rejected query arguments return that query's configured description, bounded to 1,024 characters, and an index read entry. The core does not guess a missing subject or send a corrected command automatically. Error recovery does not expand every protocol description into the active context.
 
 Only fresh server-position messages after player/private provenance checks can match. Reply matchers should validate recipient and subject, and preserve server evidence. Protocols without an echoed request nonce cannot prove unique request identity: receipts disclose `requestNonce:false`. A timeout means the result is unknown, not that the server rejected the request or the gameplay goal failed.

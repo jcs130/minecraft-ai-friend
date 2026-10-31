@@ -1,0 +1,5 @@
+# Merge these reviewed keys into the existing sections; preserve every unrelated setting and player item.
+[misc]
+MaidFairySpawnProbability = 10
+GiveSoulSpell = false
+GivePatchouliBook = false

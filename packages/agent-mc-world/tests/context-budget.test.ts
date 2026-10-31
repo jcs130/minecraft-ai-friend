@@ -178,7 +178,7 @@ it('collapsed field pools keep enums and array shapes of optional fields', () =>
     keys: { type: 'array', items: { type: 'string', enum: ['jump'] } }, ...pool } } } } };
   const items = (compactToolSchema({ name: 't' }, schema).schema as any).properties.steps.items;
   expect(items.properties).toEqual({ skill: { type: 'string', enum: ['observe'] }, mode: { type: 'string', enum: ['sites', 'voxels'] },
-    bounds: { type: 'array', minItems: 6, maxItems: 6, items: { type: 'integer' } }, keys: { type: 'array', items: { enum: ['jump'] } } });
+    bounds: { type: 'array', minItems: 6, maxItems: 6, items: { type: 'integer' } }, keys: { type: 'array', items: { type: 'string', enum: ['jump'] } } });
 });
 
 it('MovementProgress counts repeated look-arounds that report nothing new', async () => {

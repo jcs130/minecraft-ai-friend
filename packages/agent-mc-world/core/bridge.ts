@@ -1,6 +1,7 @@
 import { loadViewerRelay } from './relay-port.ts';
 import { installDeathLifecycle } from './death-lifecycle.ts';
 import { advertiseAgentIdentity } from './server-identity.ts';
+import { declareDecodedChannels } from './decoded-channels.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 import { installWorldIdentity } from './world-scope.ts';
 /**
@@ -816,6 +817,7 @@ export class Bridge {
       this.installSpawnGear(bot, gen);
       // Only activate() runs after both server authentication and world spawn.
       advertiseAgentIdentity(bot._client, !this.opts.shuttingDown?.());
+      declareDecodedChannels(bot._client,[this.opts.protectionChannel]);
       this.opts.onSpawn();
     };
     bot.on('spawn', () => {

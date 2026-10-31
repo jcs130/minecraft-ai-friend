@@ -470,6 +470,8 @@ class Controller:
         self.conversation_continuation = False
         self.lookahead_used = set()
         self.lookahead_anchor = None
+        self.persistent_review_anchor = None
+        self.persistent_review_invalidated = False
         self.lookahead_invalidated = False
         self.model_started_at = None
         self.planner_failures = 0
@@ -520,6 +522,7 @@ class Controller:
             self.spatial_handoffs = 0
             self.lookahead_used.clear()
             self.lookahead_invalidated |= self.lookahead_anchor is not None
+            self.persistent_review_invalidated |= self.persistent_review_anchor is not None
             self.observation_requests.clear()
             self.read_answers.clear()
             self.read_recovery_tools.clear()
@@ -649,6 +652,9 @@ class Controller:
                 self.lookahead_used.discard(key)
                 if key == self.lookahead_anchor and execution.get("phase") != "completed":
                     self.lookahead_invalidated = True
+                    self.continuation_ready = True
+                if key == self.persistent_review_anchor:
+                    self.persistent_review_invalidated = True
                     self.continuation_ready = True
                 submitted = self.action_requests.pop(key, None)
                 submitted_scope = self.action_scopes.pop(key, None)
@@ -928,9 +934,36 @@ class Controller:
                     "description": "Planning ahead preserves the existing native task; append only."}
         return selected
 
+    def persistent_review_candidate(self):
+        """Reassess an owned indefinite follow through the existing planner.
+
+        A living target never produces a terminal receipt. Review is a wakeup,
+        not permission to cancel, replay, or declare the native task complete.
+        Finite tasks retain their existing event/one-lookahead scheduling.
+        """
+        if (not self.pending or self.inflight_request or self.feedback_pending
+                or self.death_waiting or self.death_recovery or self.stop_requested()
+                or time.monotonic() - self.last_decision < self.settings.idle_decision_seconds):
+            return None
+        for key, execution in self.pending.items():
+            submitted = self.action_requests.get(key)
+            if (not submitted or submitted[3] or self.action_scopes.get(key) != self.game_scope
+                    or execution.get("phase") not in {"accepted", "running"}):
+                continue
+            name, arguments, _, _ = submitted
+            steps = arguments.get("steps")
+            if (name != "mc_do" or not isinstance(steps, list)
+                    or not any(isinstance(step, dict) and step.get("skill") == "follow" for step in steps)):
+                continue
+            if self.active_goal and self.action_owners.get(key) != self.active_goal["id"]:
+                continue
+            return key
+        return None
+
     def model_timing(self):
         return {"at": datetime.now(timezone.utc).isoformat(), "request_started_at": self.model_started_at,
-                "planning_mode": "native_lookahead" if self.lookahead_anchor else "ordinary",
+                "planning_mode": ("native_lookahead" if self.lookahead_anchor else
+                                  "persistent_review" if self.persistent_review_anchor else "ordinary"),
                 "native_pending": [key[1] for key in self.pending],
                 **({"request_context": self.model_request_info} if getattr(self, "model_request_info", None) else {})}
 
@@ -1262,9 +1295,10 @@ class Controller:
                     return self.cancelled_decision('explicit_command')
                 wake, urgent, more = await self.events()
                 self.deferred_wake |= wake
-                if urgent or death_epoch != self.death_epoch or self.lookahead_invalidated:
+                if urgent or death_epoch != self.death_epoch or self.lookahead_invalidated or self.persistent_review_invalidated:
                     self.preempted = True
-                    reason = 'anchor_failed' if self.lookahead_invalidated else 'death' if death_epoch != self.death_epoch else 'native_preempt'
+                    reason = ('anchor_ended' if self.persistent_review_invalidated else 'anchor_failed'
+                              if self.lookahead_invalidated else 'death' if death_epoch != self.death_epoch else 'native_preempt')
                     return self.cancelled_decision(reason)
                 if more:
                     continue  # A completed inference cannot outrun a queued death event page.
@@ -1829,8 +1863,10 @@ class Controller:
             self.conversation_continuation = False  # Model chose a real native plan; no automatic cancellation.
         queued = bool(execution and execution.get("terminal") is not True)
         boundary = bool(correction_boundary or queued or control.get("endTurnRequested") or result.get("endsTurn")
+                        or (self.persistent_review_anchor and name == "mc_stop" and not result.get("failed"))
                         or (self.current_work() and not self.feedback_pending
-                            and not self.conversation_continuation and not self.lookahead_anchor))
+                            and not self.conversation_continuation and not self.lookahead_anchor
+                            and not self.persistent_review_anchor))
         return result, compact, boundary
 
     def reject_model_call(self, error, response=None, input_scene=None):
@@ -1987,6 +2023,13 @@ class Controller:
                 notice = self.planner_notice
                 if self.settings.social.enabled:
                     notice = (notice + "\n" if notice else "") + encode(self.social.context())
+                if self.persistent_review_anchor:
+                    notice = (notice + "\n" if notice else "") + (
+                        f"Periodic review of still-owned persistent native execution {self.persistent_review_anchor[1]}. "
+                        "A follow task has no natural completion while its target stays valid. Inspect fresh facts "
+                        "and the user's goal: keep useful work running, or explicitly use mc_stop if its purpose "
+                        "has ended or it is preventing progress. A review does not itself stop, replay or complete "
+                        "the task. Choose a measurable next condition; do not append work that will wait forever behind it.")
                 if self.lookahead_anchor:
                     notice = (notice + "\n" if notice else "") + (
                         f"Planning ahead of still-owned native execution {self.lookahead_anchor[1]}. "
@@ -2376,29 +2419,35 @@ class Controller:
                     if self.commands:
                         await self.observe_queue()
                 elapsed = time.monotonic() - self.last_decision
+                persistent_review = self.persistent_review_candidate() if not (urgent or self.conversation_ready()) else None
                 lookahead = self.lookahead_candidate() if not (urgent or self.conversation_ready()) else None
-                wake |= lookahead is not None
+                wake |= lookahead is not None or persistent_review is not None
                 if self.decide and not self.current_work() and elapsed >= self.settings.idle_decision_seconds:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
-                if (self.decide and wake and (not self.current_work() or urgent or self.conversation_ready() or lookahead)
+                if (self.decide and wake and (not self.current_work() or urgent or self.conversation_ready() or lookahead or persistent_review)
                         and not self.death_waiting
                         and self.death_recovery is None
                         and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready or lookahead)
                         and time.monotonic() >= self.planner_retry_at
                         and not self.review_inference_wait(urgent=urgent)):
                     self.lookahead_anchor = lookahead
+                    self.persistent_review_anchor = persistent_review
+                    self.persistent_review_invalidated = False
                     self.lookahead_invalidated = False
                     if lookahead:
                         self.lookahead_used.add(lookahead)
-                    self.publish(planning_handoff={"mode": "native_lookahead" if lookahead else "ordinary",
-                        "anchor": lookahead[1] if lookahead else None, "native_work_continues": bool(self.pending)})
+                    self.publish(planning_handoff={"mode": ("native_lookahead" if lookahead else
+                        "persistent_review" if persistent_review else "ordinary"),
+                        "anchor": (lookahead or persistent_review or (None, None))[1], "native_work_continues": bool(self.pending)})
                     try:
                         self._review_inference_bypass=urgent
                         turn_outcome=await self.turn_once(goal, prefix, tools)
                     finally:
                         self._review_inference_bypass=False
                         self.lookahead_anchor = None
+                        self.persistent_review_anchor = None
+                        self.persistent_review_invalidated = False
                         self.lookahead_invalidated = False
                     if turn_outcome is not False:
                         self.count += 1

@@ -1,8 +1,8 @@
 {
   "state": "deployed-and-verified",
-  "latestRelease": "rpg-growth-unification-20261031-r3",
-  "verifiedAt": "2026-10-31T01:01:59.347988+08:00",
-  "releaseDocument": "paper/docs/RPG_GROWTH_20261030.md",
+  "latestRelease": "vanilla-maid-maintenance-20261031-r1",
+  "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
+  "releaseDocument": "paper/docs/VANILLA_MAID_RELEASE_20261031.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -23,9 +23,9 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 54,
-    "AgentFriend": "0.4.47.37-rpg",
-    "QiandengjiRpg": "0.2.13",
-    "VortexRPG": "1.2.2-alpha-qd31-growth",
+    "AgentFriend": "0.4.47.43-rpg",
+    "QiandengjiRpg": "0.2.15",
+    "VortexRPG": "1.2.2-alpha-qd32-cooperation",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.4",
     "LoginGuard": "0.1.9",
@@ -33,7 +33,7 @@
     "QiandengjiMcbot": "0.1.0",
     "QwenPawGameChannel": "0.3.2",
     "LanTts": "1.6.0",
-    "WorldObserver": "0.1.1",
+    "WorldObserver": "0.1.2",
     "QiandengVoice": "0.1.0",
     "SimpleVoiceChat": "2.6.27",
     "EssentialsChat": "2.22.0",
@@ -42,7 +42,10 @@
     "AgentAppearance": "0.3.4",
     "AgentAppearanceBedrock": "0.1.0",
     "kernel": "Youer 1.21.1 / NeoForge 21.1.252",
-    "QiandengjiMaidBridge": "0.1.5"
+    "QiandengjiMaidBridge": "0.1.5",
+    "NativePlatform": "0.1.6",
+    "OptionalPayloadGuard": "0.1.0",
+    "YSM": "2.4.1"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -57,14 +60,17 @@
     "numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "ysm-proxy/LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
     "AgentVision-0.1.2.jar": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
-    "VortexRPG-1.2.2-alpha-qd29.jar": "4751b69a677b33d35be859de405929b31e8f36b3a0254d7ab2c2b650a6c495d4",
-    "WorldObserver-0.1.1.jar": "f1b4d51fca8bb87b1a945f939a190ce01acc0b372e81dd18b57d8b2c02022d3d",
+    "VortexRPG-1.2.2-alpha-qd29.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
+    "WorldObserver-0.1.1.jar": "b5f22a9e1ccdc1e119688bbf6008dfcf973a8293dcdd529934df7ad98fb634d0",
     "QiandengVoice-0.1.0.jar": "db28cbb28eb72ca385681a8c39e9f8bbebe625f6e08482a819a7f3a16057ede4",
     "voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
-    "QiandengjiRpg-0.2.10.jar": "5c091bc967d8041c2669abfcf9164bb4c810cdce2fe89004def5b664f37c1257",
+    "QiandengjiRpg-0.2.10.jar": "292ec8f569384b6eee646a7e3c16d1eaa8df0f899f19ce870ea2da9f589c958f",
     "EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a",
     "qiandengji-maid-native-0.1.4.jar": "f972b477472f62b729f5b7fe143874495f69e472e6e31a7de7e22c3df797c0c4",
-    "AgentFriend-0.4.47.37-rpg.jar": "ece9fa6a7dfbebd8ed7336f6b1478ee95b4f8b8b714c629cbe9b037b3ef3ae5b"
+    "plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar": "a49349697e81bc6e3023ea6d513453b81ef9519dcaae4b0ef60b9ef958e372da",
+    "AgentFriend-0.4.47.43-rpg.jar": "532d76286dd4c138d051dc68023f0d51d01fe44aca90ae5c0787abb2b8657648",
+    "qiandengji-native-platform-0.1.4.jar": "2ae8aebd0a0b43ae5d88e752fa4145ef31b3369c893d5f239318ad7fa1a074eb",
+    "OptionalPayloadGuard-0.1.0.jar": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -78,13 +84,20 @@
     "real player microphone and human hearing in current runtime",
     "all third-party agent hosts consuming nearby voice"
   ],
-  "scopeNotice": "Native-level XP display; eleven AuraSkills foundation tracks and six bounded native passives; common night/feather access; existing cold dungeon entry compatibility. Native mods, credentials, inventory and class XP retained. Six-stage route and public Skill download not included.",
+  "scopeNotice": "Same-area automatic encounter participation and durable contribution; correct menu arguments and native HP hearts; safe private/public return and smart blink; native/vanilla maid projection and matching web viewer; photo captions, digital diaries, authenticated uploads and map art. Native YSM 2.6.5, six-stage map route and native shader camera excluded.",
   "verification": {
-    "formalProduction": 32,
-    "ruleChecks": 313,
-    "realGameplayAndColdRestartChecks": 34,
-    "crossVolumeInstallAndRollbackChecks": 12,
-    "unrelatedJarsPreserved": 51,
+    "formalProduction": 40,
+    "rpgLive": 14,
+    "normalRestartPersistence": 8,
+    "rpgRules": 148,
+    "nativeCompatibilityLive": 42,
+    "cliContracts": 406,
+    "crossVolumeInstallAndRollbackChecks": 22,
+    "unrelatedJarsPreserved": 50,
+    "coldInstallationCharacterFilesUnchanged": 235,
+    "coldInstallationNativeProfilesUnchanged": 20,
+    "credentialRowsPreserved": 71,
+    "onlineReconnectedAtVerification": 6,
     "secretsExported": false
   },
   "rpgUnified": {
@@ -213,29 +226,34 @@
     "deployedFromAudit": 3
   },
   "distribution": {
-    "coreSource": "0.5.7-rc.130",
-    "publicSkill": "1.3.4",
+    "coreSource": "0.5.7-rc.150-preview.2",
+    "publicSkill": "1.3.6",
     "publicSkillCore": "0.5.7-rc.130",
     "harnessBodyCore": "0.5.7-rc.130",
-    "website": "0.8.30",
+    "website": "0.8.33",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
-    "verifiedAt": "2026-10-29T23:01:26+08:00",
-    "manifest": "paper/manifests/all-features-release-20261029.json",
-    "mediaStorage": "OSS"
+    "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
+    "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+    "mediaStorage": "OSS",
+    "coreSourceNote": "Current repository source; this release does not replace the public Skill or Harness embedded rc.130 core."
   },
   "websiteRelease": {
-    "release": "all-features-media-oss-20261029",
-    "version": "0.8.30",
-    "verifiedAt": "2026-10-29T23:01:26+08:00",
-    "photosStored": 29,
-    "publicPhotos": 3,
-    "privatePhotos": 26,
-    "protectedTables": 19,
+    "release": "vanilla-maid-maintenance-20261031-r1",
+    "version": "0.8.33",
+    "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
+    "protectedTables": 20,
     "gameRestarted": false,
-    "document": "paper/docs/OSS_STORAGE_20261029.md",
-    "manifest": "paper/manifests/portal-oss-media-release-20261029.json",
-    "promotionalVideo": "https://b23.tv/Ppfd3Ne"
+    "document": "paper/docs/VANILLA_MAID_RELEASE_20261031.md",
+    "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+    "promotionalVideo": "https://b23.tv/Ppfd3Ne",
+    "publicPhotosAtVerification": 7,
+    "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
+    "previousPhotoCountsAt20261029": {
+      "photosStored": 29,
+      "publicPhotos": 3,
+      "privatePhotos": 26
+    }
   },
   "websiteStorage": {
     "freeBytesAtVerification": 5988941824,
@@ -321,13 +339,13 @@
   },
   "website": {
     "state": "deployed-and-verified",
-    "version": "0.8.31",
-    "verifiedAt": "2026-10-30T11:19:41.831879+08:00",
-    "releaseDocument": "paper/docs/PORTAL_ADVENTURE_VISUALS_20261030.md",
-    "releaseManifest": "paper/manifests/portal-adventure-visuals-release-20261030.json",
-    "guideServerVersion": "0.4.47.34-vortex",
+    "version": "0.8.33",
+    "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
+    "releaseDocument": "paper/docs/VANILLA_MAID_RELEASE_20261031.md",
+    "releaseManifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+    "guideServerVersion": "0.4.47.43-rpg",
     "gameRestartedForWebsite": false,
-    "skillDownload": "1.3.4 unchanged"
+    "skillDownload": "1.3.6; unchanged embedded core rc.130"
   },
   "compatibilityReleaseManifest": "paper/manifests/native-compatibility-20261030.json",
   "previousCompatibilityVerification": {
@@ -367,7 +385,8 @@
     "recordReset": false,
     "document": "paper/docs/RPG_GROWTH_20261030.md",
     "goddessGuidancePublished": true,
-    "goddessAlreadyRead": false
+    "goddessAlreadyRead": false,
+    "nativeHealthScalingDisabled": true
   },
   "voiceAudit": {
     "document": "paper/docs/VOICE_STATUS_20261030.md",
@@ -408,5 +427,42 @@
     "releaseDocument": "paper/docs/SERVER_PHOTOGRAPHY.md",
     "privateEvidence": "E/F repairs/photo-recovery-20261031-r5",
     "priorFailedAttemptsRetained": true
+  },
+  "previousReleaseBeforeVanillaMaid": {
+    "latestRelease": "rpg-growth-unification-20261031-r3",
+    "verifiedAt": "2026-10-31T01:01:59.347988+08:00",
+    "releaseDocument": "paper/docs/RPG_GROWTH_20261030.md",
+    "verification": {
+      "formalProduction": 32,
+      "ruleChecks": 313,
+      "realGameplayAndColdRestartChecks": 34,
+      "crossVolumeInstallAndRollbackChecks": 12,
+      "unrelatedJarsPreserved": 51,
+      "secretsExported": false
+    }
+  },
+  "automaticEncounterParticipation": {
+    "enabled": true,
+    "persistentVortexPartyUnchanged": true,
+    "midRunEntryAndExit": true,
+    "actualContributionRetained": true,
+    "bossUnlockRequiresBossContribution": true,
+    "document": "paper/docs/DUNGEON_AUTO_TEAM_20261031.md"
+  },
+  "matchedPublicViewer": {
+    "state": "deployed-and-verified",
+    "sourceSha256": "85650f7d0b2618bec482f008aed970fce0c715ac3851ea251bd339bf7ac0b798",
+    "sharedPullRequest": "https://github.com/jcs130/mc-visual-console/pull/12",
+    "serverPullRequest": "https://github.com/jcs130/minecraft-ai-friend/pull/24",
+    "workerFresh": true,
+    "completeNativeParity": false
+  },
+  "nativeHighQualityCamera": {
+    "active": false,
+    "preferredGpu": "Intel UHD Graphics 770",
+    "driverDetected": "32.0.101.7092",
+    "physicalMonitorRequired": false,
+    "actualNativePhotoVerified": false,
+    "document": "paper/docs/NATIVE_GODDESS_CAMERA.md"
   }
 }

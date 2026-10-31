@@ -1,6 +1,7 @@
 /** Passive evidence for the host's next decision. Never refuses, retries or cancels work. */
 import { createHash } from 'node:crypto';
 import { MotionReviewBook } from './motion-review.ts';
+import { taskEffectProgress } from '../../core/task-effect-progress.ts';
 
 type Row = Record<string, any>;
 const object = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -30,7 +31,7 @@ export interface FailedPlanEpisode {
   toolPrefix: string;
   firstAt: number; lastAt: number; dimension: string | null;
   observation: 'changed' | 'unchanged' | 'unknown';
-  failureKind: 'failed-step' | 'incomplete-terminal';
+  failureKind: 'failed-step' | 'incomplete-terminal' | 'no-observed-effect';
 }
 export interface RecentPlanEffect {
   run: string; executionId: string; step: number; at: number; dimension: string | null; skill: string;
@@ -91,7 +92,11 @@ export class PlanReviewBook {
       const steps: Row[] = Array.isArray(x.evidence?.steps) ? x.evidence.steps.filter(object) : [];
       if (['cancelled', 'superseded'].includes(x.phase)) continue;
       const failed = steps.filter(p => ['fail', 'partial'].includes(p.outcome));
-      const negative = ['blocked', 'partial'].includes(x.phase) || failed.length > 0;
+      const progress = taskEffectProgress(steps.map(p => ({ outcome: p.outcome, observedEffect: effect(p) as any,
+        skill: s.stepKinds[p.step - 1] })));
+      const noEffect = x.phase === 'completed' && (progress.workSteps ? progress.workObservation : progress.observation) === 'unchanged'
+        && (progress.workSteps ? progress.workNoopSteps : progress.noopSteps) > 0;
+      const negative = ['blocked', 'partial'].includes(x.phase) || failed.length > 0 || noEffect;
       const dimension = steps.map(p => effect(p)?.dimension).find(d => typeof d === 'string') ?? null;
       const slot = `${s.run}:${dimension ?? '?'}:${s.planHash}`;
       // Loading inputs, spending fuel or merely moving can change state while
@@ -100,8 +105,12 @@ export class PlanReviewBook {
       const hasFailedStep=failed.some(p=>p.outcome==='fail');
       if (!hasFailedStep&&failed.some(p => p.outcome==='partial'&&status(p) === 'changed')) { const old = this.episodes.get(slot); if (old) {old.active = false;this.quotes.delete(old.key);} continue; }
       if (!negative) {
-        if (x.phase === 'completed' && steps.length && steps.every(p => ['ok', 'noop'].includes(p.outcome))) {
-          const old = this.episodes.get(slot); if (old) {old.active = false;this.quotes.delete(old.key);}
+        const old = this.episodes.get(slot);
+        const workChanged = (progress.workSteps ? progress.workObservation : progress.observation) === 'changed';
+        const legacySuccess = old?.failureKind !== 'no-observed-effect' && !steps.some(p => effect(p));
+        if (x.phase === 'completed' && steps.length && steps.every(p => ['ok', 'noop'].includes(p.outcome))
+          && (workChanged || legacySuccess && steps.every(p => p.outcome === 'ok'))) {
+          if (old) {old.active = false;this.quotes.delete(old.key);}
         }
         continue; // Unknown/empty success is not an observed improvement.
       }
@@ -111,11 +120,11 @@ export class PlanReviewBook {
         firstExecutionId: continuing ? old.firstExecutionId : x.id, latestExecutionId: x.id,
         localId: s.localId, count: continuing ? old.count + 1 : 1, active: true, stepKinds: s.stepKinds, toolPrefix: s.toolPrefix,
         firstAt: continuing ? old.firstAt : Date.parse(raw.ts) || this.now(), lastAt: Date.parse(raw.ts) || this.now(), dimension,
-        failureKind:hasFailedStep?'failed-step':'incomplete-terminal',
-        observation: ['changed', 'unchanged'].includes(raw.meta?.repeatFailure?.observation) ? raw.meta.repeatFailure.observation
+        failureKind:hasFailedStep?'failed-step':noEffect?'no-observed-effect':'incomplete-terminal',
+        observation: noEffect ? 'unchanged' : ['changed', 'unchanged'].includes(raw.meta?.repeatFailure?.observation) ? raw.meta.repeatFailure.observation
           : failed.length && failed.every(p => status(p) === 'unchanged') ? 'unchanged' : 'unknown' };
       this.episodes.delete(slot); this.episodes.set(slot, entry);
-      this.quotes.set(entry.key, failed.slice(0, 2).map(p => ({ step: p.step, skill: s.stepKinds[p.step - 1] ?? 'unknown', outcome: p.outcome,
+      this.quotes.set(entry.key, (noEffect ? steps.filter(p => p.outcome === 'noop') : failed).slice(0, 2).map(p => ({ step: p.step, skill: s.stepKinds[p.step - 1] ?? 'unknown', outcome: p.outcome,
         why: ['chat', 'tell'].includes(s.stepKinds[p.step - 1]) ? null : [p.why,p.detail?.text].filter(v=>typeof v==='string').join('\n').slice(0,800),
         observedEffect: effectPreview(p) })));
       while (this.episodes.size > 8) { const key = this.episodes.keys().next().value!; const e = this.episodes.get(key)!;
