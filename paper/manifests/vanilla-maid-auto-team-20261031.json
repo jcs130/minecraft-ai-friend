@@ -1,21 +1,43 @@
 {
   "schema": 1,
   "date": "2026-10-31",
-  "state": "candidate-not-deployed",
+  "state": "deployed-and-verified",
   "production": {
     "kernel": "Youer 1.21.1 build 920",
-    "agentFriend": "0.4.47.37-rpg",
-    "nativePlatform": "0.1.4",
-    "worldObserver": "0.1.1",
-    "website": "0.8.32",
+    "agentFriend": "0.4.47.43-rpg",
+    "rpgBridge": "0.2.15",
+    "nativePlatform": "0.1.6",
+    "worldObserver": "0.1.2",
+    "website": "0.8.33",
+    "skill": "1.3.6",
     "ysm": "2.4.1"
   },
   "candidates": [
-    {"component": "AgentFriend", "version": "0.4.47.43-rpg", "sha256": "532d76286dd4c138d051dc68023f0d51d01fe44aca90ae5c0787abb2b8657648"},
-    {"component": "QiandengjiRpg", "version": "0.2.15", "sha256": "292ec8f569384b6eee646a7e3c16d1eaa8df0f899f19ce870ea2da9f589c958f"},
-    {"component": "NativePlatform", "version": "0.1.6", "sha256": "2ae8aebd0a0b43ae5d88e752fa4145ef31b3369c893d5f239318ad7fa1a074eb"},
-    {"component": "WorldObserver", "version": "0.1.2", "sha256": "b5f22a9e1ccdc1e119688bbf6008dfcf973a8293dcdd529934df7ad98fb634d0"},
-    {"component": "OptionalPayloadGuard", "version": "0.1.0", "sha256": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277"}
+    {
+      "component": "AgentFriend",
+      "version": "0.4.47.43-rpg",
+      "sha256": "532d76286dd4c138d051dc68023f0d51d01fe44aca90ae5c0787abb2b8657648"
+    },
+    {
+      "component": "QiandengjiRpg",
+      "version": "0.2.15",
+      "sha256": "292ec8f569384b6eee646a7e3c16d1eaa8df0f899f19ce870ea2da9f589c958f"
+    },
+    {
+      "component": "NativePlatform",
+      "version": "0.1.6",
+      "sha256": "2ae8aebd0a0b43ae5d88e752fa4145ef31b3369c893d5f239318ad7fa1a074eb"
+    },
+    {
+      "component": "WorldObserver",
+      "version": "0.1.2",
+      "sha256": "b5f22a9e1ccdc1e119688bbf6008dfcf973a8293dcdd529934df7ad98fb634d0"
+    },
+    {
+      "component": "OptionalPayloadGuard",
+      "version": "0.1.0",
+      "sha256": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277"
+    }
   ],
   "sharedVisualization": {
     "pullRequest": "https://github.com/jcs130/mc-visual-console/pull/12",
@@ -40,8 +62,15 @@
     "viewerConditionalSkips": 39,
     "coreTests": 2694,
     "coreConditionalSkips": 8,
-    "browserWidths": [1280, 390],
-    "coldGameBackupTakenForThisCandidate": false
+    "browserWidths": [
+      1280,
+      390
+    ],
+    "coldGameBackupTakenForThisCandidate": true,
+    "formalProduction": 40,
+    "coldInstallationCharacterFilesUnchanged": 235,
+    "coldInstallationNativeProfilesUnchanged": 20,
+    "credentialRowsPreserved": 71
   },
   "releasePolicy": {
     "skillCandidate": {
@@ -53,14 +82,39 @@
       "freshMcpTools": 41,
       "startupGameConnections": 0,
       "ossBytesVerified": true,
-      "websitePointerSwitched": false
+      "websitePointerSwitched": true
     },
     "previouslyApprovedPhotoCombinationPreserved": true,
-    "combinedScopeConfirmationPending": true,
+    "combinedScopeConfirmationPending": false,
     "dualDiskCandidateAndStaticPreimagesVerified": true,
     "normalMaintenanceAndCurrentColdGameAuthRefreshRequired": true,
     "reuseConsumedMaintenance": false,
     "preservePlayerStateAndOriginalEntityAI": true,
-    "skillDownloadRepublished": false
+    "skillDownloadRepublished": true
+  },
+  "productionBefore": {
+    "kernel": "Youer 1.21.1 build 920",
+    "agentFriend": "0.4.47.37-rpg",
+    "nativePlatform": "0.1.4",
+    "worldObserver": "0.1.1",
+    "website": "0.8.32",
+    "ysm": "2.4.1"
+  },
+  "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
+  "releaseDocument": "paper/docs/VANILLA_MAID_RELEASE_20261031.md",
+  "deployment": {
+    "normalNoticeSeconds": [
+      180,
+      60,
+      10
+    ],
+    "gameRestartCount": 1,
+    "coldBackup": "20261030-040022 refreshed on both E/F for this release; previous runtime trees retained",
+    "websiteFirstAttempt": "Automatically rolled back on stale /skills expectation; original /releases configuration and database retained",
+    "websiteSecondAttempt": "Exact configured OSS object verified before switch; all original assertions retained",
+    "observerFollowup": "Original SYSTEM task restarted after a separate Windows confirmation; no second game or website restart",
+    "launcherRepair": "Windows PowerShell 5.1 inherited PowerShell 7 module directories; isolate native module paths inside this process only",
+    "originalGoddessJobs": 7,
+    "secretsExported": false
   }
 }
