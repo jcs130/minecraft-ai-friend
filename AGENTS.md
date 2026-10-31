@@ -1,3 +1,11 @@
+## 2026-10-31 Mineflayer 原版动作与自动原生数据已隔离验收，未发布主服
+
+服主强调Agent按真实消息操作，不依赖图像。新增自有网关输出层和可选标准Mineflayer插件；未订阅者不发MCNP/目录，mod物品兼容栈带只读真实ID/名称且不写回原物品。明确Lootr与暮色楼梯/台阶只在原生属性、静态碰撞完全相符时调整载体，1202状态匹配、32不冒称精确；不添加多对一放置反表。原版createBot在回环候选实际移动/打开Lootr/普通箱存取/装备铁木剑/魂符右键召唤和普通攻击；训练尸壳94.096→89.58251，NoAI，不当正常AI/连击/模型自主证明。0条未订阅额外镜像/目录。
+
+test.2用bot.loadPlugin同身体自动协商，按当前收到区块/更新的状态发≤16KiB/128行目录，序号/摘要/总量校验、缺口未知；两实际连接各120状态共67559字节，不要求30.9MB本地表或手填hash。原手动SDK保留，不能双适配；旧test.1未订阅须升级，不把候选API保持说成旧二进制兼容。最终13文件包289205fe…f35ce6未公开；解包消费者实读物品组件/配方/碰撞、原版openContainer、同UUID重连与原动作对账通过，显示marker未污染原生库存。Agent仍需core视线/保护/单队列，专用按钮须实际协议适配，不能把通用能力当所有模组已验。
+
+46 Node+16 Python本轮通过；Numen原身体Owner只读确认保持。首轮存取QA误读容器打开时bot.inventory旧值，已按窗口本人槽及重连核实原存入、一次取回，无重放；另一只读Numen参数误写已按实际companion契约纠正，失败保留。证据E:/MC/research/mineflayer-direct-20261031，正常QA JVM38408退出0于14:03:14+08、网关精确停止，ops仍空。主服三摘要保持、只读状态10在线；未改JAR、账号、代理、端口或SAO。生产认证/基岩/Eye/54插件待验，productionReleaseReady=false。详见paper/integrations/native-adventure/AGENT_ACCESS.md及direct-access-acceptance.json。原布景/维护脚本不重放；本轮研究脚本一次性，SDK无模型Key/注册表/世界。
+
 ## 2026-10-31 新模组组合的 Mineflayer 与 Numen 均已隔离验收，未发布主服
 
 服主要求两种 Agent 接入都解决。只改回环实验 E:/MC/staging/twilight-lootr-20261031/native；原 Youer1.21.1/Neo21.1.252、暮色/Lootr/YSM2.6.5/BetterCombat2.4 组合增加官方 Numen0.1.4.1原字节、自有常驻/模组扩展和原生数据组件。Numen官方发布为Beta，不冒称稳定版。Mineflayer握手桥按本次JVM导出组件/区块/注册表；独立SDK同连接读取真实物品、完整组件、菜单和静态碰撞，不拿木板/荧石载体当箱子/楼梯。原mc核心rc130实际site读取3/3原生身份，未改共享core。两身体无OP，实际移动、同一Lootr箱各取2绿宝石3面包、魂符各召唤本人女仆、铁木剑持握/攻击；两训练怪100→94.096，NoAI，不当正常怪/Boss或模型自主证明。公共箱真实存取、重连/原ID对账、去重/组件与身份拒绝、原NumenUUID/库存冷启恢复均已验证。

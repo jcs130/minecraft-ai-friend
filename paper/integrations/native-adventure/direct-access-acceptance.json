@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-31",
+  "scope": "isolated native-adventure Mineflayer gateway and optional client plugin",
+  "primaryModified": false,
+  "productionReleaseReady": false,
+  "agentRequiresImages": false,
+  "clientPackage": {
+    "name": "@qiandengji/native-adventure-client",
+    "version": "0.1.0-test.2",
+    "sha256": "289205fe3ba3e1b3dd9dd5aa48e209d83610d13ab495c065546b77ac90f35ce6",
+    "files": 13,
+    "includesWorldCredentialsOrRegistries": false,
+    "published": false
+  },
+  "offlineChecks": { "nodePassed": 46, "pythonPassed": 16 },
+  "actualGame": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.252",
+    "serverPid": 38408,
+    "bodyUuid": "506942d9-7488-329b-97d0-4a924026c55e",
+    "ordinaryMineflayerNoNativePlugin": {
+      "connected": true,
+      "moved": true,
+      "openContainerLootr": true,
+      "personalLootNotRegenerated": true,
+      "publicChestDepositAndWithdraw": true,
+      "nativeItemIdAndNameComponents": true,
+      "nativeIronwoodSwordEquipped": true,
+      "soulSlabUsedWithVanillaActivateBlock": true,
+      "nativeMaidSpawnConfirmed": true,
+      "nativeSwordVanillaAttack": { "beforeHealth": 94.096, "afterHealth": 89.58251, "targetNoAI": true },
+      "extraNativeMirrorPackets": 0,
+      "extraCatalogPackets": 0
+    },
+    "finalExtractedPluginPackage": {
+      "standardLoadPlugin": true,
+      "localRegistryFileRequired": false,
+      "hashOptionRequired": false,
+      "eachConnectionObservedStateDefinitions": 120,
+      "twoConnectionCatalogBytes": 67559,
+      "originalFullCatalogBytes": 30878708,
+      "maxCatalogMessageBytes": 16384,
+      "nativeLootrGlassAndStairs": true,
+      "normalOpenContainerWithNativeBlock": true,
+      "actualNativeInventoryComponentsAndRecipes": true,
+      "reconnectSameBodyAndOriginalActionReconciled": true,
+      "displayMarkerAbsentFromNativeInventory": true
+    },
+    "manualSameConnectionSdkStillWorks": true,
+    "numenOriginalBodyRestoredAndOwnerGetState": true,
+    "numenBodyUuid": "aeb1a8a9-7531-40a0-8c84-6942f914b67c",
+    "nativeStaticCarrierStatesMatched": 1202,
+    "nonMatchingCandidateStatesLeftUnclaimed": 32,
+    "qaOpsAfterTest": [],
+    "serverExitCode": 0,
+    "serverEndedAt": "2026-10-31T14:03:14.044248+08:00",
+    "qaGatewayStopped": true
+  },
+  "retainedFailures": [
+    "Initial deposit probe read bot.inventory while a container was open. Its current-window inventory region showed the real transfer; reconnect confirmed it. The known deposited item was subsequently withdrawn once, not replayed.",
+    "One read-only Numen probe used companion_uuid instead of the advertised companion parameter and received missing_or_invalid_companion. Correct parameter returned the original online body."
+  ],
+  "boundaries": [
+    "No online model or autonomous gameplay evaluation in this batch.",
+    "Vanilla item type/name remain carrier identity; use the native marker or native snapshot for real mod identity.",
+    "No claim of all custom mod menus, entity perception, native combat combos, or machine automation.",
+    "Unknown/dynamic geometry remains unknown. Core visibility and permission gates remain required.",
+    "No production LoginGuard/RealmAccounts integration, Bedrock upgraded-mod acceptance, Eye/Web regression, or complete 54-plugin staged test.",
+    "Original experimental test.1 clients without subscription must upgrade to test.2 for the new opt-in mirror; the manual API is retained.",
+    "The compatibility entry is not the native NeoForge backend and is not yet a public production endpoint."
+  ],
+  "primaryReadOnlyCheck": {
+    "originalCoreAndTwoModsMatch": true,
+    "protocol": 767,
+    "onlinePlayers": 10
+  },
+  "privateEvidenceRoot": "E:/MC/research/mineflayer-direct-20261031"
+}

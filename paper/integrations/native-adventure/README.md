@@ -2,6 +2,8 @@
 
 2026-10-31。**正式服未安装本批新增模组，官网客户端未更新，没有新增公网入口。**
 
+接入层最新迭代已允许普通 Mineflayer 使用原版操作：实际打开 Lootr、公共箱存取、魂符右键召唤女仆、铁木剑普通攻击均通过。需要完整原生信息时，通过标准 `bot.loadPlugin` 自动接收当前连接用到的状态定义，无需手工复制注册表；Agent 不依赖网页或截图。具体接口、真实结果和边界见 [AGENT_ACCESS.md](AGENT_ACCESS.md) 与 [direct-access-acceptance.json](direct-access-acceptance.json)。62 项本轮离线检查、最终解包插件及原手动接口实连通过；正式服仍未发布，原认证、基岩和完整插件联测待完成。
+
 后续 Agent 接入已单独完成隔离验收：Mineflayer 握手桥 + 原生 SDK，以及服务端 Numen 身体都实际完成移动、个人箱取物、魂符召唤女仆和铁木剑攻击。接入说明与边界见 [AGENT_ACCESS.md](AGENT_ACCESS.md)，最新事实见 [agent-acceptance.json](agent-acceptance.json)；下方原 [acceptance.json](acceptance.json) 保留前一阶段“普通 Mineflayer 直连被拒”的历史，不是新桥接入口的状态。正式发布仍未就绪。
 
 本轮在新建的回环测试世界验证暮色森林、Lootr、YSM 和 Better Combat。使用正式服同字节的 Youer 核心、原生平台适配模组及女仆服务端改版；没有复制正式世界、玩家数据库、登录凭据、女神配置或全部 54 个插件。原生测试客户端使用原作者发行文件，不安装服务端改版。

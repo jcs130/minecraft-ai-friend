@@ -11,13 +11,49 @@
 
 测试 Java 后端为回环 39761，Mineflayer 候选入口回环 39771，Numen Owner MCP 回环 39779。这些是本机实验端口，停机时不可连接；不应发给公网访客。主服、SAO 原有入口与账号策略保持。
 
-## Mineflayer
+## Mineflayer：原版动作 + 真实数据
 
-普通 Mineflayer 直接连接这个模组后端仍会被 NeoForge 必需通道拒绝。握手桥使用**当前 JVM**导出的注册表、完整组件编解码和 Better Combat 配置确认，没有关闭第三方通道要求。
+Agent 接入不依赖截图、模型或网页渲染。它需要按需获得真实物品、方块、配方、菜单、状态和操作契约，并核对实际变化；原版右键、持物、攻击、移动等继续由原服务端执行。只有模组自定义消息和按钮需要补充协议操作，不能把这些操作伪装成任意箱子点击。
 
-兼容物品、方块只是网络载体。例如同一次实际连接中，Lootr 箱的载体是 `oak_planks`，暮色楼梯的载体竟是 `glowstone`。它们不能成为 Agent 判断真实身份、碰撞或配方的依据。单独使用未适配的原始 Mineflayer 不等于完整模组客户端。
+新版候选桥支持标准 `mineflayer.createBot({host,port,username,version:'1.21.1',auth})`，不额外要求 MCP、Numen、第二个登录身体或推理循环。这里的 host/port 指维护者准备好的兼容入口，不是直接连 NeoForge 后端；本候选仍未发布主服。`auth` 是 Minecraft 连接模式，游戏密码和统一账号登录沿用原入口策略。
 
-可选 `@qiandengji/native-adventure-client` 附加到宿主**已经创建的同一个 bot**，不创建身体、模型循环或第二个控制器。应在登录前附加，读取当前运行的注册表文件及可信的 SHA-256：
+未加载原生插件时，普通 Mineflayer 已实测移动、`openContainer` 打开 Lootr 箱、公共箱 `deposit/withdraw`、装备铁木剑、用魂符右键地面召唤女仆和攻击训练怪。**这不代表模组专用菜单或所有物品行为都已兼容。** 底层 `item.type/name` 仍是 vanilla 载体，不能当原生身份；新增只读 `custom_data.mcagent_native` 含真实 `id`、此次注册表摘要和 `projectionOnly=1`。没有实际名称组件的模组道具，兼容显示使用真实完整 ID，原有自定义名保持。这些显示标记不写回实际物品。
+
+例如普通 `prismarine-item` 对象可从 `item.componentMap.get('custom_data').data.value.mcagent_native.value.id.value` 读取真实 ID。涉及不同模组物品共用一个载体、完整组件或专用菜单时，使用下面的原生插件；不要只按载体数字编号取出一件看似相同的物品。
+
+### 推荐：一个标准 Mineflayer 插件
+
+遵循 [Mineflayer 的插件 API](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md#botloadpluginplugin)。在 spawn 前加载，不需要本地注册表文件或手填摘要：
+
+```js
+const mineflayer = require('mineflayer')
+const { mineflayerPlugin } = require('@qiandengji/native-adventure-client')
+const bot = mineflayer.createBot({ host, port, username, version: '1.21.1', auth })
+bot.loadPlugin(mineflayerPlugin)
+bot.once('spawn', async () => {
+  const access = await bot.nativeAdventure.ready
+  const catalog = await access.native.operations()
+  if (!catalog.ok) throw Error(catalog.code) // bootstrap ready ≠ authentication ready
+  const self = await access.native.snapshot()
+  // Read the operation/schema needed for this task; keep the host's one action queue.
+})
+```
+
+同一游戏连接通过 `mcagent:native_registry` 协商，仅在当前区块或更新包出现某状态时，先发该状态的静态定义，再发原生包。不扫描额外世界，不一次发送整张注册表；未加载、未观察、缺少定义或动态几何不明保持未知。每包原始 UTF-8 JSON ≤16 KiB、每页 ≤128 状态、每连接 ≤100000 状态，序号和摘要不一致会使原生读数失效。元信息的摘要来自当前连接，不是外部签名或认证证明；它不授予账号或管理权限。
+
+实际两个新连接各只用到 120 个状态；合计 67,559 字节目录，而原导出文件为 30,878,708 字节。未订阅的普通 Mineflayer 收到 0 条原生镜像、0 条目录消息，减少额外区块传输。重新连接重新协商，不拿旧 JVM 的数字编号继续操作。现有可见性/遮挡与保护规则仍由宿主 core 执行；不能把未经视线过滤的 Mineflayer 区块缓存直接送给模型。
+
+插件自动让 `bot.blockAt` 提供真实模组 ID、属性和已知静态碰撞。已严格匹配原版属性/碰撞的 Lootr 箱和暮色楼梯载体也修正，保留原版 `openContainer` 的真实右键及菜单校验；没有适配过的模组菜单仍使用原生接口，不猜成箱子。物品查询直接得到完整原生库存/组件，不需要逐件通过 `/fom` 猜测。注册表、插件与原生操作能力都不是自动执行脚本；模型、记忆、调度继续由用户宿主负责。
+
+容器打开期间，存取后核对当前窗口中 `inventoryStart..inventoryEnd` 的本人槽位，或查询 `native.snapshot/menu.current`。不要仅用此时可能尚未刷新的 `bot.inventory` 宣称物品没动。第一轮 QA 因这个读取错误判失败，重连确认原存入已经发生；未重放，之后从真实窗口验证并收回该件测试物品。
+
+### 已有固定注册表的宿主
+
+直接连接 NeoForge 后端仍会被必需通道拒绝；兼容入口的握手桥使用**当前 JVM**导出的注册表、完整组件编解码和 Better Combat 配置确认，没有关闭第三方通道要求。
+
+兼容物品、方块只是网络载体。前一版实际把 Lootr 箱映成 `oak_planks`、暮色楼梯映成 `glowstone`；新版仅对明确语义绑定且属性、静态碰撞完全相符的状态修正箱子/楼梯/台阶，保留原生通道的真实身份。未匹配项不声称精确。它们不能成为 Agent 判断完整原生身份或配方的依据。
+
+`@qiandengji/native-adventure-client` test.2 仍保留手动接口，供维护者已有当前注册表和可信摘要时附加到**同一个 bot**。与自动插件二选一，不重复加载；它向新桥声明 `external_catalog`，普通用户优先使用上面的自动插件：
 
 ```js
 const mineflayer = require('mineflayer')

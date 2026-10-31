@@ -17,17 +17,17 @@ def build(gateway,server_addon,output):
     # their optional mod codecs are deliberately outside the client package.
     decoder=stream[:stream.index('function nativeRegistries (')]+stream[stream.index('function decodeNativePacket ('):stream.index('module.exports =')]
     decoder+='module.exports = { CHANNEL, NAMES, registryHash, decodeNativePacket, attachNativeViewerPackets }\n'
-    files={n:(source/n).read_bytes() for n in ['index.cjs','native-world.cjs']}
+    files={n:(source/n).read_bytes() for n in ['index.cjs','native-world.cjs','mineflayer-plugin.cjs','registry-protocol.cjs']}
     files['native-stream.cjs']=decoder.encode()
     for name in ['native-chunk-remap.cjs','bounded-jsonl.cjs']:files[name]=(gateway/name).read_bytes()
     files['native-client.cjs']=(REPO/'integrations/tau-ceti/native-bridge/native-client.cjs').read_bytes()
     files['operations.json']=contract
     files['README.md']=(HERE/'AGENT_ACCESS.md').read_bytes()
     files['LICENSE']=(REPO/'LICENSE').read_bytes()
-    files['package.json']=json.dumps({'name':'@qiandengji/native-adventure-client','version':'0.1.0-test.1',
+    files['package.json']=json.dumps({'name':'@qiandengji/native-adventure-client','version':'0.1.0-test.2',
         'description':'Optional same-connection native data adapter; no bot or model loop',
         'license':'MIT','main':'index.cjs','engines':{'node':'>=22'},'files':list(files),
-        'exports':{'.':'./index.cjs'}}).encode()
+        'exports':{'.':'./index.cjs','./mineflayer':'./mineflayer-plugin.cjs'}}).encode()
     provenance={'schemaVersion':1,'files':{k:sha(v) for k,v in files.items()},'serverAddonSha256':sha(server_addon.read_bytes()),
         'nativeStreamSourceSha256':sha(stream.encode()),'builderSha256':sha(Path(__file__).read_bytes()),'includesCredentialsOrWorld':False,'published':False}
     files['provenance.json']=json.dumps(provenance,indent=2).encode()

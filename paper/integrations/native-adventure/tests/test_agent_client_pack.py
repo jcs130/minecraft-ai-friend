@@ -26,7 +26,7 @@ module.exports = { encodeNativePacket }
             gate,addon,out=self.inputs(Path(name));result=pack.build(gate,addon,out)
             self.assertFalse(result['published'])
             with tarfile.open(out) as t:
-                names=t.getnames();self.assertEqual(len(names),11)
+                names=t.getnames();self.assertEqual(len(names),13)
                 self.assertNotIn('package/private-token.txt',names)
                 self.assertNotIn('server encoder',t.extractfile('package/native-stream.cjs').read().decode())
                 self.assertEqual(json.load(t.extractfile('package/operations.json'))['version'],'0.1.1')
