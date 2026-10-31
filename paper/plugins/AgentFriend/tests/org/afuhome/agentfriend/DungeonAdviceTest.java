@@ -34,6 +34,13 @@ public final class DungeonAdviceTest {
         check(DungeonAdvice.parse(new String[]{"dungeon"}).args()[1].equals("list"),"bare dungeon discovers existing group");
         check(DungeonAdvice.parse(new String[]{"dungeon","list","--page","2"}).page()==2,"bounded pagination");
         check(DungeonAdvice.parse(new String[]{"dungeon","info","undead_crypt","--verbose"}).verbose(),"detail opt in");
+        for(String action:List.of("start","join","info","travel","claim","leave")){
+            var menu=DungeonAdvice.menuArgs(action,"aincrad_01","normal");
+            check(DungeonAdvice.parse(menu).args()[1].equals(action),"menu must submit valid arguments for "+action);
+            check(menu.length==(action.equals("start")?4:action.equals("leave")?2:3),"only start carries difficulty; leave has no site");
+        }
+        check(!advice("participant",true,"phase","muster").get("nextAction").toString().contains("主动 join"),"muster describes automatic membership");
+        check(advice("occupied",true,"joinable",true).get("nextAction").toString().contains("自动同队"),"mid-run visitors receive the actual join policy");
         invalid("dungeon","start");invalid("dungeon","start","undead_crypt","secret");invalid("dungeon","start","undead_crypt","normal","extra");
         invalid("dungeon","travel","../world");invalid("dungeon","info","undead_crypt","--page","2");invalid("dungeon","list","--page","0");
         invalid("dungeon","list","--json","--json");invalid("dungeon","list","--unknown");invalid("dungeon","list","--page");

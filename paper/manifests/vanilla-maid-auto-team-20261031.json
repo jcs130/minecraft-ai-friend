@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "date": "2026-10-31",
+  "state": "candidate-not-deployed",
+  "production": {
+    "kernel": "Youer 1.21.1 build 920",
+    "agentFriend": "0.4.47.37-rpg",
+    "nativePlatform": "0.1.4",
+    "worldObserver": "0.1.1",
+    "website": "0.8.32",
+    "ysm": "2.4.1"
+  },
+  "candidates": [
+    {"component": "AgentFriend", "version": "0.4.47.43-rpg", "sha256": "532d76286dd4c138d051dc68023f0d51d01fe44aca90ae5c0787abb2b8657648"},
+    {"component": "NativePlatform", "version": "0.1.6", "sha256": "2ae8aebd0a0b43ae5d88e752fa4145ef31b3369c893d5f239318ad7fa1a074eb"},
+    {"component": "WorldObserver", "version": "0.1.2", "sha256": "b5f22a9e1ccdc1e119688bbf6008dfcf973a8293dcdd529934df7ad98fb634d0"},
+    {"component": "OptionalPayloadGuard", "version": "0.1.0", "sha256": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277"}
+  ],
+  "sharedVisualization": {
+    "pullRequest": "https://github.com/jcs130/mc-visual-console/pull/12",
+    "commit": "665da212215eaca7c88c3e24b7161d1dc786b8fb",
+    "sourceSha256": "85650f7d0b2618bec482f008aed970fce0c715ac3851ea251bd339bf7ac0b798",
+    "sourceFiles": 399,
+    "clientSha256": "03573ed3e7bb4be52a63b76356ce208d4b0b7417b2632ca12941d1a2cf18ebf3",
+    "consoleSha256": "f5e7b8d9be27074088ae5fa0bf5ac50b90a04350af59cb073cc4127f7c26cf3c",
+    "completeNativeParity": false
+  },
+  "validation": {
+    "rpgLive": 14,
+    "rpgNormalRestartPersistence": 8,
+    "rpgRules": 148,
+    "nativeCompatibilityLive": 42,
+    "payloadProxyLive": 24,
+    "payloadRules": 25,
+    "crossVolumeInstallAndRollback": 22,
+    "viewerTests": 1409,
+    "viewerConditionalSkips": 39,
+    "coreTests": 2694,
+    "coreConditionalSkips": 8,
+    "browserWidths": [1280, 390],
+    "coldGameBackupTakenForThisCandidate": false
+  },
+  "releasePolicy": {
+    "previouslyApprovedPhotoCombinationPreserved": true,
+    "combinedScopeConfirmationPending": true,
+    "dualDiskCandidateAndStaticPreimagesVerified": true,
+    "normalMaintenanceAndCurrentColdGameAuthRefreshRequired": true,
+    "reuseConsumedMaintenance": false,
+    "preservePlayerStateAndOriginalEntityAI": true,
+    "skillDownloadRepublished": false
+  }
+}

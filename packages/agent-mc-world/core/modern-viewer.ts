@@ -1,4 +1,5 @@
 import { onConnectionEnd } from './connection-end.ts';
+import { declareDecodedChannels } from './decoded-channels.ts';
 import { createViewerHeadTextures } from './viewer-head-textures.mjs';
 import { viewerVersionRegistry, viewerVersionCss, selectViewerAssets, viewerVersionTexture, type ViewerAssetSelection } from './viewer-version.mjs';
 import {viewerRuntimeRegistry,viewerRuntimeScript} from './viewer-runtime-registry.mjs';
@@ -492,6 +493,8 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   const viewerCastCommand = (text: unknown) => serverProtocol?.castCommand(text) ?? null;
   const viewerCastResult = (text: unknown, id: string) => serverProtocol?.castResult(text,id) ?? null;
   const VIEWER_STATE_CHANNEL = serverProtocol?.stateChannel;
+  const registerViewerState = () => { declareDecodedChannels(bot._client,[VIEWER_STATE_CHANNEL]); };
+  bot.on('spawn',registerViewerState);registerViewerState();
   const parseSkillsPayload = (channel: unknown, data: unknown) => serverProtocol?.parseSkillsPayload(channel,data) ?? null;
   const manaSnapshotFromText = (text: unknown) => serverProtocol?.manaSnapshotFromText(text) ?? null;
   const spellCatalogueFromText = (text: unknown) => serverProtocol?.spellCatalogueFromText(text) ?? null;
@@ -1335,6 +1338,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     });
   } catch (error) {
     content?.dispose();
+    bot.off('spawn',registerViewerState);
     agentVisuals.dispose();
     appearance?.dispose();
     observer?.dispose();
@@ -1426,6 +1430,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       closed = true;
       agentViews.clear();
       content?.dispose();
+      bot.off('spawn',registerViewerState);
     agentVisuals.dispose();
       appearance?.dispose();
       observer?.dispose();

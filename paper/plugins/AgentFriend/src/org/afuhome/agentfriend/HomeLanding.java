@@ -84,6 +84,12 @@ final class HomeLanding {
         catch (ScanLimit limit) { return false; }
     }
 
+    /** An exact personal bookmark uses the same native shape checks without searching or loading a neighbor. */
+    static Issue exactIssue(Player player, Location at) {
+        try { return new HomeLanding(player, at).inspect(at); }
+        catch (ScanLimit limit) { return new Issue("scan_limit", "落点安全检查达到上限"); }
+    }
+
     private Issue inspect(Location at) {
         if (world == null || at == null || at.getWorld() != world || !finite(at)) return new Issue("wrong_world", "目标世界或坐标无效");
         if (Math.pow(at.getX() - anchor.getX(), 2) + Math.pow(at.getZ() - anchor.getZ(), 2) > RADIUS * RADIUS + EPS
