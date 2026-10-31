@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SERVER_QUERY_TOOL, serverQueryTool, ServerQueryLane, type ServerQueryContext, type ServerQueryDefinition } from '../core/server-query.ts';
 import type { ToolOutcome } from '../core/support/host-contract.ts';
+import Ajv from 'ajv';
+import { compactToolSchema } from '../src/client/context-budget.ts';
 
 const definitions: ServerQueryDefinition[] = [{ id: 'status', description: 'Read my server status',
   command: args => args.length === 0 ? '/mycli status' : null,
@@ -20,6 +22,39 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-26T09:
 afterEach(() => { vi.useRealTimers(); });
 
 describe('read-only server query lane', () => {
+  it('binds query-specific argument requirements and exclusive call forms in full and compact schemas', () => {
+    const noArguments = { type: 'array' as const, minItems: 0, maxItems: 0, items: { type: 'string' as const } };
+    const subject = { type: 'array' as const, minItems: 1, maxItems: 1,
+      items: { type: 'string' as const, pattern: '^[a-z][a-z0-9_-]{0,63}$', maxLength: 64 } };
+    const registered = [
+      { ...definitions[0], argumentsSchema: noArguments },
+      { ...definitions[0], id: 'skills.status', argumentsSchema: noArguments },
+      { ...definitions[1], id: 'dungeon.status', argumentsSchema: subject },
+      { ...definitions[1], id: 'dungeon.info', argumentsSchema: subject },
+    ];
+    const tool = serverQueryTool(registered);
+    for (const schema of [tool.parameters, compactToolSchema(tool, tool.parameters).schema]) {
+      expect((schema as any).properties).toHaveProperty('query');
+      expect((schema as any).properties).toHaveProperty('arguments');
+      expect((schema as any).properties).toHaveProperty('requestId');
+      const validate = new Ajv({ strict: false }).compile(schema as object);
+      for (const input of [{}, { requestId: 'query-returned' }, { query: 'status' },
+        { query: 'skills.status', arguments: [] }, { query: 'dungeon.status', arguments: ['observed_site'] },
+        { query: 'dungeon.info', arguments: ['observed_site'] }]) expect(validate(input), JSON.stringify(input)).toBe(true);
+      for (const input of [{ query: 'dungeon.status' }, { query: 'dungeon.status', arguments: [] },
+        { query: 'dungeon.info', arguments: ['Invented;command'] }, { query: 'status', arguments: ['unexpected'] },
+        { query: 'status', requestId: 'query-returned' }, { requestId: 'query-returned', arguments: [] },
+        { arguments: [] }, { query: 'unregistered' }, { query: 'dungeon.status', arguments: ['one', 'two'] }]) {
+        expect(validate(input), JSON.stringify(input)).toBe(false);
+      }
+      // Identical argument shapes share a branch rather than repeating the
+      // protocol catalogue in every model request.
+      expect((schema as any).anyOf).toHaveLength(4);
+    }
+    expect(tool.description!.slice(0, 300)).toContain('Required subject IDs');
+    expect(serverQueryTool([])).toBe(SERVER_QUERY_TOOL);
+  });
+
   it('publishes selected argument contracts and rejects missing arguments without guessing a subject or dispatching', () => {
     const { lane, send, context } = setup();
     const query: ServerQueryDefinition = { ...definitions[1], argumentsSchema: {

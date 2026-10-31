@@ -15,11 +15,39 @@ export type ServerQueryDefinition = {
 /** Keep mounted tools and offline discovery on the configured protocol's same facts. */
 export function serverQueryTool(definitions: readonly ServerQueryDefinition[]): Omit<ToolDef, 'handler'> {
   if (!definitions.length) return SERVER_QUERY_TOOL;
+  const groups = new Map<string, { ids: string[]; schema: Record<string, unknown> }>();
+  const ids = new Set<string>();
+  for (const definition of definitions) {
+    // Dispatch selects the first registered definition of an ID as well.
+    if (ids.has(definition.id)) continue;
+    ids.add(definition.id);
+    const declared = definition.argumentsSchema;
+    const schema = declared ? { type: 'array', minItems: declared.minItems, maxItems: declared.maxItems,
+      items: { type: 'string', ...(declared.items.pattern ? { pattern: declared.items.pattern } : {}),
+        ...(declared.items.maxLength !== undefined ? { maxLength: declared.items.maxLength } : {}) } }
+      : SERVER_QUERY_TOOL.parameters.properties.arguments;
+    const key = JSON.stringify(schema);
+    const group = groups.get(key);
+    if (group) group.ids.push(definition.id);
+    else groups.set(key, { ids: [definition.id], schema });
+  }
   return { ...SERVER_QUERY_TOOL, parameters: { ...SERVER_QUERY_TOOL.parameters,
     properties: { ...SERVER_QUERY_TOOL.parameters.properties,
       query: { ...SERVER_QUERY_TOOL.parameters.properties.query,
-        enum: [...new Set(definitions.map(definition => definition.id))] },
-    } } };
+        enum: [...ids] },
+    },
+    // Keep flat fields for decoders that ignore nested properties. The union
+    // additionally binds each query to its declared arguments and separates
+    // receipt reads from sends, including after catalogue compaction.
+    anyOf: [
+      { maxProperties: 0 },
+      { type: 'object', additionalProperties: false, required: ['requestId'],
+        properties: { requestId: SERVER_QUERY_TOOL.parameters.properties.requestId } },
+      ...[...groups.values()].map(group => ({ type: 'object', additionalProperties: false,
+        required: ['query', ...(Number(group.schema.minItems) > 0 ? ['arguments'] : [])],
+        properties: { query: { type: 'string', enum: group.ids }, arguments: group.schema } })),
+    ],
+  } };
 }
 
 function queryContract({ id, description, argumentsSchema }: ServerQueryDefinition) {
@@ -63,8 +91,9 @@ export type ServerQueryReceipt = {
 export const SERVER_QUERY_TOOL = {
   name: 'mc_query',
   tags: ['read'],
-  description: 'Query an explicitly configured read-only server protocol without occupying the body or waiting for chat. '
-    + '{} lists available queries; {query,arguments?:string[]} sends one; {requestId} reads its receipt. '
+  description: '{} lists registered read-only queries and their argument contracts. '
+    + '{query,arguments?:string[]} sends one; {requestId} separately reads its receipt. '
+    + 'Required subject IDs must come from observed server data. No body slot or chat wait is used. '
     + 'Only listed queries are supported, never arbitrary commands. A sent status means accepted and awaiting a reply, not completed. '
     + 'At most one query is pending; identical requests reuse its receipt and terminal receipts for five seconds. '
     + 'Timeout means the result is unknown; there is no automatic retry. Replies have no request nonce and are only correlated server feedback, '
