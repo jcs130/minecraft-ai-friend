@@ -40,11 +40,11 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   const directory = mkdtempSync(join(tmpdir(), 'mc-viewer-engine-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const consumer = join(directory, 'consumer');
-  mkdirSync(join(consumer, 'node_modules', 'prismarine-nbt'), { recursive: true });
+  mkdirSync(join(consumer, 'node_modules'), { recursive: true });
   writeFileSync(join(consumer, 'package.json'), '{}');
-  // Only NBT presentation is fake; engine and bridge resolve through the actual
-  // core package's export map, including in the isolated packed-consumer run.
-  writeFileSync(join(consumer, 'node_modules', 'prismarine-nbt', 'index.js'), 'exports.simplify = value => value;');
+  // A strict consumer installs only the public core. NBT belongs to its
+  // declared Mineflayer dependency; do not hide a hoisting bug with a root stub.
+  assert.throws(() => createRequire(join(consumer, 'package.json')).resolve('prismarine-nbt'), { code: 'MODULE_NOT_FOUND' });
   symlinkSync(dirname(require.resolve('agent-mc-world/package.json')), join(consumer, 'node_modules', 'agent-mc-world'), 'junction');
   const moduleUrl = new URL('viewer-engine.mjs', integrations);
   moduleUrl.searchParams.set('package', consumer);

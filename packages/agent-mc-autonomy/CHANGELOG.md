@@ -1,6 +1,7 @@
 ## 0.2.140
 
 - Consume the verified engine-only Agent MC World 0.5.7-rc.150-preview.3 build. Preserve the native executor, explicit causal dependencies and observed-effect readback without installing a second body or viewer.
+- Resolve the optional viewer's NBT codec through Mineflayer's declared dependency chain. Strict isolated consumers no longer need a hoisted codec package before connecting; native body and queue behavior stay unchanged.
 
 ## 0.2.139
 
