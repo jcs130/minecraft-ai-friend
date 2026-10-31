@@ -1,4 +1,4 @@
-"""Offline four-player tests. Native sources are explicit pinned inputs, never downloaded here."""
+"""Offline native five-slot party tests, retaining the existing four-player acceptance entry."""
 import argparse
 import hashlib
 import json
@@ -45,7 +45,9 @@ def run(native_source=None, java="java"):
                     target.write_text(text.replace(needle, addition + needle), encoding="utf-8")
                 sources.append(target)
             sources.append(root / "tests/NativeFourPartyTest.java")
+            sources.append(root / "tests/NativeFivePartyTest.java")
             mains.append("org.qiandengji.vortex.NativeFourPartyTest")
+            mains.append("org.qiandengji.vortex.NativeFivePartyTest")
         compiler = shutil.which("javac")
         command = [compiler] if compiler else [java, "--module", "jdk.compiler/com.sun.tools.javac.Main"]
         subprocess.run([*command, "-encoding", "UTF-8", "-d", str(destination), *map(str, sources)], check=True, timeout=60)
