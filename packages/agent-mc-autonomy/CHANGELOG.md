@@ -1,4 +1,13 @@
+## 0.2.139
+
+- Pin the verified canonical core149 engine-only archive, executable/build/type hashes and dependency lock. Retain indefinite-work review from 0.2.138.
+
 # Changelog
+
+## 0.2.138
+
+- Reassess owned indefinite native follow tasks at the configured idle decision interval through the existing planner, even without a terminal event. Finite task scheduling, model backoff and explicit user stop retain priority.
+- Reviews preserve the native task and do not cancel automatically or verify completion. Terminal or world changes invalidate an in-flight review so a stale stop cannot affect successor work.
 
 ## 0.2.137
 
