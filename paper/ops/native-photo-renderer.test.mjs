@@ -1,11 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
 import {validateNativeCamera,nativeCameraPose,createNativePhotoRenderer} from './native-photo-renderer.mjs';
 const id='bdab127e-4ef3-4380-adca-a6f1430223d5';
-const state=()=>({schema:'qiandeng-native-camera/v1',instanceId:id,playerUuid:id,at:new Date().toISOString(),connected:true,renderer:'Intel(R) UHD Graphics 770',server:'127.0.0.1:29090',shadersEnabled:true,modelCatalogueSize:4});
+const state=()=>({schema:'qiandeng-native-camera/v1',instanceId:id,playerUuid:id,at:new Date().toISOString(),connected:true,renderer:'Intel(R) UHD Graphics 770',server:'127.0.0.1:29090',shadersEnabled:true,cleanHud:true,cleanToasts:true,modelCatalogueSize:4});
 const job={job:id,nonce:id,owner:id,entityId:12,mode:'first',x:0,y:64,z:0,yaw:Math.PI,pitch:-0.25,anchorX:0,anchorY:64,anchorZ:0};
 test('readiness requires fresh Intel rendering, shaders, a loaded model catalogue and connection identity',()=>{
  assert.equal(validateNativeCamera(state()).connected,true);
- for(const change of [{renderer:'NVIDIA'},{shadersEnabled:false},{modelCatalogueSize:0},{connected:false},{playerUuid:'wrong'},{at:new Date(Date.now()-5000).toISOString()},{at:new Date(Date.now()+10000).toISOString()}])assert.throws(()=>validateNativeCamera({...state(),...change}),/NOT_READY/);
+ for(const change of [{renderer:'NVIDIA'},{shadersEnabled:false},{cleanHud:false},{cleanToasts:undefined},{modelCatalogueSize:0},{connected:false},{playerUuid:'wrong'},{at:new Date(Date.now()-5000).toISOString()},{at:new Date(Date.now()+10000).toISOString()},{screenOpen:true},{renderer:'D3D12 (Intel UHD 770)',windowVisible:false},{renderer:'D3D12 (Intel UHD 770)',windowVisible:true,windowIconified:true}])assert.throws(()=>validateNativeCamera({...state(),...change}),/NOT_READY/);
+ assert.equal(validateNativeCamera({...state(),renderer:'D3D12 (Intel UHD 770)',windowVisible:true,windowIconified:false,windowPosition:[2600,40],expectedWindowPosition:[2600,40]}).connected,true);
+ assert.throws(()=>validateNativeCamera({...state(),renderer:'D3D12 (Intel UHD 770)',windowVisible:true,windowPosition:[896,336],expectedWindowPosition:[2600,40]}),/NOT_READY/);
 });
 test('web pose is converted to actual Minecraft camera coordinates and angles without moving the body',()=>{
  const pose=nativeCameraPose(job,state(),1000);assert.equal(pose.y,65.62);assert.equal(pose.yaw,0);assert.equal(pose.pitch,0.25*180/Math.PI);assert.equal(pose.expiresAt,4000);

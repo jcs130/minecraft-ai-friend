@@ -1,29 +1,37 @@
 {
-  "state": "candidate-awaiting-windows-display-installation",
-  "date": "2026-10-31",
+  "state": "candidate-blocked-on-shader-native-memory-growth",
+  "date": "2026-11-01",
   "gameOrInferenceRestarted": false,
   "physicalMonitorRequiredByPlan": false,
   "preferredGpu": "Intel UHD Graphics 770",
   "nativePhotoVerified": false,
+  "isolatedPhotoFramesVerified": true,
+  "cleanUiVerified": true,
+  "sustainedShaderRunPassed": false,
   "productionRenderer": "existing webgl camera",
   "runtime": {
     "java": "Microsoft OpenJDK 21.0.13.0.2",
     "javaArchiveSha256": "c5706a9cf482ef1a0622a86eea5b13d557b07f04554572af061e2d02b58c0f99",
-    "ysm": "2.4.1 unchanged",
+    "ysm": "2.6.5 isolated native client; production model chain still 2.4.1",
     "virtualDisplay": "VirtualDisplayDriver 25.7.23",
     "installer": "NefCon 1.14.0",
     "display": "one Intel 1536x1536 at 30 Hz",
     "signaturesVerified": true,
     "certificateStoreChanged": false,
-    "displayInstalled": false
+    "displayInstalled": true,
+    "displayInstance": "ROOT\\DISPLAY\\0001",
+    "shaderProcessCommitBudgetGiB": 8
   },
   "evidence": {
     "wslg": "Observed recurrent Weston signal 11 exits about 104 seconds apart; upstream WSL issue 41552",
-    "windowsD3d12Probe": "Rejected actual NVIDIA renderer despite adapter-name preference",
+    "windowsD3d12Probe": "Actual Intel UHD770 renderer and pixel checks passed with an application-local Mesa D3D12 runtime",
     "windowsZinkProbe": "Intel Vulkan driver selected; bounded 30-second context initialization timeout, not a successful render",
-    "isolatedClient": "Prepared without model authentication cache or requested game connection",
-    "cameraModule": "Compiled against installed bridge and actual Fabric/Minecraft/Iris/YSM dependencies",
-    "systemConfirmation": "Windows returned cancellation; signed display installation has not started"
+    "isolatedClient": "First/third/top original encrypted BigFish photos captured on the marked loopback fixture; game UI/toasts suppressed and scene name rendering retained",
+    "cameraModule": "Compiled against installed bridge and reviewed YSM2.6.5 Fabric bytes, using the matching shared MC-core reader",
+    "systemConfirmation": "Both signed display installation and configuration confirmations consumed; no pending display approval",
+    "stability": "Iris-on native private memory grows about 1GiB/s and crashes at the protective 8GiB process cap; removing YSM also reproduces it. Shader-off control peaked near 1.8GiB and exited normally",
+    "failedControls": "Mesa26.2.4/26.1.8, lighter shader, smaller frame, performance mods, correct visible monitor placement, DSA/buffer-storage masks and synchronous frames did not resolve growth",
+    "proxyClient": "Actual native2.6.5 through real Velocity loaded the original encrypted fish with clean UI at 30FPS, shaders disabled; not high-quality photo acceptance"
   },
   "document": "paper/docs/NATIVE_GODDESS_CAMERA.md"
 }
