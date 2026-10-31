@@ -396,7 +396,8 @@ def _spatial_objects(text):
             cursor = start + 1
             continue
         end = start + length
-        if isinstance(value, dict) and value.get("source") in {"client-loaded-world", "client-visible-world"}:
+        if (isinstance(value, dict) and isinstance(value.get("source"), str)
+                and value["source"] in {"client-loaded-world", "client-visible-world"}):
             yield start, end, value
             cursor = end
         else:

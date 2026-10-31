@@ -1,6 +1,12 @@
+## 0.2.141
+
+- Preserve object and array provenance in ordinary tool receipts without treating it as a spatial source tag. Large discovery receipts no longer stop the controller while constructing their preview; original receipts and retrieval handles remain available.
+- Keep native execution, unknown-dispatch fences and goal verification unchanged. Offline tests do not establish gameplay or playback success.
+
 ## 0.2.140
 
 - Consume the verified engine-only Agent MC World 0.5.7-rc.150-preview.3 build. Preserve the native executor, explicit causal dependencies and observed-effect readback without installing a second body or viewer.
+- Resolve the optional viewer's NBT codec through Mineflayer's declared dependency chain. Strict isolated consumers no longer need a hoisted codec package before connecting; native body and queue behavior stay unchanged.
 
 ## 0.2.139
 

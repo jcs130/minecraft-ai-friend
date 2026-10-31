@@ -39,9 +39,9 @@ async function fixture(t) {
   const directory = fs.mkdtempSync(join(tmpdir(), 'mc-viewer-persistence-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const consumer = join(directory, 'consumer');
-  fs.mkdirSync(join(consumer, 'node_modules', 'prismarine-nbt'), { recursive: true });
+  fs.mkdirSync(join(consumer, 'node_modules'), { recursive: true });
   fs.writeFileSync(join(consumer, 'package.json'), '{}');
-  fs.writeFileSync(join(consumer, 'node_modules', 'prismarine-nbt', 'index.js'), 'exports.simplify = value => value;');
+  assert.throws(() => createRequire(join(consumer, 'package.json')).resolve('prismarine-nbt'), { code: 'MODULE_NOT_FOUND' });
   fs.symlinkSync(dirname(require.resolve('agent-mc-world/package.json')), join(consumer, 'node_modules', 'agent-mc-world'), 'junction');
   const moduleUrl = new URL('viewer-engine.mjs', integrations); moduleUrl.searchParams.set('package', consumer);
   const { createEngine } = await import(moduleUrl.href);

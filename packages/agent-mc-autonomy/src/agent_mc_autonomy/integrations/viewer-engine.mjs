@@ -10,7 +10,10 @@ import { serverEnginePort } from './server-engine-port.mjs';
 const require = createRequire(resolve(new URL(import.meta.url).searchParams.get('package'), 'package.json'));
 const { Bridge, bindNativeGuiPresentation } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
 const { TacticalMinecraftWorld } = await import(pathToFileURL(require.resolve('agent-mc-world/tactics')).href);
-const { simplify } = require('prismarine-nbt');
+// Resolve presentation's NBT codec through the body's declared dependencies.
+// A pnpm/isolated consumer need not hoist Mineflayer's transitive packages.
+const bodyRequire = createRequire(createRequire(require.resolve('agent-mc-world/package.json')).resolve('mineflayer'));
+const { simplify } = bodyRequire('prismarine-nbt');
 const engineUrl = new URL(import.meta.url);
 const serverEngine = await serverEnginePort({module:engineUrl.searchParams.get('engine'),sha256:engineUrl.searchParams.get('engineSha256')}, {World:TacticalMinecraftWorld,Bridge});
 const ViewerWorldBase = serverEngine?.EngineWorld ?? TacticalMinecraftWorld;
