@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.7-rc.152-practice.1 (unpublished candidate)
+
+- Expose the connected crafting experiment as an explicit host-model entry, reusing SDK/MCP, dedicated clients, original executor and MethodLibrary; keep the scripted verifier separate.
+- Supply bounded original action rejection feedback with training inventory/health evidence. Require failed training evidence in real-mode model inputs, preserve source revision and independent holdouts, audit model attempts/known tokens and report measured work without inventing a monetary charge.
+- Add no-connection preflight and cancellation/failure evidence. No live profile, method adoption, npm publication or real-model/server success claim.
+
 ## 0.5.7-rc.148
 
 - Wire the existing Harness² practice service into the core SDK/MCP tool catalogue, request facts, completion events, console monitor and disconnect/reconnect lifecycle. Hosts explicitly supply the model, worker and isolated execution port; unconfigured help reports unavailable without starting anything.

@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.152-preview.2",
+  "version": "0.5.7-rc.152-practice.1",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -31,6 +31,10 @@
     "minecraft-agent-knowledge": "./bin/minecraft-agent-knowledge.mjs"
   },
   "exports": {
+    "./experiments/connected-crafting": {
+      "types":"./examples/connected-crafting.d.mts",
+      "default":"./examples/connected-crafting.mjs"
+    },
     "./body-readiness": {
       "types": "./dist/types/core/body-readiness.d.ts",
       "default": "./dist/runtime/core/body-readiness.js"
@@ -186,6 +190,9 @@
     "scripts/build-client-graphics.mjs",
     "scripts/build-mesa-presentation.mjs",
     "scripts/verify-practice-server.mjs",
+    "scripts/run-model-practice.mjs",
+    "scripts/practice-model-audit.mjs",
+    "scripts/practice-report.mjs",
     "scripts/client-graphics-loader.mjs",
     "client-graphics",
     "client-appearance",

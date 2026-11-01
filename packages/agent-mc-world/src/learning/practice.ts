@@ -2,6 +2,7 @@
 import { MethodRunner, METHOD_ADAPTER, type MethodHost, type MethodRun } from '../../core/method-runner.ts';
 import { MethodLibrary, type MethodReview } from '../../core/method-library.ts';
 import { PROCEDURE_RECEIPT_SCHEMA, procedureHash, resolveProcedure, type ProcedureReference, type ProcedureReceipt } from '../../core/support/procedure.ts';
+import {summarizePracticeTrace,type PracticeFeedback} from './practice-feedback.ts';
 
 export interface PracticeBinding { instanceId: string; realm: string; account: string; agent: string; isolated: true }
 export interface PracticeCandidate { code: string; params: Record<string, unknown>; guidance: string }
@@ -25,6 +26,8 @@ export interface PracticeTrial {
   before: PracticeSnapshot | null; after: PracticeSnapshot | null;
   /** Counted by the trusted method executor from its original trace, not script output. */
   sdkCalls?:number|null;
+  /** Original action failures and work counts supplied to the optimizer with training observations. */
+  feedback?:PracticeFeedback;
 }
 export interface PracticeExecutionPort {
   readonly binding: PracticeBinding;
@@ -142,6 +145,7 @@ export class MethodPracticeExecutor implements PracticeExecutionPort {
       if (await this.options.settle(run) !== 'settled') throw new PracticeUnknownEffect();
       trial.endedAt = Date.now();
       trial.sdkCalls=run.trace.length;
+      trial.feedback=summarizePracticeTrace(run.trace);
       // Observe after cleanup, not the method's self-reported return value.
       if (!signal.aborted) trial.after = await this.options.observe(fixture,signal);
       if (!run.procedure || !run.endedAt || run.status === 'running') throw new PracticeUnknownEffect();
