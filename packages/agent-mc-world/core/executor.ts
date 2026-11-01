@@ -10,6 +10,7 @@
  * 调用方不必分辨两处。
  */
 import type { Bot } from 'mineflayer';
+import { nativeBodyBlockedReason } from './body-readiness.ts';
 import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
@@ -670,6 +671,8 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
 }
 
 async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
+  const bodyBlocked = nativeBodyBlockedReason(bot, call.skill);
+  if (bodyBlocked) throw new SkillBlocked(bodyBlocked);
   // A dispatched travel can change worlds within one task. Freeze each operation, not the whole task.
   if (ctx.getChests) ctx = { ...ctx, chests: ctx.getChests() };
   // An unresolved click is a protocol transaction barrier, independent of item

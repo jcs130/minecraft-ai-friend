@@ -1,4 +1,5 @@
 import { installDeathLifecycle } from '../core/death-lifecycle.ts';
+import { installNativeBodyReadiness } from '../core/body-readiness.ts';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
@@ -115,6 +116,40 @@ function rig(
     setTaskFighting: (v: boolean) => { taskFighting = v; },
   };
 }
+
+it('does not enter a new combat from stale positive health before respawn position and physics', async () => {
+  vi.useFakeTimers();
+  const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
+  b._client = Object.assign(new EventEmitter(), { state: 'play' });
+  const observer = installNativeBodyReadiness(b), r = rig(bot);
+  try {
+    b.emit('death'); b.emit('respawn'); b.emit('spawn');
+    r.session.start(); await vi.advanceTimersByTimeAsync(1000);
+    expect(r.session.onHurtBy(7, 'zombie')).toBe(false);
+    expect(r.session.active).toBe(false); expect(r.calls.suspended).toBe(0); expect(attacks).toEqual([]);
+    b._client.emit('position', {}); b.emit('physicsTick');
+    expect(r.session.onHurtBy(7, 'zombie')).toBe(true);
+  } finally { r.session.stop(); observer.dispose(); vi.useRealTimers(); }
+});
+
+it('reports a blocked combat and releases its hold on wall time when native physics stops', async () => {
+  vi.useFakeTimers();
+  const { bot, controls } = combatRigBot([foe(7, 'enderman', 2.5)]), b = bot as any;
+  b._client = Object.assign(new EventEmitter(), { state: 'play' });
+  const observer = installNativeBodyReadiness(b), r = rig(bot);
+  try {
+    b._client.emit('position', {}); b.emit('physicsTick'); r.session.start();
+    expect(r.session.onHurtBy(7, 'enderman')).toBe(true);
+    expect(r.session.active).toBe(true);
+    // Deliberately emit no physicsTick: the old active-session watcher returned immediately.
+    await vi.advanceTimersByTimeAsync(5500);
+    expect(r.session.active).toBe(false);
+    expect(r.combatReports).toHaveLength(1); expect(r.combatReports[0].reason).toBe('stuck');
+    expect(r.calls.resumed).toBe(1); expect(Object.values(controls).some(Boolean)).toBe(false);
+    expect(r.events.some(e => /跑开了|撤出来了/.test(e.text))).toBe(false);
+    expect(r.events.some(e => e.text.includes('没有确认撤离成功'))).toBe(true);
+  } finally { r.session.stop(); observer.dispose(); vi.useRealTimers(); }
+});
 
 function rangedRig() {
   const shots: Array<{ target: RangedTarget; ownerToken: unknown }> = [];
