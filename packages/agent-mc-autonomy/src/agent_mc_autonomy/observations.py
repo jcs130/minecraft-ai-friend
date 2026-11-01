@@ -5,9 +5,9 @@ import json
 import re
 from collections import Counter
 
-from .effects import effect_view, projected_effect
 from .chat_noop import chat_noop_view
 from .control_motion import control_motion_view
+from .effects import effect_view, projected_effect
 
 
 def runtime_error_code(error):

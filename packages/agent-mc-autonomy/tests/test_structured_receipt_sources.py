@@ -3,7 +3,6 @@ import importlib
 import json
 
 import pytest
-
 from test_controller import setup
 
 

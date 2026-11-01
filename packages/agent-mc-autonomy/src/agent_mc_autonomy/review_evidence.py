@@ -5,8 +5,8 @@ import json
 import re
 import uuid
 
-from .effects import projected_effect
 from .control_motion import control_motion_view
+from .effects import projected_effect
 from .observations import REPEAT_GUIDANCE, repeat_evidence_view
 
 

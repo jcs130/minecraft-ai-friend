@@ -34,8 +34,8 @@ def test_bad_original_is_failed_tool_result_without_uncertainty(
 
 
 def rejected_fixture(tmp_path, framework_module):
-    from agent_mc_autonomy.mailbox import Mailbox
     from agent_mc_autonomy.local_rejection_recovery import latest_decision
+    from agent_mc_autonomy.mailbox import Mailbox
 
     settings = dataclasses.replace(
         framework_module.Settings(), host="example.test", username="Alice"
