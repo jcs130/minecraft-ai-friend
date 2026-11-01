@@ -3,11 +3,12 @@ from pathlib import Path
 import argparse, hashlib, json, subprocess, zipfile
 
 ROOT=Path(__file__).resolve().parent
-VERSION='0.2.2'
+VERSION='0.2.3'
 parser=argparse.ArgumentParser()
 for name in ('geyser','gson','jdk','output'):parser.add_argument('--'+name,required=True,type=Path)
 args=parser.parse_args()
-pins={'geyser':'d808c432bae955413c80ca752f99ea9f7dda52f2552057508646a3ee344a696e','gson':'4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593'}
+pins={'geyser':hashlib.sha256(args.geyser.read_bytes()).hexdigest(),'gson':'4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593'}
+assert pins['geyser']in {'d808c432bae955413c80ca752f99ea9f7dda52f2552057508646a3ee344a696e','0b94c8a92660071115eeae10d9999ad3666bde01c1123147c8e3cff9852f3729'},'Unreviewed Geyser build'
 for name,sha in pins.items():assert hashlib.sha256(getattr(args,name).read_bytes()).hexdigest()==sha,('Dependency mismatch',name)
 out=args.output.resolve();assert not out.exists() and not out.is_relative_to(ROOT.parent.parent.parent)
 out.mkdir(parents=True);classes=out/'classes';classes.mkdir()

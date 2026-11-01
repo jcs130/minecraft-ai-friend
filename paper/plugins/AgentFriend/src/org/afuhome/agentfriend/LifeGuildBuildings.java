@@ -482,7 +482,7 @@ final class LifeGuildBuildings implements Listener {
         found.setAI(false);
         found.setInvulnerable(true);
         found.setRemoveWhenFarAway(false);
-        if (found.getRecipes().isEmpty()) found.addTrades(2);
+        GuildHostTrades.ensure(found);
         return found;
     }
     private Villager findHost(String contract) {

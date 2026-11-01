@@ -17,16 +17,18 @@ export function validateConfig(c) {
   if(!['worker241','native265'].includes(appearanceBackend(c)))throw Error('Invalid appearance backend');
   if(appearanceBackend(c)==='native265'&&(!isAbsolute(c.native?.stateFile??'')||!isAbsolute(c.native?.properties??'')||basename(c.native.properties)!=='server.properties'
     ||!Number.isInteger(c.native.rconPort)||c.native.rconPort<1024||c.native.rconPort>65535||c.native.jarSha256!==NATIVE_SHA))throw Error('Invalid native appearance configuration');
-  const native=appearanceBackend(c)==='native265',names=native?['proxy',...(c.worker?['worker']:[])]:['proxy','worker'];
+  const native=appearanceBackend(c)==='native265',names=native?['proxy',...(c.worker?['worker']:[]),...(c.auth?['auth']:[])]:['proxy','worker'];
+  if(c.auth&&!native)throw Error('Native authentication requires the native appearance backend');
+  if(c.auth&&(!isAbsolute(c.auth.properties??'')||resolve(c.auth.properties)!==resolve(c.auth.directory,'server.properties')))throw Error('Authentication properties must belong to its private directory');
   if(native){const relativeState=relative(resolve(c.root),resolve(c.native.stateFile));if(!relativeState||relativeState.startsWith('..')||isAbsolute(relativeState))throw Error('Native state must be inside the private backup root');}
   const ports=new Set();
-  for(const port of [c.controlPort,c.proxy?.port,...(!native||c.worker?[c.worker?.port]:[]),...(!native||c.workerControllerPort!==undefined?[c.workerControllerPort]:[])]) {
+  for(const port of [c.controlPort,c.proxy?.port,...(!native||c.worker?[c.worker?.port]:[]),...(!native||c.workerControllerPort!==undefined?[c.workerControllerPort]:[]),...(c.auth?[c.auth.port,c.auth.rconPort]:[])]) {
     if(!Number.isInteger(port)||port<1024||port>65535||ports.has(port))throw Error('Invalid YSM ports');ports.add(port);
   }
   if(appearanceBackend(c)==='native265'&&ports.has(c.native.rconPort))throw Error('Native RCON port conflicts with model services');
   for(const name of names) {
     const s=c[name],dir=resolve(s?.directory||''),rel=relative(resolve(c.root),dir);
-    if(!rel || rel.startsWith('..')||isAbsolute(rel)||!Number.isInteger(s.heapMiB)||s.heapMiB<256||s.heapMiB>1024
+    if(!rel || rel.startsWith('..')||isAbsolute(rel)||!Number.isInteger(s.heapMiB)||s.heapMiB<(name==='auth'?1024:256)||s.heapMiB>(name==='auth'?2048:1024)
       || !/^[A-Za-z0-9_.+-]+\.jar$/.test(s.jar||'')||!/^[a-f0-9]{64}$/.test(s.sha256||''))throw Error('Invalid YSM service '+name);
   }
   return c;
@@ -60,20 +62,26 @@ export async function supervise(configPath) {
   if(!c.enabled)throw Error('YSM services disabled');
   const logs=join(c.root,'logs');mkdirSync(logs,{recursive:true});
   const state=new Map();let stopping=false,ticking=false,timer;
-  const backend=appearanceBackend(c),serviceNames=backend==='native265'?['proxy']:['proxy','worker'];
-  function snapshot(){return {protocol:'YSM-SERVICES-V1',pid:process.pid,stopping,appearanceBackend:backend,...(backend==='native265'?{modelBackend:nativeBackendStatus(c)}:{}),proxyPort:c.proxy.port,services:Object.fromEntries([...state].map(([n,s])=>[n,{pid:s.child?.pid??null,alive:!!s.child&&s.child.exitCode===null&&s.child.signalCode===null,starts:s.starts,lastExit:s.lastExit??null,error:s.error??null}]))};}
+  const backend=appearanceBackend(c),serviceNames=backend==='native265'?[...(c.auth?['auth']:[]),'proxy']:['proxy','worker'];
+  function snapshot(){return {protocol:'YSM-SERVICES-V1',pid:process.pid,stopping,appearanceBackend:backend,...(backend==='native265'?{modelBackend:nativeBackendStatus(c)}:{}),proxyPort:c.proxy.port,...(c.auth?{authPort:c.auth.port}:{}),services:Object.fromEntries([...state].map(([n,s])=>[n,{pid:s.child?.pid??null,alive:!!s.child&&s.child.exitCode===null&&s.child.signalCode===null,starts:s.starts,lastExit:s.lastExit??null,error:s.error??null}]))};}
   function persist(){const f=join(c.root,'lifecycle-status.json'),tmp=f+'.tmp';writeFileSync(tmp,JSON.stringify({...snapshot(),at:new Date().toISOString()}));renameSync(tmp,f);}
   async function start(name) {
     const s=state.get(name),spec=c[name];if(stopping||s.suspended||s.child||Date.now()<s.retryAt)return;
     // A stale child/foreign port is never killed or adopted by a new supervisor.
-    if(await listening(spec.port)||(backend==='worker241'&&name==='proxy'&&await listening(c.workerControllerPort))) {s.error='YSM_PORT_ALREADY_IN_USE';s.retryAt=Date.now()+30_000;return;}
+    if(name==='proxy'&&c.auth&&(!await listening(c.auth.port)||!await listening(c.auth.rconPort))){s.error='AUTHENTICATION_BACKEND_NOT_READY';s.retryAt=Date.now()+2000;return;}
+    if(await listening(spec.port)||(name==='auth'&&await listening(spec.rconPort))||(backend==='worker241'&&name==='proxy'&&await listening(c.workerControllerPort))) {s.error='YSM_PORT_ALREADY_IN_USE';s.retryAt=Date.now()+30_000;return;}
     if(stopping||s.suspended)return;
     const jar=join(spec.directory,spec.jar);
     if(!existsSync(jar)||createHash('sha256').update(readFileSync(jar)).digest('hex')!==spec.sha256) {s.error='YSM_JAR_HASH_MISMATCH';s.retryAt=Date.now()+60_000;return;}
+    if(name==='auth'){
+      const properties=Object.fromEntries(readFileSync(spec.properties,'utf8').split(/\r?\n/).filter(line=>line&&!/^\s*[#!]/.test(line)).map(line=>{const i=line.indexOf('=');return [line.slice(0,i).trim(),line.slice(i+1).trim()];}));
+      const required={'server-ip':'127.0.0.1','server-port':String(spec.port),'rcon.port':String(spec.rconPort),'enable-rcon':'true','online-mode':'false','gamemode':'spectator','force-gamemode':'true'};
+      if(Object.entries(required).some(([key,value])=>properties[key]!==value)){s.error='AUTHENTICATION_BACKEND_CONFIGURATION_INVALID';s.retryAt=Date.now()+60_000;return;}
+    }
     const log=createWriteStream(join(logs,`${name}-${Date.now()}.log`),{flags:'wx'});
     // Never inherit a crashed proxy's readiness when spawning a new JVM.
     if(name==='proxy' && c.authHeartbeat && existsSync(c.authHeartbeat)) unlinkSync(c.authHeartbeat);
-    const child=spawn(c.java,['-Xms128M',`-Xmx${spec.heapMiB}M`,'-XX:ActiveProcessorCount=4','-Dfile.encoding=UTF-8','-jar',jar,'nogui'],{cwd:spec.directory,stdio:['pipe','pipe','pipe'],windowsHide:true});
+    const child=spawn(c.java,['-Xms128M',`-Xmx${spec.heapMiB}M`,'-XX:ActiveProcessorCount=4','-Dfile.encoding=UTF-8','-jar',jar,name==='auth'?'--nogui':'nogui'],{cwd:spec.directory,stdio:['pipe','pipe','pipe'],windowsHide:true});
     s.child=child;s.starts++;s.startedAt=Date.now();s.error=null;
     child.stdout.pipe(log,{end:false});child.stderr.pipe(log,{end:false});child.stdin.on('error',()=>{});
     child.once('error',e=>{s.error=e.code||'YSM_SPAWN_FAILED';});
@@ -89,7 +97,7 @@ export async function supervise(configPath) {
   async function stopAll() {
     if(stopping)return;stopping=true;clearInterval(timer);persist();
     // Proxy first removes mapper sessions; Worker then saves actual model/player data.
-    await stopChild('proxy');await stopChild('worker');persist();
+    await stopChild('proxy');await stopChild('worker');await stopChild('auth');persist();
     server.close();
   }
   const server=net.createServer(socket=>{

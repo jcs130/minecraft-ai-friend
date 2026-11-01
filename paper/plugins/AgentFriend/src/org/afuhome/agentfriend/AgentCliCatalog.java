@@ -418,6 +418,14 @@ final class AgentCliCatalog {
     }
 
     static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
+    static List<AgentCliRecovery.Card> recoveryCards(boolean nativeRpg) {
+        return recoveryCards(SpellGuide.entries(),nativeRpg);
+    }
+    static List<AgentCliRecovery.Card> recoveryCards(List<SpellGuide.Entry> spells,boolean nativeRpg) {
+        return catalogSpecs(spells,nativeRpg).values().stream()
+            .filter(spec->!Set.of("help","list","explain","spells","status.full").contains(spec.id()))
+            .map(spec->new AgentCliRecovery.Card(spec.id(),spec.usage(),spec.summary(),spec.requires())).toList();
+    }
     /** Standard --help/-h discovery never runs the requested gameplay command. */
     static void commandHelp(Player player,String[] args) {
         boolean json=java.util.Arrays.asList(args).contains("--json");
@@ -488,7 +496,12 @@ final class AgentCliCatalog {
                 for(String key:List.of("operation","parameters","permission","requirements","consumption","resultQuery"))out.add(key,semantic.get(key));
                 out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",nativeRpg&&nativeEntry(id)||jsonSupported(id));
             }
-        }catch(IllegalArgumentException invalid){out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("errorCode","INVALID_ARGUMENT");out.addProperty("message",invalid.getMessage());out.addProperty("nextCommand","/mycli --help");}
+        }catch(IllegalArgumentException invalid){
+            var cards=recoveryCards(spells,nativeRpg);
+            out=AgentCliRecovery.payload(AgentCliRecovery.suggest(raw,cards,AgentCliRecovery.Context.empty()),cards,"INVALID_ARGUMENT",invalid.getMessage());
+            // Preserve the existing read-only help recovery contract; candidate usages are separate.
+            out.addProperty("nextCommand","/mycli --help");
+        }
         return out;
     }
     private static boolean nativeEntry(String id){return Set.of("status","progress","profession","skills","cast","tasks","tasks.list","tasks.info","tasks.status","tasks.accept","tasks.claim","guild.party").contains(id)||id.startsWith("profession.")||id.startsWith("skills.")||id.startsWith("guild.party.");}
@@ -563,7 +576,9 @@ final class AgentCliCatalog {
             SpellGuide.Entry spell = SpellGuide.find(id);
             if (spell != null) spec = new Spec(id, "magic", "cast", spell.command(), spell.effect(), spell.requires(), "MC_PROFESSION_RESULT、mcagent:event");
         }
-        if (spec == null) { error(player, "UNKNOWN_ID", "未知 ID " + id + "；先用 /mycli list <分类|命令>"); return; }
+        if (spec == null) {
+            org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).cliRecovery().reject(player,new String[]{id.replace('.',' ')},"UNKNOWN_ID","该ID不在当前服务器目录中");return;
+        }
         JsonObject detail = new JsonObject();
         detail.addProperty("schemaVersion", 1);
         detail.addProperty("id", spec.id());

@@ -1,5 +1,7 @@
 # /mycli 的统一交互约定
 
+2026-11-01：正式AF0.4.47.46-rpg。错误建议AF.47为候选，沿用原入口，见[只读纠正](CLI_RECOVERY_20261101.md)。未知命令应返回当前目录的正确用法、条件和下一步；相似度不授予执行权，也不代表动作成功。
+
 2026-10-14，统一CLI已随正式0.4.40上线；0.4.39隔离结果作为原始版本证据保留。
 
 参照 [CLI-Anything HARNESS 的 CLI Design](https://github.com/HKUDS/CLI-Anything/blob/main/cli-anything-plugin/HARNESS.md)：命令分组、`list/info/status` 自检、`--help`、所有新命令的 `--json`、可恢复错误及安全的重复调用。游戏聊天沿用原版协议和 `MC_` 前缀；不在 Paper 中模拟操作系统进程、退出码或另造 REPL。

@@ -77,6 +77,14 @@ public final class VortexBridge extends JavaPlugin {
         UUID.fromString(run);quests.progressObjectiveByType(p,QuestObjectiveType.KILL_BOSS,"site_"+site,1);
     }
     public boolean hasQuest(String id){return quests.registry().find(id).isPresent();}
+    /** Current configured spell definitions only; no player mutation or inferred unlock. */
+    public String commandAdviceCatalog(){
+        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("catalog requires primary thread");
+        var entries=vortex.spellbookService().editorSpellSnapshots().stream().sorted(Comparator.comparing(s->s.id())).limit(256).map(s->Map.of(
+            "id",s.id(),"summary",vortex.spellbookService().spellLabel(s.id())+"；"+SkillTransition.effects(s.mechanics())+"；目标："+SkillTransition.targets(s.targeters()),
+            "requirements","至少Lv"+s.minLevel()+"；魔力"+io.vortexcore.combat.ManaGate.cost(vortex,s.id())+"；冷却"+s.cooldownMillis()/1000.0+"秒；职业和已学要求查询 /mycli skills info "+s.id())).toList();
+        return gson.toJson(entries);
+    }
     /** Native definitions/PDC, never a renamed ordinary stick or book. */
     public boolean hasUsableDungeonWeapon(Player p){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
@@ -298,7 +306,15 @@ public final class VortexBridge extends JavaPlugin {
         }
         if(spell||node)return false;
         boolean chosen=vortex.classSkillService().hasClass(state);String next=SkillTransition.next(chosen);
-        emit(p,r,Map.of("success",false,"reason",SkillTransition.reason(id),"skill",id,"nextCommand",next,"changed",false),SkillTransition.message(id,chosen));return true;
+        emit(p,r,Map.of("success",false,"reason",SkillTransition.reason(id),"skill",id,"nextCommand",next,"changed",false),SkillTransition.message(id,chosen));
+        if(SkillTransition.reason(id).equals("unknown_skill")){
+            var friend=Bukkit.getPluginManager().getPlugin("AgentFriend");
+            if(friend!=null&&friend.isEnabled())try{
+                var words=new ArrayList<String>();words.add(r.group());if(!r.group().equals("cast"))words.add(r.action());words.addAll(r.arguments());if(r.json())words.add("--json");
+                friend.getClass().getMethod("commandAdvice",Player.class,String[].class).invoke(friend,p,words.toArray(String[]::new));
+            }catch(ReflectiveOperationException unavailable){/* Older AgentFriend retains the original Vortex error. */}
+        }
+        return true;
     }
     private void skills(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(Set.of("explain","status").contains(r.action())&&r.arguments().size()==1){skills(p,state,new BridgeRules.Request(r.group(),"info",r.arguments(),r.json(),r.help()));return;}
