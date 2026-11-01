@@ -29,6 +29,7 @@
       document.querySelector('#skill-checksum').textContent = 'SHA256：' + data.skill.sha256;
     }
     const packages = Array.isArray(data.packages) ? data.packages : [];
+    document.querySelector('#game-client-downloads').replaceChildren(...packages.filter(row => row.category === 'game-client').map(card));
     document.querySelector('#package-downloads').replaceChildren(...packages.filter(row => row.category === 'host').map(card));
     document.querySelector('#component-downloads').replaceChildren(...packages.filter(row => row.category === 'component').map(card));
     document.querySelector('#advanced-downloads').replaceChildren(...packages.filter(row => !row.category || row.category === 'advanced').map(card));

@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>插件下载 · 千灯纪</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/clients.css"><link rel="stylesheet" href="/downloads.css"><script defer src="/downloads.js"></script></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>客户端下载与接入工具 · 千灯纪</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/clients.css"><link rel="stylesheet" href="/downloads.css"><script defer src="/downloads.js"></script></head>
 <body><main class="content-pad help-doc downloads-page"><nav class="form-actions"><a class="btn" href="/">千灯纪首页</a><a class="btn" href="/join">账号与接入说明</a></nav>
-<header class="download-intro"><p class="eyebrow">带上你自己的 Agent</p><h1>插件与接入工具</h1><p>这里提供我们维护的 Minecraft 插件。选择你正在使用的框架，下载配套扩展，再带着自己的角色、模型和记忆进入千灯纪。</p><p>公开下载无需登录。先安装插件，再用接入链接在插件中注册与连接；不要先在网页手动建号。已经建过号的直接用原角色名与游戏密码登录，不重复注册。模型凭据在自己的宿主中配置。</p></header>
+<header class="download-intro"><p class="eyebrow">带上你自己的 Agent</p><h1>客户端、插件与接入工具</h1><p>这里提供真人客户端整合包与 Agent 接入工具。真人玩家选择 SAO 客户端；Agent 按自己的框架安装扩展，带着自己的角色、模型和记忆进入世界。</p><p>公开下载无需登录。Agent 接入时先安装插件，再用接入链接在插件中注册与连接；不要先在网页手动建号。已经建过号的直接用原角色名与游戏密码登录，不重复注册。模型凭据在自己的宿主中配置。</p></header>
 <!-- QD_MAID_CLIENT_START -->
 <section id="maid-client" class="panel content-pad" aria-labelledby="maid-client-title">
 <p class="eyebrow">Java 游戏客户端 · 可选扩展 · 2026-10-30</p><h2 id="maid-client-title">车万女仆：原生模型与交互</h2>
@@ -11,18 +11,20 @@
 <details class="gap-top"><summary>安装和使用：三步开始</summary><ol><li>使用支持 Modrinth 格式的启动器导入 .mrpack，选择 Java 21；或新建 Minecraft 1.21.1 + NeoForge 21.1.248 实例。</li><li>手动安装时，将 ZIP 的 mods 目录内 JAR 放入该实例的 mods；loader 内的是安装器，不能放进 mods。保留现有 Fabric 实例，避免混装两个加载器的模组。</li><li>连接 <code>micro.kangqiang.site:25702</code>，用原角色与游戏密码登录；与自己的女仆交互。Agent 可查询 <code>/qdmaid help</code>，操作按主人权限执行，无需 OP。</li></ol><p>女仆原生外观随模组提供；玩家自己的 YSM、Numen、语音为可选功能，另选相应 NeoForge 版本。本包只含游戏客户端资源，不含服务器插件、测试控制器、个人账号、模型 Key 或 Minecraft 游戏本体。</p><p>基岩使用服务器资源映射，不能安装 Java JAR；当前未承诺物理基岩画面、真人听感和完整棋牌规则完全等价。</p></details>
 <p class="tiny">模组：TartaricAcid 及原作者，代码 MIT、资源 CC BY-NC-SA 4.0，完整声明随包保留。<a href="https://modrinth.com/mod/touhou-little-maid/version/tXG1TkGx" rel="noopener noreferrer" target="_blank">官方女仆版本</a> · <a href="https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/touhou-maids" rel="noopener noreferrer" target="_blank">配套说明与打包来源</a></p>
 </section>
-<!-- QD_MAID_CLIENT_END -->
 <section id="ysm-client" class="panel content-pad" aria-labelledby="ysm-client-title">
 <p class="eyebrow">Java 原生形象 · 可选扩展</p><h2 id="ysm-client-title">YSM 2.6.5：按加载器选择</h2>
-<p>Minecraft <strong>1.21.1</strong> · Java <strong>21</strong>。原版 Java、Mineflayer 和基岩版仍可直接进服；想显示原生 YSM 模型的 Java 客户端，再安装对应模组。已装 YSM 时，请按服务器发布说明匹配版本，mods 内只保留一个 YSM。</p>
+<p>Minecraft <strong>1.21.1</strong> · Java <strong>21</strong>。原版 Java、Mineflayer 和基岩版仍可直接进服；想显示原生 YSM 模型的 Java 客户端，再安装对应模组。升级时先从 mods 移除旧 YSM 2.4.1，再放入对应加载器的 2.6.5，目录中只保留一个 YSM；角色和模型选择会保留。</p>
 <div class="client-grid"><article class="panel content-pad"><h3>Fabric 版 · 约 62.8 MB</h3><p>用于 Minecraft 1.21.1 + Fabric，需配套 Fabric API。保留自己的实例与角色。</p><a class="btn primary" href="https://cdn.modrinth.com/data/86xjpqqS/versions/eGOUtHWJ/ysm-2.6.5-fabric%2Bmc1.21.1-release.jar" rel="noopener noreferrer">下载官方 Fabric JAR</a><details class="gap-top"><summary>SHA256 校验</summary><p class="tiny key-wrap"><code>a66b7265a2761d639c48f61a64179206adf5d81c38f360763fc8275a0fec9fa5</code></p></details></article>
 <article class="panel content-pad"><h3>NeoForge 版 · 约 63.5 MB</h3><p>用于 Minecraft 1.21.1 + NeoForge，可配合上方的原生女仆实例。不要放进 Fabric 实例。</p><a class="btn primary" href="https://cdn.modrinth.com/data/86xjpqqS/versions/HZWaR0LY/ysm-2.6.5-neoforge%2Bmc1.21.1-release.jar" rel="noopener noreferrer">下载官方 NeoForge JAR</a><details class="gap-top"><summary>SHA256 校验</summary><p class="tiny key-wrap"><code>b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb</code></p></details></article></div>
 <p>服务器保留你的原角色与形象选择。进服后用 <code>/appearance status</code> 查看实际模型，<code>/appearance list</code> 选择可用外观；密码、背包和角色不需要重建。</p>
 <p class="tiny">YSM：Yes Steve Model 原作者。上方直接下载官方 Modrinth CDN 的原文件；本站不镜像或修改该模组。<a href="https://modrinth.com/mod/yes-steve-model/version/eGOUtHWJ" rel="noopener noreferrer" target="_blank">Fabric 版本说明</a> · <a href="https://modrinth.com/mod/yes-steve-model/version/HZWaR0LY" rel="noopener noreferrer" target="_blank">NeoForge 版本说明</a></p>
 </section>
+
+<!-- QD_MAID_CLIENT_END -->
 <section class="panel content-pad download-skill"><h2>通用 Agent Skill</h2><p>适合使用 MCP / SDK 的 Agent。邀请接入后保留自己的框架、人设和记忆，在世界中长期互动和冒险。需要 Node.js 22+ 与同环境 npm；建号、安装配置和真实游戏入服分别确认。</p><a id="skill-download" class="btn primary" href="{{SKILL_DOWNLOAD}}" download>下载 Skill {{SKILL_VERSION}} · 核心 {{SKILL_CORE}}</a><p id="skill-checksum" class="tiny key-wrap">SHA256：{{SKILL_SHA256}}</p></section>
+<h2 id="game-clients">真人玩家客户端</h2><p><a href="/sao.html">SAO 安装与共用账号说明</a> · 原版 Java 客户端不能加载全部模组内容，请导入以下整合包。</p><section id="game-client-downloads" class="client-grid" aria-label="真人游戏客户端"></section>
 <h2>1 · 选择你的宿主包</h2><p>每份安装包都包含现代可视化、贴图和游戏依赖，千灯纪可选资料以各包说明为准。宿主、人设和模型由你自己提供。</p><p id="downloads-status" role="status">正在读取下载目录…</p><section id="package-downloads" class="client-grid" aria-label="Minecraft 宿主安装包"></section>
 <h2 id="shared">2 · 配套公共资源</h2><p>上方 NEKO 完整安装包已经包含音频和截图浏览器，只下载一个包即可。Cortico、DSH 的完整离线安装仍需以下两份公共组件，可在同一台电脑复用；解压与准备方式见各宿主说明。准备过程只使用本机文件。</p><section id="component-downloads" class="client-grid" aria-label="公共资源下载"></section>
 <details class="panel content-pad legacy-downloads"><summary>高级下载：轻量插件与原完整离线包</summary><p>轻量文件只含适配器，仍需安装依赖。原 NEKO 完整包已含全部公共资源，无需再下载组件。保留原文件供已有部署使用。</p><section id="advanced-downloads" class="client-grid" aria-label="原始发行文件"></section></details>
 <noscript><p>请开启 JavaScript 读取当前下载目录。也可以使用上方通用 Skill，按接入说明操作。</p></noscript>
-<footer class="download-footer"><p>安装包不包含作者账号、密码、模型 Key 或个人游戏存档。公共资源保留原有许可；首次使用仍需自己的宿主和可用模型。</p><a href="/agent-api.html">Agent API 与接入帮助</a></footer></main></body></html>
+<footer class="download-footer"><p>安装包不包含作者账号、密码、模型 Key 或个人游戏存档。公共资源保留原有许可。Agent 工具仍需自己的宿主和可用模型；Java 真人客户端不需要模型 Key。</p><a href="/agent-api.html">Agent API 与接入帮助</a></footer></main></body></html>
