@@ -21,7 +21,8 @@ final class NativeYsm {
     private String diagnostic="not_observed";
     private record Context(ClassLoader loader,Class<?> attachment,Object modelType,Object ownedType,
                            Class<?> data,Method model,Method texture,Method disabled,Method mandatory,
-                           Class<?> packet,Constructor<?> request,Method select,Class<?> registry) {}
+                           Class<?> packet,Constructor<?> request,Method select,Class<?> registry,
+                           Method peerReady,Method metadata,Method send) {}
 
     private static Object invoke(Object value,String name) throws ReflectiveOperationException {
         return value.getClass().getMethod(name).invoke(value);
@@ -54,12 +55,17 @@ final class NativeYsm {
             &&method.getParameterTypes()[0]==packet&&method.getParameterTypes()[1].isInstance(body)).toList();
         if(methods.size()!=1)throw new IOException("Native selection signature mismatch");
         Object modelType=attachment(registry,id,"model_id");if(modelType==null)throw new IOException("Native model attachment missing");
+        Class<?> serverPlayer=Class.forName("net.minecraft.server.level.ServerPlayer",false,loader);
+        Class<?> transport=Class.forName("com.elfmcys.yesstevemodel.o0ooOoOO0Oo0OoOO00oo0ooo",false,loader);
         return new Context(loader,Class.forName("net.neoforged.neoforge.attachment.AttachmentType",false,loader),
             modelType,attachment(registry,id,"own_models"),data,
             data.getMethod("oOoo00O0o0oO0o0oO00OO0O0"),data.getMethod("OO000o0ooOooooOOOOO0Ooo0"),
             data.getMethod("O0o0OoOOooOo0O0OOoo0Oo00"),data.getMethod("OOo0O00Ooo00O0Ooo0OoOo0o"),
             packet,packet.getConstructor(String.class,String.class),methods.getFirst(),
-            Class.forName("com.elfmcys.yesstevemodel.O0Ooo000O0ooO00Oooo00oOO",false,loader));
+            Class.forName("com.elfmcys.yesstevemodel.O0Ooo000O0ooO00Oooo00oOO",false,loader),
+            transport.getMethod("oOo0OO0O0o000OO0O000oo0o",serverPlayer),
+            data.getMethod("oOo0OO0O0o000OO0O000oo0o",serverPlayer,boolean.class),
+            transport.getMethod("oOo0OO0O0o000OO0O000oo0o",Object.class,serverPlayer));
     }
     private Optional<?> existing(Object body,Object type) throws Exception {
         return (Optional<?>)body.getClass().getMethod("getExistingData",context.attachment).invoke(body,type);
@@ -80,6 +86,21 @@ final class NativeYsm {
     }
     String reason(){return reason==null?"YSM_NATIVE_STATE_UNAVAILABLE":reason;}
     String diagnostic(){return diagnostic.length()>200?diagnostic.substring(0,200):diagnostic;}
+    boolean peerReady(Player recipient){
+        try {return context!=null&&Boolean.TRUE.equals(context.peerReady.invoke(null,invoke(recipient,"getHandle")));}
+        catch(Exception invalid){return false;}
+    }
+    /** Send the original selected model to a negotiated viewer, including Numen bodies without a client. */
+    void synchronize(Player recipient,Player source) throws Exception {
+        if(!peerReady(recipient))throw new IOException("Original native protocol is not negotiated");
+        Object viewer=invoke(recipient,"getHandle"),body=invoke(source,"getHandle");
+        Object value=existing(body,context.modelType).orElseThrow(()->new IOException("Selected native model missing"));
+        // The pinned original serializer resolves the server catalog and emits
+        // the existing entity ID/model/texture. No capability or mandatory flag
+        // is fabricated for the actor, and no encrypted model is decoded here.
+        Object packet=((Optional<?>)context.metadata.invoke(value,body,false)).orElseThrow(()->new IOException("Selected native model is not in the original catalog"));
+        context.send.invoke(null,packet,viewer);
+    }
     Map<String,List<String>> catalog(Player player) throws Exception {
         State current=read(player);if(current==null)throw new IOException("Native state unavailable");
         Map<?,?> registry=(Map<?,?>)context.registry.getMethod("oOo0OO0O0o000OO0O000oo0o").invoke(null);

@@ -23,6 +23,9 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
     private final Map<UUID,String> sent=new HashMap<>();
     private final Map<UUID,Long> refreshed=new HashMap<>(),requested=new HashMap<>();
     private final Map<UUID,Transfer> transfers=new HashMap<>();
+    private record Pair(UUID viewer,UUID body) {}
+    private record NativeBinding(Object viewer,Object body,String revision,long at,int sends) {}
+    private final Map<Pair,NativeBinding> nativeBindings=new HashMap<>();
     private ModelCatalog models;
     private AutomaticAppearance automatic;
     private BedrockProjection projection;
@@ -57,7 +60,7 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
             getServer().getScheduler().runTaskTimer(this,this::transfer,2,2);
         }catch(Exception unavailable){getLogger().severe("Native appearance configuration unavailable; gameplay authentication is unchanged.");getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){states.clear();sent.clear();transfers.clear();getServer().getMessenger().unregisterIncomingPluginChannel(this);getServer().getMessenger().unregisterOutgoingPluginChannel(this);}
+    @Override public void onDisable(){states.clear();sent.clear();transfers.clear();nativeBindings.clear();getServer().getMessenger().unregisterIncomingPluginChannel(this);getServer().getMessenger().unregisterOutgoingPluginChannel(this);}
     @EventHandler public void quit(PlayerQuitEvent event){
         UUID id=event.getPlayer().getUniqueId();states.remove(id);sent.remove(id);refreshed.remove(id);transfers.remove(id);requested.remove(id);selections.left(id);automatic.left(id);
         byte[] bytes=JSON.toJson(Map.of("schemaVersion",1,"source",NativeYsm.SOURCE,"type","remove","epoch",epoch,"playerUuid",id.toString())).getBytes(StandardCharsets.UTF_8);
@@ -74,6 +77,7 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
         row.put("playerUuid",player.getUniqueId().toString());row.put("playerName",player.getName());
         row.put("ysmVersion",NativeYsm.VERSION);row.put("protocolVersion",NativeYsm.PROTOCOL);row.put("jarSha256",NativeYsm.JAR_SHA);
         row.put("available",value!=null&&!value.disabled());
+        row.put("nativeDecoderReady",nativeYsm.peerReady(player));
         if(value==null){row.put("reason",nativeYsm.reason());row.put("stateStatus","unsupported");row.put("message","原生YSM状态尚未确认；请稍后查询，未改变外观。");}
         else if(value.disabled()){row.put("reason","YSM_MODEL_DISABLED");row.put("stateStatus","unsupported");row.put("message","原生YSM外观已停用，当前使用普通皮肤。");}
         else {
@@ -111,6 +115,26 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
             }catch(Exception unavailable){/* Missing native catalog is not a default appearance. */}
         }
         long now=System.currentTimeMillis();
+        Set<Pair> activeBindings=new HashSet<>();
+        for(Player viewer:getServer().getOnlinePlayers()){
+            var receiver=observed.get(viewer.getUniqueId());
+            if(receiver==null||!nativeYsm.peerReady(viewer))continue;
+            int budget=32;
+            for(Player actor:actors){
+                var body=observed.get(actor.getUniqueId());
+                if(body==null||actor.getWorld()!=viewer.getWorld()||!viewer.canSee(actor)
+                        ||actor.getLocation().distanceSquared(viewer.getLocation())>128*128)continue;
+                Pair pair=new Pair(viewer.getUniqueId(),actor.getUniqueId());activeBindings.add(pair);
+                String revision=actor.getEntityId()+":"+body.model()+":"+body.texture()+":"+body.disabled()+":"+body.mandatory();
+                NativeBinding prior=nativeBindings.get(pair);
+                boolean same=prior!=null&&prior.viewer==receiver.body()&&prior.body==body.body()&&prior.revision.equals(revision);
+                if(same&&(prior.sends>=2||now-prior.at<2000))continue;
+                if(budget--<=0)continue;
+                try{nativeYsm.synchronize(viewer,actor);nativeBindings.put(pair,new NativeBinding(receiver.body(),body.body(),revision,now,same?prior.sends+1:1));}
+                catch(Exception unavailable){/* Never manufacture decoder readiness or change original model state. */}
+            }
+        }
+        nativeBindings.keySet().retainAll(activeBindings);
         StringBuilder revision=new StringBuilder();for(var entry:states.entrySet())revision.append(entry.getKey()).append(JSON.toJson(entry.getValue()));
         String serial=revision.toString();
         for(Player recipient:getServer().getOnlinePlayers()){
@@ -165,7 +189,7 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
                 }catch(Exception unavailable){source.sendMessage("原生状态或模型授权未确认；请查询实际模型，未绕过原生规则。");}
                 return true;
             }
-            source.sendMessage("AgentAppearanceNative 0.4.1；原生YSM2.6.5；实际模型见角色 /appearance status。");return true;
+            source.sendMessage("AgentAppearanceNative 0.4.2；原生YSM2.6.5；实际模型见角色 /appearance status。");return true;
         }
         if(!player.isOnline()){tell(player,"请先完成游戏登录并进入世界。");return true;}
         if(args.length==1&&args[0].equals("status")){

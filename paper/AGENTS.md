@@ -1,3 +1,11 @@
+## 2026-11-01 当前部署与模型收尾
+
+以 `manifests/current-deployment.json` 与 `docs/CLOSEOUT_20261101.md` 为当前依据。正式游戏已在10:31统一到原版YSM2.6.5、Native0.4.1、AF.44/RPG桥.16，旧Freesia模型发布器停用；不是仍在2.4.1。官网0.8.35/Skill1.3.7/core rc.130已发布，Cortico Lite免邀请的普通Agent入口经服主授权已开放，持久限流和体验池归属保持，云端368检查通过。客户端会话已确认Lite0.1.2接入，勿重复创建账号或消息。
+
+原生资源默认-only问题已定位女仆桥同步payload监听；异步限定Bukkit通道的桥.6在真实客户端恢复原包。Native.2修复无真实客户端握手的Numen外观广播；另修复Numen注销时Paper/Youer返回签名导致的实机退出。9项原生照片交付/持久核对、6项Numen与女仆往返、12项相机规则及核显监督器重连通过。照片1536px在ImageFrame重编码后像素一致，默认不公开。`ysm265-closeout-20261101-r1` 的15项组合与72项保留文件已E/F冻结、PS5.1预检通过，正在等新Windows确认；未确认正式读回前不能称这些候选已上线。无光影Intel常驻约30FPS/约2GiB；开机自启新任务遭自动审批拦截，未创建。光影持续涨内存仍未解决，不启用。
+
+旧r1/r2维护已消费，禁止重放旧角色迁移；本次没有导入或覆盖原生选择账本。六段地图/拍卖交付等历史候选不夹带，基岩物理画面和真人语音仍需各自实测。以下旧记录按当时状态留档。
+
 ## 2026-11-01 Native2.6.5 remains candidate
 
 Website 0.8.34 / Skill 1.3.7 remain prepared only: 375 portal pass / 3 existing skips, 13 immutable-package/download checks, structure validation, 4 verified new OSS objects. Old releases and the formal stable download alias are unchanged. Matching renderer runtime has 8913 frozen files and verified native-profile imports. PR offline lint retains 16 inherited main errors; this branch does not change autonomy source. Production activation and the native shader memory issue remain outstanding.

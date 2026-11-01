@@ -14,8 +14,9 @@ export function agentOnboarding({ origin, invite, skill, gameAddress, gameReady 
 // Render public release facts on the server so a fetch-only Agent needs no JS
 // to find the exact reviewed archive. Only public, operator-selected values are
 // interpolated; the invitation fragment never reaches this rendering path.
-export function renderJoinPage(template,{skill,downloadUrl,gameAddress}) {
+export function renderJoinPage(template,{skill,downloadUrl,gameAddress,publicSignup=false}) {
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const values={SKILL_VERSION:skill.version,SKILL_CORE:skill.sdkVersion,SKILL_SHA256:skill.sha256,SKILL_DOWNLOAD:downloadUrl,GAME_ADDRESS:gameAddress};
-  return template.replace(/\{\{(SKILL_VERSION|SKILL_CORE|SKILL_SHA256|SKILL_DOWNLOAD|GAME_ADDRESS)\}\}/g,(_,key)=>escape(values[key]));
+  const publicGuide=publicSignup?'<section id="public-agent-signup" class="gap-top"><h2>已有客户端？也可免邀请加入</h2><p>Cortico Lite 等客户端可直接创建自己的普通 Agent，先进入体验池，之后用本人已登录游戏角色认领。已有角色请沿用原账号，勿重复建号。</p><p>下载<a href="/agent-register.mjs" download>官方独立注册工具</a>，摘要见<a href="/api/v1/agent-access">接入 API 的 helper.sha256</a>。需要 Node.js 22.13+：</p><pre class="code">node agent-register.mjs join-plugin --portal https://mc.kangqiang.site --username ag_MyAgent --identity-file /私有目录/identity.json</pre><p>名称先确认未占用：ag_开头，总长4–16位，仅字母、数字、下划线，不用保留名。凭据只保存在本机私有文件；pending/unknown 查询原请求，不换名或另建身份。API ready 只表示建号完成，客户端仍须连接并等到 MC_AUTH_SUCCESS 且世界可用。每个网络每小时最多6个新角色、每日20个，体验池总容量100；重试保留同一身份。</p></section>':'';
+  return template.replace('<!--PUBLIC_AGENT_SIGNUP-->',publicGuide).replace(/\{\{(SKILL_VERSION|SKILL_CORE|SKILL_SHA256|SKILL_DOWNLOAD|GAME_ADDRESS)\}\}/g,(_,key)=>escape(values[key]));
 }

@@ -227,7 +227,8 @@ export function createPortal(config, options = {}) {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
         const template = await fs.readFile(path.join(config.publicDir, pathname==='/downloads.html'?'downloads.html':'join.html'), 'utf8');
         const bytes = Buffer.from(renderJoinPage(template,{skill:agentSkill,
-          downloadUrl:skillMirrorUrl(config,agentSkill)||agentSkill.url,gameAddress:config.publicGameAddress}));
+          downloadUrl:skillMirrorUrl(config,agentSkill)||agentSkill.url,gameAddress:config.publicGameAddress,
+          publicSignup:config.agentAccess.enabled===true&&config.agentAccess.publicSignup===true}));
         res.setHeader('Referrer-Policy', 'no-referrer');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': bytes.length });
         return res.end(req.method === 'HEAD' ? undefined : bytes);
@@ -338,12 +339,17 @@ export function createPortal(config, options = {}) {
       }
       if (await agentAppearanceRoute({ req, res, pathname, context: () => selfAppearance(req), appearance, jsonBody, respond, rate })) return;
       if (await agentPhotoRoute({ req, res, pathname, url, context: () => selfPhotos(req), uploads: photoUploads, respond, rate, jsonBody, origin: config.publicOrigin || req.portalOrigin.origin })) return;
-      const agentApi = /^\/api\/v1\/agent-access\/(register|sessions|status|activate|state|session)$/.exec(pathname);
+      const agentApi = /^\/api\/v1\/agent-access\/(register|public-register|sessions|status|activate|state|session)$/.exec(pathname);
       if (agentApi) {
         // A narrow non-browser API, isolated from cookie/CSRF authority. Its
         // tokens never authorize the normal account, admin or game-claim API.
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'AGENT_CLIENT_REQUIRED', '请从 Agent 本地接入程序调用 API，不要附带浏览器 Cookie 或 Origin');
         const action = agentApi[1], address = digest(rateAddress(req, config));
+        if(action==='public-register'&&req.method==='POST'){
+          rate('agent-public-register:'+address,12);
+          const result=await agentAccess.publicRegister(await jsonBody(req),address);
+          return respond(res,result.duplicate?200:201,result);
+        }
         if (action === 'register' && req.method === 'POST') {
           rate('agent-register:' + address, 12);
           const token = /^Bearer (qdi_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1];
