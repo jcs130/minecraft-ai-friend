@@ -6,6 +6,7 @@ import java.util.*;
 import java.io.*;
 import javax.imageio.ImageIO;
 import org.cloudburstmc.protocol.bedrock.codec.v975.Bedrock_v975;
+import org.cloudburstmc.protocol.bedrock.codec.v2225.Bedrock_v2225;
 import org.cloudburstmc.protocol.bedrock.data.skin.*;
 import org.cloudburstmc.protocol.bedrock.packet.PlayerSkinPacket;
 import io.netty.buffer.Unpooled;
@@ -34,10 +35,12 @@ public final class BedrockModelTest {
         UUID uuid=UUID.randomUUID();
         var serialized=SerializedSkin.builder().skinId(blue.skin().textureUrl()).skinResourcePatch(blue.geometry().geometryName()).skinData(ImageData.of(rgba)).capeData(ImageData.EMPTY).geometryData(blue.geometry().geometryData()).geometryDataEngineVersion("1.26.50").premium(true).trusted(true).overridingPlayerAppearance(true).build();
         PlayerSkinPacket packet=new PlayerSkinPacket();packet.setUuid(uuid);packet.setSkin(serialized);packet.setNewSkinName(blue.skin().textureUrl());packet.setOldSkinName("");packet.setTrustedSkin(true);
-        var codec=Bedrock_v975.CODEC;var buffer=Unpooled.buffer();
-        try {codec.tryEncode(codec.createHelper(),buffer,packet);var decoded=(PlayerSkinPacket)codec.tryDecode(codec.createHelper(),buffer,codec.getPacketDefinition(PlayerSkinPacket.class).getId());
-            check(decoded.getUuid().equals(uuid)&&decoded.getSkin().getGeometryData().equals(blue.geometry().geometryData())&&Arrays.equals(decoded.getSkin().getSkinData().getImage(),rgba),"pinned Bedrock 975 wire encode/decode retains UUID/original geometry/pixels");
-        } finally {buffer.release();}
+        for(var codec:List.of(Bedrock_v975.CODEC,Bedrock_v2225.CODEC)) {
+            var buffer=Unpooled.buffer();
+            try {codec.tryEncode(codec.createHelper(),buffer,packet);var decoded=(PlayerSkinPacket)codec.tryDecode(codec.createHelper(),buffer,codec.getPacketDefinition(PlayerSkinPacket.class).getId());
+                check(decoded.getUuid().equals(uuid)&&decoded.getSkin().getGeometryData().equals(blue.geometry().geometryData())&&Arrays.equals(decoded.getSkin().getSkinData().getImage(),rgba),"Bedrock "+codec.getProtocolVersion()+" wire encode/decode retains UUID/original geometry/pixels");
+            } finally {buffer.release();}
+        }
         var state=new BedrockState.Entry(uuid,777,UUID.randomUUID().toString(),asset.id(),"blue",asset.sha256());
         var ready=new BedrockAppearance.Ready(state,blue);
         check(BedrockAppearance.select(ready,uuid,777)==ready && BedrockAppearance.select(ready,uuid,778)==null && BedrockAppearance.select(ready,UUID.randomUUID(),777)==null,"other UUID and reused native entity ID cannot receive this model");

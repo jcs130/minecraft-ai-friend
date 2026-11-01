@@ -62,7 +62,7 @@ public final class BedrockAppearance implements Extension {
             JsonObject options=JsonParser.parseString(Files.readString(config)).getAsJsonObject();
             enabled=options.get("enabled").getAsBoolean();if(!enabled)return;
             // Reflection is intentional: Java inlines static final String constants.
-            if(!"git-master-f66329d".equals(GeyserImpl.class.getField("GIT_VERSION").get(null)) || !"1249".equals(GeyserImpl.class.getField("BUILD_NUMBER").get(null)))throw new IllegalStateException("YSM_BEDROCK_GEYSER_VERSION_MISMATCH");
+            if(!BedrockBuildPolicy.supported((String)GeyserImpl.class.getField("BUILD_NUMBER").get(null),(String)GeyserImpl.class.getField("GIT_VERSION").get(null)))throw new IllegalStateException("YSM_BEDROCK_GEYSER_VERSION_MISMATCH");
             Path modelConfig=Path.of(options.get("modelsConfig").getAsString());stateFile=Path.of(options.get("stateFile").getAsString());
             if(!modelConfig.isAbsolute() || !stateFile.isAbsolute())throw new IllegalStateException("YSM_BEDROCK_ABSOLUTE_PATH_REQUIRED");
             ysmVersion=options.has("ysmVersion")?options.get("ysmVersion").getAsString():"2.4.1";
