@@ -11,8 +11,28 @@ export function observationFailure(stage,error,now=Date.now()) {
   if(!failureStages.has(stage))throw Error('OBSERVER_FAILURE_STAGE');
   const type=['Error','TypeError','RangeError','SyntaxError','TimeoutError','AbortError','PartialReadError'].includes(error?.name)?error.name:'Error';
   const code=value=>typeof value==='string'&&/^(?:(?:OBSERVER|OBSERVATION|PAPER|SPECTATOR|NATIVE|ERR|UND_ERR)_[A-Z0-9_]{1,90}|ECONNRESET|ECONNREFUSED|ETIMEDOUT)$/.test(value)?value:null;
-  return {stage,reason:code(error?.message)||(type==='TimeoutError'?'OBSERVER_REQUEST_TIMEOUT':'OBSERVER_EXCEPTION'),
+  const result={stage,reason:code(error?.message)||(type==='TimeoutError'?'OBSERVER_REQUEST_TIMEOUT':'OBSERVER_EXCEPTION'),
     type,cause:code(error?.cause?.code),sceneReason:code(error?.sceneReason),at:new Date(now).toISOString()};
+  if(type==='PartialReadError'){
+    // Structural locations only: never retain the error message, directories,
+    // URLs, packet contents or arbitrary stack text in an operational status.
+    result.frames=String(error?.stack??'').split('\n').slice(1,9).flatMap(line=>{
+      const frame=[...line.matchAll(/\b([A-Za-z0-9_$-]{1,64}\.(?:mjs|cjs|js|ts)):(\d{1,7}):(\d{1,6})\b/g)].at(-1);
+      return frame?[{file:frame[1],line:Number(frame[2]),column:Number(frame[3])}]:[];
+    }).slice(0,6);
+  }
+  return result;
+}
+export function observationPacketDecoder(parsers){
+  let context=null;
+  return {reset(){context=null;},context(){return context&&{...context};},decode(bytes,state){
+    let id=0,shift=0,complete=false;
+    for(let i=0;i<Math.min(5,bytes.length);i++){const n=bytes[i];id+=(n&127)*2**shift;if(!(n&128)){complete=true;break;}shift+=7;}
+    context={state,bytes:bytes.length,packetId:complete?id:null};
+    const packet=parsers[state].parsePacketBuffer(bytes).data;
+    if(/^[a-z_]{1,64}$/.test(packet?.name??''))context.name=packet.name;
+    return packet;
+  }};
 }
 export function validateWorkerConfig(c) {
   for(const k of ['rendererRoot','assetDirectory','observerKeyFile','portalTokenFile'])if(!path.isAbsolute(c[k]??''))throw Error('OBSERVER_LOCAL_CONFIGURATION');
@@ -33,17 +53,17 @@ export async function readBoundedJSON(response,maxBytes) {
 /** Controls only observation hosts and their outbound publishers. No createBot,
  * login, command, RCON or gameplay action exists in this service. */
 export class ObservationWorker {
-  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
-    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,fetcher,now,log});
+  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,packetDecoder=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
+    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,packetDecoder,fetcher,now,log});
     this.sources=new Map();this.lastPortalAt=0;this.lastPoll=0;this.lastLog=null;this.closed=false;
     this.sampleIntervalMs=config.sampleIntervalMs??50;this.authorityInFlight=null;this.sampleInFlight=null;
     this.lastSampleAt=null;this.sampleCount=0;this.sampleDurationMs=null;this.lifecycle=new AbortController();
     this.lastFailure=null;
   }
   report(reason){if(reason!==this.lastLog){this.log(reason);this.lastLog=reason;}}
-  recordFailure(stage,error){this.lastFailure=observationFailure(stage,error,this.now());this.log('OBSERVER_FAILURE '+JSON.stringify(this.lastFailure));}
+  recordFailure(stage,error){this.lastFailure=observationFailure(stage,error,this.now());if(stage==='scene'&&this.lastFailure.type==='PartialReadError'&&this.packetDecoder)this.lastFailure.lastPacket=this.packetDecoder.context();this.log('OBSERVER_FAILURE '+JSON.stringify(this.lastFailure));}
   nextSampleDelayMs(){return Math.max(0,this.sampleIntervalMs-(this.now()-(this.lastSampleAt??this.now())));}
-  status(){return {schemaVersion:1,readOnly:true,closed:this.closed,lastFailure:this.lastFailure,sampling:{intervalMs:this.sampleIntervalMs,requests:this.sampleCount,
+  status(){return {schemaVersion:1,errorDiagnosticsVersion:1,readOnly:true,closed:this.closed,lastFailure:this.lastFailure,sampling:{intervalMs:this.sampleIntervalMs,requests:this.sampleCount,
     lastSampleAt:this.lastSampleAt,lastDurationMs:this.sampleDurationMs,authorityPending:!!this.authorityInFlight},sources:[...this.sources.values()].map(source=>{
     const host=source.view.host.status(),coverage=host.viewer?.terrain?.coverage;
     const appearance=this.appearanceSource?.binding({uuid:source.job.playerUuid,entityId:host.identity?.entityId});
@@ -147,6 +167,7 @@ export class ObservationWorker {
         const row=reply.targets.find(r=>r.uuid===source.job.playerUuid);
         if(!row?.available||row.lease!==source.localLease){await this.retire(source.job.id);continue;}
         try{
+          this.packetDecoder?.reset();
           // Model conversion/download must never delay world, inventory or pose.
           if(this.appearanceSource)void this.appearanceSource.forPlayer(row.player).catch(()=>{});
           ({after:source.after,generation:source.generation}=source.view.ingest(row));
@@ -169,11 +190,12 @@ export async function createObservationWorker(input,options={}) {
   const [{preparePaperObservation},{startSpectatorPublisher}]=await Promise.all([moduleAt('host/paper-observation.mjs'),moduleAt('host/spectator-publisher.mjs')]);
   const require=createRequire(import.meta.url),protocol=require('minecraft-protocol'),registry=require('minecraft-data')('1.21.1'),nbt=require('prismarine-nbt');
   const parsers=Object.fromEntries(['play','configuration'].map(state=>[state,protocol.createDeserializer({version:'1.21.1',state,isServer:false,noErrorLogging:true})]));
+  const packetDecoder=observationPacketDecoder(parsers);
   const appearanceSource=config.appearance?new ObservationAppearanceSource({config:config.appearance,decodeBundle:(await moduleAt('host/viewer-ysm-assets.mjs')).decodeYsmBundle}):null;
   const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,terrainDeltas:config.terrainDeltas===true,appearanceSource,
     serverItemCatalogFile:config.serverItemCatalogFile,serverItemCatalogSha256:config.serverItemCatalogSha256,bundledAppearanceCatalogFile:config.bundledAppearanceCatalogFile||''});
   return new ObservationWorker({config,prepared,registry,appearanceSource,simplifyNBT:nbt.simplify,
-    decodePacket:(bytes,state)=>parsers[state].parsePacketBuffer(bytes).data,startPublisher:startSpectatorPublisher,...options});
+    decodePacket:(bytes,state)=>packetDecoder.decode(bytes,state),packetDecoder,startPublisher:startSpectatorPublisher,...options});
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const file=process.argv[2];if(!path.isAbsolute(file||''))throw Error('Use an absolute private observer configuration file');

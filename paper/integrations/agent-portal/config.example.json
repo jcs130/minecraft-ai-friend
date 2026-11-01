@@ -3,6 +3,14 @@
   "port": 8790,
   "siteName": "千灯纪",
   "sourceMode": "local",
+  "sceneDirectory": null,
+  "sceneStorage": {
+    "enabled": false,
+    "bucket": "",
+    "region": "",
+    "roleName": "",
+    "prefix": "photo-scenes/"
+  },
   "cloudAccounts": {
     "enabled": false,
     "tokenHash": "",

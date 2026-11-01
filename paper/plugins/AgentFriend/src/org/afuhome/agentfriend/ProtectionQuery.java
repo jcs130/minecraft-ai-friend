@@ -78,6 +78,7 @@ final class ProtectionQuery {
         String reason = data.get("reason").getAsString();
         if (reason.startsWith("unknown_")) return data.has("nextAction") ? data.get("nextAction").getAsString() : "权限未知，暂缓操作并重新查询。";
         if (reason.endsWith("unavailable") || data.has("boundsIncomplete")) return "权限数据未就绪，停止操作并联系服主。";
+        if (reason.equals("worldguard") && data.has("regionGuidance")) return data.get("regionGuidance").getAsString();
         if (reason.equals("no_known_protection")) return "可尝试操作；最终以实际操作结果为准。";
         if (reason.equals("land_notice_board")) return "右键公告牌查看归属和协作者；位置调整请联系服主。";
         if (reason.equals("site_dungeon")) return "副本建筑永久禁止拆改；沿原门和楼梯通行，路线用 /mycli dungeon layout。";

@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import { loadConfig } from '../src/config.mjs';
 import { Store } from '../src/store.mjs';
@@ -31,7 +32,7 @@ catch (error) {
 }
 await lock.writeFile(String(process.pid));
 const store = new Store(config.dataDir), game = new GameData(config, store.salt), world = new WorldCatalog(config, game, store);
-const photoReader = new PhotoReader(config), uploaded = new Set();
+const photoReader = new PhotoReader(config), uploaded = new Set(),scenesUploaded=new Set(),assetsUploaded=new Set();
 const archiveReader=new ArchiveReader(config,store);
 let appearanceTimer, appearanceBusy, lastAppearanceReport;
 let sequence = 0, stopping = false, lastReport;
@@ -92,6 +93,27 @@ try {
           const upload = await fetch(new URL('/api/v1/internal/photos/' + photo.metadata.id, endpoint), { method: 'PUT', redirect: 'error', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
           if (!upload.ok) throw Object.assign(Error('Photo synchronization rejected'), { status: upload.status });
           uploaded.add(key);
+        }
+        for(const photo of photos){
+          if(!photo.sceneFile)continue;const key=photo.metadata.id+':'+photo.metadata.scene.sha256;
+          try{
+            if(Array.isArray(result.wantedScenes)?result.wantedScenes.includes(photo.metadata.id):!scenesUploaded.has(key)){
+              const bytes=await fs.readFile(photo.sceneFile),response=await fetch(new URL('/api/v1/internal/photo-scenes/'+photo.metadata.id,endpoint),{method:'PUT',redirect:'error',headers:{Authorization:'Bearer '+token,'Content-Type':'application/gzip'},body:bytes,signal:AbortSignal.timeout(60000)});
+              if(!response.ok)throw Object.assign(Error('Scene synchronization rejected'),{status:response.status});scenesUploaded.add(key);
+            }
+            for(const asset of photo.sceneResources??[]){
+              if(asset.storage!=='content-addressed-private'||assetsUploaded.has(asset.sha256))continue;
+              if(!path.isAbsolute(settings.sceneResourcesDirectory??'')||!settings.sceneObjectOrigin)throw Error('Scene resource destination is not configured');
+              const r=await fetch(new URL('/api/v1/internal/photo-scenes/'+photo.metadata.id+'/assets/'+asset.sha256,endpoint),{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(15000)});if(!r.ok)throw Object.assign(Error('Scene resource synchronization rejected'),{status:r.status});
+              const target=await r.json();if(!target.present){
+                const url=new URL(target.uploadUrl);if(url.protocol!=='https:'||url.origin!==settings.sceneObjectOrigin)throw Error('Scene resource destination mismatch');
+                const root=await fs.realpath(settings.sceneResourcesDirectory),file=await fs.realpath(path.join(root,asset.sha256));if(path.dirname(file)!==root||(await fs.stat(file)).size!==asset.bytes||asset.bytes>128*1024*1024)throw Error('Scene resource path or size mismatch');
+                const bytes=await fs.readFile(file);if(createHash('sha256').update(bytes).digest('hex')!==asset.sha256)throw Error('Scene resource digest mismatch');
+                const upload=await fetch(url,{method:'PUT',redirect:'error',headers:{...target.headers,'Content-Length':String(bytes.length)},body:bytes,signal:AbortSignal.timeout(240000)});if(!upload.ok&&upload.status!==409)throw Error('Scene resource object upload failed');
+                const check=await fetch(new URL('/api/v1/internal/photo-scenes/'+photo.metadata.id+'/assets/'+asset.sha256,endpoint),{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(15000)});if(!check.ok||!(await check.json()).present)throw Error('Scene resource object verification failed');
+              }assetsUploaded.add(asset.sha256);
+            }
+          }catch(error){if([401,403].includes(error.status))throw error;archivePending=true;}
         }
         report(archivePending?'角色与照片同步已连接；档案保留待补传。':'云端资料同步已连接。');
       }
