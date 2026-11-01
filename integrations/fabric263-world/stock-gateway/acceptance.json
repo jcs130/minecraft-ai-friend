@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "scope": "stock_mineflayer_server_side_gateway_recorded_cases",
+  "acceptedForRecordedCases": true,
+  "allModFunctionsAccepted": false,
+  "client": {
+    "package": "mineflayer", "version": "4.39.0", "extraPlugins": [],
+    "unmodifiedPublishedFilesVerified": 188,
+    "archiveSha256": "733260f73949ff59858c189e211ed9d3bd433adfeaeb32b12e11c34a00883dd7",
+    "entry": "require('mineflayer').createBot",
+    "defaultAutoDetectNegotiatedVersion": "1.21.1",
+    "requiresCustomClientOrRegistryInjection": false
+  },
+  "deployment": {
+    "host": "127.0.0.1", "stockPort": 39786, "internalCarrierPort": 39785,
+    "nativeGamePort": 39781, "nativeMinecraft": "26.3", "nativeProtocol": 777,
+    "supervised": true, "immutableRuntimeSources": true,
+    "currentRelease": "managed-main-r2", "productionSourceFilesVerified": 10,
+    "serverTopLevelJars": 32, "clientTopLevelJars": 31,
+    "bodyJarSha256": "69b3842ec6fc11d96a79a4138e6aa6a62d3a08e2718a13e9a7ce84d71354ac05",
+    "proxyVersion": "3.4.14", "proxySha256": "2894bbfb2f4342f8fde887af6c689313efd5b0e46a8006775eea0e21e2948ab5",
+    "publicAuthenticationOrFirewallChanged": false,
+    "existingSaoPortsUnchanged": [28976, 28977],
+    "originalNativeConnectorStillAvailable": true
+  },
+  "tests": {"gatewayNodePassed": 12, "existingNativeAdapterNodePassed": 24, "deploymentPythonPassed": 35, "preparationPythonPassed": 5, "skipped": 0, "deterministicBodyBuilds": 2},
+  "liveCases": [
+    {"case": "official_client_login_chunks_body_status", "evidence": "stock-gateway-read-4", "passed": true},
+    {"case": "automatic_version_selection", "evidence": "stock-auto-gateway-1", "passed": true},
+    {"case": "ordinary_movement_server_position_verified", "evidence": "stock-walk-1", "passed": true},
+    {"case": "dig_and_natural_item_pickup", "evidence": ["stock-dig-1", "stock-pickup-1"], "passedAfterReconciliation": true, "originalEarlyPickupCheckRetainedAsFailed": true, "digWasNotReplayed": true},
+    {"case": "real_native_rice_and_planks_chest_clicks", "evidence": "stock-chest-1", "passed": true, "samePaperCarrierItemsRemainDistinct": true},
+    {"case": "ordinary_inventory_craft", "evidence": "stock-craft-1", "passed": true, "actualResult": "4 oak planks consumed, 1 crafting table produced"},
+    {"case": "actual_native_pot_menu_and_input", "evidence": "stock-pot-2", "passed": true, "actualInput": "farmersdelight:rice x4", "cookedMealClaimed": false},
+    {"case": "return_to_chest", "evidence": "stock-return-1", "passed": true, "actualStored": "farmersdelight:rice x4"},
+    {"case": "reconnect_inventory", "evidence": "stock-reconnect-1", "passed": true},
+    {"case": "private_reads_quest_view_pagination_and_range", "evidence": "stock-privacy-managed-1", "passed": true, "checks": 6},
+    {"case": "restart_same_frozen_gateway", "evidence": "stock-managed-restart-1", "passed": true, "oldStopMarkerDidNotStopNewBoot": true},
+    {"case": "stop_refused_with_live_body", "passed": true, "noStopMarkerWritten": true},
+    {"case": "empty_gateway_graceful_stop", "passed": true, "childExitCodes": [0, 0], "gameJvmPreserved": true},
+    {"case": "installed_main_world_stock_client", "evidence": "stock-main-installed-1", "passed": true, "actualFloor": "minecraft:smooth_sandstone", "nativeStateId": 15328, "stockStateId": 11307, "actualHealth": 20},
+    {"case": "existing_packed_sdk_on_updated_game", "evidence": "native263-with-stock-server-1", "passed": true},
+    {"case": "main_world_after_final_cold_restart", "evidence": "stock-main-restarted-1", "passed": true},
+    {"case": "final_immutable_release_matches_source_and_stock_login", "evidence": "stock-main-final-r2-1", "passed": true, "sourceFilesMatched": 10},
+    {"case": "query_existing_failed_action_without_replay", "evidence": "ledger-read-only-check", "passed": true, "exitCode": 2, "inventedSuccess": false}
+  ],
+  "coldWorldVerification": {
+    "directRegionAndPlayerNbtRead": true,
+    "riceInChest": 4, "riceInCookingPot": 4, "riceInPlayerInventory": 0,
+    "playerInventory": {"minecraft:dirt": 1, "minecraft:oak_planks": 4, "minecraft:crafting_table": 1},
+    "playerGameMode": "survival", "playerHealth": 20,
+    "fixtureAdministrativeSetupIsNotAgentGameplay": true
+  },
+  "verifiedTwoCopyColdBackups": {
+    "mainBefore": "802e009898db662ff8e3fc9ea7f28e3b2f3503d865d1d6d491eabd1a706155dd",
+    "mainAfter": "83c5eb6f062428aefdc6a1171512906d42b78c4e3f2f4378ef99a53ebc672f34",
+    "qaBefore": "e28339ac5d76dc8070ae3d84a795f8dfc3be2b4662eabe399b08f159cecf7545",
+    "qaAfter": "ce0212e5e10a9e0185d1e5eda3343421fb557d631c01d3eade31d9cd5c0749de"
+  },
+  "limits": [
+    "Loopback only; not a public authenticated rollout",
+    "Vanilla carrier names and intermediate numeric IDs are not native identities",
+    "417 native states use explicitly unknown conservative collision carriers",
+    "Private slot permission fields remain null when not exported",
+    "Item components are packet overrides, not complete defaults; unexported defaultComponents remain null",
+    "Full spell actions, trinket writes, arbitrary mod GUIs and custom codecs are not accepted",
+    "Original recipe-book UI, advancements UI, sounds, particles and arbitrary native block-entity renderer packets are not forwarded",
+    "Not a 1:1 visual acceptance and not a resident model or long-duration autonomous-life acceptance",
+    "Standard chunk synchronization remains; bounded block queries are not server-wide anti-xray filtering",
+    "Original direct-native stock-client failure report is preserved separately"
+  ]
+}

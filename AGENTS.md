@@ -1,3 +1,13 @@
+## 2026-11-01 官方 Mineflayer 零额外客户端插件入口
+
+26.3 实验世界新增服务端兼容入口：127.0.0.1:39786（官方 Mineflayer 4.39.0，自动选择 1.21.1）→ 私有 ViaProxy 3.4.14 → 39785 原生数据转换 → 原游戏 39781。Agent 不安装连接器、不改 node_modules；188 个官方包文件逐字校验。真实物品 ID 在标准 custom_data.maw_native.id，/agent help 及 /agent <requestId> status|inventory|menu|items|blocks|recipes|recipe_book|spells|attributes|views|view|block 私有按需查询；12项/12KiB，位置和近距目标由服务端主线程读取，禁止用客户端自报位置扩展查询。普通原版名称是明确载体，不等于原生身份；中间数字 ID 与客户端数字 ID 分域。
+
+来源 integrations/fabric263-world/stock-gateway。无OP生存实测自动登录、实际地面/生命、移动、挖掘并自然拾取、箱中真实稻米/木板取放、合成工作台、openBlock打开农夫乐事45槽锅并投入4稻米、另4回箱、重连保持、原生本人Village Quest视图、跨账号隔离、无广播、超距拒绝和分页。冷盘Region/玩家NBT确认锅4+箱4，玩家泥土1/木板4/工作台1/生存20血；原早查掉落和openContainer白名单失败保留，未重放挖掘。12网关+24原生Node、35部署+5准备Python通过；只读组件两次构建摘要一致，普通客户端文件未改。旧打包核心SDK在新增只读组件后实连仍通过。
+
+服务端32/客户端31个顶层JAR。新增maw-stock263-0.1.0.jar（69b3842e…1354ac05）仅本人只读查询，无动作/命令/OP能力；原maw-native263保持。网关由manage_gateway.py持有自有Node/Java进程及冻结源码，配置 E:/MC/runtime/fabric263-lab/stock-gateway-20261101/managed-main-r2.local.json，R2冻结10个生产文件与源码核对且官方客户端再次实连通过；在线拒绝停、正常退出[0,0]、旧stop请求绑定bootId、同配置重启及旧标记不误停均实测，独立QA已退出0。游戏仍由原manage.py管理。发布前E/F冷备before-stock-main.zip摘要802e0098…706155dd；私有证据在同名stock-gateway-20261101运行目录。
+
+只开放回环；SAO/千灯纪28976/28977、路由、防火墙、正式认证、人设/记忆/模型循环未动。原生39781不等于官方库能直接登录，不覆盖历史直连失败记录。417状态碰撞载体unknown、任意附加GUI/饰品写入/完整法术/特殊配方书写入/全部codec/声音粒子及1:1渲染仍未全验。真实模组机器用公开openBlock/activateBlock；openContainer有内置原版白名单。按真实ID选准确clientSlot，不按共享纸类型猜物品。权限未知留null；失败或断线先核原库存/位置，不重放测试动作。源码/锁/去标识结果入Git，世界/私有配置/日志/供应商资源不入Git。
+
 ## 2026-11-01 Fabric 26.3 中文补全已部署
 
 仅更新独立Fabric26.3实验服/匹配客户端，SAO与千灯纪、网络、认证和原Agent循环未动。源码 integrations/fabric263-world：7,003项补全（5,763界面覆盖、25内置任务的50标题描述、1,190自动委托语料），另20项旧委托文字迁移。保留变量、命令、ID、按键与作者署名。实际客户端逐条读原始语言表0差异，原生冒险日志/任务书中文截图；38个任务含当前5项自动委托有中文。见LOCALIZATION.md与localization-acceptance-20261101.json，31项回归通过。

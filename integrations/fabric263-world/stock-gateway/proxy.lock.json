@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "name": "ViaProxy",
+  "version": "3.4.14",
+  "filename": "ViaProxy-3.4.14.jar",
+  "url": "https://github.com/ViaVersion/ViaProxy/releases/download/v3.4.14/ViaProxy-3.4.14.jar",
+  "sha256": "2894bbfb2f4342f8fde887af6c689313efd5b0e46a8006775eea0e21e2948ab5",
+  "source": "https://github.com/ViaVersion/ViaProxy/releases/expanded_assets/v3.4.14",
+  "license": "GPL-3.0",
+  "maxBytes": 73400320
+}

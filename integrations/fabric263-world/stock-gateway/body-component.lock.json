@@ -1,0 +1,6 @@
+{
+  "filename": "maw-stock263-0.1.0.jar",
+  "sha256": "69b3842ec6fc11d96a79a4138e6aa6a62d3a08e2718a13e9a7ce84d71354ac05",
+  "sourceSha256": {"BodyBridge.java": "f888adf8350e479df0820eef4a7b9b572eaa371bf47263e6af77497c8d8f33d6"},
+  "sides": ["server"]
+}

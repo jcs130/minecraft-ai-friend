@@ -102,7 +102,7 @@ def main():
         files["deployment/" + name] = HERE / name
     for path in (HERE / "localization").rglob("*.json"):
         files["deployment/" + path.relative_to(HERE).as_posix()] = path
-    for path in (HERE / "mineflayer").rglob("*"):
+    for path in (p for root in (HERE / "mineflayer", HERE / "stock-gateway") for p in root.rglob("*")):
         if any(p in ("node_modules", "vendor", "__pycache__") for p in path.relative_to(HERE).parts):
             continue
         if path.is_file() and (path.suffix in (".py", ".java", ".cjs", ".mjs", ".json", ".md") or path.name == "LICENSE") and ".local." not in path.name:

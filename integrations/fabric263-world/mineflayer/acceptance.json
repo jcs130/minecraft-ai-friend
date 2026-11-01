@@ -8,9 +8,16 @@
     "nativeConnector": {"acceptedForRecordedCases": true, "requiresClientConnector": true},
     "unmodifiedPublishedMineflayer": {
       "accepted": false, "extraClientPluginsAllowed": false,
+      "connectionMode": "direct_native_port_39781",
       "checkedVersion": "4.39.0", "directLogin": false, "nativeInformationVerified": false,
       "reasons": ["published_stack_has_no_26.3_support", "fabric_mod_registry_and_native_codecs_need_implementation"],
       "evidence": "stock-acceptance-20261101.json"
+    },
+    "serverSideStockGateway": {
+      "acceptedForRecordedCases": true, "unmodifiedClient": true, "extraClientPlugins": [],
+      "clientVersion": "4.39.0", "entry": "127.0.0.1:39786", "backendPort": 39781,
+      "clientProtocol": "1.21.1", "backendProtocol": "26.3",
+      "evidence": "../stock-gateway/acceptance.json"
     }
   },
   "deployment": {

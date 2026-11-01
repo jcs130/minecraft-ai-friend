@@ -1,6 +1,6 @@
 # Fabric 26.3 原生 Mineflayer 接入
 
-**原版 npm Mineflayer、零额外客户端插件直连：尚未支持。** 下列通过项属于配套连接器的验收，不是原版 `require('mineflayer').createBot` 的验收。2026-11-01 用完整文件校验过的官方 4.39.0 复测，显式 26.3 和自动版本均失败；只补协议、不加载连接器也被 Fabric 注册同步拒绝。详细证据、原生 ID 对照及复测命令见 [原版 Mineflayer 检查](STOCK_MINEFLAYER.md)。
+**原版 npm Mineflayer 不装额外客户端插件，请用新的 [服务端兼容入口 39786](../stock-gateway/README.md)。** 已在官方 4.39.0 上实测自动登录、普通动作、原生物品／锅菜单及私有查询。这里仍记录原生 39781 配套连接器；原版库直连 39781 尚未支持，不与新入口混淆。历史诊断与原生 ID 对照见 [原版直连检查](STOCK_MINEFLAYER.md)。
 
 这是直接使用 Java **26.3 / protocol 777** 的连接组件，没有协议降级网关或原版物品替身。上游仍在开发 26.3 支持，因此不能只给普通 npm Mineflayer 填 `version: "26.3"` 就当适配完成。
 

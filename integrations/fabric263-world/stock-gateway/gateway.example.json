@@ -1,0 +1,15 @@
+{
+  "labOnly": true,
+  "bindHost": "127.0.0.1",
+  "backendHost": "127.0.0.1",
+  "bindPort": 39785,
+  "stockPort": 39786,
+  "backendPort": 39781,
+  "runtime": "E:/MC/runtime/fabric263-lab/mineflayer/runtime-r4",
+  "maxConnections": 4,
+  "runDir": "E:/MC/runtime/fabric263-stock-your-release",
+  "node": "C:/path/to/node.exe",
+  "java": "E:/MC/runtime/fabric263-lab/java25/jdk-25.0.5+8/bin/java.exe",
+  "viaJar": "E:/MC/runtime/your-verified-proxy/ViaProxy-3.4.14.jar",
+  "backendDeployment": "E:/your-checkout/integrations/fabric263-world/deployment.local.json"
+}

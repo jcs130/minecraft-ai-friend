@@ -77,7 +77,8 @@ function parseConfiguration (channel, data) {
   return { ...def, value }
 }
 
-function attachModConfiguration (client, getNative) {
+function attachModConfiguration (client, getNative, { extraPlayChannels = [] } = {}) {
+  if (extraPlayChannels.length > 4 || extraPlayChannels.some(channel => channel !== 'maw_stock:snapshot')) throw new Error('unreviewed_extra_play_channel')
   const data = {}
   // ExactVersionPayload in the pinned Village Quest 2.6.3 is a unit codec,
   // identified by hex(UTF-8 version). This adapter implements that codec only
@@ -103,7 +104,7 @@ function attachModConfiguration (client, getNative) {
           const version = r.varint(); const phase = r.string(); const n = r.varint()
           if (data.commonProtocolVersion !== 1 || version !== 1 || phase !== 'play' || n > 256) throw new Error('invalid_common_channel_registration')
           data.serverPlayChannels = Array.from({ length: n }, () => r.string()); r.end()
-          const accepted = [villageVersionChannel, ...viewChannels(getNative()), 'maw_agent:menu_state', 'fabric-menu-api-v1:open_screen']
+          const accepted = [villageVersionChannel, ...viewChannels(getNative()), 'maw_agent:menu_state', 'fabric-menu-api-v1:open_screen', ...extraPlayChannels]
           client.write('custom_payload', { channel: packet.channel,
             data: Buffer.concat([varint(1), utf('play'), varint(accepted.length), ...accepted.map(utf)]) })
         }
