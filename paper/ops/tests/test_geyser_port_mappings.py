@@ -38,5 +38,29 @@ class MappingTests(unittest.TestCase):
     def test_public_or_loopback_destination_rejected(self):
         for client in ['8.8.8.8','127.0.0.1']:
             with self.assertRaises(ValueError):mapping.reconcile(Router().invoke,client,True)
+    def test_legacy_public_port_forwards_to_actual_internal_listener(self):
+        router=Router();result=mapping.reconcile(router.invoke,'192.0.2.10',True,[19140])
+        self.assertEqual(len(result['mappings']),4)
+        self.assertEqual(router.values[(19140,'TCP')]['NewInternalPort'],'19132')
+        self.assertNotIn((19140,'UDP'),router.values)
+    def test_alias_conflict_prevents_all_router_writes(self):
+        router=Router();router.values[(19140,'TCP')]={'NewInternalClient':'192.0.2.10','NewInternalPort':'8080'}
+        with self.assertRaisesRegex(RuntimeError,'another destination'):mapping.reconcile(router.invoke,'192.0.2.10',True,[19140])
+        self.assertEqual(router.adds,[])
+    def test_alias_inspection_failure_prevents_all_router_writes(self):
+        router=Router();router.values[(19140,'TCP')]={'errorCode':'501'}
+        with self.assertRaisesRegex(RuntimeError,'Cannot inspect'):mapping.reconcile(router.invoke,'192.0.2.10',True,[19140])
+        self.assertEqual(router.adds,[])
+    def test_alias_with_router_limited_lease_is_renewed_without_port_drift(self):
+        router=Router();mapping.reconcile(router.invoke,'192.0.2.10',True,[19140]);router.adds.clear()
+        mapping.reconcile(router.invoke,'192.0.2.10',True,[19140])
+        alias=next(row for row in router.adds if row['NewExternalPort']==19140)
+        self.assertEqual(alias['NewInternalPort'],19132)
+        self.assertEqual(alias['NewLeaseDuration'],0)
+    def test_invalid_alias_config_does_not_write_router(self):
+        for aliases in [None,'19140',[True],[0],[-1],[65536],[19132],[19140,19140],list(range(19140,19145))]:
+            router=Router()
+            with self.assertRaises(ValueError):mapping.reconcile(router.invoke,'192.0.2.10',True,aliases)
+            self.assertEqual(router.adds,[])
 
 if __name__=='__main__':unittest.main()

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "release": "client-full-compat-20261102-r1",
+  "state": "deployed-with-open-client-acceptance",
+  "deployedAt": "2026-11-02T04:38:00.5225654+08:00",
+  "document": "paper/docs/FULL_CLIENT_COMPAT_RELEASE_20261102.md",
+  "deployedGameSourceMain": "44feb3245a4c35a0e98e40240b0126582fbfe1fa",
+  "versions": {
+    "kernel": "Youer1.21.1 build920 / NeoForge21.1.252",
+    "AgentFriend": "0.4.47.48-rpg",
+    "QiandengjiRpg": "0.2.17",
+    "LoginGuard": "0.1.10",
+    "Geyser": "2.12.1-b1280",
+    "ViaVersion": "5.12.2",
+    "ViaBackwards": "5.12.2",
+    "AgentAppearanceBedrock": "0.2.3",
+    "nativeYsm": "2.6.5"
+  },
+  "artifactSha256": {
+    "AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd",
+    "QiandengjiRpg-0.2.17.jar": "b852c4fc4c991c51fdf01b002d97a744d3098e4be53b855b7fa066c1aa3a49ea",
+    "Geyser-Spigot.jar": "0b94c8a92660071115eeae10d9999ad3666bde01c1123147c8e3cff9852f3729",
+    "ViaVersion.jar": "24e4876fefe73e08a4c87cd6c457ee0916e62dd69656631caf41e26f909d504b",
+    "ViaBackwards.jar": "9a148a80ea22074f4bd1626cdbe254a4cd998bf44e7ceaff4e285a1b6b35da42",
+    "AgentAppearance-Bedrock-0.2.3.jar": "33715091b86ffabe6348b4d69bbe33014741c4b13b7c2f7dbba224abae590e1f",
+    "LoginGuard-0.1.10.jar": "77a88a17a02458d7005187453d63e5436694e9deadb588214e0f01b78665e2cb"
+  },
+  "deployment": {
+    "normalStopAndStart": true,
+    "noticeSeconds": [
+      180,
+      60,
+      10
+    ],
+    "coldGameAndAuthenticationCopiesVerifiedOnBothDisks": true,
+    "originalRecoveryPointRefreshed": "20261101-040028",
+    "previousRuntimeRetained": "client-full-compat-before-refresh-20261102-r1",
+    "preservedCharacterFiles": 664,
+    "newScheduledTasks": false,
+    "physicalBedrockVerified": false
+  },
+  "verification": {
+    "formalChecks": 16,
+    "nativeCameraAuthenticatedInProduction": true,
+    "unmodifiedMineflayerInProduction": {
+      "version": "1.21.1",
+      "libraryVersion": "4.37.1",
+      "authSuccess": true,
+      "worldStateAvailable": true,
+      "serverStatusReceived": true,
+      "physicsTicks": 43,
+      "originalUuidPreserved": true
+    },
+    "additionalIsolatedJavaVersions": [
+      "1.20.6",
+      "1.21.4"
+    ],
+    "officialNeoForgeWithTlmAndYsmIsolated": true,
+    "sourceMainCiChecksPassedBeforeRelease": 5
+  },
+  "bedrockPublicEntry": {
+    "host": "micro.kangqiang.site",
+    "port": 19140,
+    "signaling": "TCP19140 to internal TCP19132",
+    "webRtcUdpPort": 19133,
+    "legacyRakNetRetained": true,
+    "publicMetadataHttpStatus": 200,
+    "bedrockProtocol": 2225,
+    "publicProbeOrigin": "existing Hong Kong website host",
+    "aliasRenewedByExistingTask": true,
+    "networkBoundaryTests": 12,
+    "helperSha256": "c6c4e1b2bf8cbb43af222306ab84c8cd4703f1b781fd4f920271290518c0d609",
+    "physicalAndroid2660Join": "pending owner retry",
+    "sameLanPublicHairpin": "connection refused from local host; use LAN address/internal port for comparison"
+  },
+  "scope": {
+    "guildCartographerSynchronousStructureSearchFixed": true,
+    "cliRecoverySuggestionsInstalled": true,
+    "suggestionsAutoExecute": false,
+    "neuralSuggestionProviderEnabled": false,
+    "authenticationBackendLoopbackOnly": true,
+    "authenticationBackendHeapMiB": 1536,
+    "accountOrInventoryMigration": false,
+    "sixSegmentDungeonCandidatePublished": false,
+    "unprovenShipsSelectorPrototypePublished": false
+  },
+  "stillOpen": [
+    "Android26.60 actual login after the public19140 signaling correction",
+    "remote live observer client repeats backend packet-decode disconnect; exact offending packet not yet captured",
+    "original remote modded client acceptance and complete rendering/animation parity"
+  ]
+}
