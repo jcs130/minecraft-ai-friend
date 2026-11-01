@@ -1,3 +1,7 @@
+## 2026-11-01 Native camera without shaders
+
+The user asked about disabling shaders. Explicit nativeShaders:false now requires actual shader-off telemetry and keeps all identity/model/UI/lease guards. The 1536-square, 6-chunk Intel run completed 601s and exited normally: peak 1.937 GiB, sampled median 30 FPS at cap 30. Six repeated first/third/top shots and the actual-image loopback coordinator upload passed; 15 policy/quality tests passed. Transient Windows pose-file replacement has bounded retries, while persistent/storage errors still fail. New clients default shaders off. Formal WebGL and the model chain were not switched; native production album/reward/site acceptance still remains. Shader-on instability remains separate and must not block preparing the tested no-shader mode. See docs/NATIVE_GODDESS_CAMERA.md.
+
 ## 2026-11-01 Native Intel camera remains isolated
 
 Extra VDD ROOT\DISPLAY\0001 is installed/configured; prior OS confirmations are consumed. Intel D3D12 + original YSM2.6.5 produced clean first/third/top photos, suppressing HUD/toasts while retaining scene labels. Shaders still cause native memory growth even without YSM; the 8GiB QA cap is protection, not a fix. Failed buffer/fence bypasses were removed. Do not activate native photos or claim formal YSM migration from frames. Production WebGL and separately maintained live remain. See docs/NATIVE_GODDESS_CAMERA.md; game/inference/TTS/WSL were not restarted.

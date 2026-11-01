@@ -133,13 +133,15 @@ def provision(root, java, cached_mods, username):
         fetch(row["url"], root / "mods" / row["filename"], row["hashes"]["sha512"], "sha512")
     shader = modrinth("makeup-ultra-fast-shaders", shader=True)
     fetch(shader["url"], root / "shaderpacks" / shader["filename"], shader["hashes"]["sha512"], "sha512")
-    (root / "config/iris.properties").write_text("enableShaders=true\nshaderPack=" + shader["filename"] + "\n", encoding="utf-8")
+    # Native YSM rendering remains useful without shaders. Start with the
+    # explicit non-shader policy; enabling shaders needs its own stability run.
+    (root / "config/iris.properties").write_text("enableShaders=false\nshaderPack=" + shader["filename"] + "\n", encoding="utf-8")
     (root / "options.txt").write_text("version:3955\nrenderDistance:6\nsimulationDistance:5\nmaxFps:30\nenableVsync:false\npauseOnLostFocus:false\nonboardAccessibility:false\ntutorialStep:none\nfov:0.0\nguiScale:2\nsoundCategory_master:0.0\n", encoding="utf-8")
     value = hashlib.md5(("OfflinePlayer:" + username).encode()).digest()
     offline = uuid.UUID(bytes=value, version=3)
     arguments = ["-Xms512M", "-Xmx2G", "-Dfile.encoding=UTF-8", "-Djava.library.path=" + str(root / "natives"), "-Dorg.lwjgl.librarypath=" + str(root / "natives"), "-cp", os.pathsep.join(map(str, libraries + [client_file])), loader["mainClass"], "--username", username, "--version", loader["id"], "--gameDir", str(root), "--assetsDir", str(root / "assets"), "--assetIndex", index["id"], "--uuid", str(offline), "--accessToken", "0", "--userType", "legacy", "--versionType", "release", "--width", "1536", "--height", "1536"]
     (root / "launch.json").write_text(json.dumps({"java": str(Path(java).resolve()), "arguments": arguments, "instance": str(root), "offlineUuidIsUnverifiedUntilJoined": str(offline)}, indent=2))
-    (root / "source-lock.json").write_text(json.dumps({"minecraft": MC, "loader": LOADER, "minecraftMetadata": source, "copiedMods": copied, "downloadedMods": mods, "shader": shader, "assetsDownloaded": len(selected), "soundAssetsIncluded": False}, indent=2))
+    (root / "source-lock.json").write_text(json.dumps({"minecraft": MC, "loader": LOADER, "minecraftMetadata": source, "copiedMods": copied, "downloadedMods": mods, "shader": shader, "shadersEnabled": False, "assetsDownloaded": len(selected), "soundAssetsIncluded": False}, indent=2))
     print(json.dumps({"prepared": str(root), "minecraft": MC, "loader": LOADER, "nativeLibraries": len(libraries), "assets": len(selected), "launched": False}))
 
 

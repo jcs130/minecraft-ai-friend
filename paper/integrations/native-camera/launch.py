@@ -36,6 +36,6 @@ def main():
         arguments+=['--quickPlayMultiplayer',host+':'+port]
     log=(root/'native-camera.log').open('ab')
     process=subprocess.Popen([str(java)]+arguments,cwd=root,stdout=log,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    print(json.dumps({'pid':process.pid,'started':True,'verified':False,'note':'Require fresh Intel/shader/YSM telemetry before accepting photos'}))
+    print(json.dumps({'pid':process.pid,'started':True,'verified':False,'note':'Require fresh Intel/YSM telemetry matching the configured shader policy before accepting photos'}))
 
 if __name__=='__main__':main()

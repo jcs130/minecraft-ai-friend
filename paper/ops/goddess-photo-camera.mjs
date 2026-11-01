@@ -98,7 +98,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     if(settings.renderer==='native'){
       const {createNativePhotoRenderer}=await import('./native-photo-renderer.mjs');
       const dependencies=createRequire(pathToFileURL(settings.nativeDependencyRoot+'/package.json'));
-      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG});
+      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG,shadersEnabled:settings.nativeShaders===undefined?true:settings.nativeShaders});
       await nativeRenderer.probe();
       if(stopped)return;
       available=true;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});reply('ready');

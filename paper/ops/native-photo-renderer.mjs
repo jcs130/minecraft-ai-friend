@@ -4,10 +4,17 @@ import {photoImageQuality} from './photo-image-quality.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function json(file,maximum){if((await stat(file)).size>maximum)throw Error('PHOTO_NATIVE_STATE_INVALID');return JSON.parse(await readFile(file,'utf8'));}
-export function validateNativeCamera(state,now=Date.now()){
+export async function replaceNativePhotoFile(temporary,target,renameFile=rename){
+  for(let attempt=0;;attempt++){
+    try{await renameFile(temporary,target);return;}
+    catch(error){if(!['EPERM','EACCES','EBUSY'].includes(error.code)||attempt===5)throw error;await sleep(20);}
+  }
+}
+export function validateNativeCamera(state,now=Date.now(),shadersEnabled=true){
+  if(typeof shadersEnabled!=='boolean')throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   const at=Date.parse(state?.at??'');
   if(state?.schema!=='qiandeng-native-camera/v1'||!UUID.test(state.instanceId??'')||!UUID.test(state.playerUuid??'')||!state.connected||!Number.isFinite(at)||now-at>2000||at>now+1000
-    ||!String(state.renderer).toLowerCase().includes('intel')||state.shadersEnabled!==true||state.cleanHud!==true||state.cleanToasts!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server||state.screenOpen===true
+    ||!String(state.renderer).toLowerCase().includes('intel')||state.shadersEnabled!==shadersEnabled||state.cleanHud!==true||state.cleanToasts!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server||state.screenOpen===true
     ||String(state.renderer).toLowerCase().includes('d3d12')&&(state.windowVisible!==true||state.windowIconified===true||!Array.isArray(state.windowPosition)||!Array.isArray(state.expectedWindowPosition)||state.windowPosition.length!==2||state.expectedWindowPosition.length!==2||state.windowPosition.some((value,index)=>value!==state.expectedWindowPosition[index])))throw Error('PHOTO_NATIVE_NOT_READY');
   return state;
 }
@@ -20,11 +27,11 @@ export function nativeCameraPose(job,state,now=Date.now()){
   if(Math.hypot(pose.x-pose.anchorX,pose.y-pose.anchorY,pose.z-pose.anchorZ)>24||Math.abs(pose.pitch)>90)throw Error('PHOTO_NATIVE_POSE_INVALID');
   return pose;
 }
-export function createNativePhotoRenderer({gameDir,PNG,fetchImpl=fetch}){
-  if(!path.isAbsolute(gameDir)||!PNG?.sync?.read)throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
+export function createNativePhotoRenderer({gameDir,PNG,shadersEnabled=true,fetchImpl=fetch}){
+  if(!path.isAbsolute(gameDir)||!PNG?.sync?.read||typeof shadersEnabled!=='boolean')throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   const diagnostics=path.join(gameDir,'diagnostics/qiandeng-native-camera.json'),poseFile=path.join(gameDir,'agent-mc-bridge/camera-pose.json');
-  const probe=async()=>validateNativeCamera(await json(diagnostics,64*1024));
-  async function writePose(pose){const temporary=poseFile+'.writing';await writeFile(temporary,JSON.stringify(pose));await rename(temporary,poseFile);}
+  const probe=async()=>validateNativeCamera(await json(diagnostics,64*1024),Date.now(),shadersEnabled);
+  async function writePose(pose){const temporary=poseFile+'.writing';await writeFile(temporary,JSON.stringify(pose));await replaceNativePhotoFile(temporary,poseFile);}
   async function rpc(state){
     const connection=await json(path.join(gameDir,'agent-mc-bridge/connection.json'),8192),url=new URL(connection.endpoint);
     if(connection.protocol!=='agent-mc-java/v1'||url.protocol!=='http:'||url.hostname!=='127.0.0.1'||!url.port||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname)||typeof connection.token!=='string'||connection.token.length<32)throw Error('PHOTO_NATIVE_BRIDGE_INVALID');
@@ -54,7 +61,7 @@ export function createNativePhotoRenderer({gameDir,PNG,fetchImpl=fetch}){
       const png=Buffer.from(shot.base64,'base64');if(png.length<1024||png.length>8*1024*1024||png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('PHOTO_IMAGE_SIZE_INVALID');
       const width=png.readUInt32BE(16),height=png.readUInt32BE(20);if(width<256||height<256||width>4096||height>4096)throw Error('PHOTO_IMAGE_SIZE_INVALID');
       const pixels=PNG.sync.read(png,{checkCRC:true});const image={...photoImageQuality(pixels),sha256:createHash('sha256').update(png).digest('hex')};guard();
-      return {png,image,diagnostics:{renderer:ready.renderer,shadersEnabled:true,modelCatalogueSize:ready.modelCatalogueSize,width,height,nativeInstance:ready.instanceId}};
+      return {png,image,diagnostics:{renderer:ready.renderer,shadersEnabled:ready.shadersEnabled,modelCatalogueSize:ready.modelCatalogueSize,width,height,nativeInstance:ready.instanceId}};
     }finally{
       if(installed)try{const current=await json(poseFile,4096);if(current.job===job.job&&current.nonce===job.nonce&&current.instanceId===original.instanceId)await writePose({...current,expiresAt:0});}catch{}
     }

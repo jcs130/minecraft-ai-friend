@@ -1,5 +1,5 @@
 {
-  "state": "candidate-blocked-on-shader-native-memory-growth",
+  "state": "candidate-no-shader-verified-production-integration-pending",
   "date": "2026-11-01",
   "gameOrInferenceRestarted": false,
   "physicalMonitorRequiredByPlan": false,
@@ -20,7 +20,8 @@
     "certificateStoreChanged": false,
     "displayInstalled": true,
     "displayInstance": "ROOT\\DISPLAY\\0001",
-    "shaderProcessCommitBudgetGiB": 8
+    "shaderProcessCommitBudgetGiB": 8,
+    "nativeShaders": false
   },
   "evidence": {
     "wslg": "Observed recurrent Weston signal 11 exits about 104 seconds apart; upstream WSL issue 41552",
@@ -31,7 +32,24 @@
     "systemConfirmation": "Both signed display installation and configuration confirmations consumed; no pending display approval",
     "stability": "Iris-on native private memory grows about 1GiB/s and crashes at the protective 8GiB process cap; removing YSM also reproduces it. Shader-off control peaked near 1.8GiB and exited normally",
     "failedControls": "Mesa26.2.4/26.1.8/26.2.5, latest matching Iris/Sodium, lighter shader, smaller frame, performance mods, visible HUD, removing camera/core hooks, correct visible monitor placement, DSA/buffer-storage masks and synchronous frames did not resolve growth; application-local controls restored",
-    "proxyClient": "Actual native2.6.5 through real Velocity loaded the original encrypted fish with clean UI at 30FPS, shaders disabled; not high-quality photo acceptance"
+    "proxyClient": "Actual native2.6.5 through real Velocity loaded the original encrypted fish with clean UI at 30FPS, shaders disabled; not high-quality photo acceptance",
+    "noShaderRun": {
+      "runSeconds": 600.7,
+      "peakProcessCommitGiB": 1.937,
+      "steadyMedianGiB": 1.911,
+      "steadyMedianGrowthGiB": 0.001,
+      "sampledFpsMinimum": 14,
+      "sampledFpsMedian": 30.0,
+      "fpsCap": 30,
+      "width": 1536,
+      "height": 1536,
+      "renderDistance": 6,
+      "verifiedPhotoShots": 6,
+      "coordinatorLoopbackUploadPassed": true,
+      "productionAlbumVerified": false
+    }
   },
-  "document": "paper/docs/NATIVE_GODDESS_CAMERA.md"
+  "document": "paper/docs/NATIVE_GODDESS_CAMERA.md",
+  "preferredMode": "native-no-shaders",
+  "sustainedNonShaderRunPassed": true
 }
