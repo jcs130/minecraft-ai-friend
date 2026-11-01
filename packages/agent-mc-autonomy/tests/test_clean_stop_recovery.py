@@ -23,7 +23,11 @@ def clean_fixture(tmp_path, framework_module):
 
 
 def test_clean_stop_read_gap_is_explicit_audited_and_never_replays(tmp_path, framework_module):
-    from agent_mc_autonomy.recovery import acknowledge_unknown, assess_clean_stop, require_no_pending_acknowledgement
+    from agent_mc_autonomy.recovery import (
+        acknowledge_unknown,
+        assess_clean_stop,
+        require_no_pending_acknowledgement,
+    )
     settings, host, box, feedback, options = clean_fixture(tmp_path, framework_module)
     before = (host / "host-state.json").read_bytes()
     command = box.get(feedback)
@@ -63,8 +67,10 @@ def test_clean_stop_refuses_missing_or_unknown_native_evidence(tmp_path, framewo
         (client / "tools.jsonl").write_text(json.dumps({"run": "foreign", "callId": "fixture", "name": "mc_do"}) + "\n")
     else:
         p = host / "status.json"
-        value = json.loads(p.read_text()); value["disconnect_confirmed"] = False
-        p.write_text(json.dumps(value)); options["expected_status_sha256"] = hashlib.sha256(p.read_bytes()).hexdigest()
+        value = json.loads(p.read_text())
+        value["disconnect_confirmed"] = False
+        p.write_text(json.dumps(value))
+        options["expected_status_sha256"] = hashlib.sha256(p.read_bytes()).hexdigest()
     before = (host / "host-state.json").read_bytes()
     with pytest.raises((ValueError, RuntimeError)):
         acknowledge_unknown(settings, tmp_path, **options)

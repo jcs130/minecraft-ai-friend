@@ -3,12 +3,11 @@ import copy
 import json
 
 import pytest
+from test_controller import action, setup
 
 from agent_mc_autonomy import ChatNoopReview
 from agent_mc_autonomy.context import assemble
 from agent_mc_autonomy.observations import native_outcome_view
-from test_controller import action, setup
-
 
 PLAN = {"steps": [{"skill": "chat", "text": "同伴，能分一点食物吗？"}]}
 

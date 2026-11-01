@@ -4,8 +4,9 @@ import copy
 import json
 
 import pytest
-from agent_mc_autonomy.context import assemble
 from test_controller import action, setup
+
+from agent_mc_autonomy.context import assemble
 
 PLAN = {
     "steps": [
