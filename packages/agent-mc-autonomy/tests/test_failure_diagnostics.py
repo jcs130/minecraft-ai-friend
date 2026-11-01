@@ -28,8 +28,11 @@ def test_first_failure_survives_cleanup(framework_module, tmp_path, monkeypatch,
             fail_state = (seam == 'host_state.persist' and Path(target).name == 'host-state.json'
                           and state.get('uncertain') is False and state.get('inflight_request') is None)
             fail_status = seam == 'status.publish' and Path(target).name == 'status.json' and state.get('viewer_action')
-            if not failures and (fail_state or fail_status):
-                failures.append(first)
+            # Persistence now retries brief reader contention. Keep this fault
+            # permanent so the test still exercises fatal error + cleanup.
+            if fail_state or (not failures and fail_status):
+                if not failures:
+                    failures.append(first)
                 raise first
             if len(failures) == 1 and Path(target).name == 'status.json':
                 failures.append(secondary)

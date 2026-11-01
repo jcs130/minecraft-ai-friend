@@ -38,6 +38,7 @@ from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
 from .effects import EffectRecovery, body_changed
 from .fast import FastPolicy, focus_state, rule_focus
+from .filesystem import replace_prepared
 from .model_protocols import assistant_history
 from .observations import (
     body_event_view,
@@ -578,21 +579,28 @@ class Controller:
         self.publish(current_goal=self.active_goal, historical_goal=self.historical_goal)
 
     def persist(self, **changes):
+        temporary = None
         try:
             self.data.mkdir(parents=True, exist_ok=True)
             previous = json.loads(self.state_path.read_text(encoding="utf-8")) if self.state_path.exists() else {}
-            temporary = self.state_path.with_suffix(".tmp")
             # A rename is atomic for readers, but does not flush buffered file
             # contents. Publish dispatch/stop state only after durable writeback.
+            temporary = self.state_path.with_suffix(".tmp")
             with temporary.open("w", encoding="utf-8") as stream:
                 stream.write(encode({**previous, **changes}))
                 stream.flush()
                 os.fsync(stream.fileno())
-            temporary.replace(self.state_path)
+            replace_prepared(temporary, self.state_path)
         except Exception as error:
             from .failure_diagnostics import capture_current
             capture_current(error, "host_state.persist")
             raise
+        finally:
+            if temporary is not None:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass  # Retain the original persistence failure if cleanup also fails.
 
     def record_tool_failure(self, name, arguments, result, request_id=None):
         failure = failure_context(self.bridge.tools, name, arguments, result)
