@@ -274,6 +274,7 @@ public final class LoginGuard {
                             p.disconnect(text("房管请使用已验证正版账号，或本人独立密码登录。"));return;
                         }
                     }
+                    if(!clearVerifiedFailures(p))return;
                     authenticated.add(p);authenticationMethods.put(p,e.getReason().name().toLowerCase(Locale.ROOT));
                 });
                 libre.getEventProvider().subscribe(libre.getEventProvider().getTypes().wrongPassword,e->{
@@ -464,6 +465,21 @@ public final class LoginGuard {
         String raw=attempts.getProperty(key(name)); if(raw==null) return 0;
         String[] s=raw.split(","); return Long.parseLong(s[2]);
     }
+    private void persistAttempts() throws IOException {
+        Files.createDirectories(attemptsFile.getParent());
+        var tmp=Path.of(attemptsFile+".tmp");
+        try(var out=Files.newOutputStream(tmp)){attempts.store(out,"Login failures; no credentials");}
+        Files.move(tmp,attemptsFile,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
+    }
+    private synchronized boolean clearVerifiedFailures(Player p) {
+        String name=key(p.getUsername());Object previous=attempts.remove(name);
+        if(previous==null)return true;
+        try{persistAttempts();return true;}
+        catch(Exception failure){
+            attempts.put(name,previous);ready=false;diagnostic("login_failure_state",failure);
+            p.disconnect(text("登录保护保存失败，本次未放行，请稍后重试。[MC_AUTH_UNAVAILABLE]"));return false;
+        }
+    }
     private synchronized void wrong(Player p) {
         long now=System.currentTimeMillis(); String n=key(p.getUsername());
         String[] old=attempts.getProperty(n,"0,0,0").split(",");
@@ -471,10 +487,8 @@ public final class LoginGuard {
         if(count==0) start=now; count++;
         long until=count>=3?now+600_000:0;
         attempts.setProperty(n,count+","+start+","+until);
-        try { Files.createDirectories(attemptsFile.getParent());
-            var tmp=Path.of(attemptsFile+".tmp"); try(var out=Files.newOutputStream(tmp)) { attempts.store(out,"Login failures; no credentials"); }
-            Files.move(tmp,attemptsFile,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
-        } catch(Exception e) { ready=false; p.disconnect(text("登录保护暂不可用，请稍后重试。")); }
+        try { persistAttempts(); }
+        catch(Exception e) { ready=false; p.disconnect(text("登录保护暂不可用，请稍后重试。")); }
         if(until>0) p.disconnect(text("密码连续错误三次，此账号暂停登录十分钟。[MC_AUTH_LOCKED]"));
     }
     @Subscribe(order=PostOrder.LAST) public void preLogin(PreLoginEvent e) {
@@ -488,7 +502,7 @@ public final class LoginGuard {
         if(locked(e.getUsername())>System.currentTimeMillis()) e.setResult(PreLoginEvent.PreLoginComponentResult.denied(text("此账号暂停登录十分钟，请稍后使用正确密码重试。[MC_AUTH_LOCKED]")));
     }
     @Subscribe(order=PostOrder.LAST) public void configurationCompatibility(PostLoginEvent e) {
-        if(e.getPlayer().getProtocolVersion().getProtocol()!=766) return;
+        if(e.getPlayer().getProtocolVersion().getProtocol()<764) return;
         var connection=((ConnectedPlayer)e.getPlayer()).getConnection();
         var channel=connection.getChannel();
         channel.eventLoop().execute(()->{
@@ -496,13 +510,12 @@ public final class LoginGuard {
             if(decoder==null) { e.getPlayer().disconnect(text("登录协议保护未就绪，请稍后重试。")); return; }
             channel.pipeline().addBefore(decoder.name(),"auth-config-compat",new ChannelInboundHandlerAdapter() {
                 @Override public void channelRead(ChannelHandlerContext ctx,Object message) throws Exception {
-                    // Mineflayer 4.37/4.39 continues sending movement while the
-                    // proxy switches registries. Its serializer emits packet 0
-                    // (settings) with movement bytes, which otherwise kills the
-                    // connection. Drop only malformed settings during CONFIG.
+                    // An unmodified Mineflayer can keep sending movement while
+                    // switching servers. In CONFIG, packet 0 means settings.
+                    // Validate that one frame with Velocity's actual codec;
+                    // preserve valid settings and every normal PLAY packet.
                     if(connection.getState()==StateRegistry.CONFIG && message instanceof ByteBuf b && b.isReadable()) {
-                        int at=b.readerIndex();
-                        if(b.readableBytes()==1 && b.getUnsignedByte(at)==0) {ReferenceCountUtil.release(message);return;}
+                        if(ConfigurationSettings.discard(b,e.getPlayer().getProtocolVersion())) {ReferenceCountUtil.release(message);return;}
                     }
                     super.channelRead(ctx,message);
                 }

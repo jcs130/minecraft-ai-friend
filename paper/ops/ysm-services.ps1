@@ -15,6 +15,7 @@ function Ysm-ChildPorts($c) {
     $ports=@($c.proxy.port)
     if ($c.PSObject.Properties.Name -contains 'worker' -and $null -ne $c.worker) { $ports+=@($c.worker.port) }
     if ($c.PSObject.Properties.Name -contains 'workerControllerPort') { $ports+=@($c.workerControllerPort) }
+    if ($c.PSObject.Properties.Name -contains 'auth' -and $null -ne $c.auth) { $ports+=@($c.auth.port,$c.auth.rconPort) }
     return $ports
 }
 function Start-YsmServices {
@@ -27,14 +28,20 @@ function Start-YsmServices {
         $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $opsDir 'ysm-services-launch.ps1'),'-Config',(Join-Path $opsDir 'ysm-services.json')) -WorkingDirectory $opsDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $opsDir "ysm-services-$stamp.log") -RedirectStandardError (Join-Path $opsDir "ysm-services-$stamp.error.log") -PassThru
         Log "YSM supervisor launched PID=$($proc.Id)"
     }
-    $deadline = (Get-Date).AddSeconds(60)
+    $hasNativeAuth=$c.PSObject.Properties.Name -contains 'auth' -and $null -ne $c.auth
+    $deadline = (Get-Date).AddSeconds($(if($hasNativeAuth){180}else{60}))
     do {
         $listeners = @(Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort $c.controlPort -State Listen -ErrorAction SilentlyContinue)
         if ($listeners.Count -eq 1) {
             $state = Ysm-Control 'status'
             if ($state.protocol -ne 'YSM-SERVICES-V1' -or $state.pid -ne $listeners[0].OwningProcess) { throw 'YSM supervisor identity mismatch' }
             $proxy = @(Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort $c.proxy.port -State Listen -ErrorAction SilentlyContinue)
-            if ($state.services.proxy.alive -and $proxy.Count -eq 1 -and $proxy[0].OwningProcess -eq $state.services.proxy.pid) { return }
+            $authReady=$true
+            if($hasNativeAuth){
+                $auth=@(Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort $c.auth.port -State Listen -ErrorAction SilentlyContinue)
+                $authReady=$state.services.auth.alive -and $auth.Count -eq 1 -and $auth[0].OwningProcess -eq $state.services.auth.pid
+            }
+            if ($authReady -and $state.services.proxy.alive -and $proxy.Count -eq 1 -and $proxy[0].OwningProcess -eq $state.services.proxy.pid) { return }
         }
         Start-Sleep -Milliseconds 500
     } while ((Get-Date) -lt $deadline)
@@ -68,6 +75,13 @@ function Backup-YsmServices([string]$destination) {
     & robocopy.exe $c.root $target /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'logs' 'tmp' | Out-Null
     if ($LASTEXITCODE -ge 8) { throw 'YSM private snapshot failed' }
     $requiredFiles=@('proxy\velocity.toml')
+    if ($c.PSObject.Properties.Name -contains 'auth' -and $null -ne $c.auth) {
+        $authRoot=[IO.Path]::GetFullPath($c.root).TrimEnd([char[]]@('\','/'))+'\'
+        $authProperties=[IO.Path]::GetFullPath($c.auth.properties)
+        if(-not$authProperties.StartsWith($authRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'Authentication snapshot path outside private root'}
+        $relativeAuth=$authProperties.Substring($authRoot.Length)
+        $requiredFiles+=@($relativeAuth)
+    }
     $nativeMode=$c.PSObject.Properties.Name -contains 'appearanceBackend' -and $c.appearanceBackend -eq 'native265'
     foreach ($legacy in @('worker\server.properties','proxy\plugins\agentappearance\models.json')) {
         if (-not $nativeMode -or (Test-Path -LiteralPath (Join-Path $c.root $legacy))) { $requiredFiles+=@($legacy) }

@@ -832,5 +832,23 @@
     "neoforgeFullAuthenticationVerified": false,
     "physicalBedrockVerified": false,
     "productionChanged": false
+  },
+  "nativeAuthenticationCandidate": {
+    "state": "managed-isolated-verified-not-deployed",
+    "LoginGuard": "0.1.10",
+    "nativeAuthenticationVerified": true,
+    "standardNeoForgeClient": "1.21.1 / 21.1.252 / official TLM1.5.3 / original YSM2.6.5",
+    "unmodifiedMineflayerProtocols": ["1.20.6", "1.21.1", "1.21.4"],
+    "clientChecks": 18,
+    "configurationCodecChecks": 25,
+    "failureCounterChecks": 4,
+    "coldBackupChecks": 5,
+    "lifecycleTests": 7,
+    "authenticationHeapMiB": 1536,
+    "loopbackOnly": true,
+    "newScheduledTasks": false,
+    "physicalBedrockVerified": false,
+    "productionChanged": false,
+    "document": "paper/docs/NEOFORGE_AUTH_20261102.md"
   }
 }
