@@ -26,6 +26,7 @@ import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.*;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.command.SimpleCommand;
@@ -112,6 +113,10 @@ public final class LoginGuard {
                 if(e.getPacketType()==PacketType.Configuration.Server.SELECT_KNOWN_PACKS) packs.put(e.getUser(),true);
             }
             @Override public void onPacketReceive(PacketReceiveEvent e) {
+                if(WrapperPlayClientPlayerFlying.isFlying(e.getPacketType())&&e.getUser().getUUID()!=null){
+                    Player player=server.getPlayer(e.getUser().getUUID()).orElse(null);
+                    if(player!=null&&!authorized(player)&&player.getCurrentServer().map(s->s.getServerInfo().getName().equals("auth")).orElse(false)){e.setCancelled(true);return;}
+                }
                 if(e.getPacketType()==PacketType.Configuration.Client.SELECT_KNOWN_PACKS) {
                     if(!Boolean.TRUE.equals(packs.remove(e.getUser()))) e.setCancelled(true);
                 }
