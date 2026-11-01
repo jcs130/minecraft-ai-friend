@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "scope": "unmodified_mineflayer_zero_extra_client_plugins",
+  "target": {"minecraft": "26.3", "protocol": 777, "host": "127.0.0.1", "port": 39781},
+  "accepted": false,
+  "stockDirectLogin": false,
+  "nativeInformationVerifiedByStockClient": false,
+  "publishedPackage": {
+    "name": "mineflayer", "version": "4.39.0", "latestSupportedVersion": "26.1",
+    "minecraftDataVersion": "3.119.0", "minecraftProtocolVersion": "1.68.0",
+    "tarball": "https://registry.npmjs.org/mineflayer/-/mineflayer-4.39.0.tgz",
+    "archiveSha256": "733260f73949ff59858c189e211ed9d3bd433adfeaeb32b12e11c34a00883dd7",
+    "integrity": "sha512-HptE++dIG55aRmT7GIj3QComS6MhEXstE3RJSuYMFhLtobsQhJJsqWmY9ObfiLp84MrS6Q4Em+wUH0rVQMXLJw==",
+    "publishedFilesCompared": 188, "differentFiles": [],
+    "loaderSha256": "be363697869f414a4956f55ef5027fe639111dc79e6594ab49e5efb35ad58777",
+    "versionTableSha256": "e25e11553df78cb700c1474d5af55781f6c6d2f34ba1cc59d6733c63a7c25da8",
+    "unmodifiedPublishedPackageVerified": true
+  },
+  "cases": [
+    {"kind": "published_explicit_26.3", "entry": "require('mineflayer').createBot", "extraPlugins": [], "status": "unavailable", "login": false, "error": "unsupported protocol version: 26.3"},
+    {"kind": "published_auto_version", "entry": "require('mineflayer').createBot", "extraPlugins": [], "status": "unavailable", "login": false, "error": "No data available for version 26.3"},
+    {"kind": "patched_protocol_only_no_connector", "unmodifiedPublishedPackage": false, "extraPlugins": [], "status": "unavailable", "login": false, "reason": "fabric_loader_and_fabric_api_required", "observedNamespaces": ["bettercombat", "brigadier", "bundleapi", "easy_npc"]}
+  ],
+  "catalogComparison": {
+    "observedAt": "2026-11-01T09:37:41.062Z",
+    "oracle": "previously_accepted_native_connector_same_server",
+    "comparisonIsNotStockClientAcceptance": true,
+    "vanilla26_3ItemCount": 1658, "serverNativeItemCount": 2048,
+    "items": [
+      {"nativeName": "farmersdelight:rice", "nativeId": 1810, "vanillaNameAtSameId": null},
+      {"nativeName": "farmersdelight:cooking_pot", "nativeId": 1715, "vanillaNameAtSameId": null}
+    ],
+    "block": {"nativeName": "farmersdelight:cooking_pot", "nativeStateId": 35756, "vanillaNameAtSameStateId": null}
+  },
+  "boundaries": {
+    "existingConnectorAcceptanceRetainedSeparately": true,
+    "newServerSideStockGatewayImplemented": false,
+    "nativeIdsCannotBeMadeKnownByResourcePackOrCustomNameAlone": true,
+    "fabricChecksDisabled": false, "worldOrServerModified": false,
+    "publicNetworkOrAuthenticationChanged": false,
+    "noSuccessClaimFromLoginAlone": true
+  },
+  "references": [
+    "https://github.com/PrismarineJS/mineflayer/pull/4124",
+    "https://github.com/PrismarineJS/mineflayer/discussions/4190",
+    "https://github.com/PrismarineJS/mineflayer/blob/master/lib/loader.js"
+  ]
+}

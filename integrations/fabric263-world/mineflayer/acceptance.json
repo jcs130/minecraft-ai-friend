@@ -4,6 +4,15 @@
   "scope": "isolated_fabric263_world",
   "minecraft": "26.3",
   "protocol": 777,
+  "accessModes": {
+    "nativeConnector": {"acceptedForRecordedCases": true, "requiresClientConnector": true},
+    "unmodifiedPublishedMineflayer": {
+      "accepted": false, "extraClientPluginsAllowed": false,
+      "checkedVersion": "4.39.0", "directLogin": false, "nativeInformationVerified": false,
+      "reasons": ["published_stack_has_no_26.3_support", "fabric_mod_registry_and_native_codecs_need_implementation"],
+      "evidence": "stock-acceptance-20261101.json"
+    }
+  },
   "deployment": {
     "gameHost": "127.0.0.1",
     "gamePort": 39781,
