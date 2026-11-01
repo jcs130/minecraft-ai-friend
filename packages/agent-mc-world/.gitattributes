@@ -4,3 +4,6 @@ vendor/native-types/** -text whitespace=-trailing-space,-space-before-tab,cr-at-
 
 # Preserve the imported implementation's existing EOF spacing during this move.
 core/** whitespace=-blank-at-eof
+
+# Unified-diff context lines preserve a literal space for an empty source line.
+examples/*.patch whitespace=-blank-at-eol

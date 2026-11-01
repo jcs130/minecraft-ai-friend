@@ -5866,7 +5866,7 @@ export class Executor {
           const reason = blocked || err instanceof SkillNoop ? (err as Error).message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
           // 技能报阻但期望已达成(战利品自己进了包、人已经在目的地):按达成算
           const expect = call.expect ?? deriveExpect(bot, call);
-          const verdict = expect ? evaluateExpect(bot, expect, gainBase) : null;
+          const verdict = expect && !nativeBodyBlockedReason(bot, call.skill) ? evaluateExpect(bot, expect, gainBase) : null;
           const readAt = verdict ? this.clock(Date.now()) : undefined;
           const operationUnconfirmed = blocked?.code === 'container-window-changed'
             || blocked?.code === 'container-window-rollback' || blocked?.code === 'use-hand-changed'

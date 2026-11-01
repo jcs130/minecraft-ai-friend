@@ -24,6 +24,10 @@ Resumed queued steps still pass the executor's fresh body gate.
 Hosts retaining their own body install the same observer before login and call
 the public gate at physical dispatch and automatic-combat entry. They must not
 clone a second body or reset private Mineflayer flags to make the gate pass.
+The narrow `agent-mc-world/body-readiness` entry loads only the observer.
+[`examples/cortico-body-readiness-0.2.11.patch`](../examples/cortico-body-readiness-0.2.11.patch)
+shows the tested original-host hooks; its dependency must resolve to the same
+verified package archive as the host's other shared helpers.
 An upstream host's timed “respawn confirmed” message must likewise be held while
 the shared reading lacks a fresh landing. The observer does not guess a missing
 server packet, authorize unknown-action replay, cancel model requests or force
