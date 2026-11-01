@@ -46,8 +46,8 @@
     "NativePlatform": "0.1.6",
     "OptionalPayloadGuard": "0.1.0",
     "YSM": "2.6.5",
-    "NumenAPI": "0.1.4-qd-youer1",
-    "QiandengjiFaweHybrid": "0.1.0"
+    "QiandengjiFaweHybrid": "0.1.0",
+    "NumenEngine": "0.1.4-qd-youer1"
   },
   "goddessChatGuidance": {
     "enabled": true,
