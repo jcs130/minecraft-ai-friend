@@ -25,6 +25,19 @@ interface SourcePatch {
 const PATCHES: readonly SourcePatch[] = [
   {
     pkg: 'mineflayer-pathfinder',
+    file: 'lib/movements.js',
+    edits: [{
+      find: `        if (node.y - blockLand.position.y <= this.maxDropDown) return this.getBlock(blockLand.position, 0, 1, 0)`,
+      replace: `        if (node.y - blockLand.position.y <= this.maxDropDown) {
+          const landing = this.getBlock(blockLand.position, 0, 1, 0)
+          // Known support does not establish that the cell above it is loaded.
+          // The missing-block sentinel has no position and cannot be a node.
+          return landing.position ? landing : null
+        }`,
+    }],
+  },
+  {
+    pkg: 'mineflayer-pathfinder',
     file: 'index.js',
     edits: [
       {

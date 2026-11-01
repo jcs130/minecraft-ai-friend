@@ -3,6 +3,7 @@ import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
 import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
+import { TaskRecoveryBook } from './task-recovery.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
@@ -2921,6 +2922,7 @@ export class MinecraftWorld implements World {
   /** 任务号:排进队列的每一件事领一个,回报时认它 */
   protected taskSeq = 0;
   protected readonly executionEpoch = randomUUID();
+  private readonly taskRecovery = new TaskRecoveryBook();
   protected readonly taskReportVersions = new Map<number, number>();
   protected taskReportVersion = 0;
   /** 每次真实 spawn 递增；断线前后的工具、事件与连接日志据此分代。 */
@@ -8924,7 +8926,18 @@ export class MinecraftWorld implements World {
       : '';
     const feedback = r.taskId !== undefined && (r.kind === 'blocked' || r.kind === 'partial')
       ? this.serverFeedback.forTask(r.taskId) : '';
-    const reportText = `${r.text}${repeatEvidence}${feedback}`;
+    const recovery = r.taskId === undefined ? null : this.taskRecovery.record({
+      scope: `${this.executionEpoch}:${this.connectionGeneration}`,
+      executionId: `${this.executionEpoch}:${r.taskId}`,
+      phase: r.kind === 'done' ? 'completed' : r.kind,
+      steps: r.steps ?? [],
+    });
+    const recoveryText = recovery
+      ? `\n[行动恢复记录] 最近 ${recovery.attempts.length} 次行动在相近实测位置留下未解决步骤（历史回执，不等于当前地形或目标完成）：`
+        + recovery.attempts.map(a => `${a.executionId} 第${a.step}步 ${a.skill}: ${JSON.stringify(a.reason)}`).join('；')
+        + '。核对原回执与当前条件后选择下一步；没有自动重放。'
+      : '';
+    const reportText = `${r.text}${repeatEvidence}${feedback}${recoveryText}`;
     // 「最近一单是什么下场」的单槽:mc_queue 现读它(见 lastFinishedTask)
     this.lastFinishedTask = { at: Date.now(), kind: r.kind, taskId: r.taskId, text: reportText, steps: r.steps };
     if (r.taskId !== undefined) {
@@ -8945,10 +8958,10 @@ export class MinecraftWorld implements World {
       {...(workSubtask ? { trigger: 'piggyback' as const } : {}), execution: r.taskId === undefined ? undefined : {kind:'task',id:`${this.executionEpoch}:${r.taskId}`,
         phase:r.kind==='done'?'completed':r.kind,
         terminal:!['suspended','resumed','reflex'].includes(r.kind),goalCompleted:false,evidence:{receipt:reportText,steps:r.steps??[],...(r.progress?{progress:r.progress}:{})}},
-        ...(r.repeatFailure ? { meta: { repeatFailure: {
+        ...(r.repeatFailure || recovery ? { meta: { ...(recovery ? { taskRecovery: recovery } : {}), ...(r.repeatFailure ? { repeatFailure: {
         taskId: r.taskId, attempts: r.repeatFailure.attempts, scope: r.repeatFailure.scope,
         observation: r.repeatFailure.observation,
-      } } } : {}) });
+      } } : {}) } } : {}) });
     if (r.kind === 'done' && r.lastSkill === 'goto'
       && (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).afterArrival
       && q && !q.running && q.waiting.length === 0 && !q.hold) {

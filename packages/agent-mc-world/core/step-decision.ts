@@ -15,6 +15,7 @@ export function stepDecision(outcome: 'ok'|'noop'|'partial'|'fail'|'skip'|'cut',
   const uncertain = ['container-window-changed','container-window-rollback','inventory-click-sync','use-hand-changed',
     'execution-context-changed','fishing-loot-unconfirmed','fishing-reel-unconfirmed','food-consumption-unconfirmed','attack-target-unconfirmed'].includes(code ?? '');
   const conditions: Record<string,string> = {
+    'control-no-progress': 'Read the original control receipt and fresh local geometry/pose before choosing another movement. Input duration is not displacement; the cause remains unknown. Do not replay the same input as a confirmed route.',
     'target-not-ready': 'Observe the specified target again after its readiness changes; do not repeat unchanged input.',
     'container-full': 'Free compatible destination slots or explicitly select a different container.',
     'pathfinder-no-path': 'Inspect geometry and select a reachable route; permissions and collision remain unchanged.',
