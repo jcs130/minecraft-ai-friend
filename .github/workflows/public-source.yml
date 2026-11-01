@@ -22,6 +22,7 @@ jobs:
         with:
           node-version: '22'
       - run: python -m unittest discover -s tests -p test_self_host.py -v
+      - run: node --test paper/ops/ysm-services.test.mjs
       - run: python -m unittest discover -s tests -p test_agent_skill.py -v
       - name: Scan current tree without printing credential values
         shell: bash
