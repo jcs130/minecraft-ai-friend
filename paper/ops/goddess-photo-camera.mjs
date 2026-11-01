@@ -62,6 +62,16 @@ export function validatePhotoJob(job) {
   return {...job, uploadBase: url.origin};
 }
 
+export function nativeReadinessCheck({probe,ready,unavailable,stopped}) {
+  let checking=false;
+  return async()=>{
+    if(checking||stopped())return;checking=true;
+    try{await probe();if(!stopped())ready();}
+    catch{if(!stopped())unavailable();}
+    finally{checking=false;}
+  };
+}
+
 export function startGoddessPhotoCamera(bot, options = {}) {
   const log = options.log ?? (() => {});
   const skinCache = new Map(); let skinCacheBytes = 0;
@@ -99,11 +109,12 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       const {createNativePhotoRenderer}=await import('./native-photo-renderer.mjs');
       const dependencies=createRequire(pathToFileURL(settings.nativeDependencyRoot+'/package.json'));
       nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG,shadersEnabled:settings.nativeShaders===undefined?true:settings.nativeShaders});
-      await nativeRenderer.probe();
       if(stopped)return;
-      available=true;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});reply('ready');
-      let checking=false;heartbeat=setInterval(async()=>{if(checking||stopped)return;checking=true;try{await nativeRenderer.probe();available=true;reply('ready');}catch{available=false;stopJob();}finally{checking=false;}},5000);heartbeat.unref();
-      log('private Intel native photo camera ready; original photo ownership and upload flow retained');return;
+      bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});
+      const check=nativeReadinessCheck({probe:()=>nativeRenderer.probe(),stopped:()=>stopped,
+        ready:()=>{available=true;reply('ready');},unavailable:()=>{available=false;stopJob();}});
+      heartbeat=setInterval(check,5000);heartbeat.unref();await check();
+      log('private Intel native photo camera '+(available?'ready':'waiting for native client')+'; original photo ownership and upload flow retained');return;
     }
     if (!path.isAbsolute(settings.assetsRoot) || !path.isAbsolute(settings.viewerRoot) || !path.isAbsolute(settings.browserPath)) throw Error('PHOTO_CONFIGURATION_INVALID');
     await Promise.all([access(settings.assetsRoot + '/dist/modern-viewer.js'), access(settings.browserPath)]);

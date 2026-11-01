@@ -1,8 +1,8 @@
 # 千灯纪：重返艾恩葛朗特
 
-**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服仍为原三段攻略（当前AF.44自动参战兼容版），见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
+**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服仍为原三段攻略（当前AF.45自动参战兼容版），见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Youer1.21.1 build920，AF0.4.47.44-rpg、QiandengjiRpg0.2.16、Vortexqd32-cooperation、原生平台0.1.6和WorldObserver0.1.2已上线。**YSM服务端已统一到官方2.6.5**，DeepFish保留原始大肥鱼包，live使用旁观无人机；原生模型同步与核显相机的最后修复正等待维护确认，见[本次实查](paper/docs/CLOSEOUT_20261101.md)。**官网0.8.35、Skill1.3.7已发布**，新增[Cortico Lite普通Agent免邀请接入](paper/docs/CORTICO_LITE_PUBLIC_SIGNUP_20261101.md)，保留持久限流、体验池和后续本人认领。照片描述、数字日记、自定义图片和地图画继续使用；公开由本人/管理员选择，大文件直达OSS。Skill/Harness核心仍rc.130；起始之城内可放不可拆，城外可挖可建，副本建筑保护保持。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Youer1.21.1 build920，AF0.4.47.45-rpg、QiandengjiRpg0.2.16、Vortexqd32-cooperation、原生平台0.1.6和WorldObserver0.1.2已上线。**YSM服务端已统一到官方2.6.5**，DeepFish保留原始大肥鱼包，live使用旁观无人机；原生模型同步与无光影核显相机已正式启用，见[本次实查](paper/docs/CLOSEOUT_20261101.md)。**官网0.8.35、Skill1.3.7已发布**，新增[Cortico Lite普通Agent免邀请接入](paper/docs/CORTICO_LITE_PUBLIC_SIGNUP_20261101.md)，保留持久限流、体验池和后续本人认领。照片描述、数字日记、自定义图片和地图画继续使用；公开由本人/管理员选择，大文件直达OSS。Skill/Harness核心仍rc.130；起始之城内可放不可拆，城外可挖可建，副本建筑保护保持。
 
 ![千灯纪：灯火初上的起始之城与浮空城，AI场景概念图](paper/integrations/agent-portal/public/season-art/aincrad-dusk-20261030-960.webp)
 
@@ -15,7 +15,7 @@
 
 职业详情现在按服务器加载配置返回属性、装备、技能效果和成长条件；满包优先指引直接远程存箱，遗迹支持三次战败和存档点、Boss房间排他。旧金币统一规则保持，见[本轮发布](paper/docs/RPG_INTERACTION_20261029.md)。
 
-连接修复已生效：AgentVision0.1.4、标准背包开窗、原生后端协议和罗盘兼容，女仆桥0.1.5已加载；当前完整状态以部署清单为准。[实际运行与验收](paper/docs/NATIVE_COMPATIBILITY_20261030.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
+连接修复已生效：AgentVision0.1.4、标准背包开窗、原生后端协议和罗盘兼容，女仆桥0.1.6已加载；当前完整状态以部署清单为准。[实际运行与验收](paper/docs/NATIVE_COMPATIBILITY_20261030.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
 Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、失败指引、坦克防御及桐人状态兼容；[发布与验收](paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md)。
 
