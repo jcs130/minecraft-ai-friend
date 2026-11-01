@@ -8,14 +8,14 @@ import { Executor, type TaskReport } from '../core/executor.ts';
 
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
-it('returns a physical step terminal as blocked without dispatch while retaining queued chat', async () => {
+it.each([false, true])('keeps missing-body work blocked despite an explicit old-position expectation=%s, while retaining chat', async explicit => {
   vi.useFakeTimers();
   const r = methodHarness('1.21.1'); r.close();
   const observer = installNativeBodyReadiness(r.bot), reports: TaskReport[] = [];
   const exec = new Executor({ getBot: () => r.bot as unknown as Bot, report: value => reports.push(value),
     log: r.host.log, nextId: (() => { let n = 0; return () => ++n; })() });
   try {
-    exec.submit([{ skill: 'goto', at: [10, 64, 0] }], 'append');
+    exec.submit([{ skill: 'goto', at: [10, 64, 0], ...(explicit ? {expect:{near:[0,64,0] as [number,number,number],within:2}} : {}) }], 'append');
     exec.submit([{ skill: 'chat', text: 'fixture chat remains available' }], 'append');
     await vi.advanceTimersByTimeAsync(1000);
     expect(reports.find(value => value.taskId === 1 && value.kind === 'blocked')?.text).toContain('本步未执行');

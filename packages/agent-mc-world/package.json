@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.152-preview.1",
+  "version": "0.5.7-rc.152-preview.2",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -31,6 +31,10 @@
     "minecraft-agent-knowledge": "./bin/minecraft-agent-knowledge.mjs"
   },
   "exports": {
+    "./body-readiness": {
+      "types": "./dist/types/core/body-readiness.d.ts",
+      "default": "./dist/runtime/core/body-readiness.js"
+    },
     "./dependency-patches": {
       "types": "./dist/types/core/dependency-patches.d.ts",
       "default": "./dist/runtime/core/dependency-patches.js"
