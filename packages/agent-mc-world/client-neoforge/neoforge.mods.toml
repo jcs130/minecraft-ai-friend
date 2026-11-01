@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="agentmc_client_platform"
-version="0.1.0"
+version="0.1.1"
 displayName="Agent MC Native Client Platform"
 description="Opt-in scoped login, reconnect and original YSM camera-subject display; no gameplay or model loop."
 [[mixins]]

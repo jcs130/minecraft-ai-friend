@@ -38,6 +38,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
     private final ReconnectSession reconnect = new ReconnectSession();
     private class_642 reconnectServer;
     private String confirmedAt;
+    private boolean reconnectLimitLogged;
 
     @Override
     public void onInitializeClient() {
@@ -48,6 +49,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
             account = null;
             session = null;
             confirmedAt = null;
+            reconnectLimitLogged = false;
             reconnectServer = null;
             reconnect.block();
             class_642 server = current.method_1558();
@@ -131,7 +133,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
         });
         ClientTickEvents.END_CLIENT_TICK.register(current -> {
             if (current.method_1562() != null) {
-                if(session==null||session.authorized())reconnect.online(); else reconnect.cancel();
+                if(session!=null&&session.authorized())reconnect.online(System.nanoTime()/1_000_000); else reconnect.cancel();
                 if(session!=null&&account!=null&&account.reconnect&&session.confirmationTimedOut(System.nanoTime()/1_000_000)){
                     current.method_1562().method_48296().method_10747(net.minecraft.class_2561.method_43470("Configured server login confirmation timed out; waiting for scoped reconnect."));
                     System.out.println("[CorticoClientLogin] Login confirmation timed out; bounded reconnect, no action replay");
@@ -139,7 +141,13 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                 return;
             }
             if (!reconnect.tick(current.field_1755 instanceof class_419 ? current.field_1755 : null,
-                    System.nanoTime() / 1_000_000)) return;
+                    System.nanoTime() / 1_000_000)) {
+                if(current.field_1755 instanceof class_419&&reconnect.exhausted()&&!reconnectLimitLogged){
+                    reconnectLimitLogged=true;
+                    System.out.println("[CorticoClientLogin] Reconnect limit reached ("+reconnect.maximumAttempts()+"); automatic retries stopped; inspect the original disconnect reason");
+                }
+                return;
+            }
             class_642 target = reconnectServer;
             if (target == null) { reconnect.block(); return; }
             try {
@@ -172,6 +180,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
         out.put("required",owner!=null&&owner.account!=null);out.put("connectionMatched",matched);
         out.put("phase",matched&&owner.session!=null?owner.session.phase():"unknown");
         out.put("authorized",matched&&owner.session!=null?owner.session.authorized():null);
+        if(owner!=null){out.put("reconnectAttempts",owner.reconnect.attempts());out.put("reconnectLimit",owner.reconnect.maximumAttempts());out.put("reconnectExhausted",owner.reconnect.exhausted());}
         if(owner!=null&&owner.account!=null){out.put("username",owner.account.username);out.put("server",owner.account.server);}
         if(owner!=null&&owner.confirmedAt!=null)out.put("confirmedAt",owner.confirmedAt);
         return out;
