@@ -6,7 +6,7 @@
   const local = value => typeof value === 'string' && /^\/downloads\/[A-Za-z0-9_.-]+$/.test(value);
   function card(row) {
     const node = el('article', '', 'client-card download-card');
-    node.append(el('h3', row.name), el('p', row.version + ' · ' + (row.category === 'component' ? '配套资源' : row.channel === 'website-bundle' ? '官网整合包' : row.channel === 'github-release' ? '公开测试包' : '公开候选包'), 'download-version'),
+    node.append(el('h3', row.name), el('p', row.version + ' · ' + (row.category === 'component' ? '配套资源' : row.channel === 'website-bundle' ? '官网整合包' : row.channel === 'github-release' ? '已发布版本' : '公开候选包'), 'download-version'),
       el('p', row.platform, 'download-requirements'), el('p', row.includes));
     if (row.viewerIncluded && row.serverPackIncluded) node.append(el('p', '已含现代可视化与千灯纪资料', 'download-contents'));
     if (row.requires?.length) node.append(el('p', '完整离线安装另需：公共音频包、截图浏览器包。', 'download-requires'));

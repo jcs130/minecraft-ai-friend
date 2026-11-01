@@ -23,6 +23,7 @@
  * 入队不启动;任务队列**挂起**不是抢占,战后从断点续做(非幂等步不重跑)。
  */
 import type { Bot } from 'mineflayer';
+import { nativeBodyBlockedReason } from './body-readiness.ts';
 import { captureDeathTarget, matchesDeathTarget, type DeathTargetIdentity } from './entity-death-identity.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
@@ -606,7 +607,8 @@ export class CombatSession {
     if (!t.enabled) return false;
     const current = this.opts.getBot();
     if (!this.alive(current) || (this.active && this.bodyEnded(current))) {
-      if (this.active && current && current === this.bot) this.end(this.bodyEnded(current) ? 'death' : 'gone');
+      if (this.active && current && current === this.bot) this.end(this.bodyEnded(current) ? 'death'
+        : nativeBodyBlockedReason(current) ? 'stuck' : 'gone');
       return false;
     }
     this.lastSelfHurtAt = Date.now();
@@ -694,6 +696,13 @@ export class CombatSession {
 
   /** 250ms 巡检:3 格内有敌对就开打(不主动招惹,这是"找上门"的判据) */
   private watchTick(): void {
+    // This wall-clock watcher still runs when physicsTick has stopped. Do not
+    // hold the task queue forever or call a stale retreat a successful escape.
+    if (this.state !== 'idle' && this.bot && nativeBodyBlockedReason(this.bot)) {
+      this.opts.emit('身体位置或物理更新未就绪，这次交战受阻；没有确认撤离成功。', true, false);
+      this.end('stuck');
+      return;
+    }
     if (this.state !== 'idle') return;
     const t = this.opts.tuning();
     // 逃生与主动攻击各自持有身体，巡检不重复接管。
@@ -724,6 +733,7 @@ export class CombatSession {
 
   private alive(bot: Bot | null | undefined): bot is Bot {
     if (!bot?.entity || !Number.isFinite(bot.health) || bot.health <= 0) return false;
+    if (nativeBodyBlockedReason(bot)) return false;
     const phase = this.life(bot)?.phase;
     return phase === undefined || phase === 'alive';
   }

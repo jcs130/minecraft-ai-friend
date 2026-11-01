@@ -3,6 +3,7 @@ import { installDeathLifecycle } from './death-lifecycle.ts';
 import { advertiseAgentIdentity } from './server-identity.ts';
 import { declareDecodedChannels } from './decoded-channels.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
+import { installNativeBodyReadiness } from './body-readiness.ts';
 import { installWorldIdentity } from './world-scope.ts';
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
@@ -572,6 +573,7 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    this.bagFor(gen).register('native-body-readiness', installNativeBodyReadiness(bot).dispose);
     this.bagFor(gen).register('world-identity', installWorldIdentity(bot));
     this._spawnPositionPending = true;
     this.deathRecovery = installDeathLifecycle(bot, this.opts.deathRespawnDelayMs,

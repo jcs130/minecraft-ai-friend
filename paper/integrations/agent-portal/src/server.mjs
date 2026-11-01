@@ -35,6 +35,8 @@ import { Memories } from './memories.mjs';
 import { memoryRoute } from './memory-routes.mjs';
 import { LoginThrottle } from './login-throttle.mjs';
 import { PublicArchives } from './public-archives.mjs';
+import {PhotoScenes} from './photo-scenes.mjs';
+import {createSceneObjectStorage} from './scene-object-storage.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
@@ -92,6 +94,7 @@ export function createPortal(config, options = {}) {
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
+  const photoScenes=new PhotoScenes(store,gallery,options.sceneObjects??createSceneObjectStorage(config.sceneStorage));
   const photoUploads = new PhotoUploads(gallery, { now: options.now });
   const archives = new PublicArchives(store);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
@@ -389,13 +392,28 @@ export function createPortal(config, options = {}) {
         const result=cloud.accept(input);trace('committed',input.sequence);
         gallery.refreshCatalog();
         const wantedPhotos=(input.photos||[]).filter(photo=>store.db.prepare('SELECT sha256 FROM gallery_images WHERE id=?').get(photo.id)?.sha256!==photo.sha256).map(photo=>photo.id);
-        return respond(res, 200, {...result,wantedPhotos});
+        return respond(res, 200, {...result,wantedPhotos,wantedScenes:photoScenes.wanted(input.photos)});
       }
       if (req.method === 'PUT' && pathname === '/api/v1/internal/challenges') {
         if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');
         if (req.headers.origin || req.headers.cookie) throw fail(403,'SYNC_CLIENT_REQUIRED','挑战资料仅由家庭端只读采集器上传');
         cloud.authorize(req); rate('challenge-sync',12,60000);
         return respond(res,200,await challenges.accept(await jsonBody(req,config.cloudSync.maxBytes)));
+      }
+      const sceneUpload=/^\/api\/v1\/internal\/photo-scenes\/([a-f0-9-]{36})$/.exec(pathname);
+      const sceneAssetUpload=/^\/api\/v1\/internal\/photo-scenes\/([a-f0-9-]{36})\/assets\/([a-f0-9]{64})$/.exec(pathname);
+      if(sceneAssetUpload&&req.method==='POST'){
+        if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');if(req.headers.origin||req.headers.cookie)throw fail(403,'SYNC_CLIENT_REQUIRED','场景仅由家庭端同步');
+        cloud.authorize(req);rate('photo-scene-asset-sync',180,60000);return respond(res,200,await photoScenes.uploadResource(sceneAssetUpload[1],sceneAssetUpload[2]));
+      }
+      if(sceneUpload&&req.method==='PUT'){
+        if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
+        if(req.headers.origin||req.headers.cookie)throw fail(403,'SYNC_CLIENT_REQUIRED','场景仅由家庭端同步');
+        cloud.authorize(req);rate('photo-scene-sync',60,60000);
+        if(req.headers['content-type']!=='application/gzip')throw fail(415,'PHOTO_SCENE_FORMAT','场景需要 gzip 格式');
+        const maximum=32*1024*1024;if(Number(req.headers['content-length'])>maximum)throw fail(413,'PHOTO_SCENE_SIZE','场景文件过大');
+        let size=0;const parts=[];for await(const part of req){size+=part.length;if(size>maximum)throw fail(413,'PHOTO_SCENE_SIZE','场景文件过大');parts.push(part);}
+        return respond(res,200,await photoScenes.accept(sceneUpload[1],Buffer.concat(parts)));
       }
       if(req.method==='PUT'&&pathname==='/api/v1/internal/archives'){
         if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
@@ -498,7 +516,10 @@ export function createPortal(config, options = {}) {
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
       if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
-      if(req.method==='GET'&&pathname==='/api/v1/gallery/manage')return respond(res,200,gallery.managed(gallery.managementContext(browserAuth(req).owner),{page:Number(url.searchParams.get('page')||1)}));
+      if(req.method==='GET'&&pathname==='/api/v1/gallery/manage'){
+        const result=gallery.managed(gallery.managementContext(browserAuth(req).owner),{page:Number(url.searchParams.get('page')||1)});
+        result.photos=result.photos.map(photo=>({...photo,sceneReady:photoScenes.ready(photo.id,photo.scene),...(photoScenes.ready(photo.id,photo.scene)?{sceneUrl:'/api/v1/gallery/manage/'+photo.id+'/scene',sceneResourcesUrl:'/api/v1/gallery/manage/'+photo.id+'/scene/resources'}:{})}));return respond(res,200,result);
+      }
       if(req.method==='POST'&&pathname==='/api/v1/gallery/upload'){
         const {owner}=browserAuth(req);rate('photo-upload-owner:'+owner.id,12);
         const body=await jsonBody(req,6*1024*1024),{agent}=await authorizedAgent(req,body.agentId);
@@ -518,6 +539,16 @@ export function createPortal(config, options = {}) {
       const removePhoto=/^\/api\/v1\/gallery\/([a-f0-9-]{36})$/.exec(pathname);
       if(removePhoto&&req.method==='DELETE')return respond(res,200,photoUploads.remove(removePhoto[1],gallery.managementContext(browserAuth(req).owner)));
       const photoManagement=/^\/api\/v1\/gallery\/(?:manage\/([a-f0-9-]{36})\/image|([a-f0-9-]{36})\/publication)$/.exec(pathname);
+      const sceneDownload=/^\/api\/v1\/gallery\/manage\/([a-f0-9-]{36})\/scene$/.exec(pathname);
+      const sceneResources=/^\/api\/v1\/gallery\/manage\/([a-f0-9-]{36})\/scene\/(?:resources|assets\/([a-f0-9]{64}))$/.exec(pathname);
+      if(sceneResources&&req.method==='GET'){
+        const context=gallery.managementContext(browserAuth(req).owner);if(!sceneResources[2])return respond(res,200,await photoScenes.manifest(sceneResources[1],context));
+        res.writeHead(307,{Location:await photoScenes.resourceLocation(sceneResources[1],sceneResources[2],context),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','Vary':'Cookie'});return res.end();
+      }
+      if(sceneDownload&&req.method==='GET'){
+        const context=gallery.managementContext(browserAuth(req).owner),location=await photoScenes.location(sceneDownload[1],context);
+        res.writeHead(307,{Location:location,'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','Vary':'Cookie'});return res.end();
+      }
       if(photoManagement){
         const context=gallery.managementContext(browserAuth(req).owner);
         if(req.method==='GET'&&photoManagement[1]){const image=gallery.image(photoManagement[1],context);res.writeHead(200,{'Content-Type':'image/png','Content-Length':image.bytes.length,'Cache-Control':'private, no-store','Vary':'Cookie'});return res.end(image.bytes);}
@@ -849,5 +880,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoUploads, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoScenes, photoUploads, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

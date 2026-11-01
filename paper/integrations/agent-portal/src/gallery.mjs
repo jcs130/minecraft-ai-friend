@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { UUID } from './game-data.mjs';
 import { playerNameValid } from './world-catalog.mjs';
 import { photoTiles } from './photo-tiles.mjs';
+import {sceneDescriptor,readPhotoScene} from './photo-scenes.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 // Match the camera's bounded original PNG budget; catalog pages still carry metadata only.
@@ -22,16 +23,18 @@ export function validatePhotos(rows = []) {
   return rows.map(row => {
     if (!row || !UUID.test(row.id || '') || ids.has(row.id) || !playerNameValid(row.author) || typeof row.title !== 'string' || !row.title.trim() || row.title.length > 160 || typeof row.story !== 'string' || row.story.length > 2000 || !Number.isFinite(Date.parse(row.capturedAt)) || !/^[a-f0-9]{64}$/.test(row.sha256 || '') || !Number.isInteger(row.bytes) || row.bytes < 33 || row.bytes > MAX_PHOTO_BYTES || !Number.isInteger(row.width) || !Number.isInteger(row.height) || row.width < 1 || row.height < 1 || row.width > 4096 || row.height > 4096) throw fail(400, 'PHOTO_CATALOG', '照片目录格式无效');
     ids.add(row.id);
+    const scene=sceneDescriptor(row.scene);
+    if(scene&&!UUID.test(row.authorUuid??''))throw fail(400,'PHOTO_SCENE_METADATA','场景必须绑定已核实的照片作者');
     if(row.published!==undefined&&typeof row.published!=='boolean'||row.authorUuid!==undefined&&!UUID.test(row.authorUuid||''))throw fail(400,'PHOTO_CATALOG','照片归属或公开状态无效');
     return {...Object.fromEntries(['id', 'author', 'title', 'story', 'capturedAt', 'sha256', 'bytes', 'width', 'height'].map(key => [key, row[key]])),
-      ...(row.published!==undefined?{published:row.published}:{}),...(row.authorUuid?{authorUuid:row.authorUuid.toLowerCase()}:{})};
+      ...(row.published!==undefined?{published:row.published}:{}),...(row.authorUuid?{authorUuid:row.authorUuid.toLowerCase()}:{}),...(scene?{scene}:{})};
   });
 }
 
 // Preserve every finished photograph. Only the trusted journal's player UUID
 // establishes ownership; URLs, coordinates and examination context stay local.
 export class PhotoReader {
-  constructor(config) { this.root = path.resolve(config.serverDir, 'plugins', 'ImageFrame', 'data'); this.journal = path.resolve(config.serverDir, 'plugins', 'AgentFriend', 'photo-journal.json'); this.archive=path.resolve(config.serverDir,'plugins','AgentFriend','archives','archive.db');this.archived=[];this.cache = new Map();this.mosaics=new Map(); this.last = []; this.offset=0; this.manifest=null; }
+  constructor(config) { this.sceneDirectory=config.sceneDirectory;this.root = path.resolve(config.serverDir, 'plugins', 'ImageFrame', 'data'); this.journal = path.resolve(config.serverDir, 'plugins', 'AgentFriend', 'photo-journal.json'); this.archive=path.resolve(config.serverDir,'plugins','AgentFriend','archives','archive.db');this.archived=[];this.cache = new Map();this.mosaics=new Map(); this.last = []; this.offset=0; this.manifest=null; }
   async archivalPhotos(){
     let db;
     try{
@@ -39,7 +42,7 @@ export class PhotoReader {
       if(db.prepare('PRAGMA user_version').get().user_version!==1)return this.archived;
       const rows=db.prepare("SELECT id,author,author_name,title,metadata,published,created_at FROM archive_entries a WHERE kind='photo' AND version=(SELECT max(b.version) FROM archive_entries b WHERE b.id=a.id) ORDER BY created_at DESC LIMIT 10001").all();
       if(rows.length>10000)return this.archived;
-      this.archived=rows.flatMap(row=>{try{const metadata=JSON.parse(row.metadata);return [{id:row.id,author:row.author_name,authorUuid:row.author,title:row.title,story:typeof metadata.story==='string'?metadata.story:'',capturedAt:row.created_at,imageIndex:metadata.imageIndex,published:row.published===1}];}catch{return [];}});
+      this.archived=rows.flatMap(row=>{try{const metadata=JSON.parse(row.metadata);return [{id:row.id,author:row.author_name,authorUuid:row.author,title:row.title,story:typeof metadata.story==='string'?metadata.story:'',capturedAt:row.created_at,imageIndex:metadata.imageIndex,...(/^[a-f0-9]{64}$/.test(metadata.image?.sha256??'')?{image:{sha256:metadata.image.sha256}}:{}),published:row.published===1}];}catch{return [];}});
     }catch{/* An unavailable legacy archive must not block current photographs. */}finally{db?.close();}
     return this.archived;
   }
@@ -77,8 +80,9 @@ export class PhotoReader {
           cached = { mtimeMs: stat.mtimeMs, bytes: bytes.length, sha256: sha(bytes), ...pngSize(bytes) };
           this.cache.set(file, cached);
         }
-        const [metadata] = validatePhotos([{ id: photo.id, author: photo.author, ...(photo.authorUuid?{authorUuid:photo.authorUuid}:{}),published:photo.published, title: String(photo.title || photo.name || '未命名作品').slice(0, 160), story: String(photo.story || '').slice(0, 2000), capturedAt: new Date(photo.capturedAt).toISOString(), ...cached }]);
-        result.push({ metadata, file,...(original?{original}:{}) });
+        this.sceneCache??=new Map();const scene=await readPhotoScene(this.sceneDirectory,photo,this.sceneCache);
+        const [metadata] = validatePhotos([{ id: photo.id, author: photo.author, ...(photo.authorUuid?{authorUuid:photo.authorUuid}:{}),published:photo.published, title: String(photo.title || photo.name || '未命名作品').slice(0, 160), story: String(photo.story || '').slice(0, 2000), capturedAt: new Date(photo.capturedAt).toISOString(), ...cached,...(scene?{scene:scene.metadata}:{}) }]);
+        result.push({ metadata, file,...(original?{original}:{}),...(scene?.file?{sceneFile:scene.file,sceneResources:scene.resources}:{}) });
       } catch { /* A missing or unfinished image is retried on the next capture. */ }
     }
     const active = new Set(result.map(row => row.file));

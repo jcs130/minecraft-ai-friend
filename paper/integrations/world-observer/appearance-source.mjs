@@ -43,11 +43,17 @@ export class ObservationAppearanceSource {
     if(previous?.entityId===entityId&&this.now()-previous.checkedAt<1000)return;
     try{
       if(!this.state||this.now()-this.stateAt>=1000){this.state=await json(this.config.stateFile);this.stateAt=this.now();}
-      const state=this.state,row=state.players?.find(r=>r.playerUuid?.toLowerCase()===uuid);
+      const state=this.state,nativeRow=state.players?.find(r=>r.playerUuid?.toLowerCase()===uuid);let row=nativeRow,projection=null;
       if(state.source!==this.profile.source||!Number.isFinite(state.writtenAt)||this.now()-state.writtenAt>15000||state.writtenAt>this.now()+1000)throw Error('SERVER_APPEARANCE_STATE_STALE');
       if(row?.available===true){
         if(row.entityId!==entityId||row.ysmVersion!==this.profile.version||row.protocolVersion!==this.profile.protocol||row.jarSha256!==this.config.ysmJarSha256||!modelIdValid(row.modelId,this.profile)
           ||this.profile.version==='2.6.5'&&row.source!==this.profile.source)throw Error('SERVER_APPEARANCE_BODY_OR_SOURCE_MISMATCH');
+        const choice=this.config.webModelOverrides?.[uuid];
+        if(choice&&choice.nativeModelId===row.modelId&&choice.nativeTexture===row.texture){
+          if(!modelIdValid(choice.modelId,this.profile)||typeof choice.texture!=='string'||!SHA.test(choice.assetSha256??'')||!Number.isInteger(choice.assetBytes)||choice.assetBytes<1||choice.assetBytes>2*1024*1024)throw Error('SERVER_APPEARANCE_WEB_PROJECTION_INVALID');
+          projection={presentation:'owner_web_projection',nativeModelId:row.modelId,nativeTexture:row.texture};
+          row={...row,modelId:choice.modelId,texture:choice.texture,assetSha256:choice.assetSha256,assetBytes:choice.assetBytes,webAvailable:true};
+        }
         if(row.webAvailable!==true){
           value={...value,nativeAvailable:true,modelId:row.modelId,texture:row.texture,ysmVersion:row.ysmVersion,message:'原生模型已确认；网页需要原作者公开的几何、动画和贴图。'};
           throw Error(['YSM_ENCRYPTED_SOURCE_REQUIRED','YSM_SOURCE_NOT_REGISTERED','YSM_TEXTURE_NOT_REGISTERED'].includes(row.webReason)?row.webReason:'YSM_WEB_SOURCE_UNAVAILABLE');
@@ -67,7 +73,7 @@ export class ObservationAppearanceSource {
             asset={...this.store(bundle),assetSha256:row.assetSha256};
           }catch(error){this.failed.set(row.assetSha256,this.now());throw error;}
         }
-        value={...value,...asset,available:true,reason:null,kind:'ysm',modelId:row.modelId,texture:row.texture,ysmVersion:row.ysmVersion,stateEpoch:state.epoch,authority:row.stateAuthority??this.profile.source};
+        value={...value,...asset,...projection,available:true,reason:null,kind:'ysm',modelId:row.modelId,texture:row.texture,ysmVersion:row.ysmVersion,stateEpoch:state.epoch,authority:projection?'owner_web_projection':row.stateAuthority??this.profile.source};
       }else{
         // A real UUID's configured skin is an independent authoritative source,
         // not a guessed YSM folder or a replacement default Steve texture.

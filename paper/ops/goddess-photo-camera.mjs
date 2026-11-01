@@ -107,8 +107,10 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     settings = options.settings ?? JSON.parse(await readFile('E:/MC/ops/goddess-photo-camera.json','utf8'));
     if(settings.renderer==='native'){
       const {createNativePhotoRenderer}=await import('./native-photo-renderer.mjs');
+      const {createNativeSceneResources}=await import('./native-photo-scene-resources.mjs');
       const dependencies=createRequire(pathToFileURL(settings.nativeDependencyRoot+'/package.json'));
-      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG,shadersEnabled:settings.nativeShaders===undefined?true:settings.nativeShaders});
+      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG,shadersEnabled:settings.nativeShaders===undefined?true:settings.nativeShaders,sceneDirectory:settings.sceneDirectory??null,sceneRadius:settings.sceneRadius??3,
+        ...(settings.sceneResources?{sceneAppearances:createNativeSceneResources(settings.sceneResources)}:{})});
       if(stopped)return;
       bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});
       const check=nativeReadinessCheck({probe:()=>nativeRenderer.probe(),stopped:()=>stopped,
@@ -157,6 +159,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     guard();
     if(nativeRenderer){
       const {png,image,diagnostics}=await nativeRenderer.capture(job,{guard,signal});guard();
+      if(diagnostics.scene)log(`photo job=${job.job} scene=${diagnostics.scene.state} columns=${diagnostics.scene.columns??0} bytes=${diagnostics.scene.bytes??0} reason=${diagnostics.scene.reason??'none'}`);
       const body=new FormData();body.append('image',new Blob([png],{type:'image/png'}),'photo.png');reply('uploading',{...job,image});
       const response=await fetch(job.uploadBase+'/upload?id='+job.uploadId,{method:'POST',body,redirect:'error',signal});
       if(!response.ok)throw Error('PHOTO_IMPORT_REJECTED');await response.arrayBuffer();reply('uploaded',{...job,image});

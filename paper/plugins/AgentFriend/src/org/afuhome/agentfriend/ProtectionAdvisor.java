@@ -289,7 +289,9 @@ final class ProtectionAdvisor implements Listener {
         else if (guild && !edit && !action.equals("drop")) {
             next = "不要取放公会私产；需要物资装备请到门口公共箱，先用 /mycli guild shared 查看准确位置。";
             commands.add("/mycli guild shared");
-        } else if (data.has("globalProtection") && data.get("globalProtection").getAsBoolean())
+        } else if (reason.equals("worldguard") && data.has("regionGuidance") && !data.has("boundsIncomplete"))
+            next = data.get("regionGuidance").getAsString();
+        else if (data.has("globalProtection") && data.get("globalProtection").getAsBoolean())
             next = "当前世界有全局权限限制，不能靠跨越局部边界解决；联系服主确认可施工地点或授权。";
         else if (!areas.isEmpty()) {
             int minX = areas.values().stream().mapToInt(ProtectionArea::minX).min().orElseThrow();
@@ -316,6 +318,14 @@ final class ProtectionAdvisor implements Listener {
         if (plugin.lands().stateAllows(player, action, at)) return;
         var set = manager.getApplicableRegions(com.sk89q.worldedit.math.BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ()));
         var local = WorldGuardPlugin.inst().wrapPlayer(player);
+        if (data.get("reason").getAsString().equals("worldguard")) {
+            String guidance = set.queryValue(local, Flags.DENY_MESSAGE);
+            if (guidance != null) {
+                guidance = org.bukkit.ChatColor.stripColor(guidance).replaceAll("[\\p{Cntrl}]", " ").trim();
+                if (!guidance.isBlank() && guidance.length() <= 600)
+                    data.addProperty("regionGuidance", guidance.replace("%what%", actionLabel(action)));
+            }
+        }
         StateFlag flag = switch (action) {
             case "break", "harvest", "damage", "display" -> Flags.BLOCK_BREAK;
             case "place", "bucket", "fertilize" -> Flags.BLOCK_PLACE;

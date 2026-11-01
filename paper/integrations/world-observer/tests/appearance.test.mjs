@@ -40,6 +40,14 @@ test('fresh confirmed model is exported once and only bound to its actual UUID/b
  assert.ok(f.source.read(b.bundleSha256));assert.equal(f.source.binding({...f.player,entityId:13}),null);
  assert.equal(f.source.binding({...f.player,uuid:'822d173a-7181-3b9b-be60-804f29b24ecc'}),null);assert.equal(f.source.read('../private'),null);
 })
+
+test('an owner-approved web projection is UUID and native-choice bound without changing the game selection',async t=>{
+ const f=await fixture(t,{native:true});Object.assign(f.row,{modelId:'大肥鱼_1.1.ysm',texture:'white',webAvailable:false,webReason:'YSM_ENCRYPTED_SOURCE_REQUIRED'});await f.save();
+ f.source.config.webModelOverrides={[uuid]:{nativeModelId:f.row.modelId,nativeTexture:'white',modelId:'qd_dafeiyu',texture:'pearl',assetSha256:f.row.assetSha256,assetBytes:f.row.assetBytes}};
+ f.source.decodeBundle=()=>({modelId:'qd_dafeiyu',textures:{pearl:'pearl.png'},files:{}});
+ await f.source.forPlayer(f.player);let b=f.source.binding(f.player);assert.equal(b.available,true);assert.equal(b.modelId,'qd_dafeiyu');assert.equal(b.nativeModelId,'大肥鱼_1.1.ysm');assert.equal(b.nativeTexture,'white');assert.equal(b.authority,'owner_web_projection');assert.equal(f.row.modelId,'大肥鱼_1.1.ysm');assert.equal(JSON.parse(await fs.readFile(f.source.config.stateFile)).players[0].modelId,f.row.modelId);
+ f.advance(1100);f.row.texture='other';await f.save();await f.source.forPlayer(f.player);b=f.source.binding(f.player);assert.equal(b.available,false);assert.equal(b.modelId,'大肥鱼_1.1.ysm');assert.equal(b.nativeModelId,undefined);
+});
 test('stale state, a replaced body, wrong JAR or mismatched original bytes cannot render a claimed model',async t=>{
  for(const mutation of [f=>{f.state.writtenAt=0},f=>{f.row.entityId=13},f=>{f.row.jarSha256='f'.repeat(64)},f=>{f.row.assetBytes++}]){
   const f=await fixture(t);mutation(f);await f.save();await f.source.forPlayer(f.player);assert.equal(f.source.binding(f.player).available,false);assert.equal(f.source.assets.size,0);

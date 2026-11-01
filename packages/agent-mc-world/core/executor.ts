@@ -10,6 +10,7 @@
  * 调用方不必分辨两处。
  */
 import type { Bot } from 'mineflayer';
+import { nativeBodyBlockedReason } from './body-readiness.ts';
 import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
@@ -670,6 +671,8 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
 }
 
 async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
+  const bodyBlocked = nativeBodyBlockedReason(bot, call.skill);
+  if (bodyBlocked) throw new SkillBlocked(bodyBlocked);
   // A dispatched travel can change worlds within one task. Freeze each operation, not the whole task.
   if (ctx.getChests) ctx = { ...ctx, chests: ctx.getChests() };
   // An unresolved click is a protocol transaction barrier, independent of item
@@ -5863,7 +5866,7 @@ export class Executor {
           const reason = blocked || err instanceof SkillNoop ? (err as Error).message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
           // 技能报阻但期望已达成(战利品自己进了包、人已经在目的地):按达成算
           const expect = call.expect ?? deriveExpect(bot, call);
-          const verdict = expect ? evaluateExpect(bot, expect, gainBase) : null;
+          const verdict = expect && !nativeBodyBlockedReason(bot, call.skill) ? evaluateExpect(bot, expect, gainBase) : null;
           const readAt = verdict ? this.clock(Date.now()) : undefined;
           const operationUnconfirmed = blocked?.code === 'container-window-changed'
             || blocked?.code === 'container-window-rollback' || blocked?.code === 'use-hand-changed'

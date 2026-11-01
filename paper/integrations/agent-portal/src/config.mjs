@@ -13,6 +13,8 @@ export function loadConfig(overrides = {}) {
   if (!overrides.skipLocalConfig && fs.existsSync(localPath)) local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
   const defaults = JSON.parse(fs.readFileSync(path.join(projectRoot, 'config.example.json'), 'utf8'));
   const config = { ...defaults, ...local, ...overrides };
+  config.sceneStorage={...defaults.sceneStorage,...local.sceneStorage,...overrides.sceneStorage};
+  if(typeof config.sceneStorage.enabled!=='boolean'||config.sceneDirectory!==null&&config.sceneDirectory!==undefined&&!path.isAbsolute(config.sceneDirectory))throw new Error('Invalid photo scene configuration');
   config.host = process.env.PORTAL_HOST || config.host;
   config.port = Number(process.env.PORTAL_PORT || config.port);
   config.dataDir = overrides.dataDir || process.env.PORTAL_DATA_DIR || path.join(projectRoot, '.local');

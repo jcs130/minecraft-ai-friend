@@ -1,0 +1,122 @@
+--- a/src/worlds/minecraft/bridge.ts
++++ b/src/worlds/minecraft/bridge.ts
+@@ -3,6 +3,7 @@
+  * 重连会替换 bot 实例，World 与执行器须通过 bridge.bot 取得当前实例。
+  */
+ import mineflayer from 'mineflayer';
++import { installNativeBodyReadiness } from './body-readiness.ts';
+ import pathfinderPkg, { pathfinder, Movements } from 'mineflayer-pathfinder';
+ 
+ // goals 不是 cjs-module-lexer 能静态识别的命名导出,只能从默认导出上取
+@@ -357,6 +358,7 @@
+       return;
+     }
+     this._bot = bot;
++    installNativeBodyReadiness(bot);
+     this._invSynced = false;
+     this.opts.onBotCreated?.(bot);
+     // 包里地图的整张画面服务端只在登录后第一刻推一次,早于 spawn;挂在 spawn 上就只剩增量
+--- a/src/worlds/minecraft/executor.ts
++++ b/src/worlds/minecraft/executor.ts
+@@ -10,6 +10,7 @@
+  * 调用方不必分辨两处。
+  */
+ import type { Bot } from 'mineflayer';
++import { nativeBodyBlockedReason } from './body-readiness.ts';
+ import type { MinecraftTaskObserver } from './task-observer.ts';
+ import pathfinderPkg from 'mineflayer-pathfinder';
+ import { Vec3 } from 'vec3';
+@@ -476,6 +477,8 @@
+ }
+ 
+ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<string> {
++  const blocked = nativeBodyBlockedReason(bot, call.skill);
++  if (blocked) throw new SkillBlocked(blocked);
+   switch (call.skill) {
+     case 'goto': {
+       if (call.dimension
+@@ -2993,7 +2996,7 @@
+         const reason = blocked ? blocked.message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
+         // 技能报阻但期望已达成(战利品自己进了包、人已经在目的地):按达成算
+         const expect = call.expect ?? deriveExpect(bot, call);
+-        const verdict = expect ? evaluateExpect(bot, expect, gainBase) : null;
++        const verdict = expect && !nativeBodyBlockedReason(bot, call.skill) ? evaluateExpect(bot, expect, gainBase) : null;
+         const readAt = verdict ? this.clock(Date.now()) : undefined;
+         if (verdict?.met && (call.expect !== undefined || mayOverturnBlocked(expect!))) {
+           this.opts.diag?.write({
+--- a/src/worlds/minecraft/combat.ts
++++ b/src/worlds/minecraft/combat.ts
+@@ -24,6 +24,7 @@
+  * 入队不启动;任务队列**挂起**不是抢占,战后从断点续做(非幂等步不重跑)。
+  */
+ import type { Bot } from 'mineflayer';
++import { nativeBodyBlockedReason } from './body-readiness.ts';
+ import pathfinderPkg from 'mineflayer-pathfinder';
+ import { Vec3 } from 'vec3';
+ import type { Logger } from '../../core/types.ts';
+@@ -418,6 +419,8 @@
+    * false = 会话进不了场(关着/冷却/环境自保中),退回反射的降级行为。
+    */
+   onHurtBy(attackerId: number, name: string): boolean {
++    const currentBody = this.opts.getBot();
++    if (currentBody && nativeBodyBlockedReason(currentBody)) return false;
+     const t = this.opts.tuning();
+     if (!t.enabled) return false;
+     if (this.state === 'retreating') {
+@@ -471,6 +474,11 @@
+ 
+   /** 250ms 巡检:3 格内有敌对就开打(不主动招惹,这是"找上门"的判据) */
+   private watchTick(): void {
++    if (this.state !== 'idle' && this.bot && nativeBodyBlockedReason(this.bot)) {
++      this.opts.emit('身体位置或物理更新未就绪，这次交战受阻；没有确认撤离成功。', true, false);
++      this.end('stuck');
++      return;
++    }
+     if (this.state !== 'idle') return;
+     const t = this.opts.tuning();
+     // 她正在跑(flee/surface):不趁逃跑抢场——挨了打另说(onHurtBy 不看这道闸)
+@@ -478,7 +486,7 @@
+     if (t.fight === 'off') return;
+     if (Date.now() < this.cooldownUntil) return;
+     const bot = this.opts.getBot();
+-    if (!bot?.entity) return;
++    if (!bot?.entity || nativeBodyBlockedReason(bot)) return;
+     // armed 模式仅在背包有可用近战武器或远程武器就绪时主动进场。
+     if (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot)) return;
+     this.bot = bot;
+@@ -497,7 +505,7 @@
+ 
+   private engage(firstName: string, hurt: boolean): boolean {
+     const bot = this.opts.getBot();
+-    if (!bot?.entity) return false;
++    if (!bot?.entity || nativeBodyBlockedReason(bot)) return false;
+     // 血线不足时转入撤退，避免 250ms 巡检反复尝试进场。
+     const line = this.opts.tuning().fleeHealth + (hurt ? 0 : ENGAGE_MARGIN);
+     if ((bot.health ?? 20) < line) {
+--- a/src/worlds/minecraft/world.ts
++++ b/src/worlds/minecraft/world.ts
+@@ -14,6 +14,7 @@
+   ToolDef, ToolOutcome, TriggerMode,
+ } from '../../core/types.ts';
+ import { MAP_SIZE, exploredShare, mapStateOf, renderMapPng } from './map-view.ts';
++import { nativeBodyReadiness } from './body-readiness.ts';
+ import { selfDamageText, takeSelfDamage } from './damage-source.ts';
+ import { readMapDat } from './level-dat.ts';
+ import { readMapId } from './item-facts.ts';
+@@ -6445,6 +6446,11 @@
+   ): void {
+     const p = bot.entity?.position;
+     if (!p) return;
++    const body = nativeBodyReadiness(bot);
++    if (body && body.phase !== 'ready') {
++      this.emit('minecraft.event', '[Minecraft] 死亡后的新落点尚未同步，旧坐标不能确认为重生位置。', false);
++      return;
++    }
+     if (this.lastReported) this.lastReported = { ...this.lastReported, position: { x: p.x, y: p.y, z: p.z } };
+     const dimension = normalizeDimension(bot.game?.dimension);
+     const off = predicted && normalizeDimension(predicted.dimension) === dimension
+--- /dev/null
++++ b/src/worlds/minecraft/body-readiness.ts
+@@ -0,0 +1,2 @@
++// Shared observer and gates; the original host remains the sole body owner.
++export { installNativeBodyReadiness, nativeBodyReadiness, nativeBodyBlockedReason } from 'agent-mc-world/body-readiness';
