@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "model-guidance-and-web-projection-20261101-r1",
-  "verifiedAt": "2026-11-01T13:19:03.757506+00:00",
-  "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
+  "latestRelease": "client-full-compat-20261102-r1",
+  "verifiedAt": "2026-11-02T04:38:00.5225654+08:00",
+  "releaseDocument": "paper/docs/FULL_CLIENT_COMPAT_RELEASE_20261102.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -23,12 +23,12 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.46-rpg",
-    "QiandengjiRpg": "0.2.16",
+    "AgentFriend": "0.4.47.48-rpg",
+    "QiandengjiRpg": "0.2.17",
     "VortexRPG": "1.2.2-alpha-qd32-cooperation",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.4",
-    "LoginGuard": "0.1.9",
+    "LoginGuard": "0.1.10",
     "Numen": "0.1.4 + pinned mcbot/control fixes",
     "QiandengjiMcbot": "0.1.0",
     "QwenPawGameChannel": "0.3.2",
@@ -40,14 +40,18 @@
     "MultiverseCore": "5.8.1",
     "Freesia": "removed; native YSM backend active",
     "AgentAppearance": "AgentAppearanceNative 0.4.3",
-    "AgentAppearanceBedrock": "0.2.2 enabled",
-    "kernel": "Youer 1.21.1 / NeoForge 21.1.252",
+    "AgentAppearanceBedrock": "0.2.3 enabled",
+    "kernel": "Youer1.21.1 build920 / NeoForge21.1.252",
     "QiandengjiMaidBridge": "0.1.6",
     "NativePlatform": "0.1.6",
     "OptionalPayloadGuard": "0.1.0",
     "YSM": "2.6.5",
     "QiandengjiFaweHybrid": "0.1.0",
-    "NumenEngine": "0.1.4-qd-youer1"
+    "NumenEngine": "0.1.4-qd-youer1",
+    "Geyser": "2.12.1-b1280",
+    "ViaVersion": "5.12.2",
+    "ViaBackwards": "5.12.2",
+    "NativeAuthenticationBackend": "Youer1.21.1, loopback only, 1536MiB, original lifecycle"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -72,7 +76,7 @@
     "E:\\MC\\server\\plugins\\FancyNpcs-2.9.0.jar": "b7c992bdc7c01f9a7dc2943351ba7d37abb3a0c317ba0a52125326352230f57e",
     "E:\\MC\\server\\plugins\\FastAsyncWorldEdit-2.16.1.jar": "a1706c41412a108e3d2fdbd9e9dd0c60904f2ba45414c6edf11c1262812e1838",
     "E:\\MC\\server\\plugins\\floodgate-spigot.jar": "81b7b3c6cb77b387aaea9fec44e1074b76fa299d674dcd51df2f5aba92da69eb",
-    "E:\\MC\\server\\plugins\\Geyser-Spigot.jar": "d808c432bae955413c80ca752f99ea9f7dda52f2552057508646a3ee344a696e",
+    "E:\\MC\\server\\plugins\\Geyser-Spigot.jar": "0b94c8a92660071115eeae10d9999ad3666bde01c1123147c8e3cff9852f3729",
     "E:\\MC\\server\\plugins\\ImageFrame-2026.1.5.0.jar": "65b5c14eb6bd847f1cc0f4985efa95ab43d2f3e2f67dbaec2ecf3ea327fde9b1",
     "E:\\MC\\server\\plugins\\LightAntiCheat-1.2.6-qd1.jar": "9a0903649a841cced3fbcdd31bfe346c670e309d75272d7359a70c11f8ec18ad",
     "E:\\MC\\server\\plugins\\LuckPerms-Bukkit-5.5.71.jar": "49cecb66fa1fd22a133039a490e9c1e5095a238e7cd66eb9d2a16fe6c897550d",
@@ -92,7 +96,6 @@
     "E:\\MC\\server\\plugins\\QiandengjiAntiCheat-0.1.0.jar": "f8e540eed3bad1434e28ba736739725c4840dca92672b641676c675740d3a378",
     "E:\\MC\\server\\plugins\\QiandengjiFaweHybrid-0.1.0.jar": "98903723c2e63cbd32133a32bef7a74fe0774a6db1cc023bf7a56139f8fe6d15",
     "E:\\MC\\server\\plugins\\QiandengjiMcbot-0.1.0.jar": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59",
-    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.10.jar": "59d709ce193af078810d6efee795ed4aee56792e552e35259f83ed69f442fd24",
     "E:\\MC\\server\\plugins\\QiandengVoice-0.1.0.jar": "db28cbb28eb72ca385681a8c39e9f8bbebe625f6e08482a819a7f3a16057ede4",
     "E:\\MC\\server\\plugins\\Sentinel-2.9.1.jar": "3967a2f2f890a0990066927604a7463610bad4f863132b924a14a5f948cb9799",
     "E:\\MC\\server\\plugins\\Shopkeepers-2.23.3.jar": "8228d8c11d98c8b74a80b0336f5b65735cab249aa56a2a1218edcee6c61c725c",
@@ -101,8 +104,8 @@
     "E:\\MC\\server\\plugins\\spectatorplus-paper-1.2.1.jar": "95faff5336fdd265202e1589f39338f06cd6c4de788eeedd94164ec4cb2c92d2",
     "E:\\MC\\server\\plugins\\TAB-6.2.1-Paper-1.20.5-1.21.4.jar": "bdf8ea4e6b194197a02fdd7abee9845e1000183bc4df9c0e5280505fc1f51c24",
     "E:\\MC\\server\\plugins\\Vault-1.7.3.jar": "a6b5ed97f43a5cf5bbaf00a7c8cd23c5afc9bd003f849875af8b36e6cf77d01d",
-    "E:\\MC\\server\\plugins\\ViaBackwards.jar": "4316593b4e50bac259ed00c6cacf61dccc1fbfcb08832c77ae5ac7ea8e0b0185",
-    "E:\\MC\\server\\plugins\\ViaVersion.jar": "08caeeaba6674643b427ca901a47e53e291d1b3b20d06c5a0ed3b895d5d7fa00",
+    "E:\\MC\\server\\plugins\\ViaBackwards.jar": "9a148a80ea22074f4bd1626cdbe254a4cd998bf44e7ceaff4e285a1b6b35da42",
+    "E:\\MC\\server\\plugins\\ViaVersion.jar": "24e4876fefe73e08a4c87cd6c457ee0916e62dd69656631caf41e26f909d504b",
     "E:\\MC\\server\\plugins\\VillagerLife-1.0.0-qiandengji1.jar": "ae83e95991faa3bbf11408c67c2639e5c431e686d741f64688e668eb670261ab",
     "E:\\MC\\server\\plugins\\voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
     "E:\\MC\\server\\plugins\\VortexRPG-1.2.2-alpha-qd29.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
@@ -114,19 +117,20 @@
     "E:\\MC\\server\\mods\\touhoulittlemaid-1.5.3-qiandengji.jar": "f4bb0ec576f7b2226430808efa177521be48d36dd3176080ee0f76bfbaa4e23b",
     "E:\\MC\\server\\mods\\ysm-2.6.5-neoforge+mc1.21.1-release.jar": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\LibreLogin-0.24.0.jar": "ca5a5ddc7e19f97dd8548fae6c637fd02488e4279e26bfdb8784662b262933bf",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\NanoLimboPlugin-velocity-1.0.11.jar": "db24cb3db365bcb565e3cafc0c2c0984a20461cedaa4a26b5d9be910f0ebf272",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.0.jar": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\packetevents-velocity-2.14.0.jar": "0772f64b51aaf79132c76bb1503707ea0d35433713d5312e67401eaa599d271b",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\RealmAccounts-0.1.1.jar": "c2d923dc8c88d6b055fbaa9d953ae67b536d24cffbc861c59b94b1127b9b4b15",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\ViaBackwards-5.12.1.jar": "29d94d3a26c85c8a327574b2322db4078992ae457f0173325431a12aac384911",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\ViaVersion-5.12.1.jar": "b8033807e7182c35003a45962352dd642c1e91880ca281da3a43cb6f481a95a2",
-    "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.2.jar": "116ced8e39a114ebeaee3a3030a9e2aec0faa2012c74a06350b6c90d00671317",
     "E:\\MC\\server\\plugins\\Denizen\\scripts\\qd_enderman_despawn.dsc": "ce5eafb8f45a15f40720d556d30f218f3ba419088b01b718d52c1b188cd2971a",
     "E:\\MC\\ops\\goddess-photo-camera.mjs": "7d15c5f1a668b5a8c74a716d3558fdaef5d3e6c27f2544868d744a3af49053c7",
     "E:\\MC\\ops\\native-photo-renderer.mjs": "2dd58bdb3d58ac28d95d9bcb4f48d53197b738cbf76eeb96bf5a404386f0144c",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.46-rpg.jar": "a91218587aa1d759f06346b13d81aa3a08f22b0a510ddfc4a53294bcb0cf7bf2",
-    "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a"
+    "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd",
+    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.17.jar": "b852c4fc4c991c51fdf01b002d97a744d3098e4be53b855b7fa066c1aa3a49ea",
+    "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.3.jar": "33715091b86ffabe6348b4d69bbe33014741c4b13b7c2f7dbba224abae590e1f",
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "77a88a17a02458d7005187453d63e5436694e9deadb588214e0f01b78665e2cb"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -139,13 +143,16 @@
     "original reported maid death disconnect incident",
     "real player microphone and human hearing in current runtime",
     "all third-party agent hosts consuming nearby voice",
-    "Geyser 0.2.2 physical Bedrock original-model display",
+    "Geyser appearance0.2.3 physical Bedrock original-model display",
     "author-triggered production native photo gallery roundtrip (isolated full pipeline passed)",
     "long-duration shader stability (shaders remain disabled)",
     "new native camera startup task (automatic approval rejected; not created)",
-    "intermittent public observer PartialReadError: exact failing packet and stack not yet captured"
+    "intermittent public observer PartialReadError: exact failing packet and stack not yet captured",
+    "Android26.60 actual login after the public19140 signaling correction",
+    "remote live observer client repeats backend packet-decode disconnect; exact offending packet not yet captured",
+    "original remote modded client acceptance and complete rendering/animation parity"
   ],
-  "scopeNotice": "AF.46 protection directions and Native0.4.3 tracking invalidation are installed after approved normal maintenance. Website0.8.36 and matching observer render the owner-selected unencrypted BigFish only on Web; original encrypted native choice and YSM2.6.5 remain. Formal native retracking recovery, formal photo-scene delivery, some rendering features and full parity remain open.",
+  "scopeNotice": "Full reviewed compatibility and guild-cartographer stall fixes are installed. Native camera and stock Mineflayer authenticated in production. Public Bedrock19140 signaling was corrected and read back from the cloud; Android device login and the independent live client decode disconnect remain open. Six-segment dungeon and unproven Ships prototype are not published.",
   "verification": {
     "javaAuthoritativeModelChecks": 283,
     "nativePixelAcceptance": "native resources confirmed in formal client; actual native model geometry verified in isolated captures; formal preview has occlusion and is not claimed as a clear BigFish portrait",
@@ -166,7 +173,26 @@
     "formalPhotoReady": true,
     "nativeReadinessBridgeOnlyReload": "native-camera-readiness-20261101-r2",
     "publicSourceSafety": "51 changed files: no credential findings; ten self-host and eight immutable Skill checks passed",
-    "sourceCiCheckpoint": "f0ab3ab3: all five GitHub checks passed"
+    "sourceCiCheckpoint": "f0ab3ab3: all five GitHub checks passed",
+    "fullClientCompatibility": {
+      "formalChecks": 16,
+      "nativeCameraAuthenticatedInProduction": true,
+      "unmodifiedMineflayerInProduction": {
+        "version": "1.21.1",
+        "libraryVersion": "4.37.1",
+        "authSuccess": true,
+        "worldStateAvailable": true,
+        "serverStatusReceived": true,
+        "physicsTicks": 43,
+        "originalUuidPreserved": true
+      },
+      "additionalIsolatedJavaVersions": [
+        "1.20.6",
+        "1.21.4"
+      ],
+      "officialNeoForgeWithTlmAndYsmIsolated": true,
+      "sourceMainCiChecksPassedBeforeRelease": 5
+    }
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -349,7 +375,11 @@
     "VortexRPG-qd30": "VortexRPG-1.2.2-alpha-qd29.jar",
     "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions.",
     "QiandengjiRpg-0.2.13": "QiandengjiRpg-0.2.10.jar",
-    "VortexRPG-qd31-growth": "VortexRPG-1.2.2-alpha-qd29.jar"
+    "VortexRPG-qd31-growth": "VortexRPG-1.2.2-alpha-qd29.jar",
+    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar",
+    "QiandengjiRpg": "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.17.jar",
+    "LoginGuard": "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar",
+    "Geyser": "E:\\MC\\server\\plugins\\Geyser-Spigot.jar"
   },
   "rpgActivities": {
     "state": "deployed-and-verified",
@@ -634,7 +664,14 @@
     "ysm-proxy/RealmAccounts-0.1.1.jar": "c2d923dc8c88d6b055fbaa9d953ae67b536d24cffbc861c59b94b1127b9b4b15",
     "ysm-proxy/ViaBackwards-5.12.1.jar": "29d94d3a26c85c8a327574b2322db4078992ae457f0173325431a12aac384911",
     "ysm-proxy/ViaVersion-5.12.1.jar": "b8033807e7182c35003a45962352dd642c1e91880ca281da3a43cb6f481a95a2",
-    "plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar": "a49349697e81bc6e3023ea6d513453b81ef9519dcaae4b0ef60b9ef958e372da"
+    "plugins/MagicSpells/QiandengjiSmartBlink-0.1.0.jar": "a49349697e81bc6e3023ea6d513453b81ef9519dcaae4b0ef60b9ef958e372da",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.46-rpg.jar": "a91218587aa1d759f06346b13d81aa3a08f22b0a510ddfc4a53294bcb0cf7bf2",
+    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.10.jar": "59d709ce193af078810d6efee795ed4aee56792e552e35259f83ed69f442fd24",
+    "E:\\MC\\server\\plugins\\Geyser-Spigot.jar": "d808c432bae955413c80ca752f99ea9f7dda52f2552057508646a3ee344a696e",
+    "E:\\MC\\server\\plugins\\ViaVersion.jar": "08caeeaba6674643b427ca901a47e53e291d1b3b20d06c5a0ed3b895d5d7fa00",
+    "E:\\MC\\server\\plugins\\ViaBackwards.jar": "4316593b4e50bac259ed00c6cacf61dccc1fbfcb08832c77ae5ac7ea8e0b0185",
+    "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.2.jar": "116ced8e39a114ebeaee3a3030a9e2aec0faa2012c74a06350b6c90d00671317",
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c"
   },
   "previousVerificationBeforeYsm265": {
     "formalProduction": 40,
@@ -806,7 +843,7 @@
     "postflightChecks": 3
   },
   "cliRecoveryCandidate": {
-    "state": "verified-candidate-not-deployed",
+    "state": "deployed-with-open-client-acceptance",
     "from": "0.4.47.46-rpg",
     "to": "0.4.47.47-rpg",
     "rpgCompanion": "0.2.17",
@@ -816,11 +853,14 @@
     "bothDisksVerified": true,
     "neuralProviderProductionEnabled": false,
     "requiresNormalGameRestart": true,
-    "productionChanged": false,
-    "document": "paper/docs/CLI_RECOVERY_20261101.md"
+    "productionChanged": true,
+    "document": "paper/docs/CLI_RECOVERY_20261101.md",
+    "deployedAs": "client-full-compat-20261102-r1",
+    "deployedAt": "2026-11-02T04:38:00.5225654+08:00",
+    "deployedAgentFriend": "0.4.47.48-rpg"
   },
   "clientCompatibilityCandidate": {
-    "state": "isolated-verified-with-open-client-acceptance-not-deployed",
+    "state": "deployed-with-open-client-acceptance",
     "document": "paper/docs/CLIENT_COMPATIBILITY_20261101.md",
     "AgentFriend": "0.4.47.48-rpg",
     "QiandengjiRpg": "0.2.17",
@@ -829,16 +869,23 @@
     "ViaBackwards": "5.12.2",
     "AgentAppearanceBedrock": "0.2.3",
     "nativeYsmPreserved": "2.6.5",
-    "neoforgeFullAuthenticationVerified": false,
+    "neoforgeFullAuthenticationVerified": true,
     "physicalBedrockVerified": false,
-    "productionChanged": false
+    "productionChanged": true,
+    "deployedAs": "client-full-compat-20261102-r1",
+    "deployedAt": "2026-11-02T04:38:00.5225654+08:00",
+    "nativeAcceptanceScope": "Official NeoForge+TLM+YSM passed isolated; native renderer authenticated in production; original remote full client remains pending"
   },
   "nativeAuthenticationCandidate": {
-    "state": "managed-isolated-verified-not-deployed",
+    "state": "deployed-with-open-client-acceptance",
     "LoginGuard": "0.1.10",
     "nativeAuthenticationVerified": true,
     "standardNeoForgeClient": "1.21.1 / 21.1.252 / official TLM1.5.3 / original YSM2.6.5",
-    "unmodifiedMineflayerProtocols": ["1.20.6", "1.21.1", "1.21.4"],
+    "unmodifiedMineflayerProtocols": [
+      "1.20.6",
+      "1.21.1",
+      "1.21.4"
+    ],
     "clientChecks": 18,
     "configurationCodecChecks": 25,
     "failureCounterChecks": 4,
@@ -848,7 +895,34 @@
     "loopbackOnly": true,
     "newScheduledTasks": false,
     "physicalBedrockVerified": false,
-    "productionChanged": false,
-    "document": "paper/docs/NEOFORGE_AUTH_20261102.md"
+    "productionChanged": true,
+    "document": "paper/docs/NEOFORGE_AUTH_20261102.md",
+    "deployedAs": "client-full-compat-20261102-r1",
+    "deployedAt": "2026-11-02T04:38:00.5225654+08:00",
+    "productionNativeAuthenticationVerified": true,
+    "productionUnmodifiedMineflayerVerified": true
+  },
+  "previousReleaseBeforeFullClientCompatibility": "model-guidance-and-web-projection-20261101-r1",
+  "bedrockPublicEntry": {
+    "host": "micro.kangqiang.site",
+    "port": 19140,
+    "signaling": "TCP19140 to internal TCP19132",
+    "webRtcUdpPort": 19133,
+    "legacyRakNetRetained": true,
+    "publicMetadataHttpStatus": 200,
+    "bedrockProtocol": 2225,
+    "publicProbeOrigin": "existing Hong Kong website host",
+    "aliasRenewedByExistingTask": true,
+    "networkBoundaryTests": 12,
+    "helperSha256": "c6c4e1b2bf8cbb43af222306ab84c8cd4703f1b781fd4f920271290518c0d609",
+    "physicalAndroid2660Join": "pending owner retry",
+    "sameLanPublicHairpin": "connection refused from local host; use LAN address/internal port for comparison"
+  },
+  "performanceRepair": {
+    "state": "deployed",
+    "document": "paper/docs/FULL_CLIENT_COMPAT_RELEASE_20261102.md",
+    "cause": "Fixed guild cartographer lazy trade generation synchronously searched for an ocean monument on the server thread",
+    "AgentFriend": "0.4.47.48-rpg",
+    "unprovenShipsPrototypeReleased": false
   }
 }
