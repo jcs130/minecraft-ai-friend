@@ -253,6 +253,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private SpellMastery spellMastery;
     private ProfessionManager professions;
     private NativeRpg nativeRpg;
+    private AgentCliRecoveryService cliRecovery;
+    AgentCliRecoveryService cliRecovery(){return cliRecovery;}
+    /** Read-only rejection callback from the actual Vortex validator; never re-dispatches the request. */
+    public void commandAdvice(Player player,String[] args){
+        if(!Bukkit.isPrimaryThread())throw new IllegalStateException("advice requires primary thread");
+        if(cliRecovery!=null)cliRecovery.reject(player,args,"UNKNOWN_SKILL","该技能ID不在当前Vortex配置中，请核对相近用法");
+    }
     NativeRpg nativeRpg(){return nativeRpg;}
     public boolean nativeRpgSelected(){return nativeRpg!=null&&nativeRpg.selected();}
     /** Main-thread read-only HUD ABI shared by Java Eye and account-free web observation. */
@@ -381,6 +388,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         try { conquestWorldReady=ConquestWorld.load(this); }
         catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE,"Formal conquest unavailable; other activities retained",failure); }
         siteDungeons = new SiteDungeonManager(this);
+        cliRecovery = new AgentCliRecoveryService(this);
         new WorldLifeActions(this);
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
@@ -412,6 +420,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if(cliRecovery!=null)cliRecovery.close();
         if (combatRpg != null) combatRpg.close();
         if (lifeChallenges != null) lifeChallenges.shutdown();
         if (privateChatNames != null) privateChatNames.stop();
@@ -849,6 +858,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @EventHandler public void onPlayerQuit(PlayerQuitEvent event) {
         communication.forget(event.getPlayer());
+        if(cliRecovery!=null)cliRecovery.forget(event.getPlayer());
         targetGuides.remove(event.getPlayer().getUniqueId());
         if (tradeDirectory != null) tradeDirectory.stop(event.getPlayer(), false);
         if (protectionAdvisor != null) protectionAdvisor.forget(event.getPlayer());
@@ -883,6 +893,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if(sender instanceof Player p&&cliRecovery!=null)cliRecovery.observe(p);
         if(sender instanceof Player p&&nativeRpg.selected()){
             if(trialRescue!=null&&trialRescue.blockCommand(p,args))return true;
             if(nativeRpg.route(p,args))return true;
@@ -1359,7 +1370,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "trade", "交易", "商旅" -> tradeDirectory.command(player, args);
             case "village", "村庄" -> villageWatch.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
-            default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
+            default -> cliRecovery.reject(player,args,"UNKNOWN_COMMAND","未找到该命令，下面只给出当前服务器的用法建议");
         }
         return true;
     }

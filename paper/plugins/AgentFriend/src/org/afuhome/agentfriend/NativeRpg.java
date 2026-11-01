@@ -17,6 +17,20 @@ final class NativeRpg {
         selected="vortex".equals(owner.getConfig().getString("rpg-backend", "legacy"));
     }
     boolean selected(){return selected;}
+    List<AgentCliRecovery.Card> adviceCards(){
+        if(!selected)return List.of();
+        try{
+            String text=(String)call("commandAdviceCatalog",new Class<?>[]{});if(text.length()>262144)return List.of();
+            JsonArray rows=JsonParser.parseString(text).getAsJsonArray();if(rows.size()>256)return List.of();
+            var cards=new ArrayList<AgentCliRecovery.Card>();
+            for(JsonElement value:rows){
+                JsonObject row=value.getAsJsonObject();String id=row.get("id").getAsString();if(!id.matches("[a-z0-9_]{1,48}"))continue;
+                String summary=row.get("summary").getAsString(),requires=row.get("requirements").getAsString();
+                if(summary.length()>600||requires.length()>600||summary.indexOf('\n')>=0||requires.indexOf('\n')>=0)continue;
+                cards.add(new AgentCliRecovery.Card("cast."+id,"/mycli cast "+id,summary,requires));
+            }return List.copyOf(cards);
+        }catch(RuntimeException unavailable){return List.of();}
+    }
     private void invocationIndex(Player p){
         var out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("kind","skill_invocations");
         out.addProperty("queryOnly",true);var entries=new JsonArray();var commands=new LinkedHashMap<String,String>();
@@ -243,8 +257,9 @@ final class NativeRpg {
                     data.addProperty("reason","command_route_mismatch");data.addProperty("queryOnly",false);
                     data.addProperty("nextCommand",entry.command());
                     data.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(id,entry.command())));
+                    owner.cliRecovery().enrich(p,args,data);
                     if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);
-                    else p.sendMessage("§e[command_route_mismatch] "+entry.name()+"不是cast入口；用法："+entry.command()+"。本次未执行、未扣费；不能将原参数直接附加到新入口。");
+                    else {p.sendMessage("§e[command_route_mismatch] "+entry.name()+"不是cast入口，本次未执行、未扣费。");owner.cliRecovery().plain(data,p);}
                     return true;
                 }
                 boolean unsupported=Arrays.stream(args).skip(2).anyMatch(a->a.startsWith("-"));
