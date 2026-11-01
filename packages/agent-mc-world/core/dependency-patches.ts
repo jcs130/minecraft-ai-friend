@@ -13,6 +13,8 @@ import Module from 'node:module';
 interface SourceEdit {
   find: string;
   replace: string;
+  /** Exact reviewed upstream forms; a missing or ambiguous form still fails. */
+  alternatives?: readonly { find: string; replace: string }[];
 }
 
 interface SourcePatch {
@@ -105,6 +107,16 @@ const PATCHES: readonly SourcePatch[] = [
     if (packet.reason === 4 || packet.reason === 'win_game') {
       bot._client.write('client_command', bot.supportFeature('respawnIsPayload') ? { payload: 0 } : { actionId: 0 })
     }`,
+        alternatives: [{
+          find: `    if ((packet.reason === 4 || packet.reason === 'win_game') && packet.gameMode === 1) {
+      bot._client.write('client_command', { actionId: 'perform_respawn' })
+    }`,
+          replace: `    // Current upstream uses a named protocol mapper for this action.
+    // Acknowledge both first credits and subsequent End exits.
+    if (packet.reason === 4 || packet.reason === 'win_game') {
+      bot._client.write('client_command', { actionId: 'perform_respawn' })
+    }`,
+        }],
       },
     ],
   },
@@ -126,11 +138,14 @@ const PATCHES: readonly SourcePatch[] = [
 /** 对一个文件的源码套用补丁;原文缺失或不唯一时抛错。 */
 function applySourcePatch(patch: SourcePatch, source: string): string {
   let out = source;
-  for (const { find, replace } of patch.edits) {
-    const at = out.indexOf(find);
-    if (at < 0 || out.indexOf(find, at + 1) >= 0) {
-      throw new Error(`${patch.pkg}/${patch.file} 的补丁原文${at < 0 ? '找不到' : '不唯一'},依赖版本与补丁不符:\n${find}`);
+  for (const edit of patch.edits) {
+    const candidates = [edit, ...(edit.alternatives ?? [])];
+    const matches = candidates.map(candidate => ({ ...candidate, at: out.indexOf(candidate.find) }))
+      .filter(candidate => candidate.at >= 0);
+    if (matches.length !== 1 || matches.some(candidate => out.indexOf(candidate.find, candidate.at + 1) >= 0)) {
+      throw new Error(`${patch.pkg}/${patch.file} 的补丁原文${matches.length === 0 ? '找不到' : '不唯一'},依赖版本与补丁不符:\n${edit.find}`);
     }
+    const {find, replace, at} = matches[0]!;
     out = out.slice(0, at) + replace + out.slice(at + find.length);
   }
   return out;
@@ -139,6 +154,12 @@ function applySourcePatch(patch: SourcePatch, source: string): string {
 function patchFor(filename: string): SourcePatch | undefined {
   const path = filename.replaceAll('\\', '/');
   return PATCHES.find((p) => path.endsWith(`/node_modules/${p.pkg}/${p.file}`));
+}
+
+/** Pure source validation, shared by the loader and compatibility regression tests. */
+export function applyDependencySourcePatch(filename: string, source: string): string {
+  const patch = patchFor(filename);
+  return patch ? applySourcePatch(patch, source) : source;
 }
 
 type Compile = (this: unknown, content: string, filename: string, ...rest: unknown[]) => unknown;
@@ -153,8 +174,7 @@ function installDependencyPatches(): void {
   const proto = Module.prototype as unknown as { _compile: Compile };
   const compile = proto._compile;
   proto._compile = function (this: unknown, content: string, filename: string, ...rest: unknown[]): unknown {
-    const patch = patchFor(filename);
-    return compile.call(this, patch ? applySourcePatch(patch, content) : content, filename, ...rest);
+    return compile.call(this, applyDependencySourcePatch(filename, content), filename, ...rest);
   };
 }
 
