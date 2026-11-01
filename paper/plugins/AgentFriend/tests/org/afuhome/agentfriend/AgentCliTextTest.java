@@ -29,7 +29,8 @@ public final class AgentCliTextTest {
         check("real help consumption and verification exposed", action.contains(learn.get("consumption").getAsString()) && action.contains(learn.get("resultQuery").getAsString()));
         check("help distinguishes action from a read", action.contains("执行动作") && !learn.get("actionReadOnly").getAsBoolean());
         check("unsupported format is explicit", text(AgentCliText.help(help("guild claim --help"))).contains("不支持 --json"));
-        check("invalid help has one short recovery", AgentCliText.help(help("missing --help")).size() == 1);
+        var rejected=help("missing --help");String recovery=text(AgentCliText.help(rejected));
+        check("invalid help gives bounded advice and a real recovery without executing",recovery.length()<900&&recovery.contains("本次未执行、未扣费")&&recovery.contains("下一步：/mycli --help")&&!rejected.get("changed").getAsBoolean()&&!rejected.get("autoExecute").getAsBoolean());
         check("JSON help pagination remains JSON", help("--help --json").get("nextCommand").getAsString().endsWith("--json"));
         int pages = root.get("pages").getAsInt(); Set<String> all = new HashSet<>();
         for (int page = 1; page <= pages; page++) for (JsonElement item : help("--help --page " + page).getAsJsonArray("commands"))

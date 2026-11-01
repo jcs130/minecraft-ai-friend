@@ -24,7 +24,10 @@ final class AgentCliText {
     }
 
     static List<String> help(JsonObject data) {
-        if (data.has("errorCode")) return List.of("[invalid_argument] " + shortText(value(data, "message", "参数错误"), 180) + "。下一步："+command(data,"nextCommand","/mycli --help"));
+        if (data.has("errorCode")) {
+            if(data.has("suggestions"))return AgentCliRecovery.text(data);
+            return List.of("[invalid_argument] " + shortText(value(data, "message", "参数错误"), 180) + "。下一步："+command(data,"nextCommand","/mycli --help"));
+        }
         List<String> lines = new ArrayList<>();
         lines.add("用法：" + value(data, "usage", "/mycli --help"));
         if(data.has("defaultAction"))lines.add(value(data,"defaultAction",""));

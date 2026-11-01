@@ -1,6 +1,8 @@
 package org.afuhome.agentfriend;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -77,6 +79,7 @@ final class SiteDungeonManager implements Listener {
     }
     private final AgentFriendPlugin plugin;
     private Map<String,Site> sites=Map.of();
+    Set<String> configuredSiteIds(){return Set.copyOf(sites.keySet());}
     private record BuildingAreas(ProtectionArea envelope,List<ProtectionArea> pieces) {}
     private Map<String,BuildingAreas> protectionAreas=Map.of();
     private final Map<String,Run> runs=new LinkedHashMap<>();
@@ -525,8 +528,10 @@ final class SiteDungeonManager implements Listener {
         DungeonAdvice.Request request;
         try{request=DungeonAdvice.parse(raw);}catch(IllegalArgumentException e){
             String next=e instanceof DungeonAdvice.Usage usage?usage.nextCommand:"/mycli dungeon --help";
-            if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_SITE_DUNGEON_RESULT "+JSON.toJson(Map.of("schemaVersion",1,"success",false,"changed",false,"reason","INVALID_ARGUMENT","errorMessage",e.getMessage(),"retryable",false,"nextCommand",next)));
-            else p.sendMessage("[地下城] 未执行（INVALID_ARGUMENT）："+e.getMessage()+"。命令："+next);return;
+            JsonObject out=JsonParser.parseString(JSON.toJson(Map.of("schemaVersion",1,"success",false,"changed",false,"reason","INVALID_ARGUMENT","errorMessage",e.getMessage(),"retryable",false,"nextCommand",next))).getAsJsonObject();
+            plugin.cliRecovery().enrich(p,raw,out);
+            if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_SITE_DUNGEON_RESULT "+out);
+            else {p.sendMessage("[地下城] 未执行（INVALID_ARGUMENT）："+e.getMessage());plugin.cliRecovery().plain(out,p);}return;
         }
         format(request.json(),request.verbose(),()->execute(p,request.args(),request.page()));
     }

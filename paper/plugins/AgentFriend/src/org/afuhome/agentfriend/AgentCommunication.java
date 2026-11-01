@@ -235,6 +235,7 @@ final class AgentCommunication {
                 &&Set.of("status","info","guide","supplies").contains(args[2].toLowerCase(Locale.ROOT))) {
             plugin.skillAssessments().jsonQuery(p,args);return;
         }
+        if(!AgentCliCatalog.roots().contains(root)){plugin.cliRecovery().reject(p,raw,"UNKNOWN_COMMAND","未找到该命令，下面只给出当前服务器的用法建议");return;}
         error(p,"UNSUPPORTED_FORMAT","该旧入口尚未提供--json格式，本次未执行。用命令的--help核对支持情况；已有原回执入口保持兼容。",false,"/mycli "+root+" --help --json");
     }
 }

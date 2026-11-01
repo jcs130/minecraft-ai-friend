@@ -1,0 +1,9 @@
+# Merge this section into AgentFriend/config.yml, then use normal maintenance.
+# Local catalog/alias/spelling suggestions do not need an embedding service.
+cli-recovery:
+  embeddings:
+    enabled: false
+    endpoint: ''
+    model: ''
+    api-key-env: ''
+    timeout-ms: 1500
