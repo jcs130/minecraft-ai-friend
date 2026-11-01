@@ -818,5 +818,19 @@
     "requiresNormalGameRestart": true,
     "productionChanged": false,
     "document": "paper/docs/CLI_RECOVERY_20261101.md"
+  },
+  "clientCompatibilityCandidate": {
+    "state": "isolated-verified-with-open-client-acceptance-not-deployed",
+    "document": "paper/docs/CLIENT_COMPATIBILITY_20261101.md",
+    "AgentFriend": "0.4.47.48-rpg",
+    "QiandengjiRpg": "0.2.17",
+    "Geyser": "2.12.1-b1280 + same deployed Youer lookup fix",
+    "ViaVersion": "5.12.2",
+    "ViaBackwards": "5.12.2",
+    "AgentAppearanceBedrock": "0.2.3",
+    "nativeYsmPreserved": "2.6.5",
+    "neoforgeFullAuthenticationVerified": false,
+    "physicalBedrockVerified": false,
+    "productionChanged": false
   }
 }
