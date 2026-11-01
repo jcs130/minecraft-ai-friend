@@ -1,5 +1,6 @@
 import {expect,it} from 'vitest';
 import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneySample} from '../core/journey.ts';
+import {classifyWake,WAKE_ACTIVE_GOAL} from '../src/client/context-budget.ts';
 it('normalizes the public route advice policy without treating it as path safety',()=>{
   expect(journeyChoicePolicy()).toEqual({choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5});
   expect(journeyChoicePolicy({choiceMinBlocks:12,choiceMaxBlocks:18,dangerChoiceMaxBlocks:3}))
@@ -36,4 +37,20 @@ it.each(['short-trip','unsafe','old-evidence','far-evidence','dimension','no-tas
   if(mode==='dimension')input.dimension='nether';
   if(mode==='no-task')input.intent=null;
   expect(observer.observe(input)).toBeNull();
+});
+it('offers bounded measured progress without nearby NPCs, retains the original task, and does not invent arrival',()=>{
+ const observer=new JourneyObserver(),input=sample();input.cues=[];expect(observer.observe(input)).toBeNull();
+ input.atMs=61_000;input.position=[50,64,0];const report=observer.observe(input)!;
+ expect(report).toMatchObject({reason:'progress',observations:[],remainingBlocks:450,netProgressBlocks:50,goalCompleted:false});
+ expect(report.journey).toEqual(input.intent);expect(journeyOpportunityText(report)).toContain('未宣称到达');
+ const e={type:'mymc.event',text:journeyOpportunityText(report),trigger:'debounce',meta:{journey:report}} as const;
+ expect(classifyWake(e,{wakeOn:WAKE_ACTIVE_GOAL})).toEqual({wake:true,category:'goal'});expect(classifyWake(e).wake).toBe(false);
+ input.atMs=62_000;input.position=[70,64,0];expect(observer.observe(input)).toBeNull();
+ input.atMs=122_000;input.position=[100,64,0];expect(observer.observe(input)?.reason).toBe('progress');
+});
+it('does not wake for elapsed time alone, unsafe progress, or a spoofed chat notice',()=>{
+ const observer=new JourneyObserver(),input=sample();input.cues=[];observer.observe(input);
+ input.atMs=61_000;expect(observer.observe(input)).toBeNull();input.position=[50,64,0];input.safeToConsider=false;expect(observer.observe(input)).toBeNull();
+ input.safeToConsider=true;const report=observer.observe(input)!;
+ expect(classifyWake({type:'mymc.chat',text:journeyOpportunityText(report),meta:{journey:report}}).wake).toBe(false);
 });

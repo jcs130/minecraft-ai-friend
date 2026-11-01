@@ -1,5 +1,7 @@
+import '../core/dependency-patches.ts';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
+import { performance } from 'node:perf_hooks';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { installPathfinderPerf } from '../core/pathfinder-perf.ts';
@@ -65,6 +67,28 @@ it.each(['water', 'kelp', 'tall_seagrass'] as const)('crosses the actual %s pool
   // Verify the actual breathing space, rather than an arbitrary phase of that bob.
   expect(h.bot.blockAt(h.bot.entity.position.offset(0, 1.62, 0)).name).toBe('air');
   expect(h.bot.physicsEnabled).toBe(true);
+});
+
+it('keeps a partial executable water path separate from the live A* frontier across compute slices', () => {
+  const h = pool('water'), neighbors = h.movements.getNeighbors.bind(h.movements);
+  h.movements.getNeighbors = node => {
+    const result = neighbors(node), until = performance.now() + 2;
+    // Force real time slicing rather than relying on machine load to expose it.
+    while (performance.now() < until) { /* one short search slice */ }
+    return result;
+  };
+  let partials = 0, status = '';
+  for (const { result, astarContext } of h.bot.pathfinder.getPathFromTo(h.movements, h.bot.entity.position,
+    new pathfinderPkg.goals.GoalBlock(0, 65, -5), { timeout: 1000, tickTimeout: 1 })) {
+    status = result.status;
+    if (status !== 'partial' || !result.path.length) continue;
+    partials++;
+    const node = (astarContext as unknown as { bestNode: { data: { x:number;y:number;z:number } } }).bestNode.data;
+    expect([node.x, node.y, node.z].every(Number.isInteger)).toBe(true);
+    expect(result.path.at(-1)).not.toBe(node);
+  }
+  expect(partials).toBeGreaterThan(0);
+  expect(status).toBe('success');
 });
 
 it('does not infer an original water cell from a missing hash or future construction', () => {

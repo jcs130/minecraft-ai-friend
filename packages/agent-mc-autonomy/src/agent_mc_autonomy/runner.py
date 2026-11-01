@@ -16,6 +16,7 @@ from .configuration import Settings
 from .controller import Controller
 from .failure_diagnostics import FailureDiagnostics, current
 from .fast import FastPolicy, SystemOne
+from .filesystem import replace_prepared
 from .mailbox import Mailbox
 from .observations import runtime_error_code
 from .ownership import session_lease
@@ -26,40 +27,10 @@ from .viewer_public import record_playback, viewer_projection
 
 
 def _replace_status(temporary: Path, destination: Path):
-    """Brief Windows reader contention only; authoritative persistence is separate."""
-    # Real Windows readers (including status observers) may retain a handle for
-    # longer than the former 35 ms schedule. Retry the SAME prepared bytes for
-    # at most 250 ms; never repeat a body action or hide persistent ACL/disk errors.
-    deadline = time.monotonic() + .250
-    failures = []
-    first_trace = None
-    for delay in (0, .005, .010, .020, .040, .080, .080):
-        if delay:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            time.sleep(min(delay, remaining))
-            if time.monotonic() >= deadline:
-                break
-        try:
-            temporary.replace(destination)
-            return
-        except OSError as error:
-            candidate = os.name == "nt" and getattr(error, "winerror", None) in {5, 32}
-            if not failures and not candidate:
-                raise
-            if not failures:
-                first_trace = error.__traceback__
-            failures.append(error)
-            if not candidate:
-                break
-    # Recovered retries are not fatal diagnostics. Exhaustion retains the first
-    # object/trace and any later failure, including a different cleanup fault.
+    """Publish the same snapshot without repeating freshness or callbacks."""
     diagnostics = current.get()
-    if diagnostics is not None:
-        for error in failures:
-            diagnostics.capture(error, "status.publish")
-    raise failures[0].with_traceback(first_trace)
+    capture = (lambda error: diagnostics.capture(error, "status.publish")) if diagnostics is not None else None
+    replace_prepared(temporary, destination, clock=time, platform=os.name, capture=capture)
 
 
 def validate_start(settings: Settings, goal: str):

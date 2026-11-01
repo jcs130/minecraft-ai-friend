@@ -1,4 +1,5 @@
 /// <reference path="../../core/pathfinder-lib.d.ts" />
+export { NutritionNeedObserver, nutritionNeedText, type NutritionNeed } from '../../core/nutrition.ts';
 export { MinecraftAgentClient, type MinecraftClientOptions, type MinecraftPracticeOptions, type ClientEnvironment } from './runtime.ts';
 export { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 export type { JavaClientServices } from './java-memory.ts';
@@ -28,6 +29,7 @@ export {readTextPage,textPageMeta,referenceToolText,renderToolTextPage,TextPageR
 export {ReadProgressBook,readOnlyToolResult,type ReadProgressEvidence} from './read-progress.ts';
 export {taskEffectProgress,type TaskEffectProgress,type TaskEffectStep} from '../../core/task-effect-progress.ts';
 export {NoEffectPlanBook,type NoEffectPlanReview} from '../../core/no-effect-plans.ts';
+export {TaskRecoveryBook,type TaskRecoveryEvidence} from '../../core/task-recovery.ts';
 export * from './schema-reading.ts';
 export { spatialReadout, type SpatialReadout } from '../../core/spatial-readout.ts';
 export { withFactState, type FactState } from '../../core/fact-state.ts';

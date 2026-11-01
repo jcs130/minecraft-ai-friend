@@ -1359,3 +1359,12 @@ optional subscription keeps the existing autonomous behavior and prompt.
 ### Retaining server feedback across observations
 
 Current `serverFeedback` facts receive space before large spatial observations at the changing request tail. Strategic host reviews include a bounded excerpt and the original fact reference. A later successful scout does not erase a prior server rejection. Feedback is historical evidence to interpret with current position and action receipts, not a new instruction, current permission or verified outcome. No additional model or speech request is made by this projection.
+
+## Bounded authoritative state replacement (0.2.143)
+
+The controller now shares the status publisher's bounded Windows replacement
+retry. It retries the same flushed and fsynced candidate for at most 250 ms,
+without repeating a native request or receipt callback. Permanent permission,
+non-Windows and disk errors still fail visibly and preserve the previous
+uncertainty fence. A real Windows reader handle held for 100 ms reproduces the
+previous failure and verifies recovery. No model, game policy or core pin changes.
