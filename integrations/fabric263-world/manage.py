@@ -158,6 +158,30 @@ def supervise(config):
     return code
 
 
+def pid_alive(pid):
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.windll.kernel32
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    handle = kernel.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return False
+    try:
+        code = wintypes.DWORD()
+        return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value == 259)
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def launch_client(config, username):
     if not re.fullmatch(r"[A-Za-z0-9_]{3,16}", username):
         raise ValueError("Username must be 3-16 ASCII characters")
@@ -165,21 +189,8 @@ def launch_client(config, username):
     old = cache / "client-process.local.json"
     if old.exists():
         data = json.loads(old.read_text())
-        if os.name == "nt":
-            import ctypes
-            from ctypes import wintypes
-            kernel = ctypes.windll.kernel32
-            kernel.OpenProcess.restype = wintypes.HANDLE
-            kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
-            kernel.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
-            kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
-            handle = kernel.OpenProcess(0x1000, False, data["pid"])
-            if handle:
-                code = wintypes.DWORD()
-                active = kernel.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value == 259
-                kernel.CloseHandle(handle)
-                if active:
-                    raise ValueError("The recorded client is still running; do not start a second controller")
+        if pid_alive(data["pid"]):
+            raise ValueError("The recorded client is still running; do not start a second controller")
     meta = config["clientMetadata"]
     base = json.loads(Path(meta["base"]).read_text())
     profile = json.loads(Path(meta["profile"]).read_text())

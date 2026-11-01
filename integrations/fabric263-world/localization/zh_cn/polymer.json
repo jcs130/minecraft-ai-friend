@@ -1,0 +1,10 @@
+{
+  "config.jade.plugin_polymer.blockstate": "启用方块",
+  "config.jade.plugin_polymer.entities": "启用实体",
+  "itemGroup.polymer.server_items": "服务器物品",
+  "text.polymer.resource_pack.description": "基于 Polymer 的模组的可选资源包。",
+  "text.polymer.resource_pack.description.required": "基于 Polymer 的模组的资源包。",
+  "text.polymer.resource_pack.name": "Polymer 资源",
+  "text.polymer.server": "服务器",
+  "text.polymer.server_items": "服务器物品"
+}

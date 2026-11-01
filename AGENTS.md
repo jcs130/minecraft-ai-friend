@@ -1,3 +1,13 @@
+## 2026-11-01 Fabric 26.3 中文补全已部署
+
+仅更新独立Fabric26.3实验服/匹配客户端，SAO与千灯纪、网络、认证和原Agent循环未动。源码 integrations/fabric263-world：7,003项补全（5,763界面覆盖、25内置任务的50标题描述、1,190自动委托语料），另20项旧委托文字迁移。保留变量、命令、ID、按键与作者署名。实际客户端逐条读原始语言表0差异，原生冒险日志/任务书中文截图；38个任务含当前5项自动委托有中文。见LOCALIZATION.md与localization-acceptance-20261101.json，31项回归通过。
+
+自有兼容组件升0.1.1，Jar a97c2f09…55df0fe；添加原生成器中文目录，按目标类型区分兔子/生兔肉、鸡/生鸡肉，采掘Shift译作采掘委托。原VerifiedCraftMixin.class与0.1.0字节相同，现有委托目标/奖励/条件与原GraalScout完成记录核对保持；自然12小时生成轮换保留，不作人工完成/发奖证明。组件GPL-3.0-only附源码/COPYING，原模组声明未修改。资源包 ecc0da2a…9c7ccbc，服务器任务数据包6a0ef93a…a8ae9fe7。新客户端 E:/MC/releases/my-agent-world-fabric26.3-0.1.0-lab.3-zh_cn.mrpack，sha2561421aa8d…fc103bb，259835字节，默认启用中文；独立中文ZIP也在同目录。未上传生产网站。
+
+冷备 before-chinese-localization.zip（b229fd08…b1e54883d，161文件）与 after-chinese-localization.zip（c3dcceed…6adbfc31，169文件/6441972字节）分别在 E:/MC/backups/fabric263-lab-20261101 和 F:/MC-backups/fabric263-lab-20261101，两副本逐字校验。最终回环39781/39782 ready、空服正常暂停；ChineseScout仅作无OP界面验收，临时旁观后已恢复生存、下线。中文准备/更新必须先停实验服、冷备并关匹配客户端；不在运行期重写数据或热重载资源。未知旧英文委托迁移须显式补译，不清空或猜测。
+
+注意GraalWeave0.1.1的str/print钩子会改写文本中小数（3.→3.0，+0.75丢正号），首次14项文字假差异已保留。精确文字/组件请直接使用Java返回String并sys.stdout.write输出JSON；chinese_ui_probe.py逐项复验0差异，未关闭字段守卫或篡改源文迎合比较。此轮没有宣称修好上游所有格式化路径。原mod固定宽度省略显示、其他尚未验收玩法及基岩/Mineflayer26.3范围仍按前节约束。
+
 ## 2026-11-01 Fabric 26.3 独立组合实验服
 
 用户指定 Village Quest、JustQuests、Terralith、Towns and Towers、Dungeons and Taverns、Farmer's Delight Refabricated、Wizards + Paladins、Better Combat、Universal Shops、Easy NPC 全部一起加入。已在 E:/MC/servers/agent-world-fabric-26.3-lab / E:/MC/clients/agent-world-fabric-26.3-lab 组合冷启动；MC26.3/Fabric0.20.1/私有Java25.0.5+8，30服务端/31客户端顶层JAR（含依赖与自有兼容组件）。仅127.0.0.1:39781游戏、39782鉴权管理；未改SAO、千灯纪、路由、防火墙、网站、共用身份或模型循环。不能直接把离线实验入口改公网。

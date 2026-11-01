@@ -8,11 +8,16 @@ import zipfile
 
 from prepare import HERE, digest, copy_checked
 
-NAME = "maw-fabric263-compat-0.1.0.jar"
+NAME = "maw-fabric263-compat-0.1.1.jar"
 
 
 def build(cache, java, server, client, replace_built=False, previous=None):
     source = HERE / "compat-src" / "VerifiedCraftMixin.java"
+    locale_source = HERE / "compat-src" / "ChineseGeneratorMixin.java"
+    names_source = HERE / "compat-src" / "ChineseQuestNamesMixin.java"
+    locale = cache / "localization/generated/justquests-zh_cn.json"
+    if not locale.is_file():
+        raise ValueError("Build and validate localization resources before compiling compatibility")
     lock = json.loads((HERE / "pack.lock.json").read_text())
     quest = next(e for e in lock["mods"] if e["slug"] == "justquests")
     if quest["version"] != "fabric-26.3-0.4.5" or digest(cache / quest["filename"], "sha512") != quest["hashes"]["sha512"]:
@@ -29,18 +34,19 @@ def build(cache, java, server, client, replace_built=False, previous=None):
         name = next(n for n in z.namelist() if n.endswith(".jar") and "mixinextras" in n)
         extras = build_dir / "mixinextras-compile-only.jar"
         extras.write_bytes(z.read(name))
-    cp = ";".join(str(p) for p in [cache / "minecraft-26.3-client.jar", extras, *sorted((cache / "libraries").rglob("*.jar"))])
-    compile_cmd = [str(java.with_name("javac.exe")), "-J-Dfile.encoding=UTF-8", "-encoding", "UTF-8", "--release", "25", "-proc:none", "-cp", cp, "-d", str(classes), str(source)]
+    cp = ";".join(str(p) for p in [cache / "minecraft-26.3-client.jar", cache / quest["filename"], extras, *sorted((cache / "libraries").rglob("*.jar"))])
+    compile_cmd = [str(java.with_name("javac.exe")), "-J-Dfile.encoding=UTF-8", "-encoding", "UTF-8", "--release", "25", "-proc:none", "-cp", cp, "-d", str(classes), str(source), str(locale_source), str(names_source)]
     compiled = subprocess.run(compile_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (build_dir / "javac.log").write_bytes(compiled.stdout + compiled.stderr)
     if compiled.returncode:
         raise ValueError("Compatibility compilation failed: " + compiled.stderr.decode("utf-8", "replace"))
-    metadata = {"schemaVersion": 1, "id": "maw_fabric263_compat", "version": "0.1.0", "name": "My Agent World: Verified Crafting",
-                "environment": "*", "mixins": ["maw-fabric263.mixins.json"],
+    metadata = {"schemaVersion": 1, "id": "maw_fabric263_compat", "version": "0.1.1", "name": "My Agent World: Verified Crafting and Chinese Quests",
+                "environment": "*", "license": "GPL-3.0-only", "mixins": ["maw-fabric263.mixins.json"],
                 "depends": {"minecraft": "26.3", "java": ">=25", "fabricloader": ">=0.20.1", "justquests": "=0.4.5"}}
     mixin = {"required": True, "minVersion": "0.8", "package": "dev.myagentworld.fabric263", "compatibilityLevel": "JAVA_25",
-             "priority": 500, "mixins": ["VerifiedCraftMixin"], "injectors": {"defaultRequire": 1}}
-    files = {"fabric.mod.json": json.dumps(metadata).encode(), "maw-fabric263.mixins.json": json.dumps(mixin).encode()}
+             "priority": 500, "mixins": ["VerifiedCraftMixin", "ChineseGeneratorMixin", "ChineseQuestNamesMixin"], "injectors": {"defaultRequire": 1}}
+    files = {"fabric.mod.json": json.dumps(metadata).encode(), "maw-fabric263.mixins.json": json.dumps(mixin).encode(),
+             "justquests_genv2/lang/zh_cn.json": locale.read_bytes(), "COPYING": (HERE / "compat-src/COPYING").read_bytes()}
     for file in classes.rglob("*.class"):
         files[file.relative_to(classes).as_posix()] = file.read_bytes()
     jar = build_dir / NAME
@@ -53,6 +59,15 @@ def build(cache, java, server, client, replace_built=False, previous=None):
         target = (root / "mods" / NAME).resolve()
         if not target.is_relative_to(root.resolve()):
             raise ValueError("Component target escaped instance")
+        for old in (root / "mods").glob("maw-fabric263-compat-*.jar"):
+            if old.name == NAME:
+                continue
+            if not old.resolve().is_relative_to(root.resolve()) or not replace_built or previous is None or old.name != previous["filename"] or digest(old) != previous["sha256"]:
+                raise ValueError("Existing compatibility version requires an explicit reviewed migration")
+            archive = cache / "compat-build" / (side + "-previous-" + previous["sha256"] + ".jar")
+            if archive.exists():
+                raise ValueError("Prior version archive exists; reconcile before retry")
+            shutil.move(str(old.resolve()), str(archive.resolve()))
         if target.exists() and digest(target) != digest(jar):
             if not replace_built or previous is None or digest(target) != previous["sha256"]:
                 raise ValueError("Existing built component differs; explicit reviewed replacement required")
@@ -61,7 +76,7 @@ def build(cache, java, server, client, replace_built=False, previous=None):
                 raise ValueError("Archive already exists; inspect prior operation")
             shutil.move(str(target), str(archive))
         copy_checked(jar, target)
-    return {"filename": NAME, "sha256": digest(jar), "sourceSha256": digest(source), "sides": ["server", "client"]}
+    return {"filename": NAME, "sha256": digest(jar), "sourceSha256": digest(source), "localeSourceSha256": digest(locale_source), "namesSourceSha256": digest(names_source), "localeSha256": digest(locale), "sides": ["server", "client"]}
 
 
 if __name__ == "__main__":
@@ -69,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument("--replace-built", action="store_true")
     args = parser.parse_args()
     config = json.loads((HERE / "deployment.local.json").read_text())
-    previous = next((e for e in config.get("localComponents", []) if e["filename"] == NAME), None)
+    previous = next((e for e in config.get("localComponents", []) if e["filename"].startswith("maw-fabric263-compat-")), None)
     entry = build(Path(config["cache"]), Path(config["java"]), Path(config["server"]), Path(config["client"]), args.replace_built, previous)
     config["localComponents"] = [entry]
     from prepare import write_json

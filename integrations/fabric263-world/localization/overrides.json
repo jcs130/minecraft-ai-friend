@@ -1,0 +1,39 @@
+{
+  "_maw_generator": {
+    "templates/titles/mine_block/6": "采掘委托：{Name}",
+    "templates/titles/breed_animal/6": "{Names} 幼崽"
+  },
+  "bettercombat": {
+    "text.autoconfig.bettercombat.option.client.hudHighlightColor.@Tooltip": "用于界面元素的高亮颜色（适用时）。",
+    "text.autoconfig.bettercombat.option.client.firstPersonAnimations.@Tooltip": "以第一人称显示攻击动画。建议与自定义摄像机模组搭配使用。"
+  },
+  "cloth-config2": {
+    "text.cloth-config.error.color.no_alpha_allowed": "此处不允许设置透明度！",
+    "text.cloth-config.error.color.invalid_alpha": "透明度数值无效！",
+    "text.cloth-config.error.color.invalid_red": "红色通道数值无效！",
+    "text.cloth-config.error.color.invalid_green": "绿色通道数值无效！",
+    "text.cloth-config.error.color.invalid_blue": "蓝色通道数值无效！",
+    "title.cloth-config.config": "Cloth 模组配置"
+  },
+  "sodium": {
+    "sodium.console.corrupt_config.message.body": "加载配置文件时发生问题。这可能是因为\n文件在磁盘上损坏，或是因为\n手动编辑了配置文件。\n\n如果继续，配置文件将恢复为可靠的\n默认值，您此后对“视频设置”做出的\n所有修改都将丢失。\n\n更多错误信息请查看日志文件。"
+  },
+  "easy_npc_config_ui": {
+    "text.easy_npc.config.url_skin": "皮肤地址",
+    "text.easy_npc.actionDataEditor": "动作数据编辑器",
+    "text.easy_npc.actionDataEditor.title": "%s 的动作数据编辑器",
+    "text.easy_npc.actionDataEntryEditor.title": "%s 的动作条目编辑器",
+    "text.easy_npc.config.attack_player_without_owner": "攻击玩家（不受主人设置限制）",
+    "text.easy_npc.config.condition.info.and_logic": "所有条件均须满足；需要“或”逻辑时，请拆分为独立动作。",
+    "text.easy_npc.config.flee_creeper": "躲避苦力怕",
+    "text.easy_npc.config.follow_owner": "跟随主人（%1$s）",
+    "text.easy_npc.config.look_at_owner": "看向主人",
+    "text.easy_npc.config.move_back_to_home": "返回驻地",
+    "text.easy_npc.config.processing_url_skin": "正在加载网络皮肤，请稍候……",
+    "text.easy_npc.config.random_stroll_around_home": "在驻地附近游荡",
+    "text.easy_npc.config.yes_no_dialog.title": "确认对话框"
+  },
+  "village-quest": {
+    "screen.village-quest.building.hint.roof": "为入口以及至少 75% 的家具建造实心屋顶。入口地板上方须留出 2 格净空。树叶不能充当屋顶。如果小片区域内的屋顶过高，请选择“扩大区域”。"
+  }
+}

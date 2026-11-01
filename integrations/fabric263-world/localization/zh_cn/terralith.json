@@ -1,0 +1,21 @@
+{
+  "biome.terralith.deep_warm_ocean": "深层暖水海洋",
+  "config.terralith.category.modules": "模块",
+  "config.terralith.default": "默认：",
+  "config.terralith.option.custom_structures": "自定义结构",
+  "config.terralith.option.custom_structures.tooltip": "生成自定义结构，例如 fortified 村庄和法师塔。",
+  "config.terralith.option.fog_tweaks": "迷雾调整",
+  "config.terralith.option.fog_tweaks.tooltip": "改变某些生物群系（如沼泽和洞穴）中的迷雾距离和颜色。",
+  "config.terralith.option.intro_message": "入门消息",
+  "config.terralith.option.intro_message.tooltip": "创建新世界时显示提示，提供 Discord 链接并警告卸载时的困难。",
+  "config.terralith.option.recipe_changes": "配方更改",
+  "config.terralith.option.recipe_changes.tooltip": "允许部分用圆石合成的物品改用其他石头合成，并添加将石台阶转换为圆石的配方。",
+  "config.terralith.option.skylands": "空岛",
+  "config.terralith.option.skylands.tooltip": "一组以四季为主题的生物群系，生成于深海之上的天空岛屿中。",
+  "config.terralith.option.terrain_slabs": "地形台阶",
+  "config.terralith.option.terrain_slabs.tooltip": "在表面有石头的生物群系中，生成石台阶以平滑地形。",
+  "config.terralith.option.vanilla_stone_gen": "原版石头生成",
+  "config.terralith.option.vanilla_stone_gen.tooltip": "遵循原版行为，在地下生成小团的花岗岩、安山岩和闪长岩。",
+  "config.terralith.text.warning": "此配置为全局设置，将在你加载世界时应用，生成配置仅对新加载的区块生效。",
+  "config.terralith.title": "Terralith 配置"
+}

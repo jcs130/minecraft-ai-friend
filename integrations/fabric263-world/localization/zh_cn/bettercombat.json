@@ -1,0 +1,9 @@
+{
+  "key.category.bettercombat.main": "更好的战斗",
+  "text.autoconfig.bettercombat.option.client.firstPersonAnimations.@Tooltip": "以第一人称显示攻击动画。建议与自定义摄像机模组搭配使用。",
+  "text.autoconfig.bettercombat.option.client.hudHighlightColor.@Tooltip": "用于界面元素的高亮颜色（适用时）。",
+  "text.autoconfig.bettercombat.option.client.isShowingWeaponTrails": "显示武器挥舞轨迹",
+  "text.autoconfig.bettercombat.option.client.isShowingWeaponTrails.@Tooltip": "在所有视角下渲染攻击时的武器轨迹粒子",
+  "text.autoconfig.bettercombat.option.client.mineWithWeaponWhitelist": "武器挖掘白名单",
+  "text.autoconfig.bettercombat.option.client.mineWithWeaponWhitelist.@Tooltip": "ID匹配此正则表达式的武器始终可以挖掘方块，即使禁用了“使用武器挖掘”"
+}

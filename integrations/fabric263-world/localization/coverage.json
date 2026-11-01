@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "minecraft": "26.3",
+  "complete": true,
+  "entries": 7003,
+  "namespaces": {
+    "_maw_generator": {
+      "english": 1190,
+      "overrides": 1190,
+      "remaining": 0
+    },
+    "_maw_quests": {
+      "english": 50,
+      "overrides": 50,
+      "remaining": 0
+    },
+    "apollib": {
+      "english": 7,
+      "overrides": 7,
+      "remaining": 0
+    },
+    "bettercombat": {
+      "english": 50,
+      "overrides": 7,
+      "remaining": 0
+    },
+    "cloth-config2": {
+      "english": 49,
+      "overrides": 8,
+      "remaining": 0
+    },
+    "cristellib": {
+      "english": 4,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "dnt": {
+      "english": 682,
+      "overrides": 282,
+      "remaining": 0
+    },
+    "easy_npc": {
+      "english": 202,
+      "overrides": 78,
+      "remaining": 0
+    },
+    "easy_npc_config_ui": {
+      "english": 771,
+      "overrides": 236,
+      "remaining": 0
+    },
+    "easy_npc_example": {
+      "english": 6,
+      "overrides": 6,
+      "remaining": 0
+    },
+    "fabric": {
+      "english": 1,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "fabric-convention-tags-v2": {
+      "english": 524,
+      "overrides": 38,
+      "remaining": 0
+    },
+    "fabric-data-attachment-api-v1": {
+      "english": 12,
+      "overrides": 3,
+      "remaining": 0
+    },
+    "fabric-registry-sync-v0": {
+      "english": 21,
+      "overrides": 11,
+      "remaining": 0
+    },
+    "fabric-resource-loader-v1": {
+      "english": 6,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "farmersdelight": {
+      "english": 509,
+      "overrides": 32,
+      "remaining": 0
+    },
+    "justquests": {
+      "english": 267,
+      "overrides": 267,
+      "remaining": 0
+    },
+    "minecraft": {
+      "english": 14,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "paladins": {
+      "english": 144,
+      "overrides": 1,
+      "remaining": 0
+    },
+    "placeholderapi": {
+      "english": 1,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "polymer": {
+      "english": 8,
+      "overrides": 8,
+      "remaining": 0
+    },
+    "rpg_series": {
+      "english": 20,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "runes": {
+      "english": 15,
+      "overrides": 1,
+      "remaining": 0
+    },
+    "sodium": {
+      "english": 105,
+      "overrides": 105,
+      "remaining": 0
+    },
+    "spell_engine": {
+      "english": 197,
+      "overrides": 3,
+      "remaining": 0
+    },
+    "spell_power": {
+      "english": 147,
+      "overrides": 0,
+      "remaining": 0
+    },
+    "terralith": {
+      "english": 144,
+      "overrides": 19,
+      "remaining": 0
+    },
+    "trinkets": {
+      "english": 53,
+      "overrides": 35,
+      "remaining": 0
+    },
+    "universal_shops": {
+      "english": 62,
+      "overrides": 62,
+      "remaining": 0
+    },
+    "village-quest": {
+      "english": 4553,
+      "overrides": 4553,
+      "remaining": 0
+    },
+    "wizards": {
+      "english": 165,
+      "overrides": 1,
+      "remaining": 0
+    }
+  },
+  "resourcePack": {
+    "filename": "my-agent-world-zh_cn-0.1.0.zip",
+    "sha256": "ecc0da2aa7e6aa874fe33e8718b203606949ae0ee8fec176f8a3bf4159c7ccbc"
+  },
+  "questDataPack": {
+    "filename": "my-agent-world-quests-zh_cn-0.1.0.zip",
+    "sha256": "6a0ef93a02127e834d4675de41c95e0d2b418d4c4ecedd72ef73772ea8ae9fe7",
+    "definitions": 25
+  },
+  "generator": {
+    "templates": true,
+    "themes": 89,
+    "hints": 467,
+    "installedNames": 503,
+    "typedNames": 526,
+    "locale": "zh_cn"
+  }
+}

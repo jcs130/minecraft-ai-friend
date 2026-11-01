@@ -4,6 +4,8 @@
 
 当前版本：Minecraft **26.3**、Fabric Loader **0.20.1**、Fabric API **0.165.0+26.3**、私有 Temurin **25.0.5+8**。内容锁定于 `pack.spec.json` / `pack.lock.json`，不会在每次启动时追最新版本。
 
+现已提供简体中文补全：7,003 项界面与委托语料，匹配客户端已默认启用；包括后续生成的任务。真实客户端逐条核对了 5,763 项界面覆盖，并验看原生冒险日志／任务书。客户端候选更新为 `0.1.0-lab.3-zh_cn`，兼容组件为 0.1.1；详见 [中文补全说明](LOCALIZATION.md)。原来的验收 JSON 保留为首批组合的历史记录。
+
 ## 内容清单
 
 | 方向 | 已锁定的模组版本 | 用途 |
@@ -51,6 +53,8 @@ python probe.py --status
 
 `start` 返回 starting，必须等 `status` 的 `ready=true`；进程存在、端口打开或退出码 0 都不足以证明启动成功。准备脚本校验原始来源、大小、哈希与依赖，拒绝覆盖不同字节，也拒绝写入已有但不属于本实验的实例目录。
 
+上述准备命令用于首次或已正常停止的实验实例。更新中文任务数据前必须先停服、冷备份并关闭匹配客户端；不能对正在运行的实例重跑准备命令。已有兼容组件版本升级需先按中文补全说明明确迁移，不能自动覆盖不同版本。
+
 ```powershell
 python manage.py stop
 python manage.py status
@@ -84,7 +88,7 @@ Village Quest 绘制的 Journal 不暴露普通按钮列表；本次按真实 `J
 
 例如：`/quest list`、`/quest accept maw:gather_logs`、`/quest progress`、`/quest claim maw:gather_logs`。当前服务端同步 38 项任务，8 项来自此文件；这不是把整套目录塞进模型上下文。
 
-`maw-fabric263-compat-0.1.0.jar` 修复已实测的 JustQuests 0.4.5 快速合成漏计数：用 `ResultSlot.checkTakeAchievements` 的真实移出数量，为空参数的 `onTake` 保留一次性合成证据。原任务钩子仍是唯一计数来源；不写任务进度、不发额外奖励、不改库存或权限。编译器锁定原 JustQuests 字节，Mixin 必须准确命中，不能降低注入检查来伪装成功。
+`maw-fabric263-compat-0.1.1.jar` 保留已实测的 JustQuests 0.4.5 快速合成漏计数修复：用 `ResultSlot.checkTakeAchievements` 的真实移出数量，为空参数的 `onTake` 保留一次性合成证据。原任务钩子仍是唯一计数来源；不写任务进度、不发额外奖励、不改库存或权限。另补中文生成器目录和物品／实体名称区分。编译器锁定原 JustQuests 字节，Mixin 必须准确命中，不能降低注入检查来伪装成功。
 
 ## 已验收与未验收
 
@@ -113,13 +117,13 @@ python probe.py --code-file close_client.py --request-id your-new-close-id
 
 ## 分发与验证
 
-已生成独立客户端候选包 `E:/MC/releases/my-agent-world-fabric26.3-0.1.0-lab.2.mrpack`。在支持 Modrinth 包的启动器中导入新的独立实例，选择 Java 25。此包不是 SAO R2 的替代更新，尚未上传生产网站。
+已生成带中文补全的独立客户端候选包 `E:/MC/releases/my-agent-world-fabric26.3-0.1.0-lab.3-zh_cn.mrpack`。在支持 Modrinth 包的启动器中导入新的独立实例，选择 Java 25。此包不是 SAO R2 的替代更新，尚未上传生产网站。
 
 包中 32 项供应商下载索引指向原始发行地址，并带哈希、大小、端侧说明；自有兼容 JAR 附 Java 源码。不包含 Minecraft 本体、账号、存档、管理密钥、第三方模型／贴图提取物。许可证以锁中的原项目声明为准；不能把索引视为允许另行重分发所有供应商二进制的授权。
 
 ```powershell
-python -m unittest test_prepare test_probe test_backup test_install_content
+python -m unittest test_prepare test_probe test_backup test_install_content test_localization
 python package_client.py E:/MC/releases/your-new-build.mrpack --release-id your-new-build
 ```
 
-21 项回归覆盖依赖端侧、固定版本、哈希、目录归属、路径、未知结果不重放、执行成功不夸大目标、冷备份、旧快照不可覆盖，以及首次／重复安装任务和命名空间冲突。管理、依赖、内容的改动都先在本实验验收；不要修改生产服务或使用原服账号来代替测试角色。
+31 项回归覆盖依赖端侧、固定版本、哈希、目录归属、路径、未知结果不重放、执行成功不夸大目标、冷备份、旧快照不可覆盖、首次／重复安装任务、翻译变量、资源选择保持及同名实体／物品区分。管理、依赖、内容的改动都先在本实验验收；不要修改生产服务或使用原服账号来代替测试角色。

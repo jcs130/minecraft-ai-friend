@@ -414,12 +414,18 @@ def main():
     prepare_mods(args, lock)
     server_meta = prepare_server(args, spec, java)
     client_meta = prepare_client(args, spec)
+    from localize import install_client, install_server
+    localization_config = {"server": str(args.server), "client": str(args.client), "cache": str(args.cache),
+                           "port": args.port, "controlPort": args.control_port}
+    localization = install_client(localization_config)
+    install_server(localization_config)
     from build_compat import build
     local_components = [build(args.cache, java, args.server, args.client)]
     local = {"schemaVersion": 1, "server": str(args.server), "client": str(args.client), "cache": str(args.cache),
              "port": args.port, "controlPort": args.control_port, "java": str(java),
              "packLockSha256": digest(HERE / "pack.lock.json"), "serverMetadata": server_meta, "clientMetadata": client_meta,
              "localComponents": local_components}
+    local["localization"] = localization
     write_json(HERE / "deployment.local.json", local)
     print(json.dumps({"prepared": True, "mods": len(lock["mods"]), "external": len(lock["external"]), "port": args.port}))
 

@@ -1,0 +1,5 @@
+{
+  "key.category.spell_engine.spell_engine": "法术引擎",
+  "text.autoconfig.spell_engine.option.client.weaponGlowSmooth": "武器光效平滑",
+  "text.autoconfig.spell_engine.option.client.weaponGlowSmooth.@Tooltip": "武器上的发光条纹平滑过滤（关闭：像素化）"
+}

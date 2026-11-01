@@ -1,0 +1,10 @@
+{
+  "text.cloth-config.disabled_tooltip": "已禁用（未满足要求）",
+  "text.cloth-config.error.color.invalid_alpha": "透明度数值无效！",
+  "text.cloth-config.error.color.invalid_blue": "蓝色通道数值无效！",
+  "text.cloth-config.error.color.invalid_green": "绿色通道数值无效！",
+  "text.cloth-config.error.color.invalid_red": "红色通道数值无效！",
+  "text.cloth-config.error.color.no_alpha_allowed": "此处不允许设置透明度！",
+  "text.cloth-config.testing.2": "Cloth Config 维基",
+  "title.cloth-config.config": "Cloth 模组配置"
+}

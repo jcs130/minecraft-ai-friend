@@ -98,8 +98,10 @@ def main():
     validate_server(config)
     assert_stopped(config)
     files = selected_files(config["server"])
-    for name in ("pack.spec.json", "pack.lock.json", "starter-quests.json", "compat-src/VerifiedCraftMixin.java"):
+    for name in ("pack.spec.json", "pack.lock.json", "starter-quests.json", "compat-src/VerifiedCraftMixin.java", "compat-src/ChineseGeneratorMixin.java", "compat-src/ChineseQuestNamesMixin.java", "compat-src/COPYING", "build_compat.py", "localize.py", "quest_localization.py"):
         files["deployment/" + name] = HERE / name
+    for path in (HERE / "localization").rglob("*.json"):
+        files["deployment/" + path.relative_to(HERE).as_posix()] = path
     print(json.dumps(create_snapshot(files, args.primary / (args.label + ".zip"), args.secondary / (args.label + ".zip"))))
 
 

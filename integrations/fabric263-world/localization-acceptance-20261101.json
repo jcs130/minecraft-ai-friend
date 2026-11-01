@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "scope": "independent-fabric26.3-lab",
+  "coldBackup": {
+    "beforeSha256": "b229fd083e906c60a9cf45257f0d7054cf4e57ba1e4022e939aac1db1e54883d",
+    "afterSha256": "c3dcceedbf7cc95fd5e8c10f0207b9334a9341972ce362e3b348ef8d6adbfc31",
+    "afterFiles": 169,
+    "afterBytes": 6441972,
+    "bothCopiesVerified": true,
+    "roots": ["E:/MC/backups/fabric263-lab-20261101", "F:/MC-backups/fabric263-lab-20261101"]
+  },
+  "productionModified": false,
+  "entries": 7003,
+  "resourceEntries": 5763,
+  "resourceTableMismatches": 0,
+  "builtinQuestDefinitions": 25,
+  "nativeQuestCount": 38,
+  "generator": {
+    "templates": true,
+    "themes": 89,
+    "hints": 467,
+    "installedNames": 503,
+    "typedNames": 526,
+    "locale": "zh_cn"
+  },
+  "generatedChinesePreserved": true,
+  "gameplayRulesUnchangedForCurrentGeneratedSet": true,
+  "originalBodyProgressUnchanged": true,
+  "originalCraftMixinClassIdentical": true,
+  "licenseOnlyRebuildFunctionalBytesIdentical": true,
+  "component": {
+    "filename": "maw-fabric263-compat-0.1.1.jar",
+    "sha256": "a97c2f095fcd78fa6beebfb9725479aa0544687ba27e867015c0730bf55df0fe",
+    "sourceSha256": "e513074d625c3eb94c46d299dec015cff76e6a6c8ad836aed3a7df60f965d396",
+    "localeSourceSha256": "0b59e5f3a8020c8469122f552270c81b60edbbd6f158c169e5d1cd42051e5c15",
+    "namesSourceSha256": "196796275904a2864ca8b26a0140460c949b2773926fb2e812a50a2645372898",
+    "localeSha256": "013580d4e778a2c85c5ed2ac75b9ef9b10a9cb27cc7bbfbae4610d325777d7e7",
+    "sides": [
+      "server",
+      "client"
+    ]
+  },
+  "resourcePack": {
+    "filename": "my-agent-world-zh_cn-0.1.0.zip",
+    "sha256": "ecc0da2aa7e6aa874fe33e8718b203606949ae0ee8fec176f8a3bf4159c7ccbc"
+  },
+  "questDataPack": {
+    "filename": "my-agent-world-quests-zh_cn-0.1.0.zip",
+    "sha256": "6a0ef93a02127e834d4675de41c95e0d2b418d4c4ecedd72ef73772ea8ae9fe7",
+    "definitions": 25
+  },
+  "clientPackage": {
+    "filename": "my-agent-world-fabric26.3-0.1.0-lab.3-zh_cn.mrpack",
+    "sha256": "1421aa8dd044a467df16526af0732f0079d0ead3f8773ad1973bd2f1ffc103bb",
+    "bytes": 259835,
+    "originalDownloadEntries": 32,
+    "languagePackEnabledByDefault": true
+  },
+  "nativeRequests": [
+    "zh-ui-final-20261101-01",
+    "zh-generator-final-20261101-01"
+  ],
+  "screenshots": [
+    "2026-11-01_14.56.43.png",
+    "2026-11-01_14.56.44.png"
+  ],
+  "regression": {
+    "passed": 31,
+    "failed": 0
+  },
+  "retainedEarlierDiagnostics": [
+    "str/print decimal presentation mismatch",
+    "mining Shift mistranslation",
+    "item/entity name collision"
+  ],
+  "limitations": [
+    "current locked mod catalogue; not future added mods or player chat",
+    "native fixed-width GUI truncation retained",
+    "GraalWeave str/print hooks still normalize decimal-looking strings; raw verifier avoids them"
+  ]
+}
