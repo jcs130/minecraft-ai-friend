@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from agent_mc_autonomy import controller as controller_module
-from agent_mc_autonomy.filesystem import replace_prepared
 from agent_mc_autonomy.controller import Controller
+from agent_mc_autonomy.filesystem import replace_prepared
 
 
 def controller(tmp_path):

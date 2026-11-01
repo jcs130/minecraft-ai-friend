@@ -4,10 +4,8 @@ import json
 import math
 
 import pytest
-
 from test_controller import action
 from test_effect_recovery import effect, finish, prepare
-
 
 PLAN = {"steps": [
     {"skill": "control", "mode": "ground", "keys": ["jump"], "durationMs": 300},
@@ -62,8 +60,8 @@ def test_control_roundtrip_keeps_native_failure(framework_module, tmp_path, run_
     assert motion["returns_to_start"] is True and motion["net_distance"] == 0
     assert motion["moving_steps"] == 2 and motion["other_effects_observed"] is False
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
-    from agent_mc_autonomy.observations import native_outcome_view
     from agent_mc_autonomy.context import assemble
+    from agent_mc_autonomy.observations import native_outcome_view
     assert native_outcome_view(outcome)["control_motion"] == motion
     messages, _ = assemble("rules", [], "survive", {}, [], [], context_tokens=32768,
                            reserved_output=2048, native_outcomes=controller.native_outcomes)

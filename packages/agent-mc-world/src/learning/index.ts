@@ -8,6 +8,7 @@ export * from './rollout.ts';
 export * from './policy-statistics.ts';
 export * from './motor-shadow.ts';
 export * from './practice.ts';
+export * from './practice-feedback.ts';
 export * from './practice-memory.ts';
 export * from './physics-practice.ts';
 export * from './crafting-practice.ts';

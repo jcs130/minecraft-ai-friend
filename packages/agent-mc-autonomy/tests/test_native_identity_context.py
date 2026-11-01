@@ -9,7 +9,6 @@ from agent_mc_autonomy.context import assemble
 from agent_mc_autonomy.death_memory import identity, scope_key
 from agent_mc_autonomy.host_context import HostContextPort
 
-
 SCOPE = {"realm": '["server-a",["vanilla-world","minecraft:overworld"]]',
          "account": "offline:player-uuid", "agent": "player"}
 WORLD = {"schema": "agent-mc-world-identity/v1", "key": "minecraft:overworld", "uuid": None,
