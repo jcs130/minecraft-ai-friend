@@ -10,6 +10,56 @@ export interface FoodStack { name: string; count: number }
 export interface FoodValue { foodPoints?: number; saturation?: number }
 const SPECIAL_FOODS = new Set(['golden_apple', 'enchanted_golden_apple']);
 
+/** A measured need, not a meal command or permission to change the current goal. */
+export interface NutritionNeed {
+  schema: 'agent-mc-nutrition-need/v1'; id: string; scope: string; generation: string; atMs: number;
+  food: number; urgency: 'reserve' | 'low' | 'critical' | 'starving';
+  routineUnits: number; riskyUnits: number; specialUnits: number; unclassifiedUnits:number;
+  registryReferenceOnly:true;pendingMeal: boolean; goalCompleted: false;
+}
+export class NutritionNeedObserver {
+  private owner = '';
+  private announced = new Set<string>();
+  private serial = 0;
+  private lastFood: number | null = null;
+  observe(input: {scope:string;generation:string;atMs:number;food:number|null;synced:boolean;
+    stacks:readonly FoodStack[];foods:Record<string,FoodValue|undefined>;knownItems?:Readonly<Record<string,unknown>>;travelling:boolean;pendingMeal:boolean}): NutritionNeed | null {
+    const owner=JSON.stringify([input.scope,input.generation]);
+    if(owner!==this.owner){this.owner=owner;this.announced.clear();this.lastFood=null;}
+    if(!input.synced||input.food===null||!Number.isFinite(input.food)||input.food<0||input.food>20
+      ||!Number.isFinite(input.atMs)||!Object.keys(input.foods).length)return null;
+    let routineUnits=0,riskyUnits=0,specialUnits=0,unclassifiedUnits=0;
+    if(this.lastFood!==null&&this.lastFood<=6&&input.food>6){this.announced.delete('critical');this.announced.delete('starving');}
+    this.lastFood=input.food;
+    for(const stack of input.stacks){
+      if(!Number.isSafeInteger(stack.count)||stack.count<=0)continue;
+      if(!((input.foods[stack.name]?.foodPoints??0)>0)){
+        if(!Object.hasOwn(input.knownItems??{},stack.name))unclassifiedUnits+=stack.count;
+        continue;
+      }
+      if(RISKY_FOODS.has(stack.name))riskyUnits+=stack.count;
+      else if(SPECIAL_FOODS.has(stack.name))specialUnits+=stack.count;
+      else routineUnits+=stack.count;
+    }
+    if(routineUnits>0&&input.food>16){this.announced.clear();return null;}
+    // A known pending meal is not a successful recovery; its receipt provides the next evidence.
+    if(input.pendingMeal)return null;
+    const urgency=input.food===0?'starving':input.food<=6?'critical':routineUnits===0&&input.food<=16?'low'
+      :routineUnits===0&&input.travelling?'reserve':null;
+    if(!urgency||this.announced.has(urgency))return null;
+    this.announced.add(urgency);
+    return{schema:'agent-mc-nutrition-need/v1',id:`nutrition:${input.generation}:${++this.serial}`,scope:input.scope,
+      generation:input.generation,atMs:input.atMs,food:input.food,urgency,routineUnits,riskyUnits,specialUnits,
+      unclassifiedUnits,registryReferenceOnly:true,pendingMeal:false,goalCompleted:false};
+  }
+}
+export function nutritionNeedText(need:NutritionNeed):string {
+  return `[补给观察 ${need.id}] 饥饿 ${need.food}/20；按已同步物品和当前注册表识别，随身常规口粮 ${need.routineUnits} 个，`
+    +`有风险食物 ${need.riskyUnits} 个，特殊补给 ${need.specialUnits} 个，未分类 ${need.unclassifiedUnits} 个（不代表不可吃）。`
+    +'原料和未知物品不算现成口粮；没有自动代选危险或特殊食物。请结合当前任务、食物帮助与现场选择进食或补给。'
+    +'原任务仍保留；需要插入短行动时用 afterCheckpoint，不要为了查看状态撤销赶路，也不要把受理当成吃到了。';
+}
+
 /** Reference semantics, never a claim about a stack's server-overridden components or current effects. */
 export interface FoodRiskReference {
   item: string;

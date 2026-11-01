@@ -153,6 +153,15 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
       }
     }
     assertActive();
+    sample();
+    const pressed = new Set(call.keys);
+    const vertical = call.mode === 'flight' ? pressed.has('jump') !== pressed.has('sneak') : pressed.has('jump');
+    const translation = pressed.has('forward') !== pressed.has('back')
+      || pressed.has('left') !== pressed.has('right') || vertical;
+    if (translation && call.durationMs >= 250 && maxDistance <= .05) {
+      throw new SkillBlocked('移动输入已执行，但本次最大位移不足 0.05 格；未确认移动，碰撞、地形或服务端控制原因尚未核实',
+        [], 'local', 'control-no-progress');
+    }
     return `直接控制结束（${call.mode}，${call.keys.join('+') || (call.mode === 'water' ? '松键自然下沉' : '仅转头')}；客户端观测）；${observed()}；按键已释放，到达目标须按现场或 expect 另行核验`;
   } catch (error) {
     if (error instanceof SkillBlocked) {

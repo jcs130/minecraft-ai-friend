@@ -2,6 +2,29 @@
 
 Long navigation keeps its body task while the host considers new evidence. Journey observations identify their original task, step, destination, sampling time and visible clues. A villager, sign or landmark is not proof of village boundaries, a new settlement or a reachable entrance. Bounded notification novelty is not a persistent record of unexplored places; use scoped game notes and host memory when deciding whether to visit.
 
+Without a new visible clue, a fixed-destination route can produce one measured
+progress opportunity after at least 60 seconds and 16 blocks of horizontal net
+displacement since its previous notice. Elapsed time alone, unsafe footing and a
+stationary body produce none. This is a host decision opportunity, not an extra
+model loop, a new goal, arrival evidence or a command to narrate. Progress and
+clue notices use `agent-mc-journey-observation/v1`; active-goal wake classification
+consumes their structured metadata rather than matching player chat text.
+
+`agent-mc-nutrition-need/v1` reports missing routine rations and actual low or
+zero hunger from synchronized inventory and the current registry. It announces
+severity changes once per shortage episode, leaves missing readings unknown,
+and does not report a pending meal as successful eating. Registry food values
+are reference semantics, not proof of server-overridden effects. Ingredients,
+risky food and special reserves are not silently promoted to routine meals.
+The existing safe automatic meal/checkpoint path remains in charge of eating;
+the host chooses any extra supply actions with the original task preserved.
+
+A single plain `chat` action with default queue and no `needs`/`expect` sends
+while navigation continues. Put an independent reply in its own call: a chat
+step after a long `goto` in the same action group retains that group's order.
+The host owns whether and what to say. Game chat still needs its real send
+receipt before an external voice adapter claims delivery.
+
 `mc_choose` with `category:"route"` compares the Agent's evidenced candidates through the explicitly configured host decision service. It starts no background model loop and executes no movement. Fresh request facts include the current journey observation. Older observations are labeled historical; inspect again before relying on them as nearby evidence.
 
 During a resumable `goto`, route advice uses the producing core's typed task, connection, body ownership and safety evidence. Ordinary movement may survive the model response delay. The horizontal tolerance in blocks is:

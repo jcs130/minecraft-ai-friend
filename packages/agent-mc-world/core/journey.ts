@@ -20,41 +20,48 @@ export interface JourneySample {
   intent:JourneyIntent|null;safeToConsider:boolean;cues:readonly JourneyCue[];
 }
 export interface JourneyOpportunity {
+  schema:'agent-mc-journey-observation/v1';reason:'cue'|'progress';
   id:string;atMs:number;scope:string;generation:string;dimension:string;position:[number,number,number];
   journey:JourneyIntent;remainingBlocks:number;observations:JourneyCue[];
   /** Novel to this bounded notification index; not proof that the agent has never visited. */
-  novelty:'not-recently-announced';choices:readonly ['continue','inspect'];goalCompleted:false;
+  novelty:'not-recently-announced'|'progress-sample';choices:readonly ['continue','inspect'];goalCompleted:false;
+  elapsedMs?:number;netProgressBlocks?:number;
 }
 const finite=(p:readonly number[])=>p.length===3&&p.every(Number.isFinite);
 export class JourneyObserver {
-  private route:{key:string;long:boolean}|null=null;
+  private route:{key:string;long:boolean;startedAt:number;noticeAt:number;noticePosition:[number,number,number]}|null=null;
   private readonly seen=new Map<string,number>();
   private lastAt=-Infinity;
   private serial=0;
   private latest:JourneyOpportunity|null=null;
-  constructor(private readonly options:{minTripBlocks?:number;minIntervalMs?:number}={}){}
+  constructor(private readonly options:{minTripBlocks?:number;minIntervalMs?:number;progressIntervalMs?:number}={}){}
   observe(sample:JourneySample):JourneyOpportunity|null {
     const {intent,position,dimension,atMs}=sample;
     if(!intent||!finite(position)||!Number.isFinite(atMs)||intent.dimension!==dimension
       ||![2,3].includes(intent.destination.length)||!intent.destination.every(Number.isFinite)){this.route=null;this.latest=null;return null;}
     const at=intent.destination,dx=at[0]!-position[0],dz=at.at(-1)!-position[2],remaining=Math.hypot(dx,dz);
     const key=JSON.stringify([sample.scope,sample.generation,dimension,intent.taskId,intent.stepIndex,at]);
-    if(this.route?.key!==key){this.route={key,long:remaining>=(this.options.minTripBlocks??96)};this.latest=null;}
-    if(!this.route.long||!sample.safeToConsider||atMs-this.lastAt<(this.options.minIntervalMs??20_000))return null;
+    if(this.route?.key!==key){this.route={key,long:remaining>=(this.options.minTripBlocks??96),startedAt:atMs,noticeAt:atMs,noticePosition:[...position]};this.latest=null;}
+    if(!sample.safeToConsider||atMs-this.lastAt<(this.options.minIntervalMs??20_000))return null;
     for(const [key,time] of this.seen)if(atMs-time>600_000)this.seen.delete(key);
     const cues=sample.cues.filter(c=>finite(c.position)&&atMs>=c.observedAtMs&&atMs-c.observedAtMs<=10_000
       &&Math.hypot(...c.position.map((v,i)=>v-position[i]!))<=32&&c.key.length<=160&&c.label.length<=100);
     const noveltyKey=(c:JourneyCue)=>JSON.stringify([sample.scope,dimension,c.kind,
       // Different villagers/sign boards in the same small area form one encounter, not a wake-up each.
       Math.floor(c.position[0]/32),Math.floor(c.position[2]/32),c.kind==='npc'?c.label:c.key]);
-    const fresh=cues.filter(c=>!this.seen.has(noveltyKey(c))).slice(0,3);
-    if(!fresh.length)return null;
+    const fresh=this.route.long?cues.filter(c=>!this.seen.has(noveltyKey(c))).slice(0,3):[];
+    const elapsedMs=atMs-this.route.startedAt,netProgressBlocks=Math.hypot(position[0]-this.route.noticePosition[0],position[2]-this.route.noticePosition[2]);
+    const progress=!fresh.length&&atMs-this.route.noticeAt>=(this.options.progressIntervalMs??60_000)&&netProgressBlocks>=16;
+    if(!fresh.length&&!progress)return null;
     for(const c of fresh)this.seen.set(noveltyKey(c),atMs);
     while(this.seen.size>128)this.seen.delete(this.seen.keys().next().value!);
     this.lastAt=atMs;
-    this.latest={id:`journey:${sample.generation}:${intent.taskId}:${intent.stepIndex}:${++this.serial}`,atMs,scope:sample.scope,
+    this.route.noticeAt=atMs;this.route.noticePosition=[...position];
+    this.latest={schema:'agent-mc-journey-observation/v1',reason:progress?'progress':'cue',
+      id:`journey:${sample.generation}:${intent.taskId}:${intent.stepIndex}:${++this.serial}`,atMs,scope:sample.scope,
       generation:sample.generation,dimension,position:[...position],journey:structuredClone(intent),remainingBlocks:Math.round(remaining),
-      observations:structuredClone(fresh),novelty:'not-recently-announced',choices:['continue','inspect'],goalCompleted:false};
+      observations:structuredClone(fresh),novelty:progress?'progress-sample':'not-recently-announced',choices:['continue','inspect'],goalCompleted:false,
+      ...(progress?{elapsedMs,netProgressBlocks:Math.round(netProgressBlocks)}:{})};
     return structuredClone(this.latest);
   }
   reading(scope:string,generation:string,atMs=Date.now()):JourneyOpportunity|null {
@@ -63,6 +70,10 @@ export class JourneyObserver {
   }
 }
 export function journeyOpportunityText(value:JourneyOpportunity,options:{guidance?:boolean}={}):string {
+  if(value.reason==='progress')return `[旅途进度 ${value.id}｜采样 ${new Date(value.atMs).toISOString()}] `
+    +`原任务#${value.journey.taskId}仍在执行。已观察这段任务约${Math.floor((value.elapsedMs??0)/1000)}秒，`
+    +`自上次提示位置净移约${value.netProgressBlocks??0}格，当前位置 [${value.position.map(n=>Math.round(n*10)/10).join(',')}]，采样时约余${value.remainingBlocks}格。未宣称到达。`
+    +(options.guidance===false?'':'可在不停止移动的情况下核对身体与补给、读取信息并回应交流；独立普通 chat 使用默认队列且不带 needs/expect，可即时发送。需要身体短行动才用 afterCheckpoint，保留原任务。');
   const facts=value.observations.map(c=>`${c.label} (${c.position.map(Math.floor).join(',')})，来源 ${c.source}`).join('；');
   const reading=`[旅途发现 ${value.id}｜采样 ${new Date(value.atMs).toISOString()}] ${facts}。这些线索不证明村庄边界、入口可达或探索已完成。`
     +`原任务#${value.journey.taskId}第${value.journey.stepIndex+1}步仍是前往 [${value.journey.destination.join(',')}]，采样时约余${value.remainingBlocks}格。`;

@@ -67,6 +67,10 @@ The rc.99 preview is now published; the following notes preserve its feature sco
 and configurable movement tolerance while the host considers a short visit.
 Safe checkpoint insertion preserves the original task; no hidden model loop or
 automatic detour is introduced.
+Measured progress on long moving routes and edge-triggered nutrition shortages
+give active hosts a decision opportunity before arrival. Independent plain chat
+can be sent while the original navigation continues; narration remains the host's
+choice. Safe automatic meals still yield and resume through the same executor.
 
 When exact prebuilt vanilla materials are absent, the web viewer automatically selects compatible materials while preserving the actual connection's block IDs in the browser and mesher. Unknown materials use local placeholders; optional icons, fonts, paintings or audio do not block terrain. An incomplete old cache can fall back to bundled resources. Refreshing the viewer keeps the body and session. Users can connect without building resources; exact materials remain an optional enhancement. See [viewer resources](docs/viewer-resources.md).
 

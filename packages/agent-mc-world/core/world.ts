@@ -3,6 +3,7 @@ import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
 import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
+import { TaskRecoveryBook } from './task-recovery.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
@@ -166,7 +167,7 @@ import { ItemBreakDecoder, type ItemBreakFact } from './item-break.ts';
 import { WorksBook } from './works.ts';
 import { CombatSession } from './combat.ts';
 import { corridorSafe } from './idle-actions.ts';
-import { chooseRoutineFood, renderFoodReserveReadout, foodRiskReference } from './nutrition.ts';
+import { chooseRoutineFood, renderFoodReserveReadout, foodRiskReference, NutritionNeedObserver, nutritionNeedText } from './nutrition.ts';
 
 import {
   BowController,
@@ -2317,7 +2318,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_do',
     tags: ['act'],
     description:
-      'Queue Minecraft actions; queue:"afterCheckpoint" inserts a safe detour and resumes the original task. Return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
+      'Queue Minecraft actions. A single plain chat with default queue and no needs/expect sends immediately while movement continues; do not append an independent reply after a long goto. queue:"afterCheckpoint" inserts a safe detour and resumes the original task. Return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
     parameters: {
       type: 'object',
       properties: {
@@ -2921,6 +2922,7 @@ export class MinecraftWorld implements World {
   /** 任务号:排进队列的每一件事领一个,回报时认它 */
   protected taskSeq = 0;
   protected readonly executionEpoch = randomUUID();
+  private readonly taskRecovery = new TaskRecoveryBook();
   protected readonly taskReportVersions = new Map<number, number>();
   protected taskReportVersion = 0;
   /** 每次真实 spawn 递增；断线前后的工具、事件与连接日志据此分代。 */
@@ -8166,6 +8168,7 @@ export class MinecraftWorld implements World {
     }
     this.observeBodyControl();
     this.autoEatTick(bot);
+    this.nutritionTick(bot);
     this.tryArrivalIdle();
     this.idleBehavior?.tick();
     const time = bot.time?.timeOfDay ?? 0;
@@ -8223,6 +8226,16 @@ export class MinecraftWorld implements World {
     const result = this.executor.submitDetailed([{ skill: 'eat', item }], 'afterCheckpoint');
     this.diag.write({ lane: 'body', event: result.accepted ? 'auto-eat' : 'auto-eat-refused',
       msg: result.receipt, data: { item, food: bot.food, connectionGeneration: this.connectionGeneration } });
+  }
+  protected nutritionNeeds = new NutritionNeedObserver();
+  /** Edge-triggered evidence lets the host reason during movement; it never starts a second body or model loop. */
+  protected nutritionTick(bot:Bot):void {
+    const queue=this.executor?.status(),food=typeof bot.food==='number'?bot.food:null;
+    const need=(this.nutritionNeeds??=new NutritionNeedObserver()).observe({scope:this.journeyScope(),generation:String(this.connectionGeneration),
+      atMs:Date.now(),food,synced:this.bridge?.invSynced===true,stacks:itemsInReach(bot),
+      foods:bot.registry?.foodsByName??{},knownItems:bot.registry?.itemsByName??{},travelling:!!queue?.running?.travel,pendingMeal:this.executor?.hasPendingEat()??false});
+    if(need)this.emit('minecraft.event',`[Minecraft] ${nutritionNeedText(need)}`,need.urgency==='critical'||need.urgency==='starving',
+      {trigger:need.urgency==='critical'||need.urgency==='starving'?'flush':'debounce',meta:{nutritionNeed:need}});
   }
   /**
    * expectedDoneAt 到期后推送估计完成事件，不单独唤醒。
@@ -8924,7 +8937,18 @@ export class MinecraftWorld implements World {
       : '';
     const feedback = r.taskId !== undefined && (r.kind === 'blocked' || r.kind === 'partial')
       ? this.serverFeedback.forTask(r.taskId) : '';
-    const reportText = `${r.text}${repeatEvidence}${feedback}`;
+    const recovery = r.taskId === undefined ? null : this.taskRecovery.record({
+      scope: `${this.executionEpoch}:${this.connectionGeneration}`,
+      executionId: `${this.executionEpoch}:${r.taskId}`,
+      phase: r.kind === 'done' ? 'completed' : r.kind,
+      steps: r.steps ?? [],
+    });
+    const recoveryText = recovery
+      ? `\n[行动恢复记录] 最近 ${recovery.attempts.length} 次行动在相近实测位置留下未解决步骤（历史回执，不等于当前地形或目标完成）：`
+        + recovery.attempts.map(a => `${a.executionId} 第${a.step}步 ${a.skill}: ${JSON.stringify(a.reason)}`).join('；')
+        + '。核对原回执与当前条件后选择下一步；没有自动重放。'
+      : '';
+    const reportText = `${r.text}${repeatEvidence}${feedback}${recoveryText}`;
     // 「最近一单是什么下场」的单槽:mc_queue 现读它(见 lastFinishedTask)
     this.lastFinishedTask = { at: Date.now(), kind: r.kind, taskId: r.taskId, text: reportText, steps: r.steps };
     if (r.taskId !== undefined) {
@@ -8945,10 +8969,10 @@ export class MinecraftWorld implements World {
       {...(workSubtask ? { trigger: 'piggyback' as const } : {}), execution: r.taskId === undefined ? undefined : {kind:'task',id:`${this.executionEpoch}:${r.taskId}`,
         phase:r.kind==='done'?'completed':r.kind,
         terminal:!['suspended','resumed','reflex'].includes(r.kind),goalCompleted:false,evidence:{receipt:reportText,steps:r.steps??[],...(r.progress?{progress:r.progress}:{})}},
-        ...(r.repeatFailure ? { meta: { repeatFailure: {
+        ...(r.repeatFailure || recovery ? { meta: { ...(recovery ? { taskRecovery: recovery } : {}), ...(r.repeatFailure ? { repeatFailure: {
         taskId: r.taskId, attempts: r.repeatFailure.attempts, scope: r.repeatFailure.scope,
         observation: r.repeatFailure.observation,
-      } } } : {}) });
+      } } : {}) } } : {}) });
     if (r.kind === 'done' && r.lastSkill === 'goto'
       && (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).afterArrival
       && q && !q.running && q.waiting.length === 0 && !q.hold) {
