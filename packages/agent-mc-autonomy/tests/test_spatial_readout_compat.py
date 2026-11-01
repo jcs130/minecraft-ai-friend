@@ -4,7 +4,6 @@ import importlib
 import json
 
 import pytest
-
 from test_controller import action
 from test_observation_reuse import prepare
 

@@ -2,7 +2,12 @@
 import tarfile
 from pathlib import Path
 
-from agent_mc_autonomy.core_distribution.install import SOURCE, SOURCE_DIR, verify_archive, verify_runtime
+from agent_mc_autonomy.core_distribution.install import (
+    SOURCE,
+    SOURCE_DIR,
+    verify_archive,
+    verify_runtime,
+)
 
 
 def test_exact_engine_archive_passes_the_real_installation_guard(tmp_path: Path):

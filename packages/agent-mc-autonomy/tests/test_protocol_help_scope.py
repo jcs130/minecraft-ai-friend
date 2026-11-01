@@ -5,7 +5,13 @@ import pytest
 from test_controller import setup
 from test_shared_information import HELP
 
-from agent_mc_autonomy.controller import READ_PROTOCOL, failure_context, model_tools, protocol_planner_help, tool_help
+from agent_mc_autonomy.controller import (
+    READ_PROTOCOL,
+    failure_context,
+    model_tools,
+    protocol_planner_help,
+    tool_help,
+)
 
 PROTOCOL_TOOL = {"name": "mc_protocol", "description": "Native lifecycle begin_turn end_turn ack_barrier",
                  "inputSchema": {"type": "object", "properties": {"protocol": {"const": "agent-mc/v1"},
