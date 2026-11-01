@@ -1,5 +1,9 @@
 # 核显原生女神相机
 
+## 2026-11-01：光影内存诊断候选
+
+新增[源码排查与证据计划](NATIVE_CAMERA_MEMORY_INVESTIGATION.md)及[独立 Windows 诊断程序](../integrations/native-camera/diagnostics/README.md)：按同一时间轴采集 JVM/NMT、进程私有提交、按 PID 的 GPU 用量、GL 创建／删除请求和存储调用，支持 Gallium 资源轨迹与五种最小 GL 对照。当前执行环境是 Linux，没有本轮 Windows 核显实测，不据此确认驱动泄漏或提交猜测性修复。生产启动器、构建、WebGL 后端和现役服务均未改动；工具的有界退出仅属于私有 QA。
+
 ## 共享内存限额与常驻
 
 8GiB是隔离测试给相机进程设置的提交内存保护上限，不是核显显存上限，也不是Java堆上限。只读DXGI查询中，实际Intel UHD770适配器报告约102.195GiB共享系统内存上限；这是报告额度，不是已预留或空闲内存。查询进程的预算／用量不能当作相机用量。本轮相机占用另通过Windows按PID的GPU进程计数器读取。[Intel说明](https://www.intel.com/content/www/us/en/support/articles/000020962/graphics.html)明确共享内存由系统动态管理，报告上限不代表预留；[微软说明](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/process-residency-budgets)区分进程驻留预算和实际资源管理。
