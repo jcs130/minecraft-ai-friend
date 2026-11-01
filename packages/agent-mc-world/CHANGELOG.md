@@ -1,3 +1,8 @@
+## 0.5.7-rc.153
+
+- Publish validated physical readiness, durable state recovery, nutrition and journey review, current rejected-command advice, and optional host-owned visual decision contracts.
+- Preserve host-owned personas, credentials, goals, memory and optional server integration; source publication does not reload existing clients.
+
 # Changelog
 
 ## 0.5.7-rc.148
