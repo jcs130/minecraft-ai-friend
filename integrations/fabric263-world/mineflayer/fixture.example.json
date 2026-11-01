@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scope": "fresh_isolated_qa_world_only",
+  "gamePort": 39783,
+  "controlPort": 39784,
+  "requiresNoExistingPlayersOrProgress": true,
+  "commands": [
+    "forceload add -32 -32 32 32",
+    "fill -20 149 -20 20 149 20 minecraft:sea_lantern",
+    "setworldspawn 0 150 0",
+    "setblock 2 150 0 minecraft:dirt",
+    "setblock 3 150 1 minecraft:chest[facing=west]",
+    "item replace block 3 150 1 container.0 with minecraft:oak_planks 8",
+    "item replace block 3 150 1 container.1 with farmersdelight:rice 4",
+    "setblock 3 150 -1 farmersdelight:cooking_pot"
+  ],
+  "body": "MFPlayProbe",
+  "orderedPlans": ["basic", "craft", "mod_menu", "quests", "reconnect"],
+  "note": "One-time operator setup in a fresh QA copy, not a reset procedure. Do not run on 39781 or on any existing gameplay world. Reconcile a failed action by its original receipt before choosing a new plan."
+}

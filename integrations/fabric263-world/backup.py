@@ -98,10 +98,17 @@ def main():
     validate_server(config)
     assert_stopped(config)
     files = selected_files(config["server"])
-    for name in ("pack.spec.json", "pack.lock.json", "starter-quests.json", "compat-src/VerifiedCraftMixin.java", "compat-src/ChineseGeneratorMixin.java", "compat-src/ChineseQuestNamesMixin.java", "compat-src/COPYING", "build_compat.py", "localize.py", "quest_localization.py"):
+    for name in ("pack.spec.json", "pack.lock.json", "starter-quests.json", "compat-src/VerifiedCraftMixin.java", "compat-src/ChineseGeneratorMixin.java", "compat-src/ChineseQuestNamesMixin.java", "compat-src/COPYING", "build_compat.py", "localize.py", "quest_localization.py", "prepare.py", "manage.py", "backup.py", "probe.py", "install_content.py"):
         files["deployment/" + name] = HERE / name
     for path in (HERE / "localization").rglob("*.json"):
         files["deployment/" + path.relative_to(HERE).as_posix()] = path
+    for path in (HERE / "mineflayer").rglob("*"):
+        if any(p in ("node_modules", "vendor", "__pycache__") for p in path.relative_to(HERE).parts):
+            continue
+        if path.is_file() and (path.suffix in (".py", ".java", ".cjs", ".mjs", ".json", ".md") or path.name == "LICENSE") and ".local." not in path.name:
+            if path.is_symlink() or not path.resolve().is_relative_to(HERE.resolve()):
+                raise ValueError("Native source entry escapes deployment")
+            files["deployment/" + path.relative_to(HERE).as_posix()] = path
     print(json.dumps(create_snapshot(files, args.primary / (args.label + ".zip"), args.secondary / (args.label + ".zip"))))
 
 

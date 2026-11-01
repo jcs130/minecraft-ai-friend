@@ -23,7 +23,7 @@
 | 性能 | Lithium 0.26.3、FerriteCore 9.0.0、spark 1.10.187 | 游戏逻辑、内存优化及实测分析 |
 | 客户端 | Sodium 0.9.2、GraalWeave 0.1.1、官方 Baritone API 1.20.0 | 真正的客户端渲染、Python 原生数据及动作、寻路 |
 
-含依赖及自有兼容组件：服务端 **30 个顶层 JAR**，客户端 **31 个顶层 JAR**。Fabric 显示的嵌套模块数量不是内容模组数量。Player Animation Library 使用人工指定版本，依赖解析不能擅自用另一个“最新稳定版”替换。Baritone 发布号 1.20.0 对应本次 26.3 构建，不代表 Minecraft 1.20。
+含依赖及自有兼容组件：服务端 **31 个顶层 JAR**，客户端 **31 个顶层 JAR**。新增 `maw-native263` 仅服务端安装；真人客户端无需增加它。Fabric 显示的嵌套模块数量不是内容模组数量。Player Animation Library 使用人工指定版本，依赖解析不能擅自用另一个“最新稳定版”替换。Baritone 发布号 1.20.0 对应本次 26.3 构建，不代表 Minecraft 1.20。
 
 `Structure Pool API`、`Lithostitched` 的项目目录端侧标签不足以判断真实依赖；它们作为硬依赖也进入匹配客户端，已通过实际冷启动验证。不能按目录标签直接删掉。
 
@@ -36,7 +36,7 @@
 
 管理辅助入口使用随机本地 Token，只用于把命令交给该实验服 stdin。接受命令不代表游戏目标完成。未开启 RCON、未改防火墙／路由器／网站／生产端口。
 
-这是回环离线测试身份，不是公网登录方案。不要仅修改 `server-ip` 后直接公开；正式开放还需登录、身份与权限、建筑保护和发布验收。现有账号、角色记忆和原服世界未迁移。没有安装适配到 26.3 的 Mineflayer 网关、Numen 或基岩桥，不能据此声称这些入口已经可用。
+这是回环离线测试身份，不是公网登录方案。不要仅修改 `server-ip` 后直接公开；正式开放还需登录、身份与权限、建筑保护和发布验收。现有账号、角色记忆和原服世界未迁移。Mineflayer 现可通过固定依赖的原生 26.3 连接器直接连 **39781**，无需另设降级网关；Numen 与基岩桥仍未安装到本世界。见 [Mineflayer 接入与边界](mineflayer/README.md)。
 
 ## 准备、启动和停止
 
@@ -65,7 +65,9 @@ python backup.py --primary E:/MC/backups/fabric263-lab-20261101 --secondary F:/M
 
 ## 原生 Agent 接入
 
-本实验使用 **GraalWeave 控制真正的 Fabric 客户端身体**，尚未挂常驻大模型循环。Python 可从当前客户端对象读取实际注册 ID、组件、容器槽位、任务同步数据与法术选项；不是把模组道具翻译为原版物品后再猜真实身份。
+本实验有两条已验证的接入路径：**GraalWeave 控制真正的 Fabric 客户端身体**，以及 **Mineflayer 原生协议 + 自研核心 MCP／SDK**。尚未挂常驻大模型循环。Mineflayer 已验收正常登录、寻路、挖掘、取物、实际网格合成、农夫乐事菜单／输入和本人任务视图；完整施法、特殊组件和全部模组内容仍需逐项验收，详见 [验收记录](mineflayer/acceptance.json)。
+
+Python 可从真正的客户端对象读取实际注册 ID、组件、容器槽位、任务同步数据与法术选项；Mineflayer 在登录前导入同 JVM 的实际注册表，并读取原始物品包与真实菜单。不使用原版物品替身猜模组身份。
 
 ```powershell
 python probe.py --code-file inspect_world.py --request-id your-new-read-id

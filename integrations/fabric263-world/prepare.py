@@ -220,6 +220,25 @@ def copy_checked(source, target):
     shutil.copyfile(source, target)
 
 
+def retained_components(config, server, client):
+    """Preserve verified optional components when re-preparing the same lab."""
+    if Path(config.get("server", ".")).resolve() != server.resolve() or Path(config.get("client", ".")).resolve() != client.resolve():
+        return []
+    retained = []
+    for entry in config.get("localComponents", []):
+        if entry["filename"].startswith("maw-fabric263-compat-"):
+            continue
+        if Path(entry["filename"]).name != entry["filename"] or any(c in entry["filename"] for c in ("/", "\\", ":")):
+            raise ValueError("Unsafe component filename")
+        for side, root in (("server", server), ("client", client)):
+            if side in entry["sides"]:
+                file = root / "mods" / entry["filename"]
+                if file.is_symlink() or digest(file) != entry["sha256"]:
+                    raise ValueError("Optional component differs from its registered hash")
+        retained.append(entry)
+    return retained
+
+
 def resolve_lock(args, spec):
     lock_path = HERE / "pack.lock.json"
     if lock_path.exists():
@@ -404,6 +423,16 @@ def main():
     spec = json.loads((HERE / "pack.spec.json").read_text(encoding="utf-8"))
     if not args.resolve_only:
         validate_owned_roots(args)
+    previous_path = HERE / "deployment.local.json"
+    previous = json.loads(previous_path.read_text()) if previous_path.exists() else {}
+    extras = retained_components(previous, args.server, args.client)
+    if not args.resolve_only and previous.get("server") and Path(previous["server"]).resolve() == args.server:
+        import socket
+        for port in (previous["port"], previous["controlPort"]):
+            with socket.socket() as sock:
+                sock.settimeout(1)
+                if sock.connect_ex(("127.0.0.1", port)) == 0:
+                    raise ValueError("Stop the owned lab before re-preparing files")
     args.cache.mkdir(parents=True, exist_ok=True)
     lock = resolve_lock(args, spec)
     if args.resolve_only:
@@ -420,7 +449,7 @@ def main():
     localization = install_client(localization_config)
     install_server(localization_config)
     from build_compat import build
-    local_components = [build(args.cache, java, args.server, args.client)]
+    local_components = [build(args.cache, java, args.server, args.client)] + extras
     local = {"schemaVersion": 1, "server": str(args.server), "client": str(args.client), "cache": str(args.cache),
              "port": args.port, "controlPort": args.control_port, "java": str(java),
              "packLockSha256": digest(HERE / "pack.lock.json"), "serverMetadata": server_meta, "clientMetadata": client_meta,

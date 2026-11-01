@@ -1,0 +1,16 @@
+{
+  "world": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 39781,
+    "version": "26.3",
+    "username": "YourAgent",
+    "auth": "offline",
+    "viewerPort": 0,
+    "idle": { "enabled": false }
+  },
+  "adapter": { "runtimeDirectory": ".." },
+  "dataDir": "./agent-data/YourAgent",
+  "metricsPort": 0,
+  "consolePort": 0
+}

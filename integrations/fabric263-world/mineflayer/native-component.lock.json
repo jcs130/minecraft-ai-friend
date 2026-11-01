@@ -1,0 +1,15 @@
+{
+  "filename": "maw-native263-0.1.0.jar",
+  "sha256": "f2c3bb6a0de8ece4da8debfc1b5998bd14e32b5811abcd1ef01aa010e7e67f5e",
+  "sourceSha256": {
+    "InitMenuMixin.java": "89001e765342d69b6cba6cb2d3fc017eeec22abc580183d706d3b914b4582e4e",
+    "NativeMenus.java": "f83927c3e6416f911924376c2a5d3ecfb3132916dadce8e90b0109f162275ef7",
+    "NativeRecipes.java": "57126a2325a2f89ba683c54eebee95e4ba44a0b6be8a70a65997d594fcb981ae",
+    "NativeRegistry.java": "f693df781060ca244ac17e7bd0e873aa3d00a18809b89a87a309b2a2a603a424",
+    "NativeViews.java": "32a1819f4706f89a2219217259ef47429c137bfef5145d77dac154e1177409e6",
+    "OutgoingViewsMixin.java": "47cae7c5f7ab25ad9f7778af803ba6c06076d0f80d548b9b24f01d7c290c0d9b"
+  },
+  "sides": [
+    "server"
+  ]
+}

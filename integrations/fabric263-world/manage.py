@@ -65,6 +65,20 @@ def port_free(port):
         s.bind(("127.0.0.1", port))
 
 
+class ReadinessTracker:
+    """A listening port or Done alone is not native Agent readiness."""
+    def __init__(self, components):
+        self.done = False
+        self.native = not any(e["filename"].startswith("maw-native263-") for e in components)
+
+    def observe(self, line):
+        if "Done (" in line:
+            self.done = True
+        if "[MAW Native] registry ready:" in line:
+            self.native = True
+        return self.done and self.native
+
+
 def control(config, path, data=None):
     auth = json.loads((Path(config["cache"]) / "control.local.json").read_text(encoding="utf-8"))
     req = urllib.request.Request(f"http://127.0.0.1:{config['controlPort']}/{path}",
@@ -79,6 +93,7 @@ def supervise(config):
     port_free(config["port"])
     port_free(config["controlPort"])
     state = {"game": "26.3", "status": "starting", "ready": False, "pid": None, "startedAt": time.time()}
+    readiness = ReadinessTracker(config.get("localComponents", []))
     auth = {"token": secrets.token_urlsafe(36), "supervisorPid": os.getpid()}
     cache = Path(config["cache"])
     write_json(cache / "control.local.json", auth)
@@ -146,7 +161,7 @@ def supervise(config):
             for line in child.stdout:
                 log.write(line)
                 log.flush()
-                if "Done (" in line:
+                if not state["ready"] and readiness.observe(line):
                     state.update(status="ready", ready=True)
                     write_json(cache / "server-process.local.json", state)
     finally:

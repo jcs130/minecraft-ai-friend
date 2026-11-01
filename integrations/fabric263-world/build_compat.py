@@ -86,7 +86,7 @@ if __name__ == "__main__":
     config = json.loads((HERE / "deployment.local.json").read_text())
     previous = next((e for e in config.get("localComponents", []) if e["filename"].startswith("maw-fabric263-compat-")), None)
     entry = build(Path(config["cache"]), Path(config["java"]), Path(config["server"]), Path(config["client"]), args.replace_built, previous)
-    config["localComponents"] = [entry]
+    config["localComponents"] = [e for e in config.get("localComponents", []) if not e["filename"].startswith("maw-fabric263-compat-")] + [entry]
     from prepare import write_json
     write_json(HERE / "deployment.local.json", config)
     print(json.dumps(entry))

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "scope": "isolated_fabric263_world",
+  "minecraft": "26.3",
+  "protocol": 777,
+  "deployment": {
+    "gameHost": "127.0.0.1",
+    "gamePort": 39781,
+    "controlPort": 39782,
+    "serverOnlyComponent": "maw-native263-0.1.0.jar",
+    "componentSha256": "f2c3bb6a0de8ece4da8debfc1b5998bd14e32b5811abcd1ef01aa010e7e67f5e",
+    "existingSaoPortsUnchanged": [28976, 28977],
+    "firewallRouterAndPublicAuthenticationChanged": false
+  },
+  "nativeSnapshot": {
+    "blockStates": 38417,
+    "blocks": 1446,
+    "items": 2048,
+    "entities": 251,
+    "standardGridRecipes": 1414,
+    "unknownContextDependentCollisionStates": 199,
+    "nativeIdsPreserved": true,
+    "statePropertyOrderVerified": true
+  },
+  "core": {
+    "version": "0.5.7-rc.131.native-protocol.1",
+    "commit": "67f67740",
+    "testsPassed": 2556,
+    "testsSkipped": 7,
+    "testFilesPassed": 287,
+    "testFilesSkipped": 3,
+    "testEnvironment": "Windows, private Java 25, Vitest maxWorkers=2/minWorkers=1",
+    "typecheck": "passed",
+    "declarationBuild": "passed_369_files",
+    "runtimeBuildAndVerification": "passed",
+    "packedStdioMcpConsumer": "passed_with_live_game_results"
+  },
+  "adapterRegression": {
+    "nodeTestsPassed": 24,
+    "nodeTestsSkipped": 0,
+    "pythonPreparationTestsPassed": 5,
+    "parentDeploymentAndMaintenanceTestsPassed": 35,
+    "realCodecRoundTrips": true,
+    "differentServerSchemaCacheIsolation": true,
+    "unknownComponentFailsExplicitly": true,
+    "unsafeArchiveAndUnreviewedPatchesRefused": true
+  },
+  "liveCases": [
+    {"case": "native_login_chunks_and_entities", "verified": true, "evidence": "smoke-r10, smoke-r11, smoke-fresh-r3", "facts": "real spruce leaves, state 310; real sea lantern, state 14739; health 20; native entity movement parsed"},
+    {"case": "fresh_account_first_position", "verified": true, "evidence": "smoke-fresh-r3", "facts": "new survival body, 159 physics ticks; no repeated position warning after first-tick fix"},
+    {"case": "ordinary_survival_navigation", "verified": true, "evidence": "native263-basic-1/walk_to_fixture", "facts": "walked from [-8.5,150,7.5] to approximately [0.323,150,0.678], no OP or teleport"},
+    {"case": "ordinary_dig", "verified": true, "evidence": "native263-basic-1/dig_actual_dirt", "facts": "dirt at [2,150,0] became air and one dirt appeared in inventory"},
+    {"case": "chest_transfer_and_persistence", "verified": true, "evidence": "native263-items-1 plus native263-inventory-reconcile-3", "facts": "8 oak planks and 4 farmersdelight:rice actually transferred and survived reconnect; original early-read test failure retained"},
+    {"case": "native_grid_craft", "verified": true, "evidence": "native263-craft-1", "facts": "server recipe minecraft:crafting_table consumed 4 planks and produced 1 actual crafting table"},
+    {"case": "farmers_delight_extended_menu", "verified": true, "evidence": "native263-pot-2", "facts": "real farmersdelight:cooking_pot menu, 45 slots, player region [9,45); 4 real rice deposited into input slot 0"},
+    {"case": "own_village_quest_view", "verified": true, "evidence": "native263-journal-2", "facts": "original village-quest:reputation_view_v2 and matching same-player JSON verified by wire hash"},
+    {"case": "packed_core_stdio_mcp", "verified": true, "evidence": "native263-sdk-rc131-2", "facts": "40 advertised tools; native protocol 777; real native rice ID; actual fixture floor read"},
+    {"case": "installed_lab_packed_mcp", "verified": true, "evidence": "native263-installed-sdk-1", "facts": "locked npm ci SDK connected to 39781; actual smooth sandstone below village spawn matched native block state range"},
+    {"case": "unchanged_real_java_client", "verified": true, "evidence": "native-human-read-20261101-1 and native-human-close-20261101-1", "facts": "original 31-mod client without optional server component joined in survival; health 20/20, actual world and 51-slot inventory; stopped its own client and Baritone workers"}
+  ],
+  "historicalFailures": [
+    {"reason": "upstream_missing_native_packet_support", "resolution": "pinned protocol/data/chunk/physics plus exact reviewed patches"},
+    {"reason": "fabric_and_mod_configuration_not_implemented", "resolution": "real registry verification and parsed config/weapon/spell synchronization, no compatibility checks disabled"},
+    {"reason": "extended_menu_not_a_vanilla_open_window_packet", "resolution": "decode actual Fabric menu header and use actual server slot layout"},
+    {"reason": "inventory_test_read_before_window_close", "resolution": "actual server transfer reconciled after reconnect; test now checks inventory after closing"},
+    {"reason": "custom_cooking_recipe_display_dropped_by_old_decoder", "resolution": "real cooking display codec and strict full-packet consumption"},
+    {"reason": "core_legacy_dependency_patch_rejected_new_source", "resolution": "core rc131 exact reviewed source alternatives; full regressions and packed consumer passed"},
+    {"reason": "initial_mcp_probe_used_nonadvertised_mc_state", "resolution": "probe now uses advertised mc_observe and verifies its material/state against native registry"}
+  ],
+  "limits": [
+    "Loopback lab only; not a public account or firewall rollout",
+    "Numen and Bedrock are not installed on this 26.3 world",
+    "Full Spell Engine casting, all trinkets and special component variants are not accepted yet",
+    "Unsupported native codecs fail explicitly rather than silently dropping inventory packets",
+    "Container-remainder and dynamic crafting variants need further acceptance",
+    "26.3 Web renderer is not accepted; viewerPort remains 0, actual Java client provides visuals",
+    "No resident model loop or long-duration autonomous-survival acceptance was claimed",
+    "Packed core emitted death/respawn listener-count warnings; no threshold was raised to hide them"
+  ]
+}
