@@ -142,7 +142,8 @@
     "Geyser 0.2.2 physical Bedrock original-model display",
     "author-triggered production native photo gallery roundtrip (isolated full pipeline passed)",
     "long-duration shader stability (shaders remain disabled)",
-    "new native camera startup task (automatic approval rejected; not created)"
+    "new native camera startup task (automatic approval rejected; not created)",
+    "intermittent public observer PartialReadError: exact failing packet and stack not yet captured"
   ],
   "scopeNotice": "Game and website versions are deployed. Formal native client loads40models, including the original encrypted BigFish; Intel native photo pipeline is ready after an authenticated bridge-only reload. Original identities, credentials, inventories, skills and seven Goddess jobs were preserved. Physical Bedrock/voice and long-term/shader results remain separate acceptance items; six-segment map and auction candidates are not silently deployed.",
   "verification": {
@@ -673,5 +674,31 @@
     "newScheduledTaskCreated": false,
     "sevenJobSpecificationsPreserved": true,
     "sourceSha256": "7d15c5f1a668b5a8c74a716d3558fdaef5d3e6c27f2544868d744a3af49053c7"
+  },
+  "nativeCameraObserverPolicy": {
+    "verifiedAt": "2026-11-01T08:39:09.470030+00:00",
+    "state": "deployed-and-verified",
+    "role": "dedicated photography service",
+    "gameMode": "spectator",
+    "invulnerable": true,
+    "operator": false,
+    "modelId": "qd_observer_drone",
+    "texture": "default",
+    "nativeModelLoaded": true,
+    "webModelAvailable": true,
+    "maintenanceIdentity": "owner-confirmed reconnectable service",
+    "randomAssignmentExcluded": true,
+    "modelsConfigSha256": "b41433e2f04884e8be3eb4d225f77eb8cbccaf8e1cd6bf438ef5321eef697e1f",
+    "gameRestarted": false
+  },
+  "publicObserverDecodeInvestigation": {
+    "state": "open",
+    "lastRecordedFailureAt": "2026-11-01T08:13:44.256Z",
+    "protocolPacketsDecoded": 696,
+    "sceneReceiptsReplayed": 221,
+    "eventStreamBytesReplayed": 3598592,
+    "offlineReplayPassed": true,
+    "rootCauseConfirmed": false,
+    "productionRootCauseFixDeployed": false
   }
 }
