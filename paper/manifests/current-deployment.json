@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "ysm265-closeout-20261101-r1",
-  "verifiedAt": "2026-11-01T15:43:13.390283+08:00",
-  "releaseDocument": "paper/docs/CLOSEOUT_20261101.md",
+  "latestRelease": "web-scene-20261101-r1",
+  "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+  "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -295,24 +295,30 @@
   },
   "distribution": {
     "coreSource": "0.5.7-rc.150-preview.2",
-    "publicSkill": "1.3.6",
+    "publicSkill": "1.3.7",
     "publicSkillCore": "0.5.7-rc.130",
     "harnessBodyCore": "0.5.7-rc.130",
-    "website": "0.8.33",
+    "website": "0.8.36",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
-    "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
+    "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
     "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
     "mediaStorage": "OSS",
-    "coreSourceNote": "Current repository source; this release does not replace the public Skill or Harness embedded rc.130 core."
+    "coreSourceNote": "Current repository source; this release does not replace the public Skill or Harness embedded rc.130 core.",
+    "clientDownloads": {
+      "neko": "0.6.114",
+      "corticoLite": "0.1.2",
+      "dshPlugin": "0.3.0-rc.24",
+      "nativeYsm": "2.6.5"
+    }
   },
   "websiteRelease": {
-    "release": "vanilla-maid-maintenance-20261031-r1",
-    "version": "0.8.33",
-    "verifiedAt": "2026-10-31T13:32:09.871357+00:00",
-    "protectedTables": 20,
+    "release": "web-scene-20261101-r1",
+    "version": "0.8.36",
+    "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+    "protectedTables": 21,
     "gameRestarted": false,
-    "document": "paper/docs/VANILLA_MAID_RELEASE_20261031.md",
+    "document": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
     "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
     "promotionalVideo": "https://b23.tv/Ppfd3Ne",
     "publicPhotosAtVerification": 7,
@@ -407,9 +413,9 @@
   },
   "website": {
     "state": "deployed-and-verified",
-    "version": "0.8.35",
-    "verifiedAt": "2026-11-01T05:21:44.666419+00:00",
-    "releaseDocument": "paper/docs/CORTICO_LITE_PUBLIC_SIGNUP_20261101.md",
+    "version": "0.8.36",
+    "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+    "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
     "releaseManifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
     "guideServerVersion": "0.4.47.44-rpg",
     "gameRestartedForWebsite": false,
@@ -519,11 +525,15 @@
   },
   "matchedPublicViewer": {
     "state": "deployed-and-verified",
-    "sourceSha256": "85650f7d0b2618bec482f008aed970fce0c715ac3851ea251bd339bf7ac0b798",
-    "sharedPullRequest": "https://github.com/jcs130/mc-visual-console/pull/12",
+    "sourceSha256": "0aa04b3142f922fb3c199da67b4e68a6c30f25c509a2c6caafc684f8361ff0f7",
+    "sharedPullRequest": "https://github.com/jcs130/mc-visual-console/pull/14",
     "serverPullRequest": "https://github.com/jcs130/minecraft-ai-friend/pull/24",
     "workerFresh": true,
-    "completeNativeParity": false
+    "completeNativeParity": false,
+    "browserBundleSha256": "a0f9d63d0255f9e521608bcd0c562ca58ffb0289058e99d5a8fe038a37673fe5",
+    "consoleBundleSha256": "b25cbbf1c371d6de57f6b7ff3e192f7f24a0a46b3e3ff9461671bc3685baef4a",
+    "sharedMergedCommit": "7301abd3e1b96a4af9435eed31f26fe20ca414b1",
+    "verifiedAt": "2026-11-01T20:32:35.578519+08:00"
   },
   "nativeHighQualityCamera": {
     "state": "deployed-native-ready",
@@ -699,6 +709,78 @@
     "eventStreamBytesReplayed": 3598592,
     "offlineReplayPassed": true,
     "rootCauseConfirmed": false,
-    "productionRootCauseFixDeployed": false
+    "productionRootCauseFixDeployed": false,
+    "diagnosticsDeployed": true,
+    "errorDiagnosticsVersion": 1
+  },
+  "previousReleaseBeforeWebScenes": {
+    "latestRelease": "ysm265-closeout-20261101-r1",
+    "verifiedAt": "2026-11-01T15:43:13.390283+08:00",
+    "website": {
+      "state": "deployed-and-verified",
+      "version": "0.8.36",
+      "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+      "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
+      "releaseManifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+      "guideServerVersion": "0.4.47.44-rpg",
+      "gameRestartedForWebsite": false,
+      "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated"
+    },
+    "matchedPublicViewer": {
+      "state": "deployed-and-verified",
+      "sourceSha256": "0aa04b3142f922fb3c199da67b4e68a6c30f25c509a2c6caafc684f8361ff0f7",
+      "sharedPullRequest": "https://github.com/jcs130/mc-visual-console/pull/14",
+      "serverPullRequest": "https://github.com/jcs130/minecraft-ai-friend/pull/24",
+      "workerFresh": true,
+      "completeNativeParity": false,
+      "browserBundleSha256": "a0f9d63d0255f9e521608bcd0c562ca58ffb0289058e99d5a8fe038a37673fe5",
+      "consoleBundleSha256": "b25cbbf1c371d6de57f6b7ff3e192f7f24a0a46b3e3ff9461671bc3685baef4a",
+      "sharedMergedCommit": "7301abd3e1b96a4af9435eed31f26fe20ca414b1",
+      "verifiedAt": "2026-11-01T20:32:35.578519+08:00"
+    }
+  },
+  "photoSceneArchives": {
+    "state": "deployed-with-open-acceptance",
+    "schema": "mc-photo-scene/v1",
+    "website": "0.8.36",
+    "radius": 3,
+    "maximumColumns": 49,
+    "originalResources": "private SHA256-addressed OSS objects; original encryption preserved",
+    "wholeWorldBackup": false,
+    "fullReconstructionVerified": false,
+    "formalPlayerPhotoRoundTripVerified": false,
+    "readOnlyNativeAcceptance": {
+      "columns": 49,
+      "entities": 52,
+      "compressedBytes": 522194,
+      "elapsedMs": 2348,
+      "originalBlockSamples": 4816896,
+      "originalBiomeSamples": 75264
+    },
+    "cloudLinuxTestsPassed": 372,
+    "postFixSceneStorageTestsPassed": 4,
+    "originalSceneAndAssetSignedReadbackVerified": true,
+    "anonymousObjectStatus": 403,
+    "galleryDownloadAccess": "owner or administrator",
+    "gameRestarted": false,
+    "originalGoddessJobsPreserved": 7,
+    "homeSyncFreshnessRecovered": true,
+    "integrationNotes": [
+      "Home collector keeps local sceneStorage disabled; scene capture and outbound object upload remain enabled.",
+      "Config owner/group/mode retained for the node service; startup verified against actual config and an isolated database copy."
+    ],
+    "document": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md"
+  },
+  "pendingProtectionAndNativeTracking": {
+    "state": "candidate-not-installed",
+    "AgentFriend": "0.4.47.46-rpg",
+    "AgentAppearanceNative": "0.4.3",
+    "configuredDenialDirectionsChecks": 8,
+    "unrelatedAgentFriendEntriesPreserved": 609,
+    "nativeTrackingHook": "actual Youer PlayerTrackEntityEvent before addPairing; bounded original metadata resend, no periodic retransmission",
+    "nativeActualClientAcceptance": false,
+    "requiresNormalGameRestart": true,
+    "currentNativeAdapter": "0.4.2",
+    "currentAgentFriend": "0.4.47.45-rpg"
   }
 }

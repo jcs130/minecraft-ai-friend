@@ -6,6 +6,7 @@ import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.player.PlayerQuitEvent;
+import io.papermc.paper.event.player.PlayerTrackEntityEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import java.nio.charset.StandardCharsets;
@@ -61,8 +62,16 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
         }catch(Exception unavailable){getLogger().severe("Native appearance configuration unavailable; gameplay authentication is unchanged.");getServer().getPluginManager().disablePlugin(this);}
     }
     @Override public void onDisable(){states.clear();sent.clear();transfers.clear();nativeBindings.clear();getServer().getMessenger().unregisterIncomingPluginChannel(this);getServer().getMessenger().unregisterOutgoingPluginChannel(this);}
+    /** Youer fires this before addPairing; the next normal poll follows the
+     * original spawn packet. Only this viewer/body pair is invalidated. */
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void tracking(PlayerTrackEntityEvent event){
+        if(event.getEntity() instanceof Player actor)
+            nativeBindings.remove(new Pair(event.getPlayer().getUniqueId(),actor.getUniqueId()));
+    }
     @EventHandler public void quit(PlayerQuitEvent event){
         UUID id=event.getPlayer().getUniqueId();states.remove(id);sent.remove(id);refreshed.remove(id);transfers.remove(id);requested.remove(id);selections.left(id);automatic.left(id);
+        nativeBindings.keySet().removeIf(pair->pair.viewer.equals(id)||pair.body.equals(id));
         byte[] bytes=JSON.toJson(Map.of("schemaVersion",1,"source",NativeYsm.SOURCE,"type","remove","epoch",epoch,"playerUuid",id.toString())).getBytes(StandardCharsets.UTF_8);
         for(Player recipient:getServer().getOnlinePlayers())if(recipient.getListeningPluginChannels().contains(CHANNEL))recipient.sendPluginMessage(this,CHANNEL,bytes);
     }
@@ -189,7 +198,7 @@ public final class NativeAppearance extends JavaPlugin implements Listener,Plugi
                 }catch(Exception unavailable){source.sendMessage("原生状态或模型授权未确认；请查询实际模型，未绕过原生规则。");}
                 return true;
             }
-            source.sendMessage("AgentAppearanceNative 0.4.2；原生YSM2.6.5；实际模型见角色 /appearance status。");return true;
+            source.sendMessage("AgentAppearanceNative 0.4.3；原生YSM2.6.5；实际模型见角色 /appearance status。");return true;
         }
         if(!player.isOnline()){tell(player,"请先完成游戏登录并进入世界。");return true;}
         if(args.length==1&&args[0].equals("status")){

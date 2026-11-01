@@ -1,3 +1,5 @@
+当前正式适配器为0.4.2。0.4.3候选补齐原生玩家重新跟踪时的定向模型元数据缓存失效：仅当前viewer/body的原始包重送，发送预算及两次重试保留，没有周期重发、改选择或全局重载。当前Youer实际跟踪回调已确认；候选需要正常游戏重启及原生客户端联测，不能把编译成功当成恢复证明。
+
 # Optional native YSM adapter — isolated candidate
 
 `AgentAppearanceNative 0.4.1` runs on Youer 1.21.1 with the original NeoForge YSM **2.6.5**. It reads the actual player's native attachment, invokes the original ordinary-player selection handler, and publishes appearance metadata through the existing `mcagent:appearance` and `mcagent:ysm_asset` channels. It creates no player, model worker, HTTP listener, native handshake, OP permission, or model ownership grant.

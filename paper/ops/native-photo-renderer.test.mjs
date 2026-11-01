@@ -26,7 +26,8 @@ test('web pose is converted to actual Minecraft camera coordinates and angles wi
  assert.equal(nativeCameraPose({...job,mode:'top',y:84,pitch:-Math.PI/2},state()).pitch,90);
  for(const change of [{x:100},{pitch:NaN},{entityId:1.5},{owner:'wrong'},{mode:'free'}])assert.throws(()=>nativeCameraPose({...job,...change},state()));
 });
-for(const shadersEnabled of [true,false])test(`native handshake (${shadersEnabled?'shaders':'no shaders'}) uses only the existing read-only screenshot method and expires its render lease`,async()=>{
+for(const scenario of [{shaders:true},{shaders:false},{shaders:false,scene:true},{shaders:false,scene:'failed'}])test(`native handshake (${JSON.stringify(scenario)}) keeps photograph delivery independent of scene storage and expires its render lease`,async()=>{
+ const shadersEnabled=scenario.shaders;
  const root=await mkdtemp(path.join(os.tmpdir(),'native-photo-'));let timer;
  try{
   await mkdir(path.join(root,'diagnostics'));await mkdir(path.join(root,'agent-mc-bridge'));
@@ -34,10 +35,17 @@ for(const shadersEnabled of [true,false])test(`native handshake (${shadersEnable
   await writeFile(path.join(root,'agent-mc-bridge/connection.json'),JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:12345',token:'x'.repeat(64)}));
   let busy=false;timer=setInterval(async()=>{if(busy)return;busy=true;try{const row=JSON.parse(await readFile(pose,'utf8'));if(row.expiresAt>0)await writeFile(file,JSON.stringify({...state(),shadersEnabled,job:row.job,nonce:row.nonce,poseOwner:row.owner,renderedJob:row.job,renderedFrames:3,cameraPosition:[row.x,row.y,row.z],players:[{uuid:id,model:'test',modelLoaded:true}]}));}catch{}finally{busy=false;}},30);
   const png=Buffer.alloc(2048);Buffer.from('89504e470d0a1a0a','hex').copy(png);png.writeUInt32BE(256,16);png.writeUInt32BE(256,20);
-  const renderer=createNativePhotoRenderer({gameDir:root,shadersEnabled,PNG:{sync:{read:()=>({width:256,height:256,data:Buffer.alloc(256*256*4,128)})}},fetchImpl:async(url,options)=>{
-   assert.equal(url,'http://127.0.0.1:12345/v1/rpc');assert.equal(options.headers.Authorization,'Bearer '+'x'.repeat(64));const call=JSON.parse(options.body);assert.equal(call.method,'screenshot');assert.equal(call.params.expectedUuid,id);assert.equal('controllerId' in call.params,false);
+  const renderer=createNativePhotoRenderer({gameDir:root,shadersEnabled,...(scenario.scene?{sceneDirectory:path.join(root,'scenes'),sceneRadius:0}:{}),PNG:{sync:{read:()=>({width:256,height:256,data:Buffer.alloc(256*256*4,128)})}},fetchImpl:async(url,options)=>{
+   assert.equal(url,'http://127.0.0.1:12345/v1/rpc');assert.equal(options.headers.Authorization,'Bearer '+'x'.repeat(64));const call=JSON.parse(options.body);assert.equal(call.params.expectedUuid,id);assert.equal('controllerId' in call.params,false);
+   if(call.method!=='screenshot'){
+    assert.ok(scenario.scene&&['visual_frame','visual_registry','visual_chunk'].includes(call.method));if(scenario.scene==='failed')return new Response(JSON.stringify({error:{code:'UNAVAILABLE'}}));
+    const base={protocol:'agent-mc-visual/v1',minecraftVersion:'1.21.1',uuid:id,server:'127.0.0.1:29090',epoch:id,sampledAt:Date.now()},zero=Buffer.alloc(2048).toString('base64');
+    const value=call.method==='visual_frame'?{...base,source:'same_java_client_world',self:{id:12,uuid:id,name:'minecraft:player',position:[0,64,0]},entities:[],dimension:'minecraft:overworld',columns:[{x:0,z:0,revision:1}]}:call.method==='visual_registry'?{...base,registry:{blocks:[{id:0,name:'minecraft:air',properties:{}}],biomes:[{id:0,name:'minecraft:plains'}]}}:{...base,x:0,z:0,revision:1,minY:0,height:16,sections:'AA==',skyLight:[zero],blockLight:[zero]};
+    return new Response(JSON.stringify(value));
+   }
    return new Response(JSON.stringify({mime:'image/png',base64:png.toString('base64'),state:{uuid:id,server:'127.0.0.1:29090'}}));
   }});
-  const result=await renderer.capture(job,{guard:()=>{},signal:AbortSignal.timeout(3000)});assert.equal(result.png.length,2048);assert.equal(result.image.width,256);assert.equal(result.diagnostics.shadersEnabled,shadersEnabled);assert.equal(JSON.parse(await readFile(pose,'utf8')).expiresAt,0);
+  const result=await renderer.capture({...job,world:id},{guard:()=>{},signal:AbortSignal.timeout(3000)});assert.equal(result.png.length,2048);assert.equal(result.image.width,256);assert.equal(result.diagnostics.shadersEnabled,shadersEnabled);assert.equal(JSON.parse(await readFile(pose,'utf8')).expiresAt,0);assert.equal(result.diagnostics.poseLeaseReleased,true);
+  if(scenario.scene){assert.equal(result.diagnostics.scene.state,scenario.scene===true?'captured':'unavailable');assert.ok(!JSON.stringify(result.diagnostics.scene).includes('nonce'));if(scenario.scene===true)assert.ok((await readFile(path.join(root,'scenes',id+'.mcscene.gz'))).length>0);}
  }finally{clearInterval(timer);await new Promise(resolve=>setTimeout(resolve,60));await rm(root,{recursive:true,force:true});}
 });
