@@ -51,5 +51,33 @@
   },
   "document": "paper/docs/NATIVE_GODDESS_CAMERA.md",
   "preferredMode": "native-no-shaders",
-  "sustainedNonShaderRunPassed": true
+  "sustainedNonShaderRunPassed": true,
+  "memoryInvestigation": {
+    "readOnlyGpuCapacityGiB": 102.19502563402057,
+    "capacityIsNotReservedOrFreeMemory": true,
+    "testProcessCommitLimitGiB": 10,
+    "javaHeapMiB": 1536,
+    "peakProcessCommitGiB": 10.0,
+    "exitCode": 1,
+    "tailPrivateGrowthGiBPerSecond": 1.005,
+    "sampledPeakIntelSharedUsageGiB": 7.934,
+    "lastShaderFps": 4,
+    "minimumHostFreeCommitGiB": 9.517,
+    "control12Started": false,
+    "restoredNoShaderConfiguration": true,
+    "globalGpuMemorySettingsChanged": false
+  },
+  "residentDesign": {
+    "photoJobsRestartClient": false,
+    "singleNativeInstanceReuseVerified": true,
+    "noShaderPhotoCount": 6,
+    "seriesSeparatedSeconds": 306.618,
+    "warmCaptureSeconds": [
+      0.52,
+      0.704
+    ],
+    "warmCaptureScope": "already loaded scene, excludes teleport/chunk delivery/formal album",
+    "productionResidentHostEnabled": false,
+    "tenMinuteDeadlineScope": "private QA harness only"
+  }
 }

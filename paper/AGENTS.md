@@ -1,5 +1,7 @@
 ## 2026-11-01 Native camera without shaders
 
+Resident/memory follow-up: the 8GiB QA process cap is separate from the reported ~102GiB Intel shared capacity. Raising the tested process cap to 10GiB did not establish a plateau; it ended at 4FPS. The 12GiB attempt was blocked before launch by host-margin checks. Test libraries/configuration were restored and production was untouched. Six no-shader shots reused one instance; the 10-minute shutdown is QA-only, not the public resident launcher. Formal native host/album activation remains pending.
+
 The user asked about disabling shaders. Explicit nativeShaders:false now requires actual shader-off telemetry and keeps all identity/model/UI/lease guards. The 1536-square, 6-chunk Intel run completed 601s and exited normally: peak 1.937 GiB, sampled median 30 FPS at cap 30. Six repeated first/third/top shots and the actual-image loopback coordinator upload passed; 15 policy/quality tests passed. Transient Windows pose-file replacement has bounded retries, while persistent/storage errors still fail. New clients default shaders off. Formal WebGL and the model chain were not switched; native production album/reward/site acceptance still remains. Shader-on instability remains separate and must not block preparing the tested no-shader mode. See docs/NATIVE_GODDESS_CAMERA.md.
 
 ## 2026-11-01 Native Intel camera remains isolated
