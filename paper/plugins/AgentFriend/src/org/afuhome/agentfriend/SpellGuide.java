@@ -37,9 +37,9 @@ final class SpellGuide {
     }
 
     private static final List<Entry> SPELLS = List.of(
-            new Entry("support", "支援传送术", "travel", Material.BELL,
-                    "/mycli village support [事件ID]", "重查村庄实时敌情，传到仍存活敌人附近6至12格的安全可见落点，并返回敌人坐标。", "已确认警报里的活敌人", 8, 20,
-                    "生存/冒险模式；至少3颗心；不在试炼/PvP、载具或滑翔中；敌情已确认。", "警报过期、敌人消失、魔力不足或没有安全落点时不传送、不扣费。", "无熟练度升级；/mycli cast support 和罗盘也可用。", "Agent 用警报 cmd 的事件ID；不要沿用旧坐标，抵达后核对 enemy UUID 再攻击。"),
+            new Entry("support", "村庄支援传送术", "travel", Material.BELL,
+                    "/mycli cast support", "重查村庄实时敌情，传到仍存活敌人附近6至12格的安全可见落点，并返回敌人坐标。", "已确认警报里的活敌人", 8, 20,
+                    "生存/冒险模式；至少3颗心；不在试炼/PvP、载具或滑翔中；敌情已确认。", "警报过期、敌人消失、魔力不足或没有安全落点时不传送、不扣费。", "无熟练度升级；罗盘和 /mycli village support <事件ID> 复用同一入口。", "响应村庄警报时优先使用警报 cmd 的事件ID；去玩家身边求助或集合用 /mycli locate tp <在线玩家名>，不要把玩家名当事件ID。"),
             new Entry("selfheal", "圣愈术", "recovery", Material.GOLDEN_APPLE,
                     "/mycli cast selfheal", "回复自己 8 点生命（4 颗心）。", "自己", 6, 15,
                     "生命未满；非旁观者。", "已满血时不治疗，也不应重复施放。", "无熟练度升级。", "受伤后给自己补血；队友受伤用 heal。"),

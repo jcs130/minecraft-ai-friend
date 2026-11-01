@@ -7,10 +7,18 @@ import { siteFixture, testPassword } from './helpers.mjs';
 import { png, zip, modelFiles } from './appearance-fixtures.mjs';
 import { digest, newSecret } from '../src/store.mjs';
 import { offlineUuid, seal } from '../src/game-accounts.mjs';
-import { identifier } from '../scripts/appearance-worker.mjs';
+import { identifier, observedAppearance } from '../scripts/appearance-worker.mjs';
 import { runAgentAppearance } from '../public/agent-appearance.mjs';
 
 const ROOT = '/api/v1/agent-access/appearance';
+test('native appearance receipts require the matching producer, epoch, artifact and actual account',()=>{
+ const now=Date.now(),job={playerUuid:randomUUID(),username:'ag_AppearanceQA'};
+ const row={...job,playerName:job.username,source:'ysm_native_backend',epoch:randomUUID(),ysmVersion:'2.6.5',protocolVersion:'2.6.0',jarSha256:'b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb',modelId:'model'};
+ const state={source:row.source,epoch:row.epoch,writtenAt:now,players:[row]};
+ assert.equal(observedAppearance(state,job,'2.6.5',now),row);
+ for(const change of [{source:'freesia_worker'},{epoch:randomUUID()},{writtenAt:now-15000},{players:[{...row,jarSha256:'0'.repeat(64)}]},{players:[{...row,playerUuid:randomUUID()}]}])assert.equal(observedAppearance({...state,...change},job,'2.6.5',now),undefined);
+ assert.equal(observedAppearance(state,job,'unreviewed',now),undefined);
+});
 const uploadHeaders = { 'X-Appearance-Label': encodeURIComponent('自己的日常形象'), 'X-Skin-Variant': 'slim', 'X-Appearance-Consent': 'public-game-appearance' };
 async function request(f, route, token, method = 'GET', body, headers = {}) {
   const response = await fetch(f.origin + route, { method, headers: { Authorization: 'Bearer ' + token, ...(body && !Buffer.isBuffer(body) ? { 'Content-Type': 'application/json' } : {}), ...headers }, ...(body ? { body: Buffer.isBuffer(body) ? body : JSON.stringify(body) } : {}) });

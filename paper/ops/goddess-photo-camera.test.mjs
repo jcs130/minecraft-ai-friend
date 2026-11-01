@@ -1,8 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePhotoJob,nativePhotoSkin,photoLoadedRadius,photoLeaseActor,awaitPhotoLease} from './goddess-photo-camera.mjs';
+import {validatePhotoJob,nativePhotoSkin,photoLoadedRadius,photoLeaseActor,awaitPhotoLease,nativeReadinessCheck} from './goddess-photo-camera.mjs';
 const id = '2e254cab-2738-40bb-b9bf-4f65a3c3be12';
 const job = {type:'capture',job:id,nonce:id,owner:id,world:id,uploadId:id,entityId:12,mode:'first',x:0,y:64,z:0,yaw:0,pitch:0,anchorX:0,anchorY:64,anchorZ:0,uploadBase:'http://127.0.0.1:8517'};
+
+test('native photographer can arrive after the original bridge starts and recover after a disconnect',async()=>{
+  let online=false,ready=0,lost=0;
+  const check=nativeReadinessCheck({probe:async()=>{if(!online)throw Error('PHOTO_NATIVE_NOT_READY');},stopped:()=>false,
+    ready:()=>ready++,unavailable:()=>lost++});
+  await check();assert.equal(ready,0);assert.equal(lost,1);
+  online=true;await check();assert.equal(ready,1);
+  online=false;await check();assert.equal(lost,2);
+  online=true;await check();assert.equal(ready,2);
+});
+
+test('native readiness checks do not overlap or announce readiness after shutdown',async()=>{
+  let finish,stopped=false,probes=0,ready=0;
+  const check=nativeReadinessCheck({probe:()=>{probes++;return new Promise(resolve=>{finish=resolve;});},stopped:()=>stopped,
+    ready:()=>ready++,unavailable:()=>assert.fail('no failed probe')});
+  const first=check();await check();assert.equal(probes,1);
+  stopped=true;finish();await first;await check();assert.equal(ready,0);assert.equal(probes,1);
+});
 
 test('remote camera acquisition tolerates delayed entity packets without guessing another actor',async()=>{
   const bot={entities:{}},target={uuid:id,position:{x:0,y:64,z:0}};let camera=0,observations=0;

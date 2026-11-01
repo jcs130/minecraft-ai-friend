@@ -39,8 +39,14 @@ for file in (ROOT / 'skill').rglob('*'):
         if not re.fullmatch(r'(SKILL\.md|runtime-lock\.json|scripts/[a-z-]+\.mjs|references/[a-z-]+\.md|assets/runtime/(package(?:-lock)?\.json|[a-z-]+\.mjs|qiandengji/[a-z-]+\.mjs))', name):
             raise ValueError('Unexpected Skill input: ' + name)
         files[name] = file.read_bytes().replace(b'\r\n',b'\n')
-files['scripts/agent-register.mjs'] = (ROOT / 'public/agent-register.mjs').read_bytes().replace(b'\r\n',b'\n')
-files['scripts/agent-appearance.mjs'] = (ROOT / 'public/agent-appearance.mjs').read_bytes().replace(b'\r\n',b'\n')
+# Standalone website helpers can evolve between immutable Skill releases.
+# Keep the reviewed release helpers beside its other versioned Skill inputs;
+# update those copies deliberately when publishing a new Skill version.
+for helper in ['agent-register.mjs', 'agent-appearance.mjs']:
+    source = ROOT / 'skill/scripts' / helper
+    if not source.is_file():
+        raise FileNotFoundError('Missing pinned Skill helper: ' + helper)
+    files['scripts/' + helper] = source.read_bytes().replace(b'\r\n',b'\n')
 files['assets/runtime/' + lock['sdkArchive']] = sdk
 with tarfile.open(fileobj=io.BytesIO(sdk), mode='r:gz') as archive:
     package = json.load(archive.extractfile('package/package.json'))

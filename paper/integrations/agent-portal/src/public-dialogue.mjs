@@ -11,7 +11,10 @@ export function publicDialogueText(value, maximum = 2000) {
 // stays speech, titles/UUIDs are never inferred from its content. Whisper
 // commands are not accepted: a command log is not proof it was delivered.
 export function parsePublicDialogue(line, date) {
-  const envelope=/^\[(\d{2}:\d{2}:\d{2})\] \[(?:Server thread|Async Chat Thread - #\d+)\/INFO\]: (?:\[Not Secure\] )?(?<content>.+)$/.exec(line);
+  // Youer's asynchronous chat logger has an empty thread label. Accept that
+  // exact envelope as well; the speech grammar below still excludes commands,
+  // whispers, plugin messages and arbitrary log output.
+  const envelope=/^\[(\d{2}:\d{2}:\d{2})\] \[(?:Server thread|Async Chat Thread - #\d+)?\/INFO\]: (?:\[Not Secure\] )?(?<content>.+)$/.exec(line);
   if(!envelope)return null;
   const match = /^<(?<name>\.?[A-Za-z0-9_]{1,16})> (?<body>.+)$/.exec(envelope.groups.content)
     || /^\[(?<channel>附近|大喇叭)\]\s*\[(?<world>[^\[\]\r\n]{1,64})\] (?<name>\.?[A-Za-z0-9_]{1,16}): (?<body>.+)$/.exec(envelope.groups.content);

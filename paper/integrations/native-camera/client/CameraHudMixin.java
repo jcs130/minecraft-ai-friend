@@ -9,5 +9,5 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(class_329.class)
 public abstract class CameraHudMixin {
     @Inject(method="method_1753",at=@At("HEAD"),cancellable=true,remap=false)
-    private void cameraCleanFrame(CallbackInfo callback){if(Boolean.getBoolean("qiandeng.camera.enabled"))callback.cancel();}
+    private void cameraCleanFrame(CallbackInfo callback){if(Boolean.getBoolean("qiandeng.camera.enabled")&&Boolean.parseBoolean(System.getProperty("qiandeng.camera.hideHud","true")))callback.cancel();}
 }

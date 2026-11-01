@@ -1,3 +1,19 @@
+## 2026-11-01 YSM2.6.5与核显相机收尾已上线
+
+正式为Youer1.21.1 build920、AF.45、RPG桥.16、Native0.4.2、女仆桥0.1.6、Numen API0.1.4-qd-youer1，Geyser外观扩展0.2.2与FAWE混合物品修正已启用。14:55维护完成、15:16相机桥单独就绪；101正式检查、664份角色/物品/成长/认证相关文件冷安装一致性和E/F冷恢复点通过。原角色、背包、技能、密码、模型选择和女神原7任务保持，没有再做旧账本迁移。
+
+正式Intel原生客户端已加载40模型，DeepFish原始大肥鱼/white、CorMy和Yui资源读回。原生无光影摄影正式ready，1536px隐藏游戏UI，沿用描述、私有相册和个人箱；9实拍交付/冷凭据检查、6Numen/女仆检查、14相机规则通过。正式最近约10分钟120份采样FPS中位30/最低29，私有内存2.116→2.117GiB；不声称长期或光影稳定。相机启动先后问题已经原有认证控制与守护器单独重连修复，没有第二次重启游戏、创建新任务或改女神人设。
+
+官网0.8.35/Skill1.3.7已发布，普通Agent免邀请有持久限流和体验池归属，Lite0.1.2客户端独立报告已接入；旧Skill字节未变，固定助手源码后8项重建/归档检查通过。源码f0ab3ab3的5项GitHub检查通过；后续部署记录和相机启动修正按最终提交重新检查。以CLOSEOUT_20261101.md与current-deployment.json为准。
+
+原始加密模型的完整网页几何、物理基岩显示/真人语音、用户正式拍照入相册回执及六段地图等独立候选仍分别列为未验收，不把它们说成已完成。新增相机开机自启任务被自动审批拦截，未创建；当前由原交互式用户会话常驻。旧所有维护入口已消费禁止重放，E/F冷刷新复用完整静态ops并另存私有相机恢复文件。以下记录是当时历史。
+
+## 2026-11-01 Native YSM2.6.5 consumer/lifecycle candidate
+
+Delivery checkpoint: website 0.8.34 / Skill 1.3.7 are prepared, not activated. The immutable Skill passed 8 archive and 5 endpoint checks plus structure validation; 4 new OSS objects were anonymously read back without modifying old releases. Portal: 375 pass / 3 existing skips. Shared merged renderer runtime: 8913 frozen files and actual native-profile imports verified. Formal website remains 0.8.33 / Skill 1.3.6. PR offline lint still has 16 errors inherited from main; the autonomy source has no changes in this branch. Do not call the entire PR green or deploy the unstable shader camera.
+
+Production model chain remains2.4.1. Native0.4.1 + genuine Youer/Velocity passed11 relay/source checks; real Numen passed3 with original native-platform0.1.6/TLM dependencies present. Actual Fabric2.6.5 loaded original encrypted BigFish through that proxy; shader-off clean frame30FPS/1.79GiB/normal exit does not establish shader stability. Bedrock actual public identities match; encrypted Web remains unavailable. Catalog17, hint60, consumer21 pass; shared visual PR13 merged, copied deployments still pending. Read-only legacy audit82 records prepared32 UUID-preserving choices, original fish/live selections, no credentials/inventory copy. AF44/bridge16 remain candidates (13 travel checks apply to byte-identical travel classes). Do not replay consumed maintenance or replace formal data with QA state. See paper/docs/YSM_265_MIGRATION_20261031.md and YSM_LIFECYCLE.md.
+
 ## 2026-10-31 自动参战、原版女仆与网页兼容已上线
 
 21:28配套切换完成，21:32正式复核：AF.43/桥.15/qd32-cooperation/原生平台.6/Observer.2已运行，官网0.8.33、Skill1.3.6和匹配399文件的网页资源已发布。122预检、180/60/10预告、正常停启、E/F当时游戏/认证冷刷新后安装；40正式检查通过，235角色相关文件/20职业档案冷安装一致、71原凭据行保持、50无关插件未变，原女神7任务恢复，6角色已回连，相机ready与观战新心跳已核。
@@ -13,6 +29,15 @@
 公开CI收尾另补TAB/SkinsRestorer两个官方固定API锁，完整下载文件与现役摘要相同；10自建检查、8真实Skill归档/重建检查、门户374通过/3原条件跳过。Skill1.3.6入口1455字，SDK仍rc130，新说明已独立冻结并在OSS双前缀读回，旧对象不覆盖；稳定官网下载尚未切换。首次CI缺依赖/固定镜像路径及Skill入口超长均保留，没有删断言跳过。服务器PR24待新CI，游戏候选不因构建契约修改而改包。
 
 正式仍AF.37/原生平台.4/Observer.1；AF.43保留已批准AF.41组合，新增同区域自动参战、离场真实贡献和原领奖去重、菜单参数修正、私人点实际小数Y与旧爱心缩放移除。14联机及8正常冷启检查、148规则通过；原生平台.6以真实协商区分原生/普通Java/Floodgate，女仆悦灵/敌对妖精恼鬼及中文台词，原实体AI/物品/归属保持。Observer.2修Youer区块API/构造及原版背包视图；42兼容、三协议24真实代理及25规则、两尺寸真实Web通过。共享PR12/665da212已推，1409通过/39条件跳过，仍有光照/舞蹈/持物层部分支持。E/F候选静态前像、匹配399来源文件和云端网站资源已核，尚未维护；完整冷刷新在维护时做。新组合需按OPERATIONS确认范围，不重放旧相册脚本，现役YSM2.4.1/六段地图不夹带。core2694通过/8跳过，Skill/MCP只更新参考，未冒称下载包已重发。见两份新说明和manifests/vanilla-maid-auto-team-20261031.json。
+## 2026-10-31 原生YSM2.6.5适配只在隔离服验证
+
+AgentAppearanceNative0.4.0候选在Youer920/原版NeoForge2.6.5通过12联机/3冷启检查，共享84与目录14回归通过；实际原普通换装处理器保留mandatory=false，原包大肥鱼/white及旁观无人机迁移都按真实身体确认。正式模型链仍2.4.1；未更新生产JAR、消费端或客户端下载，相机会话【克隆原版 Cortico 与 Minecraft World】跨机工具不可达，已提供服主转发提示词，未冒称送达。网页/基岩/监督器与完整代理链仍需匹配发布，不能把新原生插件和旧频道发布器并装。隔离JVM正常停止，负面记录保留；只读版本与原选择导入见paper/docs/YSM_265_MIGRATION_20261031.md及paper/integrations/ysm-native/README.md。
+
+## 2026-10-31 初始YSM优先不重复，模型桥候选未部署
+
+live已按原UUID确认旁观模式3及能力invulnerable=1，无重启追加并实际应用原创qd_observer_drone；229旧公开资源保持，E/F在线资源前像核对，最终4原生／3共享渲染预览通过，不改相机隐藏自身规则。普通玩家自动分配仍未部署。原大肥鱼包在独立2.6.5实际NBT确认model_id=大肥鱼_1.1.ysm、texture=white，原包未修改／解密，正式DeepFish未换；服主已选升级2.6.5，继续协议／下载适配，勿直接覆盖独立维护的2.4.1 live客户端。见paper/docs/YSM_265_MIGRATION_20261031.md。
+
+AgentAppearance0.3.5仅桥层候选，37新增＋28本人＋8身体检查、6真实初次与7冷启检查通过；配置/E-F静态前像已核，正式仍0.3.4/Freesiaaf5/YSM2.4.1。按UUID保存、统计离线选择和当前原生状态，优先未使用，满池选少用；手选和个人模型保持，观战名册仅用于排除。live按观战／无人机要求处理，不抽人形；DeepFish原作者格式32加密原包未被现役2.4.1接受，兼容重建版不能冒称原包。新模型代理维护须单独确认、门禁、预告和完整E/F冷备，不追加或重放旧冻结相册脚本。详见paper/docs/AUTOMATIC_APPEARANCE_20261031.md。
 
 ## 2026-10-31 相册、数字日记与上传已批准，等待系统确认
 

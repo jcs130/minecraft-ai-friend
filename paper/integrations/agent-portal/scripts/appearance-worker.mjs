@@ -13,6 +13,14 @@ const uuid = /^[a-f0-9-]{36}$/, sha = bytes => createHash('sha256').update(bytes
 async function json(file) { return JSON.parse((await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, '')); }
 async function save(file, value) { const temp = file + '.' + randomUUID() + '.tmp'; await fs.writeFile(temp, JSON.stringify(value), { flag: 'wx', mode: 0o600 }); await fs.rename(temp, file); }
 export function identifier(job) { return job.kind === 'skin' ? `web_${job.sha256.slice(0, 20)}_${job.variant}` : `qd_${job.playerUuid.replaceAll('-', '').slice(0, 12)}_${job.sha256.slice(0, 12)}`; }
+export function observedAppearance(snapshot,job,version='2.4.1',now=Date.now()) {
+  const at=typeof snapshot?.writtenAt==='number'?snapshot.writtenAt:Date.parse(snapshot?.writtenAt);
+  if(!Number.isFinite(at)||Math.abs(now-at)>=10000)return undefined;
+  const row=snapshot.players?.find(row=>row.playerUuid===job.playerUuid&&row.playerName===job.username);
+  if(version==='2.6.5'&&(snapshot.source!=='ysm_native_backend'||row?.source!==snapshot.source||row.epoch!==snapshot.epoch||row.ysmVersion!==version||row.protocolVersion!=='2.6.0'
+    ||row.jarSha256!=='b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb'))return undefined;
+  return ['2.4.1','2.6.5'].includes(version)?row:undefined;
+}
 function validJob(job) {
   return uuid.test(job.id || '') && uuid.test(job.playerUuid || '') && /^ag_[A-Za-z0-9_]{1,13}$/.test(job.username || '') && !/eye$/i.test(job.username) && /^[a-f0-9]{64}$/.test(job.sha256 || '') &&
     ['skin', 'ysm'].includes(job.kind) && (job.kind === 'skin' ? ['classic', 'slim'].includes(job.variant) : /^[A-Za-z0-9_.-]{1,96}$/.test(job.texture || ''));
@@ -48,6 +56,7 @@ export async function ysmControl(configFile, command) {
 export class AppearanceWorker {
   constructor(config, dependencies = {}) { Object.assign(this, { config, dependencies }); this.origin = portalOrigin(config.endpoint); }
   async initialize() {
+    if(!['2.4.1','2.6.5'].includes(this.config.ysmVersion??'2.4.1'))throw Error('YSM_PROFILE_UNSUPPORTED');
     for (const key of ['journalDirectory', 'serverDir', 'modelRoot', 'appearanceStateFile', 'ysmServicesConfig', 'rconClientModule', 'tokenFile']) if (!path.isAbsolute(this.config[key] || '')) throw Error('ABSOLUTE_OPERATOR_PATHS_REQUIRED');
     if (path.basename(this.config.modelRoot) !== 'custom') throw Error('YSM_CUSTOM_ROOT_REQUIRED');
     await fs.mkdir(this.config.journalDirectory, { recursive: true, mode: 0o700 });
@@ -129,8 +138,9 @@ export class AppearanceWorker {
         if (error.code !== 'ENOENT') throw error;
         const models = await fs.readdir(this.modelRoot, { withFileTypes: true });
         if (models.filter(entry => entry.isDirectory() || /\.(zip|ysm)$/i.test(entry.name)).length >= 60) return report('failed', 'YSM_CATALOG_FULL', '模型目录接近现有转换上限，未安装；请服主整理旧资源后重试。');
-        // Native YSM 2.4.1 may derive a ZIP ID from its internal wrapper rather
-        // than the archive filename. Install a validated plaintext directory
+        // A validated plaintext folder has a stable native registry ID in both
+        // reviewed versions, independent of an uploaded ZIP's internal wrapper.
+        // Install a validated plaintext directory
         // under OUR identifier. Preserve every original resource byte; never
         // unpack unchecked user paths into the shared model directory.
         const temp = path.join(directory, 'validated-' + randomUUID()); await fs.mkdir(temp);
@@ -141,12 +151,12 @@ export class AppearanceWorker {
     }
     if (journal.phase === 'source_installed' && Date.now() - journal.installedAt < 45000) return report('applying', 'YSM_CONVERTING', '模型源已安装，等待稳定扫描、Web 转换与原生目录更新。');
     let state;
-    try { const snapshot = await json(this.config.appearanceStateFile); const writtenAt = typeof snapshot.writtenAt === 'number' ? snapshot.writtenAt : Date.parse(snapshot.writtenAt); if (Math.abs(Date.now() - writtenAt) < 10000) state = snapshot.players?.find(row => row.playerUuid === job.playerUuid && row.playerName === job.username); } catch { /* Actual worker state remains unknown. */ }
+    try { state=observedAppearance(await json(this.config.appearanceStateFile),job,this.config.ysmVersion??'2.4.1'); } catch { /* Actual appearance remains unknown. */ }
     if (state?.stateStatus === 'confirmed' && state.available === true && state.modelId === name && state.texture === job.texture && state.webAvailable === true) return report('applied', 'YSM_BOUND', '原生模型、贴图与 Web 资源已由模型服务确认；基岩按该模型支持范围投影。', { identifier: name, texture: job.texture, webAvailable: true, ...(journal.modelIdentifier ? { reusedExisting: true, sourceSha256: journal.sourceSha256 } : {}) });
     if (journal.phase === 'source_installed') {
       journal.phase = 'binding'; journal.dispatchedAt = Date.now(); await save(journalFile, journal);
       try { await this.control(`appearance admin set ${job.username} ${name} ${job.texture}`); }
-      catch { return report('unknown', 'YSM_BINDING_UNKNOWN', '模型绑定请求结果未知，等待实际 Worker 状态；不会重复发送。'); }
+      catch { return report('unknown', 'YSM_BINDING_UNKNOWN', '模型绑定请求结果未知，等待实际模型状态；不会重复发送。'); }
     }
     return report(Date.now() - journal.dispatchedAt > 120000 ? 'unknown' : 'applying', 'YSM_CONFIRMING', '等待原生模型与 Web 转换的实际确认，尚未报告应用成功。');
   }

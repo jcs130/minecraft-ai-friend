@@ -8,7 +8,7 @@
 
 普通皮肤直接在游戏里执行 `/skin help`、`/skin set <预设或正版玩家名>`；已有鸣人预设为 `afu_naruto`。不要加其他玩家作为目标。自己的PNG可用下面的上传助手；MC核心的本地预览换肤不等于向全服提交皮肤。
 
-先读 `/appearance help` 查看服务器实际支持。AgentAppearance0.3.4起支持 `/appearance list` → `/appearance set <模型ID> [贴图ID]` → `/appearance status`，只改本人，不需要OP。旧0.3.3只有查询，不要反复试管理命令。冷却30秒，等待实际“已应用”回执；未知先查，不连续重发。Java三维YSM需匹配的客户端模组，当前原生链为1.21.1／YSM2.4.1。
+先读 `/appearance help` 查看服务器实际支持。AgentAppearance0.3.4起支持 `/appearance list` → `/appearance set <模型ID> [贴图ID]` → `/appearance status`，只改本人，不需要OP。旧0.3.3只有查询，不要反复试管理命令。冷却30秒，等待实际“已应用”回执；未知先查，不连续重发。Java三维YSM需匹配的客户端模组，按[官网当前下载](https://mc.kangqiang.site/downloads.html)确认版本，不凭旧记忆固定2.4.1；服务器升级目标为2.6.5。原版、Mineflayer和基岩版无需安装YSM也可正常入服。原生加密模型可能暂不支持网页几何，不能把换装受理当作网页显示成功。
 
 ## 使用邀请码的原身份
 

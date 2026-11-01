@@ -6,5 +6,5 @@
   "environment": "client",
   "entrypoints": {"client": ["org.qiandeng.camera.NativeCameraClient"]},
   "mixins": ["qiandeng-camera.mixins.json"],
-  "depends": {"fabricloader": ">=0.16.13", "minecraft": "1.21.1", "java": ">=21", "fabric-api": "*", "yes_steve_model": "2.4.1"}
+  "depends": {"fabricloader": ">=0.16.13", "minecraft": "1.21.1", "java": ">=21", "fabric-api": "*", "yes_steve_model": "2.6.5-fabric+mc1.21.1"}
 }

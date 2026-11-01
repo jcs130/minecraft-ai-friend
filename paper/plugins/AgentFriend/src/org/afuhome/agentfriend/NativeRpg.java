@@ -8,7 +8,7 @@ import org.bukkit.plugin.Plugin;
 
 /** Optional Vortex front door. Legacy storage stays read-only; no second RPG engine. */
 final class NativeRpg {
-    static final List<String> COMMON_IDS = List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","team","prospect","night","feather");
+    static final List<String> COMMON_IDS = List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","team","support","prospect","night","feather");
     static final Set<String> COMMON = Set.copyOf(COMMON_IDS);
     private final AgentFriendPlugin owner;
     private final boolean selected;
@@ -39,7 +39,7 @@ final class NativeRpg {
         String name=id.equals("frostnova")?"寒霜术（霜环）":e.name();
         return new SpellGuide.Entry(e.id(),name,e.category(),e.icon(),e.command(),e.effect(),e.target(),e.mana(),e.cooldownSeconds(),requires,e.failure(),scaling,tip);
     }
-    static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡","归乡术","回城"->"home";case "传送点术"->"travel";case "队友传送术"->"team";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "寒霜","寒霜术","冰霜","霜环","霜环术"->"frostnova";case "造物","造物术"->"give";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
+    static String skillId(String id){return switch(id.toLowerCase(Locale.ROOT)){case "归乡","归乡术","回城"->"home";case "传送点术"->"travel";case "队友传送术","队友支援术"->"team";case "支援","支援传送术","村庄支援传送术"->"support";case "探矿","探矿术"->"prospect";case "夜视","夜视术"->"night";case "羽落","羽落术"->"feather";case "圣愈术"->"selfheal";case "范围治疗"->"heal";case "饱食术"->"food";case "闪现术","闪现"->"blink";case "星芒箭"->"starbolt";case "寒霜","寒霜术","冰霜","霜环","霜环术"->"frostnova";case "造物","造物术"->"give";case "焰浪"->"flamewave";case "飞行术"->"flight";case "跃空术"->"leap";case "探敌术","心眼"->"sense";default->id.toLowerCase(Locale.ROOT);};}
     private Plugin backend() {
         Plugin p=Bukkit.getPluginManager().getPlugin("QiandengjiRpg");
         if(p==null||!p.isEnabled())throw new IllegalStateException("RPG服务未就绪；稍后查询 /mycli status，不要重复执行。");

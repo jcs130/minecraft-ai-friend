@@ -28,6 +28,11 @@ export function loadConfig(overrides = {}) {
   config.cloudAccounts = { ...defaults.cloudAccounts, ...local.cloudAccounts, ...overrides.cloudAccounts };
   config.emailAuth = { ...defaults.emailAuth, ...local.emailAuth, ...overrides.emailAuth };
   config.agentAccess = { ...defaults.agentAccess, ...local.agentAccess, ...overrides.agentAccess };
+  if (process.env.PORTAL_AGENT_PUBLIC_SIGNUP !== undefined) {
+    if (!['true', 'false'].includes(process.env.PORTAL_AGENT_PUBLIC_SIGNUP)) throw new Error('PORTAL_AGENT_PUBLIC_SIGNUP must be true or false');
+    config.agentAccess.publicSignup = process.env.PORTAL_AGENT_PUBLIC_SIGNUP === 'true';
+  }
+  if (typeof config.agentAccess.publicSignup !== 'boolean') throw new Error('agentAccess.publicSignup must be an explicit boolean');
   config.nekoAuth = { ...defaults.nekoAuth, ...local.nekoAuth, ...overrides.nekoAuth };
   if (process.env.PORTAL_NEKO_OAUTH_ENABLED !== undefined) {
     if (!['true', 'false'].includes(process.env.PORTAL_NEKO_OAUTH_ENABLED)) throw new Error('PORTAL_NEKO_OAUTH_ENABLED must be true or false');

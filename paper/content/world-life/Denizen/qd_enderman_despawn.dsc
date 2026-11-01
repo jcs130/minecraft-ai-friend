@@ -8,9 +8,16 @@ qd_enderman_despawn:
     on server start:
     # Spawn chunks can load before Denizen registers entity-add events.
     - run qd_enderman_loaded_once delay:1s
-    on enderman added to world:
+    # Bukkit events work on both Paper and Youer. The Paper-only entity-add
+    # extension is not registered by Denizen on Youer.
+    on chunk loads entities entity_type:enderman:
+    - if <list[world|world_nether|world_the_end].contains[<context.chunk.world.name>]>:
+      - foreach <context.entities> as:target:
+        - if <[target].entity_type> == ENDERMAN:
+          - run qd_enderman_clear_carried def:<[target].uuid> delay:1t
+    on enderman spawns:
     - if <list[world|world_nether|world_the_end].contains[<context.location.world.name>]>:
-      # Addition fires before the entity is fully usable. Capture only its UUID
+      # Spawning fires before the entity is fully usable. Capture only its UUID
       # and re-check all eligibility conditions on the next tick.
       - run qd_enderman_clear_carried def:<context.entity.uuid> delay:1t
 

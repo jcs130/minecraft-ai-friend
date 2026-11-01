@@ -32,12 +32,14 @@ export class AgentAccess {
     this.pool = new TrialPool(store);
   }
   async capabilities() {
-    return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: true,
+    const publicSignup=this.config.agentAccess.enabled===true&&this.config.agentAccess.publicSignup===true;
+    return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: !publicSignup,
+      publicSignup: { enabled:publicSignup, endpoint:'/api/v1/agent-access/public-register', ownership:'experience_pool', role:'ordinary_agent', clientAttestationRequired:false, limits:{newPerNetworkHour:6,newPerNetworkDay:20,poolCapacity:100} },
       ownership: 'inviter', trialPool: { available: true, ownership: 'experience_pool', claim: 'authenticated_game_proof', registrationRequiredToPlay: false }, createsWebsiteOwner: false, game: await this.accounts.capabilities(),
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
       skill: agentSkill, clients: getAgentClients(this.config), joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
-      endpoints: { register: '/api/v1/agent-access/register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session', appearance: '/api/v1/agent-access/appearance' },
+      endpoints: { register: '/api/v1/agent-access/register', publicRegister:'/api/v1/agent-access/public-register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session', appearance: '/api/v1/agent-access/appearance' },
       appearance: { selfService: true, kinds: ['skin', 'ysm'], websiteLoginRequired: false, helper: 'scripts/appearance.mjs', help: '/agent-api.html#appearance' },
       memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },
       help: '/agent-api.html' };
@@ -140,6 +142,30 @@ export class AgentAccess {
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     return { schemaVersion: 1, clientId: body.requestId, username: body.username, state: 'registered', duplicate,
       registrationOnly: true, nextAction: 'login', login: '/api/v1/agent-access/sessions', ownership: this.pool.invitation(invite.id) ? 'experience_pool' : 'inviter' };
+  }
+  async publicRegister(body,addressHash) {
+    this.enabled();
+    if(this.config.agentAccess.publicSignup!==true)throw fail(403,'PUBLIC_SIGNUP_DISABLED','服务器尚未开放免邀请码注册，请使用邀请链接');
+    if(!UUID.test(body.requestId||'')||!secretPattern.test(body.clientSecret||'')||!/^[a-f0-9]{64}$/.test(addressHash||''))throw fail(400,'CLIENT_IDENTITY_REQUIRED','先在本机保存随机 requestId 和 32 字节 base64url clientSecret；中断后使用原身份接续');
+    this.checkName(body.username);
+    const roster=await this.game.roster(),db=this.store.db;let duplicate=false;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const previous=db.prepare('SELECT * FROM agent_clients WHERE id=?').get(body.requestId);
+      if(previous){
+        if(!db.prepare('SELECT 1 FROM agent_public_registrations WHERE invite_id=?').get(previous.invite_id)||previous.name!==body.username||previous.revoked_at||!equalHash(previous.secret_hash,digest(body.clientSecret)))throw fail(409,'REGISTRATION_CONFLICT','注册标识已使用，请核对原先保存的身份，不能替换参数');
+        duplicate=true;
+      }else{
+        const normalized=body.username.toLowerCase(),uuid=offlineUuid(body.username);
+        if(roster.some(row=>row.name.toLowerCase()===normalized)||db.prepare('SELECT 1 FROM portal_agents WHERE normalized=?').get(normalized)||db.prepare('SELECT 1 FROM ownerships WHERE agent_uuid=?').get(uuid))throw fail(409,'ACCOUNT_EXISTS','该角色已存在；免邀入口不能认领或改密，请另选名字');
+        if(db.prepare('SELECT 1 FROM agent_clients WHERE normalized=?').get(normalized))throw fail(409,'AGENT_NAME_RESERVED','这个名字已被注册，请另选名字或使用原身份文件');
+        const now=Date.now(),custody=this.pool.reservePublic(addressHash,now);
+        db.prepare('INSERT INTO agent_clients VALUES(?,?,?,?,?,?,?,?,NULL,NULL)').run(body.requestId,custody.inviteId,custody.ownerId,body.username,normalized,uuid,digest(body.clientSecret),now);
+        this.store.audit(custody.ownerId,'agent.public.register',body.requestId);
+      }
+      db.exec('COMMIT');
+    }catch(error){db.exec('ROLLBACK');throw error;}
+    return {schemaVersion:1,clientId:body.requestId,username:body.username,state:'registered',duplicate,registrationOnly:true,ownership:'experience_pool',role:'ordinary_agent',nextAction:'login',login:'/api/v1/agent-access/sessions'};
   }
   login(body) {
     this.enabled();

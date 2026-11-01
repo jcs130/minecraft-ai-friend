@@ -1,8 +1,8 @@
 # 千灯纪：重返艾恩葛朗特
 
-**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服仍为原三段攻略（当前AF.43自动参战兼容版），见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
+**原图六段攻略候选已验证，尚未上线：** 使用低拱、柱廊、南拱、上层看台和中央斗技场，原路约628格；24名分段敌人、弓手真实射击及首领换剑已在当前Youer与女仆兼容层上通过54项检查。正式服仍为原三段攻略（当前AF.45自动参战兼容版），见[路线、验证和发布边界](paper/docs/AINCRAD_ARCHITECTURE_20261030.md)。本批保持现有核心及其他插件，不把源码准备当成已经部署。
 
-**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Youer1.21.1，AF0.4.47.43-rpg、QiandengjiRpg0.2.15、Vortexqd32-cooperation、原生平台0.1.6和WorldObserver0.1.2已上线。同地点自动参战、中途加入与贡献领奖、原生爱心、智能闪现和安全归乡，以及原版女仆/道具/附近台词与网页兼容，见[正式发布记录](paper/docs/VANILLA_MAID_RELEASE_20261031.md)。**官网0.8.33、Skill1.3.6已发布**，支持照片描述、数字日记、本人图片上传和地图画；[可选女仆客户端](https://mc.kangqiang.site/downloads.html#maid-client)保持。YSM仍2.4.1，原生光影相机尚未启用；Skill与Harness身体仍锁MC核心rc.130，主干核心更新不等于所有宿主自动升级。照片公开由本人/管理员决定，下载直达OSS。起始之城内可放不可拆，城外可挖可建，副本建筑保护保持。
+**当前游戏版：**千灯纪：重返艾恩葛朗特·破晓攻略。Youer1.21.1 build920，AF0.4.47.45-rpg、QiandengjiRpg0.2.16、Vortexqd32-cooperation、原生平台0.1.6和WorldObserver0.1.2已上线。**YSM服务端已统一到官方2.6.5**，DeepFish保留原始大肥鱼包，live使用旁观无人机；原生模型同步与无光影核显相机已正式启用，见[本次实查](paper/docs/CLOSEOUT_20261101.md)。**官网0.8.35、Skill1.3.7已发布**，新增[Cortico Lite普通Agent免邀请接入](paper/docs/CORTICO_LITE_PUBLIC_SIGNUP_20261101.md)，保留持久限流、体验池和后续本人认领。照片描述、数字日记、自定义图片和地图画继续使用；公开由本人/管理员选择，大文件直达OSS。Skill/Harness核心仍rc.130；起始之城内可放不可拆，城外可挖可建，副本建筑保护保持。
 
 ![千灯纪：灯火初上的起始之城与浮空城，AI场景概念图](paper/integrations/agent-portal/public/season-art/aincrad-dusk-20261030-960.webp)
 
@@ -10,12 +10,12 @@
 
 [Paper现成插件复用与附近聊天方案](paper/docs/PAPER_PLUGIN_REUSE_20261029.md)：官方EssentialsXChat与世界/队伍标识已正式发布，普通聊天默认同世界48格，!内容为全服喊话；[本轮发布](paper/docs/NEARBY_COMMUNICATION_RELEASE_20261029.md)。优先用已有Vortex、BetonQuest/Citizens、Shopkeepers和MythicMobs，新增交易插件先独立验证。
 
-附近语音：服务端插件已安装并连接现有TTS与CPU ASR，语音模组可选；自启、公网UDP及每日端口续期已验收，真人耳听仍待验证，见[语音状态](paper/docs/PROXIMITY_VOICE.md)。[原生高画质女神相机](paper/docs/NATIVE_GODDESS_CAMERA.md)的核显与YSM真实渲染仍待验收，现役相机保持。
+附近语音：服务端插件已安装并连接现有TTS与CPU ASR，语音模组可选；自启、公网UDP及每日端口续期已验收，真人耳听仍待验证，见[语音状态](paper/docs/PROXIMITY_VOICE.md)。[原生高画质女神相机](paper/docs/NATIVE_GODDESS_CAMERA.md)已完成核显无光影原生实拍；正式入口的接通进度见本次实查，光影模式暂不启用。
 
 
 职业详情现在按服务器加载配置返回属性、装备、技能效果和成长条件；满包优先指引直接远程存箱，遗迹支持三次战败和存档点、Boss房间排他。旧金币统一规则保持，见[本轮发布](paper/docs/RPG_INTERACTION_20261029.md)。
 
-连接修复已生效：AgentVision0.1.4、标准背包开窗、原生后端协议和罗盘兼容，女仆桥0.1.5已加载；54插件正常。[实际运行与验收](paper/docs/NATIVE_COMPATIBILITY_20261030.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
+连接修复已生效：AgentVision0.1.4、标准背包开窗、原生后端协议和罗盘兼容，女仆桥0.1.6已加载；当前完整状态以部署清单为准。[实际运行与验收](paper/docs/NATIVE_COMPATIBILITY_20261030.md) · [当前组件摘要](paper/manifests/current-deployment.json)。
 
 Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、失败指引、坦克防御及桐人状态兼容；[发布与验收](paper/docs/BASIC_SURVIVAL_RELEASE_20261028.md)。
 

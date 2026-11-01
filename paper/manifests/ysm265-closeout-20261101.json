@@ -1,0 +1,147 @@
+{
+  "release": "ysm265-closeout-20261101-r1",
+  "state": "deployed",
+  "game": {
+    "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
+    "plugins": 55,
+    "AgentFriend": "0.4.47.45-rpg",
+    "QiandengjiRpg": "0.2.16",
+    "VortexRPG": "1.2.2-alpha-qd32-cooperation",
+    "LightAntiCheat": "1.2.6-qd2",
+    "AgentVision": "0.1.4",
+    "LoginGuard": "0.1.9",
+    "Numen": "0.1.4 + pinned mcbot/control fixes",
+    "QiandengjiMcbot": "0.1.0",
+    "QwenPawGameChannel": "0.3.2",
+    "LanTts": "1.6.0",
+    "WorldObserver": "0.1.2",
+    "QiandengVoice": "0.1.0",
+    "SimpleVoiceChat": "2.6.27",
+    "EssentialsChat": "2.22.0",
+    "MultiverseCore": "5.8.1",
+    "Freesia": "removed; native YSM backend active",
+    "AgentAppearance": "AgentAppearanceNative 0.4.2",
+    "AgentAppearanceBedrock": "0.2.2 enabled",
+    "kernel": "Youer 1.21.1 / NeoForge 21.1.252",
+    "QiandengjiMaidBridge": "0.1.6",
+    "NativePlatform": "0.1.6",
+    "OptionalPayloadGuard": "0.1.0",
+    "YSM": "2.6.5",
+    "QiandengjiFaweHybrid": "0.1.0",
+    "NumenEngine": "0.1.4-qd-youer1"
+  },
+  "installedCodeAndConfig": [
+    {
+      "artifact": "AgentAppearanceNative-0.4.2.jar",
+      "sha256": "7c1a7a9d59f361b4b74ffc4ae20a798e93709cae123678efc5f3da69886a566b",
+      "retired": false
+    },
+    {
+      "artifact": "AgentAppearanceNative-0.4.1.jar",
+      "sha256": null,
+      "retired": true
+    },
+    {
+      "artifact": "AgentFriend-0.4.47.45-rpg.jar",
+      "sha256": "f889f73106754d1744d503dccf745911d2f24e1652869ea8f1d7d4a55aaab6c3",
+      "retired": false
+    },
+    {
+      "artifact": "AgentFriend-0.4.47.44-rpg.jar",
+      "sha256": null,
+      "retired": true
+    },
+    {
+      "artifact": "qiandengji-maid-native-0.1.6.jar",
+      "sha256": "dde357119ec3e14b14855834aad814024a2b6854ede766009768ab49bfaf632d",
+      "retired": false
+    },
+    {
+      "artifact": "qiandengji-maid-native-0.1.4.jar",
+      "sha256": null,
+      "retired": true
+    },
+    {
+      "artifact": "numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "0240456e9b84cfa841c7384a3a368011a65f469bf96469a19777a50db090310f",
+      "retired": false
+    },
+    {
+      "artifact": "QiandengjiFaweHybrid-0.1.0.jar",
+      "sha256": "98903723c2e63cbd32133a32bef7a74fe0774a6db1cc023bf7a56139f8fe6d15",
+      "retired": false
+    },
+    {
+      "artifact": "AgentAppearance-Bedrock-0.2.2.jar",
+      "sha256": "116ced8e39a114ebeaee3a3030a9e2aec0faa2012c74a06350b6c90d00671317",
+      "retired": false
+    },
+    {
+      "artifact": "AgentAppearance-Bedrock-0.2.1.jar",
+      "sha256": null,
+      "retired": true
+    },
+    {
+      "artifact": "qd_enderman_despawn.dsc",
+      "sha256": "ce5eafb8f45a15f40720d556d30f218f3ba419088b01b718d52c1b188cd2971a",
+      "retired": false
+    },
+    {
+      "artifact": "photo-camera.yml",
+      "sha256": "b8c1b6717388acb7dab9be7cc830fed4c4c620b2a9932fdade795623b257b662",
+      "retired": false
+    },
+    {
+      "artifact": "goddess-photo-camera.json",
+      "sha256": "ff622021c19c8c8419b92bad2978113291011b7b155659f479f94ef929b2b0a2",
+      "retired": false
+    },
+    {
+      "artifact": "goddess-photo-camera.mjs",
+      "sha256": "f5bd59f29cfbdf66eec3274aeba6518484086ee58502c5aa79f3853cf3751d65",
+      "retired": false
+    },
+    {
+      "artifact": "native-photo-renderer.mjs",
+      "sha256": "2dd58bdb3d58ac28d95d9bcb4f48d53197b738cbf76eeb96bf5a404386f0144c",
+      "retired": false
+    }
+  ],
+  "bridgeReadiness": {
+    "release": "native-camera-readiness-20261101-r2",
+    "deployed": true,
+    "gameRestarted": false,
+    "goddessBridgeOnly": true,
+    "originalWatchdogUsed": true,
+    "newScheduledTaskCreated": false,
+    "sevenJobSpecificationsPreserved": true,
+    "sourceSha256": "7d15c5f1a668b5a8c74a716d3558fdaef5d3e6c27f2544868d744a3af49053c7"
+  },
+  "verification": {
+    "formalChecks": 101,
+    "coldCharacterFilesPreserved": 664,
+    "nativeNumenAndMaid": 6,
+    "nativePhotoDelivery": 9,
+    "nativePolicyTests": 14,
+    "formalLoadedModels": 40,
+    "memoryWindow": {
+      "passed": true,
+      "profile": "formal full-plugin native 2.6.5 Intel renderer",
+      "shadersEnabled": false,
+      "seconds": 595.5,
+      "samples": 120,
+      "fpsMedian": 30.0,
+      "fpsMinimum": 29,
+      "privateGiBMin": 2.116,
+      "privateGiBMax": 2.117,
+      "privateGiBFirst": 2.116,
+      "privateGiBLast": 2.117,
+      "privateGiBChange": 0.001,
+      "modelCatalogueSize": 40,
+      "indefiniteOrShaderStabilityProven": false
+    }
+  },
+  "noLedgerMigration": true,
+  "playerDataReplaced": false,
+  "openItemsDocument": "../docs/CLOSEOUT_20261101.md"
+}

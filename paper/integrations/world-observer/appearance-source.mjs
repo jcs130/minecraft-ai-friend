@@ -6,10 +6,18 @@ import {promisify} from 'node:util';
 
 const run=promisify(execFile),sha=b=>createHash('sha256').update(b).digest('hex');
 const SHA=/^[a-f0-9]{64}$/,UUID=/^[a-f0-9-]{36}$/;
+const NATIVE_265_SHA='b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb';
+function sourceProfile(config){
+  const version=config.ysmVersion??'2.4.1';
+  if(version==='2.4.1')return {version,protocol:'2.4.0',source:'freesia_worker'};
+  if(version==='2.6.5'&&config.ysmJarSha256===NATIVE_265_SHA)return {version,protocol:'2.6.0',source:'ysm_native_backend'};
+  throw Error('SERVER_APPEARANCE_PROFILE_MISMATCH');
+}
+function modelIdValid(id,profile){return profile.version==='2.4.1'?/^[-a-zA-Z0-9_]{1,96}$/.test(id??''):typeof id==='string'&&id.length<=96&&/^[-\p{L}\p{N}_./]+$/u.test(id)&&!id.includes('..')&&!id.startsWith('/');}
 async function json(file,limit=1024*1024){const stat=await fs.stat(file);if(stat.size>limit)throw Error('APPEARANCE_FILE_LIMIT');return JSON.parse(await fs.readFile(file,'utf8'));}
 export class ObservationAppearanceSource {
   constructor({config,decodeBundle,fetcher=fetch,now=Date.now,exportBundle}){
-    Object.assign(this,{config,decodeBundle,fetcher,now,exportBundle});this.assets=new Map();this.bindings=new Map();this.failed=new Map();this.inFlight=new Map();this.size=0;this.state=null;this.stateAt=0;
+    Object.assign(this,{config,decodeBundle,fetcher,now,exportBundle});this.profile=sourceProfile(config);this.assets=new Map();this.bindings=new Map();this.failed=new Map();this.inFlight=new Map();this.size=0;this.state=null;this.stateAt=0;
   }
   binding({uuid,entityId}){const b=this.bindings.get(uuid);return b?.entityId===entityId&&this.now()-b.checkedAt<15000?b.value:null;}
   read(hash){return SHA.test(hash??'')?this.assets.get(hash):null;}
@@ -36,9 +44,15 @@ export class ObservationAppearanceSource {
     try{
       if(!this.state||this.now()-this.stateAt>=1000){this.state=await json(this.config.stateFile);this.stateAt=this.now();}
       const state=this.state,row=state.players?.find(r=>r.playerUuid?.toLowerCase()===uuid);
-      if(state.source!=='freesia_worker'||!Number.isFinite(state.writtenAt)||this.now()-state.writtenAt>15000||state.writtenAt>this.now()+1000)throw Error('SERVER_APPEARANCE_STATE_STALE');
+      if(state.source!==this.profile.source||!Number.isFinite(state.writtenAt)||this.now()-state.writtenAt>15000||state.writtenAt>this.now()+1000)throw Error('SERVER_APPEARANCE_STATE_STALE');
       if(row?.available===true){
-        if(row.entityId!==entityId||row.webAvailable!==true||row.ysmVersion!=='2.4.1'||row.protocolVersion!=='2.4.0'||row.jarSha256!==this.config.ysmJarSha256||!SHA.test(row.assetSha256??'')||!Number.isInteger(row.assetBytes)||row.assetBytes<1||row.assetBytes>2*1024*1024||!/^[-a-zA-Z0-9_]{1,96}$/.test(row.modelId??''))throw Error('SERVER_APPEARANCE_BODY_OR_SOURCE_MISMATCH');
+        if(row.entityId!==entityId||row.ysmVersion!==this.profile.version||row.protocolVersion!==this.profile.protocol||row.jarSha256!==this.config.ysmJarSha256||!modelIdValid(row.modelId,this.profile)
+          ||this.profile.version==='2.6.5'&&row.source!==this.profile.source)throw Error('SERVER_APPEARANCE_BODY_OR_SOURCE_MISMATCH');
+        if(row.webAvailable!==true){
+          value={...value,nativeAvailable:true,modelId:row.modelId,texture:row.texture,ysmVersion:row.ysmVersion,message:'原生模型已确认；网页需要原作者公开的几何、动画和贴图。'};
+          throw Error(['YSM_ENCRYPTED_SOURCE_REQUIRED','YSM_SOURCE_NOT_REGISTERED','YSM_TEXTURE_NOT_REGISTERED'].includes(row.webReason)?row.webReason:'YSM_WEB_SOURCE_UNAVAILABLE');
+        }
+        if(!SHA.test(row.assetSha256??'')||!Number.isInteger(row.assetBytes)||row.assetBytes<1||row.assetBytes>2*1024*1024)throw Error('SERVER_APPEARANCE_BODY_OR_SOURCE_MISMATCH');
         // Reuse immutable resource references, never the previous body's
         // UUID/entityId/authority. Reconnects and respawns get a new entityId.
         let asset=previous?.value&&{bundleSha256:previous.value.bundleSha256,bytes:previous.value.bytes,assetSha256:previous.value.assetSha256};
@@ -46,14 +60,14 @@ export class ObservationAppearanceSource {
           if(this.now()-(this.failed.get(row.assetSha256)??-Infinity)<5000)throw Error('SERVER_APPEARANCE_RETRY_PENDING');
           try{
             const compressed=this.exportBundle?await this.exportBundle(row):
-              (await run(this.config.java,['-cp',this.config.exporterClasspath,'org.afuhome.appearance.ExportAppearance',this.config.publicModelRoot,row.modelId,row.assetSha256],{encoding:'buffer',maxBuffer:2*1024*1024+1024,timeout:10000,windowsHide:true})).stdout;
+              (await run(this.config.java,['-cp',this.config.exporterClasspath,'org.afuhome.appearance.ExportAppearance',this.config.publicModelRoot,row.modelId,row.assetSha256,...(this.profile.version==='2.6.5'?['2.6.5']:[])],{encoding:'buffer',maxBuffer:2*1024*1024+1024,timeout:10000,windowsHide:true})).stdout;
             if(compressed.length!==row.assetBytes)throw Error('SERVER_APPEARANCE_SIZE_MISMATCH');
             const bundle=this.decodeBundle(compressed,row.assetSha256);
             if(bundle.modelId!==row.modelId||!bundle.textures?.[row.texture])throw Error('SERVER_APPEARANCE_MODEL_MISMATCH');
             asset={...this.store(bundle),assetSha256:row.assetSha256};
           }catch(error){this.failed.set(row.assetSha256,this.now());throw error;}
         }
-        value={...value,...asset,available:true,reason:null,kind:'ysm',modelId:row.modelId,texture:row.texture,ysmVersion:row.ysmVersion,stateEpoch:state.epoch,authority:row.stateAuthority??'freesia_worker'};
+        value={...value,...asset,available:true,reason:null,kind:'ysm',modelId:row.modelId,texture:row.texture,ysmVersion:row.ysmVersion,stateEpoch:state.epoch,authority:row.stateAuthority??this.profile.source};
       }else{
         // A real UUID's configured skin is an independent authoritative source,
         // not a guessed YSM folder or a replacement default Steve texture.

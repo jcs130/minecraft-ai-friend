@@ -8,8 +8,8 @@ import {parsePublicDialogue,publicDialogueText} from '../src/public-dialogue.mjs
 import {ArchiveReader} from '../src/public-archives.mjs';
 import {WorldCatalog} from '../src/world-catalog.mjs';
 
-test('actual vanilla/async Paper public chat preserves speech and sender without promoting quoted commands to events',()=>{
- for(const prefix of ['[Server thread/INFO]: ','[Async Chat Thread - #12/INFO]: [Not Secure] ']){
+test('actual vanilla/async Paper and Youer public chat preserves speech and sender without promoting quoted commands to events',()=>{
+ for(const prefix of ['[Server thread/INFO]: ','[Async Chat Thread - #12/INFO]: [Not Secure] ','[/INFO]: [Not Secure] ']){
   const row=parsePublicDialogue('[18:06:28] '+prefix+'<ag_Alpha> @ag_CorMy 我在呢。我们一起去墓穴吧！','2026-10-25');
   assert.equal(row.playerName,'ag_Alpha');assert.equal(row.kind,'chat');assert.match(row.body,/一起去墓穴/);
  }
@@ -24,6 +24,16 @@ test('official nearby and shout chat stays archived with its channel and sender 
   const row=parsePublicDialogue('[19:50:00] [Async Chat Thread - #2/INFO]: [Not Secure] '+prefix+' ag_Alpha: 一起去冒险吧','2026-10-29');
   assert.equal(row.playerName,'ag_Alpha');assert.equal(row.body,'一起去冒险吧');assert.ok(row.title.includes(channel));assert.match(row.title,/艾恩葛朗特|主世界/);
  }
+});
+
+test('Youer empty-thread nearby messages keep their actual world and credential filtering',()=>{
+ const prefix='[11:05:36] [/INFO]: [Not Secure] [附近][主世界] Yui: ';
+ const row=parsePublicDialogue(prefix+'@Coobot 我们一起去冒险者公会','2026-11-01');
+ assert.equal(row.playerName,'Yui');assert.match(row.title,/附近·主世界/);
+ assert.equal(row.body,'@Coobot 我们一起去冒险者公会');
+ for(const body of ['/login never-publish-test','MC_AUTH_SUCCESS authenticated','我的密码是 never-publish-test'])assert.equal(parsePublicDialogue(prefix+body,'2026-11-01'),null);
+ for(const content of ['[私聊][主世界] Yui: test','[附近][监听][主世界] Yui: test','[SomePlugin] <Yui> test','Yui issued server command: /login never-publish-test'])assert.equal(parsePublicDialogue('[11:05:36] [/INFO]: '+content,'2026-11-01'),null);
+ assert.equal(parsePublicDialogue('[11:05:36] [Arbitrary worker/INFO]: [附近][主世界] Yui: test','2026-11-01'),null);
 });
 
 test('new chat envelopes retain the real outer author and never ingest whispers, spy or authentication',()=>{

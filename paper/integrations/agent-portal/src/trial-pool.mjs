@@ -13,9 +13,11 @@ export function trialPoolOwnerId(store) {
 export function isTrialAgent(store, uuid) {
   const ownerId = trialPoolOwnerId(store);
   if (!ownerId) return false;
-  return !!store.db.prepare(`SELECT 1 FROM agent_clients c JOIN agent_trial_invites t ON t.invite_id=c.invite_id
+  return !!store.db.prepare(`SELECT 1 FROM agent_clients c
     JOIN ownerships o ON o.agent_uuid=c.expected_uuid JOIN account_jobs j ON j.id=c.game_request_id
-    WHERE c.expected_uuid=? AND c.owner_id=? AND o.owner_id=? AND j.owner_id=? AND j.state='succeeded'`).get(uuid, ownerId, ownerId, ownerId);
+    WHERE c.expected_uuid=? AND c.owner_id=? AND o.owner_id=? AND j.owner_id=? AND j.state='succeeded'
+    AND (EXISTS(SELECT 1 FROM agent_trial_invites t WHERE t.invite_id=c.invite_id)
+      OR EXISTS(SELECT 1 FROM agent_public_registrations p WHERE p.invite_id=c.invite_id))`).get(uuid, ownerId, ownerId, ownerId);
 }
 export function transferTrialAgent(store, uuid, owner, proof) {
   const pool = trialPoolOwnerId(store);
@@ -41,9 +43,32 @@ export class TrialPool {
     store.db.exec(`CREATE TABLE IF NOT EXISTS agent_trial_pool(singleton INTEGER PRIMARY KEY CHECK(singleton=1),owner_id TEXT NOT NULL UNIQUE REFERENCES owners(id));
       CREATE TABLE IF NOT EXISTS agent_trial_batches(id TEXT PRIMARY KEY,issuer_id TEXT NOT NULL REFERENCES owners(id),secret_hash TEXT NOT NULL,count INTEGER NOT NULL,hours INTEGER NOT NULL,label TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS agent_trial_invites(invite_id TEXT PRIMARY KEY REFERENCES agent_invites(id),batch_id TEXT NOT NULL REFERENCES agent_trial_batches(id),ordinal INTEGER NOT NULL,UNIQUE(batch_id,ordinal));`);
+    store.db.exec(`CREATE TABLE IF NOT EXISTS agent_public_registrations(invite_id TEXT PRIMARY KEY REFERENCES agent_invites(id),address_hash TEXT NOT NULL,created_at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS agent_public_registration_rate ON agent_public_registrations(address_hash,created_at);`);
   }
   invitation(inviteId) {
-    return !!this.store.db.prepare('SELECT 1 FROM agent_trial_invites WHERE invite_id=?').get(inviteId);
+    return !!this.store.db.prepare('SELECT 1 FROM agent_trial_invites WHERE invite_id=? UNION ALL SELECT 1 FROM agent_public_registrations WHERE invite_id=?').get(inviteId,inviteId);
+  }
+  ensureOwner(now) {
+    const existing=trialPoolOwnerId(this.store);if(existing)return existing;
+    const id=randomUUID(),name='__trial_pool_'+randomUUID().slice(0,8);
+    this.store.db.prepare('INSERT INTO owners VALUES(?,?,?,?,?,?)').run(id,name,name,'disabled:trial-pool','owner',now);
+    this.store.db.prepare('INSERT INTO agent_trial_pool VALUES(1,?)').run(id);return id;
+  }
+  reservePublic(addressHash,now) {
+    const db=this.store.db,pool=trialPoolOwnerId(this.store);
+    const recent=db.prepare('SELECT count(*) AS n FROM agent_public_registrations WHERE address_hash=? AND created_at>?').get(addressHash,now-3600000).n;
+    const daily=db.prepare('SELECT count(*) AS n FROM agent_public_registrations WHERE address_hash=? AND created_at>?').get(addressHash,now-86400000).n;
+    if(recent>=6||daily>=20)throw Object.assign(fail(429,'PUBLIC_REGISTRATION_LIMIT','该网络的新角色注册已达到限额；请保留身份文件，稍后接续，不要更换请求标识'),{retryAfterSeconds:3600});
+    const waiting=db.prepare('SELECT count(*) AS n FROM agent_trial_invites t JOIN agent_invites i ON i.id=t.invite_id WHERE i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>?').get(now).n;
+    const active=pool?db.prepare('SELECT count(*) AS n FROM agent_clients WHERE owner_id=? AND revoked_at IS NULL').get(pool).n:0;
+    if(waiting+active>=100)throw fail(409,'TRIAL_POOL_FULL','体验池已满，请先认领已有角色，或联系服主');
+    const ownerId=this.ensureOwner(now),inviteId=randomUUID();
+    // Internal custody row only: no usable invitation is issued or embedded in
+    // a plugin. Public signup is an explicit server policy, not client identity.
+    db.prepare('INSERT INTO agent_invites VALUES(?,?,?,?,?,?,?,?,NULL)').run(inviteId,ownerId,'公开普通 Agent 注册',null,digest(randomUUID()),now,now+86400000,now);
+    db.prepare('INSERT INTO agent_public_registrations VALUES(?,?,?)').run(inviteId,addressHash,now);
+    return {inviteId,ownerId};
   }
   issue(owner, body) {
     if (owner.role !== 'admin') throw fail(403, 'ADMIN_REQUIRED', '体验池邀请码由服主发放');
@@ -63,15 +88,7 @@ export class TrialPool {
         const waiting = db.prepare('SELECT count(*) AS n FROM agent_trial_invites t JOIN agent_invites i ON i.id=t.invite_id WHERE i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>?').get(now).n;
         const active = pool ? db.prepare('SELECT count(*) AS n FROM agent_clients WHERE owner_id=?').get(pool).n : 0;
         if (waiting + active + count > 100) throw fail(409, 'TRIAL_POOL_FULL', '体验池最多保留 100 个待用邀请或未认领角色，请先处理旧邀请或认领角色');
-        let poolId = pool;
-        if (!poolId) {
-          poolId = randomUUID();
-          const name = '__trial_pool_' + randomUUID().slice(0, 8);
-          // This hash can never pass verifyPassword; the service owner has no
-          // password reset identity, browser session, or administrator role.
-          db.prepare('INSERT INTO owners VALUES(?,?,?,?,?,?)').run(poolId, name, name, 'disabled:trial-pool', 'owner', now);
-          db.prepare('INSERT INTO agent_trial_pool VALUES(1,?)').run(poolId);
-        }
+        const poolId = this.ensureOwner(now);
         db.prepare('INSERT INTO agent_trial_batches VALUES(?,?,?,?,?,?,?,?)').run(requestId, owner.id, digest(clientSecret), count, hours, label.trim(), now, now + hours * 3600000);
         for (let i = 0; i < count; i++) {
           const id = randomUUID(), token = this.token(requestId, clientSecret, i);

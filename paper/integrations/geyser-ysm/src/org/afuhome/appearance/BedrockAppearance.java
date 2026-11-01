@@ -38,6 +38,7 @@ public final class BedrockAppearance implements Extension {
     private final AtomicInteger packetBudget=new AtomicInteger();
     private ScheduledExecutorService scheduler;
     private ModelCatalog models;
+    private String ysmVersion="2.4.1";
     private BedrockPackDelivery packs;
     private GeyserIntEntityProperty modelProperty,extraProperty;
     private Path stateFile;
@@ -64,7 +65,8 @@ public final class BedrockAppearance implements Extension {
             if(!"git-master-f66329d".equals(GeyserImpl.class.getField("GIT_VERSION").get(null)) || !"1249".equals(GeyserImpl.class.getField("BUILD_NUMBER").get(null)))throw new IllegalStateException("YSM_BEDROCK_GEYSER_VERSION_MISMATCH");
             Path modelConfig=Path.of(options.get("modelsConfig").getAsString());stateFile=Path.of(options.get("stateFile").getAsString());
             if(!modelConfig.isAbsolute() || !stateFile.isAbsolute())throw new IllegalStateException("YSM_BEDROCK_ABSOLUTE_PATH_REQUIRED");
-            models=new ModelCatalog(modelConfig);
+            ysmVersion=options.has("ysmVersion")?options.get("ysmVersion").getAsString():"2.4.1";
+            models=new ModelCatalog(modelConfig,ysmVersion);
             if(options.has("delivery") && !Set.of("skin","resource_pack").contains(options.get("delivery").getAsString()))throw new IllegalStateException("YSM_BEDROCK_DELIVERY_INVALID");
             if(options.has("delivery") && "resource_pack".equals(options.get("delivery").getAsString())) {
                 if(!GeyserImpl.getInstance().config().gameplay().forceResourcePacks())throw new IllegalStateException("YSM_BEDROCK_PACK_ACCEPTANCE_REQUIRED");
@@ -101,7 +103,7 @@ public final class BedrockAppearance implements Extension {
     private void poll() {
         try {
             long now=System.currentTimeMillis();if(now-scanned>=5000) {scanned=now;models.scan();}
-            Map<UUID,BedrockState.Entry> states=BedrockState.read(stateFile,now);
+            Map<UUID,BedrockState.Entry> states=BedrockState.read(stateFile,now,ysmVersion);
             if(packs!=null) {
                 packs.scan(models,states);
                 ready=Map.of();reason="";

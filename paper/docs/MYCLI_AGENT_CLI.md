@@ -2,7 +2,7 @@
 
 # 千灯纪 CLI：少记命令，按需学习
 
-2026-10-31[结伴探索组合候选](COOPERATIVE_EXPLORATION_20261031.md)仍未部署：原`guild party status`给原生邀请和集合阶段，`skills info team`引到已有`locate tp <名字>`，地点管理先`waypoint list`。不新增顶层命令；委托详情补私有文字，登高改查山地地形。当前正式仍AF.37，不能把源码帮助当成已生效。
+2026-10-31[结伴探索组合](COOPERATIVE_EXPLORATION_20261031.md)已随AF.43正式发布：`guild party status`给原生邀请和集合阶段，`skills info team`引到已有`locate tp <名字>`，地点管理先`waypoint list`。不新增顶层命令；委托详情补私有文字，登高改查山地地形。2026-11-01另发现`cast support`被迁移表误列为旧技能，恢复候选尚未发布；正式可继续用原`village support [事件ID]`。普通地点和队友传送没有下架，不能把错误的cast入口当成技能失效。
 
 2026-10-31智能闪现候选只更新原 `skills info blink` 和 `help cast.blink` 的说明，入口仍是 `/mycli cast blink`/中文名，无新参数；瞄准优先、未瞄准选前方最远安全地面。候选尚未部署，见[验收与生效范围](SMART_BLINK_20261031.md)。
 

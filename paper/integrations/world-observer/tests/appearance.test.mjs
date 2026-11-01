@@ -6,16 +6,34 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {ObservationAppearanceSource} from '../appearance-source.mjs';
 const uuid='6e8b395e-4349-3d44-99f5-b7488825e426',sha=b=>createHash('sha256').update(b).digest('hex');
-async function fixture(t){
+async function fixture(t,{native=false}={}){
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'observer-appearance-'));t.after(async()=>{assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));await fs.rm(root,{recursive:true,force:true});});
  let now=100000;const stateFile=path.join(root,'appearance.json'),bytes=Buffer.from('original public model'),hash=sha(bytes),calls=[];
  const row={schemaVersion:1,source:'freesia_worker',playerUuid:uuid,entityId:12,available:true,webAvailable:true,modelId:'neko_yui',texture:'default',assetSha256:hash,assetBytes:bytes.length,ysmVersion:'2.4.1',protocolVersion:'2.4.0',jarSha256:'e'.repeat(64)};
  const state={source:'freesia_worker',writtenAt:now,epoch:'source-epoch',players:[row]};
  const config={stateFile,ysmJarSha256:row.jarSha256,skinsRestorerRoot:root};
+ if(native){Object.assign(row,{source:'ysm_native_backend',ysmVersion:'2.6.5',protocolVersion:'2.6.0',jarSha256:'b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb',modelId:'public/可米.zip'});state.source=row.source;config.ysmVersion='2.6.5';config.ysmJarSha256=row.jarSha256;}
  const save=()=>fs.writeFile(stateFile,JSON.stringify(state));await save();
- const source=new ObservationAppearanceSource({config,now:()=>now,decodeBundle:(b,h)=>{assert.equal(sha(b),h);return {modelId:'neko_yui',textures:{default:'skin.png'},files:{}}},exportBundle:async r=>{calls.push(r.modelId);return bytes;}});
+ const source=new ObservationAppearanceSource({config,now:()=>now,decodeBundle:(b,h)=>{assert.equal(sha(b),h);return {modelId:row.modelId,textures:{default:'skin.png'},files:{}}},exportBundle:async r=>{calls.push(r.modelId);return bytes;}});
  return {source,row,state,save,calls,player:{uuid,entityId:12},root,now,advance:ms=>now+=ms};
 }
+
+test('native 2.6.5 public resources require an explicit matched source profile and preserve Unicode archive IDs',async t=>{
+ const f=await fixture(t,{native:true});await f.source.forPlayer(f.player);const binding=f.source.binding(f.player);
+ assert.equal(binding.available,true);assert.equal(binding.authority,'ysm_native_backend');assert.equal(binding.modelId,'public/可米.zip');assert.equal(binding.ysmVersion,'2.6.5');assert.equal(f.calls.length,1);
+});
+
+test('mixed native version, source, artifact and unsafe paths fail before exporting any bytes',async t=>{
+ for(const change of [f=>{f.state.source='freesia_worker'},f=>{f.row.source='freesia_worker'},f=>{f.row.ysmVersion='2.4.1'},f=>{f.row.protocolVersion='2.4.0'},f=>{f.row.jarSha256='f'.repeat(64)},f=>{f.row.modelId='../private.zip'},f=>{f.row.modelId='/private.zip'}]){
+  const f=await fixture(t,{native:true});change(f);await f.save();await f.source.forPlayer(f.player);assert.equal(f.source.binding(f.player).available,false);assert.equal(f.calls.length,0);
+ }
+ assert.throws(()=>new ObservationAppearanceSource({config:{ysmVersion:'2.6.5',ysmJarSha256:'f'.repeat(64)}}),/PROFILE_MISMATCH/);
+});
+
+test('a confirmed encrypted native model is reported precisely and never replaced by cached public geometry',async t=>{
+ const f=await fixture(t,{native:true});await f.source.forPlayer(f.player);f.advance(1100);Object.assign(f.row,{modelId:'大肥鱼_1.1.ysm',webAvailable:false,webReason:'YSM_ENCRYPTED_SOURCE_REQUIRED'});await f.save();await f.source.forPlayer(f.player);
+ const binding=f.source.binding(f.player);assert.equal(binding.available,false);assert.equal(binding.nativeAvailable,true);assert.equal(binding.modelId,'大肥鱼_1.1.ysm');assert.equal(binding.reason,'YSM_ENCRYPTED_SOURCE_REQUIRED');assert.equal(binding.bundleSha256,undefined);assert.equal(f.calls.length,1);
+});
 test('fresh confirmed model is exported once and only bound to its actual UUID/body; copied resources remain immutable',async t=>{
  const f=await fixture(t);await Promise.all([f.source.forPlayer(f.player),f.source.forPlayer(f.player)]);
  const b=f.source.binding(f.player);assert.equal(b.available,true);assert.equal(b.reason,null);assert.equal(b.authority,'freesia_worker');assert.equal(f.calls.length,1);
