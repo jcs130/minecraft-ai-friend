@@ -1,7 +1,7 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "web-scene-20261101-r1",
-  "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+  "latestRelease": "model-guidance-and-web-projection-20261101-r1",
+  "verifiedAt": "2026-11-01T13:19:03.757506+00:00",
   "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
@@ -23,7 +23,7 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.45-rpg",
+    "AgentFriend": "0.4.47.46-rpg",
     "QiandengjiRpg": "0.2.16",
     "VortexRPG": "1.2.2-alpha-qd32-cooperation",
     "LightAntiCheat": "1.2.6-qd2",
@@ -39,7 +39,7 @@
     "EssentialsChat": "2.22.0",
     "MultiverseCore": "5.8.1",
     "Freesia": "removed; native YSM backend active",
-    "AgentAppearance": "AgentAppearanceNative 0.4.2",
+    "AgentAppearance": "AgentAppearanceNative 0.4.3",
     "AgentAppearanceBedrock": "0.2.2 enabled",
     "kernel": "Youer 1.21.1 / NeoForge 21.1.252",
     "QiandengjiMaidBridge": "0.1.6",
@@ -57,8 +57,6 @@
     "gameRestartRequired": false
   },
   "liveArtifactDigests": {
-    "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.2.jar": "7c1a7a9d59f361b4b74ffc4ae20a798e93709cae123678efc5f3da69886a566b",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.45-rpg.jar": "f889f73106754d1744d503dccf745911d2f24e1652869ea8f1d7d4a55aaab6c3",
     "E:\\MC\\server\\plugins\\AgentVision-0.1.2.jar": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
     "E:\\MC\\server\\plugins\\AuraSkills-2.4.0.jar": "de54cbd2e33d65e8b1704751ae4121ed2f5b466ba89c63a1aadf3a3e629d6a40",
     "E:\\MC\\server\\plugins\\BetonQuest-3.2.0.jar": "70a43c05a4a6d627fd0bc9908e07a6551a26a36671360416410f1d96bdd363b0",
@@ -126,7 +124,9 @@
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.2.jar": "116ced8e39a114ebeaee3a3030a9e2aec0faa2012c74a06350b6c90d00671317",
     "E:\\MC\\server\\plugins\\Denizen\\scripts\\qd_enderman_despawn.dsc": "ce5eafb8f45a15f40720d556d30f218f3ba419088b01b718d52c1b188cd2971a",
     "E:\\MC\\ops\\goddess-photo-camera.mjs": "7d15c5f1a668b5a8c74a716d3558fdaef5d3e6c27f2544868d744a3af49053c7",
-    "E:\\MC\\ops\\native-photo-renderer.mjs": "2dd58bdb3d58ac28d95d9bcb4f48d53197b738cbf76eeb96bf5a404386f0144c"
+    "E:\\MC\\ops\\native-photo-renderer.mjs": "2dd58bdb3d58ac28d95d9bcb4f48d53197b738cbf76eeb96bf5a404386f0144c",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.46-rpg.jar": "a91218587aa1d759f06346b13d81aa3a08f22b0a510ddfc4a53294bcb0cf7bf2",
+    "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -145,7 +145,7 @@
     "new native camera startup task (automatic approval rejected; not created)",
     "intermittent public observer PartialReadError: exact failing packet and stack not yet captured"
   ],
-  "scopeNotice": "Game and website versions are deployed. Formal native client loads40models, including the original encrypted BigFish; Intel native photo pipeline is ready after an authenticated bridge-only reload. Original identities, credentials, inventories, skills and seven Goddess jobs were preserved. Physical Bedrock/voice and long-term/shader results remain separate acceptance items; six-segment map and auction candidates are not silently deployed.",
+  "scopeNotice": "AF.46 protection directions and Native0.4.3 tracking invalidation are installed after approved normal maintenance. Website0.8.36 and matching observer render the owner-selected unencrypted BigFish only on Web; original encrypted native choice and YSM2.6.5 remain. Formal native retracking recovery, formal photo-scene delivery, some rendering features and full parity remain open.",
   "verification": {
     "javaAuthoritativeModelChecks": 283,
     "nativePixelAcceptance": "native resources confirmed in formal client; actual native model geometry verified in isolated captures; formal preview has occlusion and is not claimed as a clear BigFish portrait",
@@ -525,15 +525,16 @@
   },
   "matchedPublicViewer": {
     "state": "deployed-and-verified",
-    "sourceSha256": "0aa04b3142f922fb3c199da67b4e68a6c30f25c509a2c6caafc684f8361ff0f7",
-    "sharedPullRequest": "https://github.com/jcs130/mc-visual-console/pull/14",
+    "sourceSha256": "21076b56d0cbc11dc4137c6329389fb550bd1f23b07ed7c2b11ba83586dcbc1a",
+    "sharedPullRequest": "https://github.com/jcs130/mc-visual-console/pull/15",
     "serverPullRequest": "https://github.com/jcs130/minecraft-ai-friend/pull/24",
     "workerFresh": true,
     "completeNativeParity": false,
-    "browserBundleSha256": "a0f9d63d0255f9e521608bcd0c562ca58ffb0289058e99d5a8fe038a37673fe5",
-    "consoleBundleSha256": "b25cbbf1c371d6de57f6b7ff3e192f7f24a0a46b3e3ff9461671bc3685baef4a",
-    "sharedMergedCommit": "7301abd3e1b96a4af9435eed31f26fe20ca414b1",
-    "verifiedAt": "2026-11-01T20:32:35.578519+08:00"
+    "browserBundleSha256": "880fb02050ea06496f42b1c868d047341627d5f7971cea85a53d7f85f2f7c0d5",
+    "consoleBundleSha256": "ffbef3d8f4a36cc95bac8e58c85eb49938b8ea1f678009f61c53a8c350cc2451",
+    "verifiedAt": "2026-11-01T13:19:03.757506+00:00",
+    "sharedSourceCommit": "9976500d5064afca6a38ee747342024ece58f1ab",
+    "previousSharedMergedCommit": "7301abd3e1b96a4af9435eed31f26fe20ca414b1"
   },
   "nativeHighQualityCamera": {
     "state": "deployed-native-ready",
@@ -652,12 +653,23 @@
   "modelChain": {
     "backend": "native265",
     "nativeJarSha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
-    "nativeAdapter": "0.4.2",
+    "nativeAdapter": "0.4.3",
     "deepFish": "original encrypted 大肥鱼_1.1.ysm / white",
     "live": "qd_observer_drone / default; original spectator identity preserved",
     "bedrock": "0.2.2 extension enabled; physical display pending",
     "publicWebOriginalEncryptedFish": "unsupported; no extraction/decryption claimed",
-    "nativeAssets": "formal native client loads40models; original BigFish/white, CorMy and Yui resources confirmed"
+    "nativeAssets": "formal native client loads40models; original BigFish/white, CorMy and Yui resources confirmed",
+    "deepFishWeb": {
+      "state": "deployed-and-browser-verified",
+      "modelId": "qd_dafeiyu",
+      "texture": "pearl",
+      "selectionSource": "explicit owner-approved web projection",
+      "nativeModelId": "大肥鱼_1.1.ysm",
+      "nativeTexture": "white",
+      "nativeSelectionPreserved": true,
+      "bundleSha256": "125d4b3a35c1b3e88339bf7bf9097893247949a49f5c0eece36df166aea63a19",
+      "exactNativeAnimationParityVerified": false
+    }
   },
   "publicAgentSignup": {
     "state": "deployed-and-verified",
@@ -772,15 +784,24 @@
     "document": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md"
   },
   "pendingProtectionAndNativeTracking": {
-    "state": "candidate-not-installed",
+    "state": "deployed-with-native-client-acceptance-pending",
     "AgentFriend": "0.4.47.46-rpg",
     "AgentAppearanceNative": "0.4.3",
     "configuredDenialDirectionsChecks": 8,
     "unrelatedAgentFriendEntriesPreserved": 609,
     "nativeTrackingHook": "actual Youer PlayerTrackEntityEvent before addPairing; bounded original metadata resend, no periodic retransmission",
     "nativeActualClientAcceptance": false,
-    "requiresNormalGameRestart": true,
-    "currentNativeAdapter": "0.4.2",
-    "currentAgentFriend": "0.4.47.45-rpg"
+    "requiresNormalGameRestart": false,
+    "currentNativeAdapter": "0.4.3",
+    "currentAgentFriend": "0.4.47.46-rpg",
+    "gameRestarted": true,
+    "normalNoticesSeconds": [
+      180,
+      60,
+      10
+    ],
+    "coldGameAndAuthCopiesVerifiedOnBothDisks": true,
+    "originalGoddessJobsRestored": true,
+    "postflightChecks": 3
   }
 }
