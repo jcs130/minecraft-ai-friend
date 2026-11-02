@@ -7,12 +7,24 @@
   "document": "paper/docs/DUPLICATE_EMAIL_REGISTRATION_20261102.md",
   "runtimeVariant": "email-auth and music playback only on actual-0.8.37; dependencies and NEKO OAuth unchanged",
   "imageId": "sha256:7503d33dd1c1f1a94c716245d577e8674b8f9537db5bd22e00d160001e45f4a9",
-  "runtimeFiles": {
-    "src/email-auth.mjs": "9717094d62c0a63701122c162fe3a81625fb0002a367c96d9bd85d03cdf36360",
-    "src/music-object-storage.mjs": "2fe986ee35bc62786a9e4eb003b9e5a64d523c7dbe8fc2d3ba7c3b754f9b798e",
-    "package.json": "7cf0647e3e6bfc340c8ce81ae41f0ca071f280243d32d75dbe924bd44c053caa",
-    "package-lock.json": "cb156eed9e637de3e3d221177f24786526f731b53c7b28bf3c0f7351b4253ee6"
-  },
+  "runtimeFiles": [
+    {
+      "sha256": "9717094d62c0a63701122c162fe3a81625fb0002a367c96d9bd85d03cdf36360",
+      "path": "src/email-auth.mjs"
+    },
+    {
+      "sha256": "2fe986ee35bc62786a9e4eb003b9e5a64d523c7dbe8fc2d3ba7c3b754f9b798e",
+      "path": "src/music-object-storage.mjs"
+    },
+    {
+      "sha256": "7cf0647e3e6bfc340c8ce81ae41f0ca071f280243d32d75dbe924bd44c053caa",
+      "path": "package.json"
+    },
+    {
+      "sha256": "cb156eed9e637de3e3d221177f24786526f731b53c7b28bf3c0f7351b4253ee6",
+      "path": "package-lock.json"
+    }
+  ],
   "tests": {
     "localPassed": 410,
     "localExistingSkips": 3,
