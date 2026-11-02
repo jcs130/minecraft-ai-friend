@@ -1218,6 +1218,16 @@
     "realUploadPendingOwnerAuthorization": true,
     "manifest": "paper/manifests/music-works-deployed-20261102.json"
   },
+  "musicOperatorGrant": {
+    "state": "installed-idle-awaiting-recipient",
+    "verifiedAt": "2026-11-02T10:28:57.171348+00:00",
+    "sourceCommit": "32d570b0",
+    "scriptSha256": "947cf7fa22063e92889fa2d368e50a970e5e472c0df0fa281c6152476903016b",
+    "manifest": "paper/manifests/music-grant-ops-deployed-20261102.json",
+    "actualCredentialIssued": false,
+    "oldCredentialsChanged": false,
+    "restartRequired": false
+  },
   "jointClientAcceptance20261102": {
     "photo": {
       "verified": true,
@@ -1237,7 +1247,7 @@
     "music": {
       "websiteEnabled": true,
       "realEightSongsPublished": false,
-      "pending": "Current owner authorization on the original role/client; no qda registration exists"
+      "pending": "Verified recipient public key, encrypted role-bound credential handoff and original-client upload; delegated operator tool installed idle, no qda registration exists"
     }
   }
 }

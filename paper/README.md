@@ -1,6 +1,10 @@
 # 千灯纪：跨端服务器（Paper API / Youer运行）
 
-## 当前状态（2026-10-30）
+## 当前状态（2026-11-02）
+
+正式Youer1.21.1 build920／NeoForge21.1.252，共55插件；AF0.4.47.48-rpg、RPG桥0.2.17、Vortexqd32-cooperation与紧凑信息栏已上线。原生YSM2.6.5及模型切服确认0.1.2已部署，核显无光影相机30帧、私有照片及场景入OSS已实测。官网0.8.37／Skill1.3.7已发布，歌曲接口已启用，服务器歌曲代办工具安装待命；8首真实歌曲仍待客户端安全接入上传，真人语音及远端完整人物画面各自待验。实际组件、部署范围和未验收项以[当前清单](manifests/current-deployment.json)为准；歌曲见[作品接口](docs/MUSIC_WORKS_20261102.md)与[维护工具](docs/MUSIC_GRANT_OPERATIONS_20261102.md)。本次只安装维护工具，官网和游戏均未重启。
+
+## 历史状态（2026-10-30）
 
 正式服为 **Youer 1.21.1 build920 / NeoForge21.1.252 / Java21**，保留Paper API插件；当前AgentFriend **0.4.47.36-compat**、AgentVision **0.1.4**、VortexRPG **1.2.2-alpha-qd30**、QiandengjiRpg **0.2.12**、女仆桥 **0.1.5**，共54插件。标准背包菜单、实体感知、罗盘及原生协议路由修复已上线；[本次验收](docs/NATIVE_COMPATIBILITY_20261030.md) · [当前组件摘要](manifests/current-deployment.json)。小鱼原模组客户端及报告的死亡现场仍待复测。
 
