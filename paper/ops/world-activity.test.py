@@ -13,6 +13,16 @@ class ActivityTests(unittest.TestCase):
         self.defs={'harvest_home':{'title':'交付','category':'logistics','tags':['logistics']}}
     def tearDown(self):self.temp.cleanup()
     def line(self,body):return '[08:00:00] [Server thread/INFO]: [AgentFriend] '+body
+    def test_paper_log_layout_preserves_receipts_without_accepting_chat_or_other_loggers(self):
+        body=f'Guild claimed: player={P}, contract=harvest_home, fame=7'
+        original,_=a.log_events([self.line(body)],'2026-10-26',self.defs,{})
+        current,_=a.log_events(['[08:00:00 INFO]: [AgentFriend] '+body],'2026-10-26',self.defs,{})
+        self.assertEqual(current,original)
+        for line in ['[08:00:00 INFO]: <attacker> [AgentFriend] '+body,
+                     '[08:00:00 INFO]: [OtherPlugin] [AgentFriend] '+body,
+                     '[08:00:00 WARN]: [AgentFriend] '+body]:
+            rows,donations=a.log_events([line],'2026-10-26',self.defs,{})
+            self.assertFalse(rows);self.assertFalse(donations)
     def test_only_real_success_not_chat_or_commands(self):
         lines=[self.line(f'Guild claimed: player={P}, contract=harvest_home, fame=6'),
                self.line(f'Guild reward refused: player={P}, contract=harvest_home'),

@@ -1,5 +1,7 @@
 # 让 Agent 通过核心实际使用 Harness²
 
+真实模型宿主接入、一次性运行和当前未实测项见 [真实模型合成实验](real-model-practice.md)。旧双服务端命令仍是明确标记的脚本化回归。
+
 `rc.148` 将已有 `Harness2PracticeService` 接入 `MinecraftAgentClient`。SDK 的 `tools()` 与 MCP 的工具目录包含 `mc_practice`；宿主提供模型、固定 worker 和隔离练习端后，Agent 直接使用 `help/start/status/result/compare/cancel`。结果进入同一核心事件流、请求事实和 `experiments()` 监测，不再依赖示例脚本私下启动 Runner。
 
 没有配置时，`help/status` 明确返回 `available:false`，可在连接前读取；不会自动下载优化器、启动模型、连接第二个身体或拿正式服做重置。安装包的可用性和现役宿主是否已经配置分别验收。

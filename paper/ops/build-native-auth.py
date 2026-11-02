@@ -2,14 +2,33 @@
 from pathlib import Path
 import argparse,hashlib,json,secrets,shutil
 
+# A reviewed server-only command wrapper is not an authentication content mod.
+OPTIONAL_SERVER_ONLY_MODS={
+    'proxy-compatible-forge-1.3.1.jar': 'dba5b70fedcb0f5fdc014801ab43e6d048f24b531de8aea5b70ea223760b66ae9fba3033c2ccd9d78793b9ea2f9d3b47ae1f4caa95aa129d989f97e63636b4ab'
+}
+
+def authentication_content_mods(server):
+    all_mods=sorted((server/'mods').glob('*.jar'))
+    if any(p.is_symlink() for p in all_mods):
+        raise ValueError('Authentication inputs must be regular immutable files')
+    content=[]
+    for mod in all_mods:
+        expected=OPTIONAL_SERVER_ONLY_MODS.get(mod.name)
+        if expected is None:
+            content.append(mod)
+        elif hashlib.sha512(mod.read_bytes()).hexdigest()!=expected:
+            raise ValueError('Unreviewed optional server-only PCF artifact')
+    if len(content)!=3 or not any(p.name.startswith('touhoulittlemaid-') for p in content) or not any(p.name.startswith('ysm-2.6.5-neoforge') for p in content) or not any(p.name.startswith('qiandengji-native-platform-') for p in content):
+        raise ValueError('Review the current content-mod set before preparing its authentication peer')
+    return content
+
 def prepare(server,output,port,rcon_port):
     server=server.resolve();output=output.resolve()
     if output.exists()or output==server or server.is_relative_to(output)or output.is_relative_to(server):raise ValueError('Use a fresh separate authentication directory')
     if port==rcon_port or any(not 1024<=value<=65535 for value in [port,rcon_port]):raise ValueError('Use two distinct local ports')
     required=['server.jar','eula.txt','libraries','mods']
     if any(not(server/name).exists()for name in required):raise ValueError('Current Youer server inputs missing')
-    mods=sorted((server/'mods').glob('*.jar'))
-    if len(mods)!=3 or not any(p.name.startswith('touhoulittlemaid-')for p in mods)or not any(p.name.startswith('ysm-2.6.5-neoforge')for p in mods)or not any(p.name.startswith('qiandengji-native-platform-')for p in mods):raise ValueError('Review the current content-mod set before preparing its authentication peer')
+    mods=authentication_content_mods(server)
     ysm=next(p for p in mods if p.name.startswith('ysm-2.6.5-neoforge'))
     if hashlib.sha256(ysm.read_bytes()).hexdigest()!='b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb':raise ValueError('Use the pinned original NeoForge YSM 2.6.5 artifact')
     libraries=list((server/'libraries').rglob('*'))

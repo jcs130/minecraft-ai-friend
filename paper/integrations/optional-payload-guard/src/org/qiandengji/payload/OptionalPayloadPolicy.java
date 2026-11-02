@@ -22,6 +22,31 @@ final class OptionalPayloadPolicy {
         int size=integer(input);if(size<0||size>128||size>input.remaining())throw new IllegalArgumentException("Registration string budget");
         byte[] bytes=new byte[size];input.get(bytes);return utf8(bytes);
     }
+    private static boolean flag(ByteBuffer input){
+        int value=Byte.toUnsignedInt(input.get());if(value>1)throw new IllegalArgumentException("Registration boolean");return value==1;
+    }
+    private static Set<String> nativeRegistration(ByteBuffer input) throws CharacterCodingException {
+        // NeoForge 21.1.252 ModdedNetworkQueryPayload, sent by the real client
+        // in CONFIG: protocol ordinal -> set(id, version, optional flow, optional).
+        // ConnectionProtocol.PLAY=1; PacketFlow.CLIENTBOUND=1. Bidirectional
+        // registrations have no flow. Configuration/serverbound-only entries
+        // are not permission to deliver play packets to this client.
+        int protocols=integer(input);if(protocols<0||protocols>5)throw new IllegalArgumentException("Registration protocol budget");
+        Set<Integer> seen=new HashSet<>();Set<String> declared=new HashSet<>();int total=0;
+        for(int p=0;p<protocols;p++){
+            int protocol=integer(input);if(protocol<0||protocol>4||!seen.add(protocol))throw new IllegalArgumentException("Registration protocol");
+            int count=integer(input);if(count<0||count>512-total)throw new IllegalArgumentException("Registration channel budget");total+=count;
+            for(int i=0;i<count;i++){
+                String id=string(input);if(!valid(id))throw new IllegalArgumentException("Registration channel");
+                string(input); // Version is negotiated by the original backend, not an identity proof.
+                int flow=-1;if(flag(input)){flow=integer(input);if(flow<0||flow>1)throw new IllegalArgumentException("Registration direction");}
+                flag(input); // Original optional flag is not an authorization grant.
+                if(protocol==1&&flow!=0)declared.add(id);
+            }
+        }
+        if(input.hasRemaining())throw new IllegalArgumentException("Trailing registration bytes");
+        return declared;
+    }
     synchronized boolean registration(Object session,String channel,byte[] bytes){
         if(session==null||bytes==null||bytes.length>32767)return false;
         try{
@@ -39,6 +64,8 @@ final class OptionalPayloadPolicy {
                 int count=integer(input);if(count<0||count>512)return false;
                 for(int i=0;i<count;i++){String item=string(input);if(!valid(item))return false;declared.add(item);}
                 if(input.hasRemaining())return false;
+            }else if(channel.equals("neoforge:register")){
+                declared.addAll(nativeRegistration(ByteBuffer.wrap(bytes)));
             }else return false;
             if(!sessions.containsKey(session)&&sessions.size()>=512)return false;
             Set<String> next=new HashSet<>(sessions.getOrDefault(session,Set.of()));

@@ -18,6 +18,10 @@ jobs:
           python-version: '3.12'
       - run: python tools/check_public_source.py
       - run: python -m unittest discover -s paper/ops/tests -p test_geyser_port_mappings.py -v
+      - run: python -m unittest discover -s paper/ops -p test_native_auth_inputs.py -v
+      - run: python -m pip install PyYAML==6.0.3
+      - run: python paper/ops/world-activity.test.py
+      - run: python paper/ops/goddess_chat_review.test.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
@@ -63,6 +67,12 @@ jobs:
         run: python paper/integrations/world-observer/build.py --server "$RUNNER_TEMP/paper-inputs" --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/observer-build"
       - name: Check bounded CLI help and query contracts
         run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
+      - name: Check native and vanilla decoder capability boundaries without connecting
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/payload-policy-tests"
+          javac --release 21 -encoding UTF-8 -d "$RUNNER_TEMP/payload-policy-tests" paper/integrations/optional-payload-guard/src/org/qiandengji/payload/OptionalPayloadPolicy.java paper/integrations/optional-payload-guard/tests/org/qiandengji/payload/OptionalPayloadPolicyTest.java
+          java -ea -cp "$RUNNER_TEMP/payload-policy-tests" org.qiandengji.payload.OptionalPayloadPolicyTest
   backup-path-compatibility:
     runs-on: windows-latest
     steps:

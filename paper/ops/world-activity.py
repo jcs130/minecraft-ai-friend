@@ -34,7 +34,7 @@ GOALS = {
 }
 ID = re.compile(r"[a-z0-9][a-z0-9_.-]{0,95}\Z")
 NAME = re.compile(r"[.A-Za-z0-9_ -]{1,32}\Z")
-LOG_HEAD = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\] \[Server thread/INFO\]: \[AgentFriend\] (.*)$")
+LOG_HEAD = re.compile(r"^\[(\d{2}:\d{2}:\d{2})(?:\] \[Server thread/INFO| INFO)\]: \[AgentFriend\] (.*)$")
 CLAIM = re.compile(r"Guild (claimed|accepted): player=([a-f0-9-]{36}), contract=([a-z0-9_.-]+)(?:, fame=(\d+))?$")
 LIFE = re.compile(r"Life guild claim: player=([a-f0-9-]{36}), id=([a-z0-9_.-]+)$")
 TRANSFER = re.compile(r"Guild donation ([.A-Za-z0-9_ -]{1,32}) stashSlot=(\d+) chest=([0-3]) item=([A-Z0-9_]+) count=(\d+)$")

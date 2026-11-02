@@ -72,6 +72,20 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(len(batch['messages']), 1)
         self.assertEqual(batch['messages'][0]['player'], 'Yui')
 
+    def test_paper_log_layout_keeps_public_only_and_credential_filters(self):
+        with self.log.open('a', encoding='utf8') as f:
+            for line in ['[20:00:00 INFO]: <Yui> 回血能补饥饿吗',
+                         '[20:00:00 INFO]: [Coobot -> Yui] private words',
+                         '[20:00:00 INFO]: Yui issued server command: /login hidden',
+                         '[20:00:00 INFO]: <Coobot> password=hidden',
+                         '[20:00:00 INFO]: <Goddess> own message',
+                         '[20:00:00 WARN]: <Coobot> wrong level']:
+                f.write(line+'\n')
+        batch=self.review.poll()
+        self.assertEqual(len(batch['messages']),1)
+        self.assertEqual(batch['messages'][0]['player'],'Yui')
+        self.assertEqual(batch['messages'][0]['text'],'回血能补饥饿吗')
+
     def test_accidental_credentials_never_enter_database(self):
         for text in ['/login hidden', '密码是hidden', 'api_key=hidden', '#invite=hidden', 'MC_AUTH_STATE {}']:
             self.append(text)

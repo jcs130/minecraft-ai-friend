@@ -1,3 +1,15 @@
+## 2026-11-02 原生YSM通道识别候选，未部署
+
+最终仅OptionalPayloadGuard0.1.1补原版NeoForge的neoforge:register解码声明；保持登录规则、模型原包及全部身份。70边界检查、真实3175字节声明、原版客户端OP35秒/女仆查询/本人无人机模型读回与28份约18MB缓存通过。仅问候调整无效，且问候调整不是最终组合的必要条件；实验Guard0.1.11不在发布范围。早期隔离路由及就绪误判失败照留，各组正常停启并恢复隔离配置。正式仍0.1.0；新激活须单独确认代理短暂重连范围，游戏服不用重启，不得重放已消费整批维护。参见[证据与边界](YSM_NATIVE_CAPABILITIES_20261102.md)及独立候选清单；实际运行继续以current-deployment.json为准。
+
+## 2026-11-02 08:09 整批修复与原生OP兼容已部署
+
+现役仍为AF0.4.47.48-rpg、RPG桥0.2.17、LoginGuard0.1.10、Youer920／NeoForge21.1.252、原生YSM2.6.5。新增官方PCF1.3.1，仅启用CrossStitch，forwarding关闭、Velocity NONE保持；原三内容模组及OP未改。55插件全启用、19项正式回读、664份角色与物品／成长／认证文件安装阶段一致、E/F游戏及认证冷副本和原女神7任务均已核验。核显相机重新ready/30FPS，原观战后台新鲜。远程原live与真实安卓入服仍待分别验收。
+
+本批all-fixes-release-20261102-r1入口已消费，不能重放。首次postflight因PCF自动重排TOML误报，失败证据保留；以私有completion.json和postflight-r2.json及公开proxy-command-compat-deployed-20261102.json为收尾依据。完整TOML对象和类型逐项相等；运行后配置SHA256为d698aadb9a505f72d72a128c41de773dbb5f80bd3b6b2dbf23a978d07fa8fa59，回退须核对该已确认摘要。不可恢复旧世界或密码库覆盖新进度。
+
+Paper日志格式的活动／公屏读取兼容另经49项检查后原子更新，无第二次游戏重启，也未主动发送女神私聊。原手册仅追加当前指引，不声称Agent已阅读。PR27/30/35均已在检查通过后合入；旧可视化PR11由后续实现替代。rc.154仍为未发布的实验源码，固定Skill1.3.7字节与原宿主模型循环保持；六段地图、无收益的Ships原型和未验证光影修复不在本批。详见paper/docs/PROXY_COMMAND_COMPAT_20261102.md及current-deployment.json。
+
 ## 2026-11-02 04:38 完整兼容与公会卡顿修复已上线
 
 服主批准后按180/60/10预告、正常停启和E/F完整冷刷新发布AF.48/桥.17/LoginGuard.10/Geyser b1280/Via5.12.2/基岩外观.3；664角色相关文件安装一致，原女神七任务恢复。正式原生相机和未修改Mineflayer均真实认证并进入世界，原UUID/凭据保持，相机恢复30帧。固定公会制图师同步寻图卡死已修正；此前CLI纠正也已加载。基岩既有公网19140遗漏的新TCP入口另行补齐，并纳入原续期，云端/v1/join已回读200/2225；Android真机仍待复测。远程live仍有后端解码断线，不能声明全部观战验收完成。六段地图、无稳定收益的Ships原型不包含。旧维护入口已消费不可重放；不要覆盖玩家新进度。详见paper/docs/FULL_CLIENT_COMPAT_RELEASE_20261102.md及current-deployment.json。

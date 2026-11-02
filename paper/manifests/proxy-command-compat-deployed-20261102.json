@@ -1,0 +1,110 @@
+{
+  "state": "deployed-with-open-remote-client-acceptance",
+  "release": "all-fixes-release-20261102-r1",
+  "verifiedAt": "2026-11-02T08:09:32.354233+08:00",
+  "sourceMainBeforeCloseout": "3e7d9f8f64dca47752e190f57c5fc8d08d8f68f6",
+  "artifact": {
+    "name": "Proxy Compatible Forge",
+    "version": "1.3.1",
+    "versionId": "qiZ49HIW",
+    "bytes": 706613,
+    "url": "https://cdn.modrinth.com/data/vDyrHl8l/versions/qiZ49HIW/proxy-compatible-forge-1.3.1.jar",
+    "sha256": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271"
+  },
+  "configuration": {
+    "forwardingEnabled": false,
+    "crossStitchEnabled": true,
+    "forceWrapVanillaArguments": false,
+    "forcedArguments": [],
+    "velocityForwarding": "NONE",
+    "youerAutoDeleteMods": false,
+    "clientNeedsPcf": false
+  },
+  "appliedFiles": [
+    {
+      "target": "E:\\MC\\server\\mods\\proxy-compatible-forge-1.3.1.jar",
+      "candidateSha256": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271",
+      "runtimeSha256": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271"
+    },
+    {
+      "target": "E:\\MC\\server\\config\\proxy-compatible-forge.toml",
+      "candidateSha256": "bdb4594a2657ed236af32379eba9cb1c699c74dca41dec5bb2954dc069d79bf8",
+      "runtimeSha256": "d698aadb9a505f72d72a128c41de773dbb5f80bd3b6b2dbf23a978d07fa8fa59"
+    },
+    {
+      "target": "E:\\MC\\ops\\build-native-auth.py",
+      "candidateSha256": "42272c191df7116044e826df2efe2e7febabd8e215d0a8f50843de7920dd6aab",
+      "runtimeSha256": "42272c191df7116044e826df2efe2e7febabd8e215d0a8f50843de7920dd6aab"
+    }
+  ],
+  "backups": [
+    {
+      "root": "E:/MC/backups",
+      "id": "20261101-040028",
+      "createdAt": "2026-11-02T07:52:03.5930802+08:00",
+      "fullColdRuntime": true,
+      "staticOpsReused": true
+    },
+    {
+      "root": "F:/MC-backups",
+      "id": "20261101-040028",
+      "createdAt": "2026-11-02T07:54:40.4283150+08:00",
+      "fullColdRuntime": true,
+      "staticOpsReused": true
+    }
+  ],
+  "gameRestarted": true,
+  "originalProxyAuthLifecycleRestartedForColdBackup": true,
+  "dataFilesUnchangedDuringInstallation": 664,
+  "originalNativeJobsPreserved": 7,
+  "formalReadbackChecks": 19,
+  "fullPluginStackBooted": true,
+  "qaNativeOperatorSeconds": 35.0472969,
+  "qaNativeNonOperatorSeconds": 35.0382243,
+  "qaOriginalCustomArgumentRetained": true,
+  "qaReadOnlyMaidQueryVerified": true,
+  "qaOrdinaryCoreProtocols": [
+    "1.20.6",
+    "1.21.1",
+    "1.21.4"
+  ],
+  "productionNativeOperatorClientVerified": false,
+  "physicalBedrockClientVerified": false,
+  "mergedPullRequests": [
+    27,
+    30,
+    35
+  ],
+  "supersededVisualPullRequest": 11,
+  "experimentalCoreSource": "0.5.7-rc.154, unpublished; no live model loop enabled",
+  "publicSkill": "1.3.7 bytes unchanged",
+  "configNormalization": {
+    "completeTypedTomlObjectEqual": true,
+    "originalFailurePreserved": true,
+    "runtimeSha256": "d698aadb9a505f72d72a128c41de773dbb5f80bd3b6b2dbf23a978d07fa8fa59"
+  },
+  "logReaders": {
+    "passed": true,
+    "atomicReplacement": true,
+    "gameRestartedAgain": false,
+    "files": [
+      {
+        "path": "E:\\MC\\ops\\world-activity.py",
+        "beforeSha256": "7886758ebc416ebe53898c1c1b6db548c5d66642776a664227bc2bc38d37c4a3",
+        "afterSha256": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b"
+      },
+      {
+        "path": "E:\\MC\\ops\\goddess_chat_review.py",
+        "beforeSha256": "7b35b6df74710c3d80593f0dddd9c287b9b5bc4d309f19c1f6791fa4bf283b97",
+        "afterSha256": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575"
+      }
+    ],
+    "activityChecks": 21,
+    "chatReviewChecks": 28
+  },
+  "limitations": [
+    "Remote original live client still requires a real reconnect; isolated OP evidence is separate.",
+    "Physical Android 26.60 acceptance after the earlier 19140 correction remains open.",
+    "Optional diagnostics and real-model experiments are source utilities, not active production loops."
+  ]
+}

@@ -2,6 +2,7 @@
 import {mkdirSync,existsSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {summarizePracticeTrace} from './practice-feedback.ts';
 import type {ToolOutcome,WorldRequestFacts} from '../contracts/host.ts';
 import {procedureHash,procedureId,type ProcedureReference,type ProcedureReceipt} from '../../core/support/procedure.ts';
 import {assessPracticeTrial,validatePracticeCandidate,validatePracticeCase,PracticeUnknownEffect,
@@ -127,6 +128,7 @@ export function createClientMethodPractice(options:ClientPracticeOptions) {
         trace.push(expanded.trace);
       }
       trial.sdkCalls=receipt.trace.length;
+      trial.feedback=summarizePracticeTrace(trace);
       trial.after=await observe(request.fixture,`${request.trialId}:after`,phaseSignal);
       trial.endedAt=trial.after.at;
       const assessment=assessPracticeTrial(trial,request.fixture,binding);
@@ -136,8 +138,7 @@ export function createClientMethodPractice(options:ClientPracticeOptions) {
         counterexamples:['Fixed dedicated-server cases do not prove general survival.']}},`${request.trialId}:review`,phaseSignal)).text);
       trial.reviewId=review.id;
       write(file,{schema:'agent-mc.client-practice/v1',evidenceKind:'connected-minecraft-client',requestHash,trial,assessment,receipt,trace,
-        actionSteps:trace.filter(r=>r.method==='do').reduce((n,r)=>n+(r.args?.steps?.length??0),0),
-        failedActions:trace.filter(r=>r.method==='do'&&r.result?.done!==true).length});
+        actionSteps:trial.feedback.actionSteps,failedActions:trial.feedback.failedActions});
       write(active,{status:'settled',trialId:request.trialId,requestHash});return structuredClone(trial);
     }catch(error){
       // Cancel the dedicated client's current method, then independently settle. Preserve pending on any ambiguity.
