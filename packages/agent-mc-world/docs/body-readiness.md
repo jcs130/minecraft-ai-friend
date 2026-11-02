@@ -37,3 +37,5 @@ Regression coverage includes the real pinned Java 1.21.1 health/physics plugins:
 positive health with no new position produces no movement; a subsequent real
 position restores simulation. Separate combat checks omit all physics callbacks
 and verify wall-time termination with no successful-escape claim.
+
+Current request facts and deferred snapshots also consult this observer. While the body is unready they report explicit unknown physical readings with the native phase and boundary, retain goal intent and attributed terminal history, and omit action candidates. Proximity/gesture sampling pauses rather than interpreting the old death position as current. A real landing and physics tick restores ordinary readings; no reconnect or respawn packet is fabricated.

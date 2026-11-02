@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.154",
+  "version": "0.5.7-rc.155-preview.1",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -32,8 +32,8 @@
   },
   "exports": {
     "./experiments/connected-crafting": {
-      "types":"./examples/connected-crafting.d.mts",
-      "default":"./examples/connected-crafting.mjs"
+      "types": "./examples/connected-crafting.d.mts",
+      "default": "./examples/connected-crafting.mjs"
     },
     "./body-readiness": {
       "types": "./dist/types/core/body-readiness.d.ts",
