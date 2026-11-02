@@ -71,8 +71,9 @@ jobs:
         shell: bash
         run: |
           mkdir "$RUNNER_TEMP/payload-policy-tests"
-          javac --release 21 -encoding UTF-8 -d "$RUNNER_TEMP/payload-policy-tests" paper/integrations/optional-payload-guard/src/org/qiandengji/payload/OptionalPayloadPolicy.java paper/integrations/optional-payload-guard/tests/org/qiandengji/payload/OptionalPayloadPolicyTest.java
+          javac --release 21 -encoding UTF-8 -d "$RUNNER_TEMP/payload-policy-tests" paper/integrations/optional-payload-guard/src/org/qiandengji/payload/OptionalPayloadPolicy.java paper/integrations/optional-payload-guard/src/org/qiandengji/payload/YsmAcknowledgementHandoff.java paper/integrations/optional-payload-guard/tests/org/qiandengji/payload/OptionalPayloadPolicyTest.java paper/integrations/optional-payload-guard/tests/org/qiandengji/payload/YsmAcknowledgementHandoffTest.java
           java -ea -cp "$RUNNER_TEMP/payload-policy-tests" org.qiandengji.payload.OptionalPayloadPolicyTest
+          java -ea -cp "$RUNNER_TEMP/payload-policy-tests" org.qiandengji.payload.YsmAcknowledgementHandoffTest
   backup-path-compatibility:
     runs-on: windows-latest
     steps:

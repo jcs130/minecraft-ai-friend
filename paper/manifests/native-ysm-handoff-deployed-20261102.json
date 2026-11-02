@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "component": "OptionalPayloadGuard",
+  "version": "0.1.2",
+  "status": "deployed-native-transport-and-owned-camera-model-verified",
+  "verifiedAt": "2026-11-02T04:37:54.550790+00:00",
+  "sha256": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
+  "sourceCommit": "2f3d829f135a0b10104e727977dcfe4614fe66da",
+  "gameRestarted": false,
+  "originalLoginGuard": "0.1.10",
+  "originalYsm": "2.6.5",
+  "originalYsmProtocol": "2.6.0",
+  "normalExistingLifecycle": true,
+  "securitySettingsOrScheduledTasksChanged": false,
+  "originalCredentialRowsPreserved": 72,
+  "consistentAccountBackupOnTwoDisks": true,
+  "qa": {
+    "passed": true,
+    "candidateSha256": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
+    "sourceCommit": "2f3d829f135a0b10104e727977dcfe4614fe66da",
+    "fabricBaselineGameReady": false,
+    "fabricCandidateClientAndGameReady": true,
+    "originalNeoForgeOperatorQueryPassed": true,
+    "ordinaryJavaAuthenticationChecks": 6,
+    "ordinaryYsmPacketsFiltered": 9,
+    "allQaNormallyStoppedAndRestored": true,
+    "formalComponentsUnchanged": true
+  },
+  "production": {
+    "criticalChecksPassed": 9,
+    "originalPhotoLensServerReady": true,
+    "originalPhotoLensClientReady": true,
+    "originalLiveServerReady": true,
+    "cameraCatalogueModels": 40,
+    "cameraOwnModel": "qd_observer_drone",
+    "cameraOwnModelActuallyLoaded": true,
+    "cameraFps": 30,
+    "completeRemotePixelsAccepted": false
+  },
+  "consumedMaintenanceMustNotBeReplayed": true,
+  "document": "paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md"
+}
