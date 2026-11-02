@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "client-full-compat-20261102-r1",
-  "verifiedAt": "2026-11-02T04:38:00.5225654+08:00",
-  "releaseDocument": "paper/docs/FULL_CLIENT_COMPAT_RELEASE_20261102.md",
+  "latestRelease": "all-fixes-release-20261102-r1",
+  "verifiedAt": "2026-11-02T08:09:32.354233+08:00",
+  "releaseDocument": "paper/docs/PROXY_COMMAND_COMPAT_20261102.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -51,7 +51,8 @@
     "Geyser": "2.12.1-b1280",
     "ViaVersion": "5.12.2",
     "ViaBackwards": "5.12.2",
-    "NativeAuthenticationBackend": "Youer1.21.1, loopback only, 1536MiB, original lifecycle"
+    "NativeAuthenticationBackend": "Youer1.21.1, loopback only, 1536MiB, original lifecycle",
+    "ProxyCompatibleForge": "1.3.1 (CrossStitch only; forwarding disabled)"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -124,13 +125,21 @@
     "E:\\MC\\private\\ysm\\proxy\\plugins\\ViaBackwards-5.12.1.jar": "29d94d3a26c85c8a327574b2322db4078992ae457f0173325431a12aac384911",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\ViaVersion-5.12.1.jar": "b8033807e7182c35003a45962352dd642c1e91880ca281da3a43cb6f481a95a2",
     "E:\\MC\\server\\plugins\\Denizen\\scripts\\qd_enderman_despawn.dsc": "ce5eafb8f45a15f40720d556d30f218f3ba419088b01b718d52c1b188cd2971a",
-    "E:\\MC\\ops\\goddess-photo-camera.mjs": "7d15c5f1a668b5a8c74a716d3558fdaef5d3e6c27f2544868d744a3af49053c7",
-    "E:\\MC\\ops\\native-photo-renderer.mjs": "2dd58bdb3d58ac28d95d9bcb4f48d53197b738cbf76eeb96bf5a404386f0144c",
+    "E:\\MC\\ops\\goddess-photo-camera.mjs": "9a3fa606e62786cddebd555140707675e47e8bf19347815950695c2775ffcf67",
+    "E:\\MC\\ops\\native-photo-renderer.mjs": "703d91ca9f88ae599aeb939f35f74f5b2924f44336723cfeb77dc829877ba959",
     "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a",
     "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd",
     "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.17.jar": "b852c4fc4c991c51fdf01b002d97a744d3098e4be53b855b7fa066c1aa3a49ea",
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.3.jar": "33715091b86ffabe6348b4d69bbe33014741c4b13b7c2f7dbba224abae590e1f",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "77a88a17a02458d7005187453d63e5436694e9deadb588214e0f01b78665e2cb"
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "77a88a17a02458d7005187453d63e5436694e9deadb588214e0f01b78665e2cb",
+    "E:\\MC\\server\\server.jar": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+    "E:\\MC\\private\\ysm\\proxy\\velocity.jar": "fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef",
+    "E:\\MC\\server\\youer-config\\youer.yml": "8d469aeb0370794b5d701b26002e1d5762a773dd9c422579d950b01d33577cc8",
+    "E:\\MC\\server\\mods\\proxy-compatible-forge-1.3.1.jar": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271",
+    "E:\\MC\\server\\config\\proxy-compatible-forge.toml": "d698aadb9a505f72d72a128c41de773dbb5f80bd3b6b2dbf23a978d07fa8fa59",
+    "E:\\MC\\ops\\build-native-auth.py": "42272c191df7116044e826df2efe2e7febabd8e215d0a8f50843de7920dd6aab",
+    "E:\\MC\\ops\\world-activity.py": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b",
+    "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -924,5 +933,31 @@
     "cause": "Fixed guild cartographer lazy trade generation synchronously searched for an ocean monument on the server thread",
     "AgentFriend": "0.4.47.48-rpg",
     "unprovenShipsPrototypeReleased": false
+  },
+  "previousReleaseBeforeProxyCommands": "client-full-compat-20261102-r1",
+  "proxyCommandCompatibility": {
+    "state": "deployed-with-open-remote-client-acceptance",
+    "artifact": {
+      "name": "Proxy Compatible Forge",
+      "version": "1.3.1",
+      "versionId": "qiZ49HIW",
+      "bytes": 706613,
+      "url": "https://cdn.modrinth.com/data/vDyrHl8l/versions/qiZ49HIW/proxy-compatible-forge-1.3.1.jar",
+      "sha256": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271"
+    },
+    "configuration": {
+      "forwardingEnabled": false,
+      "crossStitchEnabled": true,
+      "forceWrapVanillaArguments": false,
+      "forcedArguments": [],
+      "velocityForwarding": "NONE",
+      "youerAutoDeleteMods": false,
+      "clientNeedsPcf": false
+    },
+    "gameRestarted": true,
+    "formalReadbackChecks": 19,
+    "productionNativeOperatorClientVerified": false,
+    "physicalBedrockClientVerified": false,
+    "document": "paper/manifests/proxy-command-compat-deployed-20261102.json"
   }
 }
