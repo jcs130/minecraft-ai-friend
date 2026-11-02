@@ -1,5 +1,5 @@
 import type { ToolDef, ToolOutcome, ToolSchema } from './contracts.ts';
-import { omitContextSchemaAnnotations } from './schema-reading.ts';
+import { omitContextSchemaAnnotations, withSkillInputSignatures } from './schema-reading.ts';
 
 export const TOOL_HELP_TOOL = {
   name: 'mc_tool_help', tags: ['read'],
@@ -103,6 +103,11 @@ export function withToolHelp(tools: readonly ToolDef[], name = TOOL_HELP_TOOL.na
     return { ...tool,
       description: `${tool.description}\nParameter notes: ${name} {"name":${JSON.stringify(tool.name)},"full":true}.`, parameters };
   });
+}
+
+/** Keep input field relationships after prose compaction, including deferred full schemas. */
+export function preserveToolInputSignatures(source: Record<string, unknown>, projected: Record<string, unknown>): Record<string, unknown> {
+  return withSkillInputSignatures(fullParameterSchemas.get(source) ?? source, projected) as Record<string, unknown>;
 }
 
 /** Map callable recovery identities at a host mount boundary, without editing action arguments. */
