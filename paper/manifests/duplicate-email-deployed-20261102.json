@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "state": "deployed-and-verified",
+  "version": "0.8.38",
+  "verifiedAt": "2026-11-02T11:51:46.975480+00:00",
+  "sourceCommit": "919ee86e8434370eb1b076571b53a52487370a0c",
+  "document": "paper/docs/DUPLICATE_EMAIL_REGISTRATION_20261102.md",
+  "runtimeVariant": "email-auth and music playback only on actual-0.8.37; dependencies and NEKO OAuth unchanged",
+  "imageId": "sha256:7503d33dd1c1f1a94c716245d577e8674b8f9537db5bd22e00d160001e45f4a9",
+  "runtimeFiles": {
+    "src/email-auth.mjs": "9717094d62c0a63701122c162fe3a81625fb0002a367c96d9bd85d03cdf36360",
+    "src/music-object-storage.mjs": "2fe986ee35bc62786a9e4eb003b9e5a64d523c7dbe8fc2d3ba7c3b754f9b798e",
+    "package.json": "7cf0647e3e6bfc340c8ce81ae41f0ca071f280243d32d75dbe924bd44c053caa",
+    "package-lock.json": "cb156eed9e637de3e3d221177f24786526f731b53c7b28bf3c0f7351b4253ee6"
+  },
+  "tests": {
+    "localPassed": 410,
+    "localExistingSkips": 3,
+    "localFailed": 0,
+    "syntaxModules": 129,
+    "cloudPassed": 33,
+    "cloudFailed": 0,
+    "actualDuplicateEmailHttp": 409,
+    "actualCaseVariantHttp": 409,
+    "reason": "EMAIL_ALREADY_USED",
+    "browserAudioDecodeAndSeek": true,
+    "desktopAnd390pxLayout": true
+  },
+  "backup": {
+    "bothDisksAndPrivateOssVerified": true,
+    "websiteBytes": 146506113,
+    "websiteSha256": "70cd145095500bf47add30c12355efbbc4069c24184ef552af04c613641cbc18",
+    "beforeAndAfterSqliteConfigBytes": 86824938,
+    "beforeAndAfterSqliteConfigSha256": "b9135db2e5dd02dd2e01ba89c48ee9b4e890e071d46fb19f81b723350759cf27",
+    "latestSnapshotIncludesAllEightSongs": true
+  },
+  "protectedTables": 15,
+  "protectedRowsPreserved": true,
+  "downloadsAndPhotoPrivacyPreserved": true,
+  "websiteConfigChanged": false,
+  "gameProxyCameraClientsRestarted": false,
+  "music": {
+    "role": "ag_CorMy",
+    "adoptedSongs": 8,
+    "actualPublicSongsVerified": 8,
+    "totalAudioBytes": 15697127,
+    "allAnonymousFullDownloadsAndSha256Verified": true,
+    "allRangeRequestsVerified": true,
+    "unsignedObjectStillPrivate": true,
+    "existingCredentialScopesWidened": false,
+    "humanAudibilityAndAsrVerified": false
+  },
+  "firstSwitchPostflightError": "Anonymous session check used an unsuitable HTTP host form; code rolled back, database not restored. Genuine HTTPS postflight subsequently passed.",
+  "consumed": true,
+  "doNotReplay": true,
+  "rollback": "Previous website container retained; code only, never overwrite new account or music progress with an older database"
+}
