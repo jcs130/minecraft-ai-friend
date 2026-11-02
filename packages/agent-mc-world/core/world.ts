@@ -1,3 +1,4 @@
+import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { operationInventory } from './operation-experience.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
@@ -3523,6 +3524,7 @@ export class MinecraftWorld implements World {
 
   requestFacts(): WorldRequestFacts | null {
     if (!this.bridge?.connected) return this.unavailableRequestFacts('disconnected');
+    if (this.bridge.bot && nativeBodyBlockedReason(this.bridge.bot)) return this.unavailableRequestFacts('body-not-ready');
     // SDK hosts need not drain deferred event renders. Sample cheap live
     // state here, independently of that delivery cache; no 16-block scan.
     const snap = this.snapshot({ scanBlocks: false });
@@ -3639,15 +3641,18 @@ export class MinecraftWorld implements World {
    * Returning null made hosts resurrect every historical delta as required context.
    * Keep local intent and attributed terminal evidence, never cached body readings.
    */
-  private unavailableRequestFacts(reason: 'disconnected' | 'snapshot-unavailable'): WorldRequestFacts {
+  private unavailableRequestFacts(reason: 'disconnected' | 'snapshot-unavailable' | 'body-not-ready'): WorldRequestFacts {
     const last = this.lastFinishedTask;
     const parts = [
       { key: 'identity', text: JSON.stringify({ realm: null, world: readWorldIdentity(null) }) },
       { key: 'availability', text: JSON.stringify({ observedAt: new Date().toISOString(), reason,
         connection: this.connectionReadiness(), currentWorldVerified: false,
+        ...(reason === 'body-not-ready' && this.bridge?.bot ? { nativeBody: nativeBodyReadiness(this.bridge.bot) } : {}),
         position: null, dimension: null, health: null, inventory: null, nearby: null,
         bodyTask: null, taskProgress: null }) },
       { key: 'observationBoundary', text: 'Minecraft 当前现场读数不可用；位置、维度、生命、背包、周围环境及身体任务进展均未验证，null 表示未知，不表示空或没有任务。历史快照和增量不能充当当前状态；原文仍在事件账本。恢复后重新读取现场，并核对原动作终态再决定下一步。' },
+      ...(reason === 'body-not-ready' && this.bridge?.bot
+        ? [{ key: 'bodyAvailability', text: nativeBodyBlockedReason(this.bridge.bot)! }] : []),
       { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
       { key: 'lastTask', text: renderLastTaskReadout(last
         ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
@@ -8446,6 +8451,7 @@ export class MinecraftWorld implements World {
     if(report)this.emit('minecraft.event',`[Minecraft] ${journeyOpportunityText(report)}`,false,{trigger:'debounce',meta:{journey:report}});
   }
   protected proximityTick(bot: any): void {
+    if (nativeBodyBlockedReason(bot)) return;
     if (bot !== this.proximityBot) {
       this.proximity.clear();
       this.flocks.clear();
@@ -8560,6 +8566,7 @@ export class MinecraftWorld implements World {
 
   /** Two nearby animations form one factual observation; intent remains the agent's judgment. */
   protected notePlayerGesture(bot: any, raw: unknown, kind: 'wave' | 'crouch'): void {
+    if (nativeBodyBlockedReason(bot)) return;
     if (!raw || !bot.entity || (this.bridge?.bot && this.bridge.bot !== bot)) return;
     const fact = this.playerObservations.gesture(bot, raw as Bot['entity'], kind,
       (name) => name === this.chatName() || this.isCamera(name));
@@ -8568,6 +8575,7 @@ export class MinecraftWorld implements World {
 
   /** Player facts are delivered independently of the full world snapshot cadence. */
   protected playerProximityTick(bot: any): void {
+    if (nativeBodyBlockedReason(bot)) return;
     if (!bot.entity || (this.bridge?.bot && this.bridge.bot !== bot)) return;
     for (const fact of this.playerObservations.sample(bot,
       (name) => name === this.chatName() || this.isCamera(name))) this.emitPlayerObservation(fact);
@@ -9070,7 +9078,7 @@ export class MinecraftWorld implements World {
 
   protected snapshot(opts?: { scanBlocks?: boolean }): WorldSnapshot | null {
     const bot = this.bridge?.bot;
-    if (!bot?.entity) return null;
+    if (!bot?.entity || nativeBodyBlockedReason(bot)) return null;
     try {
       const snap = snapshotFromBot(bot, {
         invSynced: this.bridge?.invSynced,
@@ -9102,6 +9110,11 @@ export class MinecraftWorld implements World {
     // 同批双份兜底:陈旧重挂导致一批里有两条快照时,第二条现拿直接蒸发
     if (now - this.lastSnapshotRenderAt < 1000) return null;
     if (!this.bridge?.connected) return null;
+    if (this.bridge.bot && nativeBodyBlockedReason(this.bridge.bot)) {
+      this.lastSnapshotRenderAt = now;
+      this.requestFactsCache = this.unavailableRequestFacts('body-not-ready');
+      return `[Minecraft] ${this.requestFactsCache.text}`;
+    }
     const snap = this.snapshot();
     if (!snap) return null;
     this.lastSnapshotRenderAt = now;

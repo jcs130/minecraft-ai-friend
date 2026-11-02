@@ -7,6 +7,11 @@
 
 # Changelog
 
+## 0.5.7-rc.155-preview.1 (unpublished candidate)
+
+- Invalidate current body/spatial facts while native landing or physics evidence is missing. Request facts and deferred snapshots retain goals and historical terminals, but do not expose the old location, equipment, surroundings or decision candidates as current readings.
+- Suppress proximity and gesture observations based on that stale body; resume ordinary reads after a real server landing and native physics tick. Preserve transport/chat and the no-automatic-replay policy.
+
 ## 0.5.7-rc.154 (unpublished candidate)
 
 - Expose the connected crafting experiment as an explicit host-model entry, reusing SDK/MCP, dedicated clients, original executor and MethodLibrary; keep the scripted verifier separate.
