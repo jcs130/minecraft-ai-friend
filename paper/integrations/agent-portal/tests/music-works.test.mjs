@@ -166,9 +166,9 @@ test('OSS adapter uses existing prefix, temporary credential factory, immutable 
   const calls = [], client = { asyncSignatureUrl: async (key, options) => { calls.push({ key, options }); return 'https://isolated.invalid/audio'; }, head: async () => ({ res: { headers: { 'content-length': '100', 'x-oss-meta-sha256': 'f'.repeat(64), etag: 'etag' } } }), getStream: async (key, options) => { calls.push({ key, options }); return { stream: 'fixture-stream' }; } };
   const objects = createMusicObjectStorage({ enabled: true, bucket: 'isolated-bucket', region: 'oss-cn-hongkong', roleName: 'existing-role', prefix: 'photo-scenes/' }, { clientFactory: () => client });
   const binding = { objectId: 'a'.repeat(64), sha256: 'f'.repeat(64), mime: 'audio/mpeg', extension: 'mp3' };
-  const lease = await objects.prepare(binding); assert.equal(lease.headers['x-oss-object-acl'], 'private'); assert.equal(lease.headers['x-oss-forbid-overwrite'], 'true'); assert.equal(calls.at(-1).options.expires, 300);
+  const lease = await objects.prepare(binding); assert.equal(lease.headers['Content-Type'], 'audio/mpeg'); assert.equal(lease.headers['x-oss-object-acl'], 'private'); assert.equal(lease.headers['x-oss-forbid-overwrite'], 'true'); assert.equal(calls.at(-1).options.expires, 300);
   assert.match(calls.at(-1).key, /^photo-scenes\/assets\/[a-f0-9]{64}$/); assert.equal((await objects.head(binding)).bytes, 100);
   await objects.open(binding, 'etag'); assert.equal(calls.at(-1).options.headers['If-Match'], 'etag');
-  await objects.playback(binding); assert.equal(calls.at(-1).options.expires, 3600); assert.equal(calls.at(-1).options.response['content-type'], 'audio/mpeg'); assert.match(calls.at(-1).options.response['content-disposition'], /^inline/);
+  await objects.playback(binding); assert.equal(calls.at(-1).options.expires, 3600); assert.equal(Object.hasOwn(calls.at(-1).options.response, 'content-type'), false); assert.match(calls.at(-1).options.response['content-disposition'], /^inline/);
   await assert.rejects(objects.prepare({ ...binding, objectId: '../outside' }), /MUSIC_OBJECT_KEY/);
 });

@@ -29,8 +29,10 @@ export function createMusicObjectStorage(config, options = {}) {
       const oss = await client();
       // Full songs need seeking long after the initial request. The stable app
       // route can refresh a URL, but never caches it or exposes a private object.
+      // OSS forbids response-content-type (0017-00000902); the verified upload
+      // already stores the audio MIME on the object itself.
       return oss.asyncSignatureUrl(key(binding.objectId), { expires: 3600, response: {
-        'content-type': binding.mime, 'content-disposition': `inline; filename="song.${binding.extension}"`, 'cache-control': 'private, no-store',
+        'content-disposition': `inline; filename="song.${binding.extension}"`, 'cache-control': 'private, no-store',
       } });
     },
   };
