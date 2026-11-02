@@ -1,3 +1,9 @@
+## 2026-11-03 千灯纪主服桐人按服主要求暂停
+
+服主发现桐人不行动、模型不符，明确要求“下掉吧先”。仅主服 E:/MC/server 的 ag_Kirito（8e7b99e0-595d-3402-935c-7139ac6814e3）已正常kick，未永久despawn；Numen resident已disable，复查enabled=false/body=false/bodyState=REMOVED。QwenPaw原生PATCH /api/agents/mc-kirito/toggle enabled=false已成功，配置读回停用，保留身体名册、库存、记忆及未知动作账本。不要依据下方历史“已恢复”记录擅自重新启用。
+
+下线前game-public-status持续waiting_status，日志约每两分钟只读状态查询，尚未定位阻止日常决策的具体数据字段；不能直接归因建筑卡住。AgentAppearanceNative/automatic-appearances.json明确为该UUID分配model=cormy/texture=cormy，未用桐人外观。此次仅停用并记录问题，未修改外观或控制器代码、未重新召唤试跑；其他五名在线玩家、主服和独立SAO进程保持运行。私有停用回执 E:/MC/ops/repairs/kirito-pause-20261103/receipt.json。
+
 ## 2026-11-01 官方 Mineflayer 零额外客户端插件入口
 
 26.3 实验世界新增服务端兼容入口：127.0.0.1:39786（官方 Mineflayer 4.39.0，自动选择 1.21.1）→ 私有 ViaProxy 3.4.14 → 39785 原生数据转换 → 原游戏 39781。Agent 不安装连接器、不改 node_modules；188 个官方包文件逐字校验。真实物品 ID 在标准 custom_data.maw_native.id，/agent help 及 /agent <requestId> status|inventory|menu|items|blocks|recipes|recipe_book|spells|attributes|views|view|block 私有按需查询；12项/12KiB，位置和近距目标由服务端主线程读取，禁止用客户端自报位置扩展查询。普通原版名称是明确载体，不等于原生身份；中间数字 ID 与客户端数字 ID 分域。
