@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "music-works-20261102-r2",
-  "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
-  "releaseDocument": "paper/docs/MUSIC_WORKS_20261102.md",
+  "latestRelease": "duplicate-email-20261102-r3",
+  "verifiedAt": "2026-11-02T11:51:46.975480+00:00",
+  "releaseDocument": "paper/docs/DUPLICATE_EMAIL_REGISTRATION_20261102.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -307,7 +307,7 @@
     "publicSkill": "1.3.7",
     "publicSkillCore": "0.5.7-rc.130",
     "harnessBodyCore": "0.5.7-rc.130",
-    "website": "0.8.37",
+    "website": "0.8.38",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
     "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
@@ -323,13 +323,13 @@
     "websiteManifest": "paper/manifests/music-works-deployed-20261102.json"
   },
   "websiteRelease": {
-    "release": "music-works-20261102-r2",
-    "version": "0.8.37",
-    "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
+    "release": "duplicate-email-20261102-r3",
+    "version": "0.8.38",
+    "verifiedAt": "2026-11-02T11:51:46.975480+00:00",
     "protectedTables": 15,
     "gameRestarted": false,
-    "document": "paper/docs/MUSIC_WORKS_20261102.md",
-    "manifest": "paper/manifests/music-works-deployed-20261102.json",
+    "document": "paper/docs/DUPLICATE_EMAIL_REGISTRATION_20261102.md",
+    "manifest": "paper/manifests/duplicate-email-deployed-20261102.json",
     "promotionalVideo": "https://b23.tv/Ppfd3Ne",
     "publicPhotosAtVerification": 7,
     "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
@@ -426,11 +426,11 @@
     "goddessAlreadyReadIt": false
   },
   "website": {
-    "state": "deployed-with-real-song-acceptance-pending",
-    "version": "0.8.37",
-    "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
-    "releaseDocument": "paper/docs/MUSIC_WORKS_20261102.md",
-    "releaseManifest": "paper/manifests/music-works-deployed-20261102.json",
+    "state": "deployed-and-verified",
+    "version": "0.8.38",
+    "verifiedAt": "2026-11-02T11:51:46.975480+00:00",
+    "releaseDocument": "paper/docs/DUPLICATE_EMAIL_REGISTRATION_20261102.md",
+    "releaseManifest": "paper/manifests/duplicate-email-deployed-20261102.json",
     "guideServerVersion": "0.4.47.44-rpg",
     "gameRestartedForWebsite": false,
     "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated",
@@ -782,7 +782,7 @@
   "photoSceneArchives": {
     "state": "deployed-with-open-acceptance",
     "schema": "mc-photo-scene/v1",
-    "website": "0.8.37",
+    "website": "0.8.38",
     "radius": 3,
     "maximumColumns": 49,
     "originalResources": "private SHA256-addressed OSS objects; original encryption preserved",
@@ -1211,22 +1211,27 @@
     }
   },
   "musicWorks": {
-    "state": "deployed-with-real-song-acceptance-pending",
-    "version": "0.8.37",
-    "publicSongs": 0,
+    "state": "deployed-with-real-client-upload-and-playback-verified",
+    "version": "0.8.38",
+    "publicSongs": 8,
     "clientAdoptedSongs": 8,
-    "realUploadPendingOwnerAuthorization": true,
-    "manifest": "paper/manifests/music-works-deployed-20261102.json"
+    "realUploadPendingOwnerAuthorization": false,
+    "manifest": "paper/manifests/duplicate-email-deployed-20261102.json",
+    "realAnonymousDownloadsVerified": 8,
+    "realIndependentClientAcceptance": true
   },
   "musicOperatorGrant": {
-    "state": "installed-idle-awaiting-recipient",
+    "state": "installed-with-authorized-client-grant",
     "verifiedAt": "2026-11-02T10:28:57.171348+00:00",
     "sourceCommit": "32d570b0",
     "scriptSha256": "947cf7fa22063e92889fa2d368e50a970e5e472c0df0fa281c6152476903016b",
     "manifest": "paper/manifests/music-grant-ops-deployed-20261102.json",
-    "actualCredentialIssued": false,
+    "actualCredentialIssued": true,
     "oldCredentialsChanged": false,
-    "restartRequired": false
+    "restartRequired": false,
+    "recipientKeyVerified": true,
+    "apiScopeVerified": true,
+    "actualClientUploads": 8
   },
   "jointClientAcceptance20261102": {
     "photo": {
@@ -1246,8 +1251,12 @@
     },
     "music": {
       "websiteEnabled": true,
-      "realEightSongsPublished": false,
-      "pending": "Verified recipient public key, encrypted role-bound credential handoff and original-client upload; delegated operator tool installed idle, no qda registration exists"
+      "realEightSongsPublished": true,
+      "pending": null,
+      "allServerAndClientDownloadSha256Verified": true,
+      "allRangeRequestsVerified": true,
+      "lyricsVerifiedByOriginalClient": true,
+      "actualBrowserAudioAndSeekVerified": true
     }
   }
 }

@@ -63,20 +63,27 @@ export class EmailAuth {
     return row ? { address: row.email, verified: true, verifiedAt: new Date(row.verified_at).toISOString() } : { address: null, verified: false, verifiedAt: null };
   }
   ownerByEmail(email) { return this.store.db.prepare('SELECT o.* FROM owners o JOIN owner_emails e ON e.owner_id=o.id WHERE e.email=?').get(email); }
+  requireUnusedRegistrationEmail(email) {
+    if (this.ownerByEmail(email)) throw fail(409, 'EMAIL_ALREADY_USED', '该邮箱已注册，请直接登录；忘记密码可使用“找回密码”。');
+  }
   requireReady() { if (!this.capabilities().available) throw fail(503, 'EMAIL_NOT_CONFIGURED', '邮箱发信服务尚未配置，请稍后重试；已有账号可以继续登录'); }
   async begin(purpose, values, session) {
     this.requireReady(); const email = normalizeEmail(values.email), db = this.store.db, now = Date.now();
+    if (purpose === 'register') this.requireUnusedRegistrationEmail(email);
     const recent = db.prepare('SELECT count(*) AS count,max(created_at) AS latest FROM email_challenges WHERE email=? AND created_at>?').get(email, now - 3600000);
     if (recent.count >= 5 || recent.latest > now - 60000) throw fail(429, 'EMAIL_RATE_LIMIT', '验证码发送较频繁，请一分钟后再试');
     let owner = null, passwordHash = null, username = null;
-    if (purpose === 'register') { username = values.username; passwordHash = await hashPassword(values.password); }
+    if (purpose === 'register') {
+      username = values.username; passwordHash = await hashPassword(values.password);
+      this.requireUnusedRegistrationEmail(email); // Ownership may change while hashing.
+    }
     else if (purpose === 'bind') owner = this.store.ownerById(session.owner_id);
     else if (purpose === 'reset') owner = this.ownerByEmail(email);
     else throw fail(400, 'INVALID_EMAIL_PURPOSE', '此邮箱操作不受支持');
     // Check the persisted cooldown again after password hashing, before inserting.
     if (db.prepare('SELECT 1 FROM email_challenges WHERE email=? AND created_at>?').get(email, Date.now() - 60000)) throw fail(429, 'EMAIL_RATE_LIMIT', '请一分钟后再发送验证码');
     const id = randomUUID(), code = String(randomInt(0, 100000000)).padStart(8, '0');
-    const suppressed = purpose === 'reset' && !owner || purpose === 'register' && !!this.ownerByEmail(email);
+    const suppressed = purpose === 'reset' && !owner;
     const created = Date.now();
     db.prepare('INSERT INTO email_challenges(id,purpose,email,owner_id,session_hash,username,password_hash,code_hash,created_at,expires_at,attempts,sent_at,used_at) VALUES(?,?,?,?,?,?,?,?,?,?,0,NULL,?)')
       .run(id, purpose, email, owner?.id || null, session.id_hash, username, passwordHash || owner?.password_hash || null, digest(id + ':' + code), created, created + duration, suppressed ? created : null);
@@ -87,7 +94,7 @@ export class EmailAuth {
       db.prepare('UPDATE email_challenges SET used_at=? WHERE id=?').run(Date.now(), id);
       throw fail(503, 'EMAIL_DELIVERY_FAILED', '邮件暂时发送失败，请稍后重试；账号和密码尚未更改');
     }
-    // No codes/passwords/email-existence flags are returned or written to logs.
+    // Codes/passwords are never returned or logged; recovery still hides existence.
     return { verificationRequired: true, challengeId: id, expiresInSeconds: 600, retryAfterSeconds: 60,
       message: purpose === 'reset' ? '如果该邮箱已绑定账号，你将收到重设密码验证码。' : '请到邮箱查看验证码；如果已有账号，请直接登录或找回密码。' };
   }
@@ -112,7 +119,8 @@ export class EmailAuth {
     db.exec('BEGIN IMMEDIATE');
     try {
       if (row.purpose === 'register') {
-        if (this.ownerByEmail(row.email) || this.store.ownerByName(row.username)) throw fail(409, 'ACCOUNT_CONFLICT', '账号或邮箱已被使用，请登录或找回密码');
+        this.requireUnusedRegistrationEmail(row.email);
+        if (this.store.ownerByName(row.username)) throw fail(409, 'USERNAME_TAKEN', '此网站用户名已被使用');
         owner = { id: randomUUID(), username: row.username, normalized: row.username.toLowerCase(), password_hash: row.password_hash, role: 'owner', created_at: now };
         db.prepare('INSERT INTO owners(id,username,normalized,password_hash,role,created_at) VALUES(?,?,?,?,?,?)').run(...Object.values(owner));
         db.prepare('INSERT INTO owner_emails VALUES(?,?,?)').run(owner.id, row.email, now);

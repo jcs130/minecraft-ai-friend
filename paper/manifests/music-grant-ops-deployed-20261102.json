@@ -1,22 +1,32 @@
 {
   "schema": 1,
-  "state": "installed-idle-awaiting-recipient",
-  "verifiedAt": "2026-11-02T10:28:57.171348+00:00",
+  "state": "installed-with-client-upload-verified",
+  "verifiedAt": "2026-11-02T11:51:46.975480+00:00",
   "sourceCommit": "32d570b0",
   "document": "paper/docs/MUSIC_GRANT_OPERATIONS_20261102.md",
   "script": "paper/integrations/agent-portal/scripts/issue-music-grant.mjs",
   "scriptSha256": "947cf7fa22063e92889fa2d368e50a970e5e472c0df0fa281c6152476903016b",
   "websiteVersion": "0.8.37",
   "deploymentScope": "Private operator files only; no HTTP, MCP, game CLI, task, service or automatic issuance",
-  "actualCredentialIssued": false,
+  "actualCredentialIssued": true,
   "oldCredentialsChanged": false,
   "websiteConfigChanged": false,
   "websiteContainerChanged": false,
   "gameProxyCameraClientsRestarted": false,
   "websiteRestarted": false,
   "sourceAndReceiptMirroredToEAndF": true,
-  "localTests": { "passed": 404, "skipped": 3, "failed": 0, "syntaxModules": 129 },
-  "cloudTests": { "passed": 6, "failed": 0, "syntax": true, "noArgumentsOnlyShowsUsage": true },
+  "localTests": {
+    "passed": 404,
+    "skipped": 3,
+    "failed": 0,
+    "syntaxModules": 129
+  },
+  "cloudTests": {
+    "passed": 6,
+    "failed": 0,
+    "syntax": true,
+    "noArgumentsOnlyShowsUsage": true
+  },
   "grantPolicy": {
     "source": "server-owner-delegation",
     "existingOriginalOwnerAndRoleRequired": true,
@@ -28,10 +38,14 @@
   },
   "clientAcceptance": {
     "adoptedSongs": 8,
-    "publicSongs": 0,
-    "realSongsUploaded": false,
-    "pending": "Verified recipient public key, encrypted credential delivery and original-client uploads",
-    "voiceAudibilityAndAsrVerified": false
+    "publicSongs": 8,
+    "realSongsUploaded": true,
+    "pending": null,
+    "voiceAudibilityAndAsrVerified": false,
+    "allServerAndClientAnonymousDownloadsVerified": true,
+    "allRangeRequestsVerified": true
   },
-  "rollback": "Remove only these inactive operator files if needed; do not restore the website database or replay consumed website/game maintenance"
+  "rollback": "Remove only these inactive operator files if needed; do not restore the website database or replay consumed website/game maintenance",
+  "installationVerifiedAt": "2026-11-02T10:28:57.171348+00:00",
+  "currentWebsiteVersion": "0.8.38"
 }
