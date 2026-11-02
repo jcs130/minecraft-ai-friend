@@ -249,6 +249,7 @@ final class NativeRpg {
             if(group.equals("status")&&!Arrays.asList(args).contains("--json"))adventureProgress(p,false,false);return handled;
         }
         if(group.equals("cast")||group.equals("施法")||group.equals("咏唱")) {
+            if(owner.cliRecovery().rejectMisplacedCast(p,args))return true;
             String id=args.length>1?skillId(args[1]):"";
             if(COMMON.contains(id)){
                 var entry=commonGuide(id);

@@ -513,7 +513,7 @@ final class GuildHallManager implements Listener {
     private Villager ensureReceptionist() {
         if (!servicesBuilt || !ready || world == null) return null;
         Location at = new Location(world, x - 3.5, y + 1, z + 4.5, 20, 0);
-        world.getChunkAt(at);
+        if (!plugin.npcEntityReadiness().ready("guild:receptionist", at, this::ensureReceptionist)) return null;
         Villager found = null;
         for (Entity entity : world.getNearbyEntities(at, 2, 3, 2)) {
             if (!(entity instanceof Villager villager)
@@ -530,6 +530,7 @@ final class GuildHallManager implements Listener {
         found.setCustomName("§6公会接待员·阿莉娅");
         found.setCustomNameVisible(true);
         found.setAI(false);
+        found.setSilent(true);
         found.setInvulnerable(true);
         found.setRemoveWhenFarAway(false);
         found.setRecipes(plugin.dungeon().merchantRecipes());

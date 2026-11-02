@@ -2348,6 +2348,7 @@ final class DungeonManager implements Listener {
             case 3 -> new Location(world(), X + 2.5, LOBBY_Y + 1, Z - 5.5);
             default -> new Location(world(), X + 5.5, LOBBY_Y + 1, Z - 5.5);
         };
+        if (!plugin.npcEntityReadiness().ready("dungeon:" + kind, at, () -> ensureMerchant(kind))) return null;
         Villager merchant = null;
         for (Entity entity : world().getNearbyEntities(at, 1.5, 2, 1.5)) {
             if (!(entity instanceof Villager villager)
@@ -2366,6 +2367,7 @@ final class DungeonManager implements Listener {
                 + (kind % 2 == 0 ? "装备回收商" : "武备补给商"));
         merchant.setCustomNameVisible(true);
         merchant.setAI(false);
+        merchant.setSilent(true);
         merchant.setInvulnerable(true);
         merchant.setRemoveWhenFarAway(false);
         merchant.setRecipes(merchantRecipes());

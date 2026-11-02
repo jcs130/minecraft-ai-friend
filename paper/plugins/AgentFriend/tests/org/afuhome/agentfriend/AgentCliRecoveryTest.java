@@ -17,6 +17,17 @@ public final class AgentCliRecoveryTest {
     public static void main(String[] args)throws Exception{
         var cards=AgentCliCatalog.recoveryCards(List.of(),true);
         var context=new AgentCliRecovery.Context(Set.of("undead_crypt","aincrad_01"),Set.of("DeepFish","Yui"));
+        for(String intent:List.of("cast dungeon info undead_crypt","cast dungeon claim undead_crypt","cast dungeon start undead_crypt","cast dungeon_claim undead_crypt")){
+            var routed=find(intent,cards,context);String action=intent.contains("info")?"info":intent.contains("start")?"start":"claim";
+            check(routed.size()==1&&routed.getFirst().method().equals("misplaced_cast_prefix")&&routed.getFirst().nextCommand().equals("/mycli dungeon "+action+" undead_crypt"),"exact command-prefix correction: "+intent);
+            var result=AgentCliRecovery.payload(routed,cards,"COMMAND_ROUTE_MISMATCH","入口不匹配");
+            check(!result.get("autoExecute").getAsBoolean()&&!result.get("changed").getAsBoolean(),"routing suggestion never executes "+intent);
+        }
+        check(AgentCliRecovery.misplacedCast(words("cast dungeon claim private_unknown"),cards,context).getFirst().nextCommand().equals("/mycli dungeon claim --help"),"unconfirmed destination remains a help query");
+        check(AgentCliRecovery.misplacedCast(words("cast dungeon unexpected undead_crypt"),cards,context).getFirst().nextCommand().equals("/mycli dungeon --help"),"unknown subcommand is not endorsed");
+        var collision=new ArrayList<>(cards);collision.add(new AgentCliRecovery.Card("cast.dungeon","/mycli cast dungeon","real configured spell","real validator"));
+        check(AgentCliRecovery.misplacedCast(words("cast dungeon claim undead_crypt"),collision,context).isEmpty(),"real configured spell wins namespace collision");
+        for(String valid:List.of("cast blink","cast starbolt","dungeon info undead_crypt","cast unknown_ability","cast give bread"))check(AgentCliRecovery.misplacedCast(words(valid),cards,context).isEmpty(),"leave valid or unknown spell dispatch alone: "+valid);
         for(String command:List.of("cast travel undead_crypt","teleport undead_crypt","dungeon teleport undead_crypt","传送 墓穴 undead_crypt")){
             var matches=find(command,cards,context);check(matches.size()==1&&matches.getFirst().nextCommand().equals("/mycli dungeon travel undead_crypt"),"preserve confirmed dungeon target: "+command);
             var payload=AgentCliRecovery.payload(matches,cards,"command_route_mismatch","入口不匹配");

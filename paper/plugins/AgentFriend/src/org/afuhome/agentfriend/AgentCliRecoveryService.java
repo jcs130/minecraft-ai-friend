@@ -61,6 +61,11 @@ final class AgentCliRecoveryService implements AutoCloseable {
         else AgentCliRecovery.text(out).forEach(player::sendMessage);
         supplement(player,raw,context,matches,cards);
     }
+    boolean rejectMisplacedCast(Player player,String[] raw){
+        if(AgentCliRecovery.misplacedCast(raw,currentCards(),context(player)).isEmpty())return false;
+        reject(player,raw,"COMMAND_ROUTE_MISMATCH","这项操作使用专用命令入口，请勿放进cast施法参数；按下面用法发送聊天命令");
+        return true;
+    }
     void enrich(Player player,String[] raw,JsonObject out){
         List<AgentCliRecovery.Card> cards=currentCards();
         var context=context(player);var matches=AgentCliRecovery.suggest(raw,cards,context);
@@ -80,7 +85,7 @@ final class AgentCliRecoveryService implements AutoCloseable {
         player.sendMessage("下一步："+out.get("nextCommand").getAsString()+"；请核对后自行执行。");
     }
     private void supplement(Player player,String[] raw,AgentCliRecovery.Context context,List<AgentCliRecovery.Match> local,List<AgentCliRecovery.Card> cards){
-        if(embeddings==null||closed||AgentCliRecovery.semanticQuery(raw,context).isEmpty()||!local.isEmpty()&&local.getFirst().method().startsWith("confirmed_"))return;
+        if(embeddings==null||closed||AgentCliRecovery.semanticQuery(raw,context).isEmpty()||!local.isEmpty()&&(local.getFirst().method().startsWith("confirmed_")||local.getFirst().method().equals("misplaced_cast_prefix")))return;
         UUID id=player.getUniqueId();long now=System.currentTimeMillis();
         if(now-lastLookup.getOrDefault(id,0L)<10_000)return;
         while(lastLookup.size()>=128)lastLookup.remove(lastLookup.keySet().iterator().next());lastLookup.put(id,now);

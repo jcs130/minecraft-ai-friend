@@ -10,6 +10,7 @@ public abstract class CameraWindowMixin {
     @Inject(method="<init>",at=@At(value="INVOKE",target="Lorg/lwjgl/glfw/GLFW;glfwCreateWindow(IILjava/lang/CharSequence;JJ)J"),remap=false)
     private void qiandengBackgroundWindow(CallbackInfo callback){
         if(!Boolean.getBoolean("qiandeng.camera.enabled"))return;
+        org.qiandeng.camera.MesaIntelAdapter.installIfRequested();
         // Minecraft recenters the newly created window. Keep startup hidden;
         // CLIENT_STARTED sets and verifies our final position before showing it.
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE,GLFW.GLFW_FALSE);

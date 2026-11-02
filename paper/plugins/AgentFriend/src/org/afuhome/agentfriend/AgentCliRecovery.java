@@ -75,6 +75,7 @@ final class AgentCliRecovery {
     }
     static List<Match> suggest(String[] raw,List<Card> cards,Context context){
         String q=query(raw);if(q.isEmpty())return List.of();
+        var routed=misplacedCast(raw,cards,context);if(!routed.isEmpty())return routed;
         List<Match> exact=contextMatches(q,cards,context);if(!exact.isEmpty())return exact;
         Vector query=vector(q);Index index=index(cards);var matches=new ArrayList<Match>();
         List<String> words=pathWords(q.replaceFirst("^(?:mycli|cast|施法)\\s+",""));
@@ -85,6 +86,35 @@ final class AgentCliRecovery {
             if(score>=.16)matches.add(new Match(card,safeNext(card),score,"catalog_terms_and_aliases"));
         }
         return top(matches);
+    }
+    /** Exact catalog routing beats fuzzy retrieval. Advice only; never dispatch. */
+    static List<Match> misplacedCast(String[] raw,List<Card> cards,Context context){
+        String q=query(raw);if(q.isEmpty())return List.of();
+        var words=new ArrayList<>(Arrays.asList(q.split("\\s+")));
+        if(words.size()<2||!Set.of("cast","施法","咏唱").contains(words.removeFirst()))return List.of();
+        String first=words.getFirst();
+        // A real configured spell with a colliding name keeps its real validator.
+        if(cards.stream().anyMatch(c->c.id().equals("cast."+first)))return List.of();
+        for(Card card:cards)if(!card.id().startsWith("cast.")&&card.id().replace('.','_').equals(first)){
+            words.removeFirst();words.addAll(0,Arrays.asList(card.id().split("\\.")));break;
+        }
+        Card best=null;List<String> path=List.of();
+        for(Card card:cards){
+            if(card.id().equals("cast")||card.id().startsWith("cast."))continue;
+            var literal=new ArrayList<String>();String[] usage=card.usage().split("\\s+");
+            if(usage.length<2||!usage[0].equals("/mycli"))continue;
+            for(int i=1;i<usage.length&&usage[i].matches("[a-z][a-z0-9_-]*");i++)literal.add(usage[i]);
+            if(literal.isEmpty()||literal.size()>words.size()||literal.size()<=path.size())continue;
+            if(words.subList(0,literal.size()).equals(literal)){best=card;path=List.copyOf(literal);}
+        }
+        if(best==null)return List.of();
+        String next=best.help();
+        // Fill a target only after confirming it against the live dungeon catalog.
+        if(path.size()==2&&path.getFirst().equals("dungeon")&&words.size()==3){
+            String target=words.get(2);
+            if(context.dungeonIds().contains(target))next="/mycli "+String.join(" ",path)+" "+target;
+        }
+        return List.of(new Match(best,next,1,"misplaced_cast_prefix"));
     }
     static List<Match> semantic(String[] raw,List<Card> cards,Context context,double[] vector,List<double[]> indexed){
         if(!contextMatches(query(raw),cards,context).isEmpty())return suggest(raw,cards,context);
