@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
-CHAT = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\] \[Async Chat Thread - #\d+/INFO\]: (?:\[Not Secure\] )?<([A-Za-z0-9_.-]{1,32})> (.+)$")
+CHAT = re.compile(r"^\[(\d{2}:\d{2}:\d{2})(?:\] \[Async Chat Thread - #\d+/INFO| INFO)\]: (?:\[Not Secure\] )?<([A-Za-z0-9_.-]{1,32})> (.+)$")
 SECRET = re.compile(r"(?i)(?:/(?:login|register|changepassword)\b|MC_AUTH_|#invite=|\b(?:api[-_ ]?key|password|token)\s*[:=]|密码\s*(?:是|为|[:：])|\bsk-[A-Za-z0-9_-]{16,})")
 MAX_READ = 262144
 MAX_AGE = 600
