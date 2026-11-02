@@ -1,0 +1,76 @@
+{
+  "success": true,
+  "phase": "deployed-and-verified",
+  "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
+  "sourceCommit": "c7ee6531f0dc279443c6bcbef77cfe1bcd974302",
+  "gameRestarted": true,
+  "changedFiles": 1,
+  "nativeSidebarRows": 4,
+  "nativeTitle": "千灯纪",
+  "sidebarBlankNumberFormatQaVerified": true,
+  "sidebarMobilePixelsAccepted": false,
+  "characterFilesPreservedDuringInstall": 665,
+  "originalCredentialRowsPreserved": 72,
+  "originalGoddessJobsRestored": 7,
+  "nativeCameraModelLoaded": true,
+  "nativeCameraCatalogue": 40,
+  "nativeCameraFps": 30,
+  "nativeCameraProtocolReady": true,
+  "observerFresh": true,
+  "unchangedConsumerTasks": true,
+  "formalChecks": 21,
+  "running": {
+    "pluginsEnabled": 55,
+    "gameResponsive": true,
+    "noGameplayActions": true
+  },
+  "recoveryPoints": [
+    {
+      "path": "E:/MC/backups/scheduled/20261101-040028",
+      "coldGameAndAuth": true,
+      "nestedStaticOpsReused": true
+    },
+    {
+      "path": "F:/MC-backups/scheduled/20261101-040028",
+      "coldGameAndAuth": true,
+      "nestedStaticOpsReused": true
+    }
+  ],
+  "completeRemotePixelsAccepted": false,
+  "entryConsumed": true,
+  "consoleStartup": {
+    "gamePid": 7832,
+    "jline": false,
+    "ansi": false,
+    "consoleHandlerPresent": false,
+    "promptBurstAfterReady": false,
+    "observationSeconds": 10,
+    "logGrowthBytes": 354
+  },
+  "component": "noninteractive-game-startup",
+  "properties": [
+    "terminal.jline=false",
+    "terminal.ansi=false"
+  ],
+  "bootstrapSha256": "6cb63d42f758b26297922ab047c49690dba22ed7ccb2e3bfb2776d881a375111",
+  "previousBootstrapSha256": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e",
+  "onlyTwoPropertiesAdded": true,
+  "unchangedRuntimeArtifacts": 78,
+  "liveIndependentChangesPreserved": true,
+  "permissionsOrScheduledTasksChanged": false,
+  "previousMainRelease": "main-runtime-release-20261102-r1",
+  "normalMaintenanceUsed": true,
+  "document": "paper/docs/BACKGROUND_CONSOLE_20261102.md",
+  "handbookSynchronization": {
+    "fullSourceHashMatches": true,
+    "sha256": "fdd46f5757c2f6c3a7aac1d2d8241325888e704bb910f4abbe6f70da15c1b568",
+    "goddessReadOrReplyVerified": false,
+    "modelTasksSubmitted": 0
+  },
+  "verificationCorrections": {
+    "initialReadOnlyWatcherTimedOutBeforeMaintenanceCompleted": true,
+    "windowsPropertiesEscapingCorrectedWithFourPathCases": true,
+    "restartForVerificationCorrections": false,
+    "firstFailuresRetained": true
+  }
+}

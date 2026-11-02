@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "main-runtime-release-20261102-r1",
-  "verifiedAt": "2026-11-02T05:21:30.851709+00:00",
-  "releaseDocument": "paper/docs/COMPACT_RPG_SIDEBAR_20261102.md",
+  "latestRelease": "console-runtime-release-20261102-r1",
+  "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
+  "releaseDocument": "paper/docs/BACKGROUND_CONSOLE_20261102.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -141,7 +141,8 @@
     "E:\\MC\\ops\\build-native-auth.py": "42272c191df7116044e826df2efe2e7febabd8e215d0a8f50843de7920dd6aab",
     "E:\\MC\\ops\\world-activity.py": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b",
     "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e"
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
+    "E:\\MC\\ops\\manage-server.ps1": "6cb63d42f758b26297922ab047c49690dba22ed7ccb2e3bfb2776d881a375111"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -170,8 +171,11 @@
     "characterFilesUnchangedDuringColdInstallation": 665,
     "originalCredentialRowsPreserved": 72,
     "originalGoddessJobsRestored": 7,
-    "cameraModelAndObserverRechecked": true,
-    "physicalBedrockDisplayVerified": false
+    "cameraAndObserverRechecked": true,
+    "actualJvmPropertiesVerified": true,
+    "consoleHandlerAbsent": true,
+    "promptBurstAbsent": true,
+    "physicalDevicePixelsVerified": false
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -652,7 +656,8 @@
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.2.jar": "116ced8e39a114ebeaee3a3030a9e2aec0faa2012c74a06350b6c90d00671317",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
     "OptionalPayloadGuard-0.1.1.jar": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479",
-    "VortexRPG-qd32-before-compact-sidebar.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56"
+    "VortexRPG-qd32-before-compact-sidebar.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
+    "manage-server-before-noninteractive-console.ps1": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e"
   },
   "previousVerificationBeforeYsm265": {
     "formalProduction": 40,
@@ -1081,5 +1086,94 @@
     "correctedCheckMatchesOriginalPluginMetadata": true,
     "extraGameRestart": false,
     "document": "paper/docs/COMPACT_RPG_SIDEBAR_20261102.md"
+  },
+  "previousReleaseBeforeConsoleFix": {
+    "latestRelease": "main-runtime-release-20261102-r1",
+    "verifiedAt": "2026-11-02T05:21:30.851709+00:00",
+    "verification": {
+      "formalStartupChecks": 21,
+      "enabledPlugins": 55,
+      "characterFilesUnchangedDuringColdInstallation": 665,
+      "originalCredentialRowsPreserved": 72,
+      "originalGoddessJobsRestored": 7,
+      "cameraModelAndObserverRechecked": true,
+      "physicalBedrockDisplayVerified": false
+    }
+  },
+  "backgroundConsoleStartup": {
+    "success": true,
+    "phase": "deployed-and-verified",
+    "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
+    "sourceCommit": "c7ee6531f0dc279443c6bcbef77cfe1bcd974302",
+    "gameRestarted": true,
+    "changedFiles": 1,
+    "nativeSidebarRows": 4,
+    "nativeTitle": "千灯纪",
+    "sidebarBlankNumberFormatQaVerified": true,
+    "sidebarMobilePixelsAccepted": false,
+    "characterFilesPreservedDuringInstall": 665,
+    "originalCredentialRowsPreserved": 72,
+    "originalGoddessJobsRestored": 7,
+    "nativeCameraModelLoaded": true,
+    "nativeCameraCatalogue": 40,
+    "nativeCameraFps": 30,
+    "nativeCameraProtocolReady": true,
+    "observerFresh": true,
+    "unchangedConsumerTasks": true,
+    "formalChecks": 21,
+    "running": {
+      "pluginsEnabled": 55,
+      "gameResponsive": true,
+      "noGameplayActions": true
+    },
+    "recoveryPoints": [
+      {
+        "path": "E:/MC/backups/scheduled/20261101-040028",
+        "coldGameAndAuth": true,
+        "nestedStaticOpsReused": true
+      },
+      {
+        "path": "F:/MC-backups/scheduled/20261101-040028",
+        "coldGameAndAuth": true,
+        "nestedStaticOpsReused": true
+      }
+    ],
+    "completeRemotePixelsAccepted": false,
+    "entryConsumed": true,
+    "consoleStartup": {
+      "gamePid": 7832,
+      "jline": false,
+      "ansi": false,
+      "consoleHandlerPresent": false,
+      "promptBurstAfterReady": false,
+      "observationSeconds": 10,
+      "logGrowthBytes": 354
+    },
+    "component": "noninteractive-game-startup",
+    "properties": [
+      "terminal.jline=false",
+      "terminal.ansi=false"
+    ],
+    "bootstrapSha256": "6cb63d42f758b26297922ab047c49690dba22ed7ccb2e3bfb2776d881a375111",
+    "previousBootstrapSha256": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e",
+    "onlyTwoPropertiesAdded": true,
+    "unchangedRuntimeArtifacts": 78,
+    "liveIndependentChangesPreserved": true,
+    "permissionsOrScheduledTasksChanged": false,
+    "previousMainRelease": "main-runtime-release-20261102-r1",
+    "normalMaintenanceUsed": true,
+    "document": "paper/docs/BACKGROUND_CONSOLE_20261102.md",
+    "handbookSynchronization": {
+      "fullSourceHashMatches": true,
+      "sha256": "fdd46f5757c2f6c3a7aac1d2d8241325888e704bb910f4abbe6f70da15c1b568",
+      "goddessReadOrReplyVerified": false,
+      "modelTasksSubmitted": 0
+    },
+    "verificationCorrections": {
+      "initialReadOnlyWatcherTimedOutBeforeMaintenanceCompleted": true,
+      "windowsPropertiesEscapingCorrectedWithFourPathCases": true,
+      "restartForVerificationCorrections": false,
+      "firstFailuresRetained": true
+    }
   }
 }
