@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "status": "isolated-candidate-not-deployed",
+  "status": "consumed-deployed-through-narrow-active-runtime-variant",
   "candidateVersion": "0.8.37",
   "baseCommit": "ecd6b3d3",
   "preparedAt": "2026-11-02T08:06:06.542Z",
   "featureDefaultEnabled": false,
-  "productionChanged": false,
+  "productionChanged": true,
   "gameRestarted": false,
-  "websiteRestarted": false,
+  "websiteRestarted": true,
   "newAccountsOrCredentials": false,
   "modelCalls": 0,
   "musicGenerationCalls": 0,
@@ -161,7 +161,7 @@
       "sha256": "14bccba821b9e2eb66b5153317cf234565da9d2906699f39c616fe8d08266224"
     }
   ],
-  "fileHashBasis": "Git index bytes (LF)",
+  "fileHashBasis": "Git index bytes with original line endings; frozen source candidate, not actual runtime hashes",
   "actualCloudPreflight": {
     "at": "2026-11-02T08:17:07Z",
     "readOnly": true,
@@ -177,5 +177,7 @@
       "planApplied": false
     },
     "productionMusicTablesPresent": false
-  }
+  },
+  "doNotReplayCandidate": true,
+  "deployedManifest": "paper/manifests/music-works-deployed-20261102.json"
 }

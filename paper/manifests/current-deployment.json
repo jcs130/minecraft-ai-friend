@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "console-runtime-release-20261102-r1",
-  "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
-  "releaseDocument": "paper/docs/BACKGROUND_CONSOLE_20261102.md",
+  "latestRelease": "music-works-20261102-r2",
+  "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
+  "releaseDocument": "paper/docs/MUSIC_WORKS_20261102.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -307,7 +307,7 @@
     "publicSkill": "1.3.7",
     "publicSkillCore": "0.5.7-rc.130",
     "harnessBodyCore": "0.5.7-rc.130",
-    "website": "0.8.36",
+    "website": "0.8.37",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
     "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
@@ -319,16 +319,17 @@
       "corticoLite": "0.1.2",
       "dshPlugin": "0.3.0-rc.24",
       "nativeYsm": "2.6.5"
-    }
+    },
+    "websiteManifest": "paper/manifests/music-works-deployed-20261102.json"
   },
   "websiteRelease": {
-    "release": "web-scene-20261101-r1",
-    "version": "0.8.36",
-    "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
-    "protectedTables": 21,
+    "release": "music-works-20261102-r2",
+    "version": "0.8.37",
+    "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
+    "protectedTables": 15,
     "gameRestarted": false,
-    "document": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
-    "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+    "document": "paper/docs/MUSIC_WORKS_20261102.md",
+    "manifest": "paper/manifests/music-works-deployed-20261102.json",
     "promotionalVideo": "https://b23.tv/Ppfd3Ne",
     "publicPhotosAtVerification": 7,
     "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
@@ -425,14 +426,15 @@
     "goddessAlreadyReadIt": false
   },
   "website": {
-    "state": "deployed-and-verified",
-    "version": "0.8.36",
-    "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
-    "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
-    "releaseManifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+    "state": "deployed-with-real-song-acceptance-pending",
+    "version": "0.8.37",
+    "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
+    "releaseDocument": "paper/docs/MUSIC_WORKS_20261102.md",
+    "releaseManifest": "paper/manifests/music-works-deployed-20261102.json",
     "guideServerVersion": "0.4.47.44-rpg",
     "gameRestartedForWebsite": false,
-    "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated"
+    "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated",
+    "musicEnabled": true
   },
   "compatibilityReleaseManifest": "paper/manifests/native-compatibility-20261030.json",
   "previousCompatibilityVerification": {
@@ -780,13 +782,13 @@
   "photoSceneArchives": {
     "state": "deployed-with-open-acceptance",
     "schema": "mc-photo-scene/v1",
-    "website": "0.8.36",
+    "website": "0.8.37",
     "radius": 3,
     "maximumColumns": 49,
     "originalResources": "private SHA256-addressed OSS objects; original encryption preserved",
     "wholeWorldBackup": false,
     "fullReconstructionVerified": false,
-    "formalPlayerPhotoRoundTripVerified": false,
+    "formalPlayerPhotoRoundTripVerified": true,
     "readOnlyNativeAcceptance": {
       "columns": 49,
       "entities": 52,
@@ -1174,6 +1176,68 @@
       "windowsPropertiesEscapingCorrectedWithFourPathCases": true,
       "restartForVerificationCorrections": false,
       "firstFailuresRetained": true
+    }
+  },
+  "previousReleaseBeforeMusic": {
+    "latestRelease": "console-runtime-release-20261102-r1",
+    "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
+    "releaseDocument": "paper/docs/BACKGROUND_CONSOLE_20261102.md",
+    "websiteRelease": {
+      "release": "web-scene-20261101-r1",
+      "version": "0.8.36",
+      "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+      "protectedTables": 21,
+      "gameRestarted": false,
+      "document": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
+      "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+      "promotionalVideo": "https://b23.tv/Ppfd3Ne",
+      "publicPhotosAtVerification": 7,
+      "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
+      "previousPhotoCountsAt20261029": {
+        "photosStored": 29,
+        "publicPhotos": 3,
+        "privatePhotos": 26
+      }
+    },
+    "website": {
+      "state": "deployed-and-verified",
+      "version": "0.8.36",
+      "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+      "releaseDocument": "paper/docs/WEB_SCENE_ARCHIVES_20261101.md",
+      "releaseManifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+      "guideServerVersion": "0.4.47.44-rpg",
+      "gameRestartedForWebsite": false,
+      "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated"
+    }
+  },
+  "musicWorks": {
+    "state": "deployed-with-real-song-acceptance-pending",
+    "version": "0.8.37",
+    "publicSongs": 0,
+    "clientAdoptedSongs": 8,
+    "realUploadPendingOwnerAuthorization": true,
+    "manifest": "paper/manifests/music-works-deployed-20261102.json"
+  },
+  "jointClientAcceptance20261102": {
+    "photo": {
+      "verified": true,
+      "receipt": "CF1102_1340",
+      "native1536NoUi": true,
+      "personalStashMapVerified": true,
+      "privateCloudImageAndSceneReadback": true,
+      "privateSceneResourcesVerified": 13,
+      "published": false
+    },
+    "voice": {
+      "earlierRequestCancelled": true,
+      "speakOrUploadSubmitted": false,
+      "serverReceiptCountForThatRequest": 0,
+      "fullVoiceAudibilityAndAsrVerified": false
+    },
+    "music": {
+      "websiteEnabled": true,
+      "realEightSongsPublished": false,
+      "pending": "Current owner authorization on the original role/client; no qda registration exists"
     }
   }
 }

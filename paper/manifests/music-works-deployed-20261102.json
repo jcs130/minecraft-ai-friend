@@ -1,0 +1,225 @@
+{
+  "schema": 1,
+  "state": "deployed-with-real-song-acceptance-pending",
+  "version": "0.8.37",
+  "verifiedAt": "2026-11-02T08:53:45.339432+00:00",
+  "sourceCommit": "e575bb1257f5d7aa4f8a50ef40b12f82ae41bebe",
+  "sourcePullRequest": "https://github.com/jcs130/minecraft-ai-friend/pull/44",
+  "sourceMergeCommit": "f88f8a4f61a1e4b5f4648f1a7421d5524c3d8044",
+  "sourceChecksPassed": 5,
+  "runtimeVariant": "music-only-on-actual-0.8.36; no NEKO OAuth activation or code replacement",
+  "imageId": "sha256:5f13cc7d1709bb860a55e31f49f6975c073a2e022c2b85f8e7e9415517f93e74",
+  "gameProxyCameraClientsRestarted": false,
+  "existingAccountsAndCredentialsChanged": false,
+  "oldReadOnlyTokensWidened": false,
+  "newModelOrGenerationCalls": 0,
+  "backup": {
+    "bothDisksVerified": true,
+    "sha256": "e8ae1a178bc767f3915216e1395e3999b5ebc93a3de5ffc7b1e59891de7ce71c",
+    "bytes": 136789734,
+    "scope": "consistent online website database, original config and runtime; not game data"
+  },
+  "protectedTables": 15,
+  "protectedRowsPreserved": true,
+  "unrelatedRuntimeFilesPreserved": true,
+  "downloadsUnchanged": true,
+  "originalPhotoPrivacyPreserved": true,
+  "tests": {
+    "local": {
+      "passed": 398,
+      "skipped": 3,
+      "failed": 0,
+      "syntaxModules": 127,
+      "dependencyVulnerabilities": 0
+    },
+    "cloudFocused": {
+      "passed": 26,
+      "failed": 0
+    },
+    "actualWebsiteBrowser": {
+      "passed": true,
+      "desktop": {
+        "noOverflow": true,
+        "title": "把旅途，唱给世界听。",
+        "status": "还没有公开的歌曲。完成的作品会在这里与大家见面。",
+        "audioElements": 0
+      },
+      "mobile": {
+        "noOverflow": true
+      },
+      "mainMenuMusicLink": true,
+      "errors": []
+    },
+    "external": {
+      "health": {
+        "http": 200,
+        "version": "0.8.37",
+        "cache": "no-store"
+      },
+      "capabilities": {
+        "http": 200,
+        "enabled": true,
+        "maximumBytes": 134217728,
+        "maximumSeconds": 1800,
+        "cache": "no-store"
+      },
+      "publicMusic": {
+        "http": 200,
+        "total": 0,
+        "cache": "no-store"
+      },
+      "gallery": {
+        "http": 200,
+        "cache": "no-store"
+      },
+      "selfMusic": {
+        "http": 401,
+        "cache": "no-store"
+      },
+      "originalPhotoPrivate": {
+        "http": 401,
+        "cache": "no-store"
+      },
+      "originalPhotoPublic": {
+        "http": 404,
+        "cache": "no-store"
+      },
+      "staticFiles": [
+        {
+          "name": "music.html",
+          "http": 200,
+          "sourceMatches": true
+        },
+        {
+          "name": "music.mjs",
+          "http": 200,
+          "sourceMatches": true
+        },
+        {
+          "name": "music-client.mjs",
+          "http": 200,
+          "sourceMatches": true
+        },
+        {
+          "name": "music.css",
+          "http": 200,
+          "sourceMatches": true
+        },
+        {
+          "name": "app.js",
+          "http": 200,
+          "sourceMatches": true
+        }
+      ],
+      "privateOssRange": {
+        "http": 206,
+        "bytes": 100,
+        "anonymousHttp": 403
+      }
+    }
+  },
+  "cors": {
+    "passed": true,
+    "applied": true,
+    "exactWebsiteOriginOnly": true,
+    "originalRuleCount": 0,
+    "ruleCount": 1,
+    "privateAclPreserved": true,
+    "oldTokensUnchanged": true,
+    "checks": [
+      {
+        "http": 200,
+        "method": "PUT",
+        "originMatches": true
+      },
+      {
+        "http": 200,
+        "method": "GET",
+        "originMatches": true
+      }
+    ],
+    "at": "2026-11-02T08:52:10.654Z"
+  },
+  "currentPublicSongs": 0,
+  "adoptedClientSongsPending": 8,
+  "realSongUploadNeeds": "Existing bound owner website session, or a new explicit role-scoped music.write grant; original CorMy has no qda client record. No re-registration or password replacement.",
+  "unfinishedNewSongExcluded": "千灯纪回家路",
+  "doNotReplayMaintenance": true,
+  "rollback": "Code/container only; retain new metadata and all live player progress. Do not restore old database.",
+  "failedAttemptsPreserved": [
+    "First isolated image rejected undeployed NEKO OAuth import; final release uses narrow active-runtime delta",
+    "First backup process buffered archive and exited137; production container never restarted; replaced by separate streaming container",
+    "First switch rolled back on postflight POST/port argument mistake; database was not restored; corrected one-shot r2 passed"
+  ],
+  "runtimeFiles": [
+    {
+      "path": "Dockerfile",
+      "sha256": "b36fb8ab4970508ae71313f92876f11e9e6221f1dcb02dda4c98659101172340"
+    },
+    {
+      "path": "config.example.json",
+      "sha256": "9e7bf4b4a69605645ed0b793138332a1a8ffea0dc93939bde4b58612a7afeb8c"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "9d8c5631c16a7359ae68da5d6a7bd25d6e6cbad6de2d5393112fab46fb037564"
+    },
+    {
+      "path": "package.json",
+      "sha256": "7ef37ca9394c8ef42a4b033a1b4cadb4a13e2e70c124e197e8572d305af3bdcc"
+    },
+    {
+      "path": "public/app.js",
+      "sha256": "69cef20648143a29d58f82ac2b9f83662fc5db31c3b7d63418ee5bc53ba8a85f"
+    },
+    {
+      "path": "public/music-client.mjs",
+      "sha256": "ece4a5968fc4399c48cd02aa5bbe9f1cc909d858a01e76e05f03eef8a5aa14c5"
+    },
+    {
+      "path": "public/music.css",
+      "sha256": "851a6b22981480a603aee2823c177861e819553f65c7747e9cb85a3faeb3ab96"
+    },
+    {
+      "path": "public/music.html",
+      "sha256": "b1342211f062fd98259df98169d1fb747030ba8a2a119c15718fb9bb7e486c70"
+    },
+    {
+      "path": "public/music.mjs",
+      "sha256": "2c1f04e81c1122205400fafccc70830de6c4177168c8a4450864e86b3ad239e4"
+    },
+    {
+      "path": "src/agent-access.mjs",
+      "sha256": "b1548feff2190833a68e219fb28e83f8f0abb8d1e2d1c014fafe8b37092713d4"
+    },
+    {
+      "path": "src/config.mjs",
+      "sha256": "d0f6aa5b76fcb1a54d1e05a9a7344b49dc1f18ff53805c608a39cb84e25fdfdb"
+    },
+    {
+      "path": "src/music-object-storage.mjs",
+      "sha256": "8088077e7985e12129745da32d04e52df098ef658c0dfca338804063532c7f78"
+    },
+    {
+      "path": "src/music-routes.mjs",
+      "sha256": "26c0e6eb54df1a9aa74107ceca49601ba9bed83da170ad4cae1175ac0444f38d"
+    },
+    {
+      "path": "src/music-works.mjs",
+      "sha256": "7e1a12c6b2010f4b82e543d587653b301bc28fe8ed80742a1ebe78d9443968a4"
+    },
+    {
+      "path": "src/private-object-client.mjs",
+      "sha256": "6ca5158c830e2180eb568547be152ef6a712a5dbc766c9658060662c59e0adfd"
+    },
+    {
+      "path": "src/scene-object-storage.mjs",
+      "sha256": "1ebbadc892964060b2eb74cf98cbee3871f633ede1cca3d413d858c1b5f8ec50"
+    },
+    {
+      "path": "src/server.mjs",
+      "sha256": "6cbbf5cfb9041ea412c3a5811875feb44198275b58baaab00f69e2dad765dc42"
+    }
+  ],
+  "documentation": "paper/docs/MUSIC_WORKS_20261102.md"
+}
