@@ -23,7 +23,11 @@ test('desktop/mobile music UI, literal lyrics, manual playback, owner controls a
     assert.equal((await f.api('/' + work.id + '/publication', 'PUT', { requestId: randomUUID(), published: true, expectedRevision: ready.revision })).status, 200);
   }
   await f.api('', 'POST', { ...metadata, title: '未完成的歌词草稿', requestId: randomUUID() });
-  browser = await puppeteer.launch({ executablePath, headless: true, args: ['--disable-gpu', '--no-first-run', '--no-default-browser-check'], userDataDir: path.join(f.root, 'isolated-browser') });
+  // GitHub's disposable Ubuntu runner blocks Chromium user namespaces. This
+  // exception is only for this synthetic loopback fixture, never the app or a
+  // real user's browser/profile; Windows and ordinary launches keep defaults.
+  const ciArguments = process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : [];
+  browser = await puppeteer.launch({ executablePath, headless: true, args: ['--disable-gpu', '--no-first-run', '--no-default-browser-check', ...ciArguments], userDataDir: path.join(f.root, 'isolated-browser') });
   const page = await browser.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.setViewport({ width: 1366, height: 900 }); await page.goto(f.origin + '/music.html');
   await page.waitForFunction(() => document.querySelectorAll('.work').length === 8);

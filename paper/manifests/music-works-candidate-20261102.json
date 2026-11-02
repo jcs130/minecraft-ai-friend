@@ -30,7 +30,7 @@
       "passed": true
     },
     "fixtures": "Synthetic encoded tones only, not adopted vocal songs",
-    "firstFailuresPreserved": "CSP whitespace regression and isolated browser cleanup order; both repaired"
+    "firstFailuresPreserved": "CSP whitespace regression and isolated browser cleanup order; both repaired; initial Linux CI AppArmor user namespace restriction, fixed only for synthetic GitHub fixture browser"
   },
   "realSongs": {
     "clientReportedAdoptedCount": 8,
@@ -151,8 +151,8 @@
     },
     {
       "path": "paper/integrations/agent-portal/tests/music-browser.test.mjs",
-      "bytes": 4770,
-      "sha256": "3581bcbcd9dc7a9a56eca319237128ab3f121fd1e2395504709f8cf568cd3947"
+      "bytes": 5138,
+      "sha256": "348948c5106d86819d89da5708feadf823455f27945f2643992aff1d827a985d"
     },
     {
       "path": "paper/integrations/agent-portal/tests/fixtures/music-audio.json",
