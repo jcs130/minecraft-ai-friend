@@ -1,14 +1,57 @@
 import { expect, it } from 'vitest';
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
-import { omitContextSchemaAnnotations } from '../src/context.ts';
+import { omitContextSchemaAnnotations, preserveToolInputSignatures } from '../src/context.ts';
 import { compactToolSchema } from '../src/client/context-budget.ts';
 import { withToolHelp } from '../src/client/tool-help.ts';
 import { MINECRAFT_TOOL_DECLS } from '../core/world.ts';
 import { nullLogger } from '../src/client/index.ts';
+import { SKILL_STEP_SCHEMA } from '../core/skills.ts';
 
 type Schema = Parameters<AjvJsonSchemaValidator['getValidator']>[0];
 const validator = (schema: unknown) => new AjvJsonSchemaValidator().getValidator(schema as Schema);
 const annotation='x-agent-mc-skill-contracts';
+
+it('retains per-skill field relationships when host prose compaction removed the long directory', () => {
+  // Captured host projection: it keeps the flat properties and their validators,
+  // but abbreviates the steps prose before removing the generation annotation.
+  const input=structuredClone(SKILL_STEP_SCHEMA);
+  input.description='A short heading; read full help for more.';
+  const original=structuredClone(input);
+  const result=preserveToolInputSignatures(input,omitContextSchemaAnnotations(input) as Record<string,unknown>);
+  const fields=result.properties as Record<string,Record<string,unknown>>;
+  expect(fields.skill.description).toContain('look(at*)');
+  expect(fields.skill.description).toContain('harvest(block*,at*');
+  expect(fields.skill.description).toContain('observe(mode="sites"*,sites*)');
+  expect(fields.skill.description).toContain('entityId?');
+  expect(result.required).toEqual(input.required);
+  expect(result.oneOf).toBeUndefined();
+  expect(input).toEqual(original);
+  expect(preserveToolInputSignatures(input,result)).toBe(result);
+});
+
+it('ignores malformed generation metadata and does not treat argument literals as schemas', () => {
+  const input={type:'object',properties:{skill:{type:'string',enum:['look']}},
+    [annotation]:{look:[{type:'object',properties:{skill:{const:'other'},at:{}},required:['skill','at']}]}};
+  expect(preserveToolInputSignatures(input,omitContextSchemaAnnotations(input) as Record<string,unknown>)).toEqual({type:'object',properties:input.properties});
+  const literal={type:'object',const:{[annotation]:SKILL_STEP_SCHEMA[annotation]}};
+  expect(preserveToolInputSignatures(literal,literal)).toBe(literal);
+});
+
+it('recovers the small field index from a deferred native schema without restoring the full generation directory', () => {
+  const declaration=MINECRAFT_TOOL_DECLS.find(tool=>tool.name==='mc_do')!;
+  const mounted=withToolHelp([{...declaration,handler:async()=>{throw Error('No action permitted');}}],'help',{parameterDescriptions:'on-demand'})[0];
+  const abbreviated=structuredClone(mounted.parameters);
+  const view=preserveToolInputSignatures(mounted.parameters,abbreviated);
+  const items=(view.properties as any).steps.items;
+  expect(items.properties.skill.description).toContain('look(at*)');
+  expect(items.properties.skill.description).toContain('harvest(block*,at*');
+  expect(JSON.stringify(view)).not.toContain(annotation);
+  expect(JSON.stringify(view).length).toBeLessThan(JSON.stringify(declaration.parameters).length/2);
+  const before=validator(mounted.parameters),after=validator(view);
+  for(const args of [{steps:[{skill:'look'}]},{steps:[{skill:'look',at:[1,64,2]}]},
+    {steps:[{skill:'harvest',block:'wheat',at:[1,64,2]}]}]) expect(after(args).valid).toBe(before(args).valid);
+  expect((mounted.parameters.properties as any).steps.items.properties.skill.description).toBeUndefined();
+});
 
 it('removes the generation directory from the request while preserving real action-schema validation', () => {
   const original=MINECRAFT_TOOL_DECLS.find(tool=>tool.name==='mc_do')!.parameters, saved=structuredClone(original);
