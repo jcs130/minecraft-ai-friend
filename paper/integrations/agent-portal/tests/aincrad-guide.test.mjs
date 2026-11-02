@@ -9,7 +9,8 @@ test('Aincrad release is readable without login or JavaScript and serves respons
   assert.equal(response.status, 200);
   const dom = new JSDOM(await response.text()); t.after(() => dom.window.close());
   const document = dom.window.document;
-  assert.equal(document.querySelectorAll('script,form').length, 0);
+  assert.equal(document.querySelectorAll('form,script:not([src="/site-shell.js"])').length, 0);
+  assert.equal(document.querySelectorAll('script[src="/site-shell.js"]').length, 1, 'navigation enhancement is optional; guide text remains server-rendered');
   assert.match(document.querySelector('h1').textContent, /重返艾恩葛朗特.*破晓攻略/);
   assert.match(document.body.textContent, /Vortex六职业/);
   assert.match(document.body.textContent, /后续楼层逐步建设/);
