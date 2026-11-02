@@ -129,6 +129,7 @@ async function screen(t, { capabilitiesReady = false, initialView = 'overview', 
     assert.ok(path.resolve(root).startsWith(fixtureBase + path.sep)); await fs.rm(root, { recursive: true, force: true });
     assert.deepEqual(errors, [], 'No unexpected DOM runtime errors');
   });
+  window.eval(await fs.readFile(path.join(projectRoot, 'public/site-shell.js'), 'utf8'));
   window.eval(await fs.readFile(path.join(projectRoot, 'public/memories.js'), 'utf8'));
   window.eval(await fs.readFile(path.join(projectRoot, 'public/challenges.js'), 'utf8'));
   window.eval(await fs.readFile(path.join(projectRoot, 'public/viewer-fullscreen.js'), 'utf8'));
@@ -325,11 +326,10 @@ test('public no-JavaScript onboarding and downloads distinguish plugin registrat
   assert.ok(!html.includes('{{GAME_ADDRESS}}'), 'every repeated address placeholder is resolved');
 });
 
-test('phone navigation closes from its scrim and LAN HTTP forms work without secure-context randomUUID', async t => {
+test('phone has four direct navigation entries and LAN HTTP forms work without secure-context randomUUID', async t => {
   const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
-  ui.click('.mobile-menu'); assert.ok(ui.document.querySelector('.layout').classList.contains('menu-open'));
-  assert.equal(ui.document.querySelector('.mobile-menu').getAttribute('aria-expanded'), 'true');
-  ui.click('.nav-scrim'); assert.ok(!ui.document.querySelector('.layout').classList.contains('menu-open'));
+  assert.equal(ui.document.querySelectorAll('.site-navigation>a').length, 4);
+  assert.equal(ui.document.querySelectorAll('.site-navigation details,.mobile-menu').length, 0);
   Object.defineProperty(ui.window.crypto, 'randomUUID', { value: undefined });
   ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('#main [data-action="connect-agent"]'));
   ui.click('[data-action="connect-agent"]');
@@ -580,12 +580,11 @@ test('the default homepage introduces a shared Agent living world and exhibits o
   const photo = { id: '11111111-1111-4111-8111-111111111112', author: 'ag_CorMy', title: '<script>unsafe()</script>', story: '在千灯纪安下的家。', capturedAt: '2026-10-20T01:00:00Z', width: 1536, height: 1536, imageUrl: '/api/v1/gallery/11111111-1111-4111-8111-111111111112/image?rev=test' };
   const ui = await screen(t, { initialView: 'home', photos: [photo] });
   assert.match(ui.document.querySelector('h1').textContent, /重返.*艾恩葛朗特/s);
-  assert.equal(ui.document.querySelector('.home-hero-actions a').getAttribute('href'), '/aincrad.html');
-  assert.equal(ui.document.querySelectorAll('.aincrad-step').length, 4);
-  assert.match(ui.document.querySelector('.aincrad-release').textContent, /第一层正式攻略/);
-  assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico.*QwenPaw/);
+  assert.equal(ui.document.querySelector('.home-hero-actions [data-view=live]').textContent, '看看大家在玩什么');
+  assert.equal(ui.document.querySelector('.home-join-section a[href="/aincrad.html"]').textContent.trim(), '玩法指南');
+  assert.equal(ui.document.querySelectorAll('.aincrad-release,.world-scenes,.client-choices').length, 0);
+  assert.equal(ui.document.querySelectorAll('.join-choice').length, 2);
   assert.equal(ui.document.querySelectorAll('img[src*=neko-cover]').length, 0);
-  assert.match(ui.document.querySelector('.home-rescue-note').textContent, /4格内连续停留10秒/);
   assert.equal(ui.document.querySelectorAll('.photo-card script').length, 0);
   assert.match(ui.document.querySelector('.photo-post-header').textContent, /可米/);
   assert.match(ui.document.querySelector('.photo-caption').textContent, /在千灯纪安下的家/);
@@ -595,8 +594,7 @@ test('the default homepage introduces a shared Agent living world and exhibits o
   assert.equal(ui.document.querySelectorAll('#modal script').length, 0);
   assert.match(ui.document.querySelector('.photo-story').textContent, /安下的家/);
   ui.click('[data-action="close-modal"]');
-  ui.click('.mobile-menu'); assert.ok(ui.document.querySelector('.layout').classList.contains('menu-open'));
-  ui.click('.nav-scrim'); assert.ok(!ui.document.querySelector('.layout').classList.contains('menu-open'));
+  assert.equal(ui.document.querySelectorAll('.site-navigation>a').length, 4);
   ui.window.location.hash = 'gallery'; await waitFor(() => ui.document.querySelector('.full-gallery'));
   assert.equal(ui.document.querySelectorAll('.photo-card').length, 1);
 });
@@ -611,10 +609,9 @@ test('resident scene art and promotion preserve playback while background state 
   assert.equal(ui.document.querySelector('.world-hero-resident'), null);
   assert.equal(ui.document.querySelector('.world-hero-art img').getAttribute('src'), '/season-art/aincrad-dusk-20261030-960.webp');
   assert.match(ui.document.querySelector('.world-hero-art img').getAttribute('srcset'), /640w.*960w.*1440w/);
-  assert.equal(ui.document.querySelectorAll('.world-scenes img[loading="lazy"]').length, 3);
+  assert.equal(ui.document.querySelectorAll('.world-scenes img').length, 0);
   assert.match(ui.document.querySelector('.world-art-label').textContent, /千灯纪：重返艾恩葛朗特.*场景概念图/s);
-  assert.equal(ui.document.querySelector('.season-update').getAttribute('href'), '/aincrad.html#latest');
-  assert.match(ui.document.querySelector('.home-world-strip').textContent, /NEKO.*Cortico/);
+  assert.ok(ui.document.querySelector('a[href="/aincrad.html"]'));
   video.currentTime = 42;
   ui.outage(); await ui.refresh(false);
   assert.equal(ui.document.querySelector('.home-film video'), video, 'Background polling must preserve the actual video node');
@@ -829,26 +826,39 @@ test('public deep links render escaped stories, participant filtering and sharin
 });
 
 
-test('home and connection center expose three real client choices with parent projects and current SDK', async t => {
- const ui = await screen(t, { initialView:'home' });
- const source = 'https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world';
- assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,4);
- assert.ok(ui.document.querySelector(`.client-choices a[href="${source}"]`));
- for (const url of ['https://github.com/Project-N-E-K-O/N.E.K.O','https://github.com/Pal-AI-Lab/Cortico']) assert.ok(ui.document.querySelector(`.client-choices a[href="${url}"]`));
- ui.window.location.hash='connections'; await waitFor(()=>ui.document.querySelector('a[download]'));
- assert.ok(ui.document.querySelector('a[download]').href.endsWith(agentSkill.url));
- assert.ok(ui.document.querySelector('#main').textContent.includes(agentSkill.sdkVersion));
- assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,4);
- await ui.refresh(false);
- assert.equal(ui.document.querySelectorAll('.client-choices .client-card').length,4);
+test('home and help route to one download catalogue; advanced credentials stay available to owners',async t=>{
+ const ui=await screen(t,{initialView:'home'});
+ assert.equal(ui.document.querySelectorAll('.client-choices,.client-card').length,0);
+ assert.ok(ui.document.querySelector('a[href="/join"]'));
+ ui.window.location.hash='connections';await waitFor(()=>ui.document.querySelector('.connection-start'));
+ assert.ok(ui.document.querySelector('a[href="/downloads.html"]'));
+ assert.equal(ui.document.querySelector('.advanced-settings'),null);
+ await ui.setup();
+ await waitFor(()=>ui.document.querySelector('.advanced-settings'));
+ const advanced=ui.document.querySelector('.advanced-settings');assert.equal(advanced.open,false);
+ assert.equal(ui.document.querySelectorAll('[data-action="new-agent-invite"]').length,1);
+ advanced.open=true;
+ assert.ok(advanced.querySelector('a[download]').href.endsWith(agentSkill.url));
+ assert.ok(advanced.textContent.includes(agentSkill.sdkVersion));
+ assert.ok(advanced.querySelector('[data-action="new-token"]'));
+ await ui.refresh(false);assert.equal(ui.document.querySelector('.advanced-settings').open,true,'polling preserves the active settings section');
+ assert.doesNotMatch(ui.document.querySelector('#main').textContent,/网页接管|待接入|客户端只读授权/);
+ ui.window.location.hash='help';await waitFor(()=>ui.document.querySelector('.help-topics'));
+ assert.equal(ui.document.querySelectorAll('.join-choice').length,2);
+ assert.equal(ui.document.querySelectorAll('.help-topics>details[open]').length,0);
+ assert.match(ui.document.querySelector('.help-topics').textContent,/照片和歌曲管理/);
+ ui.document.querySelector('.help-topics>details').open=true;await ui.refresh(false);assert.equal(ui.document.querySelector('.help-topics>details').open,true);
 });
 
-
-test('homepage preserves the already published SAO download entry during photo updates',async t=>{
- const ui=await screen(t,{initialView:'home'}),card=ui.document.querySelector('.home-upcoming-world');
- assert.ok(card);assert.match(card.textContent,/SAO 模组世界/);assert.match(card.textContent,/公开测试/);assert.match(card.textContent,/Java 1.20.1/);
- assert.equal(card.querySelectorAll('a').length,1);assert.equal(card.querySelector('a').getAttribute('href'),'/sao.html');assert.equal(card.querySelectorAll('button,input,code').length,0);assert.ok(!card.textContent.includes('28977'));assert.ok(!card.textContent.includes('28976'));
- await ui.refresh(false);assert.equal(ui.document.querySelectorAll('.home-upcoming-world').length,1);
+test('separate SAO world and original download links remain reachable outside the landing page',async t=>{
+ const ui=await screen(t,{initialView:'home'});
+ assert.equal(ui.document.querySelector('.home-upcoming-world'),null);
+ ui.window.location.hash='help';await waitFor(()=>ui.document.querySelector('.join-secondary'));
+ const link=ui.document.querySelector('.join-secondary a[href="/sao.html"]');assert.ok(link);
+ assert.match(link.textContent,/SAO 1.20.1.*公开测试/);
+ const downloads=await(await fetch(ui.origin+'/downloads.html')).text();
+ for(const id of ['game-clients','game-client-downloads','package-downloads','component-downloads','advanced-downloads','maid-client','ysm-client','shared'])assert.ok(downloads.includes('id="'+id+'"'),id);
+ assert.match(downloads,/<details id="appearance-clients"/);assert.match(downloads,/<details id="sao-clients"/);
 });
 
 function uiChallenges(stale=false){
@@ -1008,52 +1018,32 @@ test('an available but empty archive explains missing works without claiming a s
   await waitFor(()=>ui.document.querySelector('.content-freshness')?.textContent.includes('暂不可用'));
 });
 
-test('home and inner routes keep one grouped navigation, every route and the current-page marker', async t => {
-  const ui = await screen(t, { initialView: 'home' });
-  const nav = () => ui.document.querySelector('nav[aria-label="网站导航"]');
-  const targets = ['home', 'agents', 'live', 'overview', 'events', 'challenges', 'growth', 'gallery', 'memories', 'archives', 'help'];
-  for (const view of targets) assert.ok(nav().querySelector(`a[href="#${view}"]`), view);
-  assert.equal(nav().querySelectorAll(':scope>a').length, 4, 'secondary world pages are grouped rather than all flattened');
-  assert.equal(nav().querySelector('[aria-current=page]').getAttribute('href'), '#home');
-  assert.equal(ui.document.querySelectorAll('header.site-header').length, 1);
-  const originalLinks = [...nav().querySelectorAll('a')].map(a => a.getAttribute('href'));
-  ui.window.location.hash = 'events';
-  await waitFor(() => nav().querySelector('[aria-current=page]')?.getAttribute('href') === '#events');
-  assert.deepEqual([...nav().querySelectorAll('a')].map(a => a.getAttribute('href')), originalLinks);
-  assert.equal(ui.document.querySelector('.sidebar'), null);
-  assert.equal(nav().querySelector('[data-current=true]>summary').textContent, '探索世界');
-  await ui.setup();
-  const account = ui.document.querySelector('.site-account-menu');
-  for (const view of ['account', 'agents', 'inventory', 'connections']) assert.ok(account.querySelector(`a[href="#${view}"]`));
-  assert.equal(ui.document.querySelectorAll('nav[aria-label="网站导航"]').length, 1);
+test('four primary entries and contextual links retain existing routes and current-page markers',async t=>{
+ const ui=await screen(t,{initialView:'home'});
+ const links=()=>[...ui.document.querySelectorAll('.site-navigation>a')].map(a=>a.textContent);
+ assert.deepEqual(links(),['世界','直播','作品','加入']);
+ assert.equal(ui.document.querySelector('.site-navigation [aria-current=page]').getAttribute('href'),'#overview');
+ assert.equal(ui.document.querySelectorAll('.site-navigation details').length,0);
+ for(const [view,section] of [['events','overview'],['gallery','gallery'],['help','help'],['connections',null]]){
+  ui.window.location.hash=view;await waitFor(()=>ui.document.querySelector('.qd-section-nav [aria-current=page]')?.getAttribute('href')==='#'+view);
+  assert.deepEqual(links(),['世界','直播','作品','加入']);
+  assert.equal(ui.document.querySelector('.site-navigation [aria-current=page]')?.getAttribute('href')??null,section?'#'+section:null);
+  assert.equal(ui.document.querySelectorAll('.site-header').length,1);
+ }
+ ui.window.location.hash='overview';await waitFor(()=>ui.document.querySelector('.qd-section-nav a[href="#challenges"]'));
+ for(const view of ['overview','agents','events','challenges','growth'])assert.ok(ui.document.querySelector('.qd-section-nav a[href="#'+view+'"]'));
 });
 
-test('navigation Escape closes disclosures and mobile menu, route changes close stale mobile state', async t => {
-  const ui = await screen(t, { initialView: 'home' });
-  ui.click('.mobile-menu');
-  const group = ui.document.querySelector('.site-nav-group'); group.open = true;
-  ui.document.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  assert.equal(group.open, false);
-  assert.equal(ui.document.querySelector('.mobile-menu').getAttribute('aria-expanded'), 'false');
-  assert.equal(ui.document.querySelector('.layout').classList.contains('menu-open'), false);
-  assert.equal(ui.document.activeElement, ui.document.querySelector('.mobile-menu'));
-  ui.click('.mobile-menu'); ui.window.location.hash = 'agents';
-  await waitFor(() => ui.document.querySelector('.site-navigation [aria-current=page]')?.getAttribute('href') === '#agents');
-  assert.equal(ui.document.querySelector('.mobile-menu').getAttribute('aria-expanded'), 'false');
-  assert.equal(ui.document.querySelector('.layout').classList.contains('menu-open'), false);
+test('Escape closes the account disclosure and routes close stale disclosure state',async t=>{
+ const ui=await screen(t,{initialView:'home'});await ui.setup();
+ const group=ui.document.querySelector('.site-account-menu');group.open=true;
+ ui.document.dispatchEvent(new ui.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(group.open,false);
+ group.open=true;ui.window.location.hash='agents';await waitFor(()=>ui.document.querySelector('.qd-section-nav [aria-current=page]')?.getAttribute('href')==='#agents');
+ assert.equal(ui.document.querySelector('.site-account-menu').open,false);
 });
 
-test('background data refresh does not close or replace an open navigation menu', async t => {
-  const ui=await screen(t);
-  ui.click('.mobile-menu');
-  const menu=ui.document.querySelector('.mobile-menu'),nav=ui.document.querySelector('.site-navigation');
-  await ui.refresh(false);
-  assert.equal(ui.document.querySelector('.mobile-menu'),menu);
-  assert.equal(menu.getAttribute('aria-expanded'),'true');
-  assert.equal(ui.document.querySelector('.site-navigation'),nav);
-  ui.click('.mobile-menu');
-  const group=ui.document.querySelector('.site-nav-group');group.open=true;
-  await ui.refresh(false);
-  assert.equal(ui.document.querySelector('.site-nav-group'),group);
-  assert.equal(group.open,true);
+test('background data refresh preserves an open account disclosure',async t=>{
+ const ui=await screen(t);await ui.setup();
+ const group=ui.document.querySelector('.site-account-menu'),nav=ui.document.querySelector('.site-navigation');group.open=true;
+ await ui.refresh(false);assert.equal(ui.document.querySelector('.site-account-menu'),group);assert.equal(group.open,true);assert.equal(ui.document.querySelector('.site-navigation'),nav);
 });
