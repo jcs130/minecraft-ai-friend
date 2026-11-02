@@ -44,7 +44,7 @@
     "kernel": "Youer1.21.1 build920 / NeoForge21.1.252",
     "QiandengjiMaidBridge": "0.1.6",
     "NativePlatform": "0.1.6",
-    "OptionalPayloadGuard": "0.1.1",
+    "OptionalPayloadGuard": "0.1.2",
     "YSM": "2.6.5",
     "QiandengjiFaweHybrid": "0.1.0",
     "NumenEngine": "0.1.4-qd-youer1",
@@ -139,7 +139,7 @@
     "E:\\MC\\ops\\build-native-auth.py": "42272c191df7116044e826df2efe2e7febabd8e215d0a8f50843de7920dd6aab",
     "E:\\MC\\ops\\world-activity.py": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b",
     "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.1.jar": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479"
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -680,7 +680,8 @@
     "E:\\MC\\server\\plugins\\ViaVersion.jar": "08caeeaba6674643b427ca901a47e53e291d1b3b20d06c5a0ed3b895d5d7fa00",
     "E:\\MC\\server\\plugins\\ViaBackwards.jar": "4316593b4e50bac259ed00c6cacf61dccc1fbfcb08832c77ae5ac7ea8e0b0185",
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.2.jar": "116ced8e39a114ebeaee3a3030a9e2aec0faa2012c74a06350b6c90d00671317",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c"
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
+    "OptionalPayloadGuard-0.1.1.jar": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479"
   },
   "previousVerificationBeforeYsm265": {
     "formalProduction": 40,
@@ -758,7 +759,9 @@
     "maintenanceIdentity": "owner-confirmed reconnectable service",
     "randomAssignmentExcluded": true,
     "modelsConfigSha256": "b41433e2f04884e8be3eb4d225f77eb8cbccaf8e1cd6bf438ef5321eef697e1f",
-    "gameRestarted": false
+    "gameRestarted": false,
+    "lastNativeModelReverifiedAt": "2026-11-02T04:37:54.550790+00:00",
+    "diagnosticAddonSha256": "fe23f12b7433020e1b40118d596fad3841b6e4a0bfe1ff40bac93b01ddc73664"
   },
   "publicObserverDecodeInvestigation": {
     "state": "open",
@@ -961,13 +964,46 @@
     "document": "paper/manifests/proxy-command-compat-deployed-20261102.json"
   },
   "nativeYsmHandoff": {
-    "installedVersion": "0.1.1",
-    "installedAt": "2026-11-02T11:19:55+08:00",
+    "schemaVersion": 1,
+    "component": "OptionalPayloadGuard",
+    "version": "0.1.2",
+    "status": "deployed-native-transport-and-owned-camera-model-verified",
+    "verifiedAt": "2026-11-02T04:37:54.550790+00:00",
+    "sha256": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
+    "sourceCommit": "2f3d829f135a0b10104e727977dcfe4614fe66da",
     "gameRestarted": false,
+    "originalLoginGuard": "0.1.10",
+    "originalYsm": "2.6.5",
+    "originalYsmProtocol": "2.6.0",
+    "normalExistingLifecycle": true,
+    "securitySettingsOrScheduledTasksChanged": false,
     "originalCredentialRowsPreserved": 72,
-    "nativeClientAndBackendAgree": false,
-    "remotePixelsAccepted": false,
-    "candidateVersion": "0.1.2",
+    "consistentAccountBackupOnTwoDisks": true,
+    "qa": {
+      "passed": true,
+      "candidateSha256": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
+      "sourceCommit": "2f3d829f135a0b10104e727977dcfe4614fe66da",
+      "fabricBaselineGameReady": false,
+      "fabricCandidateClientAndGameReady": true,
+      "originalNeoForgeOperatorQueryPassed": true,
+      "ordinaryJavaAuthenticationChecks": 6,
+      "ordinaryYsmPacketsFiltered": 9,
+      "allQaNormallyStoppedAndRestored": true,
+      "formalComponentsUnchanged": true
+    },
+    "production": {
+      "criticalChecksPassed": 9,
+      "originalPhotoLensServerReady": true,
+      "originalPhotoLensClientReady": true,
+      "originalLiveServerReady": true,
+      "cameraCatalogueModels": 40,
+      "cameraOwnModel": "qd_observer_drone",
+      "cameraOwnModelActuallyLoaded": true,
+      "cameraFps": 30,
+      "completeRemotePixelsAccepted": false
+    },
+    "consumedMaintenanceMustNotBeReplayed": true,
     "document": "paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md"
-  }
+  },
+  "latestBackgroundPatch": "native-ysm-handoff-20261102"
 }

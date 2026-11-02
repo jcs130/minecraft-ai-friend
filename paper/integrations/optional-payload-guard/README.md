@@ -1,6 +1,6 @@
 # OptionalPayloadGuard
 
-正式已加载0.1.1，新增原版 NeoForge 21.1.252 的 `neoforge:register` 解码能力声明识别。正式 Fabric 相机另发现登录阶段已握手、切到游戏后未就绪的问题；0.1.2为后续候选，尚未宣称人物画面恢复。不改变原版YSM、LoginGuard、角色选择或权限。
+正式已加载0.1.2：识别原版NeoForge通道声明，并衔接Fabric在登录场景完成的原始版本确认。正式相机与live游戏端已握手，相机目录40项、无人机实际加载；完整远端画面仍单独验收。原版YSM、LoginGuard、角色选择和权限不变。
 
 只认可PLAY的客户端方向或双向通道，保留原有Minecraft/Common注册、连接隔离、断线清除、大小及数量限制。70项回归及原版NeoForge真实声明、模型传输通过。生产JAR排除所有测试夹具。
 
