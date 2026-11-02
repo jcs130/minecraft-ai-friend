@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "state": "deployed-and-verified",
+  "applicationVersion": "0.8.38",
+  "uiRevision": "0.8.38-ui-20261102-r1",
+  "verifiedAt": "2026-11-02T14:09:39.003631+00:00",
+  "sourceHead": "8fb8f7f7334125e41be77018017aaefc320e1124",
+  "mergedCommit": "9a2fdf9579dea72ddd1fc4b1bd04020d0b89a4b2",
+  "sourcePullRequest": 48,
+  "document": "paper/docs/PORTAL_SIMPLIFY_20261102.md",
+  "imageId": "sha256:ab7bfbd33c4fa69fd38637bd045a8afd9f3461456914d0a63ed7324c9f3c5a4e",
+  "baseImageId": "sha256:7503d33dd1c1f1a94c716245d577e8674b8f9537db5bd22e00d160001e45f4a9",
+  "runtimeFiles": [
+    {
+      "sha256": "6003173883a339d3bca31b6e565845cfa3fe1bac23dc79129a0a6a4d9241f957",
+      "path": "public/index.html",
+      "sourceSha256": "6003173883a339d3bca31b6e565845cfa3fe1bac23dc79129a0a6a4d9241f957",
+      "bytes": 1611,
+      "derived": false
+    },
+    {
+      "sha256": "6b9866acb98f83a1a7e22d477eaf43674f81cd18731f90f4bb43e47910f4039d",
+      "path": "public/app.js",
+      "sourceSha256": "6b9866acb98f83a1a7e22d477eaf43674f81cd18731f90f4bb43e47910f4039d",
+      "bytes": 155683,
+      "derived": false
+    },
+    {
+      "sha256": "aa8e2baf564ceaa6fe0b9a6b75ae47a29c169474b058f224cd55ce1b2365dab1",
+      "path": "public/site-shell.js",
+      "sourceSha256": "aa8e2baf564ceaa6fe0b9a6b75ae47a29c169474b058f224cd55ce1b2365dab1",
+      "bytes": 3529,
+      "derived": false
+    },
+    {
+      "sha256": "450f4272dc3b13737c020fef6dc2d2110417ec986914345b6f57275de9e060ab",
+      "path": "public/site-shell.css",
+      "sourceSha256": "450f4272dc3b13737c020fef6dc2d2110417ec986914345b6f57275de9e060ab",
+      "bytes": 11282,
+      "derived": false
+    },
+    {
+      "sha256": "0dae7c84a2e30e02c4eeb7a360c0944e6c539c572d720f13b9bc799bc649f3ac",
+      "path": "public/music.html",
+      "sourceSha256": "0dae7c84a2e30e02c4eeb7a360c0944e6c539c572d720f13b9bc799bc649f3ac",
+      "bytes": 3056,
+      "derived": false
+    },
+    {
+      "sha256": "7a108b3d401aa744e4ab08cb2a1aff1d59b2e503c8631a0d43ebd22d2bc3735a",
+      "path": "public/downloads.html",
+      "sourceSha256": "7a108b3d401aa744e4ab08cb2a1aff1d59b2e503c8631a0d43ebd22d2bc3735a",
+      "bytes": 10529,
+      "derived": false
+    },
+    {
+      "sha256": "86e38ed9452954e008e6488bc4d7edbbfbc7967510c6a0cbadfa0514d5f2db4c",
+      "path": "public/join.html",
+      "sourceSha256": "b4028308b45144cd485a307c6d188cfd4a88a1066aa5da9ce06b62ef49ef325f",
+      "bytes": 8545,
+      "derived": true
+    },
+    {
+      "sha256": "484d489f50d6017b062806808beceb65d5b70dcd4c656ac91a16f25716c1ccc8",
+      "path": "public/agent-api.html",
+      "sourceSha256": "484d489f50d6017b062806808beceb65d5b70dcd4c656ac91a16f25716c1ccc8",
+      "bytes": 15008,
+      "derived": false
+    },
+    {
+      "sha256": "9245d7f03096b993a2dfddf01ce7a1e1c5f3ecf267b5cf640c6b2106f169a0d0",
+      "path": "public/aincrad.html",
+      "sourceSha256": "9245d7f03096b993a2dfddf01ce7a1e1c5f3ecf267b5cf640c6b2106f169a0d0",
+      "bytes": 13332,
+      "derived": false
+    }
+  ],
+  "joinDerivation": [
+    "Remove exactly one undeployed neko-login.js module tag",
+    "Remove the complete undeployed neko-signin hidden section; all other bytes retained"
+  ],
+  "validation": {
+    "ciChecksPassed": 5,
+    "applicationFilesCompared": 6405,
+    "onlyNinePublicFilesChanged": true,
+    "copiedDatabaseSessionContinuityPassed": true,
+    "productionProtectedTables": 16,
+    "originalActiveSessionsPreserved": 14,
+    "realHttpsDuplicateAndCaseVariantStatus": 409,
+    "publicBrowser": {
+      "passed": true,
+      "production": true,
+      "widths": [
+        1440,
+        390
+      ],
+      "pagesChecked": 14,
+      "navigationLinks": [
+        "世界",
+        "直播",
+        "作品",
+        "加入"
+      ],
+      "noHorizontalOverflowOrScriptError": true,
+      "originalAnchorsExpand": true,
+      "noUndeployedNekoScript": true,
+      "publicSongsDisplayed": 8,
+      "realBrowserAudioDecodedAndSeeked": true,
+      "durationSeconds": 45,
+      "humanListeningOrAsrVerified": false
+    },
+    "actualPublicSongsVerified": 8,
+    "actualAudioBytesVerified": 15697127,
+    "allSongsSha256AndRangeVerified": true,
+    "saoAndDownloadMappingPreserved": true
+  },
+  "backup": {
+    "bothDisksAndPrivateOssVerified": true,
+    "bytes": 43491470,
+    "sha256": "909051e81749aa7d6c4a71169fdeaba5518d05e9f8e8aadda3313ed05ddc1e52",
+    "type": "Current SQLite, configuration, container environment and seven original static files"
+  },
+  "backendOrDependenciesChanged": false,
+  "productionConfigEnvironmentMountsSecurityPreserved": true,
+  "gameProxyCameraClientsRestarted": false,
+  "codeOnlyRollback": true,
+  "dataRollbackForbidden": true,
+  "consumedMaintenanceDoNotReplay": true,
+  "history": "Candidate mount-list ordering mismatch and two disposable QA fixture failures corrected before production; original receipts retained. First approved production switch succeeded."
+}

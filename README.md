@@ -1,5 +1,7 @@
 # 千灯纪：重返艾恩葛朗特
 
+**官网导航新版已上线：**[PR48](https://github.com/jcs130/minecraft-ai-friend/pull/48) 已合并并发布。首页、歌曲、下载和接入页统一为「世界 / 直播 / 作品 / 加入」，账号操作集中到「我的」；电脑和手机公网验收通过，原账号、14个有效会话、作品与下载保持。本次仅正常切换官网的9个静态文件，游戏、代理和相机未重启。见[发布记录](paper/docs/PORTAL_SIMPLIFY_20261102.md)及[实际部署清单](paper/manifests/portal-simplify-deployed-20261102.json)。
+
 **官网0.8.38已上线：**重复邮箱注册会立即提示登录或找回密码。[可米的8首真实歌曲](https://mc.kangqiang.site/music.html)已公开，歌词、作者、完整音频摘要、拖动播放均已核验；音频直传私有OSS，原角色和旧凭据保留。[注册及播放修复](paper/docs/DUPLICATE_EMAIL_REGISTRATION_20261102.md) · [歌曲接口](paper/docs/MUSIC_WORKS_20261102.md)。
 
 **后台启动修复已上线：**关闭空输入引起的交互终端空转，实际JVM属性、线程和日志已核验；55插件、紧凑RPG信息栏、登录及模型同步继续正常运行，原账号和成长数据保持。见[部署记录](paper/docs/BACKGROUND_CONSOLE_20261102.md)。
