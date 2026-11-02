@@ -19,6 +19,15 @@ test('public site navigation works on desktop and phone; document anchors reveal
   browser = await puppeteer.launch({ executablePath, headless: true, args: ['--disable-gpu', '--no-first-run', '--no-default-browser-check', ...ciArguments], userDataDir: path.join(f.root, 'isolated-site-browser') });
   const page = await browser.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  let legacyDocument = false;
+  await page.setRequestInterception(true);
+  page.on('request', async request => {
+    if (request.isNavigationRequest() && request.url() === f.origin + '/' && !legacyDocument) {
+      legacyDocument = true;
+      const html = await (await fetch(request.url())).text();
+      await request.respond({ status: 200, contentType: 'text/html', body: html.replace('<script src="/site-shell.js" defer></script>', '').replace('<link rel="stylesheet" href="/site-shell.css">', '') });
+    } else await request.continue();
+  });
   const artifacts = process.env.PORTAL_UI_ARTIFACT_DIR;
   if (artifacts) await fs.mkdir(artifacts, { recursive: true });
   for (const width of [1440, 390]) {
@@ -31,6 +40,7 @@ test('public site navigation works on desktop and phone; document anchors reveal
       assert.equal(await page.$eval('html', node => node.scrollWidth <= innerWidth), true, `${name} at ${width}px must not overflow`);
       assert.equal(await page.$eval('.site-navigation', node => getComputedStyle(node).display !== 'none'), true);
       if (name === 'home') {
+        assert.equal(await page.$eval('link[href="/site-shell.css"]', node => !!node.sheet), true, 'old HTML also loads the current navigation styles');
         assert.equal(await page.$$eval('.resident-card', rows => rows.length), 4);
         assert.equal(await page.$$eval('img', imgs => imgs.filter(img => img.complete && !img.naturalWidth).length), 0);
         await page.click('.site-navigation>a[href="#help"]'); await page.waitForSelector('.help-topics');

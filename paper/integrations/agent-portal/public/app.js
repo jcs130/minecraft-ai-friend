@@ -1006,8 +1006,25 @@ window.addEventListener('hashchange', async () => {
   if (revision === routeRevision && typeof document !== 'undefined' && document?.documentElement) render();
 });
 readRoute();
-window.QdMemories?.init({ api, owner, toast, render, requestId: newRequestId, login: () => document.querySelector('[data-action=\"login\"]')?.click() });
-window.QdChallenges?.init({api,render});
-render(); refresh();
-setInterval(() => { if (document.visibilityState === 'visible' && !modal.open) refresh(); }, 15000);
-setInterval(pollLiveFrame, 1000);
+async function startPortal() {
+  // A cached/in-flight old HTML document can receive the new app during a
+  // static update. Load the shared shell even if that document lacks its tags.
+  const dependencies = [];
+  if (!window.QdSite) dependencies.push(import('/site-shell.js'));
+  if (!document.querySelector('link[rel="stylesheet"][href="/site-shell.css"]')) dependencies.push(new Promise((resolve, reject) => {
+    const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = '/site-shell.css';
+    style.onload = resolve; style.onerror = () => reject(new Error('site_styles_unavailable')); document.head.append(style);
+  }));
+  if (dependencies.length) await Promise.all(dependencies);
+  window.QdMemories?.init({ api, owner, toast, render, requestId: newRequestId, login: () => document.querySelector('[data-action="login"]')?.click() });
+  window.QdChallenges?.init({ api, render });
+  render(); refresh();
+  setInterval(() => { if (document.visibilityState === 'visible' && !modal.open) refresh(); }, 15000);
+  setInterval(pollLiveFrame, 1000);
+}
+startPortal().catch(error => {
+  console.error('Portal startup failed:', error?.code || error?.name || 'unknown');
+  const message = document.createElement('p'); message.textContent = '页面更新尚未就绪，请刷新重试。';
+  const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = '刷新页面'; retry.addEventListener('click', () => location.reload());
+  const panel = document.createElement('div'); panel.className = 'initial-loading'; panel.append(message, retry); app.replaceChildren(panel);
+});
