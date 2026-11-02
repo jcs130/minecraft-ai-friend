@@ -1,3 +1,9 @@
+## 0.2.144
+
+- Pin the verified canonical rc.154 engine-only archive and the shared viewer revision 5e940506, retaining native queue ownership and all host-owned account/model/personality boundaries.
+- Distribute only public viewer runtime source with explicit auxiliary build-tool hashes; keep original resources and exact installed source inventory checks.
+- Add an explicit modern-viewer-only bundle profile which omits the unused legacy Prismarine static page tree, while retaining its WorldView library and licenses. Full copies remain the default.
+
 ## 0.2.141
 
 - Preserve object and array provenance in ordinary tool receipts without treating it as a spatial source tag. Large discovery receipts no longer stop the controller while constructing their preview; original receipts and retrieval handles remain available.

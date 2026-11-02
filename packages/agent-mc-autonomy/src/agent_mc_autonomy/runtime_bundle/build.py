@@ -26,7 +26,8 @@ from .viewer_source import verify_viewer_input
 HERE = Path(__file__).parent
 
 
-def copy_tree(source: Path, destination: Path, *, exclude: frozenset[str] = frozenset()) -> None:
+def copy_tree(source: Path, destination: Path, *, exclude: frozenset[str] = frozenset(),
+              exclude_prefixes: frozenset[str] = frozenset()) -> None:
     """Materialize regular files only. Links and author workspace mounts are rejected."""
     for directory, dirs, files in os.walk(source):
         for name in dirs + files:
@@ -34,6 +35,7 @@ def copy_tree(source: Path, destination: Path, *, exclude: frozenset[str] = froz
             info = target.lstat()
             if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
                 raise ValueError("Source contains links; supply materialized runtime dependencies")
+        dirs[:] = [name for name in dirs if (Path(directory) / name).relative_to(source).as_posix() + '/' not in exclude_prefixes]
         for name in files:
             target = Path(directory) / name
             relative = target.relative_to(source)
@@ -47,18 +49,32 @@ def copy_tree(source: Path, destination: Path, *, exclude: frozenset[str] = froz
 
 def build_bundle(destination: Path, *, node_directory: Path, backend_directory: Path,
                  viewer_directory: Path, assets_directory: Path, appearances_directory: Path,
-                 licenses_directory: Path, browser_directory: Path, bundle_id: str) -> Path:
+                 licenses_directory: Path, browser_directory: Path, bundle_id: str,
+                 compact_modern_viewer: bool = False, viewer_tools_directory: Path | None = None) -> Path:
     """Inputs are already installed exact runtime trees, never caches or developer junctions."""
     if destination.exists():
         raise ValueError("Bundle destination must be new; existing payloads are never replaced")
     pin = source_pin()
     verify_viewer_input(viewer_directory, pin)
+    auxiliary = pin['external_viewer'].get('auxiliary_tools', {})
+    for name, expected in auxiliary.items():
+        relative_path(name)
+        if (viewer_tools_directory is None or '/' in name
+                or not (viewer_tools_directory / name).is_file()
+                or (viewer_tools_directory / name).is_symlink()
+                or digest(viewer_tools_directory / name) != expected):
+            raise ValueError('Viewer auxiliary source input does not match its fixed Git receipt')
     destination.mkdir(parents=True)
     omitted = frozenset({pin["archive"], "node_modules/agent-mc-world/docs/research/vanilla-1.21.1-survival-foundations-20261016.md"})
     for source, name in [(backend_directory, "backend"), (viewer_directory, "viewer/modern-viewer"),
                          (assets_directory, "resources/vanilla-1.21.1"), (appearances_directory, "resources/appearances"),
                          (licenses_directory, "licenses"), (browser_directory, "browser")]:
-        copy_tree(source, destination / name, exclude=omitted if name == "backend" else frozenset())
+        copy_tree(source, destination / name, exclude=omitted if name == "backend" else frozenset(),
+                  exclude_prefixes=frozenset({'node_modules/prismarine-viewer/public/'})
+                  if compact_modern_viewer and name == 'backend' else frozenset())
+    for name in auxiliary:
+        (destination / 'tools').mkdir(exist_ok=True)
+        shutil.copyfile(viewer_tools_directory / name, destination / 'tools' / name)
     (destination / "node").mkdir()
     for name in ("node.exe", "LICENSE", "README.md"):
         shutil.copyfile(node_directory / name, destination / "node" / name)
@@ -83,6 +99,8 @@ def build_bundle(destination: Path, *, node_directory: Path, backend_directory: 
                               "catalog": "viewer-catalog.json", "appearanceCatalog": "resources/appearances/catalog.json"},
                 "licenses": ["node/LICENSE", *sorted(p.relative_to(destination).as_posix() for p in (destination / "licenses").rglob("*") if p.is_file())],
                 "excludedNonRuntimeFiles": {"backend/" + name: "Installer archive or optional research author-path note; no runtime/build receipt member removed" for name in sorted(omitted)},
+                "distributionProfile": "modern-viewer-only" if compact_modern_viewer else "complete",
+                "omittedOptionalComponents": ['backend/node_modules/prismarine-viewer/public/'] if compact_modern_viewer else [],
                 "files": {}}
     for file in sorted(destination.rglob("*")):
         if file.is_file():
@@ -129,6 +147,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--bundle-id", required=True)
+    parser.add_argument("--compact-modern-viewer", action="store_true",
+                        help="Omit only the unselected legacy Prismarine browser's static public tree; retain its WorldView library")
+    parser.add_argument('--viewer-tools-directory', type=Path,
+                        help='Explicit fixed auxiliary source input required by the selected viewer pin')
     for name in ("node", "backend", "viewer", "assets", "appearances", "licenses", "browser"):
         parser.add_argument(f"--{name}-directory", type=Path, required=True)
     args = vars(parser.parse_args())

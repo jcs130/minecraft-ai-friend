@@ -121,6 +121,19 @@ Absent these explicit options, its existing behavior is preserved.
 
 ## Distributor inputs
 
+The explicit `--compact-modern-viewer` distributor profile omits only
+`backend/node_modules/prismarine-viewer/public/`, the unselected legacy web page's
+static assets. It retains Prismarine's WorldView library and licenses, the modern
+renderer, original textures/audio and the browser. Default builds remain complete.
+The manifest records the selected profile and omitted optional path. Runtime and
+source receipts are still checked in full; this is not a missing-file fallback.
+
+New shared viewer pins can declare `external_viewer.auxiliary_tools`. Supply their
+exact public Git bytes with `--viewer-tools-directory`; distributor preflight
+verifies them before destination creation and includes them in the root tools
+directory and the ordinary payload inventory. Viewer docs/tests are not runtime
+inputs; the separately pinned source map still binds every shipped source byte.
+
 `python -m agent_mc_autonomy.runtime_bundle.build` accepts a **new** destination,
 bundle ID and seven explicit prepared directories: official Node, installed
 backend, exact viewer root (renderer-src plus sibling src), complete original

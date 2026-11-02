@@ -15,6 +15,24 @@ from agent_mc_autonomy.runtime_bundle import (
 from agent_mc_autonomy.runtime_bundle import manifest as m
 
 
+def test_compact_copy_retains_worldview_and_original_resources(tmp_path):
+    from agent_mc_autonomy.runtime_bundle.build import copy_tree
+    source, destination = tmp_path / 'source', tmp_path / 'destination'
+    members = {'node_modules/prismarine-viewer/public/old-viewer.js': b'legacy page',
+               'node_modules/prismarine-viewer/viewer/lib/worldView.js': b'current host dependency',
+               'node_modules/prismarine-viewer/LICENSE': b'license',
+               'resources/original.png': b'original texture'}
+    for name, data in members.items():
+        file = source / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(data)
+    copy_tree(source, destination, exclude_prefixes=frozenset({'node_modules/prismarine-viewer/public/'}))
+    assert not (destination / 'node_modules/prismarine-viewer/public').exists()
+    for name, data in members.items():
+        if '/public/' not in name:
+            assert (destination / name).read_bytes() == data
+
+
 @pytest.fixture
 def bundle(tmp_path, monkeypatch):
     root = tmp_path / "bundle"
