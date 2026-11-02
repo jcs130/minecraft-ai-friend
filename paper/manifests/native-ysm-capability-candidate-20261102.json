@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "isolated_verified_not_deployed",
+  "component": "OptionalPayloadGuard",
+  "candidateVersion": "0.1.1",
+  "artifact": "OptionalPayloadGuard-0.1.1.jar",
+  "sha256": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479",
+  "installedVersion": "0.1.0",
+  "installedSha256": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277",
+  "unchanged": {
+    "LoginGuard": "0.1.10",
+    "YSM": "2.6.5",
+    "YsmProtocol": "2.6.0",
+    "NeoForge": "21.1.252",
+    "originalModelsAndBindings": true,
+    "accountsAndPermissions": true
+  },
+  "validation": {
+    "capabilityBoundaryChecks": 70,
+    "actualOriginalNeoForgeRegistrationBytes": 3175,
+    "originalNativeClientAuthenticatedSeconds": 35,
+    "originalTouhouCommandAndQuery": true,
+    "serverAndClientYsmReady": true,
+    "qaOwnModelReadBack": "qd_observer_drone/default",
+    "freshNativeCacheFiles": 28,
+    "freshNativeCacheBytes": 18025881,
+    "normalQaShutdownAndRestore": true,
+    "formalGameOrProxyChanged": false,
+    "formalRemotePixelsAccepted": false
+  },
+  "activation": {
+    "normalLoginProxyReconnectRequired": true,
+    "gameRestartRequired": false,
+    "dedicatedRestartAuthorizationRequired": true
+  },
+  "documentation": "paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md"
+}

@@ -12,7 +12,7 @@ import com.velocitypowered.api.event.proxy.*;
 import com.velocitypowered.api.plugin.*;
 
 /** Scope optional extension packets to their original connection's declared decoders. */
-@Plugin(id="optionalpayloadguard",name="OptionalPayloadGuard",version="0.1.0",dependencies={@Dependency(id="packetevents")})
+@Plugin(id="optionalpayloadguard",name="OptionalPayloadGuard",version="0.1.1",dependencies={@Dependency(id="packetevents")})
 public final class OptionalPayloadGuard {
     private final OptionalPayloadPolicy policy=new OptionalPayloadPolicy();
     private PacketListenerAbstract listener;

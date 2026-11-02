@@ -9,6 +9,7 @@ public final class OptionalPayloadPolicyTest {
     private static void number(ByteArrayOutputStream out,int value){while((value&~127)!=0){out.write((value&127)|128);value>>>=7;}out.write(value);}
     private static void text(ByteArrayOutputStream out,String value){byte[] data=bytes(value);number(out,data.length);out.writeBytes(data);}
     private static byte[] common(int version,String protocol,String... channels){var out=new ByteArrayOutputStream();number(out,version);text(out,protocol);number(out,channels.length);for(String channel:channels)text(out,channel);return out.toByteArray();}
+    private static byte[] nativeQuery(int protocol,int flow,String... channels){var out=new ByteArrayOutputStream();number(out,1);number(out,protocol);number(out,channels.length);for(String channel:channels){text(out,channel);text(out,"2.6.0");out.write(flow<0?0:1);if(flow>=0)number(out,flow);out.write(1);}return out.toByteArray();}
     public static void main(String[] args){
         var policy=new OptionalPayloadPolicy();Object first=new Object(),other=new Object();
         check(!policy.allowed(first,"mcagent:state"),"unsolicited state does not reach a vanilla/NeoForge recipient");
@@ -29,6 +30,22 @@ public final class OptionalPayloadPolicyTest {
         for(String channel:List.of("vv:proxy_details","vv:server_details"))check(!policy.allowed(other,channel),"optional version diagnostics remain suppressed: "+channel);
         policy.left(other);check(!policy.allowed(other,"yes_steve_model:2_4_0"),"disconnect clears connection capability");
         policy.clear();check(!policy.allowed(first,"mcagent:appearance"),"shutdown clears all capabilities");
+        Object nativeClient=new Object(),unrelated=new Object();byte[] query=nativeQuery(1,-1,"yes_steve_model:2_6_0");
+        check(policy.registration(nativeClient,"neoforge:register",query),"original NeoForge native registration accepted");
+        check(policy.allowed(nativeClient,"yes_steve_model:2_6_0")&&!policy.allowed(unrelated,"yes_steve_model:2_6_0"),"bidirectional native decoder remains per connection");
+        check(policy.registration(nativeClient,"neoforge:register",nativeQuery(1,1,"mcagent:state"))&&policy.allowed(nativeClient,"mcagent:state"),"native clientbound PLAY decoder accepted");
+        check(policy.registration(unrelated,"neoforge:register",nativeQuery(1,0,"mcagent:state"))&&!policy.allowed(unrelated,"mcagent:state"),"serverbound-only declaration is not a client decoder");
+        check(policy.registration(unrelated,"neoforge:register",nativeQuery(4,-1,"mcagent:state"))&&!policy.allowed(unrelated,"mcagent:state"),"CONFIG registration cannot authorize PLAY delivery");
+        check(!policy.registration(unrelated,"neoforge:register",nativeQuery(5,-1,"mcagent:state")),"unknown protocol rejected");
+        check(!policy.registration(unrelated,"neoforge:register",nativeQuery(1,2,"mcagent:state")),"unknown flow rejected");
+        for(int length=0;length<query.length;length++){
+            Object isolated=new Object();check(!policy.registration(isolated,"neoforge:register",Arrays.copyOf(query,length))&&!policy.allowed(isolated,"yes_steve_model:2_6_0"),"truncated native query never partially grants decoder "+length);
+        }
+        byte[] extra=Arrays.copyOf(query,query.length+1);check(!policy.registration(unrelated,"neoforge:register",extra)&&!policy.allowed(unrelated,"yes_steve_model:2_6_0"),"trailing native data rejected atomically");
+        byte[] badBoolean=query.clone();badBoolean[badBoolean.length-1]=2;check(!policy.registration(unrelated,"neoforge:register",badBoolean),"invalid native optional flag rejected");
+        var huge=new ByteArrayOutputStream();number(huge,1);number(huge,1);number(huge,513);check(!policy.registration(unrelated,"neoforge:register",huge.toByteArray()),"native channel budget retained");
+        check(!policy.registration(unrelated,"neoforge:register",nativeQuery(1,-1,"mcagent:state","bad\nchannel"))&&!policy.allowed(unrelated,"mcagent:state"),"malformed native list never partially registers");
+        policy.left(nativeClient);check(!policy.allowed(nativeClient,"yes_steve_model:2_6_0")&&!policy.allowed(nativeClient,"mcagent:state"),"native decoder claims removed on disconnect");
         System.out.println("OptionalPayloadPolicyTest: "+checks+" checks passed");
     }
 }
