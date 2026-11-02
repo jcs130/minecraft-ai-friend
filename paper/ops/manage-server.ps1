@@ -507,7 +507,7 @@ function Start-Server {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $serverDir "startup-$stamp.log"
     $stderr = Join-Path $serverDir "startup-$stamp.error.log"
-    $javaArguments = @('-Xms1G', '-Xmx4G', '-Dpaper.preferSparkPlugin=true', '-Xlog:gc*,safepoint:file=logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20M')
+    $javaArguments = @('-Xms1G', '-Xmx4G', '-Dterminal.jline=false', '-Dterminal.ansi=false', '-Dpaper.preferSparkPlugin=true', '-Xlog:gc*,safepoint:file=logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20M')
     if (Test-Path -LiteralPath $auraCachePatchJar) {
         $javaArguments += "-javaagent:$auraCachePatchJar"
         Log 'Enabling the pinned AuraSkills message cache patch at startup'

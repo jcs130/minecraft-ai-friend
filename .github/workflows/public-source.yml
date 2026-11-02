@@ -18,6 +18,7 @@ jobs:
           python-version: '3.12'
       - run: python tools/check_public_source.py
       - run: python -m unittest discover -s paper/ops/tests -p test_geyser_port_mappings.py -v
+      - run: python -m unittest discover -s paper/ops/tests -p test_background_console_flags.py -v
       - run: python -m unittest discover -s paper/ops -p test_native_auth_inputs.py -v
       - run: python -m pip install PyYAML==6.0.3
       - run: python paper/ops/world-activity.test.py
