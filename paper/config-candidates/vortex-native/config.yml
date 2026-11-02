@@ -34,21 +34,13 @@ messages:
   prefix: '<gold>千灯纪</gold> <dark_gray>»</dark_gray> '
 scoreboard:
   enabled: true
-  title: <gold>千灯纪 · 重返艾恩葛朗特</gold>
+  title: <gold>千灯纪</gold>
   update-ticks: 20
   lines:
-  - ''
-  - <gray>职业：</gray> <gold>{class}</gold>
-  - <gray>等级：</gray> <yellow>{level}</yellow>
-  - <gray>本级经验：</gray> <aqua>{xp_display}</aqua>
-  - ''
-  - <gray>金币：</gray> <green>{currency}</green>
-  - <gray>徽记：</gray> <light_purple>{breach_tokens}</light_purple>
-  - ''
-  - <gray>委托：</gray> <yellow>{quests_active}/{quests_max}</yellow>
-  - <gray>天赋点：</gray> <gold>{talent_points}</gold>
-  - ''
-  - <dark_gray>micro.kangqiang.site</dark_gray>
+  - <gold>{class}</gold> <dark_gray>·</dark_gray> <yellow>Lv.{level}</yellow>
+  - <gray>经验</gray> <aqua>{xp_display}</aqua>
+  - <gray>金币</gray> <green>{currency}</green> <gray>委托</gray> <yellow>{quests_active}/{quests_max}</yellow>
+  - <gray>天赋</gray> <gold>{talent_points}</gold> <gray>徽记</gray> <light_purple>{breach_tokens}</light_purple>
 resource-pack:
   enabled: false
   send-on-join: true
