@@ -41,6 +41,49 @@ test('codes are tied to the requesting browser, expire, and lock after five inco
   assert.equal(f.portal.store.countOwners(), 1);
 });
 
+test('required and optional email registration reject a verified address immediately, including case variants', async t => {
+  for (const mode of ['email', 'optional-email']) await t.test(mode, async t => {
+    const f = await emailSite(t, { emailAuth: { registrationMode: mode } });
+    const started = await f.begin(); await f.verify(f.guest, started);
+    const original = f.portal.store.ownerByName('EmailUser');
+    const challenges = f.portal.store.db.prepare('SELECT COUNT(*) AS n FROM email_challenges').get().n;
+    for (const [index, email] of ['person@example.test', 'PERSON@EXAMPLE.TEST'].entries()) {
+      const response = await f.begin(f.guest, { username: 'DuplicateEmail' + index, email });
+      assert.equal(response.status, 409); assert.equal(response.data.error.reason, 'EMAIL_ALREADY_USED');
+      assert.match(response.data.error.message, /邮箱已注册/); assert.match(response.data.error.message, /登录/); assert.match(response.data.error.message, /找回密码/);
+      assert.equal(response.data.challengeId, undefined); assert.equal(f.portal.store.ownerByName('DuplicateEmail' + index), undefined);
+    }
+    assert.equal(f.messages.length, 1); assert.equal(f.portal.store.countOwners(), 2);
+    assert.equal(f.portal.store.db.prepare('SELECT COUNT(*) AS n FROM email_challenges').get().n, challenges);
+    assert.equal(f.portal.emailAuth.ownerByEmail('person@example.test').id, original.id);
+    assert.equal(f.portal.store.ownerByName('EmailUser').password_hash, original.password_hash);
+    assert.equal((await f.guest.request('/sessions', 'POST', { username: 'PERSON@EXAMPLE.TEST', password: 'abc123' })).status, 200);
+  });
+});
+
+test('an email bound while registration hashes its password is rejected before sending or recording a code', async t => {
+  const f = await emailSite(t), original = f.portal.store.ownerByName('fixture-admin');
+  const session = f.portal.store.db.prepare('SELECT * FROM sessions WHERE owner_id IS NULL ORDER BY created_at DESC LIMIT 1').get();
+  const pending = f.portal.emailAuth.begin('register', { username: 'RacingUser', password: 'abc123', email: 'bound@example.test' }, session);
+  f.portal.store.db.prepare('INSERT INTO owner_emails VALUES(?,?,?)').run(original.id, 'bound@example.test', Date.now());
+  await assert.rejects(pending, { status: 409, reason: 'EMAIL_ALREADY_USED' });
+  assert.equal(f.messages.length, 0); assert.equal(f.portal.store.countOwners(), 1);
+  assert.equal(f.portal.store.db.prepare('SELECT COUNT(*) AS n FROM email_challenges').get().n, 0);
+});
+
+test('verification rechecks email ownership when two registration codes were issued before either completed', async t => {
+  const f = await emailSite(t), first = await f.begin(), firstCode = f.messages.at(-1).code;
+  f.cool(); const other = f.client(); await other.init();
+  const second = await f.begin(other, { username: 'LaterUser' }), secondCode = f.messages.at(-1).code;
+  assert.equal((await f.verify(f.guest, first, { code: firstCode })).status, 200);
+  const original = f.portal.store.ownerByName('EmailUser');
+  const rejected = await f.verify(other, second, { code: secondCode });
+  assert.equal(rejected.status, 409); assert.equal(rejected.data.error.reason, 'EMAIL_ALREADY_USED');
+  assert.match(rejected.data.error.message, /登录.*找回密码/);
+  assert.equal(f.portal.store.ownerByName('LaterUser'), undefined); assert.equal(f.portal.store.countOwners(), 2);
+  assert.equal(f.portal.emailAuth.ownerByEmail('person@example.test').id, original.id);
+});
+
 test('email cooldown persists and a delivery failure never creates an account or changes a password', async t => {
   const f = await emailSite(t), response = await f.begin();
   assert.equal((await f.begin()).status, 429);

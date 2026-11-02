@@ -695,6 +695,20 @@ test('optional-email registration UI accepts a blank email and logs in the new p
   assert.equal(ui.portal.store.db.prepare('SELECT count(*) AS n FROM account_jobs').get().n,0);
 });
 
+test('a duplicate email stays on the registration form with a useful error instead of asking for an unsent code', async t => {
+  const messages = [], ui = await screen(t, { emailMode: 'optional-email', emailSender: { ready: true, send: async value => messages.push(value) } }); await ui.setup();
+  const original = ui.portal.store.ownerByName('ui-admin');
+  ui.portal.store.db.prepare('INSERT INTO owner_emails VALUES(?,?,?)').run(original.id, 'used@example.test', Date.now());
+  ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
+  ui.click('[data-action="logout"]'); await waitFor(() => currentAccountName(ui.document) === '访客');
+  ui.click('[data-action="login"]'); ui.click('[data-action="register"]');
+  ui.fill('username', 'AnotherPlayer'); ui.fill('email', 'USED@EXAMPLE.TEST'); ui.fill('password', 'abc123'); ui.submit('#auth-form');
+  await waitFor(() => ui.document.querySelector('#auth-form .form-error')?.textContent.includes('邮箱已注册'));
+  assert.match(ui.document.querySelector('#auth-form .form-error').textContent, /登录.*找回密码/);
+  assert.equal(ui.document.querySelector('#email-code-form'), null); assert.equal(ui.document.querySelector('#auth-form [type="submit"]').disabled, false);
+  assert.equal(messages.length, 0); assert.equal(ui.portal.store.ownerByName('AnotherPlayer'), undefined);
+});
+
 test('optional-email UI verifies a supplied address instead of registering before the code', async t => {
   const messages = [], ui = await screen(t, { emailMode: 'optional-email', emailSender: { ready: true, send: async value => messages.push(value) } }); await ui.setup();
   ui.window.location.hash = 'account'; await waitFor(() => ui.document.querySelector('[data-action="logout"]'));
