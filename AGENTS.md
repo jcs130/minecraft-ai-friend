@@ -1,3 +1,7 @@
+## 2026-11-02 原生YSM通道识别候选，未部署
+
+整批维护已完成且入口已消费，正式仍OptionalPayloadGuard0.1.0/LoginGuard0.1.10/YSM2.6.5。新隔离证据确认保护层漏识别真实neoforge:register，错误取消YSM消息；仅保护层0.1.1通过70边界检查、真实3175字节声明和原版客户端35秒OP/女仆查询、本人无人机选择读回、28份约18MB缓存传输。问候时机假设已移出源码，勿部署私有LoginGuard0.1.11实验包。未改正式进程、账号或外观；新激活仅重连登录代理，需独立维护范围确认，远端像素待验。见paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md及独立候选清单；current-deployment.json仍是实际现役。
+
 ## 2026-11-02 08:09 整批修复与原生OP兼容已部署
 
 现役仍为AF0.4.47.48-rpg、RPG桥0.2.17、LoginGuard0.1.10、Youer920／NeoForge21.1.252、原生YSM2.6.5。新增官方PCF1.3.1，仅启用CrossStitch，forwarding关闭、Velocity NONE保持；原三内容模组及OP未改。55插件全启用、19项正式回读、664份角色与物品／成长／认证文件安装阶段一致、E/F游戏及认证冷副本和原女神7任务均已核验。核显相机重新ready/30FPS，原观战后台新鲜。远程原live与真实安卓入服仍待分别验收。

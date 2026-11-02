@@ -67,6 +67,12 @@ jobs:
         run: python paper/integrations/world-observer/build.py --server "$RUNNER_TEMP/paper-inputs" --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/observer-build"
       - name: Check bounded CLI help and query contracts
         run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
+      - name: Check native and vanilla decoder capability boundaries without connecting
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/payload-policy-tests"
+          javac --release 21 -encoding UTF-8 -d "$RUNNER_TEMP/payload-policy-tests" paper/integrations/optional-payload-guard/src/org/qiandengji/payload/OptionalPayloadPolicy.java paper/integrations/optional-payload-guard/tests/org/qiandengji/payload/OptionalPayloadPolicyTest.java
+          java -ea -cp "$RUNNER_TEMP/payload-policy-tests" org.qiandengji.payload.OptionalPayloadPolicyTest
   backup-path-compatibility:
     runs-on: windows-latest
     steps:
