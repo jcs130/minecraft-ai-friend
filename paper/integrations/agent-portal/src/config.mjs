@@ -14,6 +14,8 @@ export function loadConfig(overrides = {}) {
   const defaults = JSON.parse(fs.readFileSync(path.join(projectRoot, 'config.example.json'), 'utf8'));
   const config = { ...defaults, ...local, ...overrides };
   config.sceneStorage={...defaults.sceneStorage,...local.sceneStorage,...overrides.sceneStorage};
+  config.music = { ...defaults.music, ...local.music, ...overrides.music };
+  if (typeof config.music.enabled !== 'boolean' || config.music.enabled && !config.sceneStorage.enabled) throw new Error('Music requires the existing private scene object storage');
   if(typeof config.sceneStorage.enabled!=='boolean'||config.sceneDirectory!==null&&config.sceneDirectory!==undefined&&!path.isAbsolute(config.sceneDirectory))throw new Error('Invalid photo scene configuration');
   config.host = process.env.PORTAL_HOST || config.host;
   config.port = Number(process.env.PORTAL_PORT || config.port);

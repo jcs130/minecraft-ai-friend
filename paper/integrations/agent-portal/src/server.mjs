@@ -16,6 +16,9 @@ import { CloudSource, CloudGame, CloudWorld } from './cloud-source.mjs';
 import { Gallery, MAX_PHOTO_BYTES } from './gallery.mjs';
 import { PhotoUploads, MAX_UPLOAD_BYTES } from './photo-uploads.mjs';
 import { agentPhotoRoute } from './photo-upload-routes.mjs';
+import { MusicWorks } from './music-works.mjs';
+import { createMusicObjectStorage } from './music-object-storage.mjs';
+import { musicRoute } from './music-routes.mjs';
 import { publicMedia, publicMediaOrigin, servePublicMedia } from './public-media.mjs';
 import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
@@ -96,6 +99,8 @@ export function createPortal(config, options = {}) {
   const gallery = new Gallery(store, cloud);
   const photoScenes=new PhotoScenes(store,gallery,options.sceneObjects??createSceneObjectStorage(config.sceneStorage));
   const photoUploads = new PhotoUploads(gallery, { now: options.now });
+  const music = new MusicWorks(store, { enabled: config.music.enabled, objects: options.musicObjects ?? (config.music.enabled ? createMusicObjectStorage(config.sceneStorage) : null), now: options.now });
+  const musicOrigin = music.objects?.origin || '';
   const archives = new PublicArchives(store);
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
@@ -210,13 +215,28 @@ export function createPortal(config, options = {}) {
     const current = sessionFrom(req);
     if (!current || !sameSecret(req.headers['x-csrf-token'], current.csrf)) throw fail(403, 'CSRF_REQUIRED', '会话已更新，请刷新页面后继续');
   }
+  async function selfMusic(req, url) {
+    if (req.headers.authorization?.startsWith('Bearer qda_')) {
+      const who = agentAccess.authorize(req);
+      return { ...who, agent: await agentAccess.selfAgent(who) };
+    }
+    if (req.headers.authorization) {
+      let who;
+      try { who = auth(req, ['music.write']); }
+      catch (error) { if (error.reason === 'SCOPE_REQUIRED') throw fail(403, 'SCOPE_REQUIRED', '原只读、外观和相册凭据没有歌曲权限；请继续使用原 qda_ 本人身份，或由主人在连接中心明确授权 music.write。'); throw error; }
+      return { ...who, agent: (await game.roster()).find(row => row.playerUuid === who.credential.agent_uuid) };
+    }
+    const who = browserAuth(req), id = url.searchParams.get('agentId');
+    if (!id) throw fail(400, 'MUSIC_ROLE_REQUIRED', '请先选择本人角色；查询 /api/v1/music/subjects 获取角色 ID。');
+    return { ...who, agent: (await game.roster()).find(row => row.id === id) };
+  }
 
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; " + (mediaOrigin ? `media-src 'self' ${mediaOrigin}; ` : '') + "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; " + `media-src 'self'${[mediaOrigin, musicOrigin].filter(Boolean).map(value => ' ' + value).join('')}; connect-src 'self'${musicOrigin ? ' ' + musicOrigin : ''}; ` + "font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Cache-Control', 'no-store');
     try {
@@ -439,6 +459,10 @@ export function createPortal(config, options = {}) {
         live.publisher(req, ingest[1]);
         return respond(res, 200, ingest[2] === 'open' ? live.open(ingest[1]) : await live.publish(req, ingest[1]));
       }
+      if (await musicRoute({ req, res, pathname, url, music, respond, jsonBody, rate,
+        context: () => selfMusic(req, url), browserWrite: () => {
+          if (req.headers.origin !== req.portalOrigin.origin) throw fail(403, 'INVALID_ORIGIN', '请从官网本人作品页面操作。'); csrf(req);
+        }, subjects: async () => { const { owner } = browserAuth(req); const owned = store.ownedUuids(owner.id); return (await game.roster()).filter(row => owned.includes(row.playerUuid) && !row.reserved && !row.historical && !row.identityConflict).map(row => ({ id: row.id, name: row.name })); } })) return;
       const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
       if (isWrite) {
         const origin = req.headers.origin;
@@ -564,7 +588,7 @@ export function createPortal(config, options = {}) {
         if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'private, no-cache'});return res.end();}
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'private, no-cache' }); return res.end(image.bytes);
       }
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config) });
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config), music: music.capabilities() });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
@@ -761,7 +785,8 @@ export function createPortal(config, options = {}) {
         const { agent } = await authorizedAgent(req, body.agentId);
         if (typeof body.label !== 'string' || body.label.trim().length < 1 || body.label.length > 60) throw fail(400, 'INVALID_LABEL', '请输入 1–60 字的客户端名称');
         const scopes = body.scopes || ['state.read'];
-        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write', 'photos.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取、本人外观管理和本人相册上传');
+        if (!Array.isArray(scopes) || !scopes.includes('state.read') || scopes.some(value => !['state.read', 'inventory.read', 'profile.read', 'appearance.write', 'photos.write', 'music.write'].includes(value))) throw fail(400, 'INVALID_SCOPES', '客户端权限可选状态、背包、角色设定读取、本人外观、相册和歌曲作品管理');
+        if (scopes.includes('music.write')) music.context(owner, agent);
         if(scopes.includes('photos.write'))photoUploads.context(owner,agent);
         if (scopes.includes('appearance.write')) {
           if (!store.ownedUuids(owner.id).includes(agent.playerUuid)) throw fail(403, 'APPEARANCE_OWNER_REQUIRED', '只有本人已绑定角色可以授权外观管理；请先通过游戏内证明认领');
@@ -867,6 +892,7 @@ export function createPortal(config, options = {}) {
       if (status === 500) console.error('Portal request failed:', error.code || error.name);
       return respond(res, status, { error: { reason: error.reason || 'INTERNAL_ERROR', message: status === 500 ? '服务暂时无法完成请求，请稍后重试' : error.message,
         ...(Number.isSafeInteger(error.currentSequence) ? { currentSequence: error.currentSequence } : {}),
+        ...(error.nextAction ? { nextAction: error.nextAction } : {}),
         ...(status === 429 && Number.isSafeInteger(error.retryAfterSeconds) ? { retryAfterSeconds: error.retryAfterSeconds } : {}) } });
     }
   });
@@ -880,5 +906,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoScenes, photoUploads, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoScenes, photoUploads, music, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); await Promise.allSettled(music.verifying.values()); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
 }

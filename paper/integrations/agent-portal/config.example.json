@@ -4,6 +4,7 @@
   "siteName": "千灯纪",
   "sourceMode": "local",
   "sceneDirectory": null,
+  "music": { "enabled": false },
   "sceneStorage": {
     "enabled": false,
     "bucket": "",

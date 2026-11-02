@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "status": "isolated-candidate-not-deployed",
+  "candidateVersion": "0.8.37",
+  "baseCommit": "ecd6b3d3",
+  "preparedAt": "2026-11-02T08:06:06.542Z",
+  "featureDefaultEnabled": false,
+  "productionChanged": false,
+  "gameRestarted": false,
+  "websiteRestarted": false,
+  "newAccountsOrCredentials": false,
+  "modelCalls": 0,
+  "musicGenerationCalls": 0,
+  "tests": {
+    "total": 401,
+    "passed": 398,
+    "failed": 0,
+    "skipped": 3,
+    "syntaxModules": 127,
+    "productionDependencyAuditVulnerabilities": 0,
+    "browser": {
+      "desktop": [
+        1366,
+        900
+      ],
+      "mobile": [
+        390,
+        844
+      ],
+      "passed": true
+    },
+    "fixtures": "Synthetic encoded tones only, not adopted vocal songs",
+    "firstFailuresPreserved": "CSP whitespace regression and isolated browser cleanup order; both repaired; initial Linux CI AppArmor user namespace restriction, fixed only for synthetic GitHub fixture browser"
+  },
+  "realSongs": {
+    "clientReportedAdoptedCount": 8,
+    "uploadedByThisCandidate": 0,
+    "newSongExcluded": "千灯纪回家路 (unfinished)"
+  },
+  "authentication": [
+    "existing qda self identity",
+    "explicit single-role PAT music.write",
+    "existing website login and CSRF"
+  ],
+  "maximumBytes": 134217728,
+  "maximumSeconds": 1800,
+  "scopeOfFutureDeployment": "Website only; one brief portal process restart. No Minecraft, proxy, camera or clients restart.",
+  "deploymentPrerequisites": [
+    "Explicit website release scope confirmation",
+    "Consistent website SQLite backup and E/F verification",
+    "Original private OSS CORS verified in cloud isolation",
+    "Real adopted song manifest/hash/lyrics checked under original role",
+    "Explicit current owner music.write grant or original website owner session for actual CorMy; no qda record exists"
+  ],
+  "rollback": "Disable feature and restore website code only; retain new metadata, private audio and live player progress",
+  "documentation": "paper/docs/MUSIC_WORKS_20261102.md",
+  "files": [
+    {
+      "path": "paper/integrations/agent-portal/package.json",
+      "bytes": 838,
+      "sha256": "7ef37ca9394c8ef42a4b033a1b4cadb4a13e2e70c124e197e8572d305af3bdcc"
+    },
+    {
+      "path": "paper/integrations/agent-portal/package-lock.json",
+      "bytes": 84246,
+      "sha256": "9d8c5631c16a7359ae68da5d6a7bd25d6e6cbad6de2d5393112fab46fb037564"
+    },
+    {
+      "path": "paper/integrations/agent-portal/config.example.json",
+      "bytes": 2086,
+      "sha256": "0dbd848b7bb355129d262f473c86d119f689b619dfd8fa5940b43b6d14665e1c"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/music-works.mjs",
+      "bytes": 17807,
+      "sha256": "2601fcb689aafdc622cb0f48fed5b06149ea39b6eea9c2270cdbfd03223ed739"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/music-routes.mjs",
+      "bytes": 3435,
+      "sha256": "e1a5335cd89b556de7748d869e97b3fa3d907e6c10b4cb4380dc38c83fe179ec"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/music-object-storage.mjs",
+      "bytes": 1980,
+      "sha256": "5a64ce87798c76435dc4220520a17e1e6c3ea2bf979076da5e6b440e2c819b7d"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/private-object-client.mjs",
+      "bytes": 1441,
+      "sha256": "dbff35207092c9ac526ed0b3e20738871978410b71416e450a96e5f29dd3b624"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/scene-object-storage.mjs",
+      "bytes": 2595,
+      "sha256": "ceda4c11556d55235d5c8dc69a7dcccf1204b2b3d101198f109a0b88e40469e3"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/server.mjs",
+      "bytes": 76317,
+      "sha256": "72e4ac1dc190e7f9d4b64ea096c19c6240b5f78319d7553752c3ef496300db05"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/agent-access.mjs",
+      "bytes": 23947,
+      "sha256": "e0e5c0ea412bb2d87dac87d4d9891462a5910b51a1479ee45a8677cbd669f2a1"
+    },
+    {
+      "path": "paper/integrations/agent-portal/src/config.mjs",
+      "bytes": 6668,
+      "sha256": "e48f12b4a6e5941018bac0b79206c640d068795349b0fb920ae24ed20790a7cd"
+    },
+    {
+      "path": "paper/integrations/agent-portal/public/music.html",
+      "bytes": 3070,
+      "sha256": "8ea14cc68946817c433f99b72e0d230fa5571d5441389bfc30ef23d6cee4a98b"
+    },
+    {
+      "path": "paper/integrations/agent-portal/public/music.css",
+      "bytes": 3555,
+      "sha256": "b2e3b5685f33e3ddf217031a0c93c1c33edc428a6d889f2af472efef4f0e272a"
+    },
+    {
+      "path": "paper/integrations/agent-portal/public/music.mjs",
+      "bytes": 10611,
+      "sha256": "18c211644fc9facb48863f15a67858e80e46495645487fe67ef9e2963f3e490e"
+    },
+    {
+      "path": "paper/integrations/agent-portal/public/music-client.mjs",
+      "bytes": 2973,
+      "sha256": "29a23b43aed6e6578a54e403763cea2aa165e2e5a9ed472d99eb9acef85f33cd"
+    },
+    {
+      "path": "paper/integrations/agent-portal/public/app.js",
+      "bytes": 162522,
+      "sha256": "b79461b5d418d56d14b503bb6b75c69c6ff1f002ca553664b0a0a74c8e75a41e"
+    },
+    {
+      "path": "paper/integrations/agent-portal/scripts/upload-music.mjs",
+      "bytes": 4465,
+      "sha256": "b63f2c3b7ff8c4ed1cd545de8e46df4ace3d478b231b8fbf3c61e5f0641815ab"
+    },
+    {
+      "path": "paper/integrations/agent-portal/tests/music-works.test.mjs",
+      "bytes": 16328,
+      "sha256": "46ce0398d710c36abecffec5fe0e286ffe2342055a9cdd0a2a5dfcc44e432c67"
+    },
+    {
+      "path": "paper/integrations/agent-portal/tests/music-fixtures.mjs",
+      "bytes": 5196,
+      "sha256": "2d2fc9952012e43e96ff35d11b54329cf21c66f3465764222fc53b3710ba21a4"
+    },
+    {
+      "path": "paper/integrations/agent-portal/tests/music-browser.test.mjs",
+      "bytes": 5138,
+      "sha256": "348948c5106d86819d89da5708feadf823455f27945f2643992aff1d827a985d"
+    },
+    {
+      "path": "paper/integrations/agent-portal/tests/fixtures/music-audio.json",
+      "bytes": 8724,
+      "sha256": "14bccba821b9e2eb66b5153317cf234565da9d2906699f39c616fe8d08266224"
+    }
+  ],
+  "fileHashBasis": "Git index bytes (LF)",
+  "actualCloudPreflight": {
+    "at": "2026-11-02T08:17:07Z",
+    "readOnly": true,
+    "corMy": {
+      "existingWebsiteOwnership": true,
+      "agentAccessClientRecords": 0,
+      "action": "Existing owner browser session, or one explicit role-scoped music.write grant after website activation; no re-registration or credential replacement"
+    },
+    "privateOss": {
+      "putCorsPreflightHttp": 403,
+      "currentCorsRules": 0,
+      "exactWebsiteCorsPlanPrepared": true,
+      "planApplied": false
+    },
+    "productionMusicTablesPresent": false
+  }
+}
