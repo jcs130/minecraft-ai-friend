@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "phase": "deployed-and-verified",
+  "verifiedAt": "2026-11-02T05:21:30.851709+00:00",
+  "sourceMain": "a74b8bde7834c694bf85d7a61c3fb69460fb81a2",
+  "gameRestarted": true,
+  "changedFiles": 2,
+  "nativeSidebarRows": 4,
+  "nativeTitle": "千灯纪",
+  "sidebarBlankNumberFormatQaVerified": true,
+  "sidebarMobilePixelsAccepted": false,
+  "characterFilesPreservedDuringInstall": 665,
+  "originalCredentialRowsPreserved": 72,
+  "originalGoddessJobsRestored": 7,
+  "nativeCameraModelLoaded": true,
+  "nativeCameraCatalogue": 40,
+  "nativeCameraFps": 30,
+  "nativeCameraProtocolReady": true,
+  "observerFresh": true,
+  "unchangedConsumerTasks": true,
+  "formalChecks": 21,
+  "running": {
+    "pluginsEnabled": 55,
+    "gameResponsive": true,
+    "noGameplayActions": true
+  },
+  "recoveryPoints": [
+    {
+      "path": "E:/MC/backups/scheduled/20261101-040028",
+      "coldGameAndAuth": true,
+      "nestedStaticOpsReused": true
+    },
+    {
+      "path": "F:/MC-backups/scheduled/20261101-040028",
+      "coldGameAndAuth": true,
+      "nestedStaticOpsReused": true
+    }
+  ],
+  "completeRemotePixelsAccepted": false,
+  "entryConsumed": true,
+  "component": "VortexRPG compact-sidebar-r1",
+  "vortexPluginVersionPreserved": "1.2.2-alpha",
+  "vortexPatchsetPreserved": "qd32-cooperation",
+  "artifactFilenamePreserved": "VortexRPG-1.2.2-alpha-qd29.jar",
+  "jarSha256": "1fb78b4c3da03acbd50875aae2b7aea437d01337a4c251568ff64e19da197618",
+  "configSha256": "d7f525465f3b488a7fd3055722d5bf448e59c9b8cbf73ae1bd18ec2262553acb",
+  "changedJarEntries": [
+    "io/vortexcore/ui/ScoreboardService.class"
+  ],
+  "otherJarEntriesRetained": 2856,
+  "configurationDelta": "scoreboard title and four lines only",
+  "normalLifecycleUsed": true,
+  "permissionsOrScheduledTasksChanged": false,
+  "recoveryScope": "Fresh cold game/auth on E/F; full original nested static ops retained and root bootstrap refreshed",
+  "originalModelsAndRpgProgressNotReplaced": true,
+  "firstPostflightVersionLabelFailurePreserved": true,
+  "correctedCheckMatchesOriginalPluginMetadata": true,
+  "extraGameRestart": false,
+  "document": "paper/docs/COMPACT_RPG_SIDEBAR_20261102.md"
+}
