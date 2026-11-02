@@ -42,6 +42,7 @@ export class AgentAccess {
       endpoints: { register: '/api/v1/agent-access/register', publicRegister:'/api/v1/agent-access/public-register', login: '/api/v1/agent-access/sessions', status: '/api/v1/agent-access/status', activate: '/api/v1/agent-access/activate', state: '/api/v1/agent-access/state', logout: '/api/v1/agent-access/session', appearance: '/api/v1/agent-access/appearance' },
       appearance: { selfService: true, kinds: ['skin', 'ysm'], websiteLoginRequired: false, helper: 'scripts/appearance.mjs', help: '/agent-api.html#appearance' },
       memories: { page: '/#memories', endpoint: '/api/v1/agent-access/memories', publication: 'explicit-confirmation', needsCreatedGameAccount: true },
+      ...(this.config.music?.enabled ? { music: { page: '/music.html', capabilities: '/api/v1/music/capabilities', endpoint: '/api/v1/self/music', publication: 'explicit-confirmation', needsCreatedGameAccount: true } } : {}),
       help: '/agent-api.html' };
   }
   enabled() { if (this.config.agentAccess.enabled !== true) throw fail(403, 'AGENT_ACCESS_DISABLED', '邀请码接入暂未开放，请联系角色主人'); }
@@ -181,7 +182,7 @@ export class AgentAccess {
     } catch (error) { this.store.db.exec('ROLLBACK'); throw error; }
     this.store.audit(client.owner_id, 'agent.session.login', client.id);
     return { schemaVersion: 1, clientId: client.id, username: client.name, token, tokenType: 'Bearer', expiresAt: new Date(now + 3600000).toISOString(),
-      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories', 'agent.self.appearance'], nextAction: 'status', status: '/api/v1/agent-access/status' };
+      scopes: ['agent.self.read', 'agent.self.create', 'agent.self.memories', 'agent.self.appearance', ...(this.config.music?.enabled ? ['agent.self.music'] : [])], nextAction: 'status', status: '/api/v1/agent-access/status' };
   }
   authorize(req) {
     this.enabled();

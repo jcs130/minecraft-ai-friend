@@ -1,6 +1,6 @@
 {
   "name": "qiandengji-agent-portal",
-  "version": "0.8.36",
+  "version": "0.8.37",
   "private": true,
   "type": "module",
   "description": "千灯纪独立账号门户：网站身份、真实只读角色资料与受限接入。",
@@ -17,6 +17,7 @@
   "dependencies": {
     "@alicloud/credentials": "2.4.7",
     "ali-oss": "6.23.0",
+    "music-metadata": "12.3.3",
     "nodemailer": "10.2.0",
     "pngjs": "7.0.0",
     "prismarine-nbt": "2.8.0",
