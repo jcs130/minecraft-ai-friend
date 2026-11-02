@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "5e9405067bd1eda4a23abc06f6b70383154c9408",
+  "sourceRevision": "402ef3152f789f0f1e6be9bf25d9fc5ebbbe77f7",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -55,8 +55,8 @@
       "sha256": "e2ff47285f9e9a4ae9840e7f5d27933af29625c2ee32f3247dabb1c16d30e5f2"
     },
     "renderer-src/host/native-audio-assets.mjs": {
-      "bytes": 4955,
-      "sha256": "427fadb172f7af333aba9a4b7d7bad1c07533bdbb3e88899e2b93619589d627c"
+      "bytes": 5336,
+      "sha256": "4d8ca413ae396e11c32a83acba91156a17a47f532212f2f78ab6dc6ee1c32c99"
     },
     "renderer-src/host/native-bundled-appearances.mjs": {
       "bytes": 3012,
@@ -923,8 +923,8 @@
       "sha256": "955a7c6447f2a75183127f1ce96868cc09fbb28ee0e645284c2f3044ba6610a6"
     },
     "renderer-src/src/native-viewer/native-audio.js": {
-      "bytes": 14015,
-      "sha256": "d395cf28c009f41737d0ec27140887c43e459c1809de0be1c54199da25b7b057"
+      "bytes": 14236,
+      "sha256": "bcf97590390b6b82b7bcc7af87523093dd1d6ce436a2d62153021d70f59464ca"
     },
     "renderer-src/src/native-viewer/native-banner-data.js": {
       "bytes": 2151,
@@ -983,8 +983,8 @@
       "sha256": "c09e716f9629b8188c7370021065b275633dba3060bb61bce369c14fadc7cebe"
     },
     "renderer-src/src/native-viewer/native-console.js": {
-      "bytes": 30691,
-      "sha256": "a7fd3739b171bd01359aaea3f51a797efd6066850ce9f634de06b57c929dda9b"
+      "bytes": 31031,
+      "sha256": "96e57695942ebdc262632d4bc6131544237e107a6402505392569dbcdce092ca"
     },
     "renderer-src/src/native-viewer/native-contraption.js": {
       "bytes": 5793,
@@ -1647,8 +1647,8 @@
       "sha256": "1116c155edceeb7b92ebe898dae89fada1c21542a820598dd130b45555d00179"
     },
     "renderer-src/tools/minecraft-viewer-sound.js": {
-      "bytes": 49312,
-      "sha256": "4a5b775685745ef6bed96deb866cc8240e82fec55e7d43324917834e7e442201"
+      "bytes": 49792,
+      "sha256": "e5a70fd30e366311e0ca7200e96f65d3e47787618249a396b2ef918f158babc2"
     },
     "renderer-src/tools/minecraft-viewer-tactics.js": {
       "bytes": 5312,

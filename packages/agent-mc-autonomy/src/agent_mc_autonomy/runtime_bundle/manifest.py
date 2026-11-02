@@ -105,6 +105,12 @@ def verify_bundle(root: Path, *, expected_manifest_sha256: str | None = None, fu
     checked: set[Path] = set()
     try:
         node, core, viewer, resources = (manifest[k] for k in ("node", "core", "viewer", "resources"))
+        from .audio_profile import resource_profile
+        try:
+            resource_pins, omitted_audio = resource_profile(
+                pin, manifest.get('audioProfile', 'complete'), resources['assetDirectory'] + '/public/sounds/manifest.json')
+        except ValueError:
+            fail('audio_profile_invalid')
         browser = manifest["browser"]
         if (node["version"] != NODE_VERSION or core["version"] != pin["version"]
                 or core["sourceRevision"] != pin["source_revision"]
@@ -182,7 +188,9 @@ def verify_bundle(root: Path, *, expected_manifest_sha256: str | None = None, fu
         if catalog != expected or digest(root / resources["assetDirectory"] / "registry/block-states.jsonl") != resources["registrySha256"]:
             fail("catalog_mismatch")
         # An omitted resource is still missing even if someone rewrites the file inventory.
-        for suffix, expected_hash in pin["offline_resources"].items():
+        if any(name in files for name in omitted_audio):
+            fail('audio_profile_mismatch')
+        for suffix, expected_hash in resource_pins.items():
             if files.get(suffix, {}).get("sha256") != expected_hash:
                 fail("resource_source_mismatch")
         for prefix, table, key in [

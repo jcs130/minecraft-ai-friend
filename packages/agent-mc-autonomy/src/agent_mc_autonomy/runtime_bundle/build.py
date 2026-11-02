@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -22,6 +23,7 @@ from .manifest import (
     verify_bundle,
 )
 from .viewer_source import verify_viewer_input
+from .audio_profile import project_effects_audio, resource_profile
 
 HERE = Path(__file__).parent
 
@@ -50,11 +52,23 @@ def copy_tree(source: Path, destination: Path, *, exclude: frozenset[str] = froz
 def build_bundle(destination: Path, *, node_directory: Path, backend_directory: Path,
                  viewer_directory: Path, assets_directory: Path, appearances_directory: Path,
                  licenses_directory: Path, browser_directory: Path, bundle_id: str,
-                 compact_modern_viewer: bool = False, viewer_tools_directory: Path | None = None) -> Path:
+                 compact_modern_viewer: bool = False, viewer_tools_directory: Path | None = None,
+                 audio_profile: str = 'complete') -> Path:
     """Inputs are already installed exact runtime trees, never caches or developer junctions."""
     if destination.exists():
         raise ValueError("Bundle destination must be new; existing payloads are never replaced")
     pin = source_pin()
+    sound_manifest = 'resources/vanilla-1.21.1/public/sounds/manifest.json'
+    resource_pins, omitted_audio = resource_profile(pin, audio_profile, sound_manifest)
+    projected_audio = None
+    if audio_profile == 'effects-only':
+        original = assets_directory / 'public/sounds/manifest.json'
+        if digest(original) != pin['offline_resources'][sound_manifest]:
+            raise ValueError('Original sound metadata does not match its fixed source')
+        projected_audio, removed = project_effects_audio(original.read_bytes())
+        if (hashlib.sha256(projected_audio).hexdigest() != resource_pins[sound_manifest]
+                or tuple('resources/vanilla-1.21.1/public/sounds/' + name for name in removed) != omitted_audio):
+            raise ValueError('Optional audio projection does not match its fixed source')
     verify_viewer_input(viewer_directory, pin)
     auxiliary = pin['external_viewer'].get('auxiliary_tools', {})
     for name, expected in auxiliary.items():
@@ -69,9 +83,13 @@ def build_bundle(destination: Path, *, node_directory: Path, backend_directory: 
     for source, name in [(backend_directory, "backend"), (viewer_directory, "viewer/modern-viewer"),
                          (assets_directory, "resources/vanilla-1.21.1"), (appearances_directory, "resources/appearances"),
                          (licenses_directory, "licenses"), (browser_directory, "browser")]:
-        copy_tree(source, destination / name, exclude=omitted if name == "backend" else frozenset(),
+        excludes = omitted if name == 'backend' else frozenset(
+            path.removeprefix(name + '/') for path in omitted_audio) if name == 'resources/vanilla-1.21.1' else frozenset()
+        copy_tree(source, destination / name, exclude=excludes,
                   exclude_prefixes=frozenset({'node_modules/prismarine-viewer/public/'})
                   if compact_modern_viewer and name == 'backend' else frozenset())
+    if projected_audio is not None:
+        (destination / sound_manifest).write_bytes(projected_audio)
     for name in auxiliary:
         (destination / 'tools').mkdir(exist_ok=True)
         shutil.copyfile(viewer_tools_directory / name, destination / 'tools' / name)
@@ -99,8 +117,11 @@ def build_bundle(destination: Path, *, node_directory: Path, backend_directory: 
                               "catalog": "viewer-catalog.json", "appearanceCatalog": "resources/appearances/catalog.json"},
                 "licenses": ["node/LICENSE", *sorted(p.relative_to(destination).as_posix() for p in (destination / "licenses").rglob("*") if p.is_file())],
                 "excludedNonRuntimeFiles": {"backend/" + name: "Installer archive or optional research author-path note; no runtime/build receipt member removed" for name in sorted(omitted)},
+                "audioProfile": audio_profile,
                 "distributionProfile": "modern-viewer-only" if compact_modern_viewer else "complete",
-                "omittedOptionalComponents": ['backend/node_modules/prismarine-viewer/public/'] if compact_modern_viewer else [],
+                "omittedOptionalComponents": (['backend/node_modules/prismarine-viewer/public/'] if compact_modern_viewer else [])
+                    + ([asset_directory + '/public/sounds/music/', asset_directory + '/public/sounds/records/']
+                       if audio_profile == 'effects-only' else []),
                 "files": {}}
     for file in sorted(destination.rglob("*")):
         if file.is_file():
@@ -151,6 +172,7 @@ def main() -> None:
                         help="Omit only the unselected legacy Prismarine browser's static public tree; retain its WorldView library")
     parser.add_argument('--viewer-tools-directory', type=Path,
                         help='Explicit fixed auxiliary source input required by the selected viewer pin')
+    parser.add_argument('--audio-profile', choices=['complete', 'effects-only'], default='complete')
     for name in ("node", "backend", "viewer", "assets", "appearances", "licenses", "browser"):
         parser.add_argument(f"--{name}-directory", type=Path, required=True)
     args = vars(parser.parse_args())

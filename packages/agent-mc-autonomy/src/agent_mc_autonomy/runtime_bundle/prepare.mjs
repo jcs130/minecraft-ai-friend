@@ -98,7 +98,18 @@ function verify(requireRunningNode = true) {
   const expected = { schemaVersion: 1, packs: [{ id: 'vanilla-1.21.1', minecraftVersion: '1.21.1', registry: 'vanilla',
     registrySha256: resources.registrySha256, assetDirectory: resources.assetDirectory }] };
   if (JSON.stringify(catalog) !== JSON.stringify(expected) || fileHash(safe(resources.assetDirectory + '/registry/block-states.jsonl')) !== resources.registrySha256) fail('catalog_mismatch');
-  for (const [name, sha256] of Object.entries(pin.offline_resources))
+  const audioProfile = manifest.audioProfile ?? 'complete';
+  let resourcePins = pin.offline_resources;
+  if (audioProfile !== 'complete') {
+    const selected = pin.offline_resource_profiles?.[audioProfile];
+    const soundManifest = resources.assetDirectory + '/public/sounds/manifest.json';
+    if (audioProfile !== 'effects-only' || !selected || !Array.isArray(selected.omitted)
+        || selected.sourceManifestSha256 !== pin.offline_resources[soundManifest]
+        || Object.keys(selected.overrides ?? {}).length !== 1 || !selected.overrides[soundManifest]) fail('audio_profile_invalid');
+    if (selected.omitted.some(name => files[name])) fail('audio_profile_mismatch');
+    resourcePins = { ...resourcePins, ...selected.overrides };
+  }
+  for (const [name, sha256] of Object.entries(resourcePins))
     if (files[name]?.sha256 !== sha256) fail('resource_source_mismatch');
   for (const [prefix, table, key] of [
     [resources.assetDirectory, resources.assetDirectory + '/native-assets.json', 'assets'],

@@ -23,7 +23,7 @@ import httpx
 from ..filesystem import verification_path
 from ..ownership import session_lease
 from . import PreparedBundle, resolve_prepared_bundle
-from .manifest import MANIFEST, digest, fail, relative_path, verify_bundle
+from .manifest import INVENTORY, MANIFEST, digest, fail, read_json, relative_path, source_pin, verify_bundle
 
 HOSTS = frozenset(
     {
@@ -225,9 +225,26 @@ def unpack_archive(
     *,
     progress=None,
     cancelled=None,
+    base_root: Path | None = None,
+    base_manifest_sha256: str | None = None,
 ) -> Path:
     """Validate every ZIP member before extraction, then use the existing full verifier."""
     _cancelled(cancelled)
+    overlay_members = None
+    base_files = {}
+    if base_root is not None:
+        if not isinstance(base_manifest_sha256, str) or not re.fullmatch(r'[a-f0-9]{64}', base_manifest_sha256):
+            fail('download_music_base_invalid')
+        base_manifest = verify_bundle(base_root, expected_manifest_sha256=base_manifest_sha256)
+        if base_manifest.get('audioProfile') != 'effects-only':
+            fail('download_music_base_invalid')
+        from .audio_profile import resource_profile
+        sound_manifest = base_manifest['resources']['assetDirectory'] + '/public/sounds/manifest.json'
+        _, omitted = resource_profile(source_pin(), 'effects-only', sound_manifest)
+        overlay_members = {*omitted, MANIFEST, INVENTORY, sound_manifest}
+        base_files = read_json(verification_path(base_root / INVENTORY))
+    elif base_manifest_sha256 is not None:
+        fail('download_music_base_invalid')
     if (
         verification_path(archive).stat().st_size != spec.bytes
         or digest(archive) != spec.sha256
@@ -266,6 +283,8 @@ def unpack_archive(
                 total += row.file_size
             if total != spec.expanded_bytes or total > MAX_EXPANDED:
                 fail("download_archive_limits")
+            if overlay_members is not None and regular != {name.casefold() for name in overlay_members}:
+                fail('download_music_members_invalid')
             if any(
                 parent.as_posix().casefold() in regular
                 for name in names
@@ -292,6 +311,18 @@ def unpack_archive(
     except (zipfile.BadZipFile, RuntimeError):
         fail("download_archive_invalid")
     _cancelled(cancelled)
+    if base_root is not None:
+        for index, name in enumerate(base_files):
+            _cancelled(cancelled)
+            if name not in overlay_members:
+                target = verification_path(destination / name)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with verification_path(base_root / name).open('rb') as data, target.open('xb') as output:
+                    while chunk := data.read(1024 * 1024):
+                        _cancelled(cancelled)
+                        output.write(chunk)
+            if index % 500 == 0 or index + 1 == len(base_files):
+                _progress(progress, 'copying', files=index + 1, total_files=len(base_files))
     if digest(destination / MANIFEST) != spec.manifest_sha256:
         fail("download_manifest_mismatch")
     _progress(progress, "verifying")
@@ -346,20 +377,27 @@ def prepare_release(
     *,
     progress=None,
     cancelled: threading.Event | None = None,
+    base_root: Path | None = None,
+    base_manifest_sha256: str | None = None,
 ) -> PreparedBundle:
     if sys.platform != "win32" or platform.machine().lower() not in {"amd64", "x86_64"}:
         fail("download_platform_unavailable")
     root = _directory(cache)
+    expanded = spec.expanded_bytes
+    if base_root is not None:
+        verify_bundle(base_root, expected_manifest_sha256=base_manifest_sha256)
+        expanded += sum(row['bytes'] for row in read_json(verification_path(base_root / INVENTORY)).values())
     if (
         shutil.disk_usage(root).free
-        < spec.bytes + 2 * spec.expanded_bytes + 256 * 1024**2
+        < spec.bytes + 2 * expanded + 256 * 1024**2
     ):
         fail("download_disk_space")
     stage = root / (".stage-" + uuid.uuid4().hex)
     with session_lease(root / "preparation-lock"):
         try:
             archive = fetch_archive(spec, root, progress=progress, cancelled=cancelled)
-            unpack_archive(archive, stage, spec, progress=progress, cancelled=cancelled)
+            unpack_archive(archive, stage, spec, progress=progress, cancelled=cancelled,
+                           base_root=base_root, base_manifest_sha256=base_manifest_sha256)
             _progress(progress, "installing")
             _prepare(stage, cancelled=cancelled)
             _cancelled(cancelled)
