@@ -462,7 +462,7 @@ final class LifeGuildBuildings implements Listener {
     }
     private Villager ensureHost(Hall hall, Plot plot, Host host) {
         Location at = hostLocation(hall, plot, host);
-        world.getChunkAt(at);
+        if (!plugin.npcEntityReadiness().ready("life:" + host.contract(), at, () -> ensureHost(hall, plot, host))) return null;
         Villager found = null;
         for (Villager villager : world.getEntitiesByClass(Villager.class)) {
             if (!villager.isValid()
@@ -480,6 +480,7 @@ final class LifeGuildBuildings implements Listener {
         found.setCustomName("§6" + host.name());
         found.setCustomNameVisible(true);
         found.setAI(false);
+        found.setSilent(true);
         found.setInvulnerable(true);
         found.setRemoveWhenFarAway(false);
         GuildHostTrades.ensure(found);

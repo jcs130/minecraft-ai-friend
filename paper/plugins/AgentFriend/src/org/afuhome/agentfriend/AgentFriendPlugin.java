@@ -255,6 +255,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private NativeRpg nativeRpg;
     private AgentCliRecoveryService cliRecovery;
     AgentCliRecoveryService cliRecovery(){return cliRecovery;}
+    private NpcEntityReadiness npcEntityReadiness;
+    NpcEntityReadiness npcEntityReadiness(){
+        if(npcEntityReadiness==null)npcEntityReadiness=new NpcEntityReadiness(this);
+        return npcEntityReadiness;
+    }
     /** Read-only rejection callback from the actual Vortex validator; never re-dispatches the request. */
     public void commandAdvice(Player player,String[] args){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("advice requires primary thread");
@@ -420,6 +425,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if(npcEntityReadiness!=null)npcEntityReadiness.close();
         if(cliRecovery!=null)cliRecovery.close();
         if (combatRpg != null) combatRpg.close();
         if (lifeChallenges != null) lifeChallenges.shutdown();

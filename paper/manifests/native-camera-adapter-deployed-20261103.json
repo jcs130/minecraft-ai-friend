@@ -1,0 +1,28 @@
+{
+  "state": "deployed-and-ready",
+  "verifiedAt": "2026-11-03T02:31:37.666642+08:00",
+  "installedAt": "2026-11-03T02:20:23.134838+08:00",
+  "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+  "recentSampleCount": 60,
+  "recentFpsRange": [
+    29,
+    30
+  ],
+  "privateMemoryGiBRange": [
+    2.051,
+    2.08
+  ],
+  "modelCatalogueSize": 40,
+  "ownDroneModelLoaded": true,
+  "authenticatedAndConnected": true,
+  "cleanHud": true,
+  "shadersEnabled": false,
+  "sameSupervisorResumed": true,
+  "gameRestartedForCamera": false,
+  "newTaskCreated": false,
+  "systemDriverModified": false,
+  "isolatedActualPixelAndMissingRuntimeChecks": 2,
+  "productionPhotoGalleryRoundtripVerifiedThisBatch": false,
+  "diagnosticAddonSha256": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
+  "launchSha256": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85"
+}

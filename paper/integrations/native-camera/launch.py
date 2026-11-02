@@ -26,7 +26,9 @@ def main():
         if not all(type(value)is int and -32768<=value<=32767 for value in coordinates):raise SystemExit('Invalid camera monitor coordinates')
         arguments=['-Dqiandeng.camera.windowX='+str(coordinates[0]),'-Dqiandeng.camera.windowY='+str(coordinates[1])]+arguments
         if display.get('graphicsBackend') not in (None,'mesa-d3d12'):raise SystemExit('Unreviewed camera graphics backend')
-        if display.get('graphicsBackend')=='mesa-d3d12':hidden=False
+        if display.get('graphicsBackend')=='mesa-d3d12':
+            hidden=False
+            arguments=['-Dqiandeng.camera.mesaIntelAdapter=true']+arguments
     arguments=['-Dqiandeng.camera.hidden='+str(hidden).lower()]+arguments
     if args.server:
         host,port=args.server.rsplit(':',1)

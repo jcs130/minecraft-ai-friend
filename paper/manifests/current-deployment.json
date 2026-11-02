@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "portal-static-publish-20261102-r1",
-  "verifiedAt": "2026-11-02T14:09:39.003631+00:00",
-  "releaseDocument": "paper/docs/PORTAL_SIMPLIFY_20261102.md",
+  "latestRelease": "npc-cli-lifecycle-20261103-r2",
+  "verifiedAt": "2026-11-03T02:31:37.666642+08:00",
+  "releaseDocument": "paper/docs/NPC_CLI_LIFECYCLE_20261103.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -23,7 +23,7 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.48-rpg",
+    "AgentFriend": "0.4.47.49-rpg",
     "QiandengjiRpg": "0.2.17",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
@@ -54,7 +54,9 @@
     "NativeAuthenticationBackend": "Youer1.21.1, loopback only, 1536MiB, original lifecycle",
     "ProxyCompatibleForge": "1.3.1 (CrossStitch only; forwarding disabled)",
     "VortexRPGPatchset": "qd32-cooperation",
-    "VortexRPGSidebar": "compact-sidebar-r1"
+    "VortexRPGSidebar": "compact-sidebar-r1",
+    "NPCSpeak": "1.0 + entity-readiness repair",
+    "YouerEntityPersistence": "persist=false respected in shouldBeSaved/saveAsPassenger; pinned build920 patch"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -88,7 +90,7 @@
     "E:\\MC\\server\\plugins\\Multiverse-Core-5.8.1.jar": "bc3f34e2d747fdf024f44868747bb016b08fa11d98ccb4ffcac958f083151a83",
     "E:\\MC\\server\\plugins\\MythicMobs-5.9.5.jar": "faeeb0e9e896f052c872380f6ce89d977df05e1ed4cf08ada2a36e942f9e5e84",
     "E:\\MC\\server\\plugins\\NamedVillagers-1.2.1.jar": "83ec1b56d4048b42644dca11ebe08bd3b07d33b07f17fd3c3453a726d75fb574",
-    "E:\\MC\\server\\plugins\\NPCSpeak-1.0.jar": "50a528809d2d3ef60bb0a2faccb09bdbd5d8550736a333334194a5dc83f73a7a",
+    "E:\\MC\\server\\plugins\\NPCSpeak-1.0.jar": "0bfb634a96e1791822b76bb367efb881f21bdd767385d5d1ff9524d11837cd1e",
     "E:\\MC\\server\\plugins\\numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "E:\\MC\\server\\plugins\\NumenBedrock-0.1.0.jar": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
     "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar": "0240456e9b84cfa841c7384a3a368011a65f469bf96469a19777a50db090310f",
@@ -129,7 +131,6 @@
     "E:\\MC\\ops\\goddess-photo-camera.mjs": "9a3fa606e62786cddebd555140707675e47e8bf19347815950695c2775ffcf67",
     "E:\\MC\\ops\\native-photo-renderer.mjs": "703d91ca9f88ae599aeb939f35f74f5b2924f44336723cfeb77dc829877ba959",
     "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd",
     "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.17.jar": "b852c4fc4c991c51fdf01b002d97a744d3098e4be53b855b7fa066c1aa3a49ea",
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.3.jar": "33715091b86ffabe6348b4d69bbe33014741c4b13b7c2f7dbba224abae590e1f",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "77a88a17a02458d7005187453d63e5436694e9deadb588214e0f01b78665e2cb",
@@ -142,7 +143,15 @@
     "E:\\MC\\ops\\world-activity.py": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b",
     "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
-    "E:\\MC\\ops\\manage-server.ps1": "6cb63d42f758b26297922ab047c49690dba22ed7ccb2e3bfb2776d881a375111"
+    "E:\\MC\\ops\\manage-server.ps1": "78f174d3d4a696256deb7ce028bcc0cd33407a108ba907d99bde9c788d654e46",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
+    "E:\\MC\\server\\libraries\\net\\neoforged\\neoforge\\21.1.252\\neoforge-21.1.252-server.jar": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4",
+    "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\qiandeng-native-camera-0.1.0.jar": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
+    "E:\\MC\\clients\\goddess-native-2.6.5\\launch.py": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85",
+    "E:\\MC\\ops\\IndependentProcess.cs": "92c1199865df7e5dfc70dfac2beaee70fa4d1d9d9d682c0918104a855e4f4c6d",
+    "E:\\MC\\ops\\independent-process.ps1": "06af1f8c5ef78aaa8907c06e72bfbf0484d4d1e5f99b7158b13b867536065865",
+    "E:\\MC\\ops\\ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
+    "E:\\MC\\ops\\rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -162,19 +171,20 @@
     "intermittent public observer PartialReadError: exact failing packet and stack not yet captured",
     "Android26.60 actual login after the public19140 signaling correction",
     "remote live observer client repeats backend packet-decode disconnect; exact offending packet not yet captured",
-    "original remote modded client acceptance and complete rendering/animation parity"
+    "original remote modded client acceptance and complete rendering/animation parity",
+    "Remote Cortico host terminal error consumption remains unverified",
+    "creeping_crypt travel still fails when its approach chunk is unloaded in the current Youer async API; separate compatible-loader repair required"
   ],
-  "scopeNotice": "Full reviewed compatibility and guild-cartographer stall fixes are installed. Native camera and stock Mineflayer authenticated in production. Public Bedrock19140 signaling was corrected and read back from the cloud; Android device login and the independent live client decode disconnect remain open. Six-segment dungeon and unproven Ships prototype are not published.",
+  "scopeNotice": "NPC entity readiness, persist=false handling, multi-argument CLI advice and independent background startup are deployed. The Intel camera is ready. Remote host terminal-error consumption and creeping_crypt cold-chunk travel remain open; this release does not claim all client or gameplay failures are resolved.",
   "verification": {
-    "formalStartupChecks": 21,
+    "formalStartupChecks": 22,
     "enabledPlugins": 55,
-    "characterFilesUnchangedDuringColdInstallation": 665,
-    "originalCredentialRowsPreserved": 72,
+    "characterFilesUnchangedDuringColdInstallation": 673,
+    "originalCredentialRowsPreserved": 75,
     "originalGoddessJobsRestored": 7,
-    "cameraAndObserverRechecked": true,
-    "actualJvmPropertiesVerified": true,
-    "consoleHandlerAbsent": true,
-    "promptBurstAbsent": true,
+    "cameraRuntimeRechecked": true,
+    "isolatedCliClientChecks": 41,
+    "isolatedNpcColdStarts": 5,
     "physicalDevicePixelsVerified": false
   },
   "rpgUnified": {
@@ -325,7 +335,7 @@
   "websiteRelease": {
     "release": "portal-static-publish-20261102-r1",
     "version": "0.8.38",
-    "verifiedAt": "2026-11-02T14:09:39.003631+00:00",
+    "verifiedAt": "2026-11-02T22:09:39.003631+08:00",
     "protectedTables": 16,
     "gameRestarted": false,
     "document": "paper/docs/PORTAL_SIMPLIFY_20261102.md",
@@ -349,7 +359,7 @@
   },
   "aincradProtection": {
     "state": "deployed-and-verified",
-    "verifiedAt": "2026-10-29T23:56:22.148660+08:00",
+    "verifiedAt": "2026-10-29T23:56:22.14866+08:00",
     "manifest": "paper/manifests/aincrad-city-policy-20261029.json",
     "scope": "city only; place allowed, break denied; wilderness open; dungeon protection retained",
     "hotReload": true,
@@ -361,7 +371,7 @@
     "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions.",
     "QiandengjiRpg-0.2.13": "QiandengjiRpg-0.2.10.jar",
     "VortexRPG-qd31-growth": "VortexRPG-1.2.2-alpha-qd29.jar",
-    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar",
+    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar",
     "QiandengjiRpg": "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.17.jar",
     "LoginGuard": "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar",
     "Geyser": "E:\\MC\\server\\plugins\\Geyser-Spigot.jar"
@@ -429,7 +439,7 @@
   "website": {
     "state": "deployed-and-verified",
     "version": "0.8.38",
-    "verifiedAt": "2026-11-02T14:09:39.003631+00:00",
+    "verifiedAt": "2026-11-02T22:09:39.003631+08:00",
     "releaseDocument": "paper/docs/PORTAL_SIMPLIFY_20261102.md",
     "releaseManifest": "paper/manifests/portal-simplify-deployed-20261102.json",
     "guideServerVersion": "0.4.47.44-rpg",
@@ -495,7 +505,7 @@
   },
   "photoCameraRepair": {
     "state": "deployed-and-production-photo-verified",
-    "verifiedAt": "2026-10-30T19:47:32.319531+00:00",
+    "verifiedAt": "2026-10-31T03:47:32.319531+08:00",
     "renderer": "webgl",
     "resolution": [
       1536,
@@ -549,7 +559,7 @@
     "completeNativeParity": false,
     "browserBundleSha256": "880fb02050ea06496f42b1c868d047341627d5f7971cea85a53d7f85f2f7c0d5",
     "consoleBundleSha256": "ffbef3d8f4a36cc95bac8e58c85eb49938b8ea1f678009f61c53a8c350cc2451",
-    "verifiedAt": "2026-11-01T13:19:03.757506+00:00",
+    "verifiedAt": "2026-11-01T21:19:03.757506+08:00",
     "sharedSourceCommit": "9976500d5064afca6a38ee747342024ece58f1ab",
     "previousSharedMergedCommit": "7301abd3e1b96a4af9435eed31f26fe20ca414b1",
     "sharedMergedCommit": "ff72e6249f24567565e842ea3f3f38355271048d"
@@ -661,7 +671,8 @@
     "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.5.jar": "a55dd131e4f44c1de28e199701dffd2d8876151fbf7bab54e6598ef592c4a32c",
     "OptionalPayloadGuard-0.1.1.jar": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479",
     "VortexRPG-qd32-before-compact-sidebar.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
-    "manage-server-before-noninteractive-console.ps1": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e"
+    "manage-server-before-noninteractive-console.ps1": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd"
   },
   "previousVerificationBeforeYsm265": {
     "formalProduction": 40,
@@ -726,7 +737,7 @@
     "sourceSha256": "7d15c5f1a668b5a8c74a716d3558fdaef5d3e6c27f2544868d744a3af49053c7"
   },
   "nativeCameraObserverPolicy": {
-    "verifiedAt": "2026-11-01T08:39:09.470030+00:00",
+    "verifiedAt": "2026-11-01T16:39:09.47003+08:00",
     "state": "deployed-and-verified",
     "role": "dedicated photography service",
     "gameMode": "spectator",
@@ -740,8 +751,8 @@
     "randomAssignmentExcluded": true,
     "modelsConfigSha256": "b41433e2f04884e8be3eb4d225f77eb8cbccaf8e1cd6bf438ef5321eef697e1f",
     "gameRestarted": false,
-    "lastNativeModelReverifiedAt": "2026-11-02T04:37:54.550790+00:00",
-    "diagnosticAddonSha256": "fe23f12b7433020e1b40118d596fad3841b6e4a0bfe1ff40bac93b01ddc73664"
+    "lastNativeModelReverifiedAt": "2026-11-03T02:31:37.666642+08:00",
+    "diagnosticAddonSha256": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7"
   },
   "publicObserverDecodeInvestigation": {
     "state": "open",
@@ -948,7 +959,7 @@
     "component": "OptionalPayloadGuard",
     "version": "0.1.2",
     "status": "deployed-native-transport-and-owned-camera-model-verified",
-    "verifiedAt": "2026-11-02T04:37:54.550790+00:00",
+    "verifiedAt": "2026-11-02T12:37:54.55079+08:00",
     "sha256": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
     "sourceCommit": "2f3d829f135a0b10104e727977dcfe4614fe66da",
     "gameRestarted": false,
@@ -1034,7 +1045,7 @@
   "compactRpgSidebar": {
     "success": true,
     "phase": "deployed-and-verified",
-    "verifiedAt": "2026-11-02T05:21:30.851709+00:00",
+    "verifiedAt": "2026-11-02T13:21:30.851709+08:00",
     "sourceMain": "a74b8bde7834c694bf85d7a61c3fb69460fb81a2",
     "gameRestarted": true,
     "changedFiles": 2,
@@ -1093,7 +1104,7 @@
   },
   "previousReleaseBeforeConsoleFix": {
     "latestRelease": "main-runtime-release-20261102-r1",
-    "verifiedAt": "2026-11-02T05:21:30.851709+00:00",
+    "verifiedAt": "2026-11-02T13:21:30.851709+08:00",
     "verification": {
       "formalStartupChecks": 21,
       "enabledPlugins": 55,
@@ -1107,7 +1118,7 @@
   "backgroundConsoleStartup": {
     "success": true,
     "phase": "deployed-and-verified",
-    "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
+    "verifiedAt": "2026-11-02T14:32:10.02729+08:00",
     "sourceCommit": "c7ee6531f0dc279443c6bcbef77cfe1bcd974302",
     "gameRestarted": true,
     "changedFiles": 1,
@@ -1182,7 +1193,7 @@
   },
   "previousReleaseBeforeMusic": {
     "latestRelease": "console-runtime-release-20261102-r1",
-    "verifiedAt": "2026-11-02T06:32:10.027290+00:00",
+    "verifiedAt": "2026-11-02T14:32:10.02729+08:00",
     "releaseDocument": "paper/docs/BACKGROUND_CONSOLE_20261102.md",
     "websiteRelease": {
       "release": "web-scene-20261101-r1",
@@ -1224,7 +1235,7 @@
   },
   "musicOperatorGrant": {
     "state": "installed-with-authorized-client-grant",
-    "verifiedAt": "2026-11-02T10:28:57.171348+00:00",
+    "verifiedAt": "2026-11-02T18:28:57.171348+08:00",
     "sourceCommit": "32d570b0",
     "scriptSha256": "947cf7fa22063e92889fa2d368e50a970e5e472c0df0fa281c6152476903016b",
     "manifest": "paper/manifests/music-grant-ops-deployed-20261102.json",
@@ -1268,5 +1279,73 @@
     "staticFiles": 9,
     "manifest": "paper/manifests/portal-simplify-deployed-20261102.json",
     "backendChanged": false
+  },
+  "previousReleaseBeforeNpcCliLifecycle": {
+    "latestRelease": "portal-static-publish-20261102-r1",
+    "verifiedAt": "2026-11-02T22:09:39.003631+08:00",
+    "releaseDocument": "paper/docs/PORTAL_SIMPLIFY_20261102.md",
+    "verification": {
+      "formalStartupChecks": 21,
+      "enabledPlugins": 55,
+      "characterFilesUnchangedDuringColdInstallation": 665,
+      "originalCredentialRowsPreserved": 72,
+      "originalGoddessJobsRestored": 7,
+      "cameraAndObserverRechecked": true,
+      "actualJvmPropertiesVerified": true,
+      "consoleHandlerAbsent": true,
+      "promptBurstAbsent": true,
+      "physicalDevicePixelsVerified": false
+    }
+  },
+  "npcCliLifecycle": {
+    "state": "deployed-with-open-acceptance",
+    "manifest": "paper/manifests/npc-cli-lifecycle-deployed-20261103.json",
+    "errorCode": "COMMAND_ROUTE_MISMATCH",
+    "suggestionsOnly": true,
+    "remoteHostTerminalReceiptVerified": false
+  },
+  "nativeCameraAdapter": {
+    "state": "deployed-and-ready",
+    "verifiedAt": "2026-11-03T02:31:37.666642+08:00",
+    "installedAt": "2026-11-03T02:20:23.134838+08:00",
+    "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+    "recentSampleCount": 60,
+    "recentFpsRange": [
+      29,
+      30
+    ],
+    "privateMemoryGiBRange": [
+      2.051,
+      2.08
+    ],
+    "modelCatalogueSize": 40,
+    "ownDroneModelLoaded": true,
+    "authenticatedAndConnected": true,
+    "cleanHud": true,
+    "shadersEnabled": false,
+    "sameSupervisorResumed": true,
+    "gameRestartedForCamera": false,
+    "newTaskCreated": false,
+    "systemDriverModified": false,
+    "isolatedActualPixelAndMissingRuntimeChecks": 2,
+    "productionPhotoGalleryRoundtripVerifiedThisBatch": false,
+    "diagnosticAddonSha256": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
+    "launchSha256": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85"
+  },
+  "independentServerLifecycle": {
+    "state": "deployed",
+    "existingLifecycleUsed": true,
+    "newTaskOrServiceCreated": false,
+    "isolatedKillOnJobCloseChecks": 6,
+    "gameAndProxyLaunchedThroughIndependentHelper": true,
+    "ownerClosingWholeApplicationTested": false,
+    "rconEmptyReplyHandled": true,
+    "artifactSha256": {
+      "IndependentProcess.cs": "92c1199865df7e5dfc70dfac2beaee70fa4d1d9d9d682c0918104a855e4f4c6d",
+      "independent-process.ps1": "06af1f8c5ef78aaa8907c06e72bfbf0484d4d1e5f99b7158b13b867536065865",
+      "manage-server.ps1": "78f174d3d4a696256deb7ce028bcc0cd33407a108ba907d99bde9c788d654e46",
+      "ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
+      "rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c"
+    }
   }
 }

@@ -39,6 +39,7 @@ final class RpgStoryNpcs implements Listener {
     private void ensureLoaded(){if(!content.enabled)return;for(var n:content.npcs)ensure(n);}
     private void ensure(RpgStoryContent.Npc n){
         World w=Bukkit.getWorld(n.world());if(w==null||!w.isChunkLoaded(((int)Math.floor(n.x()))>>4,((int)Math.floor(n.z()))>>4))return;
+        if(!plugin.npcEntityReadiness().ready("story:"+n.id(),new Location(w,n.x(),n.y(),n.z()),()->ensure(n)))return;
         LivingEntity current=entity(n.id());
         if(current==null){
             var at=new Location(w,n.x(),n.y(),n.z());var chunk=w.getChunkAt(at);var found=new ArrayList<LivingEntity>();

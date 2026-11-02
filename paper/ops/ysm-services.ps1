@@ -25,7 +25,7 @@ function Start-YsmServices {
     if ($listeners.Count -gt 1) { throw 'Multiple YSM lifecycle listeners' }
     if ($listeners.Count -eq 0) {
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-        $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $opsDir 'ysm-services-launch.ps1'),'-Config',(Join-Path $opsDir 'ysm-services.json')) -WorkingDirectory $opsDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $opsDir "ysm-services-$stamp.log") -RedirectStandardError (Join-Path $opsDir "ysm-services-$stamp.error.log") -PassThru
+        $proc = Start-IndependentProcess -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $opsDir 'ysm-services-launch.ps1'),'-Config',(Join-Path $opsDir 'ysm-services.json')) -WorkingDirectory $opsDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $opsDir "ysm-services-$stamp.log") -RedirectStandardError (Join-Path $opsDir "ysm-services-$stamp.error.log") -PassThru
         Log "YSM supervisor launched PID=$($proc.Id)"
     }
     $hasNativeAuth=$c.PSObject.Properties.Name -contains 'auth' -and $null -ne $c.auth

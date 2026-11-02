@@ -35,6 +35,7 @@ $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.j
 $pendingContentDeploy = Join-Path $opsDir 'content-plugins.pending.json'
 $pendingPaperCoreUpgrade = Join-Path $opsDir 'paper-core-upgrade.pending.json'
 $pendingRuntimeRelocation = Join-Path $opsDir 'runtime-relocation.pending.json'
+. (Join-Path $PSScriptRoot 'independent-process.ps1')
 . (Join-Path $PSScriptRoot 'content-deploy.ps1')
 . (Join-Path $PSScriptRoot 'paper-core-upgrade.ps1')
 . (Join-Path $PSScriptRoot 'ysm-services.ps1')
@@ -81,7 +82,7 @@ function Start-SpectateWatcher {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $opsDir "spectate-watcher-$stamp.log"
     $stderr = Join-Path $opsDir "spectate-watcher-$stamp.error.log"
-    $proc = Start-Process -FilePath $node -ArgumentList $spectateWatcherScript -WorkingDirectory $opsDir `
+    $proc = Start-IndependentProcess -FilePath $node -ArgumentList $spectateWatcherScript -WorkingDirectory $opsDir `
         -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     Start-Sleep -Seconds 2
     $proc.Refresh()
@@ -132,7 +133,7 @@ function Start-AgentEyeWatcher {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $opsDir "agent-eye-watcher-$stamp.stdout.log"
     $stderr = Join-Path $opsDir "agent-eye-watcher-$stamp.error.log"
-    $proc = Start-Process -FilePath $node -ArgumentList $agentEyeWatcherScript -WorkingDirectory $opsDir `
+    $proc = Start-IndependentProcess -FilePath $node -ArgumentList $agentEyeWatcherScript -WorkingDirectory $opsDir `
         -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     Start-Sleep -Seconds 2
     $proc.Refresh()
@@ -167,7 +168,7 @@ function Start-Goddess {
             $env:MC_LOGIN_PASSWORD = $Matches[1]
             $env:GODDESS_AUTH_REQUIRED = '1'
         }
-        $proc = Start-Process -FilePath $node -ArgumentList $goddessScript -WorkingDirectory $opsDir `
+        $proc = Start-IndependentProcess -FilePath $node -ArgumentList $goddessScript -WorkingDirectory $opsDir `
             -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     } finally {
         $env:GODDESS_GAME_PORT = $previousGamePort
@@ -235,7 +236,7 @@ function Start-Gateway {
     try {
         $ysm = Ysm-Config
         if ($ysm -and $ysm.enabled) { $env:AGENT_GATEWAY_BACKEND_PORT = [string]$ysm.proxy.port }
-        $process = Start-Process -FilePath $node -ArgumentList $gatewayScript -WorkingDirectory $opsDir `
+        $process = Start-IndependentProcess -FilePath $node -ArgumentList $gatewayScript -WorkingDirectory $opsDir `
             -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     } finally { $env:AGENT_GATEWAY_BACKEND_PORT = $previousBackend }
     $deadline = (Get-Date).AddSeconds(12)
@@ -279,7 +280,7 @@ function Reload-Gateway {
 }
 
 function Rcon([string]$command) {
-    $out = & $node 'E:\MC\probe\rcon.mjs' $command 2>&1
+    $out = & $node (Join-Path $opsDir 'rcon-command.mjs') $command 2>&1
     if ($LASTEXITCODE -ne 0) { throw "RCON $command failed: $($out -join ' ')" }
     $out -join "`n"
 }
@@ -512,7 +513,7 @@ function Start-Server {
         $javaArguments += "-javaagent:$auraCachePatchJar"
         Log 'Enabling the pinned AuraSkills message cache patch at startup'
     }
-    $proc = Start-Process -FilePath $java -ArgumentList ($javaArguments + @('-jar', (Join-Path $serverDir 'server.jar'), 'nogui')) `
+    $proc = Start-IndependentProcess -FilePath $java -ArgumentList ($javaArguments + @('-jar', (Join-Path $serverDir 'server.jar'), 'nogui')) `
         -WorkingDirectory $serverDir -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     Log "Launching Paper PID=$($proc.Id), log=$stdout"
     $deadline = (Get-Date).AddSeconds(120)

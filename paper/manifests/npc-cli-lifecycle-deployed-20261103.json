@@ -1,0 +1,45 @@
+{
+  "state": "deployed-with-open-acceptance",
+  "release": "npc-cli-lifecycle-20261103-r2",
+  "gameMaintenanceCompletedAt": "2026-11-03T01:58:49.4802882+08:00",
+  "verifiedAt": "2026-11-03T02:31:37.666642+08:00",
+  "gameRestarted": true,
+  "originalGoddessJobsRestored": 7,
+  "formalChecksPassed": 22,
+  "characterFilesUnchangedDuringColdInstallation": 673,
+  "originalCredentialRowsPreserved": 75,
+  "originalCredentialValuesUnchanged": true,
+  "artifactSha256": {
+    "E:/MC/server/plugins/AgentFriend-0.4.47.49-rpg.jar": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
+    "E:/MC/server/plugins/NPCSpeak-1.0.jar": "0bfb634a96e1791822b76bb367efb881f21bdd767385d5d1ff9524d11837cd1e",
+    "E:/MC/server/libraries/net/neoforged/neoforge/21.1.252/neoforge-21.1.252-server.jar": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4",
+    "E:/MC/clients/goddess-native-2.6.5/mods/qiandeng-native-camera-0.1.0.jar": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
+    "E:/MC/clients/goddess-native-2.6.5/launch.py": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85"
+  },
+  "cleanup": {
+    "confirmedResidualEntitiesRemoved": 4,
+    "loadedOverworldVillagersBefore": 52,
+    "loadedOverworldVillagersAfter": 48,
+    "currentShopkeepersRegistryPreserved": true,
+    "otherOriginalEntitiesMissing": 0,
+    "reputationFieldsRestoredByMaximum": 13,
+    "deathOrDropsRequested": false,
+    "playersOrMaidsRemoved": false
+  },
+  "verification": {
+    "isolatedColdStarts": 5,
+    "chunkLifecycleBoundaryChecks": 8,
+    "ordinaryClientCliChecks": 41,
+    "independentWindowsJobChecks": 6,
+    "actualProductionIndependentStartupUsed": true,
+    "ownerClosingWholeApplicationTested": false
+  },
+  "rollback": "E/F current game and authentication cold recovery points verified; code-only rollback, preserve new progress",
+  "maintenanceEntryConsumed": true,
+  "openAcceptance": [
+    "Remote Cortico host terminal error consumption remains unverified",
+    "creeping_crypt travel still fails when its approach chunk is unloaded in the current Youer async API; separate compatible-loader repair required",
+    "Actual Android login and complete remote rendering parity remain separate acceptance"
+  ],
+  "cameraManifest": "native-camera-adapter-deployed-20261103.json"
+}
