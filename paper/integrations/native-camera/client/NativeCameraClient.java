@@ -62,6 +62,18 @@ public final class NativeCameraClient implements ClientModInitializer {
             boolean shaders=false;
             try {Class<?> type=Class.forName("net.irisshaders.iris.api.v0.IrisApi");Object api=type.getMethod("getInstance").invoke(null);shaders=(boolean)type.getMethod("isShaderPackInUse").invoke(api);}catch(ReflectiveOperationException ignored){}
             data.put("shadersEnabled",shaders);data.put("modelCatalogueSize",YsmAccess.catalogueSize());
+            // Read the original 2.6.5 client handshake flag; never set it or send a model selection.
+            try {
+                Class<?> transport=Class.forName("com.elfmcys.yesstevemodel.OOOoo0000OooO0000O0OO00o");
+                Object ready=transport.getMethod("OO0ooo0OooOoO0OoO0ooOO0o").invoke(null);
+                if(ready instanceof Boolean)data.put("ysmProtocolReady",ready);
+            }catch(Exception unavailable){data.put("ysmProtocolDiagnosticError",unavailable.getClass().getSimpleName());}
+            for(String query:List.of("getReceived","getSendable")){
+                try {
+                    Object channels=Class.forName("net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking").getMethod(query).invoke(null);
+                    if(channels instanceof Collection<?> values)data.put("fabric"+query+"Ysm",values.stream().map(String::valueOf).filter(s->s.startsWith("yes_steve_model:")).sorted().limit(16).toList());
+                }catch(Exception unavailable){/* Disconnected clients have no play-channel view. */}
+            }
             // The 2.6.5 index and the loaded render objects are distinct stages.
             // Read only the reviewed public API; never trigger loading or alter a selection.
             try {

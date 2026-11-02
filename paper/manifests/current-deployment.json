@@ -44,7 +44,7 @@
     "kernel": "Youer1.21.1 build920 / NeoForge21.1.252",
     "QiandengjiMaidBridge": "0.1.6",
     "NativePlatform": "0.1.6",
-    "OptionalPayloadGuard": "0.1.0",
+    "OptionalPayloadGuard": "0.1.1",
     "YSM": "2.6.5",
     "QiandengjiFaweHybrid": "0.1.0",
     "NumenEngine": "0.1.4-qd-youer1",
@@ -119,7 +119,6 @@
     "E:\\MC\\server\\mods\\ysm-2.6.5-neoforge+mc1.21.1-release.jar": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\LibreLogin-0.24.0.jar": "ca5a5ddc7e19f97dd8548fae6c637fd02488e4279e26bfdb8784662b262933bf",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\NanoLimboPlugin-velocity-1.0.11.jar": "db24cb3db365bcb565e3cafc0c2c0984a20461cedaa4a26b5d9be910f0ebf272",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.0.jar": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\packetevents-velocity-2.14.0.jar": "0772f64b51aaf79132c76bb1503707ea0d35433713d5312e67401eaa599d271b",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\RealmAccounts-0.1.1.jar": "c2d923dc8c88d6b055fbaa9d953ae67b536d24cffbc861c59b94b1127b9b4b15",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\ViaBackwards-5.12.1.jar": "29d94d3a26c85c8a327574b2322db4078992ae457f0173325431a12aac384911",
@@ -139,7 +138,8 @@
     "E:\\MC\\server\\config\\proxy-compatible-forge.toml": "d698aadb9a505f72d72a128c41de773dbb5f80bd3b6b2dbf23a978d07fa8fa59",
     "E:\\MC\\ops\\build-native-auth.py": "42272c191df7116044e826df2efe2e7febabd8e215d0a8f50843de7920dd6aab",
     "E:\\MC\\ops\\world-activity.py": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b",
-    "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575"
+    "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.1.jar": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -959,5 +959,15 @@
     "productionNativeOperatorClientVerified": false,
     "physicalBedrockClientVerified": false,
     "document": "paper/manifests/proxy-command-compat-deployed-20261102.json"
+  },
+  "nativeYsmHandoff": {
+    "installedVersion": "0.1.1",
+    "installedAt": "2026-11-02T11:19:55+08:00",
+    "gameRestarted": false,
+    "originalCredentialRowsPreserved": 72,
+    "nativeClientAndBackendAgree": false,
+    "remotePixelsAccepted": false,
+    "candidateVersion": "0.1.2",
+    "document": "paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md"
   }
 }

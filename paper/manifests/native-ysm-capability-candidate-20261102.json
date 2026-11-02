@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "status": "isolated_verified_not_deployed",
+  "status": "deployed-native-display-still-pending",
   "component": "OptionalPayloadGuard",
   "candidateVersion": "0.1.1",
   "artifact": "OptionalPayloadGuard-0.1.1.jar",
   "sha256": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479",
-  "installedVersion": "0.1.0",
-  "installedSha256": "00762ad70388173854368e2c8a40c6f3fab0ac9be26bfb806cff95372b87f277",
+  "installedVersion": "0.1.1",
+  "installedSha256": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479",
   "unchanged": {
     "LoginGuard": "0.1.10",
     "YSM": "2.6.5",
@@ -31,7 +31,14 @@
   "activation": {
     "normalLoginProxyReconnectRequired": true,
     "gameRestartRequired": false,
-    "dedicatedRestartAuthorizationRequired": true
+    "dedicatedRestartAuthorizationRequired": true,
+    "approvedByOwner": true,
+    "completedAt": "2026-11-02T11:23:13+08:00",
+    "gameRestarted": false,
+    "oneShotConsumed": true,
+    "originalCredentialRowsPreserved": 72,
+    "productionNativeReady": false
   },
-  "documentation": "paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md"
+  "documentation": "paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md",
+  "followup": "Actual Fabric auth-to-game YSM acknowledgement handoff; 0.1.2 candidate"
 }

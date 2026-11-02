@@ -1,3 +1,7 @@
+## 2026-11-02 11:23 通道识别已部署，原生画面仍待修复
+
+OptionalPayloadGuard0.1.1已通过原有生命周期正常重连加载，LoginGuard0.1.10和YSM2.6.5保持，游戏PID47384未重启；E/F一致认证备份、72账号身份/凭据字段和9项后台检查通过。原入口已消费禁止重放。相机原版客户端就绪而游戏未就绪，不能称模型已恢复；24份登录前只读样本证实Fabric提前握手。0.1.2仅中转同一物理客户端实际发送的版本确认，仍是候选，须完成真实Fabric/NeoForge对照后再正常切换。勿安装私有LoginGuard0.1.11实验包。详见paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md。
+
 ## 2026-11-02 原生YSM通道识别候选，未部署
 
 整批维护已完成且入口已消费，正式仍OptionalPayloadGuard0.1.0/LoginGuard0.1.10/YSM2.6.5。新隔离证据确认保护层漏识别真实neoforge:register，错误取消YSM消息；仅保护层0.1.1通过70边界检查、真实3175字节声明和原版客户端35秒OP/女仆查询、本人无人机选择读回、28份约18MB缓存传输。问候时机假设已移出源码，勿部署私有LoginGuard0.1.11实验包。未改正式进程、账号或外观；新激活仅重连登录代理，需独立维护范围确认，远端像素待验。见paper/docs/YSM_NATIVE_CAPABILITIES_20261102.md及独立候选清单；current-deployment.json仍是实际现役。
