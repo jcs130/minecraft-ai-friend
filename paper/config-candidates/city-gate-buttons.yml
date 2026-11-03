@@ -1,0 +1,17 @@
+# Merge only this section after surveying/building the two button kiosks.
+# Left pillar's south face: stone button at (x-1,y+1,z+1).
+# Gate geometry alone never activates travel; use the button deliberately.
+city-gates:
+  enabled: true
+  village:
+    world: world
+    x: -563
+    y: 67
+    z: -443
+    destination: aincrad
+  aincrad:
+    world: aincrad
+    x: -583
+    y: 67
+    z: 919
+    destination: village
