@@ -9,7 +9,7 @@
 | [官网构建 API](https://api.mohistmc.com/project/youer/1.21.1/builds) | build 920，2026-09-28；提交 `e315863237815205021e0255f3057cca22eb28a0`，NeoForge 21.1.252 |
 | [上游 1.21.1 分支](https://github.com/MohistMC/Youer/tree/1.21.1) | 2026-10-29 的 `23f932ae111931962e2164ef1041b01d539900f9`，比常规构建多 37 次提交 |
 | [官方 CI #844](https://github.com/MohistMC/Youer/actions/runs/40834104418) | 成功，NeoForge 21.1.265；产物 ID `12879893723`，名称 `Youer-1.21.1-server` |
-| 正式服 | build 920 的启动包及本服已验证的实体保存兼容补丁；AgentFriend 仍 `.49`，`.50` 传送修复另待维护加载 |
+| 正式服 | build 920 的启动包及本服已验证的实体保存兼容补丁；AgentFriend `.50` 已于10:56完成正常维护，传送修复已加载 |
 
 常规启动包 SHA256 为 `ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1`，与正式文件相同。当前修补的 NeoForge 21.1.252 server 库摘要仍为 `4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4`；启动包相同不等于内部库未经修补。
 
