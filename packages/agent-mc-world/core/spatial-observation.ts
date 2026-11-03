@@ -12,6 +12,7 @@ export {DEFAULT_VOXEL_BOUNDS} from './voxel-query-contract.ts';
 export {SPATIAL_QUERY_SCHEMA,SPATIAL_QUERY_EXAMPLE,spatialArgumentDiagnostic} from './spatial-query-schema.ts';
 import { openVoxelQuery, voxelPage, visibleVoxelCells, voxelContinuation, type VoxelInput, type VoxelQuery } from './voxel-paging.ts';
 import { spatialReadout, SPATIAL_READOUT_TEXT_RESERVE } from './spatial-readout.ts';
+import { readWorldIdentity } from './world-scope.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
@@ -250,7 +251,8 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
   const eye: Point = [position[0], position[1] + (eyeHeight ?? 1.62), position[2]];
   const frame = { position, feet, eye, eyeHeightSource: eyeHeight === undefined ? 'standing-default' : 'client',
     yawDeg: round(bot.entity.yaw * 180 / Math.PI), pitchDeg: round(bot.entity.pitch * 180 / Math.PI) };
-  const common = { source: 'client-visible-world' as const, observedAt: new Date().toISOString(), dimension: bot.game?.dimension ?? null, frame };
+  const common = { source: 'client-visible-world' as const, observedAt: new Date().toISOString(),
+    world: readWorldIdentity(bot), dimension: bot.game?.dimension ?? null, frame };
   const cache = new Map<string, Sample>();
   const attemptedCells = new Set<string>();
   const read = (cell: Point): Sample => {

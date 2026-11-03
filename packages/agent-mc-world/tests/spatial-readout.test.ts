@@ -5,6 +5,7 @@ import { observeSpatial } from '../core/spatial-observation.ts';
 import { spatialReadout } from '../src/client/index.ts';
 import { SPATIAL_READOUT_TEXT_RESERVE } from '../core/spatial-readout.ts';
 import { methodHarness } from './method-harness.ts';
+import { installWorldIdentity } from '../core/world-scope.ts';
 
 vi.mock('../core/perception-sight.ts', async load => ({ ...await load<typeof import('../core/perception-sight.ts')>(), observedBlock: () => true, observedEntity: () => true }));
 
@@ -15,6 +16,36 @@ const receipt = () => ({source:'client-visible-world',kind:'voxels',format:'dens
   bounds:[1,64,1,17,66,1],cells:[0,1,-1],palette:[{name:'chest',stateId:203,properties:{waterlogged:false}}]});
 
 describe('shared current spatial read feedback',()=>{
+  it.each([
+    {mode:'sites' as const,sites:[[1,64,1]] as [number,number,number][]},
+    {mode:'rays' as const,rays:[[0,0,2]] as [number,number,number][]},
+    {mode:'voxels' as const,format:'visible' as const,bounds:[0,0,0,1,1,1] as [number,number,number,number,number,number]},
+    {mode:'voxels' as const,format:'dense' as const,bounds:[0,0,0,1,1,1] as [number,number,number,number,number,number]},
+  ])('retains actual map identity for $mode/$format even when both maps have overworld physics',input=>{
+    const r=methodHarness('1.21.1'),b=r.bot as unknown as Bot,dispose=installWorldIdentity(b);
+    try{
+      b._client.emit('login',{worldState:{name:'minecraft:overworld'}});
+      const first=observeSpatial(b,input);
+      b._client.emit('respawn',{worldState:{name:'minecraft:aincrad'}});
+      const second=observeSpatial(b,input);
+      expect(first).toMatchObject({dimension:'overworld',world:{key:'minecraft:overworld'},readout:{worldKey:'minecraft:overworld',dimensionType:'overworld'}});
+      expect(second).toMatchObject({dimension:'overworld',world:{key:'minecraft:aincrad',source:'vanilla-respawn'},readout:{worldKey:'minecraft:aincrad',dimensionType:'overworld'}});
+      expect(second.readout!.selection).not.toBe(first.readout!.selection);
+      expect(second.readout!.revision).not.toBe(first.readout!.revision);
+      b._client.emit('respawn',{worldState:{name:'minecraft:aincrad'}});
+      expect(observeSpatial(b,input).readout!.revision).toBe(second.readout!.revision);
+      expect(r.said).toEqual([]);
+      expect(JSON.stringify(second.readout).length).toBeLessThan(SPATIAL_READOUT_TEXT_RESERVE);
+    }finally{dispose();r.close();}
+  });
+  it('does not replace an unknown map with its known dimension type or fabricate one for older receipts',()=>{
+    const r=methodHarness('1.21.1');
+    try{
+      const data=observeSpatial(r.bot as unknown as Bot,{mode:'sites',sites:[[1,64,1]]});
+      expect(data).toMatchObject({dimension:'overworld',world:{key:null,source:'unknown'},readout:{worldKey:null,dimensionType:'overworld'}});
+      expect(spatialReadout(receipt())).toMatchObject({worldKey:null,dimensionType:'overworld'});
+    }finally{r.close();}
+  });
   it('distinguishes an exhausted partial scan from a pending action or missing next page',()=>{
     const data=receipt(),before=structuredClone(data),r=spatialReadout(data)!;
     expect(r).toMatchObject({protocol:'agent-mc-spatial-read/v1',historical:false,kind:'voxels',
@@ -40,6 +71,8 @@ describe('shared current spatial read feedback',()=>{
   });
   it('puts actual read coverage before a capped dense body and exposes it through the native read-only tool',async()=>{
     const r=methodHarness('1.21.1');
+    const dispose=installWorldIdentity(r.bot as unknown as Bot);
+    r.bot._client.emit('login',{worldState:{name:'minecraft:aincrad'}});
     try{
       const submit=vi.spyOn(r.exec,'submit'),position=r.bot.entity.position.clone();
       const feet=r.bot.entity.position.floored();
@@ -53,8 +86,10 @@ describe('shared current spatial read feedback',()=>{
       expect(result.text.slice(0,1200)).toContain('扫描已读完');
       expect(result.text.slice(0,1500)).toContain('"name":"chest"');
       expect(result.data?.readout).toEqual(result.meta?.observation);
+      expect(result.meta?.observation).toMatchObject({worldKey:'minecraft:aincrad',dimensionType:'overworld'});
+      expect(result.text.slice(0,1200)).toContain('"worldKey":"minecraft:aincrad"');
       expect(submit).not.toHaveBeenCalled();expect(r.bot.entity.position.equals(position)).toBe(true);
-    }finally{r.close();}
+    }finally{dispose();r.close();}
   });
   it('keeps real dense numeric cells and complete original data alongside the prefix',()=>{
     const bot={entity:{id:1,position:new Vec3(0.5,64,0.5),yaw:0,pitch:0},entities:{},game:{dimension:'overworld'},
