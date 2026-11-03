@@ -6,8 +6,10 @@
  */
 import type { Bot } from 'mineflayer';
 import type { goals } from 'mineflayer-pathfinder';
+import { navigationBoundaryFailureOf } from './navigation-boundary.ts';
 
 export function awaitPathGoal(bot: Bot, goal: goals.Goal): Promise<void> {
+  const boundarySequence = navigationBoundaryFailureOf(bot)?.sequence ?? 0;
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error?: Error): void => {
@@ -31,7 +33,11 @@ export function awaitPathGoal(bot: Bot, goal: goals.Goal): Promise<void> {
     };
     const reached = (actual?: goals.Goal): void => { if (!actual || actual === goal) finish(); };
     const changed = (actual: goals.Goal | null): void => {
-      if (actual !== goal) failure('GoalChanged', 'The goal changed before completion!');
+      if (actual === goal) return;
+      const boundary = navigationBoundaryFailureOf(bot);
+      if (boundary && boundary.sequence > boundarySequence && boundary.goal === goal)
+        failure('NavigationBoundary', boundary.reason);
+      else failure('GoalChanged', 'The goal changed before completion!');
     };
     const stopped = (): void => failure('PathStopped', 'Path stopped before completion!');
     bot.on('path_update', update); bot.on('goal_reached', reached);

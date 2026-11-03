@@ -23,6 +23,7 @@ import { groundPathIssueOf } from './path-waypoints.ts';
 import { corridorSafe } from './idle-actions.ts';
 import { onConnectionEnd } from './connection-end.ts';
 import { navigationInteractionFailureOf } from './hand-interaction.ts';
+import { installNavigationBoundaryGuard, navigationBoundaryFailureOf } from './navigation-boundary.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -748,6 +749,13 @@ async function navigateWithCheckpoints(bot: Bot, goal: InstanceType<typeof goals
 }
 
 export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goal>, ctx: SkillContext): Promise<void> {
+  installNavigationBoundaryGuard(bot, ctx.diag);
+  const boundarySequence = navigationBoundaryFailureOf(bot)?.sequence ?? 0;
+  const boundaryBlocked = (): SkillBlocked | null => {
+    const failure = navigationBoundaryFailureOf(bot);
+    return failure && failure.sequence > boundarySequence && failure.goal === goal
+      ? new SkillBlocked(failure.reason, [], 'local', 'navigation-location-changed') : null;
+  };
   let done = false;
   let timedOut = false;
   let stalled: Stall | null = null;
@@ -858,7 +866,10 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
     const searchFailed = (noPath || (err as Error).name === 'NoPath')
       && bot.pathfinder.goal === goal && goalOwnerOf(bot)?.goal === goal;
-    dropGoal(bot, 'task', '寻路报错,技能退出', ctx.diag);
+    // A native relocation already cleared the old route. Its delayed rejection
+    // must not revoke a newer owner/goal installed before this continuation.
+    if (bot.pathfinder.goal === goal) dropGoal(bot, 'task', '寻路报错,技能退出', ctx.diag);
+    if (boundaryBlocked()) throw boundaryBlocked()!;
     if (interactionBlocked()) throw interactionBlocked()!;
     if (geometryBlocked()) throw new SkillBlocked(geometryBlocked()!);
     const support = supportBlocked();
@@ -879,6 +890,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     done = true;
     bot.off?.('path_update', onPath);
   }
+  if (boundaryBlocked()) throw boundaryBlocked()!;
   checkAbort(ctx);
   if (interactionBlocked()) throw interactionBlocked()!;
   const support = supportBlocked();
