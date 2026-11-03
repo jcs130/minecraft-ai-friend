@@ -29,7 +29,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
     private record Account(String server, String username, String credentialFile, String command,
                            List<String> requestMarkers, List<String> successMarkers, List<String> failureMarkers,
                            boolean reconnect, List<String> reauthMarkers, List<String> stateMarkers,
-                           String initialPerspective) {}
+                           String initialPerspective, boolean retryWhileTransportUnavailable) {}
     private record Config(boolean enabled, List<Account> accounts) {}
     private LoginSession session;
     private Account account;
@@ -39,6 +39,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
     private class_642 reconnectServer;
     private String confirmedAt;
     private boolean reconnectLimitLogged;
+    private boolean retryWhileTransportUnavailable;
 
     @Override
     public void onInitializeClient() {
@@ -50,6 +51,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
             session = null;
             confirmedAt = null;
             reconnectLimitLogged = false;
+            retryWhileTransportUnavailable = false;
             reconnectServer = null;
             reconnect.block();
             class_642 server = current.method_1558();
@@ -73,6 +75,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                     session = new LoginSession(account.requestMarkers, account.successMarkers, account.failureMarkers,
                         account.reauthMarkers == null ? List.of() : account.reauthMarkers);
                     reconnectServer = account.reconnect ? server : null;
+                    retryWhileTransportUnavailable = account.retryWhileTransportUnavailable;
                     if (account.reconnect) reconnect.arm(); else reconnect.block();
                     int perspective = InitialPerspective.select(account.initialPerspective);
                     if (perspective >= 0) {
@@ -140,9 +143,11 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                 }
                 return;
             }
-            if (!reconnect.tick(current.field_1755 instanceof class_419 ? current.field_1755 : null,
-                    System.nanoTime() / 1_000_000)) {
-                if(current.field_1755 instanceof class_419&&reconnect.exhausted()&&!reconnectLimitLogged){
+            class_419 disconnected = current.field_1755 instanceof class_419 screen ? screen : null;
+            boolean prolongedRetry = reconnect.exhausted() && retryWhileTransportUnavailable
+                && disconnected != null && transportUnavailable(disconnected);
+            if (!reconnect.tick(disconnected, System.nanoTime() / 1_000_000, prolongedRetry)) {
+                if(disconnected != null&&reconnect.exhausted()&&!prolongedRetry&&!reconnectLimitLogged){
                     reconnectLimitLogged=true;
                     System.out.println("[CorticoClientLogin] Reconnect limit reached ("+reconnect.maximumAttempts()+"); automatic retries stopped; inspect the original disconnect reason");
                 }
@@ -155,11 +160,14 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                 Config config = new Gson().fromJson(Files.readString(configFile), Config.class);
                 boolean allowed = config != null && config.enabled && config.accounts != null
                     && config.accounts.stream().anyMatch(entry -> entry != null && entry.reconnect
+                        && (!prolongedRetry || entry.retryWhileTransportUnavailable)
                         && entry.server != null && entry.username != null
                         && LoginSession.matchesAccount(entry.server, entry.username, target.field_3761,
                             current.method_1548().method_1676()));
                 if (!allowed) { reconnect.block(); return; }
-                System.out.println("[CorticoClientLogin] Reconnecting configured account, attempt " + reconnect.attempts());
+                System.out.println(prolongedRetry
+                    ? "[CorticoClientLogin] Reconnecting after local transport failure (120-second backoff)"
+                    : "[CorticoClientLogin] Reconnecting configured account, attempt " + reconnect.attempts());
                 // A non-null cookie storage marks the 1.20.6 handshake as TRANSFER.
                 // This is a fresh reconnect to the configured server, not a server-directed transfer.
                 class_412.method_36877(current.field_1755, current, class_639.method_2950(target.field_3761),
@@ -170,6 +178,15 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
             }
         });
         System.out.println("[CorticoClientLogin] Active; login commands and credentials are never logged");
+    }
+
+    private static boolean transportUnavailable(class_419 screen) {
+        // In 1.21.1 the vanilla connector exposes the title and reason as separate narration components.
+        var parts = screen.method_25435().method_10855();
+        if (parts.size() < 2 || !(parts.get(0).method_10851() instanceof net.minecraft.class_2588 title)) return false;
+        var reason = parts.get(parts.size() - 1).method_10851();
+        return reason instanceof net.minecraft.class_2588 translated
+            && ReconnectSession.isTransportFailure(title.method_11022(), translated.method_11022(), translated.method_11023());
     }
     /** Optional generic Fabric authorization evidence port. Explicitly excludes all credentials. */
     @Override public Map<String,Object> get() {

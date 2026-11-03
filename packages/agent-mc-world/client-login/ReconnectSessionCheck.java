@@ -62,6 +62,28 @@ public final class ReconnectSessionCheck {
         interrupted.online(99999);interrupted.online(129998);
         check(interrupted.attempts()==1,"backward clock does not immediately reset retries");
         interrupted.online(129999);check(interrupted.attempts()==0,"clock recovery requires a complete new stable interval");
+        Object timeout = new Object();
+        check(!burst.tick(timeout, 130000, true), "first transient failure uses normal backoff");
+        check(burst.tick(timeout, 133000, true), "retry after normal backoff");
+        long time = 134000;
+        for (long delay : new long[]{10000, 30000, 60000}) {
+            Object next = new Object();
+            check(!burst.tick(next, time, true), "schedule bounded retry");
+            time += delay;
+            check(burst.tick(next, time++, true), "consume bounded retry");
+        }
+        Object prolonged = new Object();
+        check(!burst.tick(prolonged, 240000, true), "schedule slow reconnect");
+        check(!burst.tick(prolonged, 359999, true), "respect the two minute backoff");
+        check(burst.tick(prolonged, 360000, true), "recover after the normal budget was exhausted");
+        check(!burst.tick(prolonged, 560000, true), "one connect per screen");
+        check(!burst.tick(new Object(), 680000, false), "an intervening kick still stops");
+        Object abandoned = new Object();
+        check(!burst.tick(abandoned, 681000, true), "another network failure can wait");
+        check(!burst.tick(null, 800000, false), "closing the disconnect screen cancels the pending retry");
+        check(!burst.tick(abandoned, 801000, true), "cancelled timer cannot fire immediately");
+        burst.block();
+        check(!burst.tick(abandoned, 1000000, true), "auth block overrides slow reconnect");
         System.out.println("ReconnectSession: " + checks + " checks passed; bounded retries require stable authorization");
     }
 }
