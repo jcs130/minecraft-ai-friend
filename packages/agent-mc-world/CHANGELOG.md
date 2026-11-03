@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.1 (unpublished candidate)
+
+- Delay first World activation until both authentication and configuration transport readiness hold. A proxy can confirm authentication before the backend's first PLAY position; retry activation after that native position so the World sees its connected bot and installs query, perception and body lifecycle listeners exactly once.
+
 ## 0.5.7-rc.157-preview.1 (unpublished candidate)
 
 - Keep the native map identity in sites, rays and voxel receipts, including the compact readout prefix. Distinguish equal coordinates in different maps sharing the same dimension type; missing map identities remain unknown.

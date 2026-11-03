@@ -574,6 +574,7 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    let activate = () => {};
     this.bagFor(gen).register('native-body-readiness', installNativeBodyReadiness(bot).dispose);
     this.bagFor(gen).register('world-identity', installWorldIdentity(bot));
     this._spawnPositionPending = true;
@@ -590,7 +591,12 @@ export class Bridge {
       // The built-in plugin loader runs first on inject_allowed. Register after
       // physics applies the position, not on forcedMove (delayed 1.5s after death).
       bot._client.on('position', () => {
-        if (this._bot !== bot || this.generation !== gen || this.stopped || !this._spawnPositionPending) return;
+        if (this._bot !== bot || this.generation !== gen || this.stopped) return;
+        // Authentication can finish between the proxy's configuration round
+        // and its first PLAY position. Retry only when the public bot is usable;
+        // otherwise World.onSpawn sees null and never installs its listeners.
+        activate();
+        if (!this._spawnPositionPending) return;
         const p = bot.entity?.position;
         if (!p || ![p.x, p.y, p.z].every(Number.isFinite)) return;
         this._spawnPositionPending = false;
@@ -609,7 +615,6 @@ export class Bridge {
     this.protocolSpawned = false;
     this.opts.onBotCreated?.(bot);
     this.bagFor(gen).register('breathing-readings', installBreathingReadings(bot));
-    let activate = () => {};
     const login = installServerLogin(bot, { server: `${host}:${port}`, username,
       configFile: this.opts.loginConfigFile?.(),
       report: status => {
@@ -810,7 +815,8 @@ export class Bridge {
 
     activate = () => {
       if (this.stopped || this._bot !== bot || this.generation !== gen || this.spawnedBot === bot
-        || !this.protocolSpawned || !login.ready()) return;
+        || !this.protocolSpawned || !login.ready() || !configurationTransportReady(bot._client)
+        || bot.entity === undefined) return;
       setBlueprintMcVersion(bot.version);
       this.spawnedBot = bot;
       this.failure = null;

@@ -37,6 +37,29 @@ function scopedLoginRig() {
 }
 
 describe('login readiness', () => {
+  it.each(['configuration', 'play-awaiting-position'])('defers World activation until its bot getter is usable: %s', async boundary => {
+    const r = scopedLoginRig();
+    const bot = r.bots[0]!, client = Object.assign(bot._client, { state: 'configuration', write: vi.fn() });
+    try {
+      r.bridge.start();
+      bot.emit('inject_allowed');
+      bot.emit('spawn'); // Proxy lobby already supplied a spawn; backend position has not arrived.
+      if (boundary === 'play-awaiting-position') { client.state = 'play'; client.emit('state', 'play'); }
+      r.message(0, 'MC_AUTH_STATE {"username":"tester","authorized":true,"status":"authenticated"}');
+      expect(r.bridge.bot).toBeNull();
+      expect(r.onSpawn).not.toHaveBeenCalled();
+      r.onSpawn.mockImplementation(() => expect(r.bridge.bot).toBe(bot));
+      client.state = 'play'; client.emit('state', 'play');
+      client.emit('position', { x: 5, y: 64, z: 8 });
+      expect(r.onSpawn).toHaveBeenCalledOnce();
+      expect(r.bridge.connected).toBe(true);
+      client.emit('position', { x: 6, y: 64, z: 8 }); bot.emit('spawn');
+      expect(r.onSpawn).toHaveBeenCalledOnce();
+      await r.bridge.stop(); client.emit('position', {});
+      expect(r.onSpawn).toHaveBeenCalledOnce();
+    } finally { await r.close(); }
+  });
+
   it('preserves the missing-prompt diagnosis in the actual disconnect and connection state',async()=>{
     vi.useFakeTimers();const r=scopedLoginRig();
     try{
