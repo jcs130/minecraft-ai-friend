@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "city-gate-button-20261103-r1",
-  "verifiedAt": "2026-11-03T13:08:40.256118+08:00",
-  "releaseDocument": "paper/docs/CITY_GATE_BUTTONS_20261103.md",
+  "latestRelease": "pr58-boundaries-20261103-r2",
+  "verifiedAt": "2026-11-03T14:35:10.003119+08:00",
+  "releaseDocument": "paper/docs/PR58_BOUNDARIES_20261103.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -47,7 +47,7 @@
     "OptionalPayloadGuard": "0.1.2",
     "YSM": "2.6.5",
     "QiandengjiFaweHybrid": "0.1.0",
-    "NumenEngine": "0.1.4-qd-youer1",
+    "NumenEngine": "0.1.4-qd-youer2",
     "Geyser": "2.12.1-b1280",
     "ViaVersion": "5.12.2",
     "ViaBackwards": "5.12.2",
@@ -56,7 +56,9 @@
     "VortexRPGPatchset": "qd32-cooperation",
     "VortexRPGSidebar": "compact-sidebar-r1",
     "NPCSpeak": "1.0 + entity-readiness repair",
-    "YouerEntityPersistence": "persist=false respected in shouldBeSaved/saveAsPassenger; pinned build920 patch"
+    "YouerEntityPersistence": "persist=false respected in shouldBeSaved/saveAsPassenger; pinned build920 patch",
+    "GoddessPrivateIdentity": "native registered incoming-message type",
+    "NativeCameraJavaBridge": "0.1.0 + PR58 cancellation boundary"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -93,7 +95,7 @@
     "E:\\MC\\server\\plugins\\NPCSpeak-1.0.jar": "0bfb634a96e1791822b76bb367efb881f21bdd767385d5d1ff9524d11837cd1e",
     "E:\\MC\\server\\plugins\\numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "E:\\MC\\server\\plugins\\NumenBedrock-0.1.0.jar": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
-    "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar": "0240456e9b84cfa841c7384a3a368011a65f469bf96469a19777a50db090310f",
+    "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar": "b3cf763f68fb4729e1001149c267ee378a6cc55b1c91f97bb9222f80782ff35a",
     "E:\\MC\\server\\plugins\\OlEncounters-1.7.0.jar": "1577935cc738f199719db7c1b4eaa1630a4ecaa208aba5f5d18943585075ab0f",
     "E:\\MC\\server\\plugins\\ProtocolLib-5.3.0.jar": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d",
     "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.6.jar": "dde357119ec3e14b14855834aad814024a2b6854ede766009768ab49bfaf632d",
@@ -142,7 +144,7 @@
     "E:\\MC\\ops\\world-activity.py": "28e621cf54a0beba23b8f100dffed7b86a5ddb5c7f4b2b30ebddb226b255c98b",
     "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
-    "E:\\MC\\ops\\manage-server.ps1": "78f174d3d4a696256deb7ce028bcc0cd33407a108ba907d99bde9c788d654e46",
+    "E:\\MC\\ops\\manage-server.ps1": "faea48e437e9612173e7147d608946423c92a67341b43bf5ba7a753f06e4a128",
     "E:\\MC\\server\\libraries\\net\\neoforged\\neoforge\\21.1.252\\neoforge-21.1.252-server.jar": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4",
     "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\qiandeng-native-camera-0.1.0.jar": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
     "E:\\MC\\clients\\goddess-native-2.6.5\\launch.py": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85",
@@ -151,7 +153,10 @@
     "E:\\MC\\ops\\ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
     "E:\\MC\\ops\\rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c",
     "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.50-rpg.jar": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b",
-    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.18.jar": "51877d0d0c19bf0693a8b0c70d48204970d74bbdde495c0b492ad75c49f06d98"
+    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.18.jar": "51877d0d0c19bf0693a8b0c70d48204970d74bbdde495c0b492ad75c49f06d98",
+    "E:\\MC\\ops\\goddess-bridge.mjs": "d5ef2503f908b957e357790ebe44113904cc8d9fa03cf779a5b70af5c53cdf62",
+    "E:\\MC\\ops\\goddess-chat-identity.mjs": "615cb21f5793bdc3f4010c8c51b5440d29d2f9e3916234fc5185f94c5b1854bf",
+    "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\agent-mc-bridge-0.1.0-fabric-1.21.1.jar": "676bef783d1070726fc2644cbf7504834e6750dc69b05cc6a13efa7130c8c4ef"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -174,11 +179,11 @@
     "original remote modded client acceptance and complete rendering/animation parity",
     "Remote Cortico host terminal error consumption remains unverified"
   ],
-  "scopeNotice": "Safe existing-chunk travel for personal points, landmarks, legacy expedition approaches and rescue paths is deployed with terminal receipts. Local CLI recovery remains advisory; external embeddings are disabled. Patched Youer920 is retained. Remote host terminal-error consumption and physical client acceptance remain separate.",
+  "scopeNotice": "PR58 is deployed for the active Goddess bridge, Numen Lua task engine and owned Fabric camera bridge; other computers and in-game Minescript cancellation remain separate acceptance items. Safe existing-chunk travel for personal points, landmarks, legacy expedition approaches and rescue paths is deployed with terminal receipts. Local CLI recovery remains advisory; external embeddings are disabled. Patched Youer920 is retained. Remote host terminal-error consumption and physical client acceptance remain separate.",
   "verification": {
-    "formalStartupChecks": 23,
+    "formalStartupChecks": 24,
     "enabledPlugins": 55,
-    "characterFilesUnchangedDuringColdInstallation": 673,
+    "characterFilesUnchangedDuringColdInstallation": 798,
     "originalCredentialRowsPreserved": 75,
     "originalGoddessJobsRestored": 7,
     "cameraRuntimeRechecked": true,
@@ -188,7 +193,10 @@
     "physicalDevicePixelsVerified": false,
     "remoteHostUpdated": false,
     "cityGateNativeClientChecks": 15,
-    "cityGateTerrainCellsVerified": 43
+    "cityGateTerrainCellsVerified": 43,
+    "pr58NativeClientChecks": 28,
+    "ownedNativeCameraBridgeStateVerified": true,
+    "originalJvmExitConfirmedBeforeColdBackup": true
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -1397,6 +1405,17 @@
     "mergeCommit": "1d28b3188c35c9ffb6766ce7b68e2d55092216ae",
     "includedInCityGateBatch": false,
     "productionAcceptanceComplete": false,
-    "document": "paper/docs/CITY_GATE_BUTTONS_20261103.md"
+    "document": "paper/docs/PR58_BOUNDARIES_20261103.md",
+    "state": "deployed-for-active-components",
+    "manifest": "paper/manifests/pr58-boundaries-deployed-20261103.json",
+    "serverAndOwnedCameraDeployed": true,
+    "clientDownloadPublished": true,
+    "nativeInGameMinescriptCancellationVerified": false,
+    "otherComputersJavaBridgeUpdated": false
+  },
+  "previousReleaseBeforePr58": {
+    "latestRelease": "city-gate-button-20261103-r1",
+    "verifiedAt": "2026-11-03T13:08:40.256118+08:00",
+    "releaseDocument": "paper/docs/CITY_GATE_BUTTONS_20261103.md"
   }
 }
