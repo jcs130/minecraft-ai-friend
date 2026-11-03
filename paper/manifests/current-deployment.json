@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "pr58-boundaries-20261103-r2",
-  "verifiedAt": "2026-11-03T14:35:10.003119+08:00",
-  "releaseDocument": "paper/docs/PR58_BOUNDARIES_20261103.md",
+  "latestRelease": "health-repairs-20261103-r1",
+  "verifiedAt": "2026-11-03T20:28:06.802724+08:00",
+  "releaseDocument": "paper/docs/HEALTH_REPAIRS_20261103.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -23,7 +23,7 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.50-rpg",
+    "AgentFriend": "0.4.47.51-rpg",
     "QiandengjiRpg": "0.2.18",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
@@ -58,7 +58,8 @@
     "NPCSpeak": "1.0 + entity-readiness repair",
     "YouerEntityPersistence": "persist=false respected in shouldBeSaved/saveAsPassenger; pinned build920 patch",
     "GoddessPrivateIdentity": "native registered incoming-message type",
-    "NativeCameraJavaBridge": "0.1.0 + PR58 cancellation boundary"
+    "NativeCameraJavaBridge": "0.1.0 + PR58 cancellation boundary",
+    "OlEncounters": "1.7.0-qd-youer1"
   },
   "goddessChatGuidance": {
     "enabled": true,
@@ -96,7 +97,7 @@
     "E:\\MC\\server\\plugins\\numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "E:\\MC\\server\\plugins\\NumenBedrock-0.1.0.jar": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
     "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar": "b3cf763f68fb4729e1001149c267ee378a6cc55b1c91f97bb9222f80782ff35a",
-    "E:\\MC\\server\\plugins\\OlEncounters-1.7.0.jar": "1577935cc738f199719db7c1b4eaa1630a4ecaa208aba5f5d18943585075ab0f",
+    "E:\\MC\\server\\plugins\\OlEncounters-1.7.0.jar": "c7e00ec3dd58b9dd0dc789b16b7c638e794220f4627f36f0f53d6dcd66eca4fc",
     "E:\\MC\\server\\plugins\\ProtocolLib-5.3.0.jar": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d",
     "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.6.jar": "dde357119ec3e14b14855834aad814024a2b6854ede766009768ab49bfaf632d",
     "E:\\MC\\server\\plugins\\qiandengji-paper-world-layout-0.1.0.jar": "6682fa15e0e7175de62b9c82a50e77c3661137789517a4f3166d6c35604e0bea",
@@ -152,7 +153,7 @@
     "E:\\MC\\ops\\independent-process.ps1": "06af1f8c5ef78aaa8907c06e72bfbf0484d4d1e5f99b7158b13b867536065865",
     "E:\\MC\\ops\\ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
     "E:\\MC\\ops\\rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.50-rpg.jar": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.50-rpg.jar": "8b93dffeff9547ce088601469a93d481c772e562e40d88e2993d366014f76f5e",
     "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.18.jar": "51877d0d0c19bf0693a8b0c70d48204970d74bbdde495c0b492ad75c49f06d98",
     "E:\\MC\\ops\\goddess-bridge.mjs": "d5ef2503f908b957e357790ebe44113904cc8d9fa03cf779a5b70af5c53cdf62",
     "E:\\MC\\ops\\goddess-chat-identity.mjs": "615cb21f5793bdc3f4010c8c51b5440d29d2f9e3916234fc5185f94c5b1854bf",
@@ -1419,11 +1420,13 @@
     "releaseDocument": "paper/docs/CITY_GATE_BUTTONS_20261103.md"
   },
   "healthRepairs20261103": {
-    "state": "ops-deployed-game-candidates-awaiting-restart-approval",
+    "state": "deployed-and-verified-with-open-acceptance",
     "manifest": "paper/manifests/health-repairs-20261103.json",
     "document": "paper/docs/HEALTH_REPAIRS_20261103.md",
     "operationalRepairsDeployed": true,
-    "gameCandidatesInstalled": false,
-    "restartApproved": false
+    "gameCandidatesInstalled": true,
+    "restartApproved": true,
+    "formalChecks": 27,
+    "pausedCheckpointPreserved": true
   }
 }

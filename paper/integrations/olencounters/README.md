@@ -1,6 +1,6 @@
 # OlEncounters / Youer 异步区块兼容
 
-状态：`1.7.0-qd-youer1` 已隔离验证，尚未安装正式服。当前正式插件仍为1.7.0；维护与验证边界见[健康修复记录](../../docs/HEALTH_REPAIRS_20261103.md)。
+状态：`1.7.0-qd-youer1` 已隔离验证并经正常维护加载正式服；维护与验证边界见[健康修复记录](../../docs/HEALTH_REPAIRS_20261103.md)。
 
 固定原JAR SHA256：`1577935cc738f199719db7c1b4eaa1630a4ecaa208aba5f5d18943585075ab0f`。构建器用ASM只替换 `LocationFinder.lambda$snapshotAsync$22` 内唯一 `World.getChunkAtAsync(int,int,boolean)`，并增加本目录辅助类；调用点不匹配即停止，原依赖和188个其他条目保持原字节。
 

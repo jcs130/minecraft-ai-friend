@@ -1,11 +1,11 @@
 {
-  "state": "ops-deployed-game-candidates-awaiting-restart-approval",
-  "verifiedAt": "2026-11-03T19:58:22.121375+08:00",
+  "state": "deployed-and-verified-with-open-acceptance",
+  "verifiedAt": "2026-11-03T20:28:06.802724+08:00",
   "document": "paper/docs/HEALTH_REPAIRS_20261103.md",
   "liveGame": {
-    "AgentFriend": "0.4.47.50-rpg",
-    "OlEncounters": "1.7.0",
-    "gameRestartedInThisRepair": false
+    "AgentFriend": "0.4.47.51-rpg",
+    "OlEncounters": "1.7.0-qd-youer1",
+    "gameRestartedInThisRepair": true
   },
   "operationalRepairs": {
     "state": "deployed-and-verified",
@@ -53,11 +53,36 @@
   },
   "releasePreparation": {
     "dualDiskCandidateAndRollbackVerified": true,
-    "restartApproved": false,
+    "restartApproved": true,
     "onlineJarReplacement": false,
     "playerDataReplacement": false,
     "currentFaultPausedCheckpointPreserved": true,
     "faultPausedCheckpointMaintenanceExceptionNeedsExplicitApproval": true,
-    "recoveryPolicy": "code only; never restore old world/account/reward over new progress"
+    "recoveryPolicy": "code only; never restore old world/account/reward over new progress",
+    "exactFaultPausedCheckpointMaintenanceApproved": true
+  },
+  "deployment": {
+    "passed": true,
+    "at": "2026-11-03T20:28:06.802724+08:00",
+    "sourceCommit": "efaeb8554d559151dbd59dffa390068ea8aea84b",
+    "formalChecks": 27,
+    "coldInstallationCharacterFilesPreserved": 799,
+    "originalCredentialRowsPreserved": 75,
+    "originalNativeJobsRestored": 7,
+    "exactPausedCheckpointFieldsPreserved": 14,
+    "savedRoomsPreserved": 2,
+    "gameJvmExitConfirmedBeforeColdBackup": true,
+    "dualDiskColdBackupVerified": true,
+    "newRewardsFabricated": false,
+    "camera": {
+      "ready": true,
+      "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+      "fpsObserved": 30,
+      "modelCatalogueSize": 40,
+      "privateGiBObserved": 2.059
+    },
+    "websiteHttps": 200,
+    "closedOneShotEntry": true,
+    "naturalEncounterLongTermAcceptance": "not yet measured"
   }
 }
