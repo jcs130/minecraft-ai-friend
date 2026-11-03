@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.3
+
+- Project inventory organization previews into compact slot/count/variant views. Keep exact NBT/component identities for execution preconditions and conservation checks, rather than repeating them in model-facing results. Export the preview through SDK and extension contracts.
+- Retain the Java 1.21.1 codec and earlier navigation repairs from the preceding candidate. Not yet loaded or published.
+
 ## 0.5.7-rc.160-preview.2 (unpublished candidate)
 
 - Restrict the obsolete food-component workaround to Java 1.20.5/1.20.6. Preserve the real 1.21.1 usingConvertsTo field so native inventory packets containing custom food do not lose their following component/slot boundaries. Verify through the real protocol decoder and Mineflayer inventory plugin.

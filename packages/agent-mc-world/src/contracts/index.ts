@@ -9,7 +9,7 @@ export * from './java-client.ts';
 export * from './options.ts';
 export * from './work-state.ts';
 export type { InventoryOrganization, InventoryDisposition, OrganizationStack, OrganizationMove,
-  InventoryOrganizationPlan, InventoryShortcutExchange } from '../../core/inventory-organization.ts';
+  InventoryOrganizationPlan, InventoryOrganizationPlanView, InventoryShortcutExchange } from '../../core/inventory-organization.ts';
 export * from './chat-delivery.ts';
 export * from './fact-updates.ts';
 export * from './world-scope.ts';

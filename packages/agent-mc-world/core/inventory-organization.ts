@@ -104,6 +104,33 @@ export interface InventoryOrganizationPlan {
   moves: OrganizationMove[];
 }
 
+export interface InventoryOrganizationPlanView extends Omit<InventoryOrganizationPlan, 'moves'> {
+  projection: 'preview-only';
+  moves: Array<Pick<OrganizationMove, 'kind' | 'from' | 'to'> & {
+    source: { name: string; count: number; variant: number } | null;
+    destination: { name: string; count: number; variant: number } | null;
+  }>;
+}
+
+/** Readable preview, not click preconditions. Full component/NBT identities stay
+ * in the execution plan. Local variant numbers distinguish otherwise identical
+ * names without repeating entire books, lore and component maps per move. */
+export function inventoryOrganizationPlanView(plan: InventoryOrganizationPlan): InventoryOrganizationPlanView {
+  const variants = new Map<string, number>();
+  const view = (state: string) => {
+    if (state === 'empty') return null;
+    const separator = state.lastIndexOf(':');
+    const identity = state.slice(0, separator), count = Number(state.slice(separator + 1));
+    const tuple = JSON.parse(identity);
+    if (!Array.isArray(tuple) || typeof tuple[1] !== 'string' || !Number.isInteger(count))
+      throw new Error('Invalid inventory organization state');
+    if (!variants.has(identity)) variants.set(identity, variants.size + 1);
+    return { name: tuple[1], count, variant: variants.get(identity)! };
+  };
+  return { ...plan, projection: 'preview-only', moves: plan.moves.map(({ kind, from, to, source, destination }) =>
+    ({ kind, from, to, source: view(source), destination: view(destination) })) };
+}
+
 /** Stack limits are supplied by the current client/registry; missing limits never imply 64. */
 export function planInventoryOrganization(slots: readonly (OrganizationStack | null | undefined)[],
   start: number, end: number, sort = true): InventoryOrganizationPlan {

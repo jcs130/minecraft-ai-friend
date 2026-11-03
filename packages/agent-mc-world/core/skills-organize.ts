@@ -7,7 +7,7 @@ import { itemPredOf, invCountIn, playerInvIn } from './inventory.ts';
 import { skillStow, skillToss } from './skills-container.ts';
 import { consumesOpenWindow, selectionMenuTitle } from './window-semantics.ts';
 import { inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals, organizationSlotState,
-  planInventoryOrganization, planInventoryShortcutExchange, type OrganizationMove, type OrganizationStack } from './inventory-organization.ts';
+  planInventoryOrganization, inventoryOrganizationPlanView, planInventoryShortcutExchange, type OrganizationMove, type OrganizationStack } from './inventory-organization.ts';
 
 type Call = Extract<SkillCall, { skill: 'organize' }>;
 type Window = NonNullable<Bot['currentWindow']>;
@@ -140,7 +140,7 @@ export async function skillOrganize(bot: Bot, call: Call, ctx: SkillContext): Pr
       merges: 0, swaps: 0, moves: [] };
   if ((call.target ?? 'inventory') === 'open' && rules.length) throw new SkillBlocked('取舍 rules 针对随身背包；target:open 只整理当前容器');
   if (call.dryRun) return JSON.stringify({ schema: 'minecraft-inventory-organization/v1', dryRun: true,
-    target: call.target ?? 'inventory', includeHotbar: call.includeHotbar ?? false, plan: preview,
+    target: call.target ?? 'inventory', includeHotbar: call.includeHotbar ?? false, plan: inventoryOrganizationPlanView(preview),
     rules: rules.map(rule => ({ ...rule, surplus: Math.max(0, invCountIn(playerInvIn(bot, initial),
       itemPredOf(bot, rule.item, rule.pick)) - rule.keep) })), boundary: '只读计划，未点击、存放或丢弃；执行重新读取当前槽位。' });
 
