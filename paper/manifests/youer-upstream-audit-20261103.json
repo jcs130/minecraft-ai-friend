@@ -48,10 +48,26 @@
   "publicProbeBuildVerified": true,
   "publicProbeMatchesTestedEntries": 7,
   "issueReporting": {
-    "state": "prepared-not-submitted",
+    "state": "submitted",
     "creationAttempt": "GitHub connector returned 403 Resource not accessible by integration; no issue number created",
     "browserAttempt": "Windows browser URL could not be identified with sufficient confidence; computer use stopped",
-    "drafts": [
+    "submittedVia": "Owner-authenticated in-app browser; page and GitHub API readback verified",
+    "issues": [
+      {
+        "number": 596,
+        "url": "https://github.com/MohistMC/Youer/issues/596",
+        "createdAt": "2026-11-03T03:22:21Z",
+        "stateAtSubmission": "open"
+      },
+      {
+        "number": 597,
+        "url": "https://github.com/MohistMC/Youer/issues/597",
+        "createdAt": "2026-11-03T03:23:05Z",
+        "stateAtSubmission": "open"
+      }
+    ],
+    "upstreamFixVerified": false,
+    "submittedBodies": [
       "paper/docs/youer-upstream-issues/async-chunks.md",
       "paper/docs/youer-upstream-issues/nonpersistent-entities.md"
     ]

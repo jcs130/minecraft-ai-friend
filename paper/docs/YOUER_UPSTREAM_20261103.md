@@ -1,6 +1,6 @@
 # Youer 上游核对与兼容缺陷复现
 
-2026-11-03 核对完成，**正式内核未升级**。官网常规构建列表最新仍是本服使用的 build 920；GitHub 1.21.1 分支有更新的成功测试构建。两项当前故障在该测试包的纯净环境中仍存在，已完成 Paper 对照和上游 issue 草稿。连接器对上游仓库写入返回 403，电脑控制又无法可靠识别 Windows 浏览器当前网址，因此**尚未创建上游 issue**。
+2026-11-03 核对完成，**正式内核未升级**。官网常规构建列表最新仍是本服使用的 build 920；GitHub 1.21.1 分支有更新的成功测试构建。两项当前故障在该测试包的纯净环境中仍存在，已完成 Paper 对照，并于 11:22–11:23（UTC+8）通过服主登录的内置浏览器提交上游 [#596](https://github.com/MohistMC/Youer/issues/596) 和 [#597](https://github.com/MohistMC/Youer/issues/597)。网页及 GitHub API 已读回确认；这表示报告已提交，不表示上游已经修复。
 
 ## 构建通道与实际版本
 
@@ -37,12 +37,12 @@
 
 ## 上游报告及后续维护
 
-已检索现有 issue 的 `getChunkAtAsync`、`setPersistent`、`Bukkit.persist`、Shopkeepers 和重复村民相关关键词，未找到相同报告。两份去除私人信息的完整草稿：
+已检索现有 issue 的 `getChunkAtAsync`、`setPersistent`、`Bukkit.persist`、Shopkeepers 和重复村民相关关键词，未找到相同报告。两份报告现已公开，提交正文同时保留在仓库：
 
-- [异步区块读取与生成失效](youer-upstream-issues/async-chunks.md)
-- [非持久化实体跨重启恢复](youer-upstream-issues/nonpersistent-entities.md)
+- [#596：异步区块读取与生成失效](https://github.com/MohistMC/Youer/issues/596)（[提交正文](youer-upstream-issues/async-chunks.md)）
+- [#597：非持久化实体跨重启恢复](https://github.com/MohistMC/Youer/issues/597)（[提交正文](youer-upstream-issues/nonpersistent-entities.md)）
 
-第一条创建请求被 GitHub 集成以 `403 Resource not accessible by integration` 拒绝，未创建编号；第二条没有重复发送同一无权请求。服主已恢复浏览器控制并登录 GitHub，但工具未能可靠识别 Windows 浏览器当前网址而停止；后续需从可稳定识别网址的浏览器入口按原授权代发。草稿只含公开构建信息、合成实体和复现代码，不包含正式日志、世界、真实角色身份、凭据或私有下载签名。
+首次创建请求被 GitHub 集成以 `403 Resource not accessible by integration` 拒绝，未产生编号；随后 Windows 原生浏览器入口无法可靠识别网址而停止。这些失败记录保留。最终在可确认网址的内置浏览器中，由服主完成登录和二次验证后按原授权各提交一次；两条状态均为 open。报告只含公开构建信息、合成实体和复现代码，不包含正式日志、世界、真实角色身份、凭据或私有下载签名。
 
 后续内核维护先同时核对官网构建列表和 GitHub 成功 CI，固定提交、产物与摘要，再对照这两个探针；保留仍需要的本地兼容修复，并完成实际插件/模组/跨端组合及最新冷备验证后正常停启。禁止把 build 920 专用字节码补丁直接套给未知 JAR，也不能用新内核单独替代 [.50 的安全传送修复](TRAVEL_CLI_20261103.md)。
 
