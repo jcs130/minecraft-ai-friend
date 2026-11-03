@@ -1,0 +1,37 @@
+{
+  "state": "validated-awaiting-system-maintenance",
+  "candidate": "AgentFriend 0.4.47.50-rpg",
+  "currentRuntime": "AgentFriend 0.4.47.49-rpg",
+  "sha256": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b",
+  "baselineSha256": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
+  "changedClassFamilies": [
+    "DungeonExpeditions",
+    "WaypointManager",
+    "SiteDungeonManager",
+    "ActionFeedback"
+  ],
+  "otherJarEntriesPreserved": 615,
+  "verification": {
+    "nativeBaselineChecks": 10,
+    "nativeCandidateChecks": 39,
+    "nativeRestartChecks": 45,
+    "paperChecks": 44,
+    "sharedSdkActualServerReplyLifecycle": true,
+    "remoteHostAcceptance": false,
+    "qaServersStopped": true
+  },
+  "sourceSha256": {
+    "DungeonExpeditions": "6874a2bc3e708523bb3a7dff372aaa50d84281993ad3fad296291007ae2598a2",
+    "WaypointManager": "d934f43ee63536d358d024f44d0a43c8720ef8f0bd966405e3f97a4d2dbc9953",
+    "SiteDungeonManager": "a8b1f3e21d444f6993c1ac0ee5c1efac7d7322e5e1eee2d9d12984bc3d889a8b",
+    "ActionFeedback": "4c2b1d9b4008203748b932c9640622a4ffbbfcd5ff583acd0c99a6fef6e0b4b8"
+  },
+  "searchRecoveryAlreadyDeployed": true,
+  "externalEmbeddingsEnabled": false,
+  "suggestionsAutomaticallyExecuted": false,
+  "candidateAndCodeRollbackVerifiedOnEF": true,
+  "playerDataReplacement": false,
+  "credentialMigration": false,
+  "frozenSkillPackageRebuilt": false,
+  "deploymentDocument": "paper/docs/TRAVEL_CLI_20261103.md"
+}

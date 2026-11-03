@@ -203,7 +203,7 @@ final class SiteDungeonManager implements Listener {
         if(r.retryLoading||runs.get(r.site.id)!=r||!r.phase.equals("retrying"))return;
         Location point=checkpoint(r);World world=point.getWorld();if(world==null)throw new IllegalArgumentException("checkpoint_unavailable");
         r.retryLoading=true;
-        world.getChunkAtAsync(point.getBlockX()>>4,point.getBlockZ()>>4).whenComplete((chunk,error)->{if(!plugin.isEnabled())return;Bukkit.getScheduler().runTask(plugin,()->{
+        ExistingChunkAccess.load(plugin,world,point.getBlockX()>>4,point.getBlockZ()>>4).whenComplete((chunk,error)->{if(!plugin.isEnabled())return;Bukkit.getScheduler().runTask(plugin,()->{
             r.retryLoading=false;if(runs.get(r.site.id)!=r||!r.phase.equals("retrying"))return;
             try{
             Location safe=null;
@@ -243,7 +243,7 @@ final class SiteDungeonManager implements Listener {
             Location exit=r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world));
             if(bossRoom(r,exit))exit=p.getWorld().getSpawnLocation();
             Location target=exit;
-            target.getWorld().getChunkAtAsync(target.getBlockX()>>4,target.getBlockZ()>>4).thenRun(()->{if(plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,()->{
+            ExistingChunkAccess.load(plugin,target.getWorld(),target.getBlockX()>>4,target.getBlockZ()>>4).thenRun(()->{if(plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,()->{
                 if(!p.isOnline()||runs.get(r.site.id)!=r||!bossLocked(r)||r.party.contains(p.getUniqueId())||!bossRoom(r,p.getLocation()))return;
                 for(int y=0;y<=3;y++)for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++){
                     Location at=target.clone().add(x,y,z);if(!at.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4)||bossRoom(r,at)||!AgentFriendPlugin.safeLanding(at.getBlock()))continue;
@@ -579,7 +579,20 @@ final class SiteDungeonManager implements Listener {
     private void travel(Player p,Site s){
         require(own(p)==null,"already_in_site_dungeon");
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
-        if(s.entry.isEmpty()){require(!jsonOutput.get(),"legacy_travel_format_unavailable");new DungeonExpeditions(plugin).travel(p,s.expedition);return;}
+        if(s.entry.isEmpty()){
+            boolean requestedJson=jsonOutput.get(),requestedVerbose=verboseOutput.get();
+            new DungeonExpeditions(plugin).travel(p,s.expedition,outcome->format(requestedJson,requestedVerbose,()->{
+                if(outcome.reason().equals("loading"))return;
+                String reason=outcome.success()?"success":switch(outcome.reason()){
+                    case "chunk_unavailable","world_unavailable","timeout"->"entry_unavailable";
+                    case "unsafe_landing","unsafe_height","world_border"->"entry_blocked";
+                    case "moved","in_activity","spectator","dead","spectator_or_dead","point_changed"->"player_state_changed";
+                    case "teleport_rejected","protected_entry","protected_exit","protection_unavailable"->"travel_denied";
+                    default->outcome.reason();
+                };
+                result(p,"travel",s.id,reason);
+            }));return;
+        }
         World w=Bukkit.getWorld(s.world);int x=s.entry.get(0),y=s.entry.get(1),z=s.entry.get(2);
         require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");Location origin=p.getLocation().clone();
         boolean requestedJson=jsonOutput.get(),requestedVerbose=verboseOutput.get();

@@ -1,6 +1,7 @@
 package org.afuhome.agentfriend;
 
 import java.util.List;
+import java.util.function.Consumer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.HeightMap;
@@ -45,35 +46,41 @@ final class DungeonExpeditions {
     }
 
     void travel(Player player, String id) {
+        travel(player, id, outcome -> {
+            if (!outcome.success() && !outcome.reason().equals("loading"))
+                player.sendMessage(ChatColor.RED + "[" + outcome.reason() + "] 遗迹传送未完成、未耗魔。"
+                        + "下一步：/mycli dungeon " + (site(id) == null ? "list" : "info " + id)
+                        + "；检查活动状态与安全落点后再决定是否重试，不要连续重发。");
+        });
+    }
+
+    void travel(Player player, String id, Consumer<WaypointManager.Outcome> reply) {
         Site site = site(id);
         if (site == null) {
             player.sendMessage(ChatColor.RED + "没有这个遗迹；可选 "
                     + String.join("、", SITES.stream().map(Site::id).toList()) + "；复制准确ID后 /mycli guild travel <ID>。");
+            reply.accept(new WaypointManager.Outcome(false, "unknown_site"));
             return;
         }
         if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
-            player.sendMessage(ChatColor.RED + "旁观者不参与遗迹远征。"); return;
+            player.sendMessage(ChatColor.RED + "旁观者不参与遗迹远征。");
+            reply.accept(new WaypointManager.Outcome(false, "spectator")); return;
         }
         World world = Bukkit.getWorld("world");
-        if (world == null) { player.sendMessage(ChatColor.RED + "主世界尚未加载；请服主检查世界启动日志并恢复加载，再重试，不重新生成原世界。"); return; }
+        if (world == null) { player.sendMessage(ChatColor.RED + "主世界尚未加载；请服主检查世界启动日志并恢复加载，再重试，不重新生成原世界。"); reply.accept(new WaypointManager.Outcome(false, "world_unavailable")); return; }
         player.sendMessage(ChatColor.YELLOW + "正在寻找「" + site.name() + "」附近的安全落脚处……");
-        world.getChunkAtAsync(site.approachX() >> 4, site.approachZ() >> 4)
-                .whenComplete((chunk, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) return;
-                    if (error != null || chunk == null) {
-                        player.sendMessage(ChatColor.RED + "遗迹附近地形暂时无法加载，请稍后再试。"); return;
-                    }
-                    Location landing = safeLanding(world, site);
-                    if (landing == null) {
-                        player.sendMessage(ChatColor.RED + "没有找到安全落脚处，传送已取消；不要拆开保护建筑。/mycli guide explore 查看遗迹探索与路线，或联系服主检查入口。"); return;
-                    }
-                    if (!plugin.travelMagic().teleport(player, landing, "expedition:" + site.id(),
-                            "遗迹远征术", TravelMagic.DISTANT_MANA)) return;
+        Location approach = new Location(world, site.approachX() + .5, 0, site.approachZ() + .5);
+        plugin.waypoints().travel(player, "expedition:" + site.id(), "遗迹远征·" + site.name(), approach,
+                () -> true, TravelMagic.DISTANT_MANA, () -> safeLanding(world, site), outcome -> {
+                    if (outcome.success()) {
+                    Location landing = player.getLocation();
                     player.sendMessage(ChatColor.GREEN + "已到「" + site.name() + "」附近；遗迹中心约在 "
                             + site.x() + ", " + site.z() + "。向那里探索约 70 格，留意怪物和入口。");
                     player.sendMessage("MC_SITE id=" + site.id() + " " + LocationOutput.fields(landing)
                             + " centerX=" + site.x() + " centerZ=" + site.z());
-                }));
+                    }
+                    reply.accept(outcome);
+                });
     }
 
     private Location safeLanding(World world, Site site) {
@@ -81,6 +88,7 @@ final class DungeonExpeditions {
         for (int radius = 0; radius <= 4; radius++) for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++) {
                 int x = x0 + dx, z = z0 + dz;
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
                 int top = Math.min(world.getMaxHeight() - 3,
                         world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 2);
                 for (int y = top; y >= top - 8 && y > world.getMinHeight(); y--) {

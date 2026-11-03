@@ -1347,5 +1347,11 @@
       "ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
       "rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c"
     }
+  },
+  "travelCliRepairCandidate": {
+    "state": "validated-awaiting-system-maintenance",
+    "version": "0.4.47.50-rpg",
+    "manifest": "paper/manifests/travel-cli-candidate-20261103.json",
+    "runtimeStillPreviousVersion": true
   }
 }

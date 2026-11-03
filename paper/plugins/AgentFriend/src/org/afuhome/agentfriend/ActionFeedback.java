@@ -117,6 +117,9 @@ final class ActionFeedback {
                 case "not_fault_paused" -> a("没有可由你恢复的故障暂停场次。", "先 /mycli dungeon status 查看；正常挑战继续前进，若有保存故障请联系服主，不要重复 resume。", "/mycli dungeon status");
                 case "entry_blocked", "room_blocked_clear_floor_and_retry" -> a("入口或房间没有足够安全落脚空间。", "沿原通道步行查看；不要拆受保护建筑。把 " + dungeon + " 的位置与报错告知服主清理落点，再重试。", dungeon);
                 case "entry_unavailable" -> a("入口区块读取失败；未传送、未扣魔力。", "把地下城ID和时间告知服主检查区块加载；这不是装备或职业条件不足，不要反复补装备或重试。", dungeon);
+                case "busy" -> a("上一项传送仍在准备中；这次没有另开传送或扣魔力。", "站稳等待上一项最终结果，最长10秒；收到结果后再决定下一步，不要连续发送 travel。", "/mycli status");
+                case "not_standing" -> a("当前在载具、飞行或滑翔中；尚未传送。", "先安全落地并离开载具，站稳后仅提交一次 travel。", "/mycli status");
+                case "not_enough_mana" -> a("遗迹远征需要8魔力；未传送、未扣魔力。", "用 /mycli status 核对并等魔力恢复，再提交一次 travel。", "/mycli status");
                 case "entry_not_generated" -> a("入口所在区块尚未生成；未传送、未扣魔力。", "请联系服主检查地图与入口配置；不要凿墙绕路或反复重试。", dungeon);
                 case "travel_denied" -> a("传送的魔力、技能或保护条件不满足。", "先 /mycli status 查魔力，再用 " + dungeon + " 核对入口；持续拒绝请联系服主。", "/mycli status", dungeon);
                 case "player_state_changed" -> a("准备传送时角色移动或活动状态改变。", "先确认已结束其他活动；站稳后只提交一次 travel，并等最终结果。", "/mycli dungeon status");
