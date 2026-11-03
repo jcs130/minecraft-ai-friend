@@ -57,6 +57,21 @@ def plan_chat_review(existing, definition=None):
     return job
 
 
+def plan_patrol_jobs(existing, definitions=None):
+    """Update only two existing patrol prompts; keep their original identity and scheduler."""
+    definitions=definitions or json.loads(Path(__file__).with_name('evolution-jobs.json').read_text(encoding='utf-8'))
+    names={'qiandengji-daily-patrol','滞留任务巡检-3h'}
+    if any(sum(job['name']==name for job in existing)!=1 for name in names):
+        raise ValueError('exactly one original job for each bounded patrol required')
+    result=deepcopy(existing)
+    for job in result:
+        if job['name'] not in names:continue
+        text=definitions[job['name']]['text']
+        job['text']=text
+        job['request']['input']=[{'role':'user','type':'message','content':[{'type':'text','text':text}]}]
+    return result
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)

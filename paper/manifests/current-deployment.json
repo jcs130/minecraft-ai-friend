@@ -1417,5 +1417,13 @@
     "latestRelease": "city-gate-button-20261103-r1",
     "verifiedAt": "2026-11-03T13:08:40.256118+08:00",
     "releaseDocument": "paper/docs/CITY_GATE_BUTTONS_20261103.md"
+  },
+  "healthRepairs20261103": {
+    "state": "ops-deployed-game-candidates-awaiting-restart-approval",
+    "manifest": "paper/manifests/health-repairs-20261103.json",
+    "document": "paper/docs/HEALTH_REPAIRS_20261103.md",
+    "operationalRepairsDeployed": true,
+    "gameCandidatesInstalled": false,
+    "restartApproved": false
   }
 }

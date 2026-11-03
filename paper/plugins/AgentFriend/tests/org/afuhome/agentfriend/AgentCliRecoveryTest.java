@@ -17,6 +17,15 @@ public final class AgentCliRecoveryTest {
     public static void main(String[] args)throws Exception{
         var cards=AgentCliCatalog.recoveryCards(List.of(),true);
         var context=new AgentCliRecovery.Context(Set.of("undead_crypt","aincrad_01"),Set.of("DeepFish","Yui"));
+        for(String intent:List.of("cast resume dungeon aincrad_01","cast resume dungeon","cast dungeon resume aincrad_01","cast dungeon resume")){
+            var recovery=AgentCliRecovery.misplacedCast(words(intent),cards,context);
+            check(recovery.size()==1&&recovery.getFirst().nextCommand().equals("/mycli dungeon resume"),"actual resume misuse returns no-argument command: "+intent);
+            var out=AgentCliRecovery.payload(recovery,cards,"COMMAND_ROUTE_MISMATCH","续关使用副本入口");
+            check(!out.get("changed").getAsBoolean()&&!out.get("autoExecute").getAsBoolean(),"resume advice never dispatches or fabricates a result");
+        }
+        check(AgentCliRecovery.misplacedCast(words("cast resume dungeon unknown_private_site"),cards,context).getFirst().nextCommand().equals("/mycli dungeon resume --help"),"unconfirmed resume target stays a help query");
+        var resumeSpell=new ArrayList<>(cards);resumeSpell.add(new AgentCliRecovery.Card("cast.resume","/mycli cast resume","real configured skill","real validator"));
+        check(AgentCliRecovery.misplacedCast(words("cast resume dungeon aincrad_01"),resumeSpell,context).isEmpty(),"a real resume spell is not rerouted");
         for(String intent:List.of("cast dungeon info undead_crypt","cast dungeon claim undead_crypt","cast dungeon start undead_crypt","cast dungeon_claim undead_crypt")){
             var routed=find(intent,cards,context);String action=intent.contains("info")?"info":intent.contains("start")?"start":"claim";
             check(routed.size()==1&&routed.getFirst().method().equals("misplaced_cast_prefix")&&routed.getFirst().nextCommand().equals("/mycli dungeon "+action+" undead_crypt"),"exact command-prefix correction: "+intent);

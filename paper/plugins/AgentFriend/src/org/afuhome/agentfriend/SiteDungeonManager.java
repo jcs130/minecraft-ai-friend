@@ -742,6 +742,7 @@ final class SiteDungeonManager implements Listener {
         }
         int previousStage=r.stage,previousCheckpointRoom=r.checkpointRoom;Location previousCheckpoint=r.checkpoint;String previousPhase=r.phase;Map<UUID,Integer> previousAttendance=new HashMap<>(r.attendance);
         Map<Integer,Set<UUID>> previousRoomAttendance=new LinkedHashMap<>(r.roomAttendance);
+        boolean roomCheckpointCommitted=r.phase.equals("returning");
         try{
             reconcile(r);
             previousAttendance.clear();previousAttendance.putAll(r.attendance);
@@ -789,6 +790,7 @@ final class SiteDungeonManager implements Listener {
                 Player anchor=present.stream().filter(p->r.room().contains(p.getLocation())&&AgentFriendPlugin.safeLanding(p.getLocation().getBlock())).findFirst().orElse(null);
                 if(anchor!=null){r.checkpoint=anchor.getLocation().clone();r.checkpointRoom=r.stage+1;}
                 String roomName=r.room().name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.site.rooms.size()?"returning":"moving";persist();
+                roomCheckpointCommitted=true;
                 if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(challengeContext,challengePresent);
                 for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【"+label(r.site)+"·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本段参战":"本段尚无参战记录")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。中途离开仍保留已经完成的登记。");}
                 notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"全场通关，正在为所有真实参战者登记奖励，无须返回首室。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
@@ -796,14 +798,19 @@ final class SiteDungeonManager implements Listener {
             }
         }catch(RuntimeException e){
             plugin.getLogger().log(java.util.logging.Level.WARNING,"Site dungeon paused for explicit retry: "+r.site.id+" run="+r.id+" phase="+previousPhase,e);
-            clean(r);r.stage=previousStage;r.attendance.clear();r.attendance.putAll(previousAttendance);r.roomAttendance.clear();r.roomAttendance.putAll(previousRoomAttendance);
-            r.checkpoint=previousCheckpoint;r.checkpointRoom=previousCheckpointRoom;
-            r.phase=previousPhase.equals("fighting")?"moving":previousPhase;r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";
-            if(previousPhase.equals("fighting")){r.resets++;r.lastResetReason="runtime_error";r.lastResetAt=r.pausedAt;}
+            clean(r);
+            if(!roomCheckpointCommitted){
+                r.stage=previousStage;r.attendance.clear();r.attendance.putAll(previousAttendance);r.roomAttendance.clear();r.roomAttendance.putAll(previousRoomAttendance);
+                r.checkpoint=previousCheckpoint;r.checkpointRoom=previousCheckpointRoom;
+                r.phase=previousPhase.equals("fighting")?"moving":previousPhase;
+            }
+            r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";
+            if(!roomCheckpointCommitted&&previousPhase.equals("fighting")){r.resets++;r.lastResetReason="runtime_error";r.lastResetAt=r.pausedAt;}
             r.fault=Objects.toString(e.getMessage(),"runtime_error");
             if(e instanceof StorageUnavailable&&previousPhase.equals("muster")&&r.stage==0&&r.storageRetryAttempts<2)r.storageRetryAt=r.pausedAt+1000;
             try{persist();}catch(RuntimeException save){plugin.getLogger().log(java.util.logging.Level.WARNING,"Site dungeon fault checkpoint not saved: "+r.site.id,save);}
-            notice(r,"§c"+label(r.site)+"已暂停："+faultHint(r)+"。本段未结算，故障等待不计挑战时限；解决后 /mycli dungeon resume 重试，或 /mycli dungeon leave 退出。");
+            String progress=roomCheckpointCommitted?"已保存本段通关与参战进度，后续登记尚未完成，不重刷已保存的房间":"本段未结算";
+            notice(r,"§c"+label(r.site)+"已暂停："+faultHint(r)+"。"+progress+"，故障等待不计挑战时限；解决后 /mycli dungeon resume 重试，或 /mycli dungeon leave 退出。resume 是副本操作，不要加 cast 或副本ID。");
         }
         }
     }
@@ -899,13 +906,14 @@ final class SiteDungeonManager implements Listener {
         plugin.getLogger().info("MC_SITE_DUNGEON_END "+JSON.toJson(Map.of("site",r.site.id,"run",r.id,"reason",reason,"clearedRooms",r.stage,"endedAt",System.currentTimeMillis(),"active",false,"rescueActive",false,"exitPolicy","standing_stay_downed_recover","participants",r.party.stream().map(UUID::toString).toList())));
     }
     private void atomic(Runnable change){
-        String before=plugin.getConfig().saveToString();Path file=plugin.getDataFolder().toPath().resolve("config.yml"),temp=file.resolveSibling("config.yml.site-dungeon.tmp");
+        String before=plugin.getConfig().saveToString();Path file=plugin.getDataFolder().toPath().resolve("config.yml");
         String step="change";
         try{
             change.run();step="serialize";byte[] bytes=plugin.getConfig().saveToString().getBytes(StandardCharsets.UTF_8);require(bytes.length<=16*1024*1024,"state_capacity");step="write_and_force";
-            try(FileChannel out=FileChannel.open(temp,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING,StandardOpenOption.WRITE)){ByteBuffer b=ByteBuffer.wrap(bytes);while(b.hasRemaining())out.write(b);out.force(true);}
-            step="atomic_replace";
-            Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+            try(var staged=AtomicConfigFile.stage(file,bytes)){
+                step="atomic_replace";
+                staged.commit();
+            }
         }catch(Exception e){
             try{plugin.getConfig().loadFromString(before);}catch(Exception restore){restore.addSuppressed(e);throw new IllegalStateException("state_restore_failed",restore);}
             if(e instanceof IllegalArgumentException argument)throw argument;

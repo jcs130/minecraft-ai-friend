@@ -62,18 +62,25 @@ const KNIGHT_KIT = [
   'minecraft:milk_bucket 1',
 ];
 
+export function peekCommands(mode) {
+  const fixed = {list:['minecraft:list'],tps:['neoforge tps'],mspt:['neoforge tps'],uptime:['uptime'],time:['minecraft:time query day']};
+  return Object.hasOwn(fixed,mode) ? fixed[mode] : null;
+}
+
+export function nativeMetrics(text) {
+  const clean = String(text).replace(/\u00a7[0-9a-fklmnor]/gi,'');
+  const rows = [...clean.matchAll(/^\s*Overall:\s*(\d+(?:\.\d+)?)\s+TPS\s+\((\d+(?:\.\d+)?)\s+ms\/tick\)\s*$/gm)];
+  if(rows.length !== 1)return null;
+  const tps=Number(rows[0][1]),mspt=Number(rows[0][2]);
+  return Number.isFinite(tps)&&tps>=0&&tps<=20&&Number.isFinite(mspt)&&mspt>=0 ? {source:'youer_neoforge',tps,mspt} : null;
+}
+
 // action -> { cmds(target, opts), pattern }
 const ACTIONS = {
   peek: {
     readOnly: true,
-    build: (t, opts) => ({
-      list: ['minecraft:list'],
-      tps: ['tps'],          // Paper built-in, not namespaced under minecraft:
-      mspt: ['mspt'],
-      uptime: ['uptime'],
-      time: ['minecraft:time query day'],
-    })[opts.sub || 'list'] || null,
-    pattern: /^(minecraft:(list|time query day)|tps|mspt|uptime)$/,
+    build: (t, opts) => peekCommands(opts.sub || 'list'),
+    pattern: /^(minecraft:(list|time query day)|neoforge tps|uptime)$/,
   },
   watch: {
     readOnly: true, // safety telemetry only — no --commit, no cooldown, nothing is written to the world
@@ -344,9 +351,15 @@ export async function run(argv = process.argv.slice(2)) {
     }
   }
   const results = await rconBatch(commands);
+  const performance = action==='peek'&&['tps','mspt'].includes(opts.sub);
+  const metrics = performance ? nativeMetrics(results.join('\n')) : null;
+  if(spec.readOnly && (results.every(v=>!v.trim()||v==='(empty response)') || performance&&!metrics)) {
+    record({action,target:null,sub:opts.sub,commit:false,error:'telemetry unavailable'});
+    return {ok:false,code:72,commands,message:'本次没有取得有效的服务端数据；不可按正常或零值推断。检查后台后再查询，勿重复执行游戏动作。'};
+  }
   if (!spec.readOnly) noteCooldown(key);
   record({ action, target: target ?? null, sub: opts.sub ?? null, commit: true, commands, result: String(results.join(' | ')).slice(0, 400) });
-  return { ok: true, dryRun: false, commands, results, requestId: randomUUID().slice(0, 8) };
+  return { ok: true, dryRun: false, commands, results, ...(metrics?{metrics}:{}), requestId: randomUUID().slice(0, 8) };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
