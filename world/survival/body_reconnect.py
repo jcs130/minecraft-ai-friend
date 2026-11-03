@@ -23,10 +23,6 @@ DEATH_PREFLIGHT_REJECTIONS = frozenset({'death_respawn_delay', 'death_safe_spawn
 # 这些 blocked 理由属于“需复核但身体可能已由别的路径回来”——允许按节律做只读
 # roster 观察并自愈；绝不代表可以自行再次派发 restore（硬闸仍尊重）。
 OBSERVATION_RECOVERABLE = frozenset({'saved_task_requires_review'})
-# 有界自动召唤（幂等 summon 复用原 UUID/存档、不重放动作）：连续缺席这么多次才召、
-# 一天最多这么多次，仍不行回落人工。硬闸理由不走此路。
-SUMMON_AFTER_ABSENT = 3
-MAX_AUTO_SUMMONS = 5
 
 
 def episode_attempts(state, now):
@@ -190,6 +186,8 @@ class BodyReconnect:
         control = read_json(self.root/'control.json')
         controller = read_controller_json(self.root/'controller.json') if (self.root/'controller.json').exists() else {}
         lease = read_json(self.root/'lease.json') if (self.root/'lease.json').exists() else {}
+        if (control.get('drain') or {}).get('status') == 'requested':
+            return {'status': 'waiting', 'reason': 'drain_requested'}
         # Body-loss pauses keep the restore channel open: resolving the missing
         # body is the only way out of that pause, and the strict restore command
         # revalidates every guard (identity, task ledger, playerdata) itself.
@@ -208,9 +206,8 @@ class BodyReconnect:
         if expected is not None:
             if any(state.get(key) != value for key, value in expected.items()):
                 return {'status': 'blocked', 'reason': 'restore_binding_changed'}
-        # 硬闸（身份冲突/绑定变更）保持人工；“需复核”类理由按节律只读 roster 观察即可自愈，
-        # 不再空转成永久死锁；身体确实缺席时有界自动 summon 兜底。恢复排在授权闸之前，
-        # 但只读观察本身安全、自动 summon 另有 unknown/lease 护栏，绝不抢未决动作。
+        # 待复核只允许观察已经回来的同一身体；缺席次数不能授权普通 summon，
+        # 因为身体重建与旧任务的执行许可是两件事。
         if expected is not None and state.get('status') == 'blocked':
             if (state.get('reason') in OBSERVATION_RECOVERABLE
                     and now >= state.get('nextCheckAt', 0)):
@@ -232,31 +229,6 @@ class BodyReconnect:
                     self._auto_resume(control, resume_after_restore, now)
                     write_json(self.path, state)
                     return state
-                # 身体确认不在：saved_task_requires_review 是 numen 侧那道“遗留动作待复核”
-                # 挡住了按原身份 restore，但幂等 summon（按 bodyName 复用原 UUID 与存档、
-                # 不重放任何动作）能自愈——过去只能等运维手动 summon。这里做**有界**自动召唤：
-                # 连续缺席 SUMMON_AFTER_ABSENT 次、每天至多 MAX_AUTO_SUMMONS 次，仍失败则回落到
-                # 人工；身份冲突/绑定变更等硬闸不走此路。
-                absent = int(state.get('absentStreak', 0)) + 1
-                state['absentStreak'] = absent
-                summoned = state.get('autoSummons', [])
-                summoned = [t for t in summoned if isinstance(t, (int, float)) and now - t < 86400]
-                if (absent >= SUMMON_AFTER_ABSENT and len(summoned) < MAX_AUTO_SUMMONS
-                        and not state.get('autoSummonPendingAt')
-                        and not (self.root/'unknown.json').exists()
-                        and lease.get('status') != 'unknown'
-                        and not (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
-                    state['autoSummons'] = summoned + [now]
-                    # Reserve before the external command. A crash or lost RCON
-                    # reply cannot authorize another summon in this episode.
-                    state['autoSummonPendingAt'] = now
-                    write_json(self.path, state)
-                    try:
-                        self.gateway._native_summon(expected['ownerUuid'], expected['bodyName'])
-                        state['lastAutoSummonAt'] = now
-                        state['nextCheckAt'] = now + 20   # 召唤后尽快复查 roster 是否回来
-                    except Exception:
-                        state['autoSummonOutcome'] = 'unknown'
                 write_json(self.path, state)
             return state
         # Normal restore dispatch stays behind the full authorization gate (blocked
