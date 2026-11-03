@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.2 (unpublished candidate)
+
+- Restrict the obsolete food-component workaround to Java 1.20.5/1.20.6. Preserve the real 1.21.1 usingConvertsTo field so native inventory packets containing custom food do not lose their following component/slot boundaries. Verify through the real protocol decoder and Mineflayer inventory plugin.
+- Apply the potion custom-name workaround only to the known affected versions, preserving newer wire fields.
+
 ## 0.5.7-rc.160-preview.1 (unpublished candidate)
 
 - Delay first World activation until both authentication and configuration transport readiness hold. A proxy can confirm authentication before the backend's first PLAY position; retry activation after that native position so the World sees its connected bot and installs query, perception and body lifecycle listeners exactly once.

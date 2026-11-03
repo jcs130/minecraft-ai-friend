@@ -369,6 +369,9 @@ export function repairRecipeSerializers(value: unknown): boolean {
  * 登录前修改共享协议表；字段缺席时保持原表。
  */
 function fixFoodComponentSchema(bot: Bot, log: Logger): void {
+  // usingConvertsTo is a real wire field from 1.21 onward. Removing it
+  // shifts every following component/slot and can discard the entire bag.
+  if (!['1.20.5', '1.20.6'].includes(bot.registry?.version?.minecraftVersion ?? '')) return;
   const food = slotComponentFields(bot, 'food');
   if (!food) return;
   const i = food.findIndex((f) => f?.name === 'usingConvertsTo');
@@ -382,12 +385,14 @@ function fixFoodComponentSchema(bot: Bot, log: Logger): void {
  * 1.20.6 仅发送 potionId、customColor、customEffects；多读字段会使含药水物品的整包解析失败。
  */
 function fixPotionContentsSchema(bot: Bot, log: Logger): void {
+  // customName was added after 1.21.1; leave newer/unknown protocols alone.
+  if (!['1.20.5', '1.20.6', '1.21', '1.21.1'].includes(bot.registry?.version?.minecraftVersion ?? '')) return;
   const potion = slotComponentFields(bot, 'potion_contents');
   if (!potion) return;
   const i = potion.findIndex((f) => f?.name === 'customName');
   if (i < 0) return;
   potion.splice(i, 1);
-  log.info('协议表修正:1.20.6 potion_contents 组件摘除 customName,带药水/水瓶的物品栏包不再被静默丢弃');
+  log.info(`协议表修正:${bot.registry.version.minecraftVersion} potion_contents 组件摘除提前出现的 customName`);
 }
 
 /** SlotComponent 表里某个组件的字段数组(原地可改);表不在或形状不对给 null。 */
