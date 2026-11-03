@@ -1,0 +1,68 @@
+{
+  "id": "storage-rootcause-20261103-r1",
+  "state": "candidate-verified-game-not-deployed",
+  "document": "paper/docs/STATE_STORAGE_20261103.md",
+  "runtimeStill": "AgentFriend 0.4.47.51-rpg",
+  "candidate": {
+    "version": "0.4.47.52-rpg",
+    "sha256": "0dc196397e20f56dda53adebc6b76ba0c8e48d066af34f701e967f4bd8bc69cc",
+    "baselineSha256": "8b93dffeff9547ce088601469a93d481c772e562e40d88e2993d366014f76f5e",
+    "changedEntries": [
+      "plugin.yml",
+      "org/afuhome/agentfriend/AgentFriendPlugin.class",
+      "org/afuhome/agentfriend/SiteDungeonManager$Run.class",
+      "org/afuhome/agentfriend/SiteDungeonManager.class",
+      "org/afuhome/agentfriend/AtomicConfigFile$Staged.class",
+      "org/afuhome/agentfriend/AtomicConfigFile.class"
+    ],
+    "addedEntries": [
+      "org/afuhome/agentfriend/DurableConfigFiles$Commit.class",
+      "org/afuhome/agentfriend/DurableConfigFiles$Located.class",
+      "org/afuhome/agentfriend/DurableConfigFiles.class",
+      "org/afuhome/agentfriend/DurableConfigStore$State.class",
+      "org/afuhome/agentfriend/DurableConfigStore.class",
+      "org/afuhome/agentfriend/DurableFileMove$Kernel.class",
+      "org/afuhome/agentfriend/DurableFileMove$Windows.class",
+      "org/afuhome/agentfriend/DurableFileMove.class"
+    ],
+    "otherEntriesPreserved": 622,
+    "originalMainMethodsPreserved": 279
+  },
+  "verification": {
+    "javaGroups": 9,
+    "nativeWindowsAtomicChecks": 16,
+    "durableFileChecks": 35,
+    "pythonReadProtocol": 13,
+    "worldActivityChecks": 21,
+    "goddessSnapshotChecks": 23,
+    "finalRestartAuditChecks": 6,
+    "finalSustainedReaderGameplayChecks": 11,
+    "heldReaderSurvivesServerRestart": true,
+    "unknownFaultDoesNotAutoRecover": true,
+    "physicalPowerLossTested": false,
+    "client": "Mineflayer with existing recipe packet compatibility layer",
+    "fixtureFailuresRetained": true
+  },
+  "liveOperations": {
+    "installedFiles": 5,
+    "gameRestarted": false,
+    "nativeJobsChanged": false,
+    "identityFilesPreserved": true,
+    "freshSnapshotComplete": true
+  },
+  "maintenance": {
+    "newRestartApproved": false,
+    "candidateAndCodeRollbackVerifiedOnEAndF": true,
+    "requiresFreshColdBackup": true,
+    "preserveVerifiedExistingTwoOfThreeCheckpoint": true,
+    "legacyMetadataOnly": "storageFault=true after exact cold fingerprint verification",
+    "replayGameplay": false,
+    "replayConsumedMaintenance": false
+  },
+  "open": [
+    "New game restart approval and maintenance",
+    "Long-term natural reader workload observation",
+    "Historical file-locking PID is unproven"
+  ],
+  "rollback": "Never load an older config snapshot over newer accepted state. Publish and verify pending records before downgrading code."
+}

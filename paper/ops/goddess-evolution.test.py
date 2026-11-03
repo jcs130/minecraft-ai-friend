@@ -180,5 +180,18 @@ class EvolutionTests(unittest.TestCase):
         self.assertEqual(error.exception.code,2)
         self.assertEqual(json.loads(paths[0].read_text()),value)
 
+    def test_storage_projection_delay_is_not_a_failed_game_commit(self):
+        raw={'durableRevision':8,'publishedRevision':4,'projectionPending':True,'cleanupPending':False,'commitUnknown':False,'lastMirrorError':'AccessDeniedException'}
+        value=g.storage_audit('MC_AGENT_STATE_STORAGE '+json.dumps(raw))
+        self.assertEqual(value['state'],'projection_delayed');self.assertFalse(value['commitUnknown'])
+        brief=g.snapshot_brief({'observed_at':'now','complete':True,'reads':[],'stateStore':value},{'projects':{}})
+        self.assertEqual(brief['stateStore'],value)
+        raw['commitUnknown']=True
+        self.assertEqual(g.storage_audit('MC_AGENT_STATE_STORAGE '+json.dumps(raw))['state'],'commit_unknown')
+
+    def test_unknown_storage_audit_is_not_a_healthy_default(self):
+        for text in ['', 'MC_AGENT_STATE_STORAGE {}','MC_AGENT_STATE_STORAGE {"commitUnknown":false}']:
+            self.assertIsNone(g.storage_audit(text))
+
 
 if __name__ == '__main__': unittest.main()

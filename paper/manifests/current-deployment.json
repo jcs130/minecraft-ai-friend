@@ -1428,5 +1428,12 @@
     "restartApproved": true,
     "formalChecks": 27,
     "pausedCheckpointPreserved": true
+  },
+  "storageRootcauseCandidate": {
+    "state": "candidate-game-not-deployed",
+    "manifest": "paper/manifests/storage-rootcause-20261103.json",
+    "version": "0.4.47.52-rpg",
+    "liveReadModelUpdated": true,
+    "gameRestartApproved": false
   }
 }

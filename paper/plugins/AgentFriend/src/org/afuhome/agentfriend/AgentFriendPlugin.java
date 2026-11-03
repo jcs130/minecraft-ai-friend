@@ -325,6 +325,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        DurableConfigStore.onEnable(this);
         nativeRpg=new NativeRpg(this);
         worldLife = new WorldLifeManager(this);
         featureTutorials = new FeatureTutorials(this);
@@ -480,6 +481,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (prospectingSpell != null) prospectingSpell.clear();
         if (utilitySpells != null) utilitySpells.clear();
         if (flightLeases != null) flightLeases.shutdown();
+        DurableConfigStore.close(this);
+    }
+
+    @Override public void saveConfig() { DurableConfigStore.save(this); }
+    @Override public void reloadConfig() {
+        String image=DurableConfigStore.beforeReload(this);
+        super.reloadConfig();
+        DurableConfigStore.afterReload(this,image);
     }
 
     private World world() { return Bukkit.getWorld("world"); }

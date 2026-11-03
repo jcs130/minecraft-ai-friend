@@ -58,8 +58,23 @@ public final class HealthDungeonFixture extends JavaPlugin {
     @SuppressWarnings("unchecked") private void command(CommandSender sender,String[] args)throws Exception {
         if(args.length==1&&Set.of("chunks","chunks-existing").contains(args[0])){chunks(args[0].equals("chunks-existing"));sender.sendMessage("MC_HEALTH_CHUNKS_STARTED");return;}
         Map<String,Object> runs=(Map<String,Object>)get(manager,"runs");
+        if(args.length==1&&args[0].equals("storage")){
+            Class<?> store=Class.forName("org.afuhome.agentfriend.DurableConfigStore",true,af.getClass().getClassLoader());
+            Method audit=store.getDeclaredMethod("audit",JavaPlugin.class);audit.setAccessible(true);
+            Map<String,Object> state=new LinkedHashMap<>((Map<String,Object>)audit.invoke(null,af));
+            Player actor=Bukkit.getPlayerExact("ag_HealthQA");
+            if(actor==null)throw new IllegalStateException("owned lab actor required");
+            var receipt=af.getConfig().getConfigurationSection("site-dungeons.receipts."+actor.getUniqueId());
+            state.put("memoryReceipts",receipt==null?0:receipt.getKeys(false).size());
+            state.put("ordinaryCounter",af.getConfig().getInt("storage-qa-counter"));
+            state.put("rewardQueue",af.getConfig().getConfigurationSection("dungeon-rewards."+actor.getUniqueId())==null?Map.of():af.getConfig().getConfigurationSection("dungeon-rewards."+actor.getUniqueId()).getValues(false));
+            sender.sendMessage("MC_HEALTH_STORAGE "+json.toJson(state));return;
+        }
+        if(args.length==1&&args[0].equals("ordinary-save")){
+            af.getConfig().set("storage-qa-counter",af.getConfig().getInt("storage-qa-counter")+1);af.saveConfig();sender.sendMessage("MC_HEALTH_ORDINARY_SAVED");return;
+        }
         if(args.length==1&&args[0].equals("release")){unlock();}
-        else if(args.length==1&&args[0].equals("seed")){
+        else if(args.length==1&&Set.of("seed","seed-journal","seed-storage-fault","seed-unknown-fault").contains(args[0])){
             if(!runs.isEmpty())throw new IllegalStateException("no other fixture run allowed");
             Player p=Bukkit.getPlayerExact("ag_HealthQA");if(p==null)throw new IllegalStateException("owned lab player required");
             Object site=((Map<?,?>)get(manager,"sites")).get("undead_crypt");
@@ -74,10 +89,14 @@ public final class HealthDungeonFixture extends JavaPlugin {
             Constructor<?> constructor=type.getDeclaredConstructors()[0];constructor.setAccessible(true);
             Class<?> mode=Class.forName(manager.getClass().getName()+"$Mode",true,manager.getClass().getClassLoader());Object run=constructor.newInstance(site,mode.getEnumConstants()[0]);
             set(run,"stage",rooms.size()-1);set(run,"phase","fighting");
+            if(args[0].endsWith("-fault")){
+                set(run,"phase","moving");set(run,"fault","data_unavailable");set(run,"pauseReason","runtime_error");set(run,"pausedAt",System.currentTimeMillis());
+                set(run,"storageFault",args[0].equals("seed-storage-fault"));
+            }
             ((Set<UUID>)get(run,"party")).add(p.getUniqueId());((Map<UUID,Integer>)get(run,"attendance")).put(p.getUniqueId(),rooms.size()-1);
             ((Set<UUID>)get(run,"roomParticipants")).add(p.getUniqueId());
             Map<Integer,Set<UUID>> attendance=(Map<Integer,Set<UUID>>)get(run,"roomAttendance");for(int n=0;n<rooms.size()-1;n++)attendance.put(n,Set.of(p.getUniqueId()));
-            runs.put("undead_crypt",run);Method persist=manager.getClass().getDeclaredMethod("persist");persist.setAccessible(true);persist.invoke(manager);armed=true;
+            runs.put("undead_crypt",run);Method persist=manager.getClass().getDeclaredMethod("persist");persist.setAccessible(true);persist.invoke(manager);armed=args[0].equals("seed");
         }else if(args.length!=1||!args[0].equals("status"))throw new IllegalArgumentException("seed/release/status");
         Object run=runs.get("undead_crypt");YamlConfiguration disk=YamlConfiguration.loadConfiguration(new File(af.getDataFolder(),"config.yml"));
         var receipt=disk.getConfigurationSection("site-dungeons.receipts");int receiptCount=0;if(receipt!=null)for(String id:receipt.getKeys(false))if(receipt.isConfigurationSection(id+".undead_crypt"))receiptCount++;

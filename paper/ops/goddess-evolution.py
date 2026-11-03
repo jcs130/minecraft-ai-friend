@@ -204,6 +204,19 @@ class Ledger:
             return {"status": "released" if release else "acquired", "lease": state["lease"]}
 
 
+def storage_audit(text):
+    lines=re.findall(r'^MC_AGENT_STATE_STORAGE (\{[^\r\n]{1,2000}\})\s*$',text,re.M)
+    if len(lines)!=1:return None
+    try:value=json.loads(lines[0])
+    except ValueError:return None
+    required={'durableRevision','publishedRevision','projectionPending','cleanupPending','commitUnknown','lastMirrorError'}
+    if not isinstance(value,dict)or set(value)!=required:return None
+    if any(type(value[key])is not int or value[key]<0 for key in ['durableRevision','publishedRevision']):return None
+    if any(type(value[key])is not bool for key in ['projectionPending','cleanupPending','commitUnknown']):return None
+    if value['publishedRevision']>value['durableRevision']or not isinstance(value['lastMirrorError'],str):return None
+    return dict(value,lastMirrorError=value['lastMirrorError'][:100],state='commit_unknown'if value['commitUnknown']else'projection_delayed'if value['projectionPending']else'published',
+                guidance='提交结果未知，核对原记录，勿重放游戏动作'if value['commitUnknown']else'游戏提交已保存；快照延迟不需要重打、重领或重开副本')
+
 def snapshot(server, ops, node):
     server, ops = Path(server), Path(ops)
     started = now()
@@ -229,6 +242,9 @@ def snapshot(server, ops, node):
             if status == "received" and not text:
                 status = "unknown"
             row = {"command": command, "observed_at": at, "status": status, "text": text[:18000], "truncated": len(text) > 18000}
+            if command=="mycli admin dungeons audit"and status=="received":
+                state=storage_audit(text)
+                if state is not None:result['stateStore']=state
             if command == "neoforge tps" and status == "received":
                 match = re.search(r"^\s*Overall:\s*(\d+(?:\.\d+)?) TPS \((\d+(?:\.\d+)?) ms/tick\)\s*$", re.sub(r"\u00a7[0-9a-fklmnor]", "", text, flags=re.I), re.M)
                 if match and 0 <= float(match[1]) <= 20:
@@ -254,7 +270,7 @@ def snapshot(server, ops, node):
                               }.items()}}
         events=[]
         header=re.compile(r"^\[(\d\d:\d\d:\d\d)\] \[[^\]\r\n]+/(?:WARN|ERROR)\](?: \[[A-Za-z0-9_-]+\])?: (.*)$")
-        kinds={"MC_SITE_DUNGEON_SAVE_FAILURE":"dungeon_save_failure","Site dungeon paused for explicit retry":"dungeon_paused","Could not find suitable meteor location":"encounter_search_failed","Can't keep up!":"tick_lag"}
+        kinds={"MC_SITE_DUNGEON_SAVE_FAILURE":"dungeon_save_failure","Site dungeon paused for explicit retry":"dungeon_paused","Could not find suitable meteor location":"encounter_search_failed","Can't keep up!":"tick_lag","MC_AGENT_STATE_PROJECTION_DELAYED":"state_projection_delayed"}
         for line in lines:
             match=header.match(line)
             if match:
@@ -273,6 +289,7 @@ def snapshot_brief(value, projects):
             for key,row in sorted(projects.get("projects",{}).items(),key=lambda item:str(item[1].get("updated_at","")),reverse=True)
             if row.get("phase") not in ("reviewed",)]
     return {"observed_at":value["observed_at"],"complete":value["complete"],"metrics":value.get("metrics"),
+            "stateStore":value.get('stateStore'),
             "readStatus":[{"command":row["command"],"status":row["status"],"reason":row.get("reason")}for row in value["reads"]],
             "activity":value.get("activity"),"projectRevision":projects.get("revision"),"activeProjectCount":len(active),"projects":active[:8],
             "policy":"本轮只核实并记录最多一个异常；unknown不是正常或零值。建设/长调查交原建设任务，不在巡检循环中重试。"}
