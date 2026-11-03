@@ -110,6 +110,8 @@ export interface WorldRequestFacts {
       entities: readonly { id:number|null;name:string;kind:string;visible:boolean|null;position:readonly[number,number,number]|null;
         health:number|null;note:string|null;item:unknown }[];
       journeyId: string | null;
+      /** Progress notices intentionally contain no landmark cues. Absent on older producers. */
+      journeyReason?: 'cue' | 'progress' | null;
       journeyCues: readonly { position: readonly [number,number,number]; observedAtMs:number }[] } };
 }
 export interface StoragePart {

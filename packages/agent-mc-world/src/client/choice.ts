@@ -51,7 +51,7 @@ function routeObservation(f: WorldRequestFacts) {
     || route.footing?.kind !== 'support' || route.footing.grounded !== true) return null;
   if (!Array.isArray(route.entities)||route.entities.some(entity=>!Number.isFinite(entity.id)
     ||typeof entity.visible!=='boolean'||!Array.isArray(entity.position)||entity.position.length!==3||!entity.position.every(Number.isFinite))) return null;
-  if (!Array.isArray(route.journeyCues) || route.journeyId !== null && (!route.journeyCues.length
+  if (!Array.isArray(route.journeyCues) || route.journeyId !== null && ((!route.journeyCues.length && route.journeyReason !== 'progress')
     || route.journeyCues.some(cue=>!Number.isFinite(cue.observedAtMs)||sample.sampledAtMs<cue.observedAtMs
       || sample.sampledAtMs-cue.observedAtMs>10_000 || !Array.isArray(cue.position) || cue.position.length!==3
       || !cue.position.every(Number.isFinite)||Math.hypot(...cue.position.map((value:number,index:number)=>value-position[index]!))>32))) return null;

@@ -97,7 +97,7 @@ public final class ClientBridge implements ClientModInitializer {
             Path file = directory.resolve("connection.json"); Files.writeString(file, gson.toJson(connection)); restrict(file);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> { running = false; server.stop(0); }));
             ClientTickEvents.START_CLIENT_TICK.register(this::tick);
-            ClientTickEvents.END_CLIENT_TICK.register(c->reflexInputs.tick(reflexFrames.scope(c),c.field_1724!=null&&c.field_1687!=null&&ledger.active(System.currentTimeMillis())&&ServerAuthorization.ready(authorization())));
+            ClientTickEvents.END_CLIENT_TICK.register(c->reflexInputs.tick(reflexFrames.scope(c),!scriptStopUnconfirmed&&c.field_1724!=null&&c.field_1687!=null&&ledger.active(System.currentTimeMillis())&&ServerAuthorization.ready(authorization())));
             ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> { generation++; ledger.release(); cancelAll("connection changed"); inventoryPick.newConnection();reflexFrames.reset(); });
             ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> { generation++; ledger.release(); cancelAll("connection closed"); });
             ClientReceiveMessageEvents.GAME.register((message, overlay) -> receiveMessage(message.getString(), overlay, "system", null));
@@ -132,6 +132,7 @@ public final class ClientBridge implements ClientModInitializer {
         if(!client.field_1724.method_5667().toString().replace("-", "").equalsIgnoreCase(text(args,"expectedUuid","").replace("-", "")) || !actualServer.toLowerCase().replaceAll(":25565$","").equals(text(args,"expectedServer","").toLowerCase().replaceAll(":25565$",""))) throw new IllegalStateException("Client UUID/server mismatch");
         if(args.has("expectedGeneration")&&args.get("expectedGeneration").getAsDouble()!=generation)throw new IllegalStateException("Method connection generation changed before dispatch");
         if(args.has("expectedBodyScope")&&args.get("expectedBodyScope").getAsDouble()!=reflexFrames.scope(client))throw new IllegalStateException("Body lifecycle changed before dispatch; obtain fresh facts");
+        if(scriptStopUnconfirmed&&Set.of("do","method_claim","method_call","reflex_control","reflex_item").contains(method))throw new IllegalStateException("Prior script cancellation unknown; reconcile before body work");
         if(Set.of("do","method_claim","method_call","reflex_control","reflex_item").contains(method)&&!ServerAuthorization.ready(authorization()))
             throw new IllegalStateException("Server authorization is not confirmed for this connection; no body operation dispatched. Wait for the private login channel.");
         if(Set.of("do","method_call","reflex_control","reflex_item").contains(method)&&reflexInputs.unresolved())throw new IllegalStateException("Original reflex policy cleanup unknown; reconcile before body work");
@@ -190,7 +191,14 @@ public final class ClientBridge implements ClientModInitializer {
         String operation = text(args, "operation", ""); JsonObject input = object(args, "input"); validate(operation, input);
         String id = text(args, "action_id", ""); ControlLedger.Action existing = ledger.get(id);
         ControlLedger.Action action = ledger.admit(id, operation, input, now);
-        if (existing == null) {action.bodyScope=reflexFrames.scope(client);ledger.save(action);if(text(args,"queue","append").equals("now")) cancelAll("explicit queue replacement"); if (queue.size() >= 16) { ledger.finish(action, "blocked", "client action queue full", state(), now); } else queue.add(action); }
+        if (existing == null) {
+            action.bodyScope=reflexFrames.scope(client);ledger.save(action);
+            if(text(args,"queue","append").equals("now")&&!cancelAll("explicit queue replacement")) {
+                ledger.finish(action,"blocked","Prior body cancellation unconfirmed; replacement was not dispatched",state(),now);
+            } else if (queue.size() >= 16) {
+                ledger.finish(action, "blocked", "client action queue full", state(), now);
+            } else queue.add(action);
+        }
         return gson.toJsonTree(action).getAsJsonObject();
     }
     private JsonObject operations() {
@@ -215,7 +223,14 @@ public final class ClientBridge implements ClientModInitializer {
     private MinescriptRunner scripts() throws Exception { if (!minescriptAvailable()) throw new IllegalStateException("Minescript 4.0 is not explicitly enabled and installed"); if(scriptRunner==null)scriptRunner=new MinescriptRunner(FabricLoader.getInstance().getGameDir()); return scriptRunner; }
     private void cancelScript() {
         if(scriptRunner==null)return;
-        try { scriptRunner.cancel(); } catch(Exception error) { scriptStopUnconfirmed=true;releaseKeys();try{if(current!=null)ledger.finish(current,"unknown","Script cancellation unconfirmed",new JsonObject(),System.currentTimeMillis());}catch(Exception ignored){} throw new IllegalStateException("Minescript cancellation unknown; no new body work permitted"); }
+        try { scriptRunner.cancel(); scriptStopUnconfirmed=false; } catch(Exception error) { scriptStopUnconfirmed=true;releaseKeys();try{if(current!=null)ledger.finish(current,"unknown","Script cancellation unconfirmed",new JsonObject(),System.currentTimeMillis());}catch(Exception ignored){} throw new IllegalStateException("Minescript cancellation unknown; no new body work permitted"); }
+    }
+    private boolean scriptCancellationUnknown() {
+        if(scriptStopUnconfirmed&&scriptRunner!=null) {
+            try { if(scriptRunner.cancellationConfirmed())scriptStopUnconfirmed=false; }
+            catch(Exception ignored) { /* A failed observation cannot confirm a stop. */ }
+        }
+        return scriptStopUnconfirmed;
     }
     private void validate(String operation, JsonObject input) {
         if(operation.equals("navigate")){
@@ -241,6 +256,7 @@ public final class ClientBridge implements ClientModInitializer {
     private void tick(class_310 c) {
         try {
             updateScreen();
+            if(scriptStopUnconfirmed)return;
             if(navigation.unresolved()){cancelAll("Original navigation cleanup unresolved; no new body dispatch");return;}
             if(inventoryPick.unresolved()&&c.field_1724!=null&&c.field_1687!=null){
                 inventoryPick.update(MethodSession.inventoryIdentities(c),c.field_1724.method_31548().field_7545,System.currentTimeMillis());
@@ -367,6 +383,7 @@ public final class ClientBridge implements ClientModInitializer {
     private JsonObject state() {
         updateScreen(); JsonObject state=new JsonObject();state.addProperty("protocol",PROTOCOL);state.addProperty("sampledAt",Instant.now().toString());state.addProperty("generation",generation);
         state.addProperty("inventoryPick",InventoryPick.PROTOCOL);state.add("inventoryTransfer",inventoryPick.inspect());
+        state.addProperty("scriptCancellationUnknown",scriptCancellationUnknown());
         if(navigation.available())state.addProperty("navigationCapability",NativeNavigation.PROTOCOL);if(navigation.owner()!=null)state.add("navigation",navigation.report());
         state.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);state.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);state.addProperty("controllerId",ledger.owner(System.currentTimeMillis()));
         state.add("serverAuthorization",gson.toJsonTree(authorization()));

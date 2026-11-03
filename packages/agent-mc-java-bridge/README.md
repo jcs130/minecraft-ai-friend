@@ -35,7 +35,11 @@ POST `/v1/rpc`, `Authorization: Bearer <local token>`:
 - Control: `claim`, `renew`, `release`. All input and captures verify `expectedUuid` and `expectedServer`. Input also requires the controller ID and private lease nonce.
 - Execute: `do` with stable `action_id`, `operation`, `input`, and `queue` (`append`, `now`, `afterCheckpoint`). One body queue; at most 16 waiting actions. `afterCheckpoint` currently means after the current primitive's terminal boundary.
 - Reconcile/cancel: `result`, `cancel`, `stop`. A timeout is unknown until reconciled; never retry under a new ID.
+- A failed script cancellation blocks replacement admission and queued dispatch. `state.scriptCancellationUnknown` remains true until a read of the real Minescript job manager confirms it is empty, or an explicit `stop` confirms the owned job was killed. This releases only the cancellation gate: the original action's effects remain `unknown`, and a blocked replacement is never replayed.
+
 - Phases: accepted/running/completed/partial/blocked/cancelled/unknown. Chat, use and clicks are dispatch receipts, **partial**, until fresh server/menu evidence proves their effect. Completion of a primitive does not complete a host goal.
+
+Offline cancellation and saved-task regression checks run with `python tests/verify_issue43_java.py --jdk <JDK-21-directory> --gson <installed-gson.jar> --output <evidence-directory>` from the repository root. The check compiles the original control methods against explicit game doubles and never launches a client or server. Full mod compilation still requires the matching installed Fabric game inputs described below.
 
 Actual operations: bounded movement and held-item use, yaw/pitch, chat/commands, hotbar, inventory open, token-checked menu clicks/close and displayed native buttons. Snapshots include server UUID/address, real position/vitals, complete ItemStack encoding/components, cursor, menu slots/revision/token and raw game notices. Screenshots come from the rendered framebuffer, including current textures, animation and GUI.
 

@@ -13,6 +13,7 @@ import { collectPlayerObservation, buildGoddessChatPrompt, parseGoddessChatAnswe
 import { installLoginGate } from './mineflayer-login-gate.mjs';
 import { localProxyConnect } from './auth-proxy.mjs';
 import { installRecipePacketBypass } from './mineflayer-client-compat.mjs';
+import { privateGoddessMessage } from './goddess-chat-identity.mjs';
 
 const require = createRequire('E:/Cortico/package.json');
 fix1206PotionProtocol(require);
@@ -178,12 +179,12 @@ async function drain() {
     }
   } finally { draining = false; }
 }
-function receive(player, message) {
+function receive(player, message, privateMessage = false) {
   if (!names.test(player) || player === 'Goddess') return;
   const raw = String(message);
   // Preserve the production prayer-prefix correction when changing transport.
-  const creation = /^\[(?:造物申请|造物|创造)\]\s*/.test(raw);
-  const prayer = /^\[(?:祈愿|许愿|愿望|心愿)\]\s*/.test(raw);
+  const creation = privateMessage && /^\[(?:造物申请|造物|创造)\]\s*/.test(raw);
+  const prayer = privateMessage && /^\[(?:祈愿|许愿|愿望|心愿)\]\s*/.test(raw);
   const wish = raw.replace(/^\[(?:祈愿|许愿|愿望|心愿|造物申请|造物|创造)\]\s*/, '').replace(/[\x00-\x1f§]/g, ' ').trim();
   if (!wish || wish.length > 100) { sayTo(player, '请把消息写在 100 字以内。'); return; }
   const kind = creation ? 'creation' : (prayer ? 'prayer' : 'chat');
@@ -203,9 +204,9 @@ function connect() {
   connected = false;
   let login;
   try {
-    // Mineflayer's default whisper regex captures only \w+, stripping the
-    // Floodgate '.' prefix from Bedrock usernames such as .BedrockGuest. Keep the
-    // full server username so acknowledgements and replies reach that player.
+    // Display-text whisper patterns cannot establish private-message authority.
+    // The native component parser preserves full account names, including the
+    // Floodgate '.' prefix, without guessing names from rendered decorations.
     const port=Number(process.env.GODDESS_GAME_PORT || 25565);
     const protectedLogin=process.env.GODDESS_AUTH_REQUIRED==='1';
     if(protectedLogin && !process.env.MC_LOGIN_PASSWORD) throw Error('AUTH_PASSWORD_MISSING');
@@ -216,10 +217,6 @@ function connect() {
   } catch (error) { log(`createBot failed: ${error.message}`); setTimeout(connect, 15000); return; }
   login.ready.then(() => {
     startGoddessPhotoCamera(bot, {log,onCapture:info=>cacheObservedPhoto(info).catch(error=>log(`observation cache failed=${error.code??error.name}`))});
-    // EssentialsX /msg 的发件人显示名带前缀（如 "◆钻石 [Agent] CortiLan"），
-    // mineflayer 的 ^用户名 锚定匹配失败 → 改为在 messagestr 上自行解析，
-    // 玩家名取 whisper 标记前最后一个用户名 token（兼容 Floodgate 点前缀）。
-    const lastToken = part => { const t = String(part).match(/[A-Za-z0-9_.]{1,32}/g); return t ? t[t.length - 1] : null; };
     // 心跳自检：每 15 分钟要一次 list——回执必经聊天管道，自证 messagestr 活着；
     // 20 分钟无任何聊天事件（含心跳回执）则判定半死，退出交由看门狗重建
     // （病根：服务器重启后 mineflayer 连接存活但聊天事件管道偶发失效，10-07 16:01 与 10-08 04:00 两次复发）。
@@ -231,13 +228,10 @@ function connect() {
         process.exit(1);
       }
     }, 60 * 1000).unref();
-    bot.on('messagestr', text => {
+    bot.on('messagestr', (_text, position, message) => {
       lastChatEvent = Date.now();
-      const s = String(text).replace(/\s+/g, ' ').trim();
-      let m = s.match(/^(.*?)\s*whispers(?: to you)?:\s?(.*)$/);
-      if (m) { const p = lastToken(m[1]); if (p) receive(p, m[2]); return; }
-      m = s.match(/^\[(.+?) -> [^\]]*\]\s?(.*)$/);
-      if (m) { const p = lastToken(m[1]); if (p) receive(p, m[2]); }
+      const incoming = privateGoddessMessage(message, position);
+      if (incoming) receive(incoming.player, incoming.message, true);
     });
     // 公共聊天：玩家点名 Goddess / 女神 时也进入对话通道。
     bot.addChatPattern('chat', /^<([A-Za-z0-9_.-]{1,32})> (.*)$/, { deprecated: true });
@@ -248,7 +242,6 @@ function connect() {
     const s = String(msg?.toString?.() ?? msg).replace(/\s+/g, ' ').trim();
     if (s) log(`chat-dump: ${JSON.stringify(s)}`);
   });
-  bot.on('whisper', receive);
   bot.on('chat', (player, message) => {
     if (/Goddess|女神/.test(String(message))) receive(player, message);
   });

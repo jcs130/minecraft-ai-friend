@@ -198,20 +198,19 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'identity_verified')
         self.assertFalse(self.commands())                     # 只读观察，不派发任何动作
 
-    def test_saved_task_absent_triggers_bounded_auto_summon(self):
-        # 身体确认缺席：连续缺席 SUMMON_AFTER_ABSENT 次 → 幂等自动 summon 召回，且当天有配额上限。
+    def test_saved_task_absent_never_bypasses_review_with_summon(self):
         self.rcon.roster = 'count=0'
         self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
         state = self.restore.tick(BINDING)                    # 首轮走正常派发→被拒→blocked
         self.assertEqual(state['status'], 'blocked')
-        for _ in range(3):                                    # 反复只读观察，身体始终不在
+        before = self.commands()
+        for _ in range(10):
             self.clock.now = state['nextCheckAt'] + 1
             self.rcon.roster = 'count=0'
             state = self.restore.tick(BINDING)
             self.assertEqual(state['status'], 'blocked')
-        self.assertIn('numen_act summon ' + OWNER + ' Kirito', self.rcon.calls)   # 缺席够多次→自动召唤
-        # 配额：一天内自动召唤次数有上限，不无界重试
-        self.assertLessEqual(len([c for c in self.rcon.calls if c.startswith('numen_act summon')]), 5)
+        self.assertEqual(self.commands(), before)
+        self.assertFalse(any(c.startswith('numen_act summon') for c in self.rcon.calls))
 
     def test_roster_failure_never_counts_as_confirmed_absence(self):
         write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
@@ -224,26 +223,44 @@ class BodyReconnectTests(unittest.TestCase):
             self.assertFalse(self.commands())
             self.clock.now = result['nextCheckAt'] + 1
 
-    def test_uncertain_auto_summon_is_reserved_and_never_replayed(self):
+    def test_legacy_uncertain_auto_summon_is_preserved_and_never_replayed(self):
         write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
                  'reason': 'saved_task_requires_review', 'attempts': [],
-                 'absentStreak': 2, 'nextCheckAt': 0})
+                 'absentStreak': 2, 'nextCheckAt': 0,
+                 'autoSummonPendingAt': self.clock() - 30, 'autoSummonOutcome': 'unknown'})
         self.rcon.roster = 'count=0'
 
-        def lose_reply():
-            reserved = read_json(self.restore.path)
-            self.assertEqual(reserved['autoSummonPendingAt'], self.clock())
-            raise TimeoutError('summon reply lost')
-
-        self.rcon.on_restore = lose_reply
         result = self.restore.tick(BINDING)
         self.assertEqual(result['autoSummonOutcome'], 'unknown')
-        self.assertEqual(len([c for c in self.commands() if c.startswith('numen_act summon')]), 1)
-        self.rcon.on_restore = None
+        self.assertEqual(result['autoSummonPendingAt'], self.clock() - 30)
         for _ in range(5):
             self.clock.now = result['nextCheckAt'] + 1
             result = self.restore.tick(BINDING)
-        self.assertEqual(len([c for c in self.commands() if c.startswith('numen_act summon')]), 1)
+        self.assertFalse(self.commands())
+
+    def test_drain_never_dispatches_restore_or_bypasses_saved_task_review(self):
+        for blocked in (False, True):
+            self.restore.path.unlink(missing_ok=True)
+            if blocked:
+                write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
+                    'reason': 'saved_task_requires_review', 'attempts': [], 'absentStreak': 20})
+            write_json(self.state/'control.json', {'schema': 1, 'enabled': True, 'drain': {'status': 'requested'}})
+            for _ in range(5):
+                result = self.restore.tick(BINDING)
+                self.assertEqual(result['reason'], 'drain_requested')
+                self.clock.now += 1000
+            self.assertFalse(self.rcon.calls)
+
+    def test_explicitly_disabled_review_block_never_summons(self):
+        write_json(self.state/'control.json', {'enabled': False, 'pauseReason': 'operator'})
+        write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
+            'reason': 'saved_task_requires_review', 'attempts': [], 'absentStreak': 20})
+        for _ in range(5):
+            result = self.restore.tick(BINDING)
+            self.assertFalse(self.commands())
+            self.clock.now = result['nextCheckAt'] + 1
+        self.assertFalse(self.commands())
+        self.assertFalse(read_json(self.state/'control.json')['enabled'])
 
     def test_unknown_submission_is_not_retried_after_process_restart(self):
         self.rcon.response = TimeoutError('response lost')

@@ -62,3 +62,6 @@ This fixes stale path execution across relocations. It does not identify an
 unmarked custom portal before entering it, prove a server portal is configured
 correctly, choose the Agent's next destination, or certify every terrain route.
 Live improvement requires loading the candidate and observing natural play.
+
+For System 1/System 2 responsibilities, persistent skill integration and the
+algorithm evaluation plan, see [navigation control](navigation-control.md).

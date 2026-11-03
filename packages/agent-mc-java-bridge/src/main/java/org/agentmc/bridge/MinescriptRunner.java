@@ -110,4 +110,11 @@ os.replace(_tmp, _output)
         if (!((Enum<?>)job.getClass().getMethod("state").invoke(job)).name().equals("KILLED")) throw new IllegalStateException("Owned Minescript cancellation unconfirmed");
         active = null;
     }
+    boolean cancellationConfirmed() throws Exception {
+        // The real manager must be empty. A removed owned job is insufficient
+        // if another script has since taken the body; never infer from timeouts.
+        if (!map().isEmpty()) return false;
+        active = null;
+        return true;
+    }
 }

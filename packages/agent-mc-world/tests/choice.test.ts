@@ -107,6 +107,26 @@ async function choiceDuring(update: (facts: WorldRequestFacts) => void, category
   return {result:JSON.parse(typeof result==='string'?result:result.text),request};
 }
 describe('bounded route advice while the original goto continues', () => {
+  it.each(['progress','cue',undefined] as const)('accepts an empty cue list only for a typed %s progress observation',async reason=>{
+    const before=walkingFacts();
+    before.decisionStability!.route!.journeyReason=reason;
+    before.decisionStability!.route!.journeyCues=[];
+    const result=await choiceDuring(f=>{
+      f.decisionStability!.position=[2,64,0];
+      f.parts=f.parts!.map(p=>p.key==='place'?{...p,text:p.text+' moved'}:p);
+    },'route',before);
+    expect(result.result.status).toBe(reason==='progress'?'advice':'stale');
+  });
+  it.each(['teleport','combat','replacement task'] as const)('still expires progress advice on %s',async change=>{
+    const before=walkingFacts();before.decisionStability!.route!.journeyReason='progress';
+    before.decisionStability!.route!.journeyCues=[];
+    const {result}=await choiceDuring(f=>{
+      if(change==='teleport')f.decisionStability!.route!.positionEpoch++;
+      if(change==='combat')f.decisionStability!.route!.fighting=true;
+      if(change==='replacement task')f.decisionStability!.route!.task!.id++;
+    },'route',before);
+    expect(result.status).toBe('stale');
+  });
   it('keeps one observation time when the clock advances during fixture preparation', async () => {
     let now = 1_000_000;
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now++);
