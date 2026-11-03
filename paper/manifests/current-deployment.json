@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "npc-cli-lifecycle-20261103-r2",
-  "verifiedAt": "2026-11-03T02:31:37.666642+08:00",
-  "releaseDocument": "paper/docs/NPC_CLI_LIFECYCLE_20261103.md",
+  "latestRelease": "travel-cli-release-20261103-r1",
+  "verifiedAt": "2026-11-03T11:01:42.528190+08:00",
+  "releaseDocument": "paper/docs/TRAVEL_CLI_20261103.md",
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -23,7 +23,7 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.49-rpg",
+    "AgentFriend": "0.4.47.50-rpg",
     "QiandengjiRpg": "0.2.17",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
@@ -144,14 +144,14 @@
     "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
     "E:\\MC\\ops\\manage-server.ps1": "78f174d3d4a696256deb7ce028bcc0cd33407a108ba907d99bde9c788d654e46",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
     "E:\\MC\\server\\libraries\\net\\neoforged\\neoforge\\21.1.252\\neoforge-21.1.252-server.jar": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4",
     "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\qiandeng-native-camera-0.1.0.jar": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
     "E:\\MC\\clients\\goddess-native-2.6.5\\launch.py": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85",
     "E:\\MC\\ops\\IndependentProcess.cs": "92c1199865df7e5dfc70dfac2beaee70fa4d1d9d9d682c0918104a855e4f4c6d",
     "E:\\MC\\ops\\independent-process.ps1": "06af1f8c5ef78aaa8907c06e72bfbf0484d4d1e5f99b7158b13b867536065865",
     "E:\\MC\\ops\\ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
-    "E:\\MC\\ops\\rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c"
+    "E:\\MC\\ops\\rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.50-rpg.jar": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -172,10 +172,9 @@
     "Android26.60 actual login after the public19140 signaling correction",
     "remote live observer client repeats backend packet-decode disconnect; exact offending packet not yet captured",
     "original remote modded client acceptance and complete rendering/animation parity",
-    "Remote Cortico host terminal error consumption remains unverified",
-    "creeping_crypt travel still fails when its approach chunk is unloaded in the current Youer async API; separate compatible-loader repair required"
+    "Remote Cortico host terminal error consumption remains unverified"
   ],
-  "scopeNotice": "NPC entity readiness, persist=false handling, multi-argument CLI advice and independent background startup are deployed. The Intel camera is ready. Remote host terminal-error consumption and creeping_crypt cold-chunk travel remain open; this release does not claim all client or gameplay failures are resolved.",
+  "scopeNotice": "Safe existing-chunk travel for personal points, landmarks, legacy expedition approaches and rescue paths is deployed with terminal receipts. Local CLI recovery remains advisory; external embeddings are disabled. Patched Youer920 is retained. Remote host terminal-error consumption and physical client acceptance remain separate.",
   "verification": {
     "formalStartupChecks": 22,
     "enabledPlugins": 55,
@@ -183,9 +182,11 @@
     "originalCredentialRowsPreserved": 75,
     "originalGoddessJobsRestored": 7,
     "cameraRuntimeRechecked": true,
-    "isolatedCliClientChecks": 41,
-    "isolatedNpcColdStarts": 5,
-    "physicalDevicePixelsVerified": false
+    "nativeTravelRestartChecks": 45,
+    "paperTravelChecks": 44,
+    "sharedSdkActualServerRejectionLifecycle": true,
+    "physicalDevicePixelsVerified": false,
+    "remoteHostUpdated": false
   },
   "rpgUnified": {
     "bank": "Vortex/Vault/Essentials",
@@ -672,7 +673,8 @@
     "OptionalPayloadGuard-0.1.1.jar": "412804b6426d1a13765b0c912212ea50a0c986450fcbb72d5213b2d54a2d2479",
     "VortexRPG-qd32-before-compact-sidebar.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
     "manage-server-before-noninteractive-console.ps1": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd"
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24"
   },
   "previousVerificationBeforeYsm265": {
     "formalProduction": 40,
@@ -1349,9 +1351,32 @@
     }
   },
   "travelCliRepairCandidate": {
-    "state": "validated-awaiting-system-maintenance",
+    "state": "consumed-by-deployment",
     "version": "0.4.47.50-rpg",
     "manifest": "paper/manifests/travel-cli-candidate-20261103.json",
-    "runtimeStillPreviousVersion": true
-  }
+    "runtimeStillPreviousVersion": false,
+    "deployedManifest": "paper/manifests/travel-cli-deployed-20261103.json"
+  },
+  "previousReleaseBeforeTravelCliRepair": {
+    "latestRelease": "npc-cli-lifecycle-20261103-r2",
+    "verifiedAt": "2026-11-03T02:31:37.666642+08:00",
+    "runtimeAgentFriend": "0.4.47.49-rpg",
+    "verification": {
+      "formalStartupChecks": 22,
+      "enabledPlugins": 55,
+      "characterFilesUnchangedDuringColdInstallation": 673,
+      "originalCredentialRowsPreserved": 75,
+      "originalGoddessJobsRestored": 7,
+      "cameraRuntimeRechecked": true,
+      "isolatedCliClientChecks": 41,
+      "isolatedNpcColdStarts": 5,
+      "physicalDevicePixelsVerified": false
+    }
+  },
+  "travelCliRepair": {
+    "state": "deployed-with-open-acceptance",
+    "version": "0.4.47.50-rpg",
+    "manifest": "paper/manifests/travel-cli-deployed-20261103.json"
+  },
+  "youerUpstreamAudit": "paper/manifests/youer-upstream-audit-20261103.json"
 }

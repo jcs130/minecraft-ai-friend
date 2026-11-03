@@ -1,0 +1,64 @@
+{
+  "state": "upstream-defects-reproduced",
+  "productionKernelChanged": false,
+  "nightly": {
+    "commit": "23f932ae111931962e2164ef1041b01d539900f9",
+    "neoForge": "21.1.265",
+    "bootstrapSha256": "6083800040829dd1e3a12f74707e47d4227dfc2831935303f7926dfd4b0a61ba"
+  },
+  "paperControl": "1.21.1 build133 / 3cb8529",
+  "normalStartStopCycles": {
+    "nightly": 2,
+    "paper": 2
+  },
+  "userModsInstalled": 0,
+  "testPluginsInstalled": 1,
+  "results": {
+    "loadedChunkControlPassedBoth": true,
+    "newChunkGenerationYouer": false,
+    "newChunkGenerationPaper": true,
+    "savedUnloadedChunkLoadYouer": false,
+    "savedUnloadedChunkLoadPaper": true,
+    "nonpersistentEntityAbsentAfterRestartYouer": false,
+    "nonpersistentEntityAbsentAfterRestartPaper": true,
+    "persistentEntityOriginalUuidKeptBoth": true
+  },
+  "allDisposablePortsClosed": true,
+  "excludedFixtureAttempts": [
+    "RCON options passed in the timeout position",
+    "RCON sender excluded by console-only guard",
+    "same-tick save/unload did not prove a new chunk had reached disk; replaced by normal restart with positive preconditions"
+  ],
+  "fullProductionPluginModStackValidated": false,
+  "latestNightlyDeployed": false,
+  "observedAt": "2026-11-03T10:25:39+08:00",
+  "officialPublicBuild": {
+    "id": 920,
+    "commit": "e315863237815205021e0255f3057cca22eb28a0",
+    "neoForge": "21.1.252",
+    "bootstrapSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1"
+  },
+  "sourceCommitsBeyondPublicBuild": 37,
+  "latestSuccessfulCi": {
+    "runId": 40834104418,
+    "artifactId": 12879893723,
+    "archiveDigest": "sha256:13cea1a31dc749888f15c385e3176de5024a171efceebadb8ffeac684bfbf661"
+  },
+  "disposition": "Keep the verified patched build920 runtime. The newer official CI build has both reproduced API defects and has not passed the full production stack.",
+  "publicProbeBuildVerified": true,
+  "publicProbeMatchesTestedEntries": 7,
+  "issueReporting": {
+    "state": "prepared-not-submitted",
+    "creationAttempt": "GitHub connector returned 403 Resource not accessible by integration; no issue number created",
+    "browserAttempt": "Windows browser URL could not be identified with sufficient confidence; computer use stopped",
+    "drafts": [
+      "paper/docs/youer-upstream-issues/async-chunks.md",
+      "paper/docs/youer-upstream-issues/nonpersistent-entities.md"
+    ]
+  },
+  "document": "paper/docs/YOUER_UPSTREAM_20261103.md",
+  "sourceNormalizedSha256": {
+    "paper/integrations/youer-upstream-probe/src/YouerUpstreamProbe.java": "b3bf571160d7fc430234912a14b84e4ac41442e4e117c3ea1f9f7ca9af874ed7",
+    "paper/integrations/youer-upstream-probe/build.py": "fe1771a1c326f535a7fc72e8589ad3333b7c72d9cdf3255274e25e99186a2b03"
+  }
+}

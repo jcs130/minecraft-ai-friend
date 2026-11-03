@@ -1,7 +1,6 @@
 {
-  "state": "validated-awaiting-system-maintenance",
+  "state": "consumed-by-deployment",
   "candidate": "AgentFriend 0.4.47.50-rpg",
-  "currentRuntime": "AgentFriend 0.4.47.49-rpg",
   "sha256": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b",
   "baselineSha256": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
   "changedClassFamilies": [
@@ -33,5 +32,7 @@
   "playerDataReplacement": false,
   "credentialMigration": false,
   "frozenSkillPackageRebuilt": false,
-  "deploymentDocument": "paper/docs/TRAVEL_CLI_20261103.md"
+  "deploymentDocument": "paper/docs/TRAVEL_CLI_20261103.md",
+  "runtimeAtValidation": "AgentFriend 0.4.47.49-rpg",
+  "deployedManifest": "paper/manifests/travel-cli-deployed-20261103.json"
 }

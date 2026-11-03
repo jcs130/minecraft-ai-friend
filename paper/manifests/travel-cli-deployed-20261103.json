@@ -1,0 +1,70 @@
+{
+  "state": "deployed-with-open-acceptance",
+  "release": "travel-cli-release-20261103-r1",
+  "maintenanceCompletedAt": "2026-11-03T10:56:24.4407280+08:00",
+  "verifiedAt": "2026-11-03T11:01:42.528190+08:00",
+  "version": "0.4.47.50-rpg",
+  "sourcePullRequest": 54,
+  "sourceMainMerge": "fd28f9799172408f29f74eebe23a9f0d026609b2",
+  "artifactSha256": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b",
+  "baselineSha256": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
+  "changedClassFamilies": [
+    "DungeonExpeditions",
+    "WaypointManager",
+    "SiteDungeonManager",
+    "ActionFeedback"
+  ],
+  "otherJarEntriesPreserved": 615,
+  "verification": {
+    "nativeBaselineChecks": 10,
+    "nativeCandidateChecks": 39,
+    "nativeRestartChecks": 45,
+    "paperChecks": 44,
+    "sharedSdkActualServerReplyLifecycle": true,
+    "remoteHostAcceptance": false,
+    "qaServersStopped": true
+  },
+  "formalChecksPassed": 22,
+  "characterFilesUnchangedDuringColdInstallation": 673,
+  "originalCredentialRowsPreserved": 75,
+  "originalCredentialValuesUnchanged": true,
+  "originalGoddessJobsRestored": 7,
+  "originalJobSpecificationsAndIdentityPreserved": true,
+  "latestColdRecoveryPointsVerifiedEF": true,
+  "normalMaintenanceNoticesSeconds": [
+    180,
+    60,
+    10
+  ],
+  "gameRestarted": true,
+  "playerDataReplacement": false,
+  "credentialMigration": false,
+  "externalEmbeddingsEnabled": false,
+  "suggestionsAutomaticallyExecuted": false,
+  "youerCoreUpgraded": false,
+  "patchedBuild920KernelPreserved": true,
+  "camera": {
+    "phase": "ready",
+    "fps": 29,
+    "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+    "modelCatalogueSize": 40,
+    "cleanHud": true,
+    "shadersEnabled": false,
+    "observedAt": "2026-11-03T11:01:40.417249+08:00"
+  },
+  "originalActorsReconnected": [
+    "Goddess",
+    "ag_CorMy",
+    "ag_PhotoLens"
+  ],
+  "physicalDeviceLoginVerified": false,
+  "remoteCorticoHostUpdated": false,
+  "maintenanceEntryConsumed": true,
+  "rollback": "Code only; preserve current world, characters, inventories and account progress",
+  "openAcceptance": [
+    "Remote Cortico host terminal-error consumption",
+    "Physical Android and original remote native-client rendering acceptance",
+    "Remote live observer backend packet-decode investigation"
+  ],
+  "document": "paper/docs/TRAVEL_CLI_20261103.md"
+}
