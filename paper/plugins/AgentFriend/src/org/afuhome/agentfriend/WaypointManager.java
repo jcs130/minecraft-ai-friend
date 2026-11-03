@@ -25,6 +25,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -288,18 +289,23 @@ final class WaypointManager implements Listener {
     record Outcome(boolean success, String reason) { }
     /** Personal points and landmarks share one pending-request gate and the same paid, safe travel. */
     void travel(Player p, String raw, String title, Location at, BooleanSupplier stillValid, Consumer<Outcome> reply) {
+        travel(p, raw, title, at, stillValid, TravelMagic.LOCAL_MANA, () -> at, reply);
+    }
+    /** Reuse the same request, safety and charging path for a discovered approach point. */
+    void travel(Player p, String raw, String title, Location at, BooleanSupplier stillValid,
+            int mana, Supplier<Location> selectLanding, Consumer<Outcome> reply) {
         String denied = actor(p, false);
         if (denied != null) { reply.accept(new Outcome(false, denied)); return; }
         if (requests.containsKey(p.getUniqueId())) { reply.accept(new Outcome(false, "busy")); return; }
         if (at == null) { reply.accept(new Outcome(false, "world_unavailable")); return; }
-        if (!plugin.hasMana(p, TravelMagic.LOCAL_MANA)) { reply.accept(new Outcome(false, "not_enough_mana")); return; }
+        if (!plugin.hasMana(p, mana)) { reply.accept(new Outcome(false, "not_enough_mana")); return; }
         Location origin = p.getLocation().clone();
         UUID request = UUID.randomUUID(), player = p.getUniqueId(); requests.put(player, request);
         reply.accept(new Outcome(false, "loading"));
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (requests.remove(player, request) && Bukkit.getPlayer(player) != null) reply.accept(new Outcome(false, "timeout"));
         }, 200L);
-        try { at.getWorld().getChunkAtAsync(at.getBlockX() >> 4, at.getBlockZ() >> 4, false).whenComplete((chunk, error) -> {
+        try { ExistingChunkAccess.load(plugin, at.getWorld(), at.getBlockX() >> 4, at.getBlockZ() >> 4).whenComplete((chunk, error) -> {
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!requests.remove(player, request)) return;
@@ -314,8 +320,14 @@ final class WaypointManager implements Listener {
                     Location landing = null;
                     if (reason == null) {
                         // Recheck the recorded location only; never redirect through walls into somebody else's room.
-                        reason = safe(online, at);
-                        if (reason == null) landing = at;
+                        try {
+                            landing = selectLanding.get();
+                            if (landing == null || landing.getWorld() != at.getWorld()) reason = "unsafe_landing";
+                            else reason = safe(online, landing);
+                        } catch (RuntimeException | LinkageError unavailable) {
+                            reason = "chunk_unavailable";
+                            plugin.getLogger().warning("Travel landing validation unavailable: " + unavailable.getClass().getSimpleName());
+                        }
                     }
                     if (reason == null) try {
                         var query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
@@ -323,7 +335,7 @@ final class WaypointManager implements Listener {
                     } catch (RuntimeException | LinkageError unavailable) { reason = "protection_unavailable"; }
                     if (reason != null) { reply.accept(new Outcome(false, reason)); return; }
                     online.sendMessage("MC_DESTINATION id=" + raw + " " + LocationOutput.fields(landing));
-                    boolean moved = plugin.travelMagic().teleport(online, landing, raw, "传送点术·" + title, TravelMagic.LOCAL_MANA);
+                    boolean moved = plugin.travelMagic().teleport(online, landing, raw, "传送点术·" + title, mana);
                     reply.accept(new Outcome(moved, moved ? "ok" : "teleport_rejected"));
                     plugin.refreshAgentState(online);
                 } finally { if (ticket) chunk.removePluginChunkTicket(plugin); }

@@ -1,5 +1,7 @@
 # 千灯纪：重返艾恩葛朗特
 
+**传送修复候选已验证：**AF0.4.47.50-rpg 统一个人地点和旧遗迹的冷区块读取及结果回执，Youer重启后45项、普通Paper44项联调通过，当前等待Windows维护确认；正式仍为AF.49。现役命令检索已能对拼写、中文意图和错误cast入口返回准确用法；共享SDK拒绝终态已实测。见[传送与命令联机记录](paper/docs/TRAVEL_CLI_20261103.md)。
+
 **11月3日修复已上线：**固定NPC重复生成、临时商人错误持久化及多参数命令纠错已修复，现役AF0.4.47.49-rpg。游戏后台已独立启动；核显相机恢复29–30帧和40项模型。原账号、成长及物品保持。远端宿主错误回执消费及遗迹冷区块传送仍单独跟进，见[发布及边界](paper/docs/NPC_CLI_LIFECYCLE_20261103.md)、[后台修复](paper/docs/INDEPENDENT_SERVER_LIFETIME_20261103.md)和[相机修复](paper/docs/NATIVE_CAMERA_ADAPTER_20261103.md)。
 
 **官网导航新版已上线：**[PR48](https://github.com/jcs130/minecraft-ai-friend/pull/48) 已合并并发布。首页、歌曲、下载和接入页统一为「世界 / 直播 / 作品 / 加入」，账号操作集中到「我的」；电脑和手机公网验收通过，原账号、14个有效会话、作品与下载保持。本次仅正常切换官网的9个静态文件，游戏、代理和相机未重启。见[发布记录](paper/docs/PORTAL_SIMPLIFY_20261102.md)及[实际部署清单](paper/manifests/portal-simplify-deployed-20261102.json)。
