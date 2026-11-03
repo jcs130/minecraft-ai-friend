@@ -39,6 +39,7 @@ import type { ShowTempo } from './show.ts';
 import { diagnoseTargetSpace, probeBlockInfo } from './terrain.ts';
 import { walkOnlyPath } from './travel.ts';
 import { installPartialBlockStartRepair } from './pathfinder-start.ts';
+import { installNavigationBoundaryGuard } from './navigation-boundary.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 
 import { watchFlightAbilities } from './flight.ts';
@@ -885,6 +886,7 @@ export class Bridge {
   protected installSpawnGear(bot: mineflayer.Bot, gen: number): void {
     const log = this.opts.log;
     installPartialBlockStartRepair(bot);
+    this.bagFor(gen).register('navigation-boundary', installNavigationBoundaryGuard(bot, this.opts.diag));
     installNavigationBareHand(bot);
     installPathfinderToolSelection(bot, log);
     const movements = new Movements(bot);

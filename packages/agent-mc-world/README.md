@@ -249,6 +249,11 @@ physics engine checks live pathfinder control against received collision shapes 
 brakes before a predicted cliff fall. Lower destination coordinates never exempt an
 observed deep fall. See [navigation safety and its limits](docs/navigation-fall-safety.md).
 
+Native teleports and respawn/world boundaries invalidate the old physical route.
+The task receives `navigation-location-changed` and can reassess its landing;
+old-route cleanup does not cancel a replacement goal. See
+[navigation boundaries, upstream research and limits](docs/navigation-boundaries.md).
+
 `mc_script` includes a host-independent method library with scoped, immutable source
 versions, syntax-validation requirements, parent conflict checks and explicit execution
 or rollback. Saved source is not evaluated gameplay evidence. See
