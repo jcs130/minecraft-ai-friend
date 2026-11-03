@@ -1,8 +1,18 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "storage-rootcause-20261103-r1",
-  "verifiedAt": "2026-11-03T23:22:09.566286+08:00",
-  "releaseDocument": "paper/docs/STATE_STORAGE_20261103.md",
+  "latestRelease": "respawn-position-20261104-r1",
+  "verifiedAt": "2026-11-04T01:34:35.0189091+08:00",
+  "releaseDocument": "paper/docs/YOUER_RESPAWN_POSITION_20261104.md",
+  "youerRespawnPosition": {
+    "state": "deployed-with-open-acceptance",
+    "sourceCommit": "ceab2b9918cc3a3c79fbc71741626889fce9bb26",
+    "changedArchiveEntry": "net/minecraft/server/players/PlayerList.class",
+    "verifiedProductionChecks": 27,
+    "isolatedJavaDirectRespawnTrialsPassed": 2,
+    "isolatedVelocityRespawnTrialsPassed": 1,
+    "productionPlayerRespawnRetested": false,
+    "rollbackBaselineSha256": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4"
+  },
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
     "appliedAt": "2026-10-31T02:16:27+08:00",
@@ -146,7 +156,7 @@
     "E:\\MC\\ops\\goddess_chat_review.py": "0481fc33c89d9f92c744ff692179c689d9dc799e493165435de02d5c94a00575",
     "E:\\MC\\private\\ysm\\proxy\\plugins\\OptionalPayloadGuard-0.1.2.jar": "0166b71e84759042d4df98ee21bf2fea258412fbe500fc2995ec1d57f0a6432e",
     "E:\\MC\\ops\\manage-server.ps1": "faea48e437e9612173e7147d608946423c92a67341b43bf5ba7a753f06e4a128",
-    "E:\\MC\\server\\libraries\\net\\neoforged\\neoforge\\21.1.252\\neoforge-21.1.252-server.jar": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4",
+    "E:\\MC\\server\\libraries\\net\\neoforged\\neoforge\\21.1.252\\neoforge-21.1.252-server.jar": "96b402570bd6a67ebaddc5e1cc59e2399fe2c72fbf1296c79cb0dbd04793540e",
     "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\qiandeng-native-camera-0.1.0.jar": "5d1ace570d6f0f0e8560077af852a021f4c4f327ceecff478c72e554ebd977b7",
     "E:\\MC\\clients\\goddess-native-2.6.5\\launch.py": "5fa117bf05ce919f598f4d36abe33ecab89bfbfe328ad25118f6fdb805837d85",
     "E:\\MC\\ops\\IndependentProcess.cs": "92c1199865df7e5dfc70dfac2beaee70fa4d1d9d9d682c0918104a855e4f4c6d",
