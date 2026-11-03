@@ -90,6 +90,27 @@ it('preserves the relocation reason in the executor terminal instead of retrying
   expect(navigationBoundaryFailureOf(r.bot)?.to?.z).toBeGreaterThan(100);
 });
 
+it('terminates a persistent follow after relocation even when the old entity is still tracked', async () => {
+  const r = rig(), reports: TaskReport[] = [];
+  Object.assign((r.h.exec as any).opts, { report: (report: TaskReport) => reports.push(report), fleeHealth: () => 0 });
+  const ally = { id: 2, type: 'player', username: 'Ally', name: 'player', isValid: true,
+    position: r.bot.entity.position.offset(32, 0, 0) };
+  Object.assign(r.bot.entities, { 2: ally }); Object.assign(r.bot.players, { Ally: { entity: ally } });
+  r.h.exec.submit([{ skill: 'follow', name: 'Ally' }], 'append');
+  await vi.advanceTimersByTimeAsync(300);
+  const taskId = r.h.exec.status().running!.id;
+  expect(r.bot.pathfinder.isMoving()).toBe(true);
+  r.position(100.5, 64, 100.5);
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reports).toHaveLength(1);
+  expect(reports[0]).toMatchObject({ taskId, kind: 'blocked', steps: [{ outcome: 'fail', decision: {
+    status: 'blocked', reason: 'navigation-location-changed', retryable: false,
+  } }] });
+  expect(r.h.exec.status().running).toBeNull();
+  expect(r.bot.pathfinder.goal).toBeNull();
+  expect(ally.isValid).toBe(true); // Entity presence alone does not authorize a route across relocation.
+});
+
 it.each(['relative', 'absolute', 'rotation'])('keeps a small %s server correction and ordinary motion usable', async mode => {
   const r = rig(), goal = new pathfinderPkg.goals.GoalBlock(5, 64, 0);
   const result = r.bot.pathfinder.goto(goal).catch(e => e);

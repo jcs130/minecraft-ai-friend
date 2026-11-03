@@ -3630,6 +3630,7 @@ export class MinecraftWorld implements World {
               health:typeof health==='number'&&Number.isFinite(health)?health:null,note:reading.note??null,item:reading.item??null };
           }).sort((a,b)=>(a.id??-1)-(b.id??-1)),
           journeyId: journey?.id ?? null,
+          journeyReason: journey?.reason ?? null,
           journeyCues: journey?.observations.map(cue => ({ position: [...cue.position] as [number,number,number], observedAtMs: cue.observedAtMs })) ?? [] } },
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,

@@ -28,7 +28,7 @@ it('preserves typed route guards and journey facts through status IPC and the ge
       route:{generation:7,positionEpoch:3,speedBlocksPerSec:4,policy:{choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5},risks:[],
         task:{id:44,stepIndex:0,stepCount:1,step:'goto',skill:'goto',resumable:true,destination:[128,64,0],dimension:'minecraft:overworld'},
         waiting:[],hold:null,goalOwner:'task',fighting:false,environment:null,windowOpen:false,cursorOccupied:false,
-        footing:{kind:'support',block:'stone',grounded:true},entities:[],journeyId:'journey:7:44:0:1',journeyCues:[]}}};
+        footing:{kind:'support',block:'stone',grounded:true},entities:[],journeyId:'journey:7:44:0:1',journeyReason:'progress',journeyCues:[]}}};
   child.emit('message',JSON.parse(JSON.stringify({t:'note',note:{kind:'status',decl:{},storage:[],promptVars:{},requestFacts:facts}})));
   const facade=new MinecraftClientWorld({cfg},proxy);
   expect(proxy.requestFacts()?.decisionStability).toEqual(facts.decisionStability);
