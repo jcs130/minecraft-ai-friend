@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.5 (unpublished candidate)
+
+- Expose strict per-call read classification for combat tactic, battlefield, decision and report queries across SDK, IPC and Java clients. Mixed read/update requests remain mutations; hosts can permit evidence collection alongside a body-owning worker without granting tactic writes.
+- Accept finite absolute RPG health thresholds above 20, including fractional values, in tactic validation, persisted settings and rule schemas. Availability, mana, cooldown and body ownership checks remain unchanged.
+
 ## 0.5.7-rc.160-preview.4 (unpublished candidate)
 
 - Preserve death episode identity, ledger count and independently timestamped recovery health while spatial readiness is unavailable. Distinguish an authenticated connection from missing respawn position; never promote health alone to a valid landing.

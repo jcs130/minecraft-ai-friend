@@ -44,8 +44,8 @@ export const COMBAT_RULES_SCHEMA = {
         enemyTypes: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: { type: 'string', pattern: ID.source }, description: 'Optional exact entity type IDs to count; bare IDs use the minecraft namespace (zombie = minecraft:zombie). Other namespaces remain distinct. Omitted counts all observed hostiles.' },
         hostilesAtLeast: { type: 'integer', minimum: 1, maximum: 64, description: 'Minimum matching enemy count; default 1.' },
         hostilesAtMost: { type: 'integer', minimum: 1, maximum: 64 },
-        healthAtOrBelow: { type: 'number', minimum: 1, maximum: 20 },
-        healthAtOrAbove: { type: 'number', minimum: 1, maximum: 20 },
+        healthAtOrBelow: { type: 'number', minimum: 1, description: 'Absolute current health points; RPG health is not normalized to 20.' },
+        healthAtOrAbove: { type: 'number', minimum: 1, description: 'Absolute current health points; RPG health is not normalized to 20.' },
         manaAtLeast: { type: 'number', minimum: 0, maximum: 10000 },
         reserveMana: { type: 'number', minimum: 0, maximum: 10000, description: 'Require at least this much mana after the observed spell cost. Unknown mana/cost fails the predicate.' },
         dimension: { type: 'string', minLength: 1, maxLength: 100, description: 'Exact current dimension identifier.' },
@@ -79,7 +79,7 @@ export function validCombatRules(value: unknown): value is CombatRule[] {
         if (typeof v !== 'boolean') return false;
       } else {
         const limits = schema[key as Exclude<keyof typeof schema, 'enemyTypes' | 'dimension' | 'onGround'>];
-        if (typeof v !== 'number' || !Number.isFinite(v) || v < limits.minimum || v > limits.maximum
+        if (typeof v !== 'number' || !Number.isFinite(v) || v < limits.minimum || ('maximum' in limits && v > limits.maximum)
           || (limits.type === 'integer' && !Number.isInteger(v))) return false;
       }
     }

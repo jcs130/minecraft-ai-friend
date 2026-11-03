@@ -100,7 +100,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       const tactic = this.tactics.getTactic();
       return this.toolLog(tool, args, (tactic
         ? `当前战术：${tactic.spells?.join(' → ') ?? '默认法术顺序'}；`
-          + `生命线 ${tactic.healAtOrBelow ?? '未设置'}/20。`
+          + `生命线 ${tactic.healAtOrBelow ?? '未设置'}（服务端生命点数）。`
         : '当前使用默认即时战斗控制；未安装能力提供方时没有自动施法。')
         + (tactic?.rules?.length ? `\n条件分支启用，共${tactic.rules.length}项；上述法术列表仅为停用分支后的备用顺序。` : '')
         + '\n' + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined)
@@ -130,9 +130,8 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       || new Set(rawSpells).size !== rawSpells.length)) {
       return this.toolLog(tool, args, '未设置：spells 最多八项且不重复，填写服务端公布的英文技能 ID。');
     }
-    if (rawHeal !== undefined && (!Number.isInteger(rawHeal) || (rawHeal as number) < 1
-      || (rawHeal as number) > 20)) {
-      return this.toolLog(tool, args, '未设置：healAtOrBelow 必须是 1–20 的整数。');
+    if (rawHeal !== undefined && (typeof rawHeal !== 'number' || !Number.isFinite(rawHeal) || rawHeal < 1)) {
+      return this.toolLog(tool, args, '未设置：healAtOrBelow 必须是至少为 1 的有限数值，单位为服务端生命点数。');
     }
     if (rawRules !== undefined && !validCombatRules(rawRules)) {
       return this.toolLog(tool, args, '未设置：rules 最多16项，id须唯一；每项给 id、spell、when，条件须符合工具定义且上下界相容。');
@@ -165,7 +164,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     return this.toolLog(tool, args,
       `已设置战术：${spells?.join(' → ') ?? '默认法术顺序'}；`
       + (healAtOrBelow === null ? '治疗血线未设置。'
-        : `生命 ≤${healAtOrBelow}/20 时向已安装的治疗能力提供方提出请求。`)
+        : `生命 ≤${healAtOrBelow} 时向已安装的治疗能力提供方提出请求（服务端生命点数）。`)
       + (rules?.length ? `已启用${rules.length}项条件分支；法术列表仅作分支停用后的备用，未命中不自动进攻施法。` : '')
       + (rawRoutines !== undefined ? `快脚本菜单已登记${routines?.length ?? 0}个精确版本，尚未运行。` : '')
       + (program ? `自主程序「${program.name}」SHA256 ${programHash}；`

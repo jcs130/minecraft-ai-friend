@@ -73,7 +73,7 @@ export function validCombatTactic(value: unknown): value is CombatTactic {
   return (v.spells === null || (Array.isArray(v.spells) && v.spells.length > 0 && v.spells.length <= 8
     && v.spells.every((id) => typeof id === 'string' && /^[a-z][a-z0-9_:-]{0,63}$/.test(id))
     && new Set(v.spells).size === v.spells.length))
-    && (v.healAtOrBelow === null || (Number.isInteger(v.healAtOrBelow) && v.healAtOrBelow >= 1 && v.healAtOrBelow <= 20))
+    && (v.healAtOrBelow === null || (Number.isFinite(v.healAtOrBelow) && v.healAtOrBelow >= 1))
     && (v.rules === undefined || validCombatRules(v.rules))
     && (v.program === undefined || v.program === null || validCombatProgram(v.program))
     && (v.routines === undefined || validCombatRoutines(v.routines));

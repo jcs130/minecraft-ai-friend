@@ -362,7 +362,7 @@ export class JavaClientWorld implements World {
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
     const tools: ToolDef[] = [
       ...(this.messages ? [this.messages.tool()] : []),
-      {...COMBAT_TACTIC_TOOL,runtimeAvailable:()=>this.reflex!==null,readOnlyCall:args=>args.battlefield===true||args.decisions===true||args.decision!==undefined||args.report!==undefined||!Object.keys(args).length,
+      {...COMBAT_TACTIC_TOOL,runtimeAvailable:()=>this.reflex!==null,
         handler:async(args,ctx)=>{try{if(!this.reflex)throw new Error('Shared native reflex body capability unavailable; no combat action dispatched');return await this.reflex.tool(args,ctx);}catch(error){return{text:String(error),failed:true};}}},
       { ...KNOWLEDGE_TOOL, handler: async (args, ctx) => {
         ctx.signal?.throwIfAborted();

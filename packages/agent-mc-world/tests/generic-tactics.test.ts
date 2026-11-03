@@ -20,6 +20,11 @@ it('exposes the same tactic capability to generic SDK, IPC and direct engines wi
       const names = owner.tools().map(t => t.name);
       expect(names.filter(n => n === 'mc_combat_tactic')).toHaveLength(1);
       expect(names).not.toContain('mc_cast');
+      const tactic = owner.tools().find(t => t.name === 'mc_combat_tactic')!;
+      for (const args of [{}, {report:1}, {decision:1}, {decisions:true}, {battlefield:true}])
+        expect(tactic.readOnlyCall?.(args)).toBe(true);
+      for (const args of [{report:0}, {report:1,enabled:false}, {battlefield:true,spells:['spark']}, {enabled:false}, {program:null}])
+        expect(tactic.readOnlyCall?.(args)).toBe(false);
     }
   } finally { await client.disconnect(); rmSync(dataDir, { recursive: true, force: true }); }
 });

@@ -1,9 +1,19 @@
 import type { ToolDef } from './support/host-contract.ts';
 import { COMBAT_RULES_SCHEMA } from './combat-rules.ts';
 import { COMBAT_ROUTINES_SCHEMA } from './combat-routines.ts';
+/** A read selector must stand alone: a mixed update is never read-only. */
+export function isCombatTacticRead(args: Record<string, unknown>): boolean {
+  const keys = Object.keys(args);
+  if (!keys.length) return true;
+  if (keys.length !== 1) return false;
+  const key = keys[0];
+  return (key === 'battlefield' || key === 'decisions') ? args[key] === true
+    : (key === 'decision' || key === 'report') && Number.isSafeInteger(args[key]) && Number(args[key]) > 0;
+}
 export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
     name: 'mc_combat_tactic',
     tags: ['write'],
+    readOnlyCall: isCombatTacticRead,
     description:
       'Read or update combat spell rules and an agent-authored fast tactic program. {} reads it; omitted fields keep their current values; '
       + '{enabled:false} clears it. A spell list of server-listed combat spell IDs sets priority order while fighting; '
@@ -35,7 +45,7 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
         enabled: { type: 'boolean' },
         spells: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true,
           items: { type: 'string', pattern: '^[a-z][a-z0-9_:-]{0,63}$' } },
-        healAtOrBelow: { type: 'integer', minimum: 1, maximum: 20 },
+        healAtOrBelow: { type: 'number', minimum: 1, description: 'Absolute health points from the current server, not a normalized 20-point scale.' },
         rules: COMBAT_RULES_SCHEMA,
         routines: COMBAT_ROUTINES_SCHEMA,
         program: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false,

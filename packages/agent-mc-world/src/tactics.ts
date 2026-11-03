@@ -7,4 +7,4 @@ export * from '../core/combat-rules.ts';
 export * from '../core/combat-tactics.ts';
 export * from '../core/combat-abilities.ts';
 export { TacticalMinecraftWorld } from '../core/tactical-world.ts';
-export { COMBAT_TACTIC_TOOL } from '../core/combat-tool.ts';
+export { COMBAT_TACTIC_TOOL, isCombatTacticRead } from '../core/combat-tool.ts';
