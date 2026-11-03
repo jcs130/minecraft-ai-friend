@@ -3,6 +3,24 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { installDeathLifecycle, respawnDelay, type DeathLifecycle } from '../core/death-lifecycle.ts';
 
 afterEach(() => vi.useRealTimers());
+it('retains packet health for the same recovery without inventing another death or a landing', () => {
+  const r = rig(); r.bot.emit('death');
+  const id = r.bot.deathLifecycle!.episodeId;
+  r.bot.deathLifecycle!.deathsToday = 1;
+  r.bot._client.emit('update_health', { health: 3, food: 2 });
+  expect(r.bot.deathLifecycle!.healthObservation).toBeUndefined();
+  r.bot.emit('respawn');
+  r.bot._client.emit('update_health', { health: 35, food: 20 });
+  r.bot.health = 35; r.bot.emit('spawn');
+  expect(r.bot.deathLifecycle).toMatchObject({ episodeId: id, phase: 'alive', deathsToday: 1,
+    healthObservation: { health: 35, food: 20, observedAt: new Date().toISOString() } });
+  r.bot.health = 0; r.bot.emit('death');
+  expect(r.bot.deathLifecycle!.episodeId).not.toBe(id);
+  expect(r.bot.deathLifecycle!.healthObservation).toBeUndefined();
+  expect(r.bot.deathLifecycle!.deathsToday).toBeUndefined();
+  r.recovery.dispose();
+  expect(r.bot._client.listenerCount('update_health')).toBe(0);
+});
 function rig(delay?: number) {
   vi.useFakeTimers();
   let current = true;

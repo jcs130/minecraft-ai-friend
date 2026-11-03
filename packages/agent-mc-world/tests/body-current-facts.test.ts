@@ -1,6 +1,30 @@
 import { expect, it, vi } from 'vitest';
 import { installNativeBodyReadiness } from '../core/body-readiness.ts';
+import { installDeathLifecycle } from '../core/death-lifecycle.ts';
 import { methodHarness } from './method-harness.ts';
+
+it('keeps online, health and one death episode distinct from missing respawn position', () => {
+  const r = methodHarness('1.21.1'); r.close();
+  const body = installNativeBodyReadiness(r.bot as any);
+  const recovery = installDeathLifecycle(r.bot as any, 4000, () => true);
+  try {
+    r.bot._client.emit('position', {}); r.bot.emit('physicsTick');
+    r.bot.health = 0; r.bot.emit('death'); r.bot.emit('respawn');
+    r.bot._client.emit('update_health', { health: 35, food: 20 });
+    r.bot.health = 35; r.bot.emit('spawn');
+    const facts = r.world.requestFacts()!;
+    const get = (key: string) => JSON.parse(facts.parts!.find(p => p.key === key)!.text);
+    expect(get('availability')).toMatchObject({ reason: 'body-not-ready', position: null, health: 35, food: 20 });
+    expect(get('deathLifecycle')).toMatchObject({ phase: 'alive', healthObservation: { health: 35 } });
+    expect(facts.text).toContain('不表示服务器断线');
+    expect(body.read().phase).toBe('waiting-position');
+    r.bot.emit('respawn'); // New spatial boundary invalidates the prior health observation's currentness.
+    // A later boundary at a later clock must not promote the old packet.
+    const life = (r.bot as any).deathLifecycle;
+    life.healthObservation.observedAt = new Date(body.read().boundaryAt - 1).toISOString();
+    expect(JSON.parse(r.world.requestFacts()!.parts!.find(p => p.key === 'availability')!.text).health).toBeNull();
+  } finally { body.dispose(); recovery.dispose(); }
+});
 
 it('removes stale death coordinates from current request facts while retaining the goal and terminal history', async () => {
   const r = methodHarness('1.21.1');

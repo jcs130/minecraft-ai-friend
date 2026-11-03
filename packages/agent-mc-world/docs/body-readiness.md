@@ -39,3 +39,15 @@ position restores simulation. Separate combat checks omit all physics callbacks
 and verify wall-time termination with no successful-escape claim.
 
 Current request facts and deferred snapshots also consult this observer. While the body is unready they report explicit unknown physical readings with the native phase and boundary, retain goal intent and attributed terminal history, and omit action candidates. Proximity/gesture sampling pauses rather than interpreting the old death position as current. A real landing and physics tick restores ordinary readings; no reconnect or respawn packet is fabricated.
+
+During respawn, facts retain the same death episode and its recorded daily count.
+A health packet received after this boundary is exposed separately with its
+original observation time, even if the landing is still unknown. It never grants
+physical readiness. Transport/authentication readiness remains a distinct field:
+`body-not-ready` does not mean disconnected. A later boundary invalidates the
+earlier health packet's currentness.
+
+An optional observer callback reports boundary, first position and first physics
+tick transitions. Bridge logs these with the connection generation and protocol
+state to distinguish missing input from unfinished physics. Ordinary 20 Hz ticks
+and position corrections do not generate additional log records.

@@ -8,13 +8,17 @@ export interface DeathLifecycle {
   respawnAt: string | null;
   /** A full player inventory packet received after this episode's native respawn. */
   inventorySynced?: boolean;
+  /** Authoritative health packet for this recovery, independent of spatial readiness. */
+  healthObservation?: { observedAt: string; health: number; food: number | null } | null;
+  /** Recorded once by the world death ledger, never inferred from combat reports. */
+  deathsToday?: number;
 }
 interface DeathBot {
   health: number;
   deathLifecycle?: DeathLifecycle;
   inventory?: { slots: unknown[] };
-  _client?: { on(event: string, listener: (packet: { windowId: number; items: unknown[] }) => void): unknown;
-    removeListener(event: string, listener: (packet: { windowId: number; items: unknown[] }) => void): unknown };
+  _client?: { on(event: string, listener: (packet: any) => void): unknown;
+    removeListener(event: string, listener: (packet: any) => void): unknown };
   on(event: string, listener: () => void): unknown;
   removeListener(event: string, listener: () => void): unknown;
   respawn(): void;
@@ -60,7 +64,13 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
     cancel();
     if (!current() || !dead || !bot.deathLifecycle) return;
     respawnObserved = true;
-    bot.deathLifecycle = { ...bot.deathLifecycle, inventorySynced: false };
+    bot.deathLifecycle = { ...bot.deathLifecycle, inventorySynced: false, healthObservation: null };
+  };
+  const health = (packet: { health: number; food?: number }) => {
+    if (!current() || !respawnObserved || !bot.deathLifecycle || !Number.isFinite(packet.health)) return;
+    bot.deathLifecycle = { ...bot.deathLifecycle, healthObservation: {
+      observedAt: new Date().toISOString(), health: packet.health,
+      food: Number.isFinite(packet.food) ? packet.food! : null } };
   };
   const inventory = (packet: { windowId: number; items: unknown[] }) => {
     if (!current() || !respawnObserved || !bot.deathLifecycle || packet.windowId !== 0
@@ -72,6 +82,7 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
   bot.on('death', death);
   bot.on('respawn', respawn); // Native packet precedes spawn/positive health; it already satisfies the dispatch.
   bot._client?.on('window_items', inventory);
+  bot._client?.on('update_health', health);
   bot.on('spawn', spawn);
   const detachEnd = onConnectionEnd(bot, cancel);
   return { cancel, dispose: () => {
@@ -79,6 +90,7 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
     bot.removeListener('death', death);
     bot.removeListener('respawn', respawn);
     bot._client?.removeListener('window_items', inventory);
+    bot._client?.removeListener('update_health', health);
     bot.removeListener('spawn', spawn);
     detachEnd();
   } };

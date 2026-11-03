@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.4 (unpublished candidate)
+
+- Preserve death episode identity, ledger count and independently timestamped recovery health while spatial readiness is unavailable. Distinguish an authenticated connection from missing respawn position; never promote health alone to a valid landing.
+- Log native body boundary, first position and first physics transitions without per-frame noise, to support protocol diagnosis. This does not fabricate missing packets or force a reconnect.
+
 ## 0.5.7-rc.160-preview.3
 
 - Project inventory organization previews into compact slot/count/variant views. Keep exact NBT/component identities for execution preconditions and conservation checks, rather than repeating them in model-facing results. Export the preview through SDK and extension contracts.

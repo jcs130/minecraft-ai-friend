@@ -575,7 +575,11 @@ export class Bridge {
     }
     this._bot = bot;
     let activate = () => {};
-    this.bagFor(gen).register('native-body-readiness', installNativeBodyReadiness(bot).dispose);
+    this.bagFor(gen).register('native-body-readiness', installNativeBodyReadiness(bot, (event, state) => {
+      this.opts.diag?.write({ lane: 'world', event: `native-body-${event}`,
+        msg: `原生身体边界 ${state.boundary}: ${state.phase}`,
+        data: { connectionGeneration: gen, protocolState: bot._client.state, ...state } });
+    }).dispose);
     this.bagFor(gen).register('world-identity', installWorldIdentity(bot));
     this._spawnPositionPending = true;
     this.deathRecovery = installDeathLifecycle(bot, this.opts.deathRespawnDelayMs,
