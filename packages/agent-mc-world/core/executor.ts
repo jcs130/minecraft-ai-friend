@@ -159,6 +159,7 @@ import {
 } from './receipt.ts';
 import { HANDHELD_SUFFIXES, equipDestOf } from './tools.ts';
 import { dimensionOf } from './cell-facts.ts';
+import { installNavigationBoundaryGuard, navigationBoundaryFailureOf } from './navigation-boundary.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
@@ -829,6 +830,8 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const e = findEntity(bot, call.name, 128);
       if (!e) throw new SkillBlocked(`${call.name} 在线但不在附近 128 格内`);
       const goal = new goals.GoalFollow(e, 3);
+      installNavigationBoundaryGuard(bot, ctx.diag);
+      const boundarySequence = navigationBoundaryFailureOf(bot)?.sequence ?? 0;
       const releaseWalkOnly = walkOnlyPath(bot);
       setOwnedGoal(bot, goal, 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
       try {
@@ -836,6 +839,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
         while (!ctx.aborted() && e.isValid) {
           await sleep(100);
           checkAbort(ctx);
+          const boundary = navigationBoundaryFailureOf(bot);
+          if (boundary && boundary.sequence > boundarySequence && boundary.goal === goal) {
+            throw new SkillBlocked(boundary.reason, [], 'local', 'navigation-location-changed');
+          }
           if (!e.isValid) break;
           let stopped = false;
           await ctx.checkpoint?.(async () => {

@@ -168,6 +168,37 @@ it('waits for the old path cleanup before consuming or resuming another path',as
   expect(h.bot.entity.position.x).toBeGreaterThan(resumedAt+1);
 });
 
+it('keeps route advice usable during a measured progress notice with no new landmark',async()=>{
+  const h=rig();rigs.push(h);h.bot.food=20;
+  Object.assign((h.world as any).bridge,{connectionState:{ready:true,phase:'online'}});
+  h.exec.submit([{skill:'goto',at:[256,64,0],walkOnly:true}],'append');
+  await vi.advanceTimersByTimeAsync(800);
+  const original=h.exec.status().running!.id;
+  (h.world as any).journeyTick(h.bot,[]);
+  await vi.advanceTimersByTimeAsync(6500);
+  vi.setSystemTime(Date.now()+60_000);
+  (h.world as any).journeyTick(h.bot,[]);
+  const event=h.host.events.find(e=>(e.meta?.journey as any)?.reason==='progress');
+  expect(event).toBeTruthy();
+  expect((event!.meta!.journey as any).observations).toEqual([]);
+  const request=vi.fn(async()=>{
+    await vi.advanceTimersByTimeAsync(500);
+    return {answers:{action:{choice:'continue',confidence:.9,probabilities:{continue:.9,inspect:.08,_inspect:.02}}}};
+  });
+  Object.assign(h.host,{decisions:{request}});
+  const here=h.bot.entity.position.clone();
+  const tool=createMinecraftChoiceTool(()=>h.host,()=>h.world.requestFacts());
+  const raw=await tool.handler({category:'route',goal:'根据当前进度决定是否继续',candidates:[
+    {id:'continue',label:'继续原路',evidence:'当前goto在推进',ready:true},
+    {id:'inspect',label:'核对沿路',evidence:'当前旅途进度可读',ready:true},
+  ]},{role:'test',log:h.host.log});
+  const result=JSON.parse(typeof raw==='string'?raw:raw.text);
+  expect(result.status).toBe('advice');
+  expect(h.bot.entity.position.distanceTo(here)).toBeGreaterThan(1);
+  expect(h.exec.status().running?.id).toBe(original);
+  expect(h.exec.status().waiting).toHaveLength(0);
+});
+
 it('a journey encounter wakes the host without stopping travel; an explicitly chosen detour resumes the same destination',async()=>{
   const h=rig();rigs.push(h);h.bot.food=20;
   h.exec.submit([{skill:'goto',at:[128,64,0],walkOnly:true}],'append');
