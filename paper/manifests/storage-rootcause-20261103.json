@@ -1,8 +1,7 @@
 {
   "id": "storage-rootcause-20261103-r1",
-  "state": "candidate-verified-game-not-deployed",
+  "state": "deployed-and-verified-with-open-acceptance",
   "document": "paper/docs/STATE_STORAGE_20261103.md",
-  "runtimeStill": "AgentFriend 0.4.47.51-rpg",
   "candidate": {
     "version": "0.4.47.52-rpg",
     "sha256": "0dc196397e20f56dda53adebc6b76ba0c8e48d066af34f701e967f4bd8bc69cc",
@@ -51,7 +50,7 @@
     "freshSnapshotComplete": true
   },
   "maintenance": {
-    "newRestartApproved": false,
+    "newRestartApproved": true,
     "candidateAndCodeRollbackVerifiedOnEAndF": true,
     "requiresFreshColdBackup": true,
     "preserveVerifiedExistingTwoOfThreeCheckpoint": true,
@@ -60,9 +59,60 @@
     "replayConsumedMaintenance": false
   },
   "open": [
-    "New game restart approval and maintenance",
-    "Long-term natural reader workload observation",
-    "Historical file-locking PID is unproven"
+    "Natural long-term storage workload",
+    "Historical file-locking PID is not proven",
+    "No physical power-cut test"
   ],
-  "rollback": "Never load an older config snapshot over newer accepted state. Publish and verify pending records before downgrading code."
+  "rollback": "Never load an older config snapshot over newer accepted state. Publish and verify pending records before downgrading code.",
+  "verifiedAt": "2026-11-03T23:22:09.566286+08:00",
+  "liveGame": {
+    "AgentFriend": "0.4.47.52-rpg",
+    "gameRestartedInThisRepair": true
+  },
+  "deployment": {
+    "passed": true,
+    "at": "2026-11-03T23:22:09.566286+08:00",
+    "sourceCommit": "7b938561c1f532af1e75e41c92a0fa4c5cbd18d6",
+    "formalStartupChecks": 27,
+    "liveStoreChecks": 6,
+    "coldInstallationCharacterFilesPreserved": 800,
+    "originalCredentialRowsPreserved": 75,
+    "originalNativeJobsRestored": 7,
+    "legacyMetadataOnly": "verified original run storageFault=true",
+    "legacyOriginalFieldsPreservedBeforeStartup": 14,
+    "savedRoomsPreserved": 2,
+    "gameJvmExitConfirmedBeforeColdBackup": true,
+    "dualDiskColdBackupVerified": true,
+    "maintenanceRewardEdits": 0,
+    "stateStore": {
+      "cleanupPending": false,
+      "projectionPending": false,
+      "publishedRevision": 0,
+      "durableRevision": 0,
+      "commitUnknown": false,
+      "lastMirrorError": ""
+    },
+    "readModelAuthoritativeRevisionVerified": true,
+    "camera": {
+      "ready": true,
+      "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+      "fpsObserved": 30,
+      "modelCatalogueSize": 40,
+      "privateGiBObserved": 2.1
+    },
+    "websiteHttps": 200,
+    "oneShotEntryConsumed": true,
+    "openAcceptance": [
+      "Natural long-term storage workload",
+      "Historical file-locking PID is not proven",
+      "No physical power-cut test"
+    ],
+    "initialPostflightAssertionCorrection": {
+      "failureRetained": true,
+      "cause": "Version zero before the first new save is a valid initialized baseline, not a storage failure",
+      "readOnlyVerifierCorrected": true,
+      "additionalGameRestart": false
+    }
+  },
+  "previousRuntime": "AgentFriend 0.4.47.51-rpg"
 }
