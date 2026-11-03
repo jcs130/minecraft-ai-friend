@@ -1,3 +1,7 @@
+## 0.5.7-rc.157-preview.1 (unpublished candidate)
+
+- Keep the native map identity in sites, rays and voxel receipts, including the compact readout prefix. Distinguish equal coordinates in different maps sharing the same dimension type; missing map identities remain unknown.
+
 ## 0.5.7-rc.153
 
 - Pin Zod 4.6.6 to include the oversized-collection validation memory fix (GHSA-mrhx-c7xc-m3w5).

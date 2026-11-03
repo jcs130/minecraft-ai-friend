@@ -6,6 +6,9 @@ export interface SpatialReadout {
   protocol: 'agent-mc-spatial-read/v1';
   historical: false;
   kind: 'voxels' | 'sites' | 'rays';
+  /** Native map key, never inferred from dimension type. Null for legacy/unknown receipts. */
+  worldKey: string | null;
+  dimensionType: string | null;
   selection: string;
   revision: string;
   scanComplete: boolean | null;
@@ -35,6 +38,11 @@ export function spatialReadout(data: Record<string, unknown>): SpatialReadout | 
   const coverage = record(data.coverage) ? data.coverage : {};
   const frame = record(data.frame) ? data.frame : {};
   const kind = data.kind as SpatialReadout['kind'];
+  const world = record(data.world) && data.world.schema === 'agent-mc-world-identity/v1' ? data.world : null;
+  const worldKey = world && ['vanilla-login', 'vanilla-respawn'].includes(String(world.source))
+    && typeof world.key === 'string' && world.key.length > 0 && world.key.length <= 256
+    && !/[\s\u0000-\u001f\u007f]/.test(world.key) ? world.key : null;
+  const dimensionType = typeof data.dimension === 'string' && data.dimension.length > 0 ? data.dimension : null;
   const remainingCount = count(coverage.remainingCount);
   const scanComplete = typeof coverage.coverageComplete === 'boolean' ? coverage.coverageComplete
     : remainingCount === null ? null : remainingCount === 0;
@@ -44,12 +52,14 @@ export function spatialReadout(data: Record<string, unknown>): SpatialReadout | 
     : kind === 'sites' ? count(coverage.unknownTargets) : null;
   const content = Object.fromEntries(Object.entries(data).filter(([key]) =>
     !['observedAt', 'observed_at', 'next', 'next_cursor', 'next_safe_read', 'readout'].includes(key)));
-  const selection = { kind, format: data.format ?? null, dimension: data.dimension ?? null,
+  // A repeated native identity packet is provenance, not a changed spatial sample.
+  if (world) content.world = Object.fromEntries(Object.entries(world).filter(([key]) => !['observedAt', 'source'].includes(key)));
+  const selection = { kind, format: data.format ?? null, dimension: data.dimension ?? null, worldKey,
     origin: coverage.origin ?? frame.feet ?? null, bounds: data.bounds ?? coverage.requestedBounds ?? null,
     sites: Array.isArray(data.sites) ? data.sites.map(site => record(site) ? site.at : null) : null,
     rays: Array.isArray(data.rays) ? data.rays.map(ray => record(ray) ? [ray.pitchDeg, ray.yawDeg, ray.range] : null) : null };
   return {
-    protocol: 'agent-mc-spatial-read/v1', historical: false, kind,
+    protocol: 'agent-mc-spatial-read/v1', historical: false, kind, worldKey, dimensionType,
     selection: hash(selection), revision: hash(content), scanComplete,
     knownComplete: typeof data.complete === 'boolean' ? data.complete : null,
     remainingCount, unknownCount, unknownUnit: kind === 'voxels' ? 'cells' : kind === 'sites' ? 'sites' : null,
