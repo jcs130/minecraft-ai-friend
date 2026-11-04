@@ -16,7 +16,9 @@ export interface EngineInit {
   botName: string;
   /** 账本目录 data/;null = 只在内存 */
   dataDir: string | null;
-  extension?: import('./world.ts').MinecraftWorldOptions['extension'];
+  extension?: Omit<NonNullable<import('./world.ts').MinecraftWorldOptions['extension']>, 'tools'> & {
+    tools: ReadonlyArray<Omit<import('./support/host-contract.ts').ToolDef, 'handler' | 'readOnlyCall'>>;
+  };
   cfg: MinecraftConfigSection;
 }
 

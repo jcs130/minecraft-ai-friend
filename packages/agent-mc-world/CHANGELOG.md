@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.6
+
+- Keep executable per-call read predicates in the parent process and send only serializable extension descriptors to the engine child. Exercise the real child channel through SDK/MCP.
+
 ## 0.5.7-rc.160-preview.5 (unpublished candidate)
 
 - Expose strict per-call read classification for combat tactic, battlefield, decision and report queries across SDK, IPC and Java clients. Mixed read/update requests remain mutations; hosts can permit evidence collection alongside a body-owning worker without granting tactic writes.
