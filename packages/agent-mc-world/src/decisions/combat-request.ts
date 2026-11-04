@@ -43,7 +43,7 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     options[`option_${index}`] = action;
   });
   const questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string,string> }> = {
-    tactic: { type:'choice', instructions:'Choose for survival or confirmed allies; keep an effective action. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
+    tactic: { type:'choice', instructions:'Choose for survival, confirmed allies, or a short safe idle stroll when offered; keep an effective action. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
       + (frame.policy ? '\nAgent tactic: '+frame.policy.instructions : ''), criteria },
   };
   for(const [key,indices]of Object.entries(combatChoiceBindings(frame,config.compatible))){

@@ -1,7 +1,25 @@
 import { EventEmitter } from 'node:events';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { methodHarness } from './method-harness.ts';
 import { TacticalMinecraftWorld } from '../core/tactical-world.ts';
+
+it('publishes fresh body state independently of planning without creating game work',()=>{
+ vi.useFakeTimers();vi.setSystemTime(100000);
+ const world:any=Object.create(TacticalMinecraftWorld.prototype),records:any[]=[],logs:any[]=[];
+ let running:any=null;
+ Object.assign(world,{bridge:{bot:{currentWindow:null}},executor:{status:()=>({running,waiting:[],hold:null})},
+  connectionGeneration:1,publishAgentActivity:(r:any)=>records.push(r),diag:{write:(r:any)=>logs.push(r)}});
+ try{
+  world.publishBodyStatus();expect(records[0]).toMatchObject({id:'current-body',status:'unknown',title:'身体：空闲，等待任务'});
+  vi.advanceTimersByTime(4000);world.publishBodyStatus();expect(records[1].at).toBe(records[0].at);
+  expect(Date.parse(records[1].result.expiresAt)-Date.now()).toBe(6000);
+  running={id:14,skill:'attack',step:'攻击溺尸',stepIndex:0,stepCount:1};world.publishBodyStatus();
+  expect(records.at(-1)).toMatchObject({source:'unknown',status:'running',title:'身体：接近并攻击'});
+  expect(records.at(-1).at).not.toBe(records[0].at);expect(logs.at(-1).event).toBe('body-status');
+  running={id:15,skill:'chat',step:'说: /login private-token',stepIndex:0,stepCount:1};world.publishBodyStatus();
+  expect(JSON.stringify(records)).not.toContain('private-token');expect(JSON.stringify(logs)).not.toContain('private-token');
+ }finally{vi.useRealTimers();}
+});
 
 it('reports trusted caller attribution for queued tasks without treating admission as movement or exposing chat', async () => {
   const h = methodHarness(), events: unknown[] = [];

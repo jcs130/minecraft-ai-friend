@@ -6,6 +6,8 @@ import com.mojang.datafixers.util.Pair;
 import java.util.*;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import org.afuhome.eye.EyePairs;
 import org.bukkit.Bukkit;
@@ -24,6 +26,8 @@ final class EyeInventoryMirror implements Listener {
     private final Map<UUID, State> states = new HashMap<>();
     private record Replica(UUID target, int sourceId, Inventory inventory, int stateId, int offersSignature) {}
     private final Map<UUID, Replica> merchants = new HashMap<>();
+    private record StashReplica(UUID target, AbstractContainerMenu source, Inventory inventory, int stateId, int contentsSignature) {}
+    private final Map<UUID, StashReplica> stashes = new HashMap<>();
     private final Set<UUID> openingMerchants = new HashSet<>();
     private volatile Set<UUID> attached = Set.of();
     EyeInventoryMirror(CortiEyeMirrorPlugin plugin, ProtocolManager protocol) {
@@ -58,7 +62,7 @@ final class EyeInventoryMirror implements Listener {
         }
         attached = Set.copyOf(subjects.keySet());
         for (UUID id : new ArrayList<>(states.keySet())) if (!subjects.containsKey(id)) {
-            states.remove(id); merchants.remove(id); Player eye = Bukkit.getPlayer(id);
+            states.remove(id); merchants.remove(id); stashes.remove(id); Player eye = Bukkit.getPlayer(id);
             if (eye != null) { eye.closeInventory(); snapshot(eye, eye); }
         }
         for (var entry : subjects.entrySet()) {
@@ -71,6 +75,7 @@ final class EyeInventoryMirror implements Listener {
             State previous = states.put(entry.getKey(), next);
             if (previous != null && (!previous.target.equals(next.target) || !previous.world.equals(next.world)))
                 eye.closeInventory();
+            mirrorStash(eye, target);
             mirrorMerchant(eye, target);
             if (next.equals(previous)) continue;
             boolean changedSubject = previous == null || !previous.target.equals(next.target) || !previous.world.equals(next.world)
@@ -80,12 +85,51 @@ final class EyeInventoryMirror implements Listener {
             if (previous == null || !previous.target.equals(next.target) || !previous.world.equals(next.world)) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (!CortiEyeMirrorPlugin.isAttached(target, eye)
-                            || target.getOpenInventory().getType() == org.bukkit.event.inventory.InventoryType.CRAFTING) return;
+                            || target.getOpenInventory().getType() == org.bukkit.event.inventory.InventoryType.CRAFTING
+                            || stashes.containsKey(eye.getUniqueId())) return;
                     if (Bukkit.getPluginManager().getPlugin("SpectatorPlus") instanceof com.hpfxd.spectatorplus.paper.SpectatorPlugin spectator)
                         spectator.getSyncController().getScreenSyncHandler().onPlayerOpenInventory(target);
                 });
             }
         }
+    }
+    private void mirrorStash(Player eye, Player target) {
+        UUID id = eye.getUniqueId();
+        var targetHandle = ((CraftPlayer) target).getHandle();
+        AbstractContainerMenu source = targetHandle.containerMenu;
+        StashReplica previous = stashes.get(id);
+        if (previous == null || !previous.target().equals(target.getUniqueId()) || previous.source() != source) {
+            closeStash(eye);
+            if (source == targetHandle.inventoryMenu || source.containerId <= 0 || source.slots.size() != 90 || !personalStash(target)) return;
+            if (source.getType() != MenuType.GENERIC_9x6) return;
+            if (Bukkit.getPluginManager().getPlugin("SpectatorPlus") instanceof com.hpfxd.spectatorplus.paper.SpectatorPlugin spectator
+                    && spectator.getSyncController().getScreenSyncHandler().isViewingSyncedScreen(eye)) return;
+            Inventory inventory = Bukkit.createInventory(null, 54, target.getOpenInventory().getTitle());
+            if (eye.openInventory(inventory) == null || eye.getOpenInventory().getTopInventory() != inventory) return;
+            previous = new StashReplica(target.getUniqueId(), source, inventory, -1, 0);
+            stashes.put(id, previous);
+        }
+        if (eye.getOpenInventory().getTopInventory() != previous.inventory()) return;
+        var replica = ((CraftPlayer) eye).getHandle().containerMenu;
+        var items = source.getItems();
+        if (replica.slots.size() != items.size()) return;
+        var targetView = target.getOpenInventory();
+        int signature = Objects.hash(Arrays.hashCode(targetView.getTopInventory().getContents()),
+                Arrays.hashCode(targetView.getBottomInventory().getContents()), targetView.getCursor());
+        if (previous.stateId() == source.getStateId() && previous.contentsSignature() == signature) return;
+        send(eye, PacketType.Play.Server.WINDOW_ITEMS, new ClientboundContainerSetContentPacket(
+                replica.containerId, replica.getStateId(), items, source.getCarried()));
+        stashes.put(id, new StashReplica(previous.target(), source, previous.inventory(), source.getStateId(), signature));
+    }
+    private boolean personalStash(Player target) {
+        var agentFriend = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (agentFriend == null || !agentFriend.isEnabled()) return false;
+        try { return (int) agentFriend.getClass().getMethod("nativeViewerStashPage", Player.class).invoke(agentFriend, target) > 0; }
+        catch (ReflectiveOperationException unavailable) { return false; }
+    }
+    private void closeStash(Player eye) {
+        var stash = stashes.remove(eye.getUniqueId());
+        if (stash != null && eye.getOpenInventory().getTopInventory() == stash.inventory()) eye.closeInventory();
     }
     private void mirrorMerchant(Player eye, Player target) {
         UUID id = eye.getUniqueId(); Replica previous = merchants.get(id);
@@ -125,15 +169,24 @@ final class EyeInventoryMirror implements Listener {
         Replica replica = merchants.get(player.getUniqueId());
         return replica != null && player.getOpenInventory().getTopInventory() == replica.inventory;
     }
+    private boolean readOnlyReplica(Player player) {
+        StashReplica replica = stashes.get(player.getUniqueId());
+        if (replica == null || player.getOpenInventory().getTopInventory() != replica.inventory()) return replica(player);
+        // A rejected click can make vanilla resend the empty server-side placeholder.
+        stashes.put(player.getUniqueId(), new StashReplica(replica.target(), replica.source(), replica.inventory(), -1, 0));
+        return true;
+    }
     @EventHandler(priority = EventPriority.HIGHEST)
     public void click(InventoryClickEvent event) {
-        if (event.getWhoClicked() instanceof Player player && replica(player)) event.setCancelled(true);
+        if (event.getWhoClicked() instanceof Player player && readOnlyReplica(player)) event.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.HIGHEST)
     public void drag(InventoryDragEvent event) {
-        if (event.getWhoClicked() instanceof Player player && replica(player)) event.setCancelled(true);
+        if (event.getWhoClicked() instanceof Player player && readOnlyReplica(player)) event.setCancelled(true);
     }
-    @EventHandler public void quit(PlayerQuitEvent event) { merchants.remove(event.getPlayer().getUniqueId()); }
+    @EventHandler public void quit(PlayerQuitEvent event) {
+        merchants.remove(event.getPlayer().getUniqueId()); stashes.remove(event.getPlayer().getUniqueId());
+    }
     private void send(Player eye, PacketType type, Object packet) {
         protocol.sendServerPacket(eye, new PacketContainer(type, packet), false);
     }
@@ -162,8 +215,9 @@ final class EyeInventoryMirror implements Listener {
     }
     void stop() {
         attached = Set.of();
-        for (UUID id : states.keySet()) { Player eye = Bukkit.getPlayer(id); if (eye != null) snapshot(eye, eye); }
+        for (UUID id : states.keySet()) { Player eye = Bukkit.getPlayer(id); if (eye != null) { closeStash(eye); snapshot(eye, eye); } }
         states.clear();
         merchants.clear();
+        stashes.clear();
     }
 }

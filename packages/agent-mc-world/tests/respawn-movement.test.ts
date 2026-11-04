@@ -187,9 +187,9 @@ it.each([
   expect(r.bridge.invSynced).toBe(true);
   expect(r.texts().some(text => /少了.*橡木原木|少了.*oak_log/.test(text))).toBe(true);
   expect(r.texts().some(text => text.includes('饥饿 14/20'))).toBe(true);
-  if (lateBiome) expect(r.texts().some(text => text.includes('所在的群系是'))).toBe(true);
+  if (lateBiome) expect(r.texts().some(text => text.includes('当前生物群系：'))).toBe(true);
   r.bot.biomeName = 'desert'; r.walk(129);
-  expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
+  expect(r.texts().some(text => text.includes('当前生物群系：沙漠'))).toBe(true);
   expect(r.texts().some(text => text.includes('走了 8 格'))).toBe(true);
 });
 
@@ -198,7 +198,7 @@ it('rebases a dimension landing biome but preserves the next actual crossing', (
   r.bot.biomeName = 'forest'; r.health(20); r.position(121); r.world.reportWorldDelta();
   expect(r.texts().some(text => text.includes('走进了'))).toBe(false);
   r.bot.biomeName = 'desert'; r.walk(129);
-  expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
+  expect(r.texts().some(text => text.includes('当前生物群系：沙漠'))).toBe(true);
 });
 
 it('captures the loaded landing biome with a native Vec3 before the next world delta', () => {
@@ -208,7 +208,7 @@ it('captures the loaded landing biome with a native Vec3 before the next world d
   // The bot crosses again before health or the periodic delta samples the landing.
   r.bot.biomeName = 'desert'; r.bot.entity.position.x = 129;
   r.full(); r.health(20);
-  expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
+  expect(r.texts().some(text => text.includes('当前生物群系：沙漠'))).toBe(true);
   expect(r.texts().some(text => text.includes('走了 8 格'))).toBe(true);
 });
 

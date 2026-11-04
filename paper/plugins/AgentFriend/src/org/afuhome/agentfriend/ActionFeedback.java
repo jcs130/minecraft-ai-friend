@@ -123,7 +123,10 @@ final class ActionFeedback {
                 case "entry_not_generated" -> a("入口所在区块尚未生成；未传送、未扣魔力。", "请联系服主检查地图与入口配置；不要凿墙绕路或反复重试。", dungeon);
                 case "travel_denied" -> a("传送的魔力、技能或保护条件不满足。", "先 /mycli status 查魔力，再用 " + dungeon + " 核对入口；持续拒绝请联系服主。", "/mycli status", dungeon);
                 case "player_state_changed" -> a("准备传送时角色移动或活动状态改变。", "先确认已结束其他活动；站稳后只提交一次 travel，并等最终结果。", "/mycli dungeon status");
-                case "unknown_dungeon", "unknown_difficulty" -> a("地下城ID或难度无效。", "从 /mycli dungeon list 复制ID；难度填 normal、adventure 或 apocalypse，再 start。", "/mycli dungeon list");
+                case "unknown_dungeon" -> "arena".equals(id)
+                    ? a("arena 是试炼塔的命令入口。", "查试炼塔用 /mycli arena status --json。要查遗迹远征，先用 /mycli dungeon list --json 选 items[].id。", "/mycli arena status --json", "/mycli dungeon list --json")
+                    : a("找不到这个遗迹或楼层ID。", "从目录的 items[].id 复制地点ID，再用 /mycli dungeon status <ID> --json；run 是本次场次编号。", "/mycli dungeon list --json");
+                case "unknown_difficulty" -> a("地下城难度无效。", "选择 normal、adventure 或 apocalypse，再 start。", "/mycli dungeon list");
                 default -> fallback(reason, dungeon);
             };
             case "economy" -> switch (reason) {

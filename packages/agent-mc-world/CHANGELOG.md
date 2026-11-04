@@ -1,3 +1,16 @@
+## 0.5.7-rc.160-preview.14 (unpublished candidate)
+
+- Explicit host-selected engagement can approach visible targets within 32 blocks without expanding passive automatic engagement. Preserve the selected target while approaching, weapon checks and scene cancellation.
+- Offer a cancellable two-to-three-block idle stroll through the existing decision/body controller on verified flat ground. Do not offer it during work, interaction or nearby hostile presence; recheck danger and ground during movement.
+- Publish current body phase with stable elapsed time and expiring freshness to public viewers independently of model activity. These display records neither add prompt context nor report task completion.
+
+## 0.5.7-rc.160-preview.13 (unpublished candidate)
+
+- Require actual fire/lava contact before environment rescue takes the body away from combat; residual burning near an unrelated hazard no longer repeatedly cancels combat or eating.
+- Expose independent retaliation and navigation jump policy through the existing SDK/MCP policy tool. Default to full, level one-cell gap jumps, with explicit off/native alternatives and unchanged collision/landing guards.
+- Label biome telemetry as terrain classification, not an asserted named venue or movement.
+- Includes preview.12 ranged target ownership, acquisition and decision-label fixes.
+
 ## 0.5.7-rc.160-preview.11 (unpublished candidate)
 
 - Return a bounded first page from oversized solid-box probes instead of discarding the entire observation. Partial receipts keep real matches, unknown cells, exact unread regions and explicit absolute-coordinate follow-up calls; no automatic continuation or relaxed write limits.

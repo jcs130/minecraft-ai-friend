@@ -29,6 +29,7 @@ export const IDLE_ACTIONS = [
   { id: 'wave', label: '空手挥一下', category: 'pose' },
   { id: 'wave_twice', label: '空手挥两下', category: 'pose' },
   { id: 'inventory_preview', label: '短暂查看背包', category: 'interface' },
+  { id: 'wander', label: '在已核验的平地闲逛两三步', category: 'move' },
   { id: 'short_walk', label: '沿眼前平地走一小步', category: 'move' },
 ] as const;
 
@@ -39,6 +40,7 @@ interface SceneState extends Record<string, unknown> {
   origin: Point;
   targets: Partial<Record<IdleActionId, Target>>;
   movement?: { origin: Point; destination: Point };
+  wander?: { origin: Point; destination: Point };
 }
 
 const ANIMALS = new Set(['allay', 'armadillo', 'axolotl', 'bat', 'bee', 'camel', 'cat', 'chicken',
@@ -118,6 +120,13 @@ export function corridorSafe(bot: Bot, from: Point, to: Point): boolean {
   return true;
 }
 
+/** Bounded known-ground stroll; never digs, places, jumps, trades or enters unknown terrain. */
+export function wanderSafe(bot: Bot, from: Point, to: Point): boolean {
+  if (distance(from, to) > 2.5) return false;
+  const middle = { x: (from.x + to.x) / 2, y: from.y, z: (from.z + to.z) / 2 };
+  return corridorSafe(bot, from, middle) && corridorSafe(bot, middle, to);
+}
+
 /** Targets contain only loaded observations; unavailable actions are absent from candidates. */
 export function sampleIdleActions(bot: Bot, options: {
   allowMovement: boolean; preferredPlayer?: string; ignorePlayer?: (name: string) => boolean;
@@ -169,6 +178,11 @@ export function sampleIdleActions(bot: Bot, options: {
     if (corridorSafe(bot, origin, destination)) {
       state.movement = { origin, destination };
       allowed.add('short_walk');
+    }
+    for (const angle of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+      const yaw = bot.entity.yaw + angle;
+      const to = { x: origin.x - Math.sin(yaw) * 2.4, y: origin.y, z: origin.z - Math.cos(yaw) * 2.4 };
+      if (wanderSafe(bot, origin, to)) { state.wander = { origin, destination: to }; allowed.add('wander'); break; }
     }
   }
   return { state, candidates: IDLE_ACTIONS.filter(action => allowed.has(action.id)).map(({ id, label }) => {
@@ -259,6 +273,22 @@ export async function executeIdleAction(bot: Bot, id: string, sceneState: Record
         await wait(FRAME_MS);
       }
       return;
+    }
+    if (id === 'wander') {
+      const movement = (sceneState as SceneState).wander;
+      if (!movement || distance(bot.entity.position, movement.origin) > 0.2
+        || !wanderSafe(bot, movement.origin, movement.destination)) return;
+      const yaw = Math.atan2(-(movement.destination.x - movement.origin.x), -(movement.destination.z - movement.origin.z));
+      await turn(yaw, original.pitch);
+      for (let i = 0; i < 30; i++) {
+        check();
+        const here = bot.entity.position, remaining = distance(here, movement.destination);
+        if (remaining < 0.25 || distance(here, movement.origin) > 2.5 || Math.abs(yawDelta(bot.entity.yaw, yaw)) > 0.08) break;
+        const ahead = { x: here.x - Math.sin(yaw), y: here.y, z: here.z - Math.cos(yaw) };
+        if (!corridorSafe(bot, here, ahead)) break;
+        enable('forward'); await wait(FRAME_MS);
+      }
+      release('forward'); return;
     }
     if (id === 'short_walk') {
       const movement = (sceneState as SceneState).movement;

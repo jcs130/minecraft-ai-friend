@@ -6867,7 +6867,7 @@ export class Reflexes {
     bot.on('death', this.deathHandler as never);
   }
 
-  /** 着火时检测火源的半径；范围内仍有火源则继续脱离。 */
+  /** 伤害诊断的附近火源半径；仅用于描述，不证明身体仍在接触火源。 */
   private static readonly ON_FIRE_HAZARD_R = 3;
   /** 找逃生落脚格的扫描半径 */
   private static readonly ESCAPE_SCAN_R = 4;
@@ -6879,7 +6879,7 @@ export class Reflexes {
   private static readonly LAVA_BOUT_GAP_MS = 30_000;
 
   /**
-   * 连续满 600ms 没有危险接触(着火时连 ON_FIRE_HAZARD_R 内的火源也没有)才结算 lava-clear，
+   * 连续满 600ms 没有危险接触才结算 lava-clear，
    * 期间不交还执行权。600ms 约三次心跳，用于过滤危险边缘的采样抖动。
    */
   private static readonly LAVA_CLEAR_DWELL_MS = 600;
@@ -6908,12 +6908,12 @@ export class Reflexes {
   /**
    * 挨烧就跑。触发口径是"碰撞箱压着烧人的方块",不是"脚下那格是岩浆"——贴着岩浆池
    * 边缘走的时候人已经在掉血,而中心格还是空气,这是真机上最常见的中招方式;流动
-   * 岩浆柱蹭到身上同理。身上着火且火源还在近处也算,那说明刚蹭进去、下一跳还会挨。
+   * 岩浆柱蹭到身上同理。被火球点燃或离开火源后继续燃烧，不证明仍在接触附近火源。
+   * 否则火球每次命中都会取消战斗和进食，反复逃离一个并未接触的火源。
    */
   private async antiLava(bot: Bot): Promise<void> {
     const touch = hazardTouch(bot);
-    const hazard = touch.touching
-      ?? (touch.onFire ? nearestHazard(bot, Reflexes.ON_FIRE_HAZARD_R) : null);
+    const hazard = touch.touching;
     if (hazard === null) {
       // 灭火不等驻留窗口结算
       if (this.lavaEscape !== null || this.burning !== null) this.extinguish(bot, touch.onFire);
@@ -6923,9 +6923,9 @@ export class Reflexes {
     const now = Date.now();
     const p = bot.entity.position;
     if (this.lavaEscape === null) {
-      this.beginEnvironment('逃离岩浆');
+      this.beginEnvironment(`逃离${zhName(hazard.name)}`);
       // 正在飞的寻路多半就是把人送进来的那条;先撤掉,免得它把人拽回去
-      dropGoal(bot, 'escape', '踩进岩浆,撤掉正在飞的那条路', this.opts.diag);
+      dropGoal(bot, 'escape', `接触${zhName(hazard.name)},撤掉正在飞的那条路`, this.opts.diag);
       this.escapeGoal = null;
       this.lavaEscape = {
         startedAt: now, handedOff: false, reported: false, clearSince: null, cell: null, dashFrom: null,
@@ -7363,7 +7363,7 @@ export class Reflexes {
       });
     }
     // 着火不靠冻结队列来救;人在水里也站不出干燥落脚。两种情况都当场交还,其余按稳定落脚窗口。
-    if (stillOnFire) this.releaseEnvironmentHoldNow(bot, '离开了岩浆,身上还着着火,灭火不冻结队列');
+    if (stillOnFire) this.releaseEnvironmentHoldNow(bot, '已脱离火源接触,身上还着着火,灭火不冻结队列');
     else if (bodyInWater(bot)) this.releaseEnvironmentHoldNow(bot, '火灭了,人在水里(不等干燥落脚)');
   }
 
@@ -7887,7 +7887,7 @@ export class Reflexes {
         loaded: !!attacker?.isValid, attacker: actor.name, health: bot.health } });
     // 战斗会话在场就归它:反击、血线撤退、退出闸门都是它的(反射这套 10 秒挥两下
     // 保留为 combat.enabled 关掉时的降级行为)
-    if (this.opts.combatHurt?.(actor.id, actor.name)) return;
+    if (this.opts.fightBack() && this.opts.combatHurt?.(actor.id, actor.name)) return;
     const bleedingOut = (bot.health ?? 20) < this.opts.fleeHealth();
     if (!this.opts.fightBack() && !bleedingOut) return;
     // Identity is not visibility or reachability: the degraded melee loop never
