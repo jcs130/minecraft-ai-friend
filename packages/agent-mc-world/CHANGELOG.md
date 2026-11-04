@@ -1,3 +1,12 @@
+## 0.5.7-rc.160-preview.9 (unpublished candidate)
+
+- Select an existing workstation with a confirmed walking route before trying closer stations behind floors or walls. Use the same interaction reach for route probes and execution, preserving unknown routes, cancellation, native inventory confirmation and movement ownership.
+- Use workstations already within interaction reach without demanding an unnecessary two-block landing. Keep route planning bounded and restore movement settings after each attempt.
+
+## 0.5.7-rc.160-preview.8 (unpublished candidate)
+
+- Separate pre-authentication proxy health from genuine game death recovery so login zero-health packets do not hide a synchronized inventory.
+
 ## 0.5.7-rc.160-preview.7 (unpublished candidate)
 
 - Correct Java 1.21.1 inline armor trim and food component layouts so a single customized item cannot shift every following inventory slot. Preserve protocol-specific 1.20.6, 1.21.3 and 1.21.4 compatibility.
