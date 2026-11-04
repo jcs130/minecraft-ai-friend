@@ -54,6 +54,7 @@ import { itemsInReach } from './inventory.ts';
 import { RISKY_FOODS } from './nutrition.ts';
 import {
   RANGED_EXIT_RANGE,
+  RANGED_ENTER_RANGE,
   inKiteRange,
   type BowEvent,
   type BowShotResult,
@@ -466,9 +467,11 @@ export class CombatSession {
       || Date.now() < this.capCooldownUntil
       || (!t.arena && Date.now() < this.cooldownUntil)
       || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)) return [];
-    // Use the same bounded pursuit pool as fighting ticks. The old narrower
-    // acquisition radius offered only non-attacking observation at 6–10 blocks.
-    return this.scan(bot, t).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
+    // Match the actual controller's usable ranged pool. Previously a loaded bow
+    // could shoot these targets after injury, but the chooser could only wait
+    // or retreat when the same visible targets were outside melee pursuit.
+    const range = this.rangedReady(bot) ? Math.max(t.chaseMax + 4, RANGED_ENTER_RANGE) : t.chaseMax + 4;
+    return this.scan(bot, t, range).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
   }
 
   /** Tracking must use the same provocation, visibility and admission rules as react(). */
@@ -541,7 +544,12 @@ export class CombatSession {
     } else if (!this.fighting && !this.engage(foe.name ?? '', false)) return false;
     if (this.fighting) {
       if (this.targetId !== action.targetId) {
-        this.cancelRanged(); this.tacticalMove = null;
+        this.cancelRanged();
+        // Cancellation invalidates the old shot lease, not the entire new
+        // fight. Without a fresh owner, tryRanged silently returned forever
+        // after every fast-decision engagement (including idle -> engage).
+        this.rangedOwner = {};
+        this.tacticalMove = null;
         if (this.pathing) dropOwnedGoal(bot, 'combat', '切换已选择目标', this.opts.diag);
         this.pathing = false; this.release(bot);
       }
@@ -944,19 +952,25 @@ export class CombatSession {
 
   /**
    * 退出判据和剩余敌人数只统计常规半径内或已交手的目标。
-   * 可用远程武器扩大的扫描半径不扩大退出范围。
+   * 扩大的扫描半径本身不扩大退出范围；明确选择且身份仍匹配的可见目标
+   * 须保留，否则会刚受理就误判附近无怪。
    */
   private exitFoes(foes: Foe[], t: CombatTuning): Foe[] {
     const near = t.chaseMax + 4;
-    return foes.filter((f) => f.flat <= near || this.provoked.has(f.id));
+    return foes.filter((f) => f.flat <= near || this.provoked.has(f.id) || this.isSelectedTarget(f));
+  }
+
+  private isSelectedTarget(foe: Foe): boolean {
+    const selected = this.selectedTarget;
+    return !!selected && foe.id === selected.id && foe.visible
+      && (selected.uuid === null ? this.bot?.entities[foe.id] === selected.entity
+        : this.bot?.entities[foe.id]?.uuid === selected.uuid);
   }
 
   /** An admitted explicit target stays selected while present and visible. */
   private pick(foes: Foe[]): Foe | null {
     const pool = foes.filter((f) => !NO_FIGHT.has(f.name));
-    const selected = this.selectedTarget && pool.find(f => f.id === this.selectedTarget!.id && f.visible
-      && (this.selectedTarget!.uuid === null ? this.bot?.entities[f.id] === this.selectedTarget!.entity
-        : this.bot?.entities[f.id]?.uuid === this.selectedTarget!.uuid));
+    const selected = pool.find(f => this.isSelectedTarget(f));
     if (selected) { this.targetId = selected.id; return selected; }
     this.selectedTarget = null;
     if (pool.length === 0) return null;

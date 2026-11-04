@@ -26,7 +26,11 @@ export function describeCombatDecision(event: string, data: Record<string,unknow
   if(event==='requested'){phase='requested';label='候选待决策';}
   else if(event==='observation'||event==='observed'){phase='observed';label='后续采样，效果待核对';}
   else if(application.dispatched===true){phase='dispatched';label='已下发，效果待验';}
-  else if(application.keptCurrent===true){phase='kept';label='保持现有动作';}
+  else if(application.keptCurrent===true){phase='kept';label=frame?.battlefield.action.fighting?'继续当前战斗'
+    :frame?.battlefield.action.tracking?'继续观察目标'
+    :frame?.battlefield.action.followTarget?'继续跟随任务'
+    :frame?.battlefield.action.taskId!=null?'继续身体任务'
+    :frame?'保持空闲（当前无身体任务）':'保持现有动作（身体状态未知）';}
   else if(application.dispatched===false||outcome==='shadow'){phase='not-applied';label='未执行';}
   else if(event==='error'||event==='unavailable'){phase='error';label='请求不可用';}
   const reason=typeof application.reason==='string'?application.reason:outcome;
@@ -35,7 +39,7 @@ export function describeCombatDecision(event: string, data: Record<string,unknow
   const actor=targetId==null?null:frame?.battlefield.actors.find(a=>a.entityId===targetId);
   const target=targetId==null?null:{entityId:targetId,type:actor?.type??null,relation:actor?.relation??null,sampledAtMs:frame?.battlefield.sampledAtMs??null};
   const relation:Record<string,string>={hostile:'敌对',ally:'已确认队友',neutral:'中立',unknown:'关系未知'};
-  const text=[label+(phase==='not-applied'&&reason?`：${reasons[reason]??reason}`:''),actions.map(action=>labels[action]??action).join(' + '),
+  const text=[label+(phase==='not-applied'&&reason?`：${reasons[reason]??reason}`:''),actions.map(action=>action==='keep'?label:labels[action]??action).join(' + '),
     ...components.map(s=>`${s.component==='ability'?'能力':'身体'}：${labels[String(object(s.candidate).kind)]??(s.choice==='keep'?'保持':'未知')} / ${String(s.outcome??'未知')}`),
     target?`目标 ${target.type??'类型未知'} #${target.entityId} · ${relation[target.relation??'unknown']??'关系未知'}（请求采样）`:'',
     '选择与下发均不证明完成'].filter(Boolean).join('；');

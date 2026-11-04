@@ -2506,6 +2506,60 @@ describe('末地:龙只报不撤,撤退不朝悬崖跑', () => {
 });
 
 describe('异步战术动作共用战斗控制器', () => {
+  it('offers usable ranged targets beyond melee pursuit and does not immediately clear an explicitly selected one', async () => {
+    const enemy=foe(7,'skeleton',15), {bot}=combatRigBot([enemy]);
+    const b=bot as any, ranged=rangedRig();
+    const bag=[{name:'iron_sword',type:1,count:1},{name:'bow',type:2,count:1},{name:'arrow',type:3,count:20}];
+    b.inventory.items=()=>bag;
+    const r=rig(bot,{},undefined,ranged.actions);
+    try {
+      expect(r.session.engagementTargets()).toContain(7);
+      expect(r.session.active).toBe(false);
+      expect(r.session.react({kind:'engage',targetId:7})).toBe(true);
+      await drive(bot,500);
+      expect(ranged.shots.length).toBeGreaterThan(0);
+      expect(r.session.fighting).toBe(true);
+      expect(r.session.reactionState().targetId).toBe(7);
+      enemy.isValid=false;
+      await drive(bot,3600);
+      expect(r.session.active).toBe(false);
+      expect(r.calls.resumed).toBe(1);
+    } finally {r.session.stop();}
+  });
+  it('does not expand passive auto engagement or offer an empty bow as a long-range weapon',async()=>{
+    const enemy=foe(7,'skeleton',15),{bot}=combatRigBot([enemy]);
+    const b=bot as any,ranged=rangedRig();
+    b.inventory.items=()=>[{name:'iron_sword',type:1,count:1},{name:'bow',type:2,count:1}];
+    ranged.actions.ready=()=>false;
+    const r=rig(bot,{},undefined,ranged.actions);
+    try {
+      expect(r.session.engagementTargets()).toEqual([]);
+      r.session.start(); await sleep(1000);
+      expect(r.session.active).toBe(false);
+      ranged.actions.ready=()=>true;
+      expect(r.session.engagementTargets()).toEqual([7]);
+      await sleep(1000);
+      expect(r.session.active).toBe(false);
+    } finally {r.session.stop();}
+  });
+  it('renews a shot lease on target change and rejects late callbacks from the previous shot',async()=>{
+    const {bot}=combatRigBot([foe(7,'skeleton',14),foe(8,'skeleton',18)]),ranged=rangedRig();
+    (bot as any).heldItem={name:'bow'};
+    const pending:Array<(value:any)=>void>=[];
+    ranged.actions.shoot=(target,ownerToken)=>{ranged.shots.push({target,ownerToken});return new Promise(resolve=>pending.push(resolve));};
+    const r=rig(bot,{},undefined,ranged.actions);
+    try{
+      expect(r.session.react({kind:'engage',targetId:7})).toBe(true);await drive(bot,100);
+      const first=ranged.shots[0];expect(first.target.id).toBe(7);
+      expect(r.session.react({kind:'engage',targetId:8})).toBe(true);await drive(bot,400);
+      const next=ranged.shots.at(-1)!;expect(next.target.id).toBe(8);
+      expect(next.ownerToken).not.toBe(first.ownerToken);
+      expect(r.session.ownsRanged(first.ownerToken)).toBe(false);
+      expect(r.session.ownsRanged(next.ownerToken)).toBe(true);
+      pending[0]({kind:'blocked',reason:'no_arrow'});await sleep(10);
+      expect(r.session.fighting).toBe(true);expect((r.session as any).rangedUnavailable).toBe(false);
+    }finally{r.session.stop();for(const resolve of pending)resolve({kind:'blocked',reason:'aborted',cause:'lease'});}
+  });
   it('can approach a visible 7.7-block enemy and attack before any hurt event, within the existing pursuit pool', async () => {
     const enemy = foe(7, 'zombie', 8.2), { bot, controls, attacks } = combatRigBot([enemy]);
     const r = rig(bot); // Production defaults: chaseMax 6, existing pursuit pool 10.
