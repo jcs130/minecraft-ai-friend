@@ -1,5 +1,6 @@
 import { publicNativeItemStack } from './native-item-stack.js';
 import { projectNativeRpgSkills } from './native-rpg-state.js';
+import { projectGameOperations } from './native-game-operations.js';
 
 const pick=(value,keys)=>value&&typeof value==='object'?Object.fromEntries(keys.filter(k=>Object.hasOwn(value,k)).map(k=>[k,value[k]])):value;
 const selfKeys='uuid name playerUuid entityId position yaw pitch eyeHeight bodyYaw headYaw health maxHealth absorption food saturation armor oxygen airSupply maxAirSupply experienceLevel experienceProgress experiencePoints quickBarSlot mainArm onGround sprinting flying inWater surfaceBlock sneaking crouching velocity skin paperAppearance locomotion pose spinAttack swinging usingItem useItemRemainingTicks attackAnim climbing isPassenger vehicleType ysm handAnimation'.split(' ');
@@ -21,10 +22,17 @@ function inventory(row){
   return {...pick(row,['playerUuid','windowId','selectedHotbarSlot','inventoryStart','hotbarStart','offhandSlot']),
     slots:row.slots.map(slot=>{let item=null;try{item=publicNativeItemStack(slot.item??null);}catch{}return {slot:slot.slot,item};}),carried:null};
 }
+export function publicPersonalStashMenu(menu, playerUuid){
+  if(!playerUuid||menu?.playerUuid!==playerUuid||menu.source!=='paper_personal_stash'||menu.menuType!=='minecraft:generic_9x6'||
+    !Number.isInteger(menu.stashPage)||menu.stashPage<1||menu.stashPage>10||!Number.isSafeInteger(menu.windowId)||menu.windowId<1||menu.windowId>255)return null;
+  return {playerUuid,source:'paper_personal_stash',windowId:menu.windowId,stateId:0,menuType:'minecraft:generic_9x6',stashPage:menu.stashPage,
+    title:`个人试炼箱 · ${menu.stashPage}/10`,contentsHidden:true,slots:Array.from({length:90},(_,slot)=>({slot,item:null}))};
+}
 export function publicSpectatorPresentation(value){
   if(!value)return null;
   const out=pick(value,'schemaVersion playerUuid available source sampledAt reason profile serverItemPackId nativeState renderRegistries entityRenderStates contraptionRenderStates time weather'.split(' '));
-  out.self=self(value.self);out.inventory=inventory(value.inventory);out.nativeMenu=null;out.gameMessages=publicGameMessages(value.gameMessages);out.skills=projectNativeRpgSkills(value.skills,value.playerUuid);out.modOperations=[];out.agentPlayback=null;
+  out.self=self(value.self);out.inventory=inventory(value.inventory);out.nativeMenu=publicPersonalStashMenu(value.nativeMenu,value.playerUuid);out.gameMessages=publicGameMessages(value.gameMessages);out.skills=projectNativeRpgSkills(value.skills,value.playerUuid);out.modOperations=[];out.agentPlayback=null;
+  out.gameOperations=projectGameOperations(value.gameOperations);
   return out;
 }
 function state(value){

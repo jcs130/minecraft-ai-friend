@@ -1950,6 +1950,10 @@ final class DungeonManager implements Listener {
         return moved;
     }
     void openStash(Player player) { openStash(player,0); }
+    int openStashPage(Player player) {
+        Inventory inventory = player.getOpenInventory().getTopInventory();
+        return player.getUniqueId().equals(stashMenus.get(inventory)) ? storage().offset(inventory) / PagedPersonalStash.PAGE_SIZE + 1 : 0;
+    }
     void openStash(Player player,int page) {
         UUID id = player.getUniqueId();
         if(page<0||page>=PagedPersonalStash.PAGES||player.getGameMode()==GameMode.SPECTATOR)return;

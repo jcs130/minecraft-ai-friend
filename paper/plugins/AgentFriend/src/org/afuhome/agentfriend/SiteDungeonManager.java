@@ -352,7 +352,10 @@ final class SiteDungeonManager implements Listener {
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
         data.put("success",reason.equals("success"));data.put("reason",reason);
         ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
-        if(advice!=null){data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());}
+        if(advice!=null){
+            data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());
+            if(reason.equals("unknown_dungeon"))data.put("nextCommand",advice.commands().getFirst());
+        }
         if(reason.equals("claim_previous_reward_first"))data.put("pendingReward",pendingReward(p.getUniqueId(),site));
         data.putAll(detail);send(p,"MC_SITE_DUNGEON_RESULT",data);
         if(advice!=null&&!jsonOutput.get()&&!Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(reason))advice.send(p);

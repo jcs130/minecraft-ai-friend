@@ -135,7 +135,7 @@ export class ObservationWorker {
   }
   async sampleSources() {
     const active=[...this.sources.values()];
-    const targets=active.map(s=>({uuid:s.job.playerUuid,lease:s.localLease,after:s.after,generation:s.generation}));
+    const targets=active.map(s=>({uuid:s.job.playerUuid,lease:s.localLease,after:s.after,generation:s.generation,scope:s.job.scope}));
     if(!targets.length)return;
     // This implementation has one channel per UUID. Duplicates indicate an
     // inconsistent job manifest rather than a reason to reset a live source.
