@@ -91,6 +91,7 @@ final class DungeonManager implements Listener {
     private static final long OUTSIDE_GRACE_MS = 15_000L;
     private static final String RUN_STATE = "dungeon-active-run";
     private static final String OWN_OUTCOME = "dungeon-activity-outcomes.";
+    private static final int TRIAL_SCHEMA_VERSION = 1;
     private static final com.google.gson.Gson JSON = new com.google.gson.Gson();
     private static final String MOB_TAG = "afu_dungeon_mob";
     private static final String REWARDS = "dungeon-rewards.";
@@ -543,6 +544,7 @@ final class DungeonManager implements Listener {
             remaining,maxFloor(),plugin.isObserver(player),plugin.nativeRpgMayAct(player),plugin.isDowned(player),plugin.pvpParticipant(player)
             ||plugin.siteDungeons()!=null&&plugin.siteDungeons().isParticipant(player),world()!=null&&nearLobbyButton(player,lobbyButton()),mana,cooldown,DungeonLoadout.missing(player));
         var out=new com.google.gson.Gson().toJsonTree(TrialGuide.next(facts)).getAsJsonObject();
+        out.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
         boolean participant = isParticipant(player);
         out.addProperty("activityType","trial_tower");out.addProperty("participant",participant);out.addProperty("active",active);
         out.addProperty("recipient", player.getName());
@@ -1653,6 +1655,7 @@ final class DungeonManager implements Listener {
             if (player == null || !player.isOnline()) continue;
             player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + "【试炼塔·结算】" + message);
             var receipt = ownOutcome(player);
+            receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
             receipt.addProperty("activityType", "trial_tower");
             player.sendMessage("MC_TRIAL_RESULT " + receipt);
         }

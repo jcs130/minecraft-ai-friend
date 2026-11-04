@@ -258,7 +258,8 @@ final class SiteDungeonManager implements Listener {
     private String entryProblem(Player p,Run r,Location at){
         if(!playing(p)||roomVisitor(p)||plugin.isDowned(p))return "not_survival_or_observer";
         if(!r.site.contains(at))return "walk_to_site";
-        Run other=own(p);if(other!=null&&other!=r||plugin.dungeonParticipant(p)||plugin.pvpParticipant(p))return "already_in_activity_or_not_survival";
+        Run other=own(p);DungeonManager trial=plugin.dungeon();
+        if((other!=null&&other!=r)||(trial!=null&&trial.isParticipant(p))||plugin.pvpParticipant(p))return "already_in_activity_or_not_survival";
         if(!r.fault.isEmpty()||r.phase.equals("returning"))return "challenge_not_accepting";
         if(r.declined.contains(p.getUniqueId()))return "left_this_visit";
         if(!r.party.contains(p.getUniqueId())&&r.party.size()>=PARTY_LIMIT)return "party_full";

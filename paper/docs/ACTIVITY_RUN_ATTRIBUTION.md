@@ -10,6 +10,10 @@
 | `MC_SITE_DUNGEON_RESULT` | `start`、`join`、`resume`、`leave` 成功时的 `run` 取自实际操作的场次。`claim` 取自被消费的个人奖励，即使同地点已有新队伍。失败时不附会场次；旧奖励缺 ID 时不补猜。 |
 | `MC_SITE_DUNGEON_STATE` | 字段保持兼容。只有 `participant === true`、`lifecycle === "active"` 且 `participantRun === run` 时，顶层 `run` 才代表本人当前场次。 `lastOutcome.run` 和 `pendingRewardDetails[].run` 各自是历史。 |
 
+`MC_TRIAL_STATE` 和 `MC_TRIAL_RESULT` 顶层均返回数值 `schemaVersion: 1`，用于客户端识别消息结构。空闲和旁观状态也返回这个字段。
+
+已自动加入同一遗迹场次的角色再次执行 `join`，会得到同一场次的成功回执。其他遗迹、试炼塔或 PvP 参赛状态仍按原规则拦截。
+
 试炼塔的业务 `revision` 按场次计数。新场为 1；楼层、成员、暂停或恢复、清层和终局等已保存的状态变化会推进版本。等待秒数、剩余怪物和读操作不推进版本。重启继续使用同一场次的已保存版本，必要时记录一次暂停或恢复。旧版有效活动检查点从版本 1 开始，沿用已存在的场次 ID。地下城动作的 `run` 只确认归属；本批不为它构造业务版本。不要用 `schemaVersion` 或时间戳代替版本。
 
 隔离验证使用 Youer 1.21.1、JDK 21、两个普通 Mineflayer 角色和一个旁观角色。只用专用回环端口 `25976/25977`，不用生产角色、账号或凭据。测试通过真正的 `/mycli` 和服务器回执读取数据；夹具仅构造初始场地、终止已生成的怪物和注入测试暂停，不构造回执。
@@ -21,12 +25,12 @@
 基于 `a7bc299a` 完整编译 AgentFriend，候选在 Youer 上通过 22 项联机检查，并正常停机。以下是测试回执的相关字段（仅 QA 角色）：
 
 ```text
-MC_TRIAL_STATE {"recipient":"ag_AttrAlice","participant":true,"lifecycle":"active","run":"ae7507c0-d851-4b6f-8d6e-14d956e124c0","revision":1}
-MC_TRIAL_RESULT {"recipient":"ag_AttrAlice","run":"ae7507c0-d851-4b6f-8d6e-14d956e124c0","revision":3,"status":"cancelled","reason":"timeout"}
-MC_SITE_DUNGEON_STATE {"recipient":"ag_AttrAlice","run":"a4c0879f-112f-4965-91cd-c226e12353c9","participant":false,"participantRun":"","lastOutcome":{"run":"56b5371d-aff6-445b-a4fa-fde3039190f6"}}
-MC_SITE_DUNGEON_RESULT {"action":"claim","id":"qa_attribution","success":true,"recipient":"ag_AttrAlice","run":"56b5371d-aff6-445b-a4fa-fde3039190f6"}
+MC_TRIAL_STATE {"schemaVersion":1,"recipient":"ag_AttrAlice","participant":true,"lifecycle":"active","run":"35fe3254-7c84-4f88-9e92-9b480f4488ce","revision":1}
+MC_TRIAL_RESULT {"schemaVersion":1,"recipient":"ag_AttrAlice","run":"35fe3254-7c84-4f88-9e92-9b480f4488ce","revision":3,"status":"cancelled","reason":"timeout"}
+MC_SITE_DUNGEON_STATE {"schemaVersion":1,"recipient":"ag_AttrAlice","run":"dfc4e9a4-22ec-4602-9342-1947f3715f4c","participant":false,"participantRun":"","lastOutcome":{"run":"832db028-4b04-4014-8ae9-aef390e202fe"}}
+MC_SITE_DUNGEON_RESULT {"schemaVersion":1,"action":"claim","id":"qa_attribution","success":true,"recipient":"ag_AttrAlice","run":"832db028-4b04-4014-8ae9-aef390e202fe"}
 ```
 
-Alice 的楼层奖励在版本 2，重复查询保持版本 1。Bob 的新场从版本 1 开始，冷重启后的首次查询仍返回同一个 `6703159a-aa32-4eaa-b329-3d6db69becbe`，已保存的版本为 2。Alice 的历史仍为原场次版本 3。
+Alice 的楼层奖励在版本 2，重复查询保持版本 1。Bob 的新场从版本 1 开始，冷重启后的首次查询仍返回同一个 `fa775b02-6cf5-4db1-839c-049802857546`，已保存的版本为 2。Alice 的历史仍为原场次版本 3。
 
 这些字段仍需客户端按归属规则消费。该候选未部署。

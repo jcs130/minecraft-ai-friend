@@ -82,7 +82,11 @@ async function ask(bot, line, prefix) {
 }
 const json = line => JSON.parse(line.slice(line.indexOf(' ') + 1));
 const kv = line => Object.fromEntries(line.match(/\b\w+=[^\s]+/g).map(part => part.split('=')));
-const trial = async bot => json(await ask(bot, 'arena status --json', 'MC_TRIAL_STATE'));
+const trial = async bot => {
+  const state = json(await ask(bot, 'arena status --json', 'MC_TRIAL_STATE'));
+  assert.equal(state.schemaVersion, 1, 'MC_TRIAL_STATE schema version');
+  return state;
+};
 const site = 'qa_attribution', siteState = async bot => json(await ask(bot, 'dungeon status ' + site + ' --json', 'MC_SITE_DUNGEON_STATE'));
 const action = async (bot, verb) => {
   const id = ['resume','leave'].includes(verb) ? '' : ' ' + site;
@@ -116,7 +120,7 @@ try {
     && Number(reward.revision) > first.revision && Number(reward.revision) <= Number((await fixture('trial_revision')).split(' ')[1]), 'trial reward names the committed clear without claiming tower completion');
   await fixture('trial_timeout');
   const result = json(await until(() => alice.lines.find(s => s.startsWith('MC_TRIAL_RESULT ')), 'private trial outcome'));
-  check(result.run === started.run && result.recipient === alice.username && result.status === 'cancelled'
+  check(result.schemaVersion === 1 && result.run === started.run && result.recipient === alice.username && result.status === 'cancelled'
     && result.reason === 'timeout' && result.revision > Number(reward.revision), 'terminal trial result has a later durable revision');
   check(!eye.lines.some(line => line.startsWith('MC_TRIAL_RESULT ') || line.startsWith('MC_DUNGEON_LOOT ')), 'observer receives neither private loot nor private trial outcome');
   await position(alice, 'out');
@@ -125,8 +129,12 @@ try {
   const startSite = await action(alice, 'start');
   check(runId.test(startSite.run) && sameAction(startSite, alice, 'start', startSite.run), 'site start explicitly attributes its own run (' + startSite.reason + ')');
   await position(bob, 'site_in');
+  await until(async () => {
+    const state = await siteState(bob);
+    return state.participant && state.participantRun === startSite.run;
+  }, 'site auto-enrolls Bob before explicit join');
   const join = await action(bob, 'join');
-  check(sameAction(join, bob, 'join', startSite.run), 'site join refers to the shared instance: ' + explain(join));
+  check(sameAction(join, bob, 'join', startSite.run), 'site join after automatic enrollment refers to the shared instance: ' + explain(join));
   const leave = await action(bob, 'leave');
   check(sameAction(leave, bob, 'leave', startSite.run), 'site leave keeps attribution after membership removal');
   await position(bob, 'out');
