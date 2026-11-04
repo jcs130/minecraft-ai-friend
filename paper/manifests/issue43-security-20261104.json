@@ -1,0 +1,41 @@
+{
+  "sourceCommit": "8d17d2b33813e98ee144c6414aa8de94041b6243",
+  "sourcePullRequest": 60,
+  "ciChecksPassed": 6,
+  "portal": {
+    "state": "deployed-and-verified",
+    "release": "issue43-portal-20261104-r2",
+    "version": "0.8.39",
+    "imageId": "sha256:ede435afc21a072fea66b52ba4f4ec881004f22e6a41489a32298fbc5dd7a4f4",
+    "verifiedAt": "2026-11-04T22:06:56.955338+08:00",
+    "isolatedLinuxChecksPassed": 33,
+    "protectedTables": 16,
+    "preservedActiveSessions": 16,
+    "backupSha256": "522bf5cfbbc1320021ecf968ba61bdd45cf6e9a9d519f9deea57f8f0e00bdc8f",
+    "backupBytes": 43508833,
+    "twoLocalCopiesVerified": true,
+    "runtimeFiles": {
+      "src/server.mjs": "ce2719731e4c37596b9f9b36d16b586dae1def5ca2a86ee6751bd36bc99c34c1",
+      "src/store.mjs": "6424b6d53097a1df6079fe4e6e1f897081914d3c1161c59f5cad6035a3fe43d7",
+      "src/email-auth.mjs": "07297225b49b41c76dc325bc8a662cafdc38188e48a48fc7b6dd214bcd91d778",
+      "package.json": "c40e2d3acae4632ad404b56ab66278337011444d94a253563343d49dfac10b02",
+      "package-lock.json": "4d1a048b9907e95cc58e0c45748164b63047b7518a4eedc93b7669677603600e"
+    },
+    "downloadsPreserved": true,
+    "codeOnlyRollbackAvailable": true
+  },
+  "game": {
+    "state": "deployed-and-verified",
+    "release": "issue43-pvp-20261104-r1",
+    "version": "0.4.47.54-rpg",
+    "verifiedAt": "2026-11-04T22:28:08.7548397+08:00",
+    "isolatedYouerChecksPassed": 12,
+    "productionStartupChecksPassed": 28,
+    "characterFilesPreserved": 807,
+    "twoColdRecoveryCopiesVerified": true,
+    "candidateSha256": "5cf8e98db72dcb69c9f2c13ea4f905f19d9c8bd4332e732ee54bae6c06ab5fd5",
+    "rollbackSha256": "2b68f76db66e114c74cf80966429897705111a9ee683dfcb589dc8b7879c66a2",
+    "goddessJobsRestored": true,
+    "productionDuelVerified": false
+  }
+}
