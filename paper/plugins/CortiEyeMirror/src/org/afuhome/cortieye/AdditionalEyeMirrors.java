@@ -104,13 +104,17 @@ final class AdditionalEyeMirrors implements Listener {
     private final Map<String, Long> autoAttachedAt = new HashMap<>();
     private final EyeInventoryMirror inventories;
     private final EyeBossBars bossBars;
+    private final EyeNightVision nightVision;
+    private final boolean primaryNightVision;
     List<EyePairs.Pair> bindings() { return allBindings; }
 
     AdditionalEyeMirrors(CortiEyeMirrorPlugin plugin, ProtocolManager protocol,
-            String cortiTarget, String cortiEye) {
+            String cortiTarget, String cortiEye, boolean primaryNightVision) {
         this.plugin = plugin;
         inventories = new EyeInventoryMirror(plugin, protocol);
         bossBars = new EyeBossBars(plugin, protocol);
+        nightVision = new EyeNightVision(plugin, protocol);
+        this.primaryNightVision = primaryNightVision;
         this.protocol = protocol;
         this.cortiEyeName = cortiEye;
         this.cortiTargetName = cortiTarget;
@@ -161,6 +165,7 @@ final class AdditionalEyeMirrors implements Listener {
 
     void stop() {
         bossBars.stop();
+        nightVision.stop();
         for (UUID cameraId : new ArrayList<>(mirroredCrafting.keySet())) closeCrafting(cameraId);
         for (Session session : new ArrayList<>(sessions.values()))
             restoreEffects(Bukkit.getPlayer(session.cameraId), session);
@@ -233,7 +238,10 @@ final class AdditionalEyeMirrors implements Listener {
     private void tick() {
         if (++ticks % 100 == 0) loadPairs();
         else if (ticks % 5 == 0) resolveBindings();
-        if (ticks % 5 == 0) inventories.tick(allBindings);
+        if (ticks % 5 == 0) {
+            inventories.tick(allBindings);
+            nightVision.tick(allBindings, ticks % 20 == 0, cortiEyeName, primaryNightVision);
+        }
         if (!cortiAuthorized) {
             Player camera = Bukkit.getPlayerExact(cortiEyeName);
             Player target = Bukkit.getPlayerExact(cortiTargetName);
