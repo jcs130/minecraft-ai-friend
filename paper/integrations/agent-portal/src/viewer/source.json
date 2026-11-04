@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "9b5ace92bf0fb699893346148e1d5233ba930401",
+  "commit": "756328becd62d622303599320928f037aaded663",
   "normalization": "CRLF-to-LF and listed relative imports",
   "transforms": {
     "spectator-public.mjs": {
@@ -14,7 +14,7 @@
     "spectator-relay.mjs": "18aeb6fffecabf59ae25597346aef3ee3f21848271be20e2f15ba6745d0eab44",
     "spectator-site.mjs": "69ea76533bc70215aac0d81af407c2ad1c31fca9bf7856c7c371ab92b4e0b261",
     "spectator-fanout.mjs": "34b488f6ebe0b92ba6c3b454c270230363e81123c923659bd3b55368a4ab2948",
-    "spectator-public.mjs": "84745ab46bf78be482f13cba604659ad487faf15149c50af89c65ede4a152f92",
+    "spectator-public.mjs": "e4afa81add08a017c026b203195a19a20daa98b51d8272ee74ac0eb48cda9e25",
     "native-item-stack.js": "3548831a7e87e6e38c85fcf3673c31edffe03691863479aa0815a7019b49d3b4",
     "native-rpg-state.js": "e23f3ee795b7c5d57569f9e78c55f28e39a512681cb955d3d4f3a4ba2746e4d6",
     "native-game-operations.js": "f8af3860631d65e3a9011a445c48e55e13c38454c4c4dc6f378586f980be60a5"

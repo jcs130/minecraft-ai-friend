@@ -269,6 +269,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     public boolean nativeRpgSelected(){return nativeRpg!=null&&nativeRpg.selected();}
     /** Main-thread read-only HUD ABI shared by Java Eye and account-free web observation. */
     public String nativeViewerState(Player p){return viewerStatePublisher.snapshot(p);}
+    public int nativeViewerStashPage(Player player) {return dungeon == null ? 0 : dungeon.openStashPage(player);}
     public boolean nativeRpgMayAct(Player p){return p.isOnline()&&!p.isDead()&&!isDowned(p)&&!isObserver(p)
         &&Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode())&&!pvpParticipant(p);}
     /** Existing travel authority reused by the two city gates; never an OP warp. */

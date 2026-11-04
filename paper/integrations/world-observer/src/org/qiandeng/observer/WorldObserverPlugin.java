@@ -22,6 +22,8 @@ import net.minecraft.network.protocol.game.*;
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.GameMode;
@@ -94,6 +96,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
     }
 
     private record Wire(long sequence, String packet, int bytes) {}
+    private record StashContents(int tick, int stateId, List<Map<String,Object>> slots, boolean truncated) {}
     private static final class View {
         final UUID uuid;
         final String lease;
@@ -108,11 +111,15 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         UUID world;
         int centerX = Integer.MIN_VALUE, centerZ, bytes, seenTick;
         long sequence;
+        AbstractContainerMenu stashMenu;
+        int stashPage;
+        StashContents stashContents;
         String generation = UUID.randomUUID().toString(), fault;
         View(UUID uuid, String lease, int now) { this.uuid=uuid; this.lease=lease; this.seenTick=now; }
         void reset() {
             queue.clear(); pendingChunks.clear(); sent.clear(); chunkTicks.clear(); entities.clear(); metadata.clear(); equipment.clear(); positions.clear();
             world=null; centerX=Integer.MIN_VALUE; bytes=0; sequence=0; fault=null;
+            stashMenu=null; stashContents=null; stashPage=0;
             generation=UUID.randomUUID().toString();
         }
     }
@@ -230,11 +237,58 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             Map<String,Object> reply=new LinkedHashMap<>();reply.put("uuid",uuid.toString());reply.put("lease",view.lease);
             Map<String,Object> state = playerState(player);
             state.put("gameOperations", recentOperations(player));
+            boolean owner = row.has("scope") && !row.get("scope").isJsonNull() && "owner".equals(row.get("scope").getAsString());
+            var stash = personalStash(player, view, owner);
+            if (stash != null) state.put("personalStash", stash);
             reply.put("generation",view.generation);reply.put("available",true);reply.put("player",state);reply.put("packets",wire);
             if(after==0)reply.put("configurationPackets",configurationPackets);
             reply.put("initializing",!view.pendingChunks.isEmpty() || view.sent.isEmpty());replies.add(reply);
         }
         return Map.of("schemaVersion",1,"minecraftVersion","1.21.1","targets",replies,"metrics",Map.of("activeTargets",views.size(),"minecraftConnectionsCreated",0,"encodeMillis",totalEncodeNanos/1_000_000.0,"maxTickMillis",maxTickNanos/1_000_000.0));
+    }
+    private Map<String,Object> personalStash(Player player, View view, boolean owner) {
+        ServerPlayer handle = ((CraftPlayer) player).getHandle();
+        AbstractContainerMenu menu = handle.containerMenu;
+        if (menu != view.stashMenu) {
+            view.stashMenu = menu;
+            view.stashPage = 0;
+            view.stashContents = null;
+            if (menu != handle.inventoryMenu && menu.containerId > 0 && menu.slots.size() == 90) {
+                var plugin = Bukkit.getPluginManager().getPlugin("AgentFriend");
+                if (plugin != null && plugin.isEnabled()) {
+                    try {
+                        view.stashPage = (int) plugin.getClass().getMethod("nativeViewerStashPage", Player.class).invoke(plugin, player);
+                        if (view.stashPage > 0 && menu.getType() != MenuType.GENERIC_9x6) view.stashPage = 0;
+                    } catch (ReflectiveOperationException ignored) { /* Older AgentFriend does not export personal stash windows. */ }
+                }
+            }
+        }
+        if (view.stashPage < 1 || view.stashPage > 10) return null;
+        int stateId = menu.getStateId();
+        Map<String,Object> value = new LinkedHashMap<>(Map.of("page", view.stashPage, "windowId", menu.containerId, "stateId", stateId));
+        if (!owner) { view.stashContents = null; return value; }
+        var contents = view.stashContents;
+        if (contents == null || contents.stateId() != stateId || tick - contents.tick() >= 4) {
+            List<Map<String,Object>> slots = new ArrayList<>();
+            int budget = 64 * 1024;
+            boolean truncated = false;
+            for (int slot = 0; slot < 54; slot++) {
+                var item = NativeObserverProjection.item(menu.getSlot(slot).getItem());
+                if (item.isEmpty()) continue;
+                String snbt;
+                try { snbt = item.saveOptional(handle.serverLevel().registryAccess()).toString(); }
+                catch (RuntimeException unsupported) { truncated = true; continue; }
+                int bytes = snbt.getBytes(StandardCharsets.UTF_8).length;
+                if (bytes > 16 * 1024 || bytes > budget) { truncated = true; continue; }
+                budget -= bytes;
+                slots.add(Map.of("slot", slot, "item", Map.of("name", net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.getItem()).toString(),
+                    "count", item.getCount(), "snbt", snbt)));
+            }
+            view.stashContents = contents = new StashContents(tick, stateId, slots, truncated);
+        }
+        value.put("slots", contents.slots());
+        if (contents.truncated()) value.put("truncated", true);
+        return value;
     }
     private Map<String,Object> playerState(Player player) {
         ServerPlayer p=((CraftPlayer)player).getHandle(); var loc=player.getLocation();var level=p.serverLevel();
