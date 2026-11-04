@@ -1,3 +1,7 @@
+## 0.2.148
+
+- Pin core rc.160-preview.11 with bounded partial probe evidence and upstream activity attribution contracts. Preserve strict build/excavate limits, absolute follow-up regions and unknown observations.
+
 ## 0.2.147
 
 - Preserve queued observation and empty catalogue read counters through strategic review, and count immediate observation, condition-check and screenshot reads. Use one bounded vocabulary for the controller and review projection without changing action admission, ordering or lookahead permissions.
