@@ -1,3 +1,8 @@
+## 0.2.151
+
+- Resolve an explicitly selected server engine to its physical filesystem path before hashing and importing it. Windows app-data aliases now share the body's actual core constructors; hash, export and inheritance checks remain mandatory.
+- Reproduce alias-based duplicate module identities in an isolated Node consumer, retaining incompatible-core and tampered-module rejection.
+
 ## 0.2.150
 
 - Distinguish local assistant narration from native Minecraft chat in the ordinary planner contract, without requiring a configured companion roster. Brief greetings, replies and meaningful shared discoveries use the advertised chat action and its original send receipt; local narration is never automatically broadcast.
