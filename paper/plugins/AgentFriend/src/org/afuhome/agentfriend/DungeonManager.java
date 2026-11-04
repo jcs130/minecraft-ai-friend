@@ -35,6 +35,7 @@ import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Ravager;
+import org.bukkit.entity.SmallFireball;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -46,6 +47,7 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -77,6 +79,7 @@ final class DungeonManager implements Listener {
     private static final int X = -590, Z = -305, WING_X = -510, WING_Z = -305, CHALLENGE_X = -350;
     private static final int LOBBY_Y = 90, RADIUS = 12, BASE_FLOORS = 6, REST_FLOOR = 7,
             BOSS_FLOOR = 10, OLD_MAX_FLOOR = 10, FINAL_FLOOR = 15;
+    private static final int LAVA_FLOOR = 13, LAVA_FLOOR_BURN_TICKS = 60;
     private static final int[] Y = {68, 56, 44, 32, 20, 8, -4, -16, -28, -40,
             -40, -28, -16, -4, 8};
     private static final int[] RADII = {12, 12, 12, 12, 12, 12, 16, 18, 18, 20,
@@ -268,6 +271,7 @@ final class DungeonManager implements Listener {
         if (built) {
             cleanupMobs();
             updateFloorGuides();
+            if (challengeBuilt) clearLavaFloorFire();
             if (expanded) ensureMerchants();
             restoreRun();
         }
@@ -829,6 +833,7 @@ final class DungeonManager implements Listener {
     }
 
     private int enterFloor(int number, List<Player> group) {
+        if (number == LAVA_FLOOR && !group.isEmpty()) clearLavaFloorFire();
         Set<UUID> arrived = new HashSet<>();
         Set<UUID> disconnected = new HashSet<>();
         if (active) for (UUID id : participants)
@@ -849,8 +854,8 @@ final class DungeonManager implements Listener {
                 double maxHealth = player.getMaxHealth();
                 if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
                 player.setFireTicks(0);
-                if (number == 13) {
-                    player.sendMessage(ChatColor.GOLD + "第 13 层岩浆会造成伤害；本层不再自动给予抗火，请观察地形并绕行。");
+                if (number == LAVA_FLOOR) {
+                    player.sendMessage(ChatColor.GOLD + "第 13 层岩浆仍会伤人；走中央石桥，离开火源后灼烧会更快消退。");
                     player.sendMessage("MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false");
                 }
             } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍；/mycli arena status 核对场次，不要隔层追怪；把楼层和时间告知服主检查落点。");
@@ -936,7 +941,10 @@ final class DungeonManager implements Listener {
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
             if (p != null && p.isOnline() && !p.isDead() && !plugin.isDowned(p) && inFloor(p.getLocation(), floor)) {
-                anyone = true; break;
+                anyone = true;
+                if (floor != LAVA_FLOOR) break;
+                // Vanilla lava can refresh the burn timer while a player is already on fire.
+                if (p.getFireTicks() > LAVA_FLOOR_BURN_TICKS) p.setFireTicks(LAVA_FLOOR_BURN_TICKS);
             }
         }
         if (!anyone) {
@@ -1307,10 +1315,14 @@ final class DungeonManager implements Listener {
             if (trialMob(affected)) event.setIntensity(affected, 0);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTrialProjectileLaunch(ProjectileLaunchEvent event) {
         Entity source = attacker(event.getEntity());
-        if (trialMob(source)) lastMobProjectileAt.put(source.getUniqueId(), System.currentTimeMillis());
+        if (!trialMob(source)) return;
+        if (floor == LAVA_FLOOR && event.getEntity() instanceof SmallFireball fireball) {
+            fireball.setIsIncendiary(false);
+        }
+        lastMobProjectileAt.put(source.getUniqueId(), System.currentTimeMillis());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -2585,6 +2597,27 @@ final class DungeonManager implements Listener {
         if (number > OLD_MAX_FLOOR) buildChallengeTerrain(w, number);
     }
 
+    private void clearLavaFloorFire() {
+        World w = world();
+        if (w == null) return;
+        int y = Y[LAVA_FLOOR - 1], r = radius(LAVA_FLOOR);
+        int fx = floorX(LAVA_FLOOR), fz = floorZ(LAVA_FLOOR), clearedFires = 0;
+        for (int dx = 1 - r; dx < r; dx++) for (int dz = 1 - r; dz < r; dz++) {
+            for (int dy = 0; dy < 7; dy++) {
+                Block block = w.getBlockAt(fx + dx, y + dy, fz + dz);
+                if (isFire(block.getType())) {
+                    block.setType(Material.AIR, false);
+                    clearedFires++;
+                }
+            }
+        }
+        if (clearedFires > 0) plugin.getLogger().info("Trial lava floor residual fires cleared: " + clearedFires);
+    }
+
+    private static boolean isFire(Material material) {
+        return material == Material.FIRE || material == Material.SOUL_FIRE;
+    }
+
     private void buildChallengeTerrain(World w, int number) {
         int fx = floorX(number), fz = floorZ(number), y = Y[number - 1];
         Material cover = THEMES.get(number - 1).pillar();
@@ -2693,6 +2726,11 @@ final class DungeonManager implements Listener {
     @EventHandler public void onChange(EntityChangeBlockEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onBurn(BlockBurnEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onIgnite(BlockIgniteEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
+    @EventHandler public void onFireSpread(BlockSpreadEvent event) {
+        if (built && isFire(event.getNewState().getType()) && inFloor(event.getBlock().getLocation(), LAVA_FLOOR)) {
+            event.setCancelled(true);
+        }
+    }
     @EventHandler public void onFlow(BlockFromToEvent event) { if (inBuild(event.getToBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onExplosion(EntityExplodeEvent event) { if (built) event.blockList().removeIf(b -> inBuild(b.getLocation())); }
     @EventHandler public void onBlockExplosion(BlockExplodeEvent event) { if (built) event.blockList().removeIf(b -> inBuild(b.getLocation())); }
