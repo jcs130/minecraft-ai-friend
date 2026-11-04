@@ -193,7 +193,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             long cutoff = System.currentTimeMillis() - 3_000L;
             cameraChat.values().removeIf(time -> time < cutoff);
         }, 60L, 60L);
-        additionalEyeMirrors = new AdditionalEyeMirrors(this, protocol, targetName, cameraName);
+        additionalEyeMirrors = new AdditionalEyeMirrors(this, protocol, targetName, cameraName, cameraNightVision);
         additionalEyeMirrors.start();
         getLogger().info("Native HUD mirror ready: " + targetName + " -> " + cameraName
                 + "; chat=" + mirrorChat + "; advancements=" + mirrorAdvancements
