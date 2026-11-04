@@ -1,8 +1,17 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "respawn-position-20261104-r1",
-  "verifiedAt": "2026-11-04T01:34:35.0189091+08:00",
-  "releaseDocument": "paper/docs/YOUER_RESPAWN_POSITION_20261104.md",
+  "latestRelease": "eye-bossbar-lifecycle-20261104-r1",
+  "verifiedAt": "2026-11-04T13:58:55.5420377+08:00",
+  "releaseDocument": "paper/docs/EYE_BOSSBAR_LIFECYCLE_20261104.md",
+  "eyeBossBarLifecycle": {
+    "state": "deployed-with-open-acceptance",
+    "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
+    "productionHealthChecks": 28,
+    "characterFilesPreserved": 803,
+    "isolatedLifecycleChecks": 9,
+    "isolatedNativePacketsCaptured": 58,
+    "productionNativePacketSequenceVerified": false
+  },
   "youerRespawnPosition": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "ceab2b9918cc3a3c79fbc71741626889fce9bb26",
@@ -33,7 +42,8 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.52-rpg",
+    "AgentFriend": "0.4.47.53-rpg",
+    "CortiEyeMirror": "0.1.18",
     "QiandengjiRpg": "0.2.18",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
@@ -87,7 +97,7 @@
     "E:\\MC\\server\\plugins\\CommandAPI-12.1.0.jar": "ab48e55fd06264dd239cf015b501936cb50eb6c38d967fbffca6c91a48064049",
     "E:\\MC\\server\\plugins\\ConditionalEvents-4.80.3.jar": "3f9c588d664d604b09113397a6dc04c1b7ad288c2550d8270c96669eb61c7e74",
     "E:\\MC\\server\\plugins\\CoreProtect-CE-24.1.jar": "a2acef7c06ef201355cef07d591a6055dfed358ad768faaaaaf4e276865ecc97",
-    "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.17.jar": "628242d9b46b2be68037a656986c1ac1274b6a876190451a37d7e85bb8d92f51",
+    "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.18.jar": "1d4855dc871e9a916fda0a9f1f4a70be4bc9f969f98428390303fb7b388f2c4d",
     "E:\\MC\\server\\plugins\\Denizen-1.3.1-b7074-paper1211.jar": "5ecb7f7fa4141c2f8acb8b8c7cf2c004cd8e8f69fe22b31574431db9484574c6",
     "E:\\MC\\server\\plugins\\EssentialsX-2.22.0.jar": "bda4685105977fca2e209820a9f0ad24275bd103390a03236f38e59bfdac58e6",
     "E:\\MC\\server\\plugins\\EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a",
@@ -163,7 +173,7 @@
     "E:\\MC\\ops\\independent-process.ps1": "06af1f8c5ef78aaa8907c06e72bfbf0484d4d1e5f99b7158b13b867536065865",
     "E:\\MC\\ops\\ysm-services.ps1": "854442d0c76dc2fd50c170635f1ac16aaa6bb4ee07a700bd506826c9c60bed92",
     "E:\\MC\\ops\\rcon-command.mjs": "86ee27ce7061443b5caab37d53121e69e6647ced19337316aef4d94fd32be86c",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.50-rpg.jar": "0dc196397e20f56dda53adebc6b76ba0c8e48d066af34f701e967f4bd8bc69cc",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.53-rpg.jar": "2b68f76db66e114c74cf80966429897705111a9ee683dfcb589dc8b7879c66a2",
     "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.18.jar": "51877d0d0c19bf0693a8b0c70d48204970d74bbdde495c0b492ad75c49f06d98",
     "E:\\MC\\ops\\goddess-bridge.mjs": "d5ef2503f908b957e357790ebe44113904cc8d9fa03cf779a5b70af5c53cdf62",
     "E:\\MC\\ops\\goddess-chat-identity.mjs": "615cb21f5793bdc3f4010c8c51b5440d29d2f9e3916234fc5185f94c5b1854bf",
