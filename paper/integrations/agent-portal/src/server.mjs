@@ -116,7 +116,7 @@ export function createPortal(config, options = {}) {
     const account = owner ? 'owner:' + owner.id : 'unknown:' + (typeof suppliedName === 'string' ? suppliedName.toLowerCase().slice(0, 254) : 'invalid');
     const ticket = loginThrottle.reserve(rateAddress(req, config), account);
     if (typeof password !== 'string' || password.length > 128) return false;
-    const valid = await verifyPassword(password, owner?.password_hash);
+    const valid = await (options.verifyPassword ?? verifyPassword)(password, owner?.password_hash);
     if (!owner || !valid) return false;
     loginThrottle.succeeded(ticket);
     return true;
@@ -143,10 +143,16 @@ export function createPortal(config, options = {}) {
     return store.getSession(token);
   }
   function device(req) { return /Android|iPhone|iPad|Mobile/i.test(req.headers['user-agent'] || '') ? '移动设备浏览器' : '电脑浏览器'; }
-  function newSession(req, res, ownerId) {
+  function replaceSession(req, ownerId) {
     const existing = sessionFrom(req); if (existing) store.deleteSession(existing.id_hash);
-    const created = store.createSession(ownerId, device(req)); cookie(req, res, created.token, !!ownerId);
+    return store.createSession(ownerId, device(req));
+  }
+  function sendSession(req, res, created) {
+    cookie(req, res, created.token, !!created.session.owner_id);
     return created.session;
+  }
+  function newSession(req, res, ownerId) {
+    return sendSession(req, res, replaceSession(req, ownerId));
   }
   function sessionData(session) {
     return { owner: store.ownerPublic(session?.owner_id ? store.ownerById(session.owner_id) : null), csrfToken: session?.csrf || null,
@@ -678,9 +684,17 @@ export function createPortal(config, options = {}) {
         let email = null;
         if (typeof body.username === 'string' && body.username.includes('@')) { try { email = normalizeEmail(body.username); } catch {} }
         const owner = email ? emailAuth.ownerByEmail(email) : usernameValid(body.username) ? store.ownerByName(body.username) : null;
-        if (!await checkPassword(req, owner, body.password, body.username)) throw fail(401, 'LOGIN_FAILED', '网站用户名、邮箱或密码不正确');
-        const session = newSession(req, res, owner.id); store.audit(owner.id, 'session.login', owner.id);
-        return respond(res, 200, sessionData(session));
+        const rejected = () => fail(401, 'LOGIN_FAILED', '网站用户名、邮箱或密码不正确');
+        if (!await checkPassword(req, owner, body.password, body.username)) throw rejected();
+        const created = store.transaction(() => {
+          // The salted hash is the credential version. Check it and issue
+          // under the same SQLite write lock used to rotate credentials.
+          if (!store.passwordIsCurrent(owner.id, owner.password_hash)) throw rejected();
+          const session = replaceSession(req, owner.id);
+          store.audit(owner.id, 'session.login', owner.id);
+          return session;
+        });
+        return respond(res, 200, sessionData(sendSession(req, res, created)));
       }
       if (req.method === 'POST' && pathname === '/api/v1/auth/password-reset') {
         rate('reset:' + digest(rateAddress(req, config)), 6);
@@ -760,13 +774,19 @@ export function createPortal(config, options = {}) {
         const { owner, session } = browserAuth(req); rate('password:' + owner.id, 6);
         const body = await jsonBody(req);
         if (!passwordValid(body.newPassword)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 6–128 个字符');
-        if (!await checkPassword(req, owner, body.currentPassword)) throw fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
-        store.db.prepare('UPDATE owners SET password_hash=? WHERE id=?').run(await hashPassword(body.newPassword), owner.id);
-        emailAuth.invalidate(owner.id);
-        store.revokeOtherSessions(owner.id, session.id_hash);
-        store.db.prepare('UPDATE credentials SET revoked_at=? WHERE owner_id=? AND revoked_at IS NULL').run(Date.now(), owner.id);
-        store.audit(owner.id, 'account.password', owner.id);
-        return respond(res, 200, sessionData(newSession(req, res, owner.id)));
+        const rejected = () => fail(401, 'PASSWORD_INCORRECT', '当前网站密码不正确');
+        if (!await checkPassword(req, owner, body.currentPassword)) throw rejected();
+        const passwordHash = await hashPassword(body.newPassword);
+        const created = store.transaction(() => {
+          if (!store.passwordIsCurrent(owner.id, owner.password_hash) || sessionFrom(req)?.id_hash !== session.id_hash) throw rejected();
+          store.db.prepare('UPDATE owners SET password_hash=? WHERE id=?').run(passwordHash, owner.id);
+          emailAuth.invalidate(owner.id);
+          store.revokeOtherSessions(owner.id, session.id_hash);
+          store.db.prepare('UPDATE credentials SET revoked_at=? WHERE owner_id=? AND revoked_at IS NULL').run(Date.now(), owner.id);
+          store.audit(owner.id, 'account.password', owner.id);
+          return replaceSession(req, owner.id);
+        });
+        return respond(res, 200, sessionData(sendSession(req, res, created)));
       }
       const revokeSession = /^\/api\/v1\/sessions\/([a-f0-9]{64})$/.exec(pathname);
       if (req.method === 'DELETE' && revokeSession) {

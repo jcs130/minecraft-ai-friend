@@ -72,6 +72,17 @@ export class Store {
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
     return owner;
   }
+  transaction(write) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = write();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+  passwordIsCurrent(id, verifiedHash) {
+    return !!this.db.prepare('SELECT 1 FROM owners WHERE id=? AND password_hash=?').get(id, verifiedHash);
+  }
   createSession(ownerId, device = '浏览器') {
     const token = newSecret(); const now = Date.now();
     const session = { id_hash: digest(token), owner_id: ownerId || null, csrf: newSecret(), created_at: now, expires_at: now + (ownerId ? 7 * 86400000 : 3600000), verified_at: ownerId ? now : 0, device: device.slice(0, 80) };

@@ -114,10 +114,11 @@ export class EmailAuth {
     let row = this.checked(id, code, session);
     if (row.purpose === 'reset' && (typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 128)) throw fail(400, 'INVALID_PASSWORD', '新网站密码需为 6–128 个字符');
     const passwordHash = row.purpose === 'reset' ? await hashPassword(newPassword) : null;
-    row = this.checked(id, code, session); // Recheck after asynchronous hashing.
-    const db = this.store.db, now = Date.now(); let owner;
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    const db = this.store.db;
+    return this.store.transaction(() => {
+      // Recheck after hashing, with the write lock held through revocation.
+      row = this.checked(id, code, session);
+      const now = Date.now(); let owner;
       if (row.purpose === 'register') {
         this.requireUnusedRegistrationEmail(row.email);
         if (this.store.ownerByName(row.username)) throw fail(409, 'USERNAME_TAKEN', '此网站用户名已被使用');
@@ -138,9 +139,8 @@ export class EmailAuth {
       }
       db.prepare('UPDATE email_challenges SET used_at=? WHERE id=? OR owner_id=? AND used_at IS NULL').run(now, id, owner.id);
       this.store.audit(owner.id, { register: 'account.email-register', bind: 'account.email-bind', reset: 'account.password-reset' }[row.purpose], owner.id);
-      db.exec('COMMIT');
-    } catch (error) { db.exec('ROLLBACK'); throw error; }
-    return { owner, purpose: row.purpose };
+      return { owner, purpose: row.purpose };
+    });
   }
   invalidate(ownerId) { this.store.db.prepare('UPDATE email_challenges SET used_at=? WHERE owner_id=? AND used_at IS NULL').run(Date.now(), ownerId); }
   close() { this.sender.close?.(); }
