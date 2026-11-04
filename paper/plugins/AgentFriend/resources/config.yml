@@ -17,6 +17,9 @@ nametags:
   - 66f280bd-71f9-37a7-b0a4-f352a8c624c5 # Naruto
   - 9ad939f0-c56e-3b7b-ba68-e359b67af0c5 # corti
 coach:
+  adventure-enabled: true
+  adventure-first-seconds: 1200
+  adventure-interval-seconds: 3600
   enabled: true
   default-java: true
   default-bedrock: false

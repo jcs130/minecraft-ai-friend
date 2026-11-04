@@ -145,6 +145,9 @@ final class GuildManager implements Listener {
     private String today() { return LocalDate.now(GUILD_ZONE).toString(); }
     private boolean member(Player p) { return plugin.getConfig().contains(base(p.getUniqueId()) + ".joined"); }
     boolean hasJoined(Player p) { return member(p); }
+    boolean hasActiveContract(Player p) {
+        return !plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", "").isEmpty();
+    }
     com.google.gson.JsonObject onboardingState(Player p) {
         com.google.gson.JsonObject out = new com.google.gson.JsonObject();
         out.addProperty("joined", member(p));
@@ -383,7 +386,7 @@ final class GuildManager implements Listener {
         int completed = plugin.getConfig().getInt(base(player.getUniqueId()) + ".completed", 0);
         StringBuilder next = new StringBuilder();
         if (rank + 1 < RANKS.length) {
-            next.append("；升").append(RANKS[rank + 1]).append("需声望 ").append(THRESHOLDS[rank + 1] - fame);
+            next.append("；升").append(RANKS[rank + 1]).append("还缺声望 ").append(Math.max(0, THRESHOLDS[rank + 1] - fame));
             if (fameRank > rank) {
                 next.append("，并完成认证：").append(certRequirementText(rank + 1));
             }
@@ -395,6 +398,11 @@ final class GuildManager implements Listener {
         player.sendMessage(quest == null ? ChatColor.GRAY + "当前没有在办的委托。"
                 : ChatColor.AQUA + "正在进行：" + quest.title() + " [" + progress(player) + "/"
                 + quest.target() + "]" + (progress(player) >= quest.target() ? "；可交付领取" : ""));
+        if (quest == null) {
+            var cave = GuildAdventureGuide.cave(id -> plugin.taskMarket().availableOffer(player, id));
+            player.sendMessage("§a[冒险路线] " + (cave == null ? "洞穴与天然遗迹委托：/mycli tasks list exploration"
+                    : "洞穴调查：" + cave.command()) + "；逐室遗迹：/mycli dungeon list。完成公会委托后用 /mycli guild claim 交付声望。");
+        }
         if (quest != null && plugin.taskMarket().engineering(quest))
             player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
         showPeakRequirement(player, quest);
@@ -953,6 +961,7 @@ final class GuildManager implements Listener {
         if (doneToday(player, quest)) {
             player.sendMessage(ChatColor.RED + "今日奖励已结算；请联系服主核对异常记录。"); return;
         }
+        var finishedTask = plugin.taskMarket().find(player, quest.id());
         if(quest.goal()==Goal.SKILL_ASSESSMENT&&!plugin.skillAssessments().submitMarket(player))return;
         ItemStack[] playerBefore = null;
         GuildSharedStorage.Receipt delivery = null;
@@ -1029,6 +1038,8 @@ final class GuildManager implements Listener {
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
                 + "，绿宝石 ×" + emeraldGain + "及额外奖励已存入个人试炼箱。");
+        if (finishedTask != null && java.util.Set.of("exploration", "combat").contains(finishedTask.route()))
+            plugin.agentCoach().rememberAdventure(player, "这趟公会委托已经交付");
         if (dynamic != null) player.sendMessage(ChatColor.GREEN + dynamic.beneficiary()
                 + "收到了这份帮助。" + (delivery == null ? "" : "物资已进入公会公共仓库（含同类扩容箱）。"));
         if (delivery != null) delivery.announce(player, deliveryCategory, deliveredMaterial, quest.target());

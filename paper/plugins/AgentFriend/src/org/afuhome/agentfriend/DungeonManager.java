@@ -1670,6 +1670,7 @@ final class DungeonManager implements Listener {
             receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
             receipt.addProperty("activityType", "trial_tower");
             player.sendMessage("MC_TRIAL_RESULT " + receipt);
+            if (won) plugin.agentCoach().rememberAdventure(player, "本场试炼塔已经通关");
         }
     }
 

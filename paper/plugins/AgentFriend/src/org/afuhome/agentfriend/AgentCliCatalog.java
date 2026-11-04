@@ -285,6 +285,7 @@ final class AgentCliCatalog {
         add(specs,"guild.exam","adventure","read","/mycli guild exam <动作>","能力认证与晋级考试；查询、报名和交付分开","先查题目与本人状态；start才报名，submit才交付","MC_GUILD_EXAM；专项证书与新手毕业独立");
         add(specs,"guild.exam.supplies","adventure","read","/mycli guild exam supplies <动作>","考试材料：先查询，再明确领取或取回","只读查询免费；claim/take会转移本人的真实材料","MC_GUILD_EXAM；地图和奖励不重复发放");
         add(specs,"guild.exam.list","adventure","read","/mycli guild exam list","查看实操题库、场地开放情况与下一阶晋级缺项","生存角色；先guild join登记","MC_GUILD_EXAM；声望不自动跳段");
+        add(specs,"guild.exam.promotion","adventure","read","/mycli guild exam promotion","查询下一阶需要的声望、资历与实操考试","先登记公会；按返回的缺项行动","MC_GUILD_EXAM；查询不报名、不晋级");
         add(specs,"guild.exam.info","adventure","read","/mycli guild exam info <ID>","查看题目、技能与资源准备、航点和验收要求","查询免费；自然前往已勘察起点","MC_GUILD_EXAM，含冻结版本与绝对目标");
         add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
         add(specs,"guild.exam.status","adventure","read","/mycli guild exam status [--json]","查本人考试、匹配且可接的委托与准确下一步；区分考证和晋级","只接收本人或实际附身对象；推荐不自动接单","MC_GUILD_EXAM；contractOptions含真实拒绝原因和nextCommand");
@@ -299,7 +300,7 @@ final class AgentCliCatalog {
         add(specs,"guild.certificates","adventure","read","/mycli guild certificates","列出本人已通过的能力证书与18阶冒险者认证","只显示服务器实际验收；未认证不表示不会","MC_GUILD_CERTIFICATES；职业高跃/御空/祝福二三级需要对应基础/进阶证书");
         add(specs,"guild.menu","adventure","gui","/mycli guild menu","打开原版公会任务面板","在线玩家","原版菜单");
         add(specs,"guild.join","adventure","write","/mycli guild join","注册冒险者公会","非旁观者；已入会时显示状态","入会回执");
-        add(specs,"guild.status","adventure","read","/mycli guild status","查看本人公会等级、声望与活动任务","在线玩家","个人状态");
+        add(specs,"guild.status","adventure","read","/mycli guild status","查看本人冒险者段位、声望、晋级入口与在途委托","洞穴与天然遗迹用 tasks list exploration；逐室遗迹用 dungeon list","本人状态与下一步");
         add(specs,"guild.accept","adventure","write","/mycli guild accept <任务ID>","接取一张公会任务；接单可自动入会；tm_map_hunt绑定主手现有目标地图","满足等级/次数限制；同一时间一单；寻宝同一目的地每人一次，复制图不能重复领奖","任务进度或拒绝原因");
         add(specs,"guild.abandon","adventure","write","/mycli guild abandon","放弃当前公会任务","有活动任务","放弃结果");
         add(specs,"guild.claim","adventure","item","/mycli guild claim","交付已完成任务并结算声望/奖励","活动任务已达成","声望与奖励箱结果");

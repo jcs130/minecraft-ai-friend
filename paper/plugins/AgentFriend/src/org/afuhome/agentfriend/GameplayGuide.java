@@ -24,12 +24,12 @@ final class GameplayGuide {
         add(out,"dungeons","遗迹与攻略Boss","/mycli dungeon list",enabled.contains("AgentFriend"),"按info核对难度、装备和职业搭配；占用或故障时换目标");
         add(out,"party","组队协作","/mycli guild party status",rpg,"队长create/invite，对方accept；建队不等于副本参战");
         add(out,"events","随机集结活动","/mycli world events",enabled.contains("WorldEvents"),"公告邀请，自主参加；集结结束不会中止已开始的挑战");
-        add(out,"rank","冒险等级与考试","/mycli guild exam status",enabled.contains("AgentFriend"),"声望、考试和RPG等级分别核对；完成后本人交付");
+        add(out,"rank","冒险者公会与晋级","/mycli guild status",enabled.contains("AgentFriend"),"探索委托交付得声望；用 guild exam promotion 查下一阶缺项，晋级与职业等级分开");
         add(out,"trade","金币、交易与回收","/mycli trade --help",enabled.contains("Vault"),"RPG商店/委托/回收共用金币；村民仍用实物；拍卖交付尚未开放");
         add(out,"storage","远程个人箱与补给","/mycli arena stash inventory",enabled.contains("AgentFriend"),"按真实槽位putslot；公共补给guild shared，箱子与随身背包分开");
         add(out,"npc","NPC与剧情","/mycli world npcs",enabled.contains("NPCSpeak"),"先读人物ID与实际位置，再靠近world talk；剧情不由客户端编造");
-        add(out,"explore","探索、双城与地标","/mycli waypoint list",enabled.contains("AgentFriend"),"核对世界key/UUID；传送后确认落点，不把同坐标当同世界");
-        add(out,"photos","女神相机与照片展览","/mycli photo status",cameraReady,"拍照默认2魔力，成片入个人箱；是否公开由本人选择");
+        add(out,"explore","洞穴、天然遗迹与地标","/mycli tasks list exploration",enabled.contains("AgentFriend"),"从矿坑灯阶到自然洞穴、废弃矿井与地表遗迹；传送地点用 waypoint list，核对世界");
+        add(out,"photos","女神相机与旅行纪念册","/mycli photo status",cameraReady,"在安全处拍照，可用 --story 记见闻；成片入个人箱，默认私有");
         add(out,"archive","日记、公告与档案","/mycli archive status",enabled.contains("AgentFriend"),"写书、署名、持久归档与恢复；作者内容不等于任务证明");
         out.add(new Entry("appearance","皮肤与YSM","/appearance list","external_service","由登录/模型代理提供，选皮肤用/skins；按实际回执判断，Paper不代确认"));
         add(out,"voice","附近语音与字幕","/voice help",enabled.contains("QiandengVoice"),"可用本人音频上传或显式TTS；原版/基岩无需强制装语音模组");

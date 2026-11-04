@@ -125,7 +125,7 @@ final class OnboardingGuide implements Listener {
         return !observer(p) && settings.getBoolean("enabled")
                 && (!settings.getBoolean("agents-only") || plugin.isRegisteredAgent(p));
     }
-    private boolean safe(Player p, long now, long quietUntil) {
+    boolean safe(Player p, long now, long quietUntil) {
         return (p.getGameMode() == GameMode.SURVIVAL||p.getGameMode()==GameMode.ADVENTURE) && !p.isDead() && !plugin.isDowned(p)
                 && !plugin.dungeonParticipant(p) && !plugin.pvpParticipant(p) && now >= quietUntil
                 && p.getOpenInventory().getTopInventory().getType() == InventoryType.CRAFTING;

@@ -513,6 +513,10 @@ final class TaskMarketManager implements Listener {
                 ||proofs.contains("project")&&task.project||proofs.contains("supply")&&task.steps.stream().anyMatch(s->s.goal==GuildManager.Goal.DONATE);
     }
     List<Task> offers() { return tasks.values().stream().filter(Task::enabled).toList(); }
+    boolean availableOffer(Player player, String id) {
+        Task task = tasks.get(id);
+        return task != null && task.enabled() && offerState(task, player).equals("available");
+    }
     TaskRoutes routes() { return routes; }
     Task find(Player player, String id) {
         Task active = frozen(player);
