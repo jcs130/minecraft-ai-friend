@@ -4,6 +4,8 @@ import { TacticalMinecraftWorld as QiandengjiEngine } from '../core/tactical-wor
 import { combatProgramHash, type CombatProgram } from '../core/combat-program.ts';
 import { MINECRAFT_DEFAULTS } from '../core/config.ts';
 import type { CombatDecisionFrame } from '../core/combat-decision-types.ts';
+import { validCombatTactic } from '../core/combat-tactics.ts';
+import { combatRuleBlock, validCombatRules } from '../core/combat-rules.ts';
 
 class StatusWorld extends QiandengjiEngine {
   protected override syncRealm() { this.tactics.useRealm('status-test'); }
@@ -24,6 +26,24 @@ class StatusWorld extends QiandengjiEngine {
   closeProgram() { this.combatProgram.close(); }
   runner() { return this.combatProgram; }
 }
+
+it('accepts actual RPG health thresholds without normalizing them to vanilla 20', async () => {
+  const world = new StatusWorld({cfg:structuredClone(MINECRAFT_DEFAULTS)});
+  const rules=[{id:'reserve',spell:'spark',when:{healthAtOrAbove:30,healthAtOrBelow:45.5,reserveMana:6}}];
+  const receipt=await world.update({healAtOrBelow:35.5,rules});
+  expect(receipt).toContain('已设置战术');expect(receipt).not.toContain('/20');
+  expect(await world.update({})).toContain('35.5');
+  expect(validCombatTactic({spells:null,healAtOrBelow:35.5,rules})).toBe(true);
+  const facts={health:35,mana:12,manaLoading:false,cost:4,dimension:'overworld',onGround:true,enemies:[{type:'zombie',distance:3}]};
+  expect(combatRuleBlock(rules[0],facts)).toBeNull();
+  expect(combatRuleBlock(rules[0],{...facts,health:55})).toBe('未到此分支血线');
+  expect(combatRuleBlock(rules[0],{...facts,mana:8})).toBe('施法后保留魔力不足或读数未知');
+  for(const value of [Infinity,NaN,0,-1]) {
+    expect(await world.update({healAtOrBelow:value})).toContain('未设置');
+    expect(validCombatTactic({spells:null,healAtOrBelow:value})).toBe(false);
+    expect(validCombatRules([{id:'bad',spell:'spark',when:{healthAtOrBelow:value}}])).toBe(false);
+  }
+});
 
 it.each(['exceeded evaluation budget', 'worker response timed out', 'startup timed out'])
 ('retries a program after %s only once on a later sample while ordinary fallback stays available', async reason => {

@@ -14,11 +14,15 @@ it('carries turn boundaries, receipt bytes and cancellation through SDK, MCP and
   const cfg={...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'offline.invalid',username:'Fixture'};
   const runtime=new MinecraftAgentClient({cfg,dataDir:dir,agentName:'NamedAgent',log:nullLogger()},new MinecraftClientWorld({cfg,dataDir:dir,
     extension:{module:new URL('./fixtures/protocol-engine.mjs',import.meta.url).href,
-      tools:[{name:'mc_fixture',description:'Offline fixture',parameters:{type:'object'},tags:['flow']}]}}));
+      tools:[{name:'mc_fixture',description:'Offline fixture',parameters:{type:'object'},tags:['flow'],
+        readOnlyCall:args=>args.inspect===true}]}}));
   const server=createMinecraftMcpServer(runtime,'test'),client=new Client({name:'ipc-test',version:'1'});
   const [a,b]=InMemoryTransport.createLinkedPair();
   const protocol=(action:string,id:string)=>client.callTool({name:'mc_protocol',arguments:{protocol:PROTOCOL,action,id}});
   try {
+    const tool=runtime.tools().find(t=>t.name==='mc_fixture')!;
+    expect(tool.readOnlyCall?.({inspect:true})).toBe(true);
+    expect(tool.readOnlyCall?.({hold:true})).toBe(false);
     await server.connect(a);await client.connect(b);await runtime.connect();await protocol('begin_turn','turn-a');
     const initial=await runtime.events();
     const image=initial.events.find(e=>e.type==='fixture.deferred')!.blobs![0];

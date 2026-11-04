@@ -19,7 +19,7 @@ import {
   type SkillContext,
 } from './skill-context.ts';
 import { zhName } from './names.ts';
-import { gotoGoal } from './travel.ts';
+import { gotoGoal, GoalWithinBlockReach, reachCell, walkOnlyPath } from './travel.ts';
 import { invCount, type InvItem } from './inventory.ts';
 import { forgetPlaced } from './placed-ledger.ts';
 import { contentsText, type PlaceCall, zhErrorText } from './receipt.ts';
@@ -1072,6 +1072,7 @@ export async function ensureStation(
   // 被跳过的事实全部进回执/受阻文案——跳过是事实判断(它干不了这活),不是权衡
   opts?: { skip?: (c: { x: number; y: number; z: number }) => string | null },
 ): Promise<StationAt> {
+  checkAbort(ctx);
   const { kinds, label, hint } = station;
   const stock = (): number => kinds.reduce((n, k) => n + invCount(bot, (x) => x === k), 0);
   const skipped: string[] = [];
@@ -1092,12 +1093,39 @@ export async function ensureStation(
   const near = candidates[0] ?? null;
   const nearWhere = near ? `(${near.x}, ${near.y}, ${near.z}),约 ${Math.round(near.d)} 格外` : null;
   const carried = kinds.find((k) => invCount(bot, (n) => n === k) > 0) ?? null;
+  // Euclidean proximity can put a station under a protected floor ahead of an
+  // accessible station. Prefer a confirmed existing route, using precisely the
+  // same interaction goal as execution. Probes never mark a station unreachable.
+  // Bound planning work; unknown/partial results retain the original fallback.
+  let walking: (typeof candidates)[number] | undefined;
+  if (!carried && ctx.probeRoutes && !candidates.some(c =>
+    bot.entity.position.distanceTo(new Vec3(c.x + 0.5, c.y + 0.5, c.z + 0.5)) <= PLACE_REACH)) {
+    const deadline = performance.now() + 1000;
+    for (const candidate of candidates) {
+      checkAbort(ctx);
+      if (performance.now() >= deadline) break;
+      const probe = ctx.probeRoutes(candidate,
+        new GoalWithinBlockReach(candidate.x, candidate.y, candidate.z, PLACE_REACH), ['walk'])
+        ?.find(p => p.profile === 'walk');
+      if (probe?.status === 'complete' && probe.breaks === 0 && probe.place === 0) {
+        walking = candidate;
+        candidates.splice(candidates.indexOf(candidate), 1);
+        candidates.unshift(candidate);
+        break;
+      }
+    }
+  }
+  // A centre-based interaction can already be reachable even if another
+  // block's origin has a slightly shorter distance. Avoid navigating at all.
+  candidates.sort((a, b) => Number(bot.entity.position.distanceTo(new Vec3(b.x + 0.5, b.y + 0.5, b.z + 0.5)) <= PLACE_REACH)
+    - Number(bot.entity.position.distanceTo(new Vec3(a.x + 0.5, a.y + 0.5, a.z + 0.5)) <= PLACE_REACH));
   let attempted = false;
   for (const candidate of candidates) {
-    if (carried !== null && candidate.d > PLACE_REACH) break;
+    if (carried !== null && bot.entity.position.distanceTo(new Vec3(candidate.x + 0.5, candidate.y + 0.5, candidate.z + 0.5)) > PLACE_REACH) break;
     attempted = true;
+    const release = candidate === walking ? walkOnlyPath(bot) : () => {};
     try {
-      await gotoGoal(bot, new goals.GoalNear(candidate.x, candidate.y, candidate.z, 2), ctx);
+      await reachCell(bot, candidate, ctx);
     } catch (err) {
       checkAbort(ctx);
       if (!(err instanceof SkillBlocked)) throw err;
@@ -1108,6 +1136,8 @@ export async function ensureStation(
       failures.set(stationFailureKey(bot, candidate), Date.now() + STATION_RETRY_MS);
       skipped.push(`${label} (${candidate.x}, ${candidate.y}, ${candidate.z}) 走不过去:${err.message}`);
       continue;
+    } finally {
+      release();
     }
     const block = bot.blockAt(new Vec3(candidate.x, candidate.y, candidate.z));
     if (block && kinds.includes(block.name)) {

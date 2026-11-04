@@ -155,6 +155,7 @@ export function installMineflayerFixes(
   installInventoryWindowSyncGuard(bot, diag);
   fixFoodComponentSchema(bot, log);
   fixPotionContentsSchema(bot, log);
+  fixArmorTrimMaterialSchema(bot, log);
   if (repairRecipeSerializers(bot.registry)) {
     log.info('协议表修正:1.20.5/6 配方序号摘除 banneraddpattern，保持熔炼、切石与锻造包对齐');
   }
@@ -365,16 +366,50 @@ export function repairRecipeSerializers(value: unknown): boolean {
 }
 
 /**
- * 移除 1.20.6 food 组件表中不属于该版本的 usingConvertsTo 字段，避免 trade_list 解析错位。
- * 登录前修改共享协议表；字段缺席时保持原表。
+ * 1.20.5–1.21.1 food 布局：1.21 的转换产物有独立存在位；效果是完整效果实例。
+ * 在 play 解析器编译之前修正协议表，不能把消费后的产物当成直接 Slot 或把效果当成 ID。
  */
 function fixFoodComponentSchema(bot: Bot, log: Logger): void {
+  const version = bot.registry?.version?.minecraftVersion ?? '';
+  if (!['1.20.5', '1.20.6', '1.21', '1.21.1'].includes(version)) return;
   const food = slotComponentFields(bot, 'food');
   if (!food) return;
   const i = food.findIndex((f) => f?.name === 'usingConvertsTo');
-  if (i < 0) return;
-  food.splice(i, 1);
-  log.info('协议表修正:1.20.6 food 组件摘除 usingConvertsTo,村民报价包(trade_list)解析恢复');
+  let changed = false;
+  if (i >= 0 && ['1.20.5', '1.20.6'].includes(version)) { food.splice(i, 1); changed = true; }
+  else if (i >= 0 && food[i].type === 'Slot') { food[i].type = ['option', 'Slot']; changed = true; }
+  const effects = food.find(f => f.name === 'effects')?.type as
+    [string, { type?: [string, Array<{ name?: string; type?: unknown }>] }] | undefined;
+  const effect = effects?.[0] === 'array' ? effects[1].type?.[1]?.find?.(f => f.name === 'effect') : undefined;
+  if (effect?.type === 'varint') { effect.type = 'ItemPotionEffect'; changed = true; }
+  if (changed) log.info(`协议表修正:${version} food 转换产物存在位与完整效果实例，保持后续物品字段对齐`);
+}
+
+/**
+ * minecraft-data 3.117.0 reused the 1.21.4 trim material layout for older versions.
+ * ViaVersion ArmorTrimMaterial1_20_5 and MCProtocolLib 1.21-1 agree: before 1.21.4
+ * itemModelIndex is f32; before 1.21.2 override keys are armor-material registry IDs.
+ * Registered holders still use only their ID; this changes inline values only.
+ */
+function fixArmorTrimMaterialSchema(bot: Bot, log: Logger): void {
+  const version = bot.registry?.version?.minecraftVersion ?? '';
+  if (!['1.20.5', '1.20.6', '1.21', '1.21.1', '1.21.2', '1.21.3'].includes(version)) return;
+  const type = (bot.registry as unknown as { protocol?: { types?: Record<string, unknown> } })
+    .protocol?.types?.ArmorTrimMaterial as [string, RecipeField[]] | undefined;
+  if (type?.[0] !== 'container' || !Array.isArray(type[1])) return;
+  const fields = type[1], ingredient = fields.findIndex(f => f.name === 'ingredientId');
+  if (ingredient < 0) return;
+  let changed = false;
+  if (!fields.some(f => f.name === 'itemModelIndex')) {
+    fields.splice(ingredient + 1, 0, { name: 'itemModelIndex', type: 'f32' }); changed = true;
+  }
+  const overrides = fields.find(f => f.name === 'overrideArmorAssets')?.type as
+    [string, { type?: [string, RecipeField[]] }] | undefined;
+  const key = overrides?.[0] === 'array' ? overrides[1].type?.[1]?.find?.(f => f.name === 'key') : undefined;
+  if (['1.20.5', '1.20.6', '1.21', '1.21.1'].includes(version) && key?.type === 'string') {
+    key.type = 'varint'; changed = true;
+  }
+  if (changed) log.info(`协议表修正:${version} 内联护甲纹饰的模型索引和材质编号，避免整包背包错位`);
 }
 
 /**
@@ -382,23 +417,25 @@ function fixFoodComponentSchema(bot: Bot, log: Logger): void {
  * 1.20.6 仅发送 potionId、customColor、customEffects；多读字段会使含药水物品的整包解析失败。
  */
 function fixPotionContentsSchema(bot: Bot, log: Logger): void {
+  // customName was added after 1.21.1; leave newer/unknown protocols alone.
+  if (!['1.20.5', '1.20.6', '1.21', '1.21.1'].includes(bot.registry?.version?.minecraftVersion ?? '')) return;
   const potion = slotComponentFields(bot, 'potion_contents');
   if (!potion) return;
   const i = potion.findIndex((f) => f?.name === 'customName');
   if (i < 0) return;
   potion.splice(i, 1);
-  log.info('协议表修正:1.20.6 potion_contents 组件摘除 customName,带药水/水瓶的物品栏包不再被静默丢弃');
+  log.info(`协议表修正:${bot.registry.version.minecraftVersion} potion_contents 组件摘除提前出现的 customName`);
 }
 
 /** SlotComponent 表里某个组件的字段数组(原地可改);表不在或形状不对给 null。 */
-function slotComponentFields(bot: Bot, component: string): Array<{ name?: string }> | null {
+function slotComponentFields(bot: Bot, component: string): Array<{ name?: string; type?: unknown }> | null {
   const proto = (bot as unknown as { registry?: { protocol?: { types?: Record<string, unknown> } } }).registry?.protocol;
   const slotComponent = proto?.types?.SlotComponent as
     | [string, Array<{ name?: string; type?: unknown }>]
     | undefined;
   const data = slotComponent?.[1]?.find?.((f) => f?.name === 'data');
   const fields = (data?.type as [string, { fields?: Record<string, unknown> }] | undefined)?.[1]?.fields;
-  const def = fields?.[component] as [string, Array<{ name?: string }>] | undefined;
+  const def = fields?.[component] as [string, Array<{ name?: string; type?: unknown }>] | undefined;
   return Array.isArray(def?.[1]) ? def[1] : null;
 }
 

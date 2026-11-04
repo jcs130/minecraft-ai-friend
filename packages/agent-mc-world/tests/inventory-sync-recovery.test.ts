@@ -45,6 +45,31 @@ function rig(version = '1.20.6') {
 
 afterEach(() => vi.useRealTimers());
 
+it.each([true, false])('does not let pre-auth proxy death hide real player inventory, inventory-before-spawn=%s', beforeSpawn => {
+  const r=rig('1.21.1');let authenticated=false,initial=false;
+  Object.assign(r.bot,{entity:{}});
+  mf('mineflayer/lib/plugins/health.js')(r.bot,{respawn:false});
+  const lifecycle=installDeathLifecycle(r.bot,4000,()=>true,()=>authenticated);
+  r.client.on('window_items',(packet)=>{if(packet.windowId===0)initial=true;});
+  const synced=()=>Reflect.get(Bridge.prototype,'invSynced',{_invSynced:initial,_bot:r.bot});
+  r.client.emit('update_health',{health:0,food:20,foodSaturation:0});
+  expect(synced()).toBe(false);
+  expect((r.bot as any).deathLifecycle).toBeUndefined();
+  authenticated=true;
+  const inventory=()=>r.full(0,46,{36:r.raw('iron_sword'),42:r.raw('cooked_beef',43)});
+  if(beforeSpawn)inventory();
+  r.client.emit('update_health',{health:20,food:18,foodSaturation:0});
+  expect(synced()).toBe(beforeSpawn);
+  inventory();
+  expect(synced()).toBe(true);
+  expect(r.bot.inventory.slots[36]?.name).toBe('iron_sword');
+  expect(r.bot.inventory.slots[42]?.count).toBe(43);
+  // A subsequent real death must still invalidate this otherwise complete bag.
+  r.client.emit('update_health',{health:0,food:0,foodSaturation:0});
+  expect(synced()).toBe(false);
+  lifecycle.dispose();
+});
+
 it.each([true, false])('uses real 1.21.1 inventory packets for episode freshness, inventory-before-spawn=%s', beforeSpawn => {
   const r = rig('1.21.1');
   Object.assign(r.bot, { entity: {} });

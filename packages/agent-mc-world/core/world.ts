@@ -3644,16 +3644,25 @@ export class MinecraftWorld implements World {
    */
   private unavailableRequestFacts(reason: 'disconnected' | 'snapshot-unavailable' | 'body-not-ready'): WorldRequestFacts {
     const last = this.lastFinishedTask;
+    const bodyBot = reason === 'body-not-ready' ? this.bridge?.bot : null;
+    const lifecycle = (bodyBot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
+    const body = bodyBot ? nativeBodyReadiness(bodyBot) : null;
+    const health = lifecycle?.healthObservation && body && Date.parse(lifecycle.healthObservation.observedAt) >= body.boundaryAt
+      ? lifecycle.healthObservation : null;
     const parts = [
       { key: 'identity', text: JSON.stringify({ realm: null, world: readWorldIdentity(null) }) },
       { key: 'availability', text: JSON.stringify({ observedAt: new Date().toISOString(), reason,
         connection: this.connectionReadiness(), currentWorldVerified: false,
         ...(reason === 'body-not-ready' && this.bridge?.bot ? { nativeBody: nativeBodyReadiness(this.bridge.bot) } : {}),
-        position: null, dimension: null, health: null, inventory: null, nearby: null,
+        position: null, dimension: null, health: health?.health ?? null,
+        healthObservedAt: health?.observedAt ?? null, food: health?.food ?? null, inventory: null, nearby: null,
         bodyTask: null, taskProgress: null }) },
-      { key: 'observationBoundary', text: 'Minecraft 当前现场读数不可用；位置、维度、生命、背包、周围环境及身体任务进展均未验证，null 表示未知，不表示空或没有任务。历史快照和增量不能充当当前状态；原文仍在事件账本。恢复后重新读取现场，并核对原动作终态再决定下一步。' },
+      ...(lifecycle ? [{ key: 'deathLifecycle', text: JSON.stringify(lifecycle) }] : []),
+      { key: 'observationBoundary', text: reason === 'body-not-ready'
+        ? 'Minecraft 当前空间现场不可用；位置、维度、背包、周围环境及身体任务进展未验证。生命仅以附带时间的原生 healthObservation 为据；null 表示未知，不表示空或没有任务。历史快照和增量不能充当当前状态；原文仍在事件账本。恢复后重新读取现场，并核对原动作终态再决定下一步。'
+        : 'Minecraft 当前现场读数不可用；位置、维度、生命、背包、周围环境及身体任务进展均未验证，null 表示未知，不表示空或没有任务。历史快照和增量不能充当当前状态；原文仍在事件账本。恢复后重新读取现场，并核对原动作终态再决定下一步。' },
       ...(reason === 'body-not-ready' && this.bridge?.bot
-        ? [{ key: 'bodyAvailability', text: nativeBodyBlockedReason(this.bridge.bot)! }] : []),
+        ? [{ key: 'bodyAvailability', text: '游戏连接与身体可行动状态分别判断；body-not-ready 不表示服务器断线。' + nativeBodyBlockedReason(this.bridge.bot)! }] : []),
       { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
       { key: 'lastTask', text: renderLastTaskReadout(last
         ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
@@ -8012,6 +8021,7 @@ export class MinecraftWorld implements World {
           ? `${dropAt.dimension}:${Math.floor(dropAt.x)},${Math.floor(dropAt.y)},${Math.floor(dropAt.z)}`
           : null,
       });
+      if (lifecycle) lifecycle.deathsToday = toll.today;
       const gloss = cause ? deathCauseZh(cause.key) : null;
       const causeLine = cause ? `服务端记的死因:${cause.text}${gloss ? `(${gloss})` : ''}。` : '';
       const hereLine = toll.hereToday > 1 ? `你今天第 ${toll.hereToday} 次死在这一格。` : '';

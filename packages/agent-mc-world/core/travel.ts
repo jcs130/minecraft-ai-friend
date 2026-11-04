@@ -1181,7 +1181,7 @@ export async function settleOnGround(bot: Bot, ctx: SkillContext, budgetMs = 5_0
  * actual feet to the target block centre. Use the same boundary throughout a
  * route: an arbitrary two-block goal can keep walking after reach is satisfied,
  * then stall against a chest, wall or ledge before the interaction ever runs. */
-class GoalWithinBlockReach extends goals.GoalNear {
+export class GoalWithinBlockReach extends goals.GoalNear {
   override isEnd(node: Parameters<InstanceType<typeof goals.GoalNear>['isEnd']>[0]): boolean {
     return Math.hypot(node.x - this.x, node.y - this.y - 0.5, node.z - this.z) <= PLACE_REACH;
   }

@@ -1,6 +1,6 @@
 # 背包同步与恢复
 
-`mc_bag`、物资查询和现场读数现在区分四种等待原因：首次背包数据未到、容器玩家槽位不完整、上一笔操作待确认、上一笔操作结果未知。不会把后面三种情况都说成“清单还没到”，也不会把未确认的数据说成空背包或物品丢失。
+`mc_bag`、物资查询和现场读数现在区分五种未确认原因：首次背包数据未到、容器玩家槽位不完整、上一笔操作待确认、上一笔操作结果未知、原生数据包解析失败。不会把后面几种情况都说成“清单还没到”，也不会把未确认的数据说成空背包或物品丢失。
 
 ## 确认规则
 
@@ -32,3 +32,40 @@ pnpm pack
 ```
 
 包含查看器的发行包应沿原锁定资源构建，不能把 engine-only 包当作含完整 Web 资源的替代品。`tests/inventory-sync-recovery.test.ts` 使用锁定版本的真实 Mineflayer 库存插件，覆盖部分/完整数据、空槽、重复/迟到事件、窗口编号重用、三种关窗路径、合成超时、未发送延迟点击和准确提示；装备测试继续验证槽位、光标和服务器拒绝后的停止行为。
+## Native item component decoding
+
+For Java 1.21.1, `usingConvertsTo` is boolean-prefixed optional Slot data,
+food effects contain full effect instances (including hidden effects), and inline
+armor trim materials contain `itemModelIndex: f32` plus VarInt override keys.
+The pinned minecraft-data 3.117.0 definitions incorrectly reuse newer layouts.
+Corrections are installed before PLAY codec compilation, shared by SDK/MCP/hosts.
+1.21.2–1.21.3 retain the float but use string override keys; 1.21.4 removes it.
+
+Reference implementations:
+- [MCProtocolLib 1.21 ItemCodecHelper](https://github.com/GeyserMC/MCProtocolLib/blob/1.21-1/protocol/src/main/java/org/geysermc/mcprotocollib/protocol/data/game/item/component/ItemCodecHelper.java)
+- [ViaVersion versioned trim codecs](https://github.com/ViaVersion/ViaVersion/blob/master/api/src/main/java/com/viaversion/viaversion/api/minecraft/item/data/trim/ArmorTrimMaterial1_20_5.java)
+- [ViaVersion 1.21 optional item definition](https://github.com/ViaVersion/ViaVersion/blob/5.0.5/api/src/main/java/com/viaversion/viaversion/api/type/types/version/Types1_21.java)
+
+`inventorySync.phase=decode_failed` means a complete framed player-window `window_items`
+or `set_slot` packet could not be decoded. It is not an empty inventory or an ordinary
+initial wait. The diagnostic includes packet kind, byte count, time and error class,
+without retaining raw private item payloads. A successfully decoded complete player
+window snapshot clears it. One slot update or an unrelated container does not.
+The guard also refuses a packet the decoder only partially consumed, which upstream
+would otherwise log and still deliver. Existing mutation/cursor confirmation remains.
+
+`tests/item-component-wire.test.ts` constructs independent wire fixtures, feeds the
+actual protocol decoder and Mineflayer inventory plugin, and verifies later weapon,
+shield and component alignment. These are offline compatibility checks, not proof
+that a particular production inventory has recovered.
+
+### Authentication and death are separate boundaries
+
+A login proxy can send zero health before authentication and then spawn a living
+player without a `respawn` packet. It must not create a game death episode: doing
+so leaves `inventorySynced=false` even after a complete native inventory arrived.
+The connection's authentication readiness gates creation of death episodes only;
+real death recovery still requires fresh inventory after native respawn. Fresh
+authenticated zero-health packets also trigger recovery when Mineflayer already
+used its `death` edge for the login lobby. Do not resolve this state by trusting
+cached items, clearing real death records, or setting the inventory flag blindly.

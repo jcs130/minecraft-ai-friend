@@ -51,3 +51,15 @@ it('does not reuse a previous world position through configuration or a closed c
 it('retains explicit compatibility for consumers which did not install the observer', () => {
   expect(nativeBodyReadiness({})).toBeNull(); expect(nativeBodyBlockedReason({})).toBeNull();
 });
+it('reports only native readiness transitions, without logging every physics frame or correction', () => {
+  const bot = Object.assign(new EventEmitter(), { _client: Object.assign(new EventEmitter(), { state: 'play' }),
+    health: 35, physicsEnabled: true, entity: { position: { x: 0, y: 64, z: 0 } } });
+  const observe = vi.fn(), state = installNativeBodyReadiness(bot, observe);
+  bot.emit('death'); bot.emit('respawn'); bot.emit('spawn');
+  expect(observe.mock.calls.map(([event]) => event)).toEqual(['boundary', 'boundary']);
+  bot._client.emit('position', {});
+  for (let n = 0; n < 30; n++) { bot.emit('physicsTick'); bot._client.emit('position', {}); }
+  expect(observe.mock.calls.map(([event]) => event)).toEqual(['boundary', 'boundary', 'position', 'physics-ready']);
+  expect(observe.mock.calls.at(-1)?.[1].phase).toBe('ready');
+  state.dispose(); bot.emit('death'); expect(observe).toHaveBeenCalledTimes(4);
+});

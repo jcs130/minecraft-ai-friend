@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { planInventoryOrganization, planInventoryShortcutExchange, inventoryOrganizationKey, inventoryOrganizationTotals } from '../core/inventory-organization.ts';
+import { planInventoryOrganization, inventoryOrganizationPlanView, planInventoryShortcutExchange, inventoryOrganizationKey, inventoryOrganizationTotals } from '../core/inventory-organization.ts';
 import { skillOrganize } from '../core/skills-organize.ts';
 import { parseScoutSteps, parseSteps, SKILL_STEP_SCHEMA } from '../core/skills.ts';
 import { installInventoryClickSync, inventoryClickState } from '../core/inventory-click-sync.ts';
@@ -12,6 +12,21 @@ import { discardInventorySlotConfirmed, transferInventoryStackConfirmed } from '
 
 const mf = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 afterEach(() => vi.useRealTimers());
+
+it('keeps large component identities out of the preview without weakening exact click preconditions', () => {
+  const slots = Array.from({length:54}, (_,i) => ({type:1,name:i%2?'written_book':'apple',count:1,stackSize:1,
+    components:[{type:'custom_data',data:{index:i,book:'PRIVATE_COMPONENT_DETAIL'.repeat(1000)}}]}));
+  const totals=inventoryOrganizationTotals(slots);
+  const plan=planInventoryOrganization(slots,0,54);
+  const original=JSON.stringify(plan), preview=inventoryOrganizationPlanView(plan);
+  expect(original.length).toBeGreaterThan(20000);
+  expect(JSON.stringify(preview).length).toBeLessThan(20000);
+  expect(JSON.stringify(preview)).not.toContain('PRIVATE_COMPONENT_DETAIL');
+  expect(preview).toMatchObject({projection:'preview-only',range:plan.range,merges:plan.merges,swaps:plan.swaps});
+  expect(preview.moves.map(m=>[m.kind,m.from,m.to])).toEqual(plan.moves.map(m=>[m.kind,m.from,m.to]));
+  expect(new Set(preview.moves.flatMap(m=>[m.source?.variant,m.destination?.variant])).size).toBeGreaterThan(2);
+  expect(JSON.stringify(plan)).toBe(original);expect(inventoryOrganizationTotals(slots)).toBe(totals);
+});
 
 function rig(version = '1.21.1') {
   vi.useFakeTimers(); vi.setSystemTime(100000);

@@ -2,22 +2,26 @@
 import type { Bot } from 'mineflayer';
 import type { MinecraftLog } from './log.ts';
 import { inventoryClickState } from './inventory-click-sync.ts';
+import { installInventoryWireGuard, type InventoryDecodeFailure } from './inventory-wire-guard.ts';
 
 type Window = NonNullable<Bot['currentWindow']>;
 interface WindowSyncState {
   confirmed: boolean;
   observed: WeakMap<Window, Set<number>>;
+  decodeFailure?: InventoryDecodeFailure;
 }
 const syncStates = new WeakMap<Bot, WindowSyncState>();
 
 export interface InventoryReadState {
-  phase: 'ready' | 'initial' | 'partial' | 'pending' | 'quarantined';
+  phase: 'ready' | 'initial' | 'partial' | 'pending' | 'quarantined' | 'decode_failed';
   reason?: string;
 }
 
 export function inventoryReadState(bot: Bot, initialReceived = true): InventoryReadState {
   const click = inventoryClickState(bot);
   if (click.phase !== 'ready') return { phase: click.phase, reason: click.reason };
+  const failure = syncStates.get(bot)?.decodeFailure;
+  if (failure) return { phase: 'decode_failed', reason: `${failure.packet} / ${failure.error} / ${failure.bytes} bytes` };
   if (syncStates.get(bot)?.confirmed === false) return { phase: 'partial' };
   return { phase: initialReceived ? 'ready' : 'initial' };
 }
@@ -29,6 +33,7 @@ export function inventoryReadConfirmed(bot: Bot): boolean {
 
 export function narrateInventorySync(state?: InventoryReadState): string {
   switch (state?.phase) {
+    case 'decode_failed': return `服务器背包数据包解析失败，当前物品清单未确认。${state.reason ? `诊断：${state.reason}。` : ''}这不是空背包或普通等待；需修正协议解析并收到新的完整背包数据。不要反复查包、重放存取或凭旧清单合成，其他无需物品的活动仍可继续。`;
     case 'pending': return '上一笔背包操作正在等待服务器确认槽位和光标，请稍后查询，不要重复存取或合成。';
     case 'quarantined': return `上一笔背包操作结果未知，已暂停后续物品操作。${state.reason ? `原因：${state.reason}。` : ''}等待新的完整槽位和光标数据后重新查询；持续未恢复可重新连接，不要重放上一笔操作。此等待只限制物品操作，仍可只读观察、交流或在安全条件下无需用物品的行走。`;
     case 'partial': return '容器的玩家槽位数据尚不完整，已保留上次读数但暂不作为当前清单。请关闭后重新打开容器查询；仍未恢复可重新连接，不要重复存取。';
@@ -45,6 +50,11 @@ export function installInventoryWindowSyncGuard(bot: Bot, diag?: MinecraftLog): 
   if (syncStates.has(bot) || typeof bot.closeWindow !== 'function' || !bot.inventory?.slots) return;
   const state: WindowSyncState = { confirmed: true, observed: new WeakMap() };
   syncStates.set(bot, state);
+  installInventoryWireGuard(bot, failure => {
+    state.decodeFailure = failure;
+    diag?.write({ lane: 'inventory', event: 'decode-failed', level: 'warn',
+      msg: '原生背包包解析失败，保留旧数据但不再作为当前清单；等待修复后完整同步', data: {...failure} });
+  });
   const seenFor = (window: Window): Set<number> => {
     let seen = state.observed.get(window);
     if (!seen) { seen = new Set(); state.observed.set(window, seen); }
@@ -89,7 +99,13 @@ export function installInventoryWindowSyncGuard(bot: Bot, diag?: MinecraftLog): 
       return true;
     }
     if (name === 'window_items') {
-      if (packet.windowId === 0) state.confirmed = packet.items.length >= bot.inventory.slots.length;
+      if (packet.windowId === 0) {
+        state.confirmed = packet.items.length >= bot.inventory.slots.length;
+        if (state.confirmed && state.decodeFailure) {
+          state.decodeFailure = undefined;
+          diag?.write({lane:'inventory',event:'decode-recovered',level:'info',msg:'已收到并解码完整玩家背包，恢复当前清单'});
+        }
+      }
       else if (window) {
         const seen = seenFor(window);
         for (let slot = window.inventoryStart; slot < Math.min(packet.items.length, window.inventoryEnd); slot++) seen.add(slot);

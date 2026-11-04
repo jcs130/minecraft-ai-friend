@@ -20,7 +20,9 @@ const readers = new WeakMap<object, () => NativeBodyReadiness>();
 const TICK_STALE_MS = 5_000;
 
 /** Read-only lifecycle observer. Never sends packets, changes physics or starts a body. */
-export function installNativeBodyReadiness(bot: BodyBot): { read(): NativeBodyReadiness; dispose(): void } {
+export function installNativeBodyReadiness(bot: BodyBot,
+  observe?: (event: 'boundary' | 'position' | 'physics-ready', state: NativeBodyReadiness) => void,
+): { read(): NativeBodyReadiness; dispose(): void } {
   const existing = readers.get(bot);
   if (existing) return { read: existing, dispose() {} };
   let closed = false;
@@ -33,6 +35,7 @@ export function installNativeBodyReadiness(bot: BodyBot): { read(): NativeBodyRe
         || bot.physicsEnabled === false || (bot.health ?? 0) <= 0 ? 'waiting-physics' : 'ready' });
   const reset = (boundary: NativeBodyReadiness['boundary']) => {
     state = { phase: 'waiting-position', boundary, boundaryAt: Date.now(), positionAt: null, physicsAt: null };
+    observe?.('boundary', read());
   };
   const login = () => reset('login'), death = () => reset('death'), respawn = () => reset('respawn');
   const mount = () => reset('mount');
@@ -40,12 +43,18 @@ export function installNativeBodyReadiness(bot: BodyBot): { read(): NativeBodyRe
   const position = () => {
     if (closed || bot._client.state !== undefined && bot._client.state !== 'play') return;
     // A decoded server position is evidence of a new landing; positive health/spawn is not.
-    if (state.positionAt === null) state.physicsAt = null;
+    const first = state.positionAt === null;
+    if (first) state.physicsAt = null;
     state.positionAt = Date.now();
+    if (first) observe?.('position', read());
   };
   const tick = () => {
     const p = bot.entity?.position;
-    if (!closed && state.positionAt !== null && p && [p.x, p.y, p.z].every(Number.isFinite)) state.physicsAt = Date.now();
+    if (!closed && state.positionAt !== null && p && [p.x, p.y, p.z].every(Number.isFinite)) {
+      const first = state.physicsAt === null;
+      state.physicsAt = Date.now();
+      if (first) observe?.('physics-ready', read());
+    }
   };
   const dispose = () => {
     if (closed) return;

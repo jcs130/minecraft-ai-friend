@@ -1,3 +1,45 @@
+## 0.5.7-rc.160-preview.9 (unpublished candidate)
+
+- Select an existing workstation with a confirmed walking route before trying closer stations behind floors or walls. Use the same interaction reach for route probes and execution, preserving unknown routes, cancellation, native inventory confirmation and movement ownership.
+- Use workstations already within interaction reach without demanding an unnecessary two-block landing. Keep route planning bounded and restore movement settings after each attempt.
+
+## 0.5.7-rc.160-preview.8 (unpublished candidate)
+
+- Separate pre-authentication proxy health from genuine game death recovery so login zero-health packets do not hide a synchronized inventory.
+
+## 0.5.7-rc.160-preview.7 (unpublished candidate)
+
+- Correct Java 1.21.1 inline armor trim and food component layouts so a single customized item cannot shift every following inventory slot. Preserve protocol-specific 1.20.6, 1.21.3 and 1.21.4 compatibility.
+- Surface complete player-inventory packet decode failures separately from initial synchronization. Reject partially consumed inventory packets, retain old data as unconfirmed, and recover only on a new complete player snapshot. Do not reconnect, replay inventory mutations or infer empty slots.
+
+## 0.5.7-rc.160-preview.6
+
+- Keep executable per-call read predicates in the parent process and send only serializable extension descriptors to the engine child. Exercise the real child channel through SDK/MCP.
+
+## 0.5.7-rc.160-preview.5 (unpublished candidate)
+
+- Expose strict per-call read classification for combat tactic, battlefield, decision and report queries across SDK, IPC and Java clients. Mixed read/update requests remain mutations; hosts can permit evidence collection alongside a body-owning worker without granting tactic writes.
+- Accept finite absolute RPG health thresholds above 20, including fractional values, in tactic validation, persisted settings and rule schemas. Availability, mana, cooldown and body ownership checks remain unchanged.
+
+## 0.5.7-rc.160-preview.4 (unpublished candidate)
+
+- Preserve death episode identity, ledger count and independently timestamped recovery health while spatial readiness is unavailable. Distinguish an authenticated connection from missing respawn position; never promote health alone to a valid landing.
+- Log native body boundary, first position and first physics transitions without per-frame noise, to support protocol diagnosis. This does not fabricate missing packets or force a reconnect.
+
+## 0.5.7-rc.160-preview.3
+
+- Project inventory organization previews into compact slot/count/variant views. Keep exact NBT/component identities for execution preconditions and conservation checks, rather than repeating them in model-facing results. Export the preview through SDK and extension contracts.
+- Retain the Java 1.21.1 codec and earlier navigation repairs from the preceding candidate. Not yet loaded or published.
+
+## 0.5.7-rc.160-preview.2 (unpublished candidate)
+
+- Restrict the obsolete food-component workaround to Java 1.20.5/1.20.6. Preserve the real 1.21.1 usingConvertsTo field so native inventory packets containing custom food do not lose their following component/slot boundaries. Verify through the real protocol decoder and Mineflayer inventory plugin.
+- Apply the potion custom-name workaround only to the known affected versions, preserving newer wire fields.
+
+## 0.5.7-rc.160-preview.1 (unpublished candidate)
+
+- Delay first World activation until both authentication and configuration transport readiness hold. A proxy can confirm authentication before the backend's first PLAY position; retry activation after that native position so the World sees its connected bot and installs query, perception and body lifecycle listeners exactly once.
+
 ## 0.5.7-rc.157-preview.1 (unpublished candidate)
 
 - Keep the native map identity in sites, rays and voxel receipts, including the compact readout prefix. Distinguish equal coordinates in different maps sharing the same dimension type; missing map identities remain unknown.
