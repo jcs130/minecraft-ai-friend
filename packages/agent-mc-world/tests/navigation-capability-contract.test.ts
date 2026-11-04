@@ -28,17 +28,17 @@ describe('configured navigation capability disclosure', () => {
     const live = new Movements(bot);
     bridge.tune(live);
     expect(live.maxDropDown).toBe(2);
-    expect(live.allowParkour).toBe(false);
+    expect(live.allowParkour).toBe(true);
     const probes = bridge.probeRoutes({ x: 10, y: 59, z: 0 })!;
     expect(probed).toHaveLength(3);
     for (const [index, probe] of probes.entries()) {
       expect(probed[index].maxDropDown).toBe(live.maxDropDown);
       expect(probed[index].allowParkour).toBe(live.allowParkour);
-      expect(probe).toHaveProperty('capabilities', { maxDropDown: 2, allowParkour: false,
+      expect(probe).toHaveProperty('capabilities', { maxDropDown: 2, allowParkour: true, jumpMode: 'gap',
         canDig: probe.profile !== 'walk', scaffoldCount: probe.profile === 'style' ? count : 0 });
     }
     const text = renderRouteMenu(probes, { x: 10, y: 59, z: 0 });
-    expect(text).toContain('规划落差≤2格、跑酷关闭');
+    expect(text).toContain('规划落差≤2格、跑酷仅同高一格跨空');
     expect(text).toContain(`垫脚料${count}块`);
     expect(text).toContain('挖掘关闭');
     expect(text).toContain('仅表示在所列能力下未找到路线');
@@ -50,7 +50,7 @@ describe('configured navigation capability disclosure', () => {
     const help = readSkillHelp({ skill: 'goto' });
     if (!('text' in help)) throw new Error('Missing goto help');
     expect(help.text).toContain('规划落差最多 2 格');
-    expect(help.text).toContain('跑酷关闭');
+    expect(help.text).toContain('mc_policy.jump 默认 gap');
     expect(help.text).toContain('三种路线试算共享');
     expect(help.text).toContain('背包内可用垫脚料');
     expect(help.text).toContain('不证明所有移动方式或显式改结构都不可行');

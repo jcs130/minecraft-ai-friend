@@ -41,6 +41,7 @@ import { walkOnlyPath } from './travel.ts';
 import { installPartialBlockStartRepair } from './pathfinder-start.ts';
 import { installNavigationBoundaryGuard } from './navigation-boundary.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
+import { installLevelGapJumps } from './navigation-gap-jump.ts';
 
 import { watchFlightAbilities } from './flight.ts';
 import { trackWindowProps } from './containers.ts';
@@ -80,6 +81,7 @@ export interface BridgeOptions {
   scaffoldBlocks?: () => string[];
   /** 挖/垫代价系数(mc_policy 的 travel 档位);spawn 与设置热改时求值 */
   movementCosts?: () => { placeCost: number; digCost: number };
+  jumpMode?: () => import('./policy.ts').JumpMode;
   /** 当前执行器任务号，供异步物理刻异常与决策链关联。 */
   taskId?: () => number | null;
   /** 本服务端拒绝过的方块持久缓存；无目录时只保存在本次连接。 */
@@ -922,9 +924,10 @@ export class Bridge {
 
     /** 寻路单次落差上限 2 格(原版 3 格内摔落不掉血)。 */
     movements.maxDropDown = NAVIGATION_LIMITS.maxDropDown;
-    // 上游 parkour 会把屋门边的两格高墙当成捷径，插入 y+1 的跳跃首步；
-    // 实际碰撞过不去，反复 reset stuck。普通走路/开门/搭桥仍由 Movements 规划。
-    movements.allowParkour = NAVIGATION_LIMITS.allowParkour;
+    // 原生高低差跑酷曾误跳门框；只恢复同高、完整支撑面之间的一格跨空。
+    const jump = this.opts.jumpMode?.() ?? 'gap';
+    movements.allowParkour = jump !== 'off';
+    installLevelGapJumps(movements, jump === 'native' ? 'native' : 'gap');
 
     /**
      * 水路代价:游一步记 1 + 3,往水里跳也受 maxDropDown 约束(上游默认不限高)。
@@ -1140,7 +1143,7 @@ export class Bridge {
       m.allow1by1towers = profile === 'style';
       this.applyTuning(bot, m);
       if (profile !== 'style') m.scafoldingBlocks = [];
-      const capabilities = { maxDropDown: m.maxDropDown, allowParkour: m.allowParkour,
+      const capabilities = { maxDropDown: m.maxDropDown, allowParkour: m.allowParkour, jumpMode: this.opts.jumpMode?.() ?? 'gap',
         canDig: m.canDig, scaffoldCount: m.countScaffoldingItems() };
       let result: ProbePath | null = null;
       try {

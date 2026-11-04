@@ -257,7 +257,8 @@ export function renderRouteMenu(
     : `出发点离目标 ${Math.round(opts.startDist)} 格`;
   const lines = probes.map((p) => {
     const c = p.capabilities;
-    const capabilityText = c ? `（规划落差≤${c.maxDropDown}格、跑酷${c.allowParkour ? '开启' : '关闭'}、挖掘${c.canDig ? '开启' : '关闭'}、垫脚料${c.scaffoldCount}块）` : '';
+    const jumpText = c?.jumpMode === 'gap' ? '跑酷仅同高一格跨空' : `跑酷${c?.allowParkour ? '开启' : '关闭'}`;
+    const capabilityText = c ? `（规划落差≤${c.maxDropDown}格、${jumpText}、挖掘${c.canDig ? '开启' : '关闭'}、垫脚料${c.scaffoldCount}块）` : '';
     const label = `${PROBE_LABEL[p.profile]}${capabilityText}:`;
     switch (p.status) {
       case 'complete': {

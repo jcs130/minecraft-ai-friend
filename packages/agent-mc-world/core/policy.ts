@@ -1,12 +1,12 @@
 /**
- * mc_policy 的契约面:六格常驻规矩一处声明。
+ * mc_policy 的契约面:各项常驻规矩一处声明。
  *
  * `POLICY_FIELDS` 声明一次字段(schema 片段 / 工具说明的一行 / 入参校验),出口全部由
  * 这一份生成:`POLICY_SCHEMA`、`POLICY_DOC`、`parsePolicy`。回读渲染另在 `renderPolicy`,
  * 因为它按语义分句(照明名单与照明场合合成一句),不是逐格拼。
  *
- * 规矩是设置不是任务:不进队列、不占任务号、同步回执。五格落盘跨重启活着,所以
- * 「上一场设过 reserve」必须有出口说出来 —— 回执六格全念、非默认项进环境提示词、
+ * 规矩是设置不是任务:不进队列、不占任务号、同步回执。除 fight 外的设置落盘跨重启活着,所以
+ * 「上一场设过 reserve」必须有出口说出来 —— 回执各项全念、非默认项进环境提示词、
  * 连入播报点明是上一场留下的。`fight` 是例外:重启回 `DEFAULT_FIGHT`(回弹本身也要
  * 播报),理由见 `loadPolicyReport`。
  */
@@ -22,6 +22,8 @@ type LightWhen = 'dig' | 'anywhere';
 
 /** 怪贴到跟前主动动手的条件。只管主动进场,挨打还手不受它管 */
 export type FightMode = 'auto' | 'armed' | 'off';
+export type JumpMode = 'off' | 'gap' | 'native';
+export type RetaliateMode = 'default' | 'on' | 'off';
 
 /**
  * `fight` 的默认档:手上有趁手的家伙才主动进场。
@@ -37,7 +39,7 @@ const LIGHT_WHENS: readonly LightWhen[] = ['dig', 'anywhere'];
 const FIGHT_MODES: readonly FightMode[] = ['auto', 'armed', 'off'];
 
 /**
- * 生效中的六格。`scaffold`/`light` 的 `null` = 用默认名单(`PolicyDefaults`),
+ * 生效中的各项。`scaffold`/`light` 的 `null` = 用默认名单(`PolicyDefaults`),
  * `[]` = 这条关掉;`reserve` 没有默认名单这一层,空数组就是「都不收着」。
  */
 export interface PolicySettings {
@@ -50,6 +52,10 @@ export interface PolicySettings {
   /** 收着不主动拿去挖的家伙什;剔完没有别的挖得出掉落时仍然会拿(回执点名) */
   reserve: string[];
   fight: FightMode;
+  /** 可选跨空方式；碰撞、火源接触和落脚检查仍然生效。 */
+  jump: JumpMode;
+  /** 仅控制受击自动还手；不关闭低血撤离、低氧及实际火源接触自救。 */
+  retaliate: RetaliateMode;
 }
 
 /**
@@ -62,7 +68,8 @@ export interface PolicyDefaults {
 }
 
 export function defaultPolicy(): PolicySettings {
-  return { scaffold: null, light: null, lightWhen: 'dig', travel: 'auto', reserve: [], fight: DEFAULT_FIGHT };
+  return { scaffold: null, light: null, lightWhen: 'dig', travel: 'auto', reserve: [], fight: DEFAULT_FIGHT,
+    jump: 'gap', retaliate: 'default' };
 }
 
 /** 没接 World 时(测试台架)的兜底名单;真 World 一律从 `cfg.scaffoldBlocks` 来 */
@@ -132,7 +139,7 @@ function listField(
 }
 
 function enumField<T extends string>(
-  key: 'lightWhen' | 'travel' | 'fight',
+  key: 'lightWhen' | 'travel' | 'fight' | 'jump' | 'retaliate',
   values: readonly T[],
   description: string,
   doc: string,
@@ -182,15 +189,21 @@ const POLICY_FIELDS: readonly PolicyField[] = [
   ),
   enumField(
     'fight', FIGHT_MODES,
-    '怪贴到跟前主动动手的条件;挨打一律还手,这一条管不了',
+    '自动接敌的条件；受击还手另由 retaliate 控制，显式攻击任务不受此项控制',
     `fight     "auto" | "armed" | "off" 怪贴到跟前主动动手的条件:armed 手上有趁手的
                                    家伙才动手(默认),auto 空手也一律动手,
-                                   off 不主动动手。挨打一律还手,这一条改不了。
-                                   这一格重连之后回 armed,别的五格留着`,
+                                   off 不自动接敌。受击还手由 retaliate 控制。
+                                   这一格重启之后回 armed，重连不重置；显式攻击任务不受此项控制`,
   ),
+  enumField('jump', ['off', 'gap', 'native'] as const,
+    '寻路跨空：off 禁止；gap 仅同高完整落脚的一格间隙；native 使用原生跑酷候选。修改后重新算路，仍检查碰撞和危险接触',
+    'jump      "off" | "gap" | "native" 寻路跨空模式，默认 gap。native 的更长/高低差跳跃不保证成功；不允许踩火或踩岩浆。'),
+  enumField('retaliate', ['default', 'on', 'off'] as const,
+    '受击自动还手：default 沿宿主配置，on 开启，off 关闭。低血撤离和环境自救仍启用；不取消已经开始的显式攻击任务',
+    'retaliate "default" | "on" | "off" 受击还手，独立于 fight。关闭不会关闭低血撤离或环境自救。'),
 ];
 
-/** mc_policy 的参数 schema。六格全可选:空调用 = 只回读 */
+/** mc_policy 的参数 schema。各项全可选:空调用 = 只回读 */
 export const POLICY_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: Object.fromEntries(POLICY_FIELDS.map((f) => [f.key, f.schema])),
@@ -204,12 +217,12 @@ export const POLICY_DOC = [
   ...POLICY_FIELDS.map((f) => f.doc),
   `方块/物品一律用英文 id(dirt、cobblestone、torch、iron_pickaxe)。
 料不在包里的那一条就不做,不算受阻;做过的进收工回执报数。
-回执一律念出六条当下生效的规矩,没改过的念默认值。`,
+回执列出当前生效的规矩，未修改项显示默认值；jump/retaliate 跨重启保留。`,
 ].join('\n');
 
 /**
  * 解析对这次调用做过的改动:某一格没收下(不认的值),或某个键根本不存在。
- * 收下的那些不进这里 —— 回执念的是 `set` 之后读回来的六格,本来就说得出结果。
+ * 收下的那些不进这里 —— 回执念的是 `set` 之后读回来的各项,本来就说得出结果。
  */
 interface PolicyNote {
   field: string;
@@ -270,7 +283,7 @@ function policyDiff(before: PolicySettings, after: PolicySettings): string[] {
 
 /** `fight` 那一格不跨重启:改了它就得当场说一句,别让她带着一条已经弹回去的规矩干活 */
 const FIGHT_VOLATILE_NOTE =
-  `fight 这一格不跨重启,重启会弹回 ${DEFAULT_FIGHT}(其余五格落盘,跨重启还在)。`;
+  `fight 这一格不跨重启,重启会弹回 ${DEFAULT_FIGHT}(其余设置落盘,跨重启还在)。`;
 
 /** 查询与修改使用不同回执开头；修改报告 diff，并注明未变项和不跨重启项。 */
 export function renderPolicyChange(
@@ -318,7 +331,7 @@ function scaffoldText(given: string[] | null, fallback: readonly string[]): stri
  * 垫脚名单里被开工蓝图收口的那几样,只述事实。
  *
  * 判定与哪几样收口全在 World 侧算好传进来(渲染保持纯函数)。措辞一律叫「蓝图预留」:
- * 六格里另有一格也叫 `reserve`(收着不主动拿的家伙什),两者不是一回事。
+ * 各项里另有一格也叫 `reserve`(收着不主动拿的家伙什),两者不是一回事。
  */
 function blueprintHeldText(held: readonly string[]): string {
   return `垫脚名单里${namesText(held)}正在蓝图预留中(开工的蓝图还要用),`
@@ -338,12 +351,14 @@ const LIGHT_WHEN_ZH: Record<LightWhen, string> = {
 
 const FIGHT_ZH: Record<FightMode, string> = {
   auto: '怪贴到跟前一律动手',
-  armed: '手上有趁手的家伙才主动动手,挨打照旧还手',
-  off: '不主动动手,挨打照旧还手',
+  armed: '手上有趁手的家伙才主动动手',
+  off: '不自动接敌',
 };
+const JUMP_ZH: Record<JumpMode, string> = { off: '寻路不跨空', gap: '寻路只跨同高一格间隙', native: '寻路使用原生跑酷候选（仍核验碰撞与危险接触）' };
+const RETALIATE_ZH: Record<RetaliateMode, string> = { default: '受击还手沿宿主配置', on: '受击自动还手开启', off: '受击自动还手关闭（低血撤离和环境自救保留）' };
 
 /**
- * 全量回读六项设置，未修改项显示默认值，措辞不使用第二人称。
+ * 全量回读各项设置，未修改项显示默认值，措辞不使用第二人称。
  * combatOff 时注明 fight 不生效；blueprintHeld 列出被开工蓝图预留收口的物品。
  */
 export function renderPolicy(
@@ -360,9 +375,11 @@ export function renderPolicy(
     `赶路遇坎${TRAVEL_ZH[s.travel]}`,
     s.reserve.length === 0 ? '没有收着不用的家伙什' : `${namesText(s.reserve)}收着不主动拿`,
     FIGHT_ZH[s.fight],
+    JUMP_ZH[s.jump],
+    RETALIATE_ZH[s.retaliate],
   ];
   if (combatOff) parts.push('战斗总开关在控制台关着,主动动手这一格现在不起作用');
-  // 蓝图预留是当下的现场状况,不是第七格规矩:另起一句,不混进六格那一串
+  // 蓝图预留是当下的现场状况,不是设置字段:另起一句,不混进各项那一串
   const held = blueprintHeld.length > 0 ? blueprintHeldText(blueprintHeld) : '';
   return `现在生效的规矩:${parts.join(';')}。${held}`;
 }
@@ -399,7 +416,9 @@ export function renderPolicyEnv(
   if (s.travel !== 'auto') parts.push(`赶路遇坎${TRAVEL_ZH[s.travel]}`);
   if (s.reserve.length > 0) parts.push(`${namesText(s.reserve)}收着不主动拿`);
   if (s.fight !== DEFAULT_FIGHT) parts.push(FIGHT_ZH[s.fight]);
-  // 蓝图预留是当下现场状况,不是「与默认不同的规矩」:单独一句,六格全默认时也照说
+  if (s.jump !== 'gap') parts.push(JUMP_ZH[s.jump]);
+  if (s.retaliate !== 'default') parts.push(RETALIATE_ZH[s.retaliate]);
+  // 蓝图预留是当下现场状况,不是「与默认不同的规矩」:单独一句,各项全默认时也照说
   // (`PolicyBook` 拿这个函数判「有没有非默认项」,所以它不许把这一句算进去 —— 那一路
   // 一律不传 blueprintHeld)
   const held = blueprintHeld.length > 0 ? blueprintHeldText(blueprintHeld) : '';
@@ -408,7 +427,7 @@ export function renderPolicyEnv(
   return `${restored ? '上一场设下的常驻规矩还在' : '常驻规矩'}(与默认不同的几条):${parts.join(';')}。${held}`;
 }
 
-/** 读盘的结果:六格,外加这一次读盘**丢掉**的 `fight` 档(没丢就是 null) */
+/** 读盘的结果:各项,外加这一次读盘**丢掉**的 `fight` 档(没丢就是 null) */
 interface PolicyLoad {
   settings: PolicySettings;
   /** 盘上存着、而本进程按规矩不认的那一档;它是「回弹」这件事的唯一凭据 */
@@ -416,7 +435,7 @@ interface PolicyLoad {
 }
 
 /**
- * 从落盘文件加载六项设置，缺失或无效字段回默认；fight 始终回 DEFAULT_FIGHT。
+ * 从落盘文件加载各项设置，缺失或无效字段回默认；fight 始终回 DEFAULT_FIGHT。
  * 被丢弃的 fight 值经 droppedFight 传出，由连接回执报告回滚。
  */
 export function loadPolicyReport(file: string | null): PolicyLoad {
@@ -432,7 +451,7 @@ export function loadPolicyReport(file: string | null): PolicyLoad {
   }
   let droppedFight: FightMode | null = null;
   for (const f of POLICY_FIELDS) {
-    // fight 重启后回配置默认值；其余五项工作方式跨重启保留。
+    // fight 重启后回配置默认值；其余各项工作方式跨重启保留。
     if (f.key === 'fight') {
       const disk = data[f.key];
       if (disk !== undefined && disk !== null) {
@@ -450,7 +469,7 @@ export function loadPolicyReport(file: string | null): PolicyLoad {
   return { settings: out, droppedFight };
 }
 
-/** 只要六格的读法;丢档信息见 `loadPolicyReport` */
+/** 只要各项的读法;丢档信息见 `loadPolicyReport` */
 export function loadPolicy(file: string | null): PolicySettings {
   return loadPolicyReport(file).settings;
 }

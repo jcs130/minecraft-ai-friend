@@ -4383,7 +4383,7 @@ export class MinecraftWorld implements World {
       },
       resumeAfterFall: (token) => this.executor?.resumeQueue(token) ?? false,
       escapeActive: () => (this.executor?.escaping ?? false) || Date.now() < this.escapeHoldUntil,
-      fightBack: () => this.cfg.reflex.fightBack,
+      fightBack: () => this.policy.get().retaliate === 'default' ? this.cfg.reflex.fightBack : this.policy.get().retaliate === 'on',
       fleeHealth: () => this.cfg.reflex.fleeHealth,
       onLowHealth: (bot) => this.onLowHealth(bot),
       onWaterTrap: () => {
@@ -4431,6 +4431,7 @@ export class MinecraftWorld implements World {
       shuttingDown: () => this.shuttingDown,
       managedServer: () => this.managedLocalServer(),
       scaffoldBlocks: () => this.scaffoldBlocksForUse(),
+      jumpMode: () => this.policy.get().jump,
       movementCosts: () => TRAVEL_COSTS[this.policy.get().travel],
       taskId: () => this.executor?.currentTask?.id ?? null,
       protectionFile: this.dataDir ? join(this.dataDir, 'minecraft-break-permissions.json') : null,

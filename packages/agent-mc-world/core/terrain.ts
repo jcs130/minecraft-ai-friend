@@ -409,7 +409,7 @@ export function narrateWorldSegments(
   // 路标是她投影进来的暂态语义,不是世界读数,进不了 WorldSnapshot(与重生点、
   // 目标尾行同一个待遇)。没有近处路标时这一段一个字都不占。
   const place =
-    `我在${zhBiome(s.biome)}，${s.footing ? narrateFooting(s.footing, zhName)
+    `生物群系：${zhBiome(s.biome)}（地形类型，不是建筑或活动地点名称），${s.footing ? narrateFooting(s.footing, zhName)
       : s.standingOn ? `脚下是${zhName(s.standingOn)}` : '脚下支撑未知'}，` +
     `${s.vehicle ? '位于格' : '站在格'} (${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)})${near ? `，${near}` : ''}，` +
     `${zhDimension(s.dimension)}${s.world ? `，世界 ${s.world.key ?? '身份未核实'}` : ''}。` +
@@ -861,7 +861,7 @@ export function worldDelta(
   }
   if (sameDimension && spatialReady && cur.biome !== 'unknown' && cur.biome !== prev.biome) {
     // A newly loaded landing chunk establishes a biome reading, not locomotion.
-    notes.push(prev.biome === 'unknown' ? `现在所在的群系是${zhBiome(cur.biome)}` : `走进了${zhBiome(cur.biome)}`);
+    notes.push(`当前生物群系：${zhBiome(cur.biome)}（地形类型）`);
   }
   if (sameDimension && cur.raining !== prev.raining) notes.push(cur.raining ? '开始下雨了' : '雨停了');
 
