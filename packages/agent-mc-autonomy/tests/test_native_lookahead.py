@@ -218,3 +218,78 @@ def test_ahead_opportunity_preserves_backoff_and_user_stop(
     monkeypatch.setattr(module.asyncio, 'sleep', tick)
     run_async(controller.run('survive'))
     assert calls == expected
+
+
+def queue_read():
+    response = choose()
+    response['tool_calls'][0]['function'] = {'name': 'mc_queue', 'arguments': '{}'}
+    return response
+
+
+def test_repeated_ahead_queue_reads_yield_to_native_terminal_without_idle_delay(
+        framework_module, tmp_path, run_async, monkeypatch):
+    clock, decisions, terminal = [1000], [], [False]
+
+    async def decide(*_):
+        decisions.append(clock[0])
+        if len(decisions) == 1:
+            return plan(block='oak_log')
+        return {'content': '继续下一步', 'tool_calls': []} if terminal[0] else queue_read()
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: clock[0] >= 1012)
+    controller.settings = dataclasses.replace(controller.settings, max_decisions=0, min_decision_seconds=10)
+    bridge.tools.append({'name': 'mc_queue', 'inputSchema': {'type': 'object'}})
+    original_sleep = asyncio.sleep
+
+    async def tick(_):
+        clock[0] += 1
+        await original_sleep(0)
+
+    def complete():
+        if clock[0] == 1004 and not terminal[0]:
+            terminal[0] = True
+            bridge.event_pages.append([{'cursor': 1, 'trigger': 'piggyback',
+                'execution': {**action(True), 'workSteps': 1, 'evidence': {'receipt': 'Collected one log'}}}])
+
+    bridge.on_poll = complete
+    monkeypatch.setattr(module, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(module.asyncio, 'sleep', tick)
+    run_async(controller.run('survive'))
+    assert decisions == [1000, 1001, 1001, 1004]
+    receipts = [json.loads(line) for line in (tmp_path / 'receipts.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert sum(row['tool'] == 'mc_queue' for row in receipts) == 2
+    assert not controller.pending
+    assert not any(name == 'mc_stop' for name, _, _ in bridge.calls)
+
+
+@pytest.mark.parametrize('terminal_on_second_read', [False, True])
+def test_ahead_queue_read_does_not_hide_a_chosen_append_or_completed_anchor(
+        framework_module, tmp_path, run_async, terminal_on_second_read):
+    decisions = []
+
+    async def decide(*_):
+        decisions.append(1)
+        if len(decisions) == 1 or terminal_on_second_read and len(decisions) == 2:
+            return queue_read()
+        response = plan('craft', item='oak_planks', count=4)
+        if not terminal_on_second_read:
+            response['tool_calls'].insert(0, queue_read()['tool_calls'][0] | {'id': 'queue-read'})
+        return response
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    bridge.tools.append({'name': 'mc_queue', 'inputSchema': {'type': 'object'}})
+    run_async(controller.execute_model_call('mc_do', {'steps': [{'skill': 'collect', 'block': 'oak_log'}]}))
+    controller.lookahead_anchor = controller.lookahead_candidate()
+    original_call = bridge.call
+
+    async def call(name, arguments, **metadata):
+        result = await original_call(name, arguments, **metadata)
+        if terminal_on_second_read and name == 'mc_queue' and len(decisions) == 2:
+            controller.receipt({'execution': action(True)})
+        return result
+
+    bridge.call = call
+    run_async(controller.turn_once('survive', 'body contract', module.model_tools(bridge.tools)))
+    assert len(decisions) == (3 if terminal_on_second_read else 2)
+    actions = [arguments for name, arguments, _ in bridge.calls if name == 'mc_do']
+    assert len(actions) == 2 and actions[-1]['queue'] == 'append'

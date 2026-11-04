@@ -1,3 +1,9 @@
+## 0.2.149
+
+- Admit native synchronous observation, condition checks, empty catalogues, script documentation/run inspection and memory reads before another call in a validated batch. Mixed writes and programs still end the batch; every call retains its original receipt and native barriers.
+- After two queue-only lookahead rounds for the same still-owned task, wait for its native terminal instead of spending the remaining rounds polling. A selected append or an already completed anchor continues normally, without an idle delay or replay.
+- Keep partial probe/RPG integration from the preceding candidate and preserve explicit stop, unknown-dispatch, inventory and queue ownership boundaries.
+
 ## 0.2.148
 
 - Pin core rc.160-preview.11 with bounded partial probe evidence and upstream activity attribution contracts. Preserve strict build/excavate limits, absolute follow-up regions and unknown observations.

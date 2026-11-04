@@ -58,7 +58,11 @@ from .planner import (
     PlannerResponseError,
     PlannerUnavailableError,
 )
-from .read_activity import OBSERVATION_TOOLS, READ_ACTIVITY_TOOLS
+from .read_activity import (
+    OBSERVATION_TOOLS,
+    READ_ACTIVITY_TOOLS,
+    additional_immediate_read,
+)
 from .reply_quality import repeated_plain_reply
 from .social import SocialInbox
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
@@ -91,7 +95,7 @@ def conversation_event(event):
 
 def observation_call(name, arguments):
     """Classify native queued reads without treating their task IDs as actions."""
-    if name in READ_ACTIVITY_TOOLS | OBSERVATION_TOOLS or empty_catalogue_query(name, arguments):
+    if name in READ_ACTIVITY_TOOLS | OBSERVATION_TOOLS or additional_immediate_read(name, arguments):
         return True
     if name != "mc_do":
         return False
@@ -1642,8 +1646,8 @@ class Controller:
             # or act; new user goals often need these before choosing any work.
             message_query = (name == "mc_messages" and "read" in tags
                              and arguments.get("action", "list") in {"list", "search", "read"})
-            query = empty_catalogue_query(name, arguments) or message_query
-            if name != "mc_do" and effects and not (effects == {"write"} and query):
+            query = additional_immediate_read(name, arguments) or (effects == {"write"} and message_query)
+            if name != "mc_do" and effects and not query:
                 raise ModelCallRejected("Pending feedback must submit its body plan through mc_do. "
                     "Read-only catalogue queries mc_blueprint({}) and mc_map({}) are allowed; "
                     "mc_messages list/search/read can inspect dated observations before planning. "
@@ -1656,7 +1660,8 @@ class Controller:
         prepared = [self.prepare_call([call], tools) for call in calls]
         if len({call["id"] for call, _, _ in prepared}) != len(prepared):
             raise ModelCallRejected("Tool call ids must be unique within a response.")
-        if any(name not in IMMEDIATE_READ_TOOLS for _, name, _ in prepared[:-1]):
+        if any(name not in IMMEDIATE_READ_TOOLS and not additional_immediate_read(name, arguments)
+               for _, name, arguments in prepared[:-1]):
             raise ModelCallRejected("Only immediate read tools may precede the final call. Submit one queued or acting tool last, then wait for its receipt.")
         return prepared
 
@@ -2013,6 +2018,7 @@ class Controller:
         await self.protocol("begin_turn", id=self.turn)
         try:
             focus = None
+            ahead_queue_reads = 0
             for round_index in range(self.settings.max_tool_rounds):
                 if self.stop_requested():
                     return
@@ -2043,7 +2049,8 @@ class Controller:
                         f"Planning ahead of still-owned native execution {self.lookahead_anchor[1]}. "
                         "It is not finished or verified successful. Keep it running. You may append one small "
                         "independent continuation using observed facts, or wait for its terminal if prerequisites "
-                        "depend on an unknown outcome. Do not repeat, cancel or replace existing work to fill time.")
+                        "depend on an unknown outcome. Native completion already wakes the planner; repeated "
+                        "mc_queue reads do not advance the task. Do not repeat, cancel or replace existing work to fill time.")
                 state = focus_state(planning_goal, facts, self.pending)
                 if round_index == 0:
                     focus = await self.fast_policy.choose(state)
@@ -2302,6 +2309,16 @@ class Controller:
                 self.groups.append(exchange)
                 self.retain_history()
                 if boundary:
+                    return
+                # One fresh queue read can inform the ahead plan. A second
+                # queue-only round is waiting on native work, not another
+                # planning prerequisite. Keep both original receipts and yield
+                # to the event pump; the original terminal wakes normal work.
+                # A selected append in the same batch and a completed anchor
+                # must both continue normally. No synthetic/cached tool result.
+                ahead_queue_reads = (ahead_queue_reads + 1 if self.lookahead_anchor in self.pending
+                                     and all(name == "mc_queue" for _, name, _ in prepared) else 0)
+                if ahead_queue_reads >= 2:
                     return
             # A bounded documentation/read chain can continue in a fresh turn;
             # waiting for an unrelated world change here would strand the goal.
