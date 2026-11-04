@@ -52,7 +52,6 @@ final class AdditionalEyeMirrors implements Listener {
             PacketType.Play.Server.SET_SUBTITLE_TEXT,
             PacketType.Play.Server.SET_TITLES_ANIMATION,
             PacketType.Play.Server.CLEAR_TITLES,
-            PacketType.Play.Server.BOSS,
             PacketType.Play.Server.ADVANCEMENTS,
             PacketType.Play.Server.ENTITY_EFFECT,
             PacketType.Play.Server.REMOVE_ENTITY_EFFECT,
@@ -104,12 +103,14 @@ final class AdditionalEyeMirrors implements Listener {
     private final Map<String, String> autoBindings = new HashMap<>();
     private final Map<String, Long> autoAttachedAt = new HashMap<>();
     private final EyeInventoryMirror inventories;
+    private final EyeBossBars bossBars;
     List<EyePairs.Pair> bindings() { return allBindings; }
 
     AdditionalEyeMirrors(CortiEyeMirrorPlugin plugin, ProtocolManager protocol,
             String cortiTarget, String cortiEye) {
         this.plugin = plugin;
         inventories = new EyeInventoryMirror(plugin, protocol);
+        bossBars = new EyeBossBars(plugin, protocol);
         this.protocol = protocol;
         this.cortiEyeName = cortiEye;
         this.cortiTargetName = cortiTarget;
@@ -121,6 +122,7 @@ final class AdditionalEyeMirrors implements Listener {
     boolean cortiAuthorized() { return cortiAuthorized; }
 
     void start() {
+        bossBars.start();
         loadPairs();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
@@ -137,7 +139,7 @@ final class AdditionalEyeMirrors implements Listener {
                         Bukkit.getScheduler().runTask(plugin, () -> cameraChat
                                 .computeIfAbsent(cameraId, ignored -> new HashMap<>())
                                 .put(signature, System.currentTimeMillis()));
-                    } else if (attachedEyes.contains(name) && type != PacketType.Play.Server.BOSS
+                    } else if (attachedEyes.contains(name)
                             && !cameraNightVisionPacket(type, event.getPacket())) {
                         if (!isEffect(type) || event.getPacket().getIntegers().size() == 0
                                 || event.getPacket().getIntegers().read(0) == recipient.getEntityId())
@@ -158,6 +160,7 @@ final class AdditionalEyeMirrors implements Listener {
     }
 
     void stop() {
+        bossBars.stop();
         for (UUID cameraId : new ArrayList<>(mirroredCrafting.keySet())) closeCrafting(cameraId);
         for (Session session : new ArrayList<>(sessions.values()))
             restoreEffects(Bukkit.getPlayer(session.cameraId), session);
@@ -241,6 +244,8 @@ final class AdditionalEyeMirrors implements Listener {
         }
         Set<String> seen = new HashSet<>();
         Set<UUID> targets = new HashSet<>();
+        Map<UUID, UUID> bossRoutes = new HashMap<>();
+        if (cortiAuthorized) addBossRoute(bossRoutes, Bukkit.getPlayerExact(cortiEyeName), Bukkit.getPlayerExact(cortiTargetName));
         for (Pair pair : pairs) {
             String key = pair.eye().toLowerCase(Locale.ROOT);
             Player camera = Bukkit.getPlayerExact(pair.eye());
@@ -256,6 +261,7 @@ final class AdditionalEyeMirrors implements Listener {
             ensureNightVision(camera);
             seen.add(key);
             targets.add(target.getUniqueId());
+            addBossRoute(bossRoutes, camera, target);
             if (previous == null || !previous.cameraId.equals(camera.getUniqueId())
                     || !previous.targetId.equals(target.getUniqueId())
                     || previous.targetEntityId != target.getEntityId()
@@ -279,6 +285,7 @@ final class AdditionalEyeMirrors implements Listener {
         }
         attachedEyes = Set.copyOf(seen);
         attachedTargets = Set.copyOf(targets);
+        bossBars.tick(bossRoutes);
         for (UUID cameraId : new ArrayList<>(mirroredCrafting.keySet())) {
             if (System.currentTimeMillis() - lastCraftingClick.getOrDefault(cameraId, 0L) >= 3_000L)
                 closeCrafting(cameraId);
@@ -286,6 +293,12 @@ final class AdditionalEyeMirrors implements Listener {
         long cutoff = System.currentTimeMillis() - 3_000L;
         cameraChat.values().forEach(chats -> chats.values().removeIf(time -> time < cutoff));
         cameraChat.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+    }
+
+    private static void addBossRoute(Map<UUID, UUID> routes, Player camera, Player target) {
+        if (CortiEyeMirrorPlugin.isAttached(target, camera) && !target.isDead() && target.getHealth() > 0) {
+            routes.put(camera.getUniqueId(), target.getUniqueId());
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -363,6 +376,7 @@ final class AdditionalEyeMirrors implements Listener {
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
+        bossBars.quit(event.getPlayer());
         UUID playerId = event.getPlayer().getUniqueId();
         mirroredCrafting.remove(playerId);
         lastCraftingClick.remove(playerId);

@@ -834,6 +834,7 @@ final class DungeonManager implements Listener {
             player.sendMessage(ChatColor.RED + "地面入口受阻，返回已取消；停止重复传送，/mycli arena status 记录楼层并联系服主清理落点，不拆保护建筑。"); return;
         }
         if (player.teleport(landing)) {
+            if (bossBar != null) bossBar.removePlayer(player);
             if (participants.remove(player.getUniqueId())) persistRun();
             player.sendMessage(ChatColor.GREEN + "已返回地面，未领取的奖励留在个人箱子里。");
         }
@@ -843,6 +844,7 @@ final class DungeonManager implements Listener {
         if (!active) return;
         long now = System.currentTimeMillis();
         enrollPlayersOnCurrentFloor();
+        pruneBossBarAudience();
         if (pausedAt > 0) {
             if(participants.stream().map(Bukkit::getPlayer).anyMatch(p->p!=null&&p.isOnline()&&!p.isDead()&&!plugin.isDowned(p)&&inFloor(p.getLocation(),floor)))resumeRun(now);
             else{
@@ -939,6 +941,7 @@ final class DungeonManager implements Listener {
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        if (bossBar != null) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())) return;
         if (player.isDead() || !inFloor(player.getLocation(), floor)) {
             participants.remove(player.getUniqueId());
@@ -948,6 +951,7 @@ final class DungeonManager implements Listener {
 
     @EventHandler public void onParticipantDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
+        if (bossBar != null) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())
                 || !inFloor(player.getLocation(), floor)) return;
         UUID id = player.getUniqueId();
@@ -1096,7 +1100,7 @@ final class DungeonManager implements Listener {
                         BarColor.PURPLE, BarStyle.SOLID);
                 for (UUID id : participants) {
                     Player player = Bukkit.getPlayer(id);
-                    if (player != null && inFloor(player.getLocation(), floor)) bossBar.addPlayer(player);
+                    if (isBossBarViewer(player)) bossBar.addPlayer(player);
                 }
             }
             if (e instanceof Mob mob) {
@@ -1288,16 +1292,35 @@ final class DungeonManager implements Listener {
         economy.pruneBagDuplicates(player, apply, sender);
     }
 
+    private boolean isBossBarViewer(Player player) {
+        return player != null && player.isOnline() && !player.isDead()
+                && player.getGameMode() != GameMode.SPECTATOR && participants.contains(player.getUniqueId())
+                && inFloor(player.getLocation(), floor);
+    }
+
+    private void pruneBossBarAudience() {
+        if (bossBar == null) return;
+        for (Player viewer : bossBar.getPlayers()) {
+            if (!isBossBarViewer(viewer)) bossBar.removePlayer(viewer);
+        }
+    }
+
+    private void finishBossBar() {
+        if (bossBar == null) return;
+        bossBar.setProgress(0);
+        clearBossBar();
+    }
+
     private void updateBossBar() {
         if (bossBar == null || bossId == null) return;
-        for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
-            if (player != null && inFloor(player.getLocation(), floor)) bossBar.addPlayer(player);
-        }
         Entity entity = Bukkit.getEntity(bossId);
         if (!(entity instanceof Ravager ravager) || !ravager.isValid() || ravager.isDead()) {
-            bossBar.setProgress(0);
+            finishBossBar();
             return;
+        }
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (isBossBarViewer(player)) bossBar.addPlayer(player);
         }
         bossBar.setProgress(Math.max(0, Math.min(1, ravager.getHealth() / ravager.getMaxHealth())));
     }
@@ -2089,11 +2112,15 @@ final class DungeonManager implements Listener {
         if (owner != null) saveStash(event.getInventory(), owner);
     }
 
-    private void cleanupMobs() {
+    private void clearBossBar() {
         if (bossBar != null) {
             bossBar.removeAll();
             bossBar = null;
         }
+    }
+
+    private void cleanupMobs() {
+        clearBossBar();
         bossId = null;
         for (UUID id : mobs) {
             Entity e = Bukkit.getEntity(id);
@@ -2122,6 +2149,10 @@ final class DungeonManager implements Listener {
     @EventHandler public void onDungeonMobDeath(EntityDeathEvent event) {
         if (!active || !mobs.contains(event.getEntity().getUniqueId())
                 || !event.getEntity().getPersistentDataContainer().has(mobKey, PersistentDataType.BYTE)) return;
+        if (event.getEntity().getUniqueId().equals(bossId)) {
+            pruneBossBarAudience();
+            finishBossBar();
+        }
         plugin.getLogger().info("Dungeon mob died: floor=" + floor + ", id=" + event.getEntity().getUniqueId()
                 + ", type=" + event.getEntity().getType() + ", at=" + LocationOutput.fields(event.getEntity().getLocation())
                 + ", lastDamage=" + lastMobDamage.getOrDefault(event.getEntity().getUniqueId(), "none"));

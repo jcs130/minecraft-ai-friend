@@ -60,7 +60,6 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             PacketType.Play.Server.SET_SUBTITLE_TEXT,
             PacketType.Play.Server.SET_TITLES_ANIMATION,
             PacketType.Play.Server.CLEAR_TITLES,
-            PacketType.Play.Server.BOSS,
             PacketType.Play.Server.ADVANCEMENTS,
             PacketType.Play.Server.ENTITY_EFFECT,
             PacketType.Play.Server.REMOVE_ENTITY_EFFECT,
@@ -142,7 +141,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                             && event.getPacket().getIntegers().read(0) != event.getPlayer().getEntityId()) {
                         // Potion effects on other world entities are part of the scene.
                         return;
-                    } else if (attached && type != PacketType.Play.Server.BOSS
+                    } else if (attached
                             && !isCameraNightVisionPacket(type, event.getPacket())) {
                         // The camera's own mana/action bar and progress would overwrite the target's UI.
                         event.setCancelled(true);
