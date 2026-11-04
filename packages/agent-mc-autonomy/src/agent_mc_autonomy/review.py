@@ -29,8 +29,8 @@ from .observations import (
     spatial_text,
     tool_failure_view,
 )
-from .stage_applicability import body_baseline
 from .read_activity import read_activity_view
+from .stage_applicability import body_baseline
 
 
 @dataclass(frozen=True)

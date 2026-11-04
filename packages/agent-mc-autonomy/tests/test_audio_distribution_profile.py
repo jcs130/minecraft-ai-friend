@@ -4,7 +4,10 @@ import json
 
 import pytest
 
-from agent_mc_autonomy.runtime_bundle.audio_profile import project_effects_audio, resource_profile
+from agent_mc_autonomy.runtime_bundle.audio_profile import (
+    project_effects_audio,
+    resource_profile,
+)
 
 
 def test_effects_projection_retains_original_bytes_metadata_and_empty_events():

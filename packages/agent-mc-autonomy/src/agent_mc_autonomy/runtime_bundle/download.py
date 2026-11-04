@@ -23,7 +23,16 @@ import httpx
 from ..filesystem import verification_path
 from ..ownership import session_lease
 from . import PreparedBundle, resolve_prepared_bundle
-from .manifest import INVENTORY, MANIFEST, digest, fail, read_json, relative_path, source_pin, verify_bundle
+from .manifest import (
+    INVENTORY,
+    MANIFEST,
+    digest,
+    fail,
+    read_json,
+    relative_path,
+    source_pin,
+    verify_bundle,
+)
 
 HOSTS = frozenset(
     {

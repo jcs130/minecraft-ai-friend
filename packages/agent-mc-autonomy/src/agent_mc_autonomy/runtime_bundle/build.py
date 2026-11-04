@@ -11,6 +11,7 @@ import stat
 import zipfile
 from pathlib import Path
 
+from .audio_profile import project_effects_audio, resource_profile
 from .manifest import (
     INVENTORY,
     MANIFEST,
@@ -23,7 +24,6 @@ from .manifest import (
     verify_bundle,
 )
 from .viewer_source import verify_viewer_input
-from .audio_profile import project_effects_audio, resource_profile
 
 HERE = Path(__file__).parent
 
