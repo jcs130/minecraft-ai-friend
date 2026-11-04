@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -131,7 +132,7 @@ class EvolutionTests(unittest.TestCase):
         with patch.object(g.subprocess, 'run', return_value=Reply()) as run:
             out = g.snapshot(server, self.root, 'node')
         self.assertEqual(run.call_count, len(g.LIVE_READS))
-        self.assertEqual([c.args[0][-1] for c in run.call_args_list], g.LIVE_READS)
+        self.assertEqual([c.args[0][-2] for c in run.call_args_list], g.LIVE_READS)
         self.assertNotIn('secret', json.dumps(out))
         self.assertEqual(out['activity']['counts']['warnings'], 0) # logger fixture is not /WARN format
 
@@ -140,6 +141,57 @@ class EvolutionTests(unittest.TestCase):
             out = g.snapshot(self.root, self.root, 'node')
         self.assertFalse(out['complete'])
         self.assertTrue(all(r['status'] == 'unknown' for r in out['reads']))
+
+    def test_empty_responses_are_unknown_and_never_default_to_healthy(self):
+        class Reply:
+            returncode=0;stdout='\n'
+        with patch.object(g.subprocess,'run',return_value=Reply()):out=g.snapshot(self.root,self.root,'node')
+        self.assertFalse(out['complete']);self.assertNotIn('metrics',out)
+        self.assertTrue(all(row['status']=='unknown'for row in out['reads']))
+
+    def test_snapshot_has_one_overall_time_budget(self):
+        with patch.object(g.time,'monotonic',side_effect=[0]+[46]*len(g.LIVE_READS)),patch.object(g.subprocess,'run')as run:
+            out=g.snapshot(self.root,self.root,'node')
+        run.assert_not_called();self.assertFalse(out['complete'])
+        self.assertTrue(all(row['reason']=='snapshot_budget_exhausted'for row in out['reads']))
+
+    def test_summary_does_not_expand_project_history_or_raw_receipts(self):
+        snapshot={'observed_at':'now','complete':False,'reads':[{'command':'neoforge tps','status':'unknown','text':'private raw receipt'}]}
+        projects={'revision':4,'projects':{str(n):{'phase':'surveyed','title':'test','next_action':'next','history':['large old history']*5000}for n in range(30)}}
+        brief=g.snapshot_brief(snapshot,projects)
+        self.assertEqual(len(brief['projects']),8);self.assertEqual(brief['activeProjectCount'],30)
+        self.assertNotIn('history',json.dumps(brief));self.assertNotIn('private raw receipt',json.dumps(brief))
+
+    def test_snapshot_cli_without_out_retains_separate_evidence_files(self):
+        value={'observed_at':'fixture','complete':False,'reads':[]}
+        outputs=[]
+        for stamp in (123,124):
+            stream=io.StringIO()
+            with patch('sys.argv',['goddess-evolution.py','--root',str(self.ledger.root),'snapshot']),patch('sys.stdout',stream),patch.object(g,'snapshot',return_value=value),patch.object(g.time,'time_ns',return_value=stamp):
+                g.main()
+            outputs.append(json.loads(stream.getvalue()))
+        paths=[Path(row['path'])for row in outputs]
+        self.assertNotEqual(paths[0],paths[1])
+        self.assertTrue(all(path.parent==self.ledger.root/'snapshots' for path in paths))
+        self.assertTrue(all(json.loads(path.read_text())==value for path in paths))
+        stream=io.StringIO()
+        with patch('sys.argv',['goddess-evolution.py','--root',str(self.ledger.root),'snapshot','--out',str(paths[0])]),patch('sys.stdout',stream),self.assertRaises(SystemExit)as error:
+            g.main()
+        self.assertEqual(error.exception.code,2)
+        self.assertEqual(json.loads(paths[0].read_text()),value)
+
+    def test_storage_projection_delay_is_not_a_failed_game_commit(self):
+        raw={'durableRevision':8,'publishedRevision':4,'projectionPending':True,'cleanupPending':False,'commitUnknown':False,'lastMirrorError':'AccessDeniedException'}
+        value=g.storage_audit('MC_AGENT_STATE_STORAGE '+json.dumps(raw))
+        self.assertEqual(value['state'],'projection_delayed');self.assertFalse(value['commitUnknown'])
+        brief=g.snapshot_brief({'observed_at':'now','complete':True,'reads':[],'stateStore':value},{'projects':{}})
+        self.assertEqual(brief['stateStore'],value)
+        raw['commitUnknown']=True
+        self.assertEqual(g.storage_audit('MC_AGENT_STATE_STORAGE '+json.dumps(raw))['state'],'commit_unknown')
+
+    def test_unknown_storage_audit_is_not_a_healthy_default(self):
+        for text in ['', 'MC_AGENT_STATE_STORAGE {}','MC_AGENT_STATE_STORAGE {"commitUnknown":false}']:
+            self.assertIsNone(g.storage_audit(text))
 
 
 if __name__ == '__main__': unittest.main()

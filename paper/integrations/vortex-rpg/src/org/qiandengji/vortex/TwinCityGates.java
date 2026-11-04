@@ -3,15 +3,21 @@ package org.qiandengji.vortex;
 import java.util.*;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
+import org.bukkit.block.Block;
 import org.bukkit.event.*;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.Plugin;
 
-/** Two bounded entrance areas, using the existing charged/safe warp executor. */
+/** Deliberate button interaction, using the existing charged/safe warp executor. */
 final class TwinCityGates implements Listener {
     record Gate(String id,String world,int x,int y,int z,String destination){
-        boolean contains(Location l){return l!=null&&l.getWorld()!=null&&l.getWorld().getName().equals(world)
-            &&l.getX()>=x&&l.getX()<x+3&&l.getY()>=y&&l.getY()<y+3&&l.getZ()>=z&&l.getZ()<z+1;}
+        // South face of the left pillar. Stone buttons cannot be fired by arrows.
+        boolean button(Block b){return b!=null&&b.getWorld().getName().equals(world)
+            &&b.getX()==x-1&&b.getY()==y+1&&b.getZ()==z+1&&b.getType()==Material.STONE_BUTTON;}
+        boolean inReach(Player p){return p.getWorld().getName().equals(world)
+            &&p.getEyeLocation().distanceSquared(new Location(p.getWorld(),x-.5,y+1.5,z+1.5))<=30.25;}
     }
     private final VortexBridge owner;
     private final List<Gate> gates;
@@ -33,17 +39,19 @@ final class TwinCityGates implements Listener {
         gates=List.copyOf(values);
     }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
-    public void move(PlayerMoveEvent e){
-        if(e instanceof PlayerTeleportEvent||e.getTo()==null||e.getFrom().getBlockX()==e.getTo().getBlockX()
-                &&e.getFrom().getBlockY()==e.getTo().getBlockY()&&e.getFrom().getBlockZ()==e.getTo().getBlockZ())return;
+    public void interact(PlayerInteractEvent e){
+        if(e.getAction()!=Action.RIGHT_CLICK_BLOCK||e.getHand()!=EquipmentSlot.HAND
+                ||e.useInteractedBlock()==Event.Result.DENY)return;
         Player p=e.getPlayer();if(!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode()))return;
-        for(Gate gate:gates)if(gate.contains(e.getTo())&&!gate.contains(e.getFrom())&&built(gate)){
+        for(Gate gate:gates)if(gate.button(e.getClickedBlock())&&gate.inReach(p)&&built(gate)){
             long now=System.currentTimeMillis();if(now-attempts.getOrDefault(p.getUniqueId(),0L)<5000)return;
             attempts.put(p.getUniqueId(),now);
-            // Defer to the next tick, after the accepted move. Never cancel a
-            // move at MONITOR, scan chunks, elevate permissions or fake success.
+            // Honor protection decisions and recheck next tick. Never scan/load
+            // chunks, elevate permissions or dispatch a console teleport.
+            Block button=e.getClickedBlock();
             Bukkit.getScheduler().runTask(owner,()->{
-                if(!p.isOnline()||!gate.contains(p.getLocation()))return;
+                if(!p.isOnline()||!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode())
+                        ||!gate.inReach(p)||!gate.button(button)||!built(gate))return;
                 Plugin af=Bukkit.getPluginManager().getPlugin("AgentFriend");
                 try{if(af==null||!af.isEnabled())throw new IllegalStateException("travel unavailable");
                     af.getClass().getMethod("nativeCityTravel",Player.class,String.class).invoke(af,p,gate.destination());

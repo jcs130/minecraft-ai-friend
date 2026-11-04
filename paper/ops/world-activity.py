@@ -68,15 +68,9 @@ def category(goals):
 
 
 def stable_yaml(file, max_bytes=8*1024*1024):
-    for _ in range(2):
-        before = file.stat()
-        if not file.is_file() or before.st_size > max_bytes: raise ValueError('source_size_limit')
-        data = file.read_bytes(); after = file.stat()
-        if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns): continue
-        value = yaml.safe_load(data.decode('utf-8-sig'))
-        if not isinstance(value, dict): raise ValueError('source_not_mapping')
-        return value, stamp(datetime.fromtimestamp(after.st_mtime, ZONE))
-    raise ValueError('source_changing')
+    from agentfriend_state import read_yaml_snapshot
+    value,modified=read_yaml_snapshot(file,max_bytes)
+    return value,stamp(datetime.fromtimestamp(modified,ZONE))
 
 
 def catalogue(server, static):

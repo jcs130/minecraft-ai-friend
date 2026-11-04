@@ -13,7 +13,7 @@ import { collectPlayerObservation, buildGoddessChatPrompt, parseGoddessChatAnswe
 import { installLoginGate } from './mineflayer-login-gate.mjs';
 import { localProxyConnect } from './auth-proxy.mjs';
 import { installRecipePacketBypass } from './mineflayer-client-compat.mjs';
-import { privateGoddessMessage } from './goddess-chat-identity.mjs';
+import { listenPrivateGoddessMessages } from './goddess-chat-identity.mjs';
 
 const require = createRequire('E:/Cortico/package.json');
 fix1206PotionProtocol(require);
@@ -217,6 +217,7 @@ function connect() {
   } catch (error) { log(`createBot failed: ${error.message}`); setTimeout(connect, 15000); return; }
   login.ready.then(() => {
     startGoddessPhotoCamera(bot, {log,onCapture:info=>cacheObservedPhoto(info).catch(error=>log(`observation cache failed=${error.code??error.name}`))});
+    listenPrivateGoddessMessages(bot, incoming => receive(incoming.player,incoming.message,true));
     // 心跳自检：每 15 分钟要一次 list——回执必经聊天管道，自证 messagestr 活着；
     // 20 分钟无任何聊天事件（含心跳回执）则判定半死，退出交由看门狗重建
     // （病根：服务器重启后 mineflayer 连接存活但聊天事件管道偶发失效，10-07 16:01 与 10-08 04:00 两次复发）。
@@ -228,10 +229,8 @@ function connect() {
         process.exit(1);
       }
     }, 60 * 1000).unref();
-    bot.on('messagestr', (_text, position, message) => {
+    bot.on('messagestr', () => {
       lastChatEvent = Date.now();
-      const incoming = privateGoddessMessage(message, position);
-      if (incoming) receive(incoming.player, incoming.message, true);
     });
     // 公共聊天：玩家点名 Goddess / 女神 时也进入对话通道。
     bot.addChatPattern('chat', /^<([A-Za-z0-9_.-]{1,32})> (.*)$/, { deprecated: true });

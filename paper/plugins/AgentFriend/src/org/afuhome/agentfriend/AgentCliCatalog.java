@@ -234,7 +234,7 @@ final class AgentCliCatalog {
         add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","一人在首室开场，遗迹内达标者自动同队；可中途加入和离开","生存模式、穿齐护甲并携带可用武器或职业法器，未参加其他活动；不要求日常组队","MC_SITE_DUNGEON_RESULT；战败回存档点，第三次战败结束；真实参战者通关后均生成个人奖励凭据，无须返程");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","兼容入口：确认加入当前挑战；正常进入遗迹即自动加入","同地点、装备与职业等级达标；不限开场十秒","MC_SITE_DUNGEON_RESULT；只影响本场，不修改日常队伍；已参战记录离场后保留");
         add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出当前在场参战，留在原地并保留贡献","倒地先等待救援；退出期间不自动加入，离开遗迹再回来即可续接","MC_SITE_DUNGEON_RESULT；同伴通关后，真实参与者仍有待领奖凭据");
-        add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后重试暂停的挑战","须为该队成员；失败不清场、不发奖、不自动连续刷怪","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
+        add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后续接本人暂停的场次；已保存房间不重刷","须为该队成员；不加cast、不传副本ID；先查dungeon status，失败不发奖","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
         add(specs,"dungeon.claim","adventure","item","/mycli dungeon claim [ID]","把通关参战奖励结算到个人奖励箱","每处上海日期每日奖励一次；队列满保留凭据，可重试；无需回首室","MC_SITE_DUNGEON_RESULT success/reason；结算与去重在同一原子配置写入");
         add(specs,"dungeon.menu","adventure","gui","/mycli dungeon menu","选择不同地点的地下城、路线、难度和组队","Java/基岩共用原版箱式菜单；地点罗盘有入口","普通箱式菜单；点击详情不会自动开始或传送");
         add(specs,"pvp.status","adventure","read","/mycli pvp status","本人积分、胜负、匹配及对手状态和大厅绝对坐标","在线玩家","本人 MC_PVP JSON");

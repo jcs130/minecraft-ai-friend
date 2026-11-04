@@ -95,6 +95,11 @@ final class AgentCliRecovery {
         String first=words.getFirst();
         // A real configured spell with a colliding name keeps its real validator.
         if(cards.stream().anyMatch(c->c.id().equals("cast."+first)))return List.of();
+        // Some hosts put the action before its domain: "cast resume dungeon".
+        // Reorder only an exact enabled catalog path; this remains advice.
+        if(words.size()>=2&&cards.stream().anyMatch(c->!c.id().startsWith("cast.")&&c.id().equals(words.get(1)+"."+first))){
+            words.set(0,words.get(1));words.set(1,first);
+        }
         for(Card card:cards)if(!card.id().startsWith("cast.")&&card.id().replace('.','_').equals(first)){
             words.removeFirst();words.addAll(0,Arrays.asList(card.id().split("\\.")));break;
         }
@@ -112,7 +117,14 @@ final class AgentCliRecovery {
         // Fill a target only after confirming it against the live dungeon catalog.
         if(path.size()==2&&path.getFirst().equals("dungeon")&&words.size()==3){
             String target=words.get(2);
-            if(context.dungeonIds().contains(target))next="/mycli "+String.join(" ",path)+" "+target;
+            if(context.dungeonIds().contains(target)){
+                String literal="/mycli "+String.join(" ",path);
+                String usage=best.usage().toLowerCase(Locale.ROOT);
+                if(usage.startsWith(literal+" <id>")||usage.startsWith(literal+" [id]"))next=literal+" "+target;
+                else if(best.usage().equals(literal))next=literal;
+            }
+        }else if(words.size()==path.size()){
+            next=safeNext(best);
         }
         return List.of(new Match(best,next,1,"misplaced_cast_prefix"));
     }

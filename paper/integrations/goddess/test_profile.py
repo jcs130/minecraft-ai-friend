@@ -44,6 +44,25 @@ class ProfileTests(unittest.TestCase):
         other = {'name': 'unrelated', 'id': 'outside', 'dispatch': {'private': 'unchanged'}}
         self.assertEqual(p.plan_jobs(self.jobs + [other])[-1], other)
 
+    def test_bounded_patrol_updates_preserve_original_native_identity_and_schedule(self):
+        jobs=json.loads(json.dumps(self.jobs))
+        before=json.dumps(jobs,sort_keys=True);out=p.plan_patrol_jobs(jobs)
+        self.assertEqual(before,json.dumps(jobs,sort_keys=True))
+        for old,new in zip(jobs,out):
+            if old['name'] not in ('qiandengji-daily-patrol','滞留任务巡检-3h'):
+                self.assertEqual(old,new);continue
+            for key in old:
+                if key not in ('text','request'):self.assertEqual(old[key],new[key])
+            for key in old['request']:
+                if key!='input':self.assertEqual(old['request'][key],new['request'][key])
+            self.assertIn('最多6次工具调用',new['text'])
+        self.assertEqual(p.plan_patrol_jobs(out),out)
+
+    def test_patrol_planner_rejects_missing_or_duplicated_native_jobs(self):
+        with self.assertRaises(ValueError):p.plan_patrol_jobs([j for j in self.jobs if j['name']!='qiandengji-daily-patrol'])
+        patrol=next(j for j in self.jobs if j['name']=='qiandengji-daily-patrol')
+        with self.assertRaises(ValueError):p.plan_patrol_jobs(self.jobs+[patrol])
+
     def test_chat_review_uses_original_native_identity_without_touching_jobs(self):
         before = json.dumps(self.jobs, sort_keys=True)
         job = p.plan_chat_review(self.jobs)

@@ -543,14 +543,23 @@ function Stop-Server {
     Stop-YsmServices
     if (-not (Listener)) { Log 'Already stopped'; return }
     $null = Probe  # Refuse to send stop to an unrelated listener.
-    $null = Rcon 'save-all flush'
-    $null = Rcon 'stop'
-    $deadline = (Get-Date).AddSeconds(90)
-    while (Listener) {
-        if ((Get-Date) -gt $deadline) { throw 'Paper did not stop within 90 seconds.' }
-        Start-Sleep -Seconds 1
-    }
-    Log 'Paper stopped cleanly'
+    $gameListeners = @(Listener)
+    if ($gameListeners.Count -ne 1) { throw 'Expected one verified game listener before shutdown.' }
+    $exitingGame = Get-Process -Id $gameListeners[0].OwningProcess -ErrorAction Stop
+    $null = $exitingGame.Handle # Hold this exact process; a PID may be reused after exit.
+    try {
+        $null = Rcon 'save-all flush'
+        $null = Rcon 'stop'
+        $deadline = (Get-Date).AddSeconds(90)
+        while (Listener) {
+            if ((Get-Date) -gt $deadline) { throw 'Paper did not stop within 90 seconds.' }
+            Start-Sleep -Seconds 1
+        }
+        # Closing the socket precedes final world/GC writes. Cold copies require
+        # the owned JVM to finish as well, even after its listener has vanished.
+        if (-not $exitingGame.WaitForExit(120000)) { throw 'Game JVM still stopping; no cold backup is safe yet.' }
+        Log 'Paper stopped cleanly; owned JVM exit confirmed'
+    } finally { $exitingGame.Dispose() }
 }
 
 function Repair-NoRcon {

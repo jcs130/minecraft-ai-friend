@@ -1,0 +1,88 @@
+{
+  "state": "deployed-and-verified-with-open-acceptance",
+  "verifiedAt": "2026-11-03T20:28:06.802724+08:00",
+  "document": "paper/docs/HEALTH_REPAIRS_20261103.md",
+  "liveGame": {
+    "AgentFriend": "0.4.47.51-rpg",
+    "OlEncounters": "1.7.0-qd-youer1",
+    "gameRestartedInThisRepair": true
+  },
+  "operationalRepairs": {
+    "state": "deployed-and-verified",
+    "metricsCommand": "neoforge tps",
+    "originalNativeJobsUpdated": 2,
+    "otherNativeJobsPreserved": 5,
+    "originalIdentityModelScheduleDispatchPreserved": true,
+    "originalTimeoutSeconds": [
+      900,
+      600
+    ],
+    "actualPatrolSeconds": [
+      190.6,
+      160.3
+    ],
+    "newFreshSnapshots": 2,
+    "newJobOrLoop": false
+  },
+  "candidates": {
+    "AgentFriend": {
+      "version": "0.4.47.51-rpg",
+      "sha256": "8b93dffeff9547ce088601469a93d481c772e562e40d88e2993d366014f76f5e",
+      "baselineSha256": "bab691c2c53bf9519ae10fd7b2b579986f01154d87e2e58203da4232096b612b",
+      "otherEntriesPreserved": 622
+    },
+    "OlEncounters": {
+      "version": "1.7.0-qd-youer1",
+      "sha256": "c7e00ec3dd58b9dd0dc789b16b7c638e794220f4627f36f0f53d6dcd66eca4fc",
+      "baselineSha256": "1577935cc738f199719db7c1b4eaa1630a4ecaa208aba5f5d18943585075ab0f",
+      "otherEntriesPreserved": 188
+    }
+  },
+  "validation": {
+    "javaTestGroups": 8,
+    "windowsFileLockChecks": 16,
+    "cliRecoveryChecks": 61,
+    "oldVersionNativeReproductionChecks": 4,
+    "candidateNativeAndRestartChecks": 22,
+    "goddessActTests": 3,
+    "goddessEvolutionTests": 21,
+    "goddessProfileTests": 9,
+    "fixtureFailuresRetained": true,
+    "isolatedFreshWorldOnly": true,
+    "mineflayerUsesExistingRecipeCompatibility": true
+  },
+  "releasePreparation": {
+    "dualDiskCandidateAndRollbackVerified": true,
+    "restartApproved": true,
+    "onlineJarReplacement": false,
+    "playerDataReplacement": false,
+    "currentFaultPausedCheckpointPreserved": true,
+    "faultPausedCheckpointMaintenanceExceptionNeedsExplicitApproval": true,
+    "recoveryPolicy": "code only; never restore old world/account/reward over new progress",
+    "exactFaultPausedCheckpointMaintenanceApproved": true
+  },
+  "deployment": {
+    "passed": true,
+    "at": "2026-11-03T20:28:06.802724+08:00",
+    "sourceCommit": "efaeb8554d559151dbd59dffa390068ea8aea84b",
+    "formalChecks": 27,
+    "coldInstallationCharacterFilesPreserved": 799,
+    "originalCredentialRowsPreserved": 75,
+    "originalNativeJobsRestored": 7,
+    "exactPausedCheckpointFieldsPreserved": 14,
+    "savedRoomsPreserved": 2,
+    "gameJvmExitConfirmedBeforeColdBackup": true,
+    "dualDiskColdBackupVerified": true,
+    "newRewardsFabricated": false,
+    "camera": {
+      "ready": true,
+      "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+      "fpsObserved": 30,
+      "modelCatalogueSize": 40,
+      "privateGiBObserved": 2.059
+    },
+    "websiteHttps": 200,
+    "closedOneShotEntry": true,
+    "naturalEncounterLongTermAcceptance": "not yet measured"
+  }
+}

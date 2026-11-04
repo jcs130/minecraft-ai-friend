@@ -22,13 +22,14 @@ def main():
     classpath = os.pathsep.join(map(str, [classes, inputs / "versions/1.21.1/paper-1.21.1.jar",
         *sorted((inputs / "libraries").rglob("*.jar")), *sorted((inputs / "plugins").glob("*.jar"))]))
     root = Path(__file__).resolve().parent
-    tests = ["AgentCliContractTest", "AgentCliTextTest", "JourneyCatalogTest", "NativeCliCatalogTest", "AgentCliRecoveryTest"]
+    tests = ["AgentCliContractTest", "AgentCliTextTest", "JourneyCatalogTest", "NativeCliCatalogTest", "AgentCliRecoveryTest", "AtomicConfigFileTest", "DurableConfigFilesTest"]
     suffix = ".exe" if os.name == "nt" else ""
     tool = lambda name: str(args.jdk / "bin" / (name + suffix)) if args.jdk else name
     version = subprocess.run([tool("javac"), "-version"], capture_output=True, text=True, check=True)
     if not (version.stdout + version.stderr).startswith("javac 21."):
         raise ValueError("CLI checks require JDK 21.")
     sources = [root / "org/afuhome/agentfriend" / (name + ".java") for name in tests]
+    sources.append(root / "org/afuhome/agentfriend/DurableConfigCrashChild.java")
     # The catalog contract compares the two real adapters. Compile the pure
     # transition policy too; do not require a private/native RPG build or drop
     # the cross-adapter equality assertion from the public source checks.

@@ -29,3 +29,35 @@ export function privateGoddessMessage(message, position) {
   const body = plainText(root.with[1]);
   return body === null ? null : { player, message: body };
 }
+
+// Modern Mineflayer resolves translation keys while rendering ChatMessage. Use
+// the server's registered incoming-message type before rendering loses its ID.
+export function privateGoddessPacket(packet, registry) {
+  const id = packet?.type?.chatType ?? packet?.type;
+  const format = Number.isInteger(id) ? registry?.chatFormattingById?.[id] : null;
+  if (format?.name !== 'minecraft:msg_command_incoming'
+      || JSON.stringify(format.parameters) !== '["sender","content"]') return null;
+  try {
+    const sender = JSON.parse(packet.senderName);
+    const body = packet.formattedMessage ? JSON.parse(packet.formattedMessage) : {text:packet.plainMessage};
+    const native = privateGoddessMessage({translate:'commands.message.display.incoming',with:[sender,body]}, 'chat');
+    const account = component(sender)?.hoverEvent?.contents?.id;
+    if (native && account && packet.sender
+        && String(account).replaceAll('-','').toLowerCase() !== String(packet.sender).replaceAll('-','').toLowerCase()) return null;
+    return native;
+  } catch { return null; }
+}
+
+export function listenPrivateGoddessMessages(bot, receive) {
+  const formatted = bot.supportFeature?.('clientsideChatFormatting') === true;
+  bot._client?.on('playerChat', packet => {
+    if (!formatted) return;
+    const incoming = privateGoddessPacket(packet,bot.registry);
+    if (incoming) receive(incoming);
+  });
+  bot.on('messagestr', (_text,position,message) => {
+    if (formatted && position !== 'system') return;
+    const incoming = privateGoddessMessage(message,position);
+    if (incoming) receive(incoming);
+  });
+}

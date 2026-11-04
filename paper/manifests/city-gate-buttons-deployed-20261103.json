@@ -1,0 +1,85 @@
+{
+  "state": "deployed-with-open-acceptance",
+  "release": "city-gate-button-20261103-r1",
+  "maintenanceCompletedAt": "2026-11-03T13:07:34.6683748+08:00",
+  "verifiedAt": "2026-11-03T13:08:40.256118+08:00",
+  "version": "0.2.18",
+  "sourceChangeCommit": "df4f79d3",
+  "sourceMainMerge": "06f9eb672507445bd8f33cb07c63bbedc47821d3",
+  "artifactSha256": "51877d0d0c19bf0693a8b0c70d48204970d74bbdde495c0b492ad75c49f06d98",
+  "baselineSha256": "b852c4fc4c991c51fdf01b002d97a744d3098e4be53b855b7fa066c1aa3a49ea",
+  "changedJarEntries": [
+    "org/qiandengji/vortex/TwinCityGates$Gate.class",
+    "org/qiandengji/vortex/TwinCityGates.class",
+    "plugin.yml"
+  ],
+  "nativeClientChecks": 15,
+  "formalStartupChecks": 23,
+  "terrainCellsVerified": 43,
+  "originalSignNbtLeavesVerified": 34,
+  "characterFilesUnchangedDuringColdInstallation": 673,
+  "originalCredentialRowsPreserved": 75,
+  "originalCredentialValuesUnchanged": true,
+  "goddessJobsRestored": true,
+  "latestColdRecoveryPointsVerifiedEF": true,
+  "noticesSeconds": [
+    180,
+    60,
+    10
+  ],
+  "moveTriggersTeleport": false,
+  "buttonMainHandOnly": true,
+  "successManaCost": 6,
+  "travelAuthority": "AgentFriend.nativeCityTravel",
+  "villageGate": {
+    "world": "world",
+    "origin": [
+      -563,
+      67,
+      -443
+    ],
+    "button": [
+      -564,
+      68,
+      -442
+    ]
+  },
+  "aincradGate": {
+    "world": "aincrad",
+    "origin": [
+      -583,
+      67,
+      919
+    ],
+    "button": [
+      -584,
+      68,
+      920
+    ]
+  },
+  "signs": [
+    "destination",
+    "click button",
+    "six mana on success",
+    "walking does not teleport"
+  ],
+  "gameRestarted": true,
+  "playerDataReplacement": false,
+  "maintenanceEntryConsumed": true,
+  "physicalAndroidButtonUseVerified": false,
+  "rollback": "Scoped code/config/block preimages only; never restore an old whole world or account database",
+  "document": "paper/docs/CITY_GATE_BUTTONS_20261103.md",
+  "enabledPlugins": 55,
+  "originalGoddessJobsRestored": 7,
+  "originalJobSpecificationsAndIdentityPreserved": true,
+  "camera": {
+    "phase": "ready",
+    "at": "2026-11-03T13:10:03.921260+08:00",
+    "fps": 28,
+    "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+    "modelCatalogueSize": 40,
+    "cleanHud": true,
+    "shadersEnabled": false
+  },
+  "pr58Included": false
+}

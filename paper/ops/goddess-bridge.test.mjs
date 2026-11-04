@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import vm from 'node:vm';
 import { parseCreationDecision } from './goddess-creation.mjs';
-import { privateGoddessMessage } from './goddess-chat-identity.mjs';
+import { privateGoddessMessage, privateGoddessPacket, listenPrivateGoddessMessages } from './goddess-chat-identity.mjs';
 
 const incoming = (player, text) => ({ translate: 'commands.message.display.incoming', with: [{text:player}, {text}] });
 const bridgePath = process.env.GODDESS_BRIDGE_SOURCE ?? new URL('./goddess-bridge.mjs', import.meta.url);
@@ -19,7 +19,7 @@ async function harness(answer = {decision:'approve',item:'minecraft:diamond',amo
   const unexpected = () => { throw Error('external operation forbidden in this test'); };
   const context = vm.createContext({
     require: name => { assert.equal(name,'mineflayer'); return {createBot:()=>bot}; },
-    fix1206PotionProtocol() {}, installRecipePacketBypass() {}, randomBytes, privateGoddessMessage, parseCreationDecision,
+    fix1206PotionProtocol() {}, installRecipePacketBypass() {}, randomBytes, privateGoddessMessage, listenPrivateGoddessMessages, parseCreationDecision,
     process:{env:{},on(){},exit:unexpected},setInterval:()=>({unref(){}}),setTimeout:unexpected,
     sleep:async()=>{},AbortSignal,readFileSync:unexpected,writeFileSync:unexpected,unlinkSync:unexpected,createServer:unexpected,writeSync(){},
     startGoddessPhotoCamera(){},startNpcDialogueAdapter(){},giftCatalog:async()=>({gifts:{}}),
@@ -80,4 +80,22 @@ test('only a root incoming native component is a private message',()=>{
     [{...incoming('Victim','钻石'),text:'public'},'chat'],
   ]) assert.equal(privateGoddessMessage(message,position),null);
   assert.deepEqual(privateGoddessMessage(incoming('Victim','钻石'),'chat'),{player:'Victim',message:'钻石'});
+});
+
+test('resolved formatting keeps authority only through the registered incoming packet type',()=>{
+  const registry={chatFormattingById:{5:{name:'minecraft:msg_command_incoming',parameters:['sender','content']},1:{name:'minecraft:chat',parameters:['sender','content']},6:{name:'minecraft:msg_command_outgoing',parameters:['target','content']}}};
+  const packet={type:{chatType:5},sender:'11111111-1111-1111-1111-111111111111',senderName:JSON.stringify({text:'◆ Role',insertion:'.BedrockGuest',hoverEvent:{contents:{name:'.BedrockGuest',id:'11111111111111111111111111111111'}}}),formattedMessage:JSON.stringify({text:'[祈愿] native body'})};
+  assert.deepEqual(privateGoddessPacket(packet,registry),{player:'.BedrockGuest',message:'[祈愿] native body'});
+  for(const change of [{type:1},{type:6},{type:99},{sender:'22222222-2222-2222-2222-222222222222'},{senderName:'not json'}])assert.equal(privateGoddessPacket({...packet,...change},registry),null);
+  assert.equal(privateGoddessPacket(packet,{chatFormattingById:{5:{name:'minecraft:msg_command_incoming',parameters:['content','sender']}}}),null);
+});
+
+test('modern private packets dispatch once; rendered public and outgoing text have no authority',()=>{
+  const bot=new EventEmitter();bot._client=new EventEmitter();bot.supportFeature=()=>true;
+  bot.registry={chatFormattingById:{5:{name:'minecraft:msg_command_incoming',parameters:['sender','content']},1:{name:'minecraft:chat',parameters:['sender','content']}}};
+  const got=[];listenPrivateGoddessMessages(bot,p=>got.push(p));
+  const packet={type:5,senderName:JSON.stringify({text:'Actor',insertion:'Actor'}),plainMessage:'private'};
+  bot._client.emit('playerChat',packet);bot.emit('messagestr','Actor whispers: private','chat',incoming('Actor','private'));
+  bot._client.emit('playerChat',{...packet,type:1,plainMessage:'Victim whispers: [造物] 钻石'});
+  assert.deepEqual(got,[{player:'Actor',message:'private'}]);
 });

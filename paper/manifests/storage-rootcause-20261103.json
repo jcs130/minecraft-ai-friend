@@ -1,0 +1,118 @@
+{
+  "id": "storage-rootcause-20261103-r1",
+  "state": "deployed-and-verified-with-open-acceptance",
+  "document": "paper/docs/STATE_STORAGE_20261103.md",
+  "candidate": {
+    "version": "0.4.47.52-rpg",
+    "sha256": "0dc196397e20f56dda53adebc6b76ba0c8e48d066af34f701e967f4bd8bc69cc",
+    "baselineSha256": "8b93dffeff9547ce088601469a93d481c772e562e40d88e2993d366014f76f5e",
+    "changedEntries": [
+      "plugin.yml",
+      "org/afuhome/agentfriend/AgentFriendPlugin.class",
+      "org/afuhome/agentfriend/SiteDungeonManager$Run.class",
+      "org/afuhome/agentfriend/SiteDungeonManager.class",
+      "org/afuhome/agentfriend/AtomicConfigFile$Staged.class",
+      "org/afuhome/agentfriend/AtomicConfigFile.class"
+    ],
+    "addedEntries": [
+      "org/afuhome/agentfriend/DurableConfigFiles$Commit.class",
+      "org/afuhome/agentfriend/DurableConfigFiles$Located.class",
+      "org/afuhome/agentfriend/DurableConfigFiles.class",
+      "org/afuhome/agentfriend/DurableConfigStore$State.class",
+      "org/afuhome/agentfriend/DurableConfigStore.class",
+      "org/afuhome/agentfriend/DurableFileMove$Kernel.class",
+      "org/afuhome/agentfriend/DurableFileMove$Windows.class",
+      "org/afuhome/agentfriend/DurableFileMove.class"
+    ],
+    "otherEntriesPreserved": 622,
+    "originalMainMethodsPreserved": 279
+  },
+  "verification": {
+    "javaGroups": 9,
+    "nativeWindowsAtomicChecks": 16,
+    "durableFileChecks": 35,
+    "pythonReadProtocol": 13,
+    "worldActivityChecks": 21,
+    "goddessSnapshotChecks": 23,
+    "finalRestartAuditChecks": 6,
+    "finalSustainedReaderGameplayChecks": 11,
+    "heldReaderSurvivesServerRestart": true,
+    "unknownFaultDoesNotAutoRecover": true,
+    "physicalPowerLossTested": false,
+    "client": "Mineflayer with existing recipe packet compatibility layer",
+    "fixtureFailuresRetained": true
+  },
+  "liveOperations": {
+    "installedFiles": 5,
+    "gameRestarted": false,
+    "nativeJobsChanged": false,
+    "identityFilesPreserved": true,
+    "freshSnapshotComplete": true
+  },
+  "maintenance": {
+    "newRestartApproved": true,
+    "candidateAndCodeRollbackVerifiedOnEAndF": true,
+    "requiresFreshColdBackup": true,
+    "preserveVerifiedExistingTwoOfThreeCheckpoint": true,
+    "legacyMetadataOnly": "storageFault=true after exact cold fingerprint verification",
+    "replayGameplay": false,
+    "replayConsumedMaintenance": false
+  },
+  "open": [
+    "Natural long-term storage workload",
+    "Historical file-locking PID is not proven",
+    "No physical power-cut test"
+  ],
+  "rollback": "Never load an older config snapshot over newer accepted state. Publish and verify pending records before downgrading code.",
+  "verifiedAt": "2026-11-03T23:22:09.566286+08:00",
+  "liveGame": {
+    "AgentFriend": "0.4.47.52-rpg",
+    "gameRestartedInThisRepair": true
+  },
+  "deployment": {
+    "passed": true,
+    "at": "2026-11-03T23:22:09.566286+08:00",
+    "sourceCommit": "7b938561c1f532af1e75e41c92a0fa4c5cbd18d6",
+    "formalStartupChecks": 27,
+    "liveStoreChecks": 6,
+    "coldInstallationCharacterFilesPreserved": 800,
+    "originalCredentialRowsPreserved": 75,
+    "originalNativeJobsRestored": 7,
+    "legacyMetadataOnly": "verified original run storageFault=true",
+    "legacyOriginalFieldsPreservedBeforeStartup": 14,
+    "savedRoomsPreserved": 2,
+    "gameJvmExitConfirmedBeforeColdBackup": true,
+    "dualDiskColdBackupVerified": true,
+    "maintenanceRewardEdits": 0,
+    "stateStore": {
+      "cleanupPending": false,
+      "projectionPending": false,
+      "publishedRevision": 0,
+      "durableRevision": 0,
+      "commitUnknown": false,
+      "lastMirrorError": ""
+    },
+    "readModelAuthoritativeRevisionVerified": true,
+    "camera": {
+      "ready": true,
+      "renderer": "D3D12 (Intel(R) UHD Graphics 770)",
+      "fpsObserved": 30,
+      "modelCatalogueSize": 40,
+      "privateGiBObserved": 2.1
+    },
+    "websiteHttps": 200,
+    "oneShotEntryConsumed": true,
+    "openAcceptance": [
+      "Natural long-term storage workload",
+      "Historical file-locking PID is not proven",
+      "No physical power-cut test"
+    ],
+    "initialPostflightAssertionCorrection": {
+      "failureRetained": true,
+      "cause": "Version zero before the first new save is a valid initialized baseline, not a storage failure",
+      "readOnlyVerifierCorrected": true,
+      "additionalGameRestart": false
+    }
+  },
+  "previousRuntime": "AgentFriend 0.4.47.51-rpg"
+}

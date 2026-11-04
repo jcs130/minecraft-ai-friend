@@ -4,6 +4,8 @@ A small client-only Fabric bridge for **Minecraft 1.20.6 or 1.21.1 / Java 21**. 
 
 This is our own `agent-mc-java/v1` implementation. It is **not wire compatible with `maw-client-bridge-0.3.0`**. Do not copy a different bridge's connection token into it. The native source and MIT license are maintained here independently of any Agent host.
 
+Prebuilt Fabric 1.21.1 bridge with the PR58 cancellation boundary: [download and SHA256](../../paper/docs/PR58_BOUNDARIES_20261103.md). Preserve both action ledgers and private login configuration when replacing the JAR. The server-owned camera has been updated; other machines require their own installation.
+
 ## Build
 
 Install the matching Minecraft/Fabric client and Fabric API normally first. The explicit installed input must contain `libraries/`, `mods/fabric-api-*+1.20.6.jar` and Fabric's `.fabric/remappedJars/.../client-intermediary.jar`.

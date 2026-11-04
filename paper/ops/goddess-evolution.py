@@ -28,7 +28,7 @@ PHASES = {
     "reviewed": {"surveyed", "blocked"},
     "blocked": {"planned", "surveyed", "staged", "applied", "unknown"},
 }
-LIVE_READS = ["version AgentFriend", "minecraft:list uuids", "mspt",
+LIVE_READS = ["version AgentFriend", "minecraft:list uuids", "neoforge tps",
               "mycli admin dungeonaudit", "mycli admin dungeons audit",
               "mycli admin worldlife audit", "mycli admin board list"]
 
@@ -204,22 +204,54 @@ class Ledger:
             return {"status": "released" if release else "acquired", "lease": state["lease"]}
 
 
+def storage_audit(text):
+    lines=re.findall(r'^MC_AGENT_STATE_STORAGE (\{[^\r\n]{1,2000}\})\s*$',text,re.M)
+    if len(lines)!=1:return None
+    try:value=json.loads(lines[0])
+    except ValueError:return None
+    required={'durableRevision','publishedRevision','projectionPending','cleanupPending','commitUnknown','lastMirrorError'}
+    if not isinstance(value,dict)or set(value)!=required:return None
+    if any(type(value[key])is not int or value[key]<0 for key in ['durableRevision','publishedRevision']):return None
+    if any(type(value[key])is not bool for key in ['projectionPending','cleanupPending','commitUnknown']):return None
+    if value['publishedRevision']>value['durableRevision']or not isinstance(value['lastMirrorError'],str):return None
+    return dict(value,lastMirrorError=value['lastMirrorError'][:100],state='commit_unknown'if value['commitUnknown']else'projection_delayed'if value['projectionPending']else'published',
+                guidance='提交结果未知，核对原记录，勿重放游戏动作'if value['commitUnknown']else'游戏提交已保存；快照延迟不需要重打、重领或重开副本')
+
 def snapshot(server, ops, node):
     server, ops = Path(server), Path(ops)
     started = now()
     result = {"schemaVersion": 1, "observed_at": started, "server": str(server),
-              "scope": "Paper production only; no FOM/NeoForge inference", "reads": [], "plugins": [], "datapacks": []}
+              "scope": "configured Java server; features require their own actual receipts", "reads": [], "plugins": [], "datapacks": []}
     for key, path, pattern in (("plugins", server / "plugins", "*.jar"), ("datapacks", server / "world/datapacks", "*.zip")):
         result[key] = sorted(p.name for p in path.glob(pattern))
     module = (ops / "rcon-client.mjs").resolve().as_uri()
     # The command list is fixed here. Caller input is never interpolated into JS or RCON.
-    code = "import {command} from " + json.dumps(module) + "; console.log(await command(process.argv[1],10000));"
+    code = "import {command} from " + json.dumps(module) + "; console.log(await command(process.argv[1],Number(process.argv[2])));"
+    deadline = time.monotonic() + 45
     for command in LIVE_READS:
         at = now()
+        remaining = deadline - time.monotonic()
+        if remaining < 1:
+            result["reads"].append({"command": command, "observed_at": at, "status": "unknown", "reason": "snapshot_budget_exhausted"})
+            continue
         try:
-            p = subprocess.run([node, "--input-type=module", "-e", code, command], capture_output=True, text=True, encoding="utf-8", timeout=15)
-            result["reads"].append({"command": command, "observed_at": at, "status": "received" if p.returncode == 0 else "error",
-                                    "text": p.stdout[:18000] if p.returncode == 0 else "read failed; inspect local service", "truncated": len(p.stdout) > 18000})
+            limit = min(7, remaining)
+            p = subprocess.run([node, "--input-type=module", "-e", code, command, str(int((limit-.5)*1000))], capture_output=True, text=True, encoding="utf-8", timeout=limit)
+            text = p.stdout.strip() if p.returncode == 0 else "read failed; inspect local service"
+            status = "received" if p.returncode == 0 else "error"
+            if status == "received" and not text:
+                status = "unknown"
+            row = {"command": command, "observed_at": at, "status": status, "text": text[:18000], "truncated": len(text) > 18000}
+            if command=="mycli admin dungeons audit"and status=="received":
+                state=storage_audit(text)
+                if state is not None:result['stateStore']=state
+            if command == "neoforge tps" and status == "received":
+                match = re.search(r"^\s*Overall:\s*(\d+(?:\.\d+)?) TPS \((\d+(?:\.\d+)?) ms/tick\)\s*$", re.sub(r"\u00a7[0-9a-fklmnor]", "", text, flags=re.I), re.M)
+                if match and 0 <= float(match[1]) <= 20:
+                    result["metrics"] = {"source": "youer_neoforge", "tps": float(match[1]), "mspt": float(match[2])}
+                else:
+                    row.update(status="unknown", reason="performance_reply_unrecognized")
+            result["reads"].append(row)
         except subprocess.TimeoutExpired:
             result["reads"].append({"command": command, "observed_at": at, "status": "unknown", "reason": "read_timeout"})
     # Aggregate activity only. Never forward raw chat, login commands or player inventories.
@@ -236,10 +268,31 @@ def snapshot(server, ops, node):
                                   "joins": r"joined the game", "task_queries": r"issued server command: /mycli (tasks|guild)",
                                   "dungeon_commands": r"issued server command: /mycli (arena|dungeon)",
                               }.items()}}
+        events=[]
+        header=re.compile(r"^\[(\d\d:\d\d:\d\d)\] \[[^\]\r\n]+/(?:WARN|ERROR)\](?: \[[A-Za-z0-9_-]+\])?: (.*)$")
+        kinds={"MC_SITE_DUNGEON_SAVE_FAILURE":"dungeon_save_failure","Site dungeon paused for explicit retry":"dungeon_paused","Could not find suitable meteor location":"encounter_search_failed","Can't keep up!":"tick_lag","MC_AGENT_STATE_PROJECTION_DELAYED":"state_projection_delayed"}
+        for line in lines:
+            match=header.match(line)
+            if match:
+                for prefix,kind in kinds.items():
+                    if match[2].startswith(prefix):events.append({"time":match[1],"kind":kind})
+        result["activity"]["recentAlerts"]=events[-8:]
     result["finished_at"] = now()
     result["complete"] = all(x["status"] == "received" and not x.get("truncated") for x in result["reads"])
     result["note"] = "Received text must still be inspected for usage/permission/business failure. Installed JAR does not prove feature readiness. Unknown is not zero."
     return result
+
+
+def snapshot_brief(value, projects):
+    """Bound model input, while the full original receipts stay in the saved file."""
+    active=[dict(id=key, title=str(row.get("title",""))[:100], phase=row.get("phase"), next_action=str(row.get("next_action",""))[:180])
+            for key,row in sorted(projects.get("projects",{}).items(),key=lambda item:str(item[1].get("updated_at","")),reverse=True)
+            if row.get("phase") not in ("reviewed",)]
+    return {"observed_at":value["observed_at"],"complete":value["complete"],"metrics":value.get("metrics"),
+            "stateStore":value.get('stateStore'),
+            "readStatus":[{"command":row["command"],"status":row["status"],"reason":row.get("reason")}for row in value["reads"]],
+            "activity":value.get("activity"),"projectRevision":projects.get("revision"),"activeProjectCount":len(active),"projects":active[:8],
+            "policy":"本轮只核实并记录最多一个异常；unknown不是正常或零值。建设/长调查交原建设任务，不在巡检循环中重试。"}
 
 
 def main():
@@ -251,7 +304,7 @@ def main():
     s = sub.add_parser("record", description="Record a project transition. Run schema for all fields; status for current revision.")
     s.add_argument("--file", type=Path, required=True)
     s = sub.add_parser("lease"); s.add_argument("owner"); s.add_argument("--release", action="store_true")
-    s = sub.add_parser("snapshot"); s.add_argument("--out", type=Path, required=True)
+    s = sub.add_parser("snapshot"); s.add_argument("--out", type=Path, help="optional new evidence file; default is a unique file under the existing ledger")
     s.add_argument("--server", default=r"E:\MC\server"); s.add_argument("--ops", default=r"E:\MC\ops")
     s.add_argument("--node", default=r"C:\Users\lzl19\AppData\Local\hermes\node\node.exe")
     args = p.parse_args()
@@ -267,11 +320,13 @@ def main():
         elif args.op == "lease":
             out = ledger.lease(args.owner, args.release)
         else:
+            if args.out is None:
+                args.out=args.root/"snapshots"/(f"snapshot-{time.time_ns()}-{os.getpid()}.json")
             if args.out.exists():
                 raise Conflict("snapshot_exists: use a new path, preserve previous evidence")
             out = snapshot(args.server, args.ops, args.node)
             atomic(args.out, out)
-            out = {"status": "saved", "path": str(args.out.resolve()), "sha256": digest(args.out.read_bytes()), "complete": out["complete"]}
+            out = {"status": "saved", "path": str(args.out.resolve()), "sha256": digest(args.out.read_bytes()), "complete": out["complete"], "summary": snapshot_brief(out, ledger.read())}
         print(json.dumps(out, ensure_ascii=False))
     except (ValueError, OSError) as e:
         print(json.dumps({"status": "blocked" if isinstance(e, Conflict) else "invalid", "reason": str(e), "gameExecuted": False, "retryable": False,
