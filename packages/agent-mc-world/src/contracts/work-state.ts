@@ -1,10 +1,30 @@
-/** Portable evidence for retiring a host intention; never mutates host plans. */
-export interface WorkReference {
+/** Portable activity attribution; does not assert progress or completion. */
+export interface WorkBinding {
   scope: { realm: string; account: string; agent: string };
   subject: string;
+  /** Omit while preparing an activity that has not started; never infer the nearest occurrence. */
+  instance?: string;
+}
+export interface WorkReference extends WorkBinding {
   /** Exact occurrence, for example the accepted-at identity; not a reusable quest name. */
   instance: string;
   revision: number;
+}
+/** Attribution is separate from versioned completion evidence. */
+export function readWorkBinding(value: unknown): WorkBinding | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Partial<WorkBinding>;
+  if (!v.scope || ![v.scope.realm, v.scope.account, v.scope.agent, v.subject]
+    .every(x => typeof x === 'string' && !!x.trim() && x.length <= 200)
+    || (v.instance !== undefined && (typeof v.instance !== 'string' || !v.instance.trim() || v.instance.length > 200))) return null;
+  return {scope: {realm:v.scope.realm,account:v.scope.account,agent:v.scope.agent}, subject: v.subject!, ...(v.instance ? {instance:v.instance} : {})};
+}
+export function compareWorkBindings(expected: unknown, actual: unknown): 'exact' | 'subject' | 'mismatch' | 'unknown' {
+  const a=readWorkBinding(expected), b=readWorkBinding(actual);
+  if(!a || !b) return 'unknown';
+  if(a.subject!==b.subject || a.scope.realm!==b.scope.realm || a.scope.account!==b.scope.account || a.scope.agent!==b.scope.agent) return 'mismatch';
+  if(a.instance && b.instance) return a.instance===b.instance ? 'exact' : 'mismatch';
+  return 'subject';
 }
 export interface WorkState extends WorkReference {
   status: 'active' | 'completed' | 'cancelled';

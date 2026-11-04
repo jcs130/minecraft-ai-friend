@@ -55,6 +55,8 @@ export interface ToolDef extends ToolSchema {
   familiarAction?(args: Record<string, unknown>): FamiliarAction | null;
   /** True only for a branch that cannot acquire/mutate the game body. */
   readOnlyCall?(args: Record<string, unknown>): boolean;
+  /** Optional protocol-owned activity subjects for a call; never inferred by a host from prose. */
+  workSubjects?(args: Record<string, unknown>): readonly string[];
   /** Current backend capability, independent of the existence of the public tool schema. */
   runtimeAvailable?(): boolean;
   handler(args: Record<string, unknown>, context: ToolCallContext): Promise<string | ToolOutcome>;
@@ -90,6 +92,8 @@ export interface WorldRequestFacts {
   text: string; snapshotTypes: readonly string[]; parts?: readonly import('./protocol.ts').FactPart[];
   /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */
   workStates?: readonly import('./work-state.ts').WorkState[];
+  /** Observed activity attribution. Absence of a revision does not imply completion evidence. */
+  workBindings?: readonly import('./work-state.ts').WorkBinding[];
   /** Bounded current capability discovery; not execution eligibility or a model-selected plan. */
   options?: import('./options.ts').MinecraftOptionsSnapshot;
   /** World-owned compact current facts for optional fast classification; complete evidence remains in text/parts. */
