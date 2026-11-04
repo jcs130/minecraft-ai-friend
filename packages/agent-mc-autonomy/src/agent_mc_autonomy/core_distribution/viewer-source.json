@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "402ef3152f789f0f1e6be9bf25d9fc5ebbbe77f7",
+  "sourceRevision": "97e76665b501c2fc50ffa3f46c96b3d3d353266b",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -10,21 +10,61 @@
       "bytes": 56,
       "sha256": "d9956141afdf84e5b64799e7e2b93b2bf103454e94ccc5e73956ac3196ed9c24"
     },
+    "renderer-src/NATIVE_DEVICE_RENDERING_COMPATIBILITY.md": {
+      "bytes": 22842,
+      "sha256": "f0d8ad2ce6db0d0792044cd4dd1b45dff61f53fbcd39fe6fb09b432c4f6db832"
+    },
+    "renderer-src/NATIVE_ENTITY_COMPATIBILITY.md": {
+      "bytes": 14212,
+      "sha256": "6ad226b84d9eede9d9c3b58f8c272e45b5114c429ca26ef570671d3200e9b95c"
+    },
+    "renderer-src/NATIVE_FARMERS_DELIGHT_COMPATIBILITY.md": {
+      "bytes": 11058,
+      "sha256": "6f14e16856a46ee3f40623a46075eca8480a8eb0e3de43c882aea2f051d6dba5"
+    },
+    "renderer-src/NATIVE_ITEM_GUI_COMPATIBILITY.md": {
+      "bytes": 17617,
+      "sha256": "c611b72e8ae219952464eed3107a439c4892bb5e42eb6d5f39d400c39adbc244"
+    },
+    "renderer-src/NATIVE_MAID_COMPATIBILITY.md": {
+      "bytes": 3025,
+      "sha256": "d9e979489b591de0d9ec654e9aa46a31dbe00a572777d1861b5e608b5099b74a"
+    },
+    "renderer-src/README.md": {
+      "bytes": 51183,
+      "sha256": "9ee7f330bfe2d289db1d5b7664de6d699f63f34a66ac9a3d25333ae3485594e8"
+    },
+    "renderer-src/SOCKET_PROTOCOL.md": {
+      "bytes": 38336,
+      "sha256": "8eceb93c30657af4fbafe0f8a8da39f08c35c52c318a1e6c929d099e0cccf45d"
+    },
+    "renderer-src/host/README.md": {
+      "bytes": 6614,
+      "sha256": "0563335233b64e60b39c21c0615026067a2b1e31f1059b5757d14b89a1040b66"
+    },
+    "renderer-src/host/agent-content.d.mts": {
+      "bytes": 213,
+      "sha256": "eeaf35dc7dc5e4ced86519c57c5ebafd03b4079ff718107864f3de459c5f8542"
+    },
+    "renderer-src/host/agent-content.mjs": {
+      "bytes": 2360,
+      "sha256": "16908bd75f56baedd21ebad7030c0b6a8779e51bdb5aee5f8bc968d4e51bb3ae"
+    },
     "renderer-src/host/broadcast-camera.d.mts": {
-      "bytes": 3439,
-      "sha256": "a370564236df87e5ded024d2fe81ca764ee648876e107f759bc700a015d603d9"
+      "bytes": 3599,
+      "sha256": "ba7e3c59f6057df9515eb119b0b6de8e6573788c00da556ee0109a04c5a1e6c9"
     },
     "renderer-src/host/broadcast-camera.mjs": {
       "bytes": 12298,
       "sha256": "581e0b2a838aec4a72360b3cfaefe6bdd5ee262eb9dde84bd09c143240788865"
     },
     "renderer-src/host/broadcast-decisions.d.mts": {
-      "bytes": 6021,
-      "sha256": "506b4ae1dfba903f247fac84df9e42c5fce3226d9ff608ba2e724e7904f52b91"
+      "bytes": 6710,
+      "sha256": "24349d32ada85e3c2082e870f72384adef553f853d88823564bc8cbfb8ddd167"
     },
     "renderer-src/host/broadcast-decisions.mjs": {
-      "bytes": 29736,
-      "sha256": "a2f4dce2ca09deafb85fdc062135026ee35c6d428d4204380b5994a6498d8ace"
+      "bytes": 33017,
+      "sha256": "11e74cd5ce6bcd214f2936f061fa0514dd261cc6e61c781bcd6e8a4ffb1e8861"
     },
     "renderer-src/host/broadcast-motion.d.mts": {
       "bytes": 950,
@@ -41,6 +81,14 @@
     "renderer-src/host/camera-script.mjs": {
       "bytes": 2449,
       "sha256": "9bf10caf08e5eb4a05a39b062988c2248edc5a14d9829ace84cebded7c249c28"
+    },
+    "renderer-src/host/client-content-stream.d.mts": {
+      "bytes": 1176,
+      "sha256": "ca1b188a8a138e0de072ec0ff0147bd199ed9a30d953ed2bd9537618cf54dbe2"
+    },
+    "renderer-src/host/client-content-stream.mjs": {
+      "bytes": 6009,
+      "sha256": "893a002665b1359e63883edf36987c0d231d2600ebd908c6686ae25aee205401"
     },
     "renderer-src/host/java-data-viewer.mjs": {
       "bytes": 11338,
@@ -63,20 +111,20 @@
       "sha256": "5c72ede3b8112f42cdfcc094234906a21718ffe5e196dc64fdfa9a213dfa9dc6"
     },
     "renderer-src/host/native-camera-adapter.d.mts": {
-      "bytes": 2259,
-      "sha256": "6ae72d74531f40e4a1fefc2b7396697de60fc28541d3e92c9fd7cc21d1fe03f8"
+      "bytes": 2509,
+      "sha256": "98d689006282d3ea1fb62e8b99572e7952989625afc38fba90b0d3267aaa9fe1"
     },
     "renderer-src/host/native-camera-adapter.mjs": {
-      "bytes": 6102,
-      "sha256": "b63eb91eddb6572ac4abe2107f877d6a4c09db89dce39c11a403a95f7baf2022"
+      "bytes": 6734,
+      "sha256": "a548a6822b7210c548602509f542d4783bd5928bea64a08737302e19ae2410e8"
     },
     "renderer-src/host/native-director-policy.d.mts": {
-      "bytes": 2083,
-      "sha256": "cca3eae91676ea1f65cbcc6b9f1839cba67386610f1189b714bcb254a1e43c02"
+      "bytes": 3568,
+      "sha256": "54d56fb5dba22c1d4c4a2559db7bc9fbeb9fb294dbed23e22ee4ae79d09acdbe"
     },
     "renderer-src/host/native-director-policy.mjs": {
-      "bytes": 12642,
-      "sha256": "932699f7d90add62c94a3196494a42b52b0edd7e8a77250cd466b049748c895c"
+      "bytes": 18534,
+      "sha256": "f011b5044ee1a9910e3e3aa30b61f1a211921fe34d2ffa05835ea5d6be6bd273"
     },
     "renderer-src/host/native-gateway-stream.mjs": {
       "bytes": 16236,
@@ -102,6 +150,14 @@
       "bytes": 3479,
       "sha256": "9493c4c8cf7a766bf4f4552a77d8edc3eac8a237109557073403fde39f00a8d2"
     },
+    "renderer-src/host/native-shot-sequence.d.mts": {
+      "bytes": 1127,
+      "sha256": "6472daf9ea6b71c382b21fec1fa78031aa2b53684248fc2e70bcde32be9e2f59"
+    },
+    "renderer-src/host/native-shot-sequence.mjs": {
+      "bytes": 19079,
+      "sha256": "38498f02c01d5e81ad499ecdb0f3cf71b822953c43dc4f62e609521c8418cdb0"
+    },
     "renderer-src/host/native-twilight-components.mjs": {
       "bytes": 5928,
       "sha256": "fae26f8564dc78380ebb3316c9120d3b6f50cd0175ecce64a9a59207709fca53"
@@ -119,12 +175,12 @@
       "sha256": "c9aed569c8b0973cf2520bdfca7731aa103cfd9c240307dc18c0c2df1d049fec"
     },
     "renderer-src/host/native-vision-source.d.mts": {
-      "bytes": 687,
-      "sha256": "24356046e97fdbdd6b5a0f4b2ea9d779252eb0901a73e6b7aca3ac009fb3d00f"
+      "bytes": 728,
+      "sha256": "84553e282664e3712e30386a6a250355ca90f09e2ad16758d7684a90239f7cd9"
     },
     "renderer-src/host/native-vision-source.mjs": {
-      "bytes": 4693,
-      "sha256": "da6c3c6ac1475a7127f8cfa673ca75d44291d6b88adb180a20ba9fb1da62bad2"
+      "bytes": 5124,
+      "sha256": "9b6ebecc6bf718eb44dbcb67f81711b411902156f2f1532267192573656d8d04"
     },
     "renderer-src/host/paper-observation.mjs": {
       "bytes": 14350,
@@ -137,10 +193,6 @@
     "renderer-src/host/photo-scene-archive.mjs": {
       "bytes": 14069,
       "sha256": "93a361a837dfedf77cd3345f3ab2a8d8d9219eb957de461d22951998abd7ab32"
-    },
-    "renderer-src/host/README.md": {
-      "bytes": 6614,
-      "sha256": "0563335233b64e60b39c21c0615026067a2b1e31f1059b5757d14b89a1040b66"
     },
     "renderer-src/host/server-item-pack.mjs": {
       "bytes": 2786,
@@ -338,26 +390,6 @@
       "bytes": 8616,
       "sha256": "41010edcb648c8e837d50b8b9376d9e671dcc9b86932fd7eac3788a250aa139a"
     },
-    "renderer-src/NATIVE_DEVICE_RENDERING_COMPATIBILITY.md": {
-      "bytes": 22842,
-      "sha256": "f0d8ad2ce6db0d0792044cd4dd1b45dff61f53fbcd39fe6fb09b432c4f6db832"
-    },
-    "renderer-src/NATIVE_ENTITY_COMPATIBILITY.md": {
-      "bytes": 14212,
-      "sha256": "6ad226b84d9eede9d9c3b58f8c272e45b5114c429ca26ef570671d3200e9b95c"
-    },
-    "renderer-src/NATIVE_FARMERS_DELIGHT_COMPATIBILITY.md": {
-      "bytes": 11058,
-      "sha256": "6f14e16856a46ee3f40623a46075eca8480a8eb0e3de43c882aea2f051d6dba5"
-    },
-    "renderer-src/NATIVE_ITEM_GUI_COMPATIBILITY.md": {
-      "bytes": 17617,
-      "sha256": "c611b72e8ae219952464eed3107a439c4892bb5e42eb6d5f39d400c39adbc244"
-    },
-    "renderer-src/NATIVE_MAID_COMPATIBILITY.md": {
-      "bytes": 3025,
-      "sha256": "d9e979489b591de0d9ec654e9aa46a31dbe00a572777d1861b5e608b5099b74a"
-    },
     "renderer-src/package-lock.json": {
       "bytes": 62731,
       "sha256": "edeb3be874f7307588c2ee9ce08b9ec43b963324c9c56466bb442dcb803fe5fe"
@@ -365,14 +397,6 @@
     "renderer-src/package.json": {
       "bytes": 1137,
       "sha256": "a9d150412d0203e382850642f61bdedf32413c715f347275f8739c12db16f8af"
-    },
-    "renderer-src/README.md": {
-      "bytes": 51183,
-      "sha256": "9ee7f330bfe2d289db1d5b7664de6d699f63f34a66ac9a3d25333ae3485594e8"
-    },
-    "renderer-src/SOCKET_PROTOCOL.md": {
-      "bytes": 38336,
-      "sha256": "8eceb93c30657af4fbafe0f8a8da39f08c35c52c318a1e6c929d099e0cccf45d"
     },
     "renderer-src/src/modern-viewer/agent-activity-ui.js": {
       "bytes": 7625,
@@ -678,6 +702,10 @@
       "bytes": 155,
       "sha256": "fdb0400c8f716fecee99b9b4edc8877d6d297fcfef517c9aed827f5e69d359d6"
     },
+    "renderer-src/src/modern-viewer/presets/qiandengji/README.md": {
+      "bytes": 797,
+      "sha256": "960bec8e57f8442c0ae093404966e5517ee59848fada7bfc85a67112e65d09c5"
+    },
     "renderer-src/src/modern-viewer/presets/qiandengji/character-visual-profiles.js": {
       "bytes": 48649,
       "sha256": "be8a8ab894cbbdc556930f3e86a2e9db81fbaf7712ca376a4c5f81ee171d64d5"
@@ -705,10 +733,6 @@
     "renderer-src/src/modern-viewer/presets/qiandengji/player-skins.js": {
       "bytes": 1517,
       "sha256": "1c2775651067f45b56de63f5c1f49246e58b4238a94d602497b132081ac204d5"
-    },
-    "renderer-src/src/modern-viewer/presets/qiandengji/README.md": {
-      "bytes": 797,
-      "sha256": "960bec8e57f8442c0ae093404966e5517ee59848fada7bfc85a67112e65d09c5"
     },
     "renderer-src/src/modern-viewer/render-clock.js": {
       "bytes": 540,
@@ -1402,13 +1426,45 @@
       "bytes": 69218,
       "sha256": "f6a3a2bcd0f5908913db12b1f6b90ad69b338b618280211fa3250adce8a1ee66"
     },
-    "renderer-src/tools/audit-native-item-gui.mjs": {
-      "bytes": 11867,
-      "sha256": "237425aa8f5fc50134a9be1c5b6d724212c647ecd694a0aa4764a46e50e01858"
-    },
     "renderer-src/tools/AuditTwilightItemFactories.java": {
       "bytes": 3826,
       "sha256": "52ccc9b8969b97645d3b278ba43318d1a5a2afff7959be662b5caa5c6f89ebfa"
+    },
+    "renderer-src/tools/CORTICO_LICENSE": {
+      "bytes": 1066,
+      "sha256": "b8b2d2aa3b247cd0862b19df2030545859223934a5cad7321fe6ec97eaea725d"
+    },
+    "renderer-src/tools/ExportMinecraftBlockSounds.java": {
+      "bytes": 3306,
+      "sha256": "116955664dc80fee8e3bc5703772113c3a7fa30fba57b7a57a48cf02d3605b38"
+    },
+    "renderer-src/tools/ExportTwilightModelLayers.java": {
+      "bytes": 6839,
+      "sha256": "96f6b1144d48b2c2be74e403195c2697377f2fa68df0c4367729129686780fff"
+    },
+    "renderer-src/tools/ExportVanillaItemColors.java": {
+      "bytes": 5990,
+      "sha256": "a39b7fb2d2150f7c093761305717204cd331ed2d331665aeb6e3b31205b28436"
+    },
+    "renderer-src/tools/ExportVanillaModelLayers.java": {
+      "bytes": 8660,
+      "sha256": "a8f716b9cbbb90b478b20404aca2fcd6f1bcf624f070d5e012cd3dcce0ef1861"
+    },
+    "renderer-src/tools/ExportVanillaRegistry.java": {
+      "bytes": 11899,
+      "sha256": "f369fa33755a11117ee091a81418b798bdb70378b9d42942796501df4c376e5e"
+    },
+    "renderer-src/tools/PrepareTwilightOfflineBake.java": {
+      "bytes": 4392,
+      "sha256": "20ba9e4cc054452c0aeab25123d14d4ced3f287457de1a3c1a3209998fea42e8"
+    },
+    "renderer-src/tools/ProbeVanillaFlyingModels.java": {
+      "bytes": 2933,
+      "sha256": "cc4e67eb50f65e9b98f65d63e29b90a448f1fe6b97af8520f7dbc2a9117aa33a"
+    },
+    "renderer-src/tools/audit-native-item-gui.mjs": {
+      "bytes": 11867,
+      "sha256": "237425aa8f5fc50134a9be1c5b6d724212c647ecd694a0aa4764a46e50e01858"
     },
     "renderer-src/tools/benchmark-native-captured-scene.mjs": {
       "bytes": 7552,
@@ -1437,10 +1493,6 @@
     "renderer-src/tools/build-native-ysm-review.mjs": {
       "bytes": 3753,
       "sha256": "3c16a6f89ddaa6388c86c6c5785f2f0b63368e2940fd27fc4334d54c48a691c7"
-    },
-    "renderer-src/tools/CORTICO_LICENSE": {
-      "bytes": 1066,
-      "sha256": "b8b2d2aa3b247cd0862b19df2030545859223934a5cad7321fe6ec97eaea725d"
     },
     "renderer-src/tools/export-minecraft-item-colors.mjs": {
       "bytes": 3027,
@@ -1482,26 +1534,6 @@
       "bytes": 4287,
       "sha256": "f12ea17abe1129e28d670a7bf4bdcaa11775501c0053548ead510d2755194960"
     },
-    "renderer-src/tools/ExportMinecraftBlockSounds.java": {
-      "bytes": 3306,
-      "sha256": "116955664dc80fee8e3bc5703772113c3a7fa30fba57b7a57a48cf02d3605b38"
-    },
-    "renderer-src/tools/ExportTwilightModelLayers.java": {
-      "bytes": 6839,
-      "sha256": "96f6b1144d48b2c2be74e403195c2697377f2fa68df0c4367729129686780fff"
-    },
-    "renderer-src/tools/ExportVanillaItemColors.java": {
-      "bytes": 5990,
-      "sha256": "a39b7fb2d2150f7c093761305717204cd331ed2d331665aeb6e3b31205b28436"
-    },
-    "renderer-src/tools/ExportVanillaModelLayers.java": {
-      "bytes": 8660,
-      "sha256": "a8f716b9cbbb90b478b20404aca2fcd6f1bcf624f070d5e012cd3dcce0ef1861"
-    },
-    "renderer-src/tools/ExportVanillaRegistry.java": {
-      "bytes": 11899,
-      "sha256": "f369fa33755a11117ee091a81418b798bdb70378b9d42942796501df4c376e5e"
-    },
     "renderer-src/tools/fixtures/native-bundled-ysm-review.js": {
       "bytes": 4316,
       "sha256": "28b2bd5196b76788c6dc5d77695d22de7b088ea160677fd2ee5c07bb78ac51b0"
@@ -1542,13 +1574,13 @@
       "bytes": 12139,
       "sha256": "f00da07d377d62de16db87a99aba04e2c5b4958ac11b4674b19a5f859b10025f"
     },
-    "renderer-src/tools/minecraft-viewer-block-entity-geometry.json": {
-      "bytes": 24575,
-      "sha256": "b9bc7682519b46283acddef2044eb2274933e332062d172fe19b4eaa7e791a6b"
-    },
     "renderer-src/tools/minecraft-viewer-block-entity-geometry.LICENSE": {
       "bytes": 1088,
       "sha256": "34e00cb52ce4359a37e549eaea4e2d730bedc71da4060fa5fb5e48e1db169614"
+    },
+    "renderer-src/tools/minecraft-viewer-block-entity-geometry.json": {
+      "bytes": 24575,
+      "sha256": "b9bc7682519b46283acddef2044eb2274933e332062d172fe19b4eaa7e791a6b"
     },
     "renderer-src/tools/minecraft-viewer-bundle-check.mjs": {
       "bytes": 627,
@@ -1702,10 +1734,6 @@
       "bytes": 25815,
       "sha256": "0ea86278cd8b20425e028662ce1ef4fd78b716dbbb4076802080edbc3dfe5284"
     },
-    "renderer-src/tools/PrepareTwilightOfflineBake.java": {
-      "bytes": 4392,
-      "sha256": "20ba9e4cc054452c0aeab25123d14d4ced3f287457de1a3c1a3209998fea42e8"
-    },
     "renderer-src/tools/presets/qiandengji-guild.js": {
       "bytes": 2830,
       "sha256": "14a33fb303f94fe0bfe1de1ec3f6a85e30e1f7a6f17367dd8a50137a6857abc9"
@@ -1713,10 +1741,6 @@
     "renderer-src/tools/presets/qiandengji-skills.js": {
       "bytes": 2379,
       "sha256": "e170aba19e43ce11bf5dedb338c9523432cac08927d2b8210ce8be266f942ef8"
-    },
-    "renderer-src/tools/ProbeVanillaFlyingModels.java": {
-      "bytes": 2933,
-      "sha256": "cc4e67eb50f65e9b98f65d63e29b90a448f1fe6b97af8520f7dbc2a9117aa33a"
     },
     "renderer-src/tools/requirements.txt": {
       "bytes": 15,

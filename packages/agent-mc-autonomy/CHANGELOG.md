@@ -1,3 +1,8 @@
+## 0.2.146
+
+- Pin the independently built core rc.160-preview.9 and viewer 97e76665 for host consumers, including workstation reachability, native inventory/packet handling and camera world-reset updates.
+- Preserve compact default resources, optional original music, strict source/build verification and explicit host-owned model/account/start-stop controls.
+
 ## 0.2.144
 
 - Pin the verified canonical rc.154 engine-only archive and the shared viewer revision 5e940506, retaining native queue ownership and all host-owned account/model/personality boundaries.
