@@ -22,11 +22,15 @@ Files: `packages/agent-mc-autonomy/src/agent_mc_autonomy/{read_activity,controll
 
 Files: plugin pinned framework manifest/vendor, plugin version/config metadata; no native core/viewer changes unless new evidence requires them.
 
-- [ ] Fetch both source remotes before edits/pushes; preserve unrelated files.
-- [ ] Pin the verified framework commit in plugin 0.6.151, run plugin/Node/official package checks, then ordinary push.
-- [ ] Install the genuine official CI package using the existing App UI after a normal game stop and verified native drain.
-- [ ] Reuse the same account/settings and existing execution resources; start via UI, record screenshots and original scoped receipts.
-- [ ] Observe self-selected activity beyond initial startup. Report partial evidence honestly if a loop persists; do not claim autonomous survival from one movement.
+- [x] Fetch both source remotes before edits/pushes; preserve unrelated files.
+- [x] Pin the verified framework commit in plugin 0.6.151, run plugin/Node/official package checks, then ordinary push.
+- [x] Install the genuine official CI package using the existing App UI after a normal game stop and verified native drain.
+- [x] Reuse the same account/settings and existing execution resources; start via UI, record screenshots and original scoped receipts.
+- [x] Observe self-selected activity beyond initial startup. Report partial evidence honestly if a loop persists; do not claim autonomous survival from one movement.
+
+Consumer verification: plugin `d216939b7832cda44c01f23c61b42a5389b59a6b` pins framework `0040f62c621765c61a8256afb50096b4f2a263dd`. Source and isolated-wheel suites each passed 1,892 tests; plugin passed 583 with one platform skip, Node UI passed 25, and official Verify run 41828036057 succeeded. The same official artifact was imported through the App; all 30,184 prior data files remained byte-identical before starting, and only the configured plugin version changed.
+
+The bounded live observation ended at UTC 2026-11-04 12:38:58. It contains 91 successful model responses, 24 scoped admissions with 23 unique original terminal events and one task still legitimately in flight, plus two additional native eating terminals. Physical evidence supports 15 working terminals and 23 successful change steps, including tools, mining, eating and retrieving two cooked beef. Failed and partially changed tasks remain distinct. Ten review deliveries received actual host acknowledgements. A saved review packet contains the previously omitted immediate observation and queued-read counters. These facts establish the projection repair and continuing self-selected work; they do not establish a controlled improvement, permanent loop prevention or long-term survival. No public release was created.
 
 ## Review focus
 
