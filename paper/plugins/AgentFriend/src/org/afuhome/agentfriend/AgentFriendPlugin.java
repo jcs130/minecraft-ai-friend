@@ -554,7 +554,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     SiteDungeonManager siteDungeons() { return siteDungeons; }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player)
             || siteDungeons != null && siteDungeons.isParticipant(player); }
-    boolean pvpParticipant(Player player) { return pvpArena != null && pvpArena.inMatch(player); }
+    boolean pvpParticipant(Player player) { return pvpArena != null && (pvpArena.inMatch(player) || pvpArena.isRecovering(player)); }
     boolean namedTravelBlocked(Player player) {
         return dungeonParticipant(player) || pvpArena != null && pvpArena.blocksNamedTravel(player);
     }

@@ -2,10 +2,7 @@ package org.afuhome.agentfriend;
 
 import com.google.gson.JsonObject;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -19,6 +16,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
@@ -34,17 +32,28 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerPickupItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerPickupArrowEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.potion.PotionEffect;
 
@@ -55,6 +64,7 @@ final class PvpArenaManager implements Listener {
     private final AgentFriendPlugin plugin;
     private final World world;
     private final Path escrowPath;
+    private final NamespacedKey saveProof;
     private final List<UUID> queue = new ArrayList<>();
     private final Map<UUID, Location> queueOrigins = new HashMap<>();
     private final Set<UUID> recovering = new HashSet<>();
@@ -74,11 +84,13 @@ final class PvpArenaManager implements Listener {
         this.plugin = plugin;
         world = Bukkit.getWorld("world");
         escrowPath = plugin.getDataFolder().toPath().resolve("pvp-escrow.yml");
+        saveProof = new NamespacedKey(plugin, "pvp_restore_save");
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     boolean built() { return plugin.getConfig().getBoolean("pvp-arena.built", false); }
     boolean inMatch(Player p) { return match != null && match.has(p.getUniqueId()); }
+    boolean isRecovering(Player p) { return recovering.contains(p.getUniqueId()); }
     boolean blocksNamedTravel(Player p) {
         return inMatch(p) || queue.contains(p.getUniqueId()) || recovering.contains(p.getUniqueId());
     }
@@ -97,6 +109,10 @@ final class PvpArenaManager implements Listener {
 
     void command(Player p, String[] args) {
         String action = args.length < 2 ? "status" : args[1].toLowerCase(java.util.Locale.ROOT);
+        if (isRecovering(p) && !Set.of("status", "状态").contains(action)) {
+            status(p);
+            return;
+        }
         switch (action) {
             case "status", "状态" -> status(p);
             case "join", "加入" -> join(p);
@@ -116,6 +132,7 @@ final class PvpArenaManager implements Listener {
         json.addProperty("reason", reason);
         json.addProperty("queued", queue.contains(p.getUniqueId()));
         json.addProperty("participant", inMatch(p));
+        json.addProperty("inventoryRecoveryPending", isRecovering(p));
         json.addProperty("active", match != null && match.live);
         json.addProperty("queueSize", queue.size());
         json.addProperty("rating", rating(p.getUniqueId()));
@@ -137,6 +154,11 @@ final class PvpArenaManager implements Listener {
     }
 
     private void status(Player p) {
+        if (isRecovering(p)) {
+            result(p, "status", false, "inventory_recovery_pending");
+            p.sendMessage(ChatColor.RED + "原物品托管尚未确认，物品操作已锁定。请联系服主检查托管和玩家存档。");
+            return;
+        }
         result(p, "status", built(), built() ? "ok" : "arena_not_built");
         p.sendMessage(built()
                 ? ChatColor.GOLD + "PvP竞技场：同款铁剑、弓、锁链甲；180 秒限时，胜负记积分。"
@@ -160,8 +182,12 @@ final class PvpArenaManager implements Listener {
         if (p.getGameMode() == GameMode.SPECTATOR || p.isDead() || plugin.dungeonParticipant(p)) {
             result(p, "join", false, "not_eligible"); return;
         }
-        if (queue.contains(p.getUniqueId()) || inMatch(p) || escrow().contains("players." + p.getUniqueId())) {
-            result(p, "join", false, "already_joined_or_recovery_pending"); return;
+        try {
+            if (queue.contains(p.getUniqueId()) || inMatch(p) || isRecovering(p) || escrow().contains("players." + p.getUniqueId())) {
+                result(p, "join", false, "already_joined_or_recovery_pending"); return;
+            }
+        } catch (IOException error) {
+            result(p, "join", false, "escrow_unavailable"); return;
         }
         if (!plugin.hasMana(p, TravelMagic.LOCAL_MANA)) {
             result(p, "join", false, "insufficient_mana"); return;
@@ -197,20 +223,32 @@ final class PvpArenaManager implements Listener {
         Player a = Bukkit.getPlayer(queue.remove(0)), b = Bukkit.getPlayer(queue.remove(0));
         if (a == null || b == null || !a.isOnline() || !b.isOnline()) { pair(); return; }
         try {
-            snapshot(a);
-            snapshot(b);
+            a.closeInventory(); b.closeInventory();
+            var data = escrow();
+            snapshot(data, a);
+            snapshot(data, b);
+            writeEscrow(data); // Both original inventories exist durably before either kit is issued.
         } catch (Exception error) {
             plugin.getLogger().severe("PvP escrow failed; duel cancelled: " + error);
-            restore(a); restore(b);
+            // A write that did not commit cannot have issued a kit. Reconcile
+            // any record that did commit before releasing either player.
+            recoverIfPending(a); recoverIfPending(b);
             queueOrigins.remove(a.getUniqueId()); queueOrigins.remove(b.getUniqueId());
             result(a, "join", false, "escrow_failed");
             result(b, "join", false, "escrow_failed");
             return;
         }
         queueOrigins.remove(a.getUniqueId()); queueOrigins.remove(b.getUniqueId());
-        equip(a); equip(b);
         match = new Match(a, b);
-        a.teleport(spawn(true)); b.teleport(spawn(false));
+        try {
+            equip(a); equip(b);
+            if (!a.teleport(spawn(true)) || !b.teleport(spawn(false)))
+                throw new IllegalStateException("PvP spawn teleport failed");
+        } catch (RuntimeException error) {
+            plugin.getLogger().severe("PvP kit setup failed; duel cancelled: " + error);
+            finish(null, "setup_failed");
+            return;
+        }
         a.sendMessage(ChatColor.GOLD + "对手 " + b.getName() + "；同款装备，5 秒后开战。");
         b.sendMessage(ChatColor.GOLD + "对手 " + a.getName() + "；同款装备，5 秒后开战。");
         countdown(match, 5);
@@ -265,7 +303,8 @@ final class PvpArenaManager implements Listener {
         plugin.getConfig().set(path + "." + field, plugin.getConfig().getInt(path + "." + field) + 1);
         if (p != null) plugin.getConfig().set(path + ".name", p.getName());
     }
-    private void finish(UUID winner, String reason) {
+    private void finish(UUID winner, String reason) { finish(winner, reason, null); }
+    private void finish(UUID winner, String reason, UUID unavailable) {
         Match ended = match;
         if (ended == null || ended.closing) return;
         ended.closing = true;
@@ -281,7 +320,7 @@ final class PvpArenaManager implements Listener {
         }
         for (UUID id : List.of(ended.a, ended.b)) {
             Player p = Bukkit.getPlayer(id);
-            if (p == null || !p.isOnline()) continue;
+            if (id.equals(unavailable) || p == null || !p.isOnline() || p.isDead()) continue;
             restore(p);
             String outcome = !ended.live ? "cancelled" : winner == null ? "draw" : winner.equals(id) ? "win" : "loss";
             p.sendTitle(outcome.equals("win") ? ChatColor.GOLD + "胜利" : ChatColor.AQUA + "对局结束",
@@ -294,20 +333,16 @@ final class PvpArenaManager implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, this::pair, 20L);
     }
 
-    private YamlConfiguration escrow() { return YamlConfiguration.loadConfiguration(escrowPath.toFile()); }
-    private void writeEscrow(YamlConfiguration data) throws IOException {
-        Files.createDirectories(escrowPath.getParent());
-        Path temp = escrowPath.resolveSibling("pvp-escrow.yml.tmp");
-        Files.writeString(temp, data.saveToString(), StandardCharsets.UTF_8);
-        try { Files.move(temp, escrowPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE); }
-        catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-            Files.move(temp, escrowPath, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-    private void snapshot(Player p) throws IOException {
-        YamlConfiguration data = escrow();
+    private YamlConfiguration escrow() throws IOException { return PvpEscrowFiles.read(escrowPath); }
+    private void writeEscrow(YamlConfiguration data) throws IOException { PvpEscrowFiles.replace(escrowPath, data); }
+
+    private void snapshot(YamlConfiguration data, Player p) throws IOException {
         String root = "players." + p.getUniqueId();
-        if (data.contains(root)) throw new IOException("Existing inventory escrow for " + p.getUniqueId());
+        if (data.contains(root) || isRecovering(p) || !p.getItemOnCursor().getType().isAir())
+            throw new IOException("Player is already in recovery or has an item on the cursor");
+        data.set(root + ".transaction", UUID.randomUUID().toString());
+        data.set(root + ".phase", "held");
+        data.set(root + ".inventory-size", p.getInventory().getSize());
         Location at = queueOrigins.getOrDefault(p.getUniqueId(), p.getLocation());
         data.set(root + ".world", at.getWorld().getName());
         data.set(root + ".x", at.getX()); data.set(root + ".y", at.getY()); data.set(root + ".z", at.getZ());
@@ -316,10 +351,17 @@ final class PvpArenaManager implements Listener {
         data.set(root + ".food", p.getFoodLevel());
         data.set(root + ".saturation", p.getSaturation());
         data.set(root + ".gamemode", p.getGameMode().name());
-        for (int slot = 0; slot < p.getInventory().getSize(); slot++)
-            data.set(root + ".slots." + slot, p.getInventory().getItem(slot));
+        var slots = data.createSection(root + ".slots");
+        int occupied = 0;
+        for (int slot = 0; slot < p.getInventory().getSize(); slot++) {
+            ItemStack stack = p.getInventory().getItem(slot);
+            if (stack != null && !stack.getType().isAir()) {
+                slots.set(Integer.toString(slot), stack.clone());
+                occupied++;
+            }
+        }
+        data.set(root + ".occupied-slots", occupied);
         data.set(root + ".effects", new ArrayList<>(p.getActivePotionEffects()));
-        writeEscrow(data);
     }
     private void equip(Player p) {
         p.getInventory().clear();
@@ -339,50 +381,138 @@ final class PvpArenaManager implements Listener {
         p.updateInventory();
     }
     private void restore(Player p) {
-        YamlConfiguration data = escrow();
-        String root = "players." + p.getUniqueId();
-        if (!data.contains(root + ".world")) return;
+        UUID id = p.getUniqueId();
+        boolean required = inMatch(p) || recovering.contains(id);
+        recovering.add(id); // Before reading, changing inventory, or invoking another plugin's event.
         try {
-            World previous = Bukkit.getWorld(data.getString(root + ".world", "world"));
-            if (previous == null) throw new IllegalStateException("Origin world missing");
+            YamlConfiguration data = escrow();
+            String root = "players." + id;
+            if (!data.contains(root)) {
+                if (required) throw new IOException("Expected PvP inventory record missing");
+                recovering.remove(id);
+                return;
+            }
+            String phase = data.getString(root + ".phase", "");
+            String transaction = data.getString(root + ".transaction", "");
+            if ((!phase.equals("held") && !phase.equals("restoring")) || transaction.isEmpty())
+                throw new IOException("Unversioned or unknown escrow transaction; offline review required");
+            UUID.fromString(transaction);
+            World previous = Bukkit.getWorld(data.getString(root + ".world", ""));
+            if (previous == null || p.isDead() || !p.getItemOnCursor().getType().isAir())
+                throw new IOException("Origin world or safe player state unavailable");
+            for (String field : List.of("x", "y", "z", "yaw", "pitch", "health", "food", "saturation"))
+                if (!(data.get(root + "." + field) instanceof Number value) || !Double.isFinite(value.doubleValue()))
+                    throw new IOException("Invalid escrow field: " + field);
             Location origin = new Location(previous, data.getDouble(root + ".x"), data.getDouble(root + ".y"),
                     data.getDouble(root + ".z"), (float) data.getDouble(root + ".yaw"),
                     (float) data.getDouble(root + ".pitch"));
-            p.getInventory().clear();
-            for (int slot = 0; slot < p.getInventory().getSize(); slot++)
-                p.getInventory().setItem(slot, data.getItemStack(root + ".slots." + slot));
+            var mode = GameMode.valueOf(data.getString(root + ".gamemode", ""));
+            int size = p.getInventory().getSize();
+            if (data.getInt(root + ".inventory-size", -1) != size)
+                throw new IOException("Invalid escrow inventory size");
+            var items = new ItemStack[size];
+            var slots = data.getConfigurationSection(root + ".slots");
+            if (slots == null || slots.getKeys(false).size() != data.getInt(root + ".occupied-slots", -1))
+                throw new IOException("Incomplete escrow slots");
+            for (String key : slots.getKeys(false)) {
+                int slot = Integer.parseInt(key);
+                if (slot < 0 || slot >= size || !key.equals(Integer.toString(slot)) || !slots.isItemStack(key))
+                    throw new IOException("Invalid escrow slot");
+                items[slot] = slots.getItemStack(key);
+            }
+            var effects = data.getList(root + ".effects");
+            if (effects == null || effects.stream().anyMatch(effect -> !(effect instanceof PotionEffect)))
+                throw new IOException("Invalid escrow effects");
+            if (phase.equals("held")) {
+                data.set(root + ".phase", "restoring");
+                writeEscrow(data);
+            }
+            p.closeInventory();
+            if (!p.teleport(origin)) throw new IOException("Could not return player to the escrow origin");
             for (PotionEffect effect : p.getActivePotionEffects()) p.removePotionEffect(effect.getType());
-            for (Object value : data.getList(root + ".effects", List.of()))
-                if (value instanceof PotionEffect effect) p.addPotionEffect(effect);
-            p.setGameMode(GameMode.valueOf(data.getString(root + ".gamemode", "SURVIVAL")));
-            p.setHealth(Math.min(p.getMaxHealth(), Math.max(1, data.getDouble(root + ".health", 20))));
-            p.setFoodLevel(data.getInt(root + ".food", 20));
-            p.setSaturation((float) data.getDouble(root + ".saturation", 5));
+            for (Object effect : effects) p.addPotionEffect((PotionEffect) effect);
+            p.setGameMode(mode);
+            p.setHealth(Math.min(p.getMaxHealth(), Math.max(1, data.getDouble(root + ".health"))));
+            p.setFoodLevel(data.getInt(root + ".food"));
+            p.setSaturation((float) data.getDouble(root + ".saturation"));
             p.setFireTicks(0);
-            p.teleport(origin);
+            // Teleport and game mode changes above can invoke other plugins.
+            // Apply the actual inventory after those callbacks have returned.
+            for (int slot = 0; slot < size; slot++) p.getInventory().setItem(slot, items[slot]);
             p.updateInventory();
-            data.set(root, null);
-            writeEscrow(data);
-            recovering.remove(p.getUniqueId());
+
+            String nonce = UUID.randomUUID().toString();
+            p.getPersistentDataContainer().set(saveProof, PersistentDataType.STRING, nonce);
+            try {
+                p.saveData();
+                Path playerFile = Bukkit.getWorlds().getFirst().getWorldFolder().toPath()
+                        .resolve("playerdata").resolve(id + ".dat");
+                PvpEscrowFiles.confirmPlayerSave(playerFile, saveProof.toString(), nonce);
+            } finally {
+                p.getPersistentDataContainer().remove(saveProof);
+            }
+            // Leave the only recovery point in place unless the player image
+            // was independently confirmed. No player action may run between these steps.
+            // Teleport/gamemode callbacks can re-enter plugin code. Preserve
+            // any other player's new escrow rows and consume this exact record.
+            YamlConfiguration committed = escrow();
+            if (!transaction.equals(committed.getString(root + ".transaction"))
+                    || !"restoring".equals(committed.getString(root + ".phase")))
+                throw new IOException("Escrow record changed during recovery");
+            committed.set(root, null);
+            writeEscrow(committed);
+            recovering.remove(id);
         } catch (Exception error) {
-            plugin.getLogger().severe("PvP inventory restore failed for " + p.getUniqueId()
-                    + "; escrow retained: " + error);
-            p.sendMessage(ChatColor.RED + "PvP原物品恢复失败，快照已保留；不要丢物或改动背包，用 /mycli pvp status 保留状态并联系服主恢复原物品。");
+            recoveryFailed(p, error);
         }
     }
 
-    @EventHandler public void onJoin(PlayerJoinEvent event) {
+    private void recoveryFailed(Player p, Exception error) {
+        recovering.add(p.getUniqueId());
+        plugin.getLogger().severe("PvP inventory recovery blocked for " + p.getUniqueId() + ": " + error);
+        p.sendMessage(ChatColor.RED + "PvP原物品恢复尚未确认，物品操作已锁定；/mycli pvp status 查看，持续失败请联系服主。");
+    }
+
+    private void recoverIfPending(Player p) {
+        try {
+            if (escrow().contains("players." + p.getUniqueId())) restore(p);
+        } catch (Exception error) { recoveryFailed(p, error); }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST) public void onJoin(PlayerJoinEvent event) {
         Player p = event.getPlayer();
-        if (escrow().contains("players." + p.getUniqueId())) {
-            recovering.add(p.getUniqueId());
-            Bukkit.getScheduler().runTaskLater(plugin, () -> restore(p), 10L);
-        }
+        try {
+            if (escrow().contains("players." + p.getUniqueId())) {
+                recovering.add(p.getUniqueId());
+                Bukkit.getScheduler().runTaskLater(plugin, () -> resumeRecovery(p), 10L);
+            }
+        } catch (Exception error) { recoveryFailed(p, error); }
     }
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         queue.remove(id); queueOrigins.remove(id);
-        recovering.remove(id);
-        if (match != null && match.has(id)) finish(match.other(id), "disconnect");
+        if (match != null && match.has(id)) {
+            recovering.add(id);
+            finish(match.other(id), "disconnect", id);
+        }
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onDeath(PlayerDeathEvent event) {
+        Player p = event.getEntity();
+        if (!inMatch(p) && !isRecovering(p)) return;
+        recovering.add(p.getUniqueId());
+        event.setKeepInventory(true);
+        event.getDrops().clear();
+        if (inMatch(p)) finish(match.other(p.getUniqueId()), "death", p.getUniqueId());
+    }
+    @EventHandler public void onRespawn(PlayerRespawnEvent event) {
+        Player p = event.getPlayer();
+        if (isRecovering(p))
+            Bukkit.getScheduler().runTask(plugin, () -> resumeRecovery(p));
+    }
+    private void resumeRecovery(Player p) {
+        // A delayed join/respawn callback must not touch a newer login or duel.
+        if (isRecovering(p) && !inMatch(p) && Bukkit.getPlayer(p.getUniqueId()) == p && p.isOnline() && !p.isDead())
+            restore(p);
     }
     @EventHandler public void onTeleport(PlayerTeleportEvent event) {
         if (match != null && match.live && match.has(event.getPlayer().getUniqueId())
@@ -408,6 +538,10 @@ final class PvpArenaManager implements Listener {
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player victim)) return;
         Player source = event instanceof EntityDamageByEntityEvent attack ? attacker(attack.getDamager()) : null;
+        if (isRecovering(victim) || source != null && isRecovering(source)) {
+            event.setCancelled(true);
+            return;
+        }
         if (source == null) {
             if (inMatch(victim)) event.setCancelled(true);
             return;
@@ -432,18 +566,44 @@ final class PvpArenaManager implements Listener {
         if (source != null && match.has(source.getUniqueId()) && match.has(victim.getUniqueId()))
             match.damage.merge(source.getUniqueId(), Math.max(0, event.getFinalDamage()), Double::sum);
     }
-    @EventHandler public void onDrop(PlayerDropItemEvent event) {
-        if (inMatch(event.getPlayer()) || recovering.contains(event.getPlayer().getUniqueId())) event.setCancelled(true);
+    private boolean lockedInventory(Player p) { return inMatch(p) || isRecovering(p); }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onDrop(PlayerDropItemEvent event) {
+        if (lockedInventory(event.getPlayer())) event.setCancelled(true);
     }
-    @EventHandler public void onPickup(PlayerPickupItemEvent event) {
-        if (inMatch(event.getPlayer()) || recovering.contains(event.getPlayer().getUniqueId())) event.setCancelled(true);
+    @EventHandler(priority = EventPriority.HIGHEST) public void onPickup(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player p && lockedInventory(p)) event.setCancelled(true);
     }
-    @EventHandler public void onInventory(InventoryClickEvent event) {
-        if (event.getWhoClicked() instanceof Player p
-                && (inMatch(p) || recovering.contains(p.getUniqueId()))) event.setCancelled(true);
+    @EventHandler(priority = EventPriority.HIGHEST) public void onArrow(PlayerPickupArrowEvent event) {
+        if (lockedInventory(event.getPlayer())) event.setCancelled(true);
     }
-    @EventHandler public void onCommand(PlayerCommandPreprocessEvent event) {
-        if (recovering.contains(event.getPlayer().getUniqueId())) {
+    @EventHandler(priority = EventPriority.HIGHEST) public void onInventory(InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player p && lockedInventory(p)) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onDrag(InventoryDragEvent event) {
+        if (event.getWhoClicked() instanceof Player p && lockedInventory(p)) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onOpen(InventoryOpenEvent event) {
+        if (event.getPlayer() instanceof Player p && isRecovering(p)) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onInteract(PlayerInteractEvent event) {
+        if (isRecovering(event.getPlayer())) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onInteractEntity(PlayerInteractEntityEvent event) {
+        if (lockedInventory(event.getPlayer())) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onArmorStand(PlayerArmorStandManipulateEvent event) {
+        if (lockedInventory(event.getPlayer())) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onConsume(PlayerItemConsumeEvent event) {
+        if (isRecovering(event.getPlayer())) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onSwap(PlayerSwapHandItemsEvent event) {
+        if (isRecovering(event.getPlayer())) event.setCancelled(true);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onCommand(PlayerCommandPreprocessEvent event) {
+        if (isRecovering(event.getPlayer())) {
+            String command = event.getMessage().trim().toLowerCase(java.util.Locale.ROOT);
+            if (command.equals("/mycli pvp status")) return;
             event.setCancelled(true);
             event.getPlayer().sendMessage(ChatColor.RED + "PvP原物品正在恢复，请稍候；持续失败请联系服主。");
             return;
@@ -472,6 +632,7 @@ final class PvpArenaManager implements Listener {
         return area.contains(at) ? area : null;
     }
     @EventHandler public void onBreak(BlockBreakEvent event) {
+        if (isRecovering(event.getPlayer())) { event.setCancelled(true); return; }
         if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         ProtectionArea area = protectionArea(event.getBlock().getLocation());
         if (area != null) {
@@ -480,6 +641,7 @@ final class PvpArenaManager implements Listener {
         }
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
+        if (isRecovering(event.getPlayer())) { event.setCancelled(true); return; }
         if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         ProtectionArea area = protectionArea(event.getBlock().getLocation());
         if (area != null) {
@@ -492,7 +654,7 @@ final class PvpArenaManager implements Listener {
             Match old = match; old.closing = true;
             for (UUID id : List.of(old.a, old.b)) {
                 Player p = Bukkit.getPlayer(id);
-                if (p != null) restore(p);
+                if (p != null && p.isOnline() && !p.isDead()) restore(p);
             }
             match = null;
         }
