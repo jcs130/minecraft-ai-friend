@@ -1336,6 +1336,17 @@ missing recipe. No alias substitution, body action or additional model call is a
 
 ## Optional same-decision narration (0.2.1)
 
+Ordinary in-game conversation does not require the optional companion roster.
+When the native `mc_do` schema advertises the `chat` skill, both context modes
+explain how to choose a short, situational chat step, optionally alongside useful
+work in the same native task. The planner may initiate or reply, without a chat
+quota, wake timer or automatic broadcast. Local narration is a separate channel:
+`_spoken_text` is an argument field, not a function or skill. Mistaking it for a
+tool produces a specific pre-dispatch correction, never an implicit game message.
+Original native chat delivery receipts are required; transport acceptance does
+not establish that another player heard the message. Offline routing tests do
+not establish future model sociability or autonomous survival.
+
 `NarrationPort` is an optional host-neutral output contract. A frontend subscribes
 to the owned actor/body binding and claims fresh lines for its own voice service.
 With a subscription, the projected `mc_do` schema accepts optional

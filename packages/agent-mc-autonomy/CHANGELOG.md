@@ -1,3 +1,9 @@
+## 0.2.152
+
+- Give ordinary player conversation a concrete, capability-checked native chat path in both planner modes, independent of the optional companion roster. Allow purposeful initiative alongside useful queued work; preserve audience evidence, survival priority and optional silence.
+- Make local narration optional and identify `_spoken_text` as an argument field rather than a tool. Reject the observed field-as-tool mistake with a specific correction, without rerouting, broadcasting, replaying or making extra model requests.
+- Offline integration checks cover one admission for chat plus work, independent local speech, stable prompts and absent chat capability. Spontaneous model behavior remains a separate live acceptance check; these changes do not enable or start gameplay.
+
 ## 0.2.151
 
 - Resolve an explicitly selected server engine to its physical filesystem path before hashing and importing it. Windows app-data aliases now share the body's actual core constructors; hash, export and inheritance checks remain mandatory.

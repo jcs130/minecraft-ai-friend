@@ -1601,6 +1601,13 @@ class Controller:
             raise ModelCallRejected("A tool call needs a function name.")
         name = function["name"]
         if name not in {tool["function"]["name"] for tool in tools}:
+            if name in {"_spoken_text", "spoken_text"}:
+                raise ModelCallRejected(
+                    "_spoken_text is not a tool. It is optional host metadata inside mc_do arguments, "
+                    "only when advertised and current host voice permission is available. "
+                    "Do not route it through mc_invoke or add an empty action just to narrate. "
+                    "For Minecraft conversation, choose the advertised native chat action explicitly. "
+                    "No speech or game action was dispatched.")
             raise ModelCallRejected("Unavailable Minecraft tool. Only call advertised functions; use mc_tool_help and the advertised mc_invoke(name,arguments) entry when a native name is not exposed directly.")
         try:
             arguments = json.loads(function.get("arguments", ""))

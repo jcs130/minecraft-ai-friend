@@ -18,9 +18,11 @@ from .host_context import HostContextPort
 from .host_recent import binding
 from .mailbox import Mailbox, observation
 
-_LINE_GUIDANCE = """In this SAME decision, include a short natural
-utterance in mc_do._spoken_text when choosing meaningful work. This optional
-host-only field is removed before dispatch to Minecraft. Alternatively put exactly
+_LINE_GUIDANCE = """In this SAME decision, you may include a short natural
+utterance in the _spoken_text field inside mc_do arguments when choosing meaningful work.
+_spoken_text is not a tool or skill. This optional host-only field is removed before dispatch
+to Minecraft; other players do not receive it. Do not add an empty action or another tool call just to narrate.
+For game conversation choose an advertised native chat action explicitly. Alternatively put exactly
 {"spoken_text":"one short natural utterance"} in assistant content alongside
 the normal tool call. Use the supplied persona and recent conversation:
 react, joke, wonder or explain a meaningful intention in your own voice. Speak
