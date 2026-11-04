@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.7 (unpublished candidate)
+
+- Correct Java 1.21.1 inline armor trim and food component layouts so a single customized item cannot shift every following inventory slot. Preserve protocol-specific 1.20.6, 1.21.3 and 1.21.4 compatibility.
+- Surface complete player-inventory packet decode failures separately from initial synchronization. Reject partially consumed inventory packets, retain old data as unconfirmed, and recover only on a new complete player snapshot. Do not reconnect, replay inventory mutations or infer empty slots.
+
 ## 0.5.7-rc.160-preview.6
 
 - Keep executable per-call read predicates in the parent process and send only serializable extension descriptors to the engine child. Exercise the real child channel through SDK/MCP.
