@@ -51,6 +51,8 @@ public final class VortexBridge extends JavaPlugin {
             vortex.spellbookService().addCastListener((player,id)->Bukkit.getScheduler().runTask(this,()->{
                 FortifyDefence.confirmed(player,id);
                 notifyAgentFriend("nativeCastConfirmed",new Class<?>[]{Player.class,String.class},player,id);
+                if(player.isOnline())player.sendTitle(ChatColor.AQUA+vortex.spellbookService().spellLabel(id),
+                        ChatColor.GRAY+"✦ 技能发动 ✦",3,36,8);
             }));
             Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener(){
                 @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.MONITOR)
