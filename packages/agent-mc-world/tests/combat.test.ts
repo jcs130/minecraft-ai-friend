@@ -2506,6 +2506,31 @@ describe('末地:龙只报不撤,撤退不朝悬崖跑', () => {
 });
 
 describe('异步战术动作共用战斗控制器', () => {
+  it('offers a visible 22-block melee target only to explicit decisions and retains that choice while approaching', async () => {
+    const enemy=foe(7,'drowned',22),{bot,controls,attacks}=combatRigBot([enemy]);
+    const r=rig(bot,{decisionRange:32});
+    try {
+      expect(r.session.engagementTargets()).toEqual([7]);
+      r.session.start(); await drive(bot,1000);
+      expect(r.session.active).toBe(false);
+      expect(r.session.react({kind:'engage',targetId:7})).toBe(true);
+      await drive(bot,3500);
+      expect(r.session.reactionState().targetId).toBe(7);
+      expect(r.session.fighting).toBe(true);
+      expect(Object.values(controls).some(Boolean)).toBe(true);
+      expect(attacks).toEqual([]);
+      enemy.position=new Vec3(.5,64,3);bot.entity.velocity.y=-.1;
+      await drive(bot,900);expect(attacks).toContain(7);
+    }finally{r.session.stop();}
+  });
+  it('keeps explicit decision range bounded and preserves disabled combat admission',()=>{
+    for(const fight of ['auto','off'] as const){
+      const {bot}=combatRigBot([foe(7,'drowned',22),foe(8,'zombie',34)]);
+      const r=rig(bot,{decisionRange:100,fight});
+      try{expect(r.session.engagementTargets()).toEqual(fight==='auto'?[7]:[]);}
+      finally{r.session.stop();}
+    }
+  });
   it('offers usable ranged targets beyond melee pursuit and does not immediately clear an explicitly selected one', async () => {
     const enemy=foe(7,'skeleton',15), {bot}=combatRigBot([enemy]);
     const b=bot as any, ranged=rangedRig();

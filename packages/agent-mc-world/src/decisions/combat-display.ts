@@ -12,7 +12,7 @@ export interface CombatDecisionDisplay {
   goalCompleted: false;
 }
 const object = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
-const labels: Record<string,string> = { engage:'接敌',track:'停火盯防',retreat:'撤离',step:'短步移动',cast:'施法',method:'运行方法',keep:'保持现有动作' };
+const labels: Record<string,string> = { engage:'接敌',track:'停火盯防',retreat:'撤离',step:'短步移动',cast:'施法',method:'运行方法',idle:'安全闲逛',keep:'保持现有动作' };
 const reasons: Record<string,string> = { 'scene-changed':'场景变化',moved:'采样原点变化',stale:'结果过期',uncertain:'排序分差不足',shadow:'仅观测模式',rejected:'执行校验未通过',error:'请求失败' };
 
 /** Presentation only. A request or ranked choice never establishes dispatch, effect or ally identity. */

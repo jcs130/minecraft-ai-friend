@@ -186,6 +186,8 @@ export interface CombatTuning {
   engageRadius: number;
   /** 追击上限(格) */
   chaseMax: number;
+  /** Explicit host-selected pursuit only; does not expand passive auto engagement. */
+  decisionRange?: number;
   /** E3 硬时长闸(秒) */
   maxSec: number;
   /** 理想间距。2.88 几乎无敌;2.6 像个会玩的人 */
@@ -470,7 +472,8 @@ export class CombatSession {
     // Match the actual controller's usable ranged pool. Previously a loaded bow
     // could shoot these targets after injury, but the chooser could only wait
     // or retreat when the same visible targets were outside melee pursuit.
-    const range = this.rangedReady(bot) ? Math.max(t.chaseMax + 4, RANGED_ENTER_RANGE) : t.chaseMax + 4;
+    const range = Math.max(t.chaseMax + 4, Math.min(32, Math.max(0, t.decisionRange ?? 0)),
+      this.rangedReady(bot) ? RANGED_ENTER_RANGE : 0);
     return this.scan(bot, t, range).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
   }
 
@@ -1102,7 +1105,8 @@ export class CombatSession {
     const foes = this.scan(
       bot,
       t,
-      this.desperate ? RETREAT_CLEAR_DIST : rangedReady ? RANGED_EXIT_RANGE : t.chaseMax + 4,
+      this.desperate ? RETREAT_CLEAR_DIST : Math.max(rangedReady ? RANGED_EXIT_RANGE : t.chaseMax + 4,
+        this.selectedTarget ? Math.min(32, Math.max(0, t.decisionRange ?? 0)) : 0),
     );
     // E1:没怪了,滞后 3s 收工(防"炸完→退出→新怪→再进入"刷屏)。
     // 「没怪了」按退出口径算(见 exitFoes):远处那些没交过手的不算数,

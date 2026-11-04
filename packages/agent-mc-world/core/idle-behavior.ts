@@ -161,6 +161,17 @@ export class IdleBehaviorController {
   }
 
   get active(): boolean { return this.operation !== null; }
+  get actionId(): string | null { return this.operation?.actionId ?? null; }
+  get ready(): boolean { return !this.stopped && !this.operation && this.now() >= this.nextAtMs; }
+
+  /** Execute one host-selected observed action through the same cancellable body lease. */
+  startSelected(id: string): boolean {
+    const config = this.options.config(), scene = this.ready && config.enabled ? this.host.scene() : null;
+    const candidate = scene?.candidates.find(c => c.id === id);
+    if (!scene || !candidate) return false;
+    this.sceneGeneration = scene.generation; this.idleSinceMs = this.now();
+    this.start(scene, config, [candidate]); return true;
+  }
   get executing(): boolean { return this.operation?.actionId !== undefined; }
 
   /** Starts background selection or execution without waiting for it. */
@@ -180,7 +191,8 @@ export class IdleBehaviorController {
     }
     if (this.operation || now < this.nextAtMs
       || now - this.idleSinceMs! < Math.max(0, config.minIdleMs)) return;
-    const candidates = this.available(scene.candidates);
+    const candidates = this.available(scene.candidates.filter(c => c.id !== 'wander'));
+    if (!candidates.length) return;
     this.start(scene, config, candidates);
   }
 

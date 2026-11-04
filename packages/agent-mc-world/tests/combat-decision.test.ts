@@ -54,6 +54,14 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it('rejects an idle destination changed while the decision request was pending',async()=>{
+    vi.useFakeTimers();const r=rig();
+    r.f!.battlefield.action.fighting=false;r.f!.battlefield.actors=[];
+    r.f!.candidates=[{id:'idle_wander',kind:'idle',action:'wander',destination:[0,64,2.4],intent:'Stroll.'}];
+    r.loop.tick();r.f!.candidates=[{...r.f!.candidates[0],destination:[2.4,64,0]} as CombatCandidate];
+    r.resolve();await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(0);expect(r.reports.at(-1)?.data.outcome).toBe('no-longer-executable');r.loop.stop();
+  });
   it('thresholds the selected probability consistently when the service reports above-chance confidence', async () => {
     vi.useFakeTimers(); const r = rig(); r.loop.tick();
     r.resolve(new Response(JSON.stringify({ answers: { tactic: { choice: 'option_0', confidence: .6,

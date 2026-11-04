@@ -227,6 +227,8 @@ export class CombatDecisionLoop {
         && (selected.kind !== 'cast' || (c.kind === 'cast' && c.spell === selected.spell && c.ruleId === selected.ruleId))
         && (selected.kind !== 'engage' || (c.kind === 'engage' && c.targetId === selected.targetId && c.uuid === selected.uuid))
         && (selected.kind !== 'track' || (c.kind === 'track' && c.targetId === selected.targetId && c.uuid === selected.uuid))
+        && (selected.kind !== 'idle' || (c.kind === 'idle' && c.action === selected.action
+          && JSON.stringify(c.destination) === JSON.stringify(selected.destination)))
         && (selected.kind !== 'method' || c.kind === 'method' && c.procedure.handle === selected.procedure.handle
           && c.procedure.revision === selected.procedure.revision && JSON.stringify(c.params) === JSON.stringify(selected.params)
           && c.durationMs === selected.durationMs));

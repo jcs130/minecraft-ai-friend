@@ -7,6 +7,7 @@ export type CombatCandidate = { id: string; intent: string } & (
   | { kind: 'step'; destination: [number, number, number] }
   | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
   | { kind: 'retreat' }
+  | { kind: 'idle'; action: 'wander'; destination: [number, number, number] }
   | ({ kind: 'method' } & CombatRoutine)
 );
 export interface CombatDecisionFrame {

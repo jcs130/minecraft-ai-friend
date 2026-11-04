@@ -69,7 +69,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       const candidate = choice.candidate;
       const target = ('targetId' in candidate && typeof candidate.targetId === 'number')
         ? this.bridge?.bot?.entities[candidate.targetId]?.position ?? null : null;
-      const label = { engage: '接敌', retreat: '撤离', track: '停火盯防', step: '短步移动', cast: '施法', method: '运行方法' }[candidate.kind];
+      const label = { engage: '接敌', retreat: '撤离', track: '停火盯防', step: '短步移动', cast: '施法', method: '运行方法', idle: '安全闲逛' }[candidate.kind];
       this.reportViewerDecision(role, `choice:${this.connectionGeneration}:${receipt.id}`, label, accepted, target);
       this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:receipt});
       return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt },
@@ -246,7 +246,19 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       frame.program = program;
       frame.actionPool = [...combatReactions(bot, battlefield, cfg, control, true).filter(executableReaction), ...frame.candidates, ...routines];
     }
-    const choices = [...reactions, ...frame.candidates, ...routines];
+    // Reuse the idle body's cancellation/ground checks. A hostile near the body
+    // (including occluded ones) suppresses strolling, rather than hiding combat.
+    const idle = cfg.allowMovement && !emergency && !fighting && !queue?.running && !queue?.waiting.length
+      && !queue?.hold && this.idleBehavior?.ready && !this.methodOwnsBody() && this.canWander()
+      && !battlefield.actors.some(a => a.relation === 'hostile' && a.health.current !== 0
+        && a.distance !== null && a.distance <= 32) ? this.idleScene() : null;
+    const walk = idle?.candidates.some(c => c.id === 'wander') ? idle.state.wander as
+      { destination: { x: number; y: number; z: number } } | undefined : undefined;
+    const stroll: CombatCandidate[] = walk ? [{ id: 'idle_wander', kind: 'idle', action: 'wander',
+      destination: [walk.destination.x, walk.destination.y, walk.destination.z],
+      intent: 'Stroll two or three steps on verified safe nearby ground while the body is free; yield immediately to tasks or danger. This does not complete a goal or a trade.' }] : [];
+    const choices = [...reactions, ...frame.candidates, ...routines, ...stroll];
+    if (frame.actionPool) frame.actionPool.push(...stroll);
     frame.omittedCandidates += Math.max(0, choices.length - cfg.maxCandidates);
     frame.candidates = diverseCombatOptions(choices, cfg.maxCandidates);
     return frame;
@@ -295,6 +307,7 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
       if (!checked) return false;
       candidate = checked;
     }
+    if (candidate.kind === 'idle') return this.idleBehavior?.startSelected(candidate.action) ?? false;
     if (candidate.kind === 'cast') {
       // sampleCombatDecision revalidates opening admission as well as the exact rule.
       // An authored program cannot manufacture an unoffered spell outside that pool.

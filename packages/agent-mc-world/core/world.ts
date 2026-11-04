@@ -2804,6 +2804,7 @@ export class MinecraftWorld implements World {
   protected static readonly IDLE_ARRIVAL_SETTLE_MS = 150;
   protected idleArrival: { generation: string; expiresAtMs: number; readyAtMs?: number; blockedBy?: string } | null = null;
   protected idleSceneCache: IdleBehaviorScene | null = null;
+  protected bodyDisplay: { key: string; since: number; published: number } | null = null;
   protected visualWarmKey: string | null = null;
   protected visualInFlight: VisualObservationJob | null = null;
   protected readonly visualFrames = new WeakMap<ToolOutcome, { id: string; gallery: import('./viewer-agent-views.ts').AgentViewGallery }>();
@@ -4324,6 +4325,7 @@ export class MinecraftWorld implements World {
         ...this.extensionCombatTuning(),
         engageRadius: this.cfg.combat.engageRadius,
         chaseMax: this.cfg.combat.chaseMax,
+        decisionRange: this.cfg.combatOptions?.allowEngage ? 32 : 0,
         maxSec: this.cfg.combat.maxSec,
         space: this.cfg.combat.space,
         busyRatio: this.cfg.combat.busyRatio,
@@ -4496,7 +4498,8 @@ export class MinecraftWorld implements World {
           const origin = bot.entity.position.clone();
           await executeIdleAction(bot, id, scene.state, signal, {
             available: () => this.bridge?.bot === bot && this.canIdle()
-              && (id !== 'short_walk' || (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement)
+              && (id !== 'wander' || this.canWander())
+              && (!['short_walk', 'wander'].includes(id) || (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement)
               && this.idleGeneration() === scene.generation
               && bot.entity.position.distanceTo(origin) < 3,
             inventoryPreview: (open) => {
@@ -8114,6 +8117,14 @@ export class MinecraftWorld implements World {
     return this.idleUnavailableReason() === null;
   }
 
+  /** Check all currently tracked nearby hazards, not a truncated presentation list. */
+  protected canWander(): boolean {
+    const bot = this.bridge?.bot;
+    return Boolean(bot?.entity) && !Object.values(bot!.entities).some(e => e && e !== bot!.entity
+      && e.isValid !== false && e.position && e.position.distanceTo(bot!.entity.position) <= 32
+      && (classifyEntity(e.type, e.name ?? '') === 'hostile' || (e.name === 'piglin' && piglinIsHostile(bot!, e))));
+  }
+
   protected idleUnavailableReason(): string | null {
     const bot = this.bridge?.bot;
     const queue = this.executor?.status();
@@ -8163,6 +8174,36 @@ export class MinecraftWorld implements World {
     return this.idleSceneCache;
   }
 
+  /** Read-only public state; no prompt/reasoning inference and no game action. */
+  protected publishBodyStatus(): void {
+    const bot = this.bridge?.bot, queue = this.executor?.status(), now = Date.now();
+    if (!bot || !queue) return;
+    const reaction = this.combat?.reactionState();
+    const idle = this.idleBehavior?.actionId;
+    // Never echo chat, commands or arbitrary tool arguments into an audience HUD.
+    const labels: Record<string,string> = { attack:'接近并攻击',goto:'前往目标',goto_player:'跟随玩家',
+      eat:'进食',equip:'更换装备',craft:'合成物品',take:'取出物品',put:'存放物品',cast:'施法',chat:'发送游戏消息',
+      find:'寻找目标',collect:'采集',mine:'挖掘',interact:'交互',wait:'等待' };
+    const title = this.combat?.active ? reaction?.retreating ? '身体：撤离危险' : '身体：交战中'
+      : queue.hold ? '身体：等待控制权' : queue.running ? `身体：${labels[queue.running.skill ?? ''] ?? '执行游戏任务'}`
+      : idle === 'wander' ? '身体：安全闲逛' : idle ? '身体：观察周围'
+      : bot.currentWindow ? '身体：查看交互窗口' : '身体：空闲，等待任务';
+    const detail = queue.hold ? '任务暂时让出身体控制权' : (queue.running ? `任务 #${queue.running.id} · 第 ${queue.running.stepIndex + 1}/${queue.running.stepCount} 步`
+      : reaction?.targetId != null && this.combat?.active ? `当前目标实体 #${reaction.targetId}`
+      : idle ? '短暂动作，可被新任务打断' : '暂无正在执行的身体任务；不是游戏目标已完成');
+    const key = JSON.stringify([this.connectionGeneration, title, detail]);
+    if (this.bodyDisplay?.key !== key) this.bodyDisplay = { key, since: now, published: 0 };
+    if (now - this.bodyDisplay.published < 4000) return;
+    this.bodyDisplay.published = now;
+    const record = { id: 'current-body', at: new Date(this.bodyDisplay.since).toISOString(),
+      kind: 'phase', source: this.combat?.active || idle ? 'system1' : 'unknown', session: 'body-status', status: queue.running || this.combat?.active || idle ? 'running' : 'unknown',
+      title: title.slice(0,160), text: detail.slice(0,240),
+      result: { schema: 'body-status/v1', observedAt: new Date(now).toISOString(), expiresAt: new Date(now + 6000).toISOString() } };
+    this.publishAgentActivity(record);
+    // Public display adapters can consume this bounded heartbeat without model events.
+    this.diag.write({ lane: 'body', event: 'body-status', level: 'info', msg: record.title, data: record });
+  }
+
   protected worldTick(): void {
     this.proximityVoice.sync();
     // 1s 心跳里做昼夜检测(转换点不能等节流窗口),节流窗口做世界摘要
@@ -8188,6 +8229,7 @@ export class MinecraftWorld implements World {
     this.nutritionTick(bot);
     this.tryArrivalIdle();
     this.idleBehavior?.tick();
+    this.publishBodyStatus();
     const time = bot.time?.timeOfDay ?? 0;
     if (this.lastTickTime !== null) {
       const transition = dayNightTransition(this.lastTickTime, time);

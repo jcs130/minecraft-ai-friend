@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.14 (unpublished candidate)
+
+- Explicit host-selected engagement can approach visible targets within 32 blocks without expanding passive automatic engagement. Preserve the selected target while approaching, weapon checks and scene cancellation.
+- Offer a cancellable two-to-three-block idle stroll through the existing decision/body controller on verified flat ground. Do not offer it during work, interaction or nearby hostile presence; recheck danger and ground during movement.
+- Publish current body phase with stable elapsed time and expiring freshness to public viewers independently of model activity. These display records neither add prompt context nor report task completion.
+
 ## 0.5.7-rc.160-preview.13 (unpublished candidate)
 
 - Require actual fire/lava contact before environment rescue takes the body away from combat; residual burning near an unrelated hazard no longer repeatedly cancels combat or eating.
