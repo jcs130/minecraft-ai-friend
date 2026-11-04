@@ -287,7 +287,7 @@ def test_review_summary_keeps_tools_and_material_stagnation_visible(runtime):
 def test_knowledge_only_read_activity_is_visible_and_counts_remain_bounded(runtime):
     port, _, publish = runtime
     publish(read_activity={"mc_knowledge": 5000, "mc_bag": -1, "mc_help": True,
-                           "mc_map": 99, "mc_knowledge_extra": 88})
+                           "unknown_tool": 99, "mc_knowledge_extra": 88})
     review = port.offer()["review"]
     assert review["evidence"]["read_activity"] == {"mc_knowledge": 999}
     assert "连续查询999次（查询不代表行动进展）" in review["summary"]

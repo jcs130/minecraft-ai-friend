@@ -1,3 +1,8 @@
+## 0.2.147
+
+- Preserve queued observation and empty catalogue read counters through strategic review, and count immediate observation, condition-check and screenshot reads. Use one bounded vocabulary for the controller and review projection without changing action admission, ordering or lookahead permissions.
+- Include evidence-based stage completion among the existing read-loop guidance options. No counter verifies a goal or forces an action; original unknown observations, native receipts and stop boundaries remain unchanged.
+
 ## 0.2.146
 
 - Pin the independently built core rc.160-preview.9 and viewer 97e76665 for host consumers, including workstation reachability, native inventory/packet handling and camera world-reset updates.

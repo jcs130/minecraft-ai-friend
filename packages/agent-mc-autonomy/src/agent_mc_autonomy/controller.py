@@ -59,6 +59,7 @@ from .planner import (
     PlannerUnavailableError,
 )
 from .reply_quality import repeated_plain_reply
+from .read_activity import OBSERVATION_TOOLS, READ_ACTIVITY_TOOLS
 from .social import SocialInbox
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .tool_schema import argument_error, provider_schema
@@ -71,7 +72,6 @@ PROTOCOL_PLANNER_DESCRIPTION = (
     "The host owns turn boundaries, barrier acknowledgement and cancellation; do not manage that lifecycle.")
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
 DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages", "mc_query"}
-READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices", "mc_messages", "mc_query"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 # Query deduplication and reply freshness belong to the native server-query lane.
 # Never cache its sent/timeout receipts as reusable local observation answers.
@@ -91,7 +91,7 @@ def conversation_event(event):
 
 def observation_call(name, arguments):
     """Classify native queued reads without treating their task IDs as actions."""
-    if name in READ_ACTIVITY_TOOLS or empty_catalogue_query(name, arguments):
+    if name in READ_ACTIVITY_TOOLS | OBSERVATION_TOOLS or empty_catalogue_query(name, arguments):
         return True
     if name != "mc_do":
         return False

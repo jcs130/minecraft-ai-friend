@@ -269,9 +269,11 @@ def read_progress(read_activity):
     result = {"calls_since_body_action": dict(read_activity), "action_progress_verified": False}
     if sum(read_activity.values()) >= 5:
         result["next_decision"] = (
-            "Several read attempts have not constituted a body action. If the needed facts are already observed, "
-            "choose one bounded mc_do with the selected skill's required parameters. Otherwise query a specific "
-            "unresolved fact or report genuine blocked evidence; avoid rescanning unchanged space."
+            "Several read attempts have not constituted a body action or verified stage completion. "
+            "Compare the current stage's conditions with the answers already obtained. If satisfied, "
+            "use goal_report with the actual evidence to finish the stage; this report is not automatic verification. "
+            "Otherwise identify the specific unresolved condition, choose feasible work or a targeted read that can "
+            "resolve it, or report genuine blocked evidence. Avoid rescanning unchanged space."
         )
     return result
 

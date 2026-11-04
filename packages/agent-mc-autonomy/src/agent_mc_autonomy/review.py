@@ -30,6 +30,7 @@ from .observations import (
     tool_failure_view,
 )
 from .stage_applicability import body_baseline
+from .read_activity import read_activity_view
 
 
 @dataclass(frozen=True)
@@ -92,11 +93,7 @@ def review_observation(status, now):
     for key, size in (("goals", 1200), ("methods", 900)):
         useful[key] = fact_preview(facts.get(key, ""), size)
     originals, original_status = review_evidence.original_facts(facts, useful)
-    reads = snapshot.get("read_activity") or {}
-    reads = {key: min(999, reads[key]) for key in (
-        "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original",
-        "mc_knowledge", "mc_messages", "mc_notices", "mc_options")
-        if isinstance(reads, dict) and type(reads.get(key)) is int and reads[key] > 0}
+    reads = read_activity_view(snapshot.get("read_activity"))
     feedback = body_feedback(snapshot, facts)
     # Raw facts remain in the independent journal/status API; no accumulating prompt history here.
     evidence = {"sampled_at": snapshot["updated_at"], "phase": snapshot["phase"], "connected": snapshot.get("game_connected") is True,
