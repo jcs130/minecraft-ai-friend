@@ -1,3 +1,8 @@
+## 0.2.150
+
+- Distinguish local assistant narration from native Minecraft chat in the ordinary planner contract, without requiring a configured companion roster. Brief greetings, replies and meaningful shared discoveries use the advertised chat action and its original send receipt; local narration is never automatically broadcast.
+- Preserve the user's goal, actual channel/audience evidence and private-message boundaries. No synthetic greeting, periodic broadcast, additional model call or new game queue is introduced.
+
 ## 0.2.149
 
 - Admit native synchronous observation, condition checks, empty catalogues, script documentation/run inspection and memory reads before another call in a validated batch. Mixed writes and programs still end the batch; every call retains its original receipt and native barriers.
