@@ -358,6 +358,9 @@ final class SiteDungeonManager implements Listener {
         if(reason.equals("claim_previous_reward_first"))explainPending(p,List.of(site));
         else if(reason.equals("specify_dungeon_id"))explainPending(p,pendingSites(p.getUniqueId()));
     }
+    private void runResult(Player p,String action,String site,String run){
+        result(p,action,site,"success",run==null||run.isBlank()?Map.of():Map.of("run",run));
+    }
     private boolean loadout(Player p,String action,Site site){
         var missing=DungeonLoadout.missing(p);if(missing.isEmpty())return true;
         send(p,"MC_SITE_DUNGEON_RESULT",Map.of("action",action,"id",site.id,"success",false,"reason","equipment_required",
@@ -553,7 +556,7 @@ final class SiteDungeonManager implements Listener {
                 case "start"->start(p,site(id),Mode.parse(args.length>3?args[3]:"normal"));
                 case "join"->join(p,site(id));
                 case "status"->status(p,id);
-                case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");resume(r);result(p,"resume",r.site.id,"success");p.sendMessage("§a原地下城场次已恢复，已清进度保留；5分钟内返回目标房间。查询：/mycli dungeon status "+r.site.id);}
+                case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");resume(r);runResult(p,"resume",r.site.id,r.id);p.sendMessage("§a原地下城场次已恢复，已清进度保留；5分钟内返回目标房间。查询：/mycli dungeon status "+r.site.id);}
                 case "leave"->leave(p);
                 case "claim"->claim(p,id);
                 default->throw new IllegalArgumentException("use_list_info_travel_start_join_status_resume_leave_claim_menu");
@@ -624,7 +627,7 @@ final class SiteDungeonManager implements Listener {
         Run r=new Run(s,mode);r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
         reconcile(r);
-        result(p,"start",s.id,"success");tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；遗迹内达标的玩家与Agent自动同队，目前"+r.party.size()+"人。中途可加入、离开，已参战的房间保留，通关奖励会给每位真实参战者生成凭据。致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活。单人或全队战败返回存档点，第三次战败才结束；时限30分钟，全员离场宽限5分钟，故障和断线不扣次数。无需建立或修改日常队伍。");
+        runResult(p,"start",s.id,r.id);tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；遗迹内达标的玩家与Agent自动同队，目前"+r.party.size()+"人。中途可加入、离开，已参战的房间保留，通关奖励会给每位真实参战者生成凭据。致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活。单人或全队战败返回存档点，第三次战败才结束；时限30分钟，全员离场宽限5分钟，故障和断线不扣次数。无需建立或修改日常队伍。");
     }
     private void join(Player p,Site s){
         Run r=runs.get(s.id);require(r!=null,"not_participating");
@@ -632,7 +635,7 @@ final class SiteDungeonManager implements Listener {
         boolean declined=r.declined.remove(p.getUniqueId());
         try{String problem=entryProblem(p,r,p.getLocation());require(problem.isEmpty(),problem);require(enroll(p,r),"not_participating");}
         catch(RuntimeException failure){if(declined)r.declined.add(p.getUniqueId());throw failure;}
-        result(p,"join",s.id,"success");
+        runResult(p,"join",s.id,r.id);
     }
     private void conquestAdmission(Player p,Site s){
         if(s.conquestFloor==0)return;
@@ -686,7 +689,7 @@ final class SiteDungeonManager implements Listener {
         require(!plugin.isDowned(p),"downed_wait_for_rescue");
         r.party.remove(p.getUniqueId());r.declined.add(p.getUniqueId());
         try{persist();}catch(RuntimeException e){r.party.add(p.getUniqueId());r.declined.remove(p.getUniqueId());throw e;}
-        result(p,"leave",r.site.id,"success");p.sendMessage("§e已退出本次在场参战，已完成"+count+"室的记录保留；同伴通关后仍可领取奖励。请沿原路撤离；离开遗迹后再回来会自动续接。当前停留期间不会自动重新加入。");
+        runResult(p,"leave",r.site.id,r.id);p.sendMessage("§e已退出本次在场参战，已完成"+count+"室的记录保留；同伴通关后仍可领取奖励。请沿原路撤离；离开遗迹后再回来会自动续接。当前停留期间不会自动重新加入。");
     }
     private int receiptCount(){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts");if(c==null)return 0;int total=0;for(String owner:c.getKeys(false)){var section=c.getConfigurationSection(owner);if(section!=null)total+=section.getKeys(false).size();}return total;}
     private ConfigurationSection receipt(UUID id,String site){return plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id+"."+site);}
@@ -710,6 +713,7 @@ final class SiteDungeonManager implements Listener {
         if(id.isEmpty()){var pending=pendingSites(p.getUniqueId());require(!pending.isEmpty(),"no_pending_reward");require(pending.size()==1,"specify_dungeon_id");id=pending.getFirst();}
         String chosen=id;var receipt=receipt(p.getUniqueId(),chosen);
         if(receipt==null){Map<String,Object> outcome=lastOutcome(p.getUniqueId(),chosen);if(!outcome.isEmpty())explainOutcome(p,outcome);require(false,"no_pending_reward");}
+        String claimedRun=receipt.getString("run");
         applyCompletion(p,chosen,receipt);
         atomic(()->{
             require(plugin.dungeon().queueGuildRewards(p.getUniqueId(),receipt.getInt("emeralds"),Material.valueOf(receipt.getString("item")),receipt.getInt("count")),"personal_reward_queue_full");
@@ -723,7 +727,7 @@ final class SiteDungeonManager implements Listener {
                 plugin.getConfig().set(history+".nextCommands",List.of("/mycli arena rewards","/mycli arena stash"));
             }
         });
-        result(p,"claim",chosen,"success");p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。命令：/mycli arena stash；只查待入箱奖励：/mycli arena rewards list。重复领取不会再次发奖。");
+        runResult(p,"claim",chosen,claimedRun);p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。命令：/mycli arena stash；只查待入箱奖励：/mycli arena rewards list。重复领取不会再次发奖。");
     }
     private void tick(){
         long timestamp=System.currentTimeMillis();
