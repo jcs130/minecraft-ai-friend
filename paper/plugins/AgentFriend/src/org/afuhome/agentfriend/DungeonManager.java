@@ -26,6 +26,7 @@ import org.bukkit.block.Sign;
 import org.bukkit.block.TileState;
 import org.bukkit.block.data.type.Switch;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -89,6 +90,9 @@ final class DungeonManager implements Listener {
     private static final long REJOIN_GRACE_MS = 600_000L;
     private static final long OUTSIDE_GRACE_MS = 15_000L;
     private static final String RUN_STATE = "dungeon-active-run";
+    private static final String OWN_OUTCOME = "dungeon-activity-outcomes.";
+    private static final int TRIAL_SCHEMA_VERSION = 1;
+    private static final com.google.gson.Gson JSON = new com.google.gson.Gson();
     private static final String MOB_TAG = "afu_dungeon_mob";
     private static final String REWARDS = "dungeon-rewards.";
     private static final String BONUS_ITEMS = "dungeon-bonus-items.";
@@ -229,6 +233,11 @@ final class DungeonManager implements Listener {
     private Difficulty difficulty = Difficulty.NORMAL;
     private long runStartedAt;
     private String runId = UUID.randomUUID().toString();
+    private record RunCheckpoint(String run, int floor, String difficulty, boolean paused,
+                                 boolean cleared, Set<UUID> participants) { }
+    private record LootReceipt(Player recipient, String message) { }
+    private RunCheckpoint committedRun;
+    private long runRevision;
     private long floorStartedAt;
     private long spawnAt;
     private long advanceAt;
@@ -291,21 +300,64 @@ final class DungeonManager implements Listener {
     private World world() { return Bukkit.getWorld("world"); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
 
+    private RunCheckpoint checkpoint() {
+        return new RunCheckpoint(runId, floor, difficulty.id, pausedAt > 0, cleared, Set.copyOf(participants));
+    }
+
+    private boolean committedCurrentRun() {
+        return active && runRevision > 0 && checkpoint().equals(committedRun);
+    }
+
+    private void commitTrial(Runnable update) {
+        var config = plugin.getConfig();
+        String before = config.saveToString();
+        try {
+            update.run();
+            plugin.saveConfig();
+        } catch (RuntimeException failure) {
+            try { config.loadFromString(before); }
+            catch (InvalidConfigurationException restore) { failure.addSuppressed(restore); }
+            throw failure;
+        }
+    }
+
     private void persistRun() {
         if (!active) return;
-        plugin.getConfig().set(RUN_STATE + ".floor", floor);
-        plugin.getConfig().set(RUN_STATE + ".difficulty", difficulty.id);
-        plugin.getConfig().set(RUN_STATE + ".wave", activeWave.stream().map(DungeonWaveCatalog.Enemy::saved).toList());
-        plugin.getConfig().set(RUN_STATE + ".participants",
-                participants.stream().map(UUID::toString).toList());
-        plugin.getConfig().set(RUN_STATE + ".run-started-at", runStartedAt);
-        plugin.getConfig().set(RUN_STATE + ".id", runId);
-        plugin.getConfig().set(RUN_STATE + ".floor-started-at", floorStartedAt);
-        plugin.getConfig().set(RUN_STATE + ".advance-at", advanceAt);
-        plugin.getConfig().set(RUN_STATE + ".cleared", cleared);
-        plugin.getConfig().set(RUN_STATE + ".paused-at", pausedAt);
-        plugin.getConfig().set(RUN_STATE + ".saved-at", System.currentTimeMillis());
-        plugin.saveConfig();
+        RunCheckpoint checkpoint = checkpoint();
+        long revision = committedRun == null || !runId.equals(committedRun.run()) ? 1
+                : checkpoint.equals(committedRun) ? runRevision : Math.incrementExact(runRevision);
+        commitTrial(() -> {
+            var config = plugin.getConfig();
+            config.set(RUN_STATE + ".floor", floor);
+            config.set(RUN_STATE + ".difficulty", difficulty.id);
+            config.set(RUN_STATE + ".wave", activeWave.stream().map(DungeonWaveCatalog.Enemy::saved).toList());
+            config.set(RUN_STATE + ".participants", participants.stream().map(UUID::toString).toList());
+            config.set(RUN_STATE + ".run-started-at", runStartedAt);
+            config.set(RUN_STATE + ".id", runId);
+            config.set(RUN_STATE + ".floor-started-at", floorStartedAt);
+            config.set(RUN_STATE + ".advance-at", advanceAt);
+            config.set(RUN_STATE + ".cleared", cleared);
+            config.set(RUN_STATE + ".paused-at", pausedAt);
+            config.set(RUN_STATE + ".saved-at", System.currentTimeMillis());
+            config.set(RUN_STATE + ".revision", revision);
+        });
+        committedRun = checkpoint;
+        runRevision = revision;
+    }
+
+    private String attribution(Player player) {
+        String name = player.getName();
+        String recipient = name.matches("[A-Za-z0-9_.-]+") ? name : JSON.toJson(name);
+        return " recipient=" + recipient + (isParticipant(player) && committedCurrentRun()
+                ? " run=" + runId + " revision=" + runRevision : "");
+    }
+
+    private com.google.gson.JsonObject ownOutcome(Player player) {
+        var outcome = plugin.getConfig().getConfigurationSection(OWN_OUTCOME + player.getUniqueId());
+        if (outcome == null) return null;
+        var result = JSON.toJsonTree(outcome.getValues(false)).getAsJsonObject();
+        result.addProperty("recipient", player.getName());
+        return result;
     }
 
     private void restoreRun() {
@@ -348,6 +400,11 @@ final class DungeonManager implements Listener {
         spawned = false; // The old wave was removed at shutdown or startup; retry it once.
         pausedAt = interruptedAt;
         active = true;
+        runRevision = plugin.getConfig().getLong(RUN_STATE + ".revision", 0);
+        if (runRevision > 0) {
+            committedRun = new RunCheckpoint(runId, floor, difficulty.id, savedPause > 0, cleared, Set.copyOf(participants));
+        }
+        if (!committedCurrentRun()) persistRun();
         plugin.getLogger().info("Dungeon run checkpoint restored: floor=" + floor
                 + ", participants=" + participants.size() + ", waiting for reconnect.");
     }
@@ -449,7 +506,7 @@ final class DungeonManager implements Listener {
 
     private void enrollPlayersOnCurrentFloor() {
         if (!active) return;
-        boolean changed = false;
+        List<Player> joined = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
                     && player.getGameMode() != GameMode.ADVENTURE)
@@ -457,16 +514,19 @@ final class DungeonManager implements Listener {
                     || plugin.pvpParticipant(player)
                     || (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(player))
                     || !participants.add(player.getUniqueId())) continue;
-            changed = true;
+            joined.add(player);
+        }
+        if (joined.isEmpty()) return;
+        persistRun();
+        for (Player player : joined) {
             player.sendMessage(ChatColor.GREEN + "你已加入第 " + floor + " 层试炼队伍；本层清怪后会随队自动进入下一层。"
                     + (cleared ? "本层奖励已结算，从下一层开始获得奖励。" : "本层通关后可领取个人奖励。"));
             player.sendMessage("MC_DUNGEON_JOIN floor=" + floor + " participant=true"
-                    + " rewardThisFloor=" + !cleared + " nextFloorTogether=true");
+                    + " rewardThisFloor=" + !cleared + " nextFloorTogether=true" + attribution(player));
             plugin.getLogger().info("Dungeon player joined from current floor: floor=" + floor
                     + ", player=" + player.getName() + ", uuid=" + player.getUniqueId()
                     + ", rewardThisFloor=" + !cleared);
         }
-        if (changed) persistRun();
     }
 
     com.google.gson.JsonObject guidance(Player player){
@@ -484,7 +544,17 @@ final class DungeonManager implements Listener {
             remaining,maxFloor(),plugin.isObserver(player),plugin.nativeRpgMayAct(player),plugin.isDowned(player),plugin.pvpParticipant(player)
             ||plugin.siteDungeons()!=null&&plugin.siteDungeons().isParticipant(player),world()!=null&&nearLobbyButton(player,lobbyButton()),mana,cooldown,DungeonLoadout.missing(player));
         var out=new com.google.gson.Gson().toJsonTree(TrialGuide.next(facts)).getAsJsonObject();
-        out.addProperty("activityType","trial_tower");out.addProperty("participant",isParticipant(player));out.addProperty("active",active);
+        out.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
+        boolean participant = isParticipant(player);
+        out.addProperty("activityType","trial_tower");out.addProperty("participant",participant);out.addProperty("active",active);
+        out.addProperty("recipient", player.getName());
+        out.addProperty("lifecycle", participant ? "active" : "none");
+        if (participant && committedCurrentRun()) {
+            out.addProperty("run", runId);
+            out.addProperty("revision", runRevision);
+        }
+        var outcome = ownOutcome(player);
+        if (outcome != null) out.add("lastOutcome", outcome);
         out.addProperty("floor",active?floor:0);out.addProperty("selfFloor",floorAt(player.getLocation()));out.addProperty("maxFloor",maxFloor());
         out.addProperty("remainingMobs",remaining);out.addProperty("selectedDifficulty",chosenDifficulty(player).id);
         out.addProperty("world",world()==null?"unknown":world().getName());
@@ -554,7 +624,7 @@ final class DungeonManager implements Listener {
                         + " lastFloor=" + plugin.getConfig().getInt("dungeon-last-finish-floor", 0)
                         + " lastReason=" + plugin.getConfig().getString("dungeon-last-finish-reason", "none")
                         + " lastRunParticipant=" + plugin.getConfig().getStringList("dungeon-last-participants")
-                                .contains(player.getUniqueId().toString()));
+                                .contains(player.getUniqueId().toString()) + attribution(player));
                 if (plugin.trialRescue() != null) plugin.trialRescue().report(player);
                 player.sendMessage("MC_DUNGEON entrance " + LocationOutput.fields(lobbyButton())
                         + " chestX=-594 chestY=91 chestZ=-313 scope=public participant=" + participant);
@@ -709,9 +779,7 @@ final class DungeonManager implements Listener {
             player.sendTitle(ChatColor.GOLD + difficulty.label + "试炼",
                     ChatColor.YELLOW + "由 " + starter.getName() + " 发起 · " + participants.size() + " 人同队",
                     10, 65, 15);
-            player.sendMessage("MC_DUNGEON_START difficulty=" + difficulty.id
-                    + " starter=" + starter.getName() + " partySize=" + participants.size()
-                    + " floor=1");
+            sendStart(player, starter);
         }
         announce(ChatColor.GOLD + "" + maxFloor() + " 层" + difficulty.label + "试炼开始！入口按钮附近 " + participants.size()
                 + " 人已组队进入。每层清怪后 10 秒自动下楼并补满生命；奖励留在个人箱子，红色木按钮可返回地面。");
@@ -747,7 +815,17 @@ final class DungeonManager implements Listener {
         runStartedAt = now;
         runId = UUID.randomUUID().toString();
         persistRun();
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && player.isOnline()) sendStart(player, starter);
+        }
         announce(ChatColor.GOLD + "已从检查点直达第七层驿站〔" + difficulty.label + "〕；队伍可补给，再继续深入。");
+    }
+
+    private void sendStart(Player player, Player starter) {
+        player.sendMessage("MC_DUNGEON_START difficulty=" + difficulty.id
+                + " starter=" + starter.getName() + " partySize=" + participants.size()
+                + " floor=" + floor + attribution(player));
     }
 
     private int enterFloor(int number, List<Player> group) {
@@ -926,17 +1004,14 @@ final class DungeonManager implements Listener {
         });
         if (!mobs.isEmpty()) return;
         cleared = true;
+        advanceAt = floor < maxFloor() ? now + NEXT_FLOOR_DELAY_MS : 0;
         if (plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         int credited = rewardFloor();
         if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(rescueKey()+":"+floor,
                 participants.stream().map(Bukkit::getPlayer).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
         if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
-        else {
-            advanceAt = now + NEXT_FLOOR_DELAY_MS;
-            persistRun();
-            announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层并补满生命；奖励留在个人箱子，不必现在领取。");
-        }
+        else announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层并补满生命；奖励留在个人箱子，不必现在领取。");
     }
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
@@ -1386,6 +1461,7 @@ final class DungeonManager implements Listener {
     }
 
     private int rewardFloor() {
+        List<LootReceipt> receipts = new ArrayList<>();
         int credited = 0;
         int partySize = 0;
         for (UUID id : participants) {
@@ -1403,8 +1479,8 @@ final class DungeonManager implements Listener {
             if (plugin.getConfig().getLong(claimPath, Long.MIN_VALUE) == gameDay) {
                 p.sendMessage(ChatColor.YELLOW + "第 " + floor + " 层今天已领奖；明天（游戏日 "
                         + (gameDay + 1) + "）可再次获得奖励。仍可继续挑战和使用商人。");
-                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=daily_limit gameDay="
-                        + gameDay + " nextDay=" + (gameDay + 1) + " credited=false");
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=daily_limit gameDay="
+                        + gameDay + " nextDay=" + (gameDay + 1) + " credited=false"));
                 continue;
             }
             boolean firstClear = !plugin.getConfig().contains(claimPath);
@@ -1414,11 +1490,11 @@ final class DungeonManager implements Listener {
                     + plugin.adventurerRankName(p) + "，推荐" + recommended.label + "试炼；本层"
                     + difficulty.label + "奖励按 " + scale.percent() + "% 结算。首次通关解锁与剧情奖励保留，"
                     + "重复装备仅在匹配难度中发放。");
-            p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=level_scaling"
+            receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=level_scaling"
                     + " adventurerRank=" + plugin.adventurerRank(p)
                     + " recommendedDifficulty=" + recommended.id
                     + " runDifficulty=" + difficulty.id + " rewardPercent=" + scale.percent()
-                    + " firstClear=" + firstClear + " repeatedGear=" + (scale.gap() == 0 || firstClear));
+                    + " firstClear=" + firstClear + " repeatedGear=" + (scale.gap() == 0 || firstClear)));
             for (Loot loot : THEMES.get(floor - 1).rewards()) {
                 String path = rewardPath(id, loot.material());
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0)
@@ -1437,23 +1513,23 @@ final class DungeonManager implements Listener {
                             bonus.rare() ? 0 : plugin.getConfig().getInt(RARE_MISSES + id, 0) + 1);
                     p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
                             + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
-                    p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category="
+                    receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category="
                             + (bonus.rare() ? "rare" : "extra") + " tier=" + bonus.tier()
                             + " item=minecraft:" + bonus.item().getType().name().toLowerCase(Locale.ROOT)
                             + " count=" + bonus.item().getAmount()
                             + (SkillTome.spellId(bonus.item()) == null ? ""
-                                    : " skill=" + SkillTome.spellId(bonus.item())));
+                                    : " skill=" + SkillTome.spellId(bonus.item()))));
                 } else {
                     String path = rewardPath(id, Material.EMERALD);
                     plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
                     p.sendMessage(ChatColor.YELLOW + "个人宝箱普通奖励队列已满，本层普通额外战利品折成绿宝石 ×1 保存。"
                             + "稀有与保底装备仍会留在待领取队列；请及时清理个人箱。");
-                    p.sendMessage("MC_DUNGEON_LOOT floor=" + floor
-                            + " category=converted item=minecraft:emerald");
+                    receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
+                            + " category=converted item=minecraft:emerald"));
                 }
             } else {
-                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor
-                        + " category=bonus_skipped reason=below_recommended_difficulty");
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
+                        + " category=bonus_skipped reason=below_recommended_difficulty"));
             }
             List<DungeonLoot.Bonus> supplies = scale.gap() == 0 || firstClear
                     ? DungeonLoot.supplies(floor) : List.of();
@@ -1466,9 +1542,9 @@ final class DungeonManager implements Listener {
                     p.sendMessage(ChatColor.GREEN + "本层补给：" + supply.label()
                             + (item.getAmount() == supply.item().getAmount() ? "" : "（按等级调整为 ×" + item.getAmount() + "）")
                             + "，已存入个人箱子。");
-                    p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=supply item=minecraft:"
+                    receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=supply item=minecraft:"
                             + item.getType().name().toLowerCase(Locale.ROOT)
-                            + " count=" + item.getAmount());
+                            + " count=" + item.getAmount()));
                 }
                 plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
             }
@@ -1485,9 +1561,9 @@ final class DungeonManager implements Listener {
                 p.sendMessage((milestone.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.GREEN)
                         + "本层保底装备：" + milestone.label() + "，已存入个人箱子。"
                         + (floor == 6 || floor == BOSS_FLOOR ? " /mycli arena loot 可查套装进度。" : ""));
-                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
                         + milestone.item().getType().name().toLowerCase(Locale.ROOT)
-                            + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1));
+                            + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1)));
             }
             if (floor == 3) plugin.teachArenaSkills(p);
             if (floor == BASE_FLOORS && expanded) {
@@ -1504,8 +1580,8 @@ final class DungeonManager implements Listener {
                 plugin.getConfig().set(BONUS_ITEMS + id, relics);
                 plugin.getConfig().set(BOSS_CLEARS + id, clears + 1);
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "首领宝藏：" + cache.label() + "，已存入个人箱子。");
-                p.sendMessage("MC_DUNGEON_LOOT floor=10 category=boss item=minecraft:"
-                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1));
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=10 category=boss item=minecraft:"
+                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)));
             }
             if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
@@ -1515,16 +1591,16 @@ final class DungeonManager implements Listener {
                 plugin.getConfig().set(BONUS_ITEMS + id, relics);
                 plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "星灯首领宝藏：" + cache.label() + "，已存入个人箱子。");
-                p.sendMessage("MC_DUNGEON_LOOT floor=15 category=final_boss item=minecraft:"
-                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1));
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=15 category=final_boss item=minecraft:"
+                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)));
             }
             if (difficulty.walletBonus > 0) {
                 int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
                 int creditedBalance = economy.creditDifficulty(id, scale.wallet(bonusBalance));
                 p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：金币 +" + creditedBalance
                         + "；可在入口商人购买补给，不占背包。");
-                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="
-                        + difficulty.id + " amount=" + creditedBalance);
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="
+                        + difficulty.id + " amount=" + creditedBalance));
             }
             plugin.getConfig().set(claimPath, gameDay);
             plugin.saveConfig();
@@ -1532,7 +1608,11 @@ final class DungeonManager implements Listener {
             p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的个人箱里；像普通箱子一样取放。");
             credited++;
         }
-        plugin.saveConfig();
+        // Publish reward attribution only after the actual awards and clear checkpoint are durable.
+        persistRun();
+        for (LootReceipt receipt : receipts) {
+            receipt.recipient().sendMessage(receipt.message() + attribution(receipt.recipient()));
+        }
         plugin.getLogger().info("Dungeon floor reward: floor=" + floor + ", difficulty=" + difficulty.id
                 + ", credited=" + credited);
         return credited;
@@ -1540,28 +1620,45 @@ final class DungeonManager implements Listener {
 
     private void finish(boolean won, String reason, String message) {
         if (!active) return;
+        Set<UUID> endedParticipants = Set.copyOf(participants);
+        long endedAt = System.currentTimeMillis();
+        long revision = committedRun != null && runId.equals(committedRun.run())
+                ? Math.incrementExact(runRevision) : 1;
+        String outcome = won ? "won" : "failed";
+        commitTrial(() -> {
+            var config = plugin.getConfig();
+            config.set("dungeon-last-outcome", outcome);
+            config.set("dungeon-last-finish-floor", floor);
+            config.set("dungeon-last-finish-reason", reason);
+            config.set("dungeon-last-participants", endedParticipants.stream().map(UUID::toString).toList());
+            for (UUID id : endedParticipants) {
+                config.set(OWN_OUTCOME + id, null);
+                config.createSection(OWN_OUTCOME + id, Map.of(
+                        "run", runId, "revision", revision, "floor", floor, "outcome", outcome,
+                        "status", won ? "completed" : "cancelled", "reason", reason, "endedAt", endedAt));
+            }
+            config.set("dungeon-last-run", endedAt);
+            config.set(RUN_STATE, null);
+        });
         if (plugin.trialRescue() != null) plugin.trialRescue().releaseTeam(rescueKey(), rescueExit());
         plugin.getLogger().info("Dungeon finished: won=" + won + ", floor=" + floor
                 + ", reason=" + reason + ", remaining=" + mobs.size() + ", message=" + message);
-        plugin.getConfig().set("dungeon-last-outcome", won ? "won" : "failed");
-        plugin.getConfig().set("dungeon-last-finish-floor", floor);
-        plugin.getConfig().set("dungeon-last-finish-reason", reason);
-        plugin.getConfig().set("dungeon-last-participants", participants.stream().map(UUID::toString).toList());
-        // Termination must reach participants who are outside the narrow floor volume.
-        for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
-            if (player != null && player.isOnline()) player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + "【试炼塔·结算】" + message);
-        }
         cleanupMobs();
         active = false;
         advanceAt = 0;
         pausedAt = 0;
         outsideSince = 0;
         participants.clear();
-        lastRun = System.currentTimeMillis();
-        plugin.getConfig().set("dungeon-last-run", lastRun);
-        plugin.getConfig().set(RUN_STATE, null);
-        plugin.saveConfig();
+        lastRun = endedAt;
+        for (UUID id : endedParticipants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player == null || !player.isOnline()) continue;
+            player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + "【试炼塔·结算】" + message);
+            var receipt = ownOutcome(player);
+            receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
+            receipt.addProperty("activityType", "trial_tower");
+            player.sendMessage("MC_TRIAL_RESULT " + receipt);
+        }
     }
 
     private String rescueKey() { return "tower:" + runId; }

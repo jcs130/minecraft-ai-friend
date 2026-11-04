@@ -14,13 +14,28 @@
     "backupSha256": "522bf5cfbbc1320021ecf968ba61bdd45cf6e9a9d519f9deea57f8f0e00bdc8f",
     "backupBytes": 43508833,
     "twoLocalCopiesVerified": true,
-    "runtimeFiles": {
-      "src/server.mjs": "ce2719731e4c37596b9f9b36d16b586dae1def5ca2a86ee6751bd36bc99c34c1",
-      "src/store.mjs": "6424b6d53097a1df6079fe4e6e1f897081914d3c1161c59f5cad6035a3fe43d7",
-      "src/email-auth.mjs": "07297225b49b41c76dc325bc8a662cafdc38188e48a48fc7b6dd214bcd91d778",
-      "package.json": "c40e2d3acae4632ad404b56ab66278337011444d94a253563343d49dfac10b02",
-      "package-lock.json": "4d1a048b9907e95cc58e0c45748164b63047b7518a4eedc93b7669677603600e"
-    },
+    "runtimeFiles": [
+      {
+        "path": "src/server.mjs",
+        "sha256": "ce2719731e4c37596b9f9b36d16b586dae1def5ca2a86ee6751bd36bc99c34c1"
+      },
+      {
+        "path": "src/store.mjs",
+        "sha256": "6424b6d53097a1df6079fe4e6e1f897081914d3c1161c59f5cad6035a3fe43d7"
+      },
+      {
+        "path": "src/email-auth.mjs",
+        "sha256": "07297225b49b41c76dc325bc8a662cafdc38188e48a48fc7b6dd214bcd91d778"
+      },
+      {
+        "path": "package.json",
+        "sha256": "c40e2d3acae4632ad404b56ab66278337011444d94a253563343d49dfac10b02"
+      },
+      {
+        "path": "package-lock.json",
+        "sha256": "4d1a048b9907e95cc58e0c45748164b63047b7518a4eedc93b7669677603600e"
+      }
+    ],
     "downloadsPreserved": true,
     "codeOnlyRollbackAvailable": true
   },

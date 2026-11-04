@@ -19,3 +19,7 @@ not inferred from natural language or coordinates.
 Use the existing `WorkState` and `WorkReference` only when exact occurrence,
 server revision, status, and evidence are available. A schema version, timestamp,
 tool acceptance, or worker report is not a server state revision or completion.
+
+The Qiandengji adapter can use the [trial and site dungeon receipt contract](../../../paper/docs/ACTIVITY_RUN_ATTRIBUTION.md).
+Check the recipient before using a current run. Keep personal history and
+pending rewards separate from that run, even when their activity IDs match.
