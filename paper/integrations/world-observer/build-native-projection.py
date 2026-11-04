@@ -8,7 +8,7 @@ base=a.server/'plugins/WorldObserver-0.1.1.jar'
 assert sha(base)=='f1b4d51fca8bb87b1a945f939a190ce01acc0b372e81dd18b57d8b2c02022d3d','Review a changed observer baseline'
 a.output.mkdir(parents=True,exist_ok=False);classes=a.output/'classes';classes.mkdir()
 cp=os.pathsep.join(map(str,[classes,base,*a.server.glob('libraries/**/*.jar'),*a.server.glob('plugins/*.jar')]))
-sources=[root/'src/org/qiandeng/observer/WorldObserverPlugin.java',root/'src/org/qiandeng/observer/NativeObserverProjection.java',root.parents[1]/'ops/patches/CompassMethodPatch.java']
+sources=[*sorted((root/'src').rglob('*.java')),root.parents[1]/'ops/patches/CompassMethodPatch.java']
 args=['-proc:none','-implicit:none','--release','21','-encoding','UTF-8','-cp',cp,'-d',classes,*sources]
 af=a.output/'compile.args';af.write_text('\n'.join('"'+str(v).replace('\\','/')+'"'for v in args),encoding='utf-8')
 with(a.output/'compile.log').open('wb')as log:r=subprocess.run([a.jdk/'bin/javac.exe','@'+str(af)],stdout=log,stderr=subprocess.STDOUT)

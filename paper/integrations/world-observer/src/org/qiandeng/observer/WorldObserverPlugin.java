@@ -31,13 +31,25 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.*;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Read-only export of existing players. Never constructs a player, sends a
@@ -47,6 +59,9 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
     private static final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
     private static final int QUEUE_BYTES = 8 * 1024 * 1024, RESPONSE_BYTES = 4 * 1024 * 1024;
     private final Map<UUID, View> views = new LinkedHashMap<>(); // main thread only
+    private final Map<UUID, PlayerOperations> operations = new HashMap<>(); // main thread only
+    private record OperationSnapshot(int tick, List<PlayerOperations.Entry> entries) {}
+    private final Map<UUID, OperationSnapshot> operationSnapshots = new HashMap<>();
     private record DirtyBlock(UUID world, net.minecraft.core.BlockPos position) {}
     private final Set<DirtyBlock> dirtyBlocks = new LinkedHashSet<>();
     private HttpServer http;
@@ -159,6 +174,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
     @Override public void onDisable() {
         if(packets!=null)ProtocolLibrary.getProtocolManager().removePacketListener(packets);
         if(http!=null)http.stop(0); if(executor!=null)executor.shutdownNow(); views.clear();dirtyBlocks.clear();
+        operations.clear();operationSnapshots.clear();
     }
     private void handle(HttpExchange exchange) throws IOException {
         try {
@@ -212,7 +228,9 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             List<Map<String,Object>> wire=new ArrayList<>();
             for(Wire packet:view.queue) {if(packet.sequence<=after)continue;if(packet.bytes>budget)break;wire.add(Map.of("sequence",packet.sequence,"data",packet.packet));budget-=packet.bytes;}
             Map<String,Object> reply=new LinkedHashMap<>();reply.put("uuid",uuid.toString());reply.put("lease",view.lease);
-            reply.put("generation",view.generation);reply.put("available",true);reply.put("player",playerState(player));reply.put("packets",wire);
+            Map<String,Object> state = playerState(player);
+            state.put("gameOperations", recentOperations(player));
+            reply.put("generation",view.generation);reply.put("available",true);reply.put("player",state);reply.put("packets",wire);
             if(after==0)reply.put("configurationPackets",configurationPackets);
             reply.put("initializing",!view.pendingChunks.isEmpty() || view.sent.isEmpty());replies.add(reply);
         }
@@ -371,13 +389,60 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         Player player=event.getPlayer();var source=((CraftPlayer)player).getHandle();
         for(View view:views.values())if(view.uuid.equals(player.getUniqueId()) || view.entities.contains(player.getEntityId()))add(view,new ClientboundAnimatePacket(source,0));
     }
-    @EventHandler public void quit(PlayerQuitEvent event) {views.remove(event.getPlayer().getUniqueId());}
+    private void observe(Player player, String kind) {
+        if (kind != null && player.getGameMode() != GameMode.SPECTATOR) {
+            operations.computeIfAbsent(player.getUniqueId(), ignored -> new PlayerOperations())
+                .record(kind, System.currentTimeMillis());
+        }
+    }
+    private List<PlayerOperations.Entry> recentOperations(Player player) {
+        UUID id = player.getUniqueId();
+        var history = operations.get(id);
+        if (history == null) return List.of();
+        var sample = operationSnapshots.get(id);
+        if (sample != null && tick - sample.tick() < 10) return sample.entries();
+        var entries = history.recent(System.currentTimeMillis());
+        operationSnapshots.put(id, new OperationSnapshot(tick, entries));
+        return entries;
+    }
+    @EventHandler public void quit(PlayerQuitEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        views.remove(id); operations.remove(id); operationSnapshots.remove(id);
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void command(PlayerCommandPreprocessEvent event) {
+        observe(event.getPlayer(), PlayerOperations.command(event.getMessage()));
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void openInventory(InventoryOpenEvent event) {
+        if (event.getPlayer() instanceof Player player) observe(player, "open_inventory");
+    }
+    @EventHandler(priority=EventPriority.MONITOR) public void closeInventory(InventoryCloseEvent event) {
+        if (event.getPlayer() instanceof Player player) observe(player, "close_inventory");
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void clickInventory(InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player player && event.getAction() != org.bukkit.event.inventory.InventoryAction.NOTHING) {
+            observe(player, event instanceof CraftItemEvent ? "craft" : "inventory_interact");
+        }
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void attack(EntityDamageByEntityEvent event) {
+        Entity attacker = event.getDamager();
+        if (attacker instanceof Projectile projectile && projectile.getShooter() instanceof Player shooter) attacker = shooter;
+        if (attacker instanceof Player player) observe(player, "attack");
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void interact(PlayerInteractEntityEvent event) {
+        observe(event.getPlayer(), "interact");
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void pickUp(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player) observe(player, "pickup");
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void drop(PlayerDropItemEvent event) {observe(event.getPlayer(), "drop");}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void consume(PlayerItemConsumeEvent event) {observe(event.getPlayer(), "consume");}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void teleport(PlayerTeleportEvent event) {observe(event.getPlayer(), "teleport");}
     private void changed(org.bukkit.block.Block block) {
         if(views.isEmpty() || dirtyBlocks.size()>=64)return;
         dirtyBlocks.add(new DirtyBlock(block.getWorld().getUID(),new net.minecraft.core.BlockPos(block.getX(),block.getY(),block.getZ())));
     }
-    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void broken(BlockBreakEvent event) {changed(event.getBlock());}
-    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void placed(BlockPlaceEvent event) {changed(event.getBlock());}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void broken(BlockBreakEvent event) {changed(event.getBlock());observe(event.getPlayer(), "break_block");}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void placed(BlockPlaceEvent event) {changed(event.getBlock());observe(event.getPlayer(), "place_block");}
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void physics(BlockPhysicsEvent event) {changed(event.getBlock());}
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void entityBlock(EntityChangeBlockEvent event) {changed(event.getBlock());}
 }
