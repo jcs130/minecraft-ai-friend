@@ -44,6 +44,7 @@ import { beginTemporaryScaffold, closeTemporaryScaffold, reclaimTemporaryScaffol
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { blockIdOf, isAirState, normalizeBlockName } from './blueprint.ts';
 import { PROBE_SLICE_CELL_CAP, renderSpatialSlices } from './spatial-slices.ts';
+import { probePage } from './probe-page.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -1731,10 +1732,8 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
     throw new SkillBlocked('probe.slice 须用 box、fill:solid(可省略)，且不与 where 同用');
   }
   const observedAt = new Date().toISOString();
-  const cells = shapeCells(
-    bot, call.shape, call.anchors, call.fill,
-    call.slice ? PROBE_SLICE_CELL_CAP : locating ? PROBE_WHERE_CELL_CAP : PROBE_CELL_CAP,
-  );
+  const page = probePage(bot, call, call.slice ? PROBE_SLICE_CELL_CAP : locating ? PROBE_WHERE_CELL_CAP : PROBE_CELL_CAP, observedAt);
+  const cells = page.cells;
   const pre = cells.map((c) => {
     const b = blockAtCell(bot, c);
     return { c, name: b?.name ?? null, state: b ? probeStateText(bot, c) : '',
@@ -1747,7 +1746,7 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
       dimension: bot.game?.dimension === undefined ? null : String(bot.game.dimension), feet: feetOf(bot),
       cells: pre.map(e => ({ ...e, air: e.air ?? false })) });
     if (typeof text !== 'string') throw new SkillBlocked(text.error);
-    return text;
+    return page.wrap(text, pre.filter(e => e.name === null).length);
   }
   const unloaded = pre.filter((e) => e.name === null).length;
   const memo = ctx.probeMemo;
@@ -1761,7 +1760,7 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
   if (previous && previous.key === geoKey && previous.hash === readHash) {
     previous.count += 1;
     if (memo) memo.last = previous;
-    return `与上次探查相同(第 ${previous.count} 次)。上次: ${previous.summary}`;
+    return page.wrap(`与上次探查相同(第 ${previous.count} 次)。上次: ${previous.summary}`, unloaded);
   }
 
   const remember = (summary: string): void => {
@@ -1778,7 +1777,7 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
   if (call.where !== undefined && locating) {
     const text = probeWhereText(bot, call, call.where, pre, unloaded) + coverage;
     remember(text);
-    return text;
+    return page.wrap(text, unloaded);
   }
 
   const head = `探查${SHAPE_ZH[call.shape]}(共 ${cells.length} 格)${coverage}`;
@@ -1793,16 +1792,16 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
         ? `;空气:${airCells.map(cellText).join('、')}` : `;其余 ${airCells.length} 格是空气` : '';
       lines.push(`${head},逐格: ${listed.map((e) => `(${e.c.x},${e.c.y},${e.c.z}):${zhName(e.name!)}${e.state}`).join('、')}${airTail}。`);
     }
-    pushPocketLine(bot, lines, cells, airCells);
+    if (!page.partial) pushPocketLine(bot, lines, cells, airCells);
   } else {
     const reading = readRegion(bot, cells);
     const fluid = probeFluidText(bot, pre);
     lines.push(`${head}: ${compositionText(reading, true)}。坐标是各材质的最近样本，样本上方空间仍需逐格核对。${fluid ? `${fluid}。` : ''}`);
-    pushPocketLine(bot, lines, cells, reading.air);
+    if (!page.partial) pushPocketLine(bot, lines, cells, reading.air);
   }
   if (unloaded > 0) lines.push(`${unloaded} 格未观察到（遮挡或未加载）。`);
   const text = lines.join('');
   remember(lines[0]);
-  return text;
+  return page.wrap(text, unloaded);
 }
 

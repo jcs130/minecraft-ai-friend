@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.11 (unpublished candidate)
+
+- Return a bounded first page from oversized solid-box probes instead of discarding the entire observation. Partial receipts keep real matches, unknown cells, exact unread regions and explicit absolute-coordinate follow-up calls; no automatic continuation or relaxed write limits.
+- Include upstream activity attribution contracts; attribution alone remains separate from versioned completion evidence.
+
 ## 0.5.7-rc.160-preview.9 (unpublished candidate)
 
 - Select an existing workstation with a confirmed walking route before trying closer stations behind floors or walls. Use the same interaction reach for route probes and execution, preserving unknown routes, cancellation, native inventory confirmation and movement ownership.
