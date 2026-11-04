@@ -31,7 +31,8 @@ export function respawnDelay(value: number | undefined): number {
 }
 
 /** One timer belongs to this exact connection. Native/server early respawn wins. */
-export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined, current: () => boolean) {
+export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined, current: () => boolean,
+  canObserveDeath: () => boolean = () => true) {
   const delay = respawnDelay(delayMs);
   let timer: ReturnType<typeof setTimeout> | null = null;
   let dead = false;
@@ -42,7 +43,10 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
     if (bot.deathLifecycle?.phase === 'respawn_pending') bot.deathLifecycle = { ...bot.deathLifecycle, phase: 'dead', respawnAt: null };
   };
   const death = () => {
-    if (dead || !current()) return;
+    // Login proxies can emit health=0 while authenticating, followed by a fresh
+    // login/positive-health spawn rather than a native respawn packet. Treating
+    // that lobby value as death permanently waits for an unrelated inventory.
+    if (dead || !current() || !canObserveDeath()) return;
     dead = true;
     respawnObserved = false;
     const now = Date.now();
@@ -67,6 +71,10 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
     bot.deathLifecycle = { ...bot.deathLifecycle, inventorySynced: false, healthObservation: null };
   };
   const health = (packet: { health: number; food?: number }) => {
+    // Mineflayer emits `death` only on its alive -> dead edge. If its first zero
+    // came from a login lobby, a subsequent authenticated zero has no edge.
+    // Still recover a genuinely dead player once fresh in-game health confirms it.
+    if (Number.isFinite(packet.health) && packet.health <= 0) death();
     if (!current() || !respawnObserved || !bot.deathLifecycle || !Number.isFinite(packet.health)) return;
     bot.deathLifecycle = { ...bot.deathLifecycle, healthObservation: {
       observedAt: new Date().toISOString(), health: packet.health,

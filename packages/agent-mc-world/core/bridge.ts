@@ -583,7 +583,8 @@ export class Bridge {
     this.bagFor(gen).register('world-identity', installWorldIdentity(bot));
     this._spawnPositionPending = true;
     this.deathRecovery = installDeathLifecycle(bot, this.opts.deathRespawnDelayMs,
-      () => !this.stopped && this._bot === bot && this.generation === gen && !this.opts.shuttingDown?.());
+      () => !this.stopped && this._bot === bot && this.generation === gen && !this.opts.shuttingDown?.(),
+      () => this.serverLogin?.ready() ?? false);
     this.bagFor(gen).register('death-recovery', this.deathRecovery.dispose);
     this.bagFor(gen).register('configuration-phase-guard', installConfigurationPhaseGuard(bot));
     bot._client.on('session', session => {

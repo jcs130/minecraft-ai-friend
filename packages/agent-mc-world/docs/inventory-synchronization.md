@@ -58,3 +58,14 @@ would otherwise log and still deliver. Existing mutation/cursor confirmation rem
 actual protocol decoder and Mineflayer inventory plugin, and verifies later weapon,
 shield and component alignment. These are offline compatibility checks, not proof
 that a particular production inventory has recovered.
+
+### Authentication and death are separate boundaries
+
+A login proxy can send zero health before authentication and then spawn a living
+player without a `respawn` packet. It must not create a game death episode: doing
+so leaves `inventorySynced=false` even after a complete native inventory arrived.
+The connection's authentication readiness gates creation of death episodes only;
+real death recovery still requires fresh inventory after native respawn. Fresh
+authenticated zero-health packets also trigger recovery when Mineflayer already
+used its `death` edge for the login lobby. Do not resolve this state by trusting
+cached items, clearing real death records, or setting the inventory flag blindly.

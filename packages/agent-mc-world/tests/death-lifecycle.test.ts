@@ -1,8 +1,43 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import { afterEach, expect, it, vi } from 'vitest';
 import { installDeathLifecycle, respawnDelay, type DeathLifecycle } from '../core/death-lifecycle.ts';
 
 afterEach(() => vi.useRealTimers());
+it.each([20, 0])('handles proxy login health without a false recovery gate, authenticated health=%s', async health => {
+  vi.useFakeTimers();
+  let authenticated = false;
+  const bot = Object.assign(new EventEmitter(), { health: 20, respawn() {}, deathLifecycle: undefined as DeathLifecycle | undefined,
+    _client: Object.assign(new EventEmitter(), {write:vi.fn()}), inventory: {slots:Array(46).fill(null)},
+    supportFeature:()=>false });
+  const recovery=installDeathLifecycle(bot,4000,()=>true,()=>authenticated);
+  // Actual Mineflayer health plugin: a proxy's zero sets isAlive=false, so
+  // a later authenticated zero emits no second death event.
+  const require=createRequire(import.meta.url);
+  require('mineflayer/lib/plugins/health.js')(bot,{respawn:false});
+  bot._client.emit('update_health',{health:0,food:20});
+  expect(bot.deathLifecycle).toBeUndefined();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(bot._client.write).not.toHaveBeenCalled();
+  authenticated=true;
+  bot._client.emit('window_items',{windowId:0,items:Array(46).fill(null)});
+  bot._client.emit('update_health',{health,food:20});
+  if(health>0){
+    expect(bot.deathLifecycle).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(bot._client.write).not.toHaveBeenCalled();
+  }else{
+    expect(bot.deathLifecycle).toMatchObject({phase:'respawn_pending',inventorySynced:false});
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(bot._client.write).toHaveBeenCalledTimes(1);
+    expect(bot._client.write).toHaveBeenCalledWith('client_command',{actionId:0});
+    bot._client.emit('respawn',{});
+    bot._client.emit('window_items',{windowId:0,items:Array(46).fill(null)});
+    bot._client.emit('update_health',{health:20,food:20});
+    expect(bot.deathLifecycle).toMatchObject({phase:'alive',inventorySynced:true});
+  }
+  recovery.dispose();
+});
 it('retains packet health for the same recovery without inventing another death or a landing', () => {
   const r = rig(); r.bot.emit('death');
   const id = r.bot.deathLifecycle!.episodeId;
