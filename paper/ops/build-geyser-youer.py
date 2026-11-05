@@ -4,7 +4,13 @@ import argparse,hashlib,subprocess,os,json,copy,zipfile
 p=argparse.ArgumentParser(description=__doc__)
 for name in ['upstream','server','jdk','output']:p.add_argument('--'+name,type=Path,required=True)
 a=p.parse_args();root=Path(__file__).resolve().parent;out=a.output.resolve();sha=lambda f:hashlib.sha256(f.read_bytes()).hexdigest()
-assert sha(a.upstream)=='8b01d2f8c7ef7de1dda6e8acd5d3e12ad377767b4d842580dac443a5f99031b2'
+reviewed_builds={
+    '8b01d2f8c7ef7de1dda6e8acd5d3e12ad377767b4d842580dac443a5f99031b2':1280,
+    'e6a1b21c79a57e551402955f7a7b58a9c75a2dfeefd0665ed4d3d1ba9437fa53':1289,
+}
+upstream_sha=sha(a.upstream)
+assert upstream_sha in reviewed_builds,'Only exact reviewed Geyser builds are supported'
+build=reviewed_builds[upstream_sha]
 assert not out.exists()and not out.is_relative_to(a.server.resolve());out.mkdir(parents=True);classes=out/'classes';classes.mkdir()
 patch=root/'patches/GeyserLambdaLookupPatch.java';test=root/'fixtures/GeyserLambdaLookupTest.java'
 cp=os.pathsep.join(map(str,[a.upstream,*a.server.glob('libraries/org/ow2/asm/**/*.jar')]))
@@ -17,7 +23,7 @@ with zipfile.ZipFile(a.upstream)as before:
     source=before.read(entry);assert hashlib.sha256(source).hexdigest()=='3cf9f39e43f0befbf786df134aac78493d41fe1e9d09d17369054d3ea2e74d34'
     original=out/'original.class';original.write_bytes(source);patched=out/'patched.class'
     run([str(a.jdk/'bin/java.exe'),'-cp',str(classes)+os.pathsep+cp,'GeyserLambdaLookupPatch',str(original),str(patched)],'patch.log')
-    target=out/'Geyser-Spigot-2.12.1-b1280-youer.jar'
+    target=out/f'Geyser-Spigot-2.12.1-b{build}-youer.jar'
     with zipfile.ZipFile(target,'x',zipfile.ZIP_DEFLATED)as to:
         for item in before.infolist():to.writestr(copy.copy(item),patched.read_bytes()if item.filename==entry else before.read(item))
 with zipfile.ZipFile(a.upstream)as before,zipfile.ZipFile(target)as after:
@@ -25,5 +31,5 @@ with zipfile.ZipFile(a.upstream)as before,zipfile.ZipFile(target)as after:
     assert changed==[entry]and before.namelist()==after.namelist()
     preserved=len(before.namelist())-1
 run([str(a.jdk/'bin/java.exe'),'-ea','-cp',str(classes)+os.pathsep+str(target),'GeyserLambdaLookupTest'],'lambda-test.log')
-record={'artifact':target.name,'sha256':sha(target),'upstreamSha256':sha(a.upstream),'changedEntries':changed,'otherEntriesPreserved':preserved,'patchedClassSha256':sha(patched),'methods':json.loads((out/'patch.log').read_text()),'functionalChecks':4,'productionChanged':False,'sources':{str(f.relative_to(root.parent)):sha(f)for f in [patch,test,Path(__file__)]}}
+record={'artifact':target.name,'sha256':sha(target),'upstreamSha256':upstream_sha,'upstreamBuild':build,'changedEntries':changed,'otherEntriesPreserved':preserved,'patchedClassSha256':sha(patched),'methods':json.loads((out/'patch.log').read_text()),'functionalChecks':4,'productionChanged':False,'sources':{str(f.relative_to(root.parent)):sha(f)for f in [patch,test,Path(__file__)]}}
 (out/'build.json').write_text(json.dumps(record,indent=2));print(json.dumps(record))

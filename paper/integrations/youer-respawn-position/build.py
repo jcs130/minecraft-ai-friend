@@ -14,10 +14,17 @@ args = parser.parse_args()
 jdk = args.jdk / 'bin'
 baseline = args.baseline
 digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
-if digest(baseline) != '4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4':
-    raise ValueError('Unexpected NeoForge baseline SHA256')
-if digest(args.bootstrap) != 'ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1':
-    raise ValueError('Unexpected Youer bootstrap SHA256')
+# Each pair was reproduced and inspected independently; never apply this overlay
+# to an arbitrary upstream build or to an already patched server library.
+reviewed = {
+    ('ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1',
+     '4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4'): '21.1.252',
+    ('89e670684b1101f68b08f9c441297201b3006550d1bb31af2ab7dedf57966661',
+     'f6de857fe8d28d00c73a1a65cbb60102de4c13fced1635f5e2c36fc3aac2ae57'): '21.1.265',
+}
+version = reviewed.get((digest(args.bootstrap), digest(baseline)))
+if version is None:
+    raise ValueError('Unreviewed Youer bootstrap / NeoForge baseline pair')
 out = args.output.resolve()
 out.mkdir()
 asm = [args.asm_dir / f'{name}/9.10.1/{name}-9.10.1.jar' for name in ('asm', 'asm-tree')]
@@ -28,7 +35,7 @@ with zipfile.ZipFile(baseline) as archive:
     (out/'original.class').write_bytes(archive.read(entry))
 subprocess.run([str(jdk/'java.exe'), '-cp', str(out)+os.pathsep+classpath,
                 'RespawnPositionPatch', str(out/'original.class'), str(out/'patched.class')], check=True)
-target = out / 'neoforge-21.1.252-server.jar'
+target = out / f'neoforge-{version}-server.jar'
 with zipfile.ZipFile(baseline) as source, zipfile.ZipFile(target, 'x') as patched:
     for item in source.infolist():
         patched.writestr(item, (out/'patched.class').read_bytes() if item.filename == entry else source.read(item))
@@ -36,7 +43,8 @@ with zipfile.ZipFile(baseline) as source, zipfile.ZipFile(target) as patched:
     differences = [name for name in source.namelist() if source.read(name) != patched.read(name)]
     if source.namelist() != patched.namelist() or differences != [entry]:
         raise RuntimeError('Unexpected archive changes')
-    proof = {'candidate': target.name, 'baselineSha256': digest(baseline), 'sha256': digest(target),
+    proof = {'candidate': target.name, 'bootstrapSha256': digest(args.bootstrap),
+             'neoForgeVersion': version, 'baselineSha256': digest(baseline), 'sha256': digest(target),
              'changedEntries': differences, 'unchangedEntries': len(source.namelist())-1}
 (out/'build.json').write_text(json.dumps(proof, indent=2)+'\n')
 print(json.dumps(proof))
