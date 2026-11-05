@@ -42,6 +42,10 @@ test('preflight only reads native readiness files and never returns a credential
  const token='fixture-private-token-'.repeat(4),connection=path.join(root,'agent-mc-bridge/connection.json');
  writeFileSync(connection,JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:12345',token}));
  const ready=await photoJourneyPreflight(root);assert.equal(ready.ready,true);assert.ok(!JSON.stringify(ready).includes(token));
+ writeFileSync(path.join(root,'diagnostics/qiandeng-native-camera.json'),JSON.stringify({...state,renderer:'NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2',vendor:'NVIDIA Corporation',expectedGpu:'rtx3080ti',shadersEnabled:true}));
+ assert.equal((await photoJourneyPreflight(root)).ready,false,'RTX is never silently accepted by the default Intel preflight');
+ assert.equal((await photoJourneyPreflight(root,{expectedGpu:'rtx3080ti',shadersEnabled:true})).ready,true);
+ assert.equal((await photoJourneyPreflight(root,{expectedGpu:'nvidia',shadersEnabled:true})).ready,false);
  writeFileSync(connection,'{"token":"'+token+'",BROKEN');
  const invalid=await photoJourneyPreflight(root);assert.equal(invalid.ready,false);assert.ok(!JSON.stringify(invalid).includes(token));
 });

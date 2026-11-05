@@ -109,14 +109,14 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       const {createNativePhotoRenderer}=await import('./native-photo-renderer.mjs');
       const {createNativeSceneResources}=await import('./native-photo-scene-resources.mjs');
       const dependencies=createRequire(pathToFileURL(settings.nativeDependencyRoot+'/package.json'));
-      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG,shadersEnabled:settings.nativeShaders===undefined?true:settings.nativeShaders,sceneDirectory:settings.sceneDirectory??null,sceneRadius:settings.sceneRadius??3,
+      nativeRenderer=createNativePhotoRenderer({gameDir:settings.nativeGameDir,PNG:dependencies('pngjs').PNG,shadersEnabled:settings.nativeShaders===undefined?true:settings.nativeShaders,expectedGpu:settings.nativeGpu??'intel',sceneDirectory:settings.sceneDirectory??null,sceneRadius:settings.sceneRadius??3,
         ...(settings.sceneResources?{sceneAppearances:createNativeSceneResources(settings.sceneResources)}:{})});
       if(stopped)return;
       bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});
       const check=nativeReadinessCheck({probe:()=>nativeRenderer.probe(),stopped:()=>stopped,
         ready:()=>{available=true;reply('ready');},unavailable:()=>{available=false;stopJob();}});
       heartbeat=setInterval(check,5000);heartbeat.unref();await check();
-      log('private Intel native photo camera '+(available?'ready':'waiting for native client')+'; original photo ownership and upload flow retained');return;
+      log('private native photo camera '+(available?'ready':'waiting for native client')+'; original photo ownership and upload flow retained');return;
     }
     if (!path.isAbsolute(settings.assetsRoot) || !path.isAbsolute(settings.viewerRoot) || !path.isAbsolute(settings.browserPath)) throw Error('PHOTO_CONFIGURATION_INVALID');
     await Promise.all([access(settings.assetsRoot + '/dist/modern-viewer.js'), access(settings.browserPath)]);

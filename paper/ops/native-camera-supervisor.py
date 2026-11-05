@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import time
 
@@ -19,11 +20,62 @@ def configuration(file):
             raise ValueError('Expected an absolute operator path: ' + name)
     if value['server'] != '192.168.3.163:25565':
         raise ValueError('Unreviewed native camera endpoint')
-    if value.get('maximumPrivateGiB') != 8 or value.get('shadersEnabled') is not False:
+    gpu=value.get('expectedGpu','intel')
+    if gpu not in ('intel','rtx3080ti'):
+        raise ValueError('Unreviewed renderer GPU profile')
+    if gpu=='intel' and (value.get('maximumPrivateGiB') != 8 or value.get('shadersEnabled') is not False):
         raise ValueError('Unreviewed renderer resource policy')
+    if gpu=='rtx3080ti' and (value.get('maximumPrivateGiB') != 6 or value.get('shadersEnabled') is not True
+                            or not re.fullmatch(r'GPU-[0-9a-fA-F-]{36}',value.get('gpuUuid',''))):
+        raise ValueError('RTX camera requires an explicit adapter UUID and bounded shader policy')
     if value.get('expectedUuid') != 'ff58a81b-f033-3b74-a7cf-58ac4e798bb0':
         raise ValueError('Unreviewed camera identity')
     return value
+
+
+def renderer_matches(state,cfg):
+    renderer=state.get('renderer','').lower()
+    if cfg.get('expectedGpu','intel')=='intel':
+        return 'intel' in renderer and state.get('shadersEnabled') is False
+    return (state.get('vendor')=='NVIDIA Corporation'
+            and re.fullmatch(r'nvidia geforce rtx 3080 ti(?:/.*)?',renderer) is not None
+            and state.get('expectedGpu')=='rtx3080ti' and state.get('shadersEnabled') is True)
+
+
+def gpu_free_mib(cfg,run=subprocess.run):
+    """Read only the explicitly selected GPU; an unavailable reading is not free VRAM."""
+    result=run(['nvidia-smi','-i',cfg['gpuUuid'],'--query-gpu=uuid,name,memory.free',
+                '--format=csv,noheader,nounits'],capture_output=True,text=True,timeout=5,
+               creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),check=True)
+    fields=[x.strip() for x in result.stdout.strip().split(',')]
+    if len(fields)!=3 or fields[0]!=cfg['gpuUuid'] or fields[1]!='NVIDIA GeForce RTX 3080 Ti':
+        raise ValueError('The configured GPU does not match RTX 3080 Ti')
+    free=int(fields[2])
+    if free<0:raise ValueError('Invalid GPU memory reading')
+    return free
+
+
+def guarded_login(command, guard, timeout=140):
+    """Keep resource/maintenance guards active while the private auth helper waits."""
+    helper = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    deadline = time.monotonic() + timeout
+    try:
+        while helper.poll() is None:
+            problem = guard()
+            if problem:
+                raise RuntimeError(problem)
+            if time.monotonic() >= deadline:
+                raise RuntimeError('CAMERA_AUTHENTICATION_TIMEOUT')
+            time.sleep(.5)
+        return helper.returncode
+    finally:
+        if helper.poll() is None:
+            helper.terminate()
+            try: helper.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                helper.kill()
+                helper.wait(timeout=3)
 
 
 def main():
@@ -69,7 +121,8 @@ def main():
     launches = []
     samples = []
     status = {'schema': 1, 'supervisorPid': os.getpid(), 'startedAt': datetime.datetime.now().astimezone().isoformat(),
-              'phase': 'starting', 'restarts': 0, 'shadersEnabled': False}
+              'phase': 'starting', 'restarts': 0, 'shadersEnabled': cfg['shadersEnabled'],
+              'expectedGpu': cfg.get('expectedGpu','intel')}
 
     def save(phase):
         status.update(phase=phase, observedAt=datetime.datetime.now().astimezone().isoformat(), pid=pid)
@@ -107,7 +160,7 @@ def main():
         code = wintypes.DWORD()
         return bool(handle and kernel.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value == 259)
 
-    def close():
+    def close(grace=20):
         nonlocal handle, pid
         if not handle:
             return
@@ -123,7 +176,7 @@ def main():
                 user.PostMessageW(hwnd, 0x0010, 0, 0)
             return True
         user.EnumWindows(callback_type(window), 0)
-        limit = time.monotonic() + 20
+        limit = time.monotonic() + grace
         while alive() and time.monotonic() < limit:
             time.sleep(.2)
         if alive():
@@ -142,6 +195,24 @@ def main():
             'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage', 'PrivateUsage']]
     psapi = ctypes.WinDLL('psapi')
     psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Memory), wintypes.DWORD]
+
+    def resource_problem():
+        if Path(cfg['pauseFile']).exists() or (root / 'service.stop').exists():
+            return 'CAMERA_MAINTENANCE_REQUESTED'
+        if cfg.get('expectedGpu')=='rtx3080ti':
+            try: free=gpu_free_mib(cfg)
+            except (OSError,ValueError,subprocess.SubprocessError): free=-1
+            status['gpuFreeMiB']=free
+            if free<768: return 'CAMERA_GPU_MEMORY_BUDGET'
+        memory=Memory()
+        memory.cb=ctypes.sizeof(memory)
+        if not psapi.GetProcessMemoryInfo(handle,ctypes.byref(memory),memory.cb):
+            return 'CAMERA_MEMORY_UNAVAILABLE'
+        status['privateGiB']=round(memory.PrivateUsage/2**30,3)
+        if memory.PrivateUsage>cfg['maximumPrivateGiB']*2**30:
+            return 'CAMERA_MEMORY_BUDGET'
+        return None
+
     try:
         existing = root / 'process.json'
         if existing.exists():
@@ -195,8 +266,18 @@ def main():
                     save('waiting-game')
                     time.sleep(5)
                     continue
-                env = dict(os.environ, GALLIUM_DRIVER='d3d12', MESA_D3D12_DEFAULT_ADAPTER_NAME='Intel',
-                           MESA_SHADER_CACHE_DIR=str(game / 'shader-cache'), MESA_SHADER_CACHE_MAX_SIZE='256M')
+                if cfg.get('expectedGpu')=='rtx3080ti':
+                    try:free=gpu_free_mib(cfg)
+                    except (OSError,ValueError,subprocess.SubprocessError):free=-1
+                    status['gpuFreeMiB']=free
+                    if free<1536:
+                        save('waiting-gpu-memory')
+                        time.sleep(10)
+                        continue
+                env = dict(os.environ)
+                if cfg.get('expectedGpu','intel')=='intel':
+                    env.update(GALLIUM_DRIVER='d3d12',MESA_D3D12_DEFAULT_ADAPTER_NAME='Intel',
+                               MESA_SHADER_CACHE_DIR=str(game/'shader-cache'),MESA_SHADER_CACHE_MAX_SIZE='256M')
                 launched = subprocess.run([cfg['python'], '-X', 'utf8', cfg['launcher'], '--game', str(game),
                                           '--java', cfg['java'], '--server', cfg['server']], env=env,
                                          capture_output=True, text=True, encoding='utf-8', check=True)
@@ -209,32 +290,33 @@ def main():
                 save('authenticating')
                 # The helper reads credentials privately and verifies LoginGuard's
                 # actual session receipt; it never prints the submitted password.
-                login = subprocess.run([cfg['node'], cfg['loginHelper']], capture_output=True,
-                                       text=True, encoding='utf-8', timeout=140)
-                if login.returncode:
-                    status['lastError'] = 'CAMERA_AUTHENTICATION_UNCONFIRMED'
-                    close()
+                try:
+                    result=guarded_login([cfg['node'],cfg['loginHelper']],resource_problem)
+                    problem='CAMERA_AUTHENTICATION_UNCONFIRMED' if result else None
+                except RuntimeError as failure:
+                    problem=str(failure)
+                if problem:
+                    status['lastError'] = problem
+                    close(grace=2 if problem.startswith('CAMERA_GPU_') or problem.startswith('CAMERA_MEMORY_') else 20)
                     save('retry-wait')
                     time.sleep(20)
                     continue
                 unhealthy_since = None
-            memory = Memory()
-            memory.cb = ctypes.sizeof(memory)
-            if psapi.GetProcessMemoryInfo(handle, ctypes.byref(memory), memory.cb):
-                status['privateGiB'] = round(memory.PrivateUsage / 2**30, 3)
-                if memory.PrivateUsage > cfg['maximumPrivateGiB'] * 2**30:
-                    status['lastError'] = 'CAMERA_MEMORY_BUDGET'
-                    close()
-                    save('memory-budget-restart')
-                    continue
+            problem=resource_problem()
+            if problem:
+                status['lastError']=problem
+                close(grace=2)
+                save('resource-budget-backoff')
+                time.sleep(10)
+                continue
             try:
                 state = json.loads((game / 'diagnostics/qiandeng-native-camera.json').read_text())
                 age = time.time() - datetime.datetime.fromisoformat(state['at'].replace('Z', '+00:00')).timestamp()
                 healthy = (state['pid'] == pid and age < 5 and state.get('connected')
                            and state.get('server') == cfg['server'] and state.get('playerUuid') == cfg['expectedUuid']
-                           and 'intel' in state.get('renderer', '').lower() and state.get('shadersEnabled') is False
+                           and renderer_matches(state,cfg)
                            and state.get('cleanHud') is True)
-                status.update(fps=state.get('fps'), renderer=state.get('renderer'), cleanHud=state.get('cleanHud'),
+                status.update(fps=state.get('fps'), frameBudget=state.get('frameBudget'), renderer=state.get('renderer'), cleanHud=state.get('cleanHud'),
                               modelCatalogueSize=state.get('modelCatalogueSize'))
                 if not healthy:
                     raise ValueError('Unhealthy dedicated camera')
@@ -250,7 +332,7 @@ def main():
                 if time.monotonic() - unhealthy_since > 20:
                     close()
                     unhealthy_since = None
-            time.sleep(5)
+            time.sleep(1 if cfg.get('expectedGpu')=='rtx3080ti' else 5)
     finally:
         close()
         save('stopped')
