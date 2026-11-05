@@ -240,7 +240,7 @@ def compact(evidence, reference, last_decision=None):
             ("body", 160), ("place", 220), ("queue", 260), ("clock", 100),
             ("bodyRestriction", 300), ("foodReserve", 240), ("gear", 420), ("life", 200),
             ("structure", 180), ("terrain", 180), ("lastTask", 300),
-            ("goals", 900), ("methods", 700),
+            ("goals", 900), ("methods", 700), ("workStates", 700),
             ("serverFeedback", 1200), ("messages", 1000), ("inventoryIds", 1200), ("equip", 240), ("options", 500))
             if evidence["facts"].get(key) not in (None, "", [], {})}
         # The structured host uses this compact view, not summary(). Dropping

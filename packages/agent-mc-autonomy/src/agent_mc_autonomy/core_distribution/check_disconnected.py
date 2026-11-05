@@ -80,6 +80,17 @@ async def check(directory: Path, node: str) -> dict:
             assert not any(name.startswith("mymc_") for name in names)
             status = module.json_content(await bridge.call("mc_connection", {"action": "status"}))
             assert status["phase"] == "disconnected" and status["facts"] is None
+            # Real Python -> stdio MCP -> packed core, without connecting or
+            # executing the inspected branch. No host-side capability guesses.
+            for arguments, expected in (({"api": "index"}, True),
+                                        ({"validate": True, "code": "return 1;"}, True),
+                                        ({"code": "return 1;"}, False)):
+                capability = await bridge.inspect_call("mc_script", arguments)
+                assert capability["schema"] == "agent-mc/call-capability/v1"
+                assert capability["valid"] and capability["dispatched"] is False
+                assert capability["backgroundLearning"] is expected
+            assert (await bridge.resolve_work([]))["resolutions"] == []
+            assert module.json_content(await bridge.call("mc_connection", {"action": "status"}))["phase"] == "disconnected"
             shared_controller = controller.Controller(bridge, None, Settings.parse({}), data / "autonomy",
                                                        lambda **_: None, lambda: False)
             result, _ = await shared_controller.dispatch("mc_tool_help", {"name": "mc_messages", "full": True}, "offline-shared-help")

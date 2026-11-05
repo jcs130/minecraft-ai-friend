@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+Version 0.2.153 consumes canonical core call-capability inspection and versioned
+work resolution through the existing MCP bridge. `inspect_call` never dispatches
+the inspected operation; legacy cores remain explicitly unknown. `resolve_work`
+uses the core's scoped occurrence/revision matching and never adopts a host goal
+completion. Current work states reach strategic review with bounded context and
+complete original evidence paging. See the core's `SHARED_HOST_CAPABILITIES.md`.
+The personality/model and single body controller remain unchanged; this does not
+start a new worker loop or enable background learning automatically.
+
 Version 0.2.137 exposes `derive_control_motion` and `control_motion_view` for
 known, contiguous multi-step native controls. The `agent-mc-control-motion/v1`
 record preserves start/end positions and measured net displacement in planner,

@@ -71,8 +71,9 @@ from .viewer_public import tool_receipt
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
+OPTIONAL_READ_PROTOCOL = {"inspect_call", "resolve_work"}
 PROTOCOL_PLANNER_DESCRIPTION = (
-    "Read native tasks, facts and original archives. Only task, facts, archive and archive_runs are exposed. "
+    "Read native tasks, facts and original archives. When advertised by the core, inspect_call classifies exact arguments and resolve_work matches scoped work versions without adoption. "
     "The host owns turn boundaries, barrier acknowledgement and cancellation; do not manage that lifecycle.")
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
 DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages", "mc_query"}
@@ -275,7 +276,8 @@ def planner_tool_schema(tool):
     """One ownership projection for advertisement, documentation and recovery."""
     schema = copy.deepcopy(tool["inputSchema"])
     if tool["name"] == "mc_protocol":
-        schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+        native_actions = set(schema["properties"].get("action", {}).get("enum", []))
+        schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL | (native_actions & OPTIONAL_READ_PROTOCOL))}
     return schema
 
 
@@ -1637,7 +1639,7 @@ class Controller:
             if not isinstance(target, str) or target not in available - DIRECT_TOOLS or not isinstance(arguments.get("arguments"), dict):
                 raise ModelCallRejected("Unavailable advanced tool. Read mc_tool_help and use only the advertised advanced names.")
             name, arguments = target, arguments["arguments"]
-        if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
+        if name == "mc_protocol" and arguments.get("action") not in READ_PROTOCOL | OPTIONAL_READ_PROTOCOL:
             raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
         if error := argument_error(self.bridge.tools, name, arguments):
             self.record_tool_failure(name, arguments, {"text": error})

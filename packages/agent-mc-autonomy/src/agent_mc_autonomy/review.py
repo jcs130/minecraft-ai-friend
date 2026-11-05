@@ -79,6 +79,12 @@ def review_observation(status, now):
     if snapshot.get("phase") == "running" and snapshot.get("game_connected") is not True:
         return None
     facts = {part["key"]: str(part.get("text", "")) for part in snapshot.get("facts", {}).get("parts", [])}
+    # Typed server work identities survive the SDK/MCP boundary. Keep bounded
+    # context plus the existing full-evidence paging path, never infer completion
+    # from an activity name or close host intentions automatically.
+    work_states = snapshot.get("facts", {}).get("workStates")
+    if isinstance(work_states, list):
+        facts["workStates"] = json.dumps(work_states, ensure_ascii=False, separators=(",", ":"))
     if not facts.get("body") or not facts.get("gear"):
         return None
     active = snapshot.get("current_goal") or {}
@@ -90,7 +96,7 @@ def review_observation(status, now):
     useful["lastTask"] = fact_preview(spatial_text(facts.get("lastTask", "")), 1000)
     # These are the core's project/method summaries, not host personal memory.
     # Keep explicit abridgement and original query handles for longer entries.
-    for key, size in (("goals", 1200), ("methods", 900)):
+    for key, size in (("goals", 1200), ("methods", 900), ("workStates", 1000)):
         useful[key] = fact_preview(facts.get(key, ""), size)
     originals, original_status = review_evidence.original_facts(facts, useful)
     reads = read_activity_view(snapshot.get("read_activity"))

@@ -114,6 +114,20 @@ class MinecraftBridge:
     async def resource(self, uri: str) -> dict:
         return await self._request("resource", uri)
 
+    async def inspect_call(self, name: str, arguments: dict) -> dict:
+        """Ask the canonical core about this exact branch; never execute it.
+
+        Older cores stay explicitly unknown. A positive answer is a declaration,
+        not body ownership, result verification or authorization to execute.
+        """
+        from .call_capability import inspect_call
+        return await inspect_call(self, name, arguments)
+
+    async def resolve_work(self, references: list[dict]) -> dict:
+        """Match exact game work identities in core; never resolve a host mailbox."""
+        from .call_capability import resolve_work
+        return await resolve_work(self, references)
+
     async def close(self) -> None:
         owner, self._owner = self._owner, None
         if not owner:

@@ -78,3 +78,21 @@ def test_original_store_budget_is_bytes_and_never_slices_a_field():
     assert sum(len(value.encode("utf-8")) for value in saved.values()) == 65536
     assert saved == {"serverFeedback": facts["serverFeedback"], "lastTask": facts["lastTask"]}
     assert not status["messages"]["available"] and not status["goals"]["available"]
+
+
+def test_typed_work_versions_reach_review_with_complete_paged_evidence(runtime):
+    port, clock, publish = runtime
+    facts = snapshot(clock[0])["facts"]
+    states = [{"scope": {"realm": "world", "account": "account", "agent": "agent"},
+               "subject": "quest", "instance": f"occurrence-{i}", "revision": i,
+               "status": "active", "observedAt": "2026-11-05T00:00:00Z",
+               "evidence": {"source": "server", "reference": f"event-{i}", "text": "original state"}}
+              for i in range(12)]
+    facts["workStates"] = states
+    publish(facts=facts)
+    rid = port.offer()["review"]["id"]
+    inspected = port.decide(rid, "inspect", compact=True)
+    assert len(inspected["facts"]["workStates"]) < 1000
+    query = inspected["fact_detail_queries"]["workStates"]
+    assert json.loads(original(port, rid, inspected["evidence_ref"], query["detail_path"])) == states
+    assert not port.state()["review"].get("result")
