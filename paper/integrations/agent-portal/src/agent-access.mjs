@@ -7,6 +7,7 @@ import path from 'node:path';
 import { getAgentClients } from './agent-clients.mjs';
 import { agentSkill } from './agent-skill.mjs';
 import { TrialPool, trialPoolOwnerId } from './trial-pool.mjs';
+import { TRIAL_REGISTRATION_TTL_MS } from './trial-capacity.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -35,7 +36,7 @@ export class AgentAccess {
     const publicSignup=this.config.agentAccess.enabled===true&&this.config.agentAccess.publicSignup===true;
     return { schemaVersion: 1, enabled: this.config.agentAccess.enabled === true, invitationRequired: !publicSignup,
       publicSignup: { enabled:publicSignup, endpoint:'/api/v1/agent-access/public-register', ownership:'experience_pool', role:'ordinary_agent', clientAttestationRequired:false, limits:{newPerNetworkHour:6,newPerNetworkDay:20,poolCapacity:100} },
-      ownership: 'inviter', trialPool: { available: true, ownership: 'experience_pool', claim: 'authenticated_game_proof', registrationRequiredToPlay: false }, createsWebsiteOwner: false, game: await this.accounts.capabilities(),
+      ownership: 'inviter', trialPool: { available: true, ownership: 'experience_pool', claim: 'authenticated_game_proof', registrationRequiredToPlay: false, registrationTtlSeconds: TRIAL_REGISTRATION_TTL_MS / 1000 }, createsWebsiteOwner: false, game: await this.accounts.capabilities(),
       gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
       skill: agentSkill, clients: getAgentClients(this.config), joinPage: '/join',
       helper: { url: '/agent-register.mjs', sha256: this.helperSha256, node: '>=22.13.0' },
@@ -194,10 +195,15 @@ export class AgentAccess {
     return { client: row, owner };
   }
   async status({ client, owner }) {
+    // A request may have been authorized before another worker activated it.
+    // Read the durable pointer; never clear a different/newer worker's job.
+    const current = this.store.db.prepare('SELECT * FROM agent_clients WHERE id=?').get(client.id);
+    if (current) Object.assign(client, current);
     let job = null;
     if (client.game_request_id) {
       if (this.store.db.prepare('SELECT 1 FROM account_jobs WHERE id=? AND owner_id=?').get(client.game_request_id, owner.id)) job = await this.accounts.job(owner, client.game_request_id);
       else if (this.preparing.has(client.id)) job = { id: client.game_request_id, state: 'pending', message: '正在建立本次请求，请查询原状态' };
+      else if (this.store.db.prepare('SELECT 1 FROM account_jobs WHERE id=?').get(client.game_request_id)) job = { id: client.game_request_id, state: 'unknown', message: '建号归属待核验，请查询原状态或联系服主，不要重新建号' };
       else {
         // start() persists its job before any bridge dispatch. A process that
         // died before that insert could not have sent a game operation.
@@ -205,9 +211,13 @@ export class AgentAccess {
         client.game_request_id = null;
       }
     }
-    return { schemaVersion: 1, clientId: client.id, username: client.name, state: job?.state === 'succeeded' ? 'ready' : job ? job.state : 'not_created',
+    const trialCapacity = this.pool.invitation(client.invite_id) ? this.pool.capacity().clients.find(row => row.clientId === client.id) : null;
+    const reconciliationRequired = !job && trialCapacity && !['awaiting_activation', 'registration_released'].includes(trialCapacity.state);
+    return { schemaVersion: 1, clientId: client.id, username: client.name, state: job?.state === 'succeeded' ? 'ready' : job ? job.state : reconciliationRequired ? 'unknown' : 'not_created',
       gameAccountCreated: job?.state === 'succeeded', job, game: await this.accounts.capabilities(), gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
-      nextAction: job?.state === 'succeeded' ? 'connect_game' : job && ['pending', 'unknown'].includes(job.state) ? 'query_status' : 'activate',
+      nextAction: reconciliationRequired ? 'contact_owner' : job?.state === 'succeeded' ? 'connect_game' : job && ['pending', 'unknown'].includes(job.state) ? 'query_status' : 'activate',
+      ...(trialCapacity ? { trialCapacity } : {}),
+      ...(reconciliationRequired ? { reconciliationRequired: true, message: '原角色或建号记录需要核验；保留身份文件，不要重新建号' } : {}),
       ownership: this.pool.invitation(client.invite_id) && client.owner_id === trialPoolOwnerId(this.store) ? 'experience_pool' : 'website_account',
       gamePasswordEnv: 'MC_GAME_PASSWORD', apiCredentialIsGamePassword: false };
   }
@@ -223,16 +233,16 @@ export class AgentAccess {
     const capability = await this.accounts.capabilities();
     if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', '接入身份已注册，游戏建号桥尚未上线；保留身份文件，稍后查询 status，暂不连接游戏');
     if (typeof body.gamePassword !== 'string' || body.gamePassword.length < 6 || body.gamePassword.length > 64 || /\s/.test(body.gamePassword) || /^(123456|password|qwerty|12345678)$/i.test(body.gamePassword)) throw fail(400, 'INVALID_GAME_PASSWORD', '游戏密码需为 6–64 位且不含空格，请避免常见弱密码');
-    // Reserve the single request before yielding. A concurrent activation must
-    // query this one, never submit a second consumptive operation.
-    const current = this.store.db.prepare('SELECT game_request_id FROM agent_clients WHERE id=? AND revoked_at IS NULL').get(client.id);
-    if (!current || current.game_request_id !== client.game_request_id) throw fail(409, 'ACCOUNT_REQUEST_PENDING', '状态已变化，请重新查询 status');
-    this.store.db.prepare('UPDATE agent_clients SET game_request_id=? WHERE id=?').run(body.requestId, client.id);
     this.preparing.add(client.id);
-    try { return await this.accounts.start(owner, 'create', { username: client.name, requestId: body.requestId, gamePassword: body.gamePassword }); }
-    catch (error) {
-      if (!this.store.db.prepare('SELECT 1 FROM account_jobs WHERE id=? AND owner_id=?').get(body.requestId, owner.id)) this.store.db.prepare('UPDATE agent_clients SET game_request_id=? WHERE id=? AND game_request_id=?').run(client.game_request_id, client.id, body.requestId);
-      throw error;
+    try {
+      return await this.accounts.start(owner, 'create', { username: client.name, requestId: body.requestId, gamePassword: body.gamePassword }, {
+        beforeInsert: () => {
+          const current = this.store.db.prepare('SELECT * FROM agent_clients WHERE id=? AND revoked_at IS NULL').get(client.id);
+          if (!current || current.owner_id !== owner.id || current.game_request_id !== client.game_request_id) throw fail(409, 'ACCOUNT_REQUEST_PENDING', '状态已变化，请重新查询 status');
+          if (current.owner_id === trialPoolOwnerId(this.store)) this.pool.assertCapacity(1, Date.now(), client.id);
+          this.store.db.prepare('UPDATE agent_clients SET game_request_id=? WHERE id=?').run(body.requestId, client.id);
+        },
+      });
     } finally { this.preparing.delete(client.id); }
   }
   async selfAgent(context) {
