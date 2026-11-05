@@ -41,7 +41,7 @@
     "First website publish compared the full download catalogue including the intentionally changed Skill; it restored only the previous image, not the database."
   ],
   "runtimeArtifactSha256": {
-    "numen_api": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c",
+    "numen_api-paper-1.21.1-0.1.4.jar": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c",
     "AgentFriend": "3dc4845b8ddcd26a3237e32ee391293021fd6c072078968ef6640bd8cadbf4d9",
     "preservedLoginGuard": "91057a35ec75897f06c755bdeb60a48e05d9e59a93c7fe131adec510cc225a66",
     "agentSkill": "10ce45fa4e14b61fd65e2cd1287863b7c824282dcbd6bd8342c2f5f65e05f2a6"
