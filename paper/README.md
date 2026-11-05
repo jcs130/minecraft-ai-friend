@@ -1,6 +1,10 @@
 # 千灯纪：跨端服务器（Paper API / Youer运行）
 
-## 当前状态（2026-11-03）
+## 当前状态（2026-11-06）
+
+正式 Youer build920 / NeoForge21.1.252 保持，Numen API `0.1.4-qd-youer3` 和 AgentFriend `0.4.47.58-photo-recovery1-rpg` 已上线。独立 Web 客户端、语音媒体修复、桐人外观与 RTX3080Ti 相机已回读；官网0.8.40的 Skill 固定入口为1.3.8（内嵌核心rc.130）。原角色、认证、会话及相册保留。新上游内核、完整 Numen 重写与 Router 没有夹带部署；真实手机、真人音频和远端画面验收界限见[整批发布](docs/ALL_FIXES_RELEASE_20261106.md)与[当前清单](manifests/current-deployment.json)。
+
+## 历史状态（2026-11-03）
 
 Youer官网常规通道最新仍为build920，正式服保留已验证的本地实体保存补丁。官方10月29日/NeoForge21.1.265测试包在纯净环境仍复现两项区块/持久化兼容缺陷，Paper对照正常，尚未升级正式内核。上游issue草稿及发布权限状态见[上游核对](docs/YOUER_UPSTREAM_20261103.md)。AF.50传送修复已完成正常维护并通过22项正式检查。
 

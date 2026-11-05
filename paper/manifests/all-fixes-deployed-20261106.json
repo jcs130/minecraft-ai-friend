@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "passed": true,
+  "release": "all-fixes-suite-20261106-r1",
+  "deployedAt": "2026-11-05T18:34:26.261655+00:00",
+  "sourceCommit": "c26ae70116b7699c7d293f661da6f14c91b9beda",
+  "includedPullRequests": [
+    67,
+    81
+  ],
+  "gameChecks": 32,
+  "gameRestarted": true,
+  "characterFilesPreservedAtInstall": 829,
+  "originalCredentialRowsPreserved": 76,
+  "goddessJobsRestored": 7,
+  "numenVersion": "0.1.4-qd-youer3",
+  "agentFriendVersion": "0.4.47.58-photo-recovery1-rpg",
+  "existingLoginGuardVersion": "0.1.11-web-rc2",
+  "webFilesDeployed": 16,
+  "webChecks": 17,
+  "publicMobileBrowserPassed": true,
+  "websiteVersion": "0.8.40",
+  "skillVersion": "1.3.8",
+  "cloudSkillTests": 5,
+  "websiteProtectedTables": 16,
+  "websitePreservedSessions": 21,
+  "otherDownloadsPreserved": true,
+  "voiceMediaReady": true,
+  "voiceAsrDevice": "cpu",
+  "nativeCameraReady": true,
+  "nativeCameraRenderer": "NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2",
+  "kiritoSavedModel": "qiandengji_kirito",
+  "limitations": [
+    "No real player login or physical phone controls were performed for this release.",
+    "Independent Java recording of a new voice sentence and real microphone ASR remain unverified.",
+    "Public Skill 1.3.8 embeds core rc.130; remote clients were not auto-upgraded.",
+    "Full upstream Youer/Numen rewrites and Router upgrades were not deployed."
+  ],
+  "retainedFailures": [
+    "First game postflight expected the old LoginGuard version; both cold snapshots and running JAR prove the preexisting web-rc2 baseline.",
+    "First website publish compared the full download catalogue including the intentionally changed Skill; it restored only the previous image, not the database."
+  ],
+  "runtimeArtifactSha256": {
+    "numen_api": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c",
+    "AgentFriend": "3dc4845b8ddcd26a3237e32ee391293021fd6c072078968ef6640bd8cadbf4d9",
+    "preservedLoginGuard": "91057a35ec75897f06c755bdeb60a48e05d9e59a93c7fe131adec510cc225a66",
+    "agentSkill": "10ce45fa4e14b61fd65e2cd1287863b7c824282dcbd6bd8342c2f5f65e05f2a6"
+  }
+}

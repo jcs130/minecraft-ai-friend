@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-client-acceptance",
-  "latestRelease": "city-gate-protection-release-20261105-r2",
-  "verifiedAt": "2026-11-05T14:03:29.728Z",
-  "releaseDocument": "paper/docs/CITY_GATE_PROTECTION_20261105.md",
+  "latestRelease": "all-fixes-suite-20261106-r1",
+  "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
+  "releaseDocument": "paper/docs/ALL_FIXES_RELEASE_20261106.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -42,13 +42,13 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.57-camera-presence1-rpg",
+    "AgentFriend": "0.4.47.58-photo-recovery1-rpg",
     "CortiEyeMirror": "0.1.19",
     "QiandengjiRpg": "0.2.20",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.4",
-    "LoginGuard": "0.1.10",
+    "LoginGuard": "0.1.11-web-rc2",
     "Numen": "0.1.4 + pinned mcbot/control fixes",
     "QiandengjiMcbot": "0.1.0",
     "QwenPawGameChannel": "0.3.2",
@@ -67,7 +67,7 @@
     "OptionalPayloadGuard": "0.1.2",
     "YSM": "2.6.5",
     "QiandengjiFaweHybrid": "0.1.0",
-    "NumenEngine": "0.1.4-qd-youer2",
+    "NumenEngine": "0.1.4-qd-youer3",
     "Geyser": "2.12.1-b1280",
     "ViaVersion": "5.12.2",
     "ViaBackwards": "5.12.2",
@@ -116,7 +116,7 @@
     "E:\\MC\\server\\plugins\\NPCSpeak-1.0.jar": "0bfb634a96e1791822b76bb367efb881f21bdd767385d5d1ff9524d11837cd1e",
     "E:\\MC\\server\\plugins\\numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
     "E:\\MC\\server\\plugins\\NumenBedrock-0.1.0.jar": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
-    "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar": "b3cf763f68fb4729e1001149c267ee378a6cc55b1c91f97bb9222f80782ff35a",
+    "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c",
     "E:\\MC\\server\\plugins\\OlEncounters-1.7.0.jar": "c7e00ec3dd58b9dd0dc789b16b7c638e794220f4627f36f0f53d6dcd66eca4fc",
     "E:\\MC\\server\\plugins\\ProtocolLib-5.3.0.jar": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d",
     "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.6.jar": "dde357119ec3e14b14855834aad814024a2b6854ede766009768ab49bfaf632d",
@@ -155,7 +155,7 @@
     "E:\\MC\\ops\\native-photo-renderer.mjs": "703d91ca9f88ae599aeb939f35f74f5b2924f44336723cfeb77dc829877ba959",
     "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a",
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.3.jar": "33715091b86ffabe6348b4d69bbe33014741c4b13b7c2f7dbba224abae590e1f",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "1cd759c04307e2cedcac4a7541af61a49562f1e96561b60bc0e519aedf93fa94",
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "91057a35ec75897f06c755bdeb60a48e05d9e59a93c7fe131adec510cc225a66",
     "E:\\MC\\server\\server.jar": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
     "E:\\MC\\private\\ysm\\proxy\\velocity.jar": "fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef",
     "E:\\MC\\server\\youer-config\\youer.yml": "8d469aeb0370794b5d701b26002e1d5762a773dd9c422579d950b01d33577cc8",
@@ -176,10 +176,10 @@
     "E:\\MC\\ops\\goddess-bridge.mjs": "d5ef2503f908b957e357790ebe44113904cc8d9fa03cf779a5b70af5c53cdf62",
     "E:\\MC\\ops\\goddess-chat-identity.mjs": "615cb21f5793bdc3f4010c8c51b5440d29d2f9e3916234fc5185f94c5b1854bf",
     "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\agent-mc-bridge-0.1.0-fabric-1.21.1.jar": "676bef783d1070726fc2644cbf7504834e6750dc69b05cc6a13efa7130c8c4ef",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.57-camera-presence1-rpg.jar": "c9360fcd86d8d2ae5e1ad1ab33a5c55417025c3451f0525fe9a768891a2c599b",
     "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.19.jar": "c74e4ba58674d948ca079b4348941ab01b6f11f18507f38f568cc418a5265e6d",
     "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar": "6cba7905a68a710e93fa920da6d21f1d76d0cd50ee4012bba6162c3cba1c8346",
-    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.20.jar": "5c3709b22f1b089ad9f99868f9cc00ff6c2675a563405c5117b651fc71e60b5b"
+    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.20.jar": "5c3709b22f1b089ad9f99868f9cc00ff6c2675a563405c5117b651fc71e60b5b",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.58-photo-recovery1-rpg.jar": "3dc4845b8ddcd26a3237e32ee391293021fd6c072078968ef6640bd8cadbf4d9"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -347,33 +347,33 @@
     "deployedFromAudit": 3
   },
   "distribution": {
-    "coreSource": "0.5.7-rc.160-preview.15",
-    "publicSkill": "1.3.7",
+    "coreSource": "0.5.7-rc.160-preview.18",
+    "publicSkill": "1.3.8",
     "publicSkillCore": "0.5.7-rc.130",
-    "harnessBodyCore": "0.5.7-rc.160-preview.15",
+    "harnessBodyCore": "0.5.7-rc.160-preview.18",
     "website": "0.8.40",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
-    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
-    "manifest": "paper/manifests/pr-batch-deployed-20261105.json",
+    "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
+    "manifest": "paper/manifests/all-fixes-deployed-20261106.json",
     "mediaStorage": "OSS",
-    "coreSourceNote": "Builtin harness now consumes rc.160-preview.15; the public Skill remains rc.130. No npm publish or automatic remote-client upgrade.",
+    "coreSourceNote": "Builtin harness preview.18 was already updated; public Skill 1.3.8 still embeds rc.130. No npm publish or automatic remote-client upgrade.",
     "clientDownloads": {
       "neko": "0.6.114",
       "corticoLite": "0.1.2",
       "dshPlugin": "0.3.0-rc.24",
       "nativeYsm": "2.6.5"
     },
-    "websiteManifest": "paper/manifests/pr-batch-deployed-20261105.json"
+    "websiteManifest": "paper/manifests/all-fixes-deployed-20261106.json"
   },
   "websiteRelease": {
-    "release": "pr-batch-release-20261105",
+    "release": "all-fixes-skill-20261106-r1",
     "version": "0.8.40",
-    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
+    "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
     "protectedTables": 16,
     "gameRestarted": false,
-    "document": "paper/docs/PR_BATCH_RELEASE_20261105.md",
-    "manifest": "paper/manifests/pr-batch-deployed-20261105.json",
+    "document": "paper/docs/ALL_FIXES_RELEASE_20261106.md",
+    "manifest": "paper/manifests/all-fixes-deployed-20261106.json",
     "promotionalVideo": "https://b23.tv/Ppfd3Ne",
     "publicPhotosAtVerification": 7,
     "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
@@ -405,7 +405,7 @@
     "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions.",
     "QiandengjiRpg-0.2.13": "QiandengjiRpg-0.2.10.jar",
     "VortexRPG-qd31-growth": "VortexRPG-1.2.2-alpha-qd29.jar",
-    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.57-camera-presence1-rpg.jar",
+    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.58-photo-recovery1-rpg.jar",
     "QiandengjiRpg": "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.19.jar",
     "LoginGuard": "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar",
     "Geyser": "E:\\MC\\server\\plugins\\Geyser-Spigot.jar",
@@ -475,12 +475,12 @@
   "website": {
     "state": "deployed-and-verified",
     "version": "0.8.40",
-    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
-    "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261105.md",
-    "releaseManifest": "paper/manifests/pr-batch-deployed-20261105.json",
+    "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
+    "releaseDocument": "paper/docs/ALL_FIXES_RELEASE_20261106.md",
+    "releaseManifest": "paper/manifests/all-fixes-deployed-20261106.json",
     "guideServerVersion": "0.4.47.44-rpg",
     "gameRestartedForWebsite": false,
-    "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated",
+    "skillDownload": "1.3.8; embedded core rc.130; reviewed direct OSS delivery",
     "musicEnabled": true,
     "uiRevision": "0.8.38-ui-20261102-r1"
   },
@@ -709,7 +709,8 @@
     "VortexRPG-qd32-before-compact-sidebar.jar": "47bb884059ff15af6e3286727587256ea4ff34b2386bf91aa2f0d2e1dd2a7a56",
     "manage-server-before-noninteractive-console.ps1": "0d0885048b14e830af31c9c2beec2169765728384c42b7eb436de80ba696205e",
     "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.48-rpg.jar": "5831959e6b75b23a1c77363886868feadabe82b21dbbd5c1519d2d090c888bcd",
-    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24"
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar": "3eb0b4e2bb24706af8b5222e63e3a809eeededbbada8b26d0b912388ab989a24",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.57-camera-presence1-rpg.jar": "c9360fcd86d8d2ae5e1ad1ab33a5c55417025c3451f0525fe9a768891a2c599b"
   },
   "previousVerificationBeforeYsm265": {
     "formalProduction": 40,
@@ -1551,5 +1552,19 @@
     "neoForge32x": "isolated-full-model-rendering-only",
     "neoForgeProductionBridgeMigrated": false,
     "document": "paper/docs/NATIVE_CAMERA_NEOFORGE_20261105.md"
+  },
+  "previousReleaseBeforeAllFixes": {
+    "latestRelease": "city-gate-protection-release-20261105-r2",
+    "verifiedAt": "2026-11-05T14:03:29.728Z",
+    "releaseDocument": "paper/docs/CITY_GATE_PROTECTION_20261105.md"
+  },
+  "allFixes20261106": {
+    "state": "deployed-with-open-client-acceptance",
+    "manifest": "paper/manifests/all-fixes-deployed-20261106.json",
+    "document": "paper/docs/ALL_FIXES_RELEASE_20261106.md",
+    "gameChecks": 32,
+    "webChecks": 17,
+    "credentialRowsPreserved": 76,
+    "characterFilesPreserved": 829
   }
 }
