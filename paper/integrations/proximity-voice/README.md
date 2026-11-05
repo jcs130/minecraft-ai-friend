@@ -1,5 +1,7 @@
 # 千灯纪附近语音
 
+2026-11-05：配套 LoginGuard 的 `mcagent:voice` 回程误拦已完成[双向授权修复候选和隔离协议对照](../../docs/VOICE_PROXY_REPLIES_20261105.md)，未部署。此项不改变客户端或语音播放策略，也不等于正式 TTS/ASR/真人听感验收。
+
 状态（2026-10-29）：Simple Voice Chat 2.6.27、QiandengVoice 0.1.0 与本机 TTS/CPU ASR 已安装正式服并自启。局域网 UDP 已实收 nonce 回包；公网映射已补，外网及真人麦克风/耳听验证状态见[发布说明](../../docs/PROXIMITY_VOICE.md)。
 
 这是一层可选语音传输，不创建新的 Agent 大脑或 Minecraft 连接。复用 `world/god-voice-src` 的 `SpeechFrames`、`SpeechLane`、`CaptureFence`；ASR 每段只识别一次，再向附近角色分发。
