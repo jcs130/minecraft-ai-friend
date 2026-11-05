@@ -37,12 +37,13 @@ final class PhotoJournal implements Listener {
             Class<? extends Event> loaded=Class.forName("com.loohp.imageframe.api.events.ImageMapAddedEvent",true,
                     images.getClass().getClassLoader()).asSubclass(Event.class);
             Bukkit.getPluginManager().registerEvent(loaded,this,EventPriority.MONITOR,
-                    (listener,event)->Bukkit.getScheduler().runTask(plugin,this::queueReconcile),plugin);
+                    (listener,event)->Bukkit.getScheduler().runTask(plugin,()->{queueReconcile();camera.recoverPendingReceipts();}),plugin);
         } catch(ReflectiveOperationException ex){plugin.getLogger().warning("Photo gallery image-load event unavailable; existing exhibits retained");}
         if(!ledger.ready())plugin.getLogger().severe("Photo journal unavailable; retained file, no exam/photo exhibition writes: "+ledger.error());
         Bukkit.getScheduler().runTask(plugin,this::reconcile);
     }
     boolean ready(){return ledger.ready();}
+    boolean recorded(UUID owner,String job){return ready()&&rows(owner).has(job);}
     private JsonObject rows(UUID owner) {
         JsonObject p=ledger.profile(owner);return p.has("photos")?p.getAsJsonObject("photos"):new JsonObject();
     }
