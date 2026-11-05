@@ -28,6 +28,7 @@ import com.github.retrooper.packetevents.event.*;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying;
 import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
@@ -348,8 +349,19 @@ public final class LoginGuard {
     }
     @Subscribe(order=PostOrder.FIRST) public void voiceTransport(PluginMessageEvent e) {
         if(!e.getIdentifier().equals(VOICE_CHANNEL))return;
-        if(!(e.getSource() instanceof Player p)||!inPaper(p)||!authorized(p)
-                ||p.getCurrentServer().filter(c->c==e.getTarget()).isEmpty())
+        Player p;ServerConnection backend;
+        if(e.getSource() instanceof Player player && e.getTarget() instanceof ServerConnection connection) {
+            p=player;backend=connection;
+        } else if(e.getSource() instanceof ServerConnection connection && e.getTarget() instanceof Player player) {
+            p=player;backend=connection;
+        } else {
+            e.setResult(PluginMessageEvent.ForwardResult.handled());return;
+        }
+        // Replies/captions travel on the recipient's current physical connection.
+        // A matching backend name or UUID alone cannot authorize another session.
+        // Only veto forwarding; never undo another plugin's handled result.
+        if(!p.isActive() || backend.getPlayer()!=p || !authorized(p)
+                ||p.getCurrentServer().filter(c->c==backend && c.getServerInfo().getName().equals("paper")).isEmpty())
             e.setResult(PluginMessageEvent.ForwardResult.handled());
     }
     @Subscribe(order=PostOrder.FIRST) public void mcbotTransport(PluginMessageEvent e) {
