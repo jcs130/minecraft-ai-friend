@@ -5876,6 +5876,8 @@ export class Executor {
           const verdict = expect && !nativeBodyBlockedReason(bot, call.skill) ? evaluateExpect(bot, expect, gainBase) : null;
           const readAt = verdict ? this.clock(Date.now()) : undefined;
           const operationUnconfirmed = blocked?.code === 'container-window-changed'
+            // Being near a target cannot prove a safe landing or overturn its failure.
+            || call.skill === 'land' || call.skill === 'flight' && call.land !== false
             || blocked?.code === 'container-window-rollback' || blocked?.code === 'use-hand-changed'
             || blocked?.code === 'execution-context-changed'
             || isInventoryClickError(err);

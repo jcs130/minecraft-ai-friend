@@ -2,6 +2,7 @@ import { onConnectionEnd } from './connection-end.ts';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { SkillBlocked, sleep } from './skill-context.ts';
+import { nativeBodyBlockedReason, nativeBodyReadiness, trackNativeFlightControl } from './body-readiness.ts';
 
 interface FlightAbilities {
   flags: number;
@@ -16,6 +17,8 @@ interface FlightAbilities {
 interface FlightControl {
   physicsEnabled: boolean;
   gravity: number;
+  entity: Bot['entity'];
+  releaseReadiness?: () => void;
   interrupted?: string;
   mode?: 'input' | 'route';
   direction?: { x: number; y: number; z: number };
@@ -57,6 +60,7 @@ const controls = new WeakMap<Bot, FlightControl>();
 const moving = new WeakSet<Bot>();
 const timings = new WeakMap<Bot, { elapsedMs: number; ticks: number; atMs: number }[]>();
 const timingEpochs = new WeakMap<Bot, object>();
+const bodyEpochs = new WeakMap<Bot, object>();
 export const MAX_FLIGHT_DISTANCE = 12;
 const FLIGHT_TICK_MS = 50;
 const TIMING_MAX_AGE_MS = 5 * 60_000;
@@ -71,6 +75,7 @@ const HAZARDS = /^(lava|water|magma_block|cactus|fire|soul_fire|campfire|soul_ca
 export function watchFlightAbilities(bot: Bot): () => void {
   const existing = watchers.get(bot);if (existing) return existing;
   timingEpochs.set(bot, {});
+  bodyEpochs.set(bot, {});
   const onAbilities = (packet: { flags?: number; flyingSpeed?: number }): void => {
     const old = abilities.get(bot);
     const flags = Number(packet.flags ?? 0);
@@ -96,6 +101,7 @@ export function watchFlightAbilities(bot: Bot): () => void {
     }
   };
   const reset = (): void => {
+    bodyEpochs.set(bot, {});
     releaseFlight(bot, '连接或维度已变化', false);
     const state = abilities.get(bot);
     if (state?.expiryTimer) clearTimeout(state.expiryTimer);
@@ -103,17 +109,36 @@ export function watchFlightAbilities(bot: Bot): () => void {
     timings.delete(bot);
     timingEpochs.delete(bot);
   };
-  const forcedMove = (): void => releaseFlight(bot, '服务端修正了位置，已停止飞行移动', true);
+  const forcedMove = (): void => {
+    bodyEpochs.set(bot, {});
+    releaseFlight(bot, '服务端修正了位置，已停止飞行移动', true);
+  };
+  const mount = (): void => {
+    bodyEpochs.set(bot, {});
+    // Mounting interrupts control, but the same connection keeps its grant
+    // and expiry until the server says otherwise.
+    releaseFlight(bot, '已乘坐载具，飞行已中断', false);
+  };
+  const protocol = (phase: string): void => { if (phase === 'configuration') reset(); };
   bot._client.on('abilities', onAbilities);
+  bot._client.on('state', protocol);
+  bot._client.once('end', disposeClient);
   bot.on('forcedMove', forcedMove);
+  bot.on('login', reset);
+  bot.on('mount', mount);
   bot.on('respawn', reset);
   bot.on('death', reset);
   const detachEnd = onConnectionEnd(bot, () => dispose());
+  function disposeClient() { dispose(); }
   const dispose = () => {
     if (watchers.get(bot) !== dispose) return;
     watchers.delete(bot);
     bot._client.off('abilities', onAbilities);
+    bot._client.off('state', protocol);
+    bot._client.off('end', disposeClient);
     bot.off('forcedMove', forcedMove);
+    bot.off('login', reset);
+    bot.off('mount', mount);
     bot.off('respawn', reset);
     bot.off('death', reset);
     detachEnd();
@@ -166,6 +191,7 @@ function releaseFlight(bot: Bot, reason: string, send: boolean): void {
   control.interrupted = reason;
   control.releaseInput?.();
   control.releaseInput = undefined;
+  control.releaseReadiness?.();
   controls.delete(bot);
   bot.physics.gravity = control.gravity;
   bot.physicsEnabled = control.physicsEnabled;
@@ -188,20 +214,45 @@ export function stopFlight(bot: Bot): void {
   releaseFlight(bot, '飞行已停止', true);
 }
 
-async function awaitFlightPermission(bot: Bot, aborted: () => boolean): Promise<void> {
+/** Recheck after every await, including landing confirmation after ownership is released. */
+function assertFlightBody(bot: Bot, epoch: object | undefined, control?: FlightControl, settling = false): void {
+  let reason = control?.interrupted && !(settling && control.interrupted === '飞行已停止') ? control.interrupted : null;
+  const p = bot.entity?.position;
+  reason ||= epoch !== bodyEpochs.get(bot) ? '连接或维度已变化' : null;
+  reason ||= !p || ![p.x, p.y, p.z].every(Number.isFinite) ? '身体位置未知，飞行已中断' : null;
+  reason ||= control && bot.entity !== control.entity ? '身体实体已变化，飞行已中断' : null;
+  reason ||= (bot as Bot & { vehicle?: unknown }).vehicle != null ? '仍在乘坐载具；请先下车再飞行' : null;
+  reason ||= bot.health !== undefined && !(bot.health > 0) ? '身体没有有效生命状态，飞行已中断' : null;
+  reason ||= bot._client.state !== undefined && bot._client.state !== 'play' ? '连接尚未进入游戏，飞行已中断' : null;
+  if (!(settling && nativeBodyReadiness(bot)?.phase === 'waiting-physics')) reason ||= nativeBodyBlockedReason(bot, 'flight');
+  if (reason) {
+    releaseFlight(bot, reason, false);
+    throw new SkillBlocked(reason, [], 'server', 'execution-context-changed');
+  }
+}
+
+async function awaitFlightPermission(bot: Bot, aborted: () => boolean, epoch: object | undefined): Promise<void> {
   const waitUntil = Date.now() + 2_000;
   while (!(flightFlags(bot) & 4) && Date.now() < waitUntil) {
     if (aborted()) throw new SkillBlocked('飞行任务已取消');
+    assertFlightBody(bot, epoch);
     await sleep(FLIGHT_TICK_MS);
   }
   if (aborted()) throw new SkillBlocked('飞行任务已取消');
+  assertFlightBody(bot, epoch);
   if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端尚未授予飞行能力；先取得飞行许可并查看成功回执');
 }
 
-function beginFlight(bot: Bot): FlightControl {
+function beginFlight(bot: Bot, epoch: object | undefined): FlightControl {
+  assertFlightBody(bot, epoch);
   const current = controls.get(bot);
   if (current) return current;
-  const control = { physicsEnabled: bot.physicsEnabled, gravity: bot.physics.gravity };
+  const control: FlightControl = { physicsEnabled: bot.physicsEnabled, gravity: bot.physics.gravity, entity: bot.entity };
+  const releaseReadiness = trackNativeFlightControl(bot, () => controls.get(bot) === control
+    && !control.interrupted && control.entity === bot.entity && control.physicsEnabled === true
+    && bot.physicsEnabled === false && bot.physics.gravity === 0 && flightState(bot).flying);
+  if (!releaseReadiness) throw new SkillBlocked('原生身体尚未就绪，不能接管飞行');
+  control.releaseReadiness = releaseReadiness;
   if (!flightState(bot).flying) bot._client.write('abilities', { flags: 2 });
   abilities.get(bot)!.requestedFlying = true;
   abilities.get(bot)!.lastStop = undefined;
@@ -221,16 +272,17 @@ export async function flyWithInput(bot: Bot, durationMs: number,
   if (moving.has(bot)) throw new SkillBlocked('另一段飞行移动尚未结束');
   moving.add(bot);
   let control: FlightControl | undefined;
+  const epoch = bodyEpochs.get(bot);
   try {
-    await awaitFlightPermission(bot, aborted);
-    control = beginFlight(bot);
+    await awaitFlightPermission(bot, aborted, epoch);
+    control = beginFlight(bot, epoch);
     if (aborted()) throw new SkillBlocked('飞行控制已中断');
     control.releaseInput = startInput();
     control.mode = 'input';
     const until = Date.now() + durationMs;
     while (Date.now() < until) {
       if (aborted()) throw new SkillBlocked('飞行控制已中断，保持当前悬停位置');
-      if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
+      assertFlightBody(bot, epoch, control);
       if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
       const tickMs = Math.min(FLIGHT_TICK_MS, until - Date.now());
       if (tickMs <= 0) break;
@@ -263,7 +315,7 @@ export async function flyWithInput(bot: Bot, durationMs: number,
     await sleep(150);
     sample();
     if (aborted()) throw new SkillBlocked('飞行控制已中断');
-    if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
+    assertFlightBody(bot, epoch, control);
     if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
   } finally {
     if (control) {
@@ -424,13 +476,15 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
   let elapsedTickMs = 0;
   let ticks = 0;
   let timingEpoch: object | undefined;
+  const epoch = bodyEpochs.get(bot);
   try {
+    assertFlightBody(bot, epoch);
     const target = new Vec3(targetAt.x, targetAt.y, targetAt.z);
     let start = bot.entity.position.clone();
     let distance = start.distanceTo(target);
     if (distance > MAX_FLIGHT_DISTANCE) throw new SkillBlocked(flightDistanceNote(start, target));
     if (options.land && !hasSupport(bot, target)) throw new SkillBlocked('飞行目标下方没有已加载的安全落脚方块；当前 land:true 要求落地；空中悬停用 land:false，落地须选已核实的平台');
-    await awaitFlightPermission(bot, aborted);
+    await awaitFlightPermission(bot, aborted, epoch);
     start = bot.entity.position.clone();
     distance = start.distanceTo(target);
     if (distance > MAX_FLIGHT_DISTANCE) throw new SkillBlocked(`等待飞行许可时位置已变化；${flightDistanceNote(start, target)}`);
@@ -440,13 +494,13 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
       throw new SkillBlocked('服务端声明的飞行剩余时间不足以抵达目标；先就近落地');
     }
     if (aborted()) throw new SkillBlocked('飞行任务已取消');
-    control = beginFlight(bot);
+    control = beginFlight(bot, epoch);
     control.mode = 'route';
     timingEpoch = timingEpochs.get(bot);
     for (const pos of route) {
       const tickAtMs = Date.now();
       if (aborted()) throw new SkillBlocked('飞行任务已取消，保持当前位置悬停；可调用落地');
-      if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
+      assertFlightBody(bot, epoch, control);
       if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
       const obstruction = spaceObstruction(bot, pos);
       if (obstruction) throw new SkillBlocked(`途中空间发生变化：${obstruction}；已停止移动并悬停`);
@@ -463,24 +517,29 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
     control.mode = undefined;
     control.direction = undefined;
     await sleep(150);
-    if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
+    if (aborted()) throw new SkillBlocked('飞行任务已取消，保持当前位置悬停；可调用落地');
+    assertFlightBody(bot, epoch, control);
     if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
     if (bot.entity.position.distanceTo(target) > 0.4) throw new SkillBlocked('服务端未接受飞行目标位置', [], 'server');
     if (options.land) {
       if (!hasSupport(bot, bot.entity.position)) throw new SkillBlocked('落脚支撑已变化，保持悬停；请换一个落脚点');
       stopFlight(bot);
       // Restoring gravity is not evidence of landing; allow real collision ticks to settle.
-      const until = Date.now() + 750;
+      const restoredAt = Date.now(), until = restoredAt + 750;
       let stable = 0;
       while (Date.now() < until && stable < 2) {
         if (aborted()) throw new SkillBlocked('落地确认已取消；重新核对当前位置');
-        if (control.interrupted && control.interrupted !== '飞行已停止') throw new SkillBlocked(control.interrupted, [], 'server');
+        assertFlightBody(bot, epoch, control, true);
         if (bot.entity.position.distanceTo(target) > 0.7 || !hasSupport(bot, bot.entity.position)) {
           throw new SkillBlocked('落地时位置或支撑发生变化，尚未确认站稳');
         }
-        stable = bot.entity.onGround ? stable + 1 : 0;
+        const body = nativeBodyReadiness(bot);
+        const settled = !body || body.phase === 'ready' && body.physicsAt !== null && body.physicsAt > restoredAt;
+        stable = bot.entity.onGround && settled ? stable + 1 : 0;
         await sleep(FLIGHT_TICK_MS);
       }
+      assertFlightBody(bot, epoch, control, true);
+      if (aborted()) throw new SkillBlocked('落地确认已取消；重新核对当前位置');
       if (stable < 2) throw new SkillBlocked('已恢复重力，但尚未确认在平台站稳；重新观察后再行动');
     }
     const actual = bot.entity.position;
@@ -500,9 +559,12 @@ export async function flyToLanding(bot: Bot, cell: { x: number; y: number; z: nu
 
 /** Land vertically on the first safe loaded surface below the current flight position. */
 export async function landFlight(bot: Bot, aborted: () => boolean): Promise<string> {
+  assertFlightBody(bot, bodyEpochs.get(bot));
+  if (aborted()) throw new SkillBlocked('飞行任务已取消');
   if (!bot.entity?.position) throw new SkillBlocked('还没进入世界，不能落地');
   const start = bot.entity.position;
   if (hasSupport(bot, start) && openForPlayer(bot, start)) {
+    if (controls.has(bot)) return flyToPosition(bot, start, aborted, { land: true });
     stopFlight(bot);
     return `已在安全地面 (${start.x.toFixed(1)},${start.y.toFixed(1)},${start.z.toFixed(1)})`;
   }
