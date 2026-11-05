@@ -1,4 +1,6 @@
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
+import { methodLearningCall } from '../src/learning/method-capability.ts';
+import {RecordedSceneStore,type RecordedScene} from '../src/learning/recorded-scene.ts';
 import { operationInventory } from './operation-experience.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
@@ -2267,10 +2269,12 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   {
     name: 'mc_script',
     tags: ['act'],
-    readOnlyCall: args => !!args.find || !!args.api || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op)),
+    learningCall: methodLearningCall,
+    readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op)),
     description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
       + 'Write new feedback-controlled actions when persistent inputs, calculations or conditional sequencing are useful; this is not limited to existing named scripts. '
       + '{api:"authoring"} gives the short write/validate/save/execute/review/reuse path. {library:{op:"list",query:"purpose"}} searches only this scoped game-method library; a host procedure_find may use a different library. '
+      + 'scene:{op:"capture",id,target:[x,y,z],radius?:8} records current local collision geometry and initial pose for isolated replay without moving. scene list/read discovers immutable cases; unloaded cells remain unknown. This is not a combat/plugin simulator. '
       + 'Nearby blocks: {find:{names:["water"],maxDistance:8,count:4},waitMs:1000} runs a bounded read recipe without scan loops. name is optional for code; omitted names use its stable source hash. Explicit names are1–80 characters. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
@@ -2285,7 +2289,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'The first native body call queues a body lease held until program end; after it, mc.do is unavailable in that program. Read calls do not acquire the body. '
       + 'No imports, process, filesystem, network or protected raw bot access. Calls must be awaited serially. '
       + `Limits: ${METHOD_LIMITS.sourceChars} source chars, ${METHOD_LIMITS.calls} SDK calls, ${METHOD_LIMITS.actions} action groups, default ${METHOD_LIMITS.durationMs}ms including queue waits, maximum ${METHOD_LIMITS.maxDurationMs}ms. `
-      + 'Only one program runs at a time. New admitted body work, stop, death, disconnect, World stop or timeout revoke it and its own pending task. '
+      + 'One body program and one offline syntax validation may run concurrently. New admitted body work, stop, death, disconnect, World stop or timeout revoke body execution and its own pending task; validation has no body lease. '
       + 'Returns a run id immediately; {runId} reads result and call summaries, {runId,call} expands one complete SDK call; {} lists the last eight run summaries, {stop:true} cancels the current run. '
       + '{validate:true,name,code} checks syntax without running any action. Program completion does not certify a learned method. '
       + 'Expand an SDK call to inspect its actual fields before interpreting results; compare the returned observations with the method objective before saving verified claims. '
@@ -2310,6 +2314,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       params: { type: 'object', additionalProperties: true },
       durationMs: { type: 'integer', minimum: 1000, maximum: METHOD_LIMITS.maxDurationMs },
       waitMs: { type: 'integer', minimum: 0, maximum: 30000, description: 'Wait for the same run within this reply; zero keeps immediate admission. Expiring this wait does not cancel execution.' },
+      scene:{type:'object',additionalProperties:false,properties:{op:{type:'string',enum:['capture','list','read']},id:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},target:{type:'array',items:{type:'number'},minItems:3,maxItems:3},radius:{type:'integer',minimum:3,maximum:16}},required:['op']},
       validate: { type: 'boolean' }, runId: { type: 'integer', minimum: 1 },
       api: { type: 'string', description: 'index lists the program SDK and exposed Mineflayer API; mc.do/mc.state/mc.flightPlan or a native method name returns its result contract on demand.' },
       call: { type: 'integer', minimum: 1, maximum: METHOD_LIMITS.calls }, stop: { type: 'boolean' },
@@ -2863,6 +2868,29 @@ export class MinecraftWorld implements World {
       this.methodLibraries.set(scope, library);
     }
     return library;
+  }
+  private practiceScenes(args:Record<string,unknown>){
+    if(!this.dataDir)throw Error('Persistent data directory required for recorded scenarios');
+    const scope=createHash('sha256').update(JSON.stringify([this.serverRealmKey(),this.cfg.auth??'offline',this.cfg.username,this.botName])).digest('hex');
+    const store=new RecordedSceneStore(join(this.dataDir,'minecraft-scenarios',scope));
+    if(args.op==='list')return store.list();if(args.op==='read')return store.read(String(args.id));
+    if(args.op!=='capture')throw Error('scene.op: capture/list/read');
+    const bot=this.bridge?.bot,p=bot?.entity?.position;
+    if(!bot||!p||!this.bridge?.connected||this.bridge.connectionState?.ready!==true||bot._client?.state!=='play'||!this.executor||this.shuttingDown)throw Error('Fresh authenticated play body required for capture');
+    if(Object.keys(bot.entity.effects??{}).length||bot.entity.elytraFlying)throw Error('This collision replay adapter does not model active effects or elytra');
+    const radius=Number(args.radius??8),target=args.target;
+    if(!Number.isInteger(radius)||radius<3||radius>16||!Array.isArray(target)||target.length!==3||!target.every(x=>typeof x==='number'&&Number.isFinite(x)))throw Error('capture needs numeric target[3] and radius3..16');
+    const generation=this.connectionGeneration,dimension=String(bot.game.dimension),sampledAt=new Date().toISOString();
+    const scene=captureVoxelScene({source:{kind:'client-loaded-chunks',minecraftVersion:bot.version,dimension,username:bot.username,uuid:bot.entity.uuid??'',realmVerified:true,connectionEpoch:String(generation)},
+      sampledAt,feet:[p.x,p.y,p.z],yaw:bot.entity.yaw,pitch:bot.entity.pitch,eyeHeight:1.62,fovDegrees:75,
+      bounds:{min:[Math.floor(p.x)-radius,Math.floor(p.y)-4,Math.floor(p.z)-radius],max:[Math.floor(p.x)+radius,Math.floor(p.y)+6,Math.floor(p.z)+radius]},
+      blockAt:(x,y,z)=>bot.blockAt(new Vec3(x,y,z))});
+    const v=bot.entity.velocity;
+    const record:RecordedScene={schema:'agent-mc-recorded-practice/v1',id:String(args.id),scene,
+      initial:{velocity:[v.x,v.y,v.z],onGround:bot.entity.onGround,health:bot.health},
+      goal:{kind:'reach',dimension,position:{x:target[0],y:target[1],z:target[2]},radius:.8,maxHealthLoss:0},
+      evidence:[`client:${generation}:${sampledAt}`],events:[]};
+    return store.save(record);
   }
   /** 按 realmKey 隔离的运行时投影；目标的意图恢复记录另行落盘。 */
   protected readonly pwsr = new PwsrTables();
@@ -4735,6 +4763,8 @@ export class MinecraftWorld implements World {
       },
 
       mc_script: async (args, ctx) => {
+        if(args.scene!==undefined){try{if(Object.keys(args).length!==1||!args.scene||typeof args.scene!=='object'||Array.isArray(args.scene))throw Error('Use scene separately');
+          return {text:JSON.stringify(this.practiceScenes(args.scene as Record<string,unknown>))};}catch(error){return {text:String(error),failed:true};}}
         try {
           if (args.find !== undefined) args = blockFindRequest(args);
           if(args.waitMs!==undefined&&(typeof args.waitMs!=='number'||!Number.isInteger(args.waitMs)||args.waitMs<0||args.waitMs>30000))throw new Error('waitMs须为0至30000');

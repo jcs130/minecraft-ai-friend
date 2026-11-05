@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { MethodLibrary } from '../core/method-library.ts';
 import type { MethodRun } from '../core/method-runner.ts';
 import { methodHarness, methodEnded } from './method-harness.ts';
+import { MinecraftWorld } from '../core/world.ts';
+import { MINECRAFT_DEFAULTS } from '../core/config.ts';
 
 const args = (code: string, parent: string | null = null) => ({ id: 'step-check', code, parent,
   description: 'Observe a short move and return its real displacement.', conditions: ['Only use after checking loaded collision and support.'] });
@@ -72,5 +74,26 @@ describe('portable editable methods', () => {
       expect(bad).toMatchObject({ failed: true });
       expect((await call({ library: { op: 'list' }, stop: true }))).toMatchObject({ failed: true });
     } finally { r.close(); }
+  });
+
+  it('captures persistent Java 1.21.1 scene data without moving the real body', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mc-scene-'));
+    const r = methodHarness('1.21.1', () => new MinecraftWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS), dataDir: dir }));
+    Object.assign(r.bot, { username: 'fixture', uuid: 'a'.repeat(32) });
+    Object.assign(r.bot._client, { state: 'play' });
+    Object.assign((r.world as any).bridge, { connectionState: { ready: true } });
+    try {
+      const tool = r.world.tools().find(t => t.name === 'mc_script')!;
+      const call = (a: Record<string, unknown>) => tool.handler(a, { role: 'main', log: r.host.log });
+      const captured = await call({ scene: { op: 'capture', id: 'method-start', target: [.5, 64, 2.5], radius: 3 } });
+      expect(captured).not.toMatchObject({ failed: true });
+      const scene = JSON.parse((await call({ scene: { op: 'read', id: 'method-start' } }) as any).text);
+      expect(scene).toMatchObject({ schema: 'agent-mc-recorded-practice/v1', id: 'method-start', events: [] });
+      expect(scene.scene.source.minecraftVersion).toBe('1.21.1');
+      expect(r.bot.entity.position.z).toBe(.5);
+      expect(await call({ scene: { op: 'capture', id: 'method-start', target: [.5, 64, 2.5], radius: 3 } })).toMatchObject({ failed: true });
+      Object.assign((r.world as any).bridge, { connectionState: { ready: false } });
+      expect(await call({ scene: { op: 'capture', id: 'stale-start', target: [.5, 64, 2.5] } })).toMatchObject({ failed: true });
+    } finally { r.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 });

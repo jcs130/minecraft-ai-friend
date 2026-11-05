@@ -1,3 +1,10 @@
+## 0.5.7-rc.160-preview.16 (unpublished candidate)
+
+- Separate offline method validation from live execution, preserving native body ownership and original pending calls during background learning.
+- Expose explicit background-learning capability branches for immutable method edits and Harness² practice; preserve live execution and adoption evidence boundaries.
+- Capture scoped immutable local scenes through the script discovery entry and reconstruct Java 1.21.1 collision practice with original pose, velocity, verified block states and external terrain events. Unknown cells stop trials; renamed identical captures are not independent holdouts. Combat, oxygen and server plugin effects remain unsupported.
+- Bind Harness² admission and terminal notifications to one execution identity for asynchronous waiting, and allow explicit recorded training/holdout selection.
+
 ## 0.5.7-rc.160-preview.15 (unpublished candidate)
 
 - Honor Agent-authored combat observation radii beyond 16 blocks end to end; do not invent upper bounds for RPG mana or observed enemy-count predicates. Spell availability, body ownership, actual tracked entities and cooldown checks remain authoritative.

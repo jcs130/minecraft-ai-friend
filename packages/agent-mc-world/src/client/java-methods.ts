@@ -65,6 +65,7 @@ export class JavaMethods {
   private actionSerial=0;
   private owned=new Set<string>();
   private cleanup:Promise<void>|null=null;
+  private finishing=new Map<number,Promise<void>>();
   private uncertain:string|null=null;
   private generation:number|null=null;
   private availableMethods=new Set<string>();
@@ -74,14 +75,18 @@ export class JavaMethods {
     const scope=createHash('sha256').update(JSON.stringify([cfg.expectedServer.toLowerCase().replace(/:25565$/,''),cfg.expectedUuid.replaceAll('-','').toLowerCase(),cfg.controllerId])).digest('hex');
     this.library=new MethodLibrary(join(cfg.ledgerDir,'minecraft-methods',scope));
     this.evidence=new NativeEvidenceArchive(join(cfg.ledgerDir,'native-evidence'));
-    this.runner=new MethodRunner({nativeMethods:JAVA_METHODS,call:(method,args,signal)=>this.call(method,args,signal),onFinish:run=>{this.cleanup=this.finish(run).finally(()=>{this.cleanup=null;});}});
+    this.runner=new MethodRunner({nativeMethods:JAVA_METHODS,call:(method,args,signal)=>this.call(method,args,signal),onFinish:run=>{
+      const pending=this.finish(run).finally(()=>{this.finishing.delete(run.id);if(this.cleanup===pending)this.cleanup=null;});
+      this.finishing.set(run.id,pending);
+      if(run.mode!=='validation')this.cleanup=pending;
+    }});
   }
   get busy(){return !!this.runner.current||!!this.cleanup||!!this.uncertain;}
   guard(){if(this.busy)throw new Error('A JavaScript method owns execution or cleanup is pending; inspect mc_script runId or explicitly stop it before another body command');}
   async stop(reason:string){this.runner.stop(reason);if(this.cleanup)await this.cleanup;}
   private async finish(run:MethodRun){
     let error:string|undefined;
-    for(const id of this.owned){
+    for(const id of run.mode==='validation'?[]:this.owned){
       try{
         const result:JavaClientAction=await this.port.rpc(run.status==='completed'&&id===this.body?'method_finish':'cancel',{...this.port.owner(),action_id:id},AbortSignal.timeout(2000));
         if(!['completed','partial','blocked','cancelled'].includes(result.phase))throw new Error('Native terminal not confirmed');
@@ -93,14 +98,14 @@ export class JavaMethods {
         catch{error=String(e);this.uncertain=id;}
       }
     }
-    this.body=null;this.bodyCall=0;
+    if(run.mode!=='validation'){this.body=null;this.bodyCall=0;}
     const phase=error?'blocked':run.status==='completed'||run.status==='validated'?'completed':run.status==='cancelled'?'cancelled':'blocked';
     let raw:ReturnType<NativeEvidenceArchive['save']>|undefined;
     try{raw=this.evidence.save(`method:${this.epoch}:${run.id}`,{script:run,backend:'java-client',cleanup:error??'confirmed'});}catch(e){error=`${error??''} Evidence archive failed: ${String(e)}`;}
     const host=this.port.host();if(host)await host.pushEvent({type:'minecraft.method',source:'minecraft',ts:new Date().toISOString(),
       text:JSON.stringify({program:this.runner.inspect(run.id),backend:'java-client',cleanup:error??'confirmed',goalCompleted:false,raw}),
-      execution:{kind:'method',id:`${this.epoch}:${run.id}`,phase,terminal:!this.uncertain,goalCompleted:false,evidence:{localId:run.id,sourceHash:run.sourceHash,cleanup:error??'confirmed',raw}}},{trigger:'flush'}).catch(()=>{});
-    this.finishedRuns.set(run.id,{unknown:!!this.uncertain,phase,error,raw});
+      execution:{kind:'method',id:`${this.epoch}:${run.id}`,phase,terminal:run.mode==='validation'||!this.uncertain,goalCompleted:false,evidence:{localId:run.id,sourceHash:run.sourceHash,mode:run.mode,cleanup:error??'confirmed',raw}}},{trigger:'flush'}).catch(()=>{});
+    this.finishedRuns.set(run.id,{unknown:run.mode!=='validation'&&!!this.uncertain,phase,error,raw});
     while(this.finishedRuns.size>8)this.finishedRuns.delete(this.finishedRuns.keys().next().value!);
   }
   private async reconcile(){if(!this.uncertain)return;const action:JavaClientAction=await this.port.rpc('result',{action_id:this.uncertain});if(['completed','partial','blocked','cancelled'].includes(action.phase)){this.owned.delete(this.uncertain);this.uncertain=null;for(const run of this.finishedRuns.values())run.unknown=false;}else throw new Error(`Cleanup unknown for ${this.uncertain}; reconcile original action, no replay`);}
@@ -115,7 +120,7 @@ export class JavaMethods {
     if(args.stop===true){if(args.code||args.procedure||args.runId||args.call)throw new Error('Use stop separately');await this.stop('mc_script explicit cancellation');await this.reconcile();return{text:'Method stopped; own native cleanup confirmed'};}
     if(args.code!==undefined||args.procedure!==undefined){
       if(args.runId||args.call||args.code&&args.procedure)throw new Error('Choose code OR procedure; inspect runs separately');
-      await this.reconcile();this.guard();ctx.signal?.throwIfAborted();
+      if(args.validate!==true){await this.reconcile();this.guard();}ctx.signal?.throwIfAborted();
       if(args.validate!==true){const caps=await this.port.rpc('capabilities',{},ctx.signal);if(caps.methodAdapter!==JAVA_METHOD_PROTOCOL||!Array.isArray(caps.methodCalls)||!JAVA_METHOD_REQUIRED.every(n=>caps.methodCalls.includes(n)))throw new Error('Actual Java bridge lacks agent-mc-method/v1; install matching bridge before JS execution. No Python conversion occurred.');this.availableMethods=new Set(caps.methodCalls);this.generation=(await this.port.state(ctx.signal)).generation;}
       const reference=args.procedure===undefined?undefined:procedureReference(args.procedure);
       const graph=reference?resolveProcedure(reference,METHOD_ADAPTER,handle=>handle.startsWith('mem:mc-method/')?this.library.blob(handle):this.port.host()?.blob(handle)??null):undefined;
@@ -141,8 +146,8 @@ export class JavaMethods {
     const until=Date.now()+waitMs;
     try{
       await this.runner.wait(id,waitMs,signal);
-      if(this.runner.read(id)[0].status!=='running'&&!this.finishedRuns.has(id)&&this.cleanup&&Date.now()<until){
-        const cleanup=this.cleanup;
+      if(this.runner.read(id)[0].status!=='running'&&!this.finishedRuns.has(id)&&this.finishing.has(id)&&Date.now()<until){
+        const cleanup=this.finishing.get(id)!;
         await new Promise<void>((resolve,reject)=>{
           const finish=(error?:unknown)=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);error===undefined?resolve():reject(error);};
           const abort=()=>finish(signal?.reason??new Error('Method wait cancelled'));

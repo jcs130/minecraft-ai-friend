@@ -36,6 +36,23 @@ send({type:'done',result:{upstreamRevision:v.revision,candidate,selectedRunId:'l
   return {directory,p,options,args,source,settled,changeScope:()=>scope={...scope,account:'another-player'},calls:()=>calls};
 }
 describe('explicit host method practice service',()=>{
+  it('routes explicit recorded cases to their executor and keeps the selected capability with the durable result',async()=>{
+    const r=rig(),chosen=physicsPractice(join(r.directory,'selected-methods'));
+    const fixtures=chosen.fixtures.map(f=>({...f,id:'recorded-'+f.id,snapshotId:'recorded-'+f.snapshotId}));
+    // The port owns reconstruction; the service must not fall back to its default executor.
+    let selected=0;
+    const service=new Harness2PracticeService({...r.options,cases:async()=>fixtures.map(f=>({id:f.id})),
+      prepareCases:async(ids)=>{expect(ids).toEqual(['scene-one','scene-two']);return {fixtures,capability:'selected recorded geometry',practice:{...chosen.executor,binding:chosen.executor.binding,
+        execute:async(request,signal)=>{selected++;const original=chosen.fixtures[fixtures.findIndex(f=>f.id===request.fixture.id)];
+          const outcome=await chosen.executor.execute({...request,fixture:original},signal);
+          return {...outcome,caseId:request.fixture.id,before:outcome.before?{...outcome.before,snapshotId:request.fixture.snapshotId}:undefined,
+            after:outcome.after?{...outcome.after,snapshotId:request.fixture.snapshotId}:undefined};}}};}});
+    expect(await service.call({op:'cases'})).toHaveLength(2);
+    await service.call({...r.args,caseIds:['scene-one','scene-two']});await r.settled;
+    const result=await service.call({op:'result',id:r.args.id}) as any;
+    expect(result.status).toBe('completed');expect(result.applicability).toBe('selected recorded geometry');
+    expect(selected).toBeGreaterThan(0);expect(r.p.stats().resets).toBe(0);await service.close();
+  },20000);
   it('continues independent evaluation after an invalid optional reflection without retrying the model or inventing a lesson',async()=>{
     const r=rig(true);let requests=0;
     const service=new Harness2PracticeService({...r.options,model:{id:'reflection-format',generate:async(request:any)=>{
@@ -80,7 +97,9 @@ describe('explicit host method practice service',()=>{
   });
   it('returns acceptance, measures real physics, exposes complete candidate on demand, and restart never replays effects',async()=>{
     const r=rig(),service=new Harness2PracticeService(r.options);
-    expect(await service.call(r.args)).toMatchObject({accepted:true,terminal:false,adopted:false});
+    const admission=await service.tool().handler(r.args,{} as any);
+    expect(typeof admission!=='string'&&admission.execution).toMatchObject({id:'harness2:experiment-one',terminal:false,goalCompleted:false,evidence:{isolated:true}});
+    expect(JSON.parse(typeof admission==='string'?admission:admission.text)).toMatchObject({accepted:true,terminal:false,adopted:false});
     await expect(service.call(r.args)).rejects.toThrow(/already pending|already exists/);
     await r.settled;
     const snapshot=await service.call({op:'status'}) as any;
