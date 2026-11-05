@@ -11,11 +11,13 @@ export async function replaceNativePhotoFile(temporary,target,renameFile=rename)
     catch(error){if(!['EPERM','EACCES','EBUSY'].includes(error.code)||attempt===5)throw error;await sleep(20);}
   }
 }
-export function validateNativeCamera(state,now=Date.now(),shadersEnabled=true){
-  if(typeof shadersEnabled!=='boolean')throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
+export function validateNativeCamera(state,now=Date.now(),shadersEnabled=true,expectedGpu='intel'){
+  if(typeof shadersEnabled!=='boolean'||!['intel','rtx3080ti'].includes(expectedGpu))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
+  const renderer=String(state?.renderer??'').toLowerCase();
+  const gpuMatches=expectedGpu==='intel'?renderer.includes('intel'):state?.vendor==='NVIDIA Corporation'&&/^nvidia geforce rtx 3080 ti(?:\/.*)?$/.test(renderer)&&state.expectedGpu===expectedGpu;
   const at=Date.parse(state?.at??'');
   if(state?.schema!=='qiandeng-native-camera/v1'||!UUID.test(state.instanceId??'')||!UUID.test(state.playerUuid??'')||!state.connected||!Number.isFinite(at)||now-at>2000||at>now+1000
-    ||!String(state.renderer).toLowerCase().includes('intel')||state.shadersEnabled!==shadersEnabled||state.cleanHud!==true||state.cleanToasts!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server||state.screenOpen===true
+    ||!gpuMatches||state.shadersEnabled!==shadersEnabled||state.cleanHud!==true||state.cleanToasts!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server||state.screenOpen===true
     ||String(state.renderer).toLowerCase().includes('d3d12')&&(state.windowVisible!==true||state.windowIconified===true||!Array.isArray(state.windowPosition)||!Array.isArray(state.expectedWindowPosition)||state.windowPosition.length!==2||state.expectedWindowPosition.length!==2||state.windowPosition.some((value,index)=>value!==state.expectedWindowPosition[index])))throw Error('PHOTO_NATIVE_NOT_READY');
   return state;
 }
@@ -28,11 +30,11 @@ export function nativeCameraPose(job,state,now=Date.now()){
   if(Math.hypot(pose.x-pose.anchorX,pose.y-pose.anchorY,pose.z-pose.anchorZ)>24||Math.abs(pose.pitch)>90)throw Error('PHOTO_NATIVE_POSE_INVALID');
   return pose;
 }
-export function createNativePhotoRenderer({gameDir,PNG,shadersEnabled=true,fetchImpl=fetch,sceneDirectory=null,sceneRadius=3,sceneAppearances}){
-  if(!path.isAbsolute(gameDir)||!PNG?.sync?.read||typeof shadersEnabled!=='boolean')throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
+export function createNativePhotoRenderer({gameDir,PNG,shadersEnabled=true,expectedGpu='intel',fetchImpl=fetch,sceneDirectory=null,sceneRadius=3,sceneAppearances}){
+  if(!path.isAbsolute(gameDir)||!PNG?.sync?.read||typeof shadersEnabled!=='boolean'||!['intel','rtx3080ti'].includes(expectedGpu))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   if(sceneDirectory!==null&&(!path.isAbsolute(sceneDirectory)||!Number.isInteger(sceneRadius)||sceneRadius<0||sceneRadius>4))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   const diagnostics=path.join(gameDir,'diagnostics/qiandeng-native-camera.json'),poseFile=path.join(gameDir,'agent-mc-bridge/camera-pose.json');
-  const probe=async()=>validateNativeCamera(await json(diagnostics,64*1024),Date.now(),shadersEnabled);
+  const probe=async()=>validateNativeCamera(await json(diagnostics,64*1024),Date.now(),shadersEnabled,expectedGpu);
   async function writePose(pose){const temporary=poseFile+'.writing';await writeFile(temporary,JSON.stringify(pose));await replaceNativePhotoFile(temporary,poseFile);}
   async function rpc(state){
     const connection=await json(path.join(gameDir,'agent-mc-bridge/connection.json'),8192),url=new URL(connection.endpoint);

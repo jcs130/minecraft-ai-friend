@@ -21,21 +21,29 @@ test('explicit non-shader policy preserves readiness guards and rejects unexpect
  for(const change of [{shadersEnabled:true},{shadersEnabled:undefined},{cleanHud:false},{cleanToasts:false},{screenOpen:true},{renderer:'NVIDIA'},{modelCatalogueSize:0},{connected:false},{at:new Date(Date.now()-5000).toISOString()}])assert.throws(()=>validateNativeCamera({...actual,...change},Date.now(),false),/NOT_READY/);
  for(const setting of [null,'false',0])assert.throws(()=>validateNativeCamera(actual,Date.now(),setting),/CONFIGURATION_INVALID/);
 });
+test('RTX opt-in verifies the exact native adapter without weakening the default Intel policy',()=>{
+ const actual={...state(),renderer:'NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2',vendor:'NVIDIA Corporation',expectedGpu:'rtx3080ti'};
+ assert.throws(()=>validateNativeCamera(actual),/NOT_READY/);
+ assert.equal(validateNativeCamera(actual,Date.now(),true,'rtx3080ti'),actual);
+ for(const change of [{renderer:'NVIDIA RTX PRO 5000 72GB Blackwell/PCIe/SSE2'},{renderer:'D3D12 (NVIDIA GeForce RTX 3080 Ti)'},{vendor:'Microsoft Corporation'},{expectedGpu:undefined},{shadersEnabled:false},{cleanHud:false},{connected:false},{modelCatalogueSize:0}])assert.throws(()=>validateNativeCamera({...actual,...change},Date.now(),true,'rtx3080ti'),/NOT_READY/);
+ assert.throws(()=>validateNativeCamera(actual,Date.now(),true,'nvidia'),/CONFIGURATION_INVALID/);
+});
 test('web pose is converted to actual Minecraft camera coordinates and angles without moving the body',()=>{
  const pose=nativeCameraPose(job,state(),1000);assert.equal(pose.y,65.62);assert.equal(pose.yaw,0);assert.equal(pose.pitch,0.25*180/Math.PI);assert.equal(pose.expiresAt,4000);
  assert.equal(nativeCameraPose({...job,mode:'top',y:84,pitch:-Math.PI/2},state()).pitch,90);
  for(const change of [{x:100},{pitch:NaN},{entityId:1.5},{owner:'wrong'},{mode:'free'}])assert.throws(()=>nativeCameraPose({...job,...change},state()));
 });
-for(const scenario of [{shaders:true},{shaders:false},{shaders:false,scene:true},{shaders:false,scene:'failed'}])test(`native handshake (${JSON.stringify(scenario)}) keeps photograph delivery independent of scene storage and expires its render lease`,async()=>{
+for(const scenario of [{shaders:true},{shaders:false},{shaders:false,scene:true},{shaders:false,scene:'failed'},{shaders:true,gpu:'rtx3080ti',scene:true}])test(`native handshake (${JSON.stringify(scenario)}) keeps photograph delivery independent of scene storage and expires its render lease`,async()=>{
  const shadersEnabled=scenario.shaders;
+ const cameraState=()=>({...state(),shadersEnabled,...(scenario.gpu?{renderer:'NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2',vendor:'NVIDIA Corporation',expectedGpu:scenario.gpu}:{})});
  const root=await mkdtemp(path.join(os.tmpdir(),'native-photo-'));let timer;
  try{
   await mkdir(path.join(root,'diagnostics'));await mkdir(path.join(root,'agent-mc-bridge'));
-  const file=path.join(root,'diagnostics/qiandeng-native-camera.json'),pose=path.join(root,'agent-mc-bridge/camera-pose.json');await writeFile(file,JSON.stringify({...state(),shadersEnabled}));
+  const file=path.join(root,'diagnostics/qiandeng-native-camera.json'),pose=path.join(root,'agent-mc-bridge/camera-pose.json');await writeFile(file,JSON.stringify(cameraState()));
   await writeFile(path.join(root,'agent-mc-bridge/connection.json'),JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:12345',token:'x'.repeat(64)}));
-  let busy=false;timer=setInterval(async()=>{if(busy)return;busy=true;try{const row=JSON.parse(await readFile(pose,'utf8'));if(row.expiresAt>0)await writeFile(file,JSON.stringify({...state(),shadersEnabled,job:row.job,nonce:row.nonce,poseOwner:row.owner,renderedJob:row.job,renderedFrames:3,cameraPosition:[row.x,row.y,row.z],players:[{uuid:id,model:'test',modelLoaded:true}]}));}catch{}finally{busy=false;}},30);
+  let busy=false;timer=setInterval(async()=>{if(busy)return;busy=true;try{const row=JSON.parse(await readFile(pose,'utf8'));if(row.expiresAt>0)await writeFile(file,JSON.stringify({...cameraState(),job:row.job,nonce:row.nonce,poseOwner:row.owner,renderedJob:row.job,renderedFrames:3,cameraPosition:[row.x,row.y,row.z],players:[{uuid:id,model:'test',modelLoaded:true}]}));}catch{}finally{busy=false;}},30);
   const png=Buffer.alloc(2048);Buffer.from('89504e470d0a1a0a','hex').copy(png);png.writeUInt32BE(256,16);png.writeUInt32BE(256,20);
-  const renderer=createNativePhotoRenderer({gameDir:root,shadersEnabled,...(scenario.scene?{sceneDirectory:path.join(root,'scenes'),sceneRadius:0}:{}),PNG:{sync:{read:()=>({width:256,height:256,data:Buffer.alloc(256*256*4,128)})}},fetchImpl:async(url,options)=>{
+  const renderer=createNativePhotoRenderer({gameDir:root,shadersEnabled,expectedGpu:scenario.gpu??'intel',...(scenario.scene?{sceneDirectory:path.join(root,'scenes'),sceneRadius:0}:{}),PNG:{sync:{read:()=>({width:256,height:256,data:Buffer.alloc(256*256*4,128)})}},fetchImpl:async(url,options)=>{
    assert.equal(url,'http://127.0.0.1:12345/v1/rpc');assert.equal(options.headers.Authorization,'Bearer '+'x'.repeat(64));const call=JSON.parse(options.body);assert.equal(call.params.expectedUuid,id);assert.equal('controllerId' in call.params,false);
    if(call.method!=='screenshot'){
     assert.ok(scenario.scene&&['visual_frame','visual_registry','visual_chunk'].includes(call.method));if(scenario.scene==='failed')return new Response(JSON.stringify({error:{code:'UNAVAILABLE'}}));

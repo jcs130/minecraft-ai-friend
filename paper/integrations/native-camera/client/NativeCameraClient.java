@@ -22,7 +22,7 @@ public final class NativeCameraClient implements ClientModInitializer {
         if(!Boolean.getBoolean("qiandeng.camera.enabled"))return;
         ClientLifecycleEvents.CLIENT_STARTED.register(client->{
             String renderer=String.valueOf(GL11.glGetString(GL11.GL_RENDERER));
-            if(!renderer.toLowerCase(Locale.ROOT).contains("intel"))throw new IllegalStateException("CAMERA_INTEL_GPU_REQUIRED: "+renderer);
+            CameraGpuPolicy.verify(System.getProperty("qiandeng.camera.expectedGpu","intel"),renderer,GL11.glGetString(GL11.GL_VENDOR));
             // Iris uses the options perspective, not Camera's render-lease flag,
             // when deciding whether to draw the local first-person hands. This
             // dedicated photographer must never render its own hands over a
@@ -33,7 +33,7 @@ public final class NativeCameraClient implements ClientModInitializer {
             if(x!=null&&y!=null)GLFW.glfwSetWindowPos(window,x,y);
             if(!System.getProperty("qiandeng.camera.hidden","true").equals("false"))GLFW.glfwHideWindow(window);
             else GLFW.glfwShowWindow(window);
-            System.out.println("[QiandengCamera] Verified Intel renderer: "+renderer);
+            System.out.println("[QiandengCamera] Verified configured renderer: "+renderer);
             sample(client);
         });
         ClientTickEvents.END_CLIENT_TICK.register(client->{CameraPose.refresh(client,instance);if(++ticks%5==0)sample(client);});
@@ -44,6 +44,7 @@ public final class NativeCameraClient implements ClientModInitializer {
             data.put("schema","qiandeng-native-camera/v1");data.put("instanceId",instance);
             data.put("at",Instant.now().toString());data.put("pid",ProcessHandle.current().pid());
             data.put("renderer",GL11.glGetString(GL11.GL_RENDERER));data.put("vendor",GL11.glGetString(GL11.GL_VENDOR));
+            data.put("expectedGpu",System.getProperty("qiandeng.camera.expectedGpu","intel"));
             data.put("opengl",GL11.glGetString(GL11.GL_VERSION));data.put("cleanHud",Boolean.parseBoolean(System.getProperty("qiandeng.camera.hideHud","true")));data.put("cleanToasts",true);data.put("fps",client.method_47599());
             data.put("perspective",client.field_1690.method_31044().name());
             long window=client.method_22683().method_4490();
@@ -58,6 +59,7 @@ public final class NativeCameraClient implements ClientModInitializer {
             data.put("server",client.method_1558()==null?"":client.method_1558().field_3761);
             data.put("renderedJob",renderedJob==null?null:renderedJob.toString());data.put("renderedFrames",renderedFrames);
             var pose=CameraPose.applicable(client);data.put("job",pose==null?null:pose.job().toString());
+            data.put("frameBudget",CameraFramePolicy.limit(true,System.getProperty("qiandeng.camera.expectedGpu","intel"),pose!=null,30));
             data.put("nonce",pose==null?null:pose.nonce().toString());data.put("poseOwner",pose==null?null:pose.owner().toString());
             boolean shaders=false;
             try {Class<?> type=Class.forName("net.irisshaders.iris.api.v0.IrisApi");Object api=type.getMethod("getInstance").invoke(null);shaders=(boolean)type.getMethod("isShaderPackInUse").invoke(api);}catch(ReflectiveOperationException ignored){}

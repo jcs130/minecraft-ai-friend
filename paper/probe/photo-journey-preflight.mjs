@@ -3,12 +3,12 @@
 import {readFile} from 'node:fs/promises';import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {validateNativeCamera} from '../ops/native-photo-renderer.mjs';
-export async function photoJourneyPreflight(gameDir,{shadersEnabled=false}={}) {
+export async function photoJourneyPreflight(gameDir,{shadersEnabled=false,expectedGpu='intel'}={}) {
   const result={scope:'read-only native camera files; not a screenshot or game delivery',ready:false,blockers:[]};
   if(!gameDir||!path.isAbsolute(gameDir)){result.blockers.push('No explicit absolute isolated native game directory supplied');return result;}
   try {
     const state=JSON.parse(await readFile(path.join(gameDir,'diagnostics/qiandeng-native-camera.json'),'utf8'));
-    validateNativeCamera(state,Date.now(),shadersEnabled);
+    validateNativeCamera(state,Date.now(),shadersEnabled,expectedGpu);
     if(!/^127\.0\.0\.1:\d+$/.test(state.server))throw Error('ISOLATED_LOOPBACK_SERVER_REQUIRED');
     result.camera={renderer:state.renderer,modelCatalogueSize:state.modelCatalogueSize,shadersEnabled:state.shadersEnabled,ageMs:Date.now()-Date.parse(state.at)};
   }catch(error){result.blockers.push(error.code??(/^PHOTO_[A-Z_]+$|^ISOLATED_LOOPBACK_SERVER_REQUIRED$/.test(error.message)?error.message:'NATIVE_STATE_INVALID'));}
@@ -23,6 +23,7 @@ export async function photoJourneyPreflight(gameDir,{shadersEnabled=false}={}) {
   result.ready=result.blockers.length===0;return result;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
-  const result=await photoJourneyPreflight(process.argv[2],{shadersEnabled:process.argv.includes('--shaders-on')});
+  const expectedGpu=process.argv.find(arg=>arg.startsWith('--gpu='))?.slice(6)??'intel';
+  const result=await photoJourneyPreflight(process.argv[2],{shadersEnabled:process.argv.includes('--shaders-on'),expectedGpu});
   console.log(JSON.stringify(result,null,2));process.exitCode=result.ready?0:2;
 }

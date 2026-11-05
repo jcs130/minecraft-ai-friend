@@ -21,11 +21,15 @@ def main():
     display_profile=root/'native-camera-display.json'
     if display_profile.is_file():
         display=json.loads(display_profile.read_text(encoding='utf-8-sig'))
-        if display.get('schema')!=1 or display.get('expectedGpu')!='Intel':raise SystemExit('Unreviewed camera display profile')
+        if display.get('schema')!=1 or display.get('expectedGpu') not in ('Intel','RTX3080Ti'):raise SystemExit('Unreviewed camera display profile')
+        expected='intel' if display['expectedGpu']=='Intel' else 'rtx3080ti'
+        arguments=['-Dqiandeng.camera.expectedGpu='+expected]+arguments
         coordinates=[display.get('windowX'),display.get('windowY')]
         if not all(type(value)is int and -32768<=value<=32767 for value in coordinates):raise SystemExit('Invalid camera monitor coordinates')
         arguments=['-Dqiandeng.camera.windowX='+str(coordinates[0]),'-Dqiandeng.camera.windowY='+str(coordinates[1])]+arguments
-        if display.get('graphicsBackend') not in (None,'mesa-d3d12'):raise SystemExit('Unreviewed camera graphics backend')
+        if display.get('graphicsBackend') not in (None,'mesa-d3d12','native-opengl'):raise SystemExit('Unreviewed camera graphics backend')
+        if expected=='rtx3080ti' and (display.get('graphicsBackend')!='native-opengl' or (java.parent/'opengl32.dll').exists()):raise SystemExit('RTX camera requires the native driver and a dedicated clean Java runtime')
+        if display.get('graphicsBackend')=='native-opengl':hidden=False
         if display.get('graphicsBackend')=='mesa-d3d12':
             hidden=False
             arguments=['-Dqiandeng.camera.mesaIntelAdapter=true']+arguments
@@ -37,7 +41,10 @@ def main():
         # by the permissive parser and leave a renderer at the title screen.
         arguments+=['--quickPlayMultiplayer',host+':'+port]
     log=(root/'native-camera.log').open('ab')
-    process=subprocess.Popen([str(java)]+arguments,cwd=root,stdout=log,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    print(json.dumps({'pid':process.pid,'started':True,'verified':False,'lifetime':'resident','note':'Require fresh Intel/YSM telemetry matching the configured shader policy before accepting photos'}))
+    flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
+    if '-Dqiandeng.camera.expectedGpu=rtx3080ti' in arguments:
+        flags|=getattr(subprocess,'BELOW_NORMAL_PRIORITY_CLASS',0)
+    process=subprocess.Popen([str(java)]+arguments,cwd=root,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
+    print(json.dumps({'pid':process.pid,'started':True,'verified':False,'lifetime':'resident','note':'Require fresh configured-GPU/YSM telemetry matching the shader policy before accepting photos'}))
 
 if __name__=='__main__':main()
