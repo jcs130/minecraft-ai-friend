@@ -1,7 +1,9 @@
 import json
+
 import pytest
+
 from agent_mc_autonomy.bridge import MinecraftBridge
-from agent_mc_autonomy.work_evidence import SCHEMA, PROTOCOL
+from agent_mc_autonomy.work_evidence import PROTOCOL, SCHEMA
 
 
 def bridge(tmp_path, answer, *, legacy=False):
