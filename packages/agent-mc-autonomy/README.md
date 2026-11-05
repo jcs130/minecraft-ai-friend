@@ -1388,3 +1388,12 @@ without repeating a native request or receipt callback. Permanent permission,
 non-Windows and disk errors still fail visibly and preserve the previous
 uncertainty fence. A real Windows reader handle held for 100 ms reproduces the
 previous failure and verifies recovery. No model, game policy or core pin changes.
+# Canonical report and wait inspections
+
+`MinecraftBridge.inspect_report_review(record, review)` and
+`select_execution_wait(observations, options)` forward to the advertised core MCP
+contract. They keep no second hash/review policy, model loop or body queue. An
+older core returns explicit `available:false`/`disposition:unknown`; there is no
+permissive local fallback. Input remains caller-supplied evidence, and neither
+inspection adopts a decision or proves game completion. Hosts still own report
+delivery, stage checks, persistence and wakeup scheduling.
