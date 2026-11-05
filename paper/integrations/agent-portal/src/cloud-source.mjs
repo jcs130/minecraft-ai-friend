@@ -4,6 +4,7 @@ import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { validatePhotos } from './gallery.mjs';
 import { mergeReviewedRoles, prepareReviewedRoles } from './ownership-review.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
+import { isPhotoObserver } from './service-observers.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const pick = (value, fields) => Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key)).map(key => [key, value[key]]));
@@ -27,10 +28,11 @@ function noCredentials(value, depth = 0) {
 // second body, runs RCON, or reads the authentication/model credential stores.
 export async function buildSnapshot(game, world, sequence, photos = [], additions = {}) {
   const [all, summary, growth] = await Promise.all([game.roster(), game.serverSummary(), world.players()]);
-  const roster = all.slice(0, 256).map(row => pick(row, rosterFields));
+  const visible = all.filter(row => !isPhotoObserver(row.name, row.playerUuid)).slice(0, 256);
+  const roster = visible.map(row => pick(row, rosterFields));
   const publishedNames = new Set(roster.map(row => row.name.toLowerCase()));
   const states = {};
-  const eligible = all.slice(0, 256).filter(row => row.available && !row.isReserved && row.kind !== 'observer');
+  const eligible = visible.filter(row => row.available && !row.isReserved && row.kind !== 'observer');
   for (let offset = 0; offset < eligible.length; offset += 8) {
     await Promise.all(eligible.slice(offset, offset + 8).map(async row => { states[row.playerUuid] = pick(await game.playerState(row), privateStateFields); }));
   }
@@ -44,7 +46,7 @@ export async function buildSnapshot(game, world, sequence, photos = [], addition
     if (page >= result.pages) break;
   }
   const result = { schemaVersion: 1, sequence, observedAt: new Date().toISOString(), summary: pick(summary, summaryFields), roster,
-    players: growth.players.map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events, photos: validatePhotos(photos),
+    players: growth.players.filter(row => publishedNames.has(row.name.toLowerCase())).map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events, photos: validatePhotos(photos),
     ...(additions.photoManifest?{photoManifest:additions.photoManifest}:{}) };
   noCredentials(result);
   return result;
@@ -134,11 +136,21 @@ export class CloudGame {
       if (existing) { if (existing.playerUuid !== registered.uuid) existing.identityConflict = true; continue; }
       if (!roster.some(row => row.playerUuid === registered.uuid)) roster.push({ id: this.idFor(registered.uuid, registered.name), name: registered.name, playerUuid: registered.uuid, kind: 'agent', online: snapshot?.stale || !snapshot ? null : false, authenticated: false, available: true, isReserved: false, source: 'LoginGuard.verified-portal-registration' });
     }
-    return mergeReviewedRoles(this.store, roster.filter(row => !retired.has(row.name.toLowerCase())), (uuid,name)=>this.idFor(uuid,name));
+    return mergeReviewedRoles(this.store, roster.filter(row => !retired.has(row.name.toLowerCase())), (uuid,name)=>this.idFor(uuid,name))
+      .filter(row => !isPhotoObserver(row.name, row.playerUuid));
   }
   async serverSummary() {
     const snapshot = this.source.read();
-    return { name: this.config.siteName, ...(snapshot?.value.summary || {}),
+    const summary = { ...snapshot?.value.summary };
+    // Old publishers counted the camera as a player. Keep stored snapshots
+    // intact so retries retain their original sequence and body hash.
+    for (const row of snapshot?.value.roster || []) {
+      if (!isPhotoObserver(row.name, row.playerUuid)) continue;
+      if (Number.isFinite(summary.rosterCount)) summary.rosterCount = Math.max(0, summary.rosterCount - 1);
+      if (row.kind === 'agent' && Number.isFinite(summary.agentCount)) summary.agentCount = Math.max(0, summary.agentCount - 1);
+      if (row.online === true && Number.isFinite(summary.playersOnline)) summary.playersOnline = Math.max(0, summary.playersOnline - 1);
+    }
+    return { name: this.config.siteName, ...summary,
       ...(snapshot?.stale || !snapshot ? { online: null, authHealthy: false, playersOnline: null, unavailableReason: '家庭端同步已离线或尚未连接；保存资料仍可查看' } : {}),
       source: 'home.outbound-snapshot', sync: { stale: !snapshot || snapshot.stale, observedAt: snapshot?.value.observedAt || null } };
   }
@@ -155,7 +167,7 @@ export class CloudWorld {
   constructor(config, game, store, source) { this.config = config; this.game = game; this.store = store; this.source = source; }
   async players() {
     const snapshot = this.source.read(), roster = await this.game.roster();
-    const visible = new Map(roster.filter(row=>!row.historical).map(row => [row.name.toLowerCase(), row]));
+    const visible = new Map(roster.filter(row=>!row.historical && row.kind !== 'observer').map(row => [row.name.toLowerCase(), row]));
     return { players: (snapshot?.value.players || []).filter(row => visible.has(row.name.toLowerCase())).map(row => ({ ...this.game.publicAgent(visible.get(row.name.toLowerCase())), growth: row.growth, savedAt: row.savedAt, progressionSavedAt: row.progressionSavedAt })),
       freshness: 'saved', source: 'home.outbound-snapshot', observedAt: snapshot?.value.observedAt || null };
   }

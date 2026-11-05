@@ -228,12 +228,12 @@ test('helper validates transport and identity target; discovery pins its exact p
   assert.equal(helpResponse.status, 200);
 });
 
-test('archived test identities cannot reappear from a later snapshot; an Eye and its real Agent remain visible', async t => {
+test('archived test identities cannot reappear and an Eye only remains in the internal roster', async t => {
   const f = await siteFixture(t), owner = f.portal.store.ownerByName('fixture-admin'), oldUuid = randomUUID();
   f.portal.store.db.prepare('INSERT INTO archived_test_roles VALUES(?,?,?,?,?,?,?)').run(oldUuid, 'ag_OldTest', owner.id, 'isolated cleanup', Date.now(), Date.now(), 'test');
   const rows = [{ name: 'ag_OldTest', playerUuid: oldUuid, kind: 'agent' }, { name: 'ag_NEKO', playerUuid: randomUUID(), kind: 'agent' }, { name: 'ag_neko_eye', playerUuid: randomUUID(), kind: 'observer' }];
   const source = { read: () => ({ stale: false, value: { roster: rows, players: rows.map(row => ({ name: row.name, growth: { level: 1 } })) } }) };
   const game = new CloudGame(f.config, f.portal.store, source), world = new CloudWorld(f.config, game, f.portal.store, source);
   assert.deepEqual((await game.roster()).map(row => row.name), ['ag_NEKO', 'ag_neko_eye']);
-  assert.deepEqual((await world.players()).players.map(row => row.name), ['ag_NEKO', 'ag_neko_eye']);
+  assert.deepEqual((await world.players()).players.map(row => row.name), ['ag_NEKO']);
 });
