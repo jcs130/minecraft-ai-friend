@@ -183,7 +183,7 @@ final class AgentCliCatalog {
         add(specs,"skillbook.list","magic","read","/mycli skillbook list","列出背包内真实研习书、槽位、技能与可得熟练度","本人在线","MC_SKILLBOOK action=list|summary");
         add(specs,"skillbook.use","magic","item","/mycli skillbook use [背包槽位0–35]","消耗一册研习书增加对应技能熟练度；满级不消耗","本人持有该书且未满 3 级","MC_SKILLBOOK action=use");
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗 8 格内所有受伤玩家（含自己）","非旁观者；6 魔力；12 秒冷却；无需瞄准","治疗人数、视觉提示与私有技能事件");
-        add(specs,"cast.food","magic","cast","/mycli cast food","恢复饥饿","非旁观者；MagicSpells 魔力与冷却检查","施法结果");
+        add(specs,"cast.food","magic","cast","/mycli cast food","恢复饥饿","饥饿未满；非旁观者；MagicSpells 魔力与冷却检查","施法结果");
         add(specs,"cast.home","magic","teleport","/mycli cast home","归乡到出生村庄","非旁观者；村庄传送可用；6 魔力","成功后 MC_TRAVEL、技能特效和绝对坐标；失败不扣费");
         add(specs,"cast.blink","magic","cast","/mycli cast blink","瞄准安全落点；未瞄准时向前选最远安全地面","非旁观者；25格内安全落点；统一魔力与原冷却","施法结果");
         add(specs,"cast.give","magic","cast","/mycli cast give <物品名>","造物：固定 8 种即时造出；其他物品申请女神审核","非旁观者；固定配方耗魔力；申请需女神在线","物品或申请送达/拒绝原因");

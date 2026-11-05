@@ -25,6 +25,13 @@ jobs:
           java-version: '21'
       - name: Check Goddess private-message authority without connecting
         run: node --test paper/ops/goddess-*.test.mjs
+      - name: Check four-agent party diagnostics and isolated-stage boundaries offline
+        run: |
+          python paper/integrations/vortex-rpg/tests/run-four-party.py
+          python paper/integrations/vortex-rpg/tests/test_four_party_build.py
+          python paper/integrations/vortex-rpg/tests/test_party4_diagnostics.py
+          node --test paper/integrations/vortex-rpg/tests/four-party-preflight.test.mjs
+          node --check paper/integrations/vortex-rpg/tests/four-party-stage.mjs
       - name: Check restore, drain and original Minescript wrappers offline
         run: |
           python -m unittest discover -s tests -p test_survival_body_reconnect.py -v
@@ -36,6 +43,15 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar -o "$RUNNER_TEMP/gson-2.10.1.jar"
           printf '%s  %s\n' '4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593' "$RUNNER_TEMP/gson-2.10.1.jar" | sha256sum --check
           python tests/verify_issue43_java.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/gson-2.10.1.jar" --output "$RUNNER_TEMP/review-boundaries"
+      - name: Check bidirectional voice authorization and client receipts offline
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/voice-deps"
+          curl --proto '=https' --tlsv1.2 -fsSL https://fill-data.papermc.io/v1/objects/fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef/velocity-3.4.0-SNAPSHOT-563.jar -o "$RUNNER_TEMP/voice-deps/velocity.jar"
+          curl --proto '=https' --tlsv1.2 -fsSL https://github.com/kyngs/LibreLogin/releases/download/0.24.0/LibreLogin.jar -o "$RUNNER_TEMP/voice-deps/LibreLogin.jar"
+          curl --proto '=https' --tlsv1.2 -fsSL https://github.com/retrooper/packetevents/releases/download/v2.8.0/packetevents-velocity-2.8.0.jar -o "$RUNNER_TEMP/voice-deps/packetevents.jar"
+          python paper/integrations/login-guard/tests/run_transport_tests.py --deps "$RUNNER_TEMP/voice-deps" --output "$RUNNER_TEMP/voice-transport-tests"
+          node --test paper/integrations/proximity-voice/tests/client.test.mjs
   source-safety:
     runs-on: ubuntu-latest
     steps:

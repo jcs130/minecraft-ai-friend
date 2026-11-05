@@ -599,7 +599,7 @@ export function createPortal(config, options = {}) {
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {
         const owned = new Set(store.db.prepare('SELECT agent_uuid FROM ownerships').all().map(row => row.agent_uuid));
-        return respond(res, 200, { agents: (await game.roster()).filter(row=>!row.historical).map(row => ({ ...game.publicAgent(row),
+        return respond(res, 200, { agents: (await game.roster()).filter(row=>!row.historical && row.kind !== 'observer').map(row => ({ ...game.publicAgent(row),
           experiencePool: !!row.playerUuid && isTrialAgent(store, row.playerUuid),
           claimable: !!row.playerUuid && !row.isReserved && !row.historical && ['agent', 'player'].includes(row.kind) && !row.identityConflict && (!owned.has(row.playerUuid) || isTrialAgent(store, row.playerUuid)) })) });
       }

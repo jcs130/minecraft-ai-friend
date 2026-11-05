@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { digest, newSecret } from './store.mjs';
+import { isPhotoObserver } from './service-observers.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 
@@ -27,7 +28,10 @@ export function jpegSize(bytes) {
 
 export class Live {
   constructor(config, store) { this.config = config; this.store = store; this.frames = new Map(); }
-  channel(id) { return this.store.db.prepare('SELECT * FROM live_channels WHERE id=?').get(id); }
+  channel(id) {
+    const row = this.store.db.prepare('SELECT * FROM live_channels WHERE id=?').get(id);
+    return row && !isPhotoObserver(row.player_name, row.player_uuid) ? row : undefined;
+  }
   publisher(req, id) {
     const channel = this.channel(id);
     const token = /^Bearer (pub_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '')?.[1];
@@ -51,7 +55,8 @@ export class Live {
   list(owner = null) {
     const owned = owner ? this.store.ownedUuids(owner.id) : [];
     return this.store.db.prepare('SELECT id,title,player_name,player_uuid,visibility FROM live_channels ORDER BY created_at').all()
-      .filter(row => row.visibility === 'public' || owner?.role === 'admin' || owned.includes(row.player_uuid)).map(row => {
+      .filter(row => !isPhotoObserver(row.player_name, row.player_uuid)
+        && (row.visibility === 'public' || owner?.role === 'admin' || owned.includes(row.player_uuid))).map(row => {
       const frame = this.frames.get(row.id);
       const available = !!frame?.bytes && Date.now() - frame.at < this.config.live.staleAfterMs;
       return { id: row.id, title: row.title, playerName: row.player_name, visibility: row.visibility, available, isOwn: owned.includes(row.player_uuid), canManage: owner?.role === 'admin' || owned.includes(row.player_uuid),

@@ -15,11 +15,15 @@ function snapshot(sequence = 1) {
     states: { [uuid]: { freshness: 'saved', inventory: [{ slot: 5, id: 'minecraft:player_head', name: '大背包', count: 1 }], savedPosition: [1, 64, 3], progress: { profession: { combat: 'warrior' } } } },
     events: [{ id: 'a'.repeat(64), kind: 'quest', playerName: 'ag_Alpha', title: '完成营地补给', body: '', occurredAt: '2026-10-20T00:00:00+08:00', timePrecision: 'day', source: 'AgentFriend.guild.everDone' }] };
 }
-async function fixture(t) {
+async function fixture(t, live = {}) {
   const base = path.resolve(projectRoot, '.local/tests'), root = path.join(base, 'cloud-' + randomUUID());
-  const config = loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: 'username' }, host: '127.0.0.1', port: 0, sourceMode: 'cloud', dataDir: root, serverDir: path.join(root, 'MUST_NOT_READ_GAME_FILES'), cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') }, authBridge: { enabled: false } });
+  const config = loadConfig({ skipLocalConfig: true, emailAuth: { registrationMode: 'username' }, host: '127.0.0.1', port: 0, sourceMode: 'cloud', dataDir: root, serverDir: path.join(root, 'MUST_NOT_READ_GAME_FILES'), cloudSync: { enabled: true, tokenHash: createHash('sha256').update(token).digest('hex') }, authBridge: { enabled: false }, live });
   let portal;
-  async function start() { portal = createPortal(config); await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve)); }
+  async function start() {
+    const spectatorSite = live.worldObserverEnabled ? { build: {}, page: () => Buffer.from('<html>test</html>'), file: () => null } : undefined;
+    portal = createPortal(config, { spectatorSite }); await portal.ready;
+    await new Promise(resolve => portal.server.listen(0, '127.0.0.1', resolve));
+  }
   await start();
   const origin = () => 'http://127.0.0.1:' + portal.server.address().port;
   const put = (body, credential = token, headers = {}) => fetch(origin() + '/api/v1/internal/snapshot', { method: 'PUT', headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
@@ -68,6 +72,34 @@ test('snapshot replay, late arrival and malformed events cannot overwrite commit
   const late = snapshot(2); late.observedAt = new Date(Date.parse(first.observedAt) - 1000).toISOString(); assert.equal((await f.put(late)).status, 409);
   const invalid = snapshot(2); invalid.events[0].kind = 'chat'; assert.equal((await f.put(invalid)).status, 400);
   assert.equal((await f.get('server')).version, first.summary.version);
+  assert.equal((await f.get('world/events')).total, 1);
+});
+
+test('legacy snapshots cannot publish the photo camera as a role or activity', async t => {
+  const f = await fixture(t, { worldObserverEnabled: true, worldObserverPublicDefault: true, worldObserverTokenHash: 'c'.repeat(64), native3dSiteDirectory: path.resolve('isolated-site') }), old = snapshot();
+  const name = 'ag_PhotoLens', cameraUuid = 'ff58a81b-f033-3b74-a7cf-58ac4e798bb0';
+  old.roster.push({ ...old.roster[0], name, playerUuid: cameraUuid, statusSource: 'minecraft.server-list-ping.uuid', statusObservedAt: old.observedAt });
+  old.players.push({ ...old.players[0], name });
+  old.states[cameraUuid] = old.states[uuid];
+  old.roster.push({ ...old.roster[0], name: 'ExampleEye', playerUuid: randomUUID(), kind: 'observer', isReserved: true, online: false });
+  old.players.push({ ...old.players[0], name: 'ExampleEye' });
+  old.events.push({ ...old.events[0], id: 'b'.repeat(64), kind: 'join', playerName: name, title: '相机连接' });
+  Object.assign(old.summary, { playersOnline: 2, rosterCount: 3, agentCount: 2, observedAt: old.observedAt });
+  assert.equal((await f.put(old)).status, 200);
+  assert.equal((await (await f.put(old)).json()).duplicate, true);
+  assert.deepEqual((await f.get('roster')).agents.map(row => row.name), ['ag_Alpha']);
+  assert.deepEqual((await f.get('world/players')).players.map(row => row.name), ['ag_Alpha']);
+  const live = await f.get('live');
+  assert.equal(live.mode, 'native-3d');
+  assert.deepEqual(live.channels.map(row => row.playerName), ['ag_Alpha']);
+  const cameraChannel = createHash('sha256').update('qiandengji:world-view:' + cameraUuid).digest('hex').slice(0, 32);
+  const watch = await f.admin(`live/${cameraChannel}/watch`, 'POST', { viewerId: randomUUID() });
+  assert.equal(watch.status, 404);
+  assert.equal((await f.get('world/events?limit=1')).total, 1);
+  assert.equal((await f.get('world/events?player=' + name.toUpperCase())).total, 0);
+  const status = await f.get('server');
+  assert.deepEqual([status.playersOnline, status.rosterCount, status.agentCount], [1, 2, 1]);
+  await f.restart();
   assert.equal((await f.get('world/events')).total, 1);
 });
 

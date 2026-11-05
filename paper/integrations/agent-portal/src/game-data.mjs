@@ -5,10 +5,11 @@ import YAML from 'yaml';
 import nbt from 'prismarine-nbt';
 import { pingMinecraft } from './minecraft-ping.mjs';
 import { playerNameValid } from './world-catalog.mjs';
+import { isPhotoObserver, publicOnlineCount, publicPlayerCountPolicy } from './service-observers.mjs';
 
 export const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export const RESERVED = new Set(['corti', 'corticam', 'player', 'goddess', 'live']);
-export const reservedIdentityName = name => typeof name !== 'string' || /eye$/i.test(name) || RESERVED.has(name.toLowerCase()) || RESERVED.has(name.toLowerCase().replace(/^ag_/, ''));
+export const reservedIdentityName = name => typeof name !== 'string' || isPhotoObserver(name) || /eye$/i.test(name) || RESERVED.has(name.toLowerCase()) || RESERVED.has(name.toLowerCase().replace(/^ag_/, ''));
 // Game OP is a capability, not a separate website owner. Reserved housekeeper
 // names and observers remain protected; ordinary OP players still prove their
 // original game UUID through LoginGuard before any self-service ownership.
@@ -139,7 +140,10 @@ export class GameData {
     const authenticated = new Set(auth.names.map(norm));
     const sampled = new Set((status.sample || []).map(row => norm(row.name)));
     const sampledUuids = new Set((status.sample || []).filter(row => UUID.test(row.uuid || '')).map(row => row.uuid.toLowerCase()));
-    return [...names.values()].filter(name => playerNameValid(name) && !(this.config.hiddenPlayers || []).some(hidden => norm(hidden) === norm(name))).map(name => {
+    const photoNames = new Set((status.sample || []).filter(row => isPhotoObserver(row.name, row.uuid)).map(row => norm(row.name)));
+    return [...names.values()].filter(name => playerNameValid(name) && !isPhotoObserver(name, userMap.get(norm(name))?.uuid)
+      && !photoNames.has(norm(name))
+      && !(this.config.hiddenPlayers || []).some(hidden => norm(hidden) === norm(name))).map(name => {
       const user = userMap.get(norm(name));
       const conflict = conflicts.has(norm(name));
       const uuid = !conflict && user && UUID.test(user.uuid) ? user.uuid.toLowerCase() : null;
@@ -165,7 +169,7 @@ export class GameData {
     const [status, roster, heartbeat] = await Promise.all([this.status(), this.roster(), this.document(this.config.authHeartbeat)]);
     const auth = freshAuthentication(heartbeat.data);
     return { name: this.config.siteName, online: status.online, version: status.version || null,
-      playersOnline: status.playersOnline ?? null, playersMax: status.playersMax ?? null,
+      ...publicOnlineCount(status), playerCountPolicy: publicPlayerCountPolicy, playersMax: status.playersMax ?? null,
       latencyMs: status.latencyMs ?? null, observedAt: status.observedAt,
       rosterCount: roster.length, agentCount: roster.filter(row => row.kind === 'agent').length,
       authHealthy: auth.fresh, source: status.source, unavailableReason: status.unavailableReason || null,

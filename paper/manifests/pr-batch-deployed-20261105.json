@@ -1,0 +1,131 @@
+{
+  "state": "deployed-with-open-acceptance",
+  "release": "pr-batch-release-20261105",
+  "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
+  "sourceCommit": "8ae351734cd4e7741636fd25ee58f16e68fc070b",
+  "mergedPullRequests": [
+    69,
+    71,
+    72,
+    73
+  ],
+  "portal": {
+    "version": "0.8.40",
+    "imageSha256": "sha256:dd1eac8565dd8219c0361f255543fec22d6235e621bfb27665e6f12cfcb70f8e",
+    "runtimeFiles": [
+      {
+        "path": "src/cloud-source.mjs",
+        "sha256": "f79e017d607f7f570a8c7505703f892f153ab3ddde49ebfc764b411a51f3b23e"
+      },
+      {
+        "path": "src/game-data.mjs",
+        "sha256": "3f635964f4825dc36e38795c619f4b45787f5fd8ec4beb8aef1666188d20dd89"
+      },
+      {
+        "path": "src/service-observers.mjs",
+        "sha256": "8d26025d0970aa66f47b9aa32de37d109006560fbee676c084e43370bbb57d04"
+      },
+      {
+        "path": "public/app.js",
+        "sha256": "1cf34a40f095d648d8455686f61ce090d7d0e70c218fdc903d99bc995f83f4a1"
+      },
+      {
+        "path": "src/trial-pool.mjs",
+        "sha256": "8766270122b3ab10ccb85223196d5aafd3cdee7276df9ddc0843607615e8814f"
+      },
+      {
+        "path": "src/agent-access.mjs",
+        "sha256": "fe580f88072ff523fa1f9b08cb39880de8ab15a833461dfc70c7489d42173831"
+      },
+      {
+        "path": "src/game-accounts.mjs",
+        "sha256": "388d342a3f96e07612776da5bd34eca8c544eb843b9016bd038859d09cb0dc8a"
+      },
+      {
+        "path": "public/agent-register.mjs",
+        "sha256": "151f93b0d46367b0492dfea9b4b7321443156b29a2ae87035bca51b741cfb708"
+      },
+      {
+        "path": "src/trial-capacity.mjs",
+        "sha256": "bd46935761e3241594b280397c245bb4aa33c2e8505b368b34230a8d4c76c2b0"
+      },
+      {
+        "path": "scripts/trial-capacity.mjs",
+        "sha256": "aed95da4dfc2390a0a64c5d9684b30b5f5bf2a216b280dce47ad54585cf8b708"
+      },
+      {
+        "path": "package.json",
+        "sha256": "115d6b14ca28abd4a38a5b57977cad3bd5c95b9bb22dd5a2d20a2879c3151774"
+      },
+      {
+        "path": "package-lock.json",
+        "sha256": "a36c0562e0f2fcfa30024d47bcc2378b2e320c58d3aa883fbe4bbd9ba1d16928"
+      }
+    ],
+    "linuxIsolatedChecksPassed": 104,
+    "originalProtectedTables": 16,
+    "preservedValidSessions": 17,
+    "originalAgentIdentityTablesPreserved": 7,
+    "originalDownloadsPreserved": true
+  },
+  "publicCount": {
+    "policy": "photo-observer-excluded-v1",
+    "homePublisherModules": 3,
+    "samePingEvidenceRequired": true,
+    "unknownWhenEvidenceIncomplete": true,
+    "replayDoesNotDeductAgain": true
+  },
+  "trialPool": {
+    "capacity": 100,
+    "registrationReservationHours": 24,
+    "actualCreatedIdentitiesPreserved": true,
+    "beforeDeletePolicy": "No identity, client, invite or game data deletion is used for capacity recovery"
+  },
+  "builtinHarness": {
+    "coreVersion": "0.5.7-rc.160-preview.15",
+    "coreArchiveSha256": "05415ac80c20cc785dc51c21cf3bc26287fa20a1c559286f53f4bd213071f702",
+    "offlineMcpTools": 43,
+    "controllerVersion": "0.1.27",
+    "adapterAndPersonaMemoryPreserved": true,
+    "actualNewGameplayAcceptance": false
+  },
+  "voiceProxy": {
+    "version": "0.1.10",
+    "jarSha256": "1cd759c04307e2cedcac4a7541af61a49562f1e96561b60bc0e519aedf93fa94",
+    "onlyCodeChangedClass": "org/afuhome/auth/LoginGuard.class",
+    "samePhysicalConnectionAndCurrentAuthorizationRequired": true,
+    "isolatedVoiceBoundaryAssertions": 92,
+    "isolatedAuthenticationCases": 13,
+    "voiceClientChecks": 11,
+    "actualHumanAudioAcceptance": false,
+    "originalAuthenticationRowsPreserved": 76
+  },
+  "operations": {
+    "gameRestarted": false,
+    "announcementSeconds": [
+      180,
+      60,
+      10
+    ],
+    "dualDiskBackupsVerified": true,
+    "portalBackupSha256": "5b277d81947980dcc1204a69fd7ee1624f184545947372d88655f324b87e13ab",
+    "harnessBackupSha256": "011c42ef605b744911cb057f793dc75c572041ce7c16550251d5ad269fcce4fa",
+    "originalGoddessJobsRestored": 7,
+    "onlyCodeRollbackNoAccountRestore": true,
+    "firstProxyAttempt": "Windows PowerShell null-string file replacement failed before installing the JAR; original proxy restored. Corrected entry passed an actual PowerShell atomic-replace regression before retry."
+  },
+  "notIncluded": {
+    "draftPullRequests": [
+      67
+    ],
+    "publicSkillVersion": "1.3.7",
+    "publicSkillCore": "0.5.7-rc.130",
+    "remoteClientsAutomaticallyUpgraded": false,
+    "npmCorePublished": false
+  },
+  "remainingAcceptance": [
+    "Real flying and safe landing on a new gameplay session with the installed builtin harness",
+    "Real client speech playback and ASR transcription",
+    "Draft PR 67 native photo to map-inbox journey"
+  ]
+}

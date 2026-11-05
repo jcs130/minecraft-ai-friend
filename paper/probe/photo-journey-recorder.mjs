@@ -16,7 +16,10 @@ export function createPhotoJourneyRecorder({directory,owner,gameAddress,evidence
   return {
     // Attach to the existing QA Agent connection; no substitute Agent or decision loop.
     attach(bot) {
-      if(bot.entity?.uuid?.toLowerCase()!==owner.toLowerCase())throw Error('Agent UUID mismatch');
+      // Mineflayer does not always attach the login profile UUID to its own
+      // entity. Use that server-issued identity only for an actual spawned body.
+      const actual=bot.entity?.uuid??(bot.entity&&bot._client?.state==='play'?bot._client.uuid:null);
+      if(actual?.toLowerCase()!==owner.toLowerCase())throw Error('Agent UUID mismatch');
       const message=(text,position)=>{
         if(position!=='system')return;
         const match=/^MC_(COACH|PHOTO|PHOTO_RECORD) (\{.*\})$/.exec(text);if(!match)return;

@@ -11,7 +11,7 @@ import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPo
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { combatLoadout } from './combat-loadout.ts';
 import { CombatProgramRunner, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
-import { validCombatRules, type CombatRule } from './combat-rules.ts';
+import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { validCombatRoutines, type CombatRoutine } from './combat-routines.ts';
@@ -133,8 +133,9 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     if (rawHeal !== undefined && (typeof rawHeal !== 'number' || !Number.isFinite(rawHeal) || rawHeal < 1)) {
       return this.toolLog(tool, args, '未设置：healAtOrBelow 必须是至少为 1 的有限数值，单位为服务端生命点数。');
     }
-    if (rawRules !== undefined && !validCombatRules(rawRules)) {
-      return this.toolLog(tool, args, '未设置：rules 最多16项，id须唯一；每项给 id、spell、when，条件须符合工具定义且上下界相容。');
+    if (rawRules !== undefined) {
+      const issue = combatRulesError(rawRules);
+      if (issue) return this.toolLog(tool, args, `未设置：${issue.path} ${issue.message} 原战术未变。`);
     }
     if (rawRoutines !== undefined) {
       if (!validCombatRoutines(rawRoutines)) return this.toolLog(tool, args, '未设置：routines 须给唯一id、intent和已保存方法的精确procedure引用。');

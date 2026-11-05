@@ -1,0 +1,52 @@
+{
+  "schema": "party4-evidence-spec/v1",
+  "environment": "isolated-real-hosts",
+  "runId": "REPLACE_FROM_ORIGINAL_CAPTURE",
+  "serverId": "REPLACE_FROM_ORIGINAL_CAPTURE",
+  "window": {
+    "start": "2026-11-05T12:00:00Z",
+    "end": "2026-11-05T12:30:00Z"
+  },
+  "actors": [
+    {
+      "role": "可米",
+      "account": "ag_CorMy",
+      "uuid": null,
+      "host": "ag_CorMy/host.json",
+      "events": "ag_CorMy/events.jsonl",
+      "entrypoint": "ag_CorMy/installed-entrypoint",
+      "hostPackage": "ag_CorMy/package.json",
+      "corePackage": "ag_CorMy/core-package.json"
+    },
+    {
+      "role": "库博",
+      "account": "Coobot",
+      "uuid": null,
+      "host": "Coobot/host.json",
+      "events": "Coobot/events.jsonl",
+      "entrypoint": "Coobot/installed-entrypoint",
+      "hostPackage": "Coobot/package.json",
+      "corePackage": "Coobot/core-package.json"
+    },
+    {
+      "role": "肥鱼",
+      "account": "DeepFish",
+      "uuid": null,
+      "host": "DeepFish/host.json",
+      "events": "DeepFish/events.jsonl",
+      "entrypoint": "DeepFish/installed-entrypoint",
+      "hostPackage": "DeepFish/package.json",
+      "corePackage": "DeepFish/core-package.json"
+    },
+    {
+      "role": "悠怡",
+      "account": "Yui",
+      "uuid": null,
+      "host": "Yui/host.json",
+      "events": "Yui/events.jsonl",
+      "entrypoint": "Yui/installed-entrypoint",
+      "hostPackage": "Yui/package.json",
+      "corePackage": "Yui/core-package.json"
+    }
+  ]
+}

@@ -6,6 +6,16 @@ import {createPhotoJourneyRecorder} from './photo-journey-recorder.mjs';
 import {photoJourneyPreflight} from './photo-journey-preflight.mjs';
 const owner='3b71682c-b2e8-4b77-836f-c30e46408991';
 function fixture(t){const root=mkdtempSync(path.join(os.tmpdir(),'photo-recorder-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return {root,directory:path.join(root,'run')};}
+test('Mineflayer login profile supplies the UUID only after the real body has spawned',t=>{
+ const {directory}=fixture(t);
+ const recorder=createPhotoJourneyRecorder({directory,owner,gameAddress:'127.0.0.1:25914',evidenceKind:'synthetic-fixture'});
+ const bot=new EventEmitter();bot._client=new EventEmitter();bot._client.uuid=owner;bot._client.state='play';
+ assert.throws(()=>recorder.attach(bot),'login profile alone is not a spawned body');
+ bot.entity={id:42};const close=recorder.attach(bot);close();
+ bot._client.uuid='4b71682c-b2e8-4b77-836f-c30e46408991';assert.throws(()=>recorder.attach(bot));
+ bot.entity.uuid=bot._client.uuid;bot._client.uuid=owner;assert.throws(()=>recorder.attach(bot),'entity identity wins over fallback');
+ bot.entity={id:42};bot._client.state='login';assert.throws(()=>recorder.attach(bot));
+});
 test('observer is opt-in, isolated, preserves earlier evidence, and never sends commands',t=>{
  const {directory}=fixture(t);
  assert.throws(()=>createPhotoJourneyRecorder({directory,owner,gameAddress:'public.example:25565',evidenceKind:'real-client'}));

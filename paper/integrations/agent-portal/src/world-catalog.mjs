@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { parsePublicDialogue } from './public-dialogue.mjs';
+import { isPhotoObserver, photoObserverName } from './service-observers.mjs';
 
 const RANKS = ['青铜', '黑铁', '白银', '黄金', '白金', '钻石'];
 const DIVISIONS = ['III', 'II', 'I'];
@@ -76,6 +77,7 @@ export class WorldCatalog {
     });
   }
   insert(event, identity) {
+    if (isPhotoObserver(event.playerName)) return;
     const id = createHash('sha256').update(identity).digest('hex');
     this.store.db.prepare('INSERT OR IGNORE INTO public_events VALUES(?,?,?,?,?,?,?,?)').run(id, event.kind, event.playerName || null, event.title, event.body || '', event.occurredAt, event.precision, event.source);
     if (event.kind !== 'notice') this.store.db.prepare('INSERT OR IGNORE INTO public_event_outbox(event_id) VALUES(?)').run(id);
@@ -144,8 +146,8 @@ export class WorldCatalog {
   async events({ kind = 'all', page = 1, limit = 20, player = '', day = '' } = {}) {
     if (!['all', 'notice', 'join', 'leave', 'advancement', 'quest', 'chat'].includes(kind) || !Number.isInteger(page) || page < 1 || page > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 50 || player && !playerNameValid(player) || day && (!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day)))) throw Object.assign(new Error('请选择有效的角色、日期、事件类型和页码'), { status: 400, reason: 'INVALID_PAGE' });
     await this.collect();
-    const where="(?='all' OR kind=?) AND (?='' OR player_name=? COLLATE NOCASE) AND (?='' OR occurred_at>=? AND occurred_at<?)";
-    const start=day?Date.parse(day+'T00:00:00+08:00'):0,args=[kind,kind,player,player,day,start,start+86400000];
+    const where="(player_name IS NULL OR player_name!=? COLLATE NOCASE) AND (?='all' OR kind=?) AND (?='' OR player_name=? COLLATE NOCASE) AND (?='' OR occurred_at>=? AND occurred_at<?)";
+    const start=day?Date.parse(day+'T00:00:00+08:00'):0,args=[photoObserverName,kind,kind,player,player,day,start,start+86400000];
     const total = this.store.db.prepare('SELECT count(*) AS n FROM public_events WHERE '+where).get(...args).n;
     const rows = this.store.db.prepare('SELECT * FROM public_events WHERE '+where+' ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?').all(...args, limit, (page - 1) * limit);
     return { events: rows.map(eventView), page, pages: Math.max(1, Math.ceil(total / limit)), total, observedAt: new Date().toISOString() };

@@ -50,14 +50,14 @@ const waitFor = async predicate => {
   assert.fail('UI integration did not reach the expected state within four seconds');
 };
 
-async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, managedOwner = false, initialObservation = 'live' } = {}) {
+async function screen(t, { capabilitiesReady = false, initialView = 'overview', photos = [], media = {}, emailMode = 'username', emailSender = null, challengeSnapshot = null, managedLive = false, managedOwner = false, initialObservation = 'live', serverSummary = {} } = {}) {
   const root = path.join(fixtureBase, 'ui-' + randomUUID());
   const savedAt = '2026-10-10T01:00:00.000Z';
   const agent = { id: 'a'.repeat(24), name: 'ag_Alpha', playerUuid, kind: 'agent', online: true, authenticated: true, isReserved: false, available: true, observedAt: savedAt };
   const game = {
     roster: async () => [agent],
     publicAgent: row => ({ id: row.id, name: row.name, kind: row.kind, online: row.online, available: true, observedAt: row.observedAt }),
-    serverSummary: async () => ({ online: true, version: 'Isolated UI fixture', playersOnline: 1, playersMax: 40, rosterCount: 1, agentCount: 1, latencyMs: 2, authHealthy: true, observedAt: savedAt }),
+    serverSummary: async () => ({ online: true, version: 'Isolated UI fixture', playersOnline: 1, playersMax: 40, rosterCount: 1, agentCount: 1, latencyMs: 2, authHealthy: true, observedAt: savedAt, ...serverSummary }),
     playerState: async () => ({ agent, freshness: 'saved', savedAt, liveState: { available: false },
       vitals: { health: 18, food: 20, level: 7, gameMode: 0, dimension: 'minecraft:overworld' }, savedPosition: [1, 64, 3],
       inventory: [{ slot: 5, id: 'minecraft:player_head', name: '大背包', count: 1, enchanted: false }],
@@ -1016,6 +1016,25 @@ test('an available but empty archive explains missing works without claiming a s
   ui.window.location.hash='overview';await waitFor(()=>ui.document.querySelector('[data-action="detail"]'));
   ui.window.location.hash='archives';
   await waitFor(()=>ui.document.querySelector('.content-freshness')?.textContent.includes('暂不可用'));
+});
+
+test('unknown online count stays distinct from a running server and from zero', async t => {
+  const ui = await screen(t, { initialView: 'home', serverSummary: { playersOnline: null, playersOnlineUnavailableReason: '状态样本不完整，在线人数待确认' } });
+  assert.match(ui.document.querySelector('.home-live-status').textContent, /世界正在运行/);
+  assert.match(ui.document.querySelector('.home-live-status').textContent, /在线人数待确认/);
+  assert.doesNotMatch(ui.document.querySelector('.home-live-status').textContent, /0 人在线|— 人在线/);
+  ui.window.location.hash = 'overview';
+  await waitFor(() => ui.document.querySelector('progress.meter'));
+  assert.match(ui.document.querySelector('.stat-grid').textContent, /在线人数待确认/);
+  assert.equal(ui.document.querySelector('progress.meter').hasAttribute('value'), false);
+});
+
+test('a verified zero count remains a displayed zero', async t => {
+  const ui = await screen(t, { initialView: 'home', serverSummary: { playersOnline: 0 } });
+  assert.match(ui.document.querySelector('.home-live-status').textContent, /0 人在线/);
+  ui.window.location.hash = 'overview';
+  await waitFor(() => ui.document.querySelector('progress.meter'));
+  assert.equal(ui.document.querySelector('progress.meter').getAttribute('value'), '0');
 });
 
 test('four primary entries and contextual links retain existing routes and current-page markers',async t=>{

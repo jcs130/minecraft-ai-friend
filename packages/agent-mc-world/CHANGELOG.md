@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.15 (unpublished candidate)
+
+- Honor Agent-authored combat observation radii beyond 16 blocks end to end; do not invent upper bounds for RPG mana or observed enemy-count predicates. Spell availability, body ownership, actual tracked entities and cooldown checks remain authoritative.
+- Return the exact invalid rule field and condition, preserving the previous tactic when a revision is rejected.
+
 ## 0.5.7-rc.160-preview.14 (unpublished candidate)
 
 - Explicit host-selected engagement can approach visible targets within 32 blocks without expanding passive automatic engagement. Preserve the selected target while approaching, weapon checks and scene cancellation.

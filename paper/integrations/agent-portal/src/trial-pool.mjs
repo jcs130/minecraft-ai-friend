@@ -1,5 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { digest } from './store.mjs';
+import { trialCapacity, TRIAL_CAPACITY } from './trial-capacity.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -45,6 +46,24 @@ export class TrialPool {
       CREATE TABLE IF NOT EXISTS agent_trial_invites(invite_id TEXT PRIMARY KEY REFERENCES agent_invites(id),batch_id TEXT NOT NULL REFERENCES agent_trial_batches(id),ordinal INTEGER NOT NULL,UNIQUE(batch_id,ordinal));`);
     store.db.exec(`CREATE TABLE IF NOT EXISTS agent_public_registrations(invite_id TEXT PRIMARY KEY REFERENCES agent_invites(id),address_hash TEXT NOT NULL,created_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS agent_public_registration_rate ON agent_public_registrations(address_hash,created_at);`);
+    store.db.exec(`CREATE INDEX IF NOT EXISTS account_jobs_trial_uuid ON account_jobs(expected_uuid);
+      CREATE INDEX IF NOT EXISTS account_jobs_trial_name ON account_jobs(lower(name));`);
+  }
+  capacity(now = Date.now()) { return trialCapacity(this.store.db, now); }
+  // Call only within the same IMMEDIATE transaction as the new reservation or
+  // activation job. Public signup, batch issuance and activation share one cap.
+  assertCapacity(count = 1, now = Date.now(), clientId = null) {
+    const capacity = this.capacity(now);
+    if (clientId) {
+      const client = capacity.clients.find(row => row.clientId === clientId);
+      // Normal pending/successful retries return their original job before
+      // reaching this hook. Detached or inconsistent evidence must not start
+      // another game request just because the current pointer is missing.
+      if (!client || !['awaiting_activation', 'registration_released', 'creation_failed_review'].includes(client.state)
+        || client.state === 'creation_failed_review' && !client.gameRequestId) throw fail(409, 'TRIAL_IDENTITY_REVIEW_REQUIRED', '原角色或建号记录需要核验，请保留身份并联系服主，不要重新建号');
+      if (client.countsTowardCapacity) return;
+    }
+    if (capacity.used + count > TRIAL_CAPACITY) throw fail(409, 'TRIAL_POOL_FULL', '体验池已满；请保留原身份文件，稍后用同一身份重试，或先认领已有角色');
   }
   invitation(inviteId) {
     return !!this.store.db.prepare('SELECT 1 FROM agent_trial_invites WHERE invite_id=? UNION ALL SELECT 1 FROM agent_public_registrations WHERE invite_id=?').get(inviteId,inviteId);
@@ -56,13 +75,11 @@ export class TrialPool {
     this.store.db.prepare('INSERT INTO agent_trial_pool VALUES(1,?)').run(id);return id;
   }
   reservePublic(addressHash,now) {
-    const db=this.store.db,pool=trialPoolOwnerId(this.store);
+    const db=this.store.db;
     const recent=db.prepare('SELECT count(*) AS n FROM agent_public_registrations WHERE address_hash=? AND created_at>?').get(addressHash,now-3600000).n;
     const daily=db.prepare('SELECT count(*) AS n FROM agent_public_registrations WHERE address_hash=? AND created_at>?').get(addressHash,now-86400000).n;
     if(recent>=6||daily>=20)throw Object.assign(fail(429,'PUBLIC_REGISTRATION_LIMIT','该网络的新角色注册已达到限额；请保留身份文件，稍后接续，不要更换请求标识'),{retryAfterSeconds:3600});
-    const waiting=db.prepare('SELECT count(*) AS n FROM agent_trial_invites t JOIN agent_invites i ON i.id=t.invite_id WHERE i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>?').get(now).n;
-    const active=pool?db.prepare('SELECT count(*) AS n FROM agent_clients WHERE owner_id=? AND revoked_at IS NULL').get(pool).n:0;
-    if(waiting+active>=100)throw fail(409,'TRIAL_POOL_FULL','体验池已满，请先认领已有角色，或联系服主');
+    this.assertCapacity(1,now);
     const ownerId=this.ensureOwner(now),inviteId=randomUUID();
     // Internal custody row only: no usable invitation is issued or embedded in
     // a plugin. Public signup is an explicit server policy, not client identity.
@@ -84,10 +101,8 @@ export class TrialPool {
         if (previous.issuer_id !== owner.id || previous.secret_hash !== digest(clientSecret) || previous.count !== count || previous.hours !== hours || previous.label !== label.trim()) throw fail(409, 'TRIAL_BATCH_CONFLICT', '批次标识已使用，请使用原参数，不能重复生成');
         duplicate = true;
       } else {
-        const pool = trialPoolOwnerId(this.store), now = Date.now();
-        const waiting = db.prepare('SELECT count(*) AS n FROM agent_trial_invites t JOIN agent_invites i ON i.id=t.invite_id WHERE i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>?').get(now).n;
-        const active = pool ? db.prepare('SELECT count(*) AS n FROM agent_clients WHERE owner_id=?').get(pool).n : 0;
-        if (waiting + active + count > 100) throw fail(409, 'TRIAL_POOL_FULL', '体验池最多保留 100 个待用邀请或未认领角色，请先处理旧邀请或认领角色');
+        const now = Date.now();
+        this.assertCapacity(count, now);
         const poolId = this.ensureOwner(now);
         db.prepare('INSERT INTO agent_trial_batches VALUES(?,?,?,?,?,?,?,?)').run(requestId, owner.id, digest(clientSecret), count, hours, label.trim(), now, now + hours * 3600000);
         for (let i = 0; i < count; i++) {
