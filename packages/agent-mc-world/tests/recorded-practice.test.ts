@@ -7,6 +7,8 @@ import {captureVoxelScene} from '../core/voxel-scene.ts';
 import {RecordedSceneStore,recordedCase,reconstructRecordedScene,type RecordedScene} from '../src/learning/recorded-scene.ts';
 import {createPhysicsMethodPractice} from '../src/learning/physics-practice.ts';
 import {assessPracticeTrial} from '../src/learning/practice.ts';
+import {installOffsetShapes} from '../core/mineflayer-fixes.ts';
+import {Vec3} from 'vec3';
 const require=createRequire(import.meta.url),data=require('minecraft-data')('1.21.1'),Block=require('prismarine-block')('1.21.1');
 const dirs:string[]=[];afterEach(()=>{for(const p of dirs.splice(0))rmSync(p,{recursive:true,force:true});});
 function record(id:string,step:boolean,override?:(x:number,y:number,z:number)=>string|undefined):RecordedScene {
@@ -54,4 +56,30 @@ it('replays external block events by tick and retains immutable cases across rel
   sim.beforeTick(2);expect(sim.world.getBlock(point).name).toBe('air');sim.beforeTick(3);expect(sim.world.getBlock(point).name).toBe('stone');
   const dir=mkdtempSync(join(tmpdir(),'recorded-store-'));dirs.push(dir);const store=new RecordedSceneStore(dir);store.save(input);
   expect(()=>store.save(input)).toThrow();expect(new RecordedSceneStore(dir).read(input.id)).toEqual(input);expect(store.list()).toHaveLength(1);
+});
+
+it('round-trips live positional dripstone/bamboo shapes and rejects shifted or forged recordings',()=>{
+  for(const name of ['pointed_dripstone','bamboo']) {
+    const state=data.blocksByName[name].defaultState;
+    const raw=Block.fromStateId(state,0),original=JSON.stringify(raw.shapes);
+    const live={registry:data,blockAt:(position:Vec3)=>{const b=Block.fromStateId(state,0);b.position=position;return b;}};
+    installOffsetShapes(live as any);
+    const r=record('offset-'+name.replaceAll('_','-'),false);
+    r.scene=captureVoxelScene({source:r.scene.source,feet:[-440,45,658],yaw:0,pitch:0,eyeHeight:1.62,fovDegrees:75,
+      bounds:{min:[-443,42,654],max:[-437,46,660]},blockAt:(x,y,z)=>live.blockAt(new Vec3(x,y,z))});
+    const sim=reconstructRecordedScene(r);
+    for(const p of [new Vec3(-443,42,654),new Vec3(-440,45,658),new Vec3(-437,46,660)]) {
+      expect(sim.world.getBlock(p).shapes).toEqual(live.blockAt(p).shapes);
+    }
+    expect(JSON.stringify(Block.fromStateId(state,0).shapes)).toBe(original);
+    const forged=structuredClone(r);forged.scene.palette[0].collisionShapes![0][0]+=.01;
+    expect(()=>reconstructRecordedScene(forged)).toThrow('collision');
+    const shifted=structuredClone(r);shifted.scene.bounds.min[0]++;shifted.scene.bounds.max[0]++;
+    expect(()=>reconstructRecordedScene(shifted)).toThrow('collision');
+    const event=live.blockAt(new Vec3(-440,45,658));
+    const entry=r.scene.palette.find(e=>JSON.stringify(e.collisionShapes)===JSON.stringify(event.shapes))!;
+    r.events=[{tick:1,position:[-440,45,658],block:entry,source:'fixture:live-offset'}];
+    const replay=reconstructRecordedScene(r);replay.beforeTick(1);
+    expect(replay.world.getBlock(new Vec3(-440,45,658)).shapes).toEqual(event.shapes);
+  }
 });
