@@ -145,6 +145,9 @@ final class SiteDungeonManager implements Listener {
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
     private Run own(Player p){return runs.values().stream().filter(r->r.party.contains(p.getUniqueId())).findFirst().orElse(null);}
     boolean isParticipant(Player p){return own(p)!=null;}
+    boolean hasOpenSite() {
+        return ready && sites.values().stream().anyMatch(site -> !runs.containsKey(site.id));
+    }
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
     List<String> ids(){return new ArrayList<>(sites.keySet());}
     boolean activityArea(Location at){return protectionArea(at)!=null;}
@@ -732,6 +735,7 @@ final class SiteDungeonManager implements Listener {
             }
         });
         runResult(p,"claim",chosen,claimedRun);p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。命令：/mycli arena stash；只查待入箱奖励：/mycli arena rewards list。重复领取不会再次发奖。");
+        plugin.agentCoach().rememberAdventure(p, "遗迹攻略奖励已经领取");
     }
     private void tick(){
         long timestamp=System.currentTimeMillis();

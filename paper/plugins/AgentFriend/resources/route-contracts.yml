@@ -98,6 +98,30 @@ tasks:
         dimension: overworld
         target: 1
         area: { name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428 }
+  cave_lantern_survey:
+    route: exploration
+    repeat: once
+    title: 地下手记·苔光与石笋
+    description: 带火把、食物与护甲，从自然洞口走进繁茂洞穴或溶洞，踏查一条可往返的路线。地点自行寻找；初次下洞可先做公共矿坑灯阶实练。
+    beneficiary: 采矿领班·石砚
+    icon: GLOW_BERRIES
+    reward: { fame: 12, emeralds: 4, bonus: TORCH, bonus-count: 12 }
+    steps:
+      - title: 沿自然洞穴记录退路
+        description: 在主世界繁茂洞穴或溶洞中徒步走过5个不同的8格分区，累计48格新路线和25秒有效移动。沿可通行洞口下行，给岔路做标记；可绕开敌人，无需采矿、清怪或拍照。用 guild status 查缺项，再 guild claim 交阶段。
+        goal: biome
+        dimension: overworld
+        biomes: ['minecraft:lush_caves', 'minecraft:dripstone_caves']
+        target: 5
+        zone-size: 8
+        min-distance: 48
+        min-seconds: 25
+      - title: 带洞穴手记回公会
+        description: 按标记回到地面，再回主村庄司灯人旁(-541,67,-435)。本人抵达交付范围后 guild claim，公会声望和个人箱奖励在整单交付时结算。
+        goal: return
+        dimension: overworld
+        target: 1
+        area: { name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428 }
   starter_blade:
     route: combat
     beginner: true

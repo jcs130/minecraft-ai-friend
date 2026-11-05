@@ -74,6 +74,11 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private Player nativeRenderer(){return nativeRendererId==null?null:Bukkit.getPlayer(nativeRendererId);}
     private boolean nativeReady(){Player renderer=nativeRenderer();return nativeRendererId==null||renderer!=null&&renderer.getGameMode()==GameMode.SPECTATOR&&renderer!=plugin.goddessLandAdministrator();}
     boolean ready() { return enabled && nativeReady() && pendingUploads != null && System.currentTimeMillis() - heartbeat < 15_000 && plugin.goddessLandAdministrator() != null; }
+    boolean readyForReminder(Player player, long now) {
+        UUID owner = player.getUniqueId();
+        return ready() && !owns(owner) && queue.size() < queueLimit
+                && now - last.getOrDefault(owner, 0L) >= cooldown * 1000L;
+    }
     PhotoJournal journal(){return journal;}
 
     void command(Player p, String[] args) {

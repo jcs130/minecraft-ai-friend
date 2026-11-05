@@ -144,7 +144,7 @@ final class NativeRpg {
         var exam=owner.skillAssessments().summary(p);var guild=owner.guild().progressState(p);
         if(json){var out=new JsonObject();out.addProperty("rank",owner.guild().adventurerRankName(p));out.addProperty("reputation",owner.guild().reputation(p));out.add("exam",exam);out.add("guild",guild);p.sendMessage("MC_ADVENTURE "+out);return;}
         if(!details){p.sendMessage("§b[冒险] "+owner.guild().adventurerRankName(p)+"；声望 "+owner.guild().reputation(p)+"；证书 "+exam.get("certificateCount").getAsInt()+"；"+(owner.isDowned(p)?"倒地，等待队友救援":owner.dungeonParticipant(p)?"副本参战中":owner.pvpParticipant(p)?"竞技中":"自由活动")+"。分项进度：/mycli progress");return;}
-        p.sendMessage("§b[冒险] "+owner.guild().adventurerRankName(p)+"；声望 "+owner.guild().reputation(p)+"；证书 "+exam.get("certificateCount").getAsInt()+"。考试：/mycli guild exam status；探索委托：/mycli guild status；攻略与积分：/mycli dungeon status");
+        p.sendMessage("§b[冒险] "+owner.guild().adventurerRankName(p)+"；声望 "+owner.guild().reputation(p)+"；证书 "+exam.get("certificateCount").getAsInt()+"。公会与晋级：/mycli guild status；洞穴和天然遗迹：/mycli tasks list exploration；逐室攻略：/mycli dungeon list");
         if(details&&exam.has("nextCommand"))p.sendMessage("§e[考试下一步] "+exam.get("nextAction").getAsString()+" "+exam.get("nextCommand").getAsString());
         if(details&&!guild.get("status").getAsString().equals("none"))p.sendMessage("§e[在途委托] "+guild.get("title").getAsString()+"；下一步："+guild.get("nextCommand").getAsString());
     }

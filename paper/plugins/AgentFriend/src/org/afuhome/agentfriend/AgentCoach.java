@@ -27,13 +27,22 @@ import org.bukkit.scheduler.BukkitTask;
 
 /** Personal, low-frequency hints. No movement, inventory or skill action is performed. */
 final class AgentCoach implements Listener {
+    private static final long ADVENTURE_POLL_MS = 60_000L;
+    private static final long ACTIVE_WINDOW_MS = 120_000L;
+    private static final long MEMORY_WINDOW_MS = 5 * 60_000L;
+    private static final long MEMORY_DELAY_MS = 15_000L;
+
     private static final class Session {
+        final long joinedAt;
         long lastActivity;
         long lastMycli;
         boolean idleSent;
         boolean unusedSent;
         long quietUntil;
-        Session(long now) { lastActivity = now; lastMycli = now; }
+        long nextAdventureCheck;
+        long adventureFinishedAt;
+        String adventureOccasion;
+        Session(long now) { joinedAt = now; lastActivity = now; lastMycli = now; }
     }
 
     private final AgentFriendPlugin plugin;
@@ -43,6 +52,8 @@ final class AgentCoach implements Listener {
     private final NamespacedKey deathCountKey;
     private final NamespacedKey pendingDeathKey;
     private final NamespacedKey lastHintKey;
+    private final NamespacedKey adventureIndexKey;
+    private final NamespacedKey lastAdventureKey;
     private BukkitTask timer;
     private final OnboardingGuide onboarding;
 
@@ -53,6 +64,8 @@ final class AgentCoach implements Listener {
         deathCountKey = new NamespacedKey(plugin, "coach_death_count");
         pendingDeathKey = new NamespacedKey(plugin, "coach_pending_death");
         lastHintKey = new NamespacedKey(plugin, "coach_last_hint");
+        adventureIndexKey = new NamespacedKey(plugin, "coach_adventure_index");
+        lastAdventureKey = new NamespacedKey(plugin, "coach_last_adventure");
         onboarding = new OnboardingGuide(plugin);
     }
 
@@ -259,6 +272,7 @@ final class AgentCoach implements Listener {
                 continue;
             }
             if (onboarding.poll(player, now, state.quietUntil)) continue;
+            if (pollAdventure(player, state, now)) continue;
             if (!state.idleSent && now - state.lastActivity >= seconds("idle-seconds", 900)) {
                 if (send(player, now, "idle", 0,
                         "停留较久，可以查看世界能力和下一步路线。",
@@ -278,9 +292,7 @@ final class AgentCoach implements Listener {
     }
 
     private boolean send(Player player, long now, String reason, int count, String message, String... commands) {
-        long last = player.getPersistentDataContainer().getOrDefault(lastHintKey, PersistentDataType.LONG, 0L);
-        if (now - last < seconds("cooldown-seconds", 1800)) return false;
-        if (!onboarding.gapReady(player, now)) return false;
+        if (!hintGapReady(player, now)) return false;
         JsonObject result = new JsonObject();
         result.addProperty("schemaVersion", 1);
         result.addProperty("type", "reminder");
@@ -291,8 +303,62 @@ final class AgentCoach implements Listener {
         for (String command : commands) options.add(command);
         result.add("commands", options);
         player.sendMessage("MC_COACH " + result);
+        hintDelivered(player, now);
+        return true;
+    }
+
+    private boolean hintGapReady(Player player, long now) {
+        long last = player.getPersistentDataContainer().getOrDefault(lastHintKey, PersistentDataType.LONG, 0L);
+        return now - last >= seconds("cooldown-seconds", 1800) && onboarding.gapReady(player, now);
+    }
+
+    private void hintDelivered(Player player, long now) {
         player.getPersistentDataContainer().set(lastHintKey, PersistentDataType.LONG, now);
         onboarding.delivered(player, now);
+    }
+
+    void rememberAdventure(Player player, String occasion) {
+        if (!plugin.isRegisteredAgent(player) || !enabled(player)) return;
+        Session state = session(player);
+        state.adventureOccasion = occasion;
+        state.adventureFinishedAt = System.currentTimeMillis();
+        state.nextAdventureCheck = state.adventureFinishedAt + MEMORY_DELAY_MS;
+    }
+
+    private boolean pollAdventure(Player player, Session state, long now) {
+        if (!plugin.getConfig().getBoolean("coach.adventure-enabled", true)
+                || now - state.lastActivity > ACTIVE_WINDOW_MS || !plugin.isRegisteredAgent(player)
+                || player.getGameMode() != GameMode.SURVIVAL || !onboarding.safe(player, now, state.quietUntil)
+                || !hintGapReady(player, now)) return false;
+        if (state.adventureOccasion != null && now - state.adventureFinishedAt > MEMORY_WINDOW_MS)
+            state.adventureOccasion = null;
+        boolean recentAdventure = state.adventureOccasion != null;
+        if (!recentAdventure && now - state.joinedAt < seconds("adventure-first-seconds", 1200)) return false;
+        if (now < state.nextAdventureCheck) return false;
+        state.nextAdventureCheck = now + ADVENTURE_POLL_MS;
+        if (plugin.guild().hasActiveContract(player) || plugin.skillAssessments().busy(player)) return false;
+        var data = player.getPersistentDataContainer();
+        if (recentAdventure) {
+            if (!plugin.photoCamera().readyForReminder(player, now)) return false;
+            sendAdventure(player, now, GuildAdventureGuide.photo(state.adventureOccasion));
+            state.adventureOccasion = null;
+            return true;
+        }
+        if (now - data.getOrDefault(lastAdventureKey, PersistentDataType.LONG, 0L)
+                < seconds("adventure-interval-seconds", 3600)) return false;
+        var rotation = GuildAdventureGuide.next(
+                data.getOrDefault(adventureIndexKey, PersistentDataType.INTEGER, 0),
+                plugin.guild().hasJoined(player), plugin.skillAssessments().promotionsEnabled(),
+                plugin.siteDungeons().hasOpenSite(), plugin.photoCamera().readyForReminder(player, now),
+                id -> plugin.taskMarket().availableOffer(player, id));
+        sendAdventure(player, now, rotation.hint());
+        data.set(adventureIndexKey, PersistentDataType.INTEGER, rotation.nextIndex());
         return true;
+    }
+
+    private void sendAdventure(Player player, long now, GuildAdventureGuide.Hint hint) {
+        player.sendMessage("§a[公会旅途] " + hint.message() + " " + hint.command());
+        player.getPersistentDataContainer().set(lastAdventureKey, PersistentDataType.LONG, now);
+        hintDelivered(player, now);
     }
 }
