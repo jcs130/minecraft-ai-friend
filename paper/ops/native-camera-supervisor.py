@@ -270,7 +270,7 @@ def main():
                     try:free=gpu_free_mib(cfg)
                     except (OSError,ValueError,subprocess.SubprocessError):free=-1
                     status['gpuFreeMiB']=free
-                    if free<1536:
+                    if free<1280:
                         save('waiting-gpu-memory')
                         time.sleep(10)
                         continue
