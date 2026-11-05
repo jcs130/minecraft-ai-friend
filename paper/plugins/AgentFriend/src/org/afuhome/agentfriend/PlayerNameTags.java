@@ -98,7 +98,8 @@ final class PlayerNameTags implements Listener {
         prefixes.clear();
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST) public void onJoin(PlayerJoinEvent event) {
+    // EssentialsX can capture this message for a separate, delayed broadcast.
+    @EventHandler(priority = EventPriority.LOWEST) public void onJoin(PlayerJoinEvent event) {
         if (isServiceObserver(event.getPlayer())) event.joinMessage(null);
         Bukkit.getScheduler().runTaskLater(plugin, this::reconcile, 2L);
     }
