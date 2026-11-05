@@ -123,7 +123,7 @@ export async function skillCraft(
     } else if (tagged) {
       const stock = invCountById(bot, def.id);
       if (stock >= call.count) {
-        // 库存足够不等于完成合成；任务 CRAFT_ITEM（如 qd_field_kit）要求现场 CraftItemEvent。
+        // Existing output is not evidence that this requested crafting action ran.
         throw new SkillBlocked(
           `${label}的官方配方需要 ${tagged.needs};包里凑不齐;`
           + `包里虽有 ${stock} 个成品，但未现场合成。持有≠任务制作进度，请凑齐材料后重试 craft`,
@@ -139,7 +139,7 @@ export async function skillCraft(
       if (!ready) {
         const options = all.map((r) => [...craftNeeds(r)]
           .map(([id, n]) => `${nameOf(id)}×${n}`).join(' + ')).join('  或  ');
-        // 库存足够不等于完成合成；任务 CRAFT_ITEM 要求现场制作，不能因持有成品短路为成功。
+        // Keep actual crafting distinct from merely owning its output.
         const stock = invCountById(bot, def.id);
         if (stock >= call.count) {
           throw new SkillBlocked(

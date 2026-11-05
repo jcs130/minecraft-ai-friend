@@ -278,22 +278,39 @@ public final class VortexBridge extends JavaPlugin {
     private static List<Map<String,Object>> activeEffects(Player p){
         var list=new ArrayList<Map<String,Object>>();
         for(PotionEffect e:p.getActivePotionEffects()){
-            var row=new LinkedHashMap<String,Object>();
-            row.put("type",e.getType().getKey().getKey());
-            row.put("amplifier",e.getAmplifier());
-            row.put("durationTicks",e.getDuration());
-            list.add(row);
+            list.add(activeEffect(e.getType().getKey().getKey(),e.getAmplifier(),e.getDuration()));
         }
         return list;
     }
+    private static Map<String,Object> activeEffect(String type,int amplifier,int ticks){
+        var row=new LinkedHashMap<String,Object>();
+        row.put("type",type);row.put("name",effectName(type));row.put("amplifier",amplifier);
+        row.put("level",amplifier+1);row.put("durationTicks",ticks);row.put("infinite",ticks==PotionEffect.INFINITE_DURATION);
+        return row;
+    }
+    private static String effectName(String type){return switch(type){
+        case "speed"->"速度";case "slowness"->"缓慢";case "haste"->"急迫";case "mining_fatigue"->"挖掘疲劳";
+        case "strength"->"力量";case "instant_health"->"瞬间治疗";case "instant_damage"->"瞬间伤害";case "jump_boost"->"跳跃提升";
+        case "nausea"->"反胃";case "regeneration"->"生命恢复";case "resistance"->"抗性提升";case "fire_resistance"->"抗火";
+        case "water_breathing"->"水下呼吸";case "invisibility"->"隐身";case "blindness"->"失明";case "night_vision"->"夜视";
+        case "hunger"->"饥饿";case "weakness"->"虚弱";case "poison"->"中毒";case "wither"->"凋零";
+        case "health_boost"->"生命提升";case "absorption"->"伤害吸收";case "saturation"->"饱和";case "glowing"->"发光";
+        case "levitation"->"漂浮";case "luck"->"幸运";case "unluck"->"霉运";case "slow_falling"->"缓降";
+        case "conduit_power"->"潮涌能量";case "dolphins_grace"->"海豚的恩惠";case "bad_omen"->"不祥之兆";
+        case "hero_of_the_village"->"村庄英雄";case "darkness"->"黑暗";case "trial_omen"->"试炼之兆";case "raid_omen"->"袭击之兆";
+        case "wind_charged"->"蓄风";case "weaving"->"盘丝";case "oozing"->"渗浆";case "infested"->"虫蚀";default->type;
+    };}
     private static String activeEffectsText(Player p){
-        var list=activeEffects(p);
+        return activeEffectsText(activeEffects(p));
+    }
+    private static String activeEffectsText(List<Map<String,Object>> list){
         if(list.isEmpty())return "";
         var parts=new ArrayList<String>();
         for(var row:list){
             int amp=((Number)row.get("amplifier")).intValue();
             int ticks=((Number)row.get("durationTicks")).intValue();
-            parts.add(row.get("type")+(amp>0?" "+(amp+1):"")+" "+String.format("%.1f",ticks/20.0)+"秒");
+            String duration=Boolean.TRUE.equals(row.get("infinite"))?"持续生效":String.format(Locale.ROOT,"%.1f秒",Math.max(0,ticks)/20.0);
+            parts.add(row.get("name")+" "+(amp+1)+"级 "+duration);
         }
         return "；临时效果 "+String.join("、",parts);
     }
