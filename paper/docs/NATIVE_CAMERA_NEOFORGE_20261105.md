@@ -21,11 +21,13 @@
 
 - 加载器为 NeoForge `TransformingClassLoader`；Sodium 自带的 Fabric API 子模块不是 Fabric 加载器。
 - 原版 YSM 客户端握手就绪，测试玩家实际渲染自定义 YSM 外观。
-- 女仆实体类型为 `touhou_little_maid:maid`，实际使用 `EntityMaidRenderer`，没有变成村民；该测试生成的模型是原模组的油库里外观，不据此宣称所有女仆模型都验收通过。
+- 女仆实体类型为 `touhou_little_maid:maid`，实际使用 `EntityMaidRenderer`，没有变成村民。最初截图只见头部，不能据此判断原生外观完整；下述补测已定位测试场景的问题。
 - Faithful 32× 与 `mod_resources` 同时加载，资源包不覆盖 `yes_steve_model`、`touhou_little_maid` 命名空间。截图无游戏 HUD，玩家名字保留。
 - 本次只使用核显运行隔离客户端、合成玩家和本机测试服；没有第二个 RTX 相机与正式服务争抢显存。8 FPS 是此核显测试的结果，不能作为 3080 Ti 性能结论。
 
 首次启动揭示 NeoForge 改写了窗口创建调用；原 Fabric `glfwCreateWindow` 注入点不匹配。隔离探针改为已核实的 `ImmediateWindowHandler.setupMinecraftWindow` 后启动、实体渲染和截图通过。正式适配不能只改包名或把 Fabric JAR 改扩展名。
+
+21:41 CST 补测：实际地面是 Y=-60 的草方块，先前实体脚部错误地设在 Y=-60，而不是方块上表面的 Y=-59；身体被地面遮挡。仅改变驯服、饥饿状态，或移除 Iris/Sodium 都没有改变遮挡结果。修正测试高度并恢复原 Iris/Sodium 组合后，原生酒狐 `authors_and_credits:wine_fox_maid`、灵梦 `touhou_little_maid:hakurei_reimu` 与测试玩家 YSM 完整同框，女仆原生表情气泡也显示。读回实体存活、站立、正确模型 ID，原 YSM 握手保持就绪。这是测试布景错误，不是已证明的正式服模型渲染缺陷；不修改正式女仆、玩家模型或地形来“修复”它。
 
 ## 资源与后续验收边界
 
@@ -34,3 +36,5 @@ Faithful 包约 10.5 MiB、`pack_format=34`，SHA256 为 `15e093da38af37e11531c6
 本次未替换正式 `agent-mc-java/v1` 控制桥、短时镜头租约和场景归档链。切换正式相机前仍须完成 NeoForge 对应适配，并验证第一/第三/俯视拍摄、GUI 隐藏、原生女仆模型及装备、YSM 加载、照片入箱/网站同步、场景保存、断线重连和回退。不能把隔离截图成功描述成这些能力已上线。
 
 正式 RTX 测试必须先正常暂停自己的相机，避免双开；保留 TTS、系统一的 GPU 分配、缓存与服务进程，用同场景和相同分辨率比较帧时、显存、照片耗时，再做并发语音/决策验收。不得通过清空模型缓存或重启模型服务来给相机腾显存。
+
+此次维护期间正式相机已正常暂停时，3080 Ti 仍仅余约 1,334 MiB。未启动第二个 RTX 测试进程，也未把材质/更重光影直接放入正式实例。TTS PID、系统一容器 PID/实例 ID 与原基线相同，健康正常，重启计数均为 0。
