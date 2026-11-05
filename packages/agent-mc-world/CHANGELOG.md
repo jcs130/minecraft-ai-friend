@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.18 (unpublished candidate)
+
+- Expose argument-specific SDK/MCP call capability inspection using the original schema and canonical predicates; inspection does not execute, acquire the body or authorize a later call.
+- Preserve typed work identities, revisions and native world observations through SDK facts. Match work references through the same public resolver for MCP consumers; disconnected/stale/conflicting observations never close host tasks automatically.
+
 ## 0.5.7-rc.160-preview.17 (unpublished candidate)
 
 - Reconstruct coordinate-dependent dripstone and bamboo collision shapes using the same calculation as the live body. Validate recorded shapes at their original positions, including external terrain updates; reject forged or relocated geometry.

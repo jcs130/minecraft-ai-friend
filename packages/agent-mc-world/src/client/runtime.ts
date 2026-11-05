@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { inspectToolCall } from '../contracts/call-capability.ts';
+import { resolveWorkReferences, type WorkReference } from '../contracts/work-state.ts';
 import { createMinecraftChoiceTool } from './choice.ts';
 import { runtimeExecutionState } from './execution-state.ts';
 import {readTextPage} from './text-pages.ts';
@@ -165,6 +167,16 @@ export class MinecraftAgentClient {
     this.executionGenerations.set(key,generation);
   }
   get toolPrefix() { return this.binding.toolPrefix; }
+  /** Inspect argument-specific capabilities without dispatching or acquiring the body. */
+  inspectCall(name: string, args: unknown) {
+    return inspectToolCall(this.tools().find(tool => tool.name === name), name, args);
+  }
+  /** Server observations matched by exact scope/occurrence/revision; host adoption stays explicit. */
+  resolveWork(references: readonly WorkReference[]) {
+    const current = this.phase === 'started' && this.world.connectionReadiness?.()?.ready !== false ? this.requestFacts() : null;
+    return { protocol: PROTOCOL, run: this.journal.run, adopted: false as const,
+      resolutions: structuredClone(resolveWorkReferences(references, current?.workStates ?? [])) };
+  }
   /** Pure preparation on the selected tool; preserves backend-specific validation and exact IDs. */
   prepareFastAction(name: string, args: Record<string, unknown>) {
     if (this.phase !== 'started' || this.status().connection?.ready === false || name !== `${this.toolPrefix}_do`) return null;
@@ -371,9 +383,13 @@ export class MinecraftAgentClient {
 
   currentFacts() {
     const current = this.phase === 'started' ? this.requestFacts() : null;
+    const workCurrent = this.world.connectionReadiness?.()?.ready !== false ? current : null;
     const connection = { key: 'connection', text: JSON.stringify({ phase: this.phase, host: this.options.cfg.host,
       port: this.options.cfg.port, username: this.options.cfg.username, version: this.options.cfg.version }) };
     return { protocol: PROTOCOL, run: this.journal.run,
+      ...(workCurrent?.workStates ? { workStates: structuredClone(workCurrent.workStates) } : {}),
+      ...(workCurrent?.workBindings ? { workBindings: structuredClone(workCurrent.workBindings) } : {}),
+      ...(workCurrent?.world ? { world: structuredClone(workCurrent.world) } : {}),
       ...(current?.decisionStability ? { decisionStability: structuredClone(current.decisionStability) } : {}),
       observation: operationObservation(current?.experience?.observation), parts: this.facts.replace({ text: '', snapshotTypes: [],
       parts: [connection,{key:'executionState',text:JSON.stringify(this.executionState())},

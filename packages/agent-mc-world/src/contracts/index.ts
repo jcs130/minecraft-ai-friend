@@ -13,3 +13,4 @@ export type { InventoryOrganization, InventoryDisposition, OrganizationStack, Or
 export * from './chat-delivery.ts';
 export * from './fact-updates.ts';
 export * from './world-scope.ts';
+export * from './call-capability.ts';

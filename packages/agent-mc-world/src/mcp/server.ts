@@ -13,19 +13,29 @@ import { EventCursorError } from '../client/journal.ts';
 import { invalidToolArguments } from '../contracts/tool-diagnostics.ts';
 import { RequestOutcomeUnknownError } from '../client/request-ledger.ts';
 import {textPageMeta,TextPageRangeError} from '../client/text-pages.ts';
+import { CALL_CAPABILITY_SCHEMA } from '../contracts/call-capability.ts';
 
 const protocolSpec: Tool = {
-  name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
+  name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. inspect_call classifies exact tool arguments without executing; resolve_work matches scoped work occurrences and revisions without adopting completion. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
    inputSchema: { type: 'object', properties: {
     protocol: { type: 'string', const: PROTOCOL },
-    action: { enum: ['begin_turn', 'end_turn', 'ack_barrier', 'cancel', 'task', 'request', 'facts', 'archive', 'archive_runs', 'prepare_context'] },
+    action: { enum: ['begin_turn', 'end_turn', 'ack_barrier', 'cancel', 'task', 'request', 'facts', 'archive', 'archive_runs', 'prepare_context', 'inspect_call', 'resolve_work'] },
+    tool: { type: 'string', minLength: 1, maxLength: 256 }, arguments: { type: 'object' },
+    references: { type: 'array', maxItems: 64, items: { type: 'object', additionalProperties: false,
+      required: ['scope','subject','instance','revision'], properties: {
+        scope: { type: 'object', additionalProperties: false, required: ['realm','account','agent'], properties: {
+          realm: {type:'string',minLength:1,maxLength:200}, account: {type:'string',minLength:1,maxLength:200}, agent: {type:'string',minLength:1,maxLength:200} } },
+        subject: {type:'string',minLength:1,maxLength:200}, instance: {type:'string',minLength:1,maxLength:200}, revision: {type:'integer',minimum:0},
+      } } },
     id: { type: 'string', minLength: 1, maxLength: 256 }, kind: { enum: ['task', 'method', 'observation'] },
     run: { type: 'string' }, after: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 256 },
     type: { type: 'string' }, keyword: { type: 'string' }, history: { type: 'string' },
     contextTokens: { type: 'integer', minimum: 1 }, reservedOutputTokens: { type: 'integer', minimum: 0 },
    }, required: ['protocol', 'action'], additionalProperties: false,
      allOf: [{ if: { required:['action'], properties: { action: { enum: ['begin_turn','end_turn','ack_barrier','cancel','task','request'] } } }, then: { required: ['id'] } },
-       { if: { required:['action'], properties: { action: { const: 'task' } } }, then: { required: ['kind'] } }],
+       { if: { required:['action'], properties: { action: { const: 'task' } } }, then: { required: ['kind'] } },
+       { if: { required:['action'], properties: { action: { const: 'inspect_call' } } }, then: { required: ['tool', 'arguments'] } },
+       { if: { required:['action'], properties: { action: { const: 'resolve_work' } } }, then: { required: ['references'] } }],
      examples: [{ protocol: PROTOCOL, action: 'facts' }] },
 };
 
@@ -93,7 +103,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       const condition=rule.if?.properties?.action;
       if(condition?.enum)condition.enum=condition.enum.filter(action=>!hostTurnActions.has(action));
     }
-    protocol.description = 'Read current facts, execution receipts, original archives or context budgets; cancel an explicitly identified request. Decision turns and tool barriers are managed by the host through the SDK, not by this model-facing tool.';
+    protocol.description = 'Read current facts, execution receipts, original archives or context budgets; inspect_call classifies exact arguments without execution, resolve_work matches work identities/revisions without adoption. Cancel an explicitly identified request. Decision turns and tool barriers are managed by the host through the SDK, not by this model-facing tool.';
   }
   const server = new Server({ name: `minecraft-agent-${runtime.profile}`, version }, {
     capabilities: { tools: {}, resources: {} },
@@ -107,7 +117,8 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     name: tool.name, description: tool.description, inputSchema: tool.parameters as Tool['inputSchema'],
     annotations: { readOnlyHint: tool.tags.includes('read') && !tool.tags.some(tag => ['write', 'act', 'speak'].includes(tag)) },
     _meta: { [PROTOCOL]: { tags: tool.tags, barrierAfter: tool.barrierAfter === true,
-      endsTurn: tool.endsTurn === true, interruptible: tool.interruptible !== false } },
+      endsTurn: tool.endsTurn === true, interruptible: tool.interruptible !== false,
+      callCapabilities: { schema: CALL_CAPABILITY_SCHEMA, tool: protocol.name, action: 'inspect_call' } } },
   }))];
   const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
   const validators = new Map(tools.map(tool => [tool.name, ajv.compile(tool.inputSchema)]));
@@ -173,13 +184,15 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
             result = runtime.task(args.kind as 'task' | 'method' | 'observation', id()); break;
           }
           case 'facts': result = runtime.currentFacts(); break;
+          case 'inspect_call': result = runtime.inspectCall(String(args.tool), args.arguments); break;
+          case 'resolve_work': result = runtime.resolveWork(args.references as import('../contracts/work-state.ts').WorkReference[]); break;
           case 'archive_runs': result = runtime.journal.archiveRuns(); break;
           case 'archive': result = await runtime.journal.archive(args as ArchiveQuery); break;
           case 'prepare_context': result = await runtime.prepareContext({ contextTokens: Number(args.contextTokens),
             reservedOutputTokens: Number(args.reservedOutputTokens) }, String(args.history ?? ''), undefined,
             tools.map(tool => ({ name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema }))); break;
         }
-        const readOnly=['task','request','facts','archive','archive_runs','prepare_context'].includes(String(args.action));
+        const readOnly=['task','request','facts','archive','archive_runs','prepare_context','inspect_call','resolve_work'].includes(String(args.action));
         return outcome({ text: JSON.stringify(result),...(readOnly?{meta:{readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}}}:{}) });
       }
       if (name === metrics.name) return outcome({ text: JSON.stringify(runtime.metrics.snapshot(runtime.status().phase)) });
