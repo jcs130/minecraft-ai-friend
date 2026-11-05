@@ -51,6 +51,10 @@ export interface ToolOutcome {
 }
 export interface ToolDef extends ToolSchema {
   tags: readonly ToolTag[]; barrierAfter?: boolean; endsTurn?: boolean; interruptible?: boolean;
+  /** Resource requirement, not a read-only or authorization claim. Independent
+   * tools may have side effects but never acquire/mutate the physical body.
+   * Absent/unknown metadata retains conservative legacy scheduling. */
+  bodyControl?: 'independent' | 'exclusive';
   /** Pure host hint; never invokes a model or dispatches/rewrites work. */
   familiarAction?(args: Record<string, unknown>): FamiliarAction | null;
   /** True only for a branch that cannot acquire/mutate the game body. */
