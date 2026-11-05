@@ -152,8 +152,8 @@ python paper/integrations/vortex-rpg/diagnostics/party4_diagnostics.py audit \
 | `party.status` | `value`：本人真实 `/mycli guild party status --json` 结果；四端最后状态需在30秒内同一 partyId、四个准确 UUID，后来的退队/冲突不能被早先成功遮住 |
 | `chat.received` | `event`：原核心 `minecraft.chat/chat`，保留 run/cursor/ts 与 meta.senderUuid、identityEvidence；只有 packet-sender / player-list-format 身份级别可计数，不使用旁观者镜头或官网气泡 |
 | `model.input` | `turnId/receivedEventIds`：仅列实际进入模型请求的本地收件事件 ID；被 token 预算排除的内容不算 |
-| `model.result` | `inputId/turnId/status/modelInvocation/providerRequestId/chatToolCalls`；真实调用标 real，completed 才记消费，聊天调用保留原 call id；unknown、假模型、纯旁白不算回应 |
-| `chat.sent` | `turnId/toolCallId/chatDelivery`；使用原 agent-mc/chat-delivery/v1 收据，只确认 client-transport sent，不推定对方听见 |
+| `model.result` | `inputId/turnId/status/modelInvocation/providerRequestId（或本地宿主原 modelTraceId）/chatToolCalls`；真实调用标 real，completed 才记消费，聊天调用保留原 call id；unknown、假模型、纯旁白不算回应 |
+| `chat.sent` | `turnId/toolCallId/chatDelivery`；使用原 agent-mc/chat-delivery/v1 收据，保留 channel/text/sentAt；仅计公开交流或发给队内伙伴的私聊，组队命令及空收据不计回应。只确认 client-transport sent，不推定对方听见 |
 | `task.receipt` | `taskId/status/receipt`：真实生存任务终态及原回执，不用聊天承诺代替 |
 | `activity.completed` | `taskId/status/nativeReceiptRef/activity`：关联本地真实 task.receipt；activity 为 gather/craft/farm/explore/build/follow 之一；其他活动需另按原回执人工检查 |
 
@@ -167,7 +167,7 @@ python paper/integrations/vortex-rpg/diagnostics/party4_diagnostics.py audit \
 
 - 原生上游 `ExpeditionPartyManager` Git blob `f91bf3807b4bc24dd4d5a4703a695f963bd81f61`，SHA256 与既有固定锁相同；规则 162、原生四人 76、原生五人 106，共 **344 条 Java 离线断言通过**。
 - 冻结构建器拒绝检查 **2 项通过**。
-- 新诊断测试 **17 项通过**，包括未提供插件、旧摘要、模拟证据、UUID/模型未知结果、发言关联、最后状态冲突、原游标重复、只读不改文件、旧基底构建拒绝。
+- 新诊断测试 **19 项通过**，包括未提供插件、旧摘要、模拟证据、UUID/模型未知结果、发言关联、最后状态冲突、原游标重复、只读不改文件、旧基底构建拒绝。
 - Node 预检与名册检查 **8 项通过**；隔离脚本语法通过。
 - 既有自治 `test_party_context/test_social/test_social_evidence` **52 项通过**，其夹具禁止网络/模型/进程，不属于真实对话。
 - QA Java 夹具对 Paper 1.21.1 API 加 Vortex **编译签名 stub** 做过语法编译，仅验证 API/语法；不是匹配现役三 JAR 的完整编译或联机证明。此环境只有 Java21 runtime，无完整 javac/ct.sym，首次 `--release 21` 尝试失败；改用同版本编译模块 `-source 21 -target 21` 完成语法核验，正式构建入口仍要求完整 JDK21。

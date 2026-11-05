@@ -236,6 +236,8 @@ def audit(spec_path):
                 sender = meta.get("senderUuid")
                 if (native.get("type") in ("minecraft.chat", "chat") and native.get("run")
                         and type(native.get("cursor")) is int and native["cursor"] >= 0
+                        and isinstance(native.get("text"), str) and native["text"].strip()
+                        and meta.get("channel") in ("public", "private")
                         and sender in actor_ids - {uid} and not meta.get("outgoing")
                         and meta.get("identityEvidence") in ("packet-sender", "player-list-format")
                         and not meta.get("staleEpoch") and native.get("contextDelivery") != "archive-only"
@@ -265,7 +267,7 @@ def audit(spec_path):
         for result in results.values():
             inp = inputs.get(result.get("inputId"))
             if (not inp or result.get("status") != "completed" or result.get("modelInvocation") != "real"
-                    or not result.get("providerRequestId") or not result.get("turnId")
+                    or not (result.get("providerRequestId") or result.get("modelTraceId")) or not result.get("turnId")
                     or result.get("turnId") != inp.get("turnId")
                     or stamp(inp["at"]) > stamp(result["at"])):
                 continue
@@ -281,7 +283,12 @@ def audit(spec_path):
                         and stamp(result["at"]) <= stamp(sent["at"])
                         and receipt.get("protocol") == "agent-mc/chat-delivery/v1"
                         and receipt.get("status") == "sent" and receipt.get("boundary") == "client-transport"
-                        and receipt.get("id")):
+                        and receipt.get("id") and isinstance(receipt.get("text"), str) and receipt["text"].strip()
+                        and receipt.get("channel") in ("public", "private")
+                        and (receipt["channel"] != "public" or not receipt["text"].lstrip().startswith("/"))
+                        and (receipt["channel"] != "private" or receipt.get("to") in
+                             {a["account"] for a in actors if a["uuid"] != uid})
+                        and stamp(result["at"]) <= stamp(receipt["sentAt"]) <= stamp(sent["at"]) + 5):
                     row["replyTurns"].append(result["turnId"])
         row["replyTurns"] = sorted(set(row["replyTurns"]))
         row["modelObservedFrom"] = sorted(observed)

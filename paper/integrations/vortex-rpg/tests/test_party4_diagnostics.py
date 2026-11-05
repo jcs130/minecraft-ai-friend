@@ -71,13 +71,15 @@ class DiagnosticsTest(unittest.TestCase):
             for n, peer in enumerate(peers):
                 records.append({**base, 'id': 'receive' + str(n), 'kind': 'chat.received', 'at': at(2),
                     'event': {'type': 'minecraft.chat', 'run': 'fixture-native', 'cursor': n, 'ts': at(2),
-                              'meta': {'senderUuid': peer, 'identityEvidence': 'packet-sender'}}})
+                              'text': 'SYNTHETIC TEST INPUT',
+                              'meta': {'senderUuid': peer, 'identityEvidence': 'packet-sender', 'channel': 'public'}}})
             records += [
                 {**base, 'id': 'input', 'kind': 'model.input', 'at': at(3), 'turnId': 'turn1', 'receivedEventIds': ['receive0', 'receive1', 'receive2']},
                 {**base, 'id': 'result', 'kind': 'model.result', 'at': at(4), 'turnId': 'turn1', 'inputId': 'input',
                  'status': 'completed', 'modelInvocation': 'real', 'providerRequestId': 'fixture-request', 'chatToolCalls': [{'id': 'call1'}]},
                 {**base, 'id': 'sent', 'kind': 'chat.sent', 'at': at(5), 'turnId': 'turn1', 'toolCallId': 'call1',
-                 'chatDelivery': {'protocol': 'agent-mc/chat-delivery/v1', 'status': 'sent', 'boundary': 'client-transport', 'id': 'fixture-delivery'}},
+                 'chatDelivery': {'protocol': 'agent-mc/chat-delivery/v1', 'status': 'sent', 'boundary': 'client-transport',
+                                  'id': 'fixture-delivery', 'text': 'SYNTHETIC TEST OUTPUT', 'channel': 'public', 'sentAt': at(5)}},
                 {**base, 'id': 'terminal', 'kind': 'task.receipt', 'at': at(6), 'taskId': 'task1', 'status': 'completed', 'receipt': {'synthetic': True}},
                 {**base, 'id': 'activity', 'kind': 'activity.completed', 'at': at(7), 'taskId': 'task1', 'status': 'completed', 'nativeReceiptRef': 'terminal', 'activity': 'gather'},
             ]
@@ -158,6 +160,24 @@ class DiagnosticsTest(unittest.TestCase):
                 row = self.run_audit(bundle, hosts, events)['actors'][0]
                 self.assertEqual(row['modelObservedFrom'], [])
                 self.assertEqual(row['replyTurns'], [])
+
+    def test_local_model_can_use_original_host_trace_id_without_provider_request_id(self):
+        bundle, hosts, events = self.bundle()
+        result = next(e for e in events[0] if e['kind'] == 'model.result')
+        result.update(providerRequestId=None, modelTraceId='original-local-model-trace')
+        row = self.run_audit(bundle, hosts, events)['actors'][0]
+        self.assertEqual(len(row['modelObservedFrom']), 3)
+        self.assertEqual(row['replyTurns'], ['turn1'])
+
+    def test_commands_empty_receipts_and_unrelated_private_speech_are_not_replies(self):
+        for changes in ({'text': '/mycli guild party accept'}, {'channel': 'command'},
+                        {'text': ''}, {'channel': 'private', 'to': 'unrelated'},
+                        {'sentAt': '2026-11-05T11:00:00Z'}):
+            with self.subTest(changes=changes):
+                bundle, hosts, events = self.bundle()
+                sent = next(e for e in events[0] if e['kind'] == 'chat.sent')
+                sent['chatDelivery'].update(changes)
+                self.assertEqual(self.run_audit(bundle, hosts, events)['actors'][0]['replyTurns'], [])
 
     def test_wrong_uuid_unverified_identity_stale_and_foreign_connection_rejected(self):
         for change in ('uuid', 'identity', 'stale', 'connection'):
