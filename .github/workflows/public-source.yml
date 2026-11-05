@@ -25,6 +25,13 @@ jobs:
           java-version: '21'
       - name: Check Goddess private-message authority without connecting
         run: node --test paper/ops/goddess-*.test.mjs
+      - name: Check four-agent party diagnostics and isolated-stage boundaries offline
+        run: |
+          python paper/integrations/vortex-rpg/tests/run-four-party.py
+          python paper/integrations/vortex-rpg/tests/test_four_party_build.py
+          python paper/integrations/vortex-rpg/tests/test_party4_diagnostics.py
+          node --test paper/integrations/vortex-rpg/tests/four-party-preflight.test.mjs
+          node --check paper/integrations/vortex-rpg/tests/four-party-stage.mjs
       - name: Check restore, drain and original Minescript wrappers offline
         run: |
           python -m unittest discover -s tests -p test_survival_body_reconnect.py -v
