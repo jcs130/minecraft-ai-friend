@@ -1,6 +1,9 @@
 // Mineflayer 4.37.1 can keep its PLAY physics timer running while a modern
 // proxy switches back to CONFIGURATION. Never serialize those transient PLAY
 // packets with the configuration codec, and never replay them afterwards.
+// Bridge already installs the core configuration guard (including the pinned
+// rc.130 runtime). It alone saves/restores physics. This older-runtime packet
+// filter must not capture that guard's temporary false or force physics on.
 const installs = new WeakMap();
 const MOVEMENT = new Set(['position', 'position_look', 'look', 'flying', 'entity_action', 'player_input']);
 
@@ -8,26 +11,18 @@ export function pauseDuringConfiguration(bot) {
   const client = bot._client;
   if (installs.has(client)) return installs.get(client);
   const originalWrite = client.write;
-  let suspended = false, restorePhysics = false, closed = false, discarded = 0;
+  let suspended = false, closed = false, discarded = 0;
   function pause() {
     if (suspended) return;
     suspended = true;
-    // Always re-enable ordinary physics after the next PLAY position.
-    // Capturing bot.physicsEnabled here races with agent-mc-world's
-    // installConfigurationPhaseGuard, which may already have set it false;
-    // inheriting that false permanently freezes Velocity/Youer joins
-    // (onGround stuck false, control/goto report 人动不了 / 飞行尚未结束).
-    restorePhysics = true;
-    bot.physicsEnabled = false;
   }
   function state(next) { if (next === 'configuration') pause(); }
   function position() {
     if (client.state !== 'play' || !suspended) return;
     suspended = false;
-    bot.physicsEnabled = restorePhysics;
   }
   function write(name, params) {
-    if (client.state === 'configuration' && MOVEMENT.has(name)) { discarded++; return; }
+    if (!closed && (client.state === 'configuration' || suspended) && MOVEMENT.has(name)) { discarded++; return; }
     return originalWrite.call(this, name, params);
   }
   function close() {

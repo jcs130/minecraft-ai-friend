@@ -41,9 +41,10 @@ it('physics and position writes stay suspended until the backend supplies a fres
   play(client, {}); const originalWrite = client.write;
   const dispose = installConfigurationPhaseGuard(bot);
   client.emit('success', { uuid: '11111111-1111-1111-1111-111111111111', username: 'ProtocolTest' });
-  client.write('position'); client.emit('finish_configuration'); client.write('flying');
+  client.write('position'); client.write('entity_action'); client.emit('finish_configuration'); client.write('flying'); client.write('entity_action');
   expect(bot.physicsEnabled).toBe(false); expect(configurationTransportReady(client)).toBe(false);
   expect(client.writes).not.toContain('position'); expect(client.writes).not.toContain('flying');
+  expect(client.writes).not.toContain('entity_action');
   client.emit('position', { x: 0, y: 64, z: 0 });
   expect(bot.physicsEnabled).toBe(true); expect(configurationTransportReady(client)).toBe(true);
   client.write('position'); expect(client.writes.filter(n => n === 'position')).toHaveLength(1);
