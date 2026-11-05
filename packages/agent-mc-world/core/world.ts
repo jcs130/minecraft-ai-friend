@@ -2438,6 +2438,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 没有 barrierAfter:登记完没有要复核的世界事实。
     name: 'mc_goal',
     tags: ['write'],
+    bodyControl: 'independent',
     description:
       'Register and track what you are working towards in this world: up to five slots (#1..#5). '
       + 'Targets can be builds, gathered items, entity kills or captures, exploration, transport, farming, '

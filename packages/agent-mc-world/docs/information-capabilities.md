@@ -62,3 +62,23 @@ and rebuild schema discovery after namespacing via `withToolHelp(tools, name)`.
 This preserves old files without copying the implementation. A facade that
 already owns a shared native inbox can pass `JavaClientServices.messageInbox:false`
 to avoid writing a second book.
+
+## Independent side effects and body ownership
+
+`ToolDef.bodyControl` declares whether the whole tool is `independent` of the
+physical body or requires `exclusive` body control. `mc_voice` and `mc_goal`
+declare independence: speech still uses its own serialized upload lane and
+request-ID ledger; registering an intention never dispatches that intention.
+Independence is not read-only access or permission to execute.
+
+Hosts can use `toolRequiresBodyControl(tool)` from `agent-mc-world/contracts`
+when projecting execution tools or assigning body leases. Missing metadata on
+an `act`, `write` or `speak` tool remains conservative. Do not infer independence
+from a tool name, or give read-only workers permission to send speech.
+
+SDK `inspectCall` and MCP `mc_protocol {action:"inspect_call",tool,arguments}`
+report the same argument-specific `requiresBody` alongside `readOnly` and
+`backgroundLearning`. Invalid/unknown classification remains null. A result is
+not a lease: recheck ownership at dispatch and preserve the tool's authorization,
+cancellation and deduplication. Catalog opening must use the final callable
+projection; a body-owned tool should advertise its actual executor route.

@@ -35,7 +35,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const terminal = new Set(['sent','failed','cancelled','unknown','not_found']);
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 export const PROXIMITY_VOICE_TOOL: Omit<ToolDef,'handler'> = {
-  name: 'mc_voice', tags: ['speak'],
+  name: 'mc_voice', tags: ['speak'], bodyControl: 'independent',
   description: 'Optional speech to nearby Minecraft players, using the existing authenticated game connection. '
     + 'Not audience commentary, private chat or shout. {} shows availability and output mode. '
     + '{action:"speak",text,requestId?} synthesizes ONE full line through the configured audio producer; '
