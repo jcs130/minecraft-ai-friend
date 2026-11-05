@@ -38,11 +38,14 @@ export function publicPlayerSummary(summary = {}, roster = []) {
   const result = { ...summary, playerCountPolicy: publicPlayerCountPolicy };
   if (Number.isFinite(summary.rosterCount)) result.rosterCount = Math.max(0, summary.rosterCount - cameras.length);
   if (Number.isFinite(summary.agentCount)) result.agentCount = Math.max(0, summary.agentCount - cameras.filter(row => row.kind === 'agent').length);
-  // Pre-policy publishers with an unfiltered roster used the raw ping total.
-  // Several aliases can refer to this one fixed camera connection.
-  if (countValid(summary.playersOnline) && summary.playersOnline > 0 && cameras.some(row => row.online === true))
+  // Only an identity sampled by the ping that supplied the raw total can
+  // justify a deduction. Legacy roster online can also mean proxy auth.
+  const cameraSampled = Number.isFinite(Date.parse(summary.observedAt || '')) && cameras.some(row => row.online === true
+    && ['minecraft.server-list-ping.uuid', 'minecraft.server-list-ping.sample'].includes(row.statusSource)
+    && row.statusObservedAt === summary.observedAt);
+  if (countValid(summary.playersOnline) && summary.playersOnline > 0 && cameraSampled)
     return { ...result, ...countResult(summary.playersOnline - 1) };
-  if (summary.playersOnline === 0 && !cameras.some(row => row.online === true)) return { ...result, ...countResult(0) };
+  if (summary.playersOnline === 0 && !cameraSampled) return { ...result, ...countResult(0) };
   // PR #68 filtered the roster without recording whether subtraction happened.
   // Absence (or online:false from a partial sample) cannot repair that history.
   return { ...result, ...countResult(null, '旧快照缺少可靠的计数依据，在线人数待确认') };

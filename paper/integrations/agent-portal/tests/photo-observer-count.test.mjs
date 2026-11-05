@@ -120,9 +120,10 @@ for (const scenario of scenarios) test(`home → filtered snapshot → cloud res
 });
 
 function legacy(rows, count = 4) {
-  return { schemaVersion: 1, sequence: 1, observedAt: new Date().toISOString(),
-    summary: { online: true, playersOnline: count, rosterCount: rows.length, agentCount: rows.filter(row => row.kind === 'agent').length },
-    roster: rows, players: [], states: {}, events: [] };
+  const observedAt = new Date().toISOString();
+  return { schemaVersion: 1, sequence: 1, observedAt,
+    summary: { online: true, playersOnline: count, rosterCount: rows.length, agentCount: rows.filter(row => row.kind === 'agent').length, observedAt },
+    roster: rows.map(row => ({ statusSource: 'minecraft.server-list-ping.uuid', statusObservedAt: observedAt, ...row })), players: [], states: {}, events: [] };
 }
 const legacyRow = (row, kind, online = true) => ({ name: row.name, playerUuid: row.uuid, kind, online, available: true });
 
@@ -172,10 +173,24 @@ test('unversioned filtered snapshots and false/unknown legacy camera presence ca
   }
 });
 
+test('legacy online camera must be backed by the same backend ping, not proxy authorization or another ping', async t => {
+  const f = await fixture(t);
+  for (const [index, statusSource] of ['LoginGuard.authorizedNames', 'minecraft.server-list-ping.uuid', undefined].entries()) {
+    const row = { ...legacyRow(camera, 'agent'), statusSource, statusObservedAt: new Date(Date.now() - 2000).toISOString() };
+    const old = legacy([legacyRow(human, 'player'), row], 1);
+    old.sequence = index + 1;
+    if (index === 0) old.roster.at(-1).statusObservedAt = old.observedAt;
+    assert.equal((await f.put(old)).status, 200);
+    const summary = await f.get('server');
+    assert.equal(summary.playersOnline, null, 'a live proxy session or mismatched ping cannot prove a camera slot');
+    assert.ok(summary.playersOnlineUnavailableReason);
+  }
+});
+
 test('buildSnapshot normalizes legacy counts before discarding the camera and cloud does not deduct twice', async t => {
   const f = await fixture(t), rows = [legacyRow(human, 'player'), legacyRow(camera, 'agent')];
   const original = legacy(rows, 2);
-  const game = { roster: async () => rows, serverSummary: async () => original.summary,
+  const game = { roster: async () => original.roster, serverSummary: async () => original.summary,
     playerState: async () => ({ freshness: 'saved' }) };
   const world = { players: async () => ({ players: [] }), events: async () => ({ events: [], pages: 1 }) };
   const snapshot = await buildSnapshot(game, world, 1);
