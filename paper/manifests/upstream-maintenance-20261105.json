@@ -1,0 +1,249 @@
+{
+  "asOf": "2026-11-05",
+  "minecraft": "1.21.1",
+  "scope": "Upstream audit and isolated candidates; only idle internal MC body installed",
+  "production": {
+    "gameRestarted": false,
+    "routerRestarted": false,
+    "gameCodeChanged": false,
+    "accountsOrWorldDataChanged": false
+  },
+  "installedBody": {
+    "sdkBefore": "0.5.7-rc.160-preview.15",
+    "sdkAfter": "0.5.7-rc.160-preview.18",
+    "sourceCommit": "9d8be3bb4ca2b12ed6b7806ae15aae1eb7718316",
+    "profileUnchanged": true,
+    "adapterUnchanged": true,
+    "plannerChanged": false,
+    "bothDiskBackup": true,
+    "backupSha256": "032732a106b26248e66fc687e1aa48c71c6cbf9956d923e0f5f25ea8b19cf2c9"
+  },
+  "bodyChecks": {
+    "toolCount": 43,
+    "offlineCalls": 8,
+    "expectedRejectedCalls": 4,
+    "networkConnections": 0,
+    "gameConnected": false,
+    "modelCalled": false
+  },
+  "youer": {
+    "productionBootstrapSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+    "productionLibrarySha256": "96b402570bd6a67ebaddc5e1cc59e2399fe2c72fbf1296c79cb0dbd04793540e",
+    "upstreamCommit": "36f451ca68fc60e794b0b077614364dc6b12b18a",
+    "ciRun": 41847765891,
+    "artifactId": 13331199505,
+    "zipSha256": "606cf22ee6a8504be766ab600972a9122ba173fe1a4b35815f511500e5a2cba5",
+    "candidate": {
+      "candidate": "neoforge-21.1.265-server.jar",
+      "bootstrapSha256": "89e670684b1101f68b08f9c441297201b3006550d1bb31af2ab7dedf57966661",
+      "neoForgeVersion": "21.1.265",
+      "baselineSha256": "f6de857fe8d28d00c73a1a65cbb60102de4c13fced1635f5e2c36fc3aac2ae57",
+      "sha256": "76db762ca2f842f9a769489ced2c0e0b2e3ae338f7c7bf561ccfa5772788f9fb",
+      "changedEntries": [
+        "net/minecraft/server/players/PlayerList.class"
+      ],
+      "unchangedEntries": 2539
+    },
+    "checks": {
+      "asyncLoadedChunk": true,
+      "asyncGeneratedChunk": true,
+      "asyncPersistedColdChunk": true,
+      "persistentEntitySurvivesRestart": true,
+      "nonpersistentEntityAbsentAfterRestart": true,
+      "upstreamRespawnReproducedFailure": true,
+      "patchedRespawnPositionAndAck": true,
+      "patchedPhysicsTicks": 37,
+      "patchedWalking": true,
+      "rebuildSameSha256": true
+    },
+    "deployed": false
+  },
+  "numen": {
+    "productionApiVersion": "0.1.4-qd-youer2",
+    "apiSha256": "b3cf763f68fb4729e1001149c267ee378a6cc55b1c91f97bb9222f80782ff35a",
+    "upstreamCommit": "19c8710b014260bb810dd0fe8f85f054fb6decf5",
+    "upstreamApiVersion": "0.1.4",
+    "sourceCommitsSinceBase": 557,
+    "builtArtifacts": {
+      "numen_api-paper-1.21.1-0.1.4.jar": "8563e64c3e173c09765d8fc49c5e8a7d9ba498d38f8b9ed2fd09fad16624029e",
+      "numen-paper-1.21.1-0.1.4.jar": "dcda6d7a5d4062efb755b564487560c8d0906f7783f0be82b69a18e6c120b5e7"
+    },
+    "jvmTests": {
+      "tests": 2992,
+      "failures": 0,
+      "skipped": 0
+    },
+    "gameTestsRun": false,
+    "latestUpstreamIdentityCaseSafe": false,
+    "latestUpstreamDespawnYouerCompatible": false,
+    "existingPatchedApiWithNewYouerLifecyclePassed": true,
+    "deployed": false
+  },
+  "router": {
+    "productionVersion": "0.35.13",
+    "candidateVersion": "0.38.2",
+    "productionImage": "harnessrouter/harnessrouter@sha256:1e9fe5373b1aaaa8946d62b7ca241a3e8d4c1312b5beb603af5656f760036e10",
+    "candidateImage": "harnessrouter/harnessrouter@sha256:444e92aab1bce6046e404570376faadc71154f98dbd0210dee379b9488f15b00",
+    "isolatedNetwork": "none",
+    "portsPublished": false,
+    "controlRows": 100,
+    "controlIdentitySetPreserved": true,
+    "changedControlRows": 3,
+    "changedControlFields": [
+      "system-heartbeat.ts"
+    ],
+    "graphVerticesPreserved": 65,
+    "graphEdgesPreserved": 64,
+    "secretsEncrypted": true,
+    "protocol": {
+      "protocol": "uhp",
+      "versions": [
+        "2026-09-28",
+        "2026-09-12",
+        "2026-08-11"
+      ],
+      "default_version": "2026-09-28",
+      "conformance_class": "full"
+    },
+    "missingCredentialStatus": 401,
+    "invalidCredentialStatus": 401,
+    "realModelDispatchTested": false,
+    "deployed": false
+  },
+  "controller": {
+    "productionVersion": "0.1.27",
+    "mainVersion": "0.2.153",
+    "dropInHarnessRouterAdapter": false,
+    "tests": {
+      "passed": 1924,
+      "skipped": 25,
+      "failed": 6
+    },
+    "failureBoundaries": [
+      "2 Windows long-path fixture failures",
+      "4 Windows DPAPI access-denied failures"
+    ],
+    "deployed": false
+  },
+  "pluginCandidates": [
+    {
+      "file": "Geyser-Spigot-2.12.1-b1289.jar",
+      "url": "https://download.geysermc.org/v2/projects/geyser/versions/2.12.1/builds/1289/downloads/spigot",
+      "sha256": "e6a1b21c79a57e551402955f7a7b58a9c75a2dfeefd0665ed4d3d1ba9437fa53",
+      "descriptor": {
+        "name": "Geyser-Spigot",
+        "version": "2.12.1-SNAPSHOT"
+      },
+      "bytes": 52195490,
+      "lambdaClassSha256": "3cf9f39e43f0befbf786df134aac78493d41fe1e9d09d17369054d3ea2e74d34"
+    },
+    {
+      "file": "ProtocolLib-5.4.0.jar",
+      "url": "https://github.com/dmulloy2/ProtocolLib/releases/download/5.4.0/ProtocolLib.jar",
+      "sha256": "ee2e7ab9b5386f2d103081c4d108e61b1035df2ca692b53d6e2409fb1f5caccf",
+      "descriptor": {
+        "name": "ProtocolLib",
+        "version": "5.4.0"
+      },
+      "bytes": 10251186
+    },
+    {
+      "file": "Multiverse-Core-5.8.2.jar",
+      "url": "https://cdn.modrinth.com/data/3wmN97b8/versions/de7TbcZG/multiverse-core-5.8.2.jar",
+      "sha256": "792252b6bbcf17c94ab8385e595281c830d7a40c946aea1832d8a010702bb630",
+      "descriptor": {
+        "name": "Multiverse-Core",
+        "version": "5.8.2"
+      },
+      "bytes": 4631727
+    }
+  ],
+  "geyserPatch": {
+    "artifact": "Geyser-Spigot-2.12.1-b1289-youer.jar",
+    "sha256": "51b6d52ef09c9bbf3614a05c136991150dbf5fb1e43e29912bef850bc7591c89",
+    "upstreamSha256": "e6a1b21c79a57e551402955f7a7b58a9c75a2dfeefd0665ed4d3d1ba9437fa53",
+    "upstreamBuild": 1289,
+    "changedEntries": [
+      "org/lanternpowered/lmbda/InternalLambdaFactory.class"
+    ],
+    "otherEntriesPreserved": 20906,
+    "patchedClassSha256": "0957d8aebeca0396ec6c4bd590b719d7c14d841296ffc7c12a5d2cd12d6d70af",
+    "functionalChecks": 4
+  },
+  "combination": {
+    "fullAcceptance": false,
+    "includedCurrentModCount": 4,
+    "checks": [
+      {
+        "name": "Java 1.21.1 joined",
+        "pass": true
+      },
+      {
+        "name": "numen_api version",
+        "pass": true
+      },
+      {
+        "name": "ProtocolLib version",
+        "pass": true
+      },
+      {
+        "name": "Multiverse-Core version",
+        "pass": true
+      },
+      {
+        "name": "Current patched Numen body joins new Youer",
+        "pass": true
+      },
+      {
+        "name": "Case variation creates no duplicate",
+        "pass": true
+      },
+      {
+        "name": "Body UUID remains unchanged",
+        "pass": true
+      },
+      {
+        "name": "Patched Numen dismissal succeeds",
+        "pass": true
+      },
+      {
+        "name": "Effect packets observed",
+        "pass": true
+      },
+      {
+        "name": "Geyser loopback UDP responds",
+        "pass": true
+      },
+      {
+        "name": "No client protocol errors",
+        "pass": true
+      }
+    ],
+    "effectPacketCloningPassed": true,
+    "multiverseLoaded": false,
+    "bedrockLegacyUdpPing": true,
+    "bedrockProtocol": 2225,
+    "realPhoneOrWebRtcLoginTested": false,
+    "vanillaYsmVisualsTested": false,
+    "multiverse581FreshImportPassed": true,
+    "multiverse581NormalRestartPassed": false,
+    "multiverse582NormalRestartPassed": false
+  },
+  "builderRejectionChecks": [
+    {
+      "input": "already-patched-Youer",
+      "rejectedBeforeOutput": true
+    },
+    {
+      "input": "already-patched-Geyser",
+      "rejectedBeforeOutput": true
+    }
+  ],
+  "candidateAndCodeRollback": {
+    "bothDiskVerified": true,
+    "artifactCount": 10,
+    "deploymentReady": false,
+    "freshProductionColdBackupStillRequired": true
+  },
+  "evidenceHandling": "Only synthetic test results and public artifact identities are committed. Private profiles, DBs, keys and raw runtime logs excluded."
+}
