@@ -2,7 +2,7 @@ import type { EventEmitter } from 'node:events';
 
 type ProtocolClient = EventEmitter & { state?: string; write: (name: string, ...args: any[]) => any };
 const readiness = new WeakMap<EventEmitter, () => boolean>();
-const movementPackets = new Set(['position', 'position_look', 'look', 'flying', 'vehicle_move', 'steer_vehicle', 'steer_boat', 'player_input']);
+const movementPackets = new Set(['position', 'position_look', 'look', 'flying', 'vehicle_move', 'steer_vehicle', 'steer_boat', 'player_input', 'entity_action']);
 
 /** Missing installation preserves old fixture/client behavior; an active configuration never means ready. */
 export function configurationTransportReady(client: EventEmitter & { state?: string }): boolean {
