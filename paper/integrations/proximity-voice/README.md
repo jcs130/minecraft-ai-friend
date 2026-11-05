@@ -1,6 +1,8 @@
 # 千灯纪附近语音
 
-2026-11-05：配套 LoginGuard 的 `mcagent:voice` 回程误拦已完成[双向授权修复候选和隔离协议对照](../../docs/VOICE_PROXY_REPLIES_20261105.md)，未部署。此项不改变客户端或语音播放策略，也不等于正式 TTS/ASR/真人听感验收。
+2026-11-06：媒体服务误用基础 Python 导致上传音频准备失败，已切回现有语音虚拟环境；依赖预检、Windows 子进程接管和真实 HTTP 重采样已验证，守护重启后仍就绪。原失败请求不重播；独立 Java 录音复验仍待完成，见[修复与验收边界](../../docs/NUMEN_VOICE_REPAIR_20261106.md)。
+
+2026-11-05：配套 LoginGuard 的 `mcagent:voice` 回程误拦已随 PR 批次上线，见[双向授权修复](../../docs/VOICE_PROXY_REPLIES_20261105.md)和[部署记录](../../docs/PR_BATCH_RELEASE_20261105.md)。代理上线不等于正式 TTS/ASR/真人听感验收。
 
 状态（2026-10-29）：Simple Voice Chat 2.6.27、QiandengVoice 0.1.0 与本机 TTS/CPU ASR 已安装正式服并自启。局域网 UDP 已实收 nonce 回包；公网映射已补，外网及真人麦克风/耳听验证状态见[发布说明](../../docs/PROXIMITY_VOICE.md)。
 
@@ -54,8 +56,10 @@ node --test tests/client.test.mjs
 Python 测试需先在独立 venv 安装 `service/requirements.txt`；模型从 [sherpa-onnx 官方 Paraformer 文档](https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-paraformer/paraformer-models.html) 获取中文小模型的 `model.int8.onnx` 和 `tokens.txt`，模型不入 Git。`service/config.example.json` 只提供路径示例；在本机私有文件中生成至少32字符的桥令牌，并复制到 Paper `plugins/QiandengVoice/bridge.token`。服务只监听127.0.0.1，拒绝浏览器 Origin，TTS 目标仅允许数字内网／回环 HTTP 地址。
 
 ```powershell
-python service/voice_service.py --config E:/MC/private/proximity-voice/service.json
+E:/MC/runtime/qiandeng-voice/Scripts/python.exe service/voice_service.py --config E:/MC/private/proximity-voice/service.json
 ```
+
+Windows 常驻入口为 `service/media-supervisor.ps1`。`-Python` 必须指向安装了 `service/requirements.txt` 的同一虚拟环境，不要替换成基础 Python 或依赖 PATH。`/health` 应同时确认 `asrLoaded=true`、`asrDevice=cpu`；仅有任务处于 Running 不能证明服务可用。
 
 测试专用 `QiandengVoiceQA.jar` 提供控制台音频夹具，绝不能装进正式服。构建产物和第三方 JAR 不入 Git。
 

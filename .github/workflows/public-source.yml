@@ -134,6 +134,8 @@ jobs:
         run: ./paper/scripts/test-backup-long-path.ps1
   portal-release:
     runs-on: ubuntu-latest
+    env:
+      PORTAL_BROWSER_EXECUTABLE: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -147,6 +149,8 @@ jobs:
       - name: Install current portal source for candidate checks
         run: npm ci --ignore-scripts --no-audit
         working-directory: paper/integrations/agent-portal
+      - name: Verify the explicit browser before running real UI checks
+        run: test -x "$PORTAL_BROWSER_EXECUTABLE" && "$PORTAL_BROWSER_EXECUTABLE" --version
       - name: Check current portal and Skill download contracts
         run: node scripts/prepare-downloads.mjs --base-url https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/
         working-directory: paper/integrations/agent-portal
