@@ -123,8 +123,11 @@ export async function skillCraft(
     } else if (tagged) {
       const stock = invCountById(bot, def.id);
       if (stock >= call.count) {
-        return `没现搓${label}:配方需要 ${tagged.needs},包里凑不齐;`
-          + `不过包里本来就有 ${stock} 个,够这一步要的 ${call.count} 个了`;
+        // 库存足够不等于完成合成；任务 CRAFT_ITEM（如 qd_field_kit）要求现场 CraftItemEvent。
+        throw new SkillBlocked(
+          `${label}的官方配方需要 ${tagged.needs};包里凑不齐;`
+          + `包里虽有 ${stock} 个成品，但未现场合成。持有≠任务制作进度，请凑齐材料后重试 craft`,
+        );
       }
       throw new SkillBlocked(`${label}的官方配方需要 ${tagged.needs};包里凑不齐`);
     } else {
@@ -136,11 +139,13 @@ export async function skillCraft(
       if (!ready) {
         const options = all.map((r) => [...craftNeeds(r)]
           .map(([id, n]) => `${nameOf(id)}×${n}`).join(' + ')).join('  或  ');
-        // 现有库存已满足本步需求时不判失败，允许依赖该物品的后续步骤继续。
+        // 库存足够不等于完成合成；任务 CRAFT_ITEM 要求现场制作，不能因持有成品短路为成功。
         const stock = invCountById(bot, def.id);
         if (stock >= call.count) {
-          return `没现搓${label}:配方要 ${options},包里凑不齐;` +
-            `不过包里本来就有 ${stock} 个,够这一步要的 ${call.count} 个了`;
+          throw new SkillBlocked(
+            `${label}的配方要:${options};包里凑不齐;` +
+            `包里虽有 ${stock} 个成品，但未现场合成。持有≠任务制作进度，请凑齐材料后重试 craft`,
+          );
         }
         throw new SkillBlocked(`${label}的配方要:${options};包里凑不齐`);
       }
@@ -282,7 +287,10 @@ async function smithNetherite(
     const bag = have.map((h) => `${zhName(h.name)} ${h.n} 个`).join('、');
     const stock = invCount(bot, (x) => x === item);
     if (stock >= count) {
-      return `没现做${label}:锻造台升级要的材料不齐(包里${bag});不过包里本来就有 ${stock} 个,够这一步要的 ${count} 个了`;
+      throw new SkillBlocked(
+        `没现做${label}:锻造台升级要的材料不齐(包里${bag});` +
+        `包里虽有 ${stock} 个成品，但未现场升级。持有≠任务制作进度，请凑齐材料后重试`,
+      );
     }
     throw new SkillBlocked(
       `${label}要在锻造台上升级:${parts.map((p) => zhName(p)).join(' + ')} 各 1 个出 1 件,` +

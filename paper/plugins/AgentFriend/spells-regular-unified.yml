@@ -36,10 +36,10 @@ heal:
     range: 12
     cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
     str-cost: 4 shared mana
-    str-cast-self: You have healed %t.
-    str-cast-target: "%a has healed you."
-    str-no-target: No target to heal.
-    str-max-health: "%t is already at max health."
+    str-cast-self: 你治疗了 %t。
+    str-cast-target: "%a 治疗了你。"
+    str-no-target: 附近没有可治疗的目标。
+    str-max-health: "%t 已满血。"
     effects:
         eff1:
             position: target
@@ -61,4 +61,4 @@ food:
     saturation: 2.5
     cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
     str-cost: 3 shared mana
-    str-cast-self: You feel less hungry.
+    str-cast-self: 你感觉不那么饿了。

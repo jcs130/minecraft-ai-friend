@@ -765,6 +765,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。");
             return;
         }
+        // FoodSpell always HANDLE_NORMALLY even at food 20; refuse before mana/CD like heal-when-full.
+        if (event.getSpell().getInternalName().equalsIgnoreCase("food") && p.getFoodLevel() >= 20) {
+            event.setCancelled(true);
+            p.sendMessage(ChatColor.YELLOW + "饥饿已满，无需饱食术；未耗魔或冷却。");
+            return;
+        }
         if (!hasMana(p,cost)) {
             event.setCancelled(true);
             p.sendMessage(ChatColor.RED + "魔力不足：需要 " + Math.round(cost) + "。用 /mycli status 或命格书查看；停止耗魔等自然恢复，足够后再施放一次。");
