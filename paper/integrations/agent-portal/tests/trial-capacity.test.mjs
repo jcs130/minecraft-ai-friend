@@ -15,7 +15,14 @@ import { randomBytes } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 
 const identity = name => ({ requestId: randomUUID(), username: name, clientSecret: newSecret() });
-const fixture = t => siteFixture(t, { agentAccess: { enabled: true, publicSignup: true } });
+async function fixture(t) {
+  const closeWorkers = [];
+  // Register before siteFixture removes its directory. Windows keeps the
+  // SQLite files locked until every worker connection is closed.
+  t.after(async () => { for (const close of closeWorkers) await close(); });
+  const f = await siteFixture(t, { agentAccess: { enabled: true, publicSignup: true } });
+  return { ...f, closeWorkers };
+}
 const register = (f, value) => f.portal.agentAccess.publicRegister(value, digest('isolated-network:' + value.requestId));
 const capacityError = error => error.reason === 'TRIAL_POOL_FULL';
 const context = (f, value, access = f.portal.agentAccess) => {
@@ -45,15 +52,15 @@ function bridge(f) {
   f.portal.accounts.remote = remote;
   return { requests, replies, remote };
 }
-function anotherWorker(t, f, remote) {
+function anotherWorker(f, remote) {
   const store = new Store(f.config.dataDir), accounts = new GameAccounts(f.config, store, f.game, remote);
   const access = new AgentAccess(f.config, store, f.game, accounts);
-  t.after(() => store.close());
+  f.closeWorkers.push(() => store.close());
   return { store, accounts, access };
 }
-async function concurrentWorkers(t, f, tasks) {
+async function concurrentWorkers(f, tasks) {
   const workers = tasks.map(task => new Worker(new URL('./fixtures/trial-capacity-worker.mjs', import.meta.url), { workerData: { config: f.config, ...task } }));
-  t.after(async () => { await Promise.all(workers.map(worker => worker.terminate())); });
+  f.closeWorkers.push(() => Promise.all(workers.map(worker => worker.terminate())));
   const results = workers.map(worker => new Promise((resolve, reject) => {
     worker.on('message', message => { if (message.results) resolve(message.results); });
     worker.on('error', reject);
@@ -114,11 +121,22 @@ test('expiry cannot be renewed by retries or login; an expired identity must rea
   assert.equal(f.portal.agentAccess.pool.capacity().used, 100);
 });
 
+test('a client status poll only evaluates its own retained trial reservation', async t => {
+  const f = await fixture(t), value = identity('ag_Polling'), old = identity('ag_OldRecord');
+  await register(f, value); await register(f, old);
+  const access = f.portal.agentAccess;
+  const fullScan = t.mock.method(access.pool, 'capacity');
+  const result = await access.status(context(f, value));
+  assert.equal(result.trialCapacity.clientId, value.requestId);
+  assert.equal(result.trialCapacity.state, 'awaiting_activation');
+  assert.equal(fullScan.mock.callCount(), 0, 'a status poll must not rescan the growing history of all released registrations');
+});
+
 test('independent SQLite connections compete for one seat across activation, signup and invitation issuance', async t => {
   const f = await fixture(t), values = [identity('ag_RaceA'), identity('ag_RaceB')], b = bridge(f);
   for (const value of values) await register(f, value);
   age(f); inviteSeats(f, 99);
-  const worker = anotherWorker(t, f, b.remote);
+  const worker = anotherWorker(f, b.remote);
   const results = await Promise.allSettled([
     f.portal.agentAccess.activate(context(f, values[0]), activation()),
     worker.access.activate(context(f, values[1], worker.access), activation()),
@@ -135,7 +153,7 @@ test('parallel worker threads cannot overbook 100 seats during a 120-registratio
   const f = await fixture(t);
   const tasks = Array.from({ length: 4 }, (_, i) => ({ action: 'register',
     values: Array.from({ length: 30 }, (_, j) => identity('ag_Burst' + i + '_' + j)) }));
-  const results = await concurrentWorkers(t, f, tasks);
+  const results = await concurrentWorkers(f, tasks);
   assert.equal(results.filter(row => row.ok).length, 100);
   assert.deepEqual(results.filter(row => !row.ok).map(row => row.reason), Array(20).fill('TRIAL_POOL_FULL'));
   assert.equal(f.portal.agentAccess.pool.capacity().used, 100);
@@ -146,7 +164,7 @@ test('parallel activation workers reacquire exactly one final seat for expired r
   const f = await fixture(t), values = Array.from({ length: 6 }, (_, i) => identity('ag_FinalSeat' + i));
   for (const value of values) await register(f, value);
   age(f); inviteSeats(f, 99);
-  const results = await concurrentWorkers(t, f, values.map(value => ({ action: 'activate',
+  const results = await concurrentWorkers(f, values.map(value => ({ action: 'activate',
     values: [{ clientId: value.requestId, clientSecret: value.clientSecret, request: activation() }] })));
   assert.equal(results.filter(row => row.ok).length, 1);
   assert.deepEqual(results.filter(row => !row.ok).map(row => row.reason), Array(5).fill('TRIAL_POOL_FULL'));
@@ -169,7 +187,7 @@ test('a failed job insert rolls back its client pointer and seat before any brid
 test('same-client activation is atomic across workers, including a status read during asynchronous preflight', async t => {
   const f = await fixture(t), value = identity('ag_TwoWorkers'), b = bridge(f);
   await register(f, value);
-  const other = anotherWorker(t, f, b.remote);
+  const other = anotherWorker(f, b.remote);
   let release, entered;
   const gate = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { entered = resolve; });
   const roster = f.game.roster;
@@ -191,7 +209,7 @@ test('same-client activation is atomic across workers, including a status read d
 test('simultaneous retries of the same activation ID return one durable job without another dispatch', async t => {
   const f = await fixture(t), value = identity('ag_SameRequest'), b = bridge(f), request = activation();
   await register(f, value); age(f);
-  const other = anotherWorker(t, f, b.remote);
+  const other = anotherWorker(f, b.remote);
   const contexts = [context(f, value), context(f, value, other.access)];
   const results = await Promise.all([
     f.portal.agentAccess.activate(contexts[0], request), other.access.activate(contexts[1], request),
@@ -210,7 +228,7 @@ test('unknown dispatch survives worker restart and expiry, and late success reta
   await assert.rejects(f.portal.agentAccess.activate(context(f, value), request), { reason: 'ACCOUNT_RESULT_UNKNOWN' });
   age(f);
   f.portal.store.db.prepare('UPDATE account_jobs SET expires_at=0').run();
-  const other = anotherWorker(t, f, b.remote);
+  const other = anotherWorker(f, b.remote);
   assert.equal(other.access.pool.capacity().states.creation_unknown, 1);
   assert.equal((await other.access.activate(context(f, value, other.access), request)).state, 'unknown');
   await assert.rejects(other.access.activate(context(f, value, other.access), activation()), { reason: 'ACCOUNT_REQUEST_PENDING' });

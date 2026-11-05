@@ -1,15 +1,12 @@
 export const TRIAL_CAPACITY = 100;
 export const TRIAL_REGISTRATION_TTL_MS = 24 * 3600000;
 
-// Read-only, shared by admission and the operator's diagnostic. A released
-// reservation is NOT a deleted/revoked identity. No activity extends its TTL.
-// Any persisted game evidence wins over age and API credential revocation.
-export function trialCapacity(db, now = Date.now()) {
+function trialClients(db, now, clientId) {
   const pool = db.prepare('SELECT owner_id FROM agent_trial_pool WHERE singleton=1').get()?.owner_id;
-  const waitingInvitations = db.prepare(`SELECT count(*) AS n FROM agent_trial_invites t
-    JOIN agent_invites i ON i.id=t.invite_id
-    WHERE i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>?`).get(now).n;
-  const rows = pool ? db.prepare(`SELECT c.id,c.name,c.expected_uuid,c.owner_id,c.created_at,c.revoked_at,c.game_request_id,
+  if (!pool) return [];
+  const scope = clientId === undefined ? '' : 'c.id=? AND ';
+  const params = clientId === undefined ? [now, now, pool] : [now, now, clientId, pool];
+  const rows = db.prepare(`SELECT c.id,c.name,c.expected_uuid,c.owner_id,c.created_at,c.revoked_at,c.game_request_id,
     EXISTS(SELECT 1 FROM agent_public_registrations p WHERE p.invite_id=c.invite_id)
       OR EXISTS(SELECT 1 FROM agent_trial_invites t WHERE t.invite_id=c.invite_id) AS trial_origin,
     EXISTS(SELECT 1 FROM portal_agents p WHERE p.player_uuid=c.expected_uuid OR p.normalized=c.normalized)
@@ -26,13 +23,11 @@ export function trialCapacity(db, now = Date.now()) {
     EXISTS(SELECT 1 FROM account_jobs j WHERE j.operation='create'
       AND (j.id=c.game_request_id OR j.expected_uuid=c.expected_uuid OR lower(j.name)=c.normalized)
       AND j.state='pending' AND j.expires_at>?) AS pending_job
-    FROM agent_clients c WHERE c.owner_id=?
+    FROM agent_clients c WHERE ${scope}(c.owner_id=?
       OR EXISTS(SELECT 1 FROM agent_public_registrations p WHERE p.invite_id=c.invite_id)
-      OR EXISTS(SELECT 1 FROM agent_trial_invites t WHERE t.invite_id=c.invite_id)
-    ORDER BY c.id`).all(now, now, pool) : [];
-  const states = { awaiting_activation: 0, registration_released: 0, creating: 0,
-    creation_unknown: 0, creation_failed_review: 0, created: 0, claimed: 0, custody_review: 0 };
-  const clients = rows.map(row => {
+      OR EXISTS(SELECT 1 FROM agent_trial_invites t WHERE t.invite_id=c.invite_id))
+    ORDER BY c.id`).all(...params);
+  return rows.map(row => {
     let state;
     if (row.owner_id !== pool) state = 'claimed';
     else if (row.has_identity || row.succeeded) state = 'created';
@@ -46,13 +41,29 @@ export function trialCapacity(db, now = Date.now()) {
     else if (!row.trial_origin) state = 'custody_review';
     else state = row.revoked_at !== null || row.created_at + TRIAL_REGISTRATION_TTL_MS <= now
       ? 'registration_released' : 'awaiting_activation';
-    states[state]++;
     return { clientId: row.id, username: row.name, playerUuid: row.expected_uuid, gameRequestId: row.game_request_id, state,
       countsTowardCapacity: !['claimed', 'registration_released'].includes(state),
       reservationExpiresAt: ['awaiting_activation', 'registration_released'].includes(state)
         ? new Date(row.created_at + TRIAL_REGISTRATION_TTL_MS).toISOString() : null };
   });
+}
+
+// Read-only, shared by admission and the operator's diagnostic. A released
+// reservation is NOT a deleted/revoked identity. No activity extends its TTL.
+// Any persisted game evidence wins over age and API credential revocation.
+export function trialCapacity(db, now = Date.now()) {
+  const waitingInvitations = db.prepare(`SELECT count(*) AS n FROM agent_trial_invites t
+    JOIN agent_invites i ON i.id=t.invite_id
+    WHERE i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>?`).get(now).n;
+  const clients = trialClients(db, now);
+  const states = { awaiting_activation: 0, registration_released: 0, creating: 0,
+    creation_unknown: 0, creation_failed_review: 0, created: 0, claimed: 0, custody_review: 0 };
+  for (const client of clients) states[client.state]++;
   const used = waitingInvitations + clients.filter(row => row.countsTowardCapacity).length;
   return { capacity: TRIAL_CAPACITY, used, available: Math.max(0, TRIAL_CAPACITY - used),
     waitingInvitations, registrationTtlSeconds: TRIAL_REGISTRATION_TTL_MS / 1000, states, clients };
+}
+
+export function trialClientReservation(db, clientId, now = Date.now()) {
+  return trialClients(db, now, clientId)[0] ?? null;
 }

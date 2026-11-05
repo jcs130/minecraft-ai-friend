@@ -7,7 +7,7 @@ import path from 'node:path';
 import { getAgentClients } from './agent-clients.mjs';
 import { agentSkill } from './agent-skill.mjs';
 import { TrialPool, trialPoolOwnerId } from './trial-pool.mjs';
-import { TRIAL_REGISTRATION_TTL_MS } from './trial-capacity.mjs';
+import { TRIAL_REGISTRATION_TTL_MS, trialClientReservation } from './trial-capacity.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -211,7 +211,7 @@ export class AgentAccess {
         client.game_request_id = null;
       }
     }
-    const trialCapacity = this.pool.invitation(client.invite_id) ? this.pool.capacity().clients.find(row => row.clientId === client.id) : null;
+    const trialCapacity = this.pool.invitation(client.invite_id) ? trialClientReservation(this.store.db, client.id) : null;
     const reconciliationRequired = !job && trialCapacity && !['awaiting_activation', 'registration_released'].includes(trialCapacity.state);
     return { schemaVersion: 1, clientId: client.id, username: client.name, state: job?.state === 'succeeded' ? 'ready' : job ? job.state : reconciliationRequired ? 'unknown' : 'not_created',
       gameAccountCreated: job?.state === 'succeeded', job, game: await this.accounts.capabilities(), gameAddress: this.config.publicGameAddress, gameVersion: '1.21.1',
