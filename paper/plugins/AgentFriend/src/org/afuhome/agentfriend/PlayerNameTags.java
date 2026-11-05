@@ -22,6 +22,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -31,6 +32,8 @@ import org.bukkit.scoreboard.Team;
 
 /** Vanilla scoreboard prefixes for Agent identity and adventurer guild rank. */
 final class PlayerNameTags implements Listener {
+    private static final String PHOTO_OBSERVER_NAME = "ag_PhotoLens";
+    private static final UUID PHOTO_OBSERVER_UUID = UUID.fromString("ff58a81b-f033-3b74-a7cf-58ac4e798bb0");
     private static final String AGENT_TEAM = "qd_agents";
     private static final String[] RANKS = {"青铜", "黑铁", "白银", "黄金", "白金", "钻石"};
     private static final NamedTextColor[] COLORS = {NamedTextColor.GOLD, NamedTextColor.GRAY,
@@ -95,11 +98,13 @@ final class PlayerNameTags implements Listener {
         prefixes.clear();
     }
 
-    @EventHandler public void onJoin(PlayerJoinEvent event) {
+    @EventHandler(priority = EventPriority.HIGHEST) public void onJoin(PlayerJoinEvent event) {
+        if (isServiceObserver(event.getPlayer())) event.joinMessage(null);
         Bukkit.getScheduler().runTaskLater(plugin, this::reconcile, 2L);
     }
 
-    @EventHandler public void onQuit(PlayerQuitEvent event) {
+    @EventHandler(priority = EventPriority.HIGHEST) public void onQuit(PlayerQuitEvent event) {
+        if (isServiceObserver(event.getPlayer())) event.quitMessage(null);
         Bukkit.getScheduler().runTask(plugin, this::reconcile);
     }
 
@@ -111,7 +116,7 @@ final class PlayerNameTags implements Listener {
     }
 
     private String desiredTeam(Player player) {
-        if (player.getGameMode() == GameMode.SPECTATOR) return null;
+        if (isObserver(player)) return null;
         boolean agent = isAgent(player);
         if (plugin.guildMember(player)) {
             int rank = Math.max(0, Math.min(RANKS.length - 1, plugin.adventurerRank(player)));
@@ -121,14 +126,23 @@ final class PlayerNameTags implements Listener {
     }
 
     boolean isAgent(Player player) {
-        return player.getGameMode() != GameMode.SPECTATOR
+        return !isObserver(player)
                 && (agentUuids.contains(player.getUniqueId())
                 || registeredAgentNames.contains(player.getName().toLowerCase(Locale.ROOT)));
     }
     boolean isObserver(Player player) {
         return player.getGameMode() == GameMode.SPECTATOR || player.getName().equalsIgnoreCase("Goddess")
+                || isServiceObserver(player);
+    }
+
+    private boolean isServiceObserver(Player player) {
+        return isPhotoObserver(player)
                 || eyeRules != null && (EyePairs.freeObserver(eyeRules, player.getName())
                 || registeredEyes.containsKey(player.getName().toLowerCase(Locale.ROOT)));
+    }
+
+    private static boolean isPhotoObserver(Player player) {
+        return PHOTO_OBSERVER_UUID.equals(player.getUniqueId()) || PHOTO_OBSERVER_NAME.equalsIgnoreCase(player.getName());
     }
 
     Player observedPlayer(Player eye) {
@@ -185,6 +199,11 @@ final class PlayerNameTags implements Listener {
     private void reconcile() {
         ++refreshTicks; refreshAgentNames();
         var online = new ArrayList<>(Bukkit.getOnlinePlayers());
+        // Only hide the player-list entry. The camera still receives world
+        // data and can keep its spectator target and native rendering.
+        online.stream().filter(PlayerNameTags::isPhotoObserver).findFirst().ifPresent(camera -> {
+            for (Player viewer : online) if (viewer != camera && viewer.isListed(camera)) viewer.unlistPlayer(camera);
+        });
         Map<UUID, String> desiredTeams = new HashMap<>();
         Set<Scoreboard> boards = new HashSet<>();
         for (Player viewer : online) boards.add(viewer.getScoreboard());
