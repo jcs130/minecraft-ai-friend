@@ -55,6 +55,10 @@ export interface ToolDef extends ToolSchema {
   familiarAction?(args: Record<string, unknown>): FamiliarAction | null;
   /** True only for a branch that cannot acquire/mutate the game body. */
   readOnlyCall?(args: Record<string, unknown>): boolean;
+  /** Explicit background learning branch: may edit versioned methods/parameters or run isolated practice,
+   * but cannot acquire the live body, dispatch game actions, or change engine/host files.
+   * This is not a read claim. Hosts still persist attribution and apply normal validation. */
+  learningCall?(args: Record<string, unknown>): boolean;
   /** Optional protocol-owned activity subjects for a call; never inferred by a host from prose. */
   workSubjects?(args: Record<string, unknown>): readonly string[];
   /** Current backend capability, independent of the existence of the public tool schema. */

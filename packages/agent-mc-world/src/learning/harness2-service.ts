@@ -3,7 +3,7 @@ import {mkdirSync,readFileSync,writeFileSync,renameSync,existsSync} from 'node:f
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import Ajv from 'ajv';
-import type {ToolDef} from '../contracts/host.ts';
+import type {ToolDef,ToolOutcome} from '../contracts/host.ts';
 import {parseProcedure,procedureHash,procedureId,type ProcedureVersion} from '../../core/support/procedure.ts';
 import {Harness2Runner,type Harness2Options,type Harness2Job,type Harness2ModelReply,type Harness2Result} from '../decisions/harness2.ts';
 import {createHarness2Monitor} from '../decisions/harness2-monitor.ts';
@@ -13,6 +13,8 @@ import {PracticeStagingError,type PracticeStageRequest} from './practice-staging
 
 export const HARNESS2_PRACTICE_TOOL: Omit<ToolDef,'handler'>={
   name:'mc_practice',tags:['read','write'],
+  readOnlyCall:args=>['help','cases','status','result','compare'].includes(String(args.op)),
+  learningCall:args=>['help','cases','start','status','result','compare','stage','cancel'].includes(String(args.op)),
   description:'Improve an explicitly selected saved Minecraft method through Harness² in a separate practice environment. '
     +'help describes capabilities; start returns acceptance immediately, status/result read original measured trials, cancel stops that job. '
     +'result expands candidate source only on demand. compare ranks matched completed jobs by quality and actual SDK work. '
@@ -20,7 +22,8 @@ export const HARNESS2_PRACTICE_TOOL: Omit<ToolDef,'handler'>={
     +'Practice eligibility never installs a method: validate/save a candidate in the source library, execute it in a suitable real task, '
     +'review actual terminal/net change, then explicitly adopt using mc_script library. No production body control or weight training.',
   parameters:{type:'object',additionalProperties:false,properties:{
-    op:{type:'string',enum:['help','start','status','result','compare','stage','cancel']},
+    op:{type:'string',enum:['help','cases','start','status','result','compare','stage','cancel']},
+    caseIds:{type:'array',minItems:2,maxItems:9,uniqueItems:true,items:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},description:'Explicit recorded training case followed by held-out cases. Omit only for built-in flat fixtures. Capture through mc_script scene; never invent a past scene.'},
     id:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},
     methodId:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},
     revision:{type:'string',pattern:'^[a-f0-9]{64}$'},
@@ -33,12 +36,18 @@ export const HARNESS2_PRACTICE_TOOL: Omit<ToolDef,'handler'>={
   },required:['op']},
 };
 const validate=new Ajv({strict:false}).compile(HARNESS2_PRACTICE_TOOL.parameters);
+/** Same original job identity at admission and settlement; never a live-world completion. */
+export function practiceExecution(id:string,status:'accepted'|'completed'|'failed'):NonNullable<ToolOutcome['execution']>{
+  return {kind:'method',id:`harness2:${id}`,phase:status==='failed'?'blocked':status,terminal:status!=='accepted',goalCompleted:false,evidence:{practiceId:id,isolated:true,adopted:false}};
+}
 export interface Harness2PracticeOptions {
   directory:string;
   worker:Harness2Options['worker'];
   model:Harness2Options['model'];
   practice:Harness2Options['practice'];
   fixtures:PracticeCase[];
+  cases?():Promise<unknown>;
+  prepareCases?(ids:string[],signal:AbortSignal):Promise<{practice:Harness2Options['practice'];fixtures:PracticeCase[];capability:string}>;
   /** Environment capabilities and limits supplied by the actual practice adapter. */
   capability:string;
   budget:Harness2Job['budget'];
@@ -49,7 +58,7 @@ export interface Harness2PracticeOptions {
   /** One final notification, containing metadata rather than generated source or private context. */
   settled?(event:{id:string;status:'completed'|'failed';eligible:boolean|null;error?:string}):Promise<void>;
 }
-interface RequestRecord {job:Harness2Job;source:ProcedureVersion;scopeHash:string;error?:string;staged?:Record<string,unknown>;staging?:'pending'|'saved'}
+interface RequestRecord {job:Harness2Job;source:ProcedureVersion;scopeHash:string;capability?:string;error?:string;staged?:Record<string,unknown>;staging?:'pending'|'saved'}
 
 /** Parse a complete structured answer; truncated model output is rejected, never repaired into a candidate. */
 export function parseHarness2ModelReply(text:string):Harness2ModelReply {
@@ -63,6 +72,7 @@ export function parseHarness2ModelReply(text:string):Harness2ModelReply {
 
 export class Harness2PracticeService {
   private readonly runner:Harness2Runner;
+  private readonly runnerOptions:Harness2Options;
   private readonly records=new Map<string,RequestRecord>();
   private active:{id:string;controller:AbortController;promise:Promise<void>}|null=null;
   private starting=false;
@@ -72,9 +82,10 @@ export class Harness2PracticeService {
   private practiceScopeHash:string|null=null;
   constructor(private readonly options:Harness2PracticeOptions) {
     const check=()=>{if(this.source().scopeHash!==this.practiceScopeHash)throw Error('Practice source identity changed; memory delivery withheld');};
-    this.runner=new Harness2Runner({...options,
+    this.runnerOptions={...options,
       ...(options.recall?{recall:async(query,signal)=>{check();return options.recall!(query,signal);}}:{}),
-      ...(options.remember?{remember:async(result,signal)=>{check();await options.remember!(result,signal);}}:{})});
+      ...(options.remember?{remember:async(result,signal)=>{check();await options.remember!(result,signal);}}:{})};
+    this.runner=new Harness2Runner(this.runnerOptions);
     const file=join(options.directory,'requests.json');
     if(existsSync(file)){
       const rows=JSON.parse(readFileSync(file,'utf8'));
@@ -121,16 +132,18 @@ export class Harness2PracticeService {
     return j.result;
   }
   tool(name='mc_practice'):ToolDef {
-    return {...HARNESS2_PRACTICE_TOOL,name,readOnlyCall:args=>['help','status','result','compare'].includes(String(args.op)),
+    return {...HARNESS2_PRACTICE_TOOL,name,
       handler:async(args,context)=>{
-        try{return {text:JSON.stringify(await this.call(args,context.signal))};}
+        try{const result=await this.call(args,context.signal);return {text:JSON.stringify(result),
+          ...(args.op==='start'?{execution:practiceExecution(String(args.id),'accepted')}:{})};}
         catch(error){return {text:error instanceof Error?error.message:String(error),failed:true};}
       }};
   }
   async call(args:Record<string,unknown>,signal?:AbortSignal):Promise<unknown> {
     signal?.throwIfAborted();if(!validate(args))throw Error('Invalid practice parameters: '+new Ajv().errorsText(validate.errors));
+    if(args.op==='cases')return this.options.cases?this.options.cases():{available:false,cases:[]};
     if(args.op==='help')return {available:!this.closed,capability:this.options.capability,budget:this.options.budget,
-      fixtures:this.options.fixtures.map(f=>({id:f.id,environmentVersion:f.environmentVersion,goal:f.goal})),
+      fixtures:this.options.fixtures.map(f=>({id:f.id,environmentVersion:f.environmentVersion,goal:f.goal})),recordedCases:!!this.options.prepareCases,
       sourceMethod:'start needs id, methodId, exact revision and a game-only task. Read the saved source method first; private conversation is not input.',
       objective:'balanced accepts matched success with less measured SDK work on independent fixtures. Elapsed time alone is not enough; unknown token usage stays unknown.',
       lifecycle:this.context(),stagingAvailable:!!this.options.stageCandidate,
@@ -166,7 +179,7 @@ export class Harness2PracticeService {
       const journal=JSON.parse(readFileSync(join(this.options.directory,row.job.id,'journal.json'),'utf8'));
       const result=journal.result as Harness2Result;
       return {status:'completed',result,source:{id:row.source.id,revision:row.source.revision,sourceHash:row.source.sourceHash},
-        applicability:this.options.capability,next:'Candidate is isolated and unadopted. Carry result.selected.params into the natural mc_script params; saving code alone does not persist parameter defaults. Recheck source parent before validate/save; retain the old version and test actual world change before review/adopt.'};
+        applicability:row.capability??this.options.capability,next:'Candidate is isolated and unadopted. Carry result.selected.params into the natural mc_script params; saving code alone does not persist parameter defaults. Recheck source parent before validate/save; retain the old version and test actual world change before review/adopt.'};
     }
     if(args.op==='cancel'){
       this.record(args.id);
@@ -182,32 +195,36 @@ export class Harness2PracticeService {
     this.starting=true;
     try{
       const source=this.source();
+      if(args.caseIds&&!this.options.prepareCases)throw Error('Recorded practice adapter unavailable');
+      const selected=args.caseIds?await this.options.prepareCases!(args.caseIds as string[],signal??new AbortController().signal):null;
+      const fixtures=selected?.fixtures??this.options.fixtures,capability=selected?.capability??this.options.capability;
       const method=parseProcedure(await this.options.readMethod(String(args.methodId),String(args.revision),signal??new AbortController().signal));
       signal?.throwIfAborted();if(this.closed)throw Error('Practice service is stopped');
       if(method.id!==args.methodId||method.revision!==args.revision)throw Error('Source method identity mismatch');
       if(Object.keys(method.dependencies).length)throw Error('This practice adapter needs a self-contained method; linked dependencies are not mounted');
       if(this.source().scopeHash!==source.scopeHash)throw Error('Source identity changed while preparing practice');
-      const k=Number(args.k??1),holdout=this.options.fixtures.slice(1);
+      const k=Number(args.k??1),holdout=fixtures.slice(1);
       const job:Harness2Job={id:String(args.id),methodId:method.id,sourceInstanceId:source.instanceId,scope:source.scope,
-        task:String(args.task)+'\nPractice capabilities: '+this.options.capability
+        task:String(args.task)+'\nPractice capabilities: '+capability
           +'\nPreserve the measured goal and health bounds. For balanced optimization remove redundant SDK calls; do not merely return success or change the fixture/goal. Wall-clock time alone is not improvement evidence.',
         baseline:{code:method.code,params:(args.params??{}) as Record<string,unknown>,guidance:[method.description,...method.conditions].join('\n')},
-        train:this.options.fixtures[0],holdout,mode:(args.mode??'parallel') as Harness2Job['mode'],objective:(args.objective??'balanced') as Harness2Job['objective'],k,budget:{...this.options.budget}};
+        train:fixtures[0],holdout,mode:(args.mode??'parallel') as Harness2Job['mode'],objective:(args.objective??'balanced') as Harness2Job['objective'],k,budget:{...this.options.budget}};
       if(job.budget.trials<4*k+2*holdout.length)throw Error('Configured trial budget cannot cover this recursion and holdout set');
-      const row:RequestRecord={job,source:method,scopeHash:source.scopeHash};
+      const row:RequestRecord={job,source:method,scopeHash:source.scopeHash,capability};
       this.records.set(job.id,row);this.persist();
       const controller=new AbortController();
       this.practiceScopeHash=source.scopeHash;
       const operation=(async()=>{
         let event:Parameters<NonNullable<Harness2PracticeOptions['settled']>>[0];
-        try{const result=await this.runner.run(job,controller.signal);event={id:job.id,status:'completed',eligible:result.gate.eligible};}
+        try{const runner=selected?new Harness2Runner({...this.runnerOptions,practice:selected.practice}):this.runner;
+          const result=await runner.run(job,controller.signal);event={id:job.id,status:'completed',eligible:result.gate.eligible};}
         catch(error){row.error=error instanceof Error?error.message:String(error);this.persist();event={id:job.id,status:'failed',eligible:null,error:row.error};}
         this.monitor=null;
         try{await this.options.settled?.(event);}catch{/* Notification delivery does not rerun practice or alter its evidence. */}
       })();
       this.active={id:job.id,controller,promise:operation};
       void operation.finally(()=>{if(this.active?.promise===operation)this.active=null;});
-      return {accepted:true,id:job.id,terminal:false,adopted:false,capability:this.options.capability,budget:job.budget};
+      return {accepted:true,id:job.id,terminal:false,adopted:false,capability,budget:job.budget};
     }finally{this.starting=false;}
   }
   async close():Promise<void>{this.closed=true;this.active?.controller.abort();await this.active?.promise;}

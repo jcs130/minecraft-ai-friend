@@ -15,6 +15,7 @@ export interface MethodTrace {
 }
 export interface MethodRun {
   id: number; name: string; sourceHash: string; startedAt: string; endedAt?: string;
+  mode?: 'validation' | 'execution';
   status: 'running' | 'validated' | 'completed' | 'failed' | 'cancelled';
   trace: MethodTrace[]; result?: unknown; error?: string;
   routine?: { id: string; version: number };
@@ -36,6 +37,7 @@ export interface MethodHost {
 export class MethodRunner {
   private serial = 0;
   private active: { run: MethodRun; validation: boolean; stop: (reason?: string) => void } | null = null;
+  private validating: { run: MethodRun; stop: (reason?: string) => void } | null = null;
   private readonly runs = new Map<number, MethodRun>();
   private readonly waiters = new Map<number, Set<() => void>>();
 
@@ -70,7 +72,7 @@ export class MethodRunner {
   }
 
   inspect(id?: number, call?: number): unknown {
-    const summary = (run: MethodRun) => ({ id: run.id, name: run.name, sourceHash: run.sourceHash,
+    const summary = (run: MethodRun) => ({ id: run.id, name: run.name, sourceHash: run.sourceHash, mode: run.mode,
       startedAt: run.startedAt, endedAt: run.endedAt, status: run.status, calls: run.trace.length, error: run.error,
       ...(run.procedure ? { procedure: run.procedure } : {}), ...(run.routine ? { routine: run.routine } : {}) });
     if (id === undefined) return [...this.runs.values()].map(summary);
@@ -100,20 +102,21 @@ export class MethodRunner {
   }
 
   stop(reason = '外部取消'): boolean {
-    if (!this.active) return false;
-    this.active.stop(reason);
-    return true;
+    const active=this.active,validating=this.validating;
+    active?.stop(reason);validating?.stop(reason);
+    return !!(active||validating);
   }
 
   /** Static validation has no world coordinates or capabilities to revoke.
    * Explicit stop still cancels it; a dropped game connection only stops execution. */
   cancelForDisconnect(reason: string): boolean {
-    if (this.active?.validation) return false;
-    return this.stop(reason);
+    if(!this.active)return false;
+    this.active.stop(reason);return true;
   }
 
   start(request: MethodRequest): MethodRun {
-    if (this.active) throw new Error(`方法#${this.active.run.id}仍在运行；先读取结果或明确取消`);
+    const occupied=request.validate===true?this.validating:this.active;
+    if (occupied) throw new Error(`方法#${occupied.run.id}仍在运行；先读取结果或明确取消`);
     if (typeof request.code !== 'string' || !request.code.trim() || request.code.length > METHOD_LIMITS.sourceChars) throw new Error(`code须为1至${METHOD_LIMITS.sourceChars}字符的JavaScript函数体`);
     const name = request.name ?? `inline-${createHash('sha256').update(request.code).digest('hex').slice(0,12)}`;
     if (typeof name !== 'string' || !name.trim() || name.length > 80) throw new Error('name须为1至80字符；可以省略以使用稳定的源码哈希名称');
@@ -121,7 +124,7 @@ export class MethodRunner {
     if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error('params须为JSON对象');
     const durationMs = request.durationMs ?? METHOD_LIMITS.durationMs;
     if (!Number.isInteger(durationMs) || durationMs < 1_000 || durationMs > METHOD_LIMITS.maxDurationMs) throw new Error(`durationMs须为1000至${METHOD_LIMITS.maxDurationMs}`);
-    const run: MethodRun = { id: ++this.serial, name,
+    const run: MethodRun = { id: ++this.serial, name, mode: request.validate === true ? 'validation' : 'execution',
       sourceHash: createHash('sha256').update(request.code).digest('hex'),
       startedAt: new Date().toISOString(), status: 'running', trace: [] };
     if (request.routine) run.routine = structuredClone(request.routine);
@@ -158,14 +161,19 @@ export class MethodRunner {
       if (result !== undefined) run.result = result;
       controller.abort(new Error(error ?? '方法结束'));
       void worker.terminate();
-      this.active = null;
+      if(this.active?.run.id===run.id)this.active=null;
+      if(this.validating?.run.id===run.id)this.validating=null;
       this.host.onFinish(structuredClone(run));
       for (const done of [...(this.waiters.get(run.id) ?? [])]) done();
     };
     const timer = setTimeout(() => finish('failed', `方法超过${durationMs}毫秒；已撤销它自己的未完成任务`), durationMs);
-    this.active = { run, validation: request.validate === true, stop: (reason) => finish('cancelled', reason) };
+    if(request.validate===true)this.validating={run,stop:reason=>finish('cancelled',reason)};
+    else this.active = { run, validation: false, stop: (reason) => finish('cancelled', reason) };
     this.runs.set(run.id, run);
-    while (this.runs.size > 8) this.runs.delete(this.runs.keys().next().value!);
+    while (this.runs.size > 8) {
+      const old=[...this.runs.values()].find(r=>r.status!=='running');
+      if(!old)break;this.runs.delete(old.id);
+    }
     worker.on('error', (error) => finish('failed', String(error)));
     worker.on('exit', (code) => { if (!finished) finish('failed', `脚本线程退出(${code})`); });
     worker.on('message', (message) => {

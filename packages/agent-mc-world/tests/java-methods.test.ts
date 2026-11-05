@@ -38,6 +38,18 @@ function rig(){
 // Native and Mineflayer methods both start a real SES worker. Preserve the
 // upstream bounded completion window while retaining short-reply coverage.
 async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'),{timeout:5000});await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true),{timeout:5000});return r.m.runner.read(id)[0];}
+it('validates background candidates without releasing a native live body reservation',async()=>{
+  const r=rig();r.setHang(true);
+  const live=await r.call({code:'await bot.setControlState("forward",true);'});
+  await vi.waitFor(()=>expect(r.held.has('forward')).toBe(true));
+  for(const code of ['return 1;','return (;']){
+    const candidate=await r.call({validate:true,code,waitMs:2000});
+    await finished(r,JSON.parse(candidate.text).id);
+    expect(r.held.has('forward')).toBe(true);expect(r.m.runner.current?.id).toBe(JSON.parse(live.text).id);
+    expect(r.calls.some(c=>['cancel','method_finish'].includes(c.method))).toBe(false);
+  }
+  await r.m.stop('test stop');expect(r.held.size).toBe(0);
+});
 it('folds a short native program and its confirmed cleanup into the default tool reply',async()=>{
   const r=rig();Reflect.deleteProperty(r.cfg,'methodWaitMs');
   const reply=await r.call({name:'one-read',code:'return (await bot.read("entity.position")).x;'});
