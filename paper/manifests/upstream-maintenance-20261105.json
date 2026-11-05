@@ -60,7 +60,7 @@
   },
   "numen": {
     "productionApiVersion": "0.1.4-qd-youer2",
-    "productionApiSha256": "b3cf763f68fb4729e1001149c267ee378a6cc55b1c91f97bb9222f80782ff35a",
+    "apiSha256": "b3cf763f68fb4729e1001149c267ee378a6cc55b1c91f97bb9222f80782ff35a",
     "upstreamCommit": "19c8710b014260bb810dd0fe8f85f054fb6decf5",
     "upstreamApiVersion": "0.1.4",
     "sourceCommitsSinceBase": 557,
