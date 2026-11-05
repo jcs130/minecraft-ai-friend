@@ -4,14 +4,14 @@ import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { validatePhotos } from './gallery.mjs';
 import { mergeReviewedRoles, prepareReviewedRoles } from './ownership-review.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
-import { isPhotoObserver } from './service-observers.mjs';
+import { isPhotoObserver, publicPlayerCountPolicy, publicPlayerSummary } from './service-observers.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const pick = (value, fields) => Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key)).map(key => [key, value[key]]));
 const kinds = ['agent', 'player', 'observer', 'admin'];
 const privateStateFields = ['schemaVersion', 'freshness', 'source', 'observedAt', 'savedAt', 'unavailableReason', 'vitals', 'savedPosition', 'inventory', 'stats', 'account', 'progress'];
 const rosterFields = ['name', 'playerUuid', 'kind', 'online', 'authenticated', 'statusSource', 'statusObservedAt', 'isReserved', 'identityConflict', 'identitySource', 'available', 'eye', 'observedAt'];
-const summaryFields = ['name', 'online', 'version', 'playersOnline', 'playersMax', 'latencyMs', 'observedAt', 'rosterCount', 'agentCount', 'authHealthy', 'source', 'unavailableReason'];
+const summaryFields = ['name', 'online', 'version', 'playersOnline', 'playersMax', 'latencyMs', 'observedAt', 'rosterCount', 'agentCount', 'authHealthy', 'source', 'unavailableReason', 'playerCountPolicy', 'playersOnlineUnavailableReason'];
 const eventFields = ['id', 'kind', 'playerName', 'title', 'body', 'occurredAt', 'timePrecision', 'source'];
 const forbiddenKeys = /^(?:password|password_hash|access_key_id|access_key_secret|api_key|apikey|accesskeyid|accesskeysecret|authorization|cookie|ip-address|ipaddress|lastip)$/i;
 
@@ -45,7 +45,7 @@ export async function buildSnapshot(game, world, sequence, photos = [], addition
     events.push(...result.events.filter(event => event.kind !== 'notice' && publishedNames.has(String(event.playerName).toLowerCase())).map(row => pick(row, eventFields)));
     if (page >= result.pages) break;
   }
-  const result = { schemaVersion: 1, sequence, observedAt: new Date().toISOString(), summary: pick(summary, summaryFields), roster,
+  const result = { schemaVersion: 1, sequence, observedAt: new Date().toISOString(), summary: pick(publicPlayerSummary(summary, all), summaryFields), roster,
     players: growth.players.filter(row => publishedNames.has(row.name.toLowerCase())).map(row => pick(row, ['name', 'growth', 'savedAt', 'progressionSavedAt'])), states, events, photos: validatePhotos(photos),
     ...(additions.photoManifest?{photoManifest:additions.photoManifest}:{}) };
   noCredentials(result);
@@ -95,6 +95,13 @@ export class CloudSource {
       return pick(row, eventFields);
     });
     const value = { schemaVersion: 1, sequence: input.sequence, observedAt: input.observedAt, roster, states, players, events, photos: validatePhotos(input.photos), summary: pick(input.summary, summaryFields) };
+    if (Object.hasOwn(value.summary, 'playerCountPolicy')) {
+      const { playerCountPolicy, playersOnline, playersOnlineUnavailableReason: reason } = value.summary;
+      if (playerCountPolicy !== publicPlayerCountPolicy
+        || (playersOnline === null ? typeof reason !== 'string' || !reason.length || reason.length > 240
+          : !Number.isSafeInteger(playersOnline) || playersOnline < 0 || reason !== null))
+        throw fail(400, 'SNAPSHOT_COUNT', '同步在线人数口径或状态无效');
+    }
     if(input.photoManifest!==undefined){
       const ids=input.photoManifest?.publishedIds;
       const withdrawn=input.photoManifest?.withdrawnIds||[];
@@ -141,17 +148,9 @@ export class CloudGame {
   }
   async serverSummary() {
     const snapshot = this.source.read();
-    const summary = { ...snapshot?.value.summary };
-    // Old publishers counted the camera as a player. Keep stored snapshots
-    // intact so retries retain their original sequence and body hash.
-    for (const row of snapshot?.value.roster || []) {
-      if (!isPhotoObserver(row.name, row.playerUuid)) continue;
-      if (Number.isFinite(summary.rosterCount)) summary.rosterCount = Math.max(0, summary.rosterCount - 1);
-      if (row.kind === 'agent' && Number.isFinite(summary.agentCount)) summary.agentCount = Math.max(0, summary.agentCount - 1);
-      if (row.online === true && Number.isFinite(summary.playersOnline)) summary.playersOnline = Math.max(0, summary.playersOnline - 1);
-    }
+    const summary = publicPlayerSummary(snapshot?.value.summary, snapshot?.value.roster);
     return { name: this.config.siteName, ...summary,
-      ...(snapshot?.stale || !snapshot ? { online: null, authHealthy: false, playersOnline: null, unavailableReason: '家庭端同步已离线或尚未连接；保存资料仍可查看' } : {}),
+      ...(snapshot?.stale || !snapshot ? { online: null, authHealthy: false, playersOnline: null, playersOnlineUnavailableReason: '在线人数来源暂不可用或已过期', unavailableReason: '家庭端同步已离线或尚未连接；保存资料仍可查看' } : {}),
       source: 'home.outbound-snapshot', sync: { stale: !snapshot || snapshot.stale, observedAt: snapshot?.value.observedAt || null } };
   }
   async playerState(agent) {

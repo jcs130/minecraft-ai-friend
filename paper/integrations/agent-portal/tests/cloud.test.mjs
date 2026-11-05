@@ -78,13 +78,13 @@ test('snapshot replay, late arrival and malformed events cannot overwrite commit
 test('legacy snapshots cannot publish the photo camera as a role or activity', async t => {
   const f = await fixture(t, { worldObserverEnabled: true, worldObserverPublicDefault: true, worldObserverTokenHash: 'c'.repeat(64), native3dSiteDirectory: path.resolve('isolated-site') }), old = snapshot();
   const name = 'ag_PhotoLens', cameraUuid = 'ff58a81b-f033-3b74-a7cf-58ac4e798bb0';
-  old.roster.push({ ...old.roster[0], name, playerUuid: cameraUuid });
+  old.roster.push({ ...old.roster[0], name, playerUuid: cameraUuid, statusSource: 'minecraft.server-list-ping.uuid', statusObservedAt: old.observedAt });
   old.players.push({ ...old.players[0], name });
   old.states[cameraUuid] = old.states[uuid];
   old.roster.push({ ...old.roster[0], name: 'ExampleEye', playerUuid: randomUUID(), kind: 'observer', isReserved: true, online: false });
   old.players.push({ ...old.players[0], name: 'ExampleEye' });
   old.events.push({ ...old.events[0], id: 'b'.repeat(64), kind: 'join', playerName: name, title: '相机连接' });
-  Object.assign(old.summary, { playersOnline: 2, rosterCount: 3, agentCount: 2 });
+  Object.assign(old.summary, { playersOnline: 2, rosterCount: 3, agentCount: 2, observedAt: old.observedAt });
   assert.equal((await f.put(old)).status, 200);
   assert.equal((await (await f.put(old)).json()).duplicate, true);
   assert.deepEqual((await f.get('roster')).agents.map(row => row.name), ['ag_Alpha']);
