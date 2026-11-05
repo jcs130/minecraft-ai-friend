@@ -188,6 +188,16 @@ export function blockOffsetXZ(x: number, z: number, max: number): [number, numbe
   return [axis(l), axis(l >> 8n)];
 }
 
+/** Same coordinate-dependent vanilla shapes for the live body and recorded physics. */
+export function positionedBlockShapes(name: string, x: number, z: number,
+  shapes: [number, number, number, number, number, number][]): [number, number, number, number, number, number][] {
+  const max = OFFSET_MAX[name];
+  if (max === undefined) return shapes;
+  const [ox, oz] = blockOffsetXZ(x, z, max), [bx, bz] = blockOffsetXZ(0, 0, max);
+  const dx = ox - bx, dz = oz - bz;
+  return shapes.map(([x0, y0, z0, x1, y1, z1]) => [x0 + dx, y0, z0 + dz, x1 + dx, y1, z1 + dz]);
+}
+
 /**
  * 滴水石锥与竹子的碰撞箱按所在格的原版偏移摆放。minecraft-data 的碰撞箱取自 (0,0,0) 那一格,
  * 那一格两轴偏移都是负的上限;服务端按每格自己的偏移判碰撞,客户端照原数据走会走进服务端眼里的
@@ -201,18 +211,13 @@ export function installOffsetShapes(bot: Bot): void {
     const id = reg.blocksByName[name]?.id;
     if (id !== undefined) maxById.set(id, max);
   }
-  const origin = new Map([...new Set(maxById.values())].map((max) => [max, blockOffsetXZ(0, 0, max)]));
   const blockAt = bot.blockAt.bind(bot);
   bot.blockAt = ((pos: Parameters<Bot['blockAt']>[0], extraInfos?: boolean) => {
     const block = blockAt(pos, extraInfos);
     const max = block ? maxById.get(block.type) : undefined;
     if (block === null || max === undefined) return block;
-    const [ox, oz] = blockOffsetXZ(block.position.x, block.position.z, max);
-    const [bx, bz] = origin.get(max)!;
-    const dx = ox - bx;
-    const dz = oz - bz;
     // 每次读格都是新的 Block,shapes 却指向注册表里共用的数组:换成新数组,不改原数组
-    block.shapes = block.shapes.map(([x0, y0, z0, x1, y1, z1]) => [x0 + dx, y0, z0 + dz, x1 + dx, y1, z1 + dz]);
+    block.shapes = positionedBlockShapes(block.name, block.position.x, block.position.z, block.shapes);
     return block;
   }) as Bot['blockAt'];
 }

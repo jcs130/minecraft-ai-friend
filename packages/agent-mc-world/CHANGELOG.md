@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.17 (unpublished candidate)
+
+- Reconstruct coordinate-dependent dripstone and bamboo collision shapes using the same calculation as the live body. Validate recorded shapes at their original positions, including external terrain updates; reject forged or relocated geometry.
+
 ## 0.5.7-rc.160-preview.16 (unpublished candidate)
 
 - Separate offline method validation from live execution, preserving native body ownership and original pending calls during background learning.

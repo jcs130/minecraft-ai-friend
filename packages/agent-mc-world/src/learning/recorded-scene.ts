@@ -6,6 +6,7 @@ import {Vec3} from 'vec3';
 import type {VoxelScene,SceneBlockType,ScenePoint} from '../contracts/voxel-scene.ts';
 import {procedureHash,procedureId} from '../../core/support/procedure.ts';
 import {validatePracticeCase,type PracticeCase} from './practice.ts';
+import {positionedBlockShapes} from '../../core/mineflayer-fixes.ts';
 const require=createRequire(import.meta.url);
 export interface RecordedScene {
   schema:'agent-mc-recorded-practice/v1';id:string;scene:VoxelScene;
@@ -33,20 +34,27 @@ export function recordedCase(record:RecordedScene):PracticeCase {
 export function reconstructRecordedScene(input:RecordedScene){
   const record=structuredClone(input),fixture=recordedCase(record),s=record.scene;
   const data=require('minecraft-data')('1.21.1'),Block=require('prismarine-block')('1.21.1'),{Physics}=require('prismarine-physics');
-  const convert=(entry:SceneBlockType)=>{
+  const convert=(entry:SceneBlockType,position:ScenePoint)=>{
     if(!Number.isInteger(entry.stateId)||entry.stateId===null)throw Error('Missing exact vanilla block state');
     const block=Block.fromStateId(entry.stateId,0);
+    block.position=new Vec3(...position);
+    block.shapes=positionedBlockShapes(block.name,position[0],position[2],block.shapes);
     const sort=(x:object)=>JSON.stringify(Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))));
     if('minecraft:'+block.name!==entry.name||sort(block.getProperties())!==sort(entry.properties)
       ||entry.collisionShapes===null||JSON.stringify(block.shapes)!==JSON.stringify(entry.collisionShapes))throw Error('Recorded registry or collision differs from Java 1.21.1; matching simulator required');
-    return entry.stateId;
+    return block;
   };
-  const states=s.palette.map(convert),cells=[...s.cells],{min,max}=s.bounds;
+  const palette=[...s.palette],cells=[...s.cells],{min,max}=s.bounds;
   const index=(p:ScenePoint)=>p.some((x,i)=>x<min[i]||x>max[i])?-1:((p[0]-min[0])*(max[1]-min[1]+1)+(p[1]-min[1]))*(max[2]-min[2]+1)+(p[2]-min[2]);
+  // A palette may contain the same state with different coordinate offsets.
+  // Verify against the matching position, retaining rejection of forged shapes.
+  for(let x=min[0];x<=max[0];x++)for(let y=min[1];y<=max[1];y++)for(let z=min[2];z<=max[2];z++){
+    const p:ScenePoint=[x,y,z],entry=cells[index(p)];if(entry!==-1)convert(palette[entry],p);
+  }
   const world={getBlock:(p:Vec3)=>{
     const position=[Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)] as ScenePoint,i=index(position);
     if(i<0||cells[i]===-1)throw Error('Recorded geometry unknown at '+position.join(',')+'; not treated as air');
-    const block=Block.fromStateId(states[cells[i]],0);block.position=new Vec3(...position);return block;
+    return convert(palette[cells[i]],position);
   }};
   const player={version:'1.21.1',entity:{position:new Vec3(...s.camera.feet),velocity:new Vec3(...record.initial.velocity),yaw:s.camera.yaw,pitch:s.camera.pitch,
     onGround:record.initial.onGround,isInWater:false,isInLava:false,isInWeb:false,isCollidedHorizontally:false,isCollidedVertically:false,elytraFlying:false,effects:{},attributes:{}},
@@ -54,7 +62,7 @@ export function reconstructRecordedScene(input:RecordedScene){
   let eventIndex=0;
   return {fixture,player,world,physics:Physics(data,world),goal:[record.goal.position.x,record.goal.position.y,record.goal.position.z],dimension:s.source.dimension,health:record.initial.health,
     beforeTick:(tick:number)=>{while(record.events[eventIndex]?.tick<=tick){const e=record.events[eventIndex++],i=index(e.position);if(i<0)throw Error('Terrain event outside recorded bounds');
-      const state=convert(e.block);states.push(state);cells[i]=states.length-1;}}};
+      convert(e.block,e.position);palette.push(e.block);cells[i]=palette.length-1;}}};
 }
 export class RecordedSceneStore {
   constructor(private readonly directory:string){}
