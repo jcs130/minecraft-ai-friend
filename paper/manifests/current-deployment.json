@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-acceptance",
-  "latestRelease": "issue43-pvp-20261104-r1",
-  "verifiedAt": "2026-11-04T22:28:08.7548397+08:00",
-  "releaseDocument": "paper/docs/ISSUE43_AUTH_PVP.md",
+  "latestRelease": "pr-batch-release-20261105",
+  "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
+  "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261105.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -42,9 +42,9 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.54-rpg",
-    "CortiEyeMirror": "0.1.18",
-    "QiandengjiRpg": "0.2.18",
+    "AgentFriend": "0.4.47.57-camera-presence1-rpg",
+    "CortiEyeMirror": "0.1.19",
+    "QiandengjiRpg": "0.2.19",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.4",
@@ -53,7 +53,7 @@
     "QiandengjiMcbot": "0.1.0",
     "QwenPawGameChannel": "0.3.2",
     "LanTts": "1.6.0",
-    "WorldObserver": "0.1.2",
+    "WorldObserver": "0.1.3",
     "QiandengVoice": "0.1.0",
     "SimpleVoiceChat": "2.6.27",
     "EssentialsChat": "2.22.0",
@@ -155,7 +155,7 @@
     "E:\\MC\\ops\\native-photo-renderer.mjs": "703d91ca9f88ae599aeb939f35f74f5b2924f44336723cfeb77dc829877ba959",
     "E:\\MC\\server\\plugins\\AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a",
     "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\AgentAppearance-Bedrock-0.2.3.jar": "33715091b86ffabe6348b4d69bbe33014741c4b13b7c2f7dbba224abae590e1f",
-    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "77a88a17a02458d7005187453d63e5436694e9deadb588214e0f01b78665e2cb",
+    "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar": "1cd759c04307e2cedcac4a7541af61a49562f1e96561b60bc0e519aedf93fa94",
     "E:\\MC\\server\\server.jar": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
     "E:\\MC\\private\\ysm\\proxy\\velocity.jar": "fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef",
     "E:\\MC\\server\\youer-config\\youer.yml": "8d469aeb0370794b5d701b26002e1d5762a773dd9c422579d950b01d33577cc8",
@@ -177,7 +177,11 @@
     "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.18.jar": "51877d0d0c19bf0693a8b0c70d48204970d74bbdde495c0b492ad75c49f06d98",
     "E:\\MC\\ops\\goddess-bridge.mjs": "d5ef2503f908b957e357790ebe44113904cc8d9fa03cf779a5b70af5c53cdf62",
     "E:\\MC\\ops\\goddess-chat-identity.mjs": "615cb21f5793bdc3f4010c8c51b5440d29d2f9e3916234fc5185f94c5b1854bf",
-    "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\agent-mc-bridge-0.1.0-fabric-1.21.1.jar": "676bef783d1070726fc2644cbf7504834e6750dc69b05cc6a13efa7130c8c4ef"
+    "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\agent-mc-bridge-0.1.0-fabric-1.21.1.jar": "676bef783d1070726fc2644cbf7504834e6750dc69b05cc6a13efa7130c8c4ef",
+    "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.57-camera-presence1-rpg.jar": "c9360fcd86d8d2ae5e1ad1ab33a5c55417025c3451f0525fe9a768891a2c599b",
+    "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.19.jar": "c74e4ba58674d948ca079b4348941ab01b6f11f18507f38f568cc418a5265e6d",
+    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.19.jar": "f88f3838c21fa86ce89239e32357604e40991305088f0a3b26ad48daabea2738",
+    "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar": "6cba7905a68a710e93fa920da6d21f1d76d0cd50ee4012bba6162c3cba1c8346"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -345,33 +349,33 @@
     "deployedFromAudit": 3
   },
   "distribution": {
-    "coreSource": "0.5.7-rc.150-preview.2",
+    "coreSource": "0.5.7-rc.160-preview.15",
     "publicSkill": "1.3.7",
     "publicSkillCore": "0.5.7-rc.130",
-    "harnessBodyCore": "0.5.7-rc.130",
-    "website": "0.8.38",
+    "harnessBodyCore": "0.5.7-rc.160-preview.15",
+    "website": "0.8.40",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
-    "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
-    "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
+    "manifest": "paper/manifests/pr-batch-deployed-20261105.json",
     "mediaStorage": "OSS",
-    "coreSourceNote": "Current repository source; this release does not replace the public Skill or Harness embedded rc.130 core.",
+    "coreSourceNote": "Builtin harness now consumes rc.160-preview.15; the public Skill remains rc.130. No npm publish or automatic remote-client upgrade.",
     "clientDownloads": {
       "neko": "0.6.114",
       "corticoLite": "0.1.2",
       "dshPlugin": "0.3.0-rc.24",
       "nativeYsm": "2.6.5"
     },
-    "websiteManifest": "paper/manifests/music-works-deployed-20261102.json"
+    "websiteManifest": "paper/manifests/pr-batch-deployed-20261105.json"
   },
   "websiteRelease": {
-    "release": "issue43-portal-20261104-r2",
-    "version": "0.8.39",
-    "verifiedAt": "2026-11-04T22:06:56.955338+08:00",
+    "release": "pr-batch-release-20261105",
+    "version": "0.8.40",
+    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
     "protectedTables": 16,
     "gameRestarted": false,
-    "document": "paper/docs/ISSUE43_AUTH_PVP.md",
-    "manifest": "paper/manifests/issue43-security-20261104.json",
+    "document": "paper/docs/PR_BATCH_RELEASE_20261105.md",
+    "manifest": "paper/manifests/pr-batch-deployed-20261105.json",
     "promotionalVideo": "https://b23.tv/Ppfd3Ne",
     "publicPhotosAtVerification": 7,
     "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
@@ -403,10 +407,12 @@
     "note": "Existing filenames kept for the running native deployer; plugin metadata, reviewed build and SHA256 define actual versions.",
     "QiandengjiRpg-0.2.13": "QiandengjiRpg-0.2.10.jar",
     "VortexRPG-qd31-growth": "VortexRPG-1.2.2-alpha-qd29.jar",
-    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.49-rpg.jar",
-    "QiandengjiRpg": "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.17.jar",
+    "AgentFriend": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.57-camera-presence1-rpg.jar",
+    "QiandengjiRpg": "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.19.jar",
     "LoginGuard": "E:\\MC\\private\\ysm\\proxy\\plugins\\LoginGuard-0.1.10.jar",
-    "Geyser": "E:\\MC\\server\\plugins\\Geyser-Spigot.jar"
+    "Geyser": "E:\\MC\\server\\plugins\\Geyser-Spigot.jar",
+    "CortiEyeMirror": "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.19.jar",
+    "WorldObserver": "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar"
   },
   "rpgActivities": {
     "state": "deployed-and-verified",
@@ -470,10 +476,10 @@
   },
   "website": {
     "state": "deployed-and-verified",
-    "version": "0.8.39",
-    "verifiedAt": "2026-11-04T22:06:56.955338+08:00",
-    "releaseDocument": "paper/docs/ISSUE43_AUTH_PVP.md",
-    "releaseManifest": "paper/manifests/issue43-security-20261104.json",
+    "version": "0.8.40",
+    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
+    "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261105.md",
+    "releaseManifest": "paper/manifests/pr-batch-deployed-20261105.json",
     "guideServerVersion": "0.4.47.44-rpg",
     "gameRestartedForWebsite": false,
     "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated",
@@ -1464,5 +1470,68 @@
     "portalState": "deployed-and-verified",
     "gameState": "deployed-and-verified",
     "manifest": "paper/manifests/issue43-security-20261104.json"
+  },
+  "previousReleaseBeforePrBatch": {
+    "latestRelease": "issue43-pvp-20261104-r1",
+    "verifiedAt": "2026-11-04T22:28:08.7548397+08:00",
+    "releaseDocument": "paper/docs/ISSUE43_AUTH_PVP.md",
+    "distribution": {
+      "coreSource": "0.5.7-rc.150-preview.2",
+      "publicSkill": "1.3.7",
+      "publicSkillCore": "0.5.7-rc.130",
+      "harnessBodyCore": "0.5.7-rc.130",
+      "website": "0.8.38",
+      "photoLibraryCandidate": null,
+      "npmSourceCorePublished": false,
+      "verifiedAt": "2026-11-01T20:32:35.578519+08:00",
+      "manifest": "paper/manifests/vanilla-maid-auto-team-20261031.json",
+      "mediaStorage": "OSS",
+      "coreSourceNote": "Current repository source; this release does not replace the public Skill or Harness embedded rc.130 core.",
+      "clientDownloads": {
+        "neko": "0.6.114",
+        "corticoLite": "0.1.2",
+        "dshPlugin": "0.3.0-rc.24",
+        "nativeYsm": "2.6.5"
+      },
+      "websiteManifest": "paper/manifests/music-works-deployed-20261102.json"
+    },
+    "websiteRelease": {
+      "release": "issue43-portal-20261104-r2",
+      "version": "0.8.39",
+      "verifiedAt": "2026-11-04T22:06:56.955338+08:00",
+      "protectedTables": 16,
+      "gameRestarted": false,
+      "document": "paper/docs/ISSUE43_AUTH_PVP.md",
+      "manifest": "paper/manifests/issue43-security-20261104.json",
+      "promotionalVideo": "https://b23.tv/Ppfd3Ne",
+      "publicPhotosAtVerification": 7,
+      "photoCountsNote": "Earlier stored/private totals are historical; publication remains owner/admin selected.",
+      "previousPhotoCountsAt20261029": {
+        "photosStored": 29,
+        "publicPhotos": 3,
+        "privatePhotos": 26
+      },
+      "uiRevision": "0.8.38-ui-20261102-r1"
+    },
+    "website": {
+      "state": "deployed-and-verified",
+      "version": "0.8.39",
+      "verifiedAt": "2026-11-04T22:06:56.955338+08:00",
+      "releaseDocument": "paper/docs/ISSUE43_AUTH_PVP.md",
+      "releaseManifest": "paper/manifests/issue43-security-20261104.json",
+      "guideServerVersion": "0.4.47.44-rpg",
+      "gameRestartedForWebsite": false,
+      "skillDownload": "1.3.7; embedded core rc.130; standalone public signup helper separately updated",
+      "musicEnabled": true,
+      "uiRevision": "0.8.38-ui-20261102-r1"
+    }
+  },
+  "prBatch20261105": {
+    "state": "deployed-with-open-acceptance",
+    "sourceCommit": "8ae351734cd4e7741636fd25ee58f16e68fc070b",
+    "manifest": "paper/manifests/pr-batch-deployed-20261105.json",
+    "gameRestarted": false,
+    "allFourMergedFixesDeployed": true,
+    "publicSkillStillRc130": true
   }
 }
