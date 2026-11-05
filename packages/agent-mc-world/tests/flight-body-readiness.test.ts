@@ -148,6 +148,22 @@ it('rejects a stalled movement pump even though flight ownership and positive he
   expect((await r.run({ skill: 'land' }))?.kind).toBe('done');
 });
 
+it('mounting ends hover without discarding the same connection’s flight grant', async () => {
+  const r = await rig(); await r.takeoff();
+  const expiresAt = Date.now() + 15000;
+  setFlightExpiry(r.bot, expiresAt);
+  Object.assign(r.bot, { vehicle: { id: 99 } });
+  r.bot.emit('mount');
+  expect(flightState(r.bot)).toMatchObject({ allowed: true, controlActive: false, expiresAtMs: expiresAt });
+  r.position(0.5, 64); await vi.advanceTimersByTimeAsync(1600);
+  expect((await r.run({ skill: 'flight', at: [0, 66, 0], land: false }))?.kind).toBe('blocked');
+  Object.assign(r.bot, { vehicle: null });
+  r.bot.emit('dismount');
+  r.position(0.5, 64); await vi.advanceTimersByTimeAsync(1600);
+  await r.takeoff(); // No extra server abilities packet is required after dismount.
+  expect((await r.run({ skill: 'land' }))?.kind).toBe('done');
+});
+
 it.each(['death', 'respawn', 'login', 'mount', 'configuration', 'bot-end', 'client-end'])(
   '%s retires hover and cannot reuse old position/positive health to land', async boundary => {
     const r = await rig(); await r.takeoff();

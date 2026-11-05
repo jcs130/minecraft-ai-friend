@@ -113,13 +113,19 @@ export function watchFlightAbilities(bot: Bot): () => void {
     bodyEpochs.set(bot, {});
     releaseFlight(bot, '服务端修正了位置，已停止飞行移动', true);
   };
+  const mount = (): void => {
+    bodyEpochs.set(bot, {});
+    // Mounting interrupts control, but the same connection keeps its grant
+    // and expiry until the server says otherwise.
+    releaseFlight(bot, '已乘坐载具，飞行已中断', false);
+  };
   const protocol = (phase: string): void => { if (phase === 'configuration') reset(); };
   bot._client.on('abilities', onAbilities);
   bot._client.on('state', protocol);
   bot._client.once('end', disposeClient);
   bot.on('forcedMove', forcedMove);
   bot.on('login', reset);
-  bot.on('mount', reset);
+  bot.on('mount', mount);
   bot.on('respawn', reset);
   bot.on('death', reset);
   const detachEnd = onConnectionEnd(bot, () => dispose());
@@ -132,7 +138,7 @@ export function watchFlightAbilities(bot: Bot): () => void {
     bot._client.off('end', disposeClient);
     bot.off('forcedMove', forcedMove);
     bot.off('login', reset);
-    bot.off('mount', reset);
+    bot.off('mount', mount);
     bot.off('respawn', reset);
     bot.off('death', reset);
     detachEnd();
@@ -215,6 +221,7 @@ function assertFlightBody(bot: Bot, epoch: object | undefined, control?: FlightC
   reason ||= epoch !== bodyEpochs.get(bot) ? '连接或维度已变化' : null;
   reason ||= !p || ![p.x, p.y, p.z].every(Number.isFinite) ? '身体位置未知，飞行已中断' : null;
   reason ||= control && bot.entity !== control.entity ? '身体实体已变化，飞行已中断' : null;
+  reason ||= (bot as Bot & { vehicle?: unknown }).vehicle != null ? '仍在乘坐载具；请先下车再飞行' : null;
   reason ||= bot.health !== undefined && !(bot.health > 0) ? '身体没有有效生命状态，飞行已中断' : null;
   reason ||= bot._client.state !== undefined && bot._client.state !== 'play' ? '连接尚未进入游戏，飞行已中断' : null;
   if (!(settling && nativeBodyReadiness(bot)?.phase === 'waiting-physics')) reason ||= nativeBodyBlockedReason(bot, 'flight');
