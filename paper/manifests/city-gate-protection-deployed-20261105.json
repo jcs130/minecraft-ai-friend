@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "state": "deployed-with-open-client-acceptance",
+  "release": "city-gate-protection-release-20261105-r2",
+  "deployedAt": "2026-11-05T21:45:52+08:00",
+  "sourceMerge": "ad0c06b1388975f2253ed70fa0771d11c06fb761",
+  "sourcePullRequest": 78,
+  "component": "QiandengjiRpg",
+  "version": "0.2.20",
+  "jarSha256": "5c3709b22f1b089ad9f99868f9cc00ff6c2675a563405c5117b651fc71e60b5b",
+  "previousJarSha256": "f88f3838c21fa86ce89239e32357604e40991305088f0a3b26ad48daabea2738",
+  "gameRestartedNormally": true,
+  "announcementsSeconds": [180, 60, 10],
+  "freshColdBackupsOnTwoDisks": true,
+  "unrelatedProtectionRegionsPreserved": 1299,
+  "postRestartGateCellsMatched": 41,
+  "postRestartGateCellsChecked": 41,
+  "runtimePostflightChecks": 30,
+  "goddessJobsRestored": true,
+  "nativeCameraResumed": true,
+  "ttsAndSystem1ProcessesUnchanged": true,
+  "tests": {
+    "baselineProtectionFailures": 16,
+    "baselineProtectionTotal": 17,
+    "candidateProtectionPassed": 17,
+    "actualOrdinaryClientChecksPassed": 17,
+    "regionPlannerChecksPassed": 5,
+    "ciJobsPassed": 6
+  },
+  "entryConsumed": true,
+  "rollbackScope": "Code only; preserve new player, world and authentication data.",
+  "limits": [
+    "Physical Java and Bedrock button presentation not independently accepted after this restart.",
+    "Existing CortiEyeMirror effect-packet cloning errors occur in both pre-update and post-update logs; not changed by this release.",
+    "Native NeoForge and Faithful 32x camera combination is isolated validation only; production camera remains RTX/Fabric/MEDIUM."
+  ]
+}

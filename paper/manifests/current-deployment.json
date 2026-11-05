@@ -1,8 +1,8 @@
 {
-  "state": "deployed-with-open-acceptance",
-  "latestRelease": "pr-batch-release-20261105",
-  "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
-  "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261105.md",
+  "state": "deployed-with-open-client-acceptance",
+  "latestRelease": "city-gate-protection-release-20261105-r2",
+  "verifiedAt": "2026-11-05T14:03:29.728Z",
+  "releaseDocument": "paper/docs/CITY_GATE_PROTECTION_20261105.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -44,7 +44,7 @@
     "plugins": 55,
     "AgentFriend": "0.4.47.57-camera-presence1-rpg",
     "CortiEyeMirror": "0.1.19",
-    "QiandengjiRpg": "0.2.19",
+    "QiandengjiRpg": "0.2.20",
     "VortexRPG": "1.2.2-alpha",
     "LightAntiCheat": "1.2.6-qd2",
     "AgentVision": "0.1.4",
@@ -178,8 +178,8 @@
     "E:\\MC\\clients\\goddess-native-2.6.5\\mods\\agent-mc-bridge-0.1.0-fabric-1.21.1.jar": "676bef783d1070726fc2644cbf7504834e6750dc69b05cc6a13efa7130c8c4ef",
     "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.57-camera-presence1-rpg.jar": "c9360fcd86d8d2ae5e1ad1ab33a5c55417025c3451f0525fe9a768891a2c599b",
     "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.19.jar": "c74e4ba58674d948ca079b4348941ab01b6f11f18507f38f568cc418a5265e6d",
-    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.19.jar": "f88f3838c21fa86ce89239e32357604e40991305088f0a3b26ad48daabea2738",
-    "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar": "6cba7905a68a710e93fa920da6d21f1d76d0cd50ee4012bba6162c3cba1c8346"
+    "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar": "6cba7905a68a710e93fa920da6d21f1d76d0cd50ee4012bba6162c3cba1c8346",
+    "E:\\MC\\server\\plugins\\QiandengjiRpg-0.2.20.jar": "5c3709b22f1b089ad9f99868f9cc00ff6c2675a563405c5117b651fc71e60b5b"
   },
   "historicalCandidateSuperseded": "paper/manifests/mcbot-paper-candidate-20261028.json",
   "stillUnverified": [
@@ -1531,5 +1531,25 @@
     "gameRestarted": false,
     "allFourMergedFixesDeployed": true,
     "publicSkillStillRc130": true
+  },
+  "previousReleaseBeforeCityGateProtection": {
+    "state": "deployed-with-open-acceptance",
+    "latestRelease": "pr-batch-release-20261105",
+    "verifiedAt": "2026-11-05T06:16:38.025382+00:00",
+    "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261105.md"
+  },
+  "cityGateProtection20261105": {
+    "state": "deployed-with-open-client-acceptance",
+    "version": "0.2.20",
+    "manifest": "paper/manifests/city-gate-protection-deployed-20261105.json",
+    "previousJarSha256": "f88f3838c21fa86ce89239e32357604e40991305088f0a3b26ad48daabea2738",
+    "entryConsumed": true
+  },
+  "nativeCameraCurrent": {
+    "state": "production-RTX-Fabric-MEDIUM-restored",
+    "manifest": "paper/manifests/native-camera-rtx-deployed-20261105.json",
+    "neoForge32x": "isolated-full-model-rendering-only",
+    "neoForgeProductionBridgeMigrated": false,
+    "document": "paper/docs/NATIVE_CAMERA_NEOFORGE_20261105.md"
   }
 }
