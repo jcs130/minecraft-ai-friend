@@ -7,10 +7,13 @@ export type CombatCandidate = { id: string; intent: string } & (
   | { kind: 'step'; destination: [number, number, number] }
   | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
   | { kind: 'retreat' }
+  | { kind:'search';clueKey:string;source:'sound-packet'|'last-seen';destination:[number,number,number] }
   | { kind: 'idle'; action: 'wander'; destination: [number, number, number] }
   | ({ kind: 'method' } & CombatRoutine)
 );
 export interface CombatDecisionFrame {
+  /** A desired heal is not a body lease or a promise that healing can execute. */
+  survival?: { fleeAtOrBelow: number; healingDesired: boolean };
   loadout?: import('./combat-loadout.ts').CombatLoadout;
   battlefield: Battlefield;
   tacticRevision: number;

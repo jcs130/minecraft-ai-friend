@@ -83,7 +83,8 @@ describe('perception evidence boundaries',()=>{
   });
   it('quantizes received sound position; no identity, coordinates or exact distance survive',()=>{
     const hint=audibleHint(sound,self,1000)!;
-    expect(hint).toEqual({source:'sound-packet',kind:'怪物声',direction:'东北',distance:'中距离（约4–12格）',heardAt:1000,expiresAt:9000});
+    expect(hint).toMatchObject({source:'sound-packet',kind:'怪物声',direction:'东北',distance:'中距离（约4–12格）',heardAt:1000,expiresAt:9000});
+    expect(hint.origin).toEqual([self.position.x,self.position.y,self.position.z]);
     expect(audibleHint({...sound,volume:0},self,1000)).toBeNull();
     expect(audibleHint({...sound,position:{x:100,y:64,z:0}},self,1000)).toBeNull();
     const ledger=new HearingLedger();for(let n=0;n<50;n++)ledger.add(sound,self,1000+n);

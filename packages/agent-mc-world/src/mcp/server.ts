@@ -14,12 +14,15 @@ import { invalidToolArguments } from '../contracts/tool-diagnostics.ts';
 import { RequestOutcomeUnknownError } from '../client/request-ledger.ts';
 import {textPageMeta,TextPageRangeError} from '../client/text-pages.ts';
 import { CALL_CAPABILITY_SCHEMA } from '../contracts/call-capability.ts';
+import { WORK_EVIDENCE_SCHEMA } from '../contracts/work-evidence.ts';
+import { workEvidenceProperties } from '../contracts/work-evidence-schema.ts';
 
 const protocolSpec: Tool = {
   name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. inspect_call classifies exact tool arguments without executing; resolve_work matches scoped work occurrences and revisions without adopting completion. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
    inputSchema: { type: 'object', properties: {
     protocol: { type: 'string', const: PROTOCOL },
-    action: { enum: ['begin_turn', 'end_turn', 'ack_barrier', 'cancel', 'task', 'request', 'facts', 'archive', 'archive_runs', 'prepare_context', 'inspect_call', 'resolve_work'] },
+    action: { enum: ['begin_turn', 'end_turn', 'ack_barrier', 'cancel', 'task', 'request', 'facts', 'archive', 'archive_runs', 'prepare_context', 'inspect_call', 'resolve_work', 'report_review', 'execution_wait'] },
+    ...workEvidenceProperties,
     tool: { type: 'string', minLength: 1, maxLength: 256 }, arguments: { type: 'object' },
     references: { type: 'array', maxItems: 64, items: { type: 'object', additionalProperties: false,
       required: ['scope','subject','instance','revision'], properties: {
@@ -35,7 +38,9 @@ const protocolSpec: Tool = {
      allOf: [{ if: { required:['action'], properties: { action: { enum: ['begin_turn','end_turn','ack_barrier','cancel','task','request'] } } }, then: { required: ['id'] } },
        { if: { required:['action'], properties: { action: { const: 'task' } } }, then: { required: ['kind'] } },
        { if: { required:['action'], properties: { action: { const: 'inspect_call' } } }, then: { required: ['tool', 'arguments'] } },
-       { if: { required:['action'], properties: { action: { const: 'resolve_work' } } }, then: { required: ['references'] } }],
+       { if: { required:['action'], properties: { action: { const: 'resolve_work' } } }, then: { required: ['references'] } },
+       { if: { required:['action'], properties: { action: { const: 'report_review' } } }, then: { required: ['reportRecord','review'] } },
+       { if: { required:['action'], properties: { action: { const: 'execution_wait' } } }, then: { required: ['observations','waitOptions'] } }],
      examples: [{ protocol: PROTOCOL, action: 'facts' }] },
 };
 
@@ -120,6 +125,9 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       endsTurn: tool.endsTurn === true, interruptible: tool.interruptible !== false,
       callCapabilities: { schema: CALL_CAPABILITY_SCHEMA, tool: protocol.name, action: 'inspect_call' } } },
   }))];
+  protocol.description += ' report_review and execution_wait are pure inspections of caller-supplied reports/native receipts; they do not read server facts, prove model comprehension, schedule work or adopt completion.';
+  protocol._meta = { [PROTOCOL]: {workEvidence:{schema:WORK_EVIDENCE_SCHEMA,tool:protocol.name,
+    reportReviewAction:'report_review',executionWaitAction:'execution_wait',source:'caller-supplied'}} };
   const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
   const validators = new Map(tools.map(tool => [tool.name, ajv.compile(tool.inputSchema)]));
   const helpName = `${prefix}_tool_help`;
@@ -186,13 +194,19 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
           case 'facts': result = runtime.currentFacts(); break;
           case 'inspect_call': result = runtime.inspectCall(String(args.tool), args.arguments); break;
           case 'resolve_work': result = runtime.resolveWork(args.references as import('../contracts/work-state.ts').WorkReference[]); break;
+          case 'report_review': result = runtime.inspectReportReview(
+            args.reportRecord as import('../contracts/work-evidence.ts').ReportRecord,
+            args.review as import('../contracts/work-evidence.ts').ReviewProposal); break;
+          case 'execution_wait': result = runtime.selectExecutionWait(
+            args.observations as import('../contracts/work-evidence.ts').ExecutionObservation[],
+            args.waitOptions as {world:string;after:number;settled?:import('../contracts/work-evidence.ts').ExecutionWait[]}); break;
           case 'archive_runs': result = runtime.journal.archiveRuns(); break;
           case 'archive': result = await runtime.journal.archive(args as ArchiveQuery); break;
           case 'prepare_context': result = await runtime.prepareContext({ contextTokens: Number(args.contextTokens),
             reservedOutputTokens: Number(args.reservedOutputTokens) }, String(args.history ?? ''), undefined,
             tools.map(tool => ({ name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema }))); break;
         }
-        const readOnly=['task','request','facts','archive','archive_runs','prepare_context','inspect_call','resolve_work'].includes(String(args.action));
+        const readOnly=['task','request','facts','archive','archive_runs','prepare_context','inspect_call','resolve_work','report_review','execution_wait'].includes(String(args.action));
         return outcome({ text: JSON.stringify(result),...(readOnly?{meta:{readAccess:{protocol:'agent-mc-read-access/v1',readOnly:true}}}:{}) });
       }
       if (name === metrics.name) return outcome({ text: JSON.stringify(runtime.metrics.snapshot(runtime.status().phase)) });

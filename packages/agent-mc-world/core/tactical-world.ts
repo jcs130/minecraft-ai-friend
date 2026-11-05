@@ -13,11 +13,12 @@ import { combatLoadout } from './combat-loadout.ts';
 import { CombatProgramRunner, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
+import { combatSearchCandidates } from './combat-search.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { validCombatRoutines, type CombatRoutine } from './combat-routines.ts';
 import { METHOD_ADAPTER } from './method-runner.ts';
 import { resolveProcedure, type ProcedureGraph } from './support/procedure.ts';
-type RoutineAdmission = { method: { id: string; revision: string; sourceHash: string }; runId: number;
+type RoutineAdmission = { method?: { id: string; revision: string; sourceHash: string }; runId: number;
   execution: NonNullable<ToolOutcome['execution']> };
 /** Shared game execution; model requests stay on the explicit host decision port. */
 export class TacticalMinecraftWorld extends MinecraftWorld {
@@ -63,13 +64,13 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         ...(choice.decisionId ? { decisionId: choice.decisionId } : {}),
         ...(admission ? { method: admission.method, runId: admission.runId } : {}),
         ...(this.routineError ? { error: this.routineError } : {}),
-        meaning: accepted ? admission ? 'method-started; inspect original method terminal and SDK calls'
+        meaning: accepted ? admission ? `${admission.execution.kind}-started; inspect original native terminal and SDK calls`
           : 'action-sent; inspect server receipts and refreshed scene' : 'stale-or-ineligible'};
       this.choiceReceipts.push(receipt);if(this.choiceReceipts.length>32)this.choiceReceipts.shift();
       const candidate = choice.candidate;
       const target = ('targetId' in candidate && typeof candidate.targetId === 'number')
         ? this.bridge?.bot?.entities[candidate.targetId]?.position ?? null : null;
-      const label = { engage: '接敌', retreat: '撤离', track: '停火盯防', step: '短步移动', cast: '施法', method: '运行方法', idle: '安全闲逛' }[candidate.kind];
+      const label = { engage: '接敌', retreat: '撤离', track: '停火盯防', step: '短步移动', cast: '施法', method: '运行方法', idle: '安全闲逛',search:'依线索索敌' }[candidate.kind];
       this.reportViewerDecision(role, `choice:${this.connectionGeneration}:${receipt.id}`, label, accepted, target);
       this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:receipt});
       return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt },
@@ -205,10 +206,12 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const queue = this.executor?.status();
     const reaction = this.combat?.reactionState();
     const fighting = (this.combat?.fighting ?? false) || (this.executor?.attacking ?? false);
+    // Only an actual exclusive survival controller inhibits fast choices.
+    // Wanting a heal (possibly on cooldown) or having low health is evidence for
+    // the choice, not ownership of the body. Engagement keeps its native health
+    // gate; withdrawal must remain selectable while the body is otherwise free.
     const emergency = this.bodyInhibitReason !== null || (this.reflexes?.envActive ?? false) || now < this.escapeHoldUntil
-      || (this.executor?.escaping ?? false) || (reaction?.retreating ?? false)
-      || (bot.health ?? 0) <= this.cfg.reflex.fleeHealth
-      || this.combatHealingUrgent(bot);
+      || (this.executor?.escaping ?? false) || (reaction?.retreating ?? false);
     const battlefield = this.battlefield.sample(bot, this.connectionGeneration, { fighting, emergency,
       taskId: queue?.running?.id ?? null, step: queue?.running?.step.slice(0, 120) ?? null,
       targetEntityId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
@@ -216,6 +219,7 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       tracking: this.combat?.tracking ?? false }, cfg.maxEntities, now);
     const program = this.tactics.getTactic()?.program;
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
+    frame.survival = { fleeAtOrBelow: this.cfg.reflex.fleeHealth, healingDesired: this.combatHealingUrgent(bot) };
     frame.loadout = combatLoadout(bot);
     const control = {
       bodyFree: (this.combat?.tracking ? !queue?.waiting.length : !this.combat?.active && combatMayTakeTask(queue))
@@ -258,7 +262,10 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const stroll: CombatCandidate[] = walk ? [{ id: 'idle_wander', kind: 'idle', action: 'wander',
       destination: [walk.destination.x, walk.destination.y, walk.destination.z],
       intent: 'Stroll two or three steps on verified safe nearby ground while the body is free; yield immediately to tasks or danger. This does not complete a goal or a trade.' }] : [];
-    const choices = [...reactions, ...frame.candidates, ...routines, ...stroll];
+    const search=combatSearchCandidates(bot,battlefield,control.bodyFree&&!queue?.running&&!queue?.waiting.length,
+      cfg.allowMovement&&!bot.currentWindow&&!(this.executor?.eating??false));
+    const choices = [...reactions, ...frame.candidates, ...search, ...routines, ...stroll];
+    if(frame.actionPool)frame.actionPool.push(...search);
     if (frame.actionPool) frame.actionPool.push(...stroll);
     frame.omittedCandidates += Math.max(0, choices.length - cfg.maxCandidates);
     frame.candidates = diverseCombatOptions(choices, cfg.maxCandidates);
@@ -309,6 +316,19 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
       candidate = checked;
     }
     if (candidate.kind === 'idle') return this.idleBehavior?.startSelected(candidate.action) ?? false;
+    if(candidate.kind==='search'){
+      const queue=this.executor?.status(),p=bot.entity.position,to=new Vec3(...candidate.destination);
+      if(!this.executor||queue?.running||queue?.waiting.length||queue?.hold||this.combat?.active||this.methodOwnsBody()
+        ||bot.currentWindow||!corridorSafe(bot,p,to))return false;
+      this.interruptIdle('search-clue');
+      const targetYaw=Math.atan2(-(to.x-p.x),-(to.z-p.z));
+      const yawDeg=Math.atan2(Math.sin(targetYaw-bot.entity.yaw),Math.cos(targetYaw-bot.entity.yaw))*180/Math.PI;
+      const result=this.executor.submitDetailed([{skill:'control',keys:['forward'],durationMs:250,mode:'ground',yawDeg}], 'append');
+      if(!result.accepted||result.taskId===undefined)return false;
+      this.routineAdmission={runId:result.taskId,execution:{kind:'task',id:`${this.executionEpoch}:${result.taskId}`,
+        phase:'accepted',terminal:false,goalCompleted:false,evidence:{source:'search-clue',clueKey:candidate.clueKey}}};
+      return true;
+    }
     if (candidate.kind === 'cast') {
       // sampleCombatDecision revalidates opening admission as well as the exact rule.
       // An authored program cannot manufacture an unoffered spell outside that pool.

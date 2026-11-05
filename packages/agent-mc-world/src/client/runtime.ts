@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { inspectToolCall } from '../contracts/call-capability.ts';
 import { resolveWorkReferences, type WorkReference } from '../contracts/work-state.ts';
+import { inspectReportReview, selectExecutionWait, type ReportRecord, type ReviewProposal,
+  type ExecutionObservation, type ExecutionWait } from '../contracts/work-evidence.ts';
 import { createMinecraftChoiceTool } from './choice.ts';
 import { runtimeExecutionState } from './execution-state.ts';
 import {readTextPage} from './text-pages.ts';
@@ -176,6 +178,12 @@ export class MinecraftAgentClient {
     const current = this.phase === 'started' && this.world.connectionReadiness?.()?.ready !== false ? this.requestFacts() : null;
     return { protocol: PROTOCOL, run: this.journal.run, adopted: false as const,
       resolutions: structuredClone(resolveWorkReferences(references, current?.workStates ?? [])) };
+  }
+  /** Pure caller-supplied report inspection; does not adopt or schedule a decision. */
+  inspectReportReview(record: ReportRecord, review: ReviewProposal) { return inspectReportReview(record, review); }
+  /** Pure native-receipt reduction. The host authenticates and supplies its lifetime boundary. */
+  selectExecutionWait(observations: readonly ExecutionObservation[], options: {world: string; after: number; settled?: readonly ExecutionWait[]}) {
+    return selectExecutionWait(observations, options);
   }
   /** Pure preparation on the selected tool; preserves backend-specific validation and exact IDs. */
   prepareFastAction(name: string, args: Record<string, unknown>) {

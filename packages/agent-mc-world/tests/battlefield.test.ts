@@ -5,6 +5,7 @@ import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BattlefieldObserver, BATTLEFIELD_CHANNEL } from '../core/battlefield.ts';
 import { configureObservationPolicy } from '../core/perception-sight.ts';
+import { installWorldIdentity } from '../core/world-scope.ts';
 
 const ownUuid = '00000000-0000-0000-0000-000000000001';
 const allyUuid = '00000000-0000-0000-0000-000000000002';
@@ -46,6 +47,28 @@ it('requires explicit telemetry opt-in and releases its listeners on disposal', 
 });
 
 describe('programmatic battlefield observations', () => {
+  it('clears old-world search clues when native world name changes within the same dimension type',()=>{
+    const r=rig(),dispose=installWorldIdentity(r.bot as unknown as Bot);
+    r.bot._client.emit('login',{worldState:{name:'minecraft:first',dimension:0}});r.sample(1000);
+    r.bot.blockAt=(p:Vec3)=>({name:p.x===1?'stone':'air',position:p,shapes:p.x===1?[[0,0,0,1,1,1]]:[]});
+    expect(r.sample(1100).clues?.some(c=>c.source==='last-seen')).toBe(true);
+    r.bot._client.emit('respawn',{worldState:{name:'minecraft:second',dimension:0}});
+    expect(r.sample(1200).world?.key).toBe('minecraft:second');
+    expect(r.sample(1200).clues?.some(c=>c.source==='last-seen')).toBe(false);
+    dispose();r.observer.close();
+  });
+  it('retains an expiring last-seen point without following hidden motion or carrying it across spawn/generation',()=>{
+    const r=rig();r.sample(1000);
+    r.bot.blockAt=(p:Vec3)=>({name:p.x===1?'stone':'air',position:p,shapes:p.x===1?[[0,0,0,1,1,1]]:[]});
+    r.bot.entities[3].position=new Vec3(7,64,0);
+    const hidden=r.sample(1100);
+    expect(hidden.clues).toEqual(expect.arrayContaining([expect.objectContaining({source:'last-seen',position:[3,64,0],seenAt:1000})]));
+    expect(r.sample(9001).clues?.some(c=>c.source==='last-seen')).toBe(false);
+    r.bot.blockAt=(p:Vec3)=>({name:'air',position:p,shapes:[]});r.sample(10000);
+    r.bot._client.emit('end');
+    expect(r.observer.sample(r.bot as unknown as Bot,8,{fighting:false,emergency:false,taskId:null,step:null},12,10001).clues?.some(c=>c.source==='last-seen')).toBe(false);
+    r.observer.close();
+  });
   it('can disable near occlusion reporting and keep confirmed ally telemetry non-spatial', () => {
     const r = rig();
     configureObservationPolicy(r.bot,()=>({nearbyOccludedRange:0}));

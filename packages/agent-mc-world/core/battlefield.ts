@@ -8,6 +8,10 @@ import { canSeeEntity } from './terrain.ts';
 import { entityAwareness, type EntityAwareness } from './perception-sight.ts';
 import { loadedSight } from './idle-actions.ts';
 import { entityMaxHealth as maxHealth } from './entity-max-health.ts';
+import { hearingOf } from './perception-hearing.ts';
+import type { HearingHint } from '../src/contracts/perception.ts';
+import { readWorldIdentity } from './world-scope.ts';
+import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
 
 export const BATTLEFIELD_CHANNEL = 'mcagent:battlefield';
 type Relation = 'ally' | 'hostile' | 'neutral' | 'unknown';
@@ -28,6 +32,9 @@ export interface BattlefieldActor {
   targetEntityId: number | null;
 }
 export interface Battlefield {
+  world?: WorldIdentityObservation;
+  /** Expiring search clues, never hidden entities' current positions or attack permission. */
+  clues?: Array<HearingHint | {source:'last-seen';key:string;position:[number,number,number];seenAt:number;expiresAt:number}>;
   sampledAtMs: number;
   connectionGeneration: number;
   dimension: string | null;
@@ -90,8 +97,10 @@ export class BattlefieldObserver {
   private readonly healthTimes = new Map<number, number>();
   private ownHealthAtMs: number | null = null;
   private detach: (() => void) | null = null;
+  private clueScope: string | null = null;
+  private readonly lastSeen = new Map<string,{source:'last-seen';key:string;position:[number,number,number];seenAt:number;expiresAt:number}>();
 
-  reset(): void { this.server = null; this.sequence = -1; this.healthTimes.clear(); this.ownHealthAtMs = null; }
+  reset(): void { this.server = null; this.sequence = -1; this.healthTimes.clear(); this.ownHealthAtMs = null; this.lastSeen.clear();this.clueScope=null; }
 
   bind(bot: Bot, serverChannel?: string): void {
     if (this.bot === bot) return;
@@ -110,7 +119,9 @@ export class BattlefieldObserver {
       if (serverChannel && packet.channel === serverChannel) this.noteServerPayload(packet.data);
     };
     const end = () => { this.reset(); this.detach?.(); this.bot = null; };
-    const register = () => { declareDecodedChannels(bot._client,[serverChannel]); };
+    const register = () => { this.lastSeen.clear();this.clueScope=null;declareDecodedChannels(bot._client,[serverChannel]); };
+    const clearClues=()=>{this.lastSeen.clear();this.clueScope=null;};
+    bot.on('death',clearClues);bot.on('respawn',clearClues);
     bot.on('spawn',register);register();
     bot._client.on('entity_metadata', metadata);
     bot._client.on('custom_payload', payload);
@@ -122,6 +133,7 @@ export class BattlefieldObserver {
       bot._client.removeListener('end', end);
       bot.removeListener('health', health); bot.removeListener('entityGone', gone);
       bot.removeListener('spawn',register);
+      bot.removeListener('death',clearClues);bot.removeListener('respawn',clearClues);
       this.detach = null;
     };
   }
@@ -137,6 +149,8 @@ export class BattlefieldObserver {
 
   sample(bot: Bot, generation: number, action: Battlefield['action'], maxEntities: number, now = Date.now()): Battlefield {
     const dim = bot.game?.dimension ?? null;
+    const world=readWorldIdentity(bot),scope=JSON.stringify([generation,dim,world.key,world.revision]);
+    if(scope!==this.clueScope){this.lastSeen.clear();this.clueScope=scope;}
     const dimensionKey = (v: string | null) => v === null ? null : v.includes(':') ? v : `minecraft:${v}`;
     const server = this.server && dimensionKey(this.server.dimension) === dimensionKey(dim)
       && this.server.expiresAtMs > now ? this.server : null;
@@ -180,14 +194,27 @@ export class BattlefieldObserver {
         health: { ...row.health, source: 'server', updatedAtMs: server!.receivedAtMs },
         position: null, distance: null, lineOfSight: null });
     }
+    const visibleKeys=new Set<string>();
+    for(const a of actors){
+      const key=JSON.stringify([a.entityId,a.uuid]);
+      if(a.health.current===0){this.lastSeen.delete(key);continue;}
+      if(a.relation==='hostile'&&a.lineOfSight===true&&a.position){
+        visibleKeys.add(key);this.lastSeen.delete(key);
+        this.lastSeen.set(key,{source:'last-seen',key,position:[...a.position],seenAt:now,expiresAt:now+8_000});
+      }
+    }
+    for(const [key,clue]of this.lastSeen)if(clue.expiresAt<=now)this.lastSeen.delete(key);
+    while(this.lastSeen.size>32)this.lastSeen.delete(this.lastSeen.keys().next().value!);
+    const clues:NonNullable<Battlefield['clues']>=[...(hearingOf(bot)?.read(3,now)??[]),
+      ...[...this.lastSeen.values()].filter(c=>!visibleKeys.has(c.key)).slice(-3).map(c=>({...c,position:[...c.position] as [number,number,number]}))];
     actors.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity) || (a.entityId ?? 0) - (b.entityId ?? 0));
-    return { sampledAtMs: now, connectionGeneration: generation, dimension: dim,
+    return { sampledAtMs: now, connectionGeneration: generation, dimension: dim,world,
       self: { entityId: bot.entity.id, health: { current: number(bot.health) ? bot.health : null,
         max: maxHealth(bot.entity), source: number(bot.health) ? 'native' : 'unknown', updatedAtMs: this.ownHealthAtMs },
         food: number(bot.food) ? bot.food : null, position: [p.x, p.y, p.z], scoreboardTeam: team(bot.username),
         equipment: { held: bot.heldItem?.name ?? null,
           armor: bot.inventory?.slots ? [5, 6, 7, 8].map(i => bot.inventory.slots[i]?.name ?? null) : null } },
-      action, actors: actors.slice(0, maxEntities), omitted: Math.max(0, actors.length - maxEntities),
+      action, clues, actors: actors.slice(0, maxEntities), omitted: Math.max(0, actors.length - maxEntities),
       server: server ? { sequence: server.sequence, receivedAtMs: server.receivedAtMs, expiresAtMs: server.expiresAtMs } : null };
   }
 }

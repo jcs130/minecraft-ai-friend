@@ -345,3 +345,36 @@ Food risk is available through the shared [food-risk contract](docs/food-risk-co
 ### Optional nearby voice
 
 [Game voice, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md): one authenticated player connection, one audio artifact, independent game/broadcast receipts and explicit output mode.
+# Portable report and native wait evidence
+
+`agent-mc-world/contracts` exports `workReportReceipt`, `inspectReportReview`,
+`selectExecutionWait`, `nativeExecutionKey` and `matchesExecutionWait`. SDK clients
+also expose `inspectReportReview(record, review)` and
+`selectExecutionWait(observations, options)`; MCP exposes the same pure operations
+through `mc_protocol` actions `report_review` and `execution_wait` (discover their
+exact schemas and `workEvidence` metadata before use).
+
+These operate on **caller-supplied** records. They do not fetch server facts,
+authenticate evidence, prove model comprehension, run a model, acquire the body,
+schedule work, close pending items or complete goals. A host supplies the full
+report, exact assignment/revision, trusted native execution receipts and lifetime
+boundary; it retains stage/version checks, adoption, persistence and scheduling.
+Receipts are deterministic content references, not secret authorization tokens.
+
+A repeated identical persisted review is idempotent; a changed decision cannot
+overwrite it. A changed report/revision requires a fresh full report receipt.
+Native terminal receipts dominate admissions regardless of arrival order. Only
+one unfinished execution in the exact world/kind/id can establish a wait;
+ambiguous waits remain explicit, and an unknown effect never permits replay.
+Earlier host lifetimes are excluded by the explicit `after` boundary; hosts must
+not restore an old wait or terminal set as current native evidence.
+
+Fast combat frames distinguish `survival.healingDesired` from
+`battlefield.action.emergency`: only an actual exclusive survival controller
+suppresses fast choices. Native engagement still checks the configured health
+line. Sound-packet clues contain only coarse bearings/range bands; last-seen
+locations are historical, expire after eight seconds, and reset across connection,
+dimension and spawn boundaries. With movement enabled and the body free, the
+Mineflayer tactical adapter can offer a nonattacking `search` candidate that
+reuses a short native control task on checked ground. The Java reflex adapter
+does not advertise this task primitive; it never silently converts it to attack.

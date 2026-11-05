@@ -41,7 +41,8 @@ function sceneFacts(frame: CombatDecisionFrame, selected: CombatCandidate | null
   const f = frame.battlefield;
   const targetId = selected?.kind === 'engage' || selected?.kind === 'track' ? selected.targetId : f.action.targetEntityId;
   const protectedIds = new Set([f.self.entityId, ...f.actors.filter(a => a.relation === 'ally').map(a => a.entityId)]);
-  return { connection: [f.connectionGeneration, f.dimension], tactic: frame.tacticRevision,
+  return { connection: [f.connectionGeneration, f.dimension,f.world?.key??null,f.world?.revision??null], tactic: frame.tacticRevision,
+    survival: frame.survival ?? null,
     self: [f.self.entityId, healthBand(f.self.health.current, f.self.health.max), f.self.health.max,
       f.self.food === null ? null : f.self.food <= 6 ? 'hungry' : 'fed', f.self.equipment],
     omitted: f.omitted,
@@ -229,6 +230,8 @@ export class CombatDecisionLoop {
         && (selected.kind !== 'track' || (c.kind === 'track' && c.targetId === selected.targetId && c.uuid === selected.uuid))
         && (selected.kind !== 'idle' || (c.kind === 'idle' && c.action === selected.action
           && JSON.stringify(c.destination) === JSON.stringify(selected.destination)))
+        && (selected.kind !== 'search' || (c.kind === 'search' && c.clueKey === selected.clueKey
+          && c.source === selected.source && JSON.stringify(c.destination) === JSON.stringify(selected.destination)))
         && (selected.kind !== 'method' || c.kind === 'method' && c.procedure.handle === selected.procedure.handle
           && c.procedure.revision === selected.procedure.revision && JSON.stringify(c.params) === JSON.stringify(selected.params)
           && c.durationMs === selected.durationMs));
