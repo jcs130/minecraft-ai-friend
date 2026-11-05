@@ -12,7 +12,12 @@ export function pauseDuringConfiguration(bot) {
   function pause() {
     if (suspended) return;
     suspended = true;
-    restorePhysics = bot.physicsEnabled !== false;
+    // Always re-enable ordinary physics after the next PLAY position.
+    // Capturing bot.physicsEnabled here races with agent-mc-world's
+    // installConfigurationPhaseGuard, which may already have set it false;
+    // inheriting that false permanently freezes Velocity/Youer joins
+    // (onGround stuck false, control/goto report 人动不了 / 飞行尚未结束).
+    restorePhysics = true;
     bot.physicsEnabled = false;
   }
   function state(next) { if (next === 'configuration') pause(); }
