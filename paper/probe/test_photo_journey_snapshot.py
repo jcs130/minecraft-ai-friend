@@ -21,15 +21,16 @@ class SnapshotTest(unittest.TestCase):
                          "photo-journal.json": json.dumps({"players": {owner: {"photos": {job: album}}, "other": {"private": "UNRELATED"}}}),
                          "config.yml": yaml.safe_dump({"photo-rewards": {owner: {"17": {"map-ids": [23], "pending": [tile]}}}, "dungeon-personal-stash": {owner: {"0": {"type": "STONE"}}, "other": {"private": "UNRELATED"}}})}
             for name, text in documents.items():
-                (data / name).write_text(text)
+                (data / name).write_text(text, encoding="utf-8")
+            original_bytes = {name: (data / name).read_bytes() for name in documents}
             result = snapshot(root, owner, job)
             self.assertEqual(result["stash"]["pendingMapIds"], [23])
             self.assertEqual(result["stash"]["storedMapIds"], [])
             self.assertFalse(result["album"]["published"])
             self.assertNotIn("UNRELATED", json.dumps(result))
             for name, text in documents.items():
-                self.assertEqual((data / name).read_text(), text)
-                self.assertEqual(result["sourceSha256"][name], hashlib.sha256(text.encode()).hexdigest())
+                self.assertEqual((data / name).read_bytes(), original_bytes[name])
+                self.assertEqual(result["sourceSha256"][name], hashlib.sha256(original_bytes[name]).hexdigest())
             with self.assertRaises(ValueError):
                 snapshot(root, owner, "ffffffff-ffff-4fff-8fff-ffffffffffff")
 

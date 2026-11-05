@@ -323,9 +323,20 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
 
     private JsonObject envelope(Job job, String type) { var out = new JsonObject(); out.addProperty("type", type); out.addProperty("job", job.id.toString()); out.addProperty("nonce", job.nonce); return out; }
     private boolean uploadPendingConfirmation() {
-        if(uploadSent||importStarted)return true;
-        if(nativeUpload==null)return false;
-        try{return ((java.util.concurrent.Future<?>)nativeUpload.getClass().getMethod("getFile").invoke(nativeUpload)).isDone();}
+        if(importStarted)return true;
+        if(nativeUpload==null)return uploadSent;
+        try{
+            var file=(java.util.concurrent.Future<?>)nativeUpload.getClass().getMethod("getFile").invoke(nativeUpload);
+            if(!file.isDone())return uploadSent;
+            try{return file.get()!=null;}
+            catch(java.util.concurrent.ExecutionException terminal){
+                // The pinned ImageFrame future atomically accepts either a file
+                // or expiry. Expiry cannot later deliver a file for this upload.
+                Throwable cause=terminal.getCause();
+                return cause==null||!cause.getClass().getName().equals("com.loohp.imageframe.upload.PendingUploadExpiredException");
+            }
+            catch(InterruptedException interrupted){Thread.currentThread().interrupt();return true;}
+        }
         catch(Exception unreadable){return true;} // Unknown upload outcome must not become a safe-to-retry failure.
     }
     private void send(Player p, JsonObject data) { p.sendPluginMessage(plugin, CHANNEL, data.toString().getBytes(StandardCharsets.UTF_8)); }

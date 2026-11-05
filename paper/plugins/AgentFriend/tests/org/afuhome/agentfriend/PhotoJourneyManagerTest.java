@@ -32,6 +32,16 @@ public final class PhotoJourneyManagerTest {
         public List<ItemStack> getMaps(String format){return List.of(mock(ItemStack.class));}
     }
     public static final class Upload {public java.util.concurrent.Future<java.io.File> getFile(){return java.util.concurrent.CompletableFuture.completedFuture(new java.io.File("test-double-only.png"));}}
+    public static final class ExpiredUpload {
+        public java.util.concurrent.Future<java.io.File> getFile() {
+            return java.util.concurrent.CompletableFuture.failedFuture(new com.loohp.imageframe.upload.PendingUploadExpiredException());
+        }
+    }
+    public static final class FailedUpload {
+        public java.util.concurrent.Future<java.io.File> getFile() {
+            return java.util.concurrent.CompletableFuture.failedFuture(new java.io.IOException("uncertain fixture failure"));
+        }
+    }
     static final class Fixture {
         final AgentFriendPlugin plugin=mock(AgentFriendPlugin.class);
         final Player owner=mock(Player.class),camera=mock(Player.class);
@@ -112,6 +122,12 @@ public final class PhotoJourneyManagerTest {
         f=new Fixture(server);f.start();set(f.manager,"nativeUpload",new Upload());f.send("failed",JOB);
         check(get(f.manager,"active")!=null&&get(f.manager,"phase").equals("confirming"),"native completed upload is reconciled even if both worker ACKs are missing");
         f.manager.command(f.owner,new String[]{"photo","cancel"});check(get(f.manager,"active")!=null,"completed upload cannot be cancelled as though it never happened");
+        f=new Fixture(server);f.start();f.send("uploading",JOB);
+        set(f.manager,"nativeUpload",new ExpiredUpload());f.send("failed",JOB);
+        check(get(f.manager,"active")==null,"ImageFrame expiry proves this upload cannot deliver an original");
+        check(f.ledger.latest(OWNER).get("status").getAsString().equals("stopped"),"expired upload does not lock the owner in unknown");
+        f=new Fixture(server);f.start();set(f.manager,"nativeUpload",new FailedUpload());f.send("failed",JOB);
+        check(get(f.manager,"active")!=null,"unclassified upload failures retain the original reconciliation");
         f=new Fixture(server);f.start();f.manager.command(f.owner,new String[]{"photo","cancel"});
         check(f.ledger.latest(OWNER).get("status").getAsString().equals("stopped"),"explicit cancellation before upload preserves the existing ability to try later");
         System.out.println("photo-journey-manager-checks="+checks+" passed=true scope=game-api-doubles");
