@@ -28,6 +28,9 @@ try{
  await qa('deny true');await unchanged('event right','protection veto is respected');await qa('deny false');
  await qa('far');await unchanged('event right','out of reach synthetic interaction is rejected');await qa('origin');
  await qa('mode SPECTATOR');await unchanged('event right','spectator interaction is rejected');await qa('origin');
+ await sleep(2100);await qa('mode CREATIVE');let creativeNotice=lines.length;
+ await unchanged('event right','creative gate click does not charge or teleport');
+ check('creative mode receives an actionable explanation',lines.slice(creativeNotice).some(t=>/创造.*模式.*生存/.test(t)));await qa('origin');
  await qa('frame false');await unchanged('event right','broken portal frame cannot trigger');await qa('frame true');
  await qa('mana 0');let n=lines.length;await click(47);await sleep(600);s=await qa('status');check('insufficient mana does not teleport',s.position[1]===47.5&&s.position[3]===51.5);check('insufficient mana has an actionable response',lines.slice(n).some(t=>/魔力|mana/i.test(t)));
  await sleep(5200);await qa('origin');await sleep(300);n=lines.length;await click(47);await qa('event offhand');await qa('event right');
