@@ -170,14 +170,6 @@ export class CombatAbilities {
     this.lastCheck = now;
     if (now < this.manaBlockedUntil || now - this.lastAny < GLOBAL_GAP_MS) return null;
 
-    const p = bot.entity.position;
-    const foes = Object.values(bot.entities ?? {}).filter((e) => {
-      if (!e?.position || e.isValid === false || !HOSTILE.has(e.name ?? '')) return false;
-      return Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z) <= 16;
-    });
-    if (foes.length === 0) return null;
-    const near = (radius: number): number => foes.filter((e) =>
-      Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z) <= radius).length;
     const ready = (spell: CombatSpell): boolean => this.available.has(spell) && this.hasMana(spell, now)
       && now >= (this.serverReadyAt.get(spell) ?? Number.NEGATIVE_INFINITY)
       && now - (this.lastSent.get(spell) ?? Number.NEGATIVE_INFINITY) >= this.cooldownOf(spell);
@@ -194,6 +186,16 @@ export class CombatAbilities {
       return null;
     }
 
+    // Legacy fallback keeps its own range. Authored predicates above use their
+    // chosen distance over tracked entities, without an unrelated 16-block clip.
+    const p = bot.entity.position;
+    const foes = Object.values(bot.entities ?? {}).filter((e) => {
+      if (!e?.position || e.isValid === false || !HOSTILE.has(e.name ?? '')) return false;
+      return Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z) <= 16;
+    });
+    if (foes.length === 0) return null;
+    const near = (radius: number): number => foes.filter((e) =>
+      Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z) <= radius).length;
     return this.selectFallback(bot, foes, ready, near);
   }
 
@@ -281,7 +283,7 @@ export class CombatAbilities {
       enemies: Object.values(bot.entities ?? {}).flatMap(e => {
         if (!e?.position || e.isValid === false || !HOSTILE.has(e.name ?? '')) return [];
         const distance = Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z);
-        return distance <= 16 ? [{ type: e.name!, distance }] : [];
+        return Number.isFinite(distance) ? [{ type: e.name!, distance }] : [];
       }) };
   }
 

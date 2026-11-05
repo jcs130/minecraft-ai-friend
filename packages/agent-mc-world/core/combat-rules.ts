@@ -40,14 +40,14 @@ export const COMBAT_RULES_SCHEMA = {
       intent: { type: 'string', minLength: 1, maxLength: 160,
         description: 'Optional concise effect and tactical purpose from the skill documentation. Required to offer this rule to the asynchronous fast selector; does not prove the spell is learned.' },
       when: { type: 'object', additionalProperties: false, properties: {
-        within: { type: 'number', minimum: 1, maximum: 16, description: 'Count matching enemies within this 3D distance; default 12. Not a claim about spell range or line of sight.' },
+        within: { type: 'number', minimum: 1, description: 'Agent-chosen 3D distance for counting currently observed enemies; default 12. Does not load more terrain, reveal unobserved entities or change spell range/line of sight.' },
         enemyTypes: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: { type: 'string', pattern: ID.source }, description: 'Optional exact entity type IDs to count; bare IDs use the minecraft namespace (zombie = minecraft:zombie). Other namespaces remain distinct. Omitted counts all observed hostiles.' },
-        hostilesAtLeast: { type: 'integer', minimum: 1, maximum: 64, description: 'Minimum matching enemy count; default 1.' },
-        hostilesAtMost: { type: 'integer', minimum: 1, maximum: 64 },
+        hostilesAtLeast: { type: 'integer', minimum: 1, description: 'Minimum matching enemy count; default 1.' },
+        hostilesAtMost: { type: 'integer', minimum: 1 },
         healthAtOrBelow: { type: 'number', minimum: 1, description: 'Absolute current health points; RPG health is not normalized to 20.' },
         healthAtOrAbove: { type: 'number', minimum: 1, description: 'Absolute current health points; RPG health is not normalized to 20.' },
-        manaAtLeast: { type: 'number', minimum: 0, maximum: 10000 },
-        reserveMana: { type: 'number', minimum: 0, maximum: 10000, description: 'Require at least this much mana after the observed spell cost. Unknown mana/cost fails the predicate.' },
+        manaAtLeast: { type: 'number', minimum: 0 },
+        reserveMana: { type: 'number', minimum: 0, description: 'Require at least this much mana after the observed spell cost. Unknown mana/cost fails the predicate.' },
         dimension: { type: 'string', minLength: 1, maxLength: 100, description: 'Exact current dimension identifier.' },
         onGround: { type: 'boolean' },
       } },
@@ -56,38 +56,56 @@ export const COMBAT_RULES_SCHEMA = {
 };
 
 export function validCombatRules(value: unknown): value is CombatRule[] {
-  if (!Array.isArray(value) || value.length > 16) return false;
+  return combatRulesError(value) === null;
+}
+
+export interface CombatRulesError { path: string; message: string }
+
+/** First actionable validation error, shared by persisted tactics and public tool admission. */
+export function combatRulesError(value: unknown): CombatRulesError | null {
+  const fail = (path: string, message: string): CombatRulesError => ({ path, message });
+  if (!Array.isArray(value)) return fail('rules', '须为数组。');
+  if (value.length > COMBAT_RULES_SCHEMA.maxItems)
+    return fail('rules', `最多 ${COMBAT_RULES_SCHEMA.maxItems} 项；这是每次快速评估的规则预算。`);
   const ids = new Set<string>();
-  for (const rule of value) {
-    if (!rule || typeof rule !== 'object' || Array.isArray(rule)
-      || Object.keys(rule).some(k => !['id', 'spell', 'intent', 'when'].includes(k))
-      || typeof rule.id !== 'string' || !ID.test(rule.id) || ids.has(rule.id)
-      || typeof rule.spell !== 'string' || !ID.test(rule.spell)
-      || (rule.intent !== undefined && (typeof rule.intent !== 'string' || !rule.intent.trim().length || rule.intent.length > 160))
-      || !rule.when || typeof rule.when !== 'object' || Array.isArray(rule.when)) return false;
+  for (const [index, rule] of value.entries()) {
+    const path = `rules[${index}]`;
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return fail(path, '须为对象。');
+    const extra = Object.keys(rule).find(k => !Object.hasOwn(COMBAT_RULES_SCHEMA.items.properties, k));
+    if (extra !== undefined) return fail(`${path}.${extra}`, '未知字段；可用 id、spell、intent、when。');
+    for (const key of ['id', 'spell'] as const)
+      if (typeof rule[key] !== 'string' || !ID.test(rule[key])) return fail(`${path}.${key}`, `须符合 ${ID.source}。`);
+    if (ids.has(rule.id)) return fail(`${path}.id`, '规则 id 重复；每项须唯一。');
+    if (rule.intent !== undefined && (typeof rule.intent !== 'string' || !rule.intent.trim().length || rule.intent.length > 160))
+      return fail(`${path}.intent`, '须为 1–160 字符的非空说明。');
+    if (!rule.when || typeof rule.when !== 'object' || Array.isArray(rule.when)) return fail(`${path}.when`, '须为条件对象。');
     ids.add(rule.id);
     const w = rule.when;
     for (const [key, v] of Object.entries(w)) {
       const schema = COMBAT_RULES_SCHEMA.items.properties.when.properties;
-      if (!(key in schema)) return false;
+      const field = `${path}.when.${key}`;
+      if (!Object.hasOwn(schema, key)) return fail(field, `未知条件；可用 ${Object.keys(schema).join('、')}。`);
       if (key === 'enemyTypes') {
         if (!Array.isArray(v) || !v.length || v.length > 16
-          || v.some(t => typeof t !== 'string' || !ID.test(t)) || new Set(v).size !== v.length) return false;
+          || v.some(t => typeof t !== 'string' || !ID.test(t)) || new Set(v).size !== v.length)
+          return fail(field, '须为 1–16 个不重复的实体类型 ID。');
       } else if (key === 'dimension') {
-        if (typeof v !== 'string' || !v.length || v.length > 100) return false;
+        if (typeof v !== 'string' || !v.length || v.length > 100) return fail(field, '须为 1–100 字符的当前维度 ID。');
       } else if (key === 'onGround') {
-        if (typeof v !== 'boolean') return false;
+        if (typeof v !== 'boolean') return fail(field, '须为 boolean。');
       } else {
         const limits = schema[key as Exclude<keyof typeof schema, 'enemyTypes' | 'dimension' | 'onGround'>];
-        if (typeof v !== 'number' || !Number.isFinite(v) || v < limits.minimum || ('maximum' in limits && v > limits.maximum)
-          || (limits.type === 'integer' && !Number.isInteger(v))) return false;
+        if (typeof v !== 'number' || !Number.isFinite(v) || v < limits.minimum
+          || (limits.type === 'integer' && !Number.isSafeInteger(v)))
+          return fail(field, `须为${limits.type === 'integer' ? '安全整数' : '有限数值'}且 >= ${limits.minimum}。`);
       }
     }
-    if ((w.hostilesAtMost !== undefined && w.hostilesAtMost < (w.hostilesAtLeast ?? 1))
-      || (w.healthAtOrAbove !== undefined && w.healthAtOrBelow !== undefined
-        && w.healthAtOrAbove > w.healthAtOrBelow)) return false;
+    if (w.hostilesAtMost !== undefined && w.hostilesAtMost < (w.hostilesAtLeast ?? 1))
+      return fail(`${path}.when.hostilesAtMost`, '须 >= hostilesAtLeast（省略时为 1）。');
+    if (w.healthAtOrAbove !== undefined && w.healthAtOrBelow !== undefined && w.healthAtOrAbove > w.healthAtOrBelow)
+      return fail(`${path}.when.healthAtOrAbove`, '须 <= healthAtOrBelow。');
   }
-  return true;
+  return null;
 }
 
 /** Compare registry IDs without treating another namespace as a vanilla type. Empty observations remain unknown. */
