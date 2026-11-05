@@ -33,17 +33,22 @@ class DiagnosticsTest(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.manifest = {'verifiedAt': '2026-11-05T12:00:00Z', 'runtime': {}, 'liveArtifactDigests': {}}
 
-    def jars(self):
+    def jars(self, newline='\n'):
         files = {}
         for key, component in diag.COMPONENTS.items():
             file = self.root / (component + '-fixture.jar')
             with zipfile.ZipFile(file, 'w') as jar:
-                jar.writestr('plugin.yml', f'name: {component}\nversion: fixture\n')
+                jar.writestr('plugin.yml', f'name: {component}{newline}version: fixture{newline}')
                 for entry, symbols in diag.REQUIREMENTS[key].items():
                     jar.writestr(entry, pool(symbols))
             self.manifest['liveArtifactDigests'][str(file)] = diag.digest(file.read_bytes())
             files[key] = file
         return files
+
+    def test_windows_plugin_descriptors_are_valid_artifacts(self):
+        files = self.jars(newline='\r\n')
+        report = diag.inspect_artifacts(self.manifest, files)
+        self.assertEqual(report['status'], 'recorded_artifact_symbols_present')
 
     def bundle(self):
         ids = [f'00000000-0000-4000-8000-{i:012d}' for i in range(1, 5)]

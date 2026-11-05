@@ -110,7 +110,7 @@ def inspect_artifacts(manifest, files):
             names = jar.namelist()
             if len(names) != len(set(names)):
                 raise ValueError("duplicate_jar_entries")
-            descriptor = jar.read("plugin.yml").decode("utf-8-sig")
+            descriptor = "\n".join(jar.read("plugin.yml").decode("utf-8-sig").splitlines())
             for field in ("name", "version"):
                 found = re.findall(r"(?m)^" + field + r":\s*([^\r\n]+)$", descriptor)
                 if len(found) != 1:

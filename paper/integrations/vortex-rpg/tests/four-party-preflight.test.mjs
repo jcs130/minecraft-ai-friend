@@ -63,7 +63,15 @@ test('refuses changed plugins, missing proof and changes to native manager', t =
 test('refuses reused output and symlinked input', t => {
   const f = fixture(t); fs.writeFileSync(f.output, 'retain'); assert.throws(f.run, /fresh output/);
   fs.unlinkSync(f.output); const item = f.lock.artifacts.friend, target = path.join(f.stage, item.file), bytes = fs.readFileSync(target);
-  fs.unlinkSync(target); const external = path.join(f.root, 'external.jar'); fs.writeFileSync(external, bytes); fs.symlinkSync(external, target);
+  if (process.platform === 'win32') {
+    // Directory junctions exercise the same real-path escape without requiring
+    // Windows symlink privileges or skipping the production-path boundary.
+    const plugins = path.join(f.stage, 'plugins'), external = path.join(f.root, 'external-plugins');
+    fs.renameSync(plugins, external);
+    fs.symlinkSync(external, plugins, 'junction');
+  } else {
+    fs.unlinkSync(target); const external = path.join(f.root, 'external.jar'); fs.writeFileSync(external, bytes); fs.symlinkSync(external, target);
+  }
   assert.throws(f.run, /symlink/);
 });
 test('refuses traversal and writes inside server', t => {
