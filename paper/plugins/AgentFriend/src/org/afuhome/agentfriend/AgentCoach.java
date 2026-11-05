@@ -358,6 +358,10 @@ final class AgentCoach implements Listener {
 
     private void sendAdventure(Player player, long now, GuildAdventureGuide.Hint hint) {
         player.sendMessage("§a[公会旅途] " + hint.message() + " " + hint.command());
+        JsonObject event=new JsonObject();event.addProperty("type","adventure_hint");event.addProperty("eventId",UUID.randomUUID().toString());
+        event.addProperty("at",now);event.addProperty("recipient",player.getUniqueId().toString());
+        event.addProperty("command",hint.command());event.addProperty("requiresDecision",true);
+        player.sendMessage("MC_COACH "+event); // A suggestion receipt, never a photo decision/execution.
         player.getPersistentDataContainer().set(lastAdventureKey, PersistentDataType.LONG, now);
         hintDelivered(player, now);
     }
