@@ -64,7 +64,7 @@ export class GameAccounts {
     const pending = this.store.db.prepare("SELECT count(*) AS n FROM account_jobs WHERE owner_id=? AND operation='create' AND state IN ('pending','unknown')").get(owner.id).n;
     if (owner.role !== 'admin' && owned + pending >= maximum) throw fail(409, 'AGENT_LIMIT', `每个网站账号最多 ${maximum} 个 Agent；请先查询已有请求或联系服主。`);
   }
-  async start(owner, operation, body) {
+  async start(owner, operation, body, { beforeInsert } = {}) {
     const capability = await this.capabilities();
     if (!capability.ready) throw fail(503, capability.reason || 'AUTH_BRIDGE_NOT_CONNECTED', capability.message || '游戏账号桥暂不可用；请稍后查询原请求，不要重复建号或改密。');
     const name = body.username;
@@ -102,13 +102,20 @@ export class GameAccounts {
     // roster() yielded above. Recheck directly before persistence so parallel
     // API/browser requests cannot pass the same final quota slot or insert the
     // same id twice. No bridge operation is sent before this job exists.
-    const raced = this.store.db.prepare('SELECT * FROM account_jobs WHERE id=?').get(id);
-    if (raced) {
-      if (raced.owner_id !== owner.id || raced.operation !== operation || raced.name.toLowerCase() !== name.toLowerCase()) throw fail(409, 'REQUEST_ID_CONFLICT', '此请求标识已用于另一项操作');
-      return this.job(owner, id);
-    }
-    if (operation === 'create') this.assertCreateQuota(owner);
-    this.store.db.prepare('INSERT INTO account_jobs VALUES(?,?,?,?,?,?,?,?,?)').run(id, owner.id, operation, name, 'pending', JSON.stringify(result), now, expires, expectedUuid);
+    let raced;
+    this.store.transaction(() => {
+      raced = this.store.db.prepare('SELECT * FROM account_jobs WHERE id=?').get(id);
+      if (raced) {
+        if (raced.owner_id !== owner.id || raced.operation !== operation || raced.name.toLowerCase() !== name.toLowerCase()) throw fail(409, 'REQUEST_ID_CONFLICT', '此请求标识已用于另一项操作');
+        return;
+      }
+      if (operation === 'create') this.assertCreateQuota(owner);
+      // Internal synchronous admission hook: bind the client, acquire a trial
+      // seat and persist the job atomically, before any bridge I/O can begin.
+      beforeInsert?.();
+      this.store.db.prepare('INSERT INTO account_jobs VALUES(?,?,?,?,?,?,?,?,?)').run(id, owner.id, operation, name, 'pending', JSON.stringify(result), now, expires, expectedUuid);
+    });
+    if (raced) return this.job(owner, id);
     try {
       if (this.remote) await this.remote.writeRequest(id, request);
       else {

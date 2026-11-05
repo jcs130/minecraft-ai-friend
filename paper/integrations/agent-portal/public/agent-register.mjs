@@ -141,7 +141,16 @@ export async function joinAgent(args, output=console.log, timing={}, publicSignu
       if(identity.joinActivationAttempted){output(JSON.stringify({state:'unknown',username:identity.username,identityFile:path.resolve(file),nextAction:'status',message:'上次建号结果尚未确认；保留原身份并查询，不重复提交。'}));return 2;}
       if(!result.game?.ready){output(JSON.stringify({state:'awaiting_game_bridge',username:identity.username,identityFile:path.resolve(file),nextAction:'join',message:'建号服务暂不可用；稍后用同一命令接续，无需重新登记。'}));return 2;}
       identity.joinActivationAttempted=true;await privateWrite(file,identity,true);
-      result=await capture('activate',local);continue;
+      try { result=await capture('activate',local); }
+      catch (error) {
+        // This explicit admission rejection occurs before a game job exists.
+        // A transport error/unknown result must keep the attempted marker.
+        if (error.reason !== 'TRIAL_POOL_FULL') throw error;
+        identity=JSON.parse(await fs.readFile(file,'utf8'));
+        identity.joinActivationAttempted=false;await privateWrite(file,identity,true);
+        output(JSON.stringify({state:'awaiting_trial_capacity',username:identity.username,identityFile:path.resolve(file),nextAction:'join',message:'体验池暂满；保留原身份文件，稍后用同一命令接续。'}));return 2;
+      }
+      continue;
     }
     if(['failed','unknown','revoked'].includes(result.state)||Date.now()>=end){
       output(JSON.stringify({state:result.state,username:result.username,gameAccountCreated:false,identityFile:path.resolve(file),nextAction:'status',message:'接入身份已保存；先查询原请求的最终结果，不重新建号。'}));return 2;
