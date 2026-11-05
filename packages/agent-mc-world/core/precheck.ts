@@ -97,8 +97,6 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
   const tagged = taggedCraftChoice(bot, def.name);
   if (tagged) {
     if (tagged.recipe) return null;
-    if (bot.inventory.items().filter((stack) => stack.type === def.id)
-      .reduce((sum, stack) => sum + stack.count, 0) >= call.count) return null;
     return { level: 'hard', text: `做${label}需要 ${tagged.needs},包里凑不齐`, rule: 'craft.short' };
   }
   let all: Array<{ delta?: Array<{ id: number; count: number }> }> = [];

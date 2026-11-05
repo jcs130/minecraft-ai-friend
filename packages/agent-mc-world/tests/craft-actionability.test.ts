@@ -70,7 +70,7 @@ describe('verified inventory identities and craft correction', () => {
     r.slots[9] = null;
     const current = renderPrecheckNotes(precheckSteps(r.bot as never, [...steps] as never, deps));
     expect(current).toContain('第 3 步做木斧需要 任意木板×3');
-    expect(current).not.toContain('第 2 步做工作台'); // The confirmed table already satisfies this step.
+    expect(current).toContain('第 2 步做工作台'); // Owned output does not satisfy a new craft request.
     expect(current).toContain('未计入前面尚未执行步骤');
   });
   it('advises about carried cooked food without replacing an explicit raw-food request', () => {

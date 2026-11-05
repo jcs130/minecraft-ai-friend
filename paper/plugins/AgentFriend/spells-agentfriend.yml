@@ -14,8 +14,8 @@ selfheal:
     cooldown: 15
     cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
     str-cost: 6 shared mana
-    str-cast-self: Sacred healing restores your health.
-    str-max-health: You are already at full health.
+    str-cast-self: 圣愈术恢复了你的生命。
+    str-max-health: 你已满血。
     effects:
         hearts:
             position: target
@@ -37,7 +37,7 @@ conjure_bread:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["bread 4"]
-    str-cast-self: You conjured four loaves of bread.
+    str-cast-self: 你造出了四个面包。
 
 conjure_torch:
     spell-class: ".instant.ConjureSpell"
@@ -50,7 +50,7 @@ conjure_torch:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["torch 4"]
-    str-cast-self: You conjured four torches.
+    str-cast-self: 你造出了四个火把。
 
 conjure_oak_log:
     spell-class: ".instant.ConjureSpell"
@@ -63,7 +63,7 @@ conjure_oak_log:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["oak_log 8"]
-    str-cast-self: You conjured eight oak logs.
+    str-cast-self: 你造出了八个橡木原木。
 
 conjure_cobblestone:
     spell-class: ".instant.ConjureSpell"
@@ -76,7 +76,7 @@ conjure_cobblestone:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["cobblestone 16"]
-    str-cast-self: You conjured sixteen cobblestone.
+    str-cast-self: 你造出了十六个圆石。
 
 conjure_crafting_table:
     spell-class: ".instant.ConjureSpell"
@@ -89,7 +89,7 @@ conjure_crafting_table:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["crafting_table 1"]
-    str-cast-self: You conjured a crafting table.
+    str-cast-self: 你造出了一张工作台。
 
 conjure_chest:
     spell-class: ".instant.ConjureSpell"
@@ -102,7 +102,7 @@ conjure_chest:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["chest 1"]
-    str-cast-self: You conjured a chest.
+    str-cast-self: 你造出了一个箱子。
 
 conjure_cake:
     spell-class: ".instant.ConjureSpell"
@@ -115,7 +115,7 @@ conjure_cake:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["cake 1"]
-    str-cast-self: You conjured a cake.
+    str-cast-self: 你造出了一个蛋糕。
 
 conjure_glass:
     spell-class: ".instant.ConjureSpell"
@@ -128,4 +128,4 @@ conjure_glass:
     add-to-inventory: true
     drop-if-inventory-full: false
     items: ["glass 8"]
-    str-cast-self: You conjured eight glass blocks.
+    str-cast-self: 你造出了八块玻璃。
