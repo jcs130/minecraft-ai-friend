@@ -1,0 +1,12 @@
+.hosted-panel{margin:20px 0;padding:20px;max-width:100%;box-sizing:border-box}
+.hosted-panel h2{margin:0 0 8px;font-size:20px}.hosted-panel p{line-height:1.65;color:var(--text-muted,#9aa8ac)}
+.hosted-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.hosted-grid label,.hosted-panel form{display:grid;gap:8px}
+.hosted-panel input,.hosted-panel select,.hosted-panel textarea{width:100%;box-sizing:border-box;min-width:0;padding:12px;color:inherit;background:var(--input-bg,#172329);border:1px solid #45565c;border-radius:8px;font:inherit}
+.hosted-panel input[type=checkbox]{width:20px;height:20px;justify-self:start;accent-color:#71cdb4}
+.hosted-panel textarea{min-height:88px;resize:vertical}.hosted-wide{grid-column:1/-1}.hosted-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.hosted-panel button{min-height:40px;padding:9px 14px;cursor:pointer}.hosted-panel button:disabled{cursor:default;opacity:.55}
+.hosted-status{min-height:1.7em;white-space:pre-wrap;overflow-wrap:anywhere}.hosted-chat-list{max-height:300px;overflow:auto;display:grid;gap:10px}
+.hosted-chat-row{max-width:90%;border-radius:12px;padding:10px 14px;background:#20343b;overflow-wrap:anywhere;white-space:pre-wrap}
+.hosted-chat-row.mine{justify-self:end;background:#26463e}.hosted-chat-row small{display:block;margin-top:6px;color:#b3c7c8}.hosted-chat-row button{font-size:12px;margin-top:6px}
+.hosted-panel audio{max-width:100%;margin-top:12px}
+@media(max-width:650px){.hosted-grid{grid-template-columns:1fr}.hosted-panel{padding:14px}.hosted-actions button{flex:1;min-width:90px}}

@@ -43,6 +43,7 @@ import {createSceneObjectStorage} from './scene-object-storage.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
+import {hostingRoutes} from './hosting-routes.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -75,6 +76,7 @@ export function createPortal(config, options = {}) {
   const store = options.store || new Store(config.dataDir);
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
+  const hostedAgents=options.hostedAgents??options.hostedAgentsFactory?.({config,store,game})??null;
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const challenges = cloud ? new CloudChallenges(store,game) : new SavedChallenges(config,game,store);
   const live = new Live(config, store);
@@ -477,6 +479,17 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if(await hostingRoutes({req,res,pathname,backend:hostedAgents,browserAuth,world,jsonBody,respond,rate,
+        agentFor:async(owner,id)=>{
+          const agent=(await game.roster()).find(row=>row.id===id);
+          if(!agent||agent.historical||agent.reserved||agent.isReserved||agent.identityConflict||!store.ownedUuids(owner.id).includes(agent.playerUuid))
+            throw fail(404,'ROLE_NOT_OWNED','请在我的角色中选择本人已绑定的 Agent。');
+          return agent;
+        },channelFor:async(owner,id)=>{
+          const agent=worldView.roles(await game.roster()).get(id);
+          if(!agent||!worldView.allowed(agent,owner))throw fail(404,'CHANNEL_NOT_FOUND','该观战角色不存在或尚未开放。');
+          return agent;
+        }}))return;
       if(req.method==='POST'&&pathname==='/api/v1/auth/neko/start'){
         const session=sessionFrom(req),body=await jsonBody(req,1024);
         if(!session||req.portalOrigin.origin!==config.publicOrigin||!req.portalOrigin.secure)throw fail(400,'NEKO_AUTH_HTTPS_REQUIRED','请使用千灯纪正式 HTTPS 授权入口');
@@ -594,7 +607,7 @@ export function createPortal(config, options = {}) {
         if(req.headers['if-none-match']===`"${image.sha256}"`){res.writeHead(304,{'Cache-Control':'private, no-cache'});return res.end();}
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.bytes.length, ETag: `"${image.sha256}"`, 'Cache-Control': 'private, no-cache' }); return res.end(image.bytes);
       }
-      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config), music: music.capabilities() });
+      if (req.method === 'GET' && pathname === '/api/v1/site') return respond(res, 200, { name: config.siteName, gameAddress: config.publicGameAddress, registration: sessionData(null).allowRegistration, emailAuth: emailAuth.capabilities(), agentSkill, agentClients, publicOrigin: config.publicOrigin || null, media: publicMedia(config), music: music.capabilities(), hosting:{enabled:!!hostedAgents,requiresOwnKey:true} });
       if (req.method === 'GET' && pathname === '/api/v1/game-capabilities') return respond(res, 200, await accounts.capabilities());
       if (req.method === 'GET' && pathname === '/api/v1/server') return respond(res, 200, await game.serverSummary());
       if (req.method === 'GET' && pathname === '/api/v1/roster') {

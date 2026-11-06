@@ -161,6 +161,8 @@ export interface WorldConsoleDecl {
 }
 /** Execution environment port; callers can supply an alternative implementation. */
 export interface World {
+  /** Backend body guide; absent worlds keep the existing client instructions. */
+  environment?(): string;
   id: string;
   envPromptVars(): Record<string, string> | null | Promise<Record<string, string> | null>;
   tools(): ToolDef[];

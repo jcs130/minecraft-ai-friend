@@ -1,0 +1,52 @@
+{
+  "id": "numen-hosting-20261106-r1",
+  "state": "candidate",
+  "gameRestarted": false,
+  "websitePublished": false,
+  "ordinaryRolesKeepOriginalUuid": true,
+  "classicNumenMigrated": false,
+  "existingMineflayerRetained": true,
+  "requiresOwnKey": true,
+  "nativeBase": {
+    "repository": "https://github.com/Dwinovo/minecraft-numen",
+    "branch": "1.21.1",
+    "commit": "19c8710b014260bb810dd0fe8f85f054fb6decf5",
+    "patchSha256": "f6a2291e62841c3e53ab23796adcb091463dc36ee5d7065ead7f22f1c236e862",
+    "minecraft": "1.21.1",
+    "license": "LGPL-3.0-only"
+  },
+  "artifacts": [
+    {
+      "file": "numen_hosted_api-paper-1.21.1-0.1.4-ac28020de58f.jar",
+      "sha256": "d6a466b789f2ca61e05c6c1ae4742933bd0456078c6122b1f74f46d13de0ee3a"
+    },
+    {
+      "file": "numen_hosted-paper-1.21.1-0.1.4-7929ab0c5545.jar",
+      "sha256": "d673401c4b8b2ca853c02a6b2d69aaa2fcc5bc8900f7484b7caa8d575251ad26"
+    },
+    {
+      "file": "qiandengji-hosted-bridge-0.1.0-r3.jar",
+      "sha256": "6799afd2640036205fea94a46ad92048791f07c8e747821d361cbd4eae1a98da"
+    }
+  ],
+  "checks": {
+    "hosting": 51,
+    "nativeNeoForge": 448,
+    "nativeFabric": 447,
+    "nativeHosted": 6,
+    "cloudImage": 49,
+    "portalFullPassed": 476,
+    "portalExistingSkipped": 3,
+    "portalFinalUi": 9,
+    "coreFullPassed": 2930,
+    "coreExistingSkipped": 8,
+    "coreControlledCases": 60
+  },
+  "limitations": [
+    "real user model account not tested",
+    "real microphone and listening require manual acceptance",
+    "existing play manual control remains Mineflayer",
+    "classic Numen roles require a separate migration plan"
+  ],
+  "gameModificationAuthorized": true
+}
