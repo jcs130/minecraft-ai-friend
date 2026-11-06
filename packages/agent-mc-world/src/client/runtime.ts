@@ -56,7 +56,7 @@ export interface MinecraftClientOptions {
 
 export type ClientEnvironment = World & {
   requestFacts?(): unknown;
-  connectionReadiness?(): { ready: boolean; phase: string } | null;
+  connectionReadiness?(): { ready: boolean; phase: string; disconnectStopsBody?: boolean } | null;
 };
 
 /** The caller owns reasoning, personal memory and wakeups. The client owns game receipts and an optional game notebook. */
@@ -278,7 +278,8 @@ export class MinecraftAgentClient {
     return { profile: this.profile, toolPrefix: this.toolPrefix, phase: this.phase, run: this.journal.run, latestCursor: this.journal.store.latestCursor(),
       learning:this.learning.status(),
       connection: connection && typeof connection.ready === 'boolean' && typeof connection.phase === 'string'
-        ? { ready: connection.ready, phase: connection.phase } : null,
+        ? { ready: connection.ready, phase: connection.phase,
+          ...('disconnectStopsBody' in connection && connection.disconnectStopsBody === false ? {disconnectStopsBody:false} : {}) } : null,
       lamps: console?.lamps ?? [], links: console?.links ?? [],
       facts: this.phase === 'started' ? this.requestFacts() : null };
   }
@@ -323,11 +324,11 @@ export class MinecraftAgentClient {
 
   async environment(options: { turnOwnership?: 'caller' | 'host' } = {}): Promise<string> {
     const { readFileSync } = await import('node:fs');
-    let text = this.options.cfg.provider === 'java-client' ? JAVA_CLIENT_ENVIRONMENT
+    let text = this.world.environment?.() ?? (this.options.cfg.provider === 'java-client' ? JAVA_CLIENT_ENVIRONMENT
       : readFileSync(new URL('./ENV_PROMPT.md', import.meta.url), 'utf8')
       + (this.options.cfg.perception?.mineralVision === true
         ? '\nMineral vision is explicitly enabled: bounded block queries may include occluded loaded mineral cells. This is chunk data, not firsthand sight; label it accordingly. Physical actions retain their safety checks.\n'
-        : '\nMineral vision is disabled. Occluded mineral cells remain unknown; do not infer a vein from received chunk data.\n');
+        : '\nMineral vision is disabled. Occluded mineral cells remain unknown; do not infer a vein from received chunk data.\n'));
     if (options.turnOwnership === 'host') {
       const caller = 'Use mc_protocol to mark actual decision turns and read current facts.';
       const host = 'Your host opens/closes decision turns and acknowledges tool barriers. Do not call begin_turn, end_turn or ack_barrier, invent another turn id, or repair a host turn yourself. Use mc_protocol for the advertised reads and cancellations; select game tools for game actions.';

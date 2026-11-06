@@ -200,6 +200,10 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
     tools = []
     native = any(tool["name"] == "mc_do" and "operation" in tool.get("inputSchema", {}).get("properties", {}) for tool in catalogue)
     direct = DIRECT_TOOLS | ({"mc_capabilities", "mc_operations", "mc_result", "mc_wait", "mc_cancel", "mc_notices"} if native else set())
+    # A Numen body advertises its own compact catalog/observe/call/result entry.
+    # Keep its real schema visible instead of hiding it behind Mineflayer tools.
+    if any(tool["name"] == "mc_numen" for tool in catalogue):
+        direct.add("mc_numen")
     available = sorted(tool["name"] for tool in catalogue if tool["name"] not in HIDDEN_TOOLS)
     advanced = [name for name in available if name not in direct]
     if context_mode == "full":
@@ -1589,6 +1593,10 @@ class Controller:
 
     async def observe_queue(self):
         # Native readout is authoritative. Do not infer execution from inbox order.
+        if any(tool["name"] == "mc_numen" for tool in self.bridge.tools):
+            observed = outcome(await self.bridge.call("mc_numen", {"op": "observe"}))
+            self.publish(native_body=observed, facts=await self.protocol("facts"), pending=list(self.pending.values()))
+            return
         self.publish(native_queue=outcome(await self.bridge.call("mc_queue", {})),
                      facts=await self.protocol("facts"), pending=list(self.pending.values()))
 
@@ -2507,8 +2515,15 @@ class Controller:
                         raise RuntimeError("Disconnect not confirmed")
                     # Generic core disconnect explicitly stops its own action queue.
                     # This must not be reused for Numen, whose remote body stays alive.
-                    self.persist(pending=[])
-                    self.publish(disconnect_confirmed=True, pending=[])
+                    if (status.get("connection") or {}).get("disconnectStopsBody") is False:
+                        # Remote hosting must fence and confirm the server-side
+                        # body separately. Closing this SDK is not that receipt.
+                        self.persist(uncertain=bool(self.pending or self.inflight_request))
+                        self.publish(disconnect_confirmed=True, body_stop_confirmed=False,
+                                     pending=list(self.pending.values()))
+                    else:
+                        self.persist(pending=[])
+                        self.publish(disconnect_confirmed=True, pending=[])
                 except Exception:
                     if self.pending or self.inflight_request:
                         self.persist(uncertain=True)

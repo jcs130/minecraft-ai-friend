@@ -1,0 +1,99 @@
+--- a/gateway/app.py
++++ b/gateway/app.py
+@@ -344,6 +344,7 @@
+ # /v1/responses with X-Harness-Internal == this key + X-Harness-Org/X-Harness-Member, so it doesn't
+ # need a user-minted API key. Public callers use Authorization: Bearer sk-hr-... (per-org API keys).
+ INTERNAL_KEY = os.environ.get("HARNESS_INTERNAL_KEY", "")
++HOSTED_BYOK_ONLY = os.environ.get("HR_HOSTED_BYOK_ONLY", "0") == "1"
+ # LIVE-B: verified identity on the internal path. The org/member headers used to be TRUSTED
+ # verbatim behind the internal key — but the BFF forwards them from the BROWSER, so any caller of
+ # the web app could self-assert another org's identity. Fix: when a platform login JWT (engine-
+@@ -987,7 +988,7 @@
+ 
+ 
+ async def _vault_put(tenant: str, name: str, value: str) -> None:
+-    await BACKING.secrets.put(tenant, name, value)
++    await BACKING.secrets.put(tenant, name, value, require_encryption=HOSTED_BYOK_ONLY)
+ 
+ 
+ async def _vault_delete(tenant: str, name: str) -> None:
+@@ -1020,7 +1021,7 @@
+ def _tenants_for(org: str | None) -> list[str]:
+     """Resolution order: the org's own keys first (bill to the org), then the shared pool."""
+     t = _org_tenant(org)
+-    return ([t] if t else []) + [GLOBAL_TENANT]
++    return ([t] if t else []) + ([] if HOSTED_BYOK_ONLY else [GLOBAL_TENANT])
+ 
+ 
+ async def _get_connection(org: str | None, name: str) -> tuple[dict | None, str | None]:
+@@ -5588,7 +5589,14 @@
+ 
+ 
+ # ── connection admin (org admins manage their own provider connections) ──────────
++@app.get("/internal/hosted-byok-capabilities", dependencies=[Depends(_internal_only)])
++async def hosted_byok_capabilities() -> dict:
++    return {"schema": "qiandengji-hosted-byok/v1", "isolatedByok": HOSTED_BYOK_ONLY and bool(os.environ.get("HR_SECRET_KEY")),
++            "sharedFallback": not HOSTED_BYOK_ONLY}
++
++
+ class ConnBody(BaseModel):
++    disabled_tools: str | None = None
+     backend: str
+     provider: str
+     model: str | None = None
+@@ -8178,6 +8186,14 @@
+ 
+ 
+ async def _resolve_model_policy(requested: str, hv: dict | None, backend: str, org: str = "") -> str:
++    if HOSTED_BYOK_ONLY:
++        chain = await _resolve_chain(org, backend, None)
++        if len(chain) != 1:
++            raise HTTPException(400, "own provider connection required; shared fallback is disabled")
++        connection, _ = await _get_connection(org, chain[0])
++        if not connection or not connection.get("api_key") or connection.get("model") != requested:
++            raise HTTPException(400, "requested model must match the owner's configured model")
++        return requested
+     """The model this turn runs: the request's when this backend can serve it, the harness default
+     when the request names none (or a bare family name).
+ 
+@@ -8765,7 +8781,7 @@
+             pass
+     # Model→integration mapping (global token-provider routing): a mapped model runs on its
+     # integration FIRST; the backend's policy chain stays as the failure fallback.
+-    mapped_conn = await _mapped_integration_conn(backend, model_req)
++    mapped_conn = None if HOSTED_BYOK_ONLY else await _mapped_integration_conn(backend, model_req)
+     candidates: list[tuple[str, dict | None]] = ([(mapped_conn["name"], mapped_conn)] if mapped_conn else [])
+     candidates += [(n, None) for n in chain]
+     if backend == "codex" and model_req:
+@@ -8789,11 +8805,11 @@
+         elif model_req not in seen:
+             await _vertex_upsert(sid, {"models_seen": ",".join(seen + [model_req])})
+     # Independent of which chat connection wins below: images are usually a different provider.
+-    image_auth = await _image_auth(sid, backend)
++    image_auth = None if HOSTED_BYOK_ONLY else await _image_auth(sid, backend)
+     skills, skills_suppressed = _without_shadowing_image_skill(skills, skills_suppressed, image_auth, mcp_servers)
+     if "plugins" in rec:        # the record says what the turn was given, so after that change
+         rec["plugins"].update(skills=[s_.get("name") for s_ in skills], skills_off=skills_suppressed)
+-    vision_auth = await _vision_auth(sid, backend) if backend == "hermes" else None
++    vision_auth = await _vision_auth(sid, backend) if backend == "hermes" and not HOSTED_BYOK_ONLY else None
+     for name, pre in candidates:
+         conn, src = (pre, "integration") if pre is not None else await _get_connection(org, name)
+         if not conn:
+@@ -8803,7 +8819,7 @@
+         # (validated against the integration's model list at save time) — the family heuristic
+         # reads the RUNNER provider (e.g. openai-api for a TokenRouter aggregator) and would
+         # wrongly reject non-gpt families, so it applies to chain connections only.
+-        if pre is None and not _conn_serves(conn, model_req):
++        if pre is None and not HOSTED_BYOK_ONLY and not _conn_serves(conn, model_req):
+             # Multi-family backend (hermes): this connection's provider can't run the requested
+             # model's family — skipping is the honest move (running it would silently substitute
+             # the connection's default model).
+@@ -9981,7 +9997,7 @@
+     # here rejected the turn before the executor could ever reach the integration — so a user who
+     # had just added their own key was told there was no connection for the backend, which was
+     # both wrong and unactionable. Only refuse when NOTHING can serve it.
+-    if not chain and not await _mapped_integration_conn(backend, model_req):
++    if not chain and (HOSTED_BYOK_ONLY or not await _mapped_integration_conn(backend, model_req)):
+         raise HTTPException(400, f"no provider configured for backend '{backend}'. Add an "
+                                  f"integration for a provider that serves '{model_req or backend}', "
+                                  f"or configure a connection policy")

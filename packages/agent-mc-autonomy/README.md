@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+The Numen hosting source candidate accepts an explicitly advertised `mc_numen`
+body through the existing controller and injected bridge. It uses the actual
+native tool catalog and observation instead of inventing a Mineflayer queue.
+Disconnecting a remote body retains pending work when the core reports
+`disconnectStopsBody=false`; cancellation still needs a server receipt. This
+does not add another decision loop or activate any hosted role automatically.
+See the [hosting integration](../../paper/integrations/numen-hosting/README.md).
+
 Version 0.2.153 consumes canonical core call-capability inspection and versioned
 work resolution through the existing MCP bridge. `inspect_call` never dispatches
 the inspected operation; legacy cores remain explicitly unknown. `resolve_work`

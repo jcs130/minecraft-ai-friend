@@ -43,6 +43,7 @@ export { createServerToolRouter, SERVER_TOOL_PORT_TOOL } from './client/server-t
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions } from './client/message-inbox.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
+export { NumenClientWorld, type NumenBodyPort } from './client/numen-client.ts';
 export type { JavaClientServices } from './client/java-memory.ts';
 export * from './contracts/java-client.ts';
 export { itemCustomName } from '../core/item-display.ts';

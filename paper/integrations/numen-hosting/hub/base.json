@@ -1,0 +1,6 @@
+{
+  "image": "harnessrouter/harnessrouter@sha256:1e9fe5373b1aaaa8946d62b7ca241a3e8d4c1312b5beb603af5656f760036e10",
+  "sourceSha256": "cc929b03ae356dc1e21a815fb5ebb6684cc492ca6daf822b6e630b63726d233c",
+  "patchedSha256": "f8cba49b5da1e140c141d03cba14b035d94eeab5771a0d2ef7151fc495441f94",
+  "independentInstanceOnly": true
+}

@@ -1,8 +1,18 @@
 import { loadConfig } from './config.mjs';
 import { createPortal } from './server.mjs';
+import {isAbsolute} from 'node:path';
+import {pathToFileURL} from 'node:url';
 
 const config = loadConfig();
-const portal = createPortal(config);
+// Operator assembly only, never a URL/path accepted by the website. With no
+// adapter the existing website stays unchanged and the unfinished UI is hidden.
+let hostedAgentsFactory;
+if(process.env.PORTAL_HOSTING_ADAPTER){
+  if(!isAbsolute(process.env.PORTAL_HOSTING_ADAPTER))throw new Error('PORTAL_HOSTING_ADAPTER must be an absolute local path');
+  ({hostedAgentsFactory}=await import(pathToFileURL(process.env.PORTAL_HOSTING_ADAPTER).href));
+  if(typeof hostedAgentsFactory!=='function')throw new Error('Hosting adapter must export hostedAgentsFactory');
+}
+const portal = createPortal(config,{hostedAgentsFactory});
 await portal.ready;
 portal.server.listen(config.port, config.host, () => {
   console.log(`${config.siteName} Agent Portal: http://${config.host}:${portal.server.address().port}`);

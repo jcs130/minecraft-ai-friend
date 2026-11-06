@@ -1,0 +1,12 @@
+{
+  "grantKey": "GENERATE_IN_PRIVATE_STORAGE_32_RANDOM_BYTES_BASE64",
+  "serviceKey": "GENERATE_IN_PRIVATE_STORAGE_32_RANDOM_BYTES_BASE64",
+  "vaultKey": "GENERATE_IN_PRIVATE_STORAGE_32_RANDOM_BYTES_BASE64",
+  "nativeControlKey": "GENERATE_IN_PRIVATE_STORAGE_32_RANDOM_BYTES_BASE64",
+  "hubInternalKey": "GENERATE_SEPARATE_PRIVATE_HUB_INTERNAL_KEY",
+  "hubSecretKey": "GENERATE_SEPARATE_PRIVATE_HUB_ENCRYPTION_KEY",
+  "dataRoot": "/absolute/private/hosting-data",
+  "python": "/absolute/venv/python",
+  "voiceTokenFile": "/absolute/private/voice-transport-token",
+  "defaultVoice": "configured-voice-id"
+}

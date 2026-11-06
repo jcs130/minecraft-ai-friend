@@ -595,7 +595,7 @@ def test_multiple_mutating_calls_are_rejected_as_a_whole_without_freezing_other_
     assert controller.inflight_request is None and not bridge.closed
 
 
-@pytest.mark.parametrize("confirmed_disconnect", [True, False])
+@pytest.mark.parametrize("confirmed_disconnect", [True, False, "remote_body"])
 def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_module, tmp_path, run_async, monkeypatch, confirmed_disconnect):
     decisions, polls, stopped = [], [], False
 
@@ -609,6 +609,8 @@ def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_modu
     original_call = bridge.call
 
     async def call(name, args, **kwargs):
+        if name == "mc_connection" and args.get("action") == "disconnect" and confirmed_disconnect == "remote_body":
+            return packed({"phase": "disconnected", "connection": {"ready": False, "phase": "disconnected", "disconnectStopsBody": False}})
         if name == "mc_connection" and args.get("action") == "disconnect" and not confirmed_disconnect:
             return packed({"phase": "unconfirmed"})
         return await original_call(name, args, **kwargs)
@@ -636,7 +638,12 @@ def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_modu
     assert bridge.closed
     state = json.loads((tmp_path / "host-state.json").read_text())
     assert state["stopped"] is True
-    if confirmed_disconnect:
+    if confirmed_disconnect == "remote_body":
+        assert state["pending"] and published["pending"]
+        assert state["uncertain"] is True
+        assert published["body_stop_confirmed"] is False
+        assert not published.get("native_outcomes")
+    elif confirmed_disconnect:
         assert state["pending"] == [] and published["pending"] == []
         assert published["disconnect_confirmed"] is True
         # Disconnect is a lifecycle receipt, never invented native completion.

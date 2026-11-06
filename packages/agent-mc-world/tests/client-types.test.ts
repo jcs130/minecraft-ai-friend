@@ -31,6 +31,10 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     const selectedSteps = extension.parseSteps([selectedAttack]);
     void selectedSteps;
     import { readMinecraftKnowledge, KNOWLEDGE_TOOL, withFactState, type FactState } from '../dist/types/src/client/index.js';
+    import {NumenClientWorld, type NumenBodyPort} from '../dist/types/src/client/index.js';
+    declare const numenPort: NumenBodyPort;
+    const nativeNumen = new NumenClientWorld(numenPort);
+    void nativeNumen;
     import type { FactPart } from '../dist/types/src/contracts/index.js';
     const semantic: FactState = { position: [1,64,2], mana: null, lastCastAt: 'dated' };
     const dated: FactPart = withFactState({key:'state',text:'raw dated evidence'}, semantic);

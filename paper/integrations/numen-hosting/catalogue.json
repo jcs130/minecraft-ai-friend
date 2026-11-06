@@ -1,0 +1,10 @@
+{
+  "providers": [
+    {"id":"deepseek","label":"DeepSeek 官方 API","connection":{"protocol":"chat","base_url":"https://api.deepseek.com/v1","ctx":32768,"max_tokens":4096},"hub":{"provider":"openai-api","base_url":"https://api.deepseek.com/v1","wire_api":"chat"},"models":[{"id":"deepseek-flash","label":"DeepSeek Flash"},{"id":"deepseek-v4-pro","label":"DeepSeek V4 Pro"}]},
+    {"id":"qwen-cn","label":"通义千问（北京按量 API）","connection":{"protocol":"chat","base_url":"https://dashscope.aliyuncs.com/compatible-mode/v1","ctx":32768,"max_tokens":4096},"hub":{"provider":"openai-api","base_url":"https://dashscope.aliyuncs.com/compatible-mode/v1","wire_api":"chat"},"models":[{"id":"qwen-plus","label":"Qwen Plus"},{"id":"qwen3-coder-plus","label":"Qwen3 Coder Plus"}]}
+  ],
+  "harnesses": [
+    {"id":"native","label":"Numen 原生循环","mode":"numen","providers":["deepseek","qwen-cn"]},
+    {"id":"opencode","label":"Harness Hub · OpenCode + MC 核心","mode":"harness","providers":["deepseek","qwen-cn"]}
+  ]
+}

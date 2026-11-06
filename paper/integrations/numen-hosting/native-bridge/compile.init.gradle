@@ -1,0 +1,13 @@
+gradle.projectsEvaluated {
+    def target=gradle.rootProject.findProject(':numen-api:neoforge')
+    if(target==null)return
+    target.tasks.register('compileHostedBridge',JavaCompile) {
+        dependsOn target.tasks.named('compileJava')
+        source target.fileTree(System.getProperty('hostingBridgeSource')) {include '**/*.java'}
+        classpath=target.sourceSets.main.compileClasspath
+        destinationDirectory=target.file(System.getProperty('hostingBridgeOutput'))
+        options.encoding='UTF-8'
+        options.compilerArgs.add('-proc:none')
+        javaCompiler=target.javaToolchains.compilerFor {languageVersion=JavaLanguageVersion.of(21)}
+    }
+}

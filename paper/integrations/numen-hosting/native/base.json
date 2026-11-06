@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Dwinovo/minecraft-numen",
+  "branch": "1.21.1",
+  "commit": "19c8710b014260bb810dd0fe8f85f054fb6decf5",
+  "patchSha256": "f6a2291e62841c3e53ab23796adcb091463dc36ee5d7065ead7f22f1c236e862",
+  "minecraft": "1.21.1",
+  "license": "LGPL-3.0-only"
+}
