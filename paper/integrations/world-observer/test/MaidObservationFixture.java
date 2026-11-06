@@ -42,7 +42,7 @@ public final class MaidObservationFixture extends JavaPlugin {
             for(int i=0;i<models.length;i++){
                 Entity e=BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse("touhou_little_maid:maid")).create(level);
                 e.getClass().getMethod("setModelId",String.class).invoke(e,models[i]);((Mob)e).setNoAi(true);
-                e.moveTo((i-1)*2.5,80,0,0,0);e.setCustomName(net.minecraft.network.chat.Component.literal("ԭģ������ "+i));e.setCustomNameVisible(true);level.addFreshEntity(e);maids.add(e);
+                e.moveTo((i-1)*2.5,80,0,0,0);e.setCustomName(net.minecraft.network.chat.Component.literal("原模型联测 "+i));e.setCustomNameVisible(true);level.addFreshEntity(e);maids.add(e);
             }
         } else if(action.equals("sit")||action.equals("stand")){
             for(Entity e:maids)e.getClass().getMethod("setInSittingPose",boolean.class).invoke(e,action.equals("sit"));

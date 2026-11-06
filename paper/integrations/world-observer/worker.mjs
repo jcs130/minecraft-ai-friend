@@ -95,8 +95,8 @@ export class ObservationWorker {
           source.job=job;
         }
         for(const id of [...this.sources.keys()])if(!seen.has(id))await this.retire(id);
-        this.lastPortalAt=this.now();this.report('��ս��Ȩ�����ӡ�');
-      }catch(error){if(!this.closed){this.recordFailure('authority',error);this.report('��ս��Ȩ�ݲ����ã�ֹͣ���ڻ��档');}}
+        this.lastPortalAt=this.now();this.report('观战授权已连接。');
+      }catch(error){if(!this.closed){this.recordFailure('authority',error);this.report('观战授权暂不可用，停止过期画面。');}}
   }
   ensurePublisher(source) {
     if(source.publisher||source.publisherPending)return;
@@ -112,7 +112,7 @@ export class ObservationWorker {
       const ended=receipt=>{if(source.publisher===publisher){source.publisher=null;if(!this.closed&&this.sources.get(source.job.id)===source&&!source.publisherAbort.signal.aborted)this.recordFailure('publisher',Error(publisher.state?.().lastError||receipt?.reason||'SPECTATOR_TRANSPORT_CLOSED'));}};
       void publisher.done.then(ended,ended);
     }).catch(async(error)=>{
-      if(this.sources.get(source.job.id)===source){this.recordFailure('publisher',error);await this.retire(source.job.id);this.report('��ս�����ݲ����ã��ȴ����½�ͨ��');}
+      if(this.sources.get(source.job.id)===source){this.recordFailure('publisher',error);await this.retire(source.job.id);this.report('观战发布暂不可用，等待重新接通。');}
     }).finally(()=>{source.publisherPending=null;});
   }
   async step() {
@@ -175,9 +175,9 @@ export class ObservationWorker {
           const status=source.view.host.status();
           if(status.viewer.reason)throw Object.assign(Error('OBSERVER_SCENE_UNAVAILABLE'),{sceneReason:status.viewer.reason});
           if(status.viewer.loadedColumns>=9&&status.identity.confirmed)this.ensurePublisher(source);
-        }catch(error){this.recordFailure('scene',error);await this.retire(source.job.id);this.report('��ս������Ҫ���¼��أ��ɻ�����ֹͣ��');}
+        }catch(error){this.recordFailure('scene',error);await this.retire(source.job.id);this.report('观战场景需要重新加载，旧画面已停止。');}
       }
-    }catch(error){for(const source of active)if(this.sources.get(source.job.id)===source)await this.retire(source.job.id);if(!this.closed){this.recordFailure('sample',error);this.report('��Ϸ�����ݲ����ã��ȴ�����ָ���');}}
+    }catch(error){for(const source of active)if(this.sources.get(source.job.id)===source)await this.retire(source.job.id);if(!this.closed){this.recordFailure('sample',error);this.report('游戏场景暂不可用，等待服务恢复。');}}
     finally{this.sampleDurationMs=Math.round((performance.now()-started)*100)/100;}
   }
   async close(){if(this.closed)return;this.closed=true;this.lifecycle.abort();for(const id of [...this.sources.keys()])await this.retire(id);}
