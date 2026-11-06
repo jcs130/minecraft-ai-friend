@@ -1,0 +1,32 @@
+{
+  "status": "deployed",
+  "version": "0.1.7-agent",
+  "deployedAt": "2026-11-06T23:59:25.3921606+08:00",
+  "sourcePullRequest": 94,
+  "sourceMergeCommit": "91cb731bb0e992cc6c15ed0341af874038c30f95",
+  "sourceCommit": "f994b9c439461a70e90ffc7516805f5061154936",
+  "candidateSha256": "a1bc43ffba96296bbe037d0703ab6bad3ea4a71aba74731b569a8ff2e74c0ad9",
+  "normalRestart": true,
+  "maintenanceNoticesSeconds": [
+    180,
+    60,
+    10
+  ],
+  "coldBackupsVerified": 2,
+  "isolatedChecksPassed": 43,
+  "sourceCiPassed": 6,
+  "formalStartupChecksPassed": 10,
+  "unchangedCharacterFiles": 791,
+  "originalCredentialRowsPreserved": 76,
+  "originalGoddessJobsRestored": 7,
+  "unrelatedPluginsAndModsUnchanged": true,
+  "postReconnectTps": 20,
+  "nativeCameraReady": true,
+  "originalMaidDeathEvidenceRecovered": true,
+  "automaticResurrectionPerformed": false,
+  "publicSkillOrClientDownloadChanged": false,
+  "realOwnerClientLoadVerified": false,
+  "realOwnerGameplayVerified": false,
+  "clientCoordinationUrl": "https://github.com/jcs130/cortico-world-qiandengji/pull/6#issuecomment-6689244512",
+  "rollbackPolicy": "Code only; preserve original maid, tombstone, player items, lifecycle facts and operation receipts. Consumed maintenance entry must not be replayed."
+}
