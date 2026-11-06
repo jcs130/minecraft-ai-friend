@@ -1,6 +1,6 @@
 ## 2026-11-06 金币商城与回收入口候选，未部署
 
-商城继续共用 Vortex/Vault 金币与原日志；新中文容器、罗盘入口、trade shop/recycle 短文本及满包引导已通过409项 CLI、31项隔离操作和3项重启保存。原 arena JSON 保持，不回滚或迁移玩家金币、物品、职业。候选未安装，官网下载和远端客户端未更新；真实客户端及观战视觉另验。见 docs/RPG_SHOP_20261106.md 与 manifests/rpg-shop-candidate-20261106.json；部署按本批授权、预告和 E/F 当前备份执行。
+商城继续共用 Vortex/Vault 金币与原日志；新中文容器、罗盘入口、trade shop/recycle 短文本及满包引导已通过409项 CLI、37项隔离操作和3项重启保存。原 arena JSON 保持，不回滚或迁移玩家金币、物品、职业。候选未安装，官网下载和远端客户端未更新；真实客户端及观战视觉另验。见 docs/RPG_SHOP_20261106.md 与 manifests/rpg-shop-candidate-20261106.json；部署按本批授权、预告和 E/F 当前备份执行。
 
 ## 2026-11-06 语音连接、附近转写及配套观战已部署
 

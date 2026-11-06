@@ -26,6 +26,21 @@ const open=async(q,title)=>{if(bot.currentWindow)bot.closeWindow(bot.currentWind
 const click=async(slot,title)=>{const id=bot.currentWindow.id;await bot.clickWindow(slot,0,0);return until(()=>bot.currentWindow&&bot.currentWindow.id!==id&&title.test(JSON.stringify(bot.currentWindow.title))&&bot.currentWindow,'click '+slot);};
 const close=async()=>{if(bot.currentWindow)bot.closeWindow(bot.currentWindow);await sleep(300);};
 const bagItem=slot=>bot.currentWindow?bot.currentWindow.slots[slot<9?bot.currentWindow.inventoryEnd-9+slot:bot.currentWindow.inventoryStart+slot-9]:bot.inventory.slots[slot<9?36+slot:slot];
+async function pricesCannotFundCraftedGear(){
+ const lines=await ask('/mycli arena shop list');
+ const offers=lines.split('\n').filter(l=>l.startsWith('MC_ARENA_ECONOMY ')).map(l=>JSON.parse(l.slice(17)));
+ const each=id=>{const row=offers.find(o=>o.offerId===id);assert(row?.success);return row.unitPrice/row.item.quantity;};
+ const wood=each('planks'),stone=each('cobblestone');report.craftedGearPrices=[];
+ // Vanilla sticks: two planks yield four sticks. Fractional input costs are conservative;
+ // whole shop packs/recipes can only cost more. Query actual server resale quotes, never sell.
+ for(const [id,planks,rocks] of [['wooden_sword',2.5,0],['wooden_axe',4,0],['wooden_pickaxe',4,0],['stone_sword',.5,2],['stone_axe',1,3],['stone_pickaxe',1,3]]){
+  await rc('minecraft:item replace entity '+bot.username+' inventory.0 with '+id);
+  const q=await json('/mycli trade recycle quote bag 9 1 --json');assert(q.success);
+  const cost=planks*wood+rocks*stone;report.craftedGearPrices.push({id,minimumMaterialCost:cost,recycleCredit:q.price});
+  check('buy-craft-recycle cannot create gold: '+id,cost>=q.price);
+ }
+ await rc('qduse emptybag '+bot.username);
+}
 try{
  const plugins=await rc('plugins');assert(plugins.includes('§aAgentFriend')&&plugins.includes('§aQiandengjiRpg')&&plugins.includes('§aVortexRPG'),'all three real RPG plugins must be enabled before testing');
  bot=await connect('a');
@@ -33,6 +48,8 @@ try{
    const s=await ask('/mycli trade shop list');
    report.baselineResponse=s.slice(0,2000);
    check('recommended shop command exists and returns concise priced text',s.includes('金币商城')&&s.includes('torches')&&!s.includes('serializedItemBase64'));
+ }else if(mode==='pricing'){
+   await pricesCannotFundCraftedGear();
  }else if(mode==='cold'){
    const old=JSON.parse(await fs.readFile(path.join(stage,'shop-candidate-'+tag+'.json'),'utf8'));
    check('bank survives normal restart',await wallet()===old.finalBalance);
@@ -40,6 +57,7 @@ try{
    await rc('qduse mana '+bot.username+' 20');const w=await open('/mycli arena stash page 1',/个人|奖励|试炼/);
    check('purchased supplies survive restart',w.slots.slice(0,w.inventoryStart).some(i=>i?.name==='torch'&&i.count===32));await close();
  }else{
+   await pricesCannotFundCraftedGear();
    await rc('qduse coins '+bot.username+' 200.25');const before=await wallet();check('synthetic fixture funds the real Vault bank',before>=200.25);
    const s=await ask('/mycli trade shop list');check('concise Chinese shop exposes supplies and executable next step',s.includes('火把')&&s.includes('torches')&&s.includes('trade shop buy')&&!s.includes('serializedItemBase64')&&!s.includes('MC_ARENA_ECONOMY'));
    check('browsing never spends money',await wallet()===before);

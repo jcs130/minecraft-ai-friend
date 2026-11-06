@@ -73,7 +73,8 @@ final class ArenaEconomy implements Listener {
             new Offer("diamond_leggings", Material.DIAMOND_LEGGINGS, 1, 46),
             new Offer("diamond_boots", Material.DIAMOND_BOOTS, 1, 34),
             new Offer("torches", Material.TORCH, 32, 4),
-            new Offer("planks", Material.OAK_PLANKS, 32, 4),
+            // Keep bought wood above the existing wooden-gear resale value, including crafted sticks.
+            new Offer("planks", Material.OAK_PLANKS, 32, 64),
             new Offer("cobblestone", Material.COBBLESTONE, 32, 2),
             new Offer("glass", Material.GLASS, 16, 4),
             new Offer("ladders", Material.LADDER, 16, 3),
