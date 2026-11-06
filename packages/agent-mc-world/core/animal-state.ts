@@ -5,6 +5,7 @@ export interface NamedStack { name?: string }
 
 export interface FactEntity {
   id?: number;
+  uuid?: string;
   name?: string;
   metadata?: unknown[];
 }
@@ -26,6 +27,23 @@ export function metaOf(bot: FactBot, entity: FactEntity, key: string): unknown {
   const keys = bot.registry?.entitiesByName?.[name]?.metadataKeys ?? [];
   const at = keys.indexOf(key);
   return at >= 0 ? entity.metadata?.[at] : undefined;
+}
+
+/** Received custom names are identity data, not entity types or proof of ownership. */
+export function entityCustomName(bot: FactBot, entity: FactEntity): string | null {
+  const text = minecraftTextComponent(metaOf(bot, entity, 'custom_name'))
+    .replace(/§[0-9a-fk-or]/gi, '').replace(/[\r\n\t\u0000-\u001f]/g, ' ').trim().slice(0, 160);
+  return text || null;
+}
+
+export function entityIdentityNote(bot: FactBot, entity: FactEntity): string {
+  const notes: string[] = [];
+  if (Number.isInteger(entity.id)) notes.push(`entityId=${entity.id}`);
+  const name = entityCustomName(bot, entity);
+  if (name) notes.push(`名字「${name}」`);
+  // UUIDs correlate named companions with server receipts across entity-ID changes.
+  if (name && entity.uuid) notes.push(`UUID=${entity.uuid}`);
+  return notes.join('，');
 }
 
 /** 可驯服实体与对应道具。消耗道具只能证明使用发生，驯服结果须读取主人元数据。 */
@@ -133,9 +151,8 @@ export function animalStateNote(bot: FactBot, entity: FactEntity): string {
     : type === 'animal' || type === 'water_creature' || type === 'ambient';
   if (!animal) return '';
   const notes: string[] = [];
-  if (Number.isInteger(entity.id)) notes.push(`entityId=${entity.id}`);
-  const customName = minecraftTextComponent(metaOf(bot, entity, 'custom_name'));
-  if (customName) notes.push(`名字「${customName}」`);
+  const identity = entityIdentityNote(bot, entity);
+  if (identity) notes.push(identity);
   const baby = metaOf(bot, entity, 'baby');
   if (typeof baby === 'boolean') notes.push(baby ? '幼体' : '成年');
   const health = metaOf(bot, entity, 'health');

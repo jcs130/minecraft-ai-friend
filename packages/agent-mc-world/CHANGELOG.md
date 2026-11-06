@@ -1,3 +1,9 @@
+## Unreleased
+
+- Preserve protocol-observed custom names and UUIDs for named non-animal entities in visual facts and interaction receipts, without changing their target type or inferring ownership.
+- Deliver named neutral and owned-pet deaths with structured identity and an appropriate wake-up trigger; ordinary combat-target receipts retain their existing ownership and notification behavior.
+- Stop treating NPC button interfaces carried by generic chest packets as evidence of an accessible inventory. Keep verified vanilla container-entity readouts separate from unknown interaction menus.
+
 ## 0.5.7-rc.160-preview.18 (unpublished candidate)
 
 - Expose argument-specific SDK/MCP call capability inspection using the original schema and canonical predicates; inspection does not execute, acquire the body or authorize a later call.

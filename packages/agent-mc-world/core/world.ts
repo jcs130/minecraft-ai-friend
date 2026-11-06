@@ -7946,7 +7946,7 @@ export class MinecraftWorld implements World {
     bot.on('entityTamed', (entity: { name?: string }) => {
       this.emit('minecraft.event', `[Minecraft] 驯服了${zhEntity(entity?.name ?? '')}!`, false);
     });
-    bot.on('entityDead', (entity: { id?: number; uuid?: string; name?: string; position?: { distanceTo(o: unknown): number } }) => {
+    bot.on('entityDead', (entity: FactEntity & { type?: string; position?: { distanceTo(o: unknown): number } }) => {
       if (!entity?.position || !bot.entity?.position || !entity.name) return;
       // 自身死亡由死亡专报处理，此处只报告其他实体。
       if ((entity as unknown) === (bot.entity as unknown) || entity.id === bot.entity.id) return;
@@ -7956,8 +7956,16 @@ export class MinecraftWorld implements World {
       if (typeof entity.id === 'number' && (this.executor?.claimsCombat(entity.id) || this.combat?.claims(entity.id))) return;
       const d = entity.position.distanceTo(bot.entity.position);
       if (d > PROXIMITY_EXIT) return;
-      this.emit('minecraft.event', `[Minecraft] ${zhEntity(entity.name)}死了(${Math.round(d)} 格外)。`, false,
-        { trigger: 'piggyback' });
+      const customName = entityCustomName(bot, entity);
+      const owned = tamedByMe(bot, entity);
+      const namedNeutral = !!customName && classifyEntity(entity.type, entity.name) !== 'hostile';
+      const label = customName ? `「${customName}」（${zhEntity(entity.name)}）` : zhEntity(entity.name);
+      this.emit('minecraft.event', `[Minecraft] ${label}死了(${Math.round(d)} 格外)。`, owned,
+        { trigger: owned ? 'flush' : namedNeutral ? 'debounce' : 'piggyback', meta: { entityLifecycle: {
+          kind: 'death', source: 'native-entity-status', entityId: entity.id ?? null, uuid: entity.uuid ?? null,
+          entityType: entity.name, customName, ownedBySelf: owned ? true : null,
+          observedAt: Date.now(), connectionGeneration: this.connectionGeneration,
+        } } });
     });
     bot.on('soundEffectHeard', (soundName: string, position: { x: number; z: number } | null) => {
       if (!/explode|lightning_bolt/.test(String(soundName))) return;
@@ -9372,5 +9380,6 @@ export class MinecraftWorld implements World {
   }
 }
 import { chatDeliveryMessage } from './chat-delivery.ts';
+import { entityCustomName, tamedByMe, type FactEntity } from './animal-state.ts';
 import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import type { ChatDispatchContext } from './executor.ts';
