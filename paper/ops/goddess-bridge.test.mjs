@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import vm from 'node:vm';
 import { parseCreationDecision } from './goddess-creation.mjs';
+import { createGoddessDialogueState } from './goddess-dialogue.mjs';
 import { privateGoddessMessage, privateGoddessPacket, listenPrivateGoddessMessages } from './goddess-chat-identity.mjs';
 
 const incoming = (player, text) => ({ translate: 'commands.message.display.incoming', with: [{text:player}, {text}] });
@@ -12,12 +13,17 @@ const bridgePath = process.env.GODDESS_BRIDGE_SOURCE ?? new URL('./goddess-bridg
 const bridge = readFileSync(bridgePath, 'utf8').replace(/^import .*;\r?\n/gm, '')
   .replace(/^const require = createRequire\(.*\);\r?\n/m, '').replace(/^startControl\(\);\s*$/m, '');
 
-async function harness(answer = {decision:'approve',item:'minecraft:diamond',amount:1}) {
-  const bot = new EventEmitter(), posts = [], deliveries = [], chats = [], observations = [];
+async function harness(answer = {decision:'approve',item:'minecraft:diamond',amount:1}, options = {}) {
+  const bot = new EventEmitter(), posts = [], deliveries = [], chats = [], observations = [], prompts = [];
   bot.chat = text => chats.push(text);
   bot.addChatPattern = () => {};
   const unexpected = () => { throw Error('external operation forbidden in this test'); };
+  let now=1000000,release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  class Clock extends Date {static now(){return now;}}
   const context = vm.createContext({
+    Date:Clock,
+    createGoddessDialogueState:()=>createGoddessDialogueState({now:()=>now}),
     require: name => { assert.equal(name,'mineflayer'); return {createBot:()=>bot}; },
     fix1206PotionProtocol() {}, installRecipePacketBypass() {}, randomBytes, privateGoddessMessage, listenPrivateGoddessMessages, parseCreationDecision,
     process:{env:{},on(){},exit:unexpected},setInterval:()=>({unref(){}}),setTimeout:unexpected,
@@ -25,17 +31,65 @@ async function harness(answer = {decision:'approve',item:'minecraft:diamond',amo
     startGoddessPhotoCamera(){},startNpcDialogueAdapter(){},giftCatalog:async()=>({gifts:{}}),
     deliverGift:async(...args)=>{deliveries.push(args);return {ok:true};},
     collectPlayerObservation:async player=>{observations.push(player);return {};},
-    buildGoddessChatPrompt:()=> 'local public dialogue',parseGoddessChatAnswer:()=> 'local reply',cacheObservedPhoto(){},
-    fetch:async(_url,options)=>{
-      if(options?.method==='POST'){posts.push(JSON.parse(options.body));return {ok:true,json:async()=>({task_id:'task-local'})};}
+    buildGoddessChatPrompt:item=>{prompts.push(item);return 'local public dialogue';},parseGoddessChatAnswer:options.parseAnswer??(()=> 'local reply'),cacheObservedPhoto(){},
+    fetch:async(_url,requestOptions)=>{
+      if(requestOptions?.method==='POST'){posts.push(JSON.parse(requestOptions.body));return {ok:true,json:async()=>({task_id:'task-local'})};}
+      if(options.hold)await gate;
       return {ok:true,json:async()=>({status:'finished',result:{output:[{content:[{type:'text',text:JSON.stringify(answer)}]}]}})};
     },
   });
   vm.runInContext(bridge+'\nglobalThis.connectForTest=connect;',context);
   context.connectForTest();bot.emit('spawn');
   const flush=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
-  await flush();return {bot,posts,deliveries,chats,observations,flush};
+  await flush();return {bot,posts,deliveries,chats,observations,prompts,flush,release,advance:ms=>{now+=ms;}};
 }
+
+test('a silent model result sends neither a null message nor an error reply',async()=>{
+ const h=await harness(undefined,{parseAnswer:()=>null});
+ h.bot.emit('messagestr','Guest whispers: 谢谢，晚安','system',incoming('Guest','谢谢，晚安'));await h.flush();
+ assert.equal(h.posts.length,1);assert.deepEqual(h.chats,[]);
+});
+
+test('the same pending private question does not queue another inference after the old cooldown',async()=>{
+ const h=await harness(undefined,{hold:true});
+ h.bot.emit('messagestr','Guest whispers: 请问入口','system',incoming('Guest','请问入口'));await h.flush();
+ h.advance(11000);h.bot.emit('messagestr','Guest whispers: 请问入口','system',incoming('Guest','请问入口'));await h.flush();
+ h.release();await h.flush();assert.equal(h.posts.length,1);assert.equal(h.chats.filter(x=>x.includes('local reply')).length,1);
+});
+
+test('cooldown feedback cannot become a message per automatic acknowledgment',async()=>{
+ const h=await harness(undefined,{hold:true});
+ h.bot.emit('messagestr','Guest whispers: 请问入口','system',incoming('Guest','请问入口'));await h.flush();
+ for(let n=0;n<10;n++)h.bot.emit('messagestr','Guest whispers: 收到'+n,'system',incoming('Guest','收到'+n));
+ await h.flush();assert.ok(h.chats.length<=1,JSON.stringify(h.chats));h.release();await h.flush();
+});
+
+test('after closing a conversation, a new question containing thanks can still be answered',async()=>{
+ let count=0;const h=await harness(undefined,{parseAnswer:()=>++count===1?null:'这里是女神，正在听。'});
+ h.bot.emit('messagestr','Guest whispers: 谢谢，晚安','system',incoming('Guest','谢谢，晚安'));await h.flush();
+ h.advance(11000);
+ h.bot.emit('messagestr','Guest whispers: 谢谢。另外你是谁？','system',incoming('Guest','谢谢。另外你是谁？'));await h.flush();
+ assert.equal(h.posts.length,2);assert.equal(h.chats.length,1);assert.match(h.chats[0],/这里是女神/);
+ assert.equal(h.prompts[1].dialogue.lastDecision,'silent');
+});
+
+test('recent actual replies reach only the same player and do not block another player',async()=>{
+ const h=await harness();
+ for(const [player,text] of [['Guest','你好'],['Other','你好'],['gUeSt','新的问题']]){
+  h.advance(11000);h.bot.emit('messagestr',`${player} whispers: ${text}`,'system',incoming(player,text));await h.flush();
+ }
+ assert.equal(h.posts.length,3);assert.equal(h.prompts[1].dialogue.lastReply,null);
+ assert.equal(h.prompts[2].dialogue.lastReply,'local reply');assert.equal(h.prompts[2].dialogue.replyAgeMs,22000);
+});
+
+test('delivery failure does not turn an unsent reply into conversation evidence or retry the model',async()=>{
+ const h=await harness();let sends=0;h.bot.chat=()=>{sends++;throw Error('local transport failure');};
+ h.bot.emit('messagestr','Guest whispers: 你好','system',incoming('Guest','你好'));await h.flush();
+ h.advance(11000);h.bot.chat=text=>h.chats.push(text);
+ h.bot.emit('messagestr','Guest whispers: 新的问题','system',incoming('Guest','新的问题'));await h.flush();
+ assert.equal(h.posts.length,2);assert.equal(h.prompts[1].dialogue.lastReply,null);
+ assert.equal(h.prompts[1].dialogue.lastDecision,'undelivered');assert.equal(sends,1);
+});
 
 test('public display text and synthetic whisper events cannot grant private authority',async()=>{
   const h=await harness();

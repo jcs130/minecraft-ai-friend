@@ -14,6 +14,7 @@ import { installLoginGate } from './mineflayer-login-gate.mjs';
 import { localProxyConnect } from './auth-proxy.mjs';
 import { installRecipePacketBypass } from './mineflayer-client-compat.mjs';
 import { listenPrivateGoddessMessages } from './goddess-chat-identity.mjs';
+import { createGoddessDialogueState } from './goddess-dialogue.mjs';
 
 const require = createRequire('E:/Cortico/package.json');
 fix1206PotionProtocol(require);
@@ -26,6 +27,7 @@ const headers = { 'Content-Type': 'application/json', 'X-Agent-Id': 'mc_godness'
 const names = /^[A-Za-z0-9_.-]{1,32}$/;
 const queue = [];
 const last = new Map();
+const dialogue = createGoddessDialogueState();
 let bot;
 let connected = false;
 let draining = false;
@@ -80,9 +82,20 @@ function startControl() {
 
 function log(message) { writeSync(1, `[${new Date().toISOString()}] ${message}\n`); }
 function sayTo(player, message) {
-  if (!connected || !names.test(player)) return;
-  const clean = String(message).replace(/[\x00-\x1f§]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
-  if (clean) bot.chat(`/minecraft:msg ${player} ${clean}`);
+  if (!connected || !names.test(player) || typeof message !== 'string') return false;
+  const clean = [...message.replace(/[\x00-\x1f§]/g, ' ').replace(/\s+/g, ' ').trim()].slice(0, 140).join('');
+  if (!clean) return false;
+  try {
+    bot.chat(`/minecraft:msg ${player} ${clean}`);
+    return true;
+  } catch {
+    log(`chat transport failed to ${player}; not retrying`);
+    return false;
+  }
+}
+function hintTo(player, message) {
+  if (dialogue.allowNotice(player)) return sayTo(player,message);
+  return false;
 }
 function textOf(result) {
   const out = result?.output;
@@ -122,7 +135,7 @@ async function askGoddess(item) {
 // 自由对话通道：普通游戏内私聊/点名 → QwenPaw 女神本人格（只读工具），回复经 tell 转达。
 async function askChat(item) {
   const observation = await collectPlayerObservation(item.player);
-  const prompt = buildGoddessChatPrompt(item, observation);
+  const prompt = buildGoddessChatPrompt({...item,dialogue:dialogue.context(item.player)}, observation);
   const payload = {
     channel: 'console', user_id: 'afu-game-bridge',
     session_id: `afu-goddess:${item.player.toLowerCase()}`,
@@ -156,8 +169,9 @@ async function drain() {
       try {
         const { answer, catalog } = await askGoddess(item);
         if (item.kind === 'chat') {
-          sayTo(item.player, answer);
-          log(`chat replied to ${item.player}, request=${item.request}`);
+          const delivered=answer!==null&&sayTo(item.player, answer);
+          dialogue.complete(item.player,item.request,answer,{delivered});
+          log(`chat decision=${answer===null?'silent':delivered?'replied':'undelivered'} to ${item.player}, request=${item.request}`);
           continue;
         }
         const decision = parseCreationDecision(answer);
@@ -174,26 +188,39 @@ async function drain() {
         }
       } catch (error) {
         log(`request=${item.request} from ${item.player} failed: ${error.message}`);
-        sayTo(item.player, '这次答复或礼物还没确认，请稍后再来找我核对。');
+        if(item.kind==='chat')dialogue.fail(item.player,item.request);
+        hintTo(item.player,item.kind==='chat'
+          ? '这次问答没有完成，暂时不必反复发送；稍后可再核对。'
+          : '这次礼物结果未确认，请保留本次申请，先核对回执，不要重复补发。');
       }
     }
   } finally { draining = false; }
 }
 function receive(player, message, privateMessage = false) {
-  if (!names.test(player) || player === 'Goddess') return;
+  if (!names.test(player) || player.toLowerCase() === 'goddess') return;
   const raw = String(message);
   // Preserve the production prayer-prefix correction when changing transport.
   const creation = privateMessage && /^\[(?:造物申请|造物|创造)\]\s*/.test(raw);
   const prayer = privateMessage && /^\[(?:祈愿|许愿|愿望|心愿)\]\s*/.test(raw);
   const wish = raw.replace(/^\[(?:祈愿|许愿|愿望|心愿|造物申请|造物|创造)\]\s*/, '').replace(/[\x00-\x1f§]/g, ' ').trim();
-  if (!wish || wish.length > 100) { sayTo(player, '请把消息写在 100 字以内。'); return; }
+  if (!wish || wish.length > 100) { hintTo(player, '请把消息写在 100 字以内。'); return; }
   const kind = creation ? 'creation' : (prayer ? 'prayer' : 'chat');
+  if(kind==='chat') {
+    const admission=dialogue.inspect(player,wish);
+    if(!admission.ok) {
+      if(!admission.quiet)hintTo(player,'上一条问题仍在处理中，不必重复确认；等答复后再补充。');
+      log(`chat deferred from ${player}, reason=${admission.reason}`);
+      return;
+    }
+  }
   const now = Date.now();
   const cooldown = kind === 'chat' ? 10000 : 30000;
-  if (now - (last.get(player) ?? 0) < cooldown) { sayTo(player, '请稍等半分钟再问我。'); return; }
-  if (queue.length >= 3) { sayTo(player, '我正在照看其他旅人，请稍后再问。'); return; }
-  last.set(player, now);
+  const playerKey=player.toLowerCase();
+  if (now - (last.get(playerKey) ?? 0) < cooldown) { hintTo(player, '请稍等半分钟再问我。'); return; }
+  if (queue.length >= 3) { hintTo(player, '我正在照看其他旅人，请稍后再问。'); return; }
+  last.set(playerKey, now);
   const request = randomBytes(8).toString('hex');
+  if(kind==='chat')dialogue.begin(player,wish,request);
   queue.push({ player, wish, kind, request });
   if (kind !== 'chat') sayTo(player, '我听见了，稍等片刻。');
   log(`accepted ${kind} request=${request} from ${player}, chars=${wish.length}, queue=${queue.length}`);
