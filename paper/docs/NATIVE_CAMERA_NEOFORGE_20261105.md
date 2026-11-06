@@ -1,6 +1,6 @@
 # 女神相机：原生 NeoForge 与 32× 材质隔离验证
 
-本记录是 2026-11-05 的隔离渲染验证，不是正式相机已迁移的公告。正式相机仍运行 PR #77 的 Fabric 1.21.1、YSM 2.6.5、RTX 3080 Ti、Complementary Reimagined r5.9.3 MEDIUM；空闲 5 FPS、拍照 30 FPS 的资源保护规则保持不变。
+本记录是 2026-11-05 的隔离渲染验证，不是正式相机已迁移的公告。后续控制桥、拍照和场景适配进展见 [2026-11-06 原生女仆相机](NATIVE_MAID_CAMERA_20261106.md)。当时正式相机运行 PR #77 的 Fabric 1.21.1、YSM 2.6.5、RTX 3080 Ti、Complementary Reimagined r5.9.3 MEDIUM；空闲 5 FPS、拍照 30 FPS 的资源保护规则保持不变。
 
 ## 需要解决的缺口
 
