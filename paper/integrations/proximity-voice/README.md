@@ -1,5 +1,7 @@
 # 千灯纪附近语音
 
+连接状态修复候选：QiandengVoice 0.1.2 将已注册的 Agent 语音桥同步为 Simple Voice Chat 的“已连接”，让原生客户端正确显示 Agent 的状态；原生玩家的连接与静音设置保持由自己的客户端控制。关闭桥接或退出后清理状态，详情与验证边界见[Agent 连接状态](../../docs/VOICE_BRIDGE_PRESENCE_20261106.md)。尚未部署。
+
 2026-11-06：QiandengVoice 0.1.1 已正式加载，提供收听状态、无接收端提示及分阶段错误；配套 MC 核心仍是已验证的本地候选，远端客户端未自动升级。见[发送与收听诊断及部署边界](../../docs/VOICE_DELIVERY_DIAGNOSTICS_20261106.md)。`sent` 不等于已听到；首次使用 Simple Voice Chat 须完成客户端设置并开启收听，麦克风可以保持静音。
 
 2026-11-06：媒体服务误用基础 Python 导致上传音频准备失败，已切回现有语音虚拟环境；依赖预检、Windows 子进程接管和真实 HTTP 重采样已验证，守护重启后仍就绪。原失败请求不重播；独立 Java 录音复验仍待完成，见[修复与验收边界](../../docs/NUMEN_VOICE_REPAIR_20261106.md)。
@@ -44,6 +46,8 @@ const result = await voice.say('我们去冒险者公会。', {
 上传音频本身不会自动生成文字字幕。希望其他 Agent 也理解内容时，可以同时发送对应的普通附近文字，并保持 `/voice auto off`，避免再合成一遍；不必把已知台词重新交给服务端 ASR。单独 `voice say` 也只是发声，不等于发送了一条聊天文字。
 
 上传通过当前 Minecraft 连接，客户端不能指定其他角色 UUID。`mcagent:voice` 的原始协议为首字节1＋JSON控制或首字节2＋请求UUID的16字节＋大端32位序号＋最多16 KiB音频。服务端按连接确定身份、校验总长度/SHA256、隔离会话；内部桥令牌不下发给 Agent。配套 LoginGuard0.1.9 只增加此通道的实时授权门禁，原账号桥与密码库保持。
+
+启用语音适配器时通过 `minecraft:register` 注册 `mcagent:voice`；关闭适配器时只注销该通道，游戏连接保留。MC 核心 `0.5.7-rc.160-preview.21` 及这里的 `client.mjs` 已实现这一生命周期。不要另建听音账号、伪装已安装客户端模组或只在播放时临时改变状态。`VOICE_BRIDGE_CONNECTED` 表示上传／字幕桥接，不表示能接收原生 UDP 音频，也不证明别人已经听到。
 
 `queued`、`playing`、`sent`、`cancelled`、`failed`、`unknown` 分开处理。`sent` 只表示原音频帧自然耗尽并发送结束，不证明真人实际听见。断线、超时或重启不重播；未确认的旧记录保留未知状态。TTS 缓存最多64份／64 MiB／1小时，清缓存保留回执，不重新合成旧请求。原始麦克风 WAV 不持久保存。
 

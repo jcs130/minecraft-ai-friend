@@ -23,8 +23,10 @@ export function attachProximityVoice(bot,{onHearing,timeoutMs=110_000}={}){
       pending.set(row.requestId,wait);try{send(row);}catch(error){clearTimeout(wait.timer);pending.delete(row.requestId);reject(error);}
     });
   };
-  const close=()=>{if(closed)return;closed=true;bot._client.off('custom_payload',payload);bot.off('spawn',register);bot.off('end',close);for(const [requestId,wait]of pending){clearTimeout(wait.timer);wait.resolve({requestId,state:'unknown',reason:'VOICE_CONNECTION_ENDED_DO_NOT_REPLAY'});}pending.clear();};
-  bot._client.on('custom_payload',payload);bot.on('spawn',register);bot.once('end',close);if(bot._client.state==='play')register();
+  const ended=()=>close(false);
+  const close=(unregister=true)=>{if(closed)return;if(unregister&&bot._client.state==='play')try{bot._client.write('custom_payload',{channel:'minecraft:unregister',data:Buffer.from(CHANNEL)});}catch{}
+    closed=true;bot._client.off('custom_payload',payload);bot.off('spawn',register);bot.off('end',ended);for(const [requestId,wait]of pending){clearTimeout(wait.timer);wait.resolve({requestId,state:'unknown',reason:'VOICE_CONNECTION_ENDED_DO_NOT_REPLAY'});}pending.clear();};
+  bot._client.on('custom_payload',payload);bot.on('spawn',register);bot.once('end',ended);if(bot._client.state==='play')register();
   return {
     say(text,{requestId=randomUUID(),voice}={}){if(typeof text!=='string'||!text.trim()||text.length>200)throw Error('VOICE_TEXT_MAX_200');return exchange({op:'say',requestId,text,...(voice?{voice}:{})});},
     status(requestId){return exchange({op:'status',requestId},()=>true);},

@@ -39,6 +39,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final ConcurrentHashMap<UUID,VoiceDelivery> deliveries=new ConcurrentHashMap<>();
     private volatile VoiceAudience.Snapshot snapshot=new VoiceAudience.Snapshot(0,Map.of());
     private volatile VoicechatServerApi api;
+    private final VoicePresence presence=new VoicePresence(id->{VoicechatServerApi current=api;return current==null?null:current.getConnectionOf(id);});
     private volatile boolean stopping;
     private ExecutorService io,media,recognition;
     private ScheduledExecutorService captureClock;
@@ -93,16 +94,28 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             service.registerPlugin(new VoicechatPlugin(){
                 public String getPluginId(){return "qiandengji_voice";}
                 public void registerEvents(EventRegistration registration){
-                    registration.registerEvent(VoicechatServerStartedEvent.class,event->{api=event.getVoicechat();getLogger().info("SVC API ready; captions stay private and ASR stays on CPU");});
-                    registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();main(()->{for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
+                    registration.registerEvent(VoicechatServerStartedEvent.class,event->{api=event.getVoicechat();main(()->{for(Player player:Bukkit.getOnlinePlayers())syncPresence(player);});getLogger().info("SVC API ready; captions stay private and ASR stays on CPU");});
+                    registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();main(()->{presence.close();for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
                     registration.registerEvent(MicrophonePacketEvent.class,PaperVoicePlugin.this::microphone);
                     registration.registerEvent(EntitySoundPacketEvent.class,PaperVoicePlugin.this::soundOffered,1000);
-                    registration.registerEvent(PlayerStateChangedEvent.class,event->{if(event.isDisconnected()||event.isDisabled()){dropCapture(event.getPlayerUuid());sequences.remove(event.getPlayerUuid());}});
+                    registration.registerEvent(PlayerStateChangedEvent.class,event->{UUID actor=event.getPlayerUuid();if(event.isDisconnected()||event.isDisabled()){dropCapture(actor);sequences.remove(actor);}main(()->{Player player=Bukkit.getPlayer(actor);if(player!=null)syncPresence(player);});});
                 }
             });
         }catch(Exception failure){getLogger().severe("Voice bridge not enabled: "+failure.getClass().getSimpleName()+"; check private backend configuration");Bukkit.getPluginManager().disablePlugin(this);}
     }
     private void main(Runnable action){if(!stopping)Bukkit.getScheduler().runTask(this,action);}
+    private void syncPresence(Player player){
+        if(api!=null&&player.getListeningPluginChannels().contains(CHANNEL)&&player.hasPermission("qiandeng.voice.use"))presence.attach(player.getUniqueId());
+        else presence.detach(player.getUniqueId());
+    }
+    @EventHandler public void registered(PlayerRegisterChannelEvent event){
+        if(!event.getChannel().equals(CHANNEL))return;Player original=event.getPlayer();
+        main(()->{if(Bukkit.getPlayer(original.getUniqueId())==original)syncPresence(original);});
+    }
+    @EventHandler public void unregistered(PlayerUnregisterChannelEvent event){
+        if(!event.getChannel().equals(CHANNEL))return;
+        presence.detach(event.getPlayer().getUniqueId());eventCaptions.remove(event.getPlayer().getUniqueId());
+    }
     private void snapshot(){
         Map<UUID,VoiceAudience.Actor> all=new HashMap<>();
         for(Player p:Bukkit.getOnlinePlayers()){
@@ -113,7 +126,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         uploads.expire(System.currentTimeMillis());
     }
     @EventHandler public void quit(PlayerQuitEvent event){
-        UUID actor=event.getPlayer().getUniqueId();sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
+        UUID actor=event.getPlayer().getUniqueId();presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
         cancelSpeech(actor,"ACTOR_DISCONNECTED");
     }
     @EventHandler public void worldChanged(PlayerChangedWorldEvent event){
@@ -181,7 +194,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         boolean installed=connection!=null&&connection.isInstalled(),connected=connection!=null&&connection.isConnected(),disabled=connection!=null&&connection.isDisabled();
         boolean isolated=connection!=null&&connection.isInGroup()&&connection.getGroup()!=null&&connection.getGroup().getType()==Group.Type.ISOLATED;
         boolean canListen=receiver.hasPermission("voicechat.listen");
-        String code=VoiceDiagnostics.connection(current!=null,installed,connected,disabled,canListen,isolated);
+        String code=presence.isConnected(receiver.getUniqueId())?"VOICE_BRIDGE_CONNECTED":VoiceDiagnostics.connection(current!=null,installed,connected,disabled,canListen,isolated);
         double range=current==null?distanceCap:Math.min(distanceCap,current.getVoiceChatDistance());
         recipient.sendMessage("[语音] "+receiver.getName()+" "+code+"；installed="+installed+", connected="+connected+", disabled="+disabled+", listen="+canListen+", isolatedGroup="+isolated+"；附近距离="+range+"。"+VoiceDiagnostics.hint(code));
         if(speaker!=null){
@@ -194,7 +207,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         if(event.isCancelled()||!SoundPacketEvent.SOURCE_PLUGIN.equals(event.getSource())||event.getPacket().getOpusEncodedData().length==0)return;
         VoiceDelivery delivery=deliveries.get(event.getPacket().getChannelId());var receiver=event.getReceiverConnection();
         // SVC emits this before UDP send and permission checks. Count offers, never acknowledgements.
-        if(delivery!=null&&receiver!=null&&receiver.isConnected()&&!receiver.isDisabled())delivery.offered(receiver.getPlayer().getUuid());
+        if(delivery!=null&&receiver!=null&&receiver.isInstalled()&&receiver.isConnected()&&!receiver.isDisabled())delivery.offered(receiver.getPlayer().getUuid());
     }
     private void submitText(Player p,UUID id,String text,String voice){
         if(text==null||text.isBlank()||text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
@@ -349,7 +362,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void error(Player p,String code){if(p!=null)p.sendMessage("[语音] "+(code==null?"VOICE_REQUEST_FAILED":code.replaceAll("[^A-Za-z0-9_]",""))+"。音色用 /voice voices；结果未知先查原请求，不重复发送。");}
     private static String hash(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}}
     @Override public void onDisable(){
-        stopping=true;closeCaptures();
+        presence.close();stopping=true;closeCaptures();
         for(var lane:lanes.values()){Job job=lane.current();if(job!=null){job.cancelled=true;if(job.frames!=null)job.frames.cancel();if(job.player!=null)job.player.stopPlaying();}}
         if(captureClock!=null)captureClock.shutdownNow();if(media!=null)media.shutdownNow();if(recognition!=null)recognition.shutdownNow();if(io!=null)io.shutdown();
     }
