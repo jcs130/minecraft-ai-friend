@@ -7,6 +7,7 @@ import { corridorSafe } from './idle-actions.ts';
 import { BattlefieldObserver } from './battlefield.ts';
 import { CombatAbilities, type CombatSpell } from './combat-abilities.ts';
 import { CombatTacticBook } from './combat-tactics.ts';
+import { tacticSupervisorView } from '../src/client/event-context.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { combatLoadout } from './combat-loadout.ts';
@@ -72,7 +73,8 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         ? this.bridge?.bot?.entities[candidate.targetId]?.position ?? null : null;
       const label = { engage: '接敌', retreat: '撤离', track: '停火盯防', step: '短步移动', cast: '施法', method: '运行方法', idle: '安全闲逛',search:'依线索索敌' }[candidate.kind];
       this.reportViewerDecision(role, `choice:${this.connectionGeneration}:${receipt.id}`, label, accepted, target);
-      this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:receipt});
+      this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:{...receipt,
+        requestContext:tacticSupervisorView(receipt)}});
       return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt },
         ...(accepted && admission ? { execution: admission.execution } : {}) };
     }

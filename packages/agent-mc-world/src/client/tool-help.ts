@@ -3,6 +3,7 @@ import { omitContextSchemaAnnotations, withSkillInputSignatures } from './schema
 
 export const TOOL_HELP_TOOL = {
   name: 'mc_tool_help', tags: ['read'],
+  helpFor: (args: Record<string, unknown>) => typeof args.name === 'string' ? args.name : null,
   description: 'Read the actual Minecraft tool catalogue or one tool description/schema. Omit name for a short index. name returns the root constraints and child JSON pointers; path expands a documented subtree. full:true returns that exact original schema node. No tool is executed and no model is called. mc_help reads action/skill manuals; this tool reads tool parameter contracts.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     name: { type: 'string', minLength: 1 },
