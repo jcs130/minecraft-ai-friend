@@ -16,6 +16,7 @@ import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { combatSearchCandidates } from './combat-search.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { validCombatRoutines, type CombatRoutine } from './combat-routines.ts';
+import { validMeleeWeaponOrder } from './weapon-capabilities.ts';
 import { METHOD_ADAPTER } from './method-runner.ts';
 import { resolveProcedure, type ProcedureGraph } from './support/procedure.ts';
 type RoutineAdmission = { method?: { id: string; revision: string; sourceHash: string }; runId: number;
@@ -36,6 +37,7 @@ private routineAdmission: RoutineAdmission | null = null;
 private routineError: string | null = null;
   constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) { super(options); }
   protected combatHealingUrgent(_bot: Bot): boolean { return false; }
+  protected override preferredMeleeWeapons(): readonly string[] { return this.tactics.preferredMeleeWeapons(); }
   protected sendAutoCombatSpell(_bot: Bot, _spell: CombatSpell, _ruleId?: string): boolean { return false; }
   protected battlefieldChannel(): string | undefined { return undefined; }
   override requestFacts(): ReturnType<MinecraftWorld['requestFacts']> {
@@ -107,6 +109,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         + '\n' + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined)
         + '\n' + this.combatDecisionReadout()
         + '\n快脚本菜单：' + JSON.stringify(tactic?.routines ?? [])
+        + '\n近战武器偏好：' + JSON.stringify(tactic?.meleeWeapons ?? [])
         + '\n自主战术程序：' + JSON.stringify({ program: tactic?.program ?? null,
           ...this.combatProgram.status(), error: this.combatProgramError ?? this.combatProgram.status().error }));
     }
@@ -122,9 +125,12 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     const rawRules = args.rules;
     const rawProgram = args.program;
     const rawRoutines = args.routines;
-    if (rawSpells === undefined && rawHeal === undefined && rawRules === undefined && rawProgram === undefined && rawRoutines === undefined) {
-      return this.toolLog(tool, args, '未设置：请给 spells、rules、program、routines 或 healAtOrBelow；用 enabled:false 清除。');
+    const rawWeapons = args.meleeWeapons;
+    if (rawSpells === undefined && rawHeal === undefined && rawRules === undefined && rawProgram === undefined && rawRoutines === undefined && rawWeapons === undefined) {
+      return this.toolLog(tool, args, '未设置：请给 spells、rules、program、routines、meleeWeapons 或 healAtOrBelow；用 enabled:false 清除。');
     }
+    if (rawWeapons !== undefined && !validMeleeWeaponOrder(rawWeapons))
+      return this.toolLog(tool,args,'未设置：meleeWeapons 最多8个不重复的可识别近战物品 ID（含 trident/mace）；[]恢复默认。原战术未变。');
     if (rawSpells !== undefined && (!Array.isArray(rawSpells) || rawSpells.length < 1
       || rawSpells.length > 8 || rawSpells.some((spell) => typeof spell !== 'string'
         || !/^[a-z][a-z0-9_:-]{0,63}$/.test(spell))
@@ -155,8 +161,10 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     const rules = rawRules as CombatRule[] | undefined ?? previous?.rules;
     const program = rawProgram === undefined ? previous?.program : rawProgram as import('./combat-program.ts').CombatProgram | null;
     const routines = rawRoutines === undefined ? previous?.routines : rawRoutines as CombatRoutine[];
+    const meleeWeapons = rawWeapons === undefined ? previous?.meleeWeapons : rawWeapons as string[];
     this.tactics.setTactic({ spells, healAtOrBelow, ...(rules !== undefined ? { rules } : {}),
-      ...(program !== undefined ? { program } : {}), ...(routines !== undefined ? { routines } : {}) });
+      ...(program !== undefined ? { program } : {}), ...(routines !== undefined ? { routines } : {}),
+      ...(meleeWeapons !== undefined ? { meleeWeapons } : {}) });
     if (rawProgram === null) this.combatProgram.close();
     if (rawProgram !== undefined) { this.combatProgramErrorHash = null; this.combatProgramError = null;
       this.combatProgramRetryAt = 0; this.combatProgramTimeoutRetriedHash = null; }
@@ -220,7 +228,7 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const program = this.tactics.getTactic()?.program;
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
     frame.survival = { fleeAtOrBelow: this.cfg.reflex.fleeHealth, healingDesired: this.combatHealingUrgent(bot) };
-    frame.loadout = combatLoadout(bot);
+    frame.loadout = combatLoadout(bot, this.preferredMeleeWeapons());
     const control = {
       bodyFree: (this.combat?.tracking ? !queue?.waiting.length : !this.combat?.active && combatMayTakeTask(queue))
         && !this.methodOwnsBody() && !bot.currentWindow && !(this.executor?.eating ?? false),

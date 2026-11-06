@@ -133,9 +133,9 @@ export type SkillCall = StepBounds & (
   | { skill: 'craft'; item?: string; count: number; grid?: string[][] }
   | { skill: 'smelt'; input: string; count: number; fuel: string; at?: Anchor }
   | { skill: 'brew'; at?: Anchor; input: string; bottle: string; count: number; fuel: string }
-  | { skill: 'enchant'; at: Anchor; item: string; index?: number }
+  | { skill: 'enchant'; at: Anchor; item: string; pick?: string; index?: number }
   | { skill: 'eat'; item: string }
-  | { skill: 'attack'; target: string; entityId?: number; mode?: AttackMode }
+  | { skill: 'attack'; target: string; entityId?: number; mode?: AttackMode; weapon?: string }
   | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; target?: string; pick?: string }
@@ -858,6 +858,10 @@ const PICK_DOC = '同 id 的几件里挑哪一件:写清单括号里的字(「�
 
 /** 精确攻击沿用 use/ride 的类型或玩家名 + 本连接 ID；省略 ID 不默认选 0。 */
 function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
+  if (c.weapon !== undefined && (typeof c.weapon !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(c.weapon)))
+    return { error: `${at} attack.weapon 要精确的近战物品英文 ID` };
+  if (c.weapon !== undefined && (c.mode === 'ranged' || c.mode === 'kite'))
+    return { error: `${at} attack.weapon 指定近战武器，只与 auto/melee 配合；投掷或弩使用独立 use/原生脚本` };
   if (c.entityId !== undefined && (typeof c.entityId !== 'number' || !Number.isSafeInteger(c.entityId)
       || c.entityId < 0 || c.entityId > 2_147_483_647)) {
     return { error: `${at} attack 的 entityId 要是本连接里观察到的非负整数实体 ID；target 仍填实体英文类型或玩家名` };
@@ -1109,10 +1113,13 @@ function parseEnchant(c: Record<string, unknown>, at: string, marks?: MarkLookup
   }
   const item = str(c.item);
   if (!item) return { error: `${at} enchant 要 item(要给哪样东西附魔,英文 id)` };
-  if (c.index === undefined || c.index === null) return { step: { skill: 'enchant', at: table, item } };
+  if (c.pick !== undefined && (typeof c.pick !== 'string' || !c.pick.trim()))
+    return { error: `${at} enchant.pick 要非空的名称/附魔/耐久挑选词` };
+  const pick = typeof c.pick === 'string' ? c.pick.trim() : undefined;
+  if (c.index === undefined || c.index === null) return { step: { skill: 'enchant', at: table, item, ...(pick ? {pick} : {}) } };
   const index = intIn(c.index, 1, 3, 1);
   if (index === null) return { error: `${at} enchant 的 index 要 1/2/3(上中下三格),不写就是只看报价` };
-  return { step: { skill: 'enchant', at: table, item, index } };
+  return { step: { skill: 'enchant', at: table, item, ...(pick ? {pick} : {}), index } };
 }
 
 function parseCraft(c: Record<string, unknown>, at: string): ParseResult {
@@ -1705,6 +1712,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  按第 N 档下手(1/2/3 = 上中下三格)。
                                                  「需 N 级」是**门槛**;真扣掉的是档位号那么多级与同样多的青金石(1/2/3)。
                                                  原版下手前每档只显示一条附魔,别的要下手才知道。
+                                                 同名多件用 pick 选择名称/耐久；只报已回读的附魔，超时结果未知先查原物品，不重复扣费。
                                                  已经附过魔的东西附魔台不接;书架要隔一格、同高或高一格,中间那格必须空着`,
     parse: parseEnchant,
     fields: [
@@ -1713,6 +1721,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
         error: `enchant 要 at:[x,y,z](${RELATIVE_HINT}),指着附魔台那一格`,
       },
       { key: 'item', kind: 'string', required: true, hint: '要附魔的物品英文 id' },
+      { key: 'pick', kind: 'string', doc: PICK_DOC },
       { key: 'index', kind: 'int', lo: 1, hi: 3, def: 1, doc: '不写 = 只看报价;写了 = 按那一档下手' },
     ],
   },
@@ -1769,6 +1778,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"attack","target":"zombie","entityId":42} 精确指定现场观察到的这一只；target 是英文类型或玩家名，编号另填 entityId，不把 "42" 写成 target。
                                                  ID 只在当前连接有效；失效、类型不符或被遮挡时不改打附近同类，重新观察。
                                                  melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
+                                                 weapon:"trident" 可精确指定本步近战武器（auto/melee）；缺失或损坏时明确受阻，不暗换剑或空手。三叉戟近战不会扔出，重锤支持普通近战，不自动安排高处下落。
                                                  ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
                                                  auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。
                                                  end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
@@ -1776,6 +1786,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [
       { key: 'target', kind: 'string', required: true, hint: '实体英文类型或玩家名；数字实体编号另填 entityId' },
       { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；与 target 一起精确指定本连接观察到的实体 ID；省略时选最近同类，指定后不改选其他实体' },
+      { key: 'weapon', kind: 'string', doc: '可选；本步近战武器英文 ID；仅 auto/melee，失去后不替换。省略则按默认选择。' },
       {
         key: 'mode', kind: 'enum', values: ['auto', 'melee', 'ranged', 'kite'],
         error: 'attack 的 mode 只认 auto/melee/ranged/kite',

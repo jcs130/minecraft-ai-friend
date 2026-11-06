@@ -15,6 +15,8 @@ export interface CombatTactic {
   rules?: CombatRule[];
   program?: CombatProgram | null;
   routines?: CombatRoutine[];
+  /** Available entries win in order; an empty list restores the normal fallback. */
+  meleeWeapons?: string[];
 }
 
 const GLOBAL_GAP_MS = 1_500;
@@ -61,6 +63,9 @@ export class CombatAbilities {
   getTactic(): CombatTactic | null {
     return structuredClone(this.tactic);
   }
+
+  /** Hot combat polling reads only this small immutable preference, not program source/history. */
+  preferredMeleeWeapons(): readonly string[] { return this.tactic?.meleeWeapons ?? []; }
 
   /** Builds model choices from current game facts without consuming a combat tick or issuing a command. */
   decisionFrame(bot: Bot, battlefield: Battlefield, maxCandidates: number, now = Date.now()): CombatDecisionFrame {

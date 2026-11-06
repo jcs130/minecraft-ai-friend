@@ -25,6 +25,8 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
       + 'Read actors from frame.battlefield.actors (relation, health, distance, lineOfSight); candidate kinds are cast, engage, step, retreat, track, search and method. Search, when offered, investigates real sound bearings or expiring last-seen locations through a checked native short-movement task without attacking. Default choices support proactive engage or retreat before injury; resumable body work pauses and resumes. Track is only an explicit authored action-pool primitive: it watches without attacking and stops current attacks. Follow tasks remain explicit body tasks. There is no frame.snapshot.enemies or melee candidate. '
       + 'The program constructs choices from fresh battlefield facts independently of the main model; the fast model chooses and the combat controller executes. '
       + 'routines:[{id,intent,procedure,params?,durationMs?}] registers exact saved mc_script library references in the fast menu; routines:[] removes them. '
+      + 'meleeWeapons:["trident","iron_axe"] sets your native melee preference for reactive/fast combat; unavailable entries are skipped, then the normal fallback applies. [] clears the preference. It does not equip or start a fight. '
+      + 'Read frame.loadout.choices for observed weapon modes. Tridents and maces support melee; native automatic ranged combat currently uses bows. Explicit throws or crossbows can be authored with mc_script api:"weapons" and registered as versioned routines. '
       + 'Read and validate/save a method first. Registration checks its immutable version and does not execute it or claim it effective. '
       + 'A method option starts that existing script only when the body is free; its original run ID, SDK trace and terminal remain readable with mc_script. '
       + 'An installed program may filter/reorder method options from actionPool; its returned priority order is preserved. '
@@ -48,6 +50,8 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
         healAtOrBelow: { type: 'number', minimum: 1, description: 'Absolute health points from the current server, not a normalized 20-point scale.' },
         rules: COMBAT_RULES_SCHEMA,
         routines: COMBAT_ROUTINES_SCHEMA,
+        meleeWeapons: { type:'array', maxItems:8, uniqueItems:true, items:{type:'string',pattern:'^[a-z][a-z0-9_]{0,63}$'},
+          description:'Ordered melee item IDs for native combat, e.g. trident, iron_axe, mace. Missing items fall back; [] restores defaults. Per-task exact choice uses attack.weapon.' },
         program: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false,
           properties: { name: { type: 'string', minLength: 1, maxLength: 80 },
             code: { type: 'string', minLength: 1, maxLength: 12000 }, params: { type: 'object' } }, required: ['name', 'code'] }] },

@@ -6,5 +6,8 @@ export * from '../core/combat-reactions.ts';
 export * from '../core/combat-rules.ts';
 export * from '../core/combat-tactics.ts';
 export * from '../core/combat-abilities.ts';
+export * from '../core/weapon-capabilities.ts';
+export { bestWeapon, meleeWeapons } from '../core/melee.ts';
+export { combatLoadout, type CombatLoadout } from '../core/combat-loadout.ts';
 export { TacticalMinecraftWorld } from '../core/tactical-world.ts';
 export { COMBAT_TACTIC_TOOL, isCombatTacticRead } from '../core/combat-tool.ts';
