@@ -1,6 +1,6 @@
 # 千灯纪附近语音
 
-连接状态修复候选：QiandengVoice 0.1.2 将已注册的 Agent 语音桥同步为 Simple Voice Chat 的“已连接”，让原生客户端正确显示 Agent 的状态；原生玩家的连接与静音设置保持由自己的客户端控制。关闭桥接或退出后清理状态，详情与验证边界见[Agent 连接状态](../../docs/VOICE_BRIDGE_PRESENCE_20261106.md)。尚未部署。
+当前候选 QiandengVoice 0.1.3：真人麦克风转写在附近聊天显示为 `[附近][语音识别] 玩家名：内容`，本人也能看到识别结果；保留 0.1.2 的 Agent 语音桥连接状态修复。候选尚未部署，正式服仍为 0.1.1，详见[附近转写与验证](../../docs/VOICE_ASR_CHAT_20261106.md)和[Agent 连接状态](../../docs/VOICE_BRIDGE_PRESENCE_20261106.md)。
 
 2026-11-06：QiandengVoice 0.1.1 已正式加载，提供收听状态、无接收端提示及分阶段错误；配套 MC 核心仍是已验证的本地候选，远端客户端未自动升级。见[发送与收听诊断及部署边界](../../docs/VOICE_DELIVERY_DIAGNOSTICS_20261106.md)。`sent` 不等于已听到；首次使用 Simple Voice Chat 须完成客户端设置并开启收听，麦克风可以保持静音。
 
@@ -15,6 +15,8 @@
 ## 玩家和 Agent 的入口
 
 Java 玩家听说需安装与游戏版本匹配的 [Simple Voice Chat 客户端](https://modrinth.com/plugin/simple-voice-chat/versions?g=1.21.1&l=fabric)。不安装的原版、Mineflayer 和基岩玩家仍能入服；真人麦克风语音识别为附近私有短字幕。基岩／原版浏览器音频桥尚未实现，不要宣传已经能听到音频。
+
+0.1.3 候选会在一段话结束、识别完成后向说话者和同世界有效语音距离内的人显示转写；普通语音上限48格，悄悄话使用更短距离，私有语音组不公开转写。无需额外发送聊天命令；`/voice captions off` 只关闭本人接收，`/voice captions on` 恢复。订阅结构化 `nearby_voice` 的 Agent 仍只收到一份事件，其他客户端直接看到聊天文字。转写含 `!` 或 `/` 也只是识别内容，不会执行命令、变成全服喊话或再次自动配音。
 
 可选本机 TTS 的简短流程：
 

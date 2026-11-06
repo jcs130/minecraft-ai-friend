@@ -322,7 +322,9 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 String text=result.get("text").getAsString().replaceAll("[\\p{Cntrl}§]"," ").strip();if(text.isEmpty())return;
                 main(()->{for(UUID id:VoiceAudience.deliverable(listeners,world,snapshot)){Player target=Bukkit.getPlayer(id);if(target==null)continue;
                     JsonObject row=new JsonObject();row.addProperty("type","nearby_voice");row.addProperty("speaker",capture.name);row.addProperty("speakerUuid",capture.actor.toString());row.addProperty("utteranceId",capture.request.toString());row.addProperty("text",text);
-                    if(eventCaptions.contains(id)&&target.getListeningPluginChannels().contains(CHANNEL))send(target,row);else target.sendMessage("[附近语音] "+capture.name+"："+text);
+                    // System text, not Player.chat(): ASR must not run commands,
+                    // become a global shout or trigger chat-to-TTS a second time.
+                    if(eventCaptions.contains(id)&&target.getListeningPluginChannels().contains(CHANNEL))send(target,row);else target.sendMessage("[附近][语音识别] "+capture.name+"："+text);
                 }});
             }catch(Exception failure){getLogger().warning("ASR segment unavailable; no replay ("+failure.getClass().getSimpleName()+")");}
         });}catch(RejectedExecutionException busy){getLogger().warning("ASR queue full; segment dropped without blocking the server");}
