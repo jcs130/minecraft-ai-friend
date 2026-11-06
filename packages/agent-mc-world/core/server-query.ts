@@ -273,11 +273,12 @@ export class ServerQueryLane {
       let json: string | undefined;
       try { json = JSON.stringify(matched.data); } catch { return false; }
       if (json === undefined) return false;
-      if (record.parts.length >= limit! || record.partBytes + json.length > MULTIPART_LIMIT) {
+      const bytes = Buffer.byteLength(json, 'utf8');
+      if (record.parts.length >= limit! || record.partBytes + bytes > MULTIPART_LIMIT) {
         this.finish(record, 'cancelled', 'Multipart reply exceeded its bounded capacity; the list is incomplete. No retry was sent.');
         return true;
       }
-      record.parts.push(JSON.parse(json)); record.partBytes += json.length;
+      record.parts.push(JSON.parse(json)); record.partBytes += bytes;
       if (Number.isFinite(sequence)) record.lastSequence = sequence;
       return true;
     }
@@ -286,7 +287,8 @@ export class ServerQueryLane {
     if (matched.data !== undefined) {
       try {
         const json = JSON.stringify(matched.data);
-        if (json !== undefined && json.length <= (record.definition.maxReplyParts ? MULTIPART_LIMIT : DATA_LIMIT)) reply.data = JSON.parse(json);
+        if (json !== undefined && (record.definition.maxReplyParts
+          ? Buffer.byteLength(json, 'utf8') <= MULTIPART_LIMIT : json.length <= DATA_LIMIT)) reply.data = JSON.parse(json);
         else reply.dataTruncated = true;
       } catch { reply.dataTruncated = true; }
     }
