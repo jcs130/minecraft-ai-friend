@@ -34,7 +34,7 @@ import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-/** Per-UUID trial-tower economy. All inventory and balance mutations run on the server thread. */
+/** Existing per-UUID RPG shop/recycling; one Vortex bank, shared by text and native menus. */
 final class ArenaEconomy implements Listener {
     private static final String WALLET = "dungeon-emerald-wallet.";
     private static final long QUOTE_LIFETIME_MS = 30_000L;
@@ -50,7 +50,9 @@ final class ArenaEconomy implements Listener {
     private record Offer(String id, Material material, int count, int price) { }
     private record Quote(UUID owner, String id, boolean stash, int slot, int quantity, int price,
                          byte[] fingerprint, long expiresAt) { }
-    private record Candidate(boolean stash, int slot) { }
+    private record Candidate(boolean stash, int slot, String fingerprint) {
+        Candidate(boolean stash,int slot){this(stash,slot,null);}
+    }
     private record Menu(UUID owner, String kind, int page, List<Candidate> candidates, String quoteId) { }
     private static final List<Offer> OFFERS = List.of(
             new Offer("iron_helmet", Material.IRON_HELMET, 1, 8),
@@ -69,11 +71,24 @@ final class ArenaEconomy implements Listener {
             new Offer("diamond_helmet", Material.DIAMOND_HELMET, 1, 34),
             new Offer("diamond_chestplate", Material.DIAMOND_CHESTPLATE, 1, 52),
             new Offer("diamond_leggings", Material.DIAMOND_LEGGINGS, 1, 46),
-            new Offer("diamond_boots", Material.DIAMOND_BOOTS, 1, 34));
+            new Offer("diamond_boots", Material.DIAMOND_BOOTS, 1, 34),
+            new Offer("torches", Material.TORCH, 32, 4),
+            // Keep bought wood above the existing wooden-gear resale value, including crafted sticks.
+            new Offer("planks", Material.OAK_PLANKS, 32, 64),
+            new Offer("cobblestone", Material.COBBLESTONE, 32, 2),
+            new Offer("glass", Material.GLASS, 16, 4),
+            new Offer("ladders", Material.LADDER, 16, 3),
+            new Offer("chest", Material.CHEST, 1, 3),
+            new Offer("crafting_table", Material.CRAFTING_TABLE, 1, 1),
+            new Offer("water_bucket", Material.WATER_BUCKET, 1, 5));
 
     private final AgentFriendPlugin plugin;
+    static List<String> offerIds(){return OFFERS.stream().map(Offer::id).toList();}
     private final DungeonManager dungeon;
     private final NativeRpg nativeRpg;
+    private final ItemIdentity identity;
+    // Only scoped on the server thread. Async settlement explicitly captures its request format.
+    private boolean textReply;
     private final Map<UUID, JsonObject> recyclingReads = new HashMap<>();
     private final Map<UUID, Quote> quotes = new HashMap<>();
     private final Map<Inventory, Menu> menus = new IdentityHashMap<>();
@@ -82,24 +97,31 @@ final class ArenaEconomy implements Listener {
         this.plugin = plugin;
         this.dungeon = dungeon;
         this.nativeRpg = new NativeRpg(plugin);
+        this.identity = new ItemIdentity(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     void openShopMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 27, "灯火驿站 · 余额商店");
+        Inventory inv = Bukkit.createInventory(null, 45, "金币商城 · 装备与冒险补给");
         for (int slot = 0; slot < OFFERS.size(); slot++) {
             Offer offer = OFFERS.get(slot);
             ItemStack icon = new ItemStack(offer.material(), offer.count());
             ItemMeta meta = icon.getItemMeta();
-            meta.setDisplayName(ChatColor.GOLD + offer.id());
+            meta.setDisplayName(ChatColor.GOLD + identity.describe(icon).name());
             meta.setLore(List.of(ChatColor.YELLOW + "价格 " + offer.price() + " " + recycleCurrency(),
-                    ChatColor.GRAY + "点击购买，送入个人奖励箱"));
+                    ChatColor.GRAY + "每份 " + offer.count() + " 件 · 点击选数量并确认",
+                    ChatColor.GRAY + "扣金币、不耗魔力；商品送入个人箱",
+                    ChatColor.DARK_GRAY + "ID: " + offer.id()));
             icon.setItemMeta(meta);
             inv.setItem(slot, icon);
         }
-        inv.setItem(21, icon(Material.EMERALD, "余额：" + balance(player.getUniqueId()), "回收装备后增加"));
-        inv.setItem(22, icon(Material.HOPPER, "回收装备", "点击查看箱子与背包中的可回收装备"));
-        inv.setItem(23, icon(Material.EMERALD_BLOCK, "实体绿宝石交易", "打开原有村民商店"));
+        inv.setItem(36, icon(Material.HOPPER, "卖出多余装备", "逐件报价后确认；不收绑定、穿戴和当前手持装备"));
+        inv.setItem(38, icon(Material.CHEST, "取货 / 整理个人箱", "540格；成功远程开箱2魔力；物资满时仍保存在箱中"));
+        JsonObject bank=nativeRpg.selected()?nativeRpg.recyclingState(player):null;
+        inv.setItem(40, icon(Material.GOLD_INGOT, "金币：" + (bank==null?balance(player.getUniqueId()):EconomyPresentation.balance(bank)), "与任务、公会、回收共用；点击查询"));
+        inv.setItem(42, icon(Material.EMERALD_BLOCK, "村民以物易物", "需要前往商人身边；与金币商城分别结算"));
+        inv.setItem(43, icon(Material.CHEST_MINECART, "玩家交易行", "玩家间金币买卖，保留附魔耐久；商品送个人箱"));
+        inv.setItem(44, icon(Material.BARRIER, "关闭", "不会购买或卖出任何物品"));
         menus.put(inv, new Menu(player.getUniqueId(), "shop", 0, List.of(), null));
         player.openInventory(inv);
     }
@@ -108,10 +130,10 @@ final class ArenaEconomy implements Listener {
         List<Candidate> candidates = new ArrayList<>();
         Inventory stash = dungeon.liveStash(player.getUniqueId());
         for (int slot = 0; slot < dungeon.stashCapacity(); slot++)
-            if (eligible(dungeon.stashItem(player.getUniqueId(),slot))) candidates.add(new Candidate(true, slot));
+            if (eligible(dungeon.stashItem(player.getUniqueId(),slot))) candidates.add(new Candidate(true, slot,hex(digest(dungeon.stashItem(player.getUniqueId(),slot).serializeAsBytes()))));
         for (int slot = 0; slot < 36; slot++)
             if (eligibleSource(player, false, slot, player.getInventory().getItem(slot)))
-                candidates.add(new Candidate(false, slot));
+                candidates.add(new Candidate(false, slot,hex(digest(player.getInventory().getItem(slot).serializeAsBytes()))));
         int selectedPage = Math.max(0, Math.min(page, Math.max(0, (candidates.size() - 1) / 45)));
         Inventory inv = Bukkit.createInventory(null, 54, "装备回收 · 第 " + (selectedPage + 1) + " 页");
         for (int slot = 0; slot < 45 && selectedPage * 45 + slot < candidates.size(); slot++) {
@@ -129,12 +151,28 @@ final class ArenaEconomy implements Listener {
         }
         inv.setItem(45, icon(Material.ARROW, "上一页", ""));
         inv.setItem(49, icon(Material.CHEST, "返回商店", ""));
+        if(candidates.isEmpty())inv.setItem(22,icon(Material.BOOK,"没有可回收装备","材料可存个人箱；手持、穿戴、绑定和自定义装备保留"));
         inv.setItem(53, icon(Material.ARROW, "下一页", ""));
         menus.put(inv, new Menu(player.getUniqueId(), "recycle", selectedPage, candidates, null));
         player.openInventory(inv);
     }
 
     void openRecycleMenu(Player player) { openRecycleMenu(player, 0); }
+
+    private void openBuyMenu(Player player,int index,int requested){
+        Offer offer=OFFERS.get(index);
+        int max=Math.min(16,offer.material().getMaxStackSize()/offer.count());
+        int count=Math.max(1,Math.min(max,requested));
+        Inventory inv=Bukkit.createInventory(null,27,"确认购买 · 金币商城");
+        inv.setItem(4,new ItemStack(offer.material(),offer.count()*count));
+        inv.setItem(10,icon(Material.RED_WOOL,"取消 / 返回","未确认不会扣金币"));
+        inv.setItem(12,icon(Material.ARROW,"减少一份","每份 "+offer.count()+" 件；最多 "+max+" 份"));
+        inv.setItem(13,icon(Material.GOLD_INGOT,"共 "+count+" 份 / "+(offer.count()*count)+" 件","总价 "+(offer.price()*count)+" 金币；不耗魔力"));
+        inv.setItem(14,icon(Material.ARROW,"增加一份","每份 "+offer.count()+" 件；最多 "+max+" 份"));
+        inv.setItem(16,icon(Material.LIME_WOOL,"确认购买","商品送入个人箱；背包满也不会掉在地上"));
+        menus.put(inv,new Menu(player.getUniqueId(),"buy",count,List.of(),Integer.toString(index)));
+        player.openInventory(inv);
+    }
 
     private void openConfirmMenu(Player player, Quote quote) {
         Inventory inv = Bukkit.createInventory(null, 27, "确认回收 · 30秒有效");
@@ -165,16 +203,35 @@ final class ArenaEconomy implements Listener {
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= event.getView().getTopInventory().getSize()) return;
         if (menu.kind().equals("shop")) {
-            if (slot < OFFERS.size()) buy(player, new String[]{"arena", "shop", "buy", OFFERS.get(slot).id()});
-            else if (slot == 22) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, 0));
-            else if (slot == 23) Bukkit.getScheduler().runTask(plugin, () -> dungeon.openLegacyMerchant(player));
-            else if (slot == 21) wallet(player);
+            if (slot < OFFERS.size()) Bukkit.getScheduler().runTask(plugin, () -> openBuyMenu(player,slot,1));
+            else if (slot == 36) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, 0));
+            else if (slot == 38) Bukkit.getScheduler().runTask(plugin, () -> dungeon.command(player,new String[]{"arena","stash","page","1"}));
+            else if (slot == 42) Bukkit.getScheduler().runTask(plugin, () -> dungeon.openLegacyMerchant(player));
+            else if (slot == 43) Bukkit.getScheduler().runTask(plugin, () -> player.performCommand("mycli trade auction menu"));
+            else if (slot == 40) withReplyMode(true,()->wallet(player));
+            else if (slot == 44) Bukkit.getScheduler().runTask(plugin,()->player.closeInventory());
+        } else if(menu.kind().equals("buy")) {
+            int index=Integer.parseInt(menu.quoteId());
+            if(slot==10)Bukkit.getScheduler().runTask(plugin,()->openShopMenu(player));
+            else if(slot==12||slot==14)Bukkit.getScheduler().runTask(plugin,()->openBuyMenu(player,index,menu.page()+(slot==14?1:-1)));
+            else if(slot==16){
+                // Consume this exact confirmation before touching the bank: duplicate clicks do not buy twice.
+                menus.put(event.getView().getTopInventory(),new Menu(menu.owner(),"busy",0,List.of(),null));
+                withReplyMode(true,()->buy(player,new String[]{"arena","shop","buy",OFFERS.get(index).id(),Integer.toString(menu.page())}));
+                Bukkit.getScheduler().runTask(plugin,()->openShopMenu(player));
+            }
         } else if (menu.kind().equals("recycle")) {
             int index = menu.page() * 45 + slot;
             if (slot < 45 && index < menu.candidates().size()) {
                 Candidate candidate = menu.candidates().get(index);
-                quote(player, new String[]{"arena", "recycle", "quote", candidate.stash() ? "chest" : "bag",
-                        Integer.toString(candidate.stash() ? candidate.slot() + 1 : candidate.slot())});
+                ItemStack current=source(player,candidate.stash(),candidate.slot());
+                if(current==null||!hex(digest(current.serializeAsBytes())).equals(candidate.fingerprint())){
+                    player.sendMessage("§e[item_changed] 该槽物品已改变，未报价或出售。正在刷新回收列表，请重新选择。");
+                    Bukkit.getScheduler().runTask(plugin,()->openRecycleMenu(player,menu.page()));return;
+                }
+                quotes.remove(player.getUniqueId());
+                withReplyMode(true,()->quote(player, new String[]{"arena", "recycle", "quote", candidate.stash() ? "chest" : "bag",
+                        Integer.toString(candidate.stash() ? candidate.slot() + 1 : candidate.slot())}));
                 Quote issued = quotes.get(player.getUniqueId());
                 if (issued != null && issued.stash() == candidate.stash() && issued.slot() == candidate.slot())
                     Bukkit.getScheduler().runTask(plugin, () -> openConfirmMenu(player, issued));
@@ -182,7 +239,10 @@ final class ArenaEconomy implements Listener {
             else if (slot == 53) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, menu.page() + 1));
             else if (slot == 49) Bukkit.getScheduler().runTask(plugin, () -> openShopMenu(player));
         } else if (menu.kind().equals("confirm")) {
-            if (slot == 15) sell(player, new String[]{"arena", "recycle", "sell", menu.quoteId()});
+            if (slot == 15) {
+                menus.put(event.getView().getTopInventory(),new Menu(menu.owner(),"busy",0,List.of(),null));
+                withReplyMode(true,()->sell(player, new String[]{"arena", "recycle", "sell", menu.quoteId()}));
+            }
             if (slot == 11 || slot == 15) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, 0));
         }
     }
@@ -306,14 +366,25 @@ final class ArenaEconomy implements Listener {
     }
 
     void recycle(Player player, String[] args) {
+        boolean text=Arrays.asList(args).contains("--text");
+        String[] words=Arrays.stream(args).filter(v->!v.equals("--text")&&!v.equals("--json")).toArray(String[]::new);
+        withReplyMode(text,()->recycleCommand(player,words));
+    }
+    private void withReplyMode(boolean text,Runnable work){
+        boolean previous=textReply;textReply=text;
+        try{work.run();}finally{textReply=previous;}
+    }
+    private void recycleCommand(Player player,String[] args){
         if(nativeRpg.selected())recyclingReads.put(player.getUniqueId(),nativeRpg.recyclingState(player));
         try{
         String action = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "list";
         switch (action) {
+            case "menu" -> {if(args.length==3)openRecycleMenu(player);else reply(player,"recycle",false,"usage_recycle_list_quote_sell",null,0,0,false,null);}
             case "list" -> list(player, args);
             case "quote" -> quote(player, args);
             case "sell" -> sell(player, args);
             case "status" -> {
+                if(args.length!=3){reply(player,"recycle",false,"usage_recycle_list_quote_sell",null,0,0,false,null);return;}
                 if(nativeRpg.selected()){
                     JsonObject state=nativeRpg.recyclingState(player);
                     boolean available=state.has("available")&&state.get("available").getAsBoolean(),pending=state.has("pending")&&state.get("pending").getAsBoolean();
@@ -328,7 +399,14 @@ final class ArenaEconomy implements Listener {
     private String recycleCurrency(){return nativeRpg.selected()?"RPG金币":"试炼绿宝石余额";}
 
     void shop(Player player, String[] args) {
+        boolean text=Arrays.asList(args).contains("--text");
+        String[] words=Arrays.stream(args).filter(v->!v.equals("--text")&&!v.equals("--json")).toArray(String[]::new);
+        withReplyMode(text,()->shopCommand(player,words));
+    }
+    private void shopCommand(Player player,String[] args){
+        if(args.length<3){reply(player,"shop",false,"usage_shop_list_buy_wallet",null,0,0,false,null);return;}
         String action = args[2].toLowerCase(Locale.ROOT);
+        if(action.equals("menu")&&args.length==3){openShopMenu(player);return;}
         if (action.equals("list") && args.length == 3) {
             String requestId = UUID.randomUUID().toString();
             for (Offer offer : OFFERS) {
@@ -474,13 +552,14 @@ final class ArenaEconomy implements Listener {
                     player.getInventory().setItem(quote.slot(),remainder.getAmount()==0?null:remainder);player.saveData();
                 }
             };
+            boolean requestedText=textReply;
             try{nativeRpg.settleRecycling(player,quote.id(),quote.price(),snapshot.toString(),removal,raw->{
                 JsonObject result=JsonParser.parseString(raw).getAsJsonObject();
                 result.addProperty("requestedQuantity",quote.quantity());result.addProperty("requestedCredit",quote.price());
                 if(result.get("pending").getAsBoolean()){result.add("earned",JsonNull.INSTANCE);result.add("quantity",JsonNull.INSTANCE);}
                 else{result.addProperty("earned",result.get("success").getAsBoolean()?quote.price():0);result.addProperty("quantity",result.get("success").getAsBoolean()?quote.quantity():0);}
-                reply(player,"sell",result.get("success").getAsBoolean(),result.get("reason").getAsString(),item(current),quote.quantity(),balance(owner),result.get("pending").getAsBoolean(),result);
-                if(result.get("success").getAsBoolean())player.sendMessage("§a【回收】金币已入账 +"+quote.price()+"；物品已按报价回收。余额：/mycli trade wallet");
+                withReplyMode(requestedText,()->reply(player,"sell",result.get("success").getAsBoolean(),result.get("reason").getAsString(),item(current),quote.quantity(),balance(owner),result.get("pending").getAsBoolean(),result));
+                if(!requestedText&&result.get("success").getAsBoolean())player.sendMessage("§a【回收】金币已入账 +"+quote.price()+"；物品已按报价回收。购买补给：/mycli trade shop list");
             });}catch(RuntimeException unavailable){reply(player,"sell",false,"recycle_unverified",null,0,balance(owner),true,null);}
             return;
         }
@@ -533,7 +612,7 @@ final class ArenaEconomy implements Listener {
             if(result.get("pending").getAsBoolean()){result.add("spent",JsonNull.INSTANCE);result.add("quantity",JsonNull.INSTANCE);}
             else result.addProperty("spent",ok?price:0);
             reply(player,"buy",ok,ok?"queued_for_personal_chest":result.get("reason").getAsString(),item(purchased),ok?purchased.getAmount():0,0,ok||result.get("pending").getAsBoolean(),result);
-            if(ok)player.sendMessage("§a【商店】已扣 "+price+" 金币；商品在个人奖励箱。取物：/mycli arena stash page 1");
+            if(ok&&!textReply)player.sendMessage("§a【商店】已扣 "+price+" 金币；商品在个人奖励箱。取物：/mycli arena stash page 1");
             return;
         }
         int oldBalance = balance(owner);
@@ -594,7 +673,7 @@ final class ArenaEconomy implements Listener {
         catch (NumberFormatException invalid) { return -1; }
     }
 
-    private static boolean eligible(ItemStack stack) {
+    static boolean eligible(ItemStack stack) {
         if (stack == null || stack.getType().isAir() || stack.getAmount() < 1) return false;
         String type = stack.getType().name();
         boolean gear = type.endsWith("_SWORD") || type.endsWith("_AXE") || type.endsWith("_PICKAXE")
@@ -666,13 +745,13 @@ final class ArenaEconomy implements Listener {
         return Math.max(1, Math.min(32, condition + Math.min(8, enchant)));
     }
 
-    private static JsonObject item(ItemStack stack) {
+    private JsonObject item(ItemStack stack) {
         JsonObject result = new JsonObject();
         result.addProperty("id", "minecraft:" + stack.getType().name().toLowerCase(Locale.ROOT));
         result.addProperty("quantity", stack.getAmount());
         ItemMeta meta = stack.hasItemMeta() ? stack.getItemMeta() : null;
         result.addProperty("name", meta != null && meta.hasDisplayName()
-                ? ChatColor.stripColor(meta.getDisplayName()) : stack.getType().name().toLowerCase(Locale.ROOT));
+                ? ChatColor.stripColor(meta.getDisplayName()) : identity.describe(stack).name());
         JsonArray enchants = new JsonArray();
         for (Map.Entry<Enchantment, Integer> enchant : stack.getEnchantments().entrySet()) {
             JsonObject entry = new JsonObject();
@@ -737,6 +816,7 @@ final class ArenaEconomy implements Listener {
         if(unresolved){response.addProperty("nextCommand","/mycli arena recycle status");response.addProperty("nextAction","交易待对账，保留原报价与物品证据，联系服主；不重复交易或补发金币");}
         ActionFeedback.Advice advice = success||unresolved ? null : ActionFeedback.advice("economy", reason, "");
         if (advice != null) advice.add(response);
+        if(textReply){player.sendMessage(EconomyPresentation.text(response));return;}
         // Player#sendMessage is point-to-point: never publish economy state to public chat.
         player.sendMessage("MC_ARENA_ECONOMY " + response);
         if (advice != null) advice.send(player);

@@ -12,9 +12,11 @@ final class NativeRpg {
     static final Set<String> COMMON = Set.copyOf(COMMON_IDS);
     private final AgentFriendPlugin owner;
     private final boolean selected;
+    private final PlayerMarket market;
     NativeRpg(AgentFriendPlugin owner) {
         this.owner=owner;
         selected="vortex".equals(owner.getConfig().getString("rpg-backend", "legacy"));
+        market=selected?new PlayerMarket(owner,this):null;
     }
     boolean selected(){return selected;}
     List<AgentCliRecovery.Card> adviceCards(){
@@ -88,13 +90,10 @@ final class NativeRpg {
         return JsonParser.parseString((String)call("settleMoney",new Class<?>[]{Player.class,String.class,long.class,String.class,Runnable.class},p,request,delta,snapshot,domainWrite)).getAsJsonObject();
     }
     void saveConfigVerified(){
-        java.nio.file.Path file=owner.getDataFolder().toPath().resolve("config.yml"),temp=file.resolveSibling("config.yml.gold.tmp");
         try{
-            byte[] bytes=owner.getConfig().saveToString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            try(var channel=java.nio.channels.FileChannel.open(temp,java.nio.file.StandardOpenOption.CREATE,java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,java.nio.file.StandardOpenOption.WRITE)){
-                var buffer=java.nio.ByteBuffer.wrap(bytes);while(buffer.hasRemaining())channel.write(buffer);channel.force(true);
-            }
-            java.nio.file.Files.move(temp,file,java.nio.file.StandardCopyOption.ATOMIC_MOVE,java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // The published YAML is only a projection when Windows has it open.
+            // Use the same revision/commit log as the personal box and dungeons.
+            DurableConfigStore.persist(owner);
         }catch(java.io.IOException error){throw new IllegalStateException("domain save unconfirmed",error);}
     }
     JsonArray abilities(Player p){
@@ -174,6 +173,7 @@ final class NativeRpg {
     }
     boolean route(Player p,String[] args) {
         if(!selected)return false;
+        if(market.blockPending(p))return true;
         if(args.length==0){AgentCliCatalog.commandHelp(p,new String[]{"--help"});return true;}
         // Global output flags work before the group as well as after its arguments.
         if(args[0].equals("--json")){
@@ -207,6 +207,8 @@ final class NativeRpg {
         if(group.equals("status")&&Arrays.stream(args).skip(1).allMatch(a->a.equals("--json"))){
             boolean json=Arrays.asList(args).contains("--json");journey(p,false,json);if(!json)adventureProgress(p,false,false);return true;
         }
+        if(EconomyPresentation.route(owner,p,args))return true;
+        if(group.equals("trade")&&args.length>=2&&args[1].equalsIgnoreCase("auction")){market.command(p,args);return true;}
         if(group.equals("trade")&&args.length>=2&&Set.of("wallet","auction").contains(args[1].toLowerCase(Locale.ROOT))){
             try{call("tradeCommand",new Class<?>[]{Player.class,String[].class},p,Arrays.copyOfRange(args,1,args.length));}
             catch(RuntimeException unavailable){p.sendMessage("§e[service_unavailable] 金币资料暂不可用；未进行交易。稍后查询：/mycli trade wallet");}return true;
