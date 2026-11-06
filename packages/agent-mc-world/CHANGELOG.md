@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Keep overlapping battlefield reads from disabling an Agent-authored combat program. Mineflayer and native Java consumers report `programDeferred` for the contended sample and retain its fresh default candidates; in-flight output is never reused for another frame. Genuine program failures, timeouts and revocation keep their existing behavior.
 - Preserve protocol-observed custom names and UUIDs for named non-animal entities in visual facts and interaction receipts, without changing their target type or inferring ownership.
 - Deliver named neutral and owned-pet deaths with structured identity and an appropriate wake-up trigger; ordinary combat-target receipts retain their existing ownership and notification behavior.
 - Stop treating NPC button interfaces carried by generic chest packets as evidence of an accessible inventory. Keep verified vanilla container-entity readouts separate from unknown interaction menus.

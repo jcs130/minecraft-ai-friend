@@ -11,7 +11,7 @@ import { tacticSupervisorView } from '../src/client/event-context.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { combatLoadout } from './combat-loadout.ts';
-import { CombatProgramRunner, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
+import { CombatProgramRunner, CombatProgramBusyError, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { combatSearchCandidates } from './combat-search.ts';
@@ -300,6 +300,10 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
         omittedCandidates: Math.max(0, result.candidates.length - max),
         policy: { name: program.name, sourceHash: hash, instructions: result.instructions } };
     } catch (error) {
+      // Another reader owns this evaluation. Keep this reader's fresh default
+      // candidates; do not borrow its output, queue stale frames or revoke it.
+      if (error instanceof CombatProgramBusyError)
+        return { ...frame, programDeferred: { reason: 'evaluation-in-progress', sourceHash: hash } };
       this.combatProgramErrorHash = hash;
       this.combatProgramError = String(error);
       const timeout = /Combat program (?:startup timed out|exceeded evaluation budget|worker response timed out)/.test(String(error));

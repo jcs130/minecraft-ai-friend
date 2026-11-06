@@ -1,20 +1,22 @@
 import { expect, it, vi } from 'vitest';
 import { Vec3 } from 'vec3';
+import { Worker } from 'node:worker_threads';
 import { TacticalMinecraftWorld as QiandengjiEngine } from '../core/tactical-world.ts';
 import { combatProgramHash, type CombatProgram } from '../core/combat-program.ts';
 import { MINECRAFT_DEFAULTS } from '../core/config.ts';
 import type { CombatDecisionFrame } from '../core/combat-decision-types.ts';
 import { validCombatTactic } from '../core/combat-tactics.ts';
 import { combatRuleBlock, validCombatRules } from '../core/combat-rules.ts';
+import { combatRequest } from '../src/decisions/combat-request.ts';
 
 class StatusWorld extends QiandengjiEngine {
   protected override syncRealm() { this.tactics.useRealm('status-test'); }
   update(args: Record<string, unknown>) { return this.setCombatTactic(args); }
-  evaluate(program: CombatProgram) {
+  evaluate(program: CombatProgram, health = 20) {
     Object.assign(this, { bridge: { bot: { entity: { position: new Vec3(0,64,0) } } } });
     const frame: CombatDecisionFrame = {
       battlefield: { sampledAtMs: Date.now(), connectionGeneration: 1, dimension: 'overworld',
-        self: { entityId: 1, health: { current: 20, max: 20, source: 'native', updatedAtMs: 0 },
+        self: { entityId: 1, health: { current: health, max: 20, source: 'native', updatedAtMs: 0 },
           food: 20, position: [0,64,0], scoreboardTeam: null },
         action: { fighting: false, emergency: false, taskId: null, step: null,
           targetEntityId: null, sinceHitMs: null, canStep: false },
@@ -26,6 +28,47 @@ class StatusWorld extends QiandengjiEngine {
   closeProgram() { this.combatProgram.close(); }
   runner() { return this.combatProgram; }
 }
+
+it('keeps concurrent battlefield reads fresh without disabling or borrowing the in-flight policy', async () => {
+  const world = new StatusWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) });
+  const program = { name: 'fresh-health', code: 'return {candidates:[],instructions:String(frame.battlefield.self.health.current)};' };
+  const emit = Worker.prototype.emit;
+  let release: (() => void) | undefined;
+  let observed!: () => void;
+  const resultReady = new Promise<void>(resolve => { observed = resolve; });
+  const delayed = vi.spyOn(Worker.prototype, 'emit').mockImplementation(function (this: Worker, event, ...args) {
+    if (event === 'message' && args[0]?.kind === 'result' && !release) {
+      release = () => emit.call(this, event, ...args);
+      observed();
+      return true;
+    }
+    return emit.call(this, event, ...args);
+  });
+  let first: Promise<CombatDecisionFrame> | undefined;
+  try {
+    await world.update({ program });
+    first = world.evaluate(program, 20);
+    await resultReady;
+    const second = await world.evaluate(program, 7);
+    expect(second.battlefield.self.health.current).toBe(7);
+    expect(second.policy).toBeUndefined();
+    expect(await world.update({})).not.toContain('已停止采用');
+    expect(second.programDeferred).toEqual({ reason: 'evaluation-in-progress', sourceHash: combatProgramHash(program) });
+    expect(combatRequest(second).state.programDeferred).toEqual(second.programDeferred);
+    expect(world.runner().status().error).toBeNull();
+    const deliver = release!; release = () => {};
+    deliver();
+    expect((await first).policy?.instructions).toBe('20');
+    const next = await world.evaluate(program, 5);
+    expect(next.policy?.instructions).toBe('5');
+    expect(next.programDeferred).toBeUndefined();
+  } finally {
+    release?.();
+    await first;
+    delayed.mockRestore();
+    world.closeProgram();
+  }
+});
 
 it('accepts actual RPG health thresholds without normalizing them to vanilla 20', async () => {
   const world = new StatusWorld({cfg:structuredClone(MINECRAFT_DEFAULTS)});
