@@ -1,0 +1,38 @@
+{
+  "status": "deployed",
+  "version": "0.4.47.59-shop-rpg",
+  "deployedAt": "2026-11-06T20:58:32.1704914+08:00",
+  "sourcePullRequest": 89,
+  "sourceMergeCommit": "5c9c625c24709eebef959ce673c2448e20c252e6",
+  "sourceCommit": "125e72c100251de1b71afc40625dd912f6e03434",
+  "candidateSha256": "39f1a92785c2b1bec4918c05bcacf49dc837b27923d84fd849430ab34a6498df",
+  "normalRestart": true,
+  "maintenanceNoticesSeconds": [
+    180,
+    60,
+    10
+  ],
+  "coldBackupsVerified": 2,
+  "runtimeChecks": [
+    "exact AgentFriend candidate; unrelated plugins and mods unchanged",
+    "AgentFriend enabled",
+    "VortexRPG enabled",
+    "QiandengjiRpg enabled",
+    "QiandengVoice enabled",
+    "WorldObserver enabled",
+    "game responsive",
+    "performance telemetry ready",
+    "native models and client compatibility retained"
+  ],
+  "unchangedCharacterFiles": 788,
+  "originalCredentialRowsPreserved": 76,
+  "originalGoddessJobsRestored": 7,
+  "unrelatedPluginsAndModsUnchanged": true,
+  "postReconnectTps": 20,
+  "publicSkillOrClientDownloadChanged": false,
+  "realPlayerPurchaseVerified": false,
+  "realHumanClientVisualAcceptance": false,
+  "bedrockTouchAcceptance": false,
+  "observerMenuVisualAcceptance": false,
+  "rollbackPolicy": "Code only; preserve current balances, personal storage and transaction receipts. Consumed maintenance entry must not be replayed."
+}
