@@ -6799,8 +6799,14 @@ export class MinecraftWorld implements World {
       const correction = describeSkillInputCorrection(args.steps, parsed.error);
       // Text-only hosts otherwise lose the structured correction in data/meta
       // and force another model round just to discover the missing fields.
+      // A scoped worker may have mc_do without mc_help. Give it the exact
+      // failed action's registry contract in this rejection, not the whole
+      // catalogue, invented target coordinates or another execution attempt.
+      const skill = correction.helpArguments.skill;
+      const help = typeof skill === 'string' ? readSkillHelp({ skill }) : null;
+      const actionContract = help && 'text' in help && help.text.length <= 6000 ? { skill, text: help.text } : null;
       const visible = { errors: correction.errors.map(({ path, expected, problem }) => ({ path, expected, problem })),
-        minimal_legal_example: correction.minimal_legal_example };
+        minimal_legal_example: correction.minimal_legal_example, ...(actionContract ? { actionContract } : {}) };
       return invalidArguments('arguments.steps', `${parsed.error}\n[参数修正；示例仅演示格式，不是建议目标或自动重试]\n${JSON.stringify(visible)}\nmc_help ${JSON.stringify(correction.helpArguments)}\n整批未提交，当前任务和待办保留。`, correction);
     }
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
