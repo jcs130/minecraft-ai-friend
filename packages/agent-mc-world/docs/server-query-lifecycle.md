@@ -15,3 +15,16 @@ Unknown commands and mutating commands remain ordered `mc_do` steps. Explicit `q
 Ordinary queued chat also begins its reply association at the actual transport call, after validation and chat deduplication. A request accepted into the body queue has not been sent. Transport failure and cancellation must not fabricate a server reply.
 
 The same declarations and runtime are available to independent SDK/MCP consumers; server extensions import the `ServerQueryDefinition`, `ServerQueryLane` and `SERVER_QUERY_TOOL` public exports from `agent-mc-world/extension`. Server-specific command names and rules stay in that optional extension.
+
+For a protocol that sends a list as several messages, set `maxReplyParts` (1–64).
+`matchReply(text, args, username, parts)` receives retained rows and may return
+`{partial:true,data:row}`. Partial rows do not end the query, renew its deadline,
+or emit completion events. Only a validated protocol terminator returns the
+complete data without `partial`; the extension must check page, row count and
+server stream ID where available. Preserve nulls and distinguish an empty page
+from missing replies. Payloads are bounded at 64 KiB; overflow cancels rather
+than pretending a truncated catalogue is complete. Timeout/cancel receipts keep
+`partialReply:{complete:false,parts}`. Reconnect starts with no retained rows.
+Do not include serialized item/audio bytes in model-facing rows; keep relevant
+names, attributes and identity hashes. Reads remain single-flight and never
+reserve the physical action queue or automatically retry a purchase/transfer.

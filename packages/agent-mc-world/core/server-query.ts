@@ -9,7 +9,10 @@ export type ServerQueryDefinition = {
   argumentsSchema?: { type: 'array'; minItems: number; maxItems: number;
     items: { type: 'string'; pattern?: string; maxLength?: number; description?: string } };
   command(arguments_: readonly string[]): string | null;
-  matchReply(text: string, args: readonly string[], username: string): { data?: unknown; ok?: boolean } | null;
+  /** Opt-in bounded multi-message replies. Partial rows never settle a query. */
+  maxReplyParts?: number;
+  matchReply(text: string, args: readonly string[], username: string, parts?: readonly unknown[]):
+    { data?: unknown; ok?: boolean; partial?: boolean } | null;
 };
 
 /** Keep mounted tools and offline discovery on the configured protocol's same facts. */
@@ -84,6 +87,8 @@ export type ServerQueryReceipt = {
   requestNonce: false;
   goal_completed: false;
   outcomeUnknown: boolean;
+  /** Incomplete observations are retained on timeout/cancel, never reported as a full list. */
+  partialReply?: { parts: unknown[]; complete: false };
   reply?: { text: string; textTruncated: boolean; data?: unknown; dataTruncated?: boolean; ok?: boolean };
   reason?: string;
 };
@@ -113,6 +118,7 @@ const REUSE_MS = 5000;
 const HISTORY_LIMIT = 32;
 const REPLY_LIMIT = 4096;
 const DATA_LIMIT = 8192;
+const MULTIPART_LIMIT = 65536;
 
 type Record_ = {
   receipt: ServerQueryReceipt;
@@ -120,6 +126,9 @@ type Record_ = {
   key: string;
   endedAtMs?: number;
   dispatching: boolean;
+  parts: unknown[];
+  partBytes: number;
+  lastSequence?: number;
   synchronousReply?: NonNullable<ServerQueryReceipt['reply']>;
   timer?: ReturnType<typeof setTimeout>;
 };
@@ -209,7 +218,7 @@ export class ServerQueryLane {
       return queryArgumentFailure('Invalid arguments for this server query. Read the selected definition below and correct its arguments. No query was sent.', definition);
     }
     const sentAtMs = this.now();
-    const record: Record_ = { definition, key, dispatching: true, receipt: {
+    const record: Record_ = { definition, key, dispatching: true, parts: [], partBytes: 0, receipt: {
       requestId: `query-${randomUUID()}`, query: definition.id, arguments: arguments_, command,
       generation: context.generation, username: context.username, phase: 'sent',
       ...(context.afterSequence !== undefined ? { afterSequence: context.afterSequence } : {}),
@@ -249,20 +258,41 @@ export class ServerQueryLane {
     if (!record || scopeKey({ generation, username }) !== this.scope || typeof text !== 'string') return false;
     if (record.receipt.afterSequence !== undefined && (!Number.isFinite(sequence)
       || (sequence as number) <= record.receipt.afterSequence)) return false;
+    if (record.lastSequence !== undefined && (!Number.isFinite(sequence) || sequence! <= record.lastSequence)) return false;
+    if (record.synchronousReply) return false;
     let matched: ReturnType<ServerQueryDefinition['matchReply']>;
     // Reject oversized messages before invoking an extension parser; do not match a truncated prefix.
     if (text.length > 65536) return false;
-    try { matched = record.definition.matchReply(text, Object.freeze([...record.receipt.arguments]), username); }
+    try { matched = record.definition.matchReply(text, Object.freeze([...record.receipt.arguments]), username,
+      Object.freeze(JSON.parse(JSON.stringify(record.parts)))); }
     catch { return false; }
     if (!matched || typeof matched !== 'object') return false;
+    if (matched.partial === true) {
+      const limit = record.definition.maxReplyParts;
+      if (!Number.isSafeInteger(limit) || limit! < 1 || limit! > 64 || matched.data === undefined) return false;
+      let json: string | undefined;
+      try { json = JSON.stringify(matched.data); } catch { return false; }
+      if (json === undefined) return false;
+      if (record.parts.length >= limit! || record.partBytes + json.length > MULTIPART_LIMIT) {
+        this.finish(record, 'cancelled', 'Multipart reply exceeded its bounded capacity; the list is incomplete. No retry was sent.');
+        return true;
+      }
+      record.parts.push(JSON.parse(json)); record.partBytes += json.length;
+      if (Number.isFinite(sequence)) record.lastSequence = sequence;
+      return true;
+    }
     const reply: NonNullable<ServerQueryReceipt['reply']> = { text: text.slice(0, REPLY_LIMIT), textTruncated: text.length > REPLY_LIMIT };
     if (typeof matched.ok === 'boolean') reply.ok = matched.ok;
     if (matched.data !== undefined) {
       try {
         const json = JSON.stringify(matched.data);
-        if (json !== undefined && json.length <= DATA_LIMIT) reply.data = JSON.parse(json);
+        if (json !== undefined && json.length <= (record.definition.maxReplyParts ? MULTIPART_LIMIT : DATA_LIMIT)) reply.data = JSON.parse(json);
         else reply.dataTruncated = true;
       } catch { reply.dataTruncated = true; }
+    }
+    if (reply.dataTruncated && record.definition.maxReplyParts) {
+      this.finish(record, 'cancelled', 'Multipart result could not be retained within its bound; the list is incomplete. No retry was sent.');
+      return true;
     }
     if (record.dispatching) record.synchronousReply ??= reply;
     else {
@@ -295,6 +325,8 @@ export class ServerQueryLane {
     record.endedAtMs = this.now();
     record.receipt.endedAt = new Date(record.endedAtMs).toISOString();
     record.receipt.outcomeUnknown = phase !== 'replied';
+    if (phase !== 'replied' && record.parts.length) record.receipt.partialReply = { parts: record.parts, complete: false };
+    record.parts = []; record.partBytes = 0;
     if (reason) record.receipt.reason = reason;
     if (this.pending === record) this.pending = undefined;
     try { this.onTerminal?.(this.outcome(record)); } catch { /* A consumer's event sink cannot strand the query lane. */ }
