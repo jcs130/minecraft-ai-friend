@@ -1,6 +1,6 @@
 # Agent 语音连接状态
 
-状态：2026-11-06 的代码修复候选，尚未部署。正式服当前为 QiandengVoice 0.1.1；本候选为 0.1.2。MC 核心候选为 `0.5.7-rc.160-preview.21`，不会自动替换远端 Agent 的插件或宿主。
+状态：2026-11-06 已随 QiandengVoice 0.1.3 部署服务端修复。正式只读查询确认已有 Agent 返回 `VOICE_BRIDGE_CONNECTED`，保留真实 `installed=false`。MC 核心 `0.5.7-rc.160-preview.21` 仍为已验证的本地候选，不会自动替换远端 Agent 的插件或宿主。
 
 ## 问题和行为
 
