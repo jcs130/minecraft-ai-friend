@@ -18,7 +18,9 @@ final class VoiceAudience {
                 if(world!=null&&!world.equals(source.world)){listeners=Map.of();return;}
                 world=source.world;
                 for(Actor actor:snapshot.actors.values()) {
-                    if(actor.id.equals(speaker)||!actor.captions||!actor.world.equals(source.world))continue;
+                    // The speaker also sees what was recognized, using the same
+                    // opt-out and session/world fences as nearby listeners.
+                    if(!actor.captions||!actor.world.equals(source.world))continue;
                     double x=actor.x-source.x,y=actor.y-source.y,z=actor.z-source.z;
                     if(x*x+y*y+z*z<=distance*distance)heard.put(actor.id,actor);
                 }
