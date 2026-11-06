@@ -64,8 +64,6 @@ Vortex仍使用同一个chat动作，不增加另一套MCP工具。核对实际 
 
 统一版背包提示按服务器0–35槽给出 `arena stash putslot`，成功才扣2魔力；不需要让MCP先打开窗口。回收/商店/委托的pending表示结果待对账，不能自动重放；金币查 `trade wallet`，消费前按详情确认。旧研习书报告 `legacy_progression_retired` 时保留原物，不反复尝试。
 
-当服务器帮助列出 `trade shop` / `trade recycle` 时，优先用 `trade shop list`、`trade recycle list` 的短文本和返回的完整下一步；需要机器字段才加 `--json`。回收先quote再sell，买到的物品先入个人箱队列，`arena stash page 1`取货；不要因为随身背包没有增加而重复购买。旧 `arena shop/recycle` 调用保留。真人可以右键技能罗盘进入金币商城，MCP不必代点每一个菜单格。
-
 职业目录不写死在 World 或记忆：按需查询`/mycli profession info <ID>`并传递服务器说明。保存自己的选择、学习和实战结果；`catalogVersion`/`definitionVersion`变化后重查。查询不选职、发装备或扣点。
 
 任务生命周期沿用现有 chat 步骤，不新增 MCP 工具。按服务端 help/capability 选择 `tasks abandon <ID>`；该新入口须实际服务器已支持。错入口的 `nextCommand` 是建议，不能自动拼旧参数或代执行。`queryOnly` 描述本次查询；技能是否用cast取自单项 `invocation.kind/command`。缓存调用索引时核对revision，实时魔力和冷却另查；发送或pending不等于已完成。
