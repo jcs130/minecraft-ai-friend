@@ -5,6 +5,10 @@ import type { CombatCandidate, CombatDecisionFrame } from './combat-decision-typ
 
 export interface CombatProgram { name: string; code: string; params?: Record<string, unknown> }
 export interface CombatProgramResult { candidates: CombatCandidate[]; instructions: string }
+/** Transient sampling contention, not a fault in the authored program. */
+export class CombatProgramBusyError extends Error {
+  constructor() { super('Combat program already evaluating'); this.name = 'CombatProgramBusyError'; }
+}
 export const COMBAT_PROGRAM_LIMITS = Object.freeze({ sourceChars: 12_000, paramsChars: 4096,
   outputChars: 24_000, candidates: 16, startupMs: 2000, evaluationMs: 50, responseMs: 500, stepBlocks: 1.6 });
 
@@ -88,7 +92,7 @@ export class CombatProgramRunner {
 
   async run(program: CombatProgram, frame: CombatDecisionFrame): Promise<CombatProgramResult> {
     await this.configure(program);
-    if (this.pending) throw new Error('Combat program already evaluating');
+    if (this.pending) throw new CombatProgramBusyError();
     const startedAt = performance.now();
     return await new Promise<CombatProgramResult>((resolve, reject) => {
       this.pending = { resolve, reject, timer: setTimeout(() => {

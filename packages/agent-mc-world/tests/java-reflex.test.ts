@@ -8,6 +8,22 @@ import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/index.ts';
 import { methodHarness } from './method-harness.ts';
 const rigs:ReturnType<typeof rig>[]=[];
 
+it('concurrent native battlefield readers do not permanently disable the shared program',async()=>{
+  const r=rig({enemyDistance:5});await r.runtime.poll();
+  const program={name:'fresh-native',code:'return {candidates:frame.candidates,instructions:String(frame.battlefield.sampledAtMs)};'};
+  await r.runtime.tool({program},{role:'agent'} as any);
+  const reads=await Promise.all([0,1,2].map(()=>r.runtime.tool({battlefield:true},{role:'host-decision'} as any)));
+  const frames=reads.map(read=>(read.meta as any).frame);
+  expect(frames.filter(frame=>frame.policy)).toHaveLength(1);
+  expect(frames.filter(frame=>frame.programDeferred?.reason==='evaluation-in-progress')).toHaveLength(2);
+  expect(frames.every(frame=>frame.candidates.length>0)).toBe(true);
+  await r.runtime.poll();
+  const next=(await r.runtime.tool({battlefield:true},{role:'host-decision'} as any)).meta as any;
+  expect(next.frame.policy?.name).toBe(program.name);
+  expect(next.frame.policy?.instructions).toBe(String(next.frame.battlefield.sampledAtMs));
+  expect(next.frame.programDeferred).toBeUndefined();
+});
+
 it('reports the measured native task separately from old receipts and makes stale samples unknown',async()=>{
   const r=rig();expect(r.runtime.status().bodyControl).toBeNull();
   await r.runtime.poll();expect(r.runtime.status().bodyControl).toMatchObject({taskRunning:false,taskId:null,source:'native-reflex-frame'});
