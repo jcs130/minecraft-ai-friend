@@ -7,7 +7,8 @@ import {ObservationAppearanceSource} from './appearance-source.mjs';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const failureStages=new Set(['authority','sample','scene','publisher']);
-const structuralFrames=new Set(['worker.mjs','paper-observation.mjs','compiler.js','serializer.js','protodef.js','numeric.js','varint.js','utils.js','minecraft.js','nbt.js','structures.js','conditional.js']);
+const structuralFrames=new Set(['worker.mjs','paper-observation.mjs','native-world-host.mjs','native-world-preview-host.mjs','paper-observed-motion.mjs',
+  'compiler.js','serializer.js','protodef.js','numeric.js','varint.js','utils.js','minecraft.js','nbt.js','structures.js','conditional.js','smartbuffer.js']);
 const failureCodes=new Set([
   'OBSERVATION_RESPONSE_LIMIT','OBSERVER_DUPLICATE_TARGET','OBSERVER_GRANT_EXPIRED','OBSERVER_JOBS_INVALID','OBSERVER_JOB_INVALID','OBSERVER_RECEIPT_INVALID','OBSERVER_SCENE_UNAVAILABLE',
   'PAPER_INVENTORY_INVALID','PAPER_ITEM_COMPONENTS_UNAVAILABLE','PAPER_OBSERVATION_CLOSED','PAPER_OBSERVATION_CONFIGURATION','PAPER_OBSERVATION_IDENTITY_OR_STATE',

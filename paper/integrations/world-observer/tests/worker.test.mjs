@@ -5,9 +5,9 @@ import path from 'node:path';
 import { ObservationWorker, validateWorkerConfig, readBoundedJSON, observationFailure, observationPacketDecoder } from '../worker.mjs';
 const uuid='11111111-1111-3111-8111-111111111111';
 test('partial reads retain bounded structural frames without private directories or error text',()=>{
- const error=Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError',stack:'PartialReadError: PRIVATE_PACKET_CONTENT\n at reader (file:///private/PRIVATE_PACKET_CONTENT/numeric.js:12:4)\n at compiler (C:\\private\\PRIVATE_PACKET_CONTENT\\compiler.js:42:9)\n at leak (PRIVATE_PACKET_CONTENT.js:10:2)'});
+ const error=Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError',stack:'PartialReadError: PRIVATE_PACKET_CONTENT\n at reader (file:///private/PRIVATE_PACKET_CONTENT/numeric.js:12:4)\n at compiler (C:\\private\\PRIVATE_PACKET_CONTENT\\compiler.js:42:9)\n at render (file:///private/native-world-host.mjs:88:2)\n at leak (PRIVATE_PACKET_CONTENT.js:10:2)'});
  const value=observationFailure('scene',error,100000);
- assert.deepEqual(value.frames,[{file:'numeric.js',line:12,column:4},{file:'compiler.js',line:42,column:9}]);
+ assert.deepEqual(value.frames,[{file:'numeric.js',line:12,column:4},{file:'compiler.js',line:42,column:9},{file:'native-world-host.mjs',line:88,column:2}]);
  assert.ok(!JSON.stringify(value).includes('PRIVATE_PACKET_CONTENT'));assert.ok(!JSON.stringify(value).includes('/private/'));
  const long=observationFailure('scene',Object.assign(error,{stack:'PartialReadError\n'+Array(100).fill(' at test (numeric.js:1:2)').join('\n')}));assert.equal(long.frames.length,6);
 });
