@@ -1,4 +1,4 @@
-"""Supervise the dedicated hosting service or its restricted reverse tunnel."""
+"""Supervise the dedicated hosting service, restricted reverse tunnel, or dedicated Hub startup."""
 import ctypes
 from ctypes import wintypes
 import http.client,json,logging,msvcrt,os,subprocess,sys,threading,time
@@ -9,6 +9,8 @@ PRIVATE=BASE/'private'
 RELEASE=BASE/'release-20261106-r1'
 NODE=Path('C:/Users/lzl19/AppData/Local/hermes/node/node.exe')
 SSH=Path('C:/Windows/System32/OpenSSH/ssh.exe')
+WSL=Path('C:/Windows/System32/wsl.exe')
+HUB_IMAGE='sha256:1e9fe5373b1aaaa8946d62b7ca241a3e8d4c1312b5beb603af5656f760036e10'
 
 class BasicJobLimits(ctypes.Structure):
     _fields_ = [
@@ -66,8 +68,21 @@ def output(child,mode,log):
             except Exception:log.info('Service diagnostic suppressed; inspect the verified assembly and exit status.');continue
         log.info('%s',line.rstrip()[:1000])
 
+def ensure_hub():
+    # Starting WSL starts its already-enabled Docker system service. Never stop
+    # the shared daemon or restart any container that is already running.
+    base=[str(WSL),'-d','Ubuntu-24.04','--','docker']
+    result=subprocess.run([*base,'inspect','--format','{{.State.Running}} {{.Image}}','qiandengji-hosted-hub'],capture_output=True,text=True,timeout=45,creationflags=subprocess.CREATE_NO_WINDOW)
+    if result.returncode:raise RuntimeError('Dedicated Hub metadata unavailable')
+    running,image=result.stdout.strip().split()
+    if image!=HUB_IMAGE:raise RuntimeError('Dedicated Hub image differs from reviewed release')
+    if running=='false':
+        subprocess.run([*base,'start','qiandengji-hosted-hub'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=45,creationflags=subprocess.CREATE_NO_WINDOW)
+    elif running!='true':raise RuntimeError('Unknown dedicated Hub state')
+
+
 def main():
-    assert len(sys.argv)==2 and sys.argv[1] in ('service','tunnel')
+    assert len(sys.argv)==2 and sys.argv[1] in ('service','tunnel','hub')
     mode=sys.argv[1]
     with (PRIVATE/(mode+'.lock')).open('a+b') as lock:
         if lock.tell()==0:lock.write(b'0');lock.flush()
@@ -75,6 +90,11 @@ def main():
         log=logging.getLogger(mode);log.setLevel(logging.INFO)
         handler=RotatingFileHandler(PRIVATE/(mode+'.log'),maxBytes=2*1024*1024,backupCount=3,encoding='utf8')
         handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'));log.addHandler(handler)
+        if mode=='hub':
+            while True:
+                try:ensure_hub()
+                except Exception:log.warning('Dedicated Hub startup check failed; retry in 60 seconds')
+                time.sleep(60)
         delay=5
         while True:
             env=dict(os.environ);env['QDJ_HOSTING_CONFIG']=str(PRIVATE/'hosting.json')
