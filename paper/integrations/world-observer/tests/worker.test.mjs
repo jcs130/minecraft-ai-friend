@@ -72,6 +72,11 @@ test('slow appearance preparation never holds up the actual world and publisher'
  f.worker.appearanceSource={forPlayer(){preparations++;return new Promise(()=>{})},binding(){return null}};
  await f.worker.step();assert.equal(f.counts().creates,1);assert.equal(preparations,1);assert.equal(f.worker.status().sources.length,1);assert.equal(f.worker.status().readOnly,true);await f.worker.close();
 });
+test('slow original maid asset loading never delays packets or publishing',async()=>{
+ const f=fixture();let preparations=0;
+ f.worker.maidSource={prepare(){preparations++;return new Promise(()=>{})}};
+ await f.worker.step();assert.equal(preparations,1);assert.equal(f.worker.status().sources.length,1);assert.equal(f.counts().closes,0);await f.worker.close();
+});
 test('a game-side offline receipt closes the old source without any replay or game reconnection',async()=>{
  const f=fixture();await f.worker.step();f.offline();f.advance(50);await f.worker.step();assert.equal(f.worker.sources.size,0);assert.equal(f.counts().closes,1);await f.worker.close();
 });

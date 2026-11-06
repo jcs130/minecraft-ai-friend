@@ -53,8 +53,8 @@ export async function readBoundedJSON(response,maxBytes) {
 /** Controls only observation hosts and their outbound publishers. No createBot,
  * login, command, RCON or gameplay action exists in this service. */
 export class ObservationWorker {
-  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,packetDecoder=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
-    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,packetDecoder,fetcher,now,log});
+  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,maidSource=null,packetDecoder=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
+    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,maidSource,packetDecoder,fetcher,now,log});
     this.sources=new Map();this.lastPortalAt=0;this.lastPoll=0;this.lastLog=null;this.closed=false;
     this.sampleIntervalMs=config.sampleIntervalMs??50;this.authorityInFlight=null;this.sampleInFlight=null;
     this.lastSampleAt=null;this.sampleCount=0;this.sampleDurationMs=null;this.lifecycle=new AbortController();
@@ -95,8 +95,8 @@ export class ObservationWorker {
           source.job=job;
         }
         for(const id of [...this.sources.keys()])if(!seen.has(id))await this.retire(id);
-        this.lastPortalAt=this.now();this.report('观战授权已连接。');
-      }catch(error){if(!this.closed){this.recordFailure('authority',error);this.report('观战授权暂不可用，停止过期画面。');}}
+        this.lastPortalAt=this.now();this.report('��ս��Ȩ�����ӡ�');
+      }catch(error){if(!this.closed){this.recordFailure('authority',error);this.report('��ս��Ȩ�ݲ����ã�ֹͣ���ڻ��档');}}
   }
   ensurePublisher(source) {
     if(source.publisher||source.publisherPending)return;
@@ -112,7 +112,7 @@ export class ObservationWorker {
       const ended=receipt=>{if(source.publisher===publisher){source.publisher=null;if(!this.closed&&this.sources.get(source.job.id)===source&&!source.publisherAbort.signal.aborted)this.recordFailure('publisher',Error(publisher.state?.().lastError||receipt?.reason||'SPECTATOR_TRANSPORT_CLOSED'));}};
       void publisher.done.then(ended,ended);
     }).catch(async(error)=>{
-      if(this.sources.get(source.job.id)===source){this.recordFailure('publisher',error);await this.retire(source.job.id);this.report('观战发布暂不可用，等待重新接通。');}
+      if(this.sources.get(source.job.id)===source){this.recordFailure('publisher',error);await this.retire(source.job.id);this.report('��ս�����ݲ����ã��ȴ����½�ͨ��');}
     }).finally(()=>{source.publisherPending=null;});
   }
   async step() {
@@ -170,13 +170,14 @@ export class ObservationWorker {
           this.packetDecoder?.reset();
           // Model conversion/download must never delay world, inventory or pose.
           if(this.appearanceSource)void this.appearanceSource.forPlayer(row.player).catch(()=>{});
+          if(this.maidSource)void this.maidSource.prepare(row.player?.nativeMaids?.rows).catch(()=>{});
           ({after:source.after,generation:source.generation}=source.view.ingest(row));
           const status=source.view.host.status();
           if(status.viewer.reason)throw Object.assign(Error('OBSERVER_SCENE_UNAVAILABLE'),{sceneReason:status.viewer.reason});
           if(status.viewer.loadedColumns>=9&&status.identity.confirmed)this.ensurePublisher(source);
-        }catch(error){this.recordFailure('scene',error);await this.retire(source.job.id);this.report('观战场景需要重新加载，旧画面已停止。');}
+        }catch(error){this.recordFailure('scene',error);await this.retire(source.job.id);this.report('��ս������Ҫ���¼��أ��ɻ�����ֹͣ��');}
       }
-    }catch(error){for(const source of active)if(this.sources.get(source.job.id)===source)await this.retire(source.job.id);if(!this.closed){this.recordFailure('sample',error);this.report('游戏场景暂不可用，等待服务恢复。');}}
+    }catch(error){for(const source of active)if(this.sources.get(source.job.id)===source)await this.retire(source.job.id);if(!this.closed){this.recordFailure('sample',error);this.report('��Ϸ�����ݲ����ã��ȴ�����ָ���');}}
     finally{this.sampleDurationMs=Math.round((performance.now()-started)*100)/100;}
   }
   async close(){if(this.closed)return;this.closed=true;this.lifecycle.abort();for(const id of [...this.sources.keys()])await this.retire(id);}
@@ -192,9 +193,10 @@ export async function createObservationWorker(input,options={}) {
   const parsers=Object.fromEntries(['play','configuration'].map(state=>[state,protocol.createDeserializer({version:'1.21.1',state,isServer:false,noErrorLogging:true})]));
   const packetDecoder=observationPacketDecoder(parsers);
   const appearanceSource=config.appearance?new ObservationAppearanceSource({config:config.appearance,decodeBundle:(await moduleAt('host/viewer-ysm-assets.mjs')).decodeYsmBundle}):null;
-  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,terrainDeltas:config.terrainDeltas===true,appearanceSource,
+  const maidSource=config.maidAppearance?await (await moduleAt('host/maid-appearance-source.mjs')).createMaidAppearanceSource(config.maidAppearance):null;
+  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,terrainDeltas:config.terrainDeltas===true,appearanceSource,maidSource,
     serverItemCatalogFile:config.serverItemCatalogFile,serverItemCatalogSha256:config.serverItemCatalogSha256,bundledAppearanceCatalogFile:config.bundledAppearanceCatalogFile||''});
-  return new ObservationWorker({config,prepared,registry,appearanceSource,simplifyNBT:nbt.simplify,
+  return new ObservationWorker({config,prepared,registry,appearanceSource,maidSource,simplifyNBT:nbt.simplify,
     decodePacket:(bytes,state)=>packetDecoder.decode(bytes,state),packetDecoder,startPublisher:startSpectatorPublisher,...options});
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
