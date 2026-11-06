@@ -24,7 +24,7 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
   attached.get(bot)?.close();
   const pending=new Map(),lastResults=new Map();let closed=false,uploading=false;
   const send=row=>{if(closed||!ready())throw Error('VOICE_NOT_CONNECTED');bot._client.write('custom_payload',{channel:CHANNEL,data:Buffer.concat([Buffer.from([1]),Buffer.from(JSON.stringify(row))])});};
-  const register=()=>{if(closed||!ready())return;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});if(onHearing)send({op:'subscribe',requestId:randomUUID(),captions:'events'});};
+  const register=()=>{if(closed||!ready())return;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});send({op:'subscribe',requestId:randomUUID(),captions:onHearing?'events':'chat'});};
   const payload=packet=>{
     if(closed||!ready()||packet.channel!==CHANNEL||!Buffer.isBuffer(packet.data)||packet.data[0]!==1||packet.data.length>16001)return;
     let row;try{row=JSON.parse(packet.data.subarray(1).toString('utf8'));}catch{return;}

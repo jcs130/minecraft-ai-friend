@@ -6,7 +6,7 @@ const CHANNEL='mcagent:voice', UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 export function attachProximityVoice(bot,{onHearing,timeoutMs=110_000}={}){
   const pending=new Map();let closed=false,uploading=false;
   const send=row=>{if(closed||bot._client.state!=='play')throw Error('VOICE_NOT_CONNECTED');bot._client.write('custom_payload',{channel:CHANNEL,data:Buffer.concat([Buffer.from([1]),Buffer.from(JSON.stringify(row))])});};
-  const register=()=>{bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});if(onHearing)send({op:'subscribe',requestId:randomUUID(),captions:'events'});};
+  const register=()=>{bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});send({op:'subscribe',requestId:randomUUID(),captions:onHearing?'events':'chat'});};
   const payload=packet=>{
     if(packet.channel!==CHANNEL||packet.data?.[0]!==1||packet.data.length>16_001)return;
     let row;try{row=JSON.parse(packet.data.subarray(1).toString('utf8'));}catch{return;}

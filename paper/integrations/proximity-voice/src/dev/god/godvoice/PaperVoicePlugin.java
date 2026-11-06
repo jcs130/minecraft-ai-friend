@@ -39,6 +39,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final ConcurrentHashMap<UUID,VoiceDelivery> deliveries=new ConcurrentHashMap<>();
     private volatile VoiceAudience.Snapshot snapshot=new VoiceAudience.Snapshot(0,Map.of());
     private volatile VoicechatServerApi api;
+    private final Set<UUID> bridgePeers=new HashSet<>();
     private final VoicePresence presence=new VoicePresence(id->{VoicechatServerApi current=api;return current==null?null:current.getConnectionOf(id);});
     private volatile boolean stopping;
     private ExecutorService io,media,recognition;
@@ -105,7 +106,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void main(Runnable action){if(!stopping)Bukkit.getScheduler().runTask(this,action);}
     private void syncPresence(Player player){
-        if(api!=null&&player.getListeningPluginChannels().contains(CHANNEL)&&player.hasPermission("qiandeng.voice.use"))presence.attach(player.getUniqueId());
+        if(api!=null&&bridgePeers.contains(player.getUniqueId())&&player.getListeningPluginChannels().contains(CHANNEL)&&player.hasPermission("qiandeng.voice.use"))presence.attach(player.getUniqueId());
         else presence.detach(player.getUniqueId());
     }
     @EventHandler public void registered(PlayerRegisterChannelEvent event){
@@ -114,7 +115,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     @EventHandler public void unregistered(PlayerUnregisterChannelEvent event){
         if(!event.getChannel().equals(CHANNEL))return;
-        presence.detach(event.getPlayer().getUniqueId());eventCaptions.remove(event.getPlayer().getUniqueId());
+        UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.detach(actor);eventCaptions.remove(actor);
     }
     private void snapshot(){
         Map<UUID,VoiceAudience.Actor> all=new HashMap<>();
@@ -126,7 +127,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         uploads.expire(System.currentTimeMillis());
     }
     @EventHandler public void quit(PlayerQuitEvent event){
-        UUID actor=event.getPlayer().getUniqueId();presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
+        UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
         cancelSpeech(actor,"ACTOR_DISCONNECTED");
     }
     @EventHandler public void worldChanged(PlayerChangedWorldEvent event){
@@ -342,10 +343,13 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 case "subscribe"->{if(data.has("captions")&&data.get("captions").getAsString().equals("events"))eventCaptions.add(actor);else eventCaptions.remove(actor);reply(p,id,"subscribed","");}
                 case "say"->submitText(p,id,data.get("text").getAsString(),data.has("voice")?data.get("voice").getAsString():profiles.getString(actor+".voice",""));
                 case "status"->{VoiceLedger.Entry row=ledger.get(actor,id);reply(p,id,row==null?"not_found":row.state(),row==null?"":row.reason());}
-                case "begin"->{String format=data.get("format").getAsString();if(!format.equals("wav"))throw new IllegalArgumentException("UPLOAD_PCM16_WAV_REQUIRED");int bytes=data.get("bytes").getAsInt();String digest=data.get("sha256").getAsString();if(data.get("bytes").getAsDouble()!=bytes||bytes<1||bytes>VoiceUploads.MAX_BYTES||!digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("UPLOAD_SIZE_OR_DIGEST_INVALID");VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){if(!old.fingerprint().equals(hash("wav\0"+digest)))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,old.state(),old.reason());return;}reply(p,id,uploads.begin(key,session,bytes,digest,format,System.currentTimeMillis()),"");}
+                case "begin"->{String format=data.get("format").getAsString();if(!format.equals("wav"))throw new IllegalArgumentException("UPLOAD_PCM16_WAV_REQUIRED");int bytes=data.get("bytes").getAsInt();String digest=data.get("sha256").getAsString();if(data.get("bytes").getAsDouble()!=bytes||bytes<1||bytes>VoiceUploads.MAX_BYTES||!digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("UPLOAD_SIZE_OR_DIGEST_INVALID");VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){if(!old.fingerprint().equals(hash("wav\0"+digest)))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,old.state(),old.reason());break;}reply(p,id,uploads.begin(key,session,bytes,digest,format,System.currentTimeMillis()),"");}
                 case "finish"->{var audio=uploads.finish(key,session,System.currentTimeMillis());submit(p,id,hash("wav\0"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(audio.bytes()))),null,null,audio.bytes());}
                 default->throw new IllegalArgumentException("VOICE_OPERATION_UNKNOWN");
             }
+            // A proxy may register CHANNEL for every vanilla client. Require a
+            // valid adapter request before advertising a bridge connection.
+            bridgePeers.add(actor);syncPresence(p);
         }catch(Exception failure){String code=failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_PROTOCOL_INVALID";if(requestId!=null)reply(p,requestId,"failed",code==null?"VOICE_PROTOCOL_INVALID":code.replaceAll("[^A-Za-z0-9_]",""));else error(p,code);}
     }
     private void reply(Player p,UUID request,String state,String reason){

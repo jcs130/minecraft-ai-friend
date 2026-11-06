@@ -43,6 +43,11 @@ try{
   await new Promise((resolve,reject)=>{bot.once('spawn',resolve);bot.once('error',reject);setTimeout(()=>reject(Error('Isolated login timed out')),15000).unref()});await run('gamemode creative '+name);
  }
  for(const cmd of ['time set day','gamerule doMobSpawning false','tp QVSource 0 80 0','tp QVReceiver 3 80 0','tp QVFar 200 80 0','tp QVDisabled 4 80 0'])await run(cmd);
+ // Velocity also advertises its registered channels for every player. This
+ // transport declaration alone must not impersonate an Agent voice adapter.
+ for(const bot of bots)bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('mcagent:voice')});
+ await sleep(300);
+ check('proxy channel advertisement alone never connects a vanilla player',(await run('voice status QVFar')).includes('VOICE_CLIENT_NOT_INSTALLED'));
  voice=attachProximityVoice(bots[0],{timeoutMs:15000});const wav=readFileSync(root+'/synthetic.wav');
  if(mode==='restart'){
   const near=await receiver(bots[1]);await until(()=>near.state.players.has('QVSource'));
@@ -81,6 +86,11 @@ try{
   voice.close();voice=null;await sleep(400);
   check('adapter close restores the disconnected icon through a real state packet',near.state.players.get('QVSource')?.disconnected===true);
   check('adapter close removes bridge diagnostic',(await run('voice status QVSource')).includes('VOICE_CLIENT_NOT_INSTALLED'));
+  bots[0]._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('mcagent:voice')});
+  bots[0]._client.write('custom_payload',{channel:'mcagent:voice',data:Buffer.concat([Buffer.from([1]),Buffer.from(JSON.stringify({op:'status',requestId:randomUUID()}))])});await sleep(300);
+  check('legacy valid voice request also establishes presence without a new handshake',near.state.players.get('QVSource')?.disconnected===false);
+  bots[0]._client.write('custom_payload',{channel:'minecraft:unregister',data:Buffer.from('mcagent:voice')});await sleep(300);
+  check('legacy bridge unregister clears confirmed adapter state',near.state.players.get('QVSource')?.disconnected===true);
   voice=attachProximityVoice(bots[0],{timeoutMs:15000});await sleep(400);
   check('reattaching the same body reports connected without replaying audio',near.state.players.get('QVSource')?.disconnected===false&&near.state.audio===before);
   report.finalBridgeState=near.state.players.get('QVSource');

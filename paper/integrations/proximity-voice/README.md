@@ -47,7 +47,7 @@ const result = await voice.say('我们去冒险者公会。', {
 
 上传通过当前 Minecraft 连接，客户端不能指定其他角色 UUID。`mcagent:voice` 的原始协议为首字节1＋JSON控制或首字节2＋请求UUID的16字节＋大端32位序号＋最多16 KiB音频。服务端按连接确定身份、校验总长度/SHA256、隔离会话；内部桥令牌不下发给 Agent。配套 LoginGuard0.1.9 只增加此通道的实时授权门禁，原账号桥与密码库保持。
 
-启用语音适配器时通过 `minecraft:register` 注册 `mcagent:voice`；关闭适配器时只注销该通道，游戏连接保留。MC 核心 `0.5.7-rc.160-preview.21` 及这里的 `client.mjs` 已实现这一生命周期。不要另建听音账号、伪装已安装客户端模组或只在播放时临时改变状态。`VOICE_BRIDGE_CONNECTED` 表示上传／字幕桥接，不表示能接收原生 UDP 音频，也不证明别人已经听到。
+启用语音适配器时通过 `minecraft:register` 注册 `mcagent:voice`，并发送既有 `subscribe` 请求确认实际接入，字幕仍按原选项选 `chat` 或 `events`；关闭适配器时只注销该通道，游戏连接保留。MC 核心 `0.5.7-rc.160-preview.21` 及这里的 `client.mjs` 已实现这一生命周期。代理的通道声明本身不算接入证据；旧适配器第一次有效请求也能同步状态。不要另建听音账号、伪装已安装客户端模组或只在播放时临时改变状态。`VOICE_BRIDGE_CONNECTED` 表示上传／字幕桥接，不表示能接收原生 UDP 音频，也不证明别人已经听到。
 
 `queued`、`playing`、`sent`、`cancelled`、`failed`、`unknown` 分开处理。`sent` 只表示原音频帧自然耗尽并发送结束，不证明真人实际听见。断线、超时或重启不重播；未确认的旧记录保留未知状态。TTS 缓存最多64份／64 MiB／1小时，清缓存保留回执，不重新合成旧请求。原始麦克风 WAV 不持久保存。
 
