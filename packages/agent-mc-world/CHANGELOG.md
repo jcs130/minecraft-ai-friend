@@ -1,14 +1,15 @@
-## Unreleased
+## 0.5.7-rc.160-preview.24 (unpublished candidate)
 
-- Keep overlapping battlefield reads from disabling an Agent-authored combat program. Mineflayer and native Java consumers report `programDeferred` for the contended sample and retain its fresh default candidates; in-flight output is never reused for another frame. Genuine program failures, timeouts and revocation keep their existing behavior.
-- Preserve protocol-observed custom names and UUIDs for named non-animal entities in visual facts and interaction receipts, without changing their target type or inferring ownership.
-- Deliver named neutral and owned-pet deaths with structured identity and an appropriate wake-up trigger; ordinary combat-target receipts retain their existing ownership and notification behavior.
-- Stop treating NPC button interfaces carried by generic chest packets as evidence of an accessible inventory. Keep verified vanilla container-entity readouts separate from unknown interaction menus.
-
-## 0.5.7-rc.160-preview.22 (unpublished candidate)
+- Keep concurrent battlefield reads from disabling an Agent-authored combat program. Contended readers retain fresh default candidates and report `programDeferred`, without borrowing another frame's policy or masking real failures.
+- Measure multipart query limits in UTF-8 bytes so Chinese replies cannot exceed the bounded aggregate or final envelope.
+- Integrate reviewed supervisor context, named NPC observations, weapon capabilities and multipart server queries with the Numen body adapter. Keep host-authored actions and original receipts authoritative.
+- Confirm actual enchanting results before reporting success; provide exact failed-skill usage and preserve partial query evidence without automatic retries.
 
 - Add source-authored supervisor event views through `agent-mc-world/context`. Accepted tactical choices expose a bounded summary linked to the exact original payload; missing or mismatched views retain full evidence. Rejected choices and unknown outcomes stay complete.
 - Declare tool-help targets through an optional `helpFor` capability so host supervisors can route execution-contract discovery to task workers without copying or guessing tool names. SDK/MCP execution and original event delivery remain unchanged.
+- Preserve protocol-observed custom names and UUIDs for named non-animal entities in visual facts and interaction receipts, without changing their target type or inferring ownership.
+- Deliver named neutral and owned-pet deaths with structured identity and an appropriate wake-up trigger; ordinary combat-target receipts retain their existing ownership and notification behavior.
+- Stop treating NPC button interfaces carried by generic chest packets as evidence of an accessible inventory. Keep verified vanilla container-entity readouts separate from unknown interaction menus.
 
 ## 0.5.7-rc.160-preview.18 (unpublished candidate)
 

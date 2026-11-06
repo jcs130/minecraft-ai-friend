@@ -14,6 +14,23 @@ const setup = (send = vi.fn()) => {
 };
 afterEach(() => vi.useRealTimers());
 
+it('bounds multipart Unicode rows and final envelopes by UTF-8 bytes', () => {
+  const row = '字'.repeat(12000);
+  const r = setup();
+  r.lane.call({ query: 'pages' }, [definition], r.context);
+  r.lane.receive(`ROW ${row}`, 'one', 'alice', 11);
+  r.lane.receive(`ROW ${row}`, 'one', 'alice', 12);
+  expect(r.terminal).toHaveBeenCalledTimes(1);
+  expect(r.terminal.mock.calls[0][0].data).toMatchObject({ phase: 'cancelled',
+    partialReply: { complete: false, parts: [{ item: row }] } });
+  expect(r.context.send).toHaveBeenCalledTimes(1);
+  const final = setup();
+  final.lane.call({ query: 'pages' }, [{ ...definition,
+    matchReply: () => ({ ok: true, data: { item: '字'.repeat(24000) } }) }], final.context);
+  final.lane.receive('END', 'one', 'alice', 11);
+  expect(final.terminal.mock.calls[0][0].data).toMatchObject({ phase: 'cancelled', outcomeUnknown: true });
+});
+
 it('collects rows without settling, rejects duplicate/old delivery, then emits a single complete receipt', () => {
   const { lane, terminal, context } = setup();
   const sent = lane.call({ query: 'pages' }, [definition], context);
