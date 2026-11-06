@@ -21,7 +21,7 @@ import {
 import { piglinIsHostile } from './piglin.ts';
 import { itemCustomName } from './item-display.ts';
 import { inventoryIdentityText } from './item-identities.ts';
-import { animalStateNote, type FactBot, type FactEntity } from './animal-state.ts';
+import { animalStateNote, entityCustomName, entityIdentityNote, type FactBot, type FactEntity } from './animal-state.ts';
 import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardBodyBounds } from './hazard-geometry.ts';
 import { remainingEffectTicks } from './status-effects.ts';
 import type { TargetDiag } from './skill-context.ts';
@@ -95,6 +95,8 @@ type Motion = 'still' | 'walking' | 'sprinting' | 'swimming' | 'falling' | 'risi
 interface EntityInfo {
   /** 当前连接中可见实体的选择编号；实体离开加载范围后须重新观察。 */
   entityId?: number;
+  uuid?: string;
+  customName?: string;
   name: string;
   kind: 'player' | 'hostile' | 'animal' | 'other';
   distance: number;
@@ -1066,7 +1068,7 @@ export function villagerNote(e: { name?: string; metadata?: unknown[] }): string
 /** 调用方仅在视线可达时使用；编号供当次连接选择目标，动物状态保持元数据原读数。 */
 export function entityObservationNote(bot: FactBot, entity: FactEntity): string {
   const animal = animalStateNote(bot, entity);
-  const identity = animal || (Number.isInteger(entity.id) ? `entityId=${entity.id}` : '');
+  const identity = animal || entityIdentityNote(bot, entity);
   return [villagerNote(entity), identity].filter(Boolean).join('，');
 }
 
@@ -1794,8 +1796,11 @@ export function snapshotFromBot(
     const visible = observation.visibility === 'visible';
     const stack = visible ? droppedStackOf(e, bot.registry?.items) : null;
     const note = visible ? entityObservationNote(bot, e) : null;
+    const customName = visible ? entityCustomName(bot, e) : null;
     entities.push({
       ...(Number.isInteger(e.id) ? { entityId: e.id } : {}),
+      ...(visible && e.uuid ? { uuid: e.uuid } : {}),
+      ...(customName ? { customName } : {}),
       name,
       kind,
       distance: d,

@@ -17,7 +17,7 @@ import { zhDimension, zhEntity, zhName } from './names.ts';
 import { SIGN_RE, contentsText, signLinesText, zhThing } from './receipt.ts';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import {
-  FEED_ITEMS, TAME_ITEMS, TRUST_ITEMS, animalStateNote, dyeColorOf, isKnownTarget, readHorseTamed, readSaddled, readSheepColor,
+  FEED_ITEMS, TAME_ITEMS, TRUST_ITEMS, animalStateNote, entityCustomName, dyeColorOf, isKnownTarget, readHorseTamed, readSaddled, readSheepColor,
   unknownUseTargetText,
 } from './entity-facts.ts';
 import { HOE_TILLED, SHOVEL_PATH } from './blueprint-registry.ts';
@@ -43,6 +43,7 @@ import { nearestBoat } from './placement.ts';
 import { itemMatchesPick } from './item-pick.ts';
 import { itemCustomName } from './item-display.ts';
 import { windowSnapshot } from './viewer-state.ts';
+import { minecraftTextComponent } from './text-component.ts';
 import { consumesOpenWindow, selectionMenuTitle, storageWindow } from './window-semantics.ts';
 import { clearHandForBlockInteraction, needsBareHandToInteract, withPreparedInteractionHand } from './hand-interaction.ts';
 import { farmingClickCell, floodedCropSpace } from './farming-target.ts';
@@ -883,17 +884,24 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     await bot.lookAt(entity.position.offset(0, (entity.height ?? 1) * 0.5, 0));
     const beforeInv = invSnapshot(bot);
     const probe = useProbeOn(bot, held, call.target, entity);
+    const beforeWindow = bot.currentWindow;
     await useOn(entity);
     await sleep(USE_SETTLE_MS);
     checkAbort(ctx);
-    const head = `${label}右键了${zhEntity(call.target)}`;
-    // 运输矿车、漏斗矿车右键开出的是箱子类窗口:读一遍内容再关,东西要用 take 取
+    const customName = entityCustomName(bot, entity);
+    const head = `${label}右键了${customName ? `「${customName}」（${zhEntity(call.target)}，entityId=${entity.id}）` : zhEntity(call.target)}`;
+    // The generic chest wire type also carries NPC button menus. Only vanilla
+    // container entities establish storage semantics; unknown menus are not loot.
     const win = bot.currentWindow;
-    const boxNote = win && /^minecraft:(generic_9x\d|hopper)$/.test(String(win.type))
-      ? `。开出了它的箱子窗口,里面:${contentsText(containerStacks(win as never, bot.registry as never).items)};`
-        + '窗口已关,要取东西用 take'
-      : '';
-    if (boxNote) bot.closeWindow(win!);
+    let boxNote = '';
+    if (win && win !== beforeWindow && /^minecraft:(generic_9x\d|hopper)$/.test(String(win.type))) {
+      const knownStorage = ['chest_minecart', 'hopper_minecart'].includes(entity.name ?? '') && storageWindow(win);
+      const title = minecraftTextComponent(win.title).slice(0, 160) || String(win.type);
+      boxNote = knownStorage
+        ? `。开出了它的箱子窗口,里面:${contentsText(containerStacks(win as never, bot.registry as never).items)};窗口已关,要取东西用 take`
+        : `。打开了界面「${title}」；这是交互界面，槽位图标尚未确认是可取物品，不能据此记成实体背包或已获得装备；窗口已关，请查询服务端该界面的控制/装备入口`;
+      bot.closeWindow(win);
+    }
     const note = useInvNote(beforeInv, bot);
     const facts = useNoteOn(bot, held, call.target, entity) + leaveVehicle(bot, call.target) + boxNote;
     if (!probe) {
