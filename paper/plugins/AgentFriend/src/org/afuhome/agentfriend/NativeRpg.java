@@ -207,6 +207,7 @@ final class NativeRpg {
         if(group.equals("status")&&Arrays.stream(args).skip(1).allMatch(a->a.equals("--json"))){
             boolean json=Arrays.asList(args).contains("--json");journey(p,false,json);if(!json)adventureProgress(p,false,false);return true;
         }
+        if(EconomyPresentation.route(owner,p,args))return true;
         if(group.equals("trade")&&args.length>=2&&Set.of("wallet","auction").contains(args[1].toLowerCase(Locale.ROOT))){
             try{call("tradeCommand",new Class<?>[]{Player.class,String[].class},p,Arrays.copyOfRange(args,1,args.length));}
             catch(RuntimeException unavailable){p.sendMessage("§e[service_unavailable] 金币资料暂不可用；未进行交易。稍后查询：/mycli trade wallet");}return true;

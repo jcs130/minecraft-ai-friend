@@ -356,6 +356,17 @@ final class AgentCliCatalog {
         if(nativeRpg){
             nativeSpec(specs,"intro","read","/mycli intro","按真实饥饿、职业、装备和任务给一个当前目标","免费只读，不代选职、接取、学习或领奖；物理目标须实际行动，verifyCommand仅核对");
             nativeSpec(specs,"trade.wallet","read","/mycli trade wallet","查Vortex任务金币余额","任务、回收、试炼奖励和商店共用金币；实体绿宝石仍是物品；服务不可用不伪造0余额");
+            nativeSpec(specs,"trade","group","/mycli trade shop|recycle|wallet|menu|find","金币商城、装备回收与村民交易","shop/recycle用同一RPG金币；menu/find/buy/sell仍查询附近村民报价，不远程成交；真人罗盘直接开商城");
+            nativeSpec(specs,"trade.shop","group","/mycli trade shop [menu|list|buy]","金币商城：装备、食物和探索建材；真人从罗盘金币商城进入","同一Vortex金币；浏览免费，购买先确认；旧arena shop调用保留");
+            nativeSpec(specs,"trade.shop.menu","gui","/mycli trade shop menu","打开中文原版商城；点击商品→数量→确认购买","Java、基岩和观战可用原版容器；不用客户端额外模组，不依赖右键或Shift");
+            nativeSpec(specs,"trade.shop.list","read","/mycli trade shop list","列出真实商品ID、每份数量、金币价和可复制购买命令","默认精炼文本；--json取机器回执；不购买、不扣费");
+            nativeSpec(specs,"trade.shop.buy","item","/mycli trade shop buy <商品ID> [份数]","用金币购买装备与补给，直接保存到个人箱待入箱队列","不耗魔力；非堆叠装备一次1件，材料最多一组；开箱接收：arena stash page 1；未知结果先查trade recycle status，勿重复购买");
+            nativeSpec(specs,"trade.recycle","group","/mycli trade recycle [list|quote|sell|status|menu]","出售多余装备赚金币；先报价，再明确确认","当前手持、穿戴、绑定和特殊装备保留；材料存箱；旧arena recycle调用保留");
+            nativeSpec(specs,"trade.recycle.list","read","/mycli trade recycle list [页码]","查可回收装备的精确槽位、耐久、附魔、价格及下一步","默认精炼文本，每页12项；bag是0–35槽，chest是1–540槽；不会自动出售");
+            nativeSpec(specs,"trade.recycle.quote","read","/mycli trade recycle quote bag|chest <槽位> [数量]","取得30秒有效报价，返回完整确认命令","不移走物品、不加钱；核对装备后sell；取消无需操作，报价自动过期");
+            nativeSpec(specs,"trade.recycle.sell","item","/mycli trade recycle sell <报价ID>","按本人最新报价出售，金币进入同一RPG账户","只执行一次；过期/物品改变拒绝；待对账不得重试；完成后trade shop list购买补给");
+            nativeSpec(specs,"trade.recycle.status","read","/mycli trade recycle status","查金币服务、余额及交易是否待对账","不补发物品或金币；待对账请保留原记录并联系服主");
+            nativeSpec(specs,"trade.recycle.menu","gui","/mycli trade recycle menu","打开可回收装备列表→报价→绿色确认","每件显示来源和价格；不接受拖入物品、不自动批量卖出");
             nativeSpec(specs,"trade.auction","read","/mycli trade auction","查玩家拍卖维护状态：交付故障，暂不能使用","免费只读，未上架、未扣款；不把扣钱或成功台词当作收到物品");
             var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；wallet；auction","村民交易报价和位置；wallet查任务金币，auction查维护状态",trade.requires()+"；金币入口只读取本人经济账户",trade.returns()));
             // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
@@ -516,7 +527,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return (id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);

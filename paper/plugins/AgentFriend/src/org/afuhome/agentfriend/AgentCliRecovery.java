@@ -33,6 +33,7 @@ final class AgentCliRecovery {
         {"party","组队","邀请","入队","队伍"},
         {"inventory","bag","backpack","背包","物品","满了","存箱"},
         {"recycle","sell","回收","分解","卖掉","金币"},
+        {"shop","buy","purchase","商城","商店","购买","买东西","补给"},
         {"skills","spell","法术","技能","施法","学习"},
         {"profession","class","职业","选职"},
         {"quest","tasks","委托","任务"},

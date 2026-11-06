@@ -138,7 +138,11 @@ final class InventoryFeedback implements Listener {
                     ||item.hasItemMeta()||plugin.isSoulbound(item))continue;
             next="可先存「"+identity.describe(item).name()+"」×"+item.getAmount()+"。命令：/mycli arena stash putslot "+slot+" "+item.getAmount();break;
         }
-        p.sendMessage("§e【inventory_full】"+(cooldown?"物品未全部装入背包。":"随身没有空槽。")+next+"（成功2魔力，无需开界面或传送）。收到 moved>0 才算完成，再继续拾取；多余装备先 /mycli arena recycle list 报价回收，绑定物品保留。");
+        p.sendMessage("§e【inventory_full】"+(cooldown?"物品未全部装入背包。":"随身没有空槽。")+next+"（成功2魔力，无需开界面或传送）。收到 moved>0 才算完成，再继续拾取；多余装备 /mycli trade recycle list → 按返回命令报价确认，金币可用 /mycli trade shop list 买补给。不会自动丢弃或出售。");
+        p.sendMessage(net.kyori.adventure.text.Component.text("【点击整理个人箱】 ")
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash page 1"))
+                .append(net.kyori.adventure.text.Component.text("【点击装备回收】")
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli trade recycle menu"))));
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void pickup(EntityPickupItemEvent event) {

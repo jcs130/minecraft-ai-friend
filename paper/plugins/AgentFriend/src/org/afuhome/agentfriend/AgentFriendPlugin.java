@@ -2438,6 +2438,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return professions.level(p, id) > 0 && (!(id.equals("night") || id.equals("feather")) || hasLearnedSkill(p, id));
     }
     private void fillCompass(Player p, Inventory inv) {
+        EconomyPresentation.decorateCompass(inv);
         for (CompassButton button : COMPASS_BUTTONS)
             inv.setItem(button.slot(), item(button.icon(), (button.slot() < 9 ? "§d" : button.slot() < 18 ? "§a" : "§b")
                     + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力"
@@ -2461,6 +2462,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void compassClick(Player p, int slot, boolean rightClick) {
+        if(EconomyPresentation.compassClick(p,slot))return;
         if(nativeRpg.selected()&&slot>=36&&slot<45){
             var common=List.of("home","travel","prospect","night","feather");
             if(slot-36<common.size())cast(p,common.get(slot-36));else nativeRpg.delegate(p,"skills","menu");return;
@@ -2798,7 +2800,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= top.getSize() || event.getClick().isShiftClick()) return;
-        if (page.equals("skills") && slot >= 27 && slot < 35) return;
+        if (page.equals("skills") && slot >= 27 && slot < 35 && slot != 30) return;
         if (isSpellGuidePage(page) && slot < 9) return;
         menus.remove(top); // A second click packet cannot cast from this menu.
         p.closeInventory();
@@ -3234,6 +3236,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        List<String> economy=EconomyPresentation.complete(args);if(economy!=null)return economy;
         if (args.length == 2 && args[0].equalsIgnoreCase("inventory")) return List.of("status", "refresh", "item");
         if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu");
         if (args.length == 3 && args[0].equalsIgnoreCase("dungeon")) return siteDungeons.ids();

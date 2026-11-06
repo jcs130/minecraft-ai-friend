@@ -130,13 +130,13 @@ final class ActionFeedback {
                 default -> fallback(reason, dungeon);
             };
             case "economy" -> switch (reason) {
-                case "insufficient_balance" -> a("绿宝石余额不足。", "用 /mycli arena wallet 核对余额；完成试炼或回收可回收装备赚取，再购买。", "/mycli arena wallet", "/mycli arena recycle list");
+                case "insufficient_balance" -> a("金币余额不足。", "用 /mycli trade wallet 核对余额；完成试炼或回收可回收装备赚取，再购买。", "/mycli trade wallet", "/mycli trade recycle list");
                 case "pending_queue_full" -> a("个人箱的待入箱队列已满。", "清理 /mycli arena stash 的全部页面并重新开箱装入待领奖队列，再购买。", "/mycli arena stash", "/mycli arena rewards");
-                case "not_recyclable_or_protected" -> a("物品不能回收，或属于绑定/受保护物品。", "用 /mycli arena recycle list 选择服务器列出的可回收装备；保留原物品。", "/mycli arena recycle list");
-                case "quote_expired", "quote_unknown_or_consumed", "item_changed" -> a("回收报价已过期、已用过，或物品发生变化。", "先 /mycli arena wallet 核对结算；重新 recycle list 并取得新 quote，确认数量后仅 sell 一次。", "/mycli arena wallet", "/mycli arena recycle list");
-                case "wallet_limit" -> a("回收后余额会超过上限。", "先查 /mycli arena wallet，可购买需要的装备消耗余额后再取得新的回收报价。", "/mycli arena wallet", "/mycli arena shop list");
-                case "invalid_offer_or_quantity", "usage_shop_list_buy_wallet" -> a("商品ID、购买数量或语法无效。", "先 /mycli arena shop list 复制商品ID；用 /mycli arena shop buy <ID> [数量] 购买。", "/mycli arena shop list");
-                default -> a("回收或商店参数不正确（" + reason + "）。", "用 /mycli arena recycle list 查物品槽位；/mycli arena recycle quote bag|chest <槽位> [数量] 获取报价，再 /mycli arena recycle sell <报价ID>；不要凭空猜槽位。", "/mycli arena recycle list", "/mycli help arena.recycle.quote");
+                case "not_recyclable_or_protected" -> a("物品不能回收，或属于绑定/受保护物品。", "用 /mycli trade recycle list 选择服务器列出的可回收装备；保留原物品。", "/mycli trade recycle list");
+                case "quote_expired", "quote_unknown_or_consumed", "item_changed" -> a("回收报价已过期、已用过，或物品发生变化。", "先 /mycli trade wallet 核对结算；重新 recycle list 并取得新 quote，确认数量后仅 sell 一次。", "/mycli trade wallet", "/mycli trade recycle list");
+                case "wallet_limit" -> a("回收后余额会超过上限。", "先查 /mycli trade wallet，可购买需要的装备消耗余额后再取得新的回收报价。", "/mycli trade wallet", "/mycli trade shop list");
+                case "invalid_offer_or_quantity", "usage_shop_list_buy_wallet" -> a("商品ID、购买数量或语法无效。", "先 /mycli trade shop list 复制商品ID；用 /mycli trade shop buy <ID> [数量] 购买。", "/mycli trade shop list");
+                default -> a("回收或商店参数不正确（" + reason + "）。", "用 /mycli trade recycle list 查物品槽位；/mycli trade recycle quote bag|chest <槽位> [数量] 获取报价，再 /mycli trade recycle sell <报价ID>；不要凭空猜槽位。", "/mycli trade recycle list", "/mycli help arena.recycle.quote");
             };
             case "pvp" -> switch (reason) {
                 case "arena_not_built", "server_pvp_disabled" -> a("竞技场或PvP服务未开放。", "联系服主检查竞技场与PvP配置；现在可选择 /mycli dungeon list 的挑战。", "/mycli pvp status", "/mycli dungeon list");
