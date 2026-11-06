@@ -55,6 +55,8 @@ export interface ToolDef extends ToolSchema {
    * tools may have side effects but never acquire/mutate the physical body.
    * Absent/unknown metadata retains conservative legacy scheduling. */
   bodyControl?: 'independent' | 'exclusive';
+  /** Describes a tool contract, without executing it. Hosts may route detailed execution help to an executor. */
+  helpFor?(args: Record<string, unknown>): string | null;
   /** Pure host hint; never invokes a model or dispatches/rewrites work. */
   familiarAction?(args: Record<string, unknown>): FamiliarAction | null;
   /** True only for a branch that cannot acquire/mutate the game body. */
