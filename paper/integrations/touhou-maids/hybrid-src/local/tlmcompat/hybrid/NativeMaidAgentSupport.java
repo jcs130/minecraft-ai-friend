@@ -49,14 +49,21 @@ public final class NativeMaidAgentSupport implements Listener {
                 &&maid.toString().equals(row.getName().getStyle().getInsertion()))
                 .max(Comparator.comparingLong(MaidInfo::getTimestamp)).orElse(null);
     }
+    private static boolean configured(EntityMaid maid){
+        var site=maid.getAiChatManager().getLLMSite();
+        return AIConfig.LLM_ENABLED.get()&&site!=null&&site.enabled()
+            &&!(site.id().equals(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.DefaultLLMSite.DEEPSEEK.id())
+                &&site instanceof com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.LLMOpenAISite openai
+                &&(openai.secretKey()==null||openai.secretKey().isBlank()));
+    }
     public void enrich(Player actor,UUID id,JsonObject context) {
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
         if(maid!=null&&maid.isAlive()&&!maid.isRemoved()) {
             context.addProperty("lifeState","alive");
             var manager=maid.getAiChatManager();var site=manager.getLLMSite();
-            context.addProperty("dialogueMode",AIConfig.LLM_ENABLED.get()&&site!=null&&site.enabled()?"native_model":"not_configured");
+            context.addProperty("dialogueMode",configured(maid)?"native_model":"not_configured");
             context.addProperty("dialogueCommand","/qdmaid chat "+id+" <requestId> <对她说的话>");
-            context.addProperty("inferenceOwner","original_tlm");
+            if(configured(maid))context.addProperty("inferenceOwner","original_tlm");
             context.addProperty("helpCommand","/qdmaid help");
             context.addProperty("equipmentCommand","/qdmaid inventory "+id);
             return;
@@ -96,7 +103,7 @@ public final class NativeMaidAgentSupport implements Listener {
     public void validateChat(Player actor,EntityMaid maid) {
         if(pending.containsKey(maid.getUUID()))throw new CompatibilityException("chat_busy","上一条原生对话尚未结束；用 /qdmaid receipt 查询原 requestId，勿重复发送。");
         var manager=maid.getAiChatManager();var site=manager.getLLMSite();
-        if(!AIConfig.LLM_ENABLED.get()||site==null||!site.enabled())throw new CompatibilityException("chat_not_configured","服主尚未启用这位女仆的原生模型；chat 不会退回留言箱或冒充回复。");
+        if(!configured(maid))throw new CompatibilityException("chat_not_configured","服主尚未启用这位女仆的原生模型；chat 不会退回留言箱或冒充回复。");
         var tokens=((net.neoforged.neoforge.attachment.IAttachmentHolder)(Object)((CraftPlayer)actor).getHandle()).getData(com.github.tartaricacid.touhoulittlemaid.init.InitDataAttachment.CHAT_TOKENS);
         if(tokens.get()>=AIConfig.MAX_TOKENS_PER_PLAYER.get())throw new CompatibilityException("chat_budget_exhausted","原模组本角色对话额度不足，请联系服主查看模型额度；没有发送请求。");
         if(manager.historySummaryRunning)throw new CompatibilityException("chat_busy","原生对话正在整理记忆，请稍后查询状态。");

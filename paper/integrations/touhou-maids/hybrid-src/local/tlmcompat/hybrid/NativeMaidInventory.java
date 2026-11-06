@@ -30,7 +30,9 @@ public final class NativeMaidInventory implements Listener {
     public NativeMaidInventory(HybridMaidPlugin plugin){this.plugin=plugin;}
     public static int capacity(EntityMaid maid){return Math.min(maid.getMaidInv().getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex());}
     private static int integer(String value,int min,int max){try{int number=Integer.parseInt(value);if(number>=min&&number<=max)return number;}catch(NumberFormatException ignored){}throw new CompatibilityException("bad_slot_or_count","Read current inventory slots");}
-    public JsonObject transfer(Player actor,EntityMaid maid,String arguments){
+    public void validateTransfer(Player actor,EntityMaid maid,String arguments){transfer(actor,maid,arguments,false);}
+    public JsonObject transfer(Player actor,EntityMaid maid,String arguments){return transfer(actor,maid,arguments,true);}
+    private JsonObject transfer(Player actor,EntityMaid maid,String arguments,boolean apply){
         String[] values=arguments==null?new String[0]:arguments.split(" +");
         if(values.length<3||values.length>4||!Set.of("put","take").contains(values[0]))throw new CompatibilityException("bad_transfer","transfer expects put|take maidSlot count [playerSlot]");
         int slot=integer(values[1],0,capacity(maid)-1),count=integer(values[2],1,64);
@@ -43,8 +45,8 @@ public final class NativeMaidInventory implements Listener {
             if(!handler.isItemValid(slot,source)||(!destination.isEmpty()&&!ItemStack.isSameItemSameComponents(source,destination)))throw new CompatibilityException("slot_rejected","Original native handler refused this item");
             int limit=Math.min(handler.getSlotLimit(slot),source.getMaxStackSize());
             if(destination.getCount()+count>limit)throw new CompatibilityException("slot_full","Native slot capacity exceeded");
-            ItemStack updated=source.copyWithCount(destination.getCount()+count);new com.github.tartaricacid.touhoulittlemaid.inventory.container.MaidMainContainer.BackpackSlot(maid,slot,0,0).setByPlayer(updated);
-            source.shrink(count);actor.getInventory().setItem(playerSlot,source.isEmpty()?null:CraftItemStack.asBukkitCopy(source));
+            ItemStack updated=source.copyWithCount(destination.getCount()+count);if(apply){new com.github.tartaricacid.touhoulittlemaid.inventory.container.MaidMainContainer.BackpackSlot(maid,slot,0,0).setByPlayer(updated);
+            source.shrink(count);actor.getInventory().setItem(playerSlot,source.isEmpty()?null:CraftItemStack.asBukkitCopy(source));}
         }else{
             ItemStack source=handler.getStackInSlot(slot);
             if(source.isEmpty()||source.getCount()<count)throw new CompatibilityException("item_missing","Native source changed");
@@ -54,10 +56,10 @@ public final class NativeMaidInventory implements Listener {
             ItemStack old=CraftItemStack.asNMSCopy(actor.getInventory().getItem(playerSlot));
             if((!old.isEmpty()&&!ItemStack.isSameItemSameComponents(source,old))||old.getCount()+count>source.getMaxStackSize())throw new CompatibilityException("player_slot_full","Destination changed or cannot hold the transfer");
             ItemStack updated=source.copyWithCount(old.getCount()+count);ItemStack remaining=source.copy();remaining.shrink(count);
-            handler.setStackInSlot(slot,remaining);actor.getInventory().setItem(playerSlot,CraftItemStack.asBukkitCopy(updated));
-            new com.github.tartaricacid.touhoulittlemaid.inventory.container.MaidMainContainer.BackpackSlot(maid,slot,0,0).onTake(((org.bukkit.craftbukkit.entity.CraftPlayer)actor).getHandle(),source.copyWithCount(count));
+            if(apply){handler.setStackInSlot(slot,remaining);actor.getInventory().setItem(playerSlot,CraftItemStack.asBukkitCopy(updated));
+            new com.github.tartaricacid.touhoulittlemaid.inventory.container.MaidMainContainer.BackpackSlot(maid,slot,0,0).onTake(((org.bukkit.craftbukkit.entity.CraftPlayer)actor).getHandle(),source.copyWithCount(count));}
         }
-        actor.updateInventory();JsonObject result=new JsonObject();result.addProperty("maidId",maid.getUUID().toString());result.addProperty("maidSlot",slot);result.addProperty("playerSlot",playerSlot);result.addProperty("count",count);return result;
+        if(apply)actor.updateInventory();JsonObject result=new JsonObject();result.addProperty("maidId",maid.getUUID().toString());result.addProperty("maidSlot",slot);result.addProperty("playerSlot",playerSlot);result.addProperty("count",count);return result;
     }
     private static final Map<String,EquipmentSlot> EQUIPMENT=Map.of("main",EquipmentSlot.MAINHAND,"off",EquipmentSlot.OFFHAND,"head",EquipmentSlot.HEAD,"chest",EquipmentSlot.CHEST,"legs",EquipmentSlot.LEGS,"feet",EquipmentSlot.FEET);
     public static JsonObject equipment(EntityMaid maid){JsonObject result=new JsonObject();EQUIPMENT.forEach((name,slot)->result.add(name,HybridMaidPlugin.item(maid.getItemBySlot(slot))));return result;}

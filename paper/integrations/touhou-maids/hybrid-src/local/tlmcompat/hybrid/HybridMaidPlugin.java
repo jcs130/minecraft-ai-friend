@@ -179,6 +179,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
         if(action.equals("chat")){requireNearby(actor,maid,16);agentSupport.validateChat(actor,maid);}
         if(action.equals("equip"))menus.validateEquip(actor,maid,value);
+        if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
         if(previous!=null){JsonObject replay=previous.deepCopy();replay.addProperty("replayed",true);return replay;}
         if(action.equals("chat"))return agentSupport.chat(actor,maid,operation,value);

@@ -44,6 +44,12 @@ try{
  bot=connect(username);await until(()=>bot.entity,'spawn');await rc(`minecraft:tp ${username} 0.5 90 0.5`);
  if(restart){
    const life=await ask('context');check('death survives a normal restart',life.data?.lifeState==='dead');
+   const fixtureData=JSON.parse(await fs.readFile(fixture,'utf8'));
+   if(fixtureData.unavailableMaid){
+     await delay(1100);bot.chat(`/qdmaid context ${fixtureData.unavailableMaid} unavailable-check`);
+     const unknown=await until(()=>replies.find(r=>r.requestId==='unavailable-check'),'unloaded record');
+     check('registered but unavailable entity is not labeled dead',unknown.data?.lifeState==='unloaded_or_unavailable'&&unknown.data?.loaded===false&&!unknown.data?.death);
+   }
    const seen=await ask('receipt','', 'chat-accepted');check('original chat receipt survives restart',seen.data?.status==='replied');
  }else{
  original=await fs.readFile(siteFile);const sites=JSON.parse(original);sites.qa_agent_maids={id:'qa_agent_maids',api_type:'openai',enabled:true,icon:sites.openai.icon,url:`http://127.0.0.1:${mock.address().port}/v1/chat/completions`,secret_key:'isolated-no-real-key',headers:{},models:['qa-native']};await fs.writeFile(siteFile,JSON.stringify(sites));await rc('tlm ai_chat reload');
@@ -61,6 +67,8 @@ try{
   const receipt=await ask('receipt','','chat-accepted');check('receipt contains actual native reply',receipt.data?.status==='replied'&&receipt.data.observation.reply.includes('收到你的话'));
   check('only one native model call',requests.length===1);
   await rc(`minecraft:item replace entity ${username} hotbar.0 with minecraft:iron_helmet`);
+  const missing=await ask('transfer','put 0 64 0','missing-stack');check('invalid transfer reports source problem before reservation',missing.error==='item_missing');
+  const missingReceipt=await ask('receipt','','missing-stack');check('rejected transfer has no uncertain mutation receipt',missingReceipt.error==='receipt_missing');
   const put=await ask('transfer','put 0 1 0','helmet-put');check('actual helmet transferred once',put.data?.status==='applied');
   const equip=await ask('equip','head 0','helmet-equip');check('armor equipped in original native slot',equip.data?.observation?.equipment?.head?.id==='minecraft:iron_helmet');
   const again=await ask('equip','head 0','helmet-equip');check('equipment replay does not swap back',again.data?.replayed===true);
@@ -71,13 +79,26 @@ try{
   const unequip=await ask('equip','head 2','helmet-unequip');check('empty native slot can remove armor',unequip.data?.observation?.equipment?.head?.count===0);
   other=connect('MaidOtherQA');await until(()=>other.entity,'other');await rc('minecraft:tp MaidOtherQA 1.5 90 0.5');
   const foreign=await ask('chat','你好','foreign-chat',other);check('another owner cannot invoke native model',foreign.error==='not_owned');
+  await delay(1100);bot.chat(`/qdmaid menu ${maid}`);await until(()=>bot.currentWindow,'native compatible menu');
+  check('ordinary client opens backed vanilla menu',bot.currentWindow.slots.length>=54);
+  await bot.clickWindow(53,0,0);await until(()=>JSON.stringify(bot.currentWindow?.title).includes('武器护甲'),'equipment page');
+  await bot.clickWindow(2,0,0);await bot.clickWindow(38,0,0);await delay(500);bot.closeWindow(bot.currentWindow);
+  const menuGear=await ask('inventory');check('human menu equips actual original armor',menuGear.data?.equipment?.head?.id==='minecraft:iron_helmet');
+  await rc(`minecraft:item replace entity ${username} hotbar.0 with minecraft:iron_helmet[enchantments={levels:{"minecraft:binding_curse":1}}]`);
+  await ask('transfer','put 3 1 0','binding-put');await ask('equip','head 3','binding-equip');
+  const curse=await ask('equip','head 4','binding-remove');check('binding curse cannot be bypassed',curse.error==='binding_curse');
   const unknownId=await ask('receipt','','missing-original');check('unknown receipt never implies success',unknownId.error==='receipt_missing');
   bot.chat('/qdmaid help');await until(()=>lines.some(s=>s.includes('head|chest|legs|feet')),'help');check('help gives concrete equipment and chat usage',lines.some(s=>s.includes('/qdmaid chat')));
  }
  await rc(`minecraft:kill ${maid}`);await delay(6200);
  const dead=await ask('context');check('death remains queryable after entity disappears',dead.data?.lifeState==='dead'&&dead.data?.death?.tombstoneRegistered===true);
  check('death is proactively delivered with dimension and recovery',lines.some(s=>s.includes('[女仆·死亡]')&&s.includes('minecraft:overworld')));
- if(!baseline){const block=await ask('follow','','dead-follow');check('dead maid operation returns recovery guidance',block.error==='maid_dead'&&block.data?.message?.includes('胶片'));}
+ if(!baseline){
+  const block=await ask('follow','','dead-follow');check('dead maid operation returns recovery guidance',block.error==='maid_dead'&&block.data?.message?.includes('胶片'));
+  const replayAfterDeath=await ask('equip','head 0','helmet-equip');check('original operation still queryable after death',replayAfterDeath.data?.replayed===true);
+  const notices=lines.filter(s=>s.includes('[女仆·死亡]')&&s.includes(maid));await delay(5500);await ask('context');
+  check('same connection does not receive repeating death spam',lines.filter(s=>s.includes('[女仆·死亡]')&&s.includes(maid)).length===notices.length);
+ }
  report.responses=replies;report.requestCount=requests.length;
  }
 }catch(e){report.failure=String(e);console.log(report.failure);}finally{
