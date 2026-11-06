@@ -53,8 +53,8 @@ export async function readBoundedJSON(response,maxBytes) {
 /** Controls only observation hosts and their outbound publishers. No createBot,
  * login, command, RCON or gameplay action exists in this service. */
 export class ObservationWorker {
-  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,packetDecoder=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
-    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,packetDecoder,fetcher,now,log});
+  constructor({config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource=null,maidSource=null,packetDecoder=null,fetcher=fetch,now=Date.now,log=()=>{}}) {
+    Object.assign(this,{config,prepared,registry,decodePacket,simplifyNBT,startPublisher,appearanceSource,maidSource,packetDecoder,fetcher,now,log});
     this.sources=new Map();this.lastPortalAt=0;this.lastPoll=0;this.lastLog=null;this.closed=false;
     this.sampleIntervalMs=config.sampleIntervalMs??50;this.authorityInFlight=null;this.sampleInFlight=null;
     this.lastSampleAt=null;this.sampleCount=0;this.sampleDurationMs=null;this.lifecycle=new AbortController();
@@ -170,6 +170,7 @@ export class ObservationWorker {
           this.packetDecoder?.reset();
           // Model conversion/download must never delay world, inventory or pose.
           if(this.appearanceSource)void this.appearanceSource.forPlayer(row.player).catch(()=>{});
+          if(this.maidSource)void this.maidSource.prepare(row.player?.nativeMaids?.rows).catch(()=>{});
           ({after:source.after,generation:source.generation}=source.view.ingest(row));
           const status=source.view.host.status();
           if(status.viewer.reason)throw Object.assign(Error('OBSERVER_SCENE_UNAVAILABLE'),{sceneReason:status.viewer.reason});
@@ -192,9 +193,10 @@ export async function createObservationWorker(input,options={}) {
   const parsers=Object.fromEntries(['play','configuration'].map(state=>[state,protocol.createDeserializer({version:'1.21.1',state,isServer:false,noErrorLogging:true})]));
   const packetDecoder=observationPacketDecoder(parsers);
   const appearanceSource=config.appearance?new ObservationAppearanceSource({config:config.appearance,decodeBundle:(await moduleAt('host/viewer-ysm-assets.mjs')).decodeYsmBundle}):null;
-  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,terrainDeltas:config.terrainDeltas===true,appearanceSource,
+  const maidSource=config.maidAppearance?await (await moduleAt('host/maid-appearance-source.mjs')).createMaidAppearanceSource(config.maidAppearance):null;
+  const prepared=await preparePaperObservation({assetDirectory:config.assetDirectory,port:0,surfaceCulling:config.surfaceCulling===true,terrainDeltas:config.terrainDeltas===true,appearanceSource,maidSource,
     serverItemCatalogFile:config.serverItemCatalogFile,serverItemCatalogSha256:config.serverItemCatalogSha256,bundledAppearanceCatalogFile:config.bundledAppearanceCatalogFile||''});
-  return new ObservationWorker({config,prepared,registry,appearanceSource,simplifyNBT:nbt.simplify,
+  return new ObservationWorker({config,prepared,registry,appearanceSource,maidSource,simplifyNBT:nbt.simplify,
     decodePacket:(bytes,state)=>packetDecoder.decode(bytes,state),packetDecoder,startPublisher:startSpectatorPublisher,...options});
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

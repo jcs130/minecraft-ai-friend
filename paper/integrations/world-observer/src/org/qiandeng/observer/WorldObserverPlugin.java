@@ -108,6 +108,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         final Map<Integer, Integer> metadata = new HashMap<>();
         final Map<Integer, Integer> equipment = new HashMap<>();
         final Map<Integer, org.bukkit.Location> positions = new HashMap<>();
+        final Map<Integer, Map<String,Object>> maids = new LinkedHashMap<>();
         UUID world;
         int centerX = Integer.MIN_VALUE, centerZ, bytes, seenTick;
         long sequence;
@@ -118,6 +119,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         View(UUID uuid, String lease, int now) { this.uuid=uuid; this.lease=lease; this.seenTick=now; }
         void reset() {
             queue.clear(); pendingChunks.clear(); sent.clear(); chunkTicks.clear(); entities.clear(); metadata.clear(); equipment.clear(); positions.clear();
+            maids.clear();
             world=null; centerX=Integer.MIN_VALUE; bytes=0; sequence=0; fault=null;
             stashMenu=null; stashContents=null; stashPage=0;
             generation=UUID.randomUUID().toString();
@@ -236,6 +238,10 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             for(Wire packet:view.queue) {if(packet.sequence<=after)continue;if(packet.bytes>budget)break;wire.add(Map.of("sequence",packet.sequence,"data",packet.packet));budget-=packet.bytes;}
             Map<String,Object> reply=new LinkedHashMap<>();reply.put("uuid",uuid.toString());reply.put("lease",view.lease);
             Map<String,Object> state = playerState(player);
+            state.put("nativeMaids", Map.of("source", "paper_tracked_maids", "playerUuid", uuid.toString(),
+                "generation", view.generation, "dimension", ((CraftPlayer)player).getHandle().level().dimension().location().toString(),
+                "worldUuid", player.getWorld().getUID().toString(), "observedAt", System.currentTimeMillis(),
+                "rows", List.copyOf(view.maids.values())));
             state.put("gameOperations", recentOperations(player));
             boolean owner = row.has("scope") && !row.get("scope").isJsonNull() && "owner".equals(row.get("scope").getAsString());
             var stash = personalStash(player, view, owner);
@@ -398,6 +404,8 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
             if(isNumen(player)) {if(bukkit instanceof LivingEntity living && !player.hasLineOfSight(living))continue;}
             else if(!bukkit.getTrackedBy().contains(player))continue;
             var entity=((CraftEntity)bukkit).getHandle();int id=entity.getId();current.add(id);limit++;
+            var maid = MaidObservation.capture(entity);
+            if (maid != null) view.maids.put(id, maid); else view.maids.remove(id);
             if(view.entities.add(id)) {
                 var tracker=new ServerEntity(level,entity,1,false,packet->{},new HashSet<>());
                 add(view,entity.getAddEntityPacket(tracker));
@@ -418,6 +426,7 @@ public final class WorldObserverPlugin extends JavaPlugin implements Listener {
         }
         int[] removed=view.entities.stream().filter(id->!current.contains(id)).mapToInt(Integer::intValue).toArray();
         if(removed.length>0) {add(view,new ClientboundRemoveEntitiesPacket(removed));for(int id:removed){view.entities.remove(id);view.metadata.remove(id);view.equipment.remove(id);view.positions.remove(id);}}
+        view.maids.keySet().retainAll(current);
     }
     private void add(View view,Packet<?> packet) {
         if(view.fault!=null)return;
