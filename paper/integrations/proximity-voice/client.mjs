@@ -6,7 +6,7 @@ const CHANNEL='mcagent:voice', UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 export function attachProximityVoice(bot,{onHearing,timeoutMs=110_000}={}){
   const pending=new Map();let closed=false,uploading=false;
   const send=row=>{if(closed||bot._client.state!=='play')throw Error('VOICE_NOT_CONNECTED');bot._client.write('custom_payload',{channel:CHANNEL,data:Buffer.concat([Buffer.from([1]),Buffer.from(JSON.stringify(row))])});};
-  const register=()=>{bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});if(onHearing)send({op:'subscribe',requestId:randomUUID(),captions:'events'});};
+  const register=()=>{bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});send({op:'subscribe',requestId:randomUUID(),captions:onHearing?'events':'chat'});};
   const payload=packet=>{
     if(packet.channel!==CHANNEL||packet.data?.[0]!==1||packet.data.length>16_001)return;
     let row;try{row=JSON.parse(packet.data.subarray(1).toString('utf8'));}catch{return;}
@@ -23,8 +23,10 @@ export function attachProximityVoice(bot,{onHearing,timeoutMs=110_000}={}){
       pending.set(row.requestId,wait);try{send(row);}catch(error){clearTimeout(wait.timer);pending.delete(row.requestId);reject(error);}
     });
   };
-  const close=()=>{if(closed)return;closed=true;bot._client.off('custom_payload',payload);bot.off('spawn',register);bot.off('end',close);for(const [requestId,wait]of pending){clearTimeout(wait.timer);wait.resolve({requestId,state:'unknown',reason:'VOICE_CONNECTION_ENDED_DO_NOT_REPLAY'});}pending.clear();};
-  bot._client.on('custom_payload',payload);bot.on('spawn',register);bot.once('end',close);if(bot._client.state==='play')register();
+  const ended=()=>close(false);
+  const close=(unregister=true)=>{if(closed)return;if(unregister&&bot._client.state==='play')try{bot._client.write('custom_payload',{channel:'minecraft:unregister',data:Buffer.from(CHANNEL)});}catch{}
+    closed=true;bot._client.off('custom_payload',payload);bot.off('spawn',register);bot.off('end',ended);for(const [requestId,wait]of pending){clearTimeout(wait.timer);wait.resolve({requestId,state:'unknown',reason:'VOICE_CONNECTION_ENDED_DO_NOT_REPLAY'});}pending.clear();};
+  bot._client.on('custom_payload',payload);bot.on('spawn',register);bot.once('end',ended);if(bot._client.state==='play')register();
   return {
     say(text,{requestId=randomUUID(),voice}={}){if(typeof text!=='string'||!text.trim()||text.length>200)throw Error('VOICE_TEXT_MAX_200');return exchange({op:'say',requestId,text,...(voice?{voice}:{})});},
     status(requestId){return exchange({op:'status',requestId},()=>true);},

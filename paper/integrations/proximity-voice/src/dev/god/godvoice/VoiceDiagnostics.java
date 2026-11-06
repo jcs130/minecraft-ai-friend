@@ -33,6 +33,7 @@ final class VoiceDiagnostics {
         case "VOICE_AUDIO_INPUT_REJECTED"->"音频未进入播放。使用 PCM16 WAV，单或双声道，8–96 kHz，0.1–30 秒，最大 4 MiB；不要只改文件后缀。";
         case "VOICE_NORMALIZED_AUDIO_INVALID","VOICE_AUDIO_TOO_LARGE"->"媒体服务返回的音频不符合播放格式，尚未播放；请服主检查归一化服务应返回 48 kHz、单声道、PCM16 WAV。";
         case "VOICE_CLIENT_NOT_INSTALLED"->"听音需安装匹配游戏版本的 Simple Voice Chat；原版、基岩和未装语音模组的 Agent 仍可正常游戏。Agent 上传语音不要求自身安装收听模组。";
+        case "VOICE_BRIDGE_CONNECTED"->"Agent 已连接服务器语音桥：上传音频由服务器播放，附近语音通过字幕接收；这不表示已安装原生语音模组，也不是客户端实际听到的证明。";
         case "VOICE_CLIENT_NOT_CONNECTED"->"打开客户端语音设置检查连接；服主核对独立 UDP 24454 的连通性。游戏登录成功不代表语音已连接。";
         case "VOICE_CLIENT_DISABLED"->"在客户端完成 Simple Voice Chat 首次设置并开启收听；麦克风可以保持静音，无需开启录音。";
         case "VOICE_LISTEN_PERMISSION_MISSING"->"请服主检查 voicechat.listen 权限。";

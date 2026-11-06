@@ -39,6 +39,8 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final ConcurrentHashMap<UUID,VoiceDelivery> deliveries=new ConcurrentHashMap<>();
     private volatile VoiceAudience.Snapshot snapshot=new VoiceAudience.Snapshot(0,Map.of());
     private volatile VoicechatServerApi api;
+    private final Set<UUID> bridgePeers=new HashSet<>();
+    private final VoicePresence presence=new VoicePresence(id->{VoicechatServerApi current=api;return current==null?null:current.getConnectionOf(id);});
     private volatile boolean stopping;
     private ExecutorService io,media,recognition;
     private ScheduledExecutorService captureClock;
@@ -93,16 +95,28 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             service.registerPlugin(new VoicechatPlugin(){
                 public String getPluginId(){return "qiandengji_voice";}
                 public void registerEvents(EventRegistration registration){
-                    registration.registerEvent(VoicechatServerStartedEvent.class,event->{api=event.getVoicechat();getLogger().info("SVC API ready; captions stay private and ASR stays on CPU");});
-                    registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();main(()->{for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
+                    registration.registerEvent(VoicechatServerStartedEvent.class,event->{api=event.getVoicechat();main(()->{for(Player player:Bukkit.getOnlinePlayers())syncPresence(player);});getLogger().info("SVC API ready; captions stay private and ASR stays on CPU");});
+                    registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();main(()->{presence.close();for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
                     registration.registerEvent(MicrophonePacketEvent.class,PaperVoicePlugin.this::microphone);
                     registration.registerEvent(EntitySoundPacketEvent.class,PaperVoicePlugin.this::soundOffered,1000);
-                    registration.registerEvent(PlayerStateChangedEvent.class,event->{if(event.isDisconnected()||event.isDisabled()){dropCapture(event.getPlayerUuid());sequences.remove(event.getPlayerUuid());}});
+                    registration.registerEvent(PlayerStateChangedEvent.class,event->{UUID actor=event.getPlayerUuid();if(event.isDisconnected()||event.isDisabled()){dropCapture(actor);sequences.remove(actor);}main(()->{Player player=Bukkit.getPlayer(actor);if(player!=null)syncPresence(player);});});
                 }
             });
         }catch(Exception failure){getLogger().severe("Voice bridge not enabled: "+failure.getClass().getSimpleName()+"; check private backend configuration");Bukkit.getPluginManager().disablePlugin(this);}
     }
     private void main(Runnable action){if(!stopping)Bukkit.getScheduler().runTask(this,action);}
+    private void syncPresence(Player player){
+        if(api!=null&&bridgePeers.contains(player.getUniqueId())&&player.getListeningPluginChannels().contains(CHANNEL)&&player.hasPermission("qiandeng.voice.use"))presence.attach(player.getUniqueId());
+        else presence.detach(player.getUniqueId());
+    }
+    @EventHandler public void registered(PlayerRegisterChannelEvent event){
+        if(!event.getChannel().equals(CHANNEL))return;Player original=event.getPlayer();
+        main(()->{if(Bukkit.getPlayer(original.getUniqueId())==original)syncPresence(original);});
+    }
+    @EventHandler public void unregistered(PlayerUnregisterChannelEvent event){
+        if(!event.getChannel().equals(CHANNEL))return;
+        UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.detach(actor);eventCaptions.remove(actor);
+    }
     private void snapshot(){
         Map<UUID,VoiceAudience.Actor> all=new HashMap<>();
         for(Player p:Bukkit.getOnlinePlayers()){
@@ -113,7 +127,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         uploads.expire(System.currentTimeMillis());
     }
     @EventHandler public void quit(PlayerQuitEvent event){
-        UUID actor=event.getPlayer().getUniqueId();sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
+        UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
         cancelSpeech(actor,"ACTOR_DISCONNECTED");
     }
     @EventHandler public void worldChanged(PlayerChangedWorldEvent event){
@@ -181,7 +195,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         boolean installed=connection!=null&&connection.isInstalled(),connected=connection!=null&&connection.isConnected(),disabled=connection!=null&&connection.isDisabled();
         boolean isolated=connection!=null&&connection.isInGroup()&&connection.getGroup()!=null&&connection.getGroup().getType()==Group.Type.ISOLATED;
         boolean canListen=receiver.hasPermission("voicechat.listen");
-        String code=VoiceDiagnostics.connection(current!=null,installed,connected,disabled,canListen,isolated);
+        String code=presence.isConnected(receiver.getUniqueId())?"VOICE_BRIDGE_CONNECTED":VoiceDiagnostics.connection(current!=null,installed,connected,disabled,canListen,isolated);
         double range=current==null?distanceCap:Math.min(distanceCap,current.getVoiceChatDistance());
         recipient.sendMessage("[语音] "+receiver.getName()+" "+code+"；installed="+installed+", connected="+connected+", disabled="+disabled+", listen="+canListen+", isolatedGroup="+isolated+"；附近距离="+range+"。"+VoiceDiagnostics.hint(code));
         if(speaker!=null){
@@ -194,7 +208,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         if(event.isCancelled()||!SoundPacketEvent.SOURCE_PLUGIN.equals(event.getSource())||event.getPacket().getOpusEncodedData().length==0)return;
         VoiceDelivery delivery=deliveries.get(event.getPacket().getChannelId());var receiver=event.getReceiverConnection();
         // SVC emits this before UDP send and permission checks. Count offers, never acknowledgements.
-        if(delivery!=null&&receiver!=null&&receiver.isConnected()&&!receiver.isDisabled())delivery.offered(receiver.getPlayer().getUuid());
+        if(delivery!=null&&receiver!=null&&receiver.isInstalled()&&receiver.isConnected()&&!receiver.isDisabled())delivery.offered(receiver.getPlayer().getUuid());
     }
     private void submitText(Player p,UUID id,String text,String voice){
         if(text==null||text.isBlank()||text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
@@ -329,10 +343,13 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 case "subscribe"->{if(data.has("captions")&&data.get("captions").getAsString().equals("events"))eventCaptions.add(actor);else eventCaptions.remove(actor);reply(p,id,"subscribed","");}
                 case "say"->submitText(p,id,data.get("text").getAsString(),data.has("voice")?data.get("voice").getAsString():profiles.getString(actor+".voice",""));
                 case "status"->{VoiceLedger.Entry row=ledger.get(actor,id);reply(p,id,row==null?"not_found":row.state(),row==null?"":row.reason());}
-                case "begin"->{String format=data.get("format").getAsString();if(!format.equals("wav"))throw new IllegalArgumentException("UPLOAD_PCM16_WAV_REQUIRED");int bytes=data.get("bytes").getAsInt();String digest=data.get("sha256").getAsString();if(data.get("bytes").getAsDouble()!=bytes||bytes<1||bytes>VoiceUploads.MAX_BYTES||!digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("UPLOAD_SIZE_OR_DIGEST_INVALID");VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){if(!old.fingerprint().equals(hash("wav\0"+digest)))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,old.state(),old.reason());return;}reply(p,id,uploads.begin(key,session,bytes,digest,format,System.currentTimeMillis()),"");}
+                case "begin"->{String format=data.get("format").getAsString();if(!format.equals("wav"))throw new IllegalArgumentException("UPLOAD_PCM16_WAV_REQUIRED");int bytes=data.get("bytes").getAsInt();String digest=data.get("sha256").getAsString();if(data.get("bytes").getAsDouble()!=bytes||bytes<1||bytes>VoiceUploads.MAX_BYTES||!digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("UPLOAD_SIZE_OR_DIGEST_INVALID");VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){if(!old.fingerprint().equals(hash("wav\0"+digest)))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,old.state(),old.reason());break;}reply(p,id,uploads.begin(key,session,bytes,digest,format,System.currentTimeMillis()),"");}
                 case "finish"->{var audio=uploads.finish(key,session,System.currentTimeMillis());submit(p,id,hash("wav\0"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(audio.bytes()))),null,null,audio.bytes());}
                 default->throw new IllegalArgumentException("VOICE_OPERATION_UNKNOWN");
             }
+            // A proxy may register CHANNEL for every vanilla client. Require a
+            // valid adapter request before advertising a bridge connection.
+            bridgePeers.add(actor);syncPresence(p);
         }catch(Exception failure){String code=failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_PROTOCOL_INVALID";if(requestId!=null)reply(p,requestId,"failed",code==null?"VOICE_PROTOCOL_INVALID":code.replaceAll("[^A-Za-z0-9_]",""));else error(p,code);}
     }
     private void reply(Player p,UUID request,String state,String reason){
@@ -349,7 +366,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void error(Player p,String code){if(p!=null)p.sendMessage("[语音] "+(code==null?"VOICE_REQUEST_FAILED":code.replaceAll("[^A-Za-z0-9_]",""))+"。音色用 /voice voices；结果未知先查原请求，不重复发送。");}
     private static String hash(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}}
     @Override public void onDisable(){
-        stopping=true;closeCaptures();
+        presence.close();stopping=true;closeCaptures();
         for(var lane:lanes.values()){Job job=lane.current();if(job!=null){job.cancelled=true;if(job.frames!=null)job.frames.cancel();if(job.player!=null)job.player.stopPlaying();}}
         if(captureClock!=null)captureClock.shutdownNow();if(media!=null)media.shutdownNow();if(recognition!=null)recognition.shutdownNow();if(io!=null)io.shutdown();
     }

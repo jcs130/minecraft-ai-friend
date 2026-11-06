@@ -24,7 +24,7 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
   attached.get(bot)?.close();
   const pending=new Map(),lastResults=new Map();let closed=false,uploading=false;
   const send=row=>{if(closed||!ready())throw Error('VOICE_NOT_CONNECTED');bot._client.write('custom_payload',{channel:CHANNEL,data:Buffer.concat([Buffer.from([1]),Buffer.from(JSON.stringify(row))])});};
-  const register=()=>{if(closed||!ready())return;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});if(onHearing)send({op:'subscribe',requestId:randomUUID(),captions:'events'});};
+  const register=()=>{if(closed||!ready())return;bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from(CHANNEL)});send({op:'subscribe',requestId:randomUUID(),captions:onHearing?'events':'chat'});};
   const payload=packet=>{
     if(closed||!ready()||packet.channel!==CHANNEL||!Buffer.isBuffer(packet.data)||packet.data[0]!==1||packet.data.length>16001)return;
     let row;try{row=JSON.parse(packet.data.subarray(1).toString('utf8'));}catch{return;}
@@ -58,8 +58,10 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
       signal?.addEventListener('abort',abort,{once:true});pending.set(row.requestId,wait);
       try{send(row);}catch(error){clearTimeout(wait.timer);signal?.removeEventListener('abort',abort);pending.delete(row.requestId);reject(error);}});
   };
-  const close=()=>{if(closed)return;if(onHearing&&ready())try{send({op:'subscribe',requestId:randomUUID(),captions:'chat'});}catch{}
-    closed=true;bot._client.off('custom_payload',payload);bot.off('spawn',register);bot.off('end',close);
+  const ended=()=>close(false);
+  const close=(unregister=true)=>{if(closed)return;if(unregister&&onHearing&&ready())try{send({op:'subscribe',requestId:randomUUID(),captions:'chat'});}catch{}
+    if(unregister&&bot?._client?.state==='play')try{bot._client.write('custom_payload',{channel:'minecraft:unregister',data:Buffer.from(CHANNEL)});}catch{}
+    closed=true;bot._client.off('custom_payload',payload);bot.off('spawn',register);bot.off('end',ended);
     for(const [requestId,wait]of pending){clearTimeout(wait.timer);wait.resolve({requestId,state:'unknown',reason:'VOICE_CONNECTION_ENDED_DO_NOT_REPLAY'});}pending.clear();if(attached.get(bot)?.close===close)attached.delete(bot);
   };
   const voice={
@@ -77,5 +79,5 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
       }finally{uploading=false;}
     },close,
   };
-  bot._client.on('custom_payload',payload);bot.on('spawn',register);bot.once('end',close);attached.set(bot,voice);register();return voice;
+  bot._client.on('custom_payload',payload);bot.on('spawn',register);bot.once('end',ended);attached.set(bot,voice);register();return voice;
 }
