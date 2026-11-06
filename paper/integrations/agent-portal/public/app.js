@@ -119,6 +119,7 @@ function siteHeader() {
   return window.QdSite.header({ view: state.view, account, local: true });
 }
 function render() {
+  window.QdHosting?.dispose();
   const openSections = new Set([...app.querySelectorAll('details[data-preserve-section][open]')].map(node => node.dataset.preserveSection));
   liveFullscreen?.dispose(); liveFullscreen = null;
   removeWorldFrame(); worldLastRenew = 0;
@@ -138,6 +139,7 @@ function render() {
   }
   const dialogue=document.querySelector('[data-live-dialogue] .live-dialogue-list');
   if(dialogue)dialogue.scrollTop=dialogue.scrollHeight;
+  window.QdHosting?.mount({api,state,root:document.getElementById('main')});
 }
 function heading(title, description, actions = '', eyebrow = 'QIANDENGJI / AGENT WORLD') {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${actions}</div></div>`;

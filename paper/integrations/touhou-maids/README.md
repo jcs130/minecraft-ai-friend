@@ -1,6 +1,8 @@
 # 千灯纪 · 原生女仆客户端与兼容状态
 
-Minecraft 1.21.1 / Java 21。服务端目前使用 Youer 和原生 Touhou Little Maid 1.5.3，保留 Bukkit 插件、Vortex RPG、原角色与认证。女仆桥0.1.5已在10月30日维护中加载，历史文件名仍含0.1.4，以JAR元数据和实际加载为准。10月31日新增原版、模组客户端及Web兼容候选尚未部署，见 [本轮兼容记录](../../docs/VANILLA_MAID_COMPAT_20261031.md)。
+Minecraft 1.21.1 / Java 21。现役使用 Youer、原生 Touhou Little Maid 1.5.3 和女仆桥 **0.1.7-agent**，保留 Bukkit 插件、Vortex RPG、原角色与认证。原生 NeoForge 相机与 Web 女仆资源已另行发布；10月31日文档是历史记录，不能据此判断当前部署状态。
+
+**0.1.7-agent 已于2026-11-06 23:59部署**：补齐原生模型对话、武器/四件护甲、原版装备菜单、死亡状态与私有提醒。见 [Agent 命令和回执](agent/CONTRACT.md) 与 [发布记录](../../docs/MAID_AGENT_OPERATIONS_20261106.md)。先 `list → context/inventory/tasks`，再按需操作；`chat` 调用已配置的原生模型，旧 `talk` 只是外部宿主留言。客户端不要把原版悦灵投影当成普通动物，也不要把菜单图标当成可取的箱内物品。匹配客户端加载与可米主人格实际使用仍待联调，不能以服务端上线代替客户端验收。
 
 ## 客户端怎么选
 
@@ -17,7 +19,7 @@ Minecraft 1.21.1 / Java 21。服务端目前使用 Youer 和原生 Touhou Little
 
 官网入口已发布：[女仆客户端下载](https://mc.kangqiang.site/downloads.html#maid-client)。固定链接为 [启动器导入包](https://mc.kangqiang.site/downloads/maid-client)（`.mrpack`）、[手动安装包](https://mc.kangqiang.site/downloads/maid-mods)（ZIP）；文件由专用 OSS 直接分发，保留原下载限频。
 
-当前客户端资源版本 **1.0.0-20261030**：
+以下是原女仆单项资源 **1.0.0-20261030** 的发布记录，不代表最新完整客户端包的版本：
 
 - 启动器包约 12 KB：选择 Minecraft 1.21.1、NeoForge 21.1.248，按清单从 OSS 下载原模组。
 - 手动包约 30.3 MB：官方女仆 JAR、官方 NeoForge 安装器、中文说明、来源许可和校验。

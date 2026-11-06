@@ -25,6 +25,11 @@ jobs:
           java-version: '21'
       - name: Check Goddess private-message authority without connecting
         run: node --test paper/ops/goddess-*.test.mjs
+      - name: Check optional maid adapter without connecting
+        run: |
+          node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
+          node --check paper/integrations/touhou-maids/tests/agent-operations.mjs
+          node --check paper/integrations/touhou-maids/tests/agent-failures.mjs
       - name: Check native camera launch and appearance archives without connecting
         run: |
           python -m unittest discover -s paper/integrations/native-camera -p test_prepare_neoforge.py -v
@@ -192,5 +197,11 @@ jobs:
           java-version: '21'
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm build:engine
+      - name: Install the shared portal utilities for isolated hosting checks
+        run: npm ci --ignore-scripts --no-audit
+        working-directory: paper/integrations/agent-portal
+      - name: Check Numen hosting, ownership, BYOK and conversation boundaries
+        run: node --test test/*.test.mjs
+        working-directory: paper/integrations/numen-hosting
       - run: corepack pnpm exec vitest run tests/procedure-ipc.test.ts --maxWorkers=1 --minWorkers=1
       - run: corepack pnpm exec vitest run --maxWorkers=1 --minWorkers=1

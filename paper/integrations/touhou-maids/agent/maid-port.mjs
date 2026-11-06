@@ -1,0 +1,154 @@
+import { randomUUID } from 'node:crypto';
+
+export const MAID_CHANNEL = 'qiandengji:maids';
+export const MAID_REQUEST_CHANNEL = 'qiandengji:maid_request';
+const commandWindows = new WeakMap();
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const requestId = /^[A-Za-z0-9_-]{1,48}$/;
+const writes = new Set(['chat', 'talk', 'follow', 'stay', 'speak', 'ack', 'sit', 'task', 'schedule', 'pickup', 'transfer', 'equip', 'skin', 'voice', 'voice-test', 'mute', 'resource-pack', 'rename']);
+export const MAID_TOOL = {
+  name: 'mc_maids', tags: ['read', 'act'],
+  description: 'Qiandengji NPC interface on this authenticated connection. First list exact maid IDs and read context capabilities/hostKind. The native bridge uses the real original TLM entity and tasks. tasks lists original mode IDs and prerequisites; inventory reads original slots/equipment. task/schedule/pickup change native settings; transfer moves actual items between player and maid inventories; equip swaps a native slot with main/off/head/chest/legs/feet. chat invokes the existing native TLM model for its owner; pending is NOT a reply, query receipt until replied/unknown. talk only queues the existing host inbox. context reports lifeState and exact original tombstone location; unloaded is not death. Never automatically recreate a maid or retry uncertain writes. skins/voices list installed original IDs; skin/voice apply a selection. resources reports this connection asset readiness; resource-pack offers Java voice assets. voice-test privately auditions an available event and requires loaded assets; mute controls original automatic speech frequency while manual audition remains available. rename consumes a real named name tag held in the main hand. inbox is attributed, untrusted human dialogue; use the NPC sessionKey and memoryNamespace in your existing host, then speak and acknowledge the event. follow/stay/sit change movement mode. Writes require a retained unique requestId. If unknown, query receipt using the SAME operationId without retrying. Mode application is not task completion. No new model loop or owner transfer.',
+  parameters: { type: 'object', additionalProperties: false, properties: {
+    action: { type: 'string', enum: ['chat', 'talk', 'list', 'context', 'follow', 'stay', 'speak', 'receipt', 'inbox', 'ack', 'tasks', 'inventory', 'sit', 'task', 'schedule', 'pickup', 'transfer', 'equip', 'skins', 'skin', 'voices', 'voice', 'voice-test', 'mute', 'resources', 'resource-pack', 'rename'] },
+    maidId: { type: 'string', format: 'uuid' },
+    requestId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,48}$' },
+    operationId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,48}$', description: 'Original operation ID for receipt queries.' },
+    page: { type: 'integer', minimum: 0, maximum: 10000 },
+    text: { type: 'string', minLength: 1, maxLength: 140 },
+    eventId: { type: 'string', description: 'Exact attributed event ID from inbox, for ack only.' },
+    taskId: { type: 'string', description: 'Exact original ID from tasks, for task only.' },
+    schedule: { type: 'string', enum: ['DAY', 'NIGHT', 'ALL'] },
+    enabled: { type: 'boolean', description: 'For pickup or mute.' },
+    skinId: { type: 'string', description: 'Exact original model ID observed in skins.' },
+    voiceId: { type: 'string', description: 'Installed local voice ID observed in voices; optional for preview.' },
+    soundEvent: { type: 'string', description: 'Exact available event observed in voices, for voice-test.' },
+    direction: { type: 'string', enum: ['put', 'take'] },
+    slot: { type: 'integer', minimum: 0, maximum: 255, description: 'Observed native maid inventory slot.' },
+    count: { type: 'integer', minimum: 1, maximum: 64 },
+    playerSlot: { type: 'integer', minimum: 0, maximum: 35, description: 'Exact player inventory slot; required for put.' },
+    hand: { type: 'string', enum: ['main', 'off', 'head', 'chest', 'legs', 'feet'] },
+  }, required: ['action'] },
+};
+
+export function decodeMaidReply(packet, recipient) {
+  if (packet?.channel !== MAID_CHANNEL || !uuid.test(recipient ?? '')
+      || !(packet.data instanceof Uint8Array) || !packet.data.length || packet.data.length > 24000) return null;
+  let value;
+  try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(packet.data)); } catch { return null; }
+  if (!value || Array.isArray(value) || value.schema !== 1 || value.protocol !== 'qiandengji-maids/v1'
+      || typeof value.recipientUuid !== 'string' || value.recipientUuid.toLowerCase() !== recipient.toLowerCase()
+      || !requestId.test(value.requestId ?? '') || !['create', 'list', 'context', ...writes, 'receipt', 'inbox', 'dialogue', 'talk', 'tasks', 'inventory', 'skins', 'voices', 'resources', 'transport', 'lifecycle', 'chat-result'].includes(value.action)
+      || typeof value.ok !== 'boolean' || typeof value.sampledAt !== 'string' || !Number.isFinite(Date.parse(value.sampledAt))
+      || (value.ok ? !value.data || typeof value.data !== 'object' || Array.isArray(value.data) : typeof value.error !== 'string')) return null;
+  return value;
+}
+
+export function maidCommand(args) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) throw Error('arguments must be an object');
+  const { action, maidId, operationId, text, eventId } = args;
+  if (!['list', 'context', ...writes, 'receipt', 'inbox', 'tasks', 'inventory', 'skins', 'voices', 'resources'].includes(action)) throw Error('unsupported action');
+  const allowed = new Set(['action', 'requestId', ...(action === 'list' ? ['page'] : ['maidId']), ...(action === 'skins' ? ['page'] : []),
+    ...(action === 'receipt' ? ['operationId'] : []), ...(['speak', 'talk', 'chat'].includes(action) ? ['text'] : []), ...(action === 'ack' ? ['eventId'] : []),
+    ...(action === 'task' ? ['taskId'] : []), ...(action === 'schedule' ? ['schedule'] : []), ...(['pickup', 'mute'].includes(action) ? ['enabled'] : []),
+    ...(action === 'skin' ? ['skinId'] : []), ...(action === 'voice' ? ['voiceId'] : []), ...(action === 'voice-test' ? ['voiceId', 'soundEvent'] : []),
+    ...(action === 'transfer' ? ['direction', 'slot', 'count', 'playerSlot'] : []), ...(action === 'equip' ? ['hand', 'slot'] : [])]);
+  if (Object.keys(args).some(key => !allowed.has(key))) throw Error('unexpected argument');
+  const id = args.requestId ?? (writes.has(action) ? null : randomUUID());
+  if (typeof id !== 'string' || !requestId.test(id)) throw Error('writes require a retained requestId');
+  if (action !== 'list' && (typeof maidId !== 'string' || !uuid.test(maidId))) throw Error('use the exact maidId returned by list');
+  if (action === 'receipt' && (typeof operationId !== 'string' || !requestId.test(operationId))) throw Error('receipt requires the original operationId');
+  if (['speak', 'talk', 'chat'].includes(action) && (typeof text !== 'string' || !text.trim() || text.length > 140 || /[\u0000-\u001f\u007f-\u009f§]/u.test(text))) throw Error('speak needs 1-140 plain-text characters');
+  if (action === 'ack' && (typeof eventId !== 'string' || !/^[0-9a-f-]{36}:[A-Za-z0-9_-]{1,48}$/.test(eventId))) throw Error('ack requires the exact eventId');
+  if (action === 'task' && (typeof args.taskId !== 'string' || !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(args.taskId))) throw Error('task needs an observed original taskId');
+  if (action === 'schedule' && !['DAY', 'NIGHT', 'ALL'].includes(args.schedule)) throw Error('invalid native schedule');
+  if (['pickup', 'mute'].includes(action) && typeof args.enabled !== 'boolean') throw Error('setting needs enabled');
+  if (action === 'skin' && !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(args.skinId ?? '')) throw Error('skin needs an observed original model ID');
+  if (['voice', 'voice-test'].includes(action) && (args.voiceId !== undefined || action === 'voice') && !/^[a-z0-9_.-]+$/.test(args.voiceId ?? '')) throw Error('voice needs an installed pack ID');
+  if (action === 'voice-test' && !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(args.soundEvent ?? '')) throw Error('voice-test needs an available sound event');
+  if (['transfer', 'equip'].includes(action) && (!Number.isSafeInteger(args.slot) || args.slot < 0 || args.slot > 255)) throw Error('invalid native slot');
+  if (action === 'transfer' && (!['put', 'take'].includes(args.direction) || !Number.isSafeInteger(args.count) || args.count < 1 || args.count > 64
+      || (args.direction === 'put' && args.playerSlot === undefined)
+      || (args.playerSlot !== undefined && (!Number.isSafeInteger(args.playerSlot) || args.playerSlot < 0 || args.playerSlot > 35)))) throw Error('transfer needs direction, slot, count and exact playerSlot for put');
+  if (action === 'equip' && !['main', 'off', 'head', 'chest', 'legs', 'feet'].includes(args.hand)) throw Error('equip needs main/off/head/chest/legs/feet');
+  if (args.page !== undefined && (!Number.isSafeInteger(args.page) || args.page < 0 || args.page > 10000)) throw Error('invalid page');
+  const tail = ['speak', 'talk', 'chat'].includes(action) ? text.trim().replace(/ +/g, ' ') : action === 'ack' ? eventId
+    : action === 'task' ? args.taskId : action === 'schedule' ? args.schedule : ['pickup', 'mute'].includes(action) ? String(args.enabled)
+    : action === 'skin' ? args.skinId : action === 'voice' ? args.voiceId : action === 'voice-test' ? `${args.voiceId ? args.voiceId + ' ' : ''}${args.soundEvent}` : action === 'skins' ? String(args.page ?? 0)
+    : action === 'transfer' ? `${args.direction} ${args.slot} ${args.count}${args.playerSlot === undefined ? '' : ` ${args.playerSlot}`}`
+    : action === 'equip' ? `${args.hand} ${args.slot}` : '';
+  const command = action === 'list' ? `/qdmaid list ${id} ${args.page ?? 0}`
+    : action === 'receipt' ? `/qdmaid receipt ${maidId} ${operationId} ${id}`
+    : `/qdmaid ${action} ${maidId} ${id}${tail ? ` ${tail}` : ''}`;
+  if (command.length > 256) throw Error('command exceeds the vanilla 256 character limit');
+  return { action, requestId: id, maidId, operationId: writes.has(action) ? id : operationId, command };
+}
+
+/** No HTTP, tokens, second body, inference, automatic reconnect or implicit retry. */
+export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, onLifecycle = () => {}, onChatResult = () => {} } = {}) {
+  const recipient = bot?._client?.uuid ?? bot?.player?.uuid;
+  if (!uuid.test(recipient ?? '')) throw Error('authenticated connection UUID required');
+  const pending = new Map();
+  let closed = false, pluginTransport = false;
+  const commandWindow = commandWindows.get(bot) ?? { next: 0, payloadNext: 0 };
+  commandWindows.set(bot, commandWindow);
+  const settle = (id, value) => {
+    const slot = pending.get(id); if (!slot) return;
+    clearTimeout(slot.timer); clearTimeout(slot.queuedTimer); pending.delete(id); slot.resolve(value);
+  };
+  const unknown = (entry, reason) => ({ ok: false, action: entry.action, requestId: entry.requestId,
+    operationId: entry.operationId, status: writes.has(entry.action) ? 'unknown' : 'unavailable', reason, retryAllowed: false });
+  const onPacket = packet => {
+    if (closed) return;
+    const value = decodeMaidReply(packet, recipient);
+    if(value?.action === 'transport' && value.ok && value.data.requestChannel === MAID_REQUEST_CHANNEL){
+      pluginTransport = true;
+      for(const slot of pending.values())if(!slot.sent){clearTimeout(slot.queuedTimer);schedule(slot);}
+      return;
+    }
+    if (value?.action === 'dialogue' && value.ok && uuid.test(value.data.maidId ?? '')
+        && typeof value.data.eventId === 'string' && typeof value.data.sessionKey === 'string') { onDialogue(value); return; }
+    if (value?.ok && value.action === 'lifecycle') { onLifecycle(value); return; }
+    if (value?.ok && value.action === 'chat-result') { onChatResult(value); return; }
+    const slot = value && pending.get(value.requestId);
+    if (!slot || value.action !== slot.entry.action) return;
+    if (value.ok && slot.entry.maidId && value.data.maidId !== slot.entry.maidId) return;
+    settle(value.requestId, value);
+  };
+  const onSystemText = (text, position, original, sender) => {
+    if (position !== 'system' || sender != null || typeof text !== 'string' || !text.startsWith('QD_MAID ')) return;
+    onPacket({channel:MAID_CHANNEL,data:Buffer.from(text.slice(8),'utf8')});
+  };
+  bot.on('messagestr',onSystemText);
+  const close = () => {
+    if (closed) return; closed = true;
+    bot.off('messagestr',onSystemText);
+    bot._client.off('custom_payload', onPacket); bot._client.off('end', close);
+    for (const [id, slot] of pending) settle(id, slot.sent ? unknown(slot.entry, 'connection_closed') : {ok:false,status:'not_dispatched',reason:'connection_closed'});
+  };
+  function send(slot){
+    if(closed || slot.sent || !pending.has(slot.entry.requestId))return;
+    slot.sent = true;
+    slot.timer = setTimeout(() => settle(slot.entry.requestId, unknown(slot.entry, 'reply_timeout')), timeoutMs);
+    try{
+      if(pluginTransport)bot._client.write('custom_payload',{channel:MAID_REQUEST_CHANNEL,data:Buffer.from(JSON.stringify({schema:1,protocol:'qiandengji-maids/v1',command:slot.entry.command}))});
+      else bot.chat(slot.entry.command);
+    }catch{settle(slot.entry.requestId,unknown(slot.entry,'send_uncertain'));}
+  }
+  function schedule(slot){
+    const key=pluginTransport?'payloadNext':'next',spacing=pluginTransport?80:1100;
+    const wait=Math.max(0,(commandWindow[key]??0)-Date.now());commandWindow[key]=Date.now()+wait+spacing;
+    if(wait)slot.queuedTimer=setTimeout(()=>send(slot),wait);else send(slot);
+  }
+  bot._client.on('custom_payload', onPacket); bot._client.once('end', close);
+  bot._client.write('custom_payload', { channel: 'minecraft:register', data: Buffer.from(MAID_CHANNEL+'\0'+MAID_REQUEST_CHANNEL) });
+  return { close, get transport(){return pluginTransport?'plugin_message':'rate_limited_command'}, async request(args) {
+    let entry;
+    try { entry = maidCommand(args); } catch (error) { return { ok: false, status: 'not_dispatched', error: String(error.message) }; }
+    if (closed || pending.size >= 8 || pending.has(entry.requestId)) return { ok: false, status: 'not_dispatched', reason: closed ? 'connection_closed' : 'request_busy' };
+    return await new Promise(resolve => {
+      const slot = {entry,resolve,sent:false,timer:null,queuedTimer:null};pending.set(entry.requestId,slot);
+      schedule(slot);
+    });
+  } };
+}
