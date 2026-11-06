@@ -36,7 +36,14 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
       onHearing?.({type:'nearby_voice',speaker:row.speaker,speakerUuid:row.speakerUuid,utteranceId:row.utteranceId,text:row.text});return;
     }
     if(row.type!=='voice_result'||!UUID.test(row.requestId??'')||!states.has(row.state))return;
+    const details=row;
     row={type:'voice_result',requestId:row.requestId,state:row.state,reason:typeof row.reason==='string'?row.reason.slice(0,240):''};
+    if(typeof details.nextStep==='string')row.nextStep=details.nextStep.replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,600);
+    // A server send event cannot attest that a client actually played or heard audio.
+    if(details.actualHearingVerified===false)row.actualHearingVerified=false;
+    const d=details.delivery;
+    if(d&&Number.isSafeInteger(d.packetOffers)&&d.packetOffers>=0&&d.packetOffers<=1_000_000&&Number.isSafeInteger(d.listenerCount)&&d.listenerCount>=0&&d.listenerCount<=128&&typeof d.listenersTruncated==='boolean')
+      row.delivery={packetOffers:d.packetOffers,listenerCount:d.listenerCount,listenersTruncated:d.listenersTruncated};
     lastResults.set(row.requestId,row);while(lastResults.size>128)lastResults.delete(lastResults.keys().next().value);
     onResult?.(row);const wait=pending.get(row.requestId);if(!wait)return;
     wait.last=row;if(wait.until(row)){clearTimeout(wait.timer);pending.delete(row.requestId);wait.resolve(row);}

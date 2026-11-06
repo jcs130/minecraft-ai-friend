@@ -1,5 +1,6 @@
 """Build against the actual Paper/SVC API; third-party JARs remain outside Git."""
 import argparse
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -30,7 +31,8 @@ def main():
     subprocess.run([str(args.jdk / "bin/javac.exe"), "@" + str(arguments)], check=True)
     for resource in (source / "resources").iterdir():
         shutil.copyfile(resource, classes / resource.name)
-    target = output / "QiandengVoice-0.1.0.jar"
+    version = re.search(r"(?m)^version: ([0-9]+\.[0-9]+\.[0-9]+)$", (source / "resources/plugin.yml").read_text(encoding="utf-8")).group(1)
+    target = output / f"QiandengVoice-{version}.jar"
     subprocess.run([str(args.jdk / "bin/jar.exe"), "--create", "--file", str(target), "-C", str(classes), "dev", "-C", str(classes), "plugin.yml", "-C", str(classes), "config.yml"], check=True)
     classpath = str(classes) + ";" + ";".join(str(p) for p in jars)
     test_classes = output / "test-classes"
@@ -39,7 +41,7 @@ def main():
     test_arguments = output / "test.args"
     test_arguments.write_text("\n".join('"' + value.replace("\\", "/").replace('"', '\\"') + '"' for value in test_values), encoding="utf-8")
     subprocess.run([str(args.jdk / "bin/javac.exe"), "@" + str(test_arguments)], check=True)
-    for name in ("VoiceBoundaryTest", "VoiceLedgerTest"):
+    for name in ("VoiceBoundaryTest", "VoiceLedgerTest", "VoiceDiagnosticsTest"):
         if (source / "tests" / (name + ".java")).exists():
             subprocess.run([str(args.jdk / "bin/java.exe"), "-cp", str(test_classes) + ";" + classpath, "dev.god.godvoice." + name], check=True)
     qa = output / "qa"

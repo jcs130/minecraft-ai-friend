@@ -23,7 +23,7 @@ export interface GameVoiceReceipt {
   requestId: string; fingerprint: string; source: 'text' | 'artifact'; createdAt: string;
   world: ProximityVoiceContext['world']; generation: string;
   outputMode: ProximityVoiceConfig['outputMode'];
-  game: {state: string; reason?: string};
+  game: {state: string; reason?: string; nextStep?:string; actualHearingVerified?:false; delivery?:ProximityVoiceResult['delivery']};
   broadcast: {requested: boolean; state: string; actionId?: string; reason?: string; updatedAt?:number};
   audioProducerUrl?: string;
   audioSha256?: string; generationComplete: boolean | null;
@@ -132,7 +132,9 @@ export class ProximityVoiceLane {
     // Server status is stronger than a local timeout, but a nonterminal reply
     // cannot erase a previously observed terminal transmission outcome.
     if(['sent','failed','cancelled'].includes(receipt.game.state)&&!terminal.has(result.state))return;
-    receipt.game={state:result.state,...(result.reason?{reason:result.reason}:{})};this.publish(receipt);
+    receipt.game={state:result.state,...(result.reason?{reason:result.reason}:{}),
+      ...(result.nextStep?{nextStep:result.nextStep}:{}),...(result.actualHearingVerified===false?{actualHearingVerified:false as const}:{}),
+      ...(result.delivery?{delivery:{...result.delivery}}:{})};this.publish(receipt);
   }
   private outcome(row:GameVoiceReceipt):ToolOutcome {return {text:JSON.stringify(row),data:structuredClone(row) as unknown as Record<string,unknown>};}
   async call(args:Record<string,unknown>):Promise<ToolOutcome> {

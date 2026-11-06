@@ -36,6 +36,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final VoiceUploads uploads=new VoiceUploads();
     private final VoiceSequences sequences=new VoiceSequences();
     private final ConcurrentHashMap<UUID,Capture> captures=new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID,VoiceDelivery> deliveries=new ConcurrentHashMap<>();
     private volatile VoiceAudience.Snapshot snapshot=new VoiceAudience.Snapshot(0,Map.of());
     private volatile VoicechatServerApi api;
     private volatile boolean stopping;
@@ -53,6 +54,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final class Job implements SpeechLane.Item {
         final UUID actor,session,request;final String fingerprint,text,voice;final byte[] audio;final long created=System.currentTimeMillis();
         AudioPlayer player;SpeechFrames frames;OpusEncoder encoder;boolean cancelled;String cancelReason="PLAYBACK_INTERRUPTED";
+        UUID channel;VoiceDelivery delivery;
         Job(UUID a,UUID s,UUID r,String f,String t,String v,byte[] b){actor=a;session=s;request=r;fingerprint=f;text=t;voice=v;audio=b;}
         public String id(){return request.toString();}public long createdAt(){return created;}
     }
@@ -94,6 +96,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                     registration.registerEvent(VoicechatServerStartedEvent.class,event->{api=event.getVoicechat();getLogger().info("SVC API ready; captions stay private and ASR stays on CPU");});
                     registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();main(()->{for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
                     registration.registerEvent(MicrophonePacketEvent.class,PaperVoicePlugin.this::microphone);
+                    registration.registerEvent(EntitySoundPacketEvent.class,PaperVoicePlugin.this::soundOffered,1000);
                     registration.registerEvent(PlayerStateChangedEvent.class,event->{if(event.isDisconnected()||event.isDisabled()){dropCapture(event.getPlayerUuid());sequences.remove(event.getPlayerUuid());}});
                 }
             });
@@ -139,11 +142,18 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         });
     }
     private boolean command(CommandSender sender,Command command,String label,String[] args){
-        if(!(sender instanceof Player p)){sender.sendMessage("Use the authenticated player's /voice command.");return true;}
+        if(!(sender instanceof Player p)){
+            if((sender instanceof ConsoleCommandSender||sender instanceof RemoteConsoleCommandSender)&&args.length>=2&&args.length<=3&&args[0].equalsIgnoreCase("status")){
+                Player receiver=Bukkit.getPlayerExact(args[1]),speaker=args.length==3?Bukkit.getPlayerExact(args[2]):null;
+                if(receiver==null||(args.length==3&&speaker==null))sender.sendMessage("VOICE_PLAYER_OFFLINE: /voice status <online receiver> [online speaker]");
+                else connectionStatus(sender,receiver,speaker);
+            }else sender.sendMessage("Read-only diagnostic: /voice status <online receiver> [online speaker]. Player requests remain owned by their connection.");
+            return true;
+        }
         try{
             String action=args.length==0?"help":args[0].toLowerCase(Locale.ROOT);
             switch(action){
-                case "help"->p.sendMessage("[语音] 玩家用 Simple Voice Chat 客户端说话；附近角色收到字幕。Agent：/voice voices → /voice voice <音色ID> → /voice auto on，让本人公屏发言同时发声；也可 /voice say <短句>。/voice status <请求ID> 查结果；/voice captions off 关闭字幕。");
+                case "help"->p.sendMessage("[语音] 玩家用 Simple Voice Chat 客户端说话；首次使用需完成语音设置，麦克风可保持静音。/voice status 检查本人收听。Agent：/voice voices → /voice voice <音色ID> → /voice auto on，让本人公屏发言同时发声；也可 /voice say <短句>。/voice status <请求ID> 查结果；/voice captions off 关闭字幕。");
                 case "auto"->{if(args.length!=2||!Set.of("on","off").contains(args[1]))throw new IllegalArgumentException("AUTO_ON_OR_OFF_REQUIRED");if(args[1].equals("on")&&profiles.getString(p.getUniqueId()+".voice","").isBlank())throw new IllegalArgumentException("VOICE_NOT_SELECTED");profiles.set(p.getUniqueId()+".auto-speak",args[1].equals("on"));saveProfiles(p,()->p.sendMessage("[语音] 本人公屏发言自动配音已"+(args[1].equals("on")?"开启":"关闭")+"；私聊和系统提示不会配音。"));}
                 case "captions"->{if(args.length!=2||!Set.of("on","off").contains(args[1]))throw new IllegalArgumentException("CAPTIONS_ON_OR_OFF_REQUIRED");profiles.set(p.getUniqueId()+".captions",args[1].equals("on"));saveProfiles(p,()->p.sendMessage("[语音] 附近字幕已"+(args[1].equals("on")?"开启":"关闭")+"。"));}
                 case "voices","voice"->{
@@ -159,12 +169,32 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                     });}catch(Exception failure){main(()->error(Bukkit.getPlayer(actor),"VOICE_BACKEND_UNAVAILABLE"));}});
                 }
                 case "say"->{if(args.length<2)throw new IllegalArgumentException("TEXT_REQUIRED");submitText(p,UUID.randomUUID(),String.join(" ",Arrays.copyOfRange(args,1,args.length)),profiles.getString(p.getUniqueId()+".voice",""));}
-                case "status"->{if(args.length!=2)throw new IllegalArgumentException("REQUEST_ID_REQUIRED");UUID id=UUID.fromString(args[1]);VoiceLedger.Entry row=ledger.get(p.getUniqueId(),id);reply(p,id,row==null?"not_found":row.state(),row==null?"":row.reason());}
+                case "status"->{if(args.length==1){connectionStatus(p,p,null);break;}if(args.length!=2)throw new IllegalArgumentException("REQUEST_ID_REQUIRED");UUID id=UUID.fromString(args[1]);VoiceLedger.Entry row=ledger.get(p.getUniqueId(),id);reply(p,id,row==null?"not_found":row.state(),row==null?"":row.reason());}
                 case "stop"->{cancelSpeech(p.getUniqueId(),"OWNER_CANCELLED");p.sendMessage("[语音] 已取消本人待播放语音；已发送的声音无法撤回。");}
                 default->p.sendMessage("[语音] 未识别操作。下一步：/voice。");
             }
         }catch(Exception failure){error(p,failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_REQUEST_FAILED");}
         return true;
+    }
+    private void connectionStatus(CommandSender recipient,Player receiver,Player speaker){
+        VoicechatServerApi current=api;VoicechatConnection connection=current==null?null:current.getConnectionOf(receiver.getUniqueId());
+        boolean installed=connection!=null&&connection.isInstalled(),connected=connection!=null&&connection.isConnected(),disabled=connection!=null&&connection.isDisabled();
+        boolean isolated=connection!=null&&connection.isInGroup()&&connection.getGroup()!=null&&connection.getGroup().getType()==Group.Type.ISOLATED;
+        boolean canListen=receiver.hasPermission("voicechat.listen");
+        String code=VoiceDiagnostics.connection(current!=null,installed,connected,disabled,canListen,isolated);
+        double range=current==null?distanceCap:Math.min(distanceCap,current.getVoiceChatDistance());
+        recipient.sendMessage("[语音] "+receiver.getName()+" "+code+"；installed="+installed+", connected="+connected+", disabled="+disabled+", listen="+canListen+", isolatedGroup="+isolated+"；附近距离="+range+"。"+VoiceDiagnostics.hint(code));
+        if(speaker!=null){
+            boolean same=receiver.getWorld().equals(speaker.getWorld());
+            double distance=same?receiver.getEyeLocation().distance(speaker.getEyeLocation()):Double.NaN;
+            recipient.sendMessage("[语音位置] "+receiver.getName()+" → "+speaker.getName()+"；sameWorld="+same+"；distance="+(same?String.format(Locale.ROOT,"%.1f",distance):"different_world")+"；inRange="+(same&&distance<=range)+"。实体声音还需客户端实际加载声源；服务端无法代替耳听确认。");
+        }
+    }
+    private void soundOffered(EntitySoundPacketEvent event){
+        if(event.isCancelled()||!SoundPacketEvent.SOURCE_PLUGIN.equals(event.getSource())||event.getPacket().getOpusEncodedData().length==0)return;
+        VoiceDelivery delivery=deliveries.get(event.getPacket().getChannelId());var receiver=event.getReceiverConnection();
+        // SVC emits this before UDP send and permission checks. Count offers, never acknowledgements.
+        if(delivery!=null&&receiver!=null&&receiver.isConnected()&&!receiver.isDisabled())delivery.offered(receiver.getPlayer().getUuid());
     }
     private void submitText(Player p,UUID id,String text,String voice){
         if(text==null||text.isBlank()||text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
@@ -195,39 +225,47 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void begin(UUID actor){
         SpeechLane<Job> lane=lanes.get(actor);if(lane==null||lane.current()!=null)return;Job job=lane.begin();if(job==null)return;
         media.execute(()->{
+            String stage="prepare";
             try{
                 byte[] wav;
                 if(job.audio==null){JsonObject request=new JsonObject();request.addProperty("actor",job.actor.toString());request.addProperty("requestId",job.request.toString());request.addProperty("voice",job.voice);request.addProperty("text",job.text);wav=request("POST","/v1/tts",gson.toJson(request).getBytes(StandardCharsets.UTF_8),Map.of("Content-Type","application/json"));}
                 else wav=request("POST","/v1/normalize",job.audio,Map.of("Content-Type","audio/wav"));
-                short[] pcm=pcm(wav);
+                stage="decode";short[] pcm=pcm(wav);
                 io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,"playing","");main(()->play(job,pcm));}
                     catch(IOException failure){main(()->finish(job,"failed","VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}});
-            }catch(Exception failure){main(()->finish(job,"failed","VOICE_AUDIO_UNAVAILABLE_QUERY_STATUS"));}
+            }catch(Exception failure){String reason=VoiceDiagnostics.preparationFailure(stage,failure);if(failure instanceof InterruptedException)Thread.currentThread().interrupt();getLogger().warning("Voice preparation failed: request="+job.request+" stage="+stage+" code="+reason);main(()->finish(job,"failed",reason));}
         });
     }
     private void play(Job job,short[] pcm){
         if(!live(job)||api==null){finish(job,"cancelled","ACTOR_OR_VOICE_SESSION_CHANGED");return;}
         try{
-            Player source=Bukkit.getPlayer(job.actor);var channel=api.createEntityAudioChannel(UUID.randomUUID(),api.fromEntity(source));
+            Player source=Bukkit.getPlayer(job.actor);job.channel=UUID.randomUUID();var channel=api.createEntityAudioChannel(job.channel,api.fromEntity(source));
             if(channel==null)throw new IllegalStateException("No entity audio channel");
             channel.setDistance((float)Math.min(distanceCap,api.getVoiceChatDistance()));
+            job.delivery=new VoiceDelivery();deliveries.put(job.channel,job.delivery);
             job.frames=new SpeechFrames(pcm);job.encoder=api.createEncoder();job.player=api.createAudioPlayer(channel,job.encoder,job.frames);
-            job.player.setOnStopped(()->{try{job.encoder.close();}finally{main(()->finish(job,job.frames.completed()&&!job.cancelled?"sent":"cancelled",job.frames.completed()&&!job.cancelled?"":job.cancelReason));}});
+            job.player.setOnStopped(()->{try{job.encoder.close();}finally{main(()->finish(job,job.frames.completed()&&!job.cancelled?"sent":"cancelled",job.frames.completed()&&!job.cancelled?VoiceDelivery.completionReason(job.delivery.summary()):job.cancelReason));}});
             job.player.startPlaying();reply(source,job.request,"playing","");
         }catch(Exception failure){if(job.encoder!=null)job.encoder.close();finish(job,"failed","VOICE_PLAYBACK_UNAVAILABLE");}
     }
     private void finish(Job job,String state,String reason){
         SpeechLane<Job> lane=lanes.get(job.actor);if(lane==null||lane.current()!=job)return;
+        if(job.channel!=null)deliveries.remove(job.channel);
         lane.finish(job);terminal(job,state,reason);outstanding.decrementAndGet();begin(job.actor);
     }
     private void terminal(Job job,String state,String reason){
-        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,state,reason);main(()->{if(job.session.equals(sessions.get(job.actor)))reply(Bukkit.getPlayer(job.actor),job.request,state,reason);});}catch(IOException failure){main(()->error(Bukkit.getPlayer(job.actor),"VOICE_RESULT_UNKNOWN_DO_NOT_REPLAY"));}});
+        VoiceDelivery.Summary delivery=job.delivery==null?null:job.delivery.summary();
+        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,state,reason,delivery);main(()->{if(job.session.equals(sessions.get(job.actor)))reply(Bukkit.getPlayer(job.actor),job.request,state,reason);});}catch(IOException failure){main(()->error(Bukkit.getPlayer(job.actor),"VOICE_RESULT_UNKNOWN_DO_NOT_REPLAY"));}});
     }
     private byte[] request(String method,String route,byte[] body,Map<String,String> headers)throws Exception{
         var builder=HttpRequest.newBuilder(URI.create(backend+route)).timeout(Duration.ofSeconds(route.equals("/v1/tts")?100:30)).header("Authorization","Bearer "+token);
         headers.forEach(builder::header);builder.method(method,body==null?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofByteArray(body));
         var response=http.send(builder.build(),HttpResponse.BodyHandlers.ofInputStream());
-        try(var input=response.body()){byte[] bytes=input.readNBytes(VoiceUploads.MAX_BYTES+1);if(bytes.length>VoiceUploads.MAX_BYTES||response.statusCode()!=200)throw new IOException("VOICE_BACKEND_REJECTED");return bytes;}
+        try(var input=response.body()){
+            int status=response.statusCode();
+            if(status!=200)throw new VoiceDiagnostics.BackendFailure(switch(status){case 401,403->"VOICE_MEDIA_AUTH_REJECTED";case 429,503->"VOICE_MEDIA_BUSY";case 400,413,422->"VOICE_AUDIO_INPUT_REJECTED";default->"VOICE_AUDIO_PREPARATION_FAILED";});
+            byte[] bytes=input.readNBytes(VoiceUploads.MAX_BYTES+1);if(bytes.length>VoiceUploads.MAX_BYTES)throw new VoiceDiagnostics.BackendFailure("VOICE_AUDIO_TOO_LARGE");return bytes;
+        }
     }
     private JsonObject jsonRequest(String method,String route,byte[] body,Map<String,String> headers)throws Exception{return JsonParser.parseString(new String(request(method,route,body,headers),StandardCharsets.UTF_8)).getAsJsonObject();}
     private static short[] pcm(byte[] wav)throws Exception{
@@ -299,9 +337,13 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void reply(Player p,UUID request,String state,String reason){
         if(p==null)return;JsonObject row=new JsonObject();row.addProperty("type","voice_result");row.addProperty("requestId",request.toString());row.addProperty("state",state);row.addProperty("reason",reason);
+        row.addProperty("actualHearingVerified",false);
+        VoiceLedger.Entry receipt=ledger.get(p.getUniqueId(),request);
+        if(receipt!=null&&receipt.state().equals(state)&&receipt.delivery()!=null)row.add("delivery",gson.toJsonTree(receipt.delivery()));
+        if(!reason.isEmpty())row.addProperty("nextStep",VoiceDiagnostics.hint(reason));
         if(p.getListeningPluginChannels().contains(CHANNEL)){send(p,row);return;}
-        if(state.equals("playing")||state.equals("sent"))return;
-        p.sendMessage("[语音] "+state+(reason.isEmpty()?"":"（"+reason+"）")+"。查询：/voice status "+request);
+        if(state.equals("playing"))return;
+        p.sendMessage("[语音] "+state+(reason.isEmpty()?"":"（"+reason+"）"+VoiceDiagnostics.hint(reason))+"。查询：/voice status "+request);
     }
     private void send(Player p,JsonObject row){byte[] data=gson.toJson(row).getBytes(StandardCharsets.UTF_8);if(data.length>16_000)return;byte[] payload=new byte[data.length+1];payload[0]=1;System.arraycopy(data,0,payload,1,data.length);p.sendPluginMessage(this,CHANNEL,payload);}
     private void error(Player p,String code){if(p!=null)p.sendMessage("[语音] "+(code==null?"VOICE_REQUEST_FAILED":code.replaceAll("[^A-Za-z0-9_]",""))+"。音色用 /voice voices；结果未知先查原请求，不重复发送。");}
