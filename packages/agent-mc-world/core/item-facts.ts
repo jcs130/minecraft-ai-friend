@@ -41,7 +41,7 @@ const ARMOR_SLOT: Record<string, number> = {
 
 /** 不按材质×部位算的那几件 */
 const WHOLE_MAX: Record<string, number> = {
-  shield: 336, bow: 384, crossbow: 465, trident: 250, elytra: 432,
+  shield: 336, bow: 384, crossbow: 465, trident: 250, mace: 500, elytra: 432,
   fishing_rod: 64, flint_and_steel: 64, shears: 238, brush: 64,
   carrot_on_a_stick: 25, warped_fungus_on_a_stick: 100,
   turtle_helmet: 275,

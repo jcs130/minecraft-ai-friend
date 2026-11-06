@@ -42,6 +42,7 @@ import { consumesOpenWindow, selectionMenuTitle } from './window-semantics.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { withdrawStack } from './container-withdraw.ts';
 import { observedEntity } from './perception-sight.ts';
+import { enchantOnceConfirmed } from './enchantment-confirm.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -1714,14 +1715,15 @@ export interface EnchantOffer {
 }
 
 export interface EnchantWindow {
+  id: number;
   enchantments: Array<{ level: number; expected: { enchant: number; level: number } }>;
   enchant(choice: number): Promise<unknown>;
   putTargetItem(item: unknown): Promise<void>;
   putLapis(item: unknown): Promise<void>;
-  targetItem(): { name: string; slot: number } | null;
+  targetItem(): ReturnType<Bot['inventory']['items']>[number] | null;
   close(): void;
   slots: Array<{ name: string; count: number; slot: number } | null>;
-  items(): Array<{ name: string; count: number; slot: number }>;
+  items(): ReturnType<Bot['inventory']['items']>;
 }
 
 /** 三档报价都到齐(原版靠 craft_progress_bar 分条推过来)才读得出;超时就说没读到 */
@@ -1729,7 +1731,7 @@ export async function awaitOffers(win: EnchantWindow, ctx: SkillContext): Promis
   const deadline = Date.now() + 3_000;
   while (Date.now() < deadline) {
     checkAbort(ctx);
-    if (win.enchantments.every((e) => e.level >= 0)) return true;
+    if (win.enchantments.length === 3 && win.enchantments.every((e) => Number.isFinite(e.level) && e.level >= 0)) return true;
     await sleep(80);
   }
   return false;
@@ -1764,8 +1766,10 @@ export async function skillEnchant(
   if (block.name !== 'enchanting_table') {
     throw new SkillBlocked(`${cellText(cell)} 那一格是${zhName(block.name)},不是附魔台`);
   }
-  const target = bot.inventory.items().find((i) => i.name === call.item);
-  if (!target) throw new SkillBlocked(`包里没有${zhName(call.item)}`);
+  if (!inventoryReadConfirmed(bot)) throw new SkillBlocked('背包尚未确认，不能选择附魔物品');
+  const pred = itemPredOf(bot, call.item, call.pick);
+  const target = bot.inventory.items().find((i) => pred(i.name, i));
+  if (!target) throw noSuchItem(bot, call.item, call.pick);
   const already = readEnchants(target as never, bot.registry as never);
   const lapisHave = invCount(bot, (n) => n === LAPIS);
   const shelves = countBookshelves(bot, cell);
@@ -1779,8 +1783,8 @@ export async function skillEnchant(
   let done = '';
   try {
     const inWindow = (name: string) => win.items().find((i) => i.name === name);
-    const item = inWindow(call.item);
-    if (!item) throw new SkillBlocked(`包里没有${zhName(call.item)}`);
+    const item = win.items().find((i) => pred(i.name, i));
+    if (!item) throw noSuchItem(bot, call.item, call.pick);
     await win.putTargetItem(item);
     const lapis = lapisHave > 0 ? inWindow(LAPIS) : undefined;
     if (lapis) await win.putLapis(lapis);
@@ -1811,7 +1815,7 @@ export async function skillEnchant(
       if (blockedBy.length > 0) {
         throw new SkillBlocked(`${where}:${call.index} 档下不了手——${blockedBy.join(';')}`);
       }
-      await win.enchant(i);
+      await enchantOnceConfirmed(bot, win, i, ctx);
       await sleep(300);
       const after = win.targetItem();
       const got = after ? readEnchants(after as never, bot.registry as never) : [];
@@ -1820,10 +1824,15 @@ export async function skillEnchant(
     }
   } finally {
     // 东西一律取回来:窗口一关服务端会把留在槽里的丢在地上
-    const left = win.targetItem();
-    if (left) await bot.putAway(left.slot).catch(() => undefined);
-    for (const s of [win.slots[1]]) if (s) await bot.putAway(s.slot).catch(() => undefined);
-    win.close();
+    // Never clean up through a replacement window or a disconnected client.
+    // close returns station inputs under the native server inventory contract.
+    if (bot.currentWindow === (win as unknown) && bot._client?.state === 'play') {
+      const left = win.targetItem();
+      if (left) await bot.putAway(left.slot).catch(() => undefined);
+      for (const s of [win.slots[1]]) if (s && bot.currentWindow === (win as unknown))
+        await bot.putAway(s.slot).catch(() => undefined);
+      if (bot.currentWindow === (win as unknown)) win.close();
+    }
     await sleep(200);
   }
   const levelAfter = bot.experience?.level ?? 0;

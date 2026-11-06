@@ -24,6 +24,9 @@ import { zhErrorText } from './receipt.ts';
 import { itemsInReach } from './inventory.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import type { AttackEvidence } from '../src/contracts/attack-evidence.ts';
+import { readDurability } from './item-facts.ts';
+import { weaponScore } from './weapon-capabilities.ts';
+export { weaponScore, WEAPON_KIND_SCORE, WEAPON_TIER_SCORE } from './weapon-capabilities.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -66,28 +69,25 @@ export function nearestHostileWithin(bot: Bot, radius: number): HurtSource | nul
   return best;
 }
 
-/** 剑 > 斧 > 镐 > 锹,同种再按材质:下界合金 > 钻石 > 铁 > 石 > 金 > 木 */
-export const WEAPON_KIND_SCORE: Record<string, number> = { sword: 40, axe: 30, pickaxe: 20, shovel: 10 };
-export const WEAPON_TIER_SCORE: Record<string, number> = {
-  netherite: 6, diamond: 5, iron: 4, stone: 3, golden: 2, wooden: 1,
-};
-
 /** 剑 1.6 攻速 → 满伤间隔 625ms;冷却不满就挥是软伤害。战斗会话与技能共用一份 */
 export function meleeCooldownMs(bot: Bot): number {
   return attackCooldownMs(bot);
 }
 
-export function weaponScore(name: string): number {
-  const kind = Object.keys(WEAPON_KIND_SCORE).find((k) => name.endsWith(`_${k}`));
-  if (!kind) return -1;
-  const tier = Object.keys(WEAPON_TIER_SCORE).find((t) => name.startsWith(`${t}_`));
-  return WEAPON_KIND_SCORE[kind] + (tier ? WEAPON_TIER_SCORE[tier] : 0);
+export function meleeWeapons(bot: Bot): ReturnType<Bot['inventory']['items']> {
+  return itemsInReach(bot).filter(item => (item.count ?? 1) > 0 && weaponScore(item.name) >= 0
+    && (readDurability(item)?.left ?? 1) > 0);
 }
 
-export function bestWeapon(bot: Bot): ReturnType<Bot['inventory']['items']>[number] | null {
+export function bestWeapon(bot: Bot, order: readonly string[] = []): ReturnType<Bot['inventory']['items']>[number] | null {
+  const items = meleeWeapons(bot);
+  for (const name of order) {
+    const preferred = items.find(item => item.name === name);
+    if (preferred) return preferred;
+  }
   let best: ReturnType<Bot['inventory']['items']>[number] | null = null;
   let score = -1;
-  for (const item of itemsInReach(bot)) {
+  for (const item of items) {
     const s = weaponScore(item.name);
     if (s > score) { score = s; best = item; }
   }
@@ -100,6 +100,7 @@ export function attackCooldownMs(bot: Bot): number {
   if (name.endsWith('_sword')) return 625;
   if (name.endsWith('_axe')) return 1_000;
   if (name === 'trident' || name.endsWith('_trident')) return 900;
+  if (name === 'mace') return 1_667;
   if (name.endsWith('_pickaxe')) return 850;
   if (name.endsWith('_shovel') || name.endsWith('_hoe')) return 1_000;
   return 250;
@@ -280,7 +281,18 @@ export async function skillAttack(
   mode: AttackMode = 'auto',
   ctx: SkillContext,
   entityId?: number,
+  weaponName?: string,
 ): Promise<string> {
+  const selectedWeapon = () => weaponName === undefined ? bestWeapon(bot)
+    : meleeWeapons(bot).find(item => item.name === weaponName) ?? null;
+  const requireSelectedWeapon = (): void => {
+    if (weaponName === undefined) return;
+    if (mode === 'ranged' || mode === 'kite') throw new SkillBlocked('attack.weapon 是近战武器；不能与 ranged/kite 混用');
+    if (!inventoryReadConfirmed(bot) || (bot as Bot & {deathLifecycle?:{inventorySynced?:boolean}}).deathLifecycle?.inventorySynced === false)
+      throw new SkillBlocked('当前背包尚未确认，不能核对指定武器');
+    if (!selectedWeapon()) throw new SkillBlocked(`指定近战武器 ${weaponName} 不可用；没有换用其他武器或空手攻击`, [], 'local', 'resource-unavailable');
+  };
+  requireSelectedWeapon();
   if (!isKnownTarget(bot, target)) {
     throw new SkillBlocked(`不认识「${target}」这种目标；attack.target 要实体英文类型或玩家名，数字实体编号另填 entityId 并同时提供实际类型；未选择或攻击其他实体`);
   }
@@ -346,7 +358,8 @@ export async function skillAttack(
   let outOfSightSince = 0;
   const equipMelee = async (): Promise<void> => {
     ranged?.abort();
-    const best = bestWeapon(bot);
+    requireSelectedWeapon();
+    const best = selectedWeapon();
     if (!best || bot.heldItem?.name === best.name) return;
     checkAbort(ctx);
     const equipDeadline = Date.now() + 3_000;
@@ -403,6 +416,7 @@ export async function skillAttack(
       if (stats.disconnected) throw new SkillBlocked(`连接断了,主动攻击已取消;${attackStats(stats)}`);
       if (stats.dead) break;
       checkNamedTarget();
+      requireSelectedWeapon();
       if (!canSeeEntity(bot, entity)) {
         outOfSightSince ||= Date.now();
         releaseMelee(bot);
@@ -571,10 +585,13 @@ export async function skillAttack(
       if (stats.dead) break;
       pressMelee(bot, entity, dangerous ? strafeLeft : null);
       if (d <= MELEE_REACH && Date.now() - lastSwing >= attackCooldownMs(bot)) {
-        if (weaponScore(bot.heldItem?.name ?? '') < 0) await equipMelee();
+        if (weaponScore(bot.heldItem?.name ?? '') < 0 || weaponName !== undefined && bot.heldItem?.name !== weaponName) await equipMelee();
         await meleeSwing(bot, entity, () => {
           if (stats.dead) throw new SkillBlocked('目标已确认死亡，未继续挥击');
           checkNamedTarget(true);
+          requireSelectedWeapon();
+          if (weaponName !== undefined && bot.heldItem?.name !== weaponName)
+            throw new SkillBlocked(`主手已不再是指定武器 ${weaponName}，未出手`);
           stats.lastSwingAt = Date.now();
           stats.lastSwingTargetId = entity.id;
           stats.swings += 1;

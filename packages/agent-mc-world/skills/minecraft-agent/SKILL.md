@@ -25,6 +25,7 @@ MCP supplies `mc_connection`, `mc_events` and `mc_protocol`. A raw SDK uses `con
 | Collision, terrain, blocks and visibility | [Spatial observations](references/spatial.md), [perception](references/perception.md) |
 | Gathering, storage, flight, swimming, vehicles and portals | [Existing routines](references/routines.md), [water travel](references/water-travel.md) |
 | Building, temporary supports and editable methods | [Building and methods](references/building-methods.md) |
+| Weapons, equipment crafting, enchanting and repairs | [Equipment methods](references/equipment.md) |
 | Comparing routes or methods | [Focused decisions](references/choices.md) |
 | Historical notes and game-learning evidence | [Game memory](references/memory.md), [operation learning](references/operation-learning.md) |
 | Connected game but missing web picture, textures or icons | [Viewer resource repair](references/viewer-resources.md) |

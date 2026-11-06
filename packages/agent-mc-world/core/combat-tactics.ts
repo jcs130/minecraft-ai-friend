@@ -5,6 +5,7 @@ import type { CombatTactic } from './combat-abilities.ts';
 import { validCombatRules } from './combat-rules.ts';
 import { validCombatProgram } from './combat-program.ts';
 import { validCombatRoutines } from './combat-routines.ts';
+import { validMeleeWeaponOrder } from './weapon-capabilities.ts';
 
 import { sanitizeCombatResult } from './combat-observation.ts';
 import type {CombatScene,CombatResult} from './combat-observation.ts';
@@ -76,7 +77,8 @@ export function validCombatTactic(value: unknown): value is CombatTactic {
     && (v.healAtOrBelow === null || (Number.isFinite(v.healAtOrBelow) && v.healAtOrBelow >= 1))
     && (v.rules === undefined || validCombatRules(v.rules))
     && (v.program === undefined || v.program === null || validCombatProgram(v.program))
-    && (v.routines === undefined || validCombatRoutines(v.routines));
+    && (v.routines === undefined || validCombatRoutines(v.routines))
+    && (v.meleeWeapons === undefined || validMeleeWeaponOrder(v.meleeWeapons));
 }
 
 export class CombatTacticBook {

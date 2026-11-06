@@ -4349,6 +4349,7 @@ export class MinecraftWorld implements World {
     // 执行器由 busyWith 闸住(受理照收,不开跑)。
     this.combat = new CombatSession({
       getBot: () => this.bridge?.bot ?? null,
+      meleeWeapons: () => this.preferredMeleeWeapons(),
       tuning: () => ({
         enabled: this.cfg.combat.enabled,
         ...this.extensionCombatTuning(),
@@ -4710,6 +4711,7 @@ export class MinecraftWorld implements World {
   protected extensionPerception(_bot: Bot): readonly DetectionEvidence[] { return []; }
   protected extensionState(): unknown { return null; }
   protected extensionCombatTuning(): Partial<import('./combat.ts').CombatTuning> { return {}; }
+  protected preferredMeleeWeapons(): readonly string[] { return []; }
   protected extensionCombatReport(_result: unknown): void {}
   protected extensionLowHealth(_bot: Bot): void {}
   protected extensionSpawn(_bot: Bot): void {}
