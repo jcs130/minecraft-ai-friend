@@ -25,6 +25,10 @@ jobs:
           java-version: '21'
       - name: Check Goddess private-message authority without connecting
         run: node --test paper/ops/goddess-*.test.mjs
+      - name: Check native camera launch and appearance archives without connecting
+        run: |
+          python -m unittest discover -s paper/integrations/native-camera -p test_prepare_neoforge.py -v
+          node --test paper/ops/native-photo-renderer.test.mjs paper/ops/photo-scene-maid.test.mjs
       - name: Check four-agent party diagnostics and isolated-stage boundaries offline
         run: |
           python paper/integrations/vortex-rpg/tests/run-four-party.py

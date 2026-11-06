@@ -27,6 +27,7 @@ function entity(value){
   const out=pick(value,['id','uuid','name','username','position','yaw','pitch','headYaw','width','height','eyeHeight','pose','onGround','sneaking','sprinting','burning','velocity','hurtTime','swingProgress','usingItem','skinResource','skinModel']);
   need(out.username===undefined||text(out.username),'ENTITY_NAME');
   for(const k of ['yaw','pitch','headYaw','width','height','eyeHeight','hurtTime','swingProgress'])need(out[k]===undefined||finite(out[k]),'ENTITY_NUMBER');
+  if(value.maidModel!==undefined){need(value.name==='touhou_little_maid:maid'&&namespace(value.maidModel)&&!value.maidModel.includes('//')&&!value.maidModel.includes('..')&&value.nativeEntity===true,'MAID_MODEL');out.maidModel=value.maidModel;out.nativeEntity=true;}
   if(value.equipment!==undefined){need(Array.isArray(value.equipment)&&value.equipment.length<=8,'EQUIPMENT');out.equipment=value.equipment.map(row=>{if(row===null)return null;need(namespace(row?.name)&&integer(row.count)&&row.count>0&&row.count<=999&&text(row.displayName),'EQUIPMENT');return pick(row,['name','count','displayName']);});}
   return out;
 }
