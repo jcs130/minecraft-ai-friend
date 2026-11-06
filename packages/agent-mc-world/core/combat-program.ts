@@ -9,6 +9,12 @@ export interface CombatProgramResult { candidates: CombatCandidate[]; instructio
 export class CombatProgramBusyError extends Error {
   constructor() { super('Combat program already evaluating'); this.name = 'CombatProgramBusyError'; }
 }
+/** A native offered step lost its clearance while the isolated program ran. */
+export class CombatProgramSceneChangedError extends Error {
+  constructor(readonly candidateId: string) {
+    super(`Combat scene changed: ${candidateId}`); this.name = 'CombatProgramSceneChangedError';
+  }
+}
 export const COMBAT_PROGRAM_LIMITS = Object.freeze({ sourceChars: 12_000, paramsChars: 4096,
   outputChars: 24_000, candidates: 16, startupMs: 2000, evaluationMs: 50, responseMs: 500, stepBlocks: 1.6 });
 
@@ -136,8 +142,15 @@ export function combatProgramCandidates(result: unknown, frame: CombatDecisionFr
     if (c.kind === 'step') {
       const to = c.destination, from = frame.battlefield.self.position;
       if (!frame.battlefield.action.canStep || !Array.isArray(to) || to.length !== 3
-        || !to.every(Number.isFinite) || Math.hypot(...to.map((v, i) => v - from[i])) > COMBAT_PROGRAM_LIMITS.stepBlocks
-        || !safeStep(to)) throw new Error(`Unsafe or unavailable step: ${c.id}`);
+        || !to.every(Number.isFinite) || Math.hypot(...to.map((v, i) => v - from[i])) > COMBAT_PROGRAM_LIMITS.stepBlocks)
+        throw new Error(`Unsafe or unavailable step: ${c.id}`);
+      if (!safeStep(to)) {
+        // Only an exact destination offered by the native sampler establishes a
+        // scene race. Invalid authored geometry remains a real program failure.
+        if (pool.some(a => a.kind === 'step' && a.destination.every((v, i) => v === to[i])))
+          throw new CombatProgramSceneChangedError(c.id);
+        throw new Error(`Unsafe or unavailable step: ${c.id}`);
+      }
       return { id: c.id, kind: c.kind, intent: c.intent, destination: [...to] as [number, number, number] };
     }
     const eligible = pool.find(a => a.kind === c.kind && (c.kind === 'cast'

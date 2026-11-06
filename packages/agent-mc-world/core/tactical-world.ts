@@ -11,7 +11,7 @@ import { tacticSupervisorView } from '../src/client/event-context.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { combatLoadout } from './combat-loadout.ts';
-import { CombatProgramRunner, CombatProgramBusyError, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
+import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { combatSearchCandidates } from './combat-search.ts';
@@ -304,6 +304,9 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
       // candidates; do not borrow its output, queue stale frames or revoke it.
       if (error instanceof CombatProgramBusyError)
         return { ...frame, programDeferred: { reason: 'evaluation-in-progress', sourceHash: hash } };
+      if (error instanceof CombatProgramSceneChangedError)
+        return { ...frame, candidates: frame.candidates.filter(c => c.kind !== 'step'),
+          programDeferred: { reason: 'scene-changed', sourceHash: hash } };
       this.combatProgramErrorHash = hash;
       this.combatProgramError = String(error);
       const timeout = /Combat program (?:startup timed out|exceeded evaluation budget|worker response timed out)/.test(String(error));

@@ -8,11 +8,12 @@ import type { CombatDecisionFrame } from '../core/combat-decision-types.ts';
 import { validCombatTactic } from '../core/combat-tactics.ts';
 import { combatRuleBlock, validCombatRules } from '../core/combat-rules.ts';
 import { combatRequest } from '../src/decisions/combat-request.ts';
+import * as idleActions from '../core/idle-actions.ts';
 
 class StatusWorld extends QiandengjiEngine {
   protected override syncRealm() { this.tactics.useRealm('status-test'); }
   update(args: Record<string, unknown>) { return this.setCombatTactic(args); }
-  evaluate(program: CombatProgram, health = 20) {
+  evaluate(program: CombatProgram, health = 20, steps = false) {
     Object.assign(this, { bridge: { bot: { entity: { position: new Vec3(0,64,0) } } } });
     const frame: CombatDecisionFrame = {
       battlefield: { sampledAtMs: Date.now(), connectionGeneration: 1, dimension: 'overworld',
@@ -23,11 +24,37 @@ class StatusWorld extends QiandengjiEngine {
         actors: [], omitted: 0, server: null },
       tacticRevision: 1, mana: null, skills: [], candidates: [], omittedCandidates: 0, program,
     };
+    if (steps) {
+      frame.battlefield.action.canStep = true;
+      frame.candidates = [{ id:'step_direction_2', kind:'step', intent:'Native checked step', destination:[0,64,1.2] }];
+      frame.actionPool = frame.candidates;
+    }
     return this.prepareCombatProgram(frame);
   }
   closeProgram() { this.combatProgram.close(); }
   runner() { return this.combatProgram; }
 }
+
+it('does not permanently disable a pass-through program when an offered corridor closes', async () => {
+  const cfg = structuredClone(MINECRAFT_DEFAULTS);
+  cfg.combatOptions = { ...cfg.combatOptions, allowMovement:true };
+  const world = new StatusWorld({ cfg });
+  const program = { name:'fresh-steps', code:'return {candidates:frame.actionPool,instructions:"Recheck clearance"};' };
+  const clearance = vi.spyOn(idleActions, 'corridorSafe').mockReturnValue(false);
+  try {
+    await world.update({ program });
+    const blocked = await world.evaluate(program, 20, true);
+    expect(blocked.programDeferred).toEqual({ reason:'scene-changed', sourceHash:combatProgramHash(program) });
+    expect(blocked.candidates).toEqual([]);
+    expect(combatRequest(blocked).state.programDeferred).toEqual(blocked.programDeferred);
+    expect(await world.update({})).not.toContain('已停止采用');
+    clearance.mockReturnValue(true);
+    const next = await world.evaluate(program, 20, true);
+    expect(next.policy?.name).toBe(program.name);
+    expect(next.programDeferred).toBeUndefined();
+    expect(next.candidates[0].kind).toBe('step');
+  } finally { clearance.mockRestore(); world.closeProgram(); }
+});
 
 it('keeps concurrent battlefield reads fresh without disabling or borrowing the in-flight policy', async () => {
   const world = new StatusWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) });

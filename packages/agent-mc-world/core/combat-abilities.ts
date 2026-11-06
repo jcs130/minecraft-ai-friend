@@ -271,7 +271,10 @@ export class CombatAbilities {
       targetDeaths: r.targetDeaths ?? null, tacticRevision: r.tacticRevision,
       spellsSent: r.casts.map((cast) => cast.spell), castsTruncated: r.castsTruncated }));
     return `[战术状态] 版本 ${state.revision}，修改时间 ${state.updatedAt ?? '未设置'}；已按世界保存。\n`
-      + JSON.stringify({ observedAt: new Date(now).toISOString(), mana: this.mana,
+      + JSON.stringify({ observedAt: new Date(now).toISOString(),
+        controlPaths: { automatic: this.tactic?.rules?.length ? 'rules: first ready match each combat tick' : 'spells: first ready priority',
+          program: 'host-choice candidates only; does not gate automatic casts',
+          manaControls: ['rules[].when.manaAtLeast', 'rules[].when.reserveMana'] }, mana: this.mana,
         manaLoading: this.manaLoading, available: [...this.available], tactic: this.tactic, checks, ruleChecks, recent })
       + '\n能力与魔力只代表本连接已收到的读数，命令发送会扣减客户端估算；block为空仍须满足目标条件并等服务端回执。'
       + '\n默认候选与规则可由 Agent 修订，未安装能力提供方时不自动施放法术；详细战斗用 report:回执编号按需读取。';
