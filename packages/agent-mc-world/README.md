@@ -1,5 +1,7 @@
 # Agent MC World
 
+Voice diagnostics candidate: `mc_voice` and the proximity SDK retain bounded server `nextStep` guidance and optional `delivery` counters. `packetOffers` counts server send events, not client playback. `sent` still leaves `recipientHeard: unknown` and `goal_completed: false`; never replay an unknown request with a new ID. This source change requires a rebuilt client package and a compatible server; it is not automatically installed in existing hosts.
+
 Development candidate **rc.148** exposes `mc_practice` through the actual SDK/MCP runtime. A host can supply its existing model/worker and a dedicated connected practice client; experiments use the original game executor, method library and independent inventory observations. Unconfigured help reports the missing ports. See [connected practice setup and real-server verification](docs/connected-practice.md). This is a source/package candidate, with no automatic strategy adoption or production deployment.
 
 Development candidate **rc.128** separates observed target death from own kill

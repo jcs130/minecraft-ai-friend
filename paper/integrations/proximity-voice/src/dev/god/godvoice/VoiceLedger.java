@@ -10,7 +10,7 @@ import java.util.*;
 
 /** Append-only receipt identities survive reconnects and restarts; speech/audio are not logged. */
 final class VoiceLedger {
-    record Entry(String fingerprint,String state,String reason,long at) { }
+    record Entry(String fingerprint,String state,String reason,long at,VoiceDelivery.Summary delivery) { }
     private final Path directory;
     private final Map<String,Entry> rows=new java.util.concurrent.ConcurrentHashMap<>();
     private final Gson gson=new Gson();
@@ -25,7 +25,9 @@ final class VoiceLedger {
                         if(line.length()>2048)throw new IOException("VOICE_LEDGER_RECORD_INVALID");
                         JsonObject row=JsonParser.parseString(line).getAsJsonObject();
                         UUID request=UUID.fromString(row.get("requestId").getAsString());
-                        rows.put(key(actor,request),new Entry(row.get("fingerprint").getAsString(),row.get("state").getAsString(),row.get("reason").getAsString(),row.get("at").getAsLong()));
+                        VoiceDelivery.Summary delivery=row.has("delivery")?gson.fromJson(row.get("delivery"),VoiceDelivery.Summary.class):null;
+                        if(delivery!=null&&(delivery.packetOffers()<0||delivery.packetOffers()>1_000_000||delivery.listenerCount()<0||delivery.listenerCount()>128))throw new IOException("VOICE_LEDGER_RECORD_INVALID");
+                        rows.put(key(actor,request),new Entry(row.get("fingerprint").getAsString(),row.get("state").getAsString(),row.get("reason").getAsString(),row.get("at").getAsLong(),delivery));
                     }
                 }catch(RuntimeException invalid){throw new IOException("VOICE_LEDGER_RECORD_INVALID",invalid);}
             }
@@ -43,14 +45,18 @@ final class VoiceLedger {
         transition(actor,request,fingerprint,"queued","");return true;
     }
     synchronized void transition(UUID actor,UUID request,String fingerprint,String state,String reason)throws IOException {
+        transition(actor,request,fingerprint,state,reason,null);
+    }
+    synchronized void transition(UUID actor,UUID request,String fingerprint,String state,String reason,VoiceDelivery.Summary delivery)throws IOException {
         long at=System.currentTimeMillis();JsonObject row=new JsonObject();
         row.addProperty("requestId",request.toString());row.addProperty("fingerprint",fingerprint);row.addProperty("state",state);row.addProperty("reason",reason);row.addProperty("at",at);
+        if(delivery!=null)row.add("delivery",gson.toJsonTree(delivery));
         Path file=directory.resolve(actor+".jsonl");
         if(Files.isSymbolicLink(file))throw new IOException("VOICE_LEDGER_LINK_REJECTED");
         byte[] bytes=(gson.toJson(row)+"\n").getBytes(StandardCharsets.UTF_8);
         try(var channel=FileChannel.open(file,StandardOpenOption.CREATE,StandardOpenOption.WRITE,StandardOpenOption.APPEND)){
             ByteBuffer buffer=ByteBuffer.wrap(bytes);while(buffer.hasRemaining())channel.write(buffer);channel.force(true);
         }
-        rows.put(key(actor,request),new Entry(fingerprint,state,reason,at));
+        rows.put(key(actor,request),new Entry(fingerprint,state,reason,at,delivery));
     }
 }
