@@ -128,6 +128,16 @@ class MinecraftBridge:
         from .call_capability import resolve_work
         return await resolve_work(self, references)
 
+    async def inspect_report_review(self, record: dict, review: dict) -> dict:
+        """Inspect caller-supplied delivery/review versions; do not apply review."""
+        from .work_evidence import inspect_work_evidence
+        return await inspect_work_evidence(self, "report_review", {"reportRecord": record, "review": review})
+
+    async def select_execution_wait(self, observations: list[dict], options: dict) -> dict:
+        """Reduce trusted native receipts in core; no second loop or body queue."""
+        from .work_evidence import inspect_work_evidence
+        return await inspect_work_evidence(self, "execution_wait", {"observations": observations, "waitOptions": options})
+
     async def close(self) -> None:
         owner, self._owner = self._owner, None
         if not owner:

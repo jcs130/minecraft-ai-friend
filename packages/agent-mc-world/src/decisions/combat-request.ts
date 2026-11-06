@@ -53,12 +53,16 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     options[key]={kind:'combination',actions:refs};
   }
   return { state: {
+    ...(frame.survival ? {survival: frame.survival} : {}),
     ...(frame.loadout ? { loadout: frame.loadout } : {}),
-    battlefield: { dimension: b.dimension,
+    battlefield: { dimension: b.dimension,...(b.world?{world:b.world.key}:{}),
       self: { entityId: b.self.entityId, health: health(b.self.health), food: b.self.food,
-        ...(frame.candidates.some(candidate => candidate.kind === 'step')
+        ...(frame.candidates.some(candidate => candidate.kind === 'step'||candidate.kind==='search')
           ? { position: b.self.position.map(value => Math.round(value * 10) / 10) } : {}), equipment: b.self.equipment ?? null },
       action: b.action,
+      ...(b.clues?.length?{clues:b.clues.map(clue=>clue.source==='sound-packet'
+        ?{source:clue.source,kind:clue.kind,direction:clue.direction,distance:clue.distance,ageMs:b.sampledAtMs-clue.heardAt}
+        :{source:clue.source,key:clue.key,lastSeenPosition:clue.position,ageMs:b.sampledAtMs-clue.seenAt})}:{}),
       actors: b.actors.map(actor => ({ entityId: actor.entityId, type: actor.type,
         relation: actor.relation, relationSource: actor.relationSource, health: health(actor.health),
         distance: actor.distance, height: actor.position ? Math.round((actor.position[1] - b.self.position[1]) * 10) / 10 : null,

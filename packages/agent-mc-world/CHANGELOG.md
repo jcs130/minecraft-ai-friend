@@ -165,3 +165,10 @@ Add optional nearby voice through the existing authenticated connection, canonic
 - Integrate main and the deployed rc.137 client capability line without changing server code.
 - Preserve proximity voice, chat audience evidence and memory-service identity alongside main's plan, command and measured-motion review.
 - Publish configured read-only query IDs and structured argument discovery from the same protocol definitions used to dispatch commands.
+## 0.5.7-rc.160-preview.20 (unpublished candidate)
+
+- Separate a desired heal/low-health observation from actual exclusive survival body ownership. Fast withdrawal stays available while healing is cooling down; native engagement health gates remain enforced.
+- Feed real sound bearings and expiring last-seen hostile locations into fast decisions. Optional checked short search steps reuse the existing executor and never attack an occluded entity or follow its hidden live coordinates.
+- Share full-report receipts, revision/idempotence review inspection and native execution wait reduction through public contracts, SDK and MCP. Preserve host stage checks and scheduling; caller-supplied evidence never becomes verified game completion.
+- Native terminal receipts dominate admission callbacks regardless of arrival order; isolate waits by exact world/kind/id and host lifetime, preserving ambiguity and unknown effects.
+- Include the independent speech/body capability from preview.19; voice keeps its existing queue and request identity without taking a movement worker's body lease.

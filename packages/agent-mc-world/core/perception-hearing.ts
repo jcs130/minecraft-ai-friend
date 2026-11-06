@@ -5,9 +5,8 @@ import type { EventEmitter } from 'node:events';
 import { observeViewerSounds, type ViewerSound } from './viewer-sound-packets.ts';
 import { loadViewerSoundRegistry } from './viewer-sound-registry.ts';
 
-export interface HearingHint {
-  source: 'sound-packet'; kind: string; direction: string; distance: string; heardAt: number; expiresAt: number;
-}
+import type { HearingHint } from '../src/contracts/perception.ts';
+export type { HearingHint } from '../src/contracts/perception.ts';
 type Point = { x: number; y: number; z: number };
 const finite = (p: Point | null | undefined): p is Point => !!p && [p.x,p.y,p.z].every(Number.isFinite);
 export function audibleHint(event: ViewerSound, self: { id?: number; position: Point }, now: number): HearingHint | null {
@@ -23,7 +22,7 @@ export function audibleHint(event: ViewerSound, self: { id?: number; position: P
   if (!kind) return null;
   const directions=['北','东北','东','东南','南','西南','西','西北'];
   return {source:'sound-packet',kind,direction:directions[(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8]!,
-    distance:distance<4?'近处（约4格内）':distance<12?'中距离（约4–12格）':'远处（约12格外）',heardAt:now,expiresAt:now+8_000};
+    distance:distance<4?'近处（约4格内）':distance<12?'中距离（约4–12格）':'远处（约12格外）',heardAt:now,expiresAt:now+8_000,origin:[p.x,p.y,p.z]};
 }
 
 export class HearingLedger {
@@ -37,7 +36,7 @@ export class HearingLedger {
   }
   read(limit=3, now=Date.now()): HearingHint[] {
     this.hints=this.hints.filter(h=>h.expiresAt>now);
-    return this.hints.slice(-limit).reverse().map(h=>({...h}));
+    return this.hints.slice(-limit).reverse().map(h=>({...h,...(h.origin?{origin:[...h.origin] as [number,number,number]}:{})}));
   }
 }
 const ledgers=new WeakMap<object,HearingLedger>();

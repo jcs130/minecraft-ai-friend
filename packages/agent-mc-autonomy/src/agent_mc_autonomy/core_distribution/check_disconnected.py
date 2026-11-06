@@ -90,6 +90,20 @@ async def check(directory: Path, node: str) -> dict:
                 assert capability["valid"] and capability["dispatched"] is False
                 assert capability["backgroundLearning"] is expected
             assert (await bridge.resolve_work([]))["resolutions"] == []
+            # Real Python -> MCP -> canonical report/wait helpers. No Python
+            # hash copy, host review mutation, execution or implicit adoption.
+            delivery = {"assignmentId": "offline-assignment", "reportRevision": 1,
+                        "report": {"status": "ready", "text": "结果仍需核验", "evidence": ["original-call"]}}
+            review = {"assignmentId": "offline-assignment", "expectedReportRevision": 1,
+                      "decision": "release", "text": "Read the complete report"}
+            inspected = await bridge.inspect_report_review(delivery, review)
+            assert inspected["code"] == "FULL_REPORT_REQUIRED" and inspected["mutated"] is False
+            review["reportReceipt"] = inspected["reportReceipt"]
+            assert (await bridge.inspect_report_review(delivery, review))["disposition"] == "reviewable"
+            native = {"world": "minecraft", "at": 100, "execution": {"kind": "task", "id": "42", "terminal": False}}
+            assert (await bridge.select_execution_wait([native], {"world": "minecraft", "after": 90}))["disposition"] == "unique"
+            terminal = {**native, "execution": {**native["execution"], "terminal": True}}
+            assert (await bridge.select_execution_wait([terminal, native], {"world": "minecraft", "after": 90}))["disposition"] == "none"
             assert module.json_content(await bridge.call("mc_connection", {"action": "status"}))["phase"] == "disconnected"
             shared_controller = controller.Controller(bridge, None, Settings.parse({}), data / "autonomy",
                                                        lambda **_: None, lambda: False)
@@ -183,6 +197,7 @@ async def check(directory: Path, node: str) -> dict:
                     "disconnected_capture_refused": True, "unknown_request_read_without_replay": True,
                     "shared_tactics_discovered": True,
                     "shared_message_schema_and_help": True,
+                    "shared_report_and_native_wait": True,
                     "disconnected_message_query_refused": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}
         finally:

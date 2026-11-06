@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-mc-autonomy"
-version = "0.2.153"
+version = "0.2.154"
 description = "Host-neutral autonomous Minecraft planner, native queue coordinator and strategic review port"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -25,7 +25,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 agent_mc_autonomy = ["integrations/*.mjs"]
-"agent_mc_autonomy.core_distribution" = ["*.mjs", "*.json", "*.md", "LICENSE*.txt", "agent-mc-world-0.5.7-rc.160-preview.18.tgz"]
+"agent_mc_autonomy.core_distribution" = ["*.mjs", "*.json", "*.md", "LICENSE*.txt", "agent-mc-world-0.5.7-rc.160-preview.20.tgz"]
 "agent_mc_autonomy.runtime_bundle" = ["*.mjs", "*.cmd"]
 
 [tool.pytest.ini_options]
