@@ -1,6 +1,18 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,readFile,readdir,rm} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
 import {collectPlayerObservation,buildGoddessChatPrompt,parseGoddessChatAnswer,cacheObservedPhoto} from './goddess-perception.mjs';
+
+test('an explicit no-reply decision is a successful silent result, not a malformed answer',()=>{
+ assert.equal(parseGoddessChatAnswer('{"decision":"silent"}'),null);
+ for(const raw of ['{"decision":"silent","message":"send anyway"}','{"decision":"silent","command":"op"}','{"decision":"reply"}','{"message":""}'])assert.throws(()=>parseGoddessChatAnswer(raw));
+});
+
+test('ordinary chat can close a conversation while substantive new questions remain eligible',()=>{
+ const prompt=buildGoddessChatPrompt({player:'Guest',wish:'谢谢，晚安！',dialogue:{lastReply:'晚安，休息吧。',lastDecision:'reply'}},{status:'unknown'});
+ assert.ok(prompt.includes('{"decision":"silent"}'));
+ assert.ok(prompt.includes('晚安，休息吧。'));
+ assert.ok(prompt.includes('新的问题')&&prompt.includes('不按关键词'));
+});
 test('current player context uses fixed read-only query, rejects wrong subject and unavailable backend',async()=>{
  let command;const seen=await collectPlayerObservation('.Guest',async q=>{command=q;return 'MC_OBSERVATION '+JSON.stringify({schemaVersion:1,player:'.Guest',status:'ok',position:{world:'minecraft:overworld',x:3,y:65,z:8}})});
  assert.equal(seen.position.x,3);const request=JSON.parse(Buffer.from(command.slice('mycli admin observe '.length),'base64url'));assert.deepEqual(request,{op:'player',player:'.Guest'});
