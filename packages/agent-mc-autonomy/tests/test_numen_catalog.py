@@ -1,6 +1,6 @@
-from agent_mc_autonomy.controller import model_tools
-from agent_mc_autonomy.controller import Controller
 from types import SimpleNamespace
+
+from agent_mc_autonomy.controller import Controller, model_tools
 
 
 def test_numen_body_keeps_its_actual_compact_tool_vocabulary():
