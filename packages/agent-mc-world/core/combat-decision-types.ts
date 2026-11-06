@@ -26,8 +26,8 @@ export interface CombatDecisionFrame {
   program?: CombatProgram;
   actionPool?: CombatCandidate[];
   policy?: { name: string; sourceHash: string; instructions: string };
-  /** This fresh sample retains default candidates while another reader evaluates the program. */
-  programDeferred?: { reason: 'evaluation-in-progress'; sourceHash: string };
+  /** A transient sample rejection does not disable the authored program. */
+  programDeferred?: { reason: 'evaluation-in-progress' | 'scene-changed'; sourceHash: string };
 }
 export interface CombatExecutionPolicy {
   maxEntities: number; maxCandidates: number;

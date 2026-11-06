@@ -12,7 +12,7 @@ import { clearObservationRay } from '../../core/perception-sight.ts';
 import { onEscapeGoal, dropGoal } from '../../core/travel.ts';
 import { CombatAbilities } from '../../core/combat-abilities.ts';
 import { CombatTacticBook } from '../../core/combat-tactics.ts';
-import { CombatProgramRunner, CombatProgramBusyError, combatProgramCandidates, combatProgramHash, validCombatProgram } from '../../core/combat-program.ts';
+import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, validCombatProgram } from '../../core/combat-program.ts';
 import { combatReactions } from '../../core/combat-reactions.ts';
 import { diverseCombatOptions } from '../../core/combat-options.ts';
 import { corridorSafe } from '../../core/idle-actions.ts';
@@ -184,6 +184,7 @@ export class JavaReflexRuntime {
     if(args.routines!==undefined)return{text:'Native reflex has no saved-method execution port; routines were not registered or run. Use the native mc_script interface explicitly.',failed:true};
     if(args.battlefield===true){let frame=this.decisionFrame();if(frame?.program){const hash=combatProgramHash(frame.program);if(hash!==this.failedProgram)try{const result=combatProgramCandidates(await this.program.run(frame.program,frame),frame,to=>corridorSafe(this.currentBot()!,this.bot.entity.position,new Vec3(...to)));frame={...frame,candidates:diverseCombatOptions(result.candidates,({...COMBAT_EXECUTION_DEFAULTS,...this.cfg.combatOptions}).maxCandidates),policy:{name:frame.program.name,sourceHash:hash,instructions:result.instructions}};this.programError=null;}catch(error){
       if(error instanceof CombatProgramBusyError)frame={...frame,programDeferred:{reason:'evaluation-in-progress',sourceHash:hash}};
+      else if(error instanceof CombatProgramSceneChangedError)frame={...frame,candidates:frame.candidates.filter(c=>c.kind!=='step'),programDeferred:{reason:'scene-changed',sourceHash:hash}};
       else{this.failedProgram=hash;this.programError=`Program ${hash} unavailable: ${String(error).slice(0,240)}`;}
     }}
       return{text:JSON.stringify({frame,capabilities:this.status()}),meta:{protocol:'agent-mc-tactics/v1',frame}};}

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Worker } from 'node:worker_threads';
 import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
-import { CombatProgramRunner, combatProgramCandidates, COMBAT_PROGRAM_LIMITS } from '../core/combat-program.ts';
+import { CombatProgramRunner, CombatProgramSceneChangedError, combatProgramCandidates, COMBAT_PROGRAM_LIMITS } from '../core/combat-program.ts';
 import { CombatDecisionLoop, type CombatDecisionFrame } from '../src/decisions/combat-decision.ts';
 import { combatReactions } from '../core/combat-reactions.ts';
 import { COMBAT_DECISION_DEFAULTS } from '../src/decisions/defaults.ts';
@@ -27,6 +27,19 @@ function frame(): CombatDecisionFrame {
 }
 
 describe('agent-authored combat programs', () => {
+  it('distinguishes a changed native step from invented unsafe geometry', () => {
+    const f = frame();
+    const offered = { id: 'step_direction_2', kind: 'step' as const, intent: 'Native checked step', destination: [0,64,1.2] as [number,number,number] };
+    f.actionPool = [offered];
+    const result = { candidates: [{ ...offered, id: 'renamed_step' }], instructions: 'Keep spacing' };
+    expect(() => combatProgramCandidates(result, f, () => false)).toThrow(CombatProgramSceneChangedError);
+    expect(combatProgramCandidates(result, f, () => true).candidates).toEqual(result.candidates);
+    const invented = { candidates: [{ ...offered, destination: [1.1,64,0] }], instructions: '' };
+    expect(() => combatProgramCandidates(invented, f, () => false)).toThrow('Unsafe or unavailable step');
+    f.battlefield.action.canStep = false;
+    expect(() => combatProgramCandidates(result, f, () => true)).toThrow('Unsafe or unavailable step');
+  });
+
   it('executes authored geometry and revised parameters in a real isolated worker', async () => {
     const r = runner(), f = frame();
     const p = { name: 'spacing', code: `const [x,y,z] = frame.battlefield.self.position;
