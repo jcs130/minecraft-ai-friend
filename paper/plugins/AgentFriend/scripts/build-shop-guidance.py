@@ -4,7 +4,7 @@ import argparse, hashlib, json, os, subprocess, zipfile
 
 PIN = '3dc4845b8ddcd26a3237e32ee391293021fd6c072078968ef6640bd8cadbf4d9'
 PREFIX = 'org/afuhome/agentfriend/'
-NAMES = ['ArenaEconomy', 'EconomyPresentation', 'NativeRpg', 'InventoryFeedback', 'AgentCliCatalog', 'AgentCliRecovery', 'ActionFeedback']
+NAMES = ['ArenaEconomy', 'EconomyPresentation', 'NativeRpg', 'PlayerMarket', 'GameplayGuide', 'InventoryFeedback', 'AgentCliCatalog', 'AgentCliRecovery', 'ActionFeedback']
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)

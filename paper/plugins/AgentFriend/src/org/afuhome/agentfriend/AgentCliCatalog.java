@@ -367,8 +367,17 @@ final class AgentCliCatalog {
             nativeSpec(specs,"trade.recycle.sell","item","/mycli trade recycle sell <报价ID>","按本人最新报价出售，金币进入同一RPG账户","只执行一次；过期/物品改变拒绝；待对账不得重试；完成后trade shop list购买补给");
             nativeSpec(specs,"trade.recycle.status","read","/mycli trade recycle status","查金币服务、余额及交易是否待对账","不补发物品或金币；待对账请保留原记录并联系服主");
             nativeSpec(specs,"trade.recycle.menu","gui","/mycli trade recycle menu","打开可回收装备列表→报价→绿色确认","每件显示来源和价格；不接受拖入物品、不自动批量卖出");
-            nativeSpec(specs,"trade.auction","read","/mycli trade auction","查玩家拍卖维护状态：交付故障，暂不能使用","免费只读，未上架、未扣款；不把扣钱或成功台词当作收到物品");
-            var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；wallet；auction","村民交易报价和位置；wallet查任务金币，auction查维护状态",trade.requires()+"；金币入口只读取本人经济账户",trade.returns()));
+            nativeSpec(specs,"trade.auction","group","/mycli trade auction [list|mine|menu|info|sell|confirm|buy|cancel|collect]","玩家交易行：整组定价上架，其他玩家用同一RPG金币购买","默认精炼文本；挂单托管完整物品，成交/下架送个人箱，离线卖家收益保留；未知结果不重复退款");
+            nativeSpec(specs,"trade.auction.list","read","/mycli trade auction list [页码]","每页8项在售商品，返回ID、总价、卖家及下一步","只读，不扣款；详情info，购买buy");
+            nativeSpec(specs,"trade.auction.mine","read","/mycli trade auction mine [页码]","查询本人挂单和待领收益","OPEN可cancel；SOLD/PAYING可collect；RESERVED待核对");
+            nativeSpec(specs,"trade.auction.menu","gui","/mycli trade auction menu","原版交易行菜单：浏览、上架、购买、下架、领取收益","真人也可罗盘→金币商城→玩家交易行，无需额外模组");
+            nativeSpec(specs,"trade.auction.info","read","/mycli trade auction info <ID>","查整组数量、总价、附魔与耐久","不购买；ID从list或mine复制");
+            nativeSpec(specs,"trade.auction.sell","read","/mycli trade auction sell <总价>","为当前主手整组物品生成30秒确认报价","总价1–100000整数金币，尚未移走；确认ID由服务器返回，不能编造");
+            nativeSpec(specs,"trade.auction.confirm","item","/mycli trade auction confirm <确认ID>","托管刚才报价的完整主手物品并上架","主手物品变化拒绝；每人10单；绑定/系统道具不卖，不拆分附魔/耐久");
+            nativeSpec(specs,"trade.auction.buy","item","/mycli trade auction buy <ID>","按固定整组价格购买他人商品","同一商品最多成交一次；商品送个人箱，背包满也不丢货；状态不确定保留ID联系服主");
+            nativeSpec(specs,"trade.auction.cancel","item","/mycli trade auction cancel <ID>","下架本人未成交商品，原物品送个人箱","已成交/正在结算不可撤销；重复请求不会多发物品");
+            nativeSpec(specs,"trade.auction.collect","currency","/mycli trade auction collect [ID]","领取离线成交收益，每次最多10笔","在线卖家成交时自动入账；离线收益保留，使用同一RPG金币与持久化收据，不重复入账");
+            var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；auction","金币商城、回收、玩家交易行与附近村民交易",trade.requires()+"；auction是玩家间的金币交易",trade.returns()));
             // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
             specs.keySet().removeIf(id->Set.of("profession","skills","spells","cast").contains(id.split("\\.")[0]));
             nativeSpec(specs,"profession","group","/mycli profession <动作>","职业：list/info 查询，choose 主动选择，status 核对","choose 只选一次，授予本职业初始装备；查询免费");
@@ -492,7 +501,7 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=switch(prefix){case ""->nativeRpg?List.of("intro","status","profession","skills","tasks","dungeon","inventory"):List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");default->List.of("status","list","info");};
+                var order=switch(prefix){case ""->nativeRpg?List.of("intro","status","profession","skills","tasks","dungeon","inventory"):List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");case "trade."->List.of("wallet","shop","recycle","auction","menu","find","info");case "trade.auction."->List.of("list","info","sell","buy","mine","cancel","collect");default->List.of("status","list","info");};
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
@@ -527,7 +536,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -637,7 +646,7 @@ final class AgentCliCatalog {
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
         if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";
         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";
-        if(id.equals("trade.wallet")||id.startsWith("trade.auction"))query="/mycli trade wallet；/mycli inventory；实际拍卖窗口";
+        if(id.equals("trade.wallet")||id.startsWith("trade.auction"))query="/mycli trade wallet；/mycli trade auction mine；/mycli arena stash page 1";
         out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
         return out;
     }

@@ -21,6 +21,14 @@ public final class NativeCliCatalogTest {
         check(help("guild shared --help").toString().contains("共享"),"shared supplies discoverable");
         for(String alias:List.of("list","info","join","gui"))check(!help("guild party "+alias+" --help").has("errorCode"),"party alias discoverable "+alias);
         check(help("guild party status --help").get("actionReadOnly").getAsBoolean(),"party status read-only");
+        for(String action:List.of("list","mine","info","sell")){var h=help("trade auction "+action+" --help");check(!h.has("errorCode")&&h.get("actionReadOnly").getAsBoolean(),"market query/quote is read-only "+action);}
+        for(String action:List.of("confirm","buy","cancel","collect","menu")){var h=help("trade auction "+action+" --help");check(!h.has("errorCode")&&!h.get("actionReadOnly").getAsBoolean(),"market mutation explicit "+action);}
+        check(help("trade auction sell --help").toString().contains("主手"),"listing identifies actual inventory source");
+        check(help("trade auction buy --help").toString().contains("个人箱"),"market delivery is discoverable");
+        var tradePage=help("trade --help").getAsJsonArray("commands");
+        check(java.util.stream.StreamSupport.stream(tradePage.spliterator(),false).limit(4).map(v->v.getAsJsonObject().get("name").getAsString()).toList().equals(List.of("wallet","shop","recycle","auction")),"money loop appears on first help page");
+        var marketPage=help("trade auction --help").getAsJsonArray("commands");
+        check(java.util.stream.StreamSupport.stream(marketPage.spliterator(),false).anyMatch(v->v.getAsJsonObject().get("name").getAsString().equals("sell")),"listing entry is not hidden behind page two");
         check(help("guild party accept --help").get("resultQuery").getAsString().equals("/mycli guild party status"),"party action checks native membership");
         for(String id:NativeRpg.COMMON_IDS){var h=help("cast "+id+" --help");check(!h.has("errorCode")&&!h.get("jsonSupported").getAsBoolean(),"common format honest "+id);check(String.join("\n",AgentCliText.help(h)).contains("不支持 --json")&&h.get("requirements").getAsString().contains("skills info "+id),"visible common format and effect lookup documented "+id);}
         for(String name:List.of("寒霜","星芒箭","闪现","归乡","圣愈术","饱食术","造物术"))check(NativeRpg.common(name),"requested Chinese common alias "+name);

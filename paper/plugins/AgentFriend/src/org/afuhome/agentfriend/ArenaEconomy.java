@@ -120,6 +120,7 @@ final class ArenaEconomy implements Listener {
         JsonObject bank=nativeRpg.selected()?nativeRpg.recyclingState(player):null;
         inv.setItem(40, icon(Material.GOLD_INGOT, "金币：" + (bank==null?balance(player.getUniqueId()):EconomyPresentation.balance(bank)), "与任务、公会、回收共用；点击查询"));
         inv.setItem(42, icon(Material.EMERALD_BLOCK, "村民以物易物", "需要前往商人身边；与金币商城分别结算"));
+        inv.setItem(43, icon(Material.CHEST_MINECART, "玩家交易行", "玩家间金币买卖，保留附魔耐久；商品送个人箱"));
         inv.setItem(44, icon(Material.BARRIER, "关闭", "不会购买或卖出任何物品"));
         menus.put(inv, new Menu(player.getUniqueId(), "shop", 0, List.of(), null));
         player.openInventory(inv);
@@ -206,6 +207,7 @@ final class ArenaEconomy implements Listener {
             else if (slot == 36) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, 0));
             else if (slot == 38) Bukkit.getScheduler().runTask(plugin, () -> dungeon.command(player,new String[]{"arena","stash","page","1"}));
             else if (slot == 42) Bukkit.getScheduler().runTask(plugin, () -> dungeon.openLegacyMerchant(player));
+            else if (slot == 43) Bukkit.getScheduler().runTask(plugin, () -> player.performCommand("mycli trade auction menu"));
             else if (slot == 40) withReplyMode(true,()->wallet(player));
             else if (slot == 44) Bukkit.getScheduler().runTask(plugin,()->player.closeInventory());
         } else if(menu.kind().equals("buy")) {
@@ -671,7 +673,7 @@ final class ArenaEconomy implements Listener {
         catch (NumberFormatException invalid) { return -1; }
     }
 
-    private static boolean eligible(ItemStack stack) {
+    static boolean eligible(ItemStack stack) {
         if (stack == null || stack.getType().isAir() || stack.getAmount() < 1) return false;
         String type = stack.getType().name();
         boolean gear = type.endsWith("_SWORD") || type.endsWith("_AXE") || type.endsWith("_PICKAXE")

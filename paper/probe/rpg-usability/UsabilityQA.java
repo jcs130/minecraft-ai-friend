@@ -17,6 +17,22 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
         Player p=Bukkit.getPlayerExact(args[1]);if(p==null||!p.getName().matches("ag_RU[a-zA-Z0-9]{1,10}"))throw new IllegalArgumentException("new QA identities only");
         var state=vortex.playerProfileService().profile(p);
         switch(args[0]){
+            case "marketitem"->{
+                boolean locked=args[2].equals("locked");var items=vortex.qiandengjiItems();var definition=items.definitionsSnapshot().stream().filter(d->d.locked()==locked).findFirst().orElseThrow();p.getInventory().setItemInMainHand(items.create(definition.id(),1));sender.sendMessage("QA market item="+definition.id()+" locked="+locked);
+            }
+            case "marketprepared"->{
+                // Persist the exact boundary left by a crash before OPEN. No real identities allowed.
+                try{
+                    var af=(JavaPlugin)Bukkit.getPluginManager().getPlugin("AgentFriend");String id=args[2];if(!id.matches("m_[a-f0-9]{24}"))throw new IllegalArgumentException("fixture listing ID");String root="player-market.orders."+id;var c=af.getConfig().getConfigurationSection(root);if(c==null||!p.getUniqueId().toString().equals(c.getString("seller"))||!c.getString("state").equals("OPEN"))throw new IllegalArgumentException("fixture owns open listing only");
+                    af.getConfig().set(root+".state","PREPARED");
+                    if(args[3].equals("before")){p.getInventory().setItem(c.getInt("slot"),c.getItemStack("item").clone());p.getPersistentDataContainer().remove(new NamespacedKey(af,"market_transfer"));p.saveData();}
+                    af.saveConfig();sender.sendMessage("QA prepared="+id+" boundary="+args[3]);
+                }catch(Exception error){throw new IllegalStateException(error);}
+            }
+            case "marketstatefail"->{
+                // Stage-only failure of the actual shared store; never changes a real player's data.
+                try{var af=Bukkit.getPluginManager().getPlugin("AgentFriend");Class<?> store=Class.forName("org.afuhome.agentfriend.DurableConfigStore",true,af.getClass().getClassLoader());var states=store.getDeclaredField("STATES");states.setAccessible(true);Object s=((java.util.Map<?,?>)states.get(null)).get(af);var failed=s.getClass().getDeclaredField("failed");failed.setAccessible(true);failed.setBoolean(s,args[2].equals("on"));sender.sendMessage("QA market state failure="+args[2]);}catch(Exception error){throw new IllegalStateException(error);}
+            }
             case "depositfail","withdrawfail"->{
                 Bukkit.getServicesManager().unregisterAll(this);injectedEconomy=null;
                 if(args[2].equals("on")){

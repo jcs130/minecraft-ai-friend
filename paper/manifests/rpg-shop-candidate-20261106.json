@@ -3,18 +3,26 @@
   "version": "0.4.47.59-shop-rpg",
   "baseCommit": "e5f9e4b1339789c89211634dc2c992a2840773c8",
   "baseSha256": "3dc4845b8ddcd26a3237e32ee391293021fd6c072078968ef6640bd8cadbf4d9",
-  "candidateSha256": "e6ca6fbf3b787f4bb59d018f40c540470055138877ceab97052283ee06afb4a9",
-  "unchangedJarEntries": 626,
+  "candidateSha256": "39f1a92785c2b1bec4918c05bcacf49dc837b27923d84fd849430ab34a6498df",
+  "unchangedJarEntries": 623,
   "checks": {
-    "cliAndPresentationAssertions": 409,
-    "isolatedGameAssertions": 37,
-    "normalRestartAssertions": 3,
-    "baselineNewShopEntryAssertion": "failed_as_expected"
+    "cliAndPresentationAssertions": 471,
+    "durableStorageAssertions": 29,
+    "isolatedShopAssertions": 37,
+    "isolatedPlayerMarketAssertions": 25,
+    "marketFaultBoundaryAssertions": 7,
+    "normalRestartAssertions": 10,
+    "baselineNewShopEntryAssertion": "failed_as_expected",
+    "baselinePlayerMarketEntryAssertion": "failed_as_expected",
+    "unlockedAffixItemAssertion": "failed_then_fixed",
+    "joinKitRecoveryAssertion": "failed_then_fixed",
+    "finalBundleClassReuse": "Shop/economy classes byte-identical to tested r13; market class byte-identical to tested r14; r15 only updates help ordering, verified by 500 assertions and final restart."
   },
   "productionChanged": false,
   "realHumanClientVisualAcceptance": false,
   "bedrockTouchAcceptance": false,
   "observerVisualAcceptance": false,
   "downloadPackageUpdated": false,
-  "rollbackPolicy": "Code only; preserve current balances, personal storage and transaction receipts."
+  "rollbackPolicy": "Code only; preserve current balances, personal storage and transaction receipts.",
+  "safeFixedPriceMarket": true
 }

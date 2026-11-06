@@ -20,6 +20,8 @@ final class EconomyPresentation {
         }else if(args[1].equalsIgnoreCase("recycle")){
             if(args.length==3)choices=List.of("menu","list","quote","sell","status");
             else if(args.length==4&&args[2].equalsIgnoreCase("quote"))choices=List.of("bag","chest");
+        }else if(args[1].equalsIgnoreCase("auction")&&args.length==3){
+            choices=List.of("list","mine","menu","info","sell","confirm","buy","cancel","collect");
         }
         String prefix=args[args.length-1].toLowerCase(Locale.ROOT);
         return choices==null?null:choices.stream().filter(c->c.startsWith(prefix)).toList();
@@ -41,7 +43,7 @@ final class EconomyPresentation {
     }
     static void decorateCompass(Inventory inv){
         ItemStack icon=new ItemStack(Material.GOLD_INGOT);var meta=icon.getItemMeta();
-        meta.setDisplayName("§6金币商城 · 装备回收");
+        meta.setDisplayName("§6金币商城 · 回收 · 玩家交易行");
         meta.setLore(List.of("§7出售多余装备 → 金币 → 购买装备与物资",
                 "§7点击打开；先看价格再确认，不会自动买卖",
                 "§7商品送入个人箱；与任务奖励共用金币"));

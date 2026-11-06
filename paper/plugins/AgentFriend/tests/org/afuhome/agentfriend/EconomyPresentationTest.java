@@ -29,6 +29,7 @@ public final class EconomyPresentationTest {
         check(EconomyPresentation.complete(new String[]{"trade","rec"}).equals(java.util.List.of("recycle")),"completion discovers the existing trade branch");
         check(EconomyPresentation.complete(new String[]{"trade","recycle","quote","c"}).equals(java.util.List.of("chest")),"completion supplies a valid source");
         check(EconomyPresentation.complete(new String[]{"inventory","status"})==null,"unrelated completion remains unchanged");
+        check(EconomyPresentation.complete(new String[]{"trade","auction","c"}).equals(java.util.List.of("confirm","cancel","collect")),"market confirmation/return/earnings share existing trade branch");
         System.out.println("PASS "+checks+" economy presentation assertions");
     }
 }

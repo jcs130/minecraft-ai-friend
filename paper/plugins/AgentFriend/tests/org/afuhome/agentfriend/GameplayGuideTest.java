@@ -13,7 +13,7 @@ public final class GameplayGuideTest {
         check(missing.stream().filter(e->e.id().equals("appearance")).findFirst().orElseThrow().state().equals("external_service"),"proxy appearance is not inferred absent");
         check(GameplayGuide.parse(new String[]{"world","list","--page","2","--json"}).equals(new GameplayGuide.Query(2,true)),"normal CLI flags");
         for(String[] invalid:List.of(new String[]{"world","list","2"},new String[]{"world","list","--page","0"},new String[]{"world","list","--page"},new String[]{"world","list","--json","--json"},new String[]{"world","list","--page","x"})){boolean refused=false;try{GameplayGuide.parse(invalid);}catch(IllegalArgumentException expected){refused=true;}check(refused,"invalid options rejected");}
-        check(entries.stream().filter(e->e.id().equals("trade")).findFirst().orElseThrow().note().contains("拍卖交付尚未开放"),"no fake auction readiness");
+        check(entries.stream().filter(e->e.id().equals("trade")).findFirst().orElseThrow().note().contains("/mycli trade auction"),"safe fixed-price market has an executable entry");
         System.out.println("GameplayGuideTest: "+checks+" passed");
     }
 }
