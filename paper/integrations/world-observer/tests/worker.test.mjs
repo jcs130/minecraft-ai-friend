@@ -5,11 +5,11 @@ import path from 'node:path';
 import { ObservationWorker, validateWorkerConfig, readBoundedJSON, observationFailure, observationPacketDecoder } from '../worker.mjs';
 const uuid='11111111-1111-3111-8111-111111111111';
 test('partial reads retain bounded structural frames without private directories or error text',()=>{
- const error=Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError',stack:'PartialReadError: PRIVATE_PACKET_CONTENT\n at reader (file:///private/PRIVATE_PACKET_CONTENT/reader.js:12:4)\n at compiler (C:\\private\\PRIVATE_PACKET_CONTENT\\compiler.js:42:9)\n PRIVATE_PACKET_CONTENT'});
+ const error=Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError',stack:'PartialReadError: PRIVATE_PACKET_CONTENT\n at reader (file:///private/PRIVATE_PACKET_CONTENT/numeric.js:12:4)\n at compiler (C:\\private\\PRIVATE_PACKET_CONTENT\\compiler.js:42:9)\n at leak (PRIVATE_PACKET_CONTENT.js:10:2)'});
  const value=observationFailure('scene',error,100000);
- assert.deepEqual(value.frames,[{file:'reader.js',line:12,column:4},{file:'compiler.js',line:42,column:9}]);
+ assert.deepEqual(value.frames,[{file:'numeric.js',line:12,column:4},{file:'compiler.js',line:42,column:9}]);
  assert.ok(!JSON.stringify(value).includes('PRIVATE_PACKET_CONTENT'));assert.ok(!JSON.stringify(value).includes('/private/'));
- const long=observationFailure('scene',Object.assign(error,{stack:'PartialReadError\n'+Array(100).fill(' at test (reader.js:1:2)').join('\n')}));assert.equal(long.frames.length,6);
+ const long=observationFailure('scene',Object.assign(error,{stack:'PartialReadError\n'+Array(100).fill(' at test (numeric.js:1:2)').join('\n')}));assert.equal(long.frames.length,6);
 });
 test('decoder identifies a failing packet without storing bytes or replaying the decode',()=>{
  let calls=0;const decoder=observationPacketDecoder({play:{parsePacketBuffer(){calls++;throw Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError'});}}});
@@ -20,7 +20,7 @@ test('decoder identifies a failing packet without storing bytes or replaying the
  assert.equal(decoder.context().packetId,null);assert.equal(calls,2);
 });
 test('successful decode keeps only a structural name and reports context independently',()=>{
- const packet={name:'map_chunk',params:{private:'PRIVATE_PACKET_CONTENT'}},decoder=observationPacketDecoder({play:{parsePacketBuffer(){return{data:packet};}}});
+ const packet={name:'map_chunk',params:{private:'PRIVATE_PACKET_CONTENT'}},decoder=observationPacketDecoder({play:{parsePacketBuffer(){return{data:packet};}}},{play:{39:'map_chunk'}});
  assert.equal(decoder.decode(Buffer.from([39,2,3]),'play'),packet);
  const copy=decoder.context();copy.name='changed';assert.equal(decoder.context().name,'map_chunk');
  assert.ok(!JSON.stringify(decoder.context()).includes('PRIVATE_PACKET_CONTENT'));
@@ -30,6 +30,7 @@ test('failure diagnostics preserve stage and code without credentials, payloads 
  const failure=observationFailure('sample',e,100000);
  assert.equal(failure.stage,'sample');assert.equal(failure.reason,'OBSERVER_EXCEPTION');assert.equal(failure.cause,'ECONNRESET');assert.ok(!JSON.stringify(failure).includes('private-secret'));
  assert.equal(observationFailure('scene',Error('PAPER_OBSERVATION_SEQUENCE'),100000).reason,'PAPER_OBSERVATION_SEQUENCE');
+ assert.equal(observationFailure('scene',Error('OBSERVER_PRIVATE_PLAYER_DATA'),100000).reason,'OBSERVER_EXCEPTION');
  assert.equal(observationFailure('sample',Object.assign(Error('a timeout'),{name:'TimeoutError'}),100000).reason,'OBSERVER_REQUEST_TIMEOUT');
  assert.throws(()=>observationFailure('password',e),/OBSERVER_FAILURE_STAGE/);
 });
@@ -53,7 +54,8 @@ test('a real scene decoder failure records structural context once and retires o
  f.worker.packetDecoder=observationPacketDecoder({play:{parsePacketBuffer(){throw Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError'});}}});
  f.worker.prepared.attach=(...args)=>{const view=attach(...args);view.ingest=()=>f.worker.packetDecoder.decode(Buffer.from([88,1,2]),'play');return view;};
  await f.worker.step();const value=f.worker.status().lastFailure;
- assert.equal(value.stage,'scene');assert.equal(value.type,'PartialReadError');assert.deepEqual(value.lastPacket,{state:'play',bytes:3,packetId:88});
+ assert.equal(value.stage,'scene');assert.equal(value.type,'PartialReadError');assert.equal(value.phase,'packet_decode');
+ assert.equal(value.packet.packetId,88);assert.equal(value.packet.state,'play');assert.equal(value.packet.bytes,3);assert.equal(value.packet.position.replay,'unsupported');
  assert.equal(f.counts().closes,1);assert.equal(f.worker.sources.size,0);assert.ok(!JSON.stringify(value).includes('PRIVATE_PACKET_CONTENT'));await f.worker.close();
 });
 test('an error before decode cannot inherit a preceding source packet context',async()=>{
@@ -61,7 +63,7 @@ test('an error before decode cannot inherit a preceding source packet context',a
  f.worker.packetDecoder=observationPacketDecoder({play:{parsePacketBuffer(){return{data:{name:'map_chunk',params:{}}};}}});
  f.worker.packetDecoder.decode(Buffer.from([39]),'play');
  f.worker.prepared.attach=(...args)=>{const view=attach(...args);view.ingest=()=>{throw Object.assign(Error('PRIVATE_PACKET_CONTENT'),{name:'PartialReadError'});};return view;};
- await f.worker.step();assert.equal(f.worker.status().lastFailure.lastPacket,null);await f.worker.close();
+ await f.worker.step();assert.equal(f.worker.status().lastFailure.packet,null);assert.equal(f.worker.status().lastFailure.lastDecodedPacket,null);await f.worker.close();
 });
 test('same observation job reuses one host and publisher; revoked permission closes only observation resources',async()=>{
  const f=fixture();await f.worker.step();assert.equal(f.worker.sources.size,1);f.advance();await f.worker.step();assert.equal(f.counts().creates,1);
