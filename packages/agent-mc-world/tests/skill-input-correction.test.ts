@@ -4,6 +4,24 @@ import { methodHarness } from './method-harness.ts';
 import { skillProbe } from '../core/skills-gather.ts';
 import type { SkillContext } from '../core/skill-context.ts';
 import type { Bot } from 'mineflayer';
+import { readSkillHelp } from '../core/skills.ts';
+
+it.each([
+  { skill: 'use', item: '大背包', open: true },
+  { skill: 'take', from: 'open', all: true },
+])('returns the failed action contract even to a worker scoped only to mc_do: %j', async step => {
+  const r = methodHarness();
+  try {
+  const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler({ steps: [step] }, {} as never);
+  expect(result).toMatchObject({ failed: true, data: { executed: false } });
+  const text = typeof result === 'string' ? result : result.text;
+  const help = readSkillHelp({ skill: step.skill });
+  expect(text).toContain('actionContract');
+  expect(text).toContain(JSON.stringify('text' in help ? help.text : 'unexpected'));
+  expect(text).not.toContain('技能目录');
+  expect(r.said).toEqual([]);
+  } finally { r.close(); }
+});
 
 afterEach(() => vi.restoreAllMocks());
 const plan = [{ skill: 'goto', at: [4, 64, 0] }, { skill: 'look', at: [5, 64, 0], needs: [1] }];
