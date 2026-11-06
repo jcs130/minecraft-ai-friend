@@ -84,6 +84,7 @@ function rig(
   diag?: MinecraftLog,
   ranged?: CombatRangedActions,
   onLowHealth?: (bot: Bot) => void,
+  meleeWeapons?: () => readonly string[],
 ) {
   const events: Array<{ text: string; urgent: boolean }> = [];
   const combatReports: CombatResult[] = [];
@@ -105,6 +106,7 @@ function rig(
     resumeTasks: () => { calls.resumed++; return '刚才做到一半的任务#1 接着做(第 1 步:去坐标)'; },
     emit: (text, urgent) => events.push({ text, urgent }),
     onLowHealth,
+    meleeWeapons,
     report: result => combatReports.push(result),
     ranged,
     log,
@@ -182,6 +184,29 @@ it('automatic defense keeps an equipped ready bow instead of drawing the invento
     expect(equip).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
     expect(ranged.shots.length).toBeGreaterThan(0);
     expect(events.some(e=>e.text.includes('保留已经拿好的弓'))).toBe(true);
+  }finally{session.stop();}
+});
+
+it.each(['trident','mace'])('native armed defense really swings %s instead of classifying it as unarmed',async name=>{
+  const {bot,attacks}=combatRigBot([foe(7,'zombie',2.5)]);
+  const weapon={name,type:1,count:1};Object.assign(bot,{heldItem:weapon,inventory:{items:()=>[weapon],slots:[]}});
+  const {session}=rig(bot,{fight:'armed'});
+  try{expect(session.onHurtBy(7,'zombie')).toBe(true);await drive(bot,2500);expect(attacks.length).toBeGreaterThan(0);}
+  finally{session.stop();}
+});
+
+it('native combat honors an authored melee preference and waits for confirmed hand before swinging',async()=>{
+  const {bot,attacks}=combatRigBot([foe(7,'zombie',2.5)]);
+  const sword={name:'netherite_sword',type:1,count:1},trident={name:'trident',type:2,count:1};
+  const native=bot as unknown as Bot;
+  Object.assign(bot,{heldItem:sword,inventory:{items:()=>[sword,trident],slots:[]},equip:vi.fn(async()=>{
+    await new Promise(resolve=>setTimeout(resolve,800));native.heldItem=trident as never;
+  })});
+  const {session}=rig(bot,{fight:'armed'},undefined,undefined,undefined,()=>['trident']);
+  try{
+    expect(session.onHurtBy(7,'zombie')).toBe(true);await drive(bot,600);
+    expect(native.equip).toHaveBeenCalledWith(trident,'hand');expect(attacks).toHaveLength(0);
+    await drive(bot,1900);expect(native.heldItem?.name).toBe('trident');expect(attacks.length).toBeGreaterThan(0);
   }finally{session.stop();}
 });
 

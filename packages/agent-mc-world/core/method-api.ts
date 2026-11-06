@@ -4,6 +4,24 @@ import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 import { adaptiveDivingDecision } from './diving-budget.mjs';
 
 const SDK_API = Object.freeze({
+  fabrication: '制造与强化按用途选择，不必新起人格：craft 合成/锻造，smelt 冶炼，enchant 附魔台，anvil 修理/附魔书合并，grindstone 去普通附魔。mc_help {skills:["craft","enchant","anvil","grindstone"]} 按需读当前契约。'
+    + '先 mc_bag 核对具体物品/名称/附魔/耐久、现场经验等级、青金石与材料；观察当前工作站，不把旧仓库记录当库存。'
+    + 'enchant:{at,item,pick?} 不给 index 只查看本件三档报价；给 index:1|2|3 才扣费。等级门槛与实际扣的1/2/3级不同，报价只透露一条附魔，结果可能不同；回执与新物品组件为准。'
+    + '已有附魔通常用 anvil 加书/合并；砂轮会去掉普通附魔，不能作为默认准备步骤。不要为凑更高等级无限刷经验。'
+    + '报价/效果未确认先核对原物品，不重新提交付费动作。成品入包、实际装备与当前任务是否达标分别验收。'
+    + '有宿主 worker 时可交给已有制造/补给 worker，附上用途、数量、可花资源、保留物品及完成条件；只加载这些资料，执行仍走单身体队列。原生技能程序用 api:"authoring" 保存、评估和选择版本。',
+  weapons: '先 mc_bag 按需读取物品 ID、槽位、附魔和耐久；mc_combat_tactic {battlefield:true} 的 loadout.choices 是当前武器模式索引。'
+    + '近战支持剑、斧、三叉戟、重锤及工具；单步 mc.do([{skill:"attack",target:实际类型,entityId:实际编号,mode:"melee",weapon:"trident"}]) 精确指定，缺失不替换。'
+    + '反射/快战斗的偏好用 mc_combat_tactic {meleeWeapons:["trident","iron_sword"]}，不存在的跳过再回退，[]复原；仅设置不开始战斗。'
+    + '自动远程控制目前只支持弓和普通箭。三叉戟明确投掷用 use 的 item:"trident",at；这会离手，忠诚/激流要读实际附魔，不假设自动回收。'
+    + '弩的装填/发射、特殊投掷可由你编写原生方法：bot.inventory.items、bot.equip、bot.lookAt、bot.activateItem、bot.waitForTicks、bot.deactivateItem；逐项 api 查询真实契约。近战使用 mc.do 的 attack，不能假设原生脚本存在 bot.attack。'
+    + '原生按键/发包不等于成功装填、命中、回收或安全落地；按物品与实体实际变化核验。取消蓄力须切槽，不能用松手假装取消而误发射。'
+    + 'api:"authoring" 给校验、保存父版本、执行、证据、采用和回退链。保存后可用 mc_combat_tactic.routines 登记精确 procedure 给系统一选择，program 按现场重排。维护者支持某动作不等于你已学会。',
+  mobility: '交通能力按实际后端区分：ride 可上/下已观察到的载具；原生驾驶目前支持 boat/chest_boat、猪、炽足兽，不支持马/驴/骡驾驶。'
+    + '乘船可先用 use 放船，再 ride 指定 target 与 entityId，上船后 ride.to 分段开行；每段按 vehicle 身份、实际位置、碰撞与服务端纠偏验收，不能把上船当抵达。'
+    + '马可观察驯服/鞍、喂食、上马和下马；bot.moveVehicle 只发原生输入，Mineflayer没有马物理，不能用它宣称已骑行。'
+    + 'mc_script {routine:{op:"read",id:"ride_route"}} 按需读取内置可改写路线参考；自己编写前用 api:"authoring" 与 api:"mount"/"dismount"/"moveVehicle"。'
+    + '有明确交通目的且当前路段合适时可检索已有方法、改写、校验和使用；不强制为练习离开当前任务。',
   authoring: '可以直接写新的 JavaScript async 函数体，不必等待现有脚本提供所需动作。'
     + '保持按键、按实际读数计算、条件分支或重复编排适合写成有界方法；一次普通动作仍可直接用 mc_do。'
     + '先 library:{op:"list",query:"当前目的"} 检索本作用域的小索引；没有适用方法就按 api:"index" 和具体原生方法帮助构造候选。'

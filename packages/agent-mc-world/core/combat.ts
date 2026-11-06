@@ -206,6 +206,7 @@ export interface CombatTuning {
 }
 
 interface CombatSessionOptions {
+  meleeWeapons?: () => readonly string[];
   getBot: () => Bot | null;
   tuning: () => CombatTuning;
   /** 环境自保(岩浆/溺水反射/主动传送)正在进行:比战斗优先,期间不进场、进了也让位 */
@@ -426,6 +427,10 @@ export class CombatSession {
 
   constructor(private readonly opts: CombatSessionOptions) {}
 
+  private bestMeleeWeapon(bot: Bot): ReturnType<typeof bestWeapon> {
+    return bestWeapon(bot, this.opts.meleeWeapons?.() ?? []);
+  }
+
   start(): void {
     if (this.watch) return;
     this.watch = setInterval(() => this.watchTick(), 250);
@@ -465,7 +470,7 @@ export class CombatSession {
     if (!this.alive(bot) || (this.active && (this.bodyEnded(bot) || (!this.tracking && !this.fighting))) || !t.enabled || t.fight === 'off'
       || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
-      || (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot))
+      || (t.fight === 'armed' && !this.bestMeleeWeapon(bot) && !this.rangedReady(bot))
       || Date.now() < this.capCooldownUntil
       || (!t.arena && Date.now() < this.cooldownUntil)
       || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)) return [];
@@ -541,7 +546,7 @@ export class CombatSession {
     if (this.tracking) {
       this.trackingLease = null; this.state = 'fighting'; this.rangedOwner = {};
       this.hybridWeapon = this.selectDefensiveWeapon({phase:'start',current:this.hybridWeapon,heldItem:bot.heldItem?.name??null,
-        rangedReady:this.rangedReady(bot),meleeReady:Boolean(bestWeapon(bot)),distance:null});
+        rangedReady:this.rangedReady(bot),meleeReady:Boolean(this.bestMeleeWeapon(bot)),distance:null});
       if(this.hybridWeapon==='melee')this.armMelee(bot);
       this.lastLandedAt = this.lastProgressAt = this.lastRealProgressAt = Date.now();
     } else if (!this.fighting && !this.engage(foe.name ?? '', false)) return false;
@@ -632,7 +637,7 @@ export class CombatSession {
     } // 已经在撤了,别叠加;伤害历史留在同一场里,逃不掉要转身
     if (this.state === 'fighting') {
       this.provoked.add(attackerId);
-      if (!this.desperate && this.bot && !bestWeapon(this.bot) && !this.rangedReady(this.bot)) this.retreatUnarmed();
+      if (!this.desperate && this.bot && !this.bestMeleeWeapon(this.bot) && !this.rangedReady(this.bot)) this.retreatUnarmed();
       return true;
     }
     if (this.tracking) {
@@ -673,7 +678,7 @@ export class CombatSession {
       this.beginRetreat('no-fight');
       return true;
     }
-    if (bot?.entity && !bestWeapon(bot) && !this.rangedReady(bot)) {
+    if (bot?.entity && !this.bestMeleeWeapon(bot) && !this.rangedReady(bot)) {
       this.bot = bot;
       this.provoked.add(attackerId);
       this.opts.suspendTasks(`战斗:空手受击,撤退`);
@@ -723,7 +728,7 @@ export class CombatSession {
     const bot = this.opts.getBot();
     if (!this.alive(bot)) return;
     // armed 模式仅在背包有可用近战武器或远程武器就绪时主动进场。
-    if (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot)) return;
+    if (t.fight === 'armed' && !this.bestMeleeWeapon(bot) && !this.rangedReady(bot)) return;
     this.bot = bot;
     const foes = this.scan(bot, t);
     const near = foes.find((f) => f.visible && f.reach <= t.engageRadius && !NO_FIGHT.has(f.name));
@@ -791,7 +796,7 @@ export class CombatSession {
     this.rangedUnavailable = false;
     this.rangedBlocked = null;
     this.trackingLease = null;
-    this.hadCombatWeapon = Boolean(bestWeapon(bot) || this.rangedReady(bot));
+    this.hadCombatWeapon = Boolean(this.bestMeleeWeapon(bot) || this.rangedReady(bot));
     const now = Date.now();
     this.controlSummary = { schemaVersion: 1, finalMode: 'fighting', enteredDesperate: false, retreat: null };
     this.startedAt = now;
@@ -827,7 +832,7 @@ export class CombatSession {
     this.landed = 0;
     this.lastSwingTargetId = -1;
     this.hybridWeapon = this.selectDefensiveWeapon({phase:'start',current:'melee',heldItem:bot.heldItem?.name??null,
-      rangedReady:this.rangedReady(bot),meleeReady:Boolean(bestWeapon(bot)),distance:null});
+      rangedReady:this.rangedReady(bot),meleeReady:Boolean(this.bestMeleeWeapon(bot)),distance:null});
     this.rangedOwner = {};
     this.rangedPendingOwner = null;
     this.nextRangedAt = now;
@@ -1099,7 +1104,7 @@ export class CombatSession {
 
     const t = this.opts.tuning();
     const rangedReady = this.rangedReady(bot);
-    const armed = Boolean(bestWeapon(bot) || rangedReady);
+    const armed = Boolean(this.bestMeleeWeapon(bot) || rangedReady);
     if (!this.desperate && !armed && this.hadCombatWeapon) { this.retreatUnarmed(); return; }
     this.hadCombatWeapon ||= armed;
     const foes = this.scan(
@@ -1206,7 +1211,7 @@ export class CombatSession {
     // weapon, keep the ranged controller's spacing instead of choosing fists
     // merely because the hostile crossed the hybrid distance threshold.
     const weapon = this.selectDefensiveWeapon({phase:'tick',current:this.hybridWeapon,heldItem:bot.heldItem?.name??null,
-      rangedReady,meleeReady:Boolean(bestWeapon(bot)),distance:target.reach});
+      rangedReady,meleeReady:Boolean(this.bestMeleeWeapon(bot)),distance:target.reach});
     if (weapon !== this.hybridWeapon) this.switchWeapon(bot, weapon);
     if (this.hybridWeapon === 'ranged') {
       this.driveRanged(bot, target, visibleFoes, now);
@@ -1305,7 +1310,7 @@ export class CombatSession {
    * 要换时播报只说正在换,换手的结果出来后没拿到手就另发一条,写明原因和手里实际是什么。
    */
   private armMelee(bot: Bot): string {
-    const weapon = bestWeapon(bot);
+    const weapon = this.bestMeleeWeapon(bot);
     if (!weapon) return ',手边没趁手的家伙';
     if (bot.heldItem?.name === weapon.name) return `,手里是${zhName(weapon.name)}`;
     if (this.meleeEquip?.bot === bot) return ',正在核对换手结果';
@@ -1340,8 +1345,9 @@ export class CombatSession {
   /** Inventory availability is not equip confirmation. Never swing while the
    * selected weapon is still in the bag; keep movement/retreat independent. */
   private meleeHandReady(bot: Bot, now: number): boolean {
-    if (weaponScore(bot.heldItem?.name ?? '') >= 0) return true;
-    if (!bestWeapon(bot)) return true; // Existing unarmed/escape policy owns this case.
+    const selected = this.bestMeleeWeapon(bot);
+    if (!selected) return true; // Existing unarmed/escape policy owns this case.
+    if (bot.heldItem?.name === selected.name) return true;
     if (!this.meleeEquip) this.armMelee(bot);
     const attempt = this.meleeEquip;
     if (!attempt) return false;
@@ -1449,8 +1455,8 @@ export class CombatSession {
     if (!equipmentFailure && now - this.rangedBlocked.firstAt < 1_500) return;
     this.rangedUnavailable = true;
     this.opts.emit(`弓箭未能出手(${result.cause ?? result.reason})，主手是${heldText(this.bot)}。` +
-      (bestWeapon(this.bot) ? '核对近战武器后再打。' : '先撤离，不用手里物品继续攻击。'), true, false);
-    if (bestWeapon(this.bot)) this.switchWeapon(this.bot, 'melee');
+      (this.bestMeleeWeapon(this.bot) ? '核对近战武器后再打。' : '先撤离，不用手里物品继续攻击。'), true, false);
+    if (this.bestMeleeWeapon(this.bot)) this.switchWeapon(this.bot, 'melee');
     else this.beginRetreat('flee');
   }
 
@@ -1849,7 +1855,7 @@ export class CombatSession {
       } finally {
         if (generation === this.supplyGeneration) {
           if (this.state !== 'idle') {
-            const weapon = bestWeapon(bot);
+            const weapon = this.bestMeleeWeapon(bot);
             if (weapon) await equipHandConfirmed(bot, weapon, checkActive).catch(() => undefined);
           }
           this.eating = false;
@@ -2184,10 +2190,10 @@ export class CombatSession {
   private turnAndFight(bot: Bot, glued: Foe, now: number, cause: 'close' | 'stalled'): boolean {
     // A failed bow/equip is not evidence that punching with the previous food
     // item is a usable fallback. Keep the escape owner until it can disengage.
-    if (!bestWeapon(bot) && this.rangedUnavailable) return false;
+    if (!this.bestMeleeWeapon(bot) && this.rangedUnavailable) return false;
     if (this.meleeEquip?.failed && !this.rangedReady(bot)) return false;
     const line = this.opts.tuning().fleeHealth + ENGAGE_MARGIN;
-    if (!bestWeapon(bot) && !this.rangedReady(bot) && (bot.health ?? 20) < line) {
+    if (!this.bestMeleeWeapon(bot) && !this.rangedReady(bot) && (bot.health ?? 20) < line) {
       if (!this.retreatBarehandNoted) {
         this.retreatBarehandNoted = true;
         this.opts.diag?.write({
