@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.22 (unpublished candidate)
+
+- Add source-authored supervisor event views through `agent-mc-world/context`. Accepted tactical choices expose a bounded summary linked to the exact original payload; missing or mismatched views retain full evidence. Rejected choices and unknown outcomes stay complete.
+- Declare tool-help targets through an optional `helpFor` capability so host supervisors can route execution-contract discovery to task workers without copying or guessing tool names. SDK/MCP execution and original event delivery remain unchanged.
+
 ## 0.5.7-rc.160-preview.18 (unpublished candidate)
 
 - Expose argument-specific SDK/MCP call capability inspection using the original schema and canonical predicates; inspection does not execute, acquire the body or authorize a later call.
