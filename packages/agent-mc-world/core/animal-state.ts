@@ -1,5 +1,6 @@
 /** 动物状态读取仅使用协议 registry 的元数据字段。 */
 import { minecraftTextComponent } from './text-component.ts';
+import { observedEntityIdentity } from './entity-identity.ts';
 
 export interface NamedStack { name?: string }
 
@@ -39,7 +40,7 @@ export function entityCustomName(bot: FactBot, entity: FactEntity): string | nul
 export function entityIdentityNote(bot: FactBot, entity: FactEntity): string {
   const notes: string[] = [];
   if (Number.isInteger(entity.id)) notes.push(`entityId=${entity.id}`);
-  const name = entityCustomName(bot, entity);
+  const name = observedEntityIdentity(bot, entity)?.name ?? entityCustomName(bot, entity);
   if (name) notes.push(`名字「${name}」`);
   // UUIDs correlate named companions with server receipts across entity-ID changes.
   if (name && entity.uuid) notes.push(`UUID=${entity.uuid}`);

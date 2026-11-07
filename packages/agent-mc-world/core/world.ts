@@ -2999,7 +2999,8 @@ export class MinecraftWorld implements World {
         const world=readWorldIdentity(bot),generation=String(this.connectionGeneration);
         return {bot,generation,world,stillCurrent:()=>this.bridge?.bot===bot&&this.bridge?.connectionState?.ready===true
           &&bot._client?.state==='play'&&readWorldIdentity(bot).key===world.key&&readWorldIdentity(bot).revision===world.revision,
-          disableAutoSpeech:()=>sendChat(bot,'/voice auto off')};
+          disableAutoSpeech:()=>sendChat(bot,'/voice auto off'),
+          sendNearbyText:(text,requestId)=>this.sendNearbyVoiceText(text,requestId)};
       },
       blob:handle=>this.host?.blob(handle)??null,
       hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`,true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
@@ -4636,7 +4637,7 @@ export class MinecraftWorld implements World {
   private chatDeliverySequence = 0;
   private dispatchServerChat(text: string, send: () => void, context?: ChatDispatchContext): ChatDeliveryReceipt | undefined {
     const previous = new Map(this.recentSystemMessages);
-    const mutates = !this.serverActionWait.isReadOnlyQuery(text);
+    const mutates = text.trim().startsWith('/') && !this.serverActionWait.isReadOnlyQuery(text);
     let delivery: ChatDeliveryReceipt | undefined;
     if (mutates) this.recentSystemMessages.clear();
     try { this.serverActionWait.dispatchChat(text, () => {
@@ -4648,6 +4649,7 @@ export class MinecraftWorld implements World {
         status: 'sent', sentAt: new Date().toISOString(), ...message, boundary: 'client-transport', recipientRead: 'unknown',
         ...(audience ? { audience } : {}),
         ...(context?.callId ? { callId: context.callId } : {}),
+        ...(context?.voiceRequestId ? { voiceRequestId: context.voiceRequestId } : {}),
         ...(context?.taskId !== undefined ? { taskExecutionId: `${this.executionEpoch}:${context.taskId}` } : {}),
         ...(context?.stepIndex !== undefined ? { stepIndex: context.stepIndex } : {}) };
       const target = message.to ? `玩家 ${message.to}` : audience?.channel === 'nearby' ? '附近聊天频道'
@@ -4663,6 +4665,18 @@ export class MinecraftWorld implements World {
       }
       throw error;
     }
+    return delivery;
+  }
+
+  /** Voice text uses attested nearby routing, independently of the body queue. */
+  private sendNearbyVoiceText(text: string, requestId: string): ChatDeliveryReceipt {
+    const bot=this.bridge?.bot, audience=this.extensionChatAudience(text);
+    if(!bot||!this.bridge?.connected||this.bridge.connectionState?.ready!==true)throw Error('VOICE_TEXT_NOT_CONNECTED');
+    if(text.trim().startsWith('/')||audience?.channel!=='nearby'||audience.scope!=='same-world-range')
+      throw Error('VOICE_TEXT_NEARBY_ROUTE_NOT_CONFIRMED');
+    let delivery: ChatDeliveryReceipt | undefined;
+    sendChat(bot,text,(value,send)=>{delivery=this.dispatchServerChat(value,send,{voiceRequestId:requestId});});
+    if(!delivery)throw Error('VOICE_TEXT_DISPATCH_NOT_CONFIRMED');
     return delivery;
   }
 

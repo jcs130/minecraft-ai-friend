@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.28
+
+- Pair authored game speech with attested nearby text, sent while audio is synthesized. Preserve a shared request ID, durable text/audio outcomes and existing chat delivery events; never replay unknown sends or fall back to global/private chat. Uploaded audio may carry an explicit authored caption.
+- Preserve body-action waits and native system evidence when sending ordinary conversation. Upload audio in bounded 64 KiB bursts, yielding for cancellation and connection events instead of sleeping after every 16 KiB packet. Record synthesis/upload/server-state timestamps separately from actual hearing.
+- Prefer server-attested personal names over decorated protocol names in compact entity observations; retain raw identity, ownership and entity types.
+
 ## 0.5.7-rc.160-preview.27
 
 - Carry UUID-correlated server entity identity through snapshots, proximity and death events, attention, find results, and public SDK observations. Keep raw protocol types and targeting unchanged; never infer ownership from custom names or rename a player from an NPC identity.

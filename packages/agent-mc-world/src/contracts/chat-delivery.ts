@@ -20,6 +20,8 @@ export interface ChatDeliveryReceipt {
   text: string;
   audience?: ChatAudienceEvidence;
   callId?: string;
+  /** Shared authored utterance; does not attest audio playback or recipient reading. */
+  voiceRequestId?: string;
   taskExecutionId?: string;
   stepIndex?: number;
   boundary: 'client-transport';
