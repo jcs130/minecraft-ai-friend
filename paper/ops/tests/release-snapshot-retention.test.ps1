@@ -58,6 +58,8 @@ try{
 & {
  # Virtual filesystem for destructive executor faults. No real production
  # command is reachable in this scope, including Remove-Item and journal I/O.
+ # Join-Path resolves PS drives even without I/O; hosted runners have no E:.
+ function Join-Path {param($Path,$ChildPath)return [IO.Path]::Combine($Path,$ChildPath)}
  $fakeName='fixture-before-refresh-20261001-r1'
  $fake=[pscustomobject]@{Name=$fakeName;Path=('E:\MC\backups\'+$fakeName);CreatedAt=$asOf.AddDays(-30);Pinned=$false;Resume=$false;MetadataSha256=('A'*64);Journal=('E:\MC\backups\.release-retention\'+$fakeName+'.json')}
  $events=[Collections.Generic.List[string]]::new();$fault=''
