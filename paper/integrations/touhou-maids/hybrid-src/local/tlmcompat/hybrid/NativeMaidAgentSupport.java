@@ -26,6 +26,9 @@ public final class NativeMaidAgentSupport implements Listener {
     private final ReceiptJournal receipts;
     private final Path file;
     private final JsonObject deaths;
+    private final MaidLifeEpisodes lifecycle;
+    private long lastPersistenceWarning;
+    private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingDeathEvent> deathListener;
     private final Map<UUID,Pending> pending=new HashMap<>();
     private final Map<UUID,Set<String>> notified=new HashMap<>();
     private record Pending(UUID actor,String operation,String text,EntityMaid maid,
@@ -34,9 +37,15 @@ public final class NativeMaidAgentSupport implements Listener {
     public NativeMaidAgentSupport(HybridMaidPlugin plugin,ReceiptJournal receipts)throws Exception {
         this.plugin=plugin;this.receipts=receipts;this.file=plugin.getDataFolder().toPath().resolve("native-lifecycle.json");
         deaths=Files.exists(file)?JsonParser.parseString(Files.readString(file)).getAsJsonObject():new JsonObject();
+        lifecycle=new MaidLifeEpisodes(deaths);
+        deathListener=event->{if(event.getEntity() instanceof EntityMaid maid)Bukkit.getScheduler().runTask(plugin,()->{
+            if(!event.isCanceled()&&!maid.isAlive())observeDeath(maid);
+        });};
         Bukkit.getPluginManager().registerEvents(this,plugin);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,false,deathListener);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
+    public void close(){net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deathListener);persistLifecycle();}
     @EventHandler public void quit(PlayerQuitEvent event){notified.remove(event.getPlayer().getUniqueId());}
 
     /** Native saved tombstone carries the original maid UUID in the name's insertion style. */
@@ -56,10 +65,54 @@ public final class NativeMaidAgentSupport implements Listener {
                 &&site instanceof com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.LLMOpenAISite openai
                 &&(openai.secretKey()==null||openai.secretKey().isBlank()));
     }
+    private JsonObject facts(EntityMaid maid){
+        JsonObject facts=new JsonObject();facts.addProperty("name",maid.getName().getString());
+        facts.addProperty("dimension",maid.level().dimension().location().toString());
+        JsonArray position=new JsonArray();position.add(maid.getX());position.add(maid.getY());position.add(maid.getZ());facts.add("position",position);
+        return facts;
+    }
+    private UUID registeredOwner(EntityMaid maid){
+        UUID owner=((net.minecraft.world.entity.TamableAnimal)maid).getOwnerUUID();
+        JsonElement record=plugin.registeredMaids().get(maid.getUUID().toString());
+        return owner!=null&&record instanceof JsonObject row&&owner.toString().equals(row.get("ownerId").getAsString())?owner:null;
+    }
+    private JsonObject grave(UUID owner,UUID id){
+        MaidInfo found=tombstone(owner,id);if(found==null)return null;
+        JsonObject next=new JsonObject();next.addProperty("maidId",id.toString());next.addProperty("ownerId",owner.toString());
+        next.addProperty("name",found.getName().getString());next.addProperty("eventId","death-"+found.getTimestamp());
+        next.addProperty("diedAt",java.time.Instant.ofEpochMilli(found.getTimestamp()).toString());
+        next.addProperty("dimension",found.getDimension());var p=found.getChunkPos();
+        JsonArray position=new JsonArray();position.add(p.getX());position.add(p.getY());position.add(p.getZ());next.add("position",position);
+        next.addProperty("tombstoneId",found.getEntityId().toString());next.addProperty("evidence","original_tlm_tombstone");return next;
+    }
+    private void persistLifecycle(){
+        if(!lifecycle.dirty())return;
+        try{ReceiptJournal.write(file,deaths,Files.exists(file));lifecycle.saved();}
+        catch(Exception error){long now=System.nanoTime();if(now-lastPersistenceWarning>30_000_000_000L){lastPersistenceWarning=now;plugin.getLogger().warning("Maid lifecycle persistence unavailable; recovery is not durably confirmed: "+error.getClass().getSimpleName());}}
+    }
+    public void observeLoaded(EntityMaid maid){
+        UUID owner=registeredOwner(maid);if(owner==null||!maid.isAlive()||maid.isRemoved())return;
+        lifecycle.alive(owner,maid.getUUID(),System.currentTimeMillis(),facts(maid),grave(owner,maid.getUUID()));persistLifecycle();
+    }
+    private void observeDeath(EntityMaid maid){
+        UUID owner=registeredOwner(maid);if(owner==null)return;
+        lifecycle.died(owner,maid.getUUID(),System.currentTimeMillis(),facts(maid),grave(owner,maid.getUUID()));persistLifecycle();
+    }
+    private void annotateGrave(JsonObject death,JsonObject found){
+        boolean matching=found!=null&&death.has("tombstoneId")&&death.get("tombstoneId").equals(found.get("tombstoneId"));
+        death.addProperty("tombstoneRegistered",matching);
+        death.addProperty("tombstoneLoaded",matching&&Bukkit.getEntity(UUID.fromString(found.get("tombstoneId").getAsString()))!=null);
+    }
     public void enrich(Player actor,UUID id,JsonObject context) {
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
-        if(maid!=null&&maid.isAlive()&&!maid.isRemoved()) {
-            context.addProperty("lifeState","alive");
+        boolean alive=maid!=null&&maid.isAlive()&&!maid.isRemoved();
+        JsonObject found=grave(actor.getUniqueId(),id);
+        JsonObject state=lifecycle.view(actor.getUniqueId(),id,System.currentTimeMillis(),alive?facts(maid):null,found);
+        persistLifecycle();
+        for(var entry:state.entrySet())context.add(entry.getKey(),entry.getValue());
+        if(context.has("historicalDeath"))annotateGrave(context.getAsJsonObject("historicalDeath"),found);
+        if(context.has("recovery"))context.getAsJsonObject("recovery").addProperty("persisted",lifecycle.durable(context.getAsJsonObject("recovery").get("eventId").getAsString()));
+        if(alive) {
             var manager=maid.getAiChatManager();var site=manager.getLLMSite();
             context.addProperty("dialogueMode",configured(maid)?"native_model":"not_configured");
             context.addProperty("dialogueCommand","/qdmaid chat "+id+" <requestId> <对她说的话>");
@@ -68,36 +121,21 @@ public final class NativeMaidAgentSupport implements Listener {
             context.addProperty("equipmentCommand","/qdmaid inventory "+id);
             return;
         }
-        MaidInfo found=tombstone(actor.getUniqueId(),id);
-        JsonObject death=deaths.has(id.toString())?deaths.getAsJsonObject(id.toString()).deepCopy():null;
-        if(found!=null) {
-            JsonObject next=new JsonObject();next.addProperty("maidId",id.toString());next.addProperty("ownerId",actor.getUniqueId().toString());
-            next.addProperty("name",found.getName().getString());next.addProperty("eventId","death-"+found.getTimestamp());
-            next.addProperty("diedAt",java.time.Instant.ofEpochMilli(found.getTimestamp()).toString());
-            next.addProperty("dimension",found.getDimension());var p=found.getChunkPos();
-            JsonArray position=new JsonArray();position.add(p.getX());position.add(p.getY());position.add(p.getZ());next.add("position",position);
-            next.addProperty("tombstoneId",found.getEntityId().toString());next.addProperty("evidence","original_tlm_tombstone");
-            if(!next.equals(death)) {
-                deaths.add(id.toString(),next);
-                try{ReceiptJournal.write(file,deaths,Files.exists(file));}catch(Exception error){plugin.getLogger().warning("Maid lifecycle persistence failed; native tombstone retained: "+error.getClass().getSimpleName());}
-            }
-            death=next;
+        if(!context.has("death")) {
+            context.addProperty("nextStep",context.has("recovery")?"曾再次确认原UUID存活；当前未加载，靠近lastSeenAlive所列维度位置后再查询。旧墓碑可留有遗物，不代表再次死亡，勿重复复活。":"女仆当前未加载，历史墓碑不足以确认当前死亡；靠近她最后所在的维度后再查询。");return;
         }
-        if(death==null||!actor.getUniqueId().toString().equals(death.get("ownerId").getAsString())) {
-            context.addProperty("lifeState","unloaded_or_unavailable");
-            context.addProperty("nextStep","女仆当前未加载，不能据此认定死亡；靠近她最后所在的维度后再查询。");return;
-        }
-        context.addProperty("lifeState","dead");context.addProperty("name",death.get("name").getAsString());
-        death.addProperty("tombstoneRegistered",found!=null);
-        death.addProperty("tombstoneLoaded",found!=null&&Bukkit.getEntity(found.getEntityId())!=null);
-        death.addProperty("nextStep",found!=null?"先到所列维度和坐标确认墓碑并清出背包。原生右键墓碑取回遗物与复活胶片；胶片复活需要原模组祭坛流程，使用 NeoForge 客户端。不要重复创建替代女仆。":"原生墓碑记录已不在，可能已取走；检查主人的背包、箱子与复活胶片，勿自动补发或新建女仆。");
-        context.add("death",death);context.addProperty("nextStep",death.get("nextStep").getAsString());
+        JsonObject death=context.getAsJsonObject("death");annotateGrave(death,found);context.addProperty("name",death.get("name").getAsString());
+        death.addProperty("nextStep",death.get("tombstoneRegistered").getAsBoolean()?"当前死亡有本次原生证据。先核对所列墓碑与遗物；原生胶片复活需模组祭坛，不要重复创建替代女仆。":"已观察到本次死亡，但原墓碑尚未确认或已取走；查询原状态，不自动补发物品或新建女仆。");
+        context.addProperty("nextStep",death.get("nextStep").getAsString());
     }
     public void notifyOwner(Player actor,UUID id,JsonObject context) {
-        if(!context.has("death"))return;
-        JsonObject d=context.getAsJsonObject("death");String event=d.get("eventId").getAsString();
+        boolean recovered=!context.has("death")&&context.has("recovery");
+        if(!context.has("death")&&!recovered)return;
+        JsonObject d=context.getAsJsonObject(recovered?"recovery":"death");
+        if(recovered&&!d.get("persisted").getAsBoolean())return;
+        String event=d.get("eventId").getAsString();
         if(!notified.computeIfAbsent(actor.getUniqueId(),ignored->new HashSet<>()).add(id+":"+event))return;
-        actor.sendMessage("[女仆·死亡] "+d.get("name").getAsString()+" 已死亡。遗物位置："+d.get("dimension").getAsString()+" "+d.get("position")+"。查询 /qdmaid context "+id+"；先确认遗物与胶片，不要当成仍在跟随。");
+        actor.sendMessage(recovered?"[女仆·恢复] "+d.get("name").getAsString()+" 已再次确认原UUID存活；观察于 "+d.get("observedAt").getAsString()+"，不是实际复活时间。当前状态用 /qdmaid context "+id+" 查询；勿按旧墓碑重复复活。":"[女仆·死亡] "+d.get("name").getAsString()+" 已发生本次死亡。位置："+d.get("dimension").getAsString()+" "+d.get("position")+"。查询 /qdmaid context "+id+"；先核对本次遗物与胶片。");
         plugin.reply(actor,"lifecycle",event,context,null);
     }
     public void validateChat(Player actor,EntityMaid maid) {
@@ -158,6 +196,7 @@ public final class NativeMaidAgentSupport implements Listener {
         // Only registered owners/entities. No chunk loads and no per-tick world entity scans.
         if(Bukkit.getCurrentTick()%100>=20)return;
         for(var entry:plugin.registeredMaids().entrySet())try {
+            EntityMaid loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(UUID.fromString(entry.getKey())));if(loaded!=null)observeLoaded(loaded);
             Player actor=Bukkit.getPlayer(UUID.fromString(entry.getValue().getAsJsonObject().get("ownerId").getAsString()));
             if(actor!=null){UUID id=UUID.fromString(entry.getKey());JsonObject context=plugin.context(actor,id);notifyOwner(actor,id,context);}
         }catch(Exception error){plugin.getLogger().fine("Maid lifecycle observation unavailable: "+error.getClass().getSimpleName());}
