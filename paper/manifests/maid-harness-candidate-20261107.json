@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "status": "isolated-candidate-not-deployed",
+  "version": "0.1.10-harness",
+  "productionVersion": "0.1.9-follow",
+  "artifacts": {
+    "qiandengji-maid-native-0.1.10-harness.jar": "9c43d8b48414b9eb6d5495c1a7b7c7d49c96649f2d6341cb0ded0c582871b699",
+    "qiandengji-maid-brain-0.1.0.jar": "94c1ff2a1efafd8a6b1a476dce12381a0dbeda3a3baf8c3cdc5855130550f576"
+  },
+  "baselineBridgeSha256": "e4787d8cf7b43ec0b0426391ecc8dfaf881be70dd89a2ac6f21723eb2d6d3147",
+  "installedPlannerSha256": "27ea1f77e68c7054ac8a8e8cbff766f57470a28e48bf6feac3e9126233bdbc67",
+  "choices": ["native", "dsh", "codex"],
+  "checkedModels": {"dsh": "qwen3.7-plus", "codex": "qwen3.7-plus-responses"},
+  "checks": {"gatewayHttpAndContinuation": 21, "agentAdapter": 7, "nativeGame": 28, "normalRestartAndStaleResponse": 13},
+  "unrelatedBridgeEntriesPreserved": 40,
+  "reproducibleArtifacts": true,
+  "onlyOriginalCompanionUsesSharedBackends": true,
+  "newMinecraftBody": false,
+  "secondDecisionLoop": false,
+  "providerKeysInClientPackets": false,
+  "realPlayerDataUsedInQa": false,
+  "productionChanged": false,
+  "formalAutostartInstalled": false,
+  "nearbyChatAutoTrigger": "not-implemented",
+  "voiceUnification": "not-implemented",
+  "originalClientAcceptance": "pending"
+}

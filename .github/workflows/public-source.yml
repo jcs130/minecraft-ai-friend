@@ -35,6 +35,8 @@ jobs:
           python paper/integrations/touhou-maids/tests/run-lifecycle-ledger.py --gson "$RUNNER_TEMP/maid-life-gson.jar"
           python paper/integrations/touhou-maids/tests/run-close-follow.py
           node --check paper/integrations/touhou-maids/tests/close-follow-stage.mjs
+          python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_harness_gateway.py -v
+          node --check paper/integrations/touhou-maids/tests/brain-harness-stage.mjs
       - name: Check native camera launch and appearance archives without connecting
         run: |
           python -m unittest discover -s paper/integrations/native-camera -p test_prepare_neoforge.py -v

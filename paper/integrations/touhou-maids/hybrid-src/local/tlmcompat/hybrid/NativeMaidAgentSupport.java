@@ -31,6 +31,9 @@ public final class NativeMaidAgentSupport implements Listener {
     private long lastPersistenceWarning;
     private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingDeathEvent> deathListener;
     private final Map<UUID,Pending> pending=new HashMap<>();
+    private final Map<UUID,String> modelFailures=new HashMap<>();
+    private final ThreadLocal<String> startingOperation=new ThreadLocal<>();
+    String startingOperation(){return startingOperation.get();}
     private final Map<UUID,Set<String>> notified=new HashMap<>();
     private record Pending(UUID actor,String operation,String text,EntityMaid maid,
                            Set<LLMMessage> before,long deadline) {}
@@ -140,16 +143,20 @@ public final class NativeMaidAgentSupport implements Listener {
         actor.sendMessage(recovered?"[女仆·恢复] "+d.get("name").getAsString()+" 已再次确认原UUID存活；观察于 "+d.get("observedAt").getAsString()+"，不是实际复活时间。当前状态用 /qdmaid context "+id+" 查询；勿按旧墓碑重复复活。":"[女仆·死亡] "+d.get("name").getAsString()+" 已发生本次死亡。位置："+d.get("dimension").getAsString()+" "+d.get("position")+"。查询 /qdmaid context "+id+"；先核对本次遗物与胶片。");
         plugin.reply(actor,"lifecycle",event,context,null);
     }
-    public void validateChat(Player actor,EntityMaid maid) {
+    public void validateIdle(EntityMaid maid) {
         if(pending.containsKey(maid.getUUID()))throw new CompatibilityException("chat_busy","上一条原生对话尚未结束；用 /qdmaid receipt 查询原 requestId，勿重复发送。");
-        var manager=maid.getAiChatManager();var site=manager.getLLMSite();
-        if(!configured(maid))throw new CompatibilityException("chat_not_configured","服主尚未启用这位女仆的原生模型；chat 不会退回留言箱或冒充回复。");
-        var tokens=((net.neoforged.neoforge.attachment.IAttachmentHolder)(Object)((CraftPlayer)actor).getHandle()).getData(com.github.tartaricacid.touhoulittlemaid.init.InitDataAttachment.CHAT_TOKENS);
-        if(tokens.get()>=AIConfig.MAX_TOKENS_PER_PLAYER.get())throw new CompatibilityException("chat_budget_exhausted","原模组本角色对话额度不足，请联系服主查看模型额度；没有发送请求。");
+        var manager=maid.getAiChatManager();
         if(manager.historySummaryRunning)throw new CompatibilityException("chat_busy","原生对话正在整理记忆，请稍后查询状态。");
         LLMMessage last=manager.getHistory().peek();
         if(last!=null&&(last.role()==Role.USER||last.role()==Role.TOOL||last.toolCalls()!=null&&!last.toolCalls().isEmpty()))
             throw new CompatibilityException("chat_unresolved","原生历史有未完成对话，先查看原回执及服务状态，不能叠加重试。");
+    }
+    public void validateChat(Player actor,EntityMaid maid) {
+        validateIdle(maid);
+        var manager=maid.getAiChatManager();var site=manager.getLLMSite();
+        if(!configured(maid))throw new CompatibilityException("chat_not_configured","服主尚未启用这位女仆的原生模型；chat 不会退回留言箱或冒充回复。");
+        var tokens=((net.neoforged.neoforge.attachment.IAttachmentHolder)(Object)((CraftPlayer)actor).getHandle()).getData(com.github.tartaricacid.touhoulittlemaid.init.InitDataAttachment.CHAT_TOKENS);
+        if(tokens.get()>=AIConfig.MAX_TOKENS_PER_PLAYER.get())throw new CompatibilityException("chat_budget_exhausted","原模组本角色对话额度不足，请联系服主查看模型额度；没有发送请求。");
     }
     public JsonObject chat(Player actor,EntityMaid maid,String operation,String text)throws Exception {
         var seen=Collections.newSetFromMap(new IdentityHashMap<LLMMessage,Boolean>());
@@ -160,7 +167,9 @@ public final class NativeMaidAgentSupport implements Listener {
         observed.addProperty("meaning","已交给原生女仆模型，尚未收到回复；查询原 operationId，不自动重发。");
         observed.addProperty("nextCommand","/qdmaid receipt "+maid.getUUID()+" "+operation);
         JsonObject result=receipts.finish(maid.getUUID(),operation,"pending",observed);
-        maid.getAiChatManager().chat(text,new ChatClientInfo("zh_cn",maid.getName().getString(),List.of()),((CraftPlayer)actor).getHandle());
+        startingOperation.set(operation);
+        try{maid.getAiChatManager().chat(text,new ChatClientInfo("zh_cn",maid.getName().getString(),List.of()),((CraftPlayer)actor).getHandle());}
+        finally{startingOperation.remove();}
         return result;
     }
     public JsonObject reconcile(JsonObject receipt)throws Exception {
@@ -172,9 +181,33 @@ public final class NativeMaidAgentSupport implements Listener {
         }
         return receipt;
     }
+    public void modelFailed(com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback,String operation,String reason){
+        EntityMaid maid=callback.getMaid();
+        LLMMessage requested=null,current=null;
+        for(LLMMessage row:callback.getMessages())if(row.role()==Role.USER)requested=row;
+        for(LLMMessage row:maid.getAiChatManager().getHistory().getDeque())if(row.role()==Role.USER){current=row;break;}
+        Pending p=pending.get(maid.getUUID());
+        // Correlation is captured when this exact owner request enters TLM,
+        // then carried through its original tool callbacks. Never close a new turn.
+        if(operation!=null){
+            if(p==null||!operation.equals(p.operation)||current==null||p.before.contains(current)||!p.text.equals(current.message()))return;
+            modelFailures.put(maid.getUUID(),reason);
+        }else{
+            // TLM enriches the callback's user text with live contexts; its
+            // original history stores the raw text at the same game tick.
+            if(requested==null||current==null||requested.gameTime()!=current.gameTime())return;
+            if(p!=null){
+                if(p.before.contains(current)||!p.text.equals(current.message()))return;
+                modelFailures.put(maid.getUUID(),reason);
+            }
+        }
+        LLMMessage last=maid.getAiChatManager().getHistory().peek();
+        if(last!=null&&last.role()!=Role.SYSTEM&&(last.toolCalls()==null||last.toolCalls().isEmpty()))
+            maid.getAiChatManager().getHistory().add(LLMMessage.systemChat(maid,"[服务器状态] 本轮模型收尾失败："+reason+"。不是女仆回复，未确认目标完成；原生执行记录保留，请查询原回执和当前状态，勿重放本轮动作。"));
+    }
     private void tick() {
         for(var entry:new ArrayList<>(pending.entrySet())) {
-            UUID id=entry.getKey();Pending p=entry.getValue();String reason=null,reply=null;boolean user=false;
+            UUID id=entry.getKey();Pending p=entry.getValue();String reason=modelFailures.get(id),reply=null;boolean user=false;
             var history=new ArrayList<>(p.maid.getAiChatManager().getHistory().getDeque());Collections.reverse(history);
             for(LLMMessage message:history) {
                 if(p.before.contains(message))continue;
@@ -191,7 +224,7 @@ public final class NativeMaidAgentSupport implements Listener {
             else {observation.addProperty("reply",reply.length()>4000?reply.substring(0,4000):reply);observation.addProperty("meaning","已读到原生模型回复；其中提到的游戏行动仍须查询世界状态验收。");}
             try {
                 JsonObject receipt=receipts.finish(id,p.operation,reason==null?"replied":"unknown",observation);
-                pending.remove(id);Player actor=Bukkit.getPlayer(p.actor);
+                pending.remove(id);modelFailures.remove(id);Player actor=Bukkit.getPlayer(p.actor);
                 if(actor!=null)plugin.reply(actor,"chat-result",p.operation,receipt,null);
             }catch(Exception error){plugin.getLogger().warning("Maid chat receipt retained: "+error.getClass().getSimpleName());}
         }

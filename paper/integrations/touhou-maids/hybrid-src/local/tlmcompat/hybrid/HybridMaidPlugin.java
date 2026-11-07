@@ -49,6 +49,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private LegacyMaidTransport legacyTransport;
     private NativeMaidTransport nativeTransport;
     private NativeMaidAgentSupport agentSupport;
+    private NativeMaidBrainSupport brains;
+    String startingNativeOperation(){return agentSupport.startingOperation();}
+    void nativeModelFailed(com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback,String operation,String reason){
+        Bukkit.getScheduler().runTask(this,()->agentSupport.modelFailed(callback,operation,reason));
+    }
     JsonObject registeredMaids(){return records();}
     private final java.util.function.Consumer<MaidTamedEvent> adopted=event->bindOnMain(event.getMaid());
     private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.EntityJoinLevelEvent> joined=event->{if(!event.getLevel().isClientSide()&&event.getEntity() instanceof EntityMaid maid){local.tlmcompat.numen.MaidVisualRegistry.capture(maid);if(owner(maid)!=null)bindOnMain(maid);}};
@@ -64,6 +69,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             receipts=new ReceiptJournal(getDataFolder().toPath().resolve("native-receipts"));
             inbox=new DialogueInbox(getDataFolder().toPath().resolve("native-dialogue"));
             agentSupport=new NativeMaidAgentSupport(this,receipts);
+            brains=NativeMaidBrainSupport.create(this);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
             getCommand("qdmaid").setExecutor(this);
@@ -78,7 +84,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
@@ -122,7 +128,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         data.addProperty("fullOriginalEntityMaid",true);data.addProperty("hostKind","original_touhou_little_maid");
         data.addProperty("nativeClient",VanillaMaidProjection.nativeClient(actor));
         data.addProperty("viewerAppearance",VanillaMaidProjection.nativeClient(actor)?"original_maid_renderer":local.tlmcompat.numen.MaidVisualRegistry.rendered(actor.getUniqueId(),id)?"bedrock_custom_maid":"vanilla_compat_projection");
-        JsonArray capabilities=new JsonArray();for(String item:List.of("chat","lifecycle","context","follow","stay","speak","receipt","dialogue_inbox","dialogue_ack","original_tasks","native_inventory","inventory_transfer","equipment","schedule","pickup","vanilla_menu","original_menu","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename"))capabilities.add(item);data.add("capabilities",capabilities);
+        JsonArray capabilities=new JsonArray();for(String item:List.of("chat","lifecycle","context","brain_selection","follow","stay","speak","receipt","dialogue_inbox","dialogue_ack","original_tasks","native_inventory","inventory_transfer","equipment","schedule","pickup","vanilla_menu","original_menu","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename"))capabilities.add(item);data.add("capabilities",capabilities);
         if(maid!=null){
             data.addProperty("homeMode",maid.isHomeModeEnable());data.addProperty("sitting",maid.isMaidInSittingPose());data.addProperty("pickup",maid.isPickup());
             data.addProperty("schedule",maid.getSchedule().name());data.addProperty("taskId",maid.getTask().getUid().toString());data.addProperty("taskEnabled",maid.getTask().isEnable(maid));
@@ -130,6 +136,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             data.addProperty("name",maid.getName().getString());data.addProperty("soundPackId",maid.getSoundPackId());data.addProperty("silent",maid.isSilent());data.addProperty("voiceAssetsReady",VanillaMaidProjection.nativeClient(actor)||local.tlmcompat.numen.MaidVoiceTransport.ready(actor.getUniqueId()));
             data.addProperty("soundFrequency",maid.getConfigManager().getSoundFreq());
             data.addProperty("workRadius",maid.getRestrictRadius());data.addProperty("canMove",maid.canBrainMoving());
+            data.add("brain",brains.describe(maid));
             data.addProperty("activity",maid.getScheduleDetail().getName());
             data.addProperty("dimension",maid.getBukkitEntity().getWorld().getKey().toString());JsonArray position=new JsonArray();position.add(maid.getX());position.add(maid.getY());position.add(maid.getZ());data.add("position",position);
             if(maid.getOwner()!=null)data.addProperty("ownerDistance",maid.distanceTo(maid.getOwner()));else data.add("ownerDistance",JsonNull.INSTANCE);
@@ -158,6 +165,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     public JsonObject dispatch(Player actor,String action,UUID id,String operation,String value)throws Exception{
         if(!actor.isOnline()||actor.isDead())throw new CompatibilityException("actor_unavailable","Connected living player required");
         if(action.equals("context"))return context(actor,id);if(action.equals("tasks"))return catalog(actor,id);if(action.equals("inventory"))return inventory(actor,id);
+        if(action.equals("brain")&&(value==null||value.isBlank()))return brains.describe(ownedLoaded(actor,id));
         if(NativeMaidCosmetics.READS.contains(action))return cosmetics.read(actor,ownedLoaded(actor,id),action,value);
         if(action.equals("receipt"))return receipt(actor.getUniqueId(),id,operation);
         if(action.equals("inbox")){JsonObject record=owned(actor.getUniqueId(),id);JsonObject data=inbox.snapshot(id);data.addProperty("sessionKey",record.get("sessionKey").getAsString());return data;}
@@ -175,9 +183,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         }
         if(Set.of("menu","native-menu").contains(action))requireNearby(actor,maid,8);
         if(action.equals("native-menu")&&!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");
-        if(!Set.of("follow","stay","sit","speak","talk","chat","task","schedule","pickup","ack","transfer","equip","menu","native-menu").contains(action)&&!NativeMaidCosmetics.WRITES.contains(action))throw new CompatibilityException("unsupported_action",action);
+        if(!Set.of("follow","stay","sit","speak","talk","chat","brain","task","schedule","pickup","ack","transfer","equip","menu","native-menu").contains(action)&&!NativeMaidCosmetics.WRITES.contains(action))throw new CompatibilityException("unsupported_action",action);
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
         if(action.equals("chat")){requireNearby(actor,maid,16);agentSupport.validateChat(actor,maid);}
+        if(action.equals("brain")){agentSupport.validateIdle(maid);brains.validate(maid,value);}
         if(action.equals("equip"))menus.validateEquip(actor,maid,value);
         if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
@@ -185,6 +194,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("chat"))return agentSupport.chat(actor,maid,operation,value);
         JsonObject observation;
         switch(action){
+            case "brain"->observation=brains.select(maid,value);
             case "follow"->{maid.setInSittingPose(false);maid.restrictTo(net.minecraft.core.BlockPos.ZERO,MaidConfig.MAID_NON_HOME_RANGE.get());maid.setHomeModeEnable(false);observation=context(actor,id);}
             case "stay"->{maid.setHomeModeEnable(true);maid.getSchedulePos().setHomeModeEnable(maid,maid.blockPosition());maid.setInSittingPose(true);maid.getNavigation().stop();observation=context(actor,id);}
             case "sit"->{maid.setInSittingPose(true);observation=context(actor,id);}
@@ -238,6 +248,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             }
             if(args.length<2)throw new CompatibilityException("bad_arguments","Read /qdmaid help");UUID id=UUID.fromString(args[1]);
             if(action.equals("menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);menus.open(actor,maid);return true;}
+            if(action.equals("brain-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);brains.open(actor,maid);return true;}
             if(action.equals("native-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");maid.openMaidGui(((CraftPlayer)actor).getHandle());return true;}
             correlation=request(args,action.equals("receipt")?3:2);String operation=action.equals("receipt")?request(args,2):correlation;
             String value=args.length>3?String.join(" ",Arrays.copyOfRange(args,3,args.length)):null;
@@ -260,6 +271,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             }else menus.open(event.getPlayer(),maid);
         }}
         event.getPlayer().sendMessage(Component.text("[与 "+maid.getName().getString()+" 交谈]",NamedTextColor.AQUA).clickEvent(ClickEvent.suggestCommand("/qdmaid chat "+maid.getUUID()+" "+fresh()+" ")));
+        if(event.getPlayer().getUniqueId().equals(owner(maid)))event.getPlayer().sendMessage(Component.text("[选择女仆运行方式]",NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/qdmaid brain-menu "+maid.getUUID())));
     }
     public void openCommonMenu(Player actor,EntityMaid maid){menus.open(actor,maid);}
     public void openCosmetics(Player actor,EntityMaid maid,boolean voices,int page){cosmeticsMenu.open(actor,maid,voices,page);}
@@ -274,6 +286,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     private void help(Player actor){
         for(String line:List.of(
+            "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
             "对话：/qdmaid chat <UUID> <requestId> <话语>，调用她已配置的原生模型；pending 是等待，replied 才收到回复。/qdmaid receipt <UUID> <原requestId> 查结果。",
             "装备：/qdmaid inventory <UUID> 看槽位；/qdmaid transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 /qdmaid equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装。",
