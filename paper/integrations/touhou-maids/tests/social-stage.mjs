@@ -65,6 +65,12 @@ try{
    const near=await ask(guest,'nearby','',run+'_near',fixture.maid,true);
    check('nearby discovery works through authenticated plugin transport',near.ok&&near.data.maids.some(x=>x.maidId===fixture.maid&&x.publicChatEnabled&&!x.owned));
    check('nearby catalogue excludes owner private fields',!JSON.stringify(near).includes('memoryNamespace')&&!JSON.stringify(near).includes('sessionKey'));
+   let humanAt=other.lines.length;other.chat(`/qdmaid say ${fixture.maid}`);await delay(1100);
+   check('empty human input gives a concise Chinese usage hint',other.lines.slice(humanAt).some(r=>r.s.includes('请输入 1–140 字'))&&!other.lines.slice(humanAt).some(r=>r.s.startsWith('QD_MAID ')));
+   await rc(`minecraft:tp ${other.username} 330 90 300`);humanAt=other.lines.length;other.chat(`/qdmaid say ${fixture.maid} 你好`);await delay(1100);
+   check('distant human receives Chinese distance and discovery guidance',other.lines.slice(humanAt).some(r=>r.s.includes('8格内')&&r.s.includes('nearby'))&&!other.lines.slice(humanAt).some(r=>r.s.includes('Approach the NPC')));
+   await rc(`minecraft:tp ${other.username} 300.5 90 300.5`);humanAt=other.lines.length;other.chat(`/qdmaid result ${fixture.maid} missing-result`);await delay(1100);
+   check('unowned receipt gives a readable management boundary',other.lines.slice(humanAt).some(r=>r.s.includes('由主人管理'))&&!other.lines.slice(humanAt).some(r=>r.s.startsWith('QD_MAID ')));
    check('brain catalogue is available on plugin transport',(await ask(owner,'brain','',run+'_brain',fixture.maid,true)).data.selected==='native');
    const ownerCall=run+'_owner';await ask(owner,'chat','OWNER_PRIVATE_SENTINEL_7391',ownerCall);check('owner original model still works',(await done(owner,ownerCall)).status==='replied');
    const privateHistory=await rc(`minecraft:data get entity ${fixture.maid} MaidAIChat`);

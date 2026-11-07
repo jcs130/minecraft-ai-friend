@@ -316,7 +316,16 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     public void openCommonMenu(Player actor,EntityMaid maid){menus.open(actor,maid);}
     public void openCosmetics(Player actor,EntityMaid maid,boolean voices,int page){cosmeticsMenu.open(actor,maid,voices,page);}
     private void humanReply(Player actor,String operation,JsonObject data,String error){
-        if(error!=null){actor.sendMessage(Component.text("[女仆] "+(data!=null&&data.has("message")?data.get("message").getAsString():guidance("chat",error)),NamedTextColor.YELLOW));return;}
+        if(error!=null){
+            String message=switch(error){
+                case "out_of_range","not_owned","owner_mismatch"->guidance("chat",error);
+                case "bad_text"->"请输入 1–140 字的普通话语，写在自动填入的指令后，再按回车。";
+                case "actor_unavailable"->"请用已登录、存活且在现场的普通角色交谈。";
+                case "receipt_missing"->"未找到这次对话的原结果；请使用原来的查询按钮，不要猜请求编号。";
+                default->data!=null&&data.has("message")?data.get("message").getAsString():guidance("chat",error);
+            };
+            actor.sendMessage(Component.text("[女仆] "+message,NamedTextColor.YELLOW));return;
+        }
         if(data==null||!data.has("status"))return;
         String status=data.get("status").getAsString();JsonObject observation=data.getAsJsonObject("observation");
         String line=status.equals("pending")?"正在听你说话，等待回复…":status.equals("replied")&&observation!=null&&observation.has("reply")?observation.get("reply").getAsString():"本次未收到有效回复。可点下方查原结果，请勿反复发送同一句。";
