@@ -1,6 +1,21 @@
 import { expect, it, vi } from 'vitest';
 import { methodHarness } from './method-harness.ts';
 
+it('declares stable selectable fact keys without fabricating absent observations',()=>{
+  const r=methodHarness('1.21.1');
+  try {
+    const online=r.world.requestFacts()!;
+    expect(online.partKeys).toEqual(expect.arrayContaining(['body','serverFeedback','journey','recoveryState']));
+    expect(online.parts?.every(p=>online.partKeys!.includes(p.key))).toBe(true);
+    expect(online.parts?.find(p=>p.key==='serverFeedback')).toBeUndefined();
+    (r.world as any).bridge.connected=false;
+    const offline=r.world.requestFacts()!;
+    expect(offline.partKeys).toEqual(online.partKeys);
+    expect(offline.parts?.find(p=>p.key==='body')).toBeUndefined();
+    expect(offline.text).not.toContain('serverFeedback');
+  }finally{r.close();}
+});
+
 it('invalidates old physical facts on disconnect while retaining goals and historical outcomes', async () => {
   const r = methodHarness('1.21.1');
   try {

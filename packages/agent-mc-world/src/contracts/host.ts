@@ -100,6 +100,9 @@ export interface WorldRequestFacts {
    * request-only replacement of old state snapshots, not deletion of the event
    * ledger, terminal outcomes or evidence of historical progress. */
   text: string; snapshotTypes: readonly string[]; parts?: readonly import('./protocol.ts').FactPart[];
+  /** Stable selectable partition keys. A declared key absent from parts has no
+   * current observation; hosts must not restore a previous value or infer success. */
+  partKeys?: readonly string[];
   /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */
   workStates?: readonly import('./work-state.ts').WorkState[];
   /** Observed activity attribution. Absence of a revision does not imply completion evidence. */

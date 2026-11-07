@@ -92,7 +92,7 @@ export type AttackMode = 'auto' | 'melee' | 'ranged' | 'kite';
 export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; exact?: boolean; walkOnly?: boolean; dryRun?: boolean }
   | { skill: 'look'; at: Anchor }
-  | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; yawDeg?: number; pitchDeg?: number }
+  | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; orientation?: 'relative' | 'absolute'; yawDeg?: number; pitchDeg?: number }
   | { skill: 'swim'; at: Anchor; dimension?: string; reserveOxygen: number; maxDurationMs: number; dryRun?: boolean }
   | { skill: 'transit'; at: Anchor }
   | { skill: 'goto_player'; name: string }
@@ -414,14 +414,17 @@ function parseControl(c: Record<string, unknown>, at: string): ParseResult {
   }
   const mode = c.mode ?? 'ground';
   if (mode !== 'ground' && mode !== 'water' && mode !== 'flight') return { error: `${at} control 的 mode 要 ground、water 或 flight` };
+  const orientation=c.orientation??'relative';
+  if(orientation!=='relative'&&orientation!=='absolute')return {error:`${at} control 的 orientation 要 relative 或 absolute`};
   for (const [field, limit] of [['yawDeg', 180], ['pitchDeg', 90]] as const) {
     const value = c[field];
     if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > limit)) {
       return { error: `${at} control 的 ${field} 要 -${limit}–${limit} 之间的有限角度` };
     }
   }
-  if (!keys.length && !c.yawDeg && !c.pitchDeg && mode !== 'water') return { error: `${at} control 至少提供一个按键或非零转角（水中 mode:water 可空 keys 自然下沉）` };
+  if (!keys.length && !(orientation==='absolute'?(c.yawDeg!==undefined||c.pitchDeg!==undefined):(c.yawDeg||c.pitchDeg)) && mode !== 'water') return { error: `${at} control 至少提供一个按键或有效转角（水中 mode:water 可空 keys 自然下沉）` };
   return { step: { skill: 'control', keys, durationMs, mode,
+    ...(c.orientation===undefined?{}:{orientation}),
     ...(c.yawDeg === undefined ? {} : { yawDeg: c.yawDeg as number }),
     ...(c.pitchDeg === undefined ? {} : { pitchDeg: c.pitchDeg as number }) } };
 }
@@ -1154,6 +1157,7 @@ const SKILLS: readonly SkillSpec[] = [
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。
 {"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。reflex.antiDrown 只控制普通踩水；独立 reflex.emergencyDrown 默认开启，低氧/环境自救仍可接管，脱险后不重放已中断控制段。回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
 {"skill":"control","keys":["forward","jump"],"durationMs":1000,"mode":"flight","yawDeg":30} 先相对当前视角左转 30 度，再向前上方斜飞。飞行必须已有服务端许可，可与授予许可的 chat 同单用 needs 连接；最多等待许可 2 秒。
+{"skill":"control","keys":["forward"],"durationMs":500,"orientation":"absolute","yawDeg":-90} 先面向东再向前。默认 orientation:relative 累加当前角度；absolute 使用 spatial 读数同一坐标系：0 北、90 西、±180 南、-90 东，pitch 0 平视、正数抬头；未填的轴保留原值。
 keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 WASD 水平移动，jump 上升、sneak 下降，可边平移边升降；forward+sprint 水平加速，升降速度不翻倍。方向按当前视角水平朝向，pitch 不改变升降。受控短时飞行使用服务端能力速度及保守步长，不复刻完整创造模式惯性。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
 ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight 检查身位碰撞和区块加载，遇遮挡停止；不会绕路。位置修正、死亡、断线或身体被其他任务接管时结束本步，不从旧坐标继续移动。
 施法仅授予许可，不会自动按键起飞。先用 state 的 flight 检查许可/期限，再 control(mode:flight) 起飞。已知路线优先施法前 flight_plan，再把施法与移动/作业用 needs 成批提交；模型等待也会消耗许可时间，预留落地余量。坐标 flight 是路线控制，网页不应伪装成 WASD 按键。
@@ -1162,8 +1166,9 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'keys', kind: 'opaque', required: true, schema: { type: 'array', items: { type: 'string', enum: [...CONTROL_KEYS] } } },
       { key: 'durationMs', kind: 'int', lo: CONTROL_DURATION.minMs, hi: CONTROL_DURATION.maxMs, def: CONTROL_DURATION.defaultMs, unit: '毫秒' },
       { key: 'mode', kind: 'enum', values: ['ground', 'water', 'flight'], error: 'control 的 mode 要 ground、water 或 flight' },
-      { key: 'yawDeg', kind: 'opaque', schema: { type: 'number', minimum: -180, maximum: 180 }, doc: '相对视角，正数左转，单位度' },
-      { key: 'pitchDeg', kind: 'opaque', schema: { type: 'number', minimum: -90, maximum: 90 }, doc: '相对视角，正数抬头，单位度' },
+      { key: 'orientation', kind: 'enum', values: ['relative','absolute'], error: 'control 的 orientation 要 relative 或 absolute', doc: '默认 relative 加当前角度；absolute 直接设置世界朝向：0 北、90 西、±180 南、-90 东。未指定的轴保持原角度。' },
+      { key: 'yawDeg', kind: 'opaque', schema: { type: 'number', minimum: -180, maximum: 180 }, doc: '单位度；默认相对左转，orientation:absolute 时为绝对世界朝向' },
+      { key: 'pitchDeg', kind: 'opaque', schema: { type: 'number', minimum: -90, maximum: 90 }, doc: '单位度；正数抬头，遵循 orientation；absolute 时 0 平视' },
     ],
     parse: parseControl,
   },

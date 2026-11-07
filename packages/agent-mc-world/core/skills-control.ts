@@ -123,8 +123,10 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
   };
   try {
     if (call.yawDeg !== undefined || call.pitchDeg !== undefined) {
-      const yaw = bot.entity.yaw + (call.yawDeg ?? 0) * Math.PI / 180;
-      const pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, bot.entity.pitch + (call.pitchDeg ?? 0) * Math.PI / 180));
+      const angle=(current:number,degrees:number|undefined)=>degrees===undefined?current
+        :(call.orientation==='absolute'?0:current)+degrees*Math.PI/180;
+      const yaw = angle(bot.entity.yaw,call.yawDeg);
+      const pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, angle(bot.entity.pitch,call.pitchDeg)));
       await bot.look(yaw, pitch, true);
     }
     assertActive();

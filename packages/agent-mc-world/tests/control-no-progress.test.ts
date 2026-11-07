@@ -4,11 +4,33 @@ import type {Bot} from 'mineflayer';
 import {skillControl} from '../core/skills-control.ts';
 import {SkillBlocked, type SkillContext} from '../core/skill-context.ts';
 import {methodHarness} from './method-harness.ts';
+import {parseSteps} from '../core/skills.ts';
 
 const fixtures: ReturnType<typeof methodHarness>[] = [];
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {for (const h of fixtures.splice(0)) h.close();vi.useRealTimers();});
 const ctx = {aborted: () => false} as SkillContext;
+
+it('parses absolute zero headings explicitly and rejects unknown orientation modes',()=>{
+  expect(parseSteps([{skill:'control',keys:[],orientation:'absolute',yawDeg:0}])).toMatchObject({steps:[{orientation:'absolute',yawDeg:0}]});
+  expect(parseSteps([{skill:'control',keys:[],yawDeg:0}])).toHaveProperty('error');
+  expect(parseSteps([{skill:'control',keys:['forward'],orientation:'north'}])).toHaveProperty('error');
+});
+
+it('moves east using an absolute heading from a nonzero initial heading and preserves legacy relative turns',async()=>{
+  const h=methodHarness('1.21.1');fixtures.push(h);
+  h.bot.entity.yaw=Math.PI/2;h.bot.entity.pitch=.3;
+  const start=h.bot.entity.position.clone();
+  const move=skillControl(h.bot as unknown as Bot,
+    {skill:'control',mode:'ground',orientation:'absolute',keys:['forward'],yawDeg:-90,durationMs:1000},ctx);
+  await vi.advanceTimersByTimeAsync(1000);await move;
+  expect(h.bot.entity.position.x-start.x).toBeGreaterThan(1);
+  expect(Math.abs(h.bot.entity.position.z-start.z)).toBeLessThan(.05);
+  expect(h.bot.entity.pitch).toBeCloseTo(.3);
+  const turn=skillControl(h.bot as unknown as Bot,{skill:'control',mode:'ground',keys:[],yawDeg:90,durationMs:50},ctx);
+  await vi.advanceTimersByTimeAsync(50);await turn;
+  expect(h.bot.entity.yaw).toBeCloseTo(0);expect(Object.values(h.keys).some(Boolean)).toBe(false);
+});
 
 it('reports blocked translation against a real collision wall and releases all keys', async () => {
   const h = methodHarness('1.21.1');fixtures.push(h);
