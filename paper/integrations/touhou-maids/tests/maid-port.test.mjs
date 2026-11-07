@@ -4,6 +4,21 @@ import {EventEmitter} from 'node:events';
 import {createMaidPort,maidCommand,MAID_CHANNEL} from '../agent/maid-port.mjs';
 const maid='e3228ffc-eb42-441d-a08c-3e5948a307e8', recipient='fce37da4-0183-4f20-a160-3fe49d871878';
 const envelope=(action,id,data)=>({schema:1,protocol:'qiandengji-maids/v1',recipientUuid:recipient,action,requestId:id,ok:true,sampledAt:new Date().toISOString(),data});
+test('nearby discovery has no invented maid identity and accepts its authenticated catalogue',async()=>{
+  assert.equal(maidCommand({action:'nearby',requestId:'near'}).command,'/qdmaid nearby near');
+  assert.throws(()=>maidCommand({action:'nearby',maidId:maid}),/unexpected/);
+  const bot=client(),port=createMaidPort(bot),result=port.request({action:'nearby',requestId:'near'});
+  bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(envelope('nearby','near',{maids:[{maidId:maid,owned:false,publicChatEnabled:true}]})))});
+  assert.equal((await result).data.maids[0].maidId,maid);port.close();
+});
+test('visitor dialogue retains its own result without receiving owner context',async()=>{
+  const bot=client(),events=[],port=createMaidPort(bot,{onChatResult:x=>events.push(x)});
+  const result=port.request({action:'chat',maidId:maid,requestId:'visitor',text:'你好'});
+  bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(envelope('chat','visitor',{maidId:maid,status:'pending',observation:{conversation:'nearby_visitor'}})))});
+  assert.equal((await result).data.status,'pending');
+  bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(envelope('chat-result','visitor',{maidId:maid,operationId:'visitor',status:'replied',observation:{conversation:'nearby_visitor',reply:'你好'}})))});
+  assert.equal(events[0].data.observation.reply,'你好');port.close();
+});
 function client(){const bot=new EventEmitter();bot._client=new EventEmitter();bot._client.uuid=recipient;bot._client.write=()=>{};bot.chat=()=>{};return bot;}
 test('brain reads choices without a write ID and selection retains its original operation ID',()=>{
   const read=maidCommand({action:'brain',maidId:maid});assert.equal(read.operationId,undefined);assert.match(read.command,/^\/qdmaid brain /);

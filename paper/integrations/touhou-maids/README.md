@@ -1,5 +1,7 @@
 # 千灯纪 · 原生女仆客户端与兼容状态
 
+**0.1.11-social 访客交流候选，尚未部署**：修复“人人能点交谈、实际只允许主人”的入口错误；真人简短对话、Agent nearby 发现、原肥鱼公共交流与主人管理隔离，补齐 brain 插件消息白名单。见[修复与验收说明](../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。以下 0.1.10 为当前正式版本。
+
 Minecraft 1.21.1 / Java 21。现役使用 Youer、原生 Touhou Little Maid 1.5.3 和女仆桥 **0.1.10-harness**，保留 Bukkit 插件、Vortex RPG、原角色与认证。原生 NeoForge 相机与 Web 女仆资源已另行发布；10月31日文档是历史记录，不能据此判断当前部署状态。
 
 **0.1.10-harness 已正式部署**：原肥鱼可查询并选择原生、DSH或Codex，复用服务器已有HarnessRouter；真人普通菜单与Agent `brain` 共用原身份/记忆/工具。见[运行方式说明](harness/README.md)及[发布记录](../../docs/MAID_HARNESS_RELEASE_20261107.md)。附近聊天自动触发及TTS声线统一尚未接入，此次不自动替换玩家客户端或现役Numen。

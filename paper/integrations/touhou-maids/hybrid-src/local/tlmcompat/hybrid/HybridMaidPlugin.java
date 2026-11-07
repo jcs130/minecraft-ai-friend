@@ -50,8 +50,18 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidTransport nativeTransport;
     private NativeMaidAgentSupport agentSupport;
     private NativeMaidBrainSupport brains;
+    private NativeMaidSocialSupport social;
+    private final Map<String,Long> humanDialogue=new LinkedHashMap<>();
+    private void humanConversation(Player actor,String request){
+        humanDialogue.entrySet().removeIf(e->e.getValue()<System.nanoTime());
+        String key=actor.getUniqueId()+":"+request;humanDialogue.remove(key);humanDialogue.put(key,System.nanoTime()+180_000_000_000L);
+        while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
+    }
+    boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
+    void validatePublicIdle(EntityMaid maid){if(social!=null)social.validateIdle(maid);}
     String startingNativeOperation(){return agentSupport.startingOperation();}
     void nativeModelFailed(com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback,String operation,String reason){
+        if(social!=null&&social.handles(callback))return;
         Bukkit.getScheduler().runTask(this,()->agentSupport.modelFailed(callback,operation,reason));
     }
     JsonObject registeredMaids(){return records();}
@@ -70,6 +80,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             inbox=new DialogueInbox(getDataFolder().toPath().resolve("native-dialogue"));
             agentSupport=new NativeMaidAgentSupport(this,receipts);
             brains=NativeMaidBrainSupport.create(this);
+            social=new NativeMaidSocialSupport(this,receipts);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
             getCommand("qdmaid").setExecutor(this);
@@ -160,7 +171,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private JsonObject receipt(UUID actor,UUID id,String operation)throws Exception{
         JsonObject record=records().getAsJsonObject(id.toString()),receipt=receipts.read(id,operation);
         if(record==null||(!record.get("ownerId").getAsString().equals(actor.toString())&&(receipt==null||!receipt.get("actorId").getAsString().equals(actor.toString()))))throw new CompatibilityException("not_owned","No receipt belongs to this connection");
-        if(receipt==null)throw new CompatibilityException("receipt_missing","No original receipt");return agentSupport.reconcile(receipt);
+        if(receipt==null)throw new CompatibilityException("receipt_missing","No original receipt");return reconcile(receipt);
+    }
+    private JsonObject reconcile(JsonObject receipt)throws Exception{return NativeMaidSocialSupport.visitorReceipt(receipt)?social.reconcile(receipt):agentSupport.reconcile(receipt);}
+    private EntityMaid nearbyMaid(Player actor,UUID id){
+        EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+        if(maid==null||!maid.isAlive()||maid.isRemoved()||!records().has(id.toString()))throw new CompatibilityException("unavailable","女仆当前不在现场；用 /qdmaid nearby 查询附近可见女仆。");
+        requireNearby(actor,maid,8);
+        if(actor.getGameMode()==GameMode.SPECTATOR||actor.isInvisible()||!actor.canSee(maid.getBukkitEntity()))throw new CompatibilityException("actor_unavailable","请用在场的普通角色交谈，观战镜头不能代替本人发言。");
+        return maid;
     }
     public JsonObject dispatch(Player actor,String action,UUID id,String operation,String value)throws Exception{
         if(!actor.isOnline()||actor.isDead())throw new CompatibilityException("actor_unavailable","Connected living player required");
@@ -170,9 +189,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("receipt"))return receipt(actor.getUniqueId(),id,operation);
         if(action.equals("inbox")){JsonObject record=owned(actor.getUniqueId(),id);JsonObject data=inbox.snapshot(id);data.addProperty("sessionKey",record.get("sessionKey").getAsString());return data;}
         // A replay must read the original result even if the entity has since died/unloaded.
-        if(receipts.read(id,operation)!=null){receipt(actor.getUniqueId(),id,operation);JsonObject old=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));old=agentSupport.reconcile(old);old.addProperty("replayed",true);return old;}
+        if(receipts.read(id,operation)!=null){receipt(actor.getUniqueId(),id,operation);JsonObject old=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));old=reconcile(old);old.addProperty("replayed",true);return old;}
         EntityMaid maid;
-        if(action.equals("talk")){maid=nativeMaid(Bukkit.getEntity(id));if(maid==null||!records().has(id.toString()))throw new CompatibilityException("unavailable","No current registered NPC");requireNearby(actor,maid,8);}
+        boolean visitor=action.equals("chat")&&!actor.getUniqueId().toString().equals(records().has(id.toString())?records().getAsJsonObject(id.toString()).get("ownerId").getAsString():"");
+        if(action.equals("talk")||visitor){maid=nearbyMaid(actor,id);}
         else{maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);}
         if(Set.of("talk","speak","chat").contains(action)&&(value==null||value.isBlank()||value.length()>140||value.codePoints().anyMatch(c->Character.isISOControl(c)||c==0xA7)))throw new CompatibilityException("bad_text","Supply 1-140 plain text characters");
         if(action.equals("task")&&(!TaskManager.getTaskMap().containsKey(ResourceLocation.parse(value))||!TaskManager.getTaskMap().get(ResourceLocation.parse(value)).isEnable(maid)))throw new CompatibilityException("task_requirements","Read original task conditions and provide its equipment first");
@@ -185,13 +205,13 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("native-menu")&&!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");
         if(!Set.of("follow","stay","sit","speak","talk","chat","brain","task","schedule","pickup","ack","transfer","equip","menu","native-menu").contains(action)&&!NativeMaidCosmetics.WRITES.contains(action))throw new CompatibilityException("unsupported_action",action);
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
-        if(action.equals("chat")){requireNearby(actor,maid,16);agentSupport.validateChat(actor,maid);}
+        if(action.equals("chat")){requireNearby(actor,maid,16);if(visitor)social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
         if(action.equals("brain")){agentSupport.validateIdle(maid);brains.validate(maid,value);}
         if(action.equals("equip"))menus.validateEquip(actor,maid,value);
         if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
         if(previous!=null){JsonObject replay=previous.deepCopy();replay.addProperty("replayed",true);return replay;}
-        if(action.equals("chat"))return agentSupport.chat(actor,maid,operation,value);
+        if(action.equals("chat"))return visitor?social.start(actor,maid,operation,value):agentSupport.chat(actor,maid,operation,value);
         JsonObject observation;
         switch(action){
             case "brain"->observation=brains.select(maid,value);
@@ -240,6 +260,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
                 reply(actor,action,correlation,create(target,name),null);return true;
             }
             if(action.equals("help")){help(actor);return true;}
+            if(action.equals("nearby")){
+                correlation=request(args,1);JsonArray rows=new JsonArray();
+                for(var entity:actor.getNearbyEntities(8,8,8)){
+                    EntityMaid maid=nativeMaid(entity);if(maid==null||!maid.isAlive()||!records().has(maid.getUUID().toString())||!actor.canSee(entity)||actor.getLocation().distanceSquared(entity.getLocation())>64)continue;
+                    JsonObject row=new JsonObject();row.addProperty("maidId",maid.getUUID().toString());row.addProperty("name",maid.getName().getString());row.addProperty("owned",actor.getUniqueId().equals(owner(maid)));row.addProperty("publicChatEnabled",social.enabled(maid));row.addProperty("chatCommand","/qdmaid chat "+maid.getUUID()+" <requestId> <话语>");rows.add(row);if(rows.size()>=16)break;
+                }
+                JsonObject result=new JsonObject();result.add("maids",rows);reply(actor,action,correlation,result,null);return true;
+            }
             if(action.equals("list")){
                 correlation=request(args,1);int page=args.length>2?Integer.parseInt(args[2]):0;if(page<0||page>10000||args.length>3)throw new CompatibilityException("bad_arguments","list [requestId] [page]");
                 var rows=records().entrySet().stream().filter(e->e.getValue().getAsJsonObject().get("ownerId").getAsString().equals(actor.getUniqueId().toString())).toList();JsonArray list=new JsonArray();
@@ -247,6 +275,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
                 JsonObject result=new JsonObject();result.add("maids",list);result.addProperty("page",page);result.addProperty("hasMore",(long)(page+1)*8<rows.size());reply(actor,action,correlation,result,null);return true;
             }
             if(args.length<2)throw new CompatibilityException("bad_arguments","Read /qdmaid help");UUID id=UUID.fromString(args[1]);
+            if(action.equals("say")){
+                action="chat";humanConversation(actor,correlation);
+                if(args.length<3)throw new CompatibilityException("bad_text","在自动填入的指令后输入想说的话，再按回车。例：你好，能介绍一下你会做什么吗？");
+                reply(actor,action,correlation,dispatch(actor,action,id,correlation,String.join(" ",Arrays.copyOfRange(args,2,args.length))),null);return true;
+            }
+            if(action.equals("result")){
+                correlation=request(args,2);humanConversation(actor,correlation);action="receipt";reply(actor,action,correlation,receipt(actor.getUniqueId(),id,correlation),null);return true;
+            }
             if(action.equals("menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);menus.open(actor,maid);return true;}
             if(action.equals("brain-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);brains.open(actor,maid);return true;}
             if(action.equals("native-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");maid.openMaidGui(((CraftPlayer)actor).getHandle());return true;}
@@ -258,6 +294,9 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     private static String request(String[] args,int index){String value=args.length>index?args[index]:fresh();if(!value.matches("[A-Za-z0-9_-]{1,48}"))throw new CompatibilityException("bad_request_id","Invalid request ID");return value;}
     public void reply(Player actor,String action,String request,JsonObject data,String error){
+        if(humanDialogue.getOrDefault(actor.getUniqueId()+":"+request,0L)>System.nanoTime()){
+            humanReply(actor,request,data,error);return;
+        }
         JsonObject result=new JsonObject();result.addProperty("schema",1);result.addProperty("protocol","qiandengji-maids/v1");result.addProperty("recipientUuid",actor.getUniqueId().toString());result.addProperty("action",action);result.addProperty("requestId",request);result.addProperty("ok",error==null);result.addProperty("sampledAt",java.time.Instant.now().toString());
         if(data!=null)result.add("data",data);if(error!=null){result.addProperty("error",error);result.addProperty("nextStep",guidance(action,error));}byte[] bytes=result.toString().getBytes(StandardCharsets.UTF_8);if(bytes.length>24000)throw new IllegalStateException("Response budget exceeded");
         if(actor.getListeningPluginChannels().contains(CHANNEL))actor.sendPluginMessage(this,CHANNEL,bytes);else actor.sendMessage(Component.text("QD_MAID "+result,error==null?NamedTextColor.AQUA:NamedTextColor.RED));
@@ -270,17 +309,37 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
                 try{dispatch(event.getPlayer(),"rename",maid.getUUID(),fresh(),null);}catch(Exception error){event.getPlayer().sendMessage("未改名："+error.getMessage());}
             }else menus.open(event.getPlayer(),maid);
         }}
-        event.getPlayer().sendMessage(Component.text("[与 "+maid.getName().getString()+" 交谈]",NamedTextColor.AQUA).clickEvent(ClickEvent.suggestCommand("/qdmaid chat "+maid.getUUID()+" "+fresh()+" ")));
+        if(event.getHand()!=org.bukkit.inventory.EquipmentSlot.HAND)return;
+        event.getPlayer().sendMessage(Component.text("[与 "+maid.getName().getString()+" 交谈] 点击后输入话语并回车",NamedTextColor.AQUA).clickEvent(ClickEvent.suggestCommand("/qdmaid say "+maid.getUUID()+" ")));
         if(event.getPlayer().getUniqueId().equals(owner(maid)))event.getPlayer().sendMessage(Component.text("[选择女仆运行方式]",NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/qdmaid brain-menu "+maid.getUUID())));
     }
     public void openCommonMenu(Player actor,EntityMaid maid){menus.open(actor,maid);}
     public void openCosmetics(Player actor,EntityMaid maid,boolean voices,int page){cosmeticsMenu.open(actor,maid,voices,page);}
+    private void humanReply(Player actor,String operation,JsonObject data,String error){
+        if(error!=null){
+            String message=switch(error){
+                case "out_of_range","not_owned","owner_mismatch"->guidance("chat",error);
+                case "bad_text"->"请输入 1–140 字的普通话语，写在自动填入的指令后，再按回车。";
+                case "actor_unavailable"->"请用已登录、存活且在现场的普通角色交谈。";
+                case "receipt_missing"->"未找到这次对话的原结果；请使用原来的查询按钮，不要猜请求编号。";
+                default->data!=null&&data.has("message")?data.get("message").getAsString():guidance("chat",error);
+            };
+            actor.sendMessage(Component.text("[女仆] "+message,NamedTextColor.YELLOW));return;
+        }
+        if(data==null||!data.has("status"))return;
+        String status=data.get("status").getAsString();JsonObject observation=data.getAsJsonObject("observation");
+        String line=status.equals("pending")?"正在听你说话，等待回复…":status.equals("replied")&&observation!=null&&observation.has("reply")?observation.get("reply").getAsString():"本次未收到有效回复。可点下方查原结果，请勿反复发送同一句。";
+        String name="女仆";
+        if(data.has("maidId")){EntityMaid maid=nativeMaid(Bukkit.getEntity(UUID.fromString(data.get("maidId").getAsString())));if(maid!=null)name=maid.getName().getString();}
+        actor.sendMessage(Component.text("["+name+"] "+line,status.equals("unknown")?NamedTextColor.YELLOW:NamedTextColor.AQUA));
+        if(!status.equals("replied")&&data.has("maidId"))actor.sendMessage(Component.text("[查询这次对话]",NamedTextColor.GRAY).clickEvent(ClickEvent.runCommand("/qdmaid result "+data.get("maidId").getAsString()+" "+operation)));
+    }
     private static String guidance(String action,String error){
         return switch(error){
             case "maid_dead","unloaded"->"/qdmaid list 查看本人女仆真实状态；context <UUID> 查询死亡、遗物位置或未加载原因。";
-            case "not_owned","owner_mismatch"->"只能操作本人女仆；先 /qdmaid list 复制 maidId，不能用玩家 UUID 或投影实体编号。";
-            case "out_of_range"->"先 /qdmaid context <UUID> 核对维度坐标；走到同维度女仆附近再操作。";
-            case "chat_busy","chat_unresolved"->"上一条对话未确认；/qdmaid receipt <UUID> <原requestId>。勿重复提交或把 pending 当回复。";
+            case "not_owned","owner_mismatch"->"装备、工作和运行方式由主人管理；附近交谈用 /qdmaid nearby 找真实maidId，再用 chat <maidId> <requestId> <话语>。本人女仆用 list。";
+            case "out_of_range"->"先到同一维度女仆身边（访客8格内），用 /qdmaid nearby 查可见对象；context 仅供主人查询。";
+            case "chat_busy","chat_unresolved"->"她正在处理对话或整理记忆。若是你刚发的一条，用 /qdmaid receipt <UUID> <原requestId> 查询；若是别人发起，稍后再说新话。pending 不是回复。";
             default->"/qdmaid help 查询真实用法。每次写操作保留唯一 requestId；结果不明先 receipt，不重复转移物品。";
         };
     }
@@ -288,7 +347,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         for(String line:List.of(
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
-            "对话：/qdmaid chat <UUID> <requestId> <话语>，调用她已配置的原生模型；pending 是等待，replied 才收到回复。/qdmaid receipt <UUID> <原requestId> 查结果。",
+            "对话：右键→点击交谈→输入话语回车。Agent用 nearby 找附近女仆，再 chat <UUID> <requestId> <话语>；访客8格内可与已开放女仆交流，不能管理她或读取主人记忆。pending 是等待，receipt <UUID> <原requestId> 查结果。",
             "装备：/qdmaid inventory <UUID> 看槽位；/qdmaid transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 /qdmaid equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
             "真人：/qdmaid menu <UUID> 或右键本人女仆，管理原背包及装备。talk 仅为外部宿主留言箱，不是原生模型对话。死亡后先查看 context，不自动补发/复活。"
