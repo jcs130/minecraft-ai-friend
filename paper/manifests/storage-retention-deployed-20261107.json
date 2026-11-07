@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "status": "deployed",
+  "at": "2026-11-07T21:58:56.8419971+08:00",
+  "pullRequest": 113,
+  "sourceCommit": "0f70ed44a58cd221eece189ae9c7d93f5ed3b31e",
+  "operator": "storage-retention-release-20261107-r2",
+  "normalStop": true,
+  "removedSnapshots": 32,
+  "keptSnapshots": 9,
+  "ignoredIncompleteSnapshots": 1,
+  "freeBytesBefore": 1696432128,
+  "freeBytesAfter": 216434102272,
+  "freedBytes": 214737670144,
+  "fArchivePreserved": true,
+  "formalReadOnlyChecks": 10,
+  "characterFilesUnchangedDuringInstallation": 800,
+  "credentialsUnchanged": true,
+  "originalCredentialRows": 76,
+  "originalNativeJobsRestored": 7,
+  "localChecks": 68,
+  "extraCameraLifecycleChecks": 7,
+  "ciWorkflowRuns": [
+    42373346835,
+    42373346776
+  ],
+  "files": {
+    "E:\\MC\\ops\\manage-server.ps1": "a5ca5e900ffb5c10c0695acb78d5a1828c131ae9f388c0bda9cbae26677b8da7",
+    "E:\\MC\\ops\\release-snapshot-retention.ps1": "91b21e2cbb3f415dc880963a82757b912015caaedd1a71c9618c2502a4a96949"
+  },
+  "limits": [
+    "No real-player password or inventory mutation used for validation",
+    "Scheduled backup retention and capacity guards verified by isolated tests; no additional full production backup run"
+  ],
+  "cameraRestored": {
+    "at": "2026-11-07T22:05:29.9478412+08:00",
+    "profile": "original NeoForge / RTX3080Ti",
+    "ready": true,
+    "gameRestarted": false,
+    "permissionsChanged": false,
+    "idleFpsAtAcceptance": 4
+  }
+}
