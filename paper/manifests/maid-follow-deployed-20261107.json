@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "status": "deployed",
+  "version": "0.1.9-follow",
+  "pullRequest": 105,
+  "sourceCommit": "4602ea91b625e41d75888c99d3d552368fc7fead",
+  "mergedCommit": "3ba6872747b8b12b11c1faa2599c62dcaa3e7223",
+  "deployedAt": "2026-11-07T14:39:06.9910890+08:00",
+  "sha256": "e4787d8cf7b43ec0b0426391ecc8dfaf881be70dd89a2ac6f21723eb2d6d3147",
+  "validation": {
+    "sourceCiChecksPassed": 6,
+    "pureFollowPolicy": 14,
+    "nativeFollowChecks": 10,
+    "nativeLifecycleAndRestartChecks": 18,
+    "lifeReducerChecks": 29,
+    "hostAdapterChecks": 5,
+    "productionStartupChecks": 10,
+    "originalMaidReadOnlyChecks": 5,
+    "characterFilesUnchangedAtInstall": 796,
+    "credentialRecordsRetained": 76,
+    "nativeJobsRestored": 7,
+    "dualColdBackupsVerified": true
+  },
+  "originalMaid": {
+    "originalOwnerRetained": true,
+    "alive": true,
+    "ordinaryDamageProtectionRetained": true,
+    "followModeEnabled": true,
+    "freshLifeWitnessPersisted": true,
+    "readOnlyNaturalPlaySamples": 11,
+    "sameDimensionNearOwnerObserved": true,
+    "nearestObservedDistance": 1.27
+  },
+  "scope": {
+    "onlyMaidBridgeReplaced": true,
+    "ttsOrModelSettingsChanged": false,
+    "worldOrInventoryRollback": false,
+    "nativeWorkAndCombatRetained": true,
+    "fullOriginalClientEquipmentAndVoiceAcceptance": "pending"
+  }
+}
