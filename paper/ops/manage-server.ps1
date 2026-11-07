@@ -343,7 +343,20 @@ function Probe {
 function BedrockProbe {
     $out = & $node 'E:\MC\bedrock-ping.mjs' $lanHost '19132' 2>&1
     if ($LASTEXITCODE -ne 0) { return $false }
-    return (($out -join "`n") -match '(?m)^REPLY ')
+    if (($out -join "`n") -notmatch '(?m)^REPLY ') { return $false }
+    # A legacy RakNet Pong does not exercise modern HTTP/WebRTC discovery.
+    # Keep rollback-compatible behavior when the optional LAN transport is absent.
+    $lanConfig = Join-Path $serverDir 'plugins\Geyser-Spigot\lan-discovery.properties'
+    if (Test-Path -LiteralPath $lanConfig) {
+        if ((Get-Content -LiteralPath $lanConfig -Raw) -match '(?m)^\s*enabled\s*=\s*true\s*$') {
+            $out = & $node 'E:\MC\ops\bedrock-network-health.mjs' $lanHost '19132' '7551' 2>&1
+            if ($LASTEXITCODE -ne 0) { Log ('WARN Bedrock modern transport probe: ' + ($out -join ' ')); return $false }
+            try { $health = ($out -join "`n") | ConvertFrom-Json }
+            catch { Log 'WARN Bedrock modern probe returned invalid JSON'; return $false }
+            if ($health.healthy -isnot [bool] -or -not $health.healthy) { return $false }
+        }
+    }
+    return $true
 }
 
 function Check-BedrockHealth {

@@ -1,0 +1,34 @@
+{
+  "state": "isolated-candidate-not-deployed",
+  "document": "paper/docs/BEDROCK_LAN_20261107.md",
+  "upstream": {
+    "version": "2.12.1-b1295",
+    "commit": "1955f5151e2af01a7b51db1679e4324345690e70",
+    "sha256": "b60ff8f9a007f30823cf40173532a0390e6150cdfc577551f6f37bdd5ccd1528"
+  },
+  "candidate": {
+    "Geyser-Spigot-2.12.1-b1295-youer-lan1.jar": "475593086cb3db32dc119a07870eef4433565c44474605478147f22ef8e4f226",
+    "AgentAppearance-Bedrock-0.2.4.jar": "e6657b30a68d1df78fea094f81bb43a6d784f2279ad802736814b89eb6dfbe2d"
+  },
+  "changedOriginalEntries": 3,
+  "addedClasses": 4,
+  "otherEntriesPreserved": 20913,
+  "geyserReproducibleBuildVerified": true,
+  "lanUdpPorts": [7551, 19134],
+  "lanSourceCidr": "192.168.3.0/24",
+  "newWanMappings": 0,
+  "xboxValidationRequired": true,
+  "checks": {
+    "admission": 25,
+    "youerLookup": 4,
+    "appearancePolicy": 7,
+    "networkHealth": 4,
+    "watchdogProbe": 8,
+    "nativeLanNetworkSettingsSessions": 2,
+    "resourcePackBytesVerified": 4,
+    "isolatedBedrockWorldSpawn": true
+  },
+  "microkqAuthenticatedLoginVerified": false,
+  "physicalPhoneWorldListVerified": false,
+  "physicalVisualsVerified": false
+}

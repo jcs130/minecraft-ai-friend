@@ -1,0 +1,37 @@
+name: Bedrock LAN
+on:
+  pull_request:
+    paths:
+      - 'paper/integrations/geyser-lan/**'
+      - 'paper/integrations/geyser-ysm/**'
+      - 'paper/ops/bedrock-*'
+      - 'paper/ops/tests/bedrock-*'
+      - 'paper/ops/manage-server.ps1'
+      - '.github/workflows/bedrock-lan.yml'
+permissions:
+  contents: read
+jobs:
+  protocol-and-admission:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          mkdir -p /tmp/bedrock-tests
+          javac --release 21 -d /tmp/bedrock-tests paper/integrations/geyser-lan/src/org/qiandengji/geyserlan/LanAdmissionLedger.java paper/integrations/geyser-lan/tests/org/qiandengji/geyserlan/LanAdmissionLedgerTest.java paper/integrations/geyser-ysm/src/org/afuhome/appearance/BedrockBuildPolicy.java paper/integrations/geyser-ysm/tests/org/afuhome/appearance/BedrockBuildPolicyTest.java
+          java -ea -cp /tmp/bedrock-tests org.qiandengji.geyserlan.LanAdmissionLedgerTest
+          java -ea -cp /tmp/bedrock-tests org.afuhome.appearance.BedrockBuildPolicyTest
+          node --test paper/ops/tests/bedrock-network-health.test.mjs
+  windows-watchdog:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Actual probe function with transport failure fixtures
+        shell: powershell
+        run: ./paper/ops/tests/bedrock-watchdog.test.ps1
