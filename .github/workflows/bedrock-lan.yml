@@ -35,3 +35,6 @@ jobs:
       - name: Actual probe function with transport failure fixtures
         shell: powershell
         run: ./paper/ops/tests/bedrock-watchdog.test.ps1
+      - name: Scalar and array firewall subnet representations
+        shell: powershell
+        run: ./paper/ops/tests/bedrock-lan-firewall.test.ps1

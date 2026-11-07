@@ -19,7 +19,10 @@ foreach($spec in $specs){
     $port=$rule|Get-NetFirewallPortFilter
     $address=$rule|Get-NetFirewallAddressFilter
     $application=$rule|Get-NetFirewallApplicationFilter
-    if(@($rule).Count-ne 1-or$rule.Enabled-ne'True'-or$rule.Direction-ne'Inbound'-or$rule.Action-ne'Allow'-or$port.Protocol-ne'UDP'-or[string]$port.LocalPort-cne[string]$spec.Port-or@($address.RemoteAddress).Count-ne 1-or$address.RemoteAddress[0]-notin@($network,'192.168.3.0/255.255.255.0')-or-not$application.Program.Equals($program,[StringComparison]::OrdinalIgnoreCase)){
+    # CIM may return a scalar string for a single address; indexing it directly
+    # reads the first character rather than the complete subnet.
+    $remoteAddresses=@($address.RemoteAddress)
+    if(@($rule).Count-ne 1-or$rule.Enabled-ne'True'-or$rule.Direction-ne'Inbound'-or$rule.Action-ne'Allow'-or$port.Protocol-ne'UDP'-or[string]$port.LocalPort-cne[string]$spec.Port-or$remoteAddresses.Count-ne 1-or$remoteAddresses[0]-notin@($network,'192.168.3.0/255.255.255.0')-or-not$application.Program.Equals($program,[StringComparison]::OrdinalIgnoreCase)){
         throw ('LAN rule differs; preserve it for review: '+$spec.Name)
     }
 }
