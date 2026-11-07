@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "status": "deployed",
+  "version": "0.1.8-life",
+  "pullRequest": 104,
+  "sourceCommit": "761da488a06e2f22963a8b5215790991e5575d7d",
+  "mergedCommit": "037016758a8ab08b73c28855c652077cbad16e89",
+  "deployedAt": "2026-11-07T05:32:41.8175711Z",
+  "sha256": "3a0d947d6109e45f441655174c724b816088db8bad013052d1682d92fa3b117e",
+  "validation": {
+    "sourceCiChecksPassed": 6,
+    "realReducerChecksPassed": 29,
+    "hostAdapterChecksPassed": 5,
+    "nativeLifeEpisodeChecksPassed": 18,
+    "nativeFunctionalChecksPassed": 51,
+    "nativeProtectionAndReceiptRestartChecksPassed": 5,
+    "productionStartupChecksPassed": 10,
+    "characterFilesUnchangedAtInstall": 795,
+    "dualCurrentColdBackupsVerified": true,
+    "originalNativeJobsRestored": 7
+  },
+  "originalMaid": {
+    "alive": true,
+    "health": 20,
+    "originalOwnerRetained": true,
+    "originalModelAndChatRetainedBeforeMaintenance": true,
+    "ordinaryDamageProtectionSaved": true,
+    "nativeFollowObservedBeforeMaintenance": true,
+    "graveItemsRetainedBeforeMaintenance": 8,
+    "freshLifeEpisodePersisted": true,
+    "historicalDeathResolved": true,
+    "actualRevivalTimeKnown": false
+  },
+  "scope": {
+    "onlyNativeMaidBridgeReplaced": true,
+    "nativeContentAndOtherPluginsRetained": true,
+    "worldOrInventoryRollbackPerformed": false,
+    "websiteRestarted": false,
+    "originalClientRealModelAndEquipmentAcceptance": "pending",
+    "invulnerabilityDoesNotCoverVoidOrAdminKill": true
+  }
+}
