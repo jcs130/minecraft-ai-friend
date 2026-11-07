@@ -27,6 +27,7 @@ public final class NativeMaidAgentSupport implements Listener {
     private final Path file;
     private final JsonObject deaths;
     private final MaidLifeEpisodes lifecycle;
+    private final NativeMaidFollowSupport following=new NativeMaidFollowSupport();
     private long lastPersistenceWarning;
     private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingDeathEvent> deathListener;
     private final Map<UUID,Pending> pending=new HashMap<>();
@@ -113,6 +114,7 @@ public final class NativeMaidAgentSupport implements Listener {
         if(context.has("historicalDeath"))annotateGrave(context.getAsJsonObject("historicalDeath"),found);
         if(context.has("recovery"))context.getAsJsonObject("recovery").addProperty("persisted",lifecycle.durable(context.getAsJsonObject("recovery").get("eventId").getAsString()));
         if(alive) {
+            context.add("follow",following.describe(maid));
             var manager=maid.getAiChatManager();var site=manager.getLLMSite();
             context.addProperty("dialogueMode",configured(maid)?"native_model":"not_configured");
             context.addProperty("dialogueCommand","/qdmaid chat "+id+" <requestId> <对她说的话>");
@@ -194,11 +196,19 @@ public final class NativeMaidAgentSupport implements Listener {
             }catch(Exception error){plugin.getLogger().warning("Maid chat receipt retained: "+error.getClass().getSimpleName());}
         }
         // Only registered owners/entities. No chunk loads and no per-tick world entity scans.
-        if(Bukkit.getCurrentTick()%100>=20)return;
+        boolean lifecycleDue=Bukkit.getCurrentTick()%100<20;
+        Set<UUID> registered=new HashSet<>();
         for(var entry:plugin.registeredMaids().entrySet())try {
-            EntityMaid loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(UUID.fromString(entry.getKey())));if(loaded!=null)observeLoaded(loaded);
+            UUID id=UUID.fromString(entry.getKey());registered.add(id);
+            EntityMaid loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
+            if(loaded!=null){
+                try{if(registeredOwner(loaded)!=null)following.tick(loaded);else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
+                if(lifecycleDue)observeLoaded(loaded);
+            }else following.unavailable(id);
+            if(!lifecycleDue)continue;
             Player actor=Bukkit.getPlayer(UUID.fromString(entry.getValue().getAsJsonObject().get("ownerId").getAsString()));
-            if(actor!=null){UUID id=UUID.fromString(entry.getKey());JsonObject context=plugin.context(actor,id);notifyOwner(actor,id,context);}
+            if(actor!=null){JsonObject context=plugin.context(actor,id);notifyOwner(actor,id,context);}
         }catch(Exception error){plugin.getLogger().fine("Maid lifecycle observation unavailable: "+error.getClass().getSimpleName());}
+        following.retain(registered);
     }
 }

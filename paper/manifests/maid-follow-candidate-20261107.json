@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "status": "candidate-not-deployed",
+  "version": "0.1.9-follow",
+  "baselineSha256": "3a0d947d6109e45f441655174c724b816088db8bad013052d1682d92fa3b117e",
+  "candidateSha256": "e4787d8cf7b43ec0b0426391ecc8dfaf881be70dd89a2ac6f21723eb2d6d3147",
+  "unrelatedJarEntriesPreserved": 36,
+  "tests": {
+    "purePolicy": 14,
+    "nativeFollow": 10,
+    "lifeLedger": 29,
+    "hostAdapter": 5
+  },
+  "production": {
+    "bridgeVersion": "0.1.8-life",
+    "originalMaidMovedToOwnerOnce": true,
+    "modelTtsOrInventoryChanged": false
+  },
+  "scope": "Close idle companionship using original navigation and safe landing only"
+}
