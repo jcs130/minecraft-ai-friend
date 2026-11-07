@@ -1,0 +1,14 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+[[mods]]
+modId="qiandengji_maid_brain"
+version="0.1.0"
+displayName="Qiandengji maid brain adapter"
+displayTest="IGNORE_ALL_VERSION"
+[[dependencies.qiandengji_maid_brain]]
+modId="touhou_little_maid"
+type="required"
+versionRange="[1.5.3,1.6)"
+ordering="AFTER"
+side="BOTH"

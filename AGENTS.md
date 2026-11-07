@@ -1,3 +1,7 @@
+## 2026-11-07 女仆Harness选择候选，尚未部署
+
+复用现有HarnessRouter及Numen规划器，为原肥鱼提供原生/DSH/Codex选择；真人菜单与Agent brain共用原身份、历史和工具。21网关、7适配器、28原生及13正常重启/边界检查通过，两份JAR重复构建一致、40无关条目保持。共享服务仅原肥鱼，候选与回退已备；正式仍0.1.9-follow，未改现役Numen/TTS或安装自启，附近聊天及声线统一未完成。见[女仆Harness](paper/docs/MAID_HARNESS_20261107.md)。不得重放既有维护入口；上线需本次正常重启、预告与E/F当前冷备。
+
 ## 2026-11-07 基岩局域网发现候选，未部署
 
 正式入口已有公网HTTP与WebRTC映射，MicroKQ本次没有到达游戏登录日志；确认旧Geyser未启动新版LAN UDP7551，不能将旧RakNet Pong视为新版可登录。b1295固定Youer/LAN补丁与外观扩展0.2.4已隔离验证v6/v7广播、真实WebRTC网络设置、正常停启及4份完整资源下载/入世界；手机本人Xbox登录和画面仍待验。25 admission、4 lookup、7外观策略、4网络和8Watchdog分支通过，Geyser重复构建相同。只加家庭网段UDP7551/19134，保留Xbox验证、公网入口和原资源/角色；尚未替换正式文件。见[修复记录](paper/docs/BEDROCK_LAN_20261107.md)。以下为其他发布与历史。

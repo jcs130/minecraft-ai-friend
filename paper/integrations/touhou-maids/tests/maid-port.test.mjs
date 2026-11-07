@@ -5,6 +5,18 @@ import {createMaidPort,maidCommand,MAID_CHANNEL} from '../agent/maid-port.mjs';
 const maid='e3228ffc-eb42-441d-a08c-3e5948a307e8', recipient='fce37da4-0183-4f20-a160-3fe49d871878';
 const envelope=(action,id,data)=>({schema:1,protocol:'qiandengji-maids/v1',recipientUuid:recipient,action,requestId:id,ok:true,sampledAt:new Date().toISOString(),data});
 function client(){const bot=new EventEmitter();bot._client=new EventEmitter();bot._client.uuid=recipient;bot._client.write=()=>{};bot.chat=()=>{};return bot;}
+test('brain reads choices without a write ID and selection retains its original operation ID',()=>{
+  const read=maidCommand({action:'brain',maidId:maid});assert.equal(read.operationId,undefined);assert.match(read.command,/^\/qdmaid brain /);
+  const selected=maidCommand({action:'brain',maidId:maid,choice:'dsh',requestId:'select-dsh'});
+  assert.equal(selected.command,`/qdmaid brain ${maid} select-dsh dsh`);assert.equal(selected.operationId,'select-dsh');
+  assert.throws(()=>maidCommand({action:'brain',maidId:maid,choice:'codex'}),/requestId/);
+  assert.throws(()=>maidCommand({action:'brain',maidId:maid,choice:'dsh; say x',requestId:'bad'}),/exact ID/);
+});
+test('brain selection reply uses the same authenticated native transport',async()=>{
+  const bot=client(),port=createMaidPort(bot),result=port.request({action:'brain',maidId:maid,requestId:'brain-read'});
+  bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(envelope('brain','brain-read',{maidId:maid,selected:'native',choices:[{id:'dsh'}]})))});
+  assert.equal((await result).data.choices[0].id,'dsh');port.close();
+});
 test('host adapter supports native dialogue and six equipment slots without raw model code',()=>{
   assert.equal(maidCommand({action:'chat',maidId:maid,requestId:'native-1',text:'跟我说说你的状态'}).command,`/qdmaid chat ${maid} native-1 跟我说说你的状态`);
   for(const hand of ['main','off','head','chest','legs','feet'])assert.equal(maidCommand({action:'equip',maidId:maid,requestId:'gear-1',hand,slot:3}).command,`/qdmaid equip ${maid} gear-1 ${hand} 3`);
