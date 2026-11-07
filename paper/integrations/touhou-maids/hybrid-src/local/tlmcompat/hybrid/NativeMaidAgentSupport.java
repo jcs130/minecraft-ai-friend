@@ -144,6 +144,7 @@ public final class NativeMaidAgentSupport implements Listener {
         plugin.reply(actor,"lifecycle",event,context,null);
     }
     public void validateIdle(EntityMaid maid) {
+        plugin.validatePublicIdle(maid);
         if(pending.containsKey(maid.getUUID()))throw new CompatibilityException("chat_busy","上一条原生对话尚未结束；用 /qdmaid receipt 查询原 requestId，勿重复发送。");
         var manager=maid.getAiChatManager();
         if(manager.historySummaryRunning)throw new CompatibilityException("chat_busy","原生对话正在整理记忆，请稍后查询状态。");

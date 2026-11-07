@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "status": "candidate_not_deployed",
+  "version": "0.1.11-social",
+  "sourceBase": "183f8fa9675111c825ded06e80e7348043a8f681",
+  "artifact": {
+    "name": "qiandengji-maid-native-0.1.11-social.jar",
+    "sha256": "baea33e269ee63aac47963d72634678b8808eee71540299431185785f0a891f3"
+  },
+  "rollback": {
+    "name": "qiandengji-maid-native-0.1.10-harness.jar",
+    "sha256": "9c43d8b48414b9eb6d5495c1a7b7c7d49c96649f2d6341cb0ded0c582871b699"
+  },
+  "unchangedJarEntries": 44,
+  "extensionUnchanged": "0.1.0",
+  "tlmUnchanged": "1.5.3",
+  "ysmUnchanged": "2.6.5",
+  "tests": {
+    "before": {
+      "file": "social-before-sgmw68crif.json",
+      "sha256": "2c7e31117137391def1f9255f86f4459808ab149057a2f404e1230f278dbec18",
+      "checks": 4,
+      "passed": true
+    },
+    "restart": {
+      "file": "social-restart-sgmw68w9bh.json",
+      "sha256": "bf2bdcee9fd3064c76be8a77dcc88b51e888fecddd3eb894bcb68da4b8b4cd9b",
+      "checks": 27,
+      "passed": true
+    },
+    "harness": {
+      "file": "social-harness-sgmw68z0nc.json",
+      "sha256": "672f5136f7a091753634e50a0a4fbd7ac2bcf0d427a55ccfbfccca498e4dcc09",
+      "checks": 12,
+      "passed": true
+    },
+    "prepare-restart": {
+      "file": "social-prepare-restart-sgmw690jjr.json",
+      "sha256": "4cda86c5e806fcca0d18044c43cf11c716e85f2f1d549f59fda5fb631549bbcb",
+      "checks": 3,
+      "passed": true
+    }
+  },
+  "offline": {
+    "adapter": 9,
+    "gateway": 21
+  },
+  "finalChecks": 72,
+  "baselineReproductionChecks": 4,
+  "productionChanged": false,
+  "realPlayerDataUsed": false,
+  "actualHarnesses": [
+    "dsh",
+    "codex"
+  ],
+  "modelScope": "original configured maid only",
+  "limits": [
+    "Real human mobile/native UI not yet accepted",
+    "Owner private history unchanged; visitor short memory is volatile",
+    "No automatic nearby-chat/ASR trigger, shared TTS or other-maid shared models",
+    "Requires separately approved normal restart; do not replay old maintenance"
+  ]
+}

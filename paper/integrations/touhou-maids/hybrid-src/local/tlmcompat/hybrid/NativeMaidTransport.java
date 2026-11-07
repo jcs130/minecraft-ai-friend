@@ -13,7 +13,7 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 /** Uses the authenticated player's connection and the existing owner-checked command parser. */
 public final class NativeMaidTransport implements PluginMessageListener, Listener, AutoCloseable {
     public static final String REQUEST="qiandengji:maid_request";
-    private static final Set<String> ACTIONS=Set.of("chat","talk","list","context","follow","stay","speak","receipt","inbox","ack","tasks","inventory","sit","task","schedule","pickup","transfer","equip","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename");
+    private static final Set<String> ACTIONS=Set.of("brain","nearby","chat","talk","list","context","follow","stay","speak","receipt","inbox","ack","tasks","inventory","sit","task","schedule","pickup","transfer","equip","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename");
     private final HybridMaidPlugin plugin;
     private final Map<UUID,ArrayDeque<Long>> requests=new HashMap<>();
     public NativeMaidTransport(HybridMaidPlugin plugin){
@@ -46,7 +46,7 @@ public final class NativeMaidTransport implements PluginMessageListener, Listene
             long now=System.nanoTime();var window=requests.computeIfAbsent(actor.getUniqueId(),ignored->new ArrayDeque<>());
             while(!window.isEmpty()&&now-window.peekFirst()>=1_000_000_000L)window.removeFirst();
             if(window.size()>=16){
-                int correlation=args[0].equals("list")?1:args[0].equals("receipt")?3:2;
+                int correlation=Set.of("list","nearby").contains(args[0])?1:args[0].equals("receipt")?3:2;
                 if(args.length>correlation&&args[correlation].matches("[A-Za-z0-9_-]{1,48}"))plugin.reply(actor,args[0],args[correlation],null,"rate_limited");return;
             }
             window.addLast(now);

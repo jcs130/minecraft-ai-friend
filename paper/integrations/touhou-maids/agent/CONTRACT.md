@@ -1,5 +1,7 @@
 # 女仆操作协议 0.1.10-harness（服务端已部署）
 
+**0.1.11-social 候选接口，尚未部署**：新增 `nearby [queryId]` 返回附近可见女仆的 `maidId/name/owned/publicChatEnabled/chatCommand`，可选 MCP 为 `{action:"nearby"}`。`chat` 将允许同维度 8 格内访客与已开放女仆交流；其 `observation.conversation="nearby_visitor"`，不包含主人记忆或工作工具。本人 `chat` 的原生历史／工具保持，`receipt` 仍按原请求查询，不重放。真人用右键→点击交谈→输入话语，或 `/qdmaid say <maidId> <话语>`；这种便利入口只发简短中文，Agent继续用结构化 `chat`。参见[候选说明](../../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。以下为正式 0.1.10 行为，不能把源码候选当作已加载。
+
 复用本人已登录的游戏连接。宿主调用标准命令发送能力即可，不需要让模型写 `bot`、`Buffer` 或底层协议。`maid-port.mjs` 是可选的千灯纪适配器，不是新的 Agent 循环。
 
 先 `/qdmaid list` 取得自己的 `maidId`，再按需查询。只使用服务器返回的 UUID、槽位和工作 ID；悦灵只是原版投影，不代表她是普通悦灵。
