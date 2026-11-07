@@ -39,6 +39,8 @@ final class ProtectionChat {
             next = "权限未确认；停止操作，先查询详情，服务异常请联系服主。";
         } else if (reason.equals("worldguard") && data.has("regionGuidance")) {
             next = data.get("regionGuidance").getAsString();
+        } else if (reason.equals("site_dungeon")) {
+            next = ProtectionQuery.nextAction(data);
         } else if (List.of("generated_structure", "village_structure", "life_guild_building").contains(reason)) {
             next = "沿原有门、楼梯或梯子通行；施工请选择保护范围外位置后重新查询。";
         } else if (reason.startsWith("guild_owner") || data.has("landId") && data.get("landId").getAsString().equals(LandManager.GUILD)) {

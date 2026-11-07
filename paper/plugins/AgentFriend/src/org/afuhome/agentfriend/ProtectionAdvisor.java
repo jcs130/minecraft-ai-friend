@@ -280,7 +280,8 @@ final class ProtectionAdvisor implements Listener {
         else if (tagged) next = "这件物品仍归原主人；移出保护区也不会解除归属，请取得主人授权。";
         else if (reason.equals("site_dungeon")) {
             next="副本建筑永久受保护，包括未开场和结束后；不能凿墙、垫块、倒液体或用爆炸改路。沿门、楼梯和原通道前进；箱子与机关可正常交互。";
-            commands.add("/mycli dungeon layout");
+            commands.add(ProtectionQuery.DUNGEON_DISCOVERY_COMMAND);
+            commands.add("/mycli dungeon info <ID> --verbose");
         }
         else if (List.of("generated_structure", "village_structure", "life_guild_building").contains(reason)) {
             next = "不要拆建筑墙、门、梯子或垫方块；沿原有门、楼梯、梯井通行。木门用使用键/原有方块交互打开，铁门找按钮或拉杆；贴梯面向前移动或跳跃上爬。施工请另选上述结构片段范围外位置并重新查权限。";
