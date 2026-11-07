@@ -613,12 +613,13 @@ function CompleteSnapshots([string]$path) {
     } | Sort-Object Name -Descending)
 }
 
-function RetainedSnapshots([array]$completed, [datetime]$asOf = (Get-Date)) {
+function RetainedSnapshots([array]$completed, [datetime]$asOf = (Get-Date), [int]$dailyDays = 7) {
     # Owner requested smaller history after the native RPG release. Keep a
     # recent recovery window, seven calendar days, and explicit recovery pins.
     $recent = @($completed | Select-Object -First 3)
-    $cutoff = $asOf.Date.AddDays(-6).ToString('yyyyMMdd')
-    $daily = @($completed | Where-Object { $_.Name.Substring(0,8) -ge $cutoff } |
+    if ($dailyDays -lt 0 -or $dailyDays -gt 7) { throw 'Invalid daily backup retention window' }
+    $cutoff = $asOf.Date.AddDays(1-$dailyDays).ToString('yyyyMMdd')
+    $daily = @($completed | Where-Object { $dailyDays -gt 0 -and $_.Name.Substring(0,8) -ge $cutoff } |
         Group-Object { $_.Name.Substring(0,8) } |
         ForEach-Object { $_.Group | Select-Object -First 1 })
     $pinned = @($completed | Where-Object {
@@ -637,7 +638,11 @@ function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
         return
     }
     $completed = @(CompleteSnapshots $root)
-    $keep = @(RetainedSnapshots $completed $asOf)
+    # E keeps three recent full points; F carries the seven-day archive.
+    # Explicit pins remain on both drives. Recent E history is removed only
+    # when its complete F copy still passes the original mirror proof.
+    $dailyDays = if ($root -ceq 'E:\MC\backups\scheduled') { 0 } else { 7 }
+    $keep = @(RetainedSnapshots $completed $asOf $dailyDays)
     # Only a previous native prune's explicit marker permits resuming an
     # interrupted deletion. Unmarked partial backups remain for inspection.
     $resuming = @(Get-ChildItem -LiteralPath $root -Directory | Where-Object {
@@ -657,6 +662,13 @@ function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
         try {
             if ((Test-Path -LiteralPath (Join-Path $resolved '.keep')) -or
                 (Test-Path -LiteralPath (Join-Path $resolved '.pinned'))) { continue }
+            if ($root -ceq 'E:\MC\backups\scheduled' -and
+                $old.Name.Substring(0,8) -ge $asOf.Date.AddDays(-6).ToString('yyyyMMdd') -and
+                (Test-Path -LiteralPath (Join-Path $resolved '.complete'))) {
+                $mirror = Join-Path 'F:\MC-backups\scheduled' $old.Name
+                if (-not (Test-Path -LiteralPath (Join-Path $mirror '.complete'))) { throw 'Retain recent E history until F is complete' }
+                Assert-MirrorHashes $resolved $mirror
+            }
             # Never advertise a partly deleted snapshot as a recovery point.
             # Preserve the validated absolute root before adding Win32's long-
             # path prefix for bundled client dependencies.
@@ -673,6 +685,16 @@ function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
             Log "WARN expired backup cleanup incomplete: $resolved; $($_.Exception.GetType().Name)"
         }
     }
+}
+
+function PruneReleaseSnapshots([string]$scheduledRoot, [datetime]$asOf = (Get-Date)) {
+    if ($scheduledRoot -notin @('E:\MC\backups\scheduled', 'F:\MC-backups\scheduled')) { return }
+    if (Listener) { Log 'WARN release snapshot cleanup deferred until Paper is stopped'; return }
+    try {
+        . (Join-Path $opsDir 'release-snapshot-retention.ps1')
+        $result = Invoke-ReleaseSnapshotRetention -BackupRoot ([IO.Path]::GetDirectoryName($scheduledRoot)) -AsOf $asOf
+        foreach ($row in $result.Results) { Log ("Release snapshot retention {0}: removed={1}" -f $row.name,$row.removed) }
+    } catch { Log ('WARN release snapshot retention deferred: ' + $_.Exception.GetType().Name) }
 }
 
 function Assert-MirrorHashes([string]$sourcePath, [string]$mirrorPath) {
@@ -697,6 +719,32 @@ function Backup-TreeBytes([string]$path) {
     return [int64]$measure.Sum
 }
 
+function Backup-CopyBytes([string]$path) {
+    # Use the copier's own read-only traversal: ordinary directory enumeration
+    # can undercount dependency junctions that robocopy will materialize.
+    $source = [IO.Path]::GetFullPath($path).TrimEnd('\')
+    if ($source -notmatch '^[A-Za-z]:\\' -or -not (Test-Path -LiteralPath $source -PathType Container)) { throw 'Backup size requires an existing local directory' }
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+    $temp = Join-Path $tempRoot ('qiandengji-copy-size-'+[guid]::NewGuid().ToString('N'))
+    if ($temp.StartsWith($source+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Sizing destination cannot be inside source' }
+    New-Item -ItemType Directory -Path $temp -ErrorAction Stop | Out-Null
+    try {
+        $log = Join-Path $temp 'size.log'
+        & robocopy.exe $source (Join-Path $temp 'never-created') /L /E /BYTES /NFL /NDL /NJH /R:0 /W:0 ("/UNILOG:"+$log) | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw 'Read-only backup traversal failed before maintenance' }
+        $summary = Get-Content -LiteralPath $log -Raw -Encoding Unicode
+        $match = [regex]::Matches($summary,'(?m)^\s*(?:Bytes|字节|字节数)\s*:\s*(\d+)\s+')
+        if ($match.Count -ne 1) { throw 'Backup byte summary unavailable; do not guess capacity' }
+        # Robocopy /L returns 1 when it found copy candidates; that is success.
+        # Do not leak that code into an enclosing PowerShell CI/task wrapper.
+        $global:LASTEXITCODE = 0
+        return [long]$match[0].Groups[1].Value
+    } finally {
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($temp)) -cne $tempRoot -or [IO.Path]::GetFileName($temp) -notmatch '^qiandengji-copy-size-[a-f0-9]{32}$') { throw 'Unsafe sizing cleanup path' }
+        Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction Stop
+    }
+}
+
 function Mirror-LatestBackup {
     $source = CompleteSnapshots $backupRoot | Select-Object -First 1
     if (-not $source) { throw 'No verified local backup to mirror.' }
@@ -715,7 +763,13 @@ function Mirror-LatestBackup {
     }
     $sourceBytes = Backup-TreeBytes $source.FullName
     if ((Get-PSDrive -Name F).Free -lt ($sourceBytes + 1GB)) {
-        throw 'Mirror skipped: F: needs at least snapshot size plus 1 GB free.'
+        # Expired archives may be why a new mirror will not fit. Both pruning
+        # functions refuse online deletion and preserve current recovery points.
+        PruneSnapshots $mirrorRoot
+        PruneReleaseSnapshots $mirrorRoot
+        if ((Get-PSDrive -Name F).Free -lt ($sourceBytes + 1GB)) {
+            throw 'Mirror skipped: F: needs at least snapshot size plus 1 GB free.'
+        }
     }
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     & robocopy.exe $source.FullName $stage /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XF '.complete' | Out-Null
@@ -915,7 +969,13 @@ function Backup-Server {
             if(Test-Path -LiteralPath $other) { throw 'Runtime relocation must not be mixed with another deployment.' }
         }
     }
-    $sourceBytes = Backup-TreeBytes $serverDir
+    # Previous preflight counted only the game tree, omitting the much larger
+    # operational archive and model/auth support copy. Count the full superset
+    # before stopping; skipped logs/dependencies only make this conservative.
+    $sourceBytes = [long]0
+    foreach ($tree in @($serverDir,$opsDir,'E:\MC\probe','E:\MC\private\ysm')) {
+        $sourceBytes += Backup-CopyBytes $tree
+    }
     $freeBytes = (Get-PSDrive -Name E).Free
     if ($null -eq $freeBytes -or $freeBytes -lt ($sourceBytes + 1GB)) {
         throw "Backup skipped before stopping Paper: E: needs at least source size plus 1 GB free"
@@ -1005,6 +1065,9 @@ function Backup-Server {
         Log "Backup complete: $dest"
         # Pending deployments require both verified recovery copies before any JAR changes.
         Mirror-LatestBackup
+        # Also retire dated release snapshots outside the scheduled directory.
+        PruneReleaseSnapshots $mirrorRoot
+        PruneReleaseSnapshots $backupRoot
         # Finish E: retention while Paper and authentication are still stopped.
         # A standalone Mirror also defers pruning if players are already back.
         PruneSnapshots $backupRoot
