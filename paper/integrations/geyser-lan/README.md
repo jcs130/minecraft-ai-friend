@@ -1,6 +1,6 @@
 # Geyser 新版基岩局域网发现
 
-状态：2026-11-07 隔离候选，尚未部署。部署结果另见 [运维记录](../../docs/BEDROCK_LAN_20261107.md)。
+状态：2026-11-07 16:51正式部署完成；真实手机发现/登录仍待验。部署结果另见 [运维记录](../../docs/BEDROCK_LAN_20261107.md)。
 
 Bedrock 26.60 起使用 NetherNet。正式服已有 HTTP 信令与 WebRTC，旧 RakNet Pong 仍成功，但官方 Geyser 尚未启动 UDP 7551 的 LAN discovery。只开旧 UDP 19132 不能让新版手机在局域网世界列表中发现它。上游问题见 [Geyser #6853](https://github.com/GeyserMC/Geyser/issues/6853)，协议见 [Mojang NetherNet guide](https://mojang.github.io/bedrock-protocol-docs/guides/nether-net-onboarding-guide/)。
 
