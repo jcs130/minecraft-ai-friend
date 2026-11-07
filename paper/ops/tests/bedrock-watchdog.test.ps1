@@ -33,3 +33,6 @@ $script:enabled=$true;Expect $true 2
 foreach($mode in @('failed','false','malformed','string')){$script:modern=$mode;Expect $false 2}
 $script:legacyOk=$false;Expect $false 1
 Write-Output ('Bedrock watchdog: '+$checks+' passed')
+# The last fixture intentionally returned a process failure. Do not leak its
+# synthetic exit code into the CI shell after all assertions have passed.
+$global:LASTEXITCODE=0
