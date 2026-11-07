@@ -126,12 +126,12 @@ final class DungeonAdvice {
         }else if(yes(f,"atFirstRoom")) {
             state="ready";reason="DUNGEON_IDLE_READY";
             action="空闲可开；active=false 只表示尚未开场。你已到首室，可选普通难度开始。";command=base+"start "+id+" normal";
-        }else if(yes(f,"atSite")) {
+        }else if(yes(f,"atSite")||yes(f,"nearApproach")) {
             state="approach";reason="WALK_TO_FIRST_ROOM";
-            action="空闲可开；沿入口通道步行到首室 "+text(f,"firstRoom")+"，再 start。到入口不等于已进首室，不在地面反复等待。";command=base+"info "+id;
+            action="已在遗迹附近；先核对实际入口和通路，再到首室 "+text(f,"firstRoom")+" 并 start。附近不等于已进入，首室坐标不是入口；不要重复传送或原地等待。";command=base+"info "+id;
         }else {
             state="travel";reason="TRAVEL_TO_DUNGEON";
-            action="空闲可开；先到入口（传送需8魔力），再沿实际通道走到首室 "+text(f,"firstRoom")+" 并 start，不是等系统自动开。";command=base+"travel "+id;
+            action="空闲可开；可先 travel 到配置落点（需8魔力，可能只是遗迹外围），再找实际入口、沿通道到首室 "+text(f,"firstRoom")+" 并 start。传送成功不证明已到入口或进入首室。";command=base+"travel "+id;
         }
         var out=new LinkedHashMap<String,Object>();out.put("state",state);out.put("reason",reason);out.put("name",name);
         out.put("available",yes(f,"configured"));out.put("activeMeaning","是否已有开启的场次，不代表是否开放");
