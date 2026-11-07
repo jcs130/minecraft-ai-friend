@@ -6,6 +6,18 @@ afterEach(() => vi.useRealTimers());
 const denial = 'MC_LAND_ACCESS {"status":"deny","allowed":false,"reason":"land_permission_denied","action":"place","x":-486,"y":67,"z":-506}';
 
 describe('server feedback remains available after the event page', () => {
+  it('does not turn nested skill restrictions, historical failures or nullable fields into a current error',()=>{
+    const ledger=new ServerFeedbackLedger();
+    const status='MC_RPG '+JSON.stringify({readOnly:true,queryOnly:true,health:20,error:null,
+      skills:[{name:'test',available:false,reason:'魔力不足，cannot cast'}],
+      history:{status:'failed',error:'old error'},description:'资料'.repeat(5000)});
+    expect(ledger.note(status,'system',7)).toBe(false);expect(ledger.read()).toBeNull();
+    expect(ledger.note('RESULT {"ok":true,"error":false}','system',7)).toBe(false);
+    expect(ledger.note('RESULT {"status":"failed","reason":"missing item"}','system',7)).toBe(true);
+    expect(ledger.note('MC_CLI_ERROR {"code":"bad_argument"}','system',7)).toBe(true);
+    expect(ledger.read()).not.toContain('MC_RPG');expect(ledger.read()).toContain('bad_argument');
+  });
+
   it.each(['system', 'action_bar', 'system_chat', 'game_info'] as const)('retains an actual %s denial in fresh facts', async channel => {
     const r = methodHarness('1.21.1');
     try {

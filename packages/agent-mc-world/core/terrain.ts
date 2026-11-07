@@ -390,6 +390,11 @@ export function snapshotFingerprint(s: WorldSnapshot): string {
     s.equipment.map((p) => `${p.slot}:${p.name}:${p.displayName ?? ''}x${p.count ?? '?'}`).sort().join(','),
     s.effects.map((e) => `${e.name}${e.level}`).sort().join(','),
     s.standingOn ?? 'unknown', s.footing?.kind ?? '', s.onGround, s.biome,
+    // Identity may arrive after the entity spawn without movement. Do not let
+    // quiet suppression retain a protocol appearance after semantic attestation.
+    // Observation timestamps are intentionally excluded to avoid clock churn.
+    s.entities.flatMap(e => e.identity ? [JSON.stringify([e.entityId, e.identity.uuid,
+      e.identity.kind, e.identity.name, e.identity.label, e.identity.ownerUuid ?? null])] : []).sort().join(','),
     `hostile${hostiles.length}${nearest ? `@${nearest.direction ?? '-'}${distBucket(nearest.distance)}` : ''}`,
   ].join('|');
 }
@@ -502,12 +507,12 @@ export function narrateWorldSegments(
   }
   const nearbyTracked = s.entities.filter(e => !e.visible && e.observation?.source === 'nearby-entity-tracking');
   if (nearbyTracked.length) lifeLines.push('近处未直视：' + nearbyTracked.map(e =>
-    `${whereIs(e.direction,e.distance,e.dy)}有${e.identity?.label ?? zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
+    `${whereIs(e.direction,e.distance,e.dy)}有${e.identity?.label ?? zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}${e.identity && e.note ? `，${e.note}` : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
   if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个感知实体未展开；可按需查询，未列出不等于没有。`);
   lifeLines.push(...narrateDrops(seenDrops));
   const lifeCmp = [
     ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}|${s.entityObservation.nearbyOccludedRange}`] : []),
-    ...nearbyTracked.map(e => `近:${e.entityId}|${e.identity?.label ?? e.name}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
+    ...nearbyTracked.map(e => `近:${e.entityId}|${e.identity?.label ?? e.name}|${e.note ?? ''}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     `省略:${s.entitiesOmitted}`,
     ...seenMobs.map((e) => `见:${e.identity?.label ?? e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
@@ -1798,11 +1803,11 @@ export function snapshotFromBot(
     if (!observation) continue;
     const visible = observation.visibility === 'visible';
     const stack = visible ? droppedStackOf(e, bot.registry?.items) : null;
-    const note = visible ? entityObservationNote(bot, e) : null;
     const customName = visible ? entityCustomName(bot, e) : null;
     // A previously attested UUID may label nearby tracking, without exposing
     // hidden metadata or claiming visual/aural contact.
     const identity = observedEntityIdentity(bot, e);
+    const note = visible ? entityObservationNote(bot, e) : identity ? entityIdentityNote(bot, e) : null;
     entities.push({
       ...(Number.isInteger(e.id) ? { entityId: e.id } : {}),
       ...(visible && e.uuid ? { uuid: e.uuid } : {}),

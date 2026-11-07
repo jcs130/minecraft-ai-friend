@@ -8609,7 +8609,8 @@ export class MinecraftWorld implements World {
       const dir = bearing(e.position.x - me.x, e.position.z - me.z);
       const at = dir ? `${DIRECTION_ZH[dir]}边` : '附近';
       const visible = canSeeEntity(bot, e);
-      const label = observedEntityLabel(bot, e);
+      const identity = observedEntityIdentity(bot, e);
+      const label = observedEntityLabel(bot, e) + (identity ? `（${entityIdentityContext(bot, identity)}）` : '');
       if(visible&&(name==='villager'||name==='wandering_trader')&&d<=24)journeyCues.push({kind:'npc',key:`entity:${eid}`,label:zhEntity(name),
         position:[e.position.x,e.position.y,e.position.z],source:'visible-entity',observedAtMs:Date.now()});
       const stateKind = kind === 'hostile' ? 'hostile' : 'notable';
@@ -9406,6 +9407,6 @@ export class MinecraftWorld implements World {
 }
 import { chatDeliveryMessage } from './chat-delivery.ts';
 import { entityCustomName, tamedByMe, type FactEntity } from './animal-state.ts';
-import { observedEntityIdentity, observedEntityLabel } from './entity-identity.ts';
+import { observedEntityIdentity, observedEntityLabel, entityIdentityContext } from './entity-identity.ts';
 import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import type { ChatDispatchContext } from './executor.ts';

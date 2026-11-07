@@ -40,3 +40,15 @@ export function observedEntityLabel(bot: object, entity: IdentityEntity): string
   return observedEntityIdentity(bot, entity)?.label
     ?? (entity.type === 'player' || entity.name === 'player' ? entity.username ?? '玩家' : zhEntity(entity.name ?? 'unknown'));
 }
+
+/** Keep display names separate from semantic identity and verified ownership.
+ * A name may also be an animal/item noun. Ownership here is a reported relation,
+ * never a permission to act, an ally designation, or a life-state assertion. */
+export function entityIdentityContext(bot: object, identity: EntityIdentity): string {
+  const self = bot as { player?: { uuid?: string }; entity?: { uuid?: string }; _client?: { uuid?: string } };
+  const selfUuid = self.player?.uuid ?? self.entity?.uuid ?? self._client?.uuid;
+  const relation = identity.ownerUuid && selfUuid && uuid.test(selfUuid)
+    ? identity.ownerUuid.toLowerCase() === selfUuid.toLowerCase() ? '归属本人' : '归属其他玩家'
+    : '归属未比对';
+  return `服务端角色身份=${identity.kind}，${relation}`;
+}
