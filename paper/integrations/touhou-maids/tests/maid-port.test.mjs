@@ -28,3 +28,15 @@ test('uncertain writes keep the original operation ID and never retry',async()=>
   const result=await port.request({action:'chat',maidId:maid,requestId:'original-1',text:'你好'});
   assert.equal(result.status,'unknown');assert.equal(result.operationId,'original-1');assert.equal(result.retryAllowed,false);assert.equal(writes,1);port.close();
 });
+
+test('persisted recovery remains a lifecycle observation, separate from a context request',async()=>{
+  const bot=client(),life=[];let writes=0;bot.chat=()=>writes++;
+  const port=createMaidPort(bot,{onLifecycle:x=>life.push(x)});
+  const recovery={eventId:'recovery-0123456789abcdef01234567',maidId:maid,observedAt:'2026-01-01T00:00:00Z',actualRevivalTimeKnown:false,persisted:true};
+  const result=port.request({action:'context',maidId:maid,requestId:'ctx-recovery'});let done=false;result.then(()=>done=true);
+  bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(envelope('lifecycle',recovery.eventId,{maidId:maid,lifeState:'unloaded_or_unavailable',recovery})))});
+  await new Promise(r=>setTimeout(r,10));assert.equal(done,false);assert.equal(life.length,1);
+  assert.deepEqual(life[0].data.recovery,recovery);
+  bot.emit('messagestr','QD_MAID '+JSON.stringify(envelope('context','ctx-recovery',{maidId:maid,lifeState:'unloaded_or_unavailable',recovery})),'system',{},null);
+  assert.equal((await result).data.lifeState,'unloaded_or_unavailable');assert.equal(writes,1);port.close();
+});

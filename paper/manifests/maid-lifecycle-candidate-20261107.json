@@ -1,0 +1,196 @@
+{
+  "schema": 1,
+  "date": "2026-11-07",
+  "status": "candidate-not-deployed",
+  "sourceBaseCommit": "64ed7ca08f6ff3444fea2ef171e0518bf976abaa",
+  "baseline": {
+    "version": "0.1.7-agent",
+    "sha256": "a1bc43ffba96296bbe037d0703ab6bad3ea4a71aba74731b569a8ff2e74c0ad9"
+  },
+  "candidate": {
+    "version": "0.1.8-life",
+    "sha256": "3a0d947d6109e45f441655174c724b816088db8bad013052d1682d92fa3b117e",
+    "unrelatedJarEntriesPreserved": 34
+  },
+  "tests": {
+    "native": {
+      "baseline-setup": {
+        "passed": 6,
+        "failed": 4,
+        "preparationFailure": null,
+        "checks": [
+          {
+            "name": "original synthetic maid is alive",
+            "ok": true
+          },
+          {
+            "name": "native death is current before recovery",
+            "ok": true
+          },
+          {
+            "name": "native grave has film and both item stacks",
+            "ok": true
+          },
+          {
+            "name": "synthetic film consumed once, goods retained",
+            "ok": true
+          },
+          {
+            "name": "same original UUID is alive again",
+            "ok": true
+          },
+          {
+            "name": "recovery has explicit fact with unknown actual revival time",
+            "ok": false
+          },
+          {
+            "name": "owner receives one persisted recovery event",
+            "ok": false
+          },
+          {
+            "name": "same connection does not repeat recovery",
+            "ok": false
+          },
+          {
+            "name": "the native entity actually unloaded",
+            "ok": true
+          },
+          {
+            "name": "old grave cannot classify the unloaded recovered maid as dead",
+            "ok": false
+          }
+        ]
+      },
+      "baseline-restart": {
+        "passed": 1,
+        "failed": 1,
+        "preparationFailure": null,
+        "checks": [
+          {
+            "name": "original remains physically unloaded after restart",
+            "ok": true
+          },
+          {
+            "name": "restart does not turn the old grave into a new death",
+            "ok": false
+          }
+        ]
+      },
+      "candidate-setup": {
+        "passed": 10,
+        "failed": 0,
+        "preparationFailure": null,
+        "checks": [
+          {
+            "name": "original synthetic maid is alive",
+            "ok": true
+          },
+          {
+            "name": "native death is current before recovery",
+            "ok": true
+          },
+          {
+            "name": "native grave has film and both item stacks",
+            "ok": true
+          },
+          {
+            "name": "synthetic film consumed once, goods retained",
+            "ok": true
+          },
+          {
+            "name": "same original UUID is alive again",
+            "ok": true
+          },
+          {
+            "name": "recovery has explicit fact with unknown actual revival time",
+            "ok": true
+          },
+          {
+            "name": "owner receives one persisted recovery event",
+            "ok": true
+          },
+          {
+            "name": "same connection does not repeat recovery",
+            "ok": true
+          },
+          {
+            "name": "the native entity actually unloaded",
+            "ok": true
+          },
+          {
+            "name": "old grave cannot classify the unloaded recovered maid as dead",
+            "ok": true
+          }
+        ]
+      },
+      "candidate-restart": {
+        "passed": 8,
+        "failed": 0,
+        "preparationFailure": null,
+        "checks": [
+          {
+            "name": "original remains physically unloaded after restart",
+            "ok": true
+          },
+          {
+            "name": "restart does not turn the old grave into a new death",
+            "ok": true
+          },
+          {
+            "name": "restart retains original recovery id",
+            "ok": true
+          },
+          {
+            "name": "old grave is history, not current death",
+            "ok": true
+          },
+          {
+            "name": "old grave goods survive recovery, unload and restart",
+            "ok": true
+          },
+          {
+            "name": "a real second death is detected",
+            "ok": true
+          },
+          {
+            "name": "second death is a different episode and tombstone",
+            "ok": true
+          },
+          {
+            "name": "second death leaves original grave items intact",
+            "ok": true
+          }
+        ]
+      }
+    },
+    "realReducer": {
+      "passed": 29,
+      "failed": 0
+    },
+    "hostAdapter": {
+      "passed": 5,
+      "failed": 0
+    },
+    "testPreparationFailuresExcluded": 2
+  },
+  "scope": {
+    "freshLoopbackWorldOnly": true,
+    "realPasswordsOrModelKeysUsed": false,
+    "productionRestarted": false,
+    "productionGameWrites": false,
+    "nativeAltarRevivalTested": false,
+    "productionBridgeSha256": "a1bc43ffba96296bbe037d0703ab6bad3ea4a71aba74731b569a8ff2e74c0ad9",
+    "qaStoppedNormally": true
+  },
+  "invariants": {
+    "sameSyntheticMaidUuid": true,
+    "historicalGraveItemsNbtPreserved": true,
+    "distinctSecondDeathAndGrave": true,
+    "recoveryObservationIsNotActualRevivalTime": true
+  },
+  "knownLimits": [
+    "Formal deployment and real client acceptance are pending.",
+    "Client must persist event deduplication across reconnects.",
+    "No claim that the original altar revival flow was exercised."
+  ]
+}

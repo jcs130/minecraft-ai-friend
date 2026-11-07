@@ -47,6 +47,12 @@
 
 ## 生命状态与事件
 
+**0.1.8-life 候选补充，尚未部署**：同一个 UUID 再次被原生实体证实存活后，持久保存该观察及已解决的死亡事件。旧墓碑可能仍有遗物，不能在区块卸载或服务重启后重新变成当前死亡。查询不到实体时仍返回 `unloaded_or_unavailable`，不声称当前一定存活。
+
+候选保持 schema 1 和现有命令，增加 `lastSeenAlive:{name,dimension,position,observedAt}`、`historicalDeath`、`recovery`。只有当前死亡放在 `death`；历史死亡放在 `historicalDeath`。原生死亡事件可先确认死亡，墓碑随后补充同一事件；较新的独立墓碑对应另一死亡事件。旧版本只有墓碑而没有存活见证的记录先视为历史，直到获得新的原生证据。
+
+`recovery:{eventId,maidId,ownerId,name,observedAt,resolvedDeathEventId,evidence:"original_tlm_alive_entity",actualRevivalTimeKnown:false,persisted}` 表示再次确认原 UUID 存活。`observedAt` 是观察时间，**不是实际复活时间**。只有 `persisted:true` 才发 `[女仆·恢复]` 和 `action:"lifecycle"`；requestId 为不超过48字符的稳定 eventId。重连可补告，客户端应按事件 ID 持久去重，不能据此重新复活、补发装备或抢占主人格的动作。候选验证见[生命状态修复](../../../docs/MAID_LIFECYCLE_20261107.md)。以下为现役 0.1.7 的行为记录：
+
 `context.data.lifeState` 为 `alive`、`dead` 或 `unloaded_or_unavailable`。不加载区块、不从缺少实体推断死亡。死亡只根据原生墓碑记录与其原始女仆 UUID 关联，返回：
 
 ```text

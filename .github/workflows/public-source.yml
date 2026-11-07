@@ -30,6 +30,9 @@ jobs:
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
           node --check paper/integrations/touhou-maids/tests/agent-operations.mjs
           node --check paper/integrations/touhou-maids/tests/agent-failures.mjs
+          node --check paper/integrations/touhou-maids/tests/lifecycle-stage.mjs
+          curl --fail --silent --show-error --location --retry 2 https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar --output "$RUNNER_TEMP/maid-life-gson.jar"
+          python paper/integrations/touhou-maids/tests/run-lifecycle-ledger.py --gson "$RUNNER_TEMP/maid-life-gson.jar"
       - name: Check native camera launch and appearance archives without connecting
         run: |
           python -m unittest discover -s paper/integrations/native-camera -p test_prepare_neoforge.py -v
