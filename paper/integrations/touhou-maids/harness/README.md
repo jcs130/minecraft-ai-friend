@@ -60,6 +60,6 @@ Codex偶发在同次UHP响应的多个assistant帧中重复输出相同完整规
 
 离线：`python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_harness_gateway.py -v`；`node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs`。真实服夹具 `tests/brain-harness-stage.mjs` 只允许指定fresh localhost合成存档，显式提供QA目录/连接锚点/RCON/报告根目录；每轮唯一ID，不重放失败动作或复制真实玩家数据。QA wire/迟到响应探针仅装在隔离服，禁止放入正式包。
 
-已完成真实DSH/Codex工具及回复、行走主人跟随、故障终态/同ID去重、普通菜单、原客户端解码和密钥剔除检查。正式17项只读检查及已完成维护见发布记录。附近聊天/ASR自动触发、主动社交、TTS声线统一及原肥鱼正式客户端验收不属于已完成能力；本轮没有启用这些功能。
+已完成真实DSH/Codex工具及回复、行走主人跟随、故障终态/同ID去重、普通菜单、原客户端解码和密钥剔除检查。正式17项只读检查及已完成维护见发布记录。附近点名、ASR与TTS统一已在[0.1.12候选](../../../docs/MAID_CONVERSATION_20261108.md)另行实现并隔离验证，尚未部署；原肥鱼远端自主操作、主动社交和真人耳听仍不能声称完成。
 
 上游依据：[TLM AI扩展](https://tlmwiki.cfpa.team/wiki/dev/ai/overview/)、[工具扩展](https://tlmwiki.cfpa.team/wiki/dev/ai/tool/)、[HarnessRouter自托管](https://github.com/HarnessRouter/harnessrouter/blob/main/docs/self-hosting-guide.md)。

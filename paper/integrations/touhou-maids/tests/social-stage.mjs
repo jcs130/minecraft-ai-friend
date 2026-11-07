@@ -22,7 +22,7 @@ async function ask(bot,action,text='',id=run+'_'+(++seq),maid=fixture.maid,paylo
 }
 async function done(bot,id,timeout=18000){return until(async()=>{let r=await ask(bot,'receipt','',id);return r.data?.status&&r.data.status!=='pending'?r.data:null;},'terminal',timeout);}
 try{
- await until(async()=>{try{return (await rc('version QiandengjiMaidBridge')).includes(baseline?'0.1.10-harness':'0.1.11-social');}catch{return false;}},'bridge ready',150000);
+ await until(async()=>{try{return (await rc('version QiandengjiMaidBridge')).includes(baseline?'0.1.10-harness':process.env.MAID_SOCIAL_QA_VERSION||'0.1.11-social');}catch{return false;}},'bridge ready',150000);
  await new Promise(resolve=>mock.listen(19088,'127.0.0.1',resolve));
  const owner=await connect(fixture.username),guest=await connect('MaidVisitorQA'),other=await connect('MaidOtherQA');
  await rc('minecraft:fill 294 89 294 340 89 310 minecraft:stone');
@@ -95,7 +95,7 @@ try{
    const clickAt=other.lines.length;other.activateEntity(Object.values(other.entities).find(e=>e.uuid===fixture.maid));await delay(1000);
    check('right click offers the simple non-owner-safe dialogue entry',other.lines.slice(clickAt).some(r=>JSON.stringify(r.json).includes('/qdmaid say ')));
    const disabled=await ask(guest,'chat','你好',run+'_disabled',fixture.otherMaid);check('other maids remain without shared model access',!disabled.ok&&disabled.error==='public_chat_not_enabled');
-   responseMode='late';await delay(5100);const left=run+'_left';await ask(guest,'chat','我说完就离开了',left);await rc(`minecraft:execute in minecraft:the_nether run tp ${guest.username} 300 90 300`);const gone=await done(guest,left);check('late reply is not delivered across dimensions',gone.status==='unknown'&&gone.observation.reason==='listener_left');
+   responseMode='late';await delay(5100);const left=run+'_left';await ask(guest,'chat','我说完就离开了',left);await rc(`minecraft:gamemode creative ${guest.username}`);await rc(`minecraft:execute in minecraft:the_nether run minecraft:tp ${guest.username} 300 90 300`);check('late reply fixture really changed world',(await rc(`minecraft:data get entity ${guest.username} Dimension`)).includes('the_nether'));const gone=await done(guest,left);check('late reply is not delivered across dimensions',gone.status==='unknown'&&gone.observation.reason==='listener_left');
    await rc('minecraft:save-all flush');
  }
 }catch(error){report.error=String(error);console.log(report.error);}

@@ -51,6 +51,9 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidAgentSupport agentSupport;
     private NativeMaidBrainSupport brains;
     private NativeMaidSocialSupport social;
+    private NativeMaidSpeech speech;
+    private NativeMaidNearbyChat nearbyChat;
+    void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
     private final Map<String,Long> humanDialogue=new LinkedHashMap<>();
     private void humanConversation(Player actor,String request){
         humanDialogue.entrySet().removeIf(e->e.getValue()<System.nanoTime());
@@ -58,6 +61,27 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
     boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
+    void nearbyConversation(Player actor,EntityMaid maid,String text,Set<UUID> recipients){
+        nearbyConversation(actor,maid,text,recipients,"near_"+UUID.randomUUID());
+    }
+    void nearbyConversation(Player actor,EntityMaid maid,String text,Set<UUID> recipients,String operation){
+        try{
+            if(receipts.read(maid.getUUID(),operation)!=null)return;
+            humanConversation(actor,operation);
+            social.validate(actor,maid);agentSupport.validateChat(actor,maid);
+            receipts.reserve(maid.getUUID(),actor.getUniqueId(),operation,"chat",text);
+            JsonObject result=social.start(actor,maid,operation,text,recipients);
+            reply(actor,"chat",operation,result,null);
+        }catch(Exception error){
+            // An addressed line can fail explicitly, but must never be queued for replay.
+            String code=error instanceof CompatibilityException c?c.code():"chat_unavailable";
+            JsonObject data=new JsonObject();data.addProperty("message",error instanceof CompatibilityException?error.getMessage():"这次交谈暂时不可用，请稍后重新靠近并查询 /qdmaid nearby；不要连续重发。");reply(actor,"chat",operation,data,code);
+        }
+    }
+    /** Called only by the installed voice plugin after its session/range fenced ASR result. */
+    public void acceptNearbyVoice(UUID actor,UUID world,UUID utterance,long start,long end,double[] bounds,double range,String text,Set<UUID> audience){
+        if(Bukkit.isPrimaryThread()&&nearbyChat!=null)nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience);
+    }
     void validatePublicIdle(EntityMaid maid){if(social!=null)social.validateIdle(maid);}
     String startingNativeOperation(){return agentSupport.startingOperation();}
     void nativeModelFailed(com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback,String operation,String reason){
@@ -81,6 +105,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             agentSupport=new NativeMaidAgentSupport(this,receipts);
             brains=NativeMaidBrainSupport.create(this);
             social=new NativeMaidSocialSupport(this,receipts);
+            nearbyChat=new NativeMaidNearbyChat(this);
+            speech=NativeMaidSpeech.create(this);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
             getCommand("qdmaid").setExecutor(this);
@@ -95,7 +121,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
@@ -144,10 +170,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             data.addProperty("homeMode",maid.isHomeModeEnable());data.addProperty("sitting",maid.isMaidInSittingPose());data.addProperty("pickup",maid.isPickup());
             data.addProperty("schedule",maid.getSchedule().name());data.addProperty("taskId",maid.getTask().getUid().toString());data.addProperty("taskEnabled",maid.getTask().isEnable(maid));
             data.addProperty("modelId",maid.getModelId());data.addProperty("health",maid.getHealth());data.addProperty("maxHealth",maid.getMaxHealth());
+            JsonObject appearance=new JsonObject();appearance.addProperty("type",maid.isYsmModel()?"ysm":"native_maid");appearance.addProperty("modelId",maid.isYsmModel()?maid.getYsmModelId():maid.getModelId());appearance.addProperty("texture",maid.isYsmModel()?maid.getYsmModelTexture():"");appearance.addProperty("fallbackModelId",maid.getModelId());data.add("appearance",appearance);
+            data.addProperty("damageProtected",maid.isInvulnerable());
             data.addProperty("name",maid.getName().getString());data.addProperty("soundPackId",maid.getSoundPackId());data.addProperty("silent",maid.isSilent());data.addProperty("voiceAssetsReady",VanillaMaidProjection.nativeClient(actor)||local.tlmcompat.numen.MaidVoiceTransport.ready(actor.getUniqueId()));
             data.addProperty("soundFrequency",maid.getConfigManager().getSoundFreq());
             data.addProperty("workRadius",maid.getRestrictRadius());data.addProperty("canMove",maid.canBrainMoving());
             data.add("brain",brains.describe(maid));
+            if(speech!=null)data.add("speech",speech.describe(maid));
+            if(sharedDialogueEnabled(maid)){JsonObject conversation=new JsonObject();conversation.addProperty("nearbyRange",8);conversation.addProperty("addressExample",maid.getName().getString()+"，你好");conversation.addProperty("ownerWorkCommand","/qdmaid chat "+id+" <requestId> <工作要求>");conversation.addProperty("meaning","附近点名只公开交流，不读取主人私聊；工作、装备和运行方式仍由主人管理。语音点名需匹配的QiandengVoice识别链路。");data.add("conversation",conversation);}
             data.addProperty("activity",maid.getScheduleDetail().getName());
             data.addProperty("dimension",maid.getBukkitEntity().getWorld().getKey().toString());JsonArray position=new JsonArray();position.add(maid.getX());position.add(maid.getY());position.add(maid.getZ());data.add("position",position);
             if(maid.getOwner()!=null)data.addProperty("ownerDistance",maid.distanceTo(maid.getOwner()));else data.add("ownerDistance",JsonNull.INSTANCE);
@@ -347,7 +377,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         for(String line:List.of(
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
-            "对话：右键→点击交谈→输入话语回车。Agent用 nearby 找附近女仆，再 chat <UUID> <requestId> <话语>；访客8格内可与已开放女仆交流，不能管理她或读取主人记忆。pending 是等待，receipt <UUID> <原requestId> 查结果。",
+            "对话：同维度8格内，在附近聊天说「肥鱼，你好」或「@肥鱼 你好」；普通聊天和全服喊话不会唤醒她。公开交谈只聊天；主人安排工作请右键交谈或用 chat。Agent用 nearby 找真实UUID，chat <UUID> <requestId> <话语>，receipt <UUID> <原requestId> 查结果，pending不是回复。",
             "装备：/qdmaid inventory <UUID> 看槽位；/qdmaid transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 /qdmaid equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
             "真人：/qdmaid menu <UUID> 或右键本人女仆，管理原背包及装备。talk 仅为外部宿主留言箱，不是原生模型对话。死亡后先查看 context，不自动补发/复活。"
