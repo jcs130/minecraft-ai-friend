@@ -1,6 +1,7 @@
 /** Conservative geometry gate for public observations. Unloaded is unknown. */
 import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
+import { bindEntityIdentityResolver, observedEntityIdentity } from './entity-identity.ts';
 type Point={x:number;y:number;z:number};
 const observationSources=new WeakMap<object,Bot>();
 export interface ObservationPolicy {
@@ -150,5 +151,6 @@ export function observationView<T extends Bot>(bot:T):T {
     const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
   }});
   observationSources.set(view,bot);
+  bindEntityIdentityResolver(view, entity => observedEntityIdentity(bot, entity));
   return view;
 }

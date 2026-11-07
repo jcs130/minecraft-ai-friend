@@ -34,6 +34,7 @@ import { readWorldIdentity } from './world-scope.ts';
 import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 import { entityMaxHealth } from './entity-max-health.ts';
+import { observedEntityIdentity, type EntityIdentity } from './entity-identity.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
@@ -97,6 +98,8 @@ interface EntityInfo {
   entityId?: number;
   uuid?: string;
   customName?: string;
+  /** UUID-correlated server identity, distinct from the wire-level name below. */
+  identity?: EntityIdentity;
   name: string;
   kind: 'player' | 'hostile' | 'animal' | 'other';
   distance: number;
@@ -491,7 +494,7 @@ export function narrateWorldSegments(
           .map((e) => {
             const notes = [e.kind === 'hostile' ? '敌对种类，攻击意图未确认' : e.kind === 'player' ? '玩家，关系未确认' : '', e.note].filter(Boolean);
             const tag = notes.length > 0 ? `（${notes.join('，')}）` : '';
-            return `${whereIs(e.direction, e.distance, e.dy)}有${zhEntity(e.name)}${tag}`;
+            return `${whereIs(e.direction, e.distance, e.dy)}有${e.identity?.label ?? zhEntity(e.name)}${tag}`;
           })
           .join('、') +
         '。',
@@ -499,14 +502,14 @@ export function narrateWorldSegments(
   }
   const nearbyTracked = s.entities.filter(e => !e.visible && e.observation?.source === 'nearby-entity-tracking');
   if (nearbyTracked.length) lifeLines.push('近处未直视：' + nearbyTracked.map(e =>
-    `${whereIs(e.direction,e.distance,e.dy)}有${zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
+    `${whereIs(e.direction,e.distance,e.dy)}有${e.identity?.label ?? zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
   if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个感知实体未展开；可按需查询，未列出不等于没有。`);
   lifeLines.push(...narrateDrops(seenDrops));
   const lifeCmp = [
     ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}|${s.entityObservation.nearbyOccludedRange}`] : []),
-    ...nearbyTracked.map(e => `近:${e.entityId}|${e.name}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
+    ...nearbyTracked.map(e => `近:${e.entityId}|${e.identity?.label ?? e.name}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     `省略:${s.entitiesOmitted}`,
-    ...seenMobs.map((e) => `见:${e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
+    ...seenMobs.map((e) => `见:${e.identity?.label ?? e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
       `落:${e.item?.name ?? 'item'}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? 1}`,
     ).sort(),
@@ -1797,10 +1800,14 @@ export function snapshotFromBot(
     const stack = visible ? droppedStackOf(e, bot.registry?.items) : null;
     const note = visible ? entityObservationNote(bot, e) : null;
     const customName = visible ? entityCustomName(bot, e) : null;
+    // A previously attested UUID may label nearby tracking, without exposing
+    // hidden metadata or claiming visual/aural contact.
+    const identity = observedEntityIdentity(bot, e);
     entities.push({
       ...(Number.isInteger(e.id) ? { entityId: e.id } : {}),
       ...(visible && e.uuid ? { uuid: e.uuid } : {}),
       ...(customName ? { customName } : {}),
+      ...(identity ? { identity } : {}),
       name,
       kind,
       distance: d,

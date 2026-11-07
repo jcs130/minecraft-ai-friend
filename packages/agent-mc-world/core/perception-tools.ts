@@ -1,7 +1,7 @@
 import type { ToolDef } from './support/host-contract.ts';
 import { entityAwareness, entityObservationScope } from './perception-sight.ts';
 import { classifyEntity } from './terrain.ts';
-import { zhEntity } from './names.ts';
+import { observedEntityIdentity, observedEntityLabel } from './entity-identity.ts';
 import { entityCustomName } from './animal-state.ts';
 
 export type AttentionMode='peaceful'|'explore'|'combat';
@@ -78,7 +78,8 @@ export class AttentionReader {
         ...(observation.visibility==='visible'?{
           ...(e.uuid?{uuid:e.uuid}:{}),...(entityCustomName(bot,e)?{customName:entityCustomName(bot,e)}:{}),
         }:{}),
-        target:(e.type==='player'||e.name==='player'?e.username:e.name)??null,label:zhEntity(e.name??'unknown'),kind,distance:round(distance),
+        target:(e.type==='player'||e.name==='player'?e.username:e.name)??null,label:observedEntityLabel(bot,e),
+        ...(observedEntityIdentity(bot,e)?{identity:observedEntityIdentity(bot,e)}:{}),kind,distance:round(distance),
         visible:observation.visibility==='visible',observation,
         at:[round(e.position.x),round(e.position.y),round(e.position.z)],relation:kind==='player'?'未确认':undefined,
         ...(risk?{attackRange:null,sightRange:null,prediction,priority:kind==='warning'?'高':distance<6?'近距注意':'观察'}:{})})),
