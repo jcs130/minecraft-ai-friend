@@ -6,10 +6,19 @@ import { snapshotFromBot, narrateWorldSegments } from '../core/terrain.ts';
 import { AttentionReader } from '../core/perception-tools.ts';
 import { entitySnapshot } from '../core/entity-snapshot.ts';
 import { observationView } from '../core/perception-sight.ts';
+import { entityIdentityNote } from '../core/animal-state.ts';
 
 const id='12345678-1234-4234-8234-123456789abc';
 const identity:EntityIdentity={uuid:id,kind:'companion',name:'同行者',label:'同伴「同行者」',source:'test-server/v1',observedAt:'2026-11-07T00:00:00Z'};
 const entity=()=>({id:7,uuid:id,name:'allay',type:'mob',height:1,position:new Vec3(.5,64,-2),velocity:new Vec3(0,0,0),metadata:[]});
+
+it('uses an attested personal name instead of a protocol display-name prefix',()=>{
+  const r=methodHarness('1.21.1'),e=entity();
+  const release=bindEntityIdentityResolver(r.bot,()=>({...identity,label:'同行者'}));
+  try {e.metadata[r.bot.registry.entitiesByName.allay.metadataKeys.indexOf('custom_name')]=JSON.stringify({text:'[模组角色] 同行者'}) as never;
+    expect(entityIdentityNote(r.bot,e)).toContain('名字「同行者」');expect(entityIdentityNote(r.bot,e)).not.toContain('模组角色');
+  }finally{release();r.close();}
+});
 
 it.each(['1.21.1','1.20.6'])('keeps attested identity in snapshot, attention, SDK and proximity without changing raw targets (%s)',version=>{
   const r=methodHarness(version);

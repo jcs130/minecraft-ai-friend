@@ -74,7 +74,10 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
         for(let at=0,sequence=0;at<wav.length;at+=16384,sequence++){
           if(closed||!ready()||signal?.aborted)return{requestId,state:'unknown',reason:'VOICE_UPLOAD_CONNECTION_CHANGED_OR_CANCELLED_DO_NOT_REPLAY'};
           const last=lastResults.get(requestId);if(last&&terminal.has(last.state))return last;
-          const header=Buffer.alloc(21);header[0]=2;raw.copy(header,1);header.writeInt32BE(sequence,17);bot._client.write('custom_payload',{channel:CHANNEL,data:Buffer.concat([header,wav.subarray(at,at+16384)])});await sleep(10);
+          const header=Buffer.alloc(21);header[0]=2;raw.copy(header,1);header.writeInt32BE(sequence,17);bot._client.write('custom_payload',{channel:CHANNEL,data:Buffer.concat([header,wav.subarray(at,at+16384)])});
+          // Yield every bounded 64 KiB burst so cancellation, incoming receipts and
+          // the existing game connection can progress; no fixed sleep per packet.
+          if((sequence+1)%4===0||at+16384>=wav.length)await sleep(0);
         }return exchange({op:'finish',requestId},undefined,signal);
       }finally{uploading=false;}
     },close,

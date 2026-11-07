@@ -36,14 +36,15 @@ describe('canonical proximity protocol',()=>{
    expect((await voice.say('你好')).state).toBe('unknown');expect(sent).toBe(1);const pending=voice.say('再见');b.emit('end');expect((await pending).state).toBe('unknown');expect(sent).toBe(2);
  });
 });
-function laneFixture(options:{file?:string;url?:string;live?:boolean}={}){
- const b=bot(),changes:GameVoiceReceipt[]=[],heard:any[]=[],ops:string[]=[],parts:Buffer[]=[];let valid=true,world='minecraft:town',revision=1,auto=0;
- const context=():ProximityVoiceContext=>{const key=world,rev=revision;return{bot:b,generation:'test-account-1',world:{key,revision:rev,source:'vanilla-login',observedAt:new Date().toISOString()},stillCurrent:()=>valid&&world===key&&revision===rev,disableAutoSpeech:()=>{auto++;}};};
+function laneFixture(options:{file?:string;url?:string;live?:boolean;caption?:boolean}={}){
+ const b=bot(),changes:GameVoiceReceipt[]=[],heard:any[]=[],ops:string[]=[],parts:Buffer[]=[],texts:any[]=[];let valid=true,world='minecraft:town',revision=1,auto=0;
+ const context=():ProximityVoiceContext=>{const key=world,rev=revision;return{bot:b,generation:'test-account-1',world:{key,revision:rev,source:'vanilla-login',observedAt:new Date().toISOString()},stillCurrent:()=>valid&&world===key&&revision===rev,disableAutoSpeech:()=>{auto++;},
+   ...(options.caption?{sendNearbyText:(text:string,requestId:string)=>{const row={protocol:'agent-mc/chat-delivery/v1' as const,id:randomUUID(),status:'sent' as const,sentAt:new Date().toISOString(),channel:'public' as const,text,voiceRequestId:requestId,boundary:'client-transport' as const,recipientRead:'unknown' as const};texts.push(row);return row;}}:{})};};
  b.on('write',(_name:string,p:any)=>{if(p.channel!=='mcagent:voice')return;if(p.data[0]===2){parts.push(p.data.subarray(21));return;}
    const r=JSON.parse(p.data.subarray(1));ops.push(r.op);if(r.op==='begin')receipt(b,r.requestId,'uploading');if(r.op==='finish')receipt(b,r.requestId,'sent');if(r.op==='status')receipt(b,r.requestId,'sent');});
  const lane=new ProximityVoiceLane({config:()=>({enabled:true,audioProducerUrl:options.url??'',outputMode:options.live?'live-and-game':'game-only'}),context:()=>valid?context():null,
    blob:()=>({bytes:wav(),mime:'audio/wav'}),hearing:(row,w)=>heard.push({row,world:w}),changed:r=>changes.push(r),file:options.file,timeoutMs:30});
- return{lane,b,changes,heard,ops,parts,setValid:(value:boolean)=>{valid=value;},setWorld:(value:string)=>{world=value;revision++;},getAuto:()=>auto};
+ return{lane,b,changes,heard,ops,parts,texts,setValid:(value:boolean)=>{valid=value;},setWorld:(value:string)=>{world=value;revision++;},getAuto:()=>auto};
 }
 describe('independent game voice lane',()=>{
  it('never uploads explicitly incomplete generated audio or replaces false with unknown',async()=>{
@@ -77,5 +78,63 @@ describe('independent game voice lane',()=>{
  });
  it('does not admit two concurrent uploads or reuse one request for different content',async()=>{const f=laneFixture(),id=randomUUID();const [one,two]=await Promise.all([f.lane.call({action:'upload',audio_handle:'h',requestId:id}),f.lane.call({action:'upload',audio_handle:'h',requestId:randomUUID()})]);expect([one,two].filter(r=>r.failed).length).toBe(1);
    await eventually(()=>f.changes.some(r=>r.game.state==='sent'));const conflict=await f.lane.call({action:'speak',text:'changed',requestId:id});expect(conflict.failed).toBe(true);await f.lane.stop();
+ });
+});
+
+describe('paired nearby text and latency',()=>{
+ it('sends durable text before slow TTS finishes and never repeats either effect for the same request',async()=>{
+   const dir=await mkdtemp(join(tmpdir(),'paired-voice-')),file=join(dir,'ledger.json'),id=randomUUID();
+   let release!:()=>void,syntheses=0;const waiting=new Promise<void>(ok=>{release=ok;});
+   const server=createServer(async(req,res)=>{syntheses++;for await(const _ of req){}await waiting;res.end(wav());});
+   await new Promise<void>(ok=>server.listen(0,'127.0.0.1',ok));const url='http://127.0.0.1:'+(server.address() as any).port;
+   const f=laneFixture({file,url,caption:true});
+   try {const args={action:'speak',text:'小鱼，我在这里。',requestId:id};await f.lane.call(args);
+     await eventually(()=>f.texts.length===1&&syntheses===1);expect(f.ops).not.toContain('begin');
+     expect(f.texts[0]).toMatchObject({text:args.text,voiceRequestId:id,recipientRead:'unknown'});
+     await f.lane.call(args);expect(f.texts).toHaveLength(1);release();
+     await eventually(()=>f.changes.some(r=>r.game.state==='sent'&&r.nearbyText?.state==='sent'));
+     const row=f.changes.at(-1)!;expect(row.timings?.serverSentAt).toBeTruthy();
+     expect(Date.parse(row.nearbyText!.deliveries[0]!.sentAt)).toBeLessThanOrEqual(Date.parse(row.timings!.audioReadyAt!));
+     await f.lane.stop();const next=laneFixture({file,url,caption:true});
+     await next.lane.call(args);expect(next.texts).toHaveLength(0);expect(next.ops).not.toContain('begin');expect(syntheses).toBe(1);await next.lane.stop();
+   }finally{release();await f.lane.stop();server.closeAllConnections();await new Promise<void>(ok=>server.close(()=>ok()));}
+ });
+ it('keeps a delivered caption when generated audio is incomplete, with no server TTS or upload',async()=>{
+   const server=createServer(async(req,res)=>{for await(const _ of req){}res.writeHead(200,{'X-Voice-Generation-Complete':'false'}).end(wav());});
+   await new Promise<void>(ok=>server.listen(0,'127.0.0.1',ok));const f=laneFixture({url:'http://127.0.0.1:'+(server.address() as any).port,caption:true});
+   try {await f.lane.call({action:'speak',text:'文字已发，音频仍需核验。'});await eventually(()=>f.changes.some(r=>r.game.state==='failed'&&r.nearbyText?.state==='sent'));
+     expect(f.texts).toHaveLength(1);expect(f.ops).not.toContain('begin');expect(f.ops).not.toContain('say');
+   }finally{await f.lane.stop();server.closeAllConnections();await new Promise<void>(ok=>server.close(()=>ok()));}
+ });
+ it('splits only long chat transport at Unicode-safe limits, never the synthesis request',async()=>{
+   const text='一起去探索🦊。'.repeat(45);let synthesis=0,body:any;
+   const server=createServer(async(req,res)=>{synthesis++;let raw='';for await(const chunk of req)raw+=chunk;body=JSON.parse(raw);res.end(wav());});
+   await new Promise<void>(ok=>server.listen(0,'127.0.0.1',ok));const f=laneFixture({url:'http://127.0.0.1:'+(server.address() as any).port,caption:true});
+   try {await f.lane.call({action:'speak',text});await eventually(()=>f.changes.some(r=>r.nearbyText?.state==='sent'));
+     expect(f.texts.length).toBeGreaterThan(1);expect(f.texts.map(r=>r.text).join('')).toBe(text);expect(f.texts.every(r=>r.text.length<=256&&r.text.isWellFormed())).toBe(true);
+     expect(synthesis).toBe(1);expect(body.text).toBe(text);
+   }finally{await f.lane.stop();server.closeAllConnections();await new Promise<void>(ok=>server.close(()=>ok()));}
+ });
+ it('does not fall back to another text channel when the adapter has no nearby route',async()=>{
+   const f=laneFixture();try{const result=await f.lane.call({action:'upload',audio_handle:'audio:1',text:'仅附近'});
+     expect(result.data).toMatchObject({nearbyText:{state:'unavailable'}});await eventually(()=>f.changes.some(r=>r.game.state==='sent'));expect(f.texts).toHaveLength(0);
+   }finally{await f.lane.stop();}
+ });
+ it('prevents command/newline injection into captions without discarding an independent audio upload',async()=>{
+   for(const text of ['/tell Other private','hello\n/command']){const f=laneFixture({caption:true});try{
+     await f.lane.call({action:'upload',audio_handle:'audio:1',text});await eventually(()=>f.changes.some(r=>r.game.state==='sent'));
+     expect(f.texts).toHaveLength(0);expect(f.changes.at(-1)?.nearbyText?.state).toBe('failed');
+   }finally{await f.lane.stop();}}
+ });
+ it('does not send delayed caption fragments or audio to a new world',async()=>{
+   const f=laneFixture({caption:true});try{await f.lane.call({action:'upload',audio_handle:'audio:1',text:'甲'.repeat(600)});
+     await eventually(()=>f.texts.length===1);f.setWorld('minecraft:other');f.lane.sync();await f.lane.stop();expect(f.texts).toHaveLength(1);
+     expect(f.changes.at(-1)?.nearbyText?.state).toBe('failed');
+   }finally{await f.lane.stop();}
+ });
+ it('checks cancellation within an upload burst and does not finish partial audio',async()=>{
+   const b=bot(),voice=attachProximityVoice(b),id=randomUUID(),abort=new AbortController(),ops:string[]=[];let frames=0;
+   b.on('write',(_name:string,p:any)=>{if(p.channel!=='mcagent:voice')return;if(p.data[0]===2){frames++;abort.abort();}else{const r=JSON.parse(p.data.subarray(1));ops.push(r.op);if(r.op==='begin')receipt(b,id,'uploading');}});
+   expect((await voice.upload(wav(3),{requestId:id,signal:abort.signal})).state).toBe('unknown');expect(frames).toBe(1);expect(ops).not.toContain('finish');voice.close();
  });
 });

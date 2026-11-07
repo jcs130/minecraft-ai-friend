@@ -4,6 +4,22 @@ import { methodHarness } from './method-harness.ts';
 import { Executor, type ChatDispatchContext } from '../core/executor.ts';
 import type { Bot } from 'mineflayer';
 
+it('pairs voice with attested nearby text without replacing body waits or clearing system evidence',()=>{
+  const r=methodHarness('1.21.1'),world=r.world as any;
+  try{
+    world.bridge.connectionState={ready:true};
+    Object.assign(world,{extensionChatAudience:()=>({channel:'nearby',scope:'same-world-range',radius:48,source:'server-policy'})});
+    world.recentSystemMessages.set('native-reply',{at:1});world.serverActionWait.noteUse([1,2,3]);world.serverActionWait.noteFeedback('请等待 8 秒');
+    const delivery=world.sendNearbyVoiceText('等我一下。','voice-id');
+    expect(delivery).toMatchObject({voiceRequestId:'voice-id',text:'等我一下。',audience:{channel:'nearby'}});
+    expect(world.recentSystemMessages.has('native-reply')).toBe(true);expect(world.serverActionWait.blockReason([1,2,3])).toContain('8');
+    for(const scope of [undefined,{channel:'shout',scope:'server'},{channel:'server-default',scope:'server'}]){
+      world.extensionChatAudience=()=>scope;expect(()=>world.sendNearbyVoiceText('不得全服广播','other')).toThrow(/NEARBY_ROUTE/);
+    }
+    expect(r.said).toEqual(['等我一下。']);
+  }finally{r.close();}
+});
+
 it('separates public/vanilla private messages from commands and authentication', () => {
   expect(chatDeliveryMessage(' hello ')).toEqual({ channel: 'public', text: 'hello' });
   expect(chatDeliveryMessage('/tell Alex hello')).toEqual({ channel: 'private', to: 'Alex', text: 'hello' });

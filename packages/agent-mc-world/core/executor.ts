@@ -644,7 +644,7 @@ function fleeTimeoutText(
 }
 
 /** Observe the synchronous transport boundary, after validation and deduplication. */
-export interface ChatDispatchContext { taskId?: number; stepIndex?: number; callId?: string }
+export interface ChatDispatchContext { taskId?: number; stepIndex?: number; callId?: string; voiceRequestId?: string }
 export type ChatDispatch = (text: string, send: () => void, context?: ChatDispatchContext) => void;
 
 export function sendChat(bot: Bot, text: string, dispatch?: ChatDispatch, context?: ChatDispatchContext): void {
