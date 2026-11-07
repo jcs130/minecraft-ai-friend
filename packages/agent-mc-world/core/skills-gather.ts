@@ -1,4 +1,5 @@
 import { observationView } from './perception-sight.ts';
+import { observedEntityLabel } from './entity-identity.ts';
 /**
  * 找东西与拿东西:collect、find、fish、trade、probe。
  *
@@ -696,7 +697,7 @@ export async function skillFind(
           const note = entityObservationNote(bot as never, e as never);
           best = {
             x: Math.round(e.position.x), y: Math.round(e.position.y), z: Math.round(e.position.z),
-            what: `${zhEntity(entityName)}${note ? `(${note})` : ''}`, entity: true,
+            what: `${observedEntityLabel(bot, e)}${note ? `(${note})` : ''}`, entity: true,
           };
         }
       }
@@ -729,7 +730,7 @@ export async function skillFind(
         const note = entityObservationNote(bot as never, e as never);
         out.push({
           x: Math.round(e.position.x), y: Math.round(e.position.y), z: Math.round(e.position.z),
-          what: `${zhEntity(entityName)}${note ? `(${note})` : ''}`, entity: true,
+          what: `${observedEntityLabel(bot, e)}${note ? `(${note})` : ''}`, entity: true,
         });
       }
     } else {

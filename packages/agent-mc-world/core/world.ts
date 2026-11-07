@@ -7966,12 +7966,14 @@ export class MinecraftWorld implements World {
       if (d > PROXIMITY_EXIT) return;
       const customName = entityCustomName(bot, entity);
       const owned = tamedByMe(bot, entity);
-      const namedNeutral = !!customName && classifyEntity(entity.type, entity.name) !== 'hostile';
-      const label = customName ? `「${customName}」（${zhEntity(entity.name)}）` : zhEntity(entity.name);
+      const identity = observedEntityIdentity(bot, entity);
+      const namedNeutral = !!(customName || identity) && classifyEntity(entity.type, entity.name) !== 'hostile';
+      const label = identity?.label ?? (customName ? `「${customName}」（${zhEntity(entity.name)}）` : zhEntity(entity.name));
       this.emit('minecraft.event', `[Minecraft] ${label}死了(${Math.round(d)} 格外)。`, owned,
         { trigger: owned ? 'flush' : namedNeutral ? 'debounce' : 'piggyback', meta: { entityLifecycle: {
           kind: 'death', source: 'native-entity-status', entityId: entity.id ?? null, uuid: entity.uuid ?? null,
           entityType: entity.name, customName, ownedBySelf: owned ? true : null,
+          ...(identity ? { identity } : {}),
           observedAt: Date.now(), connectionGeneration: this.connectionGeneration,
         } } });
     });
@@ -8593,6 +8595,7 @@ export class MinecraftWorld implements World {
       const dir = bearing(e.position.x - me.x, e.position.z - me.z);
       const at = dir ? `${DIRECTION_ZH[dir]}边` : '附近';
       const visible = canSeeEntity(bot, e);
+      const label = observedEntityLabel(bot, e);
       if(visible&&(name==='villager'||name==='wandering_trader')&&d<=24)journeyCues.push({kind:'npc',key:`entity:${eid}`,label:zhEntity(name),
         position:[e.position.x,e.position.y,e.position.z],source:'visible-entity',observedAtMs:Date.now()});
       const stateKind = kind === 'hostile' ? 'hostile' : 'notable';
@@ -8609,7 +8612,7 @@ export class MinecraftWorld implements World {
       const exitRange = extendedVisible || (extendedState && visible) ? RANGED_EXIT_RANGE : PROXIMITY_EXIT;
       if (state && d >= exitRange) {
         this.proximity.delete(eid);
-        if (state.kind === 'hostile') left.push(zhEntity(name));
+        if (state.kind === 'hostile') left.push(label);
         continue;
       }
       if (state && state.kind !== stateKind) {
@@ -8617,10 +8620,10 @@ export class MinecraftWorld implements World {
         state.seen = visible;
         state.extended = extendedVisible;
         if (stateKind === 'hostile') {
-          if (visible) enterSeen.push(`${zhEntity(name)}在${at} ${Math.round(d)} 格`);
-          else enterHeard.push(`${at}有${zhEntity(name)}的动静`);
+          if (visible) enterSeen.push(`${label}在${at} ${Math.round(d)} 格`);
+          else enterHeard.push(`${at}有${label}的动静`);
         } else {
-          notable.push(visible ? `看见${zhEntity(name)}在${at} ${Math.round(d)} 格` : `${at}有${zhEntity(name)}的动静`);
+          notable.push(visible ? `看见${label}在${at} ${Math.round(d)} 格` : `附近实体同步：${label}在${at} ${Math.round(d)} 格（未直视，不是声音证据）`);
         }
       }
       if (state) {
@@ -8629,7 +8632,7 @@ export class MinecraftWorld implements World {
         present.add(eid);
         if (state.kind === 'hostile' && !state.seen && visible) {
           state.seen = true;
-          revealed.push(`看清了,是${zhEntity(name)}(${at} ${Math.round(d)} 格)`);
+          revealed.push(`看清了,是${label}(${at} ${Math.round(d)} 格)`);
         }
         continue;
       }
@@ -8638,10 +8641,10 @@ export class MinecraftWorld implements World {
       this.proximity.set(eid, { kind: stateKind, seen: visible, extended: extendedVisible });
       present.add(eid);
       if (kind === 'hostile') {
-        if (visible) enterSeen.push(`${zhEntity(name)}在${at} ${Math.round(d)} 格`);
-        else enterHeard.push(`${at}有${zhEntity(name)}的动静`);
+        if (visible) enterSeen.push(`${label}在${at} ${Math.round(d)} 格`);
+        else enterHeard.push(`${at}有${label}的动静`);
       } else {
-        notable.push(visible ? `看见${zhEntity(name)}在${at} ${Math.round(d)} 格` : `${at}有${zhEntity(name)}的动静`);
+        notable.push(visible ? `看见${label}在${at} ${Math.round(d)} 格` : `附近实体同步：${label}在${at} ${Math.round(d)} 格（未直视，不是声音证据）`);
       }
     }
     for (const eid of [...this.proximity.keys()]) {
@@ -9389,5 +9392,6 @@ export class MinecraftWorld implements World {
 }
 import { chatDeliveryMessage } from './chat-delivery.ts';
 import { entityCustomName, tamedByMe, type FactEntity } from './animal-state.ts';
+import { observedEntityIdentity, observedEntityLabel } from './entity-identity.ts';
 import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import type { ChatDispatchContext } from './executor.ts';

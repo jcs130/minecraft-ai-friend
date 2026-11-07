@@ -1,5 +1,7 @@
 /** Versioned server-extension surface. Plugins depend on this port; the core never loads a server implicitly. */
 export { metaOf, entityCustomName, entityIdentityNote } from '../core/animal-state.ts';
+export { bindEntityIdentityResolver, observedEntityIdentity, observedEntityLabel,
+  type EntityIdentity, type EntityIdentityResolver } from '../core/entity-identity.ts';
 export { chatDeliveryMessage } from '../core/chat-delivery.ts';
 export type { ChatDeliveryReceipt, ChatDeliveryRejection, ChatAudienceEvidence } from './contracts/chat-delivery.ts';
 export { publishViewerCastCommand, observeViewerCastCommands } from '../core/command-events.ts';

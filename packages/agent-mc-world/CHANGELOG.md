@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.27
+
+- Carry UUID-correlated server entity identity through snapshots, proximity and death events, attention, find results, and public SDK observations. Keep raw protocol types and targeting unchanged; never infer ownership from custom names or rename a player from an NPC identity.
+- Scope identity resolvers to a single connection, including read-only observation facades. Preserve explicit occlusion and use entity-tracking provenance instead of invented sounds for nearby non-hostile entities.
+
 ## 0.5.7-rc.160-preview.26 (unpublished candidate)
 
 - Recheck native offered combat steps after isolated program evaluation. If terrain changed, reject this frame's steps with `programDeferred: scene-changed` and evaluate again on the next fresh frame without disabling the authored program. Invalid authored geometry, actual program failures and execution-time safety checks remain unchanged in Mineflayer and Java.
