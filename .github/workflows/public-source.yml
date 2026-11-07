@@ -149,6 +149,11 @@ jobs:
       - name: Check Windows PowerShell backup paths without running maintenance
         shell: powershell
         run: ./paper/scripts/test-backup-long-path.ps1
+      - name: Check maintenance snapshot retention and failure recovery in isolation
+        shell: powershell
+        run: |
+          ./paper/ops/tests/release-snapshot-retention.test.ps1
+          ./paper/ops/tests/backup-retention-policy.test.ps1
   portal-release:
     runs-on: ubuntu-latest
     env:
