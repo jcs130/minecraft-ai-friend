@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { Vec3 } from 'vec3';
 import { methodHarness } from './method-harness.ts';
 import { bindEntityIdentityResolver, observedEntityIdentity, observedEntityLabel, type EntityIdentity } from '../core/entity-identity.ts';
-import { snapshotFromBot, narrateWorldSegments } from '../core/terrain.ts';
+import { snapshotFromBot, narrateWorldSegments, snapshotFingerprint } from '../core/terrain.ts';
 import { AttentionReader } from '../core/perception-tools.ts';
 import { entitySnapshot } from '../core/entity-snapshot.ts';
 import { observationView } from '../core/perception-sight.ts';
@@ -17,6 +17,53 @@ it('uses an attested personal name instead of a protocol display-name prefix',()
   const release=bindEntityIdentityResolver(r.bot,()=>({...identity,label:'同行者'}));
   try {e.metadata[r.bot.registry.entitiesByName.allay.metadataKeys.indexOf('custom_name')]=JSON.stringify({text:'[模组角色] 同行者'}) as never;
     expect(entityIdentityNote(r.bot,e)).toContain('名字「同行者」');expect(entityIdentityNote(r.bot,e)).not.toContain('模组角色');
+  }finally{release();r.close();}
+});
+
+it('retains role and verified owner when the display name is also a food noun',()=>{
+  const r=methodHarness('1.21.1'),e=entity();
+  const self='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  Object.assign(r.bot,{player:{uuid:self}});r.bot.entities[7]=e;
+  const attested={...identity,kind:'maid',name:'小饼干',label:'小饼干',ownerUuid:self};
+  const release=bindEntityIdentityResolver(r.bot,()=>attested);
+  try {
+    const visible=narrateWorldSegments(snapshotFromBot(r.bot,{scanBlocks:false})).find(s=>s.key==='life')!.text;
+    expect(visible).toContain('有小饼干（服务端角色身份=maid，归属本人');
+    expect(observedEntityLabel(r.bot,e)).toBe('小饼干'); // display name stays personal
+    expect(visible).not.toContain('悦灵');
+    r.set(0,64,-1,'stone');r.set(0,65,-1,'stone');
+    const hidden=narrateWorldSegments(snapshotFromBot(r.bot,{scanBlocks:false})).find(s=>s.key==='life')!.text;
+    expect(hidden).toContain('视线被遮挡');expect(hidden).toContain('身份=maid，归属本人');
+    const emit=vi.spyOn(r.world as any,'emit').mockImplementation(()=>undefined);
+    Object.assign(r.bot.world,{raycast:()=>null});(r.world as any).proximityTick(r.bot);
+    expect(emit.mock.calls.map(c=>c[1]).join('\n')).toContain('身份=maid，归属本人');
+    release();
+    expect(entityIdentityNote(r.bot,e)).not.toMatch(/角色身份|归属本人/);
+  }finally{release();r.close();}
+});
+
+it('does not infer ownership from the personal name or a missing self UUID',()=>{
+  const r=methodHarness('1.21.1'),e=entity();
+  const release=bindEntityIdentityResolver(r.bot,()=>({...identity,label:identity.name,ownerUuid:id}));
+  try {
+    expect(entityIdentityNote(r.bot,e)).toContain('归属未比对');
+    Object.assign(r.bot,{player:{uuid:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}});
+    expect(entityIdentityNote(r.bot,e)).toContain('归属其他玩家');
+    expect(entityIdentityNote(r.bot,e)).not.toContain('归属本人');
+  }finally{release();r.close();}
+});
+
+it('invalidates quiet snapshots for a newly attested identity, not for its refreshed clock',()=>{
+  const r=methodHarness('1.21.1');r.bot.entities[7]=entity();
+  let current={...identity,label:identity.name};
+  const before=snapshotFingerprint(snapshotFromBot(r.bot,{scanBlocks:false}));
+  const release=bindEntityIdentityResolver(r.bot,()=>current);
+  try {
+    const after=snapshotFingerprint(snapshotFromBot(r.bot,{scanBlocks:false}));expect(after).not.toBe(before);
+    current={...current,observedAt:'2026-11-07T00:01:00Z'};
+    expect(snapshotFingerprint(snapshotFromBot(r.bot,{scanBlocks:false}))).toBe(after);
+    current={...current,kind:'other-role'};
+    expect(snapshotFingerprint(snapshotFromBot(r.bot,{scanBlocks:false}))).not.toBe(after);
   }finally{release();r.close();}
 });
 

@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.29
+
+- Keep server-attested role and verified ownership beside personal names in compact observations and nearby tracking. Display names and protocol targets remain unchanged; a name alone does not establish identity, friendliness, ownership or life state.
+- Classify structured server failures by their result fields, before preview truncation. Skill restrictions, historical failures and nullable error fields in successful state/help replies no longer populate the recurring error ledger. Original server events remain available.
+
 ## 0.5.7-rc.160-preview.28
 
 - Pair authored game speech with attested nearby text, sent while audio is synthesized. Preserve a shared request ID, durable text/audio outcomes and existing chat delivery events; never replay unknown sends or fall back to global/private chat. Uploaded audio may carry an explicit authored caption.
