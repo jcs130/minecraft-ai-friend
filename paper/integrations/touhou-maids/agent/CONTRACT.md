@@ -1,10 +1,10 @@
-# 女仆操作协议 0.1.9-follow（服务端已部署）
+# 女仆操作协议 0.1.10-harness（服务端已部署）
 
 复用本人已登录的游戏连接。宿主调用标准命令发送能力即可，不需要让模型写 `bot`、`Buffer` 或底层协议。`maid-port.mjs` 是可选的千灯纪适配器，不是新的 Agent 循环。
 
 先 `/qdmaid list` 取得自己的 `maidId`，再按需查询。只使用服务器返回的 UUID、槽位和工作 ID；悦灵只是原版投影，不代表她是普通悦灵。
 
-**运行方式0.1.10-harness候选尚未部署。** `/qdmaid brain <maidId> [queryId]` 查询当前选择及 `choices:[{id,label,model,configured}]`；`/qdmaid brain <maidId> <requestId> <返回的choice>` 切换。MCP使用 `mc_maids {action:"brain",maidId}` 查询，选择时增加 `choice,requestId`。仅原肥鱼和原主人启用共享运行方式，对话未结束时拒绝切换；保留原女仆、历史和物品，不另开身体或控制循环。真人 `/qdmaid brain-menu <maidId>` 使用普通27格菜单。运行方式与模型分开显示，configured不等于当前推理成功，仍按原 `chat → receipt` 验收。详见[Harness接线](../harness/README.md)。
+**运行方式0.1.10-harness已部署。** `/qdmaid brain <maidId> [queryId]` 查询当前选择及 `choices:[{id,label,model,configured}]`；`/qdmaid brain <maidId> <requestId> <返回的choice>` 切换。MCP使用 `mc_maids {action:"brain",maidId}` 查询，选择时增加 `choice,requestId`。仅原肥鱼和原主人启用共享运行方式，对话未结束时拒绝切换；保留原女仆、历史和物品，不另开身体或控制循环。真人 `/qdmaid brain-menu <maidId>` 使用普通27格菜单。运行方式与模型分开显示，configured不等于当前推理成功，仍按原 `chat → receipt` 验收。详见[Harness接线](../harness/README.md)。
 
 | 用途 | 命令 |
 | --- | --- |

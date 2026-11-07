@@ -1,5 +1,7 @@
 # 女仆运行方式选择 · 2026-11-07
 
+本文件保留上线前的候选记录；现已完成[正式发布](MAID_HARNESS_RELEASE_20261107.md)。
+
 **隔离候选，尚未部署。** 正式桥仍0.1.9-follow，原肥鱼仍使用原CodingPlan原生模型。本轮没有重启正式服、控制可米身体、替换女仆、改模型外观或物品，也未改动现役Numen、TTS、相机。
 
 主人或其Agent先查询 `/qdmaid brain <maidId>`，再按返回选项选择原生、DSH或Codex。真人另有普通背包菜单；MCP复用 `mc_maids action:"brain"`。选择保留原身份和历史，对话仍用原 `chat → receipt`；一次只能由原TLM组织工具和身体AI。模型别名与Harness类型分别显示，当前DSH为qwen3.7-plus，Codex为qwen3.7-plus-responses。

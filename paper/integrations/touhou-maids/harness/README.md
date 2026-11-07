@@ -1,6 +1,6 @@
 # 女仆选择原生或 HarnessRouter
 
-**0.1.10-harness 候选，尚未部署。** 正式服仍为0.1.9-follow。复用已安装的 HarnessRouter 与 Numen 使用的规划适配器，不新建 Minecraft 账号、MCP 身体或常驻决策循环。
+**0.1.10-harness已部署。** 实际结果及回退边界见[发布记录](../../../docs/MAID_HARNESS_RELEASE_20261107.md)。复用已安装的 HarnessRouter 与 Numen 使用的规划适配器，不新建 Minecraft 账号、MCP 身体或常驻决策循环。
 
 主人先查 `/qdmaid brain <maidId>`，得到当前选择、可用选项及各自模型。切换使用 `/qdmaid brain <maidId> <requestId> <返回的choice>`；真人用 `/qdmaid brain-menu <maidId>` 的普通背包菜单。Agent 的 `mc_maids` 使用 `action:"brain"`，省略 `choice` 查询，填写 `choice` 时须保留独立 `requestId`。对话仍走原 `chat → receipt`，不是给每种 Harness 再造一套命令。
 
@@ -54,12 +54,12 @@ Codex偶发在同次UHP响应的多个assistant帧中重复输出相同完整规
 
 此处是格式示例，不可原样作为配置。网关只绑定loopback，检查精确Host、Bearer、请求大小及已配置模型；不接浏览器Cookie/Origin，不回显底层供应商错误。Hub Key仅由网关读取，不复制到女仆或玩家。诊断只保存请求/响应编号与状态，不保存思考过程、聊天正文或密钥。
 
-原TLM `sites/llm.json` 添加对应OpenAI兼容站点，地址为 `http://127.0.0.1:<端口>/v1/<maidId>/<choice>/chat/completions`，密钥为独立传输token。原桥私有 `brain-routing.json` 使用 `schema:1,maidId,ownerId,choices`，每个选项含 `site,model,label`，且必须包含指向原生站点的 `native`。先准备完整配置/回退并正常重启加载扩展，不能在线注入类或使用 Bukkit `/reload`。后台须通过现有独立进程、单实例和Watchdog管理；本候选尚未安装正式自启。
+原TLM `sites/llm.json` 添加对应OpenAI兼容站点，地址为 `http://127.0.0.1:<端口>/v1/<maidId>/<choice>/chat/completions`，密钥为独立传输token。原桥私有 `brain-routing.json` 使用 `schema:1,maidId,ownerId,choices`，每个选项含 `site,model,label`，且必须包含指向原生站点的 `native`。先准备完整配置/回退并正常重启加载扩展，不能在线注入类或使用 Bukkit `/reload`。后台须通过现有独立进程、单实例和Watchdog管理；正式SYSTEM独立网关及开机/分钟守护已安装。
 
 ## 验证和边界
 
 离线：`python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_harness_gateway.py -v`；`node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs`。真实服夹具 `tests/brain-harness-stage.mjs` 只允许指定fresh localhost合成存档，显式提供QA目录/连接锚点/RCON/报告根目录；每轮唯一ID，不重放失败动作或复制真实玩家数据。QA wire/迟到响应探针仅装在隔离服，禁止放入正式包。
 
-已完成真实DSH/Codex工具及回复、行走主人跟随、故障终态/同ID去重、普通菜单、原客户端解码和密钥剔除检查。最终重启检查与正式部署状态见候选发布记录。附近聊天/ASR自动触发、主动社交、TTS声线统一及原肥鱼正式客户端验收不属于已完成能力；本轮没有启用这些功能。
+已完成真实DSH/Codex工具及回复、行走主人跟随、故障终态/同ID去重、普通菜单、原客户端解码和密钥剔除检查。正式17项只读检查及已完成维护见发布记录。附近聊天/ASR自动触发、主动社交、TTS声线统一及原肥鱼正式客户端验收不属于已完成能力；本轮没有启用这些功能。
 
 上游依据：[TLM AI扩展](https://tlmwiki.cfpa.team/wiki/dev/ai/overview/)、[工具扩展](https://tlmwiki.cfpa.team/wiki/dev/ai/tool/)、[HarnessRouter自托管](https://github.com/HarnessRouter/harnessrouter/blob/main/docs/self-hosting-guide.md)。
