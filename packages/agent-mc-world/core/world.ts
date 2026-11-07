@@ -209,6 +209,11 @@ import { MINECRAFT_DEFAULTS, MINECRAFT_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GRO
 
 /** 槽位交换会连续发多次 updateSlot；只在整笔交换安静下来后核对 reserve。 */
 const BLUEPRINT_INVENTORY_SETTLE_MS = 500;
+// Capability discovery is independent of an optional observation's lifetime.
+// Declarations do not enter the factual text and never stand in for fresh data.
+const REQUEST_FACT_KEYS = ['place','vehicle','flight','clock','realclock','body','gear','inventoryIds','equip','life','structure','terrain','players',
+  'sample','queue','taskProgress','goals','foodReserve','options','methods','identity','deathLifecycle','recoveryState','temporaryScaffolds',
+  'bodyRestriction','serverFeedback','lastTask','journey','hud','availability','observationBoundary','bodyAvailability'] as const;
 /** 已确认正式施工后等待该物品数量扣减的上界。 */
 export const BLUEPRINT_PLACEMENT_SETTLE_MS = 1_500;
 
@@ -3614,7 +3619,7 @@ export class MinecraftWorld implements World {
       parts.push({ key: 'journey', text: journeyOpportunityText(journey, { guidance: false })
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
     }
-    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options, world: readWorldIdentity(bot),
+    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS, options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
@@ -3698,7 +3703,7 @@ export class MinecraftWorld implements World {
       { key: 'lastTask', text: renderLastTaskReadout(last
         ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
     ];
-    return { text: parts.map(part => part.text).join('\n'), parts, world: readWorldIdentity(null),
+    return { text: parts.map(part => part.text).join('\n'), parts, partKeys: REQUEST_FACT_KEYS, world: readWorldIdentity(null),
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 

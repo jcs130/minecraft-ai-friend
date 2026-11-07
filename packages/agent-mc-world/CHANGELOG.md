@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.30
+
+- Retry a briefly locked atomic request-receipt replacement within 75 ms. Never re-execute the tool, delete the prior pending record, or hide a persistent storage fault.
+- Declare selectable current-fact partitions independently of optional or disconnected observations. Absent values remain unknown; no previous body state is restored and no empty data enters the factual context.
+- Add explicit absolute orientation to short control steps, using the spatial observation coordinate frame. Relative turns remain the default; collision, body ownership, cancellation and measured movement receipts are unchanged.
+
 ## 0.5.7-rc.160-preview.29
 
 - Keep server-attested role and verified ownership beside personal names in compact observations and nearby tracking. Display names and protocol targets remain unchanged; a name alone does not establish identity, friendliness, ownership or life state.

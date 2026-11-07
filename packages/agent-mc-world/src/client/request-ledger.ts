@@ -40,6 +40,16 @@ export class RequestLedger {
     const body = record.outcome ? { ...record, outcome: { ...record.outcome,
       blobs: this.journal.saveBlobs(record.outcome.blobs).map(({ handle, fallbackText }) => ({ handle, fallbackText })) } } : record;
     const file = this.file(record.requestId), temporary = file + '.tmp';
-    writeFileSync(temporary, JSON.stringify(body)); renameSync(temporary, file);
+    writeFileSync(temporary, JSON.stringify(body));
+    // Windows scanners/readers may briefly deny an atomic replacement. Retry
+    // only the same prepared file, never the tool or a destructive unlink.
+    const delays=[5,20,50];
+    for(let attempt=0;;attempt++){
+      try{renameSync(temporary,file);break;}
+      catch(error){
+        if(attempt>=delays.length||!['EPERM','EACCES','EBUSY'].includes((error as NodeJS.ErrnoException).code??''))throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,delays[attempt]);
+      }
+    }
   }
 }
