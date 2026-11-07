@@ -24,6 +24,7 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $shortTarget 'five.bin'),[byte[]](1,2,3,4,5))
     $link=Join-Path $fixture 'alias';New-Item -ItemType Junction -Path $link -Target $shortTarget|Out-Null
     if((Backup-CopyBytes $fixture) -ne 18){throw 'Copier preflight must account for materialized junction contents'}
+    if($LASTEXITCODE -ne 0){throw 'Successful copier preflight must not leak robocopy exit code 1'}
     # Remove only the fixture junction itself, never its target contents.
     [IO.Directory]::Delete($link)
     $missingRejected=$false
@@ -32,7 +33,7 @@ try {
     $uncRejected=$false
     try {Backup-TreeBytes '\\invalid-backup-host\share'|Out-Null} catch {$uncRejected=$true}
     if(-not $uncRejected){throw 'Unexpected network roots must be rejected'}
-    Write-Output '5 backup path checks passed: deep contents, copier traversal, junction expansion, missing path, local root boundary.'
+    Write-Output '6 backup path checks passed: deep contents, copier traversal, junction expansion, success exit code, missing path, local root boundary.'
 } finally {
     $resolved=[IO.Path]::GetFullPath($fixture)
     if(-not $resolved.StartsWith(($temporaryRoot+'\'),[StringComparison]::OrdinalIgnoreCase) -or

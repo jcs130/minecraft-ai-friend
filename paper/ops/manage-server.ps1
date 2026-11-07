@@ -735,6 +735,9 @@ function Backup-CopyBytes([string]$path) {
         $summary = Get-Content -LiteralPath $log -Raw -Encoding Unicode
         $match = [regex]::Matches($summary,'(?m)^\s*(?:Bytes|字节|字节数)\s*:\s*(\d+)\s+')
         if ($match.Count -ne 1) { throw 'Backup byte summary unavailable; do not guess capacity' }
+        # Robocopy /L returns 1 when it found copy candidates; that is success.
+        # Do not leak that code into an enclosing PowerShell CI/task wrapper.
+        $global:LASTEXITCODE = 0
         return [long]$match[0].Groups[1].Value
     } finally {
         if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($temp)) -cne $tempRoot -or [IO.Path]::GetFileName($temp) -notmatch '^qiandengji-copy-size-[a-f0-9]{32}$') { throw 'Unsafe sizing cleanup path' }
