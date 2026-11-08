@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.34
+
+- Keep bounded native failure, observed-effect and spatial-coverage evidence in explicit queue reads; export a reusable compact execution summary. Export pure checkpoint content evidence for hosts: compare matched query payloads and spatial revisions without transport-clock/ID churn, preserve domain facts, and distinguish pending or entirely unknown observations from new content. Novel content is not verified goal progress.
+
 ## 0.5.7-rc.160-preview.33
 
 - Return fast matched read-only server replies in the original World tool invocation, with a bounded 350 ms observation window. Preserve synchronous SDK calls, pending IDs, provenance, timeout/cancellation and concurrent body actions; never resend queries.

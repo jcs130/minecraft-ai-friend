@@ -16,3 +16,4 @@ export * from './world-scope.ts';
 export * from './call-capability.ts';
 export * from './work-evidence.ts';
 export * from './perception.ts';
+export * from './continuation-evidence.ts';

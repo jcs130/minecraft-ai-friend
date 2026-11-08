@@ -48,3 +48,13 @@ it('bounds historical receipt retention and never invents outcomes for an evicte
   expect((r.world as any).queueReadout({ taskId: 1 }).text).toContain('不能据此判定成功或失败');
   expect((r.world as any).queueReadout({ taskId: 2 }).text).toContain(receipt);
 });
+
+it('exposes historical native failure/effect evidence independently of task prose and sampling clocks',async()=>{
+  const r=rig();(r.world as any).onTaskReport({kind:'blocked',taskId:300,text:'details '.repeat(1000),steps:[{step:1,outcome:'fail',why:'permission denied',
+    decision:{status:'blocked',reason:'protection-denied',completed:0,remaining:1,unit:'cells',retryable:false,retry_after:null,continue_when:null,next_safe_read:{tool:'mc_queue',arguments:{}}},
+    observedEffect:{schema:'agent-mc-observed-effect/v1',status:'unchanged',changed:{position:false,inventory:false,target:null,window:false},before:{at:'old',target:null,inventory:null,position:[1,2,3]},after:{at:'new',target:null,inventory:null,position:[1,2,3]},skill:'tunnel',dimension:'minecraft:overworld',at:null,coverage:'client-visible-only',goalVerified:false}}]});
+  const queue=r.world.tools().find(t=>t.name==='mc_queue')!;const result=await queue.handler({taskId:300},{role:'test',log:r.host.log,round:3}) as any;
+  expect(result.data.protocol).toBe('agent-mc/task-queue-read/v1');expect(result.data.goalCompleted).toBe(false);
+  expect(result.data.last.historical).toBe(true);expect(result.data.last.evidence.steps[0]).toMatchObject({decision:{status:'blocked'},observedEffect:{status:'unchanged',changed:{position:false,inventory:false}}});
+  expect(result.text).toContain('[任务读数结构]');expect(result.text).toContain('permission denied');
+});
