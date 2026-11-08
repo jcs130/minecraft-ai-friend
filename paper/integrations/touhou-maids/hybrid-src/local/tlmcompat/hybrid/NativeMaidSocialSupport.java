@@ -74,7 +74,13 @@ final class NativeMaidSocialSupport {
         return receipt;
     }
     static boolean visitorReceipt(JsonObject receipt){
-        JsonObject o=receipt.getAsJsonObject("observation");return o!=null&&o.has("conversation")&&o.get("conversation").getAsString().equals("nearby_visitor");
+        if(receipt==null)return false;
+        JsonElement action=receipt.get("action");
+        if(action==null||!action.isJsonPrimitive()||!action.getAsJsonPrimitive().isString()||!"chat".equals(action.getAsString()))return false;
+        JsonElement observation=receipt.get("observation");
+        if(observation==null||!observation.isJsonObject())return false;
+        JsonElement conversation=observation.getAsJsonObject().get("conversation");
+        return conversation!=null&&conversation.isJsonPrimitive()&&conversation.getAsJsonPrimitive().isString()&&"nearby_visitor".equals(conversation.getAsString());
     }
     private final class VisitorCallback extends LLMCallback {
         final Call call;
