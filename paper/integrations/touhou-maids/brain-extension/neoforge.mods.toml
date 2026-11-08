@@ -3,9 +3,11 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="qiandengji_maid_brain"
-version="0.1.0"
+version="0.1.1"
 displayName="Qiandengji maid brain adapter"
 displayTest="IGNORE_ALL_VERSION"
+[[mixins]]
+config="qiandengji-maid-brain.mixins.json"
 [[dependencies.qiandengji_maid_brain]]
 modId="touhou_little_maid"
 type="required"

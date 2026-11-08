@@ -1,6 +1,8 @@
-# 女仆操作协议 0.1.10-harness（服务端已部署）
+# 女仆操作协议 0.1.11-social（服务端已部署）
 
-**0.1.11-social 候选接口，尚未部署**：新增 `nearby [queryId]` 返回附近可见女仆的 `maidId/name/owned/publicChatEnabled/chatCommand`，可选 MCP 为 `{action:"nearby"}`。`chat` 将允许同维度 8 格内访客与已开放女仆交流；其 `observation.conversation="nearby_visitor"`，不包含主人记忆或工作工具。本人 `chat` 的原生历史／工具保持，`receipt` 仍按原请求查询，不重放。真人用右键→点击交谈→输入话语，或 `/qdmaid say <maidId> <话语>`；这种便利入口只发简短中文，Agent继续用结构化 `chat`。参见[候选说明](../../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。以下为正式 0.1.10 行为，不能把源码候选当作已加载。
+**0.1.11-social 已部署**：`nearby [queryId]` 返回附近可见女仆的 `maidId/name/owned/publicChatEnabled/chatCommand`，可选 MCP 为 `{action:"nearby"}`。`chat` 允许同维度 8 格内访客与已开放女仆交流；其 `observation.conversation="nearby_visitor"`，不包含主人记忆或工作工具。本人 `chat` 的原生历史／工具保持，`receipt` 按原请求查询，不重放。真人用右键→点击交谈→输入话语，或 `/qdmaid say <maidId> <话语>`；这种便利入口只发简短中文，Agent继续用结构化 `chat`。参见[发布说明](../../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。
+
+**0.1.12-conversation 候选，未部署**：附近文字/ASR 中点名“肥鱼，你好”，复用公共交流；主人工作仍用原 `chat`。新增 `context.appearance` 表示实际 YSM/原生模型，旧顶层 `modelId` 仍为备用原生模型；`damageProtected`、`conversation` 与 `speech` 分别解释保护、交谈方法和统一音色发送状态。字段须按存在性检测，`sent` 不等于真人听到。详见[设置核对](../../../docs/MAID_CONVERSATION_20261108.md)。
 
 复用本人已登录的游戏连接。宿主调用标准命令发送能力即可，不需要让模型写 `bot`、`Buffer` 或底层协议。`maid-port.mjs` 是可选的千灯纪适配器，不是新的 Agent 循环。
 
@@ -25,7 +27,7 @@
 
 例：观察到本人快捷栏 0 有一把剑、女仆背包 0 为空，先 `transfer … put 0 1 0`，再以**另一个 requestId**执行 `equip … main 0`，最后查 `inventory` 验证实际主手。护甲使用同样流程。空女仆背包槽与装备槽交换可卸装；保留附魔、耐久和原生绑定诅咒限制。玩家槽采用 Bukkit 0–35，0–8 是快捷栏，**不是 Mineflayer 窗口槽编号**，适配层需转换。
 
-`chat` 仅主人可调用，距离 16 格且同维度；使用原生 TLM 已配置的模型、记忆及工具，不另建推理循环。`talk` 保留旧外部宿主留言箱语义，**不能把它当作模型对话**。`speak` 只是作者提供的发言，也不是模型生成。
+主人 `chat` 距离 16 格且同维度，使用原 TLM 已配置的模型、记忆及工具；访客 `chat` 距离 8 格且同维度，只提供隔离公共交流。`talk` 保留旧外部宿主留言箱语义，**不能把它当作模型对话**。`speak` 只是作者提供的发言，也不是模型生成。
 
 ## 回执及终态
 

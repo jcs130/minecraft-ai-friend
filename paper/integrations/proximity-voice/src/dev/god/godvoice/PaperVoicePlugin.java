@@ -64,7 +64,8 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         final UUID actor,session,request=UUID.randomUUID();final String name;final OpusDecoder decoder;
         final VoiceAudience.Window audience=new VoiceAudience.Window();
         final ByteArrayOutputStream pcm=new ByteArrayOutputStream();long last;boolean closed;
-        Capture(VoiceAudience.Actor actor,OpusDecoder decoder){this.actor=actor.id();session=actor.session();name=actor.name();this.decoder=decoder;}
+        final long startedAt=System.currentTimeMillis();final UUID originWorld;final double[] speakerBounds;double hearingRange=Double.POSITIVE_INFINITY;
+        Capture(VoiceAudience.Actor actor,OpusDecoder decoder){this.actor=actor.id();session=actor.session();name=actor.name();this.decoder=decoder;originWorld=actor.world();speakerBounds=new double[]{actor.x(),actor.y(),actor.z(),actor.x(),actor.y(),actor.z()};}
     }
 
     @Override public void onEnable(){
@@ -305,6 +306,9 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             try{
                 short[] decoded=capture.decoder.decode(opus);if(decoded.length>5760){dropCapture(id);return;}
                 double distance=event.getPacket().isWhispering()?current.getServerConfig().getDouble("whisper_distance",24):current.getVoiceChatDistance();
+                if(!capture.originWorld.equals(actor.world())){dropCapture(id);return;}
+                capture.hearingRange=Math.min(capture.hearingRange,Math.min(distance,distanceCap));
+                double[] point={actor.x(),actor.y(),actor.z()};for(int i=0;i<3;i++){capture.speakerBounds[i]=Math.min(capture.speakerBounds[i],point[i]);capture.speakerBounds[i+3]=Math.max(capture.speakerBounds[i+3],point[i]);}
                 capture.audience.observe(observed,id,Math.min(distance,distanceCap),now);
                 for(short sample:decoded){capture.pcm.write(sample&255);capture.pcm.write((sample>>>8)&255);}capture.last=now;
                 if(capture.pcm.size()/2>=maximumSamples)flush(capture);
@@ -320,14 +324,23 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             try{
                 JsonObject result=jsonRequest("POST","/v1/asr",wav(pcm),Map.of("Content-Type","audio/wav","X-Actor",capture.actor.toString(),"X-Request-Id",capture.request.toString()));
                 String text=result.get("text").getAsString().replaceAll("[\\p{Cntrl}§]"," ").strip();if(text.isEmpty())return;
-                main(()->{for(UUID id:VoiceAudience.deliverable(listeners,world,snapshot)){Player target=Bukkit.getPlayer(id);if(target==null)continue;
+                main(()->{Set<UUID> audience=VoiceAudience.deliverable(listeners,world,snapshot);for(UUID id:audience){Player target=Bukkit.getPlayer(id);if(target==null)continue;
                     JsonObject row=new JsonObject();row.addProperty("type","nearby_voice");row.addProperty("speaker",capture.name);row.addProperty("speakerUuid",capture.actor.toString());row.addProperty("utteranceId",capture.request.toString());row.addProperty("text",text);
                     // System text, not Player.chat(): ASR must not run commands,
                     // become a global shout or trigger chat-to-TTS a second time.
                     if(eventCaptions.contains(id)&&target.getListeningPluginChannels().contains(CHANNEL))send(target,row);else target.sendMessage("[附近][语音识别] "+capture.name+"："+text);
-                }});
+                }maidHeard(capture,text,audience);});
             }catch(Exception failure){getLogger().warning("ASR segment unavailable; no replay ("+failure.getClass().getSimpleName()+")");}
         });}catch(RejectedExecutionException busy){getLogger().warning("ASR queue full; segment dropped without blocking the server");}
+    }
+    private void maidHeard(Capture capture,String text,Set<UUID> audience){
+        if(!capture.session.equals(sessions.get(capture.actor)))return;
+        Player speaker=Bukkit.getPlayer(capture.actor);if(speaker==null||!speaker.getWorld().getUID().equals(capture.originWorld))return;
+        var maid=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(maid==null||!maid.isEnabled())return;
+        try{maid.getClass().getMethod("acceptNearbyVoice",UUID.class,UUID.class,UUID.class,long.class,long.class,double[].class,double.class,String.class,Set.class)
+            .invoke(maid,capture.actor,capture.originWorld,capture.request,capture.startedAt,capture.last,capture.speakerBounds.clone(),capture.hearingRange,text,audience);}
+        catch(NoSuchMethodException oldBridge){/* Optional integration; ordinary nearby captions remain available. */}
+        catch(ReflectiveOperationException failure){getLogger().warning("Maid speech delivery unavailable; original ASR retained without replay");}
     }
     private void dropCapture(UUID id){Capture capture=captures.remove(id);if(capture!=null)synchronized(capture){if(!capture.closed){capture.closed=true;capture.decoder.close();}}}
     private void closeCaptures(){for(UUID id:captures.keySet())dropCapture(id);}

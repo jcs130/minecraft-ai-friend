@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "status": "candidate_not_deployed",
+  "sourceBase": "eb9b8766aded8a615eaca7e13c54fe751c52e782",
+  "version": "0.1.12-conversation",
+  "artifacts": [
+    {
+      "name": "qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "ddf50ae2bad07d287632533e25601543789a799afef1a4571afca82aa2ed49c9"
+    },
+    {
+      "name": "qiandengji-maid-brain-0.1.1.jar",
+      "sha256": "4d3ec5818f64bcbf9349e69d1a2cf8e9a7a323cc7d3c04b2ee14604bacc95e93"
+    },
+    {
+      "name": "QiandengVoice-0.1.4.jar",
+      "sha256": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed"
+    }
+  ],
+  "rollback": [
+    {
+      "name": "qiandengji-maid-native-0.1.11-social.jar",
+      "sha256": "ad55d45c86035940ac3741a1ba15ac2fbb8196e735cc91e88cf3d7173965ed57"
+    },
+    {
+      "name": "qiandengji-maid-brain-0.1.0.jar",
+      "sha256": "94c1ff2a1efafd8a6b1a476dce12381a0dbeda3a3baf8c3cdc5855130550f576"
+    },
+    {
+      "name": "QiandengVoice-0.1.0.jar",
+      "sha256": "60cc4c60f81f9828bf56812012220087a31b1b85e92f52df3a9a58a549bfc94f"
+    }
+  ],
+  "preservedBridgeEntries": 47,
+  "preservedVoiceEntries": 28,
+  "gameTests": {
+    "conversation-baseline": {
+      "file": "conversation-baseline-cvmw6is8cj.json",
+      "sha256": "8674213158935f1847ec587352a027609174230f06d278e0b80767df09662c39",
+      "checks": 2,
+      "passed": true
+    },
+    "conversation-candidate": {
+      "file": "conversation-candidate-cvmw6l7lhw.json",
+      "sha256": "1f7eb3b067c48b6c26b4de754cb0c31c409428ec63cb6b3655d6f103b0563178",
+      "checks": 28,
+      "passed": true
+    },
+    "conversation-restart": {
+      "file": "conversation-restart-cvmw6lkrin.json",
+      "sha256": "aced1bdf48de4f8f7fcf04d6a373619ac579d286b43d06e643bd8da639efa09f",
+      "checks": 6,
+      "passed": true
+    },
+    "social-prepare-restart": {
+      "file": "social-prepare-restart-sgmw6ljoxv.json",
+      "sha256": "9ff4877ef5ebdd0d295f2c3b1f4c543c1571bf3dde72df252b6ca25fe537a1cd",
+      "checks": 3,
+      "passed": true
+    },
+    "social-restart": {
+      "file": "social-restart-sgmw6lptm3.json",
+      "sha256": "073f5265cf563895b01860989cef69b167b9e8f34cc05c0322d312e73e4fc675",
+      "checks": 31,
+      "passed": true
+    }
+  },
+  "offline": {
+    "addressingNativeSoundRules": 45,
+    "voiceBoundariesReceiptsPresence": 79,
+    "maidAndVoiceClient": 20,
+    "harnessGateway": 21
+  },
+  "candidateChecks": 233,
+  "baselineMissingFeatureChecks": 2,
+  "realVoice": {
+    "voice": "deepfish-low-warm-20261029",
+    "ttsWavSha256": "dbf6d2bbcb46b55c3d16f1e2b8b1a402a8fc7b4aef159db91f1526f2c0634ebb",
+    "recognized": "你好我是肥鱼一起去冒险吧",
+    "receivedUdpAndCpuAsrVerified": true,
+    "humanHearingVerified": false
+  },
+  "productionChanged": false,
+  "realPlayerDataUsed": false,
+  "reproducibleBuilds": true,
+  "testsUseSyntheticLoopbackWorld": true,
+  "limits": [
+    "Not deployed; requires approved normal game restart and current E/F recovery",
+    "Original remote CorMy autonomous workflow and physical microphone/human hearing not accepted",
+    "No verified built-in Chinese voice clone; uses owner-selected existing DeepFish voice",
+    "Public chat has no owner management tools; native owner work tools remain unchanged"
+  ]
+}
