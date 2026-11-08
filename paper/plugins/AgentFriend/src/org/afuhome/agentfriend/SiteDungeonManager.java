@@ -413,7 +413,7 @@ final class SiteDungeonManager implements Listener {
         case "runtime_error"->"发生故障，等待处理后 resume";case "recovery_return"->"故障已恢复，等待队员回场";default->"暂无活跃队员";
     };}
     private static String endLabel(String reason){return switch(reason){
-        case "completed"->"全部房间已清理并完成返程结算";case "party_defeated"->"全队倒地，挑战失败";case "attempts_exhausted"->"本场已战败3次，机会用尽，挑战结束";
+        case "completed"->"全部房间已清理并完成结算，无需返回首室";case "party_defeated"->"全队倒地，挑战失败";case "attempts_exhausted"->"本场已战败3次，机会用尽，挑战结束";
         case "party_left"->"最后一名队员主动退出";case "member_left"->"本人主动退出队伍";
         case "time_limit"->"超过30分钟时限";case "return_grace_expired"->"全队离场或离线超过5分钟";
         case "missing_or_unloaded_enemy_retry_required"->"标记敌人异常消失，本室不能当作击杀通关";
@@ -435,8 +435,23 @@ final class SiteDungeonManager implements Listener {
         data.putAll(checkpointState(r));
         data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
         data.put("resets",r.resets);data.put("lastResetReason",r.lastResetReason);
-        data.put("nextAction",reward.equals("ready")?"用 /mycli dungeon claim "+r.site.id+"领取；奖励进入个人箱":reward.equals("claimed")?"用 /mycli arena rewards 查看奖励，/mycli arena stash 打开个人箱":"查询 /mycli dungeon info "+r.site.id+"；本场仍在进行时可回到遗迹自动续接，结算时按真实参战记录登记");
-        data.put("nextCommands",reward.equals("claimed")?List.of("/mycli arena rewards","/mycli arena stash"):List.of(reward.equals("ready")?"/mycli dungeon claim "+r.site.id:"/mycli dungeon info "+r.site.id));return data;
+        outcomeGuidance(data);return data;
+    }
+    private static void outcomeGuidance(Map<String,Object> data){
+        String id=Objects.toString(data.get("id"),"");
+        String info=id.matches("[a-z0-9_]{1,32}")?"/mycli dungeon info "+id:"/mycli dungeon list";
+        String reward=Objects.toString(data.get("rewardStatus"),"");
+        String next="本次记录已结束；查询 "+info+" 查看当前场次与下一步，不要根据旧记录重复开团或领奖。";
+        List<String> commands=List.of(info);
+        if(reward.equals("ready")&&id.matches("[a-z0-9_]{1,32}")){
+            next="用 /mycli dungeon claim "+id+" 领取；奖励进入个人箱";commands=List.of("/mycli dungeon claim "+id);
+        }else if(reward.equals("claimed")){
+            next="用 /mycli arena rewards 查看奖励，/mycli arena stash 打开个人箱";commands=List.of("/mycli arena rewards","/mycli arena stash");
+        }else if(reward.equals("daily_limit")&&"completed".equals(data.get("reason"))){
+            next="本场已通关；今日奖励已领取，不会重复发奖，也无需返回首室。若正在考试，/mycli guild exam status 核对实操证明；仅 ready 时用 /mycli guild exam submit。";
+            commands=List.of("/mycli guild exam status",info);
+        }
+        data.put("nextAction",next);data.put("nextCommands",commands);
     }
     private void saveOutcome(UUID id,String site,Map<String,Object> data){
         String path=ROOT+".outcomes."+id+"."+site;plugin.getConfig().set(path,null);plugin.getConfig().createSection(path,data);
@@ -446,11 +461,13 @@ final class SiteDungeonManager implements Listener {
         ConfigurationSection chosen=site.isEmpty()?root.getKeys(false).stream().map(root::getConfigurationSection).filter(Objects::nonNull).max(Comparator.comparingLong(c->c.getLong("endedAt"))).orElse(null):root.getConfigurationSection(site);
         if(chosen==null)return Map.of();
         Map<String,Object> data=new LinkedHashMap<>(chosen.getValues(false));
-        data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");return data;
+        data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
+        // Project current guidance without rewriting historical facts or granting proof.
+        outcomeGuidance(data);return data;
     }
     private void explainOutcome(Player p,Map<String,Object> data){
         String reward=Objects.toString(data.get("rewardStatus"),"run_incomplete");
-        String detail=switch(reward){case "ready"->"已生成待领奖凭据";case "claimed"->"本轮奖励已领取到个人箱";case "daily_limit"->"今日该处已经领奖，重复挑战不再发奖";case "missing_participation"->"参战登记不足，未生成凭据";case "not_returned"->"未完成返程登记，未生成凭据";default->"本轮未完成，未生成新凭据";};
+        String detail=switch(reward){case "ready"->"已生成待领奖凭据";case "claimed"->"本轮奖励已领取到个人箱";case "daily_limit"->"今日该处已经领奖，重复挑战不再发奖";case "missing_participation"->"参战登记不足，未生成凭据";case "not_returned"->"历史记录没有本场待领奖凭据，请查询当前状态，不要按旧提示返程";default->"本轮未完成，未生成新凭据";};
         Site site=sites.get(Objects.toString(data.get("id"),""));p.sendMessage("§e【"+(site==null?"遗迹远征":label(site))+"·结算】"+Objects.toString(data.get("name"),data.get("id").toString())+"："+endLabel(Objects.toString(data.get("reason")))+"；"+detail+"（参战 "+data.get("attendance")+"/"+data.get("requiredRooms")+"）。");
         if(data.get("missingRooms") instanceof List<?> missing&&!missing.isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missing.stream().map(Object::toString).toList())+"。");
         p.sendMessage("§a下一步："+data.get("nextAction"));
@@ -889,6 +906,10 @@ final class SiteDungeonManager implements Listener {
         // disconnect. Snapshot once; receipt creation remains atomic/idempotent.
         for(UUID id:new LinkedHashSet<>(r.attendance.keySet())){
             if(r.attendance.getOrDefault(id,0)==0)continue;
+            Player participant=Bukkit.getPlayer(id);
+            if(participant!=null&&plugin.nativeRpgSelected()&&plugin.skillAssessments()!=null
+                    &&missingRooms(r,id).isEmpty()&&unverifiedRooms(r).isEmpty())
+                plugin.skillAssessments().siteCompleted(participant,r.site.id,r.id,r.started);
             String rewardDay=day();
             if(rewardDay.equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id))||receipt(id,r.site.id)!=null)continue;
             boolean bossParticipant=r.roomAttendance.getOrDefault(r.site.rooms.size()-1,Set.of()).contains(id);

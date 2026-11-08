@@ -78,7 +78,7 @@ final class SkillAssessments implements Listener {
                 if(a.has("history")&&a.getAsJsonArray("history").size()>16)throw new IllegalArgumentException("history");
                 if(a.has("active")) {
                     Run run=decode(a.getAsJsonObject("active"));
-                    if(run.state.equals("active")&&!durableSurvey(run)) {run.state="interrupted";run.reason="server_restart";}
+                    if(run.state.equals("active")&&!durableRecord(run)) {run.state="interrupted";run.reason="server_restart";}
                     UUID id=UUID.fromString(entry.getKey());if(Bukkit.getPlayer(id)!=null)runs.put(id,run);
                 }
             }
@@ -110,6 +110,9 @@ final class SkillAssessments implements Listener {
     boolean busy(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.market.isEmpty()&&Set.of("active","ready").contains(r.state);}
     private static boolean durableSurvey(Run r) {
         return r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("survey");
+    }
+    private static boolean durableRecord(Run r) {
+        return durableSurvey(r)||(r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("native_clear"));
     }
     boolean canAttachContract(Player p,String id) {
         Run r=runs.get(p.getUniqueId());return r!=null&&r.state.equals("active")&&r.definition.primitive().equals("contract_record")
@@ -166,7 +169,7 @@ final class SkillAssessments implements Listener {
     private Run current(Player p) {
         Run r=runs.get(p.getUniqueId());
         if(r==null&&available()&&academy(p.getUniqueId()).has("active")) {
-            try {r=decode(academy(p.getUniqueId()).getAsJsonObject("active"));if(r.state.equals("active")&&!durableSurvey(r)){r.state="interrupted";r.reason="server_restart";}runs.put(p.getUniqueId(),r);}
+            try {r=decode(academy(p.getUniqueId()).getAsJsonObject("active"));if(r.state.equals("active")&&!durableRecord(r)){r.state="interrupted";r.reason="server_restart";}runs.put(p.getUniqueId(),r);}
             catch(RuntimeException invalid){validLedger=false;plugin.getLogger().severe("Invalid assessment record retained for "+p.getUniqueId());return null;}
         }
         TaskMarketManager market=plugin.taskMarket();
@@ -182,10 +185,10 @@ final class SkillAssessments implements Listener {
             p.sendMessage("§b能力阶段已开始："+d.title()+"；/mycli guild exam status 查看当前目标。技能须在本阶段开始后施放。");
             if(d.primitive().equals("native_lesson")&&!d.proofs().contains("native_cast")){plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
         }
-        if(r!=null&&durableSurvey(r)&&r.state.equals("interrupted")&&Set.of("logout","server_restart").contains(r.reason)
+        if(r!=null&&durableRecord(r)&&r.state.equals("interrupted")&&Set.of("logout","server_restart").contains(r.reason)
                 &&System.currentTimeMillis()<r.expires&&definition(r.definition.id())!=null&&definition(r.definition.id()).enabled()) {
-            // Upgrade recovery for old releases: restore only a durable survey
-            // interrupted by transport/shutdown, never cancelled/expired/movement.
+            // Upgrade recovery for old releases: restore only durable records
+            // interrupted by logout/shutdown, never cancelled/expired/movement.
             // Its original run, frozen requirements, proofs and deadline remain.
             String prior=r.reason;r.state="active";r.reason="resumed_after_reconnect";
             if(!save(p,r)){r.state="interrupted";r.reason=prior;}
@@ -227,6 +230,14 @@ final class SkillAssessments implements Listener {
     void proof(Player p,String id,String evidence) {
         Run r=current(p);if(r==null||!r.state.equals("active")||!r.definition.proofs().contains(id)||evidence.length()>200)return;
         r.proofs.addProperty(id,evidence);checkProofs(p,r);if(r.state.equals("active"))save(p,r);
+    }
+    void siteCompleted(Player p,String site,String run,long startedAt) {
+        Run r=current(p);
+        // Claims may arrive after a different exam starts. Only the fresh,
+        // fully witnessed completion event is valid examination evidence.
+        if(r==null||!r.state.equals("active")||!r.definition.primitive().equals("contract_record")
+                ||startedAt<=0||startedAt<r.started||System.currentTimeMillis()>r.expires)return;
+        proof(p,"native_clear","site:"+site+":"+run);
     }
     private void checkProofs(Player p,Run r) {
         if(r.definition.proofs().isEmpty())return;
@@ -357,9 +368,8 @@ final class SkillAssessments implements Listener {
         Run r=runs.get(p.getUniqueId());if(r!=null&&r.state.equals("active")&&r.castAt>0)interrupt(p,r,"skill_qualification_changed");
     }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void teleport(PlayerTeleportEvent e) {
-        // Exploration contracts include portals and a return journey. Their own survey resets
-        // movement on teleport; interrupt only exams whose uninterrupted movement is the proof.
-        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null&&!r.definition.proofs().contains("survey"))interrupt(e.getPlayer(),r,"teleport");
+        // Server-event exams allow ordinary travel; continuous movement exams do not.
+        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null&&!durableRecord(r))interrupt(e.getPlayer(),r,"teleport");
         for(var entry:runs.entrySet())if(entry.getValue().allies.remove(e.getPlayer().getUniqueId())!=null) {
             Player caster=Bukkit.getPlayer(entry.getKey());if(caster!=null)save(caster,entry.getValue());
         }
@@ -367,7 +377,7 @@ final class SkillAssessments implements Listener {
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void mode(PlayerGameModeChangeEvent e) {qualificationChanged(e.getPlayer());}
     @EventHandler(priority=EventPriority.MONITOR) public void death(PlayerDeathEvent e) {qualificationChanged(e.getEntity());}
     @EventHandler(priority=EventPriority.MONITOR) public void quit(PlayerQuitEvent e) {
-        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null&&!durableSurvey(r))interrupt(e.getPlayer(),r,"logout");runs.remove(e.getPlayer().getUniqueId());
+        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null&&!durableRecord(r))interrupt(e.getPlayer(),r,"logout");runs.remove(e.getPlayer().getUniqueId());
         menus.entrySet().removeIf(x->x.getValue().owner.equals(e.getPlayer().getUniqueId()));
         for(var entry:runs.entrySet())entry.getValue().allies.remove(e.getPlayer().getUniqueId());
     }
@@ -453,6 +463,7 @@ final class SkillAssessments implements Listener {
         if(r.state.equals("submitted"))return "/mycli guild certificates";
         if(r.state.equals("ready"))return r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim";
         if(Set.of("interrupted","cancelled").contains(r.state))return r.market.isEmpty()?"落地后 /mycli guild exam start "+(r.grade!=null?"promotion ":"")+r.definition.id():"/mycli guild exam retry；从本阶段重新实操";
+        if(r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("native_clear"))return "开考后新开一场遗迹，逐室实际参战并完成通关；无需返回首室，每日奖励上限不影响考试。传送和重连保留本场考试；/mycli guild exam status 查进度，ready 后 guild exam submit。";
         if(r.castAt==0&&!r.definition.skills().isEmpty())return "/mycli skills info "+r.definition.skills().getFirst()+"；主动学习、准备并施放后实际移动";
         if(r.definition.primitive().equals("flight_route"))return "依次经过航点；保持空中水平移动、转向、升降，面朝前方后退，再到降落台稳定停留2秒";
         return r.definition.description();
@@ -505,7 +516,7 @@ final class SkillAssessments implements Listener {
             if(!out.has("current")){JsonObject current=new JsonObject();current.addProperty("phase",r.state.equals("ready")?"submit_exam":"choose_contract");current.addProperty("summary",r.state.equals("ready")?"实操证明已齐，交付考试":"选择一张可接的调查委托");current.addProperty("nextAction",r.state.equals("ready")?"提交本场考试，取得证书或晋级。":"优先选择入门走查；普通走查无需藏宝图，地下墓穴适合作为进阶路线。");current.addProperty("nextCommand",r.state.equals("ready")?"/mycli guild exam submit":"/mycli guild exam status");out.add("current",current);}
             out.add("supplies",supplies.all(p,r.definition));
         } else {
-            guideStep(steps,"prepare","查看准备条件",r.definition.description(),"/mycli guild exam info "+r.definition.id());
+            guideStep(steps,"prepare","查看准备条件",r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("native_clear")?next(r):r.definition.description(),"/mycli guild exam info "+r.definition.id());
             if(!r.definition.skills().isEmpty())guideStep(steps,"skill","准备并施放技能","本人学习、准备并施放："+String.join("、",r.definition.skills())+"；只收技能原有魔力与冷却，不自动花技能点。","/mycli skills info "+r.definition.skills().getFirst());
             guideStep(steps,"practice","完成现场实操",next(r),"/mycli guild exam status");
             guideStep(steps,"submit","核验交付","state=ready后交付；中断或缺项看reason和nextCommand，不连续盲目重试。",r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim");
@@ -704,5 +715,5 @@ final class SkillAssessments implements Listener {
         if(args.length>2&&args[2].equals("reload"))sender.sendMessage(reload()?"考试与18阶目录已热加载；在途定义保持冻结。":"配置错误，已保留上次有效目录；修正两份配置后再加载。");
         else sender.sendMessage("Assessment catalog="+(catalog==null?0:catalog.definitions.size())+" ledger="+available()+" active="+runs.values().stream().filter(r->r.state.equals("active")).count()+" sampleMs="+lastSampleMs+" peakMs="+maxSampleMs);
     }
-    void shutdown() {task.cancel();for(var entry:List.copyOf(runs.entrySet())){Player p=Bukkit.getPlayer(entry.getKey());if(p!=null&&!durableSurvey(entry.getValue()))interrupt(p,entry.getValue(),"server_restart");}menus.clear();}
+    void shutdown() {task.cancel();for(var entry:List.copyOf(runs.entrySet())){Player p=Bukkit.getPlayer(entry.getKey());if(p!=null&&!durableRecord(entry.getValue()))interrupt(p,entry.getValue(),"server_restart");}menus.clear();}
 }
