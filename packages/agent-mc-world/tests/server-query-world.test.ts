@@ -36,6 +36,21 @@ async function until(test:()=>boolean) {
   while(!test()){if(Date.now()>end)throw new Error('fixture timed out');await new Promise(r=>setTimeout(r,10));}
 }
 describe('independent server query through the public World tool',()=>{
+  it('returns a fast native reply in the original invocation while real navigation keeps progressing',async()=>{
+    const r=rig();pathfinderPkg.pathfinder(r.bot as unknown as Bot);
+    const run=r.runner.start({name:'fast-query-while-walking',code:'await bot.pathfinder.goto(new goals.GoalBlock(30,64,0));'});
+    await until(()=>r.bot.pathfinder.goal!==null);
+    const task=r.exec.currentTask!.id,goal=r.bot.pathfinder.goal,x=r.bot.entity.position.x;
+    const reply=setTimeout(()=>r.bot.emit('message',{toString:()=> 'STATE Fixture'},'system'),120);
+    try {
+      const result=await call(r,{query:'self'});
+      expect(result.data).toMatchObject({phase:'replied',goal_completed:false,reply:{data:{owner:'Fixture'}}});
+      expect(r.said).toEqual(['/fixture state']);
+      expect(r.exec.currentTask?.id).toBe(task);expect(r.bot.pathfinder.goal).toBe(goal);
+      expect(r.runner.read(run.id)[0]?.status).toBe('running');
+      await until(()=>r.bot.entity.position.x>x+.2);
+    } finally {clearTimeout(reply);}
+  });
   it('uses the configured query IDs in the mounted tool schema without adding an execution barrier', () => {
     const r = rig();
     const tool = r.world.tools().find(tool => tool.name === 'mc_query')!;
@@ -135,8 +150,9 @@ describe('independent server query through the public World tool',()=>{
   it.each(['replied','timeout','send_failed','cancelled'] as const)('publishes one %s query terminal with an appropriate recovery trigger',async phase=>{
     vi.useFakeTimers();
     const r=rig();
+    const read=async(args:Record<string,unknown>)=>{const result=call(r,args);await vi.advanceTimersByTimeAsync(350);return result;};
     if(phase==='send_failed')r.bot.chat=()=>{throw new Error('fixture transport unavailable');};
-    const sent=await call(r,{query:'self'}),requestId=sent.data!.requestId;
+    const sent=await read({query:'self'}),requestId=sent.data!.requestId;
     if(phase==='replied') {r.bot.emit('message',{toString:()=> 'STATE Fixture'},'system');await Promise.resolve();}
     if(phase==='timeout')vi.advanceTimersByTime(5000);
     if(phase==='cancelled')(r.world as QueryWorld).clearQueries();
@@ -144,8 +160,8 @@ describe('independent server query through the public World tool',()=>{
     expect(index).toBeGreaterThanOrEqual(0);
     expect(r.host.events[index].meta?.serverQuery).toMatchObject({phase,goal_completed:false});
     expect(r.host.pushOpts[index]?.trigger).toBe(phase==='cancelled'?'piggyback':'debounce');
-    await call(r,{requestId});
-    if(phase!=='cancelled')await call(r,{query:'self'});
+    await read({requestId});
+    if(phase!=='cancelled')await read({query:'self'});
     expect(r.host.events.filter(e=>(e.meta?.serverQuery as Record<string,unknown> | undefined)?.requestId===requestId)).toHaveLength(1);
   });
 });

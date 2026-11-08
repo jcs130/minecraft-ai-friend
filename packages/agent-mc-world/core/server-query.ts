@@ -97,9 +97,9 @@ export const SERVER_QUERY_TOOL = {
   name: 'mc_query',
   tags: ['read'],
   description: '{} lists registered read-only queries and their argument contracts. '
-    + '{query,arguments?:string[]} sends one; {requestId} separately reads its receipt. '
+    + '{query,arguments?:string[]} sends one and briefly awaits its reply; {requestId} reads the same receipt. '
     + 'Required subject IDs must come from observed server data. No body slot or chat wait is used. '
-    + 'Only listed queries are supported, never arbitrary commands. A sent status means accepted and awaiting a reply, not completed. '
+    + 'A fast matched reply returns directly; otherwise sent means awaiting a reply, not completed. Only listed queries are supported. '
     + 'At most one query is pending; identical requests reuse its receipt and terminal receipts for five seconds. '
     + 'Timeout means the result is unknown; there is no automatic retry. Replies have no request nonce and are only correlated server feedback, '
     + 'not proof of a uniquely identified request or completion of a gameplay goal.',
@@ -131,6 +131,7 @@ type Record_ = {
   lastSequence?: number;
   synchronousReply?: NonNullable<ServerQueryReceipt['reply']>;
   timer?: ReturnType<typeof setTimeout>;
+  waiters?: Set<() => void>;
 };
 
 const failure = (message: string): ToolOutcome => ({ text: message, failed: true, data: { goal_completed: false } });
@@ -164,6 +165,36 @@ export class ServerQueryLane {
     this.onTerminal = options.onTerminal;
   }
 
+  /** Optional short read window, independent of the body queue and the query's
+   * original deadline. Legacy call() stays synchronous; no request is resent. */
+  async callAndWait(args: Record<string, unknown>, definitions: readonly ServerQueryDefinition[],
+    context: ServerQueryContext | null, options: { waitMs?: number; signal?: AbortSignal } = {}): Promise<ToolOutcome> {
+    const waitMs=options.waitMs??350;
+    if(!Number.isSafeInteger(waitMs)||waitMs<0||waitMs>1000)throw new RangeError('Query read window must be 0..1000 ms');
+    options.signal?.throwIfAborted();
+    const outcome=this.call(args,definitions,context),id=outcome.data?.requestId;
+    // A busy response belongs to another query; waiting must not replace its
+    // explicit busy identity with an apparently successful requested read.
+    if(waitMs===0||outcome.data?.busy===true||outcome.data?.phase!=='sent'||typeof id!=='string')return outcome;
+    const record=this.records.get(id);
+    if(!record||record.receipt.phase!=='sent')return record?this.outcome(record):outcome;
+    const reused=outcome.data?.reused===true?{reused:true}:{};
+    return new Promise(resolve=>{
+      let timer:ReturnType<typeof setTimeout>|undefined,finished=false;
+      const finish=(aborted=false)=>{
+        if(finished)return;finished=true;clearTimeout(timer);record.waiters?.delete(settled);
+        options.signal?.removeEventListener('abort',abort);
+        resolve(this.outcome(record,{...reused,...(aborted?{readWaitAborted:true}:{})}));
+      };
+      const settled=()=>finish(),abort=()=>finish(true);
+      (record.waiters??=new Set()).add(settled);
+      options.signal?.addEventListener('abort',abort,{once:true});
+      timer=setTimeout(settled,waitMs);
+      if(options.signal?.aborted)abort();
+      else if(record.receipt.phase!=='sent')settled();
+    });
+  }
+
   call(args: Record<string, unknown>, definitions: readonly ServerQueryDefinition[], context: ServerQueryContext | null): ToolOutcome {
     // A new connection is a new correlation domain, even when it has the same player name.
     if (context && this.scope !== scopeKey(context)) {
@@ -178,8 +209,8 @@ export class ServerQueryLane {
     if (keys.length === 0) {
       const data = { queries: definitions.map(queryContract),
         pendingRequestId: this.pending?.receipt.requestId ?? null, requestNonce: false, goal_completed: false };
-      return { text: 'Available read-only server queries. Sending returns immediately as sent/awaiting reply; it does not complete a goal. '
-        + 'Read requestId later. Timeout is unknown, with no automatic retry.\n' + JSON.stringify(data), data };
+      return { text: 'Available read-only server queries. The observed phase and original requestId identify the read; it does not complete a goal. '
+        + 'If still sent, read that requestId later. Timeout is unknown, with no automatic retry.\n' + JSON.stringify(data), data };
     }
     if (keys.length === 1 && typeof args.requestId === 'string' && args.requestId.length > 0 && args.requestId.length <= 128) {
       const record = this.records.get(args.requestId);
@@ -331,6 +362,8 @@ export class ServerQueryLane {
     record.parts = []; record.partBytes = 0;
     if (reason) record.receipt.reason = reason;
     if (this.pending === record) this.pending = undefined;
+    for(const settle of record.waiters??[])settle();
+    record.waiters?.clear();
     try { this.onTerminal?.(this.outcome(record)); } catch { /* A consumer's event sink cannot strand the query lane. */ }
   }
 
