@@ -10,6 +10,7 @@
       el('p', row.platform, 'download-requirements'), el('p', row.includes));
     if (row.viewerIncluded && row.serverPackIncluded) node.append(el('p', '已含现代可视化与千灯纪资料', 'download-contents'));
     if (row.requires?.length) node.append(el('p', '完整离线安装另需：公共音频包、截图浏览器包。', 'download-requires'));
+    if (row.compatibilityNote) node.append(el('p', row.compatibilityNote, 'download-preview'));
     if (row.available && local(row.url)) {
       const link = el('a', '下载 · ' + size(row.bytes), 'btn primary'); link.href = row.url; link.setAttribute('download', row.filename); node.append(link);
     } else node.append(el('p', '直下暂未配置', 'download-pending'));
@@ -29,6 +30,7 @@
       document.querySelector('#skill-checksum').textContent = 'SHA256：' + data.skill.sha256;
     }
     const packages = Array.isArray(data.packages) ? data.packages : [];
+    document.querySelector('#android-client-downloads')?.replaceChildren(...packages.filter(row => row.category === 'android-client').map(card));
     document.querySelector('#game-client-downloads').replaceChildren(...packages.filter(row => row.category === 'game-client').map(card));
     document.querySelector('#package-downloads').replaceChildren(...packages.filter(row => row.category === 'host').map(card));
     document.querySelector('#component-downloads').replaceChildren(...packages.filter(row => row.category === 'component').map(card));

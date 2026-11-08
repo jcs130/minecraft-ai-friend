@@ -1,0 +1,26 @@
+modLoader="lowcodefml"
+loaderVersion="[1,)"
+license="MIT"
+
+[[mods]]
+modId="qiandeng_android_audio"
+version="1.0.1-qiandengji.1"
+displayName="千灯纪 Android Audio Shim"
+authors="Hhhrty2; Qiandengji compatibility packaging"
+description='''Android arm64 Java Sound microphone bridge for Simple Voice Chat.
+Uses the upstream MIT native library, launcher-private extraction and Java SPI.
+Client compatibility preview; complete on-device voice acceptance is pending.'''
+
+[[dependencies.qiandeng_android_audio]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.qiandeng_android_audio]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="CLIENT"
