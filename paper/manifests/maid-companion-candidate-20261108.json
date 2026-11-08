@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "date": "2026-11-08",
+  "status": "candidate_not_deployed",
+  "baseCommit": "7f49f3a6f046c168a773c25803ff937a560a3944",
+  "production": {
+    "version": "0.1.13-receipts",
+    "sha256": "5f801267739d08a41d294d20dbcf5ef804cc1c3416bdabfd9cfba90f3b8a93a1"
+  },
+  "candidate": {
+    "version": "0.1.14-companion",
+    "sha256": "fbf629147c0d089f27a27f97d7ad3b2dc71d2a59fde2ca55ec00afb6c837c628",
+    "repeatBuildIdentical": true,
+    "unrelatedJarEntriesPreserved": 47
+  },
+  "validation": {
+    "pureRules": {
+      "companionAndReply": 38,
+      "conversation": 45,
+      "closeFollow": 14,
+      "lifeLedger": 29,
+      "harnessGateway": 21
+    },
+    "isolatedReports": [
+      {
+        "file": "companion-candidate-cvmw7vpnq5.json",
+        "passed": 17,
+        "sha256": "30545c28f4e8594c5d86a1fe02a2380c26e4164670c4297a4c7bf5ec3f06fa15"
+      },
+      {
+        "file": "conversation-candidate-cvmw7vj983.json",
+        "passed": 37,
+        "sha256": "f04507c17aab593f4e5f8673f95ef7b90f0822c1c9d43b55393dff89f5b737fe"
+      },
+      {
+        "file": "conversation-restart-cvmw7vnqcx.json",
+        "passed": 7,
+        "sha256": "f57eee7166c394d34a3c76dd2e0c7d3b6a424bfb5e1c5aaa09fb70a6faf3bfa3"
+      }
+    ],
+    "totalChecks": 208,
+    "realPlayerDataUsed": false,
+    "actualHumanHearingVerified": false
+  },
+  "stages": {
+    "candidate": "passed",
+    "production": "not_deployed",
+    "originalClientAcceptance": "pending",
+    "code": "candidate_not_merged"
+  },
+  "rollback": {
+    "codeMirrors": [
+      "E",
+      "F"
+    ],
+    "preserve": [
+      "current_world",
+      "original_maid_uuid_owner_inventory",
+      "lifecycle_tombstones",
+      "native_brain_selection_history",
+      "authentication",
+      "operation_and_speech_receipts"
+    ],
+    "neverReplayUnknownActions": true
+  },
+  "productionChanged": false,
+  "sourceIntegrationBaseCommit": "145efe38d9d360ad489c3d6fa2575ce4fe889434"
+}

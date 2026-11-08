@@ -6,6 +6,7 @@ import java.util.*;
 /** Transport-only protection queries. No cached verdicts, world loads or permissions. */
 final class ProtectionQuery {
     static final int MAX_TARGETS = 64;
+    static final String DUNGEON_DISCOVERY_COMMAND = "/mycli dungeon list";
     static final Set<String> ACTIONS = Set.of("break", "place", "container", "use");
     record Point(int x, int y, int z) {
         JsonArray json() { JsonArray a = new JsonArray(); a.add(x); a.add(y); a.add(z); return a; }
@@ -81,7 +82,8 @@ final class ProtectionQuery {
         if (reason.equals("worldguard") && data.has("regionGuidance")) return data.get("regionGuidance").getAsString();
         if (reason.equals("no_known_protection")) return "可尝试操作；最终以实际操作结果为准。";
         if (reason.equals("land_notice_board")) return "右键公告牌查看归属和协作者；位置调整请联系服主。";
-        if (reason.equals("site_dungeon")) return "副本建筑永久禁止拆改；沿原门和楼梯通行，路线用 /mycli dungeon layout。";
+        if (reason.equals("site_dungeon")) return "副本建筑永久禁止拆改；沿原门和楼梯通行。先用 " + DUNGEON_DISCOVERY_COMMAND
+                + " 确认副本ID，再用 /mycli dungeon info <ID> --verbose 查详情。首室坐标不是入口，也不证明有直达路线。";
         if (Set.of("generated_structure", "village_structure", "life_guild_building").contains(reason)) return "沿原有门、楼梯或梯子通行；施工换目标后重查权限。";
         if (data.has("publicCommand")) return "私产需主人授权；公共物资用 /mycli guild shared。";
         if (data.has("globalProtection") && data.get("globalProtection").getAsBoolean()) return "当前世界有全局限制，请联系服主确认允许的位置或授权。";

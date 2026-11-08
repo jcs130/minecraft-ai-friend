@@ -234,6 +234,7 @@ export function fmtDist(d: number): string {
  * 诊断只陈述已加载整格碰撞的结果；完整路线试算可以推翻阻塞定性。
  */
 export function diagText(diag: TargetDiag | null | undefined): string | null {
+  if (diag?.kind === 'occupied') return `精确落脚格的身体空间被 ${diag.block} (${diag.at.x}, ${diag.at.y}, ${diag.at.z}) 的整格碰撞占用；邻格或高一格不满足本次精确目标。核对脚部高度，或自行选择邻域目标/显式改结构后重查`;
   if (diag?.kind === 'noStand') return '目标那一格站不进人:它和四周都被方块占着';
   if (diag?.kind === 'noSupport') return `目标附近有能容身的空位 (${diag.at.x}, ${diag.at.y}, ${diag.at.z})，但脚下缺少支撑；没有核实到该高度可站立的落点`;
   if (diag?.kind === 'sealed') return `目标封在一个约 ${diag.size} 格的死角里`;
@@ -318,7 +319,7 @@ export function withRouteScene(
   const probes = ctx.probeRoutes?.(target, goal);
   const waterNote = underwaterRouteNote(bot, target, goal);
   const diag = waterNote || (goal && !(goal instanceof goals.GoalBlock)) || probes?.some((probe) => probe.status === 'complete')
-    ? null : ctx.probeTarget?.(target) ?? null;
+    ? null : ctx.probeTarget?.(target, goal instanceof goals.GoalBlock ? {exact:true} : undefined) ?? null;
   const scene = [
     ...extra,
     ...(waterNote && !extra.some(line => line.includes(waterNote)) ? [waterNote] : []),
@@ -378,7 +379,7 @@ export function routeNote(bot: Bot, ctx: SkillContext, target: { x: number; y: n
   // diagnosis as a local coordinate, unlike a horizontal/near goal whose Y or
   // centre need not be standable. A complete route may still dig a valid landing.
   const diag = !waterNote && (!goal || goal instanceof goals.GoalBlock) && !probes.some((probe) => probe.status === 'complete')
-    ? ctx.probeTarget?.(target) ?? null : null;
+    ? ctx.probeTarget?.(target, goal instanceof goals.GoalBlock ? {exact:true} : undefined) ?? null : null;
   if (diag && diag.kind !== 'open') {
     throw new SkillBlocked(renderRouteMenu(probes, target, { startDist, diag }));
   }

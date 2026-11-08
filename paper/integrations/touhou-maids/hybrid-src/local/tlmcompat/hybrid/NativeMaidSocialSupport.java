@@ -106,6 +106,7 @@ final class NativeMaidSocialSupport {
             JsonObject receipt=receipts.finish(id,call.operation,reason==null?"replied":"unknown",observation);
             pending.remove(id);
             if(reason==null){
+                plugin.conversationReplied(actor,call.maid);
                 Set<UUID> audience=new HashSet<>();for(UUID listener:call.listeners)if(Bukkit.getPlayer(listener)==call.connections.get(listener))audience.add(listener);audience.add(call.actor);
                 plugin.speakPublicReply(call.maid,call.operation,observation.get("reply").getAsString(),Set.copyOf(audience));
                 List<LLMMessage> history=new ArrayList<>(conversations.getOrDefault(key(call),List.of()));history.add(LLMMessage.userChat(call.maid,call.text));history.add(LLMMessage.assistantChat(call.maid,observation.get("reply").getAsString()));
