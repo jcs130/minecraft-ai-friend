@@ -1,12 +1,12 @@
 {
   "inventoryScope": "historical_batch_snapshot_20261106_not_current_runtime",
-  "currentComponentEvidence": "paper/manifests/runtime-evidence-20261108.json",
+  "currentComponentEvidence": "paper/manifests/pr-batch-deployed-20261108.json",
   "acceptanceDocument": "paper/docs/ACCEPTANCE_EVIDENCE_20261108.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-with-open-client-acceptance",
-  "latestRelease": "maid-market-cli-release-20261108-r1",
-  "verifiedAt": "2026-11-08T18:22:21.6961048+08:00",
-  "releaseDocument": "paper/docs/MAID_MARKET_CLI_20261108.md",
+  "latestRelease": "pr-batch-release-20261108-r1",
+  "verifiedAt": "2026-11-08T23:26:25.2884411+08:00",
+  "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261108.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -1578,5 +1578,23 @@
     ],
     "manifest": "paper/manifests/maid-market-cli-deployed-20261108.json",
     "otherComponentFields": "historical component snapshots; this batch did not re-audit all versions"
+  },
+  "prBatch20261108": {
+    "state": "deployed-with-open-real-client-acceptance",
+    "sourceCommit": "4edf7bb8720fcc712b06d7cbbb87ff34dfa9ce10",
+    "mergedCommit": "99d9b7a719f7a6fe886f7218583ca090b21a0937",
+    "versions": {
+      "AgentFriend": "0.4.47.62-entry-guide-rpg",
+      "QiandengjiMaidBridge": "0.1.14-companion",
+      "nativePlatform": "0.1.7",
+      "GeyserMaids": "0.1.5",
+      "Geyser": "2.12.1-b1295-youer-lan2",
+      "embeddedCore": "0.5.7-rc.160-preview.33",
+      "clientWorldSource": "0.4.1-rc.71-preview.34",
+      "clientServerPackSource": "0.5.0-rc.50-preview.30"
+    },
+    "formalStartupChecksPassed": 13,
+    "characterFilesPreserved": 3450,
+    "clientAcceptance": "pending_remote_host_and_devices"
   }
 }

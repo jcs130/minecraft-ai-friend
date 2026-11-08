@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "state": "deployed-with-open-real-client-acceptance",
+  "release": "pr-batch-release-20261108-r1",
+  "deployedAt": "2026-11-08T23:26:25.2884411+08:00",
+  "sourceCommit": "4edf7bb8720fcc712b06d7cbbb87ff34dfa9ce10",
+  "sourceTree": "866ce6ae7e69548fe657314677ad4788596215d2",
+  "mergedCommit": "99d9b7a719f7a6fe886f7218583ca090b21a0937",
+  "serverPullRequests": [
+    112,
+    117,
+    120,
+    124,
+    126,
+    127,
+    128
+  ],
+  "clientPullRequests": [
+    20,
+    21,
+    24,
+    25
+  ],
+  "clientMergedCommit": "d0140045c3cbab4807a051c8642485714bc95622",
+  "ci": {
+    "run": 42491009443,
+    "jobsPassed": 6
+  },
+  "versions": {
+    "AgentFriend": "0.4.47.62-entry-guide-rpg",
+    "QiandengjiMaidBridge": "0.1.14-companion",
+    "nativePlatform": "0.1.7",
+    "GeyserMaids": "0.1.5",
+    "Geyser": "2.12.1-b1295-youer-lan2",
+    "embeddedCore": "0.5.7-rc.160-preview.33",
+    "clientWorldSource": "0.4.1-rc.71-preview.34",
+    "clientServerPackSource": "0.5.0-rc.50-preview.30"
+  },
+  "artifacts": [
+    {
+      "target": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "cb39efb9a9118d5ad27135291c6b8c3835fda02868e4c7b55a366c2ba4258125"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "fbf629147c0d089f27a27f97d7ad3b2dc71d2a59fde2ca55ec00afb6c837c628"
+    },
+    {
+      "target": "E:\\MC\\server\\mods\\qiandengji-native-platform-0.1.4.jar",
+      "sha256": "9e9c2bd6ecfb73e7a48a5bffef74ed33dd8b3d75ec7cc449dec19297262fb965"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\Geyser-Spigot\\extensions\\qiandengji-geyser-maids-0.1.4.jar",
+      "sha256": "da5ecd211f9fbcb3c18ea18109e00b9cf523ed0ce5ce764f95e51838e4321eb7"
+    }
+  ],
+  "gameRestarted": true,
+  "originalJvmExited": true,
+  "coldCopiesVerified": 2,
+  "characterFilesPreservedDuringInstall": 3450,
+  "originalCredentialRowsPreserved": 77,
+  "goddessJobsRestored": 7,
+  "formalStartupChecksPassed": 13,
+  "embeddedCoreFilesUpdated": 66,
+  "embeddedHostingIdleRoles": 0,
+  "originalMaidRegistrationPreserved": {
+    "registered": true,
+    "ownerMatchesExpected": true,
+    "health": 20,
+    "observation": "loaded_health_sample"
+  },
+  "cameraAtSample": {
+    "phase": "ready",
+    "renderer": "NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2",
+    "pid": 21144,
+    "observedAt": "2026-11-08T23:26:51.606162+08:00"
+  },
+  "publicWebsiteHttpStatus": 200,
+  "validation": {
+    "corePassed": 3010,
+    "coreSkipped": 8,
+    "clientPassed": 501,
+    "hostingPassed": 68,
+    "nativeLeasePassed": 11,
+    "combinedMaidStagePassed": 17,
+    "dungeonRulesPassed": 179
+  },
+  "realAcceptance": {
+    "originalCormyClient": "pending_remote_host_loaded_receipts",
+    "humanJavaHearing": "pending",
+    "physicalBedrockRendering": "pending",
+    "cryptOutsideToFirstRoomWalk": "not_proven_by_this_release",
+    "numenLostOfflineReplyRecovery": "documented_unfixed_protocol_gap"
+  },
+  "rollback": "Code only; preserve latest worlds, characters, inventories, tombstones, life/action receipts, authentication, brain choices and client memory. Consumed maintenance must not be rerun.",
+  "privateReceiptDigests": {
+    "completion.json": "edb405784a745e2662ec9731506427ffa36e880f3e9b5b09d215e923717c38e3",
+    "postflight.json": "1f569c44eb27309b4b04dcff22405ff2270958176335cdb8498b0f3902b101a9",
+    "characters-install.json": "c47d6fb6ef37212abc4d15565446a650328422b605c220ff573cd05ec6f3583f",
+    "credentials-after.json": "81d72a6a48514588bf0c830fffa29cc64edf3320ffb04fdb2f6cd24ba1ce99b3",
+    "goddess-jobs.restored.json": "6a8bf58489aa0853097f3cbe2fb866014b1c5ffed88b0893d79e3207e4f08ac8",
+    "cold-backups-proof.json": "b576ed853d3d865594a9ca64a6021d11d2db51dc5000d6668a5ccb6be335ac71",
+    "core-update/result.json": "e99e640dbf5a2d5637d082c460496eea6ed7737e8859043c9b557a021576f889"
+  }
+}
