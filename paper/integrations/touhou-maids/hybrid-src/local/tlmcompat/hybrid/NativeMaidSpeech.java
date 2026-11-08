@@ -6,6 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.google.gson.*;
 import de.maxhenkel.voicechat.api.*;
 import de.maxhenkel.voicechat.api.audiochannel.AudioPlayer;
+import de.maxhenkel.voicechat.api.audiochannel.LocationalAudioChannel;
 import de.maxhenkel.voicechat.api.events.*;
 import de.maxhenkel.voicechat.api.opus.OpusEncoder;
 import java.io.*;
@@ -38,13 +39,14 @@ final class NativeMaidSpeech implements AutoCloseable {
     private volatile boolean closed;
     private boolean historyInitialized;
     private long nextAmbient;
+    private long nextCaption;
     private volatile Job active;
     private String lastState="ready",lastReason="",lastRequest="";
     private record Stamp(Player player,UUID world){}
     private static final class Job {
         final EntityMaid maid;final String request,text,kind;final UUID world;final Map<UUID,Stamp> listeners;
-        volatile Set<UUID> audible=Set.of();volatile boolean cancelled,exhausted;final AtomicInteger offers=new AtomicInteger();
-        AudioPlayer player;OpusEncoder encoder;UUID channel;int offset;
+        volatile Set<UUID> audible=Set.of();volatile boolean cancelled,exhausted;boolean finished;final AtomicInteger offers=new AtomicInteger();
+        AudioPlayer player;OpusEncoder encoder;UUID channel;LocationalAudioChannel spatial;Future<?> media;int offset;
         Job(EntityMaid maid,String request,String text,String kind,Map<UUID,Stamp> listeners){this.maid=maid;this.request=request;this.text=text;this.kind=kind;this.listeners=Map.copyOf(listeners);world=maid.getBukkitEntity().getWorld().getUID();}
     }
     static NativeMaidSpeech create(HybridMaidPlugin plugin){
@@ -72,7 +74,7 @@ final class NativeMaidSpeech implements AutoCloseable {
             public void registerEvents(EventRegistration events){
                 events.registerEvent(VoicechatServerStartedEvent.class,event->api=event.getVoicechat());
                 events.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;main(()->cancel("voice_service_stopped"));});
-                events.registerEvent(EntitySoundPacketEvent.class,event->{Job job=active;if(job!=null&&!event.isCancelled()&&Objects.equals(job.channel,event.getPacket().getChannelId())&&event.getPacket().getOpusEncodedData().length>0&&event.getReceiverConnection()!=null&&event.getReceiverConnection().isConnected()&&!event.getReceiverConnection().isDisabled())job.offers.incrementAndGet();},1000);
+                events.registerEvent(LocationalSoundPacketEvent.class,event->{Job job=active;if(job!=null&&!event.isCancelled()&&Objects.equals(job.channel,event.getPacket().getChannelId())&&event.getPacket().getOpusEncodedData().length>0&&event.getReceiverConnection()!=null&&event.getReceiverConnection().isConnected()&&!event.getReceiverConnection().isDisabled())job.offers.incrementAndGet();},1000);
             }
         });
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,5,5);
@@ -82,7 +84,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     JsonObject describe(EntityMaid maid){
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
-        out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_entity");
+        out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
         out.addProperty("state",lastState);out.addProperty("reason",lastReason);out.addProperty("requestId",lastRequest);out.addProperty("hearingVerified",false);
         out.addProperty("nextStep","听音需 Simple Voice Chat；/voice status 查询本连接。无语音模组仍可读附近文字。sent只证明音频发送，不证明真人耳听。");return out;
     }
@@ -106,12 +108,13 @@ final class NativeMaidSpeech implements AutoCloseable {
             receipts.reserve(maidId,ownerId,request,"speech",voice+"\n"+kind+"\n"+text);
             Job job=new Job(maid,request,text,kind,listeners);
             if(listeners.isEmpty()){finish(job,"skipped","no_connected_voice_listener");return;}
+            if(active!=null&&active.kind.equals("ambient")&&!kind.equals("ambient"))cancel("ambient_interrupted_for_reply");
             if(active!=null){finish(job,"skipped","companion_already_speaking");return;}
             active=job;finishRecord(job,"preparing","");
             short[] cached=kind.equals("ambient")?ambientCache.get(text):null;
             if(cached!=null){play(job,cached);return;}
-            worker.execute(()->{try{short[] pcm=synthesize(job);main(()->{if(job!=active)return;if(kind.equals("ambient")){ambientCache.put(job.text,pcm);while(ambientCache.size()>16)ambientCache.remove(ambientCache.keySet().iterator().next());}play(job,pcm);});}
-                catch(Exception error){main(()->finish(job,"failed","media_unavailable_no_replay"));}});
+            job.media=worker.submit(()->{try{short[] pcm=synthesize(job);main(()->{if(job!=active)return;if(kind.equals("ambient")){ambientCache.put(job.text,pcm);while(ambientCache.size()>16)ambientCache.remove(ambientCache.keySet().iterator().next());}play(job,pcm);});}
+                catch(Exception error){main(()->{if(job==active)finish(job,"failed","media_unavailable_no_replay");});}});
         }catch(Exception error){if(active!=null&&active.request.equals(request))active=null;lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}
     }
     private short[] synthesize(Job job)throws Exception{
@@ -128,13 +131,15 @@ final class NativeMaidSpeech implements AutoCloseable {
         Set<UUID> ids=new HashSet<>();if(valid(job.maid)&&job.world.equals(job.maid.getBukkitEntity().getWorld().getUID()))for(var entry:job.listeners.entrySet()){
             Player p=Bukkit.getPlayer(entry.getKey());if(p==entry.getValue().player&&p.isOnline()&&p.getWorld().getUID().equals(job.world)&&p.canSee(job.maid.getBukkitEntity())&&p.getLocation().distanceSquared(job.maid.getBukkitEntity().getLocation())<=64)ids.add(p.getUniqueId());
         }job.audible=Set.copyOf(ids);
+        if(job.spatial!=null&&api!=null&&job.world.equals(job.maid.getBukkitEntity().getWorld().getUID()))job.spatial.updateLocation(api.createPosition(job.maid.getX(),job.maid.getEyeY(),job.maid.getZ()));
     }
     private void play(Job job,short[] pcm){
         if(job!=active)return;refresh(job);
         if(job.audible.isEmpty()||api==null){finish(job,"cancelled","audience_or_entity_changed");return;}
         try{
-            job.channel=UUID.randomUUID();var channel=api.createEntityAudioChannel(job.channel,api.fromEntity(job.maid.getBukkitEntity()));
-            if(channel==null)throw new IllegalStateException("Entity channel unavailable");channel.setDistance(8);channel.setFilter(p->job.audible.contains(p.getUuid()));
+            // Positional packets also play when the client projects or temporarily lacks the native entity UUID.
+            job.channel=UUID.randomUUID();var channel=api.createLocationalAudioChannel(job.channel,api.fromServerLevel(job.maid.getBukkitEntity().getWorld()),api.createPosition(job.maid.getX(),job.maid.getEyeY(),job.maid.getZ()));job.spatial=channel;
+            if(channel==null)throw new IllegalStateException("Position channel unavailable");channel.setDistance(8);channel.setFilter(p->job.audible.contains(p.getUuid()));
             job.encoder=api.createEncoder();job.player=api.createAudioPlayer(channel,job.encoder,()->{
                 if(job.cancelled||job.audible.isEmpty())return null;
                 if(job.offset>=pcm.length){job.exhausted=true;return null;}short[] frame=new short[960];int n=Math.min(960,pcm.length-job.offset);System.arraycopy(pcm,job.offset,frame,0,n);job.offset+=n;return frame;
@@ -145,15 +150,21 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void finishRecord(Job job,String state,String reason)throws Exception{
         JsonObject result=new JsonObject();result.addProperty("voice",voice);result.addProperty("kind",job.kind);result.addProperty("reason",reason);result.addProperty("packetOffers",job.offers.get());result.addProperty("hearingVerified",false);result.addProperty("retryAllowed",false);
-        receipts.finish(maidId,job.request,state,result);lastRequest=job.request;lastState=state;lastReason=reason;
+        result.addProperty("transport","simple_voice_chat_position");result.addProperty("connectedListeners",job.listeners.size());
+        JsonArray listeners=new JsonArray();job.listeners.keySet().stream().sorted().forEach(id->listeners.add(id.toString()));result.add("listenerUuids",listeners);
+        receipts.finish(maidId,job.request,state,result);if(active==job||active==null){lastRequest=job.request;lastState=state;lastReason=reason;}
     }
-    private void finish(Job job,String state,String reason){try{finishRecord(job,state,reason);}catch(Exception error){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}if(active==job)active=null;}
-    private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
+    private void finish(Job job,String state,String reason){if(job.finished)return;job.finished=true;try{finishRecord(job,state,reason);}catch(Exception error){if(active==job||active==null){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}}if(active==job)active=null;}
+    private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
     private void ambient(EntityMaid maid,String sound){
         if(!Bukkit.isPrimaryThread()||!valid(maid)||System.nanoTime()<nextAmbient||active!=null)return;
         String text=MaidSpeechLines.forSound(sound);if(text==null)return;
         double frequency=maid.getConfigManager().getSoundFreq()*com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig.GLOBAL_MAID_SOUND_FREQUENCY.get()/100.0;
-        nextAmbient=System.nanoTime()+15_000_000_000L;if(frequency<=0||frequency<1&&maid.getRandom().nextDouble()>frequency)return;
+        if(frequency<=0||frequency<1&&maid.getRandom().nextDouble()>frequency)return;nextAmbient=System.nanoTime()+15_000_000_000L;
+        if(System.nanoTime()>=nextCaption){
+            nextCaption=System.nanoTime()+60_000_000_000L;
+            for(Player p:maid.getBukkitEntity().getLocation().getNearbyPlayers(8))if(p.canSee(maid.getBukkitEntity()))p.sendMessage("[附近·女仆] "+maid.getName().getString()+"："+text);
+        }
         submit(maid,"a_"+UUID.randomUUID(),text,"ambient",null);
     }
     private void tick(){

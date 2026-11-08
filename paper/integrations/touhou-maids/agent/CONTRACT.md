@@ -1,5 +1,11 @@
 # 女仆操作协议 0.1.12-conversation（服务端已部署）
 
+**0.1.14-companion 候选，尚未部署**：原肥鱼在附近点名且回复成功后，同一玩家、连接、维度有45秒接话窗口；每个已完成回复最多承接3条后续输入，仍需8格范围并遵守原节流。公屏、私聊、旁人和跨维度不继承此窗口。对话声音优先于日常短句，后者可被中断；`speech.transport=simple_voice_chat_position` 不依赖客户端女仆投影的实体 UUID，仍需连接 Simple Voice Chat，`sent` 不等于耳听验收。
+
+候选 `context.companion` 返回原生自动护卫状态。仅已配置的原肥鱼在闲置跟随、有合适武器、附近可见怪物正在攻击主人或本人时切到原生战斗；脱战5秒、低血量或武器不合格时恢复陪伴。主人手选任务和停留优先，不另启模型行动循环。她在主人原位置16格内、处于跟随时，会跟随成功的远距／跨维度传送，落点必须已加载且安全；不召回远方或未加载女仆，不创建替代实体。`applied` 仍只是设置成功，必须核对维度、位置及 `ownerDistance`。
+
+候选的旧聊天回执超过4000字符时仅省略静态帮助，标记 `compactHelp:true`；身份、生命事实、动作终态和原请求ID保留。插件频道返回完整内容。仍超长会明确返回 `response_requires_plugin_channel`，客户端应在 `qiandengji:maids` 查询原请求，不能换ID重做动作。基础协议和命令入口不变。
+
 **0.1.11-social 已部署**：`nearby [queryId]` 返回附近可见女仆的 `maidId/name/owned/publicChatEnabled/chatCommand`，可选 MCP 为 `{action:"nearby"}`。`chat` 允许同维度 8 格内访客与已开放女仆交流；其 `observation.conversation="nearby_visitor"`，不包含主人记忆或工作工具。本人 `chat` 的原生历史／工具保持，`receipt` 按原请求查询，不重放。真人用右键→点击交谈→输入话语，或 `/qdmaid say <maidId> <话语>`；这种便利入口只发简短中文，Agent继续用结构化 `chat`。参见[发布说明](../../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。
 
 **0.1.12-conversation 已部署**：附近文字/ASR 中点名“肥鱼，你好”，复用公共交流；主人工作仍用原 `chat`。新增 `context.appearance` 表示实际 YSM/原生模型，旧顶层 `modelId` 仍为备用原生模型；`damageProtected`、`conversation` 与 `speech` 分别解释保护、交谈方法和统一音色发送状态。字段须按存在性检测，`sent` 不等于真人听到。服务端部署不代替客户端自主交流、真人麦克风或耳听验收。详见[设置核对](../../../docs/MAID_CONVERSATION_20261108.md)。

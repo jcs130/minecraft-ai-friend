@@ -4,11 +4,11 @@ async function until(fn){for(let end=Date.now()+15000;Date.now()<end;){if(await 
 function vint(n){const out=[];do{let b=n&127;n>>>=7;if(n)b|=128;out.push(b);}while(n);return Buffer.from(out);}
 function readv(b,offset){let n=0,s=0,p=offset;for(;p<b.length&&s<35;s+=7){let v=b[p++];n|=(v&127)<<s;if(!(v&128))return[n,p];}throw Error('Invalid synthetic UDP packet');}
 export async function receiver(bot){
- const sock=createSocket('udp4'),state={audio:0,acks:0,errors:0,secret:false,packets:[],players:new Map(),stateChanges:0};let key,uuid,sequence=0n,closed=false;
+ const sock=createSocket('udp4'),state={audio:0,positional:0,positions:[],acks:0,errors:0,secret:false,packets:[],players:new Map(),stateChanges:0};let key,uuid,sequence=0n,closed=false;
  const send=(id,body=Buffer.alloc(0))=>{const iv=randomBytes(12),cipher=createCipheriv('aes-128-gcm',key,iv),encrypted=Buffer.concat([iv,cipher.update(Buffer.concat([Buffer.from([id]),body])),cipher.final(),cipher.getAuthTag()]);sock.send(Buffer.concat([Buffer.from([255]),uuid,vint(encrypted.length),encrypted]),25940,'127.0.0.1');};
  sock.on('message',(packet,rinfo)=>{try{
   assert.equal(rinfo.address,'127.0.0.1');assert.equal(rinfo.port,25940);assert.equal(packet[0],255);const[len,at]=readv(packet,1),enc=packet.subarray(at,at+len),dec=createDecipheriv('aes-128-gcm',key,enc.subarray(0,12));dec.setAuthTag(enc.subarray(-16));const data=Buffer.concat([dec.update(enc.subarray(12,-16)),dec.final()]);
-  if(data[0]===6){state.acks++;send(9);}else if(data[0]===8)send(8);else if(data[0]===9)send(10);else if(data[0]===2){const[size,start]=readv(data,33);if(size>0){state.audio++;state.packets.push(data.subarray(start,start+size).toString('base64'));}}
+  if(data[0]===6){state.acks++;send(9);}else if(data[0]===8)send(8);else if(data[0]===9)send(10);else if(data[0]===2||data[0]===4){const[size,start]=readv(data,data[0]===4?57:33);if(size>0){state.audio++;if(data[0]===4){state.positional++;state.positions.push([data.readDoubleBE(33),data.readDoubleBE(41),data.readDoubleBE(49)]);}state.packets.push(data.subarray(start,start+size).toString('base64'));}}
  }catch{state.errors++;}});
  const secret=packet=>{
   if(['voicechat:state','voicechat:states'].includes(packet.channel)){

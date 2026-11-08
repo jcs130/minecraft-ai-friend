@@ -39,6 +39,8 @@ jobs:
           node --check paper/integrations/touhou-maids/tests/brain-harness-stage.mjs
           node --check paper/integrations/touhou-maids/tests/social-stage.mjs
           python paper/integrations/touhou-maids/tests/run-conversation-rules.py
+          python paper/integrations/touhou-maids/tests/run-companion-rules.py --gson "$RUNNER_TEMP/maid-life-gson.jar"
+          node --check paper/integrations/touhou-maids/tests/companion-stage.mjs
           node --check paper/integrations/touhou-maids/tests/conversation-stage.mjs
           node --check paper/integrations/touhou-maids/tests/svc-receiver.mjs
       - name: Check native camera launch and appearance archives without connecting
