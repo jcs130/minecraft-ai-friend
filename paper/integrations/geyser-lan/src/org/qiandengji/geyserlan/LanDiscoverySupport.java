@@ -58,7 +58,7 @@ public final class LanDiscoverySupport {
     private void open() throws Exception {
         long guid=new java.security.SecureRandom().nextLong();
         var identity=OperatorIdentity.fromPemOrCreate(geyser.getBootstrap().getConfigFolder().resolve("nethernet/identity.pem").toFile(),GeyserImpl.NAME+"-"+geyser.config().gameplay().serverName());
-        signaling=new NetherNetDiscoverySignaling(guid,new InetSocketAddress("0.0.0.0",discoveryPort));
+        signaling=new LanAnswerSignaling(guid,new InetSocketAddress("0.0.0.0",discoveryPort),ledger);
         signaling.setServerIdentity(identity);signaling.setTokenTrust(TokenTrust.MINECRAFT_AUTH);
         var ping=new BedrockPingHandler(geyser);
         signaling.setMotdProvider((host,remote,client)->{

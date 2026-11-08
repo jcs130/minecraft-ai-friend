@@ -1,5 +1,7 @@
 # Geyser 新版基岩局域网发现
 
+2026-11-08：Xbox紧凑回答候选`youer-lan2`已补充，现役仍lan1。仅对家庭LAN的无身份offer移除回复的`a=identity`行，保留其余握手及既有签名登录验证。实测载荷1808→864字节；真实Xbox最终登录仍待发布后验收。见[本次记录](../../docs/BEDROCK_XBOX_LAN_20261108.md)。以下为11月7日已部署状态。
+
 状态：2026-11-07 16:51正式部署完成；真实手机发现/登录仍待验。部署结果另见 [运维记录](../../docs/BEDROCK_LAN_20261107.md)。
 
 Bedrock 26.60 起使用 NetherNet。正式服已有 HTTP 信令与 WebRTC，旧 RakNet Pong 仍成功，但官方 Geyser 尚未启动 UDP 7551 的 LAN discovery。只开旧 UDP 19132 不能让新版手机在局域网世界列表中发现它。上游问题见 [Geyser #6853](https://github.com/GeyserMC/Geyser/issues/6853)，协议见 [Mojang NetherNet guide](https://mojang.github.io/bedrock-protocol-docs/guides/nether-net-onboarding-guide/)。
