@@ -68,8 +68,8 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/voice-deps"
           curl --proto '=https' --tlsv1.2 -fsSL https://fill-data.papermc.io/v1/objects/fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef/velocity-3.4.0-SNAPSHOT-563.jar -o "$RUNNER_TEMP/voice-deps/velocity.jar"
-          curl --proto '=https' --tlsv1.2 -fsSL https://github.com/kyngs/LibreLogin/releases/download/0.24.0/LibreLogin.jar -o "$RUNNER_TEMP/voice-deps/LibreLogin.jar"
-          curl --proto '=https' --tlsv1.2 -fsSL https://github.com/retrooper/packetevents/releases/download/v2.8.0/packetevents-velocity-2.8.0.jar -o "$RUNNER_TEMP/voice-deps/packetevents.jar"
+          curl --proto '=https' --tlsv1.2 -fsSL https://cdn.modrinth.com/data/tL0SCXYq/versions/reFUiAdB/LibreLogin.jar -o "$RUNNER_TEMP/voice-deps/LibreLogin.jar"
+          curl --proto '=https' --tlsv1.2 -fsSL https://cdn.modrinth.com/data/HYKaKraK/versions/QrZrSKnd/packetevents-velocity-2.8.0.jar -o "$RUNNER_TEMP/voice-deps/packetevents.jar"
           python paper/integrations/login-guard/tests/run_transport_tests.py --deps "$RUNNER_TEMP/voice-deps" --output "$RUNNER_TEMP/voice-transport-tests"
           node --test paper/integrations/proximity-voice/tests/client.test.mjs
   source-safety:

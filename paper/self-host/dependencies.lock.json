@@ -46,7 +46,7 @@
     {
       "component": "EssentialsX",
       "path": "plugins/EssentialsX-2.21.2.jar",
-      "url": "https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsX-2.21.2.jar",
+      "url": "https://cdn.modrinth.com/data/hXiIvTyT/versions/Oa9ZDzZq/EssentialsX-2.21.2.jar",
       "algorithm": "sha256",
       "digest": "0b759026f02f3c547c32886f3666db3c1f94cff73e141ae5648313fd0d0bdfc6",
       "licenseSource": "https://github.com/EssentialsX/Essentials"
@@ -54,9 +54,9 @@
     {
       "component": "ProtocolLib",
       "path": "plugins/ProtocolLib-5.3.0.jar",
-      "url": "https://github.com/dmulloy2/ProtocolLib/releases/download/5.3.0/ProtocolLib.jar",
+      "url": "https://repo.maven.apache.org/maven2/net/dmulloy2/ProtocolLib/5.3.0/ProtocolLib-5.3.0-all.jar",
       "algorithm": "sha256",
-      "digest": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d",
+      "digest": "b5f31dbc0a910ca194952556bb919a66e61a724723688cb68215b2b605b9c974",
       "licenseSource": "https://github.com/dmulloy2/ProtocolLib"
     },
     {
@@ -86,7 +86,7 @@
     {
       "component": "SkinsRestorer",
       "path": "plugins/SkinsRestorer.jar",
-      "url": "https://github.com/SkinsRestorer/SkinsRestorer/releases/download/15.12.6/SkinsRestorer.jar",
+      "url": "https://cdn.modrinth.com/data/TsLS8Py5/versions/ziIzW16f/SkinsRestorer.jar",
       "algorithm": "sha256",
       "digest": "a85b4a370f988741c9a38f4d0498262edacbf3220314790ac1c127461996359c",
       "licenseSource": "https://github.com/SkinsRestorer/SkinsRestorer"
