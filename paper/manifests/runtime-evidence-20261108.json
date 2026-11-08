@@ -259,5 +259,46 @@
     "Artifact presence is not a process loader receipt",
     "Unchanged upstream artifacts do not receive the latest maid commit as their source commit",
     "Component observations are sampled facts, not a full inventory refresh or rollback plan"
-  ]
+  ],
+  "clientReadbackFollowup": {
+    "checkedAt": "2026-11-08T08:27:50.174388+00:00",
+    "scope": "client_source_and_isolated_consumers_not_original_host_readback",
+    "mainCommit": "ad7cd5fb117299f296c3b18501f99c39f9653697",
+    "mergedPr": 19,
+    "mergedAt": "2026-11-08T03:21:35Z",
+    "declaredVersions": {
+      "world": "0.4.1-rc.71-preview.29",
+      "core": "0.5.7-rc.160-preview.30",
+      "serverPack": "0.5.0-rc.50-preview.25"
+    },
+    "runtimeLoadedVersions": {
+      "world": null,
+      "core": null,
+      "serverPack": null
+    },
+    "readOnlyCandidatePr": "https://github.com/jcs130/cortico-world-qiandengji/pull/21",
+    "candidateCommit": "7d72943ed535b27504f49d23536f45dd0a27ae5f",
+    "originalHostAccessed": false,
+    "liveQueriesCollected": 0,
+    "liveModelInputReceiptsCollected": 0,
+    "published": false,
+    "reloaded": false,
+    "localValidation": {
+      "worldTestsPassed": 498,
+      "worldFilesPassed": 61,
+      "sdkTools": 37,
+      "mcpTools": 44,
+      "officialApi6DryMountPassed": 5,
+      "privateApi5ConstructionTools": 33,
+      "modelCalls": 0,
+      "gameConnections": 0
+    },
+    "allClientAcceptanceComplete": false,
+    "limits": [
+      "SourceReceipt and recovery eventId changes are candidates only",
+      "Current-connection dedup is not persistent host delivery evidence",
+      "Spatial revision/time must not be relabeled as supervisor observationId",
+      "C12/C13 and controlled write/device checks require their own authorization"
+    ]
+  }
 }
