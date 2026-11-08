@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "release": "dungeon-exam-release-20261108-r1",
+  "status": "deployed",
+  "completedAt": "2026-11-08T13:57:56.5329514+08:00",
+  "sourcePr": "https://github.com/jcs130/minecraft-ai-friend/pull/118",
+  "sourceCommit": "56fa8938f31f8a1affa6f04d76d571570c825172",
+  "mergedCommit": "a528bfd8ca12ca247033abcb79aa457c24c97ea3",
+  "sourceTree": "230c028572a4af1d26c3f29996445699849d61f4",
+  "runtimeVersion": "0.4.47.60-dungeon-exam-rpg",
+  "packaging": "minimal overlay on live 0.4.47.59 package; original filename retained, runtime plugin version updated",
+  "files": [
+    {
+      "target": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "before": "39f1a92785c2b1bec4918c05bcacf49dc837b27923d84fd849430ab34a6498df",
+      "source": "candidate/AgentFriend-0.4.47.60-dungeon-exam-rpg.jar",
+      "sha256": "d922bb9e83e21ab6d3137cbee68752fcb55f627d6ba2d9cf96670c201467724d",
+      "rollback": "rollback/AgentFriend-0.4.47.59-shop-rpg.jar"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\AgentFriend\\skill-assessments.yml",
+      "before": "35210b28676b131a36a09d4855f8e3be0395de42fab55a6653d0e986510ea8a2",
+      "source": "candidate/skill-assessments.yml",
+      "sha256": "d6967cee05aa687a0106cde8265ca91eaacf217da3d6ed3a933ceeb95458b80c",
+      "rollback": "rollback/skill-assessments.yml"
+    }
+  ],
+  "ci": {
+    "run": 42449759901,
+    "passed": 6
+  },
+  "isolatedTests": {
+    "examRegression": 32,
+    "existingGroups": 9,
+    "progressCorrection": 22,
+    "actualCandidateDecodeEncodeProcesses": 2,
+    "nativeFullGameRehearsal": false
+  },
+  "formalChecks": {
+    "passed": true,
+    "checks": [
+      "candidate and all unrelated binaries verified",
+      "AgentFriend enabled",
+      "QiandengjiMaidBridge enabled",
+      "VortexRPG enabled",
+      "QiandengjiRpg enabled",
+      "QiandengVoice enabled",
+      "WorldObserver enabled",
+      "game responsive",
+      "performance telemetry ready",
+      "original native content retained",
+      "original exam proof persisted and no reward duplication",
+      "dungeon service ready"
+    ],
+    "readOnly": true,
+    "playerActions": false,
+    "progress": {
+      "passed": true,
+      "runId": "6aa9999f-2ecc-48e0-bd20-760a64d986b4",
+      "state": "ready",
+      "grade": 4,
+      "submitted": false
+    }
+  },
+  "preservedDuringCodeInstall": {
+    "passed": true,
+    "files": 1647
+  },
+  "progressRepair": {
+    "passed": true,
+    "player": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "runId": "6aa9999f-2ecc-48e0-bd20-760a64d986b4",
+    "evidence": "site:illager_camp:57fd2b96-f2d1-47f7-9140-b5e54a67ec29",
+    "state": "ready",
+    "beforeSha256": "4bff9db6fe98f8975326ce39f4cbf61ad56827595ce0147476df6b256ac69658",
+    "afterSha256": "b03a194ac4dedc777338a36003d0d45741ee5c170c9e76bf65776f06fe07b8e8",
+    "grade": 4,
+    "submitted": false,
+    "rewardGranted": false,
+    "preservedRetryId": "5fd60ce9-d5d2-482d-b37b-e585adbcf713",
+    "changedFields": [
+      "originalExam.state",
+      "originalExam.reason",
+      "originalExam.proofs",
+      "active/history placement if retried"
+    ],
+    "allOtherPlayersAndCertificatesPreserved": true
+  },
+  "coldBackupProof": [
+    {
+      "verifiedColdCopy": true,
+      "root": "E:\\MC\\backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "39f1a92785c2b1bec4918c05bcacf49dc837b27923d84fd849430ab34a6498df",
+          "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+        },
+        {
+          "sha256": "35210b28676b131a36a09d4855f8e3be0395de42fab55a6653d0e986510ea8a2",
+          "name": "\\plugins\\AgentFriend\\skill-assessments.yml"
+        }
+      ],
+      "manifestSha256": "9a3a0ff37d1cd89531070cdf180650797cd6144fa46eb13df7fff67723558119"
+    },
+    {
+      "verifiedColdCopy": true,
+      "root": "F:\\MC-backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "39f1a92785c2b1bec4918c05bcacf49dc837b27923d84fd849430ab34a6498df",
+          "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+        },
+        {
+          "sha256": "35210b28676b131a36a09d4855f8e3be0395de42fab55a6653d0e986510ea8a2",
+          "name": "\\plugins\\AgentFriend\\skill-assessments.yml"
+        }
+      ],
+      "manifestSha256": "c25cfde0d32cfd0e2c4cf4a784aaee77afc24436585c2cbe38ae32c0d9304c3d"
+    }
+  ],
+  "remaining": [
+    "original client main-personality understanding evidence",
+    "native human/Bedrock UI acceptance"
+  ],
+  "rollback": "Code and description only; preserve all latest world, character, exam, certificate, reward and action state. Do not replay this consumed maintenance entry.",
+  "originalClientSubmission": {
+    "passed": true,
+    "runId": "6aa9999f-2ecc-48e0-bd20-760a64d986b4",
+    "state": "submitted_by_original_client",
+    "grade": 5,
+    "operatorSubmitted": false,
+    "observedAt": "2026-11-08T06:01:38.040227+00:00",
+    "serverCommandAt": "2026-11-08T14:00:16+08:00",
+    "source": "Original ag_CorMy command in server latest.log, matched persisted original examination certificate"
+  }
+}
