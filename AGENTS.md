@@ -2,6 +2,10 @@
 
 0.1.14-companion候选修复日常语音丢弃正式回复、自然接话和旧聊天回执截断；原肥鱼闲置时复用原生护卫，成功远传/跨维度时只携带附近原女仆到已加载安全地面。208规则/隔离/正常重启检查通过，六槽装备、原身份、回执保持；E/F仅代码候选与前像核验。正式仍0.1.13-receipts，未改真实角色、TTS或世界，真人耳听/可米自主体验未验；需要本批重启确认，不重放历史维护。见[候选说明](paper/docs/MAID_COMPANION_20261108.md)与[清单](paper/manifests/maid-companion-candidate-20261108.json)。基岩女仆PR124另案未部署。
 
+## 2026-11-08 Xbox 局域网握手候选，未部署
+
+Xbox26.60从LAN列表出现Guardian/InitialConnection-146，20:53未到达游戏登录。现役LAN回复实测1808字节；新Geyser1295/youer-lan2仅对家庭网段无身份LAN offer使用864字节紧凑回答，原Xbox签名及nonce验证保持。72项检查和四次真实DTLS/SCTP网络设置通过，含并发和正常重启；重复构建一致，其他20919条目保持。尚未替换正式JAR，真实Xbox登录待部署后验收；维护需当次窗口、预告及E/F当前冷备，勿重放旧入口。见[候选记录](paper/docs/BEDROCK_XBOX_LAN_20261108.md)。
+
 ## 2026-11-08 女仆回执、独立回收报价与CLI格式已部署
 
 PR119/121已合并，6CI通过，正常预告/原JVM退出/E-F当前冷备后实际加载AF0.4.47.61-market-cli-rpg与女仆桥0.1.13-receipts。11项正式只读启动检查通过，2484份角色文件、77原凭据和女神7任务保持。回收每人最多32份5分钟独立报价；原主人回执和订阅附近chat-result修复，applied不代表任务完成。没有重放可米考试或未知操作。原客户端主人格/真人听感仍待验；入口已消费，代码回退不回灌角色账本。见[发布记录](paper/docs/MAID_MARKET_CLI_20261108.md)及[部署清单](paper/manifests/maid-market-cli-deployed-20261108.json)。以下候选是历史。

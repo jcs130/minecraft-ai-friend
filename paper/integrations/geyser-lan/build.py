@@ -26,6 +26,7 @@ def main():
  argfile=out/'compile.args';argfile.write_text('\n'.join('"'+str(x).replace('\\','/')+'"' for x in ['-proc:none','-encoding','UTF-8','--release','21','-cp',cp,'-d',classes,*sources]),encoding='utf8')
  run([str(a.jdk/'bin/javac.exe'),'@'+str(argfile)],'compile.log')
  run([str(a.jdk/'bin/java.exe'),'-ea','-cp',str(classes),'org.qiandengji.geyserlan.LanAdmissionLedgerTest'],'admission-test.log')
+ run([str(a.jdk/'bin/java.exe'),'-ea','-cp',str(classes),'org.qiandengji.geyserlan.LanAnswerPolicyTest'],'answer-test.log')
  changed={};methods={}
  with zipfile.ZipFile(a.upstream)as z:
   for entry,pin in PINS.items():
@@ -34,7 +35,7 @@ def main():
    tool='GeyserLambdaLookupPatch' if 'InternalLambdaFactory' in entry else 'GeyserLanPatch'
    log=Path(entry).stem+'.patch.json';run([str(a.jdk/'bin/java.exe'),'-cp',str(classes)+os.pathsep+cp,tool,str(before),str(after)],log)
    changed[entry]=after.read_bytes();methods[entry]=json.loads((out/log).read_text())
-  jar=out/'Geyser-Spigot-2.12.1-b1295-youer-lan1.jar'
+  jar=out/'Geyser-Spigot-2.12.1-b1295-youer-lan2.jar'
   with zipfile.ZipFile(jar,'x',zipfile.ZIP_DEFLATED)as target:
    for info in z.infolist():target.writestr(copy.copy(info),changed.get(info.filename,z.read(info)))
    for file in sorted((classes/'org/qiandengji/geyserlan').glob('*.class')):
@@ -46,6 +47,6 @@ def main():
   assert set(actual)==set(PINS)
   additions=sorted(set(after.namelist())-set(before.namelist()));assert all(x.startswith('org/qiandengji/geyserlan/') for x in additions)
  run([str(a.jdk/'bin/java.exe'),'-ea','-cp',str(classes)+os.pathsep+str(jar),'GeyserLambdaLookupTest'],'lookup-test.log')
- record={'upstreamBuild':1295,'upstreamCommit':'1955f5151e2af01a7b51db1679e4324345690e70','upstreamSha256':UPSTREAM,'artifact':jar.name,'sha256':sha(jar.read_bytes()),'changedEntries':actual,'addedEntries':additions,'otherEntriesPreserved':len(before.namelist())-len(actual),'methods':methods,'tests':{'admission':(out/'admission-test.log').read_text().strip(),'lookup':(out/'lookup-test.log').read_text().strip()},'productionChanged':False}
+ record={'upstreamBuild':1295,'upstreamCommit':'1955f5151e2af01a7b51db1679e4324345690e70','upstreamSha256':UPSTREAM,'artifact':jar.name,'sha256':sha(jar.read_bytes()),'changedEntries':actual,'addedEntries':additions,'otherEntriesPreserved':len(before.namelist())-len(actual),'methods':methods,'tests':{'admission':(out/'admission-test.log').read_text().strip(),'answer':(out/'answer-test.log').read_text().strip(),'lookup':(out/'lookup-test.log').read_text().strip()},'productionChanged':False}
  (out/'build.json').write_text(json.dumps(record,indent=2),encoding='utf8');print(json.dumps(record))
 if __name__=='__main__':main()

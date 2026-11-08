@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "status": "isolated_candidate_not_deployed",
+  "version": "2.12.1-b1295-youer-lan2",
+  "sha256": "3cd7e6b87a795ff50fa19bd32feadb48cf0085b4df9c344cfa0c43fb980e64fd",
+  "productionBeforeSha256": "475593086cb3db32dc119a07870eef4433565c44474605478147f22ef8e4f226",
+  "repeatBuildIdentical": true,
+  "changedProductionEntries": [
+    "org/qiandengji/geyserlan/LanDiscoverySupport.class"
+  ],
+  "addedEntries": [
+    "org/qiandengji/geyserlan/LanAnswerPolicy$Peer.class",
+    "org/qiandengji/geyserlan/LanAnswerPolicy.class",
+    "org/qiandengji/geyserlan/LanAnswerSignaling.class"
+  ],
+  "otherEntriesPreserved": 20919,
+  "checks": {
+    "admission": 25,
+    "answerPolicy": 20,
+    "lookup": 4,
+    "network": 4,
+    "watchdog": 8,
+    "firewall": 11,
+    "total": 72
+  },
+  "protocolProbes": {
+    "live-before": {
+      "discoveryVersions": [
+        6,
+        7
+      ],
+      "protocol": 2225,
+      "xboxRequired": true,
+      "noncePresent": true,
+      "dtlsSctpConnected": true,
+      "networkSettingsPacket": 143,
+      "answerUdpBytes": 1808,
+      "answerIdentity": true,
+      "gameLoginTested": false
+    },
+    "qa-probe": {
+      "discoveryVersions": [
+        6,
+        7
+      ],
+      "protocol": 2225,
+      "xboxRequired": true,
+      "noncePresent": true,
+      "dtlsSctpConnected": true,
+      "networkSettingsPacket": 143,
+      "answerUdpBytes": 864,
+      "answerIdentity": false,
+      "gameLoginTested": false
+    },
+    "qa-concurrent-1": {
+      "discoveryVersions": [
+        6,
+        7
+      ],
+      "protocol": 2225,
+      "xboxRequired": true,
+      "noncePresent": true,
+      "dtlsSctpConnected": true,
+      "networkSettingsPacket": 143,
+      "answerUdpBytes": 864,
+      "answerIdentity": false,
+      "gameLoginTested": false
+    },
+    "qa-concurrent-2": {
+      "discoveryVersions": [
+        6,
+        7
+      ],
+      "protocol": 2225,
+      "xboxRequired": true,
+      "noncePresent": true,
+      "dtlsSctpConnected": true,
+      "networkSettingsPacket": 143,
+      "answerUdpBytes": 864,
+      "answerIdentity": false,
+      "gameLoginTested": false
+    },
+    "qa-restart-ready-probe": {
+      "discoveryVersions": [
+        6,
+        7
+      ],
+      "protocol": 2225,
+      "xboxRequired": true,
+      "noncePresent": true,
+      "dtlsSctpConnected": true,
+      "networkSettingsPacket": 143,
+      "answerUdpBytes": 864,
+      "answerIdentity": false,
+      "gameLoginTested": false
+    }
+  },
+  "restartEarlyProbe": "timed out before Ready; retained; passed after Ready",
+  "isolatedServerStoppedNormally": true,
+  "realXboxLoginVerified": false,
+  "productionChanged": false,
+  "identityValidationEnabled": true,
+  "newPublicPorts": false
+}
