@@ -17,7 +17,7 @@
 - 女仆 PR119 的32分类+6投递专项通过；隔离游戏21项附近聊天/身份/权限与回执检查、7项正常重启后原请求读取检查通过。没有操作正式女仆或重放未知请求。
 - 商城隔离实机40项通过，包含真实 Vault 金币、原版菜单确认、超过30秒后的多份报价、物品组件变化、跨账号、重复确认、故障待对账及格式路由。仅合成账号和隔离存档。
 - 正常重启后另3项检查通过：余额、无待处理重复结算及已购个人箱物品保持。
-- 首轮 CI 三项遇到 GitHub Releases 下载504；重试后仍有两项被依赖下载阻断。EssentialsX、SkinsRestorer、LibreLogin、PacketEvents 改用作者 Modrinth 发布的同一文件；四份下载均摘要匹配原锁定 SHA256。ProtocolLib 改用[作者 Maven Central 的5.3.0完整制品](https://repo.maven.apache.org/maven2/net/dmulloy2/ProtocolLib/5.3.0/ProtocolLib-5.3.0-all.jar)：其压缩包 SHA256 为 `b5f31dbc0a910ca194952556bb919a66e61a724723688cb68215b2b605b9c974`，原 GitHub 包为 `a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d`；真实解包比对3525条目全部相同、无新增/删除，差异限归档包装。仅更新隔离自建/CI下载锁，正式ProtocolLib不替换，没有升级插件代码或取消校验。自建服10项测试通过。
+- 首轮 CI 三项遇到 GitHub Releases 下载504；重试后仍有两项被依赖下载阻断。EssentialsX、SkinsRestorer、LibreLogin、PacketEvents、TAB 改用作者 Modrinth 发布的同一文件；五份下载均摘要匹配原锁定 SHA256。ProtocolLib 改用[作者 Maven Central 的5.3.0完整制品](https://repo.maven.apache.org/maven2/net/dmulloy2/ProtocolLib/5.3.0/ProtocolLib-5.3.0-all.jar)：其压缩包 SHA256 为 `b5f31dbc0a910ca194952556bb919a66e61a724723688cb68215b2b605b9c974`，原 GitHub 包为 `a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d`；真实解包比对3525条目全部相同、无新增/删除，差异限归档包装。仅更新隔离自建/CI下载锁，正式ProtocolLib不替换，没有升级插件代码或取消校验。自建服10项测试通过。
 - 扩大的旧语音脚本在24项通过后遇到 `Timeout ambient media`：随机环境语音触发未观察到新的媒体请求，未确认属于本次代码缺陷。该失败保留，未计作整套通过。限定回执/交谈测试与重启测试另行通过，不替代真人麦克风/耳听和现有 `UPLOAD_INCOMPLETE` 问题的验收。
 
 私有证据在 `E:/MC/ops/repairs/maid-market-cli-20261108-r1/`。候选 AgentFriend `0.4.47.61-market-cli-rpg`、女仆桥 `0.1.13-receipts`；保留现役其余638/55个归档条目。本文件记录候选时点，正式部署须另有成功回执。服主已授权本批上线，仍须 CI、安全窗口、三分钟预告和 E/F 当前冷备。回退仅代码，不回灌世界、考试、角色、物品、金币、生命周期或动作账本，不重放已消费维护入口。

@@ -78,7 +78,7 @@
     {
       "component": "TAB",
       "path": "plugins/TAB-6.2.1-Paper-1.20.5-1.21.4.jar",
-      "url": "https://github.com/NEZNAMY/TAB/releases/download/6.2.1/TAB.v6.2.1.-.Paper.1.20.5.-.1.21.4.jar",
+      "url": "https://cdn.modrinth.com/data/gG7VFbG0/versions/xgEj2eCT/TAB%20v6.2.1%20-%20Paper%201.20.5%20-%201.21.4.jar",
       "algorithm": "sha256",
       "digest": "bdf8ea4e6b194197a02fdd7abee9845e1000183bc4df9c0e5280505fc1f51c24",
       "licenseSource": "https://github.com/NEZNAMY/TAB"
