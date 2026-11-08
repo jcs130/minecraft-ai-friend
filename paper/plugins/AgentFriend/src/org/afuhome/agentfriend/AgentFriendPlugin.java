@@ -674,7 +674,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     void nativeSiteCompleted(Player p,String site,String run) {
         if(!nativeRpg.selected())return;
-        if(skillAssessments!=null)skillAssessments.proof(p,"native_clear","site:"+site+":"+run);
+        // Reward replay/claim is not fresh examination evidence. The live
+        // completion boundary records it separately, before reward limits.
         nativeRpg.siteCompleted(p,site,run);
     }
 

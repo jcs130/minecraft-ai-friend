@@ -8,7 +8,7 @@ combat_basic:
   timeout-seconds: 1800
 conquest_basic:
   title: 副本攻略认证
-  description: 开考后完整攻略一处开放的遗迹副本，全部房间完成并返回首室；服务器实际结算才算，抵达入口或单独杀怪不算。
+  description: 开考后新开一场遗迹副本，逐室实际参战并完整通关，服务器自动登记证明，无需返回首室。每日奖励上限不影响考试；传送与重连保留原考试和截止时间。抵达入口、旁观或领取旧奖励不算；用 /mycli guild exam status 核对，ready 后提交。
   primitive: contract_record
   proofs: [native_clear]
   all-proofs: true
