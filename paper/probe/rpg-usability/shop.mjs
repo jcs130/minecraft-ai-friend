@@ -59,6 +59,8 @@ try{
  }else{
    await pricesCannotFundCraftedGear();
    await rc('qduse coins '+bot.username+' 200.25');const before=await wallet();check('synthetic fixture funds the real Vault bank',before>=200.25);
+   const alias=await json('/mycli arena wallet --json');check('legacy arena wallet accepts explicit JSON',Number(alias.balance)===before);
+   const format=await json('/mycli arena start --json','MC_QUERY_ERROR');check('unsupported trial format gives exact nonexecuted alternative',format.errorCode==='UNSUPPORTED_FORMAT'&&format.nextCommand==='/mycli arena start');
    const s=await ask('/mycli trade shop list');check('concise Chinese shop exposes supplies and executable next step',s.includes('火把')&&s.includes('torches')&&s.includes('trade shop buy')&&!s.includes('serializedItemBase64')&&!s.includes('MC_ARENA_ECONOMY'));
    check('browsing never spends money',await wallet()===before);
    const old=await json('/mycli arena shop list');check('legacy arena JSON remains compatible',old.action==='shop_list'&&old.item.serializedItemBase64&&old.currency==='金币');
@@ -88,6 +90,10 @@ try{
    const other=await connect('b');const main=bot;bot=other;
    const poor=await json('/mycli trade shop buy diamond_chestplate --json');check('insufficient balance rejects purchase',!poor.success&&poor.reason==='insufficient_balance');bot=main;
    const quote=await json('/mycli trade recycle quote bag 9 1 --json');assert(quote.success);
+   await rc('minecraft:item replace entity '+bot.username+' inventory.1 with iron_axe');
+   const second=await json('/mycli arena recycle quote bag 10 1 --json');
+   check('independent quotes expose five minute expiry and exact confirmation',second.success&&second.quoteId!==quote.quoteId&&second.validForSeconds===300&&second.confirmCommand.endsWith(second.quoteId));
+   await sleep(31000);
    bot=other;const cross=await json('/mycli trade recycle sell '+quote.quoteId+' --json');check('quotes cannot be used by another account',!cross.success);bot=main;
    const creditBefore=await wallet();const sold=await ask('/mycli trade recycle sell '+quote.quoteId);
    await until(()=>bot.lines.some(s=>s.includes('回收成功')),'async recycle');

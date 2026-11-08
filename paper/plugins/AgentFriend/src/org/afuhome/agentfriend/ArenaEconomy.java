@@ -9,6 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.IdentityHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +38,7 @@ import org.bukkit.persistence.PersistentDataType;
 /** Existing per-UUID RPG shop/recycling; one Vortex bank, shared by text and native menus. */
 final class ArenaEconomy implements Listener {
     private static final String WALLET = "dungeon-emerald-wallet.";
-    private static final long QUOTE_LIFETIME_MS = 30_000L;
+    private static final long QUOTE_LIFETIME_MS = 300_000L;
     private static final int MAX_BALANCE = 1_000_000_000;
     private static final String TRIAL_LORE = "千灯纪试炼战利品";
     private static final Set<String> NAMED_REWARDS = Set.of("冒险者铁剑", "守护铁靴", "迅发弩",
@@ -90,7 +91,33 @@ final class ArenaEconomy implements Listener {
     // Only scoped on the server thread. Async settlement explicitly captures its request format.
     private boolean textReply;
     private final Map<UUID, JsonObject> recyclingReads = new HashMap<>();
-    private final Map<UUID, Quote> quotes = new HashMap<>();
+    private final Map<UUID, LinkedHashMap<String, Quote>> quotes = new HashMap<>();
+
+    private void rememberQuote(Quote quote) {
+        long now = System.currentTimeMillis();
+        quotes.values().forEach(book -> book.values().removeIf(q -> q.expiresAt() < now));
+        quotes.values().removeIf(Map::isEmpty);
+        var book = quotes.computeIfAbsent(quote.owner(), ignored -> new LinkedHashMap<>());
+        // Repricing one slot invalidates only that slot, not other selected equipment.
+        book.values().removeIf(q -> q.stash() == quote.stash() && q.slot() == quote.slot());
+        while (book.size() >= 32) book.remove(book.keySet().iterator().next());
+        book.put(quote.id(), quote);
+    }
+
+    private Quote findQuote(UUID owner, String id) {
+        var book = quotes.get(owner);
+        return book == null ? null : book.get(id);
+    }
+
+    private Quote slotQuote(UUID owner, boolean stash, int slot) {
+        var book = quotes.get(owner);
+        return book == null ? null : book.values().stream().filter(q -> q.stash() == stash && q.slot() == slot).findFirst().orElse(null);
+    }
+
+    private void consumeQuote(UUID owner, String id) {
+        var book = quotes.get(owner);
+        if (book != null) { book.remove(id); if (book.isEmpty()) quotes.remove(owner); }
+    }
     private final Map<Inventory, Menu> menus = new IdentityHashMap<>();
 
     ArenaEconomy(AgentFriendPlugin plugin, DungeonManager dungeon) {
@@ -229,10 +256,11 @@ final class ArenaEconomy implements Listener {
                     player.sendMessage("§e[item_changed] 该槽物品已改变，未报价或出售。正在刷新回收列表，请重新选择。");
                     Bukkit.getScheduler().runTask(plugin,()->openRecycleMenu(player,menu.page()));return;
                 }
-                quotes.remove(player.getUniqueId());
+                Quote previous = slotQuote(player.getUniqueId(),candidate.stash(),candidate.slot());
+                if(previous != null) consumeQuote(player.getUniqueId(),previous.id());
                 withReplyMode(true,()->quote(player, new String[]{"arena", "recycle", "quote", candidate.stash() ? "chest" : "bag",
                         Integer.toString(candidate.stash() ? candidate.slot() + 1 : candidate.slot())}));
-                Quote issued = quotes.get(player.getUniqueId());
+                Quote issued = slotQuote(player.getUniqueId(),candidate.stash(),candidate.slot());
                 if (issued != null && issued.stash() == candidate.stash() && issued.slot() == candidate.slot())
                     Bukkit.getScheduler().runTask(plugin, () -> openConfirmMenu(player, issued));
             } else if (slot == 45) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, menu.page() - 1));
@@ -492,7 +520,7 @@ final class ArenaEconomy implements Listener {
         int price = unitPrice(stack) * quantity;
         String quoteId = UUID.randomUUID().toString();
         long expiresAt = System.currentTimeMillis() + QUOTE_LIFETIME_MS;
-        quotes.put(owner, new Quote(owner, quoteId, stash, slot, quantity, price,
+        rememberQuote(new Quote(owner, quoteId, stash, slot, quantity, price,
                 digest(stack.serializeAsBytes()), expiresAt));
         JsonObject details = new JsonObject();
         details.addProperty("quoteId", quoteId);
@@ -500,6 +528,10 @@ final class ArenaEconomy implements Listener {
         details.addProperty("slot", stash ? slot + 1 : slot);
         details.addProperty("price", price);
         details.addProperty("expiresAt", expiresAt);
+        details.addProperty("validForSeconds", QUOTE_LIFETIME_MS / 1000);
+        details.addProperty("confirmCommand", "/mycli trade recycle sell " + quoteId);
+        details.addProperty("refreshCommand", "/mycli trade recycle quote " + (stash ? "chest" : "bag") + " " + (stash ? slot + 1 : slot) + " " + quantity);
+        details.addProperty("maxOutstandingQuotes", 32);
         reply(player, "quote", true, "ok", item(stack), quantity, balance(owner), false, details);
     }
 
@@ -509,7 +541,7 @@ final class ArenaEconomy implements Listener {
             reply(player, "sell", false, "usage_sell_quote_id", null, 0, balance(owner), false, null);
             return;
         }
-        Quote quote = quotes.get(owner);
+        Quote quote = findQuote(owner, args[3]);
         if (quote == null || !quote.id().equals(args[3])) {
             if(nativeRpg.selected()&&nativeRpg.recyclingState(player).get("pending").getAsBoolean()){
                 reply(player,"sell",false,"recycle_pending",null,0,balance(owner),true,null);return;
@@ -517,9 +549,12 @@ final class ArenaEconomy implements Listener {
             reply(player, "sell", false, "quote_unknown_or_consumed", null, 0, balance(owner), false, null);
             return;
         }
-        quotes.remove(owner); // Consume first; retries can never sell a second item.
+        consumeQuote(owner, quote.id()); // Consume this exact quote first; retries never sell twice.
         if (System.currentTimeMillis() > quote.expiresAt()) {
-            reply(player, "sell", false, "quote_expired", null, 0, balance(owner), false, null);
+            JsonObject expired = new JsonObject();
+            expired.addProperty("nextCommand", "/mycli trade recycle quote " + (quote.stash() ? "chest" : "bag") + " " + (quote.stash() ? quote.slot() + 1 : quote.slot()) + " " + quote.quantity());
+            expired.addProperty("nextAction", "本次未出售；重新查询此槽报价，核对物品后再确认，不自动重卖");
+            reply(player, "sell", false, "quote_expired", null, 0, balance(owner), false, expired);
             return;
         }
         ItemStack current = source(player, quote.stash(), quote.slot());
@@ -815,7 +850,7 @@ final class ArenaEconomy implements Listener {
         boolean unresolved=Set.of("recycle_pending","recycle_unverified","money_pending","money_unverified").contains(reason);
         if(unresolved){response.addProperty("nextCommand","/mycli arena recycle status");response.addProperty("nextAction","交易待对账，保留原报价与物品证据，联系服主；不重复交易或补发金币");}
         ActionFeedback.Advice advice = success||unresolved ? null : ActionFeedback.advice("economy", reason, "");
-        if (advice != null) advice.add(response);
+        if (advice != null && !response.has("nextCommand")) advice.add(response);
         if(textReply){player.sendMessage(EconomyPresentation.text(response));return;}
         // Player#sendMessage is point-to-point: never publish economy state to public chat.
         player.sendMessage("MC_ARENA_ECONOMY " + response);

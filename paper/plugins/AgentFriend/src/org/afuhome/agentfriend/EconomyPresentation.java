@@ -70,7 +70,7 @@ final class EconomyPresentation {
                     +condition(item)+"；单价 "+value(r,"unitPrice","?")+"金币。报价：/mycli trade recycle quote "+value(r,"source","")+" "+value(r,"slot","")+" 1";
             case "recycle_list_end" -> "§b【装备回收】第"+value(r,"page","1")+"/"+value(r,"pages","1")+"页，共"+value(r,"total","0")
                     +"项；手持、穿戴、绑定和特殊装备保留，材料可远程存箱。报价后再确认sell；下一页 /mycli trade recycle list <页码>；真人菜单 /mycli trade recycle menu。";
-            case "quote" -> "§e【回收报价】"+name+" ×"+value(r,"quantity","0")+"，可得 "+value(r,"price","?")+" 金币；尚未卖出，30秒有效。确认：/mycli trade recycle sell "+value(r,"quoteId","")+"；取消无需操作。";
+            case "quote" -> "§e【回收报价】"+name+" ×"+value(r,"quantity","0")+"，可得 "+value(r,"price","?")+" 金币；尚未卖出，5分钟有效；不同槽位报价互不覆盖。确认：/mycli trade recycle sell "+value(r,"quoteId","")+"；取消无需操作。";
             case "sell" -> "§a【回收成功】"+name+" ×"+value(r,"quantity","0")+"；金币 +"+value(r,"earned","?")+"，余额 "+money+"。购买补给：/mycli trade shop list";
             case "buy" -> "§a【购买成功】"+name+" ×"+value(r,"quantity","0")+"；已扣 "+value(r,"spent","?")+" 金币，余额 "+money+"。商品已保存至个人箱待入箱队列；取货 /mycli arena stash page 1。箱满则继续保留，不要重复购买。";
             case "wallet","recycle_status" -> (r.has("pending")&&r.get("pending").getAsBoolean()
@@ -93,7 +93,7 @@ final class EconomyPresentation {
         case "recycle_pending","recycle_unverified","money_pending","money_unverified","receipt_unavailable" -> "交易结果待对账，不重复出售、购买或补发。查询 /mycli trade recycle status，保留原记录并联系服主。";
         case "pending_queue_full" -> "个人箱待入箱队列已满，未购买、未扣费。用 /mycli arena stash page 1 整理箱子，再重新开箱接收排队物品。";
         case "not_recyclable_or_protected" -> "这件装备受保护或不在回收范围；当前手持、穿戴、绑定和特殊装备不能卖。用 /mycli trade recycle list 选服务器列出的装备，材料用个人箱保存。";
-        case "quote_expired","quote_unknown_or_consumed","item_changed" -> "报价已过期、已用过或物品已改变；本次未再次出售。先 /mycli trade wallet 核对，再 /mycli trade recycle list 获取新报价。";
+        case "quote_expired","quote_unknown_or_consumed","item_changed" -> "报价已过期、已确认、被同槽新报价替换或物品改变；本次未再次出售。先 /mycli trade wallet 核对，再 /mycli trade recycle list 查槽位并 quote；仅拿到新报价不等于卖出。";
         case "invalid_offer_or_quantity","usage_shop_list_buy_wallet" -> "商品ID或份数不正确；未购买。先 /mycli trade shop list 复制ID；/mycli trade shop buy <ID> [份数]。非堆叠装备一次1件，物资每次最多一组。";
         case "wallet_limit" -> "金币余额将超过上限，未出售。先 /mycli trade wallet 核对；按需 /mycli trade shop list 购买补给后再报价。";
         default -> "参数不正确，未成交。/mycli trade recycle list 查物品；quote bag <0–35槽> [数量] 或 quote chest <1–540槽> [数量]；收到报价后 sell <报价ID>。";
