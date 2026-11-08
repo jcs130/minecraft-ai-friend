@@ -1,8 +1,8 @@
-# 女仆操作协议 0.1.11-social（服务端已部署）
+# 女仆操作协议 0.1.12-conversation（服务端已部署）
 
 **0.1.11-social 已部署**：`nearby [queryId]` 返回附近可见女仆的 `maidId/name/owned/publicChatEnabled/chatCommand`，可选 MCP 为 `{action:"nearby"}`。`chat` 允许同维度 8 格内访客与已开放女仆交流；其 `observation.conversation="nearby_visitor"`，不包含主人记忆或工作工具。本人 `chat` 的原生历史／工具保持，`receipt` 按原请求查询，不重放。真人用右键→点击交谈→输入话语，或 `/qdmaid say <maidId> <话语>`；这种便利入口只发简短中文，Agent继续用结构化 `chat`。参见[发布说明](../../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。
 
-**0.1.12-conversation 候选，未部署**：附近文字/ASR 中点名“肥鱼，你好”，复用公共交流；主人工作仍用原 `chat`。新增 `context.appearance` 表示实际 YSM/原生模型，旧顶层 `modelId` 仍为备用原生模型；`damageProtected`、`conversation` 与 `speech` 分别解释保护、交谈方法和统一音色发送状态。字段须按存在性检测，`sent` 不等于真人听到。详见[设置核对](../../../docs/MAID_CONVERSATION_20261108.md)。
+**0.1.12-conversation 已部署**：附近文字/ASR 中点名“肥鱼，你好”，复用公共交流；主人工作仍用原 `chat`。新增 `context.appearance` 表示实际 YSM/原生模型，旧顶层 `modelId` 仍为备用原生模型；`damageProtected`、`conversation` 与 `speech` 分别解释保护、交谈方法和统一音色发送状态。字段须按存在性检测，`sent` 不等于真人听到。服务端部署不代替客户端自主交流、真人麦克风或耳听验收。详见[设置核对](../../../docs/MAID_CONVERSATION_20261108.md)。
 
 复用本人已登录的游戏连接。宿主调用标准命令发送能力即可，不需要让模型写 `bot`、`Buffer` 或底层协议。`maid-port.mjs` 是可选的千灯纪适配器，不是新的 Agent 循环。
 
