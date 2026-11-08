@@ -1,0 +1,431 @@
+{
+  "schema": 1,
+  "scope": "candidate_geometry_only",
+  "site": "creeping_crypt",
+  "world": "world",
+  "sourceCodeBase": "43a76e48effebf28f0a7504257a877b663efa425",
+  "observedAt": "2026-11-09T03:47:32+08:00",
+  "productionModified": false,
+  "productionPlayerMoved": false,
+  "fourPhases": {
+    "codeMerged": false,
+    "candidateValidated": true,
+    "productionDeployed": false,
+    "originalClientGameplayAccepted": false
+  },
+  "server": {
+    "kind": "Youer",
+    "version": "1.21.1-e3158632",
+    "neoForge": "21.1.252",
+    "bind": "127.0.0.1",
+    "port": 25928,
+    "rconPort": 25929,
+    "plugins": [
+      "ProtocolLib 5.3.0",
+      "CryptRouteQA 1"
+    ],
+    "fullProductionPluginMatrixValidated": false
+  },
+  "client": {
+    "mineflayer": "4.37.1",
+    "pathfinder": "2.4.5",
+    "protocol": "1.21.1",
+    "syntheticName": "ag_RUCrypta",
+    "syntheticUuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+    "mode": "ADVENTURE",
+    "op": false,
+    "canDig": false,
+    "canBuild": false,
+    "canParkour": false,
+    "waterRoutesForbidden": true,
+    "initialPlacement": "exterior only; no forward teleport to first room"
+  },
+  "geometry": {
+    "sourceSha256": "9cf28ee814aa7bfc0138586accee7867f8799d3d9127f3fa782e21925535c71f",
+    "sourceBytes": 11997184,
+    "geometrySha256": "353e7a02a5fc4d50d9c04dd206b7928e148d1cebb1426b57eaacf282591bc133",
+    "chunks": 110,
+    "removedBlockEntities": 1204,
+    "rootKeysRetained": [
+      "DataVersion",
+      "xPos",
+      "yPos",
+      "zPos",
+      "Heightmaps",
+      "isLightOn",
+      "Status",
+      "sections"
+    ],
+    "entitiesCopied": 0,
+    "playerFilesCopied": 0,
+    "inventoryContentsCopied": 0,
+    "productionModified": false,
+    "collisionBlockStatesPreserved": true
+  },
+  "blockChangeAudit": {
+    "at": "2026-11-08T19:46:44.097Z",
+    "productionModified": false,
+    "checkedBlocks": 10813440,
+    "expectedChanges": 34,
+    "confirmedChanges": 34,
+    "unexpectedCount": 0,
+    "unexpected": [],
+    "passed": true,
+    "afterSha256": "a104c684625f4b2f90f099ed0a9cea99710265d20f8d8e56d91730822f5a16ee"
+  },
+  "cases": [
+    {
+      "label": "forward-roof-original",
+      "status": "noPath",
+      "start": {
+        "label": "forward-roof-original",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1165.5,
+          94,
+          230.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": false,
+        "outside": false,
+        "moves": 0,
+        "walkedDistance": 0,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 152
+      },
+      "end": {
+        "label": "forward-roof-original",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1174.383294460359,
+          91,
+          240.1961703776381
+        ],
+        "dimension": "world",
+        "inFirstRoom": false,
+        "outside": false,
+        "moves": 118,
+        "walkedDistance": 22.799702323039167,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 7042
+      }
+    },
+    {
+      "label": "forward-candidate",
+      "status": "goal",
+      "start": {
+        "label": "forward-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1165.5,
+          94,
+          230.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": false,
+        "outside": false,
+        "moves": 0,
+        "walkedDistance": 0,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 155
+      },
+      "end": {
+        "label": "forward-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1160.5033129604178,
+          45.375,
+          210.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": true,
+        "outside": false,
+        "moves": 600,
+        "walkedDistance": 129.65164192416228,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 33445
+      }
+    },
+    {
+      "label": "return-candidate",
+      "status": "goal",
+      "start": {
+        "label": "return-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1160.5033129604178,
+          45.375,
+          210.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": true,
+        "outside": false,
+        "moves": 0,
+        "walkedDistance": 0,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 155
+      },
+      "end": {
+        "label": "return-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1166.517978671479,
+          94,
+          230.50615429711922
+        ],
+        "dimension": "world",
+        "inFirstRoom": false,
+        "outside": false,
+        "moves": 587,
+        "walkedDistance": 134.9863037830918,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 32914
+      }
+    },
+    {
+      "label": "forward-ground-candidate",
+      "status": "goal",
+      "start": {
+        "label": "forward-ground-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1169.5,
+          93,
+          231.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": false,
+        "outside": false,
+        "moves": 0,
+        "walkedDistance": 0,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 154
+      },
+      "end": {
+        "label": "forward-ground-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1160.5033129604178,
+          45.375,
+          210.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": true,
+        "outside": false,
+        "moves": 600,
+        "walkedDistance": 128.19712788557374,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 33402
+      }
+    },
+    {
+      "label": "return-ground-candidate",
+      "status": "goal",
+      "start": {
+        "label": "return-ground-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1160.5033129604178,
+          45.375,
+          210.5
+        ],
+        "dimension": "world",
+        "inFirstRoom": true,
+        "outside": false,
+        "moves": 0,
+        "walkedDistance": 0,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 153
+      },
+      "end": {
+        "label": "return-ground-candidate",
+        "phase": "walking",
+        "uuid": "c06fadbb-e02d-372c-9b6d-83ac1d4ec753",
+        "position": [
+          1168.9056616478533,
+          93,
+          231.5061478232429
+        ],
+        "dimension": "world",
+        "inFirstRoom": false,
+        "outside": false,
+        "moves": 581,
+        "walkedDistance": 133.07728145477338,
+        "breakAttempts": 0,
+        "placeAttempts": 0,
+        "digPackets": 0,
+        "teleportsWhileWalking": 0,
+        "interactions": 0,
+        "waterSamples": 0,
+        "damage": 0,
+        "health": 20,
+        "op": false,
+        "flying": false,
+        "mode": "ADVENTURE",
+        "elapsedMs": 32347
+      }
+    }
+  ],
+  "rawReceiptDigests": [
+    {
+      "file": "walking-roof-original.json",
+      "sha256": "b775abffe25b3205e995d51a28f13c688700ac636e162e5a9f74e99b46a5cbc0"
+    },
+    {
+      "file": "forward-roof-original-c06fadbb-e02d-372c-9b6d-83ac1d4ec753.json",
+      "sha256": "0cfa1f1b081ae191578d8d0a9f8b28344d72c4529f66489fef295d64db2ca62b"
+    },
+    {
+      "file": "walking-candidate.json",
+      "sha256": "7332e8ccb740a68d9b617b5a34cae216b2c6a38f6315845c4c9b5db3e1a51adf"
+    },
+    {
+      "file": "forward-candidate-c06fadbb-e02d-372c-9b6d-83ac1d4ec753.json",
+      "sha256": "b756cd1ad15f006b566b6d07a47ec9b3fd6b54af556b8fe3560e6a621eb246cf"
+    },
+    {
+      "file": "return-candidate-c06fadbb-e02d-372c-9b6d-83ac1d4ec753.json",
+      "sha256": "1473864601945382a29de42ab9a5509daa99b5169a7aeddab1dfb4e21bdea83c"
+    },
+    {
+      "file": "walking-ground-candidate.json",
+      "sha256": "3797c1e8ac2c1770d83b2609fbee42318ff9a92bb39bbd21965a69abeecfd087"
+    },
+    {
+      "file": "forward-ground-candidate-c06fadbb-e02d-372c-9b6d-83ac1d4ec753.json",
+      "sha256": "69426f2c9a317d167a1210408b83fd0036e08b8ed3660bcec6cf2a1b03288e91"
+    },
+    {
+      "file": "return-ground-candidate-c06fadbb-e02d-372c-9b6d-83ac1d4ec753.json",
+      "sha256": "7d1886f888499b226f24aafa5b37929be8617f2f1aa18652666485e2f6d742a7"
+    }
+  ],
+  "limitations": [
+    "No production map/config/role changes",
+    "No claim that every possible natural/crawl/swim route is impossible",
+    "routeVerified=false means the current query did not verify a route",
+    "Signs, production protection/admission, Bedrock/Web UI and original CorMy adoption pending",
+    "Stage world metadata was not restored; synthetic stage remains stopped"
+  ],
+  "fixtureJarSha256": "3d1e433986c4e5fefa5cf67e2014a237344d674a058e443f09ac8ba5056786e7",
+  "qaCleanup": {
+    "normalStop": true,
+    "qaPortsClosed": true,
+    "restoredPluginCount": 12,
+    "allRestoredPluginDigestsMatched": true,
+    "geometryAndHelperParked": true,
+    "productionJvmUntouched": true
+  },
+  "publishedBuildProof": {
+    "executedClassBytesMatchNativeFixture": true,
+    "executedClassCount": 3,
+    "omittedUnreferencedClass": [
+      "org/qiandengji/cryptqa/CryptRouteFixture$2.class"
+    ],
+    "omittedClassReferencedByCurrentClasses": false,
+    "syntaxChecksPassed": 5,
+    "nativeMovementCasesPassed": 4,
+    "baselineFailedBeforeGeometryChange": true,
+    "productionChanged": false,
+    "publicBuildJarSha256": "7ab6b209258bddb2750bea6021435963eae1f2c74df3aa6912eb717cedeb1655"
+  }
+}

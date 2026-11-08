@@ -1,0 +1,555 @@
+{
+  "schema": 1,
+  "type": "one_wide_switchback_roof_connector",
+  "entry": [
+    1165,
+    94,
+    230
+  ],
+  "lowerLanding": [
+    1165,
+    86.5,
+    229
+  ],
+  "orientation": "east",
+  "side": 1,
+  "changes": 34,
+  "solidRemoved": 23,
+  "routeIntersections": 0,
+  "reasons": [],
+  "cells": [
+    {
+      "pos": [
+        1166,
+        86,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "east",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1166,
+        87,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1166,
+        88,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:polished_andesite"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1167,
+        87,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "east",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1167,
+        88,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:polished_andesite"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1167,
+        89,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:mossy_stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1167,
+        90,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:cracked_stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1168,
+        88,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "east",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1168,
+        89,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1168,
+        90,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1168,
+        91,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:cracked_stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        89,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "east",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1169,
+        90,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        91,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        92,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        89,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:stone_bricks"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        90,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "west",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1169,
+        91,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:dirt"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        92,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:dirt"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        89,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:stone_bricks"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        90,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        91,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        92,
+        229
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        89,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:stone_bricks"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        90,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        91,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1170,
+        92,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1169,
+        93,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:dirt"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1168,
+        91,
+        230
+      ],
+      "before": {
+        "Properties": {
+          "waterlogged": "false",
+          "half": "top",
+          "shape": "straight",
+          "facing": "north"
+        },
+        "Name": "minecraft:stone_brick_stairs"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "west",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1168,
+        92,
+        230
+      ],
+      "before": {
+        "Properties": {
+          "waterlogged": "false",
+          "half": "bottom",
+          "shape": "straight",
+          "facing": "west"
+        },
+        "Name": "minecraft:stone_brick_stairs"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1168,
+        93,
+        230
+      ],
+      "before": {
+        "Properties": {
+          "snowy": "false"
+        },
+        "Name": "minecraft:grass_block"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1167,
+        92,
+        230
+      ],
+      "before": {
+        "Name": "minecraft:stone_bricks"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "west",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    },
+    {
+      "pos": [
+        1167,
+        93,
+        230
+      ],
+      "before": {
+        "Properties": {
+          "waterlogged": "false",
+          "half": "bottom",
+          "shape": "straight",
+          "facing": "west"
+        },
+        "Name": "minecraft:stone_brick_stairs"
+      },
+      "after": {
+        "Name": "minecraft:air"
+      }
+    },
+    {
+      "pos": [
+        1166,
+        93,
+        230
+      ],
+      "before": {
+        "Properties": {
+          "waterlogged": "false",
+          "type": "bottom"
+        },
+        "Name": "minecraft:stone_brick_slab"
+      },
+      "after": {
+        "Name": "minecraft:stone_brick_stairs",
+        "Properties": {
+          "facing": "west",
+          "half": "bottom",
+          "shape": "straight",
+          "waterlogged": "false"
+        }
+      }
+    }
+  ],
+  "productionModified": false,
+  "originalContainersPreserved": true,
+  "usesOriginalInteriorStaircase": true,
+  "status": "candidate_only_not_deployed",
+  "world": "world",
+  "sourceRegionSha256": "9cf28ee814aa7bfc0138586accee7867f8799d3d9127f3fa782e21925535c71f",
+  "configurationCandidate": {
+    "path": "sites.creeping_crypt",
+    "expectedEntry": null,
+    "entry": [
+      1165,
+      94,
+      230
+    ],
+    "hint": "先到 world (1169,93,231) 山坡草地，再到 (1165,94,230) 屋顶入口；沿折返楼梯下到原上平台 (1165,86.5,229)，沿既有楼梯下行到蔓藤前殿。start 是首室中心，不能挖穿建筑。",
+    "applyOnlyAfterGeometryVerified": true,
+    "roomCentersUnchanged": true
+  }
+}
