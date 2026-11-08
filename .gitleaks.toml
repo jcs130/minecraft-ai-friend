@@ -14,3 +14,8 @@ regexes = [
   '''^\s*countTokens \? 'host-tokenizer' : 'utf8-byte-upper-bound'\);\s*$''',
   '''^\s*countTokens \? "host-tokenizer" : "utf8-byte-upper-bound"\s*$'''
 ]
+
+[[allowlists]]
+description = "One exact historical credentials-after receipt SHA256; never an API credential"
+regexTarget = "line"
+regexes = ['''^\s*"credentials-after\.json"\s*:\s*"81d72a6a48514588bf0c830fffa29cc64edf3320ffb04fdb2f6cd24ba1ce99b3"[,]?\s*$''']

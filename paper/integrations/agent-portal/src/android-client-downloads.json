@@ -1,0 +1,20 @@
+[
+  {
+    "androidDeviceVerified": false,
+    "bytes": 52587,
+    "category": "android-client",
+    "channel": "website-bundle",
+    "compatibilityNote": "附近语音兼容预览；完整手机听说仍待实机验证。",
+    "filename": "qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack",
+    "framework": "minecraft",
+    "id": "android-client-pack",
+    "includes": "主世界地址、女仆1.5.3、YSM2.6.5、SVC2.6.27、安卓音频适配和低负载画面设置。",
+    "install": "FCL 导入此 .mrpack，选择 Java 21；首次允许麦克风并完成语音设置向导。",
+    "license": "音频适配 MIT；女仆、YSM、SVC 保留原作者许可并从官方 CDN 下载",
+    "name": "千灯纪手机版 · FCL 导入包",
+    "platform": "安卓 8+ / arm64 / FCL / Minecraft 1.21.1 / Java 21",
+    "sha256": "0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220",
+    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/android-client",
+    "version": "1.0.0-preview.1"
+  }
+]

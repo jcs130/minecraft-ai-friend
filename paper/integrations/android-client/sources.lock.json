@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "version": "1.0.0-preview.1",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "java": 21,
+  "serverAddress": "micro.kangqiang.site:25702",
+  "files": [
+    {
+      "id": "touhou-little-maid",
+      "version": "1.5.3-neoforge+mc1.21.1",
+      "filename": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar",
+      "source": "https://modrinth.com/mod/touhou-little-maid/version/tXG1TkGx",
+      "bytes": 24408776,
+      "sha1": "f96507810deaa2ffd8c3bd86a79d6ccbd56ca32e",
+      "sha512": "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe",
+      "license": "Code MIT; assets CC BY-NC-SA 4.0; voices retain upstream terms"
+    },
+    {
+      "id": "yes-steve-model",
+      "version": "2.6.5-neoforge+mc1.21.1",
+      "filename": "ysm-2.6.5-neoforge+mc1.21.1-release.jar",
+      "url": "https://cdn.modrinth.com/data/86xjpqqS/versions/HZWaR0LY/ysm-2.6.5-neoforge%2Bmc1.21.1-release.jar",
+      "source": "https://modrinth.com/mod/yes-steve-model/version/HZWaR0LY",
+      "bytes": 63463229,
+      "sha1": "18bec74a5b7f3778ce162ddbbbd5555aff0eda2e",
+      "sha512": "75a655fe095565d949aeea5e333f3e1501443b796b250aeabe1ac230c47a99cbac6b7470956b4458f5c982c2cf8a17f170b53e0805b4f4079874fc9975b10dce",
+      "license": "ARR; original file downloaded directly from the author's Modrinth CDN"
+    },
+    {
+      "id": "simple-voice-chat",
+      "version": "neoforge-1.21.1-2.6.27",
+      "filename": "voicechat-neoforge-1.21.1-2.6.27.jar",
+      "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/iR08ksVF/voicechat-neoforge-1.21.1-2.6.27.jar",
+      "source": "https://modrinth.com/mod/simple-voice-chat/version/iR08ksVF",
+      "bytes": 4936802,
+      "sha1": "8aded3a22614a8e1641973623e7817dccea513fa",
+      "sha512": "35a9411d71de86071501f6b42088585a1be6e90b03cafe75d89b53e913a5af9d5cdfa40a098d95908af63237577e58f6263ce4f676deec58aca2de0758eba9dd",
+      "license": "ARR; unmodified official client, downloaded directly from Modrinth"
+    }
+  ],
+  "compiler": {
+    "filename": "ecj-3.42.0.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/eclipse/jdt/ecj/3.42.0/ecj-3.42.0.jar",
+    "bytes": 3327035,
+    "sha1": "22b170025f5e0d849d07f4a84d421e42fae701bf",
+    "sha512": "4f0da140e5c447717e5111bd4bf6e6e9a4431f1db2c67deaf37b13f4ec0f6314d8d799a8a3da19859028c5ff6bcf32ac417228697941c590ce3f0f89ab3a30fc"
+  },
+  "audioShim": {
+    "filename": "audio-shim.jar",
+    "url": "https://cdn.modrinth.com/data/QJdtFX0C/versions/nmHMf3eC/audio-shim.jar",
+    "source": "https://modrinth.com/mod/android-audio-shim/version/nmHMf3eC",
+    "sourceRepository": "https://github.com/Hhhrty2/android-audio-shim",
+    "sourceCommit": "94b5742214991945700f36abb2bad394dedc4957",
+    "neoForgeReference": "https://github.com/Hhhrty2/android-audio-shim/pull/3",
+    "bytes": 17440,
+    "sha1": "cf5dfcb60a4d560b898af2281cc9bb90af79f5e2",
+    "sha512": "3ee9165cad6497ab53ae695452585efc05d6848d6994c38be30a05109fc0a4693196f802b44e12f748f1b99b3ec57a9383df3e4729dea88a4f93e24afc2b2ba4",
+    "license": "MIT; Hhhrty2, 2026",
+    "patchedVersion": "1.0.1-qiandengji.1"
+  }
+}
