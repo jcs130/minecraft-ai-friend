@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "status": "deployed",
+  "releaseId": "maid-conversation-release-20261108-r1",
+  "mergedCommit": "3d43e2cf1b9f9606b338de463856656844df6730",
+  "pullRequest": 116,
+  "completedAt": "2026-11-08T09:37:13.5985919+08:00",
+  "versions": {
+    "maidBridge": "0.1.12-conversation",
+    "brainExtension": "0.1.1",
+    "QiandengVoice": "0.1.4"
+  },
+  "plannedArtifacts": [
+    {
+      "installedName": "qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "ddf50ae2bad07d287632533e25601543789a799afef1a4571afca82aa2ed49c9"
+    },
+    {
+      "installedName": "qiandengji-maid-brain-0.1.0.jar",
+      "sha256": "4d3ec5818f64bcbf9349e69d1a2cf8e9a7a323cc7d3c04b2ee14604bacc95e93"
+    },
+    {
+      "installedName": "QiandengVoice-0.1.0.jar",
+      "sha256": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed"
+    },
+    {
+      "installedName": "companion-speech.json",
+      "sha256": "5e714dd54be02ec14bb9fe2c27fb53702b31d183735012d4a22d29fceb15862f"
+    }
+  ],
+  "candidateChecks": 233,
+  "baselineMissingFeatureChecks": 2,
+  "ciJobsPassed": 6,
+  "readOnlyProductionChecks": 21,
+  "normalMaintenance": {
+    "announcements": [
+      180,
+      60,
+      10
+    ],
+    "originalJvmExited": true,
+    "currentColdRecoveryDisks": [
+      "E",
+      "F"
+    ],
+    "codeOnlyRollback": true
+  },
+  "preservation": {
+    "characterFiles": 844,
+    "originalCredentialRows": 77,
+    "credentialsUnchanged": true,
+    "originalGoddessJobs": 7,
+    "jobSpecificationsAndIdentityUnchanged": true,
+    "originalMaidAndOwner": true,
+    "nativeYsm": "大肥鱼_1.1.ysm",
+    "nativeSelectedBrain": "native",
+    "damageProtection": true
+  },
+  "services": {
+    "serviceProcesses": [
+      {
+        "port": 8017,
+        "originalProcessRetained": true
+      },
+      {
+        "port": 8857,
+        "originalProcessRetained": true
+      },
+      {
+        "port": 19094,
+        "originalProcessRetained": true
+      }
+    ],
+    "cameraObservedAt": "2026-11-08T09:38:25.886039+08:00",
+    "productionSettingsChanged": false,
+    "cameraPhase": "ready",
+    "passed": true
+  },
+  "runtime": {
+    "companionVoiceRegistered": true,
+    "originalContentModsRetained": true
+  },
+  "limits": [
+    "Real human microphone/hearing and original remote CorMy autonomous equipment/work loop still require client acceptance",
+    "Uses authorized existing DeepFish voice, not a newly cloned built-in Chinese voice",
+    "No production player impersonation or inventory actions for this audit"
+  ]
+}
