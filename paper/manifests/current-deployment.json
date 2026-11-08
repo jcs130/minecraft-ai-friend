@@ -1,8 +1,8 @@
 {
   "state": "deployed-with-open-client-acceptance",
-  "latestRelease": "all-fixes-suite-20261106-r1",
-  "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
-  "releaseDocument": "paper/docs/ALL_FIXES_RELEASE_20261106.md",
+  "latestRelease": "maid-market-cli-release-20261108-r1",
+  "verifiedAt": "2026-11-08T18:22:21.6961048+08:00",
+  "releaseDocument": "paper/docs/MAID_MARKET_CLI_20261108.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -42,7 +42,7 @@
   "runtime": {
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 55,
-    "AgentFriend": "0.4.47.58-photo-recovery1-rpg",
+    "AgentFriend": "0.4.47.61-market-cli-rpg",
     "CortiEyeMirror": "0.1.19",
     "QiandengjiRpg": "0.2.20",
     "VortexRPG": "1.2.2-alpha",
@@ -62,7 +62,7 @@
     "AgentAppearance": "AgentAppearanceNative 0.4.3",
     "AgentAppearanceBedrock": "0.2.3 enabled",
     "kernel": "Youer1.21.1 build920 / NeoForge21.1.252",
-    "QiandengjiMaidBridge": "0.1.6",
+    "QiandengjiMaidBridge": "0.1.13-receipts",
     "NativePlatform": "0.1.6",
     "OptionalPayloadGuard": "0.1.2",
     "YSM": "2.6.5",
@@ -1566,5 +1566,13 @@
     "webChecks": 17,
     "credentialRowsPreserved": 76,
     "characterFilesPreserved": 829
+  },
+  "latestVerificationScope": {
+    "components": [
+      "AgentFriend",
+      "QiandengjiMaidBridge"
+    ],
+    "manifest": "paper/manifests/maid-market-cli-deployed-20261108.json",
+    "otherComponentFields": "historical component snapshots; this batch did not re-audit all versions"
   }
 }

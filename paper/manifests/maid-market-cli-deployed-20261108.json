@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "status": "deployed-with-open-client-acceptance",
+  "release": "maid-market-cli-release-20261108-r1",
+  "completedAt": "2026-11-08T18:22:21.6961048+08:00",
+  "sourceCommit": "63d6a4832200e796280712da0e128531f31ef6ca",
+  "mergedCommit": "153dd1bdd369635d6ad828913bf201cba8cec650",
+  "pullRequests": [
+    119,
+    121
+  ],
+  "versions": {
+    "AgentFriend": "0.4.47.61-market-cli-rpg",
+    "QiandengjiMaidBridge": "0.1.13-receipts"
+  },
+  "artifacts": [
+    {
+      "installedName": "AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "fe455626136e00496b702503730b2274d6d489f36a51a4dbce750788a399d105",
+      "rollbackSha256": "d922bb9e83e21ab6d3137cbee68752fcb55f627d6ba2d9cf96670c201467724d"
+    },
+    {
+      "installedName": "qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "5f801267739d08a41d294d20dbcf5ef804cc1c3416bdabfd9cfba90f3b8a93a1",
+      "rollbackSha256": "ddf50ae2bad07d287632533e25601543789a799afef1a4571afca82aa2ed49c9"
+    }
+  ],
+  "ci": {
+    "run": 42467417904,
+    "passed": 6
+  },
+  "formalReadOnlyChecks": {
+    "passed": true,
+    "checks": [
+      "candidate and all unrelated binaries verified",
+      "AgentFriend enabled",
+      "QiandengjiMaidBridge enabled",
+      "VortexRPG enabled",
+      "QiandengjiRpg enabled",
+      "QiandengVoice enabled",
+      "WorldObserver enabled",
+      "game responsive",
+      "performance telemetry ready",
+      "original native content retained",
+      "dungeon service ready"
+    ],
+    "readOnly": true,
+    "playerActions": false
+  },
+  "characterFilesPreserved": 2484,
+  "credentials": {
+    "originalRows": 77,
+    "currentRows": 77,
+    "originalCredentialsUnchanged": true,
+    "credentialValuesPrinted": false
+  },
+  "goddessJobs": {
+    "nativeJobs": 7,
+    "exactSpecificationsPreserved": true,
+    "identityHashesPreserved": true
+  },
+  "normalMaintenance": {
+    "notices": [
+      180,
+      60,
+      10
+    ],
+    "originalJvmExited": true,
+    "coldRecoveryDisks": [
+      "E",
+      "F"
+    ]
+  },
+  "preservesLatestPlayerState": true,
+  "oldExamRepairReplayed": false,
+  "acceptancePending": [
+    "Original client natural maid interaction and main model understanding",
+    "Human microphone/listening and historical UPLOAD_INCOMPLETE diagnosis"
+  ],
+  "rollback": "Code only; preserve current world, identities, inventory, balances, exams, maid life/action ledgers and authentication. Consumed maintenance entry must not be replayed."
+}
