@@ -30,6 +30,17 @@ try {
   const run = spawnSync(option('--java') ?? 'java', ['-cp', [tmp, path.resolve(gson)].join(path.delimiter), 'ReceiptClassificationQa'], { encoding: 'utf8' });
   process.stdout.write(run.stdout ?? ''); process.stderr.write(run.stderr ?? '');
   assert.equal(run.status, 0, 'Production receipt classification regression failed');
+  const plugin = await fs.readFile(option('--plugin-source') ?? path.resolve(root, '../hybrid-src/local/tlmcompat/hybrid/HybridMaidPlugin.java'), 'utf8');
+  const reply = plugin.match(/^    public void reply\(Player actor,String action,String request,JsonObject data,String error\)\{[\s\S]*?^    \}/m)?.[0];
+  assert(reply, 'Production reply method was not found; update the fixture extraction.');
+  const replyWrapper = path.join(tmp, 'MaidDialogueReplyUnderTest.java');
+  await fs.writeFile(replyWrapper, `import com.google.gson.*;\nimport java.util.*;\nimport java.nio.charset.StandardCharsets;\nclass MaidDialogueReplyUnderTest {\nfinal Map<String,Long> humanDialogue=new HashMap<>();\nstatic final String CHANNEL="qa:maids";\nvoid humanReply(Player actor,String request,JsonObject data,String error){actor.humanLines++;}\nstatic String guidance(String action,String error){return "guidance";}\n${reply}\n}\n`);
+  const compileReply=spawnSync(option('--javac')??'javac',['--release','21','-encoding','UTF-8','-cp',path.resolve(gson),'-d',tmp,replyWrapper,path.join(root,'DialogueReplyQa.java')],{encoding:'utf8'});
+  process.stdout.write(compileReply.stdout??'');process.stderr.write(compileReply.stderr??'');
+  assert.equal(compileReply.status,0,'Reply fixture compilation failed');
+  const runReply=spawnSync(option('--java')??'java',['-cp',[tmp,path.resolve(gson)].join(path.delimiter),'DialogueReplyQa'],{encoding:'utf8'});
+  process.stdout.write(runReply.stdout??'');process.stderr.write(runReply.stderr??'');
+  assert.equal(runReply.status,0,'Production dialogue reply regression failed');
 } finally {
   await fs.rm(tmp, { recursive: true, force: true });
 }

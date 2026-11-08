@@ -325,7 +325,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private static String request(String[] args,int index){String value=args.length>index?args[index]:fresh();if(!value.matches("[A-Za-z0-9_-]{1,48}"))throw new CompatibilityException("bad_request_id","Invalid request ID");return value;}
     public void reply(Player actor,String action,String request,JsonObject data,String error){
         if(humanDialogue.getOrDefault(actor.getUniqueId()+":"+request,0L)>System.nanoTime()){
-            humanReply(actor,request,data,error);return;
+            humanReply(actor,request,data,error);
+            // Nearby speech also reaches subscribed Agent clients. Keep the
+            // human line, and preserve authenticated IDs/status for their loop.
+            if(!actor.getListeningPluginChannels().contains(CHANNEL))return;
         }
         JsonObject result=new JsonObject();result.addProperty("schema",1);result.addProperty("protocol","qiandengji-maids/v1");result.addProperty("recipientUuid",actor.getUniqueId().toString());result.addProperty("action",action);result.addProperty("requestId",request);result.addProperty("ok",error==null);result.addProperty("sampledAt",java.time.Instant.now().toString());
         if(data!=null)result.add("data",data);if(error!=null){result.addProperty("error",error);result.addProperty("nextStep",guidance(action,error));}byte[] bytes=result.toString().getBytes(StandardCharsets.UTF_8);if(bytes.length>24000)throw new IllegalStateException("Response budget exceeded");
