@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.32
+
+- Diagnose the requested exact feet/head cells independently of open neighbours. Report measured full-cube obstruction before a futile navigation wait when no complete route exists; preserve unknown/partial shapes and explicit terrain-editing routes.
+
 ## 0.5.7-rc.160-preview.31
 
 - Preserve complete short system/plugin notices in requested message results, including confirmation identifiers; keep resident indexes and long-message previews compact.

@@ -1545,7 +1545,18 @@ export function standCellsAround(
 }
 
 /** Empty body space with no floor does not establish an occupied target. */
-export function diagnoseTargetSpace(read: BlockReader, target: { x: number; y: number; z: number }): TargetDiag {
+export function diagnoseTargetSpace(read: BlockReader, target: { x: number; y: number; z: number },
+  options?: { exact?: boolean }): TargetDiag {
+  if (options?.exact) {
+    // GoalBlock requires this feet cell, not any neighbouring/higher landing.
+    // Only a measured full cube proves occupancy; missing or partial shapes
+    // remain unproven. A complete route may still remove the obstruction.
+    for (const at of [target, { ...target, y: target.y + 1 }]) {
+      const block = read(at.x, at.y, at.z);
+      if (block?.solid && !block.uncertain) return {kind:'occupied',at:{...at},block:block.name};
+    }
+    return {kind:'open'};
+  }
   const stand = standCellsAround(read, target);
   if (!stand.length) {
     for (const at of goalStandCells(target)) {

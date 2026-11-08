@@ -4298,7 +4298,7 @@ export class MinecraftWorld implements World {
       permitResourcePlacement: (item, intent) => this.permitBlueprintResourcePlacement(item, intent),
       previewResourcePlacement: (item) => this.previewBlueprintResourcePlacement(item),
       probeRoutes: (target, goal, profiles) => this.bridge?.probeRoutes(target, goal, profiles) ?? null,
-      probeTarget: (target) => this.bridge?.probeTarget(target) ?? null,
+      probeTarget: (target, options) => this.bridge?.probeTarget(target, options) ?? null,
       digBackoffSince: (ts) => this.bridge?.digBackoffSince(ts) ?? [],
       // 战斗会话在场时队列闸住:受理照收,腾出手(resume)再跑
       busyWith: () => this.bodyInhibitReason ?? (this.combat?.active ? '正在跟怪打' : null),
