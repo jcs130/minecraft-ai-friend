@@ -723,7 +723,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
         const waterNote = underwaterRouteNote(bot, target, finalGoal);
         return [waterNote, renderRouteMenu(probes, target, {
-          startDist, diag: call.groundY || waterNote ? null : ctx.probeTarget?.(target) ?? null,
+          startDist, diag: call.groundY || waterNote ? null : ctx.probeTarget?.(target, call.exact ? {exact:true} : undefined) ?? null,
         })].filter(Boolean).join('\n');
       }
       const startedAt = Date.now();

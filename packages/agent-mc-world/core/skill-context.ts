@@ -51,6 +51,7 @@ export interface RouteProbe {
  */
 export type TargetDiag =
   | { kind: 'open' }
+  | { kind: 'occupied'; at: { x: number; y: number; z: number }; block: string }
   | { kind: 'noStand' }
   | { kind: 'noSupport'; at: { x: number; y: number; z: number } }
   | { kind: 'sealed'; size: number };
@@ -249,7 +250,7 @@ export interface SkillContext {
     profiles?: readonly RouteProbe['profile'][],
   ) => RouteProbe[] | null;
   /** 目标点分诊(落脚预检+死角灌水);没连上服务器时 null */
-  probeTarget?: (target: { x: number; y: number; z: number }) => TargetDiag | null;
+  probeTarget?: (target: { x: number; y: number; z: number }, options?: { exact?: boolean }) => TargetDiag | null;
   /**
    * 零位移探针里执行器自己看不见的那几格(战斗、环境 owner、队列冻结、断点)。
    * 只读,不改任何动作;不接 = 那几格记 null(台架)。

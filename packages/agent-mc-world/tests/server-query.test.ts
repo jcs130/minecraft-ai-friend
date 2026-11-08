@@ -22,6 +22,40 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-26T09:
 afterEach(() => { vi.useRealTimers(); });
 
 describe('read-only server query lane', () => {
+  it('settles a short read window on the same native reply, without a second send',async()=>{
+    const {lane,send,context,terminal}=setup();
+    const result=lane.callAndWait({query:'status'},definitions,context);
+    await vi.advanceTimersByTimeAsync(62);
+    expect(lane.receive('Status alice: ready',context.generation,context.username)).toBe(true);
+    expect((await result).data).toMatchObject({phase:'replied',requestNonce:false,goal_completed:false});
+    expect(send).toHaveBeenCalledOnce();expect(terminal).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it('ends only the short wait and preserves the pending request, original deadline and late reply',async()=>{
+    const {lane,send,context}=setup();
+    const waiting=lane.callAndWait({query:'status'},definitions,context);
+    await vi.advanceTimersByTimeAsync(350);const first=await waiting;
+    expect(first.data).toMatchObject({phase:'sent',outcomeUnknown:true});
+    await vi.advanceTimersByTimeAsync(1000);lane.receive('Status alice: ready',context.generation,context.username);
+    const read=lane.call({requestId:first.data!.requestId},definitions,context);
+    expect(read.data).toMatchObject({requestId:first.data!.requestId,phase:'replied'});
+    expect(send).toHaveBeenCalledOnce();
+  });
+  it('does not turn another pending query into the requested result',async()=>{
+    const {lane,send,context}=setup();const pending=lane.call({query:'status'},definitions,context);
+    const busy=await lane.callAndWait({query:'inventory',arguments:['chest']},definitions,context);
+    expect(busy.data).toMatchObject({busy:true,requestId:pending.data!.requestId,phase:'sent'});expect(send).toHaveBeenCalledOnce();
+    lane.reset('done');
+  });
+  it('settles reset and cancellation without resending or claiming server completion',async()=>{
+    const {lane,send,context}=setup(),controller=new AbortController();
+    const aborted=lane.callAndWait({query:'status'},definitions,context,{signal:controller.signal});
+    controller.abort();const first=await aborted;
+    expect(first.data).toMatchObject({phase:'sent',readWaitAborted:true,outcomeUnknown:true});
+    const waiting=lane.callAndWait({requestId:first.data!.requestId},definitions,context);
+    lane.reset('respawn');expect((await waiting).data).toMatchObject({phase:'cancelled',outcomeUnknown:true});
+    expect(send).toHaveBeenCalledOnce();expect(vi.getTimerCount()).toBe(0);
+  });
   it('binds query-specific argument requirements and exclusive call forms in full and compact schemas', () => {
     const noArguments = { type: 'array' as const, minItems: 0, maxItems: 0, items: { type: 'string' as const } };
     const subject = { type: 'array' as const, minItems: 1, maxItems: 1,

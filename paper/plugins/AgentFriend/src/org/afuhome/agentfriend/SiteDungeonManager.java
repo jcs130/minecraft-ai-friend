@@ -104,6 +104,10 @@ final class SiteDungeonManager implements Listener {
         facts.put("otherActivity",mine!=null&&mine!=run||plugin.dungeonParticipant(p)&&mine==null||plugin.pvpParticipant(p));
         facts.put("occupied",run!=null);facts.put("joinable",run!=null&&!run.phase.equals("returning")&&run.fault.isEmpty()&&run.party.size()<PARTY_LIMIT);
         facts.put("atFirstRoom",first.contains(p.getLocation())&&s.contains(p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
+        var expedition=DungeonExpeditions.site(s.expedition);
+        if(s.entry.isEmpty()&&expedition!=null)facts.put("nearApproach",DungeonArrival.nearApproach(
+                p.getWorld().getName(),p.getLocation().getX(),p.getLocation().getZ(),s.world,
+                expedition.x(),expedition.z(),expedition.approachX(),expedition.approachZ()));
         facts.put("firstRoom",s.world+" "+first.x+","+first.y+","+first.z);
         facts.put("cooldownMs",Math.max(0,120_000-(now-plugin.getConfig().getLong(ROOT+".cooldowns."+id,0))));
         if(run!=null){facts.put("phase",run.phase);facts.put("paused",run.pausedAt>0);facts.put("faulted",!run.fault.isEmpty());facts.put("remainingMobs",run.mobs.size());Room target=run.room();facts.put("target",s.world+" "+target.x+","+target.y+","+target.z);}
@@ -320,7 +324,7 @@ final class SiteDungeonManager implements Listener {
         if(prefix.equals("MC_SITE_DUNGEON_LIST")){p.sendMessage("[提示] 空闲需本人到首室 start；active=false不是未开放。详情用 info <ID>，状态用 status <ID>。" );return;}
         if(prefix.equals("MC_SITE_DUNGEON_RESULT")){
             boolean success=Boolean.TRUE.equals(fields.get("success"));String action=Objects.toString(fields.get("action"),"");
-            String done=switch(action){case "start"->"已开启本次集结";case "join"->"已加入本次队伍";case "claim"->"奖励结算已保存";case "travel"->"已到入口";case "resume"->"已处理恢复请求";case "leave"->"已退出本次场次";default->"操作已完成";};
+            String done=switch(action){case "start"->"已开启本次集结";case "join"->"已加入本次队伍";case "claim"->"奖励结算已保存";case "travel"->DungeonArrival.travelSuccess(site!=null&&!site.entry.isEmpty());case "resume"->"已处理恢复请求";case "leave"->"已退出本次场次";default->"操作已完成";};
             p.sendMessage("[地下城] "+(success?done:Objects.toString(fields.get("errorMessage"),"操作未完成"))+"（"+fields.get("reason")+"）。");
             if(!success&&!guide.isEmpty()&&Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(fields.get("reason"))){p.sendMessage("下一步："+guide.get("nextAction")+" 命令："+guide.get("nextCommand"));}
             return;
@@ -601,7 +605,12 @@ final class SiteDungeonManager implements Listener {
         send(p,"MC_SITE_DUNGEON_LIST",summary);
     }
     private void info(Player p,Site s){
-        Room first=s.rooms.getFirst();send(p,"MC_SITE_DUNGEON_INFO",Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8,"lifecycleRules",Map.of("timeLimitSeconds",TIMEOUT_MS/1000,"rescueScope","current_run_and_site","exitPolicy","standing_stay_downed_recover","instruction","有效场次且身处范围内才有存档点救援；超时、结束或退出后失效，存活者留在原地须及时撤离。")));
+        Room first=s.rooms.getFirst();
+        Map<String,Object> detail=new LinkedHashMap<>(Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8,"lifecycleRules",Map.of("timeLimitSeconds",TIMEOUT_MS/1000,"rescueScope","current_run_and_site","exitPolicy","standing_stay_downed_recover","instruction","有效场次且身处范围内才有存档点救援；超时、结束或退出后失效，存活者留在原地须及时撤离。")));
+        var expedition=DungeonExpeditions.site(s.expedition);
+        var arrival=DungeonArrival.describe(s.world,s.entry,expedition==null?null:expedition.approachX(),expedition==null?null:expedition.approachZ());
+        detail.put("arrival",arrival);send(p,"MC_SITE_DUNGEON_INFO",detail);
+        if(!jsonOutput.get())p.sendMessage("[抵达] "+arrival.get("instruction"));
         if(verboseOutput.get()&&!jsonOutput.get())p.sendMessage("[路线] "+s.hint+"；逐室清怪，通关后直接领取个人奖励。普通/冒险/末日的生命倍率为1/1.5/2.1，伤害倍率为1/1.25/1.6；进入遗迹自动同队，可中途加入和离开。");
     }
     private void travel(Player p,Site s){

@@ -14,6 +14,12 @@ final class NativeMaidNearbyChat implements Listener {
     private final HybridMaidPlugin plugin;
     private record Pose(long time,UUID world,double x,double y,double z){}
     private final Map<UUID,ArrayDeque<Pose>> positions=new HashMap<>();
+    private final MaidConversationWindow conversation=new MaidConversationWindow();
+    void replied(Player actor,EntityMaid maid){conversation.replied(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,System.nanoTime());}
+    private String addressed(Player actor,EntityMaid maid,String text){
+        String direct=MaidAddressing.addressed(maid.getName().getString(),text);
+        return direct!=null?direct:conversation.followup(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,text,System.nanoTime());
+    }
     NativeMaidNearbyChat(HybridMaidPlugin plugin){
         this.plugin=plugin;Bukkit.getPluginManager().registerEvents(this,plugin);
         Bukkit.getScheduler().runTaskTimer(plugin,this::sample,1,5);
@@ -36,7 +42,7 @@ final class NativeMaidNearbyChat implements Listener {
         for(var row:positions.entrySet()){
             EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(row.getKey()));
             if(maid==null||!plugin.sharedDialogueEnabled(maid)||!world.equals(maid.getBukkitEntity().getWorld().getUID())||!actor.canSee(maid.getBukkitEntity())||actor.getLocation().distanceSquared(maid.getBukkitEntity().getLocation())>64)continue;
-            String addressed=MaidAddressing.addressed(maid.getName().getString(),text);if(addressed==null)continue;
+            String addressed=addressed(actor,maid,text);if(addressed==null)continue;
             List<Pose> samples=row.getValue().stream().filter(p->p.time>=start-300&&p.time<=end+300).toList();
             if(samples.isEmpty()||samples.getFirst().time>start||samples.getLast().time<end-300)continue;
             boolean heard=true;long previous=start;
@@ -82,7 +88,7 @@ final class NativeMaidNearbyChat implements Listener {
             if(maid==null||!plugin.sharedDialogueEnabled(maid)||!maid.isAlive()||maid.isRemoved()
                 ||!actor.getWorld().equals(maid.getBukkitEntity().getWorld())||!actor.canSee(maid.getBukkitEntity())
                 ||actor.getLocation().distanceSquared(maid.getBukkitEntity().getLocation())>64)continue;
-            String addressed=MaidAddressing.addressed(maid.getName().getString(),text);if(addressed==null)continue;
+            String addressed=addressed(actor,maid,text);if(addressed==null)continue;
             plugin.nearbyConversation(actor,maid,addressed,recipients);return;
         }
     }

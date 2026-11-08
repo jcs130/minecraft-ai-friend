@@ -112,10 +112,10 @@ export function messageChannel(text: string): MessageChannel | null {
   }
 }
 
-function heading(row: MessageObservation): string {
+function heading(row: MessageObservation, previewChars = 96): string {
   const text = row.text.replace(/\s+/g, ' ');
   const display = row.provenance?.serverRenderedText;
-  return `${row.id} [${row.channel}] ${row.lastAt} ${text.slice(0, 96)}${text.length > 96 ? '…' : ''}`
+  return `${row.id} [${row.channel}] ${row.lastAt} ${text.slice(0, previewChars)}${text.length > previewChars ? '…' : ''}`
     + (typeof display === 'string' ? ` [服务端显示：${display.replace(/\s+/g, ' ').slice(0, 160)}]` : '');
 }
 
@@ -317,7 +317,11 @@ export class MessageInbox {
         { total: rows.length, omitted: this.state.omitted, selected }), text: this.storageNote()
       + `[${this.label}消息查询] 匹配 ${rows.length} 条；展示 ${selected.length} 条，offset=${offset}。`
       + (this.state.omitted ? `保留上限 ${MESSAGE_LIMIT} 条，已移出 ${this.state.omitted} 条；更早原文查事件账本。` : '')
-      + `\n${selected.map(heading).join('\n') || '当前筛选无结果。'}`
+      // On-demand short notices often contain expiring confirmation references.
+      // Preserve the complete notice within a bounded budget; the resident index
+      // stays compact. This is received text, never authorization or execution.
+      + `\n${selected.map(row => heading(row,
+        (row.channel === 'system' || row.channel === 'plugin') && row.text.replace(/\s+/g, ' ').length <= 512 ? 512 : 96)).join('\n') || '当前筛选无结果。'}`
       + '\nread 按 id 或 ids 展开完整原文；省略 status 只列尚未标记考虑的消息，status:all 查询历史。' };
   }
 

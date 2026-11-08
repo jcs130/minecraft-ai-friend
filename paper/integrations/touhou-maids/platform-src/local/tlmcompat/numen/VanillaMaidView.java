@@ -39,17 +39,9 @@ final class VanillaMaidView {
         if(entity==null)return "";var key=BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
         return key.getNamespace().equals("touhou_little_maid")?key.getPath():"";
     }
-    private static boolean bedrock(ServerPlayer player){
-        if(player==null)return false;
-        var plugin=org.bukkit.Bukkit.getPluginManager().getPlugin("floodgate");if(plugin==null||!plugin.isEnabled())return false;
-        try{
-            Class<?> type=Class.forName("org.geysermc.floodgate.api.FloodgateApi",false,plugin.getClass().getClassLoader());
-            Object api=type.getMethod("getInstance").invoke(null);return Boolean.TRUE.equals(type.getMethod("isFloodgatePlayer",UUID.class).invoke(api,player.getUUID()));
-        }catch(ReflectiveOperationException unavailable){return false;}
-    }
     static EntityType<?> type(Entity entity,ServerPlayer viewer){
         return switch(kind(entity)){
-            case "maid" -> bedrock(viewer)?EntityType.VILLAGER:EntityType.ALLAY; // Preserve the existing Geyser original-model hook.
+            case "maid" -> EntityType.ALLAY; // Geyser replaces this only for an exact known maid with an offered model pack.
             case "fairy" -> EntityType.VEX;
             case "danmaku" -> EntityType.SMALL_FIREBALL;
             default -> entity instanceof LivingEntity?EntityType.VILLAGER:EntityType.SNOWBALL;

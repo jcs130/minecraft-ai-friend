@@ -1,3 +1,15 @@
+## 0.5.7-rc.160-preview.33
+
+- Return fast matched read-only server replies in the original World tool invocation, with a bounded 350 ms observation window. Preserve synchronous SDK calls, pending IDs, provenance, timeout/cancellation and concurrent body actions; never resend queries.
+
+## 0.5.7-rc.160-preview.32
+
+- Diagnose the requested exact feet/head cells independently of open neighbours. Report measured full-cube obstruction before a futile navigation wait when no complete route exists; preserve unknown/partial shapes and explicit terrain-editing routes.
+
+## 0.5.7-rc.160-preview.31
+
+- Preserve complete short system/plugin notices in requested message results, including confirmation identifiers; keep resident indexes and long-message previews compact.
+
 ## 0.5.7-rc.160-preview.30
 
 - Retry a briefly locked atomic request-receipt replacement within 75 ms. Never re-execute the tool, delete the prior pending record, or hide a persistent storage fault.

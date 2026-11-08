@@ -25,9 +25,11 @@ public final class ProtectionQueryTest {
     }
     public static void main(String[] args) {
         var permanent=ProtectionQuery.compact(result(0,"deny","site_dungeon",null));
-        check("dungeon compact verdict explains permanence and route",permanent.get("nextAction").getAsString().contains("永久")&&permanent.get("nextAction").getAsString().contains("dungeon layout")&&!permanent.get("nextAction").getAsString().contains("主人授权"));
+        check("dungeon compact verdict explains permanence and route",permanent.get("nextAction").getAsString().contains("永久")&&permanent.get("nextAction").getAsString().contains(ProtectionQuery.DUNGEON_DISCOVERY_COMMAND)&&!permanent.get("nextAction").getAsString().contains("主人授权"));
+        check("dungeon discovery is an existing read-only command",AgentCliCatalog.helpData(new String[]{"dungeon","list","--help"},List.of()).get("actionReadOnly").getAsBoolean());
+        check("dungeon details are an existing read-only command",AgentCliCatalog.helpData(new String[]{"dungeon","info","--help"},List.of()).get("actionReadOnly").getAsBoolean());
         var dungeonHelp=AgentCliCatalog.helpData(new String[]{"dungeon","start","--help"},List.of());
-        check("team entry help explains one leader admission",dungeonHelp.get("summary").getAsString().contains("队长"));
+        check("team entry help preserves automatic participation",dungeonHelp.get("summary").getAsString().contains("一人在首室开场") && dungeonHelp.get("summary").getAsString().contains("自动同队"));
         for (String action : List.of("break", "place", "container", "use")) {
             var q = parse(action + " -1 64 0 --json");
             check("legacy " + action, !q.batch() && q.json() && q.action().equals(action) && q.points().getFirst().x() == -1);

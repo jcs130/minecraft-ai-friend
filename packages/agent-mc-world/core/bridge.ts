@@ -1194,7 +1194,7 @@ export class Bridge {
   }
 
   /** 检查目标附近落脚格与最多 128 格的空间连通性；未加载区域不作封闭结论。 */
-  probeTarget(target: { x: number; y: number; z: number }): TargetDiag | null {
+  probeTarget(target: { x: number; y: number; z: number }, options?: { exact?: boolean }): TargetDiag | null {
     const bot = this._bot;
     if (!bot?.entity) return null;
     const read = (x: number, y: number, z: number) => {
@@ -1202,7 +1202,7 @@ export class Bridge {
       return b ? probeBlockInfo(b) : null;
     };
     const t = { x: Math.floor(target.x), y: Math.floor(target.y), z: Math.floor(target.z) };
-    return diagnoseTargetSpace(read, t);
+    return diagnoseTargetSpace(read, t, options);
   }
 
   /** 每类寻路记录使用独立的五秒窗口；期间重复项计数，下一次输出附抑制数量。 */

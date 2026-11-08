@@ -4298,7 +4298,7 @@ export class MinecraftWorld implements World {
       permitResourcePlacement: (item, intent) => this.permitBlueprintResourcePlacement(item, intent),
       previewResourcePlacement: (item) => this.previewBlueprintResourcePlacement(item),
       probeRoutes: (target, goal, profiles) => this.bridge?.probeRoutes(target, goal, profiles) ?? null,
-      probeTarget: (target) => this.bridge?.probeTarget(target) ?? null,
+      probeTarget: (target, options) => this.bridge?.probeTarget(target, options) ?? null,
       digBackoffSince: (ts) => this.bridge?.digBackoffSince(ts) ?? [],
       // 战斗会话在场时队列闸住:受理照收,腾出手(resume)再跑
       busyWith: () => this.bodyInhibitReason ?? (this.combat?.active ? '正在跟怪打' : null),
@@ -4685,16 +4685,16 @@ export class MinecraftWorld implements World {
     return delivery;
   }
 
-  protected queryServer(args: Record<string, unknown>): ToolOutcome {
+  protected queryServer(args: Record<string, unknown>, signal?: AbortSignal): Promise<ToolOutcome> {
     const bot = this.bridge?.bot;
     const connected = bot && this.bridge?.connected && this.bridge.connectionState?.ready !== false;
-    return this.serverQueries.call(args, this.serverQueryDefinitions(), connected ? {
+    return this.serverQueries.callAndWait(args, this.serverQueryDefinitions(), connected ? {
       generation: this.queryGeneration(), username: bot.username || this.chatName(),
       afterSequence: this.serverQueryMessageSequence,
       // A read has its own correlation slot and must not replace an active
       // body action's wait/cooldown evidence or clear its system-message cache.
       send: command => sendChat(bot, command),
-    } : null);
+    } : null,{signal});
   }
   protected bodyInhibitReason: string | null = null;
   private bodyInhibitHold: QueueHoldToken | null = null;
@@ -4756,7 +4756,7 @@ export class MinecraftWorld implements World {
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
       mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
-      mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args); },
+      mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args,ctx.signal); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();

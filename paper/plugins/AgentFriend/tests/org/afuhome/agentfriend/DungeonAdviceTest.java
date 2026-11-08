@@ -11,6 +11,11 @@ public final class DungeonAdviceTest {
     static void invalid(String... args){try{DungeonAdvice.parse(args);throw new AssertionError("accepted invalid args "+Arrays.toString(args));}catch(IllegalArgumentException expected){checks++;}}
     public static void main(String[] args){
         state("travel");state("ready","atFirstRoom",true);state("approach","atSite",true);
+        state("approach","nearApproach",true);
+        check(advice("nearApproach",true).get("nextCommand").equals("/mycli dungeon info undead_crypt"),"nearby discovery never asks for repeated paid travel");
+        check(advice("nearApproach",true).get("nextAction").toString().contains("首室坐标不是入口"),"nearby is not entrance or first room");
+        state("ready","atFirstRoom",true,"nearApproach",true);
+        state("requirements","loadoutReady",false,"nearApproach",true,"missingLoadout","靴子");
         check(advice("atFirstRoom",true).get("nextCommand").equals("/mycli dungeon start undead_crypt normal"),"idle false never interpreted as closed");
         state("unavailable","configured",false);state("cooldown","cooldownMs",12001L);
         check(advice("cooldownMs",12001L).get("retryAfterMs").equals(12001L),"actual cooldown not an invented fixed wait");
