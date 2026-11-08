@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.31
+
+- Preserve complete short system/plugin notices in requested message results, including confirmation identifiers; keep resident indexes and long-message previews compact.
+
 ## 0.5.7-rc.160-preview.30
 
 - Retry a briefly locked atomic request-receipt replacement within 75 ms. Never re-execute the tool, delete the prior pending record, or hide a persistent storage fault.
