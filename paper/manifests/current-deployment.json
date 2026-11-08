@@ -1,4 +1,8 @@
 {
+  "inventoryScope": "historical_batch_snapshot_20261106_not_current_runtime",
+  "currentComponentEvidence": "paper/manifests/runtime-evidence-20261108.json",
+  "acceptanceDocument": "paper/docs/ACCEPTANCE_EVIDENCE_20261108.md",
+  "historicalFieldsPreserved": true,
   "state": "deployed-with-open-client-acceptance",
   "latestRelease": "all-fixes-suite-20261106-r1",
   "verifiedAt": "2026-11-05T18:34:26.261655+00:00",

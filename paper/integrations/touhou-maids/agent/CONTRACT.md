@@ -1,8 +1,8 @@
-# 女仆操作协议 0.1.11-social（服务端已部署）
+# 女仆操作协议 0.1.12-conversation（服务端已部署，原客户端验收未闭环）
 
 **0.1.11-social 已部署**：`nearby [queryId]` 返回附近可见女仆的 `maidId/name/owned/publicChatEnabled/chatCommand`，可选 MCP 为 `{action:"nearby"}`。`chat` 允许同维度 8 格内访客与已开放女仆交流；其 `observation.conversation="nearby_visitor"`，不包含主人记忆或工作工具。本人 `chat` 的原生历史／工具保持，`receipt` 按原请求查询，不重放。真人用右键→点击交谈→输入话语，或 `/qdmaid say <maidId> <话语>`；这种便利入口只发简短中文，Agent继续用结构化 `chat`。参见[发布说明](../../../docs/MAID_PUBLIC_DIALOGUE_20261107.md)。
 
-**0.1.12-conversation 候选，未部署**：附近文字/ASR 中点名“肥鱼，你好”，复用公共交流；主人工作仍用原 `chat`。新增 `context.appearance` 表示实际 YSM/原生模型，旧顶层 `modelId` 仍为备用原生模型；`damageProtected`、`conversation` 与 `speech` 分别解释保护、交谈方法和统一音色发送状态。字段须按存在性检测，`sent` 不等于真人听到。详见[设置核对](../../../docs/MAID_CONVERSATION_20261108.md)。
+**0.1.12-conversation 已于2026-11-08部署（PR116）**：附近文字/ASR 中点名“肥鱼，你好”，复用公共交流；主人工作仍用原 `chat`。新增 `context.appearance` 表示实际 YSM/原生模型，旧顶层 `modelId` 仍为备用原生模型；`damageProtected`、`conversation` 与 `speech` 分别解释保护、交谈方法和统一音色发送状态。字段须按存在性检测，`sent` 不等于真人听到。详见[设置核对](../../../docs/MAID_CONVERSATION_20261108.md)。
 
 复用本人已登录的游戏连接。宿主调用标准命令发送能力即可，不需要让模型写 `bot`、`Buffer` 或底层协议。`maid-port.mjs` 是可选的千灯纪适配器，不是新的 Agent 循环。
 
@@ -77,4 +77,4 @@ death: {maidId, ownerId, name, eventId, diedAt, dimension, position,
 
 ## 验证与边界
 
-生产现役已于2026-11-07更新为0.1.8-life，正式原女仆存活与保护、账本、启动检查通过；真实客户端自主使用仍待验收。此前0.1.7已于2026-11-06 23:59部署，43项隔离检查和10项正式启动检查通过。匹配客户端是否加载、主人格是否接收死亡事实及自主操作，仍须由原客户端分别验收，不能只根据版本号判定。11月6日发布时原肥鱼仍死亡；11月7日已按服主明确授权，从原胶片按原UUID恢复，见[发布记录](../../../docs/PR_BATCH_RELEASE_20261107.md)。实时状态应查询 `context.data.lifeState`，不能把历史死亡记录当作当前死亡。原生复活胶片需要模组祭坛流程，本版本没有承诺原版/Agent 已能独立完成祭坛复活。
+历史生命状态修复于2026-11-07部署为0.1.8-life；现役0.1.12-conversation保留该修复，正式原女仆存活与保护、账本、启动检查通过；真实客户端自主使用仍待验收。此前0.1.7已于2026-11-06 23:59部署，43项隔离检查和10项正式启动检查通过。匹配客户端是否加载、主人格是否接收死亡事实及自主操作，仍须由原客户端分别验收，不能只根据版本号判定。11月6日发布时原肥鱼仍死亡；11月7日已按服主明确授权，从原胶片按原UUID恢复，见[发布记录](../../../docs/PR_BATCH_RELEASE_20261107.md)。实时状态应查询 `context.data.lifeState`，不能把历史死亡记录当作当前死亡。原生复活胶片需要模组祭坛流程，本版本没有承诺原版/Agent 已能独立完成祭坛复活。

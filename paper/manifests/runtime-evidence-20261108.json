@@ -1,0 +1,263 @@
+{
+  "schema": 1,
+  "scope": "read_only_component_audit_not_deployment_instruction",
+  "observedAt": "2026-11-08T01:55:01.449Z",
+  "allClientAcceptanceComplete": false,
+  "gameProcess": {
+    "pid": 18184,
+    "startedLocal": "2026-11-08T09:34:13+08:00",
+    "startupLog": "E:/MC/server/startup-20261108-093413.log",
+    "physicalRoot": "C:/MC-active/youer-tlm-0.1.4-20261030-115513",
+    "logicalRoot": "E:/MC/server"
+  },
+  "maidRelease": {
+    "manifest": "paper/manifests/maid-conversation-deployed-20261108.json",
+    "commit": "3d43e2cf1b9f9606b338de463856656844df6730",
+    "deployedAt": "2026-11-08T09:37:13.5985919+08:00"
+  },
+  "artifacts": [
+    {
+      "path": "E:\\MC\\server\\plugins\\numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
+      "metadata": {}
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\NumenBedrock-0.1.0.jar",
+      "sha256": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
+      "metadata": {}
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c",
+      "metadata": {}
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\numen_hosted-paper-1.21.1-0.1.4-7929ab0c5545.jar",
+      "sha256": "d673401c4b8b2ca853c02a6b2d69aaa2fcc5bc8900f7484b7caa8d575251ad26",
+      "metadata": {}
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\numen_hosted_api-paper-1.21.1-0.1.4-ac28020de58f.jar",
+      "sha256": "d6a466b789f2ca61e05c6c1ae4742933bd0456078c6122b1f74f46d13de0ee3a",
+      "metadata": {}
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "ddf50ae2bad07d287632533e25601543789a799afef1a4571afca82aa2ed49c9",
+      "metadata": {
+        "plugin.yml": [
+          "name: QiandengjiMaidBridge",
+          "version: 0.1.12-conversation"
+        ]
+      }
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\QiandengVoice-0.1.0.jar",
+      "sha256": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed",
+      "metadata": {
+        "plugin.yml": [
+          "name: QiandengVoice",
+          "version: 0.1.4"
+        ]
+      }
+    },
+    {
+      "path": "E:\\MC\\server\\plugins\\voicechat-bukkit-2.6.27.jar",
+      "sha256": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
+      "metadata": {
+        "plugin.yml": [
+          "name: voicechat",
+          "version: 2.6.27"
+        ]
+      }
+    },
+    {
+      "path": "E:\\MC\\server\\mods\\qiandengji-hosted-bridge-0.1.0.jar",
+      "sha256": "6799afd2640036205fea94a46ad92048791f07c8e747821d361cbd4eae1a98da",
+      "metadata": {
+        "META-INF/neoforge.mods.toml": [
+          "modId=\"qiandengji_hosted_bridge\"",
+          "version=\"0.1.0\"",
+          "modId=\"minecraft\""
+        ]
+      }
+    },
+    {
+      "path": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
+      "sha256": "4d3ec5818f64bcbf9349e69d1a2cf8e9a7a323cc7d3c04b2ee14604bacc95e93",
+      "metadata": {
+        "META-INF/neoforge.mods.toml": [
+          "modId=\"qiandengji_maid_brain\"",
+          "version=\"0.1.1\"",
+          "modId=\"touhou_little_maid\""
+        ]
+      }
+    },
+    {
+      "path": "E:\\MC\\server\\mods\\touhoulittlemaid-1.5.3-qiandengji.jar",
+      "sha256": "f4bb0ec576f7b2226430808efa177521be48d36dd3176080ee0f76bfbaa4e23b",
+      "metadata": {
+        "META-INF/neoforge.mods.toml": []
+      }
+    },
+    {
+      "path": "E:\\MC\\server\\mods\\ysm-2.6.5-neoforge+mc1.21.1-release.jar",
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
+      "metadata": {
+        "META-INF/neoforge.mods.toml": []
+      }
+    }
+  ],
+  "localHostingCore": {
+    "path": "E:\\MC\\clients\\numen-hosting\\release-20261106-r1\\core\\package",
+    "version": "0.5.7-rc.160-preview.26",
+    "sourceCommit": "86dbcd1b48274ef7ead3fc27fa34028d16069dc4",
+    "archiveSha256": "8766c63cb8c19ee260e94fdf1dc574f4dadbeb9c7068d71b078e435cd3f8f4dd",
+    "archivePresent": true,
+    "files": [
+      {
+        "path": "package.json",
+        "actual": "86ffba5b1da984808d4a6ceed4cc4ce435e626c96601de37f4fc8dad47905a9c",
+        "expected": "86ffba5b1da984808d4a6ceed4cc4ce435e626c96601de37f4fc8dad47905a9c",
+        "matches": true
+      },
+      {
+        "path": "core/combat-abilities.ts",
+        "actual": "91c457ceb4cafbf84c495dd7af5a40e7cc9d889365904e72095591b21a8f2e07",
+        "expected": "91c457ceb4cafbf84c495dd7af5a40e7cc9d889365904e72095591b21a8f2e07",
+        "matches": true
+      },
+      {
+        "path": "core/combat-decision-types.ts",
+        "actual": "9182b270e4d21c7824c553b762f9cad5663f2f5a17554fb10375749c0b488946",
+        "expected": "9182b270e4d21c7824c553b762f9cad5663f2f5a17554fb10375749c0b488946",
+        "matches": true
+      },
+      {
+        "path": "core/combat-program.ts",
+        "actual": "5c01153e11179fa83f162b285693fe31cd4cc5e8eab8b2dab83d583488ff421f",
+        "expected": "5c01153e11179fa83f162b285693fe31cd4cc5e8eab8b2dab83d583488ff421f",
+        "matches": true
+      },
+      {
+        "path": "core/combat-tool.ts",
+        "actual": "8dc808e9dcd53799ecd3e05558967c09f89d66bc93e8702dcd0d441233da5a5a",
+        "expected": "8dc808e9dcd53799ecd3e05558967c09f89d66bc93e8702dcd0d441233da5a5a",
+        "matches": true
+      },
+      {
+        "path": "core/tactical-world.ts",
+        "actual": "b46048bec28bfff35638588b44c560f381c02d53a6a5f9e685de845a577cec41",
+        "expected": "b46048bec28bfff35638588b44c560f381c02d53a6a5f9e685de845a577cec41",
+        "matches": true
+      },
+      {
+        "path": "dist/build.json",
+        "actual": "22665f0d099f18a56c02b4b7fdd9a8f86c2ebc9e3346f4332743596bffb1e133",
+        "expected": "22665f0d099f18a56c02b4b7fdd9a8f86c2ebc9e3346f4332743596bffb1e133",
+        "matches": true
+      },
+      {
+        "path": "dist/types/manifest.json",
+        "actual": "c74fecdd711a0767263d800c2833ae2247fe07591a3bbfa8afde8cfc217d8626",
+        "expected": "c74fecdd711a0767263d800c2833ae2247fe07591a3bbfa8afde8cfc217d8626",
+        "matches": true
+      },
+      {
+        "path": "dist/runtime/core/combat-abilities.js",
+        "actual": "e3892370def118c832c355bb1a7c30db7fdf9efcae335b5fb3d49eb59d4945a4",
+        "expected": "e3892370def118c832c355bb1a7c30db7fdf9efcae335b5fb3d49eb59d4945a4",
+        "matches": true
+      },
+      {
+        "path": "dist/runtime/core/combat-program.js",
+        "actual": "7f342cdb723394992ca43ad996bfb23ca003ec18e2d03473741417f0e9dc9083",
+        "expected": "7f342cdb723394992ca43ad996bfb23ca003ec18e2d03473741417f0e9dc9083",
+        "matches": true
+      },
+      {
+        "path": "dist/runtime/core/combat-tool.js",
+        "actual": "61cf07971265721b00b9fa640254da97d9d679671c67716ccfaf7d5ce46baad3",
+        "expected": "61cf07971265721b00b9fa640254da97d9d679671c67716ccfaf7d5ce46baad3",
+        "matches": true
+      },
+      {
+        "path": "dist/runtime/core/tactical-world.js",
+        "actual": "f900acc03d0ab37a73862545ff20184093a784033d6c1ba8a0be8a7a5849eb12",
+        "expected": "f900acc03d0ab37a73862545ff20184093a784033d6c1ba8a0be8a7a5849eb12",
+        "matches": true
+      },
+      {
+        "path": "dist/runtime/src/client/java-reflex.js",
+        "actual": "83a01170d0a2e6b937e34e426b0daa84b0170a4459a114db2aba462b5a57e495",
+        "expected": "83a01170d0a2e6b937e34e426b0daa84b0170a4459a114db2aba462b5a57e495",
+        "matches": true
+      },
+      {
+        "path": "dist/types/core/combat-decision-types.d.ts",
+        "actual": "cc3e205e7848dbb13ce4412dcb41a6df67e60ab619582edd3125906d6d23addd",
+        "expected": "cc3e205e7848dbb13ce4412dcb41a6df67e60ab619582edd3125906d6d23addd",
+        "matches": true
+      },
+      {
+        "path": "dist/types/core/combat-program.d.ts",
+        "actual": "3f576c20172ee864f73a5a3e2f199566f6c921b9875e8088db016133174bc69c",
+        "expected": "3f576c20172ee864f73a5a3e2f199566f6c921b9875e8088db016133174bc69c",
+        "matches": true
+      },
+      {
+        "path": "dist/types/src/decisions/combat-request.d.ts",
+        "actual": "b17cd10f29467ac1840048769d96e0719c1f3c7f60f859f490817e06e6f1789c",
+        "expected": "b17cd10f29467ac1840048769d96e0719c1f3c7f60f859f490817e06e6f1789c",
+        "matches": true
+      },
+      {
+        "path": "src/client/java-reflex.ts",
+        "actual": "f684030d2c090e7e18dce48d0b5ded3d56bdddc2d21320892d685bedc2746a7a",
+        "expected": "f684030d2c090e7e18dce48d0b5ded3d56bdddc2d21320892d685bedc2746a7a",
+        "matches": true
+      }
+    ]
+  },
+  "client": {
+    "pr": "https://github.com/jcs130/cortico-world-qiandengji/pull/16",
+    "mergeCommit": "52372ea074073320c815a6db967e9a60a66606f0",
+    "declaredCore": "0.5.7-rc.160-preview.28",
+    "runtimeLoadedVersion": null,
+    "runtimeEvidenceRequired": true,
+    "note": "PR reports local package candidates, no npm/Market publication or new live reload; World/server pack and original host runtime need client readback"
+  },
+  "goddessCode": [
+    {
+      "path": "E:\\MC\\ops\\goddess-bridge.mjs",
+      "sha256": "6858374535cc1186b002748bcaff3c7f8fd3c8ad28e4b7fcd188bc1a298789a6",
+      "matchesSource": true
+    },
+    {
+      "path": "E:\\MC\\ops\\goddess-dialogue.mjs",
+      "sha256": "8fe44a298cf85b17ebb3df85d25f17c7d19477e547127a2003b267f5362c57e8",
+      "matchesSource": true
+    },
+    {
+      "path": "E:\\MC\\ops\\goddess-chat-identity.mjs",
+      "sha256": "615cb21f5793bdc3f4010c8c51b5440d29d2f9e3916234fc5185f94c5b1854bf",
+      "matchesSource": true
+    },
+    {
+      "path": "E:\\MC\\ops\\goddess-perception.mjs",
+      "sha256": "f1694b5ba5b74297647ae718af0c60dae084f714ef6f260cf65d80c2ebeff877",
+      "matchesSource": true
+    }
+  ],
+  "rollback": {
+    "verifiedPlanEntries": 87,
+    "allCopiesMatchPlans": true,
+    "globalArchiveComplete": false,
+    "privateIndex": "E:/MC/ops/audits/acceptance-20261108-r1/evidence.json"
+  },
+  "limits": [
+    "Artifact presence is not a process loader receipt",
+    "Unchanged upstream artifacts do not receive the latest maid commit as their source commit",
+    "Component observations are sampled facts, not a full inventory refresh or rollback plan"
+  ]
+}
