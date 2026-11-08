@@ -27,7 +27,24 @@ public final class LanTransportProbe {
             var pong=response.get(5,TimeUnit.SECONDS);
             if(!pong.onlineAuth()||pong.selfSignedAuth()||pong.nonce().isBlank())throw new AssertionError("Discovery auth/challenge incorrect");
             var settings=new CompletableFuture<Integer>();
-            signal=new NetherNetDiscoverySignaling(new java.security.SecureRandom().nextLong(),new InetSocketAddress(local,0));
+            var answerBytes=new java.util.concurrent.atomic.AtomicInteger();
+            var answerIdentity=new java.util.concurrent.atomic.AtomicBoolean();
+            signal=new NetherNetDiscoverySignaling(new java.security.SecureRandom().nextLong(),new InetSocketAddress(local,0)) {
+                @Override public void setSignalHandler(String id,SignalHandler handler) {
+                    super.setSignalHandler(id,data->{
+                        if(data.startsWith("CONNECTRESPONSE ")) {
+                            answerIdentity.set(data.lines().anyMatch(line->line.startsWith("a=identity:")));
+                            ByteBuf wire=Unpooled.buffer();
+                            try {
+                                byte[] text=data.getBytes(StandardCharsets.UTF_8);
+                                wire.writeShortLE(NetherNetConstants.ID_DISCOVERY_MESSAGE).writeZero(24).writeIntLE(Math.min(text.length,1140)).writeBytes(text);
+                                answerBytes.set(NetherNetConstants.encryptDiscoveryPacket(wire).length);
+                            } catch(Exception e){settings.completeExceptionally(e);} finally {wire.release();}
+                        }
+                        handler.onSignal(data);
+                    });
+                }
+            };
             connection=new Bootstrap().group(group).channelFactory(NetherNetChannelFactory.client(signal))
                 .option(NetherChannelOption.NETHER_PEER_CONNECTION_CONFIG,PeerConnectionConfiguration.DEFAULT.withBindAddress(local))
                 .option(NetherChannelOption.NETHER_CLIENT_HANDSHAKE_TIMEOUT_MS,8_000)
@@ -43,7 +60,8 @@ public final class LanTransportProbe {
                     public void exceptionCaught(ChannelHandlerContext ctx,Throwable e){settings.completeExceptionally(e);ctx.close();}
                 }).connect(target).sync().channel();
             int packet=settings.get(8,TimeUnit.SECONDS);if(packet!=143)throw new AssertionError("Expected NetworkSettings, got "+packet);
-            System.out.println("{\"discoveryVersions\":"+versions+",\"protocol\":"+pong.protocol()+",\"xboxRequired\":true,\"noncePresent\":true,\"dtlsSctpConnected\":true,\"networkSettingsPacket\":"+packet+",\"gameLoginTested\":false}");
+            System.out.println("{\"discoveryVersions\":"+versions+",\"protocol\":"+pong.protocol()+",\"xboxRequired\":true,\"noncePresent\":true,\"dtlsSctpConnected\":true,\"networkSettingsPacket\":"+packet+",\"answerUdpBytes\":"+answerBytes+",\"answerIdentity\":"+answerIdentity+",\"gameLoginTested\":false}");
+            if(Arrays.asList(args).contains("--expect-compact-answer")&&(answerIdentity.get()||answerBytes.get()>1472||answerBytes.get()==0))throw new AssertionError("LAN answer is not compact for the Xbox compatibility path");
         } finally {
             if(connection!=null)connection.close().awaitUninterruptibly(3000);
             if(signal!=null)signal.close();discovery.close();group.shutdownGracefully(0,2,TimeUnit.SECONDS).awaitUninterruptibly(3000);

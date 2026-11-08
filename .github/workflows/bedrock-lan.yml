@@ -26,6 +26,8 @@ jobs:
           mkdir -p /tmp/bedrock-tests
           javac --release 21 -d /tmp/bedrock-tests paper/integrations/geyser-lan/src/org/qiandengji/geyserlan/LanAdmissionLedger.java paper/integrations/geyser-lan/tests/org/qiandengji/geyserlan/LanAdmissionLedgerTest.java paper/integrations/geyser-ysm/src/org/afuhome/appearance/BedrockBuildPolicy.java paper/integrations/geyser-ysm/tests/org/afuhome/appearance/BedrockBuildPolicyTest.java
           java -ea -cp /tmp/bedrock-tests org.qiandengji.geyserlan.LanAdmissionLedgerTest
+          javac --release 21 -d /tmp/bedrock-tests paper/integrations/geyser-lan/src/org/qiandengji/geyserlan/LanAnswerPolicy.java paper/integrations/geyser-lan/tests/org/qiandengji/geyserlan/LanAnswerPolicyTest.java
+          java -ea -cp /tmp/bedrock-tests org.qiandengji.geyserlan.LanAnswerPolicyTest
           java -ea -cp /tmp/bedrock-tests org.afuhome.appearance.BedrockBuildPolicyTest
           node --test paper/ops/tests/bedrock-network-health.test.mjs
   windows-watchdog:
