@@ -8,6 +8,29 @@ const event = (text: string, ts = '2026-01-01T00:00:00Z', senderKey = 'minecraft
   ({ ts, text, source: 'minecraft', type: 'minecraft.chat', senderKey });
 
 describe('received Minecraft messages', () => {
+  it('keeps a short expiring confirmation complete in an on-demand query without expanding the resident index', () => {
+    const inbox = new MessageInbox('quote-fixture');
+    const id = '6f86837f-6211-45ce-bb32-04e9dca36358';
+    const text = `[MC 系统] 【回收报价】春灯愈甲 ×1，可得 8 金币；尚未卖出，30秒有效。确认：/mycli trade recycle sell ${id}；取消无需操作。`;
+    inbox.observe(event(text));
+    expect(inbox.index()).not.toContain(id);
+    expect(inbox.readout({action:'search', query:'报价'}).text).toContain(text);
+    expect(inbox.readout({action:'list', channel:'system'}).text).toContain(id);
+    expect(inbox.readout({id:'message_1'}).text).toContain(text);
+  });
+
+  it('bounds on-demand long notices and retains the compact player-message budget', () => {
+    const inbox = new MessageInbox('bounded-notices');
+    inbox.observe(event('[MC 插件] ' + 'x'.repeat(2000)));
+    inbox.observe(event('[MC] Alex: ' + 'y'.repeat(1000), '2026-01-01T00:00:01Z', 'Alex'));
+    const result = inbox.readout({action:'list'}).text;
+    expect(result).toContain('x'.repeat(80));
+    expect(result).not.toContain('x'.repeat(97));
+    expect(result).not.toContain('x'.repeat(513));
+    expect(result).not.toContain('y'.repeat(97));
+    expect(result).toContain('…');
+    expect(inbox.readout({id:'message_1'}).text).toContain('x'.repeat(2000));
+  });
   it('indexes nearby voice separately from text/private chat and preserves real UUID and utterance provenance',()=>{
     const inbox=new MessageInbox('voice-fixture',undefined,{recipientNames:['Player']});
     const heard={...event('[MC 附近语音] 小鱼: @Player 一起走吗？','2026-01-01T00:00:02Z','小鱼'),
