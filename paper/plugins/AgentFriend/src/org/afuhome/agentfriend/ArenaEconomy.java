@@ -38,7 +38,7 @@ import org.bukkit.persistence.PersistentDataType;
 /** Existing per-UUID RPG shop/recycling; one Vortex bank, shared by text and native menus. */
 final class ArenaEconomy implements Listener {
     private static final String WALLET = "dungeon-emerald-wallet.";
-    private static final long QUOTE_LIFETIME_MS = 300_000L;
+    static final long QUOTE_LIFETIME_MS = 300_000L;
     private static final int MAX_BALANCE = 1_000_000_000;
     private static final String TRIAL_LORE = "千灯纪试炼战利品";
     private static final Set<String> NAMED_REWARDS = Set.of("冒险者铁剑", "守护铁靴", "迅发弩",
@@ -202,7 +202,7 @@ final class ArenaEconomy implements Listener {
     }
 
     private void openConfirmMenu(Player player, Quote quote) {
-        Inventory inv = Bukkit.createInventory(null, 27, "确认回收 · 30秒有效");
+        Inventory inv = Bukkit.createInventory(null, 27, "确认回收 · "+(QUOTE_LIFETIME_MS/60_000)+"分钟有效");
         ItemStack original = source(player, quote.stash(), quote.slot());
         if (original == null) return;
         inv.setItem(11, icon(Material.RED_WOOL, "取消", "不会消耗装备"));

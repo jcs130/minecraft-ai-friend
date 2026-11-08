@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "status": "validated-candidate-not-deployed",
+  "release": "inventory-stash-guidance-20261108-r1",
+  "sourceBase": "d500e7eb239b3c088422c2aa924e978e098fed84",
+  "version": "0.4.47.63-inventory-tidy-rpg",
+  "artifact": "AgentFriend-0.4.47.63-inventory-tidy-rpg.jar",
+  "sha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+  "baselineVersion": "0.4.47.62-entry-guide-rpg",
+  "baselineSha256": "cb39efb9a9118d5ad27135291c6b8c3835fda02868e4c7b55a366c2ba4258125",
+  "unchangedJarEntries": 625,
+  "replacedClassEntries": 28,
+  "sourceSha256": {
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java": "c120bcbdcdc76ca238a234f210ef1d9a51ab113fbdc8fe403b38b4acbc1ab8a2",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java": "3ff4d63493ac55376435470e282b02850824d1dc869467085cf0f0874789012c",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ArenaEconomy.java": "ef9e5288304f1da8d8811aa89eec75d104102d1d874f00c3b5d15c26004407c0",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java": "54f5741cdf6553f233351cbb422e35064d35f1a4935f4e3840cbcf3767809d9f",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/InventoryFeedback.java": "d27c7e09e3626718d0d21f4b6fd9f1adacc12f880799674f57295e8e30cee5be",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/InventoryTidy.java": "63cce85ee3f50e2af0a9ab2a5e85c8c22f085a1c99208600e11dc91af820dfc5",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PagedPersonalStash.java": "8a5c75e74e216db8eb02feb3767eefac911eeaaad43e6e4a0a826d06c8b4f0c2"
+  },
+  "validation": {
+    "expectedBaselineFailures": 3,
+    "rules": 530,
+    "quoteLedger": 21,
+    "nativeSynthetic": 33,
+    "normalRestart": 2,
+    "actualWindowsPlayerSaveFailure": 3,
+    "totalPassingChecks": 589,
+    "realPlayerDataUsed": false,
+    "productionInstalled": false,
+    "stage": "127.0.0.1:25928, existing marked synthetic flat-world stage",
+    "lastNativeChecksAt": "2026-11-08T17:09:51.569Z"
+  },
+  "privateEvidenceRoot": "E:\\MC\\ops\\repairs\\inventory-stash-guidance-20261108-r1",
+  "codeCopies": [
+    "E:/MC/ops/repairs/inventory-stash-guidance-20261108-r1",
+    "F:/MC-backups/repairs/inventory-stash-guidance-20261108-r1"
+  ],
+  "rollback": {
+    "scope": "code only; disable new auto preferences if needed",
+    "preserve": [
+      "latest world",
+      "characters and UUID",
+      "inventory and stash",
+      "RPG balances",
+      "quests",
+      "authentication",
+      "actions and lifecycle receipts"
+    ],
+    "explicitTrashDestructionReversible": false,
+    "freshDualDiskColdBackupRequiredAtActualMaintenance": true
+  },
+  "openAcceptance": [
+    "new batch merge and normal restart authorization",
+    "production startup and protected item verification",
+    "original client adoption and original-role cleanup receipts",
+    "Bedrock touch and Eye/Web visual presentation"
+  ],
+  "buildSourceSha256": {
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java": "c120bcbdcdc76ca238a234f210ef1d9a51ab113fbdc8fe403b38b4acbc1ab8a2",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java": "9a84794a388ee107bd0c138c6dc89fbbbe1a99a39a083797e6a280671083e116",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ArenaEconomy.java": "133adeaf8c7ef3b75232985d90295adda276c7d74c16b0bd5daa0f078b9e8e82",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java": "61855fa0edbe79f4528201859406b93a70d6cf82e336574838f3a627787d381d",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/InventoryFeedback.java": "9904118687fc5cfbe957805336397510fffff979968d0e0beaff613bd44dc57d",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/InventoryTidy.java": "63cce85ee3f50e2af0a9ab2a5e85c8c22f085a1c99208600e11dc91af820dfc5",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PagedPersonalStash.java": "24d7bc118c0976dd457c8a3f2ba17c423e50f45d94ac99df1401dd1d652fbf98"
+  }
+}

@@ -37,6 +37,28 @@ final class PagedPersonalStash implements Listener {
         for(int i=0;i<PAGES;i++)System.arraycopy(page(id,i).getContents(),0,all,i*PAGE_SIZE,PAGE_SIZE);
         return all;
     }
+    /** Reads existing pages/configuration without opening a menu or materializing rewards. */
+    Snapshot snapshot(UUID id) {
+        ItemStack[] items=new ItemStack[CAPACITY];Inventory[] loaded=pages.get(id);
+        for(int page=0;page<PAGES;page++)for(int slot=0;slot<PAGE_SIZE;slot++) {
+            int global=page*PAGE_SIZE+slot;
+            items[global]=loaded!=null&&loaded[page]!=null?loaded[page].getItem(slot)
+                    :plugin.getConfig().getItemStack("dungeon-personal-stash."+id+"."+global);
+        }
+        return new Snapshot(items);
+    }
+    record Snapshot(ItemStack[] items) {
+        int occupied(){int n=0;for(ItemStack item:items)if(item!=null&&!item.getType().isAir())n++;return n;}
+        int roomFor(ItemStack sample) {
+            if(sample==null||sample.getType().isAir())return 0;
+            int room=0,max=Math.min(64,sample.getMaxStackSize());
+            for(ItemStack item:items) {
+                if(item==null||item.getType().isAir())room+=max;
+                else if(item.isSimilar(sample))room+=Math.max(0,Math.min(max,item.getMaxStackSize())-item.getAmount());
+            }
+            return room;
+        }
+    }
     void write(Inventory inv,UUID id) {
         for(int slot=0;slot<PAGE_SIZE;slot++) {
             ItemStack item=inv.getItem(slot);

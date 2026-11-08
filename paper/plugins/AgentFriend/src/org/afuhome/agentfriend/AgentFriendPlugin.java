@@ -932,6 +932,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(sender instanceof Player p && java.util.Arrays.stream(args).anyMatch(s->s.equals("--help")||s.equals("-h"))) {
             AgentCliCatalog.commandHelp(p,args);return true;
         }
+        if(args.length>=2&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("inventorytidy")){
+            if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("仅服务器控制台可代本人维护物品；本人用 /mycli inventory tidy。");return true;}
+            inventoryFeedback.adminTidy(sender,args);return true;
+        }
+        if(sender instanceof Player p&&args.length>=2&&args[0].equalsIgnoreCase("inventory")&&args[1].equalsIgnoreCase("tidy")){
+            inventoryFeedback.command(p,args);return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("blockaccess")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("仅控制台可维护拆建范围；玩家用 /mycli protect break|place 查询本人权限。"); return true;

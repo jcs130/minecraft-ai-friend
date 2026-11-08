@@ -115,6 +115,14 @@ final class DungeonManager implements Listener {
     int stashCapacity() { return PagedPersonalStash.CAPACITY; }
     ItemStack stashItem(UUID id,int slot) { return storage().item(id,slot); }
     ItemStack[] stashContents(UUID id) { return storage().contents(id); }
+    PagedPersonalStash.Snapshot stashSnapshot(UUID id) { return storage().snapshot(id); }
+    /** Caller owns the main-thread transaction and persists once after staging all pages. */
+    void stageStashContents(UUID id,ItemStack[] items) {
+        if(items.length!=PagedPersonalStash.CAPACITY)throw new IllegalArgumentException("stash capacity");
+        for(int page=0;page<PagedPersonalStash.PAGES;page++) {
+            Inventory inv=storage().page(id,page);inv.setContents(java.util.Arrays.copyOfRange(items,page*54,(page+1)*54));storage().write(inv,id);
+        }
+    }
     boolean storePhoto(UUID id,int image,List<ItemStack> items) { return PhotoRewards.accept(plugin,storage(),id,image,items); }
     void setStashItem(UUID id,int slot,ItemStack item) { storage().set(id,slot,item);storage().write(storage().page(id,slot/54),id); }
     void openStashPages(Player player) { storage().select(player); }
@@ -2050,7 +2058,10 @@ final class DungeonManager implements Listener {
                 chargeRemoteStash(player);
             }
             player.sendMessage("MC_STASH_PUT slot=" + slot + " id=minecraft:"
-                    + material.name().toLowerCase(Locale.ROOT) + " moved=" + moved);
+                    + material.name().toLowerCase(Locale.ROOT) + " moved=" + moved
+                    + " requested="+attempted+" reason="+(moved==0?"stash_full":moved<attempted?"partial":"ok")
+                    + " retrySameAction=false"+(moved<attempted?" nextCommand=\"/mycli trade recycle list --json\"":""));
+            if(moved<attempted)explainStashFull(player,attempted-moved);
             return;
         }
         if (action.equals("put") && args.length == 5) {
@@ -2060,7 +2071,7 @@ final class DungeonManager implements Listener {
                 player.sendMessage("用法：/mycli arena stash put <英文物品ID> <1–64>"); return;
             }
             if (!remoteStashReady(player)) return;
-            int moved = 0;
+            int moved = 0;boolean capacityBlocked=false;
             for (int slot = 0; slot < 36 && moved < wanted; slot++) {
                 ItemStack source = player.getInventory().getItem(slot);
                 if (source == null || source.getType() != material || plugin.isSoulbound(source)) continue;
@@ -2069,14 +2080,19 @@ final class DungeonManager implements Listener {
                 int attempted = part.getAmount();
                 int left = storage().add(id,part);
                 int deposited = attempted - left;
-                if (deposited <= 0) break;
+                if(left>0)capacityBlocked=true;
+                if (deposited <= 0) continue;
                 source.setAmount(source.getAmount() - deposited);
                 player.getInventory().setItem(slot, source.getAmount() > 0 ? source : null);
                 moved += deposited;
             }
             if (moved > 0) { saveStash(inv, id); player.saveData(); chargeRemoteStash(player); }
             player.sendMessage("MC_STASH_PUT id=minecraft:" + material.name().toLowerCase(Locale.ROOT)
-                    + " moved=" + moved + " requested=" + wanted);
+                    + " moved=" + moved + " requested=" + wanted
+                    + " reason="+(moved==wanted?"ok":capacityBlocked?(moved==0?"stash_full":"partial"):moved==0?"no_matching_item":"insufficient_items")
+                    + " retrySameAction=false");
+            if(moved<wanted&&capacityBlocked)explainStashFull(player,wanted-moved);
+            else if(moved<wanted)player.sendMessage("§e随身没有足够的可存入同类物品；先 /mycli inventory 核对槽位和数量，绑定物品不能存箱。已存入的物品不会重复发放。");
             return;
         }
         if (action.equals("take") && (args.length == 4 || args.length == 5)) {
@@ -2123,6 +2139,12 @@ final class DungeonManager implements Listener {
         return number > 0 && at.distanceSquared(new Location(world(), chestX(number) + .5,
                 Y[number - 1] + 1.5, chestZ(number) + .5)) <= 25
                 && world().getBlockAt(chestX(number), Y[number - 1] + 1, chestZ(number)).getType() == Material.CHEST;
+    }
+    private void explainStashFull(Player player,int remaining) {
+        int used=stashSnapshot(player.getUniqueId()).occupied();
+        player.sendMessage("§e[stash_full] 个人箱已用 "+used+"/540格，无法再接收这件物品；尚有 "+remaining+" 件留在背包，未为这些物品扣魔力。不要重复同一存入命令。");
+        player.sendMessage("下一步：/mycli trade recycle list --json 查看可回收的仓库装备；先报价、确认出售腾位。普通石头、圆石和黏土不在装备回收范围。背包合并：/mycli inventory tidy；明确销毁普通杂物：/mycli inventory tidy --discard-common。");
+        player.sendMessage("MC_STASH_BLOCKED reason=stash_full occupied="+used+" capacity=540 remaining="+remaining+" nextCommand=\"/mycli trade recycle list --json\" retrySameAction=false");
     }
     private boolean remoteStashReady(Player player) {
         return nearStash(player) || plugin.professions().basicAllowed(player,"travel") && plugin.hasMana(player, 2);
