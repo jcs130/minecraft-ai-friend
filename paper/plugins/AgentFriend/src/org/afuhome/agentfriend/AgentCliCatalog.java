@@ -272,7 +272,13 @@ final class AgentCliCatalog {
         add(specs,"arena.stash.inventory","storage","read","/mycli arena stash inventory","列出本人背包槽位 0–35","在线玩家","MC_INVENTORY、MC_INVENTORY_SUMMARY");
         add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","只查已装入箱格，默认第一页；待入箱奖励另用arena rewards list，开箱后装入","在线玩家","MC_STASH、MC_STASH_SUMMARY");
         add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
-        add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按背包0–35槽直接远程存入；非绑定装备保留附魔和外观","背包槽有物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
+        add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按背包0–35槽直接远程存入；非绑定装备保留附魔和外观","背包槽有物品；箱有空位或兼容堆叠余量；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；stash_full时停止重复，查trade recycle list或inventory tidy --dry-run；不会自动出售或销毁");
+        add(specs,"inventory.tidy","storage","write","/mycli inventory tidy [--dry-run] [--discard-common] [--json]","合并主背包普通堆叠；显式discard-common才销毁普通石头、泥土、黏土等杂物","保留快捷栏、装备、特殊元数据及背包之外所有物品；先关GUI和光标物品，PvP/恢复中禁止；默认不销毁","MC_INVENTORY_TIDY；dry-run只预览；报告释放槽位和逐类销毁数量，不出售、不发钱");
+        add(specs,"inventory.tidy.stash","storage","write","/mycli inventory tidy stash [--dry-run] [--discard-common] [--json]","整理本人10页540格个人箱；显式标志才销毁普通杂物","默认只合并普通堆叠；不销毁装备、命名/附魔/PDC物品，不自动回收；普通材料也可能是任务所需，先预览","MC_INVENTORY_TIDY；报告释放槽位和可回收重复装备数量，后续trade recycle list按报价处理");
+        add(specs,"inventory.tidy.auto","storage","write","/mycli inventory tidy auto on|off|status [--discard-common] [--json]","本人选择背包满时自动整理；on带discard-common才自动销毁普通杂物","默认关闭；设置按本人UUID持久保存，最多60秒一次；status只读；关闭auto off","MC_INVENTORY_TIDY；快捷栏及特殊物品保留，其他玩家不受影响");
+        add(specs,"inventory.tidy.auto.status","storage","read","/mycli inventory tidy auto status [--json]","查询本人自动整理开关、销毁白名单及间隔","只读；不整理、不销毁、不修改设置","MC_INVENTORY_TIDY；enabled/discardCommon/discardWhitelist");
+        add(specs,"inventory.tidy.auto.on","storage","write","/mycli inventory tidy auto on [--discard-common] [--json]","本人主动开启背包满时自动合并；显式标志才销毁普通杂物","只改变本人设置，默认不销毁；销毁白名单可能包含任务需要的普通材料","MC_INVENTORY_TIDY；最多每60秒一次，不出售、不发钱");
+        add(specs,"inventory.tidy.auto.off","storage","write","/mycli inventory tidy auto off [--json]","关闭本人自动整理","只改变本人设置，不修改物品","MC_INVENTORY_TIDY enabled=false");
         add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–540> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位；远程成功取出 2 魔力","MC_STASH_TAKE moved 数量与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.leave","adventure","teleport","/mycli arena leave","退出试炼返回入口","正在试炼区域内","传送或拒绝原因");
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用；6 魔力","成功后 MC_TRAVEL 或失败原因");
@@ -363,7 +369,7 @@ final class AgentCliCatalog {
             nativeSpec(specs,"trade.shop.buy","item","/mycli trade shop buy <商品ID> [份数]","用金币购买装备与补给，直接保存到个人箱待入箱队列","不耗魔力；非堆叠装备一次1件，材料最多一组；开箱接收：arena stash page 1；未知结果先查trade recycle status，勿重复购买");
             nativeSpec(specs,"trade.recycle","group","/mycli trade recycle [list|quote|sell|status|menu]","出售多余装备赚金币；先报价，再明确确认","当前手持、穿戴、绑定和特殊装备保留；材料存箱；旧arena recycle调用保留");
             nativeSpec(specs,"trade.recycle.list","read","/mycli trade recycle list [页码]","查可回收装备的精确槽位、耐久、附魔、价格及下一步","默认精炼文本，每页12项；bag是0–35槽，chest是1–540槽；不会自动出售");
-            nativeSpec(specs,"trade.recycle.quote","read","/mycli trade recycle quote bag|chest <槽位> [数量]","取得30秒有效报价，返回完整确认命令","不移走物品、不加钱；核对装备后sell；取消无需操作，报价自动过期");
+            nativeSpec(specs,"trade.recycle.quote","read","/mycli trade recycle quote bag|chest <槽位> [数量]","取得"+(ArenaEconomy.QUOTE_LIFETIME_MS/1000)+"秒有效报价，返回完整确认命令；以实际expiresAt为准","不移走物品、不加钱；核对装备后sell；取消无需操作，报价自动过期");
             nativeSpec(specs,"trade.recycle.sell","item","/mycli trade recycle sell <报价ID>","按本人最新报价出售，金币进入同一RPG账户","只执行一次；过期/物品改变拒绝；待对账不得重试；完成后trade shop list购买补给");
             nativeSpec(specs,"trade.recycle.status","read","/mycli trade recycle status","查金币服务、余额及交易是否待对账","不补发物品或金币；待对账请保留原记录并联系服主");
             nativeSpec(specs,"trade.recycle.menu","gui","/mycli trade recycle menu","打开可回收装备列表→报价→绿色确认","每件显示来源和价格；不接受拖入物品、不自动批量卖出");
@@ -420,7 +426,7 @@ final class AgentCliCatalog {
             nativeSpec(specs,"mastery","read","/mycli mastery","旧熟练度已归档，转查Vortex当前技能状态","基础技能固定可用；职业成长用学习点和天赋：skills status/tree");
             nativeSpec(specs,"skillbook","group","/mycli skillbook list","只读列出保留的旧研习书；use已停用","书不消耗、不再写旧熟练度；升级查询skills status，学习skills learn <ID>");
             nativeSpec(specs,"skillbook.use","read","/mycli skillbook use <槽位>","兼容旧调用并解释迁移；不会消耗书或升级旧技能","基础技能无需研习；职业升级统一Vortex学习点和天赋");
-            Spec stashPut=specs.get("arena.stash.putslot");specs.put(stashPut.id(),new Spec(stashPut.id(),stashPut.category(),stashPut.mode(),stashPut.usage(),"按背包精确槽位直接远程存箱，无需先传送或打开GUI","通用travel已可用；成功2魔力；绑定保护保持；按moved和stash list核对",stashPut.returns()));
+            Spec stashPut=specs.get("arena.stash.putslot");specs.put(stashPut.id(),new Spec(stashPut.id(),stashPut.category(),stashPut.mode(),stashPut.usage(),"按背包精确槽位直接远程存箱；stash_full时停止重复，查trade recycle list或inventory tidy --dry-run","通用travel已可用；箱有空位或兼容堆叠余量；成功2魔力；绑定保护保持；按moved和stash list核对",stashPut.returns()));
             Spec shared=specs.get("guild.shared");specs.put(shared.id(),new Spec(shared.id(),shared.category(),shared.mode(),shared.usage(),"查公会共享装备、食物与材料箱坐标，需亲自前往领取",shared.requires(),shared.returns()));
             nativeSpec(specs,"guild.party","group","/mycli guild party [动作]","先status查邀请/成员/集合；create→invite→对方accept才组队，聊天约定不算","复用原Vortex权限；集合可locate tp；会话队伍不代表副本参战，原生重启后须重组");
             nativeSpec(specs,"guild.party.plan","read","/mycli guild party plan <发起者> <伙伴...>","多人组队的本人下一步；四人列四个准确名字，复用同一原生队伍","只读，不代建队/邀请/接受；已在不同队伍时先协商，不自动退队。人数上限由原生管理器执行，名单不是入队证明");
@@ -507,6 +513,12 @@ final class AgentCliCatalog {
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
                 out.addProperty("usage",path+" <命令> [参数]");out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",list.size());
                 Spec parent=specs.get(id);if(parent!=null&&parent.mode().equals("gui"))out.addProperty("defaultAction","无子命令时："+parent.summary()+"；"+parent.requires());
+                if(parent!=null&&id.equals("inventory.tidy")){
+                    out.addProperty("usage",parent.usage());out.addProperty("summary",parent.summary());
+                    JsonObject semantic=semantics(parent);
+                    for(String key:List.of("operation","parameters","permission","requirements","consumption","resultQuery"))out.add(key,semantic.get(key));
+                    out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",true);
+                }
                 var rows=new com.google.gson.JsonArray();
                 list.stream().skip((long)(page-1)*PAGE_SIZE).limit(PAGE_SIZE).forEach(spec->{JsonObject row=new JsonObject();row.addProperty("name",spec.id().substring(prefix.length()));row.addProperty("summary",spec.summary());rows.add(row);});out.add("commands",rows);
                 if(page<pages)out.addProperty("nextCommand",path+" --help --page "+(page+1)+(json?" --json":""));
@@ -536,7 +548,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return Set.of("arena.wallet","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -641,6 +653,7 @@ final class AgentCliCatalog {
         while(matcher.find()){JsonObject parameter=new JsonObject();parameter.addProperty("syntax",matcher.group());parameter.addProperty("name",matcher.group(1)!=null?matcher.group(1):matcher.group(2));parameter.addProperty("required",matcher.group(1)!=null);parameters.add(parameter);}
         out.add("parameters",parameters);
         String query=id.startsWith("skills.")||id.startsWith("cast.")||id.startsWith("profession")?"/mycli status；/mycli skills info <ID>；/mycli skills points":id.startsWith("photo")?"/mycli photo status":id.startsWith("inventory")?"/mycli inventory；重新打开对应容器核对":id.startsWith("arena.stash")||id.startsWith("guild.stash")||id.endsWith(".rewards")?"/mycli arena stash list；/mycli arena rewards list；关闭重开容器核对":id.startsWith("arena.recycle")||id.startsWith("arena.shop")||id.equals("arena.wallet")?"/mycli arena wallet；/mycli arena stash list；/mycli inventory":id.startsWith("arena")?"/mycli arena status；/mycli arena loot":id.startsWith("dungeon")?"/mycli dungeon status <ID>":id.startsWith("landmark")?"/mycli landmark info <领地ID>":id.startsWith("land.")||id.startsWith("admin.land")?"/mycli land info <ID>；/mycli land members <ID>":id.startsWith("waypoint")||id.equals("goto")?"/mycli waypoint list；本人最终 MC_TRAVEL/MC_WAYPOINT_RESULT":id.startsWith("trade")?"/mycli trade info <商人ID>":id.startsWith("commission")?"/mycli commission mine":id.startsWith("pvp")?"/mycli pvp status":id.startsWith("village")?"/mycli village threat":"/mycli progress";
+        if(id.startsWith("inventory.tidy"))query="/mycli inventory；/mycli inventory tidy auto status；存盘未确认时联系服主核对原requestId，不重放整理";
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
         if(id.startsWith("admin.blockaccess."))query="mycli admin blockaccess status --json";
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";

@@ -18,6 +18,7 @@ import org.bukkit.inventory.ItemStack;
 final class InventoryFeedback implements Listener {
     private final AgentFriendPlugin plugin;
     private final ItemIdentity identity;
+    private final InventoryTidy tidy;
     private final Map<UUID, Long> refreshed = new HashMap<>();
     private final Map<UUID, List<Gift>> pending = new HashMap<>();
     private final Map<UUID, Set<String>> explained = new HashMap<>();
@@ -28,13 +29,23 @@ final class InventoryFeedback implements Listener {
             Material.WHEAT_SEEDS,Material.ROTTEN_FLESH);
     private record Gift(UUID giver, ItemStack item, int amount, int beforeCount, EntityPickupItemEvent event) {}
     InventoryFeedback(AgentFriendPlugin plugin) {
-        this.plugin = plugin; identity = new ItemIdentity(plugin);
+        this.plugin = plugin; identity = new ItemIdentity(plugin);tidy=new InventoryTidy(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
         for (Player player : Bukkit.getOnlinePlayers()) scheduleNotice(player, 80L);
+    }
+    void adminTidy(org.bukkit.command.CommandSender sender,String[] args) {
+        if(args.length<3){sender.sendMessage("mycli admin inventorytidy <原在线角色UUID> [stash|auto on|off|status] [--dry-run] [--discard-common]");return;}
+        try {
+            UUID id=UUID.fromString(args[2]);Player p=org.bukkit.Bukkit.getPlayer(id);
+            if(p==null){sender.sendMessage("[player_unavailable] 原角色未在线；不生成或接管替代身体。");return;}
+            String[] command=new String[args.length-1];command[0]="inventory";command[1]="tidy";System.arraycopy(args,3,command,2,args.length-3);
+            tidy.operator(p,command,sender);
+        }catch(IllegalArgumentException invalid){sender.sendMessage("[invalid_uuid] 必须使用核对过的原角色UUID，未修改物品。");}
     }
     void command(Player p, String[] args) {
         if (plugin.isObserver(p)) { p.sendMessage("§e【随身背包】这是观战账号；请在附身角色自己的连接上查询。观战画面展示该角色的物品，不是观战账号的存档。"); return; }
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
+        if(action.equals("tidy")){tidy.command(p,args);return;}
         if (action.equals("item") || action.equals("物品")) { inspect(p, args); return; }
         if (!Set.of("status", "refresh", "状态", "刷新").contains(action)) {
             p.sendMessage("§e用 /mycli inventory 查服务器随身背包；refresh 同步显示；item <0–35|hand> 查物品真实名称和用法。54格大背包需另行打开；个人奖励箱用 /mycli arena stash。"); return;
@@ -96,7 +107,7 @@ final class InventoryFeedback implements Listener {
     }
     private void scheduleNotice(Player p, long delay) {
         UUID id = p.getUniqueId(); if (!scheduled.add(id)) return;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> { scheduled.remove(id); if (p.isOnline() && !plugin.isObserver(p)) showKnown(p, true); }, delay);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { scheduled.remove(id); if (p.isOnline() && !plugin.isObserver(p)) {showKnown(p, true);tidy.queueAuto(p);} }, delay);
     }
     private void showKnown(Player p, boolean onlyNew) {
         Set<String> seen = explained.computeIfAbsent(p.getUniqueId(), ignored -> new HashSet<>());
@@ -127,20 +138,26 @@ final class InventoryFeedback implements Listener {
         storageHint(p,true);
     }
     private void storageHint(Player p,boolean cooldown){
+        if(cooldown&&tidy.queueAuto(p))return;
         long now=System.currentTimeMillis();
         if(cooldown&&now-fullHints.getOrDefault(p.getUniqueId(),0L)<60000)return;
         fullHints.put(p.getUniqueId(),now);
-        String next="先 /mycli inventory 选非绑定物品槽，再 /mycli arena stash putslot <槽> <数量> 远程存箱";
+        var capacity=plugin.dungeon().stashSnapshot(p.getUniqueId());
+        String next=capacity.occupied()==PagedPersonalStash.CAPACITY
+                ?"个人箱已满（540/540），先 /mycli trade recycle list --json 查可回收仓库装备，腾位后再存。"
+                :"先 /mycli inventory tidy 合并普通堆叠；/mycli trade recycle list --json 查可回收装备。";
         // Main inventory first; never nominate held, named, bound or custom gear.
         for(int i=0;i<36;i++){
             int slot=(i+9)%36;ItemStack item=p.getInventory().getItem(slot);
             if(slot==p.getInventory().getHeldItemSlot()||item==null||!PLAIN_SURPLUS.contains(item.getType())
                     ||item.hasItemMeta()||plugin.isSoulbound(item))continue;
-            next="可先存「"+identity.describe(item).name()+"」×"+item.getAmount()+"。命令：/mycli arena stash putslot "+slot+" "+item.getAmount();break;
+            int room=capacity.roomFor(item);if(room<1)continue;
+            int amount=Math.min(item.getAmount(),room);
+            next="可先存「"+identity.describe(item).name()+"」×"+amount+"。命令：/mycli arena stash putslot "+slot+" "+amount;break;
         }
-        p.sendMessage("§e【inventory_full】"+(cooldown?"物品未全部装入背包。":"随身没有空槽。")+next+"（成功2魔力，无需开界面或传送）。收到 moved>0 才算完成，再继续拾取；多余装备 /mycli trade recycle list → 按返回命令报价确认，金币可用 /mycli trade shop list 买补给。不会自动丢弃或出售。");
-        p.sendMessage(net.kyori.adventure.text.Component.text("【点击整理个人箱】 ")
-                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash page 1"))
+        p.sendMessage("§e【inventory_full】"+(cooldown?"物品未全部装入背包。":"随身没有空槽。")+next+"存箱成功2魔力，无需开界面或传送；moved=0时停止重复。普通石头、圆石和黏土不能装备回收。明确销毁普通杂物：/mycli inventory tidy --discard-common；开启本人自动清理：/mycli inventory tidy auto on --discard-common（保留快捷栏与特殊物品）。");
+        p.sendMessage(net.kyori.adventure.text.Component.text("【点击合并背包】 ")
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli inventory tidy"))
                 .append(net.kyori.adventure.text.Component.text("【点击装备回收】")
                 .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli trade recycle menu"))));
     }
@@ -179,5 +196,6 @@ final class InventoryFeedback implements Listener {
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId(); refreshed.remove(id); explained.remove(id); scheduled.remove(id); fullHints.remove(id);
+        tidy.forget(id);
     }
 }

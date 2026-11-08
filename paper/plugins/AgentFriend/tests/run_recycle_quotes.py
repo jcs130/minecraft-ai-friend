@@ -6,7 +6,7 @@ source=a.source or Path(__file__).parents[1]/'src/org/afuhome/agentfriend/ArenaE
 s=source.read_text(encoding='utf-8')
 field=re.search(r'    private final Map<UUID,.*> quotes = new HashMap<>\(\);',s).group()
 record=re.search(r'    private record Quote\([\s\S]*?\{ \}',s).group()
-ttl=re.search(r'    private static final long QUOTE_LIFETIME_MS = .*;',s).group()
+ttl=re.search(r'    (?:private )?static final long QUOTE_LIFETIME_MS = .*;',s).group()
 helpers='\n'.join(re.findall(r'    private (?:void|Quote) (?:rememberQuote|findQuote|slotQuote|consumeQuote)\([\s\S]*?^    \}',s,re.M))
 issue=re.search(r'        int price = unitPrice\(stack\) \* quantity;[\s\S]*?(?=        JsonObject details)',s).group()
 code='''import java.util.*;
