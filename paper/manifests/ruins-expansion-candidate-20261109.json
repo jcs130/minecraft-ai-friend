@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 1,
+  "id": "ruins-expansion-20261109-r2",
+  "state": "validated-candidate-not-deployed",
+  "minecraft": "1.21.1",
+  "world": "aincrad",
+  "contentRevision": "ruins-20261109-r2",
+  "contentManifestSha256": "e4298ccbf44ad84c26d5882dd0e0b483d9675abab0032aa7ccd60a9f9d3bfc9b",
+  "agentFriendTestedVersions": [
+    "0.4.47.62-entry-guide-rpg",
+    "0.4.47.63-inventory-tidy-rpg"
+  ],
+  "sitesBefore": 5,
+  "sitesAdded": 10,
+  "sitesAfter": 15,
+  "roomsBefore": 13,
+  "roomsAdded": 30,
+  "roomsAfter": 43,
+  "towerChanged": false,
+  "jarChanges": false,
+  "unitTests": 18,
+  "reproducibleFiles": 15,
+  "repeatedBuildsIdentical": true,
+  "isolatedAcceptance": {
+    "completedSites": 10,
+    "completedRooms": 30,
+    "mobSnapshots": 100,
+    "actualStashRewardClaims": 10,
+    "duplicateClaimsDenied": 10,
+    "merged15SitesLoaded": true,
+    "ordinaryMenuChecks": 8,
+    "protocolParserErrors": 0,
+    "mode": "adventure",
+    "basis": "per-site accepted runs across two isolated worlds; original failures retained",
+    "failuresRetained": true,
+    "syntheticSetupGear": true
+  },
+  "notVerified": [
+    "physical Bedrock/Xbox UI",
+    "independent autonomous LLM playthrough",
+    "normal-equipment balance",
+    "production deployment"
+  ],
+  "regionPayload": {
+    "files": [
+      {
+        "name": "r.15.15.mca",
+        "chunks": 9,
+        "bytes": 45056,
+        "sha256": "e21180783e5fd7b0cd98144518d84eff0f6e856e591005a73408c620302f082e"
+      },
+      {
+        "name": "r.15.16.mca",
+        "chunks": 21,
+        "bytes": 94208,
+        "sha256": "55255cb366991446f7ded594fab63b0e72c9a7f11341d12347c0251da117c561"
+      },
+      {
+        "name": "r.15.17.mca",
+        "chunks": 18,
+        "bytes": 81920,
+        "sha256": "74888fed48bcf27730dc66ebee46550e9dc9ed27176ad813377fae8175d2f1fd"
+      },
+      {
+        "name": "r.16.15.mca",
+        "chunks": 27,
+        "bytes": 118784,
+        "sha256": "7cfcbac2c23aeabe241b9d68aa86baa9ab1577a91b607fcc43a7c3928adc8206"
+      },
+      {
+        "name": "r.16.16.mca",
+        "chunks": 69,
+        "bytes": 319488,
+        "sha256": "3818e6d1e1fbfbafcbf41d7b36efb58b856cee1aea35fe46fa48ace55f4915b9"
+      },
+      {
+        "name": "r.16.17.mca",
+        "chunks": 57,
+        "bytes": 266240,
+        "sha256": "7ad1f5194e923ca3de9278b79da70433315e2267b83272e933d3fe162c9e359f"
+      },
+      {
+        "name": "r.17.15.mca",
+        "chunks": 24,
+        "bytes": 106496,
+        "sha256": "459cb29e3a81dfa86e7055c6a542d8346b182e49d51e3eb3d3e7871875c1f166"
+      },
+      {
+        "name": "r.17.16.mca",
+        "chunks": 72,
+        "bytes": 327680,
+        "sha256": "6b18501e59f3fa8fa3d985083a6911dceb4ac3c98f8c34bdeb6c117ae9c84480"
+      },
+      {
+        "name": "r.17.17.mca",
+        "chunks": 54,
+        "bytes": 245760,
+        "sha256": "eba1a7f65cd41027419279042e3713e9fcc441c7358e252a169d15b6ca06180b"
+      },
+      {
+        "name": "r.18.15.mca",
+        "chunks": 24,
+        "bytes": 106496,
+        "sha256": "bc0dc65819124c51cfcaff41d73f9efa9425f2fb45b214fcadc91ea8c439e949"
+      },
+      {
+        "name": "r.18.16.mca",
+        "chunks": 61,
+        "bytes": 270336,
+        "sha256": "2618d0d6455eebacc4d4af7ce07766a0214082b7fd7ea6afa25d0f803db65a72"
+      },
+      {
+        "name": "r.18.17.mca",
+        "chunks": 34,
+        "bytes": 147456,
+        "sha256": "e14b75573f345f0e650c9c7b9fcf6333c85175866e766c54d7bbb3e3e31378db"
+      },
+      {
+        "name": "r.19.15.mca",
+        "chunks": 24,
+        "bytes": 106496,
+        "sha256": "84f1539485fc322f96b5fd7332e5966447295a85e2d0941f5b236e778c2ea5c6"
+      },
+      {
+        "name": "r.19.16.mca",
+        "chunks": 67,
+        "bytes": 303104,
+        "sha256": "bc8299503b44692e26ff8fa7540f9015eb9dc207910ade70d2ed3df7937c34ab"
+      },
+      {
+        "name": "r.19.17.mca",
+        "chunks": 54,
+        "bytes": 405504,
+        "sha256": "dc0b212f3fd0d317b3a409dc8fe901dd1d8dd6a1b52c7e70cae08e66a9b64149"
+      },
+      {
+        "name": "r.20.15.mca",
+        "chunks": 15,
+        "bytes": 69632,
+        "sha256": "4711fd54e86a9015a7fcb3bbb7114961371780f4831dc523261d8151c7913103"
+      },
+      {
+        "name": "r.20.16.mca",
+        "chunks": 43,
+        "bytes": 200704,
+        "sha256": "87fe59fadf992e4b26140eac0870da10769c9832e31c00e9b63f1815ae6b54e6"
+      },
+      {
+        "name": "r.20.17.mca",
+        "chunks": 36,
+        "bytes": 204800,
+        "sha256": "25233b94828a7dd1a72fc75a6a8b13783a5455e4621fbc0345c284e91deec9d6"
+      }
+    ],
+    "chunks": 709,
+    "entitiesOrPoiCopied": false,
+    "neighborQaChunksCopied": false
+  },
+  "sites": [
+    {
+      "id": "corsair_cove",
+      "name": "黑帆海盗湾",
+      "bounds": [
+        8156,
+        64,
+        8156,
+        8287,
+        126,
+        8253
+      ],
+      "centres": [
+        [
+          8216,
+          75,
+          8203
+        ],
+        [
+          8244,
+          86,
+          8206
+        ],
+        [
+          8230,
+          82,
+          8199
+        ]
+      ],
+      "templateSha256": "93b1ecaf477c7272919c59e325d91eb4fdea11c9aa079f18c25d3918ce927990"
+    },
+    {
+      "id": "tide_sanctum",
+      "name": "潮汐沉没圣所",
+      "bounds": [
+        8668,
+        64,
+        8156,
+        8782,
+        114,
+        8275
+      ],
+      "centres": [
+        [
+          8710,
+          73,
+          8202
+        ],
+        [
+          8742,
+          78,
+          8230
+        ],
+        [
+          8742,
+          78,
+          8198
+        ]
+      ],
+      "templateSha256": "d2e1521c0f58f5222edd2e216ed187712a6e503afb873de5a89ee6b2ffe50649"
+    },
+    {
+      "id": "sunken_dynasty",
+      "name": "失落王朝陵墓",
+      "bounds": [
+        9180,
+        64,
+        8156,
+        9290,
+        108,
+        8256
+      ],
+      "centres": [
+        [
+          9217,
+          78,
+          8204
+        ],
+        [
+          9237,
+          78,
+          8219
+        ],
+        [
+          9221,
+          78,
+          8219
+        ]
+      ],
+      "templateSha256": "1e428d7575cd43d2cdeb1de56094ce14dbca13704c1df2ef2d31b4d4c7f50fca"
+    },
+    {
+      "id": "frost_keep",
+      "name": "霜落古堡",
+      "bounds": [
+        9692,
+        64,
+        8156,
+        9804,
+        119,
+        8267
+      ],
+      "centres": [
+        [
+          9753,
+          94,
+          8211
+        ],
+        [
+          9739,
+          100,
+          8221
+        ],
+        [
+          9746,
+          99,
+          8201
+        ]
+      ],
+      "templateSha256": "7a962f470ef966f25e8b2af1a0242e3445e743f0da24bf5b1ce80f74dc694194"
+    },
+    {
+      "id": "ember_foundry",
+      "name": "熔火铸造厂",
+      "bounds": [
+        10204,
+        64,
+        8156,
+        10306,
+        119,
+        8258
+      ],
+      "centres": [
+        [
+          10245,
+          104,
+          8197
+        ],
+        [
+          10265,
+          104,
+          8217
+        ],
+        [
+          10265,
+          104,
+          8197
+        ]
+      ],
+      "templateSha256": "9f92cfad493b594261d9075b4e44e7e7e3533f117b7025dbe395f264019bf13d"
+    },
+    {
+      "id": "jungle_covenant",
+      "name": "翠藤古神祭坛",
+      "bounds": [
+        8156,
+        64,
+        8668,
+        8275,
+        119,
+        8787
+      ],
+      "centres": [
+        [
+          8212,
+          80,
+          8717
+        ],
+        [
+          8222,
+          80,
+          8747
+        ],
+        [
+          8205,
+          81,
+          8736
+        ]
+      ],
+      "templateSha256": "c9b02e329dc6ac2c97562c0ffa2411d8b625069322a44760c96c00b5697ed1e9"
+    },
+    {
+      "id": "sky_watch",
+      "name": "云上守望塔",
+      "bounds": [
+        8668,
+        104,
+        8668,
+        8795,
+        159,
+        8814
+      ],
+      "centres": [
+        [
+          8750,
+          133,
+          8734
+        ],
+        [
+          8749,
+          133,
+          8744
+        ],
+        [
+          8749,
+          133,
+          8768
+        ]
+      ],
+      "templateSha256": "ee3bb745a4b32c546d3161fbbe2cd2cb47c72d35bf8e5f452a7f33260a0df21d"
+    },
+    {
+      "id": "void_citadel",
+      "name": "虚空回响城",
+      "bounds": [
+        9180,
+        104,
+        8668,
+        9274,
+        125,
+        8762
+      ],
+      "centres": [
+        [
+          9217,
+          122,
+          8705
+        ],
+        [
+          9237,
+          122,
+          8725
+        ],
+        [
+          9237,
+          122,
+          8705
+        ]
+      ],
+      "templateSha256": "6c5878dd568b83e05965db05d80fb14a5b3b6ec8386516b7d0b59a88767a889e"
+    },
+    {
+      "id": "deep_mineworks",
+      "name": "深岩失落矿城",
+      "bounds": [
+        9692,
+        40,
+        8668,
+        9820,
+        244,
+        8796
+      ],
+      "centres": [
+        [
+          9745,
+          178,
+          8736
+        ],
+        [
+          9774,
+          181,
+          8716
+        ],
+        [
+          9758,
+          181,
+          8759
+        ]
+      ],
+      "templateSha256": "4eebc1e9452548e08b14b6a69bfb79b5d7e39ec7cbd06e62c881052a13916dd4"
+    },
+    {
+      "id": "winter_manor",
+      "name": "永夜诅咒庄园",
+      "bounds": [
+        10204,
+        64,
+        8668,
+        10323,
+        119,
+        8787
+      ],
+      "centres": [
+        [
+          10246,
+          77,
+          8735
+        ],
+        [
+          10277,
+          81,
+          8712
+        ],
+        [
+          10275,
+          89,
+          8744
+        ]
+      ],
+      "templateSha256": "e9c5b4a5056a195cc2d09251ba59393bf8d61726069ae1fe5fac2185b0d63bb8"
+    }
+  ]
+}

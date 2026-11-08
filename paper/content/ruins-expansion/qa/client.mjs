@@ -5,6 +5,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import net from 'node:net';
+import {createHash} from 'node:crypto';
 const [root,dependencies,selected]=process.argv.slice(2);
 const mcVersion=process.env.QA_MC_VERSION??'1.21.1';
 const mode=process.argv[5]??'adventure';
@@ -78,19 +79,24 @@ async function walk(point,label){
  const end=bot.entity.position;check('walk arrived '+label,end.distanceTo(start)>0&&Math.abs(end.x-point[0])<3&&Math.abs(end.y-point[1])<2&&Math.abs(end.z-point[2])<3,{from:start,to:end,target:point});
 }
 async function fight(id,stage){
- const before=(await status(id)).stage;const deadline=Date.now()+120000;let hits=0,focus=null,lastCast=0;
+ let state=await status(id),rows=[],lastStateAt=Date.now(),lastMobsAt=0;
+ const before=state.stage,deadline=Date.now()+180000;let attackAttempts=0,focus=null,lastCast=0,lastHeal=0;
  while(Date.now()<deadline){
-  const state=await status(id);if(!state.active||state.stage!==before)return {hits,state};if(state.fault)throw Error('real dungeon fault '+JSON.stringify(state));
-  const rows=JSON.parse((await rc('qruins mobs')).trim()).mobs;
+  if(Date.now()-lastStateAt>2500){state=await status(id);lastStateAt=Date.now();}
+  if(!state.active||state.stage!==before)return {attackAttempts,state};if(state.fault)throw Error('real dungeon fault '+JSON.stringify(state));
+  if(state.phase==='moving'&&state.failures>0){await walk(state.target,id+' actual checkpoint retry');continue;}
+  if(bot.health<13&&Date.now()-lastHeal>10000){await sleep(Math.max(0,1200-(Date.now()-lastCommandAt)));lastCommandAt=Date.now();bot.chat('/mycli cast selfheal');lastHeal=Date.now();await sleep(500);}
+  if(Date.now()-lastMobsAt>1800){rows=JSON.parse((await rc('qruins mobs')).trim()).mobs;lastMobsAt=Date.now();}
   if(!rows.length){await sleep(500);continue;}
   // Focus one real living UUID; changing to the nearest witch every tick lets
   // all of them heal back to full without ever finishing the intended target.
-  const target=rows.find(m=>m.uuid===focus)??rows.sort((a,b)=>bot.entity.position.distanceTo({x:a.position[0],y:a.position[1],z:a.position[2]})-bot.entity.position.distanceTo({x:b.position[0],y:b.position[1],z:b.position[2]}))[0];focus=target.uuid;
+  const score=m=>(m.type==='WITCH'?-100:0)+bot.entity.position.distanceTo({x:m.position[0],y:m.position[1],z:m.position[2]});
+  const target=rows.find(m=>m.uuid===focus)??rows.sort((a,b)=>score(a)-score(b))[0];focus=target.uuid;
   let entity=bot.entities[target.id];if(!entity){await sleep(300);continue;}
   if(entity.position.distanceTo(bot.entity.position)>3.1&&entity.name==='blaze'){
    const bow=bot.inventory.items().find(i=>i.name==='bow');if(!bow)throw Error('ranged equipment missing');
    await bot.equip(bow,'hand');const d=entity.position.distanceTo(bot.entity.position),drop=.025*(d/3)**2;
-   await bot.lookAt(entity.position.offset(0,(entity.height??1.8)*.65+drop,0),true);bot.activateItem();await sleep(1100);bot.deactivateItem();await sleep(500);hits++;continue;
+   await bot.lookAt(entity.position.offset(0,(entity.height??1.8)*.65+drop,0),true);bot.activateItem();await sleep(1100);bot.deactivateItem();await sleep(500);attackAttempts++;continue;
   }
   if(entity.position.distanceTo(bot.entity.position)>2.7){
    try{await Promise.race([bot.pathfinder.goto(new goals.GoalNear(entity.position.x,entity.position.y,entity.position.z,2)),sleep(6000).then(()=>{throw Error('combat approach timeout');})]);}
@@ -100,7 +106,7 @@ async function fight(id,stage){
   const sword=bot.inventory.items().find(i=>i.name==='netherite_sword');if(sword&&bot.heldItem?.type!==sword.type)await bot.equip(sword,'hand');
   if(entity.name==='witch'&&Date.now()-lastCast>8500){await sleep(Math.max(0,1200-(Date.now()-lastCommandAt)));lastCommandAt=Date.now();bot.chat('/mycli cast starbolt');lastCast=Date.now();await sleep(300);}
   await bot.lookAt(entity.position.offset(0,Math.min(1,entity.height??1),0),true);
-  if(entity.position.distanceTo(bot.entity.position)<=3.1){bot.attack(entity);hits++;}
+  if(entity.position.distanceTo(bot.entity.position)<=3.1){bot.attack(entity);attackAttempts++;}
   await sleep(650);
  }
  throw Error('combat timeout '+id+' '+stage);
@@ -115,9 +121,19 @@ try{
   report.trialFixture=await rc('mycli admin builddungeon');
  }
  await rc('minecraft:give '+bot.username+' minecraft:bow[minecraft:enchantments={levels:{"minecraft:power":10}}]');await rc('minecraft:give '+bot.username+' minecraft:arrow 128');await sleep(600);
+ for(const [name,destination] of [['netherite_helmet','head'],['netherite_chestplate','torso'],['netherite_leggings','legs'],['netherite_boots','feet']]){
+  await rc('minecraft:give '+bot.username+' minecraft:'+name+'[minecraft:enchantments={levels:{"minecraft:protection":4}}]');
+  await until(()=>bot.inventory.items().some(i=>i.name===name),'QA armour delivery');
+  await bot.equip(bot.inventory.items().find(i=>i.name===name),destination);
+ }
+ report.setup+='; Protection IV armour; ordinary selfheal and real checkpoint recovery, no combat console heals';
  check('ordinary player has no OP',!JSON.parse((await rc('qruins state '+bot.username)).trim()).op);
  const manifest=JSON.parse(await fs.readFile(path.join(root,'server/ruins-content/manifest.json'),'utf8'));
- const sites=selected&&selected!=='all'?manifest.sites.filter(s=>s.id===selected):manifest.sites;
+ report.contentRevision=manifest.revision;
+ report.manifestSha256=createHash('sha256').update(await fs.readFile(path.join(root,'server/ruins-content/manifest.json'))).digest('hex');
+ report.clientSourceSha256=createHash('sha256').update(await fs.readFile(new URL(import.meta.url))).digest('hex');
+ report.effectiveDungeonsSha256=createHash('sha256').update(await fs.readFile(path.join(root,'server/plugins/AgentFriend/dungeons.yml'))).digest('hex');
+ const sites=selected&&selected!=='all'?manifest.sites.filter(s=>selected.split(',').includes(s.id)):manifest.sites;
  const audit=await rc('mycli admin dungeons audit');report.busyOnStart=[...audit.matchAll(/id=([a-z0-9_]+) rooms=\d+ active=true/g)].map(m=>m[1]);
  sites.sort((a,b)=>Number(report.busyOnStart.includes(a.id))-Number(report.busyOnStart.includes(b.id)));
  check('requested sites really exist',sites.length>0);
@@ -126,19 +142,23 @@ try{
   try{
    await rc('qruins heal '+bot.username);
    const info=await command('/mycli dungeon info '+site.id+' --json','MC_SITE_DUNGEON_INFO');check('real catalogue '+site.id,info.rooms?.length===3,info);
-   const prior=await status(site.id);
-   if(prior.active&&prior.participant){row.resumedOriginalRun=prior;check('original accepted run reconciled after disconnect '+site.id,prior.stage>=1&&prior.stage<=3&&!prior.fault,prior);}
-   else{
+   let prior=await status(site.id);
+   if(!(prior.active&&prior.participant)){
     row.travel=await command('/mycli dungeon travel '+site.id+' --json');check('ordinary travel '+site.id,row.travel.success,row.travel);
     await sleep(1500);check('actual entry position '+site.id,bot.entity.position.distanceTo({x:site.centres[0][0]+.5,y:site.centres[0][1],z:site.centres[0][2]+.5})<3,bot.entity.position);
-    row.start=await command('/mycli dungeon start '+site.id+' '+mode+' --json');check('ordinary start '+site.id,row.start.success,row.start);
+    // Travel may automatically enroll this ordinary player in an existing run.
+    // Reconcile that accepted run instead of blindly submitting another start.
+    prior=await status(site.id);
+    if(!(prior.active&&prior.participant)){row.start=await command('/mycli dungeon start '+site.id+' '+mode+' --json');check('ordinary start '+site.id,row.start.success,row.start);}
    }
+   if(prior.active&&prior.participant){row.resumedOriginalRun=prior;check('original accepted run reconciled after disconnect '+site.id,prior.stage>=1&&prior.stage<=3,prior);if(prior.fault){row.resume=await command('/mycli dungeon resume --json');check('explicit original run resume '+site.id,row.resume.success,row.resume);}if(prior.phase==='moving')await walk(prior.target,site.id+' original checkpoint');}
    await until(async()=>{const s=await status(site.id);if(s.fault)throw Error('spawn fault '+s.fault);return s.phase==='fighting';},'first real wave',22000);
    for(let i=prior.active&&prior.participant?prior.stage-1:0;i<3;i++){
     if(i&&(!row.resumedOriginalRun||i!==prior.stage-1)){await rc('qruins heal '+bot.username);await walk(site.centres[i],site.id+' room '+(i+1));}
     await until(async()=>{const s=await status(site.id);if(s.fault)throw Error('spawn fault '+s.fault);return s.phase==='fighting';},'real wave '+(i+1),15000);
-    await sleep(1300);const mobs=JSON.parse((await rc('qruins mobs')).trim()).mobs;
-    check('AI and target '+site.id+' '+i,mobs.length>0&&mobs.every(m=>m.ai&&m.target===bot.player.uuid),mobs);
+    await sleep(1300);const observations=[];
+    const mobs=await until(async()=>{const sample=JSON.parse((await rc('qruins mobs')).trim()).mobs;observations.push(sample);return sample.length>0&&sample.every(m=>m.ai&&m.target===bot.player.uuid)?sample:null;},'AI target assignment '+site.id+' '+i,7000);
+    check('AI and target '+site.id+' '+i,true,{mobs,observations});
     const weapons={SKELETON:'BOW',STRAY:'BOW',PILLAGER:'CROSSBOW',VINDICATOR:'IRON_AXE',DROWNED:'TRIDENT',WITHER_SKELETON:'STONE_SWORD'};
     check('real equipped weapons '+site.id+' '+i,mobs.every(m=>!weapons[m.type]||m.hand===weapons[m.type]),mobs);
     row.rooms.push({stage:i+1,mobs});

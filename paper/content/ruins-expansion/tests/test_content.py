@@ -1,4 +1,4 @@
-import copy,importlib.util,io,unittest,tempfile
+import copy,importlib.util,io,unittest,tempfile,struct,zlib
 from pathlib import Path
 import nbtlib
 from nbtlib import Compound,List,Int,String
@@ -7,6 +7,7 @@ HERE=Path(__file__).resolve().parents[1]
 def module(name,file):
  spec=importlib.util.spec_from_file_location(name,HERE/file);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 b=module('ruins_build','build.py');merge_module=module('ruins_merge','prepare_overlay.py')
+freeze=module('ruins_regions','prepare_regions.py')
 
 class Content(unittest.TestCase):
  def test_entities_and_container_payloads_removed(self):
@@ -58,5 +59,17 @@ class Content(unittest.TestCase):
     for dy in range(3):self.assertIn(states[(x,y+dy,z)],b.AIR)
   for old,new in zip(original,centres):self.assertEqual([a+c for a,c in zip(old,site['origin'])],[a+c for a,c in zip(new,shifted['origin'])])
   self.assertTrue(all(len(points)>=8 for points in spawns))
+ def region_fixture(self):
+  raw=bytearray(8192)
+  for index,x in enumerate([0,1]):
+   nbt=nbtlib.File({'DataVersion':Int(3955),'xPos':Int(x),'zPos':Int(0),'Status':String('minecraft:full'),'block_entities':List[Compound]([])});stream=io.BytesIO();nbt.write(stream);compressed=zlib.compress(stream.getvalue());record=struct.pack('>I',len(compressed)+1)+b'\2'+compressed
+   struct.pack_into('>I',raw,index*4,((index+2)<<8)|1);raw.extend(record+b'\0'*(4096-len(record)))
+  return bytes(raw)
+ def test_only_authored_chunk_is_retained(self):
+  out=freeze.compact_region(self.region_fixture(),{(1,0)});self.assertEqual(len(out),12288);self.assertEqual(struct.unpack_from('>I',out,0)[0],0);self.assertEqual(struct.unpack_from('>I',out,4)[0],(2<<8)|1)
+ def test_missing_requested_chunk_is_unknown_not_air(self):
+  with self.assertRaisesRegex(ValueError,'missing_or_invalid'):freeze.compact_region(self.region_fixture(),{(2,0)})
+ def test_region_slot_must_match_absolute_chunk(self):
+  with self.assertRaisesRegex(ValueError,'coordinate_mismatch'):freeze.compact_region(self.region_fixture(),{(33,0)})
 
 if __name__=='__main__':unittest.main()

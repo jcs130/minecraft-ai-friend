@@ -66,7 +66,7 @@ def prepare(source,bundle,stage,java):
    for name in original.namelist():
     if name.startswith('local/tlmcompat/hybrid/HybridPluginPayloads')and name.endswith('.class'):out.writestr(name,original.read(name))
   out.writestr('plugin.yml','name: RuinsFixture\nversion: 1.0\nmain: org.qiandengji.ruinsqa.RuinsFixture\napi-version: "1.21.1"\ndepend: [AgentFriend, AuraSkills, VortexRPG, ProtocolLib]\ncommands:\n  qruins: {}\n')
- (stage/'qa-baseline.json').write_text(json.dumps({'binaries':binaries,'payloadAdapterSource':bridge[0].name,'payloadAdapterSha256':hashlib.sha256(bridge[0].read_bytes()).hexdigest(),'productionModified':False},indent=2))
+ (stage/'qa-baseline.json').write_text(json.dumps({'binaries':binaries,'contentRevision':json.loads((bundle/'manifest.json').read_text(encoding='utf-8'))['revision'],'manifestSha256':hashlib.sha256((bundle/'manifest.json').read_bytes()).hexdigest(),'payloadAdapterSource':bridge[0].name,'payloadAdapterSha256':hashlib.sha256(bridge[0].read_bytes()).hexdigest(),'productionModified':False},indent=2))
  print(json.dumps({'prepared':True,'stage':str(stage),'autoStarted':False,'productionModified':False}))
 
 if __name__=='__main__':

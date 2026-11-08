@@ -1,12 +1,12 @@
 {
   "inventoryScope": "historical_batch_snapshot_20261106_not_current_runtime",
-  "currentComponentEvidence": "paper/manifests/pr-batch-deployed-20261108.json",
+  "currentComponentEvidence": "paper/manifests/inventory-tidy-deployed-20261109.json",
   "acceptanceDocument": "paper/docs/ACCEPTANCE_EVIDENCE_20261108.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-with-open-client-acceptance",
-  "latestRelease": "pr-batch-release-20261108-r1",
-  "verifiedAt": "2026-11-08T23:26:25.2884411+08:00",
-  "releaseDocument": "paper/docs/PR_BATCH_RELEASE_20261108.md",
+  "latestRelease": "inventory-stash-release-20261109-r1",
+  "verifiedAt": "2026-11-09T02:33:41.5566634+08:00",
+  "releaseDocument": "paper/docs/INVENTORY_TIDY_20261109.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -1596,5 +1596,12 @@
     "formalStartupChecksPassed": 13,
     "characterFilesPreserved": 3450,
     "clientAcceptance": "pending_remote_host_and_devices"
+  },
+  "currentComponentOverrides": {
+    "AgentFriend": {
+      "version": "0.4.47.63-inventory-tidy-rpg",
+      "sha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+      "evidence": "paper/manifests/inventory-tidy-deployed-20261109.json"
+    }
   }
 }
