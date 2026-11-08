@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed-server-verified-xbox-retest-pending",
+  "deployedAt": "2026-11-08T21:59:28.1870886+08:00",
+  "document": "paper/docs/BEDROCK_XBOX_LAN_20261108.md",
+  "sourceCommit": "5ca9b0dae09338be6c219c0cadf916cf89b58095",
+  "mergedCommit": "145efe38d9d360ad489c3d6fa2575ce4fe889434",
+  "pullRequest": 125,
+  "ciChecksPassed": 8,
+  "version": "2.12.1-b1295-youer-lan2",
+  "sha256": "3cd7e6b87a795ff50fa19bd32feadb48cf0085b4df9c344cfa0c43fb980e64fd",
+  "previousSha256": "475593086cb3db32dc119a07870eef4433565c44474605478147f22ef8e4f226",
+  "originalJvmExitConfirmed": true,
+  "currentColdCopiesVerified": 2,
+  "characterFilesUnchangedDuringInstall": 3194,
+  "originalCredentialRowsPreserved": 77,
+  "originalGoddessJobsRestored": 7,
+  "formalStartupChecksPassed": 12,
+  "lan": {
+    "discoveryVersions": [
+      6,
+      7
+    ],
+    "protocol": 2225,
+    "xboxRequired": true,
+    "noncePresent": true,
+    "dtlsSctpConnected": true,
+    "networkSettingsPacket": 143,
+    "answerUdpBytes": 864,
+    "answerIdentity": false,
+    "gameLoginTested": false
+  },
+  "routerBroadcastVerified": true,
+  "publicHttpSignaling": {
+    "19140": 200,
+    "19132": 200
+  },
+  "nativeCameraPhase": "ready",
+  "watchdogPaused": false,
+  "observedTps": 20,
+  "unchangedBinaryCount": 62,
+  "newPublicPorts": 0,
+  "physicalXboxLoginVerified": false,
+  "oneShotMaintenanceConsumed": true,
+  "rollbackScope": "Geyser JAR only; do not restore old worlds, characters, inventory or authentication data"
+}

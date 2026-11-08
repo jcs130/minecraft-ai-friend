@@ -1,3 +1,7 @@
+## 2026-11-08 Xbox 局域网握手修复已部署
+
+PR125及8项CI通过，正常180/60/10预告、原JVM退出及E/F当前冷备后，正式加载Geyser1295/youer-lan2。12项正式检查、路由器广播和云端公网HTTP200通过；LAN回复实测864字节，真实DTLS/SCTP网络设置143通过，Xbox验证保持。3194份角色文件、77原凭据及女神7任务保持，相机ready、Watchdog恢复。实体Xbox登录仍待用户复测，不能以协议探针代替。维护入口已消费勿重放；只回退Geyser代码，不回灌世界、物品或认证。见[发布记录](paper/docs/BEDROCK_XBOX_LAN_20261108.md)及正式清单。以下候选记录为历史。
+
 ## 2026-11-08 Xbox 局域网握手候选，未部署
 
 Xbox26.60从LAN列表出现Guardian/InitialConnection-146，20:53未到达游戏登录。现役LAN回复实测1808字节；新Geyser1295/youer-lan2仅对家庭网段无身份LAN offer使用864字节紧凑回答，原Xbox签名及nonce验证保持。72项检查和四次真实DTLS/SCTP网络设置通过，含并发和正常重启；重复构建一致，其他20919条目保持。尚未替换正式JAR，真实Xbox登录待部署后验收；维护需当次窗口、预告及E/F当前冷备，勿重放旧入口。见[候选记录](paper/docs/BEDROCK_XBOX_LAN_20261108.md)。
