@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "state": "deployed-with-open-real-client-acceptance",
+  "release": "inventory-stash-release-20261109-r1",
+  "deployedAt": "2026-11-09T02:33:41.5566634+08:00",
+  "sourceCommit": "f46e04611b0d4ae90ca5f8fd437533bf8589e20f",
+  "sourceTree": "cf8b4d1ae936b222d5280b546c8e8434b88ec74b",
+  "mergedCommit": "932e7114e83de0eec67b6e380f939ac1d001bce3",
+  "pullRequest": 130,
+  "version": "0.4.47.63-inventory-tidy-rpg",
+  "artifact": {
+    "target": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+    "before": "cb39efb9a9118d5ad27135291c6b8c3835fda02868e4c7b55a366c2ba4258125",
+    "source": "candidate/AgentFriend-0.4.47.63-inventory-tidy-rpg.jar",
+    "sha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+    "rollback": "rollback/AgentFriend-0.4.47.59-shop-rpg.jar"
+  },
+  "ci": {
+    "run": 42504428143,
+    "jobsPassed": 6
+  },
+  "isolatedValidation": {
+    "passingChecks": 589,
+    "baselineExpectedFailures": 3,
+    "rulesAndQuote": 551,
+    "native": 33,
+    "normalRestart": 2,
+    "nativeWindowsSaveFailure": 3
+  },
+  "formalValidation": {
+    "startupChecks": 13,
+    "characterFilesUnchangedDuringInstall": 4050,
+    "originalCredentialRowsPreserved": 77,
+    "nativeGoddessJobsRestored": 7,
+    "originalJvmExitedBeforeColdBackup": true,
+    "dualDiskColdBackupsVerified": true,
+    "unrelatedBinariesPreserved": true,
+    "nativeRuntimeProof": {
+      "at": "2026-11-09T02:33:34.6568938+08:00",
+      "companionVoiceRegistered": true,
+      "logContainsSecretsPrinted": false,
+      "pcfInitialized": true,
+      "originalContentModsRetained": true,
+      "freshStartup": "startup-20261109-023046.log",
+      "gameLogReadWithWriteSharing": true
+    }
+  },
+  "ownerAuthorizedCleanup": {
+    "role": "ag_CorMy",
+    "originalUuidVerified": true,
+    "ordinaryBagItemsDestroyed": 0,
+    "bagSlotsFreed": 0,
+    "ordinaryStashItemsDestroyed": 383,
+    "stashSlotsFreed": 7,
+    "stashBefore": 540,
+    "stashAfter": 533,
+    "protectedStashEquipmentAndMetadataUnchanged": true,
+    "equipmentAutomaticallySold": false,
+    "recyclableExactDuplicatesBeyondTwo": 253,
+    "autoMergeEnabledForOriginalRole": true,
+    "automaticFutureDestructionEnabled": false,
+    "unknownOriginalRequestsReplayed": false
+  },
+  "previousComponentEvidence": "paper/manifests/pr-batch-deployed-20261108.json",
+  "privateEvidenceRoot": "E:\\MC\\ops\\repairs\\inventory-stash-release-20261109-r1",
+  "openAcceptance": [
+    "original main personality autonomous use of new commands",
+    "Bedrock touch and Eye/Web display of new actions",
+    "original role blocked-pickup trigger after natural new loot"
+  ],
+  "rollback": {
+    "scope": "code only, disable new auto settings if needed",
+    "preserve": [
+      "latest world",
+      "characters and inventory",
+      "personal stash and RPG balances",
+      "authentication",
+      "quests and exam evidence",
+      "actions and lifecycle receipts"
+    ],
+    "ordinaryTrashDestructionReversible": false,
+    "consumedMaintenanceEntry": true
+  }
+}

@@ -65,5 +65,6 @@
     "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/InventoryFeedback.java": "9904118687fc5cfbe957805336397510fffff979968d0e0beaff613bd44dc57d",
     "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/InventoryTidy.java": "63cce85ee3f50e2af0a9ab2a5e85c8c22f085a1c99208600e11dc91af820dfc5",
     "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PagedPersonalStash.java": "24d7bc118c0976dd457c8a3f2ba17c423e50f45d94ac99df1401dd1d652fbf98"
-  }
+  },
+  "subsequentDeploymentEvidence": "paper/manifests/inventory-tidy-deployed-20261109.json"
 }
