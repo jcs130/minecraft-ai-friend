@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "revision": "ruins-20261109-r2",
+  "world": "aincrad",
+  "sites": [
+    {
+      "id": "corsair_cove",
+      "name": "黑帆海盗湾",
+      "theme": "海盗船、船舱与甲板交战",
+      "pack": "world-expansion--when-dungeons-arise-seven-seas.zip",
+      "template": "data/dungeons_arise_seven_seas/structure/corsair_corvette/corsair_corvette_0.nbt",
+      "origin": [
+        8192,
+        72,
+        8192
+      ],
+      "rooms": [
+        "登船前哨",
+        "炮舱争夺",
+        "黑帆船长"
+      ],
+      "mobs": [
+        "PILLAGER",
+        "VINDICATOR",
+        "DROWNED"
+      ],
+      "boss": "VINDICATOR",
+      "icon": "OAK_BOAT",
+      "reward": {
+        "emeralds": 6,
+        "item": "PRISMARINE_SHARD",
+        "count": 4
+      }
+    },
+    {
+      "id": "tide_sanctum",
+      "name": "潮汐沉没圣所",
+      "theme": "海晶神殿、水边掩体与溺尸守卫",
+      "pack": "world-expansion--mtr-moogs-temples-reimagined.zip",
+      "template": "data/mtr/structure/ocean_temple.nbt",
+      "origin": [
+        8704,
+        72,
+        8192
+      ],
+      "rooms": [
+        "潮汐外庭",
+        "海晶回廊",
+        "深海祭司"
+      ],
+      "mobs": [
+        "DROWNED",
+        "SKELETON",
+        "WITCH"
+      ],
+      "boss": "DROWNED",
+      "icon": "PRISMARINE",
+      "reward": {
+        "emeralds": 7,
+        "item": "NAUTILUS_SHELL",
+        "count": 1
+      }
+    },
+    {
+      "id": "sunken_dynasty",
+      "name": "失落王朝陵墓",
+      "theme": "沙岩陵寝、转角伏击与墓道",
+      "pack": "world-expansion--mtr-moogs-temples-reimagined.zip",
+      "template": "data/mtr/structure/desert-mega-temple/desert-mega-temple-tl.nbt",
+      "origin": [
+        9216,
+        72,
+        8192
+      ],
+      "rooms": [
+        "黄沙前庭",
+        "王朝墓道",
+        "沙冕守陵人"
+      ],
+      "mobs": [
+        "HUSK",
+        "SKELETON",
+        "SPIDER"
+      ],
+      "boss": "HUSK",
+      "icon": "CHISELED_SANDSTONE",
+      "reward": {
+        "emeralds": 6,
+        "item": "GOLD_INGOT",
+        "count": 3
+      }
+    },
+    {
+      "id": "frost_keep",
+      "name": "霜落古堡",
+      "theme": "积雪城堡、室内交锋与高低差",
+      "pack": "world-expansion--grim-kingdoms-lost-structures-ruins.zip",
+      "template": "data/grim_kingdoms/structure/snowy/glacierfall_keep.nbt",
+      "origin": [
+        9728,
+        72,
+        8192
+      ],
+      "rooms": [
+        "霜落门厅",
+        "冰封侧廊",
+        "寒霜守望者"
+      ],
+      "mobs": [
+        "STRAY",
+        "ZOMBIE",
+        "VINDICATOR"
+      ],
+      "boss": "STRAY",
+      "icon": "BLUE_ICE",
+      "reward": {
+        "emeralds": 8,
+        "item": "PACKED_ICE",
+        "count": 8
+      }
+    },
+    {
+      "id": "ember_foundry",
+      "name": "熔火铸造厂",
+      "theme": "熔岩边缘、铸造回廊；没有自动防火保护",
+      "pack": "world-expansion--when-dungeons-arise.zip",
+      "template": "data/dungeons_arise/structure/foundry/foundry_crossing_start_0.nbt",
+      "origin": [
+        10240,
+        72,
+        8192
+      ],
+      "rooms": [
+        "铸造入口",
+        "炉心回廊",
+        "熔火监工"
+      ],
+      "mobs": [
+        "WITHER_SKELETON",
+        "BLAZE",
+        "MAGMA_CUBE"
+      ],
+      "boss": "WITHER_SKELETON",
+      "icon": "BLAST_FURNACE",
+      "reward": {
+        "emeralds": 9,
+        "item": "BLAZE_POWDER",
+        "count": 4
+      }
+    },
+    {
+      "id": "jungle_covenant",
+      "name": "翠藤古神祭坛",
+      "theme": "丛林遗迹、藤蔓石墙与祭坛",
+      "pack": "world-expansion--mtr-moogs-temples-reimagined.zip",
+      "template": "data/mtr/structure/jungle_temple/jungle_temple.nbt",
+      "origin": [
+        8192,
+        72,
+        8704
+      ],
+      "rooms": [
+        "翠藤前殿",
+        "古神石廊",
+        "毒藤祭仪师"
+      ],
+      "mobs": [
+        "SPIDER",
+        "SKELETON",
+        "WITCH"
+      ],
+      "boss": "WITCH",
+      "icon": "MOSSY_STONE_BRICKS",
+      "reward": {
+        "emeralds": 7,
+        "item": "GLOW_BERRIES",
+        "count": 8
+      }
+    },
+    {
+      "id": "sky_watch",
+      "name": "云上守望塔",
+      "theme": "空中建筑、楼梯与守望塔",
+      "pack": "world-expansion--mss-moogs-soaring-structures.zip",
+      "template": "data/mss/structure/large_tower.nbt",
+      "origin": [
+        8704,
+        112,
+        8704
+      ],
+      "rooms": [
+        "云阶前哨",
+        "高塔回廊",
+        "逐风守卫"
+      ],
+      "mobs": [
+        "SKELETON",
+        "PILLAGER",
+        "VINDICATOR"
+      ],
+      "boss": "PILLAGER",
+      "icon": "FEATHER",
+      "reward": {
+        "emeralds": 8,
+        "item": "PHANTOM_MEMBRANE",
+        "count": 2
+      }
+    },
+    {
+      "id": "void_citadel",
+      "name": "虚空回响城",
+      "theme": "末地石城堡、紫珀高台与异界守卫",
+      "pack": "world-expansion--dungeons-and-taverns-end-castle-standalone.zip",
+      "template": "data/qd_end_castle/structure/end_castle/main/end_castle_core_start.nbt",
+      "origin": [
+        9216,
+        112,
+        8704
+      ],
+      "rooms": [
+        "虚空前庭",
+        "紫珀卫所",
+        "回响执政官"
+      ],
+      "mobs": [
+        "WITHER_SKELETON",
+        "STRAY",
+        "WITCH"
+      ],
+      "boss": "WITHER_SKELETON",
+      "icon": "PURPUR_BLOCK",
+      "reward": {
+        "emeralds": 10,
+        "item": "ENDER_PEARL",
+        "count": 2
+      }
+    },
+    {
+      "id": "deep_mineworks",
+      "name": "深岩失落矿城",
+      "theme": "大型矿井、工业支架与纵向探索",
+      "pack": "world-expansion--when-dungeons-arise.zip",
+      "template": "data/dungeons_arise/structure/mining_complex/mining_complex_main_0.nbt",
+      "origin": [
+        9728,
+        48,
+        8704
+      ],
+      "rooms": [
+        "矿城外站",
+        "深岩工坊",
+        "矿脉暴君"
+      ],
+      "mobs": [
+        "ZOMBIE",
+        "CAVE_SPIDER",
+        "SKELETON"
+      ],
+      "boss": "VINDICATOR",
+      "icon": "MINECART",
+      "reward": {
+        "emeralds": 8,
+        "item": "COPPER_INGOT",
+        "count": 12
+      }
+    },
+    {
+      "id": "winter_manor",
+      "name": "永夜诅咒庄园",
+      "theme": "废弃庄园、曲折房间与女巫仪式",
+      "pack": "world-expansion--grim-kingdoms-lost-structures-ruins.zip",
+      "template": "data/grim_kingdoms/structure/snowy/chill_hallmanor.nbt",
+      "origin": [
+        10240,
+        72,
+        8704
+      ],
+      "rooms": [
+        "永夜门廊",
+        "低语书厅",
+        "诅咒庄园主"
+      ],
+      "mobs": [
+        "ZOMBIE",
+        "SPIDER",
+        "WITCH"
+      ],
+      "boss": "WITCH",
+      "icon": "DARK_OAK_DOOR",
+      "reward": {
+        "emeralds": 9,
+        "item": "AMETHYST_SHARD",
+        "count": 6
+      }
+    }
+  ]
+}

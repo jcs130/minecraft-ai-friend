@@ -1,0 +1,7 @@
+__pycache__/
+tests/__pycache__/
+*.nbt
+/built*/
+/collision*.json
+/states.json
+/.venv/

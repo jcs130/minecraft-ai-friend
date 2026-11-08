@@ -1,0 +1,86 @@
+{
+  "world-expansion--when-dungeons-arise.zip": {
+    "sha256": "df398881f8bdb678257db9b0dc9305e1ff00fcf4ec51f4adbdee640dc8b5db04",
+    "packMeta": {
+      "pack": {
+        "description": "When Dungeons Arise / Qiandengji pinned vanilla data",
+        "pack_format": 48,
+        "supported_formats": [
+          48,
+          48
+        ]
+      }
+    },
+    "redistribute": false
+  },
+  "world-expansion--when-dungeons-arise-seven-seas.zip": {
+    "sha256": "5c44ee6502cbbdd559defba63c0ba2e4654b3b6951af81dc6547e6381bb32a03",
+    "packMeta": {
+      "pack": {
+        "description": "When Dungeons Arise: Seven Seas / Qiandengji pinned vanilla data",
+        "pack_format": 48,
+        "supported_formats": [
+          48,
+          48
+        ]
+      }
+    },
+    "redistribute": false
+  },
+  "world-expansion--mtr-moogs-temples-reimagined.zip": {
+    "sha256": "a96a237e96fda4809357acf30215fd6659195f3d927f7976af8c0b123da66739",
+    "packMeta": {
+      "pack": {
+        "description": "MTR - Moog's Temples Reimagined / Qiandengji pinned vanilla data",
+        "pack_format": 48,
+        "supported_formats": [
+          48,
+          48
+        ]
+      }
+    },
+    "redistribute": false
+  },
+  "world-expansion--mss-moogs-soaring-structures.zip": {
+    "sha256": "85a947cde9523bde5103aaab7f693bdecb4d5243c67cfb4d9cbfa13f090c82d9",
+    "packMeta": {
+      "pack": {
+        "description": "MSS - Moog's Soaring Structures / Qiandengji pinned vanilla data",
+        "pack_format": 48,
+        "supported_formats": [
+          48,
+          48
+        ]
+      }
+    },
+    "redistribute": false
+  },
+  "world-expansion--dungeons-and-taverns-end-castle-standalone.zip": {
+    "sha256": "936a339453bee3db53c7ba80fbf997bf68c05a55e05e5ea8a34c63409b892539",
+    "packMeta": {
+      "pack": {
+        "description": "[RETIRED] Dungeons and Taverns End Castle Standalone / Qiandengji pinned vanilla data",
+        "pack_format": 48,
+        "supported_formats": [
+          48,
+          48
+        ]
+      }
+    },
+    "redistribute": false
+  },
+  "world-expansion--grim-kingdoms-lost-structures-ruins.zip": {
+    "sha256": "b171434804699681945f2966fa9781be9b2316e71d9c4745e508d1256109b19b",
+    "packMeta": {
+      "pack": {
+        "description": "Grim kingdoms: Lost structures & ruins / Qiandengji pinned vanilla data",
+        "pack_format": 48,
+        "supported_formats": [
+          48,
+          48
+        ]
+      }
+    },
+    "redistribute": false
+  }
+}
