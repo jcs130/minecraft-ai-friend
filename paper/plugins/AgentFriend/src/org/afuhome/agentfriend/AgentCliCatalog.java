@@ -255,7 +255,7 @@ final class AgentCliCatalog {
         add(specs,"arena.layout","adventure","read","/mycli arena layout","读取本人当前战斗房间的绝对中心、范围、奖励箱和地形危险类型","本人正在当前层参赛","私有 MC_DUNGEON_LAYOUT 回执");
         add(specs,"arena.recycle","storage","read","/mycli arena recycle <动作>","查询可回收装备、获取报价，再明确出售","list查询免费；quote生成报价；sell才转移实际物品","MC_ARENA_ECONOMY；按quoteId与实际余额核对");
         add(specs,"arena.recycle.list","storage","read","/mycli arena recycle list","列出本人箱子与背包中可回收装备","在线玩家","私有 MC_ARENA_ECONOMY JSON");
-        add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取30秒报价","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
+        add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取5分钟报价；不同槽位独立，最多保留32份","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
         add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
@@ -415,7 +415,7 @@ final class AgentCliCatalog {
             }
             Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；个人箱：/mycli arena stash；共享补给：/mycli guild shared",inventory.returns()));
             nativeSpec(specs,"arena.recycle","group","/mycli arena recycle list|quote bag|chest <槽> [数量]|sell <报价ID>|status","多余武器护甲回收为RPG金币；先报价再确认；不会自动出售","手持、穿戴、绑定/任务/职业法器不回收；石头木头存个人箱；旧试炼余额按1:1迁入同一金币账户");
-            nativeSpec(specs,"arena.recycle.sell","item","/mycli arena recycle sell <报价ID>","按30秒有效的原物品报价出售，等待真实金币到账","只执行一次；未知或pending不重发，查arena recycle status并联系服主；金币余额trade wallet");
+            nativeSpec(specs,"arena.recycle.sell","item","/mycli arena recycle sell <报价ID>","按5分钟有效的原物品报价出售，等待真实金币到账","只执行一次；未知或pending不重发，查arena recycle status并联系服主；金币余额trade wallet");
             nativeSpec(specs,"arena.recycle.status","read","/mycli arena recycle status","查RPG金币服务、余额与待对账回收","只读，不补发金币或物品；arena wallet是同一金币余额的兼容入口");
             nativeSpec(specs,"mastery","read","/mycli mastery","旧熟练度已归档，转查Vortex当前技能状态","基础技能固定可用；职业成长用学习点和天赋：skills status/tree");
             nativeSpec(specs,"skillbook","group","/mycli skillbook list","只读列出保留的旧研习书；use已停用","书不消耗、不再写旧熟练度；升级查询skills status，学习skills learn <ID>");
@@ -536,7 +536,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return Set.of("arena.wallet","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -632,7 +632,7 @@ final class AgentCliCatalog {
         boolean readOnly=operation.equals("query")&&!evidence&&!legacyRefresh&&!spec.usage().contains("menu");
         JsonObject out=new JsonObject();out.addProperty("operation",operation);out.addProperty("readOnly",readOnly);
         var effects=new com.google.gson.JsonArray();
-        effects.add(mixed?"命令组含查询和动作；先查具体子命令，不能把mode=read理解成所有子动作只读":evidence?"旧阅读入口：已报名时可记录阅读/状态实练证明；不自动报名、学习或施法；纯发现用capabilities":legacyRefresh?"旧入口可能刷新验收进度、迁移认证或释放过期任务；纯查询请用 /mycli progress":readOnly?"只读取与发送本人信息，不改变报名、任务、物品或资源":id.equals("guild.verify")?"主动验收并更新本人任务的阶段证据；不直接领奖":id.equals("trade.locate")?"启动/停止本人商人导航或查询大厅；导航会替换当前队友追踪":id.equals("arena.recycle.quote")?"生成短期报价ID并替换本人旧报价；不消耗物品，sell才成交":spec.mode().equals("gui")||spec.mode().equals("menu")||spec.usage().contains("menu")||Set.of("world.photos","skills.learnmenu").contains(id)?"打开或切换原版界面；点击动作按对应权限和资源结算":"主动改变本人状态、物品、技能、位置或消息；按requires和实际结果回执判断");
+        effects.add(mixed?"命令组含查询和动作；先查具体子命令，不能把mode=read理解成所有子动作只读":evidence?"旧阅读入口：已报名时可记录阅读/状态实练证明；不自动报名、学习或施法；纯发现用capabilities":legacyRefresh?"旧入口可能刷新验收进度、迁移认证或释放过期任务；纯查询请用 /mycli progress":readOnly?"只读取与发送本人信息，不改变报名、任务、物品或资源":id.equals("guild.verify")?"主动验收并更新本人任务的阶段证据；不直接领奖":id.equals("trade.locate")?"启动/停止本人商人导航或查询大厅；导航会替换当前队友追踪":id.equals("arena.recycle.quote")?"生成5分钟报价ID；仅替换本人同一槽位的旧报价，不覆盖其他装备报价；不消耗物品，sell才成交":spec.mode().equals("gui")||spec.mode().equals("menu")||spec.usage().contains("menu")||Set.of("world.photos","skills.learnmenu").contains(id)?"打开或切换原版界面；点击动作按对应权限和资源结算":"主动改变本人状态、物品、技能、位置或消息；按requires和实际结果回执判断");
         out.add("sideEffects",effects);
         out.addProperty("permission",id.startsWith("admin.")?"仅控制台/RCON；普通玩家不可调用；其他身份条件见requirements":id.startsWith("land.trust")||id.startsWith("land.untrust")||id.equals("land.manage")?"当前领地主人或显式领地超管；普通协作者不能转授权":"已登录玩家本人；无通用OP要求，具体角色/模式/资格/区域条件见requirements");
         out.addProperty("requirements",spec.requires());

@@ -8,7 +8,7 @@ public final class EconomyPresentationTest {
     private static JsonObject read(String s){return JsonParser.parseString(s).getAsJsonObject();}
     public static void main(String[]args){
         JsonObject r=read("{\"action\":\"quote\",\"success\":true,\"quantity\":1,\"price\":9,\"quoteId\":\"qa-quote\",\"item\":{\"name\":\"铁剑\",\"serializedItemBase64\":\"DO_NOT_PRINT_COMPONENTS\"}}");
-        String s=EconomyPresentation.text(r);check(s.contains("尚未卖出")&&s.contains("30秒"),"quote is not a sale");
+        String s=EconomyPresentation.text(r);check(s.contains("尚未卖出")&&s.contains("5分钟"),"quote is not a sale and gives the actual lifetime");
         check(s.contains("/mycli trade recycle sell qa-quote"),"quote supplies exact next command");
         check(!s.contains("DO_NOT_PRINT")&&!s.contains("serializedItem"),"text does not flood context with binary components");
         r=read("{\"action\":\"buy\",\"success\":false,\"reason\":\"money_unverified\",\"balance\":null}");

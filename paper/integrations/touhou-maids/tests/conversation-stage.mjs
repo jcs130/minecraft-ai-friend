@@ -19,9 +19,29 @@ let seq=0;
 async function ask(bot,action,value='',id=run+'_'+(++seq),maid=fixture.maid){await delay(1000);let start=bot.replies.length;bot.chat(`/qdmaid ${action} ${maid} ${id}${value?' '+value:''}`);return until(()=>bot.replies.slice(start).find(r=>r.requestId===id),action);}
 async function chat(bot,text){bot.chat(text);await delay(2200);}
 try{
- await until(async()=>{try{return(await rc('version QiandengjiMaidBridge')).includes(baseline?'0.1.11-social':'0.1.12-conversation');}catch{return false;}},'QA startup',150000);
+ await until(async()=>{try{return(await rc('version QiandengjiMaidBridge')).includes(baseline?'0.1.11-social':process.env.MAID_SOCIAL_QA_VERSION||'0.1.12-conversation');}catch{return false;}},'QA startup',150000);
  await new Promise(resolve=>model.listen(19088,'127.0.0.1',resolve));await new Promise(resolve=>media.listen(19091,'127.0.0.1',resolve));
  const owner=await connect(fixture.username),visitor=await connect('MaidVisitorQA'),bystander=await connect('MaidOtherQA');
+ if(process.argv.includes('--receipt-regression')){
+   visitor._client.on('custom_payload',p=>{if(p.channel==='qiandengji:maids')try{visitor.replies.push(JSON.parse(p.data.toString()));}catch{}});
+   visitor._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('qiandengji:maids')});
+   const saved=[];
+   if(!process.argv.includes('--restart'))for(const [action,value] of [['follow',''],['stay',''],['sit',''],['pickup','true']]){
+     const applied=await ask(owner,action,value);check(action+' applied',applied.ok&&applied.data.status==='applied');
+     const query=run+'_q'+(++seq),offset=owner.replies.length;
+     owner.chat(`/qdmaid receipt ${fixture.maid} ${applied.requestId} ${query}`);
+     const read=await until(()=>owner.replies.slice(offset).find(r=>r.requestId===query),'read original '+action);
+     check(action+' original receipt readable',read.ok&&read.data.operationId===applied.requestId&&read.data.status==='applied');
+     saved.push({action,id:applied.requestId});
+   }
+   if(!process.argv.includes('--restart'))await fs.writeFile(root+'/original-receipt-ids.json',JSON.stringify(saved));
+   else for(const old of JSON.parse(await fs.readFile(root+'/original-receipt-ids.json','utf8'))){
+     const query=run+'_old'+(++seq),offset=owner.replies.length;
+     owner.chat(`/qdmaid receipt ${fixture.maid} ${old.id} ${query}`);
+     const read=await until(()=>owner.replies.slice(offset).find(r=>r.requestId===query),'persisted receipt '+old.action);
+     check('restart reads original '+old.action+' without replay',read.ok&&read.data.operationId===old.id&&read.data.status==='applied');await delay(1100);
+   }
+ }
  await rc('minecraft:fill 294 89 294 340 89 310 minecraft:stone');await rc('minecraft:time set 1000');
  for(const bot of bots){await rc('minecraft:gamemode survival '+bot.username);await rc('minecraft:effect give '+bot.username+' minecraft:resistance infinite 4 true');await rc('minecraft:tp '+bot.username+' 300.5 90 300.5');}
  await rc(`minecraft:tp ${fixture.maid} 302.5 90 300.5`);await rc('speechqa quiet '+fixture.maid);await ask(owner,'brain','native');await ask(owner,'follow');await delay(1200);
@@ -45,6 +65,10 @@ try{
    await chat(visitor,'你好，大家今天去哪里冒险？');check('ordinary conversation does not call a model',modelRequests.length===0);
    await chat(visitor,'!隔离肥鱼，公屏测试');check('global shout is delivered but never treated as nearby addressing',modelRequests.length===0&&bystander.lines.some(s=>s.includes('!隔离肥鱼，公屏测试')));
    const start=visitor.lines.length;await chat(visitor,'隔离肥鱼，你好');await until(()=>modelRequests.length===1,'one addressed request');
+   if(process.argv.includes('--receipt-regression')){
+     const reply=await until(()=>visitor.replies.find(r=>r.action==='chat-result'&&r.data?.status==='replied'),'authenticated nearby reply');
+     check('subscriber gets original public identity and request',reply.recipientUuid===visitor.player.uuid&&reply.data.operationId===reply.requestId&&reply.data.maidId===fixture.maid&&reply.data.observation.conversation==='nearby_visitor');
+   }
    await until(()=>visitor.lines.slice(start).some(s=>s.includes('[隔离肥鱼] 你好，我是隔离肥鱼')),'natural reply');check('addressed chat produces one model reply',modelRequests.length===1);
    check('incoming chat is not echoed as a second maid dialogue line',!bystander.lines.some(s=>s.includes('MaidVisitorQA → 隔离肥鱼')));
    check('nearby bystander gets attributed text',bystander.lines.some(s=>s.includes('[附近·女仆] 隔离肥鱼：')));
@@ -55,6 +79,7 @@ try{
    await rc('minecraft:execute in minecraft:overworld run minecraft:tp MaidVisitorQA 300.5 90 300.5');await delay(400);await rc('minecraft:gamemode survival MaidVisitorQA');
    await rc('essentials:mute MaidVisitorQA');await chat(visitor,'隔离肥鱼，禁言测试');check('cancelled muted chat never calls model',modelRequests.length===1);await rc('essentials:mute MaidVisitorQA');
    await chat(visitor,'/msg MaidBrainQA 隔离肥鱼，私聊测试');check('delivered private messages do not wake maid',modelRequests.length===1&&owner.lines.some(s=>s.includes('私聊测试')));
+   if(!process.argv.includes('--receipt-only')){
    const receiver=await import('./svc-receiver.mjs');const peer=await receiver.receiver(visitor);peers.push(peer);const otherPeer=await receiver.receiver(bystander);peers.push(otherPeer);
    const audio=peer.state.audio;await chat(visitor,'@隔离肥鱼 请用一句话问好');await until(()=>peer.state.audio>audio,'native SVC UDP audio');
    check('public reply uses configured voice once',mediaRequests.length===1&&mediaRequests[0].voice==='qa-companion'&&mediaRequests[0].actor===fixture.maid);
@@ -74,6 +99,7 @@ try{
    await delay(5500);await peer.speak(microphone);await until(()=>releaseAsr,'deferred nearby recognition');await rc('minecraft:tp MaidVisitorQA 330.5 90 300.5');await delay(400);releaseAsr();releaseAsr=undefined;await delay(1500);check('leaving before recognition prevents stale maid request',modelRequests.length===before);mode='ok';await rc('minecraft:tp MaidVisitorQA 300.5 90 300.5');
    await delay(5500);mode='late';const lateStart=visitor.lines.length;before=mediaRequests.length;visitor.chat('隔离肥鱼，等我回来再说');await delay(1000);await rc('minecraft:tp MaidVisitorQA 330.5 90 300.5');await delay(5000);check('leaving while model thinks cancels reply and voice delivery',mediaRequests.length===before&&!visitor.lines.slice(lateStart).some(s=>s.includes('[隔离肥鱼] 你好，我是隔离肥鱼')));mode='ok';
    await rc('minecraft:tp MaidVisitorQA 300.5 90 300.5');await delay(5500);mode='late';before=mediaRequests.length;visitor.chat('隔离肥鱼，重连前的对话');await delay(1000);peer.close();visitor.quit();await delay(900);const rejoined=await connect('MaidVisitorQA');await delay(5000);check('reconnected same identity never receives stale reply or audio',mediaRequests.length===before&&!rejoined.lines.some(s=>s.includes('[隔离肥鱼] 你好，我是隔离肥鱼')));mode='ok';
+   }
  }
  await rc('minecraft:save-all flush');
 }catch(error){report.error=String(error);report.syntheticMessages=Object.fromEntries(bots.map(b=>[b.username,b.lines.slice(-12)]));console.log(report.error);console.log(JSON.stringify(report.syntheticMessages));}

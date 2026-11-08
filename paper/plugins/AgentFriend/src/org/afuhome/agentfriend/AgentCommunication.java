@@ -202,7 +202,14 @@ final class AgentCommunication {
         if(raw.length>=2&&raw[0].equalsIgnoreCase("world")&&raw[1].equalsIgnoreCase("story")){plugin.worldLife().command(p,raw);return;}
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
-        if(root.equals("arena")&&(args.length==1||Set.of("status","entrance","start","rest","checkpoint","next","leave").contains(args[1].toLowerCase(Locale.ROOT)))){
+        if(root.equals("arena") && args.length >= 2) {
+            String sub=args[1].toLowerCase(Locale.ROOT);
+            boolean economy=sub.equals("wallet") && args.length==2
+                || sub.equals("shop") && args.length>=3 && Set.of("list","buy","wallet").contains(args[2].toLowerCase(Locale.ROOT))
+                || sub.equals("recycle") && (args.length==2 || Set.of("list","quote","sell","status").contains(args[2].toLowerCase(Locale.ROOT)));
+            if(economy){plugin.dungeon().command(p,raw);return;}
+        }
+        if(root.equals("arena")&&(args.length==1||Set.of("status","entrance").contains(args[1].toLowerCase(Locale.ROOT)))){
             plugin.dungeon().command(p,args.length==1?new String[]{"arena","status","--json"}:raw);return;
         }
         if(root.equals("world")&&(args.length==1||Set.of("list","status","events").contains(args[1].toLowerCase(Locale.ROOT)))){
@@ -236,6 +243,7 @@ final class AgentCommunication {
             plugin.skillAssessments().jsonQuery(p,args);return;
         }
         if(!AgentCliCatalog.roots().contains(root)){plugin.cliRecovery().reject(p,raw,"UNKNOWN_COMMAND","未找到该命令，下面只给出当前服务器的用法建议");return;}
-        error(p,"UNSUPPORTED_FORMAT","该旧入口尚未提供--json格式，本次未执行。用命令的--help核对支持情况；已有原回执入口保持兼容。",false,"/mycli "+root+" --help --json");
+        String retry="/mycli "+String.join(" ",args);
+        error(p,"UNSUPPORTED_FORMAT","此入口沿用原回执，不支持--json；本次未执行。去掉--json后由你确认是否调用："+retry+"。arena是试炼塔，pvp是玩家竞技场。",false,retry);
     }
 }
