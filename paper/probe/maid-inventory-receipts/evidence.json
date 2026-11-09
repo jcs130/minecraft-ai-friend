@@ -1,0 +1,201 @@
+{
+  "schema": 1,
+  "state": "candidate-not-deployed",
+  "syntheticOnly": true,
+  "candidateSha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+  "repeatBuildSha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+  "tests": {
+    "baseline": {
+      "evidenceFile": "inventory-baseline-mimw8kwue8.json",
+      "sha256": "3795c6da2eba8ac67c5abbaa8bec115bba220ae91dd5b0e4a3230fe31a7d46bc",
+      "passed": false,
+      "checks": [
+        {
+          "name": "native backing is36 and usable capacity6",
+          "ok": true
+        },
+        {
+          "name": "explicit zero-based usable slots",
+          "ok": false
+        },
+        {
+          "name": "full native backpack has no free unlocked slots",
+          "ok": false
+        },
+        {
+          "name": "locked-slot reply explains current usable slots",
+          "ok": false
+        },
+        {
+          "name": "known no-effect rejection is durable by original ID",
+          "ok": false
+        },
+        {
+          "name": "duplicate rejection retains same reservation",
+          "ok": false
+        },
+        {
+          "name": "changed arguments cannot reuse rejected ID",
+          "ok": false
+        },
+        {
+          "name": "locked equipment source rejected and recoverable",
+          "ok": false
+        },
+        {
+          "name": "invalid count has no-effect rejection",
+          "ok": false
+        },
+        {
+          "name": "all native items and player components unchanged after rejection",
+          "ok": true
+        },
+        {
+          "name": "other actor cannot write foreign inventory",
+          "ok": true
+        },
+        {
+          "name": "unauthorized actor cannot allocate foreign receipt",
+          "ok": true
+        },
+        {
+          "name": "native free slot is explicitly reported",
+          "ok": false
+        },
+        {
+          "name": "valid original-handler transfer still applies",
+          "ok": true
+        },
+        {
+          "name": "valid chest equipment applies",
+          "ok": true
+        },
+        {
+          "name": "full original item components preserved",
+          "ok": true
+        },
+        {
+          "name": "applied replay does not swap equipment again",
+          "ok": true
+        },
+        {
+          "name": "registered chat request keeps correlated plugin reply",
+          "ok": true
+        },
+        {
+          "name": "plugin request uses same validation boundary",
+          "ok": false
+        }
+      ]
+    },
+    "candidate": {
+      "evidenceFile": "inventory-candidate-mimw8l335c.json",
+      "sha256": "06326520de99421b53231b9a5439f28fae270b9996bb20b5f38cb90fc866d5c7",
+      "passed": true,
+      "checks": [
+        {
+          "name": "native backing is36 and usable capacity6",
+          "ok": true
+        },
+        {
+          "name": "explicit zero-based usable slots",
+          "ok": true
+        },
+        {
+          "name": "full native backpack has no free unlocked slots",
+          "ok": true
+        },
+        {
+          "name": "locked-slot reply explains current usable slots",
+          "ok": true
+        },
+        {
+          "name": "known no-effect rejection is durable by original ID",
+          "ok": true
+        },
+        {
+          "name": "duplicate rejection retains same reservation",
+          "ok": true
+        },
+        {
+          "name": "changed arguments cannot reuse rejected ID",
+          "ok": true
+        },
+        {
+          "name": "locked equipment source rejected and recoverable",
+          "ok": true
+        },
+        {
+          "name": "invalid count has no-effect rejection",
+          "ok": true
+        },
+        {
+          "name": "all native items and player components unchanged after rejection",
+          "ok": true
+        },
+        {
+          "name": "other actor cannot write foreign inventory",
+          "ok": true
+        },
+        {
+          "name": "unauthorized actor cannot allocate foreign receipt",
+          "ok": true
+        },
+        {
+          "name": "native free slot is explicitly reported",
+          "ok": true
+        },
+        {
+          "name": "valid original-handler transfer still applies",
+          "ok": true
+        },
+        {
+          "name": "valid chest equipment applies",
+          "ok": true
+        },
+        {
+          "name": "full original item components preserved",
+          "ok": true
+        },
+        {
+          "name": "applied replay does not swap equipment again",
+          "ok": true
+        },
+        {
+          "name": "registered chat request keeps correlated plugin reply",
+          "ok": true
+        },
+        {
+          "name": "plugin request uses same validation boundary",
+          "ok": true
+        }
+      ]
+    },
+    "restart": {
+      "evidenceFile": "inventory-restart-mimw8l5hsm.json",
+      "sha256": "274419152598a20d0765538626c82e58fd39dd0a50dc89b7c998de1060c3b609",
+      "passed": true,
+      "checks": [
+        {
+          "name": "rejected receipt survives normal restart",
+          "ok": true
+        },
+        {
+          "name": "applied receipt survives normal restart",
+          "ok": true
+        },
+        {
+          "name": "restart preserves items without replay",
+          "ok": true
+        },
+        {
+          "name": "replay after restart is still idempotent",
+          "ok": true
+        }
+      ]
+    }
+  },
+  "existingRulesPassed": 90,
+  "realClientAcceptance": "pending",
+  "productionPlayerActionsForQa": false
+}
