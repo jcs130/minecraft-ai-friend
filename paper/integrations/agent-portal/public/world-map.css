@@ -11,6 +11,7 @@
 #app #zoom-buttons{bottom:84px;right:12px;width:44px;margin:0;border-radius:12px;overflow:hidden;background:#152720ed;border:1px solid #d9c39455;box-shadow:0 5px 20px #0004}
 #app .side-menu{font-size:14px;background:#14261ff7;backdrop-filter:blur(12px)}
 #app .side-menu .simple-button{min-height:44px;box-sizing:border-box}
+#map-container .bm-marker-player{pointer-events:auto;cursor:pointer}
 #map-container .bm-marker-player img{width:40px;height:40px;object-fit:cover;image-rendering:auto;border:2px solid #e2c68b;border-radius:50%;background:#1c3028;box-shadow:0 3px 14px #0009}
 #map-container .bm-marker-player .bm-player-name{font:500 12px/1.5 system-ui,sans-serif;border-radius:6px;padding:3px 8px;background:#13261eeb;border:1px solid #cdbb9255;white-space:nowrap}
 #map-container .bm-marker-player[distance-data=med] img,#map-container .bm-marker-player[distance-data=far] img{width:28px;height:28px}

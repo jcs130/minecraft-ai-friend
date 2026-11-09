@@ -79,7 +79,7 @@ function themeMap() {
     const name = marker.querySelector('.bm-player-name')?.textContent;
     const row = visiblePlayers(state).find(item => item.name === name);
     if (row) void follow(row).then(render).catch(showMapError);
-  });
+  }, true);
 }
 frame.addEventListener('load', () => { themeMap(); const row = visiblePlayers(state).find(item => item.name === following); if (row) void follow(row).catch(showMapError); });
 themeMap();
