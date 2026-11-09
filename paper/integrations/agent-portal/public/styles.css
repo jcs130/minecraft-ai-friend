@@ -96,3 +96,23 @@ dialog{border:1px solid #405544;border-radius:12px;background:#172225;color:var(
 .photo-post .photo-story{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.85;margin:0;color:#d7dfd6}
 .photo-post>button{border-radius:0;display:block;width:100%}
 .photo-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.photo-map-command{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all;max-width:100%;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:12px}
+
+/* Keep a long player roster from extending the live video row and hiding chat. */
+.live-layout > .live-channels {
+  max-height: min(72vh, 760px);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  padding: 2px 6px 2px 2px;
+}
+.live-layout > .live-channels:focus-visible {
+  outline: 2px solid var(--accent, #b7dfaa);
+  outline-offset: 3px;
+}
+@media (max-width: 1000px) {
+  .live-layout > .live-channels { max-height: 240px; }
+}
+@media (max-width: 600px) {
+  .live-layout > .live-channels { max-height: 210px; }
+}
