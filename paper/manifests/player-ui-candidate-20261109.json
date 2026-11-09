@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "candidate-validated-awaiting-ci-and-formal-deployment",
+  "status": "deployed-see-current-manifest",
   "version": "0.4.47.68-player-ui-rpg",
   "artifactSha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
   "baseCommit": "28ecbb7e24ea4b5ee95626858cb3e74a0724c90b",
@@ -35,9 +35,9 @@
     "repeatBuildsIdentical": true
   },
   "independentPhases": {
-    "codeMerged": false,
+    "codeMerged": true,
     "candidateValidated": true,
-    "formalDeployed": false,
+    "formalDeployed": true,
     "realPlayerDeviceAccepted": false
   },
   "evidenceRoot": "E:/MC/ops/repairs/player-ui-20261109-r1",
@@ -51,5 +51,30 @@
     "checkpoint-and-reward-ledgers",
     "native-classes-and-party-authority"
   ],
-  "productionChanged": false
+  "productionChanged": true,
+  "sourceCommit": "05a544e04ca7a0ccf5da77a126f77e6efb36b7ed",
+  "mergedCommit": "bef66646c9a4d75ea493f84b2e0f2732289964c7",
+  "ciEvidence": {
+    "runId": 42582306978,
+    "passedJobs": 6,
+    "sourceHead": "05a544e04ca7a0ccf5da77a126f77e6efb36b7ed"
+  },
+  "historicalOperationalSnapshot": {
+    "observedAt": "2026-11-09T16:14:19.8646778+08:00",
+    "windowsElevationAccepted": true,
+    "phase": "waiting-safe-window",
+    "unconfirmedPlayerCount": 2,
+    "activeDungeon": false,
+    "formalRuntimeStill": "0.4.47.66-dungeon-integration-rpg",
+    "gameRestarted": false,
+    "releaseRoot": "E:\\MC\\ops\\repairs\\player-ui-release-20261109-r1"
+  },
+  "deploymentManifest": "paper/manifests/all-pending-deployed-20261109.json",
+  "operationalSnapshot": {
+    "observedAt": "2026-11-09T16:57:27.1076997+08:00",
+    "phase": "player-ui-game-running",
+    "formalRuntime": "0.4.47.68-player-ui-rpg",
+    "gameRestarted": true,
+    "sourceManifest": "paper/manifests/all-pending-deployed-20261109.json"
+  }
 }

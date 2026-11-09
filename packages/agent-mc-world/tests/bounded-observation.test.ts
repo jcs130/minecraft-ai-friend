@@ -100,7 +100,10 @@ describe('real bounded world reads (no mocked visibility)', () => {
     const r=rig(), first=voxel(r,{bounds:[-10,-2,-10,10,2,10]});
     expect(parseSpatialObservation({mode:'voxels',bounds:[0,0,0,0,0,0],cursor:first.next_cursor})).toHaveProperty('error');
     expect(parseSpatialObservation({mode:'rays',cursor:first.next_cursor})).toHaveProperty('error');
-    const malformed=first.next_cursor!.slice(0,-2)+'aa';
+    // Alter a signed byte: changing Base64 padding bits can decode to the same MAC.
+    const cursor=first.next_cursor!, split=cursor.lastIndexOf('.');
+    const mac=Buffer.from(cursor.slice(split+1),'base64url');mac[0]=mac[0]!^1;
+    const malformed=cursor.slice(0,split+1)+mac.toString('base64url');
     expect(()=>voxel(r,{cursor:malformed})).toThrow('cursor');
     const reads=vi.spyOn(r.bot,'blockAt'); r.bot.game.dimension='the_nether';
     expect(()=>voxel(r,{cursor:first.next_cursor})).toThrow('维度'); expect(reads).not.toHaveBeenCalled();
