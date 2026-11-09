@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.37
+
+- Retain real cooldown refusals in the bounded server feedback facts; share scaffold eligibility and effective movement policy.
+
 ## 0.5.7-rc.160-preview.36
 
 - Unify scaffold material assessment across policy, native navigation and placement. Report unsupported configured materials separately from explicit disable, preserve authorized material selection, expose effective movement policy to journey consumers and export the shared assessment.
