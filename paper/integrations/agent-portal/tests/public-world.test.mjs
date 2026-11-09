@@ -8,6 +8,19 @@ import {parsePublicDialogue,publicDialogueText} from '../src/public-dialogue.mjs
 import {ArchiveReader} from '../src/public-archives.mjs';
 import {WorldCatalog} from '../src/world-catalog.mjs';
 
+test('delivered nearby maid speech keeps its original speaker, owner visibility and operation through HTTP/outbox/restart',async t=>{
+ const f=await siteFixture(t),file=path.join(f.root,'game/logs/latest.log');
+ const row={schemaVersion:1,maidUuid:'11111111-1111-4111-8111-111111111111',ownerName:'ag_Alpha',name:'肥鱼',dimension:'minecraft:aincrad',operationId:'near_original_1',text:'一起去公会吧。',delivered:2};
+ const line=r=>'[12:02:00] [Server thread/INFO]: [QiandengjiMaidBridge] QD_PUBLIC_MAID '+JSON.stringify(r)+'\n';
+ await fs.writeFile(file,line(row)+line(row)+line({...row,operationId:'private',delivered:0})+line({...row,ownerName:'Unknown'}));
+ const response=await f.admin.request('/world/events?kind=chat');assert.equal(response.status,200);assert.equal(response.data.total,1);
+ const event=response.data.items?.[0]??response.data.events?.[0];assert.ok(event,'HTTP event present');
+ assert.equal(event.source,'minecraft.maid-nearby-chat');assert.equal(event.title,'肥鱼（女仆·艾恩葛朗特） 说');assert.equal(event.playerName,'ag_Alpha');
+ const restart=new WorldCatalog(f.config,f.game,f.portal.store);await restart.collect();assert.equal((await restart.events({kind:'chat'})).total,1);
+ const pending=(await restart.pendingEvents()).filter(e=>e.source==='minecraft.maid-nearby-chat');assert.equal(pending.length,1);
+ restart.acknowledgeEvents(pending.map(e=>e.id));assert.equal((await restart.pendingEvents()).filter(e=>e.source==='minecraft.maid-nearby-chat').length,0);
+});
+
 test('actual vanilla/async Paper and Youer public chat preserves speech and sender without promoting quoted commands to events',()=>{
  for(const prefix of ['[Server thread/INFO]: ','[Async Chat Thread - #12/INFO]: [Not Secure] ','[/INFO]: [Not Secure] ']){
   const row=parsePublicDialogue('[18:06:28] '+prefix+'<ag_Alpha> @ag_CorMy 我在呢。我们一起去墓穴吧！','2026-10-25');

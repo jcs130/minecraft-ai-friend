@@ -115,6 +115,7 @@ final class NativeMaidSocialSupport {
                     listener.sendMessage(net.kyori.adventure.text.Component.text("[附近·女仆] "+call.maid.getName().getString()+"："+observation.get("reply").getAsString(),net.kyori.adventure.text.format.NamedTextColor.AQUA));}
             }
             if(actor!=null)plugin.reply(actor,"chat-result",call.operation,receipt,null);
+            if(reason==null&&actor!=null)plugin.publishPublicSpeech(call.maid,call.operation,observation.get("reply").getAsString(),1);
         }catch(Exception error){plugin.getLogger().warning("Visitor dialogue receipt retained: "+error.getClass().getSimpleName());}
     }
     private void tick(){

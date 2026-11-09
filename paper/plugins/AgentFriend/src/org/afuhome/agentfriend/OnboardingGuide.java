@@ -243,11 +243,14 @@ final class OnboardingGuide implements Listener {
         if (!flag(state, "eligible")) { p.sendMessage("§7观战账号不参加新手引导。 "); return; }
         if (full) for (String line : settings.getStringList("welcome")) p.sendMessage("§6[系统·迎新] §f" + line);
         p.sendMessage("§b[系统·旅途导师] " + state.get("title").getAsString() + "：§f" + state.get("message").getAsString());
-        p.sendMessage(Component.text("[查看下一步]", NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/mycli coach next"))
-                .append(Component.text("  /mycli coach menu 打开入门页；coach later 暂停" + ms("pause-seconds") / 60_000 + "分钟，coach off 关闭。", NamedTextColor.GRAY)));
+        p.sendMessage(Component.text("[打开冒险大厅]", NamedTextColor.GOLD).clickEvent(ClickEvent.runCommand("/mycli menu"))
+                .append(Component.text("  [我的入门路线]", NamedTextColor.AQUA).clickEvent(ClickEvent.runCommand("/mycli coach menu")))
+                .append(Component.text("  [查看下一步]", NamedTextColor.GREEN).clickEvent(ClickEvent.runCommand("/mycli coach next"))));
+        if (full) p.sendMessage("§7也可右键罗盘打开大厅：角色与技能 → 冒险与任务 → 准备装备后出发。菜单里先看条件，再自行确认；不会自动选职、接单或花钱。");
         JsonObject result = state.deepCopy(); result.addProperty("schemaVersion", 1); result.addProperty("type", type);
         result.addProperty("reason", "onboarding"); result.addProperty("source", "server_observed_state");
         result.addProperty("statusCommand", "/mycli coach next"); result.addProperty("menuCommand", "/mycli coach menu");
+        result.addProperty("adventureMenuCommand", "/mycli menu");
         result.addProperty("helpCommand", "/mycli help"); result.addProperty("listCommand", "/mycli list");
         result.addProperty("featureLessonsCommand", "/mycli coach lessons");
         result.addProperty("backpackCommand", "/minepacks:backpack open");

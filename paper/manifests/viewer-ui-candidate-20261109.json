@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "state": "candidate-not-deployed",
+  "sourceParent": "0375f706a5e6253189f5827a45c5206da724917b",
+  "artifacts": [
+    {
+      "baseline": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "baselineSha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
+      "version": "0.4.47.69-onboarding-viewer-rpg",
+      "candidate": "E:\\MC\\ops\\repairs\\viewer-ui-audit-20261109-r1\\java-build-r3\\AgentFriend-0.4.47.59-shop-rpg-candidate.jar",
+      "sha256": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
+      "changedEntries": [
+        "onboarding.yml",
+        "org/afuhome/agentfriend/OnboardingGuide$Holder.class",
+        "org/afuhome/agentfriend/OnboardingGuide$Session.class",
+        "org/afuhome/agentfriend/OnboardingGuide$Step.class",
+        "org/afuhome/agentfriend/OnboardingGuide.class",
+        "plugin.yml"
+      ],
+      "unrelatedEntriesPreserved": 664,
+      "sources": {
+        "plugins/AgentFriend/src/org/afuhome/agentfriend/OnboardingGuide.java": "00e41e1d83d80a91a605bea239ae1c28271cd29ffc21bfd40fc7497c7d5432dc"
+      }
+    },
+    {
+      "baseline": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "baselineSha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+      "version": "0.1.16-public-dialogue",
+      "candidate": "E:\\MC\\ops\\repairs\\viewer-ui-audit-20261109-r1\\java-build-r3\\qiandengji-maid-native-0.1.12-conversation-candidate.jar",
+      "sha256": "3a328893ab7b9319b62836122ff3e071abce0c05b6b06fc18ea97ce7a0a83d61",
+      "changedEntries": [
+        "local/tlmcompat/hybrid/HybridMaidPlugin.class",
+        "local/tlmcompat/hybrid/NativeMaidSocialSupport$Call.class",
+        "local/tlmcompat/hybrid/NativeMaidSocialSupport$VisitorCallback.class",
+        "local/tlmcompat/hybrid/NativeMaidSocialSupport.class",
+        "local/tlmcompat/hybrid/NativeMaidSpeech$1.class",
+        "local/tlmcompat/hybrid/NativeMaidSpeech$Job.class",
+        "local/tlmcompat/hybrid/NativeMaidSpeech$Stamp.class",
+        "local/tlmcompat/hybrid/NativeMaidSpeech.class",
+        "local/tlmcompat/hybrid/PublicMaidDialogue.class",
+        "plugin.yml"
+      ],
+      "unrelatedEntriesPreserved": 58,
+      "sources": {
+        "integrations/touhou-maids/hybrid-src/local/tlmcompat/hybrid/HybridMaidPlugin.java": "2df61fb35e37d1a777dcf48213d504958383642cd4b1b25f593c60f1665c9f5d",
+        "integrations/touhou-maids/hybrid-src/local/tlmcompat/hybrid/NativeMaidSocialSupport.java": "16083c5f211849987d65be5e376f07645a8b8d607f50eddaf99b2d5464b3146e",
+        "integrations/touhou-maids/hybrid-src/local/tlmcompat/hybrid/NativeMaidSpeech.java": "052e0ce890eccd00749c3f5212293e91a1cc0d2d88d8521f31685e9628ab802c",
+        "integrations/touhou-maids/hybrid-src/local/tlmcompat/hybrid/PublicMaidDialogue.java": "346f99e28d9cf939823429b3934c68b55ee13e66adc0eb1156185afb304c2bbc"
+      }
+    },
+    {
+      "baseline": "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar",
+      "baselineSha256": "521c83c4ef3e7ebc47a333cfe1841b6b223443b9b9c49b587359ac5c856cfb9a",
+      "version": "0.1.4-maid-ysm",
+      "candidate": "E:\\MC\\ops\\repairs\\viewer-ui-audit-20261109-r1\\java-build-r3\\WorldObserver-0.1.3-candidate.jar",
+      "sha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
+      "changedEntries": [
+        "org/qiandeng/observer/MaidObservation.class",
+        "plugin.yml"
+      ],
+      "unrelatedEntriesPreserved": 12,
+      "sources": {
+        "integrations/world-observer/src/org/qiandeng/observer/MaidObservation.java": "c0aa39c6f0a05686c550a17d0204d82d66318787d67860df7e480dacb28a12d3"
+      }
+    }
+  ],
+  "tests": {
+    "portalPassed": 508,
+    "portalOriginalConditionalSkips": 4,
+    "nativeMaidAndRestartPassed": 12,
+    "maidHttpPassed": 21,
+    "menuModelPassed": 68,
+    "rendererPassed": 1622,
+    "rendererOptionalSkips": 41
+  },
+  "sceneParityVerified": false,
+  "productionChanged": false,
+  "preserve": [
+    "worlds",
+    "playerUuid",
+    "owners",
+    "inventory",
+    "authentication",
+    "quests",
+    "exams",
+    "currency",
+    "lifeLedger",
+    "actionReceipts",
+    "originalBrain",
+    "originalGameModel",
+    "syncSequence"
+  ],
+  "rollback": "code/assets/catalog pointers only; no player/world or receipt rollback"
+}

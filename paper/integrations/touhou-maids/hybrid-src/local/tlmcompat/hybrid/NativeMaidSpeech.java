@@ -161,11 +161,14 @@ final class NativeMaidSpeech implements AutoCloseable {
         String text=MaidSpeechLines.forSound(sound);if(text==null)return;
         double frequency=maid.getConfigManager().getSoundFreq()*com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig.GLOBAL_MAID_SOUND_FREQUENCY.get()/100.0;
         if(frequency<=0||frequency<1&&maid.getRandom().nextDouble()>frequency)return;nextAmbient=System.nanoTime()+15_000_000_000L;
+        String operation="a_"+UUID.randomUUID();
         if(System.nanoTime()>=nextCaption){
             nextCaption=System.nanoTime()+60_000_000_000L;
-            for(Player p:maid.getBukkitEntity().getLocation().getNearbyPlayers(8))if(p.canSee(maid.getBukkitEntity()))p.sendMessage("[附近·女仆] "+maid.getName().getString()+"："+text);
+            int delivered=0;
+            for(Player p:maid.getBukkitEntity().getLocation().getNearbyPlayers(8))if(p.canSee(maid.getBukkitEntity())){p.sendMessage("[附近·女仆] "+maid.getName().getString()+"："+text);delivered++;}
+            plugin.publishPublicSpeech(maid,operation,text,delivered);
         }
-        submit(maid,"a_"+UUID.randomUUID(),text,"ambient",null);
+        submit(maid,operation,text,"ambient",null);
     }
     private void tick(){
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(maidId));
