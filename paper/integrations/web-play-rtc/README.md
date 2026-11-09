@@ -49,3 +49,7 @@ python prepare-consumer.py --source <现役网页客户端代码目录> --destin
 `QD_RTC_TURN_CONFIG` 可指定私有配置，强制真实浏览器测试走中继并检查两端选中 relay candidate；报告只记录候选类型、字节数和 RTT，不记录凭据或 SDP。
 
 `public/native-rtc-protocol.js` 原样复用 mc-visual-console（MIT）提交 `6f80eade` 的有界原生 SSE 解码器；更新需保持与上游逐字一致。其余代码是消费端控制适配，不替换共享渲染器的已有女仆、音频、物品或 GUI 修复。
+
+首次发布被部署后检查拦截并自动回退：外层网关缺少三个 RTC 路由。修复只开放 status/offer/receipt 精确路径，SDP 的 JSON 信封限 64 KiB，内部 SDP 仍限 16 KiB；其他写入保持 8 KiB。`test/consumer-http.mjs` 在 `QD_RTC_CANDIDATE` 指定的实际消费端上验证两层 HTTP、Cookie/CSRF/来源、本人归属、12 KiB SDP、未知回执及原预算。18 项专项与 8 项双层 HTTP 检查通过后才准备新的发布入口，旧维护不可重放。
+
+画面订阅结束时会关闭该 RTC 连接并停止控制，避免半个旧 SSE 事件与新快照混合；新画面先恢复 SSE，重新接管时建立全新解码器。首版此行为优先保证画面与角色操作可信，切换重建画面的视角可能需要再次接管。
