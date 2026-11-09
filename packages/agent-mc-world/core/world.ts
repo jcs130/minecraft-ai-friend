@@ -1,3 +1,4 @@
+import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { methodLearningCall } from '../src/learning/method-capability.ts';
 import {RecordedSceneStore,type RecordedScene} from '../src/learning/recorded-scene.ts';
@@ -4954,7 +4955,12 @@ export class MinecraftWorld implements World {
       mc_bag: async (args, ctx) => this.readOnce('mc_bag', ctx,
         () => this.bagReadout(typeof args.item === 'string' ? args.item : undefined)),
       mc_view_map: async (args) => this.viewMap(args),
-      mc_queue: async (args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout(args)),
+      mc_queue: async (args, ctx) => {
+        const readout=this.queueReadout(args), result=this.readOnce('mc_queue',ctx,()=>readout);
+        if(!readout.data)return result;
+        const text=typeof result==='string'?result:result.text;
+        return {text:args.taskId!==undefined||args.detail==='full'?'[任务读数结构] '+JSON.stringify(readout.data)+'\n'+text:text,data:readout.data};
+      },
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
       mc_stop: async () => {
         this.methods.stop('mc_stop取消方法');
@@ -5478,7 +5484,7 @@ export class MinecraftWorld implements World {
   }
 
   /** mc_queue:队列现读 + 最近一单的终态 */
-  protected queueReadout(args: Record<string, unknown> = {}): { stamp: string; text: string } {
+  protected queueReadout(args: Record<string, unknown> = {}): { stamp: string; text: string; data?:Record<string,unknown> } {
     const ex = this.executor;
     if (!ex) return { stamp: 'nomod', text: '[mc_queue 失败] World 未启动' };
     const q = ex.status();
@@ -5494,6 +5500,12 @@ export class MinecraftWorld implements World {
     const detail = requestedId !== undefined || args.detail === 'full' ? 'full' : 'summary';
     const method = this.methods.current;
     return {
+      data:{protocol:'agent-mc/task-queue-read/v1',requestedId:requestedId??null,
+        current:{running:q.running?{id:q.running.id,stepIndex:q.running.stepIndex,stepCount:q.running.stepCount,skill:q.running.skill}:null,
+          waiting:q.waiting.map(t=>({id:t.id})),hold:q.hold??null},
+        last:last?{taskId:last.taskId,kind:last.kind,at:last.at,historical:true,
+          evidence:compactWorkExecutionEvidence({steps:last.steps}),
+          ...(!last.steps?.length?{text:last.text}:{})}:null,goalCompleted:false},
       stamp: queueStamp(q, last?.at ?? null) + `:${method?.id ?? ''}:${requestedId ?? 'latest'}:${detail}`,
       text: renderQueueReadout(
         q,
