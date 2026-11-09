@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed-with-explicit-open-acceptance",
+  "verifiedAt": "2026-11-09T12:47:36.349311+00:00",
+  "scope": [
+    "website-live-roster",
+    "public-spectator-renderer",
+    "four-world-map-cdn",
+    "maintenance-owner-veto"
+  ],
+  "source": {
+    "serverPrs": [
+      147,
+      148
+    ],
+    "serverMerge": "8ca85cc464648b68bc3140a7dd8d259377805e40",
+    "rendererPr": 25,
+    "rendererMerge": "15379341bec33eb9fdfa3ef0308b10245957c4bf",
+    "rendererComponentTree": "5a7e6315bda5239bcafe6690810462556dc6f66d"
+  },
+  "fourStages": {
+    "codeMerged": true,
+    "candidateVerified": true,
+    "productionDeployed": true,
+    "productionBrowserAccepted": true,
+    "allNativeClientsOrAllEntityModelsAccepted": false
+  },
+  "website": {
+    "version": "0.8.41",
+    "containerId": "daed9ef79e3e86dc37a1f78ab802f06ed828de9d4ba1c017bbd1ddb855eded1e",
+    "image": "sha256:317b5a3b50a5a6c9a15be4c5bc0a66036179696559cb92c10d1d7599f24eefa2",
+    "site": "/opt/qiandengji-portal/public-viewer-20261109-r1/site",
+    "siteFiles": 17,
+    "nativeConsoleSha256": "54e5f2bd26fed2f95d8daf02d78555f2a2d312ddc018d9387036d4ef1c5bb180",
+    "deployedAt": "2026-11-09T12:33:02.885375+00:00",
+    "protectedAccountAndWorkTables": 16,
+    "downloadsAndConfigurationPreserved": true
+  },
+  "worldMap": {
+    "containerId": "75e908e9744eaa66680f9542d9c9b659d3f932fefbc4cf288bed2151132bbbcc",
+    "image": "sha256:8c5c5e5596fe9b8eed119cebb01476f9a71a349f238bc2864d974a803a1b6726",
+    "deployedAt": "2026-11-09T12:24:08.574076+00:00",
+    "maps": [
+      {
+        "id": "overworld",
+        "label": "主世界",
+        "dimension": "minecraft:overworld",
+        "bounds": {
+          "minX": -12240,
+          "maxX": 10111,
+          "minZ": -11520,
+          "maxZ": 10879
+        },
+        "sourceChunks": 99013,
+        "sourceRegions": 306,
+        "emptyRegionFilesIgnored": 1639
+      },
+      {
+        "id": "nether",
+        "label": "下界",
+        "dimension": "minecraft:the_nether",
+        "bounds": {
+          "minX": -1040,
+          "maxX": 3071,
+          "minZ": -1680,
+          "maxZ": 911
+        },
+        "sourceChunks": 29124,
+        "sourceRegions": 43,
+        "emptyRegionFilesIgnored": 0
+      },
+      {
+        "id": "end",
+        "label": "末地",
+        "dimension": "minecraft:the_end",
+        "bounds": {
+          "minX": -1024,
+          "maxX": 2767,
+          "minZ": -2368,
+          "maxZ": 2943
+        },
+        "sourceChunks": 35720,
+        "sourceRegions": 55,
+        "emptyRegionFilesIgnored": 0
+      },
+      {
+        "id": "aincrad",
+        "label": "艾恩葛朗特",
+        "dimension": "minecraft:aincrad",
+        "bounds": {
+          "minX": -2560,
+          "maxX": 10335,
+          "minZ": -2608,
+          "maxZ": 8815
+        },
+        "sourceChunks": 89429,
+        "sourceRegions": 124,
+        "emptyRegionFilesIgnored": 0
+      }
+    ],
+    "tileFiles": 61716,
+    "tileBytes": 3829881097,
+    "cdnBaseUrl": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/world-map/d81784131c0f9a686f33af4e84e19ed2b931c8fd647189bd5d00382a418bae07",
+    "manifestSha256": "d81784131c0f9a686f33af4e84e19ed2b931c8fd647189bd5d00382a418bae07",
+    "smallFiles": 49,
+    "publisherRoot": "E:/MC/integrations/world-map-20261109-r2",
+    "staticSource": "F:/MC-backups/scheduled/20261101-040028/server",
+    "sourceBackupRefreshedAndCompletedAt": "2026-11-09T16:54:00+08:00",
+    "sourceFolderDateIsHistorical": true,
+    "terrainRenderCompletedAt": "2026-11-09T19:09:11+08:00",
+    "zeroLengthOverworldRegionsIgnoredNotDeleted": 1639,
+    "livePositionFreshnessSeconds": 20,
+    "newTerrainNeedsAnotherOfflineRender": true
+  },
+  "windows": {
+    "deployedAt": "2026-11-09T20:40:02.0716530+08:00",
+    "rendererRoot": "E:\\MC\\integrations\\public-viewer-fidelity-20261109-r1\\renderer",
+    "reviewedRendererAndSiteFiles": 815,
+    "opsInstalledHashes": {
+      "E:\\MC\\ops\\agent-client-identity.ps1": "6eca4934dc04ac6f4afe68206412b8a7ea9188d6719f004a1ea271081b068152",
+      "E:\\MC\\ops\\manage-server.ps1": "6215896e359b7c43afe353f11399bb8731c02b9b6d29943b2b95cdaf187719ab",
+      "E:/MC/ops/repairs/account-free-observer-20261024/private/worker.json": "2bf021b0ed5eb323542f1b9c92bce614c31cde4c8de68c581f756e331701cd1e",
+      "E:/MC/private/world-map/config.json": "25503d746949e8cc87a55c3f765ca211b8fda79e901b981e6ab9664323243a73"
+    },
+    "ownerDenialOverridesAutomaticMarkers": true,
+    "killerWhalerTreatedAsHumanUntilOwnerReconfirms": true,
+    "services": [
+      "Qiandengji-World-Observer",
+      "Qiandengji-World-Map"
+    ]
+  },
+  "checks": {
+    "serverCiJobs": 6,
+    "rendererCiPassed": true,
+    "mapHttpAndBoundaryTests": 17,
+    "ownerIdentityTests": 14,
+    "localServiceRestartAndPermissionsTests": 10,
+    "rendererTestsPassed": 1619,
+    "rendererOptionalTestsSkipped": 38,
+    "rendererTypeChecksPassed": 2,
+    "publicBrowserChecks": [
+      {
+        "message": "fresh live position state includes four worlds",
+        "passed": true
+      },
+      {
+        "message": "position observation is current",
+        "passed": true
+      },
+      {
+        "message": "all four world selectors switch the actual rendered map",
+        "passed": true
+      },
+      {
+        "message": "real browser terrain loads from OSS",
+        "passed": true
+      },
+      {
+        "message": "public viewer loads the reviewed renderer bundle",
+        "passed": true
+      },
+      {
+        "message": "actual public viewer receives and renders terrain",
+        "passed": true
+      },
+      {
+        "message": "custom-model-data is no longer rejected as an unsupported held item",
+        "passed": true
+      },
+      {
+        "message": "map and spectator have no uncaught browser errors",
+        "passed": true
+      }
+    ],
+    "rosterViewports": [
+      1440,
+      844,
+      390
+    ],
+    "publicNoUncaughtBrowserErrors": true
+  },
+  "game": {
+    "restarted": false,
+    "originalProcessId": 19928,
+    "originalStartedAt": "2026-11-09T08:54:16.4539588Z",
+    "AgentFriend": "0.4.47.68-player-ui-rpg",
+    "CortiEyeMirror": "0.1.20",
+    "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
+    "identityInventoryAuthenticationAndActionStateChanged": false
+  },
+  "openAcceptance": [
+    "The current public CorMy sample had an empty right hand and a rendered enchanted shield. The original custom-model-data iron sword has before/after model tests; its return to the same live hand is not claimed.",
+    "Current received sheep, chicken and experience orb were rendered. Phantom was verified with original assets in isolation; no live Phantom was nearby.",
+    "Feiyu maid YSM source binding remains TLM_YSM_SOURCE_REQUIRED; a dropped entity without an item stack remains NATIVE_DROPPED_ITEM_STACK_UNAVAILABLE. Horse and complete native scene/audio parity are not claimed.",
+    "Xixi was offline in the final public observation; the historical coordinate is covered by the rendered chunk bounds, not a new live-device acceptance.",
+    "BlueMap unknown low-resolution PNGs return 404 by design; existing inline-style CSP console diagnostics are not counted as uncaught JavaScript errors. No global CSP relaxation was applied.",
+    "Phone/Xbox, original Agent main personality adoption and native client picture/audio acceptance remain separate."
+  ],
+  "deploymentCorrections": [
+    "Map candidate configuration first lacked the original node-user read group; failed promotion restored the original service.",
+    "The first map image patched /app but the active working directory was /world-map-app. Old default tests reported 12; corrected absolute-path candidate tests actually executed 17. Both attempts are retained, not counted as successful deployment.",
+    "The first Windows preflight rejected the valid listener due to a PowerShell filter syntax mistake. No service modification occurred in those preflight attempts.",
+    "The r1 NTFS replacement triggered an ACL difference. Tracked code/observer changes rolled back; the completed public four-world map configuration was retained and adopted as r2 baseline. Fresh r2 used quiesced writes, durable E/F preimages and original file ACLs.",
+    "A newly created public maps/aincrad cache directory had root ownership. It was corrected to the existing map-service owner, verified with a disposable cache write and followed by successful sustained publishing."
+  ],
+  "evidenceRoot": "E:/MC/ops/repairs/public-viewer-fidelity-20261109-r1",
+  "windowsReleaseRoot": "E:/MC/ops/repairs/public-viewer-release-20261109-r2",
+  "mirrorRoot": "F:/MC-backups/repairs/public-viewer-release-20261109-r2",
+  "cloudEvidenceRoot": "/opt/qiandengji-portal/public-viewer-20261109-r1",
+  "rollback": {
+    "codeAndStaticOnly": true,
+    "restoreWorldOrAccounts": false,
+    "keepLatestPublisherSequence": true,
+    "keepNewOssTerrain": true,
+    "consumedOrCanceledLaunchersMustNotReplay": true
+  }
+}

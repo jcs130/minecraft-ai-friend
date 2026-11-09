@@ -4,8 +4,8 @@
   "acceptanceDocument": "paper/docs/ACCEPTANCE_EVIDENCE_20261108.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-verified",
-  "latestRelease": "all-pending-release-20261109",
-  "verifiedAt": "2026-11-09T09:17:24.613138+00:00",
+  "latestRelease": "public-viewer-fidelity-20261109",
+  "verifiedAt": "2026-11-09T12:47:36.349311+00:00",
   "releaseDocument": "paper/docs/ALL_PENDING_RELEASE_20261109.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
@@ -1878,5 +1878,17 @@
       },
       "originalLedgerAndConfigUnchanged": true
     }
-  ]
+  ],
+  "latestComponentEvidence": "paper/manifests/public-viewer-deployed-20261109.json",
+  "publicViewerFidelity": {
+    "state": "deployed-with-explicit-open-acceptance",
+    "sourcePrs": [
+      147,
+      148
+    ],
+    "rendererPr": 25,
+    "gameRestarted": false,
+    "record": "paper/manifests/public-viewer-deployed-20261109.json"
+  },
+  "currentComponentEvidenceScope": "Game/client baseline remains all-pending-deployed-20261109.json; later website/map/observer/ops evidence overrides only those components."
 }
