@@ -3526,7 +3526,7 @@ export class MinecraftWorld implements World {
       'minecraft.world': worldEnvLine(this.worldIdentity()),
       'minecraft.explored': this.explored.summary(normalizeDimension(this.bridge?.bot?.game?.dimension)),
       // 上下文截断时读取当前非默认设置，同时注明被蓝图预留收口的垫脚料。
-      'minecraft.policy': renderPolicyEnv(this.policy.get(), false, this.blueprintHeldScaffold()),
+      'minecraft.policy': renderPolicyEnv(this.policy.get(), false, this.blueprintHeldScaffold(), this.bridge?.bot?.registry),
       'minecraft.camera': this.cfg.client.enabled
         ? readFileSync(CAMERA_NOTE_FILE, 'utf8').trim()
         : '',
@@ -3616,12 +3616,16 @@ export class MinecraftWorld implements World {
     const journey = observedJourney && running?.travel && observedJourney.journey.taskId === running.id
       && observedJourney.journey.stepIndex === running.stepIndex && observedJourney.journey.dimension === running.travel.dimension
       && JSON.stringify(observedJourney.journey.destination) === JSON.stringify(running.travel.destination) ? observedJourney : null;
+    // Travel workers already subscribe to journey. Always include effective
+    // movement policy, even while idle or after a failed journey ends.
+    const movementPolicy = renderPolicy(this.policy.get(), this.policyDefaults(), !this.cfg.combat.enabled,
+      this.blueprintHeldScaffold(), bot?.registry);
     if (journey) {
       const current = journey.observations.every(cue => Date.now() - cue.observedAtMs <= 10_000
         && Math.hypot(cue.position[0] - snap.position.x, cue.position[1] - snap.position.y, cue.position[2] - snap.position.z) <= 32);
-      parts.push({ key: 'journey', text: journeyOpportunityText(journey, { guidance: false })
+      parts.push({ key: 'journey', text: movementPolicy + '\n' + journeyOpportunityText(journey, { guidance: false })
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
-    }
+    } else parts.push({ key: 'journey', text: movementPolicy + '\n当前没有活动旅途观察；mc_policy 可查询和调整行走/垫脚/主动战斗策略。' });
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS, options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
@@ -5563,7 +5567,7 @@ export class MinecraftWorld implements World {
     const after = this.policy.get();
     return head + renderPolicyChange(before, after, patch)
       + renderPolicy(
-        after, this.policyDefaults(), !this.cfg.combat.enabled, this.blueprintHeldScaffold(),
+        after, this.policyDefaults(), !this.cfg.combat.enabled, this.blueprintHeldScaffold(), this.bridge?.bot?.registry,
       );
   }
 
@@ -7054,7 +7058,7 @@ export class MinecraftWorld implements World {
         `[Minecraft] 已连入服务器 ${this.cfg.host}:${this.cfg.port},身份 ${this.chatName()}。`,
         '正在接收出生点区块和在线名单；附近地形与人数稍后核实。',
         // 五格落盘跨重启活着:上一场设下的规矩必须有一句话说出来,且点明是上一场的
-        renderPolicyEnv(this.policy.get(), this.policy.restored(), this.blueprintHeldScaffold()),
+        renderPolicyEnv(this.policy.get(), this.policy.restored(), this.blueprintHeldScaffold(), this.bridge?.bot?.registry),
         // 第六格(fight)不跨重启。回弹是静默发生的,而她会按「我设过了」行事 ——
         // 所以回弹那一刻必须出线,一次重启只说一次(见 takeFightRollback)
         fightRollback ? renderFightRollback(fightRollback) : '',

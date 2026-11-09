@@ -43,7 +43,7 @@ function isFailureObservation(text: string): boolean {
     } catch { return false; } // malformed structured data is not a proven denial
     return false;
   }
-  return /(?:denied|not allowed|no permission|don't have permission|cannot|can't|failed|error|invalid|too far|not enough|缺少|不足|失败|错误|无效|不能|无法|不允许|没有权限|无权|禁止|拒绝|未授权|太远|受保护|保护区)/i.test(text);
+  return /(?:denied|not allowed|no permission|don't have permission|cannot|can't|failed|error|invalid|too far|not enough|on cooldown|cooldown (?:remaining|active)|缺少|不足|失败|错误|无效|不能|无法|不允许|没有权限|无权|禁止|拒绝|未授权|太远|受保护|保护区|还需冷却|冷却中)/i.test(text);
 }
 
 /** Historical server error observations, never permissions or proof of effects. */

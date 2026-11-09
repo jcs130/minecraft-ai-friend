@@ -33,8 +33,8 @@ import {
   type BlockProtectionPort, type ProtectReply, NearbyProtectionBackoff, holdUnverifiedPathAction,
   selectHeldPathAction, protectionCheck, type ProtectAction, type ProtectCell, type ProtectStatus,
 } from './protection-port.ts';
-import { isGravityBlock, isSpawnAnchorBlock } from './policy.ts';
-import { isStableScaffoldMaterial } from './scaffold-material.ts';
+import { isSpawnAnchorBlock } from './policy.ts';
+import { assessScaffoldMaterials } from './scaffold-material.ts';
 import type { ShowTempo } from './show.ts';
 import { diagnoseTargetSpace, probeBlockInfo } from './terrain.ts';
 import { walkOnlyPath } from './travel.ts';
@@ -994,25 +994,10 @@ export class Bridge {
       /** scafoldingBlocks 使用物品 ID；1.20.6 的物品和方块 ID 不同，须查询 itemsByName。 */
       const byName = bot.registry.itemsByName as Record<string, { id: number } | undefined>;
       // 重力方块失去支撑后会下落，不能作为寻路器按固定落点记账的垫脚料。
-      const heavy = wanted.filter((n) => isGravityBlock(n));
-      const usable = wanted.filter((n) => isStableScaffoldMaterial(bot.registry, n));
-      const shaped = wanted.filter((n) => !isGravityBlock(n)
-        && byName[n] !== undefined && !isStableScaffoldMaterial(bot.registry, n));
-      const complaints: string[] = [];
-      if (heavy.length > 0) {
-        complaints.push(`scaffoldBlocks 里的重力方块不收(垫下去会自己掉,垫不住): ${heavy.join('、')}`);
-      }
-      if (shaped.length > 0) {
-        complaints.push(`寻路垫脚需要完整稳定立方支撑，忽略非完整支撑材料: ${shaped.join('、')}`);
-      }
+      const { accepted: usable, rejected } = assessScaffoldMaterials(wanted, bot.registry);
+      const complaints = rejected.map(r => `scaffoldBlocks ${r.name}: ${r.reason}`);
       const ids = usable.map((n) => byName[n]?.id).filter((id): id is number => id !== undefined);
-      const unknown = wanted.filter((n) => byName[n] === undefined);
-      if (unknown.length > 0) complaints.push(`scaffoldBlocks 里不认识的方块名被忽略: ${unknown.join('、')}`);
-      if (ids.length > 0 || wanted.length === 0 || shaped.length > 0 || heavy.length > 0) {
-        movements.scafoldingBlocks = ids;
-      } else {
-        complaints.push('scaffoldBlocks 全部无效,沿用寻路器默认(泥土、圆石)');
-      }
+      movements.scafoldingBlocks = ids;
       const key = complaints.join('\n');
       if (key !== this.scaffoldComplained) {
         this.scaffoldComplained = key;

@@ -6,6 +6,15 @@ afterEach(() => vi.useRealTimers());
 const denial = 'MC_LAND_ACCESS {"status":"deny","allowed":false,"reason":"land_permission_denied","action":"place","x":-486,"y":67,"z":-506}';
 
 describe('server feedback remains available after the event page', () => {
+  it('retains an observed cooldown refusal without making skill help into a failed cast',()=>{
+    const ledger=new ServerFeedbackLedger(),text='法术还需冷却 8 秒；等待结束再施放一次，重复提交不会缩短冷却。';
+    expect(ledger.note(text,'system',481,1000)).toBe(true);
+    expect(ledger.read(1001)).toContain(text);
+    expect(ledger.forTask(481,1001)).toContain(text);
+    expect(ledger.forTask(482,1001)).toBe('');
+    expect(ledger.note('MC_RPG '+JSON.stringify({ok:true,description:text,cooldownRemainingMs:8000}),'system',482,1001)).toBe(false);
+    ledger.clear();expect(ledger.read(1001)).toBeNull();
+  });
   it('does not turn nested skill restrictions, historical failures or nullable fields into a current error',()=>{
     const ledger=new ServerFeedbackLedger();
     const status='MC_RPG '+JSON.stringify({readOnly:true,queryOnly:true,health:20,error:null,
