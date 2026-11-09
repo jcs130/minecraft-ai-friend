@@ -15,6 +15,7 @@ from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -27,6 +28,7 @@ import time
 from urllib.parse import parse_qs, quote, urlsplit
 
 from voice_registry import MAX_UPLOAD_BYTES, VOICE_ID, _audio_info
+from drama_rs_runtime import load_runtime
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +47,9 @@ NATIVE_FIELDS = {"text", "voice", "voices", "stream", "split", "seed", "top_k", 
 LEGACY_FIELDS = {"model", "input", "voice", "response_format", "stream_format", "seed",
                  "top_k", "top_p", "temperature", "max_new", "max_seconds"}
 BUILTINS = ("none", "kirito", "yui", "cast")
+RUNTIME_IDENTITY = {"engine_version": "0.3.0", "quantization_format": "drama-rs-v1",
+                    "quantized_repository": "apiplant/drama-q4",
+                    "quantized_revision": "1fce9bd21d46a0311294aebfad19f994df90902f"}
 
 
 class APIError(Exception):
@@ -282,10 +287,12 @@ class WavStripper:
 class Gateway(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], store: VoiceStore) -> None:
+    def __init__(self, address: tuple[str, int], store: VoiceStore,
+                 runtime_identity: dict | None = None) -> None:
         super().__init__(address, Handler)
         self.store = store
         self.model_lock = threading.Lock()
+        self.runtime_identity = dict(RUNTIME_IDENTITY if runtime_identity is None else runtime_identity)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -343,7 +350,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.json_reply(503, {"status": "loading", "runtime": "drama-rs"})
             elif path == "/v1/models":
                 self.json_reply(200, {"object": "list", "data": [{"id": "drama-3", "object": "model",
-                    "owned_by": "drama-rs", "version": "0.3.0", "sample_rate": SAMPLE_RATE,
+                    "owned_by": "drama-rs", "version": self.server.runtime_identity["engine_version"],
+                    "weights": self.server.runtime_identity, "sample_rate": SAMPLE_RATE,
                     "defaults": {"split": False, "max_new": MAX_NEW},
                     "limitations": {"numeric_speed": "unsupported", "stop_reason": "not_exposed_by_engine",
                                     "legacy_max_seconds": "advisory_only_not_enforced",
@@ -360,7 +368,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_reply(200, [item["voice_id"] for item in self.server.store.list()
                                       if item["status"] == "ready" and item["voice_id"] != "none"])
             elif path == "/v1/capabilities":
-                self.json_reply(200, {"runtime": "drama-rs 0.3.0", "sample_rate": SAMPLE_RATE,
+                self.json_reply(200, {"runtime": f"drama-rs {self.server.runtime_identity['engine_version']}", "sample_rate": SAMPLE_RATE,
                     "format": "mono PCM16 WAV (streaming)", "voice_clone": True,
                     "voice_selection": True, "multi_speaker": True, "speaker_map": True,
                     "plain_text": True,
@@ -430,8 +438,17 @@ class Handler(BaseHTTPRequestHandler):
             raise APIError(400, "text must be nonempty UTF-8, at most 16000 bytes", param="text")
         if body.get("split", False) is not False:
             raise APIError(400, "split=true would make independent utterances; use split=false", param="split")
-        if "seed" in body and (type(body["seed"]) is not int or body["seed"] < 0):
-            raise APIError(400, "seed must be a nonnegative integer", param="seed")
+        if "seed" in body and (type(body["seed"]) is not int or not 0 <= body["seed"] < 2**64):
+            raise APIError(400, "seed must be an unsigned 64-bit integer", param="seed")
+        for field, upper in (("temperature", 3.4028234e38), ("top_p", 1)):
+            if field in body:
+                value = body[field]
+                if type(value) not in (int, float) or not 0 < value <= upper or not math.isfinite(value):
+                    raise APIError(400, f"{field} must be finite and in (0, {upper}]", param=field)
+        if "top_k" in body and (type(body["top_k"]) is not int or not 1 <= body["top_k"] <= 4097):
+            raise APIError(400, "top_k must be an integer in 1–4097", param="top_k")
+        if "stream" in body and type(body["stream"]) is not bool:
+            raise APIError(400, "stream must be a boolean", param="stream")
         if "max_new" in body and (type(body["max_new"]) is not int or not 1 <= body["max_new"] <= MAX_NEW):
             raise APIError(400, f"max_new must be 1–{MAX_NEW}", param="max_new")
         if "voice" in body and "voices" in body:
@@ -667,27 +684,49 @@ def native_command(store: VoiceStore) -> list[str]:
             "--first-chunk", "4", "--stream-chunk", "16", *store.launch_voices()]
 
 
+def cleanup_native_runtime() -> None:
+    helper = _win_to_wsl(Path(__file__).with_name("drama_rs_runtime.py"))
+    result = subprocess.run([r"C:\Windows\System32\wsl.exe", "-d", "Ubuntu-24.04", "--",
+                             "python3", helper, "--reap", BINARY, "--address",
+                             f"{BACKEND_HOST}:{BACKEND_PORT}"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", timeout=40)
+    if result.returncode:
+        raise RuntimeError("prior native runtime cleanup failed: " + result.stderr.strip())
+    logging.info("native cleanup %s", result.stdout.strip())
+
+
 def main() -> int:
+    global MODEL, BINARY, BACKEND_PORT, RUNTIME_IDENTITY
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=18120)
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
+    parser.add_argument("--native-port", type=int, default=BACKEND_PORT)
+    parser.add_argument("--runtime", type=Path, help="pinned local runtime selection JSON")
+    parser.add_argument("--cleanup-only", action="store_true", help="reap only the configured native child and exit")
     args = parser.parse_args()
     args.state.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=args.state / "drama-rs-gateway.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s", encoding="utf-8")
+    if not 1024 <= args.native_port <= 65535 or args.native_port == args.port:
+        raise ValueError("native port must be a distinct unprivileged port")
+    BACKEND_PORT = args.native_port
+    selection = load_runtime(args.runtime or args.state / "runtime.json")
+    if selection:
+        BINARY = _win_to_wsl(Path(selection["binary"]))
+        MODEL = _win_to_wsl(Path(selection["model"]))
+        RUNTIME_IDENTITY = selection["identity"]
+    if args.cleanup_only:
+        cleanup_native_runtime()
+        return 0
     store = VoiceStore(args.state)
     process = None
     native_log = None
-    if not backend_has_voices(store):
-        # An earlier Windows task can leave the exact WSL binary alive. It may
-        # be missing references added since that task started; free its VRAM.
-        subprocess.run([r"C:\Windows\System32\wsl.exe", "-d", "Ubuntu-24.04", "--",
-                        "pkill", "-TERM", "-x", "drama"], capture_output=True, timeout=15)
-        for _ in range(20):
-            if not backend_ready():
-                break
-            time.sleep(0.25)
+    server = None
+    try:
+        # Confirm the prior child actually exits before allocating another model.
+        # Never adopt a same-version listener whose weights may be different.
+        cleanup_native_runtime()
         native_log = (args.state / "drama-rs-native.log").open("ab", buffering=0)
         process = subprocess.Popen(native_command(store), cwd=ROOT, stdout=native_log,
                                    stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -699,17 +738,27 @@ def main() -> int:
             time.sleep(1)
         else:
             raise TimeoutError("drama-rs did not become ready within 180 seconds")
-    server = Gateway((args.host, args.port), store)
-    logging.info("ready on %s:%s; voices=%s", args.host, args.port,
-                 [item["voice_id"] for item in store.list() if item["status"] == "ready"])
-    try:
+        connection, response = backend_request("GET", "/v1/info", timeout=5)
+        try:
+            native_info = json.loads(response.read(65536))
+        finally:
+            connection.close()
+        if native_info.get("version") != RUNTIME_IDENTITY["engine_version"]:
+            raise RuntimeError("native engine version differs from selected runtime")
+        server = Gateway((args.host, args.port), store, RUNTIME_IDENTITY)
+        logging.info("ready on %s:%s; runtime=%s; voices=%s", args.host, args.port, RUNTIME_IDENTITY,
+                     [item["voice_id"] for item in store.list() if item["status"] == "ready"])
         server.serve_forever(poll_interval=0.5)
     finally:
-        server.server_close()
-        if process and process.poll() is None:
-            process.terminate()
-        if native_log:
-            native_log.close()
+        if server:
+            server.server_close()
+        try:
+            if process:
+                cleanup_native_runtime()
+                process.wait(timeout=10)
+        finally:
+            if native_log:
+                native_log.close()
     return 0
 
 

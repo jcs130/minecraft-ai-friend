@@ -1,8 +1,29 @@
 # RTX 3090 Drama 3 局域网服务（现役）
 
-2026-10-29 已将 `192.168.3.133:18120` 从 speech.cpp 切换到 [drama-rs v0.3.0](https://github.com/apiplant/drama-rs)。Windows 交互式计划任务 `Drama3-Speech` 运行 `tools/drama3/drama_rs_service.py`，在 WSL Ubuntu 24.04 中启动 CUDA/Q4 原生模型；原生引擎只监听 `127.0.0.1:18121`，Windows 网关监听 `0.0.0.0:18120`。入站防火墙规则 `Drama 3 speech LAN 18120` 只放行 `192.168.3.0/24`。无需 API 密钥。原 speech.cpp 运维记录保存在 [历史文档](archive/DRAMA3-SPEECHCPP-SERVICE-2026-10-28.md)。
+2026-11-10 已部署官方 2026-10-29 重传的 Drama 3 权重 `78e5ab79e49aa9a25abe8799eff2c4d73a1c3216`，由固定转换器生成 CUDA/Q4 资产，继续使用最新正式 [drama-rs v0.3.0](https://github.com/apiplant/drama-rs/releases/tag/v0.3.0)。这次是实际模型资产升级，引擎正式版本未变。Windows 交互式计划任务 `Drama3-Speech` 运行 `tools/drama3/drama_rs_service.py`，在 WSL Ubuntu 24.04 中启动原生模型；原生引擎只监听 `127.0.0.1:18121`，Windows 网关监听 `0.0.0.0:18120`。入站防火墙规则 `Drama 3 speech LAN 18120` 只放行 `192.168.3.0/24`。无需 API 密钥。2026-10-29 的引擎切换和原 speech.cpp 运维记录分别见本页历史验收与 [历史文档](archive/DRAMA3-SPEECHCPP-SERVICE-2026-10-28.md)。
 
-模型、二进制、参考录音和日志不入 Git。现役二进制和 Q4 模型位于 `E:\ai-models\drama3-compare-20261029\drama-rs\`；运行状态、上传的音色与试听证据位于被忽略的 `server/drama3-service/`。
+模型、二进制、参考录音和日志不入 Git。现役二进制仍在 `E:\ai-models\drama3-compare-20261029\drama-rs\`，新模型在 `E:\ai-models\drama3-upgrade-20261109\model-78e5ab7-q4\`；通过被忽略的 `server/drama3-service/runtime.json` 选择，原模型原样保留。运行状态与音色位于 `server/drama3-service/`；本次下载、转换、验收和回退证据位于本机 `E:\ai-models\drama3-upgrade-20261109\`。
+
+## 固定权重来源与升级
+
+网关支持从 `server/drama3-service/runtime.json` 读取本机选定的二进制和模型目录，也可用 `--runtime` 显式选择候选清单。清单包含 `schema_version:1`、`engine_version`、绝对路径 `binary` / `model`、二进制 SHA-256 `binary_sha256` 和模型资产清单的 SHA-256 `manifest_sha256`。缺少选择文件时沿用原默认模型；文件存在但校验失败时直接报错，不自动换回其他权重。
+
+模型目录内的 `asset-manifest.json` 记录 `format:drama-rs-v1`、官方 `source_revision`、转换器 `converter_revision`，以及每个文件的 `name`、`bytes` 和 `sha256`。部署前逐项验证完整文件哈希；启动时绑定该清单、二进制哈希和必需文件大小，避免每次重启重复读取约 21 GB 权重。必须包含 40 层、globals、tower、codec 和 tokenizer，不能只更新显示的版本号。
+
+`GET /v1/models` 的 `data[0].weights` 返回实际选定的公开来源信息，保留原 `id:drama-3`。原生引擎版本也须与选择清单一致。查询时应看这份来源，而非仅凭模型目录日期判断是否升级。
+
+```powershell
+Invoke-RestMethod 'http://192.168.3.133:18120/v1/models' | ConvertTo-Json -Depth 8
+Get-Content 'server/drama3-service/runtime.json'
+```
+
+候选可用单独状态目录及 `--host 127.0.0.1 --port 18130 --native-port 18131` 验证。单张 3090 须逐个运行模型。切换前保存原选择清单、任务 XML 和全部音色文件哈希；失败时恢复原选择并重新做真实音频检查。原维护文件继续控制看门狗，不能让看门狗在转换或候选验收期间另起模型。
+
+看门狗通过 `drama_rs_service.py --cleanup-only` 清理当前配置的原生子进程；按二进制路径、`serve` 和回环地址/端口匹配，保留不同端口或不同二进制。先 TERM 并等待，未退出才 KILL，再确认释放；实际端口空闲检查在 WSL 内完成。无法确认退出或端口仍被占用时拒绝重复加载。启动失败和正常关闭也执行相同清理。
+
+截至本次核查，最新正式 `drama-rs` 仍为 v0.3.0；官方 Python 推理器的 [参考采样更新](https://github.com/fishaudio/fish-speech/pull/1368)（源码 `0f8a12e8a651062fdee9c33a894bdccd3a8513f1`）与 `epsilon_cutoff` 属于另一实现，现役参数以 `/v1/capabilities` 为准。网关在向引擎派发及开启音频流前验证有限采样值、`top_k` 及 64-bit seed，避免无效请求变成后置流错误。
+
+本次源权重的 24 个文件共 41,502,569,692 字节，逐项校验 Hub 文件大小及 LFS SHA-256 / Git blob 哈希；转换器为 `498f18c0b403006f207db121df8c70e024b2453a`。新资产清单包含 47 个文件，清单 SHA-256 为 `4dbeaddb578f291820845664efe1b998a589313d045339b0da6fdb183501db55`。源版本见 [官方提交历史](https://huggingface.co/fishaudio/drama-3/commits/main)；权重重新上传本身不证明音质提升。
 
 ## 接口与能力
 
@@ -77,6 +98,14 @@ curl -sS -X POST 'http://192.168.3.133:18120/v1/audio/voices' \
 
 ## 本机验收与运维
 
+2026-11-10 升级验收：先用原模型保存六组真实音频基线，再在隔离端口连续两轮测试可米长句、短句、中文名字/坐标句、桐人、结衣、双人，共 12 组 WAV，并验证兼容 SSE。切换正式 LAN 地址后同样的六组 WAV 与 SSE 再次通过，`/v1/models` 确认新来源；输出均为 44.1 kHz 单声道 PCM16，非静音，SSE 实际 PCM 样本数与尾事件一致，停止原因仍为 `unknown`。
+
+正式可米 204 字单请求生成 **46.626 秒**音频，首段 **0.601 秒**、总耗时 **9.790 秒**，PCM SHA-256 为 `a264b848e1ea2ef5ce1ff8d9163a0e9eb7aa4b516f54f05ea69963bad28e269d`。候选验收期间 30 次整卡显存采样最大 **22,296 MiB**、最小剩余 **2,031 MiB**；这不是单进程隔离值或完整冷启动峰值。全部原音色目录 65 个文件的 SHA-256 与升级前相同。正式任务保持 `lzl1992` Interactive，确认仅一个原生 18121 模型进程，维护闸门已撤下，看门狗健康检查退出 0；网关日志另记录局域网 `192.168.3.152` 成功合成，不据此推断该设备的人工播放效果。语音内容、克隆质量与语气主观听感仍需试听。
+
+本次源码验证：Windows 单元测试 27 项中 24 项通过、3 项 Linux 进程测试按平台跳过；同三项在 WSL 实跑通过，覆盖 TERM、忽略 TERM 后 KILL、保留其他端口/二进制及拒绝占用端口。真实音频报告分别在本机升级目录的 `candidate-acceptance/report.json` 和 `production-acceptance/report.json`，旧模型基线在 `baseline-2/report.json`。这些本机结果不等于任意新机器已完成部署。
+
+以下为 2026-10-29 初次切换的历史结果，不是新版权重结果：
+
 2026-10-29 在正式 LAN IP 上验收：可米 204 字单请求 `split:false` 的音频为 **45.047 秒**、首段 **0.479 秒**、整次生成 **9.558 秒**，PCM SHA-256 `6448a1e192d504192121b9088c6eaa06d3c479f6618e1a11c42f5dba0f999222`，与先前用户试听认为“稳定完整”的 drama-rs 隔离样本相同。短句、中文名字/坐标句、桐人、结衣、双人及一段 `[whisper]` 文本都生成了有效 WAV；双人/语气的主观听感尚未单独由用户验收。兼容 SSE 实测最后 `samples` 与收到的 PCM 字节数一致，`stop:"unknown"` 如实暴露上游限制。原始请求、WAV 和报告在 `server/drama3-service/drama-rs-acceptance/`。目前仅从本机访问自身 LAN IP，外部设备的当前连接与播放须从该设备确认。
 
 常用检查：
@@ -89,6 +118,8 @@ Invoke-RestMethod 'http://192.168.3.133:18120/v1/audio/voices'
 nvidia-smi --query-gpu=memory.used,memory.free --format=csv,noheader,nounits
 ```
 
-管理员切换脚本 `tools/drama3/Switch-Drama3Rs.ps1` 仅更改 `Drama3-Speech` 动作，先写 `server/drama3-service/before-drama-rs-task.xml`，加载后实测四种音色，失败时恢复旧动作；结果与日志在同一被忽略状态目录。每分钟的 `Drama3-Watchdog` 检查 Windows 网关与任务，重启前清理其可能遗留的同名 WSL 模型进程。`Drama3-Speech` 应保持交互式用户任务；现役模型在 WSL 的冷启动约 60–90 秒，不能只依据任务 Running 或 `/health` 推断真实合成。回退时须先停新任务和同名 WSL `drama` 进程，再将计划任务动作恢复为备份 XML 中的 `voice_service.py` 并做旧音色真实合成。不要同时运行新旧模型以免 24 GB 显存溢出。
+每分钟的 `Drama3-Watchdog` 检查 Windows 网关与任务，重启前按精确二进制和回环端口清理残留原生进程。`Drama3-Speech` 应保持交互式用户任务；现役模型在 WSL 的冷启动约 60–90 秒，不能只依据任务 Running 或 `/health` 推断真实合成。本次权重回退应设置原维护闸门，停语音任务并用当前选择执行 `drama_rs_service.py --cleanup-only`，再恢复升级前的 `runtime.json`；本机升级前无此文件，撤下选择文件即回到原默认目录。随后启动任务，做真实音频验收并恢复看门狗。备份在本机升级目录 `backup/`。不能同时运行新旧 GPU 模型。
+
+`tools/drama3/Switch-Drama3Rs.ps1` 是 2026-10-29 从 speech.cpp 切换引擎的历史脚本，不用于本次权重回退。只有明确需要回到旧 speech.cpp 时才恢复其备份任务 XML，并按历史文档重新验收，不能混用两种引擎的参数与音色格式。
 
 本轮没有重启 Minecraft、Cortico、IndexTTS、QwenPaw 或 LLM 服务。Drama 3 模型的使用和真人参考音授权仍受 [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE) 约束。

@@ -153,6 +153,31 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(events[-1]["legacy_max_seconds_enforced"])
         self.assertEqual(events[-1]["stop"], "unknown")
 
+    def test_model_metadata_uses_selected_manifest_without_local_paths(self):
+        previous = self.gateway.runtime_identity
+        self.gateway.runtime_identity = {'engine_version': '0.3.0', 'source_revision': 'a'*40,
+                                         'converter_revision': 'b'*40, 'quantization_format': 'drama-rs-v1'}
+        try:
+            with urlopen(self.base + '/v1/models', timeout=5) as response:
+                model = json.load(response)['data'][0]
+            self.assertEqual(model['weights']['source_revision'], 'a'*40)
+            self.assertEqual(model['version'], '0.3.0')
+            self.assertNotIn(str(Path(self.temp.name)), json.dumps(model))
+        finally:
+            self.gateway.runtime_identity = previous
+
+    def test_invalid_sampling_fails_before_native_stream(self):
+        for field, value in [('temperature', float('nan')), ('temperature', 0),
+                             ('top_p', float('inf')), ('top_p', -0.1),
+                             ('top_k', 0), ('top_k', True), ('seed', 2**64)]:
+            with self.subTest(field=field, value=value):
+                count = len(FakeNative.requests)
+                with self.assertRaises(HTTPError) as error:
+                    self.post_json('/v1/speak', {'text': '测试', 'voice': 'kirito', field: value})
+                self.assertEqual(error.exception.code, 400)
+                error.exception.close()
+                self.assertEqual(len(FakeNative.requests), count)
+
     def test_native_voice_upload_is_durable_and_selectable(self):
         audio = reference_wav()
         path = "/v1/voices?name=testvoice&text=" + "%E4%BD%A0%E5%A5%BD"

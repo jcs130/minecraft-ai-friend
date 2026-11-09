@@ -54,8 +54,10 @@ foreach ($process in $orphaned) {
 # A stopped Windows gateway can leave its WSL child alive. Reap that exact
 # runtime before restarting, or the next model load can exhaust the 3090.
 if ($usingRs) {
-    & wsl.exe -d Ubuntu-24.04 -- pkill -TERM -x drama 2>$null
-    Add-Content -LiteralPath $log -Encoding UTF8 -Value "$(Get-Date -Format o) checked stale drama-rs process"
+    $rsAction = $task.Actions | Where-Object { $_.Arguments -match 'drama_rs_service[.]py' } | Select-Object -First 1
+    & $rsAction.Execute (Join-Path $PSScriptRoot 'drama_rs_service.py') --state $StateDirectory --cleanup-only
+    if ($LASTEXITCODE -ne 0) { throw "Exact drama-rs cleanup failed with exit code $LASTEXITCODE; refusing another model load" }
+    Add-Content -LiteralPath $log -Encoding UTF8 -Value "$(Get-Date -Format o) verified exact native runtime stopped"
 }
 Start-ScheduledTask -TaskName $TaskName
 Add-Content -LiteralPath $log -Encoding UTF8 -Value "$(Get-Date -Format o) restart requested"
