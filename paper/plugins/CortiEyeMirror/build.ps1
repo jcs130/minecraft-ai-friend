@@ -18,8 +18,8 @@ $classpath = (@($paper, $protocol, (Join-Path $ServerRoot 'plugins\AuraSkills-2.
     $spectator[0].FullName) + $libraries) -join ';'
 $build = Join-Path $root "build-0.1.18-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
-$compileArguments = @('-proc:none', '-encoding', 'UTF-8', '-source', '21', '-target', '21', '-cp', $classpath, '-d', $build,
-    (Get-Item -LiteralPath (Join-Path $root '..\shared\src\org\afuhome\eye\EyePairs.java')).FullName) +
+$compileArguments = @('-proc:none', '-encoding', 'UTF-8', '-source', '21', '-target', '21', '-cp', $classpath, '-d', $build) +
+    @(Get-ChildItem -LiteralPath (Join-Path $root '..\shared\src') -Filter '*.java' -Recurse -File | ForEach-Object { $_.FullName }) +
     @(Get-ChildItem -LiteralPath (Join-Path $root 'src\org\afuhome\cortieye') -Filter '*.java' -File | ForEach-Object { $_.FullName })
 $argumentFile = [System.IO.Path]::GetTempFileName()
 try {
