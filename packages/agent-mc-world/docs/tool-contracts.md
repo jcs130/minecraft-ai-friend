@@ -30,3 +30,15 @@ Pending acceptance and entirely unobserved spatial scans have a null key. Hosts
 must scope key sets by assignment/realm, retain original receipts, and separately
 judge task progress: a distinct key never proves a goal completed. Opaque formats
 retain their content instead of guessing which domain fields to remove.
+
+### Exact inventory slots
+
+On the Mineflayer backend, `mc_bag {detail:"slots"}` returns the current self
+player-window slots 9–44 and per-stack data in both text and `data`, with protocol
+`agent-mc/inventory-slots/v1`. Optional `item` filters by material ID, translated
+material name or exact custom name. Equipment and another open container are not
+included. Window slots 36–44 are the hotbar; server-specific slot conversions
+belong to the relevant adapter. Unsynchronized or unavailable inventory does not
+become an empty slot table. Reads do not enqueue tasks, organize inventory, or
+change hand ownership. Default inventory summaries remain unchanged. Slot
+numbers are observations, not durable item identities; reread after mutations.
