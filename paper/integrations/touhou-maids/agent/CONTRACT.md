@@ -1,6 +1,6 @@
-# 女仆操作协议（0.1.15-inventory-receipts 候选，正式仍0.1.14）
+# 女仆操作协议0.1.15-inventory-receipts（服务端已部署，原客户端采用待验）
 
-**0.1.15 库存候选**：`slotCount` 是底层总槽数；保留字段 `availableSlots` 表示已解锁容量，绝不是空槽数。按 `indexBase:0`、`usableSlotIndexes`、`freeSlotIndexes`、`lockedSlotIndexes` 和 `freeSlotCount` 判断是否可用。默认未装背包通常只有0–5可用，6–35锁定；`slots` 仅列真实非空物品，不包含菜单装饰。锁定槽返回 `maid_slot_unavailable` 和当前合法范围。
+**0.1.15 已部署**：`slotCount` 是底层总槽数；保留字段 `availableSlots` 表示已解锁容量，绝不是空槽数。按 `indexBase:0`、`usableSlotIndexes`、`freeSlotIndexes`、`lockedSlotIndexes` 和 `freeSlotCount` 判断是否可用。默认未装背包通常只有0–5可用，6–35锁定；`slots` 仅列真实非空物品，不包含菜单装饰。锁定槽返回 `maid_slot_unavailable` 和当前合法范围。
 
 经主人身份核验后，`transfer/equip` 的加载、距离和原生物品预检失败会持久保存 `status:rejected`、`observation.effectsApplied:false`、错误和指引。首次写入及同参数重放的外层 `ok:false`；查询原回执的 `ok:true` 只表示查询成功，仍须读取 `data.status`。重复相同 ID 返回原拒绝；改变参数复用 ID 返回 `request_conflict`。只有明确 `rejected` 才可在重新观察、纠正参数后以新ID发起新的操作。`unknown` 或 `receipt_missing` 仍是不确定结果，不允许换ID重投；旧版缺失回执不会自动补写。校验后的执行异常不会被错误标为拒绝。
 

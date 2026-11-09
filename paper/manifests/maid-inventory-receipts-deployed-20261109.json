@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "state": "deployed-with-open-real-client-acceptance",
+  "release": "maid-inventory-release-20261109-r1",
+  "deployedAt": "2026-11-09T10:04:51.9130345+08:00",
+  "sourceCommit": "ac5a38429a0fcacc7e636af37ce28bb76e60e631",
+  "sourceTree": "bd1401dc33ebb380482754a352ba12eb646a70d7",
+  "mergedCommit": "10f571734d5b571dc3ae6fa599fae64e74a4145a",
+  "pullRequest": 136,
+  "ci": {
+    "run": 42546286742,
+    "jobsPassed": 6
+  },
+  "versions": {
+    "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
+    "AgentFriend": "0.4.47.63-inventory-tidy-rpg"
+  },
+  "artifact": {
+    "path": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+    "sha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+    "baselineSha256": "fbf629147c0d089f27a27f97d7ad3b2dc71d2a59fde2ca55ec00afb6c837c628",
+    "unrelatedArchiveEntriesPreserved": 63
+  },
+  "verification": {
+    "nativeCandidate": 19,
+    "nativeRestart": 4,
+    "existingRules": 90,
+    "formalStartupChecks": 13,
+    "characterFilesPreservedDuringInstall": 4954,
+    "credentialsAfterProofSha256": "81d72a6a48514588bf0c830fffa29cc64edf3320ffb04fdb2f6cd24ba1ce99b3",
+    "goddessRestorationProofSha256": "6a8bf58489aa0853097f3cbe2fb866014b1c5ffed88b0893d79e3207e4f08ac8"
+  },
+  "originalCompanionReturn": {
+    "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+    "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "operationId": "owner-return-follow-20261109",
+    "newEntityCreated": false,
+    "resurrected": false,
+    "inventoryPreserved": true,
+    "distance": 1.4142135623730951,
+    "appearance": {
+      "type": "ysm",
+      "modelId": "大肥鱼_1.1.ysm",
+      "texture": "white",
+      "fallbackModelId": "touhou_little_maid:hakurei_reimu"
+    },
+    "followStatus": "applied",
+    "movingOwnerFollowVerified": false
+  },
+  "openAcceptance": [
+    "Original client must load its repaired callbacks and demonstrate adoption; candidate code alone is insufficient.",
+    "Owner-moving follow and real human audio remain separate acceptance.",
+    "08:56 production respawn-position incident remains open; direct/Bukkit isolated respawns passed without reproducing it."
+  ],
+  "rollback": "normal stop; restore bridge code only; retain all current world, owner, items, tombstones, lifecycle, brain/model and request receipts",
+  "otherCandidatesIncluded": false,
+  "maintenanceEntryConsumed": true
+}

@@ -1,12 +1,12 @@
 {
   "inventoryScope": "historical_batch_snapshot_20261106_not_current_runtime",
-  "currentComponentEvidence": "paper/manifests/inventory-tidy-deployed-20261109.json",
+  "currentComponentEvidence": "paper/manifests/maid-inventory-receipts-deployed-20261109.json",
   "acceptanceDocument": "paper/docs/ACCEPTANCE_EVIDENCE_20261108.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-with-open-client-acceptance",
-  "latestRelease": "inventory-stash-release-20261109-r1",
-  "verifiedAt": "2026-11-09T02:33:41.5566634+08:00",
-  "releaseDocument": "paper/docs/INVENTORY_TIDY_20261109.md",
+  "latestRelease": "maid-inventory-release-20261109-r1",
+  "verifiedAt": "2026-11-09T10:04:51.9130345+08:00",
+  "releaseDocument": "paper/docs/MAID_INVENTORY_RECEIPTS_20261109.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -24,7 +24,15 @@
     "isolatedJavaDirectRespawnTrialsPassed": 2,
     "isolatedVelocityRespawnTrialsPassed": 1,
     "productionPlayerRespawnRetested": false,
-    "rollbackBaselineSha256": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4"
+    "rollbackBaselineSha256": "4541fcdb7e6b7eb37a4a353bc8c4523d8ccfad7fb6ee682dbcfb4b4ad9ff32e4",
+    "latestIncident": {
+      "at": "2026-11-09T08:56:09+08:00",
+      "player": "ag_CorMy",
+      "log": "Attempt to teleport removed player ag_CorMy restricted",
+      "productionIncidentResolved": false,
+      "isolatedDirectAndBukkitTrialsPassed": 2,
+      "kernelChangedThisRelease": false
+    }
   },
   "privateChatDefaultPolicy": {
     "state": "deployed-and-verified",
@@ -1602,6 +1610,21 @@
       "version": "0.4.47.63-inventory-tidy-rpg",
       "sha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
       "evidence": "paper/manifests/inventory-tidy-deployed-20261109.json"
+    }
+  },
+  "componentEvidenceByName": {
+    "QiandengjiMaidBridge": "paper/manifests/maid-inventory-receipts-deployed-20261109.json",
+    "AgentFriend": "paper/manifests/inventory-tidy-deployed-20261109.json"
+  },
+  "latestVerifiedComponents": {
+    "QiandengjiMaidBridge": {
+      "version": "0.1.15-inventory-receipts",
+      "artifactSha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+      "manifest": "paper/manifests/maid-inventory-receipts-deployed-20261109.json"
+    },
+    "AgentFriend": {
+      "version": "0.4.47.63-inventory-tidy-rpg",
+      "manifest": "paper/manifests/inventory-tidy-deployed-20261109.json"
     }
   }
 }
