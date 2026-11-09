@@ -4,6 +4,26 @@ import { createHash, randomUUID } from 'node:crypto';
 
 export const MAP_FILE_LIMIT = 8 * 1024 * 1024;
 export const MAP_FRESH_MS = 20000;
+export const MAP_AVATAR_LIMIT = 512 * 1024;
+export function validateMapAvatar(bytes) {
+  // Operator-only public portraits: bounded static PNG, never SVG/HTML or a URL fetch.
+  if (bytes.length < 45 || bytes.length > MAP_AVATAR_LIMIT || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
+      || bytes.subarray(12, 16).toString() !== 'IHDR' || bytes.readUInt32BE(8) !== 13
+      || ![bytes.readUInt32BE(16), bytes.readUInt32BE(20)].every(n => n >= 8 && n <= 512)
+      || bytes.subarray(-8, -4).toString() !== 'IEND') throw fail(400, 'MAP_AVATAR_STATIC_PNG_8_TO_512_REQUIRED');
+  let offset = 8, data = false;
+  while (offset + 12 <= bytes.length) {
+    const size = bytes.readUInt32BE(offset), type = bytes.subarray(offset + 4, offset + 8).toString();
+    if (size > bytes.length - offset - 12 || type === 'acTL') throw fail(400, 'MAP_AVATAR_STATIC_PNG_8_TO_512_REQUIRED');
+    if (type === 'IDAT') data = true;
+    offset += size + 12;
+    if (type === 'IEND') {
+      if (size || offset !== bytes.length || !data) throw fail(400, 'MAP_AVATAR_STATIC_PNG_8_TO_512_REQUIRED');
+      return bytes;
+    }
+  }
+  throw fail(400, 'MAP_AVATAR_STATIC_PNG_8_TO_512_REQUIRED');
+}
 const fail = (status, reason) => Object.assign(new Error(reason), { status, reason });
 const mapIds = new Set(['overworld', 'nether', 'end']);
 const dimensions = { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end' };
@@ -112,6 +132,15 @@ export class WorldMap {
       authorize(req);
       if (req.method !== 'PUT') throw fail(405, 'METHOD_NOT_ALLOWED');
       if (pathname === '/api/v1/internal/world-map/state') { respond(res, 200, await this.acceptState(await json(req, 131072))); return true; }
+      const avatar = /^\/api\/v1\/internal\/world-map\/avatars\/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/.exec(pathname);
+      if (avatar) {
+        if (req.headers['content-type'] !== 'image/png' || req.headers['content-encoding']) throw fail(415, 'MAP_AVATAR_PNG_REQUIRED');
+        const bytes = validateMapAvatar(await readBody(req, MAP_AVATAR_LIMIT));
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        if (req.headers['x-content-sha256'] !== sha256) throw fail(400, 'MAP_FILE_SHA256');
+        await this.write(`assets/player-portraits/${avatar[1]}.png`, bytes);
+        respond(res, 200, { accepted: true, uuid: avatar[1], sha256, bytes: bytes.length, visibility: 'public' }); return true;
+      }
       const prefix = '/api/v1/internal/world-map/files/';
       if (!pathname.startsWith(prefix)) throw fail(404, 'NOT_FOUND');
       const key = mapFileKey(pathname.slice(prefix.length)), expected = req.headers['x-content-sha256'];
@@ -132,6 +161,14 @@ export class WorldMap {
       })) } : {}); return true;
     }
     const key = mapFileKey(pathname === '/world-map/' ? 'index.html' : pathname.slice('/world-map/'.length));
+    const head = /^maps\/(?:overworld|nether|end)\/assets\/playerheads\/([a-f0-9-]{36})\.png$/.exec(key);
+    if (head) {
+      try {
+        const portrait = await fs.readFile(await this.checkedFile(`assets/player-portraits/${head[1]}.png`));
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': portrait.length, 'Cache-Control': 'no-cache', 'X-Map-Player-Head': 'custom' });
+        res.end(req.method === 'HEAD' ? undefined : portrait); return true;
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
     let bytes, compressed = key.endsWith('.gz');
     try { bytes = await fs.readFile(await this.checkedFile(key)); }
     catch (error) {
