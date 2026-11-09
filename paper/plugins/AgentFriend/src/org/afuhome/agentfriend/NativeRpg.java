@@ -43,7 +43,7 @@ final class NativeRpg {
         out.add("entries",entries);p.sendMessage("MC_RPG "+out);
     }
     static boolean common(String raw){return COMMON.contains(skillId(raw.trim().split("\\s+",2)[0]));}
-    private static SpellGuide.Entry commonGuide(String id){
+    static SpellGuide.Entry commonGuide(String id){
         var e=SpellGuide.find(id);String scaling=switch(id){
             case "starbolt"->"固定基础伤害5；Vortex角色每20级+1，最多+2；不再计旧熟练度。";
             case "frostnova"->"基础伤害2、减速4秒；Vortex角色每20级+1伤害，最多+2；不再计旧熟练度。";

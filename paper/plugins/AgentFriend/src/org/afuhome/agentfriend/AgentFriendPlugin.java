@@ -266,6 +266,77 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(cliRecovery!=null)cliRecovery.reject(player,args,"UNKNOWN_SKILL","该技能ID不在当前Vortex配置中，请核对相近用法");
     }
     NativeRpg nativeRpg(){return nativeRpg;}
+    /** Only typed, server-owned buttons reach here; existing commands keep their own authority. */
+    void executePlayerMenuAction(Player p,AdventureMenuModel.Action action,String payload){
+        switch(action){
+            case CLASS_MENU -> nativeRpg.delegate(p,"profession","menu");
+            case SKILL_MENU -> nativeRpg.delegate(p,"skills","menu");
+            case TALENT_MENU -> {
+                var state=nativeRpg.state(p);
+                String profession=state.has("combat")?state.get("combat").getAsString():"";
+                if(profession.isBlank()||profession.equals("none")){
+                    p.sendMessage("§e天赋随职业开放。请先在职业菜单查看并自行选择；现在只是打开菜单，没有替你选职。");
+                    nativeRpg.delegate(p,"profession","menu");
+                }else playerMenuCommand(p,"vortexrpg:talent");
+            }
+            case QUEST_MENU -> playerMenuCommand(p,"vortexrpg:quest");
+            case TRAINING_MENU -> openDungeonDifficultyMenu(p);
+            case CONQUEST_MENU -> siteDungeons.command(p,new String[]{"dungeon","menu","aincrad_01"});
+            case DUNGEON_MENU -> siteDungeons.command(p,new String[]{"dungeon","menu"});
+            case GUILD_MENU -> openGuildMenu(p);
+            case CONTRACT_MENU -> taskMarket.openMenu(p);
+            case PLACES_MENU -> openPlacesMenu(p);
+            case BACKPACK -> {
+                if(!p.hasPermission("backpack.use")){
+                    p.sendMessage("§e随身大背包权限未开放，本次未打开。可先使用远程个人箱；请服主核对普通玩家的 backpack.use 权限。");
+                    playerAdventureMenus.open(p,AdventureMenuModel.Page.STORAGE,"");
+                }else playerMenuCommand(p,"minepacks:backpack open");
+            }
+            case STASH -> dungeon.openStashPages(p);
+            case TIDY_BAG_CONFIRM -> playerMenuCommand(p,"mycli inventory tidy");
+            case TIDY_STASH_CONFIRM -> playerMenuCommand(p,"mycli inventory tidy stash");
+            case SHOP_MENU -> playerMenuCommand(p,"mycli trade shop menu");
+            case RECYCLE_MENU -> playerMenuCommand(p,"mycli trade recycle menu");
+            case AUCTION_MENU -> playerMenuCommand(p,"mycli trade auction menu");
+            case PARTY_MENU -> {
+                var state=nativeRpg.party(p);
+                if(state.has("inParty")&&state.get("inParty").getAsBoolean())nativeRpg.route(p,new String[]{"guild","party","menu"});
+                else playerAdventureMenus.open(p,AdventureMenuModel.Page.PARTY,"");
+            }
+            case PARTY_APPLY -> {
+                var state=nativeRpg.party(p);
+                boolean available=state.has("available")&&state.get("available").getAsBoolean();
+                boolean inParty=state.has("inParty")&&state.get("inParty").getAsBoolean();
+                boolean invited=state.has("pendingInvite")&&state.get("pendingInvite").isJsonObject();
+                String inviter=invited?state.getAsJsonObject("pendingInvite").get("inviterUuid").getAsString():null;
+                String chosen=AdventureMenuModel.partyAction(payload,available,inParty,inviter);
+                if(chosen!=null)nativeRpg.route(p,new String[]{"guild","party",chosen});
+                else p.sendMessage("§e队伍或邀请状态已变化，本次没有再次创建、接受或拒绝。请核对当前状态。");
+                playerAdventureMenus.open(p,AdventureMenuModel.Page.PARTY,"");
+            }
+            case PLAYERS_MENU -> openMenu(p,"players");
+            case WAYPOINTS_MENU -> waypoints.open(p,"own",1);
+            case PHOTO_MENU -> photoCamera.menu(p);
+            case ARCHIVE_MENU -> archives.command(p,new String[]{"archive","menu"});
+            case SKIN_MENU -> playerMenuCommand(p,"skins");
+            case LEGACY_SHORTCUTS -> openMenu(p,"skills");
+            case ONBOARDING -> {communication.chatPolicy(p,false);agentCoach.guide(p,true);}
+            case COMMON_USE -> {
+                if(!NativeRpg.COMMON.contains(payload))throw new IllegalArgumentException("unknown_common_menu_skill");
+                switch(payload){
+                    case "travel" -> waypoints.open(p,"own",1);
+                    case "team" -> openMenu(p,"players");
+                    case "give" -> openMenu(p,"conjure");
+                    case "prospect" -> openMenu(p,"prospect");
+                    default -> cast(p,payload);
+                }
+            }
+            default -> throw new IllegalArgumentException("not_an_external_menu_action");
+        }
+    }
+    private void playerMenuCommand(Player p,String command){
+        if(!p.performCommand(command))p.sendMessage("§e这个入口暂未就绪，未确认完成。请关闭后右键罗盘返回大厅；将时间和入口名称告知服主，交易或领取不要连续重试。");
+    }
     public boolean nativeRpgSelected(){return nativeRpg!=null&&nativeRpg.selected();}
     /** Main-thread read-only HUD ABI shared by Java Eye and account-free web observation. */
     public String nativeViewerState(Player p){return viewerStatePublisher.snapshot(p);}
@@ -307,6 +378,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private PublicArchives archives;
     PublicArchives archives(){return archives;}
     private InventoryFeedback inventoryFeedback;
+    private PlayerAdventureMenus playerAdventureMenus;
     private ItemAppearances itemAppearances;
     private SoulboundGear soulboundGear;
     private DungeonGearAura dungeonGearAura;
@@ -410,6 +482,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE, "Combat RPG unavailable; original progression retained", failure); }
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
+        playerAdventureMenus = new PlayerAdventureMenus(this);
         agentStatePublisher = new AgentStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         agentStatePublisher.start();
         skillEventPublisher = new SkillEventPublisher(this);
@@ -459,6 +532,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             saveConfig();
         }
         cleanupMobs();
+        if(playerAdventureMenus!=null)playerAdventureMenus.shutdown();
         menus.clear();
         playerMenuTargets.clear();
         trackedPlayers.clear();
@@ -872,7 +946,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
                 player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
                 if (!communication.compact(player)) {
-                    player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！罗盘 → 旅途指南 → 新手入门，按本人实际进度开始冒险。");
+                    player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！右键罗盘打开冒险大厅，选择角色、任务、仓库或交易；潜行右键是技能快捷栏。大厅左下可看本人下一步。");
                     player.sendMessage(ChatColor.AQUA + "Agent：/mycli intro 查看入门，/mycli rules 规则，/mycli progress 本人进度；coach lessons 只读查看，coach enroll 自愿报名。黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
                 }
             }
@@ -1354,7 +1428,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "explain" -> AgentCliCatalog.explain(player, args, 1);
             case "coach" -> agentCoach.command(player, args);
             case "inventory", "背包" -> inventoryFeedback.command(player, args);
-            case "menu", "compassmenu", "罗盘" -> openMenu(player, "skills");
+            case "menu", "compassmenu", "罗盘" -> {
+                if(args.length==1)playerAdventureMenus.open(player);
+                else if(args.length==2&&args[1].equalsIgnoreCase("quick"))openMenu(player,"skills");
+                else player.sendMessage("§e打开冒险大厅：/mycli menu；熟练玩家快捷栏：/mycli menu quick。");
+            }
             case "compass", "指南针" -> giveCompass(player);
             case "focus", "法杖" -> focusCommand(player, args);
             case "imprint", "刻印" -> imprintCommand(player, args);
@@ -2791,7 +2869,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             else cast(player, spell.id());
         } else if (isCompass(event.getItem())) {
             event.setCancelled(true);
-            openMenu(event.getPlayer(), "skills");
+            if(player.isSneaking())openMenu(player,"skills");
+            else playerAdventureMenus.open(player);
         } else if (isStatusBook(event.getItem())) {
             event.setCancelled(true);
             ItemStack updated = statusBook(player);
