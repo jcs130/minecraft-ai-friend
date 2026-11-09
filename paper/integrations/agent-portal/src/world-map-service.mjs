@@ -8,7 +8,7 @@ import { WorldMap } from './world-map.mjs';
 const staticFiles = new Map([['/map.html', 'text/html; charset=utf-8'], ['/world-map.js', 'text/javascript; charset=utf-8'], ['/world-map-model.js', 'text/javascript; charset=utf-8'], ['/world-map.css', 'text/css; charset=utf-8'], ['/site-shell.js', 'text/javascript; charset=utf-8'], ['/site-shell.css', 'text/css; charset=utf-8'], ['/assets/lantern.svg', 'image/svg+xml']]);
 export function createWorldMapService(config) {
   if (!path.isAbsolute(config.dataDir || '') || !path.isAbsolute(config.publicDir || '') || !/^[a-f0-9]{64}$/.test(config.tokenHash || '')) throw Error('WORLD_MAP_SERVICE_CONFIGURATION');
-  const map = new WorldMap({ dataDir: config.dataDir, worldMap: { enabled: true } });
+  const map = new WorldMap({ dataDir: config.dataDir, worldMap: { enabled: true, tileCdn: config.tileCdn } });
   const respond = (res, code, body) => { const bytes = Buffer.from(JSON.stringify(body)); res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': bytes.length }); res.end(bytes); };
   const authorize = req => {
     const match = /^Bearer (srv_[A-Za-z0-9_-]{43})$/.exec(req.headers.authorization || '');

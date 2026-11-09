@@ -1,5 +1,5 @@
-export const dimensionIds = Object.freeze({ 'minecraft:overworld': 'overworld', 'minecraft:the_nether': 'nether', 'minecraft:the_end': 'end' });
-export const worldNames = Object.freeze({ overworld: '主世界', nether: '下界', end: '末地' });
+export const dimensionIds = Object.freeze({ 'minecraft:overworld': 'overworld', 'minecraft:the_nether': 'nether', 'minecraft:the_end': 'end', 'minecraft:aincrad': 'aincrad' });
+export const worldNames = Object.freeze({ overworld: '主世界', nether: '下界', end: '末地', aincrad: '艾恩葛朗特' });
 export function positionText(row) { return `X ${Math.floor(row.x)} · Y ${Math.floor(row.y)} · Z ${Math.floor(row.z)}`; }
 export function visiblePlayers(state, search = '', now = Date.now()) {
   const observed = Date.parse(state?.observedAt || '');

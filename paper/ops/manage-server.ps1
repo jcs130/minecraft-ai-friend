@@ -329,9 +329,10 @@ function RuntimeControllerUuids {
 
 function HumanPlayers {
     $roster=PlayerRoster
-    $evidence=@(NumenBodyUuids)+@(RuntimeControllerUuids)+@(Maintenance-OwnerAgentUuids (Join-Path $opsDir 'maintenance-identities.private.json'))
+    $policy=Maintenance-OwnerIdentityPolicy (Join-Path $opsDir 'maintenance-identities.private.json')
+    $evidence=@(NumenBodyUuids)+@(RuntimeControllerUuids)+@($policy.Allowed)
     # Names are labels only. Unknown UUIDs, including frequent CLI users, block restart.
-    @($roster.Names | Where-Object { $evidence -notcontains $roster.Uuids[$_] })
+    @($roster.Names | Where-Object { $policy.Denied -contains $roster.Uuids[$_] -or $evidence -notcontains $roster.Uuids[$_] })
 }
 
 function Probe {

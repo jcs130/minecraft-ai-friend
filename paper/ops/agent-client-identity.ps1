@@ -1,6 +1,7 @@
 # Maintenance classification only. Never grants login, OP or anti-cheat exemptions.
-function Maintenance-OwnerAgentUuids([string]$path) {
-    if (-not (Test-Path -LiteralPath $path)) { return @() }
+function Maintenance-OwnerIdentityPolicy([string]$path) {
+    $allowed=@();$denied=@()
+    if (-not (Test-Path -LiteralPath $path)) { return [pscustomobject]@{Allowed=$allowed;Denied=$denied} }
     $registry=Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($registry.schema -ne 1 -or @($registry.accounts).Count -gt 128) { throw 'Invalid maintenance identity registry' }
     $seen=@{}
@@ -14,8 +15,13 @@ function Maintenance-OwnerAgentUuids([string]$path) {
         $uuid=$uuid.ToLowerInvariant()
         if($seen.ContainsKey($uuid)){throw 'Duplicate maintenance identity'}
         $seen[$uuid]=$true
-        if($account.reconnectAllowed){$uuid}
+        if($account.reconnectAllowed){$allowed+=,$uuid}else{$denied+=,$uuid}
     }
+    return [pscustomobject]@{Allowed=$allowed;Denied=$denied}
+}
+
+function Maintenance-OwnerAgentUuids([string]$path) {
+    (Maintenance-OwnerIdentityPolicy $path).Allowed
 }
 
 function Maintenance-UuidsFromNbt([string]$reply) {
