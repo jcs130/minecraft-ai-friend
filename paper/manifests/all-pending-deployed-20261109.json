@@ -1,0 +1,450 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed-and-read-only-verified",
+  "observedAt": "2026-11-09T09:17:24.613138+00:00",
+  "scope": "Previously approved game UI/drop balance and pending website, spectator transport, map collector and Android download; no role takeover or historical action replay",
+  "phases": {
+    "codeMerged": true,
+    "candidateValidated": true,
+    "formalDeployed": true,
+    "realPlayerDevicesAccepted": false
+  },
+  "source": {
+    "mainCodeMerge": "bef66646c9a4d75ea493f84b2e0f2732289964c7",
+    "uiPR": 145,
+    "uiHead": "05a544e04ca7a0ccf5da77a126f77e6efb36b7ed",
+    "uiCI": {
+      "runId": 42582306978,
+      "passedJobs": 6
+    },
+    "trainingRewardsPR": 144,
+    "spectatorPRs": [
+      137,
+      138
+    ],
+    "webPlayPRs": [
+      139,
+      141
+    ],
+    "androidPR": 129,
+    "preservedPriorPRs": [
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      140,
+      142,
+      143
+    ]
+  },
+  "game": {
+    "completedAt": "2026-11-09T16:57:27.1076997+08:00",
+    "processId": 19928,
+    "processStartedAt": "2026-11-09T08:54:16.4539588Z",
+    "AgentFriend": {
+      "version": "0.4.47.68-player-ui-rpg",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06"
+    },
+    "otherPluginsAndModsUnchanged": true,
+    "plugins": 57,
+    "mods": 6,
+    "startupChecks": 15,
+    "characterFilesUnchangedDuringInstall": 5473,
+    "authentication": {
+      "originalRows": 79,
+      "currentRows": 79,
+      "originalCredentialsUnchanged": true,
+      "credentialValuesPrinted": false
+    },
+    "originalGoddessJobsRestored": 7,
+    "health": {
+      "observedAt": "2026-11-09T09:09:42.287Z",
+      "tps": "Overworld: 20.000 TPS (18.966 ms/tick)\nThe End: 20.000 TPS (0.250 ms/tick)\nThe Nether: 20.000 TPS (0.359 ms/tick)\nminecraft:aincrad: 20.000 TPS (0.022 ms/tick)\nOverall: 20.000 TPS (25.024 ms/tick)\n",
+      "online": "There are 4 of a max of 40 players online: Goddess, ag_CorMy, ag_xixi, ag_PhotoLens\n",
+      "version": "§aAgentFriend§r version §a0.4.47.68-player-ui-rpg\n\nAgent-friendly /mycli, Goddess skill path, vanilla compass, and village trial arena.\n\nAuthor: §aAfuHome\n\n"
+    },
+    "backupCopies": [
+      {
+        "verifiedColdCopy": true,
+        "root": "E:\\MC\\backups\\scheduled\\20261101-040028",
+        "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+        "originalPlugins": [
+          {
+            "sha256": "2a09d9ac0720872bf9af6617ebb1f9fa42a48fd463e34eea21c5a016416b4938",
+            "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+          }
+        ],
+        "manifestSha256": "4e59df7c69598da44e4c9047789939a2f452942edc5bd1e4b4474115c8b6f496"
+      },
+      {
+        "verifiedColdCopy": true,
+        "root": "F:\\MC-backups\\scheduled\\20261101-040028",
+        "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+        "originalPlugins": [
+          {
+            "sha256": "2a09d9ac0720872bf9af6617ebb1f9fa42a48fd463e34eea21c5a016416b4938",
+            "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+          }
+        ],
+        "manifestSha256": "26921e8b011bedeab1b3f6a5728316f8d6ab36097ad9972e6a411b013c17514c"
+      }
+    ]
+  },
+  "website": {
+    "passed": true,
+    "deployed": true,
+    "portalId": "7658fb90038cc80bfb90cadaaa277c418308b5f42108f84c6e4c218bc989eed0",
+    "portalImage": "sha256:d2c58b1da93e339bc72cb64d73c027b5cd4d9482bb4033e7ed9943974d9f96b7",
+    "version": "0.8.41",
+    "protectedTables": 16,
+    "originalDownloadsPreserved": 13,
+    "androidDownloadEnabled": true,
+    "mapAndAvatarsPreserved": true,
+    "gameRestarted": false,
+    "databaseRollback": false,
+    "configSha256": "9d43e85843f6116d7f5fbcbe563c7692916922812e82db3fa563e521b0c51316",
+    "completedAt": "2026-11-09T08:59:48.441734+00:00"
+  },
+  "spectator": {
+    "deployed": true,
+    "observerRelease": "web-map-rtc-release-20261109-r3",
+    "rendererFilesVerified": 794,
+    "siteFilesVerified": 17,
+    "siteSha256": "2467c11debd0c088af0673a5b657ae860ec22e12f89a7f33f03d3689a2c45b1d",
+    "onlyWorkerConfigKeyChanged": "rendererRoot",
+    "originalAutostartTaskConfirmedByAdministrator": true,
+    "publicChromiumWebRtcAndSseFallback": {
+      "startedAt": "2026-11-09T09:10:23.359Z",
+      "passed": true,
+      "channel": {
+        "id": "a3e602d134e0e0617caab1c9e396ee17",
+        "name": "ag_CorMy"
+      },
+      "rtc": {
+        "marker": "webrtc-v1",
+        "transport": [
+          "{\"transport\":\"webrtc\",\"phase\":\"connected\",\"readOnly\":true}"
+        ],
+        "peers": [
+          "connected"
+        ],
+        "stats": [
+          {
+            "type": "candidate-pair",
+            "state": "succeeded",
+            "bytesReceived": 5286,
+            "bytesSent": 1187,
+            "currentRoundTripTime": 0.038,
+            "nominated": true
+          },
+          {
+            "type": "candidate-pair",
+            "state": "in-progress",
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "nominated": false
+          },
+          {
+            "type": "data-channel",
+            "state": "open",
+            "bytesReceived": 487,
+            "bytesSent": 0,
+            "messagesReceived": 1,
+            "messagesSent": 0
+          }
+        ],
+        "overflow": false
+      },
+      "visualReady": true,
+      "fallback": {
+        "messages": 6,
+        "transport": [
+          "{\"transport\":\"sse\",\"phase\":\"fallback\",\"reason\":\"NATIVE_RTC_UNAVAILABLE\",\"readOnly\":true}"
+        ],
+        "overflow": false
+      },
+      "fallbackVisualReady": true,
+      "errors": [],
+      "finishedAt": "2026-11-09T09:10:49.838Z"
+    },
+    "readOnlySceneVisuallyInspected": true
+  },
+  "webPlay": {
+    "deployed": true,
+    "release": "web-play-rtc-release-20261109-r3",
+    "formalChecks": {
+      "passed": true,
+      "checks": {
+        "versionedAudioLinked": true,
+        "worldPidUnchanged": true,
+        "velocityPidUnchanged": true,
+        "reviewedFilesInstalled": true,
+        "gatewayRejectsUntrustedSource": true,
+        "appRejectsUntrustedSource": true,
+        "public:public/app.js": true,
+        "public:public/play-rtc-client.mjs": true,
+        "public:public/native-rtc-protocol.js": true,
+        "relayCredentialsRequireSession": true,
+        "rtcOfferRequiresSession": true,
+        "resumeRequiresSession": true,
+        "rolesRequireAuthentication": true,
+        "privateHealthProtected": true
+      },
+      "realRoleResumeVerified": false,
+      "realMicrophoneUsed": false,
+      "worldOrVelocityRestarted": false
+    },
+    "realRoleResumeVerified": false
+  },
+  "map": {
+    "deployedImagePreserved": "sha256:b9ac9839ea1a56ab3e62c0a64c078904cb2a79f5cc01654f012f8e3bb581443d",
+    "terrainSnapshotDate": "2026-11-07",
+    "persistentCollectorTaskInstalled": true,
+    "desktopAndMobileLayout": [
+      {
+        "label": "desktop",
+        "state": {
+          "status": "● 实时位置已连接",
+          "players": [
+            "ag_CorMy",
+            "ag_xixi"
+          ],
+          "overflow": false,
+          "follow": "正在跟随 ag_CorMy"
+        },
+        "map": {
+          "map": "overworld",
+          "canvas": true,
+          "maps": [
+            "overworld",
+            "nether",
+            "end"
+          ]
+        },
+        "errors": [],
+        "bad": [],
+        "unknownTileRequests": 188,
+        "worldSwitches": 3
+      },
+      {
+        "label": "mobile",
+        "state": {
+          "status": "● 实时位置已连接",
+          "players": [
+            "ag_CorMy",
+            "ag_xixi"
+          ],
+          "overflow": false,
+          "follow": "正在跟随 ag_CorMy"
+        },
+        "map": {
+          "map": "overworld",
+          "canvas": true,
+          "maps": [
+            "overworld",
+            "nether",
+            "end"
+          ]
+        },
+        "errors": [],
+        "bad": [],
+        "unknownTileRequests": 190,
+        "worldSwitches": 3
+      }
+    ],
+    "unknownTilesAreExpectedAndNotInvented": true
+  },
+  "android": {
+    "download": {
+      "passed": true,
+      "url": "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220/qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack",
+      "sha256": "0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220",
+      "bytes": 52587,
+      "anonymousFullDownloadVerified": true,
+      "androidDeviceVerified": false
+    },
+    "checks": 43,
+    "publicPageChecks": {
+      "passed": true,
+      "checks": [
+        "Android public catalogue enabled with reviewed checksum",
+        "Original SAO download retained",
+        "GET immutable Android download redirect",
+        "HEAD immutable Android download redirect"
+      ],
+      "views": [
+        {
+          "name": "phone",
+          "path": "/android.html",
+          "overflow": false,
+          "title": "安卓手机游玩 · 千灯纪",
+          "hasFCL": true,
+          "hasPreview": true,
+          "links": 2
+        },
+        {
+          "name": "phone",
+          "path": "/downloads.html",
+          "overflow": false,
+          "title": "客户端下载与接入工具 · 千灯纪",
+          "hasFCL": true,
+          "hasPreview": true,
+          "links": 1
+        },
+        {
+          "name": "landscape",
+          "path": "/android.html",
+          "overflow": false,
+          "title": "安卓手机游玩 · 千灯纪",
+          "hasFCL": true,
+          "hasPreview": true,
+          "links": 2
+        },
+        {
+          "name": "landscape",
+          "path": "/downloads.html",
+          "overflow": false,
+          "title": "客户端下载与接入工具 · 千灯纪",
+          "hasFCL": true,
+          "hasPreview": true,
+          "links": 1
+        },
+        {
+          "name": "desktop",
+          "path": "/android.html",
+          "overflow": false,
+          "title": "安卓手机游玩 · 千灯纪",
+          "hasFCL": true,
+          "hasPreview": true,
+          "links": 2
+        },
+        {
+          "name": "desktop",
+          "path": "/downloads.html",
+          "overflow": false,
+          "title": "客户端下载与接入工具 · 千灯纪",
+          "hasFCL": true,
+          "hasPreview": true,
+          "links": 1
+        }
+      ],
+      "errors": []
+    },
+    "androidDeviceVerified": false,
+    "voiceEndToEndVerified": false
+  },
+  "backup": {
+    "website": {
+      "passed": true,
+      "copies": 2,
+      "private": true,
+      "sha256": "b67bd99bf7e6b1b2cb75553f3162c2c61ab8f98051c1b4e33b667491d7e0140d",
+      "bytes": 50827424
+    },
+    "gamePreservedBeforeRefresh": "E/F backups/all-pending-before-refresh-20261109-r1",
+    "businessDataRollbackAllowed": false
+  },
+  "maintenanceIdentity": {
+    "ag_xixi": "owner-confirmed Agent, exact live UUID registered privately",
+    "killer_whaler": "owner-confirmed reconnectable Agent, exact live UUID registered privately",
+    "newPermissionsGranted": false
+  },
+  "cacheCleanup": {
+    "passed": true,
+    "scope": "Unused Docker build cache only; no image, volume, backup or business data deletion",
+    "beforeFreeBytes": 984854528,
+    "afterFreeBytes": 1776427008,
+    "servicesUnchanged": true,
+    "summary": [
+      "Total:\t1.157GB"
+    ]
+  },
+  "artifacts": {
+    "E:/MC/server/plugins/AgentAppearanceNative-0.4.3.jar": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a",
+    "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
+    "E:/MC/server/plugins/AgentVision-0.1.2.jar": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+    "E:/MC/server/plugins/AuraSkills-2.4.0.jar": "de54cbd2e33d65e8b1704751ae4121ed2f5b466ba89c63a1aadf3a3e629d6a40",
+    "E:/MC/server/plugins/BetonQuest-3.2.0.jar": "70a43c05a4a6d627fd0bc9908e07a6551a26a36671360416410f1d96bdd363b0",
+    "E:/MC/server/plugins/Chunky-Bukkit-1.4.40.jar": "2a5477fc80f71012e15ade1ce34dbeb836e17623b28db112492c0f1443c09721",
+    "E:/MC/server/plugins/Citizens-2.0.35-b3592.jar": "35ca802f482ff0844c8cba4c5122a332a91499dbbd5bb07b0805402ae60f64b9",
+    "E:/MC/server/plugins/CommandAPI-12.1.0.jar": "ab48e55fd06264dd239cf015b501936cb50eb6c38d967fbffca6c91a48064049",
+    "E:/MC/server/plugins/ConditionalEvents-4.80.3.jar": "3f9c588d664d604b09113397a6dc04c1b7ad288c2550d8270c96669eb61c7e74",
+    "E:/MC/server/plugins/CoreProtect-CE-24.1.jar": "a2acef7c06ef201355cef07d591a6055dfed358ad768faaaaaf4e276865ecc97",
+    "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar": "a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb",
+    "E:/MC/server/plugins/Denizen-1.3.1-b7074-paper1211.jar": "5ecb7f7fa4141c2f8acb8b8c7cf2c004cd8e8f69fe22b31574431db9484574c6",
+    "E:/MC/server/plugins/EssentialsX-2.22.0.jar": "bda4685105977fca2e209820a9f0ad24275bd103390a03236f38e59bfdac58e6",
+    "E:/MC/server/plugins/EssentialsXChat-2.22.0.jar": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a",
+    "E:/MC/server/plugins/FancyNpcs-2.9.0.jar": "b7c992bdc7c01f9a7dc2943351ba7d37abb3a0c317ba0a52125326352230f57e",
+    "E:/MC/server/plugins/FastAsyncWorldEdit-2.16.1.jar": "a1706c41412a108e3d2fdbd9e9dd0c60904f2ba45414c6edf11c1262812e1838",
+    "E:/MC/server/plugins/floodgate-spigot.jar": "81b7b3c6cb77b387aaea9fec44e1074b76fa299d674dcd51df2f5aba92da69eb",
+    "E:/MC/server/plugins/Geyser-Spigot.jar": "3cd7e6b87a795ff50fa19bd32feadb48cf0085b4df9c344cfa0c43fb980e64fd",
+    "E:/MC/server/plugins/ImageFrame-2026.1.5.0.jar": "65b5c14eb6bd847f1cc0f4985efa95ab43d2f3e2f67dbaec2ecf3ea327fde9b1",
+    "E:/MC/server/plugins/LightAntiCheat-1.2.6-qd1.jar": "9a0903649a841cced3fbcdd31bfe346c670e309d75272d7359a70c11f8ec18ad",
+    "E:/MC/server/plugins/LuckPerms-Bukkit-5.5.71.jar": "49cecb66fa1fd22a133039a490e9c1e5095a238e7cd66eb9d2a16fe6c897550d",
+    "E:/MC/server/plugins/MagicSpells-4.0-Beta-15.jar": "4da599c6998f965707a5f0fbfc14f0a9a185bb09015b0dd940a030e3c8bad1a6",
+    "E:/MC/server/plugins/Minepacks-2.5.9-Release.jar": "185dd911d7dd6e0f93b56d35924e8b61c6452e29b79c2a73c31e48f83c777a04",
+    "E:/MC/server/plugins/Multiverse-Core-5.8.1.jar": "bc3f34e2d747fdf024f44868747bb016b08fa11d98ccb4ffcac958f083151a83",
+    "E:/MC/server/plugins/MythicMobs-5.9.5.jar": "faeeb0e9e896f052c872380f6ce89d977df05e1ed4cf08ada2a36e942f9e5e84",
+    "E:/MC/server/plugins/NamedVillagers-1.2.1.jar": "83ec1b56d4048b42644dca11ebe08bd3b07d33b07f17fd3c3453a726d75fb574",
+    "E:/MC/server/plugins/NPCSpeak-1.0.jar": "0bfb634a96e1791822b76bb367efb881f21bdd767385d5d1ff9524d11837cd1e",
+    "E:/MC/server/plugins/numen-paper-1.21.1-0.1.4.jar": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380",
+    "E:/MC/server/plugins/NumenBedrock-0.1.0.jar": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
+    "E:/MC/server/plugins/numen_api-paper-1.21.1-0.1.4.jar": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c",
+    "E:/MC/server/plugins/numen_hosted-paper-1.21.1-0.1.4-7929ab0c5545.jar": "d673401c4b8b2ca853c02a6b2d69aaa2fcc5bc8900f7484b7caa8d575251ad26",
+    "E:/MC/server/plugins/numen_hosted_api-paper-1.21.1-0.1.4-ac28020de58f.jar": "d6a466b789f2ca61e05c6c1ae4742933bd0456078c6122b1f74f46d13de0ee3a",
+    "E:/MC/server/plugins/OlEncounters-1.7.0.jar": "c7e00ec3dd58b9dd0dc789b16b7c638e794220f4627f36f0f53d6dcd66eca4fc",
+    "E:/MC/server/plugins/ProtocolLib-5.3.0.jar": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d",
+    "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+    "E:/MC/server/plugins/qiandengji-paper-world-layout-0.1.0.jar": "6682fa15e0e7175de62b9c82a50e77c3661137789517a4f3166d6c35604e0bea",
+    "E:/MC/server/plugins/QiandengjiAntiCheat-0.1.0.jar": "f8e540eed3bad1434e28ba736739725c4840dca92672b641676c675740d3a378",
+    "E:/MC/server/plugins/QiandengjiFaweHybrid-0.1.0.jar": "98903723c2e63cbd32133a32bef7a74fe0774a6db1cc023bf7a56139f8fe6d15",
+    "E:/MC/server/plugins/QiandengjiMcbot-0.1.0.jar": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59",
+    "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar": "5c3709b22f1b089ad9f99868f9cc00ff6c2675a563405c5117b651fc71e60b5b",
+    "E:/MC/server/plugins/QiandengVoice-0.1.0.jar": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed",
+    "E:/MC/server/plugins/Sentinel-2.9.1.jar": "3967a2f2f890a0990066927604a7463610bad4f863132b924a14a5f948cb9799",
+    "E:/MC/server/plugins/Shopkeepers-2.23.3.jar": "8228d8c11d98c8b74a80b0336f5b65735cab249aa56a2a1218edcee6c61c725c",
+    "E:/MC/server/plugins/SkinsRestorer.jar": "a85b4a370f988741c9a38f4d0498262edacbf3220314790ac1c127461996359c",
+    "E:/MC/server/plugins/spark-1.10.187-bukkit.jar": "7e1b1c38f131f04da32c86cee6af519fd8ec40c5af54dcbab77921e82bded852",
+    "E:/MC/server/plugins/spectatorplus-paper-1.2.1.jar": "95faff5336fdd265202e1589f39338f06cd6c4de788eeedd94164ec4cb2c92d2",
+    "E:/MC/server/plugins/TAB-6.2.1-Paper-1.20.5-1.21.4.jar": "bdf8ea4e6b194197a02fdd7abee9845e1000183bc4df9c0e5280505fc1f51c24",
+    "E:/MC/server/plugins/Vault-1.7.3.jar": "a6b5ed97f43a5cf5bbaf00a7c8cd23c5afc9bd003f849875af8b36e6cf77d01d",
+    "E:/MC/server/plugins/ViaBackwards.jar": "9a148a80ea22074f4bd1626cdbe254a4cd998bf44e7ceaff4e285a1b6b35da42",
+    "E:/MC/server/plugins/ViaVersion.jar": "24e4876fefe73e08a4c87cd6c457ee0916e62dd69656631caf41e26f909d504b",
+    "E:/MC/server/plugins/VillagerLife-1.0.0-qiandengji1.jar": "ae83e95991faa3bbf11408c67c2639e5c431e686d741f64688e668eb670261ab",
+    "E:/MC/server/plugins/voicechat-bukkit-2.6.27.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
+    "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar": "1fb78b4c3da03acbd50875aae2b7aea437d01337a4c251568ff64e19da197618",
+    "E:/MC/server/plugins/WorldEvents-1.8.30.jar": "381f1a5bc64d0754a428bf2a814d492233dc73537c09f8dc3e23c54e0c1f0601",
+    "E:/MC/server/plugins/worldguard-bukkit-7.0.12-dist.jar": "48b136938b3cd4816a95887847ff28e56a06fb110103344bb574739c35f9e86c",
+    "E:/MC/server/plugins/WorldObserver-0.1.3.jar": "521c83c4ef3e7ebc47a333cfe1841b6b223443b9b9c49b587359ac5c856cfb9a",
+    "E:/MC/server/plugins/WorldVariety-0.1.0.jar": "0461df00648460bb17e6f591dd410fddfc0d808d0fd863d14be66554f645d126",
+    "E:/MC/server/mods/proxy-compatible-forge-1.3.1.jar": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271",
+    "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar": "6799afd2640036205fea94a46ad92048791f07c8e747821d361cbd4eae1a98da",
+    "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar": "4d3ec5818f64bcbf9349e69d1a2cf8e9a7a323cc7d3c04b2ee14604bacc95e93",
+    "E:/MC/server/mods/qiandengji-native-platform-0.1.4.jar": "9e9c2bd6ecfb73e7a48a5bffef74ed33dd8b3d75ec7cc449dec19297262fb965",
+    "E:/MC/server/mods/touhoulittlemaid-1.5.3-qiandengji.jar": "f4bb0ec576f7b2226430808efa177521be48d36dd3176080ee0f76bfbaa4e23b",
+    "E:/MC/server/mods/ysm-2.6.5-neoforge+mc1.21.1-release.jar": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+  },
+  "privateEvidenceRoots": [
+    "E:\\MC\\ops\\repairs\\all-pending-game-release-20261109-r1",
+    "E:\\MC\\ops\\repairs\\all-pending-web-release-20261109-r1",
+    "E:\\MC\\ops\\repairs\\all-pending-release-audit-20261109-r1",
+    "F:/MC-backups/repairs corresponding mirrors"
+  ],
+  "remainingAcceptance": [
+    "Physical Android/FCL microphone and listening; actual Bedrock/Xbox UI",
+    "Original Agent personality adoption, real client/hosting handoff and BYOK device evidence",
+    "Authenticated web-play real-body control and physical WAN input; no real role was taken over",
+    "Earlier removed-player respawn observation requires its separate reproduction; not claimed fixed by this release"
+  ],
+  "rollback": {
+    "game": "Swap exact AgentFriend code only during a fresh approved normal maintenance; preserve latest world/player/escrow/checkpoint/reward/life/action/auth records",
+    "website": "Restore previous container code and the exact added-download configuration difference; retain current SQLite and works",
+    "webPlay": "Restore only the 15 scoped code/config files when no web role is active; never replace account/runtime ledgers",
+    "spectator": "Restore only rendererRoot using guarded before/after hashes; preserve publisher identity and current map sync ledger",
+    "map": "Keep latest map/world data; disable only newly created collector task if necessary; do not reimport or remove inhabited regions",
+    "consumedEntries": "Old canceled/superseded entries and completed r1/r3 entries must not be replayed"
+  }
+}
