@@ -1444,19 +1444,19 @@ final class DungeonManager implements Listener {
         for (int n = 1; n <= maxFloor(); n++)
             if (plugin.getConfig().getLong(DAILY_CLAIMS + id + "." + n, Long.MIN_VALUE) == gameDay)
                 claimedFloors.add(Integer.toString(n));
-        player.sendMessage(ChatColor.GOLD + "前三层给材料、补给和弓；第四、五、八、九层集齐铁甲；第六、十层轮换功能装备，深层首通还有斧与弓。"
-                + "下一件：" + nextName + "。"
+        player.sendMessage(ChatColor.GOLD + "村庄练习塔：前三层补给；铁甲与功能装备分层首通取得。普通难度重复挑战只给补给与材料，保底装备每层仅首通一次。"
+                + "轮换装备预览：" + nextName + "（不代表本次必得）。"
                 + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
                 + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
         player.sendMessage(ChatColor.AQUA + "新装备的附魔种类、数量和等级在结算时随机；预览只说明装备身份，层数/难度/稀有度影响品质。已有物品与已结算奖励保持原组件。");
-        player.sendMessage(ChatColor.AQUA + "随机奖池：常见材料/画、少见探索道具/珍珠、稀有附魔书/技能书、传奇强化技能书/光环装备。"
+        player.sendMessage(ChatColor.AQUA + "普通：附魔最多I–II级、1–2条，无修补/光环/传奇；冒险深层才可能有光环；末日12层后才可能有传奇。正式楼层攻略请查 /mycli dungeon info aincrad_01。"
                 + "研习书是真实物品，手持使用；Agent 用 /mycli skillbook list|use。");
         player.sendMessage("MC_DUNGEON_SET schemaVersion=2 equipmentIndex=" + index
                 + " next=minecraft:" + next.item().getType().name().toLowerCase(Locale.ROOT)
                 + " nextName=" + DungeonLoot.equipmentId(index)
                 + " bossClears=" + clears
                 + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
-                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1 enchantments=random_on_reward enchantmentSchemaVersion=1");
+                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1 enchantments=random_on_reward enchantmentSchemaVersion=1 rewardProfile=village_training_v2 normalRepeatEquipment=false normalLegendary=false");
     }
 
     private void layout(Player player) {
@@ -1572,7 +1572,8 @@ final class DungeonManager implements Listener {
             }
             int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
             boolean oneTimeDeepWeapon = floor == 11 || floor == 13;
-            DungeonLoot.Bonus milestone = (oneTimeDeepWeapon ? firstClear : scale.gap() == 0 || firstClear)
+            DungeonLoot.Bonus milestone = TrialRewardPolicy.milestone(difficulty.ordinal(),firstClear)
+                    && (oneTimeDeepWeapon ? firstClear : scale.gap() == 0 || firstClear)
                     ? DungeonLoot.milestone(floor, setIndex,difficulty.ordinal()) : null;
             if (milestone != null) {
                 List<ItemStack> guaranteed = bonusItems(id);

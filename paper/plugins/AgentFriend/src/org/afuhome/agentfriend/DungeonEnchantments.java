@@ -53,26 +53,27 @@ final class DungeonEnchantments {
     static Map<String,Integer> roll(String material,int floor,int difficulty,String tier,Set<String> required,RandomGenerator random){
         if(floor<1||floor>15||difficulty<0||difficulty>2)throw new IllegalArgumentException("loot_context_out_of_range");
         int grade=grade(tier),depth=Math.min(2,(floor-1)/5),power=depth+difficulty+grade;
-        var candidates=new ArrayList<>(pool(material).stream().filter(r->floor>=r.minimumFloor&&grade>=r.minimumGrade).toList());
+        var candidates=new ArrayList<>(pool(material).stream().filter(r->floor>=r.minimumFloor&&grade>=r.minimumGrade&&(!r.id.equals("mending")||difficulty>0)).toList());
         if(candidates.isEmpty())return Map.of();
         int count=grade==2?2:1;
         if(random.nextInt(100)<35+grade*15+depth*5+difficulty*5)count++;
         if(grade>0&&random.nextInt(100)<10+grade*10+depth*5+difficulty*5)count++;
-        count=Math.min(4,Math.max(count,required.size()));
+        count=Math.min(TrialRewardPolicy.affixCount(floor,difficulty),Math.max(count,required.size()));
+        if(required.size()>count)throw new IllegalArgumentException("required_enchantments_exceed_training_budget");
         var chosen=new LinkedHashMap<String,Integer>();
         for(String id:new TreeSet<>(required)){
             Rule r=candidates.stream().filter(x->x.id.equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("invalid_required_enchantment:"+id));
-            add(chosen,r,power,grade,depth,difficulty,random);candidates.removeIf(x->conflicts(id,x.id));
+            add(chosen,r,power,grade,depth,difficulty,TrialRewardPolicy.affixLevel(floor,difficulty),random);candidates.removeIf(x->conflicts(id,x.id));
         }
         while(chosen.size()<count&&!candidates.isEmpty()){
             int draw=random.nextInt(candidates.stream().mapToInt(Rule::weight).sum());Rule selected=null;
             for(var r:candidates){draw-=r.weight;if(draw<0){selected=r;break;}}
-            Rule r=Objects.requireNonNull(selected);add(chosen,r,power,grade,depth,difficulty,random);candidates.removeIf(x->conflicts(r.id,x.id));
+            Rule r=Objects.requireNonNull(selected);add(chosen,r,power,grade,depth,difficulty,TrialRewardPolicy.affixLevel(floor,difficulty),random);candidates.removeIf(x->conflicts(r.id,x.id));
         }
         return Collections.unmodifiableMap(chosen);
     }
-    private static void add(Map<String,Integer> chosen,Rule r,int power,int grade,int depth,int difficulty,RandomGenerator random){
-        int cap=Math.min(r.max,2+(power>=2?1:0)+(power>=4?1:0)+(power>=6?1:0));
+    private static void add(Map<String,Integer> chosen,Rule r,int power,int grade,int depth,int difficulty,int trainingCap,RandomGenerator random){
+        int cap=Math.min(trainingCap,Math.min(r.max,2+(power>=2?1:0)+(power>=4?1:0)+(power>=6?1:0)));
         int level=1+random.nextInt(cap);
         if(random.nextInt(100)<grade*15+depth*8+difficulty*8)level=Math.max(level,1+random.nextInt(cap));
         chosen.put(r.id,level);

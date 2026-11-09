@@ -29,6 +29,8 @@ jobs:
         run: python paper/ops/test-activity-bars.py
       - name: Check protected navigation-only dungeon entrances
         run: python paper/ops/test-dungeon-entrance.py
+      - name: Check training reward progression and ordinary-difficulty caps
+        run: python paper/ops/test-trial-reward-balance.py
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
