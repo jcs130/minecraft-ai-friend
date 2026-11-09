@@ -13,7 +13,7 @@ combat-quiet-seconds: 30
 complete-reminder-seconds: 3600
 pause-seconds: 1800
 welcome:
-- 千灯纪：破晓攻略MMORPG。先 /mycli intro；职业、技能、任务、副本按步骤查询，旧版职业与技能已归档。
+- 欢迎来到千灯纪。右键罗盘或点击“打开冒险大厅”，查看角色、技能、委托、副本、商城与个人箱；点击“我的入门路线”查看自己的下一步。
 steps:
   register:
     title: 先登记为冒险者

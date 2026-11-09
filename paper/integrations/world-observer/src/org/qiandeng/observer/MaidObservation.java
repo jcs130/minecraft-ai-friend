@@ -27,7 +27,13 @@ final class MaidObservation {
         try {
             String model = (String) read(entity, "getModelId");
             if (model.length() > 256 || !model.matches("[a-z0-9_.-]+:[a-z0-9_./-]+") || model.contains("..")) return null;
-            row.put("modelId", model); row.put("ysm", read(entity, "isYsmModel"));
+            row.put("modelId", model); boolean ysm = Boolean.TRUE.equals(read(entity, "isYsmModel")); row.put("ysm", ysm);
+            if (ysm) {
+                String ysmModel = (String) read(entity, "getYsmModelId"), texture = (String) read(entity, "getYsmModelTexture");
+                // Visible appearance selection only, never owner/history/inventory.
+                if (!visualChoice(ysmModel) || !visualChoice(texture)) throw new ReflectiveOperationException("Invalid YSM selection");
+                row.put("ysmModelId", ysmModel); row.put("ysmTexture", texture);
+            }
             row.put("sitting", read(entity, "isMaidInSittingPose")); row.put("begging", read(entity, "isBegging"));
             row.put("armRise", read(entity, "isSwingingArms"));
             row.put("task", read(read(entity, "getTask"), "getUid").toString());
@@ -43,6 +49,7 @@ final class MaidObservation {
             row.put("hasBoots", !living.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.FEET).isEmpty());
             row.put("attackAnim", living.getAttackAnim(1)); row.put("swingTime", living.swingTime);
             row.put("hurtTime", living.hurtTime); row.put("health", living.getHealth());
+            row.put("maxHealth", living.getMaxHealth()); row.put("onGround", entity.onGround()); row.put("sprinting", entity.isSprinting());
             row.put("bodyYaw", living.yBodyRot); row.put("headYaw", living.yHeadRot);
             row.put("pitch", entity.getXRot()); row.put("ageTicks", entity.tickCount);
             row.put("available", true);
@@ -50,5 +57,9 @@ final class MaidObservation {
             row.put("available", false); row.put("reason", "TLM_NATIVE_STATE_UNAVAILABLE");
         }
         return row;
+    }
+    private static boolean visualChoice(String value) {
+        return value != null && !value.isEmpty() && value.length() <= 96 && !value.startsWith("/") && !value.contains("..") &&
+            value.matches("[-\\p{L}\\p{N}_./]+");
     }
 }

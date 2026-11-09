@@ -3,7 +3,7 @@ import { GameData, UUID } from './game-data.mjs';
 import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
 import { validatePhotos } from './gallery.mjs';
 import { mergeReviewedRoles, prepareReviewedRoles } from './ownership-review.mjs';
-import { publicDialogueText } from './public-dialogue.mjs';
+import { publicDialogueSource } from './public-dialogue.mjs';
 import { isPhotoObserver, publicPlayerCountPolicy, publicPlayerSummary } from './service-observers.mjs';
 
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
@@ -91,7 +91,7 @@ export class CloudSource {
     });
     const events = input.events.map(row => {
       if (!/^[a-f0-9]{64}$/.test(row.id || '') || !['join', 'leave', 'quest', 'advancement', 'chat'].includes(row.kind) || !names.has(String(row.playerName).toLowerCase()) || typeof row.title !== 'string' || row.title.length > 400 || typeof row.body !== 'string' || row.body.length > 2000 || !Number.isFinite(Date.parse(row.occurredAt)) || !['day', 'second'].includes(row.timePrecision)) throw fail(400, 'SNAPSHOT_EVENT', '公开事件格式不受支持');
-      if(row.kind==='chat'&&(row.source!=='minecraft.public-chat'||!publicDialogueText(row.body)||!publicDialogueText(row.title)))throw fail(400,'SNAPSHOT_EVENT','对话来源或内容不符合公开规则');
+      if(row.kind==='chat'&&!publicDialogueSource(row))throw fail(400,'SNAPSHOT_EVENT','对话来源或内容不符合公开规则');
       return pick(row, eventFields);
     });
     const value = { schemaVersion: 1, sequence: input.sequence, observedAt: input.observedAt, roster, states, players, events, photos: validatePhotos(input.photos), summary: pick(input.summary, summaryFields) };

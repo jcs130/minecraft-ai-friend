@@ -57,6 +57,16 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
     void conversationReplied(Player actor,EntityMaid maid){if(nearbyChat!=null)nearbyChat.replied(actor,maid);}
     void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
+    private final Map<String,Boolean> publishedDialogue=new LinkedHashMap<>();
+    void publishPublicSpeech(EntityMaid maid,String operation,String text,int delivered){
+        if(!Bukkit.isPrimaryThread()||maid==null||!maid.isAlive()||maid.isRemoved())return;
+        UUID owner=owner(maid);if(owner==null)return;
+        String line=PublicMaidDialogue.line(maid.getUUID(),Bukkit.getOfflinePlayer(owner).getName(),maid.getName().getString(),maid.level().dimension().location().toString(),operation,text,delivered);
+        if(line==null)return;
+        String key=maid.getUUID()+":"+operation;if(publishedDialogue.putIfAbsent(key,true)!=null)return;
+        while(publishedDialogue.size()>256)publishedDialogue.remove(publishedDialogue.keySet().iterator().next());
+        getLogger().info(line);
+    }
     private final Map<String,Long> humanDialogue=new LinkedHashMap<>();
     private void humanConversation(Player actor,String request){
         humanDialogue.entrySet().removeIf(e->e.getValue()<System.nanoTime());

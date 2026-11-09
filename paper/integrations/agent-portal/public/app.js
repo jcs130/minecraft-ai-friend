@@ -271,7 +271,10 @@ function dialogueRows(events, focusedPlayer = '') {
   if(!rows.length)return '<p class="chat-empty">这里会留下居民们的对话。现在还没有新的发言。</p>';
   return `<div class="world-chat" role="list" aria-label="游戏对话">${rows.map(row=>{
     const name=row.playerName||row.title,focused=!!focusedPlayer&&name.toLowerCase()===focusedPlayer.toLowerCase();
-    return `<article role="listitem" class="chat-message${focused?' chat-focused':''}" data-chat-id="${e(row.id)}">${avatar(name)}<div class="chat-content"><div class="chat-meta"><a href="#events?player=${encodeURIComponent(name)}" title="${e(name)}">${e(characterName(name))}</a><time datetime="${e(row.occurredAt)}">${date(row.occurredAt,true)}</time></div><p class="chat-bubble">${e(row.body||'')}</p></div></article>`;
+    const maid=row.source==='minecraft.maid-nearby-chat',speaker=maid?e((row.title||'女仆').replace(/ 说$/,'')):e(characterName(name));
+    const portrait=maid?`<span class="avatar" aria-label="女仆伙伴">${icons.users}</span>`:avatar(name);
+    const heading=maid?`<span title="${e('伙伴所属：'+name)}">${speaker}</span>`:`<a href="#events?player=${encodeURIComponent(name)}" title="${e(name)}">${speaker}</a>`;
+    return `<article role="listitem" class="chat-message${focused?' chat-focused':''}" data-chat-id="${e(row.id)}">${portrait}<div class="chat-content"><div class="chat-meta">${heading}<time datetime="${e(row.occurredAt)}">${date(row.occurredAt,true)}</time></div><p class="chat-bubble">${e(row.body||'')}</p></div></article>`;
   }).join('')}</div>`;
 }
 function eventsPage() {

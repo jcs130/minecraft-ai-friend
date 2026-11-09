@@ -44,6 +44,19 @@ public final class MaidObservationFixture extends JavaPlugin {
                 e.getClass().getMethod("setModelId",String.class).invoke(e,models[i]);((Mob)e).setNoAi(true);
                 e.moveTo((i-1)*2.5,80,0,0,0);e.setCustomName(net.minecraft.network.chat.Component.literal("原模型联测 "+i));e.setCustomNameVisible(true);level.addFreshEntity(e);maids.add(e);
             }
+        } else if(action.equals("ysm")){
+            if(maids.isEmpty())throw new IllegalStateException("scene first");Entity e=maids.getFirst();
+            e.getClass().getMethod("setOwnerUUID",java.util.UUID.class).invoke(e,p.getUniqueId());
+            e.getClass().getMethod("setIsYsmModel",boolean.class).invoke(e,true);
+            e.getClass().getMethod("setYsmModel",String.class,String.class,net.minecraft.network.chat.Component.class)
+                .invoke(e,"大肥鱼_1.1.ysm","white",net.minecraft.network.chat.Component.literal("原资源联测"));
+        } else if(action.equals("public-speech")){
+            if(maids.isEmpty())throw new IllegalStateException("scene first");Entity e=maids.getFirst();
+            var plugin=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(plugin==null)throw new IllegalStateException("bridge required");
+            var publish=Arrays.stream(plugin.getClass().getDeclaredMethods()).filter(m->m.getName().equals("publishPublicSpeech")).findFirst().orElseThrow();publish.setAccessible(true);
+            p.sendMessage("[附近·女仆] 原资源联测：一起去公会吧。");
+            publish.invoke(plugin,e,"qa-original-public-speech","一起去公会吧。",1);
+            publish.invoke(plugin,e,"qa-original-public-speech","一起去公会吧。",1);
         } else if(action.equals("sit")||action.equals("stand")){
             for(Entity e:maids)e.getClass().getMethod("setInSittingPose",boolean.class).invoke(e,action.equals("sit"));
         } else if(action.equals("move")){

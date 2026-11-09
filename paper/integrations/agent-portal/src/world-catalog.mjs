@@ -115,7 +115,7 @@ export class WorldCatalog {
         const next=buffer.indexOf(10,offset);if(next<0)break;
         const line=buffer.subarray(offset,next).toString('utf8').replace(/\r$/,'');
         const event=line.length<=8192?(parsePublicLog(line,date)||parsePublicDialogue(line,date)):null;
-        if(event&&allowed.has(event.playerName.toLowerCase()))this.insert(event,event.kind==='chat'?`chat:${identity}:${start+offset}`:`${date}:${line}`);
+        if(event&&allowed.has(event.playerName.toLowerCase()))this.insert(event,event.eventIdentity??(event.kind==='chat'?`chat:${identity}:${start+offset}`:`${date}:${line}`));
         offset=next+1;
       }
       this.store.db.prepare('INSERT OR REPLACE INTO public_log_cursor VALUES(?,?,?)').run(file,identity,start+end+1);

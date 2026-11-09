@@ -41,6 +41,16 @@ async function fixture(t, live = {}) {
   return { get portal() { return portal; }, put, get, admin, client, origin, restart: async () => { await portal.close(); await start(); } };
 }
 
+test('cloud accepts delivered public maid events without impersonating the owner; duplicate snapshots and restart remain idempotent',async t=>{
+ const f=await fixture(t,{worldObserverPublicDefault:true}),body=snapshot();
+ body.events=[{id:'b'.repeat(64),kind:'chat',playerName:'ag_Alpha',title:'肥鱼（女仆·艾恩葛朗特） 说',body:'准备出发啦。',occurredAt:new Date().toISOString(),timePrecision:'second',source:'minecraft.maid-nearby-chat'}];
+ assert.equal((await f.put(body)).status,200);assert.equal((await f.get('world/events?kind=chat')).total,1);
+ assert.equal((await f.put({...body,sequence:2})).status,200);assert.equal((await f.get('world/events?kind=chat')).total,1);
+ await f.restart();const data=await f.get('world/events?kind=chat');assert.equal(data.total,1);
+ const row=data.items?.[0]??data.events?.[0];assert.equal(row.source,'minecraft.maid-nearby-chat');assert.match(row.title,/肥鱼/);
+ const invalid=structuredClone(body);invalid.sequence=3;invalid.events[0].title='ag_Alpha 说';assert.equal((await f.put(invalid)).status,400);
+});
+
 test('cloud ingress is separate from browsers and client credentials, with no implicit game authority', async t => {
   const f = await fixture(t);
   assert.equal((await f.put(snapshot(), 'pat_' + 'f'.repeat(43))).status, 401);
