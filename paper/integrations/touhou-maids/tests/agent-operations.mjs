@@ -68,7 +68,7 @@ try{
   check('only one native model call',requests.length===1);
   await rc(`minecraft:item replace entity ${username} hotbar.0 with minecraft:iron_helmet`);
   const missing=await ask('transfer','put 0 64 0','missing-stack');check('invalid transfer reports source problem before reservation',missing.error==='item_missing');
-  const missingReceipt=await ask('receipt','','missing-stack');check('rejected transfer has no uncertain mutation receipt',missingReceipt.error==='receipt_missing');
+  const missingReceipt=await ask('receipt','','missing-stack');check('rejected transfer has a durable no-effect receipt',missingReceipt.ok===true&&missingReceipt.data?.status==='rejected'&&missingReceipt.data?.observation?.effectsApplied===false);
   const put=await ask('transfer','put 0 1 0','helmet-put');check('actual helmet transferred once',put.data?.status==='applied');
   const equip=await ask('equip','head 0','helmet-equip');check('armor equipped in original native slot',equip.data?.observation?.equipment?.head?.id==='minecraft:iron_helmet');
   const again=await ask('equip','head 0','helmet-equip');check('equipment replay does not swap back',again.data?.replayed===true);

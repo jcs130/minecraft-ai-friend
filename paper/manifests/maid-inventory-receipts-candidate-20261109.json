@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "state": "candidate-not-deployed",
+  "component": "QiandengjiMaidBridge",
+  "version": "0.1.15-inventory-receipts",
+  "baselineVersion": "0.1.14-companion",
+  "baselineSha256": "fbf629147c0d089f27a27f97d7ad3b2dc71d2a59fde2ca55ec00afb6c837c628",
+  "sha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+  "target": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+  "unrelatedEntriesPreserved": 63,
+  "checks": {"baseline": {"total": 19, "expectedFailures": 10}, "nativeCandidate": 19, "nativeRestart": 4, "existingRules": 90},
+  "realPlayerDataUsedInQa": false,
+  "unknownHistoricalRequestsReplayed": false,
+  "unrelatedCandidatesIncluded": false,
+  "realClientAcceptance": "pending",
+  "rollback": "code-only; retain current world, owner, items, lifecycle, brain/model choices and all action receipts"
+}

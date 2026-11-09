@@ -199,7 +199,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     public JsonObject inventory(Player actor,UUID id){
         EntityMaid maid=ownedLoaded(actor,id);JsonObject data=new JsonObject();data.addProperty("maidId",id.toString());JsonArray slots=new JsonArray();
         for(int i=0;i<maid.getMaidInv().getSlots();i++){var stack=maid.getMaidInv().getStackInSlot(i);if(!stack.isEmpty()){JsonObject row=item(stack);row.addProperty("slot",i);slots.add(row);}}
-        data.add("slots",slots);data.addProperty("slotCount",maid.getMaidInv().getSlots());data.addProperty("availableSlots",NativeMaidInventory.capacity(maid));data.addProperty("backpackId",maid.getMaidBackpackType().getId().toString());data.add("mainHand",item(maid.getMainHandItem()));data.add("offHand",item(maid.getOffhandItem()));data.add("equipment",NativeMaidInventory.equipment(maid));data.addProperty("nextStep","先 transfer put 把物品放进女仆背包，再 equip main|off|head|chest|legs|feet <maidSlot>；空背包槽可卸下对应装备。");return data;
+        data.add("slots",slots);NativeMaidInventory.layout(maid).entrySet().forEach(e->data.add(e.getKey(),e.getValue()));data.add("mainHand",item(maid.getMainHandItem()));data.add("offHand",item(maid.getOffhandItem()));data.add("equipment",NativeMaidInventory.equipment(maid));data.addProperty("nextStep","只用 usableSlotIndexes 中的槽；freeSlotIndexes 才是空槽，锁定槽不是空位。先 transfer put 把物品放进女仆背包，再 equip main|off|head|chest|legs|feet <maidSlot>；空背包槽可卸下对应装备。");return data;
     }
     public static JsonObject item(net.minecraft.world.item.ItemStack stack){
         JsonObject row=new JsonObject();row.addProperty("id",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());row.addProperty("count",stack.getCount());row.addProperty("damage",stack.getDamageValue());row.addProperty("name",stack.getHoverName().getString());return row;
@@ -229,7 +229,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         EntityMaid maid;
         boolean visitor=action.equals("chat")&&!actor.getUniqueId().toString().equals(records().has(id.toString())?records().getAsJsonObject(id.toString()).get("ownerId").getAsString():"");
         if(action.equals("talk")||visitor){maid=nearbyMaid(actor,id);}
-        else{maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);}
+        else if(Set.of("transfer","equip").contains(action)){
+            // Authenticate before allocating a receipt. Only this preflight is known
+            // to have no item effects; exceptions after mutation must remain unknown.
+            owned(actor.getUniqueId(),id);
+            try{
+                maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);
+                if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);else menus.validateEquip(actor,maid,value);
+            }catch(CompatibilityException error){return rejectedInventory(actor,action,id,operation,value,error);}
+        }else{maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);}
         if(Set.of("talk","speak","chat").contains(action)&&(value==null||value.isBlank()||value.length()>140||value.codePoints().anyMatch(c->Character.isISOControl(c)||c==0xA7)))throw new CompatibilityException("bad_text","Supply 1-140 plain text characters");
         if(action.equals("task")&&(!TaskManager.getTaskMap().containsKey(ResourceLocation.parse(value))||!TaskManager.getTaskMap().get(ResourceLocation.parse(value)).isEnable(maid)))throw new CompatibilityException("task_requirements","Read original task conditions and provide its equipment first");
         if(action.equals("schedule"))MaidSchedule.valueOf(value);
@@ -243,8 +251,6 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
         if(action.equals("chat")){requireNearby(actor,maid,16);if(visitor)social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
         if(action.equals("brain")){agentSupport.validateIdle(maid);brains.validate(maid,value);}
-        if(action.equals("equip"))menus.validateEquip(actor,maid,value);
-        if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
         if(previous!=null){JsonObject replay=previous.deepCopy();replay.addProperty("replayed",true);return replay;}
         if(action.equals("chat"))return visitor?social.start(actor,maid,operation,value):agentSupport.chat(actor,maid,operation,value);
@@ -268,6 +274,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         }
         observation.addProperty("meaning",action.equals("talk")?"human message queued":"operation applied; task objective requires world observation");
         return receipts.finish(id,operation,action.equals("talk")?"queued":"applied",observation);
+    }
+    private JsonObject rejectedInventory(Player actor,String action,UUID id,String operation,String value,CompatibilityException error)throws Exception{
+        JsonObject details=new JsonObject();details.addProperty("maidId",id.toString());details.addProperty("error",error.code());details.addProperty("message",error.getMessage());
+        details.addProperty("effectsApplied",false);details.addProperty("retryAllowed",false);details.addProperty("nextStep",guidance(action,error.code()));
+        EntityMaid maid=nativeMaid(Bukkit.getEntity(id));if(maid!=null&&maid.isAlive()&&!maid.isRemoved())details.add("inventoryLayout",NativeMaidInventory.layout(maid));
+        JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
+        if(previous!=null){JsonObject replay=reconcile(previous);replay.addProperty("replayed",true);return replay;}
+        return receipts.finish(id,operation,"rejected",details);
     }
     public JsonObject create(Player owner,String name)throws Exception{
         var player=((CraftPlayer)owner).getHandle();
@@ -331,6 +345,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     private static String request(String[] args,int index){String value=args.length>index?args[index]:fresh();if(!value.matches("[A-Za-z0-9_-]{1,48}"))throw new CompatibilityException("bad_request_id","Invalid request ID");return value;}
     public void reply(Player actor,String action,String request,JsonObject data,String error){
+        // Query success is distinct from the original operation's rejected result.
+        if(error==null&&!action.equals("receipt")&&data!=null&&data.has("status")&&"rejected".equals(data.get("status").getAsString())){
+            JsonObject details=data.getAsJsonObject("observation");if(details!=null&&details.has("error")){error=details.get("error").getAsString();data=data.deepCopy();data.addProperty("message",details.get("message").getAsString());}
+        }
         if(humanDialogue.getOrDefault(actor.getUniqueId()+":"+request,0L)>System.nanoTime()){
             humanReply(actor,request,data,error);
             // Nearby speech also reaches subscribed Agent clients. Keep the
@@ -376,6 +394,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     private static String guidance(String action,String error){
         return switch(error){
+            case "maid_slot_unavailable","slot_full","slot_rejected","player_slot_full","player_inventory_full","item_missing","bad_slot_or_count","bad_transfer","bad_equipment","wrong_armor","binding_curse","player_slot_required","mod_item_requires_native_client"->"用 /qdmaid receipt <maidId> <原requestId> 查状态和原因；rejected 表示此次未转移物品。再 inventory 查最新可用槽及物品，改正后使用新的requestId；unknown 不得重投。";
             case "maid_dead","unloaded"->"/qdmaid list 查看本人女仆真实状态；context <UUID> 查询死亡、遗物位置或未加载原因。";
             case "not_owned","owner_mismatch"->"装备、工作和运行方式由主人管理；附近交谈用 /qdmaid nearby 找真实maidId，再用 chat <maidId> <requestId> <话语>。本人女仆用 list。";
             case "out_of_range"->"先到同一维度女仆身边（访客8格内），用 /qdmaid nearby 查可见对象；context 仅供主人查询。";
@@ -388,7 +407,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
             "对话：同维度8格内，在附近聊天说「肥鱼，你好」；收到回复后45秒内可直接接话。旁人的未点名聊天、私聊与全服喊话不会唤醒她。公开交谈只聊天；主人安排工作请右键交谈或用 chat。Agent用 nearby 找真实UUID，chat <UUID> <requestId> <话语>，receipt <UUID> <原requestId> 查结果，pending不是回复。",
-            "装备：/qdmaid inventory <UUID> 看槽位；/qdmaid transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 /qdmaid equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装。",
+            "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
             "随行：肥鱼闲置跟随时，有合适主手武器会保护受敌人攻击的主人，脱战后恢复陪伴；主人传送时，附近的肥鱼尝试跟到安全落点。停留、睡眠及手选工作优先，查 context 的位置与 ownerDistance 确认真正到达。",
             "真人：/qdmaid menu <UUID> 或右键本人女仆，管理原背包及装备。talk 仅为外部宿主留言箱，不是原生模型对话。死亡后先查看 context，不自动补发/复活。"

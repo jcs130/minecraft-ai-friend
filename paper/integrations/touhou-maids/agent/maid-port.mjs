@@ -25,7 +25,7 @@ export const MAID_TOOL = {
     voiceId: { type: 'string', description: 'Installed local voice ID observed in voices; optional for preview.' },
     soundEvent: { type: 'string', description: 'Exact available event observed in voices, for voice-test.' },
     direction: { type: 'string', enum: ['put', 'take'] },
-    slot: { type: 'integer', minimum: 0, maximum: 255, description: 'Observed native maid inventory slot.' },
+    slot: { type: 'integer', minimum: 0, maximum: 255, description: 'Zero-based native maid slot from inventory.usableSlotIndexes. freeSlotIndexes lists empty unlocked slots; availableSlots is usable capacity, not free space. Backing slotCount does not unlock slots.' },
     count: { type: 'integer', minimum: 1, maximum: 64 },
     playerSlot: { type: 'integer', minimum: 0, maximum: 35, description: 'Exact player inventory slot; required for put.' },
     hand: { type: 'string', enum: ['main', 'off', 'head', 'chest', 'legs', 'feet'] },
