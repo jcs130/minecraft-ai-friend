@@ -349,8 +349,9 @@
   },
   "maintenanceIdentity": {
     "ag_xixi": "owner-confirmed Agent, exact live UUID registered privately",
-    "killer_whaler": "owner-confirmed reconnectable Agent, exact live UUID registered privately",
-    "newPermissionsGranted": false
+    "killer_whaler": "Owner corrected the prior Agent confirmation: reconnect exception revoked; treat as human pending connection review",
+    "newPermissionsGranted": false,
+    "latestCorrection": "killer-owner-correction.json in private E/F evidence; no further restart authorized by classification"
   },
   "cacheCleanup": {
     "passed": true,
