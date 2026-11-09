@@ -1,0 +1,12 @@
+# Native random-loot acceptance
+
+Use only a disposable Youer 1.21.1 world bound to `127.0.0.1:40081`, RCON `40085`, with `.loot-qa-only` containing exactly `QD_RANDOM_LOOT_20261109`. The Java fixture rejects other servers and real player identities. Never install this fixture on production.
+
+Compile `LootRollFixture.java` with Java 21 against the real 1.21.1 Paper API plus server libraries, put the generated classes and this `plugin.yml` in a QA-only JAR, and load the actual AgentFriend candidate with its required dependencies. Copy the current cosmetic catalog read-only into QA to exercise real appearance rules; the audit requires nonzero positive coverage. If applicable, retain the deployed hybrid plugin-message compatibility adapter in QA. No LLM is needed.
+
+- RCON `lootrollqa audit` validates real generated stacks, enchantment legality/conflicts/caps, books, native serialization, preserved PDC/cosmetic identity and the unmarked-item boundary.
+- Run `stage.mjs --stage <QA server> --core <deployed MC-core package> --output <new private JSON> --queue` once. It connects the non-OP synthetic `LootReader`, captures the actual enchantment registry and clientbound `window_items`, opens the real personal chest and withdraws one stack with ordinary clicks. The core's deployed protocol fixes are required; parser failures are test failures.
+- Quit/reconnect and run with a new output path without `--queue`. Optionally `--withdraw` moves one additional item. Do not replay `--queue` after an unknown result: inspect the independently persisted `loot-qa/expected.yml/json` and `lootrollqa state LootReader`.
+- Stop the exact owned QA JVM normally, verify it has exited, restart the same QA world, then repeat the read test. Expected original stacks include one legacy item. All components must remain identical across stash and player inventory.
+
+`package_candidate.py --base <verified live-base copy> --compiled <fresh source build> --output <new JAR> --version 0.4.47.64-enchant-rolls-rpg` reproduces the narrow candidate: four class families and plugin version only; other deployed entries are byte-identical. It does not install anything. Test this actual packaged JAR as well as the full source build. Keep worlds, logs, actual item records, binaries and credentials private; commit only code and sanitized evidence summaries. These checks do not establish phone visual compatibility or normal-combat balance.

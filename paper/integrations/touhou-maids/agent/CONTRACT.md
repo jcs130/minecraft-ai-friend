@@ -1,4 +1,10 @@
-# 女仆操作协议 0.1.14-companion（服务端已部署，原客户端及真人听感待验）
+# 女仆操作协议0.1.15-inventory-receipts（服务端已部署，原客户端采用待验）
+
+**0.1.15 已部署**：`slotCount` 是底层总槽数；保留字段 `availableSlots` 表示已解锁容量，绝不是空槽数。按 `indexBase:0`、`usableSlotIndexes`、`freeSlotIndexes`、`lockedSlotIndexes` 和 `freeSlotCount` 判断是否可用。默认未装背包通常只有0–5可用，6–35锁定；`slots` 仅列真实非空物品，不包含菜单装饰。锁定槽返回 `maid_slot_unavailable` 和当前合法范围。
+
+经主人身份核验后，`transfer/equip` 的加载、距离和原生物品预检失败会持久保存 `status:rejected`、`observation.effectsApplied:false`、错误和指引。首次写入及同参数重放的外层 `ok:false`；查询原回执的 `ok:true` 只表示查询成功，仍须读取 `data.status`。重复相同 ID 返回原拒绝；改变参数复用 ID 返回 `request_conflict`。只有明确 `rejected` 才可在重新观察、纠正参数后以新ID发起新的操作。`unknown` 或 `receipt_missing` 仍是不确定结果，不允许换ID重投；旧版缺失回执不会自动补写。校验后的执行异常不会被错误标为拒绝。
+
+若宿主注册了 `qiandengji:maids`，即使命令由普通聊天入口发送，结果也从该插件频道返回，服务器不重复发送聊天副本。客户端须在发送前按原请求ID登记等待者，并接收 `ok:false`；不要因错误帧缺少 `data.maidId` 丢弃它。
 
 **0.1.14-companion 已部署**：原肥鱼在附近点名且回复成功后，同一玩家、连接、维度有45秒接话窗口；每个已完成回复最多承接3条后续输入，仍需8格范围并遵守原节流。公屏、私聊、旁人和跨维度不继承此窗口。对话声音优先于日常短句，后者可被中断；`speech.transport=simple_voice_chat_position` 不依赖客户端女仆投影的实体 UUID，仍需连接 Simple Voice Chat，`sent` 不等于耳听验收。
 
@@ -48,6 +54,7 @@
 | status | 含义 |
 | --- | --- |
 | `applied` | 原生设置或物品交换已应用；不代表工作目标完成 |
+| `rejected` | 主人已认证，库存预检明确拒绝且未转移物品；纠正前先读原回执及最新槽位 |
 | `pending` | 对话已交给原生入口，尚未确认回复 |
 | `replied` | 读取到此次原生历史的回答；`observation.reply` 为正文，不能据此认定提到的游戏动作完成 |
 | `queued` | 旧 `talk` 留言已进外部宿主收件箱，不等于已有回答 |

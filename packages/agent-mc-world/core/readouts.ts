@@ -15,6 +15,29 @@ import { enchantSuffix, narrateCursor, narrateInventory } from './terrain.ts';
 import { zhName } from './names.ts';
 import { PLAYER_SLOTS } from './precheck.ts';
 import { narrateInventorySync } from './inventory-window-sync.ts';
+import { itemCustomName } from './item-display.ts';
+import { readDurability, readEnchants, type ItemLike, type EnchantRegistry } from './item-facts.ts';
+
+/** Exact self-window slots, on demand. Never derive slot numbers from merged totals or an open chest. */
+export function inventorySlotReadout(
+  slots: readonly ((ItemLike & { count: number }) | null | undefined)[],
+  query?: string, registry?: (NameRegistry & EnchantRegistry) | null,
+) {
+  const wanted = query?.trim().toLowerCase().replace(/^minecraft:/, '');
+  const occupied = slots.slice(9, 45).flatMap((it, index) => {
+    if (!it || it.count <= 0) return [];
+    const displayName = itemCustomName(it);
+    if (wanted && !matchItemName(wanted, it.name, registry) && zhName(it.name) !== wanted
+      && displayName?.trim().toLowerCase() !== wanted) return [];
+    return [{ windowSlot: index + 9, name: it.name, count: it.count,
+      displayName: displayName ?? null, durability: readDurability(it),
+      enchantments: readEnchants(it, registry ?? undefined) }];
+  });
+  return { protocol: 'agent-mc/inventory-slots/v1', scope: 'self', slotSpace: 'player-window',
+    range: [9, 44], filter: query?.trim() || null, occupied,
+    emptyWindowSlots: Array.from({ length: 36 }, (_, i) => i + 9).filter(i => !slots[i] || slots[i]!.count <= 0),
+    note: 'windowSlot 是本人玩家窗口编号：9–35 主背包，36–44 快捷栏；不是箱子槽或服务器自定义槽号。操作前使用最新读数，不从物品汇总推算槽位。' };
+}
 
 const GEAR_SLOT_ZH: Record<GearSlot, string> = {
   head: '头', chest: '胸', legs: '腿', feet: '脚', offhand: '副手',

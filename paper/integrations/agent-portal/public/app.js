@@ -282,8 +282,17 @@ function eventsPage() {
     + `<form id="trail-filter" class="trail-filter"><label class="field">角色<select name="player"><option value="">所有居民</option>${state.roster.filter(row=>['agent','player'].includes(row.kind)).map(row=>`<option value="${e(row.name)}" ${row.name===state.eventPlayer?'selected':''}>${e(characterName(row.name))} · ${e(row.name)}</option>`).join('')}</select></label><label class="field">日期<input name="day" type="date" value="${e(state.eventDay)}"></label><button class="btn" type="submit">查看足迹</button><a class="btn" href="#events">全部记录</a></form>`
     + `<div class="toolbar"><div class="filters">${[['all','全部'],['chat','对话'],['notice','公告'],['quest','委托'],['advancement','成就'],['join','上线'],['leave','离线']].map(([id,name])=>button('event-filter',name,'',`filter ${state.eventKind===id?'active':''}`,`data-kind="${id}"`)).join('')}</div><span class="tiny">原始对话 · 不公开登录凭据</span></div><section class="panel">${state.eventKind==='chat'?dialogueRows(state.events,state.eventPlayer):eventRows(state.events)}<div class="pagination">${button('event-page','上一页','','small',`data-page="${state.eventPage-1}" ${state.eventPage<=1?'disabled':''}`)}<span>${state.eventPage} / ${state.eventPages}</span>${button('event-page','下一页','','small',`data-page="${state.eventPage+1}" ${state.eventPage>=state.eventPages?'disabled':''}`)}</div></section>`;
 }
+function selectLiveChannel(channels, player, selectedId) {
+  if (player) return channels.find(channel => channel.playerName?.toLowerCase() === player.toLowerCase());
+  return channels.find(channel => channel.id === selectedId) || channels.find(channel => channel.isOwn) || channels[0];
+}
 function livePage() {
-  const selected = state.channels.find(channel => channel.id === state.selectedChannel) || state.channels.find(channel => channel.isOwn) || state.channels[0];
+  const selected = selectLiveChannel(state.channels, state.livePlayer, state.selectedChannel);
+  if (state.livePlayer && !selected) {
+    state.selectedChannel = null;
+    return heading('女神之眼', `正在寻找 ${state.livePlayer} 的冒险。`)
+      + `<section class="panel">${empty('这位居民暂不可观战', '可能尚未开放直播、需要登录本人账号，或状态还在同步。不会自动切换到其他角色。', button('login', '登录', 'users'), 'eye')}</section><aside class="live-channels">${worldChannelButtons(null)}</aside>`;
+  }
   // A missing polling result is not a user selection. Keep the opaque ID so a
   // later authorized catalogue can restore it; never retain private titles.
   state.selectedChannel = selected?.id || state.selectedChannel || null;
@@ -795,7 +804,7 @@ document.addEventListener('click', async event => {
     else if(action==='public-bag'){const row=await api('/world/players/'+target.dataset.id+'/bag');openModal(e(row.agent.name)+'的背包','服务器保存于 '+date(row.savedAt,true),inventoryContent(row));}
     else if(action==='trail-watch'){const channel=state.channels.find(row=>row.playerName===target.dataset.name);if(channel){state.selectedChannel=channel.id;setView('live');}else toast('角色暂未开放观战或状态尚未同步',true);}
 
-    else if (action === 'watch-channel') { state.selectedChannel = target.dataset.id; render(); await pollLiveFrame(); }
+    else if (action === 'watch-channel') { state.livePlayer = ''; history.replaceState(null, '', '#live'); state.selectedChannel = target.dataset.id; render(); await pollLiveFrame(); }
     else if (action === 'world-visibility') {
       const enabled=target.dataset.public==='true';
       openModal(enabled?'公开这个角色的冒险？':'关闭公开观战？',enabled?'开启后，游客无需登录即可观看地形、人物外观和动作。':'关闭后，游客画面立即停止，仅本人和网站管理员可看。',`<form id="world-visibility-form" data-id="${e(target.dataset.id)}" data-public="${enabled}" class="form-grid"><p>游戏画面、背包、装备和对话对游客公开；登录凭据始终过滤。这里的开关只控制实时观战，已公开的世界足迹会保留。</p><div class="form-error" role="alert"></div><button class="btn primary" type="submit">${enabled?'开启公开观战':'关闭公开观战'}</button></form>`);
@@ -987,6 +996,7 @@ function readRoute(){
  state.view=/^memories(?:\/|$)/.test(route)?'memories':titles[route]?route:'home';
  const name=params.get('player')||'',author=params.get('author')||'',day=params.get('day')||'';
  state.eventPlayer=/^\.?[A-Za-z0-9_]{1,16}$/.test(name)?name:'';
+ state.livePlayer=state.view==='live'?state.eventPlayer:'';
  state.eventDay=/^\d{4}-\d{2}-\d{2}$/.test(day)?day:'';
  state.archiveAuthor=author.length<=64?author:'';state.photoAuthor=/^\.?[A-Za-z0-9_]{1,16}$/.test(author)?author:'';
  state.eventPage=1;state.photoPage=1;state.archivePage=1;

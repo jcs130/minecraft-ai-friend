@@ -3,6 +3,7 @@ package local.tlmcompat.hybrid;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import java.util.*;
 import local.tlmcompat.core.CompatibilityException;
 import net.minecraft.resources.ResourceLocation;
@@ -29,13 +30,26 @@ public final class NativeMaidInventory implements Listener {
     }
     public NativeMaidInventory(HybridMaidPlugin plugin){this.plugin=plugin;}
     public static int capacity(EntityMaid maid){return Math.min(maid.getMaidInv().getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex());}
+    /** Physical backing slots are not all unlocked; availableSlots is a capacity, not free space. */
+    public static JsonObject layout(EntityMaid maid){
+        int usable=capacity(maid),total=maid.getMaidInv().getSlots();
+        JsonObject data=new JsonObject();JsonArray unlocked=new JsonArray(),free=new JsonArray(),locked=new JsonArray();
+        for(int i=0;i<total;i++){if(i<usable){unlocked.add(i);if(maid.getMaidInv().getStackInSlot(i).isEmpty())free.add(i);}else locked.add(i);}
+        data.addProperty("slotCount",total);data.addProperty("availableSlots",usable);data.addProperty("availableSlotsMeaning","usable_capacity");
+        data.addProperty("indexBase",0);data.add("usableSlotIndexes",unlocked);data.add("freeSlotIndexes",free);data.add("lockedSlotIndexes",locked);data.addProperty("freeSlotCount",free.size());
+        data.addProperty("backpackId",maid.getMaidBackpackType().getId().toString());return data;
+    }
+    private static int maidSlot(EntityMaid maid,String value){
+        int usable=capacity(maid);try{int slot=Integer.parseInt(value);if(slot>=0&&slot<usable)return slot;}catch(NumberFormatException ignored){}
+        throw new CompatibilityException("maid_slot_unavailable","女仆背包槽未解锁或编号无效；当前可用槽为 "+(usable==0?"无":"0–"+(usable-1))+"（从0开始）。先 inventory 查 usableSlotIndexes/freeSlotIndexes；availableSlots 是容量，不是空槽数。不要使用锁定槽。");
+    }
     private static int integer(String value,int min,int max){try{int number=Integer.parseInt(value);if(number>=min&&number<=max)return number;}catch(NumberFormatException ignored){}throw new CompatibilityException("bad_slot_or_count","Read current inventory slots");}
     public void validateTransfer(Player actor,EntityMaid maid,String arguments){transfer(actor,maid,arguments,false);}
     public JsonObject transfer(Player actor,EntityMaid maid,String arguments){return transfer(actor,maid,arguments,true);}
     private JsonObject transfer(Player actor,EntityMaid maid,String arguments,boolean apply){
         String[] values=arguments==null?new String[0]:arguments.split(" +");
         if(values.length<3||values.length>4||!Set.of("put","take").contains(values[0]))throw new CompatibilityException("bad_transfer","transfer expects put|take maidSlot count [playerSlot]");
-        int slot=integer(values[1],0,capacity(maid)-1),count=integer(values[2],1,64);
+        int slot=maidSlot(maid,values[1]),count=integer(values[2],1,64);
         int playerSlot=values.length==4?integer(values[3],0,35):-1;var handler=maid.getMaidInv();
         if(values[0].equals("put")){
             if(playerSlot<0)throw new CompatibilityException("player_slot_required","Use the exact observed player slot");
@@ -66,7 +80,7 @@ public final class NativeMaidInventory implements Listener {
     public void validateEquip(Player actor,EntityMaid maid,String arguments){
         String[] values=arguments==null?new String[0]:arguments.split(" +");
         if(values.length!=2||!EQUIPMENT.containsKey(values[0]))throw new CompatibilityException("bad_equipment","/qdmaid equip <UUID> <requestId> main|off|head|chest|legs|feet <女仆背包槽>；先 inventory 查槽位，空槽可卸装。");
-        int slot=integer(values[1],0,capacity(maid)-1);EquipmentSlot target=EQUIPMENT.get(values[0]);
+        int slot=maidSlot(maid,values[1]);EquipmentSlot target=EQUIPMENT.get(values[0]);
         ItemStack before=maid.getItemBySlot(target),incoming=maid.getMaidInv().getStackInSlot(slot);
         if(target.getType()==EquipmentSlot.Type.HUMANOID_ARMOR){
             if(!incoming.isEmpty()&&(incoming.getCount()!=1||!((net.neoforged.neoforge.common.extensions.IItemStackExtension)(Object)incoming).canEquip(target,maid)||!incoming.getItem().canFitInsideContainerItems()))

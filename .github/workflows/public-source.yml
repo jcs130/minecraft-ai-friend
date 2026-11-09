@@ -25,6 +25,10 @@ jobs:
           java-version: '21'
       - name: Check Goddess private-message authority without connecting
         run: node --test paper/ops/goddess-*.test.mjs
+      - name: Check activity countdown meaning and scoped identity
+        run: python paper/ops/test-activity-bars.py
+      - name: Check protected navigation-only dungeon entrances
+        run: python paper/ops/test-dungeon-entrance.py
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
@@ -89,6 +93,7 @@ jobs:
       - run: python -m unittest discover -s paper/ops/tests -p test_city_gate_regions.py -v
       - run: python -m unittest discover -s paper/ops -p test_native_auth_inputs.py -v
       - run: python -m pip install PyYAML==6.0.3
+      - run: python -m unittest discover -s paper/ops/tests -p test_dungeon_content_merge.py -v
       - run: python paper/ops/world-activity.test.py
       - run: python paper/ops/goddess_chat_review.test.py
       - run: python paper/ops/goddess-evolution.test.py
@@ -196,6 +201,8 @@ jobs:
       - name: Check observation leases and lifecycle boundaries
         run: npm test
         working-directory: paper/integrations/world-observer
+      - name: Check web gameplay RTC input, receipt and fallback boundaries
+        run: node --test paper/integrations/web-play-rtc/test/*.test.mjs
       - run: python paper/self-host/selfhost.py export-portal --directory "$RUNNER_TEMP/own-game" --output "$RUNNER_TEMP/portal"
       - run: npm ci --no-audit
         working-directory: ${{ runner.temp }}/portal
@@ -221,6 +228,8 @@ jobs:
           java-version: '21'
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm build:engine
+      - name: Check minimal crypt geometry patch and guarded rollback
+        run: node --test ../../paper/ops/crypt-connector-region.test.mjs
       - name: Install the shared portal utilities for isolated hosting checks
         run: npm ci --ignore-scripts --no-audit
         working-directory: paper/integrations/agent-portal

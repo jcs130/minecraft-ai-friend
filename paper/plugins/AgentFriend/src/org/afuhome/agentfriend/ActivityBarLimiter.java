@@ -12,25 +12,28 @@ import net.minecraft.world.BossEvent;
  * so enforce the budget on actual outgoing packets rather than a dead config. */
 final class ActivityBarLimiter {
     private final ConcurrentHashMap<UUID,ConcurrentHashMap<UUID,ActivityBarBudget>> clients=new ConcurrentHashMap<>();
-    void forget(UUID id){clients.remove(id);}
-    void clear(){clients.clear();}
+    private final ConcurrentHashMap<UUID,ConcurrentHashMap<UUID,Float>> progress=new ConcurrentHashMap<>();
+    void forget(UUID id){clients.remove(id);progress.remove(id);}
+    void clear(){clients.clear();progress.clear();}
     private static BossEvent bar(UUID id,String title,float progress,BossEvent.BossBarColor color,BossEvent.BossBarOverlay overlay) {
         BossEvent b=new BossEvent(id,Component.literal(title),color,overlay){};b.setProgress(progress);return b;
     }
     void filter(PacketEvent event) {
         if(!(event.getPacket().getHandle() instanceof ClientboundBossEventPacket packet))return;
         var states=clients.computeIfAbsent(event.getPlayer().getUniqueId(),ignored->new ConcurrentHashMap<>());
+        var observed=progress.computeIfAbsent(event.getPlayer().getUniqueId(),ignored->new ConcurrentHashMap<>());
         packet.dispatch(new ClientboundBossEventPacket.Handler(){
             @Override public void add(UUID id,Component name,float progress,BossEvent.BossBarColor color,BossEvent.BossBarOverlay overlay,boolean dark,boolean music,boolean fog){
                 String title=name.getString(),label=ActivityBarBudget.label(title);
+                observed.put(id,progress);
                 if(label==null){states.remove(id);return;}
                 ActivityBarBudget state=new ActivityBarBudget(label,progress,title);states.put(id,state);
                 BossEvent b=bar(id,state.title(),state.progress(),color,overlay);b.setDarkenScreen(dark).setPlayBossMusic(music).setCreateWorldFog(fog);
                 event.setPacket(PacketContainer.fromPacket(ClientboundBossEventPacket.createAddPacket(b)));
             }
-            @Override public void remove(UUID id){states.remove(id);}
+            @Override public void remove(UUID id){states.remove(id);observed.remove(id);}
             @Override public void updateProgress(UUID id,float progress){
-                ActivityBarBudget state=states.get(id);if(state==null)return;
+                observed.put(id,progress);ActivityBarBudget state=states.get(id);if(state==null)return;
                 if(!state.updateProgress(progress)){event.setCancelled(true);return;}
                 event.setPacket(PacketContainer.fromPacket(ClientboundBossEventPacket.createUpdateProgressPacket(
                         bar(id,state.title(),state.progress(),BossEvent.BossBarColor.WHITE,BossEvent.BossBarOverlay.PROGRESS))));
@@ -41,7 +44,7 @@ final class ActivityBarLimiter {
                 String title=name.getString(),label=ActivityBarBudget.label(title);
                 if(label==null){states.remove(id);return;}
                 boolean changed=state==null || !state.label.equals(label);
-                if(changed){state=new ActivityBarBudget(label,1,title);states.put(id,state);}
+                if(changed){if(!observed.containsKey(id))return;state=new ActivityBarBudget(label,observed.get(id),title);states.put(id,state);}
                 if(!changed && !state.updateTitle(title)){event.setCancelled(true);return;}
                 event.setPacket(PacketContainer.fromPacket(ClientboundBossEventPacket.createUpdateNamePacket(
                         bar(id,state.title(),state.progress(),BossEvent.BossBarColor.WHITE,BossEvent.BossBarOverlay.PROGRESS))));

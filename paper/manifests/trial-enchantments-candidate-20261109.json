@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-09",
+  "status": "candidate-not-deployed",
+  "version": "0.4.47.64-enchant-rolls-rpg",
+  "sha256": "41cfafcfa83e5bed2cad441cfc25e784f36e81878f663589597e374c318dab14",
+  "baseCommit": "d1f616236d0c499d8830e1bf9fbef686fce6d9e7",
+  "productionVersion": "0.4.47.63-inventory-tidy-rpg",
+  "productionModified": false,
+  "policy": {
+    "maximumEnchantments": 4,
+    "vanillaLimits": true,
+    "preserveExistingItems": true,
+    "rollAt": "actual_reward_generation_only",
+    "sameItemMayRepeat": true,
+    "clientModsRequired": false,
+    "persistentMarker": "agentfriend:loot_enchant_schema=1"
+  },
+  "checks": {
+    "fullJava21Build": true,
+    "seededPolicyAssertions": 194278,
+    "seededSwordRolls": 1000,
+    "seededSwordVariants": 277,
+    "seededLowHighLevelScoreMeans": [
+      2.02375,
+      7.958
+    ],
+    "nativeItems": 2616,
+    "nativeAssertions": 24322,
+    "nativeAppearanceChecks": 386,
+    "nativeSameSwordVariants": 64,
+    "nativeBooks": 52,
+    "nativeBookVariants": 51,
+    "ordinaryClientChecks": 190,
+    "ordinaryClientOp": false,
+    "originalItemsVerifiedPerPhase": 28,
+    "rawWindowItemsVerified": true,
+    "standardWithdrawal": true,
+    "reopen": true,
+    "reconnect": true,
+    "normalRestart": true,
+    "oldItemPreserved": true,
+    "protocolErrors": 0,
+    "legacyAppearanceAndUnmarkedForgeryBoundary": true,
+    "failedFixtureAssumptionPreserved": true,
+    "artifact": "exact_live_base_class_overlay"
+  },
+  "compatibility": {
+    "items": "vanilla 1.21.1 enchantments/stored_enchantments",
+    "javaProtocol": "real ordinary MC core rc.160-preview.33",
+    "bedrockPhoneVisual": "not_verified",
+    "combatBalance": "not_verified",
+    "wholeTowerBattle": "not_performed_by_this_test"
+  },
+  "sourceSha256": {
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonEnchantments.java": "b2c9a39b9ed30750d9c98338eb1025a7e746e06f55a07082106d66def3e2c6df",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonLoot.java": "a0c95098b4e63d98547fce70a0ce4417d401abf68ff36e187d379e08f44fba42",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java": "83da71a82a4fd64c670dda366c1aa77f56b7e8e32358e41b58f3b7b06a901468",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ItemAppearances.java": "13df7e2e9c27835b6df12b8e911416d8047fb97c1be3685b90e100a50bc91fd5"
+  },
+  "pendingContent": {
+    "tenRuins": "PR131 merged but not deployed",
+    "previousUacCanceled": true,
+    "requiresFreshCombinedRelease": true,
+    "freshReleaseId": "ruins-enchants-release-20261109-r1",
+    "plannedFiles": 22
+  },
+  "rollback": "code only; preserve actual player items, reward queues, world and authentication",
+  "packaging": {
+    "baseSha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+    "candidateSha256": "41cfafcfa83e5bed2cad441cfc25e784f36e81878f663589597e374c318dab14",
+    "changedEntries": [
+      "org/afuhome/agentfriend/DungeonEnchantments$Rule.class",
+      "org/afuhome/agentfriend/DungeonEnchantments.class",
+      "org/afuhome/agentfriend/DungeonLoot$Bonus.class",
+      "org/afuhome/agentfriend/DungeonLoot.class",
+      "org/afuhome/agentfriend/DungeonManager$1.class",
+      "org/afuhome/agentfriend/DungeonManager$GuildDonation.class",
+      "org/afuhome/agentfriend/DungeonManager.class",
+      "org/afuhome/agentfriend/ItemAppearances.class",
+      "plugin.yml"
+    ],
+    "unchangedEntries": 647,
+    "sourceClassFamilies": [
+      "DungeonEnchantments",
+      "DungeonLoot",
+      "DungeonManager",
+      "ItemAppearances"
+    ],
+    "allOtherEntriesIdentical": true,
+    "productionModified": false,
+    "reproducedByPublicPackager": true
+  },
+  "sourceBuildChecks": {
+    "fullJava21Build": true,
+    "seededPolicyAssertions": 194278,
+    "seededSwordRolls": 1000,
+    "seededSwordVariants": 277,
+    "seededLowHighLevelScoreMeans": [
+      2.02375,
+      7.958
+    ],
+    "nativeItems": 2616,
+    "nativeAssertions": 24811,
+    "nativeAppearanceChecks": 383,
+    "nativeSameSwordVariants": 60,
+    "nativeBooks": 60,
+    "nativeBookVariants": 56,
+    "ordinaryClientChecks": 379,
+    "ordinaryClientOp": false,
+    "originalItemsVerifiedPerPhase": 28,
+    "rawWindowItemsVerified": true,
+    "standardWithdrawal": true,
+    "reopen": true,
+    "reconnect": true,
+    "normalRestart": true,
+    "oldItemPreserved": true,
+    "protocolErrors": 0,
+    "legacyAppearanceAndUnmarkedForgeryBoundary": true,
+    "failedFixtureAssumptionPreserved": true
+  }
+}

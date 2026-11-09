@@ -1,3 +1,4 @@
+import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { methodLearningCall } from '../src/learning/method-capability.ts';
 import {RecordedSceneStore,type RecordedScene} from '../src/learning/recorded-scene.ts';
@@ -87,7 +88,7 @@ import {
 } from './round.ts';
 import {
   bagStamp, blockedStamp, queueStamp,
-  renderBagReadout, renderBlockedReadout, renderLastTaskReadout, renderQueueReadout, renderStorageReadout, renderStoredItemReadout,
+  renderBagReadout, renderBlockedReadout, renderLastTaskReadout, renderQueueReadout, renderStorageReadout, renderStoredItemReadout, inventorySlotReadout,
 } from './readouts.ts';
 import type { SiteZone } from './pathfinder-perf.ts';
 import {
@@ -2675,10 +2676,12 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'it never moves you, never touches the world and never touches the work queue. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to locate it in your inventory, the currently open container, and last observed chest records; '
       + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
+      + 'Use detail:"slots" for exact current self windowSlot numbers and per-stack counts before slot-based transfers; item optionally filters that table. No script or organize dryRun is needed to read slots. '
       + 'Ask this instead of re-submitting a task to find out what you are carrying. '
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
     parameters: { type: 'object', properties: {
       item: { type: 'string', description: 'Optional focused stock lookup by material ID, Chinese material name, or exact custom display name.' },
+      detail: { type: 'string', enum: ['summary', 'slots'], description: 'Default summary; slots reads only the current self inventory slot table (9–44), not chest slot numbers.' },
     }, required: [] },
   },
   {
@@ -4951,10 +4954,18 @@ export class MinecraftWorld implements World {
         return { ...outcome, text: this.toolLog('mc_blueprint', args, outcome.text) };
       },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
-      mc_bag: async (args, ctx) => this.readOnce('mc_bag', ctx,
-        () => this.bagReadout(typeof args.item === 'string' ? args.item : undefined)),
+      mc_bag: async (args, ctx) => {
+        const readout=this.bagReadout(typeof args.item === 'string' ? args.item : undefined,args.detail==='slots');
+        const result=this.readOnce('mc_bag',ctx,()=>readout);
+        return readout.data ? {text:typeof result==='string'?result:result.text,data:readout.data} : result;
+      },
       mc_view_map: async (args) => this.viewMap(args),
-      mc_queue: async (args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout(args)),
+      mc_queue: async (args, ctx) => {
+        const readout=this.queueReadout(args), result=this.readOnce('mc_queue',ctx,()=>readout);
+        if(!readout.data)return result;
+        const text=typeof result==='string'?result:result.text;
+        return {text:args.taskId!==undefined||args.detail==='full'?'[任务读数结构] '+JSON.stringify(readout.data)+'\n'+text:text,data:readout.data};
+      },
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
       mc_stop: async () => {
         this.methods.stop('mc_stop取消方法');
@@ -5448,13 +5459,22 @@ export class MinecraftWorld implements World {
   }
 
   /** mc_bag:背包现读。与快照走同一份渲染口径(见 readouts.renderBagReadout) */
-  protected bagReadout(item?: string): { stamp: string; text: string } {
+  protected bagReadout(item?: string, slots=false): { stamp: string; text: string; data?: Record<string,unknown> } {
     const snap = this.snapshot({ scanBlocks: false });
     if (!snap) {
       return {
         stamp: bagStamp(null),
         text: `[mc_bag] 看不了背包：${this.unavailableConnectionText()}`,
       };
+    }
+    if(slots){
+      if(!snap.invSynced)return {stamp:bagStamp(snap),text:renderBagReadout(snap)};
+      const bot=this.bridge?.bot;
+      if(!bot?.inventory?.slots || bot.inventory.slots.length<45)
+        return {stamp:'slots:unavailable',text:'[背包槽位] 本人玩家窗口尚未完整同步；槽位未知，不能据汇总或当前容器槽号推算。'};
+      const data=inventorySlotReadout(bot.inventory.slots,item,bot.registry);
+      const text=JSON.stringify(data);
+      return {stamp:`slots:${text}`,text,data};
     }
     const records = this.chestBook().chestsIn(snap.dimension);
     if (item?.trim()) {
@@ -5478,7 +5498,7 @@ export class MinecraftWorld implements World {
   }
 
   /** mc_queue:队列现读 + 最近一单的终态 */
-  protected queueReadout(args: Record<string, unknown> = {}): { stamp: string; text: string } {
+  protected queueReadout(args: Record<string, unknown> = {}): { stamp: string; text: string; data?:Record<string,unknown> } {
     const ex = this.executor;
     if (!ex) return { stamp: 'nomod', text: '[mc_queue 失败] World 未启动' };
     const q = ex.status();
@@ -5494,6 +5514,12 @@ export class MinecraftWorld implements World {
     const detail = requestedId !== undefined || args.detail === 'full' ? 'full' : 'summary';
     const method = this.methods.current;
     return {
+      data:{protocol:'agent-mc/task-queue-read/v1',requestedId:requestedId??null,
+        current:{running:q.running?{id:q.running.id,stepIndex:q.running.stepIndex,stepCount:q.running.stepCount,skill:q.running.skill}:null,
+          waiting:q.waiting.map(t=>({id:t.id})),hold:q.hold??null},
+        last:last?{taskId:last.taskId,kind:last.kind,at:last.at,historical:true,
+          evidence:compactWorkExecutionEvidence({steps:last.steps}),
+          ...(!last.steps?.length?{text:last.text}:{})}:null,goalCompleted:false},
       stamp: queueStamp(q, last?.at ?? null) + `:${method?.id ?? ''}:${requestedId ?? 'latest'}:${detail}`,
       text: renderQueueReadout(
         q,

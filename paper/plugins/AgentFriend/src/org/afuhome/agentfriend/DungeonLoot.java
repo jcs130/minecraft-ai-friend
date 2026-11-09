@@ -1,6 +1,8 @@
 package org.afuhome.agentfriend;
 
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -13,6 +15,7 @@ import org.bukkit.persistence.PersistentDataType;
 
 /** Vanilla-only personal loot shared by Java, Geyser Bedrock and Mineflayer. */
 final class DungeonLoot {
+    static final NamespacedKey ENCHANT_ROLL=NamespacedKey.fromString("agentfriend:loot_enchant_schema");
     record Bonus(ItemStack item, boolean rare, String label, String tier) {
         Bonus(ItemStack item, boolean rare, String label) {
             this(item, rare, label, rare ? "rare" : "common");
@@ -23,13 +26,16 @@ final class DungeonLoot {
 
     /** Guaranteed equipment favors useful iron gear and spell imprints over raw attack power. */
     static Bonus milestone(int floor, int equipmentIndex) {
-        return switch (floor) {
+        return milestone(floor,equipmentIndex,0);
+    }
+    static Bonus milestone(int floor,int equipmentIndex,int difficulty) {
+        Bonus base = switch (floor) {
             case 4 -> new Bonus(extra(named(Material.IRON_HELMET, "苔原旅盔", "protection", 1,
                     "unbreaking", 1), "respiration", 1), false, "铁盔（呼吸）");
             case 5 -> new Bonus(named(Material.IRON_CHESTPLATE, "遗迹守护甲", "protection", 2,
-                    "unbreaking", 1), false, "铁胸甲（保护）");
+                    "unbreaking", 1), false, "铁胸甲（随机附魔）");
             case 8 -> new Bonus(named(Material.IRON_LEGGINGS, "雪行护腿", "protection", 2,
-                    "unbreaking", 1), false, "铁护腿（保护）");
+                    "unbreaking", 1), false, "铁护腿（随机附魔）");
             case 9 -> new Bonus(extra(named(Material.IRON_BOOTS, "焰路行靴", "protection", 2,
                     "unbreaking", 1), "feather_falling", 2), false, "铁靴（摔落保护）");
             case 6, 10 -> equipmentPiece(equipmentIndex);
@@ -41,6 +47,7 @@ final class DungeonLoot {
                     "protection", 2, "unbreaking", 2), "feather_falling", 3), true, "回廊踏影靴");
             default -> null; // Floors one to three grant supplies; seven is a rest floor.
         };
+        return randomize(base,floor,difficulty,base!=null&&base.rare()?"rare":"uncommon");
     }
 
     /** Small guaranteed supply bundles keep the early floors useful without handing out armor immediately. */
@@ -68,8 +75,11 @@ final class DungeonLoot {
         };
     }
 
-    /** Preserve indices 0–3 for existing players; later milestones add weapon styles. */
-    static Bonus equipmentPiece(int index) {
+    /** A read-only preview never rolls or promises an enchantment outcome. */
+    static Bonus equipmentPreview(int index) { return equipmentPiece(index); }
+
+    /** Unrolled identities; only the reward entry points generate enchantments. */
+    private static Bonus equipmentPiece(int index) {
         int slot = Math.floorMod(index, EQUIPMENT_CYCLE);
         return switch (slot) {
             case 0 -> new Bonus(imprint(named(Material.IRON_SWORD, "赤铜柄·闪现匕首",
@@ -93,7 +103,7 @@ final class DungeonLoot {
                     "潜行使用：闪现调整射位 · 4 魔力；站立可正常装弩"), true, "影步连弩 · 位移刻印");
             default -> new Bonus(imprint(named(Material.TRIDENT, "潮汐战矛",
                     "loyalty", 2, "impaling", 2), "frostnova",
-                    "潜行使用：近身霜环 · 7 魔力；站立可投掷"), true, "潮汐战矛 · 霜环刻印");
+                    "潜行使用：近身霜环 · 7 魔力；普通使用依本件忠诚/激流等附魔生效"), true, "潮汐战矛 · 霜环刻印");
         };
     }
 
@@ -119,29 +129,38 @@ final class DungeonLoot {
         if (rare) {
             // A pity roll guarantees rare loot, never the legendary sub-pool.
             if (!pity && floor >= 6 && random.nextInt(100) < 10)
-                return legendary(random.nextInt(6)).withTier("legendary");
-            return improve(rare(floor, random.nextInt(18)), difficulty).withTier("rare");
+                return randomize(legendary(random.nextInt(6)).withTier("legendary"),floor,difficulty,"legendary");
+            return randomize(rare(floor, random.nextInt(18)).withTier("rare"),floor,difficulty,"rare");
         }
         if (random.nextInt(100) < 30)
-            return uncommon(random.nextInt(14)).withTier("uncommon");
+            return randomize(uncommon(random.nextInt(14)).withTier("uncommon"),floor,difficulty,"uncommon");
         return common(random.nextInt(10));
     }
 
-    private static Bonus improve(Bonus bonus, int difficulty) {
-        if (difficulty <= 0) return bonus;
-        ItemStack item = bonus.item().clone();
-        if (item.getType().getMaxDurability() == 0 || !item.hasItemMeta()) return bonus;
-        ItemMeta meta = item.getItemMeta();
-        for (var enchant : meta.getEnchants().entrySet()) {
-            int level = Math.min(enchant.getKey().getMaxLevel(), enchant.getValue() + difficulty);
-            if (level > enchant.getValue()) {
-                meta.addEnchant(enchant.getKey(), level, false);
-                item.setItemMeta(meta);
-                return new Bonus(item, true, bonus.label() + " · "
-                        + (difficulty == 1 ? "冒险" : "末日") + "强化", bonus.tier());
-            }
+    private static Bonus randomize(Bonus bonus,int floor,int difficulty,String tier) {
+        if(bonus==null)return null;
+        ItemStack item=bonus.item().clone();
+        boolean book=item.getType()==Material.ENCHANTED_BOOK;
+        if(!book&&item.getType().getMaxDurability()==0)return bonus;
+        ItemMeta meta=item.getItemMeta();var required=new LinkedHashSet<String>();
+        // Retain the promised breathing / falling specialty, but roll its level
+        // and all other affixes. Spell imprints and auras are independent PDC.
+        if(!book)for(var e:meta.getEnchants().keySet())if(Set.of("respiration","feather_falling").contains(e.getKey().getKey()))required.add(e.getKey().getKey());
+        String family=book?List.of("IRON_SWORD","IRON_AXE","IRON_PICKAXE","IRON_HELMET","IRON_CHESTPLATE","IRON_LEGGINGS","IRON_BOOTS","BOW","CROSSBOW","TRIDENT").get(ThreadLocalRandom.current().nextInt(10)):item.getType().name();
+        var rolled=DungeonEnchantments.roll(family,floor,difficulty,tier,required,ThreadLocalRandom.current());
+        if(rolled.isEmpty())return bonus;
+        for(var e:List.copyOf(meta.getEnchants().keySet()))meta.removeEnchant(e);
+        if(book){var stored=(EnchantmentStorageMeta)meta;for(var e:List.copyOf(stored.getStoredEnchants().keySet()))stored.removeStoredEnchant(e);}
+        for(var entry:rolled.entrySet()){
+            Enchantment e=Enchantment.getByKey(NamespacedKey.minecraft(entry.getKey()));
+            if(e==null||entry.getValue()>e.getMaxLevel()||!book&&!e.canEnchantItem(item))throw new IllegalStateException("Invalid trial enchantment:"+family+":"+entry);
+            for(var previous:book?((EnchantmentStorageMeta)meta).getStoredEnchants().keySet():meta.getEnchants().keySet())if(previous.conflictsWith(e))throw new IllegalStateException("Conflicting trial enchantments:"+previous+":"+e);
+            boolean applied=book?((EnchantmentStorageMeta)meta).addStoredEnchant(e,entry.getValue(),false):meta.addEnchant(e,entry.getValue(),false);
+            if(!applied)throw new IllegalStateException("Trial enchantment was not applied:"+entry);
         }
-        return bonus;
+        meta.getPersistentDataContainer().set(ENCHANT_ROLL,PersistentDataType.INTEGER,1);
+        item.setItemMeta(meta);
+        return new Bonus(item,bonus.rare(),bonus.label(),bonus.tier());
     }
 
     private static Bonus earlyRare(int pick) {
@@ -224,7 +243,7 @@ final class DungeonLoot {
             case 13 -> floor >= 11 ? aura(LEECH_ARMOR, DungeonGearAura.LEECH) : earlyRare(3);
             case 14 -> new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
             case 15 -> new Bonus(SkillTome.random(4), true, "技艺研习书 · 熟练度 +4");
-            case 16 -> new Bonus(enchantedBook(floor), true, "可在铁砧使用的附魔书");
+            case 16 -> new Bonus(enchantedBook(), true, "可在铁砧使用的附魔书");
             default -> new Bonus(new ItemStack(Material.ENDER_PEARL, 2), true, "末影珍珠 ×2");
         };
     }
@@ -238,20 +257,9 @@ final class DungeonLoot {
         };
     }
 
-    private static ItemStack enchantedBook(int floor) {
-        String enchantment = switch (ThreadLocalRandom.current().nextInt(5)) {
-            case 0 -> "feather_falling";
-            case 1 -> "efficiency";
-            case 2 -> "unbreaking";
-            case 3 -> "respiration";
-            default -> "mending";
-        };
-        int level = enchantment.equals("mending") ? 1 : floor >= 11 ? 3 : 2;
+    private static ItemStack enchantedBook() {
         ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
         EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
-        Enchantment enchant = Enchantment.getByKey(NamespacedKey.minecraft(enchantment));
-        if (enchant == null || !meta.addStoredEnchant(enchant, level, false))
-            throw new IllegalStateException("Unsupported dungeon book: " + enchantment);
         meta.setLore(List.of(ChatColor.GRAY + "真实附魔书 · 可在铁砧使用"));
         book.setItemMeta(meta);
         return book;
@@ -259,8 +267,10 @@ final class DungeonLoot {
 
     /** First boss clear has a unique weapon; repeat clears rotate useful boss caches. */
     static Bonus bossCache(int clears) {
-        if (clears == 0) return new Bonus(bossRelic(), true, "首通武器 · 深渊裁决");
-        return switch ((clears - 1) % 9) {
+        return bossCache(clears,0);
+    }
+    static Bonus bossCache(int clears,int difficulty) {
+        Bonus base=clears==0?new Bonus(bossRelic(),true,"首通武器 · 深渊裁决"):switch ((clears - 1) % 9) {
             case 0 -> equipmentPiece(4);
             case 1 -> equipmentPiece(5);
             case 2 -> equipmentPiece(6);
@@ -271,12 +281,14 @@ final class DungeonLoot {
             case 7 -> equipmentPiece(0);
             default -> equipmentPiece(1);
         };
+        return randomize(base,10,difficulty,"rare");
     }
 
     static Bonus finalCache(int clears) {
-        if (clears == 0) return new Bonus(named(Material.DIAMOND_SWORD, "星灯誓约",
-                "sharpness", 3, "unbreaking", 2), true, "首通武器 · 星灯誓约");
-        return switch ((clears - 1) % 9) {
+        return finalCache(clears,0);
+    }
+    static Bonus finalCache(int clears,int difficulty) {
+        Bonus base=clears==0?new Bonus(named(Material.DIAMOND_SWORD,"星灯誓约","sharpness",3,"unbreaking",2),true,"首通武器 · 星灯誓约"):switch ((clears - 1) % 9) {
             case 0 -> equipmentPiece(5);
             case 1 -> equipmentPiece(7);
             case 2 -> equipmentPiece(4);
@@ -287,6 +299,7 @@ final class DungeonLoot {
             case 7 -> equipmentPiece(0);
             default -> equipmentPiece(1);
         };
+        return randomize(base,15,difficulty,"rare");
     }
 
     static ItemStack bossRelic() {
@@ -363,6 +376,14 @@ final class DungeonLoot {
         Enchantment enchantment = Enchantment.getByKey(NamespacedKey.minecraft(name));
         if (enchantment == null || !meta.addEnchant(enchantment, level, false))
             throw new IllegalStateException("Unsupported dungeon enchantment: " + name);
+    }
+
+    /** Full actual vanilla data, appended only to the recipient's existing receipt. */
+    static String enchantmentFields(ItemStack item) {
+        var result=new java.util.TreeMap<String,Integer>();ItemMeta meta=item.getItemMeta();
+        var enchants=meta instanceof EnchantmentStorageMeta book?book.getStoredEnchants():meta.getEnchants();
+        enchants.forEach((e,level)->result.put(e.getKey().toString(),level));
+        return " enchantments="+new com.google.gson.Gson().toJson(result);
     }
 
     private DungeonLoot() { }
