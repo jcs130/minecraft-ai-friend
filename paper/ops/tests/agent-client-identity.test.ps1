@@ -31,5 +31,12 @@ Check ($humans -contains 'HumanWithCLI') 'frequent CLI user remains behind human
 Check ($humans -contains 'ag_Human') 'ag prefix does not grant maintenance exemption'
 Check ($humans -notcontains 'RuntimeNoPrefix') 'handshake works without name convention'
 Check ($humans -notcontains 'OldConfirmed') 'legacy confirmation uses UUID'
+$veto=@{uuid=$id3;kind='agent';source='owner_confirmation';reconnectAllowed=$false}
+SaveRegistry @($account,$veto)
+Check (@(HumanPlayers) -contains 'RuntimeNoPrefix') 'owner veto overrides automatic client handshake'
+function NumenBodyUuids{return @($id3)}
+Check (@(HumanPlayers) -contains 'RuntimeNoPrefix') 'owner veto also overrides an automatic Numen body marker'
+$veto.reconnectAllowed=$true;SaveRegistry @($account,$veto)
+Check (@(HumanPlayers) -notcontains 'RuntimeNoPrefix') 'later explicit consent restores this exact UUID exemption'
 Check (@(Maintenance-UuidsFromNbt 'x has the following entity data: [I; 0, 0, 0, 1]')[0] -eq '00000000-0000-0000-0000-000000000001') 'NBT UUID decoding'
 Write-Output "Client identity: $checks checks passed; production untouched"

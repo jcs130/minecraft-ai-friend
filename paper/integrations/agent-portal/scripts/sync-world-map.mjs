@@ -7,6 +7,7 @@ import { parseMapObservation, readCommands, fileDigest } from './world-map-sourc
 const configPath = process.argv[process.argv.indexOf('--config') + 1];
 if (!process.argv.includes('--config') || !path.isAbsolute(configPath)) throw Error('Use --config with an absolute private configuration path');
 const settings = JSON.parse(await fs.readFile(configPath, 'utf8'));
+if (settings.tileDelivery !== undefined && !['local','cdn'].includes(settings.tileDelivery)) throw Error('Use local or cdn terrain delivery');
 const source = JSON.parse(await fs.readFile(settings.sourceConfig, 'utf8'));
 const destination = new URL(source.endpoint);
 if (destination.protocol !== 'https:' || destination.username || destination.password || destination.search || destination.hash
@@ -53,7 +54,10 @@ async function files(directory = webRoot, prefix = '') {
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
     const key = prefix + entry.name, file = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) continue;
-    if (entry.isDirectory()) { if (!key.split('/').some(part => part.startsWith('.')) && !key.endsWith('/live')) output.push(...await files(file, key + '/')); }
+    if (entry.isDirectory()) {
+      if (settings.tileDelivery === 'cdn' && /^maps\/(?:overworld|nether|end|aincrad)\/tiles$/.test(key)) continue;
+      if (!key.split('/').some(part => part.startsWith('.')) && !key.endsWith('/live')) output.push(...await files(file, key + '/'));
+    }
     else if (entry.isFile()) { try { mapFileKey(key); output.push({ key, file }); } catch { /* Not a reviewed public map file. */ } }
   }
   // Upload model/textures first; index and settings last so a new view never

@@ -7,7 +7,7 @@ const numberPattern = '(-?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?
 const prefix = '^' + namePattern + ' has the following entity data: ';
 const position = new RegExp(prefix + '\\[' + [numberPattern, numberPattern, numberPattern].join(',\\s*') + '\\]$');
 const rotation = new RegExp(prefix + '\\[' + [numberPattern, numberPattern].join(',\\s*') + '\\]$');
-const dimension = new RegExp(prefix + '"(minecraft:(?:overworld|the_nether|the_end))"$');
+const dimension = new RegExp(prefix + '"(minecraft:(?:overworld|the_nether|the_end|aincrad))"$');
 const excluded = /^(?:goddess|live|ag_photolens|cortieye|corticam)$/i;
 export function parseMapObservation(results, usercache, { excludeNames = [] } = {}) {
   const all = {};

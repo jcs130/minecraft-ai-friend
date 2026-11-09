@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { MapTileCdn, MAP_TILE_MANIFEST_LIMIT } from './world-map-tile-cdn.mjs';
 
 export const MAP_FILE_LIMIT = 8 * 1024 * 1024;
 export const MAP_FRESH_MS = 20000;
@@ -25,8 +26,8 @@ export function validateMapAvatar(bytes) {
   throw fail(400, 'MAP_AVATAR_STATIC_PNG_8_TO_512_REQUIRED');
 }
 const fail = (status, reason) => Object.assign(new Error(reason), { status, reason });
-const mapIds = new Set(['overworld', 'nether', 'end']);
-const dimensions = { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end' };
+const mapIds = new Set(['overworld', 'nether', 'end', 'aincrad']);
+const dimensions = { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end', aincrad: 'minecraft:aincrad' };
 const services = /^(?:goddess|live|ag_photolens|cortieye|corticam)$/i;
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.conf': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.prbm': 'application/octet-stream', '.webmanifest': 'application/manifest+json' };
 
@@ -35,7 +36,7 @@ export function mapFileKey(value) {
       || value.split('/').some(part => !part || part.startsWith('.')) || value.includes('/live/')) throw fail(400, 'MAP_FILE_PATH');
   const plain = value.endsWith('.gz') ? value.slice(0, -3) : value;
   if (!mime[path.posix.extname(plain)] || !(value === 'index.html' || value === 'settings.json'
-      || /^(?:assets|lang)\//.test(value) || /^maps\/(?:overworld|nether|end)\//.test(value))) throw fail(400, 'MAP_FILE_TYPE');
+      || /^(?:assets|lang)\//.test(value) || /^maps\/(?:overworld|nether|end|aincrad)\//.test(value))) throw fail(400, 'MAP_FILE_TYPE');
   return value;
 }
 
@@ -44,7 +45,7 @@ export function validateMapState(value, now = Date.now()) {
   if (value?.schemaVersion !== 1 || !Number.isSafeInteger(value.sequence) || value.sequence < 0
       || !Number.isFinite(at) || at > now + 5000 || now - at > 60000
       || !Array.isArray(value.players) || value.players.length > 256
-      || !Array.isArray(value.maps) || value.maps.length > 3) throw fail(400, 'MAP_STATE_FORMAT');
+      || !Array.isArray(value.maps) || value.maps.length > 4) throw fail(400, 'MAP_STATE_FORMAT');
   const seen = new Set();
   const players = value.players.map(row => {
     if (!/^\.?[A-Za-z0-9_]{1,16}$/.test(row?.name || '') || services.test(row.name)
@@ -79,6 +80,11 @@ export class WorldMap {
     this.enabled = config.worldMap?.enabled === true;
     this.root = path.resolve(config.dataDir, 'world-map'); this.now = now;
     this.queue = Promise.resolve(); this.stateCache = null;
+    this.tileCdn = config.worldMap?.tileCdn ? new MapTileCdn(config.worldMap.tileCdn, async () => {
+      const file = await this.checkedFile('.tile-cdn.json');
+      if ((await fs.stat(file)).size > MAP_TILE_MANIFEST_LIMIT) throw fail(503, 'MAP_TILE_MANIFEST_LIMIT');
+      return fs.readFile(file);
+    }) : null;
   }
   async checkedFile(key, create = false) {
     const target = path.resolve(this.root, ...key.split('/'));
@@ -153,7 +159,7 @@ export class WorldMap {
     if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED');
     if (pathname === '/api/v1/world-map') { respond(res, 200, await this.state()); return true; }
     if (pathname === '/world-map') { res.writeHead(308, { Location: '/world-map/' }); res.end(); return true; }
-    const live = /^\/world-map\/maps\/(overworld|nether|end)\/live\/(players|markers)\.json$/.exec(pathname);
+    const live = /^\/world-map\/maps\/(overworld|nether|end|aincrad)\/live\/(players|markers)\.json$/.exec(pathname);
     if (live) {
       const state = await this.state();
       respond(res, 200, live[2] === 'players' ? { players: state.players.filter(row => row.dimension === dimensions[live[1]]).map(row => ({
@@ -161,7 +167,7 @@ export class WorldMap {
       })) } : {}); return true;
     }
     const key = mapFileKey(pathname === '/world-map/' ? 'index.html' : pathname.slice('/world-map/'.length));
-    const head = /^maps\/(?:overworld|nether|end)\/assets\/playerheads\/([a-f0-9-]{36})\.png$/.exec(key);
+    const head = /^maps\/(?:overworld|nether|end|aincrad)\/assets\/playerheads\/([a-f0-9-]{36})\.png$/.exec(key);
     if (head) {
       try {
         const portrait = await fs.readFile(await this.checkedFile(`assets/player-portraits/${head[1]}.png`));
@@ -169,11 +175,21 @@ export class WorldMap {
         res.end(req.method === 'HEAD' ? undefined : portrait); return true;
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
+    const remote = await this.tileCdn?.lookup(key);
+    if (remote) {
+      if (!remote.known) {
+        res.setHeader('X-Map-Tile-State', 'unknown'); res.writeHead(/\.prbm(?:\.gz)?$/.test(key) ? 204 : 404); res.end(); return true;
+      }
+      const etag = '"'+remote.sha256+'"';
+      res.setHeader('ETag', etag); res.setHeader('Cache-Control', 'public, max-age=60');
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304); res.end(); return true; }
+      res.writeHead(307, {Location:remote.url}); res.end(); return true;
+    }
     let bytes, compressed = key.endsWith('.gz');
     try { bytes = await fs.readFile(await this.checkedFile(key)); }
     catch (error) {
       if (error.code !== 'ENOENT') throw error;
-      if (/^maps\/(?:overworld|nether|end)\/assets\/playerheads\/[a-f0-9-]{36}\.png$/.test(key)) {
+      if (/^maps\/(?:overworld|nether|end|aincrad)\/assets\/playerheads\/[a-f0-9-]{36}\.png$/.test(key)) {
         try {
           bytes = await fs.readFile(await this.checkedFile('assets/steve.png'));
           res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length, 'Cache-Control': 'public, max-age=60', 'X-Map-Player-Head': 'default' });
@@ -184,7 +200,7 @@ export class WorldMap {
       try { bytes = await fs.readFile(await this.checkedFile(mapFileKey(key + '.gz'))); compressed = true; }
       catch (missing) {
         if (missing.code !== 'ENOENT') throw missing;
-        if (/^maps\/(?:overworld|nether|end)\/tiles\/\d+\/x-?\d+\/z-?\d+\.(?:prbm|png)$/.test(key)) res.setHeader('X-Map-Tile-State', 'unknown');
+        if (/^maps\/(?:overworld|nether|end|aincrad)\/tiles\/\d+\/x-?\d+\/z-?\d+\.(?:prbm|png)$/.test(key)) res.setHeader('X-Map-Tile-State', 'unknown');
         res.writeHead(/\.prbm$/.test(key) ? 204 : 404); res.end(); return true;
       }
     }
@@ -194,7 +210,8 @@ export class WorldMap {
     res.setHeader('Cache-Control', /\.(?:json|conf|html)$/.test(key) ? 'no-cache' : 'public, max-age=120');
     // Pinned BlueMap's Vue i18n compiler and config substitutions use Function/eval.
     // Permit it only inside the map document; the portal shell keeps its stricter policy.
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; frame-ancestors 'self'");
+    const cdnOrigin = this.tileCdn ? ' '+this.tileCdn.origin : '';
+    res.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:${cdnOrigin}; connect-src 'self'${cdnOrigin}; worker-src 'self' blob:; font-src 'self'; object-src 'none'; frame-ancestors 'self'`);
     if (req.headers['if-none-match'] === etag) { res.writeHead(304); res.end(); return true; }
     if (compressed) res.setHeader('Content-Encoding', 'gzip');
     res.writeHead(200, { 'Content-Type': mime[extension], 'Content-Length': bytes.length });
