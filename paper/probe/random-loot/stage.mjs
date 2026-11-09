@@ -75,7 +75,7 @@ try {
   await nativeState('Full original ItemStacks unchanged');
   bot.closeWindow(w); await wait(1300);
   const reopened = await openAndCheck('reopen', expected);
-  if (queue) {
+  if (queue || args.includes('--withdraw')) {
     const from = reopened.slots.slice(0, 54).findIndex(Boolean);
     const to = reopened.slots.findIndex((x, i) => i >= reopened.inventoryStart && i < reopened.inventoryEnd && !x);
     check('Ordinary withdrawal has empty target', from >= 0 && to >= 54, { from, to });
