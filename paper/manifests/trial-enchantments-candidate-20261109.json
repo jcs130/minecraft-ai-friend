@@ -118,5 +118,9 @@
     "protocolErrors": 0,
     "legacyAppearanceAndUnmarkedForgeryBoundary": true,
     "failedFixtureAssumptionPreserved": true
-  }
+  },
+  "historicalCandidateState": "candidate-not-deployed",
+  "currentState": "integrated-in-verified-AF66-Eye20-deployment",
+  "deployedBy": "paper/manifests/dungeon-integration-deployed-20261109.json",
+  "candidateArtifactWasNotInstalledIndependently": true
 }

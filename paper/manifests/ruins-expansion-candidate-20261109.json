@@ -457,5 +457,9 @@
       ],
       "templateSha256": "e9c5b4a5056a195cc2d09251ba59393bf8d61726069ae1fe5fac2185b0d63bb8"
     }
-  ]
+  ],
+  "historicalCandidateState": "validated-candidate-not-deployed",
+  "currentState": "integrated-in-verified-AF66-Eye20-deployment",
+  "deployedBy": "paper/manifests/dungeon-integration-deployed-20261109.json",
+  "candidateArtifactWasNotInstalledIndependently": false
 }

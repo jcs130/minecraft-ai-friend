@@ -1,3 +1,5 @@
+本批后续已通过联合维护部署；原独立候选和旧入口不再使用。实际加载AF.66/Eye.20及正式制品摘要见[联合发布](DUNGEON_INTEGRATION_20261109.md)与[正式清单](../manifests/dungeon-integration-deployed-20261109.json)。以下是原候选时点记录，不代表目前仍未部署。
+
 # 试炼塔随机附魔候选（2026-11-09）
 
 候选 AgentFriend `0.4.47.64-enchant-rolls-rpg`，正式仍 `0.4.47.63-inventory-tidy-rpg`。本次尚未安装正式服；十境遗迹 PR131 已合并但同样未部署。旧 Windows 确认被取消，没有停服、暂停女神或修改角色。两项需重新准备本批安装清单，不能在旧 21 文件入口外临时追加 JAR。

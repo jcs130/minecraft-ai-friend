@@ -1,0 +1,244 @@
+{
+  "schema": "qiandengji-dungeon-integration-deployed/v1",
+  "status": "deployed-with-open-real-client-acceptance",
+  "release": "dungeon-joint-release-20261109-r1",
+  "verifiedAt": "2026-11-09T13:20:02.5283886+08:00",
+  "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
+  "mergeCommit": "1fbd656495294c2306045b9ac74d72242278a9ca",
+  "sourceTree": "03fdb706aedc7f4c9c501c1f6a32a4444d81ce6d",
+  "pullRequest": "https://github.com/jcs130/minecraft-ai-friend/pull/133",
+  "ciRun": 42563863068,
+  "ciPassed": 6,
+  "runtime": {
+    "AgentFriend": "0.4.47.66-dungeon-integration-rpg",
+    "CortiEyeMirror": "0.1.20",
+    "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
+    "embeddedCore": "0.5.7-rc.160-preview.35"
+  },
+  "artifacts": [
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.15.15.mca",
+      "sha256": "e21180783e5fd7b0cd98144518d84eff0f6e856e591005a73408c620302f082e"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.15.16.mca",
+      "sha256": "55255cb366991446f7ded594fab63b0e72c9a7f11341d12347c0251da117c561"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.15.17.mca",
+      "sha256": "74888fed48bcf27730dc66ebee46550e9dc9ed27176ad813377fae8175d2f1fd"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.16.15.mca",
+      "sha256": "7cfcbac2c23aeabe241b9d68aa86baa9ab1577a91b607fcc43a7c3928adc8206"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.16.16.mca",
+      "sha256": "3818e6d1e1fbfbafcbf41d7b36efb58b856cee1aea35fe46fa48ace55f4915b9"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.16.17.mca",
+      "sha256": "7ad1f5194e923ca3de9278b79da70433315e2267b83272e933d3fe162c9e359f"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.17.15.mca",
+      "sha256": "459cb29e3a81dfa86e7055c6a542d8346b182e49d51e3eb3d3e7871875c1f166"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.17.16.mca",
+      "sha256": "6b18501e59f3fa8fa3d985083a6911dceb4ac3c98f8c34bdeb6c117ae9c84480"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.17.17.mca",
+      "sha256": "eba1a7f65cd41027419279042e3713e9fcc441c7358e252a169d15b6ca06180b"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.18.15.mca",
+      "sha256": "bc0dc65819124c51cfcaff41d73f9efa9425f2fb45b214fcadc91ea8c439e949"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.18.16.mca",
+      "sha256": "2618d0d6455eebacc4d4af7ce07766a0214082b7fd7ea6afa25d0f803db65a72"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.18.17.mca",
+      "sha256": "e14b75573f345f0e650c9c7b9fcf6333c85175866e766c54d7bbb3e3e31378db"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.19.15.mca",
+      "sha256": "84f1539485fc322f96b5fd7332e5966447295a85e2d0941f5b236e778c2ea5c6"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.19.16.mca",
+      "sha256": "bc8299503b44692e26ff8fa7540f9015eb9dc207910ade70d2ed3df7937c34ab"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.19.17.mca",
+      "sha256": "dc0b212f3fd0d317b3a409dc8fe901dd1d8dd6a1b52c7e70cae08e66a9b64149"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.20.15.mca",
+      "sha256": "4711fd54e86a9015a7fcb3bbb7114961371780f4831dc523261d8151c7913103"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.20.16.mca",
+      "sha256": "87fe59fadf992e4b26140eac0870da10769c9832e31c00e9b63f1815ae6b54e6"
+    },
+    {
+      "target": "E:\\MC\\server\\aincrad\\region\\r.20.17.mca",
+      "sha256": "25233b94828a7dd1a72fc75a6a8b13783a5455e4621fbc0345c284e91deec9d6"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\MythicMobs\\Mobs\\qiandengji-ruins-mobs.yml",
+      "sha256": "6aaceb1aca0f325dc918e938f34a9b72fbe241496b94683ce77f3a8af8f10691"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\MythicMobs\\Skills\\qiandengji-ruins-skills.yml",
+      "sha256": "f328e0d7d15fe1f0df769a35e85bc696ddefcdd53591b9ade1c71b5fa0ba22b4"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "2a09d9ac0720872bf9af6617ebb1f9fa42a48fd463e34eea21c5a016416b4938"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\CortiEyeMirror-0.1.19.jar",
+      "sha256": "a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\AgentFriend\\dungeons.yml",
+      "sha256": "6f90437c0242e440449b176fd7d47dc5287efc8118996c659e7afaafd56454fa"
+    }
+  ],
+  "geometry": {
+    "beforeSha256": "88c7900c33ce2cfe8ef231754e5b605dfc32c2a91819ca8a8505453f8934ed72",
+    "sha256": "e699ac0fa9fd8c30a92bb10fc6a73c51e2ec37ec5d686db2e244f3a833a46f6d",
+    "changedCells": 34,
+    "changedChunks": 2,
+    "unrelatedChunkRecordsPreserved": true,
+    "at": "2026-11-09T05:15:31.460Z"
+  },
+  "coldBackupProof": [
+    {
+      "verifiedColdCopy": true,
+      "root": "E:\\MC\\backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+          "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+        },
+        {
+          "sha256": "c74e4ba58674d948ca079b4348941ab01b6f11f18507f38f568cc418a5265e6d",
+          "name": "\\plugins\\CortiEyeMirror-0.1.19.jar"
+        },
+        {
+          "sha256": "1f79933f6c072df35039dcd35e2a7e0683696f8b9448727a6957c99d89ac23e1",
+          "name": "\\plugins\\AgentFriend\\dungeons.yml"
+        }
+      ],
+      "manifestSha256": "bad93a709e7784883e4881ea950f71f155b413a86223606bb0376ea887fdc148"
+    },
+    {
+      "verifiedColdCopy": true,
+      "root": "F:\\MC-backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+          "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+        },
+        {
+          "sha256": "c74e4ba58674d948ca079b4348941ab01b6f11f18507f38f568cc418a5265e6d",
+          "name": "\\plugins\\CortiEyeMirror-0.1.19.jar"
+        },
+        {
+          "sha256": "1f79933f6c072df35039dcd35e2a7e0683696f8b9448727a6957c99d89ac23e1",
+          "name": "\\plugins\\AgentFriend\\dungeons.yml"
+        }
+      ],
+      "manifestSha256": "56728f78b26ee6a51fd3f7c8b8f71bfe39b1af14acf84c2c94da595f7db297a7"
+    }
+  ],
+  "formalChecks": [
+    "candidate and all unrelated binaries verified",
+    "AgentFriend enabled",
+    "CortiEyeMirror enabled",
+    "QiandengjiMaidBridge enabled",
+    "VortexRPG enabled",
+    "QiandengjiRpg enabled",
+    "QiandengVoice enabled",
+    "WorldObserver enabled",
+    "game responsive",
+    "performance telemetry ready",
+    "original native content retained",
+    "15 dungeon sites ready",
+    "original five site IDs retained",
+    "Geyser maid extension enabled",
+    "reviewed maid model pack active"
+  ],
+  "characterFilesPreservedDuringInstallation": 5423,
+  "credentials": {
+    "originalRows": 77,
+    "currentRows": 77,
+    "originalCredentialsUnchanged": true,
+    "credentialValuesPrinted": false
+  },
+  "goddessJobs": {
+    "nativeJobs": 7,
+    "exactSpecificationsPreserved": true,
+    "identityHashesPreserved": true
+  },
+  "oldFiveDefinitionsPreserved": true,
+  "oldCheckpointSignaturesUnchanged": true,
+  "worldRollbackAfterFirstStart": false,
+  "pending": [
+    "formal ordinary-player entrance walk",
+    "phone/Xbox visuals",
+    "normal equipment balance",
+    "original CorMy host loaded version and adoption",
+    "autonomous LLM full clears",
+    "formal live/Eye repeated-attachment pixel checks"
+  ],
+  "webReleaseScope": "PR139/141/142 are preserved in main; this game release does not establish their production deployment",
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.66-dungeon-integration-rpg",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "2a09d9ac0720872bf9af6617ebb1f9fa42a48fd463e34eea21c5a016416b4938",
+      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
+      "processStartedAt": "2026-11-09T05:15:40.6829700Z"
+    },
+    {
+      "name": "CortiEyeMirror",
+      "version": "0.1.20",
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb",
+      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
+      "processStartedAt": "2026-11-09T05:15:40.6829700Z"
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.15-inventory-receipts",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+      "sourceCommit": "ac5a38429a0fcacc7e636af37ce28bb76e60e631",
+      "processStartedAt": "2026-11-09T05:15:40.6829700Z"
+    },
+    {
+      "name": "Numen-hosting-embedded-core",
+      "version": "0.5.7-rc.160-preview.35",
+      "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
+      "packageJsonSha256": "e94b6b76b731c9b973fe4cb734e645565b619a58cb2a829b756e9a178b05f205",
+      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
+      "artifactSha256": "20e21d3707c6e7a2c1d4836457c25638c4dbe722c576c10960efbb4bfc0c7b37",
+      "processStartedAt": "2026-11-09T05:19:42.5812900Z",
+      "idleLedgerAfter": {
+        "roles": 0,
+        "requests": 0
+      },
+      "originalLedgerAndConfigUnchanged": true
+    }
+  ],
+  "cameraAfter": "ready"
+}
