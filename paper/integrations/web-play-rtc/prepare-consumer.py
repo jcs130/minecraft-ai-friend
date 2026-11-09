@@ -19,12 +19,17 @@ for folder in ['src','public']:
  for file in (here/folder).iterdir():shutil.copyfile(file,dst/folder/file.name)
 edit('server.mjs',"import http from 'node:http';","import http from 'node:http';\nimport {createPlayRtcGateway} from './src/play-rtc-gateway.mjs';")
 edit('server.mjs',"originKey = null, existingRolesOnly = false, voiceLoopbackPort, webLogin = null,","originKey = null, existingRolesOnly = false, voiceLoopbackPort, webLogin = null, playRtcRuntime = null,")
+edit('server.mjs','async function body(req) {','async function body(req, limit = 8192) {')
+edit('server.mjs','if (size > 8192)','if (size > limit)')
+edit('src/gateway.mjs',"import http from 'node:http';","import http from 'node:http';\nimport {isPlayRtcPath,playRtcBodyLimit} from './play-rtc-http-policy.mjs';")
+edit('src/gateway.mjs','function allowedPath(pathname) {','function allowedPath(pathname) {\n  if(isPlayRtcPath(pathname))return true;')
+edit('src/gateway.mjs','const bodyLimit = voiceUpload ? 4 * 1024 * 1024 : 8192;','const bodyLimit = voiceUpload ? 4 * 1024 * 1024 : playRtcBodyLimit(url.pathname);')
 edit('server.mjs',"  const sessions = new Map();","  const sessions = new Map();\n  const playRtc=createPlayRtcGateway({runtime:playRtcRuntime,rate});")
 edit('server.mjs',"'/client-shell.js': ['client-shell.js', 'text/javascript; charset=utf-8'],", "'/play-rtc-client.mjs':['play-rtc-client.mjs','text/javascript; charset=utf-8'], '/native-rtc-protocol.js':['native-rtc-protocol.js','text/javascript; charset=utf-8'],\n  '/client-shell.js': ['client-shell.js', 'text/javascript; charset=utf-8'],")
 anchor="      if (req.method === 'POST' && pathname === '/api/play/control') {"
 routes="""      if(req.method==='POST'&&pathname==='/api/play/rtc/offer'){
         rate(row,'rtc-offer',3,60000);
-        try{return json(res,await playRtc.offer(row,req.headers['x-client-id'],await body(req)))}
+        try{return json(res,await playRtc.offer(row,req.headers['x-client-id'],await body(req,65536)))}
         catch(e){throw new ApiError(e.status??503,e.reason??'RTC_UNAVAILABLE','实时通道暂不可用，保留原连接方式')}
       }
       if(req.method==='POST'&&pathname==='/api/play/rtc/receipt'){
@@ -33,7 +38,7 @@ routes="""      if(req.method==='POST'&&pathname==='/api/play/rtc/offer'){
         catch(e){throw new ApiError(e.status??403,e.reason??'OWN_PLAY_REQUIRED','无法查询此角色的操作')}
       }
 """
-routes="      if(req.method==='GET'&&pathname==='/api/play/rtc/status'){rate(row,'rtc-capabilities',6,60000);return json(res,playRtc.capabilities(row));}\n"+routes
+routes="      if(req.method==='GET'&&pathname==='/api/play/rtc/status'){rate(row,'rtc-capabilities',6,60000);try{return json(res,playRtc.capabilities(row))}catch(e){throw new ApiError(e.status??403,e.reason??'OWN_PLAY_REQUIRED','本人角色尚未就绪')}}\n"+routes
 edit('server.mjs',anchor,routes+anchor+"\n        try{playRtc.assertHttp(row)}catch(e){throw new ApiError(409,e.reason,'实时控制连接仍在使用，请先停止控制')}")
 edit('src/gateway.mjs',"'touch-controller.mjs', 'client-transport.mjs'", "'play-rtc-client.mjs', 'native-rtc-protocol.js', 'touch-controller.mjs', 'client-transport.mjs'")
 edit('server.mjs',"async close() { clearInterval(cleanup);", "async close() { playRtc.close(); clearInterval(cleanup);")
