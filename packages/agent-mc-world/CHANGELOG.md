@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.35
+
+- Add on-demand `mc_bag {detail:"slots", item?}` for exact self inventory window slots, stack counts, names, durability and enchantments. Read the original player window without moving items or running scripts; distinguish unsynchronized inventory, container slots, equipment and the hotbar. Keep summary reads compact and refresh slot-sensitive reads even when aggregate counts have not changed.
+
 ## 0.5.7-rc.160-preview.34
 
 - Keep bounded native failure, observed-effect and spatial-coverage evidence in explicit queue reads; export a reusable compact execution summary. Export pure checkpoint content evidence for hosts: compare matched query payloads and spatial revisions without transport-clock/ID churn, preserve domain facts, and distinguish pending or entirely unknown observations from new content. Novel content is not verified goal progress.
