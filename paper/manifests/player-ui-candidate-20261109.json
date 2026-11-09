@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-validated-awaiting-ci-and-formal-deployment",
+  "version": "0.4.47.68-player-ui-rpg",
+  "artifactSha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
+  "baseCommit": "28ecbb7e24ea4b5ee95626858cb3e74a0724c90b",
+  "baseLiveVersion": "0.4.47.66-dungeon-integration-rpg",
+  "baseLiveSha256": "2a09d9ac0720872bf9af6617ebb1f9fa42a48fd463e34eea21c5a016416b4938",
+  "sourceHashEncoding": "git-text-lf",
+  "sourceSha256": {
+    "src/org/afuhome/agentfriend/AgentFriendPlugin.java": "756c6e35730bfc17dfa59148ecacaa9158a4399f5f3d3a32a5e1ae42754f0729",
+    "src/org/afuhome/agentfriend/NativeRpg.java": "3b2b2f2511efd46860385748eba5073bba25048db3dedb38590659fcf8edadc0",
+    "src/org/afuhome/agentfriend/AdventureMenuModel.java": "8fd94a8921550b42d4cec9ffc113813aec64892b4f82b97ea4788a51176e924a",
+    "src/org/afuhome/agentfriend/PlayerAdventureMenus.java": "a8d9554b18c913c50985b4b93dbec7669d0746c50ec0a6af03185601a62bc8ac",
+    "src/org/afuhome/agentfriend/BedrockMenuForms.java": "814306a30370c027aef351bd8d1be7086873bf086903e6160c9614999e4cdcbe",
+    "src/org/afuhome/agentfriend/DungeonEnchantments.java": "c762c00bd840fd7b1953d087773ae66d22580e4b0b80f44df9a23688a8b9e3dd",
+    "src/org/afuhome/agentfriend/DungeonLoot.java": "208d1abf2675507adeb40a853449b33766b3d0128a098d67123f689130a7f634",
+    "src/org/afuhome/agentfriend/DungeonManager.java": "650f7591baacdb1baa9b98d1996bea99567ee1e9dc4a9497cf20c1736c979355",
+    "src/org/afuhome/agentfriend/TrialRewardPolicy.java": "91834267dbe1fe1e777f569433928918205ddd73b93e4cf82240f1cac6f0f788"
+  },
+  "unrelatedArchiveEntriesPreserved": 638,
+  "acceptedRewardEntriesIdenticalToAF67": 14,
+  "checks": {
+    "offlineNavigationAndResponseGuards": 68,
+    "nativeInventoryChecks": 58,
+    "cumulusApiChecks": 113,
+    "normalReboot": {
+      "nativeInventoryChecks": 57,
+      "cumulusApiChecks": 113,
+      "classAndInventoryRetained": true
+    },
+    "physicalBedrockTouchOrXbox": false,
+    "nativeClientModRequired": false,
+    "nativeAcceptedRewardGeneration": 3481,
+    "repeatBuildsIdentical": true
+  },
+  "independentPhases": {
+    "codeMerged": false,
+    "candidateValidated": true,
+    "formalDeployed": false,
+    "realPlayerDeviceAccepted": false
+  },
+  "evidenceRoot": "E:/MC/ops/repairs/player-ui-20261109-r1",
+  "preserves": [
+    "worlds",
+    "characters",
+    "credentials",
+    "inventory",
+    "currency",
+    "quests",
+    "checkpoint-and-reward-ledgers",
+    "native-classes-and-party-authority"
+  ],
+  "productionChanged": false
+}
