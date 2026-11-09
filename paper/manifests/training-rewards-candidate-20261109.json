@@ -1,6 +1,6 @@
 {
   "schema": "qiandengji-training-reward-candidate/v1",
-  "state": "candidate_not_deployed",
+  "state": "merged_validated_candidate_awaiting_approved_maintenance",
   "version": "0.4.47.67-training-rewards-rpg",
   "sha256": "7842a81e7ba3fdbf33f056a7b2af1da44e1989ed9402e967e41304e53e44af58",
   "baselineSha256": "2a09d9ac0720872bf9af6617ebb1f9fa42a48fd463e34eea21c5a016416b4938",
@@ -16,7 +16,13 @@
   "normalBudgetAssertions": 67500,
   "existingEnchantmentAssertions": 189012,
   "oldBudgetTestFailed": true,
-  "nativeAcceptance": "separate read-only item generation and normal reboot required before release",
+  "nativeAcceptance": {
+    "oldDeterministicFailure": "normal final cache guaranteed diamond sword",
+    "readOnlyItemChecks": 3481,
+    "afterNormalColdRebootChecks": 3481,
+    "playerInventoryTouched": false,
+    "productionChanged": false
+  },
   "realClientAndBalanceAcceptance": "pending",
   "retained": [
     "old equipment and item metadata",
@@ -27,5 +33,15 @@
     "15 dungeon definitions and existing checkpoints"
   ],
   "newModInstalled": false,
-  "design": "paper/docs/AINCRAD_EXPLORATION_DESIGN_20261109.md"
+  "design": "paper/docs/AINCRAD_EXPLORATION_DESIGN_20261109.md",
+  "sourceCommit": "f5cef6a16aa26d5e69725de669bb960e1f75abc1",
+  "mergeCommit": "444fba570a7f38ee8805c7cdc2af748e17b05c4d",
+  "ciPassed": 6,
+  "ciRun": 42568358183,
+  "ciNetworkFailureRetained": true,
+  "reportSha256": {
+    "native-before-r2.log": "0c8fc88e87bb233d38129ce1f1cbc7a60d282f2b98acea5b8cc30fe4fb6d238e",
+    "native-after.log": "a03775b9ee0f35af835266292355561df4b044870e9a9e73e1cb2fda8934e3d3",
+    "native-reboot.log": "a03775b9ee0f35af835266292355561df4b044870e9a9e73e1cb2fda8934e3d3"
+  }
 }
