@@ -125,12 +125,12 @@ final class DungeonLoot {
         boolean pity = floorsWithoutRare >= Math.max(3, 6 - difficulty);
         boolean rare = pity
                 || random.nextInt(100) < Math.min(42, 7 + floor + difficulty * 5);
-        if (floor <= 3) return rare ? earlyRare(random.nextInt(4)) : common(random.nextInt(10));
+        if (floor <= 3 || difficulty == 0) return rare ? earlyRare(random.nextInt(4)) : common(random.nextInt(10));
         if (rare) {
             // A pity roll guarantees rare loot, never the legendary sub-pool.
-            if (!pity && floor >= 6 && random.nextInt(100) < 10)
+            if (!pity && TrialRewardPolicy.legendary(floor,difficulty) && random.nextInt(100) < 10)
                 return randomize(legendary(random.nextInt(6)).withTier("legendary"),floor,difficulty,"legendary");
-            return randomize(rare(floor, random.nextInt(18)).withTier("rare"),floor,difficulty,"rare");
+            return randomize(rare(floor, random.nextInt(18),difficulty).withTier("rare"),floor,difficulty,"rare");
         }
         if (random.nextInt(100) < 30)
             return randomize(uncommon(random.nextInt(14)).withTier("uncommon"),floor,difficulty,"uncommon");
@@ -216,7 +216,7 @@ final class DungeonLoot {
         };
     }
 
-    private static Bonus rare(int floor, int pick) {
+    private static Bonus rare(int floor, int pick,int difficulty) {
         return switch (pick) {
             case 0 -> equipmentPiece(floor >= 6 && ThreadLocalRandom.current().nextBoolean() ? 4 : 0);
             case 1 -> equipmentPiece(floor >= 6 && ThreadLocalRandom.current().nextBoolean() ? 5 : 1);
@@ -238,9 +238,9 @@ final class DungeonLoot {
                     : new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
             case 10 -> new Bonus(named(Material.IRON_CHESTPLATE, "铜纹守护甲", "protection", 2,
                     "unbreaking", 2), true, "铜纹守护甲");
-            case 11 -> floor >= 7 ? aura(EMBER_ARMOR, DungeonGearAura.EMBER) : earlyRare(0);
-            case 12 -> floor >= 7 ? aura(HEALER_ARMOR, DungeonGearAura.RENEWAL) : earlyRare(1);
-            case 13 -> floor >= 11 ? aura(LEECH_ARMOR, DungeonGearAura.LEECH) : earlyRare(3);
+            case 11 -> TrialRewardPolicy.aura(floor,difficulty) ? aura(EMBER_ARMOR, DungeonGearAura.EMBER) : earlyRare(0);
+            case 12 -> TrialRewardPolicy.aura(floor,difficulty) ? aura(HEALER_ARMOR, DungeonGearAura.RENEWAL) : earlyRare(1);
+            case 13 -> TrialRewardPolicy.aura(floor,difficulty) ? aura(LEECH_ARMOR, DungeonGearAura.LEECH) : earlyRare(3);
             case 14 -> new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
             case 15 -> new Bonus(SkillTome.random(4), true, "技艺研习书 · 熟练度 +4");
             case 16 -> new Bonus(enchantedBook(), true, "可在铁砧使用的附魔书");
@@ -270,14 +270,15 @@ final class DungeonLoot {
         return bossCache(clears,0);
     }
     static Bonus bossCache(int clears,int difficulty) {
+        if(clears>0&&difficulty==0)return earlyRare(Math.floorMod(clears,4));
         Bonus base=clears==0?new Bonus(bossRelic(),true,"首通武器 · 深渊裁决"):switch ((clears - 1) % 9) {
             case 0 -> equipmentPiece(4);
             case 1 -> equipmentPiece(5);
             case 2 -> equipmentPiece(6);
             case 3 -> equipmentPiece(7);
-            case 4 -> auraArmor(DungeonGearAura.EMBER);
-            case 5 -> auraArmor(DungeonGearAura.RENEWAL);
-            case 6 -> auraArmor(DungeonGearAura.LEECH);
+            case 4 -> TrialRewardPolicy.aura(10,difficulty)?auraArmor(DungeonGearAura.EMBER):earlyRare(0);
+            case 5 -> TrialRewardPolicy.aura(10,difficulty)?auraArmor(DungeonGearAura.RENEWAL):earlyRare(1);
+            case 6 -> TrialRewardPolicy.aura(10,difficulty)?auraArmor(DungeonGearAura.LEECH):earlyRare(3);
             case 7 -> equipmentPiece(0);
             default -> equipmentPiece(1);
         };
@@ -288,7 +289,8 @@ final class DungeonLoot {
         return finalCache(clears,0);
     }
     static Bonus finalCache(int clears,int difficulty) {
-        Bonus base=clears==0?new Bonus(named(Material.DIAMOND_SWORD,"星灯誓约","sharpness",3,"unbreaking",2),true,"首通武器 · 星灯誓约"):switch ((clears - 1) % 9) {
+        if(clears>0&&difficulty==0)return earlyRare(Math.floorMod(clears,4));
+        Bonus base=clears==0?new Bonus(named(difficulty==2?Material.DIAMOND_SWORD:Material.IRON_SWORD,"星灯誓约","sharpness",3,"unbreaking",2),true,(difficulty==2?"首通钻石剑":"首通铁剑")+" · 星灯誓约"):switch ((clears - 1) % 9) {
             case 0 -> equipmentPiece(5);
             case 1 -> equipmentPiece(7);
             case 2 -> equipmentPiece(4);
