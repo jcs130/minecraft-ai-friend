@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {siteFixture,testPassword} from './helpers.mjs';
+const image=new URL('../public/assets/scenes/lantern-village-960.webp',import.meta.url);
+test('website avatar requires ownership, explicit publication and a reference belonging to that exact character',async t=>{
+ const f=await siteFixture(t),user=f.client(),other=f.client();
+ await user.init();await user.request('/accounts','POST',{username:'avatarowner',password:testPassword});
+ await other.init();await other.request('/accounts','POST',{username:'avatarother',password:testPassword});
+ f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(f.portal.store.ownerByName('avatarowner').id,f.uuid,'Verified fixture owner',Date.now());
+ const endpoint='/agents/'+f.agent.id,bytes=await fs.readFile(image);
+ const ref=await user.binary(endpoint+'/references','POST',bytes,'image/webp');const id=(await ref.json()).references[0].id;
+ assert.equal((await fetch(f.origin+'/api/v1/avatars/'+f.agent.name)).headers.get('content-type'),'image/svg+xml');
+ assert.equal((await other.request(endpoint+'/avatar','POST',{referenceId:id,publicConsent:true})).status,404);
+ assert.equal((await user.request(endpoint+'/avatar','POST',{referenceId:id})).status,400);
+ assert.equal((await user.request(endpoint+'/avatar','POST',{referenceId:'00000000-0000-0000-0000-000000000000',publicConsent:true})).status,404);
+ const publish=await user.request(endpoint+'/avatar','POST',{referenceId:id,publicConsent:true});assert.equal(publish.status,200);
+ const publicImage=await fetch(f.origin+publish.data.url);assert.equal(publicImage.headers.get('content-type'),'image/webp');assert.deepEqual(Buffer.from(await publicImage.arrayBuffer()),bytes);
+ await user.binary(endpoint+'/references/'+id,'DELETE');assert.equal((await fetch(f.origin+publish.data.url,{redirect:'manual'})).status,200);
+ assert.equal((await other.request(endpoint+'/avatar','DELETE')).status,404);
+ assert.equal((await user.request(endpoint+'/avatar','DELETE')).status,200);
+ assert.equal((await fetch(f.origin+publish.data.url)).headers.get('content-type'),'image/svg+xml');
+});
