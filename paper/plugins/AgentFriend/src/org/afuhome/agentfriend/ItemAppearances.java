@@ -90,8 +90,12 @@ final class ItemAppearances implements Listener {
         if (definition.kind.equals("imprint")) return !definition.spell.isBlank()
                 && definition.spell.equals(meta.getPersistentDataContainer().get(
                         NamespacedKey.fromString("agentfriend:imprint_spell"), PersistentDataType.STRING));
-        return meta.hasLore() && meta.lore().stream().anyMatch(line -> plain(line).equals("千灯纪试炼战利品"))
-                && definition.enchants.entrySet().stream().allMatch(e -> meta.getEnchantLevel(e.getKey()) >= e.getValue());
+        boolean trialLore=meta.hasLore()&&meta.lore().stream().anyMatch(line->plain(line).equals("千灯纪试炼战利品"));
+        // A server-issued random roll keeps its already assigned cosmetic ID.
+        // Renaming an unmarked item still cannot create a server loot identity.
+        boolean rolledIdentity=alreadyMarked&&Integer.valueOf(1).equals(meta.getPersistentDataContainer().get(DungeonLoot.ENCHANT_ROLL,PersistentDataType.INTEGER))
+                &&meta.hasCustomModelData()&&meta.getCustomModelData()==definition.modelData&&!meta.getEnchants().isEmpty();
+        return trialLore&&(rolledIdentity||definition.enchants.entrySet().stream().allMatch(e->meta.getEnchantLevel(e.getKey())>=e.getValue()));
     }
 
     private Definition find(ItemStack stack) {

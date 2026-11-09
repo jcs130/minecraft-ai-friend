@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-09",
+  "status": "candidate-not-deployed",
+  "version": "0.4.47.64-enchant-rolls-rpg",
+  "sha256": "20fce56c8766f132077fe3367257757a4a437438056e38f7f6ad50054279df5b",
+  "baseCommit": "d1f616236d0c499d8830e1bf9fbef686fce6d9e7",
+  "productionVersion": "0.4.47.63-inventory-tidy-rpg",
+  "productionModified": false,
+  "policy": {
+    "maximumEnchantments": 4,
+    "vanillaLimits": true,
+    "preserveExistingItems": true,
+    "rollAt": "actual_reward_generation_only",
+    "sameItemMayRepeat": true,
+    "clientModsRequired": false,
+    "persistentMarker": "agentfriend:loot_enchant_schema=1"
+  },
+  "checks": {
+    "fullJava21Build": true,
+    "seededPolicyAssertions": 194278,
+    "seededSwordRolls": 1000,
+    "seededSwordVariants": 277,
+    "seededLowHighLevelScoreMeans": [
+      2.02375,
+      7.958
+    ],
+    "nativeItems": 2616,
+    "nativeAssertions": 24811,
+    "nativeAppearanceChecks": 383,
+    "nativeSameSwordVariants": 60,
+    "nativeBooks": 60,
+    "nativeBookVariants": 56,
+    "ordinaryClientChecks": 379,
+    "ordinaryClientOp": false,
+    "originalItemsVerifiedPerPhase": 28,
+    "rawWindowItemsVerified": true,
+    "standardWithdrawal": true,
+    "reopen": true,
+    "reconnect": true,
+    "normalRestart": true,
+    "oldItemPreserved": true,
+    "protocolErrors": 0,
+    "legacyAppearanceAndUnmarkedForgeryBoundary": true,
+    "failedFixtureAssumptionPreserved": true
+  },
+  "compatibility": {
+    "items": "vanilla 1.21.1 enchantments/stored_enchantments",
+    "javaProtocol": "real ordinary MC core rc.160-preview.33",
+    "bedrockPhoneVisual": "not_verified",
+    "combatBalance": "not_verified",
+    "wholeTowerBattle": "not_performed_by_this_test"
+  },
+  "sourceSha256": {
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonEnchantments.java": "b2c9a39b9ed30750d9c98338eb1025a7e746e06f55a07082106d66def3e2c6df",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonLoot.java": "a0c95098b4e63d98547fce70a0ce4417d401abf68ff36e187d379e08f44fba42",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java": "83da71a82a4fd64c670dda366c1aa77f56b7e8e32358e41b58f3b7b06a901468",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ItemAppearances.java": "13df7e2e9c27835b6df12b8e911416d8047fb97c1be3685b90e100a50bc91fd5"
+  },
+  "pendingContent": {
+    "tenRuins": "PR131 merged but not deployed",
+    "previousUacCanceled": true,
+    "requiresFreshCombinedRelease": true
+  },
+  "rollback": "code only; preserve actual player items, reward queues, world and authentication"
+}

@@ -1437,7 +1437,7 @@ final class DungeonManager implements Listener {
         UUID id = player.getUniqueId();
         int index = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
         int clears = Math.max(0, plugin.getConfig().getInt(BOSS_CLEARS + id, 0));
-        DungeonLoot.Bonus next = DungeonLoot.equipmentPiece(index);
+        DungeonLoot.Bonus next = DungeonLoot.equipmentPreview(index);
         String nextName = ChatColor.stripColor(next.item().getItemMeta().getDisplayName());
         long gameDay = world().getFullTime() / 24000L;
         List<String> claimedFloors = new ArrayList<>();
@@ -1448,6 +1448,7 @@ final class DungeonManager implements Listener {
                 + "下一件：" + nextName + "。"
                 + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
                 + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
+        player.sendMessage(ChatColor.AQUA + "新装备的附魔种类、数量和等级在结算时随机；预览只说明装备身份，层数/难度/稀有度影响品质。已有物品与已结算奖励保持原组件。");
         player.sendMessage(ChatColor.AQUA + "随机奖池：常见材料/画、少见探索道具/珍珠、稀有附魔书/技能书、传奇强化技能书/光环装备。"
                 + "研习书是真实物品，手持使用；Agent 用 /mycli skillbook list|use。");
         player.sendMessage("MC_DUNGEON_SET schemaVersion=2 equipmentIndex=" + index
@@ -1455,7 +1456,7 @@ final class DungeonManager implements Listener {
                 + " nextName=" + DungeonLoot.equipmentId(index)
                 + " bossClears=" + clears
                 + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
-                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1");
+                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1 enchantments=random_on_reward enchantmentSchemaVersion=1");
     }
 
     private void layout(Player player) {
@@ -1537,6 +1538,7 @@ final class DungeonManager implements Listener {
                             + (bonus.rare() ? "rare" : "extra") + " tier=" + bonus.tier()
                             + " item=minecraft:" + bonus.item().getType().name().toLowerCase(Locale.ROOT)
                             + " count=" + bonus.item().getAmount()
+                            + DungeonLoot.enchantmentFields(bonus.item())
                             + (SkillTome.spellId(bonus.item()) == null ? ""
                                     : " skill=" + SkillTome.spellId(bonus.item()))));
                 } else {
@@ -1571,7 +1573,7 @@ final class DungeonManager implements Listener {
             int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
             boolean oneTimeDeepWeapon = floor == 11 || floor == 13;
             DungeonLoot.Bonus milestone = (oneTimeDeepWeapon ? firstClear : scale.gap() == 0 || firstClear)
-                    ? DungeonLoot.milestone(floor, setIndex) : null;
+                    ? DungeonLoot.milestone(floor, setIndex,difficulty.ordinal()) : null;
             if (milestone != null) {
                 List<ItemStack> guaranteed = bonusItems(id);
                 guaranteed.add(milestone.item());
@@ -1583,7 +1585,8 @@ final class DungeonManager implements Listener {
                         + (floor == 6 || floor == BOSS_FLOOR ? " /mycli arena loot 可查套装进度。" : ""));
                 receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
                         + milestone.item().getType().name().toLowerCase(Locale.ROOT)
-                            + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1)));
+                            + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1)
+                            + DungeonLoot.enchantmentFields(milestone.item())));
             }
             if (floor == 3) plugin.teachArenaSkills(p);
             if (floor == BASE_FLOORS && expanded) {
@@ -1594,25 +1597,27 @@ final class DungeonManager implements Listener {
             if (floor == BOSS_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(BOSS_CLEARS + id, -1);
                 if (clears < 0) clears = hasBossRelic(id, p) ? 1 : 0;
-                DungeonLoot.Bonus cache = DungeonLoot.bossCache(clears);
+                DungeonLoot.Bonus cache = DungeonLoot.bossCache(clears,difficulty.ordinal());
                 List<ItemStack> relics = bonusItems(id);
                 relics.add(0, cache.item());
                 plugin.getConfig().set(BONUS_ITEMS + id, relics);
                 plugin.getConfig().set(BOSS_CLEARS + id, clears + 1);
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "首领宝藏：" + cache.label() + "，已存入个人箱子。");
                 receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=10 category=boss item=minecraft:"
-                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)));
+                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)
+                        + DungeonLoot.enchantmentFields(cache.item())));
             }
             if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
-                DungeonLoot.Bonus cache = DungeonLoot.finalCache(clears);
+                DungeonLoot.Bonus cache = DungeonLoot.finalCache(clears,difficulty.ordinal());
                 List<ItemStack> relics = bonusItems(id);
                 relics.add(0, cache.item());
                 plugin.getConfig().set(BONUS_ITEMS + id, relics);
                 plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "星灯首领宝藏：" + cache.label() + "，已存入个人箱子。");
                 receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=15 category=final_boss item=minecraft:"
-                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)));
+                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)
+                        + DungeonLoot.enchantmentFields(cache.item())));
             }
             if (difficulty.walletBonus > 0) {
                 int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);

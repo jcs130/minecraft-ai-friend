@@ -1,0 +1,7 @@
+name: LootRollFixture
+version: 1.0
+main: org.qiandengji.lootqa.LootRollFixture
+api-version: "1.21.1"
+depend: [AgentFriend]
+commands:
+  lootrollqa: {}
