@@ -1,5 +1,6 @@
 ## 0.5.7-rc.160-preview.35
 
+- Wait for the current native landing/physics epoch before starting environment or damage reflexes. Positive respawn health alone no longer turns stale fire/water cells into a new rescue and body-queue hold; normal rescue resumes after fresh position and physics evidence.
 - Add on-demand `mc_bag {detail:"slots", item?}` for exact self inventory window slots, stack counts, names, durability and enchantments. Read the original player window without moving items or running scripts; distinguish unsynchronized inventory, container slots, equipment and the hotbar. Keep summary reads compact and refresh slot-sensitive reads even when aggregate counts have not changed.
 
 ## 0.5.7-rc.160-preview.34
