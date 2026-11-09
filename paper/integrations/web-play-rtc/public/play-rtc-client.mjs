@@ -66,7 +66,10 @@ export function createPlayRtcClient({offer,queryReceipt,onLost=()=>{},Peer=globa
     subscribeWorld(listener,lost){
       if(!ready||worldListener)return null;
       worldListener=listener;worldLost=lost;send({kind:'world',subscribe:true});
-      return ()=>{worldListener=worldLost=null;send({kind:'world',subscribe:false})};
+      // An interrupted SSE event may be only partly decoded. Do not reuse its
+      // byte stream for a fresh snapshot: terminate this peer and its controls.
+      // A new viewer starts on SSE; explicit reacquisition creates a new decoder.
+      return ()=>{worldListener=worldLost=null;close('WORLD_SUBSCRIPTION_ENDED')};
     },
     status:()=>({ready,closed,transport:ready?'webrtc':'http',roundTripMs:lastRttMs,pending:pending.size,lastFailure})};
 }
