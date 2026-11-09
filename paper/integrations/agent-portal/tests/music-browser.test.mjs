@@ -32,7 +32,7 @@ test('desktop/mobile music UI, literal lyrics, manual playback, owner controls a
   await page.setViewport({ width: 1366, height: 900 }); await page.goto(f.origin + '/music.html');
   await page.waitForFunction(() => document.querySelectorAll('.work').length === 8);
   assert.equal(await page.$$eval('header.site-header', rows => rows.length), 1);
-  assert.deepEqual(await page.$$eval('.site-navigation>a', links => links.map(a => a.textContent)), ['世界', '直播', '作品', '加入']);
+  assert.deepEqual(await page.$$eval('.site-navigation>a', links => links.map(a => a.textContent)), ['世界', '地图', '直播', '作品', '加入']);
   assert.equal(await page.$eval('.qd-section-nav [aria-current=page]', node => node.textContent), '歌曲');
   assert.equal(await page.$('audio'), null, 'public list does not download audio');
   assert.equal(await page.$eval('body', node => node.scrollWidth <= innerWidth), true);

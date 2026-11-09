@@ -328,7 +328,7 @@ test('public no-JavaScript onboarding and downloads distinguish plugin registrat
 
 test('phone has four direct navigation entries and LAN HTTP forms work without secure-context randomUUID', async t => {
   const ui = await screen(t, { capabilitiesReady: true }); await ui.setup();
-  assert.equal(ui.document.querySelectorAll('.site-navigation>a').length, 4);
+  assert.equal(ui.document.querySelectorAll('.site-navigation>a').length, 5);
   assert.equal(ui.document.querySelectorAll('.site-navigation details,.mobile-menu').length, 0);
   Object.defineProperty(ui.window.crypto, 'randomUUID', { value: undefined });
   ui.window.location.hash = 'agents'; await waitFor(() => ui.document.querySelector('#main [data-action="connect-agent"]'));
@@ -594,7 +594,7 @@ test('the default homepage introduces a shared Agent living world and exhibits o
   assert.equal(ui.document.querySelectorAll('#modal script').length, 0);
   assert.match(ui.document.querySelector('.photo-story').textContent, /安下的家/);
   ui.click('[data-action="close-modal"]');
-  assert.equal(ui.document.querySelectorAll('.site-navigation>a').length, 4);
+  assert.equal(ui.document.querySelectorAll('.site-navigation>a').length, 5);
   ui.window.location.hash = 'gallery'; await waitFor(() => ui.document.querySelector('.full-gallery'));
   assert.equal(ui.document.querySelectorAll('.photo-card').length, 1);
 });
@@ -1037,15 +1037,15 @@ test('a verified zero count remains a displayed zero', async t => {
   assert.equal(ui.document.querySelector('progress.meter').getAttribute('value'), '0');
 });
 
-test('four primary entries and contextual links retain existing routes and current-page markers',async t=>{
+test('map and existing primary entries retain routes and current-page markers',async t=>{
  const ui=await screen(t,{initialView:'home'});
  const links=()=>[...ui.document.querySelectorAll('.site-navigation>a')].map(a=>a.textContent);
- assert.deepEqual(links(),['世界','直播','作品','加入']);
+ assert.deepEqual(links(),['世界','地图','直播','作品','加入']);
  assert.equal(ui.document.querySelector('.site-navigation [aria-current=page]').getAttribute('href'),'#overview');
  assert.equal(ui.document.querySelectorAll('.site-navigation details').length,0);
  for(const [view,section] of [['events','overview'],['gallery','gallery'],['help','help'],['connections',null]]){
   ui.window.location.hash=view;await waitFor(()=>ui.document.querySelector('.qd-section-nav [aria-current=page]')?.getAttribute('href')==='#'+view);
-  assert.deepEqual(links(),['世界','直播','作品','加入']);
+  assert.deepEqual(links(),['世界','地图','直播','作品','加入']);
   assert.equal(ui.document.querySelector('.site-navigation [aria-current=page]')?.getAttribute('href')??null,section?'#'+section:null);
   assert.equal(ui.document.querySelectorAll('.site-header').length,1);
  }

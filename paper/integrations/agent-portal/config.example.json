@@ -79,6 +79,7 @@
     "directory": "E:/MC/private/portal-bridge",
     "keyFile": "E:/MC/private/portal-bridge.key"
   },
+  "worldMap": { "enabled": false },
   "publicMedia": { "objectStorage": false },
   "downloads": { "baseUrl": "", "enabledPackages": [] },
   "appearance": { "enabled": true, "bridgeEnabled": false, "tokenHash": "" },

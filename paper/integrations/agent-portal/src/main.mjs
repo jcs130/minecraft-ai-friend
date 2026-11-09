@@ -2,6 +2,7 @@ import { loadConfig } from './config.mjs';
 import { createPortal } from './server.mjs';
 import {isAbsolute} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {loadWebRtcRuntime} from './webrtc-runtime.mjs';
 
 const config = loadConfig();
 // Operator assembly only, never a URL/path accepted by the website. With no
@@ -12,7 +13,8 @@ if(process.env.PORTAL_HOSTING_ADAPTER){
   ({hostedAgentsFactory}=await import(pathToFileURL(process.env.PORTAL_HOSTING_ADAPTER).href));
   if(typeof hostedAgentsFactory!=='function')throw new Error('Hosting adapter must export hostedAgentsFactory');
 }
-const portal = createPortal(config,{hostedAgentsFactory});
+const webRtc = await loadWebRtcRuntime(process.env.PORTAL_WEBRTC_CONFIG);
+const portal = createPortal(config,{hostedAgentsFactory,webRtc});
 await portal.ready;
 portal.server.listen(config.port, config.host, () => {
   console.log(`${config.siteName} Agent Portal: http://${config.host}:${portal.server.address().port}`);

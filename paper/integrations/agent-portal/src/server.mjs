@@ -44,6 +44,7 @@ import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
 import {hostingRoutes} from './hosting-routes.mjs';
+import { WorldMap } from './world-map.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
@@ -71,6 +72,7 @@ async function jsonBody(req, maximum = 16 * 1024) {
 }
 
 export function createPortal(config, options = {}) {
+  const worldMap = new WorldMap(config);
   const agentClients = getAgentClients(config);
   const mediaOrigin = publicMediaOrigin(config);
   const store = options.store || new Store(config.dataDir);
@@ -84,7 +86,7 @@ export function createPortal(config, options = {}) {
   const nativeReady = worldView.enabled ? (async () => {
     const site = options.spectatorSite || await loadSpectatorSite(config.live.native3dSiteDirectory);
     const relay=createSpectatorRelay({ WebSocketServer, site, maxPublishers: config.live.worldObserverMaxTargets,
-      sharedStreams:true,cacheAssets:true,maxViewers:32,
+      sharedStreams:true,cacheAssets:true,maxViewers:32,webRtc:options.webRtc??null,
       // Four scenes share the existing 512 MiB portal container. Keep cached
       // assets/checkpoints bounded per source instead of scaling with viewers.
       assetCacheOptions:{maxBytes:16*1024*1024},
@@ -250,6 +252,11 @@ export function createPortal(config, options = {}) {
     try {
       const port = server.address()?.port || config.port;
       req.portalOrigin = requestOrigin(req, config, port);
+      const mapPath = new URL(req.url, 'http://portal.invalid').pathname;
+      if (await worldMap.route(req, res, mapPath, { authorize: req => {
+        if (!cloud) throw fail(404, 'NOT_FOUND', '未开放此接口');
+        cloud.authorize(req);
+      }, json: jsonBody, respond })) return;
       if (req.portalOrigin.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;

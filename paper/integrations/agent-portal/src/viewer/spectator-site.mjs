@@ -32,7 +32,7 @@ export async function loadSpectatorSite(directory) {
       const match = /^([a-f0-9]{64})\/(client\.js|native-console\.js)$/.exec(resource);
       return match && manifest.files[match[2]]?.sha256 === match[1] ? files.get(match[2]) : null;
     },
-    page(basePath, viewerBuild, mode = 'first', { staticPrefix = '/watch/_static' } = {}) {
+    page(basePath, viewerBuild, mode = 'first', { staticPrefix = '/watch/_static', webRtc = false } = {}) {
       if (!/^\/(?:[A-Za-z0-9_-]+\/)+$/.test(basePath) || !pages.has(mode) || !BUILD_PATTERN.test(viewerBuild)) throw Error('SPECTATOR_PAGE_INVALID');
       if (!/^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+$/.test(staticPrefix)) throw Error('SPECTATOR_PAGE_INVALID');
       let html = pages.get(mode).replaceAll(BASE, basePath);
@@ -40,6 +40,7 @@ export async function loadSpectatorSite(directory) {
         html = html.replaceAll(`src="${basePath}${alias}"`, `src="${staticPrefix}/${manifest.files[name].sha256}/${name}"`);
       }
       return Buffer.from(html.replace(/<head\b[^>]*>/i,
-        head => head + '<meta name="native-viewer-build" content="' + viewerBuild + '">'));
+        head => head + '<meta name="native-viewer-build" content="' + viewerBuild + '">'
+          + (webRtc === true ? '<meta name="native-viewer-transport" content="webrtc-v1">' : '')));
     } };
 }

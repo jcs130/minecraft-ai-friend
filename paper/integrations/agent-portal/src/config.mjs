@@ -13,6 +13,8 @@ export function loadConfig(overrides = {}) {
   if (!overrides.skipLocalConfig && fs.existsSync(localPath)) local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
   const defaults = JSON.parse(fs.readFileSync(path.join(projectRoot, 'config.example.json'), 'utf8'));
   const config = { ...defaults, ...local, ...overrides };
+  config.worldMap = { enabled: false, ...defaults.worldMap, ...local.worldMap, ...overrides.worldMap };
+  if (typeof config.worldMap.enabled !== 'boolean') throw new Error('Invalid world map configuration');
   config.sceneStorage={...defaults.sceneStorage,...local.sceneStorage,...overrides.sceneStorage};
   config.music = { ...defaults.music, ...local.music, ...overrides.music };
   if (typeof config.music.enabled !== 'boolean' || config.music.enabled && !config.sceneStorage.enabled) throw new Error('Music requires the existing private scene object storage');

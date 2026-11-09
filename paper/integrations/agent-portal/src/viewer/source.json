@@ -7,16 +7,27 @@
       "../src/native-viewer/native-item-stack.js": "./native-item-stack.js",
       "../src/native-viewer/native-rpg-state.js": "./native-rpg-state.js",
       "../src/native-viewer/native-game-operations.js": "./native-game-operations.js"
+    },
+    "spectator-webrtc.mjs": {
+      "../src/native-viewer/native-rtc-protocol.js": "./native-rtc-protocol.js"
     }
   },
   "files": {
     "spectator-protocol.mjs": "9ebcf6ba3ad8869b20c5913848259d2bb67151296ae4aba68e7642a0cb12755e",
-    "spectator-relay.mjs": "18aeb6fffecabf59ae25597346aef3ee3f21848271be20e2f15ba6745d0eab44",
-    "spectator-site.mjs": "69ea76533bc70215aac0d81af407c2ad1c31fca9bf7856c7c371ab92b4e0b261",
+    "spectator-relay.mjs": "3286ba88520552d20a1e78ed172c0d6b212b8ee6e7ad2b01d43cd06d24fff6bc",
+    "spectator-site.mjs": "96ccd9f2c08ae070317a5face3b0700970da685c83f04a2fde4d11bbcf36a62b",
     "spectator-fanout.mjs": "34b488f6ebe0b92ba6c3b454c270230363e81123c923659bd3b55368a4ab2948",
     "spectator-public.mjs": "e4afa81add08a017c026b203195a19a20daa98b51d8272ee74ac0eb48cda9e25",
     "native-item-stack.js": "3548831a7e87e6e38c85fcf3673c31edffe03691863479aa0815a7019b49d3b4",
     "native-rpg-state.js": "e23f3ee795b7c5d57569f9e78c55f28e39a512681cb955d3d4f3a4ba2746e4d6",
-    "native-game-operations.js": "f8af3860631d65e3a9011a445c48e55e13c38454c4c4dc6f378586f980be60a5"
+    "native-game-operations.js": "f8af3860631d65e3a9011a445c48e55e13c38454c4c4dc6f378586f980be60a5",
+    "spectator-webrtc.mjs": "56aef870584f2484d70d74853ba21f9ee3a46f87009c0654e139aefed961773c",
+    "native-rtc-protocol.js": "9c82f23644eee2dd09950d6839b616ade0c6ffb644eb81c7839ec7774d51c2b6"
+  },
+  "fileCommits": {
+    "spectator-relay.mjs": "6f80eadeeafa780e245312104fcbf5aaf4a0ba1f",
+    "spectator-site.mjs": "6f80eadeeafa780e245312104fcbf5aaf4a0ba1f",
+    "spectator-webrtc.mjs": "6f80eadeeafa780e245312104fcbf5aaf4a0ba1f",
+    "native-rtc-protocol.js": "6f80eadeeafa780e245312104fcbf5aaf4a0ba1f"
   }
 }

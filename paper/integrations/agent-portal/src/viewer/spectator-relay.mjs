@@ -5,6 +5,7 @@ import { SPECTATOR_PROTOCOL, CHUNK_BYTES, MAX_BODY_BYTES, CHANNEL_PATTERN, UUID_
   observationPath, validatedSource, decodeChunk } from './spectator-protocol.mjs';
 import { SpectatorFanout, SpectatorAssetCache, cacheableSpectatorAsset } from './spectator-fanout.mjs';
 import { publicSpectatorEvent, publicSpectatorStatus } from './spectator-public.mjs';
+import { createSpectatorWebRtc } from './spectator-webrtc.mjs';
 
 const CSP = "default-src 'self'; script-src 'self'; img-src 'self' blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
 const error = (res, status, reason) => {
@@ -51,16 +52,26 @@ export function decodedSpectatorChunk(data,encoding='identity') {
  */
 export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher, authorizeViewer,
   pagePrefix = '/watch', sourcePrefix = '/api/v1/live', maxPublishers = 32, maxViewers = 4,
-  sharedStreams = false, cacheAssets = false, fanoutOptions = {}, assetCacheOptions = {},
+  sharedStreams = false, cacheAssets = false, fanoutOptions = {}, assetCacheOptions = {}, webRtc = null,
   permissionIntervalMs = 5000, headerTimeoutMs = 10000, requestTimeoutMs = 60000, authTimeoutMs = 3000 }) {
   if (typeof WebSocketServer !== 'function' || !site?.page || !site?.file || !site.build
       || typeof authorizePublisher !== 'function' || typeof authorizeViewer !== 'function'
       || !/^\/[A-Za-z0-9_/-]+$/.test(pagePrefix) || pagePrefix.endsWith('/')
       || !/^\/[A-Za-z0-9_/-]+$/.test(sourcePrefix) || sourcePrefix.endsWith('/')) throw Error('SPECTATOR_RELAY_CONFIGURATION');
+  if (webRtc && !sharedStreams) throw Error('SPECTATOR_RTC_REQUIRES_SHARED_STREAMS');
   const wss = new WebSocketServer({ noServer: true, maxPayload: CHUNK_BYTES + 1024, perMessageDeflate: false });
   const sources = new Map();
   let closed = false, nextId = randomInt(1, 0x7fffffff);
   const newId = () => { nextId = nextId === 0xffffffff ? 1 : nextId + 1; return nextId; };
+  function eventHub(source) {
+    if (!source.hub || source.hub.closed) source.hub = new SpectatorFanout({ ...fanoutOptions, playerUuid: source.playerUuid, maxViewers,
+      projectPublic: publicSpectatorEvent, open: sink => request(source, null, sink, 'events', true) });
+    return source.hub;
+  }
+  const rtc = webRtc ? createSpectatorWebRtc({ ...webRtc, maxPeers: maxViewers,
+    authorize: (req, source) => authorizeViewer(req, source.channelId),
+    live: source => !closed && !source.closed && sources.get(source.channelId) === source && !!source.info,
+    subscribe: (source, req, sink, scope) => eventHub(source).subscribe(req, sink, { scope }) }) : null;
 
   function retire(source, reason = 'SPECTATOR_SOURCE_OFFLINE') {
     if (source.closed) return;
@@ -68,6 +79,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     clearTimeout(source.authTimer); clearInterval(source.timer);
     if (sources.get(source.channelId) === source) sources.delete(source.channelId);
     source.hub?.close(); source.assets?.clear();
+    rtc?.retire(source);
     for (const pending of source.requests.values()) pending.fail(503, reason);
     source.requests.clear();
     if (source.ws.readyState === 1) source.ws.close(1008, reason);
@@ -76,6 +88,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     const source = sources.get(channelId);
     return { available: !!source?.info && !source.closed, readOnly: true, mode: 'native-3d',
       playerUuid: source?.info?.playerUuid ?? null, viewerBuild: source?.info?.viewerBuild ?? null,
+      ...(rtc ? { webRtc: rtc.state(source) } : {}),
       viewers: source?.hub ? source.hub.state().viewers : source ? [...source.requests.values()].filter(p => p.path === 'events').length : 0,
       ...(sharedStreams ? { upstreamStreams: source?.hub?.state().upstreamStreams ?? 0, replayBytes: source?.hub?.state().replayBytes ?? 0,
         assetCacheBytes: source?.assets?.bytes ?? 0, assetCacheHits: source?.assets?.hits ?? 0,
@@ -172,6 +185,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
                 const current = await authorizePublisher(req, channelId, source.token);
                 if (current?.playerUuid?.toLowerCase() !== source.playerUuid) throw Error('SPECTATOR_AUTH_REVOKED');
                 await source.hub?.check(request => authorizeViewer(request, channelId));
+                await rtc?.check(source);
                 for (const pending of source.requests.values()) {
                   if (pending.internal) continue; // The hub checks every downstream separately.
                   try { await authorizeViewer(pending.req, channelId); }
@@ -243,7 +257,8 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
       return true;
     }
     const raw = req.url.slice(pagePrefix.length + 1), parts = raw.split('/'), channelId = parts.shift();
-    if (closed || req.method !== 'GET' || !CHANNEL_PATTERN.test(channelId ?? '') || /[%\\?#\x00-\x20]/.test(raw)
+    const rtcRoute = parts.join('/').replace(/^(?:third|3dview)\//, '') === 'webrtc';
+    if (closed || (req.method !== 'GET' && !(rtcRoute && req.method === 'POST')) || !CHANNEL_PATTERN.test(channelId ?? '') || /[%\\?#\x00-\x20]/.test(raw)
         || parts.some(p => p === '.' || p === '..')) { error(res, 400, 'SPECTATOR_REQUEST_INVALID'); return true; }
     let viewerScope='owner';
     try { const grant=await authorizeViewer(req, channelId);viewerScope=grant?.scope??'owner';if(!['owner','scene'].includes(viewerScope))throw Error('SPECTATOR_SCOPE_INVALID'); }
@@ -257,13 +272,18 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     if (res.destroyed) return true;
     const source = sources.get(channelId);
     if (!source?.info || source.closed) { error(res, 503, 'SPECTATOR_SOURCE_OFFLINE'); return true; }
+    if (rtcRoute) {
+      if (!rtc) error(res, 404, 'SPECTATOR_RTC_DISABLED');
+      else await rtc.http(req, res, source, viewerScope);
+      return true;
+    }
     const relative = parts.join('/');
     if (['third', '3dview'].includes(relative)) {
       res.writeHead(303, { Location: `${pagePrefix}/${channelId}/${relative}/`, 'Cache-Control': 'no-store' }); res.end(); return true;
     }
     const page = relative === '' ? 'first' : ['third/', '3dview/'].includes(relative) ? relative.slice(0, -1) : null;
     const resource = relative.replace(/^(?:third|3dview)\//, '');
-    const local = page ? { bytes: site.page(`${pagePrefix}/${channelId}/`, source.info.viewerBuild, page, { staticPrefix: pagePrefix + '/_static' }), contentType: 'text/html; charset=utf-8' } : site.file(resource);
+    const local = page ? { bytes: site.page(`${pagePrefix}/${channelId}/`, source.info.viewerBuild, page, { staticPrefix: pagePrefix + '/_static', webRtc: !!rtc }), contentType: 'text/html; charset=utf-8' } : site.file(resource);
     if (local) {
       if (!page) { staticResponse(req, res, local); return true; }
       res.writeHead(200, { 'Content-Type': local.contentType, 'Content-Length': local.bytes.length, 'Cache-Control': 'private, no-store',
@@ -292,10 +312,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     }
     if(viewerScope==='scene'&&resource==='events'&&!sharedStreams){error(res,403,'SPECTATOR_PUBLIC_STREAM_UNAVAILABLE');return true;}
     if (sharedStreams && resource === 'events') {
-      if (!source.hub || source.hub.closed) source.hub = new SpectatorFanout({ ...fanoutOptions, playerUuid:source.playerUuid, maxViewers,
-        projectPublic:publicSpectatorEvent,
-        open: sink => request(source,null,sink,'events',true) });
-      if (!source.hub.subscribe(req,res,{scope:viewerScope})) error(res,429,'SPECTATOR_VIEWER_LIMIT');
+      if (!eventHub(source).subscribe(req,res,{scope:viewerScope})) error(res,429,'SPECTATOR_VIEWER_LIMIT');
       return true;
     }
     if (cacheAssets && cacheableSpectatorAsset(resource)) {
@@ -325,6 +342,7 @@ export function createSpectatorRelay({ WebSocketServer, site, authorizePublisher
     async close() {
       if (closed) return;
       closed = true;
+      rtc?.close();
       for (const source of sources.values()) retire(source);
       for (const ws of wss.clients) ws.terminate();
       await new Promise(resolve => wss.close(resolve));
