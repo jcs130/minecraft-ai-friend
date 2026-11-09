@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-11-09T10:09:47+08:00",
+  "sourceMerge": "a0df20373db406918d9c95d456c937c4c7baee1d",
+  "ciPassed": 6,
+  "map": {
+    "deployed": true,
+    "url": "https://mc.kangqiang.site/map.html",
+    "image": "sha256:a0eb4cd44dc819b561875cbd97d2d0cc751e339bea1383205e659c5be8d54b79",
+    "terrainSnapshotDate": "2026-11-07",
+    "livePositions": true,
+    "desktopAndMobileWebGlVerified": true,
+    "offlinePositionsCleared": true,
+    "persistentCollectorTaskInstalled": false
+  },
+  "webrtc": {
+    "deployed": false,
+    "candidateImage": "sha256:b748e47d1304ddc0da022ea9043b8988474b1b118edf5d99fb6b63d66eaa8772",
+    "browserBuildSourceSha256": "d5fc30fd2720e81c9697f38a3b95b8e92489533e5d03e568522fe1f96372e308",
+    "cloudUdpReady": true,
+    "udpPortRange": [35000, 35127],
+    "productionBrowserAccepted": false,
+    "pendingRelease": "web-map-rtc-release-20261109-r2",
+    "reason": "WINDOWS_ELEVATION_CANCELLED"
+  },
+  "backup": {
+    "verifiedCopies": 2,
+    "sha256": "2869947ff10531a727de5dc99e06275b3424351c56135379ff4adb6197ea2c76",
+    "bytes": 50667206,
+    "rollbackRestoresBusinessData": false
+  },
+  "gameRestartedByThisRelease": false
+}
