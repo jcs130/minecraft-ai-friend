@@ -23,6 +23,7 @@ import { publicMedia, publicMediaOrigin, servePublicMedia } from './public-media
 import {SavedChallenges,CloudChallenges} from './challenges.mjs';
 import { CloudAccounts } from './cloud-accounts.mjs';
 import { AgentProfiles, MAX_REFERENCE_BYTES } from './agent-profiles.mjs';
+import { PlayerAvatars } from './player-avatars.mjs';
 import { EmailAuth, normalizeEmail } from './email-auth.mjs';
 import { getAgentClients } from './agent-clients.mjs';
 import { packageAt, packageLocation, publicDownloads } from './download-catalog.mjs';
@@ -109,6 +110,7 @@ export function createPortal(config, options = {}) {
   const accountCloud = cloud && config.cloudAccounts.enabled ? new CloudAccounts(config, store) : null;
   const accounts = new GameAccounts(config, store, game, accountCloud);
   const profiles = new AgentProfiles(store);
+  const playerAvatars = new PlayerAvatars(store);
   const emailAuth = new EmailAuth(config, store, options.emailSender);
   const agentAccess = new AgentAccess(config, store, game, accounts);
   const nekoAuth = new NekoAuth(config,store,{fetcher:options.nekoFetch});
@@ -537,6 +539,30 @@ export function createPortal(config, options = {}) {
         if (action === 'assets' && id && req.method === 'GET') { const bytes = appearance.image(agent, id); res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length }); return res.end(bytes); }
         if (action === 'assets' && id && req.method === 'DELETE') return respond(res, 200, appearance.remove(agent, browser.owner, id));
         throw fail(405, 'METHOD_NOT_ALLOWED', '请使用角色的外观管理入口');
+      }
+      const publicAvatar = /^\/api\/v1\/avatars\/(\.?[A-Za-z0-9_]{1,16})$/.exec(pathname);
+      if (publicAvatar && ['GET','HEAD'].includes(req.method)) {
+        const image=playerAvatars.image(publicAvatar[1]);
+        if(!image){const initials=publicAvatar[1].replace(/^ag_/i,'').slice(0,2).toUpperCase();const bytes=Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#294638"/><text x="32" y="40" text-anchor="middle" fill="#ddc18b" font-family="sans-serif" font-size="24">${initials}</text></svg>`);res.writeHead(200,{'Content-Type':'image/svg+xml','Content-Length':bytes.length,'Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?undefined:bytes);}
+        const etag='"'+image.sha256+'"';res.setHeader('ETag',etag);res.setHeader('Cache-Control','no-cache');
+        if(req.headers['if-none-match']===etag){res.writeHead(304);return res.end();}
+        res.writeHead(200,{'Content-Type':image.mime,'Content-Length':image.bytes.length});return res.end(req.method==='HEAD'?undefined:image.bytes);
+      }
+      const avatarRoute = /^\/api\/v1\/agents\/([a-f0-9]{24})\/avatar$/.exec(pathname);
+      if(avatarRoute){
+        if(isWrite)browserAuth(req);
+        const {agent,owner}=await authorizedAgent(req,avatarRoute[1],['profile.read']);
+        if(req.method==='GET')return respond(res,200,playerAvatars.get(agent));
+        if(req.method==='DELETE')return respond(res,200,playerAvatars.remove(agent,owner));
+        if(req.method==='POST'){rate('avatar:'+owner.id,12);return respond(res,200,playerAvatars.fromReference(agent,owner,profiles,await jsonBody(req)));}
+        if(req.method==='PUT'){
+          rate('avatar:'+owner.id,12);
+          if(req.headers['x-avatar-public-consent']!=='true')throw fail(400,'AVATAR_PUBLIC_CONSENT','请确认将图片用于公开头像');
+          if(Number(req.headers['content-length'])>MAX_REFERENCE_BYTES)throw fail(413,'AVATAR_SIZE','头像不能超过 4MB');
+          let size=0;const parts=[];for await(const part of req){size+=part.length;if(size>MAX_REFERENCE_BYTES)throw fail(413,'AVATAR_SIZE','头像不能超过 4MB');parts.push(part);}
+          return respond(res,200,playerAvatars.set(agent,owner,Buffer.concat(parts)));
+        }
+        throw fail(405,'METHOD_NOT_ALLOWED','请使用角色头像设置入口');
       }
       const profileRoute = /^\/api\/v1\/agents\/([a-f0-9]{24})\/(profile|references)(?:\/([a-f0-9-]{36}))?$/.exec(pathname);
       if (profileRoute) {

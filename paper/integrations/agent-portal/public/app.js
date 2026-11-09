@@ -72,7 +72,7 @@ function avatar(agent) {
   const name = typeof agent === 'string' ? agent : agent.name;
   const color = /cormy/i.test(name) ? 'blue' : /goddess/i.test(name) ? 'gold' : /eye|micro/i.test(name) ? 'purple' : '';
   const initials = name.replace(/^ag_/, '').replace(/[._]/g, '').slice(0, 2).toUpperCase() || 'AG';
-  return `<span class="avatar ${color}" aria-hidden="true">${e(initials)}</span>`;
+  return /^\.?[A-Za-z0-9_]{1,16}$/.test(name) ? `<img class="avatar ${color}" src="/api/v1/avatars/${encodeURIComponent(name)}" alt="" style="object-fit:cover;object-position:50% 20%">` : `<span class="avatar ${color}" aria-hidden="true">${e(initials)}</span>`;
 }
 function notice(message, type = '') { return `<div class="notice ${type}">${icons.info}<p>${message}</p></div>`; }
 function empty(title, description, action = '', icon = 'lock') { return `<div class="empty">${icons[icon]}<h2>${title}</h2><p>${description}</p>${action}</div>`; }
@@ -286,6 +286,12 @@ function selectLiveChannel(channels, player, selectedId) {
   if (player) return channels.find(channel => channel.playerName?.toLowerCase() === player.toLowerCase());
   return channels.find(channel => channel.id === selectedId) || channels.find(channel => channel.isOwn) || channels[0];
 }
+async function playerAvatarModal(id) {
+  const agent=state.authorized.find(row=>row.id===id)||state.roster.find(row=>row.id===id);
+  const current=await api(`/agents/${id}/avatar`);
+  const profile=agent?.kind==='agent'?await api(`/agents/${id}/profile`):{references:[]};
+  openModal('设置角色头像','用于网站、世界地图和直播选角，所有访客均可看到。',`<form id="player-avatar-form" class="form-grid" data-agent="${e(id)}"><label class="field">上传头像<input name="image" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG、JPG 或 WebP，最多 4MB。上传新图优先于下方设定图。</small></label>${profile.references.length?`<div class="reference-grid">${profile.references.map((image,index)=>`<label><img src="${e(image.url)}" alt="设定图 ${index+1}"><span><input type="radio" name="referenceId" value="${e(image.id)}"> 使用这张设定图</span></label>`).join('')}</div>`:'<p class="tiny">当前角色还没有保存设定图，可直接上传原图。</p>'}<label class="checkbox"><input name="publicConsent" type="checkbox" required><span>确认将选中的图片设为公开角色头像</span></label><div class="form-error" role="alert"></div><div class="form-actions"><button class="btn primary" type="submit">保存头像</button>${current.configured?button('clear-player-avatar','恢复默认','','',`data-id="${e(id)}"`):''}</div></form>`);
+}
 function livePage() {
   const selected = selectLiveChannel(state.channels, state.livePlayer, state.selectedChannel);
   if (state.livePlayer && !selected) {
@@ -426,7 +432,7 @@ function rosterCards(agents = [...state.roster, ...state.authorized.filter(row =
   for (const agent of filtered) {
     const full = state.authorized.find(row => row.id === agent.id);
     const historical = !!(full?.historical || agent.historical);
-    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2><a href="#events?player=${encodeURIComponent(agent.name)}">${e(agent.name)}</a></h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
+    const card = `<article class="agent-card"><div class="agent-card-top">${avatar(agent)}<div><h2><a href="#events?player=${encodeURIComponent(agent.name)}">${e(agent.name)}</a></h2><p>${kindNames[agent.kind]}${historical ? " · 历史身体（只读）" : ""}</p></div>${historical ? '<span class="status unknown">历史存档</span>' : statusTag(agent)}</div><div class="kv"><span>角色类型</span><strong>${typeTag(agent)}</strong></div><div class="kv"><span>原角色 UUID</span><strong class="mono">${full?.playerUuid ? e(full.playerUuid.slice(0, 8)) + '…' + e(full.playerUuid.slice(-4)) : '授权后可查看'}</strong></div><div class="kv"><span>资料访问</span><strong>${full?.isOwn ? '本人角色' : agent.claimable ? '可自行认领' : full ? '管理查看' : owner() ? '已绑定或管理身份' : '登录后查看'}</strong></div><button class="btn" data-action="detail" data-id="${agent.id}">角色详情 ${icons.arrow}</button>${full && !full.historical && (full.isOwn || isAdmin()) ? button('player-avatar', '设置头像', 'users', 'small', `data-id="${agent.id}"`) : ''}${full && !full.historical && agent.kind === 'agent' ? button('agent-profile', '角色设定与图片', 'book', 'small', `data-id="${agent.id}"`) : ''}${full?.isOwn && !full.historical && agent.kind === 'agent' ? button('agent-appearance', '皮肤与 YSM 模型', 'users', 'small', `data-id="${agent.id}"`) : ''}${owner() && agent.claimable && !full?.isOwn ? button('claim-role', state.gameCapabilities?.ready ? '认领这个角色' : '了解认领方式', 'link', 'small', `data-name="${e(agent.name)}"`) : ''}</article>`;
     (historical ? history : current).push(card);
   }
   return (current.length ? current.join('') : empty('没有找到匹配的当前角色', history.length ? '旧身体的保存资料在下方历史角色档案中。' : '试试其他角色名称或筛选条件。', button('clear-search', '清除筛选', 'refresh'), 'users')) + historicalRoles(history);
@@ -828,6 +834,8 @@ document.addEventListener('click', async event => {
     else if (action === 'binding') { if (detail.open) detail.close(); bindingModal(); }
     else if (action === 'connect-agent') agentSetupModal();
     else if (action === 'new-game-agent') gameAccountModal('create');
+    else if (action === 'player-avatar') await playerAvatarModal(target.dataset.id);
+    else if (action === 'clear-player-avatar') { await api(`/agents/${target.dataset.id}/avatar`, {method:'DELETE'}); modal.close(); render(); toast('已恢复默认头像'); }
     else if (action === 'agent-profile') await profileModal(target.dataset.id);
     else if (action === 'agent-appearance' || action === 'appearance-query') await appearanceModal(target.dataset.id);
     else if (action === 'apply-appearance') {
@@ -875,7 +883,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['photo-upload-form','photo-delete-form','auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form', 'world-visibility-form'].includes(form.id)) return;
+  if (!['player-avatar-form','photo-upload-form','photo-delete-form','auth-form', 'password-form', 'binding-form', 'token-form', 'reauth-form', 'revoke-token-form', 'notice-form', 'game-account-form', 'channel-form', 'rotate-publisher-form', 'delete-channel-form', 'agent-profile-form', 'remove-reference-form', 'email-code-form', 'email-request-form', 'agent-invite-form', 'revoke-agent-invite-form', 'world-visibility-form'].includes(form.id)) return;
   event.preventDefault(); const values = Object.fromEntries(new FormData(form));
   const errorElement = form.querySelector('.form-error'); errorElement.textContent = '';
   const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
@@ -926,6 +934,12 @@ document.addEventListener('submit', async event => {
     } else if (form.id === 'notice-form') {
       await api('/admin/notices', { method: 'POST', body: JSON.stringify(values) });
       modal.close(); await loadEvents(1, 'all'); render(); toast('世界公告已发布');
+    } else if(form.id==='player-avatar-form') {
+      if(!form.elements.publicConsent.checked)throw Error('请确认公开头像');
+      const file=form.elements.image.files[0],id=form.dataset.agent;
+      if(file){await checkReferenceFile(file);await api(`/agents/${id}/avatar`,{method:'PUT',headers:{'Content-Type':file.type,'X-Avatar-Public-Consent':'true'},body:file});}
+      else {if(!values.referenceId)throw Error('请上传头像或选择设定图');await api(`/agents/${id}/avatar`,{method:'POST',body:JSON.stringify({referenceId:values.referenceId,publicConsent:true})});}
+      modal.close();render();toast('公开头像已保存；地图刷新后同步');
     } else if (form.id === 'agent-profile-form') {
       const file = form.elements.reference.files[0], id = form.dataset.agent;
       if (file) await checkReferenceFile(file);
