@@ -27,6 +27,8 @@ jobs:
         run: node --test paper/ops/goddess-*.test.mjs
       - name: Check activity countdown meaning and scoped identity
         run: python paper/ops/test-activity-bars.py
+      - name: Check protected navigation-only dungeon entrances
+        run: python paper/ops/test-dungeon-entrance.py
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
@@ -91,6 +93,7 @@ jobs:
       - run: python -m unittest discover -s paper/ops/tests -p test_city_gate_regions.py -v
       - run: python -m unittest discover -s paper/ops -p test_native_auth_inputs.py -v
       - run: python -m pip install PyYAML==6.0.3
+      - run: python -m unittest discover -s paper/ops/tests -p test_dungeon_content_merge.py -v
       - run: python paper/ops/world-activity.test.py
       - run: python paper/ops/goddess_chat_review.test.py
       - run: python paper/ops/goddess-evolution.test.py
@@ -225,6 +228,8 @@ jobs:
           java-version: '21'
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm build:engine
+      - name: Check minimal crypt geometry patch and guarded rollback
+        run: node --test ../../paper/ops/crypt-connector-region.test.mjs
       - name: Install the shared portal utilities for isolated hosting checks
         run: npm ci --ignore-scripts --no-audit
         working-directory: paper/integrations/agent-portal

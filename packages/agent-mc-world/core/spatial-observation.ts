@@ -13,6 +13,7 @@ export {SPATIAL_QUERY_SCHEMA,SPATIAL_QUERY_EXAMPLE,spatialArgumentDiagnostic} fr
 import { openVoxelQuery, voxelPage, visibleVoxelCells, voxelContinuation, type VoxelInput, type VoxelQuery } from './voxel-paging.ts';
 import { spatialReadout, SPATIAL_READOUT_TEXT_RESERVE } from './spatial-readout.ts';
 import { readWorldIdentity } from './world-scope.ts';
+import { nativeBodyReadiness } from './body-readiness.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
@@ -386,6 +387,9 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
 
 /** Put coverage interpretation before dense geometry; keep the full native data. */
 export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
+  const body = nativeBodyReadiness(bot);
+  if (body && (body.positionAt === null || body.phase === 'closed'))
+    throw new SkillBlocked('当前登录/重生/切换后的服务器落点尚未确认；旧位置和旧方块不是当前空间现场，等待原生位置同步后重读。');
   const data = readSpatialObservation(bot, input);
   // Keep observed materials beside coverage, ahead of a long geometry body.
   return { readout: spatialReadout(data), ...('summary' in data ? { summary: data.summary } : {}), ...data };

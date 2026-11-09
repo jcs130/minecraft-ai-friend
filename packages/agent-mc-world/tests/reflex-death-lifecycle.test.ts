@@ -3,9 +3,29 @@ import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Reflexes } from '../core/executor.ts';
 import { methodHarness } from './method-harness.ts';
+import { installNativeBodyReadiness } from '../core/body-readiness.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-18T00:00:00Z')); });
 afterEach(() => vi.useRealTimers());
+
+it('does not rescue from the old scene when positive respawn health precedes the new landing',async()=>{
+  const r=body(), readiness=installNativeBodyReadiness(r.bot as never);
+  try {
+    r.bot.emit('respawn');
+    r.bot.health=20;r.bot.isAlive=true;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(r.reflexes.envActive).toBe(false);
+    expect(r.keys.jump).toBe(false);
+    expect(r.reports).toHaveLength(0);
+    expect(r.bot.pathfinder.goal).toBeNull();
+    // The real server position plus resumed physics permit rescue again.
+    r.bot.physicsEnabled=true;
+    r.bot._client.emit('position',{x:.5,y:65.2,z:.5});
+    r.bot.emit('physicsTick');
+    await vi.advanceTimersByTimeAsync(2300);
+    expect(r.reflexes.envActive).toBe(true);
+  } finally {readiness.dispose();r.close();}
+});
 
 function body() {
   const h = methodHarness('1.21.1');

@@ -10,7 +10,7 @@
  * 调用方不必分辨两处。
  */
 import type { Bot } from 'mineflayer';
-import { nativeBodyBlockedReason } from './body-readiness.ts';
+import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
@@ -6522,6 +6522,10 @@ export class Reflexes {
     // The entity and oxygen metadata survive the death/respawn delay. They do
     // not authorize a new rescue while Mineflayer still reports a dead body.
     if ((bot as Bot & { isAlive?: boolean }).isAlive === false || bot.health <= 0) return;
+    // Health can arrive before the new server position after respawn. Old-world
+    // fire/water blocks must not acquire the body lease in that interval.
+    const readiness = nativeBodyReadiness(bot);
+    if (readiness && readiness.phase !== 'ready' && readiness.phase !== 'controlled-flight') return;
     // Turning a reflex off also releases its existing input, path and queue hold.
     if (!this.drownRescueEnabled()) this.endDrown(bot);
     // 防溺水与防烧在各自开关启用时逐心跳检查；关闭防烧时调用 endLavaEscape 收尾。
@@ -7857,6 +7861,8 @@ export class Reflexes {
     evidence: DamageEvidence,
   ): Promise<void> {
     if ((bot as Bot & { isAlive?: boolean }).isAlive === false || bot.health <= 0) return;
+    const readiness = nativeBodyReadiness(bot);
+    if (readiness && readiness.phase !== 'ready' && readiness.phase !== 'controlled-flight') return;
     const now = Date.now();
     const actor = evidence.actor;
     if (!actor) {
