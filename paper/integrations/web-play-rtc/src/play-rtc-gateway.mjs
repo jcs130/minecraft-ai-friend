@@ -19,7 +19,7 @@ export function createPlayRtcGateway({runtime,rate=()=>{}}={}){
       ||!/^m=application /m.test(description.sdp))throw fail('INVALID_RTC_OFFER');
     if(peers.has(row)||play.bridge?.snapshot().active)throw fail('CONTROL_TRANSPORT_BUSY');
     if(peers.size>=16)throw fail('RTC_CAPACITY');
-    const peer=runtime.createPeerConnection();
+    const peer=runtime.createPeerConnection(owner+':'+row.id);
     const binding={peer,clientId,session:null};peers.set(row,binding);
     const session=createPlayRtcSession({peer,clientId,receipts:book(play),
       authorize:()=>valid(row,play,owner,connection),rate:()=>{rate(row,'control',40);row.touchedAt=Date.now()},
@@ -48,6 +48,13 @@ export function createPlayRtcGateway({runtime,rate=()=>{}}={}){
     if(!/^[A-Za-z0-9_-]{8,100}$/.test(requestId??''))throw fail('INVALID_REQUEST_ID');
     return book(row.play).get(clientId,requestId);
   },assertHttp(row){if(peers.has(row))throw fail('RTC_CONTROL_ACTIVE')},
-  capabilities:()=>({enabled:!!runtime,iceServers:(runtime?.iceServers??[]).map(s=>({urls:s.urls}))}),
+  capabilities(row){
+    if(runtime?.requiresOwner){
+      const play=row?.play,owner=row?.portal?.owner?.id;
+      if(!play||!owner||!valid(row,play,owner,play.connectionId))throw fail('OWN_PLAY_REQUIRED');
+      return {enabled:true,...runtime.browserConfiguration(owner+':'+row.id)};
+    }
+    return {enabled:!!runtime,iceServers:(runtime?.iceServers??[]).map(s=>({urls:s.urls}))};
+  },
   close(){for(const p of [...peers.values()])p.session.close('GATEWAY_CLOSED')},status:()=>({enabled:!!runtime,peers:peers.size,lastCloseReason})};
 }

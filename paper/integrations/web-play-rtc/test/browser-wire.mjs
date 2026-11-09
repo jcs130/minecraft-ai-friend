@@ -6,6 +6,7 @@ import {once} from 'node:events';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
+import {loadPlayRtcRuntime} from '../src/play-rtc-runtime.mjs';
 import {createPlayRtcGateway} from '../src/play-rtc-gateway.mjs';
 const required=n=>{if(!process.env[n])throw Error('Set '+n);return process.env[n]};
 const candidate=required('QD_RTC_CANDIDATE');
@@ -23,7 +24,8 @@ play.bridge=createViewerControlBridge({adapter:{identity:()=>play.safeIdentity()
   stop:()=>stopped++,motion:input=>motions.push({at:Date.now(),inventoryPending,input}),
   action:async(type,value)=>{if(type==='inventory'){inventoryPending=true;await new Promise(r=>setTimeout(r,300));inventoryPending=false;uses++}return{ok:true,status:'confirmed',completed:true,scope:'fixture-only'}}},
   authorize:async()=>true,acquire:async()=>{},release:async()=>{}});
-const gateway=createPlayRtcGateway({runtime:{createPeerConnection:()=>new Peer({iceUseIpv4:true,iceUseIpv6:false,iceInterfaceAddresses:{udp4:'127.0.0.1'}})}});
+const runtime=process.env.QD_RTC_TURN_CONFIG?await loadPlayRtcRuntime(process.env.QD_RTC_TURN_CONFIG,{Peer}):{createPeerConnection:()=>new Peer({iceUseIpv4:true,iceUseIpv6:false,iceInterfaceAddresses:{udp4:'127.0.0.1'}})};
+const gateway=createPlayRtcGateway({runtime});
 const clients=new Set();
 const server=http.createServer(async(req,res)=>{
  try{
@@ -41,13 +43,15 @@ const browser=await puppeteer.launch({executablePath:required('QD_RTC_BROWSER'),
 try{
  const page=await browser.newPage();await page.goto(base);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- const connected=await page.evaluate(async()=>{
+ const connected=await page.evaluate(async capabilities=>{
   const {createPlayRtcClient}=await import('/play-rtc-client.mjs');
   const post=(url,body)=>fetch(url,{method:'POST',headers:{'content-type':'application/json','x-fixture-csrf':'isolated-test'},body:JSON.stringify(body)}).then(r=>r.json());
   window.lost=[];window.events=[];
-  window.client=createPlayRtcClient({offer:v=>post('/offer',v),queryReceipt:requestId=>post('/receipt',{requestId}),onLost:r=>lost.push(r)});
+  window.peerStats=null;
+  class RecordingPeer extends RTCPeerConnection{constructor(config){super(config);window.fixturePeer=this}}
+  window.client=createPlayRtcClient({...capabilities,Peer:RecordingPeer,offer:v=>post('/offer',v),queryReceipt:requestId=>post('/receipt',{requestId}),onLost:r=>lost.push(r)});
   const ready=await client.connect();if(ready)client.subscribeWorld(m=>events.push(JSON.parse(m.data)),r=>lost.push(r));return ready;
- });if(!connected)report.diagnostics=await page.evaluate(()=>({status:client.status(),lost}));assert.equal(connected,true,'real browser channel connected');
+ },gateway.capabilities(row));if(!connected)report.diagnostics=await page.evaluate(()=>({status:client.status(),lost}));assert.equal(connected,true,'real browser channel connected');
  await page.waitForFunction(()=>events.some(e=>e.type==='snapshot'),{timeout:10000});
  const result=await page.evaluate(async()=>{
   const acquired=await client.action({type:'acquire',epoch:null});window.lease=acquired.epoch;
@@ -59,6 +63,11 @@ try{
   return {acquired,receipt,events,transport:client.status()};
  });assert.equal(result.acquired.active,true);assert.equal(uses,1);assert.equal(result.receipt.status,'confirmed');
  assert.ok(motions.some(m=>m.inventoryPending),'motion must not wait for pending inventory acknowledgement');
+ const network=await page.evaluate(async()=>{
+  const stats=await fixturePeer.getStats();const pair=[...stats.values()].find(s=>s.type==='candidate-pair'&&s.state==='succeeded'&&s.nominated);
+  return pair?{localType:stats.get(pair.localCandidateId)?.candidateType,remoteType:stats.get(pair.remoteCandidateId)?.candidateType,roundTripSeconds:pair.currentRoundTripTime,bytesSent:pair.bytesSent,bytesReceived:pair.bytesReceived}:null;
+ });
+ if(process.env.QD_RTC_TURN_CONFIG){assert.equal(network?.localType,'relay');assert.equal(network?.remoteType,'relay');assert.ok(network.bytesSent>0&&network.bytesReceived>0)}
  const before=stopped;row.expired=true;
  await page.waitForFunction(()=>lost.length>0,{timeout:5000});assert.ok(stopped>before,'revocation stops original controller');
  row.expired=false;
@@ -68,7 +77,7 @@ try{
   const c=createPlayRtcClient({Peer:class{constructor(){throw Error('UDP not available fixture')}},offer:()=>offers++});
   return {connected:await c.connect(),offers,status:c.status()};
  });assert.equal(fallback.connected,false);assert.equal(fallback.offers,0);assert.equal(fallback.status.transport,'http');assert.equal(uses,1);
- report={passed:true,realIceDtlsSctp:true,fixtureOnly:true,worldSnapshot:result.events.some(e=>e.type==='snapshot'),
+ report={passed:true,network,realIceDtlsSctp:true,fixtureOnly:true,worldSnapshot:result.events.some(e=>e.type==='snapshot'),
    motionDuringPendingAction:motions.some(m=>m.inventoryPending),uses,revocationStopped:true,receiptAfterDisconnect:after.status,fallbackBeforeAction:true,errors};
  assert.equal(errors.length,0);
 }catch(e){report.error=e.message;report.gateway=gateway.status();throw e}finally{

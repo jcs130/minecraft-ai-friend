@@ -33,7 +33,7 @@ routes="""      if(req.method==='POST'&&pathname==='/api/play/rtc/offer'){
         catch(e){throw new ApiError(e.status??403,e.reason??'OWN_PLAY_REQUIRED','无法查询此角色的操作')}
       }
 """
-routes="      if(req.method==='GET'&&pathname==='/api/play/rtc/status')return json(res,playRtc.capabilities());\n"+routes
+routes="      if(req.method==='GET'&&pathname==='/api/play/rtc/status'){rate(row,'rtc-capabilities',6,60000);return json(res,playRtc.capabilities(row));}\n"+routes
 edit('server.mjs',anchor,routes+anchor+"\n        try{playRtc.assertHttp(row)}catch(e){throw new ApiError(409,e.reason,'实时控制连接仍在使用，请先停止控制')}")
 edit('src/gateway.mjs',"'touch-controller.mjs', 'client-transport.mjs'", "'play-rtc-client.mjs', 'native-rtc-protocol.js', 'touch-controller.mjs', 'client-transport.mjs'")
 edit('server.mjs',"async close() { clearInterval(cleanup);", "async close() { playRtc.close(); clearInterval(cleanup);")
@@ -43,8 +43,8 @@ edit('src/game.mjs',"socket.emit('viewerControl', data, value => {", """socket.e
           active:socket.state?.active===true,epoch:socket.state?.active?socket.state.epoch:null});""")
 edit('gateway-server.mjs',"const app = createToyServer({", """let playRtcRuntime=null;
 if(config.playRtcConfig){
-  const {loadWebRtcRuntime}=await import('./src/webrtc-runtime.mjs');
-  playRtcRuntime=await loadWebRtcRuntime(config.playRtcConfig);
+  const {loadPlayRtcRuntime}=await import('./src/play-rtc-runtime.mjs');
+  playRtcRuntime=await loadPlayRtcRuntime(config.playRtcConfig);
 }
 const app = createToyServer({ playRtcRuntime,""")
 edit('public/app.js',"function control(type, extra = {}, lease = epoch, keepalive = false) {","""let playRtc=null;
@@ -56,6 +56,7 @@ async function preparePlayRtc(){
   const {createPlayRtcClient}=await import('./play-rtc-client.mjs');
   playRtc=createPlayRtcClient({
     iceServers:capabilities.iceServers,
+    iceTransportPolicy:capabilities.iceTransportPolicy,
     offer:sdp=>api('/api/play/rtc/offer','POST',sdp,true),
     queryReceipt:requestId=>api('/api/play/rtc/receipt','POST',{requestId},true),
     onLost:()=>{void stopControls('实时连接中断，已停止控制；请重新接管，不会重复执行操作。',true)}

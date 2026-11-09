@@ -1,7 +1,7 @@
 /** WebRTC carries only an explicitly acquired owner's inputs. HTTP fallback is
  * selected before sending an action; an uncertain action is NEVER replayed. */
 import {createNativeRtcDecoder} from './native-rtc-protocol.js';
-export function createPlayRtcClient({offer,queryReceipt,onLost=()=>{},Peer=globalThis.RTCPeerConnection,iceServers=[],
+export function createPlayRtcClient({offer,queryReceipt,onLost=()=>{},Peer=globalThis.RTCPeerConnection,iceServers=[],iceTransportPolicy='all',
   now=()=>performance.now(),timeoutMs=10000}={}){
   let peer=null,commands=null,input=null,ready=false,closed=false,token=null,tokenAt=0,generation=0,seq=0,ping=null,lastFailure=null;
   const pending=new Map();let lastRttMs=null,worldListener=null,worldLost=null;
@@ -19,7 +19,7 @@ export function createPlayRtcClient({offer,queryReceipt,onLost=()=>{},Peer=globa
   async function connect(){
     if(!Peer)return false;
     try{
-      peer=new Peer({iceServers});commands=peer.createDataChannel('qd.play.control',{ordered:true,protocol:'qiandengji.play.v1'});
+      peer=new Peer({iceServers,iceTransportPolicy});commands=peer.createDataChannel('qd.play.control',{ordered:true,protocol:'qiandengji.play.v1'});
       input=peer.createDataChannel('qd.play.input',{ordered:false,maxRetransmits:0,protocol:'qiandengji.play.v1'});
       const world=peer.createDataChannel('qd.play.world',{ordered:true,protocol:'qiandengji.play.v1'});world.binaryType='arraybuffer';
       world.onmessage=e=>{try{decoder.receive(e.data)}catch{close('INVALID_WORLD_STREAM')}};
@@ -40,7 +40,7 @@ export function createPlayRtcClient({offer,queryReceipt,onLost=()=>{},Peer=globa
       if(!response?.answer)throw Error('RTC_UNAVAILABLE');await peer.setRemoteDescription(response.answer);
       await new Promise((resolve,reject)=>{const started=now();const timer=setInterval(()=>{
         if(closed||now()-started>timeoutMs){clearInterval(timer);reject(Error('RTC_TIMEOUT'))}
-        else if(commands.readyState==='open'&&input.readyState==='open'&&token){clearInterval(timer);resolve()}
+        else if(commands.readyState==='open'&&input.readyState==='open'&&world.readyState==='open'&&token){clearInterval(timer);resolve()}
       },25)});
       ready=true;ping=setInterval(()=>send({kind:'ping',at:now()}),1000);return true;
     }catch(e){close(e.message==='RTC_TIMEOUT'?'RTC_TIMEOUT':'RTC_NEGOTIATION_FAILED');return false}
