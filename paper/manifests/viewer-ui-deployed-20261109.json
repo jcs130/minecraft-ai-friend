@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed",
+  "sourcePullRequest": 150,
+  "sourceCommit": "56828ee7ad676c226436311e3b7a658c58fa4ee3",
+  "rendererPullRequest": 26,
+  "rendererCommit": "89071875c79a514c6ec5ffcf442b4408de7d0818",
+  "completedAt": "2026-11-09T23:32:58.4688970+08:00",
+  "gamePid": 16012,
+  "artifacts": [
+    {
+      "baseline": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "version": "0.4.47.69-onboarding-viewer-rpg",
+      "sha256": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
+      "unrelatedEntriesPreserved": 664
+    },
+    {
+      "baseline": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "version": "0.1.16-public-dialogue",
+      "sha256": "3a328893ab7b9319b62836122ff3e071abce0c05b6b06fc18ea97ce7a0a83d61",
+      "unrelatedEntriesPreserved": 58
+    },
+    {
+      "baseline": "E:\\MC\\server\\plugins\\WorldObserver-0.1.3.jar",
+      "version": "0.1.4-maid-ysm",
+      "sha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
+      "unrelatedEntriesPreserved": 12
+    }
+  ],
+  "gameChecks": {
+    "passed": true,
+    "checks": [
+      "candidate and all unrelated binaries verified",
+      "AgentFriend enabled",
+      "CortiEyeMirror enabled",
+      "QiandengjiMaidBridge enabled",
+      "VortexRPG enabled",
+      "QiandengjiRpg enabled",
+      "QiandengVoice enabled",
+      "WorldObserver enabled",
+      "game responsive",
+      "performance telemetry ready",
+      "original native content retained",
+      "15 dungeon sites ready",
+      "original five site IDs retained",
+      "Geyser maid extension enabled",
+      "reviewed maid model pack active"
+    ],
+    "readOnly": true,
+    "playerActions": false
+  },
+  "backend": {
+    "publicCollectorUpdated": true,
+    "publisherPid": 32896,
+    "gameRestarted": false,
+    "accountPublisherPreserved": true,
+    "renderer": "E:\\MC\\integrations\\viewer-ui-fidelity-20261109-r1\\renderer",
+    "passed": true,
+    "completedAt": "2026-11-09T23:32:58.4248549+08:00",
+    "mapPreserved": true,
+    "maidCatalog": "3fff242b60a34668fe646de2692d0503896565085b653a8e694ebf8f33216c56",
+    "observerConfigSha256": "29c8d1ba1db242d18478253fcbf6512290e8bc210179b9574c517f9223f12266",
+    "gamePid": 16012
+  },
+  "playerDataProof": {
+    "passed": true,
+    "files": 5580
+  },
+  "authProof": {
+    "originalRows": 80,
+    "currentRows": 80,
+    "originalCredentialsUnchanged": true,
+    "credentialValuesPrinted": false
+  },
+  "viewer": {
+    "embeddedAndStandalonePassed": true,
+    "bundleSha256": "59b743945d6b99abe6f62281734b896acc683a65a3f18fdec2dcebd40d21644b",
+    "playerModel": "cormy-winefox-cream/cormy-cream",
+    "originalTrackedMaidModel": "qd_dafeiyu/pearl",
+    "readOnly": true,
+    "graphics": "software WebGL; no real-device FPS claim"
+  },
+  "website": {
+    "containerId": "98d6d3ba1da9c2d2b0c4b1291ebc43182c326b5dfdec7df4ab5e5c2cfb292d32",
+    "image": "sha256:e206eb045dd3ba6d2f09ea5edd24c1cc9dc00d5a8d3c0ec142c32e4c28ce3212",
+    "version": "0.8.41",
+    "patch": "viewer-ui-20261109-r1",
+    "protectedTables": 16,
+    "downloadsPreserved": true
+  },
+  "client": {
+    "pullRequests": [
+      26,
+      27
+    ],
+    "mainMerge": "140805c7dbfcdfa1c75d45ecedc0f67424ce0bc1",
+    "testsPassed": 503,
+    "freshApi6HostUiPassed": true,
+    "originalCormyHostUpgraded": false
+  },
+  "remaining": [
+    "Native/phone/Xbox visual and human hearing acceptance",
+    "Original Cormy host adoption",
+    "YSM maid held-equipment layer",
+    "Original trader_llama renderer",
+    "Some edge biome/fluid data arriving later",
+    "New bubble/proactive patrol/native Chinese voice candidate not included in this deployed batch"
+  ],
+  "rollback": "Only code, static assets and matching pointers. Preserve latest worlds, inventory, currency, quests, exams, auth, maid original UUID/model/brain and operation receipts."
+}

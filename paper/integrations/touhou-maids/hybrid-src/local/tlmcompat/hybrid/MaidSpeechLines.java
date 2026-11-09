@@ -3,6 +3,13 @@ package local.tlmcompat.hybrid;
 /** Original Chinese lines, not translations or copies of third-party voice recordings. */
 final class MaidSpeechLines {
     private MaidSpeechLines(){}
+    static String forSound(String sound,int variant){
+        if("touhou_little_maid:maid.mode.idle".equals(sound)){
+            String[] lines={"我在你身边，准备好了就一起出发吧。","出发前记得看看护甲和补给。","想去探索时叫上我，我们一起走。","需要帮忙可以直接叫我的名字。","有合适的武器，我也能帮你应付路上的怪物。","休息一会儿也好，准备好了再继续冒险。"};
+            return lines[Math.floorMod(variant,lines.length)];
+        }
+        return forSound(sound);
+    }
     static String forSound(String sound){
         if(sound==null||!sound.startsWith("touhou_little_maid:"))return null;
         return switch(sound.substring(sound.indexOf(':')+1)){

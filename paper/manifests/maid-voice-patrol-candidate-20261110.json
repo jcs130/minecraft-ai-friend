@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "state": "candidate-not-deployed",
+  "version": "0.1.17-bubbles-voice-patrol",
+  "sourceBase": "56828ee7ad676c226436311e3b7a658c58fa4ee3",
+  "artifact": {
+    "sha256": "f1c95b10715dbc8230bfdb444bd6b4cfca804db6f49f887880dd30718ceecf35",
+    "baselineSha256": "3a328893ab7b9319b62836122ff3e071abce0c05b6b06fc18ea97ce7a0a83d61",
+    "unrelatedArchiveEntriesPreserved": 58,
+    "sourceSha256": {
+      "HybridMaidPlugin": "9ca85b56775bafc61ee7504f13127b7a2358a247c3243d8449d985d71356a94d",
+      "NativeMaidSpeech": "209fd7f0cfe677ece16616e9600aeaea3163ce130580b81c57df5b5a9ee0ef46",
+      "MaidSpeechLines": "19f3467a5649a72c4676df9c5c138a1af2c26562e72e2be9fe14433e23f93066",
+      "MaidAmbientPolicy": "b1e7ac4a1d5930c1046105fd8617e83b82e26701a4a181dafe9871d9a1bcc32a",
+      "MaidVoiceClips": "c5014cab12d0dc0e0e8506a2ae3ff412dc5641d72b75bee6057ad3a28ec52665",
+      "MaidCompanionPolicy": "36a50ee5dfb52883b4bafed4fb3da5bf64407032ebe73ba6223289522351e434",
+      "NativeMaidCompanionSupport": "8eec2912300b7453749531153bb1c6a29fc713932bc5f58202dc0dba764a148b"
+    }
+  },
+  "voice": {
+    "id": "feiyu-tlm-furina-cn-20261109",
+    "ownerAccepted": true,
+    "sourceCatalogue": "https://tlmdl.cfpa.team/info.json",
+    "sourceArchive": "https://tlmdl.cfpa.team/file/stonaphrospack-0.0.1.zip",
+    "sourceArchiveSha256": "ae2df70fe0a947b65083216c98bebb5d280abce63b5a9645fca1549508042c38",
+    "author": "YilinMui / 猫耳结缘神",
+    "catalogSha256": "6d438f4b5b79ec883889b1df858176e29a25276ae15f91b5a2d47dc972923084",
+    "nativeEvents": 16,
+    "originalClips": 25,
+    "registered": true,
+    "productionBindingChanged": false,
+    "defaultAnd18PriorVoicesPreserved": true
+  },
+  "verification": {
+    "baselineDefects": [
+      "public text delivery did not add a native head bubble",
+      "visible untargeted hostile did not start native combat"
+    ],
+    "baselineChecks": 3,
+    "candidateNativeChecks": 13,
+    "nativeCompletedAt": "2026-11-09T16:35:24.046Z",
+    "encryptedPositionalPackets": 249,
+    "serverTtsRequestsForOriginalClip": 0,
+    "existingAndNewRuleChecks": 165,
+    "humanHearingVerified": false,
+    "nativeClientBubblePixelsVerified": false,
+    "webBubblePixelsVerified": false,
+    "productionChanged": false
+  },
+  "preserve": [
+    "original maid UUID and owner",
+    "original YSM model",
+    "inventory and equipment",
+    "saved schedule and manually chosen tasks",
+    "selected brain and model routes",
+    "lifecycle and action receipts",
+    "other maids and existing voice defaults"
+  ],
+  "rollback": {
+    "codeOnly": true,
+    "restoreSpeechConfigBeforeImage": true,
+    "retainCurrentWorldAndReceipts": true,
+    "newVoiceMayRemainUnused": true
+  },
+  "evidence": {
+    "native-baseline.json": "043259f82208c4ab909227475562b1bf470890149f0d2b02efa757231d3d0549",
+    "native-candidate.json": "3ed2b0aa614655522d313d8a525cc55183353317f1ef9bf758af15e239c8c92a",
+    "captured-original-asr.json": "099f4aa908a7e6e635c922a7ed621f576391e1cbb78d0c164fb093166c5073ea",
+    "voice-registration.json": "4f54cd57af218a3ef6962d5a66c7defdc0e5553565bae5bd3a4780ddacb0611b",
+    "voice-candidate-sample.json": "affa6ad2155be2828dfc5e43d1a9bdcd79bd2c0478e75918648c7d3ceefb15de"
+  }
+}

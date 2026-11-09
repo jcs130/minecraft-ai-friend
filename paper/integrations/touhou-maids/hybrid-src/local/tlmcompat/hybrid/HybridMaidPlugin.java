@@ -65,6 +65,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(line==null)return;
         String key=maid.getUUID()+":"+operation;if(publishedDialogue.putIfAbsent(key,true)!=null)return;
         while(publishedDialogue.size()>256)publishedDialogue.remove(publishedDialogue.keySet().iterator().next());
+        // This path is reached only after actual public delivery. Owner-only
+        // history never calls it; use literal text rather than translation keys.
+        maid.getChatBubbleManager().addChatBubble(com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData.type2(
+            net.minecraft.network.chat.Component.literal(text.replaceAll("§[0-9a-fk-or]",""))));
         getLogger().info(line);
     }
     private final Map<String,Long> humanDialogue=new LinkedHashMap<>();
@@ -136,7 +140,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
