@@ -196,6 +196,8 @@ jobs:
       - name: Check observation leases and lifecycle boundaries
         run: npm test
         working-directory: paper/integrations/world-observer
+      - name: Check web gameplay RTC input, receipt and fallback boundaries
+        run: node --test paper/integrations/web-play-rtc/test/*.test.mjs
       - run: python paper/self-host/selfhost.py export-portal --directory "$RUNNER_TEMP/own-game" --output "$RUNNER_TEMP/portal"
       - run: npm ci --no-audit
         working-directory: ${{ runner.temp }}/portal
