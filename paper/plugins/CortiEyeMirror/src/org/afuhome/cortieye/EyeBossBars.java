@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import org.afuhome.shared.ActivityBarSemantics;
 
 /** Mirrors the active bars from one attached target while leaving camera-native bars alone. */
 final class EyeBossBars {
@@ -54,6 +55,7 @@ final class EyeBossBars {
     private static final class View {
         final ServerGamePacketListenerImpl connection;
         final Set<UUID> sent = new HashSet<>();
+        final Set<String> reportedActivities = new HashSet<>();
         UUID source;
 
         View(ServerGamePacketListenerImpl connection) {
@@ -116,8 +118,13 @@ final class EyeBossBars {
                 if (!view.sent.isEmpty()) continue; // Retry failed old removals before sending the next feed.
                 view.source = source;
             } else if (source != null) {
+                Map<UUID,Bar> active=bars(source);
                 for (var change : changes.getOrDefault(source, List.of())) {
                     if (own.containsKey(change.id())) continue;
+                    if(change.action()!=Action.REMOVE&&duplicateActivity(own,active.get(change.id()))) {
+                        if(!view.sent.contains(change.id())||send(camera,ClientboundBossEventPacket.createRemovePacket(change.id()))){view.sent.remove(change.id());noteDuplicate(camera,view,active.get(change.id()));}
+                        continue;
+                    }
                     if (change.action() == Action.ADD) {
                         if (send(camera, change.packet())) view.sent.add(change.id());
                     } else if (view.sent.contains(change.id()) && send(camera, change.packet())
@@ -134,6 +141,10 @@ final class EyeBossBars {
             // A late attach, or a native REMOVE of a shared UUID, needs a full ADD.
             for (var activeBar : active.entrySet()) {
                 UUID id = activeBar.getKey();
+                if(!own.containsKey(id)&&duplicateActivity(own,activeBar.getValue())){
+                    if(!view.sent.contains(id)||send(camera,ClientboundBossEventPacket.createRemovePacket(id))){view.sent.remove(id);noteDuplicate(camera,view,activeBar.getValue());}
+                    continue;
+                }
                 if (!own.containsKey(id) && !view.sent.contains(id)
                         && send(camera, ClientboundBossEventPacket.createAddPacket(activeBar.getValue()))) {
                     view.sent.add(id);
@@ -209,6 +220,13 @@ final class EyeBossBars {
     private Map<UUID, Bar> bars(UUID playerId) {
         Feed feed = nativeFeeds.get(playerId);
         return feed == null ? Map.of() : feed.bars;
+    }
+    private static boolean duplicateActivity(Map<UUID,Bar> own,Bar target){
+        return target!=null&&own.values().stream().anyMatch(bar->ActivityBarSemantics.sameActivity(bar.getName().getString(),target.getName().getString()));
+    }
+    private void noteDuplicate(Player camera,View view,Bar target){
+        var activity=ActivityBarSemantics.identify(target.getName().getString());
+        if(activity!=null&&view.reportedActivities.add(activity.id()))plugin.getLogger().info("Eye activity bar deduplicated: camera="+camera.getName()+" activity="+activity.id()+" native=retained mirrored=suppressed");
     }
 
     private void withdraw(Player camera, View view, Map<UUID, Bar> own) {

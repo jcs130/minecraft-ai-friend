@@ -25,6 +25,8 @@ jobs:
           java-version: '21'
       - name: Check Goddess private-message authority without connecting
         run: node --test paper/ops/goddess-*.test.mjs
+      - name: Check activity countdown meaning and scoped identity
+        run: python paper/ops/test-activity-bars.py
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs

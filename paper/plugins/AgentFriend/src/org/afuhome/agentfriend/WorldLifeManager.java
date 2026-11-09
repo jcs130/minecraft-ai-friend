@@ -173,6 +173,8 @@ final class WorldLifeManager implements Listener {
             if(count++>=4)break;Object event=property(value,"getEvent");String id=String.valueOf(property(event,"getName"));
             JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("name",String.valueOf(property(event,"getDisplayName")));
             row.addProperty("remainingSeconds",Math.max(0,(((Number)property(value,"getEndTime")).longValue()-now+999)/1000));
+            row.addProperty("progressMeaning","event_time_remaining");row.addProperty("isTaskProgress",false);
+            row.addProperty("participationAutomatic",false);
             String command=id.equals("qd-trial-gather")?"/mycli arena status":id.equals("qd-ruins-gather")?"/mycli dungeon list":id.equals("qd-explorers-gather")||id.equals("qd-traveler")?"/mycli waypoint list":"/mycli world list";
             row.addProperty("nextCommand",command);rows.add(row);
             if(!json)p.sendMessage("§e[活动] "+row.get("name").getAsString()+"；剩"+row.get("remainingSeconds").getAsLong()+"秒。命令："+command);

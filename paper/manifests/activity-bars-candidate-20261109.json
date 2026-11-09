@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "state": "candidate-not-deployed",
+  "components": [
+    {
+      "component": "AgentFriend",
+      "version": "0.4.47.65-activity-bars-rpg",
+      "baselineVersion": "0.4.47.63-inventory-tidy-rpg",
+      "baselineSha256": "01ac3e3e1cac459e6e08bd9a3013e2f7ba53daa0085904fe9e164b6ccbc68b85",
+      "sha256": "f3308d4dbf4b17899f3b4022999fb5f88a29edead3344f49ff50a8deaede4f8f",
+      "target": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "unrelatedEntriesPreserved": 646
+    },
+    {
+      "component": "CortiEyeMirror",
+      "version": "0.1.20",
+      "baselineVersion": "0.1.19",
+      "baselineSha256": "c74e4ba58674d948ca079b4348941ab01b6f11f18507f38f568cc418a5265e6d",
+      "sha256": "a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb",
+      "target": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "unrelatedEntriesPreserved": 25
+    }
+  ],
+  "checks": {
+    "baseline": {"total": 16, "expectedFailures": 5},
+    "nativeCandidate": 16,
+    "nativeRestartWithProvider": 21,
+    "activitySemantics": 49,
+    "existingMessagePolicy": 76,
+    "repeatBuildSameSha256": true
+  },
+  "realPlayerDataUsedInQa": false,
+  "unrelatedCandidatesIncluded": false,
+  "realClientPixelAcceptance": "pending",
+  "rollback": "code-only; retain current world, roles, items, models, lifecycle/action ledgers and authentication"
+}

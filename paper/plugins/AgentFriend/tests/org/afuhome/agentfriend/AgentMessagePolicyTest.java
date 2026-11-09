@@ -50,13 +50,13 @@ public final class AgentMessagePolicyTest {
         check(!AgentMessagePolicy.joinTip("[危险] 怪物正在攻击"),"keep danger");
         for(String title:new String[]{"突袭 - 剩余2名袭击者","试炼救援 6/10秒","追踪 ag_NEKO","地下城头目"})
             check(ActivityBarBudget.label(title)==null,"unrelated bar unchanged: "+title);
-        ActivityBarBudget b=new ActivityBarBudget("☾ 星灯夜巡",1,"☾ 星灯夜巡 | 3:00");int names=0,progress=0;
+        ActivityBarBudget b=new ActivityBarBudget("活动·星灯夜巡",1,"☾ 星灯夜巡 | 3:00");int names=0,progress=0;
         for(int remaining=179;remaining>=0;remaining--){
             if(b.updateTitle("☾ 星灯夜巡 | "+remaining/60+":"+String.format("%02d",remaining%60)))names++;
             if(b.updateProgress(remaining/180f))progress++;
         }
-        check(names==1,"only last-minute title update");check(progress==4,"four progress packets for full event");
-        check(b.title().equals("☾ 星灯夜巡 · 最后1分钟"),"no ticking clock in title");
+        check(names==18,"at most one approximate title per ten seconds");check(progress==20,"bounded five-percent remaining-time steps");
+        check(b.title().equals("活动·星灯夜巡｜剩余约00:00"),"remaining-time meaning stays explicit");
         check(ActivityBarBudget.quantize(.999f)==1f&&ActivityBarBudget.quantize(.75f)==.75f,"correct progress boundaries");
         check(ActivityBarBudget.quantize(0)==0&&ActivityBarBudget.quantize(2)==1,"bounded progress");
         System.out.println("PASS "+checks+" message policy checks");
