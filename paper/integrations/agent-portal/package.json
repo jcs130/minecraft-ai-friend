@@ -23,7 +23,8 @@
     "prismarine-nbt": "2.8.0",
     "puppeteer-core": "25.13.0",
     "ws": "8.22.0",
-    "yaml": "2.8.3"
+    "yaml": "2.8.3",
+    "werift": "0.26.0"
   },
   "devDependencies": {
     "jsdom": "26.1.0"

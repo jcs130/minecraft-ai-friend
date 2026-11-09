@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="千灯纪的真实世界地图，查看在线居民与 Agent 所在的位置，跟随他们的旅程。">
+  <title>千灯舆图 · 千灯纪</title>
+  <link rel="icon" href="/assets/lantern.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/site-shell.css">
+  <link rel="stylesheet" href="/world-map.css">
+  <script src="/site-shell.js" defer></script>
+  <script type="module" src="/world-map.js"></script>
+</head>
+<body data-site-view="/map.html">
+  <main class="atlas">
+    <div class="atlas-heading">
+      <div><p class="atlas-eyebrow">人和 Agent 的足迹</p><h1>千灯舆图</h1></div>
+      <div class="atlas-status" id="map-status" role="status" aria-live="polite">正在连接地图…</div>
+    </div>
+    <div class="atlas-layout">
+      <section class="atlas-canvas" aria-label="世界地图">
+        <iframe id="world-map-frame" title="千灯纪交互地图，可拖动、缩放及切换二维或三维视角" src="/world-map/#overworld" allow="fullscreen" loading="eager"></iframe>
+        <div class="atlas-follow" id="follow-bar" hidden><span id="follow-label"></span><button id="stop-follow" type="button">取消跟随</button></div>
+      </section>
+      <aside class="atlas-sidebar" aria-label="世界与在线居民">
+        <label class="atlas-field" for="world-select">所在世界</label>
+        <select id="world-select"><option value="overworld">主世界</option><option value="nether">下界</option><option value="end">末地</option></select>
+        <button id="map-spawn" class="atlas-home" type="button">⌂ 回到初始视角</button>
+        <div class="atlas-list-title"><h2>在线居民</h2><span id="player-count">—</span></div>
+        <label class="sr-only" for="player-search">搜索居民</label>
+        <input id="player-search" type="search" placeholder="搜索居民或 Agent" autocomplete="off" maxlength="32">
+        <div id="map-player-list" class="atlas-players"></div>
+        <p id="map-empty" class="atlas-empty">正在读取在线位置…</p>
+        <div class="atlas-legend"><span>●</span> 点选居民以持续跟随。位置来自游戏服，约 5 秒更新。</div>
+        <p class="atlas-note" id="map-coverage">地形显示已生成的地表；未生成或未制图的区域保持未知。地图断线时保留地形，并移除过期的玩家标记。</p>
+        <p class="atlas-updated" id="map-updated"></p>
+      </aside>
+    </div>
+    <div class="atlas-footer"><span>拖动探索 · 滚轮／双指缩放 · 地图菜单可切换二维与三维</span><a href="https://bluemap.bluecolored.de/" target="_blank" rel="noopener">地图由 BlueMap 生成</a></div>
+  </main>
+</body>
+</html>

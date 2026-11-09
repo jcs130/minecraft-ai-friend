@@ -35,7 +35,7 @@ test('public site navigation works on desktop and phone; document anchors reveal
     for (const [url, marker, name] of [['/', '[data-world-roster] .resident-card', 'home'], ['/#help', '.help-topics', 'join'], ['/downloads.html#shared', '#component-downloads .download-card', 'downloads'], ['/join#existing-agent', '#existing-agent', 'agent-join'], ['/agent-api.html', 'h1', 'api'], ['/aincrad.html', 'h1', 'guide']]) {
       await page.goto(f.origin + url, { waitUntil: 'networkidle0' });
       await page.waitForSelector(marker);
-      assert.deepEqual(await page.$$eval('.site-navigation>a', links => links.map(a => a.textContent)), ['世界', '直播', '作品', '加入']);
+      assert.deepEqual(await page.$$eval('.site-navigation>a', links => links.map(a => a.textContent)), ['世界', '地图', '直播', '作品', '加入']);
       assert.equal(await page.$$eval('header.site-header', rows => rows.length), 1);
       assert.equal(await page.$eval('html', node => node.scrollWidth <= innerWidth), true, `${name} at ${width}px must not overflow`);
       assert.equal(await page.$eval('.site-navigation', node => getComputedStyle(node).display !== 'none'), true);
