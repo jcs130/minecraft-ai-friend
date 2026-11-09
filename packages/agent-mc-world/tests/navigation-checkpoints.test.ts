@@ -234,7 +234,10 @@ it('does not bind an earlier opportunity to a replacement task and marks aged cu
   await vi.advanceTimersByTimeAsync(11_000);
   expect(h.world.requestFacts()!.parts?.find(p=>p.key==='journey')?.text).toContain('历史旅途线索');
   h.exec.submit([{skill:'goto',at:[256,64,0],walkOnly:true}],'now');await vi.advanceTimersByTimeAsync(100);
-  expect(h.world.requestFacts()!.parts?.find(p=>p.key==='journey')).toBeUndefined();
+  const replacement = h.world.requestFacts()!.parts?.find(p=>p.key==='journey')?.text;
+  expect(replacement).toContain('当前没有活动旅途观察');
+  expect(replacement).not.toContain('oak_sign');
+  expect(replacement).toContain('mc_policy');
   expect(h.world.requestFacts()!.decisionStability?.route?.journeyId).toBeNull();
 });
 

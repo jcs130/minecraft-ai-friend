@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.36
+
+- Unify scaffold material assessment across policy, native navigation and placement. Report unsupported configured materials separately from explicit disable, preserve authorized material selection, expose effective movement policy to journey consumers and export the shared assessment.
+
 ## 0.5.7-rc.160-preview.35
 
 - Wait for the current native landing/physics epoch before starting environment or damage reflexes. Positive respawn health alone no longer turns stale fire/water cells into a new rescue and body-queue hold; normal rescue resumes after fresh position and physics evidence.

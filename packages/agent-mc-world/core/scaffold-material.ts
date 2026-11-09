@@ -1,6 +1,24 @@
 /** Scaffold materials must retain a full collision cube in every block state. */
 import type { Bot } from 'mineflayer';
-import { isGravityBlock } from './policy.ts';
+
+export function isGravityBlock(name: string): boolean {
+  return ['sand', 'red_sand', 'gravel', 'suspicious_sand', 'suspicious_gravel',
+    'anvil', 'chipped_anvil', 'damaged_anvil', 'dragon_egg', 'pointed_dripstone'].includes(name)
+    || name.endsWith('_concrete_powder');
+}
+
+/** Shared by policy readouts, pathfinder and explicit placement. No implicit fallback. */
+export function assessScaffoldMaterials(names: readonly string[], registry?: Bot['registry']) {
+  const accepted: string[] = [], rejected: Array<{ name: string; reason: string }> = [];
+  for (const raw of names) {
+    const name = raw.replace(/^minecraft:/, '');
+    const reason = isGravityBlock(name) ? '重力方块失去支撑会下落'
+      : registry && !isStableScaffoldMaterial(registry, name) ? '当前执行器不支持作为完整稳定垫脚支撑' : null;
+    if (reason) rejected.push({ name, reason });
+    else if (!accepted.includes(name)) accepted.push(name);
+  }
+  return { accepted, rejected, verified: !!registry };
+}
 
 interface CollisionRegistry {
   blocksByName: Record<string, { boundingBox?: string } | undefined>;

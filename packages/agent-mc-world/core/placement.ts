@@ -23,9 +23,9 @@ import { gotoGoal, GoalWithinBlockReach, reachCell, walkOnlyPath } from './trave
 import { invCount, type InvItem } from './inventory.ts';
 import { forgetPlaced } from './placed-ledger.ts';
 import { contentsText, type PlaceCall, zhErrorText } from './receipt.ts';
-import { FALLBACK_DEFAULTS, isGravityBlock } from './policy.ts';
+import { FALLBACK_DEFAULTS } from './policy.ts';
 import { type PositionXYZ } from './blueprint.ts';
-import { isStableScaffoldMaterial } from './scaffold-material.ts';
+import { assessScaffoldMaterials, isStableScaffoldMaterial } from './scaffold-material.ts';
 import { prepareTemporaryScaffoldPlacement, recordTemporaryScaffold } from './temporary-scaffold.ts';
 import { flightState } from './flight.ts';
 import { equipHandConfirmed } from './equipment.ts';
@@ -263,7 +263,19 @@ export function permittedStockFor(
   ctx: SkillContext,
   preview = false,
 ): PermittedStock {
-  if (!names) return { why: `${label}名单是空的(设置里关了)` };
+  if (!names) {
+    if (label === '垫脚') {
+      const configured = ctx.policy?.get().scaffold ?? (ctx.policy?.defaults() ?? FALLBACK_DEFAULTS).scaffold;
+      if (configured.length) {
+        const check = assessScaffoldMaterials(configured, bot.registry);
+        const alternatives = [...new Set(bot.inventory.items().map(item => item.name))]
+          .filter(name => isStableScaffoldMaterial(bot.registry, name));
+        return { why: `垫脚名单已配置但没有可执行材料：${check.rejected.map(r => `${r.name}: ${r.reason}`).join('；')}`
+          + `。这不是地形不可达或设置关闭；${alternatives.length ? `当前背包可支持候选 ${alternatives.join('、')}，可用 mc_policy 修改 scaffold` : '当前背包没有已核验的完整支撑候选，可取得材料或选择其他路线'}` };
+      }
+    }
+    return { why: `${label}名单是空的(设置里关了)` };
+  }
   const items = bot.inventory.items();
   let denied = '';
   for (const name of names) {
@@ -794,8 +806,7 @@ export function scaffoldNames(ctx: SkillContext, bot?: Bot): string[] | null {
   const names = listed ?? (ctx.policy?.defaults() ?? FALLBACK_DEFAULTS).scaffold;
   // 重力方块剔掉,与寻路器那一半同源(bridge 给 scafoldingBlocks 时也剔):垫下去失去支撑
   // 就整块落地,垫不住。分叉的代价是受阻回执把沙砾、红沙当合法垫脚料原样念给她。
-  const usable = names.filter((n) => !isGravityBlock(n)
-    && (!bot || isStableScaffoldMaterial(bot.registry, n)));
+  const usable = assessScaffoldMaterials(names, bot?.registry).accepted;
   if (usable.length === 0) return null;
   // 在建工地材料软降到末位，其他候选耗尽时仍可使用。
   const material = siteMaterials(ctx);

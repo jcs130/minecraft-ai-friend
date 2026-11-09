@@ -13,6 +13,9 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { zhName } from './names.ts';
+import type { Bot } from 'mineflayer';
+import { assessScaffoldMaterials } from './scaffold-material.ts';
+export { isGravityBlock } from './scaffold-material.ts';
 
 /** 赶路遇坎挖还是垫;接寻路器的挖/垫代价系数 */
 export type TravelPrefer = 'auto' | 'dig' | 'place';
@@ -89,13 +92,6 @@ export function isSpawnAnchorBlock(name: string): boolean {
  * 失去支撑会下落的 FallingBlock 方块族，含三种砧形态。
  * 垫脚名单排除这些方块；build 禁止放在自身碰撞箱正上方。
  */
-export function isGravityBlock(name: string): boolean {
-  return name === 'sand' || name === 'red_sand' || name === 'gravel'
-    || name === 'suspicious_sand' || name === 'suspicious_gravel'
-    || name === 'anvil' || name === 'chipped_anvil' || name === 'damaged_anvil'
-    || name === 'dragon_egg' || name === 'pointed_dripstone'
-    || name.endsWith('_concrete_powder');
-}
 
 type PolicyValue = PolicySettings[keyof PolicySettings];
 
@@ -314,17 +310,14 @@ function listText(given: string[] | null, fallback: readonly string[]): string {
 }
 
 /** 垫脚名单与 renderPolicyEnv 使用相同过滤；被剔除的重力方块须明确报告。 */
-function scaffoldText(given: string[] | null, fallback: readonly string[]): string {
+function scaffoldText(given: string[] | null, fallback: readonly string[], registry?: Bot['registry']): string {
   if (given !== null && given.length === 0) return '关着';
   const list = given ?? fallback;
-  const usable = list.filter((n) => !isGravityBlock(n));
-  const heavy = list.filter((n) => isGravityBlock(n));
-  // 名单里的全被剔了:bridge 会回退到寻路器自己的默认名单,不是"不垫"
-  if (usable.length === 0) {
-    return `料单里${namesText(heavy)}垫下去会自己掉,一样都没收下,仍走寻路器默认名单`;
-  }
-  const head = given === null ? `用默认名单(${namesText(usable)})` : `只用${namesText(usable)}`;
-  return heavy.length > 0 ? `${head}(${namesText(heavy)}垫下去会自己掉,不收)` : head;
+  const { accepted, rejected, verified } = assessScaffoldMaterials(list, registry);
+  const head = accepted.length === 0 ? '已配置但无可执行材料（不是设置关闭，不自动换用其他材料）'
+    : verified ? `${given === null ? '默认名单' : '只用'}(${namesText(accepted)})`
+    : `配置名单(${namesText(accepted)})，当前版本碰撞支持尚未核验`;
+  return head + (rejected.length ? `；${rejected.map(r => `${r.name}: ${r.reason}`).join('；')}` : '');
 }
 
 /**
@@ -366,9 +359,10 @@ export function renderPolicy(
   def: PolicyDefaults,
   combatOff = false,
   blueprintHeld: readonly string[] = [],
+  registry?: Bot['registry'],
 ): string {
   const parts = [
-    `垫一格${scaffoldText(s.scaffold, def.scaffold)}`,
+    `垫一格${scaffoldText(s.scaffold, def.scaffold, registry)}`,
     s.light !== null && s.light.length === 0
       ? '插一根关着(照明场合那一格用不上)'
       : `插一根${listText(s.light, def.light)},${LIGHT_WHEN_ZH[s.lightWhen]}`,
@@ -394,20 +388,12 @@ export function renderPolicyEnv(
   s: PolicySettings,
   restored = false,
   blueprintHeld: readonly string[] = [],
+  registry?: Bot['registry'],
 ): string {
   const parts: string[] = [];
   if (s.scaffold !== null) {
-    // 与 bridge 一致地剔除重力方块，并报告剔除项。
-    // 空名单表示禁垫；非空名单被全部剔除时，bridge 回退到寻路器默认名单。
-    const usable = s.scaffold.filter((n) => !isGravityBlock(n));
-    const heavy = s.scaffold.filter((n) => isGravityBlock(n));
     if (s.scaffold.length === 0) parts.push('不垫脚');
-    else if (usable.length === 0) {
-      parts.push(`垫脚名单里${namesText(heavy)}垫下去会自己掉,一样都没收下,垫一格仍走默认名单`);
-    } else {
-      parts.push(`垫一格只用${namesText(usable)}`);
-      if (heavy.length > 0) parts.push(`${namesText(heavy)}垫下去会自己掉,不收`);
-    }
+    else parts.push(`垫一格${scaffoldText(s.scaffold, [], registry)}`);
   }
   if (s.light !== null) {
     parts.push(s.light.length === 0 ? '不插火把' : `插一根只用${namesText(s.light)}`);
