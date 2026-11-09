@@ -1879,7 +1879,12 @@
       "originalLedgerAndConfigUnchanged": true
     }
   ],
-  "latestComponentEvidence": "paper/manifests/public-viewer-deployed-20261109.json",
+  "latestComponentEvidence": {
+    "viewerUi": "viewer-ui-deployed-20261109.json",
+    "maidRuntime": "viewer-ui-deployed-20261109.json",
+    "maidVoicePatrolCandidate": "maid-voice-patrol-candidate-20261110.json",
+    "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded."
+  },
   "publicViewerFidelity": {
     "state": "deployed-with-explicit-open-acceptance",
     "sourcePrs": [

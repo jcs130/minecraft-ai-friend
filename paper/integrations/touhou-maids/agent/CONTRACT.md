@@ -1,3 +1,5 @@
+**0.1.17候选，尚未正式加载：** `context.speech.ambientSource/ambientPack` 说明原录音来源，`voice` 说明生成回复所用克隆音色；`sent` 仍不证明耳听。自动护卫可在8格内可见敌对怪物尚未锁敌时触发，夜间只临时切原生脑活动，保留主人的作息/停留/手选工作和低血量优先。实际版本以服务器返回为准，不能因读到本文就假定正式服已有。详见[候选](../../../docs/MAID_VOICE_PATROL_20261110.md)。
+
 # 女仆操作协议0.1.15-inventory-receipts（服务端已部署，原客户端采用待验）
 
 **0.1.15 已部署**：`slotCount` 是底层总槽数；保留字段 `availableSlots` 表示已解锁容量，绝不是空槽数。按 `indexBase:0`、`usableSlotIndexes`、`freeSlotIndexes`、`lockedSlotIndexes` 和 `freeSlotCount` 判断是否可用。默认未装背包通常只有0–5可用，6–35锁定；`slots` 仅列真实非空物品，不包含菜单装饰。锁定槽返回 `maid_slot_unavailable` 和当前合法范围。
