@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "state": "deployed",
+  "sourceMain": "68a44eea0cfea4cf6747d3735cb722ed1bb9cc50",
+  "sourcePullRequests": [
+    156,
+    158,
+    161,
+    164
+  ],
+  "ciChecksPassed": 6,
+  "ciRun": 42815990583,
+  "gameRunningAt": "2026-11-10T20:54:42.2671815+08:00",
+  "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+  "gamePid": 38000,
+  "proxyPid": 3788,
+  "components": [
+    {
+      "name": "CortiEyeMirror",
+      "version": "0.1.21-hud-baseline",
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
+      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+      "processId": 38000,
+      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+    },
+    {
+      "name": "QiandengVoice",
+      "version": "0.1.6",
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "sha256": "0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f",
+      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+      "processId": 38000,
+      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+    },
+    {
+      "name": "LoginGuard",
+      "version": "0.1.12-ordered-voice",
+      "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
+      "sha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
+      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+      "processId": 3788,
+      "processStartedAt": "2026-11-10T12:54:09.7706224Z",
+      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.20-companion-dialogue",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+      "sourceCommit": "9608e7d9269836f4c9151f178bdf40ebd469ea43",
+      "processId": 38000,
+      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+    },
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.70-jungle-survey-rpg",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
+      "processId": 38000,
+      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+    },
+    {
+      "name": "AgentVision",
+      "version": "0.1.4",
+      "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
+      "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+      "codeChangedThisBatch": false,
+      "sourceCommit": null,
+      "processId": 38000,
+      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+    }
+  ],
+  "normalWorlds": [
+    "world",
+    "world_nether",
+    "world_the_end",
+    "aincrad"
+  ],
+  "activityAnnouncements": {
+    "count": 3,
+    "loadedAt": "2026-11-10T20:05:36+08:00",
+    "sha256": "3b8f9b815cc3ce555c408cb4c3d48494ce4803658c7dcf0db2bcb575dce6d39b"
+  },
+  "preservation": {
+    "coldCopies": 2,
+    "originalJvmExited": true,
+    "characterFilesUnchangedDuringInstall": 7763,
+    "originalCredentialRows": 80,
+    "currentCredentialRows": 80,
+    "originalCredentialsUnchanged": true,
+    "originalBrainChoiceUnchanged": true,
+    "allOtherBinariesUnchanged": true,
+    "ttsAndSystemOneUnchanged": true
+  },
+  "formalStartupChecks": 17,
+  "feiyu": {
+    "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+    "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "health": 20,
+    "brain": "native",
+    "site": "qiandengji_cormy_codingplan",
+    "model": "codingplan-qwen3.7-plus",
+    "voice": "feiyu-tlm-hutao-cn-20261110",
+    "modelSelectionChanged": false
+  },
+  "camera": {
+    "ready": true,
+    "gpu": "RTX 3080 Ti",
+    "configurationChanged": false
+  },
+  "javaLanAnnouncing": true,
+  "acceptance": {
+    "realOwnerNaturalConversation": false,
+    "humanHearing": false,
+    "originalEyePixels": false,
+    "agentVision24h": false,
+    "performanceTarget": false
+  },
+  "independentSourceOnly": {
+    "pullRequest": 162,
+    "embeddedCoreRuntime": "0.5.7-rc.160-preview.37",
+    "mergedCoreCandidate": "0.5.7-rc.160-preview.38",
+    "installedByThisBatch": false
+  },
+  "evidence": "paper/docs/COMPANION_VOICE_DEPLOYED_20261110.md"
+}
