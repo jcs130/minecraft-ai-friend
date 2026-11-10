@@ -30,6 +30,8 @@ final class VoiceUploads {
     record Audio(byte[] bytes,String format) { }
     record Progress(int nextSequence,int receivedBytes,int expectedBytes) { }
     synchronized Progress progress(Key key,UUID session){Upload upload=pending.get(key);return upload!=null&&upload.session.equals(session)?new Progress(upload.sequence,upload.buffer.size(),upload.bytes):null;}
+    record Snapshot(boolean pending,boolean sessionMatches,int nextSequence,int receivedBytes,int expectedBytes,long remainingMs) { }
+    synchronized Snapshot snapshot(Key key,UUID session,long now){Upload u=pending.get(key);return u==null?new Snapshot(false,false,0,0,0,0):new Snapshot(true,u.session.equals(session),u.sequence,u.buffer.size(),u.bytes,u.expires-now);}
     synchronized Audio finish(Key key,UUID session,long now) {
         Upload upload=get(key,session,now);
         // finish is a terminal attempt, including a rejected partial/damaged file.
