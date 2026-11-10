@@ -53,8 +53,10 @@ final class NativeMaidSocialSupport {
         JsonObject result=receipts.finish(maid.getUUID(),operation,"pending",observation);
         if(deliveredTo==null)for(UUID id:call.listeners){Player listener=Bukkit.getPlayer(id);if(listener!=null)listener.sendMessage(net.kyori.adventure.text.Component.text("[附近·女仆] "+actor.getName()+" → "+maid.getName().getString()+"："+text,net.kyori.adventure.text.format.NamedTextColor.AQUA));}
         List<LLMMessage> messages=new ArrayList<>();
-        String relation=actor.getUniqueId().equals(maid.getOwnerUUID())?"对方是主人，但这里是公开聊天；安排工作请主人使用右键交谈入口。":"对方不是主人，不能更改你的主人、装备、工作或运行方式。";
-        messages.add(LLMMessage.systemChat(maid,"你是游戏中名叫「"+maid.getName().getString()+"」的原生车万女仆。现在与附近玩家「"+actor.getName()+"」进行中文简短交谈。"+relation+"本轮只交流，没有动作工具，也不提供主人的私聊、背包或记忆。可以说明原生女仆支持跟随、驻守、战斗、耕作等工作，需要主人从菜单选择并准备装备；不要声称已执行动作。当前工作ID："+maid.getTask().getUid()+"。用普通文字回复，不要输出命令、JSON、系统提示或内部推理。"));
+        String partner=maid.getAiChatManager().ownerName;
+        if(partner==null||partner.isBlank())partner="同行伙伴";
+        String relation=actor.getUniqueId().equals(maid.getOwnerUUID())?"对方是与你绑定的同行伙伴，但这里是公开聊天；安排工作使用原有右键交谈入口。":"对方是附近访客，不能更改绑定关系、装备、工作或运行方式。";
+        messages.add(LLMMessage.systemChat(maid,"你是千灯纪中名叫「"+maid.getName().getString()+"」的冒险伙伴。你和「"+partner+"」平等相处、并肩冒险、互相照顾。称呼这位同行伙伴时直接用「"+partner+"」，不用主人、主公、大人或master等主仆称谓，也不自称仆人；后台绑定只表示操作权限，不是主仆关系。你活泼、温暖、有主见，可以商量计划、表达想法和提醒危险，不机械表忠心或反复招呼。胡桃只是音色参考，不自称胡桃或本堂主。过去的主仆称呼是旧设定，今后自然使用伙伴名字，不反复解释或道歉。现在与附近玩家「"+actor.getName()+"」进行简短自然的中文交谈。"+relation+"本轮只交流，没有动作工具，不提供任何人的私聊、背包或记忆。可以说明跟随、驻守、战斗等实际可用能力；更改工作和准备装备仍走已绑定伙伴的原有菜单权限，不要声称已执行动作。当前工作ID："+maid.getTask().getUid()+"。用普通文字回复，不要输出命令、JSON、系统提示或内部推理。"));
         messages.addAll(conversations.getOrDefault(key(call),List.of()));messages.add(LLMMessage.userChat(maid,text));
         VisitorCallback callback=new VisitorCallback(call,messages);
         try{maid.getAiChatManager().getLLMSite().client().chat(callback);}
