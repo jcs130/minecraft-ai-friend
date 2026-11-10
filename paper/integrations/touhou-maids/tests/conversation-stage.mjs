@@ -10,7 +10,7 @@ const {command}=await import(pathToFileURL(process.env.MAID_SOCIAL_QA_RCON));con
 const baseline=process.argv.includes('--baseline'),run='cv'+Date.now().toString(36),report={run,baseline,checks:[],realPlayerDataUsed:false,productionChanged:false,actualHumanHearingVerified:false},bots=[],peers=[],modelRequests=[],mediaRequests=[];
 const check=(name,ok)=>{report.checks.push({name,ok:!!ok});console.log((ok?'PASS ':'FAIL ')+name);assert(ok,name);};
 const until=async(fn,label,ms=20000)=>{for(let end=Date.now()+ms;Date.now()<end;){const value=await fn();if(value)return value;await delay(100);}throw Error('Timeout '+label);};
-let mode='ok',asrText='隔离肥鱼，你好，语音测试',releaseAsr;const asrRequests=[];const realVoice=process.argv.includes('--real-voice'),replyText=realVoice?'你好，我是肥鱼。一起去冒险吧。':'你好，我是隔离肥鱼。';
+let mode='ok',asrText='隔离肥鱼，你好，语音测试',releaseAsr;const asrRequests=[];const realVoice=process.argv.includes('--real-voice'),replyText=realVoice?'你好，我是肥鱼，一起去冒险吧。':'你好，我是隔离肥鱼。';
 const wav=Buffer.alloc(44+48000);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(48000,24);wav.writeUInt32LE(96000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(48000,40);for(let i=0;i<24000;i++)wav.writeInt16LE(Math.round(Math.sin(i/48000*440*Math.PI*2)*1500),44+i*2);
 const model=http.createServer(async(req,res)=>{let raw='';for await(const b of req)raw+=b;let body=JSON.parse(raw);modelRequests.push(body);await delay(mode==='late'?4500:500);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({id:'synthetic',object:'chat.completion',model:'qa-native',choices:[{message:{role:'assistant',content:replyText},finish_reason:'stop'}],usage:{prompt_tokens:1,completion_tokens:1,total_tokens:2}}));});
 const media=http.createServer(async(req,res)=>{const chunks=[];for await(const b of req)chunks.push(b);const raw=Buffer.concat(chunks);if(req.url==='/v1/asr'){assert.equal(raw.toString('ascii',0,4),'RIFF');asrRequests.push(req.headers['x-request-id']);if(mode==='asr-wait')await new Promise(resolve=>releaseAsr=resolve);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({text:asrText}));return;}mediaRequests.push(JSON.parse(raw));if(mode==='media-failure'){res.writeHead(503);res.end();return;}res.writeHead(200,{'content-type':'audio/wav'});res.end(wav);});
@@ -51,12 +51,15 @@ try{
    const context=(await ask(owner,'context')).data;check('restart keeps original owner and live identity',context.maidId===fixture.maid&&context.ownerId===fixture.owner&&context.lifeState==='alive');
    check('context explains actual appearance and natural dialogue',context.appearance.modelId===context.modelId&&context.appearance.type==='native_maid'&&context.conversation.nearbyRange===8&&context.speech.voice===(realVoice?'deepfish-low-warm-20261029':'qa-companion'));
    if(realVoice){
+     assert(/^backend:\s*http:\/\/127\.0\.0\.1:8857\s*$/m.test(await fs.readFile(stage+'/plugins/QiandengVoice/config.yml','utf8')),'Real-voice acceptance requires the actual loopback ASR service, not the fixture mock');
      const configured=JSON.parse(await fs.readFile(stage+'/plugins/QiandengjiMaidBridge/companion-speech.json','utf8'));assert.equal(configured.backend,'http://127.0.0.1:8857');assert.equal(configured.maidId,fixture.maid);assert.equal(configured.voice,'deepfish-low-warm-20261029');
      visitor.chat('隔离肥鱼，请用一句话问好');await until(()=>peers[1].state.audio>40,'existing real TTS to encrypted UDP',110000);await delay(4500);
      check('existing DeepFish voice reaches actual SVC listener',peers[1].state.audio>40&&peers[1].state.errors===0&&mediaRequests.length===0);
-     const before=visitor.lines.length;await peers[1].speak(peers[1].state.packets);await until(()=>visitor.lines.slice(before).some(s=>s.includes('[语音识别]')&&s.includes('我是肥鱼')&&s.includes('一起去冒险')),'received Opus returns through real CPU ASR',110000);
-     check('received encrypted audio decodes to the original Chinese reply',visitor.lines.slice(before).some(s=>s.includes('我是肥鱼')&&s.includes('一起去冒险')));
-     await delay(1200);check('maid-generated audio does not create an automatic conversation loop',modelRequests.length===1);report.realVoice=true;report.receivedOpusPackets=peers[1].state.audio;
+     await delay(1200);check('maid audio alone never starts another model call',modelRequests.length===1);
+     const before=visitor.lines.length;await peers[1].speak(peers[1].state.packets);await until(()=>visitor.lines.slice(before).some(s=>s.includes('[语音识别]')&&s.includes('你好')&&s.includes('冒险')),'received Opus returns through real CPU ASR',110000);
+     report.recognizedCaption=visitor.lines.slice(before).find(s=>s.includes('[语音识别]'));
+     check('received encrypted audio decodes to the original Chinese reply',report.recognizedCaption?.includes('你好')&&report.recognizedCaption.includes('冒险')&&asrRequests.length===0);
+     await until(()=>modelRequests.length===2,'one intentionally injected microphone followup');await delay(5000);check('explicit microphone followup replies once without an automatic loop',modelRequests.length===2);report.realVoice=true;report.receivedOpusPackets=peers[1].state.audio;
    }
  }else if(baseline){
    await chat(visitor,'隔离肥鱼，你好');check('baseline nearby name-addressed chat never reaches configured model',modelRequests.length===0);
