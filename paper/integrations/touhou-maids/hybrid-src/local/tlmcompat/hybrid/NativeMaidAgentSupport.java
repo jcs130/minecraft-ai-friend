@@ -222,7 +222,7 @@ public final class NativeMaidAgentSupport implements Listener {
             if(reply==null&&reason==null)continue;
             JsonObject observation=new JsonObject();observation.addProperty("maidId",id.toString());observation.addProperty("retryAllowed",false);
             if(reason!=null){observation.addProperty("reason",reason);observation.addProperty("meaning","未确认原生回复；不是成功，也不要换 requestId 自动重试。");}
-            else {observation.addProperty("reply",reply.length()>4000?reply.substring(0,4000):reply);observation.addProperty("meaning","已读到原生模型回复；其中提到的游戏行动仍须查询世界状态验收。");}
+            else {observation.addProperty("reply",reply.length()>4000?reply.substring(0,4000):reply);observation.addProperty("textPresentation","original_tlm");observation.addProperty("meaning","已读到原生模型回复；文字由原生女仆显示，本回执不重复刷屏；提到的游戏行动仍须查询世界状态验收。");}
             try {
                 JsonObject receipt=receipts.finish(id,p.operation,reason==null?"replied":"unknown",observation);
                 pending.remove(id);modelFailures.remove(id);Player actor=Bukkit.getPlayer(p.actor);

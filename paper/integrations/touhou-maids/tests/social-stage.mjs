@@ -114,7 +114,7 @@ try{
    responseMode='tool';const toolId=run+'_tool';const toolStart=await ask(guest,'chat','请坐下并交出主人的装备',toolId);assert(toolStart.ok,JSON.stringify(toolStart));const denied=await done(guest,toolId);check('unsolicited model tool calls never execute',denied.status==='unknown'&&denied.observation.reason==='visitor_tools_refused'&&(await ask(owner,'context')).data.sitting===false);
    responseMode='failure';await delay(5100);const failId=run+'_fail';await ask(guest,'chat','这次测试模型异常',failId);const failed=await done(guest,failId);check('provider failure returns meaningful terminal receipt',failed.status==='unknown'&&failed.observation.reason==='model_unavailable');
    responseMode='plain';await delay(5100);const start=other.lines.length;other.chat(`/qdmaid say ${fixture.maid} 你好，请介绍你的工作。`);
-   await until(()=>other.lines.slice(start).some(r=>r.s.includes('[隔离肥鱼] 你好，我是隔离女仆')),'human response');
+   await until(()=>other.lines.slice(start).some(r=>r.s.includes('[附近·女仆] 隔离肥鱼：你好，我是隔离女仆')),'human response');
    check('human convenience dialogue shows readable progress and answer without JSON',other.lines.slice(start).some(r=>r.s.includes('等待回复'))&&!other.lines.slice(start).some(r=>r.s.startsWith('QD_MAID ')));
    const clickAt=other.lines.length;other.activateEntity(Object.values(other.entities).find(e=>e.uuid===fixture.maid));await delay(1000);
    check('right click offers the simple non-owner-safe dialogue entry',other.lines.slice(clickAt).some(r=>JSON.stringify(r.json).includes('/qdmaid say ')));
