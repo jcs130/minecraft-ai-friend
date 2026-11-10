@@ -1,11 +1,11 @@
 {
-  "inventoryScope": "component_runtime_verified_20261109_with_explicit_historical_snapshot",
-  "currentComponentEvidence": "paper/manifests/all-pending-deployed-20261109.json",
-  "acceptanceDocument": "paper/docs/ACCEPTANCE_EVIDENCE_20261108.md",
+  "inventoryScope": "component_runtime_verified_20261110_hutao_joint_release",
+  "currentComponentEvidence": "paper/manifests/hutao-joint-deployed-20261110.json",
+  "acceptanceDocument": "paper/docs/HUTAO_JOINT_DEPLOYED_20261110.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-verified",
   "latestRelease": "public-viewer-fidelity-20261109",
-  "verifiedAt": "2026-11-09T12:47:36.349311+00:00",
+  "verifiedAt": "2026-11-10T02:29:22.478855+00:00",
   "releaseDocument": "paper/docs/ALL_PENDING_RELEASE_20261109.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
@@ -52,17 +52,17 @@
     "executionNote": "The initial wrapper did not stop on coordination-lock failure. The permission change was subsequently verified; the wrapper now fails closed. The consumed batch must not be replayed."
   },
   "runtime": {
-    "AgentFriend": "0.4.47.68-player-ui-rpg",
+    "AgentFriend": "0.4.47.69-onboarding-viewer-rpg",
     "CortiEyeMirror": "0.1.20",
-    "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
-    "embeddedCore": "0.5.7-rc.160-preview.35",
+    "QiandengjiMaidBridge": "0.1.18-scene-voice-patrol",
+    "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
     "mods": 6,
     "VortexRPG": "1.2.2-alpha",
     "QiandengjiRpg": "0.2.20",
-    "QiandengVoice": "0.1.4",
-    "WorldObserver": "0.1.3",
+    "QiandengVoice": "0.1.5",
+    "WorldObserver": "0.1.4-maid-ysm",
     "website": "0.8.41"
   },
   "goddessChatGuidance": {
@@ -1567,28 +1567,38 @@
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.15-inventory-receipts",
-      "artifactSha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
-      "manifest": "paper/manifests/maid-inventory-receipts-deployed-20261109.json"
+      "version": "0.1.18-scene-voice-patrol",
+      "artifactSha256": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
+      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
     },
     "AgentFriend": {
-      "version": "0.4.47.68-player-ui-rpg",
-      "artifactSha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
-      "manifest": "paper/manifests/all-pending-deployed-20261109.json"
+      "version": "0.4.47.69-onboarding-viewer-rpg",
+      "artifactSha256": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
+      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
+    },
+    "QiandengVoice": {
+      "version": "0.1.5",
+      "artifactSha256": "61e414af4b44f476eaafd9b34777015e6cede46ce3dd53156c4c12893a8a999c",
+      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
+    },
+    "WorldObserver": {
+      "version": "0.1.4-maid-ysm",
+      "artifactSha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
+      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
     }
   },
   "currentRuntime": {
-    "AgentFriend": "0.4.47.68-player-ui-rpg",
+    "AgentFriend": "0.4.47.69-onboarding-viewer-rpg",
     "CortiEyeMirror": "0.1.20",
-    "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
-    "embeddedCore": "0.5.7-rc.160-preview.35",
+    "QiandengjiMaidBridge": "0.1.18-scene-voice-patrol",
+    "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
     "mods": 6,
     "VortexRPG": "1.2.2-alpha",
     "QiandengjiRpg": "0.2.20",
-    "QiandengVoice": "0.1.4",
-    "WorldObserver": "0.1.3",
+    "QiandengVoice": "0.1.5",
+    "WorldObserver": "0.1.4-maid-ysm",
     "website": "0.8.41"
   },
   "currentGameContent": {
@@ -1885,9 +1895,9 @@
     "maidVoicePatrolCandidate": "maid-voice-patrol-candidate-20261110.json",
     "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded.",
     "maidSceneVoiceCandidate20261110": {
-      "state": "not-deployed",
-      "manifest": "paper/manifests/maid-scene-voice-candidate-20261110.json",
-      "notes": "Owner authorized current batch. Runtime baseline remains prior deployment until formal receipt."
+      "state": "deployed",
+      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json",
+      "sourceMain": "c26d27946e0415fc9ea5228a5d9dd77c6eb18bf1"
     }
   },
   "publicViewerFidelity": {
@@ -1900,5 +1910,37 @@
     "gameRestarted": false,
     "record": "paper/manifests/public-viewer-deployed-20261109.json"
   },
-  "currentComponentEvidenceScope": "Game/client baseline remains all-pending-deployed-20261109.json; later website/map/observer/ops evidence overrides only those components."
+  "currentComponentEvidenceScope": "Current game, hosted core and website use hutao-joint-deployed-20261110.json; other earlier release/override blocks are retained historical evidence, not a newer runtime claim.",
+  "previousCanonicalRuntimeBeforeHutao20261110": {
+    "currentRuntime": {
+      "AgentFriend": "0.4.47.68-player-ui-rpg",
+      "CortiEyeMirror": "0.1.20",
+      "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
+      "embeddedCore": "0.5.7-rc.160-preview.35",
+      "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
+      "plugins": 57,
+      "mods": 6,
+      "VortexRPG": "1.2.2-alpha",
+      "QiandengjiRpg": "0.2.20",
+      "QiandengVoice": "0.1.4",
+      "WorldObserver": "0.1.3",
+      "website": "0.8.41"
+    },
+    "runtime": {
+      "AgentFriend": "0.4.47.68-player-ui-rpg",
+      "CortiEyeMirror": "0.1.20",
+      "QiandengjiMaidBridge": "0.1.15-inventory-receipts",
+      "embeddedCore": "0.5.7-rc.160-preview.35",
+      "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
+      "plugins": 57,
+      "mods": 6,
+      "VortexRPG": "1.2.2-alpha",
+      "QiandengjiRpg": "0.2.20",
+      "QiandengVoice": "0.1.4",
+      "WorldObserver": "0.1.3",
+      "website": "0.8.41"
+    },
+    "currentComponentEvidence": "paper/manifests/all-pending-deployed-20261109.json",
+    "currentComponentEvidenceScope": "Game/client baseline remains all-pending-deployed-20261109.json; later website/map/observer/ops evidence overrides only those components."
+  }
 }
