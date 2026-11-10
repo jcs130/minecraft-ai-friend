@@ -34,6 +34,8 @@ public final class ExplorationGuidanceTest {
         check("unknown location explicit instead of asking an uninformed NPC", unknown.get("reason").getAsString().equals("TARGET_LOCATION_UNKNOWN")
                 && unknown.get("nextAction").getAsString().contains("暂未核实") && !unknown.get("nextAction").getAsString().contains("向女神"));
         check("reference does not invite vertical digging", g.get("nextAction").getAsString().contains("不沿坐标竖挖"));
+        check("temple is an interior survey, not an entry trigger", !g.get("requiresSpecificEntrance").getAsBoolean()
+                && g.get("nextAction").getAsString().contains("现有楼梯") && g.get("routeHint").getAsString().contains("不要继续向下挖"));
         var wrong = nav.deepCopy(); wrong.addProperty("dimensionMatches", false);
         g = guide(wrong, empty, "outside_survey_target", places);
         check("return dimension first", g.get("phase").getAsString().equals("return_to_required_dimension") && !g.has("landmark"));
@@ -43,6 +45,7 @@ public final class ExplorationGuidanceTest {
         g = guide(nav, partial, "different_structure_or_world", places);
         check("resume original structure", g.get("phase").getAsString().equals("resume_same_structure") && g.has("resumePosition") && !g.has("landmark"));
         check("do not advise destructive reset", g.get("nextAction").getAsString().contains("不必放弃重接"));
+        check("resume explains basement versus natural caves",g.get("nextAction").getAsString().contains("天然矿洞不计入"));
         var heightOnly = json("{\"ready\":false,\"validCurrentTarget\":true,\"distinctZones\":6,\"distance\":40,\"movingSeconds\":25,\"distinctSections\":1,\"biomes\":[\"minecraft:jungle\"],\"heightSpan\":2}");
         String before = nav + "|" + heightOnly;
         g = guide(nav, heightOnly, "survey_incomplete", places);
