@@ -73,7 +73,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         getLogger().info(line);
     }
     private final Map<String,Long> humanDialogue=new LinkedHashMap<>();
-    private void humanConversation(Player actor,String request){
+    void humanConversation(Player actor,String request){
         humanDialogue.entrySet().removeIf(e->e.getValue()<System.nanoTime());
         String key=actor.getUniqueId()+":"+request;humanDialogue.remove(key);humanDialogue.put(key,System.nanoTime()+180_000_000_000L);
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
@@ -366,7 +366,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             JsonObject details=data.getAsJsonObject("observation");if(details!=null&&details.has("error")){error=details.get("error").getAsString();data=data.deepCopy();data.addProperty("message",details.get("message").getAsString());}
         }
         if(humanDialogue.getOrDefault(actor.getUniqueId()+":"+request,0L)>System.nanoTime()){
-            humanReply(actor,request,data,error);
+            humanReply(actor,action,request,data,error);
             // Nearby speech also reaches subscribed Agent clients. Keep the
             // human line, and preserve authenticated IDs/status for their loop.
             if(!actor.getListeningPluginChannels().contains(CHANNEL))return;
@@ -389,7 +389,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     public void openCommonMenu(Player actor,EntityMaid maid){menus.open(actor,maid);}
     public void openCosmetics(Player actor,EntityMaid maid,boolean voices,int page){cosmeticsMenu.open(actor,maid,voices,page);}
-    private void humanReply(Player actor,String operation,JsonObject data,String error){
+    private void humanReply(Player actor,String action,String operation,JsonObject data,String error){
+        if(MaidReplyPresentation.alreadyShown(action,data,error))return;
         if(error!=null){
             String message=switch(error){
                 case "out_of_range","not_owned","owner_mismatch"->guidance("chat",error);

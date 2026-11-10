@@ -6,5 +6,7 @@ with tempfile.TemporaryDirectory() as tmp:
  subprocess.run([a.javac,'--release','21','-encoding','UTF-8','-cp',a.gson,'-d',tmp,*map(str,sources)],check=True)
  for fixture in ['MaidCompanionPolicyFixture','MaidConversationInitiativeFixture','MaidAmbientPatrolFixture','MaidVoiceClipsFixture','MaidShortDialogueFixture']:
   subprocess.run([a.java,'-cp',tmp+os.pathsep+a.gson,'local.tlmcompat.hybrid.'+fixture],check=True)
+ subprocess.run([a.javac,'--release','21','-encoding','UTF-8','-cp',a.gson,'-d',tmp,str(root/'hybrid-src/local/tlmcompat/hybrid/MaidReplyPresentation.java'),str(root/'tests/MaidReplyPresentationFixture.java')],check=True)
+ subprocess.run([a.java,'-cp',tmp+os.pathsep+a.gson,'local.tlmcompat.hybrid.MaidReplyPresentationFixture'],check=True)
  subprocess.run([a.javac,'--release','21','-encoding','UTF-8','-cp',a.gson,'-d',tmp,str(root/'hybrid-src/local/tlmcompat/hybrid/MaidChatReply.java'),str(root/'tests/MaidChatReplyFixture.java')],check=True)
  subprocess.run([a.java,'-cp',tmp+os.pathsep+a.gson,'local.tlmcompat.hybrid.MaidChatReplyFixture'],check=True)

@@ -53,6 +53,8 @@ jobs:
           node --check paper/integrations/touhou-maids/tests/companion-stage.mjs
           node --check paper/integrations/touhou-maids/tests/conversation-stage.mjs
           node --check paper/integrations/touhou-maids/tests/short-dialogue-stage.mjs
+          node --check paper/integrations/touhou-maids/tests/dialogue-once-stage.mjs
+          node --check paper/integrations/touhou-maids/tests/dialogue-once-public-log.mjs
           node --check paper/integrations/touhou-maids/tests/svc-receiver.mjs
           node --check paper/integrations/touhou-maids/tests/voice-patrol-stage.mjs
       - name: Check native camera launch and appearance archives without connecting

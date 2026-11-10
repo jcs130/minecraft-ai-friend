@@ -52,8 +52,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         return start(actor,maid,operation,text,deliveredTo,false);
     }
     private JsonObject start(Player actor,EntityMaid maid,String operation,String text,Set<UUID> deliveredTo,boolean proactive)throws Exception{
+        if(proactive)plugin.humanConversation(actor,operation);
         Set<UUID> listeners=new HashSet<>();
         for(Player listener:maid.getBukkitEntity().getLocation().getNearbyPlayers(8))if((deliveredTo==null||deliveredTo.contains(listener.getUniqueId()))&&listener.canSee(actor)&&listener.canSee(maid.getBukkitEntity()))listeners.add(listener.getUniqueId());
+        listeners.add(actor.getUniqueId());
         Map<UUID,Player> connections=new HashMap<>();for(UUID id:listeners)connections.put(id,Bukkit.getPlayer(id));
         Call call=new Call(actor.getUniqueId(),maid.getOwnerUUID(),operation,text,maid,System.nanoTime()+75_000_000_000L,Set.copyOf(listeners),actor,actor.getWorld().getUID(),Map.copyOf(connections),proactive,proactive?scene(maid):null);
         pending.put(maid.getUUID(),call);nextChat.put(actor.getUniqueId(),System.nanoTime()+5_000_000_000L);
@@ -120,20 +122,24 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         JsonObject observation=new JsonObject();observation.addProperty("maidId",id.toString());observation.addProperty("conversation","nearby_visitor");observation.addProperty("initiatedBy",call.proactive?"maid":"player");observation.addProperty("retryAllowed",false);
         if(reason==null){String shortText=MaidShortReply.text(text);if(shortText.isBlank())reason="invalid_model_reply";else{observation.addProperty("reply",shortText);observation.addProperty("replyShortened",!shortText.equals(text.strip()));observation.addProperty("replyChars",shortText.codePointCount(0,shortText.length()));}}
         if(reason!=null){observation.addProperty("reason",reason);observation.addProperty("meaning","未交付有效回复；查原回执，不自动重发。可稍后另说一句新话。");}
+        if(reason==null)observation.addProperty("textPresentation","nearby_canonical");
         try{
             JsonObject receipt=receipts.finish(id,call.operation,reason==null?"replied":"unknown",observation);
             pending.remove(id);
+            int delivered=0;
             if(reason==null){
                 plugin.conversationReplied(actor,call.maid);
                 Set<UUID> audience=new HashSet<>();for(UUID listener:call.listeners)if(Bukkit.getPlayer(listener)==call.connections.get(listener))audience.add(listener);audience.add(call.actor);
                 plugin.speakPublicReply(call.maid,call.operation,observation.get("reply").getAsString(),Set.copyOf(audience));
                 List<LLMMessage> history=new ArrayList<>(conversations.getOrDefault(key(call),List.of()));history.add(call.proactive?LLMMessage.systemChat(call.maid,"上次主动聊天时观察到的场景（不是玩家说的话）："+call.text):LLMMessage.userChat(call.maid,call.text));history.add(LLMMessage.assistantChat(call.maid,observation.get("reply").getAsString()));
                 while(history.size()>8)history.removeFirst();conversations.remove(key(call));conversations.put(key(call),history);while(conversations.size()>64)conversations.remove(conversations.keySet().iterator().next());
-                for(UUID listenerId:call.listeners){Player listener=Bukkit.getPlayer(listenerId);if(listener!=null&&listener==call.connections.get(listenerId)&&!listenerId.equals(call.actor)&&listener.getWorld().equals(call.maid.getBukkitEntity().getWorld())&&listener.canSee(actor)&&listener.canSee(call.maid.getBukkitEntity())&&listener.getLocation().distanceSquared(call.maid.getBukkitEntity().getLocation())<=64)
-                    listener.sendMessage(net.kyori.adventure.text.Component.text("[附近·女仆] "+call.maid.getName().getString()+"："+observation.get("reply").getAsString(),net.kyori.adventure.text.format.NamedTextColor.AQUA));}
+                // One identical packet for the actor and bystanders. Existing Eye mirrors
+                // can then recognize their direct nearby copy and omit the mirrored copy.
+                var line=net.kyori.adventure.text.Component.text("[附近·女仆] "+call.maid.getName().getString()+"："+observation.get("reply").getAsString(),net.kyori.adventure.text.format.NamedTextColor.AQUA);
+                for(UUID listenerId:call.listeners){Player listener=Bukkit.getPlayer(listenerId);if(listener!=null&&listener==call.connections.get(listenerId)&&listener.getWorld().equals(call.maid.getBukkitEntity().getWorld())&&listener.canSee(actor)&&listener.canSee(call.maid.getBukkitEntity())&&listener.getLocation().distanceSquared(call.maid.getBukkitEntity().getLocation())<=64){listener.sendMessage(line);delivered++;}}
             }
             if(actor!=null)plugin.reply(actor,"chat-result",call.operation,receipt,null);
-            if(reason==null&&actor!=null)plugin.publishPublicSpeech(call.maid,call.operation,observation.get("reply").getAsString(),1);
+            if(reason==null&&delivered>0)plugin.publishPublicSpeech(call.maid,call.operation,observation.get("reply").getAsString(),delivered);
         }catch(Exception error){plugin.getLogger().warning("Visitor dialogue receipt retained: "+error.getClass().getSimpleName());}
     }
     private void tick(){
