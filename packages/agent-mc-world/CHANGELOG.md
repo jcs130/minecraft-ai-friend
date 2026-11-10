@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.38
+
+- Validate short grounded recovery and idle movement against the actual swept player volume and loaded collision shapes, instead of rejecting an entire cell beside a fence or open mechanism. Retain continuous dry support, hazard and unknown-geometry checks, stopping margin, cancellation and control ownership.
+
 ## 0.5.7-rc.160-preview.37
 
 - Retain real cooldown refusals in the bounded server feedback facts; share scaffold eligibility and effective movement policy.
