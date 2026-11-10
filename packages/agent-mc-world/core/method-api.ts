@@ -18,7 +18,9 @@ const SDK_API = Object.freeze({
     + '原生按键/发包不等于成功装填、命中、回收或安全落地；按物品与实体实际变化核验。取消蓄力须切槽，不能用松手假装取消而误发射。'
     + 'api:"authoring" 给校验、保存父版本、执行、证据、采用和回退链。保存后可用 mc_combat_tactic.routines 登记精确 procedure 给系统一选择，program 按现场重排。维护者支持某动作不等于你已学会。',
   mobility: '交通能力按实际后端区分：ride 可上/下已观察到的载具；原生驾驶目前支持 boat/chest_boat、猪、炽足兽，不支持马/驴/骡驾驶。'
-    + '乘船可先用 use 放船，再 ride 指定 target 与 entityId，上船后 ride.to 分段开行；每段按 vehicle 身份、实际位置、碰撞与服务端纠偏验收，不能把上船当抵达。'
+    + '造船到水路：先 mc_bag 核对已有船和材料，mc_help {skills:["craft","use","ride"]} 查当前契约；没有船时用 craft 的 item:实际木种_boat,count:1，按本版本配方回执补材料/工作台，中间材料不会自动造。'
+    + '用 use 的 item:实际船物品ID,at:当前可达水面放船；回执给新船的 entityId 与类型，ride 必须点名它。消耗物品但未确认新实体时先观察，不重放放船，不把旁边旧船当本次产物。'
+    + '上船后 ride.to 分段开行，或用 ride_route 连续路点；每段按 vehicle 身份、实际位置、碰撞与服务端纠偏验收，不能把上船当抵达。受阻仍保持当前乘坐，不自动下水；改道或先核对干燥落脚点再 off:true。'
     + '马可观察驯服/鞍、喂食、上马和下马；bot.moveVehicle 只发原生输入，Mineflayer没有马物理，不能用它宣称已骑行。'
     + 'mc_script {routine:{op:"read",id:"ride_route"}} 按需读取内置可改写路线参考；自己编写前用 api:"authoring" 与 api:"mount"/"dismount"/"moveVehicle"。'
     + '有明确交通目的且当前路段合适时可检索已有方法、改写、校验和使用；不强制为练习离开当前任务。',
