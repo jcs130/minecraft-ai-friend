@@ -34,8 +34,11 @@ try {
   const reply = plugin.match(/^    public void reply\(Player actor,String action,String request,JsonObject data,String error\)\{[\s\S]*?^    \}/m)?.[0];
   assert(reply, 'Production reply method was not found; update the fixture extraction.');
   const replyWrapper = path.join(tmp, 'MaidDialogueReplyUnderTest.java');
+  const chatReplySource = await fs.readFile(path.resolve(root, '../hybrid-src/local/tlmcompat/hybrid/MaidChatReply.java'), 'utf8');
+  const chatReplyFixture = path.join(tmp, 'MaidChatReply.java');
+  await fs.writeFile(chatReplyFixture, chatReplySource.replace(/^package [^;]+;\s*/u, ''));
   await fs.writeFile(replyWrapper, `import com.google.gson.*;\nimport java.util.*;\nimport java.nio.charset.StandardCharsets;\nclass MaidDialogueReplyUnderTest {\nfinal Map<String,Long> humanDialogue=new HashMap<>();\nstatic final String CHANNEL="qa:maids";\nvoid humanReply(Player actor,String request,JsonObject data,String error){actor.humanLines++;}\nstatic String guidance(String action,String error){return "guidance";}\n${reply}\n}\n`);
-  const compileReply=spawnSync(option('--javac')??'javac',['--release','21','-encoding','UTF-8','-cp',path.resolve(gson),'-d',tmp,replyWrapper,path.join(root,'DialogueReplyQa.java')],{encoding:'utf8'});
+  const compileReply=spawnSync(option('--javac')??'javac',['--release','21','-encoding','UTF-8','-cp',path.resolve(gson),'-d',tmp,replyWrapper,chatReplyFixture,path.join(root,'DialogueReplyQa.java')],{encoding:'utf8'});
   process.stdout.write(compileReply.stdout??'');process.stderr.write(compileReply.stderr??'');
   assert.equal(compileReply.status,0,'Reply fixture compilation failed');
   const runReply=spawnSync(option('--java')??'java',['-cp',[tmp,path.resolve(gson)].join(path.delimiter),'DialogueReplyQa'],{encoding:'utf8'});
