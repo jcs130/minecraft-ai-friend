@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261110_temple_partner",
-  "currentComponentEvidence": "paper/manifests/companion-voice-deployed-20261110.json",
-  "acceptanceDocument": "paper/docs/HUTAO_JOINT_DEPLOYED_20261110.md",
+  "inventoryScope": "component_runtime_verified_20261111_maid_dialogue_once",
+  "currentComponentEvidence": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+  "acceptanceDocument": "paper/docs/MAID_DIALOGUE_ONCE_DEPLOYED_20261111.md",
   "historicalFieldsPreserved": true,
-  "state": "deployed-and-verified",
-  "latestRelease": "cormy-temple-partner-release-20261110-r2",
-  "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
-  "releaseDocument": "paper/docs/TEMPLE_PARTNER_RELEASE_20261110.md",
+  "state": "deployed-and-component-verified",
+  "latestRelease": "maid-dialogue-once-release-20261111-r1",
+  "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+  "releaseDocument": "paper/docs/MAID_DIALOGUE_ONCE_DEPLOYED_20261111.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -158,7 +158,7 @@
     "original remote modded client acceptance and complete rendering/animation parity",
     "Remote Cortico host terminal error consumption remains unverified"
   ],
-  "scopeNotice": "PR58 is deployed for the active Goddess bridge, Numen Lua task engine and owned Fabric camera bridge; other computers and in-game Minescript cancellation remain separate acceptance items. Safe existing-chunk travel for personal points, landmarks, legacy expedition approaches and rescue paths is deployed with terminal receipts. Local CLI recovery remains advisory; external embeddings are disabled. Patched Youer920 is retained. Remote host terminal-error consumption and physical client acceptance remain separate.",
+  "scopeNotice": "Use currentRuntime, componentRuntimeEvidence and currentComponentEvidence for present loading. Older runtime/override/release blocks are historical; no source-only SDK or unrelated PR is declared installed.",
   "verification": {
     "formalStartupChecks": 24,
     "enabledPlugins": 55,
@@ -1561,30 +1561,30 @@
       "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.19-partner-persona",
-      "sha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
-      "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
+      "version": "0.1.22-dialogue-once",
+      "sha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+      "evidence": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/temple-partner-deployed-20261110.json",
+    "QiandengjiMaidBridge": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
     "AgentFriend": "paper/manifests/temple-partner-deployed-20261110.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.20-companion-dialogue",
-      "artifactSha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "version": "0.1.22-dialogue-once",
+      "artifactSha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "AgentFriend": {
       "version": "0.4.47.70-jungle-survey-rpg",
       "artifactSha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "QiandengVoice": {
       "version": "0.1.6",
       "artifactSha256": "0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "WorldObserver": {
       "version": "0.1.4-maid-ysm",
@@ -1594,23 +1594,23 @@
     "CortiEyeMirror": {
       "version": "0.1.21-hud-baseline",
       "artifactSha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "LoginGuard": {
       "version": "0.1.12-ordered-voice",
       "artifactSha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "AgentVision": {
       "version": "0.1.4",
       "artifactSha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     }
   },
   "currentRuntime": {
     "AgentFriend": "0.4.47.70-jungle-survey-rpg",
     "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.20-companion-dialogue",
+    "QiandengjiMaidBridge": "0.1.22-dialogue-once",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
@@ -1874,10 +1874,11 @@
       "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
       "sha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
       "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
-      "processId": 38000,
-      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
-      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": false
     },
     {
       "name": "QiandengVoice",
@@ -1885,10 +1886,11 @@
       "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
       "sha256": "0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f",
       "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
-      "processId": 38000,
-      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
-      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": false
     },
     {
       "name": "LoginGuard",
@@ -1896,21 +1898,23 @@
       "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
       "sha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
       "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
-      "processId": 3788,
-      "processStartedAt": "2026-11-10T12:54:09.7706224Z",
-      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "processId": 21556,
+      "processStartedAt": "2026-11-10T17:07:24.3660960Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": false
     },
     {
       "name": "QiandengjiMaidBridge",
-      "version": "0.1.20-companion-dialogue",
+      "version": "0.1.22-dialogue-once",
       "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
-      "sha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
-      "sourceCommit": "9608e7d9269836f4c9151f178bdf40ebd469ea43",
-      "processId": 38000,
-      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
-      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "sha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+      "sourceCommit": "5cbc606e303c4531c1fc00a94a7dd16bb384c797",
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": true
     },
     {
       "name": "AgentFriend",
@@ -1919,10 +1923,10 @@
       "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
       "codeChangedThisBatch": false,
       "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
-      "processId": 38000,
-      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
-      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     {
       "name": "AgentVision",
@@ -1931,10 +1935,10 @@
       "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
       "codeChangedThisBatch": false,
       "sourceCommit": null,
-      "processId": 38000,
-      "processStartedAt": "2026-11-10T12:51:49.7372434Z",
-      "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
-      "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     }
   ],
   "latestComponentEvidence": {
@@ -1956,6 +1960,11 @@
       "state": "deployed",
       "manifest": "paper/manifests/companion-voice-deployed-20261110.json",
       "sourceMain": "68a44eea0cfea4cf6747d3735cb722ed1bb9cc50"
+    },
+    "maidDialogueOnce20261111": {
+      "state": "deployed",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "sourceMain": "52e731101ee077a156259757620ef6610403bc18"
     }
   },
   "publicViewerFidelity": {
@@ -2045,7 +2054,7 @@
       "originalLedgerAndConfigUnchanged": true
     }
   ],
-  "componentRuntimeEvidenceScope": "Six listed game/proxy components have current loaded process, path, artifact digest and verification time; four changed in this batch, AgentFriend and AgentVision retained exact bytes. Older arrays/override blocks are historical.",
+  "componentRuntimeEvidenceScope": "Six current game/proxy components have verified loaded version, path, artifact digest and process. Only the maid bridge code changed; the matching original-companion voice selection also changed. Other nested runtime/release blocks retain historical batch scopes.",
   "previousComponentRuntimeEvidenceBeforeCompanion20261110": [
     {
       "name": "AgentFriend",
@@ -2069,5 +2078,155 @@
       "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
       "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
     }
-  ]
+  ],
+  "previousCanonicalBeforeMaidDialogue20261111": {
+    "inventoryScope": "component_runtime_verified_20261110_temple_partner",
+    "currentComponentEvidence": "paper/manifests/companion-voice-deployed-20261110.json",
+    "acceptanceDocument": "paper/docs/HUTAO_JOINT_DEPLOYED_20261110.md",
+    "state": "deployed-and-verified",
+    "latestRelease": "cormy-temple-partner-release-20261110-r2",
+    "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+    "releaseDocument": "paper/docs/TEMPLE_PARTNER_RELEASE_20261110.md",
+    "currentRuntime": {
+      "AgentFriend": "0.4.47.70-jungle-survey-rpg",
+      "CortiEyeMirror": "0.1.21-hud-baseline",
+      "QiandengjiMaidBridge": "0.1.20-companion-dialogue",
+      "embeddedCore": "0.5.7-rc.160-preview.37",
+      "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
+      "plugins": 57,
+      "mods": 6,
+      "VortexRPG": "1.2.2-alpha",
+      "QiandengjiRpg": "0.2.20",
+      "QiandengVoice": "0.1.6",
+      "WorldObserver": "0.1.4-maid-ysm",
+      "website": "0.8.41",
+      "LoginGuard": "0.1.12-ordered-voice",
+      "AgentVision": "0.1.4"
+    },
+    "currentComponentOverrides": {
+      "AgentFriend": {
+        "version": "0.4.47.70-jungle-survey-rpg",
+        "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+        "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
+      },
+      "QiandengjiMaidBridge": {
+        "version": "0.1.19-partner-persona",
+        "sha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+        "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
+      }
+    },
+    "componentEvidenceByName": {
+      "QiandengjiMaidBridge": "paper/manifests/temple-partner-deployed-20261110.json",
+      "AgentFriend": "paper/manifests/temple-partner-deployed-20261110.json"
+    },
+    "latestVerifiedComponents": {
+      "QiandengjiMaidBridge": {
+        "version": "0.1.20-companion-dialogue",
+        "artifactSha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      "AgentFriend": {
+        "version": "0.4.47.70-jungle-survey-rpg",
+        "artifactSha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      "QiandengVoice": {
+        "version": "0.1.6",
+        "artifactSha256": "0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      "WorldObserver": {
+        "version": "0.1.4-maid-ysm",
+        "artifactSha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
+        "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
+      },
+      "CortiEyeMirror": {
+        "version": "0.1.21-hud-baseline",
+        "artifactSha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      "LoginGuard": {
+        "version": "0.1.12-ordered-voice",
+        "artifactSha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      "AgentVision": {
+        "version": "0.1.4",
+        "artifactSha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      }
+    },
+    "componentRuntimeEvidence": [
+      {
+        "name": "CortiEyeMirror",
+        "version": "0.1.21-hud-baseline",
+        "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+        "sha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
+        "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+        "processId": 38000,
+        "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+        "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      {
+        "name": "QiandengVoice",
+        "version": "0.1.6",
+        "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+        "sha256": "0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f",
+        "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+        "processId": 38000,
+        "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+        "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      {
+        "name": "LoginGuard",
+        "version": "0.1.12-ordered-voice",
+        "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
+        "sha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
+        "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+        "processId": 3788,
+        "processStartedAt": "2026-11-10T12:54:09.7706224Z",
+        "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      {
+        "name": "QiandengjiMaidBridge",
+        "version": "0.1.20-companion-dialogue",
+        "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+        "sha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+        "sourceCommit": "9608e7d9269836f4c9151f178bdf40ebd469ea43",
+        "processId": 38000,
+        "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+        "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      {
+        "name": "AgentFriend",
+        "version": "0.4.47.70-jungle-survey-rpg",
+        "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+        "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+        "codeChangedThisBatch": false,
+        "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
+        "processId": 38000,
+        "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+        "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      },
+      {
+        "name": "AgentVision",
+        "version": "0.1.4",
+        "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
+        "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+        "codeChangedThisBatch": false,
+        "sourceCommit": null,
+        "processId": 38000,
+        "processStartedAt": "2026-11-10T12:51:49.7372434Z",
+        "verifiedAt": "2026-11-10T21:03:36.613229+08:00",
+        "manifest": "paper/manifests/companion-voice-deployed-20261110.json"
+      }
+    ],
+    "componentRuntimeEvidenceScope": "Six listed game/proxy components have current loaded process, path, artifact digest and verification time; four changed in this batch, AgentFriend and AgentVision retained exact bytes. Older arrays/override blocks are historical.",
+    "scopeNotice": "PR58 is deployed for the active Goddess bridge, Numen Lua task engine and owned Fabric camera bridge; other computers and in-game Minescript cancellation remain separate acceptance items. Safe existing-chunk travel for personal points, landmarks, legacy expedition approaches and rescue paths is deployed with terminal receipts. Local CLI recovery remains advisory; external embeddings are disabled. Patched Youer920 is retained. Remote host terminal-error consumption and physical client acceptance remain separate."
+  }
 }

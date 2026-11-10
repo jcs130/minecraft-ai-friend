@@ -1,3 +1,7 @@
+## 2026-11-11 肥鱼单次显示、短句与新声线已部署
+
+PR167/169及六项CI通过，180/60/10预告、原JVM退出及当次E/F冷备后，01:07正式加载女仆桥.22和配对音色配置；游戏PID23436。17启动检查、7994角色文件和80原认证保持。原肥鱼/可米绑定、大肥鱼新YSM和原生CodingPlan后端保留；三条实际短回复各一次公开记录，新低声线发送有回执，原Eye附身、相机及LAN恢复。未动其他JAR、托管核心、TTS/系统一配置。原机像素/人耳/完整主人格输入及AgentVision24h仍独立待验。见[发布记录](paper/docs/MAID_DIALOGUE_ONCE_DEPLOYED_20261111.md)和[正式清单](paper/manifests/maid-dialogue-once-deployed-20261111.json)。联合入口已消费、旧候选入口作废，不重放或回灌。以下为历史。
+
 ## 2026-11-10 伙伴交谈、语音顺序与Eye已部署
 
 PR161/164及六项CI通过，180/60/10预告、原JVM正常退出及E/F当次冷备后，20:54正式加载女仆.20/语音.6/Eye.21/LoginGuard.12，游戏PID38000。17正式检查、7763角色文件与80原认证保持。四世界普通难度、三条集结传送公告已生效；肥鱼保留原生CodingPlan模型及胡桃音色，近聊120秒，适度主动交谈；不切DSH、不代操。相机ready、LAN恢复；主人格采用、耳听/像素及AgentVision连续24h/性能门槛仍独立待验。PR162核心preview.38仅合并，托管和官网内置仍preview.37，不混称已装。见[发布记录](paper/docs/COMPANION_VOICE_DEPLOYED_20261110.md)与[当前组件清单](paper/manifests/companion-voice-deployed-20261110.json)。旧voice-eye入口已作废，新维护入口已消费，不重放、不回灌世界/角色/认证/回执。以下日期段落为历史。

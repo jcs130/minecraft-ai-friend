@@ -1,0 +1,254 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-dialogue-once-release-20261111-r1",
+  "state": "deployed-component-runtime-verified",
+  "deployedAt": "2026-11-11T01:07:57.5870342+08:00",
+  "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+  "codePullRequests": [
+    167,
+    169
+  ],
+  "codeHead": "5cbc606e303c4531c1fc00a94a7dd16bb384c797",
+  "mergedMain": "52e731101ee077a156259757620ef6610403bc18",
+  "sourceTree": "faadbb3e0d0b06d8182bb3ecee0900e3da2ebc29",
+  "ci": {
+    "runId": 42855865269,
+    "successfulJobs": 6
+  },
+  "installedFiles": [
+    {
+      "target": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+      "sha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\QiandengjiMaidBridge\\companion-speech.json",
+      "before": "faeea7760f5213ca3b359456e4bf1005e25d860970b15ea2a6106fc84cce1ab8",
+      "sha256": "94b81fd06d4b539896e149e27457a695da479c5998f51f617490d613d694e5ab"
+    }
+  ],
+  "components": [
+    {
+      "name": "CortiEyeMirror",
+      "version": "0.1.21-hud-baseline",
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
+      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": false
+    },
+    {
+      "name": "QiandengVoice",
+      "version": "0.1.6",
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "sha256": "0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f",
+      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": false
+    },
+    {
+      "name": "LoginGuard",
+      "version": "0.1.12-ordered-voice",
+      "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
+      "sha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
+      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+      "processId": 21556,
+      "processStartedAt": "2026-11-10T17:07:24.3660960Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": false
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.22-dialogue-once",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+      "sourceCommit": "5cbc606e303c4531c1fc00a94a7dd16bb384c797",
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.70-jungle-survey-rpg",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+    },
+    {
+      "name": "AgentVision",
+      "version": "0.1.4",
+      "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
+      "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+      "codeChangedThisBatch": false,
+      "sourceCommit": null,
+      "processId": 23436,
+      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+    }
+  ],
+  "runtimeProcesses": {
+    "proxyPid": 21556,
+    "observedAt": "2026-11-11T01:11:00.2226408+08:00",
+    "proxyStartedAt": "2026-11-10T17:07:24.3660960Z",
+    "gameStartedAt": "2026-11-10T17:04:48.9264617Z",
+    "gamePid": 23436
+  },
+  "coldBackupProof": [
+    {
+      "verifiedColdCopy": true,
+      "root": "E:\\MC\\backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+          "name": "plugins\\qiandengji-maid-native-0.1.12-conversation.jar"
+        },
+        {
+          "sha256": "faeea7760f5213ca3b359456e4bf1005e25d860970b15ea2a6106fc84cce1ab8",
+          "name": "plugins\\QiandengjiMaidBridge\\companion-speech.json"
+        }
+      ],
+      "manifestSha256": "7be000ff1f1ef504ba89bbcebad7c114b57c56b94b02e95aa0292dd6957aea4f"
+    },
+    {
+      "verifiedColdCopy": true,
+      "root": "F:\\MC-backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+          "name": "plugins\\qiandengji-maid-native-0.1.12-conversation.jar"
+        },
+        {
+          "sha256": "faeea7760f5213ca3b359456e4bf1005e25d860970b15ea2a6106fc84cce1ab8",
+          "name": "plugins\\QiandengjiMaidBridge\\companion-speech.json"
+        }
+      ],
+      "manifestSha256": "329857b2d11131206930382c643d49eaeb71a3a9a6d00add4cc3140f22ee714a"
+    }
+  ],
+  "formalStartupChecks": 17,
+  "charactersInstall": {
+    "passed": true,
+    "files": 7994
+  },
+  "authentication": {
+    "originalRows": 80,
+    "currentRows": 80,
+    "originalCredentialsUnchanged": true,
+    "credentialValuesPrinted": false
+  },
+  "originalCompanion": {
+    "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+    "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "ownerAndOriginalIdentityRetained": true,
+    "aliveObserved": true,
+    "nativeModelId": "大肥鱼.ysm",
+    "nativeTexture": "texture",
+    "nativeYsmEnabled": true,
+    "nativeSite": "qiandengji_cormy_codingplan",
+    "selectedVoice": "deepfish-low-warm-20261029",
+    "ambientSource": "native_event_chinese_tts"
+  },
+  "runtimeDialogue": {
+    "at": "2026-11-11T01:14:42.940737+08:00",
+    "readOnly": true,
+    "publicReplies": [
+      {
+        "operationId": "companion_a2d7c5c4-39d6-4063-a820-85f80daec3ba",
+        "text": "丛林夜色真美，那块新木牌挺显眼，是留给谁的留言吗？",
+        "characters": 25,
+        "publishedCopies": 1,
+        "speechState": "sent",
+        "voice": "deepfish-low-warm-20261029",
+        "connectedListeners": 1,
+        "packetOffers": 272,
+        "hearingVerified": false
+      },
+      {
+        "operationId": "companion_9d5bc026-13a7-4864-a35b-3772833f88e2",
+        "text": "雨点敲着树叶响，这块新木牌在夜色里格外醒目呢。",
+        "characters": 23,
+        "publishedCopies": 1,
+        "speechState": "sent",
+        "voice": "deepfish-low-warm-20261029",
+        "connectedListeners": 1,
+        "packetOffers": 272,
+        "hearingVerified": false
+      },
+      {
+        "operationId": "near_34e9c54c-6350-4cfc-82f4-7703279936bd",
+        "text": "雨声确实催眠，可惜云层太厚看不见星星，不过在这躲雨也挺惬意。",
+        "characters": 30,
+        "publishedCopies": 1,
+        "speechState": "sent",
+        "voice": "deepfish-low-warm-20261029",
+        "connectedListeners": 1,
+        "packetOffers": 336,
+        "hearingVerified": false
+      }
+    ],
+    "originalEyeAttached": true,
+    "eyeLogLines": [
+      "[01:08:55] [Server thread/INFO] [CortiEyeMirror]: Eye mirror attached ag_cormy_eye -> ag_CorMy"
+    ],
+    "humanHearingVerified": false,
+    "originalClientPixelAcceptance": false
+  },
+  "goddessJobsRestored": true,
+  "camera": {
+    "phase": "ready",
+    "renderer": "NVIDIA GeForce RTX 3080 Ti",
+    "shadersEnabled": true,
+    "configurationChanged": false
+  },
+  "javaLan": "announcing",
+  "voiceDefaultsChanged": false,
+  "voiceCatalogueChanged": false,
+  "scope": "Only the maid bridge JAR and original Feiyu voice config changed. PR167/169 source is loaded together. Other game/proxy binaries retain exact bytes; world, characters, current YSM, brain, inventory, credentials, tasks and receipts were not rolled back.",
+  "acceptanceLimits": {
+    "originalClientPixelAcceptance": false,
+    "humanHearingVerified": false,
+    "completeOriginalMainModelInputTrace": false,
+    "agentVision24hAccepted": false
+  },
+  "finiteVisionMonitor": {
+    "readOnly": true,
+    "startedAt": "2026-11-10T17:12:11.3889608Z",
+    "independentOfChat": true,
+    "pid": 25540,
+    "gamePid": 23436,
+    "finiteSeconds": 86400,
+    "accepted24h": false,
+    "output": "E:/MC/ops/repairs/agentvision-null-loader-20261110-r1/monitor-after-dialogue-20261111-r1"
+  },
+  "previousVisionWindow": {
+    "samples": 2641,
+    "queryErrors": 0,
+    "meanObservedFiveSecondWindowMspt": 14.736274138583859,
+    "globalPeakMspt": 2107,
+    "accepted24h": false,
+    "endedForApprovedMaintenance": true
+  },
+  "privateEvidence": {
+    "primary": "E:\\MC\\ops\\repairs\\maid-dialogue-once-release-20261111-r1",
+    "mirror": "F:/MC-backups/repairs/maid-dialogue-once-release-20261111-r1"
+  },
+  "rollback": "Normal maintenance, replace only the paired .20 JAR and old voice config. Preserve latest world, entities, YSM, brains, accounts, inventories, quests and all receipts; do not replay unknown operations.",
+  "ttsOrSystemOneRestartedByThisDeployment": false
+}
