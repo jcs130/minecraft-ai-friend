@@ -108,6 +108,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         if(!valid(maid)||request.length()>48)return;
         String text=raw==null?"":raw.replaceAll("[\\p{Cntrl}§]"," ").strip();if(text.isEmpty())return;if(text.length()>200)text=text.substring(0,200);
         if(!kind.equals("ambient"))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
+        if(!kind.equals("ambient"))plugin.conversationSpoken();
         if(!maid.getAiChatManager().getTTSModel().isBlank()){lastState="unavailable";lastReason="native_tts_already_configured";return;}
         Map<UUID,Stamp> listeners=listeners(maid,allowed);
         // Quiet/unattended areas must not create thousands of ambient receipt files.
@@ -119,7 +120,7 @@ final class NativeMaidSpeech implements AutoCloseable {
             if(listeners.isEmpty()){finish(job,"skipped","no_connected_voice_listener");return;}
             if(active!=null&&active.kind.equals("ambient")&&!kind.equals("ambient"))cancel("ambient_interrupted_for_reply");
             if(active!=null){finish(job,"skipped","companion_already_speaking");return;}
-            active=job;finishRecord(job,"preparing","");
+            active=job;if(kind.equals("ambient"))plugin.conversationSpoken();finishRecord(job,"preparing","");
             if(original!=null){play(job,original.samples());return;}
             short[] cached=kind.equals("ambient")?ambientCache.get(text):null;
             if(cached!=null){play(job,cached);return;}

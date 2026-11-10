@@ -49,6 +49,30 @@ try{
      await delay(5100);
    }
    check('restored original native choice after isolated Hub tests',(await ask(owner,'brain','native')).data.observation.selected==='native');
+ }else if(process.argv.includes('--initiative')){
+   report.initiative=true;
+   owner._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('qiandengji:maids\0qiandengji:maid_request')});await delay(800);
+   const privateHistory=await rc(`minecraft:data get entity ${fixture.maid} MaidAIChat.CustomSetting`);
+   await until(()=>requests.length>0,'actual settled companion initiative',115000);
+   const first=await until(()=>owner.replies.find(x=>x.action==='chat-result'&&x.requestId.startsWith('companion_')),'spontaneous terminal receipt');
+   check('nearby owner receives actual selected-native-model initiative',first.ok&&first.data.status==='replied'&&first.data.observation.initiatedBy==='maid');
+   check('initiative has no game action tools',!requests[0].tools?.length);
+   const prompt=JSON.stringify(requests[0].messages);
+   check('scene is attributed to observation instead of fabricated player speech',prompt.includes('不是可米说的话')&&prompt.includes('相距8格内'));
+   check('only the original selected model is used',requests[0].model==='qa-native');
+   check('nearby bystander receives public companion speech',guest.lines.some(x=>x.s.startsWith('[附近·女仆] 隔离肥鱼：')));
+   check('server does not fabricate an owner chat line',!owner.lines.some(x=>x.s.includes('MaidBrainQA →')&&x.s.includes('当前观察')));
+   const original=first.requestId,count=requests.length;
+   const repeated=await ask(owner,'receipt','',original);
+   check('original initiative receipt can be queried without replay',repeated.ok&&repeated.data.status==='replied'&&requests.length===count);
+   await delay(60000);
+   check('unchanged scene does not produce repetitive greetings',requests.length===count);
+   const before=owner.replies.length;owner.chat('下一段旅程你想往哪边走？');
+   await until(()=>requests.length===count+1,'natural followup beyond old forty-five seconds');
+   await until(()=>owner.replies.slice(before).some(x=>x.action==='chat-result'&&x.data?.status==='replied'),'natural followup reply');
+   check('two-minute speaker window supports slower natural followup',JSON.stringify(requests.at(-1).messages).includes('下一段旅程'));
+   check('public conversation preserves native owner persona',(await rc(`minecraft:data get entity ${fixture.maid} MaidAIChat.CustomSetting`))===privateHistory);
+   report.originalInitiativeId=original;
  }else if(baseline){
    const response=await ask(guest,'chat','你好，我是附近的访客。');report.baselineResponse={ok:response.ok,error:response.error};
    check('old bridge reproduces visitor not_owned despite advertised chat',!response.ok&&response.error==='not_owned');
