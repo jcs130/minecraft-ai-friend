@@ -1,0 +1,68 @@
+{
+  "state": "candidate-not-deployed",
+  "baselineServerCommit": "8df10215b45db578915e2f02acbaee39078add4f",
+  "clientCommit": "c94a9943173b23875681114cd3de29d3e7501c04",
+  "defect": "independent async PluginMessageEvent completion reorders chunks and finish",
+  "historicalOriginalRequestRootCauseConfirmed": false,
+  "originalRequestsReplayed": false,
+  "productionModified": false,
+  "newAuthPolicy": false,
+  "syntheticBackendCompletion": true,
+  "humanHearingVerified": false,
+  "testResults": {
+    "real-baseline-natural": {
+      "direct": {
+        "total": 20,
+        "passed": 20
+      },
+      "proxy": {
+        "total": 20,
+        "passed": 16
+      },
+      "reportSha256": "e42c7438fbb4be859dda62d4d3954ae5959847df0baa5e7cf58c3f9335ef1577"
+    },
+    "real-baseline-delay": {
+      "direct": {
+        "total": 20,
+        "passed": 20
+      },
+      "proxy": {
+        "total": 20,
+        "passed": 0
+      },
+      "reportSha256": "6f6714494f864591cdae184659e85fe5d26d14711e4d693f45f2997b52873d4c"
+    },
+    "real-candidate-delay": {
+      "direct": {
+        "total": 20,
+        "passed": 20
+      },
+      "proxy": {
+        "total": 20,
+        "passed": 20
+      },
+      "reportSha256": "c37334d767682fe3dae3bf24a04f36eda77398b4060ab656a990818cd91672ba"
+    },
+    "real-final-natural": {
+      "direct": {
+        "total": 20,
+        "passed": 20
+      },
+      "proxy": {
+        "total": 20,
+        "passed": 20
+      },
+      "reportSha256": "839e9e66d34924fa5e46a61858928169935157ac9e3980a4d9a76e9d80dcdf92"
+    }
+  },
+  "testNodeProtocol": "1.66.2",
+  "dependencies": {
+    "paper-api.jar": "b8df3e7f2739e21072a5263e41b307bd30cfa8d8f72258ce27973167f8ad07c0",
+    "packetevents.jar": "1889f17e58030b33ef8c3c9f0d3321c6fb93c0fbd830d96c30af88b2c5eef7b4",
+    "LibreLogin.jar": "3df848d4058e63f37cf9fe997542fd49c84374440d116a34ac4052278aa77e4f",
+    "voicechat-bukkit.jar": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e",
+    "velocity.jar": "fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef",
+    "bungeecord-chat.jar": "5e61313bb35aae1b2be33276ab442f6e0d56258ff13297750d6ad9484d1a4fd6"
+  },
+  "document": "paper/docs/VOICE_PROXY_ORDERING_20261110.md"
+}

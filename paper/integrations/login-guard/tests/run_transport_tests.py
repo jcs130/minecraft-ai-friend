@@ -35,14 +35,19 @@ def main():
     classes.mkdir(parents=True)
     cp = os.pathsep.join(map(str, jars))
     sources = sorted(args.source.rglob("*.java")) + sorted((ROOT / "tests").glob("*.java"))
+    has_trace = (args.source / "org/afuhome/auth/VoiceTransportTrace.java").exists()
+    if not has_trace:
+        sources = [source for source in sources if source.name != "VoiceTransportTraceTest.java"]
     sources += sorted((ROOT / "tests/org").rglob("*.java"))
     subprocess.run([args.java, "com.sun.tools.javac.Main", "-proc:none", "-encoding", "UTF-8",
                     "-source", "21", "-target", "21", "-cp", cp, "-d", str(classes),
                     *map(str, sources)], check=True)
     cp = str(classes) + os.pathsep + cp
-    names = ["VoiceTransportTest", "McbotTransportTest", "AuthObservationTest", "AuthNotificationTest",
+    names = ["VoiceTransportTest", "VoiceOrderingTest", "VoiceTransportTraceTest", "McbotTransportTest", "AuthObservationTest", "AuthNotificationTest",
              "AuthHeartbeatRecoveryTest", "AuthMessagesTest", "FirstPasswordPolicyTest",
              "PremiumEyePolicyTest", "PortalBridgeTest", "ConfigurationSettingsTest"]
+    if not has_trace:
+        names.remove("VoiceTransportTraceTest")
     for name in names:
         qualified = name if name == "PremiumEyePolicyTest" else "org.afuhome.auth." + name
         subprocess.run([args.java, "-ea", "-cp", cp, qualified], check=True)
@@ -51,7 +56,7 @@ def main():
     for host in ["127.0.0.1", "0.0.0.0"]:
         subprocess.run([args.java, "-ea", "-cp", cp, "RefreshConcurrencyTest",
                         str(output / ("refresh-" + host)), host], check=True)
-    print("PASS 13 isolated LoginGuard regression runs; no live server/authentication provider")
+    print(f"PASS {len(names) + 3} isolated LoginGuard regression runs; no live server/authentication provider")
 
 
 if __name__ == "__main__":
