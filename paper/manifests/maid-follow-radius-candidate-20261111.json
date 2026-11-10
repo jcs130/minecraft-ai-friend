@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "state": "candidate-not-deployed",
+  "component": "QiandengjiMaidBridge",
+  "version": "0.1.23-follow-radius",
+  "baselineVersion": "0.1.22-dialogue-once",
+  "baselineSha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+  "sha256": "2c56fe0a2b84e2fbda203b4b1fb9807b9343586840f166d07876f397a452875a",
+  "preservedUnrelatedJarEntries": 70,
+  "repeatBuildIdentical": true,
+  "profile": {
+    "target": "original-feiyu-entity",
+    "schemaVersion": 1,
+    "walkDistance": 32,
+    "stopDistance": 16,
+    "returnDistance": 64,
+    "unit": "blocks",
+    "metric": "same-dimension-euclidean-3d"
+  },
+  "checks": {
+    "followPolicy": 31,
+    "lifecycle": 29,
+    "companionAndDialogue": 144,
+    "nativeBaselineReproduction": 2,
+    "nativeCandidate": 14,
+    "nativeNormalRestart": 16,
+    "productionBehaviorVerified": false,
+    "humanClientPixelsVerified": false
+  },
+  "evidence": "E/F repairs/maid-follow-radius-20261111-r1",
+  "deployment": "Fresh normal maintenance and per-original-entity profile required; no hot class replacement."
+}

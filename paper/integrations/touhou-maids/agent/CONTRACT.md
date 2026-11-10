@@ -72,6 +72,8 @@
 
 近距跟随0.1.9-follow[修复已部署](../../../docs/MAID_CLOSE_FOLLOW_20261107.md)。命令入口不变，新增 `context.follow` 解释寻路请求、实际暂停原因和原生安全恢复；`follow` 回执 applied 不能代替位置/ownerDistance 验收。新字段不表示模型已完成目标，停留、工作和跨维度需要按当前状态处理。
 
+0.1.23新增[独立跟随距离候选](../../../docs/MAID_FOLLOW_RADIUS_20261111.md)：`context.follow` 可包含 `recoveryBeyond`、`distanceUnit:blocks`、`customized`；`ranged_idle_companion` 表示该原实体采用服主配置的距离。应读取实际阈值和 `ownerDistance`，不要硬编码3格或把处于自由活动范围误报为卡住。原有操作权限、停留/工作及跨维度暂停不变；以服务端实际版本和字段判断是否已加载。
+
 **0.1.8-life 已部署**：同一个 UUID 再次被原生实体证实存活后，持久保存该观察及已解决的死亡事件。旧墓碑可能仍有遗物，不能在区块卸载或服务重启后重新变成当前死亡。查询不到实体时仍返回 `unloaded_or_unavailable`，不声称当前一定存活。
 
 保持 schema 1 和现有命令，增加 `lastSeenAlive:{name,dimension,position,observedAt}`、`historicalDeath`、`recovery`。只有当前死亡放在 `death`；历史死亡放在 `historicalDeath`。原生死亡事件可先确认死亡，墓碑随后补充同一事件；较新的独立墓碑对应另一死亡事件。旧版本只有墓碑而没有存活见证的记录先视为历史，直到获得新的原生证据。
