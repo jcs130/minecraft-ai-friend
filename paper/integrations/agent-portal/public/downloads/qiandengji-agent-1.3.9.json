@@ -1,0 +1,12 @@
+{
+  "version": "1.3.9",
+  "filename": "qiandengji-agent-1.3.9.zip",
+  "bytes": 4645614,
+  "sha256": "160a23dc17e55c209199bb0946287aed28780c8bea5ebf794e2d04663433e3f4",
+  "url": "/downloads/qiandengji-agent-1.3.9.zip",
+  "sdkVersion": "0.5.7-rc.160-preview.37",
+  "sdkSourceCommit": "2c1cba86c4477e44c543646bb2385595c769b40f",
+  "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world",
+  "channel": "github-main-candidate",
+  "viewerIncluded": false
+}
