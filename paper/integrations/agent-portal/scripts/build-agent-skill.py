@@ -70,10 +70,15 @@ for name, data in list(files.items()):
         destination = posixpath.normpath(posixpath.join(posixpath.dirname(name), path))
         if destination in files:
             return match[0]
-        if not name.startswith('references/mc-core/') or not destination.startswith('references/mc-core/'):
+        if not name.startswith('references/mc-core/'):
             raise ValueError('Missing packaged reference: ' + name + ' -> ' + href)
-        source = destination.removeprefix('references/mc-core/')
-        url = 'https://github.com/jcs130/minecraft-ai-friend/blob/' + lock['sdkSourceCommit'] + '/packages/agent-mc-world/' + source
+        # Core documentation also links to repository-level server integrations.
+        # Resolve from the original source directory, without allowing escape
+        # above the repository or pretending that those files ship in the ZIP.
+        source = posixpath.normpath(posixpath.join('packages/agent-mc-world', posixpath.relpath(destination, 'references/mc-core')))
+        if source == '..' or source.startswith('../') or source.startswith('/'):
+            raise ValueError('Core reference escapes its source repository: ' + href)
+        url = 'https://github.com/jcs130/minecraft-ai-friend/blob/' + lock['sdkSourceCommit'] + '/' + source
         return match[1] + url + (marker + anchor if marker else '') + match[3]
     files[name] = link.sub(resolve_link, data.decode('utf-8')).encode('utf-8')
 manifest = json.loads(files.pop('bundle.json'))

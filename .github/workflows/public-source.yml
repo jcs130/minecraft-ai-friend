@@ -83,6 +83,10 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://cdn.modrinth.com/data/HYKaKraK/versions/QrZrSKnd/packetevents-velocity-2.8.0.jar -o "$RUNNER_TEMP/voice-deps/packetevents.jar"
           python paper/integrations/login-guard/tests/run_transport_tests.py --deps "$RUNNER_TEMP/voice-deps" --output "$RUNNER_TEMP/voice-transport-tests"
           node --test paper/integrations/proximity-voice/tests/client.test.mjs
+          node --check paper/integrations/proximity-voice/tests/upload-recovery-stage.mjs
+          mkdir "$RUNNER_TEMP/voice-upload-failure"
+          javac --release 21 -d "$RUNNER_TEMP/voice-upload-failure" paper/integrations/proximity-voice/src/dev/god/godvoice/VoiceUploads.java paper/integrations/proximity-voice/tests/VoiceUploadFailureTest.java
+          java -cp "$RUNNER_TEMP/voice-upload-failure" dev.god.godvoice.VoiceUploadFailureTest
   source-safety:
     runs-on: ubuntu-latest
     steps:

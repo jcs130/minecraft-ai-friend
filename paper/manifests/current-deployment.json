@@ -1883,7 +1883,12 @@
     "viewerUi": "viewer-ui-deployed-20261109.json",
     "maidRuntime": "viewer-ui-deployed-20261109.json",
     "maidVoicePatrolCandidate": "maid-voice-patrol-candidate-20261110.json",
-    "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded."
+    "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded.",
+    "maidSceneVoiceCandidate20261110": {
+      "state": "not-deployed",
+      "manifest": "paper/manifests/maid-scene-voice-candidate-20261110.json",
+      "notes": "Owner authorized current batch. Runtime baseline remains prior deployment until formal receipt."
+    }
   },
   "publicViewerFidelity": {
     "state": "deployed-with-explicit-open-acceptance",

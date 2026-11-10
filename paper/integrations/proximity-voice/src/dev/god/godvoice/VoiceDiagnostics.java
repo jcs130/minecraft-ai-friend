@@ -26,6 +26,9 @@ final class VoiceDiagnostics {
         return "VOICE_RECEIVER_READY";
     }
     static String hint(String code){return switch(code){
+        case "UPLOAD_CHUNK_INVALID"->"音频分块序号、长度或总量不符，本次未播放；请保留原请求ID与客户端分块记录供排查，不要重播原请求。失败上传会释放预留，不阻挡下一句独立发言。";
+        case "UPLOAD_INCOMPLETE","UPLOAD_DIGEST_MISMATCH"->"音频未收齐或校验不符，本次未播放；保留原请求ID及实际发送字节数，联系客户端检查。已释放本次上传，下一句独立发言可以继续。";
+        case "UPLOAD_QUEUE_FULL"->"此账号已有正在上传的音频，请等待原请求结束或查询原ID；不要同时上传多句，也不要更换ID重播同一句。";
         case "VOICE_MEDIA_UNREACHABLE","VOICE_BACKEND_UNAVAILABLE"->"服务端音频准备服务未连接，请联系服主检查语音媒体服务；不要反复重发。";
         case "VOICE_MEDIA_TIMEOUT"->"服务端音频准备超时；先查询原请求，不要换编号重播。";
         case "VOICE_MEDIA_AUTH_REJECTED"->"服务端语音桥认证配置不一致，请服主检查内部配置；无需提供玩家密码。";

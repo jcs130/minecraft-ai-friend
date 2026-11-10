@@ -37,7 +37,9 @@ try{
  await qa('clear');await qa('hostile');await qa('clear');
  if(phase==='baseline'){result.passed=true;await qa('remove');}else{
  const {receiver}=await import('./svc-receiver.mjs');peer=await receiver(bot,{port:29471});
+ await qa('ambient-idle');await delay(1200);check('idle native sound creates no unrelated public speech or audio',peer.state.positional===0&&mediaRequests.length===0);
  await qa('ambient');await delay(7500);check('real encrypted positional voice reaches the synthetic client',peer.state.positional>0&&peer.state.errors===0);
+ const originalPackets=peer.state.positional;await qa('ambient');await delay(1200);check('repeated native event stays quiet inside the shared cooldown',peer.state.positional===originalPackets);
  result.voice={packets:peer.state.audio,positional:peer.state.positional,errors:peer.state.errors,mediaRequests:mediaRequests.length};
  if(phase==='candidate')check('original random recording uses no server TTS request',mediaRequests.length===0);
 

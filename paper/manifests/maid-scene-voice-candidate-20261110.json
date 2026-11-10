@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "state": "validated-candidate-not-deployed",
+  "version": "0.1.18-scene-voice-patrol",
+  "sourceBase": "2c1cba86c4477e44c543646bb2385595c769b40f",
+  "includesMergedPr": 152,
+  "artifact": {
+    "sha256": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
+    "baselineSha256": "3a328893ab7b9319b62836122ff3e071abce0c05b6b06fc18ea97ce7a0a83d61",
+    "sourceSha256": {
+      "HybridMaidPlugin": "9ca85b56775bafc61ee7504f13127b7a2358a247c3243d8449d985d71356a94d",
+      "NativeMaidSpeech": "bc1361b827880991ab19d89495dd47e0663a843083015fb8eab5461bdf5540c4",
+      "MaidSpeechLines": "19f3467a5649a72c4676df9c5c138a1af2c26562e72e2be9fe14433e23f93066",
+      "MaidAmbientPolicy": "c28463a11be8e7ef7b5e2e06a420a5a0d3057fc7efb149db2fc0e82eef4ba12c",
+      "MaidVoiceClips": "c5014cab12d0dc0e0e8506a2ae3ff412dc5641d72b75bee6057ad3a28ec52665",
+      "MaidCompanionPolicy": "36a50ee5dfb52883b4bafed4fb3da5bf64407032ebe73ba6223289522351e434",
+      "NativeMaidCompanionSupport": "8eec2912300b7453749531153bb1c6a29fc713932bc5f58202dc0dba764a148b"
+    },
+    "unrelatedEntriesPreserved": 58
+  },
+  "voice": {
+    "id": "feiyu-tlm-hutao-cn-20261110",
+    "label": "胡桃中文声线",
+    "ownerSelected": true,
+    "sourceCatalogue": "https://tlmdl.cfpa.team/info.json",
+    "sourceArchive": "https://tlmdl.cfpa.team/file/stonaphrospack-0.0.1.zip",
+    "sourceArchiveSha256": "ae2df70fe0a947b65083216c98bebb5d280abce63b5a9645fca1549508042c38",
+    "referenceSha256": "91fa2f8ae64d252b5e469d44b6b18ce96072bc7ba3bc6283b5d08efaa88589d6",
+    "catalogSha256": "8e459a00c8efa43651e86d208cdac96cb5029e0e8c43c4be55197acb8a44145c",
+    "nativeEvents": 11,
+    "originalClips": 15,
+    "existingVoicesPreserved": 19,
+    "defaultVoicePreserved": true
+  },
+  "ambient": {
+    "idleEnabled": false,
+    "minimumGapSeconds": 90,
+    "sameActionGapSeconds": 180,
+    "sameEnvironmentGapSeconds": 600,
+    "requiresCurrentScene": true,
+    "onlyCuratedRecordings": true,
+    "dialoguePriority": true
+  },
+  "library": {
+    "archives": 16,
+    "voiceConfigurations": 27,
+    "bytes": 82281998,
+    "copies": 2,
+    "otherMaidModelOrTtsEnabled": false
+  },
+  "core": {
+    "version": "0.5.7-rc.160-preview.37",
+    "file": "agent-mc-world-0.5.7-rc.160-preview.37-0e5e4066.tgz",
+    "sha256": "0e5e4066d134e6f97d10ed4a3b736b3ba477806fa10a12e975e181f944ad3b28",
+    "bytes": 4135746,
+    "sourceCommit": "2c1cba86c4477e44c543646bb2385595c769b40f",
+    "viewerIncluded": false,
+    "sourceBuildVerified": true,
+    "firstSuite": {
+      "passed": 3025,
+      "failures": 3,
+      "skipped": 8,
+      "reason": "Java17 test environment and a worker wait under concurrent load"
+    },
+    "isolatedJava21Rerun": {
+      "passed": 31,
+      "failed": 0
+    },
+    "productionChanged": false
+  },
+  "skill": {
+    "version": "1.3.9",
+    "filename": "qiandengji-agent-1.3.9.zip",
+    "bytes": 4645614,
+    "sha256": "160a23dc17e55c209199bb0946287aed28780c8bea5ebf794e2d04663433e3f4",
+    "url": "/downloads/qiandengji-agent-1.3.9.zip",
+    "sdkVersion": "0.5.7-rc.160-preview.37",
+    "sdkSourceCommit": "2c1cba86c4477e44c543646bb2385595c769b40f",
+    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world",
+    "channel": "github-main-candidate",
+    "viewerIncluded": false
+  },
+  "client": {
+    "main": "68149276da1f85f9f5f1a4102830552330278302",
+    "world": "0.4.1-rc.71-preview.38",
+    "serverPack": "0.5.0-rc.50-preview.34",
+    "tests": 504,
+    "sourceBuildAndTypesPassed": true,
+    "originalHostAdoptionVerified": false
+  },
+  "validation": {
+    "regressionFailedBeforeFix": true,
+    "ambientCompanionAudioReplyChecks": 82,
+    "nativeChecks": 15,
+    "nativePositionalPackets": 106,
+    "ambientTtsRequests": 0,
+    "coreTotalTestsPassedAcrossSuiteAndEnvironmentRerun": 3028,
+    "coreTestsSkipped": 8,
+    "ttsPreparedSeconds": 7.04,
+    "ttsAsr": "我是肥鱼我会跟着 cmme 一起冒险附近有敌人时我会先保护伙伴",
+    "humanHearingVerified": false,
+    "nativeBubblePixelsVerified": false
+  },
+  "preserved": [
+    "original maid/owner UUID",
+    "world/player inventory",
+    "YSM selection",
+    "saved schedule",
+    "brain route",
+    "lifecycle/action/voice receipts",
+    "authentication",
+    "other TTS/model services"
+  ],
+  "deploymentAuthorized": true,
+  "rollback": "Code/configuration only. Preserve latest worlds, accounts, items, receipts, original brain and new hosting ledger; no old data restore.",
+  "voiceUploadRecovery": {
+    "version": "0.1.5",
+    "sha256": "61e414af4b44f476eaafd9b34777015e6cede46ce3dd53156c4c12893a8a999c",
+    "baselineSha256": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed",
+    "unrelatedEntriesPreserved": 22,
+    "changedEntries": [
+      "dev/god/godvoice/PaperVoicePlugin$1.class",
+      "dev/god/godvoice/PaperVoicePlugin$Capture.class",
+      "dev/god/godvoice/PaperVoicePlugin$Job.class",
+      "dev/god/godvoice/PaperVoicePlugin.class",
+      "dev/god/godvoice/VoiceDiagnostics$BackendFailure.class",
+      "dev/god/godvoice/VoiceDiagnostics.class",
+      "dev/god/godvoice/VoiceUploads$Audio.class",
+      "dev/god/godvoice/VoiceUploads$Key.class",
+      "dev/god/godvoice/VoiceUploads$Progress.class",
+      "dev/god/godvoice/VoiceUploads$Upload.class",
+      "dev/god/godvoice/VoiceUploads.class",
+      "plugin.yml"
+    ],
+    "productionChanged": false,
+    "sourcePr": 153,
+    "javaBoundaryChecks": 90,
+    "nodeClientChecks": 11,
+    "nativeChecks": 9,
+    "receivedEntityAudioPackets": 25,
+    "normalizations": 1,
+    "immediateAndTerminalDuplicateProtected": true,
+    "originalProxyFirstChunkRootCauseVerified": false,
+    "humanHearingVerified": false
+  }
+}
