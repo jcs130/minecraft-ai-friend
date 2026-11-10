@@ -28,16 +28,23 @@ final class VoiceUploads {
         upload.buffer.writeBytes(data);upload.sequence++;return upload.buffer.size();
     }
     record Audio(byte[] bytes,String format) { }
+    record Progress(int nextSequence,int receivedBytes,int expectedBytes) { }
+    synchronized Progress progress(Key key,UUID session){Upload upload=pending.get(key);return upload!=null&&upload.session.equals(session)?new Progress(upload.sequence,upload.buffer.size(),upload.bytes):null;}
     synchronized Audio finish(Key key,UUID session,long now) {
         Upload upload=get(key,session,now);
+        // finish is a terminal attempt, including a rejected partial/damaged file.
+        // There is no resume offset in this protocol; keeping the reservation
+        // would reject the actor's next independent line for another minute.
+        pending.remove(key,upload);
         if(upload.buffer.size()!=upload.bytes)throw new IllegalArgumentException("UPLOAD_INCOMPLETE");
         byte[] data=upload.buffer.toByteArray();
         try {
             if(!HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data)).equals(upload.digest))throw new IllegalArgumentException("UPLOAD_DIGEST_MISMATCH");
         }catch(java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
-        pending.remove(key);return new Audio(data,upload.format);
+        return new Audio(data,upload.format);
     }
+    synchronized void discard(Key key,UUID session){Upload upload=pending.get(key);if(upload!=null&&upload.session.equals(session))pending.remove(key,upload);}
     synchronized void disconnect(UUID actor){pending.keySet().removeIf(k->k.actor.equals(actor));}
     synchronized void expire(long now){pending.values().removeIf(v->now>v.expires);}
-    private Upload get(Key key,UUID session,long now){Upload upload=pending.get(key);if(upload==null||!upload.session.equals(session)||now>upload.expires){pending.remove(key);throw new IllegalArgumentException("UPLOAD_EXPIRED_OR_SESSION_CHANGED");}return upload;}
+    private Upload get(Key key,UUID session,long now){Upload upload=pending.get(key);if(upload==null||!upload.session.equals(session))throw new IllegalArgumentException("UPLOAD_EXPIRED_OR_SESSION_CHANGED");if(now>upload.expires){pending.remove(key,upload);throw new IllegalArgumentException("UPLOAD_EXPIRED_OR_SESSION_CHANGED");}return upload;}
 }

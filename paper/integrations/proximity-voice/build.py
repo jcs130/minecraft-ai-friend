@@ -41,7 +41,7 @@ def main():
     test_arguments = output / "test.args"
     test_arguments.write_text("\n".join('"' + value.replace("\\", "/").replace('"', '\\"') + '"' for value in test_values), encoding="utf-8")
     subprocess.run([str(args.jdk / "bin/javac.exe"), "@" + str(test_arguments)], check=True)
-    for name in ("VoiceBoundaryTest", "VoiceLedgerTest", "VoiceDiagnosticsTest", "VoicePresenceTest"):
+    for name in ("VoiceBoundaryTest", "VoiceLedgerTest", "VoiceDiagnosticsTest", "VoicePresenceTest", "VoiceUploadFailureTest"):
         if (source / "tests" / (name + ".java")).exists():
             subprocess.run([str(args.jdk / "bin/java.exe"), "-cp", str(test_classes) + ";" + classpath, "dev.god.godvoice." + name], check=True)
     qa = output / "qa"

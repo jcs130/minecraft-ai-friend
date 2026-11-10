@@ -349,7 +349,21 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         UUID requestId=null;
         try{
             UUID actor=p.getUniqueId(),session=sessions.computeIfAbsent(actor,key->UUID.randomUUID());
-            if(message[0]==2){if(message.length<22||message.length>21+VoiceUploads.CHUNK)throw new IllegalArgumentException("UPLOAD_CHUNK_INVALID");ByteBuffer buffer=ByteBuffer.wrap(message,1,message.length-1);UUID id=new UUID(buffer.getLong(),buffer.getLong());int sequence=buffer.getInt();byte[] data=new byte[buffer.remaining()];buffer.get(data);uploads.chunk(new VoiceUploads.Key(actor,id),session,sequence,data,System.currentTimeMillis());return;}
+            if(message[0]==2){
+                if(message.length<22||message.length>21+VoiceUploads.CHUNK)throw new IllegalArgumentException("UPLOAD_CHUNK_INVALID");
+                ByteBuffer buffer=ByteBuffer.wrap(message,1,message.length-1);UUID id=new UUID(buffer.getLong(),buffer.getLong());requestId=id;
+                int sequence=buffer.getInt();byte[] data=new byte[buffer.remaining()];buffer.get(data);var key=new VoiceUploads.Key(actor,id);
+                // A delayed/duplicate frame cannot downgrade a queued or completed
+                // transmission. The connection still owns the ledger lookup.
+                VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){reply(p,id,old.state(),old.reason());return;}
+                try{uploads.chunk(key,session,sequence,data,System.currentTimeMillis());}
+                catch(IllegalArgumentException failure){
+                    VoiceUploads.Progress progress=uploads.progress(key,session);
+                    getLogger().warning("Voice upload chunk rejected: request="+id+" sequence="+sequence+" chunkBytes="+data.length+" progress="+progress+" code="+failure.getMessage());
+                    uploads.discard(key,session);throw failure;
+                }
+                return;
+            }
             if(message[0]!=1||message.length>8193)throw new IllegalArgumentException("VOICE_PROTOCOL_INVALID");
             JsonObject data=JsonParser.parseString(new String(message,1,message.length-1,StandardCharsets.UTF_8)).getAsJsonObject();
             if(data.has("actor")||data.has("playerUuid"))throw new IllegalArgumentException("CONNECTION_OWNS_ACTOR");
