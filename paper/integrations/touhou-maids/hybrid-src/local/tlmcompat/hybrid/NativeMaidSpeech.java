@@ -42,6 +42,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private boolean historyInitialized;
     private long nextAmbient;
     private volatile Job active;
+    private final MaidSpeechQueue<Job> waiting=new MaidSpeechQueue<>();
     private String lastState="ready",lastReason="",lastRequest="";
     private record Stamp(Player player,UUID world){}
     private static final class Job {
@@ -89,6 +90,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
         out.addProperty("ambientSource",originalClips==null?"native_event_chinese_tts":"original_chinese_recordings");
         out.addProperty("ambientIdleEnabled",false);out.addProperty("ambientMinimumGapSeconds",90);
+        out.addProperty("replyCharacterLimit",MaidShortReply.LIMIT);out.addProperty("waitingReply",waiting.peek()!=null);out.addProperty("maximumReplyWaitSeconds",10);
         if(originalClips!=null)out.addProperty("ambientPack",originalClips.pack());
         out.addProperty("state",lastState);out.addProperty("reason",lastReason);out.addProperty("requestId",lastRequest);out.addProperty("hearingVerified",false);
         out.addProperty("nextStep","听音需 Simple Voice Chat；/voice status 查询本连接。无语音模组仍可读附近文字。sent只证明音频发送，不证明真人耳听。");return out;
@@ -106,7 +108,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void submit(EntityMaid maid,String request,String raw,String kind,Set<UUID> allowed,MaidVoiceClips.Clip original){
         if(!valid(maid)||request.length()>48)return;
-        String text=raw==null?"":raw.replaceAll("[\\p{Cntrl}§]"," ").strip();if(text.isEmpty())return;if(text.length()>200)text=text.substring(0,200);
+        String text=MaidShortReply.text(raw);if(text.isEmpty())return;
         if(!kind.equals("ambient"))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
         if(!kind.equals("ambient"))plugin.conversationSpoken();
         if(!maid.getAiChatManager().getTTSModel().isBlank()){lastState="unavailable";lastReason="native_tts_already_configured";return;}
@@ -119,14 +121,29 @@ final class NativeMaidSpeech implements AutoCloseable {
             Job job=new Job(maid,request,text,kind,listeners,original);
             if(listeners.isEmpty()){finish(job,"skipped","no_connected_voice_listener");return;}
             if(active!=null&&active.kind.equals("ambient")&&!kind.equals("ambient"))cancel("ambient_interrupted_for_reply");
-            if(active!=null){finish(job,"skipped","companion_already_speaking");return;}
-            active=job;if(kind.equals("ambient"))plugin.conversationSpoken();finishRecord(job,"preparing","");
-            if(original!=null){play(job,original.samples());return;}
-            short[] cached=kind.equals("ambient")?ambientCache.get(text):null;
-            if(cached!=null){play(job,cached);return;}
-            job.media=worker.submit(()->{try{short[] pcm=synthesize(job);main(()->{if(job!=active)return;if(kind.equals("ambient")){ambientCache.put(job.text,pcm);while(ambientCache.size()>16)ambientCache.remove(ambientCache.keySet().iterator().next());}play(job,pcm);});}
-                catch(Exception error){main(()->{if(job==active)finish(job,"failed","media_unavailable_no_replay");});}});
+            if(active!=null){
+                if(kind.equals("ambient")){finish(job,"skipped","companion_already_speaking");return;}
+                // Reserve the original request once; keep only the freshest reply, never a backlog.
+                finishRecord(job,"queued","previous_reply_playing");
+                Job displaced=waiting.offer(job,System.nanoTime());
+                if(displaced!=null)finish(displaced,"skipped","newer_reply_waiting");
+                return;
+            }
+            var displaced=waiting.take();if(displaced!=null)finish(displaced.item(),"skipped","newer_reply_ready");
+            begin(job);
         }catch(Exception error){if(active!=null&&active.request.equals(request))active=null;lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}
+    }
+    private void begin(Job job){
+        active=job;
+        try{
+            refresh(job);if(job.audible.isEmpty()||api==null){finish(job,"cancelled","audience_or_entity_changed");return;}
+            if(job.kind.equals("ambient"))plugin.conversationSpoken();finishRecord(job,"preparing","");
+            if(job.original!=null){play(job,job.original.samples());return;}
+            short[] cached=job.kind.equals("ambient")?ambientCache.get(job.text):null;
+            if(cached!=null){play(job,cached);return;}
+            job.media=worker.submit(()->{try{short[] pcm=synthesize(job);main(()->{if(job!=active)return;if(job.kind.equals("ambient")){ambientCache.put(job.text,pcm);while(ambientCache.size()>16)ambientCache.remove(ambientCache.keySet().iterator().next());}play(job,pcm);});}
+                catch(Exception error){main(()->{if(job==active)finish(job,"failed","media_unavailable_no_replay");});}});
+        }catch(Exception error){finish(job,"failed","speech_preparation_unavailable_no_replay");}
     }
     private short[] synthesize(Job job)throws Exception{
         JsonObject data=new JsonObject();data.addProperty("actor",maidId.toString());data.addProperty("requestId",UUID.nameUUIDFromBytes(job.request.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());data.addProperty("voice",voice);data.addProperty("text",job.text);
@@ -170,7 +187,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private void finish(Job job,String state,String reason){if(job.finished)return;job.finished=true;try{finishRecord(job,state,reason);}catch(Exception error){if(active==job||active==null){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}}if(active==job)active=null;}
     private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
     private void ambient(EntityMaid maid,String sound){
-        if(!Bukkit.isPrimaryThread()||!valid(maid)||System.nanoTime()<nextAmbient||active!=null)return;
+        if(!Bukkit.isPrimaryThread()||!valid(maid)||System.nanoTime()<nextAmbient||active!=null||waiting.peek()!=null)return;
         var target=maid.getTarget();boolean fighting=target!=null&&target.isAlive()&&maid.distanceToSqr(target)<=64&&maid.hasLineOfSight(target);
         var world=maid.getBukkitEntity().getWorld();
         if(!MaidAmbientPolicy.matchesScene(sound,maid.getTask().getUid().toString(),fighting,maid.hurtTime>0,maid.isSleeping()||maid.isMaidInSittingPose(),world.getTime()%24000,world.hasStorm(),maid.level().canSeeSky(maid.blockPosition())))return;
@@ -180,7 +197,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         MaidVoiceClips.Clip original=originalClips==null?null:originalClips.next(sound);
         if(originalClips!=null&&original==null)return; // Curated pack omissions stay quiet, never invent a fallback line.
         String text=ambientPolicy.choose(sound,System.nanoTime(),!audience.isEmpty());if(text==null)return;
-        if(original!=null)text=original.text();
+        if(original!=null)text=original.text();text=MaidShortReply.text(text);
         nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
         String operation="a_"+UUID.randomUUID();
         int delivered=0;
@@ -190,8 +207,11 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void tick(){
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(maidId));
-        if(maid==null||!valid(maid)){cancel("companion_unavailable");return;}
+        if(maid==null||!valid(maid)){cancelWaiting("companion_unavailable");cancel("companion_unavailable");return;}
         if(active!=null){refresh(active);if(active.audible.isEmpty())cancel("audience_left");}
+        var next=waiting.peek();
+        if(next!=null&&next.expired(System.nanoTime())){waiting.take();finish(next.item(),"skipped","reply_wait_expired");}
+        else if(next!=null&&active==null){waiting.take();begin(next.item());}
         List<LLMMessage> history=new ArrayList<>(maid.getAiChatManager().getHistory().getDeque());Collections.reverse(history);
         if(!historyInitialized){seen.addAll(history);historyInitialized=true;return;}
         seen.retainAll(history);
@@ -200,5 +220,6 @@ final class NativeMaidSpeech implements AutoCloseable {
             submit(maid,key,new ResponseChat(row.message()).getChatText(),"owner_reply",Set.of(ownerId));
         }catch(Exception error){lastState="unavailable";lastReason="invalid_native_reply";}
     }
-    @Override public void close(){cancel("service_stopped");closed=true;try{soundHook.close();}catch(Exception ignored){}worker.shutdownNow();http.shutdownNow();ambientCache.clear();seen.clear();}
+    private void cancelWaiting(String reason){var next=waiting.take();if(next!=null)finish(next.item(),"cancelled",reason);}
+    @Override public void close(){closed=true;cancelWaiting("service_stopped");cancel("service_stopped");try{soundHook.close();}catch(Exception ignored){}worker.shutdownNow();http.shutdownNow();ambientCache.clear();seen.clear();}
 }

@@ -7,8 +7,8 @@ public final class MaidConversationInitiativeFixture {
         var p=new MaidConversationInitiative();long s=1_000_000_000L;
         check(!p.opportunity(0,false,"town",0,0),"absent partner never triggers");
         check(!p.opportunity(s,true,"town",0,0),"no immediate login greeting");
-        check(!p.opportunity(90*s,true,"town",0,0),"settle period");
-        check(p.opportunity(91*s,true,"town",0,0),"settled companionship opportunity");
+        check(!p.opportunity(45*s,true,"town",0,0),"settle period");
+        check(p.opportunity(46*s,true,"town",0,0),"settled companionship opportunity");
         check(!p.opportunity(100*s,true,"rain",0,0),"changing weather cannot bypass quiet time");
         check(!p.opportunity(271*s,true,"town",0,0),"unchanged idle scene never repeats");
         check(p.opportunity(271*s,true,"rain",0,0),"real scene change after quiet time");
@@ -21,6 +21,11 @@ public final class MaidConversationInitiativeFixture {
         check(!p.opportunity(900*s,true,"end",200,0),"reunion must settle again");
         check(p.opportunity(990*s,true,"end",200,0),"reunion with changed scene eventually permits topic");
         check(!p.opportunity(2000*s,true,"end",200,0),"no polling retry of unchanged opportunity");
+        check(p.opportunity(2000*s,true,"end",200,0,1),"confirmed nearby action offers a relevant topic in unchanged terrain");
+        check(!p.opportunity(2120*s,true,"end",200,0,1),"same action is not repeated after cooldown");
+        check(!p.opportunity(2100*s,true,"end",200,0,2),"new action cannot bypass two-minute quiet period");
+        check(p.opportunity(2120*s,true,"end",200,0,2),"fresh action after quiet period supports a short comment");
+        check(!p.opportunity(2240*s,true,"end",200,0,0),"expiring observation does not invent another topic");
         System.out.println("PASS "+count+" companion initiative checks");
     }
 }
