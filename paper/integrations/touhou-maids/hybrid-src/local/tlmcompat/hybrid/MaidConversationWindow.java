@@ -2,14 +2,14 @@ package local.tlmcompat.hybrid;
 
 import java.util.*;
 
-/** A completed nearby reply grants only its original speaker three short follow-ups. */
+/** A completed nearby reply grants only its original speaker bounded follow-ups. */
 final class MaidConversationWindow {
     private record Turn(UUID maid, UUID world, Object connection, long until, int remaining) {}
     private final Map<UUID,Turn> turns=new HashMap<>();
     void replied(UUID actor,UUID maid,UUID world,Object connection,long now){
         turns.entrySet().removeIf(e->e.getValue().until<now);
         if(turns.size()>=64&&!turns.containsKey(actor))return;
-        turns.put(actor,new Turn(maid,world,connection,now+45_000_000_000L,3));
+        turns.put(actor,new Turn(maid,world,connection,now+120_000_000_000L,6));
     }
     String followup(UUID actor,UUID maid,UUID world,Object connection,String text,long now){
         Turn t=turns.get(actor);

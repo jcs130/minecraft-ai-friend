@@ -25,8 +25,9 @@ public final class MaidCompanionPolicyFixture {
         for(String text:List.of("/msg x hi","!hello","@other hi","x\ny","§x","x".repeat(141)))check(w.followup(a,m,world,session,text,2)==null,"invalid/shout/command");
         check(w.followup(a,m,world,new Object(),"hello",3)==null,"reconnect invalidates");
         w.replied(a,m,world,session,0);check(w.followup(a,m,UUID.randomUUID(),session,"hello",1)==null,"world invalidates");
-        w.replied(a,m,world,session,0);check(w.followup(a,m,world,session,"hello",45_000_000_001L)==null,"expires");
-        w.replied(a,m,world,session,0);for(int i=0;i<3;i++)check(w.followup(a,m,world,session,"hello",1)!=null,"bounded pending turns");
+        w.replied(a,m,world,session,0);check(w.followup(a,m,world,session,"hello",119_000_000_000L)!=null,"slow natural followup stays available");
+        check(w.followup(a,m,world,session,"hello",120_000_000_001L)==null,"expires");
+        w.replied(a,m,world,session,0);for(int i=0;i<6;i++)check(w.followup(a,m,world,session,"hello",1)!=null,"bounded pending turns");
         check(w.followup(a,m,world,session,"hello",1)==null,"turn cap");
         System.out.println("PASS "+count+" companion and conversation rules");
     }

@@ -90,6 +90,6 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         out.addProperty("state",states.getOrDefault(maid.getUUID(),"awaiting_native_tick"));
         out.addProperty("automaticTask",maid.getPersistentData().getString(TAG));
         out.addProperty("meaning","闲置跟随且持有合用武器时，主动处理8格内可见的敌对怪物，也保护主人和自己；不主动攻击和平中立生物、友方、NPC或停用AI的装饰实体。脱战5秒或低血量恢复陪伴，停留、驻守、睡眠和手选工作优先。未自动领装备、未确认击杀。");
-        out.addProperty("nextStep","装备请用原菜单或 inventory/equip；聊天先点名，收到回复后45秒内可直接接话。工作和动作以 task、follow、stay 的真实回执为准。");return out;
+        out.addProperty("nextStep","装备请用原菜单或 inventory/equip；聊天先点名，收到回复后120秒内可直接接话，最多连续6句。工作和动作以 task、follow、stay 的真实回执为准。");return out;
     }
 }

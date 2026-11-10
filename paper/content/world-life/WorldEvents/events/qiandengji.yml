@@ -43,7 +43,7 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·试炼塔
-    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>召集10分钟，可单人或结伴；主世界world（-596,92,-313）。/mycli goto arena（6魔力）到入口，穿齐四甲、带武器；伙伴到按钮12格内，一人 /mycli arena start（免费）。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。/mycli arena status 查下一步，活动不自动报名。</gray>'
+    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>召集10分钟，可单人或结伴；主世界world（-596,92,-313）。可直接用传送魔法 /mycli goto arena（成功耗6魔力）到集结入口，不必徒步，穿齐四甲、带武器；伙伴到按钮12格内，一人 /mycli arena start（免费）。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。/mycli arena status 查下一步，活动不自动报名。</gray>'
     symbol: ⚔
     weight: 45
     bossbar-color: BLUE
@@ -55,7 +55,7 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·遗迹远征
-    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>召集10分钟；先 /mycli dungeon list 选开放地点，再info查难度、等级、装备与职业搭配。队长guild party create/invite，对方accept；全员到首室后队长dungeon start 地点ID，用status核对参战。占用或故障就换目标，不等墓穴。遗迹不是试炼塔。</gray>'
+    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>召集10分钟，可用传送魔法赶往集结点，不必长途跑图！先 /mycli dungeon list 选空闲地点，用 /mycli dungeon info 地点ID 核对准入；/mycli dungeon travel 地点ID（成功耗8魔力）到入口或外围，再沿通道进首室，一人 /mycli dungeon start 地点ID normal 开场。遗迹内装备达标者自动同队；/mycli dungeon status 地点ID 核对参战。传送不等于开场；占用或故障就换目标。</gray>'
     symbol: ◈
     weight: 35
     bossbar-color: PURPLE
@@ -67,7 +67,7 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·探索留影
-    announcement: '<aqua>[公会集结·探索留影]</aqua> <gray>选一处新地标，带食物、护甲与武器，和伙伴探路。/mycli waypoint list 查地点，注意世界不同不能比较距离；途中 /mycli photo take 旅途留影，成片自动进个人箱。日记与公告可留档：/mycli archive status。</gray>'
+    announcement: '<aqua>[公会集结·探索留影]</aqua> <gray>选一处新地标，带食物、护甲与武器，和伙伴探路。/mycli waypoint 查公共与个人地点，按返回ID用 /mycli goto 地点ID（成功耗6魔力）传送；私人点用 personal:名字，分享点用 shared:分享码。无需徒步赶集结；世界不同不能比较坐标距离。途中 /mycli photo take 旅途留影，成片自动进个人箱。日记与公告可留档：/mycli archive status。</gray>'
     symbol: ☆
     weight: 30
     bossbar-color: GREEN
