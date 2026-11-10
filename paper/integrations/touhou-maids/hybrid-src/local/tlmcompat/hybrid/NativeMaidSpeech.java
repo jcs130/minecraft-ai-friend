@@ -88,6 +88,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
         out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
         out.addProperty("ambientSource",originalClips==null?"native_event_chinese_tts":"original_chinese_recordings");
+        out.addProperty("ambientIdleEnabled",false);out.addProperty("ambientMinimumGapSeconds",90);
         if(originalClips!=null)out.addProperty("ambientPack",originalClips.pack());
         out.addProperty("state",lastState);out.addProperty("reason",lastReason);out.addProperty("requestId",lastRequest);out.addProperty("hearingVerified",false);
         out.addProperty("nextStep","听音需 Simple Voice Chat；/voice status 查询本连接。无语音模组仍可读附近文字。sent只证明音频发送，不证明真人耳听。");return out;
@@ -106,6 +107,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private void submit(EntityMaid maid,String request,String raw,String kind,Set<UUID> allowed,MaidVoiceClips.Clip original){
         if(!valid(maid)||request.length()>48)return;
         String text=raw==null?"":raw.replaceAll("[\\p{Cntrl}§]"," ").strip();if(text.isEmpty())return;if(text.length()>200)text=text.substring(0,200);
+        if(!kind.equals("ambient"))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
         if(!maid.getAiChatManager().getTTSModel().isBlank()){lastState="unavailable";lastReason="native_tts_already_configured";return;}
         Map<UUID,Stamp> listeners=listeners(maid,allowed);
         // Quiet/unattended areas must not create thousands of ambient receipt files.
@@ -168,12 +170,17 @@ final class NativeMaidSpeech implements AutoCloseable {
     private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
     private void ambient(EntityMaid maid,String sound){
         if(!Bukkit.isPrimaryThread()||!valid(maid)||System.nanoTime()<nextAmbient||active!=null)return;
+        var target=maid.getTarget();boolean fighting=target!=null&&target.isAlive()&&maid.distanceToSqr(target)<=64&&maid.hasLineOfSight(target);
+        var world=maid.getBukkitEntity().getWorld();
+        if(!MaidAmbientPolicy.matchesScene(sound,maid.getTask().getUid().toString(),fighting,maid.hurtTime>0,maid.isSleeping()||maid.isMaidInSittingPose(),world.getTime()%24000,world.hasStorm(),maid.level().canSeeSky(maid.blockPosition())))return;
         double frequency=maid.getConfigManager().getSoundFreq()*com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig.GLOBAL_MAID_SOUND_FREQUENCY.get()/100.0;
         if(frequency<=0||frequency<1&&maid.getRandom().nextDouble()>frequency)return;
         List<Player> audience=maid.getBukkitEntity().getLocation().getNearbyPlayers(8).stream().filter(p->p.isOnline()&&!p.isDead()&&p.getGameMode()!=org.bukkit.GameMode.SPECTATOR&&p.canSee(maid.getBukkitEntity())).toList();
+        MaidVoiceClips.Clip original=originalClips==null?null:originalClips.next(sound);
+        if(originalClips!=null&&original==null)return; // Curated pack omissions stay quiet, never invent a fallback line.
         String text=ambientPolicy.choose(sound,System.nanoTime(),!audience.isEmpty());if(text==null)return;
-        MaidVoiceClips.Clip original=originalClips==null?null:originalClips.next(sound);if(original!=null)text=original.text();
-        nextAmbient=System.nanoTime()+20_000_000_000L;
+        if(original!=null)text=original.text();
+        nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
         String operation="a_"+UUID.randomUUID();
         int delivered=0;
         for(Player p:audience){p.sendMessage("[附近·女仆] "+maid.getName().getString()+"："+text);delivered++;}

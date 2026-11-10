@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='maid-voice-patrol-',dir=a.output.parent
  changes={f.relative_to(classes).as_posix():f.read_bytes()for f in classes.rglob('*.class')}
  assert all(owned(n)for n in changes)
  with zipfile.ZipFile(a.baseline)as before,zipfile.ZipFile(a.output,'x',zipfile.ZIP_DEFLATED)as after:
-  changes['plugin.yml']=re.sub(rb'(?m)^version:.*$',b'version: 0.1.17-bubbles-voice-patrol',before.read('plugin.yml'))
+  changes['plugin.yml']=re.sub(rb'(?m)^version:.*$',b'version: 0.1.18-scene-voice-patrol',before.read('plugin.yml'))
   for info in before.infolist():
    if owned(info.filename)and info.filename not in changes:continue
    after.writestr(copy.copy(info),changes.get(info.filename,before.read(info.filename)))
@@ -29,6 +29,6 @@ with tempfile.TemporaryDirectory(prefix='maid-voice-patrol-',dir=a.output.parent
   untouched=[n for n in before.namelist()if not owned(n)and n!='plugin.yml']
   assert all(before.read(n)==after.read(n)for n in untouched)
   assert set(before.namelist())-set(after.namelist())<=set(n for n in before.namelist()if owned(n))
- proof={'version':'0.1.17-bubbles-voice-patrol','artifact':str(a.output),'sha256':sha(a.output.read_bytes()),'baselineSha256':sha(a.baseline.read_bytes()),'unrelatedEntriesPreserved':len(untouched),'changedEntries':sorted(changes),'sourceSha256':{n:sha((root/'hybrid-src'/prefix/(n+'.java')).read_bytes().replace(b'\r\n',b'\n'))for n in names},'productionChanged':False}
+ proof={'version':'0.1.18-scene-voice-patrol','artifact':str(a.output),'sha256':sha(a.output.read_bytes()),'baselineSha256':sha(a.baseline.read_bytes()),'unrelatedEntriesPreserved':len(untouched),'changedEntries':sorted(changes),'sourceSha256':{n:sha((root/'hybrid-src'/prefix/(n+'.java')).read_bytes().replace(b'\r\n',b'\n'))for n in names},'productionChanged':False}
  a.output.with_suffix('.build.json').write_text(json.dumps(proof,indent=2))
  print(json.dumps(proof))

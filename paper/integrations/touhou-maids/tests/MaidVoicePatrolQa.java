@@ -72,10 +72,10 @@ public final class MaidVoicePatrolQa extends JavaPlugin {
         else if(action.equals("public-bubble")){
             p.sendMessage("[附近·女仆] 隔离语音护卫：一起去冒险吧。");
             invoke("publishPublicSpeech",maid,"qa-public-bubble-1","一起去冒险吧。",1);invoke("publishPublicSpeech",maid,"qa-public-bubble-1","一起去冒险吧。",1);
-        }else if(action.equals("ambient")){
+        }else if(action.equals("ambient")||action.equals("ambient-idle")){
             clear();maid.setSilent(false);maid.getConfigManager().setSoundFreq(1.0F);
             com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig.GLOBAL_MAID_SOUND_FREQUENCY.set(100);
-            maid.playSound(com.github.tartaricacid.touhoulittlemaid.init.InitSounds.MAID_IDLE.get());
+            maid.playSound(action.equals("ambient-idle")?com.github.tartaricacid.touhoulittlemaid.init.InitSounds.MAID_IDLE.get():com.github.tartaricacid.touhoulittlemaid.init.InitSounds.MAID_ITEM_GET.get());
         }else if(action.equals("remove")){clear();maid.discard();maid=null;}
         else if(!action.equals("state"))throw new IllegalArgumentException("Unknown synthetic action");
     }
