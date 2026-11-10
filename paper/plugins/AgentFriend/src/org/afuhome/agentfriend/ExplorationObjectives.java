@@ -13,7 +13,10 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.structures.JungleTemplePiece;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -167,12 +170,11 @@ final class ExplorationObjectives {
                 if (start == null || !start.isValid() || start.getPieces().size() > 4096) continue;
                 // BuriedTreasurePiece moves its one-block box down during terrain placement.
                 // StructureStart may still cache its pre-placement height until a chunk reload.
-                var box = key.equals("minecraft:buried_treasure") && start.getPieces().size() == 1
-                        ? start.getPieces().getFirst().getBoundingBox() : start.getBoundingBox();
+                var box = surveyStartBounds(key, start);
                 if (!box.isInside(at.getBlockX(), at.getBlockY(), at.getBlockZ())) continue;
                 List<String> parts = new ArrayList<>(); int index = 0;
                 for (var piece : start.getPieces()) {
-                    var b = piece.getBoundingBox();
+                    var b = surveyPieceBounds(key, piece);
                     if (b.isInside(at.getBlockX(), at.getBlockY(), at.getBlockZ())) parts.add(Integer.toString(index));
                     index++;
                 }
@@ -182,6 +184,24 @@ final class ExplorationObjectives {
             }
         }
         return null;
+    }
+    static BoundingBox surveyStartBounds(String key, StructureStart start) {
+        if (start.getPieces().size() == 1) {
+            StructurePiece piece = start.getPieces().getFirst();
+            if (key.equals("minecraft:buried_treasure")
+                    || key.equals("minecraft:jungle_pyramid") && piece instanceof JungleTemplePiece)
+                return surveyPieceBounds(key, piece);
+        }
+        return start.getBoundingBox();
+    }
+    static BoundingBox surveyPieceBounds(String key, StructurePiece piece) {
+        BoundingBox box = piece.getBoundingBox();
+        // Vanilla generates this piece's trap/chest basement at local Y=-4..-1,
+        // outside its saved BB. Count that real interior, not caves below it.
+        // Never mutate NMS metadata: structure identity and persisted surveys stay stable.
+        if (key.equals("minecraft:jungle_pyramid") && piece instanceof JungleTemplePiece)
+            return new BoundingBox(box.minX(), box.minY() - 4, box.minZ(), box.maxX(), box.maxY(), box.maxZ());
+        return box;
     }
     private static final class Survey {
         final String token;

@@ -73,6 +73,9 @@ final class ExplorationGuidance {
         boolean ready = flag(evidence, "ready"), matches = flag(navigation, "dimensionMatches");
         out.addProperty("ready", ready); out.addProperty("targetMatch", flag(evidence, "validCurrentTarget"));
         out.addProperty("nextCommand", ready ? "/mycli guild claim" : "/mycli tasks status");
+        String route = target.goal() == GuildManager.Goal.STRUCTURE && target.keys().contains("minecraft:jungle_pyramid")
+                ? "丛林神庙不要求指定入口打卡。沿建筑现有楼梯走查主层、上层和地下机关室；地下室以下的天然矿洞不计入，不要继续向下挖。" : "";
+        if (!route.isEmpty()) { out.addProperty("requiresSpecificEntrance", false); out.addProperty("routeHint", route); }
         // Completed surveys survive the return journey; a new world must not undo them.
         if (ready) return phase(out, "ready_to_submit", "本阶段探索已完成。", "用 /mycli guild claim 交付；多阶段委托会继续下一阶段。");
         if (!matches) {
@@ -96,7 +99,7 @@ final class ExplorationGuidance {
                 JsonObject last = evidence.has("lastSurveyPosition") && evidence.get("lastSurveyPosition").isJsonObject() ? evidence.getAsJsonObject("lastSurveyPosition") : new JsonObject();
                 if (last.has("world") && last.has("x") && last.has("z")) out.add("resumePosition", last.deepCopy());
                 missing.add("回到原先记录的同一座遗迹内部");
-                return phase(out, "resume_same_structure", "已有走查证据保留，目前不在原遗迹的有效区域。", "回到上次记录地点，进入原遗迹的通道继续走查；不要换一座凑数，也不必放弃重接。");
+                return phase(out, "resume_same_structure", "已有走查证据保留，目前不在原遗迹的有效区域。", "回到上次记录地点，进入原遗迹的通道继续走查；不要换一座凑数，也不必放弃重接。" + route);
             }
             missing.add("进入任务指定的天然结构内部");
             Landmark hint = nearest(target, navigation, places, x, z);
@@ -117,7 +120,7 @@ final class ExplorationGuidance {
                         + "（直线约" + distance + "格）；这是建筑参考位置，入口与安全路线未验证。先在地表辨认洞口或侧向通道，不沿坐标竖挖。"
                         + (target.keys().contains("minecraft:ancient_city") ? "古城在地下；抵达结构内再潜行走查，不要求召唤或击杀监守者。" : "抵达后找实际入口，再查任务状态确认结构匹配。");
             }
-            return phase(out, "find_target", "还未记录到目标内部探索；到同名群系、相同高度或结构边界外都不算。", next);
+            return phase(out, "find_target", "还未记录到目标内部探索；到同名群系、相同高度或结构边界外都不算。", next + route);
         }
         if (target.goal() == GuildManager.Goal.RETURN) return phase(out, "confirm_return", "已回目标维度，等待服务器记录。", "稍后 tasks status 查询；状态就绪后只交付一次。");
         if (reason.equals("outside_survey_biome")) {
@@ -137,7 +140,7 @@ final class ExplorationGuidance {
                 ? "沿可通行的上下通道探索不同高度，再走未经过的区域；不要只在同一层绕圈。"
                 : "步行进入尚未走过的区域；站着等、重复原路和传送位移不补足行进证据。";
         if (target.goal() == GuildManager.Goal.STRUCTURE) next += "分区是同一座建筑内的" + target.zoneSize() + "格空间网格，不是多座建筑或固定打卡方块。";
-        return phase(out, "survey", "正在记录实际探索；只需补齐下列缺项。", next);
+        return phase(out, "survey", "正在记录实际探索；只需补齐下列缺项。", next + route);
     }
     private static String discovery(ExplorationObjectives.Target t) {
         if (t.keys().contains("minecraft:mansion")) return "可向制图师购买林地探险家地图，先核对原图目标，再规划行程。";

@@ -7,7 +7,7 @@ try {
     $taskCp=@($PluginJar,(Join-Path $ServerRoot 'versions/1.21.1/paper-1.21.1.jar'))+@(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'libraries') -Recurse -File -Filter '*.jar' | ForEach-Object FullName)
     $taskCp+=@(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -File -Filter '*.jar' | ForEach-Object FullName)
     $taskSources=@('TaskGuidance','TaskProgressGuidance','CombatObjectives','ExplorationGuidance','ExplorationObjectives','SurveyArea','ExplorationPauseStore') | ForEach-Object {Join-Path $PSScriptRoot "src/org/afuhome/agentfriend/$_.java"}
-    $taskTests=@('TaskProgressGuidanceTest','CombatObjectivesTest','ExplorationGuidanceTest','LocalTaskChainsTest')
+    $taskTests=@('TaskProgressGuidanceTest','CombatObjectivesTest','ExplorationGuidanceTest','StructureSurveyBoundsTest','LocalTaskChainsTest')
     $taskSources+=@($taskTests | ForEach-Object {Join-Path $PSScriptRoot "tests/org/afuhome/agentfriend/$_.java"})
     & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -proc:none -cp ($taskCp -join ';') -d $taskOutput $taskSources
     if($LASTEXITCODE -ne 0){throw 'Task guidance tests did not compile'}
