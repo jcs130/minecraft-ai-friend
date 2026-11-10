@@ -274,7 +274,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(companion!=null&&Set.of("follow","stay","sit","task").contains(action))companion.manual(maid);
         switch(action){
             case "brain"->observation=brains.select(maid,value);
-            case "follow"->{maid.setInSittingPose(false);maid.restrictTo(net.minecraft.core.BlockPos.ZERO,MaidConfig.MAID_NON_HOME_RANGE.get());maid.setHomeModeEnable(false);observation=context(actor,id);}
+            case "follow"->{NativeMaidFollowSupport.limits(maid);maid.setInSittingPose(false);maid.restrictTo(net.minecraft.core.BlockPos.ZERO,MaidConfig.MAID_NON_HOME_RANGE.get());maid.setHomeModeEnable(false);NativeMaidFollowSupport.applyNativeRange(maid);observation=context(actor,id);}
             case "stay"->{maid.setHomeModeEnable(true);maid.getSchedulePos().setHomeModeEnable(maid,maid.blockPosition());maid.setInSittingPose(true);maid.getNavigation().stop();observation=context(actor,id);}
             case "sit"->{maid.setInSittingPose(true);observation=context(actor,id);}
             case "task"->{maid.setTask(TaskManager.getTaskMap().get(ResourceLocation.parse(value)));maid.setInSittingPose(false);observation=context(actor,id);}

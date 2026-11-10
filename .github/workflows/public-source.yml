@@ -45,6 +45,7 @@ jobs:
           python paper/integrations/touhou-maids/tests/run-lifecycle-ledger.py --gson "$RUNNER_TEMP/maid-life-gson.jar"
           python paper/integrations/touhou-maids/tests/run-close-follow.py
           node --check paper/integrations/touhou-maids/tests/close-follow-stage.mjs
+          node --check paper/integrations/touhou-maids/tests/follow-radius-stage.mjs
           python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_harness_gateway.py -v
           node --check paper/integrations/touhou-maids/tests/brain-harness-stage.mjs
           node --check paper/integrations/touhou-maids/tests/social-stage.mjs
