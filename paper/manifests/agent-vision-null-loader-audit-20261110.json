@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "auditDate": "2026-11-10",
+  "component": "AgentVision",
+  "runtimeVersion": "0.1.4",
+  "runtimeFilename": "AgentVision-0.1.2.jar",
+  "runtimeSha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+  "originalFixVersion": "0.1.2",
+  "originalFixDeployedAt": "2026-10-22T22:47:58+08:00",
+  "productionCodeChanged": false,
+  "productionRestarted": false,
+  "baselineReproductionChecks": 3,
+  "candidateLifecycleChecks": 14,
+  "samplerRegressionTests": 7,
+  "historicalTaskNpeWarnings": 782,
+  "historicalExplicitNullLoaderTraces": 42,
+  "recentArchivedLogTargetNpeCount": 0,
+  "continuousMixedScene24hAccepted": false,
+  "performanceAccepted": false,
+  "evidence": "paper/docs/AGENT_VISION_NULL_LOADER_AUDIT_20261110.md"
+}
