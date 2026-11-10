@@ -74,6 +74,7 @@ public final class LoginGuard {
     private static final MinecraftChannelIdentifier VOICE_CHANNEL=MinecraftChannelIdentifier.create("mcagent","voice");
     private final Set<Player> payloadPeers=ConcurrentHashMap.newKeySet();
     private final Map<String,Long> diagnosticTimes=new ConcurrentHashMap<>();
+    private final VoiceTransportTrace voiceTrace=new VoiceTransportTrace(Boolean.getBoolean("qiandeng.voice.trace"));
 
     @Inject public LoginGuard(ProxyServer server, Logger logger) { this.server=server; this.logger=logger; }
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }
@@ -341,13 +342,17 @@ public final class LoginGuard {
         if(explicit || AuthMessages.agent(p.getUsername()))
             p.sendMessage(text("MC_AUTH_STATE "+(explicit?state:AuthMessages.compact(state))));
     }
-    @Subscribe public void agentTransport(PluginMessageEvent e) {
+    // These three gates are bounded in-memory reads. Their default asynchronous
+    // subscription lets independent events complete out of order. Keep them
+    // inline; the pinned dispatcher's complete installed subscription matrix
+    // is also tested, rather than assuming unrelated plugins must be patched.
+    @Subscribe(async=false) public void agentTransport(PluginMessageEvent e) {
         // Client-selected presentation only. Leave forwarding intact so Paper
         // receives the same hello; server-originated packets cannot opt in a player.
         if(e.getIdentifier().equals(AGENT_CHANNEL) && e.getSource() instanceof Player p
                 && AuthMessages.agent(p.getUsername()) && AuthMessages.hello(e.getData()))payloadPeers.add(p);
     }
-    @Subscribe(order=PostOrder.FIRST) public void voiceTransport(PluginMessageEvent e) {
+    @Subscribe(order=PostOrder.FIRST,async=false) public void voiceTransport(PluginMessageEvent e) {
         if(!e.getIdentifier().equals(VOICE_CHANNEL))return;
         Player p;ServerConnection backend;
         if(e.getSource() instanceof Player player && e.getTarget() instanceof ServerConnection connection) {
@@ -363,8 +368,10 @@ public final class LoginGuard {
         if(!p.isActive() || backend.getPlayer()!=p || !authorized(p)
                 ||p.getCurrentServer().filter(c->c==backend && c.getServerInfo().getName().equals("paper")).isEmpty())
             e.setResult(PluginMessageEvent.ForwardResult.handled());
+        var trace=voiceTrace.record(e,p,backend);
+        if(trace!=null&&logger!=null)logger.info("MC_VOICE_TRACE {}",gson.toJson(trace));
     }
-    @Subscribe(order=PostOrder.FIRST) public void mcbotTransport(PluginMessageEvent e) {
+    @Subscribe(order=PostOrder.FIRST,async=false) public void mcbotTransport(PluginMessageEvent e) {
         if(!e.getIdentifier().equals(MCBOT_CHANNEL))return;
         // A game-client driver is a gameplay action, not a new authentication
         // method. Consult the live provider; disk heartbeats cannot grant it.

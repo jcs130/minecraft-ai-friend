@@ -103,6 +103,7 @@ final class AdditionalEyeMirrors implements Listener {
     private final Map<String, String> autoBindings = new HashMap<>();
     private final Map<String, Long> autoAttachedAt = new HashMap<>();
     private final EyeInventoryMirror inventories;
+    private final EyeHudBaseline hud;
     private final EyeBossBars bossBars;
     private final EyeNightVision nightVision;
     private final boolean primaryNightVision;
@@ -111,7 +112,8 @@ final class AdditionalEyeMirrors implements Listener {
     AdditionalEyeMirrors(CortiEyeMirrorPlugin plugin, ProtocolManager protocol,
             String cortiTarget, String cortiEye, boolean primaryNightVision) {
         this.plugin = plugin;
-        inventories = new EyeInventoryMirror(plugin, protocol);
+        hud = new EyeHudBaseline(plugin, this::bindings);
+        inventories = new EyeInventoryMirror(plugin, protocol, hud);
         bossBars = new EyeBossBars(plugin, protocol);
         nightVision = new EyeNightVision(plugin, protocol);
         this.primaryNightVision = primaryNightVision;
@@ -164,6 +166,7 @@ final class AdditionalEyeMirrors implements Listener {
     }
 
     void stop() {
+        hud.stop();
         bossBars.stop();
         nightVision.stop();
         for (UUID cameraId : new ArrayList<>(mirroredCrafting.keySet())) closeCrafting(cameraId);
@@ -220,7 +223,8 @@ final class AdditionalEyeMirrors implements Listener {
             if (camera == null) continue;
             if (camera.getGameMode() != GameMode.SPECTATOR) camera.setGameMode(GameMode.SPECTATOR);
             if (target == null || target.getGameMode() == GameMode.SPECTATOR) { autoBindings.remove(key); continue; }
-            String identity = camera.getUniqueId() + ":" + target.getUniqueId() + ":" + target.getEntityId();
+            String identity = camera.getUniqueId() + ":" + camera.getEntityId() + ":"
+                    + target.getUniqueId() + ":" + target.getEntityId();
             long now = System.currentTimeMillis();
             if (!identity.equals(autoBindings.get(key)) || now - autoAttachedAt.getOrDefault(key, 0L) >= 120_000L) {
                 // Rejoin/respawn and first pairing attach promptly; manual detachment stops private forwarding

@@ -1,0 +1,17 @@
+{
+  "state": "validated-candidate-not-deployed",
+  "authorizedByOwner": true,
+  "pullRequests": [156, 158],
+  "baselineMain": "aa7eea6873e15cd54641490e642b119429330557",
+  "components": [
+    {"name":"CortiEyeMirror","version":"0.1.21-hud-baseline","beforeSha256":"a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb","sha256":"1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9","preservedEntries":27},
+    {"name":"QiandengVoice","version":"0.1.6","beforeSha256":"61e414af4b44f476eaafd9b34777015e6cede46ce3dd53156c4c12893a8a999c","sha256":"0546fd3dac070bcea20ad10b7a77bc039f60cbe4e40baf5fa94c4b6512e0e26f","preservedEntries":24},
+    {"name":"LoginGuard","version":"0.1.12-ordered-voice","beforeSha256":"91057a35ec75897f06c755bdeb60a48e05d9e59a93c7fe131adec510cc225a66","sha256":"58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a","preservedEntries":11}
+  ],
+  "otherProxyPluginsModified": false,
+  "originalRolesModified": false,
+  "historicalRequestsReplayed": false,
+  "humanHearingVerified": false,
+  "originalClientAutonomousAdoptionVerified": false,
+  "releaseDocument": "paper/docs/VOICE_EYE_RELEASE_20261110.md"
+}

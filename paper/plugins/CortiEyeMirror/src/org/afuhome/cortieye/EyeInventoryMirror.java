@@ -23,6 +23,7 @@ final class EyeInventoryMirror implements Listener {
     private record State(UUID target, int entityId, UUID world, int inventorySignature, int vitalsSignature) {}
     private final ProtocolManager protocol;
     private final CortiEyeMirrorPlugin plugin;
+    private final EyeHudBaseline hud;
     private final Map<UUID, State> states = new HashMap<>();
     private record Replica(UUID target, int sourceId, Inventory inventory, int stateId, int offersSignature) {}
     private final Map<UUID, Replica> merchants = new HashMap<>();
@@ -30,9 +31,10 @@ final class EyeInventoryMirror implements Listener {
     private final Map<UUID, StashReplica> stashes = new HashMap<>();
     private final Set<UUID> openingMerchants = new HashSet<>();
     private volatile Set<UUID> attached = Set.of();
-    EyeInventoryMirror(CortiEyeMirrorPlugin plugin, ProtocolManager protocol) {
+    EyeInventoryMirror(CortiEyeMirrorPlugin plugin, ProtocolManager protocol, EyeHudBaseline hud) {
         this.plugin = plugin;
         this.protocol = protocol;
+        this.hud = hud;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         protocol.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST,
                 PacketType.Play.Server.WINDOW_ITEMS, PacketType.Play.Server.SET_SLOT,
@@ -80,6 +82,7 @@ final class EyeInventoryMirror implements Listener {
             if (next.equals(previous)) continue;
             boolean changedSubject = previous == null || !previous.target.equals(next.target) || !previous.world.equals(next.world)
                     || previous.entityId != next.entityId;
+            if (changedSubject) hud.subjectChanged(eye, target);
             snapshot(eye, target, changedSubject || previous.inventorySignature != next.inventorySignature,
                     changedSubject || previous.vitalsSignature != next.vitalsSignature);
             if (previous == null || !previous.target.equals(next.target) || !previous.world.equals(next.world)) {

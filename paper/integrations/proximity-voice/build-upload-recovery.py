@@ -4,6 +4,7 @@ import argparse,hashlib,copy,re,zipfile,json
 p=argparse.ArgumentParser(description=__doc__)
 for name in ['baseline','compiled-classes','output']:p.add_argument('--'+name,type=Path,required=True)
 a=p.parse_args();assert not a.output.exists();sha=lambda b:hashlib.sha256(b).hexdigest()
+assert not (a.compiled_classes/'dev/god/godvoice/VoiceUploadTrace.class').exists(),'Historical 0.1.4 -> 0.1.5 packer: newer diagnostics require a newly reviewed runtime baseline and complete class list; do not omit VoiceUploadTrace'
 assert sha(a.baseline.read_bytes())=='314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed','Review the changed production baseline first'
 prefix='dev/god/godvoice/';names=['PaperVoicePlugin','VoiceUploads','VoiceDiagnostics'];owned=lambda n:any(n==prefix+c+'.class' or n.startswith(prefix+c+'$') for c in names)
 changes={f.relative_to(a.compiled_classes).as_posix():f.read_bytes() for f in a.compiled_classes.rglob('*.class') if owned(f.relative_to(a.compiled_classes).as_posix())}

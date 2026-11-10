@@ -34,6 +34,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final Set<UUID> eventCaptions=new HashSet<>();
     private final Map<UUID,SpeechLane<Job>> lanes=new HashMap<>();
     private final VoiceUploads uploads=new VoiceUploads();
+    private final VoiceUploadTrace uploadTrace=new VoiceUploadTrace();
     private final VoiceSequences sequences=new VoiceSequences();
     private final ConcurrentHashMap<UUID,Capture> captures=new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID,VoiceDelivery> deliveries=new ConcurrentHashMap<>();
@@ -349,12 +350,13 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void closeCaptures(){for(UUID id:captures.keySet())dropCapture(id);}
     @Override public void onPluginMessageReceived(String channel,Player p,byte[] message){
         if(stopping||!channel.equals(CHANNEL)||message.length<2)return;
-        UUID requestId=null;
+        UUID requestId=null,session=null;VoiceUploads.Snapshot chunkBefore=null;
         try{
-            UUID actor=p.getUniqueId(),session=sessions.computeIfAbsent(actor,key->UUID.randomUUID());
+            UUID actor=p.getUniqueId();session=sessions.computeIfAbsent(actor,key->UUID.randomUUID());
             if(message[0]==2){
                 if(message.length<17)throw new IllegalArgumentException("UPLOAD_CHUNK_INVALID");
                 ByteBuffer buffer=ByteBuffer.wrap(message,1,message.length-1);UUID id=new UUID(buffer.getLong(),buffer.getLong());requestId=id;var key=new VoiceUploads.Key(actor,id);
+                chunkBefore=uploads.snapshot(key,session,System.currentTimeMillis());
                 if(finalizingUploads.contains(key))return;
                 // A delayed/duplicate frame cannot downgrade a queued or completed
                 // transmission. The connection still owns the ledger lookup.
@@ -363,8 +365,6 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 int sequence=buffer.getInt();byte[] data=new byte[buffer.remaining()];buffer.get(data);
                 try{uploads.chunk(key,session,sequence,data,System.currentTimeMillis());}
                 catch(IllegalArgumentException failure){
-                    VoiceUploads.Progress progress=uploads.progress(key,session);
-                    getLogger().warning("Voice upload chunk rejected: request="+id+" sequence="+sequence+" chunkBytes="+data.length+" progress="+progress+" code="+failure.getMessage());
                     uploads.discard(key,session);throw failure;
                 }
                 return;
@@ -384,7 +384,9 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             // A proxy may register CHANNEL for every vanilla client. Require a
             // valid adapter request before advertising a bridge connection.
             bridgePeers.add(actor);syncPresence(p);
-        }catch(Exception failure){String code=failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_PROTOCOL_INVALID";if(requestId!=null)reply(p,requestId,"failed",code==null?"VOICE_PROTOCOL_INVALID":code.replaceAll("[^A-Za-z0-9_]",""));else error(p,code);}
+        }catch(Exception failure){String code=failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_PROTOCOL_INVALID";
+            if(message[0]==2){var diagnostic=uploadTrace.rejection(p.getUniqueId(),session,requestId,message,chunkBefore,code,p.getListeningPluginChannels().contains(CHANNEL),Bukkit.getPlayer(p.getUniqueId())==p,System.currentTimeMillis());if(diagnostic!=null)getLogger().warning("VOICE_UPLOAD_REJECT "+gson.toJson(diagnostic));}
+            if(requestId!=null)reply(p,requestId,"failed",code==null?"VOICE_PROTOCOL_INVALID":code.replaceAll("[^A-Za-z0-9_]",""));else error(p,code);}
     }
     private void reply(Player p,UUID request,String state,String reason){
         if(p==null)return;JsonObject row=new JsonObject();row.addProperty("type","voice_result");row.addProperty("requestId",request.toString());row.addProperty("state",state);row.addProperty("reason",reason);
