@@ -338,6 +338,21 @@ export function tunnelStopWord(name: string, cc: Cell): string | null {
   return null;
 }
 
+/** A one-cell-wide diagonal raster leaves solid corners that a player cannot pass. */
+function connectedTunnelFloor(line: Cell[]): Cell[] {
+  const floor: Cell[] = [];
+  for (const next of line) {
+    const prev = floor.at(-1);
+    if (prev && next.x !== prev.x && next.z !== prev.z) {
+      // Turn on a cardinal cell before changing height. It goes through the same
+      // support, liquid, permission and container checks as every other step.
+      floor.push({ x: next.x, y: prev.y, z: prev.z });
+    }
+    floor.push(next);
+  }
+  return floor;
+}
+
 export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 'tunnel' }>, ctx: SkillContext): Promise<string> {
   const start = feetOf(bot);
   const target = resolveAt(bot, call.at);
@@ -361,7 +376,7 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
   }
   const floorRaw = rasterize('line', [start, target], 'solid');
   if (!Array.isArray(floorRaw)) throw new SkillBlocked(floorRaw.error);
-  const floor = floorRaw;
+  const floor = vertical ? floorRaw : connectedTunnelFloor(floorRaw);
   const planned = floor.length - 1;
   const corner: SpiralCorner = spiral
     ? pickSpiralCorner(bot, start, rise > 0, planned)
@@ -388,7 +403,9 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
     // 塔要挖的是每一格的头顶(脚下那条是垫出来的),竖井挖脚下那条,斜通道两条都挖
     const carve = vertical
       ? floor.slice(1).map((c) => ({ x: c.x, y: rise > 0 ? c.y + 1 : c.y, z: c.z }))
-      : floor.flatMap((c) => [c, { x: c.x, y: c.y + 1, z: c.z }]);
+      : [...new Map(floor.flatMap((c, i) => [c, { x: c.x, y: c.y + 1, z: c.z },
+        ...(i > 0 && c.y > floor[i - 1].y ? [{ ...floor[i - 1], y: floor[i - 1].y + 2 }] : []),
+      ]).map(c => [cellKeyOf(c), c])).values()];
     const reading = readRegion(bot, carve);
     const head = vertical
       ? `试算${kind}(${planned} 格,要挖 ${carve.length} 格)`
@@ -646,7 +663,7 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
         const dy = target.y - cur.y;
         return stop(`走平之后横向到了终点${dy < 0 ? '上方' : '下方'} ${Math.abs(dy)} 格,${cellText(target)} 还是没通。`);
       }
-      plan = rest;
+      plan = connectedTunnelFloor(rest);
       i = 1;
     } else i++;
     // 路线重铺后再收集后续脚格和头格，避免将它们用作火把支撑。

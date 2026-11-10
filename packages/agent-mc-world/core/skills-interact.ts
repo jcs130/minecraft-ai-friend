@@ -39,7 +39,6 @@ import {
 } from './containers.ts';
 import { isSpawnAnchorBlock } from './policy.ts';
 import { DRINKABLES, maxDurabilityOf } from './item-facts.ts';
-import { nearestBoat } from './placement.ts';
 import { itemMatchesPick } from './item-pick.ts';
 import { itemCustomName } from './item-display.ts';
 import { windowSnapshot } from './viewer-state.ts';
@@ -1395,6 +1394,7 @@ export async function useBoat(bot: Bot, cell: Cell, held: string, label: string,
     );
   }
   const before = invCount(bot, (n) => n === held);
+  const existing = new Set(Object.keys(bot.entities));
   await aimThenUse(bot, new Vec3(face.x + 0.5, face.y, face.z + 0.5), activate);
   await sleep(USE_SETTLE_MS);
   const after = invCount(bot, (n) => n === held);
@@ -1405,10 +1405,19 @@ export async function useBoat(bot: Bot, cell: Cell, held: string, label: string,
       'server',
     );
   }
-  const boat = nearestBoat(bot, face);
-  if (boat) return `${label}放在 ${cellText(boat)};包里 ${before} → ${after} 条`;
+  const at = new Vec3(face.x + 0.5, face.y, face.z + 0.5);
+  const spawned = Object.entries(bot.entities).filter(([id, e]) => !existing.has(id)
+    && e?.isValid !== false && e?.position && /(?:^|_)(?:boat|raft)$/.test(e.name ?? '')
+    && e.position.distanceTo(at) < 4).map(([, e]) => e);
+  if (spawned.length === 1) {
+    const boat = spawned[0];
+    return `${label}使用后读到新船在 ${cellText(boat.position.floored())},entityId=${boat.id};包里 ${before} → ${after} 条;`
+      + `上船可用 ${JSON.stringify({ skill: 'ride', target: boat.name, entityId: boat.id })}`;
+  }
+  if (spawned.length > 1) return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,`
+    + `附近同时出现 ${spawned.length} 条新船,不能确认本次是哪一条;先观察实体再选择,不自动重放放船`;
   // 不做「包里少了=放成了」的二级软假设:两个读数分开说,落点没读到就是没读到
-  return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,但附近 4 格内没扫到船的实体,船落在哪儿没读到`;
+  return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,但附近 4 格内未确认新的有效船实体;旧船不算本次放置,不自动重放放船`;
 }
 
 // ======================== ride:上/驾/下坐骑 ========================
@@ -1417,7 +1426,7 @@ export async function useBoat(bot: Bot, cell: Cell, held: string, label: string,
 export const RIDE_FIND_R = 32;
 /** 驾驭:到点判定(水平距离) */
 export const RIDE_ARRIVE_R = 2.5;
-/** 驾驭:这么久推进不足 1 格就按卡死收场(下车+如实回执) */
+/** 驾驭:这么久推进不足 1 格就停止驾驶并如实回执，不擅自下车。 */
 export const RIDE_STALL_MS = 20_000;
 /** 驾驭:发包节拍(与游戏 tick 同步) */
 export const RIDE_TICK_MS = 50;
@@ -1438,7 +1447,7 @@ export const RIDE_CONTROL_ITEM: Readonly<Record<string, string>> = {
   pig: 'carrot_on_a_stick', strider: 'warped_fungus_on_a_stick',
 };
 
-export interface VehicleEntity { name?: string; position: Vec3; height?: number; width?: number }
+export interface VehicleEntity { id?: number; name?: string; position: Vec3; height?: number; width?: number }
 export interface RideClient {
   write(name: string, data: Record<string, unknown>): void;
   on(name: string, fn: (p: { x: number; y: number; z: number }) => void): void;
@@ -2018,10 +2027,13 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const left = Math.round(Math.hypot(to.x + 0.5 - pos.x, to.z + 0.5 - pos.z));
   const fixNote = corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '';
   if (stalledWhy) {
-    if(vehicleOf(bot)===vehicle)try { bot.dismount(); } catch { /* 已不在坐骑上 */ }
-    await sleep(500);
+    // Blocking a route does not make dismounting safe, especially over water.
+    // Keep the current attachment and let the caller choose a different route
+    // or explicitly dismount after checking the landing spot.
     throw new SkillBlocked(
-      `骑着${zhV}走了 ${ridden} 格停在 ${where},离目标还 ${left} 格:${stalledWhy};当前${vehicleOf(bot)?'仍附着载具，请核对身份':'已脱离载具'}${fixNote}`,
+      `骑着${zhV}走了 ${ridden} 格停在 ${where},离目标还 ${left} 格:${stalledWhy};当前`
+        + (vehicleOf(bot) === vehicle ? `仍乘坐原载具 entityId=${vehicle.id ?? '未知'}，本次未自动下车；核对现场后改道，或明确使用 {"skill":"ride","off":true}`
+          : vehicleOf(bot) ? '附着了其他载具，请核对身份' : '已脱离载具') + fixNote,
       [], 'server',
     );
   }
