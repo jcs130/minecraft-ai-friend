@@ -1,0 +1,162 @@
+{
+  "state": "deployed-verified",
+  "releaseId": "cormy-temple-partner-release-20261110-r2",
+  "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+  "sourceMain": "286291cd17fcdef58d40b742e44d1067838ac8bf",
+  "pullRequests": [
+    157,
+    159
+  ],
+  "ci": "six passed for each PR",
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.70-jungle-survey-rpg",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
+      "processId": 23260,
+      "processStartedAt": "2026-11-10T07:45:09.1448710Z",
+      "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.19-partner-persona",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+      "sourceCommit": "bba454263377ebdef94b78b2b75ea9def4a7d601",
+      "processId": 23260,
+      "processStartedAt": "2026-11-10T07:45:09.1448710Z",
+      "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
+    }
+  ],
+  "changedFiles": [
+    {
+      "target": "E:\\MC\\server\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "before": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
+      "source": "candidate/AgentFriend.jar",
+      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "rollback": "rollback/AgentFriend.jar"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
+      "source": "candidate/MaidBridge.jar",
+      "sha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+      "rollback": "rollback/MaidBridge.jar"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\QiandengjiMaidBridge\\companion-speech.json",
+      "before": "a1f12a58e793191954c96e58d62dec3945fdcb67e0d6374dfeef60d4d6b90c65",
+      "source": "candidate/companion-speech.json",
+      "sha256": "faeea7760f5213ca3b359456e4bf1005e25d860970b15ea2a6106fc84cce1ab8",
+      "rollback": "rollback/companion-speech.json"
+    }
+  ],
+  "isolatedChecks": 98,
+  "formalChecks": 18,
+  "characterFilesPreservedDuringInstallation": 7693,
+  "originalCredentialRowsPreserved": 80,
+  "currentCredentialRows": 80,
+  "mapRepair": {
+    "source": "CoreProtect original block-break records",
+    "restoredBlocks": 43,
+    "persistedAndReadBack": true,
+    "firstPass": 39,
+    "postUpdateNewDamageRepair": 4,
+    "brokenRedstoneWiresRestored": 2,
+    "containersChanged": false,
+    "laterNonLightConstructionPreserved": true,
+    "wholeRegionsRestored": false
+  },
+  "relocation": {
+    "actor": "ag_CorMy",
+    "originalIdentityPreserved": true,
+    "target": {
+      "world": "minecraft:overworld",
+      "x": 1607.5,
+      "y": 87,
+      "z": 2355.5
+    },
+    "originalFeiyuFollowedWithoutAdminTeleport": true,
+    "questProgressWritten": false,
+    "itemsGranted": false
+  },
+  "voice": {
+    "selectedVoice": "feiyu-tlm-hutao-cn-20261110",
+    "curatedClips": 14,
+    "defaultTtsAndMediaConfigurationPreserved": true,
+    "persona": "equal adventuring partner; addresses 可米 directly",
+    "otherMaidsSharedModelEnabled": false
+  },
+  "coldBackup": [
+    {
+      "verifiedColdCopy": true,
+      "root": "E:\\MC\\backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
+          "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+        },
+        {
+          "sha256": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
+          "name": "\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar"
+        },
+        {
+          "sha256": "a1f12a58e793191954c96e58d62dec3945fdcb67e0d6374dfeef60d4d6b90c65",
+          "name": "\\plugins\\QiandengjiMaidBridge\\companion-speech.json"
+        }
+      ],
+      "manifestSha256": "69caf9398e7de4acb4cfeb1af7467bd1f8b0c978f4261d0ad20aeb55b72fa658"
+    },
+    {
+      "verifiedColdCopy": true,
+      "root": "F:\\MC-backups\\scheduled\\20261101-040028",
+      "gameJarSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+      "originalPlugins": [
+        {
+          "sha256": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
+          "name": "\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar"
+        },
+        {
+          "sha256": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
+          "name": "\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar"
+        },
+        {
+          "sha256": "a1f12a58e793191954c96e58d62dec3945fdcb67e0d6374dfeef60d4d6b90c65",
+          "name": "\\plugins\\QiandengjiMaidBridge\\companion-speech.json"
+        }
+      ],
+      "manifestSha256": "9acbcc53b8c9e8dfd9c3a861801f6f603810c388584c284a8c84ddd9069dd1b3"
+    }
+  ],
+  "firstAttempt": {
+    "id": "cormy-temple-partner-release-20261110-r1",
+    "result": "auth destination guard stopped installation; unchanged previous game restored; no candidate loaded"
+  },
+  "operatorRepair": {
+    "freshDualDiskCredentialPreflight": true,
+    "syntheticCredentialChecks": 4,
+    "comparisonChecks": 5,
+    "comparison": "same path/size/SHA256 validation, arrays materialized once"
+  },
+  "unchanged": [
+    "latest worlds and original identities",
+    "inventories and currency",
+    "task/exam/checkpoint/reward and action ledgers",
+    "YSM 2.6.5 and original DeepFish game model",
+    "other gameplay binaries",
+    "website and public viewer",
+    "hosting core37",
+    "TTS/model service configuration"
+  ],
+  "stillUnverified": [
+    "original CorMy client active-task reply and model adoption",
+    "original-model natural partner dialogue after restart",
+    "human hearing and native client pixels"
+  ],
+  "rollback": "Normal maintenance; restore only these three code/config preimages. Preserve latest worlds, identity, items, task/reward/receipt data. Map inverses require exact current postimage and occupancy checks; never restore an old whole region."
+}

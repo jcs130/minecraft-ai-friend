@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261110_hutao_joint_release",
-  "currentComponentEvidence": "paper/manifests/hutao-joint-deployed-20261110.json",
+  "inventoryScope": "component_runtime_verified_20261110_temple_partner",
+  "currentComponentEvidence": "paper/manifests/temple-partner-deployed-20261110.json",
   "acceptanceDocument": "paper/docs/HUTAO_JOINT_DEPLOYED_20261110.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-verified",
-  "latestRelease": "public-viewer-fidelity-20261109",
-  "verifiedAt": "2026-11-10T02:29:22.478855+00:00",
-  "releaseDocument": "paper/docs/ALL_PENDING_RELEASE_20261109.md",
+  "latestRelease": "cormy-temple-partner-release-20261110-r2",
+  "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+  "releaseDocument": "paper/docs/TEMPLE_PARTNER_RELEASE_20261110.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -52,9 +52,9 @@
     "executionNote": "The initial wrapper did not stop on coordination-lock failure. The permission change was subsequently verified; the wrapper now fails closed. The consumed batch must not be replayed."
   },
   "runtime": {
-    "AgentFriend": "0.4.47.69-onboarding-viewer-rpg",
+    "AgentFriend": "0.4.47.70-jungle-survey-rpg",
     "CortiEyeMirror": "0.1.20",
-    "QiandengjiMaidBridge": "0.1.18-scene-voice-patrol",
+    "QiandengjiMaidBridge": "0.1.19-partner-persona",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
@@ -1556,25 +1556,30 @@
   },
   "currentComponentOverrides": {
     "AgentFriend": {
-      "version": "0.4.47.68-player-ui-rpg",
-      "sha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
-      "evidence": "paper/manifests/all-pending-deployed-20261109.json"
+      "version": "0.4.47.70-jungle-survey-rpg",
+      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.19-partner-persona",
+      "sha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+      "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/maid-inventory-receipts-deployed-20261109.json",
-    "AgentFriend": "paper/manifests/all-pending-deployed-20261109.json"
+    "QiandengjiMaidBridge": "paper/manifests/temple-partner-deployed-20261110.json",
+    "AgentFriend": "paper/manifests/temple-partner-deployed-20261110.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.18-scene-voice-patrol",
-      "artifactSha256": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
-      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
+      "version": "0.1.19-partner-persona",
+      "artifactSha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
     },
     "AgentFriend": {
-      "version": "0.4.47.69-onboarding-viewer-rpg",
-      "artifactSha256": "2fc7d9d8b14efa6c8404a1146de31fe14e9d8055fe4b91c96e5bd3817435750a",
-      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
+      "version": "0.4.47.70-jungle-survey-rpg",
+      "artifactSha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
     },
     "QiandengVoice": {
       "version": "0.1.5",
@@ -1588,9 +1593,9 @@
     }
   },
   "currentRuntime": {
-    "AgentFriend": "0.4.47.69-onboarding-viewer-rpg",
+    "AgentFriend": "0.4.47.70-jungle-survey-rpg",
     "CortiEyeMirror": "0.1.20",
-    "QiandengjiMaidBridge": "0.1.18-scene-voice-patrol",
+    "QiandengjiMaidBridge": "0.1.19-partner-persona",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
@@ -1848,45 +1853,25 @@
   "componentRuntimeEvidence": [
     {
       "name": "AgentFriend",
-      "version": "0.4.47.68-player-ui-rpg",
+      "version": "0.4.47.70-jungle-survey-rpg",
       "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
-      "sha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
-      "sourceCommit": "05a544e04ca7a0ccf5da77a126f77e6efb36b7ed",
-      "processStartedAt": "2026-11-09T08:54:16.4539588Z",
-      "verifiedAt": "2026-11-09T16:57:27.1076997+08:00",
-      "manifest": "paper/manifests/all-pending-deployed-20261109.json"
-    },
-    {
-      "name": "CortiEyeMirror",
-      "version": "0.1.20",
-      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
-      "sha256": "a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb",
-      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
-      "processStartedAt": "2026-11-09T08:54:16.4539588Z",
-      "verifiedAt": "2026-11-09T16:57:27.1076997+08:00"
+      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
+      "processId": 23260,
+      "processStartedAt": "2026-11-10T07:45:09.1448710Z",
+      "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
     },
     {
       "name": "QiandengjiMaidBridge",
-      "version": "0.1.15-inventory-receipts",
+      "version": "0.1.19-partner-persona",
       "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
-      "sha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
-      "sourceCommit": "ac5a38429a0fcacc7e636af37ce28bb76e60e631",
-      "processStartedAt": "2026-11-09T08:54:16.4539588Z",
-      "verifiedAt": "2026-11-09T16:57:27.1076997+08:00"
-    },
-    {
-      "name": "Numen-hosting-embedded-core",
-      "version": "0.5.7-rc.160-preview.35",
-      "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
-      "packageJsonSha256": "e94b6b76b731c9b973fe4cb734e645565b619a58cb2a829b756e9a178b05f205",
-      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
-      "artifactSha256": "20e21d3707c6e7a2c1d4836457c25638c4dbe722c576c10960efbb4bfc0c7b37",
-      "processStartedAt": "2026-11-09T05:19:42.5812900Z",
-      "idleLedgerAfter": {
-        "roles": 0,
-        "requests": 0
-      },
-      "originalLedgerAndConfigUnchanged": true
+      "sha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+      "sourceCommit": "bba454263377ebdef94b78b2b75ea9def4a7d601",
+      "processId": 23260,
+      "processStartedAt": "2026-11-10T07:45:09.1448710Z",
+      "verifiedAt": "2026-11-10T15:48:16.7670372+08:00",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json"
     }
   ],
   "latestComponentEvidence": {
@@ -1898,6 +1883,11 @@
       "state": "deployed",
       "manifest": "paper/manifests/hutao-joint-deployed-20261110.json",
       "sourceMain": "c26d27946e0415fc9ea5228a5d9dd77c6eb18bf1"
+    },
+    "templePartner20261110": {
+      "state": "deployed",
+      "manifest": "paper/manifests/temple-partner-deployed-20261110.json",
+      "sourceMain": "286291cd17fcdef58d40b742e44d1067838ac8bf"
     }
   },
   "publicViewerFidelity": {
@@ -1942,5 +1932,50 @@
     },
     "currentComponentEvidence": "paper/manifests/all-pending-deployed-20261109.json",
     "currentComponentEvidenceScope": "Game/client baseline remains all-pending-deployed-20261109.json; later website/map/observer/ops evidence overrides only those components."
-  }
+  },
+  "previousComponentRuntimeEvidenceBeforeTemple20261110": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.68-player-ui-rpg",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "2108acc630ffaf0610d7946cf3fbf2320363c0004118fc812f02e6f5d77a4f06",
+      "sourceCommit": "05a544e04ca7a0ccf5da77a126f77e6efb36b7ed",
+      "processStartedAt": "2026-11-09T08:54:16.4539588Z",
+      "verifiedAt": "2026-11-09T16:57:27.1076997+08:00",
+      "manifest": "paper/manifests/all-pending-deployed-20261109.json"
+    },
+    {
+      "name": "CortiEyeMirror",
+      "version": "0.1.20",
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "a7730c35827c0cb4f03a12b7d03c51316c0c2444c071c4fab4d975f027cf7dcb",
+      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
+      "processStartedAt": "2026-11-09T08:54:16.4539588Z",
+      "verifiedAt": "2026-11-09T16:57:27.1076997+08:00"
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.15-inventory-receipts",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "a9925f72c58eb4df1b33942433f26cf5500dc8def2b861ac8b38e847e95aebef",
+      "sourceCommit": "ac5a38429a0fcacc7e636af37ce28bb76e60e631",
+      "processStartedAt": "2026-11-09T08:54:16.4539588Z",
+      "verifiedAt": "2026-11-09T16:57:27.1076997+08:00"
+    },
+    {
+      "name": "Numen-hosting-embedded-core",
+      "version": "0.5.7-rc.160-preview.35",
+      "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
+      "packageJsonSha256": "e94b6b76b731c9b973fe4cb734e645565b619a58cb2a829b756e9a178b05f205",
+      "sourceCommit": "0a128dc6d0a5b557dd2c9e39cd95d8259e5d6dd1",
+      "artifactSha256": "20e21d3707c6e7a2c1d4836457c25638c4dbe722c576c10960efbb4bfc0c7b37",
+      "processStartedAt": "2026-11-09T05:19:42.5812900Z",
+      "idleLedgerAfter": {
+        "roles": 0,
+        "requests": 0
+      },
+      "originalLedgerAndConfigUnchanged": true
+    }
+  ],
+  "componentRuntimeEvidenceScope": "Current batch verifies the two listed loaded components; prior array is historical. Other components retain their individually dated manifests."
 }
