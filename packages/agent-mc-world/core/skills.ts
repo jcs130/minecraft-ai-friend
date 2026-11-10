@@ -21,6 +21,7 @@ import { PROBE_SLICE_CELL_CAP, SPATIAL_SLICE_AXES, type SpatialSliceAxis } from 
 import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, SPATIAL_QUERY_SCHEMA, type SpatialObserveInput } from './spatial-observation.ts';
 import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
+import {parseWalkRoute,WALK_ROUTE_FIELDS,type WalkRoute} from './route-contract.ts';
 import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
 const STEP_DEPENDENCY_DOC = '依赖本次 steps 内更早步骤的1起序号；第一步只能省略或写[]。'
@@ -92,6 +93,7 @@ export type AttackMode = 'auto' | 'melee' | 'ranged' | 'kite';
 export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; exact?: boolean; walkOnly?: boolean; dryRun?: boolean }
   | { skill: 'look'; at: Anchor }
+  | ({skill:'follow_route'} & WalkRoute)
   | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; orientation?: 'relative' | 'absolute'; yawDeg?: number; pitchDeg?: number }
   | { skill: 'swim'; at: Anchor; dimension?: string; reserveOxygen: number; maxDurationMs: number; dryRun?: boolean }
   | { skill: 'transit'; at: Anchor }
@@ -1152,6 +1154,23 @@ const ANCHOR_SCHEMA = {
 
 /** 注册表本体。顺序即 SKILL_NAMES 与 SKILL_DOC 的出场顺序 */
 const SKILLS: readonly SkillSpec[] = [
+  {
+    name:'follow_route',
+    doc:'{"skill":"follow_route","waypoints":[{"at":[10.5,64,20.5],"posture":"sneak"},{"at":[10.5,64,23.5],"posture":"walk"}],"avoid":[[11,64,21]],"avoidBlocks":["tripwire","stone_pressure_plate"],"dryRun":true} 精确走模型指定的地面折线。坐标是绝对脚位置，保留小数，不取整或加0.5。每段按其终点的posture走，路点前减速后再转弯，不自动抄近道或绕行。'
+      +'最多32点、总长256格、timeoutMs默认30000上限120000。当前仅支持同脚高地面，不跳跃、不攀爬、不拆放或开门；高差、水路与载具用其他能力接续。'
+      +'avoid是明确不接触的方块格，avoidBlocks是本次自行选择的准确方块ID；为空不代表无陷阱。按身体宽度、1.8格净空、支撑和已加载碰撞核验，dryRun不移动且不保证未来安全；执行中变化就停止并保留已抵达路点。'
+      +'蹲行不保证避开压力板或绊线，需选择身体也不触碰它们的路点；隐藏机关不能凭预检断言不存在。实际到达按回执及现场核验。脚本可 await mc.do([{skill:"follow_route",...}]) 在同一身体队列连续执行，再依据返回选择后续。',
+    fields:[
+      {key:'waypoints',kind:'opaque',required:true,schema:WALK_ROUTE_FIELDS.waypoints},
+      {key:'avoid',kind:'opaque',schema:WALK_ROUTE_FIELDS.avoid},
+      {key:'avoidBlocks',kind:'opaque',schema:WALK_ROUTE_FIELDS.avoidBlocks},
+      {key:'radius',kind:'opaque',schema:WALK_ROUTE_FIELDS.radius},
+      {key:'timeoutMs',kind:'opaque',schema:WALK_ROUTE_FIELDS.timeoutMs},
+      {key:'dimension',kind:'string',doc:'当前维度前置条件，不符不移动'},
+      {key:'dryRun',kind:'flag'},
+    ],
+    parse:(c,at)=>{const r=parseWalkRoute(c);return 'error'in r?{error:at+' '+r.error}:{step:{skill:'follow_route',...r}};},
+  },
   {
     name: 'control',
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。

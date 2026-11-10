@@ -65,6 +65,7 @@ import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl, waterControlActive } from './skills-control.ts';
+import {followRoute} from './follow-route.ts';
 import { sendDeduplicatedChat } from './chat-dedup.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
@@ -959,6 +960,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       }
     }
     case 'look': return skillLook(bot, call, ctx);
+    case 'follow_route': {
+      if(!call.dryRun)dropGoal(bot,'task','模型指定的精确地面路线',ctx.diag);
+      return followRoute(bot,call,ctx);
+    }
     case 'control': {
       dropGoal(bot, 'task', '短时直接控制', ctx.diag);
       return skillControl(bot, call, ctx);
@@ -1264,7 +1269,7 @@ type QueueHoldSlot = 'environment' | 'fall' | 'external';
 function reRunnable(call: SkillCall | undefined): boolean {
   if (!call) return true;
   switch (call.skill) {
-    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'harvest': case 'swim': return false;
+    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'follow_route': case 'harvest': case 'swim': return false;
     // 只看报价那一形没有副作用,重跑无妨;下过手的那一形扣了等级与青金石,不重跑
     case 'enchant': return call.index === undefined;
     case 'use': return (call.times ?? 1) <= 1 && call.index === undefined;

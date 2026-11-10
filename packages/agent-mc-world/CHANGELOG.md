@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.40
+
+- Add explicit precise ground polylines, segment posture, declared avoid cells/blocks, dynamic geometry checks and actual waypoint receipts through the shared action/script contract.
+- Keep invisible, unloaded and omitted dense voxel counts distinct in current read feedback.
+
 ## 0.5.7-rc.160-preview.38
 
 - Validate short grounded recovery and idle movement against the actual swept player volume and loaded collision shapes, instead of rejecting an entire cell beside a fence or open mechanism. Retain continuous dry support, hazard and unknown-geometry checks, stopping margin, cancellation and control ownership.
