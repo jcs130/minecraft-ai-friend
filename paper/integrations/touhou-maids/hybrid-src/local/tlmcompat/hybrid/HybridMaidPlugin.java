@@ -56,6 +56,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidCompanionSupport companion;
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
     void conversationReplied(Player actor,EntityMaid maid){if(nearbyChat!=null)nearbyChat.replied(actor,maid);}
+    void conversationSpoken(){if(social!=null)social.spoken();}
     void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
     private final Map<String,Boolean> publishedDialogue=new LinkedHashMap<>();
     void publishPublicSpeech(EntityMaid maid,String operation,String text,int delivered){
@@ -100,6 +101,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(Bukkit.isPrimaryThread()&&nearbyChat!=null)nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience);
     }
     void validatePublicIdle(EntityMaid maid){if(social!=null)social.validateIdle(maid);}
+    void validateCompanionChat(Player actor,EntityMaid maid){agentSupport.validateChat(actor,maid);}
     String startingNativeOperation(){return agentSupport.startingOperation();}
     void nativeModelFailed(com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback,String operation,String reason){
         if(social!=null&&social.handles(callback))return;
@@ -420,7 +422,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         for(String line:List.of(
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
-            "对话：同维度8格内，在附近聊天说「肥鱼，你好」；收到回复后45秒内可直接接话。旁人的未点名聊天、私聊与全服喊话不会唤醒她。公开交谈只聊天；主人安排工作请右键交谈或用 chat。Agent用 nearby 找真实UUID，chat <UUID> <requestId> <话语>，receipt <UUID> <原requestId> 查结果，pending不是回复。",
+            "对话：同维度8格内，在附近聊天说「肥鱼，你好」；收到回复后120秒内可直接接话，最多6句。她会在安静同行、场景变化时适度主动聊天；私聊与全服喊话不会唤醒她。公开交谈只聊天；安排工作请右键交谈或用 chat。Agent用 nearby 找真实UUID，chat <UUID> <requestId> <话语>，receipt <UUID> <原requestId> 查结果，pending不是回复。",
             "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
             "随行：肥鱼闲置跟随时，有合适主手武器会保护受敌人攻击的主人，脱战后恢复陪伴；主人传送时，附近的肥鱼尝试跟到安全落点。停留、睡眠及手选工作优先，查 context 的位置与 ownerDistance 确认真正到达。",

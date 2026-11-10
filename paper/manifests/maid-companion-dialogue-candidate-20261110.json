@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "version": "0.1.20-companion-dialogue",
+  "candidateSha256": "036241e1d0b2216b07872bb2ff59ae5446dd4a08f68bcc2dc6897961d664d0b2",
+  "baselineSha256": "1f3d59207d6ebdcf2de20d6e40d4a93683b60d003cc28674c682db2694dbb9e7",
+  "productionCodeDeployed": false,
+  "difficultyAndAnnouncementsDeployed": true,
+  "ruleChecks": 101,
+  "nativeLoopbackChecks": 40,
+  "realOwnerModelAccepted": false,
+  "realHearingAccepted": false,
+  "brainChoicePreserved": true,
+  "reports": [
+    {
+      "file": "social-after-sgmwanop7p.json",
+      "checks": 11,
+      "initiative": true
+    },
+    {
+      "file": "social-after-sgmwans7ku.json",
+      "checks": 29,
+      "initiative": false
+    }
+  ],
+  "evidence": "paper/docs/MAID_COMPANION_DIALOGUE_20261110.md"
+}

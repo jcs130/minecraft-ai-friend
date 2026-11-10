@@ -35,7 +35,7 @@ public final class VisibilityLifecycleFixture extends JavaPlugin {
     }
 
     private void run(CommandSender sender, String[] args) throws ReflectiveOperationException {
-        if (args.length != 1 || !args[0].startsWith("ag_Vision")) throw new IllegalArgumentException("lab Agent name required");
+        if (args.length < 1 || args.length > 2 || java.util.Arrays.stream(args).anyMatch(name -> !name.startsWith("ag_Vision"))) throw new IllegalArgumentException("lab Agent name required");
         Player player = Bukkit.getPlayerExact(args[0]);
         if (player == null) throw new IllegalStateException("real protocol client required");
         var vision = Bukkit.getPluginManager().getPlugin("AgentVision");
@@ -44,6 +44,18 @@ public final class VisibilityLifecycleFixture extends JavaPlugin {
         Collection<?> queue = (Collection<?>) field(viewer, "pending");
         Map<?, ?> targets = (Map<?, ?>) field(viewer, "targets");
         if (queue.isEmpty()) throw new IllegalStateException("tracked target required");
+        Object other = args.length == 2 ? ((Map<?, ?>) field(vision, "viewers")).get(Bukkit.getPlayerExact(args[1]).getUniqueId()) : null;
+        if (args.length == 2 && (other == null || ((Collection<?>) field(other,"pending")).isEmpty())) throw new IllegalStateException("ready second viewer required");
+        // All mutation in this fixture is confined to the marked loopback lab.
+        // Make the second queue due in this synchronous tick, rather than
+        // accidentally accepting a pass where every viewer was deferred.
+        Field due = null;
+        if (other != null) {
+            for (Object target : ((Map<?, ?>) field(other,"targets")).values()) {
+                due = target.getClass().getDeclaredField("nextCheck");due.setAccessible(true);due.setLong(target,0L);
+            }
+            Field budget = vision.getClass().getDeclaredField("budgetTick");budget.setAccessible(true);budget.setInt(vision,Integer.MIN_VALUE);
+        }
         int queued = queue.size(), tracked = targets.size();
         Map<UUID, Boolean> visibility = new java.util.HashMap<>();
         for (Object target : targets.values())
@@ -62,6 +74,8 @@ public final class VisibilityLifecycleFixture extends JavaPlugin {
                 else throw failure;
             }
         } finally { handle.moonrise$setChunkLoader(loader); }
+        boolean otherProgressed = false;
+        if (other != null && due != null) for (Object target : ((Map<?, ?>) field(other,"targets")).values()) otherProgressed |= due.getLong(target) > 0;
         boolean unchanged = queue.size() == queued && targets.size() == tracked;
         for (Object target : targets.values()) {
             UUID id = ((org.bukkit.entity.Entity) field(target, "entity")).getUniqueId();
@@ -71,6 +85,7 @@ public final class VisibilityLifecycleFixture extends JavaPlugin {
         sender.sendMessage("MC_VISION_LIFECYCLE {\"npe\":" + npe + ",\"queueRetained\":" + unchanged
                 + ",\"loaderRestored\":" + (handle.moonrise$getChunkLoader() == loader)
                 + ",\"queuedBefore\":" + queued + ",\"trackedBefore\":" + tracked
-                + ",\"otherViewersStillQueued\":" + (((Collection<?>) field(vision, "roundRobin")).size() >= 1) + "}");
+                + ",\"otherViewersStillQueued\":" + (((Collection<?>) field(vision, "roundRobin")).size() >= 1)
+                + ",\"otherViewerProgressed\":" + otherProgressed + "}");
     }
 }
