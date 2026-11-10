@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "state": "deployed-with-explicit-acceptance-limits",
+  "verifiedAt": "2026-11-10T02:29:22.478855+00:00",
+  "releaseId": "maid-hutao-release-20261110-r1",
+  "source": {
+    "serverMain": "c26d27946e0415fc9ea5228a5d9dd77c6eb18bf1",
+    "serverPrs": [
+      152,
+      153,
+      154
+    ],
+    "clientMain": "c94a9943173b23875681114cd3de29d3e7501c04",
+    "clientPr": 29,
+    "finalCiRun": 42736752254,
+    "ciJobsPassed": 6
+  },
+  "game": {
+    "maidBridge": "0.1.18-scene-voice-patrol",
+    "voicePlugin": "0.1.5",
+    "AgentFriend": "0.4.47.69-onboarding-viewer-rpg",
+    "WorldObserver": "0.1.4-maid-ysm",
+    "CortiEyeMirror": "0.1.20",
+    "VortexRPG": "1.2.2-alpha",
+    "QiandengjiRpg": "0.2.20",
+    "Youer": "1.21.1 build920",
+    "Ysm": "2.6.5",
+    "normalRestarted": true,
+    "postflightChecks": [
+      "candidate and all unrelated binaries verified",
+      "AgentFriend enabled",
+      "CortiEyeMirror enabled",
+      "QiandengjiMaidBridge enabled",
+      "VortexRPG enabled",
+      "QiandengjiRpg enabled",
+      "QiandengVoice enabled",
+      "WorldObserver enabled",
+      "game responsive",
+      "performance telemetry ready",
+      "original native content retained",
+      "15 dungeon sites ready",
+      "original five site IDs retained",
+      "Geyser maid extension enabled",
+      "reviewed maid model pack active",
+      "selected original Feiyu voice and 15 scene-matched native recordings",
+      "selected clone registered and original TTS default retained"
+    ]
+  },
+  "voice": {
+    "selected": "胡桃中文声线",
+    "id": "feiyu-tlm-hutao-cn-20261110",
+    "nativeClips": 15,
+    "nativeEvents": 11,
+    "idleChatterEnabled": false,
+    "minimumGapSeconds": 90,
+    "sameActionGapSeconds": 180,
+    "sameEnvironmentGapSeconds": 600,
+    "otherVoicesPreserved": 19,
+    "defaultVoicePreserved": true,
+    "downloadedCandidateConfigurations": 27,
+    "downloadedArchives": 16,
+    "originalAudioFilesRetained": 2460,
+    "verifiedCopies": 2,
+    "otherMaidSharedLlmOrTtsEnabled": false
+  },
+  "hostedCore": {
+    "version": "0.5.7-rc.160-preview.37",
+    "status": "preview.37-running-no-roles-or-requests",
+    "roles": 0,
+    "requests": 0,
+    "allExistingLedgerTablesPreserved": true,
+    "existingDependencyTargetVerified": true,
+    "originalHostDrivingRightsChanged": false
+  },
+  "website": {
+    "passed": true,
+    "deployed": true,
+    "sourceCommit": "c26d27946e0415fc9ea5228a5d9dd77c6eb18bf1",
+    "sourcePr": 154,
+    "portalId": "5197ced407922644288dfbd20d36deeb0ce1a75d936e5acc191f3c1184706b2c",
+    "portalImage": "sha256:c58bdde2afc0135d2cf3fff19963eb354182b034a9ac570bc2b3191ce7dc1b9f",
+    "skillVersion": "1.3.9",
+    "embeddedSdk": "0.5.7-rc.160-preview.37",
+    "skillSha256": "160a23dc17e55c209199bb0946287aed28780c8bea5ebf794e2d04663433e3f4",
+    "protectedTables": 16,
+    "originalRowsPreserved": true,
+    "realmAuthRoutesPreserved": true,
+    "layoutMapAndExistingDownloadsPreserved": true,
+    "gameRestarted": false,
+    "databaseRollback": false,
+    "completedAt": "2026-11-10T01:59:10.441596+00:00"
+  },
+  "preservation": {
+    "normalOldJvmExitVerified": true,
+    "currentColdBackupsVerified": 2,
+    "characterFilesUnchangedDuringInstall": 7559,
+    "originalCredentialRows": 80,
+    "currentCredentialRows": 80,
+    "originalCredentialsUnchanged": true,
+    "goddessJobsRestored": true,
+    "cameraPauseReleased": true,
+    "worldInventoryBrainAndReceiptsRestoredFromOldBackup": false
+  },
+  "artifacts": [
+    {
+      "target": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "version": "0.1.18-scene-voice-patrol",
+      "sha256": "7db4c45e03915317ca6f8056f22ba619f31573aea568d694111c3e1d36261094",
+      "beforeSha256": "3a328893ab7b9319b62836122ff3e071abce0c05b6b06fc18ea97ce7a0a83d61"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\QiandengjiMaidBridge\\companion-speech.json",
+      "version": "selected-original-Feiyu-only",
+      "sha256": "a1f12a58e793191954c96e58d62dec3945fdcb67e0d6374dfeef60d4d6b90c65",
+      "beforeSha256": "5e714dd54be02ec14bb9fe2c27fb53702b31d183735012d4a22d29fceb15862f"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\QiandengVoice-0.1.0.jar",
+      "version": "0.1.5",
+      "sha256": "61e414af4b44f476eaafd9b34777015e6cede46ce3dd53156c4c12893a8a999c",
+      "beforeSha256": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed"
+    }
+  ],
+  "acceptanceLimits": {
+    "originalCormyHostVersionReadback": false,
+    "originalProxyFirstRejectedChunkRootCauseConfirmed": false,
+    "humanHearingVerified": false,
+    "nativeBubblePixelsVerified": false,
+    "originalFailedRequestsReplayed": false
+  },
+  "rollback": "Code/configuration only; preserve latest worlds, original identity/inventory/brain, credentials and lifecycle/action/voice/hosting ledgers."
+}
