@@ -49,6 +49,8 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private Path profileFile;
     private HttpClient http;
     private String backend,token;
+    // Main-thread fence while the original finish is being durably reserved.
+    private final Set<VoiceUploads.Key> finalizingUploads=new HashSet<>();
     private final AtomicInteger outstanding=new AtomicInteger();
     private int maximumSpeech,maximumSamples;
     private double distanceCap;
@@ -227,6 +229,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             try{
                 boolean fresh=ledger.reserve(actor,id,fingerprint);
                 main(()->{
+                    finalizingUploads.remove(new VoiceUploads.Key(actor,id));
                     if(!fresh){outstanding.decrementAndGet();VoiceLedger.Entry row=ledger.get(actor,id);reply(Bukkit.getPlayer(actor),id,row.state(),row.reason());return;}
                     if(!live(job)){terminal(job,"cancelled","ACTOR_DISCONNECTED");outstanding.decrementAndGet();return;}
                     SpeechLane<Job> lane=lanes.computeIfAbsent(actor,k->new SpeechLane<>());
@@ -234,7 +237,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                     if(!result.equals("queued")){terminal(job,"failed","VOICE_QUEUE_FULL");outstanding.decrementAndGet();return;}
                     reply(Bukkit.getPlayer(actor),id,"queued","");begin(actor);
                 });
-            }catch(Exception failure){outstanding.decrementAndGet();main(()->error(Bukkit.getPlayer(actor),failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}
+            }catch(Exception failure){outstanding.decrementAndGet();main(()->{finalizingUploads.remove(new VoiceUploads.Key(actor,id));reply(Bukkit.getPlayer(actor),id,"failed",failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_RECEIPT_STORAGE_UNAVAILABLE");});}
         });
     }
     private void begin(UUID actor){
@@ -349,7 +352,23 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         UUID requestId=null;
         try{
             UUID actor=p.getUniqueId(),session=sessions.computeIfAbsent(actor,key->UUID.randomUUID());
-            if(message[0]==2){if(message.length<22||message.length>21+VoiceUploads.CHUNK)throw new IllegalArgumentException("UPLOAD_CHUNK_INVALID");ByteBuffer buffer=ByteBuffer.wrap(message,1,message.length-1);UUID id=new UUID(buffer.getLong(),buffer.getLong());int sequence=buffer.getInt();byte[] data=new byte[buffer.remaining()];buffer.get(data);uploads.chunk(new VoiceUploads.Key(actor,id),session,sequence,data,System.currentTimeMillis());return;}
+            if(message[0]==2){
+                if(message.length<17)throw new IllegalArgumentException("UPLOAD_CHUNK_INVALID");
+                ByteBuffer buffer=ByteBuffer.wrap(message,1,message.length-1);UUID id=new UUID(buffer.getLong(),buffer.getLong());requestId=id;var key=new VoiceUploads.Key(actor,id);
+                if(finalizingUploads.contains(key))return;
+                // A delayed/duplicate frame cannot downgrade a queued or completed
+                // transmission. The connection still owns the ledger lookup.
+                VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){reply(p,id,old.state(),old.reason());return;}
+                if(message.length<22||message.length>21+VoiceUploads.CHUNK){uploads.discard(key,session);throw new IllegalArgumentException("UPLOAD_CHUNK_INVALID");}
+                int sequence=buffer.getInt();byte[] data=new byte[buffer.remaining()];buffer.get(data);
+                try{uploads.chunk(key,session,sequence,data,System.currentTimeMillis());}
+                catch(IllegalArgumentException failure){
+                    VoiceUploads.Progress progress=uploads.progress(key,session);
+                    getLogger().warning("Voice upload chunk rejected: request="+id+" sequence="+sequence+" chunkBytes="+data.length+" progress="+progress+" code="+failure.getMessage());
+                    uploads.discard(key,session);throw failure;
+                }
+                return;
+            }
             if(message[0]!=1||message.length>8193)throw new IllegalArgumentException("VOICE_PROTOCOL_INVALID");
             JsonObject data=JsonParser.parseString(new String(message,1,message.length-1,StandardCharsets.UTF_8)).getAsJsonObject();
             if(data.has("actor")||data.has("playerUuid"))throw new IllegalArgumentException("CONNECTION_OWNS_ACTOR");
@@ -359,7 +378,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 case "say"->submitText(p,id,data.get("text").getAsString(),data.has("voice")?data.get("voice").getAsString():profiles.getString(actor+".voice",""));
                 case "status"->{VoiceLedger.Entry row=ledger.get(actor,id);reply(p,id,row==null?"not_found":row.state(),row==null?"":row.reason());}
                 case "begin"->{String format=data.get("format").getAsString();if(!format.equals("wav"))throw new IllegalArgumentException("UPLOAD_PCM16_WAV_REQUIRED");int bytes=data.get("bytes").getAsInt();String digest=data.get("sha256").getAsString();if(data.get("bytes").getAsDouble()!=bytes||bytes<1||bytes>VoiceUploads.MAX_BYTES||!digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("UPLOAD_SIZE_OR_DIGEST_INVALID");VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){if(!old.fingerprint().equals(hash("wav\0"+digest)))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,old.state(),old.reason());break;}reply(p,id,uploads.begin(key,session,bytes,digest,format,System.currentTimeMillis()),"");}
-                case "finish"->{var audio=uploads.finish(key,session,System.currentTimeMillis());submit(p,id,hash("wav\0"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(audio.bytes()))),null,null,audio.bytes());}
+                case "finish"->{if(finalizingUploads.contains(key))break;VoiceLedger.Entry old=ledger.get(actor,id);if(old!=null){reply(p,id,old.state(),old.reason());break;}var audio=uploads.finish(key,session,System.currentTimeMillis());finalizingUploads.add(key);try{submit(p,id,hash("wav\0"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(audio.bytes()))),null,null,audio.bytes());}catch(Exception failure){finalizingUploads.remove(key);throw failure;}}
                 default->throw new IllegalArgumentException("VOICE_OPERATION_UNKNOWN");
             }
             // A proxy may register CHANNEL for every vanilla client. Require a

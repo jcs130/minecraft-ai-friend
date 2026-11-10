@@ -112,5 +112,35 @@
     "other TTS/model services"
   ],
   "deploymentAuthorized": true,
-  "rollback": "Code/configuration only. Preserve latest worlds, accounts, items, receipts, original brain and new hosting ledger; no old data restore."
+  "rollback": "Code/configuration only. Preserve latest worlds, accounts, items, receipts, original brain and new hosting ledger; no old data restore.",
+  "voiceUploadRecovery": {
+    "version": "0.1.5",
+    "sha256": "61e414af4b44f476eaafd9b34777015e6cede46ce3dd53156c4c12893a8a999c",
+    "baselineSha256": "314ef8d56c5dee2ed217760293ac764aa61654294d1152989e3f31ce6d2c91ed",
+    "unrelatedEntriesPreserved": 22,
+    "changedEntries": [
+      "dev/god/godvoice/PaperVoicePlugin$1.class",
+      "dev/god/godvoice/PaperVoicePlugin$Capture.class",
+      "dev/god/godvoice/PaperVoicePlugin$Job.class",
+      "dev/god/godvoice/PaperVoicePlugin.class",
+      "dev/god/godvoice/VoiceDiagnostics$BackendFailure.class",
+      "dev/god/godvoice/VoiceDiagnostics.class",
+      "dev/god/godvoice/VoiceUploads$Audio.class",
+      "dev/god/godvoice/VoiceUploads$Key.class",
+      "dev/god/godvoice/VoiceUploads$Progress.class",
+      "dev/god/godvoice/VoiceUploads$Upload.class",
+      "dev/god/godvoice/VoiceUploads.class",
+      "plugin.yml"
+    ],
+    "productionChanged": false,
+    "sourcePr": 153,
+    "javaBoundaryChecks": 90,
+    "nodeClientChecks": 11,
+    "nativeChecks": 9,
+    "receivedEntityAudioPackets": 25,
+    "normalizations": 1,
+    "immediateAndTerminalDuplicateProtected": true,
+    "originalProxyFirstChunkRootCauseVerified": false,
+    "humanHearingVerified": false
+  }
 }
