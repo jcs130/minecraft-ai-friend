@@ -19,7 +19,8 @@ it('offers a short grounded stroll but rejects water, missing chunks, cliffs and
  const original=bot.blockAt;
  for(const mode of ['water','unloaded','cliff','head']){
   bot.blockAt=(p:Vec3)=>p.z>=0?original(p):mode==='unloaded'?null:mode==='water'?{...original(p),name:'water'}
-   :mode==='cliff'?{...original(p),boundingBox:'empty',shapes:[]}:{...original(p),boundingBox:p.y===65?'block':original(p).boundingBox};
+   :mode==='cliff'?{...original(p),boundingBox:'empty',shapes:[]}:{...original(p),boundingBox:p.y===65?'block':original(p).boundingBox,
+     shapes:p.y===65?[[0,0,0,1,1,1]]:original(p).shapes};
   expect(wanderSafe(bot,from,to),mode).toBe(false);
  }
 });

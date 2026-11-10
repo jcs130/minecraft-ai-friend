@@ -2,6 +2,7 @@ import type { Bot, ControlState } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { canSeeBlockAt, canSeeEntity } from './terrain.ts';
 import type { IdleBehaviorCandidate } from './idle-behavior.ts';
+import { spatialBody } from './spatial-site.ts';
 
 /** Protocol poses and local viewer previews available while the caller owns the body. */
 export const IDLE_ACTIONS = [
@@ -91,31 +92,44 @@ function blockAction(name: string): IdleActionId | null {
   return null;
 }
 
-function safeFloor(bot: Bot, x: number, y: number, z: number): boolean {
-  const below = bot.blockAt(new Vec3(x, y - 1, z));
-  const feet = bot.blockAt(new Vec3(x, y, z));
-  const head = bot.blockAt(new Vec3(x, y + 1, z));
-  if (!below || !feet || !head || [below, feet, head].some(b => UNSAFE.has(b.name)
-    || b.getProperties().waterlogged === true)) return false;
-  if (feet.boundingBox !== 'empty' || head.boundingBox !== 'empty') return false;
-  return below.boundingBox === 'block' && below.shapes.some(shape => shape.length === 6
-    && shape[0] === 0 && shape[1] === 0 && shape[2] === 0
-    && shape[3] === 1 && shape[4] === 1 && shape[5] === 1);
-}
-
 export function corridorSafe(bot: Bot, from: Point, to: Point): boolean {
   if (!bot.entity.onGround || Math.abs(from.y - Math.round(from.y)) > 0.04
     || Math.abs(to.y - from.y) > 0.01) return false;
   const length = distance(from, to);
   if (length < 0.5 || length > 1.6) return false;
+  // A fence's occupied cell is not its entire collision volume. Use the same
+  // unrounded 0.6 x 1.8 body and protruding-shape reads as short combat motion.
+  // Cache only for this validation; the next control tick reads fresh blocks.
+  type Cell = [number, number, number];
+  type Sample = ReturnType<Parameters<typeof spatialBody>[0]>;
+  const cache = new Map<string, Sample>(), unsafe: Cell[] = [];
+  const read = (cell: Cell): Sample => {
+    const key = cell.join(',');
+    const previous = cache.get(key); if (previous) return previous;
+    const block = bot.blockAt(new Vec3(...cell), false);
+    const properties = block?.getProperties?.() ?? null;
+    if (block && (UNSAFE.has(block.name) || properties?.waterlogged === true || properties?.waterlogged === 'true')) unsafe.push(cell);
+    const sample: Sample = block ? { material: {
+      name: block.name, properties,
+      collision: block.shapes?.map(shape => [...shape] as [number, number, number, number, number, number]) ?? null,
+      liquid: ['water', 'lava', 'bubble_column'].includes(block.name),
+    } } : { unknown: 'unloaded' };
+    cache.set(key, sample); return sample;
+  };
   const steps = Math.ceil((length + 0.35) * 5);
+  let previous: Cell = [from.x, from.y, from.z];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps * (1 + 0.35 / length);
     const x = from.x + (to.x - from.x) * t;
     const z = from.z + (to.z - from.z) * t;
-    for (const dx of [-0.32, 0.32]) for (const dz of [-0.32, 0.32]) {
-      if (!safeFloor(bot, Math.floor(x + dx), Math.round(from.y), Math.floor(z + dz))) return false;
-    }
+    const current: Cell = [x, from.y, z], body = spatialBody(read, previous, current);
+    if (body.unknown || body.collision || body.water || body.hazard || !body.supported) return false;
+    // Preserve dry/hazard restrictions including cobweb, lit campfire and
+    // waterlogged support, whose collision shape alone cannot certify safety.
+    if (unsafe.some(cell => cell[0] < Math.max(previous[0], x) + .3 && cell[0] + 1 > Math.min(previous[0], x) - .3
+      && cell[1] < from.y + 1.8 && cell[1] + 1 > from.y - .05
+      && cell[2] < Math.max(previous[2], z) + .3 && cell[2] + 1 > Math.min(previous[2], z) - .3)) return false;
+    previous = current;
   }
   return true;
 }
