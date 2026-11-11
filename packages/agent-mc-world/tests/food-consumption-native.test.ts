@@ -64,6 +64,22 @@ function foodServer(version = '1.21.1', protectShortcut = true) {
 
 afterEach(() => vi.useRealTimers());
 
+it('recovers a localized food request using the returned exact ID without replaying consumption', async () => {
+  vi.useFakeTimers(); const r = foodServer();
+  r.seed(9, 'cooked_beef', 19); r.full();
+  await expect(skillEat(r.bot, '牛排')).rejects.toThrow('cooked_beef');
+  expect(r.packets.some(p => p.name === 'use_item')).toBe(false);
+  r.use(() => {
+    expect(r.hand()?.name).toBe('cooked_beef');
+    setTimeout(() => { r.lose(37, 1); r.health(10); r.finish(); }, 1_600);
+  });
+  const result = skillEat(r.bot, 'cooked_beef');
+  await vi.runAllTimersAsync();
+  expect(await result).toContain('饥饿 2 → 10');
+  expect(r.server.slots[37]?.count).toBe(18);
+  expect(r.packets.filter(p => p.name === 'use_item')).toHaveLength(1);
+});
+
 it.each(['1.21.1', '1.20.6'])('eats stored food after the real %s swap ACK without activating a protected shortcut', async version => {
   vi.useFakeTimers(); const r = foodServer(version);
   r.use(() => {

@@ -310,10 +310,16 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
       const page = voxelPage(query!, cap), { bounds } = page;
       const palette: Material[] = [], paletteIds = new Map<string, number>(), cells: number[] = [];
       const counts: number[] = [], landmarks: Array<{ at: Point; palette: number; distance: number }> = [];
-      let unknownCells = 0;
+      let unknownCells = 0, invisibleCount=0, unloadedCount=0, omittedDetailCount=0;
       for (let y = bounds[1]; y <= bounds[4]; y++) for (let z = bounds[2]; z <= bounds[5]; z++) for (let x = bounds[0]; x <= bounds[3]; x++) {
         const sample: Sample = omitDetail ? { unknown: 'read-budget' } : read([x, y, z]);
-        if ('unknown' in sample) { cells.push(-1); unknownCells++; continue; }
+        if ('unknown' in sample) {
+          cells.push(-1); unknownCells++;
+          if(sample.unknown==='unloaded')unloadedCount++;
+          else if(sample.unknown==='occluded')invisibleCount++;
+          else omittedDetailCount++;
+          continue;
+        }
         const key = JSON.stringify(sample.material);
         let id = paletteIds.get(key);
         if (id === undefined) { id = palette.length; paletteIds.set(key, id); palette.push(sample.material); }
@@ -351,7 +357,7 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
       ];
       const result = voxelReceipt({ ...common, format:'dense' as const, kind: 'voxels' as const, status: partialReasons.length ? 'partial' as const : 'complete' as const,
         complete: partialReasons.length === 0, coverage: { ...page.coverage, observedCount: cells.length-unknownCells,
-          unknownCount: unknownCells, readAttemptedCount: attemptedCells.size,
+          unknownCount: unknownCells, invisibleCount, unloadedCount, omittedDetailCount, readAttemptedCount: attemptedCells.size,
           unreturnedAttemptedCount: Math.max(0,attemptedCells.size-cells.length),
           partialReasons, omittedEntityCount: Math.max(0,nearby.length-entityCap) }, next: page.next,
         bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells, entities: nearby.slice(0,entityCap),
