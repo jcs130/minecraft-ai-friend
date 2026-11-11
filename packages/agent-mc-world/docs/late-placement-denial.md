@@ -13,6 +13,18 @@ server reason. Existing first-attempt diagnosis, confirmation, bounded retries,
 inventory barriers and the single native queue remain unchanged. Denials from a
 different cell or dimension do not apply to the current placement.
 
+An unchanged-scene miss cache is a different outcome. A repeated `build` can be
+suppressed locally without sending another placement packet. Such a receipt now
+retains `placement-retry-cached` and a local source, the affected cell, and the
+remaining cache delay. It does not count as a new server denial or another failed
+placement attempt. A changed support, material or standing position can invalidate
+the observed scene; expiration only permits another check and does not retry it
+automatically. Other cells in the batch keep their original execution behavior.
+
+This distinction does not establish that a target has valid support or that a
+server protection rule caused the original miss. Check the original observation
+and the actual tool contract before changing the method.
+
 The Java 1.21.1 regression uses the real structured-denial parser and Bridge cache,
 with fake placement and no game/model connection. Both direct placement and native
 path-support cases first reproduced three sends after a denial observed on send

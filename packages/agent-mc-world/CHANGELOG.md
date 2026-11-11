@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.45
+
+- Report unchanged-scene placement retries suppressed by the local cache as `placement-retry-cached`, with no new packet sent and the original recovery conditions. Preserve cell iteration, cancellation, cache lifetime and actual placement behavior.
+- Retain the current query-context and portal-entry fixes alongside the latest main-branch companion travel changes.
+
 ## 0.5.7-rc.160-preview.44
 
 - Preserve block collision metadata in optimized path searches so explicitly selected Nether portals remain enterable. Task-scoped portal permission no longer mutates the shared search cache.

@@ -245,6 +245,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
   const tried = new Set<string>();
   // 接近目标失败时尚未尝试目标放置，不能把空气回读写成服务端不认放置。
   const approachFailures = new Map<string, string>();
+  const deferredPlacements = new Map<string, string>();
   let placed = 0;
   /** 收不了工时的原因;空串 = 全放完了 */
   let halt = '';
@@ -338,12 +339,15 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       if (!(await ensureHolding(bot, call.material))) { halt = `${label}用完了`; haltCode = 'resource-unavailable'; break; }
       const permit = permitPlacement(ctx, bot.heldItem?.name ?? item.name, false, c);
       if (!permit.ok) { halt = permit.reason; haltCode = 'resource-unavailable'; break; }
-      tried.add(key);
       approachFailures.delete(key);
       let landed: BlockFace | null = null;
       const temporaryProof = call.temporary ? prepareTemporaryScaffoldPlacement(bot, blockAtCell(bot, c)) : null;
       try {
-        landed = await placeIntoCell(bot, c, call.material, ctx, s.face ?? undefined);
+        deferredPlacements.delete(key);
+        landed = await placeIntoCell(bot, c, call.material, ctx, s.face ?? undefined,
+          error => deferredPlacements.set(key, error.message));
+        // A pure cache deferral made no attempt; keep earlier real attempts, if any.
+        if (!deferredPlacements.has(key)) tried.add(key);
         const actual = landed && temporaryProof ? blockAtCell(bot, c) : null;
         if (actual) recordTemporaryScaffold(bot, temporaryProof, actual);
       } finally {
@@ -351,6 +355,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
         await permit.finish(landed !== null);
       }
       if (landed) {
+        deferredPlacements.delete(key);
         remaining.delete(key);
         stuck.set(key, faceText(refCellOf(c, landed), landed));
         progressed = true;
@@ -370,10 +375,14 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
     } else {
       // 点名占位的是谁:"剩 N 格放不上"读不出下一步该拆什么
       const unapproached = frontier.filter(s => !tried.has(cellKeyOf(s.cell)) && approachFailures.has(cellKeyOf(s.cell)));
-      halt = unapproached.length === frontier.length
+      const deferred = frontier.filter(s => deferredPlacements.has(cellKeyOf(s.cell)));
+      halt = deferred.length === frontier.length
+        ? `剩 ${remaining.size} 格本机暂缓重复放置:${deferred.slice(0, 3).map(s => deferredPlacements.get(cellKeyOf(s.cell))).join('、')}`
+        : unapproached.length === frontier.length
         ? `剩 ${remaining.size} 格尚未尝试目标放置:${unapproached.slice(0, 3).map(s => approachFailures.get(cellKeyOf(s.cell))).join('、')}`
         : `剩 ${remaining.size} 格放不上,${faceGiven ? '指名的那一面' : '可用参照面'}未确认放置成功:` +
-          `${frontier.slice(0, 3).map((s) => approachFailures.get(cellKeyOf(s.cell)) ?? placementReadback(bot, s.cell)).join('、')}`;
+          `${frontier.slice(0, 3).map((s) => deferredPlacements.get(cellKeyOf(s.cell)) ?? approachFailures.get(cellKeyOf(s.cell)) ?? placementReadback(bot, s.cell)).join('、')}`;
+      if (deferred.length === frontier.length) haltCode = 'placement-retry-cached';
       break;
     }
   }
@@ -384,6 +393,8 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
     if (ok) return `${cellText(s.cell)} ${ok}放上了`;
     const settled = first.settled.get(key);
     if (settled) return `${cellText(s.cell)} ${settled}`;
+    const deferred = deferredPlacements.get(key);
+    if (deferred) return deferred;
     if (s.face !== null && !solidAt(bot, refCellOf(s.cell, s.face))) {
       const ref = refCellOf(s.cell, s.face);
       const b = blockAtCell(bot, ref);
@@ -413,7 +424,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
     const fp = footprintOf(bot, call.material);
     const scene = fp === 'single' ? [] : footprintScene(bot, first.todo[0].cell, call.material, fp);
     throw new SkillBlocked(`一块都没放上:${halt}${tail}`, [...spotLines, ...scene],
-      haltCode === 'resource-unavailable' || tried.size === 0 ? 'local' : 'server', haltCode);
+      haltCode === 'resource-unavailable' || haltCode === 'placement-retry-cached' || tried.size === 0 ? 'local' : 'server', haltCode);
   }
   // 缺口以 remaining 中计划放置但未完成的格计；原已存在的目标方块不计缺口。
   const gap = [...remaining.values()].map((s) => cellText(s.cell));
