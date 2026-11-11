@@ -16,6 +16,8 @@ export interface SpatialReadout {
   remainingCount: number | null;
   unknownCount: number | null;
   unknownUnit: 'cells' | 'sites' | null;
+  /** Real reasons from this page. Legacy absent counts stay null, never guessed. */
+  unknownReasons:{notVisible:number|null;unloaded:number|null;notReturned:number|null}|null;
   retryable: boolean | null;
   continuationAvailable: boolean;
   interpretation: string;
@@ -63,6 +65,7 @@ export function spatialReadout(data: Record<string, unknown>): SpatialReadout | 
     selection: hash(selection), revision: hash(content), scanComplete,
     knownComplete: typeof data.complete === 'boolean' ? data.complete : null,
     remainingCount, unknownCount, unknownUnit: kind === 'voxels' ? 'cells' : kind === 'sites' ? 'sites' : null,
+    unknownReasons:kind==='voxels'?{notVisible:count(coverage.invisibleCount),unloaded:count(coverage.unloadedCount),notReturned:count(coverage.omittedDetailCount)}:null,
     retryable: typeof data.retryable === 'boolean' ? data.retryable : null,
     continuationAvailable: !!(data.next_safe_read || data.next),
     interpretation: kind === 'voxels' && data.format === 'visible' && scanComplete === true

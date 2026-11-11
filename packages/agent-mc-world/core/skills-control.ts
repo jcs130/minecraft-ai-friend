@@ -59,6 +59,26 @@ export function cancelControlInput(bot: Bot, reason: string, source: 'server' | 
   for (const key of lease.keys) bot.setControlState(key, false);
 }
 
+/** One ground controller shares input revocation with ordinary direct control. */
+export async function groundInputSequence<T>(bot:Bot,ctx:SkillContext,
+ run:(input:{check():void;keys(keys:ControlKey[]):void})=>Promise<T>):Promise<T>{
+  checkAbort(ctx);
+  if(inputs.has(bot))throw new SkillBlocked('上一段直接控制尚未交还身体');
+  if(!bot.physicsEnabled||flightState(bot).flying||bodyInWater(bot)||(bot as Bot & {vehicle?:unknown}).vehicle)
+    throw new SkillBlocked('精确地面路线需要未乘坐、未飞行的地面身体；水路或载具用对应能力');
+  const lease:InputLease={keys:['forward','back','left','right','jump','sneak','sprint'],mode:'ground',finish:()=>{}};
+  inputs.set(bot,lease);
+  const release=ownNativeControlInput(bot);
+  const cancel=(reason:string,source:'local'|'server'='local')=>{if(inputs.get(bot)===lease)cancelControlInput(bot,reason,source);};
+  const check=()=>{if(lease.reason)throw new SkillBlocked(lease.reason,[],lease.source,'navigation-location-changed');checkAbort(ctx);};
+  const keys=(pressed:ControlKey[])=>{check();for(const key of lease.keys)bot.setControlState(key,pressed.includes(key));};
+  const death=()=>cancel('玩家已死亡','server'),respawn=()=>cancel('出生位置或维度已变化','server'),forced=()=>cancel('服务端修正了位置；重新观察后再选择路线','server');
+  const detach=onConnectionEnd(bot,()=>cancel('Minecraft连接已结束','server'));
+  bot.on('death',death);bot.on('respawn',respawn);bot.on('forcedMove',forced);
+  try{keys([]);return await run({check,keys});}
+  finally{cancel('精确路线控制结束');release();detach();bot.off('death',death);bot.off('respawn',respawn);bot.off('forcedMove',forced);}
+}
+
 export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: 'control' }>, ctx: SkillContext): Promise<string> {
   checkAbort(ctx);
   if (!bot.entity?.position) throw new SkillBlocked('还没进入世界，不能直接控制');

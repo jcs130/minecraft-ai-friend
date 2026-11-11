@@ -4,6 +4,11 @@ import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 import { adaptiveDivingDecision } from './diving-budget.mjs';
 
 const SDK_API = Object.freeze({
+  routes:'模型可以自行观察、选择路点、避开具体机关，并写 JavaScript 在同一脚本中连续执行。'
+    +'同脚高精确地面路线用 await mc.do([{skill:"follow_route",waypoints:[{at:[x,y,z],posture:"sneak"}],avoid:[[trapX,trapY,trapZ]],avoidBlocks:["tripwire","stone_pressure_plate"]}])。mc_help {skills:["follow_route"]} 按需取完整契约。'
+    +'路点是绝对脚位置，保留小数；按顺序走并在转角前减速，不自动改道。先 dryRun 检查身体净空/支撑与已声明禁入格，执行仍重验；未知或新的障碍会停止并给已抵达索引。'
+    +'这是Mineflayer地面控制器，不是跳跃/爬行/水路规划器。蹲行不能保证不触发压力板/绊线；脚本必须自行选择身体不接触的路径，不把未知方块或被遮挡区域当安全。'
+    +'原生 bot.setControlState/look/waitForTicks 仍可用于自己编写不同姿态和控制方法；遵守原身体租约、取消和现场读数。mc.do 后按返回steps/receipt/state核验，再记录或修改方法；不要因等待重放旧段。',
   fabrication: '制造与强化按用途选择，不必新起人格：craft 合成/锻造，smelt 冶炼，enchant 附魔台，anvil 修理/附魔书合并，grindstone 去普通附魔。mc_help {skills:["craft","enchant","anvil","grindstone"]} 按需读当前契约。'
     + '先 mc_bag 核对具体物品/名称/附魔/耐久、现场经验等级、青金石与材料；观察当前工作站，不把旧仓库记录当库存。'
     + 'enchant:{at,item,pick?} 不给 index 只查看本件三档报价；给 index:1|2|3 才扣费。等级门槛与实际扣的1/2/3级不同，报价只透露一条附魔，结果可能不同；回执与新物品组件为准。'
@@ -25,6 +30,7 @@ const SDK_API = Object.freeze({
     + 'mc_script {routine:{op:"read",id:"ride_route"}} 按需读取内置可改写路线参考；自己编写前用 api:"authoring" 与 api:"mount"/"dismount"/"moveVehicle"。'
     + '有明确交通目的且当前路段合适时可检索已有方法、改写、校验和使用；不强制为练习离开当前任务。',
   authoring: '可以直接写新的 JavaScript async 函数体，不必等待现有脚本提供所需动作。'
+    + '精确路线、逐段姿态及禁入格用 api:"routes" 按需读取；无需每个路点返回主人格派工。'
     + '保持按键、按实际读数计算、条件分支或重复编排适合写成有界方法；一次普通动作仍可直接用 mc_do。'
     + '先 library:{op:"list",query:"当前目的"} 检索本作用域的小索引；没有适用方法就按 api:"index" 和具体原生方法帮助构造候选。'
     + '例如同一程序内持续蹲走：await bot.setControlState("sneak",true); await bot.setControlState("forward",true); '
