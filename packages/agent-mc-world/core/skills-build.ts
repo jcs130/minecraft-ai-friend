@@ -339,7 +339,6 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       if (!(await ensureHolding(bot, call.material))) { halt = `${label}用完了`; haltCode = 'resource-unavailable'; break; }
       const permit = permitPlacement(ctx, bot.heldItem?.name ?? item.name, false, c);
       if (!permit.ok) { halt = permit.reason; haltCode = 'resource-unavailable'; break; }
-      tried.add(key);
       approachFailures.delete(key);
       let landed: BlockFace | null = null;
       const temporaryProof = call.temporary ? prepareTemporaryScaffoldPlacement(bot, blockAtCell(bot, c)) : null;
@@ -347,6 +346,8 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
         deferredPlacements.delete(key);
         landed = await placeIntoCell(bot, c, call.material, ctx, s.face ?? undefined,
           error => deferredPlacements.set(key, error.message));
+        // A pure cache deferral made no attempt; keep earlier real attempts, if any.
+        if (!deferredPlacements.has(key)) tried.add(key);
         const actual = landed && temporaryProof ? blockAtCell(bot, c) : null;
         if (actual) recordTemporaryScaffold(bot, temporaryProof, actual);
       } finally {

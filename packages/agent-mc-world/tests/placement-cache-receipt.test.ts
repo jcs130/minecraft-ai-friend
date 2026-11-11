@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installMineflayerFixes } from '../core/mineflayer-fixes.ts';
 import { skillBuild } from '../core/skills-build.ts';
 import type { SkillContext } from '../core/skill-context.ts';
+import { gotoGoal } from '../core/travel.ts';
+
+vi.mock('../core/travel.ts', async original => ({ ...await original<typeof import('../core/travel.ts')>(), gotoGoal: vi.fn() }));
 
 const require = createRequire(import.meta.url);
 const registry = require('minecraft-data')('1.21.1');
@@ -34,6 +37,7 @@ function rig() {
       if (accepted.has(dest.toString())) { set(dest, 'torch'); item.count--; }
     },
   }) as unknown as Bot;
+  Object.assign(bot, { world: { getBlock: bot.blockAt } });
   installMineflayerFixes(bot, log as never);
   const ctx = { aborted: () => false, taskId: 1, partial: vi.fn() } as unknown as SkillContext;
   return { bot, ctx, sends, accepted, set, place: () => bot.placeBlock(bot.blockAt(support)!, new Vec3(0, 1, 0)) };
@@ -42,7 +46,7 @@ async function failFirst(r: ReturnType<typeof rig>) {
   const failure = r.place().then(() => null, error => error as Error);
   await vi.runAllTimersAsync(); expect(await failure).toBeInstanceOf(Error); expect(r.sends).toHaveLength(3);
 }
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.mocked(gotoGoal).mockReset(); });
 describe('build reports cached placement attempts without resending them', () => {
   it('preserves local no-send classification and recovery through the composed build result', async () => {
     vi.useFakeTimers(); const r = rig(); await failFirst(r);
@@ -73,6 +77,27 @@ describe('build reports cached placement attempts without resending them', () =>
     await vi.runAllTimersAsync(); const error = await failure;
     expect(error.source).toBe('server'); expect(error.code).not.toBe('placement-retry-cached');
     expect(error.message).not.toContain('本次未发包'); expect(r.sends).toHaveLength(3);
+  });
+  it('keeps a cached cell plus a failed approach local when neither sends a new placement', async () => {
+    vi.useFakeTimers(); const r = rig(); await failFirst(r);
+    r.set(new Vec3(2, 95, 0), 'stone');
+    vi.mocked(gotoGoal).mockRejectedValue(new Error('no route to the high cell'));
+    const failure = skillBuild(r.bot, { skill: 'build', material: 'torch', anchors: [[2,64,0],[2,96,0]] }, r.ctx)
+      .then(() => null, error => error);
+    await vi.runAllTimersAsync(); const error = await failure;
+    expect(error.source).toBe('local'); expect(error.message).toContain('本次未发包');
+    expect(error.message).toContain('no route to the high cell');
+    expect(error.scene.join('\n')).toContain('尚未发出对该目标的放置');
+    expect(r.sends).toHaveLength(3); expect(r.bot.heldItem?.count).toBe(4);
+  });
+  it('retains server provenance when another cell really attempted placement', async () => {
+    vi.useFakeTimers(); const r = rig(); await failFirst(r);
+    const failure = skillBuild(r.bot, { skill: 'build', material: 'torch', anchors: [[2,64,0],[-2,64,0]] }, r.ctx)
+      .then(() => null, error => error);
+    await vi.runAllTimersAsync(); const error = await failure;
+    expect(error.source).toBe('server'); expect(error.code).not.toBe('placement-retry-cached');
+    expect(error.message).toContain('本次未发包'); expect(r.sends).toHaveLength(6);
+    expect(r.sends.filter(x => x === other.toString())).toHaveLength(3);
   });
   it('retains the existing scene-change invalidation and confirms a new actual placement', async () => {
     vi.useFakeTimers(); const r = rig(); await failFirst(r);
