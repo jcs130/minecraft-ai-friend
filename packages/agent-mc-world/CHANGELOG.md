@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.44
+
+- Preserve block collision metadata in optimized path searches so explicitly selected Nether portals remain enterable. Task-scoped portal permission no longer mutates the shared search cache.
+- Exercise portal entry, shallow water, raised sills, goal ownership, cancellation and measured dimension changes with the production pathfinder optimization enabled.
+
 ## 0.5.7-rc.160-preview.43
 
 - Route into the selected Nether portal through actual collision and support checks, including raised sills; scope portal-entry permission to the owned route and restore it on cancellation or failure.

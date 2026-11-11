@@ -6,6 +6,10 @@ import { skillTransit } from '../core/skills-container.ts';
 import { methodHarness } from './method-harness.ts';
 import type { SkillContext } from '../core/skill-context.ts';
 import type { TaskReport } from '../core/executor.ts';
+import { installPathfinderPerf } from '../core/pathfinder-perf.ts';
+
+// Production searches use cached block-state projections, not full Block instances.
+installPathfinderPerf();
 
 const rigs: ReturnType<typeof methodHarness>[] = [];
 afterEach(() => { for (const h of rigs.splice(0)) h.close(); vi.useRealTimers(); });
@@ -14,6 +18,10 @@ function rig(cross = true, rotated = false, transitionOnTouch = false, waterAppr
   vi.useFakeTimers();
   const h = methodHarness('1.21.1'); rigs.push(h);
   const bot = h.bot as unknown as Bot;
+  Object.assign(bot.world, {
+    getBlockStateId: (p: Vec3) => bot.blockAt(p)?.stateId ?? 0,
+    getColumn: () => ({}), // The local fixture has a loaded flat world around the gate.
+  });
   Object.assign(bot, { supportFeature: (name: string) => bot.registry.supportFeature(name), isAlive: true,
     getControlState: (key: string) => (h.keys as Record<string, boolean>)[key],
     lookAt: async (p: Vec3) => { const d = p.minus(bot.entity.position); await bot.look(Math.atan2(-d.x, -d.z), 0, true); } });
@@ -112,6 +120,9 @@ it('restores the portal exclusion when cancelled during approach', async () => {
 
 it('returns the actual transit contract when ordinary goto cannot enter an observed portal', async () => {
   const r = rig(), reports: TaskReport[] = [];
+  // This intentionally unreachable search has an unbounded flat fixture world.
+  // Bound each A* pass; the simulated 10-second navigation watchdog is unchanged.
+  r.bot.pathfinder.thinkTimeout = 100;
   Object.assign((r.h.exec as any).opts, { report: (report: TaskReport) => reports.push(report), fleeHealth: () => 0 });
   r.h.exec.submitDetailed([{ skill: 'goto', at: [4, 65, 0], exact: true, walkOnly: true }]);
   await vi.advanceTimersByTimeAsync(26000);

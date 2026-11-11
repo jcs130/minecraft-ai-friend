@@ -2086,7 +2086,11 @@ function allowSelectedPortal(bot: Bot, cells: readonly Cell[], goal: InstanceTyp
     // Retain collision, support, liquid, break and placement rules. Only lift the
     // normal no-portal walking exclusion for the explicitly requested component.
     if (bot.pathfinder.goal === goal && b.name === 'nether_portal' && b.boundingBox === 'empty'
-      && b.position && selected.has(cellKeyOf(b.position))) b.safe = true;
+      && b.position && selected.has(cellKeyOf(b.position))) {
+      // Preserve full Block prototype methods outside the optimized search, and
+      // never write task-scoped permission back into the search's shared cache.
+      return Object.assign(Object.create(Object.getPrototypeOf(b)), b, { safe: true });
+    }
     return b;
   };
   movements.getBlock = scoped;
