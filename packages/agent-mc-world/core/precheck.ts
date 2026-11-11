@@ -176,20 +176,30 @@ export function edibleInBag(bot: Bot): string | null {
   for (const it of bot.inventory.items()) {
     if (it.count > 0 && foods[it.name]) counts.set(it.name, (counts.get(it.name) ?? 0) + it.count);
   }
+  // eat takes exact registry IDs. Recovery feedback must expose those IDs,
+  // otherwise copying our localized observation repeats the same failed call.
+  const label = (name: string): string => zhName(name) === name ? name : `${zhName(name)}(${name})`;
   const parts = counts.size > 0
-    ? [`包里能吃的有:${[...counts].map(([n, c]) => `${zhName(n)}×${c}`).join('、')}`] : [];
+    ? [`包里能吃的有:${[...counts].map(([n, c]) => `${label(n)}×${c}`).join('、')}`] : [];
   const off = offHandItem(bot);
-  if (off && off.count > 0 && foods[off.name]) parts.push(`副手能吃的有:${zhName(off.name)}×${off.count}`);
+  if (off && off.count > 0 && foods[off.name]) parts.push(`副手能吃的有:${label(off.name)}×${off.count}`);
   return parts.length > 0 ? parts.join(';') : null;
 }
 
 /** 未知物品 id 的受阻说明，同时列出背包内词根相同的候选。 */
 export function notFoodText(bot: Bot, item: string): string {
   const known = (bot.registry?.itemsByName ?? {}) as Record<string, unknown>;
+  const foods = (bot.registry?.foodsByName ?? {}) as Record<string, unknown>;
+  const named = known[item] ? [] : [...new Set(itemsInReach(bot)
+    .filter(i => i.count > 0 && (foods[i.name] || DRINKABLES[i.name])
+      && (zhName(i.name) === item || itemCustomName(i) === item))
+    .map(i => i.name))];
   // 物品表没装出来时认不出"这个 id 不存在",退回旧说法:宁可少说不说错
-  const head = Object.keys(known).length === 0 || known[item]
-    ? `${zhName(item)}不是可进食物品`
-    : `没有 ${item} 这样的物品`;
+  const head = named.length > 0
+    ? `eat.item 需要完整物品 ID；当前显示名「${item}」对应 ${named.join('、')}，请按 ID 选择；未使用或替换任何物品`
+    : Object.keys(known).length === 0 || known[item]
+      ? `${zhName(item)}不是可进食物品`
+      : `没有 ${item} 这样的物品`;
   // Similar names are not edible substitutes (wheat -> wheat_seeds caused a
   // repeated failed meal queue). Only offer registry-confirmed carried food.
   const food = edibleInBag(bot);
