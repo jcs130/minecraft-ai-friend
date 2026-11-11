@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-fast-followup-20261111-r1",
+  "state": "isolated-candidate-validated-not-deployed",
+  "sampledAt": "2026-11-11T10:49:59.444703+08:00",
+  "sourceBase": "02f59c6c5fc0e73395d894b30c9bcf9f8866043c",
+  "version": "0.1.24-fast-followup",
+  "candidateSha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
+  "requiredBaselineVersion": "0.1.22-dialogue-once",
+  "requiredBaselineSha256": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+  "deterministicRebuild": true,
+  "preservedJarEntries": 59,
+  "includedMergedSource": [
+    170
+  ],
+  "tests": {
+    "pureRules": 279,
+    "adapterTests": 9,
+    "oldFailureReproductionChecks": 10,
+    "jointNativeChecks": 107,
+    "reports": [
+      {
+        "report": "fast-followup-candidate.json",
+        "checks": 17,
+        "sha256": "6ec09e2691c56f342f1951cb253dd42e9f6b71ffde40c70913d999db45002e1d"
+      },
+      {
+        "report": "conversation-range.json",
+        "checks": 13,
+        "sha256": "78c7373c1fd4a4d90832ef9a6da2793f0fe8ccf41b91edf3008a9e5a84f77b3c"
+      },
+      {
+        "report": "dialogue-once-candidate.json",
+        "checks": 17,
+        "sha256": "f35defed953fe14dd39ac581fd5fdbdf051916f537c6cf586b80abe331629c13"
+      },
+      {
+        "report": "social-after-sgmwbin6eb.json",
+        "checks": 29,
+        "sha256": "645b761fbd5926c34b0ef7a1e665c49f74af88e7a3392d0a27d4b4b21e1284e3"
+      },
+      {
+        "report": "candidate-follow.json",
+        "checks": 14,
+        "sha256": "5997817f13fe78c388bf865d9148b46468772b587c20200c1ecb11f745b07a8c"
+      },
+      {
+        "report": "restart-follow.json",
+        "checks": 17,
+        "sha256": "79c75487474f5d15772878cc56f2ca1ba9f4a69d0eff323b5cf63b137267f304"
+      }
+    ],
+    "restartRestoresNativeRangeBeforeOwnerLogin": true,
+    "humanHearingVerified": false,
+    "originalOwnerMainModelInputVerified": false
+  },
+  "plannedFollowing": {
+    "walkBeyond": 32,
+    "stopWithin": 16,
+    "safeReturnFrom": 64,
+    "originalEntityChanged": false
+  },
+  "publicConversation": {
+    "partnerRange": 24,
+    "visitorRange": 8,
+    "maximumPlayerRequests": 6,
+    "windowSeconds": 30,
+    "privateOwnerChatRange": 16,
+    "asrBoundedByActualAudibility": true
+  },
+  "voice": {
+    "state": "four-original-tlm-chinese-previews-awaiting-owner-choice",
+    "currentFormal": "deepfish-low-warm-20261029",
+    "defaultPreserved": "cormi-F6",
+    "candidates": [
+      "feiyu-tlm-nahida-cn-20261111",
+      "feiyu-tlm-changchun-cn-20261111",
+      "feiyu-tlm-yezi-cn-20261111",
+      "feiyu-tlm-xuanxuan-cn-20261111"
+    ],
+    "formalBindingChanged": false
+  },
+  "productionChanged": false,
+  "newRestartApprovalRequired": true,
+  "rollback": "Restore this batch code/configuration preimages only; retain latest world, original entity and owner identities, inventory, lifecycle, memory and receipts."
+}

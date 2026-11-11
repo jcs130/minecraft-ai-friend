@@ -109,7 +109,13 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     JsonObject registeredMaids(){return records();}
     private final java.util.function.Consumer<MaidTamedEvent> adopted=event->bindOnMain(event.getMaid());
-    private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.EntityJoinLevelEvent> joined=event->{if(!event.getLevel().isClientSide()&&event.getEntity() instanceof EntityMaid maid){local.tlmcompat.numen.MaidVisualRegistry.capture(maid);if(owner(maid)!=null)bindOnMain(maid);}};
+    private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.EntityJoinLevelEvent> joined=event->{if(!event.getLevel().isClientSide()&&event.getEntity() instanceof EntityMaid maid){restoreFollowRange(maid);local.tlmcompat.numen.MaidVisualRegistry.capture(maid);if(owner(maid)!=null)bindOnMain(maid);}};
+    private void restoreFollowRange(EntityMaid maid){
+        // Native restrictRadius is not persisted. Restore before native AI can
+        // teleport a newly loaded companion using the default eight-block radius.
+        try{NativeMaidFollowSupport.applyNativeRange(maid);}
+        catch(IllegalArgumentException invalid){getLogger().fine("Native following profile retained for inspection: "+maid.getUUID());}
+    }
     @Override public void onEnable(){
         try{
             if(!Bukkit.getMinecraftVersion().equals("1.21.1"))throw new IllegalStateException("This native adapter requires 1.21.1");
@@ -137,7 +143,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getServer().getPluginManager().registerEvents(cosmeticsMenu,this);
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(adopted);
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(joined);
-            for(World world:Bukkit.getWorlds())for(var entity:world.getEntities()){EntityMaid maid=nativeMaid(entity);if(maid!=null){local.tlmcompat.numen.MaidVisualRegistry.capture(maid);if(owner(maid)!=null)bindOnMain(maid);}}
+            for(World world:Bukkit.getWorlds())for(var entity:world.getEntities()){EntityMaid maid=nativeMaid(entity);if(maid!=null){restoreFollowRange(maid);local.tlmcompat.numen.MaidVisualRegistry.capture(maid);if(owner(maid)!=null)bindOnMain(maid);}}
             getServer().getScheduler().runTaskTimer(this,local.tlmcompat.numen.MaidVisualRegistry::sampleLoaded,1L,2L);
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
@@ -414,7 +420,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             case "maid_slot_unavailable","slot_full","slot_rejected","player_slot_full","player_inventory_full","item_missing","bad_slot_or_count","bad_transfer","bad_equipment","wrong_armor","binding_curse","player_slot_required","mod_item_requires_native_client"->"用 /qdmaid receipt <maidId> <原requestId> 查状态和原因；rejected 表示此次未转移物品。再 inventory 查最新可用槽及物品，改正后使用新的requestId；unknown 不得重投。";
             case "maid_dead","unloaded"->"/qdmaid list 查看本人女仆真实状态；context <UUID> 查询死亡、遗物位置或未加载原因。";
             case "not_owned","owner_mismatch"->"装备、工作和运行方式由主人管理；附近交谈用 /qdmaid nearby 找真实maidId，再用 chat <maidId> <requestId> <话语>。本人女仆用 list。";
-            case "out_of_range"->"先到同一维度女仆身边（访客8格内），用 /qdmaid nearby 查可见对象；context 仅供主人查询。";
+            case "out_of_range"->"先核对同一维度与实际距离；公开伙伴交谈24格、访客8格，原生本人chat仍16格。用 /qdmaid nearby 查可见对象；context仅供主人查询。";
             case "chat_busy","chat_unresolved"->"她正在处理对话或整理记忆。若是你刚发的一条，用 /qdmaid receipt <UUID> <原requestId> 查询；若是别人发起，稍后再说新话。pending 不是回复。";
             default->"/qdmaid help 查询真实用法。每次写操作保留唯一 requestId；结果不明先 receipt，不重复转移物品。";
         };
@@ -423,7 +429,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         for(String line:List.of(
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
-            "对话：同维度8格内，在附近聊天说「肥鱼，你好」；收到回复后120秒内可直接接话，最多6句。她会在安静同行、场景变化时适度主动聊天；私聊与全服喊话不会唤醒她。公开交谈只聊天；安排工作请右键交谈或用 chat。Agent用 nearby 找真实UUID，chat <UUID> <requestId> <话语>，receipt <UUID> <原requestId> 查结果，pending不是回复。",
+            "对话：同维度伙伴24格、访客8格内，在附近聊天说「肥鱼，你好」；伙伴也可说「拜托啦肥鱼～」。收到回复后120秒内可直接接话，30秒最多6次实际请求，不用每句等5秒。她会在安静同行、场景变化时适度主动聊天；私聊与全服喊话不会唤醒她。公开交谈只聊天；安排工作请右键交谈或用 chat。Agent用 nearby 找真实UUID，chat <UUID> <requestId> <话语>，receipt <UUID> <原requestId> 查结果，pending不是回复。",
             "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
             "随行：肥鱼闲置跟随时，有合适主手武器会保护受敌人攻击的主人，脱战后恢复陪伴；主人传送时，附近的肥鱼尝试跟到安全落点。停留、睡眠及手选工作优先，查 context 的位置与 ownerDistance 确认真正到达。",

@@ -88,6 +88,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
         out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
+        out.addProperty("partnerRangeBlocks",MaidConversationRange.PARTNER);out.addProperty("visitorRangeBlocks",MaidConversationRange.VISITOR);
         out.addProperty("ambientSource",originalClips==null?"native_event_chinese_tts":"original_chinese_recordings");
         out.addProperty("ambientIdleEnabled",false);out.addProperty("ambientMinimumGapSeconds",90);
         out.addProperty("replyCharacterLimit",MaidShortReply.LIMIT);out.addProperty("waitingReply",waiting.peek()!=null);out.addProperty("maximumReplyWaitSeconds",10);
@@ -97,8 +98,8 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private Map<UUID,Stamp> listeners(EntityMaid maid,Set<UUID> allowed){
         Map<UUID,Stamp> result=new HashMap<>();VoicechatServerApi current=api;if(current==null)return result;
-        for(Player p:maid.getBukkitEntity().getLocation().getNearbyPlayers(8)){
-            if(allowed!=null&&!allowed.contains(p.getUniqueId())||!p.canSee(maid.getBukkitEntity()))continue;
+        for(Player p:maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER)){
+            if(allowed!=null&&!allowed.contains(p.getUniqueId())||!p.canSee(maid.getBukkitEntity())||!MaidConversationRange.hears(maid,p))continue;
             var c=current.getConnectionOf(p.getUniqueId());if(c!=null&&c.isInstalled()&&c.isConnected()&&!c.isDisabled())result.put(p.getUniqueId(),new Stamp(p,p.getWorld().getUID()));
         }return result;
     }
@@ -157,7 +158,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void refresh(Job job){
         Set<UUID> ids=new HashSet<>();if(valid(job.maid)&&job.world.equals(job.maid.getBukkitEntity().getWorld().getUID()))for(var entry:job.listeners.entrySet()){
-            Player p=Bukkit.getPlayer(entry.getKey());if(p==entry.getValue().player&&p.isOnline()&&p.getWorld().getUID().equals(job.world)&&p.canSee(job.maid.getBukkitEntity())&&p.getLocation().distanceSquared(job.maid.getBukkitEntity().getLocation())<=64)ids.add(p.getUniqueId());
+            Player p=Bukkit.getPlayer(entry.getKey());if(p==entry.getValue().player&&p.isOnline()&&p.getWorld().getUID().equals(job.world)&&p.canSee(job.maid.getBukkitEntity())&&MaidConversationRange.hears(job.maid,p))ids.add(p.getUniqueId());
         }job.audible=Set.copyOf(ids);
         if(job.spatial!=null&&api!=null&&job.world.equals(job.maid.getBukkitEntity().getWorld().getUID()))job.spatial.updateLocation(api.createPosition(job.maid.getX(),job.maid.getEyeY(),job.maid.getZ()));
     }
@@ -167,7 +168,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         try{
             // Positional packets also play when the client projects or temporarily lacks the native entity UUID.
             job.channel=UUID.randomUUID();var channel=api.createLocationalAudioChannel(job.channel,api.fromServerLevel(job.maid.getBukkitEntity().getWorld()),api.createPosition(job.maid.getX(),job.maid.getEyeY(),job.maid.getZ()));job.spatial=channel;
-            if(channel==null)throw new IllegalStateException("Position channel unavailable");channel.setDistance(8);channel.setFilter(p->job.audible.contains(p.getUuid()));
+            if(channel==null)throw new IllegalStateException("Position channel unavailable");channel.setDistance(MaidConversationRange.PARTNER);channel.setFilter(p->job.audible.contains(p.getUuid()));
             job.encoder=api.createEncoder();job.player=api.createAudioPlayer(channel,job.encoder,()->{
                 if(job.cancelled||job.audible.isEmpty())return null;
                 if(job.offset>=pcm.length){job.exhausted=true;return null;}short[] frame=new short[960];int n=Math.min(960,pcm.length-job.offset);System.arraycopy(pcm,job.offset,frame,0,n);job.offset+=n;return frame;
@@ -193,7 +194,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         if(!MaidAmbientPolicy.matchesScene(sound,maid.getTask().getUid().toString(),fighting,maid.hurtTime>0,maid.isSleeping()||maid.isMaidInSittingPose(),world.getTime()%24000,world.hasStorm(),maid.level().canSeeSky(maid.blockPosition())))return;
         double frequency=maid.getConfigManager().getSoundFreq()*com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig.GLOBAL_MAID_SOUND_FREQUENCY.get()/100.0;
         if(frequency<=0||frequency<1&&maid.getRandom().nextDouble()>frequency)return;
-        List<Player> audience=maid.getBukkitEntity().getLocation().getNearbyPlayers(8).stream().filter(p->p.isOnline()&&!p.isDead()&&p.getGameMode()!=org.bukkit.GameMode.SPECTATOR&&p.canSee(maid.getBukkitEntity())).toList();
+        List<Player> audience=maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER).stream().filter(p->p.isOnline()&&!p.isDead()&&p.getGameMode()!=org.bukkit.GameMode.SPECTATOR&&p.canSee(maid.getBukkitEntity())&&MaidConversationRange.hears(maid,p)).toList();
         MaidVoiceClips.Clip original=originalClips==null?null:originalClips.next(sound);
         if(originalClips!=null&&original==null)return; // Curated pack omissions stay quiet, never invent a fallback line.
         String text=ambientPolicy.choose(sound,System.nanoTime(),!audience.isEmpty());if(text==null)return;

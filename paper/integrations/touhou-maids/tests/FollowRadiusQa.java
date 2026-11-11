@@ -17,6 +17,13 @@ public final class FollowRadiusQa extends JavaPlugin {
             JsonObject out=new JsonObject();out.addProperty("restrictRadius",maid.getRestrictRadius());
             out.addProperty("home",maid.isHomeModeEnable());out.addProperty("sitting",maid.isMaidInSittingPose());
             out.addProperty("uuid",maid.getUUID().toString());
+            out.addProperty("x",maid.getX());out.addProperty("y",maid.getY());out.addProperty("z",maid.getZ());
+            var walk=maid.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+            if(walk.isPresent()){
+                var t=walk.get().getTarget();out.addProperty("targetKind",t.getClass().getSimpleName());
+                out.addProperty("targetPosition",t.currentPosition().toString());out.addProperty("closeEnough",walk.get().getCloseEnoughDist());
+                if(t instanceof net.minecraft.world.entity.ai.behavior.EntityTracker tracker)out.addProperty("targetEntity",tracker.getEntity().getUUID().toString());
+            }
             sender.sendMessage("FOLLOW_QA "+out);return true;
         });
     }

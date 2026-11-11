@@ -18,11 +18,13 @@ function counts(at){return Object.fromEntries(bots.map((b,i)=>[b.username,b.line
 async function publicTurn(actor){const at=offsets(),start=actor.replies.length;actor.chat('隔离肥鱼，测试一次消息显示。');await until(()=>actor.replies.slice(start).some(r=>r.action==='chat-result'&&r.data?.status==='replied'),'public receipt');await delay(1500);return {at,count:counts(at),receipt:actor.replies.slice(start).find(r=>r.action==='chat-result'&&r.data?.status==='replied')};}
 try{
  await new Promise(resolve=>model.listen(19088,'127.0.0.1',resolve));
- check('expected candidate is loaded',(await rc('version QiandengjiMaidBridge')).includes(baseline?'0.1.21-short-dialogue':'0.1.22-dialogue-once'));
+ check('expected candidate is loaded',(await rc('version QiandengjiMaidBridge')).includes(baseline?'0.1.21-short-dialogue':process.env.MAID_SOCIAL_QA_VERSION||'0.1.22-dialogue-once'));
  const owner=await connect(fixture.username),guest=await connect('MaidVisitorQA'),eye=await connect('MaidEyeQA'),extra=await connect('MaidGuestEyeQA');subscribe(owner);subscribe(guest);
  await rc('minecraft:fill 294 89 294 310 89 310 minecraft:stone');await rc('minecraft:time set 1000');
- for(const b of [owner,guest]){await rc('minecraft:gamemode survival '+b.username);await rc('minecraft:tp '+b.username+' 300.5 90 300.5');await rc('minecraft:effect give '+b.username+' minecraft:resistance infinite 4 true');}
- await rc('minecraft:tp '+fixture.maid+' 302.5 90 300.5');await rc('speechqa quiet '+fixture.maid);owner.chat(`/qdmaid follow ${fixture.maid} ${run}_follow`);await delay(1600);
+ for(const b of [owner,guest]){await rc('minecraft:gamemode survival '+b.username);await rc('execute in minecraft:overworld run minecraft:tp '+b.username+' 300.5 90 300.5');await rc('minecraft:effect give '+b.username+' minecraft:resistance infinite 4 true');}
+ for(const b of [eye,extra])await rc('execute in minecraft:overworld run minecraft:tp '+b.username+' 300.5 90 300.5');
+ await rc('execute in minecraft:overworld run minecraft:tp '+fixture.maid+' 302.5 90 300.5');await rc('speechqa quiet '+fixture.maid);owner.chat(`/qdmaid follow ${fixture.maid} ${run}_follow`);await delay(1600);
+ for(const b of [owner,guest,eye,extra])assert((await rc('minecraft:data get entity '+b.username+' Dimension')).includes('minecraft:overworld'),'test connection must be in overworld: '+b.username);
  await until(()=>eye.cameras.includes(owner.entity.id)&&extra.cameras.includes(guest.entity.id),'both actual Eye routes attached');
  check('real primary and additional Eye are attached',eye.cameras.includes(owner.entity.id)&&extra.cameras.includes(guest.entity.id));
  const first=await publicTurn(owner);report.ownerPublic=first.count;

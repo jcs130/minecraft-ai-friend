@@ -58,7 +58,7 @@ try{
    check('nearby owner receives actual selected-native-model initiative',first.ok&&first.data.status==='replied'&&first.data.observation.initiatedBy==='maid');
    check('initiative has no game action tools',!requests[0].tools?.length);
    const prompt=JSON.stringify(requests[0].messages);
-   check('scene is attributed to observation instead of fabricated player speech',prompt.includes('不是可米说的话')&&prompt.includes('相距8格内'));
+   check('scene is attributed to observation instead of fabricated player speech',prompt.includes('不是可米说的话')&&/相距(?:8|24)格内/.test(prompt));
    check('only the original selected model is used',requests[0].model==='qa-native');
    check('nearby bystander receives public companion speech',guest.lines.some(x=>x.s.startsWith('[附近·女仆] 隔离肥鱼：')));
    check('server does not fabricate an owner chat line',!owner.lines.some(x=>x.s.includes('MaidBrainQA →')&&x.s.includes('当前观察')));
@@ -92,7 +92,8 @@ try{
    let humanAt=other.lines.length;other.chat(`/qdmaid say ${fixture.maid}`);await delay(1100);
    check('empty human input gives a concise Chinese usage hint',other.lines.slice(humanAt).some(r=>r.s.includes('请输入 1–140 字'))&&!other.lines.slice(humanAt).some(r=>r.s.startsWith('QD_MAID ')));
    await rc(`minecraft:tp ${other.username} 330 90 300`);humanAt=other.lines.length;other.chat(`/qdmaid say ${fixture.maid} 你好`);await delay(1100);
-   check('distant human receives Chinese distance and discovery guidance',other.lines.slice(humanAt).some(r=>r.s.includes('8格内')&&r.s.includes('nearby'))&&!other.lines.slice(humanAt).some(r=>r.s.includes('Approach the NPC')));
+   report.humanDistanceGuidance=other.lines.slice(humanAt).map(r=>r.s);
+   check('distant human receives Chinese distance and discovery guidance',report.humanDistanceGuidance.some(s=>/访客8格(?:内)?/.test(s)&&s.includes('nearby'))&&!report.humanDistanceGuidance.some(s=>s.includes('Approach the NPC')));
    await rc(`minecraft:tp ${other.username} 300.5 90 300.5`);humanAt=other.lines.length;other.chat(`/qdmaid result ${fixture.maid} missing-result`);await delay(1100);
    check('unowned receipt gives a readable management boundary',other.lines.slice(humanAt).some(r=>r.s.includes('由主人管理'))&&!other.lines.slice(humanAt).some(r=>r.s.startsWith('QD_MAID ')));
    check('brain catalogue is available on plugin transport',(await ask(owner,'brain','',run+'_brain',fixture.maid,true)).data.selected==='native');
