@@ -5,13 +5,23 @@ export interface SupervisorEventView {
   protocol: 'event-context-view/v1';
   originalSha256: string;
   supervisor: string;
+  /** Explicit opt-in for routine read notifications; absent means workers keep the original. */
+  worker?: string;
 }
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 
 /** Producers opt in only for routine detail. Never use this to summarize unknown outcomes or human input. */
-export function supervisorEventView(original: string, supervisor: string): SupervisorEventView {
+export function supervisorEventView(original: string, supervisor: string, worker?: string): SupervisorEventView {
   if (!supervisor.trim() || supervisor.length > 2000) throw new RangeError('Supervisor view must contain 1–2000 characters');
-  return { protocol: 'event-context-view/v1', originalSha256: hash(original), supervisor };
+  if (worker !== undefined && (!worker.trim() || worker.length > 2000)) throw new RangeError('Worker view must contain 1–2000 characters');
+  return { protocol: 'event-context-view/v1', originalSha256: hash(original), supervisor, ...(worker !== undefined ? {worker} : {}) };
+}
+
+/** Workers never inherit a supervisor-only summary. The producer must opt in separately. */
+export function readWorkerEventView(original: string, value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const view = value as Partial<SupervisorEventView>;
+  return typeof view.worker === 'string' ? readSupervisorEventView(original, {...view, supervisor:view.worker}) : null;
 }
 
 /** A missing, malformed or mismatched view preserves the full original, including after upgrades. */

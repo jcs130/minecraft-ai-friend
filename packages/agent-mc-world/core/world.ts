@@ -46,7 +46,8 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
-import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, type ServerQueryDefinition } from './server-query.ts';
+import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
+import { supervisorEventView } from '../src/client/event-context.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -4636,8 +4637,10 @@ export class MinecraftWorld implements World {
   /** Explicit server capabilities, never inferred from command keywords. */
   protected serverQueryDefinitions(): readonly ServerQueryDefinition[] { return []; }
   protected readonly serverQueries = new ServerQueryLane({ onTerminal: outcome => {
+    const notice=serverQueryContextNotice(outcome.data);
     this.emit('minecraft.event', outcome.text, false,
-      { trigger: outcome.data?.phase === 'cancelled' ? 'piggyback' : 'debounce', meta: { serverQuery: outcome.data } });
+      { trigger: outcome.data?.phase === 'cancelled' ? 'piggyback' : 'debounce', meta: { serverQuery: outcome.data,
+        ...(notice ? {requestContext:supervisorEventView(outcome.text,notice,notice)} : {}) } });
   } });
   private serverQueryMessageSequence = 0;
 
@@ -7768,7 +7771,9 @@ export class MinecraftWorld implements World {
         if (matchedChatMessages.has(jsonMsg)) return;
         const text = jsonMsg.toString().trim();
         if (!text) return;
-        if (unchangedQueryFeedback) return;
+        // Matched multipart rows and terminal replies already belong to the
+        // independent query ledger. Do not broadcast them again as human chat.
+        if (independentQueryReply || unchangedQueryFeedback) return;
         const privateMessage = key === 'commands.message.display.incoming' || !!incomingPrivateParts(jsonMsg, bot.registry);
         if (key === 'commands.message.display.outgoing') {
           this.emit('minecraft.chat', `[MC 私聊发出] ${text}`, false,
