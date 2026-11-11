@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-fast-followup-yezi-release-20261111-r1",
+  "state": "deployed-component-runtime-verified",
+  "deployedAt": "2026-11-11T11:39:51.5419602+08:00",
+  "verifiedAt": "2026-11-11T11:42:03.4652933+08:00",
+  "codePullRequests": [
+    170,
+    172
+  ],
+  "codeHead": "86c4a4684ee1f0ab343e6901d8b636521e7962d2",
+  "mergedMain": "5c9839e8c4b4390ab86e3701eb9f0fc33dd960fc",
+  "sourceTree": "171a92bde14b078b1b9600a15551576f080f8668",
+  "ci": {
+    "runId": 42948810130,
+    "successfulJobs": 6
+  },
+  "installedFiles": [
+    {
+      "target": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "0ceb98805025155d89f13788bf67ecfb9385c228b899f5a821d09d02f49690c1",
+      "sha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da"
+    },
+    {
+      "target": "E:\\MC\\server\\plugins\\QiandengjiMaidBridge\\companion-speech.json",
+      "before": "94b81fd06d4b539896e149e27457a695da479c5998f51f617490d613d694e5ab",
+      "sha256": "83835f55b7b1cd75dbe943aba332d589e3da59c39afbd0b361344e4ef0aa39e6"
+    }
+  ],
+  "components": [
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.24-fast-followup",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
+      "sourceCommit": "86c4a4684ee1f0ab343e6901d8b636521e7962d2",
+      "processId": 39908,
+      "processStartedAt": "2026-11-11T03:36:20.9118911Z",
+      "verifiedAt": "2026-11-11T11:42:03.4652933+08:00",
+      "manifest": "paper/manifests/maid-fast-followup-deployed-20261111.json",
+      "codeChangedThisBatch": true
+    }
+  ],
+  "voice": {
+    "label": "Yezi（秋夕 Mua）",
+    "id": "feiyu-tlm-yezi-cn-20261111",
+    "registered": true,
+    "mediaSynthesisVerified": true,
+    "humanHearingVerified": false
+  },
+  "conversation": {
+    "partnerBlocks": 24,
+    "visitorBlocks": 8,
+    "allowImmediateFollowup": true
+  },
+  "follow": {
+    "profile": {
+      "schemaVersion": 1,
+      "walkDistance": 32,
+      "stopDistance": 16,
+      "returnDistance": 64
+    },
+    "originalCompanionVerified": true,
+    "worldSaveAcknowledged": true
+  },
+  "verification": {
+    "startupChecks": 17,
+    "gameRestored": true,
+    "coldCopiesVerified": 2,
+    "originalCredentialsVerified": 80,
+    "characterFilesVerifiedDuringInstall": 8482,
+    "nativeCameraReady": true,
+    "goddessJobsRestored": 7,
+    "originalClientAutonomousInteractionVerified": false
+  },
+  "rollback": {
+    "codeAndVoicePreimagesVerified": true,
+    "preserveCurrentWorld": true,
+    "followRestoreRequiresExactAfterImage": true
+  }
+}
