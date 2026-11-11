@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "appliedAt": "2026-11-10T15:52:52.748Z",
+  "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+  "modelId": "大肥鱼.ysm",
+  "texture": "texture",
+  "sourceBytes": 1481332,
+  "sourceSha256": "43a3484fe0e534f5ac0edd31bd51630c992fad000e0c6bc7e820abe400aaa438",
+  "nativeVersion": "2.6.5",
+  "nativeJarSha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
+  "changedFields": ["YsmModelId", "YsmModelTexture"],
+  "protectedFieldOrAbsenceChecks": 20,
+  "protectedFieldDifferences": [],
+  "previousModelRetained": true,
+  "sourceUnmodified": true,
+  "nativeLoaderCatalogConfirmed": true,
+  "isolatedSavedSelectionConfirmed": true,
+  "formalEntitySelectionReadBack": true,
+  "gameRestarted": false,
+  "nativePixelAcceptance": false,
+  "matchingWebBedrockSourceProvided": false,
+  "encryptedAssetInPublicRepository": false
+}
