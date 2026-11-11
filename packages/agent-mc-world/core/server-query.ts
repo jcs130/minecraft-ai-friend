@@ -113,6 +113,17 @@ export const SERVER_QUERY_TOOL = {
   },
 } satisfies Omit<ToolDef, 'handler'>;
 
+/** Full replies remain in the query receipt and event ledger. Broadcast only a source-bound
+ * lookup notice to other readers; failures/incomplete reads keep their full diagnostics. */
+export function serverQueryContextNotice(data: Record<string, unknown> | undefined): string | null {
+  const reply=data?.reply as {ok?:boolean;dataTruncated?:boolean}|undefined;
+  if(data?.phase!=='replied'||data.outcomeUnknown!==false||reply?.ok!==true||reply.dataTruncated)return null;
+  const notice=JSON.stringify({source:'server-query-notice',requestId:data.requestId,query:data.query,
+    arguments:data.arguments,phase:data.phase,observedAt:data.endedAt,requestNonce:false,goal_completed:false,
+    detail:'Full result belongs to the original query receipt. Read the same requestId through the World query tool if relevant; do not send a new query. This notice is not current inventory or goal completion.'});
+  return notice.length<=2000?notice:null;
+}
+
 const TIMEOUT_MS = 5000;
 const REUSE_MS = 5000;
 const HISTORY_LIMIT = 32;

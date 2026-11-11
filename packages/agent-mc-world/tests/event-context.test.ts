@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {readSupervisorEventView, supervisorEventView, tacticSupervisorView} from '../src/context.ts';
+import {readSupervisorEventView, readWorkerEventView, supervisorEventView, tacticSupervisorView} from '../src/context.ts';
 describe('source-owned event context',()=>{
   it('binds an optional shorter view to the exact original, leaving source data intact',()=>{
     const original=JSON.stringify({id:1,details:'x'.repeat(2000)}), view=supervisorEventView(original,'accepted; outcome pending');
@@ -12,6 +12,14 @@ describe('source-owned event context',()=>{
   it('preserves failed and unknown tactical choices and their errors',()=>{
     for(const receipt of [{accepted:false,error:'blocked'},{accepted:null},{accepted:true,error:'uncertain'}])
       expect(tacticSupervisorView(receipt)).toBeNull();
+  });
+  it('requires separate worker opt-in and exact text binding',()=>{
+    const original='Original detail '.repeat(100);
+    expect(readWorkerEventView(original,supervisorEventView(original,'owner summary'))).toBeNull();
+    const view=supervisorEventView(original,'owner summary','worker lookup notice');
+    expect(readWorkerEventView(original,view)).toBe('worker lookup notice');
+    expect(readWorkerEventView(original+' changed',view)).toBeNull();
+    expect(readWorkerEventView(original,{...view,worker:42})).toBeNull();
   });
   it('retains native identities, time, method and the non-completion boundary',()=>{
     const receipt={id:4,at:'2026-11-06T10:00:00Z',accepted:true,candidate:{kind:'method',targetId:3,source:'x'.repeat(2000)},
