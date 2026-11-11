@@ -1,4 +1,5 @@
 import { observationView } from './perception-sight.ts';
+import { registryTargetName } from './registry-target.ts';
 import { observedEntityLabel } from './entity-identity.ts';
 /**
  * 找东西与拿东西:collect、find、fish、trade、probe。
@@ -166,6 +167,7 @@ export async function skillCollect(
   exact?: Cell,
 ): Promise<string> {
   if (exact && count !== 1) throw new SkillBlocked('精确采集一次只处理一个指定格');
+  block = registryTargetName(bot, block);
   if (/^stripped_.*_log$/.test(block)) {
     throw new SkillBlocked('去皮原木是加工过的建筑材料，不能作为自动采木目标；请找天然未去皮原木。若是明确拆除建筑，改用精确坐标的挖掘操作');
   }
@@ -576,6 +578,7 @@ export function rememberFindHit(ctx: SkillContext, target: string, hit: ExploreH
 
 /** A drop-index hit observes a source block, never a quantity of its possible loot. */
 export function findBlockObservation(bot: Bot, target: string, actualName: string): { what: string; sourceItem?: string } {
+  target = registryTargetName(bot, target);
   const exact = !!bot.registry.blocksByName[target];
   const direct = actualName === target || (!exact && (actualName.endsWith(`_${target}`) || actualName.startsWith(`${target}_`)));
   return direct ? { what: zhName(actualName) } : {
@@ -590,12 +593,13 @@ export function findObservedSummary(hits: ExploreHit[], targetName: string): str
 
 /** target 是不是实体类型 id(sheep、cow、zombie);玩家不算,找玩家有 goto_player */
 export function matchEntityName(bot: Bot, name: string): string | null {
-  const n = name.toLowerCase();
+  const n = registryTargetName(bot, name.toLowerCase());
   const entities = (bot.registry as unknown as { entitiesByName?: Record<string, unknown> }).entitiesByName;
   return entities?.[n] ? n : null;
 }
 
 export function resolveFindTarget(bot: Bot, target: string): { ids: number[]; entityName: string | null } {
+  target = registryTargetName(bot, target);
   const entity = matchEntityName(bot, target);
   // zombie_head / skeleton_skull 之类方块不能把精确实体名抢走；
   // 若本身也是精确方块名，仍按方块找，避免改变 find tnt 的含义。
@@ -628,6 +632,7 @@ export async function skillFind(
   /** 行军途中的早停名单:路上碰到这里头任何一样就正常收束(站着扫用不上) */
   until?: readonly string[],
 ): Promise<string> {
+  target = registryTargetName(bot, target);
   const { ids, entityName } = resolveFindTarget(bot, target);
   if (ids.length === 0 && entityName === null) {
     throw new SkillBlocked(categoryScopeText(target) ?? `不认识「${target.slice(0, 80)}」这种方块或实体；用 mc_help {skills:["find"]} 核对 target，用 mc_knowledge {action:"search",kind:"block",query:"log"} 查询方块英文 ID；实体请用当前连接的具体实体 ID（如 zombie），不支持 hostile/tree 类别`);
