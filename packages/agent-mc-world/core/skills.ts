@@ -1235,7 +1235,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'transit',
     doc: `{"skill":"transit","at":[-228,73,58]}          穿过这一格的传送门:nether_portal、end_portal(框中间地面那层)、
-                                                 end_gateway(末地外岛的折跃门)。会先走到门边,再明确踏进门里,
+                                                 end_gateway(末地外岛的折跃门)。下界门按实际门洞寻路进入（含门槛跳跃），不是只走到门边；其他门靠近后踏入，
                                                  等维度(折跃门是落点)切换后才算完成。普通寻路永远绕开这三种门。goto 只到门边，use 只右键；穿门后重新核对当前维度和落点`,
     fields: [
       {

@@ -6,6 +6,7 @@ import { MINECRAFT_DEFAULTS } from '../core/config.ts';
 import type { ServerQueryDefinition } from '../core/server-query.ts';
 import type { ToolCallContext, ToolOutcome } from '../core/support/host-contract.ts';
 import { methodHarness } from './method-harness.ts';
+import {readWorkerEventView,readSupervisorEventView} from '../src/context.ts';
 
 const accessDenied = 'MC_LAND_ACCESS {"status":"deny","allowed":false,"reason":"land_permission_denied","action":"place","dimension":"minecraft:overworld","x":4,"y":64,"z":0}';
 const accessDeniedText = 'CHECK 你不能破坏这里的方块';
@@ -16,7 +17,10 @@ class QueryWorld extends MinecraftWorld {
       matchReply:(text,_args,username)=>text===`STATE ${username}` || text===`STATE ${username} 还需 9 秒`
         ?{data:{owner:username},ok:true}:null },
       { id:'access',description:'Read-only fixture permission query',command:args=>args.length===0?'/fixture query-access':null,
-        matchReply:text=>text===accessDenied || text===accessDeniedText ? {ok:false}:null }];
+        matchReply:text=>text===accessDenied || text===accessDeniedText ? {ok:false}:null },
+      {id:'page',description:'Multipart fixture',command:()=>'/fixture page',maxReplyParts:54,
+        matchReply:(text,_args,_user,parts=[])=>text.startsWith('ROW ')?{partial:true,data:{item:text.slice(4)}}:
+          text===`END ${parts.length}`?{ok:true,data:{items:parts,pendingRewards:null,scope:'requested_page_only'}}:null}];
   }
   clearQueries() { this.serverQueries.reset('fixture connection lost'); }
 }
@@ -51,10 +55,36 @@ describe('independent server query through the public World tool',()=>{
       await until(()=>r.bot.entity.position.x>x+.2);
     } finally {clearTimeout(reply);}
   });
+  it('keeps correlated query rows in the receipt without broadcasting them as ordinary chat',async()=>{
+    const r=rig();
+    const read=call(r,{query:'self'});
+    r.bot.emit('message',{toString:()=> 'STATE Fixture'},'system');
+    const result=await read;
+    expect(result.data).toMatchObject({phase:'replied',reply:{data:{owner:'Fixture'}}});
+    expect(r.host.events.filter(e=>e.type==='minecraft.chat'&&e.text.includes('STATE Fixture'))).toEqual([]);
+    r.bot.emit('message',{toString:()=> 'Unrelated server notice'},'system');await Promise.resolve();
+    expect(r.host.events.some(e=>e.type==='minecraft.chat'&&e.text.includes('Unrelated server notice'))).toBe(true);
+  });
+  it('delivers a multipart result once, with a bounded broadcast and full original lookup',async()=>{
+    const r=rig(),read=call(r,{query:'page'});
+    for(let i=0;i<54;i++)r.bot.emit('message',{toString:()=>`ROW item-${i}`},'system');
+    r.bot.emit('message',{toString:()=> 'END 54'},'system');
+    const result=await read;
+    expect((result.data!.reply as any).data).toMatchObject({pendingRewards:null,scope:'requested_page_only',items:expect.any(Array)});
+    expect((result.data!.reply as any).data.items).toHaveLength(54);
+    expect(r.host.events.filter(e=>e.type==='minecraft.chat')).toEqual([]);
+    const terminal=r.host.events.find(e=>e.meta?.serverQuery)!;
+    const view=readWorkerEventView(terminal.text,terminal.meta?.requestContext)!;
+    expect(view).toBe(readSupervisorEventView(terminal.text,terminal.meta?.requestContext));
+    expect(view.length).toBeLessThan(800);expect(view).not.toContain('item-53');
+    expect(JSON.parse(view)).toMatchObject({requestId:result.data!.requestId,query:'page',phase:'replied',goal_completed:false,requestNonce:false});
+    expect((await call(r,{requestId:result.data!.requestId})).data).toEqual(result.data);
+    expect((terminal.meta!.serverQuery as any).reply.data.items).toHaveLength(54);
+  });
   it('uses the configured query IDs in the mounted tool schema without adding an execution barrier', () => {
     const r = rig();
     const tool = r.world.tools().find(tool => tool.name === 'mc_query')!;
-    expect(tool.parameters.properties).toMatchObject({ query: { enum: ['self', 'access'] } });
+    expect(tool.parameters.properties).toMatchObject({ query: { enum: ['self', 'access','page'] } });
     expect(tool.barrierAfter).not.toBe(true);
     expect(tool.endsTurn).not.toBe(true);
     expect(r.said).toEqual([]);
@@ -159,6 +189,7 @@ describe('independent server query through the public World tool',()=>{
     const index=r.host.events.findIndex(e=>(e.meta?.serverQuery as Record<string,unknown> | undefined)?.requestId===requestId);
     expect(index).toBeGreaterThanOrEqual(0);
     expect(r.host.events[index].meta?.serverQuery).toMatchObject({phase,goal_completed:false});
+    if(phase!=='replied')expect(r.host.events[index].meta?.requestContext).toBeUndefined();
     expect(r.host.pushOpts[index]?.trigger).toBe(phase==='cancelled'?'piggyback':'debounce');
     await read({requestId});
     if(phase!=='cancelled')await read({query:'self'});

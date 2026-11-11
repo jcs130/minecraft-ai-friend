@@ -421,6 +421,9 @@ export function installPathfinderPerf(log?: Logger): void {
       name: tables.names[type],
       position: vec,
       shapes: tables.shapes[stateId],
+      // Keep the collision contract of Movements.getBlock during cached searches.
+      // Transit checks this independently of `safe` to enter only its selected gate.
+      boundingBox: tables.bbEmpty[stateId] === 1 ? 'empty' : 'block',
       climbable,
       safe: (tables.bbEmpty[stateId] === 1 || climbable || (tb & BIT_CARPET) !== 0) && (tb & BIT_AVOID) === 0,
       physical,

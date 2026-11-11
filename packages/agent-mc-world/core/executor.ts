@@ -223,7 +223,7 @@ import {
 import { skillOrganize } from './skills-organize.ts';
 import {
   LAPIS, protectedTossItem, reacquiredTossNote, skillBrew, skillCompact, skillEnchant, skillPickup, skillSmelt, skillStow, skillTake, skillToss,
-  skillTransit,
+  skillTransit, PORTAL_BLOCKS,
 } from './skills-container.ts';
 import {
   hasDryFooting, skillBuild, skillBuildBlueprint, skillSurfaceLand, stableDryFooting,
@@ -711,6 +711,11 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       // Horizontal goals have no destination height. The current feet Y is only
       // a diagnostic reference; unloaded destination columns do not prevent travel.
       const target = call.groundY ? { ...resolved, y: feetOf(bot).y } : resolved;
+      const portalKind = !call.groundY ? blockAtCell(bot, target)?.name : undefined;
+      const portalNote = portalKind && PORTAL_BLOCKS.has(portalKind)
+        ? `目标格实读为${zhName(portalKind)}；goto 只负责普通走路并避开传送面，不证明穿门。`
+          + `需要穿过时使用 {"skill":"transit","at":[${target.x},${target.y},${target.z}]}，以实际维度或折跃落点变化验收；无需用定时前进替代。`
+        : null;
       const finalGoal = gotoArrivalGoal(call, target);
       const travelContext: SkillContext = call.walkOnly && ctx.probeRoutes ? {
         ...ctx, probeRoutes: (at, goal) => ctx.probeRoutes!(at, goal, ['walk'])?.filter((route) => route.profile === 'walk') ?? null,
@@ -723,7 +728,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           ? Math.hypot(me.x - target.x, me.z - target.z)
           : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
         const waterNote = underwaterRouteNote(bot, target, finalGoal);
-        return [waterNote, renderRouteMenu(probes, target, {
+        return [portalNote, waterNote, renderRouteMenu(probes, target, {
           startDist, diag: call.groundY || waterNote ? null : ctx.probeTarget?.(target, call.exact ? {exact:true} : undefined) ?? null,
         })].filter(Boolean).join('\n');
       }
@@ -812,7 +817,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
         // 长途失败只试算当前短段，避免再次用远处终点耗尽寻路预算。
         throw withRouteScene(
           bot, travelContext, err, sceneTarget,
-          [...digBackoffScene(ctx, startedAt), ...(note ? [note] : []),
+          [...digBackoffScene(ctx, startedAt), ...(portalNote ? [portalNote] : []), ...(note ? [note] : []),
             ...(sceneTarget !== target ? [
               `长途最终目标 ${cellText(target)}，这一段先去 ${cellText(sceneTarget)}`,
               "本次受阻发生在途中，尚未核实最终目标的落脚条件",
@@ -827,7 +832,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const footing = water ? ';仍在水中，未确认登岸' : '';
       const route = configuredLegs === 0 ? ';沿现有通路到达，未挖掘或垫脚'
         : ';部分路段根据完整路线试算或现有通路失败，按配置允许的挖掘/垫脚能力继续；不代表这些动作实际发生';
-      return `到了 ${cellText(actual)}${arrival}${footing}${route}${note ? `。\n${note}` : ''}`;
+      return `到了 ${cellText(actual)}${arrival}${footing}${route}${note ? `。\n${note}` : ''}${portalNote ? `。\n${portalNote}` : ''}`;
     }
     case 'swim': {
       if(call.dimension && normalizeDimension(dimensionOf(bot))!==normalizeDimension(call.dimension))throw new SkillBlocked('swim 维度不符，先穿门再重新观察');
