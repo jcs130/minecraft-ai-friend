@@ -29,11 +29,11 @@ const require = createRequire(createRequire(import.meta.url).resolve('mineflayer
 const registry = require('prismarine-registry')('1.20.6');
 const Block = require('prismarine-block')(registry);
 
-function rig(cells: Array<[number, number, number]>, pickup = true, failAt = -1) {
+function rig(cells: Array<[number, number, number]>, pickup = true, failAt = -1, age = 7) {
   const world = new Map<string, any>();
   const item = { name: 'carrot', type: registry.itemsByName.carrot.id, count: 1 };
   const set = (at: Vec3, name: string) => {
-    const b = Block.fromProperties(registry.blocksByName[name].id, name === 'carrots' ? { age: 7 } : {});
+    const b = Block.fromProperties(registry.blocksByName[name].id, name === 'carrots' ? { age } : {});
     b.position = at; world.set(at.toString(), b); return b;
   };
   const air = set(new Vec3(0, 0, 0), 'air');
@@ -58,15 +58,20 @@ function rig(cells: Array<[number, number, number]>, pickup = true, failAt = -1)
 
 afterEach(() => vi.useRealTimers());
 describe('crop collection retains original executed cells', () => {
-  it('keeps both heights at the same XZ, separate from the player feet and inventory gains', async () => {
+  it.each(['carrots', 'minecraft:carrots'])('keeps executed cells and produce counts for %s', async target => {
     const r = rig([[-6, 64, -4], [-6, 65, -4]]);
-    const receipt = await skillCollect(r.bot, 'carrots', 2, r.ctx);
+    const receipt = await skillCollect(r.bot, target, 2, r.ctx);
     expect(receipt).toContain('实际入包 6 个');
     expect(receipt).toContain('carrots@(-6,64,-4)、carrots@(-6,65,-4)');
     expect(receipt).toContain('不代表当前为空');
     expect(receipt).toContain('不证明服务端委托计数');
     expect(r.write.mock.calls.map(c => c[0].data.at)).toEqual([{ x: -6, y: 64, z: -4 }, { x: -6, y: 65, z: -4 }]);
     expect(r.write.mock.calls.every(c => c[0].taskId === 7)).toBe(true);
+  });
+  it('does not harvest immature crops through a namespaced ID', async () => {
+    const r = rig([[1, 64, 0]], true, -1, 0);
+    await expect(skillCollect(r.bot, 'minecraft:carrots', 1, r.ctx)).rejects.toBeInstanceOf(SkillBlocked);
+    expect(r.bot.dig).not.toHaveBeenCalled();
   });
   it('retains a confirmed harvested cell even when no drop enters the inventory', async () => {
     vi.useFakeTimers(); const r = rig([[1, 64, 0]], false);

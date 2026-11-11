@@ -22,6 +22,7 @@ import { cancelControlInput, waterControlActive } from './skills-control.ts';
 import { groundPathIssueOf } from './path-waypoints.ts';
 import { corridorSafe } from './idle-actions.ts';
 import { onConnectionEnd } from './connection-end.ts';
+import { registryTargetName } from './registry-target.ts';
 import { navigationInteractionFailureOf } from './hand-interaction.ts';
 import { installNavigationBoundaryGuard, navigationBoundaryFailureOf } from './navigation-boundary.ts';
 
@@ -1145,6 +1146,7 @@ export function findEntity(
  * 掉落物反查处理 cobblestone 等物品名与来源方块名不一致的情况。
  */
 export function matchBlockIds(bot: Bot, name: string): number[] {
+  name = registryTargetName(bot, name);
   const byName = bot.registry.blocksByName as Record<string, { id: number; name: string; drops?: unknown[] }>;
   const ids = new Set<number>();
   if (byName[name]) ids.add(byName[name].id);
