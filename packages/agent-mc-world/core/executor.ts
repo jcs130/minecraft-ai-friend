@@ -751,9 +751,26 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           }
           if (!walk) configuredLegs += 1;
           const planning = { ...travelContext, probeRoutes: () => probes };
-          note = routeNote(bot, planning, at, diagnoseTarget ? undefined : goal);
+          try {
+            note = routeNote(bot, planning, at, diagnoseTarget ? undefined : goal);
+          } catch (error) {
+            // The preferred walking probe can time out at a landing which needs
+            // digging/support. Its static rejection must not hide a complete
+            // route under the caller's already configured movement abilities.
+            // An incomplete search alone still never grants a terrain fallback.
+            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)) throw error;
+            const configured = travelContext.probeRoutes?.(at, goal);
+            if (!configured?.some(p => p.profile === 'style' && p.status === 'complete')) throw error;
+            checkAbort(ctx);
+            walk = false;
+            fallbackUsed = true;
+            evidence = 'configured-route-proven';
+            continue;
+          }
           ctx.diag?.write({ lane: 'path', event: 'route-choice', taskId: ctx.taskId,
-            msg: walk ? '本段优先走现有通路，不挖掘或垫脚' : '本段现有通路搜索无路，按已配置移动能力继续',
+            msg: walk ? '本段优先走现有通路，不挖掘或垫脚'
+              : evidence === 'configured-route-proven' ? '步行落脚预检受阻，但已配置能力下有完整路线，按该能力继续'
+                : '本段现有通路搜索无路，按已配置移动能力继续',
             data: { target: at, strategy: walk ? 'existing' : 'configured', evidence,
               walkStatus: walkProbes?.[0]?.status ?? null, walkSteps: walkProbes?.[0]?.steps ?? null,
               permitsTerrain, strictWalkOnly: call.walkOnly === true } });
@@ -809,7 +826,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const arrival = gotoArrivalNote(call, target, actual);
       const footing = water ? ';仍在水中，未确认登岸' : '';
       const route = configuredLegs === 0 ? ';沿现有通路到达，未挖掘或垫脚'
-        : ';部分路段现有通路搜索未找到路线，已按配置允许的挖掘/垫脚能力继续；不代表这些动作实际发生';
+        : ';部分路段根据完整路线试算或现有通路失败，按配置允许的挖掘/垫脚能力继续；不代表这些动作实际发生';
       return `到了 ${cellText(actual)}${arrival}${footing}${route}${note ? `。\n${note}` : ''}`;
     }
     case 'swim': {

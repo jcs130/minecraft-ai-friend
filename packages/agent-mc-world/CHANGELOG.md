@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.41
+
+- Preserve complete configured routes after preferred walking preflight rejection, while retaining explicit walk-only and active no-dig leases.
+- Report exact carried food IDs for recovery from localized selectors, and resolve registered vanilla resource IDs in gathering and block/entity matching.
+
 ## 0.5.7-rc.160-preview.40
 
 - Add explicit precise ground polylines, segment posture, declared avoid cells/blocks, dynamic geometry checks and actual waypoint receipts through the shared action/script contract.
