@@ -2076,6 +2076,23 @@ function portalCells(bot: Bot, start: Cell, kind: string): Cell[] {
   return out;
 }
 
+/** A transit owns permission to enter this connected gate, not every portal in the world. */
+function allowSelectedPortal(bot: Bot, cells: readonly Cell[], goal: InstanceType<typeof goals.Goal>): () => void {
+  const movements = bot.pathfinder.movements;
+  const original = movements.getBlock;
+  const selected = new Set(cells.map(cellKeyOf));
+  const scoped: typeof original = function (this: typeof movements, pos, dx, dy, dz) {
+    const b = original.call(this, pos, dx, dy, dz);
+    // Retain collision, support, liquid, break and placement rules. Only lift the
+    // normal no-portal walking exclusion for the explicitly requested component.
+    if (bot.pathfinder.goal === goal && b.name === 'nether_portal' && b.boundingBox === 'empty'
+      && b.position && selected.has(cellKeyOf(b.position))) b.safe = true;
+    return b;
+  };
+  movements.getBlock = scoped;
+  return () => { if (movements.getBlock === scoped) movements.getBlock = original; };
+}
+
 export async function skillTransit(
   bot: Bot,
   call: Extract<SkillCall, { skill: 'transit' }>,
@@ -2098,11 +2115,25 @@ export async function skillTransit(
   // 走到这片门里任意一格门方块的边上。只围着给定那一格算半径时,3×3 末地传送门的中心格
   // 从门框上够不着,寻路器只能在门方块头顶垫块站上去,把门盖住
   const cells = portalCells(bot, portal, kind);
-  const radius = kind === 'nether_portal' ? 1 : 2;
-  await gotoGoal(bot, new goals.GoalCompositeAny(cells.map((c) => new goals.GoalNear(c.x, c.y, c.z, radius))), ctx);
+  if (kind === 'nether_portal') {
+    // GoalNear can stop below a raised obsidian sill. Blind forward afterwards
+    // cannot climb it. Let the real pathfinder jump/route onto the gate's floor,
+    // with permission scoped to this gate and cleaned up on every exit path.
+    const goal = new goals.GoalCompositeAny(cells.map(c => new goals.GoalBlock(c.x, c.y, c.z)));
+    const restore = allowSelectedPortal(bot, cells, goal);
+    try {
+      await gotoGoal(bot, goal, ctx);
+    } catch (error) {
+      // A native dimension change may revoke the old route before goto settles.
+      // Only actual transition evidence supersedes that path result.
+      if (!crossed()) throw error;
+    } finally { restore(); }
+  } else {
+    await gotoGoal(bot, new goals.GoalCompositeAny(cells.map((c) => new goals.GoalNear(c.x, c.y, c.z, 2))), ctx);
+  }
   checkAbort(ctx);
   const reread = blockAtCell(bot, portal);
-  if (reread?.name !== kind) {
+  if (!crossed() && reread?.name !== kind) {
     throw new SkillBlocked(`走到门边时 ${cellText(portal)} 已经不是${zhName(kind)}了`);
   }
 

@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.43
+
+- Route into the selected Nether portal through actual collision and support checks, including raised sills; scope portal-entry permission to the owned route and restore it on cancellation or failure.
+- Require measured dimension change for transit success and preserve that evidence when the old navigation is revoked by the transition. Explain the transit contract when an ordinary goto explicitly targets an observed portal block.
+
 ## 0.5.7-rc.160-preview.41
 
 - Preserve complete configured routes after preferred walking preflight rejection, while retaining explicit walk-only and active no-dig leases.
