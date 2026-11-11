@@ -22,7 +22,8 @@ async function ask(id,action,value=''){
 }
 const diagnostics=async id=>JSON.parse((await rc('followqa '+id)).split('FOLLOW_QA ')[1]);
 try{
- const expected=baseline?'0.1.22-dialogue-once':'0.1.23-follow-radius';check('pinned QA bridge loaded',(await rc('version QiandengjiMaidBridge')).includes(expected));
+ const expected=baseline?'0.1.22-dialogue-once':process.env.MAID_FOLLOW_QA_VERSION||'0.1.23-follow-radius';check('pinned QA bridge loaded',(await rc('version QiandengjiMaidBridge')).includes(expected));
+ if(restart){report.beforeOwner=await diagnostics(fixture.maid);check('native radius restored before owner login or follow command',report.beforeOwner.restrictRadius===62);}
  bot=createRequire(anchor)('mineflayer').createBot({host:'127.0.0.1',port:25938,version:'1.21.1',username:'MaidRadiusQA',auth:'offline',hideErrors:true});
  bot.on('error',()=>{});bot.on('messagestr',(s,p)=>{if(p==='system'&&s.startsWith('QD_MAID '))try{responses.push(JSON.parse(s.slice(8)));}catch{}});
  bot._client.on('custom_payload',p=>{if(p.channel==='qiandengji:maids')try{responses.push(JSON.parse(p.data.toString()));}catch{}});
@@ -47,8 +48,17 @@ try{
    check('profile persists across normal save and JVM restart',(await rc(`minecraft:data get entity ${fixture.maid} NeoForgeData.qiandengji_follow`)).includes('returnDistance: 64'));
    check('original synthetic identity survives restart',context.maidId===fixture.maid||context.id===fixture.maid||JSON.stringify(context).includes(fixture.maid));
   }
-  await rc(`minecraft:tp ${fixture.maid} 224.5 90 0.5`);await delay(11000);context=await ask(fixture.maid,'context');
-  check('24-block roaming is not pulled back after old stuck timeout',context.ownerDistance>20&&context.ownerDistance<32);
+  await rc(`minecraft:tp ${fixture.maid} 224.5 90 0.5`);report.roamTrace=[await diagnostics(fixture.maid)];
+  for(let i=0;i<11;i++){await delay(1000);report.roamTrace.push(await diagnostics(fixture.maid));}
+  context=await ask(fixture.maid,'context');
+  let crossedWalkBoundary=false,unexpectedFollow=false,forcedReturn=false;
+  for(const sample of report.roamTrace){
+   const distance=dist([sample.x,sample.y,sample.z],[200.5,90,.5]);
+   if(distance>32)crossedWalkBoundary=true;
+   if(sample.targetEntity===bot.player.uuid&&!crossedWalkBoundary)unexpectedFollow=true;
+   if(distance<5)forcedReturn=true;
+  }
+  check('24-block roaming does not start owner following or force a return',!unexpectedFollow&&!forcedReturn);
   await ask(fixture.other,'follow');let other=await ask(fixture.other,'context');
   check('another maid retains default 3-block follow and native 8-block radius',other.follow.walkBeyond===3&&!other.follow.customized&&(await diagnostics(fixture.other)).restrictRadius===8);
   await ask(fixture.other,'stay');
