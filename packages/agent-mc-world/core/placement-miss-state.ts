@@ -7,6 +7,17 @@ type Cell = { x: number; y: number; z: number };
 const MARK = Symbol.for('cortico.minecraft.placementMissState');
 const AROUND = [[0, 0, 0], [0, -1, 0], [0, 1, 0], [-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1]];
 
+/** An unchanged-scene retry was skipped locally; no new placement packet was sent. */
+export class PlacementRetryDeferred extends Error {
+  readonly code = 'placement-retry-cached';
+  constructor(readonly cell: Cell, readonly agoMs: number, readonly retryAfterMs: number) {
+    super(`(${cell.x}, ${cell.y}, ${cell.z}) 本次未发包：${Math.round(agoMs / 1000)} 秒前的放置未确认，`
+      + `同场景失败缓存仍有效；不代表新的服务端拒绝。支撑、材料或站位等场景有新变化后可重新核验，`
+      + `或约 ${Math.ceil(retryAfterMs / 1000)} 秒后缓存到期再核验；不会自动重试`);
+    this.name = 'PlacementRetryDeferred';
+  }
+}
+
 /** A rejection applies to the observed placement scene, not just the empty target cell. */
 function scene(bot: Bot, at: Cell): string | null {
   const blocks = AROUND.map(([x, y, z]) => bot.blockAt(new Vec3(at.x + x, at.y + y, at.z + z)));

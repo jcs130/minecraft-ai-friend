@@ -29,6 +29,7 @@ import { assessScaffoldMaterials, isStableScaffoldMaterial } from './scaffold-ma
 import { prepareTemporaryScaffoldPlacement, recordTemporaryScaffold } from './temporary-scaffold.ts';
 import { flightState } from './flight.ts';
 import { equipHandConfirmed } from './equipment.ts';
+import { PlacementRetryDeferred } from './placement-miss-state.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -145,6 +146,7 @@ export function placeReferenceFace(bot: Bot, cell: Cell, face?: BlockFace): Bloc
  */
 export async function placeIntoCell(
   bot: Bot, cell: Cell, material: string, ctx: SkillContext, face?: BlockFace,
+  onDeferred?: (error: PlacementRetryDeferred) => void,
 ): Promise<BlockFace | null> {
   const became = (): boolean => {
     const b = blockAtCell(bot, cell);
@@ -155,6 +157,8 @@ export async function placeIntoCell(
   // 右键交互方块,服务端执行的是打开它而不是放方块——参照是门/箱子/工作台/熔炉时,
   // 六个面全试完也放不上一块。
   bot.setControlState('sneak', true);
+  let deferred: PlacementRetryDeferred | null = null;
+  let attempted = false;
   try {
     for (const f of face ? [face] : FACE_TRY_ORDER) {
       checkAbort(ctx);
@@ -164,7 +168,11 @@ export async function placeIntoCell(
       const [dx, dy, dz] = BLOCK_FACES[f];
       try {
         await bot.placeBlock(ref, new Vec3(dx, dy, dz));
+        attempted = true;
       } catch (error) {
+        // Keep the existing face/cell iteration while retaining a local no-send reason for build.
+        if (error instanceof PlacementRetryDeferred) deferred = error;
+        else attempted = true;
         // 服务端已明确拒绝或暂不能确认目标格，换面不会改变该格的保护判决。
         // 直接交还结构化受阻，避免把保护错误伪装成「服务端没认」。
         if (error instanceof SkillBlocked) throw error;
@@ -176,6 +184,7 @@ export async function placeIntoCell(
   } finally {
     bot.setControlState('sneak', false);
   }
+  if (deferred && !attempted) onDeferred?.(deferred);
   return null;
 }
 

@@ -19,7 +19,7 @@ import { readEnchants, type ItemLike } from './item-facts.ts';
 import { blockStateItem } from './blueprint-registry.ts';
 import { setNameRegistry, zhName } from './names.ts';
 import { PLACE_MISS_TTL_MS } from './pathfinder-perf.ts';
-import { installPlacementMissState } from './placement-miss-state.ts';
+import { installPlacementMissState, PlacementRetryDeferred } from './placement-miss-state.ts';
 import { ShowPacer, currentShowPacer, withShowPacer, type ShowTempo } from './show.ts';
 import { dropOwnedGoal } from './executor.ts';
 import { SkillBlocked } from './skill-context.ts';
@@ -869,7 +869,8 @@ function installConfirmedPlace(
               + `那一格现在还是${zhName(stale.was)}:这次不发包`,
             data: { at: { x: dest.x, y: dest.y, z: dest.z }, was: stale.was, agoMs: stale.agoMs },
           });
-          throw new Error(`No block has been placed : the block is still ${stale.was}`);
+          throw new PlacementRetryDeferred({ x: dest.x, y: dest.y, z: dest.z }, stale.agoMs,
+            Math.max(0, PLACE_MISS_TTL_MS - stale.agoMs));
         }
       }
       // 期望落地的是哪一样:`_genericPlace` 放的就是手上这件。取得到方块名才校验身份,
