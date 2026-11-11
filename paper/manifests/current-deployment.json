@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261111_maid_fast_followup",
-  "currentComponentEvidence": "paper/manifests/maid-fast-followup-deployed-20261111.json",
-  "acceptanceDocument": "paper/docs/MAID_FAST_FOLLOWUP_20261111.md",
+  "inventoryScope": "component_runtime_verified_20261111_maid_portal_travel",
+  "currentComponentEvidence": "paper/manifests/maid-portal-travel-deployed-20261111.json",
+  "acceptanceDocument": "paper/docs/MAID_PORTAL_TRAVEL_20261111.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "maid-fast-followup-yezi-release-20261111-r1",
-  "verifiedAt": "2026-11-11T11:42:03.4652933+08:00",
-  "releaseDocument": "paper/docs/MAID_FAST_FOLLOWUP_20261111.md",
+  "latestRelease": "maid-nether-travel-20261111-r1",
+  "verifiedAt": "2026-11-11T23:03:13.2175795+08:00",
+  "releaseDocument": "paper/docs/MAID_PORTAL_TRAVEL_20261111.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -1561,20 +1561,20 @@
       "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.24-fast-followup",
-      "sha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
-      "evidence": "paper/manifests/maid-fast-followup-deployed-20261111.json"
+      "version": "0.1.25-native-portal-travel",
+      "sha256": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47",
+      "evidence": "paper/manifests/maid-portal-travel-deployed-20261111.json"
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/maid-fast-followup-deployed-20261111.json",
+    "QiandengjiMaidBridge": "paper/manifests/maid-portal-travel-deployed-20261111.json",
     "AgentFriend": "paper/manifests/temple-partner-deployed-20261110.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.24-fast-followup",
-      "artifactSha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
-      "manifest": "paper/manifests/maid-fast-followup-deployed-20261111.json"
+      "version": "0.1.25-native-portal-travel",
+      "artifactSha256": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47",
+      "manifest": "paper/manifests/maid-portal-travel-deployed-20261111.json"
     },
     "AgentFriend": {
       "version": "0.4.47.70-jungle-survey-rpg",
@@ -1610,7 +1610,7 @@
   "currentRuntime": {
     "AgentFriend": "0.4.47.70-jungle-survey-rpg",
     "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.24-fast-followup",
+    "QiandengjiMaidBridge": "0.1.25-native-portal-travel",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
@@ -1906,14 +1906,14 @@
     },
     {
       "name": "QiandengjiMaidBridge",
-      "version": "0.1.24-fast-followup",
+      "version": "0.1.25-native-portal-travel",
       "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
-      "sha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
-      "sourceCommit": "86c4a4684ee1f0ab343e6901d8b636521e7962d2",
-      "processId": 39908,
-      "processStartedAt": "2026-11-11T03:36:20.9118911Z",
-      "verifiedAt": "2026-11-11T11:42:03.4652933+08:00",
-      "manifest": "paper/manifests/maid-fast-followup-deployed-20261111.json",
+      "sha256": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47",
+      "sourceCommit": "88ea653b32818d39a16568eb68fd91cdb70de842",
+      "processId": 26524,
+      "processStartedAt": "2026-11-11T14:57:45.7453423Z",
+      "verifiedAt": "2026-11-11T23:03:13.2175795+08:00",
+      "manifest": "paper/manifests/maid-portal-travel-deployed-20261111.json",
       "codeChangedThisBatch": true
     },
     {
@@ -1977,7 +1977,7 @@
     "gameRestarted": false,
     "record": "paper/manifests/public-viewer-deployed-20261109.json"
   },
-  "currentComponentEvidenceScope": "Current game/proxy component evidence uses companion-voice-deployed-20261110.json. Website and hosted core retain their individually dated hutao-joint evidence; SDK38 source merge is not an installed runtime claim.",
+  "currentComponentEvidenceScope": "QiandengjiMaidBridge uses maid-portal-travel-deployed-20261111.json. Component records carry their individual verification times.",
   "previousCanonicalRuntimeBeforeHutao20261110": {
     "currentRuntime": {
       "AgentFriend": "0.4.47.68-player-ui-rpg",

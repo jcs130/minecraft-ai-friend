@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-nether-travel-20261111-r1",
+  "state": "deployed-component-runtime-verified",
+  "deployedAt": "2026-11-11T22:59:38.0000000+08:00",
+  "verifiedAt": "2026-11-11T23:03:13.2175795+08:00",
+  "codePullRequests": [
+    177
+  ],
+  "codeHead": "88ea653b32818d39a16568eb68fd91cdb70de842",
+  "mergedMain": "a4c978401ec69ca4796de3ce391794433abdaf0e",
+  "sourceTree": "e1c676dd8917785d48dfd516611c1815cd8beab1",
+  "ci": {
+    "runId": 43039546721,
+    "successfulJobs": 6
+  },
+  "installedFiles": [
+    {
+      "target": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
+      "sha256": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47"
+    }
+  ],
+  "components": [
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.25-native-portal-travel",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47",
+      "sourceCommit": "88ea653b32818d39a16568eb68fd91cdb70de842",
+      "processId": 26524,
+      "processStartedAt": "2026-11-11T14:57:45.7453423Z",
+      "verifiedAt": "2026-11-11T23:03:13.2175795+08:00",
+      "manifest": "paper/manifests/maid-portal-travel-deployed-20261111.json",
+      "codeChangedThisBatch": true
+    }
+  ],
+  "verification": {
+    "baselineChecks": 10,
+    "isolatedRealPortalChecks": 71,
+    "startupChecks": 18,
+    "coldCopiesVerified": 2,
+    "originalCredentialsVerified": 80,
+    "characterFilesVerifiedDuringInstall": 8851,
+    "nativeCameraReady": true,
+    "goddessJobsRestored": 7,
+    "originalCompanionAutomaticPortalVerifiedInProduction": false
+  },
+  "rollback": {
+    "previousBridgeSha256": "cd040858be9cb35c72469359242b34086f5eed1dc161003aeb73c110b2c8f5da",
+    "codePreimagesVerifiedOnBothDrives": true,
+    "preserveCurrentWorld": true
+  }
+}
