@@ -116,6 +116,8 @@ async function passPortal(from,to,offset,{cancel=false,stay=false,denyMaid=false
             const type=denyMaid?'maid_transfer_cancelled':'maid_join_rejected';
             check(type+' actually exercised',events.some(event=>event.event===type));
             check('failed transfer preserves original data'+tag,JSON.stringify(await snapshot())===JSON.stringify(before));
+            check('Bukkit still resolves the valid original in its source'+tag,
+                (await rc('portalqa maid-world')).includes('PORTAL_QA_MAID '+world(from)+' true'));
         }
     }else{
         check('original maid follows actual portal at '+offset,row.maidArrived);

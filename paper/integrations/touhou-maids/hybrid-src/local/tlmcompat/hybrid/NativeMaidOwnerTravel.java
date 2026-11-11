@@ -188,15 +188,20 @@ final class NativeMaidOwnerTravel implements Listener {
             arrived.setPortalCooldown();
             return true;
         } finally {
-            var removal = maid.getRemovalReason();
-            if (removal != null && !removal.shouldDestroy() && !removal.shouldSave()
-                    && destination.getEntity(id) == null && source.getEntity(id) == null) {
-                // Destination registration can be vetoed after the native move removes the source.
-                // Re-register the original in its source world, with its original state.
-                maid.revive();
-                source.addDuringTeleport(maid);
-                if (source.getEntity(id) != maid) {
-                    plugin.getLogger().severe("Maid travel source registration rejected for " + id);
+            if (destination.getEntity(id) == null) {
+                var loaded = Bukkit.getEntity(id);
+                if (loaded == null || source.getEntity(id) == maid) {
+                    // Native restoreFrom retargets the existing Bukkit wrapper before registration.
+                    entity.setHandle(maid);
+                }
+                var removal = maid.getRemovalReason();
+                if (loaded == null && removal != null && !removal.shouldDestroy() && !removal.shouldSave()) {
+                    // The destination rejected registration after native removal from the source.
+                    maid.revive();
+                    source.addDuringTeleport(maid);
+                    if (source.getEntity(id) != maid) {
+                        plugin.getLogger().severe("Maid travel source registration rejected for " + id);
+                    }
                 }
             }
         }

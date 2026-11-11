@@ -65,6 +65,11 @@ public final class PortalTravelQa extends JavaPlugin implements Listener {
             case "cancel-maid" -> cancelMaid = true;
             case "reject-join" -> rejectJoin = true;
             case "read" -> sender.sendMessage("PORTAL_QA " + new Gson().toJson(events));
+            case "maid-world" -> {
+                var entity = maid == null ? null : Bukkit.getEntity(maid);
+                sender.sendMessage(entity == null ? "PORTAL_QA_MAID absent"
+                        : "PORTAL_QA_MAID " + entity.getWorld().getKey() + " " + entity.isValid());
+            }
             default -> { return false; }
         }
         return true;
