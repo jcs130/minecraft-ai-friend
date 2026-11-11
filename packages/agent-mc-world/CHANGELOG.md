@@ -1,3 +1,7 @@
+## Unreleased
+
+- Do not discard a complete route under configured movement abilities when the preferred walking preflight rejects the destination. Recheck the route before execution, retain explicit walk-only and active no-dig leases, and never treat a timeout alone as permission to modify terrain.
+
 ## 0.5.7-rc.160-preview.38
 
 - Validate short grounded recovery and idle movement against the actual swept player volume and loaded collision shapes, instead of rejecting an entire cell beside a fence or open mechanism. Retain continuous dry support, hazard and unknown-geometry checks, stopping margin, cancellation and control ownership.

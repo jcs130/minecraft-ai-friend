@@ -158,3 +158,25 @@ it('prefers a newly observed existing route over an earlier failed search, witho
     expect(r.reports[0].kind).toBe('done');
   } finally { r.close(); }
 });
+
+it.each(['noSupport', 'occupied'] as const)('uses a proven configured route when walking preflight rejects %s', async kind => {
+  const r = rig([route('timeout'), { ...route('complete', { place: kind === 'noSupport' ? 1 : 0, breaks: kind === 'occupied' ? 1 : 0 }), profile: 'style' }]);
+  try {
+    (r.exec as any).opts.probeTarget = () => ({ kind, at: {x:8,y:64,z:0}, block:'dirt' });
+    r.exec.submitDetailed([{ skill:'goto', at:[8,64,0], exact:true }]); await finish(r);
+    expect(r.reports[0].kind).toBe('done');
+    expect(r.calls.map(c=>c.dig)).toEqual([true]);
+    expect(r.choices).toContainEqual(expect.objectContaining({event:'route-choice',data:expect.objectContaining({evidence:'configured-route-proven'})}));
+  } finally { r.close(); }
+});
+
+it.each(['strict', 'no-permission', 'partial', 'timeout'] as const)('preserves target rejection without an authorized complete route: %s', async mode => {
+  const r = rig([route('timeout'), { ...route(mode === 'partial' ? 'partial' : mode === 'timeout' ? 'timeout' : 'complete', {place:1}), profile:'style' }]);
+  try {
+    (r.exec as any).opts.probeTarget=()=>({kind:'noSupport',at:{x:8,y:64,z:0}});
+    if(mode==='no-permission') {r.movements.canDig=false;r.movements.scafoldingBlocks=[];}
+    r.exec.submitDetailed([{skill:'goto',at:[8,64,0],exact:true,walkOnly:mode==='strict'}]); await finish(r);
+    expect(r.reports[0].kind).toBe('blocked');
+    expect(r.calls).toHaveLength(0);
+  } finally { r.close(); }
+});
