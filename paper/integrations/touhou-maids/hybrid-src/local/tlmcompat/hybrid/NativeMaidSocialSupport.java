@@ -93,7 +93,12 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         if(!proactive)messages.addAll(history(call));
         messages.add(LLMMessage.systemChat(maid,"一次只说一句，优先15至28个汉字，最多40字。以现场观察和动作回执为准。玩家提到钓鱼、添柴、煮饭，只表示他说了这些，不表示你完成过这些动作。可以讨论接下来的计划。遇到礼貌确认、重复话题或告别时，允许输出[[结束]]来安静结束这一轮，不必继续提问。"));
         if(finalTurn)messages.add(LLMMessage.systemChat(maid,"这是这段交谈的最后一轮。若有实际行动请求，处理一次，再用一句短话收尾。省去新的问题、邀请和重复确认。"));
-        if(partnerAction)messages.add(LLMMessage.systemChat(maid,"当前可核对的身体状态："+MaidCompanionActions.facts(maid,actor)));
+        if(partnerAction){
+            messages.add(LLMMessage.systemChat(maid,"当前可核对的身体状态："+MaidCompanionActions.facts(maid,actor)));
+            JsonObject workshop=plugin.workshops().describe(maid.getUUID(),actor.getUniqueId());
+            if(!workshop.getAsJsonArray("workshops").isEmpty())messages.add(LLMMessage.systemChat(maid,
+                "已授权的工位和工单："+workshop+"。伙伴要求制作时调用 make_at_workshop；pending 时只说已接单，完成会单独通知。"));
+        }
         if(proactive)messages.add(LLMMessage.systemChat(maid,"现场发生了新的变化。可以分享一句短感想，也可以用[[结束]]保持安静。省去向伙伴发问和催促。现场："+text));
         else messages.add(LLMMessage.userChat(maid,text));
         initiative.spoken(System.nanoTime());
@@ -135,7 +140,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         boolean actionAttempted;
         VisitorCallback(Call call,List<LLMMessage> messages){super(call.maid.getAiChatManager(),messages,true);this.call=call;needAddTools=false;partnerAction=call.actor.equals(call.owner)&&!call.proactive;expectedPose=MaidCompanionActions.pose(call.maid);}
         @Override public void addCompanionTools(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
-            if(partnerAction&&!actionAttempted)MaidCompanionActions.tools(request);
+            if(partnerAction&&!actionAttempted){
+                MaidCompanionActions.tools(request);
+                plugin.workshops().addTool(request,call.maid,call.actorConnection);
+            }
         }
         @Override public boolean shouldCacheTokenUsage(){return false;}
         @Override public void onSuccess(ResponseChat reply){runOnServerThread(()->finish(call,reply.getChatText(),null));}
@@ -152,15 +160,17 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
             try{
                 String denial=actionDenial();
                 if(denial!=null)throw new CompatibilityException(denial,"现场或本人安排已变化。请查询当前状态。");
-                if(!MaidCompanionActions.TOOL.equals(tool.getFunction().getName()))
-                    throw new CompatibilityException("unknown_companion_tool","可用工具set_companion_mode，参数mode为follow、guard、wait或fish。");
+                String name=tool.getFunction().getName();
                 JsonObject args;
                 try{args=JsonParser.parseString(tool.getFunction().getArguments()).getAsJsonObject();}
-                catch(RuntimeException malformed){throw new CompatibilityException("bad_companion_mode","参数须为JSON对象，如{\"mode\":\"follow\"}。");}
-                JsonElement mode=args.get("mode");
-                if(args.size()!=1||!(mode instanceof JsonPrimitive value)||!value.isString()||!MaidCompanionActions.MODES.contains(value.getAsString()))
-                    throw new CompatibilityException("bad_companion_mode","mode必须是follow、guard、wait或fish。未执行动作。");
-                result=MaidCompanionActions.apply(plugin,call.maid,call.actorConnection,operation,mode.getAsString());
+                catch(RuntimeException malformed){throw new CompatibilityException("bad_companion_action","工具参数须为JSON对象。");}
+                if(NativeMaidWorkshop.TOOL.equals(name)){
+                    result=plugin.dispatch(call.actorConnection,NativeMaidWorkshop.ACTION,call.maid.getUUID(),operation,NativeMaidWorkshop.modelOrder(args));
+                }else if(MaidCompanionActions.TOOL.equals(name)){
+                    if(args.size()!=1||!(args.get("mode") instanceof JsonPrimitive mode)||!mode.isString()||!MaidCompanionActions.MODES.contains(mode.getAsString()))
+                        throw new CompatibilityException("bad_companion_mode","mode必须是follow、guard、wait或fish。未执行动作。");
+                    result=MaidCompanionActions.apply(plugin,call.maid,call.actorConnection,operation,mode.getAsString());
+                }else throw new CompatibilityException("unknown_companion_tool","使用本轮提供的工具和参数。");
             }catch(Exception error){
                 result.addProperty("error",error instanceof CompatibilityException e?e.code():"action_result_unknown");
                 result.addProperty("message",error instanceof CompatibilityException?error.getMessage():"查询原动作回执和当前状态。不要重新执行。");

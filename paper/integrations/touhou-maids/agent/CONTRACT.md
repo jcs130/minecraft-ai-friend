@@ -1,3 +1,34 @@
+## 0.1.27-workshop 工位候选
+
+原版 Java 和未改动的 Mineflayer 直接使用现有游戏聊天和 `/qdmaid`。原版菜单照常查看真实背包，工位按当前背包的可用槽计算容量。大背包仍须实际装备。
+
+- `/qdmaid workshop <maidId> [queryId]` 返回本人女仆的工位、可选配方和当前工单。先用 `/qdmaid list` 取得 maidId。
+- `/qdmaid make <maidId> <requestId> <工位ID> <配方ID> [成品数量|once] [chest|backpack]` 下单。默认按服务端配方制作一次，使用工位补给箱。数量表示成品件数，须为 `productsPerCraft` 的整倍数，最多制作 16 次。
+- 在附近频道点名并说明工位、材料来源与数量，也可由已配置共享对话的女仆调用 `make_at_workshop`。只向绑定伙伴的近聊提供这个工具。
+- `/qdmaid receipt <maidId> <原requestId> [queryId]` 查原结果。正常接单是 `pending`。`completed` 且 `goalCompleted:true` 表示实际库存已核对，`observation` 给出 `itemId`、`count`、材料和成品所在的 `inventory`，以及到达点。完成时聊天中的工单编号可用于查询。
+- 缺材料、库存已改或路线中断会附原因。可明确确认无效果的失败修正后再下新单，`unknown` 用原请求和实物核对。
+
+在桥的插件数据目录 `workshops.json` 登记工位。示例 UUID 和坐标均需替换成实际站点信息：
+
+```json
+{
+  "schema": 1,
+  "workshops": [
+    {
+      "id": "home",
+      "maidId": "00000000-0000-0000-0000-000000000001",
+      "ownerId": "00000000-0000-0000-0000-000000000002",
+      "worldId": "00000000-0000-0000-0000-000000000003",
+      "chest": [12, 65, 5],
+      "table": [18, 65, 5],
+      "recipes": ["minecraft:torch", "minecraft:stick", "minecraft:bread"]
+    }
+  ]
+}
+```
+
+把工位放在绑定伙伴可进入的同维度地点。使用普通单箱与实体工作台，箱上留净空。箱子工单先到箱子核对，再走到工作台并回箱交付。箱内材料与成品在同一次提交中改动。背包工单到工作台后直接对可用槽提交。配方余物也放回同一个库存。现役 WorldGuard 权限、箱锁、主人身份、容器身份及库存变更均需通过检查。切换手选模式或断开可结束待处理的工单。提交不明的旧工单保留原记录，重启从原回执继续查询。
+
 **0.1.26 候选，需正式加载后生效。** 同维度附近交谈使用当前已选模型。绑定伙伴可说“肥鱼，跟我走”“稍等一下”或“请去钓鱼”，模型可以设置一次实际模式。访客可以交谈。原生本人 `chat` 继续读取原车万女仆历史和摘要，附近交谈只保留同一连接和维度的最近四组问答。
 
 每段附近交谈从第一条起最多 120 秒、6 条请求。文字、语音识别、点名和直接接话共用这段限额。收到告别或模型选择收尾时会结束。`closed` 是无台词的终态，`replied` 可带 `conversationClosed`。动作在 `observation.actions` 中独立报告。收到 `applied` 或 `appliedMode` 时按真实状态继续行动。回复为空也能查询原动作回执。交谈收尾后仍可用 `/qdmaid follow <maidId> <requestId>` 切换。短等 60 秒后由原生 AI 恢复随行。
