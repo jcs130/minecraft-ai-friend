@@ -111,6 +111,8 @@ async function fish(owner){
     check('fixture native work schedule configured',(await ask(owner,'schedule','ALL')).data.status==='applied');
     await rc(`minecraft:item replace entity ${fixture.maid} weapon.mainhand with minecraft:fishing_rod`);
     await rc('minecraft:fill 303 88 297 309 89 304 minecraft:water');
+    await rc(`minecraft:tp ${fixture.otherMaid} 330.5 90 309.5`);
+    await rc(`minecraft:data merge entity ${fixture.otherMaid} {Sitting:1b,MaidIsHome:1b}`);
     await rc('minecraft:summon touhou_little_maid:chair 302.5 90 300.5 {Tags:["MaidFishingQASeat"]}');
     const original=(await ask(owner,'context')).data.fishing.lastRetrievedAt;
     check('native fishing observer connected',(await rc('maidfishqa clear')).includes('MAID_FISH_QA'));
@@ -259,6 +261,9 @@ try{
             requestedMode='fish';
             const missing=await talk(owner,'隔离肥鱼，请去水边钓鱼。');
             check('missing rod gives concrete equipment guidance without switching tasks',missing.data.observation.actions[0].error==='fishing_rod_required'&&(await ask(owner,'context')).data.sitting);
+            await rc(`minecraft:item replace entity ${fixture.maid} weapon.mainhand with minecraft:fishing_rod`);
+            const noSeat=await talk(owner,'隔离肥鱼，拿着鱼竿试试钓鱼。');
+            check('no fishing seat yields a concrete condition and leaves current mode intact',noSeat.data.observation.actions[0].error==='fishing_seat_required'&&(await ask(owner,'context')).data.sitting);
             requestedMode='follow';forceSecondTool=true;
             const actionStart=requests.length;
             const forced=await talk(owner,'隔离肥鱼，别再等我了，跟我走。');forceSecondTool=false;

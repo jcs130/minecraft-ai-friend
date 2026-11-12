@@ -6,13 +6,16 @@ import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.param
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
+import com.github.tartaricacid.touhoulittlemaid.entity.ai.fishing.FishingTypeManager;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskFishing;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig;
 import com.google.gson.JsonObject;
+import java.util.List;
 import java.util.Set;
 import local.tlmcompat.core.CompatibilityException;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.neoforged.neoforge.common.ItemAbilities;
 import org.bukkit.entity.Player;
@@ -72,11 +75,36 @@ final class MaidCompanionActions {
     }
 
     private static boolean fishingSeat(EntityMaid maid) {
-        return maid.getVehicle() instanceof EntityChair || maid.getVehicle() instanceof Boat;
+        return fishingSeat(maid.getVehicle());
     }
+
+    private static boolean fishingSeat(Entity entity) { return entity instanceof EntityChair || entity instanceof Boat; }
 
     static boolean fishingRod(EntityMaid maid) {
         return maid.getMainHandItem().canPerformAction(ItemAbilities.FISHING_ROD_CAST);
+    }
+
+    private static void requireFishingSetup(EntityMaid maid) {
+        if (!fishingRod(maid)) {
+            throw new CompatibilityException("fishing_rod_required", "请在女仆装备菜单给主手装鱼竿。此次未切换任务。");
+        }
+        var level = maid.level();
+        List<Entity> seats = fishingSeat(maid) ? List.of(maid.getVehicle()) : level.getEntities(maid,
+            maid.getBoundingBox().inflate(6, 3, 6), seat -> seat.isAlive() && fishingSeat(seat)
+                && !seat.isVehicle() && maid.isWithinRestriction(seat.blockPosition()) && maid.hasLineOfSight(seat));
+        if (seats.isEmpty()) {
+            throw new CompatibilityException("fishing_seat_required", "请把她带到水边空椅子旁，或先坐上船再钓鱼。附近没有可用座位。此次未切换任务。");
+        }
+        var rod = maid.getMainHandItem();
+        var type = FishingTypeManager.getFishingType(rod);
+        for (var seat : seats) {
+            BlockPos origin = seat.blockPosition();
+            for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-5, -4, -5), origin.offset(5, 2, 5))) {
+                if (origin.distSqr(pos) < 36 && level.hasChunkAt(pos) && maid.isWithinRestriction(pos)
+                        && type.suitableFishingHook(maid, level, rod, pos)) return;
+            }
+        }
+        throw new CompatibilityException("fishing_water_required", "请选靠近可抛竿水面的椅子或船。座位附近没找到可用水面。此次未切换任务。");
     }
 
     static JsonObject fishing(EntityMaid maid) {
@@ -131,9 +159,7 @@ final class MaidCompanionActions {
     static JsonObject apply(HybridMaidPlugin plugin, EntityMaid maid, Player partner,
                             String operation, String mode) throws Exception {
         if (!MODES.contains(mode)) throw new IllegalArgumentException("Use follow, guard, wait or fish");
-        if (mode.equals("fish") && !fishingRod(maid)) {
-            throw new CompatibilityException("fishing_rod_required", "请先在女仆装备菜单给主手装鱼竿，再到水边找空椅子或船。此次未切换任务。");
-        }
+        if (mode.equals("fish")) requireFishingSetup(maid);
         // Dispatch authenticates the real owner, validates the loaded original entity and
         // reserves a durable receipt before modifying it. Repeated IDs never reapply.
         JsonObject receipt = plugin.companionMode(partner, maid.getUUID(), operation, mode);
