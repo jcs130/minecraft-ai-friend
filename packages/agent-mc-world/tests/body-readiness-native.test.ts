@@ -5,9 +5,43 @@ import { installNativeBodyReadiness } from '../core/body-readiness.ts';
 import { methodHarness } from './method-harness.ts';
 import type { Bot } from 'mineflayer';
 import { Executor, type TaskReport } from '../core/executor.ts';
+import { Vec3 } from 'vec3';
+import { rideDrive } from '../core/skills-interact.ts';
 
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+it.each([false, true])('drives after real set_passengers with mount before first position=%s', async mountFirst => {
+  vi.useFakeTimers(); vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+  const h = methodHarness('1.21.1'); h.close(); const b = h.bot as unknown as Bot;
+  Object.assign(b, { supportFeature: b.registry.supportFeature });
+  const self = b.entity;
+  req('mineflayer/lib/plugins/entities.js')(b);
+  b.entity = self; b.entities[self.id] = self;
+  const boat = { id: 9, name: 'boat', isValid: true, passengers: [], position: new Vec3(.5,64,.5), width: 1.4, height: .6 };
+  b.entities[9] = boat as never;
+  const observer = installNativeBodyReadiness(b);
+  req('mineflayer/lib/plugins/physics.js')(b, { physicsEnabled: true });
+  const write = vi.spyOn(b._client,'write');
+  try {
+    b.emit('login');
+    if (mountFirst) {
+      b._client.emit('set_passengers', { entityId:9,passengers:[self.id] });
+      expect(observer.read().phase).toBe('waiting-position');
+    }
+    b._client.emit('position', { x:.5,y:64,z:.5,yaw:0,pitch:0,flags:0,teleportId:1 });
+    await vi.advanceTimersByTimeAsync(100);
+    if (!mountFirst) b._client.emit('set_passengers', { entityId:9,passengers:[self.id] });
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(observer.read()).toMatchObject({ phase:'mounted',vehicleId:9 });
+    const driving = rideDrive(b,{aborted:()=>false} as never,{x:5,y:64,z:0});
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(await driving).toContain('人还骑着');
+    expect(boat.position.x).toBeGreaterThan(3);
+    expect(write.mock.calls.some(([name])=>name==='vehicle_move')).toBe(true);
+    b.emit('death'); b.emit('respawn');
+    expect(observer.read().phase).toBe('waiting-position');
+  } finally { b.emit('end'); observer.dispose(); }
+});
 it.each([false, true])('keeps missing-body work blocked despite an explicit old-position expectation=%s, while retaining chat', async explicit => {
   vi.useFakeTimers();
   const r = methodHarness('1.21.1'); r.close();

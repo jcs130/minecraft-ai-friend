@@ -149,7 +149,8 @@ export function renderMinecraftTravelOptions(s: MinecraftOptionsSnapshot): strin
   const current = s.context.inWater ? '当前位置触水' : '正在赶路';
   return `[水路候选] ${current}。随身船 ${s.context.carriedBoats ?? '未知'}；${renderBoatSupplies(s.context.boatSupplies, 3)}。若路线经过长水面，比较用已有船、造船、游泳或绕陆。`
     + '用 mc_options {"intent":"water"} 查当前配方与操作入口；goto 只步行/游泳，不会自动造船或驾驶。'
-    + '先核对原料、下水点和上岸点；无现成船不等于无法造船。';
+    + '先核对原料、下水点和上岸点；无现成船不等于无法造船。'
+    + '可用 mc_choose category:route 比较乘船与其他实际候选；mc_script routine:{op:"read",id:"boat_trip"} 有放船、驾驶、上岸及回收脚本。';
 }
 export function renderMinecraftOptionIndex(s: MinecraftOptionsSnapshot): string {
   const intents = relevantMinecraftOptionIntents(s);

@@ -283,3 +283,9 @@ Add optional nearby voice through the existing authenticated connection, canonic
 - Share full-report receipts, revision/idempotence review inspection and native execution wait reduction through public contracts, SDK and MCP. Preserve host stage checks and scheduling; caller-supplied evidence never becomes verified game completion.
 - Native terminal receipts dominate admission callbacks regardless of arrival order; isolate waits by exact world/kind/id and host lifetime, preserving ambiguity and unknown effects.
 - Include the independent speech/body capability from preview.19; voice keeps its existing queue and request identity without taking a movement worker's body lease.
+## 0.5.7-rc.160-preview.53
+
+- Treat server-confirmed mounting separately from death or world changes. Retain the verified position epoch while Mineflayer suspends walking physics, including reconnect packet ordering, without trusting stale vehicle pointers.
+- Add the optional `boat_trip` script for observed placement, exact-entity mounting, bounded waypoints, checked shore landing and verified empty-boat recovery. Preserve cancellation, single-body ownership and partial results.
+- Keep current water-travel choices ahead of large terrain details in route decisions; expose the new script and recovery contract through the shared SDK/MCP help.
+
