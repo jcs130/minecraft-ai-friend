@@ -14,6 +14,16 @@ const ctx = { role: 'test', log: new FakeHost().log };
 const fact = { text: '在桥头，任务仍进行', snapshotTypes: [] };
 afterEach(() => vi.useRealTimers());
 describe('explicit host choice', () => {
+  it('keeps water transport facts ahead of verbose terrain in a route decision',async()=>{
+    const owner:any=new FakeHost();const request=vi.fn(async()=>answer);owner.decisions={request};
+    const tool=createMinecraftChoiceTool(()=>owner,()=>({text:'',snapshotTypes:[],parts:[
+      {key:'place',text:'河岸'},{key:'body',text:'已乘船 entityId=9'},{key:'queue',text:'空闲'},
+      {key:'terrain',text:'地形'.repeat(3000)},{key:'journey',text:'旅途'.repeat(3000)},
+      {key:'travelOptions',text:'随身船1；可选boat_trip与ride_route；岸点已测'},
+    ]}));await tool.handler(args,ctx);
+    expect(request.mock.calls[0][0].state.observed.facts.some((p:any)=>p.key==='travelOptions')).toBe(true);
+    expect(request.mock.calls[0][0].questions.action.instructions).toContain('乘船');
+  });
   it('focuses real segment keys, ignores sampling clock churn and respects provider changes', async () => {
     const owner: any = new FakeHost(); let time = 'before', connection: string | undefined;
     const request = vi.fn(async () => { time = 'after'; return answer; }); owner.decisions = { request };

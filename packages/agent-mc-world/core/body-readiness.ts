@@ -5,15 +5,17 @@ interface BodyBot extends EventEmitter {
   physicsEnabled?: boolean;
   health?: number;
   entity?: { position?: { x: number; y: number; z: number } };
+  vehicle?: { id?: number; isValid?: boolean; position?: { x: number; y: number; z: number } } | null;
 }
 
 export interface NativeBodyReadiness {
-  phase: 'waiting-position' | 'waiting-physics' | 'controlled-flight' | 'ready' | 'closed';
-  boundary: 'attached' | 'login' | 'death' | 'respawn' | 'configuration' | 'mount';
+  phase: 'waiting-position' | 'waiting-physics' | 'controlled-flight' | 'mounted' | 'ready' | 'closed';
+  boundary: 'attached' | 'login' | 'death' | 'respawn' | 'configuration' | 'mount' | 'dismount';
   boundaryAt: number;
   positionAt: number | null;
   physicsAt: number | null;
   movementAt: number | null;
+  vehicleId?: number;
 }
 
 const readers = new WeakMap<object, () => NativeBodyReadiness>();
@@ -29,6 +31,7 @@ export function installNativeBodyReadiness(bot: BodyBot,
   if (existing) return { read: existing, dispose() {} };
   let closed = false;
   let flight: (() => boolean) | undefined;
+  let mounted: BodyBot['vehicle'];
   let state: NativeBodyReadiness = { phase: 'waiting-position', boundary: 'attached',
     boundaryAt: Date.now(), positionAt: null, physicsAt: null, movementAt: null };
   const finitePosition = () => {
@@ -40,6 +43,13 @@ export function installNativeBodyReadiness(bot: BodyBot,
     let phase: NativeBodyReadiness['phase'] = 'waiting-physics';
     if (closed) phase = 'closed';
     else if (state.positionAt === null || !finitePosition()) phase = 'waiting-position';
+    // Mineflayer deliberately suspends walking physics on a server-confirmed
+    // mount. No new player-position packet is required before driving a vehicle.
+    // Preserve the current life/world epoch; neither a stale vehicle pointer nor
+    // health/spawn can recover a missing post-respawn position.
+    else if (mounted && bot.vehicle === mounted && mounted.isValid !== false
+      && mounted.position && [mounted.position.x, mounted.position.y, mounted.position.z].every(Number.isFinite)
+      && inPlay() && Number.isFinite(bot.health) && bot.health! > 0) phase = 'mounted';
     else if (state.physicsAt !== null && inPlay() && Number.isFinite(bot.health) && bot.health! > 0) {
       // Mineflayer stops physicsTick during owned flight but still sends movement
       // updates (including a stationary position heartbeat about once a second).
@@ -52,11 +62,28 @@ export function installNativeBodyReadiness(bot: BodyBot,
   };
   const reset = (boundary: NativeBodyReadiness['boundary']) => {
     flight = undefined;
+    mounted = undefined;
     state = { phase: 'waiting-position', boundary, boundaryAt: Date.now(), positionAt: null, physicsAt: null, movementAt: null };
     observe?.('boundary', read());
   };
   const login = () => reset('login'), death = () => reset('death'), respawn = () => reset('respawn');
-  const mount = () => reset('mount');
+  const mount = () => {
+    const v = bot.vehicle;
+    if (closed) return;
+    if (!inPlay() || !Number.isInteger(v?.id) || v?.isValid === false) { reset('mount'); return; }
+    // On reconnect the server may attach passengers before its first position.
+    // Remember that new attachment, but read() still waits for this epoch's
+    // position. A retained bot.vehicle pointer alone never establishes a mount.
+    flight = undefined; mounted = v;
+    state = { ...state, boundary: 'mount', boundaryAt: Date.now(), physicsAt: null, vehicleId: v!.id };
+    observe?.('boundary', read());
+  };
+  const dismount = () => {
+    mounted = undefined;
+    state = { ...state, boundary: 'dismount', boundaryAt: Date.now(), physicsAt: null };
+    delete state.vehicleId;
+    observe?.('boundary', read());
+  };
   const protocol = (phase: string) => { if (phase === 'configuration') reset('configuration'); };
   const position = () => {
     if (closed || bot._client.state !== undefined && bot._client.state !== 'play') return;
@@ -82,7 +109,7 @@ export function installNativeBodyReadiness(bot: BodyBot,
     closed = true;
     flight = undefined;
     // Keep the closed reading on this obsolete bot, so it cannot silently become unmanaged.
-    bot.off('login', login); bot.off('death', death); bot.off('respawn', respawn); bot.off('mount', mount);
+    bot.off('login', login); bot.off('death', death); bot.off('respawn', respawn); bot.off('mount', mount); bot.off('dismount', dismount);
     bot.off('physicsTick', tick); bot.off('move', move); bot.off('end', dispose);
     bot._client.off('state', protocol); bot._client.off('position', position); bot._client.off('end', dispose);
   };
@@ -93,7 +120,7 @@ export function installNativeBodyReadiness(bot: BodyBot,
     flight = active;
     return () => { if (flight === active) flight = undefined; };
   });
-  bot.on('login', login); bot.on('death', death); bot.on('respawn', respawn); bot.on('mount', mount);
+  bot.on('login', login); bot.on('death', death); bot.on('respawn', respawn); bot.on('mount', mount); bot.on('dismount', dismount);
   bot.on('physicsTick', tick); bot.on('move', move); bot.once('end', dispose);
   bot._client.on('state', protocol); bot._client.on('position', position); bot._client.once('end', dispose);
   return { read, dispose };
@@ -113,6 +140,11 @@ export function nativeBodyBlockedReason(bot: object, skill?: string): string | n
   if (skill === 'chat') return null;
   const state = nativeBodyReadiness(bot);
   if (!state || state.phase === 'ready') return null;
+  if (state.phase === 'mounted') {
+    if (skill && ['goto', 'follow', 'follow_route', 'swim', 'surface', 'flight', 'control'].includes(skill))
+      return '当前已经乘坐载具；继续水路用 ride.to 或 ride_route。需要步行/游泳时先确认落点并明确下船，不能用步行物理驾驶。';
+    return null;
+  }
   if (state.phase === 'controlled-flight') {
     // control has its own mode check: ground/water inputs reject active flight.
     if (skill === 'land' || skill === 'flight' || skill === 'control') return null;

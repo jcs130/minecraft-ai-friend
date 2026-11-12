@@ -167,7 +167,7 @@ export type SkillCall = StepBounds & (
       face?: BlockFace;
     }
   /** 骑上/驾驭/下坐骑。off 单独一态;target 上坐骑;to 驾着走(可与 target 同给) */
-  | { skill: 'ride'; target?: string; entityId?: number; to?: Anchor; off?: true }
+  | { skill: 'ride'; target?: string; entityId?: number; to?: Anchor; off?: true; recover?: true }
   /**
    * 拴绳:拴住一只活物,牵着走到 to,到了松开(keep 就继续牵着)、或系到 tie 那根栅栏上。
    * off 单独一态 = 松开现在牵着的那只。
@@ -878,6 +878,8 @@ function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
 
 /** 骑乘:off / target / to 三个入参的横向规则都在这儿说清,不静默吃字段。 */
 function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
+  const recover = c.recover === true;
+  if (c.recover !== undefined && !recover) return { error: `${at} ride.recover 只认 true` };
   const off = c.off === true;
   const target = str(c.target);
   const entityId = c.entityId;
@@ -885,6 +887,8 @@ function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): 
     return {error:`${at} ride 的 entityId 须是非负实体ID，并与 target 一起给；不能用于下车`};
   }
   const to = c.to === undefined || c.to === null ? null : anchorOf(c.to, marks);
+  if (recover && (off || to || c.target !== 'boat' || !Number.isSafeInteger(entityId)))
+    return { error: `${at} 收船用 ride target:boat,entityId:当前空船编号,recover:true；不能同时上船、驾驶或下船，箱船需先处理内容物` };
   if (c.to !== undefined && c.to !== null && !to) {
     return { error: `${at} ride 的 to 要 [x,y,z](${RELATIVE_HINT})${markMissNote(c.to, marks)}` };
   }
@@ -904,6 +908,7 @@ function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): 
       ...(entityId===undefined ? {} : {entityId:Number(entityId)}),
       ...(to ? { to } : {}),
       ...(off ? { off: true as const } : {}),
+      ...(recover ? { recover: true as const } : {}),
     },
   };
 }
@@ -1634,13 +1639,16 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"ride","target":"boat"}                 只骑上不走;之后驾驭再来一步 {"skill":"ride","to":[x,y,z]}
                                                  较长水路可比较乘船、游泳、走桥或绕行；已有船先用，没有再核对 craft 材料和工作台，用 use 放船。1.21.1 的 oak_boat 是物品，boat 是实体；target 以当前版本与现场观察为准。
                                                  先选已观察的水路与上岸点，分段驾到岸边再下船；骑着时 goto 不会驾船。放船、乘上、驶过水面和安全上岸分别核验，不把接口存在当作已经学会。
-{"skill":"ride","off":true}                      从坐骑上下来。骑着的时候寻路器不管坐骑,goto 走不了`,
+{"skill":"ride","off":true}                      从坐骑上下来。骑着的时候寻路器不管坐骑,goto 走不了
+{"skill":"ride","target":"boat","entityId":123,"recover":true} 回收已点名、空置且在3格内可见的普通船；先下船站稳，再击碎。船消失不等于捡到；按物品净增加核验，未入包用pickup。箱船不在此快捷操作内。
+                                                 mc_script routine:{op:"read",id:"boat_trip"} 可读取放船→上船→驾驶→指定岸点下船→收船的同队列脚本。`,
     parse: parseRide,
     fields: [
       { key: 'target', kind: 'string', doc: '骑上哪种(实体英文 id:pig/boat/horse…);已骑着时可省' },
       { key: 'entityId', kind: 'int', lo:0,hi:2_147_483_647,def:0,doc:'与target一起指定本连接实体ID；只骑这只，不退回同类最近者' },
       { key: 'to', kind: 'anchor', error: `ride 的 to 要 [x,y,z](${RELATIVE_HINT})`, doc: '驾着去哪;猪、炽足兽和船能驾，马科暂不支持驾驶' },
       { key: 'off', kind: 'flag', doc: '下坐骑;与 target/to 互斥' },
+      { key: 'recover', kind: 'flag', doc: '下船后回收点名空普通船；须 target:boat 和 entityId，与 off/to 互斥' },
     ],
   },
   {

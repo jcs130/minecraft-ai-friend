@@ -5,6 +5,7 @@
  * 右键的结果一律回读世界或背包再报,不按客户端预测说话。
  */
 import { Vec3 } from 'vec3';
+import { recoverBoat } from './boat-recovery.ts';
 import type { Bot } from 'mineflayer';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
@@ -1459,6 +1460,7 @@ export function vehicleOf(bot: Bot): VehicleEntity | null {
 }
 
 export async function skillRide(bot: Bot, call: Extract<SkillCall, { skill: 'ride' }>, ctx: SkillContext): Promise<string> {
+  if (call.recover) return recoverBoat(bot, call.entityId!, ctx);
   if (call.off) {
     const v = vehicleOf(bot);
     if (!v) throw new SkillNoop('没骑着任何东西');

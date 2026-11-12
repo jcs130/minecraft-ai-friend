@@ -27,7 +27,7 @@ const SDK_API = Object.freeze({
     + '用 use 的 item:实际船物品ID,at:当前可达水面放船；回执给新船的 entityId 与类型，ride 必须点名它。消耗物品但未确认新实体时先观察，不重放放船，不把旁边旧船当本次产物。'
     + '上船后 ride.to 分段开行，或用 ride_route 连续路点；每段按 vehicle 身份、实际位置、碰撞与服务端纠偏验收，不能把上船当抵达。受阻仍保持当前乘坐，不自动下水；改道或先核对干燥落脚点再 off:true。'
     + '马可观察驯服/鞍、喂食、上马和下马；bot.moveVehicle 只发原生输入，Mineflayer没有马物理，不能用它宣称已骑行。'
-    + 'mc_script {routine:{op:"read",id:"ride_route"}} 按需读取内置可改写路线参考；自己编写前用 api:"authoring" 与 api:"mount"/"dismount"/"moveVehicle"。'
+    + 'mc_script {routine:{op:"read",id:"boat_trip"}} 是可改写的放船→上船→分段驾驶→指定岸点下船→收船脚本；已有载具多路点也可读 ride_route。没有安全岸点就保持乘坐，收船须点名空船并核验物品净增加。自己编写前用 api:"authoring" 与 api:"mount"/"dismount"/"moveVehicle"。'
     + '有明确交通目的且当前路段合适时可检索已有方法、改写、校验和使用；不强制为练习离开当前任务。',
   authoring: '可以直接写新的 JavaScript async 函数体，不必等待现有脚本提供所需动作。'
     + '精确路线、逐段姿态及禁入格用 api:"routes" 按需读取；无需每个路点返回主人格派工。'

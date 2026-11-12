@@ -33,10 +33,30 @@ it('keeps an idle stationary player ready while real physics continues, includin
   r.bot._client.emit('position', {});
   expect(r.observer.read().phase).toBe('ready'); expect(r.bot.entity.position.x).toBe(-645); r.observer.dispose();
 });
-it.each(['death', 'respawn', 'mount', 'login'])('requires a new position after the %s boundary', boundary => {
+it.each(['death', 'respawn', 'login'])('requires a new position after the %s boundary', boundary => {
   const r = rig(); r.land(); r.bot.emit(boundary); expect(r.observer.read().phase).toBe('waiting-position');
   r.bot.emit('spawn'); expect(r.observer.read().phase).toBe('waiting-position');
   r.land(); expect(r.observer.read().phase).toBe('ready'); r.observer.dispose();
+});
+it('keeps a confirmed mount usable without walking ticks, but never across death or a changed vehicle', async () => {
+  const r = rig(); r.land();
+  const vehicle = { id: 7, isValid: true, position: { x: 1, y: 64, z: 1 } };
+  Object.assign(r.bot, { vehicle }); r.bot.emit('mount');
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(r.observer.read()).toMatchObject({ phase: 'mounted', vehicleId: 7 });
+  expect(nativeBodyBlockedReason(r.bot, 'ride')).toBeNull();
+  expect(nativeBodyBlockedReason(r.bot)).toBeNull();
+  expect(nativeBodyBlockedReason(r.bot, 'goto')).toContain('ride.to');
+  Object.assign(r.bot, { vehicle: { ...vehicle } }); expect(r.observer.read().phase).toBe('waiting-physics');
+  Object.assign(r.bot, { vehicle }); r.bot.emit('death'); r.bot.emit('respawn'); r.bot.emit('mount');
+  expect(r.observer.read().phase).toBe('waiting-position'); r.observer.dispose();
+});
+it('waits for native walking physics after dismount and drops all mount listeners on disposal', () => {
+  const r = rig(); r.land(); Object.assign(r.bot, { vehicle: { id: 7, position: { x: 1, y: 64, z: 1 } } });
+  r.bot.emit('mount'); Object.assign(r.bot, { vehicle: null }); r.bot.emit('dismount');
+  expect(r.observer.read().phase).toBe('waiting-physics');
+  r.land(); expect(r.observer.read().phase).toBe('ready');
+  r.observer.dispose(); expect(r.bot.listenerCount('mount')).toBe(0); expect(r.bot.listenerCount('dismount')).toBe(0);
 });
 it('does not reuse a previous world position through configuration or a closed connection', () => {
   const r = rig(); r.land(); r.bot._client.state = 'configuration'; r.bot._client.emit('state', 'configuration');
