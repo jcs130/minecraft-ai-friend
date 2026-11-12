@@ -16,6 +16,23 @@ const server = (id: string, intents: MinecraftOption['intents']): MinecraftOptio
   source: { kind: 'server-observation', reference: 'test', observedAt: '2026-10-17T00:00:00Z' } });
 
 describe('outcome-oriented capability discovery', () => {
+  it('keeps a placed boat and current mount in the focused travel facts when carried boats are zero', () => {
+    const entities = [{entityId:493494,name:'boat',visible:true,distance:3},
+      {entityId:2,name:'oak_boat',visible:false,distance:2},
+      {entityId:3,name:'horse',visible:true,distance:1}] as WorldSnapshot['entities'];
+    const s=minecraftOptionsFromSnapshot(snapshot({inWater:true,entities,vehicle:null}),foods,state);
+    expect(s.context.nearbyBoats).toEqual([{entityId:493494,name:'boat',distance:3}]);
+    const fact=renderMinecraftTravelOptions(s)!;
+    expect(fact).toContain('随身船 0');expect(fact).toContain('boat#493494 3格');
+    expect(fact).toContain('当前未乘坐');expect(fact).toContain('归属/空座待核');
+    expect(fact).not.toContain('oak_boat');expect(fact).not.toContain('horse');
+    const mounted=minecraftOptionsFromSnapshot(snapshot({vehicle:{entityId:493494,name:'boat',position:null,velocity:null}}),foods,state);
+    expect(renderMinecraftTravelOptions(mounted)).toContain('正在乘坐 boat#493494');
+    const unobserved=minecraftOptionsFromSnapshot(snapshot({inWater:true,invSynced:false}),foods,state);
+    expect(renderMinecraftTravelOptions(unobserved)).toContain('乘坐未核验');
+    expect(renderMinecraftTravelOptions(unobserved)).toContain('非全域搜索');
+    expect(unobserved.context.carriedBoats).toBeNull();
+  });
   it('delivers current construction inputs without treating no boat or an omitted bag as no materials', () => {
     const s=minecraftOptionsFromSnapshot(snapshot({ inventory:[{name:'oak_log',count:3},{name:'oak_planks',count:4},
       {name:'birch_planks',count:2},{name:'crafting_table',count:1}], equipment:[{slot:'offhand',name:'oak_planks',count:2}] as WorldSnapshot['equipment'] }),foods,state);

@@ -46,11 +46,17 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     craftingTables: inventory!.filter(s => s.name === 'crafting_table').reduce((n, s) => n + s.count, 0) } : null;
   const vehicles = snapshot.entities.filter(e => e.visible && /boat|raft|horse|donkey|mule|pig$|strider/.test(e.name))
     .slice(0, 4).map(e => `${e.name} ${e.distance}格`);
+  const nearbyBoats = snapshot.entities.filter(e => e.visible && boatItem(e.name)
+    && Number.isFinite(e.distance) && e.distance >= 0).slice(0, 4)
+    .map(({ entityId, name, distance }) => ({ ...(Number.isSafeInteger(entityId) ? {entityId} : {}), name, distance }));
   const context = { sampledAt: snapshot.realTime, backend: 'mineflayer' as const, food: snapshot.food,
     oxygen: snapshot.inWater ? snapshot.oxygen : null, headInWater: snapshot.inWater,
     inWater: snapshot.inWater || WATER_BLOCKS.has(snapshot.footing?.block ?? snapshot.standingOn ?? ''),
     carriedFood: edible?.reduce((n, s) => n + s.count, 0) ?? null,
     carriedBoats: boats?.reduce((n, s) => n + s.count, 0) ?? null,
+    currentVehicle: snapshot.vehicle === undefined ? undefined : snapshot.vehicle === null ? null
+      : { entityId: snapshot.vehicle.entityId, name: snapshot.vehicle.name },
+    nearbyBoats,
     boatSupplies,
     meleeEquipment: inventory ? [...new Set(inventory.filter(s => s.count > 0 && weaponScore(s.name) >= 0).map(s => s.name))] : null,
     arrows: inventory?.filter(s => s.name === 'arrow').reduce((n,s)=>n+s.count,0) ?? null,
@@ -83,7 +89,7 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
       support: 'supported', evidence: [state.task ? `当前身体任务：${state.task.slice(0, 140)}` : '当前无身体任务'],
       checks: ['实际通路和落脚点；有效任务继续，不因查看候选重复接管'], read: [guide({ skill: 'goto' })], source },
     { id: 'core.boat', intents: ['water', 'travel'], title: '乘已有船或造船', purpose: '较长河流、湖面和沿岸交通；短涉水也可走桥或绕陆。',
-      support: 'supported', evidence: [`随身船 ${context.carriedBoats ?? '未知'}`, renderBoatSupplies(boatSupplies),
+      support: 'supported', evidence: [`随身船 ${context.carriedBoats ?? '未知'}`, renderBoatPresence(context), renderBoatSupplies(boatSupplies),
         `当前可见载具：${vehicles.join('、') || '本次近处列表未报告；非全域搜索'}`],
       checks: ['先确认已有船；没有再读当前船配方、材料及工作台', '核对放船水面、通航净空和上岸点；放船、上船、航行、上岸分别验收'],
       read: [{ tool: 'mc_bag', args: {} }, { tool: 'mc_knowledge', args: { kind: 'recipe', query: 'boat' } }, guide({ skills: ['craft', 'use', 'ride'] }),
@@ -110,6 +116,15 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
       read: [{ tool: 'mc_script', args: { api: 'methods' } }, method(''), { tool: 'mc_memory', args: { action: 'experience', operation: 'help' } }], source },
   ];
   return { schema: 'minecraft-options/v1', context, options };
+}
+
+function renderBoatPresence(c: MinecraftOptionsSnapshot['context']): string {
+  const mounted = c.currentVehicle === undefined ? '乘坐未核验' : c.currentVehicle === null ? '当前未乘坐'
+    : `正在乘坐 ${c.currentVehicle.name ?? '载具'}#${c.currentVehicle.entityId ?? '?'}`;
+  const boats = c.nearbyBoats;
+  const visible = boats?.length ? boats.slice(0, 2).map(b => `${b.name}#${b.entityId ?? '?'} ${b.distance}格`).join('、')
+    + (boats.length > 2 ? `等${boats.length}条` : '') : '本次近处未报告';
+  return `${mounted}；已见船：${visible}（非全域搜索，归属/空座待核）`;
 }
 
 function renderBoatSupplies(value: MinecraftOptionsSnapshot['context']['boatSupplies'], limit = 8): string {
@@ -143,13 +158,13 @@ export function relevantMinecraftOptionIntents(s: MinecraftOptionsSnapshot): Min
 }
 /** Focused discovery for the body owner, even when the assigned task only asked for other facts. */
 export function renderMinecraftTravelOptions(s: MinecraftOptionsSnapshot): string | null {
-  if (!s.context.inWater && !s.context.travelling) return null;
+  if (!s.context.inWater && !s.context.travelling && !boatItem(s.context.currentVehicle?.name ?? '')) return null;
   const boat = s.options.find(option => option.id === 'core.boat' && option.support === 'supported');
   if (!boat) return null;
   const current = s.context.inWater ? '当前位置触水' : '正在赶路';
-  return `[水路候选] ${current}。随身船 ${s.context.carriedBoats ?? '未知'}；${renderBoatSupplies(s.context.boatSupplies, 3)}。若路线经过长水面，比较用已有船、造船、游泳或绕陆。`
-    + '用 mc_options {"intent":"water"} 查当前配方与操作入口；goto 只步行/游泳，不会自动造船或驾驶。'
-    + '先核对原料、下水点和上岸点；无现成船不等于无法造船。'
+  return `[水路候选] ${current}。随身船 ${s.context.carriedBoats ?? '未知'}；${renderBoatPresence(s.context)}；${renderBoatSupplies(s.context.boatSupplies, 3)}。`
+    + '随身无船≠已放船不存在；按现场比较已有船、造船、游泳或绕陆，核对通航及岸点。'
+    + 'mc_options {"intent":"water"} 查入口；goto 只步行/游泳，不自动驾驶。'
     + '可用 mc_choose category:route 比较乘船与其他实际候选；mc_script routine:{op:"read",id:"boat_trip"} 有放船、驾驶、上岸及回收脚本。';
 }
 export function renderMinecraftOptionIndex(s: MinecraftOptionsSnapshot): string {

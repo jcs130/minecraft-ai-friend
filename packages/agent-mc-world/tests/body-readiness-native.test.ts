@@ -1,3 +1,4 @@
+import '../core/dependency-patches.ts';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -10,9 +11,10 @@ import { rideDrive } from '../core/skills-interact.ts';
 
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
-it.each([false, true])('drives after real set_passengers with mount before first position=%s', async mountFirst => {
+it.each([false, true])('drives after real set_passengers over deep water with mount before first position=%s', async mountFirst => {
   vi.useFakeTimers(); vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
   const h = methodHarness('1.21.1'); h.close(); const b = h.bot as unknown as Bot;
+  for (let x=-1;x<=6;x++) for (let z=-1;z<=1;z++) for (let y=30;y<64;y++) h.set(x,y,z,'water');
   Object.assign(b, { supportFeature: b.registry.supportFeature });
   const self = b.entity;
   req('mineflayer/lib/plugins/entities.js')(b);
@@ -31,16 +33,45 @@ it.each([false, true])('drives after real set_passengers with mount before first
     b._client.emit('position', { x:.5,y:64,z:.5,yaw:0,pitch:0,flags:0,teleportId:1 });
     await vi.advanceTimersByTimeAsync(100);
     if (!mountFirst) b._client.emit('set_passengers', { entityId:9,passengers:[self.id] });
+    const mountedY=b.entity.position.y;
     await vi.advanceTimersByTimeAsync(6000);
     expect(observer.read()).toMatchObject({ phase:'mounted',vehicleId:9 });
+    // A mounted passenger must not run walking physics and sink away from its boat.
+    expect(b.entity.position.y).toBeCloseTo(mountedY, 3);
     const driving = rideDrive(b,{aborted:()=>false} as never,{x:5,y:64,z:0});
     await vi.advanceTimersByTimeAsync(2000);
     expect(await driving).toContain('人还骑着');
     expect(boat.position.x).toBeGreaterThan(3);
     expect(write.mock.calls.some(([name])=>name==='vehicle_move')).toBe(true);
+    b._client.emit('set_passengers', {entityId:9,passengers:[]});
+    b._client.emit('position', {x:8.5,y:64,z:.5,yaw:0,pitch:0,flags:0,teleportId:2});
+    await vi.advanceTimersByTimeAsync(100);
+    expect(observer.read().phase).toBe('ready');
+    const ashore=b.entity.position.clone(); b.setControlState('forward',true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(b.entity.position.distanceTo(ashore)).toBeGreaterThan(.1);
     b.emit('death'); b.emit('respawn');
     expect(observer.read().phase).toBe('waiting-position');
   } finally { b.emit('end'); observer.dispose(); }
+});
+it('does not enable walking when a delayed respawn position is confirmed after mounting', async () => {
+  vi.useFakeTimers(); vi.spyOn(performance,'now').mockImplementation(()=>Date.now());
+  const h=methodHarness('1.21.1');h.close();const b=h.bot as unknown as Bot;
+  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)for(let y=30;y<64;y++)h.set(x,y,z,'water');
+  Object.assign(b,{supportFeature:b.registry.supportFeature});const self=b.entity;
+  req('mineflayer/lib/plugins/entities.js')(b);b.entity=self;b.entities[self.id]=self;
+  b.entities[9]={id:9,name:'boat',isValid:true,passengers:[],position:new Vec3(.5,64,.5)} as never;
+  req('mineflayer/lib/plugins/physics.js')(b,{physicsEnabled:true});
+  const write=vi.spyOn(b._client,'write');
+  try{
+    b.emit('login');b.emit('death');b.emit('respawn');
+    b._client.emit('position',{x:.5,y:64,z:.5,yaw:0,pitch:0,flags:0,teleportId:10});
+    b._client.emit('set_passengers',{entityId:9,passengers:[self.id]});
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(b.entity.position.y).toBeCloseTo(64,3);
+    expect(write.mock.calls.filter(([name])=>name==='teleport_confirm')).toHaveLength(1);
+    expect(write.mock.calls.some(([name])=>name==='position_look')).toBe(true);
+  }finally{b.emit('end');}
 });
 it.each([false, true])('keeps missing-body work blocked despite an explicit old-position expectation=%s, while retaining chat', async explicit => {
   vi.useFakeTimers();
