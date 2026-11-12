@@ -49,6 +49,23 @@ it('bounds historical receipt retention and never invents outcomes for an evicte
   expect((r.world as any).queueReadout({ taskId: 2 }).text).toContain(receipt);
 });
 
+it('keeps successful-step limitations in both compact queue forms without replaying the command',async()=>{
+  vi.useFakeTimers();const r=rig();
+  r.exec.submitDetailed([
+    {skill:'server_travel',command:'/example list',at:[0,64,0],within:16},
+    {skill:'server_travel',command:'/example stash',at:[0,64,0],within:16},
+  ],'append');
+  await vi.advanceTimersByTimeAsync(100);
+  const queue=r.world.tools().find(t=>t.name==='mc_queue')!;
+  const result=await queue.handler({},{role:'test',log:r.host.log,round:1}) as any;
+  expect(result.text).toContain('命令未发送');
+  expect(result.data.last.evidence.steps).toMatchObject([
+    {detail:{text:expect.stringContaining('chat.text')}},
+    {detail:{text:expect.stringContaining('chat.text')}},
+  ]);
+  expect(result.data.goalCompleted).toBe(false);expect(r.said).toEqual([]);
+});
+
 it('exposes historical native failure/effect evidence independently of task prose and sampling clocks',async()=>{
   const r=rig();(r.world as any).onTaskReport({kind:'blocked',taskId:300,text:'details '.repeat(1000),steps:[{step:1,outcome:'fail',why:'permission denied',
     decision:{status:'blocked',reason:'protection-denied',completed:0,remaining:1,unit:'cells',retryable:false,retry_after:null,continue_when:null,next_safe_read:{tool:'mc_queue',arguments:{}}},
