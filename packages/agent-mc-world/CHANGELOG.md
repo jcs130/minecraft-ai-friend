@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.51
+
+- Report all independent entity/item goal-probe errors together; reject display names used as registry IDs. Preserve measured game voice duration failures and safe recovery without resending text or audio.
+
 ## 0.5.7-rc.160-preview.50
 
 - Include a compact, current water-travel choice in the native body-owner facts during travel or water contact. Carry over the observed boat availability and point to recipe, placement, and driving help on demand.
