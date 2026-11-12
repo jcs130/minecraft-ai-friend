@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.52
+
+- Include bounded, freshly synchronized boat material counts and carried workbenches in water-travel facts. Keep unknown stock distinct from absent stock and recipe readiness, and expose focused inventory/recipe/driving help without starting a body action.
+
 ## 0.5.7-rc.160-preview.51
 
 - Report all independent entity/item goal-probe errors together; reject display names used as registry IDs. Preserve measured game voice duration failures and safe recovery without resending text or audio.

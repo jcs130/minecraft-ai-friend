@@ -23,6 +23,10 @@ const title: Record<MinecraftOptionIntent, string> = {
   explore: '现场线索与交互', method: '已保存方法与经验',
 };
 const boatItem = (id: string) => /(?:^|_)(?:boat|chest_boat|raft|chest_raft)$/.test(id);
+// Candidate inputs only: recipes still come from the actual connection. Custom
+// stacks are not declared unusable and mixed species are never summed as a boat.
+const boatSupply = (id: string) => /(?:_planks|_log|_wood|_stem|_hyphae|_bamboo_block)$/.test(id)
+  || id === 'bamboo' || id === 'bamboo_block';
 
 /** Uses the same cheap snapshot and versioned food registry as current facts. Never reads blocks or files. */
 export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Record<string, FoodValue | undefined>,
@@ -34,6 +38,12 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     && (foods[s.name]?.foodPoints ?? 0) > 0) : null;
   const foodNames = edible?.slice(0, 4).map(s => `${s.name}×${s.count}`).join('、');
   const boats = inventory?.filter(s => boatItem(s.name)) ?? null;
+  const supplies = inventory && [...inventory.filter(s => s.count > 0 && boatSupply(s.name))
+    .reduce((counts, s) => counts.set(s.name, (counts.get(s.name) ?? 0) + s.count), new Map<string, number>())]
+    .sort(([a], [b]) => a.localeCompare(b));
+  const boatSupplies = supplies ? { stacks: supplies.slice(0, 8).map(([name, count]) => ({ name, count })),
+    omitted: Math.max(0, supplies.length - 8),
+    craftingTables: inventory!.filter(s => s.name === 'crafting_table').reduce((n, s) => n + s.count, 0) } : null;
   const vehicles = snapshot.entities.filter(e => e.visible && /boat|raft|horse|donkey|mule|pig$|strider/.test(e.name))
     .slice(0, 4).map(e => `${e.name} ${e.distance}格`);
   const context = { sampledAt: snapshot.realTime, backend: 'mineflayer' as const, food: snapshot.food,
@@ -41,6 +51,7 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     inWater: snapshot.inWater || WATER_BLOCKS.has(snapshot.footing?.block ?? snapshot.standingOn ?? ''),
     carriedFood: edible?.reduce((n, s) => n + s.count, 0) ?? null,
     carriedBoats: boats?.reduce((n, s) => n + s.count, 0) ?? null,
+    boatSupplies,
     meleeEquipment: inventory ? [...new Set(inventory.filter(s => s.count > 0 && weaponScore(s.name) >= 0).map(s => s.name))] : null,
     arrows: inventory?.filter(s => s.name === 'arrow').reduce((n,s)=>n+s.count,0) ?? null,
     freeSlots: snapshot.invSynced ? state.freeSlots : null, travelling: state.travelling,
@@ -72,9 +83,10 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
       support: 'supported', evidence: [state.task ? `当前身体任务：${state.task.slice(0, 140)}` : '当前无身体任务'],
       checks: ['实际通路和落脚点；有效任务继续，不因查看候选重复接管'], read: [guide({ skill: 'goto' })], source },
     { id: 'core.boat', intents: ['water', 'travel'], title: '乘已有船或造船', purpose: '较长河流、湖面和沿岸交通；短涉水也可走桥或绕陆。',
-      support: 'supported', evidence: [`随身船 ${context.carriedBoats ?? '未知'}`, `当前可见载具：${vehicles.join('、') || '本次近处列表未报告；非全域搜索'}`],
+      support: 'supported', evidence: [`随身船 ${context.carriedBoats ?? '未知'}`, renderBoatSupplies(boatSupplies),
+        `当前可见载具：${vehicles.join('、') || '本次近处列表未报告；非全域搜索'}`],
       checks: ['先确认已有船；没有再读当前船配方、材料及工作台', '核对放船水面、通航净空和上岸点；放船、上船、航行、上岸分别验收'],
-      read: [{ tool: 'mc_knowledge', args: { kind: 'recipe', query: 'boat' } }, guide({ skills: ['craft', 'use', 'ride'] }),
+      read: [{ tool: 'mc_bag', args: {} }, { tool: 'mc_knowledge', args: { kind: 'recipe', query: 'boat' } }, guide({ skills: ['craft', 'use', 'ride'] }),
         { tool: 'mc_script', args:{api:'mobility'} }, {tool:'mc_script',args:{routine:{op:'read',id:'ride_route'}}}, method('ride')], source },
     { id: 'core.horse-travel', intents: ['travel'], title: '骑马赶路（驾驶尚不支持）', purpose: '区分观察、上马/驯服与实际驾驶能力。',
       support: 'unsupported', evidence: ['当前 ride 实现可上马和下马；不支持马/驴/骡驾驶'],
@@ -98,6 +110,14 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
       read: [{ tool: 'mc_script', args: { api: 'methods' } }, method(''), { tool: 'mc_memory', args: { action: 'experience', operation: 'help' } }], source },
   ];
   return { schema: 'minecraft-options/v1', context, options };
+}
+
+function renderBoatSupplies(value: MinecraftOptionsSnapshot['context']['boatSupplies'], limit = 8): string {
+  if (!value) return '造船原料未同步，不能推定没有木材';
+  const omitted = value.omitted + Math.max(0, value.stacks.length - limit);
+  return `已同步随身候选木料：${value.stacks.slice(0, limit).map(s => `${s.name}×${s.count}`).join('、') || '未见标准木料'}`
+    + (omitted ? `（另${omitted}种未展开）` : '')
+    + `；随身工作台 ${value.craftingTables}。原料≠可合成；附近/存放处的材料与工作台未查询`;
 }
 
 export function extendMinecraftOptions(snapshot: MinecraftOptionsSnapshot, extra: readonly MinecraftOption[]): MinecraftOptionsSnapshot {
@@ -127,8 +147,9 @@ export function renderMinecraftTravelOptions(s: MinecraftOptionsSnapshot): strin
   const boat = s.options.find(option => option.id === 'core.boat' && option.support === 'supported');
   if (!boat) return null;
   const current = s.context.inWater ? '当前位置触水' : '正在赶路';
-  return `[水路候选] ${current}。${boat.evidence.join('；')}。若路线经过长水面，比较用已有船、造船、游泳或绕陆。`
-    + '用 mc_options {"intent":"water"} 查当前候选、配方与放船／驾驶入口。先核对材料、下水点和上岸点，再决定是否换路线。';
+  return `[水路候选] ${current}。随身船 ${s.context.carriedBoats ?? '未知'}；${renderBoatSupplies(s.context.boatSupplies, 3)}。若路线经过长水面，比较用已有船、造船、游泳或绕陆。`
+    + '用 mc_options {"intent":"water"} 查当前配方与操作入口；goto 只步行/游泳，不会自动造船或驾驶。'
+    + '先核对原料、下水点和上岸点；无现成船不等于无法造船。';
 }
 export function renderMinecraftOptionIndex(s: MinecraftOptionsSnapshot): string {
   const intents = relevantMinecraftOptionIntents(s);
