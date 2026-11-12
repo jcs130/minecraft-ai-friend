@@ -15,7 +15,31 @@ final class NativeMaidNearbyChat implements Listener {
     private record Pose(long time,UUID world,double x,double y,double z){}
     private final Map<UUID,ArrayDeque<Pose>> positions=new HashMap<>();
     private final MaidConversationWindow conversation=new MaidConversationWindow();
-    void replied(Player actor,EntityMaid maid){conversation.replied(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,System.nanoTime());}
+    boolean allow(Player actor,EntityMaid maid,String text){
+        return conversation.allow(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,text,System.nanoTime());
+    }
+    boolean started(Player actor,EntityMaid maid){
+        return conversation.started(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,System.nanoTime());
+    }
+    void replied(Player actor,EntityMaid maid,String reply,boolean proactive){
+        conversation.replied(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,reply,proactive,System.nanoTime());
+    }
+    void closed(Player actor,EntityMaid maid){
+        conversation.close(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,System.nanoTime());
+    }
+    boolean mayInitiate(Player actor,EntityMaid maid){
+        return conversation.mayInitiate(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,System.nanoTime());
+    }
+    @EventHandler public void changedWorld(org.bukkit.event.player.PlayerChangedWorldEvent event){
+        Player actor=event.getPlayer();
+        plugin.resetNearbyConversation(actor,"world_changed");
+        conversation.reset(actor.getUniqueId());
+    }
+    @EventHandler public void quit(org.bukkit.event.player.PlayerQuitEvent event){
+        Player actor=event.getPlayer();
+        plugin.resetNearbyConversation(actor,"listener_left");
+        conversation.reset(actor.getUniqueId());
+    }
     private String addressed(Player actor,EntityMaid maid,String text){
         String direct=actor.getUniqueId().equals(maid.getOwnerUUID())
             ?MaidAddressing.partnerAddressed(maid.getName().getString(),text)

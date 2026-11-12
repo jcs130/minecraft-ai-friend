@@ -15,7 +15,11 @@ final class MaidConversationInitiative {
     }
     boolean opportunity(long now,boolean together,String scene,double x,double z,long cue){
         if(!together){togetherSince=Long.MIN_VALUE;return false;}
-        if(togetherSince==Long.MIN_VALUE){togetherSince=now;return false;}
+        if(togetherSince==Long.MIN_VALUE){
+            togetherSince=now;
+            if(lastScene==null){lastScene=scene;lastX=x;lastZ=z;}
+            return false;
+        }
         if(now-togetherSince<SETTLE||now<quietUntil)return false;
         boolean moved=lastScene!=null&&Math.hypot(x-lastX,z-lastZ)>=64;
         if(Objects.equals(lastScene,scene)&&!moved&&cue<=lastCue)return false;

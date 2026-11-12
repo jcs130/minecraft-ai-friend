@@ -215,8 +215,14 @@ final class NativeMaidOwnerTravel implements Listener {
         EntityMaid maid = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
         if (maid == null || !ownerId.equals(maid.getOwnerUUID()) || !source.equals(maid.getBukkitEntity().getWorld())
                 || !plugin.sharedDialogueEnabled(maid) || !maid.isAlive() || maid.isRemoved() || maid.isNoAi()
-                || maid.isMaidInSittingPose() || maid.isHomeModeEnable() || maid.isSleeping() || !maid.canBrainMoving()) return null;
+                || maid.isSleeping()) return null;
         boolean idle = maid.getTask().getUid().toString().equals("touhou_little_maid:idle");
+        // Model-selected short waiting is still companionship, not permanent stationing.
+        // Keep the lease and original identity across an accepted partner departure.
+        // Native following resumes on expiry in the arrival world.
+        boolean temporaryWait = idle && MaidCompanionActions.waiting(maid)
+                && maid.isMaidInSittingPose() && maid.isHomeModeEnable() && !maid.isPassenger() && !maid.isVehicle();
+        if (!temporaryWait && (maid.isMaidInSittingPose() || maid.isHomeModeEnable() || !maid.canBrainMoving())) return null;
         boolean defending = !maid.getPersistentData().getString("qiandengji_auto_defence_task").isEmpty();
         return idle || defending ? maid : null;
     }

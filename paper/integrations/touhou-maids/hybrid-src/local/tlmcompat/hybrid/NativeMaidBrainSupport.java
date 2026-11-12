@@ -30,6 +30,7 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
     private final Map<LLMCallback,Selection> selections=Collections.synchronizedMap(new WeakHashMap<>());
     private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();
     private final MaidBrainToolGuard toolGuard;
+    private final ThreadLocal<LLMCallback> buildingRequest=new ThreadLocal<>();
     private volatile boolean closed;
     record Selection(String site,String model,UUID maid,UUID owner,String operation){}
 
@@ -80,8 +81,15 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
                 callback.onFailure(null,new IllegalStateException("SHARED_MAID_MODEL_NOT_ENABLED: only the original configured companion may use this site; query brain choices."),403);plugin.nativeModelFailed(callback,plugin.startingNativeOperation(),"SHARED_MAID_MODEL_NOT_ENABLED");return;
             }
             selections.putIfAbsent(callback,new Selection(site.id(),maid.getAiChatManager().getLLMModel(),maid.getUUID(),maid.getOwnerUUID(),plugin.startingNativeOperation()));
-            try{super.chat(callback);}
+            LLMCallback previous=buildingRequest.get();
+            try{buildingRequest.set(callback);super.chat(callback);}
             catch(Exception error){callback.onFailure(null,new IllegalStateException("MAID_NATIVE_REQUEST_FAILED_QUERY_RECEIPT"),502);failed(callback,"MAID_NATIVE_REQUEST_FAILED_QUERY_RECEIPT");}
+            finally{if(previous==null)buildingRequest.remove();else buildingRequest.set(previous);}
+        }
+        @Override protected com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion extraArgs(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
+            request=super.extraArgs(request);
+            if(buildingRequest.get() instanceof CompanionActionCallback companion)companion.addCompanionTools(request);
+            return request;
         }
         @Override public <T> void handleResponse(LLMCallback callback,HttpResponse<String> response,Throwable error,HttpRequest request,Consumer<T> consumer,Type type){
             if(!current(callback)){callback.onFailure(request,new IllegalStateException("MAID_BRAIN_CHANGED: original response refused; query original receipt."),409);failed(callback,"MAID_BRAIN_CHANGED_QUERY_RECEIPT");return;}
