@@ -28,7 +28,9 @@ export interface GameVoiceReceipt {
   requestId: string; fingerprint: string; source: 'text' | 'artifact'; createdAt: string;
   world: ProximityVoiceContext['world']; generation: string;
   outputMode: ProximityVoiceConfig['outputMode'];
-  game: {state: string; reason?: string; nextStep?:string; actualHearingVerified?:false; delivery?:ProximityVoiceResult['delivery']};
+  game: {state: string; reason?: string; nextStep?:string; retryable?:false;
+    audioError?:{code:'VOICE_AUDIO_DURATION_EXCEEDED';durationMs:number;maxDurationMs:number};
+    actualHearingVerified?:false; delivery?:ProximityVoiceResult['delivery']};
   broadcast: {requested: boolean; state: string; actionId?: string; reason?: string; updatedAt?:number};
   audioProducerUrl?: string;
   audioSha256?: string; generationComplete: boolean | null;
@@ -43,11 +45,32 @@ export interface GameVoiceReceipt {
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const terminal = new Set(['sent','failed','cancelled','unknown','not_found']);
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+class VoiceArtifactResponseError extends Error {
+  constructor(status:number,readonly audioError?:NonNullable<GameVoiceReceipt['game']['audioError']>) {
+    super(audioError ? `${audioError.code}: ${Math.round(audioError.durationMs)}ms > ${audioError.maxDurationMs}ms` : `VOICE_ARTIFACT_HTTP_${status}`);
+  }
+}
+/** Decode only the finite public diagnostic, never echo arbitrary producer/proxy bodies into Agent context. */
+async function artifactResponseError(response:Response):Promise<VoiceArtifactResponseError> {
+  const fallback=new VoiceArtifactResponseError(response.status),reader=response.body?.getReader();
+  if(!reader)return fallback;
+  const timer=setTimeout(()=>{void reader.cancel().catch(()=>{});},2000);
+  try {
+    if(!response.headers.get('content-type')?.includes('application/json'))return fallback;
+    const parts:Uint8Array[]=[];let size=0;
+    for(;;){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>4096)return fallback;parts.push(part.value);}
+    const value=JSON.parse(Buffer.concat(parts).toString('utf8'))?.diagnostic;
+    if(value?.protocol!=='voice-artifact-error/v1'||value.code!=='VOICE_AUDIO_DURATION_EXCEEDED'||value.retryable!==false
+      ||typeof value.durationMs!=='number'||!Number.isFinite(value.durationMs)||value.durationMs<=30000||value.durationMs>3600000
+      ||value.maxDurationMs!==30000)return fallback;
+    return new VoiceArtifactResponseError(response.status,{code:value.code,durationMs:value.durationMs,maxDurationMs:value.maxDurationMs});
+  }catch{return fallback;}finally{clearTimeout(timer);await reader.cancel().catch(()=>{});reader.releaseLock();}
+}
 export const PROXIMITY_VOICE_TOOL: Omit<ToolDef,'handler'> = {
   name: 'mc_voice', tags: ['speak'], bodyControl: 'independent',
   description: 'Optional speech to nearby Minecraft players, using the existing authenticated game connection. '
     + 'Not audience commentary, private chat or shout. {} shows availability and output mode. '
-    + '{action:"speak",text,requestId?} synthesizes ONE full line through the configured audio producer; '
+    + '{action:"speak",text,requestId?} synthesizes ONE full line through the configured audio producer (generated audio must also fit 30s); '
     + '{action:"upload",audio_handle,text?,requestId?} uploads a PCM16 WAV blob (0.1–30s, max4MiB); text is an optional authored caption, not verified transcription. '
     + 'Authored text is also sent to the confirmed nearby text channel while synthesis proceeds; no global/private fallback. '
     + 'Game-only mode sends game audio and nearby text; live-and-game mirrors the SAME audio to the livestream, whose own queue still applies. '
@@ -221,7 +244,7 @@ export class ProximityVoiceLane {
       if(!bytes){receipt.game={state:'synthesizing'};(receipt.timings??={}).synthesisStartedAt=new Date().toISOString();this.publish(receipt);
         const response=await fetch(this.producer(config.audioProducerUrl)+'/api/voice-artifacts',{
           method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:receipt.requestId,text}),signal,redirect:'error'});
-        if(!response.ok||!response.body)throw Error('VOICE_ARTIFACT_HTTP_'+response.status);
+        if(!response.ok||!response.body)throw await artifactResponseError(response);
         let size=0;const chunks:Buffer[]=[],reader=response.body.getReader();
         try {for(;;){const {done,value}=await reader.read();if(done)break;
           size+=value.length;if(size>4*1024*1024){abort.abort();throw Error('VOICE_AUDIO_MAX_4_MIB');}chunks.push(Buffer.from(value));}}
@@ -236,6 +259,10 @@ export class ProximityVoiceLane {
       const broadcast=receipt.broadcast.requested?this.mirror(receipt,config,signal,receipt.source==='artifact'?bytes:undefined):Promise.resolve();
       const [result]=await Promise.all([game,broadcast]);this.serverResult(result);
     }catch(error){receipt.game={state:uploadStarted||abort.signal.aborted?'unknown':'failed',reason:String(error).slice(0,240)};
+      if(error instanceof VoiceArtifactResponseError&&error.audioError){
+        receipt.game.audioError=error.audioError;receipt.game.retryable=false;
+        receipt.game.nextStep='这条完整语音超过游戏内 30 秒上限，未上传。若仍需说话，重新写一条更简短的完整台词；不要照原文换 ID 重试，不要裁音频或拆成多次克隆。附近文字有独立回执，已发送不等于对方听到。';
+      }
       if(receipt.broadcast.state==='pending')receipt.broadcast={...receipt.broadcast,state:'not-submitted',reason:'Game preparation failed'};
       this.publish(receipt);
     }finally{await caption;}

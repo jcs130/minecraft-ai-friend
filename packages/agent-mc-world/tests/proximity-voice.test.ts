@@ -47,6 +47,24 @@ function laneFixture(options:{file?:string;url?:string;live?:boolean;caption?:bo
  return{lane,b,changes,heard,ops,parts,texts,setValid:(value:boolean)=>{valid=value;},setWorld:(value:string)=>{world=value;revision++;},getAuto:()=>auto};
 }
 describe('independent game voice lane',()=>{
+ it('exposes measured overlong synthesis as a non-retryable repairable failure, keeping delivered text separate',async()=>{
+   let synthesis=0;const server=createServer(async(req,res)=>{synthesis++;for await(const _ of req){}
+     res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({error:'do not copy provider internals',diagnostic:{protocol:'voice-artifact-error/v1',code:'VOICE_AUDIO_DURATION_EXCEEDED',retryable:false,durationMs:38080.7256,maxDurationMs:30000,secret:'do not copy'}}));});
+   await new Promise<void>(ok=>server.listen(0,'127.0.0.1',ok));const f=laneFixture({url:'http://127.0.0.1:'+(server.address() as any).port,caption:true,live:true});
+   try {const args={action:'speak',text:'This is a complete authored utterance.',requestId:randomUUID()};await f.lane.call(args);
+     await eventually(()=>f.changes.some(r=>r.game.state==='failed'&&r.nearbyText?.state==='sent'));
+     const row=f.changes.at(-1)!;expect(row.game).toMatchObject({state:'failed',retryable:false,audioError:{code:'VOICE_AUDIO_DURATION_EXCEEDED',durationMs:38080.7256,maxDurationMs:30000},nextStep:expect.stringContaining('更简短的完整台词')});
+     expect(JSON.stringify(row)).not.toContain('do not copy');expect(f.ops).not.toContain('begin');expect(f.ops).not.toContain('say');expect(row.broadcast.state).toBe('not-submitted');expect(row.recipientHeard).toBe('unknown');
+     await f.lane.call(args);expect(synthesis).toBe(1);expect(f.texts).toHaveLength(1);
+   }finally{await f.lane.stop();server.closeAllConnections();await new Promise<void>(ok=>server.close(()=>ok()));}
+ });
+ it.each(['not-json',JSON.stringify({diagnostic:{protocol:'voice-artifact-error/v1',code:'VOICE_AUDIO_DURATION_EXCEEDED',durationMs:1,maxDurationMs:30000,retryable:false}}),'x'.repeat(10000)])('bounds and distrusts producer error bodies (%#)',async body=>{
+   const server=createServer(async(req,res)=>{for await(const _ of req){}res.writeHead(400,{'Content-Type':'application/json'}).end(body);});
+   await new Promise<void>(ok=>server.listen(0,'127.0.0.1',ok));const f=laneFixture({url:'http://127.0.0.1:'+(server.address() as any).port});
+   try{await f.lane.call({action:'speak',text:'hello'});await eventually(()=>f.changes.some(r=>r.game.state==='failed'));const row=f.changes.at(-1)!;
+     expect(row.game.reason).toBe('Error: VOICE_ARTIFACT_HTTP_400');expect(row.game.audioError).toBeUndefined();expect(f.ops).not.toContain('begin');
+   }finally{await f.lane.stop();server.closeAllConnections();await new Promise<void>(ok=>server.close(()=>ok()));}
+ });
  it('never uploads explicitly incomplete generated audio or replaces false with unknown',async()=>{
    const server=createServer(async(req,res)=>{for await(const _ of req){}res.writeHead(200,{'Content-Type':'audio/wav','X-Voice-Generation-Complete':'false'}).end(wav());});
    await new Promise<void>(ok=>server.listen(0,'127.0.0.1',ok));const f=laneFixture({url:'http://127.0.0.1:'+(server.address() as any).port});

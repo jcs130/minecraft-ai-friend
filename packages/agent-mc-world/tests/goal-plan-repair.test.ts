@@ -3,6 +3,27 @@ import { parseGoalPlan, recordGoalJudgment, reopenGoalJudgment } from '../core/g
 import { parseGoal } from '../core/world.ts';
 
 describe('recoverable goal probe contract errors', () => {
+  it('reports the live companion probe mistakes together and never turns a display name into an entity type', () => {
+    const plan = [{ do: 'meet the companion', verify: { source: 'entity', type: '同伴甲' } }];
+    const original = structuredClone(plan);
+    const result = parseGoalPlan(plan);
+    if (!('error' in result)) throw Error('Display name accepted as a registry ID');
+    for (const field of ['type', 'region', 'dimension', 'count']) expect(result.error).toContain(`.verify[0].${field}`);
+    expect(result.error).toContain('按种类计数不能证明某个特定同伴到达');
+    expect(plan).toEqual(original);
+    const example = JSON.parse(result.error.match(/结构示例[^：]*：(\{[^\n]+?\})。/)![1]);
+    expect(parseGoalPlan([{ do: 'observe nearby zombies', verify: example }])).toHaveProperty('steps');
+    expect(parseGoalPlan([{ do: 'meet the companion', judgment: 'check the current identity and arrival receipt' }])).toHaveProperty('steps');
+  });
+
+  it('reports missing dimension and count even when the region is oversized', () => {
+    const result = parseGoalPlan([{ do: 'count nearby entities', verify: {
+      source: 'entity', type: 'minecraft:zombie', region: [[0, 0, 0], [25, 20, 25]],
+    } }]);
+    if (!('error' in result)) throw Error('Incomplete unobservable probe accepted');
+    for (const term of ['14196', '4096', '.dimension', '.count']) expect(result.error).toContain(term);
+  });
+
   it('does not send a completed four-step plan to a nonexistent fifth step or overwrite a mistaken judgment', () => {
     const plan = parseGoalPlan(Array.from({ length: 4 }, (_, i) => ({ do: `Stage ${i + 1}`, judgment: 'Host receipt required' })));
     if ('error' in plan) throw Error(plan.error);

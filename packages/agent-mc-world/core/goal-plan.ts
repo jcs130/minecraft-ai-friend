@@ -217,15 +217,16 @@ function parseCompare(value: unknown, path: string): GoalCompare | { error: stri
 }
 
 function parseRegion(body: Record<string, unknown>, path: string, cellCap: number | null = CHECK_BOX_CELL_CAP): Region | { error: string } {
+  const dimension = text(body.dimension);
+  const errors: string[] = dimension ? [] : [`${path}.dimension 要明确写维度`];
   if (!Array.isArray(body.region) || body.region.length !== 2) {
-    return { error: `${path}.region 要 [[x1,y1,z1],[x2,y2,z2]]` };
+    return { error: [`${path}.region 要 [[x1,y1,z1],[x2,y2,z2]]`, ...errors].join('; ') };
   }
   const a = parsePos(body.region[0], `${path}.region[0]`);
-  if ('error' in a) return a;
   const b = parsePos(body.region[1], `${path}.region[1]`);
-  if ('error' in b) return b;
-  const dimension = text(body.dimension);
-  if (!dimension) return { error: `${path}.dimension 要明确写维度` };
+  if ('error' in a || 'error' in b) {
+    return { error: [...('error' in a ? [a.error] : []), ...('error' in b ? [b.error] : []), ...errors].join('; ') };
+  }
   const min: PositionXYZ = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])];
   const max: PositionXYZ = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])];
   const dx = max[0] - min[0] + 1;
@@ -235,11 +236,10 @@ function parseRegion(body: Record<string, unknown>, path: string, cellCap: numbe
   if (cellCap !== null && cells > cellCap) {
     // 将体积上限换算成边长，并报告本次三条边长，供调用方缩小范围。
     const edge = Math.floor(Math.cbrt(cellCap));
-    return {
-      error: `${path}.region 共 ${cells} 格，超过一次能核的 ${cellCap} 格`
-        + `(${cellCap} 格 ≈ ${edge}×${edge}×${edge};你这次是 ${dx}×${dy}×${dz})`,
-    };
+    errors.push(`${path}.region 共 ${cells} 格，超过一次能核的 ${cellCap} 格`
+      + `(${cellCap} 格 ≈ ${edge}×${edge}×${edge};你这次是 ${dx}×${dy}×${dz})`);
   }
+  if (errors.length || !dimension) return { error: errors.join('; ') };
   return { min, max, dimension };
 }
 
@@ -285,19 +285,24 @@ function parseProbe(value: unknown, path: string): GoalProbe | { error: string }
   }
   if (source === 'entity') {
     const type = exactId(body.type);
-    if (!type) return { error: `${path}.type 要精确实体 id` };
+    const validType = type !== null && /^(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$/.test(type);
     const region = parseRegion(body, path);
-    if ('error' in region) return region;
     const count = parseCompare(body.count, `${path}.count`);
-    return 'error' in count ? count : { source, type, region, count };
+    if (!type || !validType || 'error' in region || 'error' in count) return { error: [
+      ...(!validType ? [`${path}.type 要精确实体注册 id，不是显示名；特定同伴身份及到达须用实际身份回执作 judgment`] : []),
+      ...('error' in region ? [region.error] : []), ...('error' in count ? [count.error] : []),
+    ].join('; ') };
+    return { source, type, region, count };
   }
   if (source === 'item') {
     const item = exactId(body.item);
-    if (!item) return { error: `${path}.item 要精确物品 id` };
     const region = parseRegion(body, path);
-    if ('error' in region) return region;
     const count = parseCompare(body.count, `${path}.count`);
-    return 'error' in count ? count : { source, item, region, count };
+    if (!item || 'error' in region || 'error' in count) return { error: [
+      ...(!item ? [`${path}.item 要精确物品 id`] : []),
+      ...('error' in region ? [region.error] : []), ...('error' in count ? [count.error] : []),
+    ].join('; ') };
+    return { source, item, region, count };
   }
   const field = body.field;
   if (!['health', 'food', 'oxygen', 'burning'].includes(String(field))) {
@@ -320,6 +325,12 @@ function probeRepairHint(value: unknown): string {
     return `source 只收 ${Object.keys(GOAL_PROBE_FIELDS).join('/')}。`;
   }
   let hint = `${source} 只收 ${GOAL_PROBE_FIELDS[source].join(', ')}。`;
+  if (source === 'entity') {
+    hint += 'type、region、dimension、count 全部必填；type 是实体注册 id，不是玩家或同伴显示名。'
+      + '结构示例（请替换占位值）：'
+      + '{"source":"entity","type":"zombie","region":[[0,63,0],[2,66,2]],"dimension":"minecraft:overworld","count":">=1"}。'
+      + '最多 4096 格；按种类计数不能证明某个特定同伴到达。';
+  }
   if (source === 'position') {
     hint += '结构示例（坐标和维度是占位值，请按实际目标填写）：'
       + '{"source":"position","region":[[0,63,0],[2,66,2]],"dimension":"minecraft:overworld"}。';
