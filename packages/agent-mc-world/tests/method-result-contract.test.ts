@@ -29,9 +29,20 @@ describe('program task result evidence', () => {
       const expanded = r.runner.inspect(run.id, 2) as { trace: { result: { steps: unknown[]; receipt: string } } };
       expect(expanded.trace.result.steps).toMatchObject(summary.trace[1].steps);
       expect(expanded.trace.result.steps[0]).toMatchObject({ detail: { text: expect.stringContaining('石头'), truncated: false } });
-      expect(summary.trace[1].steps[0]).not.toHaveProperty('detail');
+      expect(summary.trace[1].steps[0]).toMatchObject({detail:{text:expect.stringContaining('石头'),truncated:false}});
       expect(expanded.trace.result.receipt).toContain('石头');
     } finally { r.close(); }
+  });
+
+  it('keeps an unsent travel command visible to the program and its compact inspection', async () => {
+    const r=methodHarness('1.21.1');
+    try {
+      const run=r.runner.start({code:`return await mc.do([{skill:'server_travel',command:'/example inventory list',at:[0,64,0],within:16}]);`});
+      const result=await methodEnded(r,run.id);
+      expect(result).toMatchObject({status:'completed',result:{steps:[{outcome:'ok',detail:{text:expect.stringContaining('命令未发送')}}]}});
+      expect(r.runner.inspect(run.id)).toMatchObject({trace:[{steps:[{detail:{text:expect.stringContaining('chat.text')}}]}]});
+      expect(r.said).toEqual([]);
+    }finally{r.close();}
   });
 
   it('keeps long per-step summaries bounded while retaining the full call for inspection', async () => {

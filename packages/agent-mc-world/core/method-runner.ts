@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { PROCEDURE_LIMITS, type ProcedureGraph, type ProcedureInvocation, type ProcedureReference } from './support/procedure.ts';
+import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 
 export const METHOD_ADAPTER = 'minecraft-method/v1';
 
@@ -90,12 +91,14 @@ export class MethodRunner {
     trace: run.trace.map(trace => {
       const reply = trace.result as Record<string, unknown> | undefined;
       const steps = Array.isArray(reply?.steps) ? reply.steps : undefined;
+      const compactSteps = steps ? compactWorkExecutionEvidence({steps:steps.slice(0,8)})?.steps as Array<Record<string,unknown>> : undefined;
       return { call: trace.call, method: trace.method, startedAt: trace.startedAt, endedAt: trace.endedAt,
         procedure: trace.procedure,
         error: trace.error, accepted: reply?.accepted, taskId: reply?.taskId, kind: reply?.kind, done: reply?.done,
-        ...(steps ? { stepCount: steps.length, steps: steps.slice(0, 8).map(step => ({
+        ...(steps ? { stepCount: steps.length, steps: steps.slice(0, 8).map((step, index) => ({
           step: step?.step, outcome: step?.outcome,
           why: typeof step?.why === 'string' ? step.why.slice(0, 160) : step?.why,
+          ...(compactSteps?.[index]?.detail ? {detail:compactSteps[index].detail} : {}),
         })), ...(steps.length > 8 ? { stepsTruncated: true } : {}) } : {}),
         receiptExcerpt: typeof reply?.receipt === 'string' ? reply.receipt.slice(0, 500) : undefined };
     }) };

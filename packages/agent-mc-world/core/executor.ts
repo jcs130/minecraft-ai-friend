@@ -1138,7 +1138,7 @@ interface StepLanding {
   outcome: StepOutcome;
   /** 一句原因(截短);做成的那几步没有 */
   why: string | null;
-  /** Bounded original reason, including recovery conditions after the short preview. */
+  /** Bounded native result or reason, including dispatch limits and recovery conditions. */
   detail?: { text: string; chars: number; truncated: boolean };
   /** 技能给出的确定原因；资源许可拒绝不作为空间放置失败。 */
   code?: SkillBlocked['code'];
@@ -5390,9 +5390,13 @@ export class Executor {
      * 两处必须同一刻写,否则被叫停时那本账与实际跑到哪一步对不上号。
      * `line` 是这一步进结局回执的那一行,断点续做时原样摆回去。
      */
-    const land = (i: number, outcome: StepOutcome, why: string | null, line: string, code?: SkillBlocked['code'], decision?: Partial<StepDecision>): void => {
+    const land = (i: number, outcome: StepOutcome, why: string | null, line: string, code?: SkillBlocked['code'], decision?: Partial<StepDecision>, result?: string): void => {
       outcomes.push(outcome);
       const observation = observations.get(i);
+      // Successful lifecycle completion can still mean "command not sent" or
+      // "arrived in water". Keep the native qualification beside its outcome.
+      // Spatial reads already have typed coverage; never copy their bulk payload.
+      const detail = why ?? (observation ? undefined : result);
       const readDecision: Partial<StepDecision> = observation?.kind === 'voxels' ? {
         status: observation.unobserved_count === 0 ? 'completed' : 'partial',
         reason: typeof observation.partial_reason === 'string' ? observation.partial_reason : null,
@@ -5403,7 +5407,7 @@ export class Executor {
       } : {};
       task.stepLog.push({
         step: i + 1, what: describeSkill(steps[i]), outcome, why: shortWhy(why), line,
-        ...(why ? { detail: { text: why.slice(0, 600), chars: why.length, truncated: why.length > 600 } } : {}),
+        ...(detail ? { detail: { text: detail.slice(0, 600), chars: detail.length, truncated: detail.length > 600 } } : {}),
         ...(effectReadbacks.has(i) ? { observedEffect: effectReadbacks.get(i)! } : {}),
         ...(code ? { code } : {}),
         decision: stepDecision(outcome, code, counts.get(i), { ...readDecision, ...(why ? { reason: code ?? why } : {}), ...decision }),
@@ -5850,7 +5854,7 @@ export class Executor {
           const line = `${stepHead(i, startedAt)}: ${result}${ranFree}${carriedNote}`
             + `${verdict ? `;${verdictNote(expect!, verdict, readAt)}` : ''}`
             + `${gap ? `;${gap}` : ''}`;
-          land(i, gap ? 'partial' : 'ok', gap, line);
+          land(i, gap ? 'partial' : 'ok', gap, line, undefined, undefined, result);
           if (call.skill === 'tunnel' && !call.spiral && at && bot.entity?.position) {
             const end = bot.entity.position;
             this.noteVerticalTunnelTraversal(

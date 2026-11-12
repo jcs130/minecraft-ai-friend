@@ -4,6 +4,8 @@ import type { TaskReport } from '../core/executor.ts';
 import { parseSteps, readSkillHelp, SKILL_STEP_SCHEMA } from '../core/skills.ts';
 import { methodHarness } from './method-harness.ts';
 import { ChestBook } from '../core/chests.ts';
+import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
+import { renderLastTaskReadout } from '../core/readouts.ts';
 
 const rigs: ReturnType<typeof methodHarness>[] = [];
 beforeEach(() => vi.useFakeTimers());
@@ -65,6 +67,23 @@ describe('server travel task lifecycle', () => {
     expect(report.kind).toBe('done');
     expect(report.text).toContain('命令未发送');
     expect(report.text).toContain('chat');
+    const compact = compactWorkExecutionEvidence(report)!;
+    expect(compact.steps).toMatchObject([{outcome:'ok',why:null,detail:{text:expect.stringContaining('命令未发送'),truncated:false}}]);
+    expect(JSON.stringify(compact)).toContain('chat.text');
+    expect(compact.goalCompleted).toBe(false);
+    expect(renderLastTaskReadout({...report,at:'now'})).toContain('命令未发送');
+  });
+
+  it('preserves both unsent commands in a batch and does not replay either while reading evidence', async () => {
+    const r = rig();
+    const task=r.exec.submitDetailed(['/example stash putslot 33 14','/example dungeon list'].map(command=>({
+      skill:'server_travel' as const,command,at:[0,64,0] as [number,number,number],within:16})), 'append');
+    await vi.advanceTimersByTimeAsync(100);
+    const report=r.reports.find(report=>report.taskId===task.taskId)!;
+    const twice=compactWorkExecutionEvidence(compactWorkExecutionEvidence(report))!;
+    expect((twice.steps as any[]).map(s=>s.detail.text)).toEqual([expect.stringContaining('命令未发送'),expect.stringContaining('命令未发送')]);
+    expect(renderLastTaskReadout({...report,at:'now'})).toContain('chat.text');
+    expect(r.said).toEqual([]);
   });
 
   it('exposes command dispatch versus arrival in default schema and on-demand help', () => {

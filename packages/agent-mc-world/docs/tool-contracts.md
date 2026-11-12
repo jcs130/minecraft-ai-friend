@@ -24,6 +24,13 @@ copying bulk inventories or voxel arrays. Explicit `mc_queue {taskId}` / full
 reads carry this structure in `data` and before the original text; default queue
 prose stays compact. Task history remains dated history, not a current snapshot.
 
+Step `detail` also carries bounded successful-operation qualifications (at most
+600 characters, with original length and truncation flag). For example, a
+`server_travel` step can finish because its destination already holds while its
+command was **not sent**. Queue and program summaries retain this result and its
+recovery guidance; `outcome:ok` alone does not prove dispatch or server effects.
+Typed spatial reads retain coverage fields instead of duplicating voxel payloads.
+
 The continuation key compares matched query content and spatial revisions,
 excluding transport request clocks and correlation IDs for recognized envelopes.
 Pending acceptance and entirely unobserved spatial scans have a null key. Hosts

@@ -23,6 +23,11 @@ export function compactWorkExecutionEvidence(value: unknown): Record<string, unk
   return {format:'agent-mc/compact-execution-evidence/v1',
     ...(typeof value.outcome==='string'?{outcome:value.outcome.slice(0,80)}:{}),
     steps:selected.map(step=>({step:scalar(step.step,'step'),outcome:scalar(step.outcome,'outcome'),why:typeof step.why==='string'?step.why.slice(0,600):null,
+      ...(object(step.detail)&&typeof step.detail.text==='string'?{detail:{
+        text:step.detail.text.slice(0,600),
+        chars:Number.isSafeInteger(step.detail.chars)&&Number(step.detail.chars)>=step.detail.text.length?Number(step.detail.chars):step.detail.text.length,
+        truncated:step.detail.truncated===true||step.detail.text.length>600,
+      }}:{}),
       decision:pick(step.decision,['status','reason','completed','remaining','unit','retryable','retry_after','continue_when']),
       ...(object(step.observation)?{observation:{
         readout:pick(step.observation.readout,['protocol','kind','worldKey','selection','revision','scanComplete','knownComplete','remainingCount','unknownCount','continuationAvailable']),

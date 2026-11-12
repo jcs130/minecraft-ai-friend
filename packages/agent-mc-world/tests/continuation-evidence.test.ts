@@ -51,3 +51,15 @@ it('retains source step coverage when a cached compact summary is projected agai
 it('does not label a native unknown-only scan terminal as useful new continuation',()=>{
   expect(evidence({tool:'do',arguments:{},receipt:{execution:{terminal:false}},terminal:{execution:{kind:'task',terminal:true,phase:'completed',evidence:{steps:[{step:1,observation:{summary:{observedCells:0,unknownCells:480}}}]}}}}).key).toBeNull();
 });
+
+it('preserves bounded native result qualifications and original truncation through repeated projection',()=>{
+  const raw={steps:[{step:1,outcome:'ok',why:null,detail:{text:'命令未发送；改用 chat.text。'+'x'.repeat(900),chars:2000,truncated:true}}]};
+  const once=compact(raw)!,twice=compact(once)!;
+  expect(twice).toEqual(once);
+  expect((twice.steps as any[])[0].detail).toMatchObject({chars:2000,truncated:true,text:expect.stringContaining('命令未发送')});
+  expect((twice.steps as any[])[0].detail.text.length).toBe(600);
+  expect(twice.goalCompleted).toBe(false);
+  const run=(text:string)=>evidence({tool:'queue',arguments:{},receipt:{data:{protocol:'agent-mc/task-queue-read/v1',
+    last:{kind:'done',evidence:{steps:[{step:1,outcome:'ok',detail:{text,chars:text.length,truncated:false}}]}}}}}).key;
+  expect(run('命令未发送')).not.toBe(run('已向聊天发送，服务端结果未确认'));
+});
