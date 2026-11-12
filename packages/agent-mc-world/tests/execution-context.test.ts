@@ -34,6 +34,29 @@ describe('source-owned execution context', () => {
     expect(executionFactParts({ parts: current.parts }, ['place'], true)).toEqual([current.parts[0]]);
   });
 
+  it('delivers the water travel option to a narrowly scoped body owner and drops it after leaving water', () => {
+    const rig = methodHarness('1.21.1');
+    try {
+      rig.set(0,64,0,'water');
+      const facts=rig.world.requestFacts()!;
+      expect(facts.partKeys).toContain('travelOptions');
+      expect(facts.executionPartKeys).toContain('travelOptions');
+      const ownerFacts=executionFactParts(facts,['body','gear','sample'],true);
+      const option=ownerFacts.find(part=>part.key==='travelOptions')!.text;
+      expect(option).toContain('mc_options {"intent":"water"}');
+      expect(option).toContain('当前位置触水');
+      expect(option.length).toBeLessThan(300);
+      expect(ownerFacts.some(part=>part.key==='options')).toBe(false);
+      expect(executionFactParts(facts,['body'],false).some(part=>part.key==='travelOptions')).toBe(false);
+      expect(facts.options?.options.find(choice=>choice.id==='core.boat')?.read)
+        .toContainEqual({tool:'mc_knowledge',args:{kind:'recipe',query:'boat'}});
+      rig.set(0,64,0,'air');
+      const ashore=rig.world.requestFacts()!;
+      expect(ashore.executionPartKeys).not.toContain('travelOptions');
+      expect(ashore.parts?.some(part=>part.key==='travelOptions')).toBe(false);
+    } finally { rig.close(); }
+  });
+
   it('marks native server packets and excludes player chat, whispers and login messages', async () => {
     const rig = methodHarness('1.21.1');
     try {

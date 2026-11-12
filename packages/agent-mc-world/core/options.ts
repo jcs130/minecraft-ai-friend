@@ -74,7 +74,8 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     { id: 'core.boat', intents: ['water', 'travel'], title: '乘已有船或造船', purpose: '较长河流、湖面和沿岸交通；短涉水也可走桥或绕陆。',
       support: 'supported', evidence: [`随身船 ${context.carriedBoats ?? '未知'}`, `当前可见载具：${vehicles.join('、') || '本次近处列表未报告；非全域搜索'}`],
       checks: ['先确认已有船；没有再读当前船配方、材料及工作台', '核对放船水面、通航净空和上岸点；放船、上船、航行、上岸分别验收'],
-      read: [guide({ skills: ['craft', 'use', 'ride'] }), { tool: 'mc_script', args:{api:'mobility'} }, {tool:'mc_script',args:{routine:{op:'read',id:'ride_route'}}}, method('ride')], source },
+      read: [{ tool: 'mc_knowledge', args: { kind: 'recipe', query: 'boat' } }, guide({ skills: ['craft', 'use', 'ride'] }),
+        { tool: 'mc_script', args:{api:'mobility'} }, {tool:'mc_script',args:{routine:{op:'read',id:'ride_route'}}}, method('ride')], source },
     { id: 'core.horse-travel', intents: ['travel'], title: '骑马赶路（驾驶尚不支持）', purpose: '区分观察、上马/驯服与实际驾驶能力。',
       support: 'unsupported', evidence: ['当前 ride 实现可上马和下马；不支持马/驴/骡驾驶'],
       checks: ['不能把坐上去当成能骑行；驯服、鞍、归属和可通行路线还需现场核验'], read: [guide({ skill: 'ride' })], source },
@@ -119,6 +120,15 @@ export function relevantMinecraftOptionIntents(s: MinecraftOptionsSnapshot): Min
   if (c.travelling) intents.push('travel');
   if (c.freeSlots === 0) intents.push('inventory');
   return intents;
+}
+/** Focused discovery for the body owner, even when the assigned task only asked for other facts. */
+export function renderMinecraftTravelOptions(s: MinecraftOptionsSnapshot): string | null {
+  if (!s.context.inWater && !s.context.travelling) return null;
+  const boat = s.options.find(option => option.id === 'core.boat' && option.support === 'supported');
+  if (!boat) return null;
+  const current = s.context.inWater ? '当前位置触水' : '正在赶路';
+  return `[水路候选] ${current}。${boat.evidence.join('；')}。若路线经过长水面，比较用已有船、造船、游泳或绕陆。`
+    + '用 mc_options {"intent":"water"} 查当前候选、配方与放船／驾驶入口。先核对材料、下水点和上岸点，再决定是否换路线。';
 }
 export function renderMinecraftOptionIndex(s: MinecraftOptionsSnapshot): string {
   const intents = relevantMinecraftOptionIntents(s);

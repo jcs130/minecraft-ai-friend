@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.50
+
+- Include a compact, current water-travel choice in the native body-owner facts during travel or water contact. Carry over the observed boat availability and point to recipe, placement, and driving help on demand.
+
 ## 0.5.7-rc.160-preview.45
 
 - Report unchanged-scene placement retries suppressed by the local cache as `placement-retry-cached`, with no new packet sent and the original recovery conditions. Preserve cell iteration, cancellation, cache lifetime and actual placement behavior.

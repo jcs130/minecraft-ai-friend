@@ -14,7 +14,7 @@ import { observationView, observedEntity, configureObservationPolicy } from './p
 import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneyCue} from './journey.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from './knowledge.ts';
-import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex } from './options.ts';
+import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex, renderMinecraftTravelOptions } from './options.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
 import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
@@ -215,7 +215,7 @@ const BLUEPRINT_INVENTORY_SETTLE_MS = 500;
 // Capability discovery is independent of an optional observation's lifetime.
 // Declarations do not enter the factual text and never stand in for fresh data.
 const REQUEST_FACT_KEYS = ['place','vehicle','flight','clock','realclock','body','gear','inventoryIds','equip','life','structure','terrain','players',
-  'sample','queue','taskProgress','goals','foodReserve','options','methods','identity','deathLifecycle','recoveryState','temporaryScaffolds',
+  'sample','queue','taskProgress','goals','foodReserve','options','travelOptions','methods','identity','deathLifecycle','recoveryState','temporaryScaffolds',
   'bodyRestriction','serverFeedback','lastTask','journey','hud','availability','observationBoundary','bodyAvailability'] as const;
 const EXECUTION_FACT_KEYS = ['sample', 'identity', 'place', 'body', 'queue', 'taskProgress',
   'deathLifecycle', 'bodyRestriction', 'serverFeedback', 'lastTask', 'availability',
@@ -3590,6 +3590,8 @@ export class MinecraftWorld implements World {
       restriction: this.bodyInhibitReason,
     });
     parts.splice(1, 0, { key: 'options', text: renderMinecraftOptionIndex(options) });
+    const travelOptions = renderMinecraftTravelOptions(options);
+    if (travelOptions) parts.push({ key: 'travelOptions', text: travelOptions });
     try { parts.push({ key: 'methods', text: this.methodLibrary().facts() }); }
     catch { parts.push({ key: 'methods', text: '[动作方法索引] 读取失败，已有方法状态未验证；mc_script {api:"authoring"} 可读编写及恢复入口。' }); }
     if (bot) {
@@ -3632,7 +3634,8 @@ export class MinecraftWorld implements World {
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
     } else parts.push({ key: 'journey', text: movementPolicy + '\n当前没有活动旅途观察；mc_policy 可查询和调整行走/垫脚/主动战斗策略。' });
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS,
-      executionPartKeys: EXECUTION_FACT_KEYS, options, world: readWorldIdentity(bot),
+      executionPartKeys: travelOptions ? [...EXECUTION_FACT_KEYS, 'travelOptions'] : EXECUTION_FACT_KEYS,
+      options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
