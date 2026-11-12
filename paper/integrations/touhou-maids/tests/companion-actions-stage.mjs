@@ -109,12 +109,16 @@ async function testDialogueLimit(owner,first){
 async function fish(owner){
     await reset(owner);
     check('fixture native work schedule configured',(await ask(owner,'schedule','ALL')).data.status==='applied');
+    await ask(owner,'follow');
     await rc(`minecraft:item replace entity ${fixture.maid} weapon.mainhand with minecraft:fishing_rod`);
     await rc('minecraft:fill 303 88 297 309 89 304 minecraft:water');
     await rc(`minecraft:tp ${fixture.otherMaid} 330.5 90 309.5`);
     await rc(`minecraft:data merge entity ${fixture.otherMaid} {Sitting:1b,MaidIsHome:1b}`);
     await rc('minecraft:summon touhou_little_maid:chair 302.5 90 300.5 {Tags:["MaidFishingQASeat"]}');
-    const original=(await ask(owner,'context')).data.fishing.lastRetrievedAt;
+    await rc(`minecraft:ride ${fixture.maid} mount @e[type=touhou_little_maid:chair,tag=MaidFishingQASeat,limit=1,sort=nearest]`);
+    const setup=(await ask(owner,'context')).data.fishing;
+    check('fixture original maid is on its native fishing seat with a rod',setup.seated&&setup.hasRodInMainHand&&setup.workingNow);
+    const original=setup.lastRetrievedAt;
     check('native fishing observer connected',(await rc('maidfishqa clear')).includes('MAID_FISH_QA'));
     requestedMode='fish';
     const reply=await talk(owner,'隔离肥鱼，请现在用主手鱼竿在这片水边钓鱼。');
