@@ -25,6 +25,8 @@ export interface MinecraftOptionContext {
   /** null means unavailable/unclassified; zero means observed none in carried inventory only. */
   carriedFood: number | null;
   carriedBoats: number | null;
+  /** Observed inventory only, not a recipe or a claim of craftability. Omitted by older producers. */
+  boatSupplies?: { stacks: readonly { name: string; count: number }[]; omitted: number; craftingTables: number } | null;
   /** Recognized native melee gear and ordinary arrows in the current carried sample only. */
   meleeEquipment?: readonly string[] | null;
   arrows?: number | null;

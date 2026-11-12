@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { minecraftOptionsFromSnapshot, extendMinecraftOptions, readMinecraftOptions, renderMinecraftOptionIndex } from '../core/options.ts';
+import { minecraftOptionsFromSnapshot, extendMinecraftOptions, readMinecraftOptions, renderMinecraftOptionIndex, renderMinecraftTravelOptions } from '../core/options.ts';
 import { readSkillHelp } from '../core/skills.ts';
 import type { WorldSnapshot } from '../core/terrain.ts';
 import type { MinecraftOption } from '../src/contracts/options.ts';
@@ -16,6 +16,22 @@ const server = (id: string, intents: MinecraftOption['intents']): MinecraftOptio
   source: { kind: 'server-observation', reference: 'test', observedAt: '2026-10-17T00:00:00Z' } });
 
 describe('outcome-oriented capability discovery', () => {
+  it('delivers current construction inputs without treating no boat or an omitted bag as no materials', () => {
+    const s=minecraftOptionsFromSnapshot(snapshot({ inventory:[{name:'oak_log',count:3},{name:'oak_planks',count:4},
+      {name:'birch_planks',count:2},{name:'crafting_table',count:1}], equipment:[{slot:'offhand',name:'oak_planks',count:2}] as WorldSnapshot['equipment'] }),foods,state);
+    expect(s.context.carriedBoats).toBe(0);
+    expect(s.context.boatSupplies).toEqual({ stacks:[{name:'birch_planks',count:2},{name:'oak_log',count:3},{name:'oak_planks',count:6}], omitted:0, craftingTables:1 });
+    const boat=s.options.find(o=>o.id==='core.boat')!;
+    expect(boat.evidence.join('')).toContain('oak_log×3');
+    expect(boat.evidence.join('')).toContain('原料≠可合成');
+    expect(boat.read).toContainEqual({tool:'mc_bag',args:{}});
+    const unknown=minecraftOptionsFromSnapshot(snapshot({invSynced:false,inventory:[{name:'oak_log',count:3}]}),foods,state);
+    expect(unknown.context.boatSupplies).toBeNull();
+    expect(unknown.options.find(o=>o.id==='core.boat')!.evidence.join('')).toContain('不能推定没有木材');
+    const empty=minecraftOptionsFromSnapshot(snapshot(),foods,state);
+    expect(empty.context.boatSupplies).toEqual({stacks:[],omitted:0,craftingTables:0});
+    expect(empty.options.find(o=>o.id==='core.boat')!.evidence.join('')).toContain('附近/存放处的材料与工作台未查询');
+  });
   it('keeps water choices available while the feet remain in water and the head is breathing', () => {
     const s=minecraftOptionsFromSnapshot(snapshot({inWater:false,oxygen:20,standingOn:'water',
       footing:{kind:'fluid',block:'water',grounded:false}}),foods,state);
@@ -26,6 +42,15 @@ describe('outcome-oriented capability discovery', () => {
     expect(swim.evidence.join('')).toContain('头部浸水=false');
     const dry=minecraftOptionsFromSnapshot(snapshot({standingOn:'stone',footing:{kind:'support',block:'stone',grounded:true}}),foods,state);
     expect(renderMinecraftOptionIndex(dry)).not.toContain('水路与潜水→');
+  });
+  it('keeps the body-owner material clue bounded while retaining exact types on demand', () => {
+    const names=['oak','birch','spruce','jungle','acacia','dark_oak','mangrove','cherry','crimson','warped'];
+    const s=minecraftOptionsFromSnapshot(snapshot({inWater:true,inventory:names.map(name=>({name:name+'_planks',count:3}))}),foods,state);
+    expect(s.context.boatSupplies?.stacks).toHaveLength(8);
+    expect(s.context.boatSupplies?.omitted).toBe(2);
+    const fact=renderMinecraftTravelOptions(s)!;
+    expect(fact).toContain('另7种未展开');expect(fact.length).toBeLessThan(500);
+    expect(fact).toContain('goto 只步行/游泳');expect(fact).not.toContain('可以合成');
   });
   it('reports carried weapon gaps and focused storage, memory and recipe paths without declaring remote stock empty', () => {
     const s=minecraftOptionsFromSnapshot(snapshot({inventory:[{name:'bow',count:3},{name:'iron_ingot',count:4},{name:'stick',count:4}]}),foods,state);

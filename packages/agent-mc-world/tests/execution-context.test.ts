@@ -45,7 +45,9 @@ describe('source-owned execution context', () => {
       const option=ownerFacts.find(part=>part.key==='travelOptions')!.text;
       expect(option).toContain('mc_options {"intent":"water"}');
       expect(option).toContain('当前位置触水');
-      expect(option.length).toBeLessThan(300);
+      expect(option.length).toBeLessThan(500);
+      expect(option).toContain('已同步随身候选木料');
+      expect(option).toContain('goto 只步行/游泳');
       expect(ownerFacts.some(part=>part.key==='options')).toBe(false);
       expect(executionFactParts(facts,['body'],false).some(part=>part.key==='travelOptions')).toBe(false);
       expect(facts.options?.options.find(choice=>choice.id==='core.boat')?.read)
