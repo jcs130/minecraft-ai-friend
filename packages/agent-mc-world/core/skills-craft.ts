@@ -1,4 +1,5 @@
 import { ShowPacer, withShowPacer } from './show.ts';
+import { nativeFoodId } from './nutrition.ts';
 /**
  * 合成、吃喝与换装:craft、eat、equip。
  *
@@ -383,6 +384,7 @@ function newEffectText(bot: Bot, before: Map<number, ActiveEffect>): string {
 }
 
 export async function consumeHeldFood(bot: Bot, foodName: string, checkActive?: () => void): Promise<string> {
+  foodName = nativeFoodId(foodName);
   // 牛奶这类东西不给饱食度,拿 food 读数当结果就是编:它的结果是状态效果没了、
   // 手里剩个空桶(见 DRINKABLES)。判成没成仍用同一条「包里少了一个」的因果事实。
   const drink = DRINKABLES[foodName] ?? null;
@@ -456,6 +458,7 @@ export async function consumeHeldFood(bot: Bot, foodName: string, checkActive?: 
 }
 
 export async function skillEat(bot: Bot, itemName: string, checkActive?: () => void): Promise<string> {
+  itemName = nativeFoodId(itemName);
   checkActive?.();
   const foods = (bot.registry.foodsByName ?? {}) as Record<string, unknown>;
   if (!foods[itemName] && !DRINKABLES[itemName]) {

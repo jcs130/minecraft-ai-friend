@@ -17,7 +17,7 @@ import { matchItemName, type ChestBook } from './chests.ts';
 import { equipDestOf, equippedAlready } from './tools.ts';
 import { itemsInReach, offHandItem, wornItemNamed } from './inventory.ts';
 import { DRINKABLES } from './item-facts.ts';
-import { RISKY_FOODS, foodRiskReference } from './nutrition.ts';
+import { RISKY_FOODS, foodRiskReference, nativeFoodId } from './nutrition.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
@@ -138,6 +138,7 @@ function precheckEat(
   call: Extract<SkillCall, { skill: 'eat' }>,
   deps: PrecheckDeps,
 ): PrecheckNote | null {
+  call = { ...call, item: nativeFoodId(call.item) };
   const foods = (bot.registry?.foodsByName ?? {}) as Record<string, unknown>;
   // 牛奶桶不给饱食度、不在 foods 表里,但它是喝得掉的(见 DRINKABLES)
   if (!foods[call.item] && !DRINKABLES[call.item]) {

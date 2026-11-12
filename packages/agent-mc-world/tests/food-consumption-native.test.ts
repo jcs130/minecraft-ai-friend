@@ -64,6 +64,16 @@ function foodServer(version = '1.21.1', protectShortcut = true) {
 
 afterEach(() => vi.useRealTimers());
 
+it('consumes an exact namespaced vanilla food once without treating other namespaces as vanilla',async()=>{
+  vi.useFakeTimers();const r=foodServer();r.seed(9,'golden_apple',3);r.full();
+  await expect(skillEat(r.bot,'other:golden_apple')).rejects.toThrow('other:golden_apple');
+  expect(r.packets.some(p=>p.name==='use_item')).toBe(false);
+  r.use(()=>{expect(r.hand()?.name).toBe('golden_apple');setTimeout(()=>{r.lose(37,1);r.health(6);r.finish();},1600);});
+  const result=skillEat(r.bot,'minecraft:golden_apple');await vi.runAllTimersAsync();
+  expect(await result).toContain('饥饿 2 → 6');expect(r.server.slots[37]?.count).toBe(2);
+  expect(r.packets.filter(p=>p.name==='use_item')).toHaveLength(1);
+});
+
 it('recovers a localized food request using the returned exact ID without replaying consumption', async () => {
   vi.useFakeTimers(); const r = foodServer();
   r.seed(9, 'cooked_beef', 19); r.full();

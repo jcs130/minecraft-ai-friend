@@ -25,6 +25,10 @@ export interface MinecraftOptionContext {
   /** null means unavailable/unclassified; zero means observed none in carried inventory only. */
   carriedFood: number | null;
   carriedBoats: number | null;
+  /** Current attachment, not an inventory item. Undefined is unobserved; null means no reported mount. */
+  currentVehicle?: { entityId: number | null; name: string | null } | null;
+  /** Bounded visible boat observations from this sample, never a claim of ownership or an empty seat. */
+  nearbyBoats?: readonly { entityId?: number; name: string; distance: number }[];
   /** Observed inventory only, not a recipe or a claim of craftability. Omitted by older producers. */
   boatSupplies?: { stacks: readonly { name: string; count: number }[]; omitted: number; craftingTables: number } | null;
   /** Recognized native melee gear and ordinary arrows in the current carried sample only. */

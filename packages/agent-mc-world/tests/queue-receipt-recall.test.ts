@@ -12,6 +12,20 @@ function report(r: ReturnType<typeof rig>, id = 218) {
 }
 const textOf = (value: unknown): string => typeof value === 'string' ? value : String((value as any).text);
 
+it('explains that replacing pending work leaves a running action intact, and verifies explicit preemption',async()=>{
+  vi.useFakeTimers();const r=rig();
+  const first=r.exec.submitDetailed([{skill:'control',keys:['sneak'],durationMs:2000,mode:'ground'}],'append');
+  await vi.advanceTimersByTimeAsync(1);
+  const waiting=r.exec.submitDetailed([{skill:'chat',text:'after motion'}],'replace');
+  expect(waiting.receipt).toContain(`当前任务#${first.taskId}仍会继续`);
+  expect(waiting.receipt).toContain('queue:"now"');
+  expect(r.said).toEqual([]);
+  const immediate=r.exec.submitDetailed([{skill:'chat',text:'explicit takeover'}],'now');
+  await vi.advanceTimersByTimeAsync(100);
+  expect(immediate.receipt).not.toContain('仍会继续');
+  expect(r.said).toEqual(['explicit takeover','after motion']);
+});
+
 it('keeps current work prominent without repeating a full old failure; recalls its exact evidence by id', async () => {
   vi.useFakeTimers(); const r = rig(); report(r);
   r.exec.submitDetailed([{ skill: 'control', keys: ['sneak'], durationMs: 2000, mode: 'ground' }], 'append');

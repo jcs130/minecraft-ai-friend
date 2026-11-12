@@ -24,6 +24,86 @@ interface SourcePatch {
 
 const PATCHES: readonly SourcePatch[] = [
   {
+    pkg: 'mineflayer',
+    file: 'lib/plugins/entities.js',
+    edits: [{
+      find: `    const passengerEntities = passengers.map((passengerId) => fetchEntity(passengerId))
+    const vehicle = entityId === -1 ? null : bot.entities[entityId]
+
+    for (const passengerEntity of passengerEntities) {
+      const originalVehicle = passengerEntity.vehicle
+      if (originalVehicle) {
+        const index = originalVehicle.passengers.indexOf(passengerEntity)
+        originalVehicle.passengers.splice(index, 1)
+      }
+      passengerEntity.vehicle = vehicle
+      if (vehicle) {
+        vehicle.passengers.push(passengerEntity)
+      }
+    }
+
+    if (passengers.includes(bot.entity.id)) {
+      const originalVehicle = bot.vehicle
+      if (entityId === -1) {
+        bot.vehicle = null
+        bot.emit('dismount', originalVehicle)
+      } else {
+        bot.vehicle = bot.entities[entityId]
+        bot.emit('mount')
+      }
+    }`,
+      replace: `    const passengerEntities = [...new Set(passengers)].map((id) => fetchEntity(id))
+    const vehicle = entityId === -1 ? null : bot.entities[entityId]
+    const originalSelfVehicle = bot.vehicle
+    // set_passengers is a full snapshot, including the empty list on dismount.
+    if (vehicle) {
+      for (const old of vehicle.passengers || []) {
+        if (!passengerEntities.includes(old) && old.vehicle === vehicle) old.vehicle = null
+      }
+      vehicle.passengers = []
+    }
+    for (const passengerEntity of passengerEntities) {
+      const originalVehicle = passengerEntity.vehicle
+      if (originalVehicle && originalVehicle !== vehicle) {
+        const index = originalVehicle.passengers.indexOf(passengerEntity)
+        if (index >= 0) originalVehicle.passengers.splice(index, 1)
+      }
+      passengerEntity.vehicle = vehicle
+      if (vehicle) vehicle.passengers.push(passengerEntity)
+    }
+    if (passengers.includes(bot.entity.id)) {
+      bot.vehicle = vehicle
+    } else if (vehicle && originalSelfVehicle === vehicle) {
+      bot.vehicle = null
+    }
+    if (bot.vehicle !== originalSelfVehicle) {
+      if (bot.vehicle) bot.emit('mount')
+      else if (originalSelfVehicle) bot.emit('dismount', originalSelfVehicle)
+    }`,
+    }],
+  },
+  {
+    pkg: 'mineflayer',
+    file: 'lib/plugins/physics.js',
+    edits: [
+      {
+        find: `        shouldUsePhysics = true
+        bot.jumpTicks = 0`,
+        replace: `        // A delayed respawn position can arrive after set_passengers.
+        // Confirm the packet, but do not simulate walking for a mounted rider.
+        shouldUsePhysics = !bot.vehicle
+        bot.jumpTicks = 0`,
+      },
+      {
+        find: `    shouldUsePhysics = true
+    bot.jumpTicks = 0`,
+        replace: `    // Position acknowledgement does not revoke the server's vehicle attachment.
+    shouldUsePhysics = !bot.vehicle
+    bot.jumpTicks = 0`,
+      },
+    ],
+  },
+  {
     pkg: 'mineflayer-pathfinder',
     file: 'lib/astar.js',
     edits: [{

@@ -2452,6 +2452,9 @@ export class Executor {
           ? `任务#${id} 插到队头,前面只剩 ${ahead} 件`
           : `任务#${id} 排进队尾,前面还有 ${ahead} 件`;
     const notes = [
+      mode === 'replace' && (this.task && this.task.id !== id || this.frozen)
+        ? `本单尚未执行：queue:"replace" 只替换待执行队列，当前任务#${this.task?.id ?? this.frozen!.id}仍会继续；若要立即中断并执行新动作，使用 queue:"now"，不必重复提交 replace`
+        : null,
       // 她自己圈过的危险区排在这一组最前面:这是关于世界的事实,别的几句是关于队列的
       this.dangerNote(task.steps),
       // 战斗被这一单打断了:照实说一句,别让"怎么突然不打了"成为她要自己解释的事

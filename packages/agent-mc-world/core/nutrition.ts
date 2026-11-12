@@ -8,6 +8,8 @@ export const RISKY_FOODS = new Set([
 
 export interface FoodStack { name: string; count: number }
 export interface FoodValue { foodPoints?: number; saturation?: number }
+/** Vanilla's namespace is optional in Mineflayer registry keys; other namespaces remain distinct. */
+export const nativeFoodId = (id: string): string => id.startsWith('minecraft:') ? id.slice(10) : id;
 const SPECIAL_FOODS = new Set(['golden_apple', 'enchanted_golden_apple']);
 
 /** A measured need, not a meal command or permission to change the current goal. */

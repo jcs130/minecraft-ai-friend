@@ -1,3 +1,10 @@
+## 0.5.7-rc.160-preview.54
+
+- Preserve a server-confirmed vehicle attachment when a later position or delayed respawn packet arrives; keep walking physics disabled while mounted. Treat passenger packets as full snapshots, including empty dismounts, without duplicate mount events.
+- Include the current vehicle and bounded visible boats in travel facts, separately from carried boats and crafting supplies. Visible boats still require ownership and seat checks.
+- Explain that replacing the pending queue leaves the active task running and identify the explicit immediate-preemption entry. Accept exact `minecraft:` food identifiers consistently in preflight and execution.
+- Verify mounted physics in real deep water, both packet orders, modern and legacy passenger snapshots, actual food consumption, and queue preemption. These regressions do not certify a live completed boat journey.
+
 ## 0.5.7-rc.160-preview.52
 
 - Include bounded, freshly synchronized boat material counts and carried workbenches in water-travel facts. Keep unknown stock distinct from absent stock and recipe readiness, and expose focused inventory/recipe/driving help without starting a body action.
@@ -288,4 +295,3 @@ Add optional nearby voice through the existing authenticated connection, canonic
 - Treat server-confirmed mounting separately from death or world changes. Retain the verified position epoch while Mineflayer suspends walking physics, including reconnect packet ordering, without trusting stale vehicle pointers.
 - Add the optional `boat_trip` script for observed placement, exact-entity mounting, bounded waypoints, checked shore landing and verified empty-boat recovery. Preserve cancellation, single-body ownership and partial results.
 - Keep current water-travel choices ahead of large terrain details in route decisions; expose the new script and recovery contract through the shared SDK/MCP help.
-
