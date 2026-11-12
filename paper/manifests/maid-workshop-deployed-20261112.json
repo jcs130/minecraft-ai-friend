@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-workshop-release-20261112-r1",
+  "state": "deployed-component-runtime-verified",
+  "verifiedAt": "2026-11-12T13:41:07.6342368+08:00",
+  "codePullRequests": [
+    180,
+    181
+  ],
+  "codeHead": "c1f04f922bd2983b43f46fe58c5c44b54954df98",
+  "mergedMain": "c9b78d30fbac449af25886dd40a055999ff6fca3",
+  "sourceTree": "2ebab2defae576c4c7e53437de97513591fe18ba",
+  "ci": {
+    "runId": 43157606166,
+    "successfulJobs": 6
+  },
+  "components": [
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.27-workshop",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08",
+      "sourceCommit": "c1f04f922bd2983b43f46fe58c5c44b54954df98",
+      "processId": 6732,
+      "processStartedAt": "2026-11-12T05:38:02.488132+00:00",
+      "verifiedAt": "2026-11-12T13:41:07.6342368+08:00",
+      "manifest": "paper/manifests/maid-workshop-deployed-20261112.json",
+      "codeChangedThisBatch": true
+    }
+  ],
+  "installedFiles": [
+    {
+      "target": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47",
+      "sha256": "19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08"
+    },
+    {
+      "target": "E:/MC/server/plugins/QiandengjiMaidBridge/workshops.json",
+      "before": null,
+      "sha256": "9e8895afc7f606819988516a2838f72dbf913eddfcdb6f00e7d2763d56606328"
+    }
+  ],
+  "verification": {
+    "isolatedWorkshopChecks": 40,
+    "officialVanillaJava1_21_1": true,
+    "unmodifiedMineflayer": true,
+    "startupChecks": 19,
+    "coldCopiesVerified": 2,
+    "characterFilesVerifiedDuringInstall": 9168,
+    "goddessJobsRestored": 7,
+    "freshStartup": "startup-20261112-133801.log",
+    "configuredRecipeCount": 15,
+    "originalMaidBackpackSlots": 36,
+    "originalMaidWorkshopCraftVerifiedInProduction": true,
+    "originalPartnerAutonomousOrderVerifiedInProduction": false,
+    "productionWorkshopOrderVerifiedAt": "2026-11-12T05:47:53.784Z"
+  },
+  "rollback": {
+    "previousBridgeSha256": "278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47",
+    "codePreimagesVerifiedOnBothDrives": true,
+    "preserveCurrentWorld": true,
+    "preserveCurrentReceipts": true
+  }
+}
