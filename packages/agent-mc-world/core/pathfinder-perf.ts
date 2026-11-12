@@ -665,9 +665,10 @@ export function installPathfinderPerf(log?: Logger): void {
     /** 见 DOOR_*;非本模块拼的块(退回原始读块那条)没有这一项 */
     door?: number;
   };
+  type ForwardAction = NonNullable<PlacingMove['toPlace']>[number] & { expectedOpen?: boolean };
   (mProto as unknown as {
     getMoveForward(node: { x: number; y: number; z: number; remainingBlocks: number;
-      toPlace?: Array<{ x: number; y: number; z: number; useOne?: boolean }> }, dir: { x: number; z: number }, neighbors: unknown[]): void;
+      toPlace?: ForwardAction[] }, dir: { x: number; z: number }, neighbors: unknown[]): void;
   }).getMoveForward = function (
     this: PatchedMovements & {
       getBlock(pos: unknown, dx: number, dy: number, dz: number): FwdBlock;
@@ -690,7 +691,7 @@ export function installPathfinderPerf(log?: Logger): void {
     cost += this.exclusionStep(blockC);
 
     const toBreak: unknown[] = [];
-    const toPlace: Array<{ x: number; y: number; z: number; dx: number; dy: number; dz: number; useOne?: boolean }> = [];
+    const toPlace: ForwardAction[] = [];
 
     if (!blockD.physical && !blockC.liquid) {
       if (node.remainingBlocks === 0) return; // not enough blocks to place
@@ -711,15 +712,17 @@ export function installPathfinderPerf(log?: Logger): void {
     // cell. A* must schedule a click on the source door in that case. If the
     // incoming edge already clicked this same door, use the opposite state as
     // the effective geometry rather than clicking it shut again.
-    const sourceDoor = blockA.name?.endsWith('_door') && !blockA.name.endsWith('_trapdoor')
-      && ((blockA.door ?? 0) & DOOR_KIND) !== DOOR_SHUT_LOCKED;
+    const sourceKind = (blockA.door ?? 0) & DOOR_KIND;
+    const sourceDoor = blockA.name?.endsWith('_door') && sourceKind !== DOOR_SHUT_LOCKED;
     if (sourceDoor) {
-      const clickedOnEntry = node.toPlace?.some((p) => p.useOne === true
-        && p.x === node.x && p.y === node.y && p.z === node.z) ?? false;
-      const blocksExit = doorPanelBlocksMove(blockA.shapes, dir.x, dir.z) !== clickedOnEntry;
+      const entered = node.toPlace?.find((p) => p.useOne === true && p.x === node.x && p.y === node.y && p.z === node.z);
+      const observedOpen = sourceKind === DOOR_OPEN;
+      const entryOpen = entered?.expectedOpen ?? (entered ? !observedOpen : observedOpen);
+      const blocksExit = doorPanelBlocksMove(blockA.shapes, dir.x, dir.z) !== (entryOpen !== observedOpen);
       if (blocksExit) {
         if (!this.canOpenDoors) return;
-        toPlace.push({ x: node.x, y: node.y, z: node.z, dx: 0, dy: 0, dz: 0, useOne: true });
+        toPlace.push({ x: node.x, y: node.y, z: node.z, dx: 0, dy: 0, dz: 0,
+          useOne: true, expectedOpen: sourceKind ? !entryOpen : undefined });
       }
     }
 
@@ -729,13 +732,14 @@ export function installPathfinderPerf(log?: Logger): void {
     // A door may block this approach whether its state is open or shut. Toggle only
     // when the actual panel crosses the route; clicking a passable open door shuts it
     // in front of the bot. Fence gates keep their upstream interaction rule.
-    const woodenDoor = blockC.name?.endsWith('_door') && !blockC.name.endsWith('_trapdoor')
-      && ((blockC.door ?? 0) & DOOR_KIND) !== DOOR_SHUT_LOCKED;
+    const targetKind = (blockC.door ?? 0) & DOOR_KIND;
+    const woodenDoor = blockC.name?.endsWith('_door') && targetKind !== DOOR_SHUT_LOCKED;
     const toggleDoor = woodenDoor && doorPanelBlocksMove(blockC.shapes, dir.x, dir.z);
     if (toggleDoor && !this.canOpenDoors) return;
     if (toggleDoor || (this.canOpenDoors && !woodenDoor && blockC.openable
       && blockC.shapes && blockC.shapes.length !== 0)) {
-      toPlace.push({ x: node.x + dir.x, y: node.y, z: node.z + dir.z, dx: 0, dy: 0, dz: 0, useOne: true });
+      toPlace.push({ x: node.x + dir.x, y: node.y, z: node.z + dir.z, dx: 0, dy: 0, dz: 0,
+        useOne: true, expectedOpen: targetKind ? targetKind !== DOOR_OPEN : undefined });
     } else {
       cost += this.safeOrBreak(blockC, toBreak);
       if (cost > 100) return;

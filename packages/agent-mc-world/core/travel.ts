@@ -814,7 +814,8 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
       const dist = goal.heuristic({ x: here.x, y: here.y, z: here.z } as never);
       // 挖穿一格、搭一段路的时候人本来就该站着不动:钟走慢档,不按 10 秒计——
       // 但不能停走(见 GOTO_WORK_STALL_MS:挖-放振荡全程都算"在干活")
-      const working = Boolean(bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.());
+      const pathfinder = bot.pathfinder as Bot['pathfinder'] & { isUsingBlock?: () => boolean };
+      const working = Boolean(pathfinder?.isMining?.() || (pathfinder?.isBuilding?.() && !pathfinder.isUsingBlock?.()));
       const motion = navigationMotionEvidence(bot);
       // 还在挪窝就不算卡住:绕远路时直线距离可以一直不降,人却一路在走
       const moved = Math.hypot(here.x - bestPos.x, here.y - bestPos.y, here.z - bestPos.z);
@@ -937,7 +938,7 @@ export function writeStallProbe(
   const diag = ctx.diag;
   if (!diag) return;
   const pf = bot.pathfinder as unknown as {
-    isMining?: () => boolean; isBuilding?: () => boolean; isMoving?: () => boolean;
+    isMining?: () => boolean; isBuilding?: () => boolean; isUsingBlock?: () => boolean; isMoving?: () => boolean;
     goal?: unknown; path?: unknown[];
   } | undefined;
   const e = bot.entity as unknown as {
@@ -952,6 +953,8 @@ export function writeStallProbe(
     pathPlacementActive?: number;
     pathSupportFailure?: { seq: number };
   };
+  const usingBlock = pf?.isUsingBlock?.() ?? null;
+  const building = usingBlock === true ? false : pf?.isBuilding?.() ?? null;
   // Sample the actual collision geometry around the feet while the failure is
   // still present. A route can claim a door is passable while another nearby
   // block (or the rotated panel itself) prevents the body's 0.6-wide hitbox
@@ -970,12 +973,13 @@ export function writeStallProbe(
   diag.write({
     lane: 'path', event: 'goto-stall-probe', taskId: ctx.taskId,
     msg: `零位移探针(${trip === 'stall' ? '原地打转跳闸' : '走满 deadline'}):` +
-      `挖=${pf?.isMining?.() ?? '?'} 搭=${pf?.isBuilding?.() ?? '?'} 走=${pf?.isMoving?.() ?? '?'}`,
+      `挖=${pf?.isMining?.() ?? '?'} 搭=${building ?? '?'} 门交互=${usingBlock ?? '?'} 走=${pf?.isMoving?.() ?? '?'}`,
     data: {
       trip,
       goalKind: goal.constructor?.name ?? null,
       isMining: pf?.isMining?.() ?? null,
-      isBuilding: pf?.isBuilding?.() ?? null,
+      isBuilding: building,
+      isUsingBlock: usingBlock,
       isMoving: pf?.isMoving?.() ?? null,
       // 上游没把 path 挂出来,拿得到就记,拿不到记 null(isMoving 已经说了空不空)
       pathLen: Array.isArray(pf?.path) ? pf.path.length : null,

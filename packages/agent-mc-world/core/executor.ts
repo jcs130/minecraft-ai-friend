@@ -1043,6 +1043,8 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const arrived = (): boolean => (!destination || normalizeDimension(dimensionOf(bot)) === destination)
         && distance() <= call.within;
       if (arrived()) return `命令未发送：已在服务端传送落点 ${cellText(target)} 附近，无需重复传送；本步只确认位置，不证明命令已执行。需要发送非传送命令时用 chat.text，结果以服务端回执为准`;
+      const origin = bot.entity.position.clone();
+      const originDimension = normalizeDimension(dimensionOf(bot));
       // Own the transition only for the actual dispatched command, not for an
       // accepted or waiting step. Synchronous game events from chat are covered.
       const endTransition = ctx.beginDimensionTransition?.(destination ?? undefined);
@@ -1053,6 +1055,9 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           checkAbort(ctx);
           if (arrived()) return `服务端传送已核验:来到${zhDimension(dimensionOf(bot))} ${cellText(feetOf(bot))}`;
           await sleep(100);
+        }
+        if (bot.entity.position.distanceTo(origin) > 0.5 || normalizeDimension(dimensionOf(bot)) !== originDimension) {
+          throw new SkillBlocked(`已发 ${call.command}，观察到位置变化：当前在${zhDimension(dimensionOf(bot))} ${cellText(feetOf(bot))}，距指定落点 ${distance().toFixed(1)} 格。未满足本步落点条件（${call.within} 格内及指定维度）；先核对实际地点和服务端状态，不要盲目重发`);
         }
         throw new SkillBlocked(`已发 ${call.command}，但 6 秒内没有抵达 ${destination ? zhDimension(destination) : ''}${cellText(target)} 附近；查看服务端回执再决定下一步`);
       } finally {
