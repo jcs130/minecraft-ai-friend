@@ -55,6 +55,39 @@ const PATCHES: readonly SourcePatch[] = [
     file: 'index.js',
     edits: [
       {
+        find: `  const lockUseBlock = new Lock()`,
+        replace: `  const lockUseBlock = new Lock()
+  let useBlockGeneration = 0`,
+      },
+      {
+        find: `    lockUseBlock.release()
+    stateMovements.clearCollisionIndex()`,
+        replace: `    useBlockGeneration++
+    lockUseBlock.release()
+    stateMovements.clearCollisionIndex()`,
+      },
+      {
+        find: `      if (curPoint.toBreak.length > 0 || curPoint.toPlace.length > 0) break`,
+        replace: `      // Opening a door does not create a floor. Keep centering existing
+      // support after useOne; stop only at real terrain changes.
+      if (curPoint.toBreak.length > 0 || curPoint.toPlace.some(action => !action.useOne)) break`,
+      },
+      {
+        find: `      let np = getPositionOnTopOf(b)`,
+        replace: `      // The rotating panel is a side obstruction, not the floor of a doorway.
+      const doorway = b?.name?.endsWith('_door') || b?.name?.endsWith('_fence_gate')
+      let np = doorway ? null : getPositionOnTopOf(b)`,
+      },
+      {
+        find: `    if (astarContext && astartTimedout) {`,
+        replace: `    if (astarContext && astartTimedout && !(placing && placingBlock?.useOne)) {`,
+      },
+      {
+        find: `  bot.pathfinder.isBuilding = () => placing`,
+        replace: `  bot.pathfinder.isBuilding = () => placing
+  bot.pathfinder.isUsingBlock = () => placing && placingBlock?.useOne === true`,
+      },
+      {
         find: `    stateGoal = goal
     dynamicGoal = dynamic
     bot.emit('goal_updated', goal, dynamic)`,
@@ -65,6 +98,45 @@ const PATCHES: readonly SourcePatch[] = [
     // bot can no longer reach would stall every later goal.
     returningPos = null
     bot.emit('goal_updated', goal, dynamic)`,
+      },
+      {
+        find: `        bot.activateBlock(bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z))).then(() => {
+          lockUseBlock.release()
+          placingBlock = nextPoint.toPlace.shift()
+        }, err => {
+          console.error(err)
+          lockUseBlock.release()
+        })`,
+        replace: `        const interaction = placingBlock
+        const generation = ++useBlockGeneration
+        const target = bot.blockAt(new Vec3(interaction.x, interaction.y, interaction.z))
+        const use = bot.cortiNavigateUse
+          ? bot.cortiNavigateUse(target, interaction.expectedOpen)
+          : bot.activateBlock(target)
+        use.then(() => {
+          if (generation !== useBlockGeneration) return
+          lockUseBlock.release()
+          if (path[0] !== nextPoint) {
+            placing = false
+            placingBlock = null
+            return
+          }
+          if (astarContext && astartTimedout) {
+            // The unfinished search saw the old panel; plan from its current state.
+            resetPath('block_updated')
+            return
+          }
+          placingBlock = nextPoint.toPlace.shift()
+          if (!placingBlock) {
+            placing = false
+            lastNodeTime = performance.now()
+          }
+        }, err => {
+          console.error(err)
+          if (generation !== useBlockGeneration) return
+          lockUseBlock.release()
+          resetPath('interaction_error')
+        })`,
       },
       {
         find: `    if (bot.entity.position.distanceSquared(targetPos) > minDistanceSq) {`,
