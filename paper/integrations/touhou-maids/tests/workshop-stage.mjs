@@ -23,7 +23,7 @@ const box = '305 90 303';
 const table = '312 90 303';
 const maid = fixture.maid;
 let seq = 0;
-let forcedOrder = 'home minecraft:torch 1 chest';
+const forcedOrder = 'home minecraft:torch 4 chest';
 let latestModelRequest;
 const model = http.createServer(async (req, res) => {
     let body = '';
@@ -34,7 +34,7 @@ const model = http.createServer(async (req, res) => {
     if (useTool) latestModelRequest = {tools, workshopContext:parsed.messages.some(m => m.content?.includes('minecraft:torch'))};
     const message = useTool
         ? {role:'assistant', content:null, tool_calls:[{id:'workshop_qa', type:'function',
-            function:{name:'make_at_workshop', arguments:JSON.stringify({order:forcedOrder})}}]}
+            function:{name:'make_at_workshop', arguments:JSON.stringify({workshop:'home',recipe:'minecraft:torch',quantity:4,inventory:'chest'})}}]}
         : {role:'assistant', content:'我接下了，做完告诉你。'};
     res.writeHead(200, {'content-type':'application/json'});
     res.end(JSON.stringify({id:'workshop-qa', object:'chat.completion', model:'qa-native',
@@ -138,6 +138,8 @@ try {
         check('missing material is a rejected receipt', (await ask(owner, 'make', forcedOrder)).error === 'materials_missing');
         await prepChest();
         const before = await snapshot();
+        check('requesting three torches returns the real four-per-craft constraint',
+            (await ask(owner, 'make', 'home minecraft:torch 3 chest')).error === 'workshop_quantity' && (await snapshot()) === before);
         check('unregistered recipe cannot touch real slots', (await ask(owner, 'make', 'home minecraft:diamond_block')).error === 'workshop_not_allowed'
             && (await snapshot()) === before);
         await rc('minecraft:data merge block ' + box + ' {Lock:"workshop-test-key"}');
@@ -173,7 +175,7 @@ try {
         check('other nearby chest remains untouched', (await rc('minecraft:data get block 304 90 305 Items')).includes('count: 9'));
         check('duplicate request returns original result without applying twice',
             (await ask(owner, 'make', forcedOrder, report.complete)).data?.replayed && (await snapshot()) === after);
-        check('reusing ID with different parameters is rejected', (await ask(owner, 'make', 'home minecraft:torch 2 chest', report.complete)).error === 'request_conflict');
+        check('reusing ID with different parameters is rejected', (await ask(owner, 'make', 'home minecraft:torch 8 chest', report.complete)).error === 'request_conflict');
 
         await rc(`minecraft:tp ${maid} 300.5 90 303.5`);
         const stale = run + '_stale';
@@ -199,7 +201,7 @@ try {
         check('real resources transferred to backpack slots above six', (await ask(owner, 'transfer', 'put 32 1 0')).data?.status === 'applied'
             && (await ask(owner, 'transfer', 'put 33 1 1')).data?.status === 'applied');
         const backpackOrder = run + '_backpack';
-        check('backpack-funded craft is queued', (await ask(owner, 'make', 'home minecraft:torch 1 backpack', backpackOrder)).data?.status === 'pending');
+        check('backpack-funded craft is queued', (await ask(owner, 'make', 'home minecraft:torch 4 backpack', backpackOrder)).data?.status === 'pending');
         const bagDone = await terminal(owner, backpackOrder);
         check('backpack craft completes in its actual usable slots', bagDone.data?.status === 'completed' && bagDone.data?.observation?.inventory === 'backpack'
             && bagDone.data.observation.count === 4 && (await snapshot()) === edited);

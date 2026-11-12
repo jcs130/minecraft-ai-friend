@@ -1,6 +1,7 @@
 package local.tlmcompat.hybrid;
 
 import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.FunctionTool;
+import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.parameter.NumberParameter;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.parameter.ObjectParameter;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.parameter.StringParameter;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion;
@@ -8,6 +9,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,6 +47,7 @@ import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.entity.Player;
 
 /** Owns in-flight work only. Item changes commit together to one native inventory. */
@@ -57,7 +60,7 @@ final class NativeMaidWorkshop {
 
     private record Site(String id, UUID maid, UUID owner, UUID world, BlockPos chest, BlockPos table,
                         List<ResourceLocation> recipes) {}
-    private record Order(String site, ResourceLocation recipe, int batches, boolean backpack) {}
+    private record Order(String site, ResourceLocation recipe, int quantity, boolean backpack) {}
     private enum Phase { SUPPLIES, TABLE, DELIVERY }
     private static final class Job {
         final Player owner;
@@ -65,6 +68,8 @@ final class NativeMaidWorkshop {
         final ServerLevel level;
         final String request;
         final Order order;
+        final int batches;
+        final int expectedQuantity;
         final Site site;
         final long revision;
         final long deadline = System.nanoTime() + TIMEOUT;
@@ -77,12 +82,18 @@ final class NativeMaidWorkshop {
         long pathFailedSince;
         final JsonArray visits = new JsonArray();
         boolean defending;
-        Job(Player owner, EntityMaid maid, ServerLevel level, String request, Order order, Site site, Inventory inventory) {
+        Job(Player owner, EntityMaid maid, ServerLevel level, String request, Order order, Site site, Inventory inventory, int perCraft) {
             this.owner = owner;
             this.maid = maid;
             this.level = level;
             this.request = request;
             this.order = order;
+            expectedQuantity = order.quantity == 0 ? perCraft : order.quantity;
+            if (expectedQuantity % perCraft != 0 || expectedQuantity / perCraft > MAX_BATCHES) {
+                throw new CompatibilityException("workshop_quantity", "这个配方每次产出 " + perCraft
+                    + " 件，请填 " + perCraft + " 的倍数，最多 " + (perCraft * MAX_BATCHES) + " 件。");
+            }
+            batches = expectedQuantity / perCraft;
             this.site = site;
             this.inventory = inventory;
             revision = MaidCompanionActions.revision(maid);
@@ -183,8 +194,18 @@ final class NativeMaidWorkshop {
             var world = Bukkit.getWorld(site.world);
             if (world != null) row.addProperty("dimension", world.getKey().toString());
             JsonArray recipes = new JsonArray();
-            site.recipes.forEach(recipe -> recipes.add(recipe.toString()));
+            JsonObject productsPerCraft = new JsonObject();
+            for (ResourceLocation recipe : site.recipes) {
+                if (!(world instanceof CraftWorld craftWorld)) continue;
+                try {
+                    productsPerCraft.addProperty(recipe.toString(), MaidWorkshopRecipes.perCraft(craftWorld.getHandle(), recipe));
+                    recipes.add(recipe.toString());
+                } catch (CompatibilityException unavailable) {
+                    // Expose only recipes the current server can resolve.
+                }
+            }
             row.add("recipes", recipes);
+            row.add("productsPerCraft", productsPerCraft);
             catalog.add(row);
         }
         result.add("workshops", catalog);
@@ -194,15 +215,46 @@ final class NativeMaidWorkshop {
         return result;
     }
 
-    boolean addTool(ChatCompletion request, EntityMaid maid, Player actor) {
-        var available = describe(maid.getUUID(), actor.getUniqueId()).getAsJsonArray("workshops");
-        if (available.isEmpty()) return false;
-        var order = StringParameter.create();
-        order.setDescription("依次填工位ID、配方ID、合成批次数、材料位置 chest 或 backpack，例如 home minecraft:torch 1 chest。工位和配方来自现场工位清单。");
+    void addTool(ChatCompletion request, EntityMaid maid, Player actor) {
+        JsonArray available = describe(maid.getUUID(), actor.getUniqueId()).getAsJsonArray("workshops");
+        List<JsonObject> active = available.asList().stream().map(value -> value.getAsJsonObject())
+            .filter(site -> !site.getAsJsonArray("recipes").isEmpty()).toList();
+        if (active.isEmpty()) return;
+        var site = StringParameter.create().setDescription("已授权的工位ID。")
+            .addEnumValues(active.stream().map(row -> row.get("id").getAsString()).toArray(String[]::new));
+        var recipe = StringParameter.create().setDescription("工位清单中的配方ID。");
+        var quantity = NumberParameter.create().setMinimum(1)
+            .setDescription("最终需要的成品件数，整数。例如做四支火把填4。省略则使用配方的一次产出。");
+        var source = StringParameter.create().addEnumValues("chest", "backpack")
+            .setDescription("材料和成品所在处。chest 为已授权补给箱，backpack 为自己的背包。");
         request.addTool(FunctionTool.create().setName(TOOL)
-            .setDescription("用真实工作台制作。chest 从同一个已授权箱子扣材料并存回成品，backpack 使用自己的可用背包格。pending 是接单，完成后会用单独消息告知结果。")
-            .setParameters(ObjectParameter.create().addProperties("order", order)).build());
-        return true;
+            .setDescription("用真实工作台制作指定数量的成品。pending 是接单，完成后有单独回执。")
+            .setParameters(ObjectParameter.create().addProperties("workshop", site).addProperties("recipe", recipe)
+                .addProperties("quantity", quantity, false).addProperties("inventory", source)).build());
+    }
+
+    static String modelOrder(JsonObject args) {
+        try {
+            if (!Set.of("workshop", "recipe", "quantity", "inventory").containsAll(args.keySet())) throw badOrder();
+            String site = stringArgument(args, "workshop");
+            String recipe = stringArgument(args, "recipe");
+            String source = stringArgument(args, "inventory");
+            String quantity = "once";
+            if (args.has("quantity")) {
+                if (!(args.get("quantity") instanceof JsonPrimitive value) || !value.isNumber()
+                        || value.getAsBigDecimal().intValueExact() <= 0) throw badOrder();
+                quantity = Integer.toString(value.getAsInt());
+            }
+            return site + " " + recipe + " " + quantity + " " + source;
+        } catch (RuntimeException invalid) {
+            throw badOrder();
+        }
+    }
+
+    private static String stringArgument(JsonObject args, String field) {
+        if (!(args.get(field) instanceof JsonPrimitive value) || !value.isString()
+                || !value.getAsString().matches("[a-z0-9_:/.-]{1,120}")) throw badOrder();
+        return value.getAsString();
     }
 
     JsonObject start(Player actor, EntityMaid maid, String request, String value) throws Exception {
@@ -228,9 +280,10 @@ final class NativeMaidWorkshop {
             access(actor, site.table, false);
             Inventory inventory = order.backpack ? Inventory.backpack(maid) : Inventory.chest(chest(level, site.chest));
             if (!order.backpack) access(actor, site.chest, true);
-            job = new Job(actor, maid, level, request, order, site, inventory);
+            int perCraft = MaidWorkshopRecipes.perCraft(level, order.recipe);
+            job = new Job(actor, maid, level, request, order, site, inventory, perCraft);
             // Report missing materials/capacity before spending time walking. Re-read the recipe at the table.
-            MaidWorkshopRecipes.plan(level, order.recipe, order.batches, job.before, inventory.stackLimit);
+            plan(job);
         } catch (CompatibilityException error) {
             return journal.finish(id, request, "rejected", reason(error, false));
         }
@@ -243,16 +296,30 @@ final class NativeMaidWorkshop {
         String[] words = value == null ? new String[0] : value.strip().split("\\s+");
         try {
             if (words.length >= 2 && words.length <= 4) {
-                int batches = words.length >= 3 ? Integer.parseInt(words[2]) : 1;
+                boolean once = words.length == 2 || words[2].equals("once");
+                int quantity = once ? 0 : Integer.parseInt(words[2]);
                 String source = words.length == 4 ? words[3] : "chest";
-                if (batches >= 1 && batches <= MAX_BATCHES && Set.of("chest", "backpack").contains(source)) {
-                    return new Order(words[0], ResourceLocation.parse(words[1]), batches, source.equals("backpack"));
+                if ((once || quantity > 0) && Set.of("chest", "backpack").contains(source)) {
+                    return new Order(words[0], ResourceLocation.parse(words[1]), quantity, source.equals("backpack"));
                 }
             }
         } catch (RuntimeException ignored) {
             // Use the same actionable syntax for malformed counts and recipe IDs.
         }
-        throw new CompatibilityException("bad_workshop_order", "用法 /qdmaid make <女仆ID> <请求ID> <工位ID> <配方ID> [批次1-16] [chest|backpack]。");
+        throw badOrder();
+    }
+
+    private static CompatibilityException badOrder() {
+        return new CompatibilityException("bad_workshop_order",
+            "用法 /qdmaid make <女仆ID> <请求ID> <工位ID> <配方ID> [成品数量|once] [chest|backpack]。例如 home minecraft:torch 4 chest。");
+    }
+
+    private static MaidWorkshopRecipes.Plan plan(Job job) {
+        var plan = MaidWorkshopRecipes.plan(job.level, job.order.recipe, job.batches, job.before, job.inventory.stackLimit);
+        if (plan.product().getCount() != job.expectedQuantity) {
+            throw new CompatibilityException("recipe_changed", "配方产出变化，请重新查询工位和每次产出数量。");
+        }
+        return plan;
     }
 
     private static boolean ready(EntityMaid maid) {
@@ -356,7 +423,7 @@ final class NativeMaidWorkshop {
             }
             case TABLE -> {
                 if (!job.inventory.matches(job.before)) throw changed();
-                job.plan = MaidWorkshopRecipes.plan(job.level, job.order.recipe, job.order.batches, job.before, job.inventory.stackLimit);
+                job.plan = plan(job);
                 maid.swing(InteractionHand.MAIN_HAND);
                 if (job.order.backpack) commit(job); else job.phase = Phase.DELIVERY;
             }
@@ -432,7 +499,8 @@ final class NativeMaidWorkshop {
         out.addProperty("operationId", job.request);
         out.addProperty("workshopId", job.site.id);
         out.addProperty("recipeId", job.order.recipe.toString());
-        out.addProperty("batches", job.order.batches);
+        out.addProperty("batches", job.batches);
+        out.addProperty("quantity", job.expectedQuantity);
         out.addProperty("inventory", job.order.backpack ? "backpack" : "chest");
         out.addProperty("phase", job.defending ? "defending" : job.phase.name().toLowerCase(Locale.ROOT));
         if (!job.visits.isEmpty()) out.add("visits", job.visits.deepCopy());

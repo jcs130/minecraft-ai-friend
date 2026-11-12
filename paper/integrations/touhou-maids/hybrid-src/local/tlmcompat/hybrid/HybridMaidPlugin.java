@@ -500,7 +500,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
             "对话：同维度伙伴24格、访客8格内，可点名交谈。每段附近交谈最多120秒、6条请求，收到告别会收尾。伙伴可以说「肥鱼，跟我走」，也可直接用 follow <UUID> <requestId>。Agent用 nearby 找UUID，receipt <UUID> <原requestId> 查动作及回复。",
             "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
-            "工位：/qdmaid workshop <UUID> 查工位及配方；make <UUID> <requestId> <工位ID> <配方ID> [批次] [chest|backpack]。pending 表示已接单，按 receipt 查成品数量。",
+            "工位：/qdmaid workshop <UUID> 查工位及配方；make <UUID> <requestId> <工位ID> <配方ID> [成品数量|once] [chest|backpack]。pending 表示已接单，按 receipt 查成品数量。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
             "随行：肥鱼闲置跟随时，有合适主手武器会保护受敌人攻击的主人，脱战后恢复陪伴；主人传送时，附近的肥鱼尝试跟到安全落点。停留、睡眠及手选工作优先，查 context 的位置与 ownerDistance 确认真正到达。",
             "真人：/qdmaid menu <UUID> 或右键本人女仆，管理原背包及装备。talk 仅为外部宿主留言箱，不是原生模型对话。死亡后先查看 context，不自动补发/复活。"

@@ -3,7 +3,7 @@
 原版 Java 和未改动的 Mineflayer 直接使用现有游戏聊天和 `/qdmaid`。原版菜单照常查看真实背包，工位按当前背包的可用槽计算容量。大背包仍须实际装备。
 
 - `/qdmaid workshop <maidId> [queryId]` 返回本人女仆的工位、可选配方和当前工单。先用 `/qdmaid list` 取得 maidId。
-- `/qdmaid make <maidId> <requestId> <工位ID> <配方ID> [批次1-16] [chest|backpack]` 下单。默认一批，使用工位补给箱。每批按当前服务端配方决定产出数量。
+- `/qdmaid make <maidId> <requestId> <工位ID> <配方ID> [成品数量|once] [chest|backpack]` 下单。默认按服务端配方制作一次，使用工位补给箱。数量表示成品件数，须为 `productsPerCraft` 的整倍数，最多制作 16 次。
 - 在附近频道点名并说明工位、材料来源与数量，也可由已配置共享对话的女仆调用 `make_at_workshop`。只向绑定伙伴的近聊提供这个工具。
 - `/qdmaid receipt <maidId> <原requestId> [queryId]` 查原结果。正常接单是 `pending`。`completed` 且 `goalCompleted:true` 表示实际库存已核对，`observation` 给出 `itemId`、`count`、材料和成品所在的 `inventory`，以及到达点。完成时聊天中的工单编号可用于查询。
 - 缺材料、库存已改或路线中断会附原因。可明确确认无效果的失败修正后再下新单，`unknown` 用原请求和实物核对。

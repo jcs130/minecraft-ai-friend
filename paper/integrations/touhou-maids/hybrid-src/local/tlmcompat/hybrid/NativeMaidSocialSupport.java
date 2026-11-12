@@ -165,9 +165,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
                 try{args=JsonParser.parseString(tool.getFunction().getArguments()).getAsJsonObject();}
                 catch(RuntimeException malformed){throw new CompatibilityException("bad_companion_action","工具参数须为JSON对象。");}
                 if(NativeMaidWorkshop.TOOL.equals(name)){
-                    if(args.size()!=1||!(args.get("order") instanceof JsonPrimitive order)||!order.isString()||order.getAsString().length()>160)
-                        throw new CompatibilityException("bad_workshop_order","order 格式为 工位ID 配方ID 批次 chest|backpack。");
-                    result=plugin.dispatch(call.actorConnection,NativeMaidWorkshop.ACTION,call.maid.getUUID(),operation,order.getAsString());
+                    result=plugin.dispatch(call.actorConnection,NativeMaidWorkshop.ACTION,call.maid.getUUID(),operation,NativeMaidWorkshop.modelOrder(args));
                 }else if(MaidCompanionActions.TOOL.equals(name)){
                     if(args.size()!=1||!(args.get("mode") instanceof JsonPrimitive mode)||!mode.isString()||!MaidCompanionActions.MODES.contains(mode.getAsString()))
                         throw new CompatibilityException("bad_companion_mode","mode必须是follow、guard、wait或fish。未执行动作。");

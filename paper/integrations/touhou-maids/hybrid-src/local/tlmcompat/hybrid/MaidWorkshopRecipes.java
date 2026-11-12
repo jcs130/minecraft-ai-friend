@@ -19,12 +19,25 @@ final class MaidWorkshopRecipes {
 
     private MaidWorkshopRecipes() {}
 
-    static Plan plan(ServerLevel level, ResourceLocation id, int batches, List<ItemStack> contents, int stackLimit) {
+    private static CraftingRecipe recipe(ServerLevel level, ResourceLocation id) {
         var holder = level.getRecipeManager().byKey(id).orElse(null);
         if (holder == null || !(holder.value() instanceof CraftingRecipe recipe)
                 || !(recipe instanceof ShapedRecipe || recipe instanceof ShapelessRecipe) || recipe.isSpecial()) {
             throw new CompatibilityException("recipe_unavailable", "这个工位只使用服务器当前的有形或无形工作台配方。请用 workshop 查询可用配方。");
         }
+        return recipe;
+    }
+
+    static int perCraft(ServerLevel level, ResourceLocation id) {
+        ItemStack result = recipe(level, id).getResultItem(level.registryAccess());
+        if (result.isEmpty() || !result.getItem().isEnabled(level.enabledFeatures())) {
+            throw new CompatibilityException("recipe_unavailable", "当前世界没有启用这项成品。");
+        }
+        return result.getCount();
+    }
+
+    static Plan plan(ServerLevel level, ResourceLocation id, int batches, List<ItemStack> contents, int stackLimit) {
+        CraftingRecipe recipe = recipe(level, id);
         List<Ingredient> ingredients = recipe.getIngredients();
         int width = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : 3;
         int height = recipe instanceof ShapedRecipe shaped ? shaped.getHeight() : (ingredients.size() + 2) / 3;
