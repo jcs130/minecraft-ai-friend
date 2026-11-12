@@ -55,6 +55,7 @@ public final class NativeMaidFollowSupport {
         return "";
     }
     public void tick(EntityMaid maid){
+        MaidCompanionActions.expireWait(maid,System.currentTimeMillis());
         UUID id=maid.getUUID();LivingEntity owner=owner(maid);String reason=pause(maid,owner);
         if(!reason.isEmpty()){policy.clear(id);last.remove(id);return;}
         Limits limits;
@@ -91,6 +92,9 @@ public final class NativeMaidFollowSupport {
         out.addProperty("state",reason.isEmpty()?last.getOrDefault(maid.getUUID(),"awaiting_native_tick"):reason);
         out.addProperty("walkBeyond",limits.walkBeyond());out.addProperty("stopWithin",limits.stopWithin());out.addProperty("recoveryBeyond",limits.recoverBeyond());out.addProperty("distanceUnit","blocks");out.addProperty("stuckSeconds",8);out.addProperty("recoveryCooldownSeconds",15);out.addProperty("customized",limits.customized());
         out.addProperty("meaning","模式已设置不等于已走到身边；读取实际位置和ownerDistance。卡路时仅尝试原模组安全落点，不破坏地形。");
+        out.addProperty("temporaryWait",MaidCompanionActions.waiting(maid));
+        out.addProperty("waitUntilEpochMillis",maid.getPersistentData().getLong(MaidCompanionActions.WAIT));
+        if(reason.equals("sitting")||reason.equals("home_mode"))out.addProperty("nextStep",MaidCompanionActions.waiting(maid)?"短暂停等结束后自动恢复跟随。":"当前处于驻守。可以在同维度近处说“肥鱼，跟我走”，也可用 /qdmaid follow <maidId> <新requestId> 立即切换。");
         if(reason.equals("different_dimension"))out.addProperty("nextStep","主人与女仆不在同一维度；先通过正常传送入口会合，再查询，不按相似坐标判断在附近。");
         if(reason.equals("native_work_or_combat"))out.addProperty("nextStep","当前工作或战斗由原生AI处理；闲置且非停留状态时才启用近距陪伴。");
         return out;

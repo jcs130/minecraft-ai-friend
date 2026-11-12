@@ -174,7 +174,7 @@ export interface TaskReadout {
   kind: string;
   taskId?: number;
   text: string;
-  steps?: Array<{ step: number; why: string | null }>;
+  steps?: Array<{ step: number; why: string | null; detail?: {text:string; chars:number; truncated:boolean} }>;
 }
 
 /** Current progress stays separate from historical terminal evidence. */
@@ -193,8 +193,11 @@ export function renderLastTaskReadout(last: TaskReadout | null, detail: 'summary
   const clip = (text: string, limit: number): string => text.length > limit ? `${text.slice(0, limit)}…` : text;
   const head = clip(last.text.split('\n')[0], 240);
   const cause = last.steps?.find(step => step.why)?.why;
+  const results = last.steps?.filter(step => step.detail?.text && !head.includes(step.detail.text)) ?? [];
   return `[最近一单，历史终态] ${last.at} 任务#${last.taskId} ${last.kind}: ${head}`
     + (cause && !head.includes(cause) ? `\n[原因摘要] ${clip(cause, 160)}` : '')
+    + results.slice(-2).map(step => `\n[第${step.step}步原生回执摘要] ${clip(step.detail!.text, 240)}`).join('')
+    + (results.length > 2 ? `\n另有 ${results.length-2} 步结果未展开。` : '')
     + `\n完整原文：mc_queue {"taskId":${last.taskId}}（本场保留最近 64 个任务；不是当前现场）。`;
 }
 

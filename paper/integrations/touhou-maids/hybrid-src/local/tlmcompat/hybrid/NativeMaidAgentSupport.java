@@ -30,6 +30,7 @@ public final class NativeMaidAgentSupport implements Listener {
     private final NativeMaidFollowSupport following=new NativeMaidFollowSupport();
     private long lastPersistenceWarning;
     private final java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingDeathEvent> deathListener;
+    private final java.util.function.Consumer<com.github.tartaricacid.touhoulittlemaid.api.event.MaidFishedEvent> fishingListener;
     private final Map<UUID,Pending> pending=new HashMap<>();
     private final Map<UUID,String> modelFailures=new HashMap<>();
     private final ThreadLocal<String> startingOperation=new ThreadLocal<>();
@@ -45,11 +46,21 @@ public final class NativeMaidAgentSupport implements Listener {
         deathListener=event->{if(event.getEntity() instanceof EntityMaid maid)Bukkit.getScheduler().runTask(plugin,()->{
             if(!event.isCanceled()&&!maid.isAlive())observeDeath(maid);
         });};
+        fishingListener=event->{
+            EntityMaid maid=event.getMaid();
+            if(maid==null||!plugin.sharedDialogueEnabled(maid))return;
+            long observed=System.currentTimeMillis();
+            Bukkit.getScheduler().runTask(plugin,()->{
+                if(!event.isCanceled()&&event.getHook().isRemoved()&&maid.isAlive()&&!maid.isRemoved()&&registeredOwner(maid)!=null)
+                    maid.getPersistentData().putLong(MaidCompanionActions.FISHED_AT,observed);
+            });
+        };
         Bukkit.getPluginManager().registerEvents(this,plugin);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,false,deathListener);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,false,fishingListener);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
-    public void close(){net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deathListener);persistLifecycle();}
+    public void close(){net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deathListener);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(fishingListener);persistLifecycle();}
     @EventHandler public void quit(PlayerQuitEvent event){notified.remove(event.getPlayer().getUniqueId());}
 
     /** Native saved tombstone carries the original maid UUID in the name's insertion style. */
