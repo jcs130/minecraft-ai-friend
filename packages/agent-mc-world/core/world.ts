@@ -48,6 +48,7 @@ import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
 import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
 import { supervisorEventView } from '../src/client/event-context.ts';
+import { executionFeedbackContext } from '../src/client/execution-context.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -216,6 +217,9 @@ const BLUEPRINT_INVENTORY_SETTLE_MS = 500;
 const REQUEST_FACT_KEYS = ['place','vehicle','flight','clock','realclock','body','gear','inventoryIds','equip','life','structure','terrain','players',
   'sample','queue','taskProgress','goals','foodReserve','options','methods','identity','deathLifecycle','recoveryState','temporaryScaffolds',
   'bodyRestriction','serverFeedback','lastTask','journey','hud','availability','observationBoundary','bodyAvailability'] as const;
+const EXECUTION_FACT_KEYS = ['sample', 'identity', 'place', 'body', 'queue', 'taskProgress',
+  'deathLifecycle', 'bodyRestriction', 'serverFeedback', 'lastTask', 'availability',
+  'observationBoundary', 'bodyAvailability'] as const;
 /** 已确认正式施工后等待该物品数量扣减的上界。 */
 export const BLUEPRINT_PLACEMENT_SETTLE_MS = 1_500;
 
@@ -3627,7 +3631,8 @@ export class MinecraftWorld implements World {
       parts.push({ key: 'journey', text: movementPolicy + '\n' + journeyOpportunityText(journey, { guidance: false })
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
     } else parts.push({ key: 'journey', text: movementPolicy + '\n当前没有活动旅途观察；mc_policy 可查询和调整行走/垫脚/主动战斗策略。' });
-    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS, options, world: readWorldIdentity(bot),
+    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS,
+      executionPartKeys: EXECUTION_FACT_KEYS, options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
@@ -3711,7 +3716,8 @@ export class MinecraftWorld implements World {
       { key: 'lastTask', text: renderLastTaskReadout(last
         ? { ...last, at: nowIso(this.timezone, new Date(last.at)) } : null) },
     ];
-    return { text: parts.map(part => part.text).join('\n'), parts, partKeys: REQUEST_FACT_KEYS, world: readWorldIdentity(null),
+    return { text: parts.map(part => part.text).join('\n'), parts, partKeys: REQUEST_FACT_KEYS,
+      executionPartKeys: EXECUTION_FACT_KEYS, world: readWorldIdentity(null),
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 
@@ -7808,11 +7814,16 @@ export class MinecraftWorld implements World {
         }
         const serverNotice = this.extensionImportantMessage(text);
         if (!privateMessage && !serverNotice && this.suppressRepeatedSystemMessage(text)) return;
-        this.emit('minecraft.chat', `[MC ${privateMessage ? '私聊' : serverNotice ? '插件' : loginMessage ? '登录消息' : '系统'}] ${text}`,
+        const notice = `[MC ${privateMessage ? '私聊' : serverNotice ? '插件' : loginMessage ? '登录消息' : '系统'}] ${text}`;
+        const nativeServerFeedback = !privateMessage && !loginMessage
+          && (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender))
+          && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.');
+        this.emit('minecraft.chat', notice,
           privateMessage || serverNotice,
           { ...(privateMessage || serverNotice ? {} : { trigger: 'piggyback' as const }),
             ...(privateMessage ? { meta: { channel: 'private' } }
-              : loginMessage ? { meta: { phase: 'login', server: `${this.cfg.host}:${this.cfg.port}` } } : {}) },
+              : loginMessage ? { meta: { phase: 'login', server: `${this.cfg.host}:${this.cfg.port}` } }
+              : nativeServerFeedback ? { meta: { executionFeedback: executionFeedbackContext(notice) } } : {}) },
           serverNotice ? 'server-extension' : undefined);
       });
     });

@@ -103,6 +103,8 @@ export interface WorldRequestFacts {
   /** Stable selectable partition keys. A declared key absent from parts has no
    * current observation; hosts must not restore a previous value or infer success. */
   partKeys?: readonly string[];
+  /** Producer-owned current identity, body queue and execution results required by an active body owner. */
+  executionPartKeys?: readonly string[];
   /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */
   workStates?: readonly import('./work-state.ts').WorkState[];
   /** Observed activity attribution. Absence of a revision does not imply completion evidence. */
