@@ -1,4 +1,4 @@
-"""Build the companion-action increment over the verified deployed portal bridge."""
+"""Build the companion action and workshop increment over the verified deployed portal bridge."""
 import argparse
 from copy import copy
 import hashlib
@@ -8,11 +8,12 @@ import tempfile
 import zipfile
 
 BASELINE_SHA256 = '278f6e0c2c9619c8ed92ed7616f7717d86a88bfc638eb03338ae7024ee052c47'
-VERSION = '0.1.26-companion-actions'
+VERSION = '0.1.27-workshop'
 PACKAGE = 'local/tlmcompat/hybrid/'
 CLASSES = ('CompanionActionCallback', 'MaidCompanionActions', 'NativeMaidBrainSupport',
            'NativeMaidSocialSupport', 'HybridMaidPlugin', 'NativeMaidFollowSupport', 'NativeMaidOwnerTravel',
-           'NativeMaidNearbyChat', 'MaidConversationWindow', 'MaidConversationInitiative', 'NativeMaidAgentSupport')
+           'NativeMaidNearbyChat', 'MaidConversationWindow', 'MaidConversationInitiative', 'NativeMaidAgentSupport',
+           'NativeMaidWorkshop', 'MaidWorkshopRecipes')
 
 
 def replaced(name):
