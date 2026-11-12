@@ -84,3 +84,14 @@ flight ascent/descent, directional controls and view changes have unknown motion
 in this input contract and do not yield a no-movement verdict. Check actual
 position/height, constraints and task terminals before a host intervenes. This
 helper does not cancel work, close goals or schedule model calls.
+
+For a worker that holds the physical body, `executionFactParts` includes the
+World's `executionPartKeys` in addition to the worker's optional selections.
+The current queue and last native terminal are distinct. An absent current
+partition stays unavailable even when older observations remain in the archive.
+
+A native server message can carry `meta.executionFeedback`. The consumer
+checks `hasExecutionFeedbackContext` against the original text and routes it
+to the active worker in the same World independently of optional event
+subscriptions. The marker carries neither a command correlation nor proof of
+an effect. Independent read queries return their matched replies directly.
