@@ -138,6 +138,22 @@ describe('server travel task lifecycle', () => {
     expect(r.reports.find(report => report.taskId === next.taskId)?.kind).toBe('cancelled');
   });
 
+  it('reports the observed arrival outside a specified radius without retrying or running the next step', async () => {
+    const r = rig();
+    r.bot.chat = vi.fn(text => {
+      r.said.push(text);
+      if (text === '/home') r.bot.entity.position = new Vec3(20.5, 64, 10.5);
+    });
+    const task = r.exec.submitDetailed([travel, { skill: 'chat', text: 'must not execute' }], 'append');
+    await vi.advanceTimersByTimeAsync(6100);
+    const report = r.reports.find(result => result.taskId === task.taskId)!;
+    expect(report.kind).toBe('blocked');
+    expect(report.text).toContain('观察到位置变化');
+    expect(report.text).toContain('距指定落点 10.5 格');
+    expect(report.steps?.[1].outcome).toBe('skip');
+    expect(r.said).toEqual(['/home']);
+  });
+
   it('still cancels a transition to a dimension that the travel did not request', async () => {
     const r = rig();
     r.bot.chat = vi.fn(() => {
