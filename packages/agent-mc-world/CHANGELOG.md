@@ -1,6 +1,10 @@
-## 0.5.7-rc.160-preview.58
+## 0.5.7-rc.160-preview.59
 
 - Keep learning admission predicates in the parent tool table, alongside read-only predicates, instead of passing functions through the engine initialization IPC. Verify the actual combat tool and learning admission through a real SDK/MCP child lifecycle.
+
+## 0.5.7-rc.160-preview.58
+
+- Read current health, food, position and active work for Numen bodies that expose sampled facts. Keep the full inbox and native guide behind their existing explicit reads.
 
 ## 0.5.7-rc.160-preview.57
 

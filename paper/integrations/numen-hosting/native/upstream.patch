@@ -102,28 +102,18 @@ index 000000000..2cd301bc6
 +    }
 +}
 diff --git a/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpEndpoint.java b/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpEndpoint.java
-index 755b6922b..6fe06a187 100644
+index f27a6b65f..b72d64910 100644
 --- a/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpEndpoint.java
 +++ b/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpEndpoint.java
-@@ -83,6 +83,9 @@ public final class McpEndpoint {
-     private final McpConfig config;
-     private final McpTokens tokens;
-     private final McpLimits limits;
-+    /** 20Hz 输入和保活独立限额；模型动作仍使用服主配置的普通限额。 */
-+    static final McpConfig.Limits LIVE_INPUT_LIMITS = new McpConfig.Limits(8, 1500, 64, 12000);
-+    private final McpLimits inputLimits = new McpLimits(LIVE_INPUT_LIMITS, System::currentTimeMillis);
-     private final McpAudit audit;
-     private final McpStrangers strangers;
-     private final McpPresence presence;
-@@ -351,7 +354,7 @@ public final class McpEndpoint {
-         String name = request.name();
-         String argsJson = request.arguments() == null ? "{}" : toJson(request.arguments());
-         int bytesIn = argsJson.length();
--        McpLimits.Permit permit = limits.acquire(token.id());
-+        McpLimits.Permit permit = (host.liveInput(name, argsJson) ? inputLimits : limits).acquire(token.id());
-         if (permit.refusal() != null) {
-             audit.called(exchange.sessionId(), token, name, null, false, bytesIn, 0);
-             return result(McpHost.Result.text("rate limited: " + permit.refusal() + ". Wait a few seconds and call again.", true));
+@@ -72,7 +72,7 @@ public final class McpEndpoint {
+     public void start() throws IOException, InterruptedException {
+         ExecutorService pool = McpThreads.perTask("numen-mcp-");
+         ToolTable table = new ToolTable(host, config, tokenId -> sessions.toolsChanged(tokenId));
+-        SessionRegistry registry = new SessionRegistry(new ServerMethods(host, config, table, limits, audit, presence),
++        SessionRegistry registry = new SessionRegistry(new ServerMethods(host, config, table, limits, audit, presence, clock),
+                 presence, pool, clock);
+         Questions asked = new Questions(presence, registry::of);
+         registry.questions(asked);
 diff --git a/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpHost.java b/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpHost.java
 index 14d57945a..f3d662b17 100644
 --- a/mcp/src/main/java/com/dwinovo/numen/mcp/server/McpHost.java
@@ -138,13 +128,59 @@ index 14d57945a..f3d662b17 100644
      /**
       * 做一次调用。出岔子(超时、停服……)以异常抛出,端点按工具执行错误回给客户端。
       *
+diff --git a/mcp/src/main/java/com/dwinovo/numen/mcp/server/ServerMethods.java b/mcp/src/main/java/com/dwinovo/numen/mcp/server/ServerMethods.java
+index 1d725b026..56c4fa901 100644
+--- a/mcp/src/main/java/com/dwinovo/numen/mcp/server/ServerMethods.java
++++ b/mcp/src/main/java/com/dwinovo/numen/mcp/server/ServerMethods.java
+@@ -23,6 +23,7 @@ import java.util.Base64;
+ import java.util.List;
+ import java.util.concurrent.TimeoutException;
+ import java.util.concurrent.atomic.AtomicLong;
++import java.util.function.LongSupplier;
+ 
+ /**
+  * 端点作为 MCP 服务器做的事:握手、ping、列工具、调工具。协议之外的都交给各自的组件:工具从哪来问 {@link McpHost}(经
+@@ -45,17 +46,22 @@ final class ServerMethods {
+     private final McpHost host;
+     private final McpConfig config;
+     private final ToolTable tools;
++    /** 20Hz input frames and heartbeats have their own bounded budget. */
++    static final McpConfig.Limits LIVE_INPUT_LIMITS = new McpConfig.Limits(8, 1500, 64, 12000);
++
+     private final McpLimits limits;
++    private final McpLimits inputLimits;
+     private final McpAudit audit;
+     private final McpPresence presence;
+     private final Implementation serverInfo;
+     private final Icon icon;
+ 
+-    ServerMethods(McpHost host, McpConfig config, ToolTable tools, McpLimits limits, McpAudit audit, McpPresence presence) {
++    ServerMethods(McpHost host, McpConfig config, ToolTable tools, McpLimits limits, McpAudit audit, McpPresence presence, LongSupplier clock) {
+         this.host = host;
+         this.config = config;
+         this.tools = tools;
+         this.limits = limits;
++        this.inputLimits = new McpLimits(LIVE_INPUT_LIMITS, clock);
+         this.audit = audit;
+         this.presence = presence;
+         McpHost.Identity who = host.identity();
+@@ -124,7 +130,8 @@ final class ServerMethods {
+         String argsJson = params.arguments().toString();
+         int bytesIn = argsJson.length();
+         McpHost.Result result;
+-        try (McpLimits.Permit permit = limits.acquire(token.id())) {
++        McpLimits budget = host.liveInput(name, argsJson) ? inputLimits : limits;
++        try (McpLimits.Permit permit = budget.acquire(token.id())) {
+             if (permit.refusal() != null) {
+                 audit.called(session.id, token, name, null, false, bytesIn, 0);
+                 return encode(McpHost.Result.text("rate limited: " + permit.refusal() + ". Wait a few seconds and call again.",
 diff --git a/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java b/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java
-index 27e2dd30f..51969539c 100644
+index de5ad11f0..df281ef08 100644
 --- a/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java
 +++ b/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java
-@@ -74,6 +74,9 @@ class McpEndpointTest {
-         /** 非空时 tools 抛出它:宿主取不到工具表。 */
-         volatile String toolsFailure;
+@@ -89,6 +89,9 @@ class McpEndpointTest {
+             return "drive carefully";
+         }
  
 +        @Override
 +        public boolean liveInput(String tool, String argsJson) { return tool.equals("input"); }
@@ -152,7 +188,7 @@ index 27e2dd30f..51969539c 100644
          @Override
          public List<ToolInfo> tools(McpToken who) throws Exception {
              if (toolsFailure != null) {
-@@ -512,6 +515,22 @@ class McpEndpointTest {
+@@ -715,6 +718,22 @@ class McpEndpointTest {
  
      // ---- 限流与审计 ----
  
@@ -161,34 +197,34 @@ index 27e2dd30f..51969539c 100644
 +        launch(new McpConfig(true, McpConfig.LOOPBACK, 0, 30, List.of(), new McpConfig.Limits(8, 2, 64, 1200)));
 +        host.tools = List.of(host.tools.get(0), new McpHost.ToolInfo("input", null, "complete input frame",
 +                "{\"type\":\"object\"}", new McpHost.Hints(false, false, true, false)));
-+        McpSyncClient client = connect(brain(McpToken.Scope.ALL).secret());
++        McpClient client = connect(brain(McpToken.Scope.ALL).secret());
 +        client.listTools();
-+        for (int n = 0; n < 40; n++) assertFalse(client.callTool(call("input", null)).isError());
-+        assertFalse(client.callTool(call("lua", null)).isError());
-+        assertTrue(client.callTool(call("lua", null)).isError());
-+        McpLimits budget = new McpLimits(McpEndpoint.LIVE_INPUT_LIMITS, now::get);
-+        for (int n = 0; n < 1500; n++) try (var permit = budget.acquire("a")) { assertNull(permit.refusal()); }
-+        try (var permit = budget.acquire("a")) { assertNotNull(permit.refusal()); }
-+        try (var permit = budget.acquire("b")) { assertNull(permit.refusal()); }
++        for (int n = 0; n < 40; n++) assertFalse(client.callTool("input", new JsonObject()).isError());
++        assertFalse(client.callTool("lua", args("x")).isError());
++        assertTrue(client.callTool("lua", args("x")).isError());
++        McpLimits budget = new McpLimits(ServerMethods.LIVE_INPUT_LIMITS, now::get);
++        for (int n = 0; n < 1500; n++) try (var permit = budget.acquire("a")) { assertEquals(null, permit.refusal()); }
++        try (var permit = budget.acquire("a")) { assertTrue(permit.refusal() != null); }
++        try (var permit = budget.acquire("b")) { assertEquals(null, permit.refusal()); }
 +    }
 +
      @Test
      void callsPastThePerTokenRateAreAnsweredWithAWaitNotRun() throws Exception {
          launch(new McpConfig(true, McpConfig.LOOPBACK, 0, 30, List.of(), new McpConfig.Limits(8, 2, 64, 1200)));
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
-index 5b9225a76..63b3c0351 100644
+index 0192abab4..01e29c2c5 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
-@@ -80,7 +80,7 @@ public final class CompanionBrains {
-                     CompanionRegistry.Entry entry = registry.find(companion);
-                     return entry != null && entry.removed() ? HaltReason.REMOVED : null;
+@@ -84,7 +84,7 @@ public final class CompanionBrains {
+                         case NONE -> null;
+                     };
                  },
 -                ownerOnline, driving, initiative, persona,
 +                ownerOnline, () -> com.dwinovo.numen.api.entity.HostedBodyControls.driving(server,companion,driving.getAsBoolean()), initiative, persona,
                  () -> server.overworld().getDayTime(), () -> server.overworld().getGameTime(), rooms));
          CompanionLoops.install(owner, loop, link, rooms);
          return loop;
-@@ -107,7 +107,9 @@ public final class CompanionBrains {
+@@ -111,7 +111,9 @@ public final class CompanionBrains {
          Homes homes = Homes.of(server);
          McpClients.of(server).owner(owner);   // 他自己接进来的 MCP 服务器,从这一刻起连着
          CompanionLoop loop = create(server, companion, owner, homes.companion(companion),
@@ -200,10 +236,10 @@ index 5b9225a76..63b3c0351 100644
                  () -> OwnerPresence.present(server, owner),
                  () -> com.dwinovo.numen.api.mcp.server.McpMode.instance().driving(owner, companion));
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
-index 035415a1b..0eeb922a6 100644
+index 8ceb71520..34cdeee71 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
-@@ -316,6 +316,9 @@ public final class CompanionLoop {
+@@ -336,6 +336,9 @@ public final class CompanionLoop {
          return runtime.xml();
      }
  
@@ -213,7 +249,7 @@ index 035415a1b..0eeb922a6 100644
      /** 订阅循环事件:界面、记账之外的人(推给主人客户端的那一层)在这里接。 */
      public void subscribe(java.util.function.Consumer<? super LoopEvent> listener) {
          loop.subscribe(listener);
-@@ -428,6 +431,10 @@ public final class CompanionLoop {
+@@ -448,6 +451,10 @@ public final class CompanionLoop {
          loop.halt(HaltReason.OWNER_STOP);
      }
  
@@ -575,129 +611,93 @@ index cff945562..69cfb3840 100644
          Visits.start();
          for (UUID companion : registry.all()) {
              try {
-diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
-index 06b7cb191..514568bbe 100644
---- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
-+++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
-@@ -26,8 +26,8 @@ import java.util.function.Consumer;
-  * load a hand-built fake player's {@code .dat} (that path is tied to the real
-  * login flow) — so {@link #spawn} restores position / inventory / owner from disk
-  * explicitly afterwards.
-- * {@link net.minecraft.server.players.PlayerList#remove} saves that data back and
-- * removes the body — so despawn is a clean, persisted dormancy.
-+ * The play listener's disconnect callback saves that data back and removes the
-+ * body — so despawn is a clean, persisted dormancy.
-  */
- @com.dwinovo.numen.api.Internal
- public final class CompanionFactory {
-@@ -177,7 +177,11 @@ public final class CompanionFactory {
-         CompanionEvents.fire(CompanionEvent.REMOVE, player);
-         LEAVING.add(player);
-         try {
--            server.getPlayerList().remove(player);
-+            // The fake connection never invokes this callback. Complete the normal player-exit path
-+            // ourselves: it saves/removes the body and runs the platform's quit lifecycle. Do not bind
-+            // directly to PlayerList.remove: its return type differs between Paper and vanilla forks.
-+            player.connection.onDisconnect(new net.minecraft.network.DisconnectionDetails(
-+                    net.minecraft.network.chat.Component.translatable("multiplayer.disconnect.quitting")));
-         } finally {
-             LEAVING.remove(player);
-         }
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java
-index 9e1edaf54..354d22fee 100644
+index a7e83177c..fd3a24af9 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java
-@@ -41,7 +41,14 @@ public final class CompanionRegistry extends SavedData {
+@@ -45,10 +45,15 @@ public final class CompanionRegistry extends SavedData {
       *  读档时被忽略,下一次存盘就不再写。 */
      public record Entry(String name, UUID owner, ResourceKey<Level> dimension, BlockPos pos,
                          String skinValue, String skinSig,
--                        String taskName, String taskLua, String taskOld, String removedFor) {
-+                        String taskName, String taskLua, String taskOld, String removedFor, boolean hosted) {
-+        public Entry(String name, UUID owner, ResourceKey<Level> dimension, BlockPos pos,
-+                     String skinValue, String skinSig, String taskName, String taskLua, String taskOld, String removedFor) {
-+            this(name,owner,dimension,pos,skinValue,skinSig,taskName,taskLua,taskOld,removedFor,false);
-+        }
+-                        String taskName, String taskLua, String taskOld, Outside outside, long leftAt) {
++                        String taskName, String taskLua, String taskOld, Outside outside, long leftAt, boolean hosted) {
 +        public Entry withHosted() {
-+            return new Entry(name,owner,dimension,pos,skinValue,skinSig,taskName,taskLua,taskOld,removedFor,true);
++            return hosted ? this : new Entry(name, owner, dimension, pos, skinValue, skinSig,
++                    taskName, taskLua, taskOld, outside, leftAt, true);
 +        }
++
          /** A companion with no borrowed skin, idle. */
          public Entry(String name, UUID owner, ResourceKey<Level> dimension, BlockPos pos) {
-             this(name, owner, dimension, pos, "", "", "", "", "", "");
-@@ -53,25 +60,25 @@ public final class CompanionRegistry extends SavedData {
+-            this(name, owner, dimension, pos, "", "", "", "", "", Outside.NONE, -1L);
++            this(name, owner, dimension, pos, "", "", "", "", "", Outside.NONE, -1L, false);
+         }
+ 
+         /**
+@@ -57,31 +62,31 @@ public final class CompanionRegistry extends SavedData {
           */
          public Entry doing(String task, String lua) {
              return new Entry(name, owner, dimension, pos, skinValue, skinSig,
--                    task == null ? "" : task, lua == null ? "" : lua, "", removedFor);
-+                    task == null ? "" : task, lua == null ? "" : lua, "", removedFor, hosted);
+-                    task == null ? "" : task, lua == null ? "" : lua, "", outside, leftAt);
++                    task == null ? "" : task, lua == null ? "" : lua, "", outside, leftAt, hosted);
          }
  
          /** 刷新落点(休眠/移动时的 respawn 提示),皮肤原样保留。 */
          public Entry movedTo(ResourceKey<Level> dimension, BlockPos pos) {
              return new Entry(name, owner, dimension, pos, skinValue, skinSig,
--                    taskName, taskLua, taskOld, removedFor);
-+                    taskName, taskLua, taskOld, removedFor, hosted);
+-                    taskName, taskLua, taskOld, outside, leftAt);
++                    taskName, taskLua, taskOld, outside, leftAt, hosted);
          }
  
          /** 换上 Mojang 签名的皮肤数据(value+signature)。 */
          public Entry withSkin(String value, String sig) {
              return new Entry(name, owner, dimension, pos,
--                    value == null ? "" : value, sig == null ? "" : sig, taskName, taskLua, taskOld, removedFor);
-+                    value == null ? "" : value, sig == null ? "" : sig, taskName, taskLua, taskOld, removedFor, hosted);
+-                    value == null ? "" : value, sig == null ? "" : sig, taskName, taskLua, taskOld, outside, leftAt);
++                    value == null ? "" : value, sig == null ? "" : sig, taskName, taskLua, taskOld, outside, leftAt, hosted);
          }
  
-         /** 身体被外面请出了服务器({@code reason} 是当时说的理由);主人再召唤之前不重建。 */
-         Entry removed(String reason) {
+         /** 换一个"留在外面"的状态({@link Outside#NONE} = 不在外面)。 */
+         Entry outside(Outside next) {
              return new Entry(name, owner, dimension, pos, skinValue, skinSig,
--                    taskName, taskLua, taskOld, reason);
-+                    taskName, taskLua, taskOld, reason, hosted);
+-                    taskName, taskLua, taskOld, next, leftAt);
++                    taskName, taskLua, taskOld, next, leftAt, hosted);
          }
  
-         /** 身体被外面请出了服务器、还没被再召唤。 */
-@@ -90,7 +97,8 @@ public final class CompanionRegistry extends SavedData {
-                 Codec.STRING.optionalFieldOf("taskLua", "").forGetter(Entry::taskLua),
-                 // 旧版本记的那一行命令:读进来只为如实说它接不回来,写回去它已经清掉了
-                 Codec.STRING.optionalFieldOf("taskArgs", "").forGetter(Entry::taskOld),
--                Codec.STRING.optionalFieldOf("removedFor", "").forGetter(Entry::removedFor)
-+                Codec.STRING.optionalFieldOf("removedFor", "").forGetter(Entry::removedFor),
+         /** 记下她被登出世界的游戏时间;-1 = 清掉。 */
+         Entry leftAt(long at) {
+             return new Entry(name, owner, dimension, pos, skinValue, skinSig,
+-                    taskName, taskLua, taskOld, outside, at);
++                    taskName, taskLua, taskOld, outside, at, hosted);
+         }
+ 
+         /** 被服务器请出去时说的理由;不是服务器请出去的是空串。 */
+@@ -116,10 +121,11 @@ public final class CompanionRegistry extends SavedData {
+                 // 旧版本记的"被服务器请出去"的理由:读进来当作服务器请出去的状态,写回去它已经并进了 outside
+                 Codec.STRING.optionalFieldOf("removedFor", "").forGetter(e -> ""),
+                 OUTSIDE.optionalFieldOf("outside", Outside.NONE).forGetter(Entry::outside),
+-                Codec.LONG.optionalFieldOf("leftAt", -1L).forGetter(Entry::leftAt)
++                Codec.LONG.optionalFieldOf("leftAt", -1L).forGetter(Entry::leftAt),
 +                Codec.BOOL.optionalFieldOf("hosted", false).forGetter(Entry::hosted)
-         ).apply(i, Entry::new));
+         ).apply(i, (name, owner, dimension, pos, skinValue, skinSig, taskName, taskLua, taskOld, legacyRemovedFor,
+-                    outside, leftAt) -> new Entry(name, owner, dimension, pos, skinValue, skinSig, taskName, taskLua,
+-                taskOld, legacyRemovedFor.isEmpty() ? outside : Outside.byServer(legacyRemovedFor), leftAt)));
++                    outside, leftAt, hosted) -> new Entry(name, owner, dimension, pos, skinValue, skinSig, taskName, taskLua,
++                taskOld, legacyRemovedFor.isEmpty() ? outside : Outside.byServer(legacyRemovedFor), leftAt, hosted)));
      }
  
-diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java
-index 3b8dd6ea8..31b7e6800 100644
---- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java
-+++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRoster.java
-@@ -36,7 +36,7 @@ public final class CompanionRoster {
-     }
- 
-     /**
--     * 主人名下叫这个名字的同伴,没有则 null——<b>召唤的幂等就靠它</b>:同名就复用,
-+     * 主人名下叫这个玩家名的同伴(同原版玩家名,不分大小写),没有则 null——<b>召唤的幂等就靠它</b>:同名就复用,
-      * 不铸新 UUID,否则每喊一次"召唤小焰"就多一只同名分身,登录时一起复活。
-      *
-      * <p>万一有重名(迁移过来的旧数据),取定序后的第一个:注册表是 HashMap,不定序的话
-@@ -48,7 +48,7 @@ public final class CompanionRoster {
-         }
-         UUID best = null;
-         for (Row r : rows) {
--            if (!name.equals(r.name())) {
-+            if (!name.equalsIgnoreCase(r.name())) {
-                 continue;
-             }
-             if (best == null || r.uuid().toString().compareTo(best.toString()) < 0) {
+     private static final Codec<CompanionRegistry> CODEC = RecordCodecBuilder.create(i -> i.group(
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
-index 791a9b096..8db75d113 100644
+index 18d18c7ad..2f0ee4aee 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
-@@ -666,7 +666,7 @@ public final class Companions {
-     public static int dismissByName(MinecraftServer server, UUID ownerUuid, String name) {
-         List<UUID> ids = new ArrayList<>();
+@@ -403,6 +403,8 @@ public final class Companions {
+     public static void reconcile(MinecraftServer server, UUID ownerUuid) {
+         boolean ownerPresent = com.dwinovo.numen.api.brain.OwnerPresence.present(server, ownerUuid);
          for (Map.Entry<UUID, CompanionRegistry.Entry> e : CompanionRegistry.get(server).ownedBy(ownerUuid)) {
--            if (e.getValue().name().equals(name)) ids.add(e.getKey());
-+            if (e.getValue().name().equalsIgnoreCase(name)) ids.add(e.getKey());
-         }
-         dismiss(server, ownerUuid, ids);
-         return ids.size();
++            // Hosted bodies enter and leave under the website's fenced seat.
++            if (e.getValue().hosted()) continue;
+             try {
+                 com.dwinovo.numen.api.brain.CompanionBrains.ensure(server, e.getKey());
+                 NumenPlayer body = NumenPlayer.findByUuid(server, e.getKey());
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java
 new file mode 100644
 index 000000000..4ec851863
@@ -803,7 +803,7 @@ index 000000000..4ec851863
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java
 new file mode 100644
-index 000000000..89c84f1ae
+index 000000000..2b6aee337
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java
 @@ -0,0 +1,147 @@
@@ -854,12 +854,12 @@ index 000000000..89c84f1ae
 +            for (Controls.Key key:Controls.Key.values()) body.controls().set(key,frame.keys.contains(key));
 +            if (applied != frame.sequence()) { body.hotbar().hold(frame.slot()); applied=frame.sequence(); }
 +            if (frame.attack()) {
-+                if (body.mouse().pick() instanceof EntityHitResult) {
++                if (body.mouse().pick() instanceof EntityHitResult hit) {
 +                    body.mouse().release();
 +                    long tick=body.level().getGameTime();
 +                    if (tick!=attackTick && body.getAttackStrengthScale(0.5F)>=1.0F) {
 +                        attackTick=tick;
-+                        var result=body.mouse().attack();
++                        var result=body.mouse().attack(hit.getEntity());
 +                        if (result instanceof Mouse.Blow.Refused refusal) problem(body,refusal.reason().toString());
 +                    }
 +                } else {
@@ -1093,7 +1093,7 @@ index e7c38433f..ebf903201 100644
      /** 主人的一只同伴:稳定 id + 显示名。 */
      record Companion(UUID uuid, String name) {}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java
-index 42fc2c12d..df0227240 100644
+index 42fc2c12d..4d30086db 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java
 @@ -34,6 +34,18 @@ import java.util.function.Function;
@@ -1124,7 +1124,7 @@ index 42fc2c12d..df0227240 100644
 +                "Exclusive control of an existing scoped Numen body. Never summons or changes UUID. Native loop, harness and manual input share a fenced seat. Read capabilities, attach paused, then transition. Unknown actions must not be replayed.",
 +                JsonParser.parseString("""
 +                {"type":"object","required":["op","companion"],"properties":{
-+                  "op":{"type":"string","enum":["capabilities","attach","transition","release","heartbeat","input","observe","catalog","call","result","web_message","web_message_result","web_replies","model_bind","model_unbind"]},
++                  "op":{"type":"string","enum":["capabilities","attach","transition","release","heartbeat","input","observe","facts","catalog","call","result","web_message","web_message_result","web_replies","model_bind","model_unbind"]},
 +                  "companion":{"type":"string"},"expectedName":{"type":"string"},"expectedOwner":{"type":"string"},"serverId":{"type":"string"},
 +                  "boot":{"type":"string"},"epoch":{"type":"integer","minimum":1},"mode":{"enum":["paused","numen","harness","manual"]},
 +                  "controllerId":{"type":"string"},"sequence":{"type":"integer","minimum":0},"yaw":{"type":"number"},"pitch":{"type":"number"},
@@ -1179,10 +1179,10 @@ index 42fc2c12d..df0227240 100644
              return hands.companions().get(CONTROL_TIMEOUT_SECONDS, TimeUnit.SECONDS).stream()
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
 new file mode 100644
-index 000000000..d74ab80f3
+index 000000000..b5566464d
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,200 @@
 +package com.dwinovo.numen.api.mcp.server;
 +
 +import com.dwinovo.numen.api.entity.*;
@@ -1249,6 +1249,7 @@ index 000000000..d74ab80f3
 +            var out=new JsonObject();out.addProperty("protocol",PROTOCOL);
 +            out.addProperty("nativeModelReady",CompanionLoops.get(uuid).map(loop->loop.nativeModelReady()).orElse(false));
 +            out.addProperty("spectatorMessages",true);
++            out.addProperty("sampledFacts", true);
 +            out.addProperty("isolatedModels",com.dwinovo.numen.api.brain.HostedModels.configured(server));
 +            for(String flag:List.of("stableIdentity","serverFence","inputTimeout","persistedReceipts"))out.addProperty(flag,true);
 +            out.add("modes",JsonParser.parseString("[\"paused\",\"numen\",\"harness\",\"manual\"]"));return out;
@@ -1269,6 +1270,9 @@ index 000000000..d74ab80f3
 +            var body=body(uuid,args);var mode=op.equals("attach")?HostedControlLease.Mode.PAUSED:HostedControlLease.Mode.valueOf(string(args,"mode").toUpperCase(Locale.ROOT));
 +            if(mode==HostedControlLease.Mode.NUMEN&&!CompanionBrains.ensure(server,uuid).nativeModelReady())throw new IllegalStateException("native model is unavailable; configure the existing Numen model profile and quota before starting its loop");
 +            HostedBodyControls.begin(body,owner,string(args,"expectedName"),fence(args),mode,args.has("controllerId")?string(args,"controllerId"):null);
++            if (op.equals("attach") && CompanionBrains.ensure(server, uuid) == null) {
++                throw new IllegalStateException("registered hosted body has no execution loop");
++            }
 +            return null;
 +        }).thenCompose(ignored->settled(uuid,args,System.nanoTime()+TimeUnit.SECONDS.toNanos(8)));
 +        if(op.equals("call"))return game(()->{
@@ -1312,6 +1316,21 @@ index 000000000..d74ab80f3
 +                    HostedBodyControls.input(body,fence(args),string(args,"controllerId"),new HostedBodyControls.Frame(sequence,args.get("yaw").getAsFloat(),args.get("pitch").getAsFloat(),keys,args.get("attack").getAsBoolean(),args.get("use").getAsBoolean(),Math.toIntExact(integer(args,"slot"))));
 +                    out.addProperty("sequence",sequence);
 +                }
++                case "facts" -> {
++                    var pos = body.blockPosition();
++                    var position = new JsonArray();
++                    position.add(pos.getX());
++                    position.add(pos.getY());
++                    position.add(pos.getZ());
++                    out.addProperty("sampledAt", System.currentTimeMillis());
++                    out.addProperty("health", body.getHealth());
++                    out.addProperty("maxHealth", body.getMaxHealth());
++                    out.addProperty("food", body.getFoodData().getFoodLevel());
++                    out.addProperty("dimension", body.level().dimension().location().toString());
++                    out.add("position", position);
++                    out.addProperty("workPending", com.dwinovo.numen.api.program.ServerPrograms.running(uuid)
++                            || !com.dwinovo.numen.api.task.CompanionTickDispatcher.hostingIdle(uuid));
++                }
 +                case "observe" -> {
 +                    out.addProperty("sampledAt",System.currentTimeMillis());
 +                    out.addProperty("text",CompanionLoops.get(uuid).map(loop->{
@@ -1336,7 +1355,7 @@ index 000000000..d74ab80f3
 +                    var say=new JsonObject();say.addProperty("name","say");say.addProperty("description","Speak through the native body's existing chat and voice path.");say.add("parameters",ExternalHost.saySchema(false));tools.add(say);
 +                    out.add("tools",tools);
 +                }
-+                default -> throw new IllegalArgumentException("op must be capabilities, attach, transition, heartbeat, input, observe, catalog, call or result");
++                default -> throw new IllegalArgumentException("unknown hosted body operation");
 +            }
 +            return out;
 +        });
@@ -1365,7 +1384,7 @@ index 000000000..d74ab80f3
 +    }
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ServerActuator.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ServerActuator.java
-index e7ee1454f..b4f1b108a 100644
+index 0a5f3b2fe..6b0bcf5a5 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ServerActuator.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ServerActuator.java
 @@ -43,10 +43,17 @@ public final class ServerActuator implements ExternalHands {
@@ -1386,7 +1405,7 @@ index e7ee1454f..b4f1b108a 100644
      }
  
      @Override
-@@ -90,7 +97,11 @@ public final class ServerActuator implements ExternalHands {
+@@ -91,7 +98,11 @@ public final class ServerActuator implements ExternalHands {
          if (companion == null) {
              return CompletableFuture.completedFuture(false);
          }
@@ -1399,7 +1418,7 @@ index e7ee1454f..b4f1b108a 100644
      }
  
      /** 主人在线才有人替他召唤、遣散(这两条路的权威校验都认一个 {@link ServerPlayer})。 */
-@@ -102,8 +113,8 @@ public final class ServerActuator implements ExternalHands {
+@@ -103,8 +114,8 @@ public final class ServerActuator implements ExternalHands {
                  f.complete(false);
                  return;
              }
@@ -1410,7 +1429,7 @@ index e7ee1454f..b4f1b108a 100644
          });
          return f;
      }
-@@ -111,7 +122,9 @@ public final class ServerActuator implements ExternalHands {
+@@ -112,7 +123,9 @@ public final class ServerActuator implements ExternalHands {
      @Override
      public CompletableFuture<String> takeEvents(UUID companion) {
          CompletableFuture<String> f = new CompletableFuture<>();
@@ -1421,7 +1440,7 @@ index e7ee1454f..b4f1b108a 100644
                  .map(CompanionLoop::takeEventsForExternal).orElse(null)));
          return f;
      }
-@@ -126,7 +139,7 @@ public final class ServerActuator implements ExternalHands {
+@@ -127,7 +140,7 @@ public final class ServerActuator implements ExternalHands {
      @Override
      public ExternalWait.Parked awaitEvents(UUID companion) {
          // 先查后登记在一次主线程的跳转里完成,不让一条事件从"队是空的"与"已停靠"之间溜过去
@@ -1430,7 +1449,7 @@ index e7ee1454f..b4f1b108a 100644
                  .map(CompanionLoop::parkForExternal).orElse(null));
      }
  
-@@ -137,6 +150,7 @@ public final class ServerActuator implements ExternalHands {
+@@ -138,6 +151,7 @@ public final class ServerActuator implements ExternalHands {
          }
          CompletableFuture<Boolean> f = new CompletableFuture<>();
          server.execute(() -> f.complete(CompanionLoops.get(companion).map(loop -> {
@@ -1438,7 +1457,7 @@ index e7ee1454f..b4f1b108a 100644
              loop.externalSay(text);
              return true;
          }).orElse(false)));
-@@ -174,6 +188,12 @@ public final class ServerActuator implements ExternalHands {
+@@ -175,6 +189,12 @@ public final class ServerActuator implements ExternalHands {
      @Override
      public CompletableFuture<String> invoke(UUID companion, String toolName, String argsJson,
                                              java.util.function.Consumer<String> progress) {
@@ -1451,7 +1470,7 @@ index e7ee1454f..b4f1b108a 100644
          CompletableFuture<String> f = new CompletableFuture<>();
          if (companion == null || toolName == null || toolName.isBlank()) {
              f.complete(ToolOutcome.failure("companion and toolName are required"));
-@@ -181,6 +201,11 @@ public final class ServerActuator implements ExternalHands {
+@@ -182,6 +202,11 @@ public final class ServerActuator implements ExternalHands {
          }
          server.execute(() -> {
              try {
@@ -1463,7 +1482,7 @@ index e7ee1454f..b4f1b108a 100644
                  NumenTool tool = CompanionBrains.toolsOf(server, owner).resolve(toolName);
                  if (tool == null) {
                      f.complete(ToolOutcome.failure("unknown tool: " + toolName));
-@@ -195,7 +220,7 @@ public final class ServerActuator implements ExternalHands {
+@@ -196,7 +221,7 @@ public final class ServerActuator implements ExternalHands {
                  if (tool instanceof ScriptTool) {
                      ScriptTool.code(args);   // 参数写错当场回失败,不占工具口
                  }
@@ -1496,7 +1515,7 @@ index 406d0665c..f61056854 100644
          // 每刻结算:主人按停止会在带外把记录标成终态,而客户端串行的派发器会一直
          // 卡到那一个结果送出——不能等这个槽下次赢了才结算。
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
-index 3401caf30..9ed55cdec 100644
+index ebd86c2bd..1098a27bc 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
 @@ -108,6 +108,7 @@ public final class CompanionTickDispatcher {
@@ -1609,38 +1628,6 @@ index 6e4b8bf86..2ee87e66b 100644
 +        assertFalse(isolated.endpoint(profile).hasApiKey());
 +    }
  }
-diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java
-index abaa777df..7bb92feea 100644
---- a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java
-+++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/CompanionRosterTest.java
-@@ -52,6 +52,27 @@ class CompanionRosterTest {
-         assertNull(CompanionRoster.findByName(rows, "新来的"), "没见过的名字才铸新 UUID");
-     }
- 
-+    @Test
-+    void playerNameCaseDoesNotMintAnotherIdentity() {
-+        List<CompanionRoster.Row> rows = List.of(new CompanionRoster.Row(A, "QaNumenBody"));
-+        assertEquals(A, CompanionRoster.findByName(rows, "qanumenbody"));
-+        assertEquals(A, CompanionRoster.findByName(rows, "QANUMENBODY"));
-+        assertEquals(A, CompanionRoster.findByName(rows, "qAnUmEnBoDy"));
-+        assertNull(CompanionRoster.findByName(rows, "QaNumenBody_2"));
-+        assertNull(CompanionRoster.findByName(rows, "QaNumenBody "));
-+        assertEquals("QaNumenBody", rows.getFirst().name(), "查找不改写名册中的原名");
-+    }
-+
-+    @Test
-+    void historicalCaseDuplicatesKeepDeterministicResolution() {
-+        List<CompanionRoster.Row> rows = List.of(
-+                new CompanionRoster.Row(B, "QaNumenBody"),
-+                new CompanionRoster.Row(A, "qanumenbody"));
-+        assertEquals(A, CompanionRoster.findByName(rows, "QANUMENBODY"));
-+        assertEquals(A, CompanionRoster.findByName(rows.reversed(), "QaNumenBody"));
-+        assertEquals(2, rows.size(), "查找不删除或合并已有身份");
-+    }
-+
-     @Test
-     void duplicateNamesResolveTheSameWayEveryTime() {
-         // 同名分身(迁移来的数据里可能有):注册表是 HashMap,不定序的话同一句
 diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java
 new file mode 100644
 index 000000000..57d545d9a
@@ -1822,10 +1809,10 @@ index b19fc8645..67ac71ff2 100644
      }
  }
 diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CommandGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CommandGameTests.java
-index 6b6b64227..7917af1d3 100644
+index 30401dd02..61f38c2b6 100644
 --- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CommandGameTests.java
 +++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CommandGameTests.java
-@@ -175,6 +175,62 @@ public class CommandGameTests {
+@@ -175,6 +175,33 @@ public class CommandGameTests {
          }
      }
  
@@ -1842,7 +1829,7 @@ index 6b6b64227..7917af1d3 100644
 +        try {
 +            com.dwinovo.numen.api.entity.Companions.dormant(server, body);
 +            helper.assertTrue(NumenPlayer.findByUuid(server, id) == null, "the dormant body remains online");
-+            helper.assertTrue(registry.find(id) != null && !registry.find(id).removed(), "dormancy was treated as an external kick");
++            helper.assertTrue(registry.find(id) != null && !registry.find(id).outside().isOutside(), "dormancy was treated as an external kick");
 +            helper.assertTrue(!CompanionFactory.isLeaving(body), "the leaving marker leaked");
 +            CompanionFactory.despawn(server, body);
 +            var back = com.dwinovo.numen.api.gametest.Bodies.summon(server, owner.getUUID(), "QaDormantBody", helper.getLevel(), position);
@@ -1856,38 +1843,9 @@ index 6b6b64227..7917af1d3 100644
 +        }
 +    }
 +
-+    /** 玩家名的大小写不产生第二个 UUID、身体或背包;按名遣散也认同一套名字。 */
-+    @GameTest(template = "floor16", timeoutTicks = 100, batch = "numen_command")
-+    public static void name_case_reuses_the_body_and_dismisses_the_same_identity(GameTestHelper helper) {
-+        var server = helper.getLevel().getServer();
-+        var owner = presentVanillaPlayer(helper, null, "gametest_case_owner", "en_us");
-+        var position = net.minecraft.world.phys.Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(8, 2, 8)));
-+        var body = com.dwinovo.numen.api.gametest.Bodies.summon(server, owner.getUUID(), "QaCaseBody", helper.getLevel(), position);
-+        var registry = com.dwinovo.numen.api.entity.CompanionRegistry.get(server);
-+        body.getInventory().setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 3));
-+        try {
-+            for (String name : java.util.List.of("qacasebody", "QACASEBODY", "qAcAsEbOdY")) {
-+                var same = com.dwinovo.numen.api.gametest.Bodies.summon(server, owner.getUUID(), name, helper.getLevel(), position);
-+                helper.assertTrue(same == body, "case variation created another body: " + name);
-+                helper.assertTrue(registry.ownedBy(owner.getUUID()).size() == 1, "the roster contains a duplicate identity");
-+                helper.assertTrue(same.getGameProfile().getName().equals("QaCaseBody"), "the original spelling changed");
-+                helper.assertTrue(same.getInventory().getItem(0).is(net.minecraft.world.item.Items.DIAMOND)
-+                        && same.getInventory().getItem(0).getCount() == 3, "the inventory changed");
-+            }
-+            helper.assertTrue(com.dwinovo.numen.api.entity.Companions.dismissByName(server, owner.getUUID(), "qacasebody") == 1,
-+                    "case-insensitive dismissal did not find the identity");
-+            helper.assertTrue(NumenPlayer.findByUuid(server, body.getUUID()) == null && registry.find(body.getUUID()) == null,
-+                    "the dismissed identity is still present");
-+            helper.succeed();
-+        } finally {
-+            if (registry.find(body.getUUID()) != null) com.dwinovo.numen.api.entity.Companions.dismiss(server, body);
-+            leave(owner);
-+        }
-+    }
-+
-     /**
-      * 服主踢她({@code /kick} 对目标做的就是 {@code connection.disconnect}):身体被外面移除。身体不在、大脑停牌、她的收件箱里留下一条事实、主人收到消息、名册记着;
-      * 主人再召唤她就回来,停牌解开。
+     /** 玩家名的大小写不产生第二个 UUID、身体或背包;按名删除也认同一套名字。 */
+     @GameTest(template = "floor16", timeoutTicks = 100, batch = "numen_command")
+     public static void name_case_reuses_the_body_and_deletes_the_same_identity(GameTestHelper helper) {
 diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/HostedBodyGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/HostedBodyGameTests.java
 new file mode 100644
 index 000000000..2fa069ef3
