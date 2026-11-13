@@ -171,9 +171,10 @@ final class CombatSpells {
 
     private void frostnova(Player caster) {
         if (!ready(caster, "frostnova")) return;
-        List<Enemy> enemies = nearbyHostiles(caster, 5.5, 4);
-        if (enemies.isEmpty()) {
-            caster.sendMessage(ChatColor.YELLOW + "霜环附近没有看得见的怪物；未耗魔。/mycli skills info frostnova 查范围，靠近可见敌人再施放，勿攻击村民。");
+        List<Enemy> enemies = nearbyHostiles(caster, FrostControl.RADIUS, 4);
+        FrostControl.Targets fire = FrostControl.find(plugin, caster);
+        if (enemies.isEmpty() && fire.empty()) {
+            caster.sendMessage(ChatColor.YELLOW + "5.5 格内没有可见敌怪或可熄灭的火；未耗魔。靠近目标再施放，/mycli skills info frostnova 查看范围。");
             return;
         }
         if (!begin(caster, "frostnova", 7)) return;
@@ -187,16 +188,28 @@ final class CombatSpells {
         }
         world.spawnParticle(Particle.CLOUD, center, 32, 2.4, 0.3, 2.4, 0.01);
         world.playSound(center, Sound.BLOCK_GLASS_BREAK, 0.8f, 1.4f);
+        String extinguished = FrostControl.extinguish(fire);
         int damage = damage(caster, "frostnova", 2);
         int slowTicks = 80 + (plugin.mastery().rank(caster, "frostnova") - 1) * 20;
+        int hits = 0;
         for (Enemy enemy : enemies) {
+            double before = enemy.getHealth() + enemy.getAbsorptionAmount();
             enemy.damage(damage, caster);
-            if (enemy.isValid() && !enemy.isDead())
-                enemy.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, slowTicks, 1, false, true));
+            if (!enemy.isDead() && enemy.getHealth() + enemy.getAbsorptionAmount() >= before) continue;
+            hits++;
+            if (enemy.isValid() && !enemy.isDead()) FrostControl.slow(enemy, slowTicks);
         }
-        plugin.mastery().successfulCast(caster, "frostnova");
-        plugin.publishSkill(caster, "frostnova", "命中 " + enemies.size() + " 只怪物", center);
-        caster.sendMessage(ChatColor.AQUA + "霜环命中 " + enemies.size() + " 只怪物并减速（7 魔力）。");
+        if (hits == 0 && extinguished.isEmpty()) {
+            caster.sendMessage(ChatColor.YELLOW + "霜环已施放，但当前目标未受影响（7 魔力）。");
+            return;
+        }
+        if (hits > 0) plugin.mastery().successfulCast(caster, "frostnova");
+        List<String> effects = new ArrayList<>();
+        if (hits > 0) effects.add("命中 " + hits + " 只怪物，施加减速与虚弱");
+        if (!extinguished.isEmpty()) effects.add(extinguished);
+        String summary = String.join("；", effects);
+        plugin.publishSkill(caster, "frostnova", summary, center);
+        caster.sendMessage(ChatColor.AQUA + "霜环：" + summary + "（7 魔力）。");
     }
 
     private void flamewave(Player caster) {

@@ -1,8 +1,16 @@
+## 学徒法杖与女仆护卫候选
+
+服主已配置的随行伙伴，主手装备真实的 Vortex `mage_apprentice_staff` 后，会在 8 格内对可见的普通敌怪施放法师初始技能和法杖普攻。技能 ID、法术效果和冷却读 Vortex 当前配置。伙伴用自己的魔力，沿用随行护卫的暂停与低血量规则。遗迹、试炼塔和 Vortex 实例的专属怪物仍走各自的参战规则。
+
+`context.companion.rpg` 会返回 `classId`、`staffId`、最近一次战斗检查时的 `manaAtLastCombatCheck`，以及最近实际命中的 `lastHitSpellId`、`lastHitTargetId` 和 `lastHitAt`。这些是这只女仆的护卫状态。需要确认新命中时对照目标 UUID 和命中时间。没有新的命中记录时，可读取 `companion.state` 查看当前阻碍。
+
+原版 Java 和 Mineflayer 使用同 UUID 的悦灵投影和普通装备、挥手、粒子、音效包。基岩由既有资源包显示受支持的原生／YSM 外形并同步动作。访客可观察、交谈，女仆主人使用既有兼容菜单处理背包、装备、工作和跟随。模型包未覆盖的外形使用悦灵投影。
+
 ## 0.1.28-residence 驻点已上线
 
 服主可为一个已有绑定的原实体配置驻点。伙伴离线且女仆处于空闲随行状态时，女仆会回驻点并沿固定路线巡逻。访客在附近时可看到她转身招手，也可以点名交谈。访客的交谈没有操作权限。
 
-`/qdmaid context <maidId>` 对绑定伙伴显示 `residence`。`resident_patrol` 表示当前执行驻点巡逻，`patrolVisitsThisRun` 只在实际到达巡逻点后增加。`awaiting_partner_at_home` 表示伙伴已上线，可以到驻点 24 格内会合，原随行规则随后恢复。`awaiting_original` 表示尚未定位到原实体，可用 `lifeState` 区分生命状态。手选驻守、工作、坐下或正在战斗时优先保留现场安排。
+`/qdmaid context <maidId>` 对绑定伙伴显示 `residence`。`resident_patrol` 表示当前执行驻点巡逻，`patrolVisitsThisRun` 只在实际到达巡逻点后增加。伙伴回到驻点附近会恢复随行。同维度远处也可以在允许传送且有安全落点时自动会合，副本和竞技场内保持原准入规则。`awaiting_safe_reunion` 表示正在等待可会合的位置。`awaiting_partner_at_home` 表示目前需要回到同一维度或等待驻点活动结束。`awaiting_original` 表示尚未定位到原实体，可用 `lifeState` 区分生命状态。手选驻守、工作、坐下或正在战斗时优先保留现场安排。
 
 常驻按区块模拟运行，使用现有原生女仆和聊天入口。驻点可以使用现有客户端。驻点只启用步行、动作和访客交谈，已有私人合成工单沿用本人在线条件。[正式发布](../../../docs/MAID_RESIDENCE_DEPLOYED_20261113.md)
 
@@ -16,6 +24,10 @@
 - 在附近频道点名并说明工位、材料来源与数量，也可由已配置共享对话的女仆调用 `make_at_workshop`。只向绑定伙伴的近聊提供这个工具。
 - `/qdmaid receipt <maidId> <原requestId> [queryId]` 查原结果。正常接单是 `pending`。`completed` 且 `goalCompleted:true` 表示实际库存已核对，`observation` 给出 `itemId`、`count`、材料和成品所在的 `inventory`，以及到达点。完成时聊天中的工单编号可用于查询。
 - 缺材料、库存已改或路线中断会附原因。可明确确认无效果的失败修正后再下新单，`unknown` 用原请求和实物核对。
+
+更新后的 `mc_maids` 可以用 `workshop` 读取同一工位目录和 `currentOrder`，用 `make` 传 `maidId`、`requestId`、`workshopId`、`recipeId`，并按需传 `quantity`（成品件数）和 `inventory`（`chest` 或 `backpack`）。桥 0.1.30 起目录附 `table`、`supplyChest` 方块坐标。旧桥可走已有的普通命令入口，新的插件频道能力在发送前协商。
+
+需要农场时，从 `tasks` 读取已启用的 `touhou_little_maid:farm`。先核对有权使用的耕地、工作时段与种子，再用 `task` 选择原生任务。`applied` 表示已切模式，采收和补种以方块、掉落或真实库存为准。用 `follow` 结束工作并恢复同行。
 
 在桥的插件数据目录 `workshops.json` 登记工位。示例 UUID 和坐标均需替换成实际站点信息：
 
@@ -63,6 +75,8 @@
 **0.1.14-companion 已部署**：原肥鱼在附近点名且回复成功后，同一玩家、连接、维度有45秒接话窗口；每个已完成回复最多承接3条后续输入，仍需8格范围并遵守原节流。公屏、私聊、旁人和跨维度不继承此窗口。对话声音优先于日常短句，后者可被中断；`speech.transport=simple_voice_chat_position` 不依赖客户端女仆投影的实体 UUID，仍需连接 Simple Voice Chat，`sent` 不等于耳听验收。
 
 `context.companion` 返回原生自动护卫状态。仅已配置的原肥鱼在闲置跟随、有合适武器、附近可见怪物正在攻击主人或本人时切到原生战斗；脱战5秒、低血量或武器不合格时恢复陪伴。主人手选任务和停留优先，不另启模型行动循环。她在主人原位置16格内、处于跟随时，会跟随成功的远距／跨维度传送，落点必须已加载且安全；不召回远方或未加载女仆，不创建替代实体。`applied` 仍只是设置成功，必须核对维度、位置及 `ownerDistance`。
+
+桥 0.1.30 候选通过原生注册表匹配主手武器，包含近战、弓、弩、三叉戟与弹幕。弓弩按原生弹药条件就绪。`context.companion` 返回 `mainHand`、就绪的 `equippedAttackTask`、`partnerRange` 和下一步。伙伴距离由原跟随停止距离推导，按 16 格最低值计算。可见敌对目标仍须在女仆 8 格内，并通过原生目标检查。驻点、坐下或手选工作继续优先。VortexRPG 的玩家施法入口仍要求在线玩家角色。
 
 旧聊天回执超过4000字符时仅省略静态帮助，标记 `compactHelp:true`；身份、生命事实、动作终态和原请求ID保留。插件频道返回完整内容。仍超长会明确返回 `response_requires_plugin_channel`，客户端应在 `qiandengji:maids` 查询原请求，不能换ID重做动作。基础协议和命令入口不变。
 
