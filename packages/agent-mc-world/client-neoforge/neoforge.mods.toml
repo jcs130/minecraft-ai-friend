@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+[[mods]]
+modId="agentmc_client_platform"
+version="0.1.3"
+displayName="Agent MC Native Client Platform"
+description="Opt-in scoped login, reconnect and original YSM camera-subject display; no gameplay or model loop."
+[[mixins]]
+config="agentmc-client-neoforge.mixins.json"
+[[mixins]]
+config="agentmc-graphics-neoforge.mixins.json"
+[[dependencies.agentmc_client_platform]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.233,21.2)"
+side="CLIENT"
+[[dependencies.agentmc_client_platform]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+side="CLIENT"
+[[dependencies.agentmc_client_platform]]
+modId="yes_steve_model"
+type="required"
+versionRange="[2.6.5-neoforge+mc1.21.1]"
+side="CLIENT"

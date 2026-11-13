@@ -29,7 +29,8 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
     private record Account(String server, String username, String credentialFile, String command,
                            List<String> requestMarkers, List<String> successMarkers, List<String> failureMarkers,
                            boolean reconnect, List<String> reauthMarkers, List<String> stateMarkers,
-                           String initialPerspective) {}
+                           String initialPerspective, boolean retryWhileTransportUnavailable,
+                           List<String> retryableDisconnectMarkers) {}
     private record Config(boolean enabled, List<Account> accounts) {}
     private LoginSession session;
     private Account account;
@@ -38,6 +39,9 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
     private final ReconnectSession reconnect = new ReconnectSession();
     private class_642 reconnectServer;
     private String confirmedAt;
+    private boolean reconnectLimitLogged;
+    private boolean retryWhileTransportUnavailable;
+    private List<String> retryableDisconnectMarkers = List.of();
 
     @Override
     public void onInitializeClient() {
@@ -48,6 +52,9 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
             account = null;
             session = null;
             confirmedAt = null;
+            reconnectLimitLogged = false;
+            retryWhileTransportUnavailable = false;
+            retryableDisconnectMarkers = List.of();
             reconnectServer = null;
             reconnect.block();
             class_642 server = current.method_1558();
@@ -71,6 +78,9 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                     session = new LoginSession(account.requestMarkers, account.successMarkers, account.failureMarkers,
                         account.reauthMarkers == null ? List.of() : account.reauthMarkers);
                     reconnectServer = account.reconnect ? server : null;
+                    retryWhileTransportUnavailable = account.retryWhileTransportUnavailable;
+                    retryableDisconnectMarkers = account.retryableDisconnectMarkers == null ? List.of()
+                        : List.copyOf(account.retryableDisconnectMarkers);
                     if (account.reconnect) reconnect.arm(); else reconnect.block();
                     int perspective = InitialPerspective.select(account.initialPerspective);
                     if (perspective >= 0) {
@@ -131,15 +141,25 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
         });
         ClientTickEvents.END_CLIENT_TICK.register(current -> {
             if (current.method_1562() != null) {
-                if(session==null||session.authorized())reconnect.online(); else reconnect.cancel();
+                if(session!=null&&session.authorized())reconnect.online(System.nanoTime()/1_000_000); else reconnect.cancel();
                 if(session!=null&&account!=null&&account.reconnect&&session.confirmationTimedOut(System.nanoTime()/1_000_000)){
                     current.method_1562().method_48296().method_10747(net.minecraft.class_2561.method_43470("Configured server login confirmation timed out; waiting for scoped reconnect."));
                     System.out.println("[CorticoClientLogin] Login confirmation timed out; bounded reconnect, no action replay");
                 }
                 return;
             }
-            if (!reconnect.tick(current.field_1755 instanceof class_419 ? current.field_1755 : null,
-                    System.nanoTime() / 1_000_000)) return;
+            class_419 disconnected = current.field_1755 instanceof class_419 screen ? screen : null;
+            boolean localTransportFailure = disconnected != null && transportUnavailable(disconnected);
+            boolean serviceUnavailable = disconnected != null && serviceUnavailable(disconnected, retryableDisconnectMarkers);
+            boolean prolongedRetry = reconnect.exhausted()
+                && (retryWhileTransportUnavailable && localTransportFailure || serviceUnavailable);
+            if (!reconnect.tick(disconnected, System.nanoTime() / 1_000_000, prolongedRetry)) {
+                if(disconnected != null&&reconnect.exhausted()&&!prolongedRetry&&!reconnectLimitLogged){
+                    reconnectLimitLogged=true;
+                    System.out.println("[CorticoClientLogin] Reconnect limit reached ("+reconnect.maximumAttempts()+"); automatic retries stopped; inspect the original disconnect reason");
+                }
+                return;
+            }
             class_642 target = reconnectServer;
             if (target == null) { reconnect.block(); return; }
             try {
@@ -147,11 +167,15 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                 Config config = new Gson().fromJson(Files.readString(configFile), Config.class);
                 boolean allowed = config != null && config.enabled && config.accounts != null
                     && config.accounts.stream().anyMatch(entry -> entry != null && entry.reconnect
+                        && (!prolongedRetry || entry.retryWhileTransportUnavailable && localTransportFailure
+                            || serviceUnavailable(disconnected, entry.retryableDisconnectMarkers))
                         && entry.server != null && entry.username != null
                         && LoginSession.matchesAccount(entry.server, entry.username, target.field_3761,
                             current.method_1548().method_1676()));
                 if (!allowed) { reconnect.block(); return; }
-                System.out.println("[CorticoClientLogin] Reconnecting configured account, attempt " + reconnect.attempts());
+                System.out.println(prolongedRetry
+                    ? "[CorticoClientLogin] Reconnecting after " + (serviceUnavailable ? "configured service unavailable" : "local transport failure") + " (120-second backoff)"
+                    : "[CorticoClientLogin] Reconnecting configured account, attempt " + reconnect.attempts());
                 // A non-null cookie storage marks the 1.20.6 handshake as TRANSFER.
                 // This is a fresh reconnect to the configured server, not a server-directed transfer.
                 class_412.method_36877(current.field_1755, current, class_639.method_2950(target.field_3761),
@@ -163,6 +187,21 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
         });
         System.out.println("[CorticoClientLogin] Active; login commands and credentials are never logged");
     }
+
+    private static boolean transportUnavailable(class_419 screen) {
+        // In 1.21.1 the vanilla connector exposes the title and reason as separate narration components.
+        var parts = screen.method_25435().method_10855();
+        if (parts.size() < 2 || !(parts.get(0).method_10851() instanceof net.minecraft.class_2588 title)) return false;
+        var reason = parts.get(parts.size() - 1).method_10851();
+        return reason instanceof net.minecraft.class_2588 translated
+            && ReconnectSession.isTransportFailure(title.method_11022(), translated.method_11022(), translated.method_11023());
+    }
+    private static boolean serviceUnavailable(class_419 screen, List<String> markers) {
+        if (screen == null) return false;
+        var parts = screen.method_25435().method_10855();
+        if (parts.size() < 2 || !(parts.get(0).method_10851() instanceof net.minecraft.class_2588 title)) return false;
+        return ReconnectSession.isServiceUnavailable(title.method_11022(), parts.get(parts.size() - 1).getString(), markers);
+    }
     /** Optional generic Fabric authorization evidence port. Explicitly excludes all credentials. */
     @Override public Map<String,Object> get() {
         CorticoClientLogin owner=active;
@@ -172,6 +211,7 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
         out.put("required",owner!=null&&owner.account!=null);out.put("connectionMatched",matched);
         out.put("phase",matched&&owner.session!=null?owner.session.phase():"unknown");
         out.put("authorized",matched&&owner.session!=null?owner.session.authorized():null);
+        if(owner!=null){out.put("reconnectAttempts",owner.reconnect.attempts());out.put("reconnectLimit",owner.reconnect.maximumAttempts());out.put("reconnectExhausted",owner.reconnect.exhausted());}
         if(owner!=null&&owner.account!=null){out.put("username",owner.account.username);out.put("server",owner.account.server);}
         if(owner!=null&&owner.confirmedAt!=null)out.put("confirmedAt",owner.confirmedAt);
         return out;

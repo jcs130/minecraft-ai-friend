@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.61
+
+- Bound accepted tactical event views for execution workers; retain source hashes and action/terminal distinction. Integrate native NeoForge login/appearance helpers and explicit per-account retryable service-unavailable disconnect markers.
+
 ## 0.5.7-rc.160-preview.60
 
 - Clarify equipped engage versus observation-only track in fast combat requests. Preserve authored tactics but make live body ownership authoritative.
