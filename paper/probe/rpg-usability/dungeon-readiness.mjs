@@ -101,13 +101,15 @@ async function playTower(owner) {
         await mc('give '+name+' minecraft:arrow 16');
     }
     await mc(`summon touhou_little_maid:maid -593.5 92 -312.5 {UUID:[I;${ints(maid)}],Owner:[I;${ints(fixture.owner)}],CustomName:'"SyntheticTrialMaid"',PersistenceRequired:1b,Invulnerable:1b}`);
-    await mc(`data modify entity ${maid} NeoForgeData.qiandengji_follow set value {schemaVersion:1,walkDistance:20,stopDistance:16,returnDistance:64}`);
+    await mc(`data merge entity ${maid} {NeoForgeData:{qiandengji_follow:{schemaVersion:1,walkDistance:20,stopDistance:16,returnDistance:64}}}`);
+    const followProfile=await mc(`data get entity ${maid} NeoForgeData.qiandengji_follow`);
+    check('synthetic companion uses the wide follow profile',/walkDistance:\s*20\b/.test(followProfile));
     const start=await say(owner,'/mycli arena start',/^MC_DUNGEON_START /);
     check(baseline?'old tower admits a sword-only player':'melee and loaded ranged kit opens the trial',start.includes('floor=1'));
     await until(async()=>Math.abs(await y(maid)-69)<3,'companion entered floor one');
     check('original companion alive at the entrance floor', Number((await mc(`data get entity ${maid} Health`)).match(/([\d.]+)f\s*$/)?.[1])>0);
-    await mc('tp '+name+' -589.5 69 -304.5');
-    await mc('tp '+maid+' -587.5 69 -304.5');
+    await mc('tp '+name+' -597.5 69 -304.5');
+    await mc('tp '+maid+' -579.5 69 -304.5');
     await until(async()=>await enemies(name)>0,'tower enemies');
     if (!baseline) {
         await rc(`dailyqa clear-state ${name} arm`);
@@ -126,11 +128,11 @@ async function playTower(owner) {
         check('clear restores real health and mana, removes harmful effects and preserves buffs while still on floor one',
             recovered(report.towerRecovery.state) && Math.abs(await y(name)-69)<3);
     }
-    await until(async()=>Math.abs(await y(name)-57)<3,'official 12-block next-floor transfer');
+    await until(async()=>Math.abs(await y(name)-57)<3,'official short next-floor transfer');
     await delay(350);
     report.towerPositions={owner:await location(name),companion:await location(maid)};
     if (baseline) {
-        check('old companion remains on floor one after the 12-block transfer',Math.abs(await y(maid)-69)<3);
+        check('old companion remains on floor one after the short transfer',Math.abs(await y(maid)-69)<3);
     } else {
         check('same companion arrives with the owner on floor two',
             await until(async()=>Math.abs(await y(maid)-57)<3,'companion floor two',3500));
