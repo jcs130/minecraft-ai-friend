@@ -1,4 +1,4 @@
-/** Shared contact volume for burning blocks and pathfinder movement edges. */
+/** Planner clearance for burning blocks. Never use the safety margin as actual contact. */
 export const BURNING_BLOCKS = new Set(['lava', 'fire', 'soul_fire']);
 export const SCORCHING_FLOOR = new Set(['magma_block']);
 export const HAZARD_BODY_REACH = 0.3 + 0.1;
@@ -9,6 +9,16 @@ interface Point { x: number; y: number; z: number }
 interface Bounds { min: Point; max: Point }
 const AXES = ['x', 'y', 'z'] as const;
 const EPS = 1e-7;
+
+/** Physical player AABB, excluding cells which merely share a face. */
+export function hazardContactBounds(point: Point, width = 0.6, height = 1.8): Bounds {
+  const half = Number.isFinite(width) && width > 0 ? width / 2 : 0.3;
+  const h = Number.isFinite(height) && height > 0 ? height : 1.8;
+  return {
+    min: { x: Math.floor(point.x - half + EPS), y: Math.floor(point.y + EPS), z: Math.floor(point.z - half + EPS) },
+    max: { x: Math.floor(point.x + half - EPS), y: Math.floor(point.y + h - EPS), z: Math.floor(point.z + half - EPS) },
+  };
+}
 
 export function hazardBodyBounds(point: Point): Bounds {
   return {

@@ -6,9 +6,33 @@ import { methodHarness } from './method-harness.ts';
 import { localHazardExit } from '../core/hazard-exit.ts';
 import { findEscapeCell, hazardsWithin, hazardTouch } from '../core/terrain.ts';
 import { crossFire, intentionalFireCrossing, fireRoutes, fireRouteGeometryCurrent } from '../core/fire-route.ts';
+import { pressRanged } from '../core/melee.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-04T16:52:12Z')); });
 afterEach(() => vi.useRealTimers());
+
+it.each([[-.3609002782035,-.30473852207155],[-.2343,-.3069],[-.3,.5]])('planner clearance is not physical fire contact (%s,%s)',async(x,z)=>{
+  const r=rig();try{
+    r.bot.entity.position=new Vec3(x,64,z);r.set(0,64,0,'fire');
+    expect(hazardTouch(r.bot).touching).toBeNull();
+    await vi.advanceTimersByTimeAsync(1000);expect(r.pause).not.toHaveBeenCalled();
+  }finally{r.close();}
+});
+
+it('safe ranged spacing cannot re-enter fire after escape, while a genuine new contact still interrupts (native physics)',async()=>{
+  const r=rig();try{
+    r.bot.physicsEnabled=true;r.bot.entity.position=new Vec3(.5,64,.68);r.set(0,64,1,'fire');
+    for(let i=0;i<30;i++){
+      const motion=pressRanged(r.bot as unknown as Bot,3,'kite',true);
+      expect(motion.retreating).toBe(false);
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    expect(r.pause).not.toHaveBeenCalled();expect(hazardTouch(r.bot).touching).toBeNull();
+    expect(r.bot.entity.position.z).toBeCloseTo(.68);
+    r.set(0,64,0,'fire');await vi.advanceTimersByTimeAsync(200);
+    expect(r.pause).toHaveBeenCalledTimes(1);
+  }finally{r.close();}
+});
 
 it('retains a simulated fire route across fire age changes, but rejects changed support or new fire',()=>{
   const r=rig();try{

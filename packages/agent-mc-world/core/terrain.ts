@@ -22,7 +22,7 @@ import { piglinIsHostile } from './piglin.ts';
 import { itemCustomName } from './item-display.ts';
 import { inventoryIdentityText } from './item-identities.ts';
 import { animalStateNote, entityCustomName, entityIdentityNote, type FactBot, type FactEntity } from './animal-state.ts';
-import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardBodyBounds } from './hazard-geometry.ts';
+import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardContactBounds } from './hazard-geometry.ts';
 import { remainingEffectTicks } from './status-effects.ts';
 import type { TargetDiag } from './skill-context.ts';
 import { flightState, type FlightState } from './flight.ts';
@@ -1340,13 +1340,13 @@ function cellOf(from: { x: number; y: number; z: number }, x: number, y: number,
 }
 
 /**
- * 按碰撞箱及水平余量检测接触的烧灼方块，供反射心跳读取。
+ * 按真实身体碰撞箱检测接触，寻路预留的安全余量不算已经踩火。
  * 没有侧面接触时另查脚下的灼热表面。
  */
 export function hazardTouch(bot: any): HazardTouch {
   const p = bot.entity.position;
   const base = p.floored();
-  const bounds = hazardBodyBounds(p);
+  const bounds = hazardContactBounds(p, bot.entity.width, bot.entity.height);
   const dy0 = bounds.min.y - base.y;
   const dy1 = bounds.max.y - base.y;
   let touching: HazardCell | null = null;
