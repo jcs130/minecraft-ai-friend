@@ -25,6 +25,8 @@ final class MaidCompanionActions {
     static final String TOOL = "set_companion_mode";
     static final String REVISION = "qiandengji_companion_revision";
     static final String WAIT = "qiandengji_companion_wait_until";
+    private static final String MODEL_FISHING = "qiandengji_companion_model_fishing";
+    private static final String GUARD_UNTIL = "qiandengji_companion_guard_until";
     static final String FISHED_AT = "qiandengji_fishing_retrieved_at";
     static final String IDLE = "touhou_little_maid:idle";
     static final Set<String> MODES = Set.of("follow", "guard", "wait", "fish");
@@ -40,15 +42,38 @@ final class MaidCompanionActions {
             .setParameters(ObjectParameter.create().addProperties("mode", mode)).build());
     }
 
+    static void autonomousTool(ChatCompletion request, String availableMode) {
+        var mode = StringParameter.create();
+        mode.addEnumValues(availableMode);
+        mode.setDescription(availableMode.equals("guard")
+            ? "guard：中断自己安排的暂歇或钓鱼，立刻随行护卫。原生控制器会选武器并实际攻击符合条件的目标。"
+            : "follow：收起自己的鱼竿，恢复跟随正在离开的伙伴。");
+        request.addTool(FunctionTool.create().setName(TOOL)
+            .setDescription("选择是否实际切换自己的状态。决定行动时调用一次；暂不行动时回复[[结束]]。")
+            .setParameters(ObjectParameter.create().addProperties("mode",mode)).build());
+    }
+
     static long revision(EntityMaid maid) { return maid.getPersistentData().getLong(REVISION); }
 
     static void manual(EntityMaid maid) {
         var data = maid.getPersistentData();
         data.putLong(REVISION, revision(maid) + 1);
         data.remove(WAIT);
+        data.remove(MODEL_FISHING);
+        data.remove(GUARD_UNTIL);
     }
 
     static boolean waiting(EntityMaid maid) { return maid.getPersistentData().getLong(WAIT) > 0; }
+    static boolean selfDirectedFishing(EntityMaid maid) {
+        return maid.getTask() instanceof TaskFishing && maid.getPersistentData().getBoolean(MODEL_FISHING);
+    }
+    static boolean activeGuardOrder(EntityMaid maid) {
+        return System.currentTimeMillis() < maid.getPersistentData().getLong(GUARD_UNTIL);
+    }
+    static void modelModeApplied(EntityMaid maid,String mode){
+        if("fish".equals(mode))maid.getPersistentData().putBoolean(MODEL_FISHING,true);
+        if("guard".equals(mode))maid.getPersistentData().putLong(GUARD_UNTIL,System.currentTimeMillis()+60_000);
+    }
 
     static void expireWait(EntityMaid maid, long now) {
         long until = maid.getPersistentData().getLong(WAIT);
@@ -150,6 +175,7 @@ final class MaidCompanionActions {
         facts.addProperty("visibleCombatTarget", target != null && target.isAlive() && maid.hasLineOfSight(target));
         facts.add("fishing", fishing(maid));
         facts.addProperty("temporaryWait", waiting(maid));
+        facts.addProperty("explicitGuard", activeGuardOrder(maid));
         facts.addProperty("waitUntilEpochMillis", maid.getPersistentData().getLong(WAIT));
         facts.addProperty("observedAt", java.time.Instant.now().toString());
         var limits = NativeMaidFollowSupport.limits(maid);

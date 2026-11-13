@@ -157,14 +157,27 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     private boolean shouldCloseIn(EntityMaid maid, Player owner) {
-        if (maid.getBukkitEntity().getLocation().distanceSquared(owner.getLocation()) <= 16
-                || !guardWeaponReady(maid)) return false;
-        if (combatPosition(owner, owner.getLocation())) return true;
+        if (maid.getBukkitEntity().getLocation().distanceSquared(owner.getLocation()) <= 16) return false;
+        if (MaidCompanionActions.activeGuardOrder(maid)) return true;
+        if (!guardWeaponReady(maid)) return false;
+        return combatPosition(owner, owner.getLocation()) || visibleAttackOnPartner(maid,owner);
+    }
+
+    boolean visibleAttackOnPartner(EntityMaid maid,Player owner){
         if (!(owner instanceof CraftPlayer craft)) return false;
         var body = craft.getHandle();
         return !body.level().getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(6), mob ->
             mob.isAlive() && mob.getTarget() == body && body.hasLineOfSight(mob)
+                && !maid.isAlliedTo(mob) && !mob.isNoAi() && !mob.isInvulnerable()
+                && !mob.getBukkitEntity().hasMetadata("NPC")
                 && !authoredMob(mob) && !mob.getBukkitEntity().getPersistentDataContainer().has(VORTEX_INSTANCE)).isEmpty();
+    }
+
+    UUID visibleThreat(EntityMaid maid, Player owner) {
+        if (!owner.getWorld().equals(maid.getBukkitEntity().getWorld()) || lowHealth(maid)) return null;
+        return maid.level().getEntitiesOfClass(Mob.class, maid.getBoundingBox().inflate(8), mob -> hostile(maid,owner,mob))
+            .stream().min(Comparator.comparing((Mob mob)->!attacksPartner(maid,mob)).thenComparingDouble(maid::distanceToSqr))
+            .map(Mob::getUUID).orElse(null);
     }
 
     private boolean currentDungeonTarget(EntityMaid maid, Player owner, Mob mob) {
@@ -489,6 +502,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         if (armed != null) out.addProperty("equippedAttackTask", armed.getUid().toString());
         out.add("mainHand", HybridMaidPlugin.item(maid.getMainHandItem()));
         out.addProperty("partnerRange", partnerRange(maid));
+        out.addProperty("explicitGuard", scoped && MaidCompanionActions.activeGuardOrder(maid));
         if (!scoped) return out;
         out.addProperty("systemOneEnabled", decision != null);
         out.addProperty("systemOneStatus", current ? guard.systemOne : "idle");

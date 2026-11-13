@@ -67,6 +67,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
     boolean closingInToGuard(EntityMaid maid){return companion!=null&&companion.closingIn(maid);}
     boolean companionCombatPosition(Player owner,Location position){return companion!=null&&companion.combatPosition(owner,position);}
+    UUID companionVisibleThreat(EntityMaid maid,Player owner){return companion==null?null:companion.visibleThreat(maid,owner);}
+    boolean companionPartnerThreat(EntityMaid maid,Player owner){return companion!=null&&companion.visibleAttackOnPartner(maid,owner);}
     void conversationReplied(Player actor,EntityMaid maid,String reply,boolean proactive){
         nearbyChat.replied(actor,maid,reply,proactive);
     }
@@ -348,7 +350,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         }
         switch(action){
             case "brain"->observation=brains.select(maid,value);
-            case "follow"->{MaidCompanionActions.follow(maid);observation=context(actor,id);}
+            case "follow"->{
+                MaidCompanionActions.follow(maid);
+                MaidCompanionActions.modelModeApplied(maid,companionMode);
+                observation=context(actor,id);
+            }
             case "stay"->{
                 if(temporaryWait){
                     MaidCompanionActions.leaveFishingSeat(maid);
@@ -362,7 +368,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
                 observation=context(actor,id);
             }
             case "sit"->{maid.setInSittingPose(true);observation=context(actor,id);}
-            case "task"->{maid.setTask(TaskManager.getTaskMap().get(ResourceLocation.parse(value)));maid.setInSittingPose(false);observation=context(actor,id);}
+            case "task"->{
+                maid.setTask(TaskManager.getTaskMap().get(ResourceLocation.parse(value)));
+                maid.setInSittingPose(false);
+                MaidCompanionActions.modelModeApplied(maid,companionMode);
+                observation=context(actor,id);
+            }
             case "schedule"->{maid.setSchedule(MaidSchedule.valueOf(value));observation=context(actor,id);}
             case "pickup"->{maid.setPickup(Boolean.parseBoolean(value));observation=context(actor,id);}
             case "speak"->{int count=0;Component text=Component.text("<"+maid.getName().getString()+"> ",NamedTextColor.AQUA).append(Component.text(value));for(Player player:maid.getBukkitEntity().getLocation().getNearbyPlayers(16)){player.sendMessage(text);count++;}observation=new JsonObject();observation.addProperty("deliveredPlayers",count);}
