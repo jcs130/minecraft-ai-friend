@@ -33,6 +33,19 @@ def test_fast_rules_no_request_and_danger_does_not_wait(framework_module, run_as
     assert run_async(fast.FastPolicy(fast.FastSettings()).choose({"facts": {}}))["reason"] == "not_configured"
 
 
+def test_fast_focus_respects_server_side_work_and_omits_inbox(framework_module, run_async):
+    fast = module(framework_module, "autonomy.fast")
+    selector = AsyncMock(return_value=answer())
+    facts = {"parts": [{"key": "body", "text": "health 20/20, food 20/20"},
+                       {"key": "nativeWork", "text": "running"},
+                       {"key": "world", "text": "Full observation and inbox"}]}
+    state = fast.focus_state("Explore", facts, {})
+    assert state["native_work_pending"] and list(state["facts"]) == ["body"]
+    result = run_async(fast.FastPolicy(fast.FastSettings(mode="host"), selector).choose(state))
+    assert result["choice"] == "wait" and result["reason"] == "native_priority"
+    selector.assert_not_awaited()
+
+
 def test_jev_confidence_is_not_probability_and_low_confidence_falls_back(framework_module, run_async):
     fast = module(framework_module, "autonomy.fast")
     config = fast.FastSettings(mode="system_one")

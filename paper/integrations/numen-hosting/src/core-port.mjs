@@ -21,6 +21,15 @@ export function numenCorePort(hosting, role, epoch) {
     async disconnect(){},
     async observe(signal){check();signal?.throwIfAborted();const state=await hosting.body.observe(role);check();
       return{text:state.text,sampledAt:state.sampledAt,uuid:state.roleUuid,server:state.serverId};},
+    async facts(signal){
+      check();signal?.throwIfAborted();
+      const state=await hosting.body.facts(role);
+      check();signal?.throwIfAborted();
+      if(!state)return null;
+      return {uuid:state.roleUuid,server:state.serverId,sampledAt:state.sampledAt,
+        health:state.health,maxHealth:state.maxHealth,food:state.food,dimension:state.dimension,
+        position:state.position,workPending:state.workPending};
+    },
     async catalog(signal){check();signal?.throwIfAborted();const result=await hosting.body.catalog(role);check();return result.tools;},
     async call({id,tool,args,signal}){
       check();signal?.throwIfAborted();return outcome(await hosting.call(role,{id,tool,args,epoch}));

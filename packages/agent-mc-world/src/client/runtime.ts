@@ -56,6 +56,7 @@ export interface MinecraftClientOptions {
 
 export type ClientEnvironment = World & {
   requestFacts?(): unknown;
+  refreshFacts?(signal: AbortSignal): Promise<void>;
   connectionReadiness?(): { ready: boolean; phase: string; disconnectStopsBody?: boolean } | null;
 };
 
@@ -388,6 +389,10 @@ export class MinecraftAgentClient {
     const saved=this.journal.blob(handle);if(!saved)throw new Error('Execution artifact not found');
     if(saved.mime!=='application/json'&&!saved.mime.startsWith('text/'))throw new Error('Only UTF-8 text artifacts support paging');
     return readTextPage(Buffer.from(saved.bytes).toString('utf8'),handle,{...options,mime:saved.mime});
+  }
+
+  async refreshFacts(signal: AbortSignal) {
+    if(this.phase==='started')await this.world.refreshFacts?.(signal);
   }
 
   currentFacts() {

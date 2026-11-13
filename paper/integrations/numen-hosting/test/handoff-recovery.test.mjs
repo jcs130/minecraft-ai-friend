@@ -160,6 +160,28 @@ test('a failed scoped MCP call is not replayed when the next explicit query reco
   } finally {await body.close();}
 });
 
+test('a tool rejection keeps the authenticated session for the next explicit read',async()=>{
+  let sessions=0;const operations=[];
+  const body=new NumenHostedBody({sessionFor:async()=>{
+    sessions++;
+    return {
+      listTools:async()=>({tools:[{name:'hosted_body'}]}),
+      async callTool({arguments:args}){
+        operations.push(args.op);
+        if(args.op==='capabilities')return {structuredContent:{protocol:PROTOCOL,stableIdentity:true,serverFence:true,inputTimeout:true,persistedReceipts:true,modes:['paused','numen','harness','manual']}};
+        if(args.op==='input')return {isError:true,content:[{type:'text',text:'stale input'}]};
+        return {structuredContent:{roleUuid:role.roleUuid,ready:true}};
+      }
+    };
+  }});
+  try {
+    await assert.rejects(body.input(role,{sequence:1}),{code:'NUMEN_RECEIPT_INVALID'});
+    assert.equal((await body.observe(role)).roleUuid,role.roleUuid);
+    assert.equal(sessions,1);
+    assert.deepEqual(operations,['capabilities','input','observe']);
+  } finally {await body.close();}
+});
+
 test('refused offline admission prevents opening a body control session',async t=>{
   const f=fixture(t);let admissions=0,sessions=0;
   const bootstrap=hostedBootstrapClient({endpoint:'http://127.0.0.1:19085/v1/hosted-role',controlKey:randomBytes(32),

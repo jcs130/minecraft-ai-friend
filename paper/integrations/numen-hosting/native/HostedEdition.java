@@ -24,7 +24,7 @@ public final class HostedEdition {
     return text(s);
   }
   public static void main(String[] args) throws Exception {
-    if(args.length!=2)throw new IllegalArgumentException();
+    if(args.length!=3 || !args[2].matches("[0-9]+(?:\\.[0-9]+){2}"))throw new IllegalArgumentException("expected input, output and upstream version");
     String[] currentClass={""};
     Remapper remapper=new Remapper(Opcodes.ASM9) {
       @Override public String map(String name) {
@@ -55,7 +55,12 @@ public final class HostedEdition {
           name=String.join("/",Arrays.stream(name.split("/")).map(part->part.equals("numen")?"numen_hosted":part).toList());
           if(name.endsWith(".yml")||name.endsWith(".yaml")||name.endsWith(".json")||name.endsWith(".md")||name.endsWith(".lua")||name.startsWith("META-INF/services/"))
             bytes=text(new String(bytes,StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
-          if(name.equals("paper-plugin.yml"))bytes=new String(bytes,StandardCharsets.UTF_8).replace("version: '0.1.4'","version: '0.1.4-hosted.1'").getBytes(StandardCharsets.UTF_8);
+          if(name.equals("paper-plugin.yml")) {
+            String descriptor=new String(bytes,StandardCharsets.UTF_8);
+            String upstreamVersion="version: '"+args[2]+"'";
+            if(!descriptor.lines().anyMatch(upstreamVersion::equals))throw new IllegalArgumentException("unexpected Numen plugin version");
+            bytes=descriptor.replace(upstreamVersion,"version: '"+args[2]+"-hosted.1'").getBytes(StandardCharsets.UTF_8);
+          }
         }
         byte[] previous=written.putIfAbsent(name,bytes);
         if(previous!=null){if(Arrays.equals(previous,bytes))continue;throw new IllegalStateException("different duplicate output resource: "+name);}

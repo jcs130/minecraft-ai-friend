@@ -80,7 +80,8 @@ def focus_state(goal, facts, pending):
     selected = {p["key"]: str(p.get("text", ""))[:320] for p in facts.get("parts", [])
                 if p.get("key") in {"body", "place", "foodReserve", "lastTask", "gear"}}
     # Never forward full chat, schema, image data or decision history to a fast model.
-    return {"goal": goal[:500], "facts": selected, "native_work_pending": bool(pending)}
+    native_work = any(p.get("key") == "nativeWork" and p.get("text") == "running" for p in facts.get("parts", []))
+    return {"goal": goal[:500], "facts": selected, "native_work_pending": bool(pending) or native_work}
 
 
 def rule_focus(state):

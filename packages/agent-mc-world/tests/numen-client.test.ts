@@ -38,3 +38,27 @@ test('fresh state identity mismatch disables future actions and drops stale fact
   await f.tool.handler({op:'observe'},f.context);assert.equal(f.world.connectionReadiness().ready,false);
   assert.equal(f.world.requestFacts(),null);
 });
+
+test('typed Numen facts refresh without reading the inbox and clear on identity mismatch',async()=>{
+  const f=fixture();
+  await f.world.start({}as WorldHost);
+  f.port.observe=async()=>{throw new Error('The inbox must remain unread.');};
+  let health=19;
+  let uuid=f.port.identity.uuid;
+  f.port.facts=async()=>({uuid,server:'isolated',sampledAt:100,health,maxHealth:20,food:14,
+    dimension:'minecraft:overworld',position:[4,64,-2],workPending:true});
+  const signal=new AbortController().signal;
+  await f.world.refreshFacts(signal);
+  assert.deepEqual(f.world.requestFacts()?.parts?.slice(1),[
+    {key:'body',text:'health 19/20, food 14/20'},
+    {key:'place',text:'minecraft:overworld [4,64,-2]'},
+    {key:'nativeWork',text:'running'},
+  ]);
+  health=6;
+  await f.world.refreshFacts(signal);
+  assert.match(f.world.requestFacts()?.parts?.[1].text??'',/health 6\/20/);
+  uuid='other';
+  await assert.rejects(f.world.refreshFacts(signal),/do not match/);
+  assert.equal(f.world.requestFacts(),null);
+  assert.equal(f.world.connectionReadiness().ready,false);
+});
