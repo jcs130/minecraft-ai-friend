@@ -6540,6 +6540,7 @@ export class Reflexes {
     if (bot?.entity && this.lavaEscape !== null && !this.lavaEscape.handedOff) this.releaseDash(bot);
     this.lavaEscape = null;
     this.failedHazard = null;
+    this.fireWithoutExit = null;
     this.burning = null;
     if (bot?.entity && this.buried !== null) bot.setControlState('jump', false);
     this.buried = null;
@@ -6951,6 +6952,7 @@ export class Reflexes {
   private static readonly LAVA_DASH_STALL_MOVE = 1;
 
   private lastLavaReportAt = 0;
+  private fireWithoutExit: string | null = null;
   private failedHazard: { bot: Bot; position: Vec3; name: string; exitKey: string } | null = null;
   private lavaEscape: {
     startedAt: number; handedOff: boolean; reported: boolean;
@@ -6987,6 +6989,7 @@ export class Reflexes {
       }
     }
     if (hazard === null) {
+      this.fireWithoutExit = null;
       this.failedHazard = null;
       // 灭火不等驻留窗口结算
       if (this.lavaEscape !== null || this.burning !== null) this.extinguish(bot, touch.onFire);
@@ -6998,6 +7001,20 @@ export class Reflexes {
     const fire = hazard.name === 'fire' || hazard.name === 'soul_fire';
     if(fire&&intentionalFireCrossing(bot))return;
     const localExit = fire ? localHazardExit(bot, Reflexes.ESCAPE_SCAN_R) : null;
+    // Acquiring the survival lease cancels combat and suspends the executor.
+    // Do it only for an actual escape, not a five-second wait with all keys up.
+    // In particular knockback can leave an airborne body with no grounded route.
+    const plan = fire && this.lavaEscape === null ? fireRoutes(bot)[0] : undefined;
+    if (fire && this.lavaEscape === null && !plan && !localExit) {
+      const key = JSON.stringify([hazard.name, Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)]);
+      if (key !== this.fireWithoutExit) {
+        this.fireWithoutExit = key;
+        this.opts.report({kind:'reflex',hurt:true,text:'[反射受阻] 正在接触火源，但没有可执行的脱离路线；未抢占身体，现有攻击、进食和自主脱离仍可继续。危险尚未解除。'});
+        this.opts.diag?.write({lane:'reflex',event:'fire-no-executable-exit',msg:'No fire escape; body ownership unchanged',data:{position:p,hazard,health:bot.health,onGround:bot.entity.onGround}});
+      }
+      return;
+    }
+    this.fireWithoutExit = null;
     if (this.failedHazard) {
       const failed = this.failedHazard;
       // A failed reflex must not retain controls or re-freeze the same scene.
@@ -7014,7 +7031,7 @@ export class Reflexes {
       this.lavaEscape = {
         startedAt: now, handedOff: false, reported: false, clearSince: null, cell: null, dashFrom: null,
       };
-      if(fire){const plan=fireRoutes(bot)[0];if(plan)this.lavaEscape.fireMotion={plan,at:now};}
+      if(plan)this.lavaEscape.fireMotion={plan,at:now};
       const fresh = this.lavaBout.count === 0
         || now - this.lavaBout.lastClearAt > Reflexes.LAVA_BOUT_GAP_MS;
       if (fresh) this.lavaBout = { count: 1, firstAt: now, lastClearAt: 0 };

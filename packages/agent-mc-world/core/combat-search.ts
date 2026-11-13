@@ -29,7 +29,7 @@ export function combatSearchCandidates(bot:Bot,field:Battlefield,bodyFree:boolea
       if(clue.seenAt>field.sampledAtMs||!clue.position.every(Number.isFinite))continue;
       dx=clue.position[0]-from[0];dz=clue.position[2]-from[2];
       if(Math.hypot(dx,dz)<1.5)continue;
-      key=JSON.stringify([clue.source,clue.key,clue.position]);
+      key=JSON.stringify([clue.source,clue.key]);
       description='a recently visible hostile\'s last-seen location; its current position is unknown';
     }
     const len=Math.hypot(dx,dz);if(!Number.isFinite(len)||len<.01)continue;
@@ -42,6 +42,15 @@ export function combatSearchCandidates(bot:Bot,field:Battlefield,bodyFree:boolea
         intent:`Investigate ${description}. Take one checked short ${i?'side':'forward'} step without attacking, then observe again.`.slice(0,240)});
     }
     if(candidates.length)return candidates;
+  }
+  const objective=field.searchObjective;
+  if(objective&&objective.remaining>0&&objective.observedAtMs<=field.sampledAtMs&&objective.expiresAtMs>field.sampledAtMs){
+    return [0,Math.PI/2,Math.PI,Math.PI*1.5].flatMap((angle,i)=>{
+      const to=new Vec3(p.x+1.2*Math.cos(angle),p.y,p.z+1.2*Math.sin(angle));
+      return corridorSafe(bot,p,to)?[{id:`search_area_${i}`,kind:'search' as const,source:'objective' as const,
+        clueKey:objective.key,destination:[to.x,to.y,to.z] as [number,number,number],
+        intent:`Server reports ${objective.remaining} enemies remaining, locations unknown. Check a short safe corridor toward ${['east','south','west','north'][i]}, then observe again; this is search, not an attack or proof of a clear room.`}]:[];
+    });
   }
   return [];
 }

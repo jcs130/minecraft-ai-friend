@@ -731,10 +731,20 @@ function narrateEquip(s: WorldSnapshot): string {
     .filter((p): p is GearPiece => p !== undefined);
   const off = s.equipment.find((p) => p.slot === 'offhand');
   const bits = [s.xpLevel === null ? '经验正在从服务器同步。' : `经验 ${s.xpLevel} 级。`];
-  bits.push(worn.length > 0 ? `穿着：${worn.map(gearPhrase).join('、')}。` : '身上没穿护甲。');
-  if (off) bits.push(`${gearPhrase(off)}。`);
+  if(s.invSynced){
+    bits.push(worn.length > 0 ? `穿着：${worn.map(gearPhrase).join('、')}。` : '身上没穿护甲。');
+    const missing=WORN_ORDER.filter(slot=>!worn.some(p=>p.slot===slot));
+    if(missing.length&&worn.length)bits.push(`空着的护甲槽：${missing.map(slot=>GEAR_SLOT_ZH[slot]).join('、')}。`);
+    bits.push(armorReserveText(s));
+    if (off) bits.push(`${gearPhrase(off)}。`);
+  }else bits.push('穿戴与备用护甲尚未同步，不能据此判定缺失。');
   if (s.effects.length > 0) bits.push(`状态：${s.effects.map(effectPhrase).join('、')}。`);
   return bits.join('');
+}
+
+function armorReserveText(s:WorldSnapshot):string{
+  const spare=s.inventory.filter(item=>/(?:_helmet|_chestplate|_leggings|_boots)$/.test(item.name));
+  return `随身备用护甲：${spare.length?narrateInventory(spare):'无'}（不含远程箱，未查询的仓库现货未知）。`;
 }
 
 /**
@@ -753,7 +763,7 @@ function equipCmp(s: WorldSnapshot): string {
     .map((e) => `${e.name}${e.level}${e.seconds <= 30 ? '!' : ''}`)
     .sort()
     .join(',');
-  return `xp${s.xpLevel ?? '?'}|${gear}|${eff}`;
+  return `xp${s.xpLevel ?? '?'}|${s.invSynced?'synced':'unknown'}|${gear}|${eff}|${s.invSynced?armorReserveText(s):''}`;
 }
 
 /**

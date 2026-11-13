@@ -4756,6 +4756,7 @@ export class MinecraftWorld implements World {
   protected extensionPerception(_bot: Bot): readonly DetectionEvidence[] { return []; }
   protected extensionState(): unknown { return null; }
   protected extensionCombatTuning(): Partial<import('./combat.ts').CombatTuning> { return {}; }
+  protected extensionCombatSearchObjective(): import('./battlefield.ts').Battlefield['searchObjective'] { return undefined; }
   protected preferredMeleeWeapons(): readonly string[] { return []; }
   protected extensionCombatReport(_result: unknown): void {}
   protected extensionLowHealth(_bot: Bot): void {}

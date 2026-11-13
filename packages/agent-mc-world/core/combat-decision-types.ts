@@ -7,7 +7,7 @@ export type CombatCandidate = { id: string; intent: string } & (
   | { kind: 'step'; destination: [number, number, number] }
   | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
   | { kind: 'retreat' }
-  | { kind:'search';clueKey:string;source:'sound-packet'|'last-seen';destination:[number,number,number] }
+  | { kind:'search';clueKey:string;source:'sound-packet'|'last-seen'|'objective';destination:[number,number,number] }
   | { kind: 'idle'; action: 'wander'; destination: [number, number, number] }
   | ({ kind: 'method' } & CombatRoutine)
 );
@@ -30,6 +30,11 @@ export interface CombatDecisionFrame {
       offered: Partial<Record<CombatCandidate['kind'], number>>; excludedKinds: CombatCandidate['kind'][] } };
   /** A transient sample rejection does not disable the authored program. */
   programDeferred?: { reason: 'evaluation-in-progress' | 'scene-changed'; sourceHash: string };
+}
+/** Fresh collision checks may update a short step for sub-block drift, not change its intent. */
+export function sameCombatSearch(a:Extract<CombatCandidate,{kind:'search'}>,b:Extract<CombatCandidate,{kind:'search'}>):boolean{
+  return a.id===b.id&&a.source===b.source&&a.clueKey===b.clueKey
+    &&Math.hypot(...a.destination.map((v,i)=>v-b.destination[i]))<=.5;
 }
 export interface CombatExecutionPolicy {
   maxEntities: number; maxCandidates: number;

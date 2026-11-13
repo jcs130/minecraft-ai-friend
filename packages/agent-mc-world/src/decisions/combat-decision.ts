@@ -1,6 +1,7 @@
 /** Optional HOST-side selector. The game engine never imports or starts this loop. */
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
 import { randomUUID } from 'node:crypto';
+import { sameCombatSearch } from '../../core/combat-decision-types.ts';
 import { combatChoiceBindings,combatRequest } from './combat-request.ts';
 import { CombatAbstention, type CombatDecisionAttention } from './combat-attention.ts';
 import type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
@@ -43,10 +44,11 @@ const healthBand = (hp: number | null, max: number | null) => hp === null ? 'unk
 
 function sceneFacts(frame: CombatDecisionFrame, selected: CombatCandidate | null) {
   const f = frame.battlefield;
-  const targetId = selected?.kind === 'engage' || selected?.kind === 'track' ? selected.targetId : f.action.targetEntityId;
+  const targetId = selected?.kind === 'search' ? null : selected?.kind === 'engage' || selected?.kind === 'track' ? selected.targetId : f.action.targetEntityId;
   const protectedIds = new Set([f.self.entityId, ...f.actors.filter(a => a.relation === 'ally').map(a => a.entityId)]);
   return { connection: [f.connectionGeneration, f.dimension,f.world?.key??null,f.world?.revision??null], tactic: frame.tacticRevision,
     survival: frame.survival ?? null,
+    searchObjective:selected?.kind==='search'&&selected.source==='objective' ? [f.searchObjective?.key,f.searchObjective?.remaining] : null,
     self: [f.self.entityId, healthBand(f.self.health.current, f.self.health.max), f.self.health.max,
       f.self.food === null ? null : f.self.food <= 6 ? 'hungry' : 'fed', f.self.equipment],
     omitted: f.omitted,
@@ -73,7 +75,7 @@ export function assessCombatDecisionScene(before: CombatDecisionFrame, after: Co
     .filter(key => key !== 'actors' && JSON.stringify(prior[key]) !== JSON.stringify(current[key]));
   const tolerated: string[] = [];
   const targetId = selected?.kind === 'engage' || selected?.kind === 'track' ? selected.targetId
-    : selected?.kind === 'retreat' ? null : before.battlefield.action.targetEntityId;
+    : selected?.kind === 'retreat'||selected?.kind==='search' ? null : before.battlefield.action.targetEntityId;
   const protectedIds = new Set([before.battlefield.self.entityId,
     ...before.battlefield.actors.filter(a => a.relation === 'ally').map(a => a.entityId)]);
   const key = (a: (typeof prior.actors)[number]) => JSON.stringify(a.slice(0, 2));
@@ -109,9 +111,14 @@ export function assessCombatDecisionScene(before: CombatDecisionFrame, after: Co
       actorsChanged = true;
     }
     // New relevant actors, newly visible threats, new attacks and relation changes still recheck.
-    if (afterActors.size) actorsChanged = true;
+    for(const a of afterActors.values()){
+      if(selected?.kind==='search'&&a[3]==='hostile'&&a[5]===false
+        &&!(typeof a[6]==='number'&&protectedIds.has(a[6])))tolerated.push('search-occluded-actor');
+      else actorsChanged=true;
+    }
   }
   if (actorsChanged) changed.push('actors');
+  if(selected?.kind==='search'&&Math.hypot(...after.battlefield.self.position.map((v,i)=>v-before.battlefield.self.position[i]))>.5)changed.push('search-origin-moved');
   // Only a cast consumes mana. Eligibility (including rule reserves) is recomputed by the engine.
   if (selected?.kind === 'cast' && before.mana !== after.mana
     && (after.mana === null || after.mana < selected.manaCost))
@@ -239,8 +246,7 @@ export class CombatDecisionLoop {
         && (selected.kind !== 'track' || (c.kind === 'track' && c.targetId === selected.targetId && c.uuid === selected.uuid))
         && (selected.kind !== 'idle' || (c.kind === 'idle' && c.action === selected.action
           && JSON.stringify(c.destination) === JSON.stringify(selected.destination)))
-        && (selected.kind !== 'search' || (c.kind === 'search' && c.clueKey === selected.clueKey
-          && c.source === selected.source && JSON.stringify(c.destination) === JSON.stringify(selected.destination)))
+        && (selected.kind !== 'search' || (c.kind === 'search' && sameCombatSearch(selected,c)))
         && (selected.kind !== 'method' || c.kind === 'method' && c.procedure.handle === selected.procedure.handle
           && c.procedure.revision === selected.procedure.revision && JSON.stringify(c.params) === JSON.stringify(selected.params)
           && c.durationMs === selected.durationMs));

@@ -10,7 +10,7 @@ import { CombatTacticBook } from './combat-tactics.ts';
 import { combatTacticHash } from './combat-tactics.ts';
 import { CombatProgramProbe, validCombatProbe } from './combat-probe.ts';
 import { tacticSupervisorView } from '../src/client/event-context.ts';
-import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
+import { COMBAT_EXECUTION_DEFAULTS, sameCombatSearch, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { combatLoadout } from './combat-loadout.ts';
 import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, combatProgramSelection, validCombatProgram } from './combat-program.ts';
@@ -254,6 +254,9 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       targetEntityId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
       canStep: reaction?.canStep ?? false, followTarget: queue?.running?.followTarget ?? null,
       tracking: this.combat?.tracking ?? false }, cfg.maxEntities, now);
+    const objective=this.extensionCombatSearchObjective();
+    if(objective&&objective.observedAtMs<=now&&objective.expiresAtMs>now&&Number.isSafeInteger(objective.remaining)&&objective.remaining>0)
+      battlefield.searchObjective=objective;
     const program = this.tactics.getTactic()?.program;
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
     frame.survival = { fleeAtOrBelow: this.cfg.reflex.fleeHealth, healingDesired: this.combatHealingUrgent(bot) };
@@ -365,7 +368,8 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
         to => this.combatDecisionConfig().allowMovement && corridorSafe(bot, bot.entity.position, new Vec3(...to))).candidates[0]; }
       catch { return false; }
     } else {
-      const checked = current.candidates.find(c => JSON.stringify(c) === JSON.stringify(candidate));
+      const checked = current.candidates.find(c => candidate.kind === 'search' && c.kind === 'search'
+        ? sameCombatSearch(candidate, c) : JSON.stringify(c) === JSON.stringify(candidate));
       if (!checked) return false;
       candidate = checked;
     }
