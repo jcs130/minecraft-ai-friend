@@ -75,6 +75,40 @@ for(const advertised of [false,true])test(`workshop chooses its transport before
     assert.equal((await result).ok,true);
   }finally{port.close();}
 });
+test('a direct craft write needs confirmed capability and is dispatched at most once',async()=>{
+  const bot=client(),sent=[];
+  bot._client.write=(_kind,packet)=>{if(packet.channel===MAID_REQUEST_CHANNEL)sent.push(JSON.parse(packet.data).command);};
+  bot.chat=command=>sent.push(command);
+  const port=createMaidPort(bot,{timeoutMs:40});
+  const make={action:'make',maidId:maid,requestId:'craft-1',workshopId:'home',recipeId:'minecraft:torch'};
+  try {
+    assert.equal((await port.request(make)).status,'not_dispatched');
+    assert.deepEqual(sent,[]);
+    const transport=envelope('transport','transport',{requestChannel:MAID_REQUEST_CHANNEL,workshop:true});
+    bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(transport))});
+    const first=port.request(make), second=port.request(make);
+    assert.equal((await port.request({...make,quantity:8})).reason,'request_conflict');
+    const results=await Promise.all([first,second,port.request(make)]);
+    assert.deepEqual(results.map(result=>result.status),['unknown','unknown','unknown']);
+    assert.deepEqual(sent,[maidCommand(make).command]);
+  } finally {port.close();}
+});
+
+test('receipt ignores a different operation, action or malformed completion on the same query',async()=>{
+  const bot=client(),port=createMaidPort(bot,{timeoutMs:120});
+  const original={maidId:maid,actorId:recipient,action:'make',operationId:'craft-1',status:'completed',goalCompleted:true,
+    observation:{operationId:'craft-1',itemId:'minecraft:torch',quantity:4,count:4,inventory:'chest',verified:true,effectsApplied:true}};
+  const deliver=data=>bot._client.emit('custom_payload',{channel:MAID_CHANNEL,
+    data:Buffer.from(JSON.stringify(envelope('receipt','query-craft',data)))});
+  try {
+    const result=port.request({action:'receipt',maidId:maid,requestId:'query-craft',operationId:'craft-1',operationAction:'make'});
+    deliver({...original,operationId:'unrelated'});
+    deliver({...original,action:'follow'});
+    deliver({...original,observation:{...original.observation,count:0}});
+    deliver(original);
+    assert.deepEqual((await result).data,original);
+  } finally {port.close();}
+});
 test('command fallback resolves only authentic server system messages',async()=>{
   const bot=client(),port=createMaidPort(bot,{timeoutMs:1000});let done=false;
   const result=port.request({action:'context',maidId:maid,requestId:'ctx'}).then(r=>{done=true;return r;});

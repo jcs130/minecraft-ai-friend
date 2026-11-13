@@ -33,6 +33,10 @@
 
 更新后的 `mc_maids` 可以用 `workshop` 读取同一工位目录和 `currentOrder`，用 `make` 传 `maidId`、`requestId`、`workshopId`、`recipeId`，并按需传 `quantity`（成品件数）和 `inventory`（`chest` 或 `backpack`）。桥 0.1.30 起目录附 `table`、`supplyChest` 方块坐标。旧桥可走已有的普通命令入口，新的插件频道能力在发送前协商。
 
+客户端适配器以 `workshop:true` 握手或成功读取工位目录确认当前连接的工位能力。空目录也确认协议可用，使用前仍需取得获准的工位。未确认能力时，适配器会在发送前拒绝 `make`。同一连接中的同参制作请求复用第一次提交，改参复用 ID 返回 `request_conflict`。
+
+断线、超时和结果未知时，使用原 `operationId` 和 `operationAction:"make"` 查回执。`operationAction` 仅供适配器校验，查询命令格式不变。适配器核对收件人、查询 ID、女仆 UUID、原工单 ID 和原动作。制作完成须有 `data.status:"completed"`、`goalCompleted:true`，以及 `observation` 中的 `verified:true`、`itemId`、`count` 和 `inventory`。未知结果保留原 ID 对账。
+
 需要农场时，从 `tasks` 读取已启用的 `touhou_little_maid:farm`。先核对有权使用的耕地、工作时段与种子，再用 `task` 选择原生任务。`applied` 表示已切模式，采收和补种以方块、掉落或真实库存为准。用 `follow` 结束工作并恢复同行。
 
 在桥的插件数据目录 `workshops.json` 登记工位。示例 UUID 和坐标均需替换成实际站点信息：
