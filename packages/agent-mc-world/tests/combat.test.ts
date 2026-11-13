@@ -183,7 +183,7 @@ it('automatic defense keeps an equipped ready bow instead of drawing the invento
     await drive(bot,600,50);
     expect(equip).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
     expect(ranged.shots.length).toBeGreaterThan(0);
-    expect(events.some(e=>e.text.includes('保留已经拿好的弓'))).toBe(true);
+    expect(events.some(e=>e.text.includes('保留手里的远程武器'))).toBe(true);
   }finally{session.stop();}
 });
 
@@ -2043,9 +2043,76 @@ describe('空手低血:挨打的默认反应改成脱离', () => {
 });
 
 /**
- * queue:"now" 让战斗交还身体；低血时只让位给进食和撤离首步。
+ * queue:"now" 让战斗交还身体；低血时也允许显式换装完成其回执。
  */
 describe('standDown:queue:"now" 夺手', () => {
+  it.each([true, false])('低血试炼即时换弓确认=%s：换装持手直到回执，受击与巡检不抢回身体', async (confirmed) => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.2)]);
+    const native = bot as unknown as Bot;
+    const bow = { name: 'bow', type: 2, count: 1 };
+    const bag = [bow, { name: 'arrow', type: 3, count: 32 }];
+    const reports: TaskReport[] = [];
+    const said: string[] = [];
+    Object.assign(bot, {
+      heldItem: null, health: 5, game: { dimension: 'overworld' },
+      inventory: { items: () => bag, slots: Array(46).fill(null) },
+      equip: async (item: unknown) => {
+        await new Promise(resolve => setTimeout(resolve, 1_200));
+        if (!confirmed) throw new Error('服务端拒绝换手');
+        Object.assign(bot, { heldItem: item });
+      },
+      chat: (text: string) => said.push(text), deactivateItem: () => {},
+    });
+    let id = 0;
+    let exec: Executor;
+    const session = new CombatSession({ getBot: () => native,
+      tuning: () => ({ enabled: true, engageRadius: 3, chaseMax: 6, maxSec: 30, space: 2.6,
+        busyRatio: 60, cooldownSec: 60, fleeHealth: 10, fight: 'auto', arena: true }),
+      envBusy: () => false, taskEquipping: () => exec?.equipping ?? false,
+      suspendTasks: reason => exec.suspend(reason), resumeTasks: () => exec.resume(), emit: () => {}, log });
+    exec = new Executor({ getBot: () => native, report: r => reports.push(r), log, nextId: () => ++id,
+      busyWith: () => session.active ? '正在跟怪打' : null,
+      stopCombat: first => session.standDown(first) });
+    try {
+      session.onHurtBy(7, 'zombie');
+      expect(session.active).toBe(true);
+      exec.submit([{ skill: 'chat', text: '保留后续任务' }], 'append');
+      const receipt = exec.submit([{ skill: 'equip', item: 'bow', hand: 'main' }], 'now');
+      expect(receipt).toContain('已经放开手');
+      await waitUntil(() => exec.equipping);
+      session.start();
+      for (let i = 0; i < 4; i++) {
+        expect(session.onHurtBy(7, 'zombie')).toBe(true);
+        expect(session.react({ kind: 'engage', targetId: 7 })).toBe(false);
+        native.emit('physicsTick');
+        await sleep(200);
+        expect(session.active).toBe(false);
+        expect(native.heldItem).toBeNull();
+      }
+      expect(reports).toEqual([]);
+      expect(attacks).toEqual([]);
+      await waitUntil(() => reports.length === 2);
+      expect(reports[0].kind).toBe(confirmed ? 'done' : 'blocked');
+      expect(reports[0].text).toContain(confirmed ? '拿起了弓' : '服务端拒绝换手');
+      expect(native.heldItem?.name ?? null).toBe(confirmed ? 'bow' : null);
+      expect(said).toEqual(['保留后续任务']);
+      expect(exec.equipping).toBe(false);
+      await sleep(300);
+      expect(session.active).toBe(true);
+    } finally { session.stop(); exec.shutdown(); }
+  });
+
+  it('环境危机仍可阻止低血即时换装', () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 2.2)]);
+    Object.assign(bot, { health: 5 });
+    const { session, setEnvBusy } = rig(bot);
+    session.onHurtBy(7, 'zombie');
+    setEnvBusy(true);
+    expect(session.standDown({ skill: 'equip', item: 'iron_sword' })).toBeNull();
+    expect(session.active).toBe(true);
+    session.stop();
+  });
+
   it('容器游标无法归还时保留物品与窗口，不开始消费', async () => {
     const { bot } = combatRigBot([]);
     const apple = { name: 'golden_apple', type: 2, count: 2 };

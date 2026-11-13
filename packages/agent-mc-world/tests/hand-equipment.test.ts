@@ -68,6 +68,25 @@ function rig(denySwap = false, version = '1.20.6') {
 afterEach(() => vi.useRealTimers());
 
 describe('hand material server confirmation', () => {
+  it('cancelled explicit equip keeps late inventory acknowledgement but does not select or claim the weapon', async () => {
+    vi.useFakeTimers();
+    const r = rig(false, '1.21.1');
+    r.seed(9, 'bow'); r.seed(36, 'bread');
+    let cancelled = false;
+    const work = skillEquip(r.bot, { skill: 'equip', item: 'bow', hand: 'main' },
+      { aborted: () => cancelled } as never);
+    const failed = expect(work).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(100);
+    cancelled = true;
+    await vi.runAllTimersAsync();
+    await failed;
+    expect(r.sent).toEqual([9]);
+    expect(r.bot.quickBarSlot).toBe(0);
+    expect(r.bot.heldItem?.name).toBe('bread');
+    expect(r.server.slots[37]?.name).toBe('bow');
+    expect(r.server.selectedItem).toBeNull();
+  });
+
   it.each([false, true])('bow drawing waits for authoritative 1.21.1 equipment; refused=%s', async denied => {
     vi.useFakeTimers();
     const r = rig(denied, '1.21.1');

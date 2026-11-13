@@ -569,8 +569,10 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
       + (near.length > 0 ? `;名字带这几个字的有:${near.join('、')}` : ''));
   }
   const dest = call.hand === 'off' ? 'off-hand' : call.hand === 'main' ? 'hand' : equipDestOf(item.name, bot.registry);
-  if (dest === 'hand') await equipHandConfirmed(bot, item);
-  else await equipSlotConfirmed(bot, item, dest);
+  const checkActive = ctx ? () => checkAbort(ctx) : undefined;
+  if (dest === 'hand') await equipHandConfirmed(bot, item, checkActive);
+  else await equipSlotConfirmed(bot, item, dest, checkActive);
+  checkActive?.();
   // 点名拿的时候回执念全标签:「拿起了弓」答不了「拿的是无限那把吗」
   const what = call.pick ? pickLabel(pickTargetOf(item, bot.registry as never)) : itemCustomName(item) ?? zhName(item.name);
   if (dest === 'hand' && fromOffHand) {

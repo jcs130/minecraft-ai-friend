@@ -25,7 +25,9 @@ export interface CombatDecisionFrame {
   omittedCandidates: number;
   program?: CombatProgram;
   actionPool?: CombatCandidate[];
-  policy?: { name: string; sourceHash: string; instructions: string };
+  policy?: { name: string; sourceHash: string; instructions: string;
+    selection?: { native: Partial<Record<CombatCandidate['kind'], number>>;
+      offered: Partial<Record<CombatCandidate['kind'], number>>; excludedKinds: CombatCandidate['kind'][] } };
   /** A transient sample rejection does not disable the authored program. */
   programDeferred?: { reason: 'evaluation-in-progress' | 'scene-changed'; sourceHash: string };
 }
