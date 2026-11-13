@@ -24,6 +24,7 @@ public final class NativeMaidFollowSupport {
         int nativeRange(){return recoverBeyond-2;}
     }
     private static final Limits DEFAULT=new Limits(3,2,3,false);
+    private static final int GUARD_WALK = 4, GUARD_STOP = 3;
     public static Limits limits(EntityMaid maid){
         CompoundTag data=maid.getPersistentData();if(!data.contains(PROFILE))return DEFAULT;
         if(!data.contains(PROFILE,Tag.TAG_COMPOUND))throw new IllegalArgumentException("Invalid following profile");
@@ -54,7 +55,7 @@ public final class NativeMaidFollowSupport {
         if(owner.level()!=maid.level())return "different_dimension";
         return "";
     }
-    public void tick(EntityMaid maid){
+    public void tick(EntityMaid maid, boolean closingIn){
         MaidCompanionActions.expireWait(maid,System.currentTimeMillis());
         UUID id=maid.getUUID();LivingEntity owner=owner(maid);String reason=pause(maid,owner);
         if(!reason.isEmpty()){policy.clear(id);last.remove(id);return;}
@@ -70,15 +71,17 @@ public final class NativeMaidFollowSupport {
             if(limits.customized()&&target.isPresent()&&target.get().getTarget() instanceof EntityTracker tracker&&tracker.getEntity()==owner){maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);maid.getNavigationManager().resetNavigation();}
         }
         applyNativeRange(maid);
-        var decision=policy.observe(id,new MaidFollowPolicy.Point(maid.getX(),maid.getY(),maid.getZ()),new MaidFollowPolicy.Point(owner.getX(),owner.getY(),owner.getZ()),System.nanoTime(),limits.walkBeyond(),limits.recoverBeyond());
+        int walk = closingIn ? GUARD_WALK : limits.walkBeyond();
+        int stop = closingIn ? GUARD_STOP : limits.stopWithin();
+        var decision=policy.observe(id,new MaidFollowPolicy.Point(maid.getX(),maid.getY(),maid.getZ()),new MaidFollowPolicy.Point(owner.getX(),owner.getY(),owner.getZ()),System.nanoTime(),walk,Math.max(walk, limits.recoverBeyond()));
         if(decision==MaidFollowPolicy.Action.RECOVER){
             boolean moved=maid.teleportToOwner(owner);
             if(moved){maid.getNavigationManager().resetNavigation();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);}
             last.put(id,moved?"native_safe_recovery":"no_safe_landing");
         }else if(decision==MaidFollowPolicy.Action.WALK){
             var target=maid.getBrain().getMemory(MemoryModuleType.WALK_TARGET);
-            if(target.isEmpty()||!(target.get().getTarget() instanceof EntityTracker tracker)||tracker.getEntity()!=owner||target.get().getCloseEnoughDist()!=limits.stopWithin())
-                BehaviorUtils.setWalkAndLookTargetMemories(maid,owner,0.5F,limits.stopWithin());
+            if(target.isEmpty()||!(target.get().getTarget() instanceof EntityTracker tracker)||tracker.getEntity()!=owner||target.get().getCloseEnoughDist()!=stop)
+                BehaviorUtils.setWalkAndLookTargetMemories(maid,owner,0.5F,stop);
             if(!"no_safe_landing".equals(last.get(id)))last.put(id,"walk_requested");
         }else last.put(id,"within_follow_distance");
     }
@@ -95,7 +98,7 @@ public final class NativeMaidFollowSupport {
         out.addProperty("temporaryWait",MaidCompanionActions.waiting(maid));
         out.addProperty("waitUntilEpochMillis",maid.getPersistentData().getLong(MaidCompanionActions.WAIT));
         if(reason.equals("sitting")||reason.equals("home_mode"))out.addProperty("nextStep",MaidCompanionActions.waiting(maid)?"短暂停等结束后自动恢复跟随。":"当前处于驻守。可以在同维度近处说“肥鱼，跟我走”，也可用 /qdmaid follow <maidId> <新requestId> 立即切换。");
-        if(reason.equals("different_dimension"))out.addProperty("nextStep","主人与女仆不在同一维度；先通过正常传送入口会合，再查询，不按相似坐标判断在附近。");
+        if(reason.equals("different_dimension"))out.addProperty("nextStep","伙伴与女仆不在同一维度；可用 /qdmaid recall 召回，随后核对实际维度和位置。");
         if(reason.equals("native_work_or_combat"))out.addProperty("nextStep","当前工作或战斗由原生AI处理；闲置且非停留状态时才启用近距陪伴。");
         return out;
     }

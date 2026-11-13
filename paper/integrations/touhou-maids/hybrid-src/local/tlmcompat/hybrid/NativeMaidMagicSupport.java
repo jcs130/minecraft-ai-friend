@@ -13,6 +13,7 @@ import io.vortexcore.player.UnifiedPlayer;
 import io.vortexcore.progression.VortexAttribute;
 import io.vortexcore.rpg.NpcSpellAccess;
 import io.vortexcore.rpg.VortexClass;
+import local.tlmcompat.core.CompatibilityException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,6 +32,7 @@ import org.bukkit.entity.Player;
 final class NativeMaidMagicSupport {
     private static final String STAFF = "mage_apprentice_staff";
     private static final String MAGE = "mage";
+    private static final String STARTER_ISSUED = "qiandengji_mage_starter_issued";
     private static final double GUARD_RANGE = 8;
     private final VortexCorePlugin vortex;
     private final Map<UUID, Mana> manaByMaid = new HashMap<>();
@@ -61,6 +63,40 @@ final class NativeMaidMagicSupport {
         if (!STAFF.equals(items.resolveId(hand))) return null;
         return items.definition(STAFF).filter(item -> item.material() == hand.getType()
             && MAGE.equals(item.requiredClassId())).orElse(null);
+    }
+
+    JsonObject provisionStaff(EntityMaid maid) {
+        var inventory = maid.getMaidInv();
+        var out = new JsonObject();
+        out.addProperty("maidId", maid.getUUID().toString());
+        out.addProperty("staffId", STAFF);
+        if (staff(maid.getMainHandItem()) != null || staff(maid.getOffhandItem()) != null) {
+            out.addProperty("status", "already_equipped");
+            return out;
+        }
+        int free = -1;
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            var item = inventory.getStackInSlot(slot);
+            if (staff(item) != null) {
+                out.addProperty("status", "already_present");
+                out.addProperty("slot", slot);
+                return out;
+            }
+            if (free < 0 && item.isEmpty() && slot < NativeMaidInventory.capacity(maid)) free = slot;
+        }
+        if (maid.getPersistentData().getBoolean(STARTER_ISSUED)) {
+            throw new CompatibilityException("starter_already_issued", "已有初始法杖发放记录。请从个人箱或商城补充法杖。");
+        }
+        if (free < 0) throw new CompatibilityException("maid_inventory_full", "女仆已解锁背包没有空位。请先整理背包。");
+        var item = CraftItemStack.asNMSCopy(vortex.qiandengjiItems().create(STAFF, 1));
+        if (staff(item) == null || !inventory.isItemValid(free, item)) {
+            throw new CompatibilityException("rpg_item_unavailable", "当前 Vortex 配置未提供可用学徒法杖。");
+        }
+        inventory.setStackInSlot(free, item);
+        maid.getPersistentData().putBoolean(STARTER_ISSUED, true);
+        out.addProperty("status", "issued");
+        out.addProperty("slot", free);
+        return out;
     }
 
     record Opportunity(String state, Attempt attempt) {}

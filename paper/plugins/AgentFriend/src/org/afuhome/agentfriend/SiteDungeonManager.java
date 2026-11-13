@@ -1056,6 +1056,23 @@ final class SiteDungeonManager implements Listener {
     private boolean owned(Entity e){return e!=null&&e.getScoreboardTags().contains(TAG);}
     private Run owner(Entity e){if(e==null)return null;Shot shot=shots.get(e.getUniqueId());if(shot!=null)return shot.run;if(!owned(e))return null;return runs.values().stream().filter(r->r.mobs.containsKey(e.getUniqueId())).findFirst().orElse(null);}
     private Entity actor(Entity e){if(e instanceof Projectile p){ProjectileSource source=p.getShooter();return source instanceof Entity a?a:null;}return e;}
+    private boolean companionCombatPosition(Run run, Player player, Location position) {
+        return ready && run != null
+            && run.phase.equals("fighting") && run.fault.isEmpty() && run.pausedAt == 0 && !run.invalid
+            && run.party.contains(player.getUniqueId())
+            && position.getWorld().equals(player.getWorld()) && player.getWorld().getName().equals(run.site.world())
+            && run.room().contains(player.getLocation()) && run.room().contains(position);
+    }
+    boolean companionCombatPosition(Player player, Location position) {
+        return companionCombatPosition(own(player), player, position);
+    }
+    boolean companionCombatTarget(Player player, Entity companion, Entity target) {
+        if (!owned(target)) return false;
+        Run run = owner(target);
+        return companionCombatPosition(run, player, companion.getLocation())
+            && run.mobs.containsKey(target.getUniqueId()) && target.getWorld().equals(player.getWorld())
+            && run.room().contains(target.getLocation());
+    }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void target(EntityTargetLivingEntityEvent e){Run r=owner(e.getEntity());if(r!=null&&e.getTarget()!=null&&!(e.getTarget() instanceof Player p&&playing(p)&&!plugin.isDowned(p)&&r.party.contains(p.getUniqueId())&&r.room().contains(p.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void damage(EntityDamageByEntityEvent e){
         Run from=owner(e.getDamager());if(from==null)from=owner(actor(e.getDamager()));Run to=owner(e.getEntity());

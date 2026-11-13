@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import local.tlmcompat.core.CompatibilityException;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.neoforged.neoforge.common.CommonHooks;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -115,6 +117,44 @@ final class NativeMaidOwnerTravel implements Listener {
         if (!canTravel(owner) || stage < 1 || !owner.getWorld().equals(from.getWorld())) return;
         Trip trip = capture(owner, from, owner.getLocation(), false, stage);
         if (trip != null) scheduleArrival(trip, trip.destination());
+    }
+
+    Location recallLanding(Player owner) {
+        if (!canTravel(owner)) {
+            throw new CompatibilityException("actor_unavailable", "本人使用存活的游戏角色后再召回伙伴。");
+        }
+        Location landing = safe(owner.getLocation(), candidate -> true, true);
+        if (landing == null) {
+            throw new CompatibilityException("no_safe_landing", "请站到附近有实心地面和两格净空的位置，再召回伙伴。");
+        }
+        return landing;
+    }
+
+    void recoverFollowing(EntityMaid maid, Player owner) {
+        Location origin = maid.getBukkitEntity().getLocation();
+        Location target = owner.getLocation();
+        if (!canTravel(owner) || maid.isSleeping() || maid.isPassenger() || maid.isVehicle()
+                || maid.isMaidInSittingPose() || maid.isHomeModeEnable() || maid.isNoAi() || !maid.canBrainMoving()
+                || plugin.editingMaidInventory(maid) || plugin.workshops().busy(maid.getUUID())
+                || !maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE)) return;
+        int range;
+        try {
+            range = NativeMaidFollowSupport.limits(maid).recoverBeyond();
+        } catch (IllegalArgumentException invalidProfile) {
+            return;
+        }
+        boolean combat = plugin.companionCombatPosition(owner, target);
+        if (origin.getWorld().equals(target.getWorld()) && origin.distanceSquared(target) <= range * range
+                && (!combat || plugin.companionCombatPosition(owner, origin))) return;
+        Location landing = safe(target, candidate -> !combat || plugin.companionCombatPosition(owner, candidate), true);
+        if (landing == null || !transfer(maid, landing)) return;
+        EntityMaid arrived = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(maid.getUUID()));
+        if (arrived != null) {
+            arrived.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            arrived.getBrain().eraseMemory(MemoryModuleType.PATH);
+            arrived.getNavigation().stop();
+            plugin.rememberResidenceDeparture(arrived);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -257,15 +297,32 @@ final class NativeMaidOwnerTravel implements Listener {
         return safe(centre, candidate -> true);
     }
     private static Location safe(Location centre, Predicate<Location> allowed){
+        return safe(centre, allowed, false);
+    }
+    private static Location safe(Location centre, Predicate<Location> allowed, boolean fallbackToOwner) {
         World world=centre.getWorld();
-        for(int dy:new int[]{0,1,-1,2})for(int[] offset:new int[][]{{1,0},{-1,0},{0,1},{0,-1},{1,1},{-1,-1}}){
-            int x=centre.getBlockX()+offset[0],y=centre.getBlockY()+dy,z=centre.getBlockZ()+offset[1];
-            if(y<=world.getMinHeight()||y+2>=world.getMaxHeight()||!world.isChunkLoaded(x>>4,z>>4))continue;
-            Location at=new Location(world,x+0.5,y,z+0.5,centre.getYaw(),0);
-            if(!world.getWorldBorder().isInside(at))continue;
-            var floor=world.getBlockAt(x,y-1,z);var feet=world.getBlockAt(x,y,z);var head=world.getBlockAt(x,y+1,z);
-            if(floor.getType().isSolid()&&floor.getType().isOccluding()&&feet.getType().isAir()&&head.getType().isAir()
-                &&!Set.of(Material.MAGMA_BLOCK,Material.CACTUS,Material.CAMPFIRE,Material.SOUL_CAMPFIRE).contains(floor.getType())&&allowed.test(at))return at;
-        }return null;
+        int[][] offsets = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{-1,-1},{1,-1},{-1,1}};
+        for (int dy : new int[]{0,1,-1,2}) {
+            for (int[] offset : offsets) {
+                Location at = new Location(world, centre.getBlockX()+offset[0]+.5, centre.getBlockY()+dy,
+                    centre.getBlockZ()+offset[1]+.5, centre.getYaw(), 0);
+                if (safeBlock(at) && allowed.test(at)) return at;
+            }
+        }
+        if (!fallbackToOwner) return null;
+        Location ownerBlock = new Location(world, centre.getBlockX()+.5, centre.getBlockY(), centre.getBlockZ()+.5,
+            centre.getYaw(), 0);
+        return safeBlock(ownerBlock) && allowed.test(ownerBlock) ? ownerBlock : null;
+    }
+
+    private static boolean safeBlock(Location at) {
+        World world = at.getWorld();
+        int x = at.getBlockX(), y = at.getBlockY(), z = at.getBlockZ();
+        if (y <= world.getMinHeight() || y + 1 >= world.getMaxHeight()
+                || !world.isChunkLoaded(x >> 4, z >> 4) || !world.getWorldBorder().isInside(at)) return false;
+        Material floor = world.getBlockAt(x, y - 1, z).getType();
+        return floor.isSolid() && floor.isOccluding() && world.getBlockAt(x,y,z).getType().isAir()
+            && world.getBlockAt(x,y+1,z).getType().isAir()
+            && !Set.of(Material.MAGMA_BLOCK,Material.CACTUS,Material.CAMPFIRE,Material.SOUL_CAMPFIRE).contains(floor);
     }
 }

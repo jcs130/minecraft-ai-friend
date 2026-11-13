@@ -34,6 +34,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.world.WorldSaveEvent;
 
 /** The original companion can patrol one configured chunk without a connected owner. */
@@ -43,6 +44,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     private static final int REJOIN_DISTANCE = 24;
     private static final long REUNION_RETRY = 15 * SECOND;
     private static final int MAX_SOURCE_TICKET_SECONDS = 12;
+    private static final long RECONNECT_GRACE = 90 * SECOND;
 
     private record Config(UUID maid, UUID owner, NamespacedKey world, List<BlockPos> route) {
         BlockPos home() { return route.getFirst(); }
@@ -64,6 +66,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     private long originalDeadline;
     private long nextAttempt;
     private long nextReunionAttempt;
+    private long offlineSince = System.nanoTime();
     private long nextLeg;
     private long legDeadline;
     private long nextGreeting;
@@ -120,8 +123,17 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void quit(PlayerQuitEvent event) {
         if (!config.owner().equals(event.getPlayer().getUniqueId()) || !registered()) return;
+        offlineSince = System.nanoTime();
         EntityMaid maid = original();
         if (maid != null) plugin.rememberResidenceDeparture(maid);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void join(PlayerJoinEvent event) {
+        if (!config.owner().equals(event.getPlayer().getUniqueId())) return;
+        sourceTried = false;
+        nextAttempt = 0;
+        nextReunionAttempt = 0;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -164,12 +176,17 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         EntityMaid maid = original();
         Player partner = Bukkit.getPlayer(config.owner());
         if (partner != null && maid != null && !resident(maid)) {
+            if (playable(partner) && available(maid) && !maid.isHomeModeEnable() && now >= nextReunionAttempt) {
+                nextReunionAttempt = now + REUNION_RETRY;
+                travel.recoverFollowing(maid, partner);
+            }
             state = "partner_online";
             sourceTried = false;
             releaseSource();
             releaseHome();
             return;
         }
+        if (partner == null && (maid == null || !resident(maid)) && now - offlineSince < RECONNECT_GRACE) return;
         if (maid == null && homeChunk == null && sourceTried) return;
         if (maid != null) {
             if (!resident(maid) && !eligible(maid)) {
@@ -206,9 +223,8 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
             if (partner == null) returnHome(maid, world, now);
             return;
         }
-        if (playable(partner) && partner.getWorld().equals(world)
-            && maid.getBukkitEntity().getWorld().equals(world) && available(maid)) {
-            if (reunite(maid, partner, world, now)) return;
+        if (playable(partner) && available(maid)) {
+            if (reunite(maid, partner, now)) return;
             state = "awaiting_safe_reunion";
         } else {
             state = partner == null ? "resident_patrol" : "awaiting_partner_at_home";
@@ -220,45 +236,34 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         patrol(maid, world, now);
     }
 
-    private boolean reunite(EntityMaid maid, Player partner, World world, long now) {
-        int recoveryRange;
+    private boolean reunite(EntityMaid maid, Player partner, long now) {
+        if (now < nextReunionAttempt) return false;
+        nextReunionAttempt = now + REUNION_RETRY;
+        Location current = maid.getBukkitEntity().getLocation();
+        Location target = partner.getLocation();
+        EntityMaid arrived = maid;
         try {
-            recoveryRange = Math.max(REJOIN_DISTANCE, NativeMaidFollowSupport.limits(maid).recoverBeyond());
-        } catch (IllegalArgumentException invalidProfile) {
+            NativeMaidFollowSupport.limits(maid);
+            if (!current.getWorld().equals(target.getWorld()) || current.distanceSquared(target) > REJOIN_DISTANCE * REJOIN_DISTANCE) {
+                Location landing = travel.recallLanding(partner);
+                if (!travel.transfer(maid, landing)) return false;
+                arrived = original();
+                if (arrived == null || !near(arrived.getBukkitEntity(), landing.getWorld(),
+                        BlockPos.containing(landing.getX(), landing.getY(), landing.getZ()), 1)) return false;
+            }
+        } catch (local.tlmcompat.core.CompatibilityException | IllegalArgumentException unavailable) {
             return false;
         }
-        if (!near(partner, world, config.home(), REJOIN_DISTANCE)) {
-            if (now < nextReunionAttempt) return false;
-            nextReunionAttempt = now + REUNION_RETRY;
-            Location partnerLocation = partner.getLocation();
-            boolean recover = maid.getBukkitEntity().getLocation().distanceSquared(partnerLocation)
-                > (double) recoveryRange * recoveryRange;
-            Location landing = recover ? NativeMaidOwnerTravel.safe(partnerLocation) : partnerLocation;
-            if (landing == null || !mayRejoin(partner, landing)) return false;
-            if (recover && !travel.transfer(maid, landing)) return false;
-        }
-        releasePatrol(maid);
-        restoreSchedule(maid);
-        MaidCompanionActions.follow(maid);
+        releasePatrol(arrived);
+        restoreSchedule(arrived);
+        MaidCompanionActions.follow(arrived);
+        plugin.rememberResidenceDeparture(arrived);
         state = "partner_online";
         sourceTried = false;
         nextReunionAttempt = 0;
+        releaseSource();
         releaseHome();
         return true;
-    }
-
-    private static boolean mayRejoin(Player partner, Location landing) {
-        var agentFriend = Bukkit.getPluginManager().getPlugin("AgentFriend");
-        if (agentFriend == null) return true;
-        if (!agentFriend.isEnabled()) return false;
-        try {
-            var access = Class.forName("org.afuhome.agentfriend.CompanionTravelAccess", true,
-                agentFriend.getClass().getClassLoader());
-            return Boolean.TRUE.equals(access.getMethod("mayRejoin", Player.class, Location.class)
-                .invoke(null, partner, landing));
-        } catch (ReflectiveOperationException | LinkageError unavailable) {
-            return false;
-        }
     }
 
     private boolean eligible(EntityMaid maid) {
@@ -500,7 +505,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         out.addProperty("patrolVisitsThisRun", visits);
         out.addProperty("rejoinDistance", REJOIN_DISTANCE);
         if (state.equals("awaiting_safe_reunion")) {
-            out.addProperty("nextStep", "伙伴已在同一维度。女仆会在允许传送且有安全落点时自动会合；副本内先继续挑战，结束后到有地面和两格净空处即可。");
+            out.addProperty("nextStep", "女仆会自动寻找你附近的安全落点，支持跨维度和副本。也可用 /qdmaid recall 主动召回。");
         }
         World world = Bukkit.getWorld(config.world());
         out.addProperty("holdingResidenceChunk", world != null && world.getPluginChunkTickets(
