@@ -56,6 +56,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.entity.PotionSplashEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -79,7 +80,7 @@ final class DungeonManager implements Listener {
     private static final int X = -590, Z = -305, WING_X = -510, WING_Z = -305, CHALLENGE_X = -350;
     private static final int LOBBY_Y = 90, RADIUS = 12, BASE_FLOORS = 6, REST_FLOOR = 7,
             BOSS_FLOOR = 10, OLD_MAX_FLOOR = 10, FINAL_FLOOR = 15;
-    private static final int LAVA_FLOOR = 13, LAVA_FLOOR_BURN_TICKS = 60;
+    private static final int BLAZE_FLOOR = 4, LAVA_FLOOR = 13, LAVA_FLOOR_BURN_TICKS = 60;
     private static final int[] Y = {68, 56, 44, 32, 20, 8, -4, -16, -28, -40,
             -40, -28, -16, -4, 8};
     private static final int[] RADII = {12, 12, 12, 12, 12, 12, 16, 18, 18, 20,
@@ -97,6 +98,7 @@ final class DungeonManager implements Listener {
     private static final int TRIAL_SCHEMA_VERSION = 1;
     private static final com.google.gson.Gson JSON = new com.google.gson.Gson();
     private static final String MOB_TAG = "afu_dungeon_mob";
+    private static final String FIREBALL_TAG = "afu_trial_fireball";
     private static final String REWARDS = "dungeon-rewards.";
     private static final String BONUS_ITEMS = "dungeon-bonus-items.";
     private static final String STASH = "dungeon-personal-stash.";
@@ -280,7 +282,8 @@ final class DungeonManager implements Listener {
         if (built) {
             cleanupMobs();
             updateFloorGuides();
-            if (challengeBuilt) clearLavaFloorFire();
+            clearFloorFire(BLAZE_FLOOR);
+            if (challengeBuilt) clearFloorFire(LAVA_FLOOR);
             if (expanded) ensureMerchants();
             restoreRun();
         }
@@ -508,6 +511,10 @@ final class DungeonManager implements Listener {
         return null;
     }
     boolean deniesEdit(Location at) { return inBuild(at); }
+
+    boolean mayExtinguishTrialFire(Player caster, Location fire) {
+        return built && active && pausedAt == 0 && validParticipantTarget(caster) && inFloor(fire, floor);
+    }
 
     private Location lobbyButton() {
         return new Location(world(), X - 5.5, LOBBY_Y + 2.5, Z - 7.5);
@@ -865,7 +872,7 @@ final class DungeonManager implements Listener {
     }
 
     private int enterFloor(int number, List<Player> group) {
-        if (number == LAVA_FLOOR && !group.isEmpty()) clearLavaFloorFire();
+        if ((number == BLAZE_FLOOR || number == LAVA_FLOOR) && !group.isEmpty()) clearFloorFire(number);
         Set<UUID> arrived = new HashSet<>();
         Set<UUID> disconnected = new HashSet<>();
         if (active) for (UUID id : participants)
@@ -886,6 +893,8 @@ final class DungeonManager implements Listener {
                 if (number == LAVA_FLOOR) {
                     player.sendMessage(ChatColor.GOLD + "第 13 层岩浆仍会伤人；走中央石桥，离开火源后灼烧会更快消退。");
                     player.sendMessage("MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false");
+                }
+                if (number == BLAZE_FLOOR || number == LAVA_FLOOR) {
                     player.sendMessage(ChatColor.AQUA + "着火或遇到明火时，/mycli cast frostnova 可以灭火；技能说明 /mycli skills info frostnova。");
                 }
             } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍；/mycli arena status 核对场次，不要隔层追怪；把楼层和时间告知服主检查落点。");
@@ -1362,10 +1371,28 @@ final class DungeonManager implements Listener {
     public void onTrialProjectileLaunch(ProjectileLaunchEvent event) {
         Entity source = attacker(event.getEntity());
         if (!trialMob(source)) return;
-        if (floor == LAVA_FLOOR && event.getEntity() instanceof SmallFireball fireball) {
+        if (event.getEntity() instanceof SmallFireball fireball) {
             fireball.setIsIncendiary(false);
+            fireball.addScoreboardTag(FIREBALL_TAG);
         }
         lastMobProjectileAt.put(source.getUniqueId(), System.currentTimeMillis());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onTrialFireballHit(ProjectileHitEvent event) {
+        if (!(event.getEntity() instanceof SmallFireball fireball)
+                || event.getHitBlock() == null || event.getHitBlockFace() == null) return;
+        if (!fireball.getScoreboardTags().contains(FIREBALL_TAG) && !trialMob(attacker(fireball))) return;
+        Block landing = event.getHitBlock().getRelative(event.getHitBlockFace());
+        World world = landing.getWorld();
+        int chunkX = landing.getX() >> 4, chunkZ = landing.getZ() >> 4;
+        if (!inBuild(landing.getLocation()) || !world.isChunkLoaded(chunkX, chunkZ)) return;
+        Material before = landing.getType();
+        if (!before.isAir()) return;
+        // Youer's NeoForge fireball can place fire after this event without a Bukkit ignite event.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (world.isChunkLoaded(chunkX, chunkZ) && isFire(landing.getType())) landing.setType(before, false);
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -2670,11 +2697,11 @@ final class DungeonManager implements Listener {
         if (number > OLD_MAX_FLOOR) buildChallengeTerrain(w, number);
     }
 
-    private void clearLavaFloorFire() {
+    private void clearFloorFire(int number) {
         World w = world();
         if (w == null) return;
-        int y = Y[LAVA_FLOOR - 1], r = radius(LAVA_FLOOR);
-        int fx = floorX(LAVA_FLOOR), fz = floorZ(LAVA_FLOOR), clearedFires = 0;
+        int y = Y[number - 1], r = radius(number);
+        int fx = floorX(number), fz = floorZ(number), clearedFires = 0;
         for (int dx = 1 - r; dx < r; dx++) for (int dz = 1 - r; dz < r; dz++) {
             for (int dy = 0; dy < 7; dy++) {
                 Block block = w.getBlockAt(fx + dx, y + dy, fz + dz);
@@ -2684,7 +2711,7 @@ final class DungeonManager implements Listener {
                 }
             }
         }
-        if (clearedFires > 0) plugin.getLogger().info("Trial lava floor residual fires cleared: " + clearedFires);
+        if (clearedFires > 0) plugin.getLogger().info("Trial floor " + number + " residual fires cleared: " + clearedFires);
     }
 
     private static boolean isFire(Material material) {
@@ -2800,7 +2827,7 @@ final class DungeonManager implements Listener {
     @EventHandler public void onBurn(BlockBurnEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onIgnite(BlockIgniteEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onFireSpread(BlockSpreadEvent event) {
-        if (built && isFire(event.getNewState().getType()) && inFloor(event.getBlock().getLocation(), LAVA_FLOOR)) {
+        if (isFire(event.getNewState().getType()) && inBuild(event.getBlock().getLocation())) {
             event.setCancelled(true);
         }
     }

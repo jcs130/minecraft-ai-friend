@@ -39,9 +39,6 @@ final class FrostControl {
         List<Block> fire = new ArrayList<>();
         var world = caster.getWorld();
         var eye = caster.getEyeLocation();
-        ProtectionArea trialRoom = plugin.dungeon().protectionArea(center);
-        boolean inLavaTrial = trialRoom != null && trialRoom.id().equals("trial_floor_13")
-                && plugin.dungeon().challengeContext(caster.getUniqueId()).endsWith(":13");
         for (int x = center.getBlockX() - 6; x <= center.getBlockX() + 6; x++) {
             for (int z = center.getBlockZ() - 6; z <= center.getBlockZ() + 6; z++) {
                 if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
@@ -51,8 +48,7 @@ final class FrostControl {
                     if (center.distanceSquared(at) > RADIUS_SQUARED) continue;
                     Block block = world.getBlockAt(x, y, z);
                     if (!isFire(block.getType()) || !visible(eye, at)) continue;
-                    boolean trialFire = inLavaTrial && trialRoom.contains(at);
-                    if (!trialFire && !mayRemove(plugin, caster, block)) continue;
+                    if (!plugin.dungeon().mayExtinguishTrialFire(caster, at) && !mayRemove(plugin, caster, block)) continue;
                     var air = block.getState();
                     air.setType(Material.AIR);
                     if (new BlockFadeEvent(block, air).callEvent()) fire.add(block);
