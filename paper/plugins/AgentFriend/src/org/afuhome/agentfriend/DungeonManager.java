@@ -253,8 +253,6 @@ final class DungeonManager implements Listener {
     private long floorStartedAt;
     private long spawnAt;
     private long advanceAt;
-    private record FloorTransfer(Player player, Location from, Location to, int stage) {}
-    private FloorTransfer floorTransfer;
     private long pausedAt;
     private long outsideSince;
     private long lastRun;
@@ -467,17 +465,9 @@ final class DungeonManager implements Listener {
         for (int n = 1; n <= maxFloor(); n++) if (inFloor(at, n)) return n;
         return 0;
     }
-    int companionTrialDeparture(Player player, Location from, Location to) {
-        FloorTransfer transfer = floorTransfer;
-        return transfer != null && transfer.player() == player && sameLanding(transfer.from(), from)
-            && sameLanding(transfer.to(), to) ? transfer.stage() : 0;
-    }
     boolean companionTrialArrival(Player player, int stage, Location landing) {
         return isParticipant(player) && pausedAt == 0 && floor == stage && committedCurrentRun()
             && inFloor(player.getLocation(), stage) && inFloor(landing, stage);
-    }
-    private static boolean sameLanding(Location expected, Location actual) {
-        return actual != null && expected.getWorld().equals(actual.getWorld()) && expected.distanceSquared(actual) < 0.01;
     }
     private boolean inBuild(Location at) {
         if (!built || !sameWorld(at)) return false;
@@ -918,14 +908,12 @@ final class DungeonManager implements Listener {
         return arrived.size();
     }
     private boolean sendToFloor(Player player, Location landing, int number) {
-        floorTransfer = new FloorTransfer(player, player.getLocation(), landing.clone(), number);
-        try {
-            if (number == REST_FLOOR && !active)
-                return plugin.travelMagic().teleport(player, landing, "arena:rest", "深层驿站传送术", TravelMagic.DISTANT_MANA);
-            return player.teleport(landing);
-        } finally {
-            floorTransfer = null;
-        }
+        Location from=player.getLocation();
+        boolean arrived = number == REST_FLOOR && !active
+            ? plugin.travelMagic().teleport(player, landing, "arena:rest", "深层驿站传送术", TravelMagic.DISTANT_MANA)
+            : player.teleport(landing);
+        if (arrived && inFloor(player.getLocation(), number)) CompanionTravelAccess.followTrialTransfer(player, from, number);
+        return arrived;
     }
 
     private Location center(int number) {

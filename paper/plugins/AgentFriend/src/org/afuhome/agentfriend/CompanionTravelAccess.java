@@ -14,10 +14,17 @@ public final class CompanionTravelAccess {
             && !plugin.namedTravelActivityArea(partner.getLocation()) && !plugin.namedTravelActivityArea(landing);
     }
 
-    public static int trialDeparture(Player partner, Location from, Location to) {
-        if (!(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
-                || !plugin.isEnabled() || !plugin.nativeRpgMayAct(partner)) return 0;
-        return plugin.dungeon().companionTrialDeparture(partner, from, to);
+    static void followTrialTransfer(Player partner, Location from, int stage) {
+        var maids=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
+        if (maids == null || !maids.isEnabled()) return;
+        try {
+            maids.getClass().getMethod("followTrialTransfer", Player.class, Location.class, int.class)
+                .invoke(maids, partner, from, stage);
+        } catch (NoSuchMethodException unsupported) {
+            // The companion bridge is optional and can be rolled back independently.
+        } catch (ReflectiveOperationException | LinkageError failure) {
+            maids.getLogger().warning("Trial companion transfer unavailable: "+failure.getClass().getSimpleName());
+        }
     }
 
     public static boolean trialArrival(Player partner, int stage, Location landing) {

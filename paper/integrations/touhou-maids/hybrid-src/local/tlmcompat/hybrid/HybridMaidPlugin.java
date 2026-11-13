@@ -55,6 +55,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidCompanionSupport companion;
     private NativeMaidWorkshop workshops;
     private NativeMaidResidence residence;
+    private NativeMaidOwnerTravel ownerTravel;
+    public void followTrialTransfer(Player partner, Location from, int stage) {
+        if (Bukkit.isPrimaryThread() && ownerTravel!=null) ownerTravel.followTrialTransfer(partner,from,stage);
+    }
     NativeMaidWorkshop workshops(){return workshops;}
     boolean editingMaidInventory(EntityMaid maid){return maid.guiOpening||menus!=null&&menus.editing(maid);}
     boolean guardWeaponReady(EntityMaid maid){return companion!=null&&companion.guardWeaponReady(maid);}
@@ -145,6 +149,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             brains=NativeMaidBrainSupport.create(this);
             companion=new NativeMaidCompanionSupport(this);
             NativeMaidOwnerTravel travel=new NativeMaidOwnerTravel(this);
+            ownerTravel=travel;
             residence=NativeMaidResidence.open(this,travel);
             social=new NativeMaidSocialSupport(this,receipts);
             nearbyChat=new NativeMaidNearbyChat(this);

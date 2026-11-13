@@ -79,10 +79,8 @@ final class NativeMaidOwnerTravel implements Listener {
                 if (corrections.get(ownerId) == correction) corrections.remove(ownerId);
             });
         }
-        int trialStage = !portal && event.getCause() == PlayerTeleportEvent.TeleportCause.PLUGIN
-            ? trialDeparture(owner, from, destination) : 0;
-        if (!changesWorld && (portal || trialStage == 0 && from.distanceSquared(destination) < LEGACY_RANGE * LEGACY_RANGE)) return;
-        Trip trip = capture(owner, from, destination, portal, trialStage);
+        if (!changesWorld && (portal || from.distanceSquared(destination) < LEGACY_RANGE * LEGACY_RANGE)) return;
+        Trip trip = capture(owner, from, destination, portal, 0);
         if (trip == null) return;
 
         if (trip.changesWorld()) {
@@ -111,6 +109,12 @@ final class NativeMaidOwnerTravel implements Listener {
         Trip trip = new Trip(owner, from.getWorld(), destination.clone(), portal, trialStage, List.copyOf(companions));
         pending.put(ownerId, trip);
         return trip;
+    }
+
+    void followTrialTransfer(Player owner, Location from, int stage) {
+        if (!canTravel(owner) || stage < 1 || !owner.getWorld().equals(from.getWorld())) return;
+        Trip trip = capture(owner, from, owner.getLocation(), false, stage);
+        if (trip != null) scheduleArrival(trip, trip.destination());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -239,22 +243,12 @@ final class NativeMaidOwnerTravel implements Listener {
         }
     }
 
-    private static Class<?> trialAccess() throws ClassNotFoundException {
-        var agentFriend = Bukkit.getPluginManager().getPlugin("AgentFriend");
-        return agentFriend == null || !agentFriend.isEnabled() ? null : Class.forName(
-            "org.afuhome.agentfriend.CompanionTravelAccess", false, agentFriend.getClass().getClassLoader());
-    }
-    private static int trialDeparture(Player owner, Location from, Location to) {
-        try {
-            Class<?> access = trialAccess();
-            return access == null ? 0 : (int) access.getMethod("trialDeparture", Player.class, Location.class, Location.class)
-                .invoke(null, owner, from, to);
-        } catch (ReflectiveOperationException | LinkageError unavailable) { return 0; }
-    }
     private static boolean trialArrival(Player owner, int stage, Location landing) {
+        var agentFriend = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (agentFriend == null || !agentFriend.isEnabled()) return false;
         try {
-            Class<?> access = trialAccess();
-            return access != null && Boolean.TRUE.equals(access.getMethod("trialArrival", Player.class, int.class, Location.class)
+            Class<?> access = Class.forName("org.afuhome.agentfriend.CompanionTravelAccess", false, agentFriend.getClass().getClassLoader());
+            return Boolean.TRUE.equals(access.getMethod("trialArrival", Player.class, int.class, Location.class)
                 .invoke(null, owner, stage, landing));
         } catch (ReflectiveOperationException | LinkageError unavailable) { return false; }
     }
