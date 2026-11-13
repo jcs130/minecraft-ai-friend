@@ -66,11 +66,11 @@ async function maidAction(bot, action, request) {
     const reply=await ask(bot,'/qdmaid '+action+' '+maid+' '+request,line=>line.startsWith('QD_MAID ')&&line.includes(request));
     return JSON.parse(reply.slice(reply.indexOf('{')));
 }
-async function floor(dimension,x,y,z) {
-    await mc(`execute in ${dimension} run forceload add ${x-3} ${z-3} ${x+3} ${z+3}`);
+async function floor(dimension,x,y,z,radius=3) {
+    await mc(`execute in ${dimension} run forceload add ${x-radius} ${z-radius} ${x+radius} ${z+radius}`);
     await until(async()=>(await mc(`execute in ${dimension} if loaded ${x} ${y} ${z}`)).includes('Test passed'),'loaded '+dimension);
-    assert.match(await mc(`execute in ${dimension} run fill ${x-3} ${y-1} ${z-3} ${x+3} ${y-1} ${z+3} stone`),/filled|changed|No blocks/i);
-    await mc(`execute in ${dimension} run fill ${x-3} ${y} ${z-3} ${x+3} ${y+2} ${z+3} air`);
+    assert.match(await mc(`execute in ${dimension} run fill ${x-radius} ${y-1} ${z-radius} ${x+radius} ${y-1} ${z+radius} stone`),/filled|changed|No blocks/i);
+    await mc(`execute in ${dimension} run fill ${x-radius} ${y} ${z-radius} ${x+radius} ${y+2} ${z+radius} air`);
 }
 async function setup(owner) {
     await mc('gamerule doMobSpawning false');
@@ -82,7 +82,7 @@ async function setup(owner) {
         await mc(`item replace entity ${ownerName} armor.${slot} with minecraft:iron_${item}`);
     for (const [item,n] of [['iron_sword',1],['bow',1],['arrow',16]]) await mc(`give ${ownerName} minecraft:${item} ${n}`);
     if (!await position(maid)) {
-        await mc(`summon touhou_little_maid:maid -593.5 92 -312.5 {UUID:[I;${token(maid)}],Owner:[I;${token(fixture.owner)}],CustomName:'"SyntheticGuard"',PersistenceRequired:1b,Invulnerable:1b}`);
+        await mc(`summon touhou_little_maid:maid -593.5 92 -312.5 {UUID:[I;${token(maid)}],Owner:[I;${token(fixture.owner)}],CustomName:'"SyntheticGuard"',PersistenceRequired:1b,Invulnerable:1b,NeoForgeData:{qiandengji_follow:{schemaVersion:1,walkDistance:32,stopDistance:16,returnDistance:64}}}`);
     } else await teleport(maid,'minecraft:overworld',-593.5,92,-312.5);
     await until(async()=>close(await position(maid),await position(ownerName),9),'synthetic maid and owner together');
     check('bound original synthetic owner',owner.player.uuid===fixture.owner);
@@ -129,19 +129,30 @@ async function tower(owner) {
 }
 async function site(owner) {
     const context=async()=> (await maidAction(owner,'context','site'+Date.now())).data;
-    await floor('minecraft:overworld',3200,81,2400);
-    await teleport(ownerName,'minecraft:overworld',3200.5,81,2400.5);
+    await floor('minecraft:overworld',3200,81,2400,6);
+    await teleport(ownerName,'minecraft:overworld',3205.5,81,2400.5);
     const joined=await until(async()=>close(await position(maid),await position(ownerName),4),'companion on the site entrance',25000);
     assert(joined);
     const previous=(await context()).companion.rpg.lastHitTargetId;
+    await teleport(maid,'minecraft:overworld',3195.5,81,2400.5);
     const result=JSON.parse((await ask(owner,'/mycli dungeon start qa_guard_own --json',
         line=>line.startsWith('MC_SITE_DUNGEON_RESULT '))).split('MC_SITE_DUNGEON_RESULT ')[1]);
     assert(result.success,JSON.stringify(result));
+    const waiting=(await context()).ownerDistance;
+    check('outside combat, the 32/16 walking profile still keeps the ten-block gap',waiting>8);
     const found=await until(async()=>{
         const output=await rc('mycli admin dungeonaudit');
         return /SITE id=qa_guard_own .*phase=fighting/.test(output) && output;
     },'actual site run and mob');
     check('site party enters through its usual gate',found.includes('party=1'));
+    await until(async()=>{
+        const state=await context();
+        const audit=await rc('mycli admin dungeonaudit');
+        report.approach={distance:state.ownerDistance,position:state.position,guard:state.companion.state,
+            owner:await position(ownerName),line:audit.split(/\r?\n/).find(line=>line.includes('SITE id=qa_guard_own '))};
+        return state.ownerDistance<7;
+    },'armed companion closes the gap during combat');
+    check('companion walks inside spell range when combat starts',true);
     const hit=await until(async()=>{
         const rpg=(await context()).companion.rpg;
         return rpg.lastHitTargetId && rpg.lastHitTargetId!==previous && rpg;
@@ -153,10 +164,9 @@ async function site(owner) {
 
 async function foreignRoom(owner) {
     const guest=await connect('ag_RUReadyA');
-    await floor('minecraft:overworld',3388,81,2400);
     await floor('minecraft:overworld',3400,81,2400);
-    await teleport(ownerName,'minecraft:overworld',3388.5,81,2400.5);
-    // This is a fresh run started by the guest while the companion's owner stays outside.
+    await mc('item replace entity '+ownerName+' armor.chest with minecraft:air');
+    // The guest starts the site. The companion's owner cannot auto-enroll without the chestplate.
     await teleport(guest.username,'minecraft:overworld',3400.5,81,2400.5);
     await mc('effect give '+guest.username+' resistance 35 4 true');
     for (const [slot,item] of [['head','helmet'],['chest','chestplate'],['legs','leggings'],['feet','boots']])
@@ -167,13 +177,19 @@ async function foreignRoom(owner) {
     assert(result.success,JSON.stringify(result));
     const enemy='@e[tag=afu_site_qa_guard_foreign,limit=1]';
     await until(async()=>(await mc('execute if entity '+enemy)).includes('Test passed'),'foreign room mob');
+    await teleport(ownerName,'minecraft:overworld',3401.5,81,2402.5);
     await teleport(maid,'minecraft:overworld',3400.5,81,2402.5);
-    const before=(await maidAction(owner,'context','foreignBefore')).data.companion.rpg.lastHitTargetId;
+    const before=(await maidAction(owner,'context','foreignBefore')).data;
     const hp=await mc('data get entity '+enemy+' Health');
     await delay(4000);
-    const after=(await maidAction(owner,'context','foreignAfter')).data.companion.rpg.lastHitTargetId;
-    check('companion cannot attack another party’s active site',hp.includes('10.0f')
-        && hp===await mc('data get entity '+enemy+' Health')&&before===after);
+    const after=(await maidAction(owner,'context','foreignAfter')).data;
+    const later=await mc('data get entity '+enemy+' Health');
+    const party=(await rc('mycli admin dungeonaudit')).split(/\r?\n/).find(line=>line.includes('SITE id=qa_guard_foreign '));
+    report.foreign={hp,later,party,position:after.position,previousTarget:before.companion.rpg.lastHitTargetId,
+        currentTarget:after.companion.rpg.lastHitTargetId};
+    check('companion cannot attack another party’s active site', /entity data: [\d.]+f$/.test(hp)
+        && hp===later && party?.includes('party=1') && close(after.position,[3400.5,81,2400.5],6)
+        && report.foreign.previousTarget===report.foreign.currentTarget);
     await ask(guest,'/mycli dungeon leave qa_guard_foreign --json',line=>line.startsWith('MC_SITE_DUNGEON_RESULT '));
 }
 async function recall(owner) {
