@@ -74,21 +74,19 @@ function recovered(receipt) {
         return current===maximum&&maximum>0;
     }) && fields.fire==='0' && fields.poison==='false' && fields.speed==='true' && fields.bleed==='false' && fields.ward==='true';
 }
-const visibleMob = async (name, tag) => Number((await mc(
-    `execute at ${name} run data get entity @e[tag=${tag},distance=..24,limit=1] Health`
-)).match(/([\d.]+)f\s*$/)?.[1])>0;
+const enemies = async (name, operation='read') => Number((await rc(
+    `dailyqa readiness-enemies ${name} ${operation}`
+)).match(/mobs=(\d+)/)?.[1]);
 async function playTower(owner) {
     const name=owner.username;
     const maid=fixture.maid;
     await mc('gamerule doMobSpawning false');
     await mc('gamerule keepInventory true');
+    await mc('gamerule doDaylightCycle false');
+    await mc('time set midnight');
     await mc(`tp ${name} -595.5 92 -312.5`);
-    await mc('effect give '+name+' minecraft:resistance infinite 4 true');
     // The source fixture keeps both consecutive rooms physically separate.
-    for (const floorY of [56,68]) {
-        await mc(`fill -601 ${floorY} -316 -579 ${floorY} -294 minecraft:stone`);
-        await mc(`fill -599 ${floorY+1} -314 -581 ${floorY+3} -296 minecraft:air`);
-    }
+    assert((await rc('dailyqa readiness-ground '+name)).includes('ground=ready'));
     await gear(owner);
     if (!baseline) {
         check('sword alone refused at the real tower entrance',
@@ -104,8 +102,7 @@ async function playTower(owner) {
     check(baseline?'old tower admits a sword-only player':'melee and loaded ranged kit opens the trial',start.includes('floor=1'));
     await until(async()=>Math.abs(await y(maid)-69)<3,'companion entered floor one');
     check('original companion alive at the entrance floor', Number((await mc(`data get entity ${maid} Health`)).match(/([\d.]+)f\s*$/)?.[1])>0);
-    const tag='afu_dungeon_mob';
-    await until(()=>visibleMob(name,tag),'tower enemies');
+    await until(async()=>await enemies(name)>0,'tower enemies');
     if (!baseline) {
         await rc(`dailyqa clear-state ${name} arm`);
         const armed=await until(async()=>{
@@ -116,7 +113,7 @@ async function playTower(owner) {
     }
     const mark=owner.lines.length;
     // The source of the encounter clear is actual mob death in the loaded room.
-    await mc(`execute at ${name} run kill @e[tag=${tag},distance=..24]`);
+    assert(await enemies(name,'clear')>0);
     if (!baseline) {
         const receipt=await until(()=>owner.lines.slice(mark).find(line=>line.startsWith('MC_DUNGEON_RECOVERY encounter=trial_tower stage=1')),'tower clear recovery',6500);
         report.towerRecovery={receipt,state:await rc('dailyqa clear-state '+name)};
@@ -136,12 +133,8 @@ async function playTower(owner) {
 
 async function playSite() {
     const bot=await connect('ag_RUReadyA');
-    await mc('forceload add 2994 2394 3020 2406');
-    await until(async()=>!(await mc('execute positioned 3000 81 2400 run setblock ~ ~-1 ~ minecraft:stone')).includes('not loaded'),'site fixture chunk');
-    await mc('fill 2994 80 2394 3020 80 2406 minecraft:stone');
-    await mc('fill 2994 81 2394 3020 85 2406 minecraft:air');
+    assert((await rc('dailyqa readiness-ground '+bot.username)).includes('ground=ready'));
     await mc('tp '+bot.username+' 3000.5 81 2400.5');
-    await mc('effect give '+bot.username+' minecraft:resistance infinite 4 true');
     await gear(bot);
     const site='qa_readiness';
     const start=async()=>JSON.parse((await say(bot,'/mycli dungeon start '+site+' --json',/^MC_SITE_DUNGEON_RESULT /)).split('MC_SITE_DUNGEON_RESULT ')[1]);
@@ -151,12 +144,11 @@ async function playSite() {
     const preview=await say(bot,'/mycli dungeon status '+site+' --json',/^MC_SITE_DUNGEON_STATE /);
     check('real mage starter staff meets the ranged requirement',JSON.parse(preview.slice(preview.indexOf(' {')+1)).guidance?.missingEquipment?.length===0);
     check('mage with melee backup can open the site run',(await start()).success);
-    const tag='afu_site_'+site;
-    await until(()=>visibleMob(bot.username,tag),'site enemies');
+    await until(async()=>await enemies(bot.username)>0,'site enemies');
     await rc('dailyqa clear-state '+bot.username+' arm');
     await until(async()=> (await rc('dailyqa clear-state '+bot.username)).includes('ward=true'),'site statuses present');
     const mark=bot.lines.length;
-    await rc(`minecraft:execute at ${bot.username} as @e[tag=${tag},distance=..24] run damage @s 1000 minecraft:player_attack by ${bot.username}`);
+    assert(await enemies(bot.username,'clear')>0);
     const receipt=await until(()=>bot.lines.slice(mark).find(line=>line.startsWith('MC_DUNGEON_RECOVERY encounter='+site+' stage=1')),'site clear recovery',11000);
     report.siteRecovery={receipt,state:await rc('dailyqa clear-state '+bot.username)};
     check('clearing the site room recovers before moving rooms',recovered(report.siteRecovery.state)&&Math.abs(await y(bot.username)-81)<1);

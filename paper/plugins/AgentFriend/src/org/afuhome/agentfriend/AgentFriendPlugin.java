@@ -1553,7 +1553,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 p.sendMessage(ChatColor.GRAY + "Agent：/mycli guild board；/mycli guild accept <任务ID>；/mycli guild status；/mycli guild claim；/mycli arena rewards list；/mycli arena stash list。");
             }
             case "dungeon", "地下城", "试炼" -> {
-                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；按入口普通（绿）／冒险（橙）／末日（紫）三个按钮选择难度，再点菜单「开始」。附近队友会一起进入；清怪 10 秒后自动下楼并补满生命。");
+                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口，选难度后点菜单「开始」。"+DungeonLoadoutRules.REQUIREMENTS+"。达标的附近队友会一起进入；清怪立即恢复，10秒后自动下楼。");
                 p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；远程开箱需 2 魔力。");
             }
             case "team", "队友" -> {
@@ -2492,7 +2492,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
                 "§d技能成长§r\n\n战斗：星芒箭、霜环、焰浪。\n探索：跃空、飞行、守护傀儡、探敌。\n采集：探矿。\n\n成功施放 8 次升 2 级、24 次升 3 级。罗盘选「技能成长」看本人进度；失败不计数。",
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
-                "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。按入口普通／冒险／末日三个按钮选难度，再点「开始」；附近队友一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
+                "§c试炼塔与奖励§r\n\n沿村庄道路到入口，选难度后点「开始」。"+DungeonLoadoutRules.REQUIREMENTS
+                        +"。\n\n清怪立即恢复生命和魔力，清除负面状态。10 秒后自动下楼。\n\n奖励存入个人箱。",
                 "§6给旅人的话§r\n\n村庄里安全，村外有怪。先选一个公会任务，再结伴探险。\n\nAgent 用 /mycli guide 看指令；遇到困难可联系女神。\n\n命格书每次打开都会更新你的状态。");
         meta.addPage(professions.bookPages(p).toArray(String[]::new));
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);

@@ -39,6 +39,8 @@ export interface BattlefieldActor {
   targetEntityId: number | null;
 }
 export interface Battlefield {
+  /** Server-attested unfinished objective, not an enemy coordinate or attack permission. */
+  searchObjective?: {key:string;remaining:number;observedAtMs:number;expiresAtMs:number};
   world?: WorldIdentityObservation;
   /** Expiring search clues, never hidden entities' current positions or attack permission. */
   clues?: Array<HearingHint | {source:'last-seen';key:string;position:[number,number,number];seenAt:number;expiresAt:number}>;

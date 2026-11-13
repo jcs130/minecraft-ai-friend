@@ -72,6 +72,33 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                         +" speed="+player.hasPotionEffect(PotionEffectType.SPEED)+" bleed="+active.containsKey("bleed")
                         +" ward="+active.containsKey("arcane_ward"));
                 }
+                case "readiness-ground" -> {
+                    if (!player.getName().matches("MaidBrainQA|ag_RUReady[AB]"))
+                        throw new IllegalArgumentException("Synthetic dungeon actor required");
+                    var world=Bukkit.getWorld("world");
+                    player.setInvulnerable(true);
+                    boolean tower=player.getName().equals("MaidBrainQA");
+                    int fromX=tower?-601:2994, toX=tower?-579:3020;
+                    int fromZ=tower?-316:2394, toZ=tower?-294:2406;
+                    for(int x=fromX>>4;x<=toX>>4;x++)for(int z=fromZ>>4;z<=toZ>>4;z++)
+                        world.getChunkAt(x,z).addPluginChunkTicket(this);
+                    for(int floorY:tower?new int[]{56,68}:new int[]{80})
+                        for(int x=fromX;x<=toX;x++)for(int z=fromZ;z<=toZ;z++) {
+                            world.getBlockAt(x,floorY,z).setType(Material.STONE,false);
+                            for(int y=floorY+1;y<=floorY+3;y++)world.getBlockAt(x,y,z).setType(Material.AIR,false);
+                        }
+                    sender.sendMessage("ground=ready");
+                }
+                case "readiness-enemies" -> {
+                    if (!player.getName().matches("MaidBrainQA|ag_RUReady[AB]")||args.length<3)
+                        throw new IllegalArgumentException("Synthetic dungeon actor and mode required");
+                    String tag=player.getName().equals("MaidBrainQA")?"afu_dungeon_mob":"afu_site_qa_readiness";
+                    var mobs=player.getNearbyEntities(24,7,24).stream()
+                        .filter(entity->entity instanceof LivingEntity living&&!living.isDead()&&entity.getScoreboardTags().contains(tag)).toList();
+                    if (args[2].equals("clear")) for(var mob:mobs) ((LivingEntity)mob).setHealth(0);
+                    else if (!args[2].equals("read")) throw new IllegalArgumentException("read or clear");
+                    sender.sendMessage("mobs="+mobs.size());
+                }
                 case "entity-health" -> {
                     var entities = Bukkit.selectEntities(sender, args[1]);
                     if (entities.isEmpty()) sender.sendMessage("health=0.0");

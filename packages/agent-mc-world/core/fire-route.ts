@@ -24,7 +24,8 @@ export function fireRoutes(bot: Bot, options: FireCrossing = {}): FireRoute[] {
   const start = bot.entity.position;
   if (options.at && (Math.abs(options.at[1]-start.y)>.15 || start.distanceTo(new Vec3(...options.at))>4)) return [];
   const cache = new Map<string, ReturnType<Bot['blockAt']>>();
-  const readBlock = (p: Vec3) => { const q=p.floored(), k=q.toString(); if(!cache.has(k))cache.set(k,bot.blockAt(q,false)); return cache.get(k)!; };
+  let used = new Set<string>();
+  const readBlock = (p: Vec3) => { const q=p.floored(), k=q.toString(); used.add(k); if(!cache.has(k))cache.set(k,bot.blockAt(q,false)); return cache.get(k)!; };
   const read = (p: [number,number,number]): Sample => {const b=readBlock(new Vec3(...p));return b ? {material:{name:b.name,collision:b.shapes as any,properties:b.getProperties?.()??null,liquid:['water','lava'].includes(b.name)}}:{unknown:'unloaded'};};
   const names = (p: Vec3): string[] => {
     const bounds=hazardBodyBounds(p),out:string[]=[];
@@ -38,6 +39,7 @@ export function fireRoutes(bot: Bot, options: FireCrossing = {}): FireRoute[] {
   const modes=options.mode&&options.mode!=='auto'?[options.mode]:['walk','jump'] as const;
   const routes:FireRoute[]=[];
   for(const yaw of angles)for(const mode of modes)try{
+    used = new Set<string>();
     const keys={forward:true,back:false,left:false,right:false,jump:false,sprint:false,sneak:false};
     const state=new PlayerState(bot,keys);state.yaw=yaw;state.pitch=0;
     let contactTicks=0,soulTicks=0,landedClear=0;
@@ -57,15 +59,22 @@ export function fireRoutes(bot: Bot, options: FireCrossing = {}): FireRoute[] {
         const resistant=Object.keys(bot.entity.effects??{}).some(id=>/fire.?resistance/i.test(bot.registry.effects?.[Number(id)]?.name??''));
         const damage=resistant?0:contactTicks?8+Math.ceil((contactTicks+soulTicks)/10):0;
         routes.push({mode,yaw,ticks:tick+1,end:[p.x,p.y,p.z],contactTicks,estimatedDamage:damage,
-          cost:(tick+1)*.05+damage*2+(mode==='jump'?.15:0),geometry:[]});break;
+          cost:(tick+1)*.05+damage*2+(mode==='jump'?.15:0),geometry:[...used].map(k=>cache.get(k)!).filter(b=>b!==null)
+            .map(b=>[b!.position.x,b!.position.y,b!.position.z,b!.stateId])});break;
       }
     }
   }catch{/* Unreceived geometry/effect state does not certify a route. */}
-  const geometry=[...cache.values()].filter(b=>b!==null).map(b=>[b!.position.x,b!.position.y,b!.position.z,b!.stateId] as [number,number,number,number]);
-  return routes.sort((a,b)=>a.cost-b.cost).map(r=>({...r,geometry}));
+  return routes.sort((a,b)=>a.cost-b.cost);
 }
 export function fireRouteGeometryCurrent(bot:Bot,route:FireRoute):boolean {
-  return route.geometry.every(([x,y,z,id])=>bot.blockAt(new Vec3(x,y,z),false)?.stateId===id);
+  return route.geometry.every(([x,y,z,id])=>{
+    const current=bot.blockAt(new Vec3(x,y,z),false);
+    if(current?.stateId===id)return true;
+    // Fire's age/attachment state changes without changing collision or damage
+    // class. A newly ignited cell, removed support or soul-fire change still fails.
+    const previous=bot.registry.blocksByStateId[id]?.name;
+    return (previous==='fire'||previous==='soul_fire')&&current?.name===previous;
+  });
 }
 const intents=new WeakMap<Bot,{until:number;healthFloor:number}>();
 /** Scoped to one verified crossing. Never exempts lava, death, cancellation or a whole task. */

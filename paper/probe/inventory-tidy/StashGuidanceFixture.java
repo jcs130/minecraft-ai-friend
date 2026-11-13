@@ -81,7 +81,7 @@ public final class StashGuidanceFixture extends JavaPlugin {
             }
             else if(args[2].equals("off")){var channel=saveBlocks.remove(p.getUniqueId());if(channel==null)throw new IllegalStateException("Original fault not held");channel.close();}
             else throw new IllegalArgumentException("on/off");sender.sendMessage("STASH_QA saveblock="+args[2]);
-        }else if(args[0].equals("drop")){p.getWorld().dropItem(p.getLocation(),new ItemStack(Material.COBBLESTONE,4)).setPickupDelay(0);sender.sendMessage("STASH_QA dropped=4");}
+        }else if(args[0].equals("drop")){p.getWorld().dropItem(p.getLocation(),new ItemStack(Material.DIAMOND,4),item->{item.setOwner(p.getUniqueId());item.setPickupDelay(0);});sender.sendMessage("STASH_QA dropped=4");}
         else throw new IllegalArgumentException("Known bounded QA action only");return true;
     }catch(Exception e){throw new IllegalStateException(e);}}
 }

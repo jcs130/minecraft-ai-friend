@@ -5,10 +5,21 @@ import { Reflexes } from '../core/executor.ts';
 import { methodHarness } from './method-harness.ts';
 import { localHazardExit } from '../core/hazard-exit.ts';
 import { findEscapeCell, hazardsWithin, hazardTouch } from '../core/terrain.ts';
-import { crossFire, intentionalFireCrossing } from '../core/fire-route.ts';
+import { crossFire, intentionalFireCrossing, fireRoutes, fireRouteGeometryCurrent } from '../core/fire-route.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-04T16:52:12Z')); });
 afterEach(() => vi.useRealTimers());
+
+it('retains a simulated fire route across fire age changes, but rejects changed support or new fire',()=>{
+  const r=rig();try{
+    r.set(0,64,0,'fire');const plan=fireRoutes(r.bot as unknown as Bot)[0];expect(plan).toBeDefined();
+    const read=r.bot.blockAt;
+    r.bot.blockAt=(p:Vec3)=>{const b=read(p);if(b.name==='fire')b.stateId=b.stateId===r.bot.registry.blocksByName.fire.minStateId?b.stateId+1:b.stateId-1;return b;};
+    expect(fireRouteGeometryCurrent(r.bot as unknown as Bot,plan)).toBe(true);
+    const footing=plan.geometry.find(([,y])=>y===63)!;r.set(footing[0],footing[1],footing[2],'air');
+    expect(fireRouteGeometryCurrent(r.bot as unknown as Bot,plan)).toBe(false);
+  }finally{r.close();}
+});
 
 function rig(fightBack = () => true, combatHurt = vi.fn(() => true)) {
   const h = methodHarness('1.21.1');
@@ -96,17 +107,27 @@ it('leaves dense fire through the open side instead of running into the wall (na
   }finally{r.close();}
 });
 
-it('blocked fire recovery releases controls AND its body lease once, and can use a newly opened exit',async()=>{
+it('blocked fire recovery never takes a no-op body lease, and can use a newly opened exit',async()=>{
   const r=rig();try{
     r.set(0,64,0,'fire');
     for(const [x,z] of [[-1,0],[1,0],[0,-1],[0,1]]){r.set(x,64,z,'nether_bricks');r.set(x,65,z,'nether_bricks');}
     await vi.advanceTimersByTimeAsync(6200);
     expect(r.reflex.envActive).toBe(false);expect(r.keys.forward).toBe(false);
-    expect(r.bot.pathfinder.goal).toBeNull();expect(r.pause).toHaveBeenCalledTimes(1);
+    expect(r.bot.pathfinder.goal).toBeNull();expect(r.pause).not.toHaveBeenCalled();
     expect(r.reports.filter(t=>t.includes('[反射受阻]'))).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(6000);expect(r.pause).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(6000);expect(r.pause).not.toHaveBeenCalled();
     r.set(1,64,0,'air');r.set(1,65,0,'air');
-    await vi.advanceTimersByTimeAsync(200);expect(r.reflex.envActive).toBe(true);expect(r.pause).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(200);expect(r.reflex.envActive).toBe(true);expect(r.pause).toHaveBeenCalledTimes(1);
+  }finally{r.close();}
+});
+
+it('does not cancel combat during an airborne fire contact without an executable escape',async()=>{
+  const r=rig();try{
+    r.set(0,64,0,'fire');r.bot.entity.onGround=false;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(r.pause).not.toHaveBeenCalled();expect(r.reflex.envActive).toBe(false);
+    r.bot.entity.onGround=true;
+    await vi.advanceTimersByTimeAsync(200);expect(r.pause).toHaveBeenCalledTimes(1);
   }finally{r.close();}
 });
 
