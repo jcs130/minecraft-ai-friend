@@ -24,13 +24,20 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     private final MaidConversationRate chatRate=new MaidConversationRate();
     private final MaidConversationInitiative initiative=new MaidConversationInitiative();
     private long nextInitiativeScan;
+    private long nextAutonomousDecision;
+    private long lastActionOpportunity;
+    private AutonomousDecision lastDecision;
+    private record ActionCue(String mode,UUID threat,String observation){}
+    private record AutonomousDecision(EntityMaid maid,long revision,ActionCue cue){}
     private record VisibleChange(long sequence,long at,String text){}
     private final Map<UUID,VisibleChange> changes=new HashMap<>();
     private long changeSequence;
     private final Map<String,JsonObject> actionResults=new HashMap<>();
     private record Call(UUID actor,UUID owner,String operation,String text,EntityMaid maid,long deadline,
                         Set<UUID> listeners,Player actorConnection,UUID world,Map<UUID,Player> connections,
-                        boolean proactive,String scene,boolean nearby,boolean finalTurn){}
+                        boolean proactive,String scene,boolean nearby,boolean finalTurn,ActionCue cue){
+        boolean ownerRequested(){return actor.equals(owner)&&!proactive;}
+    }
 
     NativeMaidSocialSupport(HybridMaidPlugin plugin,ReceiptJournal receipts){
         this.plugin=plugin;this.receipts=receipts;
@@ -62,6 +69,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     }
     private JsonObject start(Player actor,EntityMaid maid,String operation,String text,Set<UUID> deliveredTo,
                              boolean proactive,boolean finalTurn)throws Exception{
+        return start(actor,maid,operation,text,deliveredTo,proactive,finalTurn,null);
+    }
+    private JsonObject start(Player actor,EntityMaid maid,String operation,String text,Set<UUID> deliveredTo,
+                             boolean proactive,boolean finalTurn,ActionCue cue)throws Exception{
         if(proactive)plugin.humanConversation(actor,operation);
         Set<UUID> listeners=new HashSet<>();
         for(Player listener:maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER))if((deliveredTo==null||deliveredTo.contains(listener.getUniqueId()))&&MaidConversationRange.hears(maid,listener)&&listener.canSee(actor)&&listener.canSee(maid.getBukkitEntity()))listeners.add(listener.getUniqueId());
@@ -69,20 +80,29 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         Map<UUID,Player> connections=new HashMap<>();for(UUID id:listeners)connections.put(id,Bukkit.getPlayer(id));
         Call call=new Call(actor.getUniqueId(),maid.getOwnerUUID(),operation,text,maid,System.nanoTime()+75_000_000_000L,
             Set.copyOf(listeners),actor,actor.getWorld().getUID(),Map.copyOf(connections),proactive,
-            proactive?scene(maid):null,deliveredTo!=null,finalTurn);
+            proactive&&cue==null?scene(maid):null,deliveredTo!=null,finalTurn,cue);
         pending.put(maid.getUUID(),call);
         // Count only actual player requests; completed turns may continue promptly.
         // Native/public busy validation still permits only one in-flight model call.
         chatRate.started(actor.getUniqueId(),System.nanoTime(),proactive);
         JsonObject observation=new JsonObject();observation.addProperty("maidId",maid.getUUID().toString());
         observation.addProperty("initiatedBy",proactive?"maid":"player");
-        boolean partnerAction=call.actor.equals(call.owner)&&!call.proactive;
+        boolean partnerAction=call.ownerRequested()||cue!=null;
         observation.addProperty("conversation","nearby_visitor");observation.addProperty("partnerActions",partnerAction);
         observation.addProperty("meaning","已送达当前模型。绑定伙伴可请求跟随、护卫、短等或原生钓鱼。动作设置和实际进展分别查询。");
         observation.addProperty("nextCommand","/qdmaid receipt "+maid.getUUID()+" "+operation);
         JsonObject result=receipts.finish(maid.getUUID(),operation,"pending",observation);
         if(deliveredTo==null&&!proactive)for(UUID id:call.listeners){Player listener=Bukkit.getPlayer(id);if(listener!=null)listener.sendMessage(net.kyori.adventure.text.Component.text("[附近·女仆] "+actor.getName()+" → "+maid.getName().getString()+"："+text,net.kyori.adventure.text.format.NamedTextColor.AQUA));}
         List<LLMMessage> messages=new ArrayList<>();
+        if(cue!=null){
+            messages.add(LLMMessage.systemChat(maid,"你是千灯纪的冒险伙伴。根据服务器现场事实独立决定自己的下一步。"+
+                "伙伴正在冒险时，遇到确认的敌人优先中断自己安排的休息或工作并护卫。"+
+                "伙伴继续出发时，考虑收竿跟上。需要执行就调用一次工具，确实没有适合的动作才输出[[结束]]。"+
+                "无法用文字执行动作，不发问、不催促、不声称已经击中或走到。"));
+            messages.add(LLMMessage.userChat(maid,cue.observation()+" 身体实测："+MaidCompanionActions.facts(maid,actor)));
+            submitModel(call,messages);
+            return result;
+        }
         String partner=maid.getAiChatManager().ownerName;
         if(partner==null||partner.isBlank())partner="同行伙伴";
         String relation=partnerAction
@@ -102,10 +122,14 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         if(proactive)messages.add(LLMMessage.systemChat(maid,"现场发生了新的变化。可以分享一句短感想，也可以用[[结束]]保持安静。省去向伙伴发问和催促。现场："+text));
         else messages.add(LLMMessage.userChat(maid,text));
         initiative.spoken(System.nanoTime());
-        VisitorCallback callback=new VisitorCallback(call,messages);
-        try{maid.getAiChatManager().getLLMSite().client().chat(callback);}
-        catch(Exception error){callback.onFailure(null,error,502);}
+        submitModel(call,messages);
         return result;
+    }
+
+    private void submitModel(Call call,List<LLMMessage> messages){
+        VisitorCallback callback=new VisitorCallback(call,messages);
+        try{call.maid.getAiChatManager().getLLMSite().client().chat(callback);}
+        catch(Exception error){callback.onFailure(null,error,502);}
     }
     private static String key(Call call){return call.maid.getUUID()+":"+call.actor;}
     private List<LLMMessage> history(Call call){
@@ -138,15 +162,18 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         final boolean partnerAction;
         final String expectedPose;
         boolean actionAttempted;
-        VisitorCallback(Call call,List<LLMMessage> messages){super(call.maid.getAiChatManager(),messages,true);this.call=call;needAddTools=false;partnerAction=call.actor.equals(call.owner)&&!call.proactive;expectedPose=MaidCompanionActions.pose(call.maid);}
+        VisitorCallback(Call call,List<LLMMessage> messages){super(call.maid.getAiChatManager(),messages,true);this.call=call;needAddTools=false;partnerAction=call.ownerRequested()||call.cue!=null;expectedPose=MaidCompanionActions.pose(call.maid);}
         @Override public void addCompanionTools(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
             if(partnerAction&&!actionAttempted){
-                MaidCompanionActions.tools(request);
-                plugin.workshops().addTool(request,call.maid,call.actorConnection);
+                if(call.cue!=null)MaidCompanionActions.autonomousTool(request,call.cue.mode());
+                else{
+                    MaidCompanionActions.tools(request);
+                    plugin.workshops().addTool(request,call.maid,call.actorConnection);
+                }
             }
         }
         @Override public boolean shouldCacheTokenUsage(){return false;}
-        @Override public void onSuccess(ResponseChat reply){runOnServerThread(()->finish(call,reply.getChatText(),null));}
+        @Override public void onSuccess(ResponseChat reply){runOnServerThread(()->finish(call,call.cue==null?reply.getChatText():"[[结束]]",null));}
         @Override public void onFailure(HttpRequest request,Throwable error,int code){runOnServerThread(()->finish(call,null,"model_unavailable"));}
         @Override public void onFunctionCall(Message message,LLMClient client){runOnServerThread(()->{
             if(pending.get(call.maid.getUUID())!=call)return;
@@ -164,11 +191,13 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
                 JsonObject args;
                 try{args=JsonParser.parseString(tool.getFunction().getArguments()).getAsJsonObject();}
                 catch(RuntimeException malformed){throw new CompatibilityException("bad_companion_action","工具参数须为JSON对象。");}
-                if(NativeMaidWorkshop.TOOL.equals(name)){
+                if(NativeMaidWorkshop.TOOL.equals(name)&&call.cue==null){
                     result=plugin.dispatch(call.actorConnection,NativeMaidWorkshop.ACTION,call.maid.getUUID(),operation,NativeMaidWorkshop.modelOrder(args));
                 }else if(MaidCompanionActions.TOOL.equals(name)){
                     if(args.size()!=1||!(args.get("mode") instanceof JsonPrimitive mode)||!mode.isString()||!MaidCompanionActions.MODES.contains(mode.getAsString()))
                         throw new CompatibilityException("bad_companion_mode","mode必须是follow、guard、wait或fish。未执行动作。");
+                    if(call.cue!=null&&!call.cue.mode().equals(mode.getAsString()))
+                        throw new CompatibilityException("bad_companion_mode","这个现场只提供当前允许的模式。未执行动作。");
                     result=MaidCompanionActions.apply(plugin,call.maid,call.actorConnection,operation,mode.getAsString());
                 }else throw new CompatibilityException("unknown_companion_tool","使用本轮提供的工具和参数。");
             }catch(Exception error){
@@ -178,6 +207,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
                 if(!(error instanceof CompatibilityException))result.addProperty("operationId",operation);
             }
             actionResults.put(call.operation,result);
+            if(call.cue!=null){finish(call,"[[结束]]",null);return;}
             // The next completion only writes speech. Supply the verified server result
             // without replaying a provider-specific assistant reasoning/tool turn.
             messages.add(LLMMessage.systemChat(call.maid,"本轮的服务器动作回执："+result+"。请根据回执简短回复。动作设置成功后按实际状态描述，省去进一步请求和问题。"));
@@ -190,6 +220,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
             if(!call.world.equals(actor.getWorld().getUID())||!call.world.equals(call.maid.getBukkitEntity().getWorld().getUID()))return "world_changed";
             if(System.nanoTime()>call.deadline||!MaidConversationRange.within(call.maid,actor,32)||!actor.canSee(call.maid.getBukkitEntity()))return "companion_action_out_of_range";
             if(!expectedPose.equals(MaidCompanionActions.pose(call.maid)))return "companion_arrangement_changed";
+            if(call.cue!=null&&!sameActionCue(call.cue,actionCue(call.maid,actor)))return "companion_situation_changed";
             return null;
         }
     }
@@ -199,7 +230,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         Player actor=Bukkit.getPlayer(call.actor);
         if(actor!=call.actorConnection)actor=null;
         if(reason==null&&!call.world.equals(call.maid.getBukkitEntity().getWorld().getUID()))reason="world_changed";
-        if(reason==null&&call.proactive&&(!call.scene.equals(scene(call.maid))||call.maid.isSleeping()
+        if(reason==null&&call.scene!=null&&(!call.scene.equals(scene(call.maid))||call.maid.isSleeping()
                 ||call.maid.isMaidInSittingPose()||call.maid.isHomeModeEnable()
                 ||!call.maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE)))reason="scene_changed";
         if(reason==null&&(actor==null||!actor.isOnline()||actor.isDead()||actor.isInvisible()||actor.getGameMode()==org.bukkit.GameMode.SPECTATOR
@@ -211,6 +242,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         JsonObject observation=new JsonObject();
         observation.addProperty("maidId",id.toString());observation.addProperty("conversation","nearby_visitor");
         observation.addProperty("initiatedBy",call.proactive?"maid":"player");observation.addProperty("retryAllowed",false);
+        if(call.cue!=null)observation.addProperty("decisionMode",call.cue.mode());
         JsonObject action=actionResults.get(call.operation);
         boolean applied=action!=null&&action.has("status")&&"applied".equals(action.get("status").getAsString());
         if(action!=null){JsonArray actions=new JsonArray();actions.add(action.deepCopy());observation.add("actions",actions);}
@@ -231,6 +263,11 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
             JsonObject receipt=receipts.finish(id,call.operation,reason!=null?"unknown":silent?"closed":"replied",observation);
             pending.remove(id);
             actionResults.remove(call.operation);
+            if(call.cue!=null){
+                plugin.getLogger().info("Companion decision maid="+id+" request="+call.operation+
+                    " mode="+call.cue.mode()+" result="+(applied?"applied":reason==null?"closed":reason));
+                return;
+            }
             if(actor!=null&&call.world.equals(actor.getWorld().getUID())&&(call.nearby||call.proactive)){
                 if(silent||call.finalTurn||reason!=null)plugin.conversationClosed(actor,call.maid);
                 else plugin.conversationReplied(actor,call.maid,spoken,call.proactive);
@@ -263,11 +300,64 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         for(Call call:new ArrayList<>(pending.values()))if(now>call.deadline)finish(call,null,"model_timeout");
         if(now>=nextInitiativeScan){nextInitiativeScan=now+5_000_000_000L;initiate(now);}
     }
+
+    private static boolean sameActionCue(ActionCue first,ActionCue current){
+        return current!=null&&first.mode().equals(current.mode())&&Objects.equals(first.threat(),current.threat());
+    }
+
+    private ActionCue actionCue(EntityMaid maid,Player partner){
+        if(partner==null||!partner.isOnline()||partner.isDead()||partner.isSleeping()||partner.isInvisible()
+                ||partner.getGameMode()==org.bukkit.GameMode.SPECTATOR||!partner.canSee(maid.getBukkitEntity())
+                ||!MaidConversationRange.within(maid,partner,32)||!maid.isAlive()||maid.isRemoved()||maid.isNoAi()
+                ||maid.isSleeping()||plugin.editingMaidInventory(maid)||plugin.workshops().busy(maid.getUUID()))return null;
+        boolean idle=maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE);
+        boolean resting=MaidCompanionActions.waiting(maid)&&maid.isMaidInSittingPose()&&maid.isHomeModeEnable()&&idle;
+        boolean fishing=MaidCompanionActions.selfDirectedFishing(maid)&&!maid.isHomeModeEnable();
+        double distance=maid.getBukkitEntity().getLocation().distanceSquared(partner.getLocation());
+        boolean following=idle&&!maid.isMaidInSittingPose()&&!maid.isHomeModeEnable()&&!maid.isPassenger()
+            &&maid.canBrainMoving()&&distance>16&&!MaidCompanionActions.activeGuardOrder(maid);
+        if(!resting&&!fishing&&!following)return null;
+        UUID threat=plugin.companionVisibleThreat(maid,partner);
+        boolean partnerInCombat=plugin.companionCombatPosition(partner,partner.getLocation())||plugin.companionPartnerThreat(maid,partner);
+        if(((resting||fishing)&&(threat!=null||partnerInCombat))||(following&&threat==null&&partnerInCombat)){
+            String observed=threat!=null?"已确认8格内可见、能攻击的真实敌对生物。":"已确认同行伙伴正在遭到攻击或参与当前副本战斗。";
+            return new ActionCue("guard",threat,observed+" 当前身体还未进入护卫，能用已装备或背包中的武器。");
+        }
+        if(fishing&&distance>=24*24)
+            return new ActionCue("follow",null,"你正在执行自己安排的钓鱼，同行伙伴已经走到24格外。考虑停止钓鱼并跟上。");
+        return null;
+    }
+
+    private boolean decide(EntityMaid maid,Player partner,long now){
+        ActionCue cue=actionCue(maid,partner);
+        if(cue==null){
+            if(now-lastActionOpportunity>=15_000_000_000L)lastDecision=null;
+            return false;
+        }
+        lastActionOpportunity=now;
+        long revision=MaidCompanionActions.revision(maid);
+        if(now<nextAutonomousDecision||(lastDecision!=null&&lastDecision.maid()==maid
+                &&lastDecision.revision()==revision&&sameActionCue(lastDecision.cue(),cue)))return true;
+        try{plugin.validateCompanionChat(partner,maid);}catch(CompatibilityException busy){return true;}
+        String operation="autonomy_"+UUID.randomUUID();
+        lastDecision=new AutonomousDecision(maid,revision,cue);
+        nextAutonomousDecision=now+45_000_000_000L;
+        try{
+            receipts.reserve(maid.getUUID(),partner.getUniqueId(),operation,"chat",cue.observation());
+            start(partner,maid,operation,cue.observation(),null,true,false,cue);
+        }catch(Exception unavailable){
+            plugin.getLogger().warning("Companion decision unavailable; inspect original request "+operation+
+                " ("+unavailable.getClass().getSimpleName()+")");
+        }
+        return true;
+    }
+
     private void initiate(long now){
         for(String id:plugin.registeredMaids().keySet()){
             EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(UUID.fromString(id)));
             if(maid==null||!enabled(maid))continue;
             Player partner=Bukkit.getPlayer(maid.getOwnerUUID());
+            if(decide(maid,partner,now)){initiative.opportunity(now,false,"",0,0);continue;}
             boolean together=partner!=null&&partner.isOnline()&&!partner.isDead()&&!partner.isSleeping()&&!partner.isInvisible()
                 &&partner.getGameMode()!=org.bukkit.GameMode.SPECTATOR&&partner.getWorld().equals(maid.getBukkitEntity().getWorld())
                 &&partner.canSee(maid.getBukkitEntity())&&MaidConversationRange.within(maid,partner,MaidConversationRange.PARTNER)
