@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.60
+
+- Clarify equipped engage versus observation-only track in fast combat requests. Preserve authored tactics but make live body ownership authoritative.
+- Escalate a repeated idle ambiguous ranking once per unchanged encounter to the task owner with decision/scene/version evidence. Include actual non-execution in subsequent requests; retain selection thresholds and all action validation.
+- Export typed host-decision feedback for ordinary World streams and active execution inboxes.
+
 ## 0.5.7-rc.160-preview.59
 
 - Keep learning admission predicates in the parent tool table, alongside read-only predicates, instead of passing functions through the engine initialization IPC. Verify the actual combat tool and learning admission through a real SDK/MCP child lifecycle.

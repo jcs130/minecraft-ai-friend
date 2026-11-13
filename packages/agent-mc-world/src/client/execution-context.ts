@@ -4,22 +4,22 @@ import type { FactPart } from '../contracts/protocol.ts';
 
 export interface ExecutionFeedbackContext {
   protocol: 'execution-feedback-context/v1';
-  kind: 'server-message';
+  kind: 'server-message' | 'host-decision';
   originalSha256: string;
 }
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** Only the producer may mark a message after validating its native server provenance. */
-export function executionFeedbackContext(original: string): ExecutionFeedbackContext {
-  return { protocol: 'execution-feedback-context/v1', kind: 'server-message', originalSha256: digest(original) };
+/** Only the producer may mark feedback after validating its server or host-decision provenance. */
+export function executionFeedbackContext(original: string, kind: ExecutionFeedbackContext['kind'] = 'server-message'): ExecutionFeedbackContext {
+  return { protocol: 'execution-feedback-context/v1', kind, originalSha256: digest(original) };
 }
 
 /** Match the source-owned marker to the text. Hosts must also validate the event source. */
 export function hasExecutionFeedbackContext(original: string, value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const context = value as Partial<ExecutionFeedbackContext>;
-  return context.protocol === 'execution-feedback-context/v1' && context.kind === 'server-message'
+  return context.protocol === 'execution-feedback-context/v1' && ['server-message', 'host-decision'].includes(context.kind ?? '')
     && context.originalSha256 === digest(original);
 }
 

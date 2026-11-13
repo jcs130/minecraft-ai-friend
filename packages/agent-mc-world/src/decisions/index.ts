@@ -4,6 +4,7 @@ export * from './combat-display.ts';
 export * from './combat-request.ts';
 export * from '../../core/journey.ts';
 export * from './combat-driver.ts';
+export * from './combat-attention.ts';
 export * from './defaults.ts';
 export * from './decision-adviser.ts';
 export * from './idle-behavior.ts';

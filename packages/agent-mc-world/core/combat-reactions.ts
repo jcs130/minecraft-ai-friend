@@ -60,7 +60,7 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
         && e.targetEntityId !== null && partyIds.has(e.targetEntityId))));
     for (const enemy of enemies.filter(e => e.entityId !== control.targetId || !field.action.fighting))
       candidates.push({ id: `engage_${enemy.entityId}`, kind: 'engage', targetId: enemy.entityId!, uuid: enemy.uuid,
-        intent: `Attack visible hostile ${enemy.type ?? 'entity'} at ${enemy.distance} blocks now, before it hits us; approach and continue attacking through the body controller, resuming paused work afterwards.` });
+        intent: `Attack visible hostile ${enemy.type ?? 'entity'} at ${enemy.distance} blocks now using the equipped combat controller (melee or bow), resuming paused work afterwards. This is not a melee-only approach; the controller chooses range and rechecks movement.` });
   }
   if (!cfg.allowMovement || !field.action.fighting || !control.canStep || target.position === null
     || (!programmable && (control.sinceHitMs ?? 0) < cfg.movementStallMs)) return candidates;
