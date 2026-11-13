@@ -5,3 +5,4 @@ caption-distance-cap: 48.0
 max-concurrent-speech: 16
 max-utterance-seconds: 15
 captions-default: true
+goddess-private-voice: feiyu-tlm-changchun-cn-20261111

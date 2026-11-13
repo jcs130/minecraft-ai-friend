@@ -4,7 +4,7 @@ import{attachProximityVoice}from'../client.mjs';
 // Explicit loopback fixture only. Never defaults to a production server.
 const [rootArg,mode,baseArg,dependencies,compat]=process.argv.slice(2);
 assert.ok(rootArg&&baseArg&&dependencies,'evidence directory, mode, fixture root and Mineflayer dependency root required');
-assert.ok(['baseline','candidate','restart'].includes(mode));
+assert.ok(['baseline','candidate','restart','goddess'].includes(mode));
 const root=resolve(rootArg),base=resolve(baseArg),lab=base+'/lab';
 assert.equal(dirname(root).toLowerCase(),base.toLowerCase());
 const installRecipePacketBypass=compat?(await import(pathToFileURL(resolve(compat)).href)).installRecipePacketBypass:()=>{};
@@ -17,11 +17,18 @@ async function until(fn,ms=12000){const end=Date.now()+ms;while(Date.now()<end){
 function vint(n){const out=[];do{let b=n&127;n>>>=7;if(n)b|=128;out.push(b);}while(n);return Buffer.from(out);}
 function readv(b,offset){let n=0,s=0,p=offset;for(;p<b.length&&s<35;s+=7){let v=b[p++];n|=(v&127)<<s;if(!(v&128))return[n,p];}throw Error('Invalid synthetic UDP packet');}
 async function receiver(bot){
- const sock=createSocket('udp4'),state={audio:0,acks:0,errors:0,secret:false,packets:[],players:new Map(),stateChanges:0};let key,uuid;
+ const sock=createSocket('udp4'),state={audio:0,privateAudio:0,acks:0,errors:0,secret:false,packets:[],privatePackets:[],players:new Map(),stateChanges:0};let key,uuid;
  const send=(id,body=Buffer.alloc(0))=>{const iv=randomBytes(12),cipher=createCipheriv('aes-128-gcm',key,iv),encrypted=Buffer.concat([iv,cipher.update(Buffer.concat([Buffer.from([id]),body])),cipher.final(),cipher.getAuthTag()]);sock.send(Buffer.concat([Buffer.from([255]),uuid,vint(encrypted.length),encrypted]),29522,'127.0.0.1');};
  sock.on('message',(packet,rinfo)=>{try{
   assert.equal(rinfo.address,'127.0.0.1');assert.equal(rinfo.port,29522);assert.equal(packet[0],255);const[len,at]=readv(packet,1),enc=packet.subarray(at,at+len),dec=createDecipheriv('aes-128-gcm',key,enc.subarray(0,12));dec.setAuthTag(enc.subarray(-16));const data=Buffer.concat([dec.update(enc.subarray(12,-16)),dec.final()]);
-  if(data[0]===6){state.acks++;send(9);}else if(data[0]===8)send(8);else if(data[0]===9)send(10);else if(data[0]===2){const[size,start]=readv(data,33);if(size>0){state.audio++;state.packets.push(data.subarray(start,start+size).toString('base64'));}}
+  if(data[0]===6){state.acks++;send(9);}else if(data[0]===8)send(8);else if(data[0]===9)send(10);else if(data[0]===2||data[0]===3){
+   const [size,start]=readv(data,33);
+   if(size>0){
+    const payload=data.subarray(start,start+size).toString('base64');
+    if(data[0]===3){state.privateAudio++;state.privatePackets.push(payload);}
+    else{state.audio++;state.packets.push(payload);}
+   }
+  }
  }catch{state.errors++;}});
  const secret=packet=>{
   if(['voicechat:state','voicechat:states'].includes(packet.channel)){
@@ -38,11 +45,66 @@ async function receiver(bot){
  const result={state,setDisabled,close(){clearInterval(timer);bot._client.off('custom_payload',secret);sock.close();}};udp.push(result);return result;
 }
 try{
- for(const name of ['QVSource','QVReceiver','QVFar','QVDisabled']){
+ for(const name of [mode==='goddess'?'Goddess':'QVSource','QVReceiver','QVFar','QVDisabled']){
   const bot=mineflayer.createBot({host:'127.0.0.1',port:29520,version:'1.21.1',username:name,auth:'offline',hideErrors:true});bots.push(bot);installRecipePacketBypass(bot._client);bot.on('error',()=>{});
   await new Promise((resolve,reject)=>{bot.once('spawn',resolve);bot.once('error',reject);setTimeout(()=>reject(Error('Isolated login timed out')),15000).unref()});await run('gamemode creative '+name);
  }
- for(const cmd of ['time set day','gamerule doMobSpawning false','tp QVSource 0 80 0','tp QVReceiver 3 80 0','tp QVFar 200 80 0','tp QVDisabled 4 80 0'])await run(cmd);
+ for(const cmd of ['time set day','gamerule doMobSpawning false','tp '+bots[0].username+' 0 80 0','tp QVReceiver 3 80 0','tp QVFar 200 80 0','tp QVDisabled 4 80 0'])await run(cmd);
+ if(mode==='goddess'){
+  const [goddess,nearPlayer,farPlayer,plainPlayer]=bots;
+  const messages=new Map(bots.map(bot=>[bot.username,[]]));
+  for(const bot of bots)bot.on('messagestr',line=>messages.get(bot.username).push(line));
+  await run('op Goddess');
+  const near=await receiver(nearPlayer),far=await receiver(farPlayer);
+  const total=r=>r.state.audio+r.state.privateAudio;
+  const heard=(bot,line)=>messages.get(bot.username).some(message=>message.includes(line));
+ const waitForPlayback=async n=>{
+  const ledger=lab+'/plugins/QiandengVoice/receipts/'+goddess.player.uuid+'.jsonl';
+  await until(()=>{
+   try{return readFileSync(ledger,'utf8').split('\n').filter(line=>line&&JSON.parse(line).state==='sent').length>=n;}
+   catch{return false;}
+  },22000);
+  await sleep(250);
+ };
+ let played=0;
+ try{
+  played=readFileSync(lab+'/plugins/QiandengVoice/receipts/'+goddess.player.uuid+'.jsonl','utf8')
+   .split('\n').filter(line=>line&&JSON.parse(line).state==='sent').length;
+ }catch(error){if(error.code!=='ENOENT')throw error;}
+  const qaLine='旅人，你好。沿着灯火往前走，我在公会等你。';
+  goddess.chat('/minecraft:msg QVReceiver '+qaLine);
+  await until(()=>total(near)>0,20000);
+  await waitForPlayback(played+1);
+  check('native whisper delivers text only to its intended recipient',heard(nearPlayer,qaLine)&&!heard(farPlayer,qaLine)&&!heard(plainPlayer,qaLine));
+  check('private sound uses the static channel and has no nearby echo',near.state.privateAudio>0&&near.state.audio===0&&total(far)===0);
+  const before=total(near);
+  await run('execute in minecraft:the_nether run tp QVFar 3 80 0');
+  await sleep(500);
+  goddess.chat('/minecraft:msg QVFar 跨维度私聊验收。');
+  await until(()=>total(far)>0,20000);
+  await waitForPlayback(played+2);
+  check('only the addressed listener receives audio across dimensions',far.state.privateAudio>0&&far.state.audio===0&&total(near)===before&&heard(farPlayer,'跨维度私聊验收。'));
+  const farBefore=total(far);
+  goddess.chat('/minecraft:msg QVDisabled 原版也能收到文字。');
+  await until(()=>heard(plainPlayer,'原版也能收到文字。'));
+  await sleep(1100);
+  check('vanilla recipient still receives text without any broadcast audio',total(near)===before&&total(far)===farBefore);
+  nearPlayer.chat('/minecraft:msg QVFar 普通账号私聊。');
+  await until(()=>heard(farPlayer,'普通账号私聊。'));
+  await sleep(1100);
+  check('another account cannot trigger Goddess private TTS',total(near)===before&&total(far)===farBefore);
+  near.setDisabled(true);
+  await until(async()=>(await run('voice status QVReceiver')).includes('VOICE_CLIENT_DISABLED'));
+  goddess.chat('/minecraft:msg QVReceiver 禁用语音仍有文字。');
+  await until(()=>heard(nearPlayer,'禁用语音仍有文字。'));
+  await sleep(1100);
+  check('disabled SVC client still receives only text',total(near)===before&&total(far)===farBefore);
+  report.udp={target:near.state.privateAudio,acrossDimensions:far.state.privateAudio,unexpected:near.state.audio+far.state.audio,
+    errors:near.state.errors+far.state.errors};
+  check('both encrypted audio sessions decode without transport errors',report.udp.errors===0);
+  writeFileSync(root+'/goddess-private-opus.json',JSON.stringify(near.state.privatePackets));
+  report.passed=!report.failures.length;
+ }else{
  // Velocity also advertises its registered channels for every player. This
  // transport declaration alone must not impersonate an Agent voice adapter.
  for(const bot of bots)bot._client.write('custom_payload',{channel:'minecraft:register',data:Buffer.from('mcagent:voice')});
@@ -95,6 +157,7 @@ try{
   check('reattaching the same body reports connected without replaying audio',near.state.players.get('QVSource')?.disconnected===false&&near.state.audio===before);
   report.finalBridgeState=near.state.players.get('QVSource');
   report.passed=report.failures.length===0;
+ }
  }
 }catch(e){report.passed=false;report.error=e.stack;}
 finally{voice?.close();for(const r of udp)r.close();for(const b of bots)b.quit('isolated voice verification finished');writeFileSync(root+'/result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));}
