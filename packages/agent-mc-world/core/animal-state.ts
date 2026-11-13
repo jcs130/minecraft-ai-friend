@@ -1,6 +1,6 @@
 /** 动物状态读取仅使用协议 registry 的元数据字段。 */
-import { minecraftTextComponent } from './text-component.ts';
-import { observedEntityIdentity, entityIdentityContext } from './entity-identity.ts';
+import { entityCustomName, observedEntityIdentity, entityIdentityContext } from './entity-identity.ts';
+export { entityCustomName } from './entity-identity.ts';
 
 export interface NamedStack { name?: string }
 
@@ -28,13 +28,6 @@ export function metaOf(bot: FactBot, entity: FactEntity, key: string): unknown {
   const keys = bot.registry?.entitiesByName?.[name]?.metadataKeys ?? [];
   const at = keys.indexOf(key);
   return at >= 0 ? entity.metadata?.[at] : undefined;
-}
-
-/** Received custom names are identity data, not entity types or proof of ownership. */
-export function entityCustomName(bot: FactBot, entity: FactEntity): string | null {
-  const text = minecraftTextComponent(metaOf(bot, entity, 'custom_name'))
-    .replace(/§[0-9a-fk-or]/gi, '').replace(/[\r\n\t\u0000-\u001f]/g, ' ').trim().slice(0, 160);
-  return text || null;
 }
 
 export function entityIdentityNote(bot: FactBot, entity: FactEntity): string {

@@ -2,6 +2,7 @@
 import type { Bot } from 'mineflayer';
 import { declareDecodedChannels } from './decoded-channels.ts';
 import { metaOf } from './animal-state.ts';
+import {entityCustomName, observedEntityIdentity, observedEntityLabel, type EntityIdentity} from './entity-identity.ts';
 import { HOSTILE } from './melee.ts';
 import { piglinIsHostile } from './piglin.ts';
 import { canSeeEntity } from './terrain.ts';
@@ -21,6 +22,10 @@ export interface BattlefieldActor {
   uuid: string | null;
   type: string | null;
   name: string | null;
+  /** Display-only; never an executable type, party relation or instruction. */
+  label?: string;
+  customName?: string | null;
+  identity?: EntityIdentity;
   relation: Relation;
   relationSource: 'server' | 'hostile-type' | 'unknown';
   scoreboardTeam: string | null;
@@ -178,6 +183,9 @@ export class BattlefieldObserver {
         } catch { /* An unloaded ray is unknown. */ }
       }
       actors.push({ entityId: e.id, uuid: e.uuid ?? null, type: e.name ?? row?.type ?? null,
+        label:observedEntityLabel(bot,e,observation.visibility==='visible'),
+        ...(observation.visibility==='visible'?{customName:entityCustomName(bot,e)}:{}),
+        ...(observedEntityIdentity(bot,e)?{identity:observedEntityIdentity(bot,e)!}:{}),
         name: e.username ?? row?.name ?? null, relation: row?.relation ?? (hostile ? 'hostile' : 'unknown'),
         relationSource: row ? 'server' : hostile ? 'hostile-type' : 'unknown',
         scoreboardTeam: team(e.username),

@@ -19,4 +19,14 @@ with `agent-mc-world/observations`; adapters bind it through `/extension`.
 Identity does not establish life state, visibility, friendliness, permissions,
 proximity or successful interaction. Nearby occluded observations remain
 explicitly tracked/occluded; the identity does not reveal hidden metadata or
-grant attack/interaction access. Unknown entities keep their original labels.
+grant attack/interaction access.
+
+For a visible entity without an attested identity, its received custom name is
+the leading display label, followed by the raw protocol type. This handles
+server compatibility projections without a global type rename: a mod creature
+named `[敌对妖精] 弹幕妖精` transported as `vex` is shown with that display text,
+while targeting, physics and classification still use `vex` and the exact entity
+ID/UUID. Ordinary unnamed vex entities remain vex. A name tag can also supply
+custom text: it is never proof of a mod species, allegiance, ownership or an
+instruction to follow. Hidden metadata is not newly disclosed. The same bounded
+label is carried in attention, SDK entity observations and fast battle facts.

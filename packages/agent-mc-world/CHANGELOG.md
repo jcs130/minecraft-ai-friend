@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.56
+
+- Prefer a received custom display name in visible entity observations while retaining the raw protocol type, UUID and executable target. No global mob rename, name-derived allegiance or hidden-name disclosure.
+- Carry the same label through attention, proximity, SDK observations and the compact fast-decision request. A mod entity projected as a vanilla mob can be described by its actual received name without changing physics or targeting.
+- Verify modern and legacy metadata, plain vanilla entities, arbitrary name tags, occlusion and server-attested companions. These checks do not attest an unprovided original mod type.
+
 ## 0.5.7-rc.160-preview.54
 
 - Preserve a server-confirmed vehicle attachment when a later position or delayed respawn packet arrives; keep walking physics disabled while mounted. Treat passenger packets as full snapshots, including empty dismounts, without duplicate mount events.

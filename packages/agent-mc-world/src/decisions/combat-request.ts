@@ -65,6 +65,7 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
         ?{source:clue.source,kind:clue.kind,direction:clue.direction,distance:clue.distance,ageMs:b.sampledAtMs-clue.heardAt}
         :{source:clue.source,key:clue.key,lastSeenPosition:clue.position,ageMs:b.sampledAtMs-clue.seenAt})}:{}),
       actors: b.actors.map(actor => ({ entityId: actor.entityId, type: actor.type,
+        ...((actor.customName || actor.identity) && actor.label ? {displayLabel:actor.label.slice(0,220)} : {}),
         relation: actor.relation, relationSource: actor.relationSource, health: health(actor.health),
         distance: actor.distance, height: actor.position ? Math.round((actor.position[1] - b.self.position[1]) * 10) / 10 : null,
         lineOfSight: actor.lineOfSight, targetEntityId: actor.targetEntityId })),
