@@ -10,7 +10,7 @@
 | Skill | `skills/minecraft-agent/` | 复制整个文件夹，保留 references |
 | 本机连接台 | `minecraft-agent-client <private-config.json>` | 无 Cortico；默认仅绑定 127.0.0.1 |
 
-安装与离线检查见 [核心包说明](../README.md)。千灯纪适配器在独立 World 仓库的 `integrations/qiandengji/`，不随此通用包安装，也不是默认能力。
+首次使用 Agensi 版 Skill 时，见[本机快速入门](../../../docs/AGENSI-MINECRAFT-QUICKSTART.md)。安装与离线检查见 [核心包说明](../README.md)。千灯纪适配器在独立 World 仓库的 `integrations/qiandengji/`，不随此通用包安装，也不是默认能力。
 
 Java 1.21.1 是主要维护、构建与验收版本，1.20.6 保留显式兼容回归。早期 1.20.6 的私聊、登录状态、工具屏障、现场读数、退出与可选构建修订及逐项测试见 [客户端兼容修订](client-fixes-20261013.md)。心跳默认 60 秒，可用 `keepAliveTimeoutMs` 配置；登录失败会停下等待修正，不循环重试密码。
 
