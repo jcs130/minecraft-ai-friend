@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261113_maid_residence",
-  "currentComponentEvidence": "paper/manifests/maid-residence-deployed-20261113.json",
-  "acceptanceDocument": "paper/docs/MAID_RESIDENCE_DEPLOYED_20261113.md",
+  "inventoryScope": "component_runtime_verified_20261113_rpg_party_maid",
+  "currentComponentEvidence": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+  "acceptanceDocument": "paper/docs/RPG_DAILY_SHOP_AND_PARTY_20261113.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "maid-residence-20261113-r1",
-  "verifiedAt": "2026-11-13T11:36:06.1708969+08:00",
-  "releaseDocument": "paper/docs/MAID_RESIDENCE_DEPLOYED_20261113.md",
+  "latestRelease": "rpg-party-maid-20261113-r3",
+  "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+  "releaseDocument": "paper/docs/RPG_DAILY_SHOP_AND_PARTY_20261113.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
     "verifiedAt": "2026-11-13T17:23:09+08:00",
@@ -1576,30 +1576,42 @@
   },
   "currentComponentOverrides": {
     "AgentFriend": {
-      "version": "0.4.47.70-jungle-survey-rpg",
-      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
-      "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
+      "version": "0.4.47.71-daily-shop-frost",
+      "sha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
+      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.28-residence",
-      "sha256": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
-      "evidence": "paper/manifests/maid-residence-deployed-20261113.json"
+      "version": "0.1.31-vortex-spells",
+      "sha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
+      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.21-party-support",
+      "sha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
+      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+    },
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "sha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/maid-residence-deployed-20261113.json",
-    "AgentFriend": "paper/manifests/temple-partner-deployed-20261110.json"
+    "QiandengjiMaidBridge": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+    "AgentFriend": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+    "QiandengjiRpg": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+    "VortexRPG": "paper/manifests/rpg-party-maid-deployed-20261113.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.28-residence",
-      "artifactSha256": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
-      "manifest": "paper/manifests/maid-residence-deployed-20261113.json"
+      "version": "0.1.31-vortex-spells",
+      "artifactSha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
     },
     "AgentFriend": {
-      "version": "0.4.47.70-jungle-survey-rpg",
-      "artifactSha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+      "version": "0.4.47.71-daily-shop-frost",
+      "artifactSha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
     },
     "QiandengVoice": {
       "version": "0.1.6",
@@ -1625,23 +1637,34 @@
       "version": "0.1.4",
       "artifactSha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
       "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.21-party-support",
+      "artifactSha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+    },
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "artifactSha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
     }
   },
   "currentRuntime": {
-    "AgentFriend": "0.4.47.70-jungle-survey-rpg",
+    "AgentFriend": "0.4.47.71-daily-shop-frost",
     "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.28-residence",
+    "QiandengjiMaidBridge": "0.1.31-vortex-spells",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
     "mods": 6,
     "VortexRPG": "1.2.2-alpha",
-    "QiandengjiRpg": "0.2.20",
+    "QiandengjiRpg": "0.2.21-party-support",
     "QiandengVoice": "0.1.6",
     "WorldObserver": "0.1.4-maid-ysm",
     "website": "0.8.41",
     "LoginGuard": "0.1.12-ordered-voice",
-    "AgentVision": "0.1.4"
+    "AgentVision": "0.1.4",
+    "hostedNumenCore": "0.5.7-rc.160-preview.59"
   },
   "currentGameContent": {
     "sites": 15,
@@ -1926,27 +1949,27 @@
     },
     {
       "name": "QiandengjiMaidBridge",
-      "version": "0.1.28-residence",
+      "version": "0.1.31-vortex-spells",
       "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
-      "sha256": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
-      "sourceCommit": "162a370409a9dbcbfbae59949cf70e0704d48a4c",
-      "processId": 12748,
-      "processStartedAt": "2026-11-13T11:32:51+08:00",
-      "verifiedAt": "2026-11-13T11:36:06.1708969+08:00",
-      "manifest": "paper/manifests/maid-residence-deployed-20261113.json",
+      "sha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
       "codeChangedThisBatch": true
     },
     {
       "name": "AgentFriend",
-      "version": "0.4.47.70-jungle-survey-rpg",
+      "version": "0.4.47.71-daily-shop-frost",
       "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
-      "sha256": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
-      "codeChangedThisBatch": false,
-      "sourceCommit": "16ade277492fd64a2b74ce9b7571903e7a140e28",
-      "processId": 23436,
-      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
-      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+      "sha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
     },
     {
       "name": "AgentVision",
@@ -1959,11 +1982,35 @@
       "processStartedAt": "2026-11-10T17:04:48.9264617Z",
       "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
       "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+    },
+    {
+      "name": "QiandengjiRpg",
+      "version": "0.2.21-party-support",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "sha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "VortexRPG",
+      "version": "1.2.2-alpha",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "sha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
     }
   ],
   "latestComponentEvidence": {
     "viewerUi": "viewer-ui-deployed-20261109.json",
-    "maidRuntime": "maid-residence-deployed-20261113.json",
+    "maidRuntime": "rpg-party-maid-deployed-20261113.json",
     "maidVoicePatrolCandidate": "maid-voice-patrol-candidate-20261110.json",
     "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded.",
     "maidSceneVoiceCandidate20261110": {
@@ -1995,6 +2042,11 @@
       "state": "deployed",
       "manifest": "paper/manifests/maid-residence-deployed-20261113.json",
       "sourceMain": "d0b727cf74ab98f461957f1a2effce52d64193bf"
+    },
+    "rpgPartyMaid20261113": {
+      "state": "deployed",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "sourceMain": "95beae0049944182903d14aec646f934b0734aa9"
     }
   },
   "publicViewerFidelity": {
@@ -2007,7 +2059,7 @@
     "gameRestarted": false,
     "record": "paper/manifests/public-viewer-deployed-20261109.json"
   },
-  "currentComponentEvidenceScope": "The maid bridge uses the residence manifest. Other components retain their individual verification times.",
+  "currentComponentEvidenceScope": "The joint manifest records the four updated game plugins. Hosted Numen has its own runtime record. Other component records retain their original observation times.",
   "previousCanonicalRuntimeBeforeHutao20261110": {
     "currentRuntime": {
       "AgentFriend": "0.4.47.68-player-ui-rpg",
@@ -2084,7 +2136,7 @@
       "originalLedgerAndConfigUnchanged": true
     }
   ],
-  "componentRuntimeEvidenceScope": "The maid bridge entry is verified against the restarted game. Other entries retain their separately recorded verification times and scopes.",
+  "componentRuntimeEvidenceScope": "The four updated game plugins were verified on the restarted game. Other entries retain their individually recorded verification times.",
   "previousComponentRuntimeEvidenceBeforeCompanion20261110": [
     {
       "name": "AgentFriend",

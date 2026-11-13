@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "release": "rpg-party-maid-20261113-r3",
+  "state": "deployed-component-runtime-verified",
+  "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+  "codePullRequests": [
+    192,
+    193,
+    199
+  ],
+  "codeHead": "d193ab32fd093acb146195ba9dd466a186fe6944",
+  "mergedMain": "95beae0049944182903d14aec646f934b0734aa9",
+  "sourceTree": "cc30b7ccc63465252d59a571465da2b9e98e6f14",
+  "ci": {
+    "runId": 43406611585,
+    "successfulJobs": 6
+  },
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.71-daily-shop-frost",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengjiRpg",
+      "version": "0.2.21-party-support",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "sha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "VortexRPG",
+      "version": "1.2.2-alpha",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "sha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.31-vortex-spells",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
+      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
+      "processId": 5088,
+      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
+      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
+      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "codeChangedThisBatch": true
+    }
+  ],
+  "installedFiles": [
+    {
+      "target": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "before": "f8ee8b9df20f363d60509196a9a5e93baef92a9c19f39f9612f10b613c499702",
+      "sha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d"
+    },
+    {
+      "target": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "before": "5c3709b22f1b089ad9f99868f9cc00ff6c2675a563405c5117b651fc71e60b5b",
+      "sha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079"
+    },
+    {
+      "target": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "before": "1fb78b4c3da03acbd50875aae2b7aea437d01337a4c251568ff64e19da197618",
+      "sha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223"
+    },
+    {
+      "target": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
+      "sha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97"
+    }
+  ],
+  "verification": {
+    "isolatedGameplayChecks": 111.0,
+    "formalStartupChecks": 19,
+    "coldCopiesVerified": 2,
+    "characterFilesVerifiedDuringInstall": 9754,
+    "originalAuthRowsVerified": 80,
+    "tps": 20.0,
+    "dungeonSites": 15,
+    "publicJavaStatus": true,
+    "bedrockLanTransport": true,
+    "physicalBedrockDevice": false,
+    "originalMaidLife": "alive",
+    "originalMaidHealth": 25,
+    "originalMaidInvulnerable": true,
+    "originalMaidOwnerAndYsmVerified": true,
+    "originalProductionFollow": "waiting-for-safe-reunion-outside-trial-area",
+    "hostedNumen": "0.1.5-hosted.1",
+    "hostedCore": "0.5.7-rc.160-preview.59",
+    "hostedAutonomy": "0.2.155",
+    "hostCombatAttentionPreview60": "source-only-in-this-batch"
+  },
+  "rollbackScope": "Four pinned code artifacts. Preserve current world, character, inventory, wallet, shop and action history."
+}
