@@ -26,7 +26,7 @@ it('offers a short grounded stroll but rejects water, missing chunks, cliffs and
 });
 it('moves through owned controls and releases synchronously before a successor takes the body',async()=>{
  vi.useFakeTimers();const {bot,controls}=flat(),stop=new AbortController();
- const sampled=sampleIdleActions(bot,{allowMovement:true});
+ const sampled=sampleIdleActions(bot,{allowMovement:true,random:()=>0});
  const outcome=executeIdleAction(bot,'wander',sampled.state,stop.signal,{available:()=>true,inventoryPreview:()=>{}}).catch(e=>e);
  await vi.advanceTimersByTimeAsync(60);expect(controls.forward).toBe(true);
  stop.abort('new task');expect(controls.forward).toBe(false);
@@ -35,17 +35,48 @@ it('moves through owned controls and releases synchronously before a successor t
 });
 it('stops a stroll when its runtime safety lease changes',async()=>{
  vi.useFakeTimers();const {bot,controls}=flat();let safe=true;
- const result=executeIdleAction(bot,'wander',sampleIdleActions(bot,{allowMovement:true}).state,new AbortController().signal,
+ const result=executeIdleAction(bot,'wander',sampleIdleActions(bot,{allowMovement:true,random:()=>0}).state,new AbortController().signal,
   {available:()=>safe,inventoryPreview:()=>{}}).catch(e=>e);
  await vi.advanceTimersByTimeAsync(60);safe=false;await vi.advanceTimersByTimeAsync(60);
  expect((await result).name).toBe('AbortError');expect(controls.forward).toBe(false);
 });
-it('does not choose wandering at random and admits a model-selected stroll only once',async()=>{
+it('starts authorized idle strolling without waiting for a model and yields to a new task',async()=>{
  vi.useFakeTimers();let cancelled=false;
  const execute=vi.fn((_id,_scene,signal)=>new Promise<void>(resolve=>signal.addEventListener('abort',()=>{cancelled=true;resolve();},{once:true})));
  const controller=new IdleBehaviorController({config:()=>({enabled:true,selector:'random',minIdleMs:0,minIntervalMs:1000,maxIntervalMs:1000}),
   host:{scene:()=>({generation:'1',state:{},candidates:[{id:'wander',label:'stroll'}]}),execute,record:()=>{}}});
- controller.tick();expect(execute).not.toHaveBeenCalled();
- expect(controller.startSelected('wander')).toBe(true);expect(execute).toHaveBeenCalledTimes(1);
+ controller.tick();expect(execute).toHaveBeenCalledTimes(1);
  expect(controller.startSelected('wander')).toBe(false);controller.cancel('task');expect(cancelled).toBe(true);controller.stop();
+});
+
+it('varies observed stroll directions while staying around the uninterrupted idle anchor',()=>{
+ const {bot}=flat(),anchor=bot.entity.position.clone();
+ const first=sampleIdleActions(bot,{allowMovement:true,movementAnchor:anchor,random:()=>0}).state as any;
+ const second=sampleIdleActions(bot,{allowMovement:true,movementAnchor:anchor,random:()=>.5}).state as any;
+ expect(first.wander.destination.z).toBeLessThan(anchor.z);
+ expect(second.wander.destination.z).toBeGreaterThan(anchor.z);
+ bot.entity.position=anchor.offset(0,0,-5.5);
+ const edge=sampleIdleActions(bot,{allowMovement:true,movementAnchor:anchor,random:()=>0});
+ expect(edge.candidates.some(c=>c.id==='short_walk')).toBe(false);
+ const to=(edge.state as any).wander.destination;
+ expect(Math.hypot(to.x-anchor.x,to.z-anchor.z)).toBeLessThanOrEqual(6);
+});
+
+it('does not let a large catalogue of glances crowd movement out of family selection',async()=>{
+ const execute=vi.fn(async()=>{});
+ const candidates=[...Array.from({length:40},(_,i)=>({id:`look_${i}`,label:'look',category:'look' as const})),
+  {id:'wander',label:'stroll',category:'move' as const}];
+ const controller=new IdleBehaviorController({random:()=>.1,
+  config:()=>({enabled:true,selector:'random',minIdleMs:0,minIntervalMs:1000,maxIntervalMs:1000}),
+  host:{scene:()=>({generation:'1',state:{},candidates}),execute,record:()=>{}}});
+ controller.tick();expect(execute.mock.calls[0]?.[0]).toBe('wander');controller.stop();
+});
+
+it('rechecks terrain during a stroll and releases forward when a hazard appears',async()=>{
+ vi.useFakeTimers();const {bot,controls}=flat();
+ const result=executeIdleAction(bot,'wander',sampleIdleActions(bot,{allowMovement:true,random:()=>0}).state,
+  new AbortController().signal,{available:()=>true,inventoryPreview:()=>{}});
+ await vi.advanceTimersByTimeAsync(60);expect(controls.forward).toBe(true);
+ const original=bot.blockAt;bot.blockAt=(p:Vec3)=>p.z<0?{...original(p),name:'fire'}:original(p);
+ await vi.advanceTimersByTimeAsync(60);await result;expect(controls.forward).toBe(false);
 });
