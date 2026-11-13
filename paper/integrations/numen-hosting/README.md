@@ -1,6 +1,6 @@
 # Numen 服务器托管
 
-2026-11-13 正式托管运行 `0.1.5-hosted.1`、MC 核心 `0.5.7-rc.160-preview.59` 和自治运行时 `0.2.155`。详情见[发布记录](../../docs/NUMEN_SYSTEM_ONE_20261113.md)。
+2026-11-14 正式托管运行 `0.1.5-hosted.2`、MC 核心 `0.5.7-rc.160-preview.68` 和自治运行时 `0.2.156`，已启用战场提醒。见[发布清单](../../manifests/server-pr207-trial-deployed-20261114.json)。
 
 这是与既有 Mineflayer 并行的托管入口。官网账号选择本人已绑定角色，填写自己的 API Key、供应商、模型和目标，再选择 **Numen 原生循环** 或 **Harness Hub · OpenCode + MC 核心**。原 UUID、背包、位置和权限继续使用，不按同名另建角色。
 

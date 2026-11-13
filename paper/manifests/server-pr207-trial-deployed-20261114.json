@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "release": "server-pr207-trial-20261114-r1",
+  "state": "deployed-component-runtime-verified",
+  "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+  "mergedMain": "fa1d296cacfb2823fcd6c847793f1ff83beb7d1f",
+  "sourceTree": "39c8648b1c0d34b455c7761e72142bbda08b9e88",
+  "opsSourceMain": "6fcaa9469d40b0015ab70efbf323efee5a50e0a0",
+  "codePullRequests": [
+    203,
+    207,
+    211,
+    212,
+    213,
+    215,
+    216,
+    218,
+    219,
+    220
+  ],
+  "ci": {
+    "combatAttention": 43522562001,
+    "trialFire": 43498361425,
+    "trialDrops": 43506699278,
+    "dailyBackup": 43527398312,
+    "jobsPerRun": 6
+  },
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.75-trial-gear",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "879b84565e4381aaac9e4a6cfd545cd5ad7e70115e48af7ef39f5e44471427de",
+      "sourceCommit": "58b417c9088d4112a3683cdfe2b2be06ac55bacd",
+      "processId": 38380,
+      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.34-autonomous-companion",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "bae659e41e5b4d09a37b403b6943f67896bb6b52717a489df3f61cde75ca769a",
+      "sourceCommit": "5557e43a0b9afb44ad52086aaff0b76c8a3082a4",
+      "processId": 38380,
+      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengVoice",
+      "version": "0.1.7",
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "sha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
+      "sourceCommit": "9326de9b5a28697ff9ab8e8494dfc221bee92933",
+      "processId": 38380,
+      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "numen_hosted",
+      "version": "0.1.5-hosted.2",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+      "sourceCommit": "b189fc123d3d2139271abf73341f22026d446f52",
+      "processId": 38380,
+      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "numen_hosted_api",
+      "version": "0.1.5-hosted.2",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+      "sourceCommit": "b189fc123d3d2139271abf73341f22026d446f52",
+      "processId": 38380,
+      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "hostedNumenCore",
+      "version": "0.5.7-rc.160-preview.68",
+      "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
+      "sha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
+      "sourceCommit": "656afc659ba896d10118ec2e9223f982d7577fb7",
+      "processId": 37468,
+      "processStartedAt": "2026-11-14T07:42:17.830+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengjiRpg",
+      "version": "0.2.22-dungeon-readiness",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "sha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 38380,
+      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "codeChangedThisBatch": false
+    }
+  ],
+  "hosting": {
+    "autonomy": "0.2.156",
+    "combatAttention": true,
+    "coreArchiveSha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
+    "packageManifestSha256": "410e07d2acf449f23c59ab95b493ae75d94146a1b8526499a7027b171a93dc37",
+    "decisionRuntimeSha256": "33d0302dd133a78707d3ca9677a77c5f438e1bffb9cf2db65ea77e803c24c81b"
+  },
+  "backupSet": {
+    "stamp": "20261114-073014",
+    "volumes": [
+      "E",
+      "F"
+    ],
+    "criticalFilesVerified": 3017,
+    "authRowsVerified": 80,
+    "hostingDatabaseVerified": true
+  },
+  "opsManager": {
+    "sha256": "d663f18832c986bb86651eb3666654547ba68bbbaf3de0c406d777a0cb0fb251",
+    "sourcePr": 220
+  },
+  "verification": {
+    "isolatedCombatChecks": 12,
+    "corePassed": 3214,
+    "coreSkipped": 8,
+    "hostingTestsPassed": 70,
+    "combinedYouerStartups": 2,
+    "productionChecks": [
+      "numen_hosted_api 0.1.5-hosted.2",
+      "numen_hosted 0.1.5-hosted.2",
+      "Numen native signature gate, scoped MCP, shared core preview.68 and autonomy 0.2.156 verified",
+      "reviewed JARs and all unchanged game binaries verified",
+      "AgentFriend 0.4.47.75-trial-gear",
+      "QiandengjiRpg 0.2.22-dungeon-readiness",
+      "QiandengjiMaidBridge 0.1.34-autonomous-companion",
+      "VortexRPG 1.2.2-alpha",
+      "QiandengVoice 0.1.7",
+      "game, performance and 15 dungeon sites ready",
+      "Simple Voice Chat API ready",
+      "original resident binding, patrol route and workshop loaded",
+      "public Java ingress and private hosting service responded"
+    ],
+    "tps": "20.000",
+    "bedrockLanAndSignaling": true,
+    "cameraReady": true,
+    "goddessJobsRestored": 7,
+    "actualProductionPlayerActions": 0,
+    "originalMaidLoadedAtStartupCheck": false,
+    "productionHostedRoleControlInvoked": false
+  },
+  "rollbackScope": "Restore only the reviewed code and hosted runtime files after a normal stop. Keep current worlds, characters, identity, credentials, leases and action receipts."
+}
