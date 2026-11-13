@@ -15,7 +15,7 @@
     "upstreamNumen": "143ba409a62c99bf1e985b6047bcad0f00e9313e",
     "hostedNumen": "0.1.5-hosted.1",
     "classicNumen": "0.1.4",
-    "classicNumenApi": "0.1.4-qd-youer3",
+    "classicRuntimeBuild": "0.1.4-qd-youer3",
     "embeddedCore": "0.5.7-rc.160-preview.59",
     "autonomy": "0.2.155",
     "hostingPullRequest": 196,
