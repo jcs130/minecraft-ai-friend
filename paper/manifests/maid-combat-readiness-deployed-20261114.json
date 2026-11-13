@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-combat-readiness-20261113-r4",
+  "state": "deployed-component-runtime-verified",
+  "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+  "codePullRequests": [
+    206
+  ],
+  "codeHead": "75448d282038c168187ec03e3aa099b166cea31e",
+  "mergedMain": "82867065e0713a2840023999330ae6b7fb1a20b5",
+  "sourceTree": "9a9fb648e1f01b5e3a95f05ea3010f288e57a1f2",
+  "ci": {
+    "runId": 43455388855,
+    "successfulJobs": 6
+  },
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.72-dungeon-readiness",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "bd65dcca4fe65c7a7f09fa10f3115b02af13bdbd149b756cef39f1d50ae694ec",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 22400,
+      "processStartedAt": "2026-11-14T00:11:13.6682035+08:00",
+      "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengjiRpg",
+      "version": "0.2.22-dungeon-readiness",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "sha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 22400,
+      "processStartedAt": "2026-11-14T00:11:13.6682035+08:00",
+      "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.32-adaptive-guard",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "b90611afb606a6584f55ebf7c0d6f8ed29f61e7a9fadd000f4bc6d4e8e767d17",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 22400,
+      "processStartedAt": "2026-11-14T00:11:13.6682035+08:00",
+      "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+      "codeChangedThisBatch": true
+    }
+  ],
+  "backupSet": "maid-combat-readiness-20261113-r4",
+  "installedFiles": [
+    {
+      "target": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "before": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
+      "sha256": "bd65dcca4fe65c7a7f09fa10f3115b02af13bdbd149b756cef39f1d50ae694ec"
+    },
+    {
+      "target": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "before": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
+      "sha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5"
+    },
+    {
+      "target": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "before": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
+      "sha256": "b90611afb606a6584f55ebf7c0d6f8ed29f61e7a9fadd000f4bc6d4e8e767d17"
+    },
+    {
+      "target": "E:/MC/server/plugins/AgentFriend/agent-guide.yml",
+      "before": "98603047372de0f1e2d740c24a2add073688901ebbdaa7a7de07fc82ea091810",
+      "sha256": "a1125f2b053d96dadea6b9725e9d37d217e3a708e7f1e2f861c093380cee7dde"
+    },
+    {
+      "target": "E:/MC/server/plugins/AgentFriend/onboarding.yml",
+      "before": "af10e8417da5e34ad900a415197c149fba6256a2a39bcff818818bb2d3a7f0b6",
+      "sha256": "5424166e7607cb5c150432dcacc72bbb0913fc4e9b297c16289b01f9adc311c8"
+    },
+    {
+      "target": "E:/MC/server/plugins/WorldEvents/events/qiandengji.yml",
+      "before": "3b8f9b815cc3ce555c408cb4c3d48494ce4803658c7dcf0db2bcb575dce6d39b",
+      "sha256": "5968f08668119b64506e907e3b7d25fea3857e9c834f7bfb866c8a2615e85c19"
+    }
+  ],
+  "verification": {
+    "candidateTests": {
+      "dungeon": 14,
+      "guard": 25,
+      "guardRestart": 5,
+      "voice": 6,
+      "stash": 37,
+      "stashRestart": 2
+    },
+    "formalStartupChecks": 9,
+    "unchangedBinariesVerified": 69,
+    "coldCopiesVerified": 2,
+    "originalDungeonCheckpointPreserved": true,
+    "characterFilesVerifiedDuringInstall": 9851,
+    "originalAuthRowsVerified": 80,
+    "tps": 20.0,
+    "dungeonSitesLoaded": 15,
+    "publicJavaStatus": true,
+    "originalOwnerRejoined": true,
+    "bedrockLanTransport": true,
+    "physicalBedrockDevice": false,
+    "originalMaidLife": "alive",
+    "originalMaidInvulnerable": true,
+    "originalMaidOwnerAndYsmVerified": true,
+    "goddessJobsRestored": 7,
+    "productionTrialFloorTransitionObserved": false,
+    "productionMaidGuardCombatObserved": false,
+    "productionMaidVoiceListeningObserved": false,
+    "existingPlayerInventoryChangedByOperator": false
+  },
+  "rollbackScope": "Restore the reviewed code and static configuration during a normal backed-up maintenance window. Preserve the latest world, original identities and inventory, the dungeon checkpoint and action records."
+}
