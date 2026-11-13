@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.65
+
+- Separate physical fire contact from planner clearance. Validate explicit ranged spacing against the current local corridor; blocked retreat can still fire a verified shot. Clarify that a local combat clear does not complete a server room.
+
 ## 0.5.7-rc.160-preview.64
 
 - Preserve combat ownership when fire has no executable escape; revalidate bounded search, unfinished-room intent and current armor/spare facts.

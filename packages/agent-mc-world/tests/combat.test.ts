@@ -679,6 +679,20 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
     expect(Object.values(controls).every(value => !value)).toBe(true);
   });
 
+  it('explicit kite releases an arrow when fire prevents retreat instead of repeatedly stepping into it',async()=>{
+    const enemy=foe(7,'blaze',3),{bot,controls}=combatRigBot([enemy]),b=bot as any;
+    b.registry.entitiesByName.blaze={name:'blaze'};
+    b.inventory.items=()=>[{name:'bow',count:1},{name:'arrow',count:12}];
+    const read=b.blockAt;b.blockAt=(p:Vec3)=>p.y>=64&&p.z>=1?{name:'fire',shapes:[],getProperties:()=>({})}:read(p);
+    const stats={token:{},targetId:7,swings:0,meleeHits:0,arrows:0,rangedHits:0,hurts:0,lastHurtAt:0,lastSwingAt:0,lastSwingTargetId:-1,dead:false,disconnected:false};
+    const release=vi.fn(),ranged=rangedRig();
+    ranged.actions.shoot=vi.fn(async()=>{expect(controls.back).toBe(false);stats.dead=true;return {kind:'released',shotId:1,targetId:7,ownerToken:stats.token,at:Date.now(),aim:enemy.position,hitWindow:{from:Date.now(),until:Date.now()+1500}};});
+    const result=skillAttack(bot,'blaze','kite',{aborted:()=>false,fleeHealth:()=>0,escape:{active:false},attack:{acquire:()=>stats,release,ranged:ranged.actions},log} as never);
+    await drive(bot,100);await result;
+    expect(ranged.actions.shoot).toHaveBeenCalledTimes(1);expect(stats.arrows).toBe(1);expect(release).toHaveBeenCalledTimes(1);
+    expect(Object.values(controls).some(Boolean)).toBe(false);
+  });
+
   it('a ranged-only loadout keeps distance instead of switching to an empty melee hand at close range', async () => {
     const { bot, attacks, controls } = combatRigBot([foe(7, 'zombie', 2.5)]), b = bot as any;
     b.heldItem = null; b.inventory.items = () => [{ name: 'bow', type: 2, count: 1 }];

@@ -26,6 +26,7 @@ import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import type { AttackEvidence } from '../src/contracts/attack-evidence.ts';
 import { readDurability } from './item-facts.ts';
 import { weaponScore } from './weapon-capabilities.ts';
+import { corridorSafe } from './idle-actions.ts';
 export { weaponScore, WEAPON_KIND_SCORE, WEAPON_TIER_SCORE } from './weapon-capabilities.ts';
 
 const { goals } = pathfinderPkg;
@@ -209,16 +210,25 @@ export function pressRanged(
   distance: number,
   mode: AttackMode,
   strafeLeft: boolean,
-): void {
+): { retreating: boolean } {
   const kite = mode === 'kite';
   const retreat = distance <= HYBRID_MELEE_AT || (kite && distance < KITE_MIN_RANGE);
-  bot.setControlState('jump', false);
-  bot.setControlState('forward', kite && distance > KITE_MAX_RANGE);
-  bot.setControlState('back', retreat);
-  bot.setControlState('sprint', kite && distance > KITE_MAX_RANGE);
+  const p = bot.entity.position, yaw = bot.entity.yaw;
+  // Validate the short control corridor before pressing a key. In particular,
+  // resuming an interrupted kite must not walk straight back into the same fire.
+  const safe = (angle: number) => corridorSafe(bot, p, p.offset(-Math.sin(angle), 0, -Math.cos(angle)));
+  const forward = kite && distance > KITE_MAX_RANGE && safe(yaw);
+  const backward = retreat && safe(yaw + Math.PI);
   const lateral = kite && distance >= KITE_MIN_RANGE && distance <= KITE_MAX_RANGE;
-  bot.setControlState('left', lateral && strafeLeft);
-  bot.setControlState('right', lateral && !strafeLeft);
+  const left = lateral && strafeLeft && safe(yaw + Math.PI / 2);
+  const right = lateral && !strafeLeft && safe(yaw - Math.PI / 2);
+  bot.setControlState('jump', false);
+  bot.setControlState('forward', forward);
+  bot.setControlState('back', backward);
+  bot.setControlState('sprint', forward);
+  bot.setControlState('left', left);
+  bot.setControlState('right', right);
+  return { retreating: backward };
 }
 
 /** 一只在 32 格内的敌对生物读数 */
@@ -503,10 +513,12 @@ export async function skillAttack(
         await aimAt(bot, entity);
         if (stats.dead) break;
         checkNamedTarget(true);
-        pressRanged(bot, d, mode, strafeLeft);
+        const motion = pressRanged(bot, d, mode, strafeLeft);
         // Explicit kite asks for spacing first. Auto/ranged may shoot while
         // making room; the hybrid weapon preference is not a bow range limit.
-        if (mode === 'kite' && d < KITE_MIN_RANGE) {
+        // A blocked retreat is not a reason to withhold a valid shot forever.
+        // The bow controller still verifies LOS, ballistics and the attack lease.
+        if (mode === 'kite' && d < KITE_MIN_RANGE && motion.retreating) {
           await sleep(50);
           continue;
         }

@@ -419,6 +419,7 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
           } : {}) });
           this.combatProbe.flush();
           this.emit('minecraft.combat', `[Minecraft] 战斗观察回执#${receipt.id}：${result.reason}；`
+            + (result.reason === 'clear' ? '局部战斗控制器当前已无交战目标；不代表房间、楼层或副本清完，须另核对服务器进度。' : '')
             + `生命 ${result.healthBefore ?? '未知'}→${result.healthAfter ?? '未知'}，`
             + `刀 ${result.swings} 次/命中 ${result.meleeLanded} 次；`
             + `结束时战术版本 ${receipt.tacticRevision}，已发送法术 ${receipt.casts.map((cast) => cast.spell).join('、') || '无'}。`
