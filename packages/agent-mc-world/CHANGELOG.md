@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.57
+
+- Add collision-checked, costed fire crossings; release failed reflex ownership; expose bounded combat program probes/history and current identity observations.
+
 ## 0.5.7-rc.160-preview.56
 
 - Prefer a received custom display name in visible entity observations while retaining the raw protocol type, UUID and executable target. No global mob rename, name-derived allegiance or hidden-name disclosure.

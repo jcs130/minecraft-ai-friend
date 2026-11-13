@@ -5,6 +5,7 @@ import {RecordedSceneStore,type RecordedScene} from '../src/learning/recorded-sc
 import { operationInventory } from './operation-experience.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
+import { identityObservations } from './identity-observation.ts';
 import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { TaskRecoveryBook } from './task-recovery.ts';
@@ -3641,6 +3642,7 @@ export class MinecraftWorld implements World {
       executionPartKeys: travelOptions ? [...EXECUTION_FACT_KEYS, 'travelOptions'] : EXECUTION_FACT_KEYS,
       options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
+        identityObservations: identityObservations(snap, Date.now()),
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
         health: snap.health, food: snap.food, air: snap.inWater ? snap.oxygen : null, motion: snap.motion,

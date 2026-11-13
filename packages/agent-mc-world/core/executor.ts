@@ -11,6 +11,7 @@
  */
 import type { Bot } from 'mineflayer';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
+import { localHazardExit } from './hazard-exit.ts';
 import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
@@ -66,6 +67,7 @@ import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl, waterControlActive } from './skills-control.ts';
 import {followRoute} from './follow-route.ts';
+import {crossFire,fireRoutes,fireRouteGeometryCurrent,intentionalFireCrossing,type FireRoute} from './fire-route.ts';
 import { sendDeduplicatedChat } from './chat-dedup.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
@@ -986,6 +988,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       if(!call.dryRun)dropGoal(bot,'task','模型指定的精确地面路线',ctx.diag);
       return followRoute(bot,call,ctx);
     }
+    case 'cross_fire': {
+      if(!call.dryRun)dropGoal(bot,'task','模型选择的短距离穿火路线',ctx.diag);
+      return crossFire(bot,call,ctx);
+    }
     case 'control': {
       dropGoal(bot, 'task', '短时直接控制', ctx.diag);
       return skillControl(bot, call, ctx);
@@ -1296,7 +1302,7 @@ type QueueHoldSlot = 'environment' | 'fall' | 'external';
 function reRunnable(call: SkillCall | undefined): boolean {
   if (!call) return true;
   switch (call.skill) {
-    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'follow_route': case 'harvest': case 'swim': return false;
+    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'follow_route': case 'cross_fire': case 'harvest': case 'swim': return false;
     // 只看报价那一形没有副作用,重跑无妨;下过手的那一形扣了等级与青金石,不重跑
     case 'enchant': return call.index === undefined;
     case 'use': return (call.times ?? 1) <= 1 && call.index === undefined;
@@ -6528,6 +6534,7 @@ export class Reflexes {
     const bot = this.opts.getBot();
     if (bot?.entity && this.lavaEscape !== null && !this.lavaEscape.handedOff) this.releaseDash(bot);
     this.lavaEscape = null;
+    this.failedHazard = null;
     this.burning = null;
     if (bot?.entity && this.buried !== null) bot.setControlState('jump', false);
     this.buried = null;
@@ -6754,6 +6761,7 @@ export class Reflexes {
     const envToken = this.environmentHold;
     if (envToken !== null && this.environmentHoldSince !== 0
       && now - this.environmentHoldSince >= HOLD_WATCHDOG_MS) {
+      if(this.lavaEscape){this.failHazardExit(bot,'火源脱离超过环境租约时限仍未恢复');return;}
       const heldSec = Math.round((now - this.environmentHoldSince) / 1000);
       const kind = this.environmentOwnerKind;
       const footing = this.footingText(bot);
@@ -6906,6 +6914,7 @@ export class Reflexes {
       // 氧气元数据死后停在旧值,复活后服务端不一定补发:读数再变之前只信水下计时
       this.oxygenTrusted = false;
       this.lavaEscape = null;
+      this.failedHazard = null;
       this.burning = null;
       this.buried = null;
       this.escapeGoal = null;
@@ -6937,6 +6946,7 @@ export class Reflexes {
   private static readonly LAVA_DASH_STALL_MOVE = 1;
 
   private lastLavaReportAt = 0;
+  private failedHazard: { bot: Bot; position: Vec3; name: string; exitKey: string } | null = null;
   private lavaEscape: {
     startedAt: number; handedOff: boolean; reported: boolean;
     /** 头一次读到「不碰」的时刻;再碰到就清回 null(见 LAVA_CLEAR_DWELL_MS) */
@@ -6945,6 +6955,7 @@ export class Reflexes {
     cell: Cell | null;
     /** 冲刺卡住检测的窗口起点:从哪儿、什么时候开始量 */
     dashFrom: { x: number; y: number; z: number; at: number } | null;
+    fireMotion?: { plan: FireRoute; at: number };
   } | null = null;
   /**
    * 一轮岩浆的进出计次。离开危险格满驻留窗口记 clear，身上还着火也照记，着火交给灭火反射。
@@ -6961,7 +6972,17 @@ export class Reflexes {
   private async antiLava(bot: Bot): Promise<void> {
     const touch = hazardTouch(bot);
     const hazard = touch.touching;
+    const motion=this.lavaEscape?.fireMotion;
+    if(motion){
+      const elapsed=Date.now()-motion.at;
+      if(!fireRouteGeometryCurrent(bot,motion.plan))this.lavaEscape!.fireMotion=undefined;
+      else if(elapsed<motion.plan.ticks*50&&!bot.entity.onGround){
+        // Keep the same validated arc through its landing, not a new airborne choice.
+        bot.setControlState('forward',true);bot.setControlState('jump',false);return;
+      }
+    }
     if (hazard === null) {
+      this.failedHazard = null;
       // 灭火不等驻留窗口结算
       if (this.lavaEscape !== null || this.burning !== null) this.extinguish(bot, touch.onFire);
       this.endLavaEscape(bot, touch.onFire);
@@ -6969,6 +6990,17 @@ export class Reflexes {
     }
     const now = Date.now();
     const p = bot.entity.position;
+    const fire = hazard.name === 'fire' || hazard.name === 'soul_fire';
+    if(fire&&intentionalFireCrossing(bot))return;
+    const localExit = fire ? localHazardExit(bot, Reflexes.ESCAPE_SCAN_R) : null;
+    if (this.failedHazard) {
+      const failed = this.failedHazard;
+      // A failed reflex must not retain controls or re-freeze the same scene.
+      // A new reachable exit or an actual relocation permits another attempt.
+      if (failed.bot === bot && failed.name === hazard.name && p.distanceTo(failed.position) < .75
+        && failed.exitKey === JSON.stringify(localExit)) return;
+      this.failedHazard = null;
+    }
     if (this.lavaEscape === null) {
       this.beginEnvironment(`逃离${zhName(hazard.name)}`);
       // 正在飞的寻路多半就是把人送进来的那条;先撤掉,免得它把人拽回去
@@ -6977,6 +7009,7 @@ export class Reflexes {
       this.lavaEscape = {
         startedAt: now, handedOff: false, reported: false, clearSince: null, cell: null, dashFrom: null,
       };
+      if(fire){const plan=fireRoutes(bot)[0];if(plan)this.lavaEscape.fireMotion={plan,at:now};}
       const fresh = this.lavaBout.count === 0
         || now - this.lavaBout.lastClearAt > Reflexes.LAVA_BOUT_GAP_MS;
       if (fresh) this.lavaBout = { count: 1, firstAt: now, lastClearAt: 0 };
@@ -7006,16 +7039,23 @@ export class Reflexes {
     if (!hazards.some((h) => h.x === hazard.x && h.y === hazard.y && h.z === hazard.z)) {
       hazards.push(hazard);
     }
-    const cell = findEscapeCell(bot, hazards, Reflexes.ESCAPE_SCAN_R, touch.onFire, esc.cell);
+    const cell = fire ? localExit : findEscapeCell(bot, hazards, Reflexes.ESCAPE_SCAN_R, touch.onFire, esc.cell);
     esc.cell = cell;
     if (!esc.handedOff) {
-      if (cell !== null && now - esc.startedAt >= Reflexes.DASH_MS && now >= this.goalHoldUntil) {
+      if (!fire && cell !== null && now - esc.startedAt >= Reflexes.DASH_MS && now >= this.goalHoldUntil) {
         // 冲开一段之后多半已经出了岩浆,这时候再让寻路器把人送到落脚点
         this.handLavaToPathfinder(bot, esc, cell, `冲刺 ${fmtDur(now - esc.startedAt)} 后`);
       } else {
-        this.dashAway(bot, hazards, cell, touch.submerged);
-        if (cell === null) this.watchLavaDash(bot, esc, now);
-        else esc.dashFrom = null;
+        if(fire&&esc.fireMotion){
+          const m=esc.fireMotion;
+          if(now-m.at>m.plan.ticks*50+600){this.failHazardExit(bot,'实际穿火未抵达物理预测的落点');return;}
+          void bot.look(m.plan.yaw,0,true).catch(()=>undefined);
+          bot.setControlState('forward',true);bot.setControlState('jump',m.plan.mode==='jump'&&now-m.at<150);
+        }else if (fire && cell === null) this.releaseDash(bot);
+        else this.dashAway(bot, hazards, cell, touch.submerged);
+        if(fire)bot.setControlState('sprint',false);
+        this.watchLavaDash(bot, esc, now);
+        if (this.lavaEscape !== esc) return;
       }
     }
     if (esc.reported && now - this.lastLavaReportAt < Reflexes.LAVA_REPORT_MS) return;
@@ -7027,9 +7067,10 @@ export class Reflexes {
       : touch.submerged ? `整个人陷进${what}里了` : `碰到${what}了(${hazard.distance.toFixed(1)} 格)`;
     this.opts.diag?.write({
       lane: 'reflex', event: 'lava',
-      msg: `${how},正在往 ${cell ? `(${cell.x}, ${cell.y}, ${cell.z})` : '反方向'} 逃`,
+      msg: `${how},${cell ? `正在往 (${cell.x}, ${cell.y}, ${cell.z}) 脱离` : fire ? '尚无已验证的脱离路线' : '正在反方向逃离'}`,
       data: {
         position: p, hazard, cell, onFire: touch.onFire,
+        fireRoute:esc.fireMotion?{mode:esc.fireMotion.plan.mode,end:esc.fireMotion.plan.end,estimatedDamage:esc.fireMotion.plan.estimatedDamage,cost:esc.fireMotion.plan.cost,estimateOnly:true}:null,
         submerged: touch.submerged, health: bot.health,
         bout: this.lavaBout.count, boutMs: now - this.lavaBout.firstAt,
       },
@@ -7037,7 +7078,7 @@ export class Reflexes {
     this.opts.report({
       kind: 'reflex',
       hurt: true,
-      text: `[反射] ${how}!正在逃离。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
+      text: `[反射] ${how}!${esc.fireMotion?`正在${esc.fireMotion.plan.mode==='jump'?'跳跃':'步行'}脱离；估计火焰损失约${esc.fireMotion.plan.estimatedDamage}点（原版估算，不保证服务端伤害）。`:fire && !cell ? '尚无通过碰撞、支撑与火源校验的脱离路线。' : '正在逃离。'}生命 ${Math.ceil(bot.health ?? 0)}。`,
     });
   }
 
@@ -7093,7 +7134,7 @@ export class Reflexes {
 
   /**
    * 没有落脚格时手动冲刺的卡住检测:ESCAPE_STALL_MS 内净位移不到 LAVA_DASH_STALL_MOVE
-   * 就把现场报给 bot,接着冲并重新计窗。有落脚格时冲满 DASH_MS 就交寻路器,轮不到这里。
+   * 就撤销这条失败动作并完整交还身体，不让手动控制与恢复的任务继续抢身体。
    */
   private watchLavaDash(bot: Bot, esc: NonNullable<Reflexes['lavaEscape']>, now: number): void {
     const p = bot.entity.position;
@@ -7115,13 +7156,22 @@ export class Reflexes {
       msg: `逃离岩浆冲刺 ${fmtDur(heldMs)} 只挪了 ${moved.toFixed(1)} 格,人在 ${where},脚下是${footing},附近没有安全落脚格`,
       data: { moved, heldMs, footing, position: p, health: bot.health },
     });
-    this.opts.report({
-      kind: 'reflex', hurt: true,
-      text: `[反射] 逃离岩浆卡住了:往背离岩浆的方向冲了 ${fmtDur(heldMs)},只挪了 ${moved.toFixed(1)} 格,`
-        + `人在 ${where},脚下是${footing};${Reflexes.ESCAPE_SCAN_R} 格内找不到离岩浆 ${ESCAPE_SAFE_GAP} 格以上`
-        + `能站的地方,还在往外冲。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
-    });
-    esc.dashFrom = { x: p.x, y: p.y, z: p.z, at: now };
+    this.failHazardExit(bot, `脱离火源 ${fmtDur(heldMs)} 只挪了 ${moved.toFixed(1)} 格；人在 ${where}，脚下${footing}`);
+  }
+
+  private failHazardExit(bot: Bot, why: string): void {
+    const hazard=hazardTouch(bot).touching;
+    this.releaseDash(bot);
+    if(this.escapeGoal?.kind==='lava') {
+      if(bot.pathfinder?.goal===this.escapeGoal.goal)dropGoal(bot,'escape',why,this.opts.diag);
+      this.escapeGoal=null;
+    }
+    this.lavaEscape=null;
+    this.failedHazard=hazard?{bot,position:bot.entity.position.clone(),name:hazard.name,
+      exitKey:JSON.stringify(hazard.name==='fire'||hazard.name==='soul_fire'?localHazardExit(bot):null)}:null;
+    this.releaseEnvironmentHoldNow(bot,'脱离路线受阻，撤销失败反射并交还控制权（危险尚未解除）');
+    this.opts.report({kind:'reflex',hurt:true,text:`[反射受阻] ${why}。危险尚未解除；已松开方向键、撤销自有寻路并交还身体。`
+      +'需要改用已核验的路线、灭火或脱离方法；同一现场不重复盲冲。出现新可达出口或实际离开原位置后才重新尝试。'});
   }
 
   /** 身上还烧着时找水的扫描半径;着火满时长 8 秒,值得看远一点 */

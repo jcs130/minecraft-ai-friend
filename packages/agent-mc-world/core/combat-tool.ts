@@ -1,21 +1,27 @@
 import type { ToolDef } from './support/host-contract.ts';
 import { COMBAT_RULES_SCHEMA } from './combat-rules.ts';
 import { COMBAT_ROUTINES_SCHEMA } from './combat-routines.ts';
+import { validCombatProbe } from './combat-probe.ts';
 /** A read selector must stand alone: a mixed update is never read-only. */
 export function isCombatTacticRead(args: Record<string, unknown>): boolean {
   const keys = Object.keys(args);
   if (!keys.length) return true;
   if (keys.length !== 1) return false;
   const key = keys[0];
-  return (key === 'battlefield' || key === 'decisions') ? args[key] === true
-    : (key === 'decision' || key === 'report') && Number.isSafeInteger(args[key]) && Number(args[key]) > 0;
+  return (key === 'battlefield' || key === 'decisions' || key === 'samples' || key === 'history') ? args[key] === true
+    : (key === 'decision' || key === 'report' || key === 'version') && Number.isSafeInteger(args[key]) && Number(args[key]) > 0;
 }
+export const isCombatTacticLearning = (args: Record<string, unknown>): boolean =>
+  isCombatTacticRead(args) || (Object.keys(args).length === 1 && validCombatProbe(args.probe));
 export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
     name: 'mc_combat_tactic',
     tags: ['write'],
     readOnlyCall: isCombatTacticRead,
+    learningCall: isCombatTacticLearning,
     description:
       'Read or update combat spell rules and an agent-authored fast tactic program. {} reads it; omitted fields keep their current values; '
+      + '{samples:true} indexes recorded pre-program battlefields. {probe:{program,samples?:[id]}} compares your candidate with the recorded program on exactly those historical inputs, without controlling the body or changing the active tactic. This branch is available to background learning. '
+      + 'A successful probe proves only menu validity, not survival or improvement; inspect candidate differences, then install with expectedRevision. {history:true} indexes retained tactic versions; {version:n} reads an exact saved version for comparison/rollback. '
       + '{enabled:false} clears it. A spell list of server-listed combat spell IDs sets priority order while fighting; '
       + 'healAtOrBelow is the optional ability provider healing threshold, not a body lock; a cooling-down heal does not stop fast decisions. Without a provider it never sends a command. '
       + 'Nonempty rules replace the unconditional spell priority: ordered observed conditions are rechecked each combat tick and the first ready match wins; no match means no automatic offensive cast. rules:[] restores spells/default priority. '
@@ -26,7 +32,7 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
       + 'The program constructs choices from fresh battlefield facts independently of the main model; the fast model chooses and the combat controller executes. '
       + 'Program ordering only changes the host-choice menu; it does not throttle the separate automatic spell rules. To conserve mana on automatic casts, edit the relevant rule when.manaAtLeast or when.reserveMana and verify casts[].source/ruleId/manaBefore in a combat report. '
       + 'routines:[{id,intent,procedure,params?,durationMs?}] registers exact saved mc_script library references in the fast menu; routines:[] removes them. '
-      + 'meleeWeapons:["trident","iron_axe"] sets your native melee preference for reactive/fast combat; unavailable entries are skipped, then the normal fallback applies. [] clears the preference. It does not equip or start a fight. '
+      + 'meleeWeapons:["trident","iron_axe"] sets your native melee preference for reactive/fast combat; unavailable entries are skipped, then the normal fallback applies. [] restores defaults and does NOT disable melee. It does not equip or start a fight. '
       + 'Read frame.loadout.choices for observed weapon modes. Tridents and maces support melee; native automatic ranged combat currently uses bows. Explicit throws or crossbows can be authored with mc_script api:"weapons" and registered as versioned routines. '
       + 'Read and validate/save a method first. Registration checks its immutable version and does not execute it or claim it effective. '
       + 'A method option starts that existing script only when the body is free; its original run ID, SDK trace and terminal remain readable with mc_script. '
@@ -42,6 +48,13 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
     parameters: {
       type: 'object',
       properties: {
+        expectedRevision: {type:'integer',minimum:0,description:'For a write, require the current tactic revision; a mismatch does not replace the active tactic.'},
+        history: {type:'boolean',description:'Index retained immutable tactic revisions; use alone.'},
+        version: {type:'integer',minimum:1,description:'Read one retained tactic revision including source, parameters and policy hash; use alone.'},
+        samples: {type:'boolean',description:'Index recent historical battlefield inputs for an isolated probe; use alone.'},
+        probe: {type:'object',additionalProperties:false,required:['program'],properties:{
+          program:{type:'object',additionalProperties:false,required:['name','code'],properties:{name:{type:'string',minLength:1,maxLength:80},code:{type:'string',minLength:1,maxLength:12000},params:{type:'object'}}},
+          samples:{type:'array',minItems:1,maxItems:8,uniqueItems:true,items:{type:'string',pattern:'^sample-[a-f0-9]{24}$'}}}},
         choice: { type:'object',additionalProperties:false,required:['candidate','tacticRevision','connectionGeneration'],
           properties:{candidate:{type:'object'},tacticRevision:{type:'integer'},connectionGeneration:{type:'integer'},
             decisionId:{type:'string',minLength:1,maxLength:128}} },

@@ -12,6 +12,7 @@ import { clearObservationRay } from '../../core/perception-sight.ts';
 import { onEscapeGoal, dropGoal } from '../../core/travel.ts';
 import { CombatAbilities } from '../../core/combat-abilities.ts';
 import { CombatTacticBook } from '../../core/combat-tactics.ts';
+import { CombatProgramProbe, validCombatProbe } from '../../core/combat-probe.ts';
 import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, validCombatProgram } from '../../core/combat-program.ts';
 import { combatReactions } from '../../core/combat-reactions.ts';
 import { diverseCombatOptions } from '../../core/combat-options.ts';
@@ -45,6 +46,7 @@ export class JavaReflexRuntime {
   private readonly cells=new Map<string,any>();private lastError:string|null=null;private lastAck:any=null;
   private nutritionVersion:string|null=null;
   private readonly tactics:CombatAbilities;private readonly program=new CombatProgramRunner();private failedProgram:string|null=null;
+  private readonly probe:CombatProgramProbe;
   private programError:string|null=null;
   private receiptSerial=0;private readonly receipts:Record<string,unknown>[]=[];
   private choiceRequestId:string|null=null;private lastControlEvent='';
@@ -71,6 +73,7 @@ export class JavaReflexRuntime {
     });
     this.tactics=new CombatAbilities(new CombatTacticBook(join(cfg.javaClient!.ledgerDir,'native-combat-tactics.json')));
     this.tactics.useRealm(`${cfg.javaClient!.expectedServer}|${cfg.javaClient!.expectedUuid}`);
+    this.probe=new CombatProgramProbe(join(cfg.javaClient!.ledgerDir,'combat-probes'));
     const emit=(text:string,urgent=false,meta?:Record<string,unknown>)=>{void this.port.host()?.pushEvent({type:'minecraft.reflex',source:'minecraft',ts:new Date().toISOString(),text,
       meta:{protocol:JAVA_REFLEX_PROTOCOL,sharedKernel:true,goalCompleted:false,...meta}},{trigger:urgent?'debounce':'piggyback'}).catch(()=>{});};
     const log={info(){},warn(){},error(){},debug(){},trace(){},child(){return this}} as any;
@@ -181,8 +184,20 @@ export class JavaReflexRuntime {
     const program=this.tactics.getTactic()?.program;if(program)frame.program=program;return frame;
   }
   async tool(args:Record<string,unknown>,ctx:ToolCallContext):Promise<ToolOutcome>{
+    this.probe.useRealm(JSON.stringify([this.cfg.javaClient!.expectedServer,this.cfg.javaClient!.expectedUuid,
+      this.generation,this.bodyScope,this.dimension]));
+    if(args.probe!==undefined||args.samples!==undefined||args.history!==undefined||args.version!==undefined){
+      if(Object.keys(args).length!==1)throw Error('Probe/read selectors cannot be combined with live tactic updates');
+      if(args.samples===true)return{text:JSON.stringify(this.probe.index())};
+      if(args.history===true)return{text:JSON.stringify(this.tactics.tacticHistory())};
+      if(Number.isSafeInteger(args.version)&&Number(args.version)>0)return{text:JSON.stringify(this.tactics.tacticHistory(Number(args.version)))};
+      if(!validCombatProbe(args.probe))throw Error('Invalid combat program probe');
+      const result=await this.probe.run(args.probe,this.tactics.tacticRevision(),ctx.signal);
+      return{text:JSON.stringify(result),meta:{protocol:'combat-program-probe/v1',probe:result}};
+    }
+    if(args.expectedRevision!==undefined&&args.expectedRevision!==this.tactics.tacticRevision())throw Error('Tactic revision changed; read before merging your edit');
     if(args.routines!==undefined)return{text:'Native reflex has no saved-method execution port; routines were not registered or run. Use the native mc_script interface explicitly.',failed:true};
-    if(args.battlefield===true){let frame=this.decisionFrame();if(frame?.program){const hash=combatProgramHash(frame.program);if(hash!==this.failedProgram)try{const result=combatProgramCandidates(await this.program.run(frame.program,frame),frame,to=>corridorSafe(this.currentBot()!,this.bot.entity.position,new Vec3(...to)));frame={...frame,candidates:diverseCombatOptions(result.candidates,({...COMBAT_EXECUTION_DEFAULTS,...this.cfg.combatOptions}).maxCandidates),policy:{name:frame.program.name,sourceHash:hash,instructions:result.instructions}};this.programError=null;}catch(error){
+    if(args.battlefield===true){let frame=this.decisionFrame();if(frame)this.probe.capture(frame);if(frame?.program){const hash=combatProgramHash(frame.program);if(hash!==this.failedProgram)try{const result=combatProgramCandidates(await this.program.run(frame.program,frame),frame,to=>corridorSafe(this.currentBot()!,this.bot.entity.position,new Vec3(...to)));frame={...frame,candidates:diverseCombatOptions(result.candidates,({...COMBAT_EXECUTION_DEFAULTS,...this.cfg.combatOptions}).maxCandidates),policy:{name:frame.program.name,sourceHash:hash,instructions:result.instructions}};this.programError=null;}catch(error){
       if(error instanceof CombatProgramBusyError)frame={...frame,programDeferred:{reason:'evaluation-in-progress',sourceHash:hash}};
       else if(error instanceof CombatProgramSceneChangedError)frame={...frame,candidates:frame.candidates.filter(c=>c.kind!=='step'),programDeferred:{reason:'scene-changed',sourceHash:hash}};
       else{this.failedProgram=hash;this.programError=`Program ${hash} unavailable: ${String(error).slice(0,240)}`;}
@@ -200,10 +215,17 @@ export class JavaReflexRuntime {
     if(!Object.keys(args).length)return{text:JSON.stringify({tactic:this.tactics.getTactic(),capabilities:this.status()})};
     if(args.spells!==undefined||args.rules!==undefined||args.healAtOrBelow!==undefined)throw Error('Native server spell provider is not installed; no spell or healing command dispatched');
     if(args.enabled===false){this.tactics.setTactic(null);this.program.close();this.failedProgram=null;this.programError=null;return{text:'Custom program removed; shared reflex kernel remains configured.'};}
-    if(args.program!==undefined){if(args.program!==null&&!validCombatProgram(args.program))throw Error('Invalid shared combat program');if(args.program)await this.program.configure(args.program as any);else this.program.close();this.tactics.setTactic({spells:null,healAtOrBelow:null,program:args.program as any});this.failedProgram=null;this.programError=null;return{text:'Shared combat program saved; actual adoption and gameplay outcomes remain unverified.'};}
+    if(args.program!==undefined){
+      if(args.program!==null&&!validCombatProgram(args.program))throw Error('Invalid shared combat program');
+      const revision=this.tactics.tacticRevision(),scope=this.bodyScope;
+      if(args.program){const compiler=new CombatProgramRunner();try{await compiler.configure(args.program as any);}finally{compiler.close();}}
+      ctx.signal?.throwIfAborted();
+      if(revision!==this.tactics.tacticRevision()||scope!==this.bodyScope)throw Error('Body or tactic changed during validation; read and merge again');
+      this.tactics.setTactic({spells:null,healAtOrBelow:null,program:args.program as any});this.program.close();
+      this.failedProgram=null;this.programError=null;return{text:'Shared combat program saved; actual adoption and gameplay outcomes remain unverified.'};}
     throw Error('Unsupported native tactic operation');
   }
   async beforeBody(firstStep?:any){this.combat.standDown(firstStep);if(!this.combat.active)this.combatHold=false;if(!this.combat.active&&!this.reflexes.envActive&&!this.environmentHolds.size&&!onEscapeGoal(this.bot))await this.flush(true);}
   async requestStop(){const result=this.combat.requestStop();if(result)await this.flush(false);return result;}
-  async close(){this.stopped=true;clearInterval(this.timer);this.combat.stop();this.reflexes.stop();this.program.close();this.environmentHolds.clear();this.combatHold=false;await this.polling?.catch(()=>{});await this.flush(true).catch(()=>{});this.bot.emit('end');}
+  async close(){this.probe.flush();this.stopped=true;clearInterval(this.timer);this.combat.stop();this.reflexes.stop();this.program.close();this.environmentHolds.clear();this.combatHold=false;await this.polling?.catch(()=>{});await this.flush(true).catch(()=>{});this.bot.emit('end');}
 }

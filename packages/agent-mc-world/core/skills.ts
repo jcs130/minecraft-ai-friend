@@ -22,6 +22,7 @@ import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, SPATIAL_QUERY_SCHE
 import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 import {parseWalkRoute,WALK_ROUTE_FIELDS,type WalkRoute} from './route-contract.ts';
+import type {FireCrossing} from './fire-route.ts';
 import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
 const STEP_DEPENDENCY_DOC = '依赖本次 steps 内更早步骤的1起序号；第一步只能省略或写[]。'
@@ -94,6 +95,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; exact?: boolean; walkOnly?: boolean; dryRun?: boolean }
   | { skill: 'look'; at: Anchor }
   | ({skill:'follow_route'} & WalkRoute)
+  | ({skill:'cross_fire'} & FireCrossing)
   | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; orientation?: 'relative' | 'absolute'; yawDeg?: number; pitchDeg?: number }
   | { skill: 'swim'; at: Anchor; dimension?: string; reserveOxygen: number; maxDurationMs: number; dryRun?: boolean }
   | { skill: 'transit'; at: Anchor }
@@ -1159,6 +1161,20 @@ const ANCHOR_SCHEMA = {
 
 /** 注册表本体。顺序即 SKILL_NAMES 与 SKILL_DOC 的出场顺序 */
 const SKILLS: readonly SkillSpec[] = [
+  {
+    name:'cross_fire',
+    doc:'{"skill":"cross_fire","at":[10.5,64,23.5],"mode":"auto","maxDamage":12,"reserveHealth":2,"dryRun":true} 比较短距离步行穿火与跳火的代价。at 是4格内绝对落脚坐标，省略则寻找附近脱离火源的落点。mode auto/walk/jump；dryRun 只回候选、预计损失与耗时。伤害是原版无甲估计，服务器插件可改变实际值，不是承诺。执行只用同一身体按键、真实碰撞与落地校验；不跨岩浆、不把未知区块当空气。实际损失达预算、场景变化、取消或落点未确认就停止。maxDamage 默认12，reserveHealth 默认2，均可主动选择。临时穿火期间普通火焰反射让行，结束即恢复；不全局关闭保命。脚本可 mc.do 调用并检查原生终态。',
+    fields:[{key:'at',kind:'opaque',schema:{type:'array',items:{type:'number'},minItems:3,maxItems:3}},
+      {key:'mode',kind:'opaque',schema:{type:'string',enum:['auto','walk','jump']}}, {key:'maxDamage',kind:'opaque',schema:{type:'number',minimum:0,maximum:1000}},
+      {key:'reserveHealth',kind:'opaque',schema:{type:'number',minimum:0,maximum:1000}},{key:'dryRun',kind:'flag'}],
+    parse:(c,where)=>{
+      if(c.at!==undefined&&(!Array.isArray(c.at)||c.at.length!==3||!c.at.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=30000000)))return {error:where+' cross_fire.at 要绝对脚坐标 [x,y,z]'};
+      if(c.mode!==undefined&&!['auto','walk','jump'].includes(String(c.mode)))return {error:where+' mode 只认 auto/walk/jump'};
+      for(const k of ['maxDamage','reserveHealth'])if(c[k]!==undefined&&(typeof c[k]!=='number'||!Number.isFinite(c[k])||Number(c[k])<0||Number(c[k])>1000))return {error:where+' '+k+' 要0–1000有限数值'};
+      if(c.dryRun!==undefined&&typeof c.dryRun!=='boolean')return {error:where+' dryRun 要布尔值'};
+      return {step:{skill:'cross_fire',...(c.at?{at:c.at as [number,number,number]}:{}),mode:(c.mode??'auto') as 'auto'|'walk'|'jump',maxDamage:Number(c.maxDamage??12),reserveHealth:Number(c.reserveHealth??2),...(c.dryRun===true?{dryRun:true}:{})}};
+    },
+  },
   {
     name:'follow_route',
     doc:'{"skill":"follow_route","waypoints":[{"at":[10.5,64,20.5],"posture":"sneak"},{"at":[10.5,64,23.5],"posture":"walk"}],"avoid":[[11,64,21]],"avoidBlocks":["tripwire","stone_pressure_plate"],"dryRun":true} 精确走模型指定的地面折线。坐标是绝对脚位置，保留小数，不取整或加0.5。每段按其终点的posture走，路点前减速后再转弯，不自动抄近道或绕行。'

@@ -1,6 +1,7 @@
 /** World-scoped tactic settings and observed combat receipts; neither is a learned conclusion. */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { createHash } from 'node:crypto';
 import type { CombatTactic } from './combat-abilities.ts';
 import { validCombatRules } from './combat-rules.ts';
 import { validCombatProgram } from './combat-program.ts';
@@ -27,13 +28,18 @@ export interface CombatReceipt extends CombatResult {
   tacticAtEnd: CombatTactic | null;
   casts: CombatCastAttempt[];
   castsTruncated: boolean;
+  policy?: { startRevision: number | null; endRevision: number; startHash: string | null; endHash: string;
+    changedDuringCombat: boolean | null };
 }
+export const combatTacticHash = (tactic: CombatTactic | null): string => createHash('sha256').update(JSON.stringify(tactic)).digest('hex');
+export interface CombatTacticVersion { revision: number; updatedAt: string | null; hash: string; tactic: CombatTactic | null }
 
 interface TacticState {
   revision: number;
   updatedAt: string | null;
   tactic: CombatTactic | null;
   reports: CombatReceipt[];
+  versions?: CombatTacticVersion[];
 }
 
 const time = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value));
@@ -97,29 +103,46 @@ export class CombatTacticBook {
         || !Array.isArray(state.reports) || !state.reports.every(validReceipt))
         throw new Error('Invalid combat tactic state');
       this.realms.set(key, structuredClone({ ...state, reports: state.reports.slice(-5).map(sanitizeCombatResult) }));
+      if (state.versions !== undefined && (!Array.isArray(state.versions) || state.versions.length > 32
+        || state.versions.some(v => !count(v.revision) || v.revision > state.revision
+          || (v.updatedAt !== null && !time(v.updatedAt)) || (v.tactic !== null && !validCombatTactic(v.tactic))
+          || v.hash !== combatTacticHash(v.tactic)))) throw Error('Invalid combat tactic history');
     }
   }
 
   useRealm(realm: string): void { this.realm = realm; }
 
   current(): TacticState {
-    return structuredClone(this.realms.get(this.realm)
-      ?? { revision: 0, updatedAt: null, tactic: null, reports: [] });
+    const {versions: _versions, ...current} = this.realms.get(this.realm)
+      ?? { revision: 0, updatedAt: null, tactic: null, reports: [] };
+    return structuredClone(current);
+  }
+  revision(): number { return this.realms.get(this.realm)?.revision ?? 0; }
+  history(): CombatTacticVersion[] {
+    const state = this.realms.get(this.realm);
+    if (!state) return [];
+    return structuredClone(state.versions ?? [{ revision: state.revision, updatedAt: state.updatedAt,
+      hash: combatTacticHash(state.tactic), tactic: state.tactic }]);
   }
 
   set(tactic: CombatTactic | null, now = Date.now()): void {
     const state = this.current();
     const next = { ...state, revision: state.revision + 1,
       updatedAt: new Date(now).toISOString(), tactic: structuredClone(tactic) };
-    this.save(next);
+    this.save({ ...next, versions: [...this.history(), { revision: next.revision, updatedAt: next.updatedAt,
+      hash: combatTacticHash(tactic), tactic: structuredClone(tactic) }].slice(-32) });
   }
 
   record(result: CombatResult, casts: CombatCastAttempt[]): CombatReceipt {
     const state = this.current();
+    const versions = this.history();
+    const start = versions.filter(v => v.updatedAt !== null && Date.parse(v.updatedAt) <= Date.parse(result.startedAt)).at(-1);
     const receipt = { ...sanitizeCombatResult(result), id: (state.reports.at(-1)?.id ?? 0) + 1,
       tacticRevision: state.revision, tacticAtEnd: state.tactic,
+      policy: { startRevision: start?.revision ?? null, endRevision: state.revision, startHash: start?.hash ?? null,
+        endHash: combatTacticHash(state.tactic), changedDuringCombat: start ? start.revision !== state.revision : null },
       casts: structuredClone(casts.slice(-16)), castsTruncated: casts.length > 16 };
-    this.save({ ...state, reports: [...state.reports, receipt].slice(-5) });
+    this.save({ ...state, versions, reports: [...state.reports, receipt].slice(-5) });
     return structuredClone(receipt);
   }
 
