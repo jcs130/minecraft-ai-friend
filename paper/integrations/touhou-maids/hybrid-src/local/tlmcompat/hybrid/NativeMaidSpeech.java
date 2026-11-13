@@ -38,6 +38,8 @@ final class NativeMaidSpeech implements AutoCloseable {
     private volatile VoicechatServerApi api;
     private final MaidAmbientPolicy ambientPolicy=new MaidAmbientPolicy();
     private final MaidVoiceClips originalClips;
+    private final double gainDb;
+    private final MaidSpeechVolume volume;
     private volatile boolean closed;
     private boolean historyInitialized;
     private long nextAmbient;
@@ -63,6 +65,8 @@ final class NativeMaidSpeech implements AutoCloseable {
         JsonObject brain=JsonParser.parseString(Files.readString(plugin.getDataFolder().toPath().resolve("brain-routing.json"))).getAsJsonObject();
         if(!maidId.toString().equals(brain.get("maidId").getAsString())||!ownerId.toString().equals(brain.get("ownerId").getAsString()))throw new IllegalArgumentException("Companion identity mismatch");
         voice=config.get("voice").getAsString();if(!voice.matches("[A-Za-z0-9_.-]{1,96}"))throw new IllegalArgumentException("Explicit voice required");
+        gainDb=config.has("voiceGainDb")?config.get("voiceGainDb").getAsDouble():6;
+        volume=new MaidSpeechVolume(gainDb);
         originalClips=config.has("ambientPack")?new MaidVoiceClips(config.getAsJsonObject("ambientPack")):null;
         URI uri=URI.create(config.get("backend").getAsString());
         if(!"http".equals(uri.getScheme())||!"127.0.0.1".equals(uri.getHost())||uri.getPort()<1||uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null||!Set.of("","/").contains(uri.getPath()))throw new IllegalArgumentException("Exact loopback media origin required");
@@ -88,6 +92,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
         out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
+        out.addProperty("voiceGainDb",gainDb);
         out.addProperty("partnerRangeBlocks",MaidConversationRange.PARTNER);out.addProperty("visitorRangeBlocks",MaidConversationRange.VISITOR);
         out.addProperty("ambientSource",originalClips==null?"native_event_chinese_tts":"original_chinese_recordings");
         out.addProperty("ambientIdleEnabled",false);out.addProperty("ambientMinimumGapSeconds",90);
@@ -171,7 +176,7 @@ final class NativeMaidSpeech implements AutoCloseable {
             if(channel==null)throw new IllegalStateException("Position channel unavailable");channel.setDistance(MaidConversationRange.PARTNER);channel.setFilter(p->job.audible.contains(p.getUuid()));
             job.encoder=api.createEncoder();job.player=api.createAudioPlayer(channel,job.encoder,()->{
                 if(job.cancelled||job.audible.isEmpty())return null;
-                if(job.offset>=pcm.length){job.exhausted=true;return null;}short[] frame=new short[960];int n=Math.min(960,pcm.length-job.offset);System.arraycopy(pcm,job.offset,frame,0,n);job.offset+=n;return frame;
+                if(job.offset>=pcm.length){job.exhausted=true;return null;}short[] frame=new short[960];int n=Math.min(960,pcm.length-job.offset);volume.copy(pcm,job.offset,frame,n);job.offset+=n;return frame;
             });
             job.player.setOnStopped(()->{job.encoder.close();main(()->finish(job,job.exhausted&&!job.cancelled?"sent":"cancelled",job.exhausted&&!job.cancelled?(job.offers.get()>0?"hearing_unverified":"no_packet_receiver"):"playback_interrupted"));});
             finishRecord(job,"playing","");job.player.startPlaying();
@@ -180,6 +185,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private void finishRecord(Job job,String state,String reason)throws Exception{
         JsonObject result=new JsonObject();result.addProperty("voice",voice);result.addProperty("kind",job.kind);result.addProperty("reason",reason);result.addProperty("packetOffers",job.offers.get());result.addProperty("hearingVerified",false);result.addProperty("retryAllowed",false);
         result.addProperty("audioSource",job.original==null?"server_tts":"original_chinese_maid_pack");
+        result.addProperty("voiceGainDb",gainDb);
         if(job.original!=null)result.addProperty("originalAudioSha256",job.original.sourceSha256());
         result.addProperty("transport","simple_voice_chat_position");result.addProperty("connectedListeners",job.listeners.size());
         JsonArray listeners=new JsonArray();job.listeners.keySet().stream().sorted().forEach(id->listeners.add(id.toString()));result.add("listenerUuids",listeners);

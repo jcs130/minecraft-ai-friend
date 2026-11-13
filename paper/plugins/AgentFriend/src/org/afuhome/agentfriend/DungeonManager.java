@@ -226,6 +226,7 @@ final class DungeonManager implements Listener {
     private final Set<UUID> participants = new HashSet<>();
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<Inventory, UUID> stashMenus = new IdentityHashMap<>();
+    private final Map<UUID, Long> gearWarningAt = new HashMap<>();
     private final Map<UUID, String> lastMobDamage = new HashMap<>();
     private final Map<UUID, Location> lastMobPosition = new HashMap<>();
     private final Map<UUID, Long> lastMobMovedAt = new HashMap<>();
@@ -464,6 +465,10 @@ final class DungeonManager implements Listener {
         for (int n = 1; n <= maxFloor(); n++) if (inFloor(at, n)) return n;
         return 0;
     }
+    boolean companionTrialArrival(Player player, int stage, Location landing) {
+        return isParticipant(player) && pausedAt == 0 && floor == stage && committedCurrentRun()
+            && inFloor(player.getLocation(), stage) && inFloor(landing, stage);
+    }
     private boolean inBuild(Location at) {
         if (!built || !sameWorld(at)) return false;
         if (at.getY() >= Y[BASE_FLOORS - 1] && at.getY() <= Y[0] + 7
@@ -525,7 +530,18 @@ final class DungeonManager implements Listener {
                     || plugin.isObserver(player) || !inFloor(player.getLocation(), floor)
                     || plugin.pvpParticipant(player)
                     || (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(player))
-                    || !participants.add(player.getUniqueId())) continue;
+                    || participants.contains(player.getUniqueId())) continue;
+            if (!DungeonLoadout.missing(player).isEmpty()) {
+                long now = System.currentTimeMillis();
+                UUID id = player.getUniqueId();
+                if (now - gearWarningAt.getOrDefault(id, 0L) >= 10_000) {
+                    gearWarningAt.put(id, now);
+                    DungeonLoadout.ready(player);
+                }
+                continue;
+            }
+            participants.add(player.getUniqueId());
+            gearWarningAt.remove(player.getUniqueId());
             joined.add(player);
         }
         if (joined.isEmpty()) return;
@@ -794,7 +810,7 @@ final class DungeonManager implements Listener {
             sendStart(player, starter);
         }
         announce(ChatColor.GOLD + "" + maxFloor() + " 层" + difficulty.label + "试炼开始！入口按钮附近 " + participants.size()
-                + " 人已组队进入。每层清怪后 10 秒自动下楼并补满生命；奖励留在个人箱子，红色木按钮可返回地面。");
+                + " 人已组队进入。每层清怪立刻恢复生命、魔力并清除负面状态，10 秒后自动下楼；奖励留在个人箱子。");
     }
 
     private void startAtRest(Player starter) {
@@ -852,19 +868,17 @@ final class DungeonManager implements Listener {
         for (Player player : group) {
             int[] offset = offsets[position++ % offsets.length];
             Location landing = destination.clone().add(offset[0], 0, offset[1]);
-            boolean paidCheckpoint = number == REST_FLOOR && !active;
-            if (player.isOnline() && !player.isDead()
-                    && (paidCheckpoint
-                        ? plugin.travelMagic().teleport(player, landing, "arena:rest", "深层驿站传送术",
-                                TravelMagic.DISTANT_MANA)
-                        : player.teleport(landing))) {
+            if (player.isOnline() && !player.isDead() && sendToFloor(player, landing, number)) {
                 arrived.add(player.getUniqueId());
-                double maxHealth = player.getMaxHealth();
-                if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
-                player.setFireTicks(0);
+                if (!active) {
+                    double maxHealth = player.getMaxHealth();
+                    if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
+                    player.setFireTicks(0);
+                }
                 if (number == LAVA_FLOOR) {
                     player.sendMessage(ChatColor.GOLD + "第 13 层岩浆仍会伤人；走中央石桥，离开火源后灼烧会更快消退。");
                     player.sendMessage("MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false");
+                    player.sendMessage(ChatColor.AQUA + "着火或遇到明火时，/mycli cast frostnova 可以灭火；技能说明 /mycli skills info frostnova。");
                 }
             } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍；/mycli arena status 核对场次，不要隔层追怪；把楼层和时间告知服主检查落点。");
         }
@@ -887,11 +901,19 @@ final class DungeonManager implements Listener {
         spawnAt = cleared ? 0 : floorStartedAt + 3000L;
         advanceAt = cleared ? floorStartedAt + REST_DURATION_MS : 0;
         announce(ChatColor.AQUA + "附近 " + arrived.size() + " 人进入第 " + number + "/" + maxFloor() + " 层："
-                + THEMES.get(number - 1).name() + "；生命已补满。");
+                + THEMES.get(number - 1).name() + "。");
         if (cleared) announce(ChatColor.GOLD + "这里可使用工作台与商人，领取个人箱奖励。"
                 + "三分钟后自动下楼，或按绿色按钮／输入 /mycli arena next 提前出发。");
         persistRun();
         return arrived.size();
+    }
+    private boolean sendToFloor(Player player, Location landing, int number) {
+        Location from=player.getLocation();
+        boolean arrived = number == REST_FLOOR && !active
+            ? plugin.travelMagic().teleport(player, landing, "arena:rest", "深层驿站传送术", TravelMagic.DISTANT_MANA)
+            : player.teleport(landing);
+        if (arrived && inFloor(player.getLocation(), number)) CompanionTravelAccess.followTrialTransfer(player, from, number);
+        return arrived;
     }
 
     private Location center(int number) {
@@ -908,12 +930,12 @@ final class DungeonManager implements Listener {
             if (advanceAt - now > NEXT_FLOOR_DELAY_MS) {
                 advanceAt = now + NEXT_FLOOR_DELAY_MS;
                 persistRun();
-                announce(ChatColor.GOLD + "驿站出发！10 秒后全队进入第八层，生命会补满。");
+                announce(ChatColor.GOLD + "驿站出发！10 秒后全队进入第八层。");
             } else player.sendMessage(ChatColor.AQUA + "队伍已准备出发，请稍候。");
         } else if (!cleared) player.sendMessage(ChatColor.YELLOW + "打败本层怪物后会自动下楼，不用按绿色按钮。");
         else player.sendMessage(ChatColor.AQUA + "约 "
                 + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
-                + " 秒后自动下楼并补满生命；奖励留在个人箱子里。");
+                + " 秒后自动下楼；奖励留在个人箱子里。");
     }
 
     private void leave(Player player) {
@@ -1023,15 +1045,18 @@ final class DungeonManager implements Listener {
         advanceAt = floor < maxFloor() ? now + NEXT_FLOOR_DELAY_MS : 0;
         if (plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         int credited = rewardFloor();
+        DungeonRecovery.apply(plugin, participants.stream().map(Bukkit::getPlayer)
+            .filter(p -> p != null && inFloor(p.getLocation(), floor)).toList(), "trial_tower", floor);
         if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(rescueKey()+":"+floor,
                 participants.stream().map(Bukkit::getPlayer).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
         if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
-        else announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层并补满生命；奖励留在个人箱子，不必现在领取。");
+        else announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层；奖励留在个人箱子，不必现在领取。");
     }
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        gearWarningAt.remove(player.getUniqueId());
         if (bossBar != null) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())) return;
         if (player.isDead() || !inFloor(player.getLocation(), floor)) {
@@ -1085,6 +1110,11 @@ final class DungeonManager implements Listener {
         for (Material material : REWARD_TYPES) if (pending(id, material) > 0) return true;
         return !bonusItems(id).isEmpty();
     }
+    int queuedRewardEntries(UUID id) {
+        int queued = bonusItems(id).size() + PhotoRewards.pending(plugin,id);
+        for (Material material : REWARD_TYPES) if (pending(id,material)>0) queued++;
+        return queued;
+    }
     private boolean hasPersonalChestContents(UUID id) {
         if (hasPendingRewards(id)) return true;
         for (int slot = 0; slot < PagedPersonalStash.CAPACITY; slot++)
@@ -1101,13 +1131,10 @@ final class DungeonManager implements Listener {
             if (!active || !participants.contains(id) || player == null || !player.isOnline()
                     || player.isDead()) return;
             if (pausedAt > 0 && System.currentTimeMillis() - pausedAt > REJOIN_GRACE_MS) return;
-            boolean advancedWhileAway = floorAt(player.getLocation()) > 0
-                    && floorAt(player.getLocation()) != floor;
             if (!inFloor(player.getLocation(), floor) && !player.teleport(center(floor))) {
                 player.sendMessage(ChatColor.RED + "【试炼塔】重连传送失败；请联系服主，本场仍保留到宽限期结束。");
                 return;
             }
-            if (advancedWhileAway && !plugin.isDowned(player)) player.setHealth(player.getMaxHealth());
             player.setNoDamageTicks(60);
             if (pausedAt > 0) resumeRun(System.currentTimeMillis());
             player.sendMessage(ChatColor.GREEN + "已恢复第 " + floor + "/" + maxFloor() + " 层试炼。"
@@ -1991,6 +2018,8 @@ final class DungeonManager implements Listener {
         boolean moved=false;
         for(int i=0;i<PagedPersonalStash.PAGES;i++)moved|=materializeRewards(storage().page(id,i),id);
         if(moved)plugin.saveConfig();
+        plugin.inventoryTidy().onStashOpen(player);
+        if (plugin.inventoryTidy().stashWritesBlocked(id)) return;
         player.sendMessage("个人箱第"+(page+1)+"/10页，共540格；/mycli arena stash pages 选择其他页。");
         stashMenus.put(inv, id);
         player.openInventory(inv);
@@ -2027,8 +2056,7 @@ final class DungeonManager implements Listener {
             player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/" + STASH_SIZE + " page="+page+" pages=10 capacity=540");
             // Listing is read-only. Ledger rewards are materialized on opening,
             // so an empty stored page must not imply that a new reward was lost.
-            int queued=bonusItems(id).size()+PhotoRewards.pending(plugin,id);
-            for(Material material:REWARD_TYPES)if(pending(id,material)>0)queued++;
+            int queued=queuedRewardEntries(id);
             if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程需travel，2魔力）。");
             return;
         }
@@ -2066,7 +2094,7 @@ final class DungeonManager implements Listener {
             player.sendMessage("MC_STASH_PUT slot=" + slot + " id=minecraft:"
                     + material.name().toLowerCase(Locale.ROOT) + " moved=" + moved
                     + " requested="+attempted+" reason="+(moved==0?"stash_full":moved<attempted?"partial":"ok")
-                    + " retrySameAction=false"+(moved<attempted?" nextCommand=\"/mycli trade recycle list --json\"":""));
+                    + " retrySameAction=false"+(moved<attempted?" nextCommand=\""+InventoryTidy.STASH_PREVIEW+"\"":""));
             if(moved<attempted)explainStashFull(player,attempted-moved);
             return;
         }
@@ -2149,10 +2177,14 @@ final class DungeonManager implements Listener {
     private void explainStashFull(Player player,int remaining) {
         int used=stashSnapshot(player.getUniqueId()).occupied();
         player.sendMessage("§e[stash_full] 个人箱已用 "+used+"/540格，无法再接收这件物品；尚有 "+remaining+" 件留在背包，未为这些物品扣魔力。不要重复同一存入命令。");
-        player.sendMessage("下一步：/mycli trade recycle list --json 查看可回收的仓库装备；先报价、确认出售腾位。普通石头、圆石和黏土不在装备回收范围。背包合并：/mycli inventory tidy；明确销毁普通杂物：/mycli inventory tidy --discard-common。");
-        player.sendMessage("MC_STASH_BLOCKED reason=stash_full occupied="+used+" capacity=540 remaining="+remaining+" nextCommand=\"/mycli trade recycle list --json\" retrySameAction=false");
+        player.sendMessage("先预览全箱整理和普通杂物清单："+InventoryTidy.STASH_PREVIEW+"。装备可用 /mycli trade recycle list --json 查报价。");
+        player.sendMessage("MC_STASH_BLOCKED reason=stash_full occupied="+used+" capacity=540 remaining="+remaining+" nextCommand=\""+InventoryTidy.STASH_PREVIEW+"\" retrySameAction=false");
     }
     private boolean remoteStashReady(Player player) {
+        if (plugin.inventoryTidy().stashWritesBlocked(player.getUniqueId())) {
+            player.sendMessage("§e[save_unverified] 个人箱整理存盘待核对。请联系服主，现可用 /mycli arena stash list 查询。");
+            return false;
+        }
         return nearStash(player) || plugin.professions().basicAllowed(player,"travel") && plugin.hasMana(player, 2);
     }
     private void chargeRemoteStash(Player player) {

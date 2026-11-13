@@ -10,3 +10,9 @@ with tempfile.TemporaryDirectory() as tmp:
  subprocess.run([a.java,'-cp',tmp+os.pathsep+a.gson,'local.tlmcompat.hybrid.MaidReplyPresentationFixture'],check=True)
  subprocess.run([a.javac,'--release','21','-encoding','UTF-8','-cp',a.gson,'-d',tmp,str(root/'hybrid-src/local/tlmcompat/hybrid/MaidChatReply.java'),str(root/'tests/MaidChatReplyFixture.java')],check=True)
  subprocess.run([a.java,'-cp',tmp+os.pathsep+a.gson,'local.tlmcompat.hybrid.MaidChatReplyFixture'],check=True)
+ guard = root / 'hybrid-src/local/tlmcompat/hybrid'
+ subprocess.run([a.javac, '--release', '21', '-encoding', 'UTF-8', '-cp', a.gson, '-d', tmp,
+                 str(guard / 'MaidGuardDecision.java'), str(guard / 'MaidSpeechVolume.java'),
+                 str(root / 'tests/MaidGuardDecisionFixture.java')], check=True)
+ subprocess.run([a.java, '-cp', tmp + os.pathsep + a.gson,
+                 'local.tlmcompat.hybrid.MaidGuardDecisionFixture'], check=True)

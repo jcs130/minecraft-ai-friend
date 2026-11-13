@@ -19,6 +19,7 @@ final class InventoryFeedback implements Listener {
     private final AgentFriendPlugin plugin;
     private final ItemIdentity identity;
     private final InventoryTidy tidy;
+    InventoryTidy tidy(){return tidy;}
     private final Map<UUID, Long> refreshed = new HashMap<>();
     private final Map<UUID, List<Gift>> pending = new HashMap<>();
     private final Map<UUID, Set<String>> explained = new HashMap<>();
@@ -144,7 +145,7 @@ final class InventoryFeedback implements Listener {
         fullHints.put(p.getUniqueId(),now);
         var capacity=plugin.dungeon().stashSnapshot(p.getUniqueId());
         String next=capacity.occupied()==PagedPersonalStash.CAPACITY
-                ?"个人箱已满（540/540），先 /mycli trade recycle list --json 查可回收仓库装备，腾位后再存。"
+                ?"个人箱已满（540/540），先 "+InventoryTidy.STASH_PREVIEW+" 预览可腾出的箱格。"
                 :"先 /mycli inventory tidy 合并普通堆叠；/mycli trade recycle list --json 查可回收装备。";
         // Main inventory first; never nominate held, named, bound or custom gear.
         for(int i=0;i<36;i++){

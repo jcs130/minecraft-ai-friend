@@ -16,6 +16,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.nio.file.Files;
@@ -59,6 +60,14 @@ public final class MaidVortexQa extends JavaPlugin implements Listener {
                 var staff = items.create("mage_apprentice_staff", 1);
                 maid.getEquipment().setItemInMainHand(staff);
                 sender.sendMessage("item=" + items.resolveId(maid.getEquipment().getItemInMainHand()));
+            }
+            case "pack-staff" -> {
+                var original = HybridMaidPlugin.nativeMaid(maid);
+                var items = vortex.qiandengjiItems();
+                var staff = items.create("mage_apprentice_staff", 1);
+                int slot = Integer.parseInt(args[2]);
+                original.getMaidInv().setStackInSlot(slot, CraftItemStack.asNMSCopy(staff));
+                sender.sendMessage("packed=" + items.resolveId(staff) + " slot=" + slot);
             }
             case "damage" -> sender.sendMessage(damage);
             case "player-staff" -> {

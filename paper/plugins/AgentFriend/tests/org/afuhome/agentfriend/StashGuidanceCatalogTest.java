@@ -17,6 +17,8 @@ public final class StashGuidanceCatalogTest {
         var status=help("inventory tidy auto status");
         check(status.get("actionReadOnly").getAsBoolean(),"auto status is read only");
         for(String action:List.of("on","off"))check(!help("inventory tidy auto "+action).get("actionReadOnly").getAsBoolean(),"auto setting writes are explicit: "+action);
+        check(help("inventory tidy stash auto status").get("actionReadOnly").getAsBoolean(),"stash auto status is discoverable and read only");
+        for(String action:List.of("on","off"))check(!help("inventory tidy stash auto "+action).get("actionReadOnly").getAsBoolean(),"stash auto settings are explicit: "+action);
         check(help("arena stash putslot").toString().contains("stash_full"),"deposit failure has an actionable alternative");
         check(tidy.get("resultQuery").getAsString().contains("不重放"),"unknown save results cannot be retried as completion");
         System.out.println("PASS "+checks+" stash guidance catalog assertions");

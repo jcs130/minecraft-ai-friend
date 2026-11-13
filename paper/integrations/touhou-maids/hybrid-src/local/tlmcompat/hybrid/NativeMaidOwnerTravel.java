@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.common.CommonHooks;
 import org.bukkit.Bukkit;
@@ -29,7 +30,7 @@ final class NativeMaidOwnerTravel implements Listener {
     private static final int LEGACY_RANGE = 16;
     private static final int ARRIVAL_RANGE = 8;
 
-    private record Trip(Player owner, World source, Location destination, boolean portal, List<UUID> companions) {
+    private record Trip(Player owner, World source, Location destination, boolean portal, int trialStage, List<UUID> companions) {
         boolean changesWorld() {
             return !source.equals(destination.getWorld());
         }
@@ -79,7 +80,7 @@ final class NativeMaidOwnerTravel implements Listener {
             });
         }
         if (!changesWorld && (portal || from.distanceSquared(destination) < LEGACY_RANGE * LEGACY_RANGE)) return;
-        Trip trip = capture(owner, from, destination, portal);
+        Trip trip = capture(owner, from, destination, portal, 0);
         if (trip == null) return;
 
         if (trip.changesWorld()) {
@@ -91,14 +92,13 @@ final class NativeMaidOwnerTravel implements Listener {
         }
     }
 
-    private Trip capture(Player owner, Location from, Location destination, boolean portal) {
+    private Trip capture(Player owner, Location from, Location destination, boolean portal, int trialStage) {
         UUID ownerId = owner.getUniqueId();
-        boolean changesWorld = !from.getWorld().equals(destination.getWorld());
         List<UUID> companions = new ArrayList<>();
         for (String key : plugin.registeredMaids().keySet()) {
             EntityMaid maid = followingMaid(UUID.fromString(key), ownerId, from.getWorld());
             if (maid == null) continue;
-            int range = departureRange(maid, changesWorld);
+            int range = departureRange(maid);
             if (range > 0 && maid.getBukkitEntity().getLocation().distanceSquared(from) <= range * range) {
                 companions.add(maid.getUUID());
             }
@@ -106,9 +106,15 @@ final class NativeMaidOwnerTravel implements Listener {
 
         pending.remove(ownerId);
         if (companions.isEmpty()) return null;
-        Trip trip = new Trip(owner, from.getWorld(), destination.clone(), portal, List.copyOf(companions));
+        Trip trip = new Trip(owner, from.getWorld(), destination.clone(), portal, trialStage, List.copyOf(companions));
         pending.put(ownerId, trip);
         return trip;
+    }
+
+    void followTrialTransfer(Player owner, Location from, int stage) {
+        if (!canTravel(owner) || stage < 1 || !owner.getWorld().equals(from.getWorld())) return;
+        Trip trip = capture(owner, from, owner.getLocation(), false, stage);
+        if (trip != null) scheduleArrival(trip, trip.destination());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -130,7 +136,7 @@ final class NativeMaidOwnerTravel implements Listener {
                 || !correction.to().getWorld().equals(owner.getWorld())) return;
         Location from = correction.from().clone();
         from.setWorld(event.getFrom());
-        Trip direct = capture(owner, from, correction.to(), false);
+        Trip direct = capture(owner, from, correction.to(), false, 0);
         if (direct != null) scheduleArrival(direct, direct.destination());
     }
 
@@ -146,12 +152,14 @@ final class NativeMaidOwnerTravel implements Listener {
         if (!canTravel(owner) || Bukkit.getPlayer(ownerId) != owner || !arrival.getWorld().equals(owner.getWorld())) return;
         Location current = owner.getLocation();
         if (current.distanceSquared(arrival) > ARRIVAL_RANGE * ARRIVAL_RANGE) return;
+        if (trip.trialStage() > 0 && !trialArrival(owner, trip.trialStage(), current)) return;
 
         for (UUID id : trip.companions()) {
             EntityMaid maid = followingMaid(id, ownerId, trip.source());
             if (maid == null || (trip.source().equals(owner.getWorld())
                     && maid.getBukkitEntity().getLocation().distanceSquared(current) < 16)) continue;
-            Location landing = safe(current);
+            Location landing = trip.trialStage() > 0
+                ? safe(current, candidate -> trialArrival(owner, trip.trialStage(), candidate)) : safe(current);
             if (landing == null) {
                 owner.sendMessage("[女仆·随行] 附近没有已加载的安全落点，伙伴暂未传送；请先站到有地面、两格净空的地方，再查询女仆位置。");
                 continue;
@@ -227,16 +235,28 @@ final class NativeMaidOwnerTravel implements Listener {
         return idle || defending ? maid : null;
     }
 
-    private static int departureRange(EntityMaid maid, boolean changesWorld) {
+    private static int departureRange(EntityMaid maid) {
         try {
-            int walkRange = NativeMaidFollowSupport.limits(maid).walkBeyond();
-            return changesWorld ? Math.max(LEGACY_RANGE, walkRange) : LEGACY_RANGE;
+            return Math.max(LEGACY_RANGE, NativeMaidFollowSupport.limits(maid).walkBeyond());
         } catch (IllegalArgumentException invalidProfile) {
             return 0;
         }
     }
 
+    private static boolean trialArrival(Player owner, int stage, Location landing) {
+        var agentFriend = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (agentFriend == null || !agentFriend.isEnabled()) return false;
+        try {
+            Class<?> access = Class.forName("org.afuhome.agentfriend.CompanionTravelAccess", false, agentFriend.getClass().getClassLoader());
+            return Boolean.TRUE.equals(access.getMethod("trialArrival", Player.class, int.class, Location.class)
+                .invoke(null, owner, stage, landing));
+        } catch (ReflectiveOperationException | LinkageError unavailable) { return false; }
+    }
+
     static Location safe(Location centre){
+        return safe(centre, candidate -> true);
+    }
+    private static Location safe(Location centre, Predicate<Location> allowed){
         World world=centre.getWorld();
         for(int dy:new int[]{0,1,-1,2})for(int[] offset:new int[][]{{1,0},{-1,0},{0,1},{0,-1},{1,1},{-1,-1}}){
             int x=centre.getBlockX()+offset[0],y=centre.getBlockY()+dy,z=centre.getBlockZ()+offset[1];
@@ -245,7 +265,7 @@ final class NativeMaidOwnerTravel implements Listener {
             if(!world.getWorldBorder().isInside(at))continue;
             var floor=world.getBlockAt(x,y-1,z);var feet=world.getBlockAt(x,y,z);var head=world.getBlockAt(x,y+1,z);
             if(floor.getType().isSolid()&&floor.getType().isOccluding()&&feet.getType().isAir()&&head.getType().isAir()
-                &&!Set.of(Material.MAGMA_BLOCK,Material.CACTUS,Material.CAMPFIRE,Material.SOUL_CAMPFIRE).contains(floor.getType()))return at;
+                &&!Set.of(Material.MAGMA_BLOCK,Material.CACTUS,Material.CAMPFIRE,Material.SOUL_CAMPFIRE).contains(floor.getType())&&allowed.test(at))return at;
         }return null;
     }
 }

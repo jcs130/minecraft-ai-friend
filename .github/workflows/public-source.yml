@@ -33,6 +33,12 @@ jobs:
         run: python paper/ops/test-dungeon-entrance.py
       - name: Check training reward progression and ordinary-difficulty caps
         run: python paper/ops/test-trial-reward-balance.py
+      - name: Check dungeon equipment categories and acceptance scripts
+        run: |
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/dungeon-readiness" paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonLoadoutRules.java paper/probe/DungeonLoadoutRulesTest.java
+          java -cp "$RUNNER_TEMP/dungeon-readiness" org.afuhome.agentfriend.DungeonLoadoutRulesTest
+          node --check paper/probe/rpg-usability/dungeon-readiness.mjs
+          node --check paper/probe/inventory-tidy/stage.mjs
       - name: Check player menu navigation and single-use responses
         run: python paper/ops/test-player-ui.py
       - name: Check optional maid adapter without connecting
@@ -54,6 +60,7 @@ jobs:
           python paper/integrations/touhou-maids/tests/run-companion-rules.py --gson "$RUNNER_TEMP/maid-life-gson.jar"
           node --check paper/integrations/touhou-maids/tests/companion-stage.mjs
           node --check paper/integrations/touhou-maids/tests/companion-actions-stage.mjs
+          node --check paper/integrations/touhou-maids/tests/maid-adaptive-guard-stage.mjs
           node --check paper/integrations/touhou-maids/tests/workshop-stage.mjs
           node --check paper/integrations/touhou-maids/tests/conversation-stage.mjs
           node --check paper/integrations/touhou-maids/tests/short-dialogue-stage.mjs
