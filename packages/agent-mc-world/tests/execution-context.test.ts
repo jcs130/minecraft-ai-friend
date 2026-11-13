@@ -1,8 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { executionFactParts, executionFeedbackContext, hasExecutionFeedbackContext } from '../src/context.ts';
+import { executionFactParts, executionFactKeys, executionFeedbackContext, hasExecutionFeedbackContext, projectDecisionEvidence } from '../src/context.ts';
 import { methodHarness } from './method-harness.ts';
 
 describe('source-owned execution context', () => {
+  it('closes source-owned dependencies after a narrow override without loading unrelated facts', () => {
+    const facts={partDependencies:{gear:['equip','inventoryIds'],equip:['gear'],inventoryIds:['gear','missing']},
+      parts:[{key:'gear',text:'bag: spare gold boots'},{key:'equip',text:'worn: iron chestplate and leggings'},
+        {key:'inventoryIds',text:'golden_boots'},{key:'farm',text:'unrelated'}]};
+    expect(executionFactKeys(facts,['gear','gear'],false)).toEqual(['gear','equip','inventoryIds','missing']);
+    const selected=executionFactParts(facts,['gear'],false);
+    expect(selected.map(p=>p.text)).toEqual(['bag: spare gold boots','worn: iron chestplate and leggings',
+      'golden_boots','[当前分区不可用；旧值不作现场]']);
+    expect(executionFactParts(facts,[],false)).toEqual([]);
+    expect(facts.parts).toHaveLength(4);
+    const rig=methodHarness('1.21.1');
+    try { expect(executionFactKeys(rig.world.requestFacts(),['gear'],false)).toEqual(['gear','equip','inventoryIds']); }
+    finally {rig.close();}
+  });
+
+  it('keeps bounded original evidence, explicit omissions and read routes without declaring completion', () => {
+    const original=[{id:'failed',kind:'event' as const,source:'fixture',observedAt:'2026-11-13T00:00:00Z',
+      text:'ACCEPTED'+'.'.repeat(4000)+'NATIVE_FAILED_NO_ITEM_USED',read:{cursor:22}},
+      {id:'huge',kind:'fact' as const,source:'fixture',observedAt:null,text:'x'.repeat(12000),read:{key:'bag'}},
+      {id:'more',kind:'call' as const,source:'fixture',observedAt:null,text:'x'.repeat(4000),read:{callId:'original'}}];
+    const copy=JSON.stringify(original),view=projectDecisionEvidence(original,{maxChars:2048,maxItemChars:1200});
+    expect(view.evidenceChars).toBeLessThanOrEqual(2048);
+    expect(view.items[0].text).toContain('NATIVE_FAILED_NO_ITEM_USED');
+    expect(view.items[0].truncated).toBe(true);expect(view.complete).toBe(false);
+    expect(view.omitted.length).toBeGreaterThan(0);expect(view.omitted[0].read).toBeTruthy();
+    expect(view).not.toHaveProperty('goalCompleted');expect(JSON.stringify(original)).toBe(copy);
+  });
   it('binds server feedback to the original text without establishing an action result', () => {
     const text = 'Directory entry: fixture_site';
     const marker = executionFeedbackContext(text);

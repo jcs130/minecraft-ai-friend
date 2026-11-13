@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.55
+
+- Declare semantic fact dependencies so narrow gear requests include worn equipment and item identifiers.
+- Export bounded request-only decision evidence and critical body lifecycle identity through SDK/MCP.
+- Preempt unexternalized decisions on native death without cancelling accepted tool execution.
+
 # Earlier core release notes
 
 Dated implementation notes; current setup is in [README](../README.md) and [MCP](mcp.md).
