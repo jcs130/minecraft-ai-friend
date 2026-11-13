@@ -190,7 +190,7 @@ final class AgentCliCatalog {
         add(specs,"cast.fireworks","magic","cast","/mycli cast fireworks","释放观赏烟花","非旁观者；冷却检查","粒子与声音");
         add(specs,"cast.starlight","magic","cast","/mycli cast starlight","释放观赏星尘","非旁观者；冷却检查","粒子与声音");
         add(specs,"cast.starbolt","magic","cast","/mycli cast starbolt","自动锁定怪物；基础 5 伤害，4 魔力、3 秒冷却","非旁观者；射程内有目标","私有命中提示含名称、中文实体类型和 minecraft 实体 ID；粒子");
-        add(specs,"cast.frostnova","magic","cast","/mycli cast frostnova","范围冰霜减速；基础 2 伤害，7 魔力、14 秒冷却","非旁观者；魔力与冷却检查","施法结果与粒子");
+        add(specs,"cast.frostnova","magic","cast","/mycli cast frostnova","5.5 格控场与灭火；缓慢 III、短暂虚弱；7 魔力、14 秒冷却","可见敌怪或可熄灭的火；魔力与冷却检查","施法结果与粒子");
         add(specs,"cast.flamewave","magic","cast","/mycli cast flamewave","范围火焰；基础 4 伤害，8 魔力、10 秒冷却","非旁观者；魔力与冷却检查","施法结果与粒子");
         add(specs,"cast.prospect","magic","cast","/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]","探查真实矿物；范围随挖矿等级增长","非旁观者；6 魔力、30 秒冷却，附近有矿才扣费","聊天 dimension/X/Y/Z 绝对矿块坐标、从当前位置完整连向矿块且随移动更新的粒子方位线、轮廓或无矿结果；直线不是安全路径");
         add(specs,"cast.leap","magic","cast","/mycli cast leap","跃空并缓降；4 魔力、8 秒冷却","非旁观者；站在地面","位移与视觉提示");
@@ -363,10 +363,10 @@ final class AgentCliCatalog {
             nativeSpec(specs,"intro","read","/mycli intro","按真实饥饿、职业、装备和任务给一个当前目标","免费只读，不代选职、接取、学习或领奖；物理目标须实际行动，verifyCommand仅核对");
             nativeSpec(specs,"trade.wallet","read","/mycli trade wallet","查Vortex任务金币余额","任务、回收、试炼奖励和商店共用金币；实体绿宝石仍是物品；服务不可用不伪造0余额");
             nativeSpec(specs,"trade","group","/mycli trade shop|recycle|wallet|menu|find","金币商城、装备回收与村民交易","shop/recycle用同一RPG金币；menu/find/buy/sell仍查询附近村民报价，不远程成交；真人罗盘直接开商城");
-            nativeSpec(specs,"trade.shop","group","/mycli trade shop [menu|list|buy]","金币商城：装备、食物和探索建材；真人从罗盘金币商城进入","同一Vortex金币；浏览免费，购买先确认；旧arena shop调用保留");
-            nativeSpec(specs,"trade.shop.menu","gui","/mycli trade shop menu","打开中文原版商城；点击商品→数量→确认购买","Java、基岩和观战可用原版容器；不用客户端额外模组，不依赖右键或Shift");
-            nativeSpec(specs,"trade.shop.list","read","/mycli trade shop list","列出真实商品ID、每份数量、金币价和可复制购买命令","默认精炼文本；--json取机器回执；不购买、不扣费");
-            nativeSpec(specs,"trade.shop.buy","item","/mycli trade shop buy <商品ID> [份数]","用金币购买装备与补给，直接保存到个人箱待入箱队列","不耗魔力；非堆叠装备一次1件，材料最多一组；开箱接收：arena stash page 1；未知结果先查trade recycle status，勿重复购买");
+            nativeSpec(specs,"trade.shop","group","/mycli trade shop [menu|list|buy]","金币商城提供常驻补给与每日附魔装备；真人从罗盘金币商城进入","使用同一 Vortex 金币；精选每天北京时间 00:00 刷新");
+            nativeSpec(specs,"trade.shop.menu","gui","/mycli trade shop menu","打开原版商城；点击商品后确认购买","每日装备全服每款一件，售出后下架");
+            nativeSpec(specs,"trade.shop.list","read","/mycli trade shop list [daily|supplies]","列出在售商品、附魔、数量、金币价及准确购买命令","daily 看每日精选，supplies 看常驻补给；可加 --json");
+            nativeSpec(specs,"trade.shop.buy","item","/mycli trade shop buy <商品ID> [份数]","用金币买入，商品送到个人箱待入箱队列","每日商品 ID 随日期变化，每款一件；不耗魔力；交易待核对先查 trade recycle status");
             nativeSpec(specs,"trade.recycle","group","/mycli trade recycle [list|quote|sell|status|menu]","出售多余装备赚金币；先报价，再明确确认","当前手持、穿戴、绑定和特殊装备保留；材料存箱；旧arena recycle调用保留");
             nativeSpec(specs,"trade.recycle.list","read","/mycli trade recycle list [页码]","查可回收装备的精确槽位、耐久、附魔、价格及下一步","默认精炼文本，每页12项；bag是0–35槽，chest是1–540槽；不会自动出售");
             nativeSpec(specs,"trade.recycle.quote","read","/mycli trade recycle quote bag|chest <槽位> [数量]","取得"+(ArenaEconomy.QUOTE_LIFETIME_MS/1000)+"秒有效报价，返回完整确认命令；以实际expiresAt为准","不移走物品、不加钱；核对装备后sell；取消无需操作，报价自动过期");

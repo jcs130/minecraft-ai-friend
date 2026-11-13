@@ -236,7 +236,7 @@ final class NativeMaidOwnerTravel implements Listener {
         }
     }
 
-    private static Location safe(Location centre){
+    static Location safe(Location centre){
         World world=centre.getWorld();
         for(int dy:new int[]{0,1,-1,2})for(int[] offset:new int[][]{{1,0},{-1,0},{0,1},{0,-1},{1,1},{-1,-1}}){
             int x=centre.getBlockX()+offset[0],y=centre.getBlockY()+dy,z=centre.getBlockZ()+offset[1];

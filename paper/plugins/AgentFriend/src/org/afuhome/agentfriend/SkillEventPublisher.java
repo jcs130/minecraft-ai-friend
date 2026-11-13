@@ -1,11 +1,8 @@
 package org.afuhome.agentfriend;
 
 import com.google.gson.JsonObject;
-import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.DiscardedPayload;
-import net.minecraft.resources.ResourceLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
@@ -15,8 +12,18 @@ import org.bukkit.entity.Player;
 final class SkillEventPublisher {
     static final String CHANNEL = "mcagent:event";
     private final AgentFriendPlugin plugin;
+    private final SkillPayload payload;
 
-    SkillEventPublisher(AgentFriendPlugin plugin) { this.plugin = plugin; }
+    SkillEventPublisher(AgentFriendPlugin plugin) {
+        this.plugin = plugin;
+        SkillPayload adapter;
+        try { adapter = new SkillPayload(); }
+        catch (RuntimeException | LinkageError incompatible) {
+            adapter = null;
+            plugin.getLogger().warning("Skill events for unregistered clients unavailable: " + incompatible.getClass().getSimpleName());
+        }
+        payload = adapter;
+    }
 
     void start() { Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL); }
 
@@ -50,11 +57,15 @@ final class SkillEventPublisher {
         }
         if (caster.getListeningPluginChannels().contains(CHANNEL)) {
             caster.sendPluginMessage(plugin, CHANNEL, bytes);
-        } else {
+        } else if (payload != null) {
             // Mineflayer need not register channels. Send the same raw UTF-8 JSON
             // directly to this player's connection, never to chat or nearby players.
-            ((CraftPlayer) caster).getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+            try {
+                ((CraftPlayer) caster).getHandle().connection.send(new ClientboundCustomPayloadPacket(payload.create(CHANNEL, bytes)));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+                if (payload.firstFailure())
+                    plugin.getLogger().warning("Could not encode private skill event: " + unavailable.getClass().getSimpleName());
+            }
         }
     }
 

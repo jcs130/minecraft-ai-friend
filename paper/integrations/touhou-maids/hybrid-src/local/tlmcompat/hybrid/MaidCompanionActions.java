@@ -34,7 +34,7 @@ final class MaidCompanionActions {
     static void tools(ChatCompletion request) {
         var mode = StringParameter.create();
         mode.addEnumValues("follow", "guard", "wait", "fish");
-        mode.setDescription("follow：结束驻守和当前工作，跟随伙伴。guard：随行护卫。wait：短停60秒后恢复跟随，期间可随伙伴传送。fish：执行原生钓鱼任务，需要主手鱼竿及水边可用的椅子或船。");
+        mode.setDescription("follow：结束驻守和当前工作，跟随伙伴。guard：随行护卫，需要合用的主手武器，弓弩还需弹药。wait：短停60秒后恢复跟随，期间可随伙伴传送。fish：执行原生钓鱼任务，需要主手鱼竿及水边可用的椅子或船。");
         request.addTool(FunctionTool.create().setName(TOOL)
             .setDescription("根据伙伴的话和当前现场，实际切换自己的陪伴模式。需要行动就调用工具，不能只口头答应。返回applied仅表示模式设置，未证明走到身边或完成战斗。不能操作其他实体、物品或任意命令。")
             .setParameters(ObjectParameter.create().addProperties("mode", mode)).build());
@@ -142,6 +142,10 @@ final class MaidCompanionActions {
         facts.addProperty("maxHealth", maid.getMaxHealth());
         facts.addProperty("canMove", maid.canBrainMoving());
         facts.addProperty("nativeDefending", !maid.getPersistentData().getString("qiandengji_auto_defence_task").isEmpty());
+        var attack=NativeMaidCompanionSupport.weaponTask(maid);
+        facts.addProperty("guardWeaponReady", attack != null);
+        if (attack != null) facts.addProperty("equippedAttackTask", attack.getUid().toString());
+        facts.add("mainHand", HybridMaidPlugin.item(maid.getMainHandItem()));
         var target = maid.getTarget();
         facts.addProperty("visibleCombatTarget", target != null && target.isAlive() && maid.hasLineOfSight(target));
         facts.add("fishing", fishing(maid));
@@ -168,6 +172,9 @@ final class MaidCompanionActions {
         result.add("status", receipt.get("status"));
         result.add("operationId", receipt.get("operationId"));
         result.add("current", facts(maid, partner));
+        if (mode.equals("guard") && NativeMaidCompanionSupport.weaponTask(maid) == null) {
+            result.addProperty("nextStep", "已恢复随行。要实际护卫，请用 inventory/equip 或女仆装备菜单给主手装备武器，弓弩还需弹药。");
+        }
         result.addProperty("goalCompleted", false);
         return result;
     }

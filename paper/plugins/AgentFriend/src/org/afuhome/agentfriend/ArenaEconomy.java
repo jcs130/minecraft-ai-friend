@@ -6,6 +6,9 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonNull;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -48,13 +51,35 @@ final class ArenaEconomy implements Listener {
             "冒险者铁盔", "冒险者胸甲", "冒险者护腿", "冒险者矿镐", "冒险者战斧", "远征盾",
             "潮汐探路冠", "回廊踏影靴", "赤铜纹战盾", "踏影铁靴",
             "铜纹守护甲", "机关弩", "深渊破壁斧", "赤铜柄·闪现匕首", "寒霜剑");
-    private record Offer(String id, Material material, int count, int price) { }
+    private record Offer(String id, Material material, int count, int price, ItemStack featuredItem) {
+        Offer(String id, Material material, int count, int price) { this(id, material, count, price, null); }
+        Offer(DailyShop.Entry entry) { this(entry.id(), entry.item().getType(), 1, entry.price(), entry.item()); }
+        boolean daily() { return featuredItem != null; }
+        int maxQuantity() { return Math.min(16, material.getMaxStackSize() / count); }
+        ItemStack stack(int quantity) {
+            return daily() ? featuredItem.clone() : new ItemStack(material, count * quantity);
+        }
+    }
     private record Quote(UUID owner, String id, boolean stash, int slot, int quantity, int price,
                          byte[] fingerprint, long expiresAt) { }
     private record Candidate(boolean stash, int slot, String fingerprint) {
         Candidate(boolean stash,int slot){this(stash,slot,null);}
     }
-    private record Menu(UUID owner, String kind, int page, List<Candidate> candidates, String quoteId) { }
+    private record Menu(UUID owner, String kind, int page, List<Candidate> candidates, String quoteId,
+                        Map<Integer, String> offersBySlot) {
+        Menu(UUID owner, String kind, int page, List<Candidate> candidates, String quoteId) {
+            this(owner, kind, page, candidates, quoteId, Map.of());
+        }
+    }
+    private record ShopStock(DailyShop.Shelf shelf, String unavailableReason) {
+        List<Offer> featured() {
+            return shelf == null ? List.of() : shelf.entries().stream().filter(DailyShop.Entry::available).map(Offer::new).toList();
+        }
+        String refreshLabel() {
+            return DateTimeFormatter.ofPattern("MM月dd日 HH:mm").withZone(DailyShop.ZONE)
+                    .format(Instant.ofEpochMilli(shelf.refreshAt())) + "（北京时间）";
+        }
+    }
     private static final List<Offer> OFFERS = List.of(
             new Offer("iron_helmet", Material.IRON_HELMET, 1, 8),
             new Offer("iron_chestplate", Material.IRON_CHESTPLATE, 1, 14),
@@ -66,7 +91,10 @@ final class ArenaEconomy implements Listener {
             new Offer("crossbow", Material.CROSSBOW, 1, 14),
             new Offer("shield", Material.SHIELD, 1, 7),
             new Offer("arrows", Material.ARROW, 16, 3),
+            new Offer("arrows_stack", Material.ARROW, 64, 12),
+            new Offer("spectral_arrows", Material.SPECTRAL_ARROW, 16, 9),
             new Offer("food", Material.COOKED_BEEF, 8, 4),
+            new Offer("golden_carrots", Material.GOLDEN_CARROT, 8, 14),
             new Offer("golden_apple", Material.GOLDEN_APPLE, 1, 10),
             new Offer("diamond_sword", Material.DIAMOND_SWORD, 1, 38),
             new Offer("diamond_helmet", Material.DIAMOND_HELMET, 1, 34),
@@ -87,6 +115,8 @@ final class ArenaEconomy implements Listener {
     static List<String> offerIds(){return OFFERS.stream().map(Offer::id).toList();}
     private final DungeonManager dungeon;
     private final NativeRpg nativeRpg;
+    private final DailyShop dailyShop;
+    private boolean loggedShelfFailure;
     private final ItemIdentity identity;
     // Only scoped on the server thread. Async settlement explicitly captures its request format.
     private boolean textReply;
@@ -124,24 +154,54 @@ final class ArenaEconomy implements Listener {
         this.plugin = plugin;
         this.dungeon = dungeon;
         this.nativeRpg = new NativeRpg(plugin);
+        this.dailyShop = new DailyShop(plugin, nativeRpg::saveConfigVerified, Clock.systemUTC());
         this.identity = new ItemIdentity(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
-    void openShopMenu(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 45, "金币商城 · 装备与冒险补给");
-        for (int slot = 0; slot < OFFERS.size(); slot++) {
-            Offer offer = OFFERS.get(slot);
-            ItemStack icon = new ItemStack(offer.material(), offer.count());
-            ItemMeta meta = icon.getItemMeta();
-            meta.setDisplayName(ChatColor.GOLD + identity.describe(icon).name());
-            meta.setLore(List.of(ChatColor.YELLOW + "价格 " + offer.price() + " " + recycleCurrency(),
-                    ChatColor.GRAY + "每份 " + offer.count() + " 件 · 点击选数量并确认",
-                    ChatColor.GRAY + "扣金币、不耗魔力；商品送入个人箱",
-                    ChatColor.DARK_GRAY + "ID: " + offer.id()));
-            icon.setItemMeta(meta);
-            inv.setItem(slot, icon);
+    private ShopStock stock() {
+        if (!nativeRpg.selected()) return new ShopStock(null, "economy_unavailable");
+        try {
+            ShopStock stock = new ShopStock(dailyShop.current(), null);
+            loggedShelfFailure = false;
+            return stock;
+        } catch (RuntimeException invalid) {
+            if (!loggedShelfFailure) {
+                plugin.getLogger().warning("RPG daily shop unavailable: " + invalid.getClass().getSimpleName()
+                        + ": " + invalid.getMessage());
+                loggedShelfFailure = true;
+            }
+            return new ShopStock(null, "shop_stock_unavailable");
         }
+    }
+
+    private ItemStack shopIcon(Offer offer, ShopStock stock) {
+        ItemStack icon = offer.stack(1);
+        ItemMeta meta = icon.getItemMeta();
+        meta.setDisplayName((offer.daily() ? ChatColor.LIGHT_PURPLE : ChatColor.GOLD) + identity.describe(icon).name());
+        meta.setLore(List.of(ChatColor.YELLOW + "价格 " + offer.price() + " " + recycleCurrency(),
+                ChatColor.GRAY + (offer.daily() ? "全服限购 1 件 · 刷新 " + stock.refreshLabel()
+                        : "每份 " + offer.count() + " 件 · 点击选数量并确认"),
+                ChatColor.GRAY + "购买不耗魔力 · 商品送入个人箱"));
+        icon.setItemMeta(meta);
+        return icon;
+    }
+
+    void openShopMenu(Player player) {
+        ShopStock stock = stock();
+        List<Offer> featured = stock.featured();
+        Inventory inv = Bukkit.createInventory(null, 45, "金币商城 · 补给与每日装备");
+        Map<Integer, String> offersBySlot = new LinkedHashMap<>();
+        int slot = 0;
+        for (Offer offer : OFFERS) {
+            inv.setItem(slot, shopIcon(offer, stock));
+            offersBySlot.put(slot++, offer.id());
+        }
+        for (Offer offer : featured) {
+            inv.setItem(slot, shopIcon(offer, stock));
+            offersBySlot.put(slot++, offer.id());
+        }
+        if (nativeRpg.selected()) showDailyStock(inv, stock.shelf() == null ? -1 : featured.size());
         inv.setItem(36, icon(Material.HOPPER, "卖出多余装备", "逐件报价后确认；不收绑定、穿戴和当前手持装备"));
         inv.setItem(38, icon(Material.CHEST, "取货 / 整理个人箱", "540格；成功远程开箱2魔力；物资满时仍保存在箱中"));
         JsonObject bank=nativeRpg.selected()?nativeRpg.recyclingState(player):null;
@@ -149,8 +209,33 @@ final class ArenaEconomy implements Listener {
         inv.setItem(42, icon(Material.EMERALD_BLOCK, "村民以物易物", "需要前往商人身边；与金币商城分别结算"));
         inv.setItem(43, icon(Material.CHEST_MINECART, "玩家交易行", "玩家间金币买卖，保留附魔耐久；商品送个人箱"));
         inv.setItem(44, icon(Material.BARRIER, "关闭", "不会购买或卖出任何物品"));
-        menus.put(inv, new Menu(player.getUniqueId(), "shop", 0, List.of(), null));
+        menus.put(inv, new Menu(player.getUniqueId(), "shop", 0, List.of(), null, Map.copyOf(offersBySlot)));
         player.openInventory(inv);
+    }
+
+    private void showDailyStock(Inventory menu, int remaining) {
+        String label = remaining < 0 ? "暂时无法读取每日装备"
+                : remaining == 0 ? "今日装备已下架" : "每日精选 · " + remaining + " 件在售";
+        menu.setItem(35, icon(Material.CLOCK, label, remaining < 0
+                ? "常用补给仍可购买" : "每日北京时间 00:00 刷新 · 点击刷新货架"));
+    }
+
+    private void removeFromOpenShelves(String id) {
+        for (var window : menus.entrySet()) {
+            Inventory inventory = window.getKey();
+            Menu menu = window.getValue();
+            if (!menu.kind().equals("shop")) continue;
+            int remaining = 0;
+            boolean removed = false;
+            for (var slot : menu.offersBySlot().entrySet()) {
+                if (!DailyShop.isDaily(slot.getValue())) continue;
+                if (slot.getValue().equals(id)) {
+                    inventory.setItem(slot.getKey(), null);
+                    removed = true;
+                } else if (inventory.getItem(slot.getKey()) != null) remaining++;
+            }
+            if (removed) showDailyStock(inventory, remaining);
+        }
     }
 
     private void openRecycleMenu(Player player, int page) {
@@ -186,18 +271,22 @@ final class ArenaEconomy implements Listener {
 
     void openRecycleMenu(Player player) { openRecycleMenu(player, 0); }
 
-    private void openBuyMenu(Player player,int index,int requested){
-        Offer offer=OFFERS.get(index);
-        int max=Math.min(16,offer.material().getMaxStackSize()/offer.count());
+    private void openBuyMenu(Player player,String id,int requested){
+        Offer offer = shopOffer(player, id);
+        if (offer == null) {
+            openShopMenu(player);
+            return;
+        }
+        int max=offer.maxQuantity();
         int count=Math.max(1,Math.min(max,requested));
         Inventory inv=Bukkit.createInventory(null,27,"确认购买 · 金币商城");
-        inv.setItem(4,new ItemStack(offer.material(),offer.count()*count));
+        inv.setItem(4,offer.stack(count));
         inv.setItem(10,icon(Material.RED_WOOL,"取消 / 返回","未确认不会扣金币"));
-        inv.setItem(12,icon(Material.ARROW,"减少一份","每份 "+offer.count()+" 件；最多 "+max+" 份"));
+        if(max>1)inv.setItem(12,icon(Material.ARROW,"减少一份","每份 "+offer.count()+" 件；最多 "+max+" 份"));
         inv.setItem(13,icon(Material.GOLD_INGOT,"共 "+count+" 份 / "+(offer.count()*count)+" 件","总价 "+(offer.price()*count)+" 金币；不耗魔力"));
-        inv.setItem(14,icon(Material.ARROW,"增加一份","每份 "+offer.count()+" 件；最多 "+max+" 份"));
+        if(max>1)inv.setItem(14,icon(Material.ARROW,"增加一份","每份 "+offer.count()+" 件；最多 "+max+" 份"));
         inv.setItem(16,icon(Material.LIME_WOOL,"确认购买","商品送入个人箱；背包满也不会掉在地上"));
-        menus.put(inv,new Menu(player.getUniqueId(),"buy",count,List.of(),Integer.toString(index)));
+        menus.put(inv,new Menu(player.getUniqueId(),"buy",count,List.of(),id));
         player.openInventory(inv);
     }
 
@@ -230,7 +319,10 @@ final class ArenaEconomy implements Listener {
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= event.getView().getTopInventory().getSize()) return;
         if (menu.kind().equals("shop")) {
-            if (slot < OFFERS.size()) Bukkit.getScheduler().runTask(plugin, () -> openBuyMenu(player,slot,1));
+            String id = menu.offersBySlot().get(slot);
+            if (id != null && event.getCurrentItem() != null)
+                Bukkit.getScheduler().runTask(plugin, () -> withReplyMode(true, () -> openBuyMenu(player,id,1)));
+            else if (slot == 35 && nativeRpg.selected()) Bukkit.getScheduler().runTask(plugin, () -> openShopMenu(player));
             else if (slot == 36) Bukkit.getScheduler().runTask(plugin, () -> openRecycleMenu(player, 0));
             else if (slot == 38) Bukkit.getScheduler().runTask(plugin, () -> dungeon.command(player,new String[]{"arena","stash","page","1"}));
             else if (slot == 42) Bukkit.getScheduler().runTask(plugin, () -> dungeon.openLegacyMerchant(player));
@@ -238,14 +330,17 @@ final class ArenaEconomy implements Listener {
             else if (slot == 40) withReplyMode(true,()->wallet(player));
             else if (slot == 44) Bukkit.getScheduler().runTask(plugin,()->player.closeInventory());
         } else if(menu.kind().equals("buy")) {
-            int index=Integer.parseInt(menu.quoteId());
             if(slot==10)Bukkit.getScheduler().runTask(plugin,()->openShopMenu(player));
-            else if(slot==12||slot==14)Bukkit.getScheduler().runTask(plugin,()->openBuyMenu(player,index,menu.page()+(slot==14?1:-1)));
+            else if((slot==12||slot==14)&&event.getCurrentItem()!=null)Bukkit.getScheduler().runTask(plugin,
+                    ()->withReplyMode(true,()->openBuyMenu(player,menu.quoteId(),menu.page()+(slot==14?1:-1))));
             else if(slot==16){
                 // Consume this exact confirmation before touching the bank: duplicate clicks do not buy twice.
                 menus.put(event.getView().getTopInventory(),new Menu(menu.owner(),"busy",0,List.of(),null));
-                withReplyMode(true,()->buy(player,new String[]{"arena","shop","buy",OFFERS.get(index).id(),Integer.toString(menu.page())}));
-                Bukkit.getScheduler().runTask(plugin,()->openShopMenu(player));
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    withReplyMode(true, () -> buy(player, new String[]{"arena", "shop", "buy", menu.quoteId(), Integer.toString(menu.page())}));
+                    if (player.getOpenInventory().getTopInventory() == event.getView().getTopInventory()) openShopMenu(player);
+                });
             }
         } else if (menu.kind().equals("recycle")) {
             int index = menu.page() * 45 + slot;
@@ -435,17 +530,44 @@ final class ArenaEconomy implements Listener {
         if(args.length<3){reply(player,"shop",false,"usage_shop_list_buy_wallet",null,0,0,false,null);return;}
         String action = args[2].toLowerCase(Locale.ROOT);
         if(action.equals("menu")&&args.length==3){openShopMenu(player);return;}
-        if (action.equals("list") && args.length == 3) {
+        if (action.equals("list") && (args.length == 3 || args.length == 4
+                && (args[3].equalsIgnoreCase("daily") || args[3].equalsIgnoreCase("supplies")))) {
             String requestId = UUID.randomUUID().toString();
-            for (Offer offer : OFFERS) {
-                JsonObject details = new JsonObject();
-                details.addProperty("offerId", offer.id());
-                details.addProperty("unitPrice", offer.price());
-                reply(player, "shop_list", true, "ok", item(new ItemStack(offer.material(), offer.count())),
-                        0, balance(player.getUniqueId()), false, details, requestId);
+            String section = args.length == 4 ? args[3].toLowerCase(Locale.ROOT) : "all";
+            ShopStock stock = section.equals("supplies") ? null : stock();
+            List<Offer> offers = new ArrayList<>();
+            if (!section.equals("daily")) offers.addAll(OFFERS);
+            if (stock != null) offers.addAll(stock.featured());
+            if (nativeRpg.selected()) recyclingReads.put(player.getUniqueId(), nativeRpg.recyclingState(player));
+            int legacyBalance = nativeRpg.selected() ? 0 : balance(player.getUniqueId());
+            try {
+                for (Offer offer : offers) {
+                    JsonObject details = new JsonObject();
+                    details.addProperty("offerId", offer.id());
+                    details.addProperty("unitPrice", offer.price());
+                    details.addProperty("daily", offer.daily());
+                    if (offer.daily()) {
+                        details.addProperty("stock", 1);
+                        details.addProperty("refreshAt", stock.shelf().refreshAt());
+                    }
+                    details.addProperty("buyCommand", "/mycli trade shop buy " + offer.id());
+                    reply(player, "shop_list", true, "ok", item(offer.stack(1)), 0, legacyBalance, false, details, requestId);
+                }
+                JsonObject summary = new JsonObject();
+                summary.addProperty("section", section);
+                if (stock != null && stock.shelf() != null) {
+                    summary.addProperty("stockDate", stock.shelf().day().toString());
+                    summary.addProperty("dailyInStock", offers.stream().filter(Offer::daily).count());
+                    summary.addProperty("refreshAt", stock.shelf().refreshAt());
+                    summary.addProperty("refreshTimezone", DailyShop.ZONE.getId());
+                    summary.addProperty("refreshLabel", stock.refreshLabel());
+                } else if (stock != null) {
+                    summary.addProperty("dailyUnavailableReason", stock.unavailableReason());
+                }
+                reply(player, "shop_list_end", true, "ok", null, offers.size(), legacyBalance, false, summary, requestId);
+            } finally {
+                recyclingReads.remove(player.getUniqueId());
             }
-            reply(player, "shop_list_end", true, "ok", null, OFFERS.size(),
-                    balance(player.getUniqueId()), false, null, requestId);
             return;
         }
         if (action.equals("buy") && (args.length == 4 || args.length == 5)) {
@@ -623,26 +745,106 @@ final class ArenaEconomy implements Listener {
         reply(player, "sell", true, "ok", sold, quote.quantity(), oldBalance + quote.price(), false, details);
     }
 
+    private Offer shopOffer(Player player, String id) {
+        if (!DailyShop.isDaily(id)) {
+            Offer offer = OFFERS.stream().filter(row -> row.id().equals(id)).findFirst().orElse(null);
+            if (offer == null) shopFailure(player, "invalid_offer_or_quantity", id);
+            return offer;
+        }
+        return dailyOffer(player, id, stock());
+    }
+
+    private Offer dailyOffer(Player player, String id, ShopStock stock) {
+        DailyShop.Shelf shelf = stock.shelf();
+        DailyShop.Entry entry = shelf == null ? null : shelf.find(id);
+        if (entry == null || !entry.available()) {
+            String reason = shelf == null ? stock.unavailableReason()
+                    : entry == null ? DailyShop.missingReason(shelf, id) : entry.reason();
+            shopFailure(player, reason, id);
+            return null;
+        }
+        return new Offer(entry);
+    }
+
+    private void shopFailure(Player player, String reason, String id) {
+        JsonObject details = new JsonObject();
+        if (id.matches("[a-z0-9_]{1,80}")) details.addProperty("offerId", id);
+        details.addProperty("spent", 0);
+        if (reason.startsWith("shop_")) {
+            details.addProperty("retrySameAction", false);
+            details.addProperty("nextCommand", reason.equals("shop_stock_unavailable") ? "/mycli trade shop list supplies"
+                    : reason.equals("shop_survival_required") ? "/mycli status" : "/mycli trade shop list daily");
+        }
+        reply(player, "buy", false, reason, null, 0, 0, false, details);
+    }
+
     private void buy(Player player, String[] args) {
         UUID owner = player.getUniqueId();
-        Offer offer = OFFERS.stream().filter(value -> value.id().equalsIgnoreCase(args[3])).findFirst().orElse(null);
+        String id = args[3].toLowerCase(Locale.ROOT);
+        ShopStock stock = DailyShop.isDaily(id) ? stock() : null;
+        Offer offer = stock == null ? shopOffer(player, id) : dailyOffer(player, id, stock);
+        if (offer == null) return;
         int count = args.length == 5 ? parsePositive(args[4]) : 1;
-        if (offer == null || count < 1 || count > 16 || (long) offer.count() * count > 64
-                || (offer != null && offer.material().getMaxStackSize() == 1 && count != 1)) {
-            reply(player, "buy", false, "invalid_offer_or_quantity", null, 0, balance(owner), false, null);
+        if (count < 1 || count > offer.maxQuantity()) {
+            shopFailure(player, "invalid_offer_or_quantity", id);
             return;
         }
         int price = offer.price() * count;
         if(nativeRpg.selected()){
-            ItemStack purchased=new ItemStack(offer.material(),offer.count()*count);
+            ItemStack purchased=offer.stack(count);
             if(dungeon.queuedItems(owner)>=1024){reply(player,"buy",false,"pending_queue_full",item(purchased),0,0,true,null);return;}
             JsonObject evidence=new JsonObject();evidence.addProperty("offerId",offer.id());evidence.addProperty("price",price);
             evidence.addProperty("item",Base64.getEncoder().encodeToString(purchased.serializeAsBytes()));
-            JsonObject result=nativeRpg.settleMoney(player,"shop:"+UUID.randomUUID(),-price,evidence.toString(),()->{
+            String requestId = "shop:" + UUID.randomUUID();
+            if (offer.daily()) {
+                JsonObject bank = nativeRpg.recyclingState(player);
+                if (!plugin.nativeRpgMayAct(player)) { shopFailure(player, "shop_survival_required", id); return; }
+                if (!bank.get("available").getAsBoolean()) { shopFailure(player, "economy_unavailable", id); return; }
+                if (bank.get("pending").getAsBoolean()) { shopFailure(player, "money_pending", id); return; }
+                if (!bank.has("balance") || bank.get("balance").getAsDouble() < price) {
+                    shopFailure(player, "insufficient_balance", id);
+                    return;
+                }
+                try {
+                    dailyShop.reserve(stock.shelf(), stock.shelf().find(id), requestId, owner);
+                } catch (RuntimeException failure) {
+                    plugin.getLogger().warning("Could not reserve daily stock " + id + ": " + failure.getMessage());
+                    shopFailure(player, "shop_stock_unavailable", id);
+                    return;
+                }
+            }
+            Runnable queueItem = () -> {
                 if(!dungeon.queuePurchased(owner,purchased))throw new IllegalStateException("queue changed");
-                nativeRpg.saveConfigVerified();
-            });
+            };
+            JsonObject result;
+            try {
+                result = nativeRpg.settleMoney(player,requestId,-price,evidence.toString(),()->{
+                    if (offer.daily()) dailyShop.deliver(id, requestId, owner, queueItem);
+                    else {
+                        queueItem.run();
+                        nativeRpg.saveConfigVerified();
+                    }
+                });
+            } catch (RuntimeException failure) {
+                result = new JsonObject();
+                result.addProperty("success", false);
+                result.addProperty("reason", "money_unverified");
+                result.addProperty("pending", true);
+                plugin.getLogger().warning("Shop settlement unconfirmed: " + requestId + " (" + failure.getClass().getSimpleName() + ")");
+            }
             boolean ok=result.get("success").getAsBoolean();
+            if (offer.daily() && !ok && Set.of("insufficient_balance", "economy_unavailable", "money_pending")
+                    .contains(result.get("reason").getAsString())) {
+                try { dailyShop.release(id, requestId); }
+                catch (RuntimeException failure) {
+                    plugin.getLogger().warning("Daily stock remains reserved: " + requestId + " (" + failure.getClass().getSimpleName() + ")");
+                }
+            }
+            result.addProperty("offerId", id);
+            result.addProperty("daily", offer.daily());
+            result.addProperty("transactionId", requestId);
+            if (offer.daily() && (ok || result.get("reason").getAsString().equals("money_unverified"))) removeFromOpenShelves(id);
+            if (offer.daily() && ok) result.addProperty("stock", 0);
             result.addProperty("requestedSpend",price);result.addProperty("pendingCount",dungeon.queuedItems(owner));
             if(result.get("pending").getAsBoolean()){result.add("spent",JsonNull.INSTANCE);result.add("quantity",JsonNull.INSTANCE);}
             else result.addProperty("spent",ok?price:0);

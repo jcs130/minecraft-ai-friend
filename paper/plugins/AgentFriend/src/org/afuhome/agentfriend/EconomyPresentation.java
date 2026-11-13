@@ -17,6 +17,7 @@ final class EconomyPresentation {
         else if(args[1].equalsIgnoreCase("shop")){
             if(args.length==3)choices=List.of("menu","list","buy");
             else if(args.length==4&&args[2].equalsIgnoreCase("buy"))choices=ArenaEconomy.offerIds();
+            else if(args.length==4&&args[2].equalsIgnoreCase("list"))choices=List.of("daily","supplies");
         }else if(args[1].equalsIgnoreCase("recycle")){
             if(args.length==3)choices=List.of("menu","list","quote","sell","status");
             else if(args.length==4&&args[2].equalsIgnoreCase("quote"))choices=List.of("bag","chest");
@@ -63,9 +64,13 @@ final class EconomyPresentation {
         JsonObject item=r.has("item")&&r.get("item").isJsonObject()?r.getAsJsonObject("item"):new JsonObject();
         String name=value(item,"name",value(item,"id","物品"));
         return switch(action){
-            case "shop_list" -> "§b"+value(r,"offerId","")+" · "+name+" ×"+value(item,"quantity","1")
-                    +" / "+value(r,"unitPrice","?")+"金币每份；购买：/mycli trade shop buy "+value(r,"offerId","")+" 1";
-            case "shop_list_end" -> "§b【金币商城】"+value(r,"quantity","0")+"种商品；余额 "+money+" 金币。购买不耗魔力，物品送入个人箱；份数受单格堆叠上限限制。真人：罗盘→金币商城；取货：/mycli arena stash page 1（成功远程开箱2魔力）。";
+            case "shop_list" -> (value(r,"daily","false").equals("true") ? "§d每日精选 · "+name
+                    +condition(item)+" · 全服剩 1 件" : "§b"+name+" ×"+value(item,"quantity","1"))
+                    +" / "+value(r,"unitPrice","?")+"金币；购买 "+value(r,"buyCommand","/mycli trade shop buy "+value(r,"offerId",""));
+            case "shop_list_end" -> "§b【金币商城】"+value(r,"quantity","0")+"种在售；余额 "+money+" 金币。"
+                    +(r.has("refreshAt") ? "每日精选剩 "+value(r,"dailyInStock","0")+" 件，下次刷新 "+value(r,"refreshLabel","")+"。"
+                    :r.has("dailyUnavailableReason")?"每日装备暂不可用。":"")
+                    +"购买不耗魔力，物品送入个人箱。查看精选 /mycli trade shop list daily；取货 /mycli arena stash page 1。";
             case "recycle_list" -> "§b"+value(r,"source","")+" 槽"+value(r,"slot","")+" · "+name+" ×"+value(item,"quantity","1")
                     +condition(item)+"；单价 "+value(r,"unitPrice","?")+"金币。报价：/mycli trade recycle quote "+value(r,"source","")+" "+value(r,"slot","")+" 1";
             case "recycle_list_end" -> "§b【装备回收】第"+value(r,"page","1")+"/"+value(r,"pages","1")+"页，共"+value(r,"total","0")
@@ -95,6 +100,11 @@ final class EconomyPresentation {
         case "not_recyclable_or_protected" -> "这件装备受保护或不在回收范围；当前手持、穿戴、绑定和特殊装备不能卖。用 /mycli trade recycle list 选服务器列出的装备，材料用个人箱保存。";
         case "quote_expired","quote_unknown_or_consumed","item_changed" -> "报价已过期、已确认、被同槽新报价替换或物品改变；本次未再次出售。先 /mycli trade wallet 核对，再 /mycli trade recycle list 查槽位并 quote；仅拿到新报价不等于卖出。";
         case "invalid_offer_or_quantity","usage_shop_list_buy_wallet" -> "商品ID或份数不正确；未购买。先 /mycli trade shop list 复制ID；/mycli trade shop buy <ID> [份数]。非堆叠装备一次1件，物资每次最多一组。";
+        case "shop_sold_out" -> "这件每日装备已经卖出，本次未扣费。用 /mycli trade shop list daily 查看余货。";
+        case "shop_offer_expired" -> "这件装备属于其他日期，本次未扣费。用 /mycli trade shop list daily 获取今天的商品ID。";
+        case "shop_stock_pending" -> "这件装备正在核对上一笔交易，本次未扣费。用 /mycli trade shop list daily 查看余货。";
+        case "shop_stock_unavailable" -> "每日货架暂不可用，本次未扣费。常用补给可用 /mycli trade shop list supplies 查询。";
+        case "shop_survival_required" -> "请用可行动的生存角色购买。可先用 /mycli status 检查当前状态。";
         case "wallet_limit" -> "金币余额将超过上限，未出售。先 /mycli trade wallet 核对；按需 /mycli trade shop list 购买补给后再报价。";
         default -> "参数不正确，未成交。/mycli trade recycle list 查物品；quote bag <0–35槽> [数量] 或 quote chest <1–540槽> [数量]；收到报价后 sell <报价ID>。";
     };}
