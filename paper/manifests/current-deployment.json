@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261113_rpg_party_maid",
-  "currentComponentEvidence": "paper/manifests/rpg-party-maid-deployed-20261113.json",
-  "acceptanceDocument": "paper/docs/RPG_DAILY_SHOP_AND_PARTY_20261113.md",
+  "inventoryScope": "component_runtime_verified_20261114_maid_combat_readiness",
+  "currentComponentEvidence": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+  "acceptanceDocument": "paper/docs/SERVER_UPDATES.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "rpg-party-maid-20261113-r3",
-  "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
-  "releaseDocument": "paper/docs/RPG_DAILY_SHOP_AND_PARTY_20261113.md",
+  "latestRelease": "maid-combat-readiness-20261113-r4",
+  "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+  "releaseDocument": "paper/docs/SERVER_UPDATES.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
     "verifiedAt": "2026-11-13T17:23:09+08:00",
@@ -1576,19 +1576,19 @@
   },
   "currentComponentOverrides": {
     "AgentFriend": {
-      "version": "0.4.47.71-daily-shop-frost",
-      "sha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
-      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+      "version": "0.4.47.72-dungeon-readiness",
+      "sha256": "bd65dcca4fe65c7a7f09fa10f3115b02af13bdbd149b756cef39f1d50ae694ec",
+      "evidence": "paper/manifests/maid-combat-readiness-deployed-20261114.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.31-vortex-spells",
-      "sha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
-      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+      "version": "0.1.32-adaptive-guard",
+      "sha256": "b90611afb606a6584f55ebf7c0d6f8ed29f61e7a9fadd000f4bc6d4e8e767d17",
+      "evidence": "paper/manifests/maid-combat-readiness-deployed-20261114.json"
     },
     "QiandengjiRpg": {
-      "version": "0.2.21-party-support",
-      "sha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
-      "evidence": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+      "version": "0.2.22-dungeon-readiness",
+      "sha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5",
+      "evidence": "paper/manifests/maid-combat-readiness-deployed-20261114.json"
     },
     "VortexRPG": {
       "version": "1.2.2-alpha",
@@ -1597,21 +1597,21 @@
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/rpg-party-maid-deployed-20261113.json",
-    "AgentFriend": "paper/manifests/rpg-party-maid-deployed-20261113.json",
-    "QiandengjiRpg": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+    "QiandengjiMaidBridge": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+    "AgentFriend": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+    "QiandengjiRpg": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
     "VortexRPG": "paper/manifests/rpg-party-maid-deployed-20261113.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.31-vortex-spells",
-      "artifactSha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
-      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+      "version": "0.1.32-adaptive-guard",
+      "artifactSha256": "b90611afb606a6584f55ebf7c0d6f8ed29f61e7a9fadd000f4bc6d4e8e767d17",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json"
     },
     "AgentFriend": {
-      "version": "0.4.47.71-daily-shop-frost",
-      "artifactSha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
-      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+      "version": "0.4.47.72-dungeon-readiness",
+      "artifactSha256": "bd65dcca4fe65c7a7f09fa10f3115b02af13bdbd149b756cef39f1d50ae694ec",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json"
     },
     "QiandengVoice": {
       "version": "0.1.6",
@@ -1639,9 +1639,9 @@
       "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "QiandengjiRpg": {
-      "version": "0.2.21-party-support",
-      "artifactSha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
-      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json"
+      "version": "0.2.22-dungeon-readiness",
+      "artifactSha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json"
     },
     "VortexRPG": {
       "version": "1.2.2-alpha",
@@ -1650,15 +1650,15 @@
     }
   },
   "currentRuntime": {
-    "AgentFriend": "0.4.47.71-daily-shop-frost",
+    "AgentFriend": "0.4.47.72-dungeon-readiness",
     "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.31-vortex-spells",
+    "QiandengjiMaidBridge": "0.1.32-adaptive-guard",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
     "mods": 6,
     "VortexRPG": "1.2.2-alpha",
-    "QiandengjiRpg": "0.2.21-party-support",
+    "QiandengjiRpg": "0.2.22-dungeon-readiness",
     "QiandengVoice": "0.1.6",
     "WorldObserver": "0.1.4-maid-ysm",
     "website": "0.8.41",
@@ -1949,26 +1949,26 @@
     },
     {
       "name": "QiandengjiMaidBridge",
-      "version": "0.1.31-vortex-spells",
+      "version": "0.1.32-adaptive-guard",
       "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
-      "sha256": "23b668b8957c9b335e0347dd1720c87e63d7d1b0245d0b5776e4ca777e9a0c97",
-      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
-      "processId": 5088,
-      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
-      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
-      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "sha256": "b90611afb606a6584f55ebf7c0d6f8ed29f61e7a9fadd000f4bc6d4e8e767d17",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 22400,
+      "processStartedAt": "2026-11-14T00:11:13.6682035+08:00",
+      "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
       "codeChangedThisBatch": true
     },
     {
       "name": "AgentFriend",
-      "version": "0.4.47.71-daily-shop-frost",
+      "version": "0.4.47.72-dungeon-readiness",
       "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
-      "sha256": "dc4a1f163271b93b9ce6e1cb5ceb740b504b0ad74edf2f1bb806c806a4333a4d",
-      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
-      "processId": 5088,
-      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
-      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
-      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "sha256": "bd65dcca4fe65c7a7f09fa10f3115b02af13bdbd149b756cef39f1d50ae694ec",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 22400,
+      "processStartedAt": "2026-11-14T00:11:13.6682035+08:00",
+      "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
       "codeChangedThisBatch": true
     },
     {
@@ -1985,14 +1985,14 @@
     },
     {
       "name": "QiandengjiRpg",
-      "version": "0.2.21-party-support",
+      "version": "0.2.22-dungeon-readiness",
       "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
-      "sha256": "0867036c7e68859e7511100259773be58ab6468c8b6b2c5124437decd2c02079",
-      "sourceCommit": "d193ab32fd093acb146195ba9dd466a186fe6944",
-      "processId": 5088,
-      "processStartedAt": "2026-11-13T18:55:50.3532712+08:00",
-      "verifiedAt": "2026-11-13T18:59:00.32772+08:00",
-      "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
+      "sha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5",
+      "sourceCommit": "75448d282038c168187ec03e3aa099b166cea31e",
+      "processId": 22400,
+      "processStartedAt": "2026-11-14T00:11:13.6682035+08:00",
+      "verifiedAt": "2026-11-14T00:14:29.9563646+08:00",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
       "codeChangedThisBatch": true
     },
     {
@@ -2010,7 +2010,7 @@
   ],
   "latestComponentEvidence": {
     "viewerUi": "viewer-ui-deployed-20261109.json",
-    "maidRuntime": "rpg-party-maid-deployed-20261113.json",
+    "maidRuntime": "maid-combat-readiness-deployed-20261114.json",
     "maidVoicePatrolCandidate": "maid-voice-patrol-candidate-20261110.json",
     "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded.",
     "maidSceneVoiceCandidate20261110": {
@@ -2047,6 +2047,11 @@
       "state": "deployed",
       "manifest": "paper/manifests/rpg-party-maid-deployed-20261113.json",
       "sourceMain": "95beae0049944182903d14aec646f934b0734aa9"
+    },
+    "maidCombatReadiness20261114": {
+      "state": "deployed",
+      "manifest": "paper/manifests/maid-combat-readiness-deployed-20261114.json",
+      "sourceMain": "82867065e0713a2840023999330ae6b7fb1a20b5"
     }
   },
   "publicViewerFidelity": {
@@ -2059,7 +2064,7 @@
     "gameRestarted": false,
     "record": "paper/manifests/public-viewer-deployed-20261109.json"
   },
-  "currentComponentEvidenceScope": "The joint manifest records the four updated game plugins. Hosted Numen has its own runtime record. Other component records retain their original observation times.",
+  "currentComponentEvidenceScope": "The latest manifest records three changed game plugins and three static gameplay files. Other component records retain their own observation times.",
   "previousCanonicalRuntimeBeforeHutao20261110": {
     "currentRuntime": {
       "AgentFriend": "0.4.47.68-player-ui-rpg",
@@ -2136,7 +2141,7 @@
       "originalLedgerAndConfigUnchanged": true
     }
   ],
-  "componentRuntimeEvidenceScope": "The four updated game plugins were verified on the restarted game. Other entries retain their individually recorded verification times.",
+  "componentRuntimeEvidenceScope": "The three changed game plugins were verified on the restarted game. Other entries retain their individually recorded verification times.",
   "previousComponentRuntimeEvidenceBeforeCompanion20261110": [
     {
       "name": "AgentFriend",
