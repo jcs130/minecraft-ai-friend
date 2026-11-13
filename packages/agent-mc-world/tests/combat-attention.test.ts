@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { CombatDecisionLoop, type CombatDecisionFrame } from '../src/decisions/combat-decision.ts';
-import { CombatAbstention, combatAttentionText, combatAttentionEvent } from '../src/decisions/combat-attention.ts';
+import { CombatAbstention, combatAttentionText, combatAttentionEvent, type CombatDecisionAttention } from '../src/decisions/combat-attention.ts';
 import { hasExecutionFeedbackContext } from '../src/client/execution-context.ts';
 import { COMBAT_DECISION_DEFAULTS } from '../src/decisions/defaults.ts';
 
@@ -62,7 +62,7 @@ it('does not turn a broken notification sink into a false model failure or repla
     request: async () => ({ answers: { tactic: { type: 'choice', choice: 'option_0', confidence: .5,
       probabilities: { option_0: .5, option_1: .49, keep: .01 } } } }), apply, report,
     attention: async () => { throw Error('host storage unavailable'); } });
-  for (let i = 0; i < 4; i++) { loop.tick(); await vi.advanceTimersByTimeAsync(1000); }
+  for (let i = 0; i < 3; i++) { loop.tick(); await vi.advanceTimersByTimeAsync(1000); }
   expect(apply).not.toHaveBeenCalled(); expect(report.mock.calls.filter(([e]) => e === 'error')).toHaveLength(0);
   expect(report.mock.calls.filter(([e]) => e === 'attention-delivery-error')).toHaveLength(1); loop.stop();
 });
@@ -91,4 +91,47 @@ it('keeps ordinary shadow mode silent and stops ranking an unchanged encounter a
   expect(attention).toHaveBeenCalledTimes(2);
   expect(apply).not.toHaveBeenCalled();
   observer.stop();
+});
+
+it.each(['unavailable sample', 'journal error'])('retries the same feedback after %s and stops after one delivery', async failure => {
+  vi.useFakeTimers();
+  const f = frame();
+  const request = vi.fn(async () => ({ answers: { tactic: { type: 'choice', choice: 'option_0', confidence: .5,
+    probabilities: { option_0: .5, option_1: .49, keep: .01 } } } }));
+  const delivered: string[] = [];
+  const attention = vi.fn(async (evidence: CombatDecisionAttention) => {
+    if (attention.mock.calls.length === 1) {
+      if (failure === 'journal error') throw Error('journal unavailable');
+      return false;
+    }
+    delivered.push(evidence.decisionId);
+  });
+  const apply = vi.fn(() => true);
+  const loop = new CombatDecisionLoop({ config: () => ({ ...COMBAT_DECISION_DEFAULTS, enabled: true, mode: 'shadow',
+    connection: 'host', minIntervalMs: 1000 }), sample: () => f, request, apply, report: vi.fn(), attention, attentionInShadow: true });
+  for (let i = 0; i < 10; i++) { loop.tick(); await vi.advanceTimersByTimeAsync(1000); }
+  expect(attention).toHaveBeenCalledTimes(2);
+  expect(attention.mock.calls[1]![0]).toEqual(attention.mock.calls[0]![0]);
+  expect(delivered).toEqual([attention.mock.calls[0]![0].decisionId]);
+  expect(request).toHaveBeenCalledTimes(3);
+  expect(apply).not.toHaveBeenCalled();
+  loop.stop();
+});
+
+it.each(['lease changes', 'feedback expires', 'observer stops'])('discards pending feedback when the %s', async condition => {
+  vi.useFakeTimers();
+  const f = frame();
+  const attention = vi.fn(() => false);
+  const loop = new CombatDecisionLoop({ config: () => ({ ...COMBAT_DECISION_DEFAULTS, enabled: true, mode: 'shadow',
+    connection: 'host', minIntervalMs: 1000 }), sample: () => f, apply: vi.fn(), report: vi.fn(), attention, attentionInShadow: true,
+    request: async () => ({ answers: { tactic: { type: 'choice', choice: 'option_0', confidence: .5,
+      probabilities: { option_0: .5, option_1: .49, keep: .01 } } } }) });
+  for (let i = 0; i < 3; i++) { loop.tick(); await vi.advanceTimersByTimeAsync(1000); }
+  expect(attention).toHaveBeenCalledTimes(1);
+  if (condition === 'lease changes') f.battlefield.connectionGeneration++;
+  if (condition === 'feedback expires') await vi.advanceTimersByTimeAsync(10000);
+  if (condition === 'observer stops') loop.stop();
+  loop.tick(); await vi.advanceTimersByTimeAsync(1000);
+  expect(attention).toHaveBeenCalledTimes(1);
+  loop.stop();
 });

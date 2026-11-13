@@ -23,7 +23,8 @@ export interface CombatDecisionAttention {
 
 /** Report failed selection to the owning agent; never convert uncertainty into an attack. */
 export class CombatAbstention {
-  private episode: { key: string; firstDecisionId: string; sinceMs: number; lastAtMs: number; count: number; notified: boolean; origin: number[] } | null = null;
+  private episode: { key: string; firstDecisionId: string; sinceMs: number; lastAtMs: number; count: number;
+    notified: boolean; pending: CombatDecisionAttention | null; origin: number[] } | null = null;
   clear() { this.episode = null; }
   private key(frame: CombatDecisionFrame): string | null {
     const b = frame.battlefield, a = b.action;
@@ -37,23 +38,31 @@ export class CombatAbstention {
   context(frame: CombatDecisionFrame, now: number, observed = false) {
     const e = this.episode;
     if (!e) return null;
-    if (e.key !== this.key(frame) || now < e.lastAtMs || now - e.lastAtMs > 10_000
+    if (e.key !== this.key(frame) || now < e.lastAtMs || now - (e.pending?.observedAtMs ?? e.lastAtMs) > 10_000
       || Math.hypot(...frame.battlefield.self.position.map((v, i) => v - e.origin[i]!)) > 1.5) { this.clear(); return null; }
     if (observed && e.notified) e.lastAtMs = now;
     return { reason: 'ambiguous-ranking', count: e.count, elapsedMs: now - e.sinceMs, dispatched: false, bodyIdle: true,
       ownerReviewRequested: e.notified };
   }
+  pendingAttention(frame: CombatDecisionFrame, now: number): CombatDecisionAttention | null {
+    return this.context(frame, now) ? this.episode?.pending ?? null : null;
+  }
+  delivered(attention: CombatDecisionAttention) {
+    if (this.episode?.pending !== attention) return;
+    this.episode.pending = null;
+    this.episode.notified = true;
+  }
   record(frame: CombatDecisionFrame, decisionId: string, now: number): CombatDecisionAttention | null {
     const key = this.key(frame);
     if (!key) { this.clear(); return null; }
     this.context(frame, now);
-    const e = this.episode ??= { key, firstDecisionId: decisionId, sinceMs: now, lastAtMs: now, count: 0, notified: false, origin: [...frame.battlefield.self.position] };
+    const e = this.episode ??= { key, firstDecisionId: decisionId, sinceMs: now, lastAtMs: now, count: 0,
+      notified: false, pending: null, origin: [...frame.battlefield.self.position] };
     e.lastAtMs = now; e.count++;
     // A single abstention is normal. A repeated idle episode requires an owner decision.
-    if (e.notified || e.count < 3 || now - e.sinceMs < 1500) return null;
-    e.notified = true;
+    if (e.notified || e.pending || e.count < 3 || now - e.sinceMs < 1500) return null;
     const b = frame.battlefield;
-    return { schema: 'combat-decision-attention/v1', decisionId, firstDecisionId: e.firstDecisionId,
+    return e.pending = { schema: 'combat-decision-attention/v1', decisionId, firstDecisionId: e.firstDecisionId,
       observedAtMs: now, sinceMs: e.sinceMs, count: e.count, reason: 'repeated-ambiguous-ranking',
       connectionGeneration: b.connectionGeneration, world: b.world?.key ?? b.dimension, tacticRevision: frame.tacticRevision,
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null,

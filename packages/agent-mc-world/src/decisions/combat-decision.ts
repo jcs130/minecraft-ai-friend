@@ -25,7 +25,8 @@ export interface CombatDecisionOptions {
   prepare?: (frame: CombatDecisionFrame) => Promise<CombatDecisionFrame>;
   fallback?: () => void;
   report: (event: string, data: Record<string, unknown>) => void;
-  attention?: (evidence: CombatDecisionAttention) => void | Promise<void>;
+  /** Return false or reject when feedback was not delivered. Resolving void acknowledges delivery. */
+  attention?: (evidence: CombatDecisionAttention) => boolean | void | Promise<boolean | void>;
   /** An observer may request review without becoming a second body controller. */
   attentionInShadow?: boolean;
   fetchImpl?: typeof fetch;
@@ -146,6 +147,7 @@ export class CombatDecisionLoop {
   private readonly observations = new Set<ReturnType<typeof setTimeout>>();
   stop(): void { this.stopped=true; this.abstention.clear(); this.lifetime.abort(); for(const timer of this.observations) clearTimeout(timer); this.observations.clear(); }
   private inFlight = false;
+  private attentionInFlight = false;
   private lastCheckedAtMs = -Infinity;
   private lastEligible = false;
   private serial = 0;
@@ -169,11 +171,31 @@ export class CombatDecisionLoop {
     const frame = this.options.sample();
     this.lastEligible = !!frame && !frame.battlefield.action.emergency && (frame.candidates.length > 0 || !!frame.program);
     if (!frame || !this.lastEligible) { this.abstention.clear(); return false; }
-    if (cfg.mode === 'shadow' && this.options.attentionInShadow
-      && this.abstention.context(frame, now, true)?.ownerReviewRequested) return false;
+    const observesAttention = cfg.mode === 'shadow' && this.options.attentionInShadow;
+    if (observesAttention) {
+      if (this.abstention.context(frame, now, true)?.ownerReviewRequested) return false;
+      const attention = this.abstention.pendingAttention(frame, now);
+      if (attention) {
+        void this.deliverAttention(attention);
+        return false;
+      }
+    } else if (cfg.mode === 'shadow') this.abstention.clear();
     this.inFlight = true;
     void this.choose(frame, cfg, now).finally(() => { this.inFlight = false; });
     return true;
+  }
+
+  private async deliverAttention(attention: CombatDecisionAttention): Promise<void> {
+    if (this.attentionInFlight) return;
+    this.attentionInFlight = true;
+    try {
+      const delivered = await this.options.attention?.(attention);
+      if (delivered !== false && !this.stopped) this.abstention.delivered(attention);
+    } catch (error) {
+      if (!this.stopped) this.options.report('attention-delivery-error', { decisionId: attention.decisionId, reason: String(error) });
+    } finally {
+      this.attentionInFlight = false;
+    }
   }
 
   private async choose(frame: CombatDecisionFrame, cfg: CombatDecisionConfig, startedAtMs: number): Promise<void> {
@@ -319,18 +341,11 @@ export class CombatDecisionLoop {
       this.options.report('result', result);
       if ((cfg.mode === 'act' || this.options.attentionInShadow) && outcome === 'uncertain'
         && ranking.reason === 'ambiguous-ranking' && current) {
-        const attention = this.abstention.record(current, scope.decisionId, now());
-        if (attention) {
-          this.options.report('attention', { ...attention });
-          try {
-            const delivery = this.options.attention?.(attention);
-            if (delivery) void delivery.catch(error => {
-              if (!this.stopped) this.options.report('attention-delivery-error', { decisionId: attention.decisionId, reason: String(error) });
-            });
-          } catch (error) {
-            this.options.report('attention-delivery-error', { decisionId: attention.decisionId, reason: String(error) });
-          }
-        }
+        const observedAt = now();
+        const recorded = this.abstention.record(current, scope.decisionId, observedAt);
+        if (recorded) this.options.report('attention', { ...recorded });
+        const attention = recorded ?? this.abstention.pendingAttention(current, observedAt);
+        if (attention) void this.deliverAttention(attention);
       } else this.abstention.clear();
       if (outcome === 'sent') {
         const before = current!.battlefield;
