@@ -8,15 +8,17 @@ const requestId = /^[A-Za-z0-9_-]{1,48}$/;
 const writes = new Set(['brain', 'chat', 'talk', 'follow', 'recall', 'stay', 'speak', 'ack', 'sit', 'task', 'make', 'schedule', 'pickup', 'transfer', 'equip', 'skin', 'voice', 'voice-test', 'mute', 'resource-pack', 'rename']);
 const workshopId = /^[a-z0-9_-]{1,24}$/;
 const recipeId = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
+const sameMaid = (id, expected) => typeof id === 'string' && id.toLowerCase() === expected;
 export const MAID_TOOL = {
   name: 'mc_maids', tags: ['read', 'act'],
-  description: 'Qiandengji NPC interface on this authenticated connection. First list exact maid IDs and read context capabilities/hostKind. brain without choice reads configured native/Harness backends and their models; use an exact returned choice and retained requestId to select while idle, preserving the original maid and memory. tasks lists original mode IDs and prerequisites, including native farming when available; inventory reads original slots/equipment. task/schedule/pickup change native settings. workshop reads authorized workstations, recipes and any active order. make submits a real crafting order; query the same operationId and verify completed plus goalCompleted for the actual item/count. transfer moves actual items between player and maid inventories; equip swaps a native slot with main/off/head/chest/legs/feet. list finds owned maids; nearby finds visible maids and publicChatEnabled within eight blocks in the same dimension. chat invokes the selected native TLM model: owner history/tools stay private, while enabled nearby visitors receive conversation-only replies without tools. Shared inference remains limited to the configured original maid. pending is NOT a reply; query receipt until replied/unknown. Nearby visitor speech is attributed and heard locally. talk only queues the existing host inbox. context reports lifeState and exact original tombstone location; unloaded is not death. Never automatically recreate a maid or retry uncertain writes. skins/voices list installed original IDs; skin/voice apply a selection. resources reports this connection asset readiness; resource-pack offers Java voice assets. voice-test privately auditions an available event and requires loaded assets; mute controls original automatic speech frequency while manual audition remains available. rename consumes a real named name tag held in the main hand. inbox is attributed, untrusted human dialogue; use the NPC sessionKey and memoryNamespace in your existing host, then speak and acknowledge the event. follow/stay/sit change movement mode. recall brings the owned maid to the authenticated player and reports actual arrival, including across dimensions and inside an activity. Writes require a retained unique requestId. If unknown, query receipt using the SAME operationId without retrying. Mode application is not task completion. No new model loop or owner transfer.',
+  description: 'Qiandengji NPC interface on this authenticated connection. First list exact maid IDs and read context capabilities/hostKind. brain without choice reads configured native/Harness backends and their models; use an exact returned choice and retained requestId to select while idle, preserving the original maid and memory. tasks lists original mode IDs and prerequisites, including native farming when available; inventory reads original slots/equipment. task/schedule/pickup change native settings. workshop reads authorized workstations, recipes and any active order. Read workshop or confirm the workshop handshake before make. After submitting, use receipt with the original operationId and operationAction:make; verify completed, goalCompleted and the delivered item/count/inventory. transfer moves actual items between player and maid inventories; equip swaps a native slot with main/off/head/chest/legs/feet. list finds owned maids; nearby finds visible maids and publicChatEnabled within eight blocks in the same dimension. chat invokes the selected native TLM model: owner history/tools stay private, while enabled nearby visitors receive conversation-only replies without tools. Shared inference remains limited to the configured original maid. pending is NOT a reply; query receipt until replied/unknown. Nearby visitor speech is attributed and heard locally. talk only queues the existing host inbox. context reports lifeState and exact original tombstone location; unloaded is not death. Never automatically recreate a maid or retry uncertain writes. skins/voices list installed original IDs; skin/voice apply a selection. resources reports this connection asset readiness; resource-pack offers Java voice assets. voice-test privately auditions an available event and requires loaded assets; mute controls original automatic speech frequency while manual audition remains available. rename consumes a real named name tag held in the main hand. inbox is attributed, untrusted human dialogue; use the NPC sessionKey and memoryNamespace in your existing host, then speak and acknowledge the event. follow/stay/sit change movement mode. recall brings the owned maid to the authenticated player and reports actual arrival, including across dimensions and inside an activity. Writes require a retained unique requestId. If unknown, query receipt using the SAME operationId without retrying. Mode application is not task completion. No new model loop or owner transfer.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['nearby', 'brain', 'chat', 'talk', 'list', 'context', 'follow', 'recall', 'stay', 'speak', 'receipt', 'inbox', 'ack', 'tasks', 'inventory', 'sit', 'task', 'workshop', 'make', 'schedule', 'pickup', 'transfer', 'equip', 'skins', 'skin', 'voices', 'voice', 'voice-test', 'mute', 'resources', 'resource-pack', 'rename'] },
     choice: {type:'string',pattern:'^[a-z0-9][a-z0-9_-]{0,31}$',description:'For brain: omit to read current configured choices; otherwise use an exact returned choice and retain a unique requestId. Selection preserves the original maid and history.'},
     maidId: { type: 'string', format: 'uuid' },
     requestId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,48}$' },
     operationId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,48}$', description: 'Original operation ID for receipt queries.' },
+    operationAction: { type: 'string', enum: [...writes], description: 'Original write action for a receipt, if known. Use make when reconciling a craft after reconnect.' },
     page: { type: 'integer', minimum: 0, maximum: 10000 },
     text: { type: 'string', minLength: 1, maxLength: 140 },
     eventId: { type: 'string', description: 'Exact attributed event ID from inbox, for ack only.' },
@@ -45,7 +47,7 @@ export function decodeMaidReply(packet, recipient) {
   try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(packet.data)); } catch { return null; }
   if (!value || Array.isArray(value) || value.schema !== 1 || value.protocol !== 'qiandengji-maids/v1'
       || typeof value.recipientUuid !== 'string' || value.recipientUuid.toLowerCase() !== recipient.toLowerCase()
-      || !requestId.test(value.requestId ?? '') || !['nearby', 'create', 'list', 'context', ...writes, 'receipt', 'inbox', 'dialogue', 'talk', 'tasks', 'inventory', 'workshop', 'skins', 'voices', 'resources', 'transport', 'lifecycle', 'chat-result'].includes(value.action)
+      || typeof value.requestId !== 'string' || !requestId.test(value.requestId) || !['nearby', 'create', 'list', 'context', ...writes, 'receipt', 'inbox', 'dialogue', 'talk', 'tasks', 'inventory', 'workshop', 'skins', 'voices', 'resources', 'transport', 'lifecycle', 'chat-result'].includes(value.action)
       || typeof value.ok !== 'boolean' || typeof value.sampledAt !== 'string' || !Number.isFinite(Date.parse(value.sampledAt))
       || (value.ok ? !value.data || typeof value.data !== 'object' || Array.isArray(value.data) : typeof value.error !== 'string')) return null;
   return value;
@@ -53,10 +55,10 @@ export function decodeMaidReply(packet, recipient) {
 
 export function maidCommand(args) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) throw Error('arguments must be an object');
-  const { action, maidId, operationId, text, eventId } = args;
+  const { action, maidId: inputMaid, operationId, operationAction, text, eventId } = args;
   if (!['nearby', 'list', 'context', ...writes, 'receipt', 'inbox', 'tasks', 'inventory', 'workshop', 'skins', 'voices', 'resources'].includes(action)) throw Error('unsupported action');
   const allowed = new Set(['action', 'requestId', ...(action === 'list' ? ['page'] : action === 'nearby' ? [] : ['maidId']), ...(action === 'skins' ? ['page'] : []),
-    ...(action === 'receipt' ? ['operationId'] : []), ...(action === 'brain' ? ['choice'] : []), ...(['speak', 'talk', 'chat'].includes(action) ? ['text'] : []), ...(action === 'ack' ? ['eventId'] : []),
+    ...(action === 'receipt' ? ['operationId', 'operationAction'] : []), ...(action === 'brain' ? ['choice'] : []), ...(['speak', 'talk', 'chat'].includes(action) ? ['text'] : []), ...(action === 'ack' ? ['eventId'] : []),
     ...(action === 'task' ? ['taskId'] : []), ...(action === 'schedule' ? ['schedule'] : []), ...(['pickup', 'mute'].includes(action) ? ['enabled'] : []),
     ...(action === 'make' ? ['workshopId', 'recipeId', 'quantity', 'inventory'] : []),
     ...(action === 'skin' ? ['skinId'] : []), ...(action === 'voice' ? ['voiceId'] : []), ...(action === 'voice-test' ? ['voiceId', 'soundEvent'] : []),
@@ -66,8 +68,10 @@ export function maidCommand(args) {
   if(action === 'brain' && args.choice !== undefined && (typeof args.choice !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(args.choice)))throw Error('brain choice must be an exact ID returned by brain');
   const id = args.requestId ?? (writing ? null : randomUUID());
   if (typeof id !== 'string' || !requestId.test(id)) throw Error('writes require a retained requestId');
-  if (!['list','nearby'].includes(action) && (typeof maidId !== 'string' || !uuid.test(maidId))) throw Error('use the exact maidId returned by list or nearby');
+  if (!['list','nearby'].includes(action) && (typeof inputMaid !== 'string' || !uuid.test(inputMaid))) throw Error('use the exact maidId returned by list or nearby');
+  const maidId = typeof inputMaid === 'string' ? inputMaid.toLowerCase() : undefined;
   if (action === 'receipt' && (typeof operationId !== 'string' || !requestId.test(operationId))) throw Error('receipt requires the original operationId');
+  if (operationAction !== undefined && !writes.has(operationAction)) throw Error('operationAction must be the original write action');
   if (['speak', 'talk', 'chat'].includes(action) && (typeof text !== 'string' || !text.trim() || text.length > 140 || /[\u0000-\u001f\u007f-\u009f§]/u.test(text))) throw Error('speak needs 1-140 plain-text characters');
   if (action === 'ack' && (typeof eventId !== 'string' || !/^[0-9a-f-]{36}:[A-Za-z0-9_-]{1,48}$/.test(eventId))) throw Error('ack requires the exact eventId');
   if (action === 'task' && (typeof args.taskId !== 'string' || !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(args.taskId))) throw Error('task needs an observed original taskId');
@@ -82,7 +86,8 @@ export function maidCommand(args) {
       || (args.playerSlot !== undefined && (!Number.isSafeInteger(args.playerSlot) || args.playerSlot < 0 || args.playerSlot > 35)))) throw Error('transfer needs direction, slot, count and exact playerSlot for put');
   if (action === 'equip' && !['main', 'off', 'head', 'chest', 'legs', 'feet'].includes(args.hand)) throw Error('equip needs main/off/head/chest/legs/feet');
   if (args.page !== undefined && (!Number.isSafeInteger(args.page) || args.page < 0 || args.page > 10000)) throw Error('invalid page');
-  let order = '';
+  let order;
+  let orderArgs = '';
   if (action === 'make') {
     const { workshopId: site, recipeId: recipe, quantity, inventory = 'chest' } = args;
     if (typeof site !== 'string' || !workshopId.test(site) || typeof recipe !== 'string' || !recipeId.test(recipe)) {
@@ -92,18 +97,45 @@ export function maidCommand(args) {
       throw Error('quantity must be a positive finished item count, or omitted for one batch');
     }
     if (!['chest', 'backpack'].includes(inventory)) throw Error('inventory must be chest or backpack');
-    order = `${site} ${recipe} ${quantity ?? 'once'} ${inventory}`;
+    order = { workshopId: site, recipeId: recipe, quantity, inventory };
+    orderArgs = `${site} ${recipe} ${quantity ?? 'once'} ${inventory}`;
   }
   const tail = action === 'brain' ? args.choice ?? '' : ['speak', 'talk', 'chat'].includes(action) ? text.trim().replace(/ +/g, ' ') : action === 'ack' ? eventId
     : action === 'task' ? args.taskId : action === 'schedule' ? args.schedule : ['pickup', 'mute'].includes(action) ? String(args.enabled)
     : action === 'skin' ? args.skinId : action === 'voice' ? args.voiceId : action === 'voice-test' ? `${args.voiceId ? args.voiceId + ' ' : ''}${args.soundEvent}` : action === 'skins' ? String(args.page ?? 0)
     : action === 'transfer' ? `${args.direction} ${args.slot} ${args.count}${args.playerSlot === undefined ? '' : ` ${args.playerSlot}`}`
-    : action === 'equip' ? `${args.hand} ${args.slot}` : order;
+    : action === 'equip' ? `${args.hand} ${args.slot}` : orderArgs;
   const command = action === 'nearby' ? `/qdmaid nearby ${id}` : action === 'list' ? `/qdmaid list ${id} ${args.page ?? 0}`
     : action === 'receipt' ? `/qdmaid receipt ${maidId} ${operationId} ${id}`
     : `/qdmaid ${action} ${maidId} ${id}${tail ? ` ${tail}` : ''}`;
   if (command.length > 256) throw Error('command exceeds the vanilla 256 character limit');
-  return { action, requestId: id, maidId, operationId: writing ? id : operationId, command };
+  return { action, requestId: id, maidId, operationId: writing ? id : operationId, operationAction, command, order };
+}
+
+/** Correlate a decoded server envelope and, for crafting, require evidence of actual inventory delivery. */
+export function matchesMaidReply(reply, entry, order = entry.order) {
+  if (reply.action !== entry.action || reply.requestId !== entry.requestId) return false;
+  const data = reply.data;
+  if (entry.maidId && (reply.ok || data?.maidId !== undefined) && !sameMaid(data?.maidId, entry.maidId)) return false;
+  if (!reply.ok) return data?.operationId === undefined || data.operationId === entry.operationId;
+  if (entry.action === 'workshop') return Array.isArray(data.workshops);
+  if (!['receipt', 'make'].includes(entry.action)) return true;
+  const expectedAction = entry.operationAction ?? (entry.action === 'make' || order ? 'make' : undefined);
+  if (data.operationId !== entry.operationId || typeof data.action !== 'string' || !data.action
+      || (expectedAction !== undefined && expectedAction !== data.action)) return false;
+  if (data.action !== 'make') return true;
+  if (!sameMaid(data.actorId, reply.recipientUuid.toLowerCase())
+      || !['reserved', 'pending', 'completed', 'rejected', 'cancelled', 'unknown'].includes(data.status)) return false;
+  if (data.status !== 'completed') return data.goalCompleted !== true;
+  const seen = data.observation;
+  return data.goalCompleted === true && seen?.operationId === entry.operationId
+    && seen.verified === true && seen.effectsApplied === true
+    && typeof seen.itemId === 'string' && recipeId.test(seen.itemId) && seen.itemId !== 'minecraft:air'
+    && Number.isSafeInteger(seen.count) && seen.count > 0 && seen.count === seen.quantity
+    && ['chest', 'backpack'].includes(seen.inventory)
+    && (!order || (seen.workshopId === order.workshopId && seen.recipeId === order.recipeId
+      && seen.inventory === (order.inventory ?? 'chest')
+      && (order.quantity === undefined ? seen.batches === 1 : seen.count === order.quantity)));
 }
 
 /** No HTTP, tokens, second body, inference, automatic reconnect or implicit retry. */
@@ -111,7 +143,9 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
   const recipient = bot?._client?.uuid ?? bot?.player?.uuid;
   if (!uuid.test(recipient ?? '')) throw Error('authenticated connection UUID required');
   const pending = new Map();
-  let closed = false, pluginTransport = false, workshopTransport = false;
+  // Keep direct make IDs for this connection, including timeouts and preflight refusals.
+  const crafts = new Map();
+  let closed = false, pluginTransport = false, workshopTransport = false, workshopObserved = false;
   const commandWindow = commandWindows.get(bot) ?? { next: 0, payloadNext: 0 };
   commandWindows.set(bot, commandWindow);
   const settle = (id, value) => {
@@ -120,12 +154,13 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
   };
   const unknown = (entry, reason) => ({ ok: false, action: entry.action, requestId: entry.requestId,
     operationId: entry.operationId, status: entry.operationId && writes.has(entry.action) ? 'unknown' : 'unavailable', reason, retryAllowed: false });
+  const workshopSupported = () => !closed && (workshopTransport || workshopObserved);
   const onPacket = packet => {
     if (closed) return;
     const value = decodeMaidReply(packet, recipient);
     if(value?.action === 'transport' && value.ok && value.data.requestChannel === MAID_REQUEST_CHANNEL){
       pluginTransport = true;
-      workshopTransport = value.data.workshop === true;
+      workshopTransport ||= value.data.workshop === true;
       for(const slot of pending.values())if(!slot.sent){clearTimeout(slot.queuedTimer);schedule(slot);}
       return;
     }
@@ -135,7 +170,11 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
     if (value?.ok && value.action === 'chat-result') { onChatResult(value); return; }
     const slot = value && pending.get(value.requestId);
     if (!slot || value.action !== slot.entry.action) return;
-    if (value.ok && slot.entry.maidId && value.data.maidId !== slot.entry.maidId) return;
+    if (!matchesMaidReply(value, slot.entry, slot.order)) {
+      slot.mismatchedReply = true;
+      return;
+    }
+    if (value.ok && value.action === 'workshop') workshopObserved = true;
     settle(value.requestId, value);
   };
   const onSystemText = (text, position, original, sender) => {
@@ -155,7 +194,7 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
   function send(slot){
     if(closed || slot.sent || !pending.has(slot.entry.requestId))return;
     slot.sent = true;
-    slot.timer = setTimeout(() => settle(slot.entry.requestId, unknown(slot.entry, 'reply_timeout')), timeoutMs);
+    slot.timer = setTimeout(() => settle(slot.entry.requestId, unknown(slot.entry, slot.mismatchedReply ? 'reply_mismatch' : 'reply_timeout')), timeoutMs);
     try{
       if(usePayload(slot))bot._client.write('custom_payload',{channel:MAID_REQUEST_CHANNEL,data:Buffer.from(JSON.stringify({schema:1,protocol:'qiandengji-maids/v1',command:slot.entry.command}))});
       else bot.chat(slot.entry.command);
@@ -169,13 +208,23 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
   }
   bot._client.on('custom_payload', onPacket); bot._client.once('end', close);
   bot._client.write('custom_payload', { channel: 'minecraft:register', data: Buffer.from(MAID_CHANNEL+'\0'+MAID_REQUEST_CHANNEL) });
-  return { close, get transport(){return pluginTransport?'plugin_message':'rate_limited_command'}, async request(args) {
+  return { close, get transport(){return pluginTransport?'plugin_message':'rate_limited_command'},
+    get workshopSupported(){return workshopSupported();}, async request(args) {
     let entry;
     try { entry = maidCommand(args); } catch (error) { return { ok: false, status: 'not_dispatched', error: String(error.message) }; }
+    const notDispatched = reason => ({ ...unknown(entry, reason), status: 'not_dispatched' });
+    const make = entry.action === 'make';
+    if (make && !workshopSupported()) return notDispatched(closed ? 'connection_closed' : 'workshop_capability_unconfirmed');
+    const craft = crafts.get(entry.operationId);
+    if (craft && entry.action !== 'receipt') return craft.command === entry.command ? craft.result : notDispatched('request_conflict');
     if (closed || pending.size >= 8 || pending.has(entry.requestId)) return { ok: false, status: 'not_dispatched', reason: closed ? 'connection_closed' : 'request_busy' };
-    return await new Promise(resolve => {
-      const slot = {entry,resolve,sent:false,timer:null,queuedTimer:null};pending.set(entry.requestId,slot);
-      schedule(slot);
-    });
+    let resolve;
+    const result = new Promise(done => { resolve = done; });
+    const order = entry.order ?? craft?.order;
+    if (make) crafts.set(entry.operationId, { command:entry.command, result, order });
+    const slot = { entry, order, resolve, sent:false, timer:null, queuedTimer:null, mismatchedReply:false };
+    pending.set(entry.requestId, slot);
+    schedule(slot);
+    return result;
   } };
 }
