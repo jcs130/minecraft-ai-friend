@@ -20,6 +20,7 @@ from .container_recovery import ContainerRecovery
 from .context import (
     assemble,
     coalesce_rejected,
+    combat_attention,
     encode,
     outcome_eviction_index,
     retain_events,
@@ -487,6 +488,7 @@ class Controller:
         self.model_started_at = None
         self.planner_failures = 0
         self.planner_retry_at = 0.0
+        self.idle_reply_retry_at = 0.0
         self.argument_corrections = ArgumentCorrections()
         self.planner_notice = None
         self.tool_failure = None
@@ -1069,6 +1071,14 @@ class Controller:
             self.receipt({"events": [event], "execution": event.get("execution")})
             trigger = event.get("trigger")
             trigger = trigger.get("type") if isinstance(trigger, dict) else trigger
+            if (trigger == "debounce" and self.planner_retry_at == self.idle_reply_retry_at
+                    and self.planner_retry_at > time.monotonic() and not self.current_work()
+                    and not self.inflight_request and not self.death_waiting and not self.death_recovery
+                    and (attention := combat_attention(event))
+                    and 0 <= time.time() * 1000 - attention["observedAtMs"] <= 15000):
+                # Fresh combat feedback ends a wait caused by a text-only idle
+                # reply. Provider failures and the ordinary turn gates still apply.
+                self.planner_retry_at = self.idle_reply_retry_at = 0.0
             wake |= terminal or (not self.social.owns(event) and trigger in {"preempt", "interrupt", "flush", "debounce"})
             urgent |= not self.social.owns(event) and trigger in {"preempt", "interrupt"}
         if self.death_recovery and not page.get("hasMore", False):
@@ -2030,6 +2040,7 @@ class Controller:
         self.deferred_wake = False
         self.continuation_needed = False
         self.continuation_ready = False  # Consume one meaningful handoff, never a polling loop.
+        self.idle_reply_retry_at = 0.0
         self.turn = str(uuid.uuid4())
         self.turn_death_epoch = self.death_epoch
         await self.protocol("begin_turn", id=self.turn)
@@ -2295,6 +2306,7 @@ class Controller:
                         delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
                                     * 2 ** min(6, self.unactioned_replies - 1))
                         self.planner_retry_at = time.monotonic() + delay
+                        self.idle_reply_retry_at = self.planner_retry_at
                         self.continuation_needed = True
                         self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
                     self.planner_notice = f"{self.unactioned_replies} replies without a subsequent accepted game action. The previous reply had no tool calls; no game action was dispatched from it. The standing goal remains active. Use current facts and receipts to choose useful next work; if waiting, explain the condition preventing action."

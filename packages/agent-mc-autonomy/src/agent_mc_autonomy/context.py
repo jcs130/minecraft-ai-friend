@@ -1,6 +1,7 @@
 """Bound request construction without losing the backend's original evidence handles."""
 
 import copy
+import hashlib
 import json
 import time
 
@@ -108,6 +109,26 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def combat_attention(event):
+    """Recognize typed feedback from the body's combat observer."""
+    if (event.get("source"), event.get("type"), event.get("senderKey")) != (
+            "minecraft", "minecraft.tactic", "minecraft.combat-decision"):
+        return None
+    meta = event.get("meta") or {}
+    evidence, marker = meta.get("combatAttention"), meta.get("executionFeedback")
+    text = event.get("text")
+    if (not isinstance(evidence, dict) or evidence.get("schema") != "combat-decision-attention/v1"
+            or evidence.get("reason") != "repeated-ambiguous-ranking"
+            or evidence.get("bodyIdle") is not True or evidence.get("dispatched") is not False
+            or type(evidence.get("count")) is not int or evidence["count"] < 3
+            or type(evidence.get("observedAtMs")) is not int or not isinstance(text, str)
+            or not isinstance(marker, dict) or marker.get("protocol") != "execution-feedback-context/v1"
+            or marker.get("kind") != "host-decision"
+            or marker.get("originalSha256") != hashlib.sha256(text.encode("utf-8")).hexdigest()):
+        return None
+    return evidence
+
+
 def event_priority(event):
     """Delivery salience only; a message never gains action authority here."""
     meta = event.get("meta") or {}
@@ -117,7 +138,7 @@ def event_priority(event):
             or str(event.get("text", "")).startswith("[MC 私聊] ")):
         return 3
     execution = event.get("execution") or {}
-    if (meta.get("death") or event.get("type") in {"minecraft.damage", "minecraft.death"}
+    if (meta.get("death") or event.get("type") in {"minecraft.damage", "minecraft.death"} or combat_attention(event)
             or execution.get("terminal") and execution.get("phase") in {"blocked", "failed", "partial"}):
         return 2
     return 1 if execution.get("terminal") else 0

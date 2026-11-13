@@ -14,6 +14,8 @@ export interface HostCombatPort {
   report(event: string, data: Record<string, unknown>): void;
   /** Deliver bounded unresolved-selection evidence to the task owner, not only a diagnostic log. */
   attention?: (evidence: CombatDecisionAttention) => void | Promise<void>;
+  /** Opt in to one feedback event in shadow mode while keeping the body read-only. */
+  attentionInShadow?: boolean;
   decisions?: { request: NonNullable<CombatDecisionOptions['request']> };
 }
 
@@ -63,6 +65,7 @@ export class HostCombatDriver {
       fallback: () => port.report('fallback', { policy: 'continue-game-rules', goalCompleted: false }),
       report: (event, data) => port.report(event, data),
       attention: evidence => port.attention?.(evidence),
+      attentionInShadow: port.attentionInShadow === true && !!port.attention,
     });
   }
   private async refresh(): Promise<CombatDecisionFrame | null> {

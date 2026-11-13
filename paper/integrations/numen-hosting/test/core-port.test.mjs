@@ -23,3 +23,26 @@ test('core port rejects stale-epoch calls before reaching the actual body',async
   const port=numenCorePort(hosting,role,3);assert.equal((await port.connect()).uuid,role.roleUuid);
   epoch=4;await assert.rejects(port.call({id:'original-request',tool:'lua',args:{}}),{code:'CONTROL_CHANGED'});assert.equal(calls,0);
 });
+
+test('battlefield reads retain the role and current lease and cannot run during unresolved work',async()=>{
+  let epoch=3,unresolvedRequest=null,calls=0;
+  const battlefield={sampledAt:1,threats:[]};
+  const proof={protocol:'qiandengji-hosted-body/v1',bodyKind:'numen',name:role.name,
+    roleUuid:role.roleUuid,serverId:role.serverId,mode:'harness',epoch,ready:true,fenced:true,battlefield};
+  const hosting={boot:'original-boot',status:()=>({state:'ready',mode:'harness',epoch,unresolvedRequest}),
+    body:{battlefield:async(selected,lease)=>{
+      calls++;
+      assert.equal(selected,role);assert.deepEqual(lease,{boot:'original-boot',epoch:3});
+      return proof;
+    }}};
+  const port=numenCorePort(hosting,role,3);
+  assert.equal(await port.battlefield(),battlefield);
+  unresolvedRequest='original-id';
+  assert.equal(await port.battlefield(),null);
+  assert.equal(calls,1);
+  unresolvedRequest=null;
+  proof.roleUuid='other-role';
+  await assert.rejects(port.battlefield(),{code:'BODY_IDENTITY_MISMATCH'});
+  hosting.body.battlefield=async()=>{epoch=4;return proof;};
+  await assert.rejects(port.battlefield(),{code:'CONTROL_CHANGED'});
+});

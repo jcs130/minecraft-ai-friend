@@ -48,6 +48,11 @@ async def run(config):
 
         async def _request(self, operation, *arguments, timeout=45):
             response = await self.http.post(endpoint, json={"operation": operation, "arguments": arguments}, timeout=timeout)
+            if response.status_code == 409 and response.json().get("error") == "CONTROL_CHANGED":
+                # Rejected before tool admission. The service owns the body
+                # fence; the old worker can stop without reattaching or retrying.
+                stopping.set()
+                raise asyncio.CancelledError
             if response.status_code != 200:
                 raise RuntimeError("hosted_core_request_unknown_do_not_replay")
             return response.json()

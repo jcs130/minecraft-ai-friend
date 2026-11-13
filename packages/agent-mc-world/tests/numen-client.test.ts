@@ -1,6 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { NumenClientWorld, type NumenBodyPort } from '../src/client/numen-client.ts';
+import type { NumenBattlefieldSample } from '../src/client/numen-battlefield.ts';
 import type { WorldHost, ToolCallContext } from '../src/contracts/host.ts';
 
 function fixture(){
@@ -61,4 +62,27 @@ test('typed Numen facts refresh without reading the inbox and clear on identity 
   await assert.rejects(f.world.refreshFacts(signal),/do not match/);
   assert.equal(f.world.requestFacts(),null);
   assert.equal(f.world.connectionReadiness().ready,false);
+});
+
+test('Numen battle observation keeps the exact native target reference and drops bad or stale samples',async()=>{
+  const f=fixture();
+  await f.world.start({} as WorldHost);
+  const sample:NumenBattlefieldSample={sampledAt:Date.now(),dimension:'minecraft:overworld',selfId:5,
+    health:20,maxHealth:20,food:18,position:[0,64,0],heldItem:'minecraft:iron_sword',
+    threats:[{id:8,uuid:'12345678-0000-0000-0000-000000000000',type:'minecraft:zombie',
+      reference:'zombie@123456',health:18,maxHealth:20,distance:5,targetingSelf:true}]};
+  const signal=new AbortController().signal;
+  assert.equal(await f.world.combatFrame(7,signal),null);
+  f.port.battlefield=async()=>sample;
+  const frame=await f.world.combatFrame(7,signal);
+  assert.equal(frame?.battlefield.connectionGeneration,7);
+  assert.equal(frame?.battlefield.actors[0]?.nativeReference,'zombie@123456');
+  assert.equal(frame?.battlefield.actors[0]?.targetEntityId,5);
+  assert.equal(frame?.battlefield.actors[0]?.position,null);
+  sample.threats[0]!.reference='zombie@000000';
+  assert.equal(await f.world.combatFrame(7,signal),null);
+  sample.threats[0]!.reference='zombie@123456';
+  sample.sampledAt-=3000;
+  assert.equal(await f.world.combatFrame(7,signal),null);
+  assert.deepEqual(f.calls,[]);
 });

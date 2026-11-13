@@ -30,7 +30,8 @@ export async function scopedMcpSessions({coreDirectory,endpointFor,tokenFor}) {
     catch(error){await transport.close();throw error;}
     return{
       listTools:()=>client.listTools({}, {timeout:10000}),
-      callTool:request=>client.callTool(request,undefined,{timeout:request.arguments?.op==='call'?300000:12000}),
+      callTool:(request,{signal}={})=>client.callTool(request,undefined,
+        {timeout:request.arguments?.op==='call'?300000:12000,signal}),
       close:()=>client.close()
     };
   };

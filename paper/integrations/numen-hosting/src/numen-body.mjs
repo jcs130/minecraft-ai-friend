@@ -40,18 +40,21 @@ export class NumenHostedBody {
     if(reply?.isError||!value||typeof value!=='object')throw fail('NUMEN_RECEIPT_INVALID','Numen 未返回结构化回执；保持暂停。',503);
     return value;
   }
-  async rpc(role,op,args={}){
+  async rpc(role,op,args={},options){
     const connection=await this.session(role);
     const {session}=connection;
     let reply;
     try{
       reply=await session.callTool({name:'hosted_body',arguments:{...args,op,companion:role.roleUuid,
-        expectedName:role.name,expectedOwner:role.numenOwnerUuid,serverId:role.serverId}});
+        expectedName:role.name,expectedOwner:role.numenOwnerUuid,serverId:role.serverId}},options);
       // A tool rejection is a response from the authenticated session. Retain
       // it so the next explicit query can use the same connection.
       if(reply?.isError!==true)return this.decode(reply);
     }
     catch(error){
+      // Optional sampled reads have their own cancellation deadline. Leave the
+      // shared connection alone so an advisory read cannot stop an action.
+      if(op==='battlefield')throw error;
       // A server restart invalidates scoped MCP tokens. Drop the failed session
       // so the next explicit query can reauthenticate; never replay this call.
       const id=`${role.serverId}/${role.roleUuid}`,pending=this.sessions.get(id);
@@ -76,6 +79,14 @@ export class NumenHostedBody {
   async facts(role){
     const {caps}=await this.session(role);
     return caps.sampledFacts===true?this.rpc(role,'facts'):null;
+  }
+  async battlefield(role,lease,signal){
+    signal?.throwIfAborted();
+    const {caps}=await this.session(role);
+    if(caps.sampledBattlefield!==true)return null;
+    signal?.throwIfAborted();
+    const timeout=AbortSignal.timeout(1500);
+    return this.rpc(role,'battlefield',lease,{signal:signal?AbortSignal.any([signal,timeout]):timeout});
   }
   catalog(role){return this.rpc(role,'catalog');}
   heartbeat(role,lease){return this.rpc(role,'heartbeat',lease);}

@@ -24,7 +24,8 @@ public final class HostedEdition {
     return text(s);
   }
   public static void main(String[] args) throws Exception {
-    if(args.length!=3 || !args[2].matches("[0-9]+(?:\\.[0-9]+){2}"))throw new IllegalArgumentException("expected input, output and upstream version");
+    if(args.length!=4 || !args[2].matches("[0-9]+(?:\\.[0-9]+){2}") || !args[3].matches("[1-9][0-9]*"))
+      throw new IllegalArgumentException("expected input, output, upstream version and hosting edition");
     String[] currentClass={""};
     Remapper remapper=new Remapper(Opcodes.ASM9) {
       @Override public String map(String name) {
@@ -59,7 +60,7 @@ public final class HostedEdition {
             String descriptor=new String(bytes,StandardCharsets.UTF_8);
             String upstreamVersion="version: '"+args[2]+"'";
             if(!descriptor.lines().anyMatch(upstreamVersion::equals))throw new IllegalArgumentException("unexpected Numen plugin version");
-            bytes=descriptor.replace(upstreamVersion,"version: '"+args[2]+"-hosted.1'").getBytes(StandardCharsets.UTF_8);
+            bytes=descriptor.replace(upstreamVersion,"version: '"+args[2]+"-hosted."+args[3]+"'").getBytes(StandardCharsets.UTF_8);
           }
         }
         byte[] previous=written.putIfAbsent(name,bytes);

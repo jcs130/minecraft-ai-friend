@@ -175,10 +175,19 @@ index 1d725b026..56c4fa901 100644
                  audit.called(session.id, token, name, null, false, bytesIn, 0);
                  return encode(McpHost.Result.text("rate limited: " + permit.refusal() + ". Wait a few seconds and call again.",
 diff --git a/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java b/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java
-index de5ad11f0..df281ef08 100644
+index de5ad11f0..55f19c73c 100644
 --- a/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java
 +++ b/mcp/src/test/java/com/dwinovo/numen/mcp/server/McpEndpointTest.java
-@@ -89,6 +89,9 @@ class McpEndpointTest {
+@@ -47,6 +47,8 @@ import java.util.stream.Collectors;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertNotNull;
++import static org.junit.jupiter.api.Assertions.assertNull;
+ import static org.junit.jupiter.api.Assertions.assertThrows;
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
+@@ -89,6 +91,9 @@ class McpEndpointTest {
              return "drive carefully";
          }
  
@@ -188,7 +197,7 @@ index de5ad11f0..df281ef08 100644
          @Override
          public List<ToolInfo> tools(McpToken who) throws Exception {
              if (toolsFailure != null) {
-@@ -715,6 +718,22 @@ class McpEndpointTest {
+@@ -715,6 +720,22 @@ class McpEndpointTest {
  
      // ---- 限流与审计 ----
  
@@ -1093,7 +1102,7 @@ index e7c38433f..ebf903201 100644
      /** 主人的一只同伴:稳定 id + 显示名。 */
      record Companion(UUID uuid, String name) {}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java
-index 42fc2c12d..4d30086db 100644
+index 42fc2c12d..444420da4 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/ExternalHost.java
 @@ -34,6 +34,18 @@ import java.util.function.Function;
@@ -1124,7 +1133,7 @@ index 42fc2c12d..4d30086db 100644
 +                "Exclusive control of an existing scoped Numen body. Never summons or changes UUID. Native loop, harness and manual input share a fenced seat. Read capabilities, attach paused, then transition. Unknown actions must not be replayed.",
 +                JsonParser.parseString("""
 +                {"type":"object","required":["op","companion"],"properties":{
-+                  "op":{"type":"string","enum":["capabilities","attach","transition","release","heartbeat","input","observe","facts","catalog","call","result","web_message","web_message_result","web_replies","model_bind","model_unbind"]},
++                  "op":{"type":"string","enum":["capabilities","attach","transition","release","heartbeat","input","observe","facts","battlefield","catalog","call","result","web_message","web_message_result","web_replies","model_bind","model_unbind"]},
 +                  "companion":{"type":"string"},"expectedName":{"type":"string"},"expectedOwner":{"type":"string"},"serverId":{"type":"string"},
 +                  "boot":{"type":"string"},"epoch":{"type":"integer","minimum":1},"mode":{"enum":["paused","numen","harness","manual"]},
 +                  "controllerId":{"type":"string"},"sequence":{"type":"integer","minimum":0},"yaw":{"type":"number"},"pitch":{"type":"number"},
@@ -1177,12 +1186,96 @@ index 42fc2c12d..4d30086db 100644
          /** 作用域管得着的、此刻在世界里的同伴。 */
          private List<ExternalHands.Companion> visible() throws Exception {
              return hands.companions().get(CONTROL_TIMEOUT_SECONDS, TimeUnit.SECONDS).stream()
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBattlefield.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBattlefield.java
+new file mode 100644
+index 000000000..0d9cadcfa
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBattlefield.java
+@@ -0,0 +1,78 @@
++package com.dwinovo.numen.api.mcp.server;
++
++import com.dwinovo.numen.api.brain.CompanionLoops;
++import com.dwinovo.numen.api.entity.NumenPlayer;
++import com.dwinovo.numen.api.program.ServerPrograms;
++import com.dwinovo.numen.api.sdk.EntityLabel;
++import com.dwinovo.numen.api.sdk.NearbyEntities;
++import com.dwinovo.numen.api.task.CompanionTickDispatcher;
++import com.google.gson.JsonArray;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonNull;
++import com.google.gson.JsonObject;
++import net.minecraft.core.registries.BuiltInRegistries;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.Mob;
++import net.minecraft.world.entity.NeutralMob;
++import net.minecraft.world.entity.monster.Enemy;
++
++import java.util.Comparator;
++
++/** Main-thread observation for a fenced, idle body. No input, chunk tickets or inbox reads. */
++final class HostedBattlefield {
++    private static final int MAX_THREATS = 6;
++    private static final int MAX_SIGHT_CHECKS = 24;
++
++    private HostedBattlefield() {}
++
++    static boolean workPending(NumenPlayer body) {
++        var id = body.getUUID();
++        return ServerPrograms.running(id) || !CompanionTickDispatcher.hostingIdle(id);
++    }
++
++    static JsonElement sample(NumenPlayer body) {
++        if (!body.isAlive() || body.isSpectator() || body.isCreative() || body.isSleeping()
++                || body.isPassenger() || workPending(body)
++                || !CompanionLoops.get(body.getUUID()).map(loop -> loop.externalControlIdle()).orElse(false)) {
++            return JsonNull.INSTANCE;
++        }
++        var mobs = NearbyEntities.within(body, NearbyEntities.RADIUS, Mob.class, mob ->
++                mob instanceof Enemy && mob.isAlive() && !mob.isInvisibleTo(body)
++                        && !body.isAlliedTo(mob) && !mob.isAlliedTo(body)
++                        && (!(mob instanceof NeutralMob) || mob.getTarget() == body));
++        var nearest = mobs.stream().sorted(Comparator.<Mob>comparingDouble(body::distanceToSqr).thenComparingInt(Entity::getId))
++                .limit(MAX_SIGHT_CHECKS).toList();
++        var threats = new JsonArray();
++        for (var mob : nearest) {
++            // Bound the vanilla ray to loaded chunks, including across chunk borders.
++            if (!body.level().hasChunksAt(body.blockPosition(), mob.blockPosition()) || !body.hasLineOfSight(mob)) continue;
++            var threat = new JsonObject();
++            threat.addProperty("id", mob.getId());
++            threat.addProperty("uuid", mob.getUUID().toString());
++            threat.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
++            threat.addProperty("reference", EntityLabel.of(mob));
++            threat.addProperty("health", mob.getHealth());
++            threat.addProperty("maxHealth", mob.getMaxHealth());
++            threat.addProperty("distance", Math.round(body.distanceTo(mob) * 10.0) / 10.0);
++            threat.addProperty("targetingSelf", mob.getTarget() == body);
++            threats.add(threat);
++            if (threats.size() == MAX_THREATS) break;
++        }
++        if (threats.isEmpty()) return JsonNull.INSTANCE;
++        var out = new JsonObject();
++        out.addProperty("sampledAt", System.currentTimeMillis());
++        out.addProperty("dimension", body.level().dimension().location().toString());
++        out.addProperty("selfId", body.getId());
++        out.addProperty("health", body.getHealth());
++        out.addProperty("maxHealth", body.getMaxHealth());
++        out.addProperty("food", body.getFoodData().getFoodLevel());
++        out.addProperty("heldItem", BuiltInRegistries.ITEM.getKey(body.getMainHandItem().getItem()).toString());
++        var position = new JsonArray();
++        position.add(body.getX());
++        position.add(body.getY());
++        position.add(body.getZ());
++        out.add("position", position);
++        out.add("threats", threats);
++        return out;
++    }
++}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
 new file mode 100644
-index 000000000..b5566464d
+index 000000000..b1543ca3b
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,204 @@
 +package com.dwinovo.numen.api.mcp.server;
 +
 +import com.dwinovo.numen.api.entity.*;
@@ -1250,6 +1343,7 @@ index 000000000..b5566464d
 +            out.addProperty("nativeModelReady",CompanionLoops.get(uuid).map(loop->loop.nativeModelReady()).orElse(false));
 +            out.addProperty("spectatorMessages",true);
 +            out.addProperty("sampledFacts", true);
++            out.addProperty("sampledBattlefield", true);
 +            out.addProperty("isolatedModels",com.dwinovo.numen.api.brain.HostedModels.configured(server));
 +            for(String flag:List.of("stableIdentity","serverFence","inputTimeout","persistedReceipts"))out.addProperty(flag,true);
 +            out.add("modes",JsonParser.parseString("[\"paused\",\"numen\",\"harness\",\"manual\"]"));return out;
@@ -1328,8 +1422,11 @@ index 000000000..b5566464d
 +                    out.addProperty("food", body.getFoodData().getFoodLevel());
 +                    out.addProperty("dimension", body.level().dimension().location().toString());
 +                    out.add("position", position);
-+                    out.addProperty("workPending", com.dwinovo.numen.api.program.ServerPrograms.running(uuid)
-+                            || !com.dwinovo.numen.api.task.CompanionTickDispatcher.hostingIdle(uuid));
++                    out.addProperty("workPending", HostedBattlefield.workPending(body));
++                }
++                case "battlefield" -> {
++                    HostedBodyControls.requireHarness(body, fence(args));
++                    out.add("battlefield", HostedBattlefield.sample(body));
 +                }
 +                case "observe" -> {
 +                    out.addProperty("sampledAt",System.currentTimeMillis());

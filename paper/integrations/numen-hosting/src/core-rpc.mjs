@@ -14,9 +14,20 @@ export async function openCoreRpc(client,{check}){
         ||req.headers.origin||req.headers.cookie||Object.keys(req.headers).some(k=>k==='forwarded'||k.startsWith('x-forwarded-'))
         ||supplied.length!==expected.length||!timingSafeEqual(supplied,expected))return send(403,{error:'LOCAL_CORE_ONLY'});
       if(req.method!=='POST'||req.url!=='/core'||!/^application\/json(?:;|$)/i.test(req.headers['content-type']??''))return send(404,{error:'NOT_FOUND'});
-      check();let size=0;const parts=[];
+      const admitted=()=>{
+        try{check();return true;}
+        catch(error){
+          if(error?.code!=='CONTROL_CHANGED')throw error;
+          send(409,{error:'CONTROL_CHANGED'});
+          return false;
+        }
+      };
+      if(!admitted())return;
+      let size=0;const parts=[];
       for await(const part of req){size+=part.length;if(size>262144)throw new Error('too large');parts.push(part);}
-      const value=JSON.parse(Buffer.concat(parts).toString());check();let result;
+      const value=JSON.parse(Buffer.concat(parts).toString());
+      if(!admitted())return;
+      let result;
       if(value.operation==='tools')result=await client.mcp.listTools();
       else if(value.operation==='tool')result=await client.mcp.callTool({name:value.arguments[0],arguments:value.arguments[1],
         ...(value.arguments[2]?{_meta:value.arguments[2]}:{})},undefined,{timeout:180000});

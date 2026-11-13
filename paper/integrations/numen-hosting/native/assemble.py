@@ -10,13 +10,15 @@ a=p.parse_args();root=Path(__file__).resolve().parent;output=Path(a.output).reso
 output.mkdir(parents=True,exist_ok=True);java=Path(a.java_home)/'bin';manifest=[]
 base=json.loads((root/'base.json').read_text())
 version=base['version']
+edition=base.get('hostedEdition',1)
 suffix='.exe' if os.name=='nt' else ''
 with tempfile.TemporaryDirectory(prefix='hosted-assembly-') as working:
     subprocess.run([str(java/('javac'+suffix)),'-cp',a.asm_classpath,'-d',working,str(root/'HostedEdition.java')],check=True)
     for source,name in [(Path(a.api),'numen_hosted_api'),(Path(a.content),'numen_hosted')]:
         digest=hashlib.sha256(source.read_bytes()+(root/'HostedEdition.java').read_bytes()).hexdigest()[:12]
-        target=output/(f"{name}-{base['minecraft']}-{version}-hosted.1-{digest}.jar");assert not target.exists()
-        subprocess.run([str(java/('java'+suffix)),'-cp',working+os.pathsep+a.asm_classpath,'HostedEdition',str(source),str(target),version],check=True)
+        target=output/(f"{name}-{base['minecraft']}-{version}-hosted.{edition}-{digest}.jar");assert not target.exists()
+        subprocess.run([str(java/('java'+suffix)),'-cp',working+os.pathsep+a.asm_classpath,'HostedEdition',
+                        str(source),str(target),version,str(edition)],check=True)
         with zipfile.ZipFile(target) as jar:
             assert 'com.dwinovo.numen.hosted.' in jar.read('paper-plugin.yml').decode()
             assert not any(n.startswith('com/dwinovo/numen/') and not n.startswith('com/dwinovo/numen/hosted/') for n in jar.namelist())
