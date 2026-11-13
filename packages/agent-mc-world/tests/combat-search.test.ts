@@ -44,3 +44,14 @@ it('preserves body ownership, clue expiry, real visible threats, unknown ground 
   expect(combatSearchCandidates(bot,{...field,self:{...field.self,position:[3,64,0]}},true,true)).toEqual([]);
   bot.blockAt=()=>null;expect(combatSearchCandidates(bot,field,true,true)).toEqual([]);
 });
+it('offers exploration from an attested remaining count without guessing an enemy position',()=>{
+  const {bot,field}=rig();field.clues=[];
+  field.searchObjective={key:'room:4',remaining:1,observedAtMs:900,expiresAtMs:5000};
+  const candidates=combatSearchCandidates(bot,field,true,true);
+  expect(candidates).toHaveLength(4);expect(candidates.every(c=>c.kind==='search'&&c.source==='objective'&&!('targetId' in c))).toBe(true);
+  const input=combatRequest({battlefield:field,tacticRevision:1,mana:null,skills:[],candidates,omittedCandidates:0});
+  expect(input.state.battlefield.searchObjective).toEqual({key:'room:4',remaining:1,ageMs:100});
+  expect(combatSearchCandidates(bot,{...field,sampledAtMs:5000},true,true)).toEqual([]);
+  expect(combatSearchCandidates(bot,{...field,searchObjective:{...field.searchObjective,remaining:0}},true,true)).toEqual([]);
+  bot.blockAt=()=>null;expect(combatSearchCandidates(bot,field,true,true)).toEqual([]);
+});

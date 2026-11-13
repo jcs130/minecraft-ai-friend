@@ -54,6 +54,28 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it.each(['departed','small-drift','new-occluded'] as const)('keeps an executable search across %s without inheriting an old attack target',async change=>{
+    vi.useFakeTimers();const r=rig();r.f!.battlefield.action.fighting=false;
+    r.f!.battlefield.actors=r.f!.battlefield.actors.slice(0,1);r.f!.battlefield.actors[0].lineOfSight=false;r.f!.battlefield.actors[0].targetEntityId=null;
+    r.f!.candidates=[{id:'search_0',kind:'search',source:'last-seen',clueKey:'observed-id',destination:[1.2,64,0],intent:'Check last seen bearing.'}];
+    r.loop.tick();
+    if(change==='departed')r.f!.battlefield.actors=[];
+    if(change==='small-drift')r.f!.candidates=[{...r.f!.candidates[0],destination:[1.21,64,0]} as CombatCandidate];
+    if(change==='new-occluded')r.f!.battlefield.actors.push({...r.f!.battlefield.actors[0],entityId:8,uuid:'new-hidden'});
+    r.resolve();await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1);expect(r.reports.at(-1)?.data.outcome).toBe('sent');r.loop.stop();
+  });
+  it.each(['visible','expired','changed-bearing','new-owner','teleport'] as const)('still cancels stale or unsafe search: %s',async change=>{
+    vi.useFakeTimers();const r=rig();r.f!.battlefield.action.fighting=false;r.f!.battlefield.actors=[];
+    r.f!.candidates=[{id:'search_0',kind:'search',source:'last-seen',clueKey:'observed-id',destination:[1.2,64,0],intent:'Search.'}];
+    r.loop.tick();
+    if(change==='visible')r.f!.battlefield.actors.push(frame().battlefield.actors[0]);
+    if(change==='expired')r.f!.candidates=[];
+    if(change==='changed-bearing')r.f!.candidates=[{...r.f!.candidates[0],destination:[-1.2,64,0]} as CombatCandidate];
+    if(change==='new-owner')r.f!.battlefield.action.taskId=8;
+    if(change==='teleport')r.f!.battlefield.self.position=[20,64,0];
+    r.resolve();await vi.advanceTimersByTimeAsync(1);expect(r.sent).toHaveLength(0);r.loop.stop();
+  });
   it('rejects an idle destination changed while the decision request was pending',async()=>{
     vi.useFakeTimers();const r=rig();
     r.f!.battlefield.action.fighting=false;r.f!.battlefield.actors=[];

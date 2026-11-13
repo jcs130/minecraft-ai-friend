@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.64
+
+- Preserve combat ownership when fire has no executable escape; revalidate bounded search, unfinished-room intent and current armor/spare facts.
+
 ## 0.5.7-rc.160-preview.63
 
 - Let explicit equipment transactions finish during low-health combat; retain native confirmation, cancellation and environmental rescue priority. Report authored candidate exclusions without adding or forcing attacks.
