@@ -720,7 +720,7 @@ function Backup-TreeBytes([string]$path) {
     return [int64]$measure.Sum
 }
 
-function Backup-CopyBytes([string]$path) {
+function Backup-CopyBytes([string]$path, [string[]]$excludedDirectories = @()) {
     # Use the copier's own read-only traversal: ordinary directory enumeration
     # can undercount dependency junctions that robocopy will materialize.
     $source = [IO.Path]::GetFullPath($path).TrimEnd('\')
@@ -731,10 +731,11 @@ function Backup-CopyBytes([string]$path) {
     New-Item -ItemType Directory -Path $temp -ErrorAction Stop | Out-Null
     try {
         $log = Join-Path $temp 'size.log'
-        & robocopy.exe $source (Join-Path $temp 'never-created') /L /E /BYTES /NFL /NDL /NJH /R:0 /W:0 ("/UNILOG:"+$log) | Out-Null
+        $exclude = if ($excludedDirectories.Count) { @('/XD') + $excludedDirectories } else { @() }
+        & robocopy.exe $source (Join-Path $temp 'never-created') /L /E /BYTES /NFL /NDL /NJH /R:0 /W:0 ("/UNILOG:"+$log) @exclude | Out-Null
         if ($LASTEXITCODE -ge 8) { throw 'Read-only backup traversal failed before maintenance' }
         $summary = Get-Content -LiteralPath $log -Raw -Encoding Unicode
-        $match = [regex]::Matches($summary,'(?m)^\s*(?:Bytes|字节|字节数)\s*:\s*(\d+)\s+')
+        $match = [regex]::Matches($summary,'(?m)^\s*(?:Bytes|\u5B57\u8282|\u5B57\u8282\u6570)\s*:\s*(\d+)\s+')
         if ($match.Count -ne 1) { throw 'Backup byte summary unavailable; do not guess capacity' }
         # Robocopy /L returns 1 when it found copy candidates; that is success.
         # Do not leak that code into an enclosing PowerShell CI/task wrapper.
@@ -970,12 +971,17 @@ function Backup-Server {
             if(Test-Path -LiteralPath $other) { throw 'Runtime relocation must not be mixed with another deployment.' }
         }
     }
-    # Previous preflight counted only the game tree, omitting the much larger
-    # operational archive and model/auth support copy. Count the full superset
-    # before stopping; skipped logs/dependencies only make this conservative.
-    $sourceBytes = [long]0
-    foreach ($tree in @($serverDir,$opsDir,'E:\MC\probe','E:\MC\private\ysm')) {
-        $sourceBytes += Backup-CopyBytes $tree
+    # Keep emergency release archives out of every daily snapshot. The one
+    # current service dependency under repairs is copied explicitly below.
+    $repairArchives = Join-Path $opsDir 'repairs'
+    $voiceRenewal = 'repairs\proximity-chat-20261029\router-voice.py'
+    $sourceBytes = (Backup-CopyBytes $serverDir) +
+        (Backup-CopyBytes $opsDir @($repairArchives)) +
+        (Backup-CopyBytes 'E:\MC\probe' @('node_modules')) +
+        (Backup-CopyBytes 'E:\MC\private\ysm' @('logs','tmp'))
+    $voiceScript = Join-Path $opsDir $voiceRenewal
+    if (Test-Path -LiteralPath $voiceScript -PathType Leaf) {
+        $sourceBytes += (Get-Item -LiteralPath $voiceScript).Length
     }
     $freeBytes = (Get-PSDrive -Name E).Free
     if ($null -eq $freeBytes -or $freeBytes -lt ($sourceBytes + 1GB)) {
@@ -1026,8 +1032,16 @@ function Backup-Server {
         # Resident MCP drivers keep a Windows byte-range lock until they exit.
         # The PID lease is rebuilt at startup and is not restorable state.
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'runtime-relocation.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
+            /XD (Join-Path $opsDir 'repairs') /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'runtime-relocation.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Details: $opsCopyLog. Incomplete backup: $dest" }
+        if (Test-Path -LiteralPath $voiceScript -PathType Leaf) {
+            $voiceBackup = Join-Path $opsCopy $voiceRenewal
+            New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($voiceBackup)) -Force | Out-Null
+            Copy-Item -LiteralPath $voiceScript -Destination $voiceBackup -ErrorAction Stop
+            if ((Get-FileHash -LiteralPath $voiceBackup).Hash -cne (Get-FileHash -LiteralPath $voiceScript).Hash) {
+                throw 'Scheduled voice renewal backup failed verification'
+            }
+        }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Probe backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }

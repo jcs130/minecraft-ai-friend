@@ -20,6 +20,13 @@ try {
     [IO.File]::WriteAllBytes(('\\?\'+(Join-Path $deep 'deep.bin')),[byte[]](4,5,6,7,8))
     if((Backup-TreeBytes $fixture) -ne 8){throw 'Short and deep files must both contribute'}
     if((Backup-CopyBytes $fixture) -ne 8){throw 'Copier preflight must include long paths'}
+    $archive=Join-Path $fixture 'repairs'
+    New-Item -ItemType Directory -Path $archive|Out-Null
+    $archiveFile=Join-Path $archive 'old-release.bin'
+    [IO.File]::WriteAllBytes($archiveFile,[byte[]]::new(1024))
+    if((Backup-CopyBytes $fixture) -ne 1032){throw 'Full scan ignored the archive'}
+    if((Backup-CopyBytes $fixture @($archive)) -ne 8){throw 'Daily sizing still counts excluded maintenance archives'}
+    Remove-Item -LiteralPath $archiveFile
     $shortTarget=Join-Path $fixture 'short-target';New-Item -ItemType Directory -Path $shortTarget|Out-Null
     [IO.File]::WriteAllBytes((Join-Path $shortTarget 'five.bin'),[byte[]](1,2,3,4,5))
     $link=Join-Path $fixture 'alias';New-Item -ItemType Junction -Path $link -Target $shortTarget|Out-Null
@@ -33,7 +40,7 @@ try {
     $uncRejected=$false
     try {Backup-TreeBytes '\\invalid-backup-host\share'|Out-Null} catch {$uncRejected=$true}
     if(-not $uncRejected){throw 'Unexpected network roots must be rejected'}
-    Write-Output '6 backup path checks passed: deep contents, copier traversal, junction expansion, success exit code, missing path, local root boundary.'
+    Write-Output '8 backup path checks passed, including deep files, exclusion sizing, and junction traversal.'
 } finally {
     $resolved=[IO.Path]::GetFullPath($fixture)
     if(-not $resolved.StartsWith(($temporaryRoot+'\'),[StringComparison]::OrdinalIgnoreCase) -or
